@@ -178,8 +178,9 @@ function buildDom(root) {
 
 // --- The show ---------------------------------------------------------------------------------------
 // Runs one judging call through the theatre. Resolves with { words, meta } when the show is over
-// (or skipped). `fallbackWords(card)` supplies local lines if the call fails.
-export function runTheatre(root, { log, assist, ai, card, course, fallbackWords, reduced = false, replay = null }) {
+// (or skipped). `fallbackWords(card)` supplies local lines if the call fails. Aborting `abort`
+// (an AbortSignal: a restart, the title) tears it down at once and resolves with { aborted: true }.
+export function runTheatre(root, { log, assist, ai, card, course, fallbackWords, reduced = false, replay = null, abort = null }) {
   registerShapes();
   const dom = buildDom(root);
   root.hidden = false;
@@ -325,7 +326,7 @@ export function runTheatre(root, { log, assist, ai, card, course, fallbackWords,
   };
 
   let showFinal = null;
-  const source = replay ? replayEvents(replay, handlers) : streamPanel({ log, assist, ai, course }, handlers);
+  const source = replay ? replayEvents(replay, handlers) : streamPanel({ log, assist, ai, course }, handlers, { signal: abort });
 
   (async () => {
     try { await source; } catch (err) { handlers.error({ message: 'The judges are offline.', fallback: true }); console.warn(err); }
@@ -362,6 +363,16 @@ export function runTheatre(root, { log, assist, ai, card, course, fallbackWords,
     setTimeout(() => { safe(() => field?.destroy()); root.hidden = true; root.classList.remove('on', 'out'); }, 650);
     skipResolve({ words: meta.words, meta });
   }
+  abort?.addEventListener('abort', () => {
+    if (finished) return;
+    finished = true;
+    clearInterval(pulse);
+    clearTimeout(deadline);
+    safe(() => field?.destroy());
+    root.hidden = true;
+    root.classList.remove('on', 'out');
+    skipResolve({ aborted: true, words: null, meta });
+  }, { once: true });
   dom.skip.addEventListener('click', () => {
     // Skipping only hurries the show; the words still come from the call if it has answered.
     if (!words && !failure) { caption('Finishing the call…'); return; }

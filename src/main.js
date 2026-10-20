@@ -112,7 +112,21 @@ function syncCar(pos, quat, comps, spins, steer) {
 }
 
 // --- Flow --------------------------------------------------------------------------------
+// Everything layered over the stage that belongs to the last run: the judges' theatre (and its
+// call), the AI settings sheet, cues. A restart, a new run or the title clears it all at once.
+let panelAbort = null;
+function closeOverlays() {
+  panelAbort?.abort(); panelAbort = null;
+  const th = document.querySelector('[data-theatre]');
+  th.hidden = true; th.classList.remove('on', 'out');
+  const ai = document.querySelector('[data-ai-modal]');
+  if (ai && !ai.hidden) ai.hidden = true;
+  S.paused = false;
+  ui.clearCue();
+}
+
 function toTitle() {
+  closeOverlays();
   S.mode = 'title'; S.run = null;
   ui.only('title');
   ui.touch.hidden = true;
@@ -124,6 +138,7 @@ function toTitle() {
 }
 
 function startRun(kind = 'jump') {
+  closeOverlays();
   initAudio();
   S.run = createRun(stage.course);
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
@@ -169,13 +184,15 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 async function runPanel(run, replay = null) {
   const assist = !!(S.assist || S.autopilot);
   const card = S.card;
+  if (!replay) { panelAbort?.abort(); panelAbort = new AbortController(); }
+  const signal = panelAbort?.signal;
   let mod;
   try { mod = await import('./ai/theatre.js'); } catch { S.words = localWords(card); ui.words(S.words); return; }
   if (S.run !== run) return;
-  const { words, meta } = await mod.runTheatre(theatreRoot, {
-    log: run.inputLog, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay,
+  const { words, meta, aborted } = await mod.runTheatre(theatreRoot, {
+    log: run.inputLog, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay, abort: signal,
   });
-  if (S.run !== run) return;
+  if (aborted || S.run !== run) return;
   if (!replay) {
     if (meta.verify?.card && Math.abs(meta.verify.card.total - card.total) > 0.05) console.warn('server card differs', meta.verify.card.total, card.total);
     S.words = words; S.callMeta = meta;
