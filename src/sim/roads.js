@@ -20,7 +20,19 @@ import { datan2 } from './dmath.js';
 
 export const ROAD_MAGIC = 'CGR1';
 const SHOULDER = 1.2;            // m of gravel shoulder past the painted edge
-const CUT = 1.0, FILL = 1.5;     // cut slope rises 1:1, fill falls 1:1.5 (a common earthwork design)
+const CUT = 1.0, FILL = 1.5;     // structural slopes: cut rises 1:1, fill falls 1:1.5 (a common earthwork design)
+// Past the shoulder, a graded, recoverable roadside before any structural slope (FHWA/AASHTO
+// Roadside Design Guide: foreslopes of 1:4 or flatter are "recoverable": a driver who runs off can
+// stop and drive back). For APRON m past the shoulder the ground is graded, not natural: a smooth
+// ramp from the shoulder to the natural ground at the apron's outer edge, never steeper than 1:4
+// (the hinge rounded over ROUND m, as graders round it). Past the apron, the natural ground is held
+// within the structural slopes, which steepen in over another ROUND m. Without it the car could not
+// get back on from the grass: natural mountainside (30°+) and the 1:1.5 fill (34°) ran right up to
+// the shoulder, and a rear-driven 2.4 t car on grass (μ ≈ 0.56, ≈ 60 % of its weight on the driven
+// axle) climbs about 18°; the 1:1 cut tipped it over its nose on the way down, and the sharp hinge
+// high-centred it on a 10 cm ride height.
+const APRON_SLOPE = 0.25, APRON = 7, ROUND = 2.5;
+const EXACT = APRON + ROUND + 2;   // m past the shoulder where the exact earthwork has handed over to the grid
 const CELL = 8;                  // segment grid cell (m)
 const FINE = 4, TILE = 16;       // conformed terrain: 4 m posts, 16×16 cells (64 m) per tile
 const CONFORM_REACH = 40;        // m beyond the edge where a road still shapes the ground
@@ -107,7 +119,7 @@ export function buildRoad(data) {
     hwMax = Math.max(hwMax, hw[i]);
     minX = Math.min(minX, x[i]); maxX = Math.max(maxX, x[i]); minZ = Math.min(minZ, z[i]); maxZ = Math.max(maxZ, z[i]);
   }
-  const reach = hwMax + 6;                          // past the barriers, over the verge's earthwork
+  const reach = hwMax + SHOULDER + EXACT + 8;   // over the verge's earthwork, and any other leg near enough to matter there
   // Segment grid (CSR): every segment listed in each cell its reach overlaps.
   const gx0 = minX - reach - CELL, gz0 = minZ - reach - CELL;
   const gnx = Math.ceil((maxX - gx0 + reach + CELL) / CELL) + 1, gnz = Math.ceil((maxZ - gz0 + reach + CELL) / CELL) + 1;
@@ -147,7 +159,7 @@ export function buildRoad(data) {
 // The nearest segment to (x, y, z), into `q`: seg, t (along), lat (+ left), yc (centreline
 // height there), hw, bank. Vertically stacked legs (a hairpin under a hairpin) are told apart
 // by height. Returns false when no segment is within reach.
-const q0 = { seg: -1, t: 0, lat: 0, yc: 0, hw: 0, bank: 0, u: 0 };
+const q0 = { seg: -1, t: 0, lat: 0, yc: 0, hw: 0, bank: 0, u: 0, other: Infinity };
 export function nearestSeg(road, x, y, z, q = q0) {
   const g = road.grid;
   const ci = Math.floor((x - g.x0) / CELL), cj = Math.floor((z - g.z0) / CELL);
@@ -174,6 +186,19 @@ export function nearestSeg(road, x, y, z, q = q0) {
     }
   }
   if (q.seg < 0) return false;
+  // The nearest other leg (a segment more than 30 m along the road from this one): where two legs
+  // are close (a hairpin, stacked switchbacks) the ground between them is the grid's blend of both.
+  q.other = Infinity;
+  for (let k = a; k < b; k++) {
+    const i = g.list[k], di = i - q.seg;
+    if (di < 10 && di > -10) continue;
+    const px = x - road.sx[i], pz = z - road.sz[i];
+    let t = px * road.dx[i] + pz * road.dz[i];
+    if (t < 0) t = 0; else if (t > road.len[i]) t = road.len[i];
+    const ex = px - road.dx[i] * t, ez = pz - road.dz[i] * t, d2 = ex * ex + ez * ez;
+    if (d2 < q.other) q.other = d2;
+  }
+  q.other = q.other === Infinity ? Infinity : Math.sqrt(q.other);
   // Continuous coordinates through the bends: the point lies on the line from P(u) along the
   // blended vertex normal N(u) (P and N interpolated along the segment). Projecting onto the
   // segment alone makes the station jump on the inside of a bend, and with grade and banking
@@ -220,6 +245,48 @@ function shoulderHeight(yc, bank, hw, lat) {
   if (al <= hw) return yc + bank * lat - 0.04;
   return yc + bank * edge - 0.04 - 0.05 * (al - hw);
 }
+
+// The earthwork's rise (cut) or drop (fill) `run` m past the shoulder, toward a structural slope
+// `steep`, and its gradient there (into ew[0], ew[1]): slope 0 → APRON_SLOPE over ROUND m, held to
+// APRON, then → steep over ROUND m, held beyond. Piecewise-quadratic, C¹, + − × ÷ only.
+const ew = [0, 0];
+export function earthwork(run, steep, out = ew) {
+  const a = APRON_SLOPE, r = ROUND;
+  if (run <= 0) { out[0] = 0; out[1] = 0; return out; }
+  if (run < r) { out[0] = (a * run * run) / (2 * r); out[1] = (a * run) / r; return out; }
+  const d1 = (a * r) / 2;
+  if (run < APRON) { out[0] = d1 + a * (run - r); out[1] = a; return out; }
+  const d2 = d1 + a * (APRON - r), u = run - APRON;
+  if (u < r) { out[0] = d2 + a * u + ((steep - a) * u * u) / (2 * r); out[1] = a + ((steep - a) * u) / r; return out; }
+  out[0] = d2 + a * r + ((steep - a) * r) / 2 + steep * (u - r); out[1] = steep;
+  return out;
+}
+
+// The graded apron's full rise or drop (m) at its outer edge, and the roadside's height `run` m past
+// the shoulder: out = [height, lateral slope rising away from the road, 1 if the earthwork set it
+// (0: the natural ground stands)]. (fx, fz) is the shoulder's foot on the centreline, (px, pz) the
+// unit direction away from the road on this side, hNat the natural (or conformed) ground there.
+const APRON_RISE = earthwork(APRON, APRON_SLOPE)[0];
+const rs = [0, 0, 0], rs2 = [0, 0];
+function roadside(data, yEdge, hw, run, fx, fz, px, pz, hNat, out = rs) {
+  if (run <= APRON) {
+    const o = hw + SHOULDER + APRON;
+    let d = demAt(data, fx + px * o, fz + pz * o, s3r) - yEdge;
+    if (d > APRON_RISE) d = APRON_RISE; else if (d < -APRON_RISE) d = -APRON_RISE;
+    earthwork(run, APRON_SLOPE, rs2);
+    out[0] = yEdge + (d * rs2[0]) / APRON_RISE; out[1] = (d * rs2[1]) / APRON_RISE; out[2] = 1;
+    return out;
+  }
+  earthwork(run, FILL, rs2);
+  const lo = yEdge - rs2[0], sLo = rs2[1];
+  earthwork(run, CUT, rs2);
+  const hi = yEdge + rs2[0], sHi = rs2[1];
+  if (hNat < lo) { out[0] = lo; out[1] = -sLo; out[2] = 1; }
+  else if (hNat > hi) { out[0] = hi; out[1] = sHi; out[2] = 1; }
+  else { out[0] = hNat; out[1] = 0; out[2] = 0; }
+  return out;
+}
+const s3r = [0, 0, 0];
 
 // Conformed terrain on 4 m posts in 64 m tiles around the road (tiles only where a road is near).
 function buildConform(road) {
@@ -273,16 +340,30 @@ function buildConform(road) {
       for (let p = 5; p < cand.length; p += 5) {
         for (let r = p; r > 0 && cand[r - 5] < cand[r]; r -= 5) for (let w = 0; w < 5; w++) { const tmp = cand[r - 5 + w]; cand[r - 5 + w] = cand[r + w]; cand[r + w] = tmp; }
       }
+      // Past every apron, the natural ground held within each road's structural slopes (farthest
+      // first, so the nearest constrains last). Within a road's apron the ground is graded: where
+      // two legs' aprons meet (a hairpin's inside, stacked switchbacks) their grades are blended by
+      // inverse distance⁴, so the ground runs smoothly from one to the other instead of stepping.
+      let wSum = 0, hSum = 0;
       for (let p = 0; p < cand.length; p += 5) {
         const d = cand[p], k = cand[p + 1], tt = cand[p + 2], lat = cand[p + 3], hwk = cand[p + 4];
         const u = tt / road.len[k], yc = road.y[k] + road.grade[k] * tt, bk = road.bank[k] + (road.bank[k + 1] - road.bank[k]) * u;
         const e = d - hwk;
-        if (e <= SHOULDER) { hgt = shoulderHeight(yc, bk, hwk, lat); continue; }
-        const yEdge = shoulderHeight(yc, bk, hwk, lat < 0 ? -(hwk + SHOULDER) : hwk + SHOULDER);
-        const run = e - SHOULDER;
-        const lo = yEdge - FILL * run, hi = yEdge + CUT * run;
-        if (hgt < lo) hgt = lo; else if (hgt > hi) hgt = hi;
+        let hk;
+        if (e <= SHOULDER) hk = shoulderHeight(yc, bk, hwk, lat);
+        else {
+          const sd = lat < 0 ? -1 : 1;
+          const yEdge = shoulderHeight(yc, bk, hwk, sd * (hwk + SHOULDER));
+          const nbx = road.vnx[k] + (road.vnx[k + 1] - road.vnx[k]) * u, nbz = road.vnz[k] + (road.vnz[k + 1] - road.vnz[k]) * u;
+          const nl = sd / (Math.sqrt(nbx * nbx + nbz * nbz) || 1);
+          roadside(data, yEdge, hwk, e - SHOULDER, road.sx[k] + road.dx[k] * tt, road.sz[k] + road.dz[k] * tt, nbx * nl, nbz * nl, hgt);
+          if (e - SHOULDER > APRON) { hgt = rs[0]; continue; }
+          hk = rs[0];
+        }
+        const r = (e > 0 ? e : 0) + 1, w = 1 / (r * r * r * r);
+        wSum += w; hSum += w * hk;
       }
+      if (wSum > 0) hgt = hSum / wSum;
       h[t * P * P + j * P + i] = hgt;
     }
   }
@@ -319,7 +400,7 @@ export function terrainAt(road, x, z, out) {
 
 // ---- The query ---------------------------------------------------------------------------------
 const tq = [0, 0, 0];
-const qs = { seg: -1, t: 0, lat: 0, yc: 0, hw: 0, bank: 0, u: 0 };
+const qs = { seg: -1, t: 0, lat: 0, yc: 0, hw: 0, bank: 0, u: 0, other: Infinity };
 // Signed distance from (x, y, z) to the road world; out gets the normal {x, y, z}, `mat`, and
 // `obstacle` (true for barriers, so the crash code treats a wall as a wall).
 export function roadSurface(road, x, y, z, out) {
@@ -384,15 +465,32 @@ export function roadSurface(road, x, y, z, out) {
     terrainAt(road, x, z, tq);
     // Right beside the road the ground is the earthwork itself, exactly: the 4 m grid can't hold
     // the crease at the shoulder's edge, and a wheel rolling off the shoulder must not meet a step.
-    if (on && !(fl & 3) && al > qs.hw + SHOULDER) {
+    // It hands over to the grid (which also blends neighbouring legs) over the last 2 m of EXACT.
+    const run = al - qs.hw - SHOULDER;
+    if (on && !(fl & 3) && run > 0 && run < EXACT) {
       const side = qs.lat < 0 ? -1 : 1, i0 = qs.seg;
       const yEdge = shoulderHeight(qs.yc, qs.bank, qs.hw, side * (qs.hw + SHOULDER));
-      const run = al - qs.hw - SHOULDER;
-      const lo = yEdge - FILL * run, hi = yEdge + CUT * run;
-      // The cone's slope points away from the road, across it.
-      const lx = road.dz[i0] * side, lz = -road.dx[i0] * side;
-      if (tq[0] < lo) { tq[0] = lo; tq[1] = -FILL * lx; tq[2] = -FILL * lz; }
-      else if (tq[0] > hi) { tq[0] = hi; tq[1] = CUT * lx; tq[2] = CUT * lz; }
+      const px = road.dz[i0] * side, pz = -road.dx[i0] * side;
+      // The apron's outer edge along the blended normal (continuous through bends, as `lat` is).
+      const u = qs.u, nbx = road.vnx[i0] + (road.vnx[i0 + 1] - road.vnx[i0]) * u, nbz = road.vnz[i0] + (road.vnz[i0 + 1] - road.vnz[i0]) * u;
+      const nl = side / (Math.sqrt(nbx * nbx + nbz * nbz) || 1);
+      roadside(road.data, yEdge, qs.hw, run, road.x[i0] + (road.x[i0 + 1] - road.x[i0]) * u, road.z[i0] + (road.z[i0 + 1] - road.z[i0]) * u, nbx * nl, nbz * nl, tq[0]);
+      // The earthwork's slope points across the road, and it climbs with the road's grade along it.
+      const g = road.grade[i0], hx = rs[1] * px + g * road.dx[i0], hz = rs[1] * pz + g * road.dz[i0];
+      // Hand over at the end of EXACT, and wherever another leg is about as near as this one.
+      let f = run <= EXACT - 2 ? 0 : (run - (EXACT - 2)) / 2;
+      const gap = qs.other - al;
+      if (gap < 6) { const f2 = gap <= 2 ? 1 : (6 - gap) / 4; if (f2 > f) f = f2; }
+      // …and near a bridge's or a tunnel's end, where the grid carries the natural ground.
+      for (let d = 1; d <= 5 && f < 1; d++) {
+        // Samples from here to the structure (continuous along the road).
+        let dist = 99;
+        if (i0 + d < road.m && road.flags[i0 + d] & 3) dist = d - u;
+        if (i0 - d >= 0 && road.flags[i0 - d] & 3 && u + d - 1 < dist) dist = u + d - 1;
+        if (dist < 4) { const f3 = 1 - dist / 4; if (f3 > f) f = f3; }
+      }
+      const k = f * f * (3 - 2 * f);
+      tq[0] = rs[0] + (tq[0] - rs[0]) * k; tq[1] = hx + (tq[1] - hx) * k; tq[2] = hz + (tq[2] - hz) * k;
     }
     const hx = tq[1], hz = tq[2], k = 1 / Math.sqrt(1 + hx * hx + hz * hz);
     const pt = (y - tq[0]) * k;
@@ -418,7 +516,7 @@ export function createRoadCourse(road, { name = road.meta.id } = {}) {
   return course;
 }
 
-const qp = { seg: -1, t: 0, lat: 0, yc: 0, hw: 0, bank: 0, u: 0 };
+const qp = { seg: -1, t: 0, lat: 0, yc: 0, hw: 0, bank: 0, u: 0, other: Infinity };
 // A pose on the road at distance s (m), in the right-hand lane, facing along the road
 // (dir = +1) or back down it (−1): { x, y, z, yaw } with yaw about +y (the car's +z forward).
 export function poseAt(road, s, dir = 1, out = { x: 0, y: 0, z: 0, yaw: 0, i: 0 }) {

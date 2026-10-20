@@ -229,9 +229,10 @@ export const MATERIALS = {
   steel: { id: 'steel', grip: 0.6, slide: 0.4, bounce: 0.2 },
   body: { id: 'body', grip: 0.55, slide: 0.5, bounce: 0.12 },
   asphalt: { id: 'asphalt', grip: 1, slide: 0.55, bounce: 0.1 },
-  gravel: { id: 'gravel', grip: 0.62, slide: 0.6, bounce: 0.05 },
-  grass: { id: 'grass', grip: 0.45, slide: 0.45, bounce: 0.05 },
-  rock: { id: 'rock', grip: 0.7, slide: 0.55, bounce: 0.15 },
+  // `loose`: off the pavement; traction control adapts to it (vehicle.js).
+  gravel: { id: 'gravel', grip: 0.62, slide: 0.6, bounce: 0.05, loose: true },
+  grass: { id: 'grass', grip: 0.45, slide: 0.45, bounce: 0.05, loose: true },
+  rock: { id: 'rock', grip: 0.7, slide: 0.55, bounce: 0.15, loose: true },
   barrier: { id: 'barrier', grip: 0.5, slide: 0.35, bounce: 0.2 },
 };
 
