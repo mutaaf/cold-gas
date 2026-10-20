@@ -98,7 +98,7 @@ function syncCar(pos, quat, comps, spins, steer) {
   carRoot.quaternion.set(quat.x, quat.y, quat.z, quat.w);
   for (let i = 0; i < 4; i++) {
     const w = hero.wheels[i];
-    w.pivot.position.y = wheelCenterY(comps[i], CAR.restLen);
+    w.pivot.position.y = wheelCenterY(comps[i], CAR.restLen, i);
     w.spin.rotation.x = spins[i];
     if (i < 2) w.pivot.rotation.y = steer;
   }
@@ -260,9 +260,9 @@ function cues(run, c) {
   const v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
   if (run.phase === 'drive' && v < 2) return ui.cue_(`Hold ${kbd('GO', '↑')} to drive`, 600);
   if (run.course === 'wall') {
-    if (run.phase === 'drive' && c.pos.z > -40) return ui.cue_(`Fan spooling · about 60 km/h into the curl`, 600);
-    if (run.phase === 'ramp' && run.t.progress < 0.85) return ui.cue_(`Feather ${kbd('GO', '↑')}: too fast and you’ll fly off the lip`, 500);
-    if (run.phase === 'ramp') return ui.cue_(`${kbd('LIFT', 'Space')} to release`, 500);
+    if (run.phase === 'drive' && c.pos.z > -40) return ui.cue_(`Fan spooling · crawl in, about 20 km/h`, 600);
+    if (run.phase === 'ramp' && run.t.progress < 0.85) return ui.cue_(`Feather ${kbd('GO', '↑')}: crawl up on suction`, 500);
+    if (run.phase === 'ramp') return ui.cue_(`Hang it upside down · ${kbd('LIFT', 'Space')} to let go`, 500);
     if (run.phase === 'air' && c.vel.y > -1) return ui.cue_(`Roll upright: ${kbd('stick', '← →')}`, 500);
     if (run.phase === 'air') return ui.cue_(`Hold ${kbd('LAND', 'Shift')}: it levels and slows the fall`, 500);
     return;

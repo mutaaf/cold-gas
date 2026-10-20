@@ -32,7 +32,8 @@ describe('vehicle: the numbers a car person checks', () => {
       return Infinity;
     };
     const tyres = t60({}), fan = t60({ fan: 1 }), all = t60({ fan: 1, thrust: 1 });
-    expect(tyres).toBeGreaterThan(2.6); expect(tyres).toBeLessThan(4.2);
+    // 2.45 t Rocket stunt car on μ 1.25 Trofeo RS (OFFICIAL grip): traction-limited RWD.
+    expect(tyres).toBeGreaterThan(3.6); expect(tyres).toBeLessThan(5.6);
     expect(fan).toBeLessThan(tyres - 0.8);
     expect(all).toBeLessThan(fan);
   });
@@ -46,9 +47,13 @@ describe('vehicle: the numbers a car person checks', () => {
   it('the fan holds the car on a vertical wall; without it, it falls', () => {
     for (const fan of [1, 0]) {
       const s = createVehicle('wall');
-      // Place the car on the vertical section, wheels to the deck, nose up, parked.
-      const p = wallProfile(WALL.r1 * Math.PI / 2 + 0.5);
-      s.pos.x = 0; s.pos.y = p.y + p.ny * SPEC.comHeight; s.pos.z = p.z + p.nz * SPEC.comHeight;
+      // Place the car where the curl is exactly vertical, wheels to the deck, nose up, parked.
+      // On a concave arc the deck rises under each axle by the sagitta (≈wheelbase²/8R), so the
+      // body sits that much further out than on flat ground.
+      const p = wallProfile(WALL.r1 * Math.PI / 2);
+      const sag = (SPEC.wheelbase * SPEC.wheelbase) / (8 * WALL.r1);
+      const off = SPEC.comHeight + sag;
+      s.pos.x = 0; s.pos.y = p.y + p.ny * off; s.pos.z = p.z + p.nz * off;
       // Body up = deck normal (−z), body forward = +y: rotate −90° about x.
       s.quat.x = -Math.SQRT1_2; s.quat.y = 0; s.quat.z = 0; s.quat.w = Math.SQRT1_2;
       s.fan = fan;   // already spooled up, as it is on the climb
@@ -109,8 +114,8 @@ describe('the reference runs land, and replay bit-exactly', () => {
   it('the Wall reference climbs the whole curl and hangs inverted', () => {
     const t = fly('wall').t;
     expect(t.progress).toBe(1);
-    expect(t.invertedTime).toBeGreaterThan(0.3);
-    expect(t.maxRampHeight).toBeGreaterThan(20);
+    expect(t.maxRampHeight).toBeGreaterThan(17);   // the sourced lip is ≈19.8 m
+    expect(t.invertedTime).toBeGreaterThan(1.5);     // it hangs on the ledge like the reveal
   });
 });
 
@@ -126,5 +131,31 @@ describe('judging', () => {
     const inp = { ...newInput(), throttle: 1 };
     for (let i = 0; i < 240 * 20 && run.phase !== 'done'; i++) stepRun(run, inp);
     expect(scoreRun(run.t).total).toBeLessThan(40);
+  });
+});
+
+// The reference runs must keep matching what the reveal's livestream showed
+// (docs/REVEAL_RESEARCH.md). If physics changes break these, the sim has drifted from reality.
+describe('reveal fidelity', () => {
+  const wall = fly('wall').t, lineup = fly('lineup').t;
+  it('the Wall: release to touchdown ≈4.5 s, a ~180° roll-out, braking ≈3.3 G, soft on four wheels', () => {
+    const air = (wall.touchTick - wall.airStartTick) / 240;
+    expect(air).toBeGreaterThan(3.5); expect(air).toBeLessThan(5.5);
+    const roll = Math.abs(wall.rollAccum) * 180 / Math.PI;
+    expect(roll).toBeGreaterThan(150); expect(roll).toBeLessThan(220);
+    expect(wall.maxG).toBeGreaterThan(2.5); expect(wall.maxG).toBeLessThan(4.6);
+    expect(wall.launchHeight).toBeGreaterThan(18); expect(wall.launchHeight).toBeLessThan(21.5);
+    expect(wall.sink).toBeLessThan(1.5);
+    expect(wall.wheelSpreadMs).toBeLessThan(80);
+  });
+  it('the Lineup: lift-off from flat ground, peak ≈7–8 m, a clean 360° over the cars', () => {
+    expect(lineup.apex).toBeGreaterThan(6.5); expect(lineup.apex).toBeLessThan(9.5);
+    expect(lineup.contact).toBe(false);
+    expect(Math.abs(Math.abs(lineup.rollAccum) * 180 / Math.PI - 360)).toBeLessThan(20);
+  });
+  it('0–60 mph with fan and rear thrusters lands near the live run (0.67 s net)', () => {
+    const s = settle(); const inp = { ...newInput(), throttle: 1, fan: 1, thrust: 1 };
+    let t = 0; while (Math.hypot(s.vel.x, s.vel.z) < 26.82 && t < 3) { step(s, inp); t += DT; }
+    expect(t).toBeGreaterThan(0.45); expect(t).toBeLessThan(0.95);
   });
 });

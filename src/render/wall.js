@@ -220,9 +220,10 @@ function truss(tier) {
   const m = (a, b, t) => members.push([...a, ...b, t]);
   const back = (s) => { const p = wallProfile(s); return [p.z - p.nz * T, p.y - p.ny * T]; };
 
-  // The tower behind the wall and ledge: 4 chords in a 3.4 × 2.8 m footprint.
-  const zA = WALL.r1 + T + 0.25, zB = zA + 2.8, xs = [-1.7, 1.7];
-  const top = WALL.r1 + WALL.h + WALL.r2 + T + 1.0; // a little above the curl's back
+  // The tower behind the curl (as at the reveal): 4 chords in a 3.4 × 3.0 m footprint, rising
+  // past the ledge; a cantilever truss off its top carries the inverted ledge out to the lip.
+  const zA = WALL.r1 + T + 0.35, zB = zA + 3.0, xs = [-1.7, 1.7];
+  const top = WALL.lip.y + T + 1.6;
   const step = 2.4;
   for (const x of xs) for (const z of [zA, zB]) m([x, 0, z], [x, top, z], 0.3);
   for (let y = step; y <= top + 0.01; y += step) {
@@ -237,26 +238,28 @@ function truss(tier) {
     m([xs[0], y, zB], [xs[1], y1, zB], 0.11); m([xs[1], y, zB], [xs[0], y1, zB], 0.11);
     for (const x of xs) m([x, y, f > 0 ? zA : zB], [x, y1, f > 0 ? zB : zA], 0.11);
   }
-  // Ties from the tower to the back of the vertical wall.
-  const ar = WALL.r1 * Math.PI / 2;
-  for (let s = ar + 0.3; s <= ar + WALL.h; s += 1.5) {
+  // Horizontal ties from the tower face to the back of the upper curl.
+  const arcLen = WALL.arcLength || WALL.r1 * Math.PI / 2;
+  for (let s = WALL.r1 * (Math.PI / 3); s <= arcLen - 0.5; s += 1.6) {
     const [bz, by] = back(s);
+    if (by > top - 0.5 || bz > zA) continue;
     for (const x of xs) m([x, by, bz], [x, by, zA], 0.13);
+    m([xs[0], by, bz], [xs[1], by, zA], 0.07);
   }
-  // Cantilever over the ledge: top chords running back over the curl, hangers down to the deck.
-  const sB0 = ar + WALL.h, sB1 = L;
-  const zEnd = WALL.lip.z - 1.2;
+  // Cantilever: top chords from the tower out over the ledge, a lower chord, hangers to the deck.
+  const zEnd = WALL.lip.z - 0.6;
   for (const x of xs) {
-    m([x, top, zA], [x, top, zEnd], 0.26);
-    m([x, top - step, zA], [x, top - 0.2, zEnd], 0.14);
+    m([x, top, zB], [x, top, zEnd], 0.26);
+    m([x, top - step, zA], [x, top - 0.25, zEnd + 0.8], 0.14);
   }
-  for (let s = sB0 + 0.6; s <= sB1 + 0.01; s += 1.4) {
+  for (let s = arcLen * 0.82; s <= L + 0.01; s += 1.3) {
     const [bz, by] = back(s);
+    if (bz > zA) continue;
     for (const x of xs) {
-      m([x, by, bz], [x, top, Math.min(bz, zA)], 0.12);
-      m([x, by, bz], [x, top, Math.min(bz + 1.2, zA)], 0.08);
+      m([x, by, bz], [x, top, bz], 0.12);
+      m([x, by, bz], [x, top, Math.min(bz + 1.3, zA)], 0.08);
     }
-    m([xs[0], top, Math.min(bz, zA)], [xs[1], top, Math.min(bz, zA)], 0.12);
+    m([xs[0], top, bz], [xs[1], top, bz], 0.12);
   }
   // Under-frame for the lower curve: posts from the slab to the back of the arc.
   for (let z = 6.2; z <= WALL.r1 + 0.3; z += 1.45) {

@@ -6,7 +6,7 @@
 // randomness, no wall clock: a run replays bit-exactly from its inputs (the Worker verifies
 // scores this way). No allocation in step().
 import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
-import { SPEC, NOZZLE_SPEC, wheelAnchors } from './spec.js';
+import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf } from './spec.js';
 import { surface, COURSES, DEFAULT_COURSE } from './courses.js';
 import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
 
@@ -21,14 +21,14 @@ const WHEEL_I = 1.35;                         // kg·m² per wheel (22" forged +
 const STATIC_LOAD = ((SPEC.dryMass + SPEC.gasMass) * G) / 4;
 const MOUNT_TO_CENTRE = 0.24;                 // at rest (spec.js wheelAnchors)
 const REST_LEN = MOUNT_TO_CENTRE + STATIC_LOAD / K_SPRING;
-const R = SPEC.wheelRadius;
+const RW = [0, 1, 2, 3].map(wheelRadiusOf);    // staggered: 20" front, 21" rear
 // Pacejka coefficients (peak at κ ≈ 0.10, α ≈ 7°): semi-slicks.
 const BX = 11.5, CX = 1.65, BY = 9.5, CY = 1.35;
 
 export const CAR = {
-  dryMass: SPEC.dryMass, airMass: SPEC.gasMass, isp: SPEC.isp,
+  dryMass: SPEC.dryMass, airMass: SPEC.gasMass, isp: SPEC.ispFull,
   halfW: SPEC.width / 2, halfL: SPEC.length / 2,
-  maxTravel: TRAVEL, restLen: REST_LEN, wheelR: R, mountToCentre: MOUNT_TO_CENTRE,
+  maxTravel: TRAVEL, restLen: REST_LEN, wheelR: SPEC.wheelRadius, mountToCentre: MOUNT_TO_CENTRE,
 };
 
 export const NOZZLES = NOZZLE_SPEC.map((n) => {
@@ -37,6 +37,7 @@ export const NOZZLES = NOZZLE_SPEC.map((n) => {
 });
 
 const WHEELS = wheelAnchors().map((a) => v3(...a));
+const LIFT_MAX = NOZZLE_SPEC.filter((n) => n.group === 'lift').reduce((a, n) => a + n.max, 0);
 const DRIVEN = [false, false, true, true];
 
 // Hull probe points (body frame): the faceted body's corners, sills, roof and nose/tail.
@@ -78,12 +79,20 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
 
 export const massOf = (s) => CAR.dryMass + Math.max(0, s.air);
 
+// Nozzle feed pressure as a fraction of full. The tanks expand adiabatically (p ∝ m^1.375,
+// γ ≈ 1.4 for N2); a regulator holds the feed at line pressure until the tanks drop below it.
+export function feedPressure(s) {
+  const rG = Math.max(0, s.air) / CAR.airMass;
+  const tank = rG * Math.sqrt(Math.sqrt(rG)) * Math.sqrt(Math.sqrt(Math.sqrt(rG)));
+  return Math.min(1, tank / SPEC.regulatedFraction);
+}
+
 // Scratch (never reallocated).
 const tmp = v3(), tmp2 = v3(), r = v3(), pw = v3(), vp = v3(), force = v3(), fwd = v3(), right = v3(), upW = v3(),
   fTot = v3(), tTot = v3(), wb = v3(), Lb = v3(), cmdT = v3(), dn = v3(), hitN = v3(), wf = v3(), wl = v3(), worldUpB = v3(), rp = v3();
 const sn = { x: 0, y: 0, z: 0, obstacle: false };
 const target = new Float64Array(NOZZLES.length);
-const eff = { lift: 0, thrust: 0, retro: 0 };
+const eff = { lift: 0, thrust: 0 };
 
 function pointVel(out, s, rw) { cross(out, s.angVel, rw); return add(out, out, s.vel); }
 function applyAt(rw, f) { add(fTot, fTot, f); cross(tmp2, rw, f); add(tTot, tTot, tmp2); }
@@ -132,7 +141,7 @@ export function mix(cmd, torqueCmd, out) {
   const liftBase = Math.min(cmd.lift, 1 - Math.min(1, maxDelta));
   for (let i = 0; i < NOZZLES.length; i++) {
     const g = NOZZLES[i].group;
-    const base = g === 'lift' ? liftBase : g === 'rear' ? cmd.thrust : g === 'front' ? cmd.retro || 0 : 0;
+    const base = g === 'lift' ? liftBase : g === 'rear' ? cmd.thrust : 0;   // yaw jets: attitude only
     out[i] = clamp(base + out[i], 0, 1);
   }
   return out;
@@ -177,11 +186,12 @@ export function step(s, inp) {
   // --- Suction fan: pulls the floor toward whatever surface is under it ---
   rotate(r, s.quat, FLOOR);
   add(pw, s.pos, r);
-  const gapT = raycast(s, pw, dn, SPEC.fanGapZero + 0.05);
+  const gapT = raycast(s, pw, dn, 0.6);
   s.floorGap = gapT < 0 ? Infinity : gapT;
   s.fan += (clamp(inp.fan, 0, 1) - s.fan) * Math.min(1, dt / SPEC.fanSpool);
-  const seal = gapT < 0 ? 0 : clamp((SPEC.fanGapZero - gapT) / (SPEC.fanGapZero - SPEC.fanGapFull), 0, 1);
-  s.fanForce = s.fan * seal * SPEC.fanMaxG * m * G;
+  // Skirts drop to seal; past their reach the leak grows and suction falls off fast.
+  const leak = gapT < 0 ? Infinity : Math.max(0, gapT - SPEC.fanSkirtReach) / SPEC.fanGapScale;
+  s.fanForce = gapT < 0 ? 0 : (s.fan * SPEC.fanMaxForce) / (1 + leak * leak);
   if (s.fanForce > 0) { scale(force, dn, s.fanForce); applyAt(r, force); }
 
   // --- Wheels: raycast suspension + Pacejka tyres + wheel spin ---
@@ -193,6 +203,7 @@ export function step(s, inp) {
     add(pw, s.pos, r);
     w.prevCompression = w.compression;
     w.contact = false;
+    const R = RW[i];
     const maxT = REST_LEN + R;
     const t = raycast(s, pw, dn, maxT);
     if (t < 0) {
@@ -310,29 +321,37 @@ export function step(s, inp) {
   // --- Thrusters (nitrogen cold gas, blowdown) ---
   flightComputer(s, inp, cmdT);
   if (grounded >= 2) { cmdT.x = 0; cmdT.y = 0; cmdT.z = 0; }
-  eff.lift = inp.lift; eff.thrust = inp.thrust; eff.retro = inp.retro;
+  eff.lift = inp.lift; eff.thrust = inp.thrust;
   if (inp.assist && inp.level && grounded === 0 && s.air > 0) {
     // LAND: govern lift so the sink rate eases to a soft touchdown on the ground below.
     const h = Math.max(0, s.pos.y - SPEC.comHeight - 0.05);
-    let wantVy = -Math.max(0.9, Math.min(8, Math.sqrt(h * 2 * 2.6)));
-    // Inside the last 3 m, nearly hover until the car is level: touch down flat, on four wheels.
-    if (h < 3 && upW.y < 0.99) wantVy = Math.max(wantVy, -0.45);
+    // Plan the braking from the thrust the down-jets can actually make at today's tank pressure
+    // (blowdown halves it fast), then brake late and hard like the reveal (3.3 G peak at ≈6 m).
+    const aAvail = (LIFT_MAX * feedPressure(s)) / m - G;
+    const aPlan = clamp(aAvail * 0.5, 0.6, 9);    // margin: pressure can still fall during the burn
+    // Brake to a low hover (as the reveal did), then set down at walking pace: time to level.
+    const HOVER = 1.3;
+    let wantVy = h > HOVER ? -Math.max(0.6, Math.min(16, Math.sqrt((h - HOVER) * 2 * aPlan))) : -0.55;
+    if (h < HOVER + 1.5 && upW.y < 0.99) wantVy = Math.max(wantVy, -0.25);
     if (s.vel.y < wantVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((wantVy - s.vel.y) * 0.8 + 0.55, 0, 1));
   }
   mix(eff, cmdT, target);
-  const bd = 0.45 + 0.55 * (Math.max(0, s.air) / CAR.airMass);   // blowdown: thrust ∝ tank pressure
+  // Blowdown: the tanks expand adiabatically (p ∝ m^1.375 here, γ ≈ 1.4 for N2), thrust follows
+  // pressure, and specific impulse sags with it (72 s full → ≈60 s average).
+  const pr = feedPressure(s);
+  const isp = SPEC.ispFull * (0.7 + 0.3 * pr);
   let mdot = 0;
   for (let i = 0; i < NOZZLES.length; i++) {
     const nz = NOZZLES[i];
-    const goal = s.air > 0 ? target[i] : 0;
+    const goal = s.air > 0.5 ? target[i] : 0;
     s.throttles[i] += (goal - s.throttles[i]) * Math.min(1, dt / 0.03);
-    const F = nz.max * s.throttles[i] * bd;
+    const F = nz.max * s.throttles[i] * pr;
     if (F <= 0) continue;
     rotate(r, s.quat, nz.pos);
     rotate(force, s.quat, nz.dir);
     scale(force, force, F);
     applyAt(r, force);
-    mdot += F / (SPEC.isp * G);
+    mdot += F / (isp * G);
   }
   s.air = Math.max(0, s.air - mdot * dt);
 
@@ -345,7 +364,7 @@ export function step(s, inp) {
   addScaled(s.pos, s.pos, s.vel, dt);
   rotateInv(Lb, s.quat, tTot);
   rotateInv(wb, s.quat, s.angVel);
-  const k = m / SPEC.dryMass;
+  const k = m / SPEC.inertiaMass;
   const Ix = SPEC.inertia.pitch * k, Iy = SPEC.inertia.yaw * k, Iz = SPEC.inertia.roll * k;
   const hx = Ix * wb.x, hy = Iy * wb.y, hz = Iz * wb.z;
   const gx = wb.y * hz - wb.z * hy, gy = wb.z * hx - wb.x * hz, gz = wb.x * hy - wb.y * hx;
