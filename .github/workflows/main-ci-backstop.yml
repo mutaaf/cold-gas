@@ -1,0 +1,51 @@
+name: Main CI backstop
+# Squash merges made by the Agent auto-merge workflow are pushed with GITHUB_TOKEN, and
+# GitHub never starts new workflow runs from GITHUB_TOKEN events, so CI did not run on
+# those main commits and "is main red?" had nothing to read. workflow_dispatch is the one
+# exception, so this dispatches CI on main whenever main's head commit has no CI run.
+#
+# Triggers: right after a PR's CI goes green (auto-merge lands seconds later), and hourly
+# as a backstop. Read-only apart from dispatching CI; never checks out code.
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  schedule:
+    - cron: '7 * * * *'
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: read
+
+concurrency:
+  group: main-ci-backstop
+  cancel-in-progress: false
+
+jobs:
+  dispatch:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.event == 'pull_request' &&
+       github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      # After a green PR run, give auto-merge up to ~5 minutes to land.
+      TRIES: ${{ github.event_name == 'workflow_run' && 10 || 1 }}
+    steps:
+      - name: Dispatch CI on main if its head has no run
+        run: |
+          for i in $(seq 1 "$TRIES"); do
+            sha=$(gh api "repos/$REPO/commits/main" --jq '.sha')
+            runs=$(gh api "repos/$REPO/actions/workflows/ci.yml/runs?head_sha=$sha&per_page=1" --jq '.total_count')
+            if [ "$runs" = "0" ]; then
+              echo "main@$sha has no CI run; dispatching"
+              gh workflow run ci.yml --repo "$REPO" --ref main
+              exit 0
+            fi
+            [ "$i" -lt "$TRIES" ] && sleep 30
+          done
+          echo "main@$sha already has CI; nothing to do"

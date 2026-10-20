@@ -1,0 +1,57 @@
+name: Agent auto-merge
+# Arms GitHub auto-merge on agent PRs so they land the moment required checks pass,
+# even if the agent's cloud session ended first.
+#
+# Runs as pull_request_target: the workflow definition comes from main, so a PR cannot
+# edit its own guard. It never checks out or executes PR code; it only reads metadata.
+# Never armed: proposal/ PRs, fork PRs, drafts, PRs touching control.json frozen_paths,
+# or anything while agents/control.json has "paused": true.
+on:
+  pull_request_target:
+    types: [opened, reopened, synchronize, ready_for_review, converted_to_draft]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  arm:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (startsWith(github.head_ref, 'scout/') || startsWith(github.head_ref, 'build/') ||
+       startsWith(github.head_ref, 'fix/') || startsWith(github.head_ref, 'keep/'))
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      PR: ${{ github.event.pull_request.number }}
+      DRAFT: ${{ github.event.pull_request.draft }}
+    steps:
+      - name: Decide
+        id: gate
+        run: |
+          control=$(gh api "repos/$REPO/contents/agents/control.json?ref=main" --jq '.content' | base64 -d)
+          paused=$(echo "$control" | jq -r '.paused')
+          frozen=$(echo "$control" | jq -r '.frozen_paths[]')
+          changed=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
+          hit=""
+          for f in $changed; do
+            for p in $frozen; do
+              case "$f" in "$p"*) hit="$hit $f" ;; esac
+            done
+          done
+          if [ "$paused" = "true" ]; then echo "verdict=paused" >> "$GITHUB_OUTPUT"
+          elif [ -n "$hit" ]; then echo "verdict=frozen" >> "$GITHUB_OUTPUT"; echo "hit=$hit" >> "$GITHUB_OUTPUT"
+          elif [ "$DRAFT" = "true" ]; then echo "verdict=draft" >> "$GITHUB_OUTPUT"
+          else echo "verdict=arm" >> "$GITHUB_OUTPUT"; fi
+      - name: Arm squash auto-merge
+        if: steps.gate.outputs.verdict == 'arm'
+        run: gh pr merge "$PR" --repo "$REPO" --auto --squash --delete-branch
+      - name: Refuse (frozen paths)
+        if: steps.gate.outputs.verdict == 'frozen'
+        run: |
+          gh pr merge "$PR" --repo "$REPO" --disable-auto || true
+          gh pr comment "$PR" --repo "$REPO" --body "Auto-merge refused: this PR touches operator-only paths (${{ steps.gate.outputs.hit }}). It needs the operator. Agents must not merge it."
+      - name: Hold (paused or draft)
+        if: steps.gate.outputs.verdict == 'paused' || steps.gate.outputs.verdict == 'draft'
+        run: gh pr merge "$PR" --repo "$REPO" --disable-auto || true
