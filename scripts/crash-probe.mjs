@@ -36,7 +36,7 @@ function fly(course, opts, label = course) {
     parts = Object.entries(seen).map(([k, n]) => `${k}×${n}`).join(',');
   }
   console.log(label.padEnd(18), card.total.toFixed(2).padStart(6), card.verdict.padEnd(16), run.t.endReason.padEnd(8), String(run.tick).padStart(6),
-    '| maxW', maxW.toFixed(1).padStart(4), 'crush', Math.max(...run.car.crush).toFixed(2), 'minUp', minUp.toFixed(2).padStart(5), 'bounces', bounces, 'flipped', run.t.flipped,
+    '| maxW', maxW.toFixed(1).padStart(4), 'crush', (run.car.crush ? Math.max(...run.car.crush) : 0).toFixed(2), 'minUp', minUp.toFixed(2).padStart(5), 'bounces', bounces, 'flipped', run.t.flipped,
     '| impacts', imp ? `${imp.count} peak ${peak.toFixed(1)} m/s [${parts}]` : '-',
     '| bodies', run.car.world.bodies.map((b) => `${b.id}(${b.cx.toFixed(2)},${b.cz.toFixed(2)},${b.yaw.toFixed(2)})`).join(' '));
   return run;

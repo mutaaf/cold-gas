@@ -88,10 +88,12 @@ describe('impact events', () => {
     expect(events(re.impacts)).toEqual(events(carry5.impacts));
     expect(scoreRun(re.t)).toEqual(scoreRun(carry5.t));
   });
-  const roll = fly('lineup', { rolls: 0.5 });
-  it('a rollover: lands on its roof on the row and rolls over, and replays bit-exactly', () => {
+  // Too low over the row: it clips the roofs, goes over on its side and ends on its roof.
+  const roll = fly('lineup', { apex: 2.5 });
+  it('a rollover: clips the row, rolls onto its roof, and replays bit-exactly', () => {
     expect(roll.t.flipped).toBe(true);
-    expect(kinds(roll.impacts, HIT).some((e) => e[2] === PART.roof)).toBe(true);
+    expect(kinds(roll.impacts, HIT).some((e) => e[2] === PART.side && e[4] >= 0)).toBe(true);
+    expect(kinds(roll.impacts, SCRAPE).some((e) => e[2] === PART.roof)).toBe(true);
     expect(Math.max(...roll.car.crush)).toBeGreaterThan(0.05);
     const re = simulate(roll.inputLog, 'lineup');
     expect(re.tick).toBe(roll.tick);

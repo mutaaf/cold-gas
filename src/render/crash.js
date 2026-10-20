@@ -350,7 +350,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
       // Into the parked car: against the normal (which points out of it, toward the roadster).
       wp.set(x - nx, y - ny, z - nz).applyMatrix4(inv);
       ld.copy(wp).sub(lp).normalize();
-      dent(d, 0.5 + depth * 1.5, depth, salt);
+      dent(d, 0.45 + depth * 1.2, depth, salt);
     }
   }
   function rockParked(i, x, z, nx, ny, nz, speed) {
@@ -473,7 +473,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
     // A big hit vents a nitrogen line: a white jet of condensation for a moment.
     if (sev > 0.55) st.ventT = Math.max(st.ventT, 1.1 + sev);
     // Parked car: a dent and a rock on its springs.
-    if (body >= 0) { dentParked(body, x, y, z, nx, ny, nz, Math.min(0.22, 0.006 * v * v), imp.tick[i] * 0.29); rockParked(body, x, z, nx, ny, nz, v); }
+    if (body >= 0) { dentParked(body, x, y, z, nx, ny, nz, Math.min(0.14, 0.003 * v * v), imp.tick[i] * 0.29); rockParked(body, x, z, nx, ny, nz, v); }
     crunch(sev, { glass: glassy && v > 5, seed: imp.tick[i] * 31 + imp.probe[i] });
     if (!reduced) {
       director.shake(Math.min(2.6, 0.25 + v * 0.17));

@@ -175,11 +175,11 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
   page.on('console', (m) => { if (m.type() === 'error' && !/api\//.test(m.text()) && !/404/.test(m.text())) errors.push(m.text()); });
   await page.goto('/coldgas/?course=lineup&gfx=low');
   await expect(page.locator('[data-start]')).toBeVisible();
-  // Roll only half way: it comes down on its roof on the row.
+  // Too low over the row: it clips the roofs and rolls over.
   await page.evaluate(() => {
     const g = window.__coldgas;
     g.startRun('reveal');
-    g.S.autopilot = g.createAutopilot('lineup', { rolls: 0.5 });
+    g.S.autopilot = g.createAutopilot('lineup', { apex: 2.5 });
     g.skipCountdown();
   });
   await page.waitForFunction(() => window.__coldgas.S.run.impacts.count > 0, null, { timeout: 45_000 });
@@ -189,7 +189,7 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
   expect(run.flipped).toBe(true);
   expect(run.impacts).toBeGreaterThan(5);
   // The replay walks the same events: the hazards come back on once it reaches the crash.
-  await page.evaluate(() => { window.__coldgas.S.replayT = 700; });
+  await page.evaluate(() => { window.__coldgas.S.replayT = 660; });
   await page.waitForFunction(() => window.__coldgas.crash.state.hazard === true, null, { timeout: 30_000 });
   expect(errors).toEqual([]);
 });

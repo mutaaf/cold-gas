@@ -1,7 +1,7 @@
 // Screenshots of crash moments, keyed to the run's own impact events.
 //   node scripts/shots-crash.mjs outdir [url] [phone] [only]
-// Cases: the Show dropped onto the row (no carry), a Lineup roll that lands on its roof
-// (rollover), full throttle up the curl (thrown off the ledge), a Lineup jump too low to clear.
+// Cases: the Show dropped onto the row (no carry), a Lineup jump too low to clear the row
+// (rollover), full throttle up the curl (thrown off the ledge), a half roll that comes down nose-first.
 import { chromium } from '@playwright/test';
 const [out, url = 'http://localhost:4320/coldgas/', phone, only] = process.argv.slice(2);
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
@@ -14,9 +14,9 @@ await page.waitForTimeout(2500);
 
 const CASES = [
   { id: 'row', course: 'show', pilot: { carry: 5 } },
-  { id: 'rollover', course: 'lineup', pilot: { rolls: 0.5 } },
+  { id: 'rollover', course: 'lineup', pilot: { apex: 2.5 } },
   { id: 'thrown', course: 'show', pilot: 'full' },
-  { id: 'low', course: 'lineup', pilot: { apex: 2.5 } },
+  { id: 'nose-in', course: 'lineup', pilot: { rolls: 0.5 } },
 ];
 // After the first big hit: the moment, the slow-motion beat, the tumble, the aftermath.
 const AFTER = [[2, 'a-impact'], [14, 'b-beat'], [70, 'c-tumble'], [260, 'd-after']];
