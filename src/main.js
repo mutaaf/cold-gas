@@ -338,7 +338,8 @@ function liveStep(dt) {
 
   // Phase cues and moments.
   // Touch layout follows the phase: pedals on the ground and up the wall, LIFT/LAND in the air.
-  const tp = run.phase === 'air' ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
+  // (Let go of the Wall, the air controls come up at once, not when the sim calls it airborne.)
+  const tp = run.phase === 'air' || (run.phase === 'ramp' && S.released) ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
   if (ui.touch.dataset.phase !== tp) {
     ui.touch.dataset.phase = tp;
     liftLabel.textContent = tp === 'ramp' ? 'RELEASE' : 'LIFT';
@@ -402,7 +403,7 @@ function cues(run, c) {
       return;
     }
     if (boostCue) return ui.cue_(adv ? `${kbd('BOOST', 'F')} the rear row · carry over the roofs` : `${kbd('BOOST', 'F')} · carry about 10 m/s over the row`, 400);
-    if (run.phase === 'air' && landing.prediction.upY < 0.85) return ui.cue_(adv ? `Roll out: ${kbd('a side', 'A or D')} · watch the dial` : `Roll out: ${kbd('stick', '← →')} · let go early`, 400);
+    if (run.phase === 'air' && landing.prediction.upY < 0.85) return ui.cue_(adv ? `Roll out: ${kbd('Q+Z or E+C', 'A or D')} · watch the dial` : `Roll out: ${kbd('stick', '← →')} · let go early`, 400);
     if (run.phase === 'air') return ui.cue_(`Brake: ${kbd('LIFT', 'Space')} at the BRAKE line`, 400);
     return;
   }
@@ -548,7 +549,8 @@ function setTier(tier) {
   const t = TIERS[S.tier];
   tierBtn.dataset.tier = S.tier;
   ui.screens.hud.dataset.tier = S.tier;
-  tierBtn.innerHTML = t.factor > 1 ? `${t.label} <i>×${t.factor.toFixed(2)}</i>` : t.label;
+  const short = { assist: 'Assist', pro: 'Pro', advanced: 'Adv' }[S.tier];
+  tierBtn.innerHTML = `<span class="tl">${t.label}</span><span class="ts">${short}</span>${t.factor > 1 ? ` <i>×${t.factor.toFixed(2)}</i>` : ''}`;
   tierBtn.setAttribute('aria-label', `Flight tier: ${t.label}`);
   try { localStorage.setItem('coldgas_tier', S.tier); localStorage.setItem('coldgas_assist', S.assist ? '1' : '0'); } catch { /* storage blocked */ }
 }
@@ -563,7 +565,7 @@ const drillBar = document.querySelector('[data-drill-bar]');
 const slowBtn = document.querySelector('[data-drill-slow]');
 const viewBtns = document.querySelectorAll('[data-view]');
 try { S.pilotView = localStorage.getItem('coldgas_view') === 'pilot'; S.viewChosen = !!localStorage.getItem('coldgas_view'); } catch { S.pilotView = false; }
-const syncView = () => viewBtns.forEach((b) => { b.textContent = S.pilotView ? 'Pilot view' : 'Broadcast'; b.setAttribute('aria-pressed', String(S.pilotView)); });
+const syncView = () => viewBtns.forEach((b) => { b.innerHTML = S.pilotView ? '<span class="tl">Pilot view</span><span class="ts">Pilot</span>' : '<span class="tl">Broadcast</span><span class="ts">TV</span>'; b.setAttribute('aria-pressed', String(S.pilotView)); });
 function toggleView() {
   S.pilotView = !S.pilotView; S.viewChosen = true; syncView();
   director.setView(S.pilotView ? 'pilot' : 'broadcast');
@@ -614,6 +616,7 @@ function startDrill(id) {
   ui.countdown(0);
   drillBar.hidden = false;
   document.querySelector('[data-drill-name]').textContent = `${drill.n} ${drill.label}`;
+  document.querySelector('[data-drill-n]').textContent = drill.n;
   document.querySelector('[data-drill-goal]').textContent = drill.goal;
   ui.touch.hidden = !(coarse || usingTouch());
   plumes.clear();

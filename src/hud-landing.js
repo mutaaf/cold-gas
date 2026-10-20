@@ -80,10 +80,12 @@ export function createLandingHud({ scene }) {
     if (sink !== last.sink) { el.sink.textContent = (Math.max(0, sink) / 10).toFixed(1); last.sink = sink; }
     if (pr.status !== last.status) {
       root.dataset.status = pr.status;
-      el.state.textContent = pr.status === 'green' ? 'On profile' : pr.status === 'amber' ? 'Fast · brake' : 'Too fast';
       mat.color.setHex(COLORS[pr.status]);
       last.status = pr.status;
     }
+    // What the band asks of you: roof up first, then the brake.
+    const word = pr.status === 'green' ? 'On profile' : pr.upY < 0.85 ? 'Roll out · now' : pr.status === 'amber' ? 'Brake' : 'Too fast';
+    if (word !== last.word) { el.state.textContent = word; last.word = word; }
     const tg = Math.round(pr.profileSink * 2);
     if (tg !== last.target) { el.target.textContent = `≤ ${(tg / 2).toFixed(1)}`; last.target = tg; }
     const ttg = Number.isFinite(pr.tGround) ? Math.round(pr.tGround * 10) : 999;

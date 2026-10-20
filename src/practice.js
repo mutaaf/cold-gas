@@ -15,6 +15,8 @@ import { dhypot } from './sim/dmath.js';
 const uv = { x: 0, y: 0, z: 0 };
 const speedOf = (c) => dhypot(c.vel.x, c.vel.y, c.vel.z);
 const heightOf = (c) => c.pos.y - SPEC.comHeight;
+// The release drills: a RELEASE tap's push-off on the down-jets (ticks), then the hand-over.
+const PUSH = 24, HANDOVER = 36;
 
 export const DRILLS = [
   {
@@ -30,7 +32,7 @@ export const DRILLS = [
     blurb: 'Falling inverted off the lip. Boost, roll out, brake, set it down.',
     goal: 'Roll out high, brake by the line',
     hang: true,
-    at: (run, st) => st.releasedTicks >= 60,
+    at: (run, st) => st.releasedTicks >= HANDOVER,
     released: true,
   },
   {
@@ -38,7 +40,7 @@ export const DRILLS = [
     blurb: 'Only the boost: carry over five roofs with a metre or two to spare. Ends past the row.',
     goal: 'Clear the roofs by 1–3 m',
     hang: true,
-    at: (run, st) => st.releasedTicks >= 60,
+    at: (run, st) => st.releasedTicks >= HANDOVER,
     released: true,
     // Ends once the car is past the row (or on it).
     done: (run) => run.t.contact || run.car.pos.z < COURSES.show.rowFar - 2 || run.phase === 'landed' || run.phase === 'done',
@@ -56,8 +58,8 @@ export const drillsFor = (course) => DRILLS.filter((d) => d.courses.includes(cou
 
 // Fly the reference to the drill's start and hand the run over (≈30–70 ms of sim). The ledge
 // drills fly it onto the inverted ledge (93 % of the curl), stop and hang there; the release
-// drills then let go as a player does (fan off, a 0.25 s push-off on the down-jets) and hand over:
-// every decision after the release is yours.
+// drills then let go as a player does (fan off, a 0.1 s RELEASE tap on the down-jets) and hand over
+// 0.15 s after the release: every decision after it is yours.
 export function buildDrill(drill, course) {
   const run = createRun(course);
   const ap = createAutopilot(course, drill.hang ? { releaseAt: 0.93, hang: 999 } : {});
@@ -67,7 +69,7 @@ export function buildDrill(drill, course) {
     if (drill.hang && !st.hanging && run.phase === 'ramp' && wallProgress(run.car.pos) >= 0.92 && speedOf(run.car) < 0.2) st.hanging = true;
     if (drill.at(run, st)) break;
     if (drill.released && st.hanging) {
-      Object.assign(idle, newInput()); idle.fan = 0; idle.lift = 1; st.releasedTicks++;
+      Object.assign(idle, newInput()); idle.fan = 0; idle.lift = st.releasedTicks < PUSH ? 1 : 0; st.releasedTicks++;
       stepRun(run, idle);
       continue;
     }

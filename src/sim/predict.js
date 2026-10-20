@@ -48,7 +48,8 @@ export function predict(c, h, out) {
   // Not roof-up yet? The roll-out comes first, and the car keeps falling while it turns (≈1 s for
   // the half-roll off the ledge at the stick's rate, with the spin-up and the stop).
   const tilt = datan2(dhypot(upv.x, upv.z), upv.y);
-  const tLevel = tilt > 0.2 ? 0.2 + tilt / 3.5 : 0;
+  // (A bank of up to ≈60° LAND levels while it brakes; past that the roll-out comes first.)
+  const tLevel = tilt > 1.05 ? 0.15 + (tilt - 0.7) / 3.5 : 0;
   out.stopDist = stopFrom(sink, tLevel, out.aMax);
   // Brake by: the roll-out and the stop, plus one reaction time of falling, plus a metre to set down.
   out.brakeBy = out.stopDist + sink * REACTION + 1;
@@ -61,17 +62,17 @@ export function predict(c, h, out) {
   const sinkAhead = Math.max(0, sink - aUp * WARN), hAhead = h - sink * WARN + 0.5 * aUp * WARN * WARN;
   out.marginAhead = hAhead - (stopFrom(sinkAhead, tLevel, out.aMax) + sinkAhead * REACTION + 1);
   const levelDrop = sink * tLevel + 0.5 * G * tLevel * tLevel, sinkLevel = sink + G * tLevel;
-  // The band's edge: the sink you can still stop from at 70 % of a full-lift stop, down to a hover.
-  // (LAND's own plan flies well inside it: it brakes on the end-of-stop pressure.)
-  out.profileSink = h > HOVER ? Math.sqrt((h - HOVER) * 2 * Math.max(0.6, 0.7 * out.aMax)) : 0.55;
-  // Red: even full lift from now (after the roll-out) won't stop it in time. Amber: within a
-  // reaction time and a metre of the BRAKE line (a person needs the warning before the line, not
-  // at it), or falling faster than the profile. Green: on or under the profile, with room.
-  const warn = out.marginAhead < 0;
-  out.status = out.stopDist >= h - 0.3 ? 'red' : warn || sink > out.profileSink + 0.5 ? 'amber' : 'green';
-  // Touching down after braking from here at full lift: v² = sink² − 2·a·h.
+  // The band's edge: the most sink you can carry here and still roll out (if you must), react and
+  // stop at 70 % of a full-lift stop, down to a hover. (LAND's own plan flies well inside it.)
+  out.profileSink = h > HOVER ? maxSink(h - HOVER, tLevel, Math.max(0.6, 0.7 * out.aMax)) : 0.55;
+  // Touching down after braking from here at full lift (after the roll-out): v² = v² − 2·a·h.
   const v2 = sinkLevel * sinkLevel - 2 * Math.max(0, out.aMax) * Math.max(0, h - levelDrop - 0.3);
   out.touchSink = v2 > 0 ? Math.sqrt(v2) : 0;
+  // Red: even full lift from now touches down harder than a firm landing. Amber: the stop has to
+  // start within WARN s (a person needs the warning before the BRAKE line, not at it), or it would
+  // touch down firm, or the sink is past the band. Green: on or under the band, with room.
+  out.status = out.touchSink > SINK_FIRM ? 'red'
+    : out.marginAhead < 0 || out.touchSink > SINK_SOFT || sink > out.profileSink + 0.5 ? 'amber' : 'green';
   // Free fall to the ground.
   out.tGround = (vy + Math.sqrt(vy * vy + 2 * G * Math.max(0, h))) / G;
   // On the profile: fall until the profile catches the sink rate, then ride it down.
@@ -90,6 +91,16 @@ const WARN = 0.6;
 function stopFrom(sink, tLevel, a) {
   const drop = sink * tLevel + 0.5 * G * tLevel * tLevel, v = sink + G * tLevel;
   return drop + (v > 0 ? (a > 0.05 ? (v * v) / (2 * a) : Infinity) : 0);
+}
+
+// The largest sink from which a stop (roll-out, reaction, braking at `a`) still fits in `room` m.
+function maxSink(room, tLevel, a) {
+  let lo = 0, hi = 40;
+  for (let i = 0; i < 18; i++) {
+    const v = (lo + hi) / 2;
+    if (stopFrom(v, tLevel, a) + v * REACTION <= room) lo = v; else hi = v;
+  }
+  return lo;
 }
 
 // Seconds to touchdown riding the LAND profile (a coarse 1-D integration: 1/30 s steps).

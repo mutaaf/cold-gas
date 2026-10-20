@@ -87,7 +87,8 @@ export function sample(phase, tier, out = newInput(), released = false) {
   if (typeof tier === 'boolean') tier = tier ? 'assist' : 'pro';
   out.assist = tier === 'assist' ? 1 : 0;
   out.manual = tier === 'advanced' ? 1 : 0;
-  const air = phase === 'air';
+  // Let go of the Wall, you're flying (the sim calls it airborne 0.1 s later).
+  const air = phase === 'air' || (phase === 'ramp' && released);
   let ax = 0, ay = 0, lift = 0, land = 0, thr = 0, brk = 0, yaw = 0;
   ax = rampKey((k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0));
   if (k('ArrowUp', 'KeyW')) ay -= 1;
@@ -122,12 +123,14 @@ export function sample(phase, tier, out = newInput(), released = false) {
   }
   ax = Math.max(-1, Math.min(1, ax)); ay = Math.max(-1, Math.min(1, ay));
 
-  if (out.manual) return advanced(out, air || (phase === 'ramp' && released), lift, ax, thr, brk, pads);
+  if (out.manual) return advanced(out, air, lift, ax, thr, brk, pads);
   if (air) {
     out.roll = ax; out.pitch = -ay; out.yaw = yaw; out.lift = lift; out.level = land; out.thrust = boost;
   } else {
     out.steer = ax; out.throttle = thr; out.brake = brk; out.lift = lift;
-    out.thrust = land && !brk ? 1 : 0;   // Shift on the ground = rear boost
+    // Shift on the run-up = rear boost. Not after a landing: it's LAND in the air, and holding it
+    // through the touchdown used to fire the rear jets and launch the car off the pad.
+    out.thrust = phase === 'drive' && land && !brk ? 1 : 0;
   }
   return out;
 }

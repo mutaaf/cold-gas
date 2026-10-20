@@ -435,7 +435,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .descent[data-status='amber'] .d-sink b, .descent[data-status='amber'] .d-state { color: var(--amber); }
 .descent[data-status='red'] .d-sink b, .descent[data-status='red'] .d-state { color: var(--hot); }
 .descent[data-status='red'] .d-state { animation: blink 0.5s steps(2) infinite; }
-.d-tape { width: 58px; height: 150px; overflow: visible; }
+.d-tape { width: 82px; height: 150px; overflow: visible; }
 .d-axis { stroke: var(--hair); stroke-width: 1; }
 .d-ticks line { stroke: var(--ink-3); stroke-width: 1; }
 .d-fill { fill: rgba(255, 191, 90, 0.28); transition: fill 0.2s; }
@@ -443,7 +443,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .d-brake { stroke: var(--amber); stroke-width: 1.2; stroke-dasharray: 3 2; }
 .d-brake-lbl { font: 500 7.5px var(--text); letter-spacing: 0.16em; fill: var(--amber); }
 .d-car path { fill: var(--ink); }
-.d-car text { font: 400 10px var(--mono); fill: var(--ink); }
+.d-car text { font: 400 10px var(--mono); fill: var(--ink); text-anchor: end; }
 .descent[data-status='green'] .d-brake, .descent[data-status='green'] .d-brake-lbl { opacity: 0.7; }
 
 /* Attitude: the horizon turns over when you're upside down; the car glyph stays put. */
@@ -469,8 +469,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* The nozzle diagram: a ring per nozzle sweeps to its valve; Advanced shows the keys. */
 .nozzles .nzg .nz-ring { fill: none; stroke: var(--ice); stroke-width: 1.6; opacity: 0.85; }
 .nozzles .nzg .nz-k { display: none; font: 500 9px var(--mono); fill: var(--ink-2); text-anchor: middle; }
-.hud[data-tier='advanced'] .nozzles { width: 84px; height: 140px; }
-.hud[data-tier='advanced'] .nozzles .nz-k { display: block; }
+/* Advanced: the diagram is the key legend, so it grows and every nozzle wears its key. */
+.hud[data-tier='advanced'] .nozzles { width: 104px; height: 174px; }
+.hud[data-tier='advanced'] .nozzles .body { stroke: var(--ink-3); }
+.hud[data-tier='advanced'] .nozzles .nz-k { display: block; font-size: 11px; fill: var(--ink); }
+.hud[data-tier='advanced'] .nozzles .nz { fill: rgba(255, 255, 255, 0.2); }
 
 /* --- Advanced on a phone: the nozzle pad ------------------------------------------------------- */
 .nozzle-pad { position: fixed; left: 50%; bottom: calc(14px + var(--safe-b)); transform: translateX(-50%); width: min(330px, 92vw); z-index: 5; touch-action: none; user-select: none; -webkit-user-select: none; }
@@ -538,5 +541,23 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @media (pointer: coarse) {
   .hud .d-sink b { font-size: 44px; }
   .hud .d-tape { height: 104px; }
-  .hud[data-tier='advanced'] .nozzles { width: 60px; height: 100px; }
+  .hud[data-tier='advanced'] .nozzles { width: 66px; height: 110px; }
+}
+
+/* Phones: short labels where a long one won't fit; the drill bar stays one compact row and the HUD
+   moves down out of its way; in the air the readouts drop what the landing HUD already says. */
+.ts, .drill-bar .db-n { display: none; }
+@media (max-width: 480px) {
+  .tl { display: none; }
+  .ts { display: inline; }
+  .drill-bar [data-drill-name], .drill-bar kbd { display: none; }
+  .drill-bar .db-n { display: inline; }
+  .drill-bar { gap: 5px; padding: 5px 5px 5px 12px; }
+  .drill-bar .chip { padding: 0 10px; }
+}
+@media (pointer: coarse) {
+  body:has([data-drill-bar]:not([hidden])) .hud { top: calc(100px + var(--safe-t)); }
+  .hud[data-air] .r-sink, .hud[data-air] .r-fan { display: none; }
+  .hud[data-tier='advanced'] .nozzles { width: 52px; height: 88px; }
+  .hud[data-tier='advanced'] .nozzles .nz-k { display: none; }
 }

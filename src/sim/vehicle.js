@@ -133,7 +133,7 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     wheels: WHEELS.map(() => ({ contact: true, compression: REST_LEN - MOUNT_TO_CENTRE, prevCompression: REST_LEN - MOUNT_TO_CENTRE, omega: 0, spin: 0, steer: 0, slip: 0, slipAngle: 0, load: STATIC_LOAD, nx: 0, ny: 1, nz: 0 })),
     fan: 0, fanForce: 0, floorGap: SPEC.rideHeight,
     hullContact: false, hullGround: false, obstacleContact: false, obstacleSpeed: 0, hullImpulse: 0,
-    steer: 0, grounded: 4, onWall: false, wheelForce: 0, tcActive: false,
+    steer: 0, grounded: 4, onWall: false, onSlope: false, wheelForce: 0, tcActive: false,
     // Crash state: each hull probe's permanent crush (m), its contact last tick, and the run's
     // impact events (src/sim/impacts.js).
     crush: new Float64Array(HULL.length), crushShown: new Float64Array(HULL.length), touch: new Uint8Array(HULL.length), impacts: createImpacts(),
@@ -357,7 +357,7 @@ export function step(s, inp) {
   if (s.fanForce > 0) { scale(force, dn, s.fanForce); applyAt(r, force); }
 
   // --- Wheels: raycast suspension + Pacejka tyres + wheel spin ---
-  let grounded = 0, wallContact = false, wheelForce = 0;
+  let grounded = 0, wallContact = false, sloped = false, wheelForce = 0;
   s.hullContact = false; s.hullGround = false; s.obstacleContact = false;
   s.tcActive = false;
   evHit[0] = 0; evScr[0] = 0; evWheel[0] = 0;
@@ -383,6 +383,7 @@ export function step(s, inp) {
     w.contact = true; grounded++;
     if (hitBody) s.obstacleContact = true;      // a tyre on a parked car is contact
     if (hitN.y < 0.85) wallContact = true;
+    if (hitN.y < 0.995) sloped = true;
     w.nx = hitN.x; w.ny = hitN.y; w.nz = hitN.z;
     const comp = maxT - t;
     w.compression = Math.min(comp, REST_LEN + R);
@@ -422,7 +423,7 @@ export function step(s, inp) {
       const motorT = Math.min(SPEC.maxWheelTorque, (SPEC.power / 2) / Math.max(Math.abs(w.omega), 8));
       T = inp.throttle * motorT;
       // Assist's crawl limiter: on the curl, drive torque fades out above ASSIST_CRAWL.
-      if (inp.assist && s.onWall) T *= clamp(ASSIST_CRAWL + 1 - speed, 0, 1);
+      if (inp.assist && s.onSlope) T *= clamp(ASSIST_CRAWL + 1 - speed, 0, 1);
       if (kappa > 0.12) { T *= clamp(1 - (kappa - 0.12) * 9, 0.15, 1); s.tcActive = true; }
     }
     const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85);
@@ -468,6 +469,7 @@ export function step(s, inp) {
   }
   s.grounded = grounded;
   s.onWall = wallContact;
+  s.onSlope = sloped;   // any tyre off the level: the curl from its first metre (Assist's crawl limit)
   s.wheelForce = wheelForce;
 
   // --- Hull contact (sills, bumpers, roof) against everything ---

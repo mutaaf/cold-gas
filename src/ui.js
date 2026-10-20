@@ -26,7 +26,9 @@ export function createUI() {
     g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
     g.setAttribute('class', `nzg g-${n.group}`);
     const r = n.group === 'lift' ? 8 : 5;
-    g.innerHTML = `<circle class="nz" r="${r}"/><circle class="nz-ring" r="11" pathLength="${ringLen.toFixed(1)}" stroke-dasharray="0 ${ringLen.toFixed(1)}" transform="rotate(-90)"/><text class="nz-k" x="${n.pos.x > 0 ? -17 : 17}" y="3.5">${NOZZLE_UI[n.id].key}</text>`;
+    // Keys beside each nozzle; the rear row's four sit 9 px apart, so theirs spread out under the tail.
+    const kx = n.group === 'rear' ? (x - 60) * 2.2 : n.pos.x > 0 ? -17 : 17, ky = n.group === 'rear' ? 20 : 3.5;
+    g.innerHTML = `<circle class="nz" r="${r}"/><circle class="nz-ring" r="11" pathLength="${ringLen.toFixed(1)}" stroke-dasharray="0 ${ringLen.toFixed(1)}" transform="rotate(-90)"/><text class="nz-k" x="${kx.toFixed(1)}" y="${ky}">${NOZZLE_UI[n.id].key}</text>`;
     nzGroup.appendChild(g);
     return { dot: g.querySelector('.nz'), ring: g.querySelector('.nz-ring'), last: -1 };
   });

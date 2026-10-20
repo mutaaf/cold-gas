@@ -36,12 +36,15 @@ export function createDirector(camera) {
     view: 'broadcast', px: 0, pz: -1,                    // pilot view: on/off, its heading
   };
 
-  // Behind and above the car along its line of flight (the last good heading when it's slow).
+  // Behind, above and to the side of the car along its line of flight (the last good heading when
+  // it's slow), looking down at the ground ahead. Off to the side so that, at the release, the
+  // camera is clear of the Wall's deck and truss (3.7 m wide) behind the car.
   function pilot(carPos, carVel, dt) {
     const hl = Math.hypot(carVel.x, carVel.z);
     if (hl > 1.2) { st.px = carVel.x / hl; st.pz = carVel.z / hl; }
-    want.set(carPos.x - st.px * 10.5, carPos.y + 4.2, carPos.z - st.pz * 10.5);
-    lookWant.set(carPos.x + st.px * 6, Math.max(0, carPos.y * 0.45), carPos.z + st.pz * 6);
+    const sx = -st.pz, sz = st.px;   // the side (+x for a car heading −z: the broadcast side)
+    want.set(carPos.x - st.px * 8 + sx * 7, carPos.y + 5.5, carPos.z - st.pz * 8 + sz * 7);
+    lookWant.set(carPos.x + st.px * 4, Math.max(0, carPos.y * 0.85 - 3), carPos.z + st.pz * 4);
     ease(dt, 3.6, 9);
     fovTo(58, dt);
   }
