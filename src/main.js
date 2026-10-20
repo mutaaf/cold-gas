@@ -11,9 +11,10 @@ import * as THREE from 'three';
 import { createStage } from './render/scene.js';
 import { createPlumes } from './render/plumes.js';
 import { createDirector } from './render/director.js';
+import { landingImpact } from './render/impact.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
 import { createRun, stepRun, FRAME_EVERY, BODY_FRAME } from './sim/run.js';
-import { DT, CAR, NOZZLES, bodyRates } from './sim/vehicle.js';
+import { DT, CAR, NOZZLES, WHEELS, bodyRates, worldPoint } from './sim/vehicle.js';
 import { scoreRun } from './sim/judge.js';
 import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
@@ -64,6 +65,7 @@ const S = {
   run: null, autopilot: null, card: null, words: null,
   assist: true, acc: 0, countT: 0, doneT: 0, paused: false,
   replayT: 0, prevPhase: '', time: 0,
+  impacts: 0, impact: null,   // touchdowns this run, and the last one's cues (src/render/impact.js)
   idleThrottles: new Float64Array(NOZZLES.length),
 };
 try { S.assist = localStorage.getItem('coldgas_assist') !== '0'; } catch { /* storage blocked */ }
@@ -123,6 +125,7 @@ function startRun(kind = 'jump') {
   S.released = false;
   ghostLoaded(stage.course);
   S.mode = 'countdown'; S.countT = 0; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
+  S.impacts = 0; S.impact = null;
   ui.only('hud');
   ui.touch.hidden = !(coarse || usingTouch()) || !!S.autopilot;
   plumes.clear();
@@ -208,6 +211,22 @@ function feltG(c, dt) {
   return gState.g;
 }
 
+// The touchdown felt in the body: camera, mist from each tyre and the thud, all scaled by sink rate.
+const contactPts = new Float32Array(12), wp = { x: 0, y: 0, z: 0 };
+function touchdown(run) {
+  const c = run.car;
+  const k = landingImpact(run.t.sink, reducedMotion);
+  S.impacts++; S.impact = k;
+  thud(k);
+  director.shake(k.shake);
+  director.impact(k.dip, k.fovPunch);
+  for (let i = 0; i < 4; i++) {
+    worldPoint(c, WHEELS[i], wp);
+    contactPts[i * 3] = wp.x; contactPts[i * 3 + 1] = Math.max(0, wp.y - 0.24 - SPEC.wheelRadius); contactPts[i * 3 + 2] = wp.z;
+  }
+  plumes.burst(contactPts, k.mist, k.mistSpeed);
+}
+
 // --- Live step -----------------------------------------------------------------------------
 function liveStep(dt) {
   const run = S.run;
@@ -233,10 +252,12 @@ function liveStep(dt) {
     goLabel.textContent = tp === 'air' ? 'BOOST' : 'GO';
   }
   if (run.phase !== S.prevPhase) {
-    if (run.phase === 'air') director.shake(0.15);
-    if (run.phase === 'landed') { thud(run.t.sink); director.shake(Math.min(1, run.t.sink / 4)); }
+    if (run.phase === 'air' && !reducedMotion) director.shake(0.15);
     S.prevPhase = run.phase;
   }
+  // Touchdown, once per run (keyed on the sim's touch tick, so a fast-forward that steps past the
+  // 'landed' phase in one frame still lands).
+  if (run.t.touchTick >= 0 && S.impacts === 0) touchdown(run);
   if (!S.autopilot) cues(run, c);
 
   const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
@@ -468,5 +489,5 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
-window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, hero, director, fastForward, skipCountdown };
+window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, hero, director, plumes, fastForward, skipCountdown };
 requestAnimationFrame(frame);

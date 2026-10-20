@@ -24,6 +24,7 @@ const K = WALL.lip.y / 19.8;
 export function createDirector(camera) {
   const st = {
     mode: '', course: '', t: 0, shot: -1, smooth: new THREE.Vector3(), lookS: new THREE.Vector3(), fov: 52, shake: 0, init: false,
+    dip: 0, punch: 0,           // touchdown: camera drop (m) and FOV punch-in (deg), both decay
     peak: 0, launched: false, launchT: 0,
     hx: 0, hz: 1,                 // chase heading (unit, xz), follows the car's travel
   };
@@ -203,7 +204,7 @@ export function createDirector(camera) {
   // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup' })
   function update(dt, time, { carPos, carVel, phase, mode, course = 'show' }) {
     if (mode !== st.mode || course !== st.course) {
-      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false;
+      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.dip = 0; st.punch = 0;
       st.hx = 0; st.hz = 1;
       snap(); frameOffset(mode === 'title');
     }
@@ -220,8 +221,14 @@ export function createDirector(camera) {
       tmp.set(Math.sin(time * 91), Math.sin(time * 77 + 1), 0).multiplyScalar(st.shake * 0.08);
       camera.position.add(tmp);
     }
-    if (Math.abs(camera.fov - st.fov) > 0.01) { camera.fov = st.fov; camera.updateProjectionMatrix(); }
+    // Touchdown: the camera rides the car's suspension down and back, and punches in, over ≈0.4 s.
+    const k = Math.exp(-dt * 7);
+    if (st.dip > 0.001) { camera.position.y -= st.dip; st.dip *= k; } else st.dip = 0;
+    if (st.punch > 0.01) st.punch *= k; else st.punch = 0;
+    const fov = st.fov - st.punch;
+    if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   }
 
-  return { update, snap, reframe: () => frameOffset(st.mode === 'title'), shake: (s) => { st.shake = Math.max(st.shake, s); }, state: st };
+  return { update, snap, reframe: () => frameOffset(st.mode === 'title'), shake: (s) => { st.shake = Math.max(st.shake, s); },
+    impact: (dip, punch) => { st.dip = Math.max(st.dip, dip); st.punch = Math.max(st.punch, punch); }, state: st };
 }

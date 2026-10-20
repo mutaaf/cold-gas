@@ -53,6 +53,9 @@ test('phone layout: touch controls visible and nothing overlaps the title CTA', 
 });
 
 test('bring your own key: paste one key and it is done', async ({ page }) => {
+  // Every action here waits on the title's software-GL frames (2–5 s each on a CI runner), so
+  // under the flake guard's parallel repeats it ran past 60 s. Nothing in it is optional.
+  test.slow();
   const calls = [];
   await page.route('**/coldgas/api/models', async (route) => {
     const req = route.request();
@@ -146,4 +149,21 @@ test('first load: inline styles, title wired early, 3D fades in when ready', asy
   // Switching the event after the first load still builds the whole course.
   await page.locator('[data-course="lineup"]').click();
   await expect(page.locator('[data-course="lineup"]')).toHaveAttribute('aria-checked', 'true');
+});
+
+test('the reveal touchdown lands once: one mist burst, cues scaled by its sink rate', async ({ page }) => {
+  await page.goto('/coldgas/?gfx=low');
+  await page.waitForFunction(() => !!window.__coldgas, null, { timeout: 30_000 });
+  const before = await page.evaluate(() => window.__coldgas.plumes.bursts());
+  await page.locator('[data-reveal]').click();
+  await expect(page.locator('[data-screen="hud"]')).toBeVisible();
+  await page.evaluate(() => window.__coldgas.fastForward());
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 20_000 });
+  const hit = await page.evaluate(() => {
+    const { S, plumes } = window.__coldgas;
+    return { bursts: plumes.bursts(), impacts: S.impacts, sink: S.run.t.sink, strength: S.impact.strength };
+  });
+  expect(hit.impacts).toBe(1);
+  expect(hit.bursts - before).toBe(1);
+  expect(hit.strength).toBeCloseTo(Math.min(1, (hit.sink / 5) ** 2), 5);
 });
