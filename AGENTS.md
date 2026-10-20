@@ -62,7 +62,8 @@ mark, and air left in the tanks.
     and the raw stream.
   - Afterwards the results receipt offers *Replay the call* and *Inspect the call*: the system
     prompt, the user prompt and the raw response.
-- Deploy = merge to `main` (Workers Builds). Rollback = revert the PR.
+- Deploy = merge to `main`: Workers Builds (connected 2026-10-19) runs `npm run build` then
+  `npx wrangler deploy`, and pull requests get preview builds. Rollback = revert the PR.
 
 ## 3 · Invariants (breaking any of these fails review)
 
