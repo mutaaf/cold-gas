@@ -251,7 +251,7 @@ export function step(s, inp) {
     if (brakeT > 0) {
       // Brakes pull toward zero and can lock the wheel, never reverse it. Assist adds ABS:
       // release pressure once the wheel is past the slip peak.
-      const abs = inp.assist && kappa < -0.1 ? clamp(1 - (-kappa - 0.1) * 10, 0.05, 1) : 1;
+      const abs = inp.assist && kappa < -0.1 && Math.abs(vLong) > 2 ? clamp(1 - (-kappa - 0.1) * 10, 0.05, 1) : 1;
       const db = ((brakeT * abs) / WHEEL_I) * dt;
       omega = Math.abs(omega) <= db ? 0 : omega - Math.sign(omega) * db;
     }
@@ -259,6 +259,16 @@ export function step(s, inp) {
     kappa = (w.omega * R - vLong) / den;
     Fx = D * Math.sin(CX * Math.atan(BX * kappa));
     let Fy = Fy0;
+    // Stiction: a slip model has no static friction, so a braked car would creep down a slope.
+    // At crawl speed, a locked (or stopped, undriven) tyre cancels sliding outright, up to its
+    // friction limit, as a velocity constraint over one step.
+    // The hold cancels this wheel's share of gravity along the tyre plus the residual velocity.
+    const mEff = m * 0.25;
+    if (Math.abs(vLong) < 0.5 && w.omega === 0 && T === 0) Fx = clamp(-mEff * (vLong / dt * 0.5 - G * wf.y), -D, D);
+    if (Math.abs(vLat) < 0.5 && Math.abs(vLong) < 2) {
+      const hold = clamp(-mEff * (vLat / dt * 0.5 - G * wl.y), -D, D);
+      if (Math.abs(hold) > Math.abs(Fy)) Fy = hold;
+    }
     const mag = Math.hypot(Fx, Fy);
     if (mag > D && mag > 0) { Fx *= D / mag; Fy *= D / mag; }
     Fx -= vLong * 6;                              // rolling resistance

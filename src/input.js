@@ -4,11 +4,12 @@
 // Keyboard   ground: ↑/W throttle · ↓/S brake · ←/→ A/D steer · Shift boost · Space LIFT
 //            air:    ←/→ A/D roll · ↑/W nose down · ↓/S nose up · Q/E yaw · Space LIFT · Shift LAND
 // Gamepad    left stick steer/roll+pitch · RT throttle/LIFT · LT brake/LAND · A LIFT · B LAND
-// Touch      left thumb stick · LIFT and LAND buttons on the right (throttle is automatic)
+// Touch      ground: steer stick · GO and BRAKE pedals · LIFT (RELEASE on the wall)
+//            air:    stick rolls and pitches (up = nose up) · LIFT · LAND
 import { newInput } from './sim/vehicle.js';
 
 const keys = new Set();
-const touch = { active: false, x: 0, y: 0, lift: false, land: false };
+const touch = { active: false, x: 0, y: 0, lift: false, land: false, go: false, brk: false };
 
 export function bindInput(root, { onPause } = {}) {
   addEventListener('keydown', (e) => {
@@ -42,7 +43,7 @@ export function bindInput(root, { onPause } = {}) {
   const up = (e) => { if (e.pointerId !== id) return; id = null; touch.x = 0; touch.y = 0; if (knob) knob.style.transform = ''; };
   stick?.addEventListener('pointerup', up);
   stick?.addEventListener('pointercancel', up);
-  for (const [sel, k] of [['[data-btn-lift]', 'lift'], ['[data-btn-land]', 'land']]) {
+  for (const [sel, k] of [['[data-btn-lift]', 'lift'], ['[data-btn-land]', 'land'], ['[data-btn-go]', 'go'], ['[data-btn-brake]', 'brk']]) {
     const b = root.querySelector(sel);
     if (!b) continue;
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); touch[k] = true; touch.active = true; b.classList.add('on'); b.setPointerCapture(e.pointerId); });
@@ -84,10 +85,14 @@ export function sample(phase, assist, out = newInput()) {
   }
 
   if (touch.active) {
-    ax += touch.x; ay += touch.y;
+    // Touch: on the ground (and up the wall) the stick only steers and the pedals drive. In the
+    // air it flies, and pushing up raises the nose: what people expect on a phone.
+    ax += touch.x;
+    if (air) ay -= touch.y;
     if (touch.lift) lift = 1;
     if (touch.land) land = 1;
-    if (!air) { thr = Math.max(thr, touch.y < 0.4 ? 1 : 0); brk = Math.max(brk, touch.y > 0.6 ? 1 : 0); }
+    if (touch.go) thr = 1;
+    if (touch.brk) brk = 1;
   }
   ax = Math.max(-1, Math.min(1, ax)); ay = Math.max(-1, Math.min(1, ay));
 

@@ -112,7 +112,7 @@ function toTitle() {
   ui.clearCue(); ui.countdown(0);
   plumes.clear();
   placeOnPad();
-  history.replaceState(null, '', location.pathname);
+  history.replaceState(null, '', stage.course === 'wall' ? location.pathname : `${location.pathname}?course=${stage.course}`);
 }
 
 function startRun(kind = 'jump') {
@@ -153,6 +153,7 @@ function finishRun() {
 }
 
 const theatreRoot = document.querySelector('[data-theatre]');
+const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 async function runPanel(run, replay = null) {
   const assist = !!(S.assist || S.autopilot);
@@ -189,8 +190,20 @@ function wallAssist(run, input) {
 }
 
 const sn = { x: 0, y: 0, z: 0 };
+// Height above the ground, unless something nearer is under the floor (the Lineup's kicker, a roof).
 function heightAboveSurface(c) {
-  return Math.max(0, surface(COURSES[stage.course], c.pos.x, c.pos.y, c.pos.z, sn) - SPEC.comHeight);
+  const d = surface(COURSES[stage.course], c.pos.x, c.pos.y, c.pos.z, sn);
+  const h = sn.y > 0.9 ? d : c.pos.y;
+  return Math.max(0, h - SPEC.comHeight);
+}
+// Felt g-load, smoothed (the occupant's view: specific force, not coordinate acceleration).
+const gState = { vx: 0, vy: 0, vz: 0, g: 1 };
+function feltG(c, dt) {
+  if (dt <= 0) return gState.g;
+  const ax = (c.vel.x - gState.vx) / dt, ay = (c.vel.y - gState.vy) / dt + 9.81, az = (c.vel.z - gState.vz) / dt;
+  gState.vx = c.vel.x; gState.vy = c.vel.y; gState.vz = c.vel.z;
+  gState.g += (Math.min(12, Math.hypot(ax, ay, az) / 9.81) - gState.g) * Math.min(1, dt * 6);
+  return gState.g;
 }
 
 // --- Live step -----------------------------------------------------------------------------
@@ -208,6 +221,13 @@ function liveStep(dt) {
   syncCar(c.pos, c.quat, fcomp, fspin, c.steer);
 
   // Phase cues and moments.
+  // Touch layout follows the phase: pedals on the ground and up the wall, LIFT/LAND in the air.
+  const tp = run.phase === 'air' ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
+  if (ui.touch.dataset.phase !== tp) {
+    ui.touch.dataset.phase = tp;
+    liftLabel.textContent = tp === 'ramp' ? 'RELEASE' : 'LIFT';
+    stickHint.textContent = tp === 'air' ? 'ROLL · PITCH' : 'STEER';
+  }
   if (run.phase !== S.prevPhase) {
     if (run.phase === 'air') director.shake(0.15);
     if (run.phase === 'landed') { thud(run.t.sink); director.shake(Math.min(1, run.t.sink / 4)); }
@@ -222,7 +242,7 @@ function liveStep(dt) {
     speed, air: (c.air / CAR.airMass) * 100, rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI,
     rollAngle: Math.atan2(qv.x, qv.y), alt: heightAboveSurface(c),
     sink: -c.vel.y, phase: { drive: 'Run-up', ramp: c.fanForce > 1000 ? 'On the wall · fan' : 'On the wall', air: 'Airborne', landed: 'Touchdown', done: 'Settled' }[run.phase],
-    throttles: c.throttles, fan: c.fanForce / (SPEC.fanMaxG * 9.81 * (SPEC.dryMass + c.air)),
+    throttles: c.throttles, fan: c.fan, g: feltG(c, dt),
   });
   hero.setFan?.(c.fan);
   hero.setWing?.(Math.min(1, Math.max(0, (speed - 20) / 20)));
@@ -349,6 +369,19 @@ on('[data-share]', async () => {
     else { await navigator.clipboard.writeText(`${text} ${url}`); ui.cue_('Copied', 1400); }
   } catch { /* cancelled */ }
 });
+
+// Event picker on the title (also ?course=wall|lineup).
+const courseBtns = document.querySelectorAll('[data-course]');
+function syncCourseBtns() { courseBtns.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.course === stage.course))); }
+courseBtns.forEach((b) => b.addEventListener('click', () => {
+  if (b.dataset.course === stage.course) return;
+  stage.setCourse(b.dataset.course);
+  syncCourseBtns();
+  placeOnPad();
+  director.snap();
+  const u = new URL(location.href); u.searchParams.set('course', stage.course); history.replaceState(null, '', u);
+}));
+syncCourseBtns();
 
 const assistBtn = document.querySelector('[data-assist]');
 const syncAssist = () => assistBtn.setAttribute('aria-pressed', String(S.assist));

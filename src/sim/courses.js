@@ -28,7 +28,7 @@ export const WALL = {
   slab: 0.9,                  // m, deck thickness
   start: { z: -175, x: 0 },
   pad: { z: -34, x: 0, rings: [2.5, 5, 8] },   // landing target, back on the approach
-  runout: { zMin: -230, zMax: 40 },
+  runout: { zMin: -420, zMax: 60 },
   // Derived: lip of the ledge (where you launch from) and the profile's total length.
   lip: { z: R1 - R2 + R2 * Math.cos(TIP), y: R1 + H + R2 * Math.sin(TIP) },
   length: R1 * Math.PI / 2 + H + R2 * TIP,

@@ -48,8 +48,13 @@ export function createUI() {
   ui.countdown = (n) => { ui.count.innerHTML = n ? `<span>${n}</span>` : ''; if (n) tick(); };
 
   // Last-written values, so the DOM is only touched on change.
-  const last = { speed: -1, air: -1, roll: -9999, alt: -1, sink: -1, phase: '' };
-  ui.hud = ({ speed, air, rollDeg, alt, sink, phase, throttles, rollAngle }) => {
+  const last = { speed: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, fan: -1, phase: '' };
+  const gEl = $('[data-g]'), fanEl = $('[data-fan]');
+  ui.hud = ({ speed, air, rollDeg, alt, sink, phase, throttles, rollAngle, g = 1, fan = 0 }) => {
+    const gg = Math.round(g * 10);
+    if (gg !== last.g) { gEl.textContent = (gg / 10).toFixed(1); gEl.parentElement.classList.toggle('hot', g > 4.5); last.g = gg; }
+    const ff = Math.round(fan * 100);
+    if (ff !== last.fan) { fanEl.textContent = String(ff); last.fan = ff; }
     const sp = Math.round(speed * 3.6);
     if (sp !== last.speed) { ui.speed.textContent = String(sp); last.speed = sp; }
     const a = Math.round(air);
