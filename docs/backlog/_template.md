@@ -7,6 +7,7 @@ size: M              # S (<1h) | M (one sitting) | L (split it if it touches >3 
 lens: player-feel    # player-feel | content | authenticity | performance | accessibility | tech-health
 created: YYYY-MM-DD
 pr:                  # filled in by the Builder when shipped
+by: scout            # scout | critic | operator (critic tickets are re-checked live and can bounce)
 ---
 
 ## Why

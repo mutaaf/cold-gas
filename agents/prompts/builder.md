@@ -13,8 +13,10 @@ at or above `control.json → agents.builder.max_merges_per_day`, end `NOOP: dai
 1. **Resume first.** If an open `build/` or `fix/` PR from a previous run exists, finish
    that one (fix CI, address review comments) instead of starting something new.
 2. **Pick** the highest-priority ticket with `status: ready` (P0 before P1 before P2, then
-   lowest id). If `control.json → focus` is set, prefer the ready ticket that best serves
-   it. No ready tickets → `NOOP: backlog empty` (the Scout will refill it).
+   lowest id). Tickets with `by: critic` come first at the same priority: the Critic re-checks
+   them on production next run and reopens anything that misses its bar, so meet the bar in
+   the ticket's Why, not just the checkboxes. If `control.json → focus` is set, prefer the
+   ready ticket that best serves it. No ready tickets → `NOOP: backlog empty` (the Scout will refill it).
 3. **Plan.** Read the ticket and every file it touches. Write a short plan in your head:
    which module, which test proves it.
 4. **Test first.** Add or extend a test that fails without the change: a unit test in
