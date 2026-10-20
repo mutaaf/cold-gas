@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.1 — 2026-10-20
+
+- Restart, Jump again and the title now clear everything the last run layered over the stage. The judges' theatre (and its in-flight call) is aborted instead of playing on over the next run; the AI sheet and cues close too. Regression test: tests/e2e/overlays.spec.js.
+
 ## Unreleased
 
 **Crashes** (SIM_VERSION 9). A crash used to just happen; now the physics folds, the record says what hit what, and the renderer, camera and sound make it land.
