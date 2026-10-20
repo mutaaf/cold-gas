@@ -38,12 +38,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .top-actions { display: flex; gap: 10px; pointer-events: auto; }
 .chip { height: 32px; padding: 0 14px; border-radius: 16px; border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px);
   font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); transition: all 0.3s var(--ease); }
-.chip[aria-pressed='false'] { color: var(--ink); border-color: var(--signal); }
-.chip[aria-pressed='false']::after { content: ' · Pro'; color: var(--signal); }
+.chip[data-assist][aria-pressed='false'] { color: var(--ink); border-color: var(--signal); }
+.chip[data-assist][aria-pressed='false']::after { content: ' · Pro'; color: var(--signal); }
 .chip[aria-pressed='true']::after { content: ''; }
 .icon-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px); display: grid; place-items: center; padding: 0; }
 .icon-btn svg { width: 16px; height: 16px; fill: none; stroke: var(--ink-2); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
 .icon-btn[aria-pressed='true'] [data-wave] { opacity: 0; }
+.icon-btn[data-ghost][aria-pressed='false'] svg { opacity: 0.4; }
+.icon-btn[data-ghost][aria-pressed='false'] [data-echo] { opacity: 0; }
 
 /* --- Title --- */
 .title { position: fixed; left: calc(clamp(24px, 6vw, 96px) + var(--safe-l)); bottom: calc(clamp(32px, 9vh, 110px) + var(--safe-b)); max-width: 640px; z-index: 4; }
@@ -295,3 +297,11 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .ai-chip { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .theatre::before { animation: none; } }
+/* Phones: brand, AI, Assist, Ghost and Sound all fit on one 390 px bar. */
+@media (max-width: 480px) {
+  .top { padding-left: calc(16px + var(--safe-l)); padding-right: calc(16px + var(--safe-r)); }
+  .brand { font-size: 10px; letter-spacing: 0.3em; }
+  .top-actions { gap: 6px; }
+  .chip { padding: 0 10px; letter-spacing: 0.1em; }
+  .ai-chip { max-width: 92px; }
+}

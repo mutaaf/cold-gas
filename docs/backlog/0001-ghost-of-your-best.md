@@ -1,12 +1,12 @@
 ---
 id: 0001
 title: Ghost of your best jump in the next attempt
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-10-19
-pr:
+pr: 4
 ---
 
 ## Why
@@ -20,10 +20,10 @@ IndexedDB, keyed by `SIM_VERSION`. During a live run, draw a translucent clone o
 current tick. Toggle it with `G`. Touches src/main.js, src/render/cars.js and a new src/ghost.js.
 
 ## Acceptance criteria
-- [ ] After one finished run, the next run shows a ghost that moves in lockstep with ticks
-- [ ] `G` toggles it, and the setting persists
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
-- [ ] No per-frame allocations
+- [x] After one finished run, the next run shows a ghost that moves in lockstep with ticks
+- [x] `G` toggles it, and the setting persists
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] No per-frame allocations
 
 ## Test plan
 Unit: ghost frame lookup by tick (interpolation and clamping). E2E: after the reveal run, start

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+2026-10-20 · #0001 · Ghost of your best run: your best jump (or the reference, until you land one) rides alongside the next attempt as a translucent silhouette; toggle it with G or the ghost button.
+
 ## 0.2.0 — 2026-10-19
 
 The judges' brain and theatre:

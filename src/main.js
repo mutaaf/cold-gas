@@ -12,6 +12,7 @@ import * as THREE from 'three';
 import { createStage } from './render/scene.js';
 import { createPlumes } from './render/plumes.js';
 import { createDirector } from './render/director.js';
+import { makeGhost, ghostMat } from './render/cars.js';
 import { createRun, stepRun, FRAME_EVERY } from './sim/run.js';
 import { DT, CAR, NOZZLES, bodyRates } from './sim/vehicle.js';
 import { scoreRun } from './sim/judge.js';
@@ -23,6 +24,7 @@ import { createUI } from './ui.js';
 import { localWords, postScore, fetchBoard } from './panel.js';
 import { loadAI } from './ai/config.js';
 import { openSettings, aiLabel } from './ai/settings.js';
+import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
 
 const params = new URLSearchParams(location.search);
 const coarse = matchMedia('(pointer: coarse)').matches;
@@ -45,6 +47,14 @@ const carRoot = new THREE.Group();
 hero.group.position.y = -hero.comY;
 carRoot.add(hero.group);
 scene.add(carRoot);
+// The ghost of your best run rides alongside in the next attempt (src/ghost.js).
+const ghostRoot = new THREE.Group();
+const ghostModel = makeGhost(hero);
+ghostModel.position.y = -hero.comY;
+ghostRoot.add(ghostModel);
+scene.add(ghostRoot);
+stage.renderer.compile(scene, camera);   // warm the ghost's shader so "Go" doesn't hitch
+ghostRoot.visible = false;
 const plumes = createPlumes(scene, carRoot, { maxMist: tier === 'low' ? 500 : 1800 });
 const director = createDirector(camera);
 
@@ -57,6 +67,19 @@ const S = {
   idleThrottles: new Float64Array(NOZZLES.length),
 };
 try { S.assist = localStorage.getItem('coldgas_assist') !== '0'; } catch { /* storage blocked */ }
+S.ghost = null; S.ghostOn = ghostEnabled();
+const ghostLoaded = loadBest().then((g) => { if (g && isBetter(S.ghost, g)) S.ghost = g; });
+const gpose = newGhostPose();
+// Shown only in your own live runs; it fades out where it overlaps the car (the start line).
+function syncGhost() {
+  const live = (S.mode === 'live' || S.mode === 'countdown') && !S.autopilot;
+  ghostRoot.visible = live && S.ghostOn && ghostAt(S.ghost, S.run.tick, gpose);
+  if (!ghostRoot.visible) return;
+  ghostRoot.position.set(gpose.x, gpose.y, gpose.z);
+  ghostRoot.quaternion.set(gpose.qx, gpose.qy, gpose.qz, gpose.qw);
+  const d = ghostRoot.position.distanceTo(carRoot.position);
+  ghostMat.opacity = 0.18 * Math.min(1, Math.max(0, (d - 1.5) / 2.5));
+}
 
 const qv = new THREE.Vector3(), rates = { x: 0, y: 0, z: 0 };
 const zeroVel = new THREE.Vector3();
@@ -111,6 +134,12 @@ function finishRun() {
   ui.touch.hidden = true;
   ui.clearCue();
   ui.results(S.card);
+  // Your best run becomes the ghost for the next attempt (the reference jump only until you
+  // finish one of your own). Storage keeps whichever is better, even across tabs.
+  if (run.frames.length) {
+    const g = packFrames(run.frames, S.card.total, !!S.autopilot);
+    ghostLoaded.then(() => { if (isBetter(S.ghost, g)) { S.ghost = g; saveBest(g); } });
+  }
   // The judges' theatre: the server re-simulates the log, then a model writes the words, all of
   // it shown live (src/ai/theatre.js, a lazy chunk with the aurora-field particle engine).
   runPanel(run);
@@ -242,6 +271,7 @@ function frame(now) {
     } else if (S.mode === 'live') liveStep(dt);
     else if (S.mode === 'results' || S.mode === 'replay') replayStep(dt);
 
+    syncGhost();
     const live = S.mode === 'live' || S.mode === 'countdown';
     director.update(dt, S.time, {
       carPos: carRoot.position, carVel: live && S.run ? S.run.car.vel : zeroVel,
@@ -288,6 +318,20 @@ assistBtn.addEventListener('click', () => {
   S.assist = !S.assist; syncAssist();
   try { localStorage.setItem('coldgas_assist', S.assist ? '1' : '0'); } catch { /* storage blocked */ }
   ui.cue_(S.assist ? 'Assist: the flight computer holds rates and levels for landing' : 'Pro: raw thrust, +8% on every score', 2600);
+});
+const ghostBtn = document.querySelector('[data-ghost]');
+const syncGhostBtn = () => ghostBtn.setAttribute('aria-pressed', String(S.ghostOn));
+syncGhostBtn();
+function toggleGhost() {
+  S.ghostOn = !S.ghostOn; syncGhostBtn(); setGhostEnabled(S.ghostOn);
+  const who = S.ghost?.ref ? 'the reference jump' : 'your best run';
+  ui.cue_(S.ghostOn ? (S.ghost ? `Ghost on: ${who} rides alongside` : 'Ghost on: finish a run to set one') : 'Ghost off', 1600);
+}
+ghostBtn.addEventListener('click', toggleGhost);
+addEventListener('keydown', (e) => {
+  if (e.code !== 'KeyG' || e.repeat || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (e.target?.closest?.('input, select, textarea, [contenteditable], dialog, [data-ai-modal]')) return;
+  toggleGhost();
 });
 const muteBtn = document.querySelector('[data-mute]');
 muteBtn.setAttribute('aria-pressed', String(isMuted()));
@@ -336,5 +380,5 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
-window.__coldgas = { S, startRun, toTitle, camera, carRoot, hero, director, fastForward, skipCountdown };
+window.__coldgas = { S, startRun, toTitle, camera, carRoot, ghostRoot, hero, director, fastForward, skipCountdown };
 requestAnimationFrame(frame);
