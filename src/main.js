@@ -12,12 +12,13 @@ import * as THREE from 'three';
 import { createStage } from './render/scene.js';
 import { createPlumes } from './render/plumes.js';
 import { createDirector } from './render/director.js';
-import { makeGhost, ghostMat } from './render/cars.js';
+import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
 import { createRun, stepRun, FRAME_EVERY } from './sim/run.js';
 import { DT, CAR, NOZZLES, bodyRates } from './sim/vehicle.js';
 import { scoreRun } from './sim/judge.js';
 import { createAutopilot } from './sim/autopilot.js';
-import { RAMP, PAD, groundAt } from './sim/course.js';
+import { COURSES, surface } from './sim/courses.js';
+import { SPEC } from './sim/spec.js';
 import { bindInput, sample, usingTouch } from './input.js';
 import { initAudio, updateAudio, thud, setMuted, isMuted } from './audio.js';
 import { createUI } from './ui.js';
@@ -89,7 +90,7 @@ function placeOnPad() {
   const tp = stage.titlePose();   // [stage] the course decides where the car sits on the title
   carRoot.position.set(tp.x, hero.comY, tp.z);
   carRoot.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), tp.yaw);
-  for (const w of hero.wheels) { w.pivot.position.y = 0.33; w.pivot.rotation.y = 0; }
+  for (const w of hero.wheels) { w.pivot.position.y = w.baseY; w.pivot.rotation.y = 0; }
 }
 
 function syncCar(pos, quat, comps, spins, steer) {
@@ -97,9 +98,9 @@ function syncCar(pos, quat, comps, spins, steer) {
   carRoot.quaternion.set(quat.x, quat.y, quat.z, quat.w);
   for (let i = 0; i < 4; i++) {
     const w = hero.wheels[i];
-    w.pivot.position.y = 0.234 + comps[i];
+    w.pivot.position.y = wheelCenterY(comps[i], CAR.restLen);
     w.spin.rotation.x = spins[i];
-    if (i < 2) w.pivot.rotation.y = -steer;
+    if (i < 2) w.pivot.rotation.y = steer;
   }
 }
 
@@ -116,16 +117,18 @@ function toTitle() {
 
 function startRun(kind = 'jump') {
   initAudio();
-  S.run = createRun();
-  S.autopilot = kind === 'reveal' ? createAutopilot() : null;
+  S.run = createRun(stage.course);
+  S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
+  S.released = false;
   S.mode = 'countdown'; S.countT = 0; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
   ui.only('hud');
   ui.touch.hidden = !(coarse || usingTouch()) || !!S.autopilot;
   plumes.clear();
   const c = S.run.car;
-  syncCar(c.pos, c.quat, [0.096, 0.096, 0.096, 0.096], [0, 0, 0, 0], 0);
+  const sag = c.wheels[0].compression;
+  syncCar(c.pos, c.quat, [sag, sag, sag, sag], [0, 0, 0, 0], 0);
   director.snap();
-  if (S.autopilot) ui.cue_('The reference jump', 2400);
+  if (S.autopilot) ui.cue_(stage.course === 'wall' ? 'The reference run: up the Wall' : 'The reference jump', 2400);
 }
 
 function finishRun() {
@@ -158,7 +161,7 @@ async function runPanel(run, replay = null) {
   try { mod = await import('./ai/theatre.js'); } catch { S.words = localWords(card); ui.words(S.words); return; }
   if (S.run !== run) return;
   const { words, meta } = await mod.runTheatre(theatreRoot, {
-    log: run.inputLog, assist, ai: loadAI(), card, fallbackWords: localWords, reduced: reducedMotion, replay,
+    log: run.inputLog, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay,
   });
   if (S.run !== run) return;
   if (!replay) {
@@ -175,13 +178,28 @@ function openAI() { openSettings(document.querySelector('[data-ai-modal]'), { on
 aiChip.addEventListener('click', openAI);
 syncAiChip();
 
+// The Wall's fan is a car system, not a button: it spools up before the foot of the ramp and holds
+// the car to the deck. On the deck, LIFT is the release: suction off, lift jets push you clear.
+function wallAssist(run, input) {
+  if (run.course !== 'wall') return input;
+  const c = run.car;
+  if (run.phase === 'ramp' && input.lift > 0) S.released = true;
+  input.fan = !S.released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
+  return input;
+}
+
+const sn = { x: 0, y: 0, z: 0 };
+function heightAboveSurface(c) {
+  return Math.max(0, surface(COURSES[stage.course], c.pos.x, c.pos.y, c.pos.z, sn) - SPEC.comHeight);
+}
+
 // --- Live step -----------------------------------------------------------------------------
 function liveStep(dt) {
   const run = S.run;
   S.acc += Math.min(dt, 0.1);
   let input = null;
   while (S.acc >= DT && run.phase !== 'done') {
-    input = S.autopilot ? S.autopilot(run) : sample(run.phase, S.assist);
+    input = S.autopilot ? S.autopilot(run) : wallAssist(run, sample(run.phase, S.assist));
     stepRun(run, input);
     S.acc -= DT;
   }
@@ -195,21 +213,19 @@ function liveStep(dt) {
     if (run.phase === 'landed') { thud(run.t.sink); director.shake(Math.min(1, run.t.sink / 4)); }
     S.prevPhase = run.phase;
   }
-  if (!S.autopilot) {
-    if (run.phase === 'drive' && c.pos.z > -40 && c.pos.z < RAMP.z0) ui.cue_(usingTouch() ? 'Hold <kbd>LIFT</kbd> at the lip' : 'Hold <kbd>Space</kbd> at the lip', 600);
-    else if (run.phase === 'air' && Math.abs(run.t.rollAccum) < 0.3 && c.vel.y < 4) ui.cue_(usingTouch() ? 'Stick sideways to roll' : '<kbd>←</kbd> <kbd>→</kbd> to roll', 500);
-    else if (run.phase === 'air' && Math.abs(run.t.rollAccum) > 5.6 && c.vel.y < 0) ui.cue_(usingTouch() ? 'Hold <kbd>LAND</kbd>' : 'Hold <kbd>Shift</kbd> to land', 500);
-  }
+  if (!S.autopilot) cues(run, c);
 
-  const speed = Math.hypot(c.vel.x, c.vel.z);
+  const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
   bodyRates(c, rates);
   qv.set(0, 1, 0).applyQuaternion(carRoot.quaternion);
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI,
-    rollAngle: Math.atan2(qv.x, qv.y), alt: Math.max(0, c.pos.y - hero.comY - groundAt(c.pos.x, c.pos.z)),
-    sink: -c.vel.y, phase: { drive: 'Run-up', air: 'Airborne', landed: 'Touchdown', done: 'Settled' }[run.phase],
-    throttles: c.throttles,
+    rollAngle: Math.atan2(qv.x, qv.y), alt: heightAboveSurface(c),
+    sink: -c.vel.y, phase: { drive: 'Run-up', ramp: c.fanForce > 1000 ? 'On the wall · fan' : 'On the wall', air: 'Airborne', landed: 'Touchdown', done: 'Settled' }[run.phase],
+    throttles: c.throttles, fan: c.fanForce / (SPEC.fanMaxG * 9.81 * (SPEC.dryMass + c.air)),
   });
+  hero.setFan?.(c.fan);
+  hero.setWing?.(Math.min(1, Math.max(0, (speed - 20) / 20)));
   plumes.update(dt, S.time, c.throttles, c.vel, 0);
   updateAudio({ speed, grounded: c.grounded > 0, throttles: c.throttles });
 
@@ -217,6 +233,24 @@ function liveStep(dt) {
     S.doneT += dt;
     if (S.doneT > 1.4) finishRun();
   } else S.doneT = 0;
+}
+
+const kbd = (touchLabel, keyLabel) => `<kbd>${usingTouch() ? touchLabel : keyLabel}</kbd>`;
+function cues(run, c) {
+  const v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
+  if (run.phase === 'drive' && v < 2) return ui.cue_(`Hold ${kbd('GO', '↑')} to drive`, 600);
+  if (run.course === 'wall') {
+    if (run.phase === 'drive' && c.pos.z > -40) return ui.cue_(`Fan spooling · about 60 km/h into the curl`, 600);
+    if (run.phase === 'ramp' && run.t.progress < 0.85) return ui.cue_(`Feather ${kbd('GO', '↑')}: too fast and you’ll fly off the lip`, 500);
+    if (run.phase === 'ramp') return ui.cue_(`${kbd('LIFT', 'Space')} to release`, 500);
+    if (run.phase === 'air' && c.vel.y > -1) return ui.cue_(`Roll upright: ${kbd('stick', '← →')}`, 500);
+    if (run.phase === 'air') return ui.cue_(`Hold ${kbd('LAND', 'Shift')}: it levels and slows the fall`, 500);
+    return;
+  }
+  const R = COURSES.lineup.ramp;
+  if (run.phase === 'drive' && c.pos.z > -40 && c.pos.z < R.z0) return ui.cue_(`Hold ${kbd('LIFT', 'Space')} at the lip`, 600);
+  if (run.phase === 'air' && Math.abs(run.t.rollAccum) < 0.3 && c.vel.y < 4) return ui.cue_(`${kbd('stick sideways', '← →')} to roll`, 500);
+  if (run.phase === 'air' && Math.abs(run.t.rollAccum) > 5.6 && c.vel.y < 0) return ui.cue_(`Hold ${kbd('LAND', 'Shift')}`, 500);
 }
 
 // --- Replay (behind the results sheet, and on demand) ----------------------------------------
@@ -230,8 +264,9 @@ function replayStep(dt) {
   const n = frames.length;
   const i0 = Math.min(n - 1, Math.floor(S.replayT));
   const f = frames[i0];
-  // Slow motion over the lineup and the roll.
-  const slow = f[2] > RAMP.z1 - 2 && f[2] < PAD.z - 6 ? 0.42 : 1;
+  // Slow motion where it matters: over the lineup, or up the wall and through the roll.
+  const L = COURSES.lineup;
+  const slow = stage.course === 'wall' ? (f[1] > 3 ? 0.45 : 1) : (f[2] > L.ramp.z1 - 2 && f[2] < L.pad.z - 6 ? 0.42 : 1);
   S.replayT += dt * (240 / FRAME_EVERY) * slow;
   if (S.replayT >= n + 90) S.replayT = 0;   // hold a beat, loop
   const i1 = Math.min(n - 1, i0 + 1), k = Math.min(1, S.replayT - i0);
@@ -241,7 +276,8 @@ function replayStep(dt) {
   for (let w = 0; w < 4; w++) { fcomp[w] = f[7 + w]; fspin[w] = f[11 + w]; }
   for (let j = 0; j < NOZZLES.length; j++) fthr[j] = f[15 + j];
   fvel.set(g[0] - f[0], g[1] - f[1], g[2] - f[2]).multiplyScalar(60);
-  syncCar(fpos, fquat, fcomp, fspin, 0);
+  syncCar(fpos, fquat, fcomp, fspin, f[15 + NOZZLES.length] || 0);
+  hero.setFan?.(f[16 + NOZZLES.length] || 0);
   plumes.update(dt * slow, S.time, fthr, fvel, 0);
   updateAudio({ speed: fvel.length() * slow, grounded: fpos.y < 0.7, throttles: fthr });
 }
@@ -349,7 +385,7 @@ document.querySelector('[data-r-submit]').addEventListener('submit', async (e) =
   if (S.autopilot) { msg.textContent = 'The reference jump can’t be posted.'; return; }
   try { localStorage.setItem('coldgas_initials', initials); } catch { /* storage blocked */ }
   msg.textContent = 'Verifying…';
-  const res = await postScore(S.run.inputLog, S.assist, initials);
+  const res = await postScore(S.run.inputLog, S.assist, initials, S.run.course);
   msg.textContent = res.ok ? `Posted. #${res.rank} today.` : res.status === 429 ? 'Slow down a little.' : 'The board is offline.';
 });
 try { document.getElementById('initials').value = localStorage.getItem('coldgas_initials') || ''; } catch { /* storage blocked */ }

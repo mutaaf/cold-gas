@@ -22,7 +22,7 @@ function laneKeep(c, out) { out.steer = Math.max(-1, Math.min(1, -c.pos.x * 0.35
 
 function wallPilot(plan) {
   const out = newInput();
-  const st = { released: false };
+  const st = { released: false, rolledOut: false };
   const pad = COURSES.wall.pad;
   return function autopilot(run) {
     const c = run.car;
@@ -52,8 +52,12 @@ function wallPilot(plan) {
     out.fan = 0;
     if (run.phase === 'landed') { out.brake = 1; return out; }
     up(c, upv);
-    const clear = c.pos.y < 30 && run.car.grounded === 0;
-    out.level = clear ? 1 : 0;
+    // Roll out of the inversion (a barrel roll, as at the reveal), then let the computer level it.
+    if (!st.rolledOut && run.car.grounded === 0) {
+      if (upv.y > -0.15) st.rolledOut = true;
+      else { out.roll = 1; out.pitch = 0; return out; }
+    }
+    out.level = run.car.grounded === 0 ? 1 : 0;
     if (upv.y > 0.5) {
       // Steer the fall onto the pad. The car may face either way after the flip, so pick the
       // jet pair that pushes toward where we need to be: rear jets push along the nose, front

@@ -3,11 +3,11 @@
 // picked from the same facts, so the game never waits on the network.
 const API = `${import.meta.env.BASE_URL}api`;
 
-export async function postScore(log, assist, initials) {
+export async function postScore(log, assist, initials, course) {
   try {
     const res = await fetch(`${API}/scores`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ log, assist, initials }),
+      body: JSON.stringify({ log, assist, initials, course }),
     });
     return { ok: res.ok, status: res.status, ...(await res.json().catch(() => ({}))) };
   } catch { return { ok: false, status: 0 }; }
@@ -25,6 +25,7 @@ export async function fetchBoard(board = 'today') {
 const pick = (arr, seed) => arr[Math.abs(Math.round(seed * 997)) % arr.length];
 
 export function localWords(card) {
+  if (card.facts.course === 'wall') return wallWords(card);
   const f = card.facts, s = f.sink + f.tiltDeg + f.padMiss;
   if (!f.jumped) {
     return { headline: 'No jump recorded', engineer: 'The car never left the ground long enough to measure. Nothing to grade.', coordinator: 'The ramp is right there. Hit it with intent and give me something.', designer: 'Restraint is a virtue. This was too much of it.', source: 'local' };
@@ -46,5 +47,23 @@ export function localWords(card) {
   const designer = f.airPct > 40
     ? pick([`${f.airPct}% of the air still in the tanks. Nothing wasted, nothing missing.`, `Quiet, exact, ${f.airPct}% in reserve. That is how it should feel.`], s)
     : pick([`Effective, but ${f.airPct}% left in the tanks tells me it was loud in places.`, `The shape was right. The burn was heavy.`], s);
+  return { headline: card.verdict, engineer, coordinator, designer, source: 'local' };
+}
+
+function wallWords(card) {
+  const f = card.facts, s = f.height + f.sink + f.padMiss;
+  if (f.fellOff) return { headline: 'Off the side of the deck', engineer: 'Lateral drift exceeded the deck width at height. Keep it on the centreline before you add speed.', coordinator: 'The wall doesn’t forgive a wandering line. Straighten up and go again.', designer: 'Symmetry first. Everything else follows.', source: 'local' };
+  if (!f.jumped) return { headline: f.progressPct > 50 ? 'Stalled on the wall' : 'No climb', engineer: `${f.progressPct}% of the curl at ${f.entryKmh} km/h entry. The fan holds you; the motors have to lift you.`, coordinator: 'Commit to the climb. Hold GO all the way to the ledge.', designer: 'Hesitation reads from the grandstand.', source: 'local' };
+  if (f.landedOnRamp) return { headline: 'Came down on the deck', engineer: 'You released too low; the car fell back onto the curl. Release at the ledge.', coordinator: 'So close. Ride it higher before you let go.', designer: 'The landing belongs on the pad, not the ramp.', source: 'local' };
+  if (f.flipped || f.crashed) return { headline: 'Down, not done', engineer: `Touchdown at ${f.sink} m/s with ${f.tiltDeg}° of tilt. Finish the roll before you land.`, coordinator: `${f.height} m up and ${f.invertedS} s inverted. The hard part was right.`, designer: 'Everything before the ground was beautiful.', source: 'local' };
+  const engineer = f.sink < 1.5 && f.wheelSpreadMs < 60
+    ? pick([`${f.sink} m/s at contact after a ${f.launchHeight} m drop. That is a controlled descent.`, `Four wheels inside ${f.wheelSpreadMs} ms, ${f.maxG} g peak on the curl. Clean.`], s)
+    : pick([`Touchdown at ${f.sink} m/s, ${f.tiltDeg}° of tilt. Hold LAND longer and let it level.`, `${f.wheelSpreadMs} ms between first and last wheel. Level before contact.`], s);
+  const coordinator = f.invertedS > 0.8
+    ? `${f.invertedS} seconds upside down at ${f.height} metres. That is the shot.`
+    : pick([`Up the curl, over the ledge, ${Math.max(f.rollDeg, f.pitchDeg)}° to upright. The crowd felt that.`, `Hang it longer under the ledge next time. Make them wait.`], s);
+  const designer = f.airPct > 30
+    ? `${f.airPct}% of the nitrogen left. Restraint, not panic.`
+    : `${f.airPct}% gas left. Effective, but the burn was heavy.`;
   return { headline: card.verdict, engineer, coordinator, designer, source: 'local' };
 }

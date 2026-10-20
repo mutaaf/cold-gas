@@ -54,13 +54,14 @@ export const SPEC = {
 
 // Ten thrusters (public: 4 rear on the Thrust trim, 6 more at the front and sides on Rocket).
 // Placement here is our engineering reading of the reveal footage: 4 rear in the diffuser
-// (the four round nozzles visible at the back), 2 front retro, 4 underbody corner lift jets.
+// (the four round nozzles visible at the back), 2 front retro, 4 underbody lift jets.
 // `dir` is the force direction on the car (opposite to the jet). `max` in newtons at full tank.
 export const NOZZLE_SPEC = [
-  { id: 'lift-fl', group: 'lift', pos: [-0.86, -0.3, 1.32], dir: [0, 1, 0], max: 10200 },
-  { id: 'lift-fr', group: 'lift', pos: [0.86, -0.3, 1.32], dir: [0, 1, 0], max: 10200 },
-  { id: 'lift-rl', group: 'lift', pos: [-0.86, -0.3, -1.4], dir: [0, 1, 0], max: 10200 },
-  { id: 'lift-rr', group: 'lift', pos: [0.86, -0.3, -1.4], dir: [0, 1, 0], max: 10200 },
+  // Lift jets sit under the sills between the wheels (outboard of the battery, clear of the tyres).
+  { id: 'lift-fl', group: 'lift', pos: [-0.62, -0.3, 0.9], dir: [0, 1, 0], max: 10200 },
+  { id: 'lift-fr', group: 'lift', pos: [0.62, -0.3, 0.9], dir: [0, 1, 0], max: 10200 },
+  { id: 'lift-rl', group: 'lift', pos: [-0.62, -0.3, -0.9], dir: [0, 1, 0], max: 10200 },
+  { id: 'lift-rr', group: 'lift', pos: [0.62, -0.3, -0.9], dir: [0, 1, 0], max: 10200 },
   { id: 'rear-1', group: 'rear', pos: [-0.5, -0.2, -2.28], dir: [0, 0, 1], max: 3300 },
   { id: 'rear-2', group: 'rear', pos: [-0.18, -0.2, -2.3], dir: [0, 0, 1], max: 3300 },
   { id: 'rear-3', group: 'rear', pos: [0.18, -0.2, -2.3], dir: [0, 0, 1], max: 3300 },

@@ -1,6 +1,6 @@
 // DOM: the HUD (updated in place, no layout thrash), the results sheet, the board.
 import { NOZZLES } from './sim/vehicle.js';
-import { CATEGORIES } from './sim/judge.js';
+import { categoriesFor } from './sim/judge.js';
 import { chime, tick } from './audio.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -100,7 +100,7 @@ export function createUI() {
     });
     const cats = $('[data-r-cats]');
     cats.innerHTML = '';
-    for (const c of CATEGORIES) {
+    for (const c of categoriesFor(card.course)) {
       const v = card.categories[c.id] ?? 0;
       const el = document.createElement('div');
       el.className = 'cat';
@@ -111,7 +111,13 @@ export function createUI() {
       requestAnimationFrame(() => requestAnimationFrame(() => { el.querySelector('.bar span').style.transform = `scaleX(${v / 10})`; }));
     }
     const f = card.facts;
-    const facts = [
+    const facts = f.course === 'wall' ? [
+      [`${f.entryKmh} km/h into the curl`], [`${f.height} m up the wall`], [`${f.invertedS} s inverted`], [`${f.maxG} g peak`],
+      ...(f.jumped ? [[`released at ${f.launchHeight} m`], [`${Math.max(f.rollDeg, f.pitchDeg)}° roll-out`], [`${f.sink} m/s touchdown`, f.sink > 4],
+        [`${f.tiltDeg}° tilt`, f.tiltDeg > 15], [`${f.wheelSpreadMs} ms wheel sync`, f.wheelSpreadMs > 250], [`${f.padMiss} m from the mark`], [`${f.airPct}% gas left`]] : []),
+      ...(f.zeroToSixty ? [[`0–60 in ${f.zeroToSixty.toFixed(2)} s`]] : []),
+      ...(f.fellOff ? [['slid off the deck', true]] : []), ...(f.landedOnRamp ? [['came down on the deck', true]] : []),
+    ] : [
       [`${f.launchKmh} km/h at the lip`], [`${f.apex} m apex`], [`${f.rollDeg}° roll`],
       [f.contact ? 'contact' : `${f.clearance} m clearance`, f.contact], [`${f.sink} m/s touchdown`, f.sink > 4],
       [`${f.tiltDeg}° tilt`, f.tiltDeg > 15], [`${f.wheelSpreadMs} ms wheel sync`, f.wheelSpreadMs > 250], [`${f.padMiss} m from the mark`], [`${f.airPct}% air left`],

@@ -1,7 +1,7 @@
 // The scorecard. Pure function of the run telemetry, so the client, the replay and the Worker
 // always agree. The AI panel only *writes* the commentary (src/judges-ai.js, src/worker/); the
 // numbers are decided here and nowhere else.
-import { PAD, TALLEST } from './course.js';
+import { COURSES, LINEUP } from './courses.js';
 import { CAR } from './vehicle.js';
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
@@ -9,6 +9,16 @@ const lerp = (a, b, t) => a + (b - a) * t;
 // Map x in [bad, good] → [0, 1] (works for either direction).
 const band = (x, bad, good) => clamp01((x - bad) / (good - bad));
 const r1 = (x) => Math.round(x * 10) / 10;
+
+// The Wall: climb the curl, hang inverted, peel off the lip, roll upright, land on the mark.
+export const WALL_CATEGORIES = [
+  { id: 'climb', label: 'Climb', unit: '%' },
+  { id: 'inversion', label: 'Inverted', unit: 's' },
+  { id: 'rotation', label: 'Roll-out', unit: '°' },
+  { id: 'landing', label: 'Landing', unit: '' },
+  { id: 'precision', label: 'Precision', unit: 'm' },
+  { id: 'efficiency', label: 'Gas left', unit: '%' },
+];
 
 export const CATEGORIES = [
   { id: 'height', label: 'Amplitude', unit: 'm' },
@@ -29,7 +39,88 @@ export const PANEL = [
     w: { height: 0.12, rotation: 0.22, clearance: 0.12, landing: 0.24, precision: 0.12, efficiency: 0.18 } },
 ];
 
+export const categoriesFor = (course) => (course === 'wall' ? WALL_CATEGORIES : CATEGORIES);
+
+// Landing quality, shared: sink rate, attitude, heading, wheel sync, suspension.
+function landingScore(t) {
+  const sinkS = band(t.sink, 6, 0.9);
+  const tiltS = band(t.tiltDeg, 25, 1.5);
+  const headS = band(Math.abs(t.headingDeg) > 90 ? 180 - Math.abs(t.headingDeg) : Math.abs(t.headingDeg), 30, 2);
+  const syncS = band(t.wheelSpreadMs, 250, 20);
+  const suspS = t.bottomOut ? 0.55 : 1;
+  return 10 * (0.38 * sinkS + 0.26 * tiltS + 0.14 * headS + 0.22 * syncS) * suspS * (t.bodyStrike ? 0.6 : 1);
+}
+
+function scoreWall(t, opts) {
+  const course = COURSES.wall;
+  const crashed = t.flipped || !t.settledUpright || t.fellOff || t.landedOnRamp;
+  const launched = t.airStartTick >= 0;
+  const jumped = launched && t.touchTick >= 0;
+  const rollDeg = Math.abs(t.rollAccum) * 180 / Math.PI;
+  const pitchDeg = Math.abs(t.pitchAccum) * 180 / Math.PI;
+  const turned = Math.max(rollDeg, pitchDeg);
+  const rollShare = rollDeg / Math.max(1, rollDeg + pitchDeg);
+  const airPct = (t.airEnd / CAR.airMass) * 100;
+  const padMiss = Math.hypot(t.lateral, t.landZ - course.pad.z);
+  const c = {};
+  c.climb = 10 * Math.pow(clamp01(t.progress), 1.4);
+  c.inversion = t.progress > 0.8 ? 10 * band(t.invertedTime, 0, 1.0) : 0;
+  // Coming off the ledge upside down, the car must turn ~180° to land. The reveal did it as a
+  // roll; a roll-dominant turn scores higher than a flip.
+  c.rotation = 10 * clamp01(turned / 160) * (0.7 + 0.3 * rollShare);
+  c.landing = landingScore(t);
+  c.precision = 10 * band(padMiss, 20, 1);
+  c.efficiency = 10 * band(airPct, 0, 50) * clamp01(turned / 120);
+  if (!jumped) { c.rotation = 0; c.landing = 0; c.precision = 0; c.efficiency = 0; }
+  if (crashed) { c.landing = 0; c.precision *= 0.3; }
+  const assistFactor = opts.assist === false ? 1.08 : 1;
+  const W = {
+    engineer: { climb: 0.12, inversion: 0.12, rotation: 0.12, landing: 0.38, precision: 0.16, efficiency: 0.1 },
+    coordinator: { climb: 0.24, inversion: 0.24, rotation: 0.22, landing: 0.18, precision: 0.06, efficiency: 0.06 },
+    designer: { climb: 0.14, inversion: 0.16, rotation: 0.16, landing: 0.24, precision: 0.14, efficiency: 0.16 },
+  };
+  const judges = PANEL.map((j) => {
+    let s = 0;
+    for (const k of Object.keys(W[j.id])) s += W[j.id][k] * c[k];
+    if (crashed) s = Math.min(s, 3.5);
+    else if (!jumped) s = Math.min(s, 3);
+    return { id: j.id, name: j.name, title: j.title, score: r1(Math.min(10, s * assistFactor)) };
+  });
+  const total = r1(judges.reduce((a, j) => a + j.score, 0) * 10 / 3);
+  let verdict;
+  if (t.fellOff) verdict = 'Fell off the wall';
+  else if (!launched) verdict = t.progress > 0.5 ? 'Stalled on the wall' : 'No climb';
+  else if (t.landedOnRamp) verdict = 'Came down on the deck';
+  else if (t.flipped || !t.settledUpright) verdict = 'Rolled over';
+  else if (crashed) verdict = 'Crash';
+  else if (total >= 92) verdict = 'Perfect 10';
+  else if (total >= 84) verdict = 'Stuck it';
+  else if (total >= 72) verdict = 'Clean';
+  else if (total >= 55) verdict = 'Rough landing';
+  else verdict = 'Survived';
+  return {
+    course: 'wall', total, judges,
+    categories: Object.fromEntries(Object.entries(c).map(([k, v]) => [k, r1(v)])),
+    facts: {
+      course: 'wall', height: r1(t.maxRampHeight), progressPct: Math.round(t.progress * 100), invertedS: r1(t.invertedTime),
+      launchHeight: r1(t.launchHeight), launchKmh: Math.round(t.launchSpeed * 3.6), entryKmh: Math.round(t.rampEntrySpeed * 3.6),
+      apex: r1(t.apex), maxG: r1(t.maxG), rollDeg: Math.round(rollDeg), pitchDeg: Math.round(pitchDeg), rotations: Math.round(turned / 360),
+      sink: r1(t.sink), tiltDeg: r1(t.tiltDeg), headingDeg: r1(t.headingDeg), wheelSpreadMs: Math.round(t.wheelSpreadMs),
+      padMiss: r1(padMiss), airPct: Math.round(airPct), zeroToSixty: t.zeroToSixty,
+      bottomOut: t.bottomOut, bodyStrike: t.bodyStrike, contact: false, clearance: null, apexOverRoof: null,
+      flipped: t.flipped, fellOff: t.fellOff, landedOnRamp: t.landedOnRamp, crashed, jumped, endReason: t.endReason,
+    },
+    verdict,
+  };
+}
+
 export function scoreRun(t, opts = {}) {
+  if (t.course === 'wall') return scoreWall(t, opts);
+  return scoreLineup(t, opts);
+}
+
+function scoreLineup(t, opts = {}) {
+  const PAD = LINEUP.pad, TALLEST = LINEUP.tallest;
   const crashed = t.contact || t.flipped || !t.settledUpright;
   const jumped = t.airStartTick >= 0 && t.touchTick >= 0;
   const rollDeg = Math.abs(t.rollAccum) * 180 / Math.PI;

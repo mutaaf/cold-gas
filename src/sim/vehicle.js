@@ -303,7 +303,9 @@ export function step(s, inp) {
   if (inp.assist && inp.level && grounded === 0 && s.air > 0) {
     // LAND: govern lift so the sink rate eases to a soft touchdown on the ground below.
     const h = Math.max(0, s.pos.y - SPEC.comHeight - 0.05);
-    const wantVy = -Math.max(0.9, Math.min(8, Math.sqrt(h * 2 * 2.6)));
+    let wantVy = -Math.max(0.9, Math.min(8, Math.sqrt(h * 2 * 2.6)));
+    // Inside the last 3 m, nearly hover until the car is level: touch down flat, on four wheels.
+    if (h < 3 && upW.y < 0.99) wantVy = Math.max(wantVy, -0.45);
     if (s.vel.y < wantVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((wantVy - s.vel.y) * 0.8 + 0.55, 0, 1));
   }
   mix(eff, cmdT, target);

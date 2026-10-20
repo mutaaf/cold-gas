@@ -154,7 +154,7 @@ function buildDom(root) {
 // --- The show ---------------------------------------------------------------------------------------
 // Runs one judging call through the theatre. Resolves with { words, meta } when the show is over
 // (or skipped). `fallbackWords(card)` supplies local lines if the call fails.
-export function runTheatre(root, { log, assist, ai, card, fallbackWords, reduced = false, replay = null }) {
+export function runTheatre(root, { log, assist, ai, card, course, fallbackWords, reduced = false, replay = null }) {
   registerShapes();
   const dom = buildDom(root);
   root.hidden = false;
@@ -259,7 +259,7 @@ export function runTheatre(root, { log, assist, ai, card, fallbackWords, reduced
         const f = card.facts;
         caption('Your telemetry becomes text: the facts the model reads.');
         if (field) safe(() => {
-          const name = textShape(`${f.rollDeg}° ${f.apex}M ${f.sink}M/S`);
+          const name = textShape(f.course === 'wall' ? `${f.height}M ${f.invertedS}S ${f.sink}M/S` : `${f.rollDeg}° ${f.apex}M ${f.sink}M/S`);
           if (name !== 'cg:compute') field.add([name]);
           field.setShape(name, { pin: 1e9, arrive: { from: [-1, 0, 0], ms: 1100 } });
         });
@@ -296,7 +296,7 @@ export function runTheatre(root, { log, assist, ai, card, fallbackWords, reduced
   };
 
   let showFinal = null;
-  const source = replay ? replayEvents(replay, handlers) : streamPanel({ log, assist, ai }, handlers);
+  const source = replay ? replayEvents(replay, handlers) : streamPanel({ log, assist, ai, course }, handlers);
 
   (async () => {
     try { await source; } catch (err) { handlers.error({ message: 'The judges are offline.', fallback: true }); console.warn(err); }
