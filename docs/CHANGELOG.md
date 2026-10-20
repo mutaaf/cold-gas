@@ -1,6 +1,14 @@
 # Changelog
 
 2026-10-20 · #0012 · The fan is scheduled like the livestream's DOWNFORCE channel (SIM_VERSION 12): armed, it asks for the suction the deck's tilt needs (≈130 kgf rolling on the pad, ≈1,900 at 75°, ≈2,450 on the vertical, the 4,690 kgf cap hanging inverted), spools in 1.5 s and holds its demand; full throttle or a full stop fills the grip void up to the cap. The HUD's FAN reads kgf. The Wall reference climb reads within ±26 % of all six telemetry rows (was +981 % at 25°).
+## 0.11.0 — 2026-10-20
+
+The damage sensor.
+- `src/sim/damage.js`: per-zone damage (nose, tail, left, right, roof, floor, suspension) from the sim's own impact events and permanent crush: hits ∝ impact energy (100 % at 14 m/s ≈ a barrier test), scrapes grind, tyre slams past 3 m/s bend suspension, crush sets a floor. Integrity = 100 − (0.6·worst + 0.4·mean). Deterministic, so the Worker's re-simulation agrees.
+- HUD: the car from above, each zone shaded (scuff / amber ≥ 10 % / red ≥ 40 %), the total %, a flash on each hit.
+- Judges: a new Integrity category on every event (Engineer weighs it 15 %, Designer 12 %, Coordinator 8 %); 60 % damage or worse is a wreck, capped like a crash, verdict "Wrecked". Results show "% intact"; the AI panel gets the damage line with the worst zones.
+- Reference runs read ≤ 2 % (skirts brushing the ledge); a drop onto the row reads ≈37 %.
+
 
 ## 0.10.0 — 2026-10-20
 

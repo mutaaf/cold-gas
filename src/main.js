@@ -189,7 +189,7 @@ function startRun(kind = 'jump') {
   refGhost(stage.course);
   S.mode = 'countdown'; S.countT = 0; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
   S.impacts = 0; S.impact = null;
-  ui.only('hud');
+  ui.only('hud'); ui.damageReset();
   drillBar.hidden = true;
   landing.show(false);
   getNozzlePad().show(false);
@@ -370,6 +370,7 @@ function liveStep(dt) {
     sink: -c.vel.y, phase: { drive: 'Run-up', ramp: c.fanForce > 1000 ? 'On the wall · fan' : 'On the wall', air: 'Airborne', landed: 'Touchdown', done: 'Settled' }[run.phase],
     throttles: c.throttles, fan: c.fanForce / G, g: feltG(c, dt),
   });
+  ui.damage(run.damage);
   landing.update(c, alt, S.autopilot ? '' : run.phase);
   hero.setFan?.(c.fan);
   hero.setWing?.(Math.min(1, Math.max(0, (speed - 20) / 20)));
@@ -617,7 +618,7 @@ function startDrill(id) {
   S.run = run; S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;
   S.mode = 'live'; S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
   S.impacts = 0; S.impact = null;
-  ui.only('hud');
+  ui.only('hud'); ui.damageReset();
   ui.countdown(0);
   drillBar.hidden = false;
   document.querySelector('[data-drill-name]').textContent = `${drill.n} ${drill.label}`;

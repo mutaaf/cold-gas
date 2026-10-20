@@ -91,6 +91,34 @@ export function createUI() {
     }
   };
 
+  // The damage sensor: per-zone shading (amber from 10 %, red from 40 %), the total, a flash on a hit.
+  const dmgEl = $('[data-dmg]'), dmgPct = $('[data-dmg-pct]');
+  const dmgZones = dmgEl ? Object.fromEntries([...dmgEl.querySelectorAll('[data-z]')].map((el) => [el.dataset.z, el])) : {};
+  const ZONE_ORDER = ['nose', 'tail', 'left', 'right', 'roof', 'floor', 'susp'];
+  const lastDmg = { total: -1, hit: -1, z: ZONE_ORDER.map(() => -1) };
+  ui.damage = (d) => {
+    if (!dmgEl || !d) return;
+    for (let k = 0; k < ZONE_ORDER.length; k++) {
+      const v = Math.round(d.zones[k]);
+      if (v === lastDmg.z[k]) continue;
+      lastDmg.z[k] = v;
+      const el = dmgZones[ZONE_ORDER[k]];
+      el.style.setProperty('--dmg', String(v / 100));
+      el.dataset.level = v >= 40 ? 'red' : v >= 10 ? 'amber' : v > 0 ? 'scuff' : '';
+    }
+    const t = Math.round(d.total);
+    if (t !== lastDmg.total) {
+      dmgPct.textContent = String(t);
+      dmgEl.dataset.state = t >= 60 ? 'wreck' : t >= 25 ? 'warn' : t > 0 ? 'scuffed' : 'ok';
+      lastDmg.total = t;
+    }
+    if (d.lastTick !== lastDmg.hit) {
+      if (lastDmg.hit >= 0 || d.lastTick >= 0) { dmgEl.classList.remove('hit'); void dmgEl.offsetWidth; dmgEl.classList.add('hit'); }
+      lastDmg.hit = d.lastTick;
+    }
+  };
+  ui.damageReset = () => { lastDmg.total = -1; lastDmg.hit = -1; lastDmg.z.fill(-1); dmgEl?.classList.remove('hit'); };
+
   // --- Results ---------------------------------------------------------------------------
   // `practice`: { drill, result } for a drill (not scored: no panel, no board).
   ui.results = (card, practice = null) => {
@@ -157,6 +185,7 @@ export function createUI() {
     ];
     if (f.bottomOut) facts.push(['bottomed out', true]);
     if (f.flipped) facts.push(['rolled over', true]);
+    if (f.damagePct != null) facts.push([f.damagePct >= 60 ? `wrecked · ${f.damagePct}% damage` : `${f.integrity}% intact`, f.damagePct >= 25]);
     const ul = $('[data-r-facts]');
     ul.innerHTML = '';
     for (const [txt, bad] of facts) { const li = document.createElement('li'); li.textContent = txt; if (bad) li.className = 'bad'; ul.appendChild(li); }

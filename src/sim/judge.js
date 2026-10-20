@@ -19,6 +19,7 @@ export const WALL_CATEGORIES = [
   { id: 'landing', label: 'Landing', unit: '' },
   { id: 'precision', label: 'Precision', unit: 'm' },
   { id: 'efficiency', label: 'Gas left', unit: '%' },
+  { id: 'damage', label: 'Integrity', unit: '%' },
 ];
 
 export const CATEGORIES = [
@@ -28,6 +29,7 @@ export const CATEGORIES = [
   { id: 'landing', label: 'Landing', unit: '' },
   { id: 'precision', label: 'Precision', unit: 'm' },
   { id: 'efficiency', label: 'Air left', unit: '%' },
+  { id: 'damage', label: 'Integrity', unit: '%' },
 ];
 
 // Flight tiers and what the panel pays for each (src/sim/vehicle.js `tierOf`). Assist flies with
@@ -65,6 +67,7 @@ export const SHOW_CATEGORIES = [
   { id: 'landing', label: 'Landing', unit: '' },
   { id: 'precision', label: 'Precision', unit: 'm' },
   { id: 'efficiency', label: 'Gas left', unit: '%' },
+  { id: 'damage', label: 'Integrity', unit: '%' },
 ];
 
 export const categoriesFor = (course) => (course === 'wall' ? WALL_CATEGORIES : course === 'show' ? SHOW_CATEGORIES : CATEGORIES);
@@ -79,6 +82,14 @@ const SHOW_W = {
   coordinator: { climb: 0.16, inversion: 0.18, rotation: 0.2, clearance: 0.2, landing: 0.16, precision: 0.05, efficiency: 0.05 },
   designer: { climb: 0.1, inversion: 0.12, rotation: 0.14, clearance: 0.14, landing: 0.22, precision: 0.12, efficiency: 0.16 },
 };
+
+// Damage (src/sim/damage.js): every judge marks the car's integrity, each with their own weight
+// (the Engineer cares most: they have to fix it). 60 % or worse is a wreck, whatever else happened.
+const DAMAGE_W = { engineer: 0.15, coordinator: 0.08, designer: 0.12 };
+export const WRECK_PCT = 60;
+const damagePct = (t) => (t.damage ? t.damage.pct : 0);
+const withDamage = (s, j, c) => s * (1 - DAMAGE_W[j.id]) + DAMAGE_W[j.id] * c.damage;
+const damageFactsOf = (t) => ({ damagePct: damagePct(t), integrity: 100 - damagePct(t), damageZones: t.damage ? t.damage.zones : null });
 
 // Landing quality, shared: sink rate, attitude, heading, wheel sync, suspension.
 function landingScore(t) {
@@ -102,7 +113,8 @@ function clearanceScore(t) {
 function scoreWall(t, opts) {
   const show = t.course === 'show';
   const course = COURSES[show ? 'show' : 'wall'];
-  const crashed = t.flipped || !t.settledUpright || t.fellOff || t.landedOnRamp || (show && t.contact);
+  const wrecked = damagePct(t) >= WRECK_PCT;
+  const crashed = t.flipped || !t.settledUpright || t.fellOff || t.landedOnRamp || (show && t.contact) || wrecked;
   const launched = t.airStartTick >= 0;
   const jumped = launched && t.touchTick >= 0;
   const rollDeg = Math.abs(t.rollAccum) * 180 / Math.PI;
@@ -121,6 +133,7 @@ function scoreWall(t, opts) {
   c.precision = 10 * band(padMiss, 20, 1);
   c.efficiency = 10 * band(airPct, 0, 50) * clamp01(turned / 120);
   if (show) c.clearance = t.crossedRow ? clearanceScore(t) : 0;
+  c.damage = 10 * (1 - damagePct(t) / 100);
   if (!jumped) { c.rotation = 0; c.landing = 0; c.precision = 0; c.efficiency = 0; c.clearance = 0; }
   if (crashed) { c.landing = 0; c.precision *= 0.3; }
   const tier = TIERS[tierOfRun(t, opts)];
@@ -128,6 +141,7 @@ function scoreWall(t, opts) {
   const judges = PANEL.map((j) => {
     let s = 0;
     for (const k of Object.keys(W[j.id])) s += W[j.id][k] * c[k];
+    s = withDamage(s, j, c);
     if (crashed) s = Math.min(s, 3.5);
     else if (!jumped) s = Math.min(s, 3);
     else if (show && !t.crossedRow) s = Math.min(s, 5);
@@ -136,6 +150,7 @@ function scoreWall(t, opts) {
   const total = r1(judges.reduce((a, j) => a + j.score, 0) * 10 / 3);
   let verdict;
   if (t.fellOff) verdict = 'Fell off the wall';
+  else if (wrecked) verdict = 'Wrecked';
   else if (show && t.contact) verdict = 'Contact';
   else if (!launched) verdict = t.progress > 0.5 ? 'Stalled on the wall' : 'No climb';
   else if (t.landedOnRamp) verdict = 'Came down on the deck';
@@ -158,7 +173,7 @@ function scoreWall(t, opts) {
       padMiss: r1(padMiss), airPct: Math.round(airPct), zeroToSixty: t.zeroToSixty,
       bottomOut: t.bottomOut, bodyStrike: t.bodyStrike, contact: show && t.contact,
       clearance: show && Number.isFinite(t.minClearance) ? r1(t.minClearance) : null, crossedRow: show ? t.crossedRow : null, apexOverRoof: null,
-      flipped: t.flipped, fellOff: t.fellOff, landedOnRamp: t.landedOnRamp, crashed, jumped, endReason: t.endReason,
+      flipped: t.flipped, fellOff: t.fellOff, landedOnRamp: t.landedOnRamp, crashed, jumped, endReason: t.endReason, ...damageFactsOf(t),
     },
     verdict,
   };
@@ -172,7 +187,8 @@ export function scoreRun(t, opts = {}) {
 
 function scoreLineup(t, opts = {}) {
   const PAD = LINEUP.pad, TALLEST = LINEUP.tallest;
-  const crashed = t.contact || t.flipped || !t.settledUpright;
+  const wrecked = damagePct(t) >= WRECK_PCT;
+  const crashed = t.contact || t.flipped || !t.settledUpright || wrecked;
   const jumped = t.airStartTick >= 0 && t.touchTick >= 0;
   const rollDeg = Math.abs(t.rollAccum) * 180 / Math.PI;
   const rotations = Math.round(rollDeg / 360);
@@ -206,11 +222,13 @@ function scoreLineup(t, opts = {}) {
 
   if (!jumped) for (const k of Object.keys(c)) c[k] = 0;
   if (crashed) { c.landing = 0; c.precision *= 0.3; }
+  c.damage = 10 * (1 - damagePct(t) / 100);
 
   const tier = TIERS[tierOfRun(t, opts)];
   const judges = PANEL.map((j) => {
     let s = 0;
     for (const k of Object.keys(j.w)) s += j.w[k] * c[k];
+    s = withDamage(s, j, c);
     if (crashed) s = Math.min(s, 3.5);
     else if (rotations === 0) s = Math.min(s, 4.5);
     return { id: j.id, name: j.name, title: j.title, score: r1(Math.min(10, s * tier.factor)) };
@@ -226,9 +244,9 @@ function scoreLineup(t, opts = {}) {
       clearance: r1(clearance), sink: r1(t.sink), tiltDeg: r1(t.tiltDeg), headingDeg: r1(t.headingDeg),
       wheelSpreadMs: Math.round(t.wheelSpreadMs), padMiss: r1(padMiss), airPct: Math.round(airPct),
       launchKmh: Math.round(t.launchSpeed * 3.6), bottomOut: t.bottomOut, bodyStrike: t.bodyStrike,
-      contact: t.contact, flipped: t.flipped, crashed, jumped, endReason: t.endReason,
+      contact: t.contact, flipped: t.flipped, crashed, jumped, endReason: t.endReason, ...damageFactsOf(t),
     },
-    verdict: verdictOf(total, crashed, jumped, t),
+    verdict: wrecked && jumped ? 'Wrecked' : verdictOf(total, crashed, jumped, t),
   };
 }
 
