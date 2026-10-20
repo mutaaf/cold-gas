@@ -34,6 +34,7 @@
       <button type="button" role="radio" class="course-btn" data-course="wall" aria-checked="false"><b>The Wall</b><span>28 m curl · 46 kN suction · inverted</span></button>
       <button type="button" role="radio" class="course-btn" data-course="lineup" aria-checked="false"><b>The Lineup</b><span>No ramp · lift over five EVs · 360° roll</span></button>
     </div>
+    <button type="button" class="course-btn drive-btn" data-drive-open aria-haspopup="dialog"><b>Free Drive</b><span>Stelvio · Transfăgărășan · Big Sur · Atlantic Road</span></button>
     <div class="cta">
       <button class="btn primary" data-start>Jump</button>
       <button class="btn ghost" data-reveal>Watch the reference</button>
@@ -232,6 +233,27 @@
         <button class="btn primary" data-resume>Resume</button>
         <button class="btn ghost" data-restart>Restart</button>
         <button class="btn link" data-home>Title</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Free Drive: the road picker, the driving HUD and its pause sheet (src/drive/, a lazy chunk) -->
+  <section class="fd-picker" data-drive-picker hidden></section>
+  <section class="fd-hud" data-drive-hud hidden></section>
+  <section class="fd-pause" data-drive-pause hidden>
+    <div class="sheet narrow" role="dialog" aria-modal="true" aria-label="Paused">
+      <h2>Paused</h2>
+      <div class="keys">
+        <p><b>Drive</b> ↑ throttle · ↓ brake, hold to reverse · ← → steer · Shift boost · Space lift</p>
+        <p><b>Air</b> ← → roll · ↑ ↓ pitch · Space lift · Shift land</p>
+        <p><b>Any time</b> R back on the road · C camera · T day / dusk · X suction fan</p>
+      </div>
+      <div class="actions">
+        <button class="btn primary" data-dp-resume>Resume</button>
+        <button class="btn ghost" data-dp-reset>Back on the road</button>
+        <button class="btn ghost" data-dp-restart>From the start</button>
+        <button class="btn ghost" data-dp-roads>Another road</button>
+        <button class="btn link" data-dp-exit>Title</button>
       </div>
     </div>
   </section>

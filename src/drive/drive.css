@@ -1,0 +1,124 @@
+/* Free Drive: the road picker and the driving HUD. Loaded with the drive chunk only. Same voice
+   as the stunts: hairlines, glass, Michroma for names, mono for numbers. */
+
+/* --- Picker --- */
+.fd-picker { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; pointer-events: auto;
+  background: radial-gradient(120% 90% at 30% 100%, rgba(5, 7, 12, 0.55), rgba(5, 7, 12, 0.92)); backdrop-filter: blur(6px);
+  animation: fd-in 0.5s var(--ease) both; overflow-y: auto; }
+@keyframes fd-in { from { opacity: 0; } to { opacity: 1; } }
+.fd-sheet { width: min(1120px, calc(100vw - 32px)); padding: calc(64px + var(--safe-t)) 0 calc(28px + var(--safe-b)); }
+.fd-head h2 { margin: 0; font: 400 clamp(26px, 3.4vw, 40px)/1.05 var(--display); letter-spacing: 0.02em; }
+.fd-lede { margin: 12px 0 26px; max-width: 620px; color: var(--ink-2); font-weight: 300; font-size: 16px; }
+.fd-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+.fd-card { position: relative; display: grid; align-content: start; gap: 6px; text-align: left; padding: 14px 16px 16px; border-radius: 16px;
+  border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px); transition: border-color 0.3s var(--ease), transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
+  animation: rise 0.9s var(--ease) both; }
+.fd-card:nth-child(2) { animation-delay: 0.06s; } .fd-card:nth-child(3) { animation-delay: 0.12s; } .fd-card:nth-child(4) { animation-delay: 0.18s; }
+.fd-card:hover { border-color: rgba(255, 255, 255, 0.34); transform: translateY(-2px); }
+.fd-card[aria-checked='true'] { border-color: var(--ice); box-shadow: 0 0 0 3px rgba(191, 230, 255, 0.12), 0 24px 60px rgba(0, 0, 0, 0.35); }
+.fd-card:focus-visible { outline: 2px solid var(--ice); outline-offset: 3px; }
+.fd-sil { width: 100%; height: 96px; margin-bottom: 4px; }
+.fd-sil path { fill: none; stroke: var(--ink); stroke-width: 1.15; stroke-linejoin: round; stroke-linecap: round; opacity: 0.86; }
+.fd-card[aria-checked='true'] .fd-sil path { stroke: #fff; opacity: 1; }
+.fd-sil .a { fill: var(--ink); } .fd-sil .b { fill: var(--signal); }
+.fd-name { font: 400 15px/1.15 var(--display); letter-spacing: 0.04em; }
+.fd-local { font-size: 12px; color: var(--ink-2); }
+.fd-country { font: 500 10px/1 var(--text); letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink-3); }
+.fd-cstats { font: 400 11.5px/1.5 var(--mono); color: var(--ink-2); margin-top: 6px; }
+.fd-cstats b { font-weight: 400; color: var(--ink); }
+.fd-prof { width: 100%; height: 28px; }
+.fd-prof path { fill: rgba(191, 230, 255, 0.16); stroke: rgba(191, 230, 255, 0.55); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.fd-blurb { font-size: 12px; color: var(--ink-3); line-height: 1.45; }
+.fd-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 22px; }
+.seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 20px; border: 1px solid var(--hair); background: var(--glass); }
+.fd-tod button { height: 38px; padding: 0 16px; border: 0; border-radius: 17px; background: none; font: 500 12px/1 var(--text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+.fd-tod button[aria-checked='true'] { background: rgba(245, 246, 248, 0.14); color: var(--ink); }
+.fd-loading { display: grid; gap: 8px; margin-top: 18px; max-width: 420px; font: 500 11px/1 var(--text); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-2); }
+.fd-loading i { display: block; height: 1px; background: var(--hair); overflow: hidden; }
+.fd-loading b { display: block; height: 1px; background: var(--ink); transform-origin: left; transform: scaleX(0); transition: transform 0.25s var(--ease); }
+.fd-credit { margin: 26px 0 0; font-size: 11px; color: var(--ink-3); max-width: 760px; }
+
+/* --- Driving HUD --- */
+body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { display: none; }
+.fd-hud { position: fixed; inset: 0; pointer-events: none; z-index: 3; font-variant-numeric: tabular-nums; }
+.fd-hud .chip { pointer-events: auto; }
+.fd-road { position: absolute; left: calc(24px + var(--safe-l)); top: calc(58px + var(--safe-t)); text-shadow: 0 1px 12px rgba(0, 0, 0, 0.45); }
+.fd-road p { margin: 0; }
+.fd-road-name { font: 400 clamp(15px, 1.6vw, 20px)/1.1 var(--display); letter-spacing: 0.06em; }
+.fd-road-sub { margin-top: 6px !important; font-size: 12px; color: var(--ink-2); }
+.fd-ctl { position: absolute; right: calc(24px + var(--safe-r)); top: calc(62px + var(--safe-t)); display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
+.fd-ctl [data-h-fan][aria-pressed='true'] { color: var(--ink); border-color: var(--ice); box-shadow: 0 0 0 2px rgba(191, 230, 255, 0.15); }
+.fd-timer { position: absolute; left: 50%; top: calc(20px + var(--safe-t)); transform: translateX(-50%); display: grid; justify-items: center; gap: 4px; opacity: 0.4; transition: opacity 0.4s var(--ease); }
+.fd-timer.running, .fd-timer.finished { opacity: 1; }
+.fd-timer b { font: 400 15px/1 var(--mono); letter-spacing: 0.04em; }
+.fd-timer span { font: 500 10px/1 var(--text); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); }
+.fd-timer.finished b { color: var(--ice); }
+.fd-speed { position: absolute; left: 50%; bottom: calc(34px + var(--safe-b)); transform: translateX(-50%); display: grid; justify-items: center; text-shadow: 0 2px 18px rgba(0, 0, 0, 0.4); }
+.fd-speed b { font: 300 64px/0.9 var(--text); letter-spacing: -0.02em; }
+.fd-speed span { margin-top: 6px; font: 500 10px/1 var(--text); letter-spacing: 0.32em; text-transform: uppercase; color: var(--ink-2); }
+.fd-stats { position: absolute; left: calc(24px + var(--safe-l)); bottom: calc(40px + var(--safe-b)); margin: 0; display: grid; gap: 12px; text-shadow: 0 1px 10px rgba(0, 0, 0, 0.5); }
+.fd-stats div { display: grid; gap: 4px; }
+.fd-stats dt { font: 500 9.5px/1 var(--text); letter-spacing: 0.26em; text-transform: uppercase; color: var(--ink-3); }
+.fd-stats dd { margin: 0; font: 400 13px/1 var(--mono); color: var(--ink-2); }
+.fd-stats dd b { font-weight: 400; font-size: 17px; color: var(--ink); }
+.fd-map { position: absolute; right: calc(24px + var(--safe-r)); bottom: calc(40px + var(--safe-b)); width: 168px; padding: 9px; border-radius: 14px; border: 1px solid var(--hair-2);
+  background: rgba(8, 11, 17, 0.42); backdrop-filter: blur(10px); display: grid; gap: 6px; }
+.fd-mini { width: 150px; height: 150px; display: block; }
+.fd-mini .route { fill: none; stroke: rgba(245, 246, 248, 0.42); stroke-width: 1.3; stroke-linejoin: round; }
+.fd-mini .a { fill: var(--ink-2); } .fd-mini .b { fill: var(--signal); }
+.fd-mini [data-h-car] circle { fill: rgba(191, 230, 255, 0.25); stroke: var(--ice); stroke-width: 1.2; }
+.fd-mini [data-h-car] path { fill: var(--ice); }
+.fd-profile { width: 150px; height: 34px; display: block; }
+.fd-profile path { fill: rgba(191, 230, 255, 0.12); stroke: rgba(191, 230, 255, 0.5); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.fd-profile line { stroke: var(--ice); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.fd-fine { position: absolute; left: calc(24px + var(--safe-l)); right: calc(24px + var(--safe-r)); bottom: calc(10px + var(--safe-b)); margin: 0; font-size: 9.5px; line-height: 1.3;
+  color: rgba(245, 246, 248, 0.55); text-shadow: 0 1px 6px rgba(0, 0, 0, 0.7); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.fd-pause { position: fixed; inset: 0; z-index: 25; display: grid; place-items: center; background: rgba(5, 7, 12, 0.55); backdrop-filter: blur(8px); pointer-events: auto; }
+.fd-pause .sheet { height: auto; border-radius: 18px; border: 1px solid var(--hair); padding: 28px; }
+.fd-pause .keys p { margin: 6px 0; font-size: 13px; color: var(--ink-2); }
+.fd-pause .actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 18px; }
+
+@media (max-width: 900px) {
+  .fd-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 560px) {
+  .fd-sheet { padding-top: calc(56px + var(--safe-t)); }
+  .fd-lede { font-size: 14px; margin-bottom: 16px; }
+  .fd-cards { grid-template-columns: 1fr; gap: 8px; }
+  .fd-card { grid-template-columns: 84px 1fr; column-gap: 12px; row-gap: 3px; padding: 10px 12px; }
+  .fd-sil { grid-row: 1 / span 4; height: 64px; margin: 0; }
+  .fd-prof, .fd-blurb { display: none; }
+  .fd-cstats { font-size: 10.5px; }
+}
+/* Phones: the thumbs own the bottom of the screen, so the HUD lives up top. */
+@media (pointer: coarse) {
+  .fd-stats dd { white-space: nowrap; }
+  .fd-speed b { font-size: 44px; }
+  .fd-stats dd b { font-size: 14px; }
+  .fd-mini { width: 84px; height: 84px; }
+  .fd-profile { width: 84px; height: 22px; }
+  .fd-map { width: auto; padding: 6px; bottom: auto; }
+  .fd-fine { white-space: normal; font-size: 8.5px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  .fd-road { top: calc(56px + var(--safe-t)); }
+  .fd-road-sub { max-width: 60vw; }
+  .fd-fine { top: calc(106px + var(--safe-t)); bottom: auto; right: auto; max-width: 62vw; }
+  .fd-timer { top: calc(60px + var(--safe-t)); left: auto; right: calc(16px + var(--safe-r)); transform: none; justify-items: end; }
+  .fd-speed { bottom: auto; top: calc(140px + var(--safe-t)); }
+  .fd-stats { bottom: auto; top: calc(204px + var(--safe-t)); left: 50%; transform: translateX(-50%); grid-auto-flow: column; gap: 18px; }
+  .fd-ctl { top: calc(250px + var(--safe-t)); right: 50%; transform: translateX(50%); max-width: 96vw; flex-wrap: nowrap; gap: 6px; }
+  .fd-ctl .chip { padding: 0 10px; }
+  .fd-map { top: calc(296px + var(--safe-t)); right: calc(14px + var(--safe-r)); }
+}
+@media (pointer: coarse) and (orientation: landscape) {
+  .fd-speed { bottom: auto; top: calc(54px + var(--safe-t)); }
+  .fd-stats { bottom: auto; top: calc(116px + var(--safe-t)); left: 50%; transform: translateX(-50%); grid-auto-flow: column; gap: 16px; }
+  .fd-ctl { top: auto; bottom: calc(14px + var(--safe-b)); right: 50%; transform: translateX(50%); max-width: 60vw; flex-wrap: nowrap; }
+  .fd-fine { top: auto; bottom: calc(58px + var(--safe-b)); left: 50%; right: auto; transform: translateX(-50%); max-width: 46vw; text-align: center; }
+  .fd-map { top: calc(60px + var(--safe-t)); right: calc(14px + var(--safe-r)); }
+  .fd-timer { top: calc(20px + var(--safe-t)); }
+  .fd-road { top: calc(56px + var(--safe-t)); }
+}
+@media (prefers-reduced-motion: reduce) { .fd-picker, .fd-card { animation: none; } }

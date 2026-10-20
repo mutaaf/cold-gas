@@ -82,7 +82,9 @@ function findRow(scene) {
   return row;
 }
 
-export function createCrash({ scene, hero, carRoot, director, tier = 'high', course = () => 'show' }) {
+// `course` returns a course id or a course object (Free Drive's roads); `floor` the ground height
+// near the car (0 on the stages), for sparks, chips and torn-off parts to land on.
+export function createCrash({ scene, hero, carRoot, director, tier = 'high', course = () => 'show', floor = () => 0 }) {
   const P = POOLS[tier] || POOLS.high;
   const reduced = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
   const root = new THREE.Group();
@@ -183,7 +185,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
   // --- Parts that tear off: free rigid copies (src/render/debris.js) ---
   // Each breakable is one or more pieces, each a box with its own visual, spawned at the part's
   // pose on the car when a hit is hard enough at the right end; the part on the car hides.
-  const pieces = createPieces(root);
+  const pieces = createPieces(root, floor);
   const breakable = [];
   const zF = SPEC.wheelbase - SPEC.comFromFront;
   const SKIRT_Y = SPEC.rideHeight + 0.012 + 0.06;          // roadster.js: skirt top + half its height
@@ -490,7 +492,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
   // the open side first, low, then higher over the roofs, then the other side.
   const camP = new THREE.Vector3(), sn = { x: 0, y: 0, z: 0 };
   const clear = (px, py, pz, x, y, z) => {
-    const C = COURSES[course()] || COURSES.show;
+    const cc = course(), C = typeof cc === 'object' ? cc : COURSES[cc] || COURSES.show;
     if (surface(C, px, py, pz, sn) < 0.8) return false;
     for (let k = 1; k < 8; k++) {
       const f = k / 8;
@@ -537,6 +539,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
     else st.slowK += (1 - st.slowK) * Math.min(1, dtReal * 3.5);
     if (st.slowK > 0.995) st.slowK = 1;
     const dt = dtReal * st.slowK;
+    const fl = floor();
 
     // Sparks: ballistic, a little drag, they bounce once off the concrete and cool.
     if (sLive > 0) {
@@ -549,7 +552,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
         any = true;
         sVel[j * 3] *= drag; sVel[j * 3 + 1] = sVel[j * 3 + 1] * drag - G * dt; sVel[j * 3 + 2] *= drag;
         sPos[j * 3] += sVel[j * 3] * dt; sPos[j * 3 + 1] += sVel[j * 3 + 1] * dt; sPos[j * 3 + 2] += sVel[j * 3 + 2] * dt;
-        if (sPos[j * 3 + 1] < 0.01 && sVel[j * 3 + 1] < 0) { sPos[j * 3 + 1] = 0.01; sVel[j * 3 + 1] *= -0.35; sVel[j * 3] *= 0.7; sVel[j * 3 + 2] *= 0.7; }
+        if (sPos[j * 3 + 1] < fl + 0.01 && sVel[j * 3 + 1] < 0) { sPos[j * 3 + 1] = fl + 0.01; sVel[j * 3 + 1] *= -0.35; sVel[j * 3] *= 0.7; sVel[j * 3 + 2] *= 0.7; }
       }
       sgeo.instanceCount = any ? sLive : 0;
       if (!any) sLive = 0;
@@ -566,8 +569,8 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
       if (!rest) {
         cVel[o + 1] -= G * dt;
         cPos[o] += cVel[o] * dt; cPos[o + 1] += cVel[o + 1] * dt; cPos[o + 2] += cVel[o + 2] * dt;
-        const floor = cScale[o + 1] * 0.5;
-        if (cPos[o + 1] < floor) { cPos[o + 1] = floor; cVel[o + 1] *= -0.3; cVel[o] *= 0.55; cVel[o + 2] *= 0.55; cSpin[o] *= 0.5; cSpin[o + 1] *= 0.5; cSpin[o + 2] *= 0.5; }
+        const rest = fl + cScale[o + 1] * 0.5;
+        if (cPos[o + 1] < rest) { cPos[o + 1] = rest; cVel[o + 1] *= -0.3; cVel[o] *= 0.55; cVel[o + 2] *= 0.55; cSpin[o] *= 0.5; cSpin[o + 1] *= 0.5; cSpin[o + 2] *= 0.5; }
         qa.set(cRot[j * 4], cRot[j * 4 + 1], cRot[j * 4 + 2], cRot[j * 4 + 3]);
         va.set(cSpin[o], cSpin[o + 1], cSpin[o + 2]);
         const wl = va.length();

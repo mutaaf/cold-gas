@@ -136,6 +136,13 @@ src/sim/              PURE, shared with the Worker:
   predict.js            the descent from here: sink band, BRAKE line, time to ground, touchdown
                           point, gas to stop, roll/pitch to level (HUD, coach, drills; not scored)
   coach.js              re-flies a log and names the fixes, with the numbers (results sheet)
+  roads.js              FREE DRIVE's real roads as a course: parse the baked asset, segment grid,
+                          ribbon (width, grade, banking) + conformed terrain + rails/walls/tunnels
+                          as one `surface()` (courses.js defers to `course.sdf`); unscored
+src/drive/            FREE DRIVE (lazy chunk): index.js (picker → load → drive loop, reset, timer),
+                        load.js (fetch + gunzip from our origin), camera.js (chase / bumper /
+                        cinema), hud.js (picker cards, HUD, minimap, credits), pilot.js (a road-
+                        following driver for tests and shots), manifest.js (GENERATED), drive.css
 src/render/           three.js (r186):
   scene.js              renderer, composer, course switching (`setCourse`), lineup world,
                           sliced first load (`stage.ready`: build, bake, compileAsync, fade in)
@@ -156,6 +163,10 @@ src/valves.js         Advanced: keyboard layout like the car, chords, key ramp, 
                         nozzle pad
 src/hud-landing.js    the landing HUD (sink band, descent tape, ADI, roll-out cue) + touchdown ring
 src/practice.js       drills from moments of the reference flight, retry, drill scorecards
+  road.js               Free Drive's world: 3-level streamed terrain, road chunks (ribbon,
+                          verges, walls, rails, bridges, delineators), trees, sea, skyline ring
+  roadlook.js           Free Drive's sky, time of day, haze and shader-patched materials
+src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air)
 src/audio.js          procedural WebAudio: motor, tyres, wind, nozzle hiss, chimes, crash crunch/grind
 src/ui.js             HUD (in-place updates), results sheet, board
 src/panel.js          board client + local judge lines (offline fallback)
@@ -174,6 +185,8 @@ scripts/human-advanced.mjs Advanced by a person: taps on the valve keys
 scripts/play-human.mjs     a cue-following player on the real page (keyboard or touch)
 scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
 scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)
+scripts/roads/        build-time only: OSM + terrain → public/roads/*.bin.gz (docs/ROADS.md)
+public/roads/         the baked Free Drive roads (fetched only when a road is picked)
 ```
 
 Frame flow: `frame()` → `liveStep(dt)` runs whole 1/240 s sim ticks, then syncs the car, HUD,
@@ -188,6 +201,7 @@ state. It never writes it.
 | `?play=reveal` | Watch the reference jump, then its scorecard |
 | `?board=today` / `?board=all` | Open the leaderboard |
 | `?gfx=low\|mid\|high` | Force a graphics tier |
+| `?drive=stelvio\|transfagarasan\|bigsur\|atlantic[&tod=dusk]` | Free Drive on that road |
 
 Renaming or removing a deep link breaks the mutaafaziz.com launcher and Digital Craft /labs.
 Keep the old ones working.
@@ -203,6 +217,9 @@ npm run check      backlog + lint + unit + e2e (what CI runs)
 npm run check:fast backlog + lint + unit + build (cloud sandboxes)
 node scripts/fly.mjs '{"apex":7,"rolls":1}'   headless reference flight telemetry
 node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title wired, first 3D frame, long tasks, bytes
+node scripts/roads/build.mjs [road]             rebuild Free Drive roads from OSM + terrain (network; cached)
+node scripts/perf-drive.mjs <url> [phone|desktop] [roads] [secs]   Free Drive frame times (phone = 4× CPU throttle)
+node scripts/shots-drive.mjs <outdir> <url> [phone|land] [roads] [tods]   Free Drive screenshots
 ```
 
 Local Worker: `npx wrangler dev` (serves dist + the API with a local D1, and uses

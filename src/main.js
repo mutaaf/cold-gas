@@ -77,11 +77,12 @@ const director = createDirector(camera);
 const landing = createLandingHud({ scene });
 // Crashes: sparks, chips, dents, torn-off parts, lamps, shake, slow motion, the crash cut and the
 // crunch, all keyed to the sim's impact events (src/render/crash.js).
-const crash = createCrash({ scene, hero, carRoot, director, tier, course: () => stage.course });
+const crash = createCrash({ scene, hero, carRoot, director, tier,
+  course: () => (S.mode === 'drive' && drive ? drive.course : stage.course), floor: () => (S.mode === 'drive' && drive ? drive.floor : 0) });
 
 // --- State -------------------------------------------------------------------------------
 const S = {
-  mode: 'title',          // title | countdown | live | results | replay
+  mode: 'title',          // title | countdown | live | results | replay | drive (Free Drive, src/drive/)
   run: null, autopilot: null, card: null, words: null,
   assist: true, acc: 0, countT: 0, doneT: 0, paused: false,
   replayT: 0, prevPhase: '', time: 0,
@@ -479,10 +480,11 @@ function frame(now) {
       plumes.update(dt, S.time, S.idleThrottles.fill(0), zeroVel, 0);
     } else if (S.mode === 'live') liveStep(dt * slow);
     else if (S.mode === 'results' || S.mode === 'replay') replayStep(dt * slow);
+    else if (S.mode === 'drive') drive.frame(dt * crash.timeScale(), S.time);   // Free Drive runs its own cameras
 
-    syncGhost();
+    if (S.mode !== 'drive') syncGhost();
     const live = S.mode === 'live' || S.mode === 'countdown';
-    director.update(dt, S.time, {
+    if (S.mode !== 'drive') director.update(dt, S.time, {
       carPos: carRoot.position, carVel: live && S.run ? S.run.car.vel : zeroVel,
       phase: S.run?.phase || 'drive',
       mode: S.mode === 'title' ? 'title' : S.mode === 'results' || S.mode === 'replay' ? 'replay' : 'live',
@@ -494,7 +496,9 @@ function frame(now) {
 }
 
 // --- Wiring ---------------------------------------------------------------------------------
-function pause(on = !S.paused) {
+function pause(on) {
+  if (S.mode === 'drive') { drive.pause(on ?? !drive.paused); return; }
+  on ??= !S.paused;
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
   S.paused = on;
   ui.show('pause', on);
@@ -699,8 +703,26 @@ addEventListener('resize', () => { stage.resize(); plumes.setScale(innerHeight);
 plumes.setScale(innerHeight); crash.setScale(innerHeight);
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(true); });
 
-// Deep links: ?play=jump|reveal, ?board=today|all.
+// --- Free Drive (a lazy chunk: real roads from open data, src/drive/) ------------------------------
+let drive = null, driveLoad = null;
+function loadDrive() {
+  driveLoad ??= import('./drive/index.js').then((mod) => {
+    drive = mod.createDrive({
+      stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
+      audio: { initAudio, updateAudio }, input: { sample, usingTouch },
+      assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
+      setMode: (m) => { S.mode = m; S.run = null; S.paused = false; ui.show('pause', false); },
+      onExit: () => { toTitle(); director.snap(); director.reframe(); },
+    });
+    return drive;
+  });
+  return driveLoad;
+}
+on('[data-drive-open]', () => { loadDrive().then((d) => d.openPicker()).catch((err) => { console.error(err); ui.cue_('Free Drive couldn’t load', 2000); }); });
+
+// Deep links: ?play=jump|reveal, ?board=today|all, ?drive=<road>[&tod=dusk].
 toTitle();
+if (params.get('drive') !== null) loadDrive().then((d) => d.start(params.get('drive') || 'stelvio', { tod: params.get('tod') || undefined }));
 const play = params.get('play');
 if (play === 'jump' || play === 'reveal') startRun(play);
 if (params.get('board')) openBoard(params.get('board') === 'all' ? 'all' : 'today');
@@ -713,5 +735,5 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
-window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing };
+window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; } };
 requestAnimationFrame(frame);
