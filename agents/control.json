@@ -1,11 +1,20 @@
 {
   "_readme": "Operator control panel. Edit this file (GitHub web or mobile is fine) to pause or steer the agents. Every agent reads it first and obeys it. HOW OFTEN each agent runs is set on its routine schedule at https://claude.ai/code/routines, not here.",
   "paused": false,
-  "focus": "",
+  "focus": "REALISM. Make this the place people come to feel the real physics of the reveal car. Every change must make the sim, the course or the car more faithful to sourced numbers (docs/REVEAL_RESEARCH.md; tag each new number OFFICIAL/TELEMETRY/ESTIMATE with a source or reasoning). Priorities: (1) tyre, suspension and steering behaviour at the limit (load sensitivity, combined slip, relaxation length, kerb/landing compression) checked against published data for the tyre sizes and mass; (2) nitrogen system truth: blowdown, regulator, nozzle thrust vs pressure, refill/one-fill-per-stunt, cold-soak effects; (3) landing physics: suspension bottoming, tyre spin-up on touchdown, sink-rate limits a real chassis survives; (4) the wall and lineup geometry and the parked vehicles matched to reveal footage; (5) honest on-screen telemetry (g, pressure, gas left, sink rate) so players see the real considerations. Keep: determinism (dmath only, SIM_VERSION bump + replay tests when physics changes), right-means-right controls, 32/32 naive landings, mobile playability, no brand names or logos. No cosmetic-only or feature-creep tickets while this focus is set.",
   "agents": {
-    "scout": { "enabled": true, "max_new_tickets_per_run": 3, "ready_queue_cap": 10 },
-    "builder": { "enabled": true, "max_merges_per_day": 8 },
-    "keeper": { "enabled": true }
+    "scout": {
+      "enabled": true,
+      "max_new_tickets_per_run": 3,
+      "ready_queue_cap": 10
+    },
+    "builder": {
+      "enabled": true,
+      "max_merges_per_day": 8
+    },
+    "keeper": {
+      "enabled": true
+    }
   },
   "frozen_paths": [
     "wrangler.jsonc",
