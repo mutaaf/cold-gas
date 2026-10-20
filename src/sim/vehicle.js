@@ -373,9 +373,11 @@ export function step(s, inp) {
       s.fanDemand = Math.max(need / SPEC.fanMaxForce, s.fanDemand + (need / SPEC.fanMaxForce - s.fanDemand) * (dt / SPEC.fanHold));
     } else s.fanDemand -= s.fanDemand * (dt / SPEC.fanHold);
   } else s.fanDemand = 0;
-  // Full throttle, or a full stop on the move, asks the tyres for everything: the fan fills the
-  // grip void up to the cap. Held only (over fanGripTime): a crawl's throttle blips don't count.
-  const allIn = inp.throttle >= 0.9 || (inp.brake >= 0.9 && speed > 2) ? 1 : 0;
+  // Full throttle, or a full stop on the move, asks the tyres for everything: below 50 mph the
+  // fan fills the grip void up to the cap. Held only (over fanGripTime): a crawl's throttle blips
+  // don't count. Floored up the curl that is the grip the climb needs (the attitude law alone
+  // is tuned to the reveal's crawl, and full torque on it spins the rears to a stall).
+  const allIn = speed < SPEC.fanVoidSpeed && (inp.throttle >= 0.9 || (inp.brake >= 0.9 && speed > 2)) ? 1 : 0;
   s.gripSat += (allIn - s.gripSat) * (dt / SPEC.fanGripTime);
   const fanTarget = armed * Math.max(s.fanDemand, clamp(2 * s.gripSat - 1, 0, 1));
   s.fan += (fanTarget - s.fan) * Math.min(1, dt / (fanTarget > s.fan ? SPEC.fanSpool / Math.LN10 : SPEC.fanDump));

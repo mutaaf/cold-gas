@@ -73,6 +73,7 @@ export const SPEC = {
   // held full throttle, or a full stop on the move, asks for up to the cap (filtered over
   // fanGripTime, past half of it, so a crawl's throttle blips don't count).
   fanGripTime: 0.25,       // s (ESTIMATE)
+  fanVoidSpeed: 22,        // m/s ≈ 50 mph: above it the aero carries the load (OFFICIAL, Moravy)
   fanIdleForce: 1300,      // N ≈ 130 kgf (TELEMETRY: 79–186 kgf rolling on the pad)
   // Spool: 1.5 s to 90 % of the demand (REPORTED telemetry, §6 row 21: 79 → 434 kgf over 3 s
   // rolling; range 1–3 s), a first-order lag τ = 1.5 / ln 10. The demand itself is held: it

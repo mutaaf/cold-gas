@@ -2,7 +2,7 @@
 // controller asks for the suction the deck's tilt needs, spools to it in ≈1.5 s, holds the car
 // hanging inverted, and idles on the level. Telemetry: docs/REVEAL_RESEARCH.md §2.1.2.
 import { describe, it, expect } from 'vitest';
-import { createRun, stepRun } from '../../src/sim/run.js';
+import { createRun, stepRun, wallProgress } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { createVehicle, step, newInput, up, G, DT } from '../../src/sim/vehicle.js';
 import { DRILLS, buildDrill } from '../../src/practice.js';
@@ -43,8 +43,24 @@ describe('fan suction follows the attitude (SIM_VERSION 12)', () => {
     const s = createVehicle('lineup'); s.pos.x = 30;
     for (let i = 0; i < 480; i++) step(s, newInput());
     const inp = { ...newInput(), fan: 1, throttle: 1 };
-    for (let i = 0; i < 240 * 2.5; i++) step(s, inp);
+    for (let i = 0; i < 240 * 1.2; i++) step(s, inp);
+    expect(Math.hypot(s.vel.x, s.vel.z)).toBeLessThan(22);   // below 50 mph: the void
     expect(s.fanForce / G).toBeGreaterThan(3000);
+  });
+  it('floored up the curl, the fan gives the climb its grip: the car reaches the ledge', () => {
+    // The telemetry is the reveal's crawl; a player who holds full throttle asks for every newton
+    // of grip, and the attitude law alone would let the rears spin it to a stall.
+    const run = createRun('wall'), ap = createAutopilot('wall'), u = {};
+    let at50 = 0;
+    while (run.phase === 'drive' || run.phase === 'ramp') {
+      const inp = ap(run);
+      if (run.car.pos.z > -40 && run.phase !== 'air' && wallProgress(run.car.pos) < 0.97) inp.throttle = 1;
+      stepRun(run, inp);
+      if (!at50 && run.phase === 'ramp' && pitchOf(run.car, u) >= 50) at50 = run.car.fanForce / G;
+      if (wallProgress(run.car.pos) >= 0.97) break;
+    }
+    expect(wallProgress(run.car.pos)).toBeGreaterThanOrEqual(0.97);
+    expect(at50).toBeGreaterThan(3000);
   });
   it('holds the car stopped, hanging inverted on the ledge, for 10 s (run 1 hung ≈10 s)', () => {
     for (const course of ['wall', 'show']) {
