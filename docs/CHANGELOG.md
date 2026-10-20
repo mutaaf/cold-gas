@@ -29,6 +29,11 @@ The car's real geometry in the physics (SIM_VERSION 7), from the body research (
 
 ## Unreleased
 
+**The judges' theatre is readable** (every text clears WCAG AA, measured from pixels: worst 5.2:1; was 3.1:1 on desktop and 4.2:1 on a phone, where the results sheet also ghosted through)
+- Particle text (aurora-field `fromText`): the facts and the verdict stack one word per line, rasterised from a real Geist Mono 700 (lazy font face), 72% of particles on the outlines, flat (depth 0), the field held still (autonomy 0) and lifted toward white while it spells. Phones get 2,600 particles (was 1,800). The facts hold 2.4 s (was 1.7 s) and arrive in 0.7 s.
+- The raw stream sits on its own dark glass panel and leaves the stage when the verdict lands; the phone theatre is opaque, so the results sheet no longer ghosts through it; the Skip button no longer covers the rail.
+- Secondary inks raised inside the theatre and the results sheet (0.46 → 0.66, 0.72 → 0.86), caption 300 → 400 weight, a soft dark halo under rail and caption text, 11 px labels on phones.
+- `node scripts/theatre-shots.mjs` reproduces it: screenshots of every stage (local lines and a mocked stream, 1280×720 and 390×844) plus a contrast table. Before/after in docs/shots/theatre-legibility/.
 2026-10-20 · #0002 · The touchdown lands in the body: a camera dip, an FOV punch-in, a ring of mist from each tyre and a thud whose depth and weight follow the sink rate (energy, v²). A 1 m/s landing is a light tap, a 4 m/s one is a deep thump with a suspension crunch. Reduced motion keeps the sound and the mist but drops the dip, the punch and every camera shake (the lift-off shake wasn't gated before).
 
 **First load** (phone, 4× CPU, Slow 4G, local build: first paint 1.48 s → 0.75 s, title wired 3.63 s → 2.99 s, longest main-thread task 588 ms → 284 ms)
