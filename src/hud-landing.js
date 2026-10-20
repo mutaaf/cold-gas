@@ -29,7 +29,7 @@ export function createLandingHud({ scene }) {
     horizon: $('[data-adi-horizon]'), adi: $('[data-adi]'), cue: $('[data-roll-cue]'),
   };
   const pr = newPrediction();
-  const last = { sink: -1, status: '', target: -1, ttg: -1, brake: -1, car: -1, need: -1, low: null, cue: '', on: null, adi: '' };
+  const last = { sink: -1, status: '', target: -1, ttg: -1, brake: -1, car: -1, need: -1, low: null, cue: 0, on: null, adi: NaN, word: '' };
   const TAPE_H = 140;   // tape height in its viewBox units (0 m at the bottom)
   const yOf = (h) => (TAPE_H - Math.max(0, Math.min(TAPE_MAX, h)) * (TAPE_H / TAPE_MAX)).toFixed(1);
 
@@ -58,7 +58,7 @@ export function createLandingHud({ scene }) {
     last.on = on;
     root.hidden = !on;
     mk.visible = on;
-    if (!on) { el.tank.classList.remove('low'); el.need.style.opacity = '0'; el.cue.textContent = ''; last.cue = ''; }
+    if (!on) { el.tank.classList.remove('low'); el.need.style.opacity = '0'; el.cue.textContent = ''; last.cue = 0; }
   }
 
   // Every frame of a live run. `h`: the floor's height over what's below (the HUD's altitude).
@@ -69,8 +69,9 @@ export function createLandingHud({ scene }) {
     // An attitude indicator, as from the driver's seat: banked left (rollOut > 0), the world turns
     // clockwise; nose up (pitchOut > 0), the horizon drops. Upside down, the ground is on top.
     const roll = (pr.rollOut * 180) / Math.PI, pitch = Math.max(-40, Math.min(40, (pr.pitchOut * 180) / Math.PI));
-    const adi = `rotate(${roll.toFixed(1)} 60 60) translate(0 ${(pitch * 0.9).toFixed(1)})`;
-    if (adi !== last.adi) { el.horizon.setAttribute('transform', adi); last.adi = adi; }
+    // (Strings only when the picture changes: a key of the rounded angles, not a string a frame.)
+    const rq = Math.round(roll * 2), pq = Math.round(pitch * 2), key = rq * 1000 + pq;
+    if (key !== last.adi) { el.horizon.setAttribute('transform', `rotate(${rq / 2} 60 60) translate(0 ${((pq / 2) * 0.9).toFixed(2)})`); last.adi = key; }
     const level = Math.abs(pr.rollOut) < 0.09 && Math.abs(pr.pitchOut) < 0.09;
     el.adi.classList.toggle('level', air && level);
     show(air);
@@ -114,15 +115,20 @@ export function createLandingHud({ scene }) {
     // Roll-out cue: the way round and how far; LET GO once the car will coast the rest within a
     // reaction time at the rate it's turning.
     const deg = Math.abs(pr.rollOut) * 180 / Math.PI;
-    let cue = '';
+    // The cue as a number (0 none, 1 LEVEL, 2 LET GO, ±(5..180) roll that way): text only on change.
+    let cue = 0;
     if (deg > 12) {
       // Body roll rate has the stick's sign (+ = rolling right), so it's turning the right way
       // when it matches the roll-out's sign.
       const rate = rollRate(car), toward = Math.sign(rate) === Math.sign(pr.rollOut);
       const lead = Math.min(ROLL_RATE, Math.abs(rate)) * REACTION;
-      cue = toward && Math.abs(rate) > 1 && lead > Math.abs(pr.rollOut) * 0.9 ? 'LET GO' : `ROLL ${pr.rollOut > 0 ? '→' : '←'} ${Math.round(deg / 5) * 5}°`;
-    } else if (level) cue = 'LEVEL';
-    if (cue !== last.cue) { el.cue.textContent = cue; el.cue.dataset.kind = cue === 'LET GO' ? 'go' : cue === 'LEVEL' ? 'ok' : cue ? 'roll' : ''; last.cue = cue; }
+      cue = toward && Math.abs(rate) > 1 && lead > Math.abs(pr.rollOut) * 0.9 ? 2 : (pr.rollOut > 0 ? 1 : -1) * Math.round(deg / 5) * 5;
+    } else if (level) cue = 1;
+    if (cue !== last.cue) {
+      el.cue.textContent = cue === 0 ? '' : cue === 1 ? 'LEVEL' : cue === 2 ? 'LET GO' : `ROLL ${cue > 0 ? '→' : '←'} ${Math.abs(cue)}°`;
+      el.cue.dataset.kind = cue === 2 ? 'go' : cue === 1 ? 'ok' : cue ? 'roll' : '';
+      last.cue = cue;
+    }
     // The touchdown marker.
     mk.position.x = pr.landX; mk.position.z = pr.landZ;
     const s = 0.8 + Math.min(1.2, pr.tLand * 0.12);

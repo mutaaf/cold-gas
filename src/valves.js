@@ -53,15 +53,23 @@ const KEY_VALVE = NOZZLE_SPEC.map((n) => NOZZLE_UI[n.id].code);
 // further: instead it throttles the OPPOSITE pair back to half (A: the right pair, so the left
 // side lifts; W: the rears, so the nose lifts). Steering on a full burn is unbalancing it.
 const OPPOSITE = { left: 'right', right: 'left', fronts: 'rears', rears: 'fronts' };
+// Flat lists, built once: this runs every 240 Hz tick in Advanced (no allocation in the hot path).
+const CHORD_LIST = Object.entries(CHORDS).map(([id, c]) => ({ code: c.code, valves: c.valves, pair: !!OPPOSITE[id] }));
+const PAIR_LIST = Object.entries(OPPOSITE).map(([id, opp]) => ({ code: CHORDS[id].code, other: CHORDS[opp].valves }));
 export function keyValves(down, out) {
   const k = down('ShiftLeft') || down('ShiftRight') ? 0.5 : 1;
   const lift = down(CHORDS.lift.code);
   for (let i = 0; i < VALVES; i++) if (down(KEY_VALVE[i])) out[i] = Math.max(out[i], k);
-  for (const [id, c] of Object.entries(CHORDS)) if (down(c.code) && !(lift && OPPOSITE[id])) for (const [i, v] of c.valves) out[i] = Math.max(out[i], v * k);
+  for (let c = 0; c < CHORD_LIST.length; c++) {
+    const ch = CHORD_LIST[c];
+    if (!down(ch.code) || (lift && ch.pair)) continue;
+    for (let j = 0; j < ch.valves.length; j++) out[ch.valves[j][0]] = Math.max(out[ch.valves[j][0]], ch.valves[j][1] * k);
+  }
   if (lift) {
-    for (const [id, opp] of Object.entries(OPPOSITE)) {
-      if (!down(CHORDS[id].code)) continue;
-      for (const [i] of CHORDS[opp].valves) out[i] *= 0.5;
+    for (let p = 0; p < PAIR_LIST.length; p++) {
+      if (!down(PAIR_LIST[p].code)) continue;
+      const o = PAIR_LIST[p].other;
+      for (let j = 0; j < o.length; j++) out[o[j][0]] *= 0.5;
     }
   }
   return out;
