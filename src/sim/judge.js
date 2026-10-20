@@ -3,6 +3,7 @@
 // numbers are decided here and nowhere else.
 import { COURSES, LINEUP } from './courses.js';
 import { CAR } from './vehicle.js';
+import { dhypot } from './dmath.js';
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -61,9 +62,9 @@ function scoreWall(t, opts) {
   const turned = Math.max(rollDeg, pitchDeg);
   const rollShare = rollDeg / Math.max(1, rollDeg + pitchDeg);
   const airPct = (t.airEnd / CAR.airMass) * 100;
-  const padMiss = Math.hypot(t.lateral, t.landZ - course.pad.z);
+  const padMiss = dhypot(t.lateral, t.landZ - course.pad.z);
   const c = {};
-  c.climb = 10 * Math.pow(clamp01(t.progress), 1.4);
+  c.climb = 10 * clamp01(t.progress) * Math.sqrt(clamp01(t.progress));
   c.inversion = t.progress > 0.8 ? 10 * band(t.invertedTime, 0, 1.0) : 0;
   // Coming off the ledge upside down, the car must turn ~180° to land. The reveal did it as a
   // roll; a roll-dominant turn scores higher than a flip.
@@ -128,7 +129,7 @@ function scoreLineup(t, opts = {}) {
   const rollError = rotations > 0 ? Math.abs(rollDeg - rotations * 360) : 360;
   const clearance = Number.isFinite(t.minClearance) ? t.minClearance : 0;
   const airPct = (t.airEnd / CAR.airMass) * 100;
-  const padMiss = Math.hypot(t.lateral, t.landZ - PAD.z);
+  const padMiss = dhypot(t.lateral, t.landZ - PAD.z);
   const apexOverRoof = t.apex - TALLEST;
 
   // Raw category scores, 0..10.

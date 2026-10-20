@@ -5,8 +5,9 @@ import { createVehicle, step, bodyRates, up, forward, worldPoint, newInput, DT, 
 import { COURSES, DEFAULT_COURSE, WALL, roofUnder } from './courses.js';
 import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
+import { datan2, dacos, dhypot } from './dmath.js';
 
-export const SIM_VERSION = 2;           // v2: physics v2 (tyres, fan, curved surfaces), courses
+export const SIM_VERSION = 3;           // v3: deterministic math (dmath.js); v2: physics v2, courses
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 60;      // 60 s hard cap
 
@@ -85,9 +86,9 @@ export function wallProgress(pos) {
   const { r1, h, r2, tip, length } = WALL;
   let s;
   if (pos.z < 0) s = 0;
-  else if (pos.y <= r1 && pos.z <= r1 + 2) s = r1 * (Math.atan2(pos.y - r1, pos.z) + Math.PI / 2);
+  else if (pos.y <= r1 && pos.z <= r1 + 2) s = r1 * (datan2(pos.y - r1, pos.z) + Math.PI / 2);
   else if (pos.y <= r1 + h) s = r1 * Math.PI / 2 + (pos.y - r1);
-  else s = r1 * Math.PI / 2 + h + r2 * Math.max(0, Math.min(tip, Math.atan2(pos.y - r1 - h, pos.z - (r1 - r2))));
+  else s = r1 * Math.PI / 2 + h + r2 * Math.max(0, Math.min(tip, datan2(pos.y - r1 - h, pos.z - (r1 - r2))));
   return Math.max(0, Math.min(1, s / length));
 }
 
@@ -101,14 +102,14 @@ function advance(run, input) {
   run.tick++;
   if (run.tick % FRAME_EVERY === 0) recordFrame(run);
 
-  const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
+  const speed = dhypot(c.vel.x, c.vel.y, c.vel.z);
   t.maxSpeed = Math.max(t.maxSpeed, speed);
-  if (t.zeroToSixty === null && Math.hypot(c.vel.x, c.vel.z) >= 26.8224) t.zeroToSixty = Math.round(run.tick * DT * 100) / 100;
+  if (t.zeroToSixty === null && dhypot(c.vel.x, c.vel.z) >= 26.8224) t.zeroToSixty = Math.round(run.tick * DT * 100) / 100;
   const lift = c.throttles[0] + c.throttles[1] + c.throttles[2] + c.throttles[3];
   if (Math.abs(lift - prevLift) > 0.08) t.thrustChanges++;
   // Felt acceleration in g (what the car's occupant would feel), the number the stunt is about.
   const ax = (c.vel.x - prevVx) / DT, ay = (c.vel.y - prevVy) / DT + 9.81, az = (c.vel.z - prevVz) / DT;
-  if (run.tick > 30) t.maxG = Math.max(t.maxG, Math.min(25, Math.hypot(ax, ay, az) / 9.81));
+  if (run.tick > 30) t.maxG = Math.max(t.maxG, Math.min(25, dhypot(ax, ay, az) / 9.81));
   if (c.obstacleContact && !t.contact) { t.contact = true; t.contactSpeed = c.obstacleSpeed; t.contactTick = run.tick; }
   up(c, upv);
   const airborne = c.grounded === 0 && !c.hullContact;
@@ -160,13 +161,13 @@ function advance(run, input) {
       t.touchTick = run.tick;
       t.sink = Math.max(0, -c.vel.y);
       forward(c, fw);
-      t.tiltDeg = Math.acos(Math.max(-1, Math.min(1, upv.y))) * 180 / Math.PI;
+      t.tiltDeg = dacos(Math.max(-1, Math.min(1, upv.y))) * 180 / Math.PI;
       // Heading error against the run direction (the Wall sends you back the way you came).
       const hz = wall ? -fw.z : fw.z;
-      t.headingDeg = Math.atan2(wall ? -fw.x : fw.x, hz) * 180 / Math.PI;
+      t.headingDeg = datan2(wall ? -fw.x : fw.x, hz) * 180 / Math.PI;
       t.lateral = c.pos.x - course.pad.x;
       t.landZ = c.pos.z;
-      t.landSpeed = Math.hypot(c.vel.x, c.vel.z);
+      t.landSpeed = dhypot(c.vel.x, c.vel.z);
       t.airAtTouch = c.air;
       if (wall && c.pos.z > -1 && c.pos.y > 1.2) t.landedOnRamp = true;
     } else if (!wall && c.grounded > 0 && run.tick - t.airStartTick <= 36) {

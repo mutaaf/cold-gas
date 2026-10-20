@@ -8,6 +8,7 @@
 import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
 import { SPEC, NOZZLE_SPEC, wheelAnchors } from './spec.js';
 import { surface, COURSES, DEFAULT_COURSE } from './courses.js';
+import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
 
 export const DT = 1 / 240;
 export const G = 9.81;
@@ -169,7 +170,7 @@ export function step(s, inp) {
   scale(dn, upW, -1);
 
   // --- Steering (steer-by-wire: rate-limited, speed-sensitive) ---
-  const speed = Math.hypot(s.vel.x, s.vel.y, s.vel.z);
+  const speed = dhypot(s.vel.x, s.vel.y, s.vel.z);
   const steerTarget = (inp.steer * 0.5) / (1 + speed * 0.055);
   s.steer += clamp(steerTarget - s.steer, -2.2 * dt, 2.2 * dt);
 
@@ -221,16 +222,16 @@ export function step(s, inp) {
     // Wheel axes in the contact plane.
     const steerA = i < 2 ? s.steer : 0;
     w.steer = steerA;
-    const cs = Math.cos(steerA), snA = Math.sin(steerA);
+    const cs = dcos(steerA), snA = dsin(steerA);
     set(wf, fwd.x * cs + right.x * snA, fwd.y * cs + right.y * snA, fwd.z * cs + right.z * snA);
     addScaled(wf, wf, hitN, -dot(wf, hitN));
-    const lf = Math.hypot(wf.x, wf.y, wf.z) || 1;
+    const lf = dhypot(wf.x, wf.y, wf.z) || 1;
     scale(wf, wf, 1 / lf);
     cross(wl, hitN, wf);                         // wheel left
     const vLong = dot(vp, wf), vLat = dot(vp, wl);
     const den = Math.max(Math.abs(vLong), 3.0);
     let kappa = (w.omega * R - vLong) / den;
-    const alpha = Math.atan2(vLat, Math.max(Math.abs(vLong), 1.5));
+    const alpha = datan2(vLat, Math.max(Math.abs(vLong), 1.5));
     const mu = SPEC.tyreMu * (1 - 0.07 * (Fz / STATIC_LOAD - 1));   // load sensitivity
     const D = Math.max(0, mu * Fz);
     // Drive and brake torque. Two rear motors, 500 kW each; Assist adds traction control.
@@ -242,10 +243,10 @@ export function step(s, inp) {
     }
     const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85);
     // Pacejka pure-slip forces, then the friction ellipse for combined slip.
-    let Fx = D * Math.sin(CX * Math.atan(BX * kappa));
-    const Fy0 = -D * Math.sin(CY * Math.atan(BY * alpha));
+    let Fx = D * dsin(CX * datan(BX * kappa));
+    const Fy0 = -D * dsin(CY * datan(BY * alpha));
     // Wheel spin, implicit in the tyre's longitudinal stiffness: stable at any speed.
-    const slope = (D * CX * BX * Math.cos(CX * Math.atan(BX * kappa))) / (1 + (BX * kappa) * (BX * kappa));
+    const slope = (D * CX * BX * dcos(CX * datan(BX * kappa))) / (1 + (BX * kappa) * (BX * kappa));
     const kEff = Math.max(slope, D * 2) / den;
     let omega = w.omega + ((dt / WHEEL_I) * (T - R * Fx)) / (1 + (dt / WHEEL_I) * R * R * kEff);
     if (brakeT > 0) {
@@ -257,7 +258,7 @@ export function step(s, inp) {
     }
     w.omega = omega;
     kappa = (w.omega * R - vLong) / den;
-    Fx = D * Math.sin(CX * Math.atan(BX * kappa));
+    Fx = D * dsin(CX * datan(BX * kappa));
     let Fy = Fy0;
     // Stiction: a slip model has no static friction, so a braked car would creep down a slope.
     // At crawl speed, a locked (or stopped, undriven) tyre cancels sliding outright, up to its
@@ -269,7 +270,7 @@ export function step(s, inp) {
       const hold = clamp(-mEff * (vLat / dt * 0.5 - G * wl.y), -D, D);
       if (Math.abs(hold) > Math.abs(Fy)) Fy = hold;
     }
-    const mag = Math.hypot(Fx, Fy);
+    const mag = dhypot(Fx, Fy);
     if (mag > D && mag > 0) { Fx *= D / mag; Fy *= D / mag; }
     Fx -= vLong * 6;                              // rolling resistance
     w.slip = kappa; w.slipAngle = alpha;
@@ -293,14 +294,14 @@ export function step(s, inp) {
     if (phi >= 0) continue;
     set(hitN, sn.x, sn.y, sn.z);
     pointVel(vp, s, r);
-    if (sn.obstacle) { s.obstacleContact = true; s.obstacleSpeed = Math.max(s.obstacleSpeed, Math.hypot(vp.x, vp.y, vp.z)); }
+    if (sn.obstacle) { s.obstacleContact = true; s.obstacleSpeed = Math.max(s.obstacleSpeed, dhypot(vp.x, vp.y, vp.z)); }
     else s.hullGround = true;
     s.hullContact = true;
     const vn = dot(vp, hitN);
     const fn = Math.max(0, -300000 * phi - 11000 * vn);
     s.hullImpulse = Math.max(s.hullImpulse, -vn);
     addScaled(tmp, vp, hitN, -vn);
-    const vt = Math.hypot(tmp.x, tmp.y, tmp.z);
+    const vt = dhypot(tmp.x, tmp.y, tmp.z);
     scale(force, hitN, fn);
     if (vt > 1e-4) addScaled(force, force, tmp, -Math.min(0.5 * fn, vt * 5000) / vt);
     applyAt(r, force);
@@ -336,7 +337,7 @@ export function step(s, inp) {
   s.air = Math.max(0, s.air - mdot * dt);
 
   // --- Aero drag ---
-  const vmag = Math.hypot(s.vel.x, s.vel.y, s.vel.z);
+  const vmag = dhypot(s.vel.x, s.vel.y, s.vel.z);
   addScaled(fTot, fTot, s.vel, -0.5 * RHO * SPEC.cdA * vmag);
 
   // --- Integrate (semi-implicit Euler), inertia tensor diagonal in the body frame ---

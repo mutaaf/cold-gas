@@ -1,6 +1,7 @@
 // Tiny allocation-free 3D math on plain {x,y,z} / {x,y,z,w} objects. The sim runs 240 times a
 // second and also inside the Worker (score recompute), so it must not depend on three.js and
 // must not allocate in the step. Every function writes into an `out` argument and returns it.
+import { dsin, dcos } from './dmath.js';
 
 export const v3 = (x = 0, y = 0, z = 0) => ({ x, y, z });
 export const q4 = (x = 0, y = 0, z = 0, w = 1) => ({ x, y, z, w });
@@ -58,7 +59,7 @@ export function integrateQuat(q, w, dt) {
 }
 
 export function quatFromYaw(q, yaw) {
-  q.x = 0; q.y = Math.sin(yaw / 2); q.z = 0; q.w = Math.cos(yaw / 2); return q;
+  q.x = 0; q.y = dsin(yaw / 2); q.z = 0; q.w = dcos(yaw / 2); return q;
 }
 
 export const clamp = (v, lo, hi) => (v < lo ? lo : v > hi ? hi : v);
