@@ -33,7 +33,8 @@ const tier = params.get('gfx') || (coarse ? 'mid' : 'high');
 const canvas = document.getElementById('stage');
 let stage;
 try {
-  stage = createStage(canvas, { tier });
+  // [stage] ?course=lineup picks the kickflip range; the Wall is the default.
+  stage = createStage(canvas, { tier, course: params.get('course') === 'lineup' ? 'lineup' : 'wall' });
 } catch (err) {
   console.error(err);
   document.body.insertAdjacentHTML('beforeend', '<p class="noscript">COLD GAS needs WebGL. Try a current browser.</p>');
@@ -85,8 +86,9 @@ const qv = new THREE.Vector3(), rates = { x: 0, y: 0, z: 0 };
 const zeroVel = new THREE.Vector3();
 
 function placeOnPad() {
-  carRoot.position.set(PAD.x, hero.comY, PAD.z);
-  carRoot.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), -0.6);
+  const tp = stage.titlePose();   // [stage] the course decides where the car sits on the title
+  carRoot.position.set(tp.x, hero.comY, tp.z);
+  carRoot.quaternion.setFromAxisAngle(new THREE.Vector3(0, 1, 0), tp.yaw);
   for (const w of hero.wheels) { w.pivot.position.y = 0.33; w.pivot.rotation.y = 0; }
 }
 
@@ -277,6 +279,7 @@ function frame(now) {
       carPos: carRoot.position, carVel: live && S.run ? S.run.car.vel : zeroVel,
       phase: S.run?.phase || 'drive',
       mode: S.mode === 'title' ? 'title' : S.mode === 'results' || S.mode === 'replay' ? 'replay' : 'live',
+      course: stage.course,   // [stage]
     });
     stage.render(S.time);
   }

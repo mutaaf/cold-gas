@@ -1,14 +1,19 @@
-// The test range at blue hour: one low warm key light, a cool sky fill, matte concrete, a white
-// kicker with a hairline light strip, the parked lineup, and a bullseye landing pad. Restraint is
-// the brief — every object earns its place.
+// Two stages, one renderer. The Wall (default): the reveal's night stage, built in
+// src/render/wall.js. The Lineup: the test range at blue hour, with one low warm key light, a cool
+// sky fill, matte concrete, a white kicker with a hairline light strip, the parked lineup and a
+// bullseye landing pad. `stage.setCourse(id)` swaps the course group, environment, fog, exposure
+// and bloom without recreating the renderer.
 import * as THREE from 'three';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { RAMP, LINEUP, PAD, START_Z, RUNOUT_Z } from '../sim/course.js';
+import { RAMP, LINEUP, LINEUP_BOXES } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
+import { buildWall, nightSkyMaterial, bakeNightEnvironment } from './wall.js';
+
+const PAD = LINEUP.pad, START_Z = LINEUP.start.z, RUNOUT_Z = LINEUP.runout.zMax;
 
 export const PALETTE = {
   zenith: new THREE.Color(0x05070c),
@@ -134,7 +139,7 @@ function ramp() {
 
 function lineup() {
   const g = new THREE.Group();
-  for (const b of LINEUP) {
+  for (const b of LINEUP_BOXES) {
     const car = makeParked(b.id, b.paint);
     // Parked crosswise, nose to +x, alternating facing like a real row.
     car.rotation.y = Math.PI / 2;
@@ -214,7 +219,49 @@ function horizon() {
   return g;
 }
 
-export function createStage(canvas, { tier = 'high' } = {}) {
+// The blue-hour range (the Lineup's look).
+function buildLineup(tier) {
+  const group = new THREE.Group();
+  group.name = 'course:lineup';
+  group.add(new THREE.HemisphereLight(0x8fa6c8, 0x1a1c20, 0.55));
+  const rim = new THREE.DirectionalLight(0x9ec5ff, 0.7);
+  rim.position.set(30, 18, -40);
+  group.add(rim);
+  const map = concreteTextures();
+  map.repeat.set(60, 60);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshStandardMaterial({ color: PALETTE.ground, map, roughness: 0.9, metalness: 0, envMapIntensity: 0.4 }));
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  group.add(ground);
+  group.add(ramp());
+  group.add(lineup());
+  group.add(linesAndPad());
+  const hz = horizon();
+  group.add(hz);
+  // Floodlight poles along the run-up: thin, minimal, each with a small lamp head.
+  const poleMat = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.6, metalness: 0.6 });
+  for (let z = START_Z + 10; z < 80; z += 24) {
+    for (const sx of [-1, 1]) {
+      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 9, 10), poleMat);
+      pole.position.set(sx * 13, 4.5, z); pole.castShadow = tier !== 'low'; group.add(pole);
+      const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.3), lampWhite);
+      head.position.set(sx * 12.6, 9, z); group.add(head);
+    }
+  }
+  return {
+    group,
+    titlePose: { x: PAD.x, z: PAD.z, yaw: -0.6 },
+    look: { exposure: 1.05, bloom: { strength: 0.3, radius: 0.5, threshold: 0.92 }, fog: new THREE.Fog(PALETTE.haze, 120, 900) },
+    keyLight: { color: 0xffd2ad, intensity: 2.6, offset: new THREE.Vector3(-30, 22, 46) },
+    update(t) { hz.userData.beacon.visible = Math.sin(t * 2.2) > 0.2; },
+  };
+}
+
+export const COURSE_IDS = ['wall', 'lineup'];
+
+// createStage(canvas, { tier: 'low' | 'mid' | 'high', course: 'wall' | 'lineup' })
+//   → { renderer, scene, camera, hero, key, course, resize, render(time), setCourse(id), titlePose() }
+export function createStage(canvas, { tier = 'high', course = 'wall' } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier !== 'low', powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1));
   renderer.toneMapping = THREE.AgXToneMapping;
@@ -223,59 +270,29 @@ export function createStage(canvas, { tier = 'high' } = {}) {
   renderer.shadowMap.type = THREE.PCFShadowMap;
 
   const scene = new THREE.Scene();
-  scene.fog = new THREE.Fog(PALETTE.haze, 120, 900);
-  scene.environment = bakeEnvironment(renderer);
-  scene.environmentIntensity = 0.9;
-  const sky = new THREE.Mesh(new THREE.SphereGeometry(2000, 48, 24), skyMaterial());
+  // Two skies and two environments, each made on first use and swapped with the course.
+  const skies = { lineup: skyMaterial(), wall: nightSkyMaterial() };
+  const envs = {};
+  const envFor = (id) => (envs[id] ??= id === 'wall' ? bakeNightEnvironment(renderer) : bakeEnvironment(renderer));
+  const sky = new THREE.Mesh(new THREE.SphereGeometry(2000, 48, 24), skies.wall);
   sky.frustumCulled = false;
   scene.add(sky);
 
-  // Light: warm low key from the horizon glow, cool hemisphere fill.
-  const hemi = new THREE.HemisphereLight(0x8fa6c8, 0x1a1c20, 0.55);
-  scene.add(hemi);
-  const key = new THREE.DirectionalLight(0xffd2ad, 2.6);
-  key.position.set(-30, 22, 46);
+  // One shadow-casting key light that follows the hero; colour and angle come from the course.
+  const key = new THREE.DirectionalLight(0xffffff, 1);
   key.castShadow = tier !== 'low';
   key.shadow.mapSize.set(tier === 'high' ? 2048 : 1024, tier === 'high' ? 2048 : 1024);
   const sc = key.shadow.camera;
-  sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 1; sc.far = 140;
+  sc.left = -22; sc.right = 22; sc.top = 22; sc.bottom = -22; sc.near = 1; sc.far = 160;
   key.shadow.bias = -0.0004; key.shadow.normalBias = 0.03; key.shadow.radius = 3;
   scene.add(key); scene.add(key.target);
-  const rim = new THREE.DirectionalLight(0x9ec5ff, 0.7);
-  rim.position.set(30, 18, -40);
-  scene.add(rim);
-
-  // Ground: one huge slab with tiled concrete.
-  const map = concreteTextures();
-  map.repeat.set(60, 60);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1200, 1200), new THREE.MeshStandardMaterial({ color: PALETTE.ground, map, roughness: 0.9, metalness: 0, envMapIntensity: 0.4 }));
-  ground.rotation.x = -Math.PI / 2;
-  ground.receiveShadow = true;
-  scene.add(ground);
-
-  scene.add(ramp());
-  scene.add(lineup());
-  scene.add(linesAndPad());
-  const hz = horizon();
-  scene.add(hz);
-
-  // Floodlight poles along the run-up: thin, minimal, each with a small lamp head.
-  const poleMat = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.6, metalness: 0.6 });
-  for (let z = START_Z + 10; z < 80; z += 24) {
-    for (const sx of [-1, 1]) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 9, 10), poleMat);
-      pole.position.set(sx * 13, 4.5, z); pole.castShadow = true; scene.add(pole);
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.3), lampWhite);
-      head.position.set(sx * 12.6, 9, z); scene.add(head);
-    }
-  }
 
   const hero = makeRoadster();
   hero.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(hero.group);
 
   const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 4000);
-  camera.position.set(0, 3, START_Z - 8);
+  camera.position.set(0, 3, -100);
 
   let composer = null, bloom = null;
   if (tier !== 'low') {
@@ -290,6 +307,34 @@ export function createStage(canvas, { tier = 'high' } = {}) {
     if (tier === 'high') composer.addPass(new SMAAPass());
   }
 
+  const looks = {};
+  const lookFor = (id) => (looks[id] ??= id === 'wall' ? buildWall(tier) : buildLineup(tier));
+  let current = null;
+  const keyOffset = new THREE.Vector3();
+  const stage = { renderer, scene, camera, hero, key, course: null, resize, render, setCourse, titlePose };
+
+  function setCourse(id) {
+    if (!COURSE_IDS.includes(id)) id = 'wall';
+    if (stage.course === id) return stage;
+    if (current) scene.remove(current.group);
+    current = lookFor(id);
+    scene.add(current.group);
+    stage.course = id;
+    sky.material = skies[id];
+    scene.environment = envFor(id);
+    scene.environmentIntensity = id === 'wall' ? 1.0 : 0.9;
+    scene.fog = current.look.fog;
+    renderer.toneMappingExposure = current.look.exposure;
+    if (bloom) Object.assign(bloom, current.look.bloom);
+    key.color.set(current.keyLight.color);
+    key.intensity = current.keyLight.intensity;
+    keyOffset.copy(current.keyLight.offset);
+    return stage;
+  }
+
+  // Where the car sits on the title screen for this course: { x, z, yaw }.
+  function titlePose() { return current.titlePose; }
+
   function resize() {
     const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
     renderer.setSize(w, h, false);
@@ -299,14 +344,14 @@ export function createStage(canvas, { tier = 'high' } = {}) {
   }
   resize();
 
-  const keyOffset = new THREE.Vector3(-30, 22, 46);
   function render(time) {
-    hz.userData.beacon.visible = Math.sin(time * 2.2) > 0.2;
+    current.update(time);
     // Keep the shadow frustum on the hero.
     hero.group.getWorldPosition(key.target.position);
     key.position.copy(key.target.position).add(keyOffset);
     if (composer) composer.render(); else renderer.render(scene, camera);
   }
 
-  return { renderer, scene, camera, hero, resize, render, key };
+  setCourse(course);
+  return stage;
 }
