@@ -16,11 +16,13 @@ const D2R = Math.PI / 180;
 //   arc A: centre (0, R1), radius R1, from straight down (−90°) to level with the centre (0°)
 //   wall:  the vertical line z = R1, from y = R1 to y = R1 + H
 //   arc B: centre (R1 − R2, R1 + H), radius R2, from 0° to TIP degrees (past vertical: the ledge)
-const R1 = 11, H = 6, R2 = 6, TIP = 70 * D2R;
+// Radii are set by the car: across a 4.6 m car a concave curve of radius R rises ≈ L²/8R, which
+// has to stay inside the nose's approach angle and the tail's departure angle under load.
+const R1 = 15, H = 1, R2 = 13, TIP = 45 * D2R;
 export const WALL = {
   id: 'wall',
   name: 'The Wall',
-  blurb: 'Drive up a 22 m curl on 2 g of suction, launch upside down, roll it, stick it.',
+  blurb: 'Drive up a 25 m curl on 2 g of suction, launch upside down, roll it, stick it.',
   r1: R1, h: H, r2: R2, tip: TIP,
   width: 5.2,                 // m, concrete deck width
   slab: 0.9,                  // m, deck thickness

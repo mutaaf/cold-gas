@@ -36,7 +36,7 @@ export const SPEC = {
   power: 1_000_000,
   maxWheelTorque: 6200,    // per rear wheel, N·m (est.)
   brakeTorque: 4200,       // per wheel, N·m (carbon-ceramic, est.)
-  tyreMu: 1.55,            // semi-slick peak friction (est.)
+  tyreMu: 1.45,            // semi-slick peak friction (est.)
 
   // Suction fan: "can pull up to two Gs" (public, Lars Moravy). Modelled as a force toward
   // the surface under the floor, fading with gap, with a spool-up time.

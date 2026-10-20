@@ -1,104 +1,132 @@
-// The roadster: a 6-DOF rigid body on four raycast wheels with ten cold-gas nozzles.
-// Body frame: +x right, +y up, +z forward, origin at the centre of mass.
+// The roadster, physics v2: a 6-DOF rigid body on four raycast-suspended wheels with slip-based
+// tyres, a suction fan and ten cold-gas thrusters. It drives on any surface the course defines
+// (src/sim/courses.js `surface()`): flat concrete, a vertical wall, or upside down under a ledge.
 //
-// Everything here is deterministic (fixed step, no randomness, no wall clock) so a run can be
-// replayed from its inputs alone — by the replay camera and by the Worker's score recompute.
-import {
-  v3, q4, add, sub, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, copy, set,
-} from './m3.js';
-import { groundAt, obstaclePenetration, START_Z } from './course.js';
+// Body frame: +x right, +y up, +z forward, origin at the centre of mass. Fixed step, no
+// randomness, no wall clock: a run replays bit-exactly from its inputs (the Worker verifies
+// scores this way). No allocation in step().
+import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
+import { SPEC, NOZZLE_SPEC, wheelAnchors } from './spec.js';
+import { surface, COURSES, DEFAULT_COURSE } from './courses.js';
 
 export const DT = 1 / 240;
 export const G = 9.81;
+const RHO = 1.2;
+
+// Suspension: rest length chosen so the car sits at SPEC.comHeight under its own weight.
+// Fan cars run stiff (the suction alone is 2 g): ~3 cm static sag, 16 cm of travel to the bump stop.
+const K_SPRING = 150000, C_DAMP = 9500, BUMP = 600000, TRAVEL = 0.16;
+const WHEEL_I = 1.35;                         // kg·m² per wheel (22" forged + tyre + disc)
+const STATIC_LOAD = ((SPEC.dryMass + SPEC.gasMass) * G) / 4;
+const MOUNT_TO_CENTRE = 0.24;                 // at rest (spec.js wheelAnchors)
+const REST_LEN = MOUNT_TO_CENTRE + STATIC_LOAD / K_SPRING;
+const R = SPEC.wheelRadius;
+// Pacejka coefficients (peak at κ ≈ 0.10, α ≈ 7°): semi-slicks.
+const BX = 11.5, CX = 1.65, BY = 9.5, CY = 1.35;
 
 export const CAR = {
-  dryMass: 1900,
-  airMass: 250,                  // two composite tanks of compressed air
-  isp: 72,                       // cold-gas specific impulse, seconds
-  halfW: 1.0, halfH: 0.56, halfL: 2.17,
-  // Inertia per kg (box approximation), scaled by the current mass.
-  inertiaPerKg: v3((1.12 * 1.12 + 4.34 * 4.34) / 12, (2 * 2 + 4.34 * 4.34) / 12, (2 * 2 + 1.12 * 1.12) / 12),
-  wheelX: 0.84, wheelZ: 1.38, wheelY: -0.06,
-  restLen: 0.3, wheelR: 0.34, maxTravel: 0.22,
-  spring: 56000, damper: 4200, bumpSpring: 420000,
-  mu: 1.35, lateralGrip: 9000,
-  driveForce: 23000, drivePower: 820000, brakeForce: 26000,
-  maxSteer: 0.42, drag: 0.36,
+  dryMass: SPEC.dryMass, airMass: SPEC.gasMass, isp: SPEC.isp,
+  halfW: SPEC.width / 2, halfL: SPEC.length / 2,
+  maxTravel: TRAVEL, restLen: REST_LEN, wheelR: R, mountToCentre: MOUNT_TO_CENTRE,
 };
 
-// Ten nozzles: four lift (underbody corners), two rear (thrust), two front (retro),
-// two upper side "kick" nozzles that roll the car. `dir` is the force direction on the car.
-export const NOZZLES = [
-  { id: 'lift-fl', group: 'lift', pos: v3(-0.86, -0.28, 1.5), dir: v3(0, 1, 0), max: 9200 },
-  { id: 'lift-fr', group: 'lift', pos: v3(0.86, -0.28, 1.5), dir: v3(0, 1, 0), max: 9200 },
-  { id: 'lift-rl', group: 'lift', pos: v3(-0.86, -0.28, -1.5), dir: v3(0, 1, 0), max: 9200 },
-  { id: 'lift-rr', group: 'lift', pos: v3(0.86, -0.28, -1.5), dir: v3(0, 1, 0), max: 9200 },
-  { id: 'rear-l', group: 'rear', pos: v3(-0.55, 0.02, -2.17), dir: v3(0, 0, 1), max: 6000 },
-  { id: 'rear-r', group: 'rear', pos: v3(0.55, 0.02, -2.17), dir: v3(0, 0, 1), max: 6000 },
-  { id: 'front-l', group: 'front', pos: v3(-0.62, 0.0, 2.17), dir: v3(0, 0, -1), max: 5000 },
-  { id: 'front-r', group: 'front', pos: v3(0.62, 0.0, 2.17), dir: v3(0, 0, -1), max: 5000 },
-  { id: 'kick-l', group: 'kick', pos: v3(-1.0, 0.42, 0), dir: v3(1, 0, 0), max: 4200 },
-  { id: 'kick-r', group: 'kick', pos: v3(1.0, 0.42, 0), dir: v3(-1, 0, 0), max: 4200 },
-];
-// Body-frame torque per newton of each nozzle (r × d), precomputed for the mixer.
-for (const n of NOZZLES) n.torque = cross(v3(), n.pos, n.dir);
+export const NOZZLES = NOZZLE_SPEC.map((n) => {
+  const pos = v3(...n.pos), dir = v3(...n.dir);
+  return { ...n, pos, dir, torque: cross(v3(), pos, dir) };
+});
 
-const WHEELS = [
-  v3(-CAR.wheelX, CAR.wheelY, CAR.wheelZ), v3(CAR.wheelX, CAR.wheelY, CAR.wheelZ),
-  v3(-CAR.wheelX, CAR.wheelY, -CAR.wheelZ), v3(CAR.wheelX, CAR.wheelY, -CAR.wheelZ),
-];
-// Body hull probe points: 8 corners plus mid-edges, for ground and obstacle contact.
+const WHEELS = wheelAnchors().map((a) => v3(...a));
+const DRIVEN = [false, false, true, true];
+
+// Hull probe points (body frame): the faceted body's corners, sills, roof and nose/tail.
 const HULL = [];
-for (const sx of [-1, 1]) for (const sy of [-1, 1]) for (const sz of [-1, 0, 1]) {
-  HULL.push(v3(sx * CAR.halfW, sy === -1 ? -0.2 : CAR.halfH, sz * CAR.halfL));
+{
+  const hw = SPEC.width / 2 - 0.04;
+  const zf = SPEC.wheelbase - SPEC.comFromFront + SPEC.overhangFront - 0.05;
+  const zr = zf - SPEC.length + 0.1;
+  // Floor probes sit 5 cm above the floor: the fan's sliding skirts touch first and are compliant.
+  const yb = -(SPEC.comHeight - SPEC.rideHeight) + 0.05, yt = SPEC.height - SPEC.comHeight - 0.05;
+  // Approach and departure angles: the nose's underside sits 15 cm above the floor, the
+  // diffuser's trailing edge 20 cm.
+  const yNose = yb + 0.15, yTail = yb + 0.2;
+  for (const x of [-hw, hw]) {
+    HULL.push(v3(x, yNose, zf), v3(x, yb, (zf + zr) / 2), v3(x, yTail, zr), v3(x, yb, zf - 0.9), v3(x, yb, zr + 0.9));
+    for (const z of [zf, (zf + zr) / 2, zr]) HULL.push(v3(x * 0.8, yt * 0.55, z * 0.9));
+  }
+  HULL.push(v3(0, yt, -0.2), v3(0, yNose, zf), v3(0, yTail, zr), v3(0, yt * 0.4, zf + 0.04), v3(0, yt * 0.6, zr - 0.02));
 }
-HULL.push(v3(0, CAR.halfH, 0), v3(0, -0.2, CAR.halfL), v3(0, -0.2, -CAR.halfL));
+export { HULL };
+const FLOOR = v3(0, -(SPEC.comHeight - SPEC.rideHeight), 0);
 
-export const newInput = () => ({ throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, lift: 0, thrust: 0, retro: 0, level: 0, assist: 1 });
+export const newInput = () => ({ throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, lift: 0, thrust: 0, retro: 0, level: 0, fan: 0, assist: 1 });
 
-export function createVehicle() {
+export function createVehicle(courseId = DEFAULT_COURSE) {
+  const course = COURSES[courseId] || COURSES[DEFAULT_COURSE];
   const s = {
-    tick: 0,
-    pos: v3(0, 0.6, START_Z), vel: v3(), quat: quatFromYaw(q4(), 0), angVel: v3(),
+    course, tick: 0,
+    pos: v3(course.start.x, SPEC.comHeight, course.start.z), vel: v3(), quat: quatFromYaw(q4(), 0), angVel: v3(),
     air: CAR.airMass,
-    throttles: new Float64Array(NOZZLES.length),   // actual valve state (lagged)
-    wheels: WHEELS.map(() => ({ contact: false, compression: 0, prevCompression: 0, spin: 0, steer: 0 })),
-    hullContact: false, hullImpulse: 0, obstacleContact: false, obstacleSpeed: 0,
-    steer: 0,
+    throttles: new Float64Array(NOZZLES.length),
+    wheels: WHEELS.map(() => ({ contact: true, compression: REST_LEN - MOUNT_TO_CENTRE, prevCompression: REST_LEN - MOUNT_TO_CENTRE, omega: 0, spin: 0, steer: 0, slip: 0, slipAngle: 0, load: STATIC_LOAD, nx: 0, ny: 1, nz: 0 })),
+    fan: 0, fanForce: 0, floorGap: SPEC.rideHeight,
+    hullContact: false, hullGround: false, obstacleContact: false, obstacleSpeed: 0, hullImpulse: 0,
+    steer: 0, grounded: 4, onWall: false, wheelForce: 0, tcActive: false,
   };
-  // Settle onto the springs.
-  s.pos.y = CAR.wheelR + CAR.restLen - CAR.wheelY - (CAR.dryMass + CAR.airMass) * G / 4 / CAR.spring;
   return s;
 }
 
 export const massOf = (s) => CAR.dryMass + Math.max(0, s.air);
 
-// Scratch.
-const tmp = v3(), tmp2 = v3(), r = v3(), pw = v3(), vp = v3(), n = v3(), force = v3(), torque = v3(),
-  fwd = v3(), right = v3(), upW = v3(), fTot = v3(), tTot = v3(), wb = v3(), Lb = v3(), cmdT = v3();
+// Scratch (never reallocated).
+const tmp = v3(), tmp2 = v3(), r = v3(), pw = v3(), vp = v3(), force = v3(), fwd = v3(), right = v3(), upW = v3(),
+  fTot = v3(), tTot = v3(), wb = v3(), Lb = v3(), cmdT = v3(), dn = v3(), hitN = v3(), wf = v3(), wl = v3(), worldUpB = v3(), rp = v3();
+const sn = { x: 0, y: 0, z: 0, obstacle: false };
+const target = new Float64Array(NOZZLES.length);
 const eff = { lift: 0, thrust: 0, retro: 0 };
-const blowdown = (s) => 0.55 + 0.45 * Math.max(0, s.air) / CAR.airMass;
 
-// Point velocity of a world-offset r: v + ω × r.
 function pointVel(out, s, rw) { cross(out, s.angVel, rw); return add(out, out, s.vel); }
+function applyAt(rw, f) { add(fTot, fTot, f); cross(tmp2, rw, f); add(tTot, tTot, tmp2); }
+const phiAt = (s, p) => surface(s.course, p.x, p.y, p.z, sn);
 
-function applyAt(rw, f) {
-  add(fTot, fTot, f);
-  cross(tmp2, rw, f);
-  add(tTot, tTot, tmp2);
+// March a ray from `o` along unit `d` up to `maxT`; the first distance where it enters a solid
+// (or -1), with the hit normal left in hitN.
+function raycast(s, o, d, maxT) {
+  let prevT = 0, prevPhi = phiAt(s, o);
+  if (prevPhi <= 0) { set(hitN, sn.x, sn.y, sn.z); return 0; }
+  const steps = 6;
+  for (let i = 1; i <= steps; i++) {
+    const t = (maxT * i) / steps;
+    addScaled(rp, o, d, t);
+    const phi = phiAt(s, rp);
+    if (phi <= 0) {
+      // Bracketed: a few bisections, then a secant step on the (locally linear) distance field
+      // for a sub-micron hit, so the damper never sees quantisation noise.
+      let lo = prevT, hi = t, pLo = prevPhi, pHi = phi;
+      for (let k = 0; k < 5; k++) {
+        const mid = (lo + hi) / 2;
+        addScaled(rp, o, d, mid);
+        const pm = phiAt(s, rp);
+        if (pm <= 0) { hi = mid; pHi = pm; } else { lo = mid; pLo = pm; }
+      }
+      const th = pLo - pHi > 1e-12 ? lo + ((hi - lo) * pLo) / (pLo - pHi) : hi;
+      addScaled(rp, o, d, th);
+      phiAt(s, rp);
+      set(hitN, sn.x, sn.y, sn.z);
+      return th;
+    }
+    prevT = t; prevPhi = phi;
+  }
+  return -1;
 }
 
-// Mixer: pilot command → per-nozzle valve targets in [0,1]. Attitude has priority over lift:
-// the lift group's base is lowered until its differential fits, like a quadcopter mixer.
-const target = new Float64Array(NOZZLES.length);
+// Mixer: pilot command → valve targets. Attitude has priority over lift (quadcopter-style).
 export function mix(cmd, torqueCmd, out) {
   let maxDelta = 0;
   for (let i = 0; i < NOZZLES.length; i++) {
-    const nz = NOZZLES[i];
-    const t = nz.torque;
+    const t = NOZZLES[i].torque;
     const d = (t.x * torqueCmd.x + t.y * torqueCmd.y + t.z * torqueCmd.z) * 2.0;
     out[i] = d;
-    if (nz.group === 'lift' && d > maxDelta) maxDelta = d;
+    if (NOZZLES[i].group === 'lift' && d > maxDelta) maxDelta = d;
   }
   const liftBase = Math.min(cmd.lift, 1 - Math.min(1, maxDelta));
   for (let i = 0; i < NOZZLES.length; i++) {
@@ -109,23 +137,19 @@ export function mix(cmd, torqueCmd, out) {
   return out;
 }
 
-// Flight computer: in Assist the stick commands angular *rates* (body frame) and the computer
-// finds the torque. In Pro the stick is raw torque. Returns body-frame torque command (unitless).
-const RATE = v3(2.6, 1.6, 5.2);
+// Flight computer. Assist: the stick commands body rates; LAND also levels the car. Pro: raw.
+const RATE = v3(2.4, 1.4, 4.6);
 function flightComputer(s, inp, out) {
   rotateInv(wb, s.quat, s.angVel);
-  // Stick: pitch +1 = nose down (push), roll +1 = roll right, yaw +1 = nose right.
   if (inp.assist) {
     const kp = 1.6;
-    set(out,
-      kp * (inp.pitch * RATE.x - wb.x),
-      kp * (inp.yaw * RATE.y - wb.y),
-      kp * (-inp.roll * RATE.z - wb.z));
+    set(out, kp * (inp.pitch * RATE.x - wb.x), kp * (inp.yaw * RATE.y - wb.y), kp * (-inp.roll * RATE.z - wb.z));
     if (inp.level) {
-      // Auto-level: drive body up toward world up (and keep the pitch/roll stick as a trim).
-      rotateInv(upW, s.quat, set(tmp, 0, 1, 0));
-      out.x += upW.z * 6 - wb.x * 1.4;
-      out.z += -upW.x * 6 - wb.z * 1.4;
+      rotateInv(worldUpB, s.quat, set(tmp, 0, 1, 0));
+      // Upside down, a zero roll error is a trap: pick the nearer way round and commit.
+      const ux = worldUpB.y < -0.2 && Math.abs(worldUpB.x) < 0.25 ? (worldUpB.x >= 0 ? 0.25 : -0.25) : worldUpB.x;
+      out.x += worldUpB.z * 6 - wb.x * 1.4;
+      out.z += -ux * 6 - wb.z * 1.4;
     }
   } else {
     set(out, inp.pitch, inp.yaw, -inp.roll);
@@ -134,167 +158,197 @@ function flightComputer(s, inp, out) {
   return out;
 }
 
-// One fixed step. `inp` is the pilot (or autopilot) input for this tick.
 export function step(s, inp) {
   const dt = DT;
   const m = massOf(s);
   set(fTot, 0, -m * G, 0);
   set(tTot, 0, 0, 0);
-
   rotate(fwd, s.quat, set(tmp, 0, 0, 1));
   rotate(right, s.quat, set(tmp, 1, 0, 0));
   rotate(upW, s.quat, set(tmp, 0, 1, 0));
+  scale(dn, upW, -1);
 
-  // --- Steering (rate-limited, speed-sensitive) ---
-  const speed = Math.sqrt(s.vel.x * s.vel.x + s.vel.z * s.vel.z);
-  const steerTarget = inp.steer * CAR.maxSteer / (1 + speed * 0.06);
-  s.steer += clamp(steerTarget - s.steer, -2.5 * dt, 2.5 * dt);
+  // --- Steering (steer-by-wire: rate-limited, speed-sensitive) ---
+  const speed = Math.hypot(s.vel.x, s.vel.y, s.vel.z);
+  const steerTarget = (inp.steer * 0.5) / (1 + speed * 0.055);
+  s.steer += clamp(steerTarget - s.steer, -2.2 * dt, 2.2 * dt);
 
-  // --- Wheels: suspension + tyre forces ---
-  let grounded = 0;
-  for (let i = 0; i < WHEELS.length; i++) {
+  // --- Suction fan: pulls the floor toward whatever surface is under it ---
+  rotate(r, s.quat, FLOOR);
+  add(pw, s.pos, r);
+  const gapT = raycast(s, pw, dn, SPEC.fanGapZero + 0.05);
+  s.floorGap = gapT < 0 ? Infinity : gapT;
+  s.fan += (clamp(inp.fan, 0, 1) - s.fan) * Math.min(1, dt / SPEC.fanSpool);
+  const seal = gapT < 0 ? 0 : clamp((SPEC.fanGapZero - gapT) / (SPEC.fanGapZero - SPEC.fanGapFull), 0, 1);
+  s.fanForce = s.fan * seal * SPEC.fanMaxG * m * G;
+  if (s.fanForce > 0) { scale(force, dn, s.fanForce); applyAt(r, force); }
+
+  // --- Wheels: raycast suspension + Pacejka tyres + wheel spin ---
+  let grounded = 0, wallContact = false, wheelForce = 0;
+  s.tcActive = false;
+  for (let i = 0; i < 4; i++) {
     const w = s.wheels[i];
     rotate(r, s.quat, WHEELS[i]);
     add(pw, s.pos, r);
     w.prevCompression = w.compression;
     w.contact = false;
-    // Ray along body -y from the anchor.
-    const downY = -upW.y;
-    if (downY < -0.25) {
-      const g = groundAt(pw.x, pw.z, n);
-      const t = (pw.y - g) / -downY;               // distance along the ray to the ground
-      const comp = CAR.restLen + CAR.wheelR - t;
-      if (comp > 0) {
-        w.contact = true; grounded++;
-        w.compression = Math.min(comp, CAR.restLen + CAR.wheelR);
-        const compRate = (w.compression - w.prevCompression) / dt;
-        let fs = CAR.spring * Math.min(comp, CAR.maxTravel) + CAR.damper * compRate;
-        if (comp > CAR.maxTravel) fs += CAR.bumpSpring * (comp - CAR.maxTravel);
-        fs = Math.max(0, fs);
-        // Contact patch.
-        addScaled(tmp, r, upW, -t);
-        pointVel(vp, s, tmp);
-        scale(force, n, fs);
-        // Tyre frame on the ground plane.
-        const steerA = i < 2 ? s.steer : 0;
-        w.steer = steerA;
-        const cs = Math.cos(steerA), sn = Math.sin(steerA);
-        set(tmp2, fwd.x * cs + right.x * sn, fwd.y * cs + right.y * sn, fwd.z * cs + right.z * sn);
-        addScaled(tmp2, tmp2, n, -dot(tmp2, n));
-        const lf = Math.hypot(tmp2.x, tmp2.y, tmp2.z) || 1;
-        scale(tmp2, tmp2, 1 / lf);                  // wheel forward
-        cross(Lb, n, tmp2);                          // wheel left
-        const vLong = dot(vp, tmp2), vLat = dot(vp, Lb);
-        const maxF = CAR.mu * fs;
-        let fLong = 0;
-        const drive = Math.min(CAR.driveForce, CAR.drivePower / Math.max(4, Math.abs(vLong)));
-        fLong += inp.throttle * drive / 4;
-        if (inp.brake > 0) fLong -= Math.sign(vLong) * Math.min(Math.abs(vLong) * 4000, inp.brake * CAR.brakeForce / 4);
-        fLong -= vLong * 12;                          // rolling resistance
-        let fLat = -vLat * CAR.lateralGrip;
-        const mag = Math.hypot(fLong, fLat);
-        if (mag > maxF) { fLong *= maxF / mag; fLat *= maxF / mag; }
-        addScaled(force, force, tmp2, fLong);
-        addScaled(force, force, Lb, fLat);
-        applyAt(tmp, force);
-        w.spin += (vLong / CAR.wheelR) * dt;
-      } else {
-        w.compression = 0;
-      }
-    } else {
-      w.compression = 0;
+    const maxT = REST_LEN + R;
+    const t = raycast(s, pw, dn, maxT);
+    if (t < 0) {
+      w.compression = 0; w.load = 0;
+      // Free wheel: driven wheels spin up under throttle, brakes stop them.
+      if (DRIVEN[i]) w.omega += ((inp.throttle * 600) / WHEEL_I) * dt;
+      if (inp.brake > 0) w.omega *= 0.9;
+      w.omega *= 0.999;
+      w.spin += w.omega * dt;
+      continue;
     }
+    w.contact = true; grounded++;
+    if (hitN.y < 0.85) wallContact = true;
+    w.nx = hitN.x; w.ny = hitN.y; w.nz = hitN.z;
+    const comp = maxT - t;
+    w.compression = Math.min(comp, REST_LEN + R);
+    const compRate = (w.compression - w.prevCompression) / dt;
+    let fs = K_SPRING * Math.min(comp, REST_LEN) + C_DAMP * compRate;
+    const over = comp - (REST_LEN - MOUNT_TO_CENTRE + TRAVEL);
+    if (over > 0) fs += BUMP * over;
+    fs = Math.max(0, fs);
+    const Fz = fs * Math.max(0.3, -dot(dn, hitN));
+    w.load = Fz;
+    // Contact patch and its velocity.
+    addScaled(tmp, r, dn, t);
+    pointVel(vp, s, tmp);
+    // Wheel axes in the contact plane.
+    const steerA = i < 2 ? s.steer : 0;
+    w.steer = steerA;
+    const cs = Math.cos(steerA), snA = Math.sin(steerA);
+    set(wf, fwd.x * cs + right.x * snA, fwd.y * cs + right.y * snA, fwd.z * cs + right.z * snA);
+    addScaled(wf, wf, hitN, -dot(wf, hitN));
+    const lf = Math.hypot(wf.x, wf.y, wf.z) || 1;
+    scale(wf, wf, 1 / lf);
+    cross(wl, hitN, wf);                         // wheel left
+    const vLong = dot(vp, wf), vLat = dot(vp, wl);
+    const den = Math.max(Math.abs(vLong), 3.0);
+    let kappa = (w.omega * R - vLong) / den;
+    const alpha = Math.atan2(vLat, Math.max(Math.abs(vLong), 1.5));
+    const mu = SPEC.tyreMu * (1 - 0.07 * (Fz / STATIC_LOAD - 1));   // load sensitivity
+    const D = Math.max(0, mu * Fz);
+    // Drive and brake torque. Two rear motors, 500 kW each; Assist adds traction control.
+    let T = 0;
+    if (DRIVEN[i]) {
+      const motorT = Math.min(SPEC.maxWheelTorque, (SPEC.power / 2) / Math.max(Math.abs(w.omega), 8));
+      T = inp.throttle * motorT;
+      if (inp.assist && kappa > 0.12) { T *= clamp(1 - (kappa - 0.12) * 9, 0.15, 1); s.tcActive = true; }
+    }
+    const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85);
+    // Pacejka pure-slip forces, then the friction ellipse for combined slip.
+    let Fx = D * Math.sin(CX * Math.atan(BX * kappa));
+    const Fy0 = -D * Math.sin(CY * Math.atan(BY * alpha));
+    // Wheel spin, implicit in the tyre's longitudinal stiffness: stable at any speed.
+    const slope = (D * CX * BX * Math.cos(CX * Math.atan(BX * kappa))) / (1 + (BX * kappa) * (BX * kappa));
+    const kEff = Math.max(slope, D * 2) / den;
+    let omega = w.omega + ((dt / WHEEL_I) * (T - R * Fx)) / (1 + (dt / WHEEL_I) * R * R * kEff);
+    if (brakeT > 0) {
+      // Brakes pull toward zero and can lock the wheel, never reverse it. Assist adds ABS:
+      // release pressure once the wheel is past the slip peak.
+      const abs = inp.assist && kappa < -0.1 ? clamp(1 - (-kappa - 0.1) * 10, 0.05, 1) : 1;
+      const db = ((brakeT * abs) / WHEEL_I) * dt;
+      omega = Math.abs(omega) <= db ? 0 : omega - Math.sign(omega) * db;
+    }
+    w.omega = omega;
+    kappa = (w.omega * R - vLong) / den;
+    Fx = D * Math.sin(CX * Math.atan(BX * kappa));
+    let Fy = Fy0;
+    const mag = Math.hypot(Fx, Fy);
+    if (mag > D && mag > 0) { Fx *= D / mag; Fy *= D / mag; }
+    Fx -= vLong * 6;                              // rolling resistance
+    w.slip = kappa; w.slipAngle = alpha;
+    scale(force, hitN, Fz);
+    addScaled(force, force, wf, Fx);
+    addScaled(force, force, wl, Fy);
+    applyAt(tmp, force);
+    wheelForce += Fz;
+    w.spin += w.omega * dt;
   }
+  s.grounded = grounded;
+  s.onWall = wallContact;
+  s.wheelForce = wheelForce;
 
-  // --- Hull contact (roof, sills, bumpers) against ground and parked cars ---
-  s.hullContact = false;
-  s.hullGround = false;
-  s.obstacleContact = false;
+  // --- Hull contact (sills, bumpers, roof) against everything ---
+  s.hullContact = false; s.hullGround = false; s.obstacleContact = false;
   for (let i = 0; i < HULL.length; i++) {
     rotate(r, s.quat, HULL[i]);
     add(pw, s.pos, r);
+    const phi = phiAt(s, pw);
+    if (phi >= 0) continue;
+    set(hitN, sn.x, sn.y, sn.z);
     pointVel(vp, s, r);
-    let depth = 0;
-    const g = groundAt(pw.x, pw.z, n);
-    if (pw.y < g) depth = (g - pw.y) * n.y;
-    const od = obstaclePenetration(pw, tmp2);
-    let obstacle = false;
-    if (od > depth) { depth = od; copy(n, tmp2); obstacle = true; }
-    if (depth <= 0) continue;
-    if (obstacle) { s.obstacleContact = true; s.obstacleSpeed = Math.max(s.obstacleSpeed, Math.hypot(vp.x, vp.y, vp.z)); }
+    if (sn.obstacle) { s.obstacleContact = true; s.obstacleSpeed = Math.max(s.obstacleSpeed, Math.hypot(vp.x, vp.y, vp.z)); }
+    else s.hullGround = true;
     s.hullContact = true;
-    if (!obstacle) s.hullGround = true;
-    const vn = dot(vp, n);
-    const fn = Math.max(0, 260000 * depth - 9000 * vn);
+    const vn = dot(vp, hitN);
+    const fn = Math.max(0, -300000 * phi - 11000 * vn);
     s.hullImpulse = Math.max(s.hullImpulse, -vn);
-    // Coulomb friction on the hull (scraping).
-    addScaled(tmp, vp, n, -vn);
+    addScaled(tmp, vp, hitN, -vn);
     const vt = Math.hypot(tmp.x, tmp.y, tmp.z);
-    scale(force, n, fn);
-    if (vt > 1e-4) addScaled(force, force, tmp, -Math.min(0.55 * fn, vt * 4000) / vt);
+    scale(force, hitN, fn);
+    if (vt > 1e-4) addScaled(force, force, tmp, -Math.min(0.5 * fn, vt * 5000) / vt);
     applyAt(r, force);
   }
 
-  // --- Thrusters ---
+  // --- Thrusters (nitrogen cold gas, blowdown) ---
   flightComputer(s, inp, cmdT);
-  // On its wheels the car is a car: attitude jets stay closed (lift and boost still work).
   if (grounded >= 2) { cmdT.x = 0; cmdT.y = 0; cmdT.z = 0; }
-  // LAND (Assist): the computer also governs lift to bring the sink rate down to a soft
-  // touchdown, measured against the ground under the car. Pilot lift still adds on top.
   eff.lift = inp.lift; eff.thrust = inp.thrust; eff.retro = inp.retro;
-  if (inp.assist && inp.level && !grounded && s.air > 0) {
-    const h = Math.max(0, s.pos.y - groundAt(s.pos.x, s.pos.z, null) - 0.62);
-    const wantVy = -Math.max(0.8, Math.min(7, Math.sqrt(h * 2 * 2.4)));
-    if (s.vel.y < wantVy && upW.y > 0.6) eff.lift = Math.max(eff.lift, clamp((wantVy - s.vel.y) * 0.8 + 0.5, 0, 1));
+  if (inp.assist && inp.level && grounded === 0 && s.air > 0) {
+    // LAND: govern lift so the sink rate eases to a soft touchdown on the ground below.
+    const h = Math.max(0, s.pos.y - SPEC.comHeight - 0.05);
+    const wantVy = -Math.max(0.9, Math.min(8, Math.sqrt(h * 2 * 2.6)));
+    if (s.vel.y < wantVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((wantVy - s.vel.y) * 0.8 + 0.55, 0, 1));
   }
   mix(eff, cmdT, target);
-  const bd = blowdown(s);
+  const bd = 0.45 + 0.55 * (Math.max(0, s.air) / CAR.airMass);   // blowdown: thrust ∝ tank pressure
   let mdot = 0;
   for (let i = 0; i < NOZZLES.length; i++) {
     const nz = NOZZLES[i];
     const goal = s.air > 0 ? target[i] : 0;
-    s.throttles[i] += (goal - s.throttles[i]) * Math.min(1, dt / 0.035);
+    s.throttles[i] += (goal - s.throttles[i]) * Math.min(1, dt / 0.03);
     const F = nz.max * s.throttles[i] * bd;
     if (F <= 0) continue;
     rotate(r, s.quat, nz.pos);
     rotate(force, s.quat, nz.dir);
     scale(force, force, F);
     applyAt(r, force);
-    mdot += F / (CAR.isp * G);
+    mdot += F / (SPEC.isp * G);
   }
   s.air = Math.max(0, s.air - mdot * dt);
 
   // --- Aero drag ---
   const vmag = Math.hypot(s.vel.x, s.vel.y, s.vel.z);
-  addScaled(fTot, fTot, s.vel, -CAR.drag * vmag);
+  addScaled(fTot, fTot, s.vel, -0.5 * RHO * SPEC.cdA * vmag);
 
-  // --- Integrate (semi-implicit Euler) ---
+  // --- Integrate (semi-implicit Euler), inertia tensor diagonal in the body frame ---
   addScaled(s.vel, s.vel, fTot, dt / m);
   addScaled(s.pos, s.pos, s.vel, dt);
-  // Angular: world torque → body, divide by body inertia, back to world. Gyroscopic term kept.
   rotateInv(Lb, s.quat, tTot);
   rotateInv(wb, s.quat, s.angVel);
-  const Ix = CAR.inertiaPerKg.x * m, Iy = CAR.inertiaPerKg.y * m, Iz = CAR.inertiaPerKg.z * m;
-  // τ - ω × (Iω)
+  const k = m / SPEC.dryMass;
+  const Ix = SPEC.inertia.pitch * k, Iy = SPEC.inertia.yaw * k, Iz = SPEC.inertia.roll * k;
   const hx = Ix * wb.x, hy = Iy * wb.y, hz = Iz * wb.z;
   const gx = wb.y * hz - wb.z * hy, gy = wb.z * hx - wb.x * hz, gz = wb.x * hy - wb.y * hx;
   wb.x += ((Lb.x - gx) / Ix) * dt;
   wb.y += ((Lb.y - gy) / Iy) * dt;
   wb.z += ((Lb.z - gz) / Iz) * dt;
-  // A little angular damping (air + suspension losses).
-  const ad = grounded ? 0.995 : 0.9995;
+  const ad = grounded ? 0.997 : 0.9996;
   wb.x *= ad; wb.y *= ad; wb.z *= ad;
   rotate(s.angVel, s.quat, wb);
   integrateQuat(s.quat, s.angVel, dt);
-
-  s.grounded = grounded;
   s.tick++;
   return s;
 }
 
-// Body-frame angular velocity (for telemetry: roll rate about the car's own nose axis).
 export function bodyRates(s, out) { return rotateInv(out, s.quat, s.angVel); }
 export function up(s, out) { return rotate(out, s.quat, set(out, 0, 1, 0)); }
 export function forward(s, out) { return rotate(out, s.quat, set(out, 0, 0, 1)); }
 export function worldPoint(s, local, out) { rotate(out, s.quat, local); return add(out, out, s.pos); }
-export { WHEELS, HULL, sub };
+export { WHEELS };
