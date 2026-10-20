@@ -133,7 +133,8 @@ describe('damage sensor', () => {
     for (const course of ['show', 'wall', 'lineup']) expect(fly(course).t.damage.pct).toBeLessThanOrEqual(2);
   });
   it('dropping onto the row damages the car and the Integrity mark, and replays exactly', () => {
-    const r = fly('show', { carry: 5 });
+    const r = fly('show', { carry: 3 });   // far too little carry: down onto the row hard
+    expect(r.t.contact).toBe(true);
     expect(r.t.damage.pct).toBeGreaterThan(15);
     const card = scoreRun(r.t);
     expect(card.categories.damage).toBeLessThan(9);
