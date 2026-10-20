@@ -145,10 +145,10 @@ function lineup(boxes) {
     const car = makeParked(b.id, b.paint);
     // Parked crosswise, nose to +x.
     car.rotation.y = Math.PI / 2;
-    car.position.set((b.minX + b.maxX) / 2 + (b.id === 'semi' ? 0.2 : 0), 0, b.cz);
+    car.position.set((b.minX + b.maxX) / 2, 0, b.cz);
     car.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     g.add(car);
-    return { car, home: { cx: (b.minX + b.maxX) / 2, cz: b.cz, yaw: 0 }, dx: b.id === 'semi' ? 0.2 : 0 };
+    return { car, home: { cx: (b.minX + b.maxX) / 2, cz: b.cz, yaw: 0 }, dx: 0 };   // models are built centred on their box
   });
   g.userData.setBodies = (bodies) => {
     for (let i = 0; i < cars.length; i++) {

@@ -90,7 +90,8 @@ describe('impact events', () => {
   });
   // Too low over the row: it clips the roofs and goes over (onto its side or roof: chaotic, so the
   // exact resting face isn't pinned).
-  const roll = fly('lineup', { apex: 2.8 });
+  // (2.9 since the row took its researched sizes in SIM_VERSION 12: the semi stands 4.11 m.)
+  const roll = fly('lineup', { apex: 2.9 });
   it('a rollover: clips the row, goes over, and replays bit-exactly', () => {
     expect(roll.t.flipped).toBe(true);
     expect(kinds(roll.impacts, HIT).some((e) => e[2] === PART.side && e[4] >= 0)).toBe(true);
