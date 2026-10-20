@@ -419,7 +419,7 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
   const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
   const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
-  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, resize, render, setCourse, titlePose, setBodies };
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, resize, render, setCourse, titlePose, setBodies, setLook, bloom };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
@@ -444,8 +444,37 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     return stage;
   }
 
+  // An outside look takes the stage (Free Drive's roads, src/drive/): its own group with its own
+  // sky, plus fog, environment, exposure, bloom and the key light. setLook(null) gives the stage
+  // back to the course.
+  let external = null;
+  function setLook(look) {
+    if (external) { scene.remove(external.group); external = null; }
+    if (!look) {
+      sky.visible = true;
+      const id = stage.course; stage.course = null; current = null;
+      for (const k of Object.keys(looks)) scene.remove(looks[k].group);
+      setCourse(id);
+      return stage;
+    }
+    if (current) scene.remove(current.group);
+    external = look;
+    scene.add(look.group);
+    sky.visible = false;
+    scene.environment = look.env; scene.environmentIntensity = look.envIntensity ?? 1;
+    scene.fog = look.fog;
+    renderer.toneMappingExposure = look.exposure;
+    if (bloom) Object.assign(bloom, look.bloom);
+    key.color.set(look.keyLight.color);
+    key.intensity = look.keyLight.intensity;
+    keyOffset.copy(look.keyLight.offset);
+    lightRot.lookAt(keyOffset, ORIGIN, key.up);
+    lightInv.copy(lightRot).transpose();
+    return stage;
+  }
+
   // Pose the parked vehicles from the sim's bodies (or null: back where the course parked them).
-  function setBodies(bodies) { current.setBodies?.(bodies); }
+  function setBodies(bodies) { if (!external) current.setBodies?.(bodies); }
 
   // Where the car sits on the title screen for this course: { x, z, yaw }.
   function titlePose() { return current.titlePose; }
@@ -462,7 +491,7 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
 
   function render(time) {
     if (!drawing) return;
-    current.update(time);
+    (external || current).update(time);
     hero.update?.(time);   // lamps, active aero, skirts, nozzle states
     // Keep the shadow frustum on the hero, snapped to whole shadow-map texels across the light,
     // so the map's grid stays fixed on the ground and shadow edges don't crawl as the car moves.

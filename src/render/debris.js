@@ -10,7 +10,7 @@ for (const x of [-1, 1]) for (const y of [-1, 1]) for (const z of [-1, 1]) CORNE
 
 const r = new THREE.Vector3(), p = new THREE.Vector3(), vp = new THREE.Vector3(), t = new THREE.Vector3(), a = new THREE.Vector3(), b = new THREE.Vector3(), dq = new THREE.Quaternion(), iq = new THREE.Quaternion();
 
-export function createPieces(root) {
+export function createPieces(root, floor = () => 0) {
   const list = [];
 
   // A piece: `visual` is drawn centred on the body's origin; `half` is the box's half extents.
@@ -50,11 +50,12 @@ export function createPieces(root) {
     const wl = pc.w.length();
     if (wl > 1e-6) { dq.setFromAxisAngle(a.copy(pc.w).multiplyScalar(1 / wl), wl * dt); body.quaternion.premultiply(dq).normalize(); }
     let deepest = 0;
+    const fy = floor();
     for (const c of CORNERS) {
       r.set(c.x * pc.half.x, c.y * pc.half.y, c.z * pc.half.z).applyQuaternion(body.quaternion);
       p.copy(body.position).add(r);
-      if (p.y >= 0) continue;
-      deepest = Math.min(deepest, p.y);
+      if (p.y >= fy) continue;
+      deepest = Math.min(deepest, p.y - fy);
       vp.crossVectors(pc.w, r).add(pc.v);
       if (vp.y >= 0) continue;
       // Normal impulse at this corner (ground normal +y).

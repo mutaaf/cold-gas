@@ -124,7 +124,8 @@ export const tierOf = (inp) => (inp.assist ? 'assist' : inp.manual ? 'advanced' 
 export const ASSIST_CRAWL = 8, ASSIST_CARRY = 10;
 
 export function createVehicle(courseId = DEFAULT_COURSE) {
-  const course = COURSES[courseId] || COURSES[DEFAULT_COURSE];
+  // A course id, or a course object (Free Drive's roads aren't in COURSES).
+  const course = typeof courseId === 'object' ? courseId : COURSES[courseId] || COURSES[DEFAULT_COURSE];
   const s = {
     course, tick: 0, world: createWorld(course),
     pos: v3(course.start.x, SPEC.comHeight, course.start.z), vel: v3(), quat: quatFromYaw(q4(), 0), angVel: v3(), angMom: v3(),

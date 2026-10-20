@@ -168,6 +168,15 @@ export const DEFAULT_COURSE = 'show';
 export const MATERIALS = {
   concrete: { id: 'concrete', grip: 1, slide: 0.5 },
   paint: { id: 'paint', grip: 0.55, slide: 0.3 },
+  // Free Drive's real roads (src/sim/roads.js). ESTIMATES from road-friction literature, relative
+  // to the sealed concrete above: dry dense asphalt grips about the same; loose gravel μ ≈ 0.5–0.7
+  // of it; dry grass and soil ≈ 0.4–0.5; bare rock ≈ 0.7. Bodywork scrapes along a steel rail or
+  // a stone wall at μ ≈ 0.3–0.4.
+  asphalt: { id: 'asphalt', grip: 1, slide: 0.55 },
+  gravel: { id: 'gravel', grip: 0.62, slide: 0.6 },
+  grass: { id: 'grass', grip: 0.45, slide: 0.45 },
+  rock: { id: 'rock', grip: 0.7, slide: 0.55 },
+  barrier: { id: 'barrier', grip: 0.5, slide: 0.35 },
 };
 // Parked vehicles (kg, ESTIMATE: class-typical curb weights for a mid-size sedan, a crossover, an
 // electric semi tractor, a full-size pickup and a two-seat cab). Parked means in Park with the
@@ -304,6 +313,8 @@ const tmpN = { nx: 0, ny: 0, nz: 0 };
 // the material `mat`, and `body`: the parked vehicle it is (or null). `world` carries the run's
 // own bodies; without one, the parked vehicles stand where the course put them.
 export function surface(course, x, y, z, out, world = worldOf(course)) {
+  // A course that brings its own geometry (Free Drive's real roads, src/sim/roads.js).
+  if (course.sdf) return course.sdf(x, y, z, out);
   // The ground: flat concrete everywhere (y = 0), plus the kicker where a course has one.
   let phi, nx = 0, ny = 1, nz = 0;
   if (course.ramp && Math.abs(x) <= RAMP.halfWidth && z >= RAMP.z0 && z <= RAMP.z1) {
