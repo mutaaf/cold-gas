@@ -1,5 +1,5 @@
-// Three stages, one renderer. The Show (default): the Wall's night stage with the lineup parked on
-// its own lane beside the approach. The Wall: the reveal's night stage, built in
+// Three stages, one renderer. The Show (default): the Wall's night stage with the lineup parked
+// across the approach under the ledge. The Wall: the reveal's night stage, built in
 // src/render/wall.js. The Lineup: the test range at blue hour, with one low warm key light, a cool
 // sky fill, matte concrete, a white kicker with a hairline light strip, the parked lineup and a
 // bullseye landing pad. `stage.setCourse(id)` swaps the course group, environment, fog, exposure
@@ -10,7 +10,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { RAMP, LINEUP, LINEUP_BOXES, SHOW, SHOW_LANE } from '../sim/courses.js';
+import { RAMP, LINEUP, SHOW } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
 import { buildWall, nightSkyMaterial, bakeNightEnvironment } from './wall.js';
 
@@ -138,16 +138,29 @@ function ramp() {
   return g;
 }
 
-function lineup() {
+// The parked row, one mesh per sim body (src/sim/courses.js createWorld). `setBodies(bodies)`
+// moves each to its body's pose (a shoved car is drawn where the physics left it); null puts the
+// row back where the course parked it.
+function lineup(boxes) {
   const g = new THREE.Group();
-  for (const b of LINEUP_BOXES) {
+  const cars = boxes.map((b) => {
     const car = makeParked(b.id, b.paint);
-    // Parked crosswise, nose to +x, alternating facing like a real row.
+    // Parked crosswise, nose to +x.
     car.rotation.y = Math.PI / 2;
-    car.position.set(b.id === 'semi' ? 0.2 : 0, 0, b.cz);
+    car.position.set((b.minX + b.maxX) / 2 + (b.id === 'semi' ? 0.2 : 0), 0, b.cz);
     car.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     g.add(car);
-  }
+    return { car, home: { cx: (b.minX + b.maxX) / 2, cz: b.cz, yaw: 0 }, dx: b.id === 'semi' ? 0.2 : 0 };
+  });
+  g.userData.setBodies = (bodies) => {
+    for (let i = 0; i < cars.length; i++) {
+      const p = bodies ? bodies[i] : cars[i].home, k = cars[i];
+      if (!p) continue;
+      const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
+      k.car.position.set(p.cx + c * k.dx, 0, p.cz - s * k.dx);
+      k.car.rotation.y = Math.PI / 2 + p.yaw;
+    }
+  };
   return g;
 }
 
@@ -235,7 +248,8 @@ function buildLineup(tier) {
   ground.receiveShadow = true;
   group.add(ground);
   // The reveal's kickflip used no ramp (thrust alone off flat ground), so the Lineup has none.
-  group.add(lineup());
+  const row = lineup(LINEUP.boxes);
+  group.add(row);
   group.add(linesAndPad());
   const hz = horizon();
   group.add(hz);
@@ -255,24 +269,22 @@ function buildLineup(tier) {
     look: { exposure: 1.05, bloom: { strength: 0.3, radius: 0.5, threshold: 0.92 }, fog: new THREE.Fog(PALETTE.haze, 120, 900) },
     keyLight: { color: 0xffd2ad, intensity: 2.6, offset: new THREE.Vector3(-30, 22, 46) },
     update(t) { hz.userData.beacon.visible = Math.sin(t * 2.2) > 0.2; },
+    setBodies: row.userData.setBodies,
   };
 }
 
-// The Show: the night Wall plus the lineup, turned to run down its lane beside the approach
-// (src/sim/courses.js SHOW). The reveal parked the row on a low red-lit plinth; here it is a red
-// LED outline on the slab, with two white washes so the cars read at night.
+// The Show: the night Wall with the lineup parked across the approach under the ledge, and the
+// landing pad beyond it (src/sim/courses.js SHOW). The reveal parked its row on a low red-lit
+// plinth; here it is a red LED outline on the slab, with two white washes so the cars read at night.
 function buildShow(tier) {
-  const look = buildWall(tier);
+  const look = buildWall(tier, SHOW.pad);
   look.group.name = 'course:show';
-  const row = new THREE.Group();
-  row.add(lineup());
-  row.rotation.y = Math.PI;                         // the same half turn the physics uses
-  row.position.set(SHOW_LANE.x, 0, SHOW_LANE.z);
+  const row = lineup(SHOW.boxes);
   look.group.add(row);
+  look.setBodies = row.userData.setBodies;
+  look.titlePose = { x: SHOW.start.x, z: SHOW.start.z, yaw: 0 };
 
   const g = new THREE.Group();
-  const white = new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity: 0.55 });
-  const faint = new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity: 0.18 });
   const red = new THREE.MeshBasicMaterial({ color: new THREE.Color(4.5, 0.2, 0.3), fog: false });
   const flat = (geo, mat, x, z, y = 0.004) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
   const boxes = SHOW.boxes;
@@ -281,28 +293,18 @@ function buildShow(tier) {
   // Red outline of the row.
   for (const z of [minZ, maxZ]) flat(new THREE.PlaneGeometry(maxX - minX, 0.07), red, (minX + maxX) / 2, z, 0.006);
   for (const x of [minX, maxX]) flat(new THREE.PlaneGeometry(0.07, maxZ - minZ), red, x, (minZ + maxZ) / 2, 0.006);
-  // The lane: a dashed centreline from the Wall's pad to the lift-off line, then the line itself.
-  const { x: lx, z: lz } = SHOW.liftOff;
-  for (let z = lz + 4; z < SHOW.pad.z - 6; z += 6) flat(new THREE.PlaneGeometry(0.06, 2.4), faint, lx, z);
-  flat(new THREE.PlaneGeometry(5.2, 0.12), white, lx, lz, 0.006);
-  // The second landing pad.
-  const P = SHOW.pad2;
-  flat(new THREE.CircleGeometry(P.rings.at(-1) + 0.6, 96), new THREE.MeshBasicMaterial({ color: 0x0e1014, transparent: true, opacity: 0.4 }), P.x, P.z, 0.003);
-  for (const r of P.rings) flat(new THREE.RingGeometry(r - 0.022, r + 0.022, 192), white, P.x, P.z, 0.005);
-  flat(new THREE.PlaneGeometry(0.04, 3), white, P.x, P.z, 0.006);
-  flat(new THREE.PlaneGeometry(3, 0.04), white, P.x, P.z, 0.006);
   look.group.add(g);
 
   const cz = (minZ + maxZ) / 2;
-  // Two soft top-lights from behind the row (away from the approach), so the paint reads without
+  // Two soft top-lights from beyond the row (away from the Wall), so the paint reads without
   // glaring into the chase camera.
-  for (const [x, z] of [[SHOW_LANE.x - 10, cz - 14], [SHOW_LANE.x + 4, cz - 16]]) {
+  for (const [x, z] of [[-10, cz - 14], [4, cz - 16]]) {
     const wash = new THREE.SpotLight(0xe8eeff, 420, 0, 0.5, 0.8, 2);
-    wash.position.set(x, 14, z); wash.target.position.set(SHOW_LANE.x, 0.8, cz);
+    wash.position.set(x, 14, z); wash.target.position.set(0, 0.8, cz);
     look.group.add(wash, wash.target);
   }
   const glow = new THREE.PointLight(0xff1a28, 10, 14, 2);
-  glow.position.set(SHOW_LANE.x, 0.6, cz);
+  glow.position.set(0, 0.6, cz);
   look.group.add(glow);
   return look;
 }
@@ -363,7 +365,7 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   const lookFor = (id) => (looks[id] ??= id === 'show' ? buildShow(tier) : id === 'wall' ? buildWall(tier) : buildLineup(tier));
   let current = null;
   const keyOffset = new THREE.Vector3();
-  const stage = { renderer, scene, camera, hero, key, course: null, resize, render, setCourse, titlePose };
+  const stage = { renderer, scene, camera, hero, key, course: null, resize, render, setCourse, titlePose, setBodies };
 
   function setCourse(id) {
     if (!COURSE_IDS.includes(id)) id = 'show';
@@ -383,6 +385,9 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     keyOffset.copy(current.keyLight.offset);
     return stage;
   }
+
+  // Pose the parked vehicles from the sim's bodies (or null: back where the course parked them).
+  function setBodies(bodies) { current.setBodies?.(bodies); }
 
   // Where the car sits on the title screen for this course: { x, z, yaw }.
   function titlePose() { return current.titlePose; }

@@ -348,7 +348,7 @@ function searchlights(tier) {
 }
 
 // --- Markings, approach, pad ---------------------------------------------------------------------
-function approach() {
+function approach(P) {
   const g = new THREE.Group();
   const z0 = WALL.runout.zMin, z1 = 0, len = z1 - z0;
   const map = groundTexture(23, '#1b1c1f'); map.repeat.set(2, len / 8);
@@ -370,7 +370,6 @@ function approach() {
     num.rotation.z = Math.PI;
   }
   // Landing target.
-  const P = WALL.pad;
   flat(new THREE.CircleGeometry(P.rings.at(-1) + 0.8, 96), new THREE.MeshBasicMaterial({ color: 0x050607, transparent: true, opacity: 0.45, depthWrite: false }), P.x, P.z, 0.004);
   for (const r of P.rings) flat(new THREE.RingGeometry(r - 0.025, r + 0.025, 192), white, P.x, P.z, 0.007);
   flat(new THREE.PlaneGeometry(0.05, 3.4), white, P.x, P.z, 0.008);
@@ -433,7 +432,7 @@ export function bakeNightEnvironment(renderer) {
 }
 
 // --- The whole look ------------------------------------------------------------------------------------
-export function buildWall(tier) {
+export function buildWall(tier, pad = WALL.pad) {
   const group = new THREE.Group();
   group.name = 'course:wall';
   const S = samples(tier === 'low' ? 200 : 380);
@@ -488,7 +487,7 @@ export function buildWall(tier) {
   }));
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
   group.add(ground);
-  group.add(approach());
+  group.add(approach(pad));
   group.add(glowDecal(0xff1828, 8, 0, 1.0, 0.26));
   group.add(glowDecal(0x8fb6ff, 7, -2.5, -5, 0.12));
   group.add(glowDecal(0x8fb6ff, 7, 2.5, -5, 0.12));

@@ -3,6 +3,7 @@
 //
 // Keyboard   ground: ↑/W throttle · ↓/S brake · ←/→ A/D steer · Shift boost · Space LIFT
 //            air:    ←/→ A/D roll · ↑/W nose down · ↓/S nose up · Q/E yaw · Space LIFT · Shift LAND
+//                    · F BOOST (the rear jets: carry off the Wall's ledge, over the row)
 // Gamepad    left stick steer/roll+pitch · RT throttle/LIFT · LT brake/LAND · A LIFT · B LAND
 // Touch      ground: steer stick · GO and BRAKE pedals · LIFT (RELEASE on the wall)
 //            air:    stick rolls and pitches (up = nose up) · LIFT · LAND
@@ -82,6 +83,7 @@ export function sample(phase, assist, out = newInput()) {
   if (k('KeyE')) yaw += 1;
   if (k('Space')) lift = 1;
   if (k('ShiftLeft', 'ShiftRight')) land = 1;
+  let boost = k('KeyF') ? 1 : 0;
   if (ay < 0) thr = 1;
   if (ay > 0) brk = 1;
 
@@ -91,7 +93,7 @@ export function sample(phase, assist, out = newInput()) {
     ax += dz(p.axes[0] || 0); ay += dz(p.axes[1] || 0);
     yaw += dz(p.axes[2] || 0) * 0.8;
     const rt = p.buttons[7]?.value || 0, lt = p.buttons[6]?.value || 0;
-    if (air) { lift = Math.max(lift, rt, p.buttons[0]?.pressed ? 1 : 0); land = Math.max(land, lt > 0.3 || p.buttons[1]?.pressed ? 1 : 0); }
+    if (air) { lift = Math.max(lift, rt, p.buttons[0]?.pressed ? 1 : 0); land = Math.max(land, lt > 0.3 || p.buttons[1]?.pressed ? 1 : 0); if (p.buttons[5]?.pressed) boost = 1; }
     else { thr = Math.max(thr, rt); brk = Math.max(brk, lt); if (p.buttons[0]?.pressed) lift = 1; }
   }
 
@@ -102,13 +104,13 @@ export function sample(phase, assist, out = newInput()) {
     if (air) ay -= touch.y;
     if (touch.lift) lift = 1;
     if (touch.land) land = 1;
-    if (touch.go) thr = 1;
+    if (touch.go) { thr = 1; boost = 1; }
     if (touch.brk) brk = 1;
   }
   ax = Math.max(-1, Math.min(1, ax)); ay = Math.max(-1, Math.min(1, ay));
 
   if (air) {
-    out.roll = ax; out.pitch = -ay; out.yaw = yaw; out.lift = lift; out.level = land;
+    out.roll = ax; out.pitch = -ay; out.yaw = yaw; out.lift = lift; out.level = land; out.thrust = boost;
   } else {
     out.steer = ax; out.throttle = thr; out.brake = brk; out.lift = lift;
     out.thrust = land && !brk ? 1 : 0;   // Shift on the ground = rear boost

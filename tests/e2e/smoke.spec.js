@@ -36,10 +36,10 @@ test('deep link ?play=jump starts a countdown and accepts keyboard input', async
   await page.evaluate(() => window.__coldgas.skipCountdown());
   // Any real movement proves the key reached the sim (software GL in CI can run at a few fps).
   await page.keyboard.down('ArrowUp');
-  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -116, null, { timeout: 45_000 });
+  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -5.5, null, { timeout: 45_000 });
   await page.keyboard.up('ArrowUp');
   const z = await page.evaluate(() => window.__coldgas.S.run.car.pos.z);
-  expect(z).toBeGreaterThan(-116);
+  expect(z).toBeGreaterThan(-5.5);   // the Show starts at z = −6, just short of the Wall
 });
 
 test('phone layout: touch controls visible and nothing overlaps the title CTA', async ({ browser }) => {
@@ -96,24 +96,27 @@ test('phone: GO pedal drives, the stick alone does not, and air pitch is not inv
   const box = await stick.boundingBox();
   await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
   await page.waitForTimeout(800);
-  expect(await page.evaluate(() => window.__coldgas.S.run.car.pos.z)).toBeLessThan(-94);
+  expect(await page.evaluate(() => window.__coldgas.S.run.car.pos.z)).toBeLessThan(-5.9);
   // Holding GO does.
   const go = await page.locator('[data-btn-go]').boundingBox();
   await page.dispatchEvent('[data-btn-go]', 'pointerdown', { pointerId: 7, clientX: go.x + 10, clientY: go.y + 10 });
-  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -93, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -5.5, null, { timeout: 30_000 });
   await page.dispatchEvent('[data-btn-go]', 'pointerup', { pointerId: 7 });
   await page.close();
 });
 
-// Right means right: from the chase camera, pressing → turns the car to the right of the screen,
-// and the default event is the Show (both stunts, one run).
+// Right means right: from the chase camera, pressing → turns the car to the right of the screen.
+// The default event is the Show (one flight off the Wall); the steering check runs on the Lineup's
+// long run-up, where the chase camera sits behind the car.
 test('keyboard: → steers right on screen, and the Show is the default event', async ({ page }) => {
   await page.goto('/coldgas/?play=jump&gfx=low');
   await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
   expect(await page.evaluate(() => window.__coldgas.S.run.course)).toBe('show');
+  await page.goto('/coldgas/?play=jump&course=lineup&gfx=low');
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
   await page.evaluate(() => window.__coldgas.skipCountdown());
   await page.keyboard.down('ArrowUp');
-  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -116, null, { timeout: 45_000 });
+  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -66, null, { timeout: 45_000 });
   await page.keyboard.down('ArrowRight');
   await page.waitForFunction(() => window.__coldgas.S.run.car.vel.x < -0.4, null, { timeout: 45_000 });
   await page.keyboard.up('ArrowRight');

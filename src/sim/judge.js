@@ -40,19 +40,29 @@ export const PANEL = [
     w: { height: 0.12, rotation: 0.22, clearance: 0.12, landing: 0.24, precision: 0.12, efficiency: 0.18 } },
 ];
 
-// The Show: both stunts, one card.
+// The Show: one flight, off the Wall and over the row.
 export const SHOW_CATEGORIES = [
   { id: 'climb', label: 'Climb', unit: '%' },
   { id: 'inversion', label: 'Inverted', unit: 's' },
-  { id: 'rollout', label: 'Roll-out', unit: '°' },
-  { id: 'kickflip', label: 'Kickflip', unit: '°' },
+  { id: 'rotation', label: 'Roll-out', unit: '°' },
   { id: 'clearance', label: 'Clearance', unit: 'm' },
-  { id: 'landing', label: 'Landings', unit: '' },
+  { id: 'landing', label: 'Landing', unit: '' },
   { id: 'precision', label: 'Precision', unit: 'm' },
   { id: 'efficiency', label: 'Gas left', unit: '%' },
 ];
 
 export const categoriesFor = (course) => (course === 'wall' ? WALL_CATEGORIES : course === 'show' ? SHOW_CATEGORIES : CATEGORIES);
+
+const WALL_W = {
+  engineer: { climb: 0.12, inversion: 0.12, rotation: 0.12, landing: 0.38, precision: 0.16, efficiency: 0.1 },
+  coordinator: { climb: 0.24, inversion: 0.24, rotation: 0.22, landing: 0.18, precision: 0.06, efficiency: 0.06 },
+  designer: { climb: 0.14, inversion: 0.16, rotation: 0.16, landing: 0.24, precision: 0.14, efficiency: 0.16 },
+};
+const SHOW_W = {
+  engineer: { climb: 0.1, inversion: 0.08, rotation: 0.1, clearance: 0.12, landing: 0.34, precision: 0.14, efficiency: 0.12 },
+  coordinator: { climb: 0.16, inversion: 0.18, rotation: 0.2, clearance: 0.2, landing: 0.16, precision: 0.05, efficiency: 0.05 },
+  designer: { climb: 0.1, inversion: 0.12, rotation: 0.14, clearance: 0.14, landing: 0.22, precision: 0.12, efficiency: 0.16 },
+};
 
 // Landing quality, shared: sink rate, attitude, heading, wheel sync, suspension.
 function landingScore(t) {
@@ -64,9 +74,19 @@ function landingScore(t) {
   return 10 * (0.38 * sinkS + 0.26 * tiltS + 0.14 * headS + 0.22 * syncS) * suspS * (t.bodyStrike ? 0.6 : 1);
 }
 
+// Clearance over the parked row: contact is a zero; close-but-clean is the art (≈0.8 m is
+// perfect, 3 m+ is safe).
+function clearanceScore(t) {
+  const clearance = Number.isFinite(t.minClearance) ? t.minClearance : 0;
+  return t.contact ? 0 : clearance <= 0 ? 0 : 10 * (clearance < 0.8 ? lerp(0.82, 1, clearance / 0.8) : lerp(1, 0.72, clamp01((clearance - 0.8) / 4)));
+}
+
+// The Wall, and the Show (the Wall with the row under the ledge: clearance counts, contact
+// crashes, and the pad is beyond the row).
 function scoreWall(t, opts) {
-  const course = COURSES.wall;
-  const crashed = t.flipped || !t.settledUpright || t.fellOff || t.landedOnRamp;
+  const show = t.course === 'show';
+  const course = COURSES[show ? 'show' : 'wall'];
+  const crashed = t.flipped || !t.settledUpright || t.fellOff || t.landedOnRamp || (show && t.contact);
   const launched = t.airStartTick >= 0;
   const jumped = launched && t.touchTick >= 0;
   const rollDeg = Math.abs(t.rollAccum) * 180 / Math.PI;
@@ -84,43 +104,44 @@ function scoreWall(t, opts) {
   c.landing = landingScore(t);
   c.precision = 10 * band(padMiss, 20, 1);
   c.efficiency = 10 * band(airPct, 0, 50) * clamp01(turned / 120);
-  if (!jumped) { c.rotation = 0; c.landing = 0; c.precision = 0; c.efficiency = 0; }
+  if (show) c.clearance = t.crossedRow ? clearanceScore(t) : 0;
+  if (!jumped) { c.rotation = 0; c.landing = 0; c.precision = 0; c.efficiency = 0; c.clearance = 0; }
   if (crashed) { c.landing = 0; c.precision *= 0.3; }
   const assistFactor = opts.assist === false ? 1.08 : 1;
-  const W = {
-    engineer: { climb: 0.12, inversion: 0.12, rotation: 0.12, landing: 0.38, precision: 0.16, efficiency: 0.1 },
-    coordinator: { climb: 0.24, inversion: 0.24, rotation: 0.22, landing: 0.18, precision: 0.06, efficiency: 0.06 },
-    designer: { climb: 0.14, inversion: 0.16, rotation: 0.16, landing: 0.24, precision: 0.14, efficiency: 0.16 },
-  };
+  const W = show ? SHOW_W : WALL_W;
   const judges = PANEL.map((j) => {
     let s = 0;
     for (const k of Object.keys(W[j.id])) s += W[j.id][k] * c[k];
     if (crashed) s = Math.min(s, 3.5);
     else if (!jumped) s = Math.min(s, 3);
+    else if (show && !t.crossedRow) s = Math.min(s, 5);
     return { id: j.id, name: j.name, title: j.title, score: r1(Math.min(10, s * assistFactor)) };
   });
   const total = r1(judges.reduce((a, j) => a + j.score, 0) * 10 / 3);
   let verdict;
   if (t.fellOff) verdict = 'Fell off the wall';
+  else if (show && t.contact) verdict = 'Contact';
   else if (!launched) verdict = t.progress > 0.5 ? 'Stalled on the wall' : 'No climb';
   else if (t.landedOnRamp) verdict = 'Came down on the deck';
   else if (t.flipped || !t.settledUpright) verdict = 'Rolled over';
   else if (crashed) verdict = 'Crash';
+  else if (show && !t.crossedRow) verdict = 'Short of the row';
   else if (total >= 92) verdict = 'Perfect 10';
   else if (total >= 84) verdict = 'Stuck it';
   else if (total >= 72) verdict = 'Clean';
   else if (total >= 55) verdict = 'Rough landing';
   else verdict = 'Survived';
   return {
-    course: 'wall', total, judges,
+    course: course.id, total, judges,
     categories: Object.fromEntries(Object.entries(c).map(([k, v]) => [k, r1(v)])),
     facts: {
-      course: 'wall', height: r1(t.maxRampHeight), progressPct: Math.round(t.progress * 100), invertedS: r1(t.invertedTime),
+      course: course.id, height: r1(t.maxRampHeight), progressPct: Math.round(t.progress * 100), invertedS: r1(t.invertedTime),
       launchHeight: r1(t.launchHeight), launchKmh: Math.round(t.launchSpeed * 3.6), entryKmh: Math.round(t.rampEntrySpeed * 3.6),
       apex: r1(t.apex), maxG: r1(t.maxG), rollDeg: Math.round(rollDeg), pitchDeg: Math.round(pitchDeg), rotations: Math.round(turned / 360),
       sink: r1(t.sink), tiltDeg: r1(t.tiltDeg), headingDeg: r1(t.headingDeg), wheelSpreadMs: Math.round(t.wheelSpreadMs),
       padMiss: r1(padMiss), airPct: Math.round(airPct), zeroToSixty: t.zeroToSixty,
-      bottomOut: t.bottomOut, bodyStrike: t.bodyStrike, contact: false, clearance: null, apexOverRoof: null,
+      bottomOut: t.bottomOut, bodyStrike: t.bodyStrike, contact: show && t.contact,
+      clearance: show && Number.isFinite(t.minClearance) ? r1(t.minClearance) : null, crossedRow: show ? t.crossedRow : null, apexOverRoof: null,
       flipped: t.flipped, fellOff: t.fellOff, landedOnRamp: t.landedOnRamp, crashed, jumped, endReason: t.endReason,
     },
     verdict,
@@ -129,46 +150,8 @@ function scoreWall(t, opts) {
 
 export function scoreRun(t, opts = {}) {
   if (t.course === 'wall') return scoreWall(t, opts);
-  if (t.course === 'show') return scoreShow(t, opts);
+  if (t.course === 'show') return scoreWall(t, opts);
   return scoreLineup(t, opts);
-}
-
-// The Show scores each stunt on its own card, then each judge's mark is the mean of their two.
-// Never reaching the lineup leaves that half at zero: the whole show is the point.
-function scoreShow(t, opts) {
-  const reached = t.leg === 1;
-  const wall = scoreWall(reached ? t.wall : t, opts);
-  const kick = reached ? scoreLineup(t, opts) : null;
-  const judges = wall.judges.map((j, i) => ({ ...j, score: r1((j.score + (kick ? kick.judges[i].score : 0)) / 2) }));
-  const total = r1(judges.reduce((a, j) => a + j.score, 0) * 10 / 3);
-  const wc = wall.categories, kc = kick?.categories;
-  const categories = {
-    climb: wc.climb, inversion: wc.inversion, rollout: wc.rotation,
-    kickflip: kc ? kc.rotation : 0, clearance: kc ? kc.clearance : 0,
-    landing: r1(kc ? (wc.landing + kc.landing) / 2 : wc.landing / 2),
-    precision: r1(kc ? (wc.precision + kc.precision) / 2 : wc.precision / 2),
-    efficiency: kc ? kc.efficiency : 0,
-  };
-  let verdict;
-  if (!reached) verdict = wall.facts.jumped && !wall.facts.crashed ? 'Never reached the lineup' : wall.verdict;
-  else if (kick.verdict === 'No jump' || kick.facts.crashed || kick.verdict === 'No trick') verdict = kick.verdict;
-  else if (total >= 92) verdict = 'Perfect 10';
-  else if (total >= 84) verdict = 'Stuck it';
-  else if (total >= 72) verdict = 'Clean';
-  else if (total >= 55) verdict = 'Rough landing';
-  else verdict = 'Survived';
-  const wf = wall.facts, kf = kick?.facts;
-  const last = kf || wf;
-  return {
-    course: 'show', total, judges, categories, verdict,
-    facts: {
-      course: 'show', reachedLineup: reached, wall: wf, lineup: kf || null,
-      // The headline numbers (share text, theatre), from the last stunt flown.
-      rollDeg: kf ? kf.rollDeg : wf.rollDeg, apex: kf ? kf.apex : wf.apex, sink: last.sink,
-      height: wf.height, invertedS: wf.invertedS, maxG: wf.maxG, zeroToSixty: wf.zeroToSixty,
-      crashed: wf.crashed || !!kf?.crashed, jumped: wf.jumped, endReason: t.endReason,
-    },
-  };
 }
 
 function scoreLineup(t, opts = {}) {

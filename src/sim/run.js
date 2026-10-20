@@ -2,17 +2,17 @@
 // run can be re-simulated exactly), records replay frames, and measures everything the judges
 // score. Pure and deterministic: the Worker runs this same file to verify a submitted run.
 import { createVehicle, step, bodyRates, up, forward, worldPoint, newInput, DT, CAR, NOZZLES, HULL, massOf } from './vehicle.js';
-import { COURSES, DEFAULT_COURSE, WALL, LINEUP, roofUnder, wallArcLength, showLocalX, showLocalZ } from './courses.js';
+import { COURSES, DEFAULT_COURSE, WALL, LINEUP, SHOW, roofUnder, wallArcLength } from './courses.js';
 import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
 import { datan2, dacos, dhypot } from './dmath.js';
 
-// v5: driver-relative steer/roll/yaw, grip-limited steering, The Show; v4: sourced specs
-// (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 5;
+// v6: The Show is one flight (off the Wall, over the row); parked vehicles are bodies with mass,
+// per-surface materials; v5: driver-relative steer/roll/yaw, grip-limited steering; v4: sourced
+// specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
+export const SIM_VERSION = 6;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
-export const MAX_TICKS = 240 * 120;     // 120 s hard cap (The Show runs both stunts)
-export const SERVICE_TICKS = 240 * 2;  // The Show's nitrogen top-up, fast-forwarded
+export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 
 const KEYS = ['throttle', 'brake', 'steer', 'pitch', 'roll', 'yaw', 'lift', 'thrust', 'retro', 'level', 'fan', 'assist'];
 export const INPUT_KEYS = KEYS;
@@ -28,11 +28,10 @@ export function quantise(raw, out) {
 const pack = (q) => KEYS.map((k) => Math.round(q[k] * 100));
 const unpack = (arr, out) => { for (let i = 0; i < KEYS.length; i++) out[KEYS[i]] = arr[i] / 100; return out; };
 
-// Everything the judges score for one stunt. The Show keeps one per leg: the Wall's book is closed
-// and hung on the Lineup's as `t.wall` when the second leg starts.
+// Everything the judges score.
 function newTelemetry(courseId) {
   return {
-    course: courseId, leg: 0,
+    course: courseId, crossedRow: false,
     launchSpeed: 0, launchTick: -1, airStartTick: -1, touchTick: -1, endTick: -1,
     apex: 0, apexZ: 0, rollAccum: 0, pitchAccum: 0, yawAccum: 0, offAxis: 0,
     minClearance: Infinity, contact: false, contactSpeed: 0, contactTick: -1,
@@ -53,9 +52,7 @@ export function createRun(courseId = DEFAULT_COURSE) {
   return {
     course: course.id,
     car: createVehicle(course.id),
-    phase: 'drive',            // drive → ramp (wall only) → air → landed → done (Show: … → service → drive …)
-    leg: 0,                    // The Show: 0 = the Wall, 1 = the Lineup
-    legFrame: -1,              // replay frame where the Show's second leg starts
+    phase: 'drive',            // drive → ramp (Wall, Show) → air → landed → done
     tick: 0,
     inputLog: [],              // [tick, ...ints] whenever the quantised input changes
     lastPacked: '',
@@ -68,11 +65,14 @@ export function createRun(courseId = DEFAULT_COURSE) {
 const q = newInput();
 const rates = v3(), upv = v3(), fw = v3(), p = v3();
 
-// Replay frame: pos(3) quat(4) wheel compression(4) wheel spin(4) throttles(10) steer fan.
+// Replay frame: pos(3) quat(4) wheel compression(4) wheel spin(4) throttles(10) steer fan, then
+// each parked vehicle's pose (x, z, yaw), so a shoved car replays where it was shoved.
 export const FRAME_SIZE = 7 + 4 + 4 + NOZZLES.length + 2;
+export const BODY_FRAME = FRAME_SIZE;
 function recordFrame(run) {
-  const c = run.car;
-  const f = new Float32Array(FRAME_SIZE);
+  const c = run.car, bodies = c.world.bodies;
+  const f = new Float32Array(FRAME_SIZE + 3 * bodies.length);
+  for (let i = 0; i < bodies.length; i++) { f[FRAME_SIZE + 3 * i] = bodies[i].cx; f[FRAME_SIZE + 3 * i + 1] = bodies[i].cz; f[FRAME_SIZE + 3 * i + 2] = bodies[i].yaw; }
   f[0] = c.pos.x; f[1] = c.pos.y; f[2] = c.pos.z;
   f[3] = c.quat.x; f[4] = c.quat.y; f[5] = c.quat.z; f[6] = c.quat.w;
   for (let i = 0; i < 4; i++) { f[7 + i] = c.wheels[i].compression; f[11 + i] = c.wheels[i].spin; }
@@ -99,12 +99,10 @@ export function wallProgress(pos) {
 
 function advance(run, input) {
   const c = run.car, t = run.t;
+  // The Wall's rules run the Wall and the Show (which is the Wall with the row under its ledge).
   const show = run.course === 'show';
-  // Which rules this leg runs by. The Show's second leg is the Lineup, turned onto its lane: its
-  // checks run in Lineup-local coordinates (lx, lz).
-  const wall = run.course === 'wall' || (show && run.leg === 0);
-  const course = wall ? WALL : LINEUP;
-  const local = show && !wall;
+  const wall = run.course !== 'lineup';
+  const course = show ? SHOW : wall ? WALL : LINEUP;
   const prevLift = c.throttles[0] + c.throttles[1] + c.throttles[2] + c.throttles[3];
   const prevVx = c.vel.x, prevVy = c.vel.y, prevVz = c.vel.z;
   step(c, input);
@@ -122,7 +120,7 @@ function advance(run, input) {
   if (c.obstacleContact && !t.contact) { t.contact = true; t.contactSpeed = c.obstacleSpeed; t.contactTick = run.tick; }
   up(c, upv);
   const airborne = c.grounded === 0 && !c.hullContact;
-  const lx = local ? showLocalX(c.pos.x) : c.pos.x, lz = local ? showLocalZ(c.pos.z) : c.pos.z;
+  const lx = c.pos.x, lz = c.pos.z;
 
   if (run.phase === 'drive') {
     if (wall) {
@@ -131,9 +129,8 @@ function advance(run, input) {
       }
     } else {
       // The Lineup has no ramp: the car lifts off flat ground on thrust alone.
-      // On the Show, only a lift-off on the lineup lane counts (not a bounce off the Wall's pad).
       run.airTicks = c.grounded === 0 ? run.airTicks + 1 : 0;
-      if (run.airTicks > 12 && (!local || lz > -25)) {
+      if (run.airTicks > 12) {
         run.phase = 'air'; t.airStartTick = run.tick - 12;
         t.launchTick = t.airStartTick; t.launchSpeed = speed; t.airAtLaunch = c.air;
       }
@@ -162,13 +159,15 @@ function advance(run, input) {
     t.yawAccum += rates.y * DT;
     t.offAxis += (Math.abs(rates.x) + Math.abs(rates.y)) * DT;
     if (c.pos.y > t.apex) { t.apex = c.pos.y; t.apexZ = c.pos.z; }
-    if (!wall && lz > course.lineupZ0 - 3 && lz < course.lineupEnd + 3) {
+    const overRow = show ? lz < course.rowNear + 3 && lz > course.rowFar - 3 : !wall && lz > course.lineupZ0 - 3 && lz < course.lineupEnd + 3;
+    if (overRow) {
       for (let i = 0; i < HULL.length; i++) {
         worldPoint(c, HULL[i], p);
-        const roof = local ? roofUnder(showLocalX(p.x), showLocalZ(p.z)) : roofUnder(p.x, p.z);
+        const roof = roofUnder(c.world, p.x, p.z);
         if (roof > -Infinity) t.minClearance = Math.min(t.minClearance, p.y - roof);
       }
     }
+    if (show && lz < course.rowFar) t.crossedRow = true;
     const minAir = wall ? 48 : 36;
     if ((c.grounded > 0 || c.hullGround) && run.tick - t.airStartTick > minAir) {
       run.phase = 'landed';
@@ -176,10 +175,8 @@ function advance(run, input) {
       t.sink = Math.max(0, -c.vel.y);
       forward(c, fw);
       t.tiltDeg = dacos(Math.max(-1, Math.min(1, upv.y))) * 180 / Math.PI;
-      // Heading error against the run direction (the Wall sends you back the way you came, and
-      // the Show's Lineup lane runs the same way).
-      const back = wall || local;
-      t.headingDeg = datan2(back ? -fw.x : fw.x, back ? -fw.z : fw.z) * 180 / Math.PI;
+      // Heading error against the run direction (the Wall sends you back the way you came).
+      t.headingDeg = datan2(wall ? -fw.x : fw.x, wall ? -fw.z : fw.z) * 180 / Math.PI;
       t.lateral = lx - course.pad.x;
       t.landZ = lz;
       t.landSpeed = dhypot(c.vel.x, c.vel.z);
@@ -209,32 +206,14 @@ function advance(run, input) {
   if (run.flippedTicks > 120) t.flipped = true;
   run.offTicks = onDeck && speed < 0.5 ? run.offTicks + 1 : 0;
 
-  // The Show: after a clean Wall landing, stop on the pad and the crew tops the nitrogen back up
-  // (the reveal flew each stunt on a fresh fill; the sim fast-forwards the fill to SERVICE_TICKS).
-  // Then the Lineup leg starts from rest.
-  if (show && run.leg === 0) {
-    if (run.phase === 'landed' && run.tick - t.touchTick >= 96 && upv.y > 0.8 && speed < 0.5 && !t.flipped && !t.landedOnRamp) {
-      closeBook(run, t, 'next');
-      run.phase = 'service'; run.serviceTicks = 0; run.serviceFrom = c.air;
-      return run;
-    }
-    if (run.phase === 'service') {
-      if (speed < 0.5) run.serviceTicks++;
-      c.air = run.serviceFrom + (CAR.airMass - run.serviceFrom) * Math.min(1, run.serviceTicks / SERVICE_TICKS);
-      if (run.serviceTicks >= SERVICE_TICKS) startLineupLeg(run);
-      return run;
-    }
-  }
-
   let end = '';
   if (t.flipped) end = 'flipped';
   else if (t.contact && run.tick - t.contactTick > 480) end = 'contact';
-  else if (run.phase === 'landed' && (show && run.leg === 0 ? run.tick - t.touchTick > 240 * 10 : speed < 1.2 || run.tick - t.touchTick > 240 * 5)) end = 'settled';
+  else if (run.phase === 'landed' && (speed < 1.2 || run.tick - t.touchTick > 240 * 5)) end = 'settled';
   else if (c.pos.z > COURSES[run.course].runout.zMax || c.pos.z < COURSES[run.course].runout.zMin) end = 'runout';
   else if (run.offTicks > 240 * 6) end = 'stalled';
   else if (run.tick >= MAX_TICKS) end = 'timeout';
   else if (!wall && run.phase === 'drive' && lz > course.lineupEnd + 4 && c.grounded > 0) end = 'no-jump';
-  else if (!wall && run.phase === 'drive' && c.obstacleContact) end = 'no-jump';
   if (end) finish(run, end);
   return run;
 }
@@ -256,19 +235,6 @@ function closeBook(run, t, reason) {
   else t.wheelSpreadMs = 1000;
   t.bottomOut = t.maxCompression > CAR.restLen - CAR.mountToCentre + CAR.maxTravel + 0.02;
   t.mass = massOf(c);
-}
-
-// The Show, leg 2: the Wall's book (closed at the service stop) hangs on the Lineup's.
-function startLineupLeg(run) {
-  const w = run.t;
-  const t = newTelemetry('show');
-  t.leg = 1; t.wall = w;
-  t.zeroToSixty = w.zeroToSixty; t.maxSpeed = w.maxSpeed; t.maxG = w.maxG;
-  run.t = t;
-  run.leg = 1;
-  run.legFrame = run.frames.length;
-  run.phase = 'drive';
-  run.airTicks = 0; run.flippedTicks = 0;
 }
 
 // Re-simulate a run from its input log alone (replay, server verification).

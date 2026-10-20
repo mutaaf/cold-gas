@@ -2,7 +2,7 @@
 // answers in four labelled lines. Plain lines rather than JSON so the reply streams as readable
 // text (the circuit theatre shows it arriving) and parses the same from any model.
 
-export const SYSTEM = `You are the judging panel for COLD GAS, a stunt game. A roadster with a suction fan and ten cold-gas thrusters performs THE SHOW (both stunts in one run: the Wall, a nitrogen top-up, then the Lineup) or a single stunt: either THE WALL (crawl up a 20 m concrete curl on fan suction, hang upside down under the ledge, let go, roll upright, brake on the down-jets, land) or THE LINEUP (no ramp: lift off flat ground on thrust, a 360-degree roll over five parked EVs, landing). The event is named in the facts.
+export const SYSTEM = `You are the judging panel for COLD GAS, a stunt game. A roadster with a suction fan and ten cold-gas thrusters performs THE SHOW (one flight: up the Wall, let go from the inverted ledge, boost over five parked EVs on the rear jets, roll upright and land beyond them) or a single stunt: either THE WALL (crawl up a 20 m concrete curl on fan suction, hang upside down under the ledge, let go, roll upright, brake on the down-jets, land) or THE LINEUP (no ramp: lift off flat ground on thrust, a 360-degree roll over five parked EVs, landing). The event is named in the facts.
 
 Three judges:
 - ENGINEER (Chief Vehicle Engineer): dry and exacting; cares about sink rate, wheel sync, g-load and attitude at touchdown.
@@ -21,15 +21,14 @@ DESIGNER: <remark>`;
 export function userPrompt(card) {
   const f = card.facts;
   if (f.course === 'show') {
-    const w = f.wall, k = f.lineup;
     return [
-      'Event: THE SHOW. Both stunts in one run: crawl up a 20 m concrete curl on fan suction, hang upside down under the ledge, let go, roll upright and land; stop while the crew tops up the nitrogen; then lift off flat ground and roll 360 degrees over five parked EVs and land.',
+      'Event: THE SHOW. One flight on one fill of nitrogen: crawl up a 20 m concrete curl on fan suction, hang upside down under the ledge, let go, fire the rear jets to carry out over five parked EVs (a semi among them), roll upright on the way down, brake on the down-jets and land on a pad beyond the row.',
       `Total ${card.total}/100, verdict "${card.verdict}".`,
       `Judges: ${card.judges.map((j) => `${j.name} ${j.score}`).join(', ')}.`,
-      `Categories (0-10): ${Object.entries(card.categories).map(([key, v]) => `${key} ${v}`).join(', ')}.`,
-      `The Wall: climbed ${w.progressPct}% to ${w.height} m; hung inverted ${w.invertedS} s; peak load ${w.maxG} g.` + (w.jumped ? ` Released at ${w.launchHeight} m, turned ${Math.max(w.rollDeg, w.pitchDeg)} degrees, touched down at ${w.sink} m/s, ${w.padMiss} m from the mark.` : ' Never left the wall.'),
-      k ? `The Lineup: apex ${k.apex} m (${k.apexOverRoof} m over the semi); roll ${k.rollDeg} degrees; ${k.contact ? 'hit a parked vehicle' : `closest clearance ${k.clearance} m`}; touchdown ${k.sink} m/s, tilt ${k.tiltDeg} degrees, ${k.padMiss} m from the mark; gas left ${k.airPct}%.` : 'Never reached the lineup.',
-      w.fellOff ? 'The car slid off the side of the deck.' : '', w.landedOnRamp ? 'It came down on the deck.' : '', (w.flipped || k?.flipped) ? 'It rolled over after a landing.' : '',
+      `Categories (0-10): ${Object.entries(card.categories).map(([k, v]) => `${k} ${v}`).join(', ')}.`,
+      `Climbed ${f.progressPct}% to ${f.height} m; hung inverted ${f.invertedS} s; peak load ${f.maxG} g.`,
+      f.jumped ? `Released at ${f.launchHeight} m; ${f.contact ? 'came down on a parked vehicle' : f.crossedRow ? `cleared the roofs by ${f.clearance} m` : 'fell short of the row'}; turned ${Math.max(f.rollDeg, f.pitchDeg)} degrees; touchdown ${f.sink} m/s, tilt ${f.tiltDeg} degrees, ${f.padMiss} m from the mark; gas left ${f.airPct}%.` : 'Never left the wall.',
+      f.fellOff ? 'The car slid off the side of the deck.' : '', f.landedOnRamp ? 'It came down on the deck.' : '', f.flipped ? 'It rolled over after the landing.' : '',
     ].filter(Boolean).join('\n');
   }
   if (f.course === 'wall') {

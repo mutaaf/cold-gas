@@ -2,10 +2,10 @@
 // the attract mode, the ?play=reveal replay, the ghost, and the physics regression tests: if the
 // autopilot can't land it, neither can a player, and CI fails.
 import { newInput, bodyRates, up, forward, G } from './vehicle.js';
-import { COURSES, SHOW, showLocalZ } from './courses.js';
+import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { wallProgress } from './run.js';
-import { v3, rotate } from './m3.js';
+import { v3 } from './m3.js';
 import { dhypot } from './dmath.js';
 
 // The reveal, as the livestream telemetry shows it (docs/REVEAL_RESEARCH.md): the Wall climbed at
@@ -15,17 +15,17 @@ import { dhypot } from './dmath.js';
 export const REVEAL = {
   wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.97 },
   lineup: { speed: 7.5, apex: 5.0, rolls: 1, rollBrake: 14 },
+  show: { carry: 9 },
 };
 
 const rates = v3(), upv = v3(), fwv = v3();
 
 export function createAutopilot(courseId = 'show', opts = {}) {
-  if (courseId === 'wall') return wallPilot({ ...REVEAL.wall, ...opts });
   if (courseId === 'lineup') return lineupPilot({ ...REVEAL.lineup, ...opts });
-  // The Show: the Wall, then the Lineup on its lane.
-  const wall = wallPilot({ ...REVEAL.wall, ...opts.wall });
-  const lineup = lineupPilot({ ...REVEAL.lineup, ...opts.lineup }, true);
-  return (run) => (run.leg === 0 ? wall(run) : lineup(run));
+  // The Show is the Wall with the row under the ledge: let go, and a short rear-jet burn carries
+  // the car out over the row (`carry`, m/s along the run) before the roll-out and the descent.
+  if (courseId === 'show') return wallPilot({ ...REVEAL.wall, ...REVEAL.show, ...opts }, 'show');
+  return wallPilot({ ...REVEAL.wall, ...opts }, 'wall');
 }
 
 // Fly the lift vector toward the pad like a drone: a little roll moves you sideways, a little
@@ -45,19 +45,10 @@ function steerToPad(c, pad, out, h) {
 // Hold the centreline (inputs are driver-relative: + steers right, toward −x).
 function laneKeep(c, out) { out.steer = Math.max(-1, Math.min(1, c.pos.x * 0.35 + c.vel.x * 0.25)); }
 
-// Pure pursuit onto a lane running in −z: aim at a point on the lane a few car lengths ahead.
-const rightW = v3(), xAxis = v3(-1, 0, 0);
-function pursueLane(c, laneX, out) {
-  rotate(rightW, c.quat, xAxis);                                   // the driver's right, in world
-  const tx = laneX - c.pos.x, tz = -12;                            // 12 m down the lane
-  const l = Math.sqrt(tx * tx + tz * tz);
-  out.steer = Math.max(-1, Math.min(1, ((rightW.x * tx + rightW.z * tz) / l) * 2.2));
-}
-
-function wallPilot(plan) {
+function wallPilot(plan, courseId) {
   const out = newInput();
-  const st = { released: false, rolledOut: false };
-  const pad = COURSES.wall.pad;
+  const st = { released: false, rolledOut: false, carried: !plan.carry };
+  const pad = COURSES[courseId].pad;
   return function autopilot(run) {
     const c = run.car;
     Object.assign(out, newInput());
@@ -93,6 +84,11 @@ function wallPilot(plan) {
     out.fan = 0;
     if (run.phase === 'landed') { out.brake = 1; return out; }
     up(c, upv);
+    // The Show: carry out over the row on the rear jets (the nose points down the run, inverted).
+    if (!st.carried) {
+      if (-c.vel.z >= plan.carry) st.carried = true;
+      else { out.thrust = 1; return out; }
+    }
     // Roll out of the inversion (a barrel roll, as at the reveal), then let the computer level it.
     if (!st.rolledOut && run.car.grounded === 0) {
       if (upv.y > -0.15) st.rolledOut = true;
@@ -104,23 +100,20 @@ function wallPilot(plan) {
   };
 }
 
-// On the Show (`show`), the same flight runs down the Lineup lane beside the Wall's approach.
-function lineupPilot(plan, show = false) {
+function lineupPilot(plan) {
   const out = newInput();
   const st = { burnDone: false, rollDone: false };
-  const course = COURSES.lineup;
-  const pad = show ? SHOW.pad2 : course.pad;
-  const lz = (c) => (show ? showLocalZ(c.pos.z) : c.pos.z);       // distance along the Lineup
+  const course = COURSES.lineup, pad = course.pad;
   return function autopilot(run) {
     const c = run.car, t = run.t;
     Object.assign(out, newInput());
     out.assist = 1;
     const speed = dhypot(c.vel.x, c.vel.z);
-    if (show) pursueLane(c, SHOW.liftOff.x, out); else laneKeep(c, out);
+    laneKeep(c, out);
     if (run.phase === 'drive') {
       out.throttle = speed < plan.speed ? 1 : 0;
       out.brake = speed > plan.speed + 0.6 ? 0.4 : 0;
-      if (lz(c) > course.lineupZ0 - 6.5) out.lift = 1;       // lift off flat ground before the cars
+      if (c.pos.z > course.lineupZ0 - 6.5) out.lift = 1;       // lift off flat ground before the cars
       return out;
     }
     if (run.phase === 'air') {
@@ -140,7 +133,7 @@ function lineupPilot(plan, show = false) {
       }
       return out;
     }
-    out.brake = lz(c) > course.pad.z - 2 ? 1 : 0.35;
+    out.brake = c.pos.z > course.pad.z - 2 ? 1 : 0.35;
     return out;
   };
 }

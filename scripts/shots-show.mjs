@@ -12,14 +12,13 @@ await page.screenshot({ path: `${out}/0-title.png` });
 await page.evaluate(() => window.__coldgas.startRun('reveal'));
 await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 20000 });
 const shots = [
-  ['1-approach', (S) => S.run.car.pos.z > -70],
+  ['1-start', (S) => S.run.car.pos.z > -5.5],
   ['2-climb', (S) => S.run.phase === 'ramp' && S.run.car.pos.y > 8],
   ['3-inverted', (S) => S.run.phase === 'ramp' && S.run.t.invertedTime > 0.2],
-  ['4-rollout', (S) => S.run.phase === 'air' && S.run.car.pos.y < 14],
-  ['5-service', (S) => S.run.phase === 'service'],
-  ['6-lane', (S) => S.run.leg === 1 && S.run.car.pos.x < -8],
-  ['7-kickflip', (S) => S.run.leg === 1 && S.run.phase === 'air' && Math.abs(S.run.t.rollAccum) > 2.6],
-  ['8-landing', (S) => S.run.leg === 1 && (S.run.phase === 'landed' || (S.run.phase === 'air' && S.run.car.pos.y < 1.6 && Math.abs(S.run.t.rollAccum) > 6))],
+  ['4-boost', (S) => S.run.phase === 'air' && S.run.car.pos.z < -9],
+  ['5-over-row', (S) => S.run.phase === 'air' && S.run.car.pos.z < -16],
+  ['6-rollout', (S) => S.run.phase === 'air' && S.run.car.pos.y < 8],
+  ['7-landing', (S) => S.run.phase === 'landed'],
 ];
 for (const [name, pred] of shots) {
   const fn = `(${pred.toString()})(window.__coldgas.S)`;

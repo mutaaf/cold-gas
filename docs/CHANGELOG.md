@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.6.0 — 2026-10-20
+
+The Show is one flight, and every object has its own physics (SIM_VERSION 6).
+
+**The Show**
+- One run: start just short of the Wall, crawl up the curl on fan suction, hang inverted, let go, fire the rear jets to carry out over five parked vehicles, roll upright on the way down, land on a pad beyond them. No service stop, no lane change.
+- The row is parked across the approach under the ledge (z −10 to −23, the semi in the middle); the pad is at z −35.
+- One fill of nitrogen for the whole flight. The reference uses a ≈0.15 s rear burn to reach 9 m/s, clears the roofs by 4.4 m, touches down at 0.8 m/s and scores 89.3. Too little carry puts you on a roof (contact, crash).
+- New BOOST control in the air for the rear jets: F, gamepad RB, or the GO button (relabelled BOOST in the air).
+- Scoring: climb, inversion, roll-out, clearance, landing, precision, gas left. Contact is a crash; falling short of the row caps each judge at 5.
+
+**Physics per object**
+- Every surface has a material: tyre grip and sliding friction (concrete 1.0 / 0.5, a parked car's paint and glass 0.55 / 0.3).
+- Every parked vehicle is a rigid body with its own mass (1.6 t cab to 10.5 t semi tractor) and parked-tyre friction (μ 0.8). Wheel and hull contact push back on it; it slides and yaws, and shoves its neighbour.
+- Each run owns its world, and replay frames carry the bodies' poses, so a shove replays exactly and the server verifies it.
+
+
 ## 0.5.0 — 2026-10-20
 
 The Show and expert steering (SIM_VERSION 5).
