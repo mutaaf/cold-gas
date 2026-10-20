@@ -218,7 +218,7 @@ function finishRun() {
     if (S.run !== run) return;
     try {
       const own = S.drill && drillCoach(S.drill, run);
-      S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card);
+      S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0);
       ui.coaching(S.coach.items);
     } catch (err) { console.warn('coach', err); }
   }, 450);

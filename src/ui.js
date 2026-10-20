@@ -170,7 +170,7 @@ export function createUI() {
     ol.innerHTML = '';
     for (const it of items || []) {
       const li = document.createElement('li');
-      li.dataset.coach = it.id;
+      li.dataset.fix = it.id;
       li.innerHTML = '<b></b><p class="cd"></p><p class="cf"></p>';
       li.querySelector('b').textContent = it.title;
       li.querySelector('.cd').textContent = it.detail;

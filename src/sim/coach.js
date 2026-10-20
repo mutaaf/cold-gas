@@ -14,8 +14,9 @@ const r1 = (x) => Math.round(x * 10) / 10;
 const LIFT_IDX = NOZZLES.map((n, i) => (n.group === 'lift' ? i : -1)).filter((i) => i >= 0);
 const REAR_IDX = NOZZLES.map((n, i) => (n.group === 'rear' ? i : -1)).filter((i) => i >= 0);
 
-// Read the flight. Returns the events the coach (and the drills) talk about.
-export function readFlight(inputLog, courseId) {
+// Read the flight. Returns the events the coach (and the drills) talk about. `fromTick`: a drill's
+// hand-over (what the reference flew before it isn't yours to be coached on).
+export function readFlight(inputLog, courseId, fromTick = 0) {
   const course = COURSES[courseId];
   const pr = newPrediction(), u = v3(), fw = v3();
   const f = {
@@ -25,7 +26,7 @@ export function readFlight(inputLog, courseId) {
     brakeTick: -1, brakeH: 0, brakeSink: 0, brakeA: 0, brakeBy: 0,
     needTick: -1, needH: 0, needSink: 0, needA: 0, needUp: 1, brakeGoverned: false,
     maxSinkBeforeBrake: 0, lowestMargin: Infinity, redTicks: 0,
-    touch: null, gasAtTouch: 0, pressureAtTouch: 0, apexTick: -1, landedTick: -1, levelHeld: 0, airTicks: 0,
+    touch: null, wasInverted: false, gasAtTouch: 0, pressureAtTouch: 0, apexTick: -1, landedTick: -1, levelHeld: 0, airTicks: 0,
   };
   let lastPhase = '', wasInverted = false;
   const run = simulate(inputLog, courseId, undefined, (r, inp) => {
@@ -34,7 +35,8 @@ export function readFlight(inputLog, courseId) {
       f.releaseTick = r.t.airStartTick; f.releaseH = r.t.launchHeight - SPEC.comHeight; f.releaseProgress = r.t.launchProgress;
     }
     lastPhase = r.phase;
-    if (r.phase !== 'air') return;
+    // (After a drill's hand-over the reference's valves take ≈0.1 s to close: not yours either.)
+    if (r.phase !== 'air' || t < fromTick + (fromTick > 0 ? 24 : 0)) return;
     f.airTicks++;
     up(c, u);
     const h = Math.max(0, c.pos.y - SPEC.comHeight);
@@ -49,7 +51,7 @@ export function readFlight(inputLog, courseId) {
     forward(c, fw);
     if (r.t.crossedRow) f.rowCleared = true;
     // The roll-out: from upside down to the roof up.
-    if (u.y < -0.3) wasInverted = true;
+    if (u.y < -0.3) wasInverted = f.wasInverted = true;
     if (wasInverted && f.rollStartTick < 0 && Math.abs(c.angVel.x * fw.x + c.angVel.y * fw.y + c.angVel.z * fw.z) > 1) f.rollStartTick = t;
     if (wasInverted && f.uprightTick < 0 && u.y > 0.85) { f.uprightTick = t; f.uprightH = h; }
     // Braking: the first tick the four down-jets push hard while the car is roof-up and falling.
@@ -77,8 +79,9 @@ export function readFlight(inputLog, courseId) {
 }
 
 // The fixes, most costly first. Each: { id, title, detail, fix, weight }.
-export function coach(inputLog, courseId, card = null) {
-  const { run, flight: f } = readFlight(inputLog, courseId);
+export function coach(inputLog, courseId, card = null, fromTick = 0) {
+  const { run, flight: f } = readFlight(inputLog, courseId, fromTick);
+  const assist = (card?.tier || run.t.tier) === 'assist';
   const t = run.t, course = COURSES[courseId];
   const wall = courseId !== 'lineup', show = courseId === 'show';
   const out = [];
@@ -131,12 +134,13 @@ export function coach(inputLog, courseId, card = null) {
     add('over-roll', 4, 'Rolled past upright', `The car turned ${Math.round(f.rollDeg)}°: about ${Math.round(f.rollDeg - 180)}° more than the half-roll you needed.`,
       'Let go of the roll about 40° early: the car keeps turning for a reaction time. Watch the roll-out arrow on the dial.');
   }
-  if (wall && f.uprightTick < 0 && t.touchTick >= 0) {
+  if (wall && f.wasInverted && f.uprightTick < 0 && t.touchTick >= 0) {
     add('no-roll', 9, 'Never rolled upright', `You touched down ${Math.round(t.tiltDeg)}° from level.`, 'Roll out with ← → straight after the release, or hold LAND.');
   }
   // Touchdown attitude and the mark.
   if (t.touchTick >= 0 && t.tiltDeg > 10 && f.uprightTick >= 0) {
-    add('tilt', 4, 'Touched down tilted', `${Math.round(t.tiltDeg)}° off level at touchdown: the wheels met the ground one at a time.`, 'Stop steering for the last 2 m and let the car level (LAND levels it for you).');
+    add('tilt', 4, 'Touched down tilted', `${Math.round(t.tiltDeg)}° off level at touchdown: the wheels met the ground one at a time.`,
+      assist ? 'Stop steering for the last 2 m and let the car level (LAND levels it for you).' : 'Level it by the dial before the last 2 m: the horizon flat, the roll and pitch cues gone.');
   }
   if (f.touch && f.touch.padMiss > 7 && !t.contact) {
     const past = show ? f.touch.along < 0 : false;

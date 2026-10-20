@@ -528,7 +528,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .coach-items .cd { margin: 0; font: 400 13px/1.45 var(--text); color: var(--ink-2); }
 .coach-items .cf { margin: 0; font: 400 13px/1.45 var(--text); color: var(--ink); }
 .coach-items .cf::before { content: '→ '; color: var(--amber); }
-.coach-items li[data-coach='clean'] .cf::before { color: var(--ok); }
+.coach-items li[data-fix='clean'] .cf::before { color: var(--ok); }
 
 @media (max-width: 720px) {
   .drill-bar { top: calc(54px + var(--safe-t)); gap: 6px; padding-left: 12px; }
