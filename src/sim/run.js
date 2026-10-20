@@ -5,6 +5,7 @@ import { createVehicle, step, bodyRates, up, forward, worldPoint, newInput, DT, 
 import { COURSES, DEFAULT_COURSE, WALL, LINEUP, SHOW, roofUnder, wallArcLength } from './courses.js';
 import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
+import { createDamage, updateDamage, damageFacts } from './damage.js';
 import { datan2, dacos, dhypot } from './dmath.js';
 
 // v11: the input log gains `manual` + ten valve channels (Advanced: per-thruster control); LAND rolls
@@ -61,6 +62,8 @@ function newTelemetry(courseId) {
     // The Wall.
     rampEntrySpeed: 0, rampTick: -1, maxRampHeight: 0, progress: 0, invertedTime: 0, maxG: 0,
     launchHeight: 0, launchUpY: 1, launchProgress: 0, fellOff: false, landedOnRamp: false,
+    // Damage (src/sim/damage.js): filled from the run's damage sensor when the book closes.
+    damage: null,
   };
 }
 
@@ -69,6 +72,7 @@ export function createRun(courseId = DEFAULT_COURSE) {
   const run = {
     course: course.id,
     car: createVehicle(course.id),
+    damage: createDamage(),    // the damage sensor: per-zone %, total (src/sim/damage.js)
     phase: 'drive',            // drive → ramp (Wall, Show) → air → landed → done
     tick: 0,
     inputLog: [],              // [tick, ...ints] whenever the quantised input changes
@@ -128,6 +132,7 @@ function advance(run, input) {
   const prevLift = c.throttles[0] + c.throttles[1] + c.throttles[2] + c.throttles[3];
   const prevVx = c.vel.x, prevVy = c.vel.y, prevVz = c.vel.z;
   step(c, input);
+  updateDamage(run.damage, c, HULL);
   run.tick++;
   if (run.tick % FRAME_EVERY === 0) recordFrame(run);
 
@@ -264,6 +269,7 @@ function closeBook(run, t, reason) {
   else t.wheelSpreadMs = 1000;
   t.bottomOut = t.maxCompression > CAR.restLen - CAR.mountToCentre + CAR.maxTravel + 0.02;
   t.mass = massOf(c);
+  t.damage = damageFacts(run.damage);
 }
 
 // Re-simulate a run from its input log alone (replay, server verification). `onTick(run, input)`

@@ -135,6 +135,7 @@ src/sim/              PURE, shared with the Worker:
                           TIERS (Assist ×1, Pro ×1.08, Advanced ×1.15) from the flown inputs
   predict.js            the descent from here: sink band, BRAKE line, time to ground, touchdown
                           point, gas to stop, roll/pitch to level (HUD, coach, drills; not scored)
+  damage.js             the damage sensor: per-zone % from impact events + crush; judges' Integrity
   coach.js              re-flies a log and names the fixes, with the numbers (results sheet)
   roads.js              FREE DRIVE's real roads as a course: parse the baked asset, segment grid,
                           ribbon (width, grade, banking) + conformed terrain + rails/walls/tunnels
