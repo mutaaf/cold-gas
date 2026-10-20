@@ -8,7 +8,7 @@
 import { newInput } from './sim/vehicle.js';
 
 const keys = new Set();
-const touch = { active: false, x: 0, y: 0, lift: false, land: false };
+const touch = { active: false, x: 0, y: 0, lift: false, land: false, go: false, brk: false };
 
 export function bindInput(root, { onPause } = {}) {
   addEventListener('keydown', (e) => {
@@ -42,7 +42,7 @@ export function bindInput(root, { onPause } = {}) {
   const up = (e) => { if (e.pointerId !== id) return; id = null; touch.x = 0; touch.y = 0; if (knob) knob.style.transform = ''; };
   stick?.addEventListener('pointerup', up);
   stick?.addEventListener('pointercancel', up);
-  for (const [sel, k] of [['[data-btn-lift]', 'lift'], ['[data-btn-land]', 'land']]) {
+  for (const [sel, k] of [['[data-btn-lift]', 'lift'], ['[data-btn-land]', 'land'], ['[data-btn-go]', 'go'], ['[data-btn-brake]', 'brk']]) {
     const b = root.querySelector(sel);
     if (!b) continue;
     b.addEventListener('pointerdown', (e) => { e.preventDefault(); touch[k] = true; touch.active = true; b.classList.add('on'); b.setPointerCapture(e.pointerId); });
@@ -84,10 +84,14 @@ export function sample(phase, assist, out = newInput()) {
   }
 
   if (touch.active) {
-    ax += touch.x; ay += touch.y;
+    // Touch: the stick steers on the ground (pedals drive) and flies in the air, where pushing
+    // up raises the nose: what people expect on a phone, not the flight-sim convention.
+    ax += touch.x;
+    if (air) ay -= touch.y;
     if (touch.lift) lift = 1;
     if (touch.land) land = 1;
-    if (!air) { thr = Math.max(thr, touch.y < 0.4 ? 1 : 0); brk = Math.max(brk, touch.y > 0.6 ? 1 : 0); }
+    if (touch.go) thr = 1;
+    if (touch.brk) brk = 1;
   }
   ax = Math.max(-1, Math.min(1, ax)); ay = Math.max(-1, Math.min(1, ay));
 
