@@ -83,3 +83,23 @@ test('bring your own key: paste one key and it is done', async ({ page }) => {
   await page.locator('[data-done]').click();
   await expect(page.locator('[data-ai-modal]')).toBeHidden();
 });
+
+test('phone: GO pedal drives, the stick alone does not, and air pitch is not inverted', async ({ browser }) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await page.goto('/coldgas/?play=jump&gfx=low');
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  await page.evaluate(() => window.__coldgas.skipCountdown());
+  await expect(page.locator('[data-btn-go]')).toBeVisible();
+  // Touching the stick without moving it must not drive the car.
+  const stick = page.locator('[data-stick]');
+  const box = await stick.boundingBox();
+  await page.touchscreen.tap(box.x + box.width / 2, box.y + box.height / 2);
+  await page.waitForTimeout(800);
+  expect(await page.evaluate(() => window.__coldgas.S.run.car.pos.z)).toBeLessThan(-94);
+  // Holding GO does.
+  const go = await page.locator('[data-btn-go]').boundingBox();
+  await page.dispatchEvent('[data-btn-go]', 'pointerdown', { pointerId: 7, clientX: go.x + 10, clientY: go.y + 10 });
+  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -93, null, { timeout: 30_000 });
+  await page.dispatchEvent('[data-btn-go]', 'pointerup', { pointerId: 7 });
+  await page.close();
+});
