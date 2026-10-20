@@ -8,15 +8,32 @@ import { wallProgress } from './run.js';
 import { v3 } from './m3.js';
 import { dhypot } from './dmath.js';
 
+// The reveal, as the livestream telemetry shows it (docs/REVEAL_RESEARCH.md): the Wall climbed at
+// a crawl (≈4 m/s) on fan suction, hung inverted on the ledge, let go, rolled 180° in ≈1.1 s while
+// falling, braked hard on the down-jets and landed ≈4.5 s after release. The kickflip lifted off
+// flat ground at ≈7–8 m/s and peaked ≈7–8 m over the lineup.
 export const REVEAL = {
-  wall: { approach: 17, climb: 12, releaseAt: 0.96 },
-  lineup: { speed: 16.5, apex: 6.2, rolls: 1, rollBrake: 16 },
+  wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.97 },
+  lineup: { speed: 7.5, apex: 5.0, rolls: 1, rollBrake: 14 },
 };
 
 const rates = v3(), upv = v3(), fwv = v3();
 
 export function createAutopilot(courseId = 'wall', opts = {}) {
   return courseId === 'wall' ? wallPilot({ ...REVEAL.wall, ...opts }) : lineupPilot({ ...REVEAL.lineup, ...opts });
+}
+
+// Fly the lift vector toward the pad like a drone: a little roll moves you sideways, a little
+// pitch moves you along the nose. Gentle near the ground, off in the last metre.
+function steerToPad(c, pad, out, h) {
+  forward(c, fwv);
+  const tGo = Math.max(1.2, h / Math.max(1.2, -c.vel.y + 0.6));
+  const dvz = (pad.z - c.pos.z) / tGo - c.vel.z, dvx = (pad.x - c.pos.x) / tGo - c.vel.x;
+  const along = dvz * fwv.z + dvx * fwv.x;                  // + = toward the nose
+  const side = dvx * fwv.z - dvz * fwv.x;                   // + = toward the car's right
+  const k = h < 1 ? 0 : h < 2.5 ? 0.5 : 1;
+  out.roll = k * Math.max(-0.45, Math.min(0.45, side * 0.24));
+  out.pitch = k * Math.max(-0.4, Math.min(0.4, along * 0.12));
 }
 
 function laneKeep(c, out) { out.steer = Math.max(-1, Math.min(1, -c.pos.x * 0.35 - c.vel.x * 0.25)); }
@@ -40,11 +57,18 @@ function wallPilot(plan) {
     if (run.phase === 'ramp' && !st.released) {
       laneKeep(c, out);
       out.fan = 1;
-      // Speed governor up the deck: hold the climb speed against gravity.
+      const prog = wallProgress(c.pos);
+      if (prog >= plan.releaseAt) {
+        // On the ledge: stop and hang upside down, then let go.
+        out.brake = 1;
+        st.hangT = (st.hangT || 0) + 1 / 240;
+        if (st.hangT >= plan.hang) st.released = true;
+        return out;
+      }
+      // Crawl governor up the deck: hold the climb speed against gravity.
       const err = plan.climb - speed;
-      out.throttle = Math.max(0, Math.min(1, 0.55 + err * 0.25));
-      out.brake = err < -3 ? Math.min(1, (-err - 3) * 0.2) : 0;
-      if (wallProgress(c.pos) >= plan.releaseAt) st.released = true;
+      out.throttle = Math.max(0, Math.min(1, 0.45 + err * 0.3));
+      out.brake = err < -1.5 ? Math.min(1, (-err - 1.5) * 0.4) : 0;
       return out;
     }
     // Released: fan off and gravity peels the car off the overhang. Then roll upright, level,
@@ -59,22 +83,7 @@ function wallPilot(plan) {
       else { out.roll = 1; out.pitch = 0; return out; }
     }
     out.level = run.car.grounded === 0 ? 1 : 0;
-    if (upv.y > 0.5) {
-      // Steer the fall onto the pad. The car may face either way after the flip, so pick the
-      // jet pair that pushes toward where we need to be: rear jets push along the nose, front
-      // jets against it.
-      forward(c, fwv);
-      const h = Math.max(0.3, c.pos.y - SPEC.comHeight);
-      const tFall = Math.max(0.4, h / Math.max(1.2, -c.vel.y + 0.6));
-      const wantVz = (pad.z - c.pos.z) / tFall, wantVx = (pad.x - c.pos.x) / tFall;
-      const dvz = wantVz - c.vel.z, dvx = wantVx - c.vel.x;
-      const along = dvz * fwv.z + dvx * fwv.x;                 // desired change along the nose
-      if (along > 0.8) out.thrust = Math.min(1, along * 0.25);
-      else if (along < -0.8) out.retro = Math.min(1, -along * 0.25);
-      // Sideways: tilt the lift vector (a little roll) toward the target, in the car's own frame.
-      const side = dvx * fwv.z - dvz * fwv.x;                   // + = toward the car's right
-      out.roll = Math.max(-0.3, Math.min(0.3, side * 0.12));
-    }
+    if (upv.y > 0.5) steerToPad(c, pad, out, Math.max(0, c.pos.y - SPEC.comHeight));
     return out;
   };
 }
@@ -92,7 +101,7 @@ function lineupPilot(plan) {
     if (run.phase === 'drive') {
       out.throttle = speed < plan.speed ? 1 : 0;
       out.brake = speed > plan.speed + 0.6 ? 0.4 : 0;
-      if (c.pos.z > course.ramp.z1 - 1.2) out.lift = 1;
+      if (c.pos.z > course.lineupZ0 - 6.5) out.lift = 1;     // lift off flat ground before the cars
       return out;
     }
     if (run.phase === 'air') {
@@ -108,9 +117,7 @@ function lineupPilot(plan) {
       }
       if (st.rollDone) {
         out.level = 1;
-        out.roll = Math.max(-0.25, Math.min(0.25, -(c.pos.x * 0.06 + c.vel.x * 0.16)));
-        const h = c.pos.y - 0.6, tFall = Math.max(0.3, h / Math.max(1, -vy));
-        if (speed * tFall > course.pad.z - c.pos.z + 2) out.retro = 1;
+        steerToPad(c, course.pad, out, Math.max(0, c.pos.y - SPEC.comHeight));
       }
       return out;
     }

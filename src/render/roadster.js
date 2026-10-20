@@ -23,9 +23,11 @@ import { SPEC, NOZZLE_SPEC, wheelAnchors } from '../sim/spec.js';
 // SPEC.wheelRadius = 0.36 m) and positive compression moves the wheel up into the arch. If the
 // sim measures compression from full droop, pass its free (droop) length instead.
 export const ANCHOR_Y = wheelAnchors()[0][1] + SPEC.comHeight;
+// Staggered tyres (20" front, 21" rear): each axle's top mount sits at its own height.
+const ANCHORS_Y = wheelAnchors().map((a) => a[1] + SPEC.comHeight);
 export const REST_LENGTH = 0.24;
-export function wheelCenterY(compression = 0, freeLength = REST_LENGTH) {
-  return ANCHOR_Y - freeLength + compression;
+export function wheelCenterY(compression = 0, freeLength = REST_LENGTH, i = 0) {
+  return ANCHORS_Y[i] - freeLength + compression;
 }
 
 // --- Materials ---------------------------------------------------------------------------------
@@ -255,26 +257,27 @@ const outward = (x, y, z, k = 1.004) => [x * k, y, z];
 
 // --- Wheels -----------------------------------------------------------------------------------------
 const tyreGeoCache = new Map();
-function tyreGeo(width) {
-  if (tyreGeoCache.has(width)) return tyreGeoCache.get(width);
+function tyreGeo(width, R = SPEC.wheelRadius) {
+  const key = `${width}:${R}`;
+  if (tyreGeoCache.has(key)) return tyreGeoCache.get(key);
   // Low-profile tyre on a 22" rim (rim radius ≈ 0.28 m): squared shoulders, flat tread.
-  const rr = 0.28, h = width / 2;
+  const rr = R - 0.3 * width, h = width / 2;           // rim radius: tyre radius minus a 30% sidewall
   const pts = [[rr, -h], [R - 0.032, -h], [R - 0.012, -h + 0.012], [R - 0.002, -h + 0.035], [R, -h + 0.06],
     [R, h - 0.06], [R - 0.002, h - 0.035], [R - 0.012, h - 0.012], [R - 0.032, h], [rr, h]].map(([a, b]) => new THREE.Vector2(a, b));
   const g = new THREE.LatheGeometry(pts, 56);
   g.rotateZ(Math.PI / 2);
-  tyreGeoCache.set(width, g);
+  tyreGeoCache.set(key, g);
   return g;
 }
 
-function heroWheel(width, side) {
+function heroWheel(width, side, R = SPEC.wheelRadius) {
   const g = new THREE.Group();
-  const tyre = new THREE.Mesh(tyreGeo(width), M.tyre);   // first child: the ghost uses it
+  const tyre = new THREE.Mesh(tyreGeo(width, R), M.tyre);   // first child: the ghost uses it
   tyre.castShadow = true;
   g.add(tyre);
   const face = side * width * 0.36;                      // outer face x
   // Rim barrel.
-  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.28, 0.28, width * 0.82, 40, 1, true), M.rim);
+  const barrel = new THREE.Mesh(new THREE.CylinderGeometry(R - 0.3 * width, R - 0.3 * width, width * 0.82, 40, 1, true), M.rim);
   barrel.rotation.z = Math.PI / 2;
   barrel.material.side = THREE.DoubleSide;
   g.add(barrel);
@@ -563,17 +566,18 @@ export function makeRoadster() {
   // --- Wheels: FL, FR, RL, RR (the sim's order) ---
   const wheels = [];
   const corners = [
-    [-SPEC.trackFront / 2, zF, SPEC.tyreWidthFront, -1], [SPEC.trackFront / 2, zF, SPEC.tyreWidthFront, 1],
-    [-SPEC.trackRear / 2, zR, SPEC.tyreWidthRear, -1], [SPEC.trackRear / 2, zR, SPEC.tyreWidthRear, 1],
+    [-SPEC.trackFront / 2, zF, SPEC.tyreWidthFront, -1, SPEC.wheelRadiusFront], [SPEC.trackFront / 2, zF, SPEC.tyreWidthFront, 1, SPEC.wheelRadiusFront],
+    [-SPEC.trackRear / 2, zR, SPEC.tyreWidthRear, -1, SPEC.wheelRadiusRear], [SPEC.trackRear / 2, zR, SPEC.tyreWidthRear, 1, SPEC.wheelRadiusRear],
   ];
-  for (const [x, z, w, side] of corners) {
+  corners.forEach(([x, z, w, side, radius], i) => {
     const pivot = new THREE.Group();
-    pivot.position.set(x, wheelCenterY(0), z);
-    const spin = heroWheel(w, side);
+    const y0 = wheelCenterY(0, REST_LENGTH, i);
+    pivot.position.set(x, y0, z);
+    const spin = heroWheel(w, side, radius);
     pivot.add(brakes(side), spin);
     group.add(pivot);
-    wheels.push({ pivot, spin, baseY: wheelCenterY(0) });
-  }
+    wheels.push({ pivot, spin, baseY: y0 });
+  });
 
   group.traverse((o) => { if (o.isMesh && o.material !== M.fanGlow && o.material !== M.redGlow) { o.castShadow = true; o.receiveShadow = true; } });
   return { group, body, shell, canopy: glass, ghostParts: [...ghostParts, ...wheels.map((w) => w.spin.children[0])], wheels, nozzles, comY: SPEC.comHeight, setWing, setFan };

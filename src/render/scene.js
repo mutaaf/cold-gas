@@ -233,7 +233,7 @@ function buildLineup(tier) {
   ground.rotation.x = -Math.PI / 2;
   ground.receiveShadow = true;
   group.add(ground);
-  group.add(ramp());
+  // The reveal's kickflip used no ramp (thrust alone off flat ground), so the Lineup has none.
   group.add(lineup());
   group.add(linesAndPad());
   const hz = horizon();

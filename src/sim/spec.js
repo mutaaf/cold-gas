@@ -1,81 +1,99 @@
-// The car, as specified. Public numbers from the October 2026 reveal where they exist
-// (wheelbase, width, power, 0–60, thruster count, gas volume and pressure); engineering
-// estimates where they don't, each marked. One source of truth for the sim AND the model.
+// The car, as specified. Sources: docs/REVEAL_RESEARCH.md (the Oct 15, 2026 reveal: Tesla's
+// statements, the livestream's on-screen telemetry, and press measurements). Every number is
+// tagged OFFICIAL (Tesla / exec statement), TELEMETRY (read off the livestream), or ESTIMATE (our
+// engineering estimate, with the reasoning in the research doc). One source of truth for the sim
+// AND the 3D model.
 //
 // Body frame: +x right, +y up, +z forward, origin at the centre of mass.
 
 export const SPEC = {
   // Geometry (m)
-  length: 4.62,            // est. from the 2,825 mm wheelbase and the reveal's proportions
-  width: 2.0,              // public: ~2,000 mm
-  height: 1.12,            // est.
-  wheelbase: 2.825,        // public: 2,825 mm
-  trackFront: 1.70,        // est.
-  trackRear: 1.74,         // est.
-  overhangFront: 0.86,     // est.: front axle to nose
-  wheelRadius: 0.36,       // 22" rim with a 30-profile tyre ≈ 720 mm diameter
-  tyreWidthFront: 0.285,
+  length: 4.65,            // ESTIMATE (not disclosed)
+  width: 2.0,              // OFFICIAL
+  height: 1.15,            // ESTIMATE (not disclosed)
+  wheelbase: 2.825,        // OFFICIAL (Moravy)
+  trackFront: 1.70,        // ESTIMATE
+  trackRear: 1.74,         // ESTIMATE
+  overhangFront: 0.90,     // ESTIMATE
+  // Tyres: Pirelli P Zero Trofeo RS, 295/30 R20 front, 335/30 R21 rear (OFFICIAL sizes).
+  wheelRadiusFront: 0.343, // 20" + 30% of 295 mm
+  wheelRadiusRear: 0.367,  // 21" + 30% of 335 mm
+  wheelRadius: 0.355,      // mean, for code that wants one number
+  tyreWidthFront: 0.295,
   tyreWidthRear: 0.335,
-  rideHeight: 0.11,        // floor to ground at rest (fan cars run low)
-  comHeight: 0.43,         // centre of mass above ground at rest (battery in the floor)
-  comFromFront: 1.42,      // CoM behind the front axle (≈50:50 with the rear tank)
+  tyreMu: 1.25,            // OFFICIAL: Moravy, "typically 1.26 G" of tyre grip
+  rideHeight: 0.10,        // ESTIMATE (fan car, runs low)
+  comHeight: 0.42,         // ESTIMATE
+  comFromFront: 1.42,      // ESTIMATE (≈50:50)
 
-  // Mass (kg). A target of under 1,700 kg was announced for the base car; the single-seat
-  // Rocket trim adds a 400 L tank and six more thrusters. Estimate: 1,640 kg dry.
-  dryMass: 1640,
-  // Nitrogen: 600 L of composite-overwrapped pressure vessels at ~690 bar (public).
-  // Real-gas density of N2 at 690 bar, 300 K ≈ 0.47 kg/L (Z ≈ 1.6) → ≈ 280 kg.
+  // Mass (kg). The base car is "just under 1,700 kg" (OFFICIAL). The single-seat Rocket trim adds
+  // a 400 L tank, six thrusters and plumbing: ≈2,150 kg dry is our ESTIMATE for the stunt car.
+  dryMass: 2150,
+  // Nitrogen: 600 L of composite tanks at 69 MPa (10,000 psi) (OFFICIAL). Real-gas density of N2
+  // at 690 bar and 20 °C is 0.495 kg/L (Z ≈ 1.60) → 297 kg (computed; Tesla said "about 250 kg").
   gasVolumeL: 600,
   gasPressureBar: 690,
-  gasMass: 280,
-  // Moments of inertia about the CoM (kg·m²) for the dry car, from a mass-distribution
-  // estimate (battery slab, two rear motors, tanks behind the seat); scaled with mass.
-  inertia: { pitch: 2650, yaw: 2950, roll: 640 },
+  gasMass: 297,
+  // Moments of inertia (kg·m²), ESTIMATE for the Thrust trim at 1,980 kg; scaled with mass.
+  inertia: { roll: 650, pitch: 2900, yaw: 3250 },
+  inertiaMass: 1980,
 
-  // Powertrain: two rear motors, torque-vectoring, 1,000 kW (public: >1,341 hp).
+  // Powertrain: two rear motors, 1.0 MW (OFFICIAL), 1,400 N·m each (OFFICIAL) through an 8.4:1
+  // reduction (OFFICIAL) → ≈11,800 N·m at each rear wheel.
   power: 1_000_000,
-  maxWheelTorque: 6200,    // per rear wheel, N·m (est.)
-  brakeTorque: 4200,       // per wheel, N·m (carbon-ceramic, est.)
-  tyreMu: 1.45,            // semi-slick peak friction (est.)
+  maxWheelTorque: 11760,
+  brakeTorque: 5200,       // per wheel, N·m (carbon-ceramic, ESTIMATE)
 
-  // Suction fan: "can pull up to two Gs" (public, Lars Moravy). Modelled as a force toward
-  // the surface under the floor, fading with gap, with a spool-up time.
-  fanMaxG: 2.0,
-  fanSpool: 0.35,          // s, est.
-  fanGapFull: 0.16,        // m: full suction at or below this floor gap (est.)
-  fanGapZero: 0.55,        // m: no suction above this gap (est.)
+  // Suction: four 20 kW fans in the rear diffuser with four deployable skirts (OFFICIAL). Peak
+  // downforce read 4,700 kg on the livestream (TELEMETRY: 46 kN; the "2 G" design claim is for a
+  // lighter car). Force falls with the skirt gap as F = Fmax / (1 + (gap / 8 mm)²) (ESTIMATE).
+  fanMaxForce: 46000,
+  // Deployable skirts must seal across the curl's sag: on the 9.5 m arc the deck bows ≈0.11 m away
+  // from the floor between the axles, so they reach ≈0.22 m (ESTIMATE, set by the geometry).
+  fanSkirtReach: 0.22,
+  fanGapScale: 0.008,      // m (ESTIMATE)
+  fanSpool: 0.4,           // s (ESTIMATE)
 
   // Aero
-  cdA: 0.62,               // m² (Cd ≈ 0.27 × 2.3 m² frontal), est.
+  cdA: 0.55,               // m², low-drag mode (ESTIMATE)
 
-  // Cold gas: nitrogen, Isp ≈ 70 s at sea level for a simple converging-diverging nozzle (est.).
-  isp: 70,
+  // Cold gas: nitrogen. Specific impulse ≈72 s at full pressure, falling as the tanks blow down
+  // (≈60 s average) (ESTIMATE). Thrust follows tank pressure; pressure follows the gas left
+  // adiabatically (p ∝ m^γ, γ ≈ 1.4 for N2).
+  ispFull: 72,
+  // A regulator holds the nozzle feed at line pressure until the tanks fall below it (the
+  // livestream's in-car readout showed 5,500 psi against 10,000 psi tanks: TELEMETRY). Thrust and
+  // Isp are full while regulated, then blow down with the tanks.
+  regulatedFraction: 0.55,
 };
 
-// Ten thrusters (public: 4 rear on the Thrust trim, 6 more at the front and sides on Rocket).
-// Placement here is our engineering reading of the reveal footage: 4 rear in the diffuser
-// (the four round nozzles visible at the back), 2 front retro, 4 underbody lift jets.
-// `dir` is the force direction on the car (opposite to the jet). `max` in newtons at full tank.
+// Ten thrusters (OFFICIAL count and grouping: 4 rear, 4 down "one per corner", 2 front yaw).
+// Positions are read from reveal stills; per-nozzle thrust at full pressure:
+//   rear: 80 kN total peak (OFFICIAL, "Mach diamonds" on the 0–60 run) → 20 kN each
+//   down: ≈17 kN each (ESTIMATE from the 3.3 G braking peak on the livestream)
+//   yaw:  ≈4 kN each (ESTIMATE)
+// `dir` is the force direction on the car (opposite to the jet).
 export const NOZZLE_SPEC = [
-  // Lift jets sit under the sills between the wheels (outboard of the battery, clear of the tyres).
-  { id: 'lift-fl', group: 'lift', pos: [-0.62, -0.3, 0.9], dir: [0, 1, 0], max: 10200 },
-  { id: 'lift-fr', group: 'lift', pos: [0.62, -0.3, 0.9], dir: [0, 1, 0], max: 10200 },
-  { id: 'lift-rl', group: 'lift', pos: [-0.62, -0.3, -0.9], dir: [0, 1, 0], max: 10200 },
-  { id: 'lift-rr', group: 'lift', pos: [0.62, -0.3, -0.9], dir: [0, 1, 0], max: 10200 },
-  { id: 'rear-1', group: 'rear', pos: [-0.5, -0.2, -2.28], dir: [0, 0, 1], max: 3300 },
-  { id: 'rear-2', group: 'rear', pos: [-0.18, -0.2, -2.3], dir: [0, 0, 1], max: 3300 },
-  { id: 'rear-3', group: 'rear', pos: [0.18, -0.2, -2.3], dir: [0, 0, 1], max: 3300 },
-  { id: 'rear-4', group: 'rear', pos: [0.5, -0.2, -2.28], dir: [0, 0, 1], max: 3300 },
-  { id: 'front-l', group: 'front', pos: [-0.62, -0.18, 2.22], dir: [0, 0, -1], max: 5200 },
-  { id: 'front-r', group: 'front', pos: [0.62, -0.18, 2.22], dir: [0, 0, -1], max: 5200 },
+  { id: 'down-fl', group: 'lift', pos: [-0.75, -0.24, 1.98], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-fr', group: 'lift', pos: [0.75, -0.24, 1.98], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-rl', group: 'lift', pos: [-0.75, -0.24, -1.98], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-rr', group: 'lift', pos: [0.75, -0.24, -1.98], dir: [0, 1, 0], max: 17000 },
+  { id: 'rear-1', group: 'rear', pos: [-0.5, -0.2, -2.3], dir: [0, 0, 1], max: 20000 },
+  { id: 'rear-2', group: 'rear', pos: [-0.18, -0.2, -2.32], dir: [0, 0, 1], max: 20000 },
+  { id: 'rear-3', group: 'rear', pos: [0.18, -0.2, -2.32], dir: [0, 0, 1], max: 20000 },
+  { id: 'rear-4', group: 'rear', pos: [0.5, -0.2, -2.3], dir: [0, 0, 1], max: 20000 },
+  { id: 'yaw-l', group: 'yaw', pos: [-0.86, -0.05, 2.0], dir: [1, 0, 0], max: 4000 },
+  { id: 'yaw-r', group: 'yaw', pos: [0.86, -0.05, 2.0], dir: [-1, 0, 0], max: 4000 },
 ];
 
-// Derived wheel anchors (body frame, at the suspension's top mount).
+export const wheelRadiusOf = (i) => (i < 2 ? SPEC.wheelRadiusFront : SPEC.wheelRadiusRear);
+
+// Wheel anchors (body frame, at the suspension's top mount, 0.24 m above the wheel centre at rest).
 export function wheelAnchors() {
   const zf = SPEC.wheelbase - SPEC.comFromFront, zr = -SPEC.comFromFront;
-  const y = SPEC.wheelRadius - SPEC.comHeight + 0.24; // top mount ≈ 0.24 m above the wheel centre at rest
+  const yf = SPEC.wheelRadiusFront - SPEC.comHeight + 0.24, yr = SPEC.wheelRadiusRear - SPEC.comHeight + 0.24;
   return [
-    [-SPEC.trackFront / 2, y, zf], [SPEC.trackFront / 2, y, zf],
-    [-SPEC.trackRear / 2, y, zr], [SPEC.trackRear / 2, y, zr],
+    [-SPEC.trackFront / 2, yf, zf], [SPEC.trackFront / 2, yf, zf],
+    [-SPEC.trackRear / 2, yr, zr], [SPEC.trackRear / 2, yr, zr],
   ];
 }

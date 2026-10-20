@@ -2,12 +2,12 @@
 // run can be re-simulated exactly), records replay frames, and measures everything the judges
 // score. Pure and deterministic: the Worker runs this same file to verify a submitted run.
 import { createVehicle, step, bodyRates, up, forward, worldPoint, newInput, DT, CAR, NOZZLES, HULL, massOf } from './vehicle.js';
-import { COURSES, DEFAULT_COURSE, WALL, roofUnder } from './courses.js';
+import { COURSES, DEFAULT_COURSE, WALL, roofUnder, wallArcLength } from './courses.js';
 import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
 import { datan2, dacos, dhypot } from './dmath.js';
 
-export const SIM_VERSION = 3;           // v3: deterministic math (dmath.js); v2: physics v2, courses
+export const SIM_VERSION = 4;           // v4: sourced specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 60;      // 60 s hard cap
 
@@ -83,13 +83,7 @@ export function stepRun(run, raw) {
 
 // Progress along the Wall's profile (0 at the foot, 1 at the lip) for a point near the deck.
 export function wallProgress(pos) {
-  const { r1, h, r2, tip, length } = WALL;
-  let s;
-  if (pos.z < 0) s = 0;
-  else if (pos.y <= r1 && pos.z <= r1 + 2) s = r1 * (datan2(pos.y - r1, pos.z) + Math.PI / 2);
-  else if (pos.y <= r1 + h) s = r1 * Math.PI / 2 + (pos.y - r1);
-  else s = r1 * Math.PI / 2 + h + r2 * Math.max(0, Math.min(tip, datan2(pos.y - r1 - h, pos.z - (r1 - r2))));
-  return Math.max(0, Math.min(1, s / length));
+  return wallArcLength(pos.z, pos.y) / WALL.length;
 }
 
 function advance(run, input) {
@@ -120,9 +114,12 @@ function advance(run, input) {
         run.phase = 'ramp'; t.rampTick = run.tick; t.rampEntrySpeed = speed;
       }
     } else {
-      const R = course.ramp;
-      if (c.pos.z >= R.z1 && t.launchTick < 0) { t.launchTick = run.tick; t.launchSpeed = speed; t.airAtLaunch = c.air; }
-      if (c.grounded === 0 && c.pos.z > R.z0) { run.phase = 'air'; t.airStartTick = run.tick; }
+      // The Lineup has no ramp: the car lifts off flat ground on thrust alone.
+      run.airTicks = c.grounded === 0 ? run.airTicks + 1 : 0;
+      if (run.airTicks > 12) {
+        run.phase = 'air'; t.airStartTick = run.tick - 12;
+        t.launchTick = t.airStartTick; t.launchSpeed = speed; t.airAtLaunch = c.air;
+      }
     }
   } else if (run.phase === 'ramp') {
     if (c.grounded > 0) {
@@ -171,7 +168,7 @@ function advance(run, input) {
       t.airAtTouch = c.air;
       if (wall && c.pos.z > -1 && c.pos.y > 1.2) t.landedOnRamp = true;
     } else if (!wall && c.grounded > 0 && run.tick - t.airStartTick <= 36) {
-      run.phase = 'drive';
+      run.phase = 'drive'; run.airTicks = 0;
       t.rollAccum = 0; t.pitchAccum = 0; t.yawAccum = 0; t.offAxis = 0; t.apex = 0;
     }
   }
@@ -202,6 +199,7 @@ function advance(run, input) {
   else if (run.offTicks > 240 * 6) end = 'stalled';
   else if (run.tick >= MAX_TICKS) end = 'timeout';
   else if (!wall && run.phase === 'drive' && c.pos.z > course.lineupEnd + 4 && c.grounded > 0) end = 'no-jump';
+  else if (!wall && run.phase === 'drive' && c.obstacleContact) end = 'no-jump';
   if (end) finish(run, end);
   return run;
 }

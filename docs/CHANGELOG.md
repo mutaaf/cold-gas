@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.4.0 — 2026-10-20
+
+Sourced specs (SIM_VERSION 4), from `docs/REVEAL_RESEARCH.md`: Tesla's statements, the livestream's on-screen telemetry and the press.
+
+**The Wall's geometry**
+- A 9.5 m arc turning 170°, then a 5.5 m inverted ledge to a 19.8 m lip, on a 3.7 m deck.
+- The car crawls up at about 4 m/s on fan suction and hangs upside down.
+
+**The car**
+- 2,150 kg dry plus 297 kg of nitrogen at 690 bar.
+- Staggered Trofeo RS tyres (20″ front, 21″ rear) at μ 1.25, and 1,400 N·m × 8.4 at each rear wheel.
+- Four 20 kW fans with deployable skirts make 46 kN of suction.
+- Four 20 kN rear jets, four 17 kN corner down-jets and two front yaw jets.
+- The pressure regulator holds 5,500 psi of line pressure before the tanks blow down.
+
+**The reference runs reproduce the reveal**
+- The Wall: about 4.5 s from release to touchdown, a roughly 180° roll-out, braking near 3.3 G, and a soft four-wheel landing.
+- The Lineup: lift-off from flat ground, a peak of 7–8 m and a 360° roll.
+- 0–60 with fan and thrusters comes out at 0.60 s against 0.67 s net live.
+
+**Tests**
+- New reveal-fidelity tests fail CI if the physics drifts from the telemetry.
+
 ## 0.3.0 — 2026-10-20
 
 The realism rework (SIM_VERSION 2):
