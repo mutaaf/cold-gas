@@ -229,8 +229,27 @@ async function handle(req, env, ctx) {
   return json({ error: 'not found' }, 404);
 }
 
+// --- The page itself ------------------------------------------------------------------------------
+// The HTML carries `Cache-Control: no-transform` so the zone's analytics beacon is never injected
+// (AGENTS.md §3.3). That also stops Cloudflare compressing it, so the Worker gzips it here and
+// hands the bytes over as-is (encodeBody: 'manual'): 37 kB of inlined CSS goes out as ≈10 kB.
+const PAGES = new Set(['/coldgas/', '/coldgas/index.html']);
+async function page(req, env) {
+  const res = await env.ASSETS.fetch(req);
+  const type = res.headers.get('content-type') || '';
+  if (res.status !== 200 || !type.startsWith('text/html') || !/\bgzip\b/.test(req.headers.get('accept-encoding') || '')) return res;
+  const headers = new Headers(res.headers);
+  headers.set('content-encoding', 'gzip');
+  headers.append('vary', 'accept-encoding');
+  headers.delete('content-length');
+  const etag = headers.get('etag');
+  if (etag && !etag.startsWith('W/')) headers.set('etag', `W/${etag}`);   // a different byte stream
+  return new Response(req.method === 'HEAD' ? null : res.body.pipeThrough(new CompressionStream('gzip')), { status: 200, headers, encodeBody: 'manual' });
+}
+
 export default {
   async fetch(req, env, ctx) {
+    if (PAGES.has(new URL(req.url).pathname) && (req.method === 'GET' || req.method === 'HEAD')) return page(req, env);
     try { return await handle(req, env, ctx); }
     catch (err) { console.error('worker error', err?.name, err?.status); return json({ error: 'server' }, 500); }
   },

@@ -35,8 +35,11 @@ const inlineCss = {
         html = html.replace(link, () => `<style>${String(asset.source).trim()}</style>`);
         delete bundle[file];
       }
-      const display = Object.keys(bundle).find((f) => /michroma-latin-400-normal-[\w-]+\.woff2$/.test(f));
-      if (display) html = html.replace('</title>', `</title>\n  <link rel="preload" href="${BASE}${display}" as="font" type="font/woff2" crossorigin />`);
+      // Preload the two faces the title paints with: the wordmark and the text face.
+      for (const re of [/michroma-latin-400-normal-[\w-]+\.woff2$/, /geist-latin-wght-normal-[\w-]+\.woff2$/]) {
+        const font = Object.keys(bundle).find((f) => re.test(f));
+        if (font) html = html.replace('</title>', `</title>\n  <link rel="preload" href="${BASE}${font}" as="font" type="font/woff2" crossorigin />`);
+      }
       return html;
     },
   },

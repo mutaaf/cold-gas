@@ -3,10 +3,8 @@
 // physics and judging in src/sim/ (pure, shared with the Worker).
 // Latin subsets only: the copy is English, and every @font-face rule is inlined into index.html.
 import '@fontsource/michroma/latin-400.css';
-import '@fontsource/geist-sans/latin-200.css';
-import '@fontsource/geist-sans/latin-300.css';
-import '@fontsource/geist-sans/latin-400.css';
-import '@fontsource/geist-sans/latin-500.css';
+// Geist as one variable font (every weight from 200 to 500 in a single 29 kB latin file).
+import '@fontsource-variable/geist/wght.css';
 import '@fontsource/geist-mono/latin-400.css';
 import './styles.css';
 import * as THREE from 'three';
