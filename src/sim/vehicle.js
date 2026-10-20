@@ -221,14 +221,17 @@ export function mix(cmd, torqueCmd, out) {
 }
 
 // Flight computer. Assist and Pro: the stick commands body rates. Assist's LAND also levels the
-// car, as a body-rate demand toward upright on top of the rate loop: 2 × the tilt's sine, the law
-// the reference runs were tuned on. Upside down that law asks for almost nothing (sin 180° = 0),
-// so a player who held LAND inverted rolled out at ≈0.5 rad/s and hit the ground still rolling. In
-// the lower hemisphere LAND now rolls out decisively: the nearer way round, 2 rad/s per radian of
-// tilt (up to the stick's full 4.6 rad/s, the reveal's 180° in ≈1.1 s with the spin-up), pitch
-// rate held (correcting pitch too would start a half-loop that fights the roll).
+// car, as a body-rate demand toward upright on top of the rate loop: 2 × the tilt's sine near
+// level, the law the reference runs were tuned on. Upside down that law asks for almost nothing
+// (sin 180° = 0), so a player who held LAND inverted rolled out at ≈0.5 rad/s and hit the ground
+// still rolling; and from 90° it crawled, braking with half its thrust going sideways. LAND now
+// rolls out decisively: inverted, the nearer way round at 2 rad/s per radian of tilt with the pitch
+// rate held (correcting pitch too would start a half-loop that fights the roll); banked past 20°,
+// 3 rad/s per radian of bank; both up to the stick's 4.6 rad/s (the reveal: 180° in ≈1.1 s).
 const RATE = v3(2.4, 1.4, 4.6);
 const LEVEL_K = 2, LEVEL_DAMP = 1.4;
+// Banked past ≈20° (cos 20° = 0.94), the roll-out keeps going at 3 rad/s per radian of bank.
+const UPPER_ROLL = 0.94, UPPER_K = 3;
 function flightComputer(s, inp, out, envelope = 1) {
   rotateInv(wb, s.quat, s.angVel);
   const kp = 1.6, k = envelope;
@@ -250,6 +253,10 @@ function flightComputer(s, inp, out, envelope = 1) {
       const tilt = datan2(dhypot(ux, uz), uy);
       wantX = 0;
       wantZ = clamp((ux >= 0 ? -1 : 1) * LEVEL_K * tilt, -RATE.z, RATE.z);
+    } else if (uy < UPPER_ROLL && Math.abs(ux) > Math.abs(uz) && Math.abs(inp.roll) < 0.05) {
+      // Still banked past ≈20°: keep rolling at the reveal's pace (an angle law), not the sine
+      // law's crawl, so the down-jets aren't braking sideways for the last half of the roll-out.
+      wantZ = clamp((ux >= 0 ? -1 : 1) * UPPER_K * datan2(Math.abs(ux), uy), -RATE.z, RATE.z);
     }
     out.x += (kp + LEVEL_DAMP) * wantX - LEVEL_DAMP * wb.x;
     out.z += (kp + LEVEL_DAMP) * wantZ - LEVEL_DAMP * wb.z;
@@ -264,7 +271,8 @@ function record(imp, tick, kind, part, ev) {
 
 // Assist's governors, on top of the pilot's commands (writes `eff`).
 //  - LAND: lift is governed so the sink rate eases to a soft touchdown on the ground below.
-//  - CARRY: airborne, the rear jets fade out as the horizontal speed nears ASSIST_CARRY.
+//  - CARRY: airborne, the rear jets fade out as the horizontal speed nears ASSIST_CARRY, and shut
+//    while LAND brakes.
 export const HOVER = 1.3;
 let behind = 0;   // m/s the car is falling faster than the LAND profile wants (0 when not governed)
 function governor(s, inp, grounded, m) {
@@ -284,6 +292,9 @@ function governor(s, inp, grounded, m) {
   let wantVy = h > HOVER ? -Math.max(0.6, Math.min(16, Math.sqrt((h - HOVER) * 2 * aPlan))) : -0.55;
   if (h < HOVER + 1.5 && upW.y < 0.99) wantVy = Math.max(wantVy, -0.25);
   behind = wantVy - s.vel.y;
+  // The brake has priority: once LAND is braking (or below 8 m), a thumb left on BOOST no longer
+  // drains the gas the stop needs.
+  if (behind > 0 || h < 8) eff.thrust = 0;
   if (s.vel.y < wantVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((wantVy - s.vel.y) * 0.8 + 0.55, 0, 1));
 }
 // Net upward deceleration the four down-jets can make right now (m/s², trimmed, level), and the

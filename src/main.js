@@ -607,6 +607,7 @@ function openPractice() {
 function startDrill(id) {
   const drill = drillById(id);
   if (!drill || !drill.courses.includes(stage.course)) return;
+  closeOverlays();
   initAudio();
   const { run, released } = buildDrill(drill, stage.course);
   S.run = run; S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;

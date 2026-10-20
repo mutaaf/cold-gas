@@ -561,3 +561,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .hud[data-tier='advanced'] .nozzles { width: 52px; height: 88px; }
   .hud[data-tier='advanced'] .nozzles .nz-k { display: none; }
 }
+@media (pointer: coarse) and (max-width: 480px) {
+  .hud[data-tier='advanced'] .readouts { min-width: 80px; }
+  .hud[data-tier='advanced'] .hud-right { gap: 10px; }
+}

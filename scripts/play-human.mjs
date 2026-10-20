@@ -29,11 +29,12 @@ async function centre(sel) {
   const b = await page.locator(sel).boundingBox();
   return b ? { x: b.x + b.width / 2, y: b.y + b.height / 2 } : null;
 }
-async function syncTouches() {
-  const pts = [];
-  for (const [, p] of fingers) pts.push({ x: p.x, y: p.y, id: p.id });
-  await cdp.send('Input.dispatchTouchEvent', { type: pts.length ? 'touchMove' : 'touchEnd', touchPoints: pts });
+// Lifting one finger: a touchEnd listing just that finger (CDP releases the points it lists; a
+// touchMove that leaves a finger out doesn't lift it).
+async function lift(p) {
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [{ x: p.x, y: p.y, id: p.id }] });
 }
+let nextId = 1;
 async function press(key, on) {
   if (on === held.has(key)) return;
   if (on) held.add(key); else held.delete(key);
@@ -44,11 +45,13 @@ async function press(key, on) {
     const c = await centre(sel);
     if (!c) return;
     if (key === 'ArrowLeft') c.x -= 50;
-    fingers.set(key, { ...c, id: fingers.size + 1 });
-    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [...fingers.values()].map((p) => ({ x: p.x, y: p.y, id: p.id })) });
+    const f = { ...c, id: nextId++ };
+    fingers.set(key, f);
+    await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: f.x, y: f.y, id: f.id }] });
   } else {
+    const f = fingers.get(key);
     fingers.delete(key);
-    await syncTouches();
+    if (f) await lift(f);
   }
 }
 // The cue line as a person reads it: its words and the keys (or buttons) it names.

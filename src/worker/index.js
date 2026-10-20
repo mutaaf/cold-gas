@@ -55,7 +55,7 @@ async function ipHash(req) {
 }
 
 // Validate and replay a client input log → { run, card } or null. Entries carry every channel of
-// src/sim/run.js INPUT_KEYS (v10: 23 incl. Advanced's ten valves) or the 12 of a v9 client, whose
+// src/sim/run.js INPUT_KEYS (v11: 23 incl. Advanced's ten valves) or the 12 of an older client, whose
 // missing channels replay as zero. The tier (Assist / Pro / Advanced) comes from the replayed
 // inputs themselves, never from a flag the client sends.
 export function verify(body) {

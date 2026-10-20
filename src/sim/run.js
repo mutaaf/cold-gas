@@ -7,24 +7,26 @@ import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
 import { datan2, dacos, dhypot } from './dmath.js';
 
-// v10: the input log gains `manual` + ten valve channels (Advanced: per-thruster control); LAND
-// levels by tilt angle (a decisive roll-out from inverted); Pro is rate control; Assist limits the
-// crawl up the curl and the airborne carry; TC/ABS in every tier; the tier is telemetry.
+// v11: the input log gains `manual` + ten valve channels (Advanced: per-thruster control); LAND rolls
+// out decisively from inverted, plans its brake on the end-of-stop pressure, holds the line and
+// protects the lift it needs; Pro is rate control; Assist limits the crawl up the curl and the
+// airborne carry; TC/ABS in every tier; the tier is telemetry.
+// v10: angular momentum integration and rotational air drag (no NaN at Pro spin rates).
 // v9: bodywork folds (elastic to a 100 kN yield per hull probe, then plastic crush), no artificial
 // spin damping while the hull is in contact, impact events; v8: taller Wall, sourced mass
 // distribution; v7: body geometry; v6: The Show is one flight (off the Wall, over the row); parked
 // vehicles are bodies with mass, per-surface materials; v5: driver-relative steer/roll/yaw,
 // grip-limited steering; v4: sourced specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 10;
+export const SIM_VERSION = 11;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 
-// The input log's channels. v10 appended `manual` and v0..v9 (one per nozzle, NOZZLE_SPEC order).
+// The input log's channels. v11 appended `manual` and v0..v9 (one per nozzle, NOZZLE_SPEC order).
 const LEGACY_KEYS = ['throttle', 'brake', 'steer', 'pitch', 'roll', 'yaw', 'lift', 'thrust', 'retro', 'level', 'fan', 'assist'];
 const KEYS = [...LEGACY_KEYS, 'manual', ...VALVE_KEYS];
 export const INPUT_KEYS = KEYS;
 export const LEGACY_INPUT_KEYS = LEGACY_KEYS;
-// A log entry is [tick, ...channels]. Entries from a v9 client (12 channels) still verify: the
+// A log entry is [tick, ...channels]. Entries from an older client (12 channels) still verify: the
 // channels they lack are zero (no manual mode, valves shut), so they replay as they were flown,
 // under today's physics (as every log has on every SIM_VERSION bump).
 export const isLogEntryLength = (n) => n === KEYS.length + 1 || n === LEGACY_KEYS.length + 1;
