@@ -5,6 +5,7 @@
 // centimetre.
 import * as THREE from 'three';
 import { WALL, wallProfile } from '../sim/courses.js';
+import { sliver, spreadAxes, spreadThin, spreadRing, setSliverAttributes, DECAL, LAYER } from './sliver.js';
 
 const W = WALL.width, T = WALL.slab, L = WALL.length;
 const HK = WALL.lip.y / 19.8;   // lights were aimed on a 19.8 m lip; they follow the real height
@@ -93,6 +94,20 @@ function deckTextures() {
   return { map: tex(cc, true), roughnessMap: tex(rc, false), bumpMap: tex(bc, false) };
 }
 
+// Derivative bump mapping turns to noise once a pixel spans many bump texels: each pixel's
+// forward difference lands on a different board line, so a distant deck sparkles as it moves.
+// Fade the bump out between 4 and 16 texels per pixel (the title and chase cameras sit under 4,
+// so up close the deck is unchanged).
+function fadeBump(mat, size) {
+  const chunk = THREE.ShaderChunk.bumpmap_pars_fragment
+    .replace('float Hll = bumpScale *', `float bumpK = bumpScale * ( 1.0 - smoothstep( 4.0, 16.0, max( length( dSTdx ), length( dSTdy ) ) * ${size.toFixed(1)} ) );
+		float Hll = bumpK *`)
+    .replace('float dBx = bumpScale *', 'float dBx = bumpK *')
+    .replace('float dBy = bumpScale *', 'float dBy = bumpK *');
+  mat.onBeforeCompile = (sh) => { sh.fragmentShader = sh.fragmentShader.replace('#include <bumpmap_pars_fragment>', chunk); };
+  mat.customProgramCacheKey = () => `fadeBump:${size}`;
+}
+
 // Dark slab and approach asphalt for the ground.
 function groundTexture(seed, base) {
   const S = 512, rnd = rng(seed);
@@ -179,12 +194,14 @@ function deckGeometry(S) {
 
 // A ribbon lying on the riding surface between x0 and x1, lifted `lift` along the normal.
 function ribbon(S, x0, x1, lift, from = 0) {
-  const pos = [], uv = [], idx = [];
+  const pos = [], uv = [], idx = [], spread = [], side = [], h = (x1 - x0) / 2;
   for (let i = 0; i < S.length; i++) {
     const p = S[i];
     if (p.s < from) continue;
     const y = p.y + p.ny * lift, z = p.z + p.nz * lift;
     pos.push(x0, y, z, x1, y, z);
+    spread.push(-h, 0, 0, h, 0, 0);   // across the ribbon from its centre line (src/render/sliver.js)
+    side.push(-1, 1);
     uv.push(0, p.s, 1, p.s);
   }
   const n = pos.length / 6;
@@ -192,6 +209,7 @@ function ribbon(S, x0, x1, lift, from = 0) {
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
   g.setAttribute('uv', new THREE.Float32BufferAttribute(uv, 2));
+  setSliverAttributes(g, spread, side);
   g.setIndex(idx);
   g.computeVertexNormals();
   return g;
@@ -199,11 +217,16 @@ function ribbon(S, x0, x1, lift, from = 0) {
 
 // A band on the deck's outer side face at x, from depth d0 to d1 below the riding surface.
 function sideBand(S, x, d0, d1) {
-  const pos = [], idx = [];
-  for (const p of S) pos.push(x, p.y - p.ny * d0, p.z - p.nz * d0, x, p.y - p.ny * d1, p.z - p.nz * d1);
+  const pos = [], idx = [], spread = [], side = [], h = (d1 - d0) / 2;
+  for (const p of S) {
+    pos.push(x, p.y - p.ny * d0, p.z - p.nz * d0, x, p.y - p.ny * d1, p.z - p.nz * d1);
+    spread.push(0, p.ny * h, p.nz * h, 0, -p.ny * h, -p.nz * h);
+    side.push(1, -1);
+  }
   for (let i = 0; i < S.length - 1; i++) { const a = i * 2; idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2); }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  setSliverAttributes(g, spread, side);
   g.setIndex(idx);
   return g;
 }
@@ -274,8 +297,9 @@ function truss(tier) {
   for (const x of xs) for (const z of [zA, zB]) boxes.push([x, 0.2, z, 1.1, 0.4, 1.1]);
   for (let y = step; y <= top + 0.01; y += step) for (const x of xs) for (const z of [zA, zB]) boxes.push([x, y, z, 0.42, 0.42, 0.42]);
 
-  const geo = new THREE.BoxGeometry(1, 1, 1);
-  const mat = new THREE.MeshStandardMaterial({ color: 0x2b2e33, metalness: 0.85, roughness: 0.42, envMapIntensity: 1.2 });
+  // Members are unit boxes stretched along y: kept at least a pixel thick in the distance.
+  const geo = spreadAxes(new THREE.BoxGeometry(1, 1, 1), [1, 0, 1]);
+  const mat = sliver(new THREE.MeshStandardMaterial({ color: 0x2b2e33, metalness: 0.85, roughness: 0.42, envMapIntensity: 1.2 }), { minPx: 1, dim: false, maxK: 4 });
   const total = members.length + boxes.length;
   const mesh = new THREE.InstancedMesh(geo, mat, total);
   const a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);
@@ -356,55 +380,69 @@ function approach(P) {
   const strip = new THREE.Mesh(new THREE.PlaneGeometry(9, len), new THREE.MeshStandardMaterial({ map, color: 0x9a9ca0, roughness: 0.62, metalness: 0, envMapIntensity: 0.5, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
   strip.rotation.x = -Math.PI / 2; strip.position.set(0, 0.002, (z0 + z1) / 2); strip.receiveShadow = true;
   g.add(strip);
-  const white = new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity: 0.55, depthWrite: false });
-  const faint = new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity: 0.2, depthWrite: false });
-  const flat = (geo, mat, x, z, y = 0.006) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
-  for (const sx of [-1, 1]) flat(new THREE.PlaneGeometry(0.1, len), white, sx * 4.2, (z0 + z1) / 2);
-  for (let z = z0 + 3; z < -1; z += 6) flat(new THREE.PlaneGeometry(0.08, 2.6), faint, 0, z);
+  // Paint on the strip (DECAL: the strip's own slope-scaled offset used to beat these lines at
+  // grazing angles, and they vanished in stripes), kept at least a pixel wide at range.
+  const paint = (opacity) => sliver(new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity, depthWrite: false, ...DECAL }), { dim: 'alpha', maxK: 64 });
+  const white = paint(0.55), faint = paint(0.2);
+  const flat = (geo, mat, x, z, y = 0.006, order = LAYER.paint) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.renderOrder = order; g.add(m); return m; };
+  for (const sx of [-1, 1]) flat(spreadThin(new THREE.PlaneGeometry(0.1, len)), white, sx * 4.2, (z0 + z1) / 2);
+  for (let z = z0 + 3; z < -1; z += 6) flat(spreadThin(new THREE.PlaneGeometry(0.08, 2.6)), faint, 0, z);
   // Distance-to-wall markers every 25 m: a bar and a number, painted on the slab.
   for (let d = 25; d <= -z0 - 5; d += 25) {
-    flat(new THREE.PlaneGeometry(1.4, 0.08), white, 5.5, -d);
+    flat(spreadThin(new THREE.PlaneGeometry(1.4, 0.08)), white, 5.5, -d);
     const c = document.createElement('canvas'); c.width = 128; c.height = 64;
     const x = c.getContext('2d'); x.fillStyle = 'rgba(223,227,232,0.75)'; x.font = '500 40px "Geist Mono", monospace'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(String(d), 64, 34);
     const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace;
-    const num = flat(new THREE.PlaneGeometry(1.4, 0.7), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false }), 7.1, -d);
+    const num = flat(new THREE.PlaneGeometry(1.4, 0.7), new THREE.MeshBasicMaterial({ map: t, transparent: true, depthWrite: false, ...DECAL }), 7.1, -d);
     num.rotation.z = Math.PI;
   }
   // Landing target.
-  flat(new THREE.CircleGeometry(P.rings.at(-1) + 0.8, 96), new THREE.MeshBasicMaterial({ color: 0x050607, transparent: true, opacity: 0.45, depthWrite: false }), P.x, P.z, 0.004);
-  for (const r of P.rings) flat(new THREE.RingGeometry(r - 0.025, r + 0.025, 192), white, P.x, P.z, 0.007);
-  flat(new THREE.PlaneGeometry(0.05, 3.4), white, P.x, P.z, 0.008);
-  flat(new THREE.PlaneGeometry(3.4, 0.05), white, P.x, P.z, 0.008);
+  flat(new THREE.CircleGeometry(P.rings.at(-1) + 0.8, 96), new THREE.MeshBasicMaterial({ color: 0x050607, transparent: true, opacity: 0.45, depthWrite: false, ...DECAL }), P.x, P.z, 0.004, LAYER.pad);
+  for (const r of P.rings) flat(spreadRing(new THREE.RingGeometry(r - 0.025, r + 0.025, 192), r), white, P.x, P.z, 0.007);
+  flat(spreadThin(new THREE.PlaneGeometry(0.05, 3.4)), white, P.x, P.z, 0.008);
+  flat(spreadThin(new THREE.PlaneGeometry(3.4, 0.05)), white, P.x, P.z, 0.008);
   return g;
 }
 
 // Additive glow decal on the slab (the red base glow, light pools).
 function glowDecal(color, r, x, z, power) {
   const mat = new THREE.ShaderMaterial({
-    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false,
+    transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, fog: false, ...DECAL,
     uniforms: { uC: { value: new THREE.Color(color) }, uP: { value: power } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
     fragmentShader: 'uniform vec3 uC; uniform float uP; varying vec2 vUv; void main(){ float d = length(vUv - 0.5) * 2.; float a = uP * pow(max(0., 1. - d), 2.2); gl_FragColor = vec4(uC * a, a); }',
   });
   const m = new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), mat);
-  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.012, z);
+  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.012, z); m.renderOrder = LAYER.glow;
   return m;
 }
 
 // --- Night sky and environment -------------------------------------------------------------------------
+// Stars: one cell in a few hundred of a grid over the sky. Each star used to fill its whole cell,
+// a square about a pixel and a half across, so it lit one, two or four pixels as the camera
+// drifted and the sky twinkled. Now each is a round dot with a soft edge one pixel wide (from the
+// cell's screen footprint), so it slides instead of popping. Same stars, much the same brightness.
+export const STARS = `
+  float hash(vec3 p){ p = fract(p*0.3183099+.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+  vec3 starField(vec3 dir, float cells, float keep, float h0, bool vary){
+    vec3 q = dir * cells, sp = floor(q);
+    float on = step(keep, hash(sp)) * smoothstep(h0, h0 < 0.2 ? 0.5 : 0.7, dir.y);
+    float aa = max(length(fwidth(q)), 1e-4);
+    float d = length(fract(q) - 0.5);
+    float disc = 1.0 - smoothstep(0.32 - aa * 0.5, 0.32 + aa * 0.5, d);
+    return vec3(on * disc * 1.6) * (vary ? 0.35 + 0.65 * hash(sp + 3.1) : 1.0);
+  }`;
 export function nightSkyMaterial() {
   return new THREE.ShaderMaterial({
     side: THREE.BackSide, depthWrite: false, fog: false,
     vertexShader: 'varying vec3 vDir; void main(){ vDir = normalize((modelMatrix * vec4(position,1.)).xyz - cameraPosition); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position,1.); gl_Position.z = gl_Position.w; }',
     fragmentShader: `varying vec3 vDir;
-      float hash(vec3 p){ p = fract(p*0.3183099+.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+      ${STARS}
       void main(){
         float h = clamp(vDir.y, -1., 1.);
         vec3 c = mix(vec3(0.010, 0.013, 0.022), vec3(0.0015, 0.002, 0.004), smoothstep(0.0, 0.5, h));
         c += vec3(0.02, 0.022, 0.03) * exp(-abs(h) * 22.);
-        vec3 sp = floor(vDir * 520.);
-        float st = step(0.9982, hash(sp)) * smoothstep(0.08, 0.5, h);
-        c += vec3(st) * (0.35 + 0.65 * hash(sp + 3.1));
+        c += starField(vDir, 520., 0.9982, 0.08, true);
         if (h < 0.0) c = vec3(0.004, 0.005, 0.007);
         gl_FragColor = vec4(c, 1.);
         #include <tonemapping_fragment>
@@ -455,6 +493,7 @@ export function* buildWall(tier, pad = WALL.pad) {
     map: tex.map, roughnessMap: tex.roughnessMap, bumpMap: tex.bumpMap, bumpScale: 1.2,
     color: 0x8f9196, roughness: 1, metalness: 0, envMapIntensity: 0.3,
   });
+  fadeBump(deckMat, 1024);
   const deck = new THREE.Mesh(deckGeometry(S), deckMat);
   deck.castShadow = tier !== 'low'; deck.receiveShadow = true;
   group.add(deck);
@@ -470,11 +509,16 @@ export function* buildWall(tier, pad = WALL.pad) {
   // Red LED strips on both top edges (HDR so bloom catches them), a dimmer pair on the back edges.
   // Each strip is a flat band on the deck edge plus a band down the outer face, wide enough
   // (7 cm) to stay continuous at stadium distance.
-  const led = new THREE.MeshBasicMaterial({ color: new THREE.Color(5.5, 0.26, 0.36), fog: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 });
+  // Slivers (src/render/sliver.js): at range a strip stays a pixel and a half wide and dims to
+  // match, instead of popping in and out of the bloom.
+  const led = sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(5.5, 0.26, 0.36), fog: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), { minPx: 1.5 });
   const ledDim = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 0.05, 0.08), fog: false });
   for (const sx of [-1, 1]) {
-    group.add(new THREE.Mesh(ribbon(S, sx * (W / 2 - 0.1), sx * (W / 2 - 0.01), 0.008), led));
-    group.add(new THREE.Mesh(sideBand(S, sx * (W / 2 + 0.006), 0.0, 0.07), led));
+    for (const geo of [ribbon(S, sx * (W / 2 - 0.1), sx * (W / 2 - 0.01), 0.008), sideBand(S, sx * (W / 2 + 0.006), 0.0, 0.07)]) {
+      const strip = new THREE.Mesh(geo, led);
+      strip.renderOrder = LAYER.light;
+      group.add(strip);
+    }
     group.add(new THREE.Mesh(edgeTube(S, sx * (W / 2 + 0.005), 0, T - 0.02, 0.016), ledDim));
   }
   // Faint red spill on the concrete next to each strip.
@@ -527,8 +571,8 @@ export function* buildWall(tier, pad = WALL.pad) {
     uplights.push(up);
     const fx = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.5), new THREE.MeshStandardMaterial({ color: 0x111215, metalness: 0.6, roughness: 0.4 }));
     fx.position.set(sx * 2.4, 0.15, -5.7); group.add(fx);
-    const lens = new THREE.Mesh(new THREE.PlaneGeometry(0.62, 0.18), new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.6, 3) }));
-    lens.position.set(sx * 2.4, 0.2, -5.44); lens.rotation.x = -0.5; group.add(lens);
+    const lens = new THREE.Mesh(spreadThin(new THREE.PlaneGeometry(0.62, 0.18)), sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.6, 3) }), { minPx: 1.5 }));
+    lens.position.set(sx * 2.4, 0.2, -5.44); lens.rotation.x = -0.5; lens.renderOrder = LAYER.light; group.add(lens);
   }
   const red = new THREE.PointLight(0xff1a28, 35, 18, 2);
   red.position.set(0, 1.2, 1.5);

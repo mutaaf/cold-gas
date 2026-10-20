@@ -139,6 +139,8 @@ src/render/           three.js (r186):
   crash.js              everything a crash shows, keyed to run.impacts (live and replay): sparks,
                           chips, dust, dents, torn-off parts, lamps/hazards, shake, slow-mo, cut
   debris.js             torn-off parts as small rigid boxes on the concrete (cosmetic)
+  sliver.js             minimum on-screen width for thin lights/paint/struts (anti-flicker),
+                          DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air)
 src/audio.js          procedural WebAudio: motor, tyres, wind, nozzle hiss, chimes, crash crunch/grind
@@ -153,6 +155,7 @@ tests/unit/           Vitest: sim, course, mixer, determinism, judging
 tests/e2e/            Playwright: boot + reference jump + judging, deep link, phone
 scripts/fly.mjs       Headless reference flight with telemetry (tuning tool)
 scripts/shots.mjs     Screenshots of key moments against a running preview
+scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)
 ```
 
 Frame flow: `frame()` → `liveStep(dt)` runs whole 1/240 s sim ticks, then syncs the car, HUD,
