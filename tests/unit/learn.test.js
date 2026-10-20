@@ -30,7 +30,7 @@ const flyDrill = (id, policy, course = 'show') => {
 };
 
 describe('SIM_VERSION 11: the skill ladder', () => {
-  it('is version 11', () => expect(SIM_VERSION).toBe(11));
+  it('is version 11 or later (12: the parked row at its researched sizes)', () => expect(SIM_VERSION).toBeGreaterThanOrEqual(11));
   // SIM_VERSION 10: Show 87.3, Wall 88.0, Lineup 85.0. The references fly the same; LAND's roll-out
   // no longer brakes sideways, so they land nearer the mark (Wall 11.2 → 5.7 m): the Show and the
   // Wall gain on precision alone, and nothing else may move.

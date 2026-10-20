@@ -180,7 +180,7 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
   await page.evaluate(() => {
     const g = window.__coldgas;
     g.startRun('reveal');
-    g.S.autopilot = g.createAutopilot('lineup', { apex: 2.8 });
+    g.S.autopilot = g.createAutopilot('lineup', { apex: 2.9 });   // 2.9 since the row's researched sizes (SIM_VERSION 12)
     g.skipCountdown();
   });
   await page.evaluate(() => window.__coldgas.fastForward());   // the whole run in one go, not at software GL's pace
