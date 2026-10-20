@@ -1,0 +1,17 @@
+{
+  // cold-gas: static assets under mutaafaziz.com/coldgas/ plus the judging + leaderboard API.
+  // The route takes precedence over the mutaafaziz.com Custom Domain (the personal site).
+  // Operator-owned file (agents/control.json → frozen_paths).
+  "name": "cold-gas",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"],
+  "workers_dev": true,
+  "preview_urls": true,
+  "previews": {},
+  "main": "src/worker/index.js",
+  "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/coldgas/api/*"] },
+  // No database_id on purpose: Workers Builds provisions this D1 database by name on first
+  // deploy. The Worker creates its own tables. Secret: ANTHROPIC_API_KEY (wrangler secret put).
+  "d1_databases": [{ "binding": "DB", "database_name": "cold-gas" }],
+  "routes": [{ "pattern": "mutaafaziz.com/coldgas*", "zone_name": "mutaafaziz.com" }]
+}

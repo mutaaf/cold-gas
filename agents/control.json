@@ -1,0 +1,16 @@
+{
+  "_readme": "Operator control panel. Edit this file (GitHub web or mobile is fine) to pause or steer the agents. Every agent reads it first and obeys it. HOW OFTEN each agent runs is set on its routine schedule at https://claude.ai/code/routines, not here.",
+  "paused": false,
+  "focus": "",
+  "agents": {
+    "scout": { "enabled": true, "max_new_tickets_per_run": 3, "ready_queue_cap": 10 },
+    "builder": { "enabled": true, "max_merges_per_day": 8 },
+    "keeper": { "enabled": true }
+  },
+  "frozen_paths": [
+    "wrangler.jsonc",
+    ".github/workflows/",
+    "agents/control.json",
+    "src/worker/"
+  ]
+}

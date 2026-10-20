@@ -34,7 +34,7 @@ the Builder can ship it in one PR without asking anyone.
    there is room). A full queue never excuses skipping steps 2–4: always play, discover,
    and groom; a run that only reads files and exits is a failed run. Use
    `docs/backlog/_template.md`. Balance the lenses over time (see the template); do not
-   generate vanity work (badges, share cards, marketing, leaderboards that need a server).
+   generate vanity work (badges, marketing, features that dilute the one moment).
    Each ticket must have checkable acceptance criteria and a test plan.
 6. Run `node scripts/check-backlog.mjs`. Fix until it passes.
 7. Open a PR; auto-merge lands it when CI is green. Watch CI and fix any failure.

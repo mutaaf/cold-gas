@@ -12,7 +12,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -20,23 +20,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # Offline play is checked in every major engine (ticket 0158): tests/e2e/offline.spec.js
-      # also runs in Firefox and WebKit (Safari) projects when those browsers are installed.
-      - run: npx playwright install --with-deps chromium firefox webkit
-      - name: Backlog, unit tests, build, e2e
+      - run: npx playwright install --with-deps chromium
+      - name: Backlog, lint, unit tests, build, e2e
         run: npm run check
-      # Flake guard: e2e specs this PR adds or changes run several times in a row with no
-      # retries (scripts/e2e-repeat-changed.mjs), so a test that only passes some of the time
-      # is caught here instead of failing everyone else's PRs after it merges.
+      # Flake guard: e2e specs this PR adds or changes run several times in a row.
       - name: Flake guard (changed e2e specs, repeated)
         if: github.event_name == 'pull_request' && hashFiles('scripts/e2e-repeat-changed.mjs') != ''
         run: node scripts/e2e-repeat-changed.mjs
-      # Offline play in the other engines (ticket 0158), after the Chromium suite so it never
-      # adds load to timing-sensitive tests.
-      - name: Offline e2e in Firefox and WebKit
-        run: npx playwright test --project=firefox --project=webkit --project=webkit-iphone
-        env:
-          E2E_ENGINES: '1'
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

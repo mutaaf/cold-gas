@@ -32,6 +32,6 @@ at or above `control.json → agents.builder.max_merges_per_day`, end `NOOP: dai
 8. **Merge.** Auto-merge squash-merges the PR once CI is green (see `common.md` § 3).
    Watch for the merge. Cloudflare Workers Builds deploys `main` to production on merge.
 9. **Verify live.** Wait ~2 minutes, then
-   `curl -s "https://mutaafaziz.com/outatime/?cb=$(date +%s)"` and confirm the response is
+   `curl -s "https://mutaafaziz.com/coldgas/?cb=$(date +%s)"` and confirm the response is
    200 and references the new build's asset hash. If production is broken, immediately
    open a `fix/` PR reverting your merge, merge it on green, and record a lesson.

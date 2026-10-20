@@ -11,7 +11,7 @@ Read `agents/prompts/common.md` and follow its preflight first. Your branch pref
    stays green. A major bump (e.g. three.js) becomes a ticket for the Scout/Builder with a
    migration plan, never a drive-by.
 3. **Performance budget.** Build and check bundle size against the budget in `AGENTS.md`.
-   Run the e2e perf probe; if average frame time regressed versus `docs/PERF.md`, open a
+   Run `node scripts/shots.mjs` against a preview build; if frame time or visuals regressed, open a
    ticket with the evidence. Update `docs/PERF.md` with today's numbers.
 4. **Code health.** Find one module that is too large or tangled (the original game was
    one giant file; keep carving it into focused modules under `src/`). Refactor it with

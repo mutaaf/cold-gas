@@ -3,7 +3,7 @@ import globals from 'globals';
 // Correctness-only lint: catches undefined identifiers and broken imports — the classic
 // failure when carving main.js into modules. Style is not enforced.
 export default [
-  { ignores: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/'] },
+  { ignores: ['dist/', 'node_modules/', 'playwright-report/', 'test-results/', '.wrangler/'] },
   {
     files: ['**/*.js', '**/*.mjs'],
     languageOptions: {

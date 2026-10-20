@@ -237,6 +237,8 @@ export function step(s, inp) {
 
   // --- Thrusters ---
   flightComputer(s, inp, cmdT);
+  // On its wheels the car is a car: attitude jets stay closed (lift and boost still work).
+  if (grounded >= 2) { cmdT.x = 0; cmdT.y = 0; cmdT.z = 0; }
   // LAND (Assist): the computer also governs lift to bring the sink rate down to a soft
   // touchdown, measured against the ground under the car. Pilot lift still adds on top.
   eff.lift = inp.lift; eff.thrust = inp.thrust; eff.retro = inp.retro;

@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
+  <title>COLD GAS</title>
+  <meta name="description" content="Ten cold-gas thrusters. One roll. Stick the landing. A minimal 3D stunt game judged by an AI panel." />
+  <meta name="theme-color" content="#05070c" />
+  <meta property="og:title" content="COLD GAS" />
+  <meta property="og:description" content="Ramp, ten thrusters, a row of parked EVs, one 360° roll. Stick the landing." />
+  <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+</head>
+<body>
+  <canvas id="stage" aria-label="3D view of the test range"></canvas>
+  <div class="grain" aria-hidden="true"></div>
+
+  <header class="top">
+    <div class="brand" aria-label="COLD GAS">COLD&nbsp;GAS</div>
+    <div class="top-actions">
+      <button class="chip" data-assist aria-pressed="true" title="Flight computer: Assist holds rates and levels for landing. Pro is raw thrust (+8%).">Assist</button>
+      <button class="icon-btn" data-mute aria-label="Sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path data-wave d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" /></svg></button>
+    </div>
+  </header>
+
+  <!-- Title -->
+  <section class="title" data-screen="title">
+    <p class="eyebrow">Test Range · Blue Hour</p>
+    <h1 class="wordmark">COLD<br />GAS</h1>
+    <p class="tagline">Ten thrusters. One roll. Stick the landing.</p>
+    <div class="cta">
+      <button class="btn primary" data-start>Jump</button>
+      <button class="btn ghost" data-reveal>Watch the reference</button>
+      <button class="btn link" data-board-open>Today’s board</button>
+    </div>
+    <dl class="spec">
+      <div><dt>Thrusters</dt><dd>10</dd></div>
+      <div><dt>Air</dt><dd>250 kg</dd></div>
+      <div><dt>Lineup</dt><dd>5 EVs</dd></div>
+      <div><dt>Judges</dt><dd>3</dd></div>
+    </dl>
+    <p class="fineprint">Inspired by the October 2026 roadster reveal. An independent fan game, not affiliated with any automaker.</p>
+  </section>
+
+  <!-- Live HUD -->
+  <section class="hud" data-screen="hud" hidden>
+    <div class="hud-left">
+      <svg class="nozzles" viewBox="0 0 120 200" aria-label="Thruster array">
+        <rect class="body" x="22" y="16" width="76" height="168" rx="34" />
+        <g data-nz></g>
+      </svg>
+      <div class="tank">
+        <div class="tank-row"><span>Air</span><b data-air>100</b><i>%</i></div>
+        <div class="bar"><span data-air-bar></span></div>
+      </div>
+    </div>
+    <div class="hud-center">
+      <div class="speed"><b data-speed>0</b><span>km/h</span></div>
+      <div class="phase" data-phase>Run-up</div>
+    </div>
+    <div class="hud-right">
+      <svg class="dial" viewBox="0 0 120 120" aria-label="Roll">
+        <circle class="ring" cx="60" cy="60" r="50" />
+        <circle class="arc" data-roll-arc cx="60" cy="60" r="50" pathLength="360" />
+        <g data-ticks></g>
+        <g data-car-glyph transform="rotate(0 60 60)"><rect x="40" y="56" width="40" height="8" rx="4" /><rect x="56" y="48" width="8" height="8" rx="2" /></g>
+      </svg>
+      <div class="readouts">
+        <div><span>Roll</span><b data-roll>0°</b></div>
+        <div><span>Alt</span><b data-alt>0.0</b><i>m</i></div>
+        <div><span>Sink</span><b data-sink>0.0</b><i>m/s</i></div>
+      </div>
+    </div>
+  </section>
+  <div class="cue" data-cue aria-live="polite"></div>
+  <div class="count" data-count aria-live="assertive"></div>
+
+  <!-- Touch -->
+  <div class="touch" data-touch hidden>
+    <div class="stick" data-stick><div class="knob" data-knob></div></div>
+    <div class="buttons">
+      <button class="tbtn land" data-btn-land>LAND</button>
+      <button class="tbtn lift" data-btn-lift>LIFT</button>
+    </div>
+  </div>
+
+  <!-- Results -->
+  <section class="results" data-screen="results" hidden>
+    <div class="sheet">
+      <p class="eyebrow" data-r-headline>The panel</p>
+      <div class="total-row">
+        <h2 class="verdict" data-r-verdict>Stuck it</h2>
+        <div class="total"><b data-r-total>0.0</b><span>/ 100</span></div>
+      </div>
+      <div class="actions top-actions-row">
+        <button class="btn primary" data-again>Jump again</button>
+        <button class="btn ghost" data-replay>Replay</button>
+        <button class="btn ghost" data-share>Share</button>
+        <button class="btn link" data-home>Title</button>
+      </div>
+      <ol class="judges" data-r-judges></ol>
+      <div class="cats" data-r-cats></div>
+      <ul class="facts" data-r-facts></ul>
+      <form class="submit" data-r-submit>
+        <label for="initials">Initials</label>
+        <input id="initials" name="initials" maxlength="3" autocomplete="off" spellcheck="false" placeholder="AAA" />
+        <button class="btn small" type="submit">Post to today’s board</button>
+        <span class="submit-msg" data-r-submit-msg></span>
+      </form>
+
+    </div>
+  </section>
+
+  <!-- Board -->
+  <section class="board" data-screen="board" hidden>
+    <div class="sheet">
+      <div class="board-head">
+        <h2>Today’s board</h2>
+        <div class="seg"><button data-board="today" aria-pressed="true">Today</button><button data-board="all" aria-pressed="false">All time</button></div>
+      </div>
+      <ol class="rows" data-board-rows><li class="empty">Loading…</li></ol>
+      <button class="btn ghost" data-board-close>Close</button>
+    </div>
+  </section>
+
+  <!-- Pause -->
+  <section class="pause" data-screen="pause" hidden>
+    <div class="sheet narrow">
+      <h2>Paused</h2>
+      <div class="keys">
+        <p><b>Ground</b> ↑ throttle · ↓ brake · ← → steer · Space lift · Shift boost</p>
+        <p><b>Air</b> ← → roll · ↑ ↓ pitch · Q E yaw · Space lift · Shift land</p>
+      </div>
+      <div class="actions">
+        <button class="btn primary" data-resume>Resume</button>
+        <button class="btn ghost" data-restart>Restart</button>
+        <button class="btn link" data-home>Title</button>
+      </div>
+    </div>
+  </section>
+
+  <noscript><p class="noscript">COLD GAS needs JavaScript and WebGL.</p></noscript>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
