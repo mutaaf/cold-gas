@@ -12,7 +12,7 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // distribution; v7: body geometry; v6: The Show is one flight (off the Wall, over the row); parked
 // vehicles are bodies with mass, per-surface materials; v5: driver-relative steer/roll/yaw,
 // grip-limited steering; v4: sourced specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 9;
+export const SIM_VERSION = 10;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 
@@ -214,6 +214,9 @@ function advance(run, input) {
   run.offTicks = onDeck && speed < 0.5 ? run.offTicks + 1 : 0;
 
   let end = '';
+  // A non-finite state would poison the replay, the scorecard and the HUD. The integrator is built
+  // never to produce one; if it ever does, end the run cleanly instead of drawing NaN.
+  if (!Number.isFinite(c.pos.x + c.pos.y + c.pos.z + c.quat.w + c.angVel.x + c.angVel.y + c.angVel.z + c.vel.x + c.vel.y + c.vel.z)) { finish(run, 'sim-fault'); return run; }
   if (t.flipped) end = 'flipped';
   else if (t.contact && run.tick - t.contactTick > 480) end = 'contact';
   else if (run.phase === 'landed' && (speed < 1.2 || run.tick - t.touchTick > 240 * 5)) end = 'settled';

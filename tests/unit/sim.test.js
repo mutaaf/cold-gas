@@ -261,3 +261,33 @@ describe('reveal fidelity', () => {
     expect(t).toBeGreaterThan(0.45); expect(t).toBeLessThan(0.95);
   });
 });
+
+// Pro mode has no rate limits: a held roll + yaw spins the car up. The integrator must stay finite
+// at any spin rate (it once overshot and went NaN mid-trick), and the air must bound the spin.
+describe('spin stability (Pro)', () => {
+  it('a held roll + yaw in the air for 10 s stays finite', () => {
+    const s = createVehicle('lineup'); s.pos.x = 40; s.pos.y = 400;
+    for (let i = 0; i < 240 * 10; i++) step(s, { ...newInput(), assist: 0, roll: 1, yaw: 1, pitch: 0.3, lift: 0.5 });
+    for (const v of [s.pos.x, s.pos.y, s.quat.w, s.angVel.x, s.angVel.y, s.angVel.z]) expect(Number.isFinite(v)).toBe(true);
+    expect(Math.abs(s.quat.x ** 2 + s.quat.y ** 2 + s.quat.z ** 2 + s.quat.w ** 2 - 1)).toBeLessThan(1e-6);
+  });
+  it('random Pro tricks never produce a non-finite state', () => {
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
+    for (let trial = 0; trial < 40; trial++) {
+      const course = ['lineup', 'show', 'wall'][trial % 3];
+      const run = createRun(course);
+      const p = { at: 60 + rnd() * 600, dur: 100 + rnd() * 500, roll: rnd() * 2 - 1, pitch: rnd() * 2 - 1, yaw: rnd() * 2 - 1, thr: rnd() };
+      while (run.phase !== 'done' && run.tick < 240 * 25) {
+        const i = { ...newInput(), assist: 0, fan: course === 'lineup' ? 0 : 1 };
+        if (run.phase === 'drive') i.throttle = p.thr;
+        if (run.tick > p.at && run.tick < p.at + p.dur) i.lift = 1;
+        if (run.phase === 'air') { i.roll = p.roll; i.pitch = p.pitch; i.yaw = p.yaw; }
+        stepRun(run, i);
+      }
+      expect(run.t.endReason).not.toBe('sim-fault');
+      expect(Number.isFinite(run.car.angVel.x + run.car.quat.w + run.car.pos.y)).toBe(true);
+    }
+  });
+});
+
