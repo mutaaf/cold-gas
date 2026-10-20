@@ -122,7 +122,9 @@ src/sim/              PURE, shared with the Worker:
                           nozzles with blowdown, mixer, flight computer (Assist / LAND / Pro)
   run.js                one attempt: input log (12 channels incl. fan), phases drive → ramp →
                           air → landed, telemetry (Show: clearance, crossedRow), simulate();
-                          replay frames carry each parked body's pose
+                          replay frames carry each parked body's pose; run.impacts = the crash
+  impacts.js            impact events (hit / scrape / tyre slam / crush: tick, point, normal,
+                          speed, part, body) in fixed typed arrays, written by vehicle.step
   autopilot.js          reference runs for both courses, closed-loop through the same physics
   judge.js              scoreRun: per-course categories → three judges → total /100 + verdict
 src/render/           three.js (r186):
@@ -134,9 +136,12 @@ src/render/           three.js (r186):
                           wake / brake / aero / skirt / nozzle states from what the renderer sees
   cars.js               lineup vehicles, ghost, `wheelCenterY` contract
   plumes.js             per-nozzle shock-diamond cones + condensation mist pool
+  crash.js              everything a crash shows, keyed to run.impacts (live and replay): sparks,
+                          chips, dust, dents, torn-off parts, lamps/hazards, shake, slow-mo, cut
+  debris.js             torn-off parts as small rigid boxes on the concrete (cosmetic)
   director.js           chase / broadcast air cam / replay rigs / title turntable
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air)
-src/audio.js          procedural WebAudio: motor, tyres, wind, nozzle hiss, chimes
+src/audio.js          procedural WebAudio: motor, tyres, wind, nozzle hiss, chimes, crash crunch/grind
 src/ui.js             HUD (in-place updates), results sheet, board
 src/panel.js          board client + local judge lines (offline fallback)
 src/ai/               config.js (provider/key on this device) · stream.js (SSE client) ·

@@ -167,3 +167,29 @@ test('the reveal touchdown lands once: one mist burst, cues scaled by its sink r
   expect(hit.bursts - before).toBe(1);
   expect(hit.strength).toBeCloseTo(Math.min(1, (hit.sink / 5) ** 2), 5);
 });
+
+// A crash: the run's impact events drive the effects live and again in the replay, with no errors.
+test('a crash plays out: impact events, wreckage, hazards, and the replay re-shows it', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  page.on('console', (m) => { if (m.type() === 'error' && !/api\//.test(m.text()) && !/404/.test(m.text())) errors.push(m.text()); });
+  await page.goto('/coldgas/?course=lineup&gfx=low');
+  await expect(page.locator('[data-start]')).toBeVisible();
+  // Roll only half way: it comes down on its roof on the row.
+  await page.evaluate(() => {
+    const g = window.__coldgas;
+    g.startRun('reveal');
+    g.S.autopilot = g.createAutopilot('lineup', { rolls: 0.5 });
+    g.skipCountdown();
+  });
+  await page.waitForFunction(() => window.__coldgas.S.run.impacts.count > 0, null, { timeout: 45_000 });
+  await page.evaluate(() => window.__coldgas.fastForward());
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 20_000 });
+  const run = await page.evaluate(() => ({ flipped: window.__coldgas.S.run.t.flipped, impacts: window.__coldgas.S.run.impacts.count }));
+  expect(run.flipped).toBe(true);
+  expect(run.impacts).toBeGreaterThan(5);
+  // The replay walks the same events: the hazards come back on once it reaches the crash.
+  await page.evaluate(() => { window.__coldgas.S.replayT = 700; });
+  await page.waitForFunction(() => window.__coldgas.crash.state.hazard === true, null, { timeout: 30_000 });
+  expect(errors).toEqual([]);
+});

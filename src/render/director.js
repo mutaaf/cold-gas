@@ -27,6 +27,7 @@ export function createDirector(camera) {
     dip: 0, punch: 0,           // touchdown: camera drop (m) and FOV punch-in (deg), both decay
     peak: 0, launched: false, launchT: 0,
     hx: 0, hz: 1,                 // chase heading (unit, xz), follows the car's travel
+    cutT: 0, cutPos: new THREE.Vector3(), cutFov: 40,   // a crash cut (src/render/crash.js)
   };
 
   function snap() { st.init = false; }
@@ -205,11 +206,18 @@ export function createDirector(camera) {
   function update(dt, time, { carPos, carVel, phase, mode, course = 'show' }) {
     if (mode !== st.mode || course !== st.course) {
       st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.dip = 0; st.punch = 0;
-      st.hx = 0; st.hz = 1;
+      st.hx = 0; st.hz = 1; st.cutT = 0;
       snap(); frameOffset(mode === 'title');
     }
     st.t += dt;
-    if (course === 'wall' || course === 'show') {
+    if (st.cutT > 0) {
+      // A crash cut: a locked-off camera near the impact, watching the car, then a hard cut back.
+      st.cutT -= dt;
+      camera.position.copy(st.cutPos);
+      camera.lookAt(carPos.x, carPos.y + 0.15, carPos.z);
+      st.fov = st.cutFov;
+      if (st.cutT <= 0) { st.shot = -1; snap(); }
+    } else if (course === 'wall' || course === 'show') {
       if (mode === 'title') (course === 'show' ? titleShow : titleWall)(time);
       else if (mode === 'replay') wallReplay(carPos, carVel, phase);
       else wallLive(carPos, carVel, phase, dt);
@@ -220,6 +228,7 @@ export function createDirector(camera) {
       st.shake = Math.max(0, st.shake - dt * 3);
       tmp.set(Math.sin(time * 91), Math.sin(time * 77 + 1), 0).multiplyScalar(st.shake * 0.08);
       camera.position.add(tmp);
+      if (st.shake > 0.5) camera.rotateZ(Math.sin(time * 53) * (st.shake - 0.5) * 0.02);   // a crash rattles the frame too
     }
     // Touchdown: the camera rides the car's suspension down and back, and punches in, over ≈0.4 s.
     const k = Math.exp(-dt * 7);
@@ -229,6 +238,9 @@ export function createDirector(camera) {
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
   }
 
-  return { update, snap, reframe: () => frameOffset(st.mode === 'title'), shake: (s) => { st.shake = Math.max(st.shake, s); },
+  // Hold a locked-off camera at `pos` for `seconds` (crash cuts); a mode change cancels it.
+  function cut(pos, seconds, fov = 40) { st.cutPos.copy(pos); st.cutT = seconds; st.cutFov = fov; }
+
+  return { update, snap, cut, reframe: () => frameOffset(st.mode === 'title'), shake: (s) => { st.shake = Math.max(st.shake, s); },
     impact: (dip, punch) => { st.dip = Math.max(st.dip, dip); st.punch = Math.max(st.punch, punch); }, state: st };
 }
