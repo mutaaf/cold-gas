@@ -7,11 +7,11 @@ export const newGhostPose = () => ({ x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 
 
 // Flatten run.frames (one Float32Array per frame) into one array: cheap to store and to read.
 // `ref` marks the reference jump: a stand-in until you finish a run of your own.
-export function packFrames(frames, total, ref = false) {
+export function packFrames(frames, total, ref = false, course = 'show') {
   const n = frames.length, stride = n ? frames[0].length : 0;
   const data = new Float32Array(n * stride);
   for (let i = 0; i < n; i++) data.set(frames[i], i * stride);
-  return { v: SIM_VERSION, n, stride, total, ref, data };
+  return { v: SIM_VERSION, n, stride, total, ref, course, data };
 }
 
 // Your own run always replaces the reference; otherwise the higher total wins.
@@ -43,8 +43,9 @@ export function ghostAt(g, tick, out) {
 }
 
 // --- Storage (this device only) ------------------------------------------------------------
-// One fixed key; the record carries its SIM_VERSION, so a sim change retires the old ghost.
-const DB = 'coldgas', STORE = 'ghost', KEY = 'best';
+// One key per course; the record carries its SIM_VERSION, so a sim change retires the old ghost.
+const DB = 'coldgas', STORE = 'ghost';
+const keyOf = (course) => `best:${course}`;
 function openDB() {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(DB, 1);
@@ -57,11 +58,11 @@ function openDB() {
 }
 const valid = (g) => !!g && g.v === SIM_VERSION && g.n > 0 && g.data instanceof Float32Array;
 
-export async function loadBest() {
+export async function loadBest(course) {
   try {
     const db = await openDB();
     return await new Promise((resolve) => {
-      const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(KEY);
+      const req = db.transaction(STORE, 'readonly').objectStore(STORE).get(keyOf(course));
       req.onsuccess = () => { db.close(); resolve(valid(req.result) ? req.result : null); };
       req.onerror = () => { db.close(); resolve(null); };
     });
@@ -76,8 +77,8 @@ export async function saveBest(g) {
     await new Promise((resolve) => {
       const t = db.transaction(STORE, 'readwrite');
       const s = t.objectStore(STORE);
-      const req = s.get(KEY);
-      req.onsuccess = () => { const old = req.result; if (!valid(old) || isBetter(old, g)) s.put(g, KEY); };
+      const req = s.get(keyOf(g.course));
+      req.onsuccess = () => { const old = req.result; if (!valid(old) || isBetter(old, g)) s.put(g, keyOf(g.course)); };
       t.oncomplete = t.onerror = t.onabort = () => { db.close(); resolve(); };
     });
   } catch { /* storage blocked */ }

@@ -259,7 +259,7 @@ export function runTheatre(root, { log, assist, ai, card, course, fallbackWords,
         const f = card.facts;
         caption('Your telemetry becomes text: the facts the model reads.');
         if (field) safe(() => {
-          const name = textShape(f.course === 'wall' ? `${f.height}M ${f.invertedS}S ${f.sink}M/S` : `${f.rollDeg}° ${f.apex}M ${f.sink}M/S`);
+          const name = textShape(f.course === 'wall' ? `${f.height}M ${f.invertedS}S ${f.sink}M/S` : f.course === 'show' ? `${f.height}M ${f.rollDeg}° ${f.sink}M/S` : `${f.rollDeg}° ${f.apex}M ${f.sink}M/S`);
           if (name !== 'cg:compute') field.add([name]);
           field.setShape(name, { pin: 1e9, arrive: { from: [-1, 0, 0], ms: 1100 } });
         });

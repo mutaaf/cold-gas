@@ -4,7 +4,7 @@
 // engineering estimate, with the reasoning in the research doc). One source of truth for the sim
 // AND the 3D model.
 //
-// Body frame: +x right, +y up, +z forward, origin at the centre of mass.
+// Body frame: +x is the car's left, +y up, +z forward (right-handed), origin at the centre of mass.
 
 export const SPEC = {
   // Geometry (m)
@@ -74,16 +74,16 @@ export const SPEC = {
 //   yaw:  ≈4 kN each (ESTIMATE)
 // `dir` is the force direction on the car (opposite to the jet).
 export const NOZZLE_SPEC = [
-  { id: 'down-fl', group: 'lift', pos: [-0.75, -0.24, 1.98], dir: [0, 1, 0], max: 17000 },
-  { id: 'down-fr', group: 'lift', pos: [0.75, -0.24, 1.98], dir: [0, 1, 0], max: 17000 },
-  { id: 'down-rl', group: 'lift', pos: [-0.75, -0.24, -1.98], dir: [0, 1, 0], max: 17000 },
-  { id: 'down-rr', group: 'lift', pos: [0.75, -0.24, -1.98], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-fr', group: 'lift', pos: [-0.75, -0.24, 1.98], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-fl', group: 'lift', pos: [0.75, -0.24, 1.98], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-rr', group: 'lift', pos: [-0.75, -0.24, -1.98], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-rl', group: 'lift', pos: [0.75, -0.24, -1.98], dir: [0, 1, 0], max: 17000 },
   { id: 'rear-1', group: 'rear', pos: [-0.5, -0.2, -2.3], dir: [0, 0, 1], max: 20000 },
   { id: 'rear-2', group: 'rear', pos: [-0.18, -0.2, -2.32], dir: [0, 0, 1], max: 20000 },
   { id: 'rear-3', group: 'rear', pos: [0.18, -0.2, -2.32], dir: [0, 0, 1], max: 20000 },
   { id: 'rear-4', group: 'rear', pos: [0.5, -0.2, -2.3], dir: [0, 0, 1], max: 20000 },
-  { id: 'yaw-l', group: 'yaw', pos: [-0.86, -0.05, 2.0], dir: [1, 0, 0], max: 4000 },
-  { id: 'yaw-r', group: 'yaw', pos: [0.86, -0.05, 2.0], dir: [-1, 0, 0], max: 4000 },
+  { id: 'yaw-r', group: 'yaw', pos: [-0.86, -0.05, 2.0], dir: [1, 0, 0], max: 4000 },
+  { id: 'yaw-l', group: 'yaw', pos: [0.86, -0.05, 2.0], dir: [-1, 0, 0], max: 4000 },
 ];
 
 export const wheelRadiusOf = (i) => (i < 2 ? SPEC.wheelRadiusFront : SPEC.wheelRadiusRear);

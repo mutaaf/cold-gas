@@ -17,7 +17,7 @@ import { createRun, stepRun, FRAME_EVERY } from './sim/run.js';
 import { DT, CAR, NOZZLES, bodyRates } from './sim/vehicle.js';
 import { scoreRun } from './sim/judge.js';
 import { createAutopilot } from './sim/autopilot.js';
-import { COURSES, surface } from './sim/courses.js';
+import { COURSES, surface, showLocalX, showLocalZ } from './sim/courses.js';
 import { SPEC } from './sim/spec.js';
 import { bindInput, sample, usingTouch } from './input.js';
 import { initAudio, updateAudio, thud, setMuted, isMuted } from './audio.js';
@@ -34,8 +34,8 @@ const tier = params.get('gfx') || (coarse ? 'mid' : 'high');
 const canvas = document.getElementById('stage');
 let stage;
 try {
-  // [stage] ?course=lineup picks the kickflip range; the Wall is the default.
-  stage = createStage(canvas, { tier, course: params.get('course') === 'lineup' ? 'lineup' : 'wall' });
+  // [stage] ?course=wall|lineup practises one stunt; the Show (both, one run) is the default.
+  stage = createStage(canvas, { tier, course: ['wall', 'lineup'].includes(params.get('course')) ? params.get('course') : 'show' });
 } catch (err) {
   console.error(err);
   document.body.insertAdjacentHTML('beforeend', '<p class="noscript">COLD GAS needs WebGL. Try a current browser.</p>');
@@ -69,13 +69,16 @@ const S = {
   idleThrottles: new Float64Array(NOZZLES.length),
 };
 try { S.assist = localStorage.getItem('coldgas_assist') !== '0'; } catch { /* storage blocked */ }
-S.ghost = null; S.ghostOn = ghostEnabled();
-const ghostLoaded = loadBest().then((g) => { if (g && isBetter(S.ghost, g)) S.ghost = g; });
+// One ghost per course, loaded on first use.
+S.ghosts = {}; S.ghostOn = ghostEnabled();
+const ghostLoads = {};
+const ghostLoaded = (course) => (ghostLoads[course] ??= loadBest(course).then((g) => { if (g && isBetter(S.ghosts[course], g)) S.ghosts[course] = g; }));
+ghostLoaded(stage.course);
 const gpose = newGhostPose();
 // Shown only in your own live runs; it fades out where it overlaps the car (the start line).
 function syncGhost() {
   const live = (S.mode === 'live' || S.mode === 'countdown') && !S.autopilot;
-  ghostRoot.visible = live && S.ghostOn && ghostAt(S.ghost, S.run.tick, gpose);
+  ghostRoot.visible = live && S.ghostOn && ghostAt(S.ghosts[S.run.course], S.run.tick, gpose);
   if (!ghostRoot.visible) return;
   ghostRoot.position.set(gpose.x, gpose.y, gpose.z);
   ghostRoot.quaternion.set(gpose.qx, gpose.qy, gpose.qz, gpose.qw);
@@ -112,7 +115,7 @@ function toTitle() {
   ui.clearCue(); ui.countdown(0);
   plumes.clear();
   placeOnPad();
-  history.replaceState(null, '', stage.course === 'wall' ? location.pathname : `${location.pathname}?course=${stage.course}`);
+  history.replaceState(null, '', stage.course === 'show' ? location.pathname : `${location.pathname}?course=${stage.course}`);
 }
 
 function startRun(kind = 'jump') {
@@ -120,6 +123,7 @@ function startRun(kind = 'jump') {
   S.run = createRun(stage.course);
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.released = false;
+  ghostLoaded(stage.course);
   S.mode = 'countdown'; S.countT = 0; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
   ui.only('hud');
   ui.touch.hidden = !(coarse || usingTouch()) || !!S.autopilot;
@@ -128,7 +132,7 @@ function startRun(kind = 'jump') {
   const sag = c.wheels[0].compression;
   syncCar(c.pos, c.quat, [sag, sag, sag, sag], [0, 0, 0, 0], 0);
   director.snap();
-  if (S.autopilot) ui.cue_(stage.course === 'wall' ? 'The reference run: up the Wall' : 'The reference jump', 2400);
+  if (S.autopilot) ui.cue_({ show: 'The reference run: the Wall, then the lineup', wall: 'The reference run: up the Wall' }[stage.course] || 'The reference jump', 2400);
 }
 
 function finishRun() {
@@ -142,8 +146,8 @@ function finishRun() {
   // Your best run becomes the ghost for the next attempt (the reference jump only until you
   // finish one of your own). Storage keeps whichever is better, even across tabs.
   if (run.frames.length) {
-    const g = packFrames(run.frames, S.card.total, !!S.autopilot);
-    ghostLoaded.then(() => { if (isBetter(S.ghost, g)) { S.ghost = g; saveBest(g); } });
+    const g = packFrames(run.frames, S.card.total, !!S.autopilot, run.course);
+    ghostLoaded(run.course).then(() => { if (isBetter(S.ghosts[run.course], g)) { S.ghosts[run.course] = g; saveBest(g); } });
   }
   // The judges' theatre: the server re-simulates the log, then a model writes the words, all of
   // it shown live (src/ai/theatre.js, a lazy chunk with the aurora-field particle engine).
@@ -182,7 +186,7 @@ syncAiChip();
 // The Wall's fan is a car system, not a button: it spools up before the foot of the ramp and holds
 // the car to the deck. On the deck, LIFT is the release: suction off, lift jets push you clear.
 function wallAssist(run, input) {
-  if (run.course !== 'wall') return input;
+  if (!(run.course === 'wall' || (run.course === 'show' && run.leg === 0))) { input.fan = 0; return input; }
   const c = run.car;
   if (run.phase === 'ramp' && input.lift > 0) S.released = true;
   input.fan = !S.released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
@@ -222,7 +226,7 @@ function liveStep(dt) {
 
   // Phase cues and moments.
   // Touch layout follows the phase: pedals on the ground and up the wall, LIFT/LAND in the air.
-  const tp = run.phase === 'air' ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
+  const tp = run.phase === 'air' ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';   // (service: ground)
   if (ui.touch.dataset.phase !== tp) {
     ui.touch.dataset.phase = tp;
     liftLabel.textContent = tp === 'ramp' ? 'RELEASE' : 'LIFT';
@@ -231,6 +235,7 @@ function liveStep(dt) {
   if (run.phase !== S.prevPhase) {
     if (run.phase === 'air') director.shake(0.15);
     if (run.phase === 'landed') { thud(run.t.sink); director.shake(Math.min(1, run.t.sink / 4)); }
+    if (run.phase === 'service') ui.cue_('Crew topping up the nitrogen · hold it still', 2000);
     S.prevPhase = run.phase;
   }
   if (!S.autopilot) cues(run, c);
@@ -241,7 +246,7 @@ function liveStep(dt) {
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI,
     rollAngle: Math.atan2(qv.x, qv.y), alt: heightAboveSurface(c),
-    sink: -c.vel.y, phase: { drive: 'Run-up', ramp: c.fanForce > 1000 ? 'On the wall · fan' : 'On the wall', air: 'Airborne', landed: 'Touchdown', done: 'Settled' }[run.phase],
+    sink: -c.vel.y, phase: { drive: 'Run-up', ramp: c.fanForce > 1000 ? 'On the wall · fan' : 'On the wall', air: 'Airborne', landed: 'Touchdown', service: 'Top-up', done: 'Settled' }[run.phase],
     throttles: c.throttles, fan: c.fan, g: feltG(c, dt),
   });
   hero.setFan?.(c.fan);
@@ -258,17 +263,22 @@ function liveStep(dt) {
 const kbd = (touchLabel, keyLabel) => `<kbd>${usingTouch() ? touchLabel : keyLabel}</kbd>`;
 function cues(run, c) {
   const v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
-  if (run.phase === 'drive' && v < 2) return ui.cue_(`Hold ${kbd('GO', '↑')} to drive`, 600);
-  if (run.course === 'wall') {
+  if (run.phase === 'drive' && v < 2 && !(run.course === 'show' && run.leg === 1)) return ui.cue_(`Hold ${kbd('GO', '↑')} to drive`, 600);
+  if (run.course === 'wall' || (run.course === 'show' && run.leg === 0)) {
     if (run.phase === 'drive' && c.pos.z > -40) return ui.cue_(`Fan spooling · crawl in, about 20 km/h`, 600);
     if (run.phase === 'ramp' && run.t.progress < 0.85) return ui.cue_(`Feather ${kbd('GO', '↑')}: crawl up on suction`, 500);
     if (run.phase === 'ramp') return ui.cue_(`Hang it upside down · ${kbd('LIFT', 'Space')} to let go`, 500);
     if (run.phase === 'air' && c.vel.y > -1) return ui.cue_(`Roll upright: ${kbd('stick', '← →')}`, 500);
     if (run.phase === 'air') return ui.cue_(`Hold ${kbd('LAND', 'Shift')}: it levels and slows the fall`, 500);
+    if (run.course === 'show' && run.phase === 'landed') return ui.cue_(`${kbd('BRAKE', '↓')} to a stop on the pad: the crew tops up the tanks`, 500);
     return;
   }
-  const R = COURSES.lineup.ramp;
-  if (run.phase === 'drive' && c.pos.z > -40 && c.pos.z < R.z0) return ui.cue_(`Hold ${kbd('LIFT', 'Space')} at the lip`, 600);
+  // The Lineup (or the Show's second leg, on the lineup lane: lz is distance along it).
+  const show = run.course === 'show';
+  const lz = show ? showLocalZ(c.pos.z) : c.pos.z, lx = show ? showLocalX(c.pos.x) : c.pos.x;
+  if (show && run.phase === 'drive' && lz < -14 && Math.abs(lx) > 1.2) return ui.cue_(`Steer onto the lineup lane: ${kbd('stick', '← →')} · about 27 km/h`, 500);
+  if (show && run.phase === 'drive' && v < 2) return ui.cue_(`Tanks full · ${kbd('GO', '↑')} for the lineup`, 600);
+  if (run.phase === 'drive' && lz > -14 && lz < COURSES.lineup.lineupZ0) return ui.cue_(`Hold ${kbd('LIFT', 'Space')} at the line`, 600);
   if (run.phase === 'air' && Math.abs(run.t.rollAccum) < 0.3 && c.vel.y < 4) return ui.cue_(`${kbd('stick sideways', '← →')} to roll`, 500);
   if (run.phase === 'air' && Math.abs(run.t.rollAccum) > 5.6 && c.vel.y < 0) return ui.cue_(`Hold ${kbd('LAND', 'Shift')}`, 500);
 }
@@ -286,7 +296,10 @@ function replayStep(dt) {
   const f = frames[i0];
   // Slow motion where it matters: over the lineup, or up the wall and through the roll.
   const L = COURSES.lineup;
-  const slow = stage.course === 'wall' ? (f[1] > 3 ? 0.45 : 1) : (f[2] > L.ramp.z1 - 2 && f[2] < L.pad.z - 6 ? 0.42 : 1);
+  const leg2 = stage.course === 'show' && S.run.legFrame >= 0 && i0 >= S.run.legFrame;
+  const lz = leg2 ? showLocalZ(f[2]) : f[2];
+  const slow = stage.course === 'wall' || (stage.course === 'show' && !leg2) ? (f[1] > 3 ? 0.45 : 1) : (lz > L.liftOffZ - 2 && lz < L.pad.z - 6 ? 0.42 : 1);
+  S.replayLeg = leg2 ? 1 : 0;
   S.replayT += dt * (240 / FRAME_EVERY) * slow;
   if (S.replayT >= n + 90) S.replayT = 0;   // hold a beat, loop
   const i1 = Math.min(n - 1, i0 + 1), k = Math.min(1, S.replayT - i0);
@@ -336,6 +349,7 @@ function frame(now) {
       phase: S.run?.phase || 'drive',
       mode: S.mode === 'title' ? 'title' : S.mode === 'results' || S.mode === 'replay' ? 'replay' : 'live',
       course: stage.course,   // [stage]
+      leg: S.mode === 'results' || S.mode === 'replay' ? S.replayLeg || 0 : S.run?.leg || 0,
     });
     stage.render(S.time);
   }
@@ -362,7 +376,9 @@ on('[data-restart]', () => { S.paused = false; ui.show('pause', false); startRun
 on('[data-share]', async () => {
   if (!S.card) return;
   const f = S.card.facts;
-  const text = `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. ${f.rollDeg}° roll, ${f.apex} m apex, ${f.sink} m/s touchdown.`;
+  const text = f.course === 'show'
+    ? `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. Up a ${f.height} m wall, ${f.invertedS} s inverted${f.lineup ? `, a ${f.rollDeg}° kickflip over the lineup, ${f.sink} m/s touchdown` : ''}.`
+    : `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. ${f.rollDeg}° roll, ${f.apex} m apex, ${f.sink} m/s touchdown.`;
   const url = `${location.origin}${import.meta.env.BASE_URL}`;
   try {
     if (navigator.share) await navigator.share({ title: 'COLD GAS', text, url });
@@ -370,7 +386,7 @@ on('[data-share]', async () => {
   } catch { /* cancelled */ }
 });
 
-// Event picker on the title (also ?course=wall|lineup).
+// Event picker on the title (also ?course=wall|lineup; the Show is the default).
 const courseBtns = document.querySelectorAll('[data-course]');
 function syncCourseBtns() { courseBtns.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.course === stage.course))); }
 courseBtns.forEach((b) => b.addEventListener('click', () => {
@@ -396,8 +412,9 @@ const syncGhostBtn = () => ghostBtn.setAttribute('aria-pressed', String(S.ghostO
 syncGhostBtn();
 function toggleGhost() {
   S.ghostOn = !S.ghostOn; syncGhostBtn(); setGhostEnabled(S.ghostOn);
-  const who = S.ghost?.ref ? 'the reference jump' : 'your best run';
-  ui.cue_(S.ghostOn ? (S.ghost ? `Ghost on: ${who} rides alongside` : 'Ghost on: finish a run to set one') : 'Ghost off', 1600);
+  const ghost = S.ghosts[stage.course];
+  const who = ghost?.ref ? 'the reference run' : 'your best run';
+  ui.cue_(S.ghostOn ? (ghost ? `Ghost on: ${who} rides alongside` : 'Ghost on: finish a run to set one') : 'Ghost off', 1600);
 }
 ghostBtn.addEventListener('click', toggleGhost);
 addEventListener('keydown', (e) => {

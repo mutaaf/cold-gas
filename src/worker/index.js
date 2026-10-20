@@ -65,7 +65,7 @@ export function verify(body) {
     last = e[0];
     for (let i = 1; i < e.length; i++) if (!Number.isInteger(e[i]) || e[i] < -100 || e[i] > 100) return null;
   }
-  const course = body?.course === 'lineup' ? 'lineup' : 'wall';
+  const course = ['show', 'wall', 'lineup'].includes(body?.course) ? body.course : 'show';
   const run = simulate(log, course);
   const assist = log.some((e) => e[INPUT_KEYS.indexOf('assist') + 1] !== 0);
   return { run, card: scoreRun(run.t, { assist }) };

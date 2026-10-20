@@ -26,6 +26,7 @@ const pick = (arr, seed) => arr[Math.abs(Math.round(seed * 997)) % arr.length];
 
 export function localWords(card) {
   if (card.facts.course === 'wall') return wallWords(card);
+  if (card.facts.course === 'show') return showWords(card);
   const f = card.facts, s = f.sink + f.tiltDeg + f.padMiss;
   if (!f.jumped) {
     return { headline: 'No jump recorded', engineer: 'The car never left the ground long enough to measure. Nothing to grade.', coordinator: 'The ramp is right there. Hit it with intent and give me something.', designer: 'Restraint is a virtue. This was too much of it.', source: 'local' };
@@ -65,5 +66,27 @@ function wallWords(card) {
   const designer = f.airPct > 30
     ? `${f.airPct}% of the nitrogen left. Restraint, not panic.`
     : `${f.airPct}% gas left. Effective, but the burn was heavy.`;
+  return { headline: card.verdict, engineer, coordinator, designer, source: 'local' };
+}
+
+// The Show: speak to the leg that decided it.
+function showWords(card) {
+  const f = card.facts, w = f.wall, k = f.lineup;
+  if (!k) {
+    const words = wallWords({ ...card, facts: w });
+    if (w.jumped && !w.crashed) return { ...words, headline: 'Never reached the lineup', designer: 'Half a show is half a score. Stop on the pad, take the top-up, finish it.' };
+    return words;
+  }
+  if (k.contact || k.crashed || !k.jumped) {
+    const words = localWords({ ...card, facts: k });
+    return { ...words, coordinator: `The wall was right: ${w.height} m, ${w.invertedS} s inverted. ${words.coordinator}` };
+  }
+  const s = w.height + k.apex + k.sink;
+  const engineer = k.sink < 1.5 && w.sink < 1.5
+    ? `Two landings, ${w.sink} and ${k.sink} m/s. Both inside the envelope. I would sign that off.`
+    : `Touchdowns at ${w.sink} and ${k.sink} m/s. Level earlier and let the down-jets do the work.`;
+  const coordinator = pick([`${w.invertedS} seconds upside down at ${w.height} metres, then ${k.rollDeg}° over the lineup. That is the show.`,
+    `Off the wall and over the semi in one run. The crowd got both.`], s);
+  const designer = k.airPct > 30 ? `Two stunts, one fill each, ${k.airPct}% left at the end. Restraint.` : `${k.airPct}% gas left after the kickflip. The second burn was heavy.`;
   return { headline: card.verdict, engineer, coordinator, designer, source: 'local' };
 }

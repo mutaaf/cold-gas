@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import { createRun, stepRun, simulate } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
-import { createVehicle, step, newInput, mix, NOZZLES, DT } from '../../src/sim/vehicle.js';
-import { surface, WALL, wallProfile, LINEUP, LINEUP_BOXES } from '../../src/sim/courses.js';
+import { createVehicle, step, newInput, mix, NOZZLES, DT, forward } from '../../src/sim/vehicle.js';
+import { v3, rotate } from '../../src/sim/m3.js';
+import { surface, WALL, wallProfile, LINEUP, LINEUP_BOXES, SHOW, SHOW_BOXES } from '../../src/sim/courses.js';
 import { SPEC } from '../../src/sim/spec.js';
 
 function fly(course, opts) {
@@ -89,6 +90,66 @@ describe('courses', () => {
     const b = LINEUP_BOXES[2];
     expect(surface(LINEUP, 0, b.h - 0.1, b.cz, n)).toBeLessThan(0);
     expect(n.obstacle).toBe(true);
+  });
+});
+
+// Inputs are driver-relative. From the driver's seat (+z ahead, +y up) the right-hand side is −x.
+describe('controls: right means right', () => {
+  const driverRight = (s) => rotate(v3(), s.quat, v3(-1, 0, 0));
+  it('steer right turns the car to the driver\'s right', () => {
+    const s = settle();
+    for (let i = 0; i < 480; i++) step(s, { ...newInput(), throttle: 0.5, steer: i > 120 ? 1 : 0 });
+    expect(forward(s, v3()).x).toBeLessThan(-0.3);   // heading swung toward −x
+  });
+  it('roll right drops the right side; yaw right swings the nose right', () => {
+    const roll = createVehicle('lineup'); roll.pos.x = 30; roll.pos.y += 6;
+    for (let i = 0; i < 60; i++) step(roll, { ...newInput(), roll: 1, lift: 0.6 });
+    expect(driverRight(roll).y).toBeLessThan(-0.3);
+    const yaw = createVehicle('lineup'); yaw.pos.x = 30; yaw.pos.y += 6;
+    for (let i = 0; i < 60; i++) step(yaw, { ...newInput(), yaw: 1, lift: 0.6 });
+    expect(forward(yaw, v3()).x).toBeLessThan(-0.05);
+  });
+  it('full lock at speed asks for the tyres\' grip, not more', () => {
+    const s = settle();
+    for (let i = 0; i < 240 * 4; i++) step(s, { ...newInput(), throttle: Math.hypot(s.vel.x, s.vel.z) < 25 ? 1 : 0.25 });
+    for (let i = 0; i < 240; i++) step(s, { ...newInput(), throttle: 0.25, steer: 1 });
+    expect(Math.abs(s.steer)).toBeLessThan(0.2);
+    expect(Math.max(...s.wheels.slice(0, 2).map((w) => Math.abs(w.slipAngle)))).toBeLessThan(0.2);   // ≲11°: at the peak, not past it
+  });
+});
+
+describe('the Show: both stunts, one run', () => {
+  it('puts the lineup on its own lane beside the Wall approach', () => {
+    for (const b of SHOW_BOXES) { expect(b.maxX).toBeLessThan(-3); expect(b.maxZ).toBeLessThan(WALL.pad.z - 30); }
+    const n = { x: 0, y: 0, z: 0 };
+    const semi = SHOW_BOXES.find((b) => b.id === 'semi');
+    expect(surface(SHOW, (semi.minX + semi.maxX) / 2, semi.h - 0.1, semi.cz, n)).toBeLessThan(0);
+    expect(surface(SHOW, 0, 5, 5, n)).toBeLessThan(surface(LINEUP, 0, 5, 5, n));   // and the Wall is there too
+  });
+  const run = fly('show');
+  const card = scoreRun(run.t, { assist: true });
+  it('the reference climbs the Wall, tops up, clears the lineup and sticks both landings', () => {
+    expect(run.leg).toBe(1);
+    expect(run.t.wall.progress).toBe(1);
+    expect(card.facts.reachedLineup).toBe(true);
+    expect(card.facts.lineup.contact).toBe(false);
+    expect(card.facts.lineup.rotations).toBe(1);
+    expect(card.facts.wall.padMiss).toBeLessThan(6);
+    expect(card.facts.lineup.padMiss).toBeLessThan(4);
+    expect(card.total).toBeGreaterThan(80);
+  });
+  it('replays exactly from its input log', () => {
+    const re = simulate(run.inputLog, 'show');
+    expect(re.tick).toBe(run.tick);
+    expect(re.car.pos).toEqual(run.car.pos);
+    expect(scoreRun(re.t, { assist: true })).toEqual(card);
+  });
+  it('stopping after the Wall scores half at most', () => {
+    const r = createRun('show'); const ap = createAutopilot('show');
+    while (r.phase !== 'done' && r.leg === 0) stepRun(r, ap(r));
+    const idle = newInput();
+    while (r.phase !== 'done') stepRun(r, idle);
+    expect(scoreRun(r.t).total).toBeLessThanOrEqual(50);
   });
 });
 
