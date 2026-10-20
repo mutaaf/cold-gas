@@ -74,10 +74,14 @@ mark, and air left in the tanks.
 3. **Own origin only.** Everything is bundled (fonts via `@fontsource`), and the only API is
    `/coldgas/api/*`. No third-party hosts, analytics, trackers or CDNs. The smoke test fails on
    any non-localhost request. No accounts and no personal data. Initials are 3 letters.
-4. **Determinism.** `src/sim/*` is pure. It uses no `Math.random`, no wall clock, no DOM and no
+4. **Determinism and realism.** `src/sim/*` is pure. It uses no `Math.random`, no wall clock, no DOM and no
    three.js, and it's fixed-step at 240 Hz. A run replays bit-exactly from its input log
    (`tests/unit/sim.test.js`). Any change to the sim or the scorer that changes outcomes bumps
-   `SIM_VERSION` in `src/sim/run.js`.
+   `SIM_VERSION` in `src/sim/run.js`. Physical numbers live in `spec.js` with a source or an
+   ESTIMATE note; never tune the car to "feel" without saying what real quantity changed.
+   `node scripts/physics-bench.mjs` (0–60, braking, cornering) and `node scripts/naive-players.mjs`
+   (32 simple strategies must all land upright with Assist) are the realism and accessibility
+   gates: run them for any physics change.
 5. **Scores are decided by `scoreRun`.** The AI writes words only. The client never sends a
    score: the Worker replays the log.
 5½. **AI usage is always visible and honest.** Every model call goes through the theatre and
@@ -100,17 +104,24 @@ src/main.js           Entry: state machine (title → countdown → live → res
                         fixed-step clock, sim → scene sync, deep links, wiring
 src/sim/              PURE, shared with the Worker:
   m3.js                 allocation-free vec3/quat math
-  course.js             the range: ramp profile, lineup boxes, pad, groundAt(), obstacles
-  vehicle.js            6-DOF rigid body, raycast suspension, tyres, 10 nozzles, mixer,
-                          flight computer (Assist rate mode, LAND = level + sink governor)
-  run.js                one attempt: input quantising + log, replay frames, telemetry,
-                          end conditions, simulate(log) for exact replays
-  autopilot.js          the reference jump, closed-loop through the same physics
-  judge.js              scoreRun(t): six categories → three judges → total /100 + verdict
+  spec.js               THE CAR: dimensions, mass, inertia, power, tyres, fan, nitrogen, ten
+                          nozzles. Public reveal numbers where they exist, marked estimates elsewhere
+  courses.js            THE COURSES as exact geometry: the Wall (15 m quarter-pipe → vertical →
+                          13 m overhang, 25 m lip) and the Lineup (kicker + five parked EVs);
+                          `surface()` = signed distance + normal, used by wheels, hull and fan
+  vehicle.js            physics v2: 6-DOF body, raycast suspension on any surface, Pacejka tyres
+                          with implicit wheel spin, TC/ABS, stiction, 2 g suction fan, cold-gas
+                          nozzles with blowdown, mixer, flight computer (Assist / LAND / Pro)
+  run.js                one attempt: input log (12 channels incl. fan), phases drive → ramp →
+                          air → landed, telemetry (0–60, g-load, inversion, landing), simulate()
+  autopilot.js          reference runs for both courses, closed-loop through the same physics
+  judge.js              scoreRun: per-course categories → three judges → total /100 + verdict
 src/render/           three.js (r186):
-  scene.js              renderer, sky shader, PMREM env, ground, ramp, lineup, pad,
-                          horizon + test stand, lights, bloom + SMAA composer
-  cars.js               procedural lofted vehicles (roadster + lineup), materials
+  scene.js              renderer, composer, course switching (`setCourse`), lineup world
+  wall.js               the night stage: the Wall's deck sampled from `wallProfile`, truss,
+                          LED edges, searchlights, pad
+  roadster.js           the hero car: faceted body from SPEC, nozzles at NOZZLE_SPEC, fan, wing
+  cars.js               lineup vehicles, ghost, `wheelCenterY` contract
   plumes.js             per-nozzle shock-diamond cones + condensation mist pool
   director.js           chase / broadcast air cam / replay rigs / title turntable
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air)
