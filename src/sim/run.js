@@ -10,7 +10,7 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // v6: The Show is one flight (off the Wall, over the row); parked vehicles are bodies with mass,
 // per-surface materials; v5: driver-relative steer/roll/yaw, grip-limited steering; v4: sourced
 // specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 6;
+export const SIM_VERSION = 7;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 

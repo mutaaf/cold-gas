@@ -150,7 +150,7 @@ export const SHOW = {
   blurb: 'One flight: up the Wall, hang inverted, let go, thrust over five parked vehicles, roll it, land it.',
   ramp: null,
   start: { z: -6, x: 0 },
-  pad: { z: -35, x: 0, rings: [2, 4, 7] },
+  pad: { z: -32, x: 0, rings: [2, 4, 7] },
   boxes: SHOW_BOXES,
   rowNear: SHOW_ROW_NEAR,
   rowFar: SHOW_BOXES[SHOW_BOXES.length - 1].minZ,

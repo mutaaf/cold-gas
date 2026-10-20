@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.7.0 — 2026-10-20
+
+The car's real geometry in the physics (SIM_VERSION 7), from the body research (docs/REVEAL_RESEARCH.md §10).
+- Length 4.65 → 4.33 m, front overhang 0.85 m (PHOTO): the hull is 0.3 m shorter at the tail.
+- Rear nozzles moved up to 0.42 m (≈ the CoM height), 0.26 m apart: a burn no longer pitches the car.
+- Down-jets moved to just behind each wheel (OFFICIAL "behind each wheel"). They are no longer symmetric about the CoM, so the mixer trims each jet's lift share to cancel the pitch moment; pure lift is ≈51 kN.
+- The model draws every nozzle exactly where the physics fires it.
+- The Show's pad moved to z −32 and the reference carry to 8.5 m/s; reference 90.3 (Wall 94, Lineup 84.3). Naive Show players: 30/36 land clean (was 24/36).
+
+
 ## Unreleased
 
 **First load** (phone, 4× CPU, Slow 4G, local build: first paint 1.48 s → 0.75 s, title wired 3.63 s → 2.99 s, longest main-thread task 588 ms → 284 ms)

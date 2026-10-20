@@ -683,13 +683,10 @@ How the PHOTO numbers were measured:
 - Any light behaviour tied to the thrusters.
 - An official length, height or track.
 
-### 10.8 Mismatches with `src/sim/spec.js` (physics numbers, deliberately NOT changed here)
+### 10.8 Mismatches with `src/sim/spec.js`: resolved in SIM_VERSION 7
 
-These need a `SIM_VERSION` bump and replay-test updates, so they are reported rather than changed.
-
-| Quantity | spec.js | Reveal car | Effect today |
+| Quantity | was | now (sourced) | Consequence in the sim |
 |---|---|---|---|
-| `length` | 4.65 m | **4.33 m** (PHOTO) | The hull box, and so the drawn body, is about 0.3 m too long, almost all in the tail (rear overhang 0.93 m vs 0.63–0.69 m) |
-| `overhangFront` | 0.90 m | 0.82–0.87 m (PHOTO) | close |
-| Rear nozzles `pos` | y −0.20 (0.22 m above ground), x ±0.18 / ±0.50 | 0.42 m above ground, x ±0.13 / ±0.39 (PHOTO) | The model and the plumes draw them at the photo position (`NOZZLE_VISUAL`); the force still acts 0.20 m lower and slightly wider |
-| Down nozzles `pos` | z ±1.98 (ahead of the front wheel, behind the rear wheel) | just **behind** each wheel at sill level, so about z +0.95 and −1.95 (PHOTO, 04-World) | drawn at the spec position, so the front pair fires from under the nose |
+| `length` | 4.65 m | **4.33 m** (PHOTO), front overhang 0.85 m | Hull probes (tail, sills) are 0.3 m shorter; the drawn body matches |
+| Rear nozzles `pos` | 0.22 m up, x ±0.18 / ±0.50 | **0.42 m up** (≈ CoM height), x ±0.13 / ±0.39 | A rear burn no longer pitches the nose up; boosting off the ledge is cleaner |
+| Down nozzles `pos` | z ±1.98 | **just behind each wheel**: z +0.95 / −1.95 | The jets sit asymmetrically about the CoM, so the mixer trims each one's share of a lift command to cancel the pitch moment (the front pair runs full, the rear pair at ≈49 %). Pure lift is now ≈51 kN, not 68 kN; attitude authority rides on top. The Wall still brakes at 2.5–4.6 G peak (the fidelity test), landing a little harder from the Show's carry. If Tesla's weight distribution is rearward of our 50:50 estimate, the trim (and the lift) comes back up: the CoM position is now the most consequential unsourced number. |
