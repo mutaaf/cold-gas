@@ -6,6 +6,7 @@ import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { wallProgress } from './run.js';
 import { v3 } from './m3.js';
+import { dhypot } from './dmath.js';
 
 export const REVEAL = {
   wall: { approach: 17, climb: 12, releaseAt: 0.96 },
@@ -28,7 +29,7 @@ function wallPilot(plan) {
     const c = run.car;
     Object.assign(out, newInput());
     out.assist = 1;
-    const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
+    const speed = dhypot(c.vel.x, c.vel.y, c.vel.z);
     if (run.phase === 'drive') {
       laneKeep(c, out);
       out.throttle = speed < plan.approach ? 1 : 0;
@@ -86,7 +87,7 @@ function lineupPilot(plan) {
     const c = run.car, t = run.t;
     Object.assign(out, newInput());
     out.assist = 1;
-    const speed = Math.hypot(c.vel.x, c.vel.z);
+    const speed = dhypot(c.vel.x, c.vel.z);
     laneKeep(c, out);
     if (run.phase === 'drive') {
       out.throttle = speed < plan.speed ? 1 : 0;

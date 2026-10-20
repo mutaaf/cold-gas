@@ -74,7 +74,11 @@ mark, and air left in the tanks.
 3. **Own origin only.** Everything is bundled (fonts via `@fontsource`), and the only API is
    `/coldgas/api/*`. No third-party hosts, analytics, trackers or CDNs. The smoke test fails on
    any non-localhost request. No accounts and no personal data. Initials are 3 letters.
-4. **Determinism and realism.** `src/sim/*` is pure. It uses no `Math.random`, no wall clock, no DOM and no
+4. **Determinism and realism.** `src/sim/*` is pure. It uses `dmath.js` (dsin, dcos, datan,
+   datan2, dacos, dhypot), never `Math.sin`/`atan2`/`hypot`/`pow`: engines differ in those by an
+   ulp and the stunt physics is chaotic, so runs would score differently on Safari, Chrome and the
+   Worker. `npm run determinism -- logs.json` replays logs in Node, Chromium and WebKit and
+   must print IDENTICAL. It uses no `Math.random`, no wall clock, no DOM and no
    three.js, and it's fixed-step at 240 Hz. A run replays bit-exactly from its input log
    (`tests/unit/sim.test.js`). Any change to the sim or the scorer that changes outcomes bumps
    `SIM_VERSION` in `src/sim/run.js`. Physical numbers live in `spec.js` with a source or an

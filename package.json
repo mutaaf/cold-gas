@@ -16,7 +16,8 @@
     "lint": "eslint .",
     "check": "node scripts/check-backlog.mjs && npm run lint && npm test && npm run e2e",
     "check:fast": "node scripts/check-backlog.mjs && npm run lint && npm test && npm run build",
-    "up": "npm install && npx playwright install chromium && npm run dev"
+    "up": "npm install && npx playwright install chromium && npm run dev",
+    "determinism": "node scripts/determinism.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

@@ -6,6 +6,7 @@
 // unit normal pointing out of the solid. Wheels, the hull and the suction fan all use it, so the
 // car can drive up walls and hang upside down under a ledge with the same code that drives it
 // on flat concrete. +z is the driving direction, +y is up, metres.
+import { dsin, dcos, datan2, dhypot } from './dmath.js';
 
 const D2R = Math.PI / 180;
 
@@ -30,7 +31,7 @@ export const WALL = {
   pad: { z: -34, x: 0, rings: [2.5, 5, 8] },   // landing target, back on the approach
   runout: { zMin: -420, zMax: 60 },
   // Derived: lip of the ledge (where you launch from) and the profile's total length.
-  lip: { z: R1 - R2 + R2 * Math.cos(TIP), y: R1 + H + R2 * Math.sin(TIP) },
+  lip: { z: R1 - R2 + R2 * dcos(TIP), y: R1 + H + R2 * dsin(TIP) },
   length: R1 * Math.PI / 2 + H + R2 * TIP,
   topHeight: R1 + H + R2,     // highest point of the curl's centreline circle
 };
@@ -41,17 +42,17 @@ export function wallProfile(s, out = { z: 0, y: 0, nz: 0, ny: 0, tz: 0, ty: 0 })
   const a = R1 * Math.PI / 2;
   if (s <= a) {
     const th = -Math.PI / 2 + s / R1;
-    out.z = R1 * Math.cos(th); out.y = R1 + R1 * Math.sin(th);
-    out.nz = -Math.cos(th); out.ny = -Math.sin(th);
-    out.tz = -Math.sin(th); out.ty = Math.cos(th);
+    out.z = R1 * dcos(th); out.y = R1 + R1 * dsin(th);
+    out.nz = -dcos(th); out.ny = -dsin(th);
+    out.tz = -dsin(th); out.ty = dcos(th);
   } else if (s <= a + H) {
     out.z = R1; out.y = R1 + (s - a);
     out.nz = -1; out.ny = 0; out.tz = 0; out.ty = 1;
   } else {
     const th = Math.min(TIP, (s - a - H) / R2);
-    out.z = R1 - R2 + R2 * Math.cos(th); out.y = R1 + H + R2 * Math.sin(th);
-    out.nz = -Math.cos(th); out.ny = -Math.sin(th);
-    out.tz = -Math.sin(th); out.ty = Math.cos(th);
+    out.z = R1 - R2 + R2 * dcos(th); out.y = R1 + H + R2 * dsin(th);
+    out.nz = -dcos(th); out.ny = -dsin(th);
+    out.tz = -dsin(th); out.ty = dcos(th);
   }
   return out;
 }
@@ -61,7 +62,7 @@ function wallSdf(z, y, n) {
   let best = Infinity, bz = 0, by = 0;
   // arc A
   {
-    const dz = z, dy = y - R1, d = Math.hypot(dz, dy), th = Math.atan2(dy, dz);
+    const dz = z, dy = y - R1, d = dhypot(dz, dy), th = datan2(dy, dz);
     if (th >= -Math.PI / 2 - 1e-9 && th <= 0 && d > 1e-6) {
       const s = R1 - d;
       if (Math.abs(s) < Math.abs(best)) { best = s; bz = -dz / d; by = -dy / d; }
@@ -74,7 +75,7 @@ function wallSdf(z, y, n) {
   }
   // arc B (the ledge)
   {
-    const cz = R1 - R2, cy = R1 + H, dz = z - cz, dy = y - cy, d = Math.hypot(dz, dy), th = Math.atan2(dy, dz);
+    const cz = R1 - R2, cy = R1 + H, dz = z - cz, dy = y - cy, d = dhypot(dz, dy), th = datan2(dy, dz);
     if (th >= 0 && th <= TIP && d > 1e-6) {
       const s = R2 - d;
       if (Math.abs(s) < Math.abs(best)) { best = s; bz = -dz / d; by = -dy / d; }
@@ -131,7 +132,7 @@ function kickerHeight(z) {
 
 function boxSdf(b, x, y, z, n) {
   const qx = Math.max(b.minX - x, 0, x - b.maxX), qy = Math.max(b.minY - y, 0, y - b.maxY), qz = Math.max(b.minZ - z, 0, z - b.maxZ);
-  const out = Math.hypot(qx, qy, qz);
+  const out = dhypot(qx, qy, qz);
   if (out > 0) {
     n.nx = (x < b.minX ? -qx : x > b.maxX ? qx : 0) / out;
     n.ny = (y < b.minY ? -qy : y > b.maxY ? qy : 0) / out;
