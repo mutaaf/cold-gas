@@ -1,7 +1,7 @@
 // The reference runs, flown closed-loop through the same physics the player uses. They power
 // the attract mode, the ?play=reveal replay, the ghost, and the physics regression tests: if the
 // autopilot can't land it, neither can a player, and CI fails.
-import { newInput, bodyRates, up, G } from './vehicle.js';
+import { newInput, bodyRates, up, forward, G } from './vehicle.js';
 import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { wallProgress } from './run.js';
@@ -12,7 +12,7 @@ export const REVEAL = {
   lineup: { speed: 16.5, apex: 6.2, rolls: 1, rollBrake: 16 },
 };
 
-const rates = v3(), upv = v3();
+const rates = v3(), upv = v3(), fwv = v3();
 
 export function createAutopilot(courseId = 'wall', opts = {}) {
   return courseId === 'wall' ? wallPilot({ ...REVEAL.wall, ...opts }) : lineupPilot({ ...REVEAL.lineup, ...opts });
@@ -55,13 +55,20 @@ function wallPilot(plan) {
     const clear = c.pos.y < 30 && run.car.grounded === 0;
     out.level = clear ? 1 : 0;
     if (upv.y > 0.5) {
+      // Steer the fall onto the pad. The car may face either way after the flip, so pick the
+      // jet pair that pushes toward where we need to be: rear jets push along the nose, front
+      // jets against it.
+      forward(c, fwv);
       const h = Math.max(0.3, c.pos.y - SPEC.comHeight);
-      const tFall = h / Math.max(1.5, -c.vel.y + 0.5);
-      const toPad = c.pos.z - pad.z;               // the car travels toward −z
-      const vz = -c.vel.z;
-      if (vz * tFall > toPad + 1) out.retro = 1;
-      else if (vz * tFall < toPad - 4) out.thrust = 0.6;
-      out.roll = Math.max(-0.25, Math.min(0.25, (c.pos.x - pad.x) * 0.05 + c.vel.x * 0.15));
+      const tFall = Math.max(0.4, h / Math.max(1.2, -c.vel.y + 0.6));
+      const wantVz = (pad.z - c.pos.z) / tFall, wantVx = (pad.x - c.pos.x) / tFall;
+      const dvz = wantVz - c.vel.z, dvx = wantVx - c.vel.x;
+      const along = dvz * fwv.z + dvx * fwv.x;                 // desired change along the nose
+      if (along > 0.8) out.thrust = Math.min(1, along * 0.25);
+      else if (along < -0.8) out.retro = Math.min(1, -along * 0.25);
+      // Sideways: tilt the lift vector (a little roll) toward the target, in the car's own frame.
+      const side = dvx * fwv.z - dvz * fwv.x;                   // + = toward the car's right
+      out.roll = Math.max(-0.3, Math.min(0.3, side * 0.12));
     }
     return out;
   };
