@@ -27,8 +27,15 @@ test('Free Drive: pick Stelvio on the title, the car drives up the real road', a
   await expect(page.locator('.fd-fine')).toContainText('OpenStreetMap contributors');
   // Drive with the keyboard: throttle moves the car along the road.
   const s0 = await page.evaluate(() => window.__coldgas.drive.stats().i);
+  // The key reaches the sim; then step the sim in 0.1 s frames (CI's software GL renders a few
+  // frames a second under parallel load, so waiting on wall-clock time is a flake).
   await page.keyboard.down('ArrowUp');
-  await page.waitForFunction((s0) => window.__coldgas.drive.stats().i > s0 + 3, s0, { timeout: 60_000 });
+  await page.waitForFunction(() => window.__coldgas.drive.car.vel && Math.hypot(window.__coldgas.drive.car.vel.x, window.__coldgas.drive.car.vel.z) > 0.2, null, { timeout: 60_000 });
+  for (let k = 0; k < 20; k++) {
+    if (await page.evaluate((s0) => window.__coldgas.drive.stats().i > s0 + 3, s0)) break;
+    await page.evaluate(() => { const d = window.__coldgas.drive; for (let n = 0; n < 10; n++) d.frame(0.1, performance.now() / 1000); });
+  }
+  expect(await page.evaluate(() => window.__coldgas.drive.stats().i)).toBeGreaterThan(s0 + 3);
   await page.keyboard.up('ArrowUp');
   // On the road, wheels down, not under it.
   const st = await page.evaluate(() => {
