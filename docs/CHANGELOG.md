@@ -1,5 +1,14 @@
 # Changelog
 
+## Unreleased
+
+**First load** (phone, 4× CPU, Slow 4G, local build: first paint 1.48 s → 0.75 s, title wired 3.63 s → 2.99 s, longest main-thread task 588 ms → 284 ms)
+- The stylesheet is inlined into index.html (latin-only font faces) and the display face is preloaded, so the title paints from the HTML alone.
+- The title is wired before the 3D is built. The course is then built in ~10 ms slices between frames, the environment baked, and every shader (the ghost's and idle plumes' too) compiled with `compileAsync`. The canvas fades in on its first frame.
+- SMAA (desktop only) is its own chunk: phones download 37 kB less JavaScript.
+- Hashed assets are cached for a year as immutable, so a repeat visit only revalidates the HTML.
+- `node scripts/perf.mjs <url>` measures all of this.
+
 ## 0.6.0 — 2026-10-20
 
 The Show is one flight, and every object has its own physics (SIM_VERSION 6).

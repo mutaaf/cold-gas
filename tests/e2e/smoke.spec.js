@@ -131,3 +131,19 @@ test('keyboard: → steers right on screen, and the Show is the default event', 
   expect(vx).toBeLessThan(-0.3);        // world −x is the driver's right when heading +z
   expect(sx).toBeGreaterThan(-0.05);
 });
+
+// First load: the title paints from the HTML alone (CSS inlined, no stylesheet round trip), the
+// title is wired before the 3D is built, and the canvas fades in once the scene is warmed up.
+test('first load: inline styles, title wired early, 3D fades in when ready', async ({ page }) => {
+  const res = await page.goto('/coldgas/?gfx=low');
+  const html = await res.text();
+  expect(html).not.toMatch(/<link rel="stylesheet"/);
+  expect(html).toContain('<style>');
+  await expect(page.locator('[data-start]')).toBeVisible();
+  await page.waitForFunction(() => window.__coldgas?.stage.ready, null, { timeout: 30_000 });
+  await page.evaluate(() => window.__coldgas.stage.ready.then(() => true));
+  await expect(page.locator('#stage')).toHaveClass(/\bon\b/, { timeout: 30_000 });
+  // Switching the event after the first load still builds the whole course.
+  await page.locator('[data-course="lineup"]').click();
+  await expect(page.locator('[data-course="lineup"]')).toHaveAttribute('aria-checked', 'true');
+});

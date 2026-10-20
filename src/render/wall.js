@@ -432,9 +432,20 @@ export function bakeNightEnvironment(renderer) {
 }
 
 // --- The whole look ------------------------------------------------------------------------------------
-export function buildWall(tier, pad = WALL.pad) {
+// A generator, so the first load can build it in slices between frames (src/render/scene.js
+// `lookFor`): the first value is the look itself (empty group, camera pose, lighting), every
+// later `yield` is a safe place to hand the main thread back.
+export function* buildWall(tier, pad = WALL.pad) {
   const group = new THREE.Group();
   group.name = 'course:wall';
+  let beams = null;
+  yield {
+    group,
+    titlePose: { x: 0, z: -11, yaw: 0 },
+    look: { exposure: 1.18, bloom: { strength: 0.62, radius: 0.55, threshold: 0.82 }, fog: new THREE.FogExp2(0x020305, 0.0032) },
+    keyLight: { color: 0xdfe6ff, intensity: 1.7, offset: new THREE.Vector3(-18, 30, -22) },
+    update(t) { beams?.update(t); },
+  };
   const S = samples(tier === 'low' ? 200 : 380);
 
   // Deck.
@@ -446,6 +457,7 @@ export function buildWall(tier, pad = WALL.pad) {
   const deck = new THREE.Mesh(deckGeometry(S), deckMat);
   deck.castShadow = tier !== 'low'; deck.receiveShadow = true;
   group.add(deck);
+  yield;
 
   // Centreline: painted, matte white.
   const line = new THREE.Mesh(ribbon(S, -0.065, 0.065, 0.006), new THREE.MeshStandardMaterial({
@@ -475,9 +487,11 @@ export function buildWall(tier, pad = WALL.pad) {
   group.add(new THREE.Mesh(ribbon(S, W / 2 - 0.85, W / 2, 0.004), spill));
   const spillL = new THREE.Mesh(ribbon(S, -W / 2 + 0.85, -W / 2, 0.004), spill);
   group.add(spillL);
+  yield;
 
   // Truss.
   group.add(truss(tier));
+  yield;
 
   // Ground: a dark polished slab, the approach and the target.
   const gmap = groundTexture(41, '#141518'); gmap.repeat.set(70, 70);
@@ -487,6 +501,7 @@ export function buildWall(tier, pad = WALL.pad) {
   }));
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
   group.add(ground);
+  yield;
   group.add(approach(pad));
   group.add(glowDecal(0xff1828, 8, 0, 1.0, 0.26));
   group.add(glowDecal(0x8fb6ff, 7, -2.5, -5, 0.12));
@@ -518,15 +533,8 @@ export function buildWall(tier, pad = WALL.pad) {
   red.position.set(0, 1.2, 1.5);
   lights.add(red);
   group.add(lights);
+  yield;
 
-  const beams = searchlights(tier);
+  beams = searchlights(tier);
   group.add(beams.group);
-
-  return {
-    group,
-    titlePose: { x: 0, z: -11, yaw: 0 },
-    look: { exposure: 1.18, bloom: { strength: 0.62, radius: 0.55, threshold: 0.82 }, fog: new THREE.FogExp2(0x020305, 0.0032) },
-    keyLight: { color: 0xdfe6ff, intensity: 1.7, offset: new THREE.Vector3(-18, 30, -22) },
-    update(t) { beams.update(t); },
-  };
 }

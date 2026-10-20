@@ -126,7 +126,8 @@ src/sim/              PURE, shared with the Worker:
   autopilot.js          reference runs for both courses, closed-loop through the same physics
   judge.js              scoreRun: per-course categories → three judges → total /100 + verdict
 src/render/           three.js (r186):
-  scene.js              renderer, composer, course switching (`setCourse`), lineup world
+  scene.js              renderer, composer, course switching (`setCourse`), lineup world,
+                          sliced first load (`stage.ready`: build, bake, compileAsync, fade in)
   wall.js               the night stage: the Wall's deck sampled from `wallProfile`, truss,
                           LED edges, searchlights, pad
   roadster.js           the hero car: faceted body from SPEC, nozzles at NOZZLE_SPEC, fan, wing
@@ -174,6 +175,7 @@ npm run e2e        Playwright against a production build
 npm run check      backlog + lint + unit + e2e (what CI runs)
 npm run check:fast backlog + lint + unit + build (cloud sandboxes)
 node scripts/fly.mjs '{"apex":7,"rolls":1}'   headless reference flight telemetry
+node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title wired, first 3D frame, long tasks, bytes
 ```
 
 Local Worker: `npx wrangler dev` (serves dist + the API with a local D1, and uses
