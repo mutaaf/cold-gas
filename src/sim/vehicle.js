@@ -8,7 +8,7 @@
 // randomness, no wall clock: a run replays bit-exactly from its inputs (the Worker verifies
 // scores this way). No allocation in step().
 import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
-import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf } from './spec.js';
+import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf, AXLE_F } from './spec.js';
 import { surface, COURSES, DEFAULT_COURSE, MATERIALS, createWorld, stepWorld, pushBody } from './courses.js';
 import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
 
@@ -23,6 +23,10 @@ const WHEEL_I = 1.35;                         // kg·m² per wheel (22" forged +
 const STATIC_LOAD = ((SPEC.dryMass + SPEC.gasMass) * G) / 4;
 const MOUNT_TO_CENTRE = 0.24;                 // at rest (spec.js wheelAnchors)
 const REST_LEN = MOUNT_TO_CENTRE + STATIC_LOAD / K_SPRING;
+// Each axle's springs and dampers are rated to the weight it carries (42 : 58 front:rear), so the
+// car sits level with the same sag front and rear, like a real one set up on corner scales.
+const FRONT_SHARE = (SPEC.wheelbase - SPEC.comFromFront) / SPEC.wheelbase;
+const AXLE_K = [0, 1, 2, 3].map((i) => 2 * (i < 2 ? FRONT_SHARE : 1 - FRONT_SHARE));
 const RW = [0, 1, 2, 3].map(wheelRadiusOf);    // staggered: 20" front, 21" rear
 // Pacejka coefficients (peak at κ ≈ 0.10, α ≈ 8.4°): semi-slicks. Cornering stiffness B·C·D ≈ 21.6·μFz
 // (≈160 kN/rad per tyre at static load), crisp like a track tyre.
@@ -55,7 +59,7 @@ const DRIVEN = [false, false, true, true];
 const HULL = [];
 {
   const hw = SPEC.width / 2 - 0.04;
-  const zf = SPEC.wheelbase - SPEC.comFromFront + SPEC.overhangFront - 0.05;
+  const zf = AXLE_F + SPEC.overhangFront - 0.05;
   const zr = zf - SPEC.length + 0.1;
   // Floor probes sit 5 cm above the floor: the fan's sliding skirts touch first and are compliant.
   const yb = -(SPEC.comHeight - SPEC.rideHeight) + 0.05, yt = SPEC.height - SPEC.comHeight - 0.05;
@@ -243,7 +247,7 @@ export function step(s, inp) {
     const comp = maxT - t;
     w.compression = Math.min(comp, REST_LEN + R);
     const compRate = (w.compression - w.prevCompression) / dt;
-    let fs = K_SPRING * Math.min(comp, REST_LEN) + C_DAMP * compRate;
+    let fs = AXLE_K[i] * (K_SPRING * Math.min(comp, REST_LEN) + C_DAMP * compRate);
     const over = comp - (REST_LEN - MOUNT_TO_CENTRE + TRAVEL);
     if (over > 0) fs += BUMP * over;
     fs = Math.max(0, fs);
@@ -265,7 +269,7 @@ export function step(s, inp) {
     const den = Math.max(Math.abs(vLong), 3.0);
     let kappa = (w.omega * R - vLong) / den;
     const alpha = datan2(vLat, Math.max(Math.abs(vLong), 1.5));
-    const mu = SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (Fz / STATIC_LOAD - 1));   // load sensitivity, this surface
+    const mu = SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (Fz / (STATIC_LOAD * AXLE_K[i]) - 1));   // load sensitivity, this surface
     const D = Math.max(0, mu * Fz);
     // Drive and brake torque. Two rear motors, 500 kW each; Assist adds traction control.
     let T = 0;
@@ -387,7 +391,7 @@ export function step(s, inp) {
   addScaled(s.pos, s.pos, s.vel, dt);
   rotateInv(Lb, s.quat, tTot);
   rotateInv(wb, s.quat, s.angVel);
-  const k = m / SPEC.inertiaMass;
+  const k = 1;   // the gas sits near the CoM: inertia barely changes as it blows down (spec.js)
   const Ix = SPEC.inertia.pitch * k, Iy = SPEC.inertia.yaw * k, Iz = SPEC.inertia.roll * k;
   const hx = Ix * wb.x, hy = Iy * wb.y, hz = Iz * wb.z;
   const gx = wb.y * hz - wb.z * hy, gy = wb.z * hx - wb.x * hz, gz = wb.x * hy - wb.y * hx;

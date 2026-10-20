@@ -18,7 +18,7 @@ const D2R = Math.PI / 180;
 // in (z, y) and extruded across x:
 //   arc:   centre (0, R), from straight down (−90°) to 80°, i.e. 170° of turn
 //   ledge: a straight line from the arc's end, along its tangent, for LEDGE metres
-const R1 = 9.5, TURN = 170 * D2R, LEDGE = 5.5;
+const R1 = 13.5, TURN = 170 * D2R, LEDGE = 5.5;   // R1 scaled from the reveal's 9.5 m to raise the lip to 27.7 m (taller than the reveal by design)
 const A_END = -Math.PI / 2 + TURN;                      // 80°
 const P_END = { z: R1 * dcos(A_END), y: R1 + R1 * dsin(A_END) };
 const T_LEDGE = { z: -dsin(A_END), y: dcos(A_END) };    // along the ledge (up the curl)
@@ -150,7 +150,7 @@ export const SHOW = {
   blurb: 'One flight: up the Wall, hang inverted, let go, thrust over five parked vehicles, roll it, land it.',
   ramp: null,
   start: { z: -6, x: 0 },
-  pad: { z: -32, x: 0, rings: [2, 4, 7] },
+  pad: { z: -30, x: 0, rings: [2, 4, 7] },
   boxes: SHOW_BOXES,
   rowNear: SHOW_ROW_NEAR,
   rowFar: SHOW_BOXES[SHOW_BOXES.length - 1].minZ,

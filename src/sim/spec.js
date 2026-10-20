@@ -23,8 +23,10 @@ export const SPEC = {
   tyreWidthRear: 0.335,
   tyreMu: 1.25,            // OFFICIAL: Moravy, "typically 1.26 G" of tyre grip
   rideHeight: 0.10,        // ESTIMATE (fan car, runs low)
-  comHeight: 0.42,         // ESTIMATE
-  comFromFront: 1.42,      // ESTIMATE (≈50:50)
+  // Centre of mass (docs/REVEAL_RESEARCH.md §11, component build-up: floor battery, both motors at
+  // the rear axle, 200 L tank behind the seats, 400 L in the passenger seat): 42 : 58 front:rear.
+  comHeight: 0.40,         // ESTIMATE (0.37–0.45)
+  comFromFront: 1.62,      // ESTIMATE: CoM behind the FRONT axle, m (1.52–1.75)
 
   // Mass (kg). The base car is "just under 1,700 kg" (OFFICIAL). The single-seat Rocket trim adds
   // a 400 L tank, six thrusters and plumbing: ≈2,150 kg dry is our ESTIMATE for the stunt car.
@@ -34,9 +36,9 @@ export const SPEC = {
   gasVolumeL: 600,
   gasPressureBar: 690,
   gasMass: 297,
-  // Moments of inertia (kg·m²), ESTIMATE for the Thrust trim at 1,980 kg; scaled with mass.
-  inertia: { roll: 650, pitch: 2900, yaw: 3250 },
-  inertiaMass: 1980,
+  // Moments of inertia (kg·m²), ESTIMATE from the §11 build-up for the Rocket, gas full. The gas
+  // sits near the CoM, so emptying the tanks (−12 % mass) moves inertia only ≈4 %: held fixed.
+  inertia: { roll: 615, pitch: 2680, yaw: 3080 },
 
   // Powertrain: two rear motors, 1.0 MW (OFFICIAL), 1,400 N·m each (OFFICIAL) through an 8.4:1
   // reduction (OFFICIAL) → ≈11,800 N·m at each rear wheel.
@@ -67,35 +69,37 @@ export const SPEC = {
   regulatedFraction: 0.55,
 };
 
-// Ten thrusters (OFFICIAL count and grouping: 4 rear, 4 down "one per corner", 2 front yaw).
-// Positions are read from reveal stills (the rear row measures 0.42 m up and 0.26 m apart, and the
-// down-jets sit just behind each wheel: research §10.8, pending a SIM_VERSION bump; the renderer
-// draws the rear row at the measured place). Per-nozzle thrust at full pressure:
-//   rear: 80 kN total peak (OFFICIAL, "Mach diamonds" on the 0–60 run) → 20 kN each
-//   down: ≈17 kN each (ESTIMATE from the 3.3 G braking peak on the livestream)
-//   yaw:  ≈4 kN each (ESTIMATE)
-// `dir` is the force direction on the car (opposite to the jet).
+// Axles in the body frame (+z forward, origin at the CoM).
+export const AXLE_F = SPEC.comFromFront, AXLE_R = SPEC.comFromFront - SPEC.wheelbase;
+const yUp = (h) => h - SPEC.comHeight;   // height above the ground → body y
+
+// Ten thrusters (OFFICIAL count and grouping: 4 rear, 4 down "one per corner", 2 front yaw),
+// placed from the axles so a CoM change moves nothing on the car. Per-nozzle thrust at full
+// pressure: rear 80 kN total (OFFICIAL, "Mach diamonds" on the 0–60 run) → 20 kN each; down 20 kN
+// each (the same rating; §11); yaw ≈4 kN each (ESTIMATE). `dir` is the force on the car.
 export const NOZZLE_SPEC = [
-  // Down: "behind each wheel" (OFFICIAL), at sill level (PHOTO, 04-World): ≈0.45 m behind each axle.
-  { id: 'down-fr', group: 'lift', pos: [-0.75, -0.24, 0.95], dir: [0, 1, 0], max: 17000 },
-  { id: 'down-fl', group: 'lift', pos: [0.75, -0.24, 0.95], dir: [0, 1, 0], max: 17000 },
-  { id: 'down-rr', group: 'lift', pos: [-0.75, -0.24, -1.95], dir: [0, 1, 0], max: 17000 },
-  { id: 'down-rl', group: 'lift', pos: [0.75, -0.24, -1.95], dir: [0, 1, 0], max: 17000 },
-  // Rear: one row along the top of the diffuser, centres 0.42 m up (≈ the CoM height, so a burn
-  // barely pitches the car), 0.26 m apart (PHOTO, §10.3).
-  { id: 'rear-1', group: 'rear', pos: [-0.39, 0, -2.05], dir: [0, 0, 1], max: 20000 },
-  { id: 'rear-2', group: 'rear', pos: [-0.13, 0, -2.06], dir: [0, 0, 1], max: 20000 },
-  { id: 'rear-3', group: 'rear', pos: [0.13, 0, -2.06], dir: [0, 0, 1], max: 20000 },
-  { id: 'rear-4', group: 'rear', pos: [0.39, 0, -2.05], dir: [0, 0, 1], max: 20000 },
-  { id: 'yaw-r', group: 'yaw', pos: [-0.86, -0.05, 2.0], dir: [1, 0, 0], max: 4000 },
-  { id: 'yaw-l', group: 'yaw', pos: [0.86, -0.05, 2.0], dir: [-1, 0, 0], max: 4000 },
+  // Down: "behind each wheel" (OFFICIAL) at sill level, 0.18 m up: 0.47 m behind the front axle,
+  // 0.53 m behind the rear (PHOTO, 04-World and the kickflip clip, §11).
+  { id: 'down-fr', group: 'lift', pos: [-0.75, yUp(0.18), AXLE_F - 0.47], dir: [0, 1, 0], max: 20000 },
+  { id: 'down-fl', group: 'lift', pos: [0.75, yUp(0.18), AXLE_F - 0.47], dir: [0, 1, 0], max: 20000 },
+  { id: 'down-rr', group: 'lift', pos: [-0.75, yUp(0.18), AXLE_R - 0.53], dir: [0, 1, 0], max: 20000 },
+  { id: 'down-rl', group: 'lift', pos: [0.75, yUp(0.18), AXLE_R - 0.53], dir: [0, 1, 0], max: 20000 },
+  // Rear: one row along the top of the diffuser, centres 0.42 m up, 0.26 m apart (PHOTO, §10.3),
+  // at the tail (rear overhang ≈0.65 m).
+  { id: 'rear-1', group: 'rear', pos: [-0.39, yUp(0.42), AXLE_R - 0.63], dir: [0, 0, 1], max: 20000 },
+  { id: 'rear-2', group: 'rear', pos: [-0.13, yUp(0.42), AXLE_R - 0.64], dir: [0, 0, 1], max: 20000 },
+  { id: 'rear-3', group: 'rear', pos: [0.13, yUp(0.42), AXLE_R - 0.64], dir: [0, 0, 1], max: 20000 },
+  { id: 'rear-4', group: 'rear', pos: [0.39, yUp(0.42), AXLE_R - 0.63], dir: [0, 0, 1], max: 20000 },
+  // Yaw: "on each front fender" (REPORTED), ≈0.6 m ahead of the front axle.
+  { id: 'yaw-r', group: 'yaw', pos: [-0.86, yUp(0.37), AXLE_F + 0.6], dir: [1, 0, 0], max: 4000 },
+  { id: 'yaw-l', group: 'yaw', pos: [0.86, yUp(0.37), AXLE_F + 0.6], dir: [-1, 0, 0], max: 4000 },
 ];
 
 export const wheelRadiusOf = (i) => (i < 2 ? SPEC.wheelRadiusFront : SPEC.wheelRadiusRear);
 
 // Wheel anchors (body frame, at the suspension's top mount, 0.24 m above the wheel centre at rest).
 export function wheelAnchors() {
-  const zf = SPEC.wheelbase - SPEC.comFromFront, zr = -SPEC.comFromFront;
+  const zf = AXLE_F, zr = AXLE_R;
   const yf = SPEC.wheelRadiusFront - SPEC.comHeight + 0.24, yr = SPEC.wheelRadiusRear - SPEC.comHeight + 0.24;
   return [
     [-SPEC.trackFront / 2, yf, zf], [SPEC.trackFront / 2, yf, zf],

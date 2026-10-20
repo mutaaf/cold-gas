@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.8.0 — 2026-10-20
+
+A taller Wall, and the car's mass where the research puts it (SIM_VERSION 8).
+- The Wall's curl radius goes 9.5 → 13.5 m: the lip is 27.7 m up (the reveal's was 19.8 m; taller by design). Cameras, lights and copy scale with it.
+- Centre of mass from a component build-up (REVEAL_RESEARCH §11: floor battery, both motors at the rear axle, tanks behind and beside the driver): 42 : 58, 1.62 m behind the front axle, 0.40 m up. Fixed a naming bug: `comFromFront` was being used as the distance from the REAR axle.
+- Inertia 615 / 2,680 / 3,080 kg·m², held fixed (the gas sits near the CoM, so blowdown barely changes it).
+- Down-jets rated 20 kN each (the rear nozzles' rating), placed 0.47 m behind the front axle and 0.53 m behind the rear (PHOTO). With the sourced CoM the trimmed lift is ≈67 kN, up from ≈51 kN.
+- Every nozzle is now placed from the axles, so a CoM change moves nothing on the car.
+- Each axle's springs and dampers are rated to its share of the weight, so the car sits level.
+- Wall: touching the deck while still high is a scrape, not a landing. The reference pilot pushes off the ledge on the lift jets (as a player taps RELEASE) and levels for the last 4 m.
+- References: Show 87, Wall 87.7, Lineup 85. Naive players: Wall 32/32; Show 46/54 (crawling up at the cued speed — half throttle up the taller curl throws you off the ledge at 30 m/s).
 ## 0.7.1 — 2026-10-20
 
 - Body text finally renders in Geist. The CSS asked for 'Geist' but the package registers another name, so it had always fallen back to the system font. Now one variable font (every weight, 29 kB latin), preloaded.
