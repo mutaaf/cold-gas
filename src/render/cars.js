@@ -155,70 +155,19 @@ function lightBar(group, z, y, hw, mat, h = 0.025, curve = 0) {
 }
 
 // --- The hero roadster ---------------------------------------------------------------------
-// Built in a ground frame (y = 0 at the tyres' contact patch, origin centred), then offset so
-// the group's origin is the physics centre of mass.
-export function makeRoadster(color = 0xa30f1c) {
-  const g = new THREE.Group();
-  const body = new THREE.Group();
-  g.add(body);
-  const st = [
-    { z: -2.17, hw: 0.86, top: 0.74, bot: 0.24, n: 3.4 },
-    { z: -1.95, hw: 0.97, top: 0.83, bot: 0.17, n: 3.6 },
-    { z: -1.35, hw: 1.0, top: 0.88, bot: 0.14, n: 3.8 },
-    { z: -0.6, hw: 0.98, top: 0.84, bot: 0.13, n: 3.4 },
-    { z: 0.3, hw: 0.97, top: 0.8, bot: 0.13, n: 3.2 },
-    { z: 1.05, hw: 0.97, top: 0.79, bot: 0.14, n: 3.4 },
-    { z: 1.6, hw: 0.94, top: 0.74, bot: 0.15, n: 3.3 },
-    { z: 1.98, hw: 0.86, top: 0.6, bot: 0.17, n: 3.0 },
-    { z: 2.17, hw: 0.72, top: 0.46, bot: 0.21, n: 2.6 },
-  ];
-  const shell = new THREE.Mesh(loft(st, { arches: [{ z: 1.38, r: 0.43 }, { z: -1.38, r: 0.43 }], archTop: 0.7 }), paint(color));
-  shell.castShadow = true; shell.receiveShadow = true;
-  body.add(shell);
-  // Greenhouse: a teardrop canopy (targa).
-  const gh = [
-    { z: -1.0, hw: 0.5, top: 0.8, bot: 0.76, n: 2.4 },
-    { z: -0.55, hw: 0.66, top: 1.06, bot: 0.78, n: 2.6 },
-    { z: -0.05, hw: 0.7, top: 1.13, bot: 0.76, n: 2.6 },
-    { z: 0.5, hw: 0.68, top: 1.02, bot: 0.73, n: 2.4 },
-    { z: 1.05, hw: 0.56, top: 0.72, bot: 0.66, n: 2.2 },
-  ];
-  const canopy = new THREE.Mesh(loft(gh, { segZ: 40, segR: 40 }), glass);
-  canopy.castShadow = true;
-  body.add(canopy);
-  addTub(body, 3.5, 0.5, 0.2, 0.55);
-  // Full-width light bars, front and rear.
-  lightBar(body, 2.12, 0.42, 0.56, lampWhite, 0.014);
-  lightBar(body, -2.15, 0.68, 0.72, lampRed, 0.02);
-  // Nozzle bezels (the ten jets), so the hardware reads on the car.
-  const nozzles = [];
-  const ring = new THREE.TorusGeometry(0.04, 0.012, 8, 24);
-  const bezel = (x, y, z, rx, ry) => {
-    const m = new THREE.Mesh(ring, nozzleMat);
-    m.position.set(x, y, z); m.rotation.set(rx, ry, 0);
-    body.add(m); nozzles.push(m); return m;
-  };
-  for (const [x, z] of [[-0.86, 1.5], [0.86, 1.5], [-0.86, -1.5], [0.86, -1.5]]) bezel(x, 0.14, z, Math.PI / 2, 0);
-  bezel(-0.55, 0.42, -2.12, 0, 0); bezel(0.55, 0.42, -2.12, 0, 0);
-  bezel(-0.62, 0.34, 2.06, 0, 0); bezel(0.62, 0.34, 2.06, 0, 0);
-  bezel(-0.93, 0.86, 0, 0, Math.PI / 2); bezel(0.93, 0.86, 0, 0, Math.PI / 2);
-
-  const wheels = [];
-  addWheels(g, [-0.84, 0.84], [1.38, -1.38], 0.34, 0.27, true, wheels);
-  // Order wheels to match the sim: FL, FR, RL, RR.
-  const ordered = [wheels[0], wheels[1], wheels[2], wheels[3]];
-  return { group: g, body, shell, canopy, wheels: ordered, comY: 0.594 };
-}
+// The faceted reveal-style wedge lives in its own module (src/render/roadster.js).
+export { makeRoadster, wheelCenterY, ANCHOR_Y, REST_LENGTH } from './roadster.js';
 
 // --- The ghost: a translucent silhouette of the hero (your best run, played back alongside) --
-// Only the shell, canopy and tyres, sharing the hero's geometry under one cheap Lambert
-// material: six draw calls, no shadows, nothing inside showing through.
+// The body panels, glass and tyres, sharing the hero's geometry under one cheap Lambert
+// material: eight draw calls, no shadows, nothing inside showing through.
 export const ghostMat = new THREE.MeshLambertMaterial({ color: 0xcfe3ff, transparent: true, opacity: 0.18, depthWrite: false });
 export function makeGhost(hero) {
   const g = new THREE.Group();
   hero.group.updateMatrixWorld(true);
   const inv = new THREE.Matrix4().copy(hero.group.matrixWorld).invert();
-  for (const src of [hero.shell, hero.canopy, ...hero.wheels.map((w) => w.spin.children[0])]) {
+  const parts = hero.ghostParts || [hero.shell, hero.canopy, ...hero.wheels.map((w) => w.spin.children[0])];
+  for (const src of parts) {
     const m = new THREE.Mesh(src.geometry, ghostMat);
     m.matrixAutoUpdate = false;
     m.matrix.multiplyMatrices(inv, src.matrixWorld);
