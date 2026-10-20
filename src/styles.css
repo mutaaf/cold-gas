@@ -207,6 +207,12 @@ button { font: inherit; color: inherit; cursor: pointer; }
 
 /* --- The judges' theatre (src/ai/theatre.js) ---------------------------------------------- */
 :root { --aur-1: #5cffc8; --aur-2: #4fb3ff; --aur-3: #b07bff; }
+/* Legibility over the aurora: inside the theatre and the results sheet the secondary inks are
+   raised (0.46 → 0.66, 0.72 → 0.86) so 10–12 px labels clear WCAG AA (4.5:1) against the field,
+   measured from pixels by scripts/theatre-shots.mjs. --th-lift is the soft shadow every theatre
+   text sits on: a 1 px contact shadow plus a dark halo that dims any particle behind a glyph. */
+.theatre, .results { --ink-2: rgba(245, 246, 248, 0.86); --ink-3: rgba(245, 246, 248, 0.66);
+  --th-lift: 0 1px 1px rgba(0, 0, 0, 0.9), 0 0 10px rgba(2, 3, 6, 0.95), 0 0 22px rgba(2, 3, 6, 0.8); }
 .theatre { position: fixed; inset: 0 min(520px, 100vw) 0 0; z-index: 6; overflow: hidden; opacity: 0; transition: opacity 0.6s var(--ease);
   background: radial-gradient(120% 80% at 40% 45%, rgba(7, 11, 20, 0.93), rgba(2, 3, 6, 0.985)); }
 .theatre.on { opacity: 1; }
@@ -217,7 +223,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 @keyframes aurora { to { transform: rotate(360deg); } }
 .th-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 .th-rail { position: absolute; top: calc(70px + var(--safe-t)); left: 50%; transform: translateX(-50%); display: flex; gap: 0; margin: 0; padding: 0; list-style: none; z-index: 1; }
-.th-rail li { position: relative; display: grid; justify-items: center; gap: 6px; width: clamp(78px, 11vw, 132px); color: var(--ink-3); transition: color 0.4s; }
+.th-rail li { position: relative; display: grid; justify-items: center; gap: 6px; width: clamp(78px, 11vw, 132px); color: var(--ink-3); transition: color 0.4s; text-shadow: var(--th-lift); }
 .th-rail li::before { content: ''; position: absolute; top: 6px; left: -50%; right: 50%; height: 1px; background: var(--hair); }
 .th-rail li:first-child::before { display: none; }
 .th-rail .n { font: 400 10px/1 var(--mono); }
@@ -230,9 +236,9 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .th-rail li.on { color: var(--ink); }
 .th-rail li.on .d { background: var(--aur-1); border-color: var(--aur-1); box-shadow: 0 0 0 4px rgba(92, 255, 200, 0.15), 0 0 18px var(--aur-1); animation: beat 1s ease-in-out infinite; }
 @keyframes beat { 50% { box-shadow: 0 0 0 7px rgba(92, 255, 200, 0.06), 0 0 26px var(--aur-1); } }
-.th-caption { position: absolute; top: calc(126px + var(--safe-t)); left: 0; right: 0; text-align: center; font: 300 14px/1.4 var(--text); color: var(--ink-2); padding: 0 24px; z-index: 1; }
+.th-caption { position: absolute; top: calc(126px + var(--safe-t)); left: 0; right: 0; text-align: center; font: 400 14px/1.4 var(--text); color: var(--ink); padding: 0 24px; z-index: 1; text-shadow: var(--th-lift); }
 .th-card { position: absolute; left: calc(28px + var(--safe-l)); bottom: calc(28px + var(--safe-b)); width: min(300px, 40%); z-index: 1;
-  padding: 18px 20px; border: 1px solid var(--hair); border-radius: 16px; background: rgba(6, 9, 15, 0.62); backdrop-filter: blur(14px); }
+  padding: 18px 20px; border: 1px solid var(--hair); border-radius: 16px; background: rgba(4, 6, 11, 0.82); backdrop-filter: blur(14px); }
 .th-eyebrow { font: 500 10px/1 var(--text); letter-spacing: 0.3em; text-transform: uppercase; color: var(--aur-1); }
 .th-model { display: grid; gap: 4px; margin: 12px 0 14px; }
 .th-model b { font: 400 17px/1.2 var(--mono); color: var(--ink); word-break: break-all; }
@@ -242,15 +248,21 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .th-meta dt, .th-stats dt { font: 500 10px/1.4 var(--text); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); }
 .th-meta dd, .th-stats dd { margin: 0; font: 400 12px/1.4 var(--mono); color: var(--ink); text-align: right; }
 .th-stats { position: absolute; right: calc(28px + var(--safe-r)); bottom: calc(28px + var(--safe-b)); width: min(240px, 34%); z-index: 1;
-  padding: 18px 20px; border: 1px solid var(--hair); border-radius: 16px; background: rgba(6, 9, 15, 0.62); backdrop-filter: blur(14px); }
+  padding: 18px 20px; border: 1px solid var(--hair); border-radius: 16px; background: rgba(4, 6, 11, 0.82); backdrop-filter: blur(14px); }
 .th-stats dd { font-variant-numeric: tabular-nums; }
-.th-ticker { position: absolute; left: 50%; bottom: calc(200px + var(--safe-b)); transform: translateX(-50%); width: min(560px, 70%); z-index: 1; text-align: center;
-  font: 400 11px/1.55 var(--mono); color: var(--ink); max-height: 9.5em; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
-  mask-image: linear-gradient(transparent, #000 40%); -webkit-mask-image: linear-gradient(transparent, #000 40%); white-space: pre-wrap; word-break: break-word; }
-.th-reason { color: var(--aur-3); opacity: 0.7; font-style: italic; }
-.th-out { color: var(--aur-1); text-shadow: 0 0 12px rgba(92, 255, 200, 0.35); }
+/* The raw stream sits on its own dark glass (like the cards), so the words never share pixels
+   with the compute die behind them. Empty until the first token; gone when the words land. */
+.th-ticker { position: absolute; left: 50%; bottom: calc(216px + var(--safe-b)); transform: translateX(-50%); width: min(560px, 70%); z-index: 1; text-align: center;
+  font: 400 12px/1.55 var(--mono); color: var(--ink); max-height: calc(8 * 1.55em + 24px); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
+  padding: 12px 16px; box-sizing: border-box; border-radius: 14px; border: 1px solid var(--hair-2); background: rgba(3, 5, 10, 0.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+  white-space: pre-wrap; word-break: break-word; transition: opacity 0.4s var(--ease); }
+.th-ticker:has(.th-reason:empty):has(.th-out:empty), .theatre[data-stage='app'] .th-ticker { opacity: 0; }
+.th-ticker::before { content: ''; position: absolute; inset: 0 0 auto; height: 2.4em; border-radius: 14px 14px 0 0; pointer-events: none;
+  background: linear-gradient(rgba(3, 5, 10, 0.95), rgba(3, 5, 10, 0)); }
+.th-reason { color: #cdb3ff; font-style: italic; }
+.th-out { color: var(--aur-1); }
 .th-skip { position: absolute; top: calc(66px + var(--safe-t)); right: 24px; height: 30px; padding: 0 14px; border-radius: 15px; border: 1px solid var(--hair);
-  background: rgba(6, 9, 15, 0.6); font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); z-index: 2; }
+  background: rgba(6, 9, 15, 0.82); font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); z-index: 2; }
 
 /* Receipt in the results sheet */
 .receipt { margin: 14px 0 0; padding: 14px 16px; border: 1px solid var(--hair-2); border-radius: 14px; background: rgba(255, 255, 255, 0.02); }
@@ -260,7 +272,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .rc-where { color: var(--ink-3); }
 .rc-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--aur-1); box-shadow: 0 0 10px var(--aur-1); }
 .rc-dot.off { background: var(--ink-3); box-shadow: none; }
-.rc-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font: 400 11px/1.4 var(--mono); color: var(--ink-3); }
+.rc-stats { display: flex; flex-wrap: wrap; gap: 6px 14px; margin-top: 8px; font: 400 12px/1.4 var(--mono); color: var(--ink-2); }
 .rc-actions { display: flex; gap: 4px; margin: 6px 0 0 -8px; }
 .rc-actions .btn.link { height: 30px; font-size: 12px; }
 .rc-inspect summary { cursor: pointer; font-size: 12px; color: var(--ink-2); margin-top: 4px; }
@@ -289,12 +301,19 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .btn[disabled] { opacity: 0.4; pointer-events: none; }
 
 @media (max-width: 720px) {
-  .theatre { inset: 0; z-index: 8; }
+  /* Full screen over the results sheet: opaque, so the sheet's text never ghosts through. */
+  .theatre { inset: 0; z-index: 8; background: radial-gradient(120% 80% at 40% 45%, rgb(7, 11, 20), rgb(2, 3, 6)); }
   .th-rail li { width: 76px; }
+  .th-rail .n, .th-rail .l { font-size: 11px; }
+  .th-rail .l { letter-spacing: 0.2em; }
+  .th-caption { font-size: 15px; }
+  .th-skip { top: calc(14px + var(--safe-t)); right: calc(16px + var(--safe-r)); height: 34px; }
+  .th-meta dt, .th-stats dt { font-size: 11px; letter-spacing: 0.14em; }
+  .th-model span { font-size: 13px; }
   .th-card { left: 16px; right: 16px; width: auto; bottom: calc(150px + var(--safe-b)); padding: 14px 16px; }
   .th-card .th-meta { display: none; }
   .th-stats { left: 16px; right: 16px; width: auto; bottom: calc(16px + var(--safe-b)); grid-template-columns: 1fr 1fr; padding: 12px 16px; }
-  .th-ticker { width: calc(100vw - 32px); bottom: calc(300px + var(--safe-b)); }
+  .th-ticker { width: calc(100vw - 32px); bottom: calc(272px + var(--safe-b)); font-size: 13px; max-height: calc(7 * 1.55em + 24px); }
   .ai-chip { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .theatre::before { animation: none; } }

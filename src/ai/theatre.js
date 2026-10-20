@@ -11,10 +11,30 @@
 import { create, register, fromText } from 'aurora-field';
 import { streamPanel } from './stream.js';
 import { shortModel, PROVIDER_INFO } from './config.js';
+import monoBoldUrl from '@fontsource/geist-mono/files/geist-mono-latin-700-normal.woff2?url';
 
 const STAGES = ['telemetry', 'text', 'compute', 'app'];
 // Each morph needs time to read; the call itself usually finishes inside these.
-const MIN_MS = { telemetry: 1700, text: 1700, compute: 1500 };
+// TEXT holds long enough after its 700 ms arrival for the figures to be read (~1.7 s settled).
+const MIN_MS = { telemetry: 1700, text: 2400, compute: 1500 };
+// How alive the field is per stage. Text stages hold still (no drifting, place-trading or scouts)
+// so the particle letters stay crisp; the circuit and the die breathe.
+const AUTONOMY = { telemetry: 0.3, text: 0, compute: 0.3, app: 0 };
+// While the field spells something, its points burn brighter (same aurora hue, lifted toward
+// white) and far points fade toward a light fog instead of the dark one, so letters read as light.
+const SPELL = { preset: 'aurora', point: [176, 255, 228], accent: [176, 255, 228], glow: [150, 245, 210], fog: [120, 180, 170] };
+const PALETTE = { telemetry: 'aurora', text: SPELL, compute: 'aurora', app: SPELL };
+
+// The particle letters are rasterised from a real bold face (a synthesised bold of the 400 cut is
+// thin and breaks up into noise). Loaded once with the lazy chunk; until it lands the fallback
+// monospace is used, so nothing ever waits on it.
+let monoBold = null;
+function loadMonoBold() {
+  if (monoBold || typeof FontFace === 'undefined' || !document.fonts) return monoBold;
+  monoBold = new FontFace('Geist Mono', `url(${monoBoldUrl}) format('woff2')`, { weight: '700' })
+    .load().then((f) => { document.fonts.add(f); }).catch(() => {});
+  return monoBold;
+}
 
 // --- Shapes -------------------------------------------------------------------------------------
 let registered = false;
@@ -100,10 +120,15 @@ function registerShapes() {
 }
 
 let textSeq = 0;
-function textShape(text) {
+// Particle text. The words stack one per line, so each glyph gets several times the particles
+// and the height to read (one 17-character line was ~17 px a letter of scattered dots on a 390 px
+// phone, ~28 px on a laptop). Most particles go to the outlines (edges) so the letters read crisp,
+// and the shape is flat (depth 0) so nothing fogs toward the background colour. On a wide stage
+// the stack is scaled down to stay between the caption and the cards.
+function textShape(text, narrow) {
   const name = `cg:text:${++textSeq}`;
   try {
-    register(name, fromText(text, { font: '700 140px "Geist Mono", ui-monospace, monospace' }));
+    register(name, fromText(text.split(' ').join('\n'), { font: '700 160px "Geist Mono", ui-monospace, monospace', edges: 0.72, depth: 0, scale: narrow ? 0.86 : 0.66 }));
     return name;
   } catch (err) {
     console.warn('theatre text shape', err);
@@ -162,10 +187,12 @@ export function runTheatre(root, { log, assist, ai, card, course, fallbackWords,
   requestAnimationFrame(() => root.classList.add('on'));
 
   let field = null;
+  loadMonoBold();
+  const narrow = () => root.clientWidth < 560;
   if (!reduced) safe(() => { field = create(dom.canvas, {
     container: root.querySelector('.th-canvas').parentElement, shapes: ['cg:circuit', 'cg:compute'], initial: 'cg:circuit',
     cycle: 0, palette: 'aurora', blank: true, interactive: false, stars: 60, autonomy: 0.3, depth: 3.0, intro: 0,
-    count: (w) => (w < 700 ? 1800 : 3600), radius: (w, h) => Math.min(w * 0.42, h * 0.36),
+    count: (w) => (w < 700 ? 2600 : 3600), radius: (w, h) => Math.min(w * 0.42, h * 0.36),
   }); });
   const timeline = [];               // recorded events, for "Replay the call"
   const t0 = performance.now();
@@ -175,6 +202,8 @@ export function runTheatre(root, { log, assist, ai, card, course, fallbackWords,
 
   const setStage = (s) => {
     stage = s; stageAt = performance.now();
+    root.dataset.stage = s;
+    safe(() => field?.set({ autonomy: AUTONOMY[s], palette: PALETTE[s] }));
     for (const k of STAGES) dom.railItems[k].className = k === s ? 'on' : STAGES.indexOf(k) < STAGES.indexOf(s) ? 'done' : '';
   };
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -259,9 +288,9 @@ export function runTheatre(root, { log, assist, ai, card, course, fallbackWords,
         const f = card.facts;
         caption('Your telemetry becomes text: the facts the model reads.');
         if (field) safe(() => {
-          const name = textShape(f.course === 'wall' ? `${f.height}M ${f.invertedS}S ${f.sink}M/S` : f.course === 'show' ? `${f.height}M ${f.rollDeg}° ${f.sink}M/S` : `${f.rollDeg}° ${f.apex}M ${f.sink}M/S`);
+          const name = textShape(f.course === 'wall' ? `${f.height}M ${f.invertedS}S ${f.sink}M/S` : f.course === 'show' ? `${f.height}M ${f.rollDeg}° ${f.sink}M/S` : `${f.rollDeg}° ${f.apex}M ${f.sink}M/S`, narrow());
           if (name !== 'cg:compute') field.add([name]);
-          field.setShape(name, { pin: 1e9, arrive: { from: [-1, 0, 0], ms: 1100 } });
+          field.setShape(name, { pin: 1e9, arrive: { from: [-1, 0, 0], ms: 700 } });
         });
       })();
     },
@@ -315,7 +344,7 @@ export function runTheatre(root, { log, assist, ai, card, course, fallbackWords,
     setStage('app');
     caption('The words land in the app.');
     if (field) safe(() => {
-      const name = textShape((card.verdict || 'JUDGED').toUpperCase());
+      const name = textShape((card.verdict || 'JUDGED').toUpperCase(), narrow());
       if (name !== 'cg:compute') field.add([name]);
       field.setShape(name, { pin: 1e9, arrive: { from: [0, 0, 0], ms: 800 } });
     });
