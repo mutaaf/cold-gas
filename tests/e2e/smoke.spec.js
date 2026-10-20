@@ -53,6 +53,9 @@ test('phone layout: touch controls visible and nothing overlaps the title CTA', 
 });
 
 test('bring your own key: paste one key and it is done', async ({ page }) => {
+  // Every action here waits on the title's software-GL frames (2–5 s each on a CI runner), so
+  // under the flake guard's parallel repeats it ran past 60 s. Nothing in it is optional.
+  test.slow();
   const calls = [];
   await page.route('**/coldgas/api/models', async (route) => {
     const req = route.request();
