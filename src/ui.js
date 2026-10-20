@@ -195,17 +195,16 @@ export function createUI() {
   return ui;
 }
 
-// The Show's results: the Wall's numbers, then the lineup's.
+// The Show's results: the climb, the carry over the row, the landing.
 function showFacts(f) {
-  const w = f.wall, k = f.lineup;
-  const out = [[`${w.height} m up the wall`], [`${w.invertedS} s inverted`], [`${w.maxG} g peak`]];
-  if (w.jumped) out.push([`wall landing ${w.sink} m/s`, w.sink > 4], [`${w.padMiss} m from the wall mark`]);
-  if (w.fellOff) out.push(['slid off the deck', true]);
-  if (w.landedOnRamp) out.push(['came down on the deck', true]);
-  if (!k) { out.push([w.jumped && !w.crashed ? 'never reached the lineup' : 'show over at the wall', true]); return out; }
-  out.push([`${k.apex} m apex over the lineup`], [`${k.rollDeg}° kickflip`], [k.contact ? 'contact' : `${k.clearance} m clearance`, k.contact],
-    [`lineup landing ${k.sink} m/s`, k.sink > 4], [`${k.padMiss} m from the lineup mark`], [`${k.airPct}% gas left`]);
-  if (k.bottomOut) out.push(['bottomed out', true]);
-  if (k.flipped) out.push(['rolled over', true]);
+  const out = [[`${f.height} m up the wall`], [`${f.invertedS} s inverted`], [`${f.maxG} g peak`]];
+  if (f.fellOff) out.push(['slid off the deck', true]);
+  if (f.landedOnRamp) out.push(['came down on the deck', true]);
+  if (!f.jumped) return out;
+  out.push([`released at ${f.launchHeight} m`]);
+  if (f.contact) out.push(['contact with the row', true]);
+  else if (!f.crossedRow) out.push(['short of the row', true]);
+  else out.push([`${f.clearance} m over the roofs`]);
+  out.push([`${Math.max(f.rollDeg, f.pitchDeg)}° roll-out`], [`${f.sink} m/s touchdown`, f.sink > 4], [`${f.padMiss} m from the mark`], [`${f.airPct}% gas left`]);
   return out;
 }

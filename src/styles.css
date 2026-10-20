@@ -363,7 +363,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .tbtn.go.on { background: rgba(92, 255, 200, 0.85); color: #06080c; }
 .tbtn.lift.on, .tbtn.land.on { background: rgba(191, 230, 255, 0.85); color: #06080c; }
 .touch[data-phase='air'] .t-ground, .touch:not([data-phase='air']) .t-air { display: none; }
-.touch[data-phase='air'] .buttons { grid-template-areas: 'lift land'; }
+.touch[data-phase='air'] .buttons { grid-template-areas: 'lift land' '. go'; }
+.touch[data-phase='air'] .tbtn.go { width: 84px; height: 84px; font-size: 11px; }
 .touch[data-phase='ramp'] .tbtn.lift { border-color: rgba(255, 120, 120, 0.7); color: #ffb3b6; }
 /* The HUD moves up out of the thumbs' way on touch devices. */
 @media (pointer: coarse) {

@@ -4,7 +4,7 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { createVehicle, step, newInput, mix, NOZZLES, DT, forward } from '../../src/sim/vehicle.js';
 import { v3, rotate } from '../../src/sim/m3.js';
-import { surface, WALL, wallProfile, LINEUP, LINEUP_BOXES, SHOW, SHOW_BOXES } from '../../src/sim/courses.js';
+import { surface, WALL, wallProfile, LINEUP, LINEUP_BOXES, SHOW, SHOW_BOXES, MATERIALS } from '../../src/sim/courses.js';
 import { SPEC } from '../../src/sim/spec.js';
 
 function fly(course, opts) {
@@ -118,25 +118,34 @@ describe('controls: right means right', () => {
   });
 });
 
-describe('the Show: both stunts, one run', () => {
-  it('puts the lineup on its own lane beside the Wall approach', () => {
-    for (const b of SHOW_BOXES) { expect(b.maxX).toBeLessThan(-3); expect(b.maxZ).toBeLessThan(WALL.pad.z - 30); }
+describe('the Show: one flight, off the Wall and over the row', () => {
+  it('parks the row across the approach, under the flight path off the ledge', () => {
+    for (const b of SHOW_BOXES) {
+      expect(b.minX).toBeLessThan(-0.9); expect(b.maxX).toBeGreaterThan(0.9);    // across the lane
+      expect(b.maxZ).toBeLessThan(WALL.lip.z); expect(b.minZ).toBeGreaterThan(SHOW.pad.z + 7);
+    }
+    expect(SHOW.start.z).toBeGreaterThan(SHOW.rowNear + SPEC.length / 2);        // the car starts clear of it
     const n = { x: 0, y: 0, z: 0 };
     const semi = SHOW_BOXES.find((b) => b.id === 'semi');
-    expect(surface(SHOW, (semi.minX + semi.maxX) / 2, semi.h - 0.1, semi.cz, n)).toBeLessThan(0);
-    expect(surface(SHOW, 0, 5, 5, n)).toBeLessThan(surface(LINEUP, 0, 5, 5, n));   // and the Wall is there too
+    expect(surface(SHOW, 0, semi.h - 0.1, semi.cz, n)).toBeLessThan(0);
+    expect(n.body.id).toBe('semi');
+    expect(surface(SHOW, 0, 5, 5, n)).toBeLessThan(surface(LINEUP, 0, 5, 5, n));   // and the Wall is there
   });
   const run = fly('show');
   const card = scoreRun(run.t, { assist: true });
-  it('the reference climbs the Wall, tops up, clears the lineup and sticks both landings', () => {
-    expect(run.leg).toBe(1);
-    expect(run.t.wall.progress).toBe(1);
-    expect(card.facts.reachedLineup).toBe(true);
-    expect(card.facts.lineup.contact).toBe(false);
-    expect(card.facts.lineup.rotations).toBe(1);
-    expect(card.facts.wall.padMiss).toBeLessThan(6);
-    expect(card.facts.lineup.padMiss).toBeLessThan(4);
+  it('the reference climbs, lets go, carries over all five roofs and lands beyond them', () => {
+    expect(run.t.progress).toBe(1);
+    expect(run.t.contact).toBe(false);
+    expect(run.t.crossedRow).toBe(true);
+    expect(run.t.minClearance).toBeGreaterThan(1.5);
+    expect(run.t.landZ).toBeLessThan(SHOW.rowFar);
+    expect(run.t.sink).toBeLessThan(1.5);
+    expect(card.facts.padMiss).toBeLessThan(6);
     expect(card.total).toBeGreaterThan(80);
+  });
+  it('on one fill of nitrogen, with some left', () => {
+    expect(run.t.airEnd).toBeGreaterThan(20);
+    expect(run.t.airEnd).toBeLessThan(SPEC.gasMass * 0.6);
   });
   it('replays exactly from its input log', () => {
     const re = simulate(run.inputLog, 'show');
@@ -144,12 +153,42 @@ describe('the Show: both stunts, one run', () => {
     expect(re.car.pos).toEqual(run.car.pos);
     expect(scoreRun(re.t, { assist: true })).toEqual(card);
   });
-  it('stopping after the Wall scores half at most', () => {
-    const r = createRun('show'); const ap = createAutopilot('show');
-    while (r.phase !== 'done' && r.leg === 0) stepRun(r, ap(r));
-    const idle = newInput();
-    while (r.phase !== 'done') stepRun(r, idle);
-    expect(scoreRun(r.t).total).toBeLessThanOrEqual(50);
+  it('letting go without boosting drops the car onto the row', () => {
+    const r = fly('show', { carry: 5 });
+    expect(r.t.contact).toBe(true);
+    expect(scoreRun(r.t).verdict).toBe('Contact');
+    expect(scoreRun(r.t).total).toBeLessThan(40);
+  });
+});
+
+describe('physics per object', () => {
+  it('a parked car is a body: hit it and it slides, and shoves the next one', () => {
+    const r = createRun('lineup');
+    const inp = (run) => ({ ...newInput(), throttle: Math.hypot(run.car.vel.z) < 12 ? 1 : 0 });
+    while (r.phase !== 'done') stepRun(r, inp(r));
+    const [sedan, suv] = r.car.world.bodies;
+    expect(r.t.contact).toBe(true);
+    expect(sedan.cz - LINEUP_BOXES[0].cz).toBeGreaterThan(0.5);
+    expect(suv.cz - LINEUP_BOXES[1].cz).toBeGreaterThan(0.2);
+    expect(suv.cz - suv.hz).toBeGreaterThan(sedan.cz + sedan.hz - 0.05);   // never through each other
+  });
+  it('the semi barely moves: mass matters', () => {
+    const w = createRun('lineup').car.world;
+    const semi = w.bodies.find((b) => b.id === 'semi'), cab = w.bodies.find((b) => b.id === 'cab');
+    expect(semi.mass).toBeGreaterThan(4 * cab.mass);
+  });
+  it('a roof grips a tyre about half as well as concrete', () => {
+    const n = { x: 0, y: 0, z: 0 };
+    surface(LINEUP, 0, LINEUP_BOXES[0].h + 0.01, LINEUP_BOXES[0].cz, n);
+    expect(n.mat).toBe(MATERIALS.paint);
+    surface(LINEUP, 30, 0.01, 0, n);
+    expect(n.mat).toBe(MATERIALS.concrete);
+    expect(MATERIALS.paint.grip).toBeLessThan(0.7 * MATERIALS.concrete.grip);
+  });
+  it('a world is per run: one run\'s shoved car is not the next run\'s', () => {
+    const a = createRun('lineup'), b = createRun('lineup');
+    a.car.world.bodies[0].cz += 3;
+    expect(b.car.world.bodies[0].cz).toBe(LINEUP_BOXES[0].cz);
   });
 });
 

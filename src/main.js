@@ -13,11 +13,11 @@ import { createStage } from './render/scene.js';
 import { createPlumes } from './render/plumes.js';
 import { createDirector } from './render/director.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
-import { createRun, stepRun, FRAME_EVERY } from './sim/run.js';
+import { createRun, stepRun, FRAME_EVERY, BODY_FRAME } from './sim/run.js';
 import { DT, CAR, NOZZLES, bodyRates } from './sim/vehicle.js';
 import { scoreRun } from './sim/judge.js';
 import { createAutopilot } from './sim/autopilot.js';
-import { COURSES, surface, showLocalX, showLocalZ } from './sim/courses.js';
+import { COURSES, surface } from './sim/courses.js';
 import { SPEC } from './sim/spec.js';
 import { bindInput, sample, usingTouch } from './input.js';
 import { initAudio, updateAudio, thud, setMuted, isMuted } from './audio.js';
@@ -34,7 +34,7 @@ const tier = params.get('gfx') || (coarse ? 'mid' : 'high');
 const canvas = document.getElementById('stage');
 let stage;
 try {
-  // [stage] ?course=wall|lineup practises one stunt; the Show (both, one run) is the default.
+  // [stage] ?course=wall|lineup practises one stunt; the Show (one flight off the Wall) is the default.
   stage = createStage(canvas, { tier, course: ['wall', 'lineup'].includes(params.get('course')) ? params.get('course') : 'show' });
 } catch (err) {
   console.error(err);
@@ -157,7 +157,7 @@ function finishRun() {
 }
 
 const theatreRoot = document.querySelector('[data-theatre]');
-const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]');
+const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]'), goLabel = document.querySelector('[data-go-label]');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 async function runPanel(run, replay = null) {
   const assist = !!(S.assist || S.autopilot);
@@ -186,7 +186,7 @@ syncAiChip();
 // The Wall's fan is a car system, not a button: it spools up before the foot of the ramp and holds
 // the car to the deck. On the deck, LIFT is the release: suction off, lift jets push you clear.
 function wallAssist(run, input) {
-  if (!(run.course === 'wall' || (run.course === 'show' && run.leg === 0))) { input.fan = 0; return input; }
+  if (run.course === 'lineup') { input.fan = 0; return input; }
   const c = run.car;
   if (run.phase === 'ramp' && input.lift > 0) S.released = true;
   input.fan = !S.released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
@@ -223,19 +223,20 @@ function liveStep(dt) {
   const c = run.car;
   for (let i = 0; i < 4; i++) { fcomp[i] = c.wheels[i].compression; fspin[i] = c.wheels[i].spin; }
   syncCar(c.pos, c.quat, fcomp, fspin, c.steer);
+  stage.setBodies(c.world.bodies);
 
   // Phase cues and moments.
   // Touch layout follows the phase: pedals on the ground and up the wall, LIFT/LAND in the air.
-  const tp = run.phase === 'air' ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';   // (service: ground)
+  const tp = run.phase === 'air' ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
   if (ui.touch.dataset.phase !== tp) {
     ui.touch.dataset.phase = tp;
     liftLabel.textContent = tp === 'ramp' ? 'RELEASE' : 'LIFT';
     stickHint.textContent = tp === 'air' ? 'ROLL · PITCH' : 'STEER';
+    goLabel.textContent = tp === 'air' ? 'BOOST' : 'GO';
   }
   if (run.phase !== S.prevPhase) {
     if (run.phase === 'air') director.shake(0.15);
     if (run.phase === 'landed') { thud(run.t.sink); director.shake(Math.min(1, run.t.sink / 4)); }
-    if (run.phase === 'service') ui.cue_('Crew topping up the nitrogen · hold it still', 2000);
     S.prevPhase = run.phase;
   }
   if (!S.autopilot) cues(run, c);
@@ -246,7 +247,7 @@ function liveStep(dt) {
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI,
     rollAngle: Math.atan2(qv.x, qv.y), alt: heightAboveSurface(c),
-    sink: -c.vel.y, phase: { drive: 'Run-up', ramp: c.fanForce > 1000 ? 'On the wall · fan' : 'On the wall', air: 'Airborne', landed: 'Touchdown', service: 'Top-up', done: 'Settled' }[run.phase],
+    sink: -c.vel.y, phase: { drive: 'Run-up', ramp: c.fanForce > 1000 ? 'On the wall · fan' : 'On the wall', air: 'Airborne', landed: 'Touchdown', done: 'Settled' }[run.phase],
     throttles: c.throttles, fan: c.fan, g: feltG(c, dt),
   });
   hero.setFan?.(c.fan);
@@ -263,21 +264,19 @@ function liveStep(dt) {
 const kbd = (touchLabel, keyLabel) => `<kbd>${usingTouch() ? touchLabel : keyLabel}</kbd>`;
 function cues(run, c) {
   const v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
-  if (run.phase === 'drive' && v < 2 && !(run.course === 'show' && run.leg === 1)) return ui.cue_(`Hold ${kbd('GO', '↑')} to drive`, 600);
-  if (run.course === 'wall' || (run.course === 'show' && run.leg === 0)) {
+  if (run.phase === 'drive' && v < 2) return ui.cue_(`Hold ${kbd('GO', '↑')} to drive`, 600);
+  if (run.course !== 'lineup') {
+    const show = run.course === 'show';
     if (run.phase === 'drive' && c.pos.z > -40) return ui.cue_(`Fan spooling · crawl in, about 20 km/h`, 600);
     if (run.phase === 'ramp' && run.t.progress < 0.85) return ui.cue_(`Feather ${kbd('GO', '↑')}: crawl up on suction`, 500);
     if (run.phase === 'ramp') return ui.cue_(`Hang it upside down · ${kbd('LIFT', 'Space')} to let go`, 500);
+    // The Show: the row is under you. The rear jets carry you out over it (≈30 km/h is enough).
+    if (show && run.phase === 'air' && !run.t.crossedRow && -c.vel.z < 8.5 && c.pos.z > COURSES.show.rowNear) return ui.cue_(`${kbd('BOOST', 'F')} · carry out over the row`, 400);
     if (run.phase === 'air' && c.vel.y > -1) return ui.cue_(`Roll upright: ${kbd('stick', '← →')}`, 500);
     if (run.phase === 'air') return ui.cue_(`Hold ${kbd('LAND', 'Shift')}: it levels and slows the fall`, 500);
-    if (run.course === 'show' && run.phase === 'landed') return ui.cue_(`${kbd('BRAKE', '↓')} to a stop on the pad: the crew tops up the tanks`, 500);
     return;
   }
-  // The Lineup (or the Show's second leg, on the lineup lane: lz is distance along it).
-  const show = run.course === 'show';
-  const lz = show ? showLocalZ(c.pos.z) : c.pos.z, lx = show ? showLocalX(c.pos.x) : c.pos.x;
-  if (show && run.phase === 'drive' && lz < -14 && Math.abs(lx) > 1.2) return ui.cue_(`Steer onto the lineup lane: ${kbd('stick', '← →')} · about 27 km/h`, 500);
-  if (show && run.phase === 'drive' && v < 2) return ui.cue_(`Tanks full · ${kbd('GO', '↑')} for the lineup`, 600);
+  const lz = c.pos.z;
   if (run.phase === 'drive' && lz > -14 && lz < COURSES.lineup.lineupZ0) return ui.cue_(`Hold ${kbd('LIFT', 'Space')} at the line`, 600);
   if (run.phase === 'air' && Math.abs(run.t.rollAccum) < 0.3 && c.vel.y < 4) return ui.cue_(`${kbd('stick sideways', '← →')} to roll`, 500);
   if (run.phase === 'air' && Math.abs(run.t.rollAccum) > 5.6 && c.vel.y < 0) return ui.cue_(`Hold ${kbd('LAND', 'Shift')}`, 500);
@@ -288,18 +287,18 @@ const fpos = { x: 0, y: 0, z: 0 }, fquat = { x: 0, y: 0, z: 0, w: 1 };
 const fcomp = [0, 0, 0, 0], fspin = [0, 0, 0, 0];
 const fthr = new Float64Array(NOZZLES.length);
 const fvel = new THREE.Vector3();
+const replayBodies = [];
 function replayStep(dt) {
   const frames = S.run?.frames;
   if (!frames?.length) return;
+  while (replayBodies.length < (frames[0].length - BODY_FRAME) / 3) replayBodies.push({ cx: 0, cz: 0, yaw: 0 });
+  replayBodies.length = (frames[0].length - BODY_FRAME) / 3;
   const n = frames.length;
   const i0 = Math.min(n - 1, Math.floor(S.replayT));
   const f = frames[i0];
   // Slow motion where it matters: over the lineup, or up the wall and through the roll.
   const L = COURSES.lineup;
-  const leg2 = stage.course === 'show' && S.run.legFrame >= 0 && i0 >= S.run.legFrame;
-  const lz = leg2 ? showLocalZ(f[2]) : f[2];
-  const slow = stage.course === 'wall' || (stage.course === 'show' && !leg2) ? (f[1] > 3 ? 0.45 : 1) : (lz > L.liftOffZ - 2 && lz < L.pad.z - 6 ? 0.42 : 1);
-  S.replayLeg = leg2 ? 1 : 0;
+  const slow = stage.course !== 'lineup' ? (f[1] > 3 ? 0.45 : 1) : (f[2] > L.liftOffZ - 2 && f[2] < L.pad.z - 6 ? 0.42 : 1);
   S.replayT += dt * (240 / FRAME_EVERY) * slow;
   if (S.replayT >= n + 90) S.replayT = 0;   // hold a beat, loop
   const i1 = Math.min(n - 1, i0 + 1), k = Math.min(1, S.replayT - i0);
@@ -310,6 +309,8 @@ function replayStep(dt) {
   for (let j = 0; j < NOZZLES.length; j++) fthr[j] = f[15 + j];
   fvel.set(g[0] - f[0], g[1] - f[1], g[2] - f[2]).multiplyScalar(60);
   syncCar(fpos, fquat, fcomp, fspin, f[15 + NOZZLES.length] || 0);
+  for (let b = 0; b < replayBodies.length; b++) { const o = BODY_FRAME + 3 * b; replayBodies[b].cx = f[o]; replayBodies[b].cz = f[o + 1]; replayBodies[b].yaw = f[o + 2]; }
+  stage.setBodies(replayBodies);
   hero.setFan?.(f[16 + NOZZLES.length] || 0);
   plumes.update(dt * slow, S.time, fthr, fvel, 0);
   updateAudio({ speed: fvel.length() * slow, grounded: fpos.y < 0.7, throttles: fthr });
@@ -317,6 +318,7 @@ function replayStep(dt) {
 
 // --- Title idle: an occasional breath from the lift jets --------------------------------------
 function titleStep(dt) {
+  stage.setBodies(null);
   const t = S.time % 9;
   const puff = t > 6.2 && t < 6.9 ? Math.sin(((t - 6.2) / 0.7) * Math.PI) * 0.35 : 0;
   for (let i = 0; i < 4; i++) S.idleThrottles[i] = puff;
@@ -349,7 +351,6 @@ function frame(now) {
       phase: S.run?.phase || 'drive',
       mode: S.mode === 'title' ? 'title' : S.mode === 'results' || S.mode === 'replay' ? 'replay' : 'live',
       course: stage.course,   // [stage]
-      leg: S.mode === 'results' || S.mode === 'replay' ? S.replayLeg || 0 : S.run?.leg || 0,
     });
     stage.render(S.time);
   }
@@ -377,7 +378,7 @@ on('[data-share]', async () => {
   if (!S.card) return;
   const f = S.card.facts;
   const text = f.course === 'show'
-    ? `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. Up a ${f.height} m wall, ${f.invertedS} s inverted${f.lineup ? `, a ${f.rollDeg}° kickflip over the lineup, ${f.sink} m/s touchdown` : ''}.`
+    ? `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. Up a ${f.height} m wall, ${f.invertedS} s inverted${f.crossedRow ? `, ${f.clearance} m over five parked vehicles, ${f.sink} m/s touchdown` : ''}.`
     : `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. ${f.rollDeg}° roll, ${f.apex} m apex, ${f.sink} m/s touchdown.`;
   const url = `${location.origin}${import.meta.env.BASE_URL}`;
   try {

@@ -112,13 +112,17 @@ src/sim/              PURE, shared with the Worker:
                           nozzles. Public reveal numbers where they exist, marked estimates elsewhere
   courses.js            THE COURSES as exact geometry: the Wall (9.5 m arc turning 170° + 5.5 m
                           inverted ledge, 19.8 m lip), the Lineup (no ramp, five parked EVs) and
-                          the Show (both: the Lineup turned 180° onto a lane beside the approach,
-                          `showLocalX/Z`); `surface()` = signed distance + normal (wheels, hull, fan)
+                          the Show (one flight: the row parked across the approach under the
+                          ledge, pad beyond it); MATERIALS (grip/slide per surface); createWorld/
+                          stepWorld: each parked vehicle is a body (mass, parked-tyre friction,
+                          body-body contact); `surface()` = signed distance + normal + material +
+                          body (wheels, hull, fan)
   vehicle.js            physics v2: 6-DOF body, raycast suspension on any surface, Pacejka tyres
                           with implicit wheel spin, TC/ABS, stiction, 2 g suction fan, cold-gas
                           nozzles with blowdown, mixer, flight computer (Assist / LAND / Pro)
   run.js                one attempt: input log (12 channels incl. fan), phases drive → ramp →
-                          air → landed (Show: → service top-up → leg 2), telemetry, simulate()
+                          air → landed, telemetry (Show: clearance, crossedRow), simulate();
+                          replay frames carry each parked body's pose
   autopilot.js          reference runs for both courses, closed-loop through the same physics
   judge.js              scoreRun: per-course categories → three judges → total /100 + verdict
 src/render/           three.js (r186):

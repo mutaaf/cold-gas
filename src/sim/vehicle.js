@@ -9,7 +9,7 @@
 // scores this way). No allocation in step().
 import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
 import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf } from './spec.js';
-import { surface, COURSES, DEFAULT_COURSE } from './courses.js';
+import { surface, COURSES, DEFAULT_COURSE, MATERIALS, createWorld, stepWorld, pushBody } from './courses.js';
 import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
 
 export const DT = 1 / 240;
@@ -68,7 +68,7 @@ export const newInput = () => ({ throttle: 0, brake: 0, steer: 0, pitch: 0, roll
 export function createVehicle(courseId = DEFAULT_COURSE) {
   const course = COURSES[courseId] || COURSES[DEFAULT_COURSE];
   const s = {
-    course, tick: 0,
+    course, tick: 0, world: createWorld(course),
     pos: v3(course.start.x, SPEC.comHeight, course.start.z), vel: v3(), quat: quatFromYaw(q4(), 0), angVel: v3(),
     air: CAR.airMass,
     throttles: new Float64Array(NOZZLES.length),
@@ -93,19 +93,21 @@ export function feedPressure(s) {
 // Scratch (never reallocated).
 const tmp = v3(), tmp2 = v3(), r = v3(), pw = v3(), vp = v3(), force = v3(), fwd = v3(), right = v3(), upW = v3(),
   fTot = v3(), tTot = v3(), wb = v3(), Lb = v3(), cmdT = v3(), dn = v3(), hitN = v3(), wf = v3(), wl = v3(), worldUpB = v3(), rp = v3();
-const sn = { x: 0, y: 0, z: 0, obstacle: false };
+const sn = { x: 0, y: 0, z: 0, obstacle: false, body: null, mat: MATERIALS.concrete };
+let hitBody = null, hitMat = MATERIALS.concrete;
 const target = new Float64Array(NOZZLES.length);
 const eff = { lift: 0, thrust: 0 };
 
 function pointVel(out, s, rw) { cross(out, s.angVel, rw); return add(out, out, s.vel); }
 function applyAt(rw, f) { add(fTot, fTot, f); cross(tmp2, rw, f); add(tTot, tTot, tmp2); }
-const phiAt = (s, p) => surface(s.course, p.x, p.y, p.z, sn);
+const phiAt = (s, p) => surface(s.course, p.x, p.y, p.z, sn, s.world);
+const hitFrom = () => { set(hitN, sn.x, sn.y, sn.z); hitBody = sn.body; hitMat = sn.mat; };
 
 // March a ray from `o` along unit `d` up to `maxT`; the first distance where it enters a solid
 // (or -1), with the hit normal left in hitN.
 function raycast(s, o, d, maxT) {
   let prevT = 0, prevPhi = phiAt(s, o);
-  if (prevPhi <= 0) { set(hitN, sn.x, sn.y, sn.z); return 0; }
+  if (prevPhi <= 0) { hitFrom(); return 0; }
   const steps = 6;
   for (let i = 1; i <= steps; i++) {
     const t = (maxT * i) / steps;
@@ -124,7 +126,7 @@ function raycast(s, o, d, maxT) {
       const th = pLo - pHi > 1e-12 ? lo + ((hi - lo) * pLo) / (pLo - pHi) : hi;
       addScaled(rp, o, d, th);
       phiAt(s, rp);
-      set(hitN, sn.x, sn.y, sn.z);
+      hitFrom();
       return th;
     }
     prevT = t; prevPhi = phi;
@@ -206,6 +208,7 @@ export function step(s, inp) {
 
   // --- Wheels: raycast suspension + Pacejka tyres + wheel spin ---
   let grounded = 0, wallContact = false, wheelForce = 0;
+  s.hullContact = false; s.hullGround = false; s.obstacleContact = false;
   s.tcActive = false;
   for (let i = 0; i < 4; i++) {
     const w = s.wheels[i];
@@ -226,6 +229,7 @@ export function step(s, inp) {
       continue;
     }
     w.contact = true; grounded++;
+    if (hitBody) s.obstacleContact = true;      // a tyre on a parked car is contact
     if (hitN.y < 0.85) wallContact = true;
     w.nx = hitN.x; w.ny = hitN.y; w.nz = hitN.z;
     const comp = maxT - t;
@@ -253,7 +257,7 @@ export function step(s, inp) {
     const den = Math.max(Math.abs(vLong), 3.0);
     let kappa = (w.omega * R - vLong) / den;
     const alpha = datan2(vLat, Math.max(Math.abs(vLong), 1.5));
-    const mu = SPEC.tyreMu * (1 - 0.07 * (Fz / STATIC_LOAD - 1));   // load sensitivity
+    const mu = SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (Fz / STATIC_LOAD - 1));   // load sensitivity, this surface
     const D = Math.max(0, mu * Fz);
     // Drive and brake torque. Two rear motors, 500 kW each; Assist adds traction control.
     let T = 0;
@@ -299,6 +303,7 @@ export function step(s, inp) {
     addScaled(force, force, wf, Fx);
     addScaled(force, force, wl, Fy);
     applyAt(tmp, force);
+    if (hitBody) pushBody(hitBody, s.pos.x + tmp.x, s.pos.z + tmp.z, -force.x, -force.y, -force.z);   // and back on what it stands on
     wheelForce += Fz;
     w.spin += w.omega * dt;
   }
@@ -307,7 +312,6 @@ export function step(s, inp) {
   s.wheelForce = wheelForce;
 
   // --- Hull contact (sills, bumpers, roof) against everything ---
-  s.hullContact = false; s.hullGround = false; s.obstacleContact = false;
   for (let i = 0; i < HULL.length; i++) {
     rotate(r, s.quat, HULL[i]);
     add(pw, s.pos, r);
@@ -324,8 +328,9 @@ export function step(s, inp) {
     addScaled(tmp, vp, hitN, -vn);
     const vt = dhypot(tmp.x, tmp.y, tmp.z);
     scale(force, hitN, fn);
-    if (vt > 1e-4) addScaled(force, force, tmp, -Math.min(0.5 * fn, vt * 5000) / vt);
+    if (vt > 1e-4) addScaled(force, force, tmp, -Math.min(sn.mat.slide * fn, vt * 5000) / vt);
     applyAt(r, force);
+    if (sn.body) pushBody(sn.body, pw.x, pw.z, -force.x, -force.y, -force.z);
   }
 
   // --- Thrusters (nitrogen cold gas, blowdown) ---
@@ -385,6 +390,7 @@ export function step(s, inp) {
   wb.x *= ad; wb.y *= ad; wb.z *= ad;
   rotate(s.angVel, s.quat, wb);
   integrateQuat(s.quat, s.angVel, dt);
+  stepWorld(s.world, dt, G);
   s.tick++;
   return s;
 }

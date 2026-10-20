@@ -10,11 +10,10 @@
 // reference-image wide side shot, a low shot at the base looking up the wall, a ledge close-up and
 // a landing cam. Title parks the car at the foot of the curl with the curl towering behind.
 //
-// Show: the Wall's cameras for the first leg; for the second, the Lineup's rigs run in the
-// lineup lane's own frame and the camera is turned onto the lane with the same half turn the
-// physics uses (src/sim/courses.js SHOW).
+// Show: the Wall's cameras; the row sits under the ledge, so the fall and the carry over it play
+// out in the same wide shots.
 import * as THREE from 'three';
-import { LINEUP, WALL, showLocalX, showLocalZ } from '../sim/courses.js';
+import { LINEUP, WALL, SHOW } from '../sim/courses.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
 const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3();
@@ -23,11 +22,9 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export function createDirector(camera) {
   const st = {
     mode: '', course: '', t: 0, shot: -1, smooth: new THREE.Vector3(), lookS: new THREE.Vector3(), fov: 52, shake: 0, init: false,
-    peak: 0, launched: false, launchT: 0, leg: 0,
+    peak: 0, launched: false, launchT: 0,
     hx: 0, hz: 1,                 // chase heading (unit, xz), follows the car's travel
   };
-  const halfTurn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
-  const lp = new THREE.Vector3(), lv = new THREE.Vector3();
 
   function snap() { st.init = false; }
 
@@ -126,6 +123,12 @@ export function createDirector(camera) {
       lookWant.set(carPos.x * 0.3, carPos.y * 0.6 + 6, carPos.z * 0.5 + 2.5);
       ease(dt, 1.8, 4);
       fovTo(46, dt, 1.5);
+    } else if (!landed && st.course === 'show') {
+      // The carry over the row: low and wide from the side, so the roofs under the car stay in frame.
+      want.set(carPos.x + 21, clamp(carPos.y * 0.4 + 2.2, 2.2, 10), carPos.z + 2);
+      lookWant.set(carPos.x * 0.5, carPos.y * 0.55 + 0.8, carPos.z - 2);
+      ease(dt, 3.2, 9);
+      fovTo(54, dt);
     } else if (!landed) {
       // The fall and the roll: wide from the side, tracking.
       want.set(carPos.x + 19, clamp(carPos.y * 0.55 + 3.5, 3, 18), carPos.z + 5);
@@ -160,10 +163,13 @@ export function createDirector(camera) {
         camera.position.set(1.9, 0.45, -2.6); camera.lookAt(carPos.x, carPos.y, carPos.z); st.fov = 60; break;
       case 3: // ledge close-up: below and in front of the overhang, looking up at the car hanging under it
         camera.position.set(7.5, WALL.lip.y - 5, WALL.lip.z - 10); camera.lookAt(carPos.x, carPos.y, carPos.z); st.fov = 44; break;
-      case 4: // the fall and the roll, wide from the side
-        camera.position.set(28, 7.5, -16); camera.lookAt(carPos.x, carPos.y, carPos.z); st.fov = 42; break;
+      case 4: { // the fall and the roll, wide from the side (on the Show, over the row)
+        const show = st.course === 'show';
+        camera.position.set(show ? 30 : 28, show ? 8.5 : 7.5, show ? -19 : -16);
+        camera.lookAt(carPos.x, carPos.y, carPos.z); st.fov = show ? 46 : 42; break;
+      }
       default: // landing cam, beyond the pad looking back at the wall
-        camera.position.set(5.5, 1.0, WALL.pad.z - 22); camera.lookAt(carPos.x, carPos.y + 0.3, carPos.z); st.fov = 34; break;
+        camera.position.set(5.5, 1.0, (st.course === 'show' ? SHOW.pad.z : WALL.pad.z) - 22); camera.lookAt(carPos.x, carPos.y + 0.3, carPos.z); st.fov = 34; break;
     }
   }
 
@@ -177,34 +183,31 @@ export function createDirector(camera) {
     st.fov = 54;
   }
 
+  function titleShow(time) {
+    // The car at the start, just short of the curl, the parked row behind it: a slow side sway
+    // that keeps all three in frame.
+    const a = Math.sin(time * 0.07) * 0.28;
+    camera.position.set(15 * Math.cos(a), 2.4 + Math.sin(time * 0.2) * 0.08, -13 + 15 * Math.sin(a));
+    camera.lookAt(-1, 6.2, -4);
+    st.fov = 56;
+  }
+
   function frameOffset(on) {
     const w = innerWidth, h = innerHeight;
     if (on && w / h > 1.15) camera.setViewOffset(w, h, -w * 0.2, h * 0.04, w, h);
     else if (camera.view?.enabled) camera.clearViewOffset();
   }
 
-  // The Show's second leg: run a Lineup rig in the lane's frame, then turn the camera onto it.
-  function inLane(fn, carPos, carVel, phase, dt) {
-    lp.set(showLocalX(carPos.x), carPos.y, showLocalZ(carPos.z));
-    lv.set(-carVel.x, carVel.y, -carVel.z);
-    fn(lp, lv, phase, dt);
-    camera.position.set(showLocalX(camera.position.x), camera.position.y, showLocalZ(camera.position.z));
-    camera.quaternion.premultiply(halfTurn);
-  }
-
-  // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup', leg })
-  function update(dt, time, { carPos, carVel, phase, mode, course = 'show', leg = 0 }) {
+  // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup' })
+  function update(dt, time, { carPos, carVel, phase, mode, course = 'show' }) {
     if (mode !== st.mode || course !== st.course) {
-      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.leg = leg;
+      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false;
       st.hx = 0; st.hz = 1;
       snap(); frameOffset(mode === 'title');
     }
-    if (leg !== st.leg) { st.leg = leg; st.t = 0; st.shot = -1; st.hx = 0; st.hz = 1; snap(); }
     st.t += dt;
-    if (course === 'show' && mode !== 'title' && leg === 1) {
-      inLane(mode === 'replay' ? (p) => replay(p) : chase, carPos, carVel, phase, dt);
-    } else if (course === 'wall' || course === 'show') {
-      if (mode === 'title') titleWall(time);
+    if (course === 'wall' || course === 'show') {
+      if (mode === 'title') (course === 'show' ? titleShow : titleWall)(time);
       else if (mode === 'replay') wallReplay(carPos, carVel, phase);
       else wallLive(carPos, carVel, phase, dt);
     } else if (mode === 'title') titleLineup(time);
