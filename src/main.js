@@ -1,12 +1,13 @@
 // COLD GAS — entry. Owns the state machine (title → countdown → live → results ⇄ replay), the
 // fixed-step sim clock, and syncing the sim to the scene. Rendering lives in src/render/, the
 // physics and judging in src/sim/ (pure, shared with the Worker).
-import '@fontsource/michroma/400.css';
-import '@fontsource/geist-sans/200.css';
-import '@fontsource/geist-sans/300.css';
-import '@fontsource/geist-sans/400.css';
-import '@fontsource/geist-sans/500.css';
-import '@fontsource/geist-mono/400.css';
+// Latin subsets only: the copy is English, and every @font-face rule is inlined into index.html.
+import '@fontsource/michroma/latin-400.css';
+import '@fontsource/geist-sans/latin-200.css';
+import '@fontsource/geist-sans/latin-300.css';
+import '@fontsource/geist-sans/latin-400.css';
+import '@fontsource/geist-sans/latin-500.css';
+import '@fontsource/geist-mono/latin-400.css';
 import './styles.css';
 import * as THREE from 'three';
 import { createStage } from './render/scene.js';
@@ -55,8 +56,7 @@ const ghostModel = makeGhost(hero);
 ghostModel.position.y = -hero.comY;
 ghostRoot.add(ghostModel);
 scene.add(ghostRoot);
-stage.renderer.compile(scene, camera);   // warm the ghost's shader so "Go" doesn't hitch
-ghostRoot.visible = false;
+ghostRoot.visible = false;   // its shader is still warmed with the scene's (stage.ready), so "Go" doesn't hitch
 const plumes = createPlumes(scene, carRoot, { maxMist: tier === 'low' ? 500 : 1800 });
 const director = createDirector(camera);
 
@@ -470,5 +470,5 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
-window.__coldgas = { S, startRun, toTitle, camera, carRoot, ghostRoot, hero, director, fastForward, skipCountdown };
+window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, hero, director, fastForward, skipCountdown };
 requestAnimationFrame(frame);

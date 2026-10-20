@@ -9,7 +9,6 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
 import { RAMP, LINEUP, SHOW } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
 import { buildWall, nightSkyMaterial, bakeNightEnvironment } from './wall.js';
@@ -276,13 +275,18 @@ function buildLineup(tier) {
 // The Show: the night Wall with the lineup parked across the approach under the ledge, and the
 // landing pad beyond it (src/sim/courses.js SHOW). The reveal parked its row on a low red-lit
 // plinth; here it is a red LED outline on the slab, with two white washes so the cars read at night.
-function buildShow(tier) {
-  const look = buildWall(tier, SHOW.pad);
+// A generator, like buildWall: the look first, then the pieces.
+function* buildShow(tier) {
+  const wall = buildWall(tier, SHOW.pad);
+  const look = wall.next().value;
   look.group.name = 'course:show';
+  look.titlePose = { x: SHOW.start.x, z: SHOW.start.z, yaw: 0 };
+  yield look;
+  yield* wall;
   const row = lineup(SHOW.boxes);
   look.group.add(row);
   look.setBodies = row.userData.setBodies;
-  look.titlePose = { x: SHOW.start.x, z: SHOW.start.z, yaw: 0 };
+  yield;
 
   const g = new THREE.Group();
   const red = new THREE.MeshBasicMaterial({ color: new THREE.Color(4.5, 0.2, 0.3), fog: false });
@@ -306,13 +310,35 @@ function buildShow(tier) {
   const glow = new THREE.PointLight(0xff1a28, 10, 14, 2);
   glow.position.set(0, 0.6, cz);
   look.group.add(glow);
-  return look;
 }
 
 export const COURSE_IDS = ['show', 'wall', 'lineup'];
+const BUILDERS = { show: buildShow, wall: buildWall, lineup: function* (tier) { yield buildLineup(tier); } };
+
+// Hand the main thread back (input, the title's CSS animation, a paint) between slices of work.
+const nextTask = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise((r) => setTimeout(r, 0)));
+// Run the rest of a look's build now (a course picked before the first load finished).
+function finishBuild(look) {
+  while (look.build && !look.build.next().done);
+  look.build = null;
+}
+// Run it in ~10 ms slices, yielding between them, so no single task blocks the page for long.
+async function buildSliced(look) {
+  while (look.build) {
+    const t0 = performance.now();
+    while (look.build && performance.now() - t0 < 10) if (look.build.next().done) look.build = null;
+    if (look.build) await nextTask();
+  }
+}
 
 // createStage(canvas, { tier: 'low' | 'mid' | 'high', course: 'show' | 'wall' | 'lineup' })
-//   → { renderer, scene, camera, hero, key, course, resize, render(time), setCourse(id), titlePose() }
+//   → { renderer, scene, camera, hero, key, course, ready, resize, render(time), setCourse(id), titlePose() }
+//
+// First load: createStage returns as soon as the renderer, camera and car exist, so the title is
+// wired and usable at once. The course is then built in slices between frames, the environment
+// is baked, every shader is compiled off the main thread (KHR_parallel_shader_compile, via
+// compileAsync), and only then does `render` draw: the canvas fades in on its first frame
+// (`.on`), and `stage.ready` resolves.
 export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier !== 'low', powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1));
@@ -348,7 +374,7 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 4000);
   camera.position.set(0, 3, -100);
 
-  let composer = null, bloom = null;
+  let composer = null, bloom = null, smaa = null;
   if (tier !== 'low') {
     // No MSAA render target: multisampled HalfFloat targets render black on some GPU paths.
     // SMAA after the output pass does the edges instead.
@@ -358,24 +384,34 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 0.92);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
-    if (tier === 'high') composer.addPass(new SMAAPass());
+    // SMAA (desktop only) carries ~45 kB of lookup images: its own chunk, fetched in parallel
+    // with the course build, so phones never download it.
+    if (tier === 'high') smaa = import('three/examples/jsm/postprocessing/SMAAPass.js').then(({ SMAAPass }) => composer.addPass(new SMAAPass()));
   }
 
   const looks = {};
-  const lookFor = (id) => (looks[id] ??= id === 'show' ? buildShow(tier) : id === 'wall' ? buildWall(tier) : buildLineup(tier));
-  let current = null;
+  // A look is ready to place the car and camera at once; its geometry follows (look.build).
+  const lookFor = (id) => {
+    if (looks[id]) return looks[id];
+    const build = BUILDERS[id](tier);
+    const look = build.next().value;
+    look.build = build;
+    return (looks[id] = look);
+  };
+  let current = null, drawing = false;
   const keyOffset = new THREE.Vector3();
-  const stage = { renderer, scene, camera, hero, key, course: null, resize, render, setCourse, titlePose, setBodies };
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, resize, render, setCourse, titlePose, setBodies };
 
-  function setCourse(id) {
+  function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
     if (stage.course === id) return stage;
     if (current) scene.remove(current.group);
     current = lookFor(id);
+    if (!sliced) finishBuild(current);
     scene.add(current.group);
     stage.course = id;
     sky.material = skies[id];
-    scene.environment = envFor(id);
+    if (!sliced) scene.environment = envFor(id);
     scene.environmentIntensity = isNight(id) ? 1.0 : 0.9;
     scene.fog = current.look.fog;
     renderer.toneMappingExposure = current.look.exposure;
@@ -402,13 +438,42 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   resize();
 
   function render(time) {
+    if (!drawing) return;
     current.update(time);
     // Keep the shadow frustum on the hero.
     hero.group.getWorldPosition(key.target.position);
     key.position.copy(key.target.position).add(keyOffset);
     if (composer) composer.render(); else renderer.render(scene, camera);
+    if (!canvas.classList.contains('on')) canvas.classList.add('on');
   }
 
-  setCourse(course);
+  // Compile every material in the scene, hidden ones too (the ghost, idle plumes), so nothing
+  // stalls the first frame or the first time it appears. Never waits more than 4 s.
+  function precompile() {
+    const hidden = [];
+    scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+    let done;
+    try { done = renderer.compileAsync(scene, camera); } finally { for (const o of hidden) o.visible = false; }
+    return Promise.race([done, new Promise((r) => setTimeout(r, 4000))]);
+  }
+
+  async function boot() {
+    try {
+      await nextTask();
+      await buildSliced(current);
+      await nextTask();
+      scene.environment = envFor(stage.course);
+      await nextTask();
+      await precompile();
+      await smaa;
+    } catch (err) {
+      console.warn('stage warm-up', err);
+    }
+    drawing = true;
+    return stage;
+  }
+
+  setCourse(course, { sliced: true });
+  stage.ready = boot();
   return stage;
 }
