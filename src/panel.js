@@ -25,6 +25,10 @@ export async function fetchBoard(board = 'today') {
 const pick = (arr, seed) => arr[Math.abs(Math.round(seed * 997)) % arr.length];
 
 export function localWords(card) {
+  const f0 = card.facts;
+  if (f0.damagePct >= 60) {
+    return { headline: 'Wrecked', engineer: `The damage sensor reads ${f0.damagePct}%. That car does not drive home: it goes back on a flatbed.`, coordinator: 'Big, brave, and expensive. Land the next one in one piece.', designer: 'The shape was the point. You bent it.', source: 'local' };
+  }
   if (card.facts.course === 'wall') return wallWords(card);
   if (card.facts.course === 'show') return showWords(card);
   const f = card.facts, s = f.sink + f.tiltDeg + f.padMiss;

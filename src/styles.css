@@ -567,3 +567,17 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .hud[data-tier='advanced'] .readouts { min-width: 80px; }
   .hud[data-tier='advanced'] .hud-right { gap: 10px; }
 }
+
+/* --- Damage sensor (src/sim/damage.js) -------------------------------------------------------- */
+.dmg { display: flex; align-items: center; gap: 10px; margin-top: 10px; }
+.dmg svg { width: 40px; height: 72px; overflow: visible; }
+.dmg .z { fill: rgba(255, 255, 255, 0.04); stroke: rgba(223, 227, 232, 0.42); stroke-width: 0.8; transition: fill 0.25s ease; }
+.dmg .z.susp circle { fill: inherit; stroke: inherit; }
+.dmg .z[data-level='scuff'] { fill: rgba(223, 227, 232, calc(0.15 + var(--dmg) * 2)); }
+.dmg .z[data-level='amber'] { fill: rgba(255, 184, 76, calc(0.35 + var(--dmg))); stroke: #ffb84c; }
+.dmg .z[data-level='red'] { fill: rgba(255, 70, 80, calc(0.45 + var(--dmg) * 0.5)); stroke: #ff4650; }
+.dmg[data-state='warn'] [data-dmg-pct] { color: #ffb84c; }
+.dmg[data-state='wreck'] [data-dmg-pct] { color: #ff4650; }
+.dmg.hit svg { animation: dmg-hit 0.6s ease-out; }
+@keyframes dmg-hit { 0% { filter: drop-shadow(0 0 6px rgba(255, 70, 80, 0.9)); transform: scale(1.12); } 100% { filter: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { .dmg.hit svg { animation: none; } }

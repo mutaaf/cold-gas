@@ -122,3 +122,30 @@ describe('impact events', () => {
     expect(run.t.flipped).toBe(true);
   });
 });
+
+// The damage sensor (src/sim/damage.js): clean runs are clean, crashes cost the right zones, the
+// judges mark it, a wreck is a wreck, and it all replays exactly.
+import { createDamage, updateDamage, ZONES } from '../../src/sim/damage.js';
+import { WRECK_PCT } from '../../src/sim/judge.js';
+describe('damage sensor', () => {
+  it('a clean reference run stays ≥ 98 % intact', () => {
+    for (const course of ['show', 'wall', 'lineup']) expect(fly(course).t.damage.pct).toBeLessThanOrEqual(2);
+  });
+  it('dropping onto the row damages the car and the Integrity mark, and replays exactly', () => {
+    const r = fly('show', { carry: 5 });
+    expect(r.t.damage.pct).toBeGreaterThan(15);
+    const card = scoreRun(r.t);
+    expect(card.categories.damage).toBeLessThan(9);
+    expect(card.facts.damagePct).toBe(r.t.damage.pct);
+    const re = simulate(r.inputLog, 'show');
+    expect(re.t.damage).toEqual(r.t.damage);
+  });
+  it('a 14 m/s head-on hit writes the car off; a 5 m/s knock costs ≈13 %', () => {
+    const fake = (speed) => ({ impacts: { count: 1, kind: [0], part: [1], probe: [0], speed: [speed], crush: [0], tick: [10] } });
+    const hard = updateDamage(createDamage(), fake(14), []), soft = updateDamage(createDamage(), fake(5), []);
+    expect(hard.zones[ZONES.indexOf('nose')]).toBe(100);
+    expect(hard.total).toBeGreaterThanOrEqual(WRECK_PCT);
+    expect(soft.zones[ZONES.indexOf('nose')]).toBeCloseTo(12.8, 0);
+  });
+});
+

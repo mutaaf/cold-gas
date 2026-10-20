@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.11.0 — 2026-10-20
+
+The damage sensor.
+- `src/sim/damage.js`: per-zone damage (nose, tail, left, right, roof, floor, suspension) from the sim's own impact events and permanent crush: hits ∝ impact energy (100 % at 14 m/s ≈ a barrier test), scrapes grind, tyre slams past 3 m/s bend suspension, crush sets a floor. Integrity = 100 − (0.6·worst + 0.4·mean). Deterministic, so the Worker's re-simulation agrees.
+- HUD: the car from above, each zone shaded (scuff / amber ≥ 10 % / red ≥ 40 %), the total %, a flash on each hit.
+- Judges: a new Integrity category on every event (Engineer weighs it 15 %, Designer 12 %, Coordinator 8 %); 60 % damage or worse is a wreck, capped like a crash, verdict "Wrecked". Results show "% intact"; the AI panel gets the damage line with the worst zones.
+- Reference runs read ≤ 2 % (skirts brushing the ledge); a drop onto the row reads ≈37 %.
+
+
 ## 0.10.0 — 2026-10-20
 
 **Learn to land, then fly it by hand** (SIM_VERSION 11). The landing was the wall people hit: a model of human play (reaction time, keys, following the cues; `scripts/human-show.mjs`) landed the Show clean 10 % of the time with Assist and never in Pro. Diagnosis: holding LAND upside down rolled the car out at ≈0.5 rad/s (the leveller's sine law asks for nothing at 180°), so a player who held it from the release hit the ground still rolling; the cues said to roll first and LAND after, which left 10 m to stop from 19 m/s; boosting until the cue went (one reaction time of 80 kN) carried 19 m/s and landed 60 m long; full throttle up the curl threw the car off the lip at 24 m/s; the governor planned its brake on today's tank pressure and ran out of thrust in the last metre once the tanks blew down; nothing on screen said when braking had to start; and Shift (LAND in the air) fired the rear jets after touchdown.

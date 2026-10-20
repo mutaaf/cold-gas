@@ -25,7 +25,13 @@ const TIER_LINE = {
 
 // The user message: the verified scorecard as compact, readable facts.
 export function userPrompt(card) {
-  return [userFacts(card), TIER_LINE[card.tier] || ''].filter(Boolean).join('\n');
+  return [userFacts(card), damageLine(card.facts), TIER_LINE[card.tier] || ''].filter(Boolean).join('\n');
+}
+// The damage sensor: integrity, the worst zones. The Engineer weighs it most.
+function damageLine(f) {
+  if (f.damagePct == null) return '';
+  const zones = Object.entries(f.damageZones || {}).filter(([, v]) => v >= 5).sort((a, b) => b[1] - a[1]).map(([z, v]) => `${z} ${v}%`).join(', ');
+  return `Damage sensor: ${f.damagePct}% damage, ${f.integrity}% intact${zones ? ` (${zones})` : ''}${f.damagePct >= 60 ? '; the car is a write-off' : ''}.`;
 }
 function userFacts(card) {
   const f = card.facts;

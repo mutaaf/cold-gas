@@ -61,6 +61,19 @@
         <div class="tank-row"><span>Air</span><b data-air>100</b><i>%</i></div>
         <div class="bar"><span data-air-bar></span><i class="need" data-air-need aria-hidden="true"></i></div>
       </div>
+      <!-- The damage sensor (src/sim/damage.js): the car from above, nose up, each zone shaded by damage. -->
+      <div class="dmg" data-dmg data-state="ok">
+        <svg viewBox="0 0 44 80" aria-label="Damage by zone">
+          <rect class="z" data-z="floor" x="9" y="10" width="26" height="60" rx="9" />
+          <path class="z" data-z="nose" d="M11 14 Q22 2 33 14 L33 18 L11 18 Z" />
+          <path class="z" data-z="tail" d="M11 62 L33 62 L33 66 Q22 76 11 66 Z" />
+          <rect class="z" data-z="left" x="6" y="20" width="5" height="40" rx="2" />
+          <rect class="z" data-z="right" x="33" y="20" width="5" height="40" rx="2" />
+          <rect class="z" data-z="roof" x="15" y="28" width="14" height="20" rx="4" />
+          <g class="z susp" data-z="susp"><circle cx="5" cy="21" r="3" /><circle cx="39" cy="21" r="3" /><circle cx="5" cy="59" r="3" /><circle cx="39" cy="59" r="3" /></g>
+        </svg>
+        <div class="tank-row"><span>Damage</span><b data-dmg-pct>0</b><i>%</i></div>
+      </div>
     </div>
     <div class="hud-center">
       <div class="speed"><b data-speed>0</b><span>km/h</span></div>
