@@ -710,7 +710,7 @@ function loadDrive() {
     drive = mod.createDrive({
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
       audio: { initAudio, updateAudio }, input: { sample, usingTouch },
-      assist: () => S.assist,
+      assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
       setMode: (m) => { S.mode = m; S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
     });
