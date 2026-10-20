@@ -491,7 +491,7 @@ function frame(now) {
       mode: S.mode === 'title' ? 'title' : S.mode === 'results' || S.mode === 'replay' ? 'replay' : 'live',
       course: stage.course,   // [stage]
     });
-    stage.render(S.time);
+    stage.render(S.time, S.mode);
   }
   requestAnimationFrame(frame);
 }
