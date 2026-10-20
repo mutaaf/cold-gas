@@ -11,7 +11,10 @@
   "main": "src/worker/index.js",
   "assets": { "directory": "./dist", "binding": "ASSETS", "run_worker_first": ["/coldgas/api/*"] },
   // No database_id on purpose: Workers Builds provisions this D1 database by name on first
-  // deploy. The Worker creates its own tables. Secret: ANTHROPIC_API_KEY (wrangler secret put).
+  // deploy. The Worker creates its own tables.
   "d1_databases": [{ "binding": "DB", "database_name": "cold-gas" }],
+  // The judges' default brain: an open model on Workers AI (free daily allowance). Players can
+  // bring their own Anthropic / OpenAI / xAI / Gemini key instead (src/worker/ai/providers.js).
+  "ai": { "binding": "AI" },
   "routes": [{ "pattern": "mutaafaziz.com/coldgas*", "zone_name": "mutaafaziz.com" }]
 }

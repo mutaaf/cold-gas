@@ -1,0 +1,352 @@
+// The judges' theatre: every AI call made visible. An aurora-field particle field (lazy chunk)
+// morphs with the real call as it happens:
+//
+//   TELEMETRY  a circuit board: signals run from the run's sensors to the die
+//   TEXT       the telemetry becomes text: the facts the model is about to read
+//   COMPUTE    a compute die: one signal per streamed token (reasoning and words)
+//   APP        the verdict, then the words land in the judges' cards
+//
+// Around it: the stage rail, the model card (who, where, who pays), live counters (tokens in and
+// out, time to first token, tokens/s, neurons, cost) and the raw stream as it arrives.
+import { create, register, fromText } from 'aurora-field';
+import { streamPanel } from './stream.js';
+import { shortModel, PROVIDER_INFO } from './config.js';
+
+const STAGES = ['telemetry', 'text', 'compute', 'app'];
+// Each morph needs time to read; the call itself usually finishes inside these.
+const MIN_MS = { telemetry: 1700, text: 1700, compute: 1500 };
+
+// --- Shapes -------------------------------------------------------------------------------------
+let registered = false;
+function registerShapes() {
+  if (registered) return;
+  registered = true;
+
+  // A circuit board: sensor pads on the left route into a die in the middle, three output pads
+  // on the right (the judges). Manhattan traces with 45° chamfers, vias, a pinned die outline.
+  register('cg:circuit', (n, rnd) => {
+    const lines = [];
+    const chip = 0.2;
+    const left = 7, right = 3;
+    for (let i = 0; i < left; i++) {
+      const y0 = -0.62 + (i / (left - 1)) * 1.24, yPin = -chip * 0.8 + (i / (left - 1)) * chip * 1.6;
+      const xBend = -0.78 + rnd() * 0.3, dy = yPin - y0, xEnd = xBend + Math.abs(dy);
+      lines.push({ pts: [[-1.05, y0], [xBend, y0], [Math.min(-chip - 0.04, xEnd), yPin], [-chip, yPin]], tone: 0.25, pad: true });
+    }
+    for (let i = 0; i < right; i++) {
+      const y1 = -0.45 + i * 0.45, yPin = -chip * 0.6 + i * chip * 0.6;
+      const xBend = 0.45 + rnd() * 0.2, dy = y1 - yPin;
+      lines.push({ pts: [[chip, yPin], [xBend - Math.abs(dy), yPin], [xBend, y1], [1.05, y1]], tone: 0.9, pad: true });
+    }
+    // Decorative ground traces.
+    for (let i = 0; i < 8; i++) {
+      const x = -0.9 + rnd() * 1.8, y = (rnd() < 0.5 ? -1 : 1) * (0.7 + rnd() * 0.08), len = 0.2 + rnd() * 0.45;
+      lines.push({ pts: [[x, y], [x + len, y]], tone: 0.12 });
+    }
+    // Die outline with pins.
+    const c = chip;
+    lines.push({ pts: [[-c, -c], [c, -c], [c, c], [-c, c], [-c, -c]], tone: 1, die: true });
+    lines.push({ pts: [[-c * 0.55, -c * 0.55], [c * 0.55, -c * 0.55], [c * 0.55, c * 0.55], [-c * 0.55, c * 0.55], [-c * 0.55, -c * 0.55]], tone: 0.7, die: true });
+
+    const segLen = (l) => l.pts.slice(1).reduce((a, p, i) => a + Math.hypot(p[0] - l.pts[i][0], p[1] - l.pts[i][1]), 0);
+    const total = lines.reduce((a, l) => a + segLen(l), 0);
+    const points = [], tone = [], pairs = [], bright = [];
+    for (const l of lines) {
+      const k = Math.max(2, Math.round((segLen(l) / total) * n));
+      const start = points.length;
+      const L = segLen(l);
+      for (let j = 0; j < k && points.length < n; j++) {
+        let d = (j / (k - 1)) * L;
+        let s = 0;
+        while (s < l.pts.length - 2 && d > Math.hypot(l.pts[s + 1][0] - l.pts[s][0], l.pts[s + 1][1] - l.pts[s][1])) {
+          d -= Math.hypot(l.pts[s + 1][0] - l.pts[s][0], l.pts[s + 1][1] - l.pts[s][1]); s++;
+        }
+        const a = l.pts[s], b = l.pts[s + 1];
+        const sl = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        const t = Math.min(1, d / sl);
+        points.push([a[0] + (b[0] - a[0]) * t, (a[1] + (b[1] - a[1]) * t) * 0.9, (rnd() - 0.5) * 0.02]);
+        tone.push(l.tone);
+        if (j > 0) pairs.push([points.length - 2, points.length - 1]);
+      }
+      if (l.pad) bright.push(start, points.length - 1);
+    }
+    while (points.length < n) { const i = Math.floor(rnd() * points.length); points.push([...points[i]]); tone.push(tone[i]); }
+    return { points, tone, pairs, bright, kick: 0.15, edges: true };
+  });
+
+  // The compute die: a lattice of cells, densest at the core, wired to its neighbours so the
+  // field's signals race across it.
+  register('cg:compute', (n, rnd) => {
+    const side = Math.max(6, Math.floor(Math.sqrt(n * 0.82)));
+    const points = [], tone = [], pairs = [];
+    const idx = (i, j) => i * side + j;
+    for (let i = 0; i < side; i++) for (let j = 0; j < side; j++) {
+      const x = (i / (side - 1) - 0.5) * 1.0, y = (j / (side - 1) - 0.5) * 1.0;
+      const r = Math.hypot(x, y);
+      points.push([x + (rnd() - 0.5) * 0.004, y * 0.92, Math.sin(r * 14) * 0.02]);
+      tone.push(Math.max(0, 1 - r * 1.6));
+      if (i > 0 && rnd() < 0.35) pairs.push([idx(i - 1, j), idx(i, j)]);
+      if (j > 0 && rnd() < 0.35) pairs.push([idx(i, j - 1), idx(i, j)]);
+    }
+    // Pins round the edge.
+    for (let k = 0; points.length < n; k++) {
+      const side4 = k % 4, t = ((k >> 2) % 24) / 23 - 0.5;
+      const o = 0.62 + ((k >> 2) % 2) * 0.02;
+      points.push(side4 === 0 ? [t, -o * 0.92, 0] : side4 === 1 ? [o, t * 0.92, 0] : side4 === 2 ? [t, o * 0.92, 0] : [-o, t * 0.92, 0]);
+      tone.push(0.5);
+    }
+    return { points, tone, pairs, kick: 0.25, edges: true };
+  });
+}
+
+let textSeq = 0;
+function textShape(text) {
+  const name = `cg:text:${++textSeq}`;
+  try {
+    register(name, fromText(text, { font: '700 140px "Geist Mono", ui-monospace, monospace' }));
+    return name;
+  } catch (err) {
+    console.warn('theatre text shape', err);
+    return 'cg:compute';
+  }
+}
+
+// Visuals must never block the judges' words: any failure in the field is logged and skipped.
+const safe = (fn) => { try { fn(); } catch (err) { console.warn('theatre visual', err); } };
+
+// --- DOM ------------------------------------------------------------------------------------------
+function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
+const fmtMs = (ms) => (ms == null ? '—' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`);
+const fmtUsd = (u) => (u == null ? '—' : u < 0.0001 ? `$${u.toFixed(6)}` : `$${u.toFixed(4)}`);
+
+function buildDom(root) {
+  root.innerHTML = '';
+  const canvas = el('canvas', 'th-canvas');
+  const rail = el('ol', 'th-rail');
+  const railItems = {};
+  for (const [i, s] of STAGES.entries()) {
+    const li = el('li', '', `<span class="n">0${i + 1}</span><span class="l">${s}</span><span class="d"></span>`);
+    rail.appendChild(li); railItems[s] = li;
+  }
+  const card = el('div', 'th-card', `
+    <div class="th-eyebrow">Inside the panel</div>
+    <div class="th-model"><b data-k="model">—</b><span data-k="vendor"></span></div>
+    <dl class="th-meta">
+      <div><dt>Runs on</dt><dd data-k="where">—</dd></div>
+      <div><dt>Billed to</dt><dd data-k="billed">—</dd></div>
+    </dl>`);
+  const stats = el('dl', 'th-stats', ['in', 'out', 'ttft', 'rate', 'neurons', 'cost'].map((k) =>
+    `<div><dt>${{ in: 'Tokens in', out: 'Tokens out', ttft: 'First token', rate: 'Speed', neurons: 'Neurons', cost: 'Cost' }[k]}</dt><dd data-s="${k}">—</dd></div>`).join(''));
+  const ticker = el('div', 'th-ticker', '<div class="th-reason" data-k="reason"></div><div class="th-out" data-k="out"></div>');
+  const caption = el('div', 'th-caption', '');
+  const skip = el('button', 'th-skip', 'Skip');
+  skip.type = 'button';
+  root.append(canvas, rail, card, stats, ticker, caption, skip);
+  const q = (sel) => root.querySelector(sel);
+  return {
+    canvas, railItems, skip, caption,
+    set: (k, v) => { const n = q(`[data-k="${k}"]`); if (n) n.textContent = v; },
+    stat: (k, v) => { const n = q(`[data-s="${k}"]`); if (n) n.textContent = v; },
+    out: q('[data-k="out"]'), reason: q('[data-k="reason"]'),
+  };
+}
+
+// --- The show ---------------------------------------------------------------------------------------
+// Runs one judging call through the theatre. Resolves with { words, meta } when the show is over
+// (or skipped). `fallbackWords(card)` supplies local lines if the call fails.
+export function runTheatre(root, { log, assist, ai, card, fallbackWords, reduced = false, replay = null }) {
+  registerShapes();
+  const dom = buildDom(root);
+  root.hidden = false;
+  root.classList.remove('out');
+  requestAnimationFrame(() => root.classList.add('on'));
+
+  let field = null;
+  if (!reduced) safe(() => { field = create(dom.canvas, {
+    container: root.querySelector('.th-canvas').parentElement, shapes: ['cg:circuit', 'cg:compute'], initial: 'cg:circuit',
+    cycle: 0, palette: 'aurora', blank: true, interactive: false, stars: 60, autonomy: 0.3, depth: 3.0, intro: 0,
+    count: (w) => (w < 700 ? 1800 : 3600), radius: (w, h) => Math.min(w * 0.42, h * 0.36),
+  }); });
+  const timeline = [];               // recorded events, for "Replay the call"
+  const t0 = performance.now();
+  let stage = null, stageAt = t0, finished = false, skipResolve = null;
+  const meta = { provider: ai.provider, model: ai.model, events: timeline };
+  const done = new Promise((resolve) => { skipResolve = resolve; });
+
+  const setStage = (s) => {
+    stage = s; stageAt = performance.now();
+    for (const k of STAGES) dom.railItems[k].className = k === s ? 'on' : STAGES.indexOf(k) < STAGES.indexOf(s) ? 'done' : '';
+  };
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const dwell = (s) => wait(Math.max(0, (MIN_MS[s] || 0) - (performance.now() - stageAt)));
+  let tokenCount = 0, lastSignal = 0, outText = '', reasonText = '';
+  // Tokens are queued as they arrive and played through the COMPUTE stage at their recorded
+  // pace (a fast edge model can answer before the show reaches COMPUTE). The counters always
+  // show the call's real timings.
+  const queue = [];
+  let drained = null;
+  const drain = () => {
+    drained ??= (async () => {
+      await computing;
+      let prevAt = null;
+      for (;;) {
+        const item = queue.shift();
+        if (!item) {
+          if (callOver) return;
+          await wait(30);
+          continue;
+        }
+        const [kind, text, at] = item;
+        if (prevAt != null) await wait(Math.min(45, Math.max(12, at - prevAt)));
+        prevAt = at;
+        if (kind === 'reasoning') { reasonText = (reasonText + text).slice(-220); dom.reason.textContent = reasonText; }
+        else {
+          if (!tokenCount && meta.ttft != null) dom.stat('ttft', fmtMs(meta.ttft));
+          outText += text; dom.out.textContent = outText.slice(-360);
+        }
+        tokenCount++; dom.stat('out', String(tokenCount)); signal();
+      }
+    })();
+    return drained;
+  };
+  let callOver = false;
+  const signal = () => {
+    const now = performance.now();
+    if (field && now - lastSignal > 33) { safe(() => field.signal(undefined, 14, 2)); lastSignal = now; }
+  };
+  const caption = (t) => { dom.caption.textContent = t; };
+
+  setStage('telemetry');
+  caption('The server re-simulates your run from its inputs…');
+  safe(() => field?.setShape('cg:circuit', { pin: 1e9 }));
+  const pulse = setInterval(() => safe(() => field?.signal(undefined, 30, 3)), 180);
+  // Hard deadline: whatever happens to the network or the visuals, the words land.
+  const deadline = setTimeout(() => { if (!finished) { if (!words) { words = fallbackWords(card); meta.error = meta.error || 'The judges took too long.'; } finish(); } }, 35_000);
+
+  let showText = null;          // promise: TEXT stage done
+  let computing = null;          // promise: COMPUTE stage entered (one per show)
+  let words = null, failure = null;
+
+  const startCompute = () => {
+    computing ??= (async () => {
+      await showText;
+      await dwell('text');
+      setStage('compute');
+      caption(`${shortModel(meta.model)} is writing the judges' remarks…`);
+      safe(() => field?.setShape('cg:compute', { pin: 1e9, arrive: { from: [-0.6, 0, 0], ms: 700 } }));
+    })();
+    drain();
+    return computing;
+  };
+
+  const handlers = {
+    verify: (d) => {
+      timeline.push(['verify', performance.now() - t0, d]);
+      meta.verify = d;
+      caption(`Verified: ${d.ticks.toLocaleString()} physics ticks replayed in ${fmtMs(d.ms)}. Score ${d.card.total.toFixed(1)}.`);
+    },
+    prompt: (d) => {
+      timeline.push(['prompt', performance.now() - t0, d]);
+      Object.assign(meta, { provider: d.provider, model: d.model, where: d.where, system: d.system, user: d.user });
+      dom.set('model', shortModel(d.model));
+      dom.set('vendor', `${d.providerLabel} · ${d.vendor}`);
+      dom.set('where', d.where);
+      dom.set('billed', d.provider === 'edge' ? 'COLD GAS · free allowance' : `Your ${d.providerLabel} key`);
+      dom.stat('in', `~${d.inTokensEst}`);
+      showText = (async () => {
+        await dwell('telemetry').catch(() => {});
+        setStage('text');
+        const f = card.facts;
+        caption('Your telemetry becomes text: the facts the model reads.');
+        if (field) safe(() => {
+          const name = textShape(`${f.rollDeg}° ${f.apex}M ${f.sink}M/S`);
+          if (name !== 'cg:compute') field.add([name]);
+          field.setShape(name, { pin: 1e9, arrive: { from: [-1, 0, 0], ms: 1100 } });
+        });
+      })();
+    },
+    reasoning: (d) => {
+      timeline.push(['reasoning', performance.now() - t0, d]);
+      startCompute();
+      queue.push(['reasoning', d.t, performance.now()]);
+    },
+    token: (d) => {
+      timeline.push(['token', performance.now() - t0, d]);
+      startCompute();
+      if (meta.ttft == null) meta.ttft = performance.now() - t0;
+      queue.push(['token', d.t, performance.now()]);
+    },
+    note: (d) => { timeline.push(['note', performance.now() - t0, d]); meta.model = d.model; dom.set('model', shortModel(d.model)); },
+    done: (d) => {
+      timeline.push(['done', performance.now() - t0, d]);
+      Object.assign(meta, d, { ok: true });
+      words = d.words;
+      showFinal = () => {
+      dom.stat('in', String(d.inTokens)); dom.stat('out', String(d.outTokens));
+      dom.stat('ttft', fmtMs(d.ttftMs)); dom.stat('rate', d.tokensPerSec ? `${d.tokensPerSec} tok/s` : '—');
+      dom.stat('neurons', d.neurons != null ? String(d.neurons) : '—');
+      dom.stat('cost', d.costUsd != null ? fmtUsd(d.costUsd) : 'Billed by provider');
+      };
+    },
+    error: (d) => {
+      timeline.push(['error', performance.now() - t0, d]);
+      failure = d;
+      meta.error = d.message;
+    },
+  };
+
+  let showFinal = null;
+  const source = replay ? replayEvents(replay, handlers) : streamPanel({ log, assist, ai }, handlers);
+
+  (async () => {
+    try { await source; } catch (err) { handlers.error({ message: 'The judges are offline.', fallback: true }); console.warn(err); }
+    if (!showText) handlers.prompt({ provider: ai.provider, providerLabel: PROVIDER_INFO[ai.provider]?.label || '', vendor: PROVIDER_INFO[ai.provider]?.vendor || '', model: ai.model, where: '—', inTokensEst: 0 });
+    await startCompute().catch((err) => console.warn('theatre', err));
+    callOver = true;
+    await drain();
+    showFinal?.();
+    if (!words) {
+      words = fallbackWords(card);
+      caption(`${failure?.message || 'No answer.'} The panel speaks from the game's own lines.`);
+      dom.set('billed', 'Nobody: local lines');
+      await wait(900);
+    }
+    await dwell('compute');
+    setStage('app');
+    caption('The words land in the app.');
+    if (field) safe(() => {
+      const name = textShape((card.verdict || 'JUDGED').toUpperCase());
+      if (name !== 'cg:compute') field.add([name]);
+      field.setShape(name, { pin: 1e9, arrive: { from: [0, 0, 0], ms: 800 } });
+    });
+    await wait(reduced ? 0 : 1900);
+    finish();
+  })();
+
+  function finish() {
+    if (finished) return;
+    finished = true;
+    clearInterval(pulse);
+    clearTimeout(deadline);
+    meta.words = words || fallbackWords(card);
+    root.classList.add('out');
+    setTimeout(() => { safe(() => field?.destroy()); root.hidden = true; root.classList.remove('on', 'out'); }, 650);
+    skipResolve({ words: meta.words, meta });
+  }
+  dom.skip.addEventListener('click', () => {
+    // Skipping only hurries the show; the words still come from the call if it has answered.
+    if (!words && !failure) { caption('Finishing the call…'); return; }
+    finish();
+  });
+  return done;
+}
+
+// Replays a recorded call with its original timing.
+async function replayEvents(timeline, handlers) {
+  const start = performance.now();
+  for (const [ev, at, data] of timeline) {
+    const delay = at - (performance.now() - start);
+    if (delay > 0) await new Promise((r) => setTimeout(r, delay));
+    handlers[ev]?.(data);
+  }
+}

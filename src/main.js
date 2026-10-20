@@ -20,7 +20,9 @@ import { RAMP, PAD, groundAt } from './sim/course.js';
 import { bindInput, sample, usingTouch } from './input.js';
 import { initAudio, updateAudio, thud, setMuted, isMuted } from './audio.js';
 import { createUI } from './ui.js';
-import { askPanel, localWords, postScore, fetchBoard } from './panel.js';
+import { localWords, postScore, fetchBoard } from './panel.js';
+import { loadAI } from './ai/config.js';
+import { openSettings, aiLabel } from './ai/settings.js';
 
 const params = new URLSearchParams(location.search);
 const coarse = matchMedia('(pointer: coarse)').matches;
@@ -109,17 +111,38 @@ function finishRun() {
   ui.touch.hidden = true;
   ui.clearCue();
   ui.results(S.card);
-  // The server re-simulates the same log and asks the AI panel for words.
-  const assist = !!(S.assist || S.autopilot);
-  askPanel(run.inputLog, assist).then((res) => {
-    if (S.run !== run) return;
-    if (res?.card && Math.abs(res.card.total - S.card.total) > 0.05) console.warn('server card differs', res.card.total, S.card.total);
-    S.words = res?.words || localWords(S.card);
-    ui.words(S.words);
-  });
+  // The judges' theatre: the server re-simulates the log, then a model writes the words, all of
+  // it shown live (src/ai/theatre.js, a lazy chunk with the aurora-field particle engine).
+  runPanel(run);
   // Replay plays behind the sheet.
   S.replayT = 0;
 }
+
+const theatreRoot = document.querySelector('[data-theatre]');
+const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+async function runPanel(run, replay = null) {
+  const assist = !!(S.assist || S.autopilot);
+  const card = S.card;
+  let mod;
+  try { mod = await import('./ai/theatre.js'); } catch { S.words = localWords(card); ui.words(S.words); return; }
+  if (S.run !== run) return;
+  const { words, meta } = await mod.runTheatre(theatreRoot, {
+    log: run.inputLog, assist, ai: loadAI(), card, fallbackWords: localWords, reduced: reducedMotion, replay,
+  });
+  if (S.run !== run) return;
+  if (!replay) {
+    if (meta.verify?.card && Math.abs(meta.verify.card.total - card.total) > 0.05) console.warn('server card differs', meta.verify.card.total, card.total);
+    S.words = words; S.callMeta = meta;
+  }
+  ui.words(S.words);
+  ui.receipt(S.callMeta, { onReplay: () => runPanel(run, S.callMeta.events), onChange: () => openAI() });
+}
+
+const aiChip = document.querySelector('[data-ai-open]');
+const syncAiChip = () => { aiChip.textContent = aiLabel(); };
+function openAI() { openSettings(document.querySelector('[data-ai-modal]'), { onChange: syncAiChip }); }
+aiChip.addEventListener('click', openAI);
+syncAiChip();
 
 // --- Live step -----------------------------------------------------------------------------
 function liveStep(dt) {
