@@ -146,10 +146,48 @@ function boxSdf(b, x, y, z, n) {
   return -m[0];
 }
 
-export const COURSES = { wall: WALL, lineup: LINEUP };
-export const DEFAULT_COURSE = 'wall';
+// --- The Show (both stunts, one run, as the reveal night ran them) ---------------------------------
+// Up the Wall, let go, roll, land; then drive on, swing over to the lineup lane beside the approach
+// and kickflip over the parked fleet. The Wall sends the car back down the approach (−z), so the
+// Lineup leg is the Lineup course turned 180° about +y onto a lane beside it: one proper rotation,
+// so every Lineup rule (lift-off line, roofs, pad, heading) runs unchanged in its local frame.
+const SHOW_LANE_X = -12, SHOW_REF_Z = -52;
+export const SHOW_LANE = { x: SHOW_LANE_X, z: SHOW_REF_Z };
+// World → Lineup-local and back (the same map both ways: a half turn is its own inverse).
+export const showLocalX = (x) => SHOW_LANE_X - x;
+export const showLocalZ = (z) => SHOW_REF_Z - z;
+export const SHOW_BOXES = LINEUP_BOXES.map((b) => ({
+  ...b, minX: SHOW_LANE_X - b.maxX, maxX: SHOW_LANE_X - b.minX,
+  minZ: SHOW_REF_Z - b.maxZ, maxZ: SHOW_REF_Z - b.minZ, cz: SHOW_REF_Z - b.cz,
+}));
+export const SHOW = {
+  id: 'show',
+  name: 'The Show',
+  blurb: 'Both stunts, one run: up the Wall and off the ledge, then kickflip the lineup and stick it.',
+  ramp: null,
+  start: WALL.start,
+  pad: WALL.pad,                                                     // leg 1: under the ledge
+  pad2: { x: SHOW_LANE_X - LINEUP.pad.x, z: SHOW_REF_Z - LINEUP.pad.z, rings: LINEUP.pad.rings },   // leg 2
+  liftOff: { x: SHOW_LANE_X, z: SHOW_REF_Z - LINEUP.liftOffZ },
+  boxes: SHOW_BOXES,
+  runout: WALL.runout,
+};
+
+export const COURSES = { show: SHOW, wall: WALL, lineup: LINEUP };
+export const DEFAULT_COURSE = 'show';
 
 // --- The query the physics asks ---------------------------------------------------------------------
+const bounds = new Map();
+function boundsOf(course) {
+  let b = bounds.get(course);
+  if (!b) {
+    const bx = course.boxes;
+    b = { minX: Math.min(...bx.map((v) => v.minX)), maxX: Math.max(...bx.map((v) => v.maxX)),
+      minZ: Math.min(...bx.map((v) => v.minZ)), maxZ: Math.max(...bx.map((v) => v.maxZ)), maxY: Math.max(...bx.map((v) => v.maxY)) };
+    bounds.set(course, b);
+  }
+  return b;
+}
 const tmpN = { nx: 0, ny: 0, nz: 0 };
 // Signed distance from (x, y, z) to the course's solids. `out` gets the unit normal {x, y, z}.
 // `out.obstacle` is set when the nearest solid is a parked vehicle.
@@ -163,14 +201,19 @@ export function surface(course, x, y, z, out) {
     phi = y;
   }
   out.obstacle = false;
-  if (course.id === 'wall') {
+  if (course.id === 'wall' || course.id === 'show') {
     if (Math.abs(x) <= WALL.width / 2) {
       const d = wallSdf(z, y, tmpN);
       if (d < phi) { phi = d; nx = 0; ny = tmpN.ny; nz = tmpN.nz; }
     }
-  } else if (course.id === 'lineup') {
-    for (let i = 0; i < LINEUP_BOXES.length; i++) {
-      const d = boxSdf(LINEUP_BOXES[i], x, y, z, tmpN);
+  }
+  // Parked vehicles. A box is never nearer than the row's bounding box, so skip the row whenever
+  // that is already farther than the nearest surface: same answer, a fraction of the work.
+  const bb = course.boxes && boundsOf(course);
+  if (bb && x > bb.minX - phi && x < bb.maxX + phi && z > bb.minZ - phi && z < bb.maxZ + phi && y < bb.maxY + phi) {
+    const boxes = course.boxes;
+    for (let i = 0; i < boxes.length; i++) {
+      const d = boxSdf(boxes[i], x, y, z, tmpN);
       if (d < phi) { phi = d; nx = tmpN.nx; ny = tmpN.ny; nz = tmpN.nz; out.obstacle = true; }
     }
   }

@@ -53,18 +53,29 @@ export function bindInput(root, { onPause } = {}) {
 }
 
 const k = (...codes) => codes.some((c) => keys.has(c));
+
+// Keys are on/off; a driver's hands aren't. Keyboard steer and roll ramp in over ≈0.25 s and
+// centre twice as fast, so a tap is a correction and a hold is full lock. sample() runs once per
+// 240 Hz sim tick.
+const KEY_IN = 4 / 240, KEY_OUT = 8 / 240;
+let keyAx = 0;
+function rampKey(target) {
+  const rate = Math.abs(target) > Math.abs(keyAx) && Math.sign(target) !== -Math.sign(keyAx) ? KEY_IN : KEY_OUT;
+  keyAx += Math.max(-rate, Math.min(rate, target - keyAx));
+  return keyAx;
+}
 const dz = (v) => (Math.abs(v) < 0.12 ? 0 : v);
 
 export const usingTouch = () => touch.active;
 
 // Sample into a sim input. `phase` is the run phase; `assist` the flight computer setting.
+// Everything is driver-relative: + steer, roll and yaw are to the right (src/sim/vehicle.js).
 export function sample(phase, assist, out = newInput()) {
   Object.assign(out, newInput());
   out.assist = assist ? 1 : 0;
   const air = phase === 'air';
   let ax = 0, ay = 0, lift = 0, land = 0, thr = 0, brk = 0, yaw = 0;
-  if (k('ArrowLeft', 'KeyA')) ax -= 1;
-  if (k('ArrowRight', 'KeyD')) ax += 1;
+  ax = rampKey((k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0));
   if (k('ArrowUp', 'KeyW')) ay -= 1;
   if (k('ArrowDown', 'KeyS')) ay += 1;
   if (k('KeyQ')) yaw -= 1;

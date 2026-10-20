@@ -1,4 +1,5 @@
-// Two stages, one renderer. The Wall (default): the reveal's night stage, built in
+// Three stages, one renderer. The Show (default): the Wall's night stage with the lineup parked on
+// its own lane beside the approach. The Wall: the reveal's night stage, built in
 // src/render/wall.js. The Lineup: the test range at blue hour, with one low warm key light, a cool
 // sky fill, matte concrete, a white kicker with a hairline light strip, the parked lineup and a
 // bullseye landing pad. `stage.setCourse(id)` swaps the course group, environment, fog, exposure
@@ -9,7 +10,7 @@ import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { SMAAPass } from 'three/examples/jsm/postprocessing/SMAAPass.js';
-import { RAMP, LINEUP, LINEUP_BOXES } from '../sim/courses.js';
+import { RAMP, LINEUP, LINEUP_BOXES, SHOW, SHOW_LANE } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
 import { buildWall, nightSkyMaterial, bakeNightEnvironment } from './wall.js';
 
@@ -257,11 +258,60 @@ function buildLineup(tier) {
   };
 }
 
-export const COURSE_IDS = ['wall', 'lineup'];
+// The Show: the night Wall plus the lineup, turned to run down its lane beside the approach
+// (src/sim/courses.js SHOW). The reveal parked the row on a low red-lit plinth; here it is a red
+// LED outline on the slab, with two white washes so the cars read at night.
+function buildShow(tier) {
+  const look = buildWall(tier);
+  look.group.name = 'course:show';
+  const row = new THREE.Group();
+  row.add(lineup());
+  row.rotation.y = Math.PI;                         // the same half turn the physics uses
+  row.position.set(SHOW_LANE.x, 0, SHOW_LANE.z);
+  look.group.add(row);
 
-// createStage(canvas, { tier: 'low' | 'mid' | 'high', course: 'wall' | 'lineup' })
+  const g = new THREE.Group();
+  const white = new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity: 0.55 });
+  const faint = new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity: 0.18 });
+  const red = new THREE.MeshBasicMaterial({ color: new THREE.Color(4.5, 0.2, 0.3), fog: false });
+  const flat = (geo, mat, x, z, y = 0.004) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
+  const boxes = SHOW.boxes;
+  const minX = Math.min(...boxes.map((b) => b.minX)) - 0.6, maxX = Math.max(...boxes.map((b) => b.maxX)) + 0.6;
+  const minZ = Math.min(...boxes.map((b) => b.minZ)) - 0.6, maxZ = Math.max(...boxes.map((b) => b.maxZ)) + 0.6;
+  // Red outline of the row.
+  for (const z of [minZ, maxZ]) flat(new THREE.PlaneGeometry(maxX - minX, 0.07), red, (minX + maxX) / 2, z, 0.006);
+  for (const x of [minX, maxX]) flat(new THREE.PlaneGeometry(0.07, maxZ - minZ), red, x, (minZ + maxZ) / 2, 0.006);
+  // The lane: a dashed centreline from the Wall's pad to the lift-off line, then the line itself.
+  const { x: lx, z: lz } = SHOW.liftOff;
+  for (let z = lz + 4; z < SHOW.pad.z - 6; z += 6) flat(new THREE.PlaneGeometry(0.06, 2.4), faint, lx, z);
+  flat(new THREE.PlaneGeometry(5.2, 0.12), white, lx, lz, 0.006);
+  // The second landing pad.
+  const P = SHOW.pad2;
+  flat(new THREE.CircleGeometry(P.rings.at(-1) + 0.6, 96), new THREE.MeshBasicMaterial({ color: 0x0e1014, transparent: true, opacity: 0.4 }), P.x, P.z, 0.003);
+  for (const r of P.rings) flat(new THREE.RingGeometry(r - 0.022, r + 0.022, 192), white, P.x, P.z, 0.005);
+  flat(new THREE.PlaneGeometry(0.04, 3), white, P.x, P.z, 0.006);
+  flat(new THREE.PlaneGeometry(3, 0.04), white, P.x, P.z, 0.006);
+  look.group.add(g);
+
+  const cz = (minZ + maxZ) / 2;
+  // Two soft top-lights from behind the row (away from the approach), so the paint reads without
+  // glaring into the chase camera.
+  for (const [x, z] of [[SHOW_LANE.x - 10, cz - 14], [SHOW_LANE.x + 4, cz - 16]]) {
+    const wash = new THREE.SpotLight(0xe8eeff, 420, 0, 0.5, 0.8, 2);
+    wash.position.set(x, 14, z); wash.target.position.set(SHOW_LANE.x, 0.8, cz);
+    look.group.add(wash, wash.target);
+  }
+  const glow = new THREE.PointLight(0xff1a28, 10, 14, 2);
+  glow.position.set(SHOW_LANE.x, 0.6, cz);
+  look.group.add(glow);
+  return look;
+}
+
+export const COURSE_IDS = ['show', 'wall', 'lineup'];
+
+// createStage(canvas, { tier: 'low' | 'mid' | 'high', course: 'show' | 'wall' | 'lineup' })
 //   → { renderer, scene, camera, hero, key, course, resize, render(time), setCourse(id), titlePose() }
-export function createStage(canvas, { tier = 'high', course = 'wall' } = {}) {
+export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier !== 'low', powerPreference: 'high-performance' });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1));
   renderer.toneMapping = THREE.AgXToneMapping;
@@ -271,9 +321,11 @@ export function createStage(canvas, { tier = 'high', course = 'wall' } = {}) {
 
   const scene = new THREE.Scene();
   // Two skies and two environments, each made on first use and swapped with the course.
-  const skies = { lineup: skyMaterial(), wall: nightSkyMaterial() };
+  const night = nightSkyMaterial();
+  const skies = { lineup: skyMaterial(), wall: night, show: night };
   const envs = {};
-  const envFor = (id) => (envs[id] ??= id === 'wall' ? bakeNightEnvironment(renderer) : bakeEnvironment(renderer));
+  const isNight = (id) => id !== 'lineup';
+  const envFor = (id) => (envs[isNight(id) ? 'night' : 'day'] ??= isNight(id) ? bakeNightEnvironment(renderer) : bakeEnvironment(renderer));
   const sky = new THREE.Mesh(new THREE.SphereGeometry(2000, 48, 24), skies.wall);
   sky.frustumCulled = false;
   scene.add(sky);
@@ -308,13 +360,13 @@ export function createStage(canvas, { tier = 'high', course = 'wall' } = {}) {
   }
 
   const looks = {};
-  const lookFor = (id) => (looks[id] ??= id === 'wall' ? buildWall(tier) : buildLineup(tier));
+  const lookFor = (id) => (looks[id] ??= id === 'show' ? buildShow(tier) : id === 'wall' ? buildWall(tier) : buildLineup(tier));
   let current = null;
   const keyOffset = new THREE.Vector3();
   const stage = { renderer, scene, camera, hero, key, course: null, resize, render, setCourse, titlePose };
 
   function setCourse(id) {
-    if (!COURSE_IDS.includes(id)) id = 'wall';
+    if (!COURSE_IDS.includes(id)) id = 'show';
     if (stage.course === id) return stage;
     if (current) scene.remove(current.group);
     current = lookFor(id);
@@ -322,7 +374,7 @@ export function createStage(canvas, { tier = 'high', course = 'wall' } = {}) {
     stage.course = id;
     sky.material = skies[id];
     scene.environment = envFor(id);
-    scene.environmentIntensity = id === 'wall' ? 1.0 : 0.9;
+    scene.environmentIntensity = isNight(id) ? 1.0 : 0.9;
     scene.fog = current.look.fog;
     renderer.toneMappingExposure = current.look.exposure;
     if (bloom) Object.assign(bloom, current.look.bloom);

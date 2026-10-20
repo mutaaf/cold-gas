@@ -11,7 +11,7 @@ for (const st of strategies) {
   while (run.phase !== 'done') {
     const c = run.car, inp = newInput(); inp.assist = 1;
     const v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
-    inp.steer = Math.max(-1, Math.min(1, -c.pos.x * 0.25));           // a person keeps it roughly straight
+    inp.steer = Math.max(-1, Math.min(1, c.pos.x * 0.25));           // a person keeps it roughly straight
     if (run.phase === 'drive') { inp.throttle = v < st.approach ? 1 : 0; inp.fan = c.pos.z > -16 ? 1 : 0; }
     else if (run.phase === 'ramp' && !released) {
       inp.throttle = st.climbThrottle; inp.fan = 1;

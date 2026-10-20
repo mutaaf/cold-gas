@@ -40,7 +40,19 @@ export const PANEL = [
     w: { height: 0.12, rotation: 0.22, clearance: 0.12, landing: 0.24, precision: 0.12, efficiency: 0.18 } },
 ];
 
-export const categoriesFor = (course) => (course === 'wall' ? WALL_CATEGORIES : CATEGORIES);
+// The Show: both stunts, one card.
+export const SHOW_CATEGORIES = [
+  { id: 'climb', label: 'Climb', unit: '%' },
+  { id: 'inversion', label: 'Inverted', unit: 's' },
+  { id: 'rollout', label: 'Roll-out', unit: '°' },
+  { id: 'kickflip', label: 'Kickflip', unit: '°' },
+  { id: 'clearance', label: 'Clearance', unit: 'm' },
+  { id: 'landing', label: 'Landings', unit: '' },
+  { id: 'precision', label: 'Precision', unit: 'm' },
+  { id: 'efficiency', label: 'Gas left', unit: '%' },
+];
+
+export const categoriesFor = (course) => (course === 'wall' ? WALL_CATEGORIES : course === 'show' ? SHOW_CATEGORIES : CATEGORIES);
 
 // Landing quality, shared: sink rate, attitude, heading, wheel sync, suspension.
 function landingScore(t) {
@@ -117,7 +129,46 @@ function scoreWall(t, opts) {
 
 export function scoreRun(t, opts = {}) {
   if (t.course === 'wall') return scoreWall(t, opts);
+  if (t.course === 'show') return scoreShow(t, opts);
   return scoreLineup(t, opts);
+}
+
+// The Show scores each stunt on its own card, then each judge's mark is the mean of their two.
+// Never reaching the lineup leaves that half at zero: the whole show is the point.
+function scoreShow(t, opts) {
+  const reached = t.leg === 1;
+  const wall = scoreWall(reached ? t.wall : t, opts);
+  const kick = reached ? scoreLineup(t, opts) : null;
+  const judges = wall.judges.map((j, i) => ({ ...j, score: r1((j.score + (kick ? kick.judges[i].score : 0)) / 2) }));
+  const total = r1(judges.reduce((a, j) => a + j.score, 0) * 10 / 3);
+  const wc = wall.categories, kc = kick?.categories;
+  const categories = {
+    climb: wc.climb, inversion: wc.inversion, rollout: wc.rotation,
+    kickflip: kc ? kc.rotation : 0, clearance: kc ? kc.clearance : 0,
+    landing: r1(kc ? (wc.landing + kc.landing) / 2 : wc.landing / 2),
+    precision: r1(kc ? (wc.precision + kc.precision) / 2 : wc.precision / 2),
+    efficiency: kc ? kc.efficiency : 0,
+  };
+  let verdict;
+  if (!reached) verdict = wall.facts.jumped && !wall.facts.crashed ? 'Never reached the lineup' : wall.verdict;
+  else if (kick.verdict === 'No jump' || kick.facts.crashed || kick.verdict === 'No trick') verdict = kick.verdict;
+  else if (total >= 92) verdict = 'Perfect 10';
+  else if (total >= 84) verdict = 'Stuck it';
+  else if (total >= 72) verdict = 'Clean';
+  else if (total >= 55) verdict = 'Rough landing';
+  else verdict = 'Survived';
+  const wf = wall.facts, kf = kick?.facts;
+  const last = kf || wf;
+  return {
+    course: 'show', total, judges, categories, verdict,
+    facts: {
+      course: 'show', reachedLineup: reached, wall: wf, lineup: kf || null,
+      // The headline numbers (share text, theatre), from the last stunt flown.
+      rollDeg: kf ? kf.rollDeg : wf.rollDeg, apex: kf ? kf.apex : wf.apex, sink: last.sink,
+      height: wf.height, invertedS: wf.invertedS, maxG: wf.maxG, zeroToSixty: wf.zeroToSixty,
+      crashed: wf.crashed || !!kf?.crashed, jumped: wf.jumped, endReason: t.endReason,
+    },
+  };
 }
 
 function scoreLineup(t, opts = {}) {

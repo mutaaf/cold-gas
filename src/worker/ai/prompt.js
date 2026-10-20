@@ -2,7 +2,7 @@
 // answers in four labelled lines. Plain lines rather than JSON so the reply streams as readable
 // text (the circuit theatre shows it arriving) and parses the same from any model.
 
-export const SYSTEM = `You are the judging panel for COLD GAS, a stunt game. A roadster with a suction fan and ten cold-gas thrusters performs a stunt: either THE WALL (crawl up a 20 m concrete curl on fan suction, hang upside down under the ledge, let go, roll upright, brake on the down-jets, land) or THE LINEUP (no ramp: lift off flat ground on thrust, a 360-degree roll over five parked EVs, landing). The event is named in the facts.
+export const SYSTEM = `You are the judging panel for COLD GAS, a stunt game. A roadster with a suction fan and ten cold-gas thrusters performs THE SHOW (both stunts in one run: the Wall, a nitrogen top-up, then the Lineup) or a single stunt: either THE WALL (crawl up a 20 m concrete curl on fan suction, hang upside down under the ledge, let go, roll upright, brake on the down-jets, land) or THE LINEUP (no ramp: lift off flat ground on thrust, a 360-degree roll over five parked EVs, landing). The event is named in the facts.
 
 Three judges:
 - ENGINEER (Chief Vehicle Engineer): dry and exacting; cares about sink rate, wheel sync, g-load and attitude at touchdown.
@@ -20,6 +20,18 @@ DESIGNER: <remark>`;
 // The user message: the verified scorecard as compact, readable facts.
 export function userPrompt(card) {
   const f = card.facts;
+  if (f.course === 'show') {
+    const w = f.wall, k = f.lineup;
+    return [
+      'Event: THE SHOW. Both stunts in one run: crawl up a 20 m concrete curl on fan suction, hang upside down under the ledge, let go, roll upright and land; stop while the crew tops up the nitrogen; then lift off flat ground and roll 360 degrees over five parked EVs and land.',
+      `Total ${card.total}/100, verdict "${card.verdict}".`,
+      `Judges: ${card.judges.map((j) => `${j.name} ${j.score}`).join(', ')}.`,
+      `Categories (0-10): ${Object.entries(card.categories).map(([key, v]) => `${key} ${v}`).join(', ')}.`,
+      `The Wall: climbed ${w.progressPct}% to ${w.height} m; hung inverted ${w.invertedS} s; peak load ${w.maxG} g.` + (w.jumped ? ` Released at ${w.launchHeight} m, turned ${Math.max(w.rollDeg, w.pitchDeg)} degrees, touched down at ${w.sink} m/s, ${w.padMiss} m from the mark.` : ' Never left the wall.'),
+      k ? `The Lineup: apex ${k.apex} m (${k.apexOverRoof} m over the semi); roll ${k.rollDeg} degrees; ${k.contact ? 'hit a parked vehicle' : `closest clearance ${k.clearance} m`}; touchdown ${k.sink} m/s, tilt ${k.tiltDeg} degrees, ${k.padMiss} m from the mark; gas left ${k.airPct}%.` : 'Never reached the lineup.',
+      w.fellOff ? 'The car slid off the side of the deck.' : '', w.landedOnRamp ? 'It came down on the deck.' : '', (w.flipped || k?.flipped) ? 'It rolled over after a landing.' : '',
+    ].filter(Boolean).join('\n');
+  }
   if (f.course === 'wall') {
     return [
       'Event: THE WALL. A concrete curl turns 170 degrees from the ground into an inverted ledge about 20 m up. The car crawls up it on four suction fans (46 kN), hangs upside down under the ledge, lets go, rolls upright in the air, brakes on four nitrogen down-jets and lands on a target pad.',

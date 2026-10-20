@@ -34,11 +34,12 @@ test('deep link ?play=jump starts a countdown and accepts keyboard input', async
   await page.goto('/coldgas/?play=jump&gfx=low');
   await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
   await page.evaluate(() => window.__coldgas.skipCountdown());
+  // Any real movement proves the key reached the sim (software GL in CI can run at a few fps).
   await page.keyboard.down('ArrowUp');
-  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -93, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -116, null, { timeout: 45_000 });
   await page.keyboard.up('ArrowUp');
   const z = await page.evaluate(() => window.__coldgas.S.run.car.pos.z);
-  expect(z).toBeGreaterThan(-93);
+  expect(z).toBeGreaterThan(-116);
 });
 
 test('phone layout: touch controls visible and nothing overlaps the title CTA', async ({ browser }) => {
@@ -102,4 +103,28 @@ test('phone: GO pedal drives, the stick alone does not, and air pitch is not inv
   await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -93, null, { timeout: 30_000 });
   await page.dispatchEvent('[data-btn-go]', 'pointerup', { pointerId: 7 });
   await page.close();
+});
+
+// Right means right: from the chase camera, pressing → turns the car to the right of the screen,
+// and the default event is the Show (both stunts, one run).
+test('keyboard: → steers right on screen, and the Show is the default event', async ({ page }) => {
+  await page.goto('/coldgas/?play=jump&gfx=low');
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  expect(await page.evaluate(() => window.__coldgas.S.run.course)).toBe('show');
+  await page.evaluate(() => window.__coldgas.skipCountdown());
+  await page.keyboard.down('ArrowUp');
+  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -116, null, { timeout: 45_000 });
+  await page.keyboard.down('ArrowRight');
+  await page.waitForFunction(() => window.__coldgas.S.run.car.vel.x < -0.4, null, { timeout: 45_000 });
+  await page.keyboard.up('ArrowRight');
+  await page.keyboard.up('ArrowUp');
+  // Project the car into the camera: it has moved right of centre on screen.
+  const sx = await page.evaluate(() => {
+    const { camera, carRoot } = window.__coldgas;
+    const p = carRoot.position.clone().project(camera);
+    return p.x;
+  });
+  const vx = await page.evaluate(() => window.__coldgas.S.run.car.vel.x);
+  expect(vx).toBeLessThan(-0.3);        // world −x is the driver's right when heading +z
+  expect(sx).toBeGreaterThan(-0.05);
 });

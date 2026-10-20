@@ -2,7 +2,9 @@
 // tyres, a suction fan and ten cold-gas thrusters. It drives on any surface the course defines
 // (src/sim/courses.js `surface()`): flat concrete, a vertical wall, or upside down under a ledge.
 //
-// Body frame: +x right, +y up, +z forward, origin at the centre of mass. Fixed step, no
+// Body frame: +x is the car's LEFT, +y up, +z forward (right-handed), origin at the centre of
+// mass. Inputs are driver-relative: steer, roll and yaw are positive to the driver's right (−x),
+// pitch is positive nose-down. Fixed step, no
 // randomness, no wall clock: a run replays bit-exactly from its inputs (the Worker verifies
 // scores this way). No allocation in step().
 import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
@@ -22,8 +24,9 @@ const STATIC_LOAD = ((SPEC.dryMass + SPEC.gasMass) * G) / 4;
 const MOUNT_TO_CENTRE = 0.24;                 // at rest (spec.js wheelAnchors)
 const REST_LEN = MOUNT_TO_CENTRE + STATIC_LOAD / K_SPRING;
 const RW = [0, 1, 2, 3].map(wheelRadiusOf);    // staggered: 20" front, 21" rear
-// Pacejka coefficients (peak at κ ≈ 0.10, α ≈ 7°): semi-slicks.
-const BX = 11.5, CX = 1.65, BY = 9.5, CY = 1.35;
+// Pacejka coefficients (peak at κ ≈ 0.10, α ≈ 8.4°): semi-slicks. Cornering stiffness B·C·D ≈ 21.6·μFz
+// (≈160 kN/rad per tyre at static load), crisp like a track tyre.
+const BX = 11.5, CX = 1.65, BY = 16, CY = 1.35;
 
 export const CAR = {
   dryMass: SPEC.dryMass, airMass: SPEC.gasMass, isp: SPEC.ispFull,
@@ -153,7 +156,7 @@ function flightComputer(s, inp, out) {
   rotateInv(wb, s.quat, s.angVel);
   if (inp.assist) {
     const kp = 1.6;
-    set(out, kp * (inp.pitch * RATE.x - wb.x), kp * (inp.yaw * RATE.y - wb.y), kp * (-inp.roll * RATE.z - wb.z));
+    set(out, kp * (inp.pitch * RATE.x - wb.x), kp * (-inp.yaw * RATE.y - wb.y), kp * (inp.roll * RATE.z - wb.z));
     if (inp.level) {
       rotateInv(worldUpB, s.quat, set(tmp, 0, 1, 0));
       // Upside down, a zero roll error is a trap: pick the nearer way round and commit.
@@ -162,7 +165,7 @@ function flightComputer(s, inp, out) {
       out.z += -ux * 6 - wb.z * 1.4;
     }
   } else {
-    set(out, inp.pitch, inp.yaw, -inp.roll);
+    set(out, inp.pitch, -inp.yaw, inp.roll);
   }
   out.x = clamp(out.x, -1, 1); out.y = clamp(out.y, -1, 1); out.z = clamp(out.z, -1, 1);
   return out;
@@ -179,8 +182,15 @@ export function step(s, inp) {
   scale(dn, upW, -1);
 
   // --- Steering (steer-by-wire: rate-limited, speed-sensitive) ---
+  // Full lock is 0.5 rad at parking speed. At speed the rack is scaled so full stick asks for
+  // the tyres' peak grip and no more: the kinematic angle for μg of lateral acceleration (L·μg/v²)
+  // plus 0.04 rad, the lock that measured the most steady cornering g at 12, 25 and 40 m/s. Every
+  // bit of stick travel is usable, and a full-stick flick at 200 km/h can't saw the front axle
+  // into understeer.
   const speed = dhypot(s.vel.x, s.vel.y, s.vel.z);
-  const steerTarget = (inp.steer * 0.5) / (1 + speed * 0.055);
+  const vSq = Math.max(1, s.vel.x * s.vel.x + s.vel.z * s.vel.z);
+  const lock = Math.min(0.5, (SPEC.wheelbase * SPEC.tyreMu * G) / vSq + 0.04);
+  const steerTarget = -inp.steer * lock;        // driver's right is −x
   s.steer += clamp(steerTarget - s.steer, -2.2 * dt, 2.2 * dt);
 
   // --- Suction fan: pulls the floor toward whatever surface is under it ---

@@ -116,7 +116,7 @@ export function createUI() {
       requestAnimationFrame(() => requestAnimationFrame(() => { el.querySelector('.bar span').style.transform = `scaleX(${v / 10})`; }));
     }
     const f = card.facts;
-    const facts = f.course === 'wall' ? [
+    const facts = f.course === 'show' ? showFacts(f) : f.course === 'wall' ? [
       [`${f.entryKmh} km/h into the curl`], [`${f.height} m up the wall`], [`${f.invertedS} s inverted`], [`${f.maxG} g peak`],
       ...(f.jumped ? [[`released at ${f.launchHeight} m`], [`${Math.max(f.rollDeg, f.pitchDeg)}° roll-out`], [`${f.sink} m/s touchdown`, f.sink > 4],
         [`${f.tiltDeg}° tilt`, f.tiltDeg > 15], [`${f.wheelSpreadMs} ms wheel sync`, f.wheelSpreadMs > 250], [`${f.padMiss} m from the mark`], [`${f.airPct}% gas left`]] : []),
@@ -193,4 +193,19 @@ export function createUI() {
   };
 
   return ui;
+}
+
+// The Show's results: the Wall's numbers, then the lineup's.
+function showFacts(f) {
+  const w = f.wall, k = f.lineup;
+  const out = [[`${w.height} m up the wall`], [`${w.invertedS} s inverted`], [`${w.maxG} g peak`]];
+  if (w.jumped) out.push([`wall landing ${w.sink} m/s`, w.sink > 4], [`${w.padMiss} m from the wall mark`]);
+  if (w.fellOff) out.push(['slid off the deck', true]);
+  if (w.landedOnRamp) out.push(['came down on the deck', true]);
+  if (!k) { out.push([w.jumped && !w.crashed ? 'never reached the lineup' : 'show over at the wall', true]); return out; }
+  out.push([`${k.apex} m apex over the lineup`], [`${k.rollDeg}° kickflip`], [k.contact ? 'contact' : `${k.clearance} m clearance`, k.contact],
+    [`lineup landing ${k.sink} m/s`, k.sink > 4], [`${k.padMiss} m from the lineup mark`], [`${k.airPct}% gas left`]);
+  if (k.bottomOut) out.push(['bottomed out', true]);
+  if (k.flipped) out.push(['rolled over', true]);
+  return out;
 }

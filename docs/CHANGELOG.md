@@ -1,5 +1,30 @@
 # Changelog
 
+## 0.5.0 — 2026-10-20
+
+The Show and expert steering (SIM_VERSION 5).
+
+**The Show (new default event)**
+- Both reveal stunts in one run: climb the Wall, hang inverted, release, roll, land.
+- Then stop on the pad while the crew tops up the nitrogen. The reveal flew each stunt on a fresh fill: after the Wall the tanks hold about 95 of 297 kg, too little pressure to lift the car again. The fill is fast-forwarded, and the game says so.
+- Then steer onto the lineup lane beside the approach, lift off flat ground, kickflip the five parked vehicles and land on the second pad.
+- The lineup leg is the Lineup course turned 180° onto its lane (`SHOW`, `showLocalX/Z`), so its rules run unchanged.
+- Scoring: each judge's mark is the mean of their Wall and Lineup marks. Stopping after the Wall caps the run at 50.
+- The reference run scores 90.
+
+**Steering**
+- Fixed mirrored controls. The sim's +x is the car's left, so steer, roll and yaw all went the wrong way on screen.
+- Inputs are now driver-relative: + is right.
+- Full lock is grip-limited: L·μg/v² + 0.04 rad. Full stick asks for the tyres' peak grip at any speed (about 1.2–1.35 g) and never saws the front into understeer.
+- Lateral tyre stiffness raised to a track tyre's: B 9.5 → 16, peak slip angle 14° → 8.4°, so turn-in is crisp.
+- Keyboard steer and roll ramp in over about 0.25 s, so a tap is a correction.
+- The chase camera follows the direction of travel.
+
+**Fixes**
+- The Lineup's on-screen hints and replay read the removed ramp's position and threw. They now use `liftOffZ`.
+- Ghosts are stored per course.
+- Lift-jet ids now name the side they're on.
+
 ## 0.4.0 — 2026-10-20
 
 Sourced specs (SIM_VERSION 4), from `docs/REVEAL_RESEARCH.md`: Tesla's statements, the livestream's on-screen telemetry and the press.

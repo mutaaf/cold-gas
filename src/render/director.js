@@ -9,8 +9,12 @@
 // over, which tracks the fall and the roll; a low landing cam finishes. Replay cuts between the
 // reference-image wide side shot, a low shot at the base looking up the wall, a ledge close-up and
 // a landing cam. Title parks the car at the foot of the curl with the curl towering behind.
+//
+// Show: the Wall's cameras for the first leg; for the second, the Lineup's rigs run in the
+// lineup lane's own frame and the camera is turned onto the lane with the same half turn the
+// physics uses (src/sim/courses.js SHOW).
 import * as THREE from 'three';
-import { RAMP, LINEUP, WALL } from '../sim/courses.js';
+import { LINEUP, WALL, showLocalX, showLocalZ } from '../sim/courses.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
 const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3();
@@ -19,8 +23,11 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 export function createDirector(camera) {
   const st = {
     mode: '', course: '', t: 0, shot: -1, smooth: new THREE.Vector3(), lookS: new THREE.Vector3(), fov: 52, shake: 0, init: false,
-    peak: 0, launched: false, launchT: 0,
+    peak: 0, launched: false, launchT: 0, leg: 0,
+    hx: 0, hz: 1,                 // chase heading (unit, xz), follows the car's travel
   };
+  const halfTurn = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI);
+  const lp = new THREE.Vector3(), lv = new THREE.Vector3();
 
   function snap() { st.init = false; }
 
@@ -37,17 +44,25 @@ export function createDirector(camera) {
   // --- Lineup -----------------------------------------------------------------------------------
   function chase(carPos, carVel, phase, dt) {
     const speed = Math.hypot(carVel.x, carVel.z);
+    // Follow the direction of travel (smoothed), so a steering input reads as a turn on screen.
+    if (speed > 1.5) {
+      const k = 1 - Math.exp(-dt * 3);
+      st.hx += (carVel.x / speed - st.hx) * k; st.hz += (carVel.z / speed - st.hz) * k;
+      const l = Math.hypot(st.hx, st.hz) || 1; st.hx /= l; st.hz /= l;
+    }
+    const hx = st.hx, hz = st.hz;
     if (phase === 'air' || (phase === 'landed' && st.t < 1.2)) {
       // Broadcast three-quarter: off to the right, a little ahead, low.
-      want.set(carPos.x + 13, Math.max(2.2, carPos.y * 0.55 + 1.6), carPos.z + 2 - Math.min(6, speed * 0.15));
+      want.set(carPos.x + 14, Math.max(3.4, carPos.y * 0.6 + 2.2), carPos.z + 2 - Math.min(6, speed * 0.15));
       lookWant.set(carPos.x, carPos.y + 0.2, carPos.z + 3);
     } else if (phase === 'landed' || phase === 'done') {
       want.set(carPos.x + 7, 2.4, carPos.z - 6);
       lookWant.copy(carPos);
     } else {
-      // Car sits just below centre, clear of the HUD.
-      want.set(carPos.x * 0.6, carPos.y + 2.0 + speed * 0.012, carPos.z - 7.4 - speed * 0.06);
-      lookWant.set(carPos.x, carPos.y + 0.35, carPos.z + 4.5);
+      // Car sits just below centre, clear of the HUD; the camera trails the heading.
+      const back = 7.4 + speed * 0.06;
+      want.set(carPos.x - hx * back, carPos.y + 2.0 + speed * 0.012, carPos.z - hz * back);
+      lookWant.set(carPos.x + hx * 4.5, carPos.y + 0.35, carPos.z + hz * 4.5);
     }
     ease(dt, phase === 'air' ? 3.2 : 5);
     fovTo(48 + Math.min(16, speed * 0.42) + (phase === 'air' ? 4 : 0), dt);
@@ -55,7 +70,7 @@ export function createDirector(camera) {
 
   function replay(carPos) {
     let shot;
-    if (carPos.z < RAMP.z0 - 25) shot = 0;
+    if (carPos.z < LINEUP.liftOffZ - 37) shot = 0;
     else if (carPos.z < LINEUP_Z0 - 4) shot = 1;
     else if (carPos.z < LINEUP_END + 6) shot = 2;
     else shot = 3;
@@ -64,7 +79,7 @@ export function createDirector(camera) {
       case 0: // low tracking, front quarter
         camera.position.set(carPos.x - 3.2, 0.5, carPos.z + 7.5); camera.lookAt(carPos.x, carPos.y + 0.3, carPos.z); st.fov = 36; break;
       case 1: // locked off at the lip, very low
-        camera.position.set(-5.5, 0.35, RAMP.z1 + 3); camera.lookAt(carPos.x, carPos.y + 0.4, carPos.z); st.fov = 42; break;
+        camera.position.set(-5.5, 0.35, LINEUP.liftOffZ + 3); camera.lookAt(carPos.x, carPos.y + 0.4, carPos.z); st.fov = 42; break;
       case 2: // wide side-on over the lineup: the money shot
         camera.position.set(26, 3.6, (LINEUP_Z0 + LINEUP_END) / 2 + 2); camera.lookAt(carPos.x, carPos.y, carPos.z); st.fov = 34; break;
       default: // landing cam, behind the pad
@@ -168,14 +183,27 @@ export function createDirector(camera) {
     else if (camera.view?.enabled) camera.clearViewOffset();
   }
 
-  // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'wall' | 'lineup' })
-  function update(dt, time, { carPos, carVel, phase, mode, course = 'lineup' }) {
+  // The Show's second leg: run a Lineup rig in the lane's frame, then turn the camera onto it.
+  function inLane(fn, carPos, carVel, phase, dt) {
+    lp.set(showLocalX(carPos.x), carPos.y, showLocalZ(carPos.z));
+    lv.set(-carVel.x, carVel.y, -carVel.z);
+    fn(lp, lv, phase, dt);
+    camera.position.set(showLocalX(camera.position.x), camera.position.y, showLocalZ(camera.position.z));
+    camera.quaternion.premultiply(halfTurn);
+  }
+
+  // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup', leg })
+  function update(dt, time, { carPos, carVel, phase, mode, course = 'show', leg = 0 }) {
     if (mode !== st.mode || course !== st.course) {
-      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false;
+      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.leg = leg;
+      st.hx = 0; st.hz = 1;
       snap(); frameOffset(mode === 'title');
     }
+    if (leg !== st.leg) { st.leg = leg; st.t = 0; st.shot = -1; st.hx = 0; st.hz = 1; snap(); }
     st.t += dt;
-    if (course === 'wall') {
+    if (course === 'show' && mode !== 'title' && leg === 1) {
+      inLane(mode === 'replay' ? (p) => replay(p) : chase, carPos, carVel, phase, dt);
+    } else if (course === 'wall' || course === 'show') {
       if (mode === 'title') titleWall(time);
       else if (mode === 'replay') wallReplay(carPos, carVel, phase);
       else wallLive(carPos, carVel, phase, dt);

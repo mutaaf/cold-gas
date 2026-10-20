@@ -1,7 +1,7 @@
 {
   "name": "cold-gas",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.5.0",
   "type": "module",
   "description": "COLD GAS: a keynote-minimal 3D stunt game. Ten cold-gas thrusters, one roll, one landing, an AI judge panel.",
   "engines": {
