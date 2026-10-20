@@ -1,12 +1,12 @@
 ---
 id: 0002
 title: Make the touchdown land in the body — suspension squash, tyre puff, camera dip
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-19
-pr:
+pr: 17
 ---
 
 ## Why
@@ -19,9 +19,9 @@ from each wheel contact (src/render/plumes.js gets a `burst(pos, strength)`), an
 pitch and gain that depend on sink rate (src/audio.js). Honour `prefers-reduced-motion`.
 
 ## Acceptance criteria
-- [ ] Soft (<1.5 m/s) and hard (>4 m/s) landings are visibly and audibly different
-- [ ] Reduced motion disables the dip and the FOV punch
-- [ ] No frame-time regression
+- [x] Soft (<1.5 m/s) and hard (>4 m/s) landings are visibly and audibly different
+- [x] Reduced motion disables the dip and the FOV punch
+- [x] No frame-time regression
 
 ## Test plan
 Unit: the strength mapping function. E2E: the reveal run triggers exactly one landing burst.

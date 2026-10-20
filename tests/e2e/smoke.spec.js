@@ -147,3 +147,18 @@ test('first load: inline styles, title wired early, 3D fades in when ready', asy
   await page.locator('[data-course="lineup"]').click();
   await expect(page.locator('[data-course="lineup"]')).toHaveAttribute('aria-checked', 'true');
 });
+
+test('the reveal touchdown lands once: one mist burst, cues scaled by its sink rate', async ({ page }) => {
+  await page.goto('/coldgas/?gfx=low');
+  await page.locator('[data-reveal]').click();
+  await expect(page.locator('[data-screen="hud"]')).toBeVisible();
+  await page.evaluate(() => window.__coldgas.fastForward());
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 20_000 });
+  const hit = await page.evaluate(() => {
+    const { S, plumes } = window.__coldgas;
+    return { bursts: plumes.bursts(), impacts: S.impacts, sink: S.run.t.sink, strength: S.impact.strength };
+  });
+  expect(hit.impacts).toBe(1);
+  expect(hit.bursts).toBe(1);
+  expect(hit.strength).toBeCloseTo(Math.min(1, (hit.sink / 5) ** 2), 5);
+});

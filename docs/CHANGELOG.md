@@ -12,6 +12,8 @@ The car's real geometry in the physics (SIM_VERSION 7), from the body research (
 
 ## Unreleased
 
+2026-10-20 · #0002 · The touchdown lands in the body: a camera dip, an FOV punch-in, a ring of mist from each tyre and a thud whose depth and weight follow the sink rate (energy, v²). A 1 m/s landing is a light tap, a 4 m/s one is a deep thump with a suspension crunch. Reduced motion keeps the sound and the mist but drops the dip, the punch and every camera shake (the lift-off shake wasn't gated before).
+
 **First load** (phone, 4× CPU, Slow 4G, local build: first paint 1.48 s → 0.75 s, title wired 3.63 s → 2.99 s, longest main-thread task 588 ms → 284 ms)
 - The stylesheet is inlined into index.html (latin-only font faces) and the display face is preloaded, so the title paints from the HTML alone.
 - The title is wired before the 3D is built. The course is then built in ~10 ms slices between frames, the environment baked, and every shader (the ghost's and idle plumes' too) compiled with `compileAsync`. The canvas fades in on its first frame.

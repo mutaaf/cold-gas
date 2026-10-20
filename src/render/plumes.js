@@ -143,8 +143,26 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
     pgeo.attributes.aAlpha.needsUpdate = true;
   }
 
+  // Touchdown: a flat ring of mist from each tyre contact (`pts` = x,y,z per contact, flat), pushed
+  // outward at `speed` m/s. One call per landing; the pool is shared with the jets.
+  let bursts = 0;
+  function burst(pts, perPoint, speed) {
+    bursts++;
+    for (let k = 0; k + 2 < pts.length; k += 3) {
+      for (let m = 0; m < perPoint; m++) {
+        const a = (m / perPoint + rnd() * 0.15) * Math.PI * 2;
+        const sp = speed * (0.6 + rnd() * 0.6);
+        const j = head; head = (head + 1) % maxMist;
+        pos[j * 3] = pts[k]; pos[j * 3 + 1] = pts[k + 1]; pos[j * 3 + 2] = pts[k + 2];
+        vel[j * 3] = Math.cos(a) * sp; vel[j * 3 + 1] = rnd() * speed * 0.15; vel[j * 3 + 2] = Math.sin(a) * sp;
+        life[j] = 1;
+        size[j] = 0.3;
+      }
+    }
+  }
+
   function clear() { life.fill(0); alpha.fill(0); }
   function setScale(h) { pmat.uniforms.scale.value = h * 0.6; }
 
-  return { update, clear, setScale };
+  return { update, clear, setScale, burst, bursts: () => bursts };
 }

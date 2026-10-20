@@ -79,13 +79,20 @@ export function updateAudio({ speed = 0, grounded = true, throttles = null, titl
 }
 
 // One-shots.
-export function thud(strength = 1) {
+export function thud({ thudHz = 110, thudGain = 0.45, thudDecay = 0.4, crunch = 0 } = {}) {
   if (!ctx || muted) return;
   const t = ctx.currentTime;
   const o = ctx.createOscillator(); o.type = 'sine';
-  o.frequency.setValueAtTime(110, t); o.frequency.exponentialRampToValueAtTime(38, t + 0.25);
-  const g = ctx.createGain(); g.gain.setValueAtTime(Math.min(1, 0.25 + strength * 0.2), t); g.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
-  o.connect(g).connect(master); o.start(t); o.stop(t + 0.45);
+  o.frequency.setValueAtTime(thudHz, t); o.frequency.exponentialRampToValueAtTime(Math.max(30, thudHz * 0.33), t + thudDecay * 0.6);
+  const g = ctx.createGain(); g.gain.setValueAtTime(Math.min(1, thudGain), t); g.gain.exponentialRampToValueAtTime(0.001, t + thudDecay);
+  o.connect(g).connect(master); o.start(t); o.stop(t + thudDecay + 0.05);
+  // A hard landing: the suspension and the tyres' short crunch on top of the thump.
+  if (crunch > 0) {
+    const n = ctx.createBufferSource(); n.buffer = noiseBuffer(ctx, 0.25);
+    const f = ctx.createBiquadFilter(); f.type = 'bandpass'; f.frequency.value = 420; f.Q.value = 0.8;
+    const ng = ctx.createGain(); ng.gain.setValueAtTime(0.5 * crunch, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
+    n.connect(f).connect(ng).connect(master); n.start(t); n.stop(t + 0.25);
+  }
 }
 
 export function chime(i = 0) {
