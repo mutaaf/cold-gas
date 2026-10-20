@@ -65,3 +65,50 @@ test('the judges\' brain: pick a provider, the key never leaves without Connect'
   await page.locator('[data-close]').click();
   await expect(page.locator('[data-ai-modal]')).toBeHidden();
 });
+
+test('ghost: after the reveal, the next jump flies with a ghost that G toggles', async ({ page }) => {
+  await page.goto('/coldgas/?gfx=low');
+  await page.locator('[data-reveal]').click();
+  await page.evaluate(() => window.__coldgas.fastForward());
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 20_000 });
+
+  await page.locator('[data-again]').click();
+  await page.evaluate(() => window.__coldgas.skipCountdown());
+  await page.keyboard.down('ArrowUp');
+  await page.waitForFunction(() => window.__coldgas.S.run.tick > 120, null, { timeout: 30_000 });
+  await page.keyboard.up('ArrowUp');
+  // Visible, and posed from the stored run's frame for the live tick (lockstep).
+  await page.waitForFunction(() => window.__coldgas.ghostRoot.visible, null, { timeout: 5_000 });
+  const { want, got } = await page.evaluate(() => {
+    const { S, ghostRoot } = window.__coldgas;
+    const g = S.ghost, f = Math.min(g.n - 1, S.run.tick / 4 - 1), i = Math.floor(f), k = f - i;
+    const a = i * g.stride, b = Math.min(g.n - 1, i + 1) * g.stride;
+    return { want: g.data[a + 2] + (g.data[b + 2] - g.data[a + 2]) * k, got: ghostRoot.position.z };
+  });
+  expect(Math.abs(got - want)).toBeLessThan(1e-3);
+
+  await page.keyboard.press('g');
+  await page.waitForFunction(() => !window.__coldgas.ghostRoot.visible, null, { timeout: 5_000 });
+  await expect(page.locator('[data-ghost]')).toHaveAttribute('aria-pressed', 'false');
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_ghost'))).toBe('0');
+
+  // The setting and the stored best both survive a reload.
+  await page.goto('/coldgas/?play=jump&gfx=low');
+  await expect(page.locator('[data-ghost]')).toHaveAttribute('aria-pressed', 'false');
+  await page.waitForFunction(() => window.__coldgas?.S.ghost?.n > 0, null, { timeout: 10_000 });
+  await page.keyboard.press('g');
+  await page.waitForFunction(() => window.__coldgas.ghostRoot.visible, null, { timeout: 5_000 });
+});
+
+test('ghost on a phone: the toggle fits the top bar and taps on and off', async ({ browser }) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await page.goto('/coldgas/?gfx=low');
+  await page.locator('[data-assist]').tap();   // Pro: the widest the top bar gets
+  for (const sel of ['[data-ai-open]', '[data-assist]', '[data-ghost]', '[data-mute]']) await expect(page.locator(sel)).toBeInViewport({ ratio: 1 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.locator('[data-ghost]').tap();
+  await expect(page.locator('[data-ghost]')).toHaveAttribute('aria-pressed', 'false');
+  await page.locator('[data-ghost]').tap();
+  await expect(page.locator('[data-ghost]')).toHaveAttribute('aria-pressed', 'true');
+  await page.close();
+});

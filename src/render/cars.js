@@ -207,7 +207,25 @@ export function makeRoadster(color = 0xa30f1c) {
   addWheels(g, [-0.84, 0.84], [1.38, -1.38], 0.34, 0.27, true, wheels);
   // Order wheels to match the sim: FL, FR, RL, RR.
   const ordered = [wheels[0], wheels[1], wheels[2], wheels[3]];
-  return { group: g, body, wheels: ordered, comY: 0.594 };
+  return { group: g, body, shell, canopy, wheels: ordered, comY: 0.594 };
+}
+
+// --- The ghost: a translucent silhouette of the hero (your best run, played back alongside) --
+// Only the shell, canopy and tyres, sharing the hero's geometry under one cheap Lambert
+// material: six draw calls, no shadows, nothing inside showing through.
+export const ghostMat = new THREE.MeshLambertMaterial({ color: 0xcfe3ff, transparent: true, opacity: 0.18, depthWrite: false });
+export function makeGhost(hero) {
+  const g = new THREE.Group();
+  hero.group.updateMatrixWorld(true);
+  const inv = new THREE.Matrix4().copy(hero.group.matrixWorld).invert();
+  for (const src of [hero.shell, hero.canopy, ...hero.wheels.map((w) => w.spin.children[0])]) {
+    const m = new THREE.Mesh(src.geometry, ghostMat);
+    m.matrixAutoUpdate = false;
+    m.matrix.multiplyMatrices(inv, src.matrixWorld);
+    m.renderOrder = 2;
+    g.add(m);
+  }
+  return g;
 }
 
 // --- The parked lineup (built nose → +z, then turned crosswise by the scene) ----------------
