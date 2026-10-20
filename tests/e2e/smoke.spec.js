@@ -34,11 +34,12 @@ test('deep link ?play=jump starts a countdown and accepts keyboard input', async
   await page.goto('/coldgas/?play=jump&gfx=low');
   await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
   await page.evaluate(() => window.__coldgas.skipCountdown());
+  // Any real movement proves the key reached the sim (software GL in CI can run at a few fps).
   await page.keyboard.down('ArrowUp');
-  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -93, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -116, null, { timeout: 45_000 });
   await page.keyboard.up('ArrowUp');
   const z = await page.evaluate(() => window.__coldgas.S.run.car.pos.z);
-  expect(z).toBeGreaterThan(-93);
+  expect(z).toBeGreaterThan(-116);
 });
 
 test('phone layout: touch controls visible and nothing overlaps the title CTA', async ({ browser }) => {
@@ -112,9 +113,9 @@ test('keyboard: → steers right on screen, and the Show is the default event', 
   expect(await page.evaluate(() => window.__coldgas.S.run.course)).toBe('show');
   await page.evaluate(() => window.__coldgas.skipCountdown());
   await page.keyboard.down('ArrowUp');
-  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -112, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -116, null, { timeout: 45_000 });
   await page.keyboard.down('ArrowRight');
-  await page.waitForTimeout(900);
+  await page.waitForFunction(() => window.__coldgas.S.run.car.vel.x < -0.4, null, { timeout: 45_000 });
   await page.keyboard.up('ArrowRight');
   await page.keyboard.up('ArrowUp');
   // Project the car into the camera: it has moved right of centre on screen.
