@@ -1,20 +1,7 @@
-// The judges' words. The Worker asks the AI panel (POST /coldgas/api/judge) and also returns the
-// server-verified card. Offline, or when the daily AI budget is spent, the panel speaks from
-// local lines picked from the same facts — the game never waits on the network.
+// Board client and the judges' local lines. The AI call itself lives in src/ai/ (streamed and
+// shown in the theatre). Offline, or when a provider fails, the panel speaks from local lines
+// picked from the same facts, so the game never waits on the network.
 const API = `${import.meta.env.BASE_URL}api`;
-
-export async function askPanel(log, assist, { timeoutMs = 9000 } = {}) {
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
-  try {
-    const res = await fetch(`${API}/judge`, {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ log, assist }), signal: ctrl.signal,
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch { return null; } finally { clearTimeout(timer); }
-}
 
 export async function postScore(log, assist, initials) {
   try {

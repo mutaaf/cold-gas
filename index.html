@@ -17,6 +17,7 @@
   <header class="top">
     <div class="brand" aria-label="COLD GAS">COLD&nbsp;GAS</div>
     <div class="top-actions">
+      <button class="chip ai-chip" data-ai-open title="Choose who writes the judges’ words: free Cloudflare Edge, or your own Anthropic, OpenAI, xAI or Gemini key">AI</button>
       <button class="chip" data-assist aria-pressed="true" title="Flight computer: Assist holds rates and levels for landing. Pro is raw thrust (+8%).">Assist</button>
       <button class="icon-btn" data-mute aria-label="Sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path data-wave d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" /></svg></button>
     </div>
@@ -97,6 +98,7 @@
         <button class="btn ghost" data-share>Share</button>
         <button class="btn link" data-home>Title</button>
       </div>
+      <div class="receipt" data-receipt hidden></div>
       <ol class="judges" data-r-judges></ol>
       <div class="cats" data-r-cats></div>
       <ul class="facts" data-r-facts></ul>
@@ -109,6 +111,12 @@
 
     </div>
   </section>
+
+  <!-- The judges' theatre: every AI call, visible (src/ai/theatre.js) -->
+  <section class="theatre" data-theatre hidden aria-live="polite"></section>
+
+  <!-- The judges' brain: provider and key settings (src/ai/settings.js) -->
+  <section class="ai-modal" data-ai-modal hidden></section>
 
   <!-- Board -->
   <section class="board" data-screen="board" hidden>

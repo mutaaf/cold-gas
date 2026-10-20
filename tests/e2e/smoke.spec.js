@@ -20,8 +20,11 @@ test('boots, flies the reference jump, and judges it', async ({ page }) => {
   const total = Number(await page.locator('[data-r-total]').textContent());
   await expect.poll(async () => Number(await page.locator('[data-r-total]').textContent())).toBeGreaterThan(70);
   await expect(page.locator('[data-judge]')).toHaveCount(3);
-  // Words arrive from the AI panel or the local fallback.
-  await expect(page.locator('[data-judge="engineer"] .quote')).not.toBeEmpty({ timeout: 15_000 });
+  // The judges' theatre runs the call (here the preview server has no API, so it falls back to
+  // the local lines), then the words land and the receipt says what happened.
+  await expect(page.locator('[data-judge="engineer"] .quote')).not.toBeEmpty({ timeout: 20_000 });
+  await expect(page.locator('[data-receipt]')).toBeVisible();
+  await expect(page.locator('[data-receipt]')).toContainText('local lines');
   expect(total).toBeGreaterThanOrEqual(0);
   expect(errors).toEqual([]);
   expect(foreign).toEqual([]);
@@ -46,4 +49,19 @@ test('phone layout: touch controls visible and nothing overlaps the title CTA', 
   await expect(page.locator('[data-touch]')).toBeVisible();
   await expect(page.locator('[data-btn-lift]')).toBeInViewport();
   await page.close();
+});
+
+test('the judges\' brain: pick a provider, the key never leaves without Connect', async ({ page }) => {
+  const calls = [];
+  page.on('request', (r) => { if (r.url().includes('/api/')) calls.push(r.url()); });
+  await page.goto('/coldgas/?gfx=low');
+  await expect(page.locator('[data-ai-open]')).toContainText('AI');
+  await page.locator('[data-ai-open]').click();
+  await expect(page.locator('#ai-title')).toBeVisible();
+  await page.locator('[data-prov="openai"]').click();
+  await page.locator('[data-key]').fill('sk-test-not-a-real-key');
+  await expect(page.locator('[data-save]')).toBeDisabled();
+  expect(calls).toEqual([]);
+  await page.locator('[data-close]').click();
+  await expect(page.locator('[data-ai-modal]')).toBeHidden();
 });

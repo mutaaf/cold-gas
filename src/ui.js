@@ -122,6 +122,7 @@ export function createUI() {
     ul.innerHTML = '';
     for (const [txt, bad] of facts) { const li = document.createElement('li'); li.textContent = txt; if (bad) li.className = 'bad'; ul.appendChild(li); }
     $('[data-r-submit-msg]').textContent = '';
+    $('[data-receipt]').hidden = true;
   };
 
   // Type the words into each judge's quote.
@@ -142,6 +143,27 @@ export function createUI() {
         else q.classList.remove('typing');
       }, delay);
     }
+  };
+
+  // The AI receipt: what ran, where, how fast, what it cost, and the call itself on request.
+  ui.receipt = (meta, { onReplay, onChange } = {}) => {
+    const r = $('[data-receipt]');
+    const esc = (x) => String(x ?? '').replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
+    const model = String(meta.model || '').replace(/^@cf\/[^/]+\//, '');
+    const parts = meta.ok
+      ? [`${meta.inTokens} → ${meta.outTokens} tokens`, meta.totalMs != null ? `${(meta.totalMs / 1000).toFixed(2)} s` : null,
+        meta.neurons != null ? `${meta.neurons} neurons` : null, meta.costUsd != null ? `$${meta.costUsd.toFixed(6)}` : 'billed by provider'].filter(Boolean)
+      : [meta.error || 'offline', 'local lines'];
+    r.innerHTML = `
+      <div class="rc-head"><span class="rc-dot${meta.ok ? '' : ' off'}"></span><b>${meta.ok ? 'Judged by' : 'AI unavailable'}</b> <code>${esc(model)}</code> <span class="rc-where">${esc(meta.where || '')}</span></div>
+      <div class="rc-stats">${parts.map((p) => `<span>${esc(p)}</span>`).join('')}</div>
+      <div class="rc-actions"><button type="button" class="btn link" data-rc-replay>Replay the call</button><button type="button" class="btn link" data-rc-change>Change AI</button></div>
+      ${meta.user ? `<details class="rc-inspect"><summary>Inspect the call</summary>
+        <h4>System</h4><pre>${esc(meta.system)}</pre><h4>Prompt</h4><pre>${esc(meta.user)}</pre>
+        ${meta.raw ? `<h4>Response</h4><pre>${esc(meta.raw)}</pre>` : ''}</details>` : ''}`;
+    r.hidden = false;
+    r.querySelector('[data-rc-replay]').onclick = onReplay;
+    r.querySelector('[data-rc-change]').onclick = onChange;
   };
 
   ui.board = (rows) => {

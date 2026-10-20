@@ -39,14 +39,29 @@ mark, and air left in the tanks.
 - Production: https://mutaafaziz.com/coldgas/. It's served by the `cold-gas` Cloudflare Worker on the
   route `mutaafaziz.com/coldgas*`. The rest of mutaafaziz.com is another repo. Never touch it
   from here.
-- API (src/worker/, frozen): `POST /coldgas/api/judge` (replays the log → verified card + AI
-  words), `POST /coldgas/api/scores` (verified board entry), `GET /coldgas/api/scores?board=today|all`.
-  D1 database `cold-gas` (binding `DB`, auto-provisioned, tables self-created). Secret
-  `ANTHROPIC_API_KEY` (operator sets it with `wrangler secret put`). Without it the panel speaks
-  from local lines (src/panel.js).
-- AI budget: at most 400 commentary calls per UTC day and 30 per hour per player (hashed IP,
-  daily salt). Model `claude-opus-5-5` at `effort: low`, structured JSON output, server-side
-  refusal fallback.
+- API (src/worker/, frozen):
+  - `POST /coldgas/api/judge/stream` replays the log, scores it, and streams the AI panel as
+    server-sent events: `verify → prompt → reasoning/token… → done | error`.
+  - `POST /coldgas/api/models` (BYOK connect) asks a provider for its live models and suggests one.
+  - `GET /coldgas/api/providers`.
+  - `POST /coldgas/api/scores` (verified board entry) and `GET /coldgas/api/scores?board=today|all`.
+  - D1 database `cold-gas` (binding `DB`, auto-provisioned, tables self-created).
+- **The judges' brain** (src/worker/ai/):
+  - Default: Workers AI (binding `AI`). `@cf/google/gemma-4-26b-a4b-it` runs with thinking off;
+    if it's unavailable, `@cf/meta/llama-3.1-8b-instruct-fp8` takes over. A judging costs about
+    13 neurons. The cap is 700 a day and 40 an hour per player, inside the 10k-neuron free allowance.
+  - Bring your own key: Anthropic (official SDK, low effort), and OpenAI, xAI and Gemini (OpenAI SDK
+    against each one's OpenAI-compatible endpoint). The key lives in the player's localStorage. It
+    reaches the Worker as `x-cg-key` for one call and is never stored or logged. Base URLs are
+    fixed, and the prompt is built server-side from the verified card, so the Worker can't be used
+    as an open relay.
+  - When no provider answers, the panel speaks from local lines (src/panel.js).
+- **The judges' theatre** (src/ai/theatre.js, a lazy chunk with `aurora-field`) shows every call live:
+  - Particle stages: circuit board → telemetry as text → compute die (one signal per token) → verdict.
+  - Panels around it: a model card, counters (tokens, time to first token, tok/s, neurons, cost)
+    and the raw stream.
+  - Afterwards the results receipt offers *Replay the call* and *Inspect the call*: the system
+    prompt, the user prompt and the raw response.
 - Deploy = merge to `main` (Workers Builds). Rollback = revert the PR.
 
 ## 3 · Invariants (breaking any of these fails review)
@@ -64,6 +79,10 @@ mark, and air left in the tanks.
    `SIM_VERSION` in `src/sim/run.js`.
 5. **Scores are decided by `scoreRun`.** The AI writes words only. The client never sends a
    score: the Worker replays the log.
+5½. **AI usage is always visible and honest.** Every model call goes through the theatre and
+   the receipt. Real model ids, token counts and costs are shown, with an estimate only where
+   the provider doesn't report them. Keys are never logged, persisted server-side or echoed.
+   No AI call may block the results: a 35 s deadline falls back to local lines.
 6. **Frame budget.** 60 fps on a mid-range laptop and playable on a recent phone. No per-frame
    allocations in hot paths (reuse vectors and arrays). Graphics tiers: `?gfx=low|mid|high`.
 7. **IP caution.** No real brand, product or person names, logos or likenesses anywhere: code,
@@ -96,8 +115,12 @@ src/render/           three.js (r186):
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air)
 src/audio.js          procedural WebAudio: motor, tyres, wind, nozzle hiss, chimes
 src/ui.js             HUD (in-place updates), results sheet, board
-src/panel.js          client for /api/judge + /api/scores, local judge lines fallback
-src/worker/index.js   Worker (frozen): verify by replay, AI commentary, D1 board
+src/panel.js          board client + local judge lines (offline fallback)
+src/ai/               config.js (provider/key on this device) · stream.js (SSE client) ·
+                        settings.js (the judges' brain picker) · theatre.js (lazy: aurora-field show)
+src/worker/index.js   Worker (frozen): verify by replay, streaming judge, BYOK models, D1 board
+src/worker/ai/        prompt.js (brief + tolerant line parser) · providers.js (edge, anthropic,
+                        openai, xai, gemini; model picking; prices)
 tests/unit/           Vitest: sim, course, mixer, determinism, judging
 tests/e2e/            Playwright: boot + reference jump + judging, deep link, phone
 scripts/fly.mjs       Headless reference flight with telemetry (tuning tool)
