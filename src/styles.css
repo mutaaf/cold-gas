@@ -305,3 +305,48 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .chip { padding: 0 10px; letter-spacing: 0.1em; }
   .ai-chip { max-width: 92px; }
 }
+
+/* Use your own AI: one paste box (src/ai/settings.js) */
+.ai-top { display: flex; justify-content: space-between; align-items: center; }
+.ai-status { display: flex; align-items: center; gap: 8px; margin: 10px 0 18px; font-size: 13px; color: var(--ink-2); }
+.ai-status b { color: var(--ink); font-weight: 500; }
+.ai-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--aur-2); box-shadow: 0 0 10px var(--aur-2); flex: none; }
+.ai-dot.free { background: var(--aur-1); box-shadow: 0 0 10px var(--aur-1); }
+.ai-paste { display: grid; gap: 10px; }
+.ai-paste-label { font: 500 13px/1 var(--text); color: var(--ink); }
+.ai-paste-row { display: flex; gap: 8px; align-items: center; }
+.ai-paste-row input { flex: 1; min-width: 0; height: 56px; border-radius: 14px; border: 1px solid rgba(92, 255, 200, 0.45); background: rgba(92, 255, 200, 0.04);
+  color: var(--ink); padding: 0 16px; font: 400 15px/1 var(--mono); user-select: text; -webkit-user-select: text; box-shadow: 0 0 0 4px rgba(92, 255, 200, 0.06); }
+.ai-paste-row input:focus { outline: none; border-color: var(--aur-1); box-shadow: 0 0 0 4px rgba(92, 255, 200, 0.14); }
+.ai-paste-row .btn.small { height: 56px; padding: 0 20px; border-radius: 14px; }
+.ai-eye { height: 56px; padding: 0 12px; border: 0; background: none; color: var(--ink-3); font-size: 12px; }
+.ai-result { min-height: 2.8em; margin: 12px 0 18px; font-size: 13px; line-height: 1.45; color: var(--ink-3); }
+.ai-adv select { width: 100%; max-width: 100%; }
+.ai-result.ok { color: var(--aur-1); }
+.ai-result.ok b { color: var(--ink); }
+.ai-result.bad { color: #ff8a8f; }
+.ai-result.busy { color: var(--ink-2); }
+.ai-spin { display: inline-block; vertical-align: -2px; margin-right: 8px; width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--hair); border-top-color: var(--aur-1); animation: spin 0.8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+.ai-get-title { margin: 0 0 10px; font-size: 12px; color: var(--ink-3); }
+.ai-get-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.ai-get-tile { display: grid; gap: 3px; padding: 12px 14px; border-radius: 12px; border: 1px solid var(--hair); text-decoration: none; color: var(--ink); background: rgba(255, 255, 255, 0.02); transition: border-color 0.2s; }
+.ai-get-tile:hover { border-color: rgba(255, 255, 255, 0.4); }
+.ai-get-tile b { font-weight: 500; font-size: 14px; }
+.ai-get-tile span { font-size: 11px; color: var(--ink-3); }
+.ai-get-tile i { font-style: normal; font-size: 11px; color: var(--ink-2); margin-top: 4px; line-height: 1.35; }
+.ai-privacy { font-size: 11px; color: var(--ink-3); margin: 16px 0; }
+.ai-foot { align-items: center; }
+.ai-adv summary { cursor: pointer; font-size: 12px; color: var(--ink-3); padding: 10px 8px; }
+.ai-adv[hidden] { display: none; }
+@media (max-width: 720px) {
+  .ai-sheet { padding: 24px 20px !important; max-height: calc(100dvh - 24px); overflow-y: auto; }
+  .ai-sheet h2 { font-size: 19px; }
+  .ai-paste-row { flex-wrap: wrap; }
+  .ai-paste-row input { flex-basis: 100%; height: 54px; font-size: 16px; }
+  .ai-eye { display: none; }
+  .ai-paste-row .btn.small { flex: 1; height: 48px; }
+  .ai-get-grid { grid-template-columns: 1fr 1fr; }
+  .ai-get-tile i { display: none; }
+  .ai-result { min-height: 2.2em; margin: 10px 0 14px; }
+}

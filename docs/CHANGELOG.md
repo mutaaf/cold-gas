@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.1 — 2026-10-19
+
+Bring your own key, made caveman-simple:
+- **One paste box:** the provider is detected from the key itself (Anthropic `sk-ant-`, OpenAI `sk-`, xAI `xai-`, Google `AIza`).
+- **No setup:** the key is checked against the provider's live model list, the cheapest fast model is picked, and it's saved. No buttons.
+- **Forgiving pastes:** quotes, `Bearer `, `NAME=` prefixes and stray whitespace are cleaned up.
+- **Look-alike keys explained:** Groq vs Grok, OpenRouter, GitHub tokens and others get a friendly explanation and are never sent.
+- **Help getting a key:** a Paste-from-clipboard button and one-tap "get a key" tiles with the exact steps.
+- **Easy switching:** Advanced has a model picker, and one tap goes back to the free judges.
+
 ## Unreleased
 
 2026-10-20 · #0001 · Ghost of your best run: your best jump (or the reference, until you land one) rides alongside the next attempt as a translucent silhouette; toggle it with G or the ghost button.

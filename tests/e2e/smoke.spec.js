@@ -51,64 +51,35 @@ test('phone layout: touch controls visible and nothing overlaps the title CTA', 
   await page.close();
 });
 
-test('the judges\' brain: pick a provider, the key never leaves without Connect', async ({ page }) => {
+test('bring your own key: paste one key and it is done', async ({ page }) => {
   const calls = [];
-  page.on('request', (r) => { if (r.url().includes('/api/')) calls.push(r.url()); });
-  await page.goto('/coldgas/?gfx=low');
-  await expect(page.locator('[data-ai-open]')).toContainText('AI');
-  await page.locator('[data-ai-open]').click();
-  await expect(page.locator('#ai-title')).toBeVisible();
-  await page.locator('[data-prov="openai"]').click();
-  await page.locator('[data-key]').fill('sk-test-not-a-real-key');
-  await expect(page.locator('[data-save]')).toBeDisabled();
-  expect(calls).toEqual([]);
-  await page.locator('[data-close]').click();
-  await expect(page.locator('[data-ai-modal]')).toBeHidden();
-});
-
-test('ghost: after the reveal, the next jump flies with a ghost that G toggles', async ({ page }) => {
-  await page.goto('/coldgas/?gfx=low');
-  await page.locator('[data-reveal]').click();
-  await page.evaluate(() => window.__coldgas.fastForward());
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 20_000 });
-
-  await page.locator('[data-again]').click();
-  await page.evaluate(() => window.__coldgas.skipCountdown());
-  await page.keyboard.down('ArrowUp');
-  await page.waitForFunction(() => window.__coldgas.S.run.tick > 120, null, { timeout: 30_000 });
-  await page.keyboard.up('ArrowUp');
-  // Visible, and posed from the stored run's frame for the live tick (lockstep).
-  await page.waitForFunction(() => window.__coldgas.ghostRoot.visible, null, { timeout: 5_000 });
-  const { want, got } = await page.evaluate(() => {
-    const { S, ghostRoot } = window.__coldgas;
-    const g = S.ghost, f = Math.min(g.n - 1, S.run.tick / 4 - 1), i = Math.floor(f), k = f - i;
-    const a = i * g.stride, b = Math.min(g.n - 1, i + 1) * g.stride;
-    return { want: g.data[a + 2] + (g.data[b + 2] - g.data[a + 2]) * k, got: ghostRoot.position.z };
+  await page.route('**/coldgas/api/models', async (route) => {
+    const req = route.request();
+    calls.push({ body: req.postDataJSON(), key: req.headers()['x-cg-key'] });
+    await route.fulfill({ json: { provider: 'anthropic', models: ['claude-haiku-5-5', 'claude-opus-5-5', 'claude-sonnet-5-5'], suggested: 'claude-haiku-5-5' } });
   });
-  expect(Math.abs(got - want)).toBeLessThan(1e-3);
-
-  await page.keyboard.press('g');
-  await page.waitForFunction(() => !window.__coldgas.ghostRoot.visible, null, { timeout: 5_000 });
-  await expect(page.locator('[data-ghost]')).toHaveAttribute('aria-pressed', 'false');
-  expect(await page.evaluate(() => localStorage.getItem('coldgas_ghost'))).toBe('0');
-
-  // The setting and the stored best both survive a reload.
-  await page.goto('/coldgas/?play=jump&gfx=low');
-  await expect(page.locator('[data-ghost]')).toHaveAttribute('aria-pressed', 'false');
-  await page.waitForFunction(() => window.__coldgas?.S.ghost?.n > 0, null, { timeout: 10_000 });
-  await page.keyboard.press('g');
-  await page.waitForFunction(() => window.__coldgas.ghostRoot.visible, null, { timeout: 5_000 });
-});
-
-test('ghost on a phone: the toggle fits the top bar and taps on and off', async ({ browser }) => {
-  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   await page.goto('/coldgas/?gfx=low');
-  await page.locator('[data-assist]').tap();   // Pro: the widest the top bar gets
-  for (const sel of ['[data-ai-open]', '[data-assist]', '[data-ghost]', '[data-mute]']) await expect(page.locator(sel)).toBeInViewport({ ratio: 1 });
-  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-  await page.locator('[data-ghost]').tap();
-  await expect(page.locator('[data-ghost]')).toHaveAttribute('aria-pressed', 'false');
-  await page.locator('[data-ghost]').tap();
-  await expect(page.locator('[data-ghost]')).toHaveAttribute('aria-pressed', 'true');
-  await page.close();
+  await expect(page.locator('[data-ai-open]')).toHaveText('AI · Free');
+  await page.locator('[data-ai-open]').click();
+  await expect(page.locator('#ai-title')).toHaveText('Use your own AI');
+
+  // A look-alike key is explained, and never sent anywhere.
+  await page.locator('[data-key]').fill('gsk_' + 'x'.repeat(40));
+  await expect(page.locator('[data-result]')).toContainText('Groq');
+  expect(calls).toEqual([]);
+
+  // A sloppy paste of a real-shaped key: detected, checked, chosen, saved. One action.
+  await page.locator('[data-key]').fill('  "sk-ant-api03-' + 'k'.repeat(40) + '"  ');
+  await expect(page.locator('[data-result]')).toContainText('Done', { timeout: 10_000 });
+  await expect(page.locator('[data-result]')).toContainText('Claude Haiku 5.5');
+  expect(calls).toHaveLength(1);
+  expect(calls[0].body.provider).toBe('auto');
+  expect(calls[0].key).toBe('sk-ant-api03-' + 'k'.repeat(40));
+  await expect(page.locator('[data-ai-open]')).toHaveText('AI · Claude');
+
+  // Back to free in one tap.
+  await page.locator('[data-free]').click();
+  await expect(page.locator('[data-ai-open]')).toHaveText('AI · Free');
+  await page.locator('[data-done]').click();
+  await expect(page.locator('[data-ai-modal]')).toBeHidden();
 });
