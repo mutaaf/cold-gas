@@ -11,8 +11,8 @@
   --signal: #e8323c;
   --ice: #bfe6ff;
   --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
-  --display: 'Michroma', 'Geist', sans-serif;
-  --text: 'Geist', ui-sans-serif, sans-serif;
+  --display: 'Michroma', 'Geist Variable', sans-serif;
+  --text: 'Geist Variable', ui-sans-serif, sans-serif;
   --mono: 'Geist Mono', ui-monospace, monospace;
   --safe-t: env(safe-area-inset-top, 0px);
   --safe-b: env(safe-area-inset-bottom, 0px);

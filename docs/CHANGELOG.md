@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.7.1 — 2026-10-20
+
+- Body text finally renders in Geist. The CSS asked for 'Geist' but the package registers another name, so it had always fallen back to the system font. Now one variable font (every weight, 29 kB latin), preloaded.
+- The page is gzipped by the Worker (37.5 → 10.3 kB). `no-transform` keeps the zone's analytics beacon out but also stopped Cloudflare compressing the HTML; the Worker compresses it itself and passes the bytes through (`encodeBody: 'manual'`).
+
+
 ## 0.7.0 — 2026-10-20
 
 The car's real geometry in the physics (SIM_VERSION 7), from the body research (docs/REVEAL_RESEARCH.md §10).
