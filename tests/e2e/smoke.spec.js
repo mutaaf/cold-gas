@@ -180,7 +180,7 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
   await page.evaluate(() => {
     const g = window.__coldgas;
     g.startRun('reveal');
-    g.S.autopilot = g.createAutopilot('lineup', { apex: 2.5 });
+    g.S.autopilot = g.createAutopilot('lineup', { apex: 2.8 });
     g.skipCountdown();
   });
   await page.evaluate(() => window.__coldgas.fastForward());   // the whole run in one go, not at software GL's pace
@@ -188,10 +188,16 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
   const run = await page.evaluate(() => ({ flipped: window.__coldgas.S.run.t.flipped, impacts: window.__coldgas.S.run.impacts.count }));
   expect(run.flipped).toBe(true);
   expect(run.impacts).toBeGreaterThan(5);
-  // The replay walks the same events: jump it to just before the first big hit (tick 2688, frame
-  // 671) and the crash fires again (the hazards are armed on the hit itself, not after a delay, so
-  // this holds at software GL's few frames a second).
-  await page.evaluate(() => { window.__coldgas.S.replayT = 668; });
+  // The replay walks the same events: jump it to just before the first hit (read from the run's own
+  // impact log, so a physics change can't strand the test on a stale frame) and the crash fires
+  // again (the hazards are armed on the hit itself, not after a delay, so this holds at software
+  // GL's few frames a second).
+  await page.evaluate(() => {
+    const m = window.__coldgas.S.run.impacts;
+    let first = -1;
+    for (let i = 0; i < m.count; i++) if (m.kind[i] === 0 && m.speed[i] > 3) { first = m.tick[i]; break; }
+    window.__coldgas.S.replayT = Math.max(0, Math.floor(first / 4) - 3);
+  });
   await page.waitForFunction(() => window.__coldgas.crash.state.hazardT > 0 || window.__coldgas.crash.state.hazard, null, { timeout: 60_000 });
   expect(errors).toEqual([]);
 });
