@@ -1,5 +1,23 @@
 # Changelog
 
+## Unreleased
+
+**Crashes** (SIM_VERSION 9). A crash used to just happen; now the physics folds, the record says what hit what, and the renderer, camera and sound make it land.
+- Bodywork is elastic to a yield, then it folds and stays folded. Each body hull probe springs at 1.2 MN/m up to 100 kN (≈8 cm), then crushes plastically, up to 0.35 m. The yield is an estimate from crash tests: a 56 km/h full-frontal barrier test crushes a 1.5–2 t car ≈0.6–0.7 m (≈350–400 kN mean force over the ≈4 probes a nose engages), and FMVSS 216 holds roofs to ≥3× vehicle weight (≈72 kN here) within 127 mm. The old fully elastic 0.3 MN/m spring let a hard hit sink the body 0.3–0.5 m into the ground and fired it back out. Drop tests (roof, side, nose at 6–15 m/s) now rebound at e ≈ 0.18–0.33 (was 0.27–0.5, and 0.98 for a slow nose hit), with 40–77 g peaks and up to 0.33 m of crush. The floor probes (skirts and pan) keep the old compliant law, so clean runs are untouched.
+- No artificial spin damping while the hull is in contact. The 0.997-per-tick grounded damper (it halved a spin every second) ate tumbles and rollovers. Scraping contact removes that energy itself.
+- Impact events (src/sim/impacts.js): every hull hit, slide, tyre slam and fold, with its tick, world point, normal, speed, body part and the parked body it struck. They are recorded in the sim, so they replay bit-exactly and the replay re-shows the crash.
+- What a crash shows (src/render/crash.js, src/render/debris.js):
+  - Sparks: instanced streaks, hot white cooling to orange, bouncing off the concrete.
+  - Glass, carbon and paint chips, a dust ring, and a nitrogen line venting condensation after a big hit.
+  - The wing, intake vanes, barge boards and skirts tear off as small rigid bodies that tumble and settle.
+  - The body dents where the physics folded it, as deep as it folded. Struck parked cars dent and rock on their springs.
+  - The canopy crazes. The lamps flicker out and the hazards come on.
+  - The camera shakes with the impact, slow motion holds a beat, and a locked-off crash camera cuts in.
+  - A procedural crunch layered by severity (thump, crack, folding metal, glass), plus a grind while the body slides.
+- `prefers-reduced-motion` now also drops the landing shakes, the crash shake, the slow motion and the cut.
+- Reference runs within ±1 of SIM_VERSION 8: Show 87.3 (was 87.0), Wall 87.0 (87.7), Lineup 85.0 (85.0). Naive players unchanged (Wall 32/32, Show 46/54). `node scripts/crash-probe.mjs` prints the crash cases; `node scripts/shots-crash.mjs outdir url` screenshots them.
+
+
 ## 0.8.0 — 2026-10-20
 
 A taller Wall, and the car's mass where the research puts it (SIM_VERSION 8).

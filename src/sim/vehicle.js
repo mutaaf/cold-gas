@@ -11,6 +11,7 @@ import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrate
 import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf, AXLE_F } from './spec.js';
 import { surface, COURSES, DEFAULT_COURSE, MATERIALS, createWorld, stepWorld, pushBody } from './courses.js';
 import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
+import { createImpacts, pushImpact, HIT, SCRAPE, WHEEL, CRUSH, CRUSH_STEP, PART, SCRAPE_EVERY, HIT_MIN, SCRAPE_MIN, WHEEL_MIN } from './impacts.js';
 
 export const DT = 1 / 240;
 export const G = 9.81;
@@ -55,8 +56,9 @@ const TRIM = (() => {
 const LIFT_MAX = NOZZLE_SPEC.reduce((a, n, i) => a + (n.group === 'lift' ? n.max * TRIM[i] : 0), 0);
 const DRIVEN = [false, false, true, true];
 
-// Hull probe points (body frame): the faceted body's corners, sills, roof and nose/tail.
-const HULL = [];
+// Hull probe points (body frame): the faceted body's corners, sills, roof and nose/tail, and
+// which part of the body each one is (impact events say what was hit).
+const HULL = [], HULL_PART = [];
 {
   const hw = SPEC.width / 2 - 0.04;
   const zf = AXLE_F + SPEC.overhangFront - 0.05;
@@ -68,11 +70,33 @@ const HULL = [];
   const yNose = yb + 0.15, yTail = yb + 0.2;
   for (const x of [-hw, hw]) {
     HULL.push(v3(x, yNose, zf), v3(x, yb, (zf + zr) / 2), v3(x, yTail, zr), v3(x, yb, zf - 0.9), v3(x, yb, zr + 0.9));
-    for (const z of [zf, (zf + zr) / 2, zr]) HULL.push(v3(x * 0.8, yt * 0.55, z * 0.9));
+    HULL_PART.push(PART.nose, PART.floor, PART.tail, PART.floor, PART.floor);
+    for (const z of [zf, (zf + zr) / 2, zr]) { HULL.push(v3(x * 0.8, yt * 0.55, z * 0.9)); HULL_PART.push(PART.side); }
   }
   HULL.push(v3(0, yt, -0.2), v3(0, yNose, zf), v3(0, yTail, zr), v3(0, yt * 0.4, zf + 0.04), v3(0, yt * 0.6, zr - 0.02));
+  HULL_PART.push(PART.roof, PART.nose, PART.tail, PART.nose, PART.tail);
 }
-export { HULL };
+export { HULL, HULL_PART };
+
+// Bodywork contact: elastic up to the structure's yield, then it crushes and stays crushed.
+// Each hull probe stands for a patch of structure. ESTIMATES from crash-test numbers:
+//  - Yield ≈100 kN per probe. A full-frontal rigid-barrier test at 56 km/h crushes a 1.5–2 t
+//    car's front ≈0.6–0.7 m: mean force m·v²/2d ≈ 350–400 kN over the ≈4 probes a nose engages.
+//    Roofs are held to ≥3× vehicle weight within 127 mm of platen travel (FMVSS 216, upgraded
+//    2009): ≈72 kN for this car on one side of the roof; the best roofs reach 4–5×.
+//  - Elastic slope 1.2 MN/m per probe: ≈8 cm of give before it yields (sheet metal over the
+//    tub springs back that much, then folds). The old fully elastic 0.3 MN/m let a hard hit sink
+//    the body 0.3–0.5 m into the ground and then fired it back out like a trampoline.
+//  - Crush is plastic: a folded panel stays folded, so a hard hit returns only the elastic part
+//    (restitution ≈0.1–0.3 at crash speeds, as crash tests measure, not ≈0.5 from a spring).
+//    A probe can crush at most 0.35 m (behind that is the battery tub and the cabin cell).
+//  - The floor is different: its probes stand for the sliding skirts and the flat pan over the
+//    battery, which ride on the deck under suction. They stay compliant (0.3 MN/m) and don't fold.
+const HULL_K = 1.2e6, HULL_C = 16000, HULL_YIELD = 1.0e5, CRUSH_MAX = 0.35;
+const FLOOR_K = 300000, FLOOR_C = 11000;
+const PROBE_K = HULL_PART.map((p) => (p === PART.floor ? FLOOR_K : HULL_K));
+const PROBE_C = HULL_PART.map((p) => (p === PART.floor ? FLOOR_C : HULL_C));
+const PROBE_YIELD = HULL_PART.map((p) => (p === PART.floor ? Infinity : HULL_YIELD));
 const FLOOR = v3(0, -(SPEC.comHeight - SPEC.rideHeight), 0);
 
 export const newInput = () => ({ throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, lift: 0, thrust: 0, retro: 0, level: 0, fan: 0, assist: 1 });
@@ -88,6 +112,9 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     fan: 0, fanForce: 0, floorGap: SPEC.rideHeight,
     hullContact: false, hullGround: false, obstacleContact: false, obstacleSpeed: 0, hullImpulse: 0,
     steer: 0, grounded: 4, onWall: false, wheelForce: 0, tcActive: false,
+    // Crash state: each hull probe's permanent crush (m), its contact last tick, and the run's
+    // impact events (src/sim/impacts.js).
+    crush: new Float64Array(HULL.length), crushShown: new Float64Array(HULL.length), touch: new Uint8Array(HULL.length), impacts: createImpacts(),
   };
   return s;
 }
@@ -108,6 +135,12 @@ const tmp = v3(), tmp2 = v3(), r = v3(), pw = v3(), vp = v3(), force = v3(), fwd
 const sn = { x: 0, y: 0, z: 0, obstacle: false, body: null, mat: MATERIALS.concrete };
 let hitBody = null, hitMat = MATERIALS.concrete;
 const target = new Float64Array(NOZZLES.length);
+// The strongest new hit / slide / tyre slam this tick: [speed, x, y, z, nx, ny, nz, probe, body, crush].
+const evHit = new Float64Array(10), evScr = new Float64Array(10), evWheel = new Float64Array(10);
+function keep(ev, speed, p, n, probe, body, crush) {
+  ev[0] = speed; ev[1] = p.x; ev[2] = p.y; ev[3] = p.z; ev[4] = n.x; ev[5] = n.y; ev[6] = n.z; ev[7] = probe; ev[8] = body; ev[9] = crush;
+}
+const bodyIndex = (s, b) => (b ? s.world.bodies.indexOf(b) : -1);
 const eff = { lift: 0, thrust: 0 };
 
 function pointVel(out, s, rw) { cross(out, s.angVel, rw); return add(out, out, s.vel); }
@@ -185,6 +218,10 @@ function flightComputer(s, inp, out) {
   return out;
 }
 
+function record(imp, tick, kind, part, ev) {
+  pushImpact(imp, tick, kind, part, ev[7], ev[8], ev[1], ev[2], ev[3], ev[4], ev[5], ev[6], ev[0], ev[9]);
+}
+
 export function step(s, inp) {
   const dt = DT;
   const m = massOf(s);
@@ -222,11 +259,13 @@ export function step(s, inp) {
   let grounded = 0, wallContact = false, wheelForce = 0;
   s.hullContact = false; s.hullGround = false; s.obstacleContact = false;
   s.tcActive = false;
+  evHit[0] = 0; evScr[0] = 0; evWheel[0] = 0;
   for (let i = 0; i < 4; i++) {
     const w = s.wheels[i];
     rotate(r, s.quat, WHEELS[i]);
     add(pw, s.pos, r);
     w.prevCompression = w.compression;
+    const wasContact = w.contact;
     w.contact = false;
     const R = RW[i];
     const maxT = REST_LEN + R;
@@ -256,6 +295,10 @@ export function step(s, inp) {
     // Contact patch and its velocity.
     addScaled(tmp, r, dn, t);
     pointVel(vp, s, tmp);
+    if (!wasContact) {
+      const close = -dot(vp, hitN);
+      if (close > WHEEL_MIN && close > evWheel[0]) { add(rp, s.pos, tmp); keep(evWheel, close, rp, hitN, i, bodyIndex(s, hitBody), 0); }
+    }
     // Wheel axes in the contact plane.
     const steerA = i < 2 ? s.steer : 0;
     w.steer = steerA;
@@ -328,22 +371,43 @@ export function step(s, inp) {
     rotate(r, s.quat, HULL[i]);
     add(pw, s.pos, r);
     const phi = phiAt(s, pw);
-    if (phi >= 0) continue;
+    // Into the structure past what is already crushed (a crushed corner sits that much further in).
+    const dEl = -phi - s.crush[i];
+    if (dEl <= 0) { s.touch[i] = 0; continue; }
     set(hitN, sn.x, sn.y, sn.z);
     pointVel(vp, s, r);
     if (sn.obstacle) { s.obstacleContact = true; s.obstacleSpeed = Math.max(s.obstacleSpeed, dhypot(vp.x, vp.y, vp.z)); }
     else s.hullGround = true;
     s.hullContact = true;
     const vn = dot(vp, hitN);
-    const fn = Math.max(0, -300000 * phi - 11000 * vn);
+    const K = PROBE_K[i];
+    let fs = K * dEl;
+    if (fs > PROBE_YIELD[i] && s.crush[i] < CRUSH_MAX) {
+      s.crush[i] = Math.min(CRUSH_MAX, -phi - PROBE_YIELD[i] / K);    // it folds: the excess stays
+      fs = K * (-phi - s.crush[i]);
+    }
+    const fn = Math.max(0, fs - PROBE_C[i] * vn);
     s.hullImpulse = Math.max(s.hullImpulse, -vn);
     addScaled(tmp, vp, hitN, -vn);
     const vt = dhypot(tmp.x, tmp.y, tmp.z);
+    if (!s.touch[i] && -vn > HIT_MIN && -vn > evHit[0]) keep(evHit, -vn, pw, hitN, i, bodyIndex(s, sn.body), s.crush[i]);
+    if (s.crush[i] - s.crushShown[i] >= CRUSH_STEP) {
+      // The panel folded further: report the new depth (the renderer dents the body to match).
+      s.crushShown[i] = s.crush[i];
+      pushImpact(s.impacts, s.tick + 1, CRUSH, HULL_PART[i], i, bodyIndex(s, sn.body), pw.x, pw.y, pw.z, hitN.x, hitN.y, hitN.z, -vn, s.crush[i]);
+    }
+    if (vt > SCRAPE_MIN && vt > evScr[0]) keep(evScr, vt, pw, hitN, i, bodyIndex(s, sn.body), s.crush[i]);
+    s.touch[i] = 1;
     scale(force, hitN, fn);
     if (vt > 1e-4) addScaled(force, force, tmp, -Math.min(sn.mat.slide * fn, vt * 5000) / vt);
     applyAt(r, force);
     if (sn.body) pushBody(sn.body, pw.x, pw.z, -force.x, -force.y, -force.z);
   }
+  // Impact events for this tick (the renderer, camera and sound key off them, live and in replay).
+  const evTick = s.tick + 1, imp = s.impacts;
+  if (evHit[0] > 0) record(imp, evTick, HIT, HULL_PART[evHit[7]], evHit);
+  if (evScr[0] > 0 && evTick - imp.lastScrape >= SCRAPE_EVERY) { imp.lastScrape = evTick; record(imp, evTick, SCRAPE, HULL_PART[evScr[7]], evScr); }
+  if (evWheel[0] > 0) record(imp, evTick, WHEEL, PART.wheel, evWheel);
 
   // --- Thrusters (nitrogen cold gas, blowdown) ---
   flightComputer(s, inp, cmdT);
@@ -398,7 +462,7 @@ export function step(s, inp) {
   wb.x += ((Lb.x - gx) / Ix) * dt;
   wb.y += ((Lb.y - gy) / Iy) * dt;
   wb.z += ((Lb.z - gz) / Iz) * dt;
-  const ad = grounded ? 0.997 : 0.9996;
+  const ad = grounded && !s.hullContact ? 0.997 : 0.9996;
   wb.x *= ad; wb.y *= ad; wb.z *= ad;
   rotate(s.angVel, s.quat, wb);
   integrateQuat(s.quat, s.angVel, dt);

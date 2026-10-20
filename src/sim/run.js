@@ -7,10 +7,12 @@ import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
 import { datan2, dacos, dhypot } from './dmath.js';
 
-// v6: The Show is one flight (off the Wall, over the row); parked vehicles are bodies with mass,
-// per-surface materials; v5: driver-relative steer/roll/yaw, grip-limited steering; v4: sourced
-// specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 8;
+// v9: bodywork folds (elastic to a 100 kN yield per hull probe, then plastic crush), no artificial
+// spin damping while the hull is in contact, impact events; v8: taller Wall, sourced mass
+// distribution; v7: body geometry; v6: The Show is one flight (off the Wall, over the row); parked
+// vehicles are bodies with mass, per-surface materials; v5: driver-relative steer/roll/yaw,
+// grip-limited steering; v4: sourced specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
+export const SIM_VERSION = 9;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 
@@ -49,7 +51,7 @@ function newTelemetry(courseId) {
 
 export function createRun(courseId = DEFAULT_COURSE) {
   const course = COURSES[courseId] || COURSES[DEFAULT_COURSE];
-  return {
+  const run = {
     course: course.id,
     car: createVehicle(course.id),
     phase: 'drive',            // drive → ramp (Wall, Show) → air → landed → done
@@ -60,6 +62,8 @@ export function createRun(courseId = DEFAULT_COURSE) {
     frames: [],                // see recordFrame for the layout
     t: newTelemetry(course.id),
   };
+  run.impacts = run.car.impacts;   // impact events (src/sim/impacts.js): the crash, for the renderer and the replay
+  return run;
 }
 
 const q = newInput();

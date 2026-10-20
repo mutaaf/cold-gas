@@ -676,6 +676,9 @@ export function makeRoadster() {
     fan: 0, skirtSide: 0, skirtEnd: 0, fanAngle: 0,
     wingExt: 0, wingExtT: -1, wing: 0, airbrake: 0,
     frost: new Float32Array(NOZZLE_SPEC.length), thrForced: null,
+    // Crash damage (src/render/crash.js): parts torn off, lamps flickering or dead, hazards on.
+    broken: { wing: false, skirts: false, vanes: false, barge: false },
+    dmgHead: 1, dmgTail: 1, hazard: false,
   };
   const fwd = new THREE.Vector3(), q = new THREE.Quaternion(), col = new THREE.Color();
   // The physics' droop: with no load the sim reports compression 0, the pivot at its lowest.
@@ -686,6 +689,8 @@ export function makeRoadster() {
   function setFan(level) { st.fan = Math.min(1, Math.max(0, level)); }
   function setBrake(v) { st.forcedBrake = v; }
   function setThrust(arr) { st.thrForced = arr; }
+  function setBroken(name, on) { if (name in st.broken) st.broken[name] = on; }
+  function setDamage(head = 1, tail = 1, hazard = false) { st.dmgHead = head; st.dmgTail = tail; st.hazard = hazard; }
 
   function applyWing(k, air) {
     // k: 0 stowed → 1 high downforce; air: 0 → 1 airbrake (kicked up).
@@ -700,33 +705,37 @@ export function makeRoadster() {
     // OFFICIAL) for downforce; the barge boards pop out.
     vanes.rotation.x = -(0.15 + 0.95 * Math.max(k, air));
     barge.scale.x = 0.955 + 0.06 * Math.max(k, air);
+    wing.visible = !st.broken.wing; vanes.visible = !st.broken.vanes; barge.visible = !st.broken.barge;
   }
   function applySkirts() {
     sideSkirts.position.y = -0.11 * st.skirtSide;
     endSkirts.position.y = -0.11 * st.skirtEnd;
-    sideSkirts.visible = st.skirtSide > 0.01; endSkirts.visible = st.skirtEnd > 0.01;
+    sideSkirts.visible = st.skirtSide > 0.01 && !st.broken.skirts; endSkirts.visible = st.skirtEnd > 0.01 && !st.broken.skirts;
   }
   function applyLights(dt) {
     const t = st.wake;
     const sweep = smooth(0.15, 0.85, t), lampsOn = smooth(0.85, 1.15, t);
     const flare = 1 + 0.7 * Math.max(0, 1 - Math.abs(t - 1.25) / 0.25);
     drl.scale.x = Math.max(0.001, sweep); drl.visible = sweep > 0.002;
-    setLamp(M.drl, 0.92, 0.96, 1, 3.2 * Math.min(1, sweep * 1.4));
+    // After a crash: hazards blink at 1.5 Hz (amber repeaters, and the red bar, as rear signals do).
+    const blink = st.hazard ? ((st.last * 1.5) % 1 < 0.5 ? 1 : 0) : -1;
+    const head = st.dmgHead, tailK = st.dmgTail * (blink < 0 ? 1 : blink ? 1.5 : 0.25);
+    setLamp(M.drl, 0.92, 0.96, 1, 3.2 * Math.min(1, sweep * 1.4) * head);
     // Headlamp covers drop ~15 mm into the fender, then the lamps come up.
     covers.position.y = -0.02 * lampsOn; covers.position.z = -0.012 * lampsOn;
     covers.visible = lampsOn < 0.98;
-    setLamp(M.head, 0.95, 0.97, 1, 6 * lampsOn * flare);
+    setLamp(M.head, 0.95, 0.97, 1, 6 * lampsOn * flare * head);
     heads.visible = lampsOn > 0.01;
     tailBar.scale.x = tailDim.scale.x = Math.max(0.001, sweep);
     tailBar.visible = tailDim.visible = sweep > 0.002;
     // Brake: the whole bar steps up and the centre section goes bright.
     st.brake = ease(st.brake, st.forcedBrake ?? (st.brakeHold > 0 ? 1 : 0), dt, st.brakeHold > 0 ? 0.04 : 0.12);
-    setLamp(M.tail, 1, 0.08, 0.1, (1.7 + 3.5 * st.brake) * sweep);
-    setLamp(M.tailDim, 1, 0.08, 0.1, (0.6 + 1.2 * st.brake) * sweep);
-    setLamp(M.brake, 1, 0.1, 0.12, 9 * st.brake * sweep);
+    setLamp(M.tail, 1, 0.08, 0.1, (1.7 + 3.5 * st.brake) * sweep * tailK);
+    setLamp(M.tailDim, 1, 0.08, 0.1, (0.6 + 1.2 * st.brake) * sweep * tailK);
+    setLamp(M.brake, 1, 0.1, 0.12, 9 * st.brake * sweep * st.dmgTail);
     brake.visible = st.brake > 0.02 && sweep > 0.5;
     const markers = smooth(0.9, 1.05, t);
-    setLamp(M.amber, 1, 0.55, 0.12, 2.2 * markers);
+    setLamp(M.amber, 1, 0.55, 0.12, 2.2 * markers * (blink < 0 ? 1 : blink ? 3.5 : 0.08));
     setLamp(M.marker, 1, 0.08, 0.1, 2.4 * markers);
     setLamp(M.plateLamp, 1, 1, 1, 1.6 * markers);
     setLamp(M.ambient, 1, 0.12, 0.1, 2.2 * smooth(0, 0.6, t));
@@ -811,6 +820,8 @@ export function makeRoadster() {
     group, body, shell: merged[M.paint.uuid], canopy: merged[M.glass.uuid],
     ghostParts: [merged[M.paint.uuid], merged[M.black.uuid], merged[M.glass.uuid], ...wheels.map((w) => w.spin.children[0])],
     wheels, comY: SPEC.comHeight, setWing, setFan, setBrake, setThrust, update, debugHold: false,
+    // Crash hooks: the parts that can tear off, and the lamp damage / hazard state.
+    parts: { wing, vanes, barge, sideSkirts, endSkirts }, setBroken, setDamage,
   };
   applyWing(0, 0); applySkirts(); applyLights(0); applyNozzles(0, null);
   return hero;

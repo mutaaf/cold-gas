@@ -53,6 +53,11 @@ export function initAudio() {
     wind: loopNoise(ctx, 900, 0.5),
     hissLift: loopNoise(ctx, 3800, 0.9),
     hissSide: loopNoise(ctx, 5600, 1.4),
+    // Crashes: bodywork grinding along concrete (a resonant band of noise, gain from the slide),
+    // and one shared noise buffer for the one-shot crunches.
+    grind: loopNoise(ctx, 2300, 3.5),
+    grindLo: loopNoise(ctx, 520, 1.2),
+    burst: noiseBuffer(ctx, 1),
   };
 }
 
@@ -93,6 +98,60 @@ export function thud({ thudHz = 110, thudGain = 0.45, thudDecay = 0.4, crunch = 
     const ng = ctx.createGain(); ng.gain.setValueAtTime(0.5 * crunch, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.2);
     n.connect(f).connect(ng).connect(master); n.start(t); n.stop(t + 0.25);
   }
+}
+
+// A crash, layered by severity (0–1): the body's thump, a crack of noise, folding sheet metal
+// (inharmonic partials that die fast) and, when glass goes, a shower of high pings. `seed` makes
+// the same impact sound the same in the replay.
+export function crunch(severity = 0.5, { glass = false, seed = 1 } = {}) {
+  if (!ctx || muted || !nodes) return;
+  const t = ctx.currentTime, k = Math.min(1, Math.max(0, severity));
+  let sd = (seed * 16807) % 2147483647 || 1;
+  const rnd = () => ((sd = (sd * 16807) % 2147483647) / 2147483647);
+  const out = ctx.createGain(); out.gain.value = 0.35 + 0.65 * k; out.connect(master);
+  // Thump: the mass of the car stopping.
+  const o = ctx.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(95 + 40 * k, t); o.frequency.exponentialRampToValueAtTime(32, t + 0.3);
+  const og = ctx.createGain(); og.gain.setValueAtTime(0.9, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.45 + 0.3 * k);
+  o.connect(og).connect(out); o.start(t); o.stop(t + 0.8);
+  // Crack: a burst of noise, low-passed less the harder the hit.
+  const n = ctx.createBufferSource(); n.buffer = nodes.burst; n.playbackRate.value = 0.7 + rnd() * 0.5;
+  const nf = ctx.createBiquadFilter(); nf.type = 'lowpass'; nf.frequency.value = 900 + 5200 * k; nf.Q.value = 0.8;
+  const ng = ctx.createGain(); ng.gain.setValueAtTime(0.75, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.18 + 0.35 * k);
+  n.connect(nf).connect(ng).connect(out); n.start(t, rnd() * 0.5); n.stop(t + 0.7);
+  // Metal folding: a few inharmonic partials, each its own short decay.
+  const parts = 3 + Math.round(3 * k);
+  for (let i = 0; i < parts; i++) {
+    const m = ctx.createOscillator(); m.type = i % 2 ? 'triangle' : 'square';
+    const f = 140 + rnd() * 900 * (0.6 + k);
+    m.frequency.setValueAtTime(f, t); m.frequency.exponentialRampToValueAtTime(f * (0.55 + rnd() * 0.3), t + 0.4);
+    const mf = ctx.createBiquadFilter(); mf.type = 'bandpass'; mf.frequency.value = f * 1.5; mf.Q.value = 6;
+    const mg = ctx.createGain(); const d = 0.06 + rnd() * 0.3 * (0.4 + k);
+    mg.gain.setValueAtTime(0.0001, t); mg.gain.exponentialRampToValueAtTime(0.5, t + 0.004 + rnd() * 0.03); mg.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.05);
+    m.connect(mf).connect(mg).connect(out); m.start(t); m.stop(t + d + 0.1);
+  }
+  if (glass) {
+    // Glass: a bright crack, then a scatter of pings as the pieces land.
+    const g = ctx.createBufferSource(); g.buffer = nodes.burst;
+    const gf = ctx.createBiquadFilter(); gf.type = 'highpass'; gf.frequency.value = 3500;
+    const gg = ctx.createGain(); gg.gain.setValueAtTime(0.6, t); gg.gain.exponentialRampToValueAtTime(0.001, t + 0.12);
+    g.connect(gf).connect(gg).connect(out); g.start(t, rnd() * 0.5); g.stop(t + 0.15);
+    for (let i = 0; i < 10 + 8 * k; i++) {
+      const p = ctx.createOscillator(); p.type = 'sine'; p.frequency.value = 2800 + rnd() * 5200;
+      const pg = ctx.createGain(); const at = t + 0.03 + rnd() * (0.35 + 0.4 * k);
+      pg.gain.setValueAtTime(0.0001, t); pg.gain.setValueAtTime(0.0001, at); pg.gain.exponentialRampToValueAtTime(0.07 + rnd() * 0.08, at + 0.003); pg.gain.exponentialRampToValueAtTime(0.0001, at + 0.05 + rnd() * 0.12);
+      p.connect(pg).connect(out); p.start(t); p.stop(at + 0.2);
+    }
+  }
+}
+
+// Bodywork grinding along a surface, 0 (none) to 1 (a hard slide). Call per frame.
+export function setGrind(level = 0) {
+  if (!ctx || !nodes) return;
+  const k = Math.min(1, Math.max(0, level));
+  ramp(nodes.grind.g.gain, k * 0.32, 0.03);
+  ramp(nodes.grind.f.frequency, 1600 + k * 2200, 0.05);
+  ramp(nodes.grindLo.g.gain, k * 0.28, 0.03);
 }
 
 export function chime(i = 0) {

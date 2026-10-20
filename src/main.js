@@ -12,6 +12,7 @@ import { createStage } from './render/scene.js';
 import { createPlumes } from './render/plumes.js';
 import { createDirector } from './render/director.js';
 import { landingImpact } from './render/impact.js';
+import { createCrash } from './render/crash.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
 import { createRun, stepRun, FRAME_EVERY, BODY_FRAME } from './sim/run.js';
 import { DT, CAR, NOZZLES, WHEELS, bodyRates, worldPoint } from './sim/vehicle.js';
@@ -58,6 +59,9 @@ scene.add(ghostRoot);
 ghostRoot.visible = false;   // its shader is still warmed with the scene's (stage.ready), so "Go" doesn't hitch
 const plumes = createPlumes(scene, carRoot, { maxMist: tier === 'low' ? 500 : 1800 });
 const director = createDirector(camera);
+// Crashes: sparks, chips, dents, torn-off parts, lamps, shake, slow motion, the crash cut and the
+// crunch, all keyed to the sim's impact events (src/render/crash.js).
+const crash = createCrash({ scene, hero, carRoot, director, tier, course: () => stage.course });
 
 // --- State -------------------------------------------------------------------------------
 const S = {
@@ -114,6 +118,7 @@ function toTitle() {
   ui.touch.hidden = true;
   ui.clearCue(); ui.countdown(0);
   plumes.clear();
+  crash.reset();
   placeOnPad();
   history.replaceState(null, '', stage.course === 'show' ? location.pathname : `${location.pathname}?course=${stage.course}`);
 }
@@ -129,6 +134,7 @@ function startRun(kind = 'jump') {
   ui.only('hud');
   ui.touch.hidden = !(coarse || usingTouch()) || !!S.autopilot;
   plumes.clear();
+  crash.reset();
   const c = S.run.car;
   const sag = c.wheels[0].compression;
   syncCar(c.pos, c.quat, [sag, sag, sag, sag], [0, 0, 0, 0], 0);
@@ -241,6 +247,7 @@ function liveStep(dt) {
   for (let i = 0; i < 4; i++) { fcomp[i] = c.wheels[i].compression; fspin[i] = c.wheels[i].spin; }
   syncCar(c.pos, c.quat, fcomp, fspin, c.steer);
   stage.setBodies(c.world.bodies);
+  crash.feed(run.impacts, run.tick, c.vel);
 
   // Phase cues and moments.
   // Touch layout follows the phase: pedals on the ground and up the wall, LIFT/LAND in the air.
@@ -330,6 +337,8 @@ function replayStep(dt) {
   syncCar(fpos, fquat, fcomp, fspin, f[15 + NOZZLES.length] || 0);
   for (let b = 0; b < replayBodies.length; b++) { const o = BODY_FRAME + 3 * b; replayBodies[b].cx = f[o]; replayBodies[b].cz = f[o + 1]; replayBodies[b].yaw = f[o + 2]; }
   stage.setBodies(replayBodies);
+  // The crash, re-shown from the run's impact events at the tick on screen.
+  crash.feed(S.run.impacts, Math.floor((S.replayT + 1) * FRAME_EVERY), fvel);
   hero.setFan?.(f[16 + NOZZLES.length] || 0);
   plumes.update(dt * slow, S.time, fthr, fvel, 0);
   updateAudio({ speed: fvel.length() * slow, grounded: fpos.y < 0.7, throttles: fthr });
@@ -351,6 +360,9 @@ function frame(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
   if (!S.paused) {
+    // A crash's slow-motion beat scales the game clock (live and replay); the effects run on it too.
+    const slow = S.mode === 'live' || S.mode === 'results' || S.mode === 'replay' ? crash.timeScale() : 1;
+    crash.update(dt);
     S.time += dt;
     if (S.mode === 'title') titleStep(dt);
     else if (S.mode === 'countdown') {
@@ -360,8 +372,8 @@ function frame(now) {
       if (S.countT < 0.02 || after !== before) ui.countdown(after > 0 ? after : 0);
       if (S.countT >= 3) { S.mode = 'live'; ui.countdown(0); ui.cue_(S.autopilot ? 'The reference jump' : 'Go', 900); }
       plumes.update(dt, S.time, S.idleThrottles.fill(0), zeroVel, 0);
-    } else if (S.mode === 'live') liveStep(dt);
-    else if (S.mode === 'results' || S.mode === 'replay') replayStep(dt);
+    } else if (S.mode === 'live') liveStep(dt * slow);
+    else if (S.mode === 'results' || S.mode === 'replay') replayStep(dt * slow);
 
     syncGhost();
     const live = S.mode === 'live' || S.mode === 'countdown';
@@ -471,8 +483,8 @@ on('[data-board-open]', () => openBoard());
 on('[data-board-close]', () => ui.show('board', false));
 document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('click', () => openBoard(b.dataset.board)));
 
-addEventListener('resize', () => { stage.resize(); plumes.setScale(innerHeight); director.reframe(); });
-plumes.setScale(innerHeight);
+addEventListener('resize', () => { stage.resize(); plumes.setScale(innerHeight); crash.setScale(innerHeight); director.reframe(); });
+plumes.setScale(innerHeight); crash.setScale(innerHeight);
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(true); });
 
 // Deep links: ?play=jump|reveal, ?board=today|all.
@@ -489,5 +501,5 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
-window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, hero, director, plumes, fastForward, skipCountdown };
+window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown };
 requestAnimationFrame(frame);
