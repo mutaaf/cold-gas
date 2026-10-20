@@ -27,13 +27,14 @@ export function createAutopilot(courseId = 'wall', opts = {}) {
 // pitch moves you along the nose. Gentle near the ground, off in the last metre.
 function steerToPad(c, pad, out, h) {
   forward(c, fwv);
-  const tGo = Math.max(1.2, h / Math.max(1.2, -c.vel.y + 0.6));
+  // Time to go: the governed descent (≈2.5 m/s) plus the hover-and-set-down at the end.
+  const tGo = Math.max(1.5, h / 2.5 + 1.5);
   const dvz = (pad.z - c.pos.z) / tGo - c.vel.z, dvx = (pad.x - c.pos.x) / tGo - c.vel.x;
   const along = dvz * fwv.z + dvx * fwv.x;                  // + = toward the nose
   const side = dvx * fwv.z - dvz * fwv.x;                   // + = toward the car's right
   const k = h < 1 ? 0 : h < 2.5 ? 0.5 : 1;
   out.roll = k * Math.max(-0.45, Math.min(0.45, side * 0.24));
-  out.pitch = k * Math.max(-0.4, Math.min(0.4, along * 0.12));
+  out.pitch = k * Math.max(-0.55, Math.min(0.55, along * 0.2));
 }
 
 function laneKeep(c, out) { out.steer = Math.max(-1, Math.min(1, -c.pos.x * 0.35 - c.vel.x * 0.25)); }
