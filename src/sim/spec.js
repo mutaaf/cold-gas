@@ -8,13 +8,13 @@
 
 export const SPEC = {
   // Geometry (m)
-  length: 4.65,            // ESTIMATE (not disclosed). The official side render measures 4.33 m (PHOTO, research §10.8): pending a SIM_VERSION bump
+  length: 4.33,            // PHOTO: official side render (docs/REVEAL_RESEARCH.md §10). The official side render measures 4.33 m (PHOTO, research §10.8): pending a SIM_VERSION bump
   width: 2.0,              // OFFICIAL
   height: 1.15,            // ESTIMATE (not disclosed; PHOTO 1.14 m, research §10.1)
   wheelbase: 2.825,        // OFFICIAL (Moravy)
   trackFront: 1.70,        // ESTIMATE
   trackRear: 1.74,         // ESTIMATE
-  overhangFront: 0.90,     // ESTIMATE (PHOTO 0.82–0.87 m, §10.1)
+  overhangFront: 0.85,     // PHOTO (0.82–0.87); rear overhang ≈0.65 follows from length (PHOTO 0.82–0.87 m, §10.1)
   // Tyres: Pirelli P Zero Trofeo RS, 295/30 R20 front, 335/30 R21 rear (OFFICIAL sizes).
   wheelRadiusFront: 0.343, // 20" + 30% of 295 mm
   wheelRadiusRear: 0.367,  // 21" + 30% of 335 mm
@@ -76,14 +76,17 @@ export const SPEC = {
 //   yaw:  ≈4 kN each (ESTIMATE)
 // `dir` is the force direction on the car (opposite to the jet).
 export const NOZZLE_SPEC = [
-  { id: 'down-fr', group: 'lift', pos: [-0.75, -0.24, 1.98], dir: [0, 1, 0], max: 17000 },
-  { id: 'down-fl', group: 'lift', pos: [0.75, -0.24, 1.98], dir: [0, 1, 0], max: 17000 },
-  { id: 'down-rr', group: 'lift', pos: [-0.75, -0.24, -1.98], dir: [0, 1, 0], max: 17000 },
-  { id: 'down-rl', group: 'lift', pos: [0.75, -0.24, -1.98], dir: [0, 1, 0], max: 17000 },
-  { id: 'rear-1', group: 'rear', pos: [-0.5, -0.2, -2.3], dir: [0, 0, 1], max: 20000 },
-  { id: 'rear-2', group: 'rear', pos: [-0.18, -0.2, -2.32], dir: [0, 0, 1], max: 20000 },
-  { id: 'rear-3', group: 'rear', pos: [0.18, -0.2, -2.32], dir: [0, 0, 1], max: 20000 },
-  { id: 'rear-4', group: 'rear', pos: [0.5, -0.2, -2.3], dir: [0, 0, 1], max: 20000 },
+  // Down: "behind each wheel" (OFFICIAL), at sill level (PHOTO, 04-World): ≈0.45 m behind each axle.
+  { id: 'down-fr', group: 'lift', pos: [-0.75, -0.24, 0.95], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-fl', group: 'lift', pos: [0.75, -0.24, 0.95], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-rr', group: 'lift', pos: [-0.75, -0.24, -1.95], dir: [0, 1, 0], max: 17000 },
+  { id: 'down-rl', group: 'lift', pos: [0.75, -0.24, -1.95], dir: [0, 1, 0], max: 17000 },
+  // Rear: one row along the top of the diffuser, centres 0.42 m up (≈ the CoM height, so a burn
+  // barely pitches the car), 0.26 m apart (PHOTO, §10.3).
+  { id: 'rear-1', group: 'rear', pos: [-0.39, 0, -2.05], dir: [0, 0, 1], max: 20000 },
+  { id: 'rear-2', group: 'rear', pos: [-0.13, 0, -2.06], dir: [0, 0, 1], max: 20000 },
+  { id: 'rear-3', group: 'rear', pos: [0.13, 0, -2.06], dir: [0, 0, 1], max: 20000 },
+  { id: 'rear-4', group: 'rear', pos: [0.39, 0, -2.05], dir: [0, 0, 1], max: 20000 },
   { id: 'yaw-r', group: 'yaw', pos: [-0.86, -0.05, 2.0], dir: [1, 0, 0], max: 4000 },
   { id: 'yaw-l', group: 'yaw', pos: [0.86, -0.05, 2.0], dir: [-1, 0, 0], max: 4000 },
 ];

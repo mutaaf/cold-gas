@@ -40,14 +40,11 @@ export function wheelCenterY(compression = 0, freeLength = REST_LENGTH, i = 0) {
 }
 
 // --- Where the nozzles are drawn ------------------------------------------------------------------
-// Body frame (origin at the CoM). The physics applies each force at NOZZLE_SPEC.pos. The four rear
-// nozzles are drawn where the reveal car has them (PHOTO, rear studio shot scaled by the 2.0 m
-// width): one row 0.42 m above the ground, 0.26 m apart, in the top of the diffuser box. The spec
-// still puts their force line 0.22 m up and 0.32–0.36 m apart; moving it changes the physics
-// (SIM_VERSION), so it is flagged in the research doc rather than changed here. The plumes start
-// at these drawn positions.
-export const NOZZLE_VISUAL = NOZZLE_SPEC.map((n) => (n.group !== 'rear' ? n.pos.slice()
-  : [Math.sign(n.pos[0]) * (Math.abs(n.pos[0]) > 0.3 ? 0.39 : 0.13), 0.42 - SPEC.comHeight, n.pos[2]]));
+// Body frame (origin at the CoM). Drawn exactly where the physics applies each force
+// (NOZZLE_SPEC.pos, sourced in docs/REVEAL_RESEARCH.md §10.3): the four rear nozzles in one row
+// 0.42 m up in the top of the diffuser box, the four down-jets just behind each wheel. The plumes
+// start here too.
+export const NOZZLE_VISUAL = NOZZLE_SPEC.map((n) => n.pos.slice());   // drawn where the physics fires them
 
 // --- Materials ---------------------------------------------------------------------------------
 // HDR colours on the lamps (MeshBasic, values > 1) so the bloom pass picks them up; the low tier

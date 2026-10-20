@@ -15,7 +15,7 @@ import { dhypot } from './dmath.js';
 export const REVEAL = {
   wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.97 },
   lineup: { speed: 7.5, apex: 5.0, rolls: 1, rollBrake: 14 },
-  show: { carry: 9 },
+  show: { carry: 8.5 },
 };
 
 const rates = v3(), upv = v3(), fwv = v3();

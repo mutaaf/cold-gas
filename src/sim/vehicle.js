@@ -40,7 +40,15 @@ export const NOZZLES = NOZZLE_SPEC.map((n) => {
 });
 
 const WHEELS = wheelAnchors().map((a) => v3(...a));
-const LIFT_MAX = NOZZLE_SPEC.filter((n) => n.group === 'lift').reduce((a, n) => a + n.max, 0);
+// Lift trim: the down-jets don't sit symmetrically about the CoM, so each one's share of a pure
+// lift command is scaled until the four make no pitch or roll moment (the nozzle farthest out
+// runs leaner). Attitude commands ride on top.
+const TRIM = (() => {
+  const lift = NOZZLE_SPEC.filter((n) => n.group === 'lift');
+  const zf = Math.max(...lift.map((n) => n.pos[2])), zr = Math.min(...lift.map((n) => n.pos[2]));
+  return NOZZLE_SPEC.map((n) => (n.group !== 'lift' ? 1 : n.pos[2] > 0 ? Math.min(1, -zr / zf) : Math.min(1, zf / -zr)));
+})();
+const LIFT_MAX = NOZZLE_SPEC.reduce((a, n, i) => a + (n.group === 'lift' ? n.max * TRIM[i] : 0), 0);
 const DRIVEN = [false, false, true, true];
 
 // Hull probe points (body frame): the faceted body's corners, sills, roof and nose/tail.
@@ -146,7 +154,7 @@ export function mix(cmd, torqueCmd, out) {
   const liftBase = Math.min(cmd.lift, 1 - Math.min(1, maxDelta));
   for (let i = 0; i < NOZZLES.length; i++) {
     const g = NOZZLES[i].group;
-    const base = g === 'lift' ? liftBase : g === 'rear' ? cmd.thrust : 0;   // yaw jets: attitude only
+    const base = g === 'lift' ? liftBase * TRIM[i] : g === 'rear' ? cmd.thrust : 0;   // yaw jets: attitude only
     out[i] = clamp(base + out[i], 0, 1);
   }
   return out;
