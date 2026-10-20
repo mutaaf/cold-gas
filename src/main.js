@@ -305,5 +305,13 @@ const play = params.get('play');
 if (play === 'jump' || play === 'reveal') startRun(play);
 if (params.get('board')) openBoard(params.get('board') === 'all' ? 'all' : 'today');
 
-window.__coldgas = { S, startRun, toTitle, camera, carRoot, hero, director };   // e2e hook
+// e2e hooks. fastForward() runs the sim to the end without waiting on the wall clock, so slow
+// software-GL runners exercise the same flow (countdown → live → results) in seconds.
+function fastForward() {
+  if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); }
+  if (S.mode !== 'live') return;
+  for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
+}
+function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
+window.__coldgas = { S, startRun, toTitle, camera, carRoot, hero, director, fastForward, skipCountdown };
 requestAnimationFrame(frame);
