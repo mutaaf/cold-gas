@@ -15,7 +15,7 @@
   - The camera shakes with the impact, slow motion holds a beat, and a locked-off crash camera cuts in.
   - A procedural crunch layered by severity (thump, crack, folding metal, glass), plus a grind while the body slides.
 - `prefers-reduced-motion` now also drops the landing shakes, the crash shake, the slow motion and the cut.
-- Reference runs score as before: Show 90.3, Wall 94.0, Lineup 84.3. `node scripts/crash-probe.mjs` prints the crash cases; `node scripts/shots-crash.mjs outdir url` screenshots them.
+- Reference runs within ±1 of SIM_VERSION 8: Show 87.3 (was 87.0), Wall 87.0 (87.7), Lineup 85.0 (85.0). Naive players unchanged (Wall 32/32, Show 46/54). `node scripts/crash-probe.mjs` prints the crash cases; `node scripts/shots-crash.mjs outdir url` screenshots them.
 
 
 ## 0.8.0 — 2026-10-20

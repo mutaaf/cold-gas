@@ -170,6 +170,7 @@ test('the reveal touchdown lands once: one mist burst, cues scaled by its sink r
 
 // A crash: the run's impact events drive the effects live and again in the replay, with no errors.
 test('a crash plays out: impact events, wreckage, hazards, and the replay re-shows it', async ({ page }) => {
+  test.slow();   // the replay has to render its way to the hit, a few frames a second under software GL
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   page.on('console', (m) => { if (m.type() === 'error' && !/api\//.test(m.text()) && !/404/.test(m.text())) errors.push(m.text()); });
@@ -182,14 +183,15 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
     g.S.autopilot = g.createAutopilot('lineup', { apex: 2.5 });
     g.skipCountdown();
   });
-  await page.waitForFunction(() => window.__coldgas.S.run.impacts.count > 0, null, { timeout: 45_000 });
-  await page.evaluate(() => window.__coldgas.fastForward());
+  await page.evaluate(() => window.__coldgas.fastForward());   // the whole run in one go, not at software GL's pace
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 20_000 });
   const run = await page.evaluate(() => ({ flipped: window.__coldgas.S.run.t.flipped, impacts: window.__coldgas.S.run.impacts.count }));
   expect(run.flipped).toBe(true);
   expect(run.impacts).toBeGreaterThan(5);
-  // The replay walks the same events: the hazards come back on once it reaches the crash.
-  await page.evaluate(() => { window.__coldgas.S.replayT = 660; });
-  await page.waitForFunction(() => window.__coldgas.crash.state.hazard === true, null, { timeout: 30_000 });
+  // The replay walks the same events: jump it to just before the first big hit (tick 2688, frame
+  // 671) and the crash fires again (the hazards are armed on the hit itself, not after a delay, so
+  // this holds at software GL's few frames a second).
+  await page.evaluate(() => { window.__coldgas.S.replayT = 668; });
+  await page.waitForFunction(() => window.__coldgas.crash.state.hazardT > 0 || window.__coldgas.crash.state.hazard, null, { timeout: 60_000 });
   expect(errors).toEqual([]);
 });

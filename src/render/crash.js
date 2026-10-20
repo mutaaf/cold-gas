@@ -420,7 +420,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
         const a = rnd() * Math.PI * 2, sp = 1.5 + rnd() * 3 * (0.5 + sev);
         puff(x + Math.cos(a) * 0.2, y + 0.12, z + Math.sin(a) * 0.2, Math.cos(a) * sp + carVel.x * 0.3, 0.3 + rnd() * 0.8, Math.sin(a) * sp + carVel.z * 0.3, 0.5, 4 + sev * 3, 1.6 + rnd(), 0.3, 0.8, 0.8, 0.82);
       }
-      thud(1 + sev * 3);
+      if (v > 5) thud(1 + sev * 3);   // a landing's own thud is main.js's touchdown
       if (!reduced) director.shake(Math.min(1.2, 0.2 + sev));
       return;
     }
