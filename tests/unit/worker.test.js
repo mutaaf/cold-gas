@@ -96,3 +96,34 @@ describe('POST /judge/stream (edge)', () => {
     expect((await worker.fetch(req({ log: [[0, 1]] }), { AI: fakeAI(REPLY) }, ctx)).status).toBe(400);
   });
 });
+
+import { detectProvider, cleanKey } from '../../src/ai/detect.js';
+describe('caveman key detection', () => {
+  it('knows each provider by the shape of its key', () => {
+    expect(detectProvider('sk-ant-api03-' + 'a'.repeat(40)).provider).toBe('anthropic');
+    expect(detectProvider('sk-proj-' + 'b'.repeat(40)).provider).toBe('openai');
+    expect(detectProvider('sk-' + 'c'.repeat(40)).provider).toBe('openai');
+    expect(detectProvider('xai-' + 'd'.repeat(40)).provider).toBe('xai');
+    expect(detectProvider('AIza' + 'e'.repeat(35)).provider).toBe('gemini');
+  });
+  it('forgives sloppy pastes', () => {
+    expect(cleanKey('  "Bearer sk-ant-xyz"\n')).toBe('sk-ant-xyz');
+    expect(cleanKey('ANTHROPIC_API_KEY=sk-ant-xyz')).toBe('sk-ant-xyz');
+  });
+  it('explains look-alikes instead of failing', () => {
+    expect(detectProvider('gsk_' + 'x'.repeat(40)).reason).toMatch(/Groq/);
+    expect(detectProvider('ghp_' + 'x'.repeat(36)).reason).toMatch(/GitHub/);
+    expect(detectProvider('abc').reason).toMatch(/too short/);
+  });
+});
+
+import { nice } from '../../src/ai/settings.js';
+describe('model display names', () => {
+  it('reads like a person wrote it', () => {
+    expect(nice('claude-haiku-5-5')).toBe('Claude Haiku 5.5');
+    expect(nice('gpt-5.4-nano')).toBe('GPT-5.4 Nano');
+    expect(nice('grok-4.1-fast')).toBe('Grok 4.1 Fast');
+    expect(nice('gemini-3.5-flash-lite')).toBe('Gemini 3.5 Flash Lite');
+    expect(nice('@cf/google/gemma-4-26b-a4b-it')).toBe('Gemma 4');
+  });
+});

@@ -16,6 +16,7 @@ import { simulate, MAX_TICKS, INPUT_KEYS } from '../sim/run.js';
 import { scoreRun } from '../sim/judge.js';
 import { SYSTEM, userPrompt, parseWords, estimateTokens } from './ai/prompt.js';
 import { PROVIDERS, EDGE_MODELS, streamJudge, listModels, pickModel, costUsd, describeError } from './ai/providers.js';
+import { detectProvider } from '../ai/detect.js';
 
 const EDGE_DAILY_CAP = 700;         // free-allowance judgings per UTC day (≈13 neurons each, 10k free)
 const EDGE_HOURLY_PER_IP = 40;
@@ -181,13 +182,16 @@ async function handle(req, env, ctx) {
 
   if (path === '/models' && req.method === 'POST') {
     const body = await req.json().catch(() => null);
-    const provider = body?.provider;
     const key = req.headers.get('x-cg-key') || '';
-    if (!PROVIDERS[provider]?.needsKey || !KEY_RE.test(key)) return json({ error: 'bad request' }, 400);
+    // "auto": work out the provider from the key itself (src/ai/detect.js).
+    const detected = body?.provider === 'auto' ? detectProvider(key) : null;
+    if (detected && !detected.provider) return json({ error: detected.reason || 'Unrecognised key.' }, 400);
+    const provider = detected ? detected.provider : body?.provider;
+    if (!PROVIDERS[provider]?.needsKey || !KEY_RE.test(key)) return json({ error: 'That doesn’t look like a complete key.' }, 400);
     if (env.DB) { await ensureTables(env.DB); if ((await bump(env.DB, `models:${await ipHash(req)}:${hour()}`)) > 30) return json({ error: 'slow down' }, 429); }
     try {
       const models = (await listModels(provider, key)).sort();
-      return json({ models, suggested: pickModel(provider, models) || PROVIDERS[provider].fallbackModel || null });
+      return json({ provider, models, suggested: pickModel(provider, models) || PROVIDERS[provider].fallbackModel || null });
     } catch (err) {
       return json({ error: describeError(provider, err) }, err?.status === 401 || err?.status === 403 ? 401 : 502);
     }
