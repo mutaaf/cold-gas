@@ -12,7 +12,7 @@
 // deterministic sim (src/sim/) and scores it itself. The AI writes words, never numbers.
 // Bring-your-own keys are used for one call and never stored or logged.
 // Operator-owned (agents/control.json → frozen_paths).
-import { simulate, MAX_TICKS, INPUT_KEYS } from '../sim/run.js';
+import { simulate, MAX_TICKS, INPUT_KEYS, isLogEntryLength } from '../sim/run.js';
 import { scoreRun } from '../sim/judge.js';
 import { SYSTEM, userPrompt, parseWords, estimateTokens } from './ai/prompt.js';
 import { PROVIDERS, EDGE_MODELS, streamJudge, listModels, pickModel, costUsd, describeError } from './ai/providers.js';
@@ -54,13 +54,16 @@ async function ipHash(req) {
   return [...new Uint8Array(h)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Validate and replay a client input log → { run, card } or null.
+// Validate and replay a client input log → { run, card } or null. Entries carry every channel of
+// src/sim/run.js INPUT_KEYS (v10: 23 incl. Advanced's ten valves) or the 12 of a v9 client, whose
+// missing channels replay as zero. The tier (Assist / Pro / Advanced) comes from the replayed
+// inputs themselves, never from a flag the client sends.
 export function verify(body) {
   const log = body?.log;
   if (!Array.isArray(log) || log.length === 0 || log.length > MAX_LOG) return null;
   let last = -1;
   for (const e of log) {
-    if (!Array.isArray(e) || e.length !== INPUT_KEYS.length + 1) return null;
+    if (!Array.isArray(e) || !isLogEntryLength(e.length)) return null;
     if (!Number.isInteger(e[0]) || e[0] < last || e[0] > MAX_TICKS) return null;
     last = e[0];
     for (let i = 1; i < e.length; i++) if (!Number.isInteger(e[i]) || e[i] < -100 || e[i] > 100) return null;

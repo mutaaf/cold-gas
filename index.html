@@ -18,7 +18,7 @@
     <div class="brand" aria-label="COLD GAS">COLD&nbsp;GAS</div>
     <div class="top-actions">
       <button class="chip ai-chip" data-ai-open title="Choose who writes the judges’ words: free Cloudflare Edge, or your own Anthropic, OpenAI, xAI or Gemini key">AI</button>
-      <button class="chip" data-assist aria-pressed="true" title="Flight computer: Assist holds rates and levels for landing. Pro is raw thrust (+8%).">Assist</button>
+      <button class="chip tier-chip" data-tier="assist" aria-label="Flight tier: Assist" title="Flight tier. Assist: the computer holds rates, LAND levels and brakes. Pro: rate control, no LAND (×1.08). Advanced: ten valves by hand (×1.15).">Assist</button>
       <button class="icon-btn" data-ghost aria-pressed="true" aria-label="Ghost of your best run (G)" title="Ghost: your best run rides alongside (G)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14" cy="12" r="5" /><circle data-echo cx="9" cy="12" r="5" stroke-dasharray="2 2.4" /></svg></button>
       <button class="icon-btn" data-mute aria-label="Sound"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h4l5-4v14l-5-4H4z" /><path data-wave d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11" /></svg></button>
     </div>
@@ -37,6 +37,7 @@
     <div class="cta">
       <button class="btn primary" data-start>Jump</button>
       <button class="btn ghost" data-reveal>Watch the reference</button>
+      <button class="btn ghost" data-practice-open>Practice</button>
       <button class="btn link" data-board-open>Today’s board</button>
     </div>
     <dl class="spec">
@@ -55,22 +56,56 @@
         <rect class="body" x="22" y="16" width="76" height="168" rx="34" />
         <g data-nz></g>
       </svg>
-      <div class="tank">
+      <div class="tank" data-tank>
         <div class="tank-row"><span>Air</span><b data-air>100</b><i>%</i></div>
-        <div class="bar"><span data-air-bar></span></div>
+        <div class="bar"><span data-air-bar></span><i class="need" data-air-need aria-hidden="true"></i></div>
       </div>
     </div>
     <div class="hud-center">
       <div class="speed"><b data-speed>0</b><span>km/h</span></div>
+      <!-- The landing HUD (src/hud-landing.js): sink in its band, the descent tape with the BRAKE line. -->
+      <div class="descent" data-descent data-status="green" hidden>
+        <div class="d-main">
+          <div class="d-sink"><b data-d-sink>0.0</b><span>Sink · m/s</span></div>
+          <div class="d-meta">
+            <span class="d-state" data-d-state>On profile</span>
+            <span>target <i data-d-target>≤ 9.0</i></span>
+            <span><i data-d-ttg>2.0</i> s to ground</span>
+          </div>
+        </div>
+        <svg class="d-tape" viewBox="-2 -10 58 160" aria-label="Altitude and the brake-by line">
+          <line class="d-axis" x1="8" y1="0" x2="8" y2="140" />
+          <g class="d-ticks"><line x1="5" x2="11" y1="0" y2="0" /><line x1="6" x2="10" y1="23.3" y2="23.3" /><line x1="5" x2="11" y1="46.7" y2="46.7" /><line x1="6" x2="10" y1="70" y2="70" /><line x1="5" x2="11" y1="93.3" y2="93.3" /><line x1="6" x2="10" y1="116.7" y2="116.7" /><line x1="3" x2="13" y1="140" y2="140" /></g>
+          <rect class="d-fill" data-d-fill x="6" y="140" width="4" height="0" />
+          <line class="d-brake" data-d-brake x1="0" x2="54" y1="70" y2="70" />
+          <text class="d-brake-lbl" data-d-brake-lbl x="15" y="66">BRAKE</text>
+          <g class="d-car" data-d-car transform="translate(0 0)"><path d="M10 0 l7 -4.5 v9z" /><text data-d-car-lbl x="20" y="3.5">27</text></g>
+        </svg>
+      </div>
       <div class="phase" data-phase>Run-up</div>
     </div>
     <div class="hud-right">
-      <svg class="dial" viewBox="0 0 120 120" aria-label="Roll">
-        <circle class="ring" cx="60" cy="60" r="50" />
-        <circle class="arc" data-roll-arc cx="60" cy="60" r="50" pathLength="360" />
-        <g data-ticks></g>
-        <g data-car-glyph transform="rotate(0 60 60)"><rect x="40" y="56" width="40" height="8" rx="4" /><rect x="56" y="48" width="8" height="8" rx="2" /></g>
-      </svg>
+      <div class="adi-wrap">
+        <svg class="dial adi" data-adi viewBox="0 0 120 120" aria-label="Attitude and roll">
+          <defs><clipPath id="adi-clip"><circle cx="60" cy="60" r="43" /></clipPath></defs>
+          <g transform="rotate(90 60 60)">
+            <g clip-path="url(#adi-clip)">
+              <g data-adi-horizon>
+                <rect class="adi-sky" x="-80" y="-140" width="280" height="200" />
+                <rect class="adi-ground" x="-80" y="60" width="280" height="200" />
+                <line class="adi-hz" x1="-80" y1="60" x2="200" y2="60" />
+                <line class="adi-ladder" x1="48" x2="72" y1="51" y2="51" /><line class="adi-ladder" x1="48" x2="72" y1="69" y2="69" />
+                <line class="adi-ladder" x1="42" x2="78" y1="42" y2="42" /><line class="adi-ladder" x1="42" x2="78" y1="78" y2="78" />
+              </g>
+            </g>
+            <g class="adi-car" data-car-glyph><rect x="38" y="57" width="44" height="6" rx="3" /><rect x="55" y="50" width="10" height="8" rx="2" /><circle cx="60" cy="60" r="1.6" /></g>
+          </g>
+          <circle class="ring" cx="60" cy="60" r="50" />
+          <circle class="arc" data-roll-arc cx="60" cy="60" r="50" pathLength="360" />
+          <g data-ticks></g>
+        </svg>
+        <div class="roll-cue" data-roll-cue aria-live="off"></div>
+      </div>
       <div class="readouts">
         <div><span>Roll</span><b data-roll>0°</b></div>
         <div><span>Alt</span><b data-alt>0.0</b><i>m</i></div>
@@ -94,6 +129,40 @@
     </div>
   </div>
 
+  <!-- Advanced on a phone: the nozzle pad, a car seen from above with a pad on every nozzle (src/valves.js) -->
+  <div class="nozzle-pad" data-nozzle-pad hidden>
+    <svg viewBox="0 0 300 380" aria-label="Nozzle pad: hold a pad to open that valve">
+      <rect class="np-car" x="56" y="20" width="188" height="330" rx="70" />
+      <path class="np-nose" d="M110 20 q40 -12 80 0" />
+    </svg>
+  </div>
+
+  <!-- Practice: the drill bar while a drill runs -->
+  <div class="drill-bar" data-drill-bar hidden>
+    <span class="db-tag">Practice · not scored</span>
+    <b data-drill-name>On the ledge</b>
+    <span class="db-goal" data-drill-goal></span>
+    <button class="chip" data-drill-retry title="Retry from the same start (R)">Retry <kbd>R</kbd></button>
+    <button class="chip" data-drill-slow title="Slow motion (T)">1×</button>
+    <button class="chip" data-view title="Camera: broadcast or pilot view (L)">View</button>
+    <button class="chip" data-drill-exit>Done</button>
+  </div>
+
+  <!-- Practice: pick a drill -->
+  <section class="practice" data-screen="practice" hidden>
+    <div class="sheet narrow">
+      <p class="eyebrow">Practice · not scored, never posted</p>
+      <h2>Drills</h2>
+      <p class="lede">Start anywhere in the flight. <kbd>R</kbd> retries from the same start, instantly. The reference rides alongside as a ghost.</p>
+      <ol class="drills" data-drills></ol>
+      <div class="pr-opts">
+        <span>Slow motion</span>
+        <div class="seg" data-slow-seg><button data-slow="1" aria-pressed="true">1×</button><button data-slow="0.5" aria-pressed="false">½×</button><button data-slow="0.25" aria-pressed="false">¼×</button></div>
+      </div>
+      <div class="actions"><button class="btn ghost" data-practice-close>Close</button></div>
+    </div>
+  </section>
+
   <!-- Results -->
   <section class="results" data-screen="results" hidden>
     <div class="sheet">
@@ -102,11 +171,20 @@
         <h2 class="verdict" data-r-verdict>Stuck it</h2>
         <div class="total"><b data-r-total>0.0</b><span>/ 100</span></div>
       </div>
+      <p class="tier-line" data-r-tier></p>
+      <div class="drill-card" data-drill-card hidden>
+        <ul class="facts" data-drill-stats></ul>
+        <div class="actions"><button class="btn primary" data-drill-again>Retry <kbd>R</kbd></button><button class="btn ghost" data-drill-next>Next drill</button><button class="btn link" data-drill-menu>All drills</button></div>
+      </div>
       <div class="actions top-actions-row">
         <button class="btn primary" data-again>Jump again</button>
         <button class="btn ghost" data-replay>Replay</button>
         <button class="btn ghost" data-share>Share</button>
         <button class="btn link" data-home>Title</button>
+      </div>
+      <div class="coach" data-coach hidden>
+        <p class="eyebrow">What happened</p>
+        <ol class="coach-items" data-coach-items></ol>
       </div>
       <div class="receipt" data-receipt hidden></div>
       <ol class="judges" data-r-judges></ol>
@@ -145,9 +223,10 @@
     <div class="sheet narrow">
       <h2>Paused</h2>
       <div class="keys">
-        <p><b>Ground</b> ↑ throttle · ↓ brake · ← → steer · Space lift · Shift boost</p>
-        <p><b>Air</b> ← → roll · ↑ ↓ pitch · Q E yaw · Space lift · Shift land</p>
-        <p><b>Any time</b> G ghost of your best run</p>
+        <p><b>Ground</b> ↑ throttle · ↓ brake · ← → steer · Space lift / release · Shift boost</p>
+        <p><b>Air</b> ← → roll · ↑ ↓ pitch · Q E yaw · Space lift · F boost · Shift land</p>
+        <p><b>Advanced</b> Q E Z C the down-jets · W S A D a pair · Space all four · V B N M the rear row · F all four · 1 3 fender jets · Shift half open</p>
+        <p><b>Any time</b> G ghost · L pilot view · Practice: R retry · T slow motion</p>
       </div>
       <div class="actions">
         <button class="btn primary" data-resume>Resume</button>

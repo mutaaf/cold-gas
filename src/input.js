@@ -4,18 +4,26 @@
 // Keyboard   ground: ↑/W throttle · ↓/S brake · ←/→ A/D steer · Shift boost · Space LIFT
 //            air:    ←/→ A/D roll · ↑/W nose down · ↓/S nose up · Q/E yaw · Space LIFT · Shift LAND
 //                    · F BOOST (the rear jets: carry off the Wall's ledge, over the row)
+//            Advanced (air): the ten valves by hand, keys laid out like the car (src/valves.js)
 // Gamepad    left stick steer/roll+pitch · RT throttle/LIFT · LT brake/LAND · A LIFT · B LAND
+//            Advanced (air): shoulders = the four down-jets, A BOOST, Y LIFT, X/B fender jets
 // Touch      ground: steer stick · GO and BRAKE pedals · LIFT (RELEASE on the wall)
 //            air:    stick rolls and pitches (up = nose up) · LIFT · LAND
-import { newInput } from './sim/vehicle.js';
+//            Advanced (air): the nozzle pad, a car with a pad on every nozzle
+import { newInput, VALVE_KEYS } from './sim/vehicle.js';
+import { createKeyRamp, padValves, bindNozzlePad, VALVES } from './valves.js';
 
 const keys = new Set();
 const touch = { active: false, x: 0, y: 0, lift: false, land: false, go: false, brk: false };
 
+let nozzlePad = { valves: new Float64Array(VALVES), active: () => false, show: () => {}, sync: () => {} };
+export const getNozzlePad = () => nozzlePad;
+
 export function bindInput(root, { onPause } = {}) {
+  nozzlePad = bindNozzlePad(root);
   addEventListener('keydown', (e) => {
     if (e.target?.tagName === 'INPUT') return;
-    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) e.preventDefault();
+    if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code) && !e.target?.closest?.('button, a, [role="radio"]')) e.preventDefault();
     if (e.code === 'Escape' || e.code === 'KeyP') onPause?.();
     keys.add(e.code);
   });
@@ -69,11 +77,16 @@ const dz = (v) => (Math.abs(v) < 0.12 ? 0 : v);
 
 export const usingTouch = () => touch.active;
 
-// Sample into a sim input. `phase` is the run phase; `assist` the flight computer setting.
+// Sample into a sim input. `phase` is the run phase; `tier` the flight tier ('assist' | 'pro' |
+// 'advanced'; a boolean means assist on/off); `released` whether the car has let go of the Wall.
 // Everything is driver-relative: + steer, roll and yaw are to the right (src/sim/vehicle.js).
-export function sample(phase, assist, out = newInput()) {
+const vScratch = new Float64Array(VALVES);
+const keyRamp = createKeyRamp(), isDown = (c) => keys.has(c);
+export function sample(phase, tier, out = newInput(), released = false) {
   Object.assign(out, newInput());
-  out.assist = assist ? 1 : 0;
+  if (typeof tier === 'boolean') tier = tier ? 'assist' : 'pro';
+  out.assist = tier === 'assist' ? 1 : 0;
+  out.manual = tier === 'advanced' ? 1 : 0;
   const air = phase === 'air';
   let ax = 0, ay = 0, lift = 0, land = 0, thr = 0, brk = 0, yaw = 0;
   ax = rampKey((k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0));
@@ -89,7 +102,7 @@ export function sample(phase, assist, out = newInput()) {
 
   const pads = navigator.getGamepads?.() || [];
   for (const p of pads) {
-    if (!p) continue;
+    if (!p || out.manual) continue;
     ax += dz(p.axes[0] || 0); ay += dz(p.axes[1] || 0);
     yaw += dz(p.axes[2] || 0) * 0.8;
     const rt = p.buttons[7]?.value || 0, lt = p.buttons[6]?.value || 0;
@@ -109,6 +122,7 @@ export function sample(phase, assist, out = newInput()) {
   }
   ax = Math.max(-1, Math.min(1, ax)); ay = Math.max(-1, Math.min(1, ay));
 
+  if (out.manual) return advanced(out, air || (phase === 'ramp' && released), lift, ax, thr, brk, pads);
   if (air) {
     out.roll = ax; out.pitch = -ay; out.yaw = yaw; out.lift = lift; out.level = land; out.thrust = boost;
   } else {
@@ -117,3 +131,28 @@ export function sample(phase, assist, out = newInput()) {
   }
   return out;
 }
+
+// Advanced: off the Wall the valves are yours; on the ground (and up the curl) you drive.
+// Space on the ledge is still RELEASE (and opens the four down-jets, like the real push-off).
+function advanced(out, flying, liftKey, ax, thr, brk, pads) {
+  if (!flying) {
+    for (const p of pads) {
+      if (!p) continue;
+      ax += dz(p.axes[0] || 0);
+      thr = Math.max(thr, p.buttons[7]?.value || 0); brk = Math.max(brk, p.buttons[6]?.value || 0);
+      if (p.buttons[0]?.pressed) liftKey = 1;
+    }
+    out.steer = Math.max(-1, Math.min(1, ax)); out.throttle = thr; out.brake = brk; out.lift = liftKey;
+    return out;
+  }
+  vScratch.fill(0);
+  keyRamp(isDown, vScratch);
+  for (const p of pads) if (p) padValves(p, vScratch);
+  const pad = nozzlePad.valves;
+  for (let i = 0; i < VALVES; i++) out[VALVE_KEYS[i]] = Math.max(vScratch[i], pad[i]);
+  out.lift = liftKey;   // the sim ignores it in Advanced; the ledge reads it as RELEASE
+  return out;
+}
+
+// Any of these keys pressed this frame (the practice keys: R retry, T slow motion, L view).
+export const held = (code) => keys.has(code);

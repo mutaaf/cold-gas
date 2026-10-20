@@ -115,7 +115,7 @@ describe('impact events', () => {
     }
   });
   it('the buffer is fixed: a long slide never grows it', () => {
-    const run = fly('show', () => ({ ...newInput(), throttle: 1, fan: 1 }));
+    const run = fly('show', () => ({ ...newInput(), assist: 0, throttle: 1, fan: 1 }));   // Pro: Assist's crawl limiter would hold it on the curl
     const imp = run.impacts;
     expect(imp.tick.length).toBe(IMPACT_CAP);
     expect(imp.count).toBeLessThanOrEqual(IMPACT_CAP);

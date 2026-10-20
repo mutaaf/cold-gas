@@ -17,8 +17,17 @@ ENGINEER: <remark>
 COORDINATOR: <remark>
 DESIGNER: <remark>`;
 
+// How the run was flown (the multiplier is already in the scores).
+const TIER_LINE = {
+  pro: 'Flown in Pro: rate control by hand, no LAND governor (scores x1.08).',
+  advanced: 'Flown in Advanced: all ten valves by hand, no flight computer at all (scores x1.15). Raw piloting.',
+};
+
 // The user message: the verified scorecard as compact, readable facts.
 export function userPrompt(card) {
+  return [userFacts(card), TIER_LINE[card.tier] || ''].filter(Boolean).join('\n');
+}
+function userFacts(card) {
   const f = card.facts;
   if (f.course === 'show') {
     return [
