@@ -1,6 +1,6 @@
 // DOM: the HUD (updated in place, no layout thrash), the results sheet, the board.
 import { NOZZLES } from './sim/vehicle.js';
-import { CATEGORIES } from './sim/judge.js';
+import { categoriesFor } from './sim/judge.js';
 import { chime, tick } from './audio.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -48,8 +48,13 @@ export function createUI() {
   ui.countdown = (n) => { ui.count.innerHTML = n ? `<span>${n}</span>` : ''; if (n) tick(); };
 
   // Last-written values, so the DOM is only touched on change.
-  const last = { speed: -1, air: -1, roll: -9999, alt: -1, sink: -1, phase: '' };
-  ui.hud = ({ speed, air, rollDeg, alt, sink, phase, throttles, rollAngle }) => {
+  const last = { speed: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, fan: -1, phase: '' };
+  const gEl = $('[data-g]'), fanEl = $('[data-fan]');
+  ui.hud = ({ speed, air, rollDeg, alt, sink, phase, throttles, rollAngle, g = 1, fan = 0 }) => {
+    const gg = Math.round(g * 10);
+    if (gg !== last.g) { gEl.textContent = (gg / 10).toFixed(1); gEl.parentElement.classList.toggle('hot', g > 4.5); last.g = gg; }
+    const ff = Math.round(fan * 100);
+    if (ff !== last.fan) { fanEl.textContent = String(ff); last.fan = ff; }
     const sp = Math.round(speed * 3.6);
     if (sp !== last.speed) { ui.speed.textContent = String(sp); last.speed = sp; }
     const a = Math.round(air);
@@ -100,7 +105,7 @@ export function createUI() {
     });
     const cats = $('[data-r-cats]');
     cats.innerHTML = '';
-    for (const c of CATEGORIES) {
+    for (const c of categoriesFor(card.course)) {
       const v = card.categories[c.id] ?? 0;
       const el = document.createElement('div');
       el.className = 'cat';
@@ -111,7 +116,13 @@ export function createUI() {
       requestAnimationFrame(() => requestAnimationFrame(() => { el.querySelector('.bar span').style.transform = `scaleX(${v / 10})`; }));
     }
     const f = card.facts;
-    const facts = [
+    const facts = f.course === 'wall' ? [
+      [`${f.entryKmh} km/h into the curl`], [`${f.height} m up the wall`], [`${f.invertedS} s inverted`], [`${f.maxG} g peak`],
+      ...(f.jumped ? [[`released at ${f.launchHeight} m`], [`${Math.max(f.rollDeg, f.pitchDeg)}° roll-out`], [`${f.sink} m/s touchdown`, f.sink > 4],
+        [`${f.tiltDeg}° tilt`, f.tiltDeg > 15], [`${f.wheelSpreadMs} ms wheel sync`, f.wheelSpreadMs > 250], [`${f.padMiss} m from the mark`], [`${f.airPct}% gas left`]] : []),
+      ...(f.zeroToSixty ? [[`0–60 in ${f.zeroToSixty.toFixed(2)} s`]] : []),
+      ...(f.fellOff ? [['slid off the deck', true]] : []), ...(f.landedOnRamp ? [['came down on the deck', true]] : []),
+    ] : [
       [`${f.launchKmh} km/h at the lip`], [`${f.apex} m apex`], [`${f.rollDeg}° roll`],
       [f.contact ? 'contact' : `${f.clearance} m clearance`, f.contact], [`${f.sink} m/s touchdown`, f.sink > 4],
       [`${f.tiltDeg}° tilt`, f.tiltDeg > 15], [`${f.wheelSpreadMs} ms wheel sync`, f.wheelSpreadMs > 250], [`${f.padMiss} m from the mark`], [`${f.airPct}% air left`],

@@ -2,14 +2,14 @@
 // a handler as it arrives. Also: list a BYOK provider's models.
 const API = `${import.meta.env.BASE_URL}api`;
 
-export async function streamPanel({ log, assist, ai }, on, { signal } = {}) {
+export async function streamPanel({ log, assist, ai, course }, on, { signal } = {}) {
   const headers = { 'content-type': 'application/json' };
   if (ai.provider !== 'edge' && ai.key) headers['x-cg-key'] = ai.key;
   let res;
   try {
     res = await fetch(`${API}/judge/stream`, {
       method: 'POST', headers, signal,
-      body: JSON.stringify({ log, assist, provider: ai.provider, model: ai.model }),
+      body: JSON.stringify({ log, assist, course, provider: ai.provider, model: ai.model }),
     });
   } catch {
     on.error?.({ message: 'The judges are offline.', fallback: true, offline: true });

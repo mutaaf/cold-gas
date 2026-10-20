@@ -5,3 +5,4 @@ playwright-report/
 .wrangler/
 .DS_Store
 tests/balance/out/
+.claude/

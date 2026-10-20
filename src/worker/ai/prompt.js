@@ -2,10 +2,10 @@
 // answers in four labelled lines. Plain lines rather than JSON so the reply streams as readable
 // text (the circuit theatre shows it arriving) and parses the same from any model.
 
-export const SYSTEM = `You are the judging panel for COLD GAS, a stunt game. A roadster ran up a kicker ramp, fired ten cold-gas thrusters to jump a row of five parked electric vehicles (the tallest is a semi cab, 3.85 m), tried to roll 360 degrees in the air, and landed on a target pad.
+export const SYSTEM = `You are the judging panel for COLD GAS, a stunt game. A roadster with a suction fan and ten cold-gas thrusters performs a stunt: either THE WALL (climb a 25 m curl, hang upside down, release, roll upright, land) or THE LINEUP (kicker, lift over five parked EVs, a 360-degree roll, landing). The event is named in the facts.
 
 Three judges:
-- ENGINEER (Chief Vehicle Engineer): dry and exacting; cares about sink rate, wheel sync and attitude at touchdown.
+- ENGINEER (Chief Vehicle Engineer): dry and exacting; cares about sink rate, wheel sync, g-load and attitude at touchdown.
 - COORDINATOR (Stunt Coordinator): warm and theatrical; cares about height, rotation and nerve.
 - DESIGNER (Head of Design): minimal and precise; cares about clean lines, restraint and air left in the tanks.
 
@@ -20,6 +20,18 @@ DESIGNER: <remark>`;
 // The user message: the verified scorecard as compact, readable facts.
 export function userPrompt(card) {
   const f = card.facts;
+  if (f.course === 'wall') {
+    return [
+      'Event: THE WALL. A concrete quarter-pipe curls from the ground to vertical and over into an overhanging ledge about 25 m up. The car climbs it on a suction fan (up to 2 g), hangs upside down under the ledge, releases, rolls upright in the air with cold-gas thrusters and lands on a target pad.',
+      `Total ${card.total}/100, verdict "${card.verdict}".`,
+      `Judges: ${card.judges.map((j) => `${j.name} ${j.score}`).join(', ')}.`,
+      `Categories (0-10): ${Object.entries(card.categories).map(([k, v]) => `${k} ${v}`).join(', ')}.`,
+      `Entered the curl at ${f.entryKmh} km/h; climbed ${f.progressPct}% of the curl to ${f.height} m; hung inverted ${f.invertedS} s; peak load ${f.maxG} g.`,
+      f.jumped ? `Released at ${f.launchHeight} m doing ${f.launchKmh} km/h; turned ${Math.max(f.rollDeg, f.pitchDeg)} degrees (roll ${f.rollDeg}, pitch ${f.pitchDeg}).` : 'Never left the wall.',
+      f.jumped ? `Touchdown sink ${f.sink} m/s, tilt ${f.tiltDeg} degrees, four wheels within ${f.wheelSpreadMs} ms; ${f.padMiss} m from the mark; gas left ${f.airPct}%.` : '',
+      f.fellOff ? 'The car slid off the side of the deck.' : '', f.landedOnRamp ? 'It came down on the deck.' : '', f.flipped ? 'It rolled over after landing.' : '',
+    ].filter(Boolean).join('\n');
+  }
   const lines = [
     `Total ${card.total}/100, verdict "${card.verdict}".`,
     `Judges: ${card.judges.map((j) => `${j.name} ${j.score}`).join(', ')}.`,

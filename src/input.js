@@ -4,7 +4,8 @@
 // Keyboard   ground: ↑/W throttle · ↓/S brake · ←/→ A/D steer · Shift boost · Space LIFT
 //            air:    ←/→ A/D roll · ↑/W nose down · ↓/S nose up · Q/E yaw · Space LIFT · Shift LAND
 // Gamepad    left stick steer/roll+pitch · RT throttle/LIFT · LT brake/LAND · A LIFT · B LAND
-// Touch      left thumb stick · LIFT and LAND buttons on the right (throttle is automatic)
+// Touch      ground: steer stick · GO and BRAKE pedals · LIFT (RELEASE on the wall)
+//            air:    stick rolls and pitches (up = nose up) · LIFT · LAND
 import { newInput } from './sim/vehicle.js';
 
 const keys = new Set();
@@ -84,8 +85,8 @@ export function sample(phase, assist, out = newInput()) {
   }
 
   if (touch.active) {
-    // Touch: the stick steers on the ground (pedals drive) and flies in the air, where pushing
-    // up raises the nose: what people expect on a phone, not the flight-sim convention.
+    // Touch: on the ground (and up the wall) the stick only steers and the pedals drive. In the
+    // air it flies, and pushing up raises the nose: what people expect on a phone.
     ax += touch.x;
     if (air) ay -= touch.y;
     if (touch.lift) lift = 1;

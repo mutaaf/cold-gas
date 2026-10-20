@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.3.0 — 2026-10-20
+
+The realism rework (SIM_VERSION 2):
+
+**The Wall, the reveal's stunt**
+- A 25 m quarter-pipe curls through vertical into an overhang, on a night stage with a steel truss, red LED edges and searchlights.
+- You climb it on the 2 g suction fan, hang inverted, release, roll upright on the jets and land on the target.
+
+**The car**
+- Built from the public numbers: 2,825 mm wheelbase, about 2.0 m wide, 1,000 kW to the rear wheels, 600 L of nitrogen at 690 bar (about 280 kg), ten thrusters and a 2 g fan.
+- The model is a faceted wedge with a full-width light bar, four rear nozzles in the diffuser, gold glass, and an active wing and fan.
+
+**Physics v2**
+- Pacejka tyres with spinning wheels, traction control, ABS and stiction.
+- Stiff fan-car suspension and exact curved-surface contact.
+- Thrust falls off as the tank pressure drops.
+- Measured: 0–60 mph in 3.5 s on tyres alone, 1.65 s with the fan and 1.2 s with the thrusters; 60–0 in 27 m at 1.35 g with ABS.
+
+**Landing for everyone**
+- LAND rolls the car upright, levels it, eases the sink rate and nearly hovers until it's flat.
+- All 32 simple player strategies land upright.
+
+**Mobile**
+- Touch v2: a steer stick, GO and BRAKE pedals, LIFT (RELEASE on the wall) and LAND, laid out by phase.
+- The HUD sits at the top on touch devices and adds g-load and fan readouts.
+
 ## 0.2.1 — 2026-10-19
 
 Bring your own key, made caveman-simple:
