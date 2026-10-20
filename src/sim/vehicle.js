@@ -53,6 +53,12 @@ const TRIM = (() => {
   const zf = Math.max(...lift.map((n) => n.pos[2])), zr = Math.min(...lift.map((n) => n.pos[2]));
   return NOZZLE_SPEC.map((n) => (n.group !== 'lift' ? 1 : n.pos[2] > 0 ? Math.min(1, -zr / zf) : Math.min(1, zf / -zr)));
 })();
+// Rotational air drag coefficients (N·m·s²), body axes x = pitch, y = yaw, z = roll (see step()).
+const ROT_DRAG = (() => {
+  const rho = 1.2, cd = 1.2, hl = SPEC.length / 2, hw = SPEC.width / 2;
+  const hl4 = hl * hl * hl * hl, hw4 = hw * hw * hw * hw;   // (no ** in the sim: engines may round it differently)
+  return { x: (rho * cd * SPEC.width * hl4) / 4, y: (rho * cd * SPEC.height * hl4) / 4, z: (rho * cd * SPEC.length * hw4) / 4 };
+})();
 const LIFT_MAX = NOZZLE_SPEC.reduce((a, n, i) => a + (n.group === 'lift' ? n.max * TRIM[i] : 0), 0);
 const DRIVEN = [false, false, true, true];
 
@@ -105,7 +111,7 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
   const course = COURSES[courseId] || COURSES[DEFAULT_COURSE];
   const s = {
     course, tick: 0, world: createWorld(course),
-    pos: v3(course.start.x, SPEC.comHeight, course.start.z), vel: v3(), quat: quatFromYaw(q4(), 0), angVel: v3(),
+    pos: v3(course.start.x, SPEC.comHeight, course.start.z), vel: v3(), quat: quatFromYaw(q4(), 0), angVel: v3(), angMom: v3(),
     air: CAR.airMass,
     throttles: new Float64Array(NOZZLES.length),
     wheels: WHEELS.map(() => ({ contact: true, compression: REST_LEN - MOUNT_TO_CENTRE, prevCompression: REST_LEN - MOUNT_TO_CENTRE, omega: 0, spin: 0, steer: 0, slip: 0, slipAngle: 0, load: STATIC_LOAD, nx: 0, ny: 1, nz: 0 })),
@@ -453,17 +459,24 @@ export function step(s, inp) {
   // --- Integrate (semi-implicit Euler), inertia tensor diagonal in the body frame ---
   addScaled(s.vel, s.vel, fTot, dt / m);
   addScaled(s.pos, s.pos, s.vel, dt);
-  rotateInv(Lb, s.quat, tTot);
+  // Rotation integrates ANGULAR MOMENTUM in the world frame (L += τ·dt) and reads the body rates
+  // back through the inertia (ω = I⁻¹·Rᵀ·L). The gyroscopic coupling falls out of the frame
+  // change instead of an explicit ω × Iω term, which blew up at Pro-mode spin rates (a held roll
+  // + yaw: ω·dt grew until one tick overshot and the state went NaN).
+  const Ix = SPEC.inertia.pitch, Iy = SPEC.inertia.yaw, Iz = SPEC.inertia.roll;   // the gas sits near the CoM: fixed (spec.js)
+  // Air resists a spinning body: quadratic rotational drag, τ = −c·ω|ω| per body axis, from a flat
+  // plate of the car's plan sweeping about each axis (c = ρ·Cd·span·r⁴/4, Cd ≈ 1.2): ESTIMATE,
+  // small (≈150 N·m at 10 rad/s of roll) but it bounds a held spin like the real air would.
   rotateInv(wb, s.quat, s.angVel);
-  const k = 1;   // the gas sits near the CoM: inertia barely changes as it blows down (spec.js)
-  const Ix = SPEC.inertia.pitch * k, Iy = SPEC.inertia.yaw * k, Iz = SPEC.inertia.roll * k;
-  const hx = Ix * wb.x, hy = Iy * wb.y, hz = Iz * wb.z;
-  const gx = wb.y * hz - wb.z * hy, gy = wb.z * hx - wb.x * hz, gz = wb.x * hy - wb.y * hx;
-  wb.x += ((Lb.x - gx) / Ix) * dt;
-  wb.y += ((Lb.y - gy) / Iy) * dt;
-  wb.z += ((Lb.z - gz) / Iz) * dt;
+  addScaled(s.angMom, s.angMom, tTot, dt);
+  rotateInv(Lb, s.quat, s.angMom);
+  Lb.x -= clamp(ROT_DRAG.x * wb.x * Math.abs(wb.x) * dt, -Math.abs(Lb.x), Math.abs(Lb.x));
+  Lb.y -= clamp(ROT_DRAG.y * wb.y * Math.abs(wb.y) * dt, -Math.abs(Lb.y), Math.abs(Lb.y));
+  Lb.z -= clamp(ROT_DRAG.z * wb.z * Math.abs(wb.z) * dt, -Math.abs(Lb.z), Math.abs(Lb.z));
   const ad = grounded && !s.hullContact ? 0.997 : 0.9996;
-  wb.x *= ad; wb.y *= ad; wb.z *= ad;
+  Lb.x *= ad; Lb.y *= ad; Lb.z *= ad;
+  rotate(s.angMom, s.quat, Lb);
+  set(wb, Lb.x / Ix, Lb.y / Iy, Lb.z / Iz);
   rotate(s.angVel, s.quat, wb);
   integrateQuat(s.quat, s.angVel, dt);
   stepWorld(s.world, dt, G);

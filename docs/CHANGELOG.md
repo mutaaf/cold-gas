@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.2 — 2026-10-20
+
+- Fixed NaN mid-trick in Pro mode (SIM_VERSION 10). A held roll + yaw spun the car up until the explicit gyroscopic term overshot in one tick and the state went NaN (HUD showed NaN, car froze). Rotation now integrates angular momentum in the world frame (stable at any spin rate) and air resists a spinning body (quadratic rotational drag, ESTIMATE). A non-finite state now ends the run cleanly ('sim-fault') instead of drawing NaN. Fuzzed: 0 NaN in 3,000 random Pro tricks. References: Show 87.3, Wall 88, Lineup 85.
+
 ## 0.9.1 — 2026-10-20
 
 - Restart, Jump again and the title now clear everything the last run layered over the stage. The judges' theatre (and its in-flight call) is aborted instead of playing on over the next run; the AI sheet and cues close too. Regression test: tests/e2e/overlays.spec.js.
