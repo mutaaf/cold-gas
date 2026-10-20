@@ -184,12 +184,15 @@ Local Worker: `npx wrangler dev` (serves dist + the API with a local D1, and use
 
 ## 6 · The agents
 
-Three Claude Code cloud routines run this repo. Their prompts are thin pointers to
-`agents/prompts/{common,scout,builder,keeper}.md`:
+Four Claude Code cloud routines run this repo. Their prompts are thin pointers to
+`agents/prompts/{common,scout,critic,builder,keeper}.md`:
 
 - **Scout** plays the build (the reference jump plus a manual attempt), compares it with the
   pillars and grooms `docs/backlog/`.
-- **Builder** ships the top `ready` ticket test-first, one PR at a time.
+- **Critic** plays production like the most demanding engineer alive, measures it against
+  `docs/REVEAL_RESEARCH.md`, writes `docs/critique/`, files `by: critic` tickets, and re-checks
+  shipped ones live (reopening any that miss the bar). Critique → fix → critique.
+- **Builder** ships the top `ready` ticket test-first, one PR at a time (`by: critic` first).
 - **Keeper** handles upkeep: dependencies, flaky tests, perf drift, LESSONS.
 
 The operator steers through `agents/control.json` (paused, focus, caps, frozen_paths). Branch
