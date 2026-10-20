@@ -3,6 +3,7 @@
 // its valve state, and a shared particle pool sheds mist. Allocation-free per frame.
 import * as THREE from 'three';
 import { NOZZLES } from '../sim/vehicle.js';
+import { NOZZLE_VISUAL } from './roadster.js';
 
 const coneVS = `
   varying vec2 vUv; varying vec3 vN; varying vec3 vView;
@@ -56,8 +57,8 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
     // Jet points opposite the force on the car.
     const jet = new THREE.Vector3(-nz.dir.x, -nz.dir.y, -nz.dir.z);
     m.quaternion.setFromUnitVectors(new THREE.Vector3(0, 1, 0), jet);
-    // Nozzle position in the visual body frame (physics origin = CoM).
-    m.position.set(nz.pos.x, nz.pos.y, nz.pos.z);
+    // Nozzle position in the visual body frame (physics origin = CoM): where the model draws it.
+    m.position.set(...NOZZLE_VISUAL[i]);
     m.frustumCulled = false;
     m.visible = false;
     hero.add(m);
@@ -88,6 +89,7 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
   let spawnAcc = 0;
 
   function update(dt, time, throttles, carVel, groundY = 0) {
+    hero.userData.thr = throttles;   // the car model reads the valve states (nozzle core / frost)
     hero.getWorldQuaternion(q);
     for (let i = 0; i < cones.length; i++) {
       const c = cones[i];
