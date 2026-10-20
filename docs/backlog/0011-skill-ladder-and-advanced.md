@@ -1,12 +1,12 @@
 ---
 id: 0011
 title: A Show a person can learn to land, and Advanced per-thruster control
-status: in-progress
+status: shipped
 priority: P0
 size: L
 lens: player-feel
 created: 2026-10-20
-pr:
+pr: 26
 by: operator
 ---
 
