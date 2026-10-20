@@ -5,7 +5,7 @@
 // centimetre.
 import * as THREE from 'three';
 import { WALL, wallProfile } from '../sim/courses.js';
-import { sliver, spreadAxes, spreadThin, spreadRing, setSliverAttributes, DECAL } from './sliver.js';
+import { sliver, spreadAxes, spreadThin, spreadRing, setSliverAttributes, DECAL, LAYER } from './sliver.js';
 
 const W = WALL.width, T = WALL.slab, L = WALL.length;
 const HK = WALL.lip.y / 19.8;   // lights were aimed on a 19.8 m lip; they follow the real height
@@ -384,7 +384,7 @@ function approach(P) {
   // grazing angles, and they vanished in stripes), kept at least a pixel wide at range.
   const paint = (opacity) => sliver(new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity, depthWrite: false, ...DECAL }), { dim: 'alpha', maxK: 64 });
   const white = paint(0.55), faint = paint(0.2);
-  const flat = (geo, mat, x, z, y = 0.006, order = 2) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.renderOrder = order; g.add(m); return m; };
+  const flat = (geo, mat, x, z, y = 0.006, order = LAYER.paint) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.renderOrder = order; g.add(m); return m; };
   for (const sx of [-1, 1]) flat(spreadThin(new THREE.PlaneGeometry(0.1, len)), white, sx * 4.2, (z0 + z1) / 2);
   for (let z = z0 + 3; z < -1; z += 6) flat(spreadThin(new THREE.PlaneGeometry(0.08, 2.6)), faint, 0, z);
   // Distance-to-wall markers every 25 m: a bar and a number, painted on the slab.
@@ -397,7 +397,7 @@ function approach(P) {
     num.rotation.z = Math.PI;
   }
   // Landing target.
-  flat(new THREE.CircleGeometry(P.rings.at(-1) + 0.8, 96), new THREE.MeshBasicMaterial({ color: 0x050607, transparent: true, opacity: 0.45, depthWrite: false, ...DECAL }), P.x, P.z, 0.004, 1);
+  flat(new THREE.CircleGeometry(P.rings.at(-1) + 0.8, 96), new THREE.MeshBasicMaterial({ color: 0x050607, transparent: true, opacity: 0.45, depthWrite: false, ...DECAL }), P.x, P.z, 0.004, LAYER.pad);
   for (const r of P.rings) flat(spreadRing(new THREE.RingGeometry(r - 0.025, r + 0.025, 192), r), white, P.x, P.z, 0.007);
   flat(spreadThin(new THREE.PlaneGeometry(0.05, 3.4)), white, P.x, P.z, 0.008);
   flat(spreadThin(new THREE.PlaneGeometry(3.4, 0.05)), white, P.x, P.z, 0.008);
@@ -413,7 +413,7 @@ function glowDecal(color, r, x, z, power) {
     fragmentShader: 'uniform vec3 uC; uniform float uP; varying vec2 vUv; void main(){ float d = length(vUv - 0.5) * 2.; float a = uP * pow(max(0., 1. - d), 2.2); gl_FragColor = vec4(uC * a, a); }',
   });
   const m = new THREE.Mesh(new THREE.PlaneGeometry(r * 2, r * 2), mat);
-  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.012, z); m.renderOrder = 3;
+  m.rotation.x = -Math.PI / 2; m.position.set(x, 0.012, z); m.renderOrder = LAYER.glow;
   return m;
 }
 
@@ -514,8 +514,11 @@ export function* buildWall(tier, pad = WALL.pad) {
   const led = sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(5.5, 0.26, 0.36), fog: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), { minPx: 1.5 });
   const ledDim = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 0.05, 0.08), fog: false });
   for (const sx of [-1, 1]) {
-    group.add(new THREE.Mesh(ribbon(S, sx * (W / 2 - 0.1), sx * (W / 2 - 0.01), 0.008), led));
-    group.add(new THREE.Mesh(sideBand(S, sx * (W / 2 + 0.006), 0.0, 0.07), led));
+    for (const geo of [ribbon(S, sx * (W / 2 - 0.1), sx * (W / 2 - 0.01), 0.008), sideBand(S, sx * (W / 2 + 0.006), 0.0, 0.07)]) {
+      const strip = new THREE.Mesh(geo, led);
+      strip.renderOrder = LAYER.light;
+      group.add(strip);
+    }
     group.add(new THREE.Mesh(edgeTube(S, sx * (W / 2 + 0.005), 0, T - 0.02, 0.016), ledDim));
   }
   // Faint red spill on the concrete next to each strip.
@@ -569,7 +572,7 @@ export function* buildWall(tier, pad = WALL.pad) {
     const fx = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.5), new THREE.MeshStandardMaterial({ color: 0x111215, metalness: 0.6, roughness: 0.4 }));
     fx.position.set(sx * 2.4, 0.15, -5.7); group.add(fx);
     const lens = new THREE.Mesh(spreadThin(new THREE.PlaneGeometry(0.62, 0.18)), sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.6, 3) }), { minPx: 1.5 }));
-    lens.position.set(sx * 2.4, 0.2, -5.44); lens.rotation.x = -0.5; group.add(lens);
+    lens.position.set(sx * 2.4, 0.2, -5.44); lens.rotation.x = -0.5; lens.renderOrder = LAYER.light; group.add(lens);
   }
   const red = new THREE.PointLight(0xff1a28, 35, 18, 2);
   red.position.set(0, 1.2, 1.5);

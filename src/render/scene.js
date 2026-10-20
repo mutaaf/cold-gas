@@ -12,7 +12,7 @@ import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RAMP, LINEUP, SHOW } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
 import { buildWall, nightSkyMaterial, bakeNightEnvironment, STARS } from './wall.js';
-import { sliver, sliverView, spreadAxes, spreadThin, spreadRing, DECAL } from './sliver.js';
+import { sliver, sliverView, spreadAxes, spreadThin, spreadRing, DECAL, LAYER } from './sliver.js';
 
 const PAD = LINEUP.pad, START_Z = LINEUP.start.z, RUNOUT_Z = LINEUP.runout.zMax;
 
@@ -168,7 +168,7 @@ function linesAndPad() {
   // that stay a pixel wide at range (src/render/sliver.js).
   const paint = (opacity) => sliver(new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity, depthWrite: false, ...DECAL }), { dim: 'alpha', maxK: 64 });
   const white = paint(0.6), faint = paint(0.22);
-  const flat = (geo, mat, x, z, y = 0.004, order = 2) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.renderOrder = order; g.add(m); return m; };
+  const flat = (geo, mat, x, z, y = 0.004, order = LAYER.paint) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.renderOrder = order; g.add(m); return m; };
   // Run-up edge lines and a dashed centreline.
   const len = RAMP.z0 - START_Z;
   for (const sx of [-1, 1]) flat(spreadThin(new THREE.PlaneGeometry(0.08, len)), white, sx * 3.6, START_Z + len / 2);
@@ -176,7 +176,7 @@ function linesAndPad() {
   // Distance ticks every 10 m past the lip.
   for (let z = 10; z <= 80; z += 10) flat(spreadThin(new THREE.PlaneGeometry(1.2, 0.05)), faint, 4.6, z);
   // Landing pad: three hairline rings + crosshair + a soft disc.
-  flat(new THREE.CircleGeometry(PAD.rings.at(-1) + 0.6, 96), new THREE.MeshBasicMaterial({ color: 0x0e1014, transparent: true, opacity: 0.35, depthWrite: false, ...DECAL }), PAD.x, PAD.z, 0.003, 1);
+  flat(new THREE.CircleGeometry(PAD.rings.at(-1) + 0.6, 96), new THREE.MeshBasicMaterial({ color: 0x0e1014, transparent: true, opacity: 0.35, depthWrite: false, ...DECAL }), PAD.x, PAD.z, 0.003, LAYER.pad);
   for (const r of PAD.rings) flat(spreadRing(new THREE.RingGeometry(r - 0.022, r + 0.022, 192), r), white, PAD.x, PAD.z, 0.005);
   flat(spreadThin(new THREE.PlaneGeometry(0.04, 3)), white, PAD.x, PAD.z, 0.006);
   flat(spreadThin(new THREE.PlaneGeometry(3, 0.04)), white, PAD.x, PAD.z, 0.006);
@@ -266,7 +266,7 @@ function buildLineup(tier) {
       const pole = new THREE.Mesh(poleGeo, poleMat);
       pole.position.set(sx * 13, 4.5, z); pole.castShadow = tier !== 'low'; group.add(pole);
       const head = new THREE.Mesh(headGeo, headMat);
-      head.position.set(sx * 12.6, 9, z); group.add(head);
+      head.position.set(sx * 12.6, 9, z); head.renderOrder = LAYER.light; group.add(head);
     }
   }
   return {
@@ -303,7 +303,7 @@ function* buildShow(tier) {
 
   const g = new THREE.Group();
   const red = sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(4.5, 0.2, 0.3), fog: false, ...DECAL }), { minPx: 1.5 });
-  const flat = (geo, mat, x, z, y = 0.004) => { const m = new THREE.Mesh(spreadThin(geo), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
+  const flat = (geo, mat, x, z, y = 0.004) => { const m = new THREE.Mesh(spreadThin(geo), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.renderOrder = LAYER.light; g.add(m); return m; };
   const boxes = SHOW.boxes;
   const minX = Math.min(...boxes.map((b) => b.minX)) - 0.6, maxX = Math.max(...boxes.map((b) => b.maxX)) + 0.6;
   const minZ = Math.min(...boxes.map((b) => b.minZ)) - 0.6, maxZ = Math.max(...boxes.map((b) => b.maxZ)) + 0.6;
