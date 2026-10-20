@@ -440,6 +440,7 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   function render(time) {
     if (!drawing) return;
     current.update(time);
+    hero.update?.(time);   // lamps, active aero, skirts, nozzle states
     // Keep the shadow frustum on the hero.
     hero.group.getWorldPosition(key.target.position);
     key.position.copy(key.target.position).add(keyOffset);

@@ -541,3 +541,155 @@ How it was inferred:
 6. **Rocket nozzle geometry.** The four down-jets are "behind each wheel". The two "front yaw" jet directions (lateral vs forward) and any gimballing are unknown.
 7. **Unpublished data:** length, height, track, Cd/CdA and drivetrain torque definition (motor vs wheel).
 8. **Approach speeds** for the kickflip and the standing-flip altitude come from frame scaling only.
+
+---
+
+## 10. Body & lighting (for the 3D model)
+
+Compiled 2026-10-20 for `src/render/roadster.js`. This section uses three flags:
+
+- **OFFICIAL**: Tesla's page, posts or images, or a Tesla exec on camera.
+- **PHOTO**: measured by me from official or press imagery. The method is given each time; expect ±5 % from perspective.
+- **ESTIMATE**: my inference or design choice, with the reasoning.
+
+### 10.0 Sources used in this section
+
+| Short name | URL | What it gave |
+|---|---|---|
+| TESLA-PAGE | http://web.archive.org/web/20261016023617/https://www.tesla.com/roadster (tesla.com blocks scripts; the Wayback copy of 16 Oct) | "Hidden headlights, a full-length taillight and flush-mounted aerodynamics … super light wheels with thin spokes"; Ano White; Gold Glazed glass; titanium accents |
+| TESLA-IMG | `https://digitalassets.tesla.com/tesla-contents/image/upload/f_auto,q_auto/Roadster-<NN>-<name>-Desktop.jpg`, renders 01-Hero, 02-Pilot, 03-Carousel-Slide-1…4, 04-World, 06-Gravity, 07-Augments, 08-End | 02-Pilot is a near-orthographic side profile; Slide-1 is a head-on front with the lamps lit; 04-World shows a Rocket with the down-nozzles fitted, doors and wing up |
+| EVENT | https://www.youtube.com/watch?v=qt5p-_tE8d0 (Design 12:47–14:38, Aero 14:38–15:57) | the stage car under stage light: rear, front, doors, wing deploy |
+| RAMP-CLIP | https://www.youtube.com/watch?v=7p5LxFdc-Qg | the stunt car's lights at night: DRL bar and lamps lit, taillight bar lit, red glow through the glass, plume colour |
+| KICK-CLIP | https://www.youtube.com/watch?v=r5vsHHPVhJg | the down-jets from the side, firing near both axles |
+| MT-FvH | https://www.youtube.com/watch?v=y7oKy09ALfM | von Holzhausen walkaround, plus studio beauty shots (front ¾, rear ¾) at 0:40–0:56 |
+| MT-LM | https://www.youtube.com/watch?v=6D5MlPZQFOw | Moravy: fans "angled rearward and up", nitrogen "whitish cloud" |
+| HAG | https://www.youtube.com/watch?v=22rvpUecLts | Moravy: 15 mm lamp module, "titanium oxide glass … orange tint", skirts of rubber and nylon bristle, intake wings to 80°, barge board |
+| TG-VID | https://www.youtube.com/watch?v=JdkIOhFmbKI | width "2 m", wheelbase "2825", tyres, "quarter lights", "light bar that just extrudes all the way across", what moves and what doesn't |
+| TG-ART | https://www.topgear.com/car-news/electric/tesla-roadster-has-finally-landed-thrusters-0-60mph-059s-and-flight (photos `…/sites/default/files/2026/10/_B8A<nnnn>.jpg`) | _B8A5914 is a straight-on rear with the wing up; _B8A5570/5571 show the lamp V-notch; _B8A5717 shows the tyre sidewall |
+| DT | https://www.youtube.com/watch?v=_lq-DpCE9rU | "matte white paint", "big red light bar along the back", "skirt dragging along the ground" |
+| NATA | https://www.notateslaapp.com/news/4846/tesla-roadster-old-vs-new-how-the-design-changed-photo-comparisons | black lower body; no front logo |
+| JALOPNIK | https://www.jalopnik.com/2288450/tesla-roadster-rereveal-new-design-production-plans-for-flying-car/ | down-nozzles "one in each corner"; yaw nozzles "one on each front fender"; the press car lacks the down-nozzles |
+| PATENT | https://electrek.co/2026/09/25/tesla-patent-new-roadster-hidden-active-rear-wing-700-kg-downforce/ | wing: main element plus slat, stowed→deployed in < 3 s, angle changes in < 0.25 s |
+| TEASER | https://driveteslacanada.ca/news/tesla-roadster-teaser-semi-event-light-bar-reveal/ | the 25 Sept teaser's animated thin white light bar |
+
+How the PHOTO numbers were measured:
+
+- **Side:** 02-Pilot, scaled by the wheel-centre distance (1,270 px = 2,825 mm, about 2.22 mm/px). Tyre diameters check within 3 %.
+- **Front:** Slide-1, scaled by the 2.0 m body width.
+- **Rear:** TG-ART _B8A5914, scaled by the 2.0 m width, and cross-checked against EVENT frames.
+
+### 10.1 Proportions
+
+| Item | Value | Flag / source |
+|---|---|---|
+| Width | 2.0 m | OFFICIAL (TG-VID) |
+| Wheelbase | 2,825 mm | OFFICIAL (TG-VID) |
+| Overall length, wing stowed | **4.33 m** (4.30–4.40) | PHOTO (02-Pilot). Our `SPEC.length` is 4.65 m, see 10.8 |
+| Front overhang | 0.82–0.87 m | PHOTO (02-Pilot) |
+| Rear overhang | 0.63–0.69 m | PHOTO (02-Pilot) |
+| Height (roof peak) | **1.14 m** (1.12–1.16) | PHOTO (02-Pilot); matches `SPEC.height` 1.15 |
+| Roof peak position | about 1.8 m behind the front axle (near mid-car), then a straight wedge to a tail top of 0.86–0.90 m | PHOTO (02-Pilot) |
+| Cab position | cab-forward: the screen's base at the side is only 0.10–0.12 m behind the front-axle line, with the A-pillar root over the front wheel | REPORTED "cab forward" (MT-FvH); PHOTO for the number |
+| Windscreen rake | 19–22° from horizontal | PHOTO (02-Pilot) |
+| Hood leading edge | 0.40–0.42 m | PHOTO (02-Pilot, Slide-1) |
+| Fender peaks | 0.81 m high at ±0.80 m, either side of a hood that is 0.76 m high at the screen base | PHOTO (Slide-1) |
+| Side glass (DLO) | lower edge 0.80 m at the A-pillar rising to 1.05 m; ends in a point just ahead of the rear axle; small fixed quarter-lights ahead of the doors | PHOTO (02-Pilot); OFFICIAL "quarter lights" (TG-VID) |
+| Doors | shut lines at about 0.5 m and 1.7 m behind the front axle | PHOTO (02-Pilot) |
+| Black lower body | starts at about 0.15 m at the door front and rises to about 0.35 m at the rear arch; the lower rear quarters behind the rear wheels are black carbon up to about 0.5 m | PHOTO (02-Pilot, EVENT 13:30), REPORTED (NATA) |
+| Arch tops | about 0.72 m front, 0.78 m rear (tyre tops 0.686 / 0.734) | PHOTO (02-Pilot) |
+| Rear | a recessed dark rear glass between body-colour buttress quarters, then a flat deck whose rear panel is the wing | PHOTO (Slide-2, EVENT) |
+| Roof | glazed, two removable panels over the doors (T-top) | OFFICIAL (MT-FvH, TG-ART) |
+| Mirrors | none on the reveal cars (cameras in the repeaters); US production cars will get mirrors | OFFICIAL (MT-FvH), PHOTO |
+
+### 10.2 Lighting: exact places and shapes
+
+| Lamp | Where and what | Flag / source |
+|---|---|---|
+| DRL | a thin cool-white bar across the hood's leading edge, **0.415 m** up, **1.32 m** wide (±0.66 m), ending at the lamp notches | OFFICIAL "This is the DRL" (MT-FvH); PHOTO (Slide-1, MT-FvH 0:42) |
+| Headlamps | **pop-down**: a body-colour cover in each V-notch (where the flat hood meets the raised fender peak) drops into the fender, revealing a slim module (about 15 mm, low and high beam in one) that reads as a small inverted triangle of light at ±0.69 m, 0.53–0.56 m up | OFFICIAL "They pop down" (MT-FvH), "only maybe like 15 mm" (HAG), "hidden headlights" (TESLA-PAGE); PHOTO (Slide-1, TG _B8A5570) |
+| Front turn signals | built into the front lamps | OFFICIAL (MT-FvH) |
+| Side repeaters | a small amber lens at the top-rear corner of each front arch (about 0.4 m behind the front axle, 0.63 m up), with the side camera's black triangle beside it | OFFICIAL "repeaters on the side" (MT-FvH); PHOTO (02-Pilot, MT-FvH 0:42) |
+| Taillight | one **full-length** red bar, 25–30 mm tall, **0.80–0.83 m** up and **1.84 m** wide, under the lip of the deck/wing, wrapping onto the corners. It has a white-hot core with a dimmer red strip under it. It stays on the body when the wing rises | OFFICIAL "full-length taillight" (TESLA-PAGE), "single light bar going right at the corner" (MT-FvH); PHOTO (_B8A5914, 07-Augments, EVENT 13:00) |
+| Brake / reverse | not found. The bar's middle section reads brighter in EVENT frames | — / PHOTO |
+| Rear corner markers | small vertical red lenses low on the rear corners behind the rear wheels; short red lines on the diffuser's outer top edges | PHOTO (MT-FvH 0:53, 04-World, _B8A5914) |
+| Plate | centred white plate (our model reads COLD GAS), two plate lamps above it, a rear camera between them | PHOTO (_B8A5914) |
+| Cabin | red ambient strips (dash, door cards, the tank bay behind the seats), seen through the orange-gold glass as a red glow | OFFICIAL "Ultrawhite … red ambient lighting" (TESLA-PAGE); PHOTO (Slide-4, RAMP-CLIP 0:00) |
+| Underglow / fan light / lit nozzles | **none seen or reported**. The nozzles' orange glints are reflections of the taillight | PHOTO (all sources) |
+| Wake / welcome sequence | none documented on the car. The 25 Sept teaser animated the thin light bar | TEASER; ESTIMATE for ours (10.6) |
+| In flight | the stunt car flies with the DRL, lamps and taillight lit; the plumes read blue-white under stage light | PHOTO (RAMP-CLIP 0:20–0:23, KICK-CLIP) |
+
+### 10.3 Nozzles, fans, skirts, diffuser
+
+| Item | Value | Flag / source |
+|---|---|---|
+| Rear nozzles | 4 in one row along the top of the diffuser box, centres **0.42–0.43 m** up, **0.26 m** apart (outer centres ±0.39 m), exits 90–110 mm across, bronze/brass bells | OFFICIAL "the four nozzles, and below that are the four fans" (MT-FvH), "Inconel … titanium" (HAG); PHOTO (_B8A5914, EVENT 13:30) |
+| Down nozzles (Rocket) | 4 gold bells pointing straight down at sill level, **just behind the front wheel and just behind the rear wheel** on each side; not fitted to the press/stage car (a Thrust) | OFFICIAL "four aiming down behind the wheels" (MT-FvH); PHOTO (04-World); REPORTED (JALOPNIK) |
+| Yaw nozzles (Rocket) | 2, "in the front"/"on each front fender"; exact spot and direction unconfirmed | OFFICIAL (MT-FvH), REPORTED (JALOPNIK) |
+| Nozzle covers | not found | — |
+| Firing | white to blue-white supersonic columns with shock diamonds, below freezing, a white ground cloud; no flame or colour | OFFICIAL (Moravy, MT-LM, EVENT 17:37); PHOTO (RAMP-CLIP, KICK-CLIP) |
+| Fans | 4 black multi-blade impellers with cone hubs in 4 bays under the nozzles, centres about **0.25 m** up and 0.31 m apart, "angled rearward and up" | OFFICIAL (MT-FvH, MT-LM); PHOTO (_B8A5914) |
+| Diffuser | a squared carbon box about 1.35–1.4 m wide, 0.085–0.50 m up, with a vertical carbon fence at each outer edge reaching nearly to the ground; flat underfloor, "no big tunnel" | PHOTO (_B8A5914); OFFICIAL (MT-FvH) |
+| Skirts | 4 independent fences (left, right, front, rear) of rubber with nylon bristles, sealing an area "about the size of the battery pack". The front and rear lift for the high-speed venturi mode. Drop distance not found | OFFICIAL (MT-FvH, HAG, MT-LM); REPORTED "skirt dragging along the ground" (DT) |
+
+### 10.4 Wheels, paint, glass, doors
+
+| Item | Value | Flag / source |
+|---|---|---|
+| Wheels | 20″ front / 21″ rear; six dark gunmetal twin-blade spokes forming a star over a flat light-grey/white aero disc; dark centre cap. The stunt cars carry the same white-disc look | OFFICIAL "super light wheels with thin spokes" (TESLA-PAGE); PHOTO (02-Pilot, 04-World) |
+| Tyres | 295/30 R20 F, 335/30 R21 R | OFFICIAL (TG-VID) |
+| Brakes | carbon-ceramic, brake-by-wire. Caliper colour not found (none visible) | OFFICIAL (TG-VID) |
+| Paint | "Ano White", an aerospace-coating satin/matte white | OFFICIAL (TESLA-PAGE), REPORTED "matte white" (DT) |
+| Glass | "Gold Glazed" titanium-oxide glass; bronze/copper-brown from outside, transparent from inside | OFFICIAL (TESLA-PAGE, HAG) |
+| Doors | butterfly: each swings up and forward on a hinge near the A-pillar, taking its glass and a roof section, and ends nearly vertical | OFFICIAL "butterfly type door" (TG-VID); PHOTO (Slide-3, 04-World) |
+
+### 10.5 Moving parts seen or described
+
+| Part | Behaviour | Flag / source |
+|---|---|---|
+| Headlamps | covers drop, lamps appear | OFFICIAL (MT-FvH) |
+| Rear wing | flush as the deck when stowed. Rises up and back on a four-bar link per side with a lower "biplane" element. Modes: low-drag/DRS (flat), high-downforce, braking/airbrake (kicked up). Deployed top about 1.22 m with angled end plates and two swan-neck struts at about ±0.47 m. Stowed→deployed < 3 s | OFFICIAL (MT-FvH, TG-VID, EVENT 14:38); PATENT; PHOTO (_B8A5914) |
+| Intake wings | inside the mouth, pivoting up to 80° | OFFICIAL (HAG) |
+| Barge boards | panels behind the front wheels pop out to pull air from the arch | OFFICIAL (HAG, MT-FvH) |
+| Hood vent | an active cooling vent | OFFICIAL (HAG) |
+| Skirts | drop with the fans; front and rear lift at speed | OFFICIAL |
+| Doors, liftgate | butterfly doors; the liftgate shows the tank bay | OFFICIAL |
+| What doesn't move | rear quarters, front fenders, the front of the roof, the hood itself | OFFICIAL (TG-VID) |
+
+### 10.6 What the game model does with it
+
+- **Silhouette.** The model follows the 10.1 heights and stations:
+  - A hood leading edge at 0.42 m, fender peaks rising to 0.81 m, and a screen base 0.11 m behind the front axle.
+  - A 1.14 m roof peak, a straight wedge to the tail, a black lower body rising rearward, buttressed rear quarters and a recessed rear glass.
+- **Lamps.** Every lamp is in its 10.2 place. They use emissive materials with HDR intensities so the bloom pass catches them: DRL about 3×, headlamps about 6×, tail about 1.7×, brake about 5× across the bar and 9× at its centre.
+- **Wake** (ESTIMATE, our animation, after the teaser's light bar). On every new placement (title, start line, replay restart):
+  - The cabin's red glow comes up first.
+  - The DRL and the taillight sweep out from the centre.
+  - The headlamp covers drop and the lamps flare.
+  - The repeaters and markers come on.
+- **Brake lamps** (ESTIMATE). They light when the car decelerates on its wheels by more than the slope explains, and hold briefly at a stop.
+- **Aero.** The wing deploys with speed (aero "ineffective below about 50 mph", OFFICIAL) and kicks up as an airbrake under hard braking at speed. The intake wings and barge boards follow the wing.
+- **Skirts.** They drop with the fan. The front and rear skirts lift above about 22 m/s for the venturi mode.
+- **Fans.** The impellers spin with the fan level.
+- **Nozzles.** A faint blue-white core shows in each throat while its valve is open. Frost builds on the lip with use and thaws over a few seconds (ESTIMATE from "below freezing", OFFICIAL). Nothing glows on its own.
+- **Not modelled:** the doors opening, the hood vent and the T-top removal (the game never shows them).
+
+### 10.7 Not found / open
+
+- Brake and reverse lamp positions.
+- Caliper colour.
+- Skirt drop distance.
+- Nozzle covers.
+- Exact position and direction of the yaw nozzles.
+- Any light behaviour tied to the thrusters.
+- An official length, height or track.
+
+### 10.8 Mismatches with `src/sim/spec.js` (physics numbers, deliberately NOT changed here)
+
+These need a `SIM_VERSION` bump and replay-test updates, so they are reported rather than changed.
+
+| Quantity | spec.js | Reveal car | Effect today |
+|---|---|---|---|
+| `length` | 4.65 m | **4.33 m** (PHOTO) | The hull box, and so the drawn body, is about 0.3 m too long, almost all in the tail (rear overhang 0.93 m vs 0.63–0.69 m) |
+| `overhangFront` | 0.90 m | 0.82–0.87 m (PHOTO) | close |
+| Rear nozzles `pos` | y −0.20 (0.22 m above ground), x ±0.18 / ±0.50 | 0.42 m above ground, x ±0.13 / ±0.39 (PHOTO) | The model and the plumes draw them at the photo position (`NOZZLE_VISUAL`); the force still acts 0.20 m lower and slightly wider |
+| Down nozzles `pos` | z ±1.98 (ahead of the front wheel, behind the rear wheel) | just **behind** each wheel at sill level, so about z +0.95 and −1.95 (PHOTO, 04-World) | drawn at the spec position, so the front pair fires from under the nose |

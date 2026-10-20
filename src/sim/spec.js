@@ -8,13 +8,13 @@
 
 export const SPEC = {
   // Geometry (m)
-  length: 4.65,            // ESTIMATE (not disclosed)
+  length: 4.65,            // ESTIMATE (not disclosed). The official side render measures 4.33 m (PHOTO, research §10.8): pending a SIM_VERSION bump
   width: 2.0,              // OFFICIAL
-  height: 1.15,            // ESTIMATE (not disclosed)
+  height: 1.15,            // ESTIMATE (not disclosed; PHOTO 1.14 m, research §10.1)
   wheelbase: 2.825,        // OFFICIAL (Moravy)
   trackFront: 1.70,        // ESTIMATE
   trackRear: 1.74,         // ESTIMATE
-  overhangFront: 0.90,     // ESTIMATE
+  overhangFront: 0.90,     // ESTIMATE (PHOTO 0.82–0.87 m, §10.1)
   // Tyres: Pirelli P Zero Trofeo RS, 295/30 R20 front, 335/30 R21 rear (OFFICIAL sizes).
   wheelRadiusFront: 0.343, // 20" + 30% of 295 mm
   wheelRadiusRear: 0.367,  // 21" + 30% of 335 mm
@@ -68,7 +68,9 @@ export const SPEC = {
 };
 
 // Ten thrusters (OFFICIAL count and grouping: 4 rear, 4 down "one per corner", 2 front yaw).
-// Positions are read from reveal stills; per-nozzle thrust at full pressure:
+// Positions are read from reveal stills (the rear row measures 0.42 m up and 0.26 m apart, and the
+// down-jets sit just behind each wheel: research §10.8, pending a SIM_VERSION bump; the renderer
+// draws the rear row at the measured place). Per-nozzle thrust at full pressure:
 //   rear: 80 kN total peak (OFFICIAL, "Mach diamonds" on the 0–60 run) → 20 kN each
 //   down: ≈17 kN each (ESTIMATE from the 3.3 G braking peak on the livestream)
 //   yaw:  ≈4 kN each (ESTIMATE)

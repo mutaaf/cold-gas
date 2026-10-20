@@ -9,6 +9,44 @@
 - Hashed assets are cached for a year as immutable, so a repeat visit only revalidates the HTML.
 - `node scripts/perf.mjs <url>` measures all of this.
 
+The car looks like the reveal car. This change is render-only: the sim, scores and replays are unchanged.
+
+**Shape.** The body is rebuilt from the official studio renders and the livestream, measured in docs/REVEAL_RESEARCH.md §10:
+- a hood leading edge 0.42 m up, with fender peaks rising to 0.81 m on either side;
+- a 20°-raked screen whose base sits 0.11 m behind the front axle (cab-forward);
+- a 1.14 m roof peak, then a straight wedge to the tail;
+- a black lower body that rises toward the rear;
+- buttressed rear quarters around a recessed gold-glazed rear glass;
+- small quarter-lights;
+- a squared carbon diffuser box: four bronze nozzles at 0.42 m, with four fan impellers below them;
+- six twin-blade spokes over light-grey aero discs.
+
+**Lights, in their measured places:**
+- a full-width DRL bar on the hood edge;
+- pop-down headlamps in the V-notches;
+- amber repeaters;
+- a full-length red taillight under the deck lip, wrapping the corners;
+- red corner lenses, plate lamps, and a red cabin glow through the glass.
+
+There is no underglow and nothing on the car glows that the real car doesn't.
+
+**Animated states, driven by what the renderer already sees:**
+- On every new placement the car wakes: the cabin glow comes up first, then the DRL and the taillight sweep out from the centre, then the headlamp covers drop.
+- The brake lamps light when the car decelerates on its wheels by more than the slope explains.
+- The deck panel lifts into the wing with speed and kicks up as an airbrake; the intake wings and barge boards follow it.
+- The skirts drop with the fan, and the front and rear skirts lift above about 50 mph.
+- The fan impellers spin.
+- A nozzle shows a faint jet core while it fires, and frost builds on its lip.
+
+**Draw calls.** The car went from 169 meshes to 48 because static parts are merged per material. Triangles: about 17k.
+
+**Physics mismatches, reported and not changed.** Measured against spec.js:
+- the real car is 4.33 m long, not 4.65 m;
+- its rear nozzles sit 0.42 m up, not 0.22 m;
+- its down-jets are behind the wheels.
+
+The rear nozzles and their plumes are drawn at the measured place. Fixing the rest needs a SIM_VERSION bump.
+
 ## 0.6.0 — 2026-10-20
 
 The Show is one flight, and every object has its own physics (SIM_VERSION 6).

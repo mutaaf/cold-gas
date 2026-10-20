@@ -130,7 +130,8 @@ src/render/           three.js (r186):
                           sliced first load (`stage.ready`: build, bake, compileAsync, fade in)
   wall.js               the night stage: the Wall's deck sampled from `wallProfile`, truss,
                           LED edges, searchlights, pad
-  roadster.js           the hero car: faceted body from SPEC, nozzles at NOZZLE_SPEC, fan, wing
+  roadster.js           the hero car, matched to the reveal (research §10): faceted body, lamps,
+                          wake / brake / aero / skirt / nozzle states from what the renderer sees
   cars.js               lineup vehicles, ghost, `wheelCenterY` contract
   plumes.js             per-nozzle shock-diamond cones + condensation mist pool
   director.js           chase / broadcast air cam / replay rigs / title turntable
