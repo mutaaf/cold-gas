@@ -47,6 +47,12 @@ The car's real geometry in the physics (SIM_VERSION 7), from the body research (
 
 ## Unreleased
 
+**No more flicker** (render only). `node scripts/flicker.mjs <url> [--engine=webkit] [--phone]` drives the game frame by frame and measures per-pixel temporal jitter by region; the PR has the before/after numbers.
+- The approach paint, the pad rings and the Show's red row outline were losing the depth test to the approach strip (its slope-scaled offset beat their millimetre lift at grazing angles), so they flickered in and out and mostly vanished. Every ground decal now has a stronger offset than the surface under it and a fixed draw order; the camera's near plane is 0.3 m (was 0.1) for 3× the depth precision.
+- Thin bright things (the Wall's LED strips, lamp heads, painted lines) and thin dark ones (truss members, lamp poles, the far tower) keep a minimum on-screen width (`src/render/sliver.js`), dimmed to match, and the bright ones get anti-aliased edges below 4 px, so they no longer step, bead or pop in and out of the bloom at range. Close up they draw exactly as before.
+- The key light's shadow camera snaps to whole shadow-map texels, so shadow edges don't crawl as the car moves.
+- The deck's bump map fades out where a pixel spans many bump texels (it sparkled at range); stars are round dots with soft edges, not pixel squares that twinkled; the Lineup's beacon ramps on and off.
+
 **The judges' theatre is readable** (every text clears WCAG AA, measured from pixels: worst 5.2:1; was 3.1:1 on desktop and 4.2:1 on a phone, where the results sheet also ghosted through)
 - Particle text (aurora-field `fromText`): the facts and the verdict stack one word per line, rasterised from a real Geist Mono 700 (lazy font face), 72% of particles on the outlines, flat (depth 0), the field held still (autonomy 0) and lifted toward white while it spells. Phones get 2,600 particles (was 1,800). The facts hold 2.4 s (was 1.7 s) and arrive in 0.7 s.
 - The raw stream sits on its own dark glass panel and leaves the stage when the verdict lands; the phone theatre is opaque, so the results sheet no longer ghosts through it; the Skip button no longer covers the rail.

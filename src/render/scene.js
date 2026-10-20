@@ -11,7 +11,8 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RAMP, LINEUP, SHOW } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
-import { buildWall, nightSkyMaterial, bakeNightEnvironment } from './wall.js';
+import { buildWall, nightSkyMaterial, bakeNightEnvironment, STARS } from './wall.js';
+import { sliver, sliverView, spreadAxes, spreadThin, spreadRing, DECAL } from './sliver.js';
 
 const PAD = LINEUP.pad, START_Z = LINEUP.start.z, RUNOUT_Z = LINEUP.runout.zMax;
 
@@ -29,7 +30,7 @@ function skyMaterial() {
     uniforms: { zenith: { value: PALETTE.zenith }, mid: { value: PALETTE.mid }, horizon: { value: PALETTE.horizon }, sunDir: { value: new THREE.Vector3(-0.55, 0.06, 0.83).normalize() } },
     vertexShader: `varying vec3 vDir; void main(){ vDir = normalize((modelMatrix * vec4(position,1.)).xyz - cameraPosition); gl_Position = projectionMatrix * viewMatrix * modelMatrix * vec4(position,1.); gl_Position.z = gl_Position.w; }`,
     fragmentShader: `uniform vec3 zenith; uniform vec3 mid; uniform vec3 horizon; uniform vec3 sunDir; varying vec3 vDir;
-      float hash(vec3 p){ p = fract(p*0.3183099+.1); p*=17.0; return fract(p.x*p.y*p.z*(p.x+p.y+p.z)); }
+      ${STARS}
       void main(){
         float h = clamp(vDir.y, -1., 1.);
         vec3 c = mix(mid, zenith, smoothstep(0.02, 0.55, h));
@@ -38,9 +39,7 @@ function skyMaterial() {
         c = mix(c, horizon, band * (0.35 + 0.65 * sunSide));
         c += horizon * pow(max(dot(vDir, sunDir), 0.), 220.) * 1.4;
         // A few stars high up.
-        vec3 sp = floor(vDir * 420.);
-        float st = step(0.9985, hash(sp)) * smoothstep(0.25, 0.7, h);
-        c += vec3(st) * 0.7;
+        c += starField(vDir, 420., 0.9985, 0.25, false) * 0.7;
         if (h < 0.0) c = mix(mid * 0.6, vec3(0.02), smoothstep(0., -0.2, h));
         gl_FragColor = vec4(c, 1.);
         #include <tonemapping_fragment>
@@ -165,22 +164,24 @@ function lineup(boxes) {
 
 function linesAndPad() {
   const g = new THREE.Group();
-  const white = new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity: 0.6 });
-  const faint = new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity: 0.22 });
-  const flat = (geo, mat, x, z, y = 0.004) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
+  // Paint: decal offsets and draw order (no z-fighting with the slab or each other), and slivers
+  // that stay a pixel wide at range (src/render/sliver.js).
+  const paint = (opacity) => sliver(new THREE.MeshBasicMaterial({ color: 0xdfe3e8, transparent: true, opacity, depthWrite: false, ...DECAL }), { dim: 'alpha', maxK: 64 });
+  const white = paint(0.6), faint = paint(0.22);
+  const flat = (geo, mat, x, z, y = 0.004, order = 2) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.renderOrder = order; g.add(m); return m; };
   // Run-up edge lines and a dashed centreline.
   const len = RAMP.z0 - START_Z;
-  for (const sx of [-1, 1]) flat(new THREE.PlaneGeometry(0.08, len), white, sx * 3.6, START_Z + len / 2);
-  for (let z = START_Z + 2; z < RAMP.z0 - 2; z += 6) flat(new THREE.PlaneGeometry(0.06, 2.4), faint, 0, z);
+  for (const sx of [-1, 1]) flat(spreadThin(new THREE.PlaneGeometry(0.08, len)), white, sx * 3.6, START_Z + len / 2);
+  for (let z = START_Z + 2; z < RAMP.z0 - 2; z += 6) flat(spreadThin(new THREE.PlaneGeometry(0.06, 2.4)), faint, 0, z);
   // Distance ticks every 10 m past the lip.
-  for (let z = 10; z <= 80; z += 10) flat(new THREE.PlaneGeometry(1.2, 0.05), faint, 4.6, z);
+  for (let z = 10; z <= 80; z += 10) flat(spreadThin(new THREE.PlaneGeometry(1.2, 0.05)), faint, 4.6, z);
   // Landing pad: three hairline rings + crosshair + a soft disc.
-  flat(new THREE.CircleGeometry(PAD.rings.at(-1) + 0.6, 96), new THREE.MeshBasicMaterial({ color: 0x0e1014, transparent: true, opacity: 0.35 }), PAD.x, PAD.z, 0.003);
-  for (const r of PAD.rings) flat(new THREE.RingGeometry(r - 0.022, r + 0.022, 192), white, PAD.x, PAD.z, 0.005);
-  flat(new THREE.PlaneGeometry(0.04, 3), white, PAD.x, PAD.z, 0.006);
-  flat(new THREE.PlaneGeometry(3, 0.04), white, PAD.x, PAD.z, 0.006);
+  flat(new THREE.CircleGeometry(PAD.rings.at(-1) + 0.6, 96), new THREE.MeshBasicMaterial({ color: 0x0e1014, transparent: true, opacity: 0.35, depthWrite: false, ...DECAL }), PAD.x, PAD.z, 0.003, 1);
+  for (const r of PAD.rings) flat(spreadRing(new THREE.RingGeometry(r - 0.022, r + 0.022, 192), r), white, PAD.x, PAD.z, 0.005);
+  flat(spreadThin(new THREE.PlaneGeometry(0.04, 3)), white, PAD.x, PAD.z, 0.006);
+  flat(spreadThin(new THREE.PlaneGeometry(3, 0.04)), white, PAD.x, PAD.z, 0.006);
   // Run-out edge lines past the pad.
-  for (const sx of [-1, 1]) flat(new THREE.PlaneGeometry(0.06, RUNOUT_Z - PAD.z - 10), faint, sx * 9, (RUNOUT_Z + PAD.z + 10) / 2);
+  for (const sx of [-1, 1]) flat(spreadThin(new THREE.PlaneGeometry(0.06, RUNOUT_Z - PAD.z - 10)), faint, sx * 9, (RUNOUT_Z + PAD.z + 10) / 2);
   return g;
 }
 
@@ -214,17 +215,19 @@ function horizon() {
   }
   // Test stand tower.
   const tower = new THREE.Group();
-  const strut = new THREE.MeshBasicMaterial({ color: 0x080b11 });
+  // ~800 m out its legs and bands are under a pixel: slivers keep them solid.
+  const strut = sliver(new THREE.MeshBasicMaterial({ color: 0x080b11 }), { minPx: 1, dim: false, maxK: 4 });
   const H = 70;
+  const legGeo = spreadAxes(new THREE.CylinderGeometry(0.5, 0.8, H, 6), [1, 0, 1]), bandGeo = spreadAxes(new THREE.BoxGeometry(9, 0.5, 9), [0, 1, 0]);
   for (const [x, z] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) {
-    const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.5, 0.8, H, 6), strut);
+    const leg = new THREE.Mesh(legGeo, strut);
     leg.position.set(x, H / 2, z); tower.add(leg);
   }
   for (let y = 6; y < H; y += 7) {
-    const band = new THREE.Mesh(new THREE.BoxGeometry(9, 0.5, 9), strut);
+    const band = new THREE.Mesh(bandGeo, strut);
     band.position.y = y; tower.add(band);
   }
-  const beacon = new THREE.Mesh(new THREE.SphereGeometry(1.1, 12, 8), new THREE.MeshBasicMaterial({ color: 0xff2a2a }));
+  const beacon = new THREE.Mesh(spreadAxes(new THREE.SphereGeometry(1.1, 12, 8), [1, 1, 1]), sliver(new THREE.MeshBasicMaterial({ color: 0xff2a2a }), { minPx: 2, size: 2.2 }));
   beacon.position.y = H + 2; tower.add(beacon);
   tower.position.set(-420, -2, 640);
   g.add(tower);
@@ -253,12 +256,16 @@ function buildLineup(tier) {
   const hz = horizon();
   group.add(hz);
   // Floodlight poles along the run-up: thin, minimal, each with a small lamp head.
-  const poleMat = new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.6, metalness: 0.6 });
+  // Slivers (src/render/sliver.js): down the line the poles and lamp heads are under a pixel, and
+  // they crawled against the sky (and through the bloom) as the camera moved.
+  const poleMat = sliver(new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.6, metalness: 0.6 }), { minPx: 1, dim: false, maxK: 4 });
+  const headMat = sliver(lampWhite.clone(), { minPx: 1.5 });
+  const poleGeo = spreadAxes(new THREE.CylinderGeometry(0.06, 0.09, 9, 10), [1, 0, 1]), headGeo = spreadAxes(new THREE.BoxGeometry(0.9, 0.08, 0.3), [0, 1, 0]);
   for (let z = START_Z + 10; z < 80; z += 24) {
     for (const sx of [-1, 1]) {
-      const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.09, 9, 10), poleMat);
+      const pole = new THREE.Mesh(poleGeo, poleMat);
       pole.position.set(sx * 13, 4.5, z); pole.castShadow = tier !== 'low'; group.add(pole);
-      const head = new THREE.Mesh(new THREE.BoxGeometry(0.9, 0.08, 0.3), lampWhite);
+      const head = new THREE.Mesh(headGeo, headMat);
       head.position.set(sx * 12.6, 9, z); group.add(head);
     }
   }
@@ -267,7 +274,13 @@ function buildLineup(tier) {
     titlePose: { x: PAD.x, z: PAD.z, yaw: -0.6 },
     look: { exposure: 1.05, bloom: { strength: 0.3, radius: 0.5, threshold: 0.92 }, fog: new THREE.Fog(PALETTE.haze, 120, 900) },
     keyLight: { color: 0xffd2ad, intensity: 2.6, offset: new THREE.Vector3(-30, 22, 46) },
-    update(t) { hz.userData.beacon.visible = Math.sin(t * 2.2) > 0.2; },
+    // The beacon's slow blink ramps on and off (a hard cut lit or killed a pixel-sized red dot,
+    // and its bloom, in a single frame).
+    update(t) {
+      const k = THREE.MathUtils.smoothstep(Math.sin(t * 2.2), 0.05, 0.35);
+      hz.userData.beacon.visible = k > 0;
+      hz.userData.beacon.material.color.setRGB(k, 0.0231 * k, 0.0231 * k);
+    },
     setBodies: row.userData.setBodies,
   };
 }
@@ -289,8 +302,8 @@ function* buildShow(tier) {
   yield;
 
   const g = new THREE.Group();
-  const red = new THREE.MeshBasicMaterial({ color: new THREE.Color(4.5, 0.2, 0.3), fog: false });
-  const flat = (geo, mat, x, z, y = 0.004) => { const m = new THREE.Mesh(geo, mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
+  const red = sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(4.5, 0.2, 0.3), fog: false, ...DECAL }), { minPx: 1.5 });
+  const flat = (geo, mat, x, z, y = 0.004) => { const m = new THREE.Mesh(spreadThin(geo), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); g.add(m); return m; };
   const boxes = SHOW.boxes;
   const minX = Math.min(...boxes.map((b) => b.minX)) - 0.6, maxX = Math.max(...boxes.map((b) => b.maxX)) + 0.6;
   const minZ = Math.min(...boxes.map((b) => b.minZ)) - 0.6, maxZ = Math.max(...boxes.map((b) => b.maxZ)) + 0.6;
@@ -371,7 +384,11 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   hero.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(hero.group);
 
-  const camera = new THREE.PerspectiveCamera(52, 1, 0.1, 4000);
+  // Depth resolution worsens as distance² / near: with near at 0.1 m the slab and its paint ran
+  // out of it at range. The closest rigs sit 0.35 m over the slab looking along it and about a
+  // metre from the car, so 0.3 m clips nothing; the far ridges are 1.4 km out, and the sky draws
+  // at the far plane whatever its value.
+  const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 3000);
   camera.position.set(0, 3, -100);
 
   let composer = null, bloom = null, smaa = null;
@@ -399,7 +416,9 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     return (looks[id] = look);
   };
   let current = null, drawing = false;
-  const keyOffset = new THREE.Vector3();
+  const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
+  const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
+  const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
   const stage = { renderer, scene, camera, hero, key, course: null, ready: null, resize, render, setCourse, titlePose, setBodies };
 
   function setCourse(id, { sliced = false } = {}) {
@@ -419,6 +438,9 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     key.color.set(current.keyLight.color);
     key.intensity = current.keyLight.intensity;
     keyOffset.copy(current.keyLight.offset);
+    // The light's own frame (as its shadow camera sees it: looking down -offset, y up).
+    lightRot.lookAt(keyOffset, ORIGIN, key.up);
+    lightInv.copy(lightRot).transpose();
     return stage;
   }
 
@@ -432,6 +454,7 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
     renderer.setSize(w, h, false);
     composer?.setSize(w, h);
+    sliverView.value.set(w, h).multiplyScalar(renderer.getPixelRatio() / 2);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
   }
@@ -441,8 +464,12 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     if (!drawing) return;
     current.update(time);
     hero.update?.(time);   // lamps, active aero, skirts, nozzle states
-    // Keep the shadow frustum on the hero.
-    hero.group.getWorldPosition(key.target.position);
+    // Keep the shadow frustum on the hero, snapped to whole shadow-map texels across the light,
+    // so the map's grid stays fixed on the ground and shadow edges don't crawl as the car moves.
+    hero.group.getWorldPosition(snap);
+    snap.applyMatrix4(lightInv);
+    snap.x = Math.round(snap.x / texel) * texel; snap.y = Math.round(snap.y / texel) * texel;
+    key.target.position.copy(snap.applyMatrix4(lightRot));
     key.position.copy(key.target.position).add(keyOffset);
     if (composer) composer.render(); else renderer.render(scene, camera);
     if (!canvas.classList.contains('on')) canvas.classList.add('on');
