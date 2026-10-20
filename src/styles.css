@@ -350,3 +350,10 @@ button { font: inherit; color: inherit; cursor: pointer; }
   .ai-get-tile i { display: none; }
   .ai-result { min-height: 2.2em; margin: 10px 0 14px; }
 }
+
+/* Touch pedals: GO and BRAKE on the ground, LAND in the air (data-phase on .touch, set by main.js) */
+.tbtn.go { width: 104px; height: 104px; background: rgba(92, 255, 200, 0.16); border-color: rgba(92, 255, 200, 0.5); }
+.tbtn.brake { width: 74px; height: 74px; }
+.tbtn.go.on { background: rgba(92, 255, 200, 0.85); }
+.touch[data-phase='air'] .ground-only, .touch:not([data-phase='air']) .air-only { display: none; }
+.buttons { flex-wrap: wrap; justify-content: flex-end; max-width: 260px; }

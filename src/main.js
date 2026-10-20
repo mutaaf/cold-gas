@@ -188,13 +188,15 @@ function liveStep(dt) {
   syncCar(c.pos, c.quat, fcomp, fspin, c.steer);
 
   // Phase cues and moments.
+  if (ui.touch.dataset.phase !== (run.phase === 'air' ? 'air' : 'ground')) ui.touch.dataset.phase = run.phase === 'air' ? 'air' : 'ground';
   if (run.phase !== S.prevPhase) {
     if (run.phase === 'air') director.shake(0.15);
     if (run.phase === 'landed') { thud(run.t.sink); director.shake(Math.min(1, run.t.sink / 4)); }
     S.prevPhase = run.phase;
   }
   if (!S.autopilot) {
-    if (run.phase === 'drive' && c.pos.z > -40 && c.pos.z < RAMP.z0) ui.cue_(usingTouch() ? 'Hold <kbd>LIFT</kbd> at the lip' : 'Hold <kbd>Space</kbd> at the lip', 600);
+    if (run.phase === 'drive' && c.pos.z < -60 && Math.hypot(c.vel.x, c.vel.z) < 2) ui.cue_(usingTouch() ? 'Hold <kbd>GO</kbd> to drive' : 'Hold <kbd>↑</kbd> to drive', 600);
+    else if (run.phase === 'drive' && c.pos.z > -40 && c.pos.z < RAMP.z0) ui.cue_(usingTouch() ? 'Hold <kbd>LIFT</kbd> at the lip' : 'Hold <kbd>Space</kbd> at the lip', 600);
     else if (run.phase === 'air' && Math.abs(run.t.rollAccum) < 0.3 && c.vel.y < 4) ui.cue_(usingTouch() ? 'Stick sideways to roll' : '<kbd>←</kbd> <kbd>→</kbd> to roll', 500);
     else if (run.phase === 'air' && Math.abs(run.t.rollAccum) > 5.6 && c.vel.y < 0) ui.cue_(usingTouch() ? 'Hold <kbd>LAND</kbd>' : 'Hold <kbd>Shift</kbd> to land', 500);
   }
