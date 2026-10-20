@@ -63,7 +63,7 @@ export function createUI() {
     if (airborne !== last.airborne) { hudEl.toggleAttribute('data-air', airborne); last.airborne = airborne; }
     const gg = Math.round(g * 10);
     if (gg !== last.g) { gEl.textContent = (gg / 10).toFixed(1); gEl.parentElement.classList.toggle('hot', g > 4.5); last.g = gg; }
-    const ff = Math.round(fan * 100);
+    const ff = Math.round(fan);   // kgf, as the livestream's DOWNFORCE channel reads it
     if (ff !== last.fan) { fanEl.textContent = String(ff); last.fan = ff; }
     const sp = Math.round(speed * 3.6);
     if (sp !== last.speed) { ui.speed.textContent = String(sp); last.speed = sp; }

@@ -1,5 +1,7 @@
 # Changelog
 
+2026-10-20 · #0012 · The fan is scheduled like the livestream's DOWNFORCE channel (SIM_VERSION 12): armed, it asks for the suction the deck's tilt needs (≈130 kgf rolling on the pad, ≈1,900 at 75°, ≈2,450 on the vertical, the 4,690 kgf cap hanging inverted), spools in 1.5 s and holds its demand; full throttle or a full stop fills the grip void up to the cap. The HUD's FAN reads kgf. The Wall reference climb reads within ±26 % of all six telemetry rows (was +981 % at 25°).
+
 ## 0.10.0 — 2026-10-20
 
 **Learn to land, then fly it by hand** (SIM_VERSION 11). The landing was the wall people hit: a model of human play (reaction time, keys, following the cues; `scripts/human-show.mjs`) landed the Show clean 10 % of the time with Assist and never in Pro. Diagnosis: holding LAND upside down rolled the car out at ≈0.5 rad/s (the leveller's sine law asks for nothing at 180°), so a player who held it from the release hit the ground still rolling; the cues said to roll first and LAND after, which left 10 m to stop from 19 m/s; boosting until the cue went (one reaction time of 80 kN) carried 19 m/s and landed 60 m long; full throttle up the curl threw the car off the lip at 24 m/s; the governor planned its brake on today's tank pressure and ran out of thrust in the last metre once the tanks blew down; nothing on screen said when braking had to start; and Shift (LAND in the air) fired the rear jets after touchdown.
