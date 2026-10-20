@@ -29,7 +29,8 @@ test('boots, flies the reference jump, and judges it', async ({ page }) => {
 
 test('deep link ?play=jump starts a countdown and accepts keyboard input', async ({ page }) => {
   await page.goto('/coldgas/?play=jump&gfx=low');
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  await page.evaluate(() => window.__coldgas.skipCountdown());
   await page.keyboard.down('ArrowUp');
   await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -93, null, { timeout: 30_000 });
   await page.keyboard.up('ArrowUp');
