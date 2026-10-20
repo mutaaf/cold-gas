@@ -23,7 +23,7 @@
 // Budget: static parts are merged per material, so the whole car is ~50 draw calls.
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
-import { SPEC, NOZZLE_SPEC, wheelAnchors } from '../sim/spec.js';
+import { SPEC, NOZZLE_SPEC, wheelAnchors, AXLE_F, AXLE_R } from '../sim/spec.js';
 import { CAR } from '../sim/vehicle.js';
 
 // --- Suspension contract ------------------------------------------------------------------------
@@ -90,8 +90,8 @@ export const ROADSTER_MATERIALS = M;
 const setLamp = (mat, r, g, b, k) => mat.color.setRGB(r * k, g * k, b * k);
 
 // --- Geometry helpers -----------------------------------------------------------------------------
-const zF = SPEC.wheelbase - SPEC.comFromFront;              // front axle (+1.405)
-const zR = -SPEC.comFromFront;                              // rear axle (−1.42)
+const zF = AXLE_F;                                          // front axle
+const zR = AXLE_R;                                          // rear axle
 const zNose = zF + SPEC.overhangFront;                      // +2.305
 const zTail = zNose - SPEC.length;                          // −2.345
 

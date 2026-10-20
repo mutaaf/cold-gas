@@ -18,6 +18,8 @@ import { LINEUP, WALL, SHOW } from '../sim/courses.js';
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
 const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3();
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
+// The Wall's rigs were framed on a 19.8 m lip; they scale with the wall's real height.
+const K = WALL.lip.y / 19.8;
 
 export function createDirector(camera) {
   const st = {
@@ -111,15 +113,15 @@ export function createDirector(camera) {
       lookWant.set(carPos.x, carPos.y + 0.9 + Math.max(0, 30 + carPos.z) * 0.12, carPos.z + 6);
       ease(dt, 5);
       fovTo(50 + Math.min(14, speed * 0.36), dt);
-    } else if (!st.launched && carPos.y < 15) {
+    } else if (!st.launched && carPos.y < 15 * K) {
       // Climbing: swing out to the side, keep the car and the whole curl in frame.
-      want.set(24, clamp(carPos.y * 0.7 + 4, 3.2, 22), Math.min(carPos.z, 6) - 11);
+      want.set(24 * K, clamp(carPos.y * 0.7 + 4, 3.2, 22 * K), Math.min(carPos.z, 6 * K) - 11 * K);
       lookWant.set(carPos.x * 0.5, carPos.y * 0.75 + 3.5, carPos.z * 0.6 + 3);
       ease(dt, 2.6, 6);
       fovTo(50, dt);
     } else if (!st.launched) {
       // Hanging inverted on the ledge: the dramatic wide shot.
-      want.set(27, 13.5, -13);
+      want.set(27 * K, 13.5 * K, -13 * K);
       lookWant.set(carPos.x * 0.3, carPos.y * 0.6 + 6, carPos.z * 0.5 + 2.5);
       ease(dt, 1.8, 4);
       fovTo(46, dt, 1.5);
@@ -148,8 +150,8 @@ export function createDirector(camera) {
     trackWall(carPos, carVel, phase);
     let shot;
     if (!st.launched && carPos.z < -22 && st.peak < 1.5) shot = 0;
-    else if (!st.launched && carPos.y < 8) shot = 1;
-    else if (!st.launched && carPos.y < 16) shot = 2;
+    else if (!st.launched && carPos.y < 8 * K) shot = 1;
+    else if (!st.launched && carPos.y < 16 * K) shot = 2;
     else if (!st.launched) shot = 3;
     else if (carPos.y > 2.6) shot = 4;
     else shot = 5;
@@ -158,7 +160,7 @@ export function createDirector(camera) {
       case 0: // low tracking on the approach, front quarter
         camera.position.set(carPos.x - 3.4, 0.55, carPos.z + 9); camera.lookAt(carPos.x, carPos.y + 0.4, carPos.z); st.fov = 38; break;
       case 1: // the reference image: wide from the side, the whole curl, truss and beams
-        camera.position.set(31, 8.5, -9); camera.lookAt(0.5, 11.5, 5.5); st.fov = 47; break;
+        camera.position.set(31 * K, 8.5 * K, -9 * K); camera.lookAt(0.5, 11.5 * K, 5.5 * K); st.fov = 47; break;
       case 2: // at the foot of the wall, looking straight up it
         camera.position.set(1.9, 0.45, -2.6); camera.lookAt(carPos.x, carPos.y, carPos.z); st.fov = 60; break;
       case 3: // ledge close-up: below and in front of the overhang, looking up at the car hanging under it
@@ -176,10 +178,10 @@ export function createDirector(camera) {
   function titleWall(time) {
     // The car parked at the foot of the curl; the camera sways on the approach side so the curl
     // towers behind it.
-    const a = Math.sin(time * 0.07) * 0.5, R = 12.5;
+    const a = Math.sin(time * 0.07) * 0.5, R = 12.5 * K;
     const cx = 0, cz = -11;   // matches the wall look's titlePose
     camera.position.set(cx + Math.sin(a) * R, 1.25 + Math.sin(time * 0.2) * 0.08, cz - Math.cos(a) * R);
-    camera.lookAt(cx * 0.5, 7.2, cz + 9);
+    camera.lookAt(cx * 0.5, 7.2 * K, cz + 9 * K);
     st.fov = 54;
   }
 
@@ -187,8 +189,8 @@ export function createDirector(camera) {
     // The car at the start, just short of the curl, the parked row behind it: a slow side sway
     // that keeps all three in frame.
     const a = Math.sin(time * 0.07) * 0.28;
-    camera.position.set(15 * Math.cos(a), 2.4 + Math.sin(time * 0.2) * 0.08, -13 + 15 * Math.sin(a));
-    camera.lookAt(-1, 6.2, -4);
+    camera.position.set(15 * K * Math.cos(a), 2.4 + Math.sin(time * 0.2) * 0.08, -13 + 15 * K * Math.sin(a));
+    camera.lookAt(-1, 6.2 * K, -4);
     st.fov = 56;
   }
 

@@ -690,3 +690,161 @@ How the PHOTO numbers were measured:
 | `length` | 4.65 m | **4.33 m** (PHOTO), front overhang 0.85 m | Hull probes (tail, sills) are 0.3 m shorter; the drawn body matches |
 | Rear nozzles `pos` | 0.22 m up, x ±0.18 / ±0.50 | **0.42 m up** (≈ CoM height), x ±0.13 / ±0.39 | A rear burn no longer pitches the nose up; boosting off the ledge is cleaner |
 | Down nozzles `pos` | z ±1.98 | **just behind each wheel**: z +0.95 / −1.95 | The jets sit asymmetrically about the CoM, so the mixer trims each one's share of a lift command to cancel the pitch moment (the front pair runs full, the rear pair at ≈49 %). Pure lift is now ≈51 kN, not 68 kN; attitude authority rides on top. The Wall still brakes at 2.5–4.6 G peak (the fidelity test), landing a little harder from the Show's carry. If Tesla's weight distribution is rearward of our 50:50 estimate, the trim (and the lift) comes back up: the CoM position is now the most consequential unsourced number. |
+
+---
+
+## 11. Mass distribution
+
+Compiled 2026-10-20 for `SPEC.comFromFront`, `SPEC.comHeight`, `SPEC.inertia` and the down-jet mixer. Flags are as in §10: **OFFICIAL**, **REPORTED**, **PHOTO** (measured by me from official imagery, method given), **ESTIMATE** (derived, arithmetic shown), plus **UNOFFICIAL** for aggregator data.
+
+**Bottom line.** No source gives a front/rear weight split, a centre-of-mass height, an inertia figure, or the thrust of any single nozzle. That covers Tesla, Moravy, von Holzhausen, Hagerty, Top Gear, MotorTrend, Car and Driver, Edmunds, Jalopnik, Electrek, Wired, the patents and the livestream. There are also no EPA, CARB or NHTSA filings yet; the car is a 2028 product. Everything below is built up from component placements that **are** sourced. It puts the car **rear-biased at about 42:58 (Rocket, gas full)**, not 50:50. The CoM sits about 0.30 m *ahead* of the midpoint between the four down-jets.
+
+### 11.1 What was searched and what turned up
+
+| Source | Result |
+|---|---|
+| Transcripts re-pulled and grepped for weight, distribution, balance, gravity, mass, kilo, corner, behind the wheel: Tesla event (qt5p-_tE8d0), Top Gear 49 min (JdkIOhFmbKI), Hagerty (22rvpUecLts), MotorTrend Moravy (6D5MlPZQFOw), MotorTrend FvH (y7oKy09ALfM), DragTimes (_lq-DpCE9rU) | No split, no CoM, no inertia, no per-nozzle thrust. The placement quotes in 11.2 are what they do give. |
+| Wired via dnyuz (https://dnyuz.com/2026/10/16/heres-exactly-how-tesla-made-its-new-230-mph-car-fly/), Electrek technical look (https://electrek.co/2026/10/15/an-updated-technical-look-at-teslas-kick-flipping-0-60-in-1s-next-gen-roadster/), Carscoops (https://www.carscoops.com/2289194/tesla-claims-roadster-questions/), InsideEVs/Yahoo (https://autos.yahoo.com/ev-and-future-tech/articles/teslas-flying-sports-car-explained-190049113.html), tech-insider, TeslaNorth | Mass "just under 1,700 kg" only. Electrek: the thrust tank is "placed high in the vehicle" and the stunt car could be "a thousand pounds lighter than a production vehicle". |
+| Patent US 12,377,920 "Adaptive vehicle aerodynamics for downforce" (https://patents.google.com/patent/US12377920B1/en), full text | No mass, CG or battery text. It describes a "rear-biased" downforce mode and "separate bounded regions at the front and rear", which is aero balance, not mass. |
+| MotorMatchup catalog (https://www.motormatchup.com/catalog/Tesla/Roadster/2028/Performance, …/Thrust) | **42/58 Performance and 38/62 Thrust**, as surfaced in a search snippet. The page itself is behind a Vercel bot-check and could not be read. It gives no source and lists a 150 kWh battery that Tesla never stated, so it is **UNOFFICIAL** and probably generated. It agrees with 11.4 only in direction. |
+| kiwiirc "2026 Tesla Roadster Price Review" | "3,800 lb, 50:50". A spam page attributing it to Tesla. **Discarded.** |
+| EPA, CARB and NHTSA searches | Nothing for the Roadster. The only recent Tesla EPA certificate is the Cybercab's. |
+
+### 11.2 Sourced component placements
+
+| Component | Placement | Flag / source |
+|---|---|---|
+| Battery | "The low CG comes from the battery pack in the floor. This is the battery pack under the floor" | OFFICIAL, Moravy (MotorTrend 6D5MlPZQFOw 3:58) |
+| Battery size and extent | about 115 kWh; the suction area is "about the size of the battery pack"; "in that wheelbase is a generous battery" | OFFICIAL (FvH, MotorTrend); REPORTED (Top Gear voice-over, 16:49) |
+| Battery mass-savers | titanium top cover, aluminium-can 4680s | OFFICIAL (Moravy) |
+| Motors | "the two motors sit at the rear axle. They're buttoned up against each other", each with its own inverter and a planetary reduction to its wheel | OFFICIAL, Moravy (Top Gear 6:35) |
+| 200 L COPV (Thrust and Rocket) | in the luggage space behind the seats, where there are "no rear seats"; with the system removed "this is just a luggage space" | OFFICIAL (FvH, MotorTrend 20:54). The car is "fairly roomy from the back of the front seats to the centre line of the rear wheels" (Top Gear 16:39). Electrek says the tank is "placed high" (REPORTED) |
+| 400 L COPV (Rocket) | "the second seat is a 400 L cold gas tank"; "occupying the space where the passenger seat is". It is a longer cylinder with round ends | OFFICIAL (Top Gear 27:38, MotorTrend 15:52); REPORTED (Wired) |
+| Seats | fixed bases moulded into the tub; low, cab-forward | OFFICIAL (§3.5); screen base 0.11 m behind the front axle (PHOTO §10.1) |
+| Rear nozzle row and fans | in the rear diffuser at the tail (≈ 3.45–3.48 m behind the front axle) | OFFICIAL / PHOTO §10.3 |
+| Down-jets (Rocket) | "four aiming down behind the wheels"; "four down nozzles behind each wheel"; "one in each corner to push up" | OFFICIAL (FvH, MotorTrend 7:35 and 18:08; Top Gear 27:46) |
+| Stunt car | open space-frame floor (see 11.3) | PHOTO (Kickflip clip) |
+
+### 11.3 Down-jet positions (PHOTO)
+
+| Measurement | Front pair | Rear pair | Method |
+|---|---|---|---|
+| Tesla render 04-World (a Rocket with the down-nozzles fitted, 3/4 rear view) | 112 px behind the wheel centre, at about 240 px/m → **0.47 m** behind the front axle | 177 px at about 300 px/m → **0.59 m** behind the rear axle | Scale taken from each tyre's own vertical diameter (0.686 / 0.734 m) × cos(view yaw) ≈ 0.92, checked against the wheelbase in pixels. ±0.08 m |
+| Kickflip clip (r5vsHHPVhJg), t = 34.0 s, underside view mid-roll | plume root ≈ **0.48 m** behind the front axle | plume root ≈ **0.50 m** behind the rear axle | Wheelbase = 678 px → 240 px/m. ±0.07 m |
+| Kickflip clip, t = 34.3 s, side view | plume root ≈ **0.45–0.50 m** behind the front axle | (rear root hidden) | Front tyre width in the frame = 0.686 m |
+| **Adopted** | **0.47 m behind the front axle** (0.42–0.55) | **0.53 m behind the rear axle → 3.355 m from the front axle** (0.45–0.62) | PHOTO |
+
+The same t = 34.0 s frame shows that the flying car's **underside is an open lattice of square tubes spanning the wheelbase**. It is about 1.6 m wide, six bays long and three or four bays across, with dark boxes in the bays. There is no sealed pack cover and no skirts. Frost-like light patches show in the rear two bays. This is a test "skeleton", as Edmunds REPORTED, and whether a traction pack is on board cannot be told from this frame. The front-fender yaw jet is visible firing laterally from just ahead of the front wheel.
+
+**Thrust per nozzle and front/rear balancing.** Neither was reported. No one mentioned throttling of the down-jets or unequal nozzle sizes. The only statements on valving are general:
+
+- The rear pair is "two independently actuated" left/right valves (OFFICIAL, §5.1).
+- For the Rocket, "a little bit more complicated valving system there because we control thrust, yaw, and lift … we can plumb it to anything" (OFFICIAL, Moravy, MotorTrend 15:59–16:15).
+
+### 11.4 Mass and CoM build-up (ESTIMATE)
+
+Coordinates: x is measured rearward from the front axle (wheelbase 2.825 m), y is positive to the left, z is height above the ground. Each item is a uniform cuboid for its own inertia, plus parallel-axis terms (m·d²) about the combined CoM. The CoM is Σm·x / Σm per axis.
+
+| Item | kg | x | y | z | Why |
+|---|---|---|---|---|---|
+| Battery pack, about 115 kWh | 600 | 1.35 | 0 | 0.21 | Floor, inside the wheelbase. About 190 Wh/kg at pack level (Plaid 100 kWh ≈ 540 kg; Ti lid and Al cans save mass). Centroid at the middle of the sealed floor area, 1.9 × 1.45 × 0.14 m, on 0.11 m ride height |
+| Rear drive units ×2 (motors, inverters, 8.4:1 planetaries) | 130 | 2.85 | 0 | 0.36 | "At the rear axle" |
+| Rear corners (21″ wheel, 335 tyre, carbon-ceramic brakes, upright) | 110 | 2.825 | 0 | 0.367 | |
+| Front corners (20″, 295) | 100 | 0 | 0 | 0.343 | |
+| Rear subframe and suspension | 50 | 2.75 | 0 | 0.38 | Pushrod double wishbone |
+| Front subframe, suspension, steer-by-wire | 45 | 0.05 | 0 | 0.36 | |
+| Front: crash structure, flat radiator and fan, heat pump, intake wings | 70 | −0.40 | 0 | 0.42 | No frunk (§3.6) |
+| Tub, body, closures, glass, butterfly doors | 260 | 1.45 | 0 | 0.58 | Body spans −0.85 to 3.475 m (midpoint 1.31), with a long tail |
+| Interior (2 fixed seats, dash, screens, HVAC) | 80 | 1.20 | 0 | 0.48 | Cab-forward |
+| Rear aero (wing, 4-bar, actuators), diffuser, rear crash structure, lamps | 65 | 3.20 | 0 | 0.62 | |
+| Harness, charger, DC-DC, coolant, misc | 180 | 1.50 | 0 | 0.40 | |
+| **Base, empty** | **1,690** | **1.511** | 0 | **0.363** | Matches "just under 1,700 kg" (OFFICIAL) |
+| + Fans, ducts, skirts, adaptive dampers (Performance) | 40 | 3.25 | 0 | 0.27 | |
+| + 200 L Type-IV COPV and brackets (0.7 kg/L) | 140 | 2.20 | 0 | 0.55 | Behind the seats, ahead of the rear axle, "placed high" |
+| + Valves, down-pipes, 4 rear nozzles | 25 | 3.00 | 0 | 0.45 | |
+| + N₂, 200 L at 690 bar | 99 | 2.20 | 0 | 0.55 | §5.2 |
+| + 400 L COPV (Rocket) | 280 | 1.55 | −0.38 | 0.47 | Passenger seat, on the right in a LHD car |
+| − Passenger seat | −15 | 1.55 | −0.38 | 0.40 | |
+| + 6 nozzles, plumbing, valving | 30 | 1.70 | 0 | 0.30 | Corners and front fenders |
+| + N₂, 400 L at 690 bar | 198 | 1.55 | −0.38 | 0.47 | |
+| Driver (LHD) | 80 | 1.55 | +0.38 | 0.42 | |
+
+Results (Ixx = roll, Iyy = pitch, Izz = yaw, about the CoM):
+
+| Configuration | Mass kg | CoM x from front axle (m) | F : R | y (m, + left) | h (m) | Ixx / Iyy / Izz (kg·m²) |
+|---|---|---|---|---|---|---|
+| Base, empty | 1,690 | 1.511 | 46.5 : 53.5 | 0 | 0.363 | 411 / 2,054 / 2,326 |
+| Performance + driver | 1,810 | 1.551 | 45.1 : 54.9 | +0.017 | 0.364 | 433 / 2,182 / 2,469 |
+| Thrust + driver, gas full | 2,074 | 1.644 | 41.8 : 58.2 | +0.015 | 0.386 | 483 / 2,336 / 2,648 |
+| Thrust + driver, gas empty | 1,975 | 1.616 | 42.8 : 57.2 | +0.015 | 0.378 | 464 / 2,297 / 2,600 |
+| **Rocket + driver, gas full** | **2,567** | **1.627** | **42.4 : 57.6** | **−0.057** | **0.401** | **569 / 2,482 / 2,856** |
+| Rocket + driver, gas empty | 2,270 | 1.609 | 43.0 : 57.0 | −0.031 | 0.388 | 521 / 2,397 / 2,740 |
+| Rocket, no driver, gas full | 2,487 | 1.630 | 42.3 : 57.7 | −0.071 | 0.400 | 550 / 2,474 / 2,834 |
+| Stunt "skeleton" (pack and interior removed, +60 kg LV pack, ballast and flight computer, 20 kg mannequin), gas full | 1,887 | 1.727 | 38.9 : 61.1 | −0.089 | 0.453 | 404 / 2,179 / 2,449 |
+
+How the Rocket trim shifts the CoM:
+
+- **Fore-aft, almost nothing beyond Thrust.** The 400 L tank and its 198 kg of gas sit at x ≈ 1.55, just ahead of the Thrust car's CoM (1.64), so they pull it forward about 0.02 m. The big rearward step comes from the **Thrust** hardware: about 264 kg at x ≈ 2.2–3.0, which moves the CoM about 0.09 m rearward.
+- **Height.** The CoM rises about 0.015 m.
+- **Lateral.** The tank moves the CoM about **6–7 cm to the right** (the passenger side), because roughly 480 kg sits 0.38 m off the centreline against an 80 kg driver on the other side.
+- **During the burn.** As the gas empties, the CoM drifts forward about 0.02 m and back toward the centreline.
+
+**Sensitivity.** Moving the battery centroid ±0.15 m moves the CoM ±0.035 m. Moving the 200 L tank ±0.2 m moves it ±0.02 m. Moving the body centroid ±0.1 m moves it ±0.01 m. Combined (RSS, plus model error): **x = 1.63 m, range 1.52–1.75 m (46–38 % front)** and **h = 0.40 m, range 0.37–0.45 m**.
+
+**Cross-check.** A mid-engine supercar with a rear-axle drivetrain typically runs 40–43 % front, which fits. Even the base car comes out at about 46:54, not 50:50, because the motors sit at the rear axle with no front drive unit. §6 row 8 already gave 1.55 m (55 % rear); the spec's 1.42 is the outlier.
+
+**Inertia.** Lumped cuboids usually *under*-estimate measured inertia by 5–10 %, because they miss distributed harness and fasteners. Adding about 8 % gives about **615 / 2,680 / 3,080 kg·m²** for the Rocket at 2,450–2,570 kg (±20 %). That is 25–30 % below the §6 box estimate (850 / 3,700 / 4,100). The box with a 0.8 factor overstated it for a car whose heaviest items (pack, gas, motors) are central or low.
+
+Gas is near the CoM, so emptying it removes 12 % of the mass but only about 4 % of the inertia. Scaling inertia by total mass overstates how much more agile the car gets as the tanks empty. Hold inertia at the dry value plus a small gas term, or simply don't scale it with gas mass (error < 5 %).
+
+**Constraint from the stunts (weak).** The kickflip shows 360° of roll inside about 3 s of airtime. A bang-bang roll of 2π in 1.3 s needs α = 4·2π / 1.3² ≈ 14.9 rad/s², which is 9 kN·m at Ixx = 615. Differential corner jets (±0.75 m, up to 2 × 20 kN on one side) give up to 30 kN·m. So the stunt cannot bound Ixx to better than "≤ about 2,000". It is consistent with any value here.
+
+### 11.5 Is "behind each wheel" consistent with the 3.3 G braking peak?
+
+The 3.3 G peak was read at about 6.5 m altitude while the car was airborne (paultan, REPORTED; §2), so it is jet thrust over mass. The jets sit at x_f = 0.47 and x_r = 3.355. Their midpoint is **1.91 m**, which is 67 % rear. That is behind every plausible CoM, so the rear pair has the longer lever arm. To fire without pitching, the rear pair must run at a/b of the front pair's thrust, where a = x_cg − x_f and b = x_r − x_cg. The front pair then limits the total:
+
+- **Pitch-free lift:** F = 2·F_n·(1 + a/b)
+- **G:** F / (m·g)
+
+| CoM x | a/b (rear throttle) | 17 kN/nozzle | 20 kN/nozzle | 22.5 kN/nozzle |
+|---|---|---|---|---|
+| 1.42 (spec, 50:50) | 0.49 | 51 kN → 2.1 G @ 2,450 kg / 2.3 G @ 2,270 | 60 kN → 2.5 / 2.7 G | 67 kN → 2.8 / 3.0 G |
+| **1.63 (recommended)** | **0.67** | 57 kN → 2.4 / 2.6 G | **67 kN → 2.8 / 3.0 G** | 75 kN → 3.1 / 3.4 G |
+| 1.75 | 0.80 | 61 kN → 2.5 / 2.7 G | 72 kN → 3.0 / 3.2 G | 81 kN → 3.4 / 3.6 G |
+| 1.91 (jet midpoint) | 1.0 | 68 kN → 2.8 / 3.0 G | 80 kN → 3.3 / 3.6 G | 90 kN → 3.7 / 4.0 G |
+
+Thrust needed for 3.3 G, front pair / rear pair per nozzle:
+
+| Mass | CoM 1.42 | CoM 1.63 |
+|---|---|---|
+| 1,900 kg | 20.6 / 10.2 kN | 18.4 / 12.4 kN |
+| 2,270 kg | 24.6 / 12.2 kN | 21.9 / 14.8 kN |
+| 2,450 kg | 26.5 / 13.1 kN | 23.7 / 16.0 kN |
+
+**Verdict.** The positions are **only marginally consistent** with the 3.3 G peak. Equal nozzles with the same 20 kN rating as the rear row (80 kN / 4, OFFICIAL total) give 2.8–3.0 G at production Rocket mass. They reach 3.3 G only if:
+
+- **(a)** the flying car weighed **≤ about 2,050 kg** (67 kN / (3.3 × 9.81)). That is plausible for the lattice-floored skeleton (11.3: about 1,900 kg if it had no pack); or
+- **(b)** the front down-nozzles are **larger than the rear ones**, about 22–24 kN against 15–16 kN, roughly 1.5:1 in throat area. Nobody reported this, but it is the natural design answer to jets fixed "behind each wheel" with a CoM ahead of their midpoint; or
+- **(c)** the controller accepted a brief pitching moment at the peak. That is unlikely: an unbalanced 4 × 20 kN gives 40 × 1.735 − 40 × 1.15 ≈ 23 kN·m nose-down, which is 8.7 rad/s² at Iyy = 2,680, or about 30° in 0.35 s.
+
+At the spec's current 50:50, the case is worst: a 2,270–2,450 kg car needs **25–27 kN** front nozzles. The current 17 kN gives only 2.1–2.3 G of pitch-free lift.
+
+### 11.6 Recommended `src/sim/spec.js` values
+
+| Field | Now | Recommended | Range | Tag |
+|---|---|---|---|---|
+| `comFromFront` | 1.42 | **1.62** (Rocket, gas mostly full; 1.60 empty) | 1.52–1.75 | ESTIMATE (11.4) |
+| `comHeight` | 0.42 | **0.40** | 0.37–0.45 | ESTIMATE (11.4) |
+| CoM lateral (new; optional) | 0 | **0.06 m toward the right / tank side** (body +x is left, so all body positions shift by +0.06 in x) | 0.03–0.09 | ESTIMATE |
+| `inertia` / `inertiaMass` | 650 / 2,900 / 3,250 @ 1,980 | **roll 615, pitch 2,680, yaw 3,080 @ 2,450** (don't scale with gas mass) | ±20 % | ESTIMATE |
+| Down-jet `pos` z (CoM-relative, +forward) | +0.95 / −1.95 | **+1.15 / −1.735**. The axles move with the CoM (front axle at +1.62, rear at −1.205); jets 0.47 m and 0.53 m behind each | front 0.42–0.55 behind, rear 0.45–0.62 behind | PHOTO (11.3) |
+| Down-jet `max` | 17 kN each | **20 kN each** (same hardware class as the rear row). Or, if the Wall must hit 3.3 G at 2.45 t: **front 23 kN, rear 16 kN** | 17–26 | ESTIMATE |
+
+With 1.62 / 20 kN, the mixer's rear-pair trim rises from 49 % to 66 %, and pitch-free lift from 51 kN to **66.5 kN** (+30 %).
+
+**Caution: positions in `NOZZLE_SPEC` are CoM-relative and hard-coded.** Moving `comFromFront` from 1.42 to 1.62 means adding **+0.20 m to every nozzle's z**, not just the down-jets:
+
+- rear row −2.05/−2.06 → −1.85/−1.86
+- yaw jets +2.0 → +2.2
+
+Moving `comHeight` 0.42 → 0.40 means adding +0.02 to every nozzle's y. `wheelAnchors()` derives from `comFromFront` and updates itself. This changes the physics, so it needs a SIM_VERSION bump.

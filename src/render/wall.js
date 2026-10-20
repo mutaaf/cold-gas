@@ -7,6 +7,7 @@ import * as THREE from 'three';
 import { WALL, wallProfile } from '../sim/courses.js';
 
 const W = WALL.width, T = WALL.slab, L = WALL.length;
+const HK = WALL.lip.y / 19.8;   // lights were aimed on a 19.8 m lip; they follow the real height
 const SEAM = 1.2;          // board-form pour seams along the curve (m)
 const TILE = SEAM * 4;     // texture repeat along the curve (m)
 
@@ -511,17 +512,17 @@ export function* buildWall(tier, pad = WALL.pad) {
   const lights = new THREE.Group();
   const hemi = new THREE.HemisphereLight(0x22324a, 0x050506, 0.35);
   lights.add(hemi);
-  const wash = new THREE.SpotLight(0xfff0e0, 5200, 0, 0.36, 0.65, 2);
-  wash.position.set(-15, 6, -30); wash.target.position.set(1, 12, 8);
+  const wash = new THREE.SpotLight(0xfff0e0, 5200 * HK * HK, 0, 0.36, 0.65, 2);
+  wash.position.set(-15, 6, -30); wash.target.position.set(1, 12 * HK, 8);
   lights.add(wash, wash.target);
-  const wash2 = new THREE.SpotLight(0xdfe8ff, 4200, 0, 0.32, 0.7, 2);
-  wash2.position.set(16, 4, -26); wash2.target.position.set(0, 14, 9);
+  const wash2 = new THREE.SpotLight(0xdfe8ff, 4200 * HK * HK, 0, 0.32, 0.7, 2);
+  wash2.position.set(16, 4, -26); wash2.target.position.set(0, 14 * HK, 9);
   lights.add(wash2, wash2.target);
   // Uplights at the base, raking up the curl (the reference's bright lower deck).
   const uplights = [];
   for (const sx of [-1, 1]) {
-    const up = new THREE.SpotLight(0xe9f1ff, 1100, 0, 0.42, 0.55, 2);
-    up.position.set(sx * 2.4, 0.25, -5.5); up.target.position.set(sx * 0.5, 13, 10.5);
+    const up = new THREE.SpotLight(0xe9f1ff, 1100 * HK * HK, 0, 0.42, 0.55, 2);
+    up.position.set(sx * 2.4, 0.25, -5.5); up.target.position.set(sx * 0.5, 13 * HK, 10.5);
     lights.add(up, up.target);
     uplights.push(up);
     const fx = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.5), new THREE.MeshStandardMaterial({ color: 0x111215, metalness: 0.6, roughness: 0.4 }));

@@ -10,7 +10,7 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // v6: The Show is one flight (off the Wall, over the row); parked vehicles are bodies with mass,
 // per-surface materials; v5: driver-relative steer/roll/yaw, grip-limited steering; v4: sourced
 // specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 7;
+export const SIM_VERSION = 8;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 
@@ -31,7 +31,7 @@ const unpack = (arr, out) => { for (let i = 0; i < KEYS.length; i++) out[KEYS[i]
 // Everything the judges score.
 function newTelemetry(courseId) {
   return {
-    course: courseId, crossedRow: false,
+    course: courseId, crossedRow: false, deckScrape: false,
     launchSpeed: 0, launchTick: -1, airStartTick: -1, touchTick: -1, endTick: -1,
     apex: 0, apexZ: 0, rollAccum: 0, pitchAccum: 0, yawAccum: 0, offAxis: 0,
     minClearance: Infinity, contact: false, contactSpeed: 0, contactTick: -1,
@@ -169,7 +169,10 @@ function advance(run, input) {
     }
     if (show && lz < course.rowFar) t.crossedRow = true;
     const minAir = wall ? 48 : 36;
-    if ((c.grounded > 0 || c.hullGround) && run.tick - t.airStartTick > minAir) {
+    // On the Wall, touching the deck while still up high is a scrape off the lip, not a landing.
+    const deckScrape = wall && (c.grounded > 0 || c.hullGround) && c.pos.y > 3 && wallArcLength(c.pos.z, c.pos.y) > 1;
+    if (deckScrape) t.deckScrape = true;
+    if ((c.grounded > 0 || c.hullGround) && !deckScrape && run.tick - t.airStartTick > minAir) {
       run.phase = 'landed';
       t.touchTick = run.tick;
       t.sink = Math.max(0, -c.vel.y);
@@ -181,7 +184,7 @@ function advance(run, input) {
       t.landZ = lz;
       t.landSpeed = dhypot(c.vel.x, c.vel.z);
       t.airAtTouch = c.air;
-      if (wall && c.pos.z > -1 && c.pos.y > 1.2) t.landedOnRamp = true;
+      if (wall && c.pos.y > 1.2 && wallArcLength(c.pos.z, c.pos.y) > 1) t.landedOnRamp = true;
     } else if (!wall && c.grounded > 0 && run.tick - t.airStartTick <= 36) {
       run.phase = 'drive'; run.airTicks = 0;
       t.rollAccum = 0; t.pitchAccum = 0; t.yawAccum = 0; t.offAxis = 0; t.apex = 0;

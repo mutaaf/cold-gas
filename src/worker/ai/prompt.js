@@ -2,7 +2,7 @@
 // answers in four labelled lines. Plain lines rather than JSON so the reply streams as readable
 // text (the circuit theatre shows it arriving) and parses the same from any model.
 
-export const SYSTEM = `You are the judging panel for COLD GAS, a stunt game. A roadster with a suction fan and ten cold-gas thrusters performs THE SHOW (one flight: up the Wall, let go from the inverted ledge, boost over five parked EVs on the rear jets, roll upright and land beyond them) or a single stunt: either THE WALL (crawl up a 20 m concrete curl on fan suction, hang upside down under the ledge, let go, roll upright, brake on the down-jets, land) or THE LINEUP (no ramp: lift off flat ground on thrust, a 360-degree roll over five parked EVs, landing). The event is named in the facts.
+export const SYSTEM = `You are the judging panel for COLD GAS, a stunt game. A roadster with a suction fan and ten cold-gas thrusters performs THE SHOW (one flight: up the Wall, let go from the inverted ledge, boost over five parked EVs on the rear jets, roll upright and land beyond them) or a single stunt: either THE WALL (crawl up a 28 m concrete curl on fan suction, hang upside down under the ledge, let go, roll upright, brake on the down-jets, land) or THE LINEUP (no ramp: lift off flat ground on thrust, a 360-degree roll over five parked EVs, landing). The event is named in the facts.
 
 Three judges:
 - ENGINEER (Chief Vehicle Engineer): dry and exacting; cares about sink rate, wheel sync, g-load and attitude at touchdown.
@@ -22,7 +22,7 @@ export function userPrompt(card) {
   const f = card.facts;
   if (f.course === 'show') {
     return [
-      'Event: THE SHOW. One flight on one fill of nitrogen: crawl up a 20 m concrete curl on fan suction, hang upside down under the ledge, let go, fire the rear jets to carry out over five parked EVs (a semi among them), roll upright on the way down, brake on the down-jets and land on a pad beyond the row.',
+      'Event: THE SHOW. One flight on one fill of nitrogen: crawl up a 28 m concrete curl on fan suction, hang upside down under the ledge, let go, fire the rear jets to carry out over five parked EVs (a semi among them), roll upright on the way down, brake on the down-jets and land on a pad beyond the row.',
       `Total ${card.total}/100, verdict "${card.verdict}".`,
       `Judges: ${card.judges.map((j) => `${j.name} ${j.score}`).join(', ')}.`,
       `Categories (0-10): ${Object.entries(card.categories).map(([k, v]) => `${k} ${v}`).join(', ')}.`,
@@ -33,7 +33,7 @@ export function userPrompt(card) {
   }
   if (f.course === 'wall') {
     return [
-      'Event: THE WALL. A concrete curl turns 170 degrees from the ground into an inverted ledge about 20 m up. The car crawls up it on four suction fans (46 kN), hangs upside down under the ledge, lets go, rolls upright in the air, brakes on four nitrogen down-jets and lands on a target pad.',
+      'Event: THE WALL. A concrete curl turns 170 degrees from the ground into an inverted ledge about 28 m up. The car crawls up it on four suction fans (46 kN), hangs upside down under the ledge, lets go, rolls upright in the air, brakes on four nitrogen down-jets and lands on a target pad.',
       `Total ${card.total}/100, verdict "${card.verdict}".`,
       `Judges: ${card.judges.map((j) => `${j.name} ${j.score}`).join(', ')}.`,
       `Categories (0-10): ${Object.entries(card.categories).map(([k, v]) => `${k} ${v}`).join(', ')}.`,

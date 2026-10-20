@@ -30,14 +30,15 @@ export function createAutopilot(courseId = 'show', opts = {}) {
 
 // Fly the lift vector toward the pad like a drone: a little roll moves you sideways, a little
 // pitch moves you along the nose. Gentle near the ground, off in the last metre.
-function steerToPad(c, pad, out, h) {
+function steerToPad(c, pad, out, h, level = 2.5) {
   forward(c, fwv);
   // Time to go: the governed descent (≈2.5 m/s) plus the hover-and-set-down at the end.
   const tGo = Math.max(1.5, h / 2.5 + 1.5);
   const dvz = (pad.z - c.pos.z) / tGo - c.vel.z, dvx = (pad.x - c.pos.x) / tGo - c.vel.x;
   const along = dvz * fwv.z + dvx * fwv.x;                  // + = toward the nose
   const side = dvz * fwv.x - dvx * fwv.z;                   // + = toward the car's right (−x)
-  const k = h < 1 ? 0 : h < 2.5 ? 0.5 : 1;
+  // Stop steering for the last `level` metres so the car sets down level, four wheels together.
+  const k = h < level ? 0 : h < level + 2 ? 0.5 : 1;
   out.roll = k * Math.max(-0.45, Math.min(0.45, side * 0.24));
   out.pitch = k * Math.max(-0.55, Math.min(0.55, along * 0.2));
 }
@@ -83,6 +84,10 @@ function wallPilot(plan, courseId) {
     st.released = true;
     out.fan = 0;
     if (run.phase === 'landed') { out.brake = 1; return out; }
+    // Push off the ledge: a short lift-jet pulse (upside down, "lift" points at the ground) so the
+    // tail doesn't swing into the lip as the car peels away.
+    st.pushT = (st.pushT || 0) + 1 / 240;
+    if (!plan.carry && st.pushT < 0.25) { out.lift = 1; return out; }   // (the Show's carry burn does this)
     up(c, upv);
     // The Show: carry out over the row on the rear jets (the nose points down the run, inverted).
     if (!st.carried) {
@@ -95,7 +100,9 @@ function wallPilot(plan, courseId) {
       else { out.roll = -1; out.pitch = 0; return out; }
     }
     out.level = run.car.grounded === 0 ? 1 : 0;
-    if (upv.y > 0.5) steerToPad(c, pad, out, Math.max(0, c.pos.y - SPEC.comHeight));
+    // Off the Wall the roll-out leaves the car banked and drifting: give it 4 m to level. The Show
+    // carries forward speed onto the pad and levels in the last metre.
+    if (upv.y > 0.5) steerToPad(c, pad, out, Math.max(0, c.pos.y - SPEC.comHeight), plan.carry ? 1 : 4);
     return out;
   };
 }
