@@ -30,6 +30,22 @@ export const CATEGORIES = [
   { id: 'efficiency', label: 'Air left', unit: '%' },
 ];
 
+// Flight tiers and what the panel pays for each (src/sim/vehicle.js `tierOf`). Assist flies with
+// the computer (rates held, LAND levels and governs, the crawl and the carry limited); Pro is rate
+// control with no LAND governor; Advanced is ten valves by hand, no computer at all. Raw piloting
+// is what the judges came to see, so the less the computer does, the more each point is worth.
+export const TIERS = {
+  assist: { id: 'assist', label: 'Assist', factor: 1 },
+  pro: { id: 'pro', label: 'Pro', factor: 1.08 },
+  advanced: { id: 'advanced', label: 'Advanced', factor: 1.15 },
+};
+// The tier a run was flown in: from its telemetry (what the inputs actually were) when it has one,
+// else from the caller's `assist` flag (hand-built telemetry, old callers).
+export function tierOfRun(t, opts = {}) {
+  if (TIERS[t.tier] && t.endTick >= 0) return t.tier;
+  return opts.assist === false ? 'pro' : 'assist';
+}
+
 // Three judges, three priorities. Weights sum to 1.
 export const PANEL = [
   { id: 'engineer', name: 'The Engineer', title: 'Chief Vehicle Engineer',
@@ -107,7 +123,7 @@ function scoreWall(t, opts) {
   if (show) c.clearance = t.crossedRow ? clearanceScore(t) : 0;
   if (!jumped) { c.rotation = 0; c.landing = 0; c.precision = 0; c.efficiency = 0; c.clearance = 0; }
   if (crashed) { c.landing = 0; c.precision *= 0.3; }
-  const assistFactor = opts.assist === false ? 1.08 : 1;
+  const tier = TIERS[tierOfRun(t, opts)];
   const W = show ? SHOW_W : WALL_W;
   const judges = PANEL.map((j) => {
     let s = 0;
@@ -115,7 +131,7 @@ function scoreWall(t, opts) {
     if (crashed) s = Math.min(s, 3.5);
     else if (!jumped) s = Math.min(s, 3);
     else if (show && !t.crossedRow) s = Math.min(s, 5);
-    return { id: j.id, name: j.name, title: j.title, score: r1(Math.min(10, s * assistFactor)) };
+    return { id: j.id, name: j.name, title: j.title, score: r1(Math.min(10, s * tier.factor)) };
   });
   const total = r1(judges.reduce((a, j) => a + j.score, 0) * 10 / 3);
   let verdict;
@@ -132,7 +148,7 @@ function scoreWall(t, opts) {
   else if (total >= 55) verdict = 'Rough landing';
   else verdict = 'Survived';
   return {
-    course: course.id, total, judges,
+    course: course.id, total, judges, tier: tier.id, multiplier: tier.factor,
     categories: Object.fromEntries(Object.entries(c).map(([k, v]) => [k, r1(v)])),
     facts: {
       course: course.id, height: r1(t.maxRampHeight), progressPct: Math.round(t.progress * 100), invertedS: r1(t.invertedTime),
@@ -191,19 +207,19 @@ function scoreLineup(t, opts = {}) {
   if (!jumped) for (const k of Object.keys(c)) c[k] = 0;
   if (crashed) { c.landing = 0; c.precision *= 0.3; }
 
-  const assistFactor = opts.assist === false ? 1.08 : 1;   // Pro (no flight computer) bonus
+  const tier = TIERS[tierOfRun(t, opts)];
   const judges = PANEL.map((j) => {
     let s = 0;
     for (const k of Object.keys(j.w)) s += j.w[k] * c[k];
     if (crashed) s = Math.min(s, 3.5);
     else if (rotations === 0) s = Math.min(s, 4.5);
-    return { id: j.id, name: j.name, title: j.title, score: r1(Math.min(10, s * assistFactor)) };
+    return { id: j.id, name: j.name, title: j.title, score: r1(Math.min(10, s * tier.factor)) };
   });
   const total = r1(judges.reduce((a, j) => a + j.score, 0) * 10 / 3);
 
   return {
     total,                              // 0..100
-    judges,
+    judges, tier: tier.id, multiplier: tier.factor,
     categories: Object.fromEntries(Object.entries(c).map(([k, v]) => [k, r1(v)])),
     facts: {
       apex: r1(t.apex), apexOverRoof: r1(apexOverRoof), rollDeg: Math.round(rollDeg), rotations,

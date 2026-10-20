@@ -12,6 +12,11 @@
 //
 // Show: the Wall's cameras; the row sits under the ledge, so the fall and the carry over it play
 // out in the same wide shots.
+//
+// Pilot view (L, and the default in practice): from the release to the touchdown the camera rides
+// behind and above the car along its line of flight, looking down at the ground ahead. The side
+// shots read pitch beautifully but see a roll end-on; from behind, the roll-out and the drift
+// toward the pad read at a glance.
 import * as THREE from 'three';
 import { LINEUP, WALL, SHOW } from '../sim/courses.js';
 
@@ -28,7 +33,21 @@ export function createDirector(camera) {
     peak: 0, launched: false, launchT: 0,
     hx: 0, hz: 1,                 // chase heading (unit, xz), follows the car's travel
     cutT: 0, cutPos: new THREE.Vector3(), cutFov: 40,   // a crash cut (src/render/crash.js)
+    view: 'broadcast', px: 0, pz: -1,                    // pilot view: on/off, its heading
   };
+
+  // Behind, above and to the side of the car along its line of flight (the last good heading when
+  // it's slow), looking down at the ground ahead. Off to the side so that, at the release, the
+  // camera is clear of the Wall's deck and truss (3.7 m wide) behind the car.
+  function pilot(carPos, carVel, dt) {
+    const hl = Math.hypot(carVel.x, carVel.z);
+    if (hl > 1.2) { st.px = carVel.x / hl; st.pz = carVel.z / hl; }
+    const sx = -st.pz, sz = st.px;   // the side (+x for a car heading −z: the broadcast side)
+    want.set(carPos.x - st.px * 8 + sx * 7, carPos.y + 5.5, carPos.z - st.pz * 8 + sz * 7);
+    lookWant.set(carPos.x + st.px * 4, Math.max(0, carPos.y * 0.85 - 3), carPos.z + st.pz * 4);
+    ease(dt, 3.6, 9);
+    fovTo(58, dt);
+  }
 
   function snap() { st.init = false; }
 
@@ -127,6 +146,8 @@ export function createDirector(camera) {
       lookWant.set(carPos.x * 0.3, carPos.y * 0.6 + 6, carPos.z * 0.5 + 2.5);
       ease(dt, 1.8, 4);
       fovTo(46, dt, 1.5);
+    } else if (!landed && st.view === 'pilot') {
+      pilot(carPos, carVel, dt);
     } else if (!landed && st.course === 'show') {
       // The carry over the row: low and wide from the side, so the roofs under the car stay in frame.
       want.set(carPos.x + 21, clamp(carPos.y * 0.4 + 2.2, 2.2, 10), carPos.z + 2);
@@ -241,6 +262,6 @@ export function createDirector(camera) {
   // Hold a locked-off camera at `pos` for `seconds` (crash cuts); a mode change cancels it.
   function cut(pos, seconds, fov = 40) { st.cutPos.copy(pos); st.cutT = seconds; st.cutFov = fov; }
 
-  return { update, snap, cut, reframe: () => frameOffset(st.mode === 'title'), shake: (s) => { st.shake = Math.max(st.shake, s); },
+  return { update, snap, cut, setView: (v) => { st.view = v; }, view: () => st.view, reframe: () => frameOffset(st.mode === 'title'), shake: (s) => { st.shake = Math.max(st.shake, s); },
     impact: (dip, punch) => { st.dip = Math.max(st.dip, dip); st.punch = Math.max(st.punch, punch); }, state: st };
 }

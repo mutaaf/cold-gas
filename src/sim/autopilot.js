@@ -1,7 +1,7 @@
 // The reference runs, flown closed-loop through the same physics the player uses. They power
 // the attract mode, the ?play=reveal replay, the ghost, and the physics regression tests: if the
 // autopilot can't land it, neither can a player, and CI fails.
-import { newInput, bodyRates, up, forward, G } from './vehicle.js';
+import { newInput, bodyRates, up, forward, G, computerValves, VALVE_KEYS, NOZZLES } from './vehicle.js';
 import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { wallProgress } from './run.js';
@@ -21,11 +21,31 @@ export const REVEAL = {
 const rates = v3(), upv = v3(), fwv = v3();
 
 export function createAutopilot(courseId = 'show', opts = {}) {
+  const pilot = basePilot(courseId, opts);
+  return opts.advanced ? byHand(pilot) : pilot;
+}
+function basePilot(courseId, opts) {
   if (courseId === 'lineup') return lineupPilot({ ...REVEAL.lineup, ...opts });
   // The Show is the Wall with the row under the ledge: let go, and a short rear-jet burn carries
   // the car out over the row (`carry`, m/s along the run) before the roll-out and the descent.
   if (courseId === 'show') return wallPilot({ ...REVEAL.wall, ...REVEAL.show, ...opts }, 'show');
   return wallPilot({ ...REVEAL.wall, ...opts }, 'wall');
+}
+
+// Advanced, flown by a perfect pair of hands: every tick, open each valve to what the flight
+// computer would have opened, in 5 % steps (a thumb on a pressure pad, not a servo). The run is an
+// Advanced run (manual, no computer in the sim): it proves the valves alone can fly the stunt, and
+// it's the ghost and the regression test for per-thruster replays.
+function byHand(pilot) {
+  const valves = new Float64Array(NOZZLES.length), out = newInput();
+  return function advancedPilot(run) {
+    const inp = pilot(run);
+    computerValves(run.car, inp, valves);
+    Object.assign(out, inp);
+    out.assist = 0; out.manual = 1;
+    for (let i = 0; i < VALVE_KEYS.length; i++) out[VALVE_KEYS[i]] = Math.round(valves[i] * 20) / 20;
+    return out;
+  };
 }
 
 // Fly the lift vector toward the pad like a drone: a little roll moves you sideways, a little

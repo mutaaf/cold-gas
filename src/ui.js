@@ -1,6 +1,7 @@
 // DOM: the HUD (updated in place, no layout thrash), the results sheet, the board.
 import { NOZZLES } from './sim/vehicle.js';
-import { categoriesFor } from './sim/judge.js';
+import { categoriesFor, TIERS } from './sim/judge.js';
+import { NOZZLE_UI } from './valves.js';
 import { chime, tick } from './audio.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
@@ -9,20 +10,27 @@ export function createUI() {
   const ui = {
     screens: Object.fromEntries([...document.querySelectorAll('[data-screen]')].map((el) => [el.dataset.screen, el])),
     speed: $('[data-speed]'), phase: $('[data-phase]'), air: $('[data-air]'), airBar: $('[data-air-bar]'),
-    roll: $('[data-roll]'), alt: $('[data-alt]'), sink: $('[data-sink]'), rollArc: $('[data-roll-arc]'), glyph: $('[data-car-glyph]'),
+    roll: $('[data-roll]'), alt: $('[data-alt]'), sink: $('[data-sink]'), rollArc: $('[data-roll-arc]'),
     cue: $('[data-cue]'), count: $('[data-count]'), touch: $('[data-touch]'),
   };
 
-  // Nozzle diagram: top-down, mapped from body x/z.
+  // Nozzle diagram: top-down, nose up, mapped from body x/z (+x is the car's left, drawn on the
+  // left). Each nozzle is a dot that fills with its valve and a ring that sweeps to its valve %;
+  // in Advanced each also carries its key.
+  const NS = 'http://www.w3.org/2000/svg';
   const nzGroup = $('[data-nz]');
+  const ringLen = 2 * Math.PI * 11;
   ui.nz = NOZZLES.map((n) => {
-    const c = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
-    c.setAttribute('cx', String(60 + n.pos.x * 34));
-    c.setAttribute('cy', String(100 - n.pos.z * 38));
-    c.setAttribute('r', n.group === 'lift' ? '9' : '6');
-    c.setAttribute('class', 'nz');
-    nzGroup.appendChild(c);
-    return c;
+    const g = document.createElementNS(NS, 'g');
+    const x = 60 - n.pos.x * 34, y = 100 - n.pos.z * 38;
+    g.setAttribute('transform', `translate(${x.toFixed(1)} ${y.toFixed(1)})`);
+    g.setAttribute('class', `nzg g-${n.group}`);
+    const r = n.group === 'lift' ? 8 : 5;
+    // Keys beside each nozzle; the rear row's four sit 9 px apart, so theirs spread out under the tail.
+    const kx = n.group === 'rear' ? (x - 60) * 2.2 : n.pos.x > 0 ? -17 : 17, ky = n.group === 'rear' ? 20 : 3.5;
+    g.innerHTML = `<circle class="nz" r="${r}"/><circle class="nz-ring" r="11" pathLength="${ringLen.toFixed(1)}" stroke-dasharray="0 ${ringLen.toFixed(1)}" transform="rotate(-90)"/><text class="nz-k" x="${kx.toFixed(1)}" y="${ky}">${NOZZLE_UI[n.id].key}</text>`;
+    nzGroup.appendChild(g);
+    return { dot: g.querySelector('.nz'), ring: g.querySelector('.nz-ring'), last: -1 };
   });
   const ticks = $('[data-ticks]');
   for (let a = 0; a < 360; a += 90) {
@@ -48,9 +56,11 @@ export function createUI() {
   ui.countdown = (n) => { ui.count.innerHTML = n ? `<span>${n}</span>` : ''; if (n) tick(); };
 
   // Last-written values, so the DOM is only touched on change.
-  const last = { speed: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, fan: -1, phase: '' };
+  const last = { speed: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, fan: -1, phase: '', airborne: null };
   const gEl = $('[data-g]'), fanEl = $('[data-fan]');
-  ui.hud = ({ speed, air, rollDeg, alt, sink, phase, throttles, rollAngle, g = 1, fan = 0 }) => {
+  const hudEl = ui.screens.hud;
+  ui.hud = ({ speed, air, rollDeg, alt, sink, phase, throttles, g = 1, fan = 0, airborne = false }) => {
+    if (airborne !== last.airborne) { hudEl.toggleAttribute('data-air', airborne); last.airborne = airborne; }
     const gg = Math.round(g * 10);
     if (gg !== last.g) { gEl.textContent = (gg / 10).toFixed(1); gEl.parentElement.classList.toggle('hot', g > 4.5); last.g = gg; }
     const ff = Math.round(fan * 100);
@@ -66,22 +76,40 @@ export function createUI() {
       ui.rollArc.classList.toggle('done', r >= 330);
       last.roll = r;
     }
-    ui.glyph.setAttribute('transform', `rotate(${(rollAngle * 180) / Math.PI + 90} 60 60)`);
     const al = Math.round(alt * 10);
     if (al !== last.alt) { ui.alt.textContent = (al / 10).toFixed(1); last.alt = al; }
     const sk = Math.round(sink * 10);
     if (sk !== last.sink) { ui.sink.textContent = (Math.max(0, sk) / 10).toFixed(1); last.sink = sk; }
     if (phase !== last.phase) { ui.phase.textContent = phase; last.phase = phase; }
     for (let i = 0; i < ui.nz.length; i++) {
-      const p = throttles[i];
-      ui.nz[i].style.fill = p > 0.02 ? `rgba(191,230,255,${0.25 + p * 0.75})` : '';
+      const n = ui.nz[i], v = Math.round(throttles[i] * 40);
+      if (v === n.last) continue;
+      n.last = v;
+      const p = v / 40;
+      n.dot.style.fill = p > 0.02 ? `rgba(191,230,255,${0.25 + p * 0.75})` : '';
+      n.ring.setAttribute('stroke-dasharray', `${(p * ringLen).toFixed(1)} ${ringLen.toFixed(1)}`);
     }
   };
 
   // --- Results ---------------------------------------------------------------------------
-  ui.results = (card) => {
-    $('[data-r-verdict]').textContent = card.verdict;
-    $('[data-r-headline]').textContent = 'The panel';
+  // `practice`: { drill, result } for a drill (not scored: no panel, no board).
+  ui.results = (card, practice = null) => {
+    const sheet = ui.screens.results;
+    sheet.toggleAttribute('data-practice', !!practice);
+    $('[data-drill-card]').hidden = !practice;
+    $('[data-coach]').hidden = true;
+    const tier = TIERS[card.tier] || TIERS.assist;
+    $('[data-r-tier]').innerHTML = practice ? `Practice · <b>${practice.drill.label}</b> · not scored`
+      : `Flown in <b>${tier.label}</b>${tier.factor > 1 ? ` · the panel pays <b>×${tier.factor.toFixed(2)}</b> for raw piloting` : ' · Pro pays ×1.08, Advanced ×1.15'}`;
+    if (practice) {
+      $('[data-r-verdict]').textContent = practice.result.headline;
+      $('[data-r-headline]').textContent = practice.result.pass ? `${practice.drill.goal} · done` : practice.drill.goal;
+      const ul = $('[data-drill-stats]');
+      ul.innerHTML = '';
+      for (const [txt, bad] of practice.result.stats) { const li = document.createElement('li'); li.textContent = txt; if (bad) li.className = 'bad'; ul.appendChild(li); }
+    }
+    $('[data-r-verdict]').textContent = practice ? practice.result.headline : card.verdict;
+    if (!practice) $('[data-r-headline]').textContent = 'The panel';
     const total = $('[data-r-total]');
     const t0 = performance.now();
     const roll = (now) => {
@@ -134,6 +162,22 @@ export function createUI() {
     for (const [txt, bad] of facts) { const li = document.createElement('li'); li.textContent = txt; if (bad) li.className = 'bad'; ul.appendChild(li); }
     $('[data-r-submit-msg]').textContent = '';
     $('[data-receipt]').hidden = true;
+  };
+
+  // The coach (src/sim/coach.js): the fixes that matter, most costly first.
+  ui.coaching = (items) => {
+    const box = $('[data-coach]'), ol = $('[data-coach-items]');
+    ol.innerHTML = '';
+    for (const it of items || []) {
+      const li = document.createElement('li');
+      li.dataset.fix = it.id;
+      li.innerHTML = '<b></b><p class="cd"></p><p class="cf"></p>';
+      li.querySelector('b').textContent = it.title;
+      li.querySelector('.cd').textContent = it.detail;
+      li.querySelector('.cf').textContent = it.fix;
+      ol.appendChild(li);
+    }
+    box.hidden = !items?.length;
   };
 
   // Type the words into each judge's quote.

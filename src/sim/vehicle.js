@@ -105,7 +105,23 @@ const PROBE_C = HULL_PART.map((p) => (p === PART.floor ? FLOOR_C : HULL_C));
 const PROBE_YIELD = HULL_PART.map((p) => (p === PART.floor ? Infinity : HULL_YIELD));
 const FLOOR = v3(0, -(SPEC.comHeight - SPEC.rideHeight), 0);
 
-export const newInput = () => ({ throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, lift: 0, thrust: 0, retro: 0, level: 0, fan: 0, assist: 1 });
+// Advanced mode: one valve channel per nozzle, in NOZZLE_SPEC order (`manual` = 1 bypasses the
+// mixer and the flight computer; the valves go straight to the nozzles).
+export const VALVE_KEYS = NOZZLE_SPEC.map((_, i) => `v${i}`);
+export const newInput = () => {
+  const inp = { throttle: 0, brake: 0, steer: 0, pitch: 0, roll: 0, yaw: 0, lift: 0, thrust: 0, retro: 0, level: 0, fan: 0, assist: 1, manual: 0 };
+  for (const k of VALVE_KEYS) inp[k] = 0;
+  return inp;
+};
+// Flight tiers. Assist: the computer holds rates, LAND levels and governs the descent, and it
+// limits the crawl up the curl and the carry off the ledge. Pro: the stick still commands body
+// rates, but there is no LAND governor and nothing limits you. Advanced: per-valve, no computer.
+export const tierOf = (inp) => (inp.assist ? 'assist' : inp.manual ? 'advanced' : 'pro');
+// Assist's limits. CRAWL: drive torque is cut above this speed while the tyres are on the curl
+// (the cue says crawl; a keyboard's full throttle throws the car off the ledge at ≈24 m/s).
+// CARRY: airborne, the rear jets cut out above this horizontal speed (≈10 m/s carries over the
+// row onto the pad; one reaction time of 80 kN on 2.4 t adds ≈10 m/s more).
+export const ASSIST_CRAWL = 8, ASSIST_CARRY = 10;
 
 export function createVehicle(courseId = DEFAULT_COURSE) {
   const course = COURSES[courseId] || COURSES[DEFAULT_COURSE];
@@ -117,7 +133,7 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     wheels: WHEELS.map(() => ({ contact: true, compression: REST_LEN - MOUNT_TO_CENTRE, prevCompression: REST_LEN - MOUNT_TO_CENTRE, omega: 0, spin: 0, steer: 0, slip: 0, slipAngle: 0, load: STATIC_LOAD, nx: 0, ny: 1, nz: 0 })),
     fan: 0, fanForce: 0, floorGap: SPEC.rideHeight,
     hullContact: false, hullGround: false, obstacleContact: false, obstacleSpeed: 0, hullImpulse: 0,
-    steer: 0, grounded: 4, onWall: false, wheelForce: 0, tcActive: false,
+    steer: 0, grounded: 4, onWall: false, onSlope: false, wheelForce: 0, tcActive: false,
     // Crash state: each hull probe's permanent crush (m), its contact last tick, and the run's
     // impact events (src/sim/impacts.js).
     crush: new Float64Array(HULL.length), crushShown: new Float64Array(HULL.length), touch: new Uint8Array(HULL.length), impacts: createImpacts(),
@@ -129,8 +145,9 @@ export const massOf = (s) => CAR.dryMass + Math.max(0, s.air);
 
 // Nozzle feed pressure as a fraction of full. The tanks expand adiabatically (p ∝ m^1.375,
 // γ ≈ 1.4 for N2); a regulator holds the feed at line pressure until the tanks drop below it.
-export function feedPressure(s) {
-  const rG = Math.max(0, s.air) / CAR.airMass;
+export function feedPressure(s) { return pressureOf(s.air); }
+export function pressureOf(air) {
+  const rG = Math.max(0, air) / CAR.airMass;
   const tank = rG * Math.sqrt(Math.sqrt(rG)) * Math.sqrt(Math.sqrt(Math.sqrt(rG)));
   return Math.min(1, tank / SPEC.regulatedFraction);
 }
@@ -203,22 +220,46 @@ export function mix(cmd, torqueCmd, out) {
   return out;
 }
 
-// Flight computer. Assist: the stick commands body rates; LAND also levels the car. Pro: raw.
+// Flight computer. Assist and Pro: the stick commands body rates. Assist's LAND also levels the
+// car, as a body-rate demand toward upright on top of the rate loop: 2 × the tilt's sine near
+// level, the law the reference runs were tuned on. Upside down that law asks for almost nothing
+// (sin 180° = 0), so a player who held LAND inverted rolled out at ≈0.5 rad/s and hit the ground
+// still rolling; and from 90° it crawled, braking with half its thrust going sideways. LAND now
+// rolls out decisively: inverted, the nearer way round at 2 rad/s per radian of tilt with the pitch
+// rate held (correcting pitch too would start a half-loop that fights the roll); banked past 20°,
+// 3 rad/s per radian of bank; both up to the stick's 4.6 rad/s (the reveal: 180° in ≈1.1 s).
 const RATE = v3(2.4, 1.4, 4.6);
-function flightComputer(s, inp, out) {
+const LEVEL_K = 2, LEVEL_DAMP = 1.4;
+// Banked past ≈20° (cos 20° = 0.94), the roll-out keeps going at 3 rad/s per radian of bank.
+const UPPER_ROLL = 0.94, UPPER_K = 3;
+function flightComputer(s, inp, out, envelope = 1) {
   rotateInv(wb, s.quat, s.angVel);
-  if (inp.assist) {
-    const kp = 1.6;
-    set(out, kp * (inp.pitch * RATE.x - wb.x), kp * (-inp.yaw * RATE.y - wb.y), kp * (inp.roll * RATE.z - wb.z));
-    if (inp.level) {
-      rotateInv(worldUpB, s.quat, set(tmp, 0, 1, 0));
-      // Upside down, a zero roll error is a trap: pick the nearer way round and commit.
-      const ux = worldUpB.y < -0.2 && Math.abs(worldUpB.x) < 0.25 ? (worldUpB.x >= 0 ? 0.25 : -0.25) : worldUpB.x;
-      out.x += worldUpB.z * 6 - wb.x * 1.4;
-      out.z += -ux * 6 - wb.z * 1.4;
+  const kp = 1.6, k = envelope;
+  set(out, kp * (inp.pitch * k * RATE.x - wb.x), kp * (-inp.yaw * RATE.y - wb.y), kp * (inp.roll * k * RATE.z - wb.z));
+  if (inp.assist && inp.level) {
+    rotateInv(worldUpB, s.quat, set(tmp, 0, 1, 0));
+    const ux = worldUpB.x, uy = worldUpB.y, uz = worldUpB.z;
+    // Pitch correction is +u.z, roll correction is −u.x (LESSONS: level-controller signs).
+    let wantX = LEVEL_K * uz, wantZ = -LEVEL_K * ux;
+    // Hold the line: roof up, above the set-down, with the stick centred, LAND banks up to 0.2 rad
+    // (≈11°) against sideways drift. Rolling out from inverted on one side's down-jets kicks the car
+    // sideways several m/s, and a player can't see it until they've landed 30 m off the mark. The
+    // carry along the run (the row, the mark) stays the pilot's to manage.
+    if (uy > 0.8 && Math.abs(inp.roll) < 0.05 && s.pos.y - SPEC.comHeight > HOVER + 1.5) {
+      rotateInv(tmp, s.quat, s.vel);
+      wantZ = -LEVEL_K * (ux - clamp(0.07 * tmp.x, -0.2, 0.2));
     }
-  } else {
-    set(out, inp.pitch, -inp.yaw, inp.roll);
+    if (uy < -0.2 && Math.abs(uz) < 0.7) {
+      const tilt = datan2(dhypot(ux, uz), uy);
+      wantX = 0;
+      wantZ = clamp((ux >= 0 ? -1 : 1) * LEVEL_K * tilt, -RATE.z, RATE.z);
+    } else if (uy < UPPER_ROLL && Math.abs(ux) > Math.abs(uz) && Math.abs(inp.roll) < 0.05) {
+      // Still banked past ≈20°: keep rolling at the reveal's pace (an angle law), not the sine
+      // law's crawl, so the down-jets aren't braking sideways for the last half of the roll-out.
+      wantZ = clamp((ux >= 0 ? -1 : 1) * UPPER_K * datan2(Math.abs(ux), uy), -RATE.z, RATE.z);
+    }
+    out.x += (kp + LEVEL_DAMP) * wantX - LEVEL_DAMP * wb.x;
+    out.z += (kp + LEVEL_DAMP) * wantZ - LEVEL_DAMP * wb.z;
   }
   out.x = clamp(out.x, -1, 1); out.y = clamp(out.y, -1, 1); out.z = clamp(out.z, -1, 1);
   return out;
@@ -226,6 +267,71 @@ function flightComputer(s, inp, out) {
 
 function record(imp, tick, kind, part, ev) {
   pushImpact(imp, tick, kind, part, ev[7], ev[8], ev[1], ev[2], ev[3], ev[4], ev[5], ev[6], ev[0], ev[9]);
+}
+
+// Assist's governors, on top of the pilot's commands (writes `eff`).
+//  - LAND: lift is governed so the sink rate eases to a soft touchdown on the ground below.
+//  - CARRY: airborne, the rear jets fade out as the horizontal speed nears ASSIST_CARRY, and shut
+//    while LAND brakes.
+export const HOVER = 1.3;
+let behind = 0;   // m/s the car is falling faster than the LAND profile wants (0 when not governed)
+function governor(s, inp, grounded, m) {
+  eff.lift = inp.lift; eff.thrust = inp.thrust;
+  behind = 0;
+  if (!inp.assist || grounded > 0) return;
+  if (eff.thrust > 0) {
+    const vh = dhypot(s.vel.x, s.vel.z);
+    eff.thrust *= clamp((ASSIST_CARRY - vh) / 1.5, 0, 1);
+  }
+  if (!inp.level || s.air <= 0) return;
+  const h = Math.max(0, s.pos.y - SPEC.comHeight - 0.05);
+  // Plan the braking from the thrust the down-jets can actually make at today's tank pressure
+  // (blowdown halves it fast), then brake late and hard like the reveal (3.3 G peak at ≈6 m).
+  const aPlan = brakePlan(s, m);
+  // Brake to a low hover (as the reveal did), then set down at walking pace: time to level.
+  let wantVy = h > HOVER ? -Math.max(0.6, Math.min(16, Math.sqrt((h - HOVER) * 2 * aPlan))) : -0.55;
+  if (h < HOVER + 1.5 && upW.y < 0.99) wantVy = Math.max(wantVy, -0.25);
+  behind = wantVy - s.vel.y;
+  // The brake has priority: once LAND is braking (or below 8 m), a thumb left on BOOST no longer
+  // drains the gas the stop needs.
+  if (behind > 0 || h < 8) eff.thrust = 0;
+  if (s.vel.y < wantVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((wantVy - s.vel.y) * 0.8 + 0.55, 0, 1));
+}
+// Net upward deceleration the four down-jets can make right now (m/s², trimmed, level), and the
+// governor's plan: half of it (pressure can still fall during the burn). The HUD reads these too.
+export const brakeAvail = (s, m = massOf(s)) => (LIFT_MAX * feedPressure(s)) / m - G;
+// The stop itself drains the tanks: stopping from v m/s at a m/s² costs an impulse m·(v + g·v/a)
+// (≈70 kg of nitrogen from 15 m/s), and below 65 % gas the regulator can't hold line pressure.
+// So the plan is the lesser of half of today's braking and all of what's left at the end of the
+// stop: the jets that finish the landing are the weaker ones. (Planning on today's pressure alone
+// arrived at the hover height still sinking 3–4 m/s once the tanks had blown down.)
+export function gasToStop(s, m = massOf(s), vy = s.vel.y) {
+  const v = Math.max(0, -vy), a = Math.max(1, brakeAvail(s, m));
+  return (m * (v + (G * v) / a)) / (SPEC.ispFull * 0.9 * G);
+}
+export function brakeAvailAtEnd(s, m = massOf(s)) {
+  const used = gasToStop(s, m);
+  return (LIFT_MAX * pressureOf(s.air - used)) / (m - used) - G;
+}
+export const brakePlan = (s, m = massOf(s)) => clamp(Math.min(brakeAvail(s, m) * 0.5, brakeAvailAtEnd(s, m)), 0.6, 9);
+export { LIFT_MAX, TRIM };
+
+// The flight computer end to end: the pilot's commands → governors → rate loop → mixer → valve
+// targets. `step` runs it every tick in Assist and Pro.
+function computerTargets(s, inp, grounded, m, out) {
+  governor(s, inp, grounded, m);
+  // Envelope protection (Assist, LAND): falling faster than the profile, the stick can't tilt
+  // away the lift the stop needs (2.5 m/s behind it keeps a quarter of its authority).
+  const envelope = inp.assist && inp.level && grounded === 0 ? clamp(1 - (behind - 0.5) / 2, 0.25, 1) : 1;
+  flightComputer(s, inp, cmdT, envelope);
+  if (grounded >= 2) { cmdT.x = 0; cmdT.y = 0; cmdT.z = 0; }
+  return mix(eff, cmdT, out);
+}
+// The same, from outside a step, on the car as it stands: the valves the computer would open now.
+// The Advanced reference pilot flies these by hand (src/sim/autopilot.js); a player never sees it.
+export function computerValves(s, inp, out) {
+  rotate(upW, s.quat, set(tmp, 0, 1, 0));
+  return computerTargets(s, inp, s.grounded, massOf(s), out);
 }
 
 export function step(s, inp) {
@@ -262,7 +368,7 @@ export function step(s, inp) {
   if (s.fanForce > 0) { scale(force, dn, s.fanForce); applyAt(r, force); }
 
   // --- Wheels: raycast suspension + Pacejka tyres + wheel spin ---
-  let grounded = 0, wallContact = false, wheelForce = 0;
+  let grounded = 0, wallContact = false, sloped = false, wheelForce = 0;
   s.hullContact = false; s.hullGround = false; s.obstacleContact = false;
   s.tcActive = false;
   evHit[0] = 0; evScr[0] = 0; evWheel[0] = 0;
@@ -288,6 +394,7 @@ export function step(s, inp) {
     w.contact = true; grounded++;
     if (hitBody) s.obstacleContact = true;      // a tyre on a parked car is contact
     if (hitN.y < 0.85) wallContact = true;
+    if (hitN.y < 0.995) sloped = true;
     w.nx = hitN.x; w.ny = hitN.y; w.nz = hitN.z;
     const comp = maxT - t;
     w.compression = Math.min(comp, REST_LEN + R);
@@ -320,12 +427,15 @@ export function step(s, inp) {
     const alpha = datan2(vLat, Math.max(Math.abs(vLong), 1.5));
     const mu = SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (Fz / (STATIC_LOAD * AXLE_K[i]) - 1));   // load sensitivity, this surface
     const D = Math.max(0, mu * Fz);
-    // Drive and brake torque. Two rear motors, 500 kW each; Assist adds traction control.
+    // Drive and brake torque. Two rear motors, 500 kW each, with traction control (every tier:
+    // it's the drivetrain, not the flight computer).
     let T = 0;
     if (DRIVEN[i]) {
       const motorT = Math.min(SPEC.maxWheelTorque, (SPEC.power / 2) / Math.max(Math.abs(w.omega), 8));
       T = inp.throttle * motorT;
-      if (inp.assist && kappa > 0.12) { T *= clamp(1 - (kappa - 0.12) * 9, 0.15, 1); s.tcActive = true; }
+      // Assist's crawl limiter: on the curl, drive torque fades out above ASSIST_CRAWL.
+      if (inp.assist && s.onSlope) T *= clamp(ASSIST_CRAWL + 1 - speed, 0, 1);
+      if (kappa > 0.12) { T *= clamp(1 - (kappa - 0.12) * 9, 0.15, 1); s.tcActive = true; }
     }
     const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85);
     // Pacejka pure-slip forces, then the friction ellipse for combined slip.
@@ -336,9 +446,9 @@ export function step(s, inp) {
     const kEff = Math.max(slope, D * 2) / den;
     let omega = w.omega + ((dt / WHEEL_I) * (T - R * Fx)) / (1 + (dt / WHEEL_I) * R * R * kEff);
     if (brakeT > 0) {
-      // Brakes pull toward zero and can lock the wheel, never reverse it. Assist adds ABS:
+      // Brakes pull toward zero and can lock the wheel, never reverse it. ABS (every tier):
       // release pressure once the wheel is past the slip peak.
-      const abs = inp.assist && kappa < -0.1 && Math.abs(vLong) > 2 ? clamp(1 - (-kappa - 0.1) * 10, 0.05, 1) : 1;
+      const abs = kappa < -0.1 && Math.abs(vLong) > 2 ? clamp(1 - (-kappa - 0.1) * 10, 0.05, 1) : 1;
       const db = ((brakeT * abs) / WHEEL_I) * dt;
       omega = Math.abs(omega) <= db ? 0 : omega - Math.sign(omega) * db;
     }
@@ -370,6 +480,7 @@ export function step(s, inp) {
   }
   s.grounded = grounded;
   s.onWall = wallContact;
+  s.onSlope = sloped;   // any tyre off the level: the curl from its first metre (Assist's crawl limit)
   s.wheelForce = wheelForce;
 
   // --- Hull contact (sills, bumpers, roof) against everything ---
@@ -416,23 +527,10 @@ export function step(s, inp) {
   if (evWheel[0] > 0) record(imp, evTick, WHEEL, PART.wheel, evWheel);
 
   // --- Thrusters (nitrogen cold gas, blowdown) ---
-  flightComputer(s, inp, cmdT);
-  if (grounded >= 2) { cmdT.x = 0; cmdT.y = 0; cmdT.z = 0; }
-  eff.lift = inp.lift; eff.thrust = inp.thrust;
-  if (inp.assist && inp.level && grounded === 0 && s.air > 0) {
-    // LAND: govern lift so the sink rate eases to a soft touchdown on the ground below.
-    const h = Math.max(0, s.pos.y - SPEC.comHeight - 0.05);
-    // Plan the braking from the thrust the down-jets can actually make at today's tank pressure
-    // (blowdown halves it fast), then brake late and hard like the reveal (3.3 G peak at ≈6 m).
-    const aAvail = (LIFT_MAX * feedPressure(s)) / m - G;
-    const aPlan = clamp(aAvail * 0.5, 0.6, 9);    // margin: pressure can still fall during the burn
-    // Brake to a low hover (as the reveal did), then set down at walking pace: time to level.
-    const HOVER = 1.3;
-    let wantVy = h > HOVER ? -Math.max(0.6, Math.min(16, Math.sqrt((h - HOVER) * 2 * aPlan))) : -0.55;
-    if (h < HOVER + 1.5 && upW.y < 0.99) wantVy = Math.max(wantVy, -0.25);
-    if (s.vel.y < wantVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((wantVy - s.vel.y) * 0.8 + 0.55, 0, 1));
-  }
-  mix(eff, cmdT, target);
+  if (inp.manual && !inp.assist) {
+    // Advanced: each valve straight from its channel. No mixer, no trim, no flight computer.
+    for (let i = 0; i < NOZZLES.length; i++) target[i] = clamp(inp[VALVE_KEYS[i]] || 0, 0, 1);
+  } else computerTargets(s, inp, grounded, m, target);
   // Blowdown: the tanks expand adiabatically (p ∝ m^1.375 here, γ ≈ 1.4 for N2), thrust follows
   // pressure, and specific impulse sags with it (72 s full → ≈60 s average).
   const pr = feedPressure(s);

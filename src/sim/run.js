@@ -1,23 +1,35 @@
 // One attempt, start line to settle: steps the vehicle, quantises and records the input (so the
 // run can be re-simulated exactly), records replay frames, and measures everything the judges
 // score. Pure and deterministic: the Worker runs this same file to verify a submitted run.
-import { createVehicle, step, bodyRates, up, forward, worldPoint, newInput, DT, CAR, NOZZLES, HULL, massOf } from './vehicle.js';
+import { createVehicle, step, bodyRates, up, forward, worldPoint, newInput, DT, CAR, NOZZLES, HULL, massOf, VALVE_KEYS } from './vehicle.js';
 import { COURSES, DEFAULT_COURSE, WALL, LINEUP, SHOW, roofUnder, wallArcLength } from './courses.js';
 import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
 import { datan2, dacos, dhypot } from './dmath.js';
 
+// v11: the input log gains `manual` + ten valve channels (Advanced: per-thruster control); LAND rolls
+// out decisively from inverted, plans its brake on the end-of-stop pressure, holds the line and
+// protects the lift it needs; Pro is rate control; Assist limits the crawl up the curl and the
+// airborne carry; TC/ABS in every tier; the tier is telemetry.
+// v10: angular momentum integration and rotational air drag (no NaN at Pro spin rates).
 // v9: bodywork folds (elastic to a 100 kN yield per hull probe, then plastic crush), no artificial
 // spin damping while the hull is in contact, impact events; v8: taller Wall, sourced mass
 // distribution; v7: body geometry; v6: The Show is one flight (off the Wall, over the row); parked
 // vehicles are bodies with mass, per-surface materials; v5: driver-relative steer/roll/yaw,
 // grip-limited steering; v4: sourced specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 10;
+export const SIM_VERSION = 11;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 
-const KEYS = ['throttle', 'brake', 'steer', 'pitch', 'roll', 'yaw', 'lift', 'thrust', 'retro', 'level', 'fan', 'assist'];
+// The input log's channels. v11 appended `manual` and v0..v9 (one per nozzle, NOZZLE_SPEC order).
+const LEGACY_KEYS = ['throttle', 'brake', 'steer', 'pitch', 'roll', 'yaw', 'lift', 'thrust', 'retro', 'level', 'fan', 'assist'];
+const KEYS = [...LEGACY_KEYS, 'manual', ...VALVE_KEYS];
 export const INPUT_KEYS = KEYS;
+export const LEGACY_INPUT_KEYS = LEGACY_KEYS;
+// A log entry is [tick, ...channels]. Entries from an older client (12 channels) still verify: the
+// channels they lack are zero (no manual mode, valves shut), so they replay as they were flown,
+// under today's physics (as every log has on every SIM_VERSION bump).
+export const isLogEntryLength = (n) => n === KEYS.length + 1 || n === LEGACY_KEYS.length + 1;
 
 // Quantise a raw input to the canonical integers both client and server use.
 export function quantise(raw, out) {
@@ -28,7 +40,7 @@ export function quantise(raw, out) {
   return out;
 }
 const pack = (q) => KEYS.map((k) => Math.round(q[k] * 100));
-const unpack = (arr, out) => { for (let i = 0; i < KEYS.length; i++) out[KEYS[i]] = arr[i] / 100; return out; };
+const unpack = (arr, out) => { for (let i = 0; i < KEYS.length; i++) out[KEYS[i]] = (arr[i] || 0) / 100; return out; };
 
 // Everything the judges score.
 function newTelemetry(courseId) {
@@ -42,6 +54,9 @@ function newTelemetry(courseId) {
     wheelTouch: [-1, -1, -1, -1], wheelSpreadMs: 0, maxCompression: 0, bottomOut: false,
     bodyStrike: false, flipped: false, settledUpright: false, maxSpeed: 0,
     thrustChanges: 0, endReason: '',
+    // Flight tier, from the inputs actually flown: any Assist tick makes it an Assist run; an
+    // Advanced run is manual on every tick of the flight (from release to touchdown).
+    usedAssist: false, usedPro: false, usedManual: false, tier: 'assist',
     zeroToSixty: null,
     // The Wall.
     rampEntrySpeed: 0, rampTick: -1, maxRampHeight: 0, progress: 0, invertedTime: 0, maxG: 0,
@@ -103,6 +118,9 @@ export function wallProgress(pos) {
 
 function advance(run, input) {
   const c = run.car, t = run.t;
+  if (input.assist) t.usedAssist = true;
+  else if (input.manual) t.usedManual = true;
+  else if (run.phase === 'air' || run.phase === 'ramp') t.usedPro = true;
   // The Wall's rules run the Wall and the Show (which is the Wall with the row under its ledge).
   const show = run.course === 'show';
   const wall = run.course !== 'lineup';
@@ -238,6 +256,7 @@ function closeBook(run, t, reason) {
   const c = run.car;
   t.endTick = run.tick;
   t.endReason = reason;
+  t.tier = t.usedAssist ? 'assist' : t.usedManual && !t.usedPro ? 'advanced' : 'pro';
   t.airEnd = c.air;
   up(c, upv);
   t.settledUpright = upv.y > 0.8 && !t.flipped;
@@ -247,14 +266,16 @@ function closeBook(run, t, reason) {
   t.mass = massOf(c);
 }
 
-// Re-simulate a run from its input log alone (replay, server verification).
-export function simulate(inputLog, courseId = DEFAULT_COURSE, maxTicks = MAX_TICKS) {
+// Re-simulate a run from its input log alone (replay, server verification). `onTick(run, input)`
+// (optional) sees every tick: the coach (src/sim/coach.js) reads the flight through it.
+export function simulate(inputLog, courseId = DEFAULT_COURSE, maxTicks = MAX_TICKS, onTick = null) {
   const run = createRun(courseId);
   const inp = newInput();
   let li = 0;
   while (run.phase !== 'done' && run.tick < maxTicks) {
     while (li < inputLog.length && inputLog[li][0] <= run.tick) { unpack(inputLog[li].slice(1), inp); li++; }
     advance(run, inp);
+    if (onTick) onTick(run, inp);
   }
   if (run.phase !== 'done') finish(run, 'timeout');
   run.inputLog = inputLog;

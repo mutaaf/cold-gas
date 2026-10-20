@@ -23,7 +23,8 @@ mark, and air left in the tanks.
    you can feel in the camera and the sound, plumes that look like cold gas rather than fire,
    and a replay you want to watch twice. Polish beats features.
 2. **Mastery and fairness.** A deterministic sim, server-verified scores (the Worker replays
-   the input log), legible judging (every category explained), Assist and Pro modes, and an
+   the input log), legible judging (every category explained), three flight tiers (Assist,
+   Pro, Advanced: ten valves by hand), a skill ladder (drills, the landing HUD, the coach), and an
    honest leaderboard.
 3. **The panel.** The AI judges' voices (src/worker → Claude) must be specific, short and in
    character, never generic. The numbers come from `src/sim/judge.js` and nowhere else.
@@ -85,7 +86,8 @@ mark, and air left in the tanks.
    ESTIMATE note; never tune the car to "feel" without saying what real quantity changed.
    `node scripts/physics-bench.mjs` (0–60, braking, cornering) and `node scripts/naive-players.mjs`
    (32 simple strategies must all land upright with Assist) are the realism and accessibility
-   gates: run them for any physics change.
+   gates: run them for any physics change, with `node scripts/human-show.mjs 300 assist --cues=new`
+   (players who follow the cue or the HUD land ≥ 95 %).
 5. **Scores are decided by `scoreRun`.** The AI writes words only. The client never sends a
    score: the Worker replays the log.
 5½. **AI usage is always visible and honest.** Every model call goes through the theatre and
@@ -119,14 +121,21 @@ src/sim/              PURE, shared with the Worker:
                           body (wheels, hull, fan)
   vehicle.js            physics v2: 6-DOF body, raycast suspension on any surface, Pacejka tyres
                           with implicit wheel spin, TC/ABS, stiction, 2 g suction fan, cold-gas
-                          nozzles with blowdown, mixer, flight computer (Assist / LAND / Pro)
-  run.js                one attempt: input log (12 channels incl. fan), phases drive → ramp →
+                          nozzles with blowdown, mixer, flight computer (Assist: rates, LAND roll-out,
+                          brake governor, line hold, envelope, crawl and carry limits / Pro: rates /
+                          Advanced: `manual`, valves straight to the nozzles)
+  run.js                one attempt: input log (23 channels: 12, `manual`, ten valves; 12-channel
+                          logs still verify), tier telemetry, phases drive → ramp →
                           air → landed, telemetry (Show: clearance, crossedRow), simulate();
                           replay frames carry each parked body's pose; run.impacts = the crash
   impacts.js            impact events (hit / scrape / tyre slam / crush: tick, point, normal,
                           speed, part, body) in fixed typed arrays, written by vehicle.step
   autopilot.js          reference runs for both courses, closed-loop through the same physics
-  judge.js              scoreRun: per-course categories → three judges → total /100 + verdict
+  judge.js              scoreRun: per-course categories → three judges → total /100 + verdict;
+                          TIERS (Assist ×1, Pro ×1.08, Advanced ×1.15) from the flown inputs
+  predict.js            the descent from here: sink band, BRAKE line, time to ground, touchdown
+                          point, gas to stop, roll/pitch to level (HUD, coach, drills; not scored)
+  coach.js              re-flies a log and names the fixes, with the numbers (results sheet)
 src/render/           three.js (r186):
   scene.js              renderer, composer, course switching (`setCourse`), lineup world,
                           sliced first load (`stage.ready`: build, bake, compileAsync, fade in)
@@ -142,7 +151,11 @@ src/render/           three.js (r186):
   sliver.js             minimum on-screen width for thin lights/paint/struts (anti-flicker),
                           DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable
-src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air)
+src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier)
+src/valves.js         Advanced: keyboard layout like the car, chords, key ramp, gamepad, the touch
+                        nozzle pad
+src/hud-landing.js    the landing HUD (sink band, descent tape, ADI, roll-out cue) + touchdown ring
+src/practice.js       drills from moments of the reference flight, retry, drill scorecards
 src/audio.js          procedural WebAudio: motor, tyres, wind, nozzle hiss, chimes, crash crunch/grind
 src/ui.js             HUD (in-place updates), results sheet, board
 src/panel.js          board client + local judge lines (offline fallback)
@@ -155,6 +168,11 @@ tests/unit/           Vitest: sim, course, mixer, determinism, judging
 tests/e2e/            Playwright: boot + reference jump + judging, deep link, phone
 scripts/fly.mjs       Headless reference flight with telemetry (tuning tool)
 scripts/shots.mjs     Screenshots of key moments against a running preview
+scripts/human-show.mjs     human-like players on the Show (reaction time, keys, cues): the
+                           learnability gate. --cues old|new, assist|pro
+scripts/human-advanced.mjs Advanced by a person: taps on the valve keys
+scripts/play-human.mjs     a cue-following player on the real page (keyboard or touch)
+scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
 scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)
 ```
 
