@@ -226,7 +226,7 @@ function startRunNow(kind = 'jump') {
   const c = S.run.car;
   const sag = c.wheels[0].compression;
   syncCar(c.pos, c.quat, [sag, sag, sag, sag], [0, 0, 0, 0], 0);
-  director.restart();
+  director.restart(); hero.placed();
   if (S.autopilot) ui.cue_({ show: 'The reference run: the Wall, then the lineup', wall: 'The reference run: up the Wall' }[stage.course] || 'The reference jump', 2400);
 }
 
@@ -580,7 +580,7 @@ function replayStep(dt) {
   const L = COURSES.lineup;
   const slow = stage.course !== 'lineup' ? (f[1] > 3 ? 0.45 : 1) : (f[2] > L.liftOffZ - 2 && f[2] < L.pad.z - 6 ? 0.42 : 1);
   S.replayT += dt * (240 / FRAME_EVERY) * slow;
-  if (S.replayT >= n + 90) { S.replayT = 0; director.restart(); }   // hold a beat, loop
+  if (S.replayT >= n + 90) { S.replayT = 0; director.restart(); hero.placed(); }   // hold a beat, loop
   const i1 = Math.min(n - 1, i0 + 1), k = Math.min(1, S.replayT - i0);
   const g = frames[i1];
   fpos.x = f[0] + (g[0] - f[0]) * k; fpos.y = f[1] + (g[1] - f[1]) * k; fpos.z = f[2] + (g[2] - f[2]) * k;
@@ -662,7 +662,7 @@ const on = (sel, fn) => document.querySelectorAll(sel).forEach((el) => el.addEve
 on('[data-start]', () => startRun('jump'));
 on('[data-reveal]', () => startRun('reveal'));
 on('[data-again]', () => startRun('jump'));
-on('[data-replay]', () => { S.replayT = 0; director.restart(); });
+on('[data-replay]', () => { S.replayT = 0; director.restart(); hero.placed(); });
 on('[data-home]', () => { S.paused = false; toTitle(); });
 on('[data-resume]', () => pause(false));
 on('[data-restart]', () => { S.paused = false; ui.show('pause', false); startRun(S.autopilot ? 'reveal' : 'jump'); });
@@ -788,7 +788,7 @@ function startDrillNow(id) {
   // Practice defaults to the pilot view until you pick one (L).
   if (!S.viewChosen) { S.pilotView = true; syncView(); }
   director.setView(S.pilotView ? 'pilot' : 'broadcast');
-  director.restart();
+  director.restart(); hero.placed();
   refGhost(stage.course);
   ui.cue_(`${drill.label} · ${drill.goal}`, 1500);
 }

@@ -821,6 +821,8 @@ export function makeRoadster() {
     group, body, shell: merged[M.paint.uuid], canopy: merged[M.glass.uuid],
     ghostParts: [merged[M.paint.uuid], merged[M.black.uuid], merged[M.glass.uuid], ...wheels.map((w) => w.spin.children[0])],
     wheels, comY: SPEC.comHeight, setWing, setFan, setBrake, setThrust, update, debugHold: false,
+    // A new placement the 3 m jump can't see (the Wall starts 3 m from its pad): wake on the next frame.
+    placed: () => { st.has = false; },
     // Crash hooks: the parts that can tear off, and the lamp damage / hazard state.
     parts: { wing, vanes, barge, sideSkirts, endSkirts }, setBroken, setDamage,
   };
