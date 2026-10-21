@@ -10,14 +10,23 @@
 // Touch      ground: steer stick · GO and BRAKE pedals · LIFT (RELEASE on the wall)
 //            air:    stick rolls and pitches (up = nose up) · LIFT · LAND
 //            Advanced (air): the nozzle pad, a car with a pad on every nozzle
+//            The stick has a 15 % dead zone: a thumb resting on it in the air used to command a
+//            roll (any |roll| > 0.05 is a rate demand, and it switches off LAND's hold-the-line).
+// One-thumb  Assist on the Show and the Wall: one control (src/onethumb.js), hold / tap / hold.
+// Tilt       optional steering by tilting the phone (src/touch-settings.js), on the ground only.
 import { newInput, VALVE_KEYS } from './sim/vehicle.js';
 import { createKeyRamp, padValves, bindNozzlePad, VALVES } from './valves.js';
+import { createOneThumb } from './onethumb.js';
+import { tiltSteer, buzz } from './touch-settings.js';
 
 const keys = new Set();
 const touch = { active: false, x: 0, y: 0, lift: false, land: false, go: false, brk: false };
 
 let nozzlePad = { valves: new Float64Array(VALVES), active: () => false, show: () => {}, sync: () => {} };
 export const getNozzlePad = () => nozzlePad;
+export const thumb = createOneThumb();
+const STICK_DEAD = 0.15;
+const deadzone = (v) => (Math.abs(v) < STICK_DEAD ? 0 : (Math.sign(v) * (Math.abs(v) - STICK_DEAD)) / (1 - STICK_DEAD));
 
 export function bindInput(root, { onPause } = {}) {
   nozzlePad = bindNozzlePad(root);
@@ -55,10 +64,31 @@ export function bindInput(root, { onPause } = {}) {
   for (const [sel, k] of [['[data-btn-lift]', 'lift'], ['[data-btn-land]', 'land'], ['[data-btn-go]', 'go'], ['[data-btn-brake]', 'brk']]) {
     const b = root.querySelector(sel);
     if (!b) continue;
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); touch[k] = true; touch.active = true; b.classList.add('on'); b.setPointerCapture(e.pointerId); });
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); touch[k] = true; touch.active = true; b.classList.add('on'); b.setPointerCapture(e.pointerId); buzz('tap'); });
     const off = () => { touch[k] = false; b.classList.remove('on'); };
     b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off);
   }
+  // One-thumb: the whole pad is the control; a press anywhere on it counts.
+  const pad = root.querySelector('[data-onethumb]');
+  if (pad) {
+    let pid = null;
+    pad.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      if (pid !== null) return;
+      pid = e.pointerId; pad.setPointerCapture?.(pid);
+      touch.active = true; thumb.down(); pad.classList.add('on'); buzz('tap');
+    });
+    const off = (e) => { if (e.pointerId !== pid) return; pid = null; thumb.up(); pad.classList.remove('on'); };
+    pad.addEventListener('pointerup', off); pad.addEventListener('pointercancel', off);
+  }
+  // A long press must never open a callout or a context menu over the controls.
+  for (const el of root.querySelectorAll('[data-touch], [data-nozzle-pad]')) el.addEventListener('contextmenu', (e) => e.preventDefault());
+}
+
+// One-thumb: the run's input for this tick from the one control (and tilt, on the ground).
+export function sampleThumb(run, released, out = newInput()) {
+  Object.assign(out, newInput());
+  return thumb.sample(run, released, out, tiltSteer());
 }
 
 const k = (...codes) => codes.some((c) => keys.has(c));
@@ -114,13 +144,14 @@ export function sample(phase, tier, out = newInput(), released = false) {
   if (touch.active) {
     // Touch: on the ground (and up the wall) the stick only steers and the pedals drive. In the
     // air it flies, and pushing up raises the nose: what people expect on a phone.
-    ax += touch.x;
-    if (air) ay -= touch.y;
+    ax += deadzone(touch.x);
+    if (air) ay -= deadzone(touch.y);
     if (touch.lift) lift = 1;
     if (touch.land) land = 1;
     if (touch.go) { thr = 1; boost = 1; }
     if (touch.brk) brk = 1;
   }
+  if (!air) ax += tiltSteer();
   ax = Math.max(-1, Math.min(1, ax)); ay = Math.max(-1, Math.min(1, ay));
 
   if (out.manual) return advanced(out, air, lift, ax, thr, brk, pads);

@@ -130,7 +130,7 @@ export function createDrive(ctx) {
     hudRoot.hidden = false;
     document.body.classList.add('driving');
     ui.touch.hidden = !(ctx.coarse || input.usingTouch());
-    ui.touch.dataset.phase = 'ground';
+    ui.touch.dataset.phase = 'ground'; ui.touch.dataset.scheme = 'classic'; ui.touch.dataset.course = 'drive';
     st.active = true; st.paused = false; st.acc = 0; st.driveT = 0;
     ctx.setMode('drive');
     bindKeys(true);
