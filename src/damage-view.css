@@ -2,11 +2,11 @@
    carries on under it. Desktop: a panel above the HUD's vehicle corner. Phones: a bottom sheet. */
 .dmv { position: fixed; z-index: 7; left: calc(clamp(16px, 2.4vw, 36px) + var(--safe-l)); bottom: calc(210px + var(--safe-b)); width: min(420px, calc(100vw - 32px));
   max-height: calc(100vh - 290px - var(--safe-t)); overflow-y: auto; overscroll-behavior: contain; padding: 18px 20px 16px;
-  border-radius: 8px; border: 1px solid rgba(245, 246, 248, 0.16); background: rgba(5, 7, 12, 0.88);
-  backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  border-radius: 8px; border: 1px solid rgba(245, 246, 248, 0.16); background: linear-gradient(180deg, #0b0e15, #06080d);   /* opaque: nothing under it reads through */
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
   color: var(--ink); font-variant-numeric: tabular-nums; pointer-events: auto; user-select: none; --line: rgba(245, 246, 248, 0.16); }
 .dmv.on { animation: dmv-in 0.32s var(--ease); }
-@keyframes dmv-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+@keyframes dmv-in { from { transform: translateY(10px) scale(0.985); } }
 .dmv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .dmv-eyebrow { margin: 0 0 6px; font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
 .dmv-title { margin: 0; display: flex; align-items: baseline; gap: 6px; font-weight: 400; }
@@ -61,6 +61,9 @@
 .dmv-does ul { margin: 0; padding: 0 0 0 16px; display: grid; gap: 6px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
 .dmv-does b { color: var(--ink); font-weight: 500; }
 .dmv-fine { margin: 10px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--ink-3); }
+/* While it's open the HUD steps back (the run carries on): nothing reads through the glass. The
+   damage map itself stays bright, it's the instrument you opened. */
+body.dmv-open .hud > :not(.h-vehicle), body.dmv-open .cue { opacity: 0.2; transition: opacity 0.25s var(--ease); }
 /* Phones: a sheet from the bottom, over the thumbs' band; the run goes on above it. */
 @media (pointer: coarse), (max-width: 760px) {
   .dmv { left: 0; right: 0; bottom: 0; width: auto; max-height: 64vh; border-radius: 16px 16px 0 0; border-bottom: 0; padding: 14px 18px calc(16px + var(--safe-b)); }
@@ -70,5 +73,5 @@
   .dmv-car { width: 96px; height: 152px; }
   .dmv-title b { font-size: 36px; }
 }
-@keyframes dmv-sheet { from { transform: translateY(40%); opacity: 0; } }
+@keyframes dmv-sheet { from { transform: translateY(40%); } }
 @media (prefers-reduced-motion: reduce) { .dmv.on, .dmv-hits .mk.new circle { animation: none; } }

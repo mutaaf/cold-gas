@@ -184,11 +184,11 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
   .fd-maptag { font-size: 11px; min-width: 30px; padding: 4px 6px; top: -4px; right: -4px; }
 }
 /* The full map: glass over the stage. The drive carries on behind it. */
-.fd-xmap { position: fixed; inset: 0; z-index: 7; display: grid; place-items: center; pointer-events: none; padding: calc(64px + var(--safe-t)) calc(24px + var(--safe-r)) calc(24px + var(--safe-b)) calc(24px + var(--safe-l)); }
+.fd-xmap { position: fixed; inset: 0; z-index: 7; display: grid; place-items: center; pointer-events: none; background: rgba(3, 5, 9, 0.6); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); padding: calc(64px + var(--safe-t)) calc(24px + var(--safe-r)) calc(24px + var(--safe-b)) calc(24px + var(--safe-l)); }
 .fd-xmap.on .xm-panel { animation: xm-in 0.32s var(--ease); }
-@keyframes xm-in { from { opacity: 0; transform: scale(0.97); } }
+@keyframes xm-in { from { transform: scale(0.97); } }
 .xm-panel { pointer-events: auto; width: min(1080px, 100%); height: min(760px, 100%); display: grid; grid-template-rows: auto 1fr 96px; gap: 0; overflow: hidden;
-  border-radius: 10px; border: 1px solid rgba(245, 246, 248, 0.16); background: rgba(5, 7, 12, 0.93); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  border-radius: 10px; border: 1px solid rgba(245, 246, 248, 0.16); background: linear-gradient(180deg, #0b0e15, #06080d);
   box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6); color: var(--ink); font-variant-numeric: tabular-nums; text-shadow: none; }
 .xm-head { display: flex; align-items: center; gap: 20px; padding: 14px 16px 12px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .xm-title .eyebrow { margin: 0 0 4px; }
@@ -222,3 +222,4 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
   .xm-hint { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { .fd-xmap.on .xm-panel { animation: none; } }
+body.xmap-open .fd-hud, body.xmap-open .bq-dock, body.xmap-open .touch { opacity: 0; transition: opacity 0.2s var(--ease); }

@@ -111,12 +111,14 @@ export function createDamageView(ui, { anchor }) {
 
   function openView() {
     open = true; root.hidden = false; anchor.setAttribute('aria-expanded', 'true');
+    document.body.classList.add('dmv-open');   // the HUD steps back under it (src/damage-view.css)
     render();
     root.classList.remove('on'); void root.offsetWidth; root.classList.add('on');
   }
   function close() {
     if (!open) return;
     open = false; root.hidden = true; root.classList.remove('on'); anchor.removeAttribute('aria-expanded');
+    document.body.classList.remove('dmv-open');
     cancelAnimationFrame(raf); raf = 0;
   }
   return { toggle: () => (open ? close() : openView()), close, isOpen: () => open, root };

@@ -47,7 +47,7 @@ export function createInstruments(ui, { getRun }) {
         ['Hardest burn', s.peakDraw > 0.5 ? flow(s.peakDraw) : '—'],
         ['Used this flight', s.gasStart >= 0 ? fmtMass(Math.max(0, s.gasStart - gas)) : '—'],
       ];
-      return { title: 'Nitrogen · burn time', big: Number.isFinite(left) ? left.toFixed(1) : '—', unit: 's',
+      return { title: 'Nitrogen · burn time', big: Number.isFinite(left) ? left.toFixed(1) : '—', unit: Number.isFinite(left) ? 's' : '',
         sub: burning ? 'left at this draw' : s.peakDraw > 0.5 ? 'left at this flight’s hardest burn' : 'no burn yet this flight', rows,
         note: 'Below about two thirds of a fill the regulator loses line pressure: every jet thins out with the gas.' };
     },
@@ -55,7 +55,7 @@ export function createInstruments(ui, { getRun }) {
       const s = ui.stats, sp = s.splits;
       const rows = sp.length ? sp.map((x, i) => {
         const end = i + 1 < sp.length ? sp[i + 1].t : s.clock;
-        return [`${String(i + 1).padStart(2, '0')} ${x.label}`, `${clockOf(x.t)} · ${Math.max(0, end - x.t).toFixed(1)} s${i === sp.length - 1 ? ' ·  now' : ''}`];
+        return [`${String(i + 1).padStart(2, '0')} ${x.label}`, `${clockOf(x.t)} · ${Math.max(0, end - x.t).toFixed(1)} s${i === sp.length - 1 ? ' · now' : ''}`];
       }) : [['—', 'the clock starts on the green light']];
       return { title: 'Mission clock · splits', big: clockOf(s.clock).slice(1), unit: '', sub: `Top speed ${fmtSpeed(s.maxSpeed)}`, rows,
         note: 'Each phase from the moment you entered it; the last one is still running.' };

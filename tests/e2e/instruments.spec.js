@@ -65,6 +65,8 @@ test('the damage map opens up, a zone focuses, Escape closes it, and the run nev
   const view = page.locator('.dmv');
   await expect(view).toBeVisible();
   await expect(view.locator('[data-v-int]')).toHaveText('100');
+  // The HUD steps back under it: nothing reads through the glass.
+  await expect.poll(() => page.evaluate(() => Number(getComputedStyle(document.querySelector('[data-hud-box="strip"]')).opacity))).toBeLessThan(0.3);
   await expect(view.locator('[data-zone]')).toHaveCount(7);
   await expect(view).toContainText('What damage does');
   await view.locator('[data-zone="nose"]').click();
@@ -83,6 +85,7 @@ test('the damage map opens up, a zone focuses, Escape closes it, and the run nev
   expect(await page.evaluate(() => window.__coldgas.S.run.tick)).toBeGreaterThan(t0);
   await page.keyboard.press('Escape');
   await expect(view).toBeHidden();
+  await expect.poll(() => page.evaluate(() => Number(getComputedStyle(document.querySelector('[data-hud-box="strip"]')).opacity))).toBe(1);
   expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('live');
   expect(errors).toEqual([]);
 });
@@ -147,6 +150,9 @@ test('Free Drive: the minimap opens the full map, a tap reads the road, Escape c
   const map = page.locator('.fd-xmap');
   await expect(map).toBeVisible();
   await expect(map.locator('[data-xm-togo]')).toHaveText(/mi · .*km/);
+  // The driving HUD under the map is inert and out of sight while it's open.
+  expect(await page.evaluate(() => document.querySelector('[data-drive-hud]').inert)).toBe(true);
+  await expect.poll(() => page.evaluate(() => Number(getComputedStyle(document.querySelector('[data-drive-hud]')).opacity))).toBeLessThan(0.05);
   // A tap on the elevation profile reads the road there: distance, elevation (ft first), grade.
   const box = await map.locator('[data-xm-prof]').boundingBox();
   await page.mouse.click(box.x + box.width * 0.5, box.y + box.height * 0.5);
@@ -161,6 +167,7 @@ test('Free Drive: the minimap opens the full map, a tap reads the road, Escape c
   await page.keyboard.press('Escape');
   await expect(map).toBeHidden();
   expect(await page.evaluate(() => window.__coldgas.drive.paused)).toBe(false);
+  expect(await page.evaluate(() => document.querySelector('[data-drive-hud]').inert)).toBe(false);
   // M opens it again.
   await page.keyboard.press('KeyM');
   await expect(map).toBeVisible();

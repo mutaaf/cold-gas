@@ -372,6 +372,8 @@ export function createMapOverlay(root, road, mini, { endless = false, name = '',
 
   function show() {
     open = true; el.classList.add('on'); el.hidden = false;
+    // The driving HUD under it goes inert and out of sight: nothing reads through the map.
+    root.inert = true; document.body.classList.add('xmap-open');
     fitAll(); pick = -1; tip.hidden = true;
     mini.state.drawnAt = 0;
     draw();
@@ -379,6 +381,7 @@ export function createMapOverlay(root, road, mini, { endless = false, name = '',
   function close() {
     if (!open) return;
     open = false; el.classList.remove('on'); el.hidden = true;
+    root.inert = false; document.body.classList.remove('xmap-open');
     cancelAnimationFrame(raf); raf = 0;
     onClose();
   }
