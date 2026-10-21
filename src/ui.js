@@ -24,7 +24,7 @@ export function createUI() {
     screens: Object.fromEntries([...document.querySelectorAll('[data-screen]')].map((el) => [el.dataset.screen, el])),
     speed: $('[data-speed]'), speedBig: $('[data-speed-big]'), air: $('[data-air]'), airBar: $('[data-air-bar]'),
     roll: $('[data-roll]'), alt: $('[data-alt]'), sink: $('[data-sink]'), rollArc: $('[data-roll-arc]'),
-    bank: $('[data-bank]'), pitch: $('[data-pitch]'), clock: $('[data-clock]'), timeline: $('[data-timeline]'),
+    pitch: $('[data-pitch]'), tankBar: $('[data-tank-bar]'), n2State: $('[data-n2-state]'), clock: $('[data-clock]'), timeline: $('[data-timeline]'),
     cue: $('[data-cue]'), count: $('[data-count]'), touch: $('[data-touch]'),
   };
 
@@ -82,19 +82,19 @@ export function createUI() {
   // Last-written values, so the DOM is only touched on change. Numbers glide to their targets (a
   // first-order lag of ≈90 ms: readable, never late) and are written only when the shown digits
   // change; tabular figures keep every digit in its place.
-  const last = { speed: -1, speedBig: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, gState: '', fan: -1, phaseKey: '', airborne: null, clock: -99999, bank: -999, pitch: -999, n2: '' };
-  const tw = { speed: 0, alt: 0, sink: 0, g: 1, t: 0 };
+  const last = { speed: -1, speedBig: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, gState: '', fan: -1, phaseKey: '', airborne: null, clock: -99999, pitch: -999, n2: '', kg: -1, bar: -1, gas: '' };
+  const tw = { speed: 0, alt: 0, sink: 0, t: 0 };
   const gEl = $('[data-g]'), fanEl = $('[data-fan]'), n2El = $('[data-tank]');
   const hudEl = ui.screens.hud;
   ui.setClock = (sec) => { const cl = Math.round(sec * 10); if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; } };
-  ui.resetHud = () => { tw.speed = 0; tw.alt = 0; tw.sink = 0; tw.g = 1; tw.t = 0; last.phaseKey = ''; };
-  ui.hud = ({ speed, air, rollDeg, alt, sink, phaseKey = '', clock = 0, bank = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
+  ui.resetHud = () => { tw.speed = 0; tw.alt = 0; tw.sink = 0; tw.t = 0; last.phaseKey = ''; };
+  ui.hud = ({ speed, air, gasKg = 0, tankBar = 0, gasState = 'reg', rollDeg, alt, sink, phaseKey = '', clock = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
     const now = performance.now(), dt = tw.t ? Math.min(0.1, (now - tw.t) / 1000) : 1;
     tw.t = now;
     const k = 1 - Math.exp(-dt / 0.09);
-    tw.speed += (speed - tw.speed) * k; tw.alt += (alt - tw.alt) * k; tw.sink += (sink - tw.sink) * k; tw.g += (g - tw.g) * k;
+    tw.speed += (speed - tw.speed) * k; tw.alt += (alt - tw.alt) * k; tw.sink += (sink - tw.sink) * k;
     if (airborne !== last.airborne) { hudEl.toggleAttribute('data-air', airborne); last.airborne = airborne; }
-    const gg = Math.round(tw.g * 10);
+    const gg = Math.round(g * 10);   // already a 0.5 s window (src/hud-telemetry.js): no glide on top
     if (gg !== last.g) {
       gEl.textContent = (gg / 10).toFixed(1); last.g = gg;
       const st = g > 4.5 ? 'warn' : g > 3 ? 'caution' : '';
@@ -104,12 +104,18 @@ export function createUI() {
     if (ff !== last.fan) { fanEl.textContent = String(ff); last.fan = ff; }
     const sp = Math.round(tw.speed * 3.6);
     if (sp !== last.speed) { ui.speed.textContent = String(sp); ui.speedBig.textContent = String(sp); last.speed = sp; }
+    // N₂: kg left (the bar under it is the fraction of a fill), tank bar, and the regulator's state.
     const a = Math.round(air);
     if (a !== last.air) {
-      ui.air.textContent = String(a); ui.airBar.style.transform = `scaleX(${a / 100})`; last.air = a;
+      ui.airBar.style.transform = `scaleX(${a / 100})`; last.air = a;
       const st = a < 15 ? 'warn' : a < 30 ? 'caution' : '';
       if (st !== last.n2) { n2El.dataset.state = st; last.n2 = st; }
     }
+    const kg = Math.round(gasKg);
+    if (kg !== last.kg) { ui.air.textContent = String(Math.max(0, kg)); last.kg = kg; }
+    const br = Math.round(tankBar);
+    if (br !== last.bar) { ui.tankBar.textContent = String(br); last.bar = br; }
+    if (gasState !== last.gas) { ui.n2State.textContent = gasState === 'blowdown' ? 'Blowdown' : 'Reg'; n2El.dataset.gas = gasState; last.gas = gasState; }
     const r = Math.round(rollDeg);
     if (r !== last.roll) {
       ui.roll.textContent = String(r);
@@ -121,10 +127,9 @@ export function createUI() {
     if (al !== last.alt) { ui.alt.textContent = (Math.max(0, al) / 10).toFixed(1); last.alt = al; }
     const sk = Math.round(tw.sink * 10);
     if (sk !== last.sink) { ui.sink.textContent = (Math.max(0, sk) / 10).toFixed(1); last.sink = sk; }
-    // Attitude: bank (+ right wing down) and pitch (+ nose up), whole degrees.
-    const bk = Math.round(bank), pt = Math.round(pitch);
-    if (bk !== last.bank) { ui.bank.textContent = bk > 0 ? `R${bk}` : bk < 0 ? `L${-bk}` : '0'; last.bank = bk; }
-    if (pt !== last.pitch) { ui.pitch.textContent = pt > 0 ? `+${pt}` : String(pt); last.pitch = pt; }
+    // Pitch, whole degrees: up the deck 0–180 (unsigned), in the air signed (+ nose up). The bank is the ADI's.
+    const pt = Math.round(pitch), pk = pt * 2 + (airborne ? 1 : 0);   // the sign shows only in the air
+    if (pk !== last.pitch) { ui.pitch.textContent = airborne && pt > 0 ? `+${pt}` : String(pt); last.pitch = pk; }
     // The mission clock: T− in the countdown, T+ from the green light, in tenths.
     const cl = Math.round(clock * 10);
     if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; }

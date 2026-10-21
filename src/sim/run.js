@@ -34,7 +34,7 @@ import { datan2, dacos, dhypot } from './dmath.js';
 export const SIM_VERSION = 16;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
-const G_WIN = 120;                      // 0.5 s of ticks: the braking peak's averaging window
+export const G_WIN = 120;               // 0.5 s of ticks: the braking peak's averaging window
 
 // The input log's channels. v11 appended `manual` and v0..v9 (one per nozzle, NOZZLE_SPEC order).
 const LEGACY_KEYS = ['throttle', 'brake', 'steer', 'pitch', 'roll', 'yaw', 'lift', 'thrust', 'retro', 'level', 'fan', 'assist'];
