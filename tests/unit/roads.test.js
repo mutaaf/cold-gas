@@ -9,6 +9,8 @@ import { createVehicle, step, newInput } from '../../src/sim/vehicle.js';
 import { quatFromYaw } from '../../src/sim/m3.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { createPilot } from '../../src/drive/pilot.js';
+import { RAPIER } from '../../src/sim/engine.js';
+import { GROUP } from '../../src/sim/world.js';
 import { ROADS } from '../../src/drive/manifest.js';
 
 const load = (id) => {
@@ -135,6 +137,22 @@ describe('driving a real road', () => {
     const a = drive('atlantic', 240 * 8).car, b = drive('atlantic', 240 * 8).car;
     for (const k of ['x', 'y', 'z']) { expect(a.pos[k]).toBe(b.pos[k]); expect(a.vel[k]).toBe(b.vel[k]); }
     for (const k of ['x', 'y', 'z', 'w']) expect(a.quat[k]).toBe(b.quat[k]);
+  });
+  it('the engine\'s near-car copy of the road (what the hull hits) lies on the road', () => {
+    const { car } = drive('stelvio', 240 * 4);
+    const w = car.world, out = {};
+    const ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
+    let sum = 0, n = 0;
+    for (let dx = -40; dx <= 40; dx += 3.7) for (let dz = -40; dz <= 40; dz += 3.3) {
+      const x = w.chunk.x + dx, z = w.chunk.z + dz;
+      ray.origin.x = x - w.ox; ray.origin.y = car.pos.y + 1.4 - w.oy; ray.origin.z = z - w.oz;
+      const h = w.rw.castRay(ray, 200, true, undefined, ((0xffff << 16) | GROUP.approx) >>> 0);
+      if (!h) continue;
+      const phi = w.course.sdf(x, car.pos.y + 1.4 - h.timeOfImpact, z, out);
+      if (out.y > 0.7) { sum += Math.abs(phi); n++; }
+    }
+    expect(n).toBeGreaterThan(100);
+    expect(sum / n).toBeLessThan(0.05);   // 2 m posts on the exact surface: centimetres between them
   });
   it('src/sim/roads.js keeps to deterministic math', () => {
     const src = readFileSync(new URL('../../src/sim/roads.js', import.meta.url), 'utf8');

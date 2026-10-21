@@ -23,6 +23,7 @@ import { PROVIDERS, EDGE_MODELS, streamJudge, listModels, pickModel, costUsd, de
 import { detectProvider } from '../ai/detect.js';
 import { validateQuest, extractJson } from '../build/quest-schema.js';
 import { questSystem, questUser, QUEST_MAX_TOKENS } from './ai/quest.js';
+import { physicsReady } from '../sim/engine.js';
 
 const EDGE_DAILY_CAP = 700;         // free-allowance judgings per UTC day (≈13 neurons each, 10k free)
 const EDGE_HOURLY_PER_IP = 40;
@@ -349,7 +350,11 @@ async function page(req, env) {
 export default {
   async fetch(req, env, ctx) {
     if (PAGES.has(new URL(req.url).pathname) && (req.method === 'GET' || req.method === 'HEAD')) return page(req, env);
-    try { return await handle(req, env, ctx); }
+    try {
+      // The replay runs on the rigid-body engine's WASM: start it once per isolate.
+      if (!physicsReady()) await (await import('./physics.js')).startPhysics();
+      return await handle(req, env, ctx);
+    }
     catch (err) { console.error('worker error', err?.name, err?.status); return json({ error: 'server' }, 500); }
   },
 };

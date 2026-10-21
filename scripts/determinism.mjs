@@ -5,23 +5,25 @@ import { chromium, firefox, webkit } from '@playwright/test';
 import { createServer } from 'vite';
 const logs = JSON.parse(readFileSync(process.argv[2], 'utf8'));
 const probe = async (logs) => {
+  await (await import('/coldgas/src/sim/engine-web.js')).loadPhysics();   // the engine's WASM, as the game loads it
   const { simulate } = await import('/coldgas/src/sim/run.js');
   const { scoreRun } = await import('/coldgas/src/sim/judge.js');
   const out = {};
   for (const [course, log] of Object.entries(logs)) {
     const run = simulate(log, course);
     const c = run.car;
-    out[course] = { tick: run.tick, bits: [c.pos.x, c.pos.y, c.pos.z, c.quat.w, c.air].map((v) => v.toString()).join(','), total: scoreRun(run.t, { assist: true }).total };
+    out[course] = { tick: run.tick, bits: [c.pos.x, c.pos.y, c.pos.z, c.quat.w, c.air, ...c.world.bodies.flatMap((b) => [b.cx, b.cy, b.cz, b.qw])].map((v) => v.toString()).join(','), total: scoreRun(run.t, { assist: true }).total };
   }
   return out;
 };
 const results = {};
 results.node = await probe.call(null, logs).catch(async () => {
   // Node can't import "/src/…": use relative paths instead.
+  await (await import('../src/sim/engine.js')).initPhysics();
   const { simulate } = await import('../src/sim/run.js');
   const { scoreRun } = await import('../src/sim/judge.js');
   const out = {};
-  for (const [course, log] of Object.entries(logs)) { const run = simulate(log, course); const c = run.car; out[course] = { tick: run.tick, bits: [c.pos.x, c.pos.y, c.pos.z, c.quat.w, c.air].map((v) => v.toString()).join(','), total: scoreRun(run.t, { assist: true }).total }; }
+  for (const [course, log] of Object.entries(logs)) { const run = simulate(log, course); const c = run.car; out[course] = { tick: run.tick, bits: [c.pos.x, c.pos.y, c.pos.z, c.quat.w, c.air, ...c.world.bodies.flatMap((b) => [b.cx, b.cy, b.cz, b.qw])].map((v) => v.toString()).join(','), total: scoreRun(run.t, { assist: true }).total }; }
   return out;
 });
 const server = await createServer({ server: { port: 4399, strictPort: true }, logLevel: 'error' });

@@ -2,6 +2,8 @@
 import { createRun, stepRun, wallProgress } from '../src/sim/run.js';
 import { newInput } from '../src/sim/vehicle.js';
 import { scoreRun } from '../src/sim/judge.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 const strategies = [];
 for (const approach of [12, 17, 25, 40]) for (const climbThrottle of [0.5, 1]) for (const releaseAt of [0.6, 0.85, 0.97, 1.01]) strategies.push({ approach, climbThrottle, releaseAt });
 let ok = 0;

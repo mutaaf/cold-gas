@@ -79,7 +79,10 @@ mark, and air left in the tanks.
 3. **Own origin only.** Everything is bundled (fonts via `@fontsource`), and the only API is
    `/coldgas/api/*`. No third-party hosts, analytics, trackers or CDNs. The smoke test fails on
    any non-localhost request. No accounts and no personal data. Initials are 3 letters.
-4. **Determinism and realism.** `src/sim/*` is pure. It uses `dmath.js` (dsin, dcos, datan,
+4. **Determinism and realism.** `src/sim/*` is pure. Its rigid-body engine is Rapier's
+   cross-platform-deterministic WASM build (docs/PHYSICS_ENGINE.md: bit-identical in Node,
+   Chromium, WebKit and workerd; re-run `scripts/engine-determinism.mjs` and
+   `scripts/engine-worker/check.mjs` after bumping it). Our own code uses `dmath.js` (dsin, dcos, datan,
    datan2, dacos, dhypot), never `Math.sin`/`atan2`/`hypot`/`pow`: engines differ in those by an
    ulp and the stunt physics is chaotic, so runs would score differently on Safari, Chrome and the
    Worker. `npm run determinism -- logs.json` replays logs in Node, Chromium and WebKit and
@@ -113,17 +116,25 @@ index.html            Markup: canvas, top bar, title, HUD, touch, results, board
 src/main.js           Entry: state machine (title → countdown → live → results ⇄ replay),
                         fixed-step clock, sim → scene sync, deep links, wiring
 src/sim/              PURE, shared with the Worker:
+  engine.js             the rigid-body engine: Rapier (deterministic build, Apache-2.0,
+                          docs/PHYSICS_ENGINE.md); `initPhysics()` once per process before any run
+                          (engine-web.js in the browser, src/worker/physics.js in the Worker, plain
+                          call in Node, tests/unit/setup.js in Vitest)
+  world.js              a run's engine world: the course's colliders (floor, the Wall's deck as a
+                          trimesh, its steel, Free Drive's near-car road), each parked vehicle as a
+                          3D rigid body on four suspended parked tyres, the roadster's rigid hull,
+                          ray casts, per-material friction/restitution
   m3.js                 allocation-free vec3/quat math
   spec.js               THE CAR: dimensions, mass, inertia, power, tyres, fan, nitrogen, ten
                           nozzles. Public reveal numbers where they exist, marked estimates elsewhere
   courses.js            THE COURSES as exact geometry: the Wall (9.5 m arc turning 170° + 5.5 m
                           inverted ledge, 19.8 m lip), the Lineup (no ramp, five parked EVs) and
                           the Show (one flight: the row parked across the approach under the
-                          ledge, pad beyond it); MATERIALS (grip/slide per surface); createWorld/
-                          stepWorld: each parked vehicle is a body (mass, parked-tyre friction,
-                          body-body contact); `surface()` = signed distance + normal + material +
-                          body (wheels, hull, fan)
-  vehicle.js            physics v2: 6-DOF body, raycast suspension on any surface, Pacejka tyres
+                          ledge, pad beyond it); MATERIALS (tyre grip, bodywork friction and
+                          restitution per surface); parkedPhysics (each parked vehicle's mass,
+                          CoM, inertia, suspension: LINEUP_SPEC first, class estimates after);
+                          `surface()` = the exact geometry for the renderer, HUD and tests
+  vehicle.js            physics v3: 6-DOF body (its contacts in the engine), raycast suspension, Pacejka tyres
                           with implicit wheel spin, TC/ABS, stiction, 2 g suction fan, cold-gas
                           nozzles with blowdown, mixer, flight computer (Assist: rates, LAND roll-out,
                           brake governor, line hold, envelope, crawl and carry limits / Pro: rates /
@@ -194,9 +205,12 @@ src/ai/               config.js (provider/key on this device) · stream.js (SSE 
 src/worker/index.js   Worker (frozen): verify by replay, streaming judge, BYOK models, D1 board
 src/worker/ai/        prompt.js (brief + tolerant line parser) · providers.js (edge, anthropic,
                         openai, xai, gemini; model picking; prices)
-tests/unit/           Vitest: sim, course, mixer, determinism, judging
+tests/unit/           Vitest: sim, course, mixer, determinism, judging, engine (parked bodies, tyres, springs)
 tests/e2e/            Playwright: boot + reference jump + judging, deep link, phone
 scripts/fly.mjs       Headless reference flight with telemetry (tuning tool)
+scripts/engine-*.mjs  the engine: determinism spike across browsers and the Worker (engine-worker/),
+                        logs for the determinism checks, ticks/s benchmark; vendor-rapier.mjs
+                        rebuilds src/vendor/rapier3d.js after a Rapier bump
 scripts/shots.mjs     Screenshots of key moments against a running preview
 scripts/human-show.mjs     human-like players on the Show (reaction time, keys, cues): the
                            learnability gate. --cues old|new, assist|pro

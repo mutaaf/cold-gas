@@ -7,6 +7,8 @@ import { createAutopilot } from '../src/sim/autopilot.js';
 import { scoreRun } from '../src/sim/judge.js';
 import { newInput, bodyRates, up } from '../src/sim/vehicle.js';
 import { v3 } from '../src/sim/m3.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 
 const r3 = v3(), u3 = v3();
 function fly(course, opts, label = course) {

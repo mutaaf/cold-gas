@@ -1,6 +1,8 @@
 // Drive the Wall with the fan on at a set entry speed and trace the climb.
 import { createVehicle, step, newInput, up, DT } from '../src/sim/vehicle.js';
 import { WALL } from '../src/sim/courses.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 const v0 = Number(process.argv[2] || 30), fanOn = process.argv[3] !== 'nofan';
 const s = createVehicle('wall'); for (let i = 0; i < 240; i++) step(s, newInput());
 const u = {}; let t = 0, maxY = 0, invT = 0, lastLog = -1;

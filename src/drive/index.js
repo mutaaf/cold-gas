@@ -12,6 +12,8 @@ import { loadRoad } from './load.js';
 import { createRoadWorld } from '../render/road.js';
 import { createRoadCourse, poseAt, nearestSample, roadSurface } from '../sim/roads.js';
 import { createVehicle, step, DT, CAR } from '../sim/vehicle.js';
+import { freeWorld } from '../sim/world.js';
+import { loadPhysics } from '../sim/engine-web.js';
 import { quatFromYaw } from '../sim/m3.js';
 import { SPEC } from '../sim/spec.js';
 import { createDriveCamera } from './camera.js';
@@ -70,7 +72,7 @@ export function createDrive(ctx) {
     try {
       audio.initAudio();
       if (st.active) teardown();
-      const road = await loadRoad(info.id, prog);
+      const [road] = await Promise.all([loadRoad(info.id, prog), loadPhysics()]);
       await stage.ready;
       prog(0.75, 'Raising the mountains');
       await new Promise((r) => setTimeout(r, 0));
@@ -129,6 +131,7 @@ export function createDrive(ctx) {
     stage.setLook(null);
     if (st.bias) { stage.key.shadow.bias = st.bias[0]; stage.key.shadow.normalBias = st.bias[1]; st.bias = null; }
     st.world?.dispose();
+    if (st.car) freeWorld(st.car.world);
     st.world = null; st.road = null; st.course = null; st.car = null;
     camera.near = 0.1; camera.far = 4000; camera.up.set(0, 1, 0); camera.updateProjectionMatrix();
     hudRoot.hidden = true; hudRoot.innerHTML = '';
@@ -150,6 +153,7 @@ export function createDrive(ctx) {
   function placeAt(s, dir, resetTimer) {
     const road = st.road;
     const p = poseAt(road, s, dir);
+    if (st.car) freeWorld(st.car.world);
     const car = createVehicle(st.course);
     car.pos.x = p.x; car.pos.y = p.y + SPEC.comHeight + 0.04; car.pos.z = p.z;
     quatFromYaw(car.quat, p.yaw);

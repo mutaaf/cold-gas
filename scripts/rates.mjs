@@ -1,6 +1,8 @@
 import { createRun, stepRun } from '../src/sim/run.js';
 import { createAutopilot } from '../src/sim/autopilot.js';
 import { bodyRates, up } from '../src/sim/vehicle.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 const run = createRun(); const ap = createAutopilot(JSON.parse(process.argv[2]||'{}'));
 const w={x:0,y:0,z:0}, u={x:0,y:0,z:0};
 while (run.phase !== 'done' && run.tick < 4000) {

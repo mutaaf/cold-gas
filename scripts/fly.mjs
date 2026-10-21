@@ -2,6 +2,8 @@
 import { createRun, stepRun } from '../src/sim/run.js';
 import { createAutopilot } from '../src/sim/autopilot.js';
 import { up } from '../src/sim/vehicle.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 const course = process.argv[2] || 'wall', opts = JSON.parse(process.argv[3] || '{}');
 const run = createRun(course); const ap = createAutopilot(course, opts);
 let lastPhase = ''; const u = {};
