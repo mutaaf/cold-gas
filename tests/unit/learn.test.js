@@ -29,8 +29,8 @@ const flyDrill = (id, policy, course = 'show') => {
   return run;
 };
 
-describe('SIM_VERSION 15: the rigid-body engine and the reveal G trace', () => {
-  it('is version 15 (14: the rigid-body engine; 15: the reveal G trace, 0013)', () => expect(SIM_VERSION).toBe(15));
+describe('SIM_VERSION 16: the rigid-body engine, the reveal G trace, relaxed tyres', () => {
+  it('is version 16 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015)', () => expect(SIM_VERSION).toBe(16));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
@@ -39,7 +39,7 @@ describe('SIM_VERSION 15: the rigid-body engine and the reveal G trace', () => {
   // lip and brakes late and hard, which saves gas (LESSONS: one late, hard burn), and the references
   // roll off the ledge instead of hanging (the Wall at 2.5 m/s like run 2, the Show at its 7.5 m/s
   // carry): Wall gas left 44 % (efficiency 8.9), 3.6 m from the mark; Show 48 % (9.6), 1.5 m.
-  // Show 94.0, Wall 96.0, Lineup 85.3.
+  // Show 94.0, Wall 96.0, Lineup 85.3. v16 (0015, tyre relaxation) moves the bits, not the scores.
   it('keeps the reference runs: no worse than SIM_VERSION 13', () => {
     const runs = Object.fromEntries(['show', 'wall', 'lineup'].map((c) => [c, fly(c)]));
     const cards = Object.fromEntries(Object.entries(runs).map(([c, r]) => [c, scoreRun(r.t)]));

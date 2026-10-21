@@ -46,6 +46,23 @@ const BX = 11.5, CX = 1.65, BY = 16, CY = 1.35;
 export const TYRE = { BX, CX, BY, CY };
 export const tyreFx = (D, kappa) => D * dsin(CX * datan(BX * kappa));
 export const tyreFy = (D, alpha) => -D * dsin(CY * datan(BY * alpha));
+// Relaxation: the tyre's slip angle α' (the carcass's side deflection over the patch) follows the
+// kinematic slip angle α as σ·dα'/dt = |vx|·(α − α'), so a step reaches 1 − 1/e of its side force
+// after σ metres of rolling. σ grows with √(load) (bounded ×0.5–1.5). Below RELAX_VMIN the speed
+// is clamped: the lag stays finite at a standstill (the stiction hold keeps a parked car parked).
+// Stepped as 1 − 1/(1 + x + x²/2) of the gap, x = |vx|·dt/σ: e^−x to second order, so it never
+// overshoots at any speed. At a crawl the first-order model goes under-damped (it's a lagged damper
+// on the sideways motion, and the real patch's own damping isn't in it: Pacejka ch. 7 adds a
+// low-speed correction for this), so the force fades back to the kinematic slip angle between
+// RELAX_VMIN + RELAX_FADE and RELAX_VMIN: a car nudged sideways at 3 m/s settled with 0.4 m/s of
+// overshoot on the lag alone, ten times what it did before.
+const RELAX_VMIN = 1.5, RELAX_FADE = 3;   // m/s; the floor is the one the slip angle itself uses
+export const relaxWeight = (vx) => clamp((Math.abs(vx) - RELAX_VMIN) / RELAX_FADE, 0, 1);
+export const relaxLength = (sigma0, Fz, Fz0) => sigma0 * clamp(Math.sqrt(Math.max(0, Fz) / Fz0), 0.5, 1.5);
+export function relaxSlip(alphaLag, alpha, vx, sigma, dt) {
+  const x = (Math.max(Math.abs(vx), RELAX_VMIN) * dt) / sigma;
+  return alphaLag + (alpha - alphaLag) * (1 - 1 / (1 + x + 0.5 * x * x));
+}
 
 export const CAR = {
   dryMass: SPEC.dryMass, airMass: SPEC.gasMass, isp: SPEC.ispFull,
@@ -176,7 +193,7 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     pos: v3(course.start.x, SPEC.comHeight, course.start.z), vel: v3(), quat: quatFromYaw(q4(), 0), angVel: v3(), angMom: v3(),
     air: CAR.airMass,
     throttles: new Float64Array(NOZZLES.length),
-    wheels: WHEELS.map(() => ({ contact: true, compression: REST_LEN - MOUNT_TO_CENTRE, prevCompression: REST_LEN - MOUNT_TO_CENTRE, omega: 0, spin: 0, steer: 0, slip: 0, slipAngle: 0, load: STATIC_LOAD, nx: 0, ny: 1, nz: 0 })),
+    wheels: WHEELS.map(() => ({ contact: true, compression: REST_LEN - MOUNT_TO_CENTRE, prevCompression: REST_LEN - MOUNT_TO_CENTRE, omega: 0, spin: 0, steer: 0, slip: 0, slipAngle: 0, slipAngleKin: 0, relax: 0, load: STATIC_LOAD, nx: 0, ny: 1, nz: 0 })),
     fan: 0, fanDemand: 0, fanForce: 0, gripSat: 0, floorGap: SPEC.rideHeight,
     hullContact: false, hullGround: false, obstacleContact: false, obstacleSpeed: 0, hullImpulse: 0,
     steer: 0, grounded: 4, onWall: false, onSlope: false, wheelForce: 0, tcActive: false,
@@ -646,6 +663,7 @@ export function step(s, inp) {
     const t = raycast(s, pw, dn, maxT);
     if (t < 0) {
       wh.compression = 0; wh.load = 0;
+      wh.slipAngle = 0;   // the carcass springs back off the ground: a touchdown's side force builds up over σ
       // Free wheel: driven wheels spin up under throttle, brakes stop them.
       if (DRIVEN[i]) wh.omega += ((inp.throttle * 600) / WHEEL_I) * dt;
       if (inp.brake > 0) wh.omega *= 0.9;
@@ -687,9 +705,12 @@ export function step(s, inp) {
     const vLong = dot(vp, wf), vLat = dot(vp, wl);
     const den = Math.max(Math.abs(vLong), 3.0);
     let kappa = (wh.omega * R - vLong) / den;
-    const alpha = datan2(vLat, Math.max(Math.abs(vLong), 1.5));
+    const alphaKin = datan2(vLat, Math.max(Math.abs(vLong), 1.5));
     const mu = SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (Fz / (STATIC_LOAD * AXLE_K[i]) - 1));   // load sensitivity, this surface
     const D = Math.max(0, mu * Fz);
+    const sigma = relaxLength(i < 2 ? SPEC.tyreRelaxFront : SPEC.tyreRelaxRear, Fz, STATIC_LOAD * AXLE_K[i]);
+    const lag = relaxSlip(wh.slipAngle, alphaKin, vLong, sigma, dt);
+    const alpha = alphaKin + (lag - alphaKin) * relaxWeight(vLong);
     // Drive and brake torque. Two rear motors, 500 kW each, with traction control (every tier:
     // it's the drivetrain, not the flight computer).
     let T = 0;
@@ -740,7 +761,7 @@ export function step(s, inp) {
     const mag = dhypot(Fx, Fy);
     if (mag > D && mag > 0) { Fx *= D / mag; Fy *= D / mag; }
     Fx -= vLong * 6;                              // rolling resistance
-    wh.slip = kappa; wh.slipAngle = alpha;
+    wh.slip = kappa; wh.slipAngle = lag; wh.slipAngleKin = alphaKin; wh.relax = sigma;
     scale(force, hitN, Fz);
     addScaled(force, force, wf, Fx);
     addScaled(force, force, wl, Fy);

@@ -1,12 +1,12 @@
 ---
 id: 0015
 title: Tyres build side force over a relaxation length, not instantly
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 40
 by: scout
 ---
 
@@ -35,6 +35,15 @@ sqrt(load)); say so in `spec.js`.
 
 ## Test plan
 Unit test for the step response and the low-speed clamp; determinism script; existing gates.
+
+## Shipped notes (PR #40)
+- Lateral relaxation only. The slip ratio is not lagged: κ feeds the implicit wheel-spin solve
+  (vehicle.js), which keeps wheel spin stable at any speed, and a lag inside that solve risks
+  exactly that. A tyre's longitudinal relaxation length is also much shorter than its lateral
+  one. If it's wanted, it's its own ticket.
+- At a crawl the first-order model goes under-damped (Pacejka ch. 7 adds a low-speed correction).
+  The force fades back to the kinematic slip angle between 4.5 and 1.5 m/s. Above that, a shove
+  sideways swings back past zero (≤ 0.35 m/s at 6 m/s, from 1 m/s) and settles in 0.5 s.
 
 ## Out of scope
 Turn-slip, camber thrust, tyre temperature.
