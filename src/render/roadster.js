@@ -53,7 +53,8 @@ const lamp = (hex) => new THREE.MeshBasicMaterial({ color: hex });
 const M = {
   // "Ano White": a satin, aerospace-coating white (OFFICIAL name; "matte white", REPORTED).
   paint: new THREE.MeshPhysicalMaterial({
-    color: 0xe3e4e2, metalness: 0.05, roughness: 0.42, clearcoat: 0.35, clearcoatRoughness: 0.45,
+    // A thin, crisp clear over the satin base: the base stays satin, the coat picks out the lights.
+    color: 0xe3e4e2, metalness: 0.05, roughness: 0.42, clearcoat: 0.5, clearcoatRoughness: 0.2,
     sheen: 0.3, sheenColor: new THREE.Color(0xffffff), sheenRoughness: 0.6, envMapIntensity: 1.15,
   }),
   black: new THREE.MeshPhysicalMaterial({ color: 0x0c0d0f, metalness: 0.2, roughness: 0.4, clearcoat: 0.6, clearcoatRoughness: 0.25 }),
@@ -61,8 +62,8 @@ const M = {
   under: new THREE.MeshStandardMaterial({ color: 0x08090a, metalness: 0.1, roughness: 0.85 }),
   // "Gold Glazed" titanium-oxide glass: reads bronze / copper-brown from outside (OFFICIAL).
   glass: new THREE.MeshPhysicalMaterial({
-    color: 0x45301c, metalness: 0.45, roughness: 0.06, clearcoat: 1, clearcoatRoughness: 0.03,
-    envMapIntensity: 1.7, transparent: true, opacity: 0.93,
+    color: 0x45301c, metalness: 0.45, roughness: 0.04, clearcoat: 1, clearcoatRoughness: 0.015, ior: 1.52,
+    envMapIntensity: 2.0, transparent: true, opacity: 0.93,
   }),
   cabin: new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.8, metalness: 0 }),
   seam: new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.6 }),
