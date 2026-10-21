@@ -183,6 +183,7 @@ export const tierOf = (inp) => (inp.assist ? 'assist' : inp.manual ? 'advanced' 
 // CARRY: airborne, the rear jets cut out above this horizontal speed (≈10 m/s carries over the
 // row onto the pad; one reaction time of 80 kN on 2.4 t adds ≈10 m/s more).
 export const ASSIST_CRAWL = 8, ASSIST_CARRY = 10;
+const TC_CAP = 1.0;   // traction control holds drive torque to what the tyre carries (≈ peak slip), not a 15 % bang-bang cut
 
 export function createVehicle(courseId = DEFAULT_COURSE) {
   // A course id, or a course object (Free Drive's roads aren't in COURSES).
@@ -727,7 +728,7 @@ export function step(s, inp) {
       // tyre gives about half its peak, and the car slid back down an 11 % verge it could climb.
       const loose = hitMat.loose === true;
       if (kappa > 0.12) { T *= clamp(1 - (kappa - 0.12) * 9, loose ? 0.15 * hitMat.grip * hitMat.grip : 0.15, 1); s.tcActive = true; }
-      if (loose && T > 1.2 * R * D) { T = 1.2 * R * D; s.tcActive = true; }
+      if (T > (loose ? 1.2 : TC_CAP) * R * D) { T = (loose ? 1.2 : TC_CAP) * R * D; s.tcActive = true; }
     }
     const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85);
     // Pacejka pure-slip forces, then the friction ellipse for combined slip.

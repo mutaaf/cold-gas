@@ -93,26 +93,32 @@ export function sampleThumb(run, released, out = newInput()) {
 
 const k = (...codes) => codes.some((c) => keys.has(c));
 
-// Keys are on/off; a driver's hands aren't. Keyboard steer and roll ramp in over ≈0.25 s and
-// centre twice as fast, so a tap is a correction and a hold is full lock. sample() runs once per
-// 240 Hz sim tick.
+// Keys are on/off; a driver's hands aren't. Keyboard steer and roll ramp in and centre twice as
+// fast, so a tap is a correction and a hold is full lock. On the ground the hands slow with speed:
+// full lock in 0.25 s at a crawl (hairpins), ≈0.6 s at 60 km/h, ≈1 s at 120 km/h, so a tap at road
+// speed is a lane change, not a swerve (the rack already scales full stick to the tyres' grip).
+// Pedals ramp too: full throttle in 0.3 s, full brake in 0.15 s; off twice as fast. sample() runs
+// once per 240 Hz sim tick.
 const KEY_IN = 4 / 240, KEY_OUT = 8 / 240;
-let keyAx = 0;
-function rampKey(target) {
-  const rate = Math.abs(target) > Math.abs(keyAx) && Math.sign(target) !== -Math.sign(keyAx) ? KEY_IN : KEY_OUT;
+let keyAx = 0, keyThr = 0, keyBrk = 0;
+function rampKey(target, v = 0) {
+  const into = Math.abs(target) > Math.abs(keyAx) && Math.sign(target) !== -Math.sign(keyAx);
+  const rate = into ? KEY_IN / (1 + v / 12) : KEY_OUT;
   keyAx += Math.max(-rate, Math.min(rate, target - keyAx));
   return keyAx;
 }
+const pedal = (cur, on, tIn) => Math.max(0, Math.min(1, cur + (on ? 1 / (240 * tIn) : -2 / (240 * tIn))));
 const dz = (v) => (Math.abs(v) < 0.12 ? 0 : v);
 
 export const usingTouch = () => touch.active;
 
 // Sample into a sim input. `phase` is the run phase; `tier` the flight tier ('assist' | 'pro' |
-// 'advanced'; a boolean means assist on/off); `released` whether the car has let go of the Wall.
+// 'advanced'; a boolean means assist on/off); `released` whether the car has let go of the Wall;
+// `car` (optional) the vehicle state, for the keyboard's speed-sensitive steering.
 // Everything is driver-relative: + steer, roll and yaw are to the right (src/sim/vehicle.js).
 const vScratch = new Float64Array(VALVES);
 const keyRamp = createKeyRamp(), isDown = (c) => keys.has(c);
-export function sample(phase, tier, out = newInput(), released = false) {
+export function sample(phase, tier, out = newInput(), released = false, car = null) {
   Object.assign(out, newInput());
   if (typeof tier === 'boolean') tier = tier ? 'assist' : 'pro';
   out.assist = tier === 'assist' ? 1 : 0;
@@ -120,7 +126,11 @@ export function sample(phase, tier, out = newInput(), released = false) {
   // Let go of the Wall, you're flying (the sim calls it airborne 0.1 s later).
   const air = phase === 'air' || (phase === 'ramp' && released);
   let ax = 0, ay = 0, lift = 0, land = 0, thr = 0, brk = 0, yaw = 0;
-  ax = rampKey((k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0));
+  const v = !air && car ? Math.hypot(car.vel.x, car.vel.z) : 0;
+  // On the ground the touch stick goes through the same hands as the keys: a thumb can't feather
+  // a 2 cm stick, so it sets where the wheel is going and the wheel follows at the speed's rate.
+  const stickGround = touch.active && !air ? deadzone(touch.x) : 0;
+  ax = rampKey(Math.max(-1, Math.min(1, (k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0) + stickGround)), v);
   if (k('ArrowUp', 'KeyW')) ay -= 1;
   if (k('ArrowDown', 'KeyS')) ay += 1;
   if (k('KeyQ')) yaw -= 1;
@@ -128,8 +138,8 @@ export function sample(phase, tier, out = newInput(), released = false) {
   if (k('Space')) lift = 1;
   if (k('ShiftLeft', 'ShiftRight')) land = 1;
   let boost = k('KeyF') ? 1 : 0;
-  if (ay < 0) thr = 1;
-  if (ay > 0) brk = 1;
+  keyThr = pedal(keyThr, ay < 0, 0.3); keyBrk = pedal(keyBrk, ay > 0, 0.15);
+  thr = keyThr; brk = keyBrk;
 
   const pads = navigator.getGamepads?.() || [];
   for (const p of pads) {
@@ -144,8 +154,7 @@ export function sample(phase, tier, out = newInput(), released = false) {
   if (touch.active) {
     // Touch: on the ground (and up the wall) the stick only steers and the pedals drive. In the
     // air it flies, and pushing up raises the nose: what people expect on a phone.
-    ax += deadzone(touch.x);
-    if (air) ay -= deadzone(touch.y);
+    if (air) { ax += deadzone(touch.x); ay -= deadzone(touch.y); }
     if (touch.lift) lift = 1;
     if (touch.land) land = 1;
     if (touch.go) { thr = 1; boost = 1; }

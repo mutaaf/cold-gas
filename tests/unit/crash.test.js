@@ -73,8 +73,8 @@ describe('bodywork: elastic to yield, then it folds and stays folded', () => {
 });
 
 describe('impact events', () => {
-  const slow = fly('show', noLand('show', { carry: 7 }));
-  it('letting go short of the carry (7 m/s off the lip) and never braking drops the car onto the row: hits on a parked body, then the ground', () => {
+  const slow = fly('show', noLand('show', { carry: 7.5 }));
+  it('letting go at 7.5 m/s off the lip and never pressing LAND drops the car onto the row: hits on a parked body, then the ground', () => {
     expect(slow.t.contact).toBe(true);
     const hits = kinds(slow.impacts, HIT);
     expect(hits.some((e) => e[4] >= 0)).toBe(true);        // a parked vehicle
