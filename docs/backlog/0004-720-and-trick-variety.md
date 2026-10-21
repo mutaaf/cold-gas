@@ -1,7 +1,7 @@
 ---
 id: 0004
 title: Recognise and reward trick variety — 720, flat spin, back-flip
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: content
@@ -29,3 +29,5 @@ Unit tests in tests/unit/sim.test.js for each classification.
 
 ## Out of scope
 New input bindings.
+
+> Scout 2026-10-21: parked as `proposed` — off the operator's REALISM focus (cosmetic / feature). Promote when the focus lifts.

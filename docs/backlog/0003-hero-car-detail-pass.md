@@ -1,7 +1,7 @@
 ---
 id: 0003
 title: Hero roadster detail pass — door cut lines, mirrors-free aero, real wheel arches
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity
@@ -29,3 +29,5 @@ design, with no badges.
 
 ## Out of scope
 Lineup vehicles (separate ticket).
+
+> Scout 2026-10-21: parked as `proposed` — off the operator's REALISM focus (cosmetic / feature). Promote when the focus lifts.
