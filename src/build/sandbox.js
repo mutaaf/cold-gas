@@ -69,7 +69,7 @@ export function createSandbox(ctx) {
     ui.only();
     document.body.classList.add('driving');
     ui.touch.hidden = !(ctx.coarse || input.usingTouch());
-    ui.touch.dataset.phase = 'ground';
+    ui.touch.dataset.phase = 'ground'; ui.touch.dataset.scheme = 'classic'; ui.touch.dataset.course = 'drive';   // the stick and pedals (src/styles.css slots)
     st.active = true; st.paused = false; st.acc = 0;
     ctx.setMode('drive');
     await stage.renderer.compileAsync?.(stage.scene, camera).catch?.(() => {});

@@ -48,7 +48,12 @@ test('phone layout: touch controls visible and nothing overlaps the title CTA', 
   await expect(page.locator('[data-start]')).toBeInViewport();
   await page.locator('[data-start]').tap();
   await expect(page.locator('[data-touch]')).toBeVisible();
-  await expect(page.locator('[data-btn-lift]')).toBeInViewport();
+  // One-thumb is the touch default on the Show; classic shows only what each phase uses, all in reach.
+  await expect(page.locator('[data-onethumb]')).toBeInViewport();
+  await page.evaluate(() => { window.__coldgas.touch.set('scheme', 'classic'); window.__coldgas.touch.sync(); });
+  for (const sel of ['[data-stick]', '[data-btn-go]', '[data-btn-brake]']) await expect(page.locator(sel)).toBeInViewport();
+  await page.evaluate(() => window.__coldgas.startDrill('ledge'));
+  await expect(page.locator('[data-btn-lift]')).toBeInViewport({ timeout: 15_000 });
   await page.close();
 });
 
@@ -90,6 +95,7 @@ test('bring your own key: paste one key and it is done', async ({ page }) => {
 
 test('phone: GO pedal drives, the stick alone does not, and air pitch is not inverted', async ({ browser }) => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await page.addInitScript(() => localStorage.setItem('coldgas_touch', JSON.stringify({ scheme: 'classic' })));   // the stick and the pedals
   await page.goto('/coldgas/?play=jump&gfx=low');
   await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
   await page.evaluate(() => window.__coldgas.skipCountdown());

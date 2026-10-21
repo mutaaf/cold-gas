@@ -27,7 +27,7 @@
   <!-- Title -->
   <section class="title" data-screen="title">
     <p class="eyebrow">Test stand · Night</p>
-    <h1 class="wordmark">COLD<br />GAS</h1>
+    <h1 class="wordmark">COLD<br /> GAS</h1>
     <p class="tagline">Ten thrusters. One roll. Stick the landing.</p>
     <div class="courses" role="radiogroup" aria-label="Event">
       <button type="button" role="radio" class="course-btn" data-course="show" aria-checked="true"><b>The Show</b><span>Up the Wall · let go · boost over five parked EVs</span></button>
@@ -43,6 +43,7 @@
       <button class="btn ghost" data-reveal>Watch the reference</button>
       <button class="btn ghost" data-practice-open>Practice</button>
       <button class="btn link" data-board-open>Today’s board</button>
+      <button class="btn link touch-only" data-controls-open aria-haspopup="dialog"><span class="ctl-k">Controls</span> <span data-controls-label>One-thumb</span></button>
     </div>
     <dl class="spec">
       <div><dt>Thrusters</dt><dd>10</dd></div>
@@ -53,18 +54,80 @@
     <p class="fineprint">Inspired by the October 2026 roadster reveal. An independent fan game, not affiliated with any automaker.</p>
   </section>
 
-  <!-- Live HUD -->
+  <!-- Live HUD: one instrument system (src/ui.js, src/hud-landing.js). A 12-column grid with the
+       mission clock and the phase timeline on top, the primary instrument (speed, or the descent
+       with its predictor) and the telemetry strip at the bottom, attitude on the right, the
+       thruster array on the left. Colour means state only: nominal ink, caution amber, warning red. -->
   <section class="hud" data-screen="hud" hidden>
-    <div class="hud-left">
-      <svg class="nozzles" viewBox="0 0 120 200" aria-label="Thruster array">
-        <rect class="body" x="22" y="16" width="76" height="168" rx="34" />
-        <g data-nz></g>
-      </svg>
-      <div class="tank" data-tank>
-        <div class="tank-row"><span>Air</span><b data-air>100</b><i>%</i></div>
-        <div class="bar"><span data-air-bar></span><i class="need" data-air-need aria-hidden="true"></i></div>
+    <div class="h-scrim h-scrim-top" aria-hidden="true"></div>
+    <div class="h-scrim h-scrim-bot" aria-hidden="true"></div>
+    <header class="h-mission" data-hud-box="mission">
+      <div class="h-clock" aria-label="Mission clock"><span class="h-t">T</span><b data-clock>−00:03.0</b></div>
+      <ol class="h-timeline" data-timeline aria-label="Flight phase"></ol>
+    </header>
+    <div class="h-primary" data-hud-box="primary">
+      <div class="speed h-big" data-big="speed"><span class="h-lbl">Speed</span><b data-speed-big>0</b><span class="h-unit">km/h</span></div>
+      <!-- The landing predictor (src/hud-landing.js): sink in its band, the descent tape with the BRAKE line. -->
+      <div class="descent" data-descent data-status="green" hidden>
+        <div class="d-main">
+          <div class="d-sink h-big"><span class="h-lbl">Sink</span><b data-d-sink>0.0</b><span class="h-unit">m/s</span></div>
+          <div class="d-meta">
+            <span class="d-state" data-d-state>Nominal</span>
+            <span class="d-row"><span class="h-lbl">Limit</span><i data-d-target>9.0</i><span class="h-unit">m/s</span></span>
+            <span class="d-row"><span class="h-lbl">Ground</span><i data-d-ttg>2.0</i><span class="h-unit">s</span></span>
+          </div>
+        </div>
+        <svg class="d-tape" viewBox="-30 -12 90 164" aria-label="Altitude and the brake-by line">
+          <line class="d-axis" x1="8" y1="0" x2="8" y2="140" />
+          <g class="d-ticks"><line x1="4" x2="12" y1="0" y2="0" /><line x1="6" x2="10" y1="23.3" y2="23.3" /><line x1="4" x2="12" y1="46.7" y2="46.7" /><line x1="6" x2="10" y1="70" y2="70" /><line x1="4" x2="12" y1="93.3" y2="93.3" /><line x1="6" x2="10" y1="116.7" y2="116.7" /><line x1="2" x2="14" y1="140" y2="140" /></g>
+          <text class="d-scale" x="16" y="4">30</text><text class="d-scale" x="16" y="144">0 m</text>
+          <rect class="d-fill" data-d-fill x="6" y="140" width="4" height="0" />
+          <line class="d-brake" data-d-brake x1="0" x2="58" y1="70" y2="70" />
+          <text class="d-brake-lbl" data-d-brake-lbl x="16" y="65">BRAKE</text>
+          <g class="d-car" data-d-car transform="translate(0 0)"><path d="M7 0 l-8 -5 v10z" /><text data-d-car-lbl x="-4" y="4">27</text></g>
+        </svg>
       </div>
-      <!-- The damage sensor (src/sim/damage.js): the car from above, nose up, each zone shaded by damage. -->
+    </div>
+    <div class="h-strip" data-hud-box="strip" role="group" aria-label="Telemetry">
+      <div class="h-cell" data-ch="spd"><span class="h-lbl">Spd</span><b data-speed>0</b><span class="h-unit">km/h</span></div>
+      <div class="h-cell" data-ch="alt"><span class="h-lbl">Alt</span><b data-alt>0.0</b><span class="h-unit">m</span></div>
+      <div class="h-cell r-sink" data-ch="sink"><span class="h-lbl">Sink</span><b data-sink>0.0</b><span class="h-unit">m/s</span></div>
+      <div class="h-cell" data-ch="g"><span class="h-lbl">Load</span><b data-g>1.0</b><span class="h-unit">g</span></div>
+      <div class="h-cell tank" data-ch="n2" data-tank><span class="h-lbl">N₂</span><b data-air>100</b><span class="h-unit">%</span>
+        <div class="bar" aria-hidden="true"><span data-air-bar></span><i class="need" data-air-need></i></div></div>
+      <div class="h-cell h-att2" data-ch="att"><span class="h-lbl">Att</span><b data-bank>0</b><span class="h-unit">°</span><b data-pitch>0</b><span class="h-unit">°</span></div>
+      <div class="h-cell r-fan" data-ch="fan"><span class="h-lbl">Fan</span><b data-fan>0</b><i class="h-unit">kgf</i></div>
+    </div>
+    <div class="h-att adi-wrap" data-hud-box="att">
+      <svg class="dial adi" data-adi viewBox="0 0 120 120" aria-label="Attitude and roll">
+        <defs><clipPath id="adi-clip"><circle cx="60" cy="60" r="43" /></clipPath></defs>
+        <g transform="rotate(90 60 60)">
+          <g clip-path="url(#adi-clip)">
+            <g data-adi-horizon>
+              <rect class="adi-sky" x="-80" y="-140" width="280" height="200" />
+              <rect class="adi-ground" x="-80" y="60" width="280" height="200" />
+              <line class="adi-hz" x1="-80" y1="60" x2="200" y2="60" />
+              <line class="adi-ladder" x1="48" x2="72" y1="51" y2="51" /><line class="adi-ladder" x1="48" x2="72" y1="69" y2="69" />
+              <line class="adi-ladder" x1="42" x2="78" y1="42" y2="42" /><line class="adi-ladder" x1="42" x2="78" y1="78" y2="78" />
+            </g>
+          </g>
+          <g class="adi-car" data-car-glyph><rect x="38" y="59.2" width="44" height="1.6" /><rect x="58" y="52" width="4" height="8" /><circle cx="60" cy="60" r="1.6" /></g>
+        </g>
+        <circle class="ring" cx="60" cy="60" r="50" />
+        <circle class="arc" data-roll-arc cx="60" cy="60" r="50" pathLength="360" />
+        <g data-ticks></g>
+      </svg>
+      <div class="adi-roll"><span class="h-lbl">Roll</span><b data-roll>0</b><span class="h-unit">°</span></div>
+      <div class="roll-cue" data-roll-cue aria-live="off"></div>
+    </div>
+    <!-- The vehicle: the thruster array and the damage sensor (src/sim/damage.js), both top-down, nose up. -->
+    <div class="h-vehicle" data-hud-box="vehicle">
+      <div class="h-array">
+        <svg class="nozzles" viewBox="0 0 120 200" aria-label="Thruster array">
+          <rect class="body" x="22" y="16" width="76" height="168" rx="34" />
+          <g data-nz></g>
+        </svg>
+      </div>
       <div class="dmg" data-dmg data-state="ok">
         <svg viewBox="0 0 44 80" aria-label="Damage by zone">
           <rect class="z" data-z="floor" x="9" y="10" width="26" height="60" rx="9" />
@@ -75,75 +138,28 @@
           <rect class="z" data-z="roof" x="15" y="28" width="14" height="20" rx="4" />
           <g class="z susp" data-z="susp"><circle cx="5" cy="21" r="3" /><circle cx="39" cy="21" r="3" /><circle cx="5" cy="59" r="3" /><circle cx="39" cy="59" r="3" /></g>
         </svg>
-        <div class="tank-row"><span>Damage</span><b data-dmg-pct>0</b><i>%</i></div>
-      </div>
-    </div>
-    <div class="hud-center">
-      <div class="speed"><b data-speed>0</b><span>km/h</span></div>
-      <!-- The landing HUD (src/hud-landing.js): sink in its band, the descent tape with the BRAKE line. -->
-      <div class="descent" data-descent data-status="green" hidden>
-        <div class="d-main">
-          <div class="d-sink"><b data-d-sink>0.0</b><span>Sink · m/s</span></div>
-          <div class="d-meta">
-            <span class="d-state" data-d-state>On profile</span>
-            <span>target <i data-d-target>≤ 9.0</i></span>
-            <span><i data-d-ttg>2.0</i> s to ground</span>
-          </div>
-        </div>
-        <svg class="d-tape" viewBox="-26 -10 82 160" aria-label="Altitude and the brake-by line">
-          <line class="d-axis" x1="8" y1="0" x2="8" y2="140" />
-          <g class="d-ticks"><line x1="5" x2="11" y1="0" y2="0" /><line x1="6" x2="10" y1="23.3" y2="23.3" /><line x1="5" x2="11" y1="46.7" y2="46.7" /><line x1="6" x2="10" y1="70" y2="70" /><line x1="5" x2="11" y1="93.3" y2="93.3" /><line x1="6" x2="10" y1="116.7" y2="116.7" /><line x1="3" x2="13" y1="140" y2="140" /></g>
-          <rect class="d-fill" data-d-fill x="6" y="140" width="4" height="0" />
-          <line class="d-brake" data-d-brake x1="0" x2="54" y1="70" y2="70" />
-          <text class="d-brake-lbl" data-d-brake-lbl x="15" y="66">BRAKE</text>
-          <g class="d-car" data-d-car transform="translate(0 0)"><path d="M6 0 l-7 -4.5 v9z" /><text data-d-car-lbl x="-3" y="3.5">27</text></g>
-        </svg>
-      </div>
-      <div class="phase" data-phase>Run-up</div>
-    </div>
-    <div class="hud-right">
-      <div class="adi-wrap">
-        <svg class="dial adi" data-adi viewBox="0 0 120 120" aria-label="Attitude and roll">
-          <defs><clipPath id="adi-clip"><circle cx="60" cy="60" r="43" /></clipPath></defs>
-          <g transform="rotate(90 60 60)">
-            <g clip-path="url(#adi-clip)">
-              <g data-adi-horizon>
-                <rect class="adi-sky" x="-80" y="-140" width="280" height="200" />
-                <rect class="adi-ground" x="-80" y="60" width="280" height="200" />
-                <line class="adi-hz" x1="-80" y1="60" x2="200" y2="60" />
-                <line class="adi-ladder" x1="48" x2="72" y1="51" y2="51" /><line class="adi-ladder" x1="48" x2="72" y1="69" y2="69" />
-                <line class="adi-ladder" x1="42" x2="78" y1="42" y2="42" /><line class="adi-ladder" x1="42" x2="78" y1="78" y2="78" />
-              </g>
-            </g>
-            <g class="adi-car" data-car-glyph><rect x="38" y="57" width="44" height="6" rx="3" /><rect x="55" y="50" width="10" height="8" rx="2" /><circle cx="60" cy="60" r="1.6" /></g>
-          </g>
-          <circle class="ring" cx="60" cy="60" r="50" />
-          <circle class="arc" data-roll-arc cx="60" cy="60" r="50" pathLength="360" />
-          <g data-ticks></g>
-        </svg>
-        <div class="roll-cue" data-roll-cue aria-live="off"></div>
-      </div>
-      <div class="readouts">
-        <div><span>Roll</span><b data-roll>0°</b></div>
-        <div><span>Alt</span><b data-alt>0.0</b><i>m</i></div>
-        <div class="r-sink"><span>Sink</span><b data-sink>0.0</b><i>m/s</i></div>
-        <div><span>Load</span><b data-g>1.0</b><i>g</i></div>
-        <div class="r-fan"><span>Fan</span><b data-fan>0</b><i>kgf</i></div>
+        <div class="dmg-read"><span class="h-lbl">Damage</span><span class="dmg-v"><b data-dmg-pct>0</b><span class="h-unit">%</span></span><span class="dmg-word" data-dmg-word>Intact</span></div>
       </div>
     </div>
   </section>
   <div class="cue" data-cue aria-live="polite"></div>
   <div class="count" data-count aria-live="assertive"></div>
 
-  <!-- Touch -->
-  <div class="touch" data-touch data-phase="ground" hidden>
-    <div class="stick" data-stick><div class="knob" data-knob></div><span class="stick-hint" data-stick-hint>STEER</span></div>
+  <!-- Touch, classic: a steer/attitude stick for the left thumb and up to three buttons on the right
+       thumb's arc (slot A under the thumb, B and C either side). Each phase shows only what it uses. -->
+  <div class="touch" data-touch data-phase="ground" data-scheme="classic" hidden>
+    <div class="stick" data-stick><div class="knob" data-knob></div><span class="stick-hint" data-stick-hint>Steer</span></div>
     <div class="buttons">
-      <button class="tbtn lift" data-btn-lift><span data-lift-label>LIFT</span></button>
-      <button class="tbtn land t-air" data-btn-land>LAND</button>
-      <button class="tbtn brake t-ground" data-btn-brake aria-label="Brake">BRAKE</button>
-      <button class="tbtn go" data-btn-go aria-label="Accelerate"><span data-go-label>GO</span></button>
+      <button class="tbtn lift" data-btn-lift><span data-lift-label>Lift</span></button>
+      <button class="tbtn land t-air" data-btn-land>Land</button>
+      <button class="tbtn brake" data-btn-brake aria-label="Brake">Brake</button>
+      <button class="tbtn go" data-btn-go aria-label="Accelerate"><span data-go-label>Go</span></button>
     </div>
+    <!-- One-thumb Assist (src/onethumb.js): one control, hold / tap / hold. -->
+    <button class="thumb" data-onethumb data-stage="climb" aria-label="One-thumb control">
+      <svg class="thumb-ring" viewBox="0 0 100 100" aria-hidden="true"><circle class="tr-bg" cx="50" cy="50" r="47" /><circle class="tr-arc" data-thumb-arc cx="50" cy="50" r="47" pathLength="100" /></svg>
+      <span class="thumb-verb" data-thumb-verb>Hold</span><span class="thumb-act" data-thumb-act>Climb</span>
+    </button>
   </div>
 
   <!-- Advanced on a phone: the nozzle pad, a car seen from above with a pad on every nozzle (src/valves.js) -->
@@ -164,6 +180,27 @@
     <button class="chip" data-view title="Camera: broadcast or pilot view (L)">View</button>
     <button class="chip" data-drill-exit>Done</button>
   </div>
+
+  <!-- Touch controls (src/touch-settings.js): the scheme, the hand, tilt steering, haptics. -->
+  <section class="controls" data-screen="controls" hidden>
+    <div class="sheet narrow" role="dialog" aria-modal="true" aria-labelledby="ctl-title">
+      <p class="eyebrow">Touch controls · this device</p>
+      <h2 id="ctl-title">Controls</h2>
+      <div class="ctl-group" role="radiogroup" aria-label="Scheme">
+        <button type="button" role="radio" class="ctl-opt" data-scheme-opt="thumb" aria-checked="true"><b>One-thumb</b><span>Assist. Hold to climb, tap to let go, hold to land. The computer rolls you out and brakes.</span></button>
+        <button type="button" role="radio" class="ctl-opt" data-scheme-opt="classic" aria-checked="false"><b>Classic</b><span>A stick and the pedals. Roll, boost and land by hand. Every tier.</span></button>
+      </div>
+      <div class="ctl-row"><span class="ctl-k">Hand</span>
+        <div class="seg" role="radiogroup" aria-label="Hand"><button type="button" role="radio" data-hand="right" aria-checked="true">Right</button><button type="button" role="radio" data-hand="left" aria-checked="false">Left</button></div></div>
+      <div class="ctl-row"><span class="ctl-k">Tilt to steer</span>
+        <div class="ctl-tilt"><button type="button" class="chip" data-tilt-calibrate hidden>Calibrate</button>
+        <button type="button" class="switch" role="switch" data-tilt aria-checked="false" aria-label="Tilt to steer"><i></i></button></div></div>
+      <p class="ctl-note" data-tilt-note>Off. Steer by tilting the phone; hold it how you play and press Calibrate.</p>
+      <div class="ctl-row" data-haptics-row><span class="ctl-k">Haptics</span>
+        <button type="button" class="switch" role="switch" data-haptics aria-checked="true" aria-label="Haptics"><i></i></button></div>
+      <div class="actions"><button class="btn primary" data-controls-close>Done</button></div>
+    </div>
+  </section>
 
   <!-- Practice: pick a drill -->
   <section class="practice" data-screen="practice" hidden>
@@ -248,6 +285,7 @@
       <div class="actions">
         <button class="btn primary" data-resume>Resume</button>
         <button class="btn ghost" data-restart>Restart</button>
+        <button class="btn ghost touch-only" data-controls-open>Controls</button>
         <button class="btn link" data-home>Title</button>
       </div>
     </div>
