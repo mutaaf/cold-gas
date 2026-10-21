@@ -43,7 +43,7 @@ for (const fan of [0, 1]) {
   const row = [20, 30, 40].map((v) => {
     const s = settle(); const inp = { ...newInput(), fan };
     while (Math.hypot(s.vel.x, s.vel.z) < v) { inp.throttle = 1; step(s, inp); }
-    inp.steer = 1; let g = 0, kgf = 0, n = 0;
+    inp.steer = -1; let g = 0, kgf = 0, n = 0;   // left: a right-hander from x = 30 reaches the row
     for (let i = 0; i < 240 * 3; i++) {
       const sp = Math.hypot(s.vel.x, s.vel.z); inp.throttle = Math.max(0, Math.min(0.85, 0.3 + (v - sp) * 0.5));
       step(s, inp);

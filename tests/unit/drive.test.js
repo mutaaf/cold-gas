@@ -183,6 +183,18 @@ describe('the hands', () => {
     expect(backT - stopT).toBeGreaterThan(0.3);
     expect(body(s).vf).toBeLessThan(-1);                            // and then it does back up
   });
+  it('backing up fast, the wheels stay where the stick puts them', () => {
+    // The rack's slew time was RACK_T0 + RACK_TV·v with v signed: past 20 m/s in reverse it went
+    // negative and the steering ran away to 20 rad with the stick centred.
+    const s = settled(), inp = newInput();
+    s.vel.z = -26; for (const w of s.wheels) w.omega = -26 / 0.35;
+    inp.throttle = -0.35;
+    let worst = 0;
+    for (let i = 0; i < 240; i++) { step(s, inp); worst = Math.max(worst, Math.abs(s.steer)); }
+    expect(worst).toBeLessThan(1e-6);
+    expect(body(s).vf).toBeLessThan(-20);
+    expect(Math.abs(body(s).heading)).toBeLessThan(0.02);
+  });
 });
 
 describe('the car drawn between ticks', () => {

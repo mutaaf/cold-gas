@@ -45,7 +45,22 @@ const BX = 11.5, CX = 1.65, BY = 16, CY = 1.35;
 // D = μ·Fz. Combined slip is the friction ellipse on top of these (step()).
 export const TYRE = { BX, CX, BY, CY };
 export const tyreFx = (D, kappa) => D * dsin(CX * datan(BX * kappa));
-export const tyreFy = (D, alpha) => -D * dsin(CY * datan(BY * alpha));
+export const tyreFy = (D, alpha, B = BY) => -D * dsin(CY * datan(B * alpha));
+// Load sensitivity (ticket 0021; spec.js names the published fit). x = Fz/Fz0, the load against
+// the tyre's static load on its axle. Peak μ falls linearly with load (MF's PDY2); past the load
+// where μ·Fz itself would start to fall (x ≈ 4.2, far outside any fit's data: bump-stop slams) the
+// peak force is held, not extrapolated. Cornering stiffness saturates (MF's PKY2): it peaks at
+// x = tyreKyLoad and the lateral B carries it as B = Kα/(C·D), so a heavily loaded tyre needs a
+// larger slip angle to reach a (lower) peak μ.
+const LS = SPEC.tyreLoadSens, KYL = SPEC.tyreKyLoad;
+const X_DMAX = (1 - LS) / (-2 * LS);
+export const tyreMuLoad = (x) => (x <= X_DMAX ? 1 + LS * (x - 1) : ((1 + LS * (X_DMAX - 1)) * X_DMAX) / x);
+const KY_NOM = dsin(2 * datan(1 / KYL));
+export const tyreKyRatio = (x) => dsin(2 * datan(x / KYL)) / KY_NOM;   // Kα(Fz) / Kα(Fz0)
+export const tyreBy = (x) => {
+  const xc = Math.max(0.05, x);
+  return (BY * tyreKyRatio(xc)) / (xc * tyreMuLoad(xc));
+};
 // Relaxation: the tyre's slip angle α' (the carcass's side deflection over the patch) follows the
 // kinematic slip angle α as σ·dα'/dt = |vx|·(α − α'), so a step reaches 1 − 1/e of its side force
 // after σ metres of rolling. σ grows with √(load) (bounded ×0.5–1.5). Below RELAX_VMIN the speed
@@ -656,7 +671,9 @@ export function step(s, inp) {
   // at road speed it crosses the (much smaller) window in no less than RACK_T(v), as a yoke geared
   // slower at speed does. A 140 km/h flick of a gamepad stick reached full lock in 29 ms and the yaw
   // overshot its steady rate by 56 %; real hands at that speed take a fifth of a second.
-  const rackRate = Math.min(SPEC.steerRate, (lock + Math.abs(slideR)) / (RACK_T0 + RACK_TV * vFwd));
+  // |v|: in reverse past 20 m/s, RACK_T0 + RACK_TV·v crossed zero, the slew went negative and the
+  // rack ran away to 20 rad with the stick centred.
+  const rackRate = Math.min(SPEC.steerRate, (lock + Math.abs(slideR)) / (RACK_T0 + RACK_TV * Math.abs(vFwd)));
   s.steer += clamp(steerTarget - s.steer, -rackRate * dt, rackRate * dt);
 
   // --- Stability control (Assist) ---
@@ -804,8 +821,13 @@ export function step(s, inp) {
     const den = Math.max(Math.abs(vLong), 3.0);
     let kappa = (wh.omega * R - vLong) / den;
     const alphaKin = datan2(vLat, Math.max(Math.abs(vLong), 1.5));
-    const mu = SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (Fz / (STATIC_LOAD * AXLE_K[i]) - 1));   // load sensitivity, this surface
-    const D = Math.max(0, mu * Fz);
+    // Peak forces on this surface. Lateral: the published load sensitivity (0021). Longitudinal:
+    // unchanged (no fit of the semi-slick's μx is public; the 0–60, the brakes and the curl's climb
+    // were sourced against it), μ = tyreMu with −7 % per unit of normalised load.
+    const xLoad = Fz / (STATIC_LOAD * AXLE_K[i]);
+    const D = Math.max(0, SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (xLoad - 1)) * Fz);
+    const Dy = Math.max(0, SPEC.tyreMu0 * hitMat.grip * tyreMuLoad(xLoad) * Fz);
+    const By = tyreBy(xLoad);
     const sigma = relaxLength(i < 2 ? SPEC.tyreRelaxFront : SPEC.tyreRelaxRear, Fz, STATIC_LOAD * AXLE_K[i]);
     const lag = relaxSlip(wh.slipAngle, alphaKin, vLong, sigma, dt);
     const alpha = alphaKin + (lag - alphaKin) * relaxWeight(vLong);
@@ -837,15 +859,15 @@ export function step(s, inp) {
       if (kd > 0.12) { T *= clamp(1 - (kd - 0.12) * 9, loose ? 0.15 * hitMat.grip * hitMat.grip : 0.15, 1); s.tcActive = true; }
       let cap = (loose ? 1.2 : TC_CAP) * R * D;
       if (!inp.manual && Math.abs(vLong) > 3) {
-        const fy = tyreFy(D, alpha);
-        cap = Math.min(cap, R * Math.sqrt(Math.max(0, D * D - fy * fy)));
+        const fy = Dy > 0 ? tyreFy(Dy, alpha, By) / Dy : 0;
+        cap = Math.min(cap, R * D * Math.sqrt(Math.max(0, 1 - fy * fy)));
       }
       if (T > cap) { T = cap; s.tcActive = true; } else if (T < -cap) { T = -cap; s.tcActive = true; }
     }
     const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85) + s.escBrake[i];
     // Pacejka pure-slip forces, then the friction ellipse for combined slip.
     let Fx = tyreFx(D, kappa);
-    const Fy0 = tyreFy(D, alpha);
+    const Fy0 = tyreFy(Dy, alpha, By);
     // Wheel spin, implicit in the tyre's longitudinal stiffness: stable at any speed.
     const slope = (D * CX * BX * dcos(CX * datan(BX * kappa))) / (1 + (BX * kappa) * (BX * kappa));
     const kEff = Math.max(slope, D * 2) / den;
@@ -868,11 +890,13 @@ export function step(s, inp) {
     const mEff = m * 0.25;
     if (Math.abs(vLong) < 0.5 && wh.omega === 0 && T === 0) Fx = clamp(-mEff * (vLong / dt * 0.5 - G * wf.y), -D, D);
     if (Math.abs(vLat) < 0.5 && Math.abs(vLong) < 2) {
-      const hold = clamp(-mEff * (vLat / dt * 0.5 - G * wl.y), -D, D);
+      const hold = clamp(-mEff * (vLat / dt * 0.5 - G * wl.y), -Dy, Dy);
       if (Math.abs(hold) > Math.abs(Fy)) Fy = hold;
     }
-    const mag = dhypot(Fx, Fy);
-    if (mag > D && mag > 0) { Fx *= D / mag; Fy *= D / mag; }
+    // The friction ellipse, (Fx/D)² + (Fy/Dy)² ≤ 1.
+    const ex = D > 0 ? Fx / D : 0, ey = Dy > 0 ? Fy / Dy : 0;
+    const ell = ex * ex + ey * ey;
+    if (ell > 1) { const k = 1 / Math.sqrt(ell); Fx *= k; Fy *= k; }
     Fx -= vLong * 6;                              // rolling resistance
     wh.slip = kappa; wh.slipAngle = lag; wh.slipAngleKin = alphaKin; wh.relax = sigma;
     scale(force, hitN, Fz);

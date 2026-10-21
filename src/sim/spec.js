@@ -21,7 +21,26 @@ export const SPEC = {
   wheelRadius: 0.355,      // mean, for code that wants one number
   tyreWidthFront: 0.295,
   tyreWidthRear: 0.335,
-  tyreMu: 1.25,            // OFFICIAL: Moravy, "typically 1.26 G" of tyre grip
+  // The CAR's grip on its tyres alone: Moravy, "typically 1.26 G" (OFFICIAL). It is a car-level
+  // number (load transfer included), so the flight computer, the rack and the fan schedule plan
+  // with it; the tyre's own peak μ at its nominal load is tyreMu0, below.
+  tyreMu: 1.25,            // OFFICIAL (car, steady corner)
+  // Load sensitivity (ticket 0021), Magic Formula 5.2 form (Pacejka, Tyre and Vehicle Dynamics,
+  // ch. 4): with dfz = Fz/Fz0 − 1 (Fz0 = the tyre's static load on its axle),
+  //   μ(Fz) = tyreMu0 · (1 + tyreLoadSens · dfz)                         (PDY1 + PDY2·dfz)
+  //   Kα(Fz) ∝ sin(2·atan(Fz / (tyreKyLoad · Fz0)))                      (PKY1, PKY2)
+  // Published fit: Cabrera et al., "A Procedure for Determining Tire-Road Friction Characteristics
+  // Using a Modification of the Magic Formula Based on Experimental Results", Sensors 18(3) 2018,
+  // Table 2, 205/65 R15: PDY1 0.932775, PDY2 −0.128085, PKY1 −17.36, PKY2 2.293896. No fit of the
+  // 295/30 R20 / 335/30 R21 semi-slick is public, so the RELATIVE shape is carried over (ESTIMATE):
+  // μ falls 13.7 % per unit of normalised load, and cornering stiffness peaks at 2.29 × Fz0.
+  // The stiffness at Fz0 stays the track tyre's own (B·C ≈ 21.6, vehicle.js).
+  tyreLoadSens: -0.128085 / 0.932775,   // ESTIMATE: PDY2 / PDY1 (Cabrera 2018, Table 2) = −0.137
+  tyreKyLoad: 2.293896,                 // ESTIMATE: PKY2 (Cabrera 2018, Table 2)
+  // Peak μ at nominal load: ESTIMATE, the one number fitted here. Chosen so the car, through this
+  // load sensitivity and its own load transfer, corners at the OFFICIAL 1.2x g on tyres alone
+  // (physics-bench steady corner); semi-slicks on dry concrete carry 1.3–1.5.
+  tyreMu0: 1.40,
   // Relaxation length σ (m): a tyre's side force builds up over σ metres of rolling after a slip
   // angle step, not at once (Pacejka, Tyre and Vehicle Dynamics, ch. 7 "transient behaviour";
   // https://en.wikipedia.org/wiki/Tire_model). ESTIMATE for 295/30 R20 and 335/30 R21 low-profile
