@@ -608,13 +608,14 @@ export function step(s, inp) {
   // --- Steering (steer-by-wire: rate-limited, speed-sensitive) ---
   // Full lock is 0.5 rad at parking speed. At speed the rack is scaled so full stick asks for
   // the tyres' peak grip and no more: the kinematic angle for the lateral acceleration the tyres
-  // carry now, μ·(m·g + N_fan)/m (L·a/v²), plus 0.04 rad, the lock that measured the most steady
-  // cornering g at 12, 25 and 40 m/s. With the fans pulling, the same stick asks for the grip
-  // they add. Every bit of stick travel is usable, and a full-stick flick at 200 km/h can't saw
-  // the front axle into understeer.
+  // carry, μ·(m·g + N)/m (L·a/v²), plus 0.04 rad (swept again for 0020: the front axle, not the
+  // rack, caps a tyres-only corner). N is the suction a held corner asked for (s.fanLat, below), so
+  // the rack opens as that suction spools; suction the curl's tilt or a launch asks for doesn't
+  // move the rack. Every bit of stick travel is usable, and a full-stick flick at 200 km/h can't
+  // saw the front axle into understeer.
   const speed = dhypot(s.vel.x, s.vel.y, s.vel.z);
   const vSq = Math.max(1, s.vel.x * s.vel.x + s.vel.z * s.vel.z);
-  const aGrip = SPEC.tyreMu * (G + s.fanForce / m);
+  const aGrip = SPEC.tyreMu * (G + Math.min(s.fanForce, s.fanLat * SPEC.fanMaxForce) / m);
   const lock = Math.min(0.5, (SPEC.wheelbase * aGrip) / vSq + 0.04);
   const steerTarget = -inp.steer * lock;        // driver's right is −x
   s.steer += clamp(steerTarget - s.steer, -2.2 * dt, 2.2 * dt);
