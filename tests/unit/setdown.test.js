@@ -7,7 +7,7 @@ import { createRun, stepRun } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { LINEUP } from '../../src/sim/courses.js';
-import { up, setdownTop, HOVER, profileVy, SETDOWN } from '../../src/sim/vehicle.js';
+import { up, setdownTop, HOVER, profileVy, SETDOWN, createVehicle, step, newInput } from '../../src/sim/vehicle.js';
 import { SPEC } from '../../src/sim/spec.js';
 
 // Fly a reference: lift-off, the last time it comes roof-up after the roll, the time below 3 m,
@@ -65,5 +65,22 @@ describe('the set-down follows the fall it ends', () => {
     expect(wall.below3).toBeGreaterThanOrEqual(1.6);
     expect(wall.below3).toBeLessThanOrEqual(2.4);
     expect(wall.t.sink).toBeLessThanOrEqual(1.5);
+  });
+
+  it('a slow LAND descent from 4.5 m (peak sink under 8 m/s) flares onto its wheels softly, and the next flight starts from zero', () => {
+    const s = createVehicle('lineup');
+    s.pos.x = 40; s.pos.z = 40; s.pos.y = 4.5 + SPEC.comHeight;
+    const inp = newInput(); inp.assist = 1; inp.level = 1;
+    let peak = 0, touchSink = -1;
+    for (let i = 0; i < 240 * 8 && touchSink < 0; i++) {
+      const vy = s.vel.y;
+      step(s, inp);
+      if (s.grounded > 0) touchSink = -vy; else peak = Math.max(peak, s.fallPeak);
+    }
+    expect(peak).toBeGreaterThan(3);
+    expect(peak).toBeLessThan(8);
+    expect(touchSink).toBeGreaterThan(0);
+    expect(touchSink).toBeLessThanOrEqual(1.5);
+    expect(s.fallPeak).toBe(0);   // on the wheels: the next hop is sized afresh
   });
 });
