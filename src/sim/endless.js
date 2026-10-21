@@ -24,7 +24,7 @@ import { roadSurface, cellKey, SHOULDER } from './roads.js';
 import { dsin, dcos } from './dmath.js';
 import { seedOf, fbm, ridged, smooth, vnoise1, hash2 } from './noise.js';
 
-export const ENDLESS_VERSION = 1;          // bump when a seed would build a different world
+export const ENDLESS_VERSION = 2;          // bump when a seed would build a different world (2: props on the ground the car drives on)
 export const SPACING = 3;                  // m between road samples
 export const BIOMES = [
   { id: 'mountain', name: 'Mountain pass' },
@@ -179,14 +179,21 @@ export function createTerrain(seedIn) {
     if (x === last.x && z === last.z) { for (let b = 0; b < 4; b++) out[b] = last.w[b]; return out; }
     return biomeWeights(seed, x, z, out, gtmp, gtmp2);
   }
-  // What a tyre meets off the road: sand on desert flats and at the shore, rock where it's steep.
+  // What a tyre meets off the road, as the tiles are painted (src/world/tilegen.js shade(), by the
+  // dominant land, the slope 1 − n.y at the middle of each colour's blend): rock where it's steep,
+  // scree below it in the mountains, sand on desert flats and at the shore, the forest's bare soil
+  // on its banks, grass elsewhere.
   function matAt(x, z, ny) {
-    if (ny < 0.8) return MATERIALS.rock;
+    const slope = 1 - ny;
     const wv = weightsAt(x, z);
+    let b = 0;
+    for (let k = 1; k < 4; k++) if (wv[k] > wv[b]) b = k;
+    if (b === 0) return slope > 0.465 ? MATERIALS.rock : slope > 0.33 ? MATERIALS.gravel : MATERIALS.grass;
+    if (b === 2) return slope > 0.26 ? MATERIALS.rock : MATERIALS.sand;
+    if (b === 3) return slope > 0.45 ? MATERIALS.dirt : MATERIALS.grass;
+    if (slope > 0.41) return MATERIALS.rock;
     const h = x === last.x && z === last.z ? last.h : heightAt(x, z, htmp)[0];
-    if (wv[2] > 0.5 && ny > 0.86) return MATERIALS.sand;
-    if (wv[1] > 0.4 && h < SEA + 2.5) return MATERIALS.sand;
-    return MATERIALS.grass;
+    return h < SEA + 2.6 ? MATERIALS.sand : MATERIALS.grass;
   }
   // The dominant biome's index at (x, z).
   function biomeAt(x, z) {

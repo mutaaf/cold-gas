@@ -11,7 +11,8 @@
 // set in the same order on every host, and nothing here reads a clock or a random source.
 import { RAPIER as R, requirePhysics } from './engine.js';
 import { WALL, wallProfile, RAMP, MATERIALS, parkedMirror, refreshBounds, PAD_R, PARK_MU } from './courses.js';
-import { RAILS, roadSurface } from './roads.js';
+import { RAILS, roadSurface, bridgePier, PIER, tunnelArch, cellKey } from './roads.js';
+import { CELL, bakedScenery, endlessScenery } from './scenery.js';
 import { dsin, dcos, datan2 } from './dmath.js';
 
 export const WORLD_DT = 1 / 240;
@@ -165,13 +166,18 @@ export function createWorld(course) {
     if (h1 === c || h2 === c) w.carTouching += started ? 1 : -1;
   };
   if (course.sdf) {
-    // Free Drive: the road is exact geometry (src/sim/roads.js) the tyres read directly; the
-    // engine gets a near-car approximation of it for hull contacts, rebuilt as the car moves.
-    // (A course without a road, the flat Sandbox apron, gets its floor. Build pieces placed on
-    // either are exact for the tyres and fan; as hull colliders they are not mapped yet:
-    // src/build/colliders.js `shapeMesh` is the hook.)
-    if (course.road) w.stream = streamRoad;
-    else colliderFor(w, R.ColliderDesc.cuboid(1500, 1, 1500).setTranslation(0, -1, 0), MATERIALS.concrete, GROUP.approx);
+    // Free Drive and the Sandbox: the road is exact geometry (src/sim/roads.js) the tyres read
+    // directly; the engine gets the world near the car for the hull, streamed as the car moves:
+    // the ground, the road's structures, the scenery, and every placed piece (streamFree, below).
+    w.free = {
+      cells: new Map(), queue: [], qi: 0, ix: NaN, iz: NaN, init: false, near: null, fixed: [],
+      pieces: new Map(), srcVer: [], px: NaN, pz: NaN, seen: new Set(),
+      scenery: course.scenery ?? (course.road ? (course.road.sceneryOf ??= (course.road.endless ? endlessScenery : bakedScenery)(course.road)) : null),
+      sources: [course.pieces, course.objects].filter((src) => src && src.near && src.shapes),
+    };
+    w.stream = streamFree;
+    // A course without a road (the Sandbox's apron) is a plane, as far as it is drawn.
+    if (!course.road) w.free.fixed.push(colliderFor(w, R.ColliderDesc.cuboid(1800, 1, 1800).setTranslation(0, -1, 0), MATERIALS.concrete, GROUP.approx));
   } else {
     const floor = colliderFor(w, R.ColliderDesc.cuboid(1500, 1, 1500).setTranslation(0, -1, 0), MATERIALS.concrete, GROUP.static);
     // The landing mark is a film of paint on that concrete: the floor's material inside its disc.
@@ -237,13 +243,6 @@ export function gateCurl(w, far, travel) {
   w.carCol.setCollisionGroups(groups(GROUP.car, on ? 0xffff : 0xffff & ~GROUP.curl));
 }
 
-// --- Free Drive: the road near the car, for the hull --------------------------------------------------
-// The tyres read the exact road (src/sim/roads.js); what the engine needs is something for the
-// body to hit: a 96 m heightfield around the car sampled from the road's own surface every 2 m,
-// its guard rails, walls and tunnel roofs as boxes per 3 m segment. Rebuilt when the car is 24 m
-// from its centre, with the engine's origin moved there: the roads span kilometres and the engine
-// stores single-precision floats, so everything it holds stays near its origin.
-const CH = 96, CN = 48;
 // The surface's height under (x, z), from y0 down: Newton steps on the distance field (two or three
 // do it on the road), then, if they haven't landed, bracket and bisect. Beside a vertical face the
 // field's gradient is level and a step falls only φ: five of them stopped 0.6 m above the road,
@@ -270,45 +269,255 @@ export function surfaceHeight(sdf, x, z, y0) {
   }
   return (lo + hi) / 2;
 }
-const q0 = { x: 0, y: 0, z: 0, w: 1 };
-function streamRoad(w, pos) {
-  const c = w.chunk;
-  if (c && Math.abs(pos.x - c.x) < 24 && Math.abs(pos.z - c.z) < 24 && Math.abs(pos.y - c.y) < 30) return;
-  if (c) for (const col of c.cols) { w.info.delete(col.handle); w.rw.removeCollider(col, false); }
-  const road = w.course.road, sdf = (x, y, z, out) => roadSurface(road, x, y, z, out, true);   // the ground, not what's built on it (rails and roofs follow as boxes)
-  const cx = Math.round(pos.x), cy = Math.round(pos.y), cz = Math.round(pos.z);
-  w.ox = cx; w.oy = cy; w.oz = cz;
-  const cols = [];
-  const hs = new Float32Array((CN + 1) * (CN + 1)), step = CH / CN;
-  // Column-major (rows along z, columns along x), as the engine's heightfield stores it.
-  for (let j = 0; j <= CN; j++) for (let i = 0; i <= CN; i++) {
-    hs[j * (CN + 1) + i] = surfaceHeight(sdf, cx - CH / 2 + j * step, cz - CH / 2 + i * step, pos.y + 1.5) - cy;
+
+// --- Free Drive and the Sandbox: the world near the car, for the hull ------------------------------
+// The tyres read the exact road (src/sim/roads.js); what the engine needs is everything the body
+// can hit, and only what is drawn. The world near the car is kept in CELL (16 m) squares, streamed
+// as the car moves, each built once:
+//   - a heightfield of the ground (the road's own surface, the graded roadside and the land), 2 m
+//     posts sampled from the exact surface on the renderer's 4 m lattice;
+//   - the road's guard rails, stone walls and tunnel walls (boxes per 3 m segment), the tunnel's
+//     arch (four plates), a bridge's girder and its piers, as src/render/road.js draws them;
+//   - the scenery (src/sim/scenery.js): tree trunks as cylinders, boulders as convex hulls, brush
+//     and foliage as soft volumes (a drag force, not a collider).
+// Cells within one of the car's are built at once; the rest of the window (±3 cells: 32–48 m of
+// warning ahead) one a tick, nearest first, so a new row costs a few small builds spread over
+// ticks instead of one big rebuild. Placed things (build pieces, the world API's objects) follow
+// as their own colliders. The engine's origin moves with the car in REBASE steps (the roads span
+// kilometres and the engine stores single-precision floats); a move translates what is built.
+const HN = 8, WIN = 3, REBASE = 384, PIECE_R = 64;
+const q0 = { x: 0, y: 0, z: 0, w: 1 }, qr = { x: 0, y: 0, z: 0, w: 1 };
+const yawQuat = (q, th) => { q.x = 0; q.y = dsin(th / 2); q.z = 0; q.w = dcos(th / 2); return q; };
+// q = yaw(th) · roll(φ about the yawed +z): a plate in the road's cross-section.
+function yawRoll(q, th, phi) {
+  const ay = dsin(th / 2), aw = dcos(th / 2), bz = dsin(phi / 2), bw = dcos(phi / 2);
+  q.x = ay * bz; q.y = ay * bw; q.z = aw * bz; q.w = aw * bw;
+  return q;
+}
+
+function place(w, desc, x, y, z) { return desc.setTranslation(x - w.ox, y - w.oy, z - w.oz); }
+function drop(w, cols) { for (const col of cols) { w.info.delete(col.handle); w.rw.removeCollider(col, false); } cols.length = 0; }
+
+// The road's structures on segment i, as hull colliders into cols.
+function segmentSolids(w, road, i, cols) {
+  const L = road.len[i], mx = road.sx[i] + road.dx[i] * L / 2, mz = road.sz[i] + road.dz[i] * L / 2;
+  const my = road.y[i] + road.grade[i] * L / 2, fl = road.flags[i], th = datan2(road.dx[i], road.dz[i]);
+  const lx = road.dz[i], lz = -road.dx[i];
+  yawQuat(q0, th);
+  for (const side of [1, -1]) {
+    const kind = side > 0 ? (fl >> 2) & 3 : (fl >> 4) & 3;
+    if (!kind) continue;
+    const rr = RAILS[kind], off = road.hw[i] + rr.off + rr.t / 2, base = my + road.bank[i] * off * side;
+    const d = R.ColliderDesc.cuboid(rr.t / 2, (rr.h + 1) / 2, L / 2 + 0.05).setRotation(q0);
+    cols.push(colliderFor(w, place(w, d, mx + lx * off * side, base + (rr.h - 1) / 2, mz + lz * off * side), MATERIALS.barrier, GROUP.approx));
   }
-  cols.push(colliderFor(w, R.ColliderDesc.heightfield(CN, CN, hs, { x: CH, y: 1, z: CH }), MATERIALS.asphalt, GROUP.approx));
+  if (fl & 2) {
+    // The arch: from the wall's top (3.6 m) to the haunch (5.0 m at 0.7 of the bore) to the crown
+    // (5.6 m), each side, as 0.6 m plates lying on the drawn shell, in the rock above it.
+    const H = road.hw[i] + RAILS[3].off, T = 0.6;
+    for (const side of [1, -1]) for (const [a0, a1] of [[H, 0.7 * H], [0.7 * H, 0]]) {
+      const l0 = side * a0, l1 = side * a1;
+      const y0 = my + road.bank[i] * side * Math.min(a0, road.hw[i]) + tunnelArch(a0, H), y1 = my + road.bank[i] * side * Math.min(a1, road.hw[i]) + tunnelArch(a1, H);
+      const el = l1 - l0, ey = y1 - y0, len = Math.sqrt(el * el + ey * ey), phi = datan2(ey, el);
+      // Up and out of the bore: the plate's normal, (−ey, el)/len, turned to point up.
+      let nl = -ey / len, ny = el / len;
+      if (ny < 0) { nl = -nl; ny = -ny; }
+      const cl = (l0 + l1) / 2 + nl * T / 2, cy = (y0 + y1) / 2 + ny * T / 2;
+      const d = R.ColliderDesc.cuboid(len / 2 + 0.05, T / 2, L / 2 + 0.05).setRotation(yawRoll(qr, th, phi));
+      cols.push(colliderFor(w, place(w, d, mx + lx * cl, cy, mz + lz * cl), MATERIALS.barrier, GROUP.approx));
+    }
+  }
+  if (fl & 1) {
+    // The bridge's box girder under the deck (drawn 0.2–1.9 m under it, ±(hw + 1.1), its lower
+    // corners chamfered): two boxes. And a pier where one stands.
+    const hw = road.hw[i];
+    for (const [hx, y0, y1] of [[hw + 1.1, -1.3, -0.2], [hw + 0.3, -1.9, -0.2]]) {
+      const d = R.ColliderDesc.cuboid(hx, (y1 - y0) / 2, L / 2 + 0.05).setRotation(q0);
+      cols.push(colliderFor(w, place(w, d, mx, my + (y0 + y1) / 2, mz), MATERIALS.concrete, GROUP.approx));
+    }
+    const gy = bridgePier(road, i);
+    if (gy !== null) {
+      const a = Math.max(0, i - 1), b = Math.min(road.n - 1, i + 1);
+      const top = road.y[i] - PIER.top, bot = Math.max(gy - PIER.sink, PIER.floor);
+      const d = R.ColliderDesc.cuboid(road.hw[i] * PIER.half, (top - bot) / 2, PIER.along).setRotation(yawQuat(qr, datan2(road.x[b] - road.x[a], road.z[b] - road.z[a])));
+      cols.push(colliderFor(w, place(w, d, road.x[i], (top + bot) / 2, road.z[i]), MATERIALS.concrete, GROUP.approx));
+    }
+  }
+}
+
+// A scenery spec (src/sim/scenery.js) as a collider, or a soft volume.
+function sceneSolid(w, s, cell) {
+  if (s.kind === 'trunk') {
+    cell.cols.push(colliderFor(w, place(w, R.ColliderDesc.cylinder(s.h / 2, s.r), s.x, s.y + s.h / 2, s.z), s.mat, GROUP.static));
+  } else if (s.kind === 'hull') {
+    const d = R.ColliderDesc.convexHull(s.points);
+    if (d) cell.cols.push(colliderFor(w, place(w, d.setRotation(yawQuat(qr, s.yaw)), s.x, s.y, s.z), s.mat, GROUP.static));
+  } else if (s.kind === 'soft') cell.soft.push(s);
+}
+
+const segSeen = new Set(), specs = [], lowered = new Float32Array((HN + 1) * (HN + 1));
+function buildCell(w, ix, iz, yHint) {
+  const F = w.free, road = w.course.road;
+  const cell = { ix, iz, y: yHint, cols: [], soft: [] };
+  const x0 = ix * CELL, z0 = iz * CELL;
   if (road) {
-    const r2 = (CH / 2 + 4) * (CH / 2 + 4);
-    for (let i = 0; i < road.m; i++) {
-      const L = road.len[i], mx = road.sx[i] + road.dx[i] * L / 2, mz = road.sz[i] + road.dz[i] * L / 2;
-      const ex = mx - cx, ez = mz - cz;
-      if (ex * ex + ez * ez > r2) continue;
-      const lx = road.dz[i], lz = -road.dx[i], my = road.y[i] + road.grade[i] * L / 2, fl = road.flags[i];
-      const th = datan2(road.dx[i], road.dz[i]);
-      q0.y = dsin(th / 2); q0.w = dcos(th / 2);
-      for (const side of [1, -1]) {
-        const kind = side > 0 ? (fl >> 2) & 3 : (fl >> 4) & 3;
-        if (!kind) continue;
-        const rr = RAILS[kind], off = road.hw[i] + rr.off + rr.t / 2, base = my + road.bank[i] * off * side;
-        const d = R.ColliderDesc.cuboid(rr.t / 2, (rr.h + 1) / 2, L / 2 + 0.05)
-          .setTranslation(mx + lx * off * side - cx, base + (rr.h - 1) / 2 - cy, mz + lz * off * side - cz).setRotation(q0);
-        cols.push(colliderFor(w, d, MATERIALS.barrier, GROUP.approx));
+    const sdf = (x, y, z, out) => roadSurface(road, x, y, z, out, true);   // the ground, not what's built on it
+    if (road.ensure && (iz + 1) * CELL + road.reach + 40 > road.zMax) road.ensure((iz + 1) * CELL);
+    const hs = new Float32Array((HN + 1) * (HN + 1)), step = CELL / HN;
+    // Column-major (rows along z, columns along x), as the engine's heightfield stores it.
+    for (let j = 0; j <= HN; j++) for (let i = 0; i <= HN; i++) hs[j * (HN + 1) + i] = surfaceHeight(sdf, x0 + j * step, z0 + i * step, yHint + 1.5) - w.oy;
+    // Never above the ground: where the ground dips between posts (a ditch where a fill slope meets
+    // the land, the hinge of a cut) a straight chord would stand over it, a floor in the air the hull
+    // would rest on with a wheel hanging in the ditch. Each 2 m square's middle is sampled too, and
+    // where it lies under the chord across the square, its four posts come down by the difference.
+    lowered.set(hs);
+    for (let j = 0; j < HN; j++) for (let i = 0; i < HN; i++) {
+      const a = (j + 1) * (HN + 1) + i, b = j * (HN + 1) + i + 1;          // the split's ends: (+x, z), (x, +z)
+      const dip = (hs[a] + hs[b]) / 2 - (surfaceHeight(sdf, x0 + (j + 0.5) * step, z0 + (i + 0.5) * step, yHint + 1.5) - w.oy);
+      if (dip <= 0.005) continue;
+      for (const k of [a - (HN + 1), a, b, b + (HN + 1)]) if (hs[k] - dip < lowered[k]) lowered[k] = hs[k] - dip;
+    }
+    hs.set(lowered);
+    // Its material: the ground's at the cell's middle (the hull scrapes asphalt, or grass).
+    sdf(x0 + CELL / 2, hs[(HN / 2) * (HN + 1) + HN / 2] + w.oy + 0.01, z0 + CELL / 2, sdfOut);
+    // The engine splits each cell from its (+x, −z) corner to its (−x, +z) corner, as the renderer
+    // does (and the terrain the tyres read: src/sim/roads.js terrainAt).
+    const d = R.ColliderDesc.heightfield(HN, HN, hs, { x: CELL, y: 1, z: CELL });
+    cell.cols.push(colliderFor(w, place(w, d, x0 + CELL / 2, w.oy, z0 + CELL / 2), sdfOut.mat || MATERIALS.asphalt, GROUP.approx));
+    // The structures on every segment whose middle lies in this cell.
+    segSeen.clear();
+    const g = road.grid;
+    const visit = (list, a, b) => {
+      for (let k = a; k < b; k++) {
+        const i = list[k];
+        if (segSeen.has(i)) continue;
+        segSeen.add(i);
+        const L = road.len[i], mx = road.sx[i] + road.dx[i] * L / 2, mz = road.sz[i] + road.dz[i] * L / 2;
+        if (mx >= x0 && mx < x0 + CELL && mz >= z0 && mz < z0 + CELL && (road.flags[i] & 63)) segmentSolids(w, road, i, cell.cols);
       }
-      if (fl & 2) {
-        const d = R.ColliderDesc.cuboid(road.hw[i] + 3, 0.5, L / 2 + 0.05).setTranslation(mx - cx, my + 5.4 + 0.5 - cy, mz - cz).setRotation(q0);
-        cols.push(colliderFor(w, d, MATERIALS.barrier, GROUP.approx));
+    };
+    if (g.cells) {
+      const list = g.cells.get(cellKey(Math.floor((x0 + CELL / 2) / g.cell), Math.floor((z0 + CELL / 2) / g.cell)));
+      if (list) visit(list, 0, list.length);
+    } else {
+      const C8 = 8;   // src/sim/roads.js segment grid cell
+      for (let cj = Math.floor((z0 - g.z0) / C8); cj <= Math.floor((z0 + CELL - g.z0) / C8); cj++) for (let ci = Math.floor((x0 - g.x0) / C8); ci <= Math.floor((x0 + CELL - g.x0) / C8); ci++) {
+        if (ci < 0 || cj < 0 || ci >= g.nx || cj >= g.nz) continue;
+        const c = cj * g.nx + ci;
+        visit(g.list, g.start[c], g.start[c + 1]);
       }
     }
   }
-  w.chunk = { x: cx, y: cy, z: cz, cols };
+  if (F.scenery) {
+    specs.length = 0;
+    F.scenery.cell(ix, iz, specs);
+    for (const s of specs) sceneSolid(w, s, cell);
+  }
+  return cell;
+}
+
+// Placed things near the car (build pieces; the endless world's objects): their colliders follow
+// the stores, added and dropped as they change or the car moves.
+function syncPieces(w, pos) {
+  const F = w.free, srcs = F.sources;
+  if (!srcs.length) return;
+  let changed = false;
+  for (let k = 0; k < srcs.length; k++) if (srcs[k].version !== F.srcVer[k]) { F.srcVer[k] = srcs[k].version; changed = true; }
+  const mx = pos.x - F.px, mz = pos.z - F.pz;
+  if (!changed && mx * mx + mz * mz < 64) return;
+  F.px = pos.x; F.pz = pos.z;
+  const seen = F.seen;
+  seen.clear();
+  for (const src of srcs) {
+    for (const o of src.near(pos.x, pos.z, PIECE_R)) {
+      seen.add(o);
+      if (F.pieces.has(o)) continue;
+      const cols = [];
+      for (const s of src.shapes(o)) {
+        let d = null;
+        if (s.kind === 'box') d = R.ColliderDesc.cuboid(s.hx, s.hy, s.hz);
+        else if (s.kind === 'hull') d = R.ColliderDesc.convexHull(s.points);
+        if (d) cols.push(colliderFor(w, place(w, d.setRotation(yawQuat(qr, s.yaw)), s.x, s.y, s.z), s.mat, GROUP.approx));
+      }
+      F.pieces.set(o, cols);
+    }
+  }
+  for (const [o, cols] of F.pieces) if (!seen.has(o)) { drop(w, cols); F.pieces.delete(o); }
+}
+
+// Move the engine's origin to (x, y, z): everything built moves with it.
+function rebase(w, x, y, z) {
+  const F = w.free, dx = x - w.ox, dy = y - w.oy, dz = z - w.oz;
+  w.ox = x; w.oy = y; w.oz = z;
+  const move = (col) => { const t = col.translation(); col.setTranslation({ x: t.x - dx, y: t.y - dy, z: t.z - dz }); };
+  for (const c of F.cells.values()) c.cols.forEach(move);
+  for (const cols of F.pieces.values()) cols.forEach(move);
+  F.fixed.forEach(move);
+}
+
+const cheb = (c, ix, iz) => Math.max(Math.abs(c.ix - ix), Math.abs(c.iz - iz));
+function streamFree(w, pos) {
+  const F = w.free;
+  // The origin: near the car (a cell corner, a whole metre up), moved when the car is REBASE away.
+  if (!F.init || Math.abs(pos.x - w.ox) > REBASE || Math.abs(pos.z - w.oz) > REBASE || Math.abs(pos.y - w.oy) > REBASE) {
+    const ox = Math.round(pos.x / CELL) * CELL, oz = Math.round(pos.z / CELL) * CELL, oy = Math.round(pos.y);
+    rebase(w, ox, oy, oz);
+    F.init = true;
+  }
+  const ix = Math.floor(pos.x / CELL), iz = Math.floor(pos.z / CELL);
+  if (ix !== F.ix || iz !== F.iz) {
+    const jump = !(Math.abs(ix - F.ix) <= WIN && Math.abs(iz - F.iz) <= WIN);
+    F.ix = ix; F.iz = iz;
+    for (const [k, c] of F.cells) if (cheb(c, ix, iz) > WIN + 1) { drop(w, c.cols); F.cells.delete(k); }
+    F.queue.length = 0; F.qi = 0;
+    for (let d = 0; d <= WIN; d++) for (let b = iz - d; b <= iz + d; b++) for (let a = ix - d; a <= ix + d; a++) {
+      if (Math.max(Math.abs(a - ix), Math.abs(b - iz)) !== d || F.cells.has(cellKey(a, b))) continue;
+      F.queue.push(a, b);
+    }
+    // A first build, or a jump (a reset): all of it now.
+    if (jump) { for (let k = 0; k < F.queue.length; k += 2) F.cells.set(cellKey(F.queue[k], F.queue[k + 1]), buildCell(w, F.queue[k], F.queue[k + 1], pos.y)); F.queue.length = 0; }
+    F.near = null;
+  }
+  // The cells next to the car's: now (and again if the car has climbed or dropped far since).
+  for (let b = iz - 1; b <= iz + 1; b++) for (let a = ix - 1; a <= ix + 1; a++) {
+    const k = cellKey(a, b), c = F.cells.get(k);
+    if (c && Math.abs(c.y - pos.y) < 24) continue;
+    if (c) drop(w, c.cols);
+    F.cells.set(k, buildCell(w, a, b, pos.y));
+    F.near = null;
+  }
+  // The rest of the window, one a tick.
+  while (F.qi < F.queue.length) {
+    const a = F.queue[F.qi], b = F.queue[F.qi + 1];
+    F.qi += 2;
+    if (F.cells.has(cellKey(a, b))) continue;
+    F.cells.set(cellKey(a, b), buildCell(w, a, b, pos.y));
+    break;
+  }
+  // The soft volumes the car can be in this tick: those of the nine cells round it.
+  if (!F.near) {
+    F.near = [];
+    for (let b = iz - 1; b <= iz + 1; b++) for (let a = ix - 1; a <= ix + 1; a++) { const c = F.cells.get(cellKey(a, b)); if (c) for (const s of c.soft) F.near.push(s); }
+  }
+  syncPieces(w, pos);
+}
+
+// Brush and foliage: while the car's body overlaps a soft volume, a drag against its motion,
+// k·v scaled by how deep it is in (1 at the middle, 0 at the edge), as a force on the car
+// (vehicle.js adds w.carF). The volume is grown by the car's half-size, so it is the car's body,
+// not its centre, that brushes it.
+const CAR_HX = 1.0, CAR_HY = 0.6;
+function softDrag(w) {
+  const p = w.carPos, v = w.carVel, list = w.free.near;
+  if (!p || !v || !list) return;
+  for (let k = 0; k < list.length; k++) {
+    const s = list[k];
+    const ex = (p.x - s.x) / (s.rx + CAR_HX), ey = (p.y - s.y) / (s.ry + CAR_HY), ez = (p.z - s.z) / (s.rz + CAR_HX);
+    const e = ex * ex + ey * ey + ez * ez;
+    if (e >= 1) continue;
+    const f = s.k * (1 - e);
+    w.carF.x -= f * v.x; w.carF.y -= f * v.y; w.carF.z -= f * v.z;
+  }
 }
 
 // --- Queries ----------------------------------------------------------------------------------------
@@ -459,6 +668,7 @@ export function preStep(w) {
       }
     }
   }
+  if (w.free) softDrag(w);
 }
 
 // Step the engine one tick, then copy every moving parked body's pose back to its mirror.

@@ -124,7 +124,8 @@ src/sim/              PURE, shared with the Worker:
                           (engine-web.js in the browser, src/worker/physics.js in the Worker, plain
                           call in Node, tests/unit/setup.js in Vitest)
   world.js              a run's engine world: the course's colliders (floor, the Wall's deck as a
-                          trimesh, its steel, Free Drive's near-car road), each parked vehicle as a
+                          trimesh, its steel; Free Drive's world near the car streamed in 16 m cells:
+                          ground, rails, arches, bridges, trees, boulders, placed pieces), each parked vehicle as a
                           3D rigid body on four suspended parked tyres, the roadster's rigid hull,
                           ray casts, per-material friction/restitution
   m3.js                 allocation-free vec3/quat math
@@ -162,6 +163,9 @@ src/sim/              PURE, shared with the Worker:
   endless.js            FREE DRIVE's endless road: seeded terrain (four biomes) and a road generated
                           northward forever, the same shape as a baked road; `course.sdf` (docs/WORLD.md)
   noise.js              integer-hashed value noise with analytic gradients (pure, deterministic)
+  scenery.js            FREE DRIVE's trees, shrubs and boulders: one placement (per 128 m tile, a fixed grid
+                          on every gfx tier) the renderer draws and the physics streams near the car (trunks
+                          and boulders solid, brush and crowns soft): what you see is what you hit
   objects.js            placed objects (ramps, loops, boost pads, power-ups): deterministic ids,
                           SDF colliders, triggers, collider primitives for another engine
 src/build/            BUILD · POWER-UPS · SIDE QUESTS (the arcade layer; Free Drive and the Sandbox only,

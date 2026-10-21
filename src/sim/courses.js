@@ -230,13 +230,23 @@ export const MATERIALS = {
   body: { id: 'body', grip: 0.55, slide: 0.5, bounce: 0.12 },
   asphalt: { id: 'asphalt', grip: 1, slide: 0.55, bounce: 0.1 },
   // `loose`: off the pavement; traction control adapts to it (vehicle.js).
-  gravel: { id: 'gravel', grip: 0.62, slide: 0.6, bounce: 0.05, loose: true },
-  grass: { id: 'grass', grip: 0.45, slide: 0.45, bounce: 0.05, loose: true },
-  rock: { id: 'rock', grip: 0.7, slide: 0.55, bounce: 0.15, loose: true },
+  // `roll`: rolling resistance over the pavement's, as a coefficient of the tyre's load (Crr). A car
+  // tyre rolls at Crr ≈ 0.010–0.015 on asphalt or concrete (already in the tyre model); on soft
+  // ground the tyre sinks and ploughs: ≈ 0.02 on packed gravel, ≈ 0.035–0.04 on firm mown turf,
+  // ≈ 0.05 on hard earth, ≈ 0.1 on firm sand, up to 0.3 in loose (Wong, Theory of Ground Vehicles, 4th ed.,
+  // tab. 1.2; Gillespie, Fundamentals of Vehicle Dynamics, §4). Values are those minus pavement's
+  // (ESTIMATE).
+  gravel: { id: 'gravel', grip: 0.62, slide: 0.6, bounce: 0.05, loose: true, roll: 0.01 },
+  grass: { id: 'grass', grip: 0.45, slide: 0.45, bounce: 0.05, loose: true, roll: 0.025 },
+  // Bare earth (forest soil, eroded banks): firmer than turf, softer than gravel (ESTIMATE μ ≈ 0.55).
+  dirt: { id: 'dirt', grip: 0.55, slide: 0.55, bounce: 0.05, loose: true, roll: 0.04 },
+  rock: { id: 'rock', grip: 0.7, slide: 0.55, bounce: 0.15, loose: true, roll: 0.005 },
   // Dry sand (the endless road's deserts and shores): tyres on loose dry sand manage μ ≈ 0.4–0.6
   // of their tarmac grip (ESTIMATE, off-road traction studies).
-  sand: { id: 'sand', grip: 0.5, slide: 0.5, bounce: 0.05, loose: true },
+  sand: { id: 'sand', grip: 0.5, slide: 0.5, bounce: 0.05, loose: true, roll: 0.1 },
   barrier: { id: 'barrier', grip: 0.5, slide: 0.35, bounce: 0.2 },
+  // A tree's trunk (bark on wood): what bodywork meets hitting one (ESTIMATE, like the barrier).
+  wood: { id: 'wood', grip: 0.6, slide: 0.45, bounce: 0.15 },
 };
 
 // The parked vehicles as physical objects. LINEUP_SPEC is the data (docs/VEHICLES.md, every number

@@ -15,9 +15,11 @@
 // verbs (world.addObject(spec) / world.objectsNear): hand it these specs as they are and let its
 // `sdf` call `objectSdf` for each solid near the query, or keep this store beside it. Either way
 // the colliders stay in src/build/colliders.js, behind one adapter.
-import { PIECES, BUILD_MATERIALS, POWERUPS } from './catalogue.js';
-import { shapeSdf, shapeBounds } from './colliders.js';
+import { PIECES, BUILD_MATERIALS, POWERUPS, SKIRT } from './catalogue.js';
+import { shapeSdf, shapeBounds, profileOf, loopShift } from './colliders.js';
 import { dsin, dcos } from '../sim/dmath.js';
+
+const TAU = 2 * Math.PI;
 
 const CELL = 16;
 const key = (ix, iz) => (ix + 32768) * 65536 + (iz + 32768);
@@ -144,6 +146,71 @@ export function createObjectStore() {
   };
 }
 
+// A piece's solid as colliders for the rigid-body engine (src/sim/world.js streams them near the car,
+// for the hull), from the same numbers its distance field and its mesh are built from
+// (src/build/colliders.js): a block is a box; a ramp, a quarter- or a half-pipe is its profile cut
+// into convex slices (each a step of the drawn curve, down to the skirt, across its width); the loop
+// is its band in 96 convex slabs. Solid volumes, not a hollow mesh: a body pressed into one at
+// 4–5 g (the kicker's curve at 80 km/h bottoms the suspension) is pushed back out of its top.
+// Sensors (rings, pads, crates, pickups) have none.
+const slices = new WeakMap(), physMats = new Map();
+const physMat = (m) => { let p = physMats.get(m); if (!p) physMats.set(m, (p = { ...m, bounce: 0.1 })); return p; };
+function sliceShape(sh) {
+  const out = [];
+  if (sh.kind === 'loop') {
+    const { r, w, t, rail } = sh, hw = w / 2, shift = loopShift(sh), RT = 0.15, N = 96;
+    // The deck (r … r + t) across the lane and both rails, and the rails (r − rail … r) at each edge.
+    const bands = [[r, r + t, -hw - RT, hw + RT], [r - rail, r, -hw - RT, -hw], [r - rail, r, hw, hw + RT]];
+    for (let i = 0; i < N; i++) for (const [r0, r1, x0, x1] of bands) {
+      const pts = [];
+      for (const k of [i, i + 1]) {
+        const phi = (k / N) * TAU, xc = shift / 2 - (shift * phi) / TAU, sz = dsin(phi), cy = -dcos(phi);
+        for (const rr of [r0, r1]) for (const xx of [x0, x1]) pts.push(xc + xx, r + rr * cy, rr * sz);
+      }
+      out.push(Float32Array.from(pts));
+    }
+    return out;
+  }
+  const pr = profileOf(sh.kind);
+  if (!pr) return out;
+  const T = pr.top, m = T.length / 2, H = pr.half;
+  // Internal edges: a slice's end face stands up to the drawn curve, so a body bottomed onto the
+  // slice before it (the kicker at 80 km/h presses the hull ≈ 2 cm in) catches its top corner and
+  // the contact normal is the face's, horizontal: the car stopped dead from 22 m/s in one tick. At
+  // each concave turn the slice runs on under its neighbour along its own line (which a concave
+  // curve keeps below the neighbour's surface) and dips EDGE_DIP into the solid, so the corner left
+  // at the surface is a 6° slant and every vertical face is buried. Convex turns (a deck's lip)
+  // keep a plain end: running on there would stand proud of the next face.
+  const EDGE_RUN = 0.4, EDGE_DIP = 0.04;
+  const seg = (i) => { const du = T[2 * i + 2] - T[2 * i], dy = T[2 * i + 3] - T[2 * i + 1], L = Math.hypot(du, dy); return { du: du / L, dy: dy / L, L }; };
+  const concave = (a, b) => a.du * b.dy - a.dy * b.du > 1e-9;
+  for (let i = 0; i + 1 < m; i++) {
+    const s = seg(i), u0 = T[2 * i], y0 = T[2 * i + 1], u1 = T[2 * i + 2], y1 = T[2 * i + 3];
+    const top = [[u0, y0], [u1, y1]];
+    if (i > 0) { const p = seg(i - 1); if (concave(p, s)) { const o = Math.min(EDGE_RUN, 0.9 * p.L); top.unshift([u0 - o * s.du + EDGE_DIP * s.dy, y0 - o * s.dy - EDGE_DIP * s.du]); } }
+    if (i + 2 < m) { const n = seg(i + 1); if (concave(s, n)) { const o = Math.min(EDGE_RUN, 0.9 * n.L); top.push([u1 + o * s.du + EDGE_DIP * s.dy, y1 + o * s.dy - EDGE_DIP * s.du]); } }
+    const pts = [];
+    for (const l of [-H, H]) for (const [u, y] of [...top, ...top.map(([u]) => [u, -SKIRT])]) {
+      if (pr.axis === 'x') pts.push(l, y, u); else pts.push(u, y, l);
+    }
+    out.push(Float32Array.from(pts));
+  }
+  return out;
+}
+export function pieceShapes(o) {
+  const sh = o.collider;
+  if (!sh) return [];
+  const t = o.transform, S = t.scale, mat = physMat(o.mat);
+  if (sh.kind === 'box') return [{ kind: 'box', x: t.x, y: t.y + ((sh.h - SKIRT) / 2) * S, z: t.z, yaw: t.yaw, hx: (sh.w / 2) * S, hy: ((sh.h + SKIRT) / 2) * S, hz: (sh.d / 2) * S, mat }];
+  let list = slices.get(sh);
+  if (!list) { list = sliceShape(sh); slices.set(sh, list); }
+  return list.map((pts) => {
+    const p = new Float32Array(pts.length);
+    for (let k = 0; k < p.length; k++) p[k] = pts[k] * S;
+    return { kind: 'hull', x: t.x, y: t.y, z: t.z, yaw: t.yaw, points: p, mat };
+  });
+}
+
 // A course for the sim with every solid of `store` folded into `base`'s ground. `base` is a course
 // object: its `sdf` (Free Drive's roads, the Sandbox) or courses.js `surface()` semantics.
 export function composeCourse(base, store) {
@@ -153,5 +220,7 @@ export function composeCourse(base, store) {
     id: `${base.id}+build`,
     sdf: (x, y, z, out) => store.sdf(x, y, z, out, baseSdf(x, y, z, out)),
     store,
+    // The hull's view of the same pieces (src/sim/world.js).
+    pieces: { get version() { return store.version; }, near: (x, z, r) => store.objectsNear(x, z, r), shapes: pieceShapes },
   };
 }

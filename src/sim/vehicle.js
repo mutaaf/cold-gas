@@ -245,7 +245,7 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
   };
   s.engineMass = massOf(s);
   attachCar(world, HULL_SHAPE, s.engineMass, { x: SPEC.inertia.pitch, y: SPEC.inertia.yaw, z: SPEC.inertia.roll });
-  world.carPos = s.pos;
+  world.carPos = s.pos; world.carVel = s.vel;
   return s;
 }
 
@@ -898,6 +898,7 @@ export function step(s, inp) {
     const ell = ex * ex + ey * ey;
     if (ell > 1) { const k = 1 / Math.sqrt(ell); Fx *= k; Fy *= k; }
     Fx -= vLong * 6;                              // rolling resistance
+    if (hitMat.roll) Fx -= clamp(vLong * 2, -1, 1) * hitMat.roll * Fz;   // and soft ground's (courses.js MATERIALS)
     wh.slip = kappa; wh.slipAngle = lag; wh.slipAngleKin = alphaKin; wh.relax = sigma;
     scale(force, hitN, Fz);
     addScaled(force, force, wf, Fx);

@@ -74,9 +74,14 @@ same IEEE-754 semantics; run `scripts/engine-determinism.mjs` on a machine where
   `src/sim/courses.js` (the floor; the Wall's deck as a closed trimesh sampled along
   `wallProfile` every 20 cm; the truss tower and the posts beside the curl; the kicker when a
   course has one), every parked vehicle as a dynamic body, and the roadster's rigid hull. Free
-  Drive builds a 96 m heightfield (2 m posts sampled from the exact road) plus boxes for rails,
-  walls and tunnel roofs around the car, and moves the engine's origin with it (the engine stores
-  single-precision floats; the roads span 6.5 km).
+  Drive (and the Sandbox) stream the world near the car in 16 m cells, ±3 around the car's: per cell a
+  heightfield (2 m posts sampled from the exact ground, on the renderer's 4 m lattice and split along
+  the same diagonal, lowered where the ground dips between posts so it never stands above it), the rails, walls, tunnel arches, bridge girders and piers on its segments, and
+  its scenery (src/sim/scenery.js: tree trunks as static cylinders, boulders as static convex hulls,
+  brush and crowns as soft drag volumes). The cells next to the car's are built at once, the rest one
+  a tick, nearest first. Build pieces and the world API's objects follow as their own colliders
+  (convex slices of the drawn shape). The engine's origin moves with the car in 384 m steps (the
+  engine stores single-precision floats; the roads span 6.5 km), translating what is built.
 - `src/sim/vehicle.js`: the roadster's own force models (below), then one engine step.
 
 ### What the engine does

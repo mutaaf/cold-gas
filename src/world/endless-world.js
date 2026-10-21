@@ -17,7 +17,8 @@
 // objectsNear, objectsInChunk, getObject, groundAt, roadPoseAt, nearestRoad, biomeAt, onObjects…
 // See docs/WORLD.md.
 import * as THREE from 'three';
-import { createUniforms, applyLook, roadMaterial, wallMaterial, steelMaterial, propMaterial, treeMaterial, skyMaterial, TODS } from '../render/roadlook.js';
+import { createUniforms, applyLook, roadMaterial, wallMaterial, steelMaterial, propMaterial, treeMaterial, farTreeMaterial, skyMaterial, TODS } from '../render/roadlook.js';
+import { VEG_SPACING } from '../sim/scenery.js';
 import { bakeEnv, disposeTree, CONIFER_GEO, CONIFER_LOW_GEO, BROAD_GEO, CHUNK } from '../render/road.js';
 import { N, LEVELS } from './tilegen.js';
 import { chunkFromData } from './roadchunk.js';
@@ -29,16 +30,18 @@ import { createObjectView } from './objects-view.js';
 import { createPool } from './pool.js';
 
 // Quality tiers (?gfx=high|mid|low; phones get mid). radius: each level's ring (m). veg0/veg1:
-// vegetation spacing (m) per prop on level-0 / near level-1 tiles. hiR: level-0 tiles nearer than
+// vegetation spacing (m) per prop on level-0 / near level-1 tiles. Level 0's are the props the
+// physics has (src/sim/scenery.js VEG_SPACING) on every tier: a tier draws them nearer or farther,
+// never fewer. hiR: level-0 tiles nearer than
 // this get the detailed trees. pool: instance capacity per prop. budget: main-thread ms per frame
 // for uploads and road chunks. gpuMB / cacheMB: the drawn geometry's and the tile cache's budgets.
 export const TIERS = {
-  high: { radius: [480, 2300, 9000, 30000], roadR: 2200, veg0: { conifer: 8, broad: 10, shrub: 8, rock: 9 }, veg1: { conifer: 22, broad: 26 }, vegR1: 1150, hiR: 300,
-    pool: { coniferHi: 6000, conifer: 26000, broad: 12000, shrub: 14000, rock: 9000 }, budget: 4, workers: 2, inflight: 3, gpuMB: 260, cacheMB: 160 },
-  mid: { radius: [400, 1900, 7000, 24000], roadR: 1700, veg0: { conifer: 10, broad: 12, shrub: 11, rock: 12 }, veg1: { conifer: 30 }, vegR1: 800, hiR: 200,
-    pool: { coniferHi: 3500, conifer: 14000, broad: 7000, shrub: 7000, rock: 5000 }, budget: 3, workers: 2, inflight: 2, gpuMB: 170, cacheMB: 96 },
-  low: { radius: [320, 1400, 5200, 18000], roadR: 1200, veg0: { conifer: 13, broad: 16, shrub: 15, rock: 16 }, veg1: null, vegR1: 0, hiR: 0,
-    pool: { coniferHi: 1, conifer: 7000, broad: 3500, shrub: 3000, rock: 2500 }, budget: 2.5, workers: 1, inflight: 2, gpuMB: 110, cacheMB: 48 },
+  high: { radius: [480, 2300, 9000, 30000], roadR: 2200, veg0: VEG_SPACING, veg1: { conifer: 22, broad: 26 }, vegR1: 1150, hiR: 300,
+    pool: { coniferHi: 6000, conifer: 20000, broad: 9000, shrub: 14000, rock: 9000, conifer1: 12000, broad1: 6000 }, budget: 4, workers: 2, inflight: 3, gpuMB: 260, cacheMB: 160 },
+  mid: { radius: [400, 1900, 7000, 24000], roadR: 1700, veg0: VEG_SPACING, veg1: { conifer: 30 }, vegR1: 800, hiR: 200,
+    pool: { coniferHi: 5500, conifer: 16000, broad: 8500, shrub: 11000, rock: 8000, conifer1: 5000, broad1: 1 }, budget: 3, workers: 2, inflight: 2, gpuMB: 170, cacheMB: 96 },
+  low: { radius: [320, 1400, 5200, 18000], roadR: 1200, veg0: VEG_SPACING, veg1: null, vegR1: 0, hiR: 0,
+    pool: { coniferHi: 1, conifer: 11000, broad: 5500, shrub: 7500, rock: 5500, conifer1: 1, broad1: 1 }, budget: 2.5, workers: 1, inflight: 2, gpuMB: 110, cacheMB: 48 },
 };
 const SUN = { az: 205, el: 34 };
 
@@ -79,7 +82,7 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
   const U = createUniforms();
   const mats = {
     terrain: endlessTerrainMaterial(U), road: roadMaterial(U, 'eu'), wall: wallMaterial(U), steel: steelMaterial(U), prop: propMaterial(U),
-    tree: treeMaterial(U), rock: rockMaterial(U),
+    tree: treeMaterial(U), treeFar: farTreeMaterial(U, cfg.radius[0] - 64), rock: rockMaterial(U),
   };
   // Road chunks shade their verges with the terrain's colours: the same material, an aCol per vertex.
   const vergeMat = mats.terrain;
@@ -163,6 +166,9 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
     broad: createPool(BROAD_GEO(), mats.tree, cfg.pool.broad, 'broad'),
     shrub: createPool(SHRUB_GEO(), mats.tree, cfg.pool.shrub, 'shrub'),
     rock: createPool(ROCK_GEO(), mats.rock, cfg.pool.rock, 'rock'),
+    // Far tiles' trees: hidden near the camera, where the near tiles' (the solid ones) stand.
+    conifer1: createPool(CONIFER_LOW_GEO(), mats.treeFar, cfg.pool.conifer1, 'conifer-far'),
+    broad1: createPool(BROAD_GEO(), mats.treeFar, cfg.pool.broad1, 'broad-far'),
   };
   const poolGroup = new THREE.Group();
   poolGroup.name = 'vegetation';
@@ -225,7 +231,7 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
     if (d.veg) {
       t.hi = lvl === 0 && nearHi(t, lastX ?? 0, lastZ ?? 0);
       for (const [type, v] of Object.entries(d.veg)) {
-        const pool = pools[type === 'conifer' && t.hi ? 'coniferHi' : type];
+        const pool = pools[lvl > 0 ? `${type}1` : type === 'conifer' && t.hi ? 'coniferHi' : type];
         const block = pool.add(v.m, v.c, v.n, d.x0 - origin.x, d.z0 - origin.z);
         if (block) t.veg.push([pool, block, type]);
       }

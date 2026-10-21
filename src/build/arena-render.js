@@ -2,7 +2,7 @@
 // firmer, the 400 m arena edge in signal red), a gradient sky and haze. Same voice as the stage:
 // matte concrete, hairlines, one signal colour. Returns a `look` for stage.setLook().
 import * as THREE from 'three';
-import { ARENA } from './arena.js';
+import { ARENA, MASTS } from './arena.js';
 
 export function createArenaWorld({ renderer, tier = 'high' }) {
   const group = new THREE.Group();
@@ -53,11 +53,11 @@ export function createArenaWorld({ renderer, tier = 'high' }) {
   // A few tall marker masts at the corners, so distance reads.
   const mastMat = new THREE.MeshStandardMaterial({ color: 0x2a2f36, roughness: 0.6, metalness: 0.4 });
   const lampMat = new THREE.MeshBasicMaterial({ color: 0xff3b42 });
-  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
-    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, 24, 8), mastMat);
-    m.position.set(sx * ARENA.half, 12, sz * ARENA.half); m.castShadow = tier !== 'low';
+  for (const mast of MASTS) {
+    const m = new THREE.Mesh(new THREE.CylinderGeometry(0.18, 0.24, mast.h, 8), mastMat);
+    m.position.set(mast.x, mast.h / 2, mast.z); m.castShadow = tier !== 'low';
     const l = new THREE.Mesh(new THREE.SphereGeometry(0.45, 12, 8), lampMat);
-    l.position.set(sx * ARENA.half, 24.4, sz * ARENA.half);
+    l.position.set(mast.x, mast.h + 0.4, mast.z);
     group.add(m, l);
   }
 
