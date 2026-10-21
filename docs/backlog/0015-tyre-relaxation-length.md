@@ -1,12 +1,12 @@
 ---
 id: 0015
 title: Tyres build side force over a relaxation length, not instantly
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 40
 by: scout
 ---
 
