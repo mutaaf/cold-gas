@@ -3,20 +3,21 @@ import { test, expect } from '@playwright/test';
 // The instruments answer a tap: both unit systems on every readout (US leading by default, a tap
 // swaps which leads and it's kept), the damage map opens up, the G meter and friends open their
 // readouts, and Free Drive's minimap opens the full map. None of it pauses the run.
+// Booting the stage and running 60 ticks on CI's software GL, beside the other workers, can take
+// more than 30 s: these get test.slow() and a minute for the first frames. Nothing is optional.
 const live = async (page, opts = {}) => {
+  test.slow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   if (opts.units) await page.addInitScript((u) => localStorage.setItem('coldgas.units', u), opts.units);
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
   await page.evaluate(async () => { await window.__coldgas.physicsReady; window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); });
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.run.tick > 60, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.run.tick > 60, null, { timeout: 60_000 });
   return errors;
 };
 
-test('both unit systems show, US leading; a tap swaps which leads, and it is kept', async ({ page }) => {
-  test.slow();   // two boots of the page (a reload) on CI's software GL
-  const errors = await live(page);
+test('both unit systems show, US leading; a tap swaps which leads, and it is kept', async ({ page }) => {  const errors = await live(page);
   const spd = page.locator('[data-ch="spd"]');
   await expect(spd.locator('.h-unit')).toHaveText('mph');
   await expect(spd.locator('[data-2="speed"]')).toBeVisible();
@@ -47,7 +48,7 @@ test('both unit systems show, US leading; a tap swaps which leads, and it is kep
   expect(await page.evaluate(() => window.__coldgas.S.paused)).toBe(false);
   // Kept across a reload.
   await page.reload({ waitUntil: 'load' });
-  await page.waitForFunction(() => !!window.__coldgas?.stage && document.documentElement.dataset.unitSys, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage && document.documentElement.dataset.unitSys, null, { timeout: 60_000 });
   expect(await page.evaluate(() => [localStorage.getItem('coldgas.units'), document.documentElement.dataset.unitSys])).toEqual(['metric', 'metric']);
   await expect(page.locator('[data-ch="spd"] .h-unit')).toHaveText('km/h');
   await expect(page.locator('.spec dd[data-u-src]').first()).toContainText('297 kg');

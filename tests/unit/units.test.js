@@ -32,6 +32,7 @@ describe('units', () => {
     expect(toUS('46 kN suction')).toBe('10,341 lbf suction');
     expect(toUS('1,000 kW')).toBe('1,341 hp');
     expect(toUS('12.3 km')).toBe('7.6 mi');
+    expect(toUS('A 71 cm traffic cone, 3.2 kg.')).toBe('A 28 in traffic cone, 7.1 lb.');
     expect(toUS('ten metres')).toBe('ten metres');
     expect(toUS('a few ms, 3D, T+00:12.4, 0–60 in 2.3 s')).toBe('a few ms, 3D, T+00:12.4, 0–60 in 2.3 s');
   });

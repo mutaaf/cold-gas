@@ -99,11 +99,11 @@ export const fmtRoad1 = (m, secondary = false) => road1(m, secondary ? other(sys
 // "<number> <SI unit>" it finds; `localize` puts both side by side, the primary first, and with
 // `html` the secondary goes in a dimmer <span class="u2">.
 const NUM = String.raw`([+−-]?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?`;
-const UNIT = String.raw`(km\/h|m\/s²|m\/s|kgf|kg|kN|kW|km|mm|bar|metres|metre|meters|meter|m)`;
+const UNIT = String.raw`(km\/h|m\/s²|m\/s|kgf|kg|kN|kW|km|cm|mm|bar|metres|metre|meters|meter|m)`;
 const RX = () => new RegExp(String.raw`(?<![\w.,])${NUM}(\s?| )${UNIT}(?![\w²/])`, 'g');
 const CONV = {
   'km/h': [1 / 1.609344, 'mph'], 'm/s': [M_TO_FT, 'ft/s'], 'm/s²': [M_TO_FT, 'ft/s²'], kg: [KG_TO_LB, 'lb'], kgf: [KGF_TO_LBF, 'lbf'],
-  kN: [1000 * N_TO_LBF, 'lbf'], kW: [KW_TO_HP, 'hp'], km: [1 / 1.609344, 'mi'], mm: [1 / 25.4, 'in'], bar: [BAR_TO_PSI, 'psi'],
+  kN: [1000 * N_TO_LBF, 'lbf'], kW: [KW_TO_HP, 'hp'], km: [1 / 1.609344, 'mi'], cm: [1 / 2.54, 'in'], mm: [1 / 25.4, 'in'], bar: [BAR_TO_PSI, 'psi'],
   m: [M_TO_FT, 'ft'], metre: [M_TO_FT, 'feet'], metres: [M_TO_FT, 'feet'], meter: [M_TO_FT, 'feet'], meters: [M_TO_FT, 'feet'],
 };
 function usOf(sign, int, frac = '', sp, unit) {
