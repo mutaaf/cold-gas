@@ -606,7 +606,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .dmg { flex-direction: column; align-items: center; gap: 6px; }
   .dmg svg { width: 30px; height: 54px; }
   .dmg-read { justify-items: center; gap: 4px; }
-  .dmg-read .h-lbl { display: none; }
+  .dmg-read .h-lbl { font-size: 11px; }   /* keep "Damage": without it "0 % Intact" reads as 0 % intact */
   .dmg-v b { font-size: 16px; min-width: 0; }
   .h-timeline li { width: 40px; }
   .h-timeline li span { position: absolute; top: 15px; left: 50%; transform: translateX(-50%); visibility: hidden; }
