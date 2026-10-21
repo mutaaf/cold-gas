@@ -689,17 +689,17 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .dial { width: 84px; height: 84px; }
   .h-strip { top: calc(var(--top) + 206px); bottom: auto; left: calc(var(--m) + 74px + var(--safe-l)); right: calc(var(--m) + var(--safe-r)); transform: none; width: auto;
     display: grid; grid-template-columns: 1.3fr 1fr 1fr; }   /* the first column carries N₂ and its BLOWDOWN tag */
-  .h-cell { min-width: 0; padding: 8px 10px 7px; }
+  .h-cell { min-width: 0; padding: 8px 8px 7px; }
   .h-cell:nth-child(n) { border-left: 0; }
   .h-cell b { font-size: 16px; }
   .hud .h-cell:not(:first-child) { border-left: 1px solid var(--line); }
   .h-strip > .tank { grid-column: 1; grid-row: 2; }   /* N₂ heads row 2 in the wide column, on the ground and in the air */
   .hud .h-strip > .tank { border-left: 0; }   /* (beats .hud .h-cell:not(:first-child)) */
   .h-strip { row-gap: 0; }
-  .cue { --cue-top: 424px; }   /* under the strip (N₂ wraps to three lines with both unit systems) */
+  .cue { --cue-top: 444px; }   /* under the strip (N₂ wraps to three lines with both unit systems) */
   /* The vehicle panel (damage) heads the strip: car health beside the telemetry. */
   .h-vehicle { top: calc(var(--top) + 206px); left: calc(var(--m) + var(--safe-l)); right: auto; width: 66px; height: 112px; justify-content: center; align-items: center; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(5, 7, 12, 0.62); }
-  body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 460px; }
+  body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 480px; }
   .h-scrim-top { height: calc(var(--top) + 300px); }
 }
 @media (pointer: coarse) and (orientation: portrait) and (min-width: 600px) {
@@ -875,7 +875,15 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 .h-big > .h-alt { grid-column: 1 / -1; justify-self: end; margin-top: 4px; font-size: 12px; }
 .tank { grid-template-columns: auto 1fr; }
 .tank .n2-bar { white-space: nowrap; line-height: 1.3; }
-@media (pointer: coarse) { .tank .n2-bar { white-space: normal; } }
+/* Phones: a cell is a wrapping line, not a grid, so a reading that outgrows a narrow cell (FAN's
+   five digits and lbf, in a wide fallback font) breaks its unit or its metric line under the
+   number instead of spilling out of the cell. */
+@media (pointer: coarse) {
+  .tank .n2-bar { white-space: normal; }
+  .h-strip .h-cell { display: flex; flex-wrap: wrap; align-items: baseline; align-content: flex-start; column-gap: 4px; row-gap: 5px; min-width: 0; }
+  .h-strip .h-cell > .h-lbl, .h-strip .h-cell > .h-alt, .h-strip .h-cell > .n2-bar { flex: 0 0 100%; min-width: 0; }
+  .h-strip .h-cell > .h-alt { white-space: normal; overflow-wrap: anywhere; }
+}
 .tank .n2-bar .h-alt { font-size: 11px; }
 .d-row .h-alt { margin-left: 4px; }
 .u2 { font-size: 0.86em; color: rgba(245, 246, 248, 0.72); font-variant-numeric: tabular-nums; white-space: nowrap; }

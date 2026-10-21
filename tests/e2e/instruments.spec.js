@@ -112,7 +112,9 @@ for (const [name, opts] of [['phone portrait', { viewport: { width: 390, height:
   test(`US-led readouts with metric beside them fit: ${name}`, async ({ browser }) => {
     const page = await browser.newPage(opts);
     const errors = await live(page);
-    const spills = await page.evaluate(() => {
+    // Twice: in the bundled faces, then in a wide fallback monospace forced over the HUD (CI's
+    // Linux fonts ran wider than a Mac's), so a layout that only just fits fails here too.
+    const measure = () => page.evaluate(() => {
       const hud = document.querySelector('[data-screen="hud"]'), out = [];
       const set = (sel, t) => { document.querySelector(sel).textContent = t; };
       set('[data-n2-state]', 'Blowdown'); set('[data-fan]', '10341'); set('[data-2="fan"]', '4690 kgf'); set('[data-pitch]', '+170'); set('[data-sink]', '40.7'); set('[data-2="sink"]', '12.4 m/s');
@@ -128,7 +130,9 @@ for (const [name, opts] of [['phone portrait', { viewport: { width: 390, height:
       hud.toggleAttribute('data-air', false);
       return out;
     });
-    expect(spills).toEqual([]);
+    expect(await measure(), 'bundled fonts').toEqual([]);
+    await page.addStyleTag({ content: '.hud, .hud * { font-family: "Courier New", "DejaVu Sans Mono", "Liberation Mono", monospace !important; letter-spacing: 0.03em !important; }' });
+    expect(await measure(), 'a wide fallback monospace').toEqual([]);
     expect(errors).toEqual([]);
     await page.close();
   });
