@@ -4,10 +4,10 @@ import { test, expect } from '@playwright/test';
 // for any pilot (the reference too), and the number labelled ROLL is the bank right now, not the
 // roll accumulated over the flight. The sim is stepped from the test (liveStep, 0.1 s at a time), so
 // software GL's slow frames don't decide what gets sampled.
-async function boot(page) {
+async function boot(page, query = '') {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/coldgas/?gfx=low');
+  await page.goto(`/coldgas/?gfx=low${query}`);
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
   // physicsReady is a function: until it says yes, startRun defers to a later task.
   await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 30_000 });
@@ -15,7 +15,7 @@ async function boot(page) {
 }
 
 // Steps the live run to its end and returns one sample per 0.1 s: sim phase, the timeline's active
-// phase, the ROLL text, and how upright the car is (world up · body up). Starts the reference and flies it in the same task, so no animation frame steps the run unsampled
+// phase, the ROLL text, and world up in the car's frame (upY: how upright; upZ: how far pitched). Starts the reference and flies it in the same task, so no animation frame steps the run unsampled
 // (under load, frames between two evaluate calls can carry it past the lip). `rollAfterRelease`:
 // a full roll stick and nothing else from the release on (Pro: no computer to level it).
 const flyAndSample = (page, rollAfterRelease = false) => page.evaluate((rollAfterRelease) => {
@@ -40,7 +40,7 @@ const flyAndSample = (page, rollAfterRelease = false) => page.evaluate((rollAfte
     out.push({
       tick: run.tick, phase: run.phase, ph: hud.dataset.phase, released: S.released,
       roll: Number(document.querySelector('[data-roll]').textContent),
-      upY: 1 - 2 * (q.x * q.x + q.z * q.z), touched: run.t.touchTick >= 0,
+      upY: 1 - 2 * (q.x * q.x + q.z * q.z), upZ: 2 * (q.y * q.z - q.w * q.x), touched: run.t.touchTick >= 0,
     });
     if (run.phase === 'done') break;
   }
@@ -80,7 +80,8 @@ test('reference rolled into a crash: on a side or the roof, ROLL reads ≥ 60°'
   test.slow();
   const errors = await boot(page);
   const { out } = await flyAndSample(page, true);
-  const over = out.filter((s) => s.touched && s.phase !== 'air' && s.upY < 0.5);   // down after the flight, not up the deck
+  // Down after the flight (not up the deck), over 60° from upright and not resting on its nose or tail.
+  const over = out.filter((s) => s.touched && s.phase !== 'air' && s.upY < 0.5 && Math.abs(s.upZ) < 0.5);
   expect(over.length, 'samples on a side or the roof').toBeGreaterThan(0);
   for (const s of over) expect(s.roll, JSON.stringify(s)).toBeGreaterThanOrEqual(60);
   expect(errors).toEqual([]);
@@ -113,5 +114,21 @@ test('player release on the ledge still runs HANG → RELEASE → CARRY', async 
   expect(seq[0].ph, txt).toBe('release');
   for (const s of seq) if (s.dt >= 0.6 + 0.1) expect(['carry', 'brake', 'touchdown'], txt).toContain(s.ph);
   expect(seq.at(-1).dt, txt).toBeGreaterThan(0.7);
+  expect(errors).toEqual([]);
+});
+
+test('the Lineup reads ROLLED: the roll so far, which its score counts in whole turns', async ({ page }) => {
+  test.slow();
+  const errors = await boot(page, '&course=lineup');
+  const r = await page.evaluate(() => {
+    const g = window.__coldgas, S = g.S;
+    g.startRun('reveal'); g.skipCountdown();
+    for (let i = 0; i < 600 && S.mode === 'live' && S.run.phase !== 'done'; i++) g.liveStep(0.1);
+    return { course: S.run.course, lbl: document.querySelector('.adi-roll .h-lbl').textContent, roll: Number(document.querySelector('[data-roll]').textContent), accum: Math.round(Math.abs(S.run.t.rollAccum) * 180 / Math.PI) };
+  });
+  expect(r.course).toBe('lineup');
+  expect(r.lbl).toBe('Rolled');
+  expect(r.accum).toBeGreaterThan(300);
+  expect(r.roll).toBe(r.accum);
   expect(errors).toEqual([]);
 });
