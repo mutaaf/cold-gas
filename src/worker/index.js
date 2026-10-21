@@ -4,6 +4,10 @@
 //        → text/event-stream: verify → prompt → reasoning/token… → done | error
 //        The server replays the log, scores it, then streams the AI panel's words.
 //   POST /coldgas/api/models  { provider } + x-cg-key → { models, suggested } (BYOK connect)
+//   POST /coldgas/api/quest  { provider?, model?, arena, wish, seed } (+ x-cg-key for BYOK)
+//        → text/event-stream: prompt → reasoning/token… → done { quest | null, errors } | error
+//        The AI designs a side quest as JSON; the server validates it against the schema
+//        (src/build/quest-schema.js) before it leaves. Data, never code.
 //   GET  /coldgas/api/providers → providers and the edge default
 //   POST /coldgas/api/scores  { log, assist, initials } → verified board entry
 //   GET  /coldgas/api/scores?board=today|all → top 20
@@ -17,10 +21,14 @@ import { scoreRun } from '../sim/judge.js';
 import { SYSTEM, userPrompt, parseWords, estimateTokens } from './ai/prompt.js';
 import { PROVIDERS, EDGE_MODELS, streamJudge, listModels, pickModel, costUsd, describeError } from './ai/providers.js';
 import { detectProvider } from '../ai/detect.js';
+import { validateQuest, extractJson } from '../build/quest-schema.js';
+import { questSystem, questUser, QUEST_MAX_TOKENS } from './ai/quest.js';
 
 const EDGE_DAILY_CAP = 700;         // free-allowance judgings per UTC day (≈13 neurons each, 10k free)
 const EDGE_HOURLY_PER_IP = 40;
 const BYOK_HOURLY_PER_IP = 90;
+const QUEST_EDGE_HOURLY_PER_IP = 12;   // side quests on the free model: ≈3× a judging's neurons each
+const QUEST_EDGE_DAILY_CAP = 250;
 const MAX_LOG = 6000;
 const KEY_RE = /^[\w\-.:+/=]{8,400}$/;
 const MODEL_RE = /^[\w\-.:/@]{1,120}$/;
@@ -171,6 +179,92 @@ async function judgeStream(req, env, ctx) {
   });
 }
 
+// --- The quest designer ----------------------------------------------------------------------------
+// One call to the chosen provider (the free edge model, or the player's key for this call only),
+// streamed to the theatre; the answer is parsed and validated here, and only a valid quest leaves.
+async function questStream(req, env, ctx) {
+  const t0 = Date.now();
+  const body = await req.json().catch(() => null);
+  const provider = PROVIDERS[body?.provider] ? body.provider : 'edge';
+  const key = req.headers.get('x-cg-key') || '';
+  if (PROVIDERS[provider].needsKey && !KEY_RE.test(key)) return json({ error: 'key' }, 400);
+  if (body?.model && !MODEL_RE.test(body.model)) return json({ error: 'model' }, 400);
+  const arena = body?.arena === 'road' ? 'road' : 'sandbox';
+  const wish = typeof body?.wish === 'string' ? body.wish.slice(0, 140) : '';
+  const seed = String(body?.seed ?? '').replace(/[^\w-]/g, '').slice(0, 24) || '0';
+
+  const db = env.DB;
+  if (db) await ensureTables(db);
+  const ip = await ipHash(req);
+  let allowed;
+  if (provider === 'edge') allowed = (await bump(db, `quest-edge:${ip}:${hour()}`)) <= QUEST_EDGE_HOURLY_PER_IP && (await bump(db, `quest-day:${day()}`)) <= QUEST_EDGE_DAILY_CAP && !!env.AI;
+  else allowed = (await bump(db, `byok:${ip}:${hour()}`)) <= BYOK_HOURLY_PER_IP;
+  if (!allowed) return json({ error: 'slow down' }, 429);
+
+  const s = sse(ctx);
+  const colo = req.cf?.colo || null;
+  ctx.waitUntil((async () => {
+    const system = questSystem(arena), user = questUser({ arena, wish, seed });
+    const model = provider === 'edge' ? (EDGE_MODELS.includes(body?.model) ? body.model : EDGE_MODELS[0]) : (body?.model || PROVIDERS[provider].fallbackModel);
+    if (!model) { s.send('error', { message: 'Pick a model first.', fallback: true }); return s.close(); }
+    s.send('prompt', {
+      provider, providerLabel: PROVIDERS[provider].label, vendor: PROVIDERS[provider].vendor, model, colo,
+      where: provider === 'edge' ? `Cloudflare ${colo || 'edge'}` : PROVIDERS[provider].label,
+      system, user, inTokensEst: estimateTokens(system) + estimateTokens(user),
+    });
+    const tCall = Date.now();
+    let ttft = null, text = '', reasoning = '', usage = { inTokens: 0, outTokens: 0, neurons: 0 };
+    const abort = new AbortController();
+    const timer = setTimeout(() => abort.abort(), 30_000);
+    try {
+      const tryModels = provider === 'edge' ? [model, ...EDGE_MODELS.filter((m) => m !== model)] : [model];
+      let lastErr = null;
+      for (const m of tryModels) {
+        try {
+          const it = streamJudge({ provider, env, key, model: m, system, user, signal: abort.signal, maxTokens: QUEST_MAX_TOKENS });
+          let r;
+          while (!(r = await it.next()).done) {
+            const c = r.value;
+            if (ttft === null) ttft = Date.now() - tCall;
+            if (c.type === 'reasoning') { reasoning += c.text; s.send('reasoning', { t: c.text }); }
+            else { text += c.text; s.send('token', { t: c.text }); }
+          }
+          usage = r.value || usage;
+          usage.model = m;
+          lastErr = null;
+          break;
+        } catch (err) {
+          lastErr = err;
+          if (text) break;
+        }
+      }
+      if (lastErr) throw lastErr;
+      const used = usage.model || model;
+      const inTokens = usage.inTokens || estimateTokens(system) + estimateTokens(user);
+      const outTokens = usage.outTokens || estimateTokens(text + reasoning);
+      const totalMs = Date.now() - tCall;
+      const parsed = extractJson(text);
+      const v = parsed ? validateQuest(parsed, { arena }) : { ok: false, errors: ['the answer had no JSON object'] };
+      s.send('done', {
+        quest: v.ok ? v.quest : null, errors: v.ok ? null : v.errors,
+        provider, model: used, colo, ttftMs: ttft, totalMs, verifyMs: tCall - t0,
+        inTokens, outTokens, neurons: usage.neurons ? Math.round(usage.neurons * 100) / 100 : null,
+        tokensPerSec: totalMs > 0 ? Math.round((outTokens / Math.max(0.05, (totalMs - (ttft || 0)) / 1000)) * 10) / 10 : null,
+        costUsd: costUsd(used, inTokens, outTokens), billedTo: provider === 'edge' ? 'COLD GAS (free allowance)' : `your ${PROVIDERS[provider].label} key`,
+        raw: text.slice(0, 6000),
+      });
+    } catch (err) {
+      s.send('error', { message: describeError(provider, err), fallback: true });
+    } finally {
+      clearTimeout(timer);
+      s.close();
+    }
+  })());
+  return new Response(s.readable, {
+    headers: { 'content-type': 'text/event-stream; charset=utf-8', 'cache-control': 'no-store', 'x-accel-buffering': 'no' },
+  });
+}
+
 // --- Routes ---------------------------------------------------------------------------------------
 async function handle(req, env, ctx) {
   const url = new URL(req.url);
@@ -183,6 +277,8 @@ async function handle(req, env, ctx) {
   }
 
   if (path === '/judge/stream' && req.method === 'POST') return judgeStream(req, env, ctx);
+
+  if (path === '/quest' && req.method === 'POST') return questStream(req, env, ctx);
 
   if (path === '/models' && req.method === 'POST') {
     const body = await req.json().catch(() => null);

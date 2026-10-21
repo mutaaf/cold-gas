@@ -72,8 +72,8 @@ export async function listModels(provider, key) {
 }
 
 // --- Streaming ---------------------------------------------------------------------------------
-async function* streamEdge({ env, model, messages, signal }) {
-  const body = { messages, stream: true, max_tokens: 400 };
+async function* streamEdge({ env, model, messages, signal, maxTokens = 400 }) {
+  const body = { messages, stream: true, max_tokens: maxTokens };
   if (/gemma-4|qwen3|glm/.test(model)) body.chat_template_kwargs = { enable_thinking: false };
   const res = await env.AI.run(model, body, { signal });
   const reader = res.getReader();
@@ -102,11 +102,11 @@ async function* streamEdge({ env, model, messages, signal }) {
   return { inTokens, outTokens, neurons };
 }
 
-async function* streamAnthropic({ key, model, system, user }) {
+async function* streamAnthropic({ key, model, system, user, maxTokens = 2000 }) {
   const client = new Anthropic({ apiKey: key, maxRetries: 1, timeout: 30_000 });
   // Cost-effective by design: low effort. Opus/Sonnet 5.5 get the server-side refusal fallback.
   const params = {
-    model, max_tokens: 2000, system,
+    model, max_tokens: maxTokens, system,
     output_config: { effort: 'low' },
     messages: [{ role: 'user', content: user }],
   };
@@ -122,6 +122,7 @@ async function* streamAnthropic({ key, model, system, user }) {
   return { inTokens: msg.usage?.input_tokens || 0, outTokens: msg.usage?.output_tokens || 0, neurons: 0 };
 }
 
+// No output cap here: a reasoning model's thinking counts against it and could starve the answer.
 async function* streamCompatible({ provider, key, model, messages }) {
   const p = PROVIDERS[provider];
   const client = new OpenAI({ apiKey: key, baseURL: p.baseURL, maxRetries: 1, timeout: 30_000 });
@@ -146,10 +147,11 @@ async function* streamCompatible({ provider, key, model, messages }) {
   return { inTokens, outTokens, neurons: 0 };
 }
 
-export function streamJudge({ provider, env, key, model, system, user, signal }) {
+// `maxTokens`: the judges' few lines fit the defaults; the quest designer's JSON needs more.
+export function streamJudge({ provider, env, key, model, system, user, signal, maxTokens }) {
   const messages = [{ role: 'system', content: system }, { role: 'user', content: user }];
-  if (provider === 'edge') return streamEdge({ env, model, messages, signal });
-  if (provider === 'anthropic') return streamAnthropic({ key, model, system, user });
+  if (provider === 'edge') return streamEdge({ env, model, messages, signal, maxTokens });
+  if (provider === 'anthropic') return streamAnthropic({ key, model, system, user, maxTokens });
   return streamCompatible({ provider, key, model, messages });
 }
 

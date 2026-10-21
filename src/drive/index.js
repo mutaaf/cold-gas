@@ -17,6 +17,8 @@ import { SPEC } from '../sim/spec.js';
 import { createDriveCamera } from './camera.js';
 import { renderPicker, createHud, fmtTime } from './hud.js';
 import { createPilot } from './pilot.js';
+import { createBuildLayer } from '../build/layer.js';
+import { roadHost } from '../build/road-host.js';
 
 export { ROADS };
 export const DEFAULT_ROAD = 'stelvio';
@@ -77,7 +79,13 @@ export function createDrive(ctx) {
       world.prime(pose.x, pose.z, (f) => prog(0.75 + f * 0.2, 'Laying the road'));
       prog(0.97, 'Warming up');
       st.road = road; st.info = info; st.world = world; st.course = createRoadCourse(road, { name: info.name });
-      st.cam = createDriveCamera(camera, road);
+      // The build / power-up / quest layer (src/build/): its pieces join the road's ground.
+      st.layer = createBuildLayer(roadHost({ road, info, course: st.course, stage, carRoot, getCar: () => st.car, placeCar: placePose }), {
+        ui, audio, tier, coarse: ctx.coarse, usingTouch: input.usingTouch,
+        onEditing: (on) => { ui.touch.hidden = on || !(ctx.coarse || input.usingTouch()); hudRoot.hidden = on; if (!on) st.cam?.snap(); },
+      });
+      st.course = st.layer.course;
+      st.cam = createDriveCamera(camera, road, (x, y, z, o) => st.course.sdf(x, y, z, o));
       camera.clearViewOffset?.();
       camera.near = 0.5; camera.far = 46000; camera.updateProjectionMatrix();
       stage.setLook(world.look);
@@ -116,6 +124,7 @@ export function createDrive(ctx) {
 
   function teardown() {
     bindKeys(false);
+    st.layer?.dispose(); st.layer = null;
     if (st.lamp) { carRoot.remove(st.lamp, st.lamp.target); st.lamp.dispose(); st.lamp = null; }
     stage.setLook(null);
     if (st.bias) { stage.key.shadow.bias = st.bias[0]; stage.key.shadow.normalBias = st.bias[1]; st.bias = null; }
@@ -147,9 +156,24 @@ export function createDrive(ctx) {
     st.car = car; st.hint = p.i;
     st.airT = 0; st.flipT = 0; st.stuckT = 0;
     if (resetTimer) { st.timer = null; st.finished = false; st.penalty = 0; }
+    st.layer?.reset();
     crash.reset(); plumes.clear();
     const sag = car.wheels[0].compression;
     comps.fill(sag); spins.fill(0);
+    syncCar(car.pos, car.quat, comps, spins, 0);
+    st.cam?.snap();
+  }
+
+  // A fresh car at a pose (a quest's start): { x, y, z, yaw }.
+  function placePose(p) {
+    const car = createVehicle(st.course);
+    car.pos.x = p.x; car.pos.y = p.y + SPEC.comHeight + 0.04; car.pos.z = p.z;
+    quatFromYaw(car.quat, p.yaw);
+    st.car = car; st.hint = nearestSample(st.road, p.x, p.z);
+    st.airT = 0; st.flipT = 0; st.stuckT = 0;
+    st.layer?.reset();
+    crash.reset(); plumes.clear();
+    comps.fill(car.wheels[0].compression); spins.fill(0);
     syncCar(car.pos, car.quat, comps, spins, 0);
     st.cam?.snap();
   }
@@ -185,7 +209,7 @@ export function createDrive(ctx) {
     ui.cue_(st.fan ? 'Fan on · 46 kN of suction holds the car down' : 'Fan off', 1600);
   }
   const onKey = (e) => {
-    if (!st.active || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (!st.active || e.repeat || e.metaKey || e.ctrlKey || e.altKey || st.layer?.editing) return;
     if (e.target?.closest?.('input, textarea, select, [contenteditable]')) return;
     if (e.code === 'KeyR') respawn();
     else if (e.code === 'KeyC') cycleCam();
@@ -195,7 +219,7 @@ export function createDrive(ctx) {
   function bindKeys(on) { if (on) addEventListener('keydown', onKey); else removeEventListener('keydown', onKey); }
 
   function pause(on = !st.paused) {
-    if (!st.active) return;
+    if (!st.active || st.layer?.editing) return;
     st.paused = on;
     pauseRoot.hidden = !on;
     if (on && !pauseRoot.dataset.wired) {
@@ -215,8 +239,10 @@ export function createDrive(ctx) {
   function frame(dt, time) {
     if (!st.active || !st.car) return;
     const road = st.road;
-    if (!st.paused) {
-      st.acc += Math.min(dt, 0.1);
+    const layer = st.layer;
+    if (!st.paused && !layer?.editing) {
+      // The arcade layer's slow-mo runs fewer 240 Hz ticks per second (the step stays the same).
+      st.acc += Math.min(dt, 0.1) * (layer ? layer.timeScale : 1);
       let c = st.car;
       while (st.acc >= DT) {
         const air = c.grounded === 0 && !c.hullContact;
@@ -230,7 +256,9 @@ export function createDrive(ctx) {
           const vf = c.vel.x * fx + c.vel.z * fz;
           if (inp.brake > 0 && inp.throttle === 0 && vf < 0.8) { inp.throttle = -0.35 * inp.brake; inp.brake = 0; }
         }
+        layer?.preStep(c, inp);
         step(c, inp);
+        layer?.postStep(c);
         st.acc -= DT;
       }
       c = st.car;
@@ -248,7 +276,7 @@ export function createDrive(ctx) {
     const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
     // Timer: from moving off the start to the end of the road.
     if (st.timer == null && !st.finished && i * road.meta.spacing > 30 && i * road.meta.spacing < 300 && speed > 1) st.timer = 0;
-    if (st.timer != null && !st.finished && !st.paused) st.timer += dt;
+    if (st.timer != null && !st.finished && !st.paused && !layer?.editing) st.timer += dt;
     if (st.timer != null && !st.finished && i >= road.n - 8) finishRun();
     const shown = st.timer != null ? st.timer + st.penalty : null;
     const dirSign = road.dx[m] * fw.x + road.dz[m] * fw.z >= 0 ? 1 : -1;
@@ -266,7 +294,8 @@ export function createDrive(ctx) {
     hero.setWing?.(Math.min(1, Math.max(0, (speed - 20) / 20)));
     plumes.update(dt, time, c.throttles, c.vel, st.ground);
     audio.updateAudio({ speed, grounded: c.grounded > 0, throttles: c.throttles });
-    st.cam.update(dt, { pos: carRoot.position, quat: carRoot.quaternion, vel: c.vel }, time);
+    if (!layer?.editing) st.cam.update(dt, { pos: carRoot.position, quat: carRoot.quaternion, vel: c.vel }, time);
+    layer?.frame(dt, time);
     st.world.update(camera, time);
     // A rough FPS meter for the perf probe (window.__coldgas.drive.stats()).
     st.frames++; st.fpsT += dt;
@@ -307,7 +336,7 @@ export function createDrive(ctx) {
     // Test and screenshot hooks: a driver that follows the road, and a teleport along it.
     autopilot(on = true, opts) { st.pilot = on && st.road ? createPilot(st.road, opts) : null; },
     goto(s, dir = 1) { if (st.road) placeAt(s, dir, true); },
-    get active() { return st.active; }, get course() { return st.course; }, get floor() { return st.ground; }, get paused() { return st.paused; },
+    get active() { return st.active; }, get course() { return st.course; }, get layer() { return st.layer; }, get floor() { return st.ground; }, get paused() { return st.paused; },
     get car() { return st.car; }, get road() { return st.road; }, get world() { return st.world; }, get cam() { return st.cam; },
     setTod: (t) => setTod(t), cycleCam, state: st, CAR,
   };

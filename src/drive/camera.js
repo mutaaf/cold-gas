@@ -11,14 +11,17 @@ export const CAM_MODES = ['chase', 'bumper', 'cinema'];
 const tmp = new THREE.Vector3(), fwd = new THREE.Vector3(), upv = new THREE.Vector3(), want = new THREE.Vector3(), look = new THREE.Vector3();
 const sn = { x: 0, y: 0, z: 0 }, t3 = [0, 0, 0];
 
-export function createDriveCamera(camera, road) {
+// `sdf` (optional): the world's distance field for keeping the camera clear of it (the Sandbox and
+// the build layer's pieces); without a road there's no cinema, only chase and bumper.
+export function createDriveCamera(camera, road, sdf = null) {
+  const modes = road ? CAM_MODES : CAM_MODES.filter((m) => m !== 'cinema');
   const st = {
     mode: 'chase', init: false, hx: 0, hz: 1, pos: new THREE.Vector3(), look: new THREE.Vector3(), fov: 58,
     shot: null, shotT: 0, shotN: 0, hint: 0,
   };
   const clearance = (p, min) => {
     // Lift a camera point clear of the ground, the road and the walls.
-    const d = roadSurface(road, p.x, p.y, p.z, sn);
+    const d = sdf ? sdf(p.x, p.y, p.z, sn) : roadSurface(road, p.x, p.y, p.z, sn);
     if (d < min) p.y += min - d;
   };
 
@@ -144,7 +147,7 @@ export function createDriveCamera(camera, road) {
   return {
     update,
     snap() { st.init = false; st.shot = null; },
-    cycle() { st.mode = CAM_MODES[(CAM_MODES.indexOf(st.mode) + 1) % CAM_MODES.length]; st.init = false; st.shot = null; return st.mode; },
+    cycle() { st.mode = modes[(modes.indexOf(st.mode) + 1) % modes.length]; st.init = false; st.shot = null; return st.mode; },
     get mode() { return st.mode; },
     set mode(m) { st.mode = m; st.init = false; st.shot = null; },
     state: st,
