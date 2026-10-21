@@ -9,8 +9,8 @@
 // |f(t) - 2 f(t-1) + f(t-2)| in 0–255 units, averaged per region, plus the share of pixel-frames
 // where it exceeds 24 (a visible pop). Regions come from an ID pass rendered with the same camera:
 // ground (the slab, the approach and everything painted on it), wall (deck, truss, LEDs), car
-// (the hero), row (the parked vehicles), sky. Frame triples that straddle a director hard cut
-// are skipped.
+// (the hero), row (the parked vehicles), sky, backdrop (the launch complex). Frame triples that
+// straddle a director hard cut are skipped.
 //
 // requestAnimationFrame is stubbed before the game loads, so every run sees the same timestamps;
 // the scene clock (S.time) is pinned at the start of each scenario. Real GPU flags (Metal ANGLE)
@@ -43,13 +43,14 @@ await page.addInitScript(() => {
 await page.goto(url);
 await page.waitForFunction(() => window.__coldgas?.stage?.ready, null, { timeout: 30000 });
 await page.evaluate(() => window.__coldgas.stage.ready);
-await page.waitForTimeout(800);
+await page.evaluate(() => window.__coldgas.stage.backdrop);   // the streamed-in backdrop (src/render/rocket.js), if any
+await page.waitForTimeout(3000);   // and its lights up
 
 // In-page harness: capture, ID pass, accumulators.
 await page.evaluate(() => {
   const F = window.__flk, G = window.__coldgas, stage = G.stage;
   const renderer = stage.renderer, gl = renderer.getContext(), scene = stage.scene, camera = stage.camera;
-  const REG = ['other', 'ground', 'wall', 'car', 'row', 'sky'];
+  const REG = ['other', 'ground', 'wall', 'car', 'row', 'sky', 'backdrop'];
   // Region of each mesh, decided once from where it sits.
   const regionOf = new Map();
   const heroSet = new Set(); G.hero.group.traverse((o) => heroSet.add(o));
@@ -60,9 +61,10 @@ await page.evaluate(() => {
       if (heroSet.has(o)) r = 3;
       else if (o.geometry?.parameters?.radius >= 1000) r = 5;
       else {
-        let p = o, inCourse = false, inRow = false;
-        while (p) { if (p.userData?.setBodies) inRow = true; if (p.name?.startsWith('course:')) inCourse = true; p = p.parent; }
-        if (inRow) r = 4;
+        let p = o, inCourse = false, inRow = false, inBackdrop = false;
+        while (p) { if (p.userData?.setBodies) inRow = true; if (p.name?.startsWith('course:')) inCourse = true; if (p.name?.startsWith('backdrop:')) inBackdrop = true; p = p.parent; }
+        if (inBackdrop) r = 6;
+        else if (inRow) r = 4;
         else if (inCourse) {
           o.geometry.computeBoundingBox?.();
           const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);

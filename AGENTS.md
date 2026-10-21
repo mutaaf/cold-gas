@@ -151,7 +151,11 @@ src/render/           three.js (r186):
                           LED edges, searchlights, pad
   roadster.js           the hero car, matched to the reveal (research §10): faceted body, lamps,
                           wake / brake / aero / skirt / nozzle states from what the renderer sees
-  cars.js               lineup vehicles, ghost, `wheelCenterY` contract
+  cars.js               the ghost, `wheelCenterY` contract, makeParked → parked/
+  parked/               the lineup, one procedural model per LINEUP_SPEC entry at its researched
+                          size (docs/VEHICLES.md): kit.js (curves, swept and faceted bodies, lamp
+                          strips and panels raycast onto a body, instanced wheels, per-material
+                          merging), smooth.js (sedan / crossover / cab builder), one file per vehicle
   plumes.js             per-nozzle shock-diamond cones + condensation mist pool
   crash.js              everything a crash shows, keyed to run.impacts (live and replay): sparks,
                           chips, dust, dents, torn-off parts, lamps/hazards, shake, slow-mo, cut
@@ -185,6 +189,7 @@ scripts/human-show.mjs     human-like players on the Show (reaction time, keys, 
 scripts/human-advanced.mjs Advanced by a person: taps on the valve keys
 scripts/play-human.mjs     a cue-following player on the real page (keyboard or touch)
 scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
+scripts/shots-lineup.mjs   studio shots of each parked vehicle + the row, and the row's draw budget
 scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)
 scripts/roads/        build-time only: OSM + terrain → public/roads/*.bin.gz (docs/ROADS.md)
 public/roads/         the baked Free Drive roads (fetched only when a road is picked)

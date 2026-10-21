@@ -108,6 +108,63 @@ function fadeBump(mat, size) {
   mat.customProgramCacheKey = () => `fadeBump:${size}`;
 }
 
+// A wet slab (the night after rain, as launch nights so often are): puddles from a world-space
+// noise, smoother where wet, and on the high tier a planar reflection of the stage mixed in by
+// Fresnel (src/render/film.js renders the mirror; until it arrives the lookup reads a black texel,
+// so the program never changes after the first load). Returns the uniforms film.js drives.
+const BLACK = new THREE.DataTexture(new Uint8Array([0, 0, 0, 255]), 1, 1);
+BLACK.needsUpdate = true;
+export function wetSlab(mat, planar) {
+  const U = { tReflect: { value: BLACK }, uReflMat: { value: new THREE.Matrix4() }, uReflK: { value: 0 } };
+  mat.onBeforeCompile = (sh) => {
+    Object.assign(sh.uniforms, U);
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nvarying vec3 vWetWp;')
+      .replace('#include <project_vertex>', '#include <project_vertex>\nvWetWp = ( modelMatrix * vec4( transformed, 1.0 ) ).xyz;');
+    sh.fragmentShader = (planar ? '#define WET_PLANAR\n' : '') + sh.fragmentShader
+      .replace('#include <common>', `#include <common>
+varying vec3 vWetWp;
+uniform sampler2D tReflect; uniform mat4 uReflMat; uniform float uReflK;
+float wetHash( vec2 p ) { vec3 q = fract( vec3( p.xyx ) * 0.1031 ); q += dot( q, q.yzx + 33.33 ); return fract( ( q.x + q.y ) * q.z ); }
+float wetNoise( vec2 p ) {
+  vec2 i = floor( p ), f = fract( p ); f = f * f * ( 3.0 - 2.0 * f );
+  return mix( mix( wetHash( i ), wetHash( i + vec2( 1, 0 ) ), f.x ), mix( wetHash( i + vec2( 0, 1 ) ), wetHash( i + vec2( 1, 1 ) ), f.x ), f.y );
+}
+// Puddles: broad patches with ragged edges; the fine detail fades out once a pixel covers it, so
+// the far slab doesn't sparkle.
+float wetMask( vec2 p ) {
+  float fw = length( fwidth( p ) );
+  float n = wetNoise( p * 0.07 ) * 0.62 + wetNoise( p * 0.29 + 7.1 ) * 0.28;
+  n += ( wetNoise( p * 1.1 + 3.7 ) - 0.5 ) * 0.2 * ( 1.0 - smoothstep( 0.3, 1.2, fw ) );
+  float e = 0.1 + fw * 0.05;
+  return smoothstep( 0.42 - e, 0.42 + e, n );
+}`)
+      .replace('#include <roughnessmap_fragment>', `#include <roughnessmap_fragment>
+float wet = 0.6 + 0.4 * wetMask( vWetWp.xz );   // damp everywhere, standing water in places
+diffuseColor.rgb *= 1.0 - 0.12 * wet;            // water darkens concrete
+roughnessFactor = mix( roughnessFactor, max( roughnessFactor * 0.55, 0.2 ), wet );`)
+      .replace('#include <opaque_fragment>', `#ifdef WET_PLANAR
+if ( uReflK > 0.0 ) {
+  vec4 rc = uReflMat * vec4( vWetWp, 1.0 );
+  vec3 vd = normalize( cameraPosition - vWetWp );
+  float fres = 0.03 + 0.97 * pow( 1.0 - clamp( vd.y, 0.0, 1.0 ), 5.0 );
+  // Wet concrete smears a reflection along the view (the micro-ripples are stretched by the
+  // grazing angle): five taps down the mirror image, wider where it's only damp.
+  vec2 ruv = rc.xy / rc.w;
+  float lod = mix( 2.2, 0.8, wet );
+  vec2 dv = vec2( 0.0, mix( 9.0, 3.0, wet ) ) / vec2( textureSize( tReflect, 0 ) );
+  vec3 refl = textureLod( tReflect, ruv, lod ).rgb * 0.3
+    + ( textureLod( tReflect, ruv + dv, lod ).rgb + textureLod( tReflect, ruv - dv, lod ).rgb ) * 0.22
+    + ( textureLod( tReflect, ruv + dv * 2.3, lod + 0.6 ).rgb + textureLod( tReflect, ruv - dv * 2.3, lod + 0.6 ).rgb ) * 0.13;
+  outgoingLight += refl * uReflK * fres * wet * wet * 0.7;
+}
+#endif
+#include <opaque_fragment>`);
+  };
+  mat.customProgramCacheKey = () => `wetSlab:${planar}`;
+  return U;
+}
+
 // Dark slab and approach asphalt for the ground.
 function groundTexture(seed, base) {
   const S = 512, rnd = rng(seed);
@@ -325,7 +382,7 @@ const beamVS = `varying vec2 vUv; varying vec3 vN; varying vec3 vV;
   void main(){ vUv = uv; vN = normalize(normalMatrix * normal); vec4 mv = modelViewMatrix * vec4(position,1.); vV = normalize(-mv.xyz); gl_Position = projectionMatrix * mv; }`;
 const beamFS = `uniform vec3 uColor; uniform float uPower; varying vec2 vUv; varying vec3 vN; varying vec3 vV;
   void main(){
-    float along = vUv.y;                            // 0 at the lamp, 1 at the far end
+    float along = clamp(vUv.y, 0., 1.);   // 0 at the lamp, 1 at the far end
     float edge = pow(abs(dot(normalize(vN), normalize(vV))), 1.6);
     float a = uPower * edge * pow(1. - along, 1.7) * smoothstep(0., 0.02, along);
     gl_FragColor = vec4(uColor * a, a);
@@ -333,7 +390,7 @@ const beamFS = `uniform vec3 uColor; uniform float uPower; varying vec2 vUv; var
 
 function searchlights(tier) {
   const g = new THREE.Group();
-  if (tier === 'low') return { group: g, update() {} };
+  if (tier === 'low') return { group: g, lamps: [], update() {} };
   const beams = [];
   const geo = new THREE.CylinderGeometry(5.2, 0.22, 130, 32, 1, true);
   geo.translate(0, 65, 0);        // lamp at the origin, beam up +y
@@ -363,6 +420,7 @@ function searchlights(tier) {
   });
   return {
     group: g,
+    lamps: spots.map(([x, z]) => new THREE.Vector3(x, 0.6, z)),
     update(t) {
       for (const b of beams) {
         b.pivot.rotation.z = -b.tilt * 0.55 + Math.sin(t * b.speed + b.phase) * 0.18;
@@ -373,11 +431,13 @@ function searchlights(tier) {
 }
 
 // --- Markings, approach, pad ---------------------------------------------------------------------
-function approach(P) {
+function approach(P, tier) {
   const g = new THREE.Group();
   const z0 = WALL.runout.zMin, z1 = 0, len = z1 - z0;
   const map = groundTexture(23, '#1b1c1f'); map.repeat.set(2, len / 8);
-  const strip = new THREE.Mesh(new THREE.PlaneGeometry(9, len), new THREE.MeshStandardMaterial({ map, color: 0x9a9ca0, roughness: 0.62, metalness: 0, envMapIntensity: 0.5, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }));
+  const stripMat = new THREE.MeshStandardMaterial({ map, color: 0x9a9ca0, roughness: 0.62, metalness: 0, envMapIntensity: 0.5, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 });
+  g.userData.wet = wetSlab(stripMat, tier === 'high');
+  const strip = new THREE.Mesh(new THREE.PlaneGeometry(9, len), stripMat);
   strip.rotation.x = -Math.PI / 2; strip.position.set(0, 0.002, (z0 + z1) / 2); strip.receiveShadow = true;
   g.add(strip);
   // Paint on the strip (DECAL: the strip's own slope-scaled offset used to beat these lines at
@@ -463,6 +523,7 @@ export function bakeNightEnvironment(renderer) {
   panel(20, 2.2, -26, 7, -8, 0xfff2e6, 1.6);
   panel(20, 1.6, 26, 6, 10, 0xdfe9ff, 1.1);
   panel(14, 0.5, 18, 9, 16, 0xff2030, 0.7);
+  panel(2.4, 9, -30, 5, -1, 0xe6ecff, 0.45);   // the floodlit vehicle on the horizon (src/render/rocket.js)
   panel(10, 10, 0, -20, 0, 0x0b0c0f, 1);
   const pm = new THREE.PMREMGenerator(renderer);
   const rt = pm.fromScene(env, 0.03);
@@ -478,13 +539,16 @@ export function* buildWall(tier, pad = WALL.pad) {
   const group = new THREE.Group();
   group.name = 'course:wall';
   let beams = null;
-  yield {
+  const look = {
     group,
+    wet: [],     // the slab's wetSlab uniforms (src/render/film.js)
+    glows: [],   // lamps that light the air around them: { pos, color } (src/render/film.js)
     titlePose: { x: 0, z: -11, yaw: 0 },
     look: { exposure: 1.18, bloom: { strength: 0.62, radius: 0.55, threshold: 0.82 }, fog: new THREE.FogExp2(0x020305, 0.0032) },
     keyLight: { color: 0xdfe6ff, intensity: 1.7, offset: new THREE.Vector3(-18, 30, -22) },
     update(t) { beams?.update(t); },
   };
+  yield look;
   const S = samples(tier === 'low' ? 200 : 380);
 
   // Deck.
@@ -540,14 +604,18 @@ export function* buildWall(tier, pad = WALL.pad) {
 
   // Ground: a dark polished slab, the approach and the target.
   const gmap = groundTexture(41, '#141518'); gmap.repeat.set(70, 70);
-  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), new THREE.MeshStandardMaterial({
+  const groundMat = new THREE.MeshStandardMaterial({
     map: gmap, color: 0x8c8f94, roughness: 0.5, metalness: 0.05, envMapIntensity: 0.55,
     polygonOffset: true, polygonOffsetFactor: 2, polygonOffsetUnits: 2,
-  }));
+  });
+  look.wet.push(wetSlab(groundMat, tier === 'high'));
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(1400, 1400), groundMat);
   ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true;
   group.add(ground);
   yield;
-  group.add(approach(pad));
+  const ap = approach(pad, tier);
+  group.add(ap);
+  look.wet.push(ap.userData.wet);
   group.add(glowDecal(0xff1828, 8, 0, 1.0, 0.26));
   group.add(glowDecal(0x8fb6ff, 7, -2.5, -5, 0.12));
   group.add(glowDecal(0x8fb6ff, 7, 2.5, -5, 0.12));
@@ -573,13 +641,16 @@ export function* buildWall(tier, pad = WALL.pad) {
     fx.position.set(sx * 2.4, 0.15, -5.7); group.add(fx);
     const lens = new THREE.Mesh(spreadThin(new THREE.PlaneGeometry(0.62, 0.18)), sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.6, 3) }), { minPx: 1.5 }));
     lens.position.set(sx * 2.4, 0.2, -5.44); lens.rotation.x = -0.5; lens.renderOrder = LAYER.light; group.add(lens);
+    look.glows.push({ pos: new THREE.Vector3(sx * 2.4, 0.35, -5.3), color: new THREE.Color(0.12, 0.13, 0.15), radius: 1.5 });
   }
   const red = new THREE.PointLight(0xff1a28, 35, 18, 2);
   red.position.set(0, 1.2, 1.5);
   lights.add(red);
+  look.glows.push({ pos: new THREE.Vector3(0, 0.5, 1.0), color: new THREE.Color(0.25, 0.012, 0.02), radius: 3.5 });
   group.add(lights);
   yield;
 
   beams = searchlights(tier);
   group.add(beams.group);
+  for (const p of beams.lamps) look.glows.push({ pos: p, color: new THREE.Color(0.1, 0.13, 0.17), radius: 1.6 });
 }

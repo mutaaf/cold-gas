@@ -1,4 +1,4 @@
-// The fan, scheduled like the livestream's DOWNFORCE channel (SIM_VERSION 12, ticket 0012): the
+// The fan, scheduled like the livestream's DOWNFORCE channel (SIM_VERSION 13, ticket 0012): the
 // controller asks for the suction the deck's tilt needs, spools to it in ≈1.5 s, holds the car
 // hanging inverted, and idles on the level. Telemetry: docs/REVEAL_RESEARCH.md §2.1.2.
 import { describe, it, expect } from 'vitest';
@@ -10,7 +10,7 @@ import { DRILLS, buildDrill } from '../../src/practice.js';
 const TELEMETRY = [[25, 434], [50, 825], [75, 1544], [90, 3300], [127, 4510], [170, 4700]];   // pitch°, kgf
 const pitchOf = (c, u) => Math.acos(Math.max(-1, Math.min(1, up(c, u).y))) * 180 / Math.PI;
 
-describe('fan suction follows the attitude (SIM_VERSION 12)', () => {
+describe('fan suction follows the attitude (SIM_VERSION 13)', () => {
   it('the reference Wall climb reads within ±30 % of the telemetry at each pitch', () => {
     const run = createRun('wall'), ap = createAutopilot('wall'), u = {}, got = [];
     while (run.phase !== 'done' && got.length < TELEMETRY.length) {

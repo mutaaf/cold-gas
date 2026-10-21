@@ -139,16 +139,40 @@ function ramp() {
 // The parked row, one mesh per sim body (src/sim/courses.js createWorld). `setBodies(bodies)`
 // moves each to its body's pose (a shoved car is drawn where the physics left it); null puts the
 // row back where the course parked it.
+// Contact shadow: a soft dark footprint under each vehicle (ambient occlusion where the body meets
+// the slab, which the key light's shadow map is too coarse and too directional to give). One
+// texture, drawn as a decal over the slab and its paint.
+let blobTex = null;
+function blobMaterial(opacity) {
+  if (!blobTex) {
+    const c = document.createElement('canvas'); c.width = c.height = 128;
+    const x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, 'rgba(255,255,255,1)'); g.addColorStop(0.5, 'rgba(255,255,255,0.75)'); g.addColorStop(0.8, 'rgba(255,255,255,0.22)'); g.addColorStop(1, 'rgba(255,255,255,0)');
+    x.fillStyle = g; x.fillRect(0, 0, 128, 128);
+    blobTex = new THREE.CanvasTexture(c);
+  }
+  return new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: blobTex, transparent: true, opacity, depthWrite: false, fog: false, ...DECAL });
+}
+const BLOB_ORDER = LAYER.glow - 0.5;   // over the paint, under the glows and LEDs
+let parkedBlob = null;
+function contactShadow(car) {
+  const box = new THREE.Box3().setFromObject(car), size = box.getSize(new THREE.Vector3()), c = box.getCenter(new THREE.Vector3());
+  const m = new THREE.Mesh(new THREE.PlaneGeometry(size.x * 1.25 + 0.3, size.z * 1.12 + 0.4), (parkedBlob ??= blobMaterial(0.62)));
+  m.rotation.x = -Math.PI / 2; m.position.set(c.x, 0.012, c.z); m.renderOrder = BLOB_ORDER;
+  car.add(m);
+}
+
 function lineup(boxes) {
   const g = new THREE.Group();
   const cars = boxes.map((b) => {
     const car = makeParked(b.id, b.paint);
+    contactShadow(car);
     // Parked crosswise, nose to +x.
     car.rotation.y = Math.PI / 2;
-    car.position.set((b.minX + b.maxX) / 2 + (b.id === 'semi' ? 0.2 : 0), 0, b.cz);
+    car.position.set((b.minX + b.maxX) / 2, 0, b.cz);
     car.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
     g.add(car);
-    return { car, home: { cx: (b.minX + b.maxX) / 2, cz: b.cz, yaw: 0 }, dx: b.id === 'semi' ? 0.2 : 0 };
+    return { car, home: { cx: (b.minX + b.maxX) / 2, cz: b.cz, yaw: 0 }, dx: 0 };   // models are built centred on their box
   });
   g.userData.setBodies = (bodies) => {
     for (let i = 0; i < cars.length; i++) {
@@ -185,7 +209,8 @@ function linesAndPad() {
   return g;
 }
 
-// Distant low ridges and a lattice test stand with a slow red beacon — the range's horizon.
+// Distant low ridges: the range's horizon. (The launch complex beyond the range streams in after
+// the first frame: src/render/rocket.js.)
 function horizon() {
   const g = new THREE.Group();
   const mat = new THREE.MeshBasicMaterial({ color: 0x0b0f17, fog: true });
@@ -213,25 +238,6 @@ function horizon() {
     g.add(m);
     void shape;
   }
-  // Test stand tower.
-  const tower = new THREE.Group();
-  // ~800 m out its legs and bands are under a pixel: slivers keep them solid.
-  const strut = sliver(new THREE.MeshBasicMaterial({ color: 0x080b11 }), { minPx: 1, dim: false, maxK: 4 });
-  const H = 70;
-  const legGeo = spreadAxes(new THREE.CylinderGeometry(0.5, 0.8, H, 6), [1, 0, 1]), bandGeo = spreadAxes(new THREE.BoxGeometry(9, 0.5, 9), [0, 1, 0]);
-  for (const [x, z] of [[-4, -4], [4, -4], [-4, 4], [4, 4]]) {
-    const leg = new THREE.Mesh(legGeo, strut);
-    leg.position.set(x, H / 2, z); tower.add(leg);
-  }
-  for (let y = 6; y < H; y += 7) {
-    const band = new THREE.Mesh(bandGeo, strut);
-    band.position.y = y; tower.add(band);
-  }
-  const beacon = new THREE.Mesh(spreadAxes(new THREE.SphereGeometry(1.1, 12, 8), [1, 1, 1]), sliver(new THREE.MeshBasicMaterial({ color: 0xff2a2a }), { minPx: 2, size: 2.2 }));
-  beacon.position.y = H + 2; tower.add(beacon);
-  tower.position.set(-420, -2, 640);
-  g.add(tower);
-  g.userData.beacon = beacon;
   return g;
 }
 
@@ -253,34 +259,30 @@ function buildLineup(tier) {
   const row = lineup(LINEUP.boxes);
   group.add(row);
   group.add(linesAndPad());
-  const hz = horizon();
-  group.add(hz);
+  group.add(horizon());
   // Floodlight poles along the run-up: thin, minimal, each with a small lamp head.
   // Slivers (src/render/sliver.js): down the line the poles and lamp heads are under a pixel, and
   // they crawled against the sky (and through the bloom) as the camera moved.
   const poleMat = sliver(new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.6, metalness: 0.6 }), { minPx: 1, dim: false, maxK: 4 });
   const headMat = sliver(lampWhite.clone(), { minPx: 1.5 });
   const poleGeo = spreadAxes(new THREE.CylinderGeometry(0.06, 0.09, 9, 10), [1, 0, 1]), headGeo = spreadAxes(new THREE.BoxGeometry(0.9, 0.08, 0.3), [0, 1, 0]);
+  const glows = [];
   for (let z = START_Z + 10; z < 80; z += 24) {
     for (const sx of [-1, 1]) {
       const pole = new THREE.Mesh(poleGeo, poleMat);
       pole.position.set(sx * 13, 4.5, z); pole.castShadow = tier !== 'low'; group.add(pole);
       const head = new THREE.Mesh(headGeo, headMat);
       head.position.set(sx * 12.6, 9, z); head.renderOrder = LAYER.light; group.add(head);
+      glows.push({ pos: new THREE.Vector3(sx * 12.6, 8.9, z), color: new THREE.Color(0.08, 0.085, 0.095), radius: 1.5 });
     }
   }
   return {
     group,
+    glows,
     titlePose: { x: PAD.x, z: PAD.z, yaw: -0.6 },
     look: { exposure: 1.05, bloom: { strength: 0.3, radius: 0.5, threshold: 0.92 }, fog: new THREE.Fog(PALETTE.haze, 120, 900) },
     keyLight: { color: 0xffd2ad, intensity: 2.6, offset: new THREE.Vector3(-30, 22, 46) },
-    // The beacon's slow blink ramps on and off (a hard cut lit or killed a pixel-sized red dot,
-    // and its bloom, in a single frame).
-    update(t) {
-      const k = THREE.MathUtils.smoothstep(Math.sin(t * 2.2), 0.05, 0.35);
-      hz.userData.beacon.visible = k > 0;
-      hz.userData.beacon.material.color.setRGB(k, 0.0231 * k, 0.0231 * k);
-    },
+    update() {},
     setBodies: row.userData.setBodies,
   };
 }
@@ -383,6 +385,11 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   const hero = makeRoadster();
   hero.group.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
   scene.add(hero.group);
+  // The hero's contact shadow follows it on the slab and fades as it leaves the ground.
+  const heroBlob = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 5.6), blobMaterial(0.7));
+  heroBlob.rotation.order = 'YXZ'; heroBlob.rotation.x = -Math.PI / 2; heroBlob.renderOrder = BLOB_ORDER;
+  scene.add(heroBlob);
+  const heroPos = new THREE.Vector3(), heroQ = new THREE.Quaternion(), heroFwd = new THREE.Vector3();
 
   // Depth resolution worsens as distance² / near: with near at 0.1 m the slab and its paint ran
   // out of it at range. The closest rigs sit 0.35 m over the slab looking along it and about a
@@ -395,7 +402,8 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   if (tier !== 'low') {
     // No MSAA render target: multisampled HalfFloat targets render black on some GPU paths.
     // SMAA after the output pass does the edges instead.
-    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType });
+    // The high tier keeps the depth as a texture: the atmosphere pass reads it (src/render/film.js).
+    const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: tier === 'high' ? new THREE.DepthTexture(1, 1) : null });
     composer = new EffectComposer(renderer, rt);
     composer.addPass(new RenderPass(scene, camera));
     bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 0.92);
@@ -419,7 +427,7 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
   const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
   const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
-  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, resize, render, setCourse, titlePose, setBodies, setLook, bloom };
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, rocket: null, film: null, resize, render, setCourse, titlePose, setBodies, setLook, bloom };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
@@ -435,6 +443,8 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     scene.fog = current.look.fog;
     renderer.toneMappingExposure = current.look.exposure;
     if (bloom) Object.assign(bloom, current.look.bloom);
+    stage.rocket?.setLook(id);
+    filmLook();
     key.color.set(current.keyLight.color);
     key.intensity = current.keyLight.intensity;
     keyOffset.copy(current.keyLight.offset);
@@ -452,6 +462,8 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     if (external) { scene.remove(external.group); external = null; }
     if (!look) {
       sky.visible = true;
+      if (stage.rocket) stage.rocket.group.visible = true;
+      heroBlob.visible = true;
       const id = stage.course; stage.course = null; current = null;
       for (const k of Object.keys(looks)) scene.remove(looks[k].group);
       setCourse(id);
@@ -461,6 +473,8 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     external = look;
     scene.add(look.group);
     sky.visible = false;
+    if (stage.rocket) stage.rocket.group.visible = false;
+    heroBlob.visible = false;
     scene.environment = look.env; scene.environmentIntensity = look.envIntensity ?? 1;
     scene.fog = look.fog;
     renderer.toneMappingExposure = look.exposure;
@@ -489,9 +503,23 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   }
   resize();
 
-  function render(time) {
+  // render(time, mode): mode is the game's ('title' on the title screen), for the backdrop's moments.
+  function render(time, mode) {
     if (!drawing) return;
     (external || current).update(time);
+    if (stage.rocket && !external) stage.rocket.update(time, mode);
+    if (!external) {
+      hero.group.getWorldPosition(heroPos);
+      hero.group.getWorldQuaternion(heroQ);
+      heroFwd.set(0, 0, 1).applyQuaternion(heroQ);
+      const up = THREE.MathUtils.smoothstep(heroPos.y, 0.15, 2.2);
+      heroBlob.position.set(heroPos.x, 0.012, heroPos.z);
+      heroBlob.rotation.y = Math.atan2(heroFwd.x, heroFwd.z);
+      heroBlob.scale.setScalar(1 + up * 0.6);
+      heroBlob.material.opacity = 0.7 * (1 - up);
+      heroBlob.visible = up < 1;
+    }
+    film?.render(!external);
     hero.update?.(time);   // lamps, active aero, skirts, nozzle states
     // Keep the shadow frustum on the hero, snapped to whole shadow-map texels across the light,
     // so the map's grid stays fixed on the ground and shadow edges don't crawl as the car moves.
@@ -530,7 +558,71 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     return stage;
   }
 
+  // The backdrop (src/render/rocket.js, its own chunk) streams in after the first frame: fetched
+  // when the page is idle, built in slices, its shaders compiled off the main thread (hidden parts
+  // too, so the first static fire doesn't stall), and only then added. Its lights power up as it
+  // arrives.
+  // The film look (src/render/film.js, desktop only): atmosphere pass and the wet slab's mirror.
+  let film = null;
+  function filmLook() {
+    if (!film || !current) return;
+    const glows = [...(current.glows || []), ...(stage.rocket?.glows || [])];
+    film.setLook(stage.course, glows, current.wet || []);
+  }
+  async function loadFilm() {
+    const { createFilm, REFLECT } = await import('./film.js');
+    // What the wet slab mirrors: everything standing on the stage (not the slab, its paint or the
+    // glows lying on it), the sky, the car and the backdrop. Lights too, so the mirror pass sees
+    // the same lights and reuses every program.
+    const tag = (root) => root.traverse((o) => {
+      if (o.isLight) { o.layers.enable(REFLECT); return; }
+      if (!o.isMesh && !o.isInstancedMesh) return;
+      if (o.geometry && !o.isInstancedMesh) {
+        o.geometry.computeBoundingBox();
+        const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+        if (b.max.y < 0.12 && o.geometry.parameters?.radius !== 2000) return;
+      }
+      o.layers.enable(REFLECT);
+    });
+    scene.updateMatrixWorld(true);
+    for (const id of ['show', 'wall']) if (looks[id]) { finishBuild(looks[id]); tag(looks[id].group); }
+    tag(sky); sky.layers.enable(REFLECT); tag(hero.group); key.layers.enable(REFLECT);
+    if (stage.rocket) tag(stage.rocket.group);
+    const f = createFilm({ renderer, scene, camera, composer, tier });
+    if (f.haze) await Promise.race([renderer.compileAsync(f.haze.quad._mesh ?? new THREE.Mesh(), camera), new Promise((r) => setTimeout(r, 2000))]).catch(() => {});
+    film = stage.film = f;
+    filmLook();
+  }
+
+  async function loadBackdrop() {
+    await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));   // the first frame is on screen
+    await new Promise((r) => (globalThis.requestIdleCallback ? requestIdleCallback(r, { timeout: 1500 }) : setTimeout(r, 300)));
+    const { buildRocket } = await import('./rocket.js');
+    const gen = buildRocket({ reducedMotion: matchMedia('(prefers-reduced-motion: reduce)').matches });
+    let res;
+    for (;;) {
+      const t0 = performance.now();
+      do res = gen.next(); while (!res.done && performance.now() - t0 < 8);
+      if (res.done) break;
+      await nextTask();
+    }
+    const rocket = res.value;
+    rocket.setLook(stage.course || 'show');
+    const hidden = [];
+    rocket.group.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
+    try {
+      await Promise.race([renderer.compileAsync(rocket.group, camera, scene), new Promise((r) => setTimeout(r, 4000))]);
+    } finally { for (const o of hidden) o.visible = false; }
+    rocket.group.visible = !external;
+    scene.add(rocket.group);
+    stage.rocket = rocket;
+    if (tier === 'high' && composer) await loadFilm();
+    else filmLook();
+    return rocket;
+  }
+
   setCourse(course, { sliced: true });
   stage.ready = boot();
+  stage.backdrop = stage.ready.then(loadBackdrop).catch((err) => { console.warn('backdrop', err); return null; });
   return stage;
 }

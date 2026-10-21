@@ -92,12 +92,51 @@ function wallSdf(z, y, n) {
 
 // --- The Lineup (the kickflip over five parked EVs) -----------------------------------------------
 export const RAMP = { z0: -12, z1: 0, height: 1.2, halfWidth: 3.2 };
+// The parked vehicles, at the researched size of the class each stands in for (docs/VEHICLES.md:
+// every number there carries its source and an OFFICIAL / REPORTED / PHOTO / ESTIMATE tag).
+// Each is parked crosswise, so `l` runs across the lane (x) and `w` along the approach (z).
+//   w, l, h        the physics box: body width without mirrors, overall length, height (m)
+//   wMirrors       width across the mirrors, unfolded (the cab has cameras, no mirrors)
+//   clearance      ground clearance, unladen (m)
+//   wheelbase      front axle to rear axle (the semi: to the middle of the tandem)
+//   axles          [{ at, track, r, w, dual }]: `at` is the axle's distance from the box centre
+//                  toward the nose (m), `track` the tyre centre-to-centre width (for twin tyres,
+//                  the centre of each pair), r / w the tyre's radius and section width
+//   tyreR, tyreW   the front tyre, for code that wants one number; rimR the rim's radius
+//   mass           curb mass (kg); cgHeight above the ground, cgAt from the box centre toward the
+//                  nose (from the axle loads where published)
+//   inertia        about the CoM (kg·m²), ESTIMATE: a solid box × 0.8 for the cars (mass sits low
+//                  and inboard: floor battery), × 0.7 for the semi tractor; that lands a mid-size
+//                  sedan within ≈10 % of measured values for the class (NHTSA inertia database)
 export const LINEUP_SPEC = [
-  { id: 'sedan', name: 'Sedan', w: 1.86, l: 4.72, h: 1.44, paint: 0xe8e8ea },
-  { id: 'suv', name: 'Crossover', w: 1.92, l: 4.76, h: 1.62, paint: 0x1d1f24 },
-  { id: 'semi', name: 'Semi', w: 2.55, l: 6.9, h: 3.85, paint: 0xf4f4f2 },
-  { id: 'pickup', name: 'Pickup', w: 2.2, l: 5.68, h: 1.86, paint: 0x9aa0a6 },
-  { id: 'cab', name: 'Cab', w: 1.94, l: 3.95, h: 1.52, paint: 0xd8b25a },
+  // Mid-size fastback sedan: 4.720 × 1.850 × 1.440, wb 2.875, 235/45R18 (OFFICIAL, owner's manual).
+  { id: 'sedan', name: 'Sedan', w: 1.85, l: 4.72, h: 1.44, paint: 0xe8e8ea, wMirrors: 2.089, clearance: 0.138,
+    wheelbase: 2.875, tyreR: 0.335, tyreW: 0.235, rimR: 0.229,
+    axles: [{ at: 1.492, track: 1.584, r: 0.335, w: 0.235 }, { at: -1.383, track: 1.584, r: 0.335, w: 0.235 }],
+    mass: 1705, cgHeight: 0.46, cgAt: -0.032, inertia: { roll: 620, pitch: 2770, yaw: 2920 } },
+  // Compact crossover: 4.790 × 1.920 × 1.624, wb 2.890, 255/45R19 (OFFICIAL, owner's manual).
+  { id: 'suv', name: 'Crossover', w: 1.92, l: 4.79, h: 1.624, paint: 0x1d1f24, wMirrors: 2.129, clearance: 0.167,
+    wheelbase: 2.89, tyreR: 0.356, tyreW: 0.255, rimR: 0.241,
+    axles: [{ at: 1.502, track: 1.636, r: 0.356, w: 0.255 }, { at: -1.388, track: 1.636, r: 0.356, w: 0.255 }],
+    mass: 1842, cgHeight: 0.53, cgAt: -0.03, inertia: { roll: 780, pitch: 3140, yaw: 3270 } },
+  // Class 8 electric day-cab tractor, 6x4, no trailer: 4.11 m tall as parked (REPORTED); length,
+  // wheelbase and tyres ESTIMATE (295/75R22.5, the class's usual size); 10,433 kg (REPORTED).
+  { id: 'semi', name: 'Semi', w: 2.59, l: 6.32, h: 4.11, paint: 0xf4f4f2, wMirrors: 2.95, clearance: 0.26,
+    wheelbase: 3.96, tyreR: 0.507, tyreW: 0.295, rimR: 0.286,
+    axles: [{ at: 1.91, track: 2.05, r: 0.507, w: 0.295 }, { at: -1.39, track: 1.86, r: 0.507, w: 0.295, dual: true }, { at: -2.71, track: 1.86, r: 0.507, w: 0.295, dual: true }],
+    mass: 10433, cgHeight: 1.1, cgAt: -0.268, inertia: { roll: 14360, pitch: 34590, yaw: 28390 } },
+  // Full-size stainless pickup: 5.683 × 2.032 × 1.794, wb 3.635, 285/65R20, 3,009 kg with axle
+  // loads 1,491 / 1,518 kg (OFFICIAL, owner's manual; air suspension at its medium height).
+  { id: 'pickup', name: 'Pickup', w: 2.032, l: 5.683, h: 1.794, paint: 0x9aa0a6, wMirrors: 2.413, clearance: 0.257,
+    wheelbase: 3.635, tyreR: 0.439, tyreW: 0.285, rimR: 0.254,
+    axles: [{ at: 1.964, track: 1.772, r: 0.439, w: 0.285 }, { at: -1.672, track: 1.772, r: 0.439, w: 0.285 }],
+    mass: 3009, cgHeight: 0.8, cgAt: 0.128, inertia: { roll: 1470, pitch: 7120, yaw: 7310 } },
+  // Two-seat robotaxi: 4.445 × 1.753 × 1.407 (REPORTED, rider guide), 1,412 kg (OFFICIAL, EPA);
+  // wheelbase and track ESTIMATE; staggered 215/60R18 front, 225/60R21 rear (REPORTED).
+  { id: 'cab', name: 'Cab', w: 1.753, l: 4.445, h: 1.407, paint: 0xd8b25a, wMirrors: 1.753, clearance: 0.145,
+    wheelbase: 2.7, tyreR: 0.358, tyreW: 0.215, rimR: 0.229,
+    axles: [{ at: 1.423, track: 1.53, r: 0.358, w: 0.215 }, { at: -1.277, track: 1.53, r: 0.402, w: 0.225, rimR: 0.267 }],
+    mass: 1412, cgHeight: 0.48, cgAt: 0.127, inertia: { roll: 480, pitch: 2050, yaw: 2150 } },
 ];
 const GAP = 0.62, Z0 = 7;
 export const LINEUP_BOXES = (() => {
@@ -178,10 +217,9 @@ export const MATERIALS = {
   rock: { id: 'rock', grip: 0.7, slide: 0.55 },
   barrier: { id: 'barrier', grip: 0.5, slide: 0.35 },
 };
-// Parked vehicles (kg, ESTIMATE: class-typical curb weights for a mid-size sedan, a crossover, an
-// electric semi tractor, a full-size pickup and a two-seat cab). Parked means in Park with the
-// brake set: all four tyres resist sliding at μ ≈ 0.8 of their load.
-const PARKED_MASS = { sedan: 1800, suv: 2000, semi: 10500, pickup: 3100, cab: 1600 };
+// Parked vehicles: curb mass from LINEUP_SPEC (sourced in docs/VEHICLES.md). Parked means in Park
+// with the brake set: all four tyres resist sliding at μ ≈ 0.8 of their load.
+const PARKED_MASS = Object.fromEntries(LINEUP_SPEC.map((v) => [v.id, v.mass]));
 const PARK_MU = 0.8;
 
 // A world: the course plus its own moving bodies. Each vehicle run gets a fresh one, so a nudged
