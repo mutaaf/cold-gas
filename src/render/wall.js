@@ -4,7 +4,7 @@
 // sampled from `wallProfile` (src/sim/courses.js), so the picture is the physics to the
 // centimetre.
 import * as THREE from 'three';
-import { WALL, wallProfile } from '../sim/courses.js';
+import { WALL, wallProfile, FIXTURES } from '../sim/courses.js';
 import { sliver, spreadAxes, spreadThin, spreadRing, setSliverAttributes, DECAL, LAYER } from './sliver.js';
 
 const W = WALL.width, T = WALL.slab, L = WALL.length;
@@ -390,27 +390,26 @@ const beamFS = `uniform vec3 uColor; uniform float uPower; varying vec2 vUv; var
 
 function searchlights(tier) {
   const g = new THREE.Group();
-  if (tier === 'low') return { group: g, lamps: [], update() {} };
-  const beams = [];
+  // The drums are solid (src/sim/courses.js FIXTURES), so every tier draws them; the low tier drops
+  // only the beams.
+  const beams = [], noBeams = tier === 'low';
   const geo = new THREE.CylinderGeometry(5.2, 0.22, 130, 32, 1, true);
   geo.translate(0, 65, 0);        // lamp at the origin, beam up +y
   const fixtureMat = new THREE.MeshStandardMaterial({ color: 0x15161a, metalness: 0.7, roughness: 0.4 });
   const lensMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.1, 1.3, 1.6) });
-  const spots = [
-    [-9, 15, -0.45, 0.10], [-13, 20, -0.62, 0.0], [-18, 25, -0.78, -0.12], [-24, 18, -0.9, 0.18],
-    [9, 15, 0.45, 0.10], [13, 20, 0.62, 0.0], [18, 25, 0.78, -0.12], [24, 18, 0.9, 0.18],
-  ];
+  const S = FIXTURES.searchlights, spots = S.at;
   spots.forEach(([x, z, tilt, lean], i) => {
     const pivot = new THREE.Group();
-    pivot.position.set(x, 0.3, z);
+    pivot.position.set(x, S.y, z);
     const mat = new THREE.ShaderMaterial({
       vertexShader: beamVS, fragmentShader: beamFS, transparent: true, depthWrite: false, blending: THREE.AdditiveBlending, side: THREE.DoubleSide, fog: false,
       uniforms: { uColor: { value: new THREE.Color(0.62, 0.78, 1.0) }, uPower: { value: 0.16 } },
     });
     const beam = new THREE.Mesh(geo, mat);
     beam.frustumCulled = false;
+    beam.visible = !noBeams;
     pivot.add(beam);
-    const head = new THREE.Mesh(new THREE.CylinderGeometry(0.55, 0.65, 0.5, 20), fixtureMat);
+    const head = new THREE.Mesh(new THREE.CylinderGeometry(S.rTop, S.r, S.h, 20), fixtureMat);
     pivot.add(head);
     const lens = new THREE.Mesh(new THREE.CircleGeometry(0.48, 24), lensMat);
     lens.rotation.x = -Math.PI / 2; lens.position.y = 0.26;
@@ -632,13 +631,14 @@ export function* buildWall(tier, pad = WALL.pad) {
   lights.add(wash2, wash2.target);
   // Uplights at the base, raking up the curl (the reference's bright lower deck).
   const uplights = [];
-  for (const sx of [-1, 1]) {
+  for (const [ux, uz] of FIXTURES.uplights.at) {
+    const sx = Math.sign(ux), [uw, uh, ud] = FIXTURES.uplights.size;
     const up = new THREE.SpotLight(0xe9f1ff, 1100 * HK * HK, 0, 0.42, 0.55, 2);
-    up.position.set(sx * 2.4, 0.25, -5.5); up.target.position.set(sx * 0.5, 13 * HK, 10.5);
+    up.position.set(ux, 0.25, uz + 0.2); up.target.position.set(sx * 0.5, 13 * HK, 10.5);
     lights.add(up, up.target);
     uplights.push(up);
-    const fx = new THREE.Mesh(new THREE.BoxGeometry(0.8, 0.3, 0.5), new THREE.MeshStandardMaterial({ color: 0x111215, metalness: 0.6, roughness: 0.4 }));
-    fx.position.set(sx * 2.4, 0.15, -5.7); group.add(fx);
+    const fx = new THREE.Mesh(new THREE.BoxGeometry(uw, uh, ud), new THREE.MeshStandardMaterial({ color: 0x111215, metalness: 0.6, roughness: 0.4 }));
+    fx.position.set(ux, uh / 2, uz); group.add(fx);
     const lens = new THREE.Mesh(spreadThin(new THREE.PlaneGeometry(0.62, 0.18)), sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(2.4, 2.6, 3) }), { minPx: 1.5 }));
     lens.position.set(sx * 2.4, 0.2, -5.44); lens.rotation.x = -0.5; lens.renderOrder = LAYER.light; group.add(lens);
     look.glows.push({ pos: new THREE.Vector3(sx * 2.4, 0.35, -5.3), color: new THREE.Color(0.12, 0.13, 0.15), radius: 1.5 });

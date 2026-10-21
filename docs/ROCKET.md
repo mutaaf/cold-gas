@@ -1,10 +1,13 @@
-# The launch complex (the backdrop)
+# The launch complex
 
 A reusable two-stage orbital launch vehicle stands on its mount a few hundred metres beyond the
-stage, floodlit, venting, with a strongback, lightning masts and a water tank around it. It's
-set dressing for the one moment (the Wall, the carry over the row, the title), built to read as
-a real vehicle at real scale. Code: `src/render/rocket.js` (a lazy chunk). The film look that
-came with it (atmosphere, wet slab) is `src/render/film.js`.
+stage, floodlit, venting, with a strongback, lightning masts and a water tank around it. It frames
+the one moment (the Wall, the carry over the row, the title), built to read as a real vehicle at
+real scale, and it is a physical place: drive out to it and it is solid where it is drawn, and its
+engines are a machine whose static fire will throw your car off the pad (docs/OBJECTS.md).
+Code: `src/sim/complex.js` (the geometry, shared by the physics and the drawing), `src/sim/rocket.js`
+(the engines, the static fire, the jet, the ascent), `src/render/rocket.js` (the drawing, a lazy
+chunk). The film look that came with it (atmosphere, wet slab) is `src/render/film.js`.
 
 ## IP (AGENTS.md invariant 3.7)
 
@@ -32,7 +35,7 @@ varies between vehicles or isn't published, the value is marked ESTIMATE.
 | Payload fairing | 13.1 long, 5.2 diameter | boat-tail from 3.66 to 5.2 m over ≈ 1.6 m, then barrel and a tangent ogive |
 | Grid fins | 1.3 × 1.5, stowed flat | four, 90° apart, near the top of the interstage (ESTIMATE: size of the stowed panel) |
 | Landing legs, folded | 9.6 long, ≈ 1.0 wide | four, between the fins, flush along the engine section and lower tank |
-| Launch mount deck | 5.0 above the pad | the vehicle stands on hold-downs; flame trench beneath, exiting to one side (ESTIMATE) |
+| Launch mount deck | 5.0 above the pad | the vehicle stands on hold-downs on a table of four columns; the flame trench runs beneath it, 9 m wide, and exits 48 m out on the side away from the stage (ESTIMATE) |
 | Pad (hardstand) | 3.0 high, ≈ 66 radius | raised, with a sloped skirt to grade |
 | Strongback / tower | 82 high, 3.4 square | a lattice beside the vehicle; clamp arms at three heights; access arm and white room at the upper stage |
 | Lightning masts | 104 high | three around the pad; class sites use 90–110 m catenary towers |
@@ -82,10 +85,50 @@ vapour 1, plus the static fire's glow (2 instances) while it burns. ≈ 6 draws,
   and beacons.
 - **Venting**: boil-off from the upper-stage and booster vents and cold vapour rolling off the
   base, always (subtle).
-- **Static fire** (title only, never with `prefers-reduced-motion`): first after ≈ 26 s on the
-  title, then every 100–160 s. 7.5 s burn: a glow under the mount and at the trench exit, the
-  vehicle and pad lit orange from below, a steam cloud out of the trench that lingers ≈ 20 s.
-  `stage.rocket.fire(t)` triggers one (screenshots).
+- **Static fire**: on the title (never with `prefers-reduced-motion`) first after ≈ 26 s, then every
+  100–160 s; in a run, on the sim's schedule (20 s in, then every 40 s), because there it is physics:
+  its jet pushes a car parked in it. 7.5 s burn whose glow follows the engines' thrust as the sim
+  integrates it: a glow under the mount and at the trench exit, the vehicle and pad lit orange from
+  below, a steam cloud out of the trench that lingers ≈ 20 s. `stage.rocket.fire(t)` triggers one
+  (screenshots).
+
+## The machine (src/sim/rocket.js)
+
+The class's first stage and its numbers (OFFICIAL: published payload user's guides and press kits;
+REPORTED: encyclopedic summaries; ESTIMATE: ours):
+
+| Quantity | Value | Source |
+|---|---|---|
+| First-stage engines | 9 | OFFICIAL |
+| Thrust per engine, sea level / vacuum | 845 / 914 kN (7,607 / 8,227 kN for nine) | OFFICIAL |
+| Isp, vacuum (sea level) | 311 s (282 s) | REPORTED |
+| Mass flow per engine | 299.7 kg/s (vacuum thrust / Isp·g₀); sea-level thrust is A_e·p₀ less on the same flow | derived |
+| First stage: propellant / dry | 395,700 / 25,600 kg; 10 % held back for landing | REPORTED / ESTIMATE |
+| Second stage: engine, Isp, propellant / dry | 981 kN, 348 s, 92,670 / 3,900 kg | OFFICIAL / REPORTED |
+| Fairing, payload | 1,750 kg, 15,000 kg | ESTIMATE |
+| Liftoff mass (sum) | 534,620 kg; thrust-to-weight 1.45 | derived (the published gross mass, ≈ 549 t, carries more propellant) |
+| Drag | reference area π·2.6², Cd 0.30 subsonic, 0.55 at Mach 1.1, 0.30 by Mach 4 | ESTIMATE (ogive-cylinder tunnel curves) |
+| Atmosphere | ρ = 1.225·e^(−h/8.5 km), sound speed 340 → 295 m/s | ESTIMATE (isothermal) |
+
+- **Static fire** (`staticFire(t)`): the engines light 40 ms apart and each ramps to full in 0.4 s,
+  all cut together over 0.6 s (ESTIMATE). Thrust, mass flow, the propellant burned (the ramps'
+  closed-form integral) and the vehicle's mass follow; the mount bears weight − thrust until thrust
+  passes weight, then the hold-down clamps carry thrust − weight: 2.43 MN at full thrust, 3 s in.
+- **The jet** (`jetSpeed`): the deflector turns the exhaust along the trench; the exit carries a share
+  η = 0.5 of its momentum (ESTIMATE: deflector losses and the deluge water). Past the exit it is a
+  turbulent round jet: momentum flux conserved (checked to 1 % by integration in the tests), a
+  Gaussian profile of width b = 0.113·(x + x₀) (spread rate 0.094 per Pope, *Turbulent Flows*, §5.1),
+  x₀ setting b to the trench's half-width at the exit. On the car: ½·ρ·CdA·|u|·u, u the air relative
+  to the car, CdA 0.55 m² head-on, 4.2 broadside, 7.8 through the floor (ESTIMATE), at a centre of
+  pressure 0.15 m above the CoM. 12 m down the jet that is ≈ 190 kN.
+- **The ascent** (`ascend()`): a point mass over a spherical Earth, RK4 at 50 ms; thrust along the
+  commanded pitch, mass falling at the engines' flow (the burnout step ends exactly at burnout, so
+  without drag and gravity the integrated Δv equals Tsiolkovsky's to 1e-9), drag on the air-relative
+  velocity, inverse-square gravity with the centrifugal and Coriolis-like terms, and the gravity turn:
+  up to 60 m/s, a 3.2° kick, then thrust along the velocity. It gives Mach 1 at 47 s, max-Q 34 kPa at
+  11.9 km and 62 s, MECO at 132 s, 73 km, 2.09 km/s, and SECO at 457 s, 6.9 km/s (the class: max-Q
+  near 72 s and 11–13 km, MECO near 150–160 s and 65–70 km at about 2.1 km/s; ours has no throttle
+  bucket and burns at full thrust throughout, so it gets there sooner). Not yet flown on screen.
 
 ## Loading
 

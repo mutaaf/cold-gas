@@ -188,6 +188,7 @@ export function createBuildLayer(host, { ui: gameUi, audio, tier = 'high', coars
 
   // --- The sim hooks: before and after each 240 Hz tick ------------------------------------------
   function preStep(car, inp) {
+    render.before(car.world);   // the loose pieces' poses before this tick (drawn between ticks)
     if (arcadeOn()) power.preStep(car, inp);
     else { st.airBefore = car.air; }
   }
@@ -293,9 +294,10 @@ export function createBuildLayer(host, { ui: gameUi, audio, tier = 'high', coars
 
   // --- Per rendered frame --------------------------------------------------------------------------
   const activeList = [];
-  function frame(dt, time) {
+  function frame(dt, time, alpha = 1) {
     for (const [id, t] of st.respawn) { const n = t - dt; if (n <= 0) { st.respawn.delete(id); st.taken.delete(id); st.rev++; } else st.respawn.set(id, n); }
     render.sync(store, { cleared: st.cleared, taken: st.taken, rev: st.rev });
+    render.poses(host.getCar()?.world, alpha);   // the loose pieces where their bodies are
     render.frame(time);
     bui.powerups(power.active(activeList));
     // The tracker (text) five times a second; the beacons twice.

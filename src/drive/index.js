@@ -384,7 +384,7 @@ export function createDrive(ctx) {
     plumes.update(dt, time, c.throttles, c.vel, st.ground);
     audio.updateAudio({ speed, grounded: c.grounded > 0, throttles: c.throttles });
     if (!layer?.editing) st.cam.update(dt, { pos: carRoot.position, quat: carRoot.quaternion, vel: c.vel }, time);
-    layer?.frame(dt, time);
+    layer?.frame(dt, time, st.acc / DT);
     st.world.update(camera, time, dt);
     // A rough FPS meter for the perf probe (window.__coldgas.drive.stats()).
     st.frames++; st.fpsT += dt;

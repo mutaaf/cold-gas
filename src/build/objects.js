@@ -18,6 +18,7 @@
 import { PIECES, BUILD_MATERIALS, POWERUPS, SKIRT } from './catalogue.js';
 import { shapeSdf, shapeBounds, profileOf, loopShift } from './colliders.js';
 import { dsin, dcos } from '../sim/dmath.js';
+import { CONE, BARRIER, propBody, parkedBody } from '../sim/props.js';
 
 const TAU = 2 * Math.PI;
 
@@ -69,6 +70,8 @@ export function createObjectStore() {
       material: BUILD_MATERIALS[spec.material] ? spec.material : def?.mat || 'concrete',
       c: dcos(tr.yaw), s: dsin(tr.yaw), inv: 1 / tr.scale, min: [0, 0, 0], max: [0, 0, 0],
       obstacle: def?.solid === 'obstacle', data: spec.data || null,
+      // A loose piece is a body of its own in the engine (src/sim/world.js), not part of the ground.
+      dynamic: !!def?.body, bodySpec: null,
     };
     o.mat = BUILD_MATERIALS[o.material];
     if (isPickup) { lb[0] = -1.6; lb[1] = 0; lb[2] = -1.6; lb[3] = 1.6; lb[4] = 3.2; lb[5] = 1.6; } else shapeBounds(shape, lb);
@@ -126,7 +129,7 @@ export function createObjectStore() {
     if (!a) return phi;
     for (let i = 0; i < a.length; i++) {
       const o = a[i];
-      if (!o.collider) continue;
+      if (!o.collider || o.dynamic) continue;
       // Lower bound: the distance to the object's box. Skip whatever can't be nearer.
       const ex = o.min[0] - x > 0 ? o.min[0] - x : x - o.max[0] > 0 ? x - o.max[0] : 0;
       const ey = o.min[1] - y > 0 ? o.min[1] - y : y - o.max[1] > 0 ? y - o.max[1] : 0;
@@ -199,7 +202,7 @@ function sliceShape(sh) {
 }
 export function pieceShapes(o) {
   const sh = o.collider;
-  if (!sh) return [];
+  if (!sh || o.dynamic) return [];
   const t = o.transform, S = t.scale, mat = physMat(o.mat);
   if (sh.kind === 'box') return [{ kind: 'box', x: t.x, y: t.y + ((sh.h - SKIRT) / 2) * S, z: t.z, yaw: t.yaw, hx: (sh.w / 2) * S, hy: ((sh.h + SKIRT) / 2) * S, hz: (sh.d / 2) * S, mat }];
   let list = slices.get(sh);
@@ -209,6 +212,17 @@ export function pieceShapes(o) {
     for (let k = 0; k < p.length; k++) p[k] = pts[k] * S;
     return { kind: 'hull', x: t.x, y: t.y, z: t.z, yaw: t.yaw, points: p, mat };
   });
+}
+
+// A loose piece's rigid body (src/sim/props.js) at its scale, or null for everything fixed.
+const PROP_SPECS = { cone: CONE, barrier: BARRIER };
+export function pieceBody(o) {
+  if (!o.dynamic) return null;
+  if (!o.bodySpec) {
+    const kind = PIECES[o.type].body, s = o.transform.scale;
+    o.bodySpec = kind === 'parked' ? parkedBody(s) : propBody(PROP_SPECS[kind], s);
+  }
+  return o.bodySpec;
 }
 
 // A course for the sim with every solid of `store` folded into `base`'s ground. `base` is a course
@@ -221,6 +235,6 @@ export function composeCourse(base, store) {
     sdf: (x, y, z, out) => store.sdf(x, y, z, out, baseSdf(x, y, z, out)),
     store,
     // The hull's view of the same pieces (src/sim/world.js).
-    pieces: { get version() { return store.version; }, near: (x, z, r) => store.objectsNear(x, z, r), shapes: pieceShapes },
+    pieces: { get version() { return store.version; }, near: (x, z, r) => store.objectsNear(x, z, r), shapes: pieceShapes, body: pieceBody },
   };
 }

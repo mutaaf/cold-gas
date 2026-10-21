@@ -1,11 +1,15 @@
 // BUILD: drawing the pieces, rings, pads and power-ups. One InstancedMesh per (kind, material),
-// rebuilt only when the build changes (never per frame); only the pickups' bob and spin and the
-// boost pads' pulse move per frame, through a reused dummy. Solid geometry comes from the same
+// rebuilt only when the build changes (never per frame); only the pickups' bob and spin, the boost
+// pads' pulse and the loose pieces (cones, barriers, parked cars: drawn where their rigid bodies are,
+// between the sim's ticks) move per frame, through a reused dummy. Solid geometry comes from the same
 // numbers as the colliders (src/build/colliders.js shapeMesh), so the drawn curve is the driven one.
 import * as THREE from 'three';
 import { PIECES, BUILD_MATERIALS, POWERUPS, SKIRT } from './catalogue.js';
 import { shapeMesh } from './colliders.js';
 import { DECAL } from '../render/sliver.js';
+import { CONE, BARRIER } from '../sim/props.js';
+import { propPose } from '../sim/world.js';
+import { createBodiesLerp } from '../render/interp.js';
 
 const ICE = 0xbfe6ff, SIGNAL = 0xd7262e;
 
@@ -37,6 +41,52 @@ function parkedCarGeo({ w, h, d }) {
   out.setAttribute('color', new THREE.BufferAttribute(col, 3));
   out.computeBoundingSphere();
   return out;
+}
+
+// Vertex-coloured parts merged into one geometry (non-indexed).
+function mergeColoured(parts) {
+  const n = parts.reduce((a, g) => a + g.attributes.position.count, 0);
+  const pos = new Float32Array(n * 3), nor = new Float32Array(n * 3), col = new Float32Array(n * 3);
+  let o = 0;
+  for (const g of parts) { pos.set(g.attributes.position.array, o); nor.set(g.attributes.normal.array, o); col.set(g.attributes.color.array, o); o += g.attributes.position.array.length; g.dispose(); }
+  const out = new THREE.BufferGeometry();
+  out.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  out.setAttribute('normal', new THREE.BufferAttribute(nor, 3));
+  out.setAttribute('color', new THREE.BufferAttribute(col, 3));
+  out.computeBoundingSphere();
+  return out;
+}
+function coloured(geo, rgb) {
+  const g = geo.index ? geo.toNonIndexed() : geo;
+  const c = new Float32Array(g.attributes.position.count * 3);
+  for (let i = 0; i < c.length; i += 3) { c[i] = rgb[0]; c[i + 1] = rgb[1]; c[i + 2] = rgb[2]; }
+  g.setAttribute('color', new THREE.BufferAttribute(c, 3));
+  g.deleteAttribute('uv');
+  return g;
+}
+// The cone as its body is (src/sim/props.js CONE): the rubber base, the cone, two reflective collars.
+function coneGeo() {
+  const C = CONE.cone, b = CONE.base, ORANGE = [0.86, 0.3, 0.12], WHITE = [0.92, 0.93, 0.94];
+  const base = new THREE.BoxGeometry(b.hx * 2, b.hy * 2, b.hz * 2); base.translate(0, b.hy, 0);
+  const parts = [coloured(base, [0.08, 0.08, 0.09])];
+  const H = C.y1 - C.y0, rAt = (y) => C.r0 + ((C.r1 - C.r0) * (y - C.y0)) / H;
+  const bands = [[C.y0, 0.36, ORANGE], [0.36, 0.44, WHITE], [0.44, 0.5, ORANGE], [0.5, 0.56, WHITE], [0.56, C.y1, ORANGE]];
+  for (const [y0, y1, rgb] of bands) {
+    const g = new THREE.CylinderGeometry(rAt(y1), rAt(y0), y1 - y0, 16, 1, y1 < C.y1);
+    g.translate(0, (y0 + y1) / 2, 0);
+    parts.push(coloured(g, rgb));
+  }
+  return mergeColoured(parts);
+}
+// The plastic barrier (src/sim/props.js BARRIER): its safety-shape section along x, white with a
+// signal-red band.
+function barrierGeo() {
+  const B = BARRIER, hl = B.l / 2, shape = new THREE.Shape();
+  shape.moveTo(-B.d / 2, 0); shape.lineTo(B.d / 2, 0); shape.lineTo(B.d / 2 - 0.05, 0.25); shape.lineTo(B.top / 2, B.h); shape.lineTo(-B.top / 2, B.h); shape.lineTo(-B.d / 2 + 0.05, 0.25); shape.closePath();
+  const body = new THREE.ExtrudeGeometry(shape, { depth: B.l, bevelEnabled: false });
+  body.rotateY(Math.PI / 2); body.translate(-hl, 0, 0);
+  const band = new THREE.BoxGeometry(B.l * 0.98, 0.1, B.d * 0.62); band.translate(0, 0.5, 0);
+  return mergeColoured([coloured(body, [0.9, 0.9, 0.88]), coloured(band, [0.78, 0.12, 0.14])]);
 }
 
 function canvasTex(w, h, draw) {
@@ -73,6 +123,7 @@ export function createBuildRender(parent, { tier = 'high' } = {}) {
   const pickMat = new THREE.MeshStandardMaterial({ color: 0xffffff, emissive: 0xffffff, emissiveIntensity: 0.55, roughness: 0.3, metalness: 0.1 });
   const crateMat = new THREE.MeshStandardMaterial({ color: 0xb08350, roughness: 0.7 });
   const carMat = new THREE.MeshPhysicalMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.38, metalness: 0.35, clearcoat: 0.8, clearcoatRoughness: 0.15 });
+  const propMat = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.6, metalness: 0 });
   const boostTex = canvasTex(128, 256, (g, w, h) => {
     g.fillStyle = '#1b1d21'; g.fillRect(0, 0, w, h);
     g.strokeStyle = '#ff4a43'; g.lineWidth = 14; g.lineCap = 'round'; g.lineJoin = 'round';
@@ -101,6 +152,8 @@ export function createBuildRender(parent, { tier = 'high' } = {}) {
     else if (type === 'padmark') { g = new THREE.PlaneGeometry(9.4, 9.4); g.rotateX(-Math.PI / 2); g.translate(0, PIECES.pad.shape.h + 0.004, 0); }
     else if (type === 'lip') g = null;
     else if (type === 'car') g = parkedCarGeo(def.shape);
+    else if (type === 'cone') g = coneGeo();
+    else if (type === 'barrier') g = barrierGeo();
     else {
       const m = shapeMesh(def.shape);
       g = new THREE.BufferGeometry();
@@ -144,6 +197,7 @@ export function createBuildRender(parent, { tier = 'high' } = {}) {
 
   const dummy = new THREE.Object3D(), col = new THREE.Color();
   const animated = [];         // pickups and boost pads: [{ b, i, o }]
+  const loose = [];            // cones, barriers, parked cars: [{ b, i, o }], posed from their bodies
   let lastVersion = -1, lastState = -1;
   function setMatrix(o, extraY = 0, spin = 0) {
     const t = o.transform;
@@ -163,11 +217,11 @@ export function createBuildRender(parent, { tier = 'high' } = {}) {
     const groups = new Map();
     for (const o of store.all()) {
       if (state.hideIds?.has(o.id) || state.taken?.has(o.id)) continue;
-      const k = o.pickup ? 'pickup' : o.type === 'ring' || o.type === 'boost' || o.type === 'crate' ? o.type : o.type === 'car' ? 'car' : `${o.type}|${o.material}`;
+      const k = o.pickup ? 'pickup' : o.type === 'ring' || o.type === 'boost' || o.type === 'crate' || o.dynamic ? o.type : `${o.type}|${o.material}`;
       let a = groups.get(k); if (!a) groups.set(k, (a = [])); a.push(o);
     }
     for (const b of buckets.values()) b.mesh.count = 0;
-    animated.length = 0;
+    animated.length = 0; loose.length = 0;
     for (const [k, list] of groups) {
       const [type, material] = k.split('|');
       const n = list.length;
@@ -177,6 +231,7 @@ export function createBuildRender(parent, { tier = 'high' } = {}) {
       else if (type === 'boost') b = bucket(k, geoFor('boost'), boostMat, n, false);
       else if (type === 'crate') b = bucket(k, geoFor('crate'), crateMat, n);
       else if (type === 'car') b = bucket(k, geoFor('car'), carMat, n);
+      else if (type === 'cone' || type === 'barrier') b = bucket(k, geoFor(type), propMat, n);
       else b = bucket(k, geoFor(type), mats[material] || mats.concrete, n);
       list.forEach((o, i) => {
         setMatrix(o, type === 'pickup' ? 1.4 : 0);
@@ -184,6 +239,7 @@ export function createBuildRender(parent, { tier = 'high' } = {}) {
         if (type === 'pickup') { b.mesh.setColorAt(i, col.set(POWERUPS[o.pickup].color)); animated.push({ b, i, o, kind: 'pickup' }); }
         if (type === 'ring') b.mesh.setColorAt(i, col.set(state.cleared?.has(o.id) ? 0x3e8f6a : ICE));
         if (type === 'car') b.mesh.setColorAt(i, col.set([0xe8e8ea, 0x1d1f24, 0x9aa0a6, 0xd8b25a][hashId(o.id) % 4]));
+        if (o.dynamic) loose.push({ b, i, o, car: type === 'car' });
       });
       b.mesh.count = n;
       b.mesh.instanceMatrix.needsUpdate = true;
@@ -202,6 +258,35 @@ export function createBuildRender(parent, { tier = 'high' } = {}) {
     }
   }
   const hashId = (s) => { let h = 7; for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) >>> 0; return h; };
+
+  // The loose pieces where their bodies are (src/sim/world.js), drawn between the 240 Hz ticks:
+  // `before(world)` ahead of each sim step, `poses(world, alpha)` once a frame (after `sync`). A piece
+  // whose body isn't in the engine (streamed out, or never touched) stays where it was left or placed.
+  const lerp = createBodiesLerp(), drawn = { cx: 0, cy: 0, cz: 0, qx: 0, qy: 0, qz: 0, qw: 1 };
+  const bq = new THREE.Quaternion(), quarter = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2);
+  function before(world) { if (world?.props?.length) lerp.before(world.props); }
+  function poses(world, alpha = 1) {
+    for (const e of loose) {
+      const p = world ? propPose(world, e.o) : null;
+      if (!p) {
+        // Never moved (or a fresh world): where it was placed.
+        if (!e.moved) continue;
+        setMatrix(e.o); e.moved = false;
+      } else {
+        const q = p.rb ? lerp.lerp(p, alpha, drawn) : p;
+        bq.set(q.qx, q.qy, q.qz, q.qw);
+        // A parked car's body runs its length along x; its mesh is built nose to +z.
+        if (e.car) bq.multiply(quarter);
+        dummy.position.set(q.cx, q.cy, q.cz);
+        dummy.quaternion.copy(bq);
+        dummy.scale.setScalar(e.o.transform.scale);
+        dummy.updateMatrix();
+        e.moved = true;
+      }
+      e.b.mesh.setMatrixAt(e.i, dummy.matrix);
+      e.b.mesh.instanceMatrix.needsUpdate = true;
+    }
+  }
 
   function frame(time) {
     let touched = null;
@@ -293,12 +378,12 @@ export function createBuildRender(parent, { tier = 'high' } = {}) {
     carry(false);
     for (const b of buckets.values()) b.mesh.dispose();
     for (const g of geos.values()) g?.dispose?.();
-    for (const m of [...Object.values(mats), lipMat, ringMat, pickMat, crateMat, carMat, boostMat, padMarkMat, ghostFill, ghostLine, selLine]) m.dispose();
+    for (const m of [...Object.values(mats), lipMat, ringMat, pickMat, crateMat, carMat, propMat, boostMat, padMarkMat, ghostFill, ghostLine, selLine]) m.dispose();
     boostTex.dispose(); padTex.dispose(); beaconGeo.dispose();
   }
 
   return {
-    group, sync, frame, showGhost, hideGhost: () => { ghost.visible = false; }, highlight, setBeacons, carry, dispose,
+    group, sync, frame, before, poses, showGhost, hideGhost: () => { ghost.visible = false; }, highlight, setBeacons, carry, dispose,
     // Warm every material once (stage.renderer.compileAsync) so the first placement doesn't hitch.
     warm(store) { void store; },
     stats: () => ({ buckets: buckets.size, instances: [...buckets.values()].reduce((a, b) => a + b.mesh.count, 0), drawCalls: [...buckets.values()].filter((b) => b.mesh.count > 0).length }),

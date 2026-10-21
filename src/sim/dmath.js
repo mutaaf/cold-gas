@@ -78,3 +78,50 @@ export function datan2(y, x) {
 
 export const dacos = (x) => datan2(Math.sqrt(Math.max(0, 1 - x * x)), x);
 export const dhypot = (a, b, c = 0) => Math.sqrt(a * a + b * b + c * c);
+
+// exp and log, fdlibm's e_exp.c and e_log.c (same notice as above): range reduction by ln 2, a
+// rational/polynomial kernel, and the power of two put together from its bits (integer work), so
+// they too round the same everywhere. For the rocket's atmosphere, mass ratios and the plume's
+// Gaussian (src/sim/rocket.js). Accurate to < 1 ulp over the ranges we use.
+const LN2_HI = 6.93147180369123816490e-01, LN2_LO = 1.90821492927058770002e-10, INV_LN2 = 1.44269504088896338700e+00;
+const P1 = 1.66666666666666019037e-01, P2 = -2.77777777770155933842e-03, P3 = 6.61375632143793436117e-05,
+  P4 = -1.65339022054652515390e-06, P5 = 4.13813679705723846039e-08;
+const bits = new DataView(new ArrayBuffer(8));
+// 2^k for an integer k in [−1022, 1023], built from its exponent bits (big-endian: no host byte order).
+function pow2(k) { bits.setUint32(0, (k + 1023) << 20); bits.setUint32(4, 0); return bits.getFloat64(0); }
+export function dexp(x) {
+  if (x !== x) return x;
+  if (x > 709.782712893384) return Infinity;
+  if (x < -745.1332191019411) return 0;
+  if (x > -3.725290298461914e-9 && x < 3.725290298461914e-9) return 1 + x;
+  const k = Math.floor(x * INV_LN2 + 0.5);
+  const hi = x - k * LN2_HI, lo = k * LN2_LO, r = hi - lo;
+  const t = r * r, c = r - t * (P1 + t * (P2 + t * (P3 + t * (P4 + t * P5))));
+  const y = 1 - ((lo - (r * c) / (2 - c)) - hi);
+  // 2^k may fall outside a normal double at the ends: split it in two steps.
+  if (k > 1023) return y * pow2(1023) * pow2(k - 1023);
+  if (k < -1022) return y * pow2(k + 1000) * pow2(-1000);
+  return y * pow2(k);
+}
+const LG1 = 6.666666666666735130e-01, LG2 = 3.999999999940941908e-01, LG3 = 2.857142874366239149e-01,
+  LG4 = 2.222219843214978396e-01, LG5 = 1.818357216161805012e-01, LG6 = 1.531383769920937332e-01, LG7 = 1.479819860511658591e-01;
+export function dlog(x) {
+  if (x !== x || x < 0) return NaN;
+  if (x === 0) return -Infinity;
+  if (x === Infinity) return x;
+  let k = 0;
+  if (x < 2.2250738585072014e-308) { x *= 18014398509481984; k = -54; }   // subnormal: × 2^54
+  bits.setFloat64(0, x);
+  let hx = bits.getUint32(0);
+  k += (hx >>> 20) - 1023;
+  hx &= 0x000fffff;
+  // Normalise the mantissa into [√2/2, √2).
+  const i = (hx + 0x95f64) & 0x100000;
+  bits.setUint32(0, hx | (i ^ 0x3ff00000));
+  k += i >>> 20;
+  const f = bits.getFloat64(0) - 1;
+  const s = f / (2 + f), z = s * s, w = z * z;
+  const t1 = w * (LG2 + w * (LG4 + w * LG6)), t2 = z * (LG1 + w * (LG3 + w * (LG5 + w * LG7)));
+  const R = t2 + t1, hfsq = 0.5 * f * f;
+  return k * LN2_HI - ((hfsq - (s * (hfsq + R) + k * LN2_LO)) - f);
+}

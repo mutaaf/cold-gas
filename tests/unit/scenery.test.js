@@ -9,7 +9,7 @@ import { createEndlessCourse } from '../../src/sim/endless.js';
 import { bakedTrees, endlessProps, VEG_SPACING, SHAPES, CELL, rockPoints } from '../../src/sim/scenery.js';
 import { MATERIALS } from '../../src/sim/courses.js';
 import { createVehicle, step, newInput } from '../../src/sim/vehicle.js';
-import { surfaceHeight, GROUP } from '../../src/sim/world.js';
+import { surfaceHeight, GROUP, propPose } from '../../src/sim/world.js';
 import { RAPIER } from '../../src/sim/engine.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { createArenaCourse, MASTS } from '../../src/build/arena.js';
@@ -284,11 +284,15 @@ describe('nothing solid that is not drawn', () => {
     const r = ram(course, MASTS[3].x, MASTS[3].z, 0);
     expect(r.past).toBeLessThan(-1.5);
     expect(r.v).toBeLessThan(3);
-    // A piece's body: a parked-car block stops the hull (only the tyres met it before).
-    store.addObject({ type: 'car', transform: { x: 60, y: 0, z: 0, yaw: Math.PI / 2, scale: 1 } });
+    // A parked car is a body of its own (src/sim/props.js): the hull meets it, and it is shoved
+    // down the apron (the roadster loses most of its 16 m/s to it).
+    const parked = store.addObject({ type: 'car', transform: { x: 60, y: 0, z: 0, yaw: Math.PI / 2, scale: 1 } });
     const c = ram(course, 60, 0, 0, { speed: 16 });
     expect(c.hull).toBeGreaterThan(0);
-    expect(c.past).toBeLessThan(-1);
+    expect(c.vMin).toBeLessThan(10);
+    const pose = propPose(c.car.world, parked);
+    expect(pose.cz).toBeGreaterThan(2);
+    expect(Math.abs(pose.cx - 60)).toBeLessThan(1.5);
   }, 60_000);
   it('the world API\'s objects (endless) are hull colliders too: a block across the road stops the car', () => {
     const course = createEndlessCourse('objects'), road = course.road;

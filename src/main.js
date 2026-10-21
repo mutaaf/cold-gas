@@ -27,7 +27,7 @@ import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { SPEC } from './sim/spec.js';
 import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad } from './input.js';
-import { createPoseLerp } from './render/interp.js';
+import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { thumbStage } from './onethumb.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
@@ -352,6 +352,7 @@ function touchdown(run) {
 // --- Live step -----------------------------------------------------------------------------
 const liveInput = newInput();
 const poseLerp = createPoseLerp();   // the car drawn between 240 Hz ticks (src/render/interp.js)
+const bodyLerp = createBodiesLerp(); // and the parked bodies with it
 function liveStep(dt) {
   const run = S.run;
   // A drill opens on a beat with the car frozen at its start, so you see where you are first.
@@ -364,6 +365,7 @@ function liveStep(dt) {
     input = S.autopilot ? S.autopilot(run)
       : wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released, run.car));
     poseLerp.before(run.car);
+    bodyLerp.before(run.car.world.bodies);
     stepRun(run, input);
     gWindow.push(run.car.vel);
     S.acc -= DT;
@@ -374,7 +376,8 @@ function liveStep(dt) {
   for (let i = 0; i < 4; i++) { fcomp[i] = c.wheels[i].compression; fspin[i] = c.wheels[i].spin; }
   const drawn = poseLerp.pose(c, S.acc / DT);
   syncCar(drawn.pos, drawn.quat, fcomp, fspin, c.steer);
-  stage.setBodies(c.world.bodies);
+  stage.setBodies(bodyLerp.poses(c.world.bodies, S.acc / DT));
+  stage.rocket?.simClock(run.tick * DT);   // the range's static fire, on the sim's schedule
   crash.feed(run.impacts, run.tick, c.vel);
 
   // Phase cues and moments.
@@ -605,11 +608,17 @@ function replayStep(dt) {
   for (let j = 0; j < NOZZLES.length; j++) fthr[j] = f[15 + j];
   fvel.set(g[0] - f[0], g[1] - f[1], g[2] - f[2]).multiplyScalar(60);
   syncCar(fpos, fquat, fcomp, fspin, f[15 + NOZZLES.length] || 0);
+  // The bodies between this frame and the next, as the car is (positions lerped, attitude nlerped).
   for (let b = 0; b < replayBodies.length; b++) {
-    const o = BODY_FRAME + BODY_STRIDE * b, r = replayBodies[b];
-    r.cx = f[o]; r.cy = f[o + 1]; r.cz = f[o + 2]; r.qx = f[o + 3]; r.qy = f[o + 4]; r.qz = f[o + 5]; r.qw = f[o + 6];
+    const o = BODY_FRAME + BODY_STRIDE * b, r = replayBodies[b], j = 1 - k;
+    r.cx = f[o] * j + g[o] * k; r.cy = f[o + 1] * j + g[o + 1] * k; r.cz = f[o + 2] * j + g[o + 2] * k;
+    const sg = f[o + 3] * g[o + 3] + f[o + 4] * g[o + 4] + f[o + 5] * g[o + 5] + f[o + 6] * g[o + 6] < 0 ? -1 : 1;
+    const qx = f[o + 3] * j * sg + g[o + 3] * k, qy = f[o + 4] * j * sg + g[o + 4] * k, qz = f[o + 5] * j * sg + g[o + 5] * k, qw = f[o + 6] * j * sg + g[o + 6] * k;
+    const l = Math.sqrt(qx * qx + qy * qy + qz * qz + qw * qw) || 1;
+    r.qx = qx / l; r.qy = qy / l; r.qz = qz / l; r.qw = qw / l;
   }
   stage.setBodies(replayBodies);
+  stage.rocket?.simClock((S.replayT * FRAME_EVERY) / 240);
   // The crash, re-shown from the run's impact events at the tick on screen.
   crash.feed(S.run.impacts, Math.floor((S.replayT + 1) * FRAME_EVERY), fvel);
   hero.setFan?.(f[16 + NOZZLES.length] || 0);

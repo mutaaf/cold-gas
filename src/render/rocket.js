@@ -18,32 +18,21 @@
 import * as THREE from 'three';
 import { mergeGeometries } from 'three/examples/jsm/utils/BufferGeometryUtils.js';
 import { sliver, sliverView, spreadAxes } from './sliver.js';
+// The geometry is the sim's (src/sim/complex.js): the physics builds its colliders from the same
+// numbers, and the static fire's thrust comes from src/sim/rocket.js (what pushes a car near the pad
+// is what lights the trench here).
+import { VEHICLE, MOUNT_TOP, PAD_Y, TOWER_X, TOWER_H, TOWER_W, PAD_PROFILE, PAD_SEGMENTS, MOUNT, TRENCH, MAST_H, MASTS, TANK, BUILDINGS, SPHERES, FLOODS, CLAMP_LEVELS, PLACES as SITES, siteOf } from '../sim/complex.js';
+import { staticFire, fireClock, ROCKET } from '../sim/rocket.js';
 
-// --- The vehicle (metres; docs/ROCKET.md) --------------------------------------------------------
-export const VEHICLE = {
-  height: 70.0,          // overall, base of the engine section to the fairing tip
-  radius: 1.83,          // 3.66 m core diameter (road-transportable)
-  boosterTop: 41.2,      // first-stage tanks + engine section
-  interstageTop: 47.7,   // interstage (carries the four grid fins)
-  stage2Top: 56.6,       // second stage, visible part
-  fairingRadius: 2.6,    // 5.2 m payload fairing
-  fairingTop: 70.0,
-  legLength: 9.6,        // four landing legs folded flat against the engine section and tank
-  finSize: [1.3, 1.5],   // grid fin, stowed (w × h)
-};
+export { VEHICLE };
 const R = VEHICLE.radius;
-const MOUNT_TOP = 8.0;   // the launch mount's deck: the vehicle stands on hold-downs here
-const PAD_Y = 3.0;       // the pad: a raised hardstand above the surrounding ground
-const TOWER_X = 6.4;     // strongback centre, beside the vehicle
-const TOWER_H = 82;
-const TOWER_W = 3.4;
 
-// Per course: where the complex stands (world), and how it's lit and hazed. `look` values are
-// linear RGB. Night: floods dominate, a near-black blue haze. Blue hour: a cool sky fill and the
-// floods already on, softer.
+// Per course: where the complex stands (src/sim/complex.js PLACES), and how it's lit and hazed.
+// `look` values are linear RGB. Night: floods dominate, a near-black blue haze. Blue hour: a cool sky
+// fill and the floods already on, softer.
 const PLACES = {
-  night: { pos: [-265, 0, -8], face: [10, -14], haze: [0.006, 0.008, 0.013], hazeK: 0.0016, sky: [0.010, 0.014, 0.024], flood: 0.35 },
-  lineup: { pos: [-260, 0, 520], face: [0, 30], haze: [0.040, 0.050, 0.072], hazeK: 0.0011, sky: [0.050, 0.065, 0.100], flood: 0.25 },
+  night: { ...SITES.night, site: siteOf('show'), haze: [0.006, 0.008, 0.013], hazeK: 0.0016, sky: [0.010, 0.014, 0.024], flood: 0.35 },
+  lineup: { ...SITES.lineup, site: siteOf('lineup'), haze: [0.040, 0.050, 0.072], hazeK: 0.0011, sky: [0.050, 0.065, 0.100], flood: 0.25 },
 };
 
 // --- Shared GLSL ---------------------------------------------------------------------------------
@@ -395,16 +384,17 @@ function vehicleParts(parts) {
 
 function padParts(parts) {
   // The raised hardstand: a flat top and a sloped skirt down to the ground.
-  const mound = new THREE.LatheGeometry([new THREE.Vector2(0, PAD_Y), new THREE.Vector2(66, PAD_Y), new THREE.Vector2(84, 0.25), new THREE.Vector2(86, 0)].reverse(), 64);
+  const mound = new THREE.LatheGeometry(PAD_PROFILE.map(([r, y]) => new THREE.Vector2(r, y)).reverse(), PAD_SEGMENTS);
   parts.push(part(mound, 0x8a8b8e, 4));
-  // The flame trench, out from under the mount, and its deflector exit.
-  const trench = new THREE.BoxGeometry(44, 0.2, 9); trench.translate(-26, PAD_Y + 0.02, 0);
+  // The flame trench, out from under the mount along −z (away from the stage), to its exit.
+  const trench = new THREE.BoxGeometry(TRENCH.w, 0.2, TRENCH.to - TRENCH.from); trench.translate(0, PAD_Y + 0.02, -(TRENCH.from + TRENCH.to) / 2);
   parts.push(part(trench, 0x1a1a1b, 4));
   // Launch mount: a steel table on four columns, the deck under the vehicle.
-  const deck = new THREE.BoxGeometry(10, 1.6, 10); deck.translate(0, MOUNT_TOP - 0.8, 0);
+  const [dw, dh, dd] = MOUNT.deck;
+  const deck = new THREE.BoxGeometry(dw, dh, dd); deck.translate(0, MOUNT_TOP - dh / 2, 0);
   parts.push(part(deck, 0x4a4c50, 0));
-  for (const [x, z] of [[-4.2, -4.2], [4.2, -4.2], [-4.2, 4.2], [4.2, 4.2]]) {
-    const col = new THREE.BoxGeometry(1.4, MOUNT_TOP - 1.6 - PAD_Y, 1.4); col.translate(x, PAD_Y + (MOUNT_TOP - 1.6 - PAD_Y) / 2, z);
+  for (const [x, z] of MOUNT.cols) {
+    const col = new THREE.BoxGeometry(MOUNT.col, MOUNT_TOP - dh - PAD_Y, MOUNT.col); col.translate(x, PAD_Y + (MOUNT_TOP - dh - PAD_Y) / 2, z);
     parts.push(part(col, 0x3a3c40, 0));
   }
   // Hold-down clamps at the base.
@@ -413,13 +403,13 @@ function padParts(parts) {
     parts.push(part(g, 0x2a2b2e, 0));
   }
   // Ground support buildings: low blocks off to one side, and the tank farm's spheres.
-  for (const [x, z, w, h, d] of [[-48, -30, 22, 7, 12], [-60, -6, 12, 5, 9], [44, -44, 16, 6, 10]]) {
+  for (const [x, z, w, h, d] of BUILDINGS) {
     const b = new THREE.BoxGeometry(w, h, d); b.translate(x, PAD_Y + h / 2, z);
     parts.push(part(b, 0x55575b, 0));
     const win = new THREE.BoxGeometry(w * 0.7, 0.5, 0.05); win.translate(x, PAD_Y + h * 0.62, z + d / 2 + 0.03);
     parts.push(part(win, new THREE.Color(1.6, 1.35, 0.95).getHex(), 3));
   }
-  for (const [x, z, r] of [[38, 30, 4.2], [48, 33, 4.2], [-30, 44, 5]]) {
+  for (const [x, z, r] of SPHERES) {
     const s = new THREE.SphereGeometry(r, 24, 12); s.translate(x, PAD_Y + r + 1.2, z);
     parts.push(part(s, 0xe2e3e4, 0));
   }
@@ -445,7 +435,7 @@ function towerParts(parts) {
   const glow2 = glow.clone(); glow2.translate(0, 0, -3.06);
   parts.push(part(glow2, new THREE.Color(1.8, 1.7, 1.45).getHex(), 3));
   // Clamp arms holding the vehicle (a pair at each level).
-  for (const y of [B + 18, B + 33, B + VEHICLE.boosterTop - 1.5]) {
+  for (const y of CLAMP_LEVELS.map((h) => B + h)) {
     for (const z of [-0.9, 0.9]) {
       parts.push(part(member(new THREE.Vector3(x0 - TOWER_W / 2, y, z), new THREE.Vector3(R + 0.15, y, z * 0.5), 0.45), 0x34363a, 0, { spread: [0, 1, 1] }));
     }
@@ -462,28 +452,19 @@ function towerParts(parts) {
     parts.push(part(g, 0x2a2c30, 0, { spread: [1, 0, 1] }));
   }
   // The water tank (sound suppression) on its legs.
-  const [tx, tz] = TANK;
-  const tank = new THREE.CylinderGeometry(5.5, 5.5, 11, 24); tank.translate(tx, PAD_Y + 46, tz);
+  const { x: tx, z: tz } = TANK;
+  const tank = new THREE.CylinderGeometry(TANK.r, TANK.r, TANK.h, 24); tank.translate(tx, PAD_Y + TANK.y, tz);
   parts.push(part(tank, 0xbfc0c2, 0));
-  const cap = new THREE.SphereGeometry(5.5, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2); cap.scale(1, 0.35, 1); cap.translate(tx, PAD_Y + 51.5, tz);
+  const cap = new THREE.SphereGeometry(TANK.r, 24, 8, 0, Math.PI * 2, 0, Math.PI / 2); cap.scale(1, 0.35, 1); cap.translate(tx, PAD_Y + TANK.y + TANK.h / 2, tz);
   parts.push(part(cap, 0xbfc0c2, 0));
-  for (const [dx, dz] of [[-3.6, -3.6], [3.6, -3.6], [-3.6, 3.6], [3.6, 3.6]]) {
-    parts.push(part(member(new THREE.Vector3(tx + dx * 1.5, PAD_Y, tz + dz * 1.5), new THREE.Vector3(tx + dx, PAD_Y + 41, tz + dz), 0.6), 0x3a3c40, 0, { spread: [1, 0, 1] }));
+  for (const [dx, dz] of TANK.legs) {
+    parts.push(part(member(new THREE.Vector3(tx + dx * 1.5, PAD_Y, tz + dz * 1.5), new THREE.Vector3(tx + dx, PAD_Y + TANK.legTop, tz + dz), TANK.legT), 0x3a3c40, 0, { spread: [1, 0, 1] }));
   }
 }
-const MAST_H = 104;
-const MASTS = [[-34, -22], [30, -30], [-8, 44]];
-const TANK = [-62, 36];
-// Flood banks: ground banks close in (lighting the base hard) and mast heads further out (the
-// upper vehicle). Aimed at a point on the vehicle; colour × power in candela-ish units.
-// A key from the front-left (a ground bank for the base, a mast for the upper vehicle), a dimmer
-// bank front-right, and a rim from behind on the right, so the tanks read round, not flat.
-const FLOODS = [
-  { p: [-15, PAD_Y + 1.2, 19], aim: 18, col: [1.0, 0.95, 0.88], k: 2300, ground: true },
-  { p: [18, PAD_Y + 1.2, 13], aim: 26, col: [0.84, 0.9, 1.0], k: 900, ground: true },
-  { p: [-30, 26, 24], aim: 52, col: [0.97, 0.98, 1.0], k: 6500 },
-  { p: [24, 32, -26], aim: 46, col: [0.78, 0.86, 1.0], k: 7000 },
-];
+// Flood banks (src/sim/complex.js FLOODS): ground banks close in (lighting the base hard) and mast
+// heads further out (the upper vehicle). Aimed at a point on the vehicle; colour × power in
+// candela-ish units. A key from the front-left (a ground bank for the base, a mast for the upper
+// vehicle), a dimmer bank front-right, and a rim from behind on the right, so the tanks read round.
 
 function latticeGeometry() {
   // Open boxes: four faces each, no top or bottom. The strongback and the tank's leg bracing.
@@ -536,7 +517,7 @@ function puffGeometry(rnd) {
   // Steam: out of the flame trench's exit, billowing sideways and up, through the burn.
   for (let i = 0; i < 34; i++) {
     const side = rnd() - 0.5;
-    rows.push([[-44 - rnd() * 4, PAD_Y + 1, side * 6], [-9 - rnd() * 7, 3 + rnd() * 5, side * 10], i / 34, 11 + rnd() * 6, 6, 28 + rnd() * 14, 1]);
+    rows.push([[side * 6, PAD_Y + 1, -TRENCH.to + 4 - rnd() * 4], [side * 10, 3 + rnd() * 5, -9 - rnd() * 7], i / 34, 11 + rnd() * 6, 6, 28 + rnd() * 14, 1]);
   }
   const g = new THREE.InstancedBufferGeometry();
   g.setAttribute('position', new THREE.Float32BufferAttribute([-0.5, -0.5, 0, 0.5, -0.5, 0, 0.5, 0.5, 0, -0.5, 0.5, 0], 3));
@@ -656,7 +637,7 @@ export function* buildRocket({ reducedMotion = false } = {}) {
   glowGeo.index = puffGeo.index; glowGeo.setAttribute('position', puffGeo.attributes.position);
   const one = (n, v) => new THREE.InstancedBufferAttribute(new Float32Array(v), n);
   // Two: under the vehicle, and where the deflected exhaust leaves the flame trench.
-  glowGeo.setAttribute('aSrc', one(3, [0, MOUNT_TOP - 2, 0, -40, PAD_Y + 3, 0])); glowGeo.setAttribute('aVel', one(3, [0, 0, 0, 0, 0, 0]));
+  glowGeo.setAttribute('aSrc', one(3, [0, MOUNT_TOP - 2, 0, 0, PAD_Y + 3, 8 - TRENCH.to])); glowGeo.setAttribute('aVel', one(3, [0, 0, 0, 0, 0, 0]));
   glowGeo.setAttribute('aLife', one(4, [0, 1e9, 22, 22, 0.5, 1e9, 30, 30])); glowGeo.setAttribute('aKind', one(1, [0, 0]));
   glowGeo.instanceCount = 2;
   const glow = new THREE.Mesh(glowGeo, new THREE.ShaderMaterial({
@@ -669,8 +650,8 @@ export function* buildRocket({ reducedMotion = false } = {}) {
   // --- Placement, look and life ---
   const fl = FLOODS.map((f) => ({ p: new THREE.Vector3(...f.p), aim: new THREE.Vector3(0, MOUNT_TOP + f.aim, 0), col: new THREE.Color(...f.col), k: f.k }));
   const tmp = new THREE.Vector3();
-  let place = PLACES.night, age = 0, fireT0 = -1e6, titleT = 0, lastT = null, nextFire = 26;
-  const FIRE_LEN = 7.5, STEAM_LEN = FIRE_LEN + 20;
+  let place = PLACES.night, age = 0, fireT0 = -1e6, titleT = 0, lastT = null, nextFire = 26, simT = null, simFt = -1;
+  const FIRE_LEN = ROCKET.fire.len, STEAM_LEN = FIRE_LEN + 20, sf = {};
 
   // The flood banks light the air around them (src/render/film.js on the high tier).
   const glows = FLOODS.map((f) => ({ pos: new THREE.Vector3(), color: new THREE.Color(...f.col).multiplyScalar(f.ground ? 0.5 : 0.7), radius: 9 }));
@@ -678,8 +659,9 @@ export function* buildRocket({ reducedMotion = false } = {}) {
   function setLook(id) {
     place = id === 'lineup' ? PLACES.lineup : PLACES.night;
     group.position.set(...place.pos);
-    // Face the vehicle's "front" (+z, where the floods are) toward a point near the stage.
-    group.rotation.y = Math.atan2(place.face[0] - place.pos[0], place.face[1] - place.pos[2]);
+    // Face the vehicle's "front" (+z, where the floods are) toward a point near the stage: the sim's
+    // own yaw (src/sim/complex.js siteOf), so the drawn pad is where the solid one is.
+    group.rotation.y = place.site.yaw;
     group.updateMatrixWorld(true);
     U.uHaze.value.setRGB(...place.haze); U.uHazeK.value = place.hazeK; U.uSky.value.setRGB(...place.sky);
     for (let i = 0; i < 4; i++) {
@@ -689,7 +671,7 @@ export function* buildRocket({ reducedMotion = false } = {}) {
       U.uFloodDir.value[i].subVectors(tmp, U.uFloodPos.value[i]).normalize();
       U.uFloodCol.value[i].copy(f.col).multiplyScalar(f.k * place.flood);
     }
-    U.uFirePos.value.set(-6, MOUNT_TOP - 1, 0).applyMatrix4(group.matrixWorld);
+    U.uFirePos.value.set(0, MOUNT_TOP - 1, -6).applyMatrix4(group.matrixWorld);
     for (let i = 0; i < 4; i++) glows[i].pos.copy(U.uFloodPos.value[i]);
   }
 
@@ -700,6 +682,10 @@ export function* buildRocket({ reducedMotion = false } = {}) {
     puffGeo.instanceCount = puffGeo.attributes.aKind.count;
     glow.visible = true;
   }
+
+  // A run's clock (s since its start), or null: in a run the range fires on the sim's schedule
+  // (src/sim/rocket.js FIRE_SCHEDULE), the same fire whose jet pushes a car parked near the trench.
+  function simClock(t) { simT = t; }
 
   function update(t, mode) {
     // Time since it arrived (scene time can jump: a pinned clock, a new run), never backwards.
@@ -720,15 +706,23 @@ export function* buildRocket({ reducedMotion = false } = {}) {
       titleT += dt;
       if (titleT > nextFire && t - fireT0 > STEAM_LEN) { fire(t); nextFire = titleT + 100 + rnd() * 60; }
     }
+    // In a run, the sim's fire: lit when it lights (the steam's clock starts with it). It is part of
+    // the physics there (its jet shoves a car), so it shows with reduced motion too.
+    if (simT !== null && mode !== 'title') {
+      const sft = fireClock(simT);
+      if (sft >= 0 && (simFt < 0 || sft < simFt)) fire(t - sft);
+      simFt = sft;
+    }
+    simT = null;
     const ft = t - fireT0;
     if (ft >= 0 && ft < STEAM_LEN) {
-      // Ignition ramps in 0.4 s, holds, cuts off over 0.6 s.
-      U.uFire.value = ft < FIRE_LEN ? THREE.MathUtils.smoothstep(ft, 0, 0.4) * (1 - THREE.MathUtils.smoothstep(ft, FIRE_LEN - 0.6, FIRE_LEN)) : 0;
+      // The engines' thrust as the sim has it (src/sim/rocket.js: staggered ignition, cut-off ramp).
+      U.uFire.value = ft < FIRE_LEN ? staticFire(ft, sf).level : 0;
       glow.visible = U.uFire.value > 0;
     } else if (puffGeo.instanceCount !== vapour) {
       puffGeo.instanceCount = vapour; U.uFire.value = 0; glow.visible = false;
     }
   }
 
-  return { group, setLook, update, fire, glows, uniforms: U };
+  return { group, setLook, update, fire, simClock, glows, uniforms: U };
 }

@@ -198,6 +198,37 @@ export const SHOW = {
 };
 
 export const COURSES = { show: SHOW, wall: WALL, lineup: LINEUP };
+
+// --- The stage's fixtures --------------------------------------------------------------------------
+// The things standing on the slab a car can drive into, drawn by src/render/wall.js and scene.js from
+// these numbers and made solid by src/sim/world.js (static colliders: steel).
+//   uplights      the Wall's two raking uplights at the foot of the curl: 0.8 × 0.3 × 0.5 m boxes
+//   searchlights  eight searchlight drums beside the curl [x, z, tilt, lean]: Ø 1.3 m at the base,
+//                 0.5 m tall, on a 5 cm plinth (their beams swing; the drum is drawn upright enough
+//                 that an upright cylinder is its solid)
+//   poles         the Lineup's floodlight poles along the run-up: 9 m, Ø 0.18 → 0.12 m, both sides
+export const FIXTURES = {
+  uplights: { at: [[-2.4, -5.7], [2.4, -5.7]], size: [0.8, 0.3, 0.5] },
+  searchlights: {
+    at: [[-9, 15, -0.45, 0.10], [-13, 20, -0.62, 0.0], [-18, 25, -0.78, -0.12], [-24, 18, -0.9, 0.18], [9, 15, 0.45, 0.10], [13, 20, 0.62, 0.0], [18, 25, 0.78, -0.12], [24, 18, 0.9, 0.18]],
+    r: 0.65, rTop: 0.55, h: 0.5, y: 0.3,
+  },
+  poles: { x: 13, z0: LINEUP.start.z + 10, z1: 80, step: 24, h: 9, r0: 0.09, r1: 0.06 },
+};
+/** The fixtures standing on a course: [{ kind: 'box' | 'cyl', x, y (centre), z, hx, hy, hz | hh, r }]. */
+export function fixturesOf(courseId) {
+  const out = [], F = FIXTURES;
+  if (courseId === 'wall' || courseId === 'show') {
+    const [w, h, d] = F.uplights.size;
+    for (const [x, z] of F.uplights.at) out.push({ kind: 'box', x, y: h / 2, z, hx: w / 2, hy: h / 2, hz: d / 2 });
+    const S = F.searchlights;
+    for (const [x, z] of S.at) out.push({ kind: 'cyl', x, y: S.y, z, hh: S.h / 2, r: S.r });
+  } else if (courseId === 'lineup') {
+    const P = F.poles;
+    for (let z = P.z0; z < P.z1; z += P.step) for (const sx of [-1, 1]) out.push({ kind: 'cyl', x: sx * P.x, y: P.h / 2, z, hh: P.h / 2, r: (P.r0 + P.r1) / 2 });
+  }
+  return out;
+}
 export const DEFAULT_COURSE = 'show';
 
 // --- Objects: every solid has its own material, and every parked vehicle its own body -------------

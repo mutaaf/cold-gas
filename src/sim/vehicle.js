@@ -245,7 +245,7 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
   };
   s.engineMass = massOf(s);
   attachCar(world, HULL_SHAPE, s.engineMass, { x: SPEC.inertia.pitch, y: SPEC.inertia.yaw, z: SPEC.inertia.roll });
-  world.carPos = s.pos; world.carVel = s.vel;
+  world.carPos = s.pos; world.carVel = s.vel; world.carQuat = s.quat;
   return s;
 }
 
@@ -632,6 +632,7 @@ export function step(s, inp) {
   const dt = DT, w = s.world;
   const m = massOf(s);
   if (w.stream) w.stream(w, s.pos);
+  w.tick = s.tick;   // the static fire's clock (src/sim/world.js)
   // The parked bodies' own suspension and tyres first: a parked car whose tyre stands on this one
   // pushes back through w.carF / w.carT.
   preStep(w);
