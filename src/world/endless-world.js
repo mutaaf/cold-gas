@@ -121,6 +121,7 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
   const wstat = { built: 0, ms: 0, msMax: 0, samples: [], errors: 0, fromLru: 0, fromDisk: 0 };
   const cstat = { built: 0, ms: 0, msMax: 0 };
   let epoch = 1;                                   // bumped on dispose: late replies are dropped
+  let inflight = cfg.inflight, wake = null;        // jobs per worker at once; prime() raises it
   for (let w = 0; w < cfg.workers; w++) {
     const worker = new Worker(new URL('./terrain.worker.js', import.meta.url), { type: 'module' });
     worker.postMessage({ type: 'seed', seed, tier });
@@ -128,6 +129,7 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
     worker.onmessage = (e) => {
       const m = e.data;
       entry.busy--;
+      if (wake) { const w = wake; wake = null; w(); }
       if (m.gen !== epoch) return;
       if (m.type === 'error') { wstat.errors++; pending.delete(m.key); console.warn('[endless] build', m.key, m.message); return; }
       if (m.type === 'chunk') {
@@ -355,7 +357,7 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
         if (chunks.has(job.c)) continue;
         if (lru.has(job.key)) { if (!ready.includes(job.key)) ready.push(job.key); continue; }
         const w = workers.reduce((a, b) => (b.busy < a.busy ? b : a));
-        if (w.busy >= cfg.inflight) break;
+        if (w.busy >= inflight) break;
         pending.set(job.key, job);
         w.busy++; w.worker.postMessage({ type: 'chunk', key: job.key, gen: epoch, c: job.c });
         continue;
@@ -363,7 +365,7 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
       if (job.kind !== 't' || tiles[job.lvl].has(job.key)) continue;
       if (lru.has(job.key)) { if (!ready.includes(job.key)) { ready.push(job.key); wstat.fromLru++; } continue; }
       const w = workers.reduce((a, b) => (b.busy < a.busy ? b : a));
-      if (w.busy >= cfg.inflight) break;
+      if (w.busy >= inflight) break;
       pending.set(job.key, job);
       const veg = job.lvl === 0 ? cfg.veg0 : job.lvl === 1 && cfg.veg1 && job.d < cfg.vegR1 ? cfg.veg1 : null;
       const send = () => { w.busy++; w.worker.postMessage({ type: 'tile', key: job.key, gen: epoch, lvl: job.lvl, i: job.i, j: job.j, veg }); };
@@ -434,14 +436,16 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
     const need = queue.filter((j) => (j.kind === 't' && (j.lvl >= 2 || j.d < cfg.radius[j.lvl] * 0.6)) || (j.kind === 'r' && j.d < 900));
     const total = need.length;
     const t0 = performance.now();
+    inflight = 64;                            // nothing else to do yet: queue everything (the page may be busy drawing)
     for (;;) {
       dispatch();
       work(40, x, z);
       const left = need.filter((j) => (j.kind === 't' ? !tiles[j.lvl].has(j.key) : !chunks.has(j.c))).length;
       onProgress?.(1 - left / Math.max(1, total));
       if (!left || performance.now() - t0 > 30000) break;
-      await new Promise((r) => setTimeout(r, 16));
+      await new Promise((r) => { wake = r; setTimeout(r, 40); });
     }
+    inflight = cfg.inflight;
     plan(x, z, 0, 0);
   }
 

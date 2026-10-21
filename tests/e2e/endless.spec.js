@@ -18,8 +18,8 @@ test('Endless: pick it with a seed, drive 2 km of generated road', async ({ page
   const seen = watch(page);
   await page.goto('/coldgas/?gfx=low');
   await page.locator('[data-drive-open]').click();
-  await expect(page.locator('.fd-card')).toHaveCount(5);
-  const card = page.locator('.fd-card[data-road="endless"]');
+  await expect(page.locator('[data-road]')).toHaveCount(5);       // four real roads and Endless
+  const card = page.locator('[data-road="endless"]');
   await expect(card).toContainText('Endless');
   await card.click();
   await expect(card).toHaveAttribute('aria-checked', 'true');
@@ -29,12 +29,13 @@ test('Endless: pick it with a seed, drive 2 km of generated road', async ({ page
   await expect(page.locator('.fd-road-name')).toHaveText('Endless');
   await expect(page.locator('[data-h-share]')).toContainText('e2e-seed');
   // Drive it: the autopilot, the sim stepped in 0.1 s frames until 2 km are behind us.
-  const s0 = await page.evaluate(() => { const d = window.__coldgas.drive; d.autopilot(true, { vmax: 40 }); return d.stats().i * 3; });
-  for (let k = 0; k < 120; k++) {
+  // Big batches: on CI's software GL every page render between them costs more than the sim.
+  const s0 = await page.evaluate(() => { const d = window.__coldgas.drive; d.autopilot(true, { vmax: 50 }); return d.state.hint * 3; });
+  for (let k = 0; k < 40; k++) {
     const done = await page.evaluate((s0) => {
       const d = window.__coldgas.drive;
-      for (let n = 0; n < 12; n++) d.frame(0.1, performance.now() / 1000);
-      return d.stats().i * 3 - s0 >= 2000;
+      for (let n = 0; n < 80; n++) { d.frame(0.1, performance.now() / 1000); if (d.state.hint * 3 - s0 >= 2000) return true; }
+      return false;
     }, s0);
     if (done) break;
   }

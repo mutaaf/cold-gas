@@ -16,7 +16,7 @@ test('Free Drive: pick Stelvio on the title, the car drives up the real road', a
   const seen = watch(page);
   await page.goto('/coldgas/?gfx=low');
   await page.locator('[data-drive-open]').click();
-  await expect(page.locator('.fd-card:not(.fd-endless)')).toHaveCount(4);   // the real roads (Endless is the fifth card)
+  await expect(page.locator('.fd-card')).toHaveCount(4);
   await expect(page.locator('.fd-card[data-road="stelvio"]')).toContainText('Stelvio Pass');
   await expect(page.locator('.fd-credit')).toContainText('OpenStreetMap contributors');
   await page.locator('.fd-card[data-road="stelvio"]').click();

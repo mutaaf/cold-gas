@@ -61,7 +61,7 @@ export function createDrive(ctx) {
       onDrive: () => start(selected, { tod, seed }),
       onBack: closePicker,
     });
-    pickerRoot.querySelector('.fd-card[aria-checked="true"]')?.focus({ preventScroll: true });
+    pickerRoot.querySelector('[data-road][aria-checked="true"]')?.focus({ preventScroll: true });
   }
   function closePicker() { pickerRoot.hidden = true; pickerRoot.innerHTML = ''; picker = null; }
 

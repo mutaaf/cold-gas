@@ -49,7 +49,7 @@ export function renderPicker(root, roads, { selected, tod, seed = '', onPick, on
             <span class="fd-blurb">${esc(r.blurb)}</span>
           </button>`;
         }).join('')}
-        <div class="fd-card fd-endless" role="radio" tabindex="0" aria-checked="${selected === 'endless'}" data-road="endless">
+        <div class="fd-endless" role="radio" tabindex="0" aria-checked="${selected === 'endless'}" data-road="endless">
           <svg class="fd-sil" viewBox="0 0 132 96" aria-hidden="true"><path d="M8 88 C 30 70, 18 52, 44 44 S 70 30, 62 18 S 96 6, 124 4" /><path class="far" d="M8 70 L 30 52 L 46 60 L 70 30 L 88 46 L 106 22 L 124 34" /></svg>
           <span class="fd-name">Endless</span>
           <span class="fd-local">A road that never ends, built as you drive</span>
@@ -88,7 +88,7 @@ export function renderPicker(root, roads, { selected, tod, seed = '', onPick, on
   // Arrow keys move between cards (a radio group).
   root.querySelector('.fd-cards').addEventListener('keydown', (e) => {
     if (e.target.closest('[data-fd-seed]')) return;
-    const ids = [...roads.map((r) => r.id), 'endless'], i = ids.indexOf(root.querySelector('.fd-card[aria-checked="true"]')?.dataset.road);
+    const ids = [...roads.map((r) => r.id), 'endless'], i = ids.indexOf(root.querySelector('[data-road][aria-checked="true"]')?.dataset.road);
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); const n = ids[(i + 1) % ids.length]; onPick(n); root.querySelector(`[data-road="${n}"]`).focus(); }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); const n = ids[(i - 1 + ids.length) % ids.length]; onPick(n); root.querySelector(`[data-road="${n}"]`).focus(); }
   });
