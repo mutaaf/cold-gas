@@ -22,6 +22,8 @@ import { scoreRun } from '../src/sim/judge.js';
 import { SHOW } from '../src/sim/courses.js';
 import { SPEC } from '../src/sim/spec.js';
 import { predict, newPrediction } from '../src/sim/predict.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
