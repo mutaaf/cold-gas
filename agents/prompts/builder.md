@@ -12,7 +12,10 @@ at or above `control.json → agents.builder.max_merges_per_day`, end `NOOP: dai
 
 1. **Resume first.** If an open `build/` or `fix/` PR from a previous run exists, finish
    that one (fix CI, address review comments) instead of starting something new.
-2. **Pick** the highest-priority ticket with `status: ready` (P0 before P1 before P2, then
+2. **Pick.** First a cheap field check (the Keeper only heals weekly): `npm run heal -- --check`
+   (one cached GET of production's `/obs/digest`). Exit 2 means a new or regressed signature has
+   no ticket yet: run `npm run heal` and carry the new ticket files in this run's PR. Exit 1
+   (production unreachable) → carry on. Then take the highest-priority ticket with `status: ready` (P0 before P1 before P2, then
    lowest id). Tickets with `by: critic` come first at the same priority: the Critic re-checks
    them on production next run and reopens anything that misses its bar, so meet the bar in
    the ticket's Why, not just the checkboxes. If `control.json → focus` is set, prefer the

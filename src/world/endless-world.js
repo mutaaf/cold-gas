@@ -28,6 +28,7 @@ import { createLru, createIdbCache, tileBytes } from './cache.js';
 import { endlessTerrainMaterial, rockMaterial, SHRUB_GEO, ROCK_GEO } from './look.js';
 import { createObjectView } from './objects-view.js';
 import { createPool } from './pool.js';
+import { obs } from '../obs/index.js';
 
 // Quality tiers (?gfx=high|mid|low; phones get mid). radius: each level's ring (m). veg0/veg1:
 // vegetation spacing (m) per prop on level-0 / near level-1 tiles. Level 0's are the props the
@@ -75,7 +76,11 @@ const fillIndex = tileIndex(N);
 const INDEX_LEN = N * N * 6 + 4 * N * 12;
 
 export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day', idb = true, info = {} }) {
-  const cfg = TIERS[tier] || TIERS.high;
+  // [obs] The world's worker is breaker-guarded: after it has crashed repeatedly, the world streams
+  // at the low tier's rings with one worker until the breaker's cooldown allows a retry.
+  const worldOk = obs.breaker('world').allow();
+  const cfg = worldOk ? TIERS[tier] || TIERS.high : TIERS.low;
+  if (!worldOk) obs.recovery('world', true, 'world worker breaker open: streaming at the low tier');
   const road = course.road, seed = road.seed;
   const group = new THREE.Group();
   group.name = 'endless';
@@ -125,16 +130,32 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
   const cstat = { built: 0, ms: 0, msMax: 0 };
   let epoch = 1;                                   // bumped on dispose: late replies are dropped
   let inflight = cfg.inflight, wake = null;        // jobs per worker at once; prime() raises it
-  for (let w = 0; w < cfg.workers; w++) {
+  const spawn = () => {
     const worker = new Worker(new URL('./terrain.worker.js', import.meta.url), { type: 'module' });
     worker.postMessage({ type: 'seed', seed, tier });
+    return worker;
+  };
+  // A worker that died (an uncaught error, out of memory) loses its jobs: record it, respawn it if
+  // the breaker allows, and re-ask for everything in flight (late replies are dropped by epoch).
+  const crashed = (entry, e) => {
+    e?.preventDefault?.();
+    obs.fail('world', Object.assign(new Error(`terrain worker crashed: ${e?.message || 'no message'}`), { stack: '    at onerror (terrain.worker.js:0:0)' }), 'worker');
+    try { entry.worker.terminate(); } catch { /* already gone */ }
+    entry.busy = 0; epoch++; pending.clear();
+    if (obs.breaker('world').allow()) { entry.worker = spawn(); entry.worker.onmessage = entry.onmessage; entry.worker.onerror = (e2) => crashed(entry, e2); obs.recovery('world', true, 'terrain worker respawned'); }
+    else { entry.busy = Infinity; obs.recovery('world', false, 'terrain worker left down (breaker open)'); }
+  };
+  for (let w = 0; w < cfg.workers; w++) {
+    const worker = spawn();
     const entry = { worker, busy: 0 };
-    worker.onmessage = (e) => {
+    worker.onerror = (e) => crashed(entry, e);
+    entry.onmessage = worker.onmessage = (e) => {
       const m = e.data;
       entry.busy--;
       if (wake) { const w = wake; wake = null; w(); }
       if (m.gen !== epoch) return;
-      if (m.type === 'error') { wstat.errors++; pending.delete(m.key); console.warn('[endless] build', m.key, m.message); return; }
+      if (m.type === 'error') { wstat.errors++; pending.delete(m.key); console.warn('[endless] build', m.key, m.message); obs.fail('world', Object.assign(new Error(String(m.message).split('\n')[0]), { stack: String(m.message) }), 'worker'); return; }
+      obs.ok('world');
       if (m.type === 'chunk') {
         const d = m.chunk;
         cstat.built++; cstat.ms += d.ms; cstat.msMax = Math.max(cstat.msMax, d.ms);

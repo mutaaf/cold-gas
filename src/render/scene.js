@@ -367,9 +367,10 @@ async function buildSliced(look) {
 // is baked, every shader is compiled off the main thread (KHR_parallel_shader_compile, via
 // compileAsync), and only then does `render` draw: the canvas fades in on its first frame
 // (`.on`), and `stage.ready` resolves.
-export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
+export function createStage(canvas, { tier = 'high', course = 'show', backdrop = true, onBackdropError = null } = {}) {
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier !== 'low', powerPreference: 'high-performance' });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1));
+  const basePixelRatio = Math.min(window.devicePixelRatio, tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1);
+  renderer.setPixelRatio(basePixelRatio);
   renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = tier !== 'low';
@@ -440,7 +441,7 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
   const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
   const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
   const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
-  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, rocket: null, film: null, resize, render, setCourse, titlePose, setBodies, setLook, bloom };
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, rocket: null, film: null, resize, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
@@ -515,6 +516,20 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
     camera.updateProjectionMatrix();
   }
   resize();
+
+  // Self-heal (src/obs/heal.js): the resolution governor's knob, and the rebuild after a lost WebGL
+  // context (three re-creates its GL state; the baked environments lived only on the GPU).
+  function setPixelScale(k) {
+    const pr = Math.max(0.5, basePixelRatio * k);
+    renderer.setPixelRatio(pr);
+    composer?.setPixelRatio(pr);
+    resize();
+  }
+  function restoreGL() {
+    for (const k of Object.keys(envs)) { envs[k]?.dispose?.(); delete envs[k]; }
+    if (stage.course && !external) scene.environment = envFor(stage.course);
+    resize();
+  }
 
   // render(time, mode): mode is the game's ('title' on the title screen), for the backdrop's moments.
   function render(time, mode) {
@@ -636,6 +651,6 @@ export function createStage(canvas, { tier = 'high', course = 'show' } = {}) {
 
   setCourse(course, { sliced: true });
   stage.ready = boot();
-  stage.backdrop = stage.ready.then(loadBackdrop).catch((err) => { console.warn('backdrop', err); return null; });
+  stage.backdrop = backdrop ? stage.ready.then(loadBackdrop).catch((err) => { console.warn('backdrop', err); onBackdropError?.(err); return null; }) : Promise.resolve(null);
   return stage;
 }

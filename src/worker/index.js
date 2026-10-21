@@ -12,6 +12,8 @@
 //   GET  /coldgas/api/providers → providers and the edge default
 //   POST /coldgas/api/scores  { log, assist, initials } → verified board entry
 //   GET  /coldgas/api/scores?board=today|all → top 20
+//   POST /coldgas/api/obs  the client's observability batch (src/obs/ → src/worker/obs.js)
+//   GET  /coldgas/api/obs/digest → top signatures, regressions vs the previous build, frame percentiles
 //
 // The client never sends a score: the board replays the input log through the same deterministic
 // sim (src/sim/) and scores it itself; the judges score the run's telemetry with the same code.
@@ -26,6 +28,7 @@ import { detectProvider } from '../ai/detect.js';
 import { validateQuest, extractJson } from '../build/quest-schema.js';
 import { questSystem, questUser, QUEST_MAX_TOKENS } from './ai/quest.js';
 import { physicsReady } from '../sim/engine.js';
+import { postObs, obsDigest } from './obs.js';
 
 const EDGE_DAILY_CAP = 700;         // free-allowance judgings per UTC day (≈13 neurons each, 10k free)
 const EDGE_HOURLY_PER_IP = 40;
@@ -372,6 +375,9 @@ async function handle(req, env, ctx) {
   }
 
   if (path === '/judge/stream' && req.method === 'POST') return judgeStream(req, env, ctx);
+
+  if (path === '/obs' && req.method === 'POST') { if (env.DB) await ensureTables(env.DB); return postObs(req, env, ctx, { json, ipHash, day, hour }); }
+  if (path === '/obs/digest' && req.method === 'GET') return obsDigest(req, env, ctx, { json });
 
   if (path === '/quest' && req.method === 'POST') return questStream(req, env, ctx);
 
