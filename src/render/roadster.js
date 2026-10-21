@@ -792,7 +792,7 @@ export function makeRoadster() {
     if (hero.debugHold) {
       // Studio shots: states forced through the setters, no inference.
       applyWing(st.wingExt, 0);
-      st.skirtSide = st.skirtEnd = st.fan > 0.03 ? 1 : 0;
+      st.skirtSide = st.skirtEnd = st.fan > 0.01 ? 1 : 0;
       applySkirts(); fanSpin(dt); applyLights(dt); applyNozzles(dt, st.thrForced);
       return;
     }
@@ -804,7 +804,7 @@ export function makeRoadster() {
     st.airbrake = ease(st.airbrake, st.grounded && st.speed > 22 && st.decel < -9 ? 1 : 0, dt, 0.25);
     applyWing(st.wing, st.airbrake);
     // Skirts drop with the fan; front and rear lift above ~50 mph for the venturi mode (OFFICIAL).
-    const on = st.fan > 0.03 ? 1 : 0;
+    const on = st.fan > 0.01 ? 1 : 0;   // armed: even the idle suction (≈130 kgf) is 0.028 of the cap
     st.skirtSide = ease(st.skirtSide, on, dt, 0.25);
     st.skirtEnd = ease(st.skirtEnd, on && st.speed < 22 ? 1 : 0, dt, 0.25);
     applySkirts();

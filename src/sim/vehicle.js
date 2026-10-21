@@ -132,7 +132,7 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     air: CAR.airMass,
     throttles: new Float64Array(NOZZLES.length),
     wheels: WHEELS.map(() => ({ contact: true, compression: REST_LEN - MOUNT_TO_CENTRE, prevCompression: REST_LEN - MOUNT_TO_CENTRE, omega: 0, spin: 0, steer: 0, slip: 0, slipAngle: 0, load: STATIC_LOAD, nx: 0, ny: 1, nz: 0 })),
-    fan: 0, fanForce: 0, floorGap: SPEC.rideHeight,
+    fan: 0, fanDemand: 0, fanForce: 0, gripSat: 0, floorGap: SPEC.rideHeight,
     hullContact: false, hullGround: false, obstacleContact: false, obstacleSpeed: 0, hullImpulse: 0,
     steer: 0, grounded: 4, onWall: false, onSlope: false, wheelForce: 0, tcActive: false,
     // Crash state: each hull probe's permanent crush (m), its contact last tick, and the run's
@@ -362,7 +362,25 @@ export function step(s, inp) {
   add(pw, s.pos, r);
   const gapT = raycast(s, pw, dn, 0.6);
   s.floorGap = gapT < 0 ? Infinity : gapT;
-  s.fan += (clamp(inp.fan, 0, 1) - s.fan) * Math.min(1, dt / SPEC.fanSpool);
+  // Armed, the controller asks for the suction the deck's tilt needs (SPEC: the law and its
+  // margins), and holds it: a demand rises at once but decays over fanHold. The fan spools to
+  // the demand; disarmed, the skirts unseal and the suction dumps.
+  const armed = clamp(inp.fan, 0, 1);
+  if (armed > 0) {
+    if (gapT >= 0) {
+      const ny = clamp(hitN.y, -1, 1), sinT = Math.sqrt(1 - ny * ny);
+      const need = clamp(m * G * ((SPEC.fanGrip * sinT) / SPEC.tyreMu + SPEC.fanContact * (1 - ny) + SPEC.fanHang * Math.max(0, -ny)), SPEC.fanIdleForce, SPEC.fanMaxForce);
+      s.fanDemand = Math.max(need / SPEC.fanMaxForce, s.fanDemand + (need / SPEC.fanMaxForce - s.fanDemand) * (dt / SPEC.fanHold));
+    } else s.fanDemand -= s.fanDemand * (dt / SPEC.fanHold);
+  } else s.fanDemand = 0;
+  // Full throttle, or a full stop on the move, asks the tyres for everything: below 50 mph the
+  // fan fills the grip void up to the cap. Held only (over fanGripTime): a crawl's throttle blips
+  // don't count. Floored up the curl that is the grip the climb needs (the attitude law alone
+  // is tuned to the reveal's crawl, and full torque on it spins the rears to a stall).
+  const allIn = speed < SPEC.fanVoidSpeed && (inp.throttle >= 0.9 || (inp.brake >= 0.9 && speed > 2)) ? 1 : 0;
+  s.gripSat += (allIn - s.gripSat) * (dt / SPEC.fanGripTime);
+  const fanTarget = armed * Math.max(s.fanDemand, clamp(2 * s.gripSat - 1, 0, 1));
+  s.fan += (fanTarget - s.fan) * Math.min(1, dt / (fanTarget > s.fan ? SPEC.fanSpool / Math.LN10 : SPEC.fanDump));
   // Skirts drop to seal; past their reach the leak grows and suction falls off fast.
   const leak = gapT < 0 ? Infinity : Math.max(0, gapT - SPEC.fanSkirtReach) / SPEC.fanGapScale;
   s.fanForce = gapT < 0 ? 0 : (s.fan * SPEC.fanMaxForce) / (1 + leak * leak);

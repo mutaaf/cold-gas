@@ -15,7 +15,7 @@ import { landingImpact } from './render/impact.js';
 import { createCrash } from './render/crash.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
 import { createRun, stepRun, FRAME_EVERY, BODY_FRAME } from './sim/run.js';
-import { DT, CAR, NOZZLES, WHEELS, bodyRates, worldPoint, newInput } from './sim/vehicle.js';
+import { DT, G, CAR, NOZZLES, WHEELS, bodyRates, worldPoint, newInput } from './sim/vehicle.js';
 import { scoreRun, TIERS } from './sim/judge.js';
 import { coach } from './sim/coach.js';
 import { createLandingHud } from './hud-landing.js';
@@ -368,7 +368,7 @@ function liveStep(dt) {
     speed, air: (c.air / CAR.airMass) * 100, rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI,
     alt, airborne: run.phase === 'air',
     sink: -c.vel.y, phase: { drive: 'Run-up', ramp: c.fanForce > 1000 ? 'On the wall · fan' : 'On the wall', air: 'Airborne', landed: 'Touchdown', done: 'Settled' }[run.phase],
-    throttles: c.throttles, fan: c.fan, g: feltG(c, dt),
+    throttles: c.throttles, fan: c.fanForce / G, g: feltG(c, dt),
   });
   ui.damage(run.damage);
   landing.update(c, alt, S.autopilot ? '' : run.phase);

@@ -54,7 +54,35 @@ export const SPEC = {
   // from the floor between the axles, so they reach ≈0.22 m (ESTIMATE, set by the geometry).
   fanSkirtReach: 0.22,
   fanGapScale: 0.008,      // m (ESTIMATE)
-  fanSpool: 0.4,           // s (ESTIMATE)
+  // The suction is scheduled, not pinned at max. The livestream DOWNFORCE channel (TELEMETRY,
+  // docs/REVEAL_RESEARCH.md §2.1.2) climbs with pitch: 79–186 kgf rolling on the pad, 434 at 25°,
+  // 825 at 50°, 1,544 at 75°, ≈3,300 at 90°, 4,510 at 127°, 4,700 at 170°. The controller asks for
+  // (ESTIMATE, the law fitted to that table):
+  //   N_fan = m·g·(fanGrip·sinθ/μ + fanContact·(1 − cosθ) + fanHang·max(0, −cosθ))
+  // within [fanIdleForce, fanMaxForce]. θ is the deck's tilt from level (the floor's surface
+  // normal against world up), μ = tyreMu. sinθ/μ is the friction gravity along the deck needs;
+  // (1 − cosθ) replaces the weight the tilted deck no longer carries, plus a margin; past vertical
+  // the whole hanging weight (−cosθ) is the fan's too. On the vertical wall that is 1.18 g of
+  // suction against the 0.8 g friction needs (1.5× margin); hanging inverted on the ledge it hits
+  // the cap. Fitted with the spool lag below: the reference Wall climb reads −26 %, +24 %, +23 %,
+  // −26 %, −5 %, −1 % against the six telemetry rows (tests/unit/fan.test.js holds it to ±30 %).
+  fanGrip: 0.6,            // ESTIMATE (fitted)
+  fanContact: 0.7,         // ESTIMATE (fitted)
+  fanHang: 1,              // physics: inverted, the deck carries none of the weight
+  // Below ≈50 mph aero is ineffective and "the fans fill that void" (OFFICIAL, Moravy, Hagerty):
+  // held full throttle, or a full stop on the move, asks for up to the cap (filtered over
+  // fanGripTime, past half of it, so a crawl's throttle blips don't count).
+  fanGripTime: 0.25,       // s (ESTIMATE)
+  fanVoidSpeed: 22,        // m/s ≈ 50 mph: above it the aero carries the load (OFFICIAL, Moravy)
+  fanIdleForce: 1300,      // N ≈ 130 kgf (TELEMETRY: 79–186 kgf rolling on the pad)
+  // Spool: 1.5 s to 90 % of the demand (REPORTED telemetry, §6 row 21: 79 → 434 kgf over 3 s
+  // rolling; range 1–3 s), a first-order lag τ = 1.5 / ln 10. The demand itself is held: it
+  // decays only slowly once the attitude asks for less (TELEMETRY: on run 1's way back down it
+  // stays at 4,691 kgf to 86° and is still 1,412 kgf back on the pad 5 s later, τ ≈ 4 s).
+  // Disarming (the release) unseals the skirts: suction dumps in fanDump.
+  fanSpool: 1.5,           // s to 90 % (REPORTED)
+  fanHold: 4,              // s, demand decay time constant (TELEMETRY, run 1 descent)
+  fanDump: 0.4,            // s, skirts unseal on release (ESTIMATE)
 
   // Aero
   cdA: 0.55,               // m², low-drag mode (ESTIMATE)

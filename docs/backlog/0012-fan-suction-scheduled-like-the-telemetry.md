@@ -1,12 +1,12 @@
 ---
 id: 0012
 title: Schedule fan suction the way the livestream DOWNFORCE channel shows, not pinned at max
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: authenticity
 created: 2026-10-20
-pr:
+pr: 31
 by: critic
 ---
 

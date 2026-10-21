@@ -1,5 +1,6 @@
 # Changelog
 
+2026-10-20 · #0012 · The fan is scheduled like the livestream's DOWNFORCE channel (SIM_VERSION 13): armed, it asks for the suction the deck's tilt needs (≈130 kgf rolling on the pad, ≈1,900 at 75°, ≈2,450 on the vertical, the 4,690 kgf cap hanging inverted), spools in 1.5 s and holds its demand; full throttle or a full stop fills the grip void up to the cap. The HUD's FAN reads kgf. The Wall reference climb reads within ±26 % of all six telemetry rows (was +981 % at 25°).
 ## 0.11.0 — 2026-10-20
 
 The damage sensor.

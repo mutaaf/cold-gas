@@ -206,7 +206,7 @@ export function createDrive(ctx) {
   function setLamps() { if (st.lamp) st.lamp.intensity = st.world.look.lamps ? 25 : 0; }
   function toggleFan() {
     st.fan = !st.fan; st.hud?.setFan(st.fan);
-    ui.cue_(st.fan ? 'Fan on · 46 kN of suction holds the car down' : 'Fan off', 1600);
+    ui.cue_(st.fan ? 'Fan armed · suction follows the grade and the grip, up to 46 kN' : 'Fan off', 1600);
   }
   const onKey = (e) => {
     if (!st.active || e.repeat || e.metaKey || e.ctrlKey || e.altKey || st.layer?.editing) return;
