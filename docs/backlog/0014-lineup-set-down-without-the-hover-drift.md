@@ -1,7 +1,7 @@
 ---
 id: 0014
 title: Lineup lands about 3 s after lift-off, not after a 2.3 s hover drift
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: authenticity
@@ -90,6 +90,36 @@ Options for the Critic or Scout to pick from (each is its own ticket):
    kickflip), with a source for why the reveal's controller hovered after one and not the other.
 3. Treat the Lineup bar as 3.5–4.0 s with today's law plus a lower set-down top (HOVER ≈ 1.2 m,
    Lineup ≈ 4.1 s and 125 kg), and drop the Wall ≤ 1.5 s bar, which the telemetry contradicts.
+
+## Critic re-scope 2026-10-21 (supersedes the acceptance criteria above)
+The builder's measurement is right and the Wall ≤ 1.5 s bar is dropped: run 2's ALTITUDE channel
+says 2.0 s below 3 m and `tests/unit/gtrace.test.js` already holds the Wall to it. Pick options 1
+and 2 together, because the reveal itself did both:
+
+- **The mark.** The reveal took off "just short of the first vehicle" and landed "just beyond the
+  last" (docs/REVEAL_RESEARCH.md §2.2, ESTIMATE from frames, 20–25 m airborne). Our mark sits at
+  z 44 (`src/sim/courses.js:158`), ≈ 22 m past the row's far edge (z 21.6), so the precision score
+  pays for the drift. Move it to just past the row (centre ≈ z 27–29, rings unchanged).
+- **The set-down follows the fall it ends.** After the 20 m drop the reveal braked hard and then
+  spent 2.0 s below 3 m (run 2). After the kickflip it was upright at ≈ t0 + 2.2 s and on its
+  wheels at ≈ t0 + 3 s (§2.2), and the standing flip went from upright (t 1.8 s) to wheels
+  (t 2.6 s) in 0.8 s (§2.4): **no hover after a low stunt**. A controller that sizes the set-down
+  to the energy it has just removed (e.g. the set-down top scales with the peak sink or the brake's
+  Δv, never below the existing sink bands) gives both from one law. Measured on main `4d00ca0`:
+  Lineup upright at τ 1.75 s (h 7.3 m) and wheels at τ 4.80 s, **3.05 s from upright to wheels**,
+  with 2.0 s of that at ≈ 1 G between 2.3 m and the ground.
+
+### Acceptance criteria (re-scoped)
+- [ ] Lineup reference: upright (up·y > 0.95) to first wheel contact ≤ 1.8 s (free fall from 7.3 m and a 3 G stop take ≈ 1.4 s; reveal 0.8 s for both
+      the kickflip and the standing flip; today 3.05 s); lift-off to touchdown ≤ 3.8 s (reveal 3.0 s,
+      2.5–3.5 REPORTED; today 4.80 s); airborne distance ≤ 30 m.
+- [ ] Lineup reference lands inside the 4 m ring of the moved mark, sink ≤ 1.5 m/s, judged a soft
+      landing; nitrogen from lift-off to touchdown ≤ 130 kg (today 152 kg).
+- [ ] Wall and Show: `tests/unit/gtrace.test.js` unchanged and green (Wall release → wheels
+      4.0–5.0 s, brake peak 2.8–3.6 G below 10 m); Wall time below 3 m stays 1.6–2.4 s (telemetry
+      2.0 s).
+- [ ] `naive-players` 32/32; `naive-show` ≥ 51/54; `human-show.mjs 300 assist --cues=new` ≥ 95 %.
+- [ ] Works at 390×844 touch and 1280×720 keyboard.
 
 ## Out of scope
 The roll timing and apex (already within the reveal's bands).
