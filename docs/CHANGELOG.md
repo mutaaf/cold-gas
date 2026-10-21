@@ -16,6 +16,7 @@
 
 
 2026-10-20 · #0012 · The fan is scheduled like the livestream's DOWNFORCE channel (SIM_VERSION 13): armed, it asks for the suction the deck's tilt needs (≈130 kgf rolling on the pad, ≈1,900 at 75°, ≈2,450 on the vertical, the 4,690 kgf cap hanging inverted), spools in 1.5 s and holds its demand; full throttle or a full stop fills the grip void up to the cap. The HUD's FAN reads kgf. The Wall reference climb reads within ±26 % of all six telemetry rows (was +981 % at 25°).
+
 ## 0.12.0 — 2026-10-20
 
 **An instrument-grade HUD, and a Show you can fly with one thumb.** No sim change (SIM_VERSION unchanged): every new control writes ordinary, quantised inputs into the same log.
@@ -24,7 +25,7 @@
 - **One-thumb Assist** (src/onethumb.js, the touch default on the Show and the Wall): hold to climb (a crawl governor that stops on the ledge; let go and it brakes), tap to let go, hold to land (LAND's roll-out and brake, plus just enough carry over the row), and it brakes to a stop after touchdown. Classic (stick + pedals) remains for every tier.
 - **Classic touch, rebuilt by reach** (`scripts/thumb-reach.mjs` heatmaps): the action you need now sits mid-band under the right thumb, the rest either side on the same arc, and each phase shows only what it uses (RELEASE appears at the top of the curl, BOOST until the row is behind you, LAND or LIFT by tier). A 15 % stick dead zone (a resting thumb used to fly the car). Left-handed mirror.
 - **Tilt steering** (off by default; iOS permission from a tap; calibrate; ±20° = full lock in 5 % steps) and **haptics** on Android (release, touchdown by sink, the descent leaving green, contact). No pinch zoom, double-tap zoom or long-press callouts. Low-memory phones default to `gfx=low`.
-- **Phone success, same seeded population** (`scripts/human-phone.mjs`, the human-show players with thumbs, reach, a resting thumb; 300 runs each): 390×844 classic 54 % → 84 %, one-thumb 100 %; 430×932 54 → 84 / 100 %; 844×390 55 → 85 / 100 %; 932×430 54 → 84 / 100 %. On the real page (`scripts/play-human.mjs … thumb`), one-thumb landed 5/5 at 390×844 and 844×390 (score 83.3, 8.6 m from the mark vs 28 m for the classic bot).
+- **Phone success, same seeded population** (`scripts/human-phone.mjs`, the human-show players with thumbs, reach, a resting thumb; 300 runs each): 390×844 classic 51 % → 85 %, one-thumb 100 %; 430×932 51 → 85 / 100 %; 844×390 52 → 86 / 100 %; 932×430 52 → 85 / 100 % (SIM_VERSION 13; keyboard human-show on the same sim: 53 %). On the real page (`scripts/play-human.mjs … thumb`), one-thumb landed 5/5 at 390×844 and 844×390 (score 83.3, 8.6 m from the mark vs 28 m for the classic bot).
 
 ## 0.11.0 — 2026-10-20
 
