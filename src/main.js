@@ -24,7 +24,7 @@ import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { SPEC } from './sim/spec.js';
 import { bindInput, sample, usingTouch, getNozzlePad } from './input.js';
-import { initAudio, updateAudio, thud, setMuted, isMuted } from './audio.js';
+import { initAudio, updateAudio, thud, setMuted, isMuted, chime } from './audio.js';
 import { createUI } from './ui.js';
 import { localWords, postScore, fetchBoard } from './panel.js';
 import { loadAI } from './ai/config.js';
@@ -78,7 +78,7 @@ const landing = createLandingHud({ scene });
 // Crashes: sparks, chips, dents, torn-off parts, lamps, shake, slow motion, the crash cut and the
 // crunch, all keyed to the sim's impact events (src/render/crash.js).
 const crash = createCrash({ scene, hero, carRoot, director, tier,
-  course: () => (S.mode === 'drive' && drive ? drive.course : stage.course), floor: () => (S.mode === 'drive' && drive ? drive.floor : 0) });
+  course: () => (S.mode === 'drive' && fd() ? fd().course : stage.course), floor: () => (S.mode === 'drive' && fd() ? fd().floor : 0) });
 
 // --- State -------------------------------------------------------------------------------
 const S = {
@@ -481,7 +481,7 @@ function frame(now) {
       plumes.update(dt, S.time, S.idleThrottles.fill(0), zeroVel, 0);
     } else if (S.mode === 'live') liveStep(dt * slow);
     else if (S.mode === 'results' || S.mode === 'replay') replayStep(dt * slow);
-    else if (S.mode === 'drive') drive.frame(dt * crash.timeScale(), S.time);   // Free Drive runs its own cameras
+    else if (S.mode === 'drive') fd().frame(dt * crash.timeScale(), S.time);   // Free Drive / the Sandbox run their own cameras
 
     if (S.mode !== 'drive') syncGhost();
     const live = S.mode === 'live' || S.mode === 'countdown';
@@ -498,7 +498,7 @@ function frame(now) {
 
 // --- Wiring ---------------------------------------------------------------------------------
 function pause(on) {
-  if (S.mode === 'drive') { drive.pause(on ?? !drive.paused); return; }
+  if (S.mode === 'drive') { fd().pause(on ?? !fd().paused); return; }
   on ??= !S.paused;
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
   S.paused = on;
@@ -710,7 +710,7 @@ function loadDrive() {
   driveLoad ??= import('./drive/index.js').then((mod) => {
     drive = mod.createDrive({
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
-      audio: { initAudio, updateAudio }, input: { sample, usingTouch },
+      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch },
       assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
       setMode: (m) => { S.mode = m; S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
@@ -721,9 +721,32 @@ function loadDrive() {
 }
 on('[data-drive-open]', () => { loadDrive().then((d) => d.openPicker()).catch((err) => { console.error(err); ui.cue_('Free Drive couldn’t load', 2000); }); });
 
+// --- The Sandbox: build, power-ups, side quests (a lazy chunk, src/build/) ----------------------------
+let sandbox = null, sandboxLoad = null;
+// Whichever driving world is live: the Sandbox or Free Drive.
+function fd() { return sandbox?.active ? sandbox : drive; }
+function loadSandbox() {
+  sandboxLoad ??= import('./build/sandbox.js').then((mod) => {
+    sandbox = mod.createSandbox({
+      stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse, CAR,
+      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch },
+      assist: () => S.tier,
+      setMode: (m) => { S.mode = m; S.run = null; S.paused = false; ui.show('pause', false); },
+      onExit: () => { toTitle(); director.snap(); director.reframe(); },
+    });
+    return sandbox;
+  });
+  return sandboxLoad;
+}
+on('[data-sandbox-open]', () => { loadSandbox().then((s) => s.start()).catch((err) => { console.error(err); ui.cue_('The Sandbox couldn’t load', 2000); }); });
+
 // Deep links: ?play=jump|reveal, ?board=today|all, ?drive=<road>[&tod=dusk].
+const bootHash = location.hash;   // a shared build (#b=…) rides on a ?drive= link
 toTitle();
-if (params.get('drive') !== null) loadDrive().then((d) => d.start(params.get('drive') || 'stelvio', { tod: params.get('tod') || undefined }));
+// Keep a ?drive= link (and its build) in the address bar, so a reload or a copy brings it back.
+if (params.get('drive') !== null) history.replaceState(null, '', `${location.pathname}?drive=${encodeURIComponent(params.get('drive') || 'stelvio')}${bootHash}`);
+if (params.get('drive') === 'sandbox') loadSandbox().then((s) => s.start());
+else if (params.get('drive') !== null) loadDrive().then((d) => d.start(params.get('drive') || 'stelvio', { tod: params.get('tod') || undefined }));
 const play = params.get('play');
 if (play === 'jump' || play === 'reveal') startRun(play);
 if (params.get('board')) openBoard(params.get('board') === 'all' ? 'all' : 'today');
@@ -736,5 +759,5 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
-window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; } };
+window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 requestAnimationFrame(frame);

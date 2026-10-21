@@ -408,7 +408,8 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .course-btn b { font: 400 13px/1 var(--display); letter-spacing: 0.06em; }
 .course-btn span { font-size: 11px; color: var(--ink-3); }
 .course-btn[aria-checked='true'] { border-color: var(--ice); box-shadow: 0 0 0 3px rgba(191, 230, 255, 0.12); }
-.drive-btn { margin: -8px 0 18px; border-style: dashed; }
+.drive-row { display: flex; flex-wrap: wrap; gap: 10px; margin: -8px 0 18px; }
+.drive-btn { border-style: dashed; }
 .drive-btn b::after { content: ' →'; color: var(--ice); }
 @media (max-width: 720px) { .course-btn { min-width: 0; flex: 1; padding: 10px 12px; } .course-btn span { display: none; } }
 

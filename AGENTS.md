@@ -43,6 +43,10 @@ mark, and air left in the tanks.
 - API (src/worker/, frozen):
   - `POST /coldgas/api/judge/stream` replays the log, scores it, and streams the AI panel as
     server-sent events: `verify → prompt → reasoning/token… → done | error`.
+  - `POST /coldgas/api/quest` (side-quest designer) calls the same providers (edge default, or the
+    player's key as `x-cg-key` for that one call), streams through the theatre, and sends a quest only
+    if it passes `src/build/quest-schema.js` (the browser checks again). Rate-limited (edge: 12/h per
+    player, 250/day; BYOK shares the judges' 90/h).
   - `POST /coldgas/api/models` (BYOK connect) asks a provider for its live models and suggests one.
   - `GET /coldgas/api/providers`.
   - `POST /coldgas/api/scores` (verified board entry) and `GET /coldgas/api/scores?board=today|all`.
@@ -140,6 +144,16 @@ src/sim/              PURE, shared with the Worker:
   roads.js              FREE DRIVE's real roads as a course: parse the baked asset, segment grid,
                           ribbon (width, grade, banking) + conformed terrain + rails/walls/tunnels
                           as one `surface()` (courses.js defers to `course.sdf`); unscored
+src/build/            BUILD · POWER-UPS · SIDE QUESTS (the arcade layer; Free Drive and the Sandbox only,
+                        never a scored event): catalogue.js (pieces, materials, power-ups, budgets) ·
+                        colliders.js (each piece as an SDF + the mesh drawn from the same numbers: the
+                        thin collision adapter a rigid-body engine would replace) · objects.js (the
+                        world-object store: addObject / removeObject / objectsNear / sdf, composeCourse)
+                        · layer.js (host interface, sensors, quest runtime, saves) · editor.js (build
+                        mode) · ui.js + build.css · render.js (instanced) · encode.js (#b= builds) ·
+                        quest-schema.js (the gate every quest passes, shared with the Worker) ·
+                        quest-gen.js (deterministic local generator) · ai-quest.js · powerups.js ·
+                        quests.js · sandbox.js / arena*.js (the Sandbox) · road-host.js (roads)
 src/drive/            FREE DRIVE (lazy chunk): index.js (picker → load → drive loop, reset, timer),
                         load.js (fetch + gunzip from our origin), camera.js (chase / bumper /
                         cinema), hud.js (picker cards, HUD, minimap, credits), pilot.js (a road-
@@ -208,6 +222,7 @@ state. It never writes it.
 | `?board=today` / `?board=all` | Open the leaderboard |
 | `?gfx=low\|mid\|high` | Force a graphics tier |
 | `?drive=stelvio\|transfagarasan\|bigsur\|atlantic[&tod=dusk]` | Free Drive on that road |
+| `?drive=sandbox[#b=<build>]` | The Sandbox (build, power-ups, side quests); `#b=` carries a shared build (also on a road link) |
 
 Renaming or removing a deep link breaks the mutaafaziz.com launcher and Digital Craft /labs.
 Keep the old ones working.

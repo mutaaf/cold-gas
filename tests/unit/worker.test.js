@@ -127,3 +127,41 @@ describe('model display names', () => {
     expect(nice('@cf/google/gemma-4-26b-a4b-it')).toBe('Gemma 4');
   });
 });
+
+describe('quest designer endpoint', () => {
+  const ctx = { waitUntil: (p) => p };
+  const req = (body, headers = {}) => new Request('https://x/coldgas/api/quest', { method: 'POST', headers: { 'content-type': 'application/json', ...headers }, body: JSON.stringify(body) });
+  const QUEST = { title: 'Ring Line', brief: 'Three rings and a pad.', pieces: [{ t: 'ring', x: 0, z: 40 }, { t: 'ring', x: 4, z: 80 }, { t: 'ring', x: -4, z: 120 }, { t: 'pad', x: 0, z: 160 }], pickups: [{ t: 'nitrogen', x: 0, z: 20 }], objectives: [{ type: 'rings', count: 3 }, { type: 'land', target: 3 }], timeLimit: 90 };
+  it('streams the model, validates its JSON, and sends only a valid quest', async () => {
+    const fenced = 'Sure!\n```json\n' + JSON.stringify(QUEST) + '\n```';
+    const events = await readSSE(await worker.fetch(req({ arena: 'sandbox', wish: 'rings please', seed: '7' }), { AI: fakeAI(fenced) }, ctx));
+    expect(events.map((e) => e.ev)).toContain('prompt');
+    expect(events.some((e) => e.ev === 'token')).toBe(true);
+    const prompt = events.find((e) => e.ev === 'prompt').data;
+    expect(prompt.system).toContain('kicker');
+    expect(prompt.user).toContain('rings please');
+    const done = events.find((e) => e.ev === 'done').data;
+    expect(done.quest.title).toBe('Ring Line');
+    expect(done.quest.pieces[0]).toMatchObject({ t: 'ring', y: 0, s: 1 });
+    expect(done.errors).toBeNull();
+  });
+  it('rejects out-of-schema answers and never forwards them as a quest', async () => {
+    const bad = { ...QUEST, pieces: [...QUEST.pieces, { t: 'ring', x: 0, z: 5000 }], onLoad: 'alert(1)' };
+    const done = (await readSSE(await worker.fetch(req({ arena: 'sandbox' }), { AI: fakeAI(JSON.stringify(bad)) }, ctx))).find((e) => e.ev === 'done').data;
+    expect(done.quest).toBeNull();
+    expect(done.errors.join()).toMatch(/onLoad|out of bounds/);
+    const none = (await readSSE(await worker.fetch(req({ arena: 'road' }), { AI: fakeAI('I cannot do that.') }, ctx))).find((e) => e.ev === 'done').data;
+    expect(none.quest).toBeNull();
+  });
+  it('needs a well-formed key for BYOK, and never echoes one', async () => {
+    expect((await worker.fetch(req({ provider: 'anthropic' }), {}, ctx)).status).toBe(400);
+    const res = await worker.fetch(req({ provider: 'edge' }, { 'x-cg-key': 'sk-ant-secret-should-not-echo-123' }), { AI: fakeAI(JSON.stringify(QUEST)) }, ctx);
+    expect(await res.text()).not.toContain('sk-ant-secret');
+  });
+  it('strips and trims the player’s wish before it reaches the model', async () => {
+    const events = await readSSE(await worker.fetch(req({ wish: 'x"<script>`'.padEnd(400, 'y') }), { AI: fakeAI(JSON.stringify(QUEST)) }, ctx));
+    const user = events.find((e) => e.ev === 'prompt').data.user;
+    expect(user).not.toContain('<script>');
+    expect(user.length).toBeLessThan(300);
+  });
+});

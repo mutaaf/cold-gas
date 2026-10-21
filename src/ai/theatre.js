@@ -9,7 +9,7 @@
 // Around it: the stage rail, the model card (who, where, who pays), live counters (tokens in and
 // out, time to first token, tokens/s, neurons, cost) and the raw stream as it arrives.
 import { create, register, fromText } from 'aurora-field';
-import { streamPanel } from './stream.js';
+import { streamPanel, streamQuest } from './stream.js';
 import { shortModel, PROVIDER_INFO } from './config.js';
 import monoBoldUrl from '@fontsource/geist-mono/files/geist-mono-latin-700-normal.woff2?url';
 
@@ -144,12 +144,12 @@ function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.
 const fmtMs = (ms) => (ms == null ? '—' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`);
 const fmtUsd = (u) => (u == null ? '—' : u < 0.0001 ? `$${u.toFixed(6)}` : `$${u.toFixed(4)}`);
 
-function buildDom(root) {
+function buildDom(root, stages = STAGES) {
   root.innerHTML = '';
   const canvas = el('canvas', 'th-canvas');
   const rail = el('ol', 'th-rail');
   const railItems = {};
-  for (const [i, s] of STAGES.entries()) {
+  for (const [i, s] of stages.entries()) {
     const li = el('li', '', `<span class="n">0${i + 1}</span><span class="l">${s}</span><span class="d"></span>`);
     rail.appendChild(li); railItems[s] = li;
   }
@@ -389,4 +389,117 @@ async function replayEvents(timeline, handlers) {
     if (delay > 0) await new Promise((r) => setTimeout(r, delay));
     handlers[ev]?.(data);
   }
+}
+
+// --- The quest designer: the same theatre, for a side quest (src/build/ai-quest.js) -----------------
+//   PROMPT   the circuit: the wish, the catalogue, the bounds and the budget become a prompt
+//   COMPUTE  the die: one signal per streamed token of JSON
+//   CHECK    the schema gate's verdict in particle text (pieces placed, or why it was rejected)
+//   QUEST    the quest's name; then it is laid out in the world
+// Shorter than a judging (it's a side quest), but every number is the call's own. Resolves with
+// { quest (validated by the server; the caller validates again) | null, meta }.
+const Q_STAGES = ['prompt', 'compute', 'check', 'quest'];
+const Q_MIN = { prompt: 1100, compute: 900, check: 1300 };
+export function runQuestTheatre(root, { ai, wish, arena, seed, reduced = false, abort = null }) {
+  registerShapes();
+  root.classList.add('th-quest');
+  const dom = buildDom(root, Q_STAGES);
+  root.hidden = false;
+  root.classList.remove('out');
+  requestAnimationFrame(() => root.classList.add('on'));
+  let field = null;
+  loadMonoBold();
+  const narrow = () => root.clientWidth < 560;
+  if (!reduced) safe(() => { field = create(dom.canvas, {
+    container: root.querySelector('.th-canvas').parentElement, shapes: ['cg:circuit', 'cg:compute'], initial: 'cg:circuit',
+    cycle: 0, palette: 'aurora', blank: true, interactive: false, stars: 60, autonomy: 0.3, depth: 3.0, intro: 0,
+    count: (w) => (w < 700 ? 2400 : 3200), radius: (w, h) => Math.min(w * 0.42, h * 0.34),
+  }); });
+  const t0 = performance.now();
+  const meta = { provider: ai.provider, model: ai.model, kind: 'quest' };
+  let stage = null, stageAt = t0, finished = false, resolve;
+  const done = new Promise((r) => { resolve = r; });
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  const setStage = (s) => {
+    stage = s; stageAt = performance.now(); root.dataset.stage = s;
+    safe(() => field?.set({ autonomy: s === 'compute' ? 0.3 : s === 'prompt' ? 0.3 : 0, palette: s === 'check' || s === 'quest' ? SPELL : 'aurora' }));
+    for (const k of Q_STAGES) dom.railItems[k].className = k === s ? 'on' : Q_STAGES.indexOf(k) < Q_STAGES.indexOf(s) ? 'done' : '';
+  };
+  const dwell = (s) => wait(reduced ? 0 : Math.max(0, (Q_MIN[s] || 0) - (performance.now() - stageAt)));
+  const caption = (t) => { dom.caption.textContent = t; };
+  const spell = (text) => { if (field) safe(() => { const n = textShape(text, narrow()); if (n !== 'cg:compute') field.add([n]); field.setShape(n, { pin: 1e9, arrive: { from: [-1, 0, 0], ms: 650 } }); }); };
+  let out = '', tokens = 0, lastSignal = 0, result = null, failure = null, computing = null;
+  setStage('prompt');
+  caption(wish ? `Your wish becomes a prompt: “${wish.slice(0, 80)}” + the catalogue, the bounds, the budget.` : 'A prompt: the catalogue, the bounds, the budget. The model designs; the schema decides.');
+  safe(() => field?.setShape('cg:circuit', { pin: 1e9 }));
+  const pulse = setInterval(() => safe(() => field?.signal(undefined, 26, 3)), 200);
+  const deadline = setTimeout(() => { if (!result && !failure) { failure = { message: 'The model took too long.' }; abortCall.abort(); } }, 35_000);
+  const abortCall = new AbortController();
+  abort?.addEventListener('abort', () => abortCall.abort(), { once: true });
+  const startCompute = () => (computing ??= (async () => {
+    await dwell('prompt');
+    setStage('compute');
+    caption(`${shortModel(meta.model)} is designing a quest as JSON…`);
+    safe(() => field?.setShape('cg:compute', { pin: 1e9, arrive: { from: [-0.6, 0, 0], ms: 600 } }));
+  })());
+  const handlers = {
+    prompt: (d) => {
+      Object.assign(meta, { provider: d.provider, model: d.model, where: d.where, system: d.system, user: d.user });
+      dom.set('model', shortModel(d.model)); dom.set('vendor', `${d.providerLabel} · ${d.vendor}`); dom.set('where', d.where);
+      dom.set('billed', d.provider === 'edge' ? 'COLD GAS · free allowance' : `Your ${d.providerLabel} key`);
+      dom.stat('in', `~${d.inTokensEst}`);
+    },
+    reasoning: (d) => { startCompute(); dom.reason.textContent = (dom.reason.textContent + d.t).slice(-200); },
+    token: (d) => {
+      startCompute();
+      if (meta.ttft == null) { meta.ttft = performance.now() - t0; dom.stat('ttft', fmtMs(meta.ttft)); }
+      out += d.t; tokens++; dom.out.textContent = out.slice(-360); dom.stat('out', String(tokens));
+      const now = performance.now();
+      if (field && now - lastSignal > 33) { safe(() => field.signal(undefined, 14, 2)); lastSignal = now; }
+    },
+    done: (d) => {
+      Object.assign(meta, d, { ok: !!d.quest });
+      result = d;
+      dom.stat('in', String(d.inTokens ?? '—')); dom.stat('out', String(d.outTokens ?? tokens));
+      dom.stat('ttft', fmtMs(d.ttftMs)); dom.stat('rate', d.tokensPerSec ? `${d.tokensPerSec} tok/s` : '—');
+      dom.stat('neurons', d.neurons != null ? String(d.neurons) : '—');
+      dom.stat('cost', d.costUsd != null ? fmtUsd(d.costUsd) : d.provider === 'edge' ? '—' : 'Billed by provider');
+    },
+    error: (d) => { failure = d; meta.error = d.message; },
+  };
+  (async () => {
+    try { await streamQuest({ ai, wish, arena, seed }, handlers, { signal: abortCall.signal }); }
+    catch (err) { if (!failure) failure = { message: 'The quest designer is offline.' }; console.warn(err); }
+    if (finished) return;
+    await startCompute();
+    await dwell('compute');
+    setStage('check');
+    const q = result?.quest;
+    if (q) {
+      caption(`Schema: passed. ${q.pieces.length} pieces, ${q.pickups.length} power-ups, ${q.objectives.length} objective${q.objectives.length > 1 ? 's' : ''}, inside the bounds and the budget.`);
+      spell(`${q.pieces.length} PIECES OK`);
+    } else {
+      const why = result?.errors?.[0] || failure?.message || 'No answer.';
+      caption(`${result ? 'Schema: rejected' : 'No quest'} (${why}). The local generator lays one out instead.`);
+      spell(result ? 'REJECTED' : 'OFFLINE');
+      if (!result) dom.set('billed', 'Nobody: local generator');
+    }
+    await dwell('check');
+    setStage('quest');
+    caption(q ? `“${q.title}”. Laying it out…` : 'Laying out a quest from the local generator…');
+    if (q) spell(q.title.toUpperCase().slice(0, 22));
+    await wait(reduced ? 0 : 1300);
+    finish();
+  })();
+  function finish() {
+    if (finished) return;
+    finished = true;
+    clearInterval(pulse); clearTimeout(deadline);
+    root.classList.add('out');
+    setTimeout(() => { safe(() => field?.destroy()); root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); }, reduced ? 0 : 600);
+    resolve({ quest: result?.quest || null, errors: result?.errors || null, raw: result?.raw || out, meta: { ...meta, error: failure?.message || null } });
+  }
+  dom.skip.addEventListener('click', () => { if (result || failure) finish(); else { caption('Finishing the call…'); } });
+  abort?.addEventListener('abort', () => { if (!finished) { finished = true; clearInterval(pulse); clearTimeout(deadline); safe(() => field?.destroy()); root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); resolve({ quest: null, aborted: true, meta }); } }, { once: true });
+  return done;
 }
