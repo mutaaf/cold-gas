@@ -233,6 +233,9 @@ export const MATERIALS = {
   gravel: { id: 'gravel', grip: 0.62, slide: 0.6, bounce: 0.05, loose: true },
   grass: { id: 'grass', grip: 0.45, slide: 0.45, bounce: 0.05, loose: true },
   rock: { id: 'rock', grip: 0.7, slide: 0.55, bounce: 0.15, loose: true },
+  // Dry sand (the endless road's deserts and shores): tyres on loose dry sand manage μ ≈ 0.4–0.6
+  // of their tarmac grip (ESTIMATE, off-road traction studies).
+  sand: { id: 'sand', grip: 0.5, slide: 0.5, bounce: 0.05, loose: true },
   barrier: { id: 'barrier', grip: 0.5, slide: 0.35, bounce: 0.2 },
 };
 

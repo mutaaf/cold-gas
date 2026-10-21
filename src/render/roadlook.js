@@ -83,7 +83,7 @@ export function createUniforms() {
   };
 }
 
-function patch(mat, U, { vertex = '', vertexMain = '', fragment = '', color = '', post = '', rough = '', normal = '' }) {
+export function patch(mat, U, { vertex = '', vertexMain = '', fragment = '', color = '', post = '', rough = '', normal = '' }) {
   mat.onBeforeCompile = (shader) => {
     Object.assign(shader.uniforms, U);
     shader.vertexShader = shader.vertexShader
@@ -102,7 +102,7 @@ function patch(mat, U, { vertex = '', vertexMain = '', fragment = '', color = ''
   return mat;
 }
 
-const WATER_GLSL = /* glsl */`
+export const WATER_GLSL = /* glsl */`
   uniform vec3 cgWater; uniform vec3 cgWaterDeep; uniform vec3 cgZenith; uniform vec3 cgHorizon;
   vec3 cgWaterShade(vec3 wpos, float depth) {
     vec3 v = normalize(cameraPosition - wpos);
