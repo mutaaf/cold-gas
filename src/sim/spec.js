@@ -103,15 +103,19 @@ const yUp = (h) => h - SPEC.comHeight;   // height above the ground → body y
 
 // Ten thrusters (OFFICIAL count and grouping: 4 rear, 4 down "one per corner", 2 front yaw),
 // placed from the axles so a CoM change moves nothing on the car. Per-nozzle thrust at full
-// pressure: rear 80 kN total (OFFICIAL, "Mach diamonds" on the 0–60 run) → 20 kN each; down 20 kN
-// each (the same rating; §11); yaw ≈4 kN each (ESTIMATE). `dir` is the force on the car.
+// pressure: rear 80 kN total (OFFICIAL, "Mach diamonds" on the 0–60 run) → 20 kN each; yaw ≈4 kN
+// each (ESTIMATE). Down: 23 kN front, 16 kN rear (ESTIMATE, docs/REVEAL_RESEARCH.md §11.5 (b)). The
+// livestream's 3.3 G braking peak (TELEMETRY, §2.1.4) is thrust over mass; equal 20 kN jets "behind
+// each wheel" make only 66.5 kN of pitch-free lift (2.8 G at 2,447 kg) because the rears sit 1.5×
+// farther from the CoM. Front jets ≈1.5× the rears' throat area are the natural design answer: 78 kN
+// rated (the rear row's class), 76.5 kN pitch-free, 3.2 G full. `dir` is the force on the car.
 export const NOZZLE_SPEC = [
   // Down: "behind each wheel" (OFFICIAL) at sill level, 0.18 m up: 0.47 m behind the front axle,
   // 0.53 m behind the rear (PHOTO, 04-World and the kickflip clip, §11).
-  { id: 'down-fr', group: 'lift', pos: [-0.75, yUp(0.18), AXLE_F - 0.47], dir: [0, 1, 0], max: 20000 },
-  { id: 'down-fl', group: 'lift', pos: [0.75, yUp(0.18), AXLE_F - 0.47], dir: [0, 1, 0], max: 20000 },
-  { id: 'down-rr', group: 'lift', pos: [-0.75, yUp(0.18), AXLE_R - 0.53], dir: [0, 1, 0], max: 20000 },
-  { id: 'down-rl', group: 'lift', pos: [0.75, yUp(0.18), AXLE_R - 0.53], dir: [0, 1, 0], max: 20000 },
+  { id: 'down-fr', group: 'lift', pos: [-0.75, yUp(0.18), AXLE_F - 0.47], dir: [0, 1, 0], max: 23000 },
+  { id: 'down-fl', group: 'lift', pos: [0.75, yUp(0.18), AXLE_F - 0.47], dir: [0, 1, 0], max: 23000 },
+  { id: 'down-rr', group: 'lift', pos: [-0.75, yUp(0.18), AXLE_R - 0.53], dir: [0, 1, 0], max: 16000 },
+  { id: 'down-rl', group: 'lift', pos: [0.75, yUp(0.18), AXLE_R - 0.53], dir: [0, 1, 0], max: 16000 },
   // Rear: one row along the top of the diffuser, centres 0.42 m up, 0.26 m apart (PHOTO, §10.3),
   // at the tail (rear overhang ≈0.65 m).
   { id: 'rear-1', group: 'rear', pos: [-0.39, yUp(0.42), AXLE_R - 0.63], dir: [0, 0, 1], max: 20000 },

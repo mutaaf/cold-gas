@@ -1,7 +1,7 @@
 // The reference runs, flown closed-loop through the same physics the player uses. They power
 // the attract mode, the ?play=reveal replay, the ghost, and the physics regression tests: if the
 // autopilot can't land it, neither can a player, and CI fails.
-import { newInput, bodyRates, up, forward, G, computerValves, VALVE_KEYS, NOZZLES } from './vehicle.js';
+import { newInput, bodyRates, up, forward, G, computerValves, VALVE_KEYS, NOZZLES, landProfile } from './vehicle.js';
 import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { wallProgress } from './run.js';
@@ -13,9 +13,14 @@ import { dhypot } from './dmath.js';
 // falling, braked hard on the down-jets and landed ≈4.5 s after release. The kickflip lifted off
 // flat ground at ≈7–8 m/s and peaked ≈7–8 m over the lineup.
 export const REVEAL = {
-  wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.93 },   // brake at 93 %: it stops on the ledge with four wheels and the whole sealed floor on the deck
+  // Run 2 (the G trace) hung under 1 s and moved forward off the lip during the roll, landing ≈8–12 m
+  // out from the ramp's base (research §2.1.4): it rolls out along the ledge at 2.5 m/s and lets go.
+  // (`hang`/`releaseAt: 0.93` stop it on the ledge instead, four wheels and the sealed floor on the
+  // deck: the drills and run 1's hang.)
+  wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.93, driveOff: true, driveSpeed: 2.5, driveFrom: 0.8, driveRelease: 0.96 },
   lineup: { speed: 7.5, apex: 5.0, rolls: 1, rollBrake: 14 },
-  show: { carry: 8.5 },
+  // The Show drives out along the ledge at the carry speed (driveSpeed falls back to `carry`) and lets go near the lip.
+  show: { carry: 7.5, driveSpeed: undefined, driveOff: true, driveFrom: 0.8, driveRelease: 0.95 },
 };
 
 const rates = v3(), upv = v3(), fwv = v3();
@@ -26,8 +31,9 @@ export function createAutopilot(courseId = 'show', opts = {}) {
 }
 function basePilot(courseId, opts) {
   if (courseId === 'lineup') return lineupPilot({ ...REVEAL.lineup, ...opts });
-  // The Show is the Wall with the row under the ledge: let go, and a short rear-jet burn carries
-  // the car out over the row (`carry`, m/s along the run) before the roll-out and the descent.
+  // The Show is the Wall with the row under the ledge: drive out along the ledge and let go at the
+  // carry speed (`carry`, m/s along the run; the rear jets top up any shortfall), then the roll-out
+  // and the descent.
   if (courseId === 'show') return wallPilot({ ...REVEAL.wall, ...REVEAL.show, ...opts }, 'show');
   return wallPilot({ ...REVEAL.wall, ...opts }, 'wall');
 }
@@ -86,6 +92,14 @@ function wallPilot(plan, courseId) {
       laneKeep(c, out);
       out.fan = 1;
       const prog = wallProgress(c.pos);
+      // The Show: no hang. Over the top of the curl it drives out along the ledge to the carry
+      // speed and lets go at the lip, so the car leaves already moving out over the row and falls
+      // free (the reveal's 0.2–0.4 G off the lip) instead of being shoved by the rear jets.
+      if (plan.driveOff && prog >= plan.driveFrom) {
+        out.throttle = speed < (plan.driveSpeed ?? plan.carry) ? 1 : 0;
+        if (prog >= plan.driveRelease) st.released = true;
+        return out;
+      }
       if (prog >= plan.releaseAt) {
         // On the ledge: stop and hang upside down, then let go.
         out.brake = 1;
@@ -104,25 +118,21 @@ function wallPilot(plan, courseId) {
     st.released = true;
     out.fan = 0;
     if (run.phase === 'landed') { out.brake = 1; return out; }
-    // Push off the ledge: a short lift-jet pulse (upside down, "lift" points at the ground) so the
-    // tail doesn't swing into the lip as the car peels away.
-    st.pushT = (st.pushT || 0) + 1 / 240;
-    if (!plan.carry && st.pushT < 0.25) { out.lift = 1; return out; }   // (the Show's carry burn does this)
     up(c, upv);
     // The Show: carry out over the row on the rear jets (the nose points down the run, inverted).
     if (!st.carried) {
       if (-c.vel.z >= plan.carry) st.carried = true;
       else { out.thrust = 1; return out; }
     }
-    // Roll out of the inversion (a barrel roll, as at the reveal), then let the computer level it.
-    if (!st.rolledOut && run.car.grounded === 0) {
-      if (upv.y > -0.15) st.rolledOut = true;
-      else { out.roll = -1; out.pitch = 0; return out; }
-    }
+    // LAND from the moment it lets go: the computer rolls it out of the inversion (a barrel roll, as
+    // at the reveal), levels it and governs the descent.
     out.level = run.car.grounded === 0 ? 1 : 0;
     // Off the Wall the roll-out leaves the car banked and drifting: give it 4 m to level. The Show
     // carries forward speed onto the pad and levels in the last metre.
-    if (upv.y > 0.5) steerToPad(c, pad, out, Math.max(0, c.pos.y - SPEC.comHeight), plan.carry ? 1 : 4);
+    // Steer for the pad once the roll-out is done and the down-jets are braking: tilting in free
+    // fall moves nothing, and it would start the brake with its thrust aimed off the vertical.
+    if (upv.y > 0.94) st.rolledOut = true;
+    if (st.rolledOut && (c.vel.y < landProfile(c) + 0.5 || c.vel.y > -3)) steerToPad(c, pad, out, Math.max(0, c.pos.y - SPEC.comHeight), plan.carry ? 1 : 4);
     return out;
   };
 }

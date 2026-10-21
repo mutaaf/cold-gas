@@ -4,7 +4,7 @@
 //
 // The physics is the governor's own (src/sim/vehicle.js): the four down-jets' trimmed lift at the
 // feed pressure left at the end of the stop, times how upright the car is, minus gravity.
-import { G, HOVER, LIFT_MAX, NOZZLES, massOf, feedPressure, pressureOf, gasToStop, brakePlan, up, CAR } from './vehicle.js';
+import { G, HOVER, LIFT_MAX, NOZZLES, massOf, feedPressure, pressureOf, gasToStop, brakePlan, profileVy, up, CAR } from './vehicle.js';
 import { SPEC } from './spec.js';
 import { v3, rotateInv } from './m3.js';
 import { datan2, dhypot } from './dmath.js';
@@ -64,7 +64,7 @@ export function predict(c, h, out) {
   const levelDrop = sink * tLevel + 0.5 * G * tLevel * tLevel, sinkLevel = sink + G * tLevel;
   // The band's edge: the most sink you can carry here and still roll out (if you must), react and
   // stop at 70 % of a full-lift stop, down to a hover. (LAND's own plan flies well inside it.)
-  out.profileSink = h > HOVER ? maxSink(h - HOVER, tLevel, Math.max(0.6, 0.7 * out.aMax)) : 0.55;
+  out.profileSink = h > HOVER ? maxSink(h - HOVER, tLevel, Math.max(0.6, 0.7 * out.aMax)) : -profileVy(h, out.aPlan);
   // Touching down after braking from here at full lift (after the roll-out): v² = v² − 2·a·h.
   const v2 = sinkLevel * sinkLevel - 2 * Math.max(0, out.aMax) * Math.max(0, h - levelDrop - 0.3);
   out.touchSink = v2 > 0 ? Math.sqrt(v2) : 0;
@@ -108,7 +108,7 @@ function profileTime(h, vy, aPlan) {
   let y = Math.max(0, h), v = vy, t = 0;
   const dt = 1 / 30;
   while (y > 0.05 && t < 20) {
-    const want = y > HOVER ? -Math.sqrt((y - HOVER) * 2 * aPlan) : -0.55;
+    const want = profileVy(y, aPlan);
     v = v < want ? Math.min(want, v + aPlan * 2 * dt) : v - G * dt;
     if (v > -0.3) v = -0.3;
     y += v * dt; t += dt;

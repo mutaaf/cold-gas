@@ -16,7 +16,7 @@
 // scores this way). No allocation in step().
 import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
 import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf, AXLE_F } from './spec.js';
-import { COURSES, DEFAULT_COURSE, MATERIALS } from './courses.js';
+import { COURSES, DEFAULT_COURSE, MATERIALS, roofUnder } from './courses.js';
 import { createWorld, attachCar, raycast as worldRay, preStep, stepEngine } from './world.js';
 import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
 import { createImpacts, pushImpact, HIT, SCRAPE, WHEEL, CRUSH, CRUSH_STEP, PART, SCRAPE_EVERY, HIT_MIN, SCRAPE_MIN, WHEEL_MIN } from './impacts.js';
@@ -59,13 +59,14 @@ export const NOZZLES = NOZZLE_SPEC.map((n) => {
 });
 
 const WHEELS = wheelAnchors().map((a) => v3(...a));
-// Lift trim: the down-jets don't sit symmetrically about the CoM, so each one's share of a pure
-// lift command is scaled until the four make no pitch or roll moment (the nozzle farthest out
-// runs leaner). Attitude commands ride on top.
+// Lift trim: the down-jets don't sit symmetrically about the CoM (nor are they the same size), so
+// each one's share of a pure lift command is scaled until the four make no pitch or roll moment
+// (the pair with the larger moment, thrust × lever, runs leaner). Attitude commands ride on top.
 const TRIM = (() => {
   const lift = NOZZLE_SPEC.filter((n) => n.group === 'lift');
-  const zf = Math.max(...lift.map((n) => n.pos[2])), zr = Math.min(...lift.map((n) => n.pos[2]));
-  return NOZZLE_SPEC.map((n) => (n.group !== 'lift' ? 1 : n.pos[2] > 0 ? Math.min(1, -zr / zf) : Math.min(1, zf / -zr)));
+  const f = lift.find((n) => n.pos[2] > 0), b = lift.find((n) => n.pos[2] < 0);
+  const mf = f.max * f.pos[2], mr = -b.max * b.pos[2];
+  return NOZZLE_SPEC.map((n) => (n.group !== 'lift' ? 1 : n.pos[2] > 0 ? Math.min(1, mr / mf) : Math.min(1, mf / mr)));
 })();
 // Rotational air drag coefficients (N·m·s²), body axes x = pitch, y = yaw, z = roll (see step()).
 const ROT_DRAG = (() => {
@@ -265,8 +266,15 @@ export function mix(cmd, torqueCmd, out) {
 // 3 rad/s per radian of bank; both up to the stick's 4.6 rad/s (the reveal: 180° in ≈1.1 s).
 const RATE = v3(2.4, 1.4, 4.6);
 const LEVEL_K = 2, LEVEL_DAMP = 1.4;
-// Banked past ≈20° (cos 20° = 0.94), the roll-out keeps going at 3 rad/s per radian of bank.
-const UPPER_ROLL = 0.94, UPPER_K = 3;
+// Banked past ≈20° (cos 20° = 0.94), LAND's roll-out is a bang-bang roll at ROLL_ACC (rad/s²) up to
+// the stick's 4.6 rad/s and back down to upright: 180° in ≈1.1 s, as at the reveal (frames: wheels
+// sideways at ≈0.5 s, upright by ≈1.1 s, docs/REVEAL_RESEARCH.md §2.1.4). Inverted, every jet that
+// rolls the car pushes it at the ground, so the roll-out asks for that acceleration and no more:
+// 12 rad/s² on Iroll 615 kg·m² is ≈9.8 kN on one side's down-jets, 0.4 G, and the car falls nearly
+// free (TELEMETRY: 0.2–0.4 G for the first second off the lip). ESTIMATE, set by the reveal's timing.
+const UPPER_ROLL = 0.94, ROLL_ACC = 12;
+// Roll torque per unit of roll command in the mixer's linear range (one side's down-jets, N·m).
+const ROLL_TAU = NOZZLE_SPEC.reduce((a, n) => a + (n.group === 'lift' && n.pos[0] > 0 ? 2 * n.pos[0] * n.pos[0] * n.max : 0), 0);
 function flightComputer(s, inp, out, envelope = 1) {
   rotateInv(wb, s.quat, s.angVel);
   const kp = 1.6, k = envelope;
@@ -284,17 +292,26 @@ function flightComputer(s, inp, out, envelope = 1) {
       rotateInv(tmp, s.quat, s.vel);
       wantZ = -LEVEL_K * (ux - clamp(0.07 * tmp.x, -0.2, 0.2));
     }
-    if (uy < -0.2 && Math.abs(uz) < 0.7) {
-      const tilt = datan2(dhypot(ux, uz), uy);
-      wantX = 0;
-      wantZ = clamp((ux >= 0 ? -1 : 1) * LEVEL_K * tilt, -RATE.z, RATE.z);
-    } else if (uy < UPPER_ROLL && Math.abs(ux) > Math.abs(uz) && Math.abs(inp.roll) < 0.05) {
-      // Still banked past ≈20°: keep rolling at the reveal's pace (an angle law), not the sine
-      // law's crawl, so the down-jets aren't braking sideways for the last half of the roll-out.
-      wantZ = clamp((ux >= 0 ? -1 : 1) * UPPER_K * datan2(Math.abs(ux), uy), -RATE.z, RATE.z);
+    let rollOut = false;
+    if ((uy < -0.2 && Math.abs(uz) < 0.7) || (uy < UPPER_ROLL && Math.abs(ux) > Math.abs(uz) && Math.abs(inp.roll) < 0.05)) {
+      // The roll-out: the nearer way round, at the rate it can still stop from by upright (decel at
+      // 80 % of ROLL_ACC, a margin for the lag), with the pitch rate held while inverted (correcting
+      // pitch too would start a half-loop that fights the roll; past sideways the pitch levels too, so
+      // the brake doesn't fire tilted and bleed off the carry).
+      const bank = uy < -0.2 ? datan2(dhypot(ux, uz), uy) : datan2(Math.abs(ux), uy);
+      if (uy < -0.2) wantX = 0;
+      wantZ = (ux >= 0 ? -1 : 1) * Math.min(RATE.z, Math.sqrt(1.6 * ROLL_ACC * bank));
+      rollOut = Math.abs(inp.roll) < 0.05;
     }
     out.x += (kp + LEVEL_DAMP) * wantX - LEVEL_DAMP * wb.x;
     out.z += (kp + LEVEL_DAMP) * wantZ - LEVEL_DAMP * wb.z;
+    if (rollOut) {
+      // No more roll torque than ROLL_ACC needs at today's feed pressure, and, upside down, the
+      // pitch hold on no more than that thrust either (every jet pushes the car at the ground).
+      const cap = (ROLL_ACC * SPEC.inertia.roll) / (ROLL_TAU * Math.max(0.2, feedPressure(s)));
+      out.z = clamp(out.z, -cap, cap);
+      if (uy < 0) out.x = clamp(out.x, -cap / 2, cap / 2);
+    }
   }
   out.x = clamp(out.x, -1, 1); out.y = clamp(out.y, -1, 1); out.z = clamp(out.z, -1, 1);
   return out;
@@ -308,7 +325,17 @@ function record(imp, tick, kind, part, ev) {
 //  - LAND: lift is governed so the sink rate eases to a soft touchdown on the ground below.
 //  - CARRY: airborne, the rear jets fade out as the horizontal speed nears ASSIST_CARRY, and shut
 //    while LAND brakes.
-export const HOVER = 1.3;
+// LAND brakes to the top of the set-down, HOVER m up, then sets down at a sink easing from
+// SETDOWN + SETDOWN_K·h to SETDOWN at the wheels: 2.05 m/s at 2.5 m, 0.8 m/s at touchdown (the
+// judges' perfect band is ≤ 0.9). TELEMETRY (docs/REVEAL_RESEARCH.md §2.1.4): braked to ≈1.5 m/s
+// by ≈2.5 m, 1.5 s from 2.3 m to wheels down, touchdown at 1.1 G.
+export const HOVER = 2.5, SETDOWN = 0.8, SETDOWN_K = 0.5;
+const V_HOVER = SETDOWN + SETDOWN_K * HOVER;
+// The vertical speed LAND wants at height h with a braking plan of aPlan m/s² (negative down).
+export function profileVy(h, aPlan) {
+  if (h <= HOVER) return -(SETDOWN + SETDOWN_K * Math.max(0, h));
+  return -Math.min(25, Math.sqrt(V_HOVER * V_HOVER + 2 * aPlan * (h - HOVER)));
+}
 let behind = 0;   // m/s the car is falling faster than the LAND profile wants (0 when not governed)
 function governor(s, inp, grounded, m) {
   eff.lift = inp.lift; eff.thrust = inp.thrust;
@@ -319,27 +346,67 @@ function governor(s, inp, grounded, m) {
     eff.thrust *= clamp((ASSIST_CARRY - vh) / 1.5, 0, 1);
   }
   if (!inp.level || s.air <= 0) return;
-  const h = Math.max(0, s.pos.y - SPEC.comHeight - 0.05);
-  // Plan the braking from the thrust the down-jets can actually make at today's tank pressure
-  // (blowdown halves it fast), then brake late and hard like the reveal (3.3 G peak at ≈6 m).
-  const aPlan = brakePlan(s, m);
-  // Brake to a low hover (as the reveal did), then set down at walking pace: time to level.
-  let wantVy = h > HOVER ? -Math.max(0.6, Math.min(16, Math.sqrt((h - HOVER) * 2 * aPlan))) : -0.55;
-  if (h < HOVER + 1.5 && upW.y < 0.99) wantVy = Math.max(wantVy, -0.25);
+  const h = landHeight(s);
+  let wantVy = landWant(s, m);
+  if (h < 1.2 && upW.y < 0.99) wantVy = Math.max(wantVy, -0.25);   // level before the wheels touch
   behind = wantVy - s.vel.y;
   // The brake has priority: once LAND is braking (or below 8 m), a thumb left on BOOST no longer
   // drains the gas the stop needs.
   if (behind > 0 || h < 8) eff.thrust = 0;
   if (s.vel.y < wantVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((wantVy - s.vel.y) * 0.8 + 0.55, 0, 1));
 }
-// Net upward deceleration the four down-jets can make right now (m/s², trimmed, level), and the
-// governor's plan: half of it (pressure can still fall during the burn). The HUD reads these too.
+// The vertical speed LAND wants for the car as it stands (m/s, negative down). Plan the braking
+// from the thrust the down-jets can actually make through the blowdown, brake late and hard like
+// the reveal (3.3 G peak at ≈6.5 m) to the top of the set-down, and set down.
+export function landProfile(s, m = massOf(s)) {
+  return landWant(s, m);
+}
+// Over a parked vehicle and still carrying along the run (> 2 m/s), LAND doesn't set down on it:
+// the roof is a floor ROOF_HOLD m under the car (braked to, then held) and the ground beyond stays
+// the target, so it doesn't dawdle in a set-down over each roof and drain the tanks. Stopped over
+// a roof, it sets down there, gently.
+function landWant(s, m) {
+  const h = landHeight(s), a = brakePlan(s, m);
+  if (roofBelow <= 0) return profileVy(h, a);
+  if (dhypot(s.vel.x, s.vel.z) <= 2) return profileVy(h, a);
+  const hRoof = h, hGround = h + roofBelow;
+  if (hRoof < ROOF_HOLD) return clamp(ROOF_HOLD - hRoof, 0, 1);
+  return Math.max(profileVy(hGround, a), -Math.min(25, Math.sqrt(2 * a * (hRoof - ROOF_HOLD))));
+}
+// LAND's altimeter: the floor's height above whatever it would set down on, the ground or the
+// tallest parked roof under the car's footprint along its track, from its tail now to its nose
+// 0.6 s on (sampled every ≈0.5 m along it and at both sides: the gaps in the row are narrower than
+// the car). A late, hard brake measured from the ground alone would arrive at a roof, or a semi's
+// flank, still falling fast.
+let roofBelow = 0;   // the last landHeight's roof (m, 0 over the ground)
+const hdg = v3();
+const ROOF_HOLD = 1.2;   // m of floor over a roof (ESTIMATE: clears the skirts and a wing mirror)
+export function landHeight(s) {
+  // Along the track; nearly stopped, along the nose (the footprint still covers the car).
+  const vh = dhypot(s.vel.x, s.vel.z);
+  let dx = 0, dz = 1;
+  if (vh > 0.5) { dx = s.vel.x / vh; dz = s.vel.z / vh; }
+  else {
+    rotate(hdg, s.quat, set(hdg, 0, 0, 1));
+    const l = dhypot(hdg.x, hdg.z);
+    if (l > 0.1) { dx = hdg.x / l; dz = hdg.z / l; }
+  }
+  const back = CAR.halfL, len = back + vh * 0.6 + CAR.halfL;
+  const n = Math.min(24, Math.ceil(len / 0.5));
+  roofBelow = 0;
+  for (let i = 0; i <= n; i++) {
+    const d = (len * i) / n - back, x = s.pos.x + dx * d, z = s.pos.z + dz * d;
+    for (let k = -1; k <= 1; k++) roofBelow = Math.max(roofBelow, roofUnder(s.world, x - dz * k * CAR.halfW, z + dx * k * CAR.halfW));
+  }
+  return Math.max(0, s.pos.y - SPEC.comHeight - 0.05 - roofBelow);
+}
+// Net upward deceleration the four down-jets can make right now (m/s², trimmed, level). The HUD
+// reads it, the stop's gas cost and the end-of-stop braking too.
 export const brakeAvail = (s, m = massOf(s)) => (LIFT_MAX * feedPressure(s)) / m - G;
 // The stop itself drains the tanks: stopping from v m/s at a m/s² costs an impulse m·(v + g·v/a)
 // (≈70 kg of nitrogen from 15 m/s), and below 65 % gas the regulator can't hold line pressure.
-// So the plan is the lesser of half of today's braking and all of what's left at the end of the
-// stop: the jets that finish the landing are the weaker ones. (Planning on today's pressure alone
-// arrived at the hover height still sinking 3–4 m/s once the tanks had blown down.)
+// The jets that finish the landing are the weaker ones. (Planning on today's pressure alone arrived
+// at the hover height still sinking 3–4 m/s once the tanks had blown down.)
 export function gasToStop(s, m = massOf(s), vy = s.vel.y) {
   const v = Math.max(0, -vy), a = Math.max(1, brakeAvail(s, m));
   return (m * (v + (G * v) / a)) / (SPEC.ispFull * 0.9 * G);
@@ -348,7 +415,34 @@ export function brakeAvailAtEnd(s, m = massOf(s)) {
   const used = gasToStop(s, m);
   return (LIFT_MAX * pressureOf(s.air - used)) / (m - used) - G;
 }
-export const brakePlan = (s, m = massOf(s)) => clamp(Math.min(brakeAvail(s, m) * 0.5, brakeAvailAtEnd(s, m)), 0.6, 9);
+// The plan: the mean deceleration of a stop flown at BRAKE_SHARE of full lift from here, through
+// the blowdown (stopFull), so the governor waits in free fall and then brakes late and hard. The
+// burn front-loads itself: it opens at line pressure (≈3.2 G of specific force) and eases as the
+// tanks fall below the regulator, like the reveal's 1.7 → 3.3 G peak at ≈6.5 m → 1.0 G
+// (TELEMETRY, docs/REVEAL_RESEARCH.md §2.1.4). The share leaves the rate loop room to level.
+const BRAKE_SHARE = 0.8;   // ESTIMATE: the most the reference and human-model runs land reliably on
+export const brakePlan = (s, m = massOf(s)) => {
+  const v = Math.max(0, -s.vel.y);
+  if (v < V_HOVER + 0.5) return clamp(brakeAvail(s, m) * BRAKE_SHARE, 0.6, 30);
+  return clamp((v * v - V_HOVER * V_HOVER) / (2 * stopFull(s.air, m, v, V_HOVER)), 0.6, 30);
+};
+// Distance (m) to slow a fall of v m/s to vEnd at BRAKE_SHARE of full lift, the gas, the mass and
+// the pressure falling as it burns (0.05 s steps; a stop that can't be made returns a long one).
+export function stopFull(air, m, v, vEnd = 0) {
+  const dt = 0.05;
+  let d = 0;
+  for (let i = 0; i < 80 && v > vEnd; i++) {
+    const pr = pressureOf(air), F = LIFT_MAX * BRAKE_SHARE * pr;
+    const a = F / m - G;
+    const dv = Math.min(v - vEnd, Math.max(0, a) * dt);
+    d += (v - dv / 2) * dt;
+    v -= dv;
+    const used = (F / (SPEC.ispFull * (0.7 + 0.3 * pr) * G)) * dt;
+    air -= used; m -= used;
+    if (a <= 0.3) return d + (v * v - vEnd * vEnd) / 0.6;
+  }
+  return Math.max(d, 0.01);
+}
 export { LIFT_MAX, TRIM };
 
 // The flight computer end to end: the pilot's commands → governors → rate loop → mixer → valve
@@ -360,6 +454,11 @@ function computerTargets(s, inp, grounded, m, out) {
   const envelope = inp.assist && inp.level && grounded === 0 ? clamp(1 - (behind - 0.5) / 2, 0.25, 1) : 1;
   flightComputer(s, inp, cmdT, envelope);
   if (grounded >= 2) { cmdT.x = 0; cmdT.y = 0; cmdT.z = 0; }
+  else if (envelope < 1) {
+    // Behind the profile the brake has priority over attitude too: the mixer gives attitude first
+    // call on the down-jets, and a full pitch correction would take most of the lift the stop needs.
+    cmdT.x *= envelope; cmdT.y *= envelope; cmdT.z *= envelope;
+  }
   return mix(eff, cmdT, out);
 }
 // The same, from outside a step, on the car as it stands: the valves the computer would open now.

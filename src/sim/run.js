@@ -9,6 +9,9 @@ import { v3 } from './m3.js';
 import { createDamage, updateDamage, damageFacts } from './damage.js';
 import { datan2, dacos, dhypot } from './dmath.js';
 
+// v15: LAND rolls out at the reveal's pace on no more thrust than the roll needs (the car falls
+// nearly free off the lip), then brakes late and hard through the blowdown to a set-down from 2.5 m;
+// down-jets 23 kN front / 16 kN rear (pitch-free 76.5 kN, 3.2 G); brakePeakG telemetry.
 // v14: the rigid-body engine (Rapier, deterministic build: docs/PHYSICS_ENGINE.md) owns every body
 // and contact. The roadster's hull is a rigid convex hull over compliant skirts; its bodywork folds
 // by the energy a contact puts into it; each parked vehicle is a 3D rigid body with its own mass,
@@ -27,9 +30,10 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // distribution; v7: body geometry; v6: The Show is one flight (off the Wall, over the row); parked
 // vehicles are bodies with mass, per-surface materials; v5: driver-relative steer/roll/yaw,
 // grip-limited steering; v4: sourced specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 14;
+export const SIM_VERSION = 15;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
+const G_WIN = 120;                      // 0.5 s of ticks: the braking peak's averaging window
 
 // The input log's channels. v11 appended `manual` and v0..v9 (one per nozzle, NOZZLE_SPEC order).
 const LEGACY_KEYS = ['throttle', 'brake', 'steer', 'pitch', 'roll', 'yaw', 'lift', 'thrust', 'retro', 'level', 'fan', 'assist'];
@@ -70,6 +74,10 @@ function newTelemetry(courseId) {
     zeroToSixty: null,
     // The Wall.
     rampEntrySpeed: 0, rampTick: -1, maxRampHeight: 0, progress: 0, invertedTime: 0, maxG: 0,
+    // The braking peak, read like the livestream's G-FORCE channel: the most specific force
+    // averaged over 0.5 s, while the down-jets brake a fall with the roof up (not the release kick
+    // or a contact spike, which maxG catches), and the height mid-window (m, CoM height over the ground less its height at rest).
+    brakePeakG: 0, brakePeakH: 0,
     launchHeight: 0, launchUpY: 1, launchProgress: 0, fellOff: false, landedOnRamp: false,
     // Damage (src/sim/damage.js): filled from the run's damage sensor when the book closes.
     damage: null,
@@ -88,6 +96,8 @@ export function createRun(courseId = DEFAULT_COURSE) {
     lastPacked: '',
     flippedTicks: 0, airTicks: 0, offTicks: 0,
     frames: [],                // see recordFrame for the layout
+    gWin: new Float64Array(G_WIN), gSum: 0,   // the last 0.5 s of specific force (g), for brakePeakG
+    hWin: new Float64Array(G_WIN),            // and the height over it (the peak is placed mid-window)
     t: newTelemetry(course.id),
   };
   run.impacts = run.car.impacts;   // impact events (src/sim/impacts.js): the crash, for the renderer and the replay
@@ -156,9 +166,15 @@ function advance(run, input) {
   if (Math.abs(lift - prevLift) > 0.08) t.thrustChanges++;
   // Felt acceleration in g (what the car's occupant would feel), the number the stunt is about.
   const ax = (c.vel.x - prevVx) / DT, ay = (c.vel.y - prevVy) / DT + 9.81, az = (c.vel.z - prevVz) / DT;
-  if (run.tick > 30) t.maxG = Math.max(t.maxG, Math.min(25, dhypot(ax, ay, az) / 9.81));
+  const g = Math.min(25, dhypot(ax, ay, az) / 9.81);
+  if (run.tick > 30) t.maxG = Math.max(t.maxG, g);
+  const wi = run.tick % G_WIN;
+  run.gSum += g - run.gWin[wi]; run.gWin[wi] = g; run.hWin[wi] = Math.max(0, c.pos.y - SPEC.comHeight);
   if (c.obstacleContact && !t.contact) { t.contact = true; t.contactSpeed = c.obstacleSpeed; t.contactTick = run.tick; }
   up(c, upv);
+  if (run.phase === 'air' && run.tick >= G_WIN && upv.y > 0.7 && c.vel.y < 0 && lift > 1 && run.gSum / G_WIN > t.brakePeakG) {
+    t.brakePeakG = run.gSum / G_WIN; t.brakePeakH = run.hWin[(run.tick + G_WIN / 2) % G_WIN];
+  }
   const airborne = c.grounded === 0 && !c.hullContact;
   const lx = c.pos.x, lz = c.pos.z;
 
@@ -258,7 +274,8 @@ function advance(run, input) {
   if (t.flipped) end = 'flipped';
   else if (t.contact && run.tick - t.contactTick > 480) end = 'contact';
   // (A car that comes to rest on its roof or side hasn't settled: it is flipped, once that's held.)
-  else if (run.phase === 'landed' && (speed < 1.2 || run.tick - t.touchTick > 240 * 5) && (upv.y >= 0.25 || run.tick - t.touchTick > 240 * 5)) end = 'settled';
+  // (It waits out the 0.3 s wheel-sync window first: LAND sets down at 0.8 m/s, already under 1.2.)
+  else if (run.phase === 'landed' && ((speed < 1.2 && run.tick - t.touchTick > 72) || run.tick - t.touchTick > 240 * 5) && (upv.y >= 0.25 || run.tick - t.touchTick > 240 * 5)) end = 'settled';
   else if (c.pos.z > COURSES[run.course].runout.zMax || c.pos.z < COURSES[run.course].runout.zMin) end = 'runout';
   else if (run.offTicks > 240 * 6) end = 'stalled';
   else if (run.tick >= MAX_TICKS) end = 'timeout';

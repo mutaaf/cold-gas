@@ -153,8 +153,8 @@ describe('the Show: one flight, off the Wall and over the row', () => {
     expect(re.car.pos).toEqual(run.car.pos);
     expect(scoreRun(re.t, { assist: true })).toEqual(card);
   });
-  it('letting go without boosting drops the car onto the row', () => {
-    const r = fly('show', { carry: 5 });
+  it('letting go too slow (3 m/s off the lip) drops the car onto the row', () => {
+    const r = fly('show', { carry: 3 });
     expect(r.t.contact).toBe(true);
     expect(scoreRun(r.t).verdict).toBe('Contact');
     expect(scoreRun(r.t).total).toBeLessThan(40);
@@ -202,7 +202,9 @@ describe('the reference runs land, and replay bit-exactly', () => {
       expect(run.t.sink).toBeLessThan(2);
       expect(run.t.tiltDeg).toBeLessThan(10);
       expect(card.total).toBeGreaterThan(65);
-      expect(card.total).toBeLessThan(95);
+      // A person can beat the reference: under 99 in Assist (the Wall reads 98.0 since SIM_VERSION
+      // 14's late burn left it 47 % of its gas), and Pro ×1.08 / Advanced ×1.15 multiply.
+      expect(card.total).toBeLessThan(99);
     });
     it(`${course}: replays exactly from its input log`, () => {
       const re = simulate(run.inputLog, course);

@@ -29,19 +29,24 @@ const flyDrill = (id, policy, course = 'show') => {
   return run;
 };
 
-describe('SIM_VERSION 14: the rigid-body engine', () => {
-  it('is version 14', () => expect(SIM_VERSION).toBe(14));
+describe('SIM_VERSION 15: the rigid-body engine and the reveal G trace', () => {
+  it('is version 15 (14: the rigid-body engine; 15: the reveal G trace, 0013)', () => expect(SIM_VERSION).toBe(15));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
   // single-point fan kept full suction while the car's floor hung past the lip), so the release is
-  // cleaner and the Wall lands nearer the mark. Nothing may get worse.
+  // cleaner and the Wall lands nearer the mark. Nothing may get worse. v15 (0013) falls free off the
+  // lip and brakes late and hard, which saves gas (LESSONS: one late, hard burn), and the references
+  // roll off the ledge instead of hanging (the Wall at 2.5 m/s like run 2, the Show at its 7.5 m/s
+  // carry): Wall gas left 44 % (efficiency 8.9), 3.6 m from the mark; Show 48 % (9.6), 1.5 m.
+  // Show 94.0, Wall 96.0, Lineup 85.3.
   it('keeps the reference runs: no worse than SIM_VERSION 13', () => {
     const runs = Object.fromEntries(['show', 'wall', 'lineup'].map((c) => [c, fly(c)]));
     const cards = Object.fromEntries(Object.entries(runs).map(([c, r]) => [c, scoreRun(r.t)]));
     // (+ the Integrity category, which a clean run scores ≈10: it lifts every reference a little)
-    expect(cards.show.total).toBeGreaterThanOrEqual(90.7 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(90.7 + 2);
-    expect(cards.wall.total).toBeGreaterThanOrEqual(92.3 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(92.3 + 3.5);
+    expect(cards.show.total).toBeGreaterThanOrEqual(90.7 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(94.0 + 0.5);
+    expect(cards.wall.total).toBeGreaterThanOrEqual(92.3 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(96.0 + 0.5);
+    expect(cards.wall.categories.efficiency).toBeGreaterThan(8.5);   // the late burn's saving (v13: 6.0)
     expect(Math.abs(cards.lineup.total - 86.3)).toBeLessThanOrEqual(1.05);
     for (const c of ['show', 'wall', 'lineup']) expect(cards[c].facts.damagePct).toBeLessThanOrEqual(2);
     expect(cards.wall.facts.padMiss).toBeLessThan(8);

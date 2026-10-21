@@ -62,7 +62,7 @@ export const drillsFor = (course) => DRILLS.filter((d) => d.courses.includes(cou
 // 0.15 s after the release: every decision after it is yours.
 export function buildDrill(drill, course) {
   const run = createRun(course);
-  const ap = createAutopilot(course, drill.hang ? { releaseAt: 0.93, hang: 999 } : {});
+  const ap = createAutopilot(course, drill.hang ? { releaseAt: 0.93, hang: 999, driveOff: false } : {});
   const st = { releasedTicks: 0, hanging: false };
   const idle = newInput();
   for (let i = 0; i < 240 * 60 && run.phase !== 'done'; i++) {

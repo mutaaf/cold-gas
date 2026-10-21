@@ -1,12 +1,12 @@
 ---
 id: 0013
 title: Release falls free and the brake peaks late, like the livestream G-FORCE trace
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: authenticity
 created: 2026-10-20
-pr:
+pr: 38
 by: critic
 ---
 
