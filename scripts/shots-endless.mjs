@@ -20,14 +20,16 @@ for (const tod of todsArg.split(',')) {
   const spots = await page.evaluate(() => {
     const d = window.__coldgas.drive, r = d.road;
     r.generate(16000);
-    const first = {}, names = ['mountain', 'coast', 'desert', 'forest'];
-    let run = 0;
-    for (let i = 40; i < r.n - 400; i++) {
-      run = r.biome[i] === r.biome[i - 1] ? run + 1 : 0;
-      const b = names[r.biome[i]];
-      if (run === 150 && first[b] == null) first[b] = (i - 60) * 3;
+    // The middle of each biome's longest stretch of road.
+    const best = {}, names = ['mountain', 'coast', 'desert', 'forest'];
+    let a = 40;
+    for (let i = 41; i < r.n - 400; i++) {
+      if (r.biome[i] === r.biome[a] && i < r.n - 401) continue;
+      const b = names[r.biome[a]], len = i - a;
+      if (!best[b] || len > best[b][1]) best[b] = [a, len];
+      a = i;
     }
-    return first;
+    return Object.fromEntries(Object.entries(best).map(([b, [s, len]]) => [b, (s + len / 2) * 3]));
   });
   console.log(tod, 'biomes at', JSON.stringify(spots));
   for (const [biome, s] of Object.entries(spots)) {

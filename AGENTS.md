@@ -154,7 +154,13 @@ src/sim/              PURE, shared with the Worker:
   coach.js              re-flies a log and names the fixes, with the numbers (results sheet)
   roads.js              FREE DRIVE's real roads as a course: parse the baked asset, segment grid,
                           ribbon (width, grade, banking) + conformed terrain + rails/walls/tunnels
-                          as one `surface()` (courses.js defers to `course.sdf`); unscored
+                          as one `surface()` (courses.js defers to `course.sdf`); unscored.
+                          Beside the road: a graded 1:4 apron, then the structural slopes
+  endless.js            FREE DRIVE's endless road: seeded terrain (four biomes) and a road generated
+                          northward forever, the same shape as a baked road; `course.sdf` (docs/WORLD.md)
+  noise.js              integer-hashed value noise with analytic gradients (pure, deterministic)
+  objects.js            placed objects (ramps, loops, boost pads, power-ups): deterministic ids,
+                          SDF colliders, triggers, collider primitives for another engine
 src/build/            BUILD · POWER-UPS · SIDE QUESTS (the arcade layer; Free Drive and the Sandbox only,
                         never a scored event): catalogue.js (pieces, materials, power-ups, budgets) ·
                         colliders.js (each piece as an SDF + the mesh drawn from the same numbers: the
@@ -169,6 +175,10 @@ src/drive/            FREE DRIVE (lazy chunk): index.js (picker → load → dri
                         load.js (fetch + gunzip from our origin), camera.js (chase / bumper /
                         cinema), hud.js (picker cards, HUD, minimap, credits), pilot.js (a road-
                         following driver for tests and shots), manifest.js (GENERATED), drive.css
+src/world/            THE ENDLESS WORLD, drawn (lazy, docs/WORLD.md): endless-world.js (LOD rings,
+                        budgets, caches, the world API), terrain.worker.js (tilegen.js tiles and
+                        roadchunk.js road chunks off the main thread), cache.js (LRU + IndexedDB),
+                        pool.js (instanced props), look.js, objects-view.js
 src/render/           three.js (r186):
   scene.js              renderer, composer, course switching (`setCourse`), lineup world,
                           sliced first load (`stage.ready`: build, bake, compileAsync, fade in)
@@ -237,6 +247,7 @@ state. It never writes it.
 | `?gfx=low\|mid\|high` | Force a graphics tier |
 | `?drive=stelvio\|transfagarasan\|bigsur\|atlantic[&tod=dusk]` | Free Drive on that road |
 | `?drive=sandbox[#b=<build>]` | The Sandbox (build, power-ups, side quests); `#b=` carries a shared build (also on a road link) |
+| `?drive=endless[&seed=<text>][&tod=dusk][&idb=0]` | Free Drive's endless road from that seed (same seed, same world) |
 
 Renaming or removing a deep link breaks the mutaafaziz.com launcher and Digital Craft /labs.
 Keep the old ones working.
@@ -255,6 +266,12 @@ node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title
 node scripts/roads/build.mjs [road]             rebuild Free Drive roads from OSM + terrain (network; cached)
 node scripts/perf-drive.mjs <url> [phone|desktop] [roads] [secs]   Free Drive frame times (phone = 4× CPU throttle)
 node scripts/shots-drive.mjs <outdir> <url> [phone|land] [roads] [tods]   Free Drive screenshots
+node scripts/perf-endless.mjs <url> [phone|desktop] [cruise|drive] [secs] [seed]   endless: fps, main ms/frame, worker ms/tile, memory, fell-behind frames
+node scripts/shots-endless.mjs <outdir> <url> [desktop|phone|land] [seed] [tods]   endless: each biome, chase + cinema
+node scripts/endless-probe.mjs [seed] [km] [secs]     endless road in Node: generation speed, biomes, bridges, a drive
+node scripts/grass-probe.mjs [roads] [off] [angle]    off the road and back on, every road (the verge regression)
+node scripts/verge-steps.mjs [roads]                  steps in the ground beside the road
+node scripts/ref-hash.mjs                             fingerprints of the stunt references (a physics change is bit-neutral or not)
 ```
 
 Local Worker: `npx wrangler dev` (serves dist + the API with a local D1, and uses

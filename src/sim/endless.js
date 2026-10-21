@@ -68,7 +68,7 @@ export function biomeWeights(seed, x, z, w, gx, gz) {
   fbm1(seed ^ 0xa11ce, z, 11000, n1); fA[0] = n1[0]; fA[1] = 0; fA[2] = n1[1];
   fbm(seed ^ 0xb0b, x * 0.25, z, 6000, 2, 0.5, fB); fB[1] *= 0.25;
   fbm(seed ^ 0xc0de, x * 0.25, z, 5200, 2, 0.5, fC); fC[1] *= 0.25;
-  smooth(0.2, 0.5, fA[0], sm); const c = sm[0], cx = 0, cz = sm[1] * fA[2];
+  smooth(0.28, 0.52, fA[0], sm); const c = sm[0], cx = 0, cz = sm[1] * fA[2];
   smooth(-0.06, 0.24, fC[0], sm); const m = sm[0], mx = sm[1] * fC[1], mz = sm[1] * fC[2];
   smooth(0.0, 0.2, fB[0], sm); const d = sm[0], dX = sm[1] * fB[1], dZ = sm[1] * fB[2];
   const nc = 1 - c, nm = 1 - m, nd = 1 - d;
@@ -122,11 +122,14 @@ function biomeHeight(seed, b, x, z, V, out) {
     // metres inland (a road on a shelf high above the sea), A·sat(e/L), smooth and C1.
     const A = 0.55 * V[0] + 45, L = 170, k = e / L, r = Math.sqrt(1 + k * k), sat = k / r, dsat = 1 / (r * r * r) / L;
     const base = A * sat + 0.03 * (e > 0 ? e : 0), dbase = A * dsat + (e > 0 ? 0.03 : 0);
-    fbm(seed ^ 0x1003, x, z, 900, 3, 0.5, t3b);
-    ridged(seed ^ 0x1008, x, z, 1400, 3, 0.5, t3);
-    out[0] = base + 24 * t3b[0] + 30 * t3[0] - 10;
-    out[1] = dbase * ex + 24 * t3b[1] + 30 * t3[1];
-    out[2] = dbase * ez + 0.55 * V[1] * sat + 24 * t3b[2] + 30 * t3[2];
+    // Rolling headlands inland, gullies and cliffs at the water (more of both away from the road).
+    fbm(seed ^ 0x1003, x, z, 700, 3, 0.5, t3b);
+    ridged(seed ^ 0x1008, x, z, 1200, 3, 0.5, t3);
+    const R = 60 * t3b[0] + 70 * t3[0], Rx = 60 * t3b[1] + 70 * t3[1], Rz = 60 * t3b[2] + 70 * t3[2];
+    const gc = 0.35 + 0.65 * g, gcx = 0.65 * gx, gcz = 0.65 * gz;
+    out[0] = base + gc * R - 12;
+    out[1] = dbase * ex + gcx * R + gc * Rx;
+    out[2] = dbase * ez + 0.55 * V[1] * sat + gcz * R + gc * Rz;
   } else if (b === 2) {
     // Desert: a high plain with mesas (flat-topped tables with steep sides) and dunes.
     fbm(seed ^ 0x1004, x, z, 3000, 3, 0.5, t3);
@@ -134,9 +137,11 @@ function biomeHeight(seed, b, x, z, V, out) {
     smooth(0.16, 0.3, t3b[0], sm);
     const R = 70 * t3[0] + 95 * sm[0], Rx = 70 * t3[1] + 95 * sm[1] * t3b[1], Rz = 70 * t3[2] + 95 * sm[1] * t3b[2];
     fbm(seed ^ 0x1006, x, z, 220, 2, 0.5, t3b);
-    out[0] = V[0] + 40 + g * R + 7 * t3b[0];
-    out[1] = gx * R + g * Rx + 7 * t3b[1];
-    out[2] = V[1] + gz * R + g * Rz + 7 * t3b[2];
+    // The tables stand closer to the road than other biomes' relief does (a road through mesas).
+    const gd = 0.4 + 0.6 * g, gdx = 0.6 * gx, gdz = 0.6 * gz;
+    out[0] = V[0] + 40 + gd * R + 7 * t3b[0];
+    out[1] = gdx * R + gd * Rx + 7 * t3b[1];
+    out[2] = V[1] + gdz * R + gd * Rz + 7 * t3b[2];
   } else {
     // Forest: rolling hills.
     fbm(seed ^ 0x1007, x, z, 1800, 4, 0.5, t3);
@@ -437,8 +442,9 @@ export function createEndlessCourse(seed, { objects = null, name = 'Endless' } =
       const objs = course.objects;
       if (objs && objs.count) {
         const d = objs.sdf(x, y, z, tmp, phi);
-        if (d < phi) { phi = d; out.x = tmp.x; out.y = tmp.y; out.z = tmp.z; out.mat = tmp.mat; out.obstacle = tmp.obstacle; out.body = null; }
+        if (d < phi) { phi = d; out.x = tmp.x; out.y = tmp.y; out.z = tmp.z; out.mat = tmp.mat; out.obstacle = tmp.obstacle; out.body = null; out.object = tmp.object; return phi; }
       }
+      out.object = null;
       return phi;
     },
   };

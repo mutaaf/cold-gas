@@ -327,7 +327,9 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
     // Road chunks: generated far enough, built within roadR.
     road.ensure(cz + cfg.roadR + 400);
     const nC = Math.floor((road.n - 4) / CHUNK);
-    const s0 = nearestSample(road, cx, cz, fx.hint ?? -1, 400);
+    let s0 = nearestSample(road, cx, cz, fx.hint ?? -1, 400);
+    // A jump (a reset, a teleport): search the whole road again.
+    if (Math.hypot(road.x[s0] - cx, road.z[s0] - cz) > 300) s0 = nearestSample(road, cx, cz, -1);
     fx.hint = s0;
     const span = Math.ceil((cfg.roadR * 1.6) / (CHUNK * road.meta.spacing));
     const c0 = Math.max(0, Math.floor(s0 / CHUNK) - span), c1 = Math.min(nC - 1, Math.floor(s0 / CHUNK) + span);

@@ -3,7 +3,34 @@
 // mix, height, slope, forest), and the shader adds what a 4 m mesh can't hold: patchy grass and
 // soil, rock relief, and the sea where the ground is under it.
 import * as THREE from 'three';
-import { patch, WATER_GLSL } from '../render/roadlook.js';
+import { patch } from '../render/roadlook.js';
+
+// The sea, as the real roads draw it (src/render/roadlook.js), but with its ripples fading out with
+// distance: an endless coast shows kilometres of water at a grazing angle, where 0.6 m ripples alias
+// into glitter.
+const WATER = /* glsl */`
+  uniform vec3 cgWater; uniform vec3 cgWaterDeep; uniform vec3 cgZenith; uniform vec3 cgHorizon;
+  vec3 cgWaterShade(vec3 wpos, float depth) {
+    vec3 v = normalize(cameraPosition - wpos);
+    vec2 p = wpos.xz;
+    float t = cgTime, dist = length(cameraPosition - wpos);
+    float near = 1.0 - smoothstep(40.0, 420.0, dist), mid = 1.0 - smoothstep(300.0, 2600.0, dist);
+    float n1 = cgNoise(p * 0.11 + vec2(t * 0.05, t * 0.03)), n2 = cgNoise(p * 0.43 - vec2(t * 0.11, -t * 0.07));
+    float n3 = cgNoise(p * 1.7 + vec2(t * 0.3, t * 0.2));
+    float a1 = 0.05 + 0.17 * mid, a2 = 0.14 * near, a3 = 0.06 * near;
+    vec3 n = normalize(vec3((n1 - 0.5) * a1 + (n2 - 0.5) * a2 + (n3 - 0.5) * a3, 1.0, (n2 - 0.5) * a2 * 1.6 + (n1 - 0.5) * a1 * 0.6 + (n3 - 0.5) * a3));
+    float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+    vec3 r = reflect(-v, n);
+    vec3 sky = mix(cgHorizon, cgZenith, smoothstep(0.0, 0.5, r.y));
+    vec3 body = mix(cgWater, cgWaterDeep, smoothstep(0.5, 18.0, -depth));
+    vec3 c = mix(body, sky, fres * 0.85);
+    float sd = max(dot(r, cgSunDir), 0.0);
+    c += cgSunGlow * (pow(sd, 320.0) * 4.0 * (0.3 + 0.7 * near) + pow(sd, 24.0) * 0.14);
+    float foam = smoothstep(-1.6, -0.05, depth) * smoothstep(0.35, 0.75, cgNoise(p * 0.9 + vec2(t * 0.4, 0.0)) * 0.6 + cgNoise(p * 3.1 - t * 0.6) * 0.5 * near);
+    c = mix(c, vec3(0.92, 0.95, 0.96) * (0.5 + 0.5 * max(cgSunDir.y, 0.15)), foam * 0.8);
+    return c;
+  }
+`;
 
 export function endlessTerrainMaterial(U) {
   const mat = new THREE.MeshLambertMaterial({ color: 0xffffff });
@@ -11,7 +38,7 @@ export function endlessTerrainMaterial(U) {
   return patch(mat, U, {
     vertex: 'attribute vec4 aCol; attribute float aDepth; varying vec4 vCol; varying float vDepth;',
     vertexMain: 'vCol = aCol; vDepth = aDepth * 31.75;',
-    fragment: `varying vec4 vCol; varying float vDepth; ${WATER_GLSL}`,
+    fragment: `varying vec4 vCol; varying float vDepth; ${WATER}`,
     color: `float cgBump = 0.0;
     {
       vec3 c = pow(vCol.rgb, vec3(2.2));

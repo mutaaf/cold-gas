@@ -192,8 +192,9 @@ function plant(gen, lvl, x0, z0, size, spacing) {
       // Each prop's chance here: its biomes, squared so a blend fades them out quickly (no spruce in
       // the desert), the forest density, and the ground it can stand on.
       const m2 = wv[0] * wv[0], c2 = wv[1] * wv[1], d2 = wv[2] * wv[2], f2 = wv[3] * wv[3];
-      if (type === 'conifer') p = (m2 * (h < 820 ? 1 : 0) + f2 * 0.6) * sstep(-0.05, 0.25, forest) * (slope < 0.9 ? 1 : 0);
-      else if (type === 'broad') p = (f2 * 0.55 + c2 * 0.3) * sstep(0.0, 0.3, forest) * (slope < 0.6 ? 1 : 0);
+      const dry = (1 - wv[2]) * (1 - wv[2]) * (1 - wv[2]);
+      if (type === 'conifer') p = (m2 * (h < 820 ? 1 : 0) + f2 * 0.6) * dry * (1 - wv[1]) * sstep(-0.05, 0.25, forest) * (slope < 0.9 ? 1 : 0);
+      else if (type === 'broad') p = (f2 * 0.55 + c2 * 0.3) * dry * sstep(0.0, 0.3, forest) * (slope < 0.6 ? 1 : 0);
       else if (type === 'shrub') p = (d2 * 0.35 + c2 * 0.5 + m2 * 0.12 + f2 * 0.1) * (0.4 + sstep(-0.2, 0.3, forest)) * (slope < 0.7 ? 1 : 0);
       else p = m2 * (0.02 + sstep(0.3, 0.7, slope)) + d2 * (0.05 + sstep(0.2, 0.45, slope)) + c2 * sstep(0.35, 0.7, slope) * 0.6 + f2 * 0.015;
       if (r3 > p) continue;
