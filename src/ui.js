@@ -128,8 +128,8 @@ export function createUI() {
     const sk = Math.round(tw.sink * 10);
     if (sk !== last.sink) { ui.sink.textContent = (Math.max(0, sk) / 10).toFixed(1); last.sink = sk; }
     // Pitch, whole degrees: up the deck 0–180 (unsigned), in the air signed (+ nose up). The bank is the ADI's.
-    const pt = Math.round(pitch);
-    if (pt !== last.pitch) { ui.pitch.textContent = airborne && pt > 0 ? `+${pt}` : String(pt); last.pitch = pt; }
+    const pt = Math.round(pitch), pk = pt * 2 + (airborne ? 1 : 0);   // the sign shows only in the air
+    if (pk !== last.pitch) { ui.pitch.textContent = airborne && pt > 0 ? `+${pt}` : String(pt); last.pitch = pk; }
     // The mission clock: T− in the countdown, T+ from the green light, in tenths.
     const cl = Math.round(clock * 10);
     if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; }

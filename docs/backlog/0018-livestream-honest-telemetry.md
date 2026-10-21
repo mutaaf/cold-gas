@@ -82,3 +82,8 @@ every strip cell lay inside x 90–374, and "Air" was already "N₂". This PR ad
   160–195 in the test.
 - Landscape phones hide PITCH (as #36 hid ATT); ALT, G, N₂ and SINK/FAN stay. The desktop
   instruments sit 16 px higher to clear the strip's added N₂ line.
+- Contrast: `scripts/hud-audit.mjs`, quick and phones sets. 0 labels under 4.5:1 and 0 text under 11 px
+  at every phase, touchdown included, the same as main; the only overlap is Free Drive's cue × stats,
+  which main has too.
+- Not done: ft beside ALT (the ticket's "or"). The phone strip has no room for it next to the
+  BLOWDOWN tag; left for the scout to re-file if still wanted.

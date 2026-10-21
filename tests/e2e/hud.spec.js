@@ -68,3 +68,26 @@ for (const [name, opts, must] of SIZES) {
     await page.close();
   });
 }
+
+// The wiring, read off the page: PITCH on the deck while hanging on the ledge (the livestream's
+// 170°), G settled at 1, and the gauge switching to BLOWDOWN once the tanks fall below the regulator.
+test('HUD telemetry is wired: deck PITCH on the ledge, BLOWDOWN below the regulator', async ({ page }) => {
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/coldgas/?gfx=low');
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+  await page.evaluate(async () => { await window.__coldgas.physicsReady; window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); window.__coldgas.startDrill('ledge'); });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.run.phase === 'ramp', null, { timeout: 30_000 });
+  await expect.poll(async () => Number(await page.locator('[data-pitch]').textContent()), { timeout: 10_000 }).toBeGreaterThanOrEqual(165);
+  const pitch = Number(await page.locator('[data-pitch]').textContent());
+  expect(pitch).toBeLessThanOrEqual(175);
+  await expect(page.locator('[data-tank]')).toHaveAttribute('data-gas', 'reg');
+  // Drain the tanks to 150 kg: below the regulator (≈192 kg), so the gauge reads blowdown and bar.
+  await page.evaluate(() => { window.__coldgas.S.run.car.air = 150; });
+  await expect(page.locator('[data-tank]')).toHaveAttribute('data-gas', 'blowdown');
+  await expect(page.locator('[data-n2-state]')).toHaveText('Blowdown');
+  await expect(page.locator('[data-air]')).toHaveText(/^1[45]\d$/);
+  const bar = Number(await page.locator('[data-tank-bar]').textContent());
+  expect(Math.abs(bar - 690 * (Number(await page.locator('[data-air]').textContent()) / 297) ** 1.375)).toBeLessThanOrEqual(3);
+  expect(errors).toEqual([]);
+});

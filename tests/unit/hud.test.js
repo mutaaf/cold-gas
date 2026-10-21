@@ -5,7 +5,8 @@
 import { describe, it, expect } from 'vitest';
 import { createRun, stepRun } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
-import { CAR, feedPressure } from '../../src/sim/vehicle.js';
+import { CAR, feedPressure, pressureOf } from '../../src/sim/vehicle.js';
+import { SPEC } from '../../src/sim/spec.js';
 import { hudPitch, createGWindow, tankBar, gasState } from '../../src/hud-telemetry.js';
 
 // Fly the Wall reference and record what the HUD would show every tick.
@@ -63,6 +64,8 @@ describe('HUD telemetry (0018)', () => {
     expect(CAR.airMass).toBe(297);
     expect(tankBar(297)).toBeCloseTo(690, 6);
     for (const m of [297, 250, 200, 150, 100, 50, 10]) expect(Math.abs(tankBar(m) - 690 * (m / 297) ** 1.375)).toBeLessThanOrEqual(2);
+    // …and it is the same blowdown the thrusters fly: below the regulator, feed = tank / regulated line.
+    for (let m = 10; m < 190; m += 7) expect(tankBar(m) / 690).toBeCloseTo(pressureOf(m) * SPEC.regulatedFraction, 9);
     expect(tankBar(0)).toBe(0);
     expect(tankBar(-1)).toBe(0);
   });
