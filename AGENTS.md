@@ -202,6 +202,9 @@ src/render/           three.js (r186):
                           DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone
+src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
+                        stick shaping, reverse at a standstill; shared with the drive bench and tests
+src/render/interp.js  the car drawn between 240 Hz ticks (no sim change)
 src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
                         hold to land (LAND + the carry over the row); plain sim inputs, pure, no DOM
 src/touch-settings.js touch scheme (one-thumb | classic), hand, tilt steering (DeviceOrientation, iOS
@@ -285,6 +288,7 @@ node scripts/endless-probe.mjs [seed] [km] [secs]     endless road in Node: gene
 node scripts/grass-probe.mjs [roads] [off] [angle]    off the road and back on, every road (the verge regression)
 node scripts/verge-steps.mjs [roads]                  steps in the ground beside the road
 node scripts/ref-hash.mjs                             fingerprints of the stunt references (a physics change is bit-neutral or not)
+node scripts/drive-feel.mjs [bench|road] [assist|pro]   driving feel: step steer, lane change, on-centre, 60–0, slides; a keyboard driver on the four roads
 ```
 
 Local Worker: `npx wrangler dev` (serves dist + the API with a local D1, and uses

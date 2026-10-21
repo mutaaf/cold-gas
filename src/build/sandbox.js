@@ -12,6 +12,8 @@ import { createDriveCamera } from '../drive/camera.js';
 import { createArenaCourse, inArena, ARENA } from './arena.js';
 import { createArenaWorld } from './arena-render.js';
 import { createBuildLayer } from './layer.js';
+import { createPoseLerp } from '../render/interp.js';
+import { createReverse } from '../hands.js';
 
 const D2R = Math.PI / 180;
 const START = { x: 0, z: -165, yaw: 0 };
@@ -22,6 +24,7 @@ export function createSandbox(ctx) {
   const camera = stage.camera;
   const st = { active: false, paused: false, car: null, course: null, world: null, layer: null, cam: null, acc: 0, airT: 0, flipT: 0, fan: false, hud: null, ground: 0 };
   const comps = [0, 0, 0, 0], spins = [0, 0, 0, 0];
+  const poseLerp = createPoseLerp(), reverse = createReverse();
   let hudRoot = null;
 
   // The build layer's view of this world.
@@ -159,19 +162,18 @@ export function createSandbox(ctx) {
         const phase = st.airT > 0.25 ? 'air' : 'drive';
         Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist(), undefined, false, c));
         if (st.fan) inp.fan = 1;
-        if (phase === 'drive') {
-          const fz = 1 - 2 * (c.quat.x * c.quat.x + c.quat.y * c.quat.y), fx = 2 * (c.quat.x * c.quat.z + c.quat.w * c.quat.y);
-          const vf = c.vel.x * fx + c.vel.z * fz;
-          if (inp.brake > 0 && inp.throttle === 0 && vf < 0.8) { inp.throttle = -0.35 * inp.brake; inp.brake = 0; }
-        }
+        // Reverse: hold the brake at a standstill (src/hands.js: a stop holds before it backs up).
+        if (phase === 'drive') reverse(c, inp);
         layer.preStep(c, inp);
+        poseLerp.before(c);
         step(c, inp);
         layer.postStep(c);
         st.acc -= DT;
       }
       c = st.car;
       for (let i = 0; i < 4; i++) { comps[i] = c.wheels[i].compression; spins[i] = c.wheels[i].spin; }
-      syncCar(c.pos, c.quat, comps, spins, c.steer);
+      const drawn = poseLerp.pose(c, st.acc / DT);
+      syncCar(drawn.pos, drawn.quat, comps, spins, c.steer);
       crash.feed(c.impacts, c.tick, c.vel);
       watchdog(dt, c);
     }

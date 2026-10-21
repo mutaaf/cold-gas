@@ -10,6 +10,17 @@ import { roadSurface, terrainAt, nearestSample } from '../sim/roads.js';
 export const CAM_MODES = ['chase', 'bumper', 'cinema'];
 const tmp = new THREE.Vector3(), fwd = new THREE.Vector3(), upv = new THREE.Vector3(), want = new THREE.Vector3(), look = new THREE.Vector3();
 const sn = { x: 0, y: 0, z: 0 }, t3 = [0, 0, 0];
+const DEG = Math.PI / 180;
+// A phone held upright sees a sliver of the world: at the landscape field of view (56° tall) a
+// 390×844 screen is 28° wide, and from 6 m behind the car filled the frame, the HUD covered the
+// sky and the road ahead was hidden behind the car. Upright, the chase widens its view until it is
+// at least H_MIN wide (up to V_MAX tall), sits further back and higher, and looks further ahead.
+const H_MIN = 46, V_MAX = 80;
+export function fovFor(base, aspect) {
+  if (!(aspect < 1)) return base;
+  const need = (2 * Math.atan(Math.tan((H_MIN / 2) * DEG) / aspect)) / DEG;
+  return Math.min(V_MAX, Math.max(base, need));
+}
 
 // `sdf` (optional): the world's distance field for keeping the camera clear of it (the Sandbox and
 // the build layer's pieces); without a road there's no cinema, only chase and bumper.
@@ -37,10 +48,12 @@ export function createDriveCamera(camera, road, sdf = null) {
     const k = 1 - Math.exp(-dt * (3.2 + speed * 0.04));
     st.hx += (fx - st.hx) * k; st.hz += (fz - st.hz) * k;
     const hl = Math.hypot(st.hx, st.hz) || 1; st.hx /= hl; st.hz /= hl;
-    const back = Math.min(9.5, 6.3 + speed * 0.04), up = 1.85 + Math.min(1.2, speed * 0.008);
+    const tall = camera.aspect < 1;
+    const back = Math.min(9.5, 6.3 + speed * 0.04) * (tall ? 1.3 : 1), up = (1.85 + Math.min(1.2, speed * 0.008)) * (tall ? 1.45 : 1);
     want.set(car.pos.x - st.hx * back, car.pos.y + up, car.pos.z - st.hz * back);
     clearance(want, 1.1);
-    look.set(car.pos.x + st.hx * 4, car.pos.y + 0.85, car.pos.z + st.hz * 4);
+    const ahead = tall ? 9 : 4;
+    look.set(car.pos.x + st.hx * ahead, car.pos.y + 0.85, car.pos.z + st.hz * ahead);
     if (!st.init) { st.pos.copy(want); st.look.copy(look); st.init = true; }
     const kp = 1 - Math.exp(-dt * 12), ky = 1 - Math.exp(-dt * 7);
     st.pos.x += (want.x - st.pos.x) * kp; st.pos.z += (want.z - st.pos.z) * kp; st.pos.y += (want.y - st.pos.y) * ky;
@@ -49,7 +62,7 @@ export function createDriveCamera(camera, road, sdf = null) {
     camera.up.set(0, 1, 0);
     camera.position.copy(st.pos);
     camera.lookAt(st.look);
-    st.fov += (56 + Math.min(20, speed * 0.13) - st.fov) * (1 - Math.exp(-dt * 2.5));
+    st.fov += (fovFor(56, camera.aspect) + Math.min(20, speed * 0.13) * (camera.aspect < 1 ? 0.4 : 1) - st.fov) * (1 - Math.exp(-dt * 2.5));
   }
 
   function bumper(car, speed) {
@@ -58,7 +71,7 @@ export function createDriveCamera(camera, road, sdf = null) {
     camera.position.copy(car.pos).addScaledVector(fwd, 0.55).addScaledVector(upv, 0.62);
     camera.up.copy(upv);
     camera.lookAt(tmp.copy(camera.position).addScaledVector(fwd, 30).addScaledVector(upv, -0.6));
-    st.fov = 66 + Math.min(10, speed * 0.06);
+    st.fov = fovFor(66, camera.aspect) + Math.min(10, speed * 0.06) * (camera.aspect < 1 ? 0.4 : 1);
     st.init = false;
   }
 
