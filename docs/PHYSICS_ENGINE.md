@@ -85,7 +85,7 @@ same IEEE-754 semantics; run `scripts/engine-determinism.mjs` on a machine where
   The engine's origin moves with the car in 384 m steps (the
   engine stores single-precision floats; the roads span 6.5 km), translating what is built. On the
   Show, the Wall and the Lineup, the stage's fixtures (uplights, searchlight drums, floodlight poles)
-  are static colliders, and the launch complex beyond the stage (src/sim/complex.js: 34 colliders)
+  are static colliders, each built while the car is within 3 m of it, and the launch complex beyond the stage (src/sim/complex.js: 34 colliders)
   is built the tick the car comes within 150 m of it and dropped past 180 m (docs/OBJECTS.md).
 - `src/sim/vehicle.js`: the roadster's own force models (below), then one engine step.
 

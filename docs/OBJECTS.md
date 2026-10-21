@@ -14,9 +14,9 @@ solid where it is drawn, from the same numbers. Audited 2026-10-21 (branch `worl
 | Show, Lineup | The parked row (Sedan, Crossover, Semi, Pickup, Cab) | body: own mass, CoM, inertia, four (six) suspended parked tyres | unchanged; drawn **between ticks** now (interpolated, live and replay) | courses.js LINEUP_SPEC, docs/VEHICLES.md |
 | Show, Wall | The Wall's deck (the curl) | static trimesh | unchanged | courses.js wallProfile |
 | Show, Wall | The truss tower's chords, the posts under the curl | static boxes | unchanged | world.js wallSteel |
-| Show, Wall | The two uplights at the foot of the curl | pixels | **static boxes** | courses.js FIXTURES |
-| Show, Wall | Eight searchlight drums beside the curl | pixels (not drawn at all on `gfx=low`) | **static cylinders**, drawn on every tier (beams off on low) | courses.js FIXTURES |
-| Lineup | Twelve floodlight poles along the run-up | pixels | **static cylinders** | courses.js FIXTURES |
+| Show, Wall | The two uplights at the foot of the curl | pixels | **static boxes** (each in the engine while the car is within 3 m of it) | courses.js FIXTURES |
+| Show, Wall | Eight searchlight drums beside the curl | pixels (not drawn at all on `gfx=low`) | **static cylinders** (the same), drawn on every tier (beams off on low) | courses.js FIXTURES |
+| Lineup | Twelve floodlight poles along the run-up | pixels | **static cylinders** (the same) | courses.js FIXTURES |
 | All stunts | Concrete slab, landing pad | static (the pad a paint material) | unchanged | courses.js |
 | Show, Wall, Lineup | **The launch complex**: hardstand, launch mount (deck + four columns), the vehicle on its hold-downs, strongback with its arm, white room and clamp arms, three lightning masts, two flood masts, the water tank and its legs, three buildings, three tank-farm spheres | pixels | **static colliders** (≈ 33: hulls, boxes, cylinders, balls), streamed in only within 150 m of the pad | src/sim/complex.js |
 | Show, Wall, Lineup | **The rocket's engines** | a cosmetic glow on the title | **mechanics**: a static fire integrated from the engines (thrust, mass flow, mass depletion, hold-down vs mount bearing), on the range's schedule in a run; its jet out of the flame trench shoves a car parked in it | src/sim/rocket.js, docs/ROCKET.md |
@@ -84,8 +84,10 @@ game depends on them, so they don't touch the sim.
 
 ## The budget
 
-- **The scored replays** pay, per tick, one distance check for the complex and nothing else new
-  while the car is on the stage; the references are bit-identical (Show 94, Wall 96, Lineup 92).
+- **The scored replays** pay, per tick, one distance check for the complex and one per stage fixture
+  (a dozen); the fixtures themselves are in the engine only while the car is within 3 m of one (left
+  in all run long, they cost a replay ≈ 4 %: every ray and the broad phase carried them). The
+  references are bit-identical (Show 94, Wall 96, Lineup 92).
 - **Loose props**: at most `PROP_CAP` (48) in the engine, the nearest; at most `PROP_BUILDS` (8)
   brought in a tick (a new body or one from the pool); asleep until something touches them; pooled
   per kind and scale when they stream out (no bodies are freed and remade on the way back).
@@ -96,23 +98,24 @@ game depends on them, so they don't touch the sim.
 - **Render**: the props are instanced per kind (one draw call each), their matrices written from
   the bodies once a frame; nothing is allocated per frame.
 
-`node scripts/objects-bench.mjs` (Node 25, M1 Max; median of 5 passes after a warm-up; quiet
-machine, pass 1 of an interleaved A/B against the base branch):
+`node scripts/objects-bench.mjs` (Node 25, M1 Max; each figure the median of 5 passes after a
+warm-up; three interleaved A/B runs against the base branch, their range):
 
-| | before | after |
+| | before (base) | after |
 |---|---|---|
-| Show reference, Worker verify path | 132.2 ms (0.038 ms/tick) | 137.0 ms (0.039) |
-| Wall reference | 141.6 ms (0.033) | 145.7 ms (0.034) |
-| Lineup reference | 61.7 ms (0.018) | 63.5 ms (0.019) |
-| Lineup crash into the row | 61.0 ms (0.040) | 69.6 ms (0.046)* |
-| Show: parked in the trench's jet through a static fire | — | 0.043 ms/tick, worst tick 0.89 ms (the complex built) |
-| Sandbox: 6 parked cars floored through (static boxes before) | 0.030 ms/tick, worst 0.31 | — |
-| Sandbox: 6 parked cars, 30 cones, 10 barriers floored through | — | 0.067 ms/tick, worst 2.8 ms** |
+| Show reference, the Worker's verify path | 130.3–132.3 ms (0.038 ms/tick) | 132.5–135.8 ms (0.038) |
+| Wall reference | 139.5–141.9 ms (0.033) | 141.9–143.5 ms (0.033) |
+| Lineup reference | 58.9–61.1 ms (0.018) | 61.1–61.7 ms (0.018) |
+| Lineup crash into the row | 60.5–61.3 ms (0.040) | 60.4–60.9 ms (0.040) |
+| Show: parked in the trench's jet through a static fire | — | 0.042 ms/tick, worst tick 0.82 ms (the tick the complex is built) |
+| Sandbox: 6 parked cars floored through (static boxes before) | 0.030 ms/tick, worst 0.31–0.36 | — |
+| Sandbox: 6 parked cars, 30 cones, 10 barriers floored through | — | 0.063 ms/tick, worst 0.50–1.15 |
 
-\* Within the run-to-run spread on this machine (the same script, six interleaved passes under load:
-before 124–230 ms, after 91–139 ms). \*\* Before `PROP_BUILDS`; the first tick built all 40 props.
-A 60 fps frame runs 4 ticks: the slalom costs 0.27 ms of a 16.7 ms frame on a laptop, ≈ 1.1 ms on a
-4×-throttled phone. `tests/unit/objects.test.js` holds a ceiling ten times the measured cost.
+The same references by CPU time (process.cpuUsage, best of 12, three alternating runs): Show
+122.5–123.5 → 122.9–125.1 ms, Wall 137.6–137.8 → 137.8–139.9, Lineup 55.5–56.9 → 56.8–57.7: within
+about 1 %, the run-to-run spread. A 60 fps frame runs 4 ticks: the slalom costs 0.25 ms of a 16.7 ms
+frame on a laptop, ≈ 1 ms on a 4×-throttled phone. `tests/unit/objects.test.js` holds a ceiling ten
+times the measured cost.
 
 ## Deferred
 

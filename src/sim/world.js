@@ -162,7 +162,7 @@ export function createWorld(course) {
     minX: 0, maxX: 0, minZ: 0, maxZ: 0, maxY: 0, stream: null, chunk: null, freed: false, solids: null, curl: false, curlOn: true,
     // The run's tick (src/sim/vehicle.js sets it: the static fire's clock), the roadster's attitude,
     // the launch complex (null where there is none) and the loose props in the engine now.
-    tick: 0, carQuat: null, site: null, props: [],
+    tick: 0, carQuat: null, site: null, props: [], fixtures: null,
     hit: { t: 0, nx: 0, ny: 1, nz: 0, mat: MATERIALS.concrete, body: null, car: false, x: 0, y: 0, z: 0 },
     ray: new R.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }),
     // How many colliders the roadster's hull is in contact with (the engine's collision events):
@@ -202,13 +202,12 @@ export function createWorld(course) {
     }
     if (course.ramp) { const k = kickerMesh(); colliderFor(w, R.ColliderDesc.trimesh(k.v, k.idx, R.TriMeshFlags.FIX_INTERNAL_EDGES), MATERIALS.deck, GROUP.static); (w.solids ??= []).push(meshBox(k.v)); }
     w.solids ??= [];
-    // The stage's fixtures (uplights, searchlight drums, floodlight poles): solid, as drawn.
-    for (const f of fixturesOf(course.id)) {
-      const d = f.kind === 'box' ? R.ColliderDesc.cuboid(f.hx, f.hy, f.hz) : R.ColliderDesc.cylinder(f.hh, f.r);
-      colliderFor(w, d.setTranslation(f.x, f.y, f.z), MATERIALS.steel, GROUP.static);
+    // The stage's fixtures (uplights, searchlight drums, floodlight poles): solid, as drawn, each in
+    // the engine only while the car is within reach of it (fixtureTick).
+    w.fixtures = fixturesOf(course.id).map((f) => {
       const hx = f.hx ?? f.r, hz = f.hz ?? f.r, hy = f.hy ?? f.hh;
-      w.solids.push([f.x - hx, f.y - hy, f.z - hz, f.x + hx, f.y + hy, f.z + hz]);
-    }
+      return { f, col: null, box: [f.x - hx, f.y - hy, f.z - hz, f.x + hx, f.y + hy, f.z + hz], reach: Math.sqrt(hx * hx + hy * hy + hz * hz) + FIX_REACH };
+    });
     // The launch complex beyond the stage: its solids join the world when the car comes near.
     const at = siteOf(course.id);
     if (at) w.site = { at, cols: [], solid: null, f: {}, push: 0 };
@@ -754,7 +753,31 @@ export function preStep(w) {
   for (const b of w.bodies) parkedForces(w, b);
   for (let i = 0; i < w.props.length; i++) if (w.props[i].wheels) parkedForces(w, w.props[i]);
   if (w.free) softDrag(w);
+  if (w.fixtures) fixtureTick(w);
   if (w.site) siteTick(w);
+}
+
+// The stage's fixtures: a dozen small static solids beside the lane. Always in the engine they cost
+// a replay ≈ 4 % (every ray and the broad phase carry them), for things a run meets only if it
+// leaves the line. So each is built the tick the car's CoM comes within FIX_REACH of its surface
+// (the hull reaches 2.4 m from the CoM; 0.5 m more is two ticks at 60 m/s) and dropped 2 m further out.
+const FIX_REACH = 3, FIX_DROP = 2;
+function fixtureTick(w) {
+  const p = w.carPos;
+  if (!p) return;
+  for (let i = 0; i < w.fixtures.length; i++) {
+    const x = w.fixtures[i], f = x.f, dx = p.x - f.x, dy = p.y - f.y, dz = p.z - f.z, d2 = dx * dx + dy * dy + dz * dz;
+    if (!x.col) {
+      if (d2 >= x.reach * x.reach) continue;
+      const d = f.kind === 'box' ? R.ColliderDesc.cuboid(f.hx, f.hy, f.hz) : R.ColliderDesc.cylinder(f.hh, f.r);
+      x.col = colliderFor(w, d.setTranslation(f.x, f.y, f.z), MATERIALS.steel, GROUP.static);
+      w.solids.push(x.box);
+    } else if (d2 > (x.reach + FIX_DROP) * (x.reach + FIX_DROP)) {
+      w.info.delete(x.col.handle); w.rw.removeCollider(x.col, false); x.col = null;
+      const k = w.solids.indexOf(x.box);
+      if (k >= 0) w.solids.splice(k, 1);
+    }
+  }
 }
 function parkedForces(w, b) {
   const dt = WORLD_DT;
