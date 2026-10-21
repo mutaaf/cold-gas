@@ -461,7 +461,9 @@ export function groundAt(road, x, y, z, out) {
 
 // Signed distance from (x, y, z) to the road world; out gets the normal {x, y, z}, `mat`, and
 // `obstacle` (true for barriers, so the crash code treats a wall as a wall).
-export function roadSurface(road, x, y, z, out) {
+// `ground`: the ground alone, without the barriers and tunnel roofs built on it (the hull's
+// heightfield samples it: src/sim/world.js adds those as boxes of their own).
+export function roadSurface(road, x, y, z, out, ground = false) {
   let phi = Infinity, nx = 0, ny = 1, nz = 0, mat = MATERIALS.grass;
   out.obstacle = false; out.body = null;
   const on = nearestSeg(road, x, y, z, qs);
@@ -490,14 +492,14 @@ export function roadSurface(road, x, y, z, out) {
       // shaped by the approaches, mustn't come up through it).
       skipTerrain = bridge ? y > yr - deck - 0.3 : phi > -0.5 && y > yr - 3;
     }
-    if (tunnel && al < qs.hw + 3) {
-      skipTerrain = true;
+    if (tunnel && al < qs.hw + 3) skipTerrain = true;
+    if (tunnel && al < qs.hw + 3 && !ground) {
       const roof = qs.yc + TUNNEL_ROOF - y;                      // the roof, from below
       if (roof < phi) { phi = roof; nx = 0; ny = -1; nz = 0; mat = MATERIALS.barrier; }
     }
     // Barriers on either side: a box in the road's cross-section (lateral × height), from a
     // metre below the edge to its top, along this segment.
-    const side = qs.lat < 0 ? (fl >> 4) & 3 : (fl >> 2) & 3;
+    const side = ground ? 0 : qs.lat < 0 ? (fl >> 4) & 3 : (fl >> 2) & 3;
     if (side) {
       const r = RAILS[side];
       const c = qs.hw + r.off + r.t / 2;

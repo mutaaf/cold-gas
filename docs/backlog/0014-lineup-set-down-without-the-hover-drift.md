@@ -42,5 +42,84 @@ a fan car's track suspension takes 1–1.5 m/s at touchdown (the 0002 touchdown 
 Extend the reveal-fidelity unit test: Lineup airtime and distance bands, gas used, and the
 time-below-3 m bound on the Wall. Replay fixtures regenerated with the SIM_VERSION bump.
 
+## Re-measured on main 2026-10-21 (builder): blocked, needs re-scoping
+The ticket predates 0013 (#38), which replaced the set-down it describes. On `788306d`
+(SIM_VERSION 15) LAND sets down at 0.8 + 0.5·h m/s from `HOVER` = 2.5 m (2.05 m/s at the top, 0.8 m/s
+at the wheels). Reference runs, measured from `t.airStartTick` to `t.touchTick`:
+
+| | airtime | time below 3 m | N2 lift-off → touchdown | sink | total |
+|---|---|---|---|---|---|
+| Lineup | 4.80 s | 2.04 s | 152 kg | 0.80 m/s | 85.3 Stuck it |
+| Wall | 4.37 s (release → wheels 4.2 s) | 1.91 s | 161 kg | 0.81 m/s | 96 Perfect 10 |
+| Show | 4.18 s | 1.53 s | 151 kg | 0.82 m/s | 94 Perfect 10 |
+
+**The Wall bar contradicts the telemetry.** Run 2's ALTITUDE channel (docs/REVEAL_RESEARCH.md
+§2.1.4, TELEMETRY at 2 Hz) reads 10.1 ft (3.1 m) at τ 6.0 s and wheels down at τ 8.0 s: **2.0 s below
+3 m**, and the last 1.2 m (3.8 ft → 0.4 ft) took 1.0 s. Today's law gives 1.91 s and 1.1 s, so it
+already matches the telemetry. The ≤ 1.5 s bar comes from the REPORTED "hovered about 1–1.5 s"
+line. The existing `tests/unit/gtrace.test.js` also holds release → touchdown at 4.0–5.0 s
+(telemetry 4.5 s), and every faster set-down tried drops that to 3.0–3.5 s.
+
+**One LAND law can't meet the Lineup bar and keep the Wall.** Sweep of the set-down
+(HOVER / SETDOWN / SETDOWN_K), Lineup reference:
+
+| set-down | Lineup airtime | N2 | Wall below 3 m |
+|---|---|---|---|
+| 2.5 / 0.8 / 0.5 (today) | 4.80 s | 152 kg | 1.91 s |
+| 1.2 / 1.1 / 0.45 | 4.07 s | 125 kg | 1.09 s |
+| 1.0 / 1.1 / 0.8 | 3.91 s | 120 kg | 0.91 s |
+| 0.6 / 1.1 / 0.8 | 3.77 s | 115 kg | 0.72 s |
+| 0.1 / 0.9 / 1.0 (no set-down at all) | 3.47 s | 104 kg | n/a |
+
+Above SETDOWN 0.9 the sink leaves the judges' perfect band and the Lineup drops to "Clean". The
+Lineup's time goes to geometry. The pilot lifts off 6.5 m before the row (any closer and it hits
+the first vehicle), the row is ≈14.6 m deep (z 7 → 21.6), and LAND holds 1.2 m over the last
+roof. At the 7.4 m/s carry, the car's tail clears the row at ≈3.0 s, still ≈2.5 m up. Approach
+speeds of 8–9 m/s gain ≈0.15 s. Making the pilot steer only after the roll-out and only while
+braking (LESSONS 2026-10-21) gains 0.02 s. Capping the leveller's roll braking to `ROLL_ACC`
+gains nothing.
+
+**The Lineup mark sits at z 44**, ≈20 m past the row. A ≤ 30 m flight lands around z 26–28, so
+the precision score rewards the drift this ticket wants gone.
+
+Options for the Critic or Scout to pick from (each is its own ticket):
+1. Let the Wall keep its telemetry set-down and move the Lineup mark to just past the row, where
+   the reveal landed. Then re-baseline the Lineup bar on the kickflip frames: upright at t0 + 2.2 s,
+   wheels at ≈t0 + 3 s.
+2. Make the set-down's height follow the fall it ends (a stop from a 20 m drop versus a 7 m
+   kickflip), with a source for why the reveal's controller hovered after one and not the other.
+3. Treat the Lineup bar as 3.5–4.0 s with today's law plus a lower set-down top (HOVER ≈ 1.2 m,
+   Lineup ≈ 4.1 s and 125 kg), and drop the Wall ≤ 1.5 s bar, which the telemetry contradicts.
+
+## Critic re-scope 2026-10-21 (supersedes the acceptance criteria above)
+The builder's measurement is right and the Wall ≤ 1.5 s bar is dropped: run 2's ALTITUDE channel
+says 2.0 s below 3 m and `tests/unit/gtrace.test.js` already holds the Wall to it. Pick options 1
+and 2 together, because the reveal itself did both:
+
+- **The mark.** The reveal took off "just short of the first vehicle" and landed "just beyond the
+  last" (docs/REVEAL_RESEARCH.md §2.2, ESTIMATE from frames, 20–25 m airborne). Our mark sits at
+  z 44 (`src/sim/courses.js:158`), ≈ 22 m past the row's far edge (z 21.6), so the precision score
+  pays for the drift. Move it to just past the row (centre ≈ z 27–29, rings unchanged).
+- **The set-down follows the fall it ends.** After the 20 m drop the reveal braked hard and then
+  spent 2.0 s below 3 m (run 2). After the kickflip it was upright at ≈ t0 + 2.2 s and on its
+  wheels at ≈ t0 + 3 s (§2.2), and the standing flip went from upright (t 1.8 s) to wheels
+  (t 2.6 s) in 0.8 s (§2.4): **no hover after a low stunt**. A controller that sizes the set-down
+  to the energy it has just removed (e.g. the set-down top scales with the peak sink or the brake's
+  Δv, never below the existing sink bands) gives both from one law. Measured on main `4d00ca0`:
+  Lineup upright at τ 1.75 s (h 7.3 m) and wheels at τ 4.80 s, **3.05 s from upright to wheels**,
+  with 2.0 s of that at ≈ 1 G between 2.3 m and the ground.
+
+### Acceptance criteria (re-scoped)
+- [ ] Lineup reference: upright (up·y > 0.95) to first wheel contact ≤ 1.8 s (free fall from 7.3 m and a 3 G stop take ≈ 1.4 s; reveal 0.8 s for both
+      the kickflip and the standing flip; today 3.05 s); lift-off to touchdown ≤ 3.8 s (reveal 3.0 s,
+      2.5–3.5 REPORTED; today 4.80 s); airborne distance ≤ 30 m.
+- [ ] Lineup reference lands inside the 4 m ring of the moved mark, sink ≤ 1.5 m/s, judged a soft
+      landing; nitrogen from lift-off to touchdown ≤ 130 kg (today 152 kg).
+- [ ] Wall and Show: `tests/unit/gtrace.test.js` unchanged and green (Wall release → wheels
+      4.0–5.0 s, brake peak 2.8–3.6 G below 10 m); Wall time below 3 m stays 1.6–2.4 s (telemetry
+      2.0 s).
+- [ ] `naive-players` 32/32; `naive-show` ≥ 51/54; `human-show.mjs 300 assist --cues=new` ≥ 95 %.
+- [ ] Works at 390×844 touch and 1280×720 keyboard.
+
 ## Out of scope
 The roll timing and apex (already within the reveal's bands).

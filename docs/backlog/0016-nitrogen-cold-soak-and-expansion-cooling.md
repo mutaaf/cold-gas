@@ -36,6 +36,22 @@ temperature state, so a long brake after a long hang costs the same gas as a sho
 - [ ] A 30 s cold-soak start (re-warm) restores T within 2 K.
 - [ ] `naive-players` 32/32; `human-show.mjs 300 assist --cues=new` ≥ 95 %; determinism IDENTICAL.
 
+## Critic note 2026-10-21 (by the Critic, measured on main 4d00ca0)
+- **The closed form in the first criterion is off.** Adiabatic T = T0·(m/m0)^(γ−1): with 60 % of
+  the gas left that is 0.6^0.4 = **0.815·T0**, not 0.88, and Isp ∝ √T falls ≈ **10 %**, not 6 %.
+- **"End-of-brake thrust within 5 % of today's" would lock in the error this ticket exists to fix.**
+  Integrating today's law (`pressureOf` with the 0.55 regulator, `isp = 72·(0.7 + 0.3·pr)`) for a
+  full dump through the four down-jets gives **186 kN·s total impulse at a 64 s average Isp**, and
+  thrust stays above half for 1.83 s of continuous firing. docs/REVEAL_RESEARCH.md §5.2 (ESTIMATE,
+  CoolProp real-gas blowdown, Rocket 600 L at 80 kN) gives **140 kN·s and 52 s adiabatic** (the
+  realistic case for a fast dump), 192–195 kN·s only if the tank stayed isothermal, and F = 50 % at
+  0.65 s adiabatic. So the game flies the isothermal tank this ticket says it isn't.
+  Replace that criterion with: a full dump through the down-jets yields **140–160 kN·s** (adiabatic,
+  with a little wall heat) and an average Isp of 50–58 s, and the references still land (Wall
+  nitrogen used rises from 165 kg today; it must stay ≤ 270 kg of 297, one fill per stunt).
+- Whether the "Thruster 5,500 psi" screen (§5.1, REPORTED) was a regulator set point or the tank
+  itself is unsourced; if the regulator stays, say so in `spec.js` as an ESTIMATE with that reasoning.
+
 ## Test plan
 Unit test of the blowdown closed form and re-warm; reference-flight regression bands.
 
