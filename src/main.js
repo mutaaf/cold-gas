@@ -25,7 +25,10 @@ import { drillById, drillsFor, buildDrill, drillResult, drillCoach } from './pra
 import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { SPEC } from './sim/spec.js';
-import { bindInput, sample, usingTouch, getNozzlePad } from './input.js';
+import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad } from './input.js';
+import { thumbStage } from './onethumb.js';
+import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
+import { wallProgress, INPUT_KEYS } from './sim/run.js';
 import { initAudio, updateAudio, thud, setMuted, isMuted, chime } from './audio.js';
 import { createUI } from './ui.js';
 import { localWords, postScore, fetchBoard } from './panel.js';
@@ -39,7 +42,10 @@ const physicsLoad = loadPhysics();
 physicsLoad.catch(() => {});
 const params = new URLSearchParams(location.search);
 const coarse = matchMedia('(pointer: coarse)').matches;
-const tier = params.get('gfx') || (coarse ? 'mid' : 'high');
+// Graphics defaults per device: phones get 'mid', and a phone that reports little memory or few
+// cores gets 'low' (its frame budget goes to the sim and the HUD, not the mist). ?gfx= overrides.
+const lowEnd = coarse && ((navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4);
+const tier = params.get('gfx') || (coarse ? (lowEnd ? 'low' : 'mid') : 'high');
 
 const canvas = document.getElementById('stage');
 let stage;
@@ -89,7 +95,8 @@ refGhostRoot.visible = false;
 const plumes = createPlumes(scene, carRoot, { maxMist: tier === 'low' ? 500 : 1800 });
 const director = createDirector(camera);
 // The landing HUD and its touchdown marker (src/hud-landing.js).
-const landing = createLandingHud({ scene });
+// Leaving the green band is a warning you can feel: one buzz (Android), once per change for the worse.
+const landing = createLandingHud({ scene, onStatus: (s, prev) => { if ((s === 'amber' && prev === 'green') || (s === 'red' && prev !== 'red' && prev)) buzz('warn'); } });
 // Crashes: sparks, chips, dents, torn-off parts, lamps, shake, slow motion, the crash cut and the
 // crunch, all keyed to the sim's impact events (src/render/crash.js).
 const crash = createCrash({ scene, hero, carRoot, director, tier,
@@ -205,12 +212,14 @@ function startRunNow(kind = 'jump') {
   refGhost(stage.course);
   S.mode = 'countdown'; S.countT = 0; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
   S.impacts = 0; S.impact = null;
-  ui.only('hud'); ui.damageReset();
+  newFlight();
+  ui.only('hud');
   drillBar.hidden = true;
   landing.show(false);
   getNozzlePad().show(false);
   director.setView(S.pilotView ? 'pilot' : 'broadcast');
   ui.touch.hidden = !(coarse || usingTouch()) || !!S.autopilot;
+  syncScheme();
   plumes.clear();
   crash.reset();
   const c = S.run.car;
@@ -295,8 +304,7 @@ syncAiChip();
 function wallAssist(run, input) {
   if (run.course === 'lineup') { input.fan = 0; return input; }
   const c = run.car;
-  if (run.phase === 'ramp' && input.lift > 0) S.released = true;
-  if (run.phase === 'air') S.released = true;
+  if (!S.released && ((run.phase === 'ramp' && input.lift > 0) || run.phase === 'air')) { S.released = true; S.releaseTick = run.tick; buzz('release'); }
   input.fan = !S.released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
   return input;
 }
@@ -325,6 +333,8 @@ function touchdown(run) {
   const k = landingImpact(run.t.sink, reducedMotion);
   S.impacts++; S.impact = k;
   thud(k);
+  // Felt in the hand too: a soft landing is a tap, a hard one a thump.
+  if (run.t.sink > 4) buzz('crash'); else buzz(null, Math.round(Math.min(90, 14 + run.t.sink * 14)));
   director.shake(k.shake);
   director.impact(k.dip, k.fovPunch);
   for (let i = 0; i < 4; i++) {
@@ -342,11 +352,14 @@ function liveStep(dt) {
   if (S.freezeT > 0) { S.freezeT -= dt; if (S.freezeT <= 0) ui.cue_('Go', 600); dt = 0; }
   S.acc += Math.min(dt, 0.1) * (S.drill ? S.slowmo : 1);
   let input = null;
+  const oneThumb = thumbActive();
   while (S.acc >= DT && run.phase !== 'done') {
-    input = S.autopilot ? S.autopilot(run) : wallAssist(run, sample(run.phase, S.tier, liveInput, S.released));
+    input = S.autopilot ? S.autopilot(run)
+      : wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released));
     stepRun(run, input);
     S.acc -= DT;
   }
+  if (run.t.contact && !S.contactBuzzed) { S.contactBuzzed = true; buzz('crash'); }
   const c = run.car;
   for (let i = 0; i < 4; i++) { fcomp[i] = c.wheels[i].compression; fspin[i] = c.wheels[i].spin; }
   syncCar(c.pos, c.quat, fcomp, fspin, c.steer);
@@ -356,13 +369,21 @@ function liveStep(dt) {
   // Phase cues and moments.
   // Touch layout follows the phase: pedals on the ground and up the wall, LIFT/LAND in the air.
   // (Let go of the Wall, the air controls come up at once, not when the sim calls it airborne.)
-  const tp = run.phase === 'air' || (run.phase === 'ramp' && S.released) ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
+  const tp = run.phase === 'landed' || run.phase === 'done' ? 'landed'
+    : run.phase === 'air' || (run.phase === 'ramp' && S.released) ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
   if (ui.touch.dataset.phase !== tp) {
     ui.touch.dataset.phase = tp;
-    liftLabel.textContent = tp === 'ramp' ? 'RELEASE' : 'LIFT';
-    stickHint.textContent = tp === 'air' ? 'ROLL · PITCH' : 'STEER';
-    goLabel.textContent = tp === 'air' ? 'BOOST' : 'GO';
+    liftLabel.textContent = tp === 'ramp' ? 'Release' : 'Lift';
+    stickHint.textContent = tp === 'air' ? 'Roll · Pitch' : 'Steer';
+    goLabel.textContent = tp === 'air' ? 'Boost' : 'Go';
   }
+  // Only what this moment uses: RELEASE once you're near the top of the curl, BOOST until the row
+  // is behind you (the Show).
+  const ledge = run.phase === 'ramp' && !S.released && run.t.progress >= 0.8;
+  if (ui.touch.hasAttribute('data-ledge') !== ledge) ui.touch.toggleAttribute('data-ledge', ledge);
+  const rowDone = run.course === 'show' && (run.t.crossedRow || run.t.contact);
+  if (ui.touch.hasAttribute('data-row-done') !== rowDone) ui.touch.toggleAttribute('data-row-done', rowDone);
+  if (oneThumb) syncThumb(run, c);
   // Advanced on a touch screen: off the Wall the nozzle pad replaces the stick and the buttons.
   const pad = getNozzlePad();
   const padOn = S.tier === 'advanced' && !S.autopilot && !ui.touch.hidden && (tp === 'air' || (tp === 'ramp' && S.released));
@@ -380,14 +401,16 @@ function liveStep(dt) {
   const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
   bodyRates(c, rates);
   const alt = heightAboveSurface(c);
+  landing.update(c, alt, S.autopilot ? '' : run.phase);
+  const pr = landing.prediction;
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI,
     alt, airborne: run.phase === 'air',
-    sink: -c.vel.y, phase: { drive: 'Run-up', ramp: c.fanForce > 1000 ? 'On the wall · fan' : 'On the wall', air: 'Airborne', landed: 'Touchdown', done: 'Settled' }[run.phase],
+    sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, pr), clock: (run.tick - S.startTick) / 240,
+    bank: (-pr.rollOut * 180) / Math.PI, pitch: (pr.pitchOut * 180) / Math.PI,
     throttles: c.throttles, fan: c.fanForce / G, g: feltG(c, dt),
   });
   ui.damage(run.damage);
-  landing.update(c, alt, S.autopilot ? '' : run.phase);
   hero.setFan?.(c.fan);
   hero.setWing?.(Math.min(1, Math.max(0, (speed - 20) / 20)));
   plumes.update(dt, S.time, c.throttles, c.vel, 0);
@@ -399,6 +422,106 @@ function liveStep(dt) {
   } else S.doneT = 0;
 }
 
+// --- The flight, as the HUD and the controls see it ---------------------------------------------
+// A new attempt (or drill): the one-thumb control, the HUD's glide and the timeline start over.
+function newFlight(startTick = 0) {
+  thumb.reset();
+  ui.resetHud(); ui.damageReset();
+  ui.timelineFor(stage.course);
+  S.phaseMax = -1; S.startTick = startTick; S.contactBuzzed = false;
+  S.releaseTick = S.released ? startTick - 240 : -1;
+}
+// Where in the flight you are, for the timeline: run-up → climb → hang → release → carry → brake →
+// touchdown (the Lineup: run-up → lift-off → roll → brake → touchdown). It only moves forward.
+const PHASE_ORDER = { show: ['runup', 'climb', 'hang', 'release', 'carry', 'brake', 'touchdown'], lineup: ['runup', 'liftoff', 'roll', 'brake', 'touchdown'] };
+function flightPhase(run, c, alt, pr) {
+  const order = run.course === 'lineup' ? PHASE_ORDER.lineup : PHASE_ORDER.show;
+  let key;
+  if (run.phase === 'landed' || run.phase === 'done') key = 'touchdown';
+  else if (run.course === 'lineup') {
+    const roll = Math.abs(run.t.rollAccum);
+    key = run.phase === 'drive' ? 'runup' : roll > 5.6 || (c.vel.y < 0 && alt <= pr.brakeBy) ? 'brake' : roll > 0.3 ? 'roll' : 'liftoff';
+  } else if (run.phase === 'drive') key = 'runup';
+  else if (!S.released) key = run.t.progress >= 0.92 ? 'hang' : 'climb';
+  else if (run.tick - S.releaseTick < 0.6 * 240) key = 'release';
+  else {
+    const lift = c.throttles[0] + c.throttles[1] + c.throttles[2] + c.throttles[3];
+    key = run.phase === 'air' && c.vel.y < -0.5 && (lift > 1.2 || alt <= pr.brakeBy) ? 'brake' : 'carry';
+  }
+  const i = order.indexOf(key);
+  if (i > S.phaseMax) S.phaseMax = i;
+  return order[S.phaseMax];
+}
+
+// One-thumb Assist: touch, the Show or the Wall, Assist, the scheme chosen (src/touch-settings.js).
+const thumbPad = document.querySelector('[data-onethumb]');
+const thumbVerb = document.querySelector('[data-thumb-verb]'), thumbAct = document.querySelector('[data-thumb-act]'), thumbArc = document.querySelector('[data-thumb-arc]');
+const thumbActive = () => !ui.touch.hidden && ui.touch.dataset.scheme === 'thumb' && !S.autopilot;
+function syncScheme() {
+  const can = !!S.run && S.run.course !== 'lineup' && S.tier === 'assist';
+  ui.touch.dataset.scheme = touchSet.scheme === 'thumb' && can ? 'thumb' : 'classic';
+  ui.touch.dataset.hand = touchSet.hand;
+  ui.touch.dataset.tier = S.tier;
+  ui.touch.dataset.course = S.run?.course || stage.course;
+  document.querySelectorAll('[data-controls-label]').forEach((el) => { el.textContent = touchSet.scheme === 'thumb' ? 'One-thumb' : 'Classic'; });
+}
+const THUMB_WORDS = {
+  climb: ['Hold', 'Climb'], climbing: ['Holding', 'Climb'], ledge: ['Tap', 'Let go'], fly: ['Hold', 'Land'], flying: ['Holding', 'Land'], landed: ['', 'Stopping'],
+};
+const thumbLast = { word: '', warn: null, arc: -1 };
+function syncThumb(run, c) {
+  const stage_ = thumbStage(run, S.released);
+  const held = thumb.held;
+  const word = stage_ === 'climb' && held ? 'climbing' : stage_ === 'fly' && held ? 'flying' : stage_;
+  if (word !== thumbLast.word) {
+    const [v, a] = THUMB_WORDS[word] || ['', ''];
+    thumbVerb.textContent = v; thumbAct.textContent = a;
+    thumbPad.dataset.stage = stage_;
+    thumbLast.word = word;
+  }
+  // Not holding while the descent leaves green: the pad asks for the thumb (amber, a pulse).
+  const warn = stage_ === 'fly' && !held && landing.prediction.status !== 'green';
+  if (warn !== thumbLast.warn) { thumbPad.toggleAttribute('data-warn', warn); thumbLast.warn = warn; }
+  // The ring: how far up the curl; in the air, how far down to the ground.
+  const k = stage_ === 'climb' || stage_ === 'ledge' ? (run.phase === 'ramp' ? wallProgress(c.pos) : 0)
+    : stage_ === 'fly' ? 1 - Math.min(1, Math.max(0, c.pos.y - SPEC.comHeight) / 27) : 1;
+  const q = Math.round(k * 100);
+  if (q !== thumbLast.arc) { thumbArc.style.strokeDasharray = `${q} 100`; thumbLast.arc = q; }
+}
+
+// --- Touch controls sheet ----------------------------------------------------------------------
+const ctlScreen = ui.screens.controls;
+function syncControlsSheet() {
+  ctlScreen.querySelectorAll('[data-scheme-opt]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.schemeOpt === touchSet.scheme)));
+  ctlScreen.querySelectorAll('[data-hand]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.hand === touchSet.hand)));
+  ctlScreen.querySelector('[data-tilt]').setAttribute('aria-checked', String(!!touchSet.tilt));
+  ctlScreen.querySelector('[data-tilt-calibrate]').hidden = !touchSet.tilt;
+  ctlScreen.querySelector('[data-haptics]').setAttribute('aria-checked', String(!!touchSet.haptics));
+  ctlScreen.querySelector('[data-haptics-row]').hidden = !hasHaptics();
+  syncScheme();
+}
+const tiltNote = ctlScreen.querySelector('[data-tilt-note]');
+ctlScreen.querySelectorAll('[data-scheme-opt]').forEach((b) => b.addEventListener('click', () => {
+  setSetting('scheme', b.dataset.schemeOpt);
+  if (touchSet.scheme === 'thumb' && S.tier !== 'assist') { setTier('assist'); ui.cue_('One-thumb flies Assist', 1600); }
+}));
+ctlScreen.querySelectorAll('[data-hand]').forEach((b) => b.addEventListener('click', () => setSetting('hand', b.dataset.hand)));
+ctlScreen.querySelector('[data-haptics]').addEventListener('click', () => { setSetting('haptics', !touchSet.haptics); buzz('tap'); });
+ctlScreen.querySelector('[data-tilt]').addEventListener('click', async () => {
+  if (touchSet.tilt) { disableTilt(); tiltNote.textContent = 'Off. Steer with the stick (or hold the line in One-thumb).'; return; }
+  const ok = await enableTilt();
+  tiltNote.textContent = ok ? 'On. Hold the phone how you play and press Calibrate. Tilt steers on the ground.' : 'Motion access was not given, or this device has no tilt sensor.';
+  if (ok) setTimeout(() => { if (touchSet.tilt && !tiltSeen()) tiltNote.textContent = 'On, but no tilt readings yet: this device may not have the sensor.'; }, 600);
+});
+ctlScreen.querySelector('[data-tilt-calibrate]').addEventListener('click', () => { calibrateTilt(); buzz('tap'); tiltNote.textContent = 'Calibrated: this is straight ahead.'; });
+onSettings(syncControlsSheet);
+syncControlsSheet();
+document.querySelectorAll('[data-controls-open]').forEach((b) => b.addEventListener('click', () => { syncControlsSheet(); ui.show('controls', true); }));
+ctlScreen.querySelector('[data-controls-close]').addEventListener('click', () => ui.show('controls', false));
+// No page zoom or scroll from a stray gesture (iOS ignores user-scalable=no for pinch).
+for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
+document.addEventListener('dblclick', (e) => { if (!e.target.closest?.('input, textarea')) e.preventDefault(); }, { passive: false });
+
 const kbd = (touchLabel, keyLabel) => `<kbd>${usingTouch() ? touchLabel : keyLabel}</kbd>`;
 // The cues teach the sequence for the tier you fly. With Assist: release, then hold BOOST and LAND
 // together (the computer caps the carry and rolls you out). Pro and Advanced fly by the HUD: roll
@@ -406,6 +529,7 @@ const kbd = (touchLabel, keyLabel) => `<kbd>${usingTouch() ? touchLabel : keyLab
 function cues(run, c) {
   const v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
   const tier = S.tier, adv = tier === 'advanced';
+  if (thumbActive()) return thumbCues(run, c, v);
   if (run.phase === 'drive' && v < 2) return ui.cue_(`Hold ${kbd('GO', '↑')} to drive`, 600);
   if (run.course !== 'lineup') {
     const show = run.course === 'show';
@@ -429,6 +553,17 @@ function cues(run, c) {
   if (run.phase === 'drive' && lz > -14 && lz < COURSES.lineup.lineupZ0) return ui.cue_(`Hold ${kbd('LIFT', 'Space')} at the line`, 600);
   if (run.phase === 'air' && Math.abs(run.t.rollAccum) < 0.3 && c.vel.y < 4) return ui.cue_(`${kbd('stick sideways', '← →')} to roll`, 500);
   if (run.phase === 'air' && Math.abs(run.t.rollAccum) > 5.6 && c.vel.y < 0) return ui.cue_(`Hold ${kbd('LAND', 'Shift')}`, 500);
+}
+
+// One-thumb: the pad itself says hold / tap; the cue line names the moment.
+function thumbCues(run, c, v) {
+  const held = thumb.held;
+  if (run.phase === 'drive') return ui.cue_(held || v > 2 ? 'Climbing · let go to stop' : 'Hold the pad to climb', 600);
+  if (run.phase === 'ramp' && !S.released) return ui.cue_(run.t.progress >= 0.92 ? 'On the ledge · tap to let go' : 'Up the curl on suction', 600);
+  if (run.phase === 'air' || S.released) {
+    if (run.course === 'show' && !run.t.crossedRow && c.pos.z > COURSES.show.rowNear) return ui.cue_('Carrying you over the row', 500);
+    if (!held) return ui.cue_('Hold to land: it rolls you out and brakes', 500);
+  }
 }
 
 // --- Replay (behind the results sheet, and on demand) ----------------------------------------
@@ -499,6 +634,7 @@ function frame(now) {
       if (S.countT < 0.02 || after !== before) ui.countdown(after > 0 ? after : 0);
       if (S.countT >= 3) { S.mode = 'live'; ui.countdown(0); ui.cue_(S.autopilot ? 'The reference jump' : 'Go', 900); }
       plumes.update(dt, S.time, S.idleThrottles.fill(0), zeroVel, 0);
+      ui.setClock(S.countT - 3);
     } else if (S.mode === 'live') liveStep(dt * slow);
     else if (S.mode === 'results' || S.mode === 'replay') replayStep(dt * slow);
     else if (S.mode === 'drive') fd().frame(dt * crash.timeScale(), S.time);   // Free Drive / the Sandbox run their own cameras
@@ -578,6 +714,7 @@ function setTier(tier) {
   tierBtn.innerHTML = `<span class="tl">${t.label}</span><span class="ts">${short}</span>${t.factor > 1 ? ` <i>×${t.factor.toFixed(2)}</i>` : ''}`;
   tierBtn.setAttribute('aria-label', `Flight tier: ${t.label}`);
   try { localStorage.setItem('coldgas_tier', S.tier); localStorage.setItem('coldgas_assist', S.assist ? '1' : '0'); } catch { /* storage blocked */ }
+  syncScheme();
 }
 setTier(S.tier);
 tierBtn.addEventListener('click', () => {
@@ -639,13 +776,15 @@ function startDrillNow(id) {
   S.run = run; S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;
   S.mode = 'live'; S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
   S.impacts = 0; S.impact = null;
-  ui.only('hud'); ui.damageReset();
+  newFlight(run.tick);
+  ui.only('hud');
   ui.countdown(0);
   drillBar.hidden = false;
   document.querySelector('[data-drill-name]').textContent = `${drill.n} ${drill.label}`;
   document.querySelector('[data-drill-n]').textContent = drill.n;
   document.querySelector('[data-drill-goal]').textContent = drill.goal;
   ui.touch.hidden = !(coarse || usingTouch());
+  syncScheme();
   plumes.clear();
   crash.reset();
   const c = run.car;
@@ -780,5 +919,5 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
-window.__coldgas = { S, stage, physicsReady, startRun, toTitle, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 requestAnimationFrame(frame);
