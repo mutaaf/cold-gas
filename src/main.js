@@ -25,6 +25,7 @@ import { hudPitch, createGWindow, tankBar, gasState } from './hud-telemetry.js';
 import { drillById, drillsFor, buildDrill, drillResult, drillCoach } from './practice.js';
 import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
+import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
 import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad } from './input.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
@@ -335,11 +336,12 @@ function wallAssist(run, input) {
   return input;
 }
 
-const sn = { x: 0, y: 0, z: 0 };
+const sn = { x: 0, y: 0, z: 0 }, padP = { x: 0, y: 0, z: 0 };
 // Height above the ground, unless something nearer is under the floor (the Lineup's kicker, a roof).
 function heightAboveSurface(c) {
   const d = surface(COURSES[stage.course], c.pos.x, c.pos.y, c.pos.z, sn);
-  const h = sn.y > 0.9 ? d : c.pos.y;
+  // The launch complex is not in surface(): over the pad (or the mount's deck), measure from it.
+  const h = Math.min(sn.y > 0.9 ? d : c.pos.y, c.pos.y - siteFloor(stage.course, c.pos.x, c.pos.y, c.pos.z, padP));
   return Math.max(0, h - SPEC.comHeight);
 }
 // G as the livestream read it: specific force over the last 0.5 s, fed every sim tick (src/hud-telemetry.js).
