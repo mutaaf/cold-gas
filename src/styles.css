@@ -129,8 +129,42 @@ button { font: inherit; color: inherit; cursor: pointer; }
   font: 400 16px/1 var(--mono); letter-spacing: 0.3em; text-transform: uppercase; text-align: center; user-select: text; -webkit-user-select: text; }
 .submit-msg { font-size: 12px; color: var(--ink-2); }
 .actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
-.top-actions-row { padding: 18px 0 4px; }
-.top-actions-row .btn { height: 40px; padding: 0 20px; font-size: 14px; }
+.top-actions-row { padding: 14px 0 4px; }
+.top-actions-row .btn { display: inline-flex; align-items: center; height: 40px; padding: 0 18px; font-size: 14px; gap: 8px; }
+.top-actions-row .btn kbd, .pause .btn kbd { font: 500 10px/1 var(--mono); padding: 3px 5px; border: 1px solid currentColor; border-radius: 4px; opacity: 0.55; margin-left: 2px; }
+/* Retry is the move after a run: the biggest thing on the sheet, a slow ice pulse until pressed. */
+.top-actions-row .retry-btn { height: 48px; padding: 0 24px; font-size: 15px; font-weight: 600; letter-spacing: 0.02em;
+  box-shadow: 0 0 0 0 rgba(150, 220, 255, 0.5); animation: retry-pulse 2.4s var(--ease) 1.2s infinite; }
+.retry-btn svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@keyframes retry-pulse { 0% { box-shadow: 0 0 0 0 rgba(150, 220, 255, 0.45); } 70%, 100% { box-shadow: 0 0 0 14px rgba(150, 220, 255, 0); } }
+
+/* The run line: Run n · against your best. A new best gets the aurora. */
+.runline { display: flex; align-items: center; gap: 12px; padding: 16px 0 0; font: 500 11px/1 var(--mono); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-3); }
+.runline[hidden] { display: none; }
+.runline .run-n { padding: 6px 9px; border: 1px solid var(--hair); border-radius: 6px; color: var(--ink-2); }
+.runline .pb { letter-spacing: 0.06em; }
+.runline[data-state='behind'] .pb { color: var(--ink-2); }
+.runline[data-state='best'] .pb, .runline[data-state='first'] .pb { color: #07090d; padding: 6px 10px; border-radius: 6px; font-weight: 700;
+  background: linear-gradient(100deg, var(--aur-1), var(--aur-2), var(--aur-3), var(--aur-1)); background-size: 300% 100%;
+  animation: pb-in 0.7s var(--ease) 0.5s both, pb-flow 3s linear infinite; }
+@keyframes pb-in { from { opacity: 0; transform: scale(0.6) translateY(4px); filter: blur(6px); } 60% { transform: scale(1.08); filter: none; } to { opacity: 1; transform: none; } }
+@keyframes pb-flow { to { background-position: -300% 0; } }
+.count span.word { font-size: clamp(54px, 9vw, 120px); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 300; animation-duration: 1s; }
+
+/* Quick Retry / Home in the top bar: only while a run is on screen (body[data-mode]). */
+.quick { display: none; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 16px; border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px);
+  color: var(--ink); font: 500 12px/1 var(--text); letter-spacing: 0.02em; }
+.quick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.quick kbd { font: 500 9px/1 var(--mono); padding: 2px 4px; border: 1px solid var(--hair); border-radius: 3px; color: var(--ink-3); }
+body[data-mode='live'] .quick, body[data-mode='countdown'] .quick, body[data-mode='results'] .quick, body[data-mode='replay'] .quick { display: inline-flex; }
+body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own Retry is right there */
+.quick:hover { border-color: rgba(255, 255, 255, 0.35); }
+.quick:active { transform: scale(0.96); }
+@media (pointer: coarse) { .quick kbd { display: none; } .quick { height: 36px; padding: 0 12px; } }
+/* Narrow screens mid-run: the AI and tier chips are title-screen settings; Home and Retry take their place. */
+@media (max-width: 720px) {
+  body:is([data-mode='live'], [data-mode='countdown'], [data-mode='results'], [data-mode='replay']) :is(.ai-chip, .tier-chip) { display: none; }
+}
 
 .board-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 18px; }
 .seg { display: flex; border: 1px solid var(--hair); border-radius: 16px; padding: 2px; }
@@ -152,6 +186,14 @@ button { font: inherit; color: inherit; cursor: pointer; }
 /* --- Small screens --- */
 @media (max-width: 720px) {
   .sheet { width: 100vw; background: rgba(5, 7, 12, 0.9); padding-left: calc(22px + var(--safe-l)); padding-right: calc(22px + var(--safe-r)); }
+  /* Phones: Retry and Home ride a bar pinned under the thumb while the panel scrolls above. */
+  .results .sheet { display: flex; flex-direction: column; padding-bottom: 0; }
+  .results .sheet > * { flex: none; }
+  .results .top-actions-row { position: sticky; bottom: 0; z-index: 2; order: 99; gap: 6px; margin: 0 -22px; padding: 12px 22px calc(14px + var(--safe-b));
+    background: linear-gradient(180deg, rgba(5, 7, 12, 0), rgba(5, 7, 12, 0.96) 28%); flex-wrap: nowrap; }
+  .results .top-actions-row .retry-btn { flex: 1 1 auto; justify-content: center; }
+  .results .top-actions-row .btn:not(.retry-btn) { padding: 0 12px; font-size: 13px; flex: none; }
+  .top-actions-row .btn kbd { display: none; }
   .total b { font-size: 52px; }
   .cats { grid-template-columns: 1fr; }
   .spec { gap: 18px; }
@@ -221,6 +263,15 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .th-out { color: var(--aur-1); }
 .th-skip { position: absolute; top: calc(66px + var(--safe-t)); right: 24px; height: 30px; padding: 0 14px; border-radius: 15px; border: 1px solid var(--hair);
   background: rgba(6, 9, 15, 0.82); font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); z-index: 2; }
+
+.th-quick { display: none; }
+@media (max-width: 720px) {
+  .th-quick { display: flex; gap: 8px; position: absolute; top: calc(14px + var(--safe-t)); left: calc(16px + var(--safe-l)); z-index: 2; }
+  .th-quick .quick-btn { height: 34px; padding: 0 14px; border-radius: 17px; border: 1px solid var(--hair); background: rgba(6, 9, 15, 0.82);
+    font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+  .th-quick .quick-btn.primary { background: var(--ink); color: #07090d; border-color: transparent; }
+  .theatre:not(.th-quest) .th-rail { top: calc(62px + var(--safe-t)); }
+}
 
 /* Receipt in the results sheet */
 .receipt { margin: 14px 0 0; padding: 14px 16px; border: 1px solid var(--hair-2); border-radius: 14px; background: rgba(255, 255, 255, 0.02); }

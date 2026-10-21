@@ -182,7 +182,11 @@ function buildDom(root, stages = STAGES) {
 // (an AbortSignal: a restart, the title) tears it down at once and resolves with { aborted: true }.
 export function runTheatre(root, { log, assist, ai, card, course, fallbackWords, reduced = false, replay = null, abort = null }) {
   registerShapes();
+  root.classList.remove('th-quest');
   const dom = buildDom(root);
+  // Full screen on a phone: Retry and Home stay one tap away while the show plays (src/main.js
+  // handles [data-again] / [data-home] wherever they are).
+  root.append(el('div', 'th-quick', '<button type="button" class="quick-btn primary" data-again>Retry</button><button type="button" class="quick-btn" data-home>Home</button>'));
   root.hidden = false;
   root.classList.remove('out');
   requestAnimationFrame(() => root.classList.add('on'));

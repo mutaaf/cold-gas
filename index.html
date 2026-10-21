@@ -17,6 +17,8 @@
   <header class="top">
     <div class="brand" aria-label="COLD GAS">COLD&nbsp;GAS</div>
     <div class="top-actions">
+      <button class="quick quick-home" data-home aria-label="Home (H)" title="Home (H)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 11.5 12 5l8 6.5" /><path d="M6.5 10v9h11v-9" /></svg><kbd>H</kbd></button>
+      <button class="quick quick-retry" data-again aria-label="Retry (R)" title="Retry from the start (R)"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.05-4.95" /><path d="M19 4.5V8h-3.5" /></svg><span>Retry</span><kbd>R</kbd></button>
       <button class="chip ai-chip" data-ai-open title="Choose who writes the judges’ words: free Cloudflare Edge, or your own Anthropic, OpenAI, xAI or Gemini key">AI</button>
       <button class="chip tier-chip" data-tier="assist" aria-label="Flight tier: Assist" title="Flight tier. Assist: the computer holds rates, LAND levels and brakes. Pro: rate control, no LAND (×1.08). Advanced: ten valves by hand (×1.15).">Assist</button>
       <button class="icon-btn" data-ghost aria-pressed="true" aria-label="Ghost of your best run (G)" title="Ghost: your best run rides alongside (G)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="14" cy="12" r="5" /><circle data-echo cx="9" cy="12" r="5" stroke-dasharray="2 2.4" /></svg></button>
@@ -232,11 +234,15 @@
         <ul class="facts" data-drill-stats></ul>
         <div class="actions"><button class="btn primary" data-drill-again>Retry <kbd>R</kbd></button><button class="btn ghost" data-drill-next>Next drill</button><button class="btn link" data-drill-menu>All drills</button></div>
       </div>
+      <div class="runline" data-runline>
+        <span class="run-n" data-r-attempt>Run 1</span>
+        <span class="pb" data-r-pb></span>
+      </div>
       <div class="actions top-actions-row">
-        <button class="btn primary" data-again>Jump again</button>
+        <button class="btn primary retry-btn" data-again><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.05-4.95" /><path d="M19 4.5V8h-3.5" /></svg>Retry<kbd>R</kbd></button>
+        <button class="btn ghost" data-home>Home<kbd>H</kbd></button>
         <button class="btn ghost" data-replay>Replay</button>
         <button class="btn ghost" data-share>Share</button>
-        <button class="btn link" data-home>Title</button>
       </div>
       <div class="coach" data-coach hidden>
         <p class="eyebrow">What happened</p>
@@ -286,9 +292,9 @@
       </div>
       <div class="actions">
         <button class="btn primary" data-resume>Resume</button>
-        <button class="btn ghost" data-restart>Restart</button>
+        <button class="btn ghost" data-restart>Restart <kbd>R</kbd></button>
         <button class="btn ghost touch-only" data-controls-open>Controls</button>
-        <button class="btn link" data-home>Title</button>
+        <button class="btn ghost" data-home>Home <kbd>H</kbd></button>
       </div>
     </div>
   </section>
