@@ -70,7 +70,7 @@ function newTelemetry(courseId) {
     rampEntrySpeed: 0, rampTick: -1, maxRampHeight: 0, progress: 0, invertedTime: 0, maxG: 0,
     // The braking peak, read like the livestream's G-FORCE channel: the most specific force
     // averaged over 0.5 s, while the down-jets brake a fall with the roof up (not the release kick
-    // or a contact spike, which maxG catches), and the height it happened at (m, floor to ground).
+    // or a contact spike, which maxG catches), and the height mid-window (m, CoM height over the ground less its height at rest).
     brakePeakG: 0, brakePeakH: 0,
     launchHeight: 0, launchUpY: 1, launchProgress: 0, fellOff: false, landedOnRamp: false,
     // Damage (src/sim/damage.js): filled from the run's damage sensor when the book closes.
@@ -91,6 +91,7 @@ export function createRun(courseId = DEFAULT_COURSE) {
     flippedTicks: 0, airTicks: 0, offTicks: 0,
     frames: [],                // see recordFrame for the layout
     gWin: new Float64Array(G_WIN), gSum: 0,   // the last 0.5 s of specific force (g), for brakePeakG
+    hWin: new Float64Array(G_WIN),            // and the height over it (the peak is placed mid-window)
     t: newTelemetry(course.id),
   };
   run.impacts = run.car.impacts;   // impact events (src/sim/impacts.js): the crash, for the renderer and the replay
@@ -158,11 +159,11 @@ function advance(run, input) {
   const g = Math.min(25, dhypot(ax, ay, az) / 9.81);
   if (run.tick > 30) t.maxG = Math.max(t.maxG, g);
   const wi = run.tick % G_WIN;
-  run.gSum += g - run.gWin[wi]; run.gWin[wi] = g;
+  run.gSum += g - run.gWin[wi]; run.gWin[wi] = g; run.hWin[wi] = Math.max(0, c.pos.y - SPEC.comHeight);
   if (c.obstacleContact && !t.contact) { t.contact = true; t.contactSpeed = c.obstacleSpeed; t.contactTick = run.tick; }
   up(c, upv);
   if (run.phase === 'air' && run.tick >= G_WIN && upv.y > 0.7 && c.vel.y < 0 && lift > 1 && run.gSum / G_WIN > t.brakePeakG) {
-    t.brakePeakG = run.gSum / G_WIN; t.brakePeakH = Math.max(0, c.pos.y - SPEC.comHeight);
+    t.brakePeakG = run.gSum / G_WIN; t.brakePeakH = run.hWin[(run.tick + G_WIN / 2) % G_WIN];
   }
   const airborne = c.grounded === 0 && !c.hullContact;
   const lx = c.pos.x, lz = c.pos.z;

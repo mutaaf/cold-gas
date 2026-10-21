@@ -64,7 +64,7 @@ export function predict(c, h, out) {
   const levelDrop = sink * tLevel + 0.5 * G * tLevel * tLevel, sinkLevel = sink + G * tLevel;
   // The band's edge: the most sink you can carry here and still roll out (if you must), react and
   // stop at 70 % of a full-lift stop, down to a hover. (LAND's own plan flies well inside it.)
-  out.profileSink = h > HOVER ? maxSink(h - HOVER, tLevel, Math.max(0.6, 0.7 * out.aMax)) : 0.55;
+  out.profileSink = h > HOVER ? maxSink(h - HOVER, tLevel, Math.max(0.6, 0.7 * out.aMax)) : -profileVy(h, out.aPlan);
   // Touching down after braking from here at full lift (after the roll-out): v² = v² − 2·a·h.
   const v2 = sinkLevel * sinkLevel - 2 * Math.max(0, out.aMax) * Math.max(0, h - levelDrop - 0.3);
   out.touchSink = v2 > 0 ? Math.sqrt(v2) : 0;

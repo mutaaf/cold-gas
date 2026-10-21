@@ -336,9 +336,18 @@ export function landProfile(s, m = massOf(s)) {
 // the car). A late, hard brake measured from the ground alone would arrive at a roof, or a semi's
 // flank, still falling fast.
 let roofBelow = 0;   // the last landHeight's roof (m, 0 over the ground)
-const ROOF_HOLD = 1.2;
+const hdg = v3();
+const ROOF_HOLD = 1.2;   // m of floor over a roof (ESTIMATE: clears the skirts and a wing mirror)
 export function landHeight(s) {
-  const vh = dhypot(s.vel.x, s.vel.z), dx = vh > 0.1 ? s.vel.x / vh : 0, dz = vh > 0.1 ? s.vel.z / vh : 0;
+  // Along the track; nearly stopped, along the nose (the footprint still covers the car).
+  const vh = dhypot(s.vel.x, s.vel.z);
+  let dx = 0, dz = 1;
+  if (vh > 0.5) { dx = s.vel.x / vh; dz = s.vel.z / vh; }
+  else {
+    rotate(hdg, s.quat, set(hdg, 0, 0, 1));
+    const l = dhypot(hdg.x, hdg.z);
+    if (l > 0.1) { dx = hdg.x / l; dz = hdg.z / l; }
+  }
   const back = CAR.halfL, len = back + vh * 0.6 + CAR.halfL;
   const n = Math.min(24, Math.ceil(len / 0.5));
   roofBelow = 0;
@@ -368,7 +377,7 @@ export function brakeAvailAtEnd(s, m = massOf(s)) {
 // burn front-loads itself: it opens at line pressure (≈3.2 G of specific force) and eases as the
 // tanks fall below the regulator, like the reveal's 1.7 → 3.3 G peak at ≈6.5 m → 1.0 G
 // (TELEMETRY, docs/REVEAL_RESEARCH.md §2.1.4). The share leaves the rate loop room to level.
-const BRAKE_SHARE = 0.8;
+const BRAKE_SHARE = 0.8;   // ESTIMATE: the most the reference and human-model runs land reliably on
 export const brakePlan = (s, m = massOf(s)) => {
   const v = Math.max(0, -s.vel.y);
   if (v < V_HOVER + 0.5) return clamp(brakeAvail(s, m) * BRAKE_SHARE, 0.6, 30);
