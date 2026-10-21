@@ -29,8 +29,8 @@ const flyDrill = (id, policy, course = 'show') => {
   return run;
 };
 
-describe('SIM_VERSION 21: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down, the Wall from its foot, the curl gate, driving feel', () => {
-  it('is version 21 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock)', () => expect(SIM_VERSION).toBe(21));
+describe('SIM_VERSION 21: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down, the Wall from its foot, the curl gate, driving feel, the fans in a corner', () => {
+  it('is version 22 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock; 22: the fans answer a held corner, 0020)', () => expect(SIM_VERSION).toBe(22));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
