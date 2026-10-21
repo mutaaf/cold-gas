@@ -293,7 +293,7 @@ async function runPanel(run, replay = null) {
   try { mod = await import('./ai/theatre.js'); } catch { S.words = localWords(card); ui.words(S.words); return; }
   if (S.run !== run) return;
   const { words, meta, aborted } = await mod.runTheatre(theatreRoot, {
-    log: run.inputLog, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay, abort: signal,
+    log: run.inputLog, t: run.t, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay, abort: signal,
   });
   if (aborted || S.run !== run) return;
   if (!replay) {
