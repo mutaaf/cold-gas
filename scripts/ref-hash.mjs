@@ -3,6 +3,8 @@
 import { createRun, stepRun } from '../src/sim/run.js';
 import { createAutopilot } from '../src/sim/autopilot.js';
 import { scoreRun } from '../src/sim/judge.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 
 for (const course of ['show', 'wall', 'lineup']) {
   const run = createRun(course), ap = createAutopilot(course);

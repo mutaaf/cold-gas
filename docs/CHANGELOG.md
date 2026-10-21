@@ -77,8 +77,8 @@ stunt courses never touch the changed surfaces, and their reference runs are bit
   an 11 % verge. Now the roadside is a graded 1:4 apron for 7 m past the shoulder (the AASHTO
   "recoverable" slope; rounded hinge; blended where hairpin legs meet), and on loose ground (grass,
   gravel, rock, sand: a new `loose` flag) traction control scales its floor with grip² and holds
-  torque to what the tyre can carry. Drives back on from 4 m out: 61–73 % → 93–100 % of verges per
-  road; from 8 m: 56–80 % → 81–98 % (`node scripts/grass-probe.mjs`, unit-tested on every road).
+  torque to what the tyre can carry. Drives back on from 4 m out: 61–73 % → 84–100 % of verges per
+  road; from 8 m: 56–80 % → 76–97 % (`node scripts/grass-probe.mjs`, unit-tested on every road).
 - **Endless** (`?drive=endless&seed=…`, a fifth card in the road picker with a seed and a share
   link): a world generated as you drive, deterministic from its seed (docs/WORLD.md). Mountain passes,
   a coast road above the sea, desert mesas and dunes, forest; viaducts, guard rails, delineators;

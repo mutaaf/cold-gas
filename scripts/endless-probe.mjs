@@ -6,6 +6,8 @@ import { quatFromYaw } from '../src/sim/m3.js';
 import { poseAt, nearestSeg } from '../src/sim/roads.js';
 import { SPEC } from '../src/sim/spec.js';
 import { createPilot } from '../src/drive/pilot.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 
 const [seed = 'cold-gas', km = '20', secs = '60'] = process.argv.slice(2);
 let t0 = performance.now();

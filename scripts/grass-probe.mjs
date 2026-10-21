@@ -7,6 +7,8 @@ import { parseRoad, buildRoad, createRoadCourse, poseAt, nearestSeg, roadSurface
 import { createVehicle, step, newInput } from '../src/sim/vehicle.js';
 import { quatFromYaw } from '../src/sim/m3.js';
 import { SPEC } from '../src/sim/spec.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 
 // The car's attitude sitting on ground with normal n, nose along (tx, tz): body +x left, +y up, +z
 // forward, so the rotation's columns are (up × fwd, up, fwd).

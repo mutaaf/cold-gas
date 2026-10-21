@@ -258,12 +258,13 @@ describe('back on the road from the grass', () => {
 describe('traction control on loose ground', () => {
   const plane = (slope, mat) => {
     const k = 1 / Math.sqrt(1 + slope * slope);
-    return { id: 'plane', boxes: [], start: { x: 0, z: 0 }, runout: {}, sdf: (x, y, z, out) => { out.x = 0; out.y = k; out.z = -slope * k; out.mat = mat; out.obstacle = false; out.body = null; return (y - slope * z) * k; } };
+    // 100 m up: a course without a road gets a flat floor at y = 0 in the rigid-body engine.
+    return { id: 'plane', boxes: [], start: { x: 0, z: 0 }, runout: {}, sdf: (x, y, z, out) => { out.x = 0; out.y = k; out.z = -slope * k; out.mat = mat; out.obstacle = false; out.body = null; return (y - 100 - slope * z) * k; } };
   };
   it('climbs a 1:4 grass bank at full throttle (it slid back down an 11 % one)', () => {
     for (const slope of [0.2, 0.25]) {
       const car = createVehicle(plane(slope, MATERIALS.grass));
-      car.pos.x = 0; car.pos.z = 0; car.pos.y = SPEC.comHeight + 0.05;
+      car.pos.x = 0; car.pos.z = 0; car.pos.y = 100 + SPEC.comHeight + 0.05;
       const a = -Math.atan(slope) / 2; car.quat.x = Math.sin(a); car.quat.y = 0; car.quat.z = 0; car.quat.w = Math.cos(a);
       const hold = newInput(); hold.brake = 1;
       for (let t = 0; t < 240; t++) step(car, hold);

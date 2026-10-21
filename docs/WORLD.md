@@ -59,7 +59,7 @@ CPU ×4; cruise = carried along the road at 250 km/h):
 | | fps | main thread, drive loop incl. world | world.update max | worker ms/tile | memory | fell behind |
 |---|---|---|---|---|---|---|
 | phone, cruise 250 km/h | 60 | 0.75 avg · 1.8 p95 · 5.1 max | 4 | 2.6 avg · 3.5 p95 | heap 41 MB · GPU 13 MB · cache 12.5 MB | 0 / 2401 frames |
-| phone, autopilot | 60 | 1.29 avg · 2.1 p95 · 9.5 max (incl. physics) | 1.4 | 3.0 avg · 6.4 p95 | heap 40 MB · GPU 12 MB | 0 / 2400 |
+| phone, autopilot | 60 | 3.1 avg · 4.6 p95 · 29.7 max (incl. physics on Rapier, #33; the max is its hull heightfield rebuild every 24 m, which samples the endless ground's noise ≈ 2,400 times) | 1.0 | 2.7 avg · 5.0 p95 | heap 38 MB · GPU 12 MB | 0 / 2392 |
 | desktop, cruise 250 km/h | 60 | 0.22 avg · 0.5 p95 · 1.6 max | 1.2 | 2.6 avg · 3.2 p95 | heap 52 MB · GPU 19 MB · cache 18 MB | 0 / 2401 |
 
 Road chunks: 2.3–2.9 ms in the worker, ≤ 1.3 ms to upload. (Chrome's CPU throttle may not slow
