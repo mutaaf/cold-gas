@@ -31,12 +31,14 @@ import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { thumbStage } from './onethumb.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
-import { initAudio, updateAudio, thud, setMuted, isMuted, chime } from './audio.js';
+import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0 } from './audio.js';
 import { createUI } from './ui.js';
 import { localWords, postScore, fetchBoard } from './panel.js';
 import { loadAI } from './ai/config.js';
 import { openSettings, aiLabel } from './ai/settings.js';
 import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
+import { obs, guard, deviceClass } from './obs/index.js';
+import { installHeal } from './obs/heal.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
@@ -47,15 +49,23 @@ const coarse = matchMedia('(pointer: coarse)').matches;
 // Graphics defaults per device: phones get 'mid', and a phone that reports little memory or few
 // cores gets 'low' (its frame budget goes to the sim and the HUD, not the mist). ?gfx= overrides.
 const lowEnd = coarse && ((navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4);
-const tier = params.get('gfx') || (coarse ? (lowEnd ? 'low' : 'mid') : 'high');
+// [obs] …then this device's own history (src/obs/ledger.js) moves it: down after a bad session, back up
+// after several smooth ones. The reason shows in For nerds → Health.
+const tier = obs.boot({ forced: params.get('gfx'), deviceTier: coarse ? (lowEnd ? 'low' : 'mid') : 'high' }).tier;
+obs.init({ deviceClass: deviceClass(navigator, coarse) });
+// Audio is a breaker-guarded subsystem: if it throws, the game goes quiet instead of stopping.
+const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updateAudio0), thud = guard('audio', thud0), chime = guard('audio', chime0);
 
 const canvas = document.getElementById('stage');
 let stage;
 try {
   // [stage] ?course=wall|lineup practises one stunt; the Show (one flight off the Wall) is the default.
-  stage = createStage(canvas, { tier, course: ['wall', 'lineup'].includes(params.get('course')) ? params.get('course') : 'show' });
+  stage = createStage(canvas, { tier, course: ['wall', 'lineup'].includes(params.get('course')) ? params.get('course') : 'show',
+    backdrop: obs.breaker('rocket').allow(), onBackdropError: (err) => obs.fail('rocket', err) });
 } catch (err) {
   console.error(err);
+  obs.error('webgl', err);
+  obs.flush('boot', { force: true });
   document.body.insertAdjacentHTML('beforeend', '<p class="noscript">COLD GAS needs WebGL. Try a current browser.</p>');
   throw err;
 }
@@ -291,12 +301,16 @@ async function runPanel(run, replay = null) {
   if (!replay) { panelAbort?.abort(); panelAbort = new AbortController(); }
   const signal = panelAbort?.signal;
   let mod;
-  try { mod = await import('./ai/theatre.js'); } catch { S.words = localWords(card); ui.words(S.words); return; }
+  // [obs] The judges are a breaker-guarded subsystem: after repeated failures the panel speaks local
+  // lines for a while (a cooldown that doubles), then tries the call again.
+  if (!replay && !obs.breaker('judge').allow()) { S.words = localWords(card); ui.words(S.words); ui.cue_('The judges are resting: local lines for now', 1800); return; }
+  try { mod = await import('./ai/theatre.js'); } catch (err) { obs.fail('judge', err, 'lazy'); S.words = localWords(card); ui.words(S.words); return; }
   if (S.run !== run) return;
   const { words, meta, aborted } = await mod.runTheatre(theatreRoot, {
     log: run.inputLog, t: run.t, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay, abort: signal,
   });
   if (aborted || S.run !== run) return;
+  if (!replay && /too long/.test(meta.error || '')) obs.fail('judge', new Error('judge deadline'), 'fetch');
   if (!replay) {
     if (meta.verify?.card && Math.abs(meta.verify.card.total - card.total) > 0.05) console.warn('server card differs', meta.verify.card.total, card.total);
     S.words = words; S.callMeta = meta;
@@ -638,7 +652,13 @@ function titleStep(dt) {
 
 // --- Main loop ------------------------------------------------------------------------------
 let lastT = performance.now();
+// [obs] The loop is scheduled first, so nothing below can stop it; heal.frame times the frame and
+// catches, records and recovers from anything it throws (src/obs/heal.js).
 function frame(now) {
+  requestAnimationFrame(frame);
+  heal.frame(now, frameBody);
+}
+function frameBody(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
   if (!S.paused) {
@@ -676,7 +696,6 @@ function frame(now) {
     });
     stage.render(S.time, S.mode);
   }
-  requestAnimationFrame(frame);
 }
 
 // --- Wiring ---------------------------------------------------------------------------------
@@ -867,7 +886,7 @@ const nerdCtx = () => {
   return {
     mode: S.mode, car: drv ? drv.car : S.run?.car || null, run: drv ? null : S.run, renderer: stage.renderer,
     simMs: drv ? null : S.mode === 'live' ? S.simMs : 0, simTicks: drv ? null : S.mode === 'live' ? S.simTicks : 0,
-    meta: S.callMeta || null, driveStats: drv?.stats ? () => drv.stats() : null,
+    meta: S.callMeta || null, driveStats: drv?.stats ? () => drv.stats() : null, health: () => obs.snapshot(),
   };
 };
 async function toggleNerds(on) {
@@ -987,5 +1006,7 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
+const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false) });
 window.__coldgas = { S, stage, physicsReady, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+Object.assign(window.__coldgas, { obs, heal });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

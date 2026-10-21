@@ -50,6 +50,12 @@ mark, and air left in the tanks.
   - `POST /coldgas/api/models` (BYOK connect) asks a provider for its live models and suggests one.
   - `GET /coldgas/api/providers`.
   - `POST /coldgas/api/scores` (verified board entry) and `GET /coldgas/api/scores?board=today|all`.
+  - `POST /coldgas/api/obs` (src/worker/obs.js): the client's observability beacon. ≤ 8 kB, strictly
+    validated (`cleanObs`), 30/h per player and 3,000/day overall; aggregated in D1 (`obs_err` per
+    signature/build/day, `obs_frames` histograms per device class/tier, `obs_evt` counters, `obs_ex`
+    exemplar stacks; month-long retention). No IPs, user agents or headers stored.
+  - `GET /coldgas/api/obs/digest[?build=]`: top signatures, `regressions` (new or ≥ 2× per session
+    vs the previous build, and p95 frame-time regressions), frame percentiles. Cached 5 min.
   - D1 database `cold-gas` (binding `DB`, auto-provisioned, tables self-created).
 - **The judges' brain** (src/worker/ai/):
   - Default: Workers AI (binding `AI`). `@cf/google/gemma-4-26b-a4b-it` runs with thinking off;
@@ -232,6 +238,14 @@ src/audio.js          procedural WebAudio: motor, tyres, wind, nozzle hiss, chim
 src/ui.js             the HUD as one instrument system (mission clock, phase timeline, primary, telemetry
                         strip, attitude, vehicle: thrusters + damage; values glide, DOM on change), results, board
 src/panel.js          board client + local judge lines (offline fallback)
+src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: errors, rejections, traps,
+                        lost context, shaders, fetches, lazy imports, audio; frames; beacons) ·
+                        signature.js (stable ids, shared with the Worker) · frames.js (ring +
+                        histogram, zero per-frame allocation) · ledger.js (per-device health ledger,
+                        boot tier from past runs, resolution governor) · breaker.js (judge, audio,
+                        world, rocket) · heal.js (guarded frame loop, context restore, trap → title,
+                        reload-once) · panel.js (For nerds → Health)
+src/worker/obs.js     POST /obs + GET /obs/digest (regression detection); scripts/heal.mjs files tickets
 src/ai/               config.js (provider/key on this device) · stream.js (SSE client) ·
                         settings.js (the judges' brain picker) · theatre.js (lazy: aurora-field show)
 src/worker/index.js   Worker (frozen): verify by replay, streaming judge, BYOK models, D1 board
@@ -301,6 +315,8 @@ node scripts/verge-steps.mjs [roads]                  steps in the ground beside
 node scripts/ref-hash.mjs                             fingerprints of the stunt references (a physics change is bit-neutral or not)
 node scripts/drive-feel.mjs [bench|road] [assist|pro]   driving feel: step steer, lane change, on-centre, 60–0, slides; a keyboard driver on the four roads
 node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
+npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
+npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)
 ```
 
 Local Worker: `npx wrangler dev` (serves dist + the API with a local D1, and uses
@@ -318,6 +334,17 @@ Four Claude Code cloud routines run this repo. Their prompts are thin pointers t
   shipped ones live (reopening any that miss the bar). Critique → fix → critique.
 - **Builder** ships the top `ready` ticket test-first, one PR at a time (`by: critic` first).
 - **Keeper** handles upkeep: dependencies, flaky tests, perf drift, LESSONS.
+
+**Self-healing from past runs.** Every page captures its errors (signature = message + top
+frame + build) and frame times (src/obs/) and heals what it can in place: the tier comes from
+this device's past sessions, the resolution steps down on a hitching run and back up with
+headroom, flaky subsystems sit behind circuit breakers, a lost GPU context is restored, a
+physics trap ends the run cleanly. What it can't heal reaches `GET /coldgas/api/obs/digest`
+as a new or regressed signature, and `npm run heal` turns that into a `ready` ticket
+(`obs: <key>@<build>` in its frontmatter, `by: operator`). The **Keeper** runs `npm run heal`
+every run (keeper.md step 2) and PRs the tickets; the **Builder** runs `npm run heal -- --check`
+before picking (builder.md step 2) and heals first if the digest has something unticketed.
+Production's own health: For nerds (`) → Health.
 
 The operator steers through `agents/control.json` (paused, focus, caps, frozen_paths). Branch
 prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.

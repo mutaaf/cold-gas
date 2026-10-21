@@ -10,6 +10,7 @@ import { REVISION } from 'three';
 import { RAPIER, physicsMemoryBytes, physicsReady } from './sim/engine.js';
 import { SIM_VERSION } from './sim/run.js';
 import { SPEC, NOZZLE_SPEC } from './sim/spec.js';
+import { HEALTH_CSS, HEALTH_SECTION, renderHealth } from './obs/panel.js';
 
 const G = 9.81;
 const WHEEL_NAMES = ['FL', 'FR', 'RL', 'RR'];
@@ -179,6 +180,7 @@ const SECTIONS = `
       <dt>GPU</dt><dd data-k="r.gpu">—</dd>
     </dl>
   </section>
+${HEALTH_SECTION}
   <section class="nd-sec"><h3>The judges' last call</h3>
     <dl class="nd-kv" data-k="ai"></dl>
   </section>
@@ -189,7 +191,7 @@ let state = null;
 export function openNerds(root, ctx) {
   if (state) return;
   if (!document.getElementById('nerds-css')) {
-    const st = document.createElement('style'); st.id = 'nerds-css'; st.textContent = CSS; document.head.appendChild(st);
+    const st = document.createElement('style'); st.id = 'nerds-css'; st.textContent = CSS + HEALTH_CSS; document.head.appendChild(st);
   }
   root.innerHTML = `<div class="nd-head"><i class="nd-live"></i><h2>For nerds</h2><span class="nd-sub">live · <kbd>\`</kbd></span><button type="button" data-nerds-close aria-label="Close">×</button></div>${SECTIONS}`;
   root.hidden = false;
@@ -377,6 +379,7 @@ function slow(s, x) {
     ['Speed', m.tokensPerSec ? `${m.tokensPerSec} tok/s` : '—'], ['Cost', m.costUsd != null ? `$${m.costUsd.toFixed(6)}` : m.neurons ? `${m.neurons} neurons` : '—'],
   ] : [['—', 'finish a run to see the call']];
   K.ai.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${String(v).replace(/[<>&]/g, '')}</dd>`).join('');
+  renderHealth(K, s.C, x.health?.(), set);   // [obs] Health (src/obs/panel.js)
 }
 
 // --- Canvases ------------------------------------------------------------------------------------------

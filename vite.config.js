@@ -1,7 +1,15 @@
 import { writeFileSync } from 'node:fs';
+import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 
 const BASE = '/coldgas/';
+
+// The build id every error signature carries (src/obs/): Workers Builds' commit, else git's, else 'dev'.
+if (!process.env.VITE_CG_BUILD) {
+  let sha = process.env.WORKERS_CI_COMMIT_SHA || '';
+  if (!sha) { try { sha = execSync('git rev-parse --short=7 HEAD', { stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch { sha = ''; } }
+  process.env.VITE_CG_BUILD = sha.slice(0, 7) || 'dev';
+}
 
 // Response headers for the static assets (Workers Static Assets reads dist/_headers).
 // - HTML: Cloudflare Web Analytics auto-injects a beacon into HTML on the mutaafaziz.com zone; the
