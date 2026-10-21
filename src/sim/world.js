@@ -17,7 +17,7 @@ import { dsin, dcos, datan2 } from './dmath.js';
 export const WORLD_DT = 1 / 240;
 const G = 9.81;
 // Collision groups (membership << 16 | filter). Rays choose what they may hit.
-export const GROUP = { static: 1, parked: 2, car: 4, approx: 8 };
+export const GROUP = { static: 1, parked: 2, car: 4, approx: 8, curl: 16 };
 const groups = (member, filter = 0xffff) => ((member << 16) | filter) >>> 0;
 const RAY_ALL = groups(0xffff, 0xffff);
 
@@ -76,6 +76,12 @@ function wallMesh() {
   return { v, idx: new Uint32Array(idx) };
 }
 let WALL_MESH = null;
+// A mesh's bounding box [minX, minY, minZ, maxX, maxY, maxZ] (the floor fast path in `raycast`).
+function meshBox(v) {
+  const b = [Infinity, Infinity, Infinity, -Infinity, -Infinity, -Infinity];
+  for (let i = 0; i < v.length; i += 3) for (let k = 0; k < 3; k++) { b[k] = Math.min(b[k], v[i + k]); b[k + 3] = Math.max(b[k + 3], v[i + k]); }
+  return b;
+}
 
 // The kicker (a course with `ramp`): its parabolic face over the concrete, closed underneath.
 function kickerMesh() {
@@ -99,11 +105,15 @@ function wallSteel(w) {
   const T = WALL.slab, zA = WALL.r1 + T + 0.35, zB = zA + 3.0, top = WALL.lip.y + T + 1.6;
   for (const x of [-1.7, 1.7]) for (const z of [zA, zB]) {
     colliderFor(w, R.ColliderDesc.cuboid(0.15, top / 2, 0.15).setTranslation(x, top / 2, z), MATERIALS.steel, GROUP.static);
+    w.solids.push([x - 0.15, 0, z - 0.15, x + 0.15, top, z + 0.15]);
   }
   for (let z = 6.2; z <= WALL.r1 + 0.3; z += 1.45) {
     const y = WALL.r1 - Math.sqrt(Math.max(0, (WALL.r1 + T) * (WALL.r1 + T) - z * z));
     if (y < 0.35) continue;
-    for (const x of [-1.9, 1.9]) colliderFor(w, R.ColliderDesc.cuboid(0.09, y / 2, 0.09).setTranslation(x, y / 2, z), MATERIALS.steel, GROUP.static);
+    for (const x of [-1.9, 1.9]) {
+      colliderFor(w, R.ColliderDesc.cuboid(0.09, y / 2, 0.09).setTranslation(x, y / 2, z), MATERIALS.steel, GROUP.static);
+      w.solids.push([x - 0.09, 0, z - 0.09, x + 0.09, y, z + 0.09]);
+    }
   }
 }
 
@@ -143,7 +153,7 @@ export function createWorld(course) {
   const w = {
     course, rw, info: new Map(), bodies: [], ox: 0, oy: 0, oz: 0,
     carRb: null, carCol: null, carF: { x: 0, y: 0, z: 0 }, carT: { x: 0, y: 0, z: 0 }, carPos: null,
-    minX: 0, maxX: 0, minZ: 0, maxZ: 0, maxY: 0, stream: null, chunk: null, freed: false,
+    minX: 0, maxX: 0, minZ: 0, maxZ: 0, maxY: 0, stream: null, chunk: null, freed: false, solids: null, curl: false, curlOn: true,
     hit: { t: 0, nx: 0, ny: 1, nz: 0, mat: MATERIALS.concrete, body: null, car: false, x: 0, y: 0, z: 0 },
     ray: new R.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }),
     // How many colliders the roadster's hull is in contact with (the engine's collision events):
@@ -168,10 +178,13 @@ export function createWorld(course) {
     if (course.pad) w.info.get(floor.handle).pad = course.pad;
     if (course.id === 'wall' || course.id === 'show') {
       WALL_MESH ??= wallMesh();
-      colliderFor(w, R.ColliderDesc.trimesh(WALL_MESH.v, WALL_MESH.idx, R.TriMeshFlags.FIX_INTERNAL_EDGES), MATERIALS.deck, GROUP.static);
+      colliderFor(w, R.ColliderDesc.trimesh(WALL_MESH.v, WALL_MESH.idx, R.TriMeshFlags.FIX_INTERNAL_EDGES), MATERIALS.deck, GROUP.curl);
+      w.solids = [meshBox(WALL_MESH.v)];
+      w.curl = true;
       wallSteel(w);
     }
-    if (course.ramp) { const k = kickerMesh(); colliderFor(w, R.ColliderDesc.trimesh(k.v, k.idx, R.TriMeshFlags.FIX_INTERNAL_EDGES), MATERIALS.deck, GROUP.static); }
+    if (course.ramp) { const k = kickerMesh(); colliderFor(w, R.ColliderDesc.trimesh(k.v, k.idx, R.TriMeshFlags.FIX_INTERNAL_EDGES), MATERIALS.deck, GROUP.static); (w.solids ??= []).push(meshBox(k.v)); }
+    w.solids ??= [];
   }
   (course.boxes || []).forEach((b, i) => w.bodies.push(addParked(w, b, i)));
   refreshBounds(w);
@@ -202,6 +215,26 @@ export function attachCar(w, hullPoints, mass, inertia) {
   w.info.get(col.handle).car = true;
   w.carRb = rb; w.carCol = col;
   return rb;
+}
+
+// The curl's deck is the inside of a circle (radius WALL.r1 about z 0, y r1, seen from the side)
+// and the whole slab lies outside that disc: the arc, the ledge on its tangent, the slab behind them
+// (the mesh's chords sit under 0.5 mm inside the circle). A convex hull's farthest point from the
+// centre is one of its corners, so a hull whose farthest corner is δ inside the circle is at least δ
+// from every triangle of it. While δ beats a margin (2 cm, ten times the engine's contact prediction,
+// plus however far a hull point can travel in the tick) the hull can't touch the curl this step, and
+// the engine is spared testing it against the triangles: the bulk of a replay's step time on the
+// Wall, and the server replays every run on a CPU budget. The engine's answer isn't bit-identical
+// across the gate (its pair caches restart when the pair comes back), so this is sim behaviour
+// (SIM_VERSION 20); the reference runs replay to the same bits either way.
+const CURL_MARGIN = 0.02;
+export const GATES = { curl: true, rays: true };   // the tests switch them off to compare
+export function gateCurl(w, far, travel) {
+  if (!w.curl || !w.carCol) return;
+  const on = !GATES.curl || WALL.r1 - far <= CURL_MARGIN + travel;
+  if (on === w.curlOn) return;
+  w.curlOn = on;
+  w.carCol.setCollisionGroups(groups(GROUP.car, on ? 0xffff : 0xffff & ~GROUP.curl));
 }
 
 // --- Free Drive: the road near the car, for the hull --------------------------------------------------
@@ -311,6 +344,13 @@ function marchSdf(sdf, ox, oy, oz, dx, dy, dz, maxT, hit) {
  */
 export function raycast(w, ox, oy, oz, dx, dy, dz, maxT, excludeRb) {
   const h = w.hit, ray = w.ray, sdf = w.course.sdf;
+  if (GATES.rays && w.solids && excludeRb === w.carRb && clear(w, ox, oy, oz, dx, dy, dz, maxT)) {
+    // The roadster's own ray, clear of every collider's bounds: a miss, without a trip into the
+    // engine (the server replays every run on a CPU budget). Only misses are answered here; a hit
+    // is the engine's, to the last bit.
+    h.t = -1;
+    return -1;
+  }
   ray.origin.x = ox - w.ox; ray.origin.y = oy - w.oy; ray.origin.z = oz - w.oz;
   ray.dir.x = dx; ray.dir.y = dy; ray.dir.z = dz;
   // On a road the tyres read the exact road; the engine's near-car copy of it is for the hull.
@@ -333,6 +373,23 @@ export function raycast(w, ox, oy, oz, dx, dy, dz, maxT, excludeRb) {
   }
   h.t = t;
   return t;
+}
+
+// True when the segment o → o + d·maxT stays clear (with a margin) of every collider: the floor's
+// top (y = 0), the static boxes recorded at build time and each parked body's bounding sphere.
+const RAY_MARGIN = 0.1;
+function clear(w, ox, oy, oz, dx, dy, dz, maxT) {
+  const ex = ox + dx * maxT, ey = oy + dy * maxT, ez = oz + dz * maxT;
+  const x0 = Math.min(ox, ex) - RAY_MARGIN, x1 = Math.max(ox, ex) + RAY_MARGIN;
+  const y0 = Math.min(oy, ey) - RAY_MARGIN, y1 = Math.max(oy, ey) + RAY_MARGIN;
+  const z0 = Math.min(oz, ez) - RAY_MARGIN, z1 = Math.max(oz, ez) + RAY_MARGIN;
+  if (y0 <= 0) return false;
+  for (const b of w.solids) if (x0 <= b[3] && x1 >= b[0] && y0 <= b[4] && y1 >= b[1] && z0 <= b[5] && z1 >= b[2]) return false;
+  for (const b of w.bodies) {
+    const r = Math.sqrt(b.hx * b.hx + b.hz * b.hz + b.h * b.h);
+    if (x0 <= b.cx + r && x1 >= b.cx - r && y0 <= b.cy + r && y1 >= b.cy - r && z0 <= b.cz + r && z1 >= b.cz - r) return false;
+  }
+  return true;
 }
 
 // --- Stepping ---------------------------------------------------------------------------------------

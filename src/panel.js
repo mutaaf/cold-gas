@@ -1,11 +1,13 @@
 // Board client and the judges' local lines. The AI call itself lives in src/ai/ (streamed and
 // shown in the theatre). Offline, or when a provider fails, the panel speaks from local lines
 // picked from the same facts, so the game never waits on the network.
+import { postRetry } from './net.js';
+
 const API = `${import.meta.env.BASE_URL}api`;
 
 export async function postScore(log, assist, initials, course) {
   try {
-    const res = await fetch(`${API}/scores`, {
+    const res = await postRetry(`${API}/scores`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ log, assist, initials, course }),
     });
