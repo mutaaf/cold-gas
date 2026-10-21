@@ -15,7 +15,7 @@
 // A live binding: modules that import it see it once initPhysics has run.
 export let RAPIER = null;
 
-let ready = false, pending = null;
+let ready = false, pending = null, memory = null;
 const IMPORTS = () => ({ './rapier_wasm3d_bg.js': RAPIER.__bg });
 
 async function nodeBytes() {
@@ -50,12 +50,16 @@ export function initPhysics(source) {
   if (!pending) {
     pending = import('../vendor/rapier3d.js').then((mod) => { RAPIER = mod; return instantiate(source); }).then((instance) => {
       RAPIER.__bg.__wbg_set_wasm(instance.exports);
+      memory = instance.exports.memory || null;
       ready = true;
     });
     pending.catch(() => { pending = null; });
   }
   return pending;
 }
+
+/** The engine's WASM linear memory, in bytes (the nerds panel, src/nerds.js), or 0 before init. */
+export const physicsMemoryBytes = () => memory?.buffer.byteLength || 0;
 
 /** True once initPhysics has finished: runs can be created. */
 export const physicsReady = () => ready;

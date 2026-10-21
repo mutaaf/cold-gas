@@ -359,6 +359,7 @@ function liveStep(dt) {
   S.acc += Math.min(dt, 0.1) * (S.drill ? S.slowmo : 1);
   let input = null;
   const oneThumb = thumbActive();
+  const simT0 = performance.now(), tick0 = run.tick;
   while (S.acc >= DT && run.phase !== 'done') {
     input = S.autopilot ? S.autopilot(run)
       : wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released, run.car));
@@ -367,6 +368,7 @@ function liveStep(dt) {
     gWindow.push(run.car.vel);
     S.acc -= DT;
   }
+  S.simMs = performance.now() - simT0; S.simTicks = run.tick - tick0;   // the nerds panel's clock
   if (run.t.contact && !S.contactBuzzed) { S.contactBuzzed = true; buzz('crash'); }
   const c = run.car;
   for (let i = 0; i < 4; i++) { fcomp[i] = c.wheels[i].compression; fspin[i] = c.wheels[i].spin; }
@@ -847,6 +849,31 @@ addEventListener('keydown', (e) => {
   if (e.code === 'KeyR' && (S.mode === 'live' || S.mode === 'results')) retryDrill();
   if (e.code === 'KeyT' && S.mode === 'live') slowBtn.click();
 });
+
+// --- For nerds: the live engineering readout (src/nerds.js, loaded on first open) -------------------
+const nerdsBtn = document.querySelector('[data-nerds]'), nerdsRoot = document.querySelector('[data-nerds-root]');
+let nerdsMod = null;
+const nerdCtx = () => {
+  const drv = S.mode === 'drive' ? fd() : null;
+  return {
+    mode: S.mode, car: drv ? drv.car : S.run?.car || null, run: drv ? null : S.run, renderer: stage.renderer,
+    simMs: drv ? null : S.mode === 'live' ? S.simMs : 0, simTicks: drv ? null : S.mode === 'live' ? S.simTicks : 0,
+    meta: S.callMeta || null, driveStats: drv?.stats ? () => drv.stats() : null,
+  };
+};
+async function toggleNerds(on) {
+  nerdsMod ??= await import('./nerds.js');
+  on ??= !nerdsMod.nerdsOpen();
+  if (on) nerdsMod.openNerds(nerdsRoot, nerdCtx); else nerdsMod.closeNerds();
+  nerdsBtn.setAttribute('aria-pressed', String(on));
+}
+nerdsBtn.addEventListener('click', () => toggleNerds());
+nerdsRoot.addEventListener('click', (e) => { if (e.target.closest('[data-nerds-close]')) nerdsBtn.setAttribute('aria-pressed', 'false'); });
+addEventListener('keydown', (e) => {
+  if (e.code !== 'Backquote' || e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.target?.closest?.('input, select, textarea')) return;
+  e.preventDefault(); toggleNerds();
+});
+if (params.get('nerds') === '1') toggleNerds(true);
 
 const ghostBtn = document.querySelector('[data-ghost]');
 const syncGhostBtn = () => ghostBtn.setAttribute('aria-pressed', String(S.ghostOn));
