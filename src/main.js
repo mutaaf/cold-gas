@@ -27,6 +27,7 @@ import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { SPEC } from './sim/spec.js';
 import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad } from './input.js';
+import { createPoseLerp } from './render/interp.js';
 import { thumbStage } from './onethumb.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
@@ -350,6 +351,7 @@ function touchdown(run) {
 
 // --- Live step -----------------------------------------------------------------------------
 const liveInput = newInput();
+const poseLerp = createPoseLerp();   // the car drawn between 240 Hz ticks (src/render/interp.js)
 function liveStep(dt) {
   const run = S.run;
   // A drill opens on a beat with the car frozen at its start, so you see where you are first.
@@ -360,6 +362,7 @@ function liveStep(dt) {
   while (S.acc >= DT && run.phase !== 'done') {
     input = S.autopilot ? S.autopilot(run)
       : wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released, run.car));
+    poseLerp.before(run.car);
     stepRun(run, input);
     gWindow.push(run.car.vel);
     S.acc -= DT;
@@ -367,7 +370,8 @@ function liveStep(dt) {
   if (run.t.contact && !S.contactBuzzed) { S.contactBuzzed = true; buzz('crash'); }
   const c = run.car;
   for (let i = 0; i < 4; i++) { fcomp[i] = c.wheels[i].compression; fspin[i] = c.wheels[i].spin; }
-  syncCar(c.pos, c.quat, fcomp, fspin, c.steer);
+  const drawn = poseLerp.pose(c, S.acc / DT);
+  syncCar(drawn.pos, drawn.quat, fcomp, fspin, c.steer);
   stage.setBodies(c.world.bodies);
   crash.feed(run.impacts, run.tick, c.vel);
 

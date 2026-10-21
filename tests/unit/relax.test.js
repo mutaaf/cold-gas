@@ -2,7 +2,7 @@
 // metres of rolling after a slip-angle step (Pacejka, Tyre and Vehicle Dynamics, ch. 7), instead of
 // appearing in the same tick. σ is an ESTIMATE for the 295/30 R20 and 335/30 R21 tyres (spec.js).
 import { describe, it, expect } from 'vitest';
-import { createVehicle, step, newInput, relaxSlip, relaxLength, relaxWeight, DT } from '../../src/sim/vehicle.js';
+import { createVehicle, step, newInput, relaxSlip, relaxLength, relaxWeight, DT, rackLock } from '../../src/sim/vehicle.js';
 import { SPEC } from '../../src/sim/spec.js';
 
 // A settled car on the Lineup's open concrete, well clear of the row.
@@ -55,7 +55,7 @@ describe('the car rolls on relaxed tyres', () => {
     const inp = newInput();
     for (let i = 0; i < 120; i++) { inp.throttle = s.vel.z < 20 ? 0.3 : 0; step(s, inp); }
     // The step: the rack jumps to 0.02 rad (held there: steer = target, so the slew has nothing to do).
-    const lock = Math.min(0.5, (SPEC.wheelbase * SPEC.tyreMu * 9.81) / (s.vel.x ** 2 + s.vel.z ** 2) + 0.04);
+    const lock = rackLock(s.vel.x ** 2 + s.vel.z ** 2);
     inp.steer = 0.02 / lock; inp.throttle = 0;
     s.steer = -0.02;
     const fl = s.wheels[0], z0 = s.pos.z;

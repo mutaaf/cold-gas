@@ -52,6 +52,19 @@ export const SPEC = {
   power: 1_000_000,
   maxWheelTorque: 11760,
   brakeTorque: 5200,       // per wheel, N·m (carbon-ceramic, ESTIMATE)
+  // Steering: a steer-by-wire rack (the yoke's ratio is variable, research §3.5). Road-wheel lock
+  // ESTIMATE 0.5 rad (28.6°; cars this size lock the inner wheel at ≈0.5–0.65 rad), which turns the
+  // car on a 6.2 m radius at a crawl. Slew rate ESTIMATE 2.2 rad/s at the road wheels (an electric
+  // rack moves ≈0.1–0.2 m/s on a ≈65 mm steering arm: 1.5–3 rad/s).
+  steerLock: 0.5,
+  steerRate: 2.2,
+  // Stability control (Assist only; Pro and Advanced drive without it). Production systems act on
+  // a few degrees of sideslip or a yaw rate past what the tyres can hold, by braking single wheels
+  // and trimming drive torque (Bosch ESP; van Zanten, SAE 2000-01-1633). ESTIMATE: 4° of slip at
+  // the rear axle (this car holds 3.7° there cornering flat out at 1.13 g), 4 % over the
+  // grip-limited yaw rate.
+  escSlip: 0.07,           // rad
+  escYaw: 1.04,            // × μg/v
 
   // Suction: four 20 kW fans in the rear diffuser with four deployable skirts (OFFICIAL). Peak
   // downforce read 4,700 kg on the livestream (TELEMETRY: 46 kN; the "2 G" design claim is for a

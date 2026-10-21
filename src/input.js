@@ -18,6 +18,7 @@ import { newInput, VALVE_KEYS } from './sim/vehicle.js';
 import { createKeyRamp, padValves, bindNozzlePad, VALVES } from './valves.js';
 import { createOneThumb } from './onethumb.js';
 import { tiltSteer, buzz } from './touch-settings.js';
+import { createHands, stickShape } from './hands.js';
 
 const keys = new Set();
 const touch = { active: false, x: 0, y: 0, lift: false, land: false, go: false, brk: false };
@@ -93,21 +94,10 @@ export function sampleThumb(run, released, out = newInput()) {
 
 const k = (...codes) => codes.some((c) => keys.has(c));
 
-// Keys are on/off; a driver's hands aren't. Keyboard steer and roll ramp in and centre twice as
-// fast, so a tap is a correction and a hold is full lock. On the ground the hands slow with speed:
-// full lock in 0.25 s at a crawl (hairpins), ≈0.6 s at 60 km/h, ≈1 s at 120 km/h, so a tap at road
-// speed is a lane change, not a swerve (the rack already scales full stick to the tyres' grip).
-// Pedals ramp too: full throttle in 0.3 s, full brake in 0.15 s; off twice as fast. sample() runs
-// once per 240 Hz sim tick.
-const KEY_IN = 4 / 240, KEY_OUT = 8 / 240;
-let keyAx = 0, keyThr = 0, keyBrk = 0;
-function rampKey(target, v = 0) {
-  const into = Math.abs(target) > Math.abs(keyAx) && Math.sign(target) !== -Math.sign(keyAx);
-  const rate = into ? KEY_IN / (1 + v / 12) : KEY_OUT;
-  keyAx += Math.max(-rate, Math.min(rate, target - keyAx));
-  return keyAx;
-}
-const pedal = (cur, on, tIn) => Math.max(0, Math.min(1, cur + (on ? 1 / (240 * tIn) : -2 / (240 * tIn))));
+// Keys are on/off; a driver's hands aren't: src/hands.js turns keys and the touch stick into a
+// steering wheel and pedals (speed-aware), once per 240 Hz sim tick, the same hands the drive
+// bench (scripts/drive-feel.mjs) and the unit tests use.
+const hands = createHands();
 const dz = (v) => (Math.abs(v) < 0.12 ? 0 : v);
 
 export const usingTouch = () => touch.active;
@@ -128,9 +118,16 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
   let ax = 0, ay = 0, lift = 0, land = 0, thr = 0, brk = 0, yaw = 0;
   const v = !air && car ? Math.hypot(car.vel.x, car.vel.z) : 0;
   // On the ground the touch stick goes through the same hands as the keys: a thumb can't feather
-  // a 2 cm stick, so it sets where the wheel is going and the wheel follows at the speed's rate.
-  const stickGround = touch.active && !air ? deadzone(touch.x) : 0;
-  ax = rampKey(Math.max(-1, Math.min(1, (k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0) + stickGround)), v);
+  // a 2 cm stick, so it sets where the wheel is going and the wheel follows at the speed's rate
+  // (with a mild expo: the middle of the stick is the fine part of the lock).
+  const stickGround = touch.active && !air ? stickShape(touch.x, STICK_DEAD, 0.3) : 0;
+  // A gamepad's stick too: shaped (src/hands.js stickShape) and rate-limited like a thumb, or a
+  // full flick at 140 km/h reached the rack's lock in 29 ms and the yaw overshot by half.
+  const pads = navigator.getGamepads?.() || [];
+  let padGround = 0;
+  if (!air && !out.manual) for (const p of pads) if (p) padGround += stickShape(p.axes[0] || 0);
+  const keyAx = (k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0), stickAx = stickGround + padGround;
+  ax = hands.steer(Math.max(-1, Math.min(1, keyAx + stickAx)), v, keyAx === 0 && stickAx !== 0);
   if (k('ArrowUp', 'KeyW')) ay -= 1;
   if (k('ArrowDown', 'KeyS')) ay += 1;
   if (k('KeyQ')) yaw -= 1;
@@ -138,13 +135,14 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
   if (k('Space')) lift = 1;
   if (k('ShiftLeft', 'ShiftRight')) land = 1;
   let boost = k('KeyF') ? 1 : 0;
-  keyThr = pedal(keyThr, ay < 0, 0.3); keyBrk = pedal(keyBrk, ay > 0, 0.15);
-  thr = keyThr; brk = keyBrk;
+  // The phone's GO and BRAKE are buttons too: on the ground they press the pedals like the keys.
+  const tGo = touch.active && touch.go && !air, tBrk = touch.active && touch.brk && !air;
+  ({ thr, brk } = hands.pedals(ay < 0 || tGo, ay > 0 || tBrk));
 
-  const pads = navigator.getGamepads?.() || [];
   for (const p of pads) {
     if (!p || out.manual) continue;
-    ax += dz(p.axes[0] || 0); ay += dz(p.axes[1] || 0);
+    if (air) ax += dz(p.axes[0] || 0);
+    ay += dz(p.axes[1] || 0);
     yaw += dz(p.axes[2] || 0) * 0.8;
     const rt = p.buttons[7]?.value || 0, lt = p.buttons[6]?.value || 0;
     if (air) { lift = Math.max(lift, rt, p.buttons[0]?.pressed ? 1 : 0); land = Math.max(land, lt > 0.3 || p.buttons[1]?.pressed ? 1 : 0); if (p.buttons[5]?.pressed) boost = 1; }
@@ -157,8 +155,8 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
     if (air) { ax += deadzone(touch.x); ay -= deadzone(touch.y); }
     if (touch.lift) lift = 1;
     if (touch.land) land = 1;
-    if (touch.go) { thr = 1; boost = 1; }
-    if (touch.brk) brk = 1;
+    if (touch.go && air) { thr = 1; boost = 1; }
+    if (touch.brk && air) brk = 1;
   }
   if (!air) ax += tiltSteer();
   ax = Math.max(-1, Math.min(1, ax)); ay = Math.max(-1, Math.min(1, ay));

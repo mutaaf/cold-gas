@@ -15,7 +15,7 @@
 // randomness, no wall clock: a run replays bit-exactly from its inputs (the Worker verifies
 // scores this way). No allocation in step().
 import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
-import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf, AXLE_F } from './spec.js';
+import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf, AXLE_F, AXLE_R } from './spec.js';
 import { COURSES, DEFAULT_COURSE, MATERIALS, WALL, roofUnder } from './courses.js';
 import { createWorld, attachCar, raycast as worldRay, preStep, stepEngine, gateCurl } from './world.js';
 import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
@@ -184,6 +184,21 @@ export const tierOf = (inp) => (inp.assist ? 'assist' : inp.manual ? 'advanced' 
 // row onto the pad; one reaction time of 80 kN on 2.4 t adds ≈10 m/s more).
 export const ASSIST_CRAWL = 8, ASSIST_CARRY = 10;
 const TC_CAP = 1.0;   // traction control holds drive torque to what the tyre carries (≈ peak slip), not a 15 % bang-bang cut
+// The rack's window at speed: the kinematic angle for μg of lateral acceleration (L·μg/v²) plus
+// 0.04 rad, the lock that measured the most steady cornering g at 12, 25 and 40 m/s. (A smaller
+// margin, 0.015, halved a full-stick flick's yaw overshoot at 140 km/h but took the turn-in bite a
+// driver corrects with: the keyboard road bench left the Stelvio 7× as often. Analog sticks are
+// rate-limited in src/hands.js instead.)
+const LOCK_MARGIN = 0.04;
+export const rackLock = (vSq) => Math.min(SPEC.steerLock, (SPEC.wheelbase * SPEC.tyreMu * G) / Math.max(1, vSq) + LOCK_MARGIN);
+// Opposite lock opens up past 2° of rear-axle slip (normal cornering stays inside the plain window).
+const COUNTER_DB = 0.035;
+// The rack crosses its window (lock either side) in no less than RACK_T0 + RACK_TV·v seconds.
+const RACK_T0 = 0.1, RACK_TV = 0.005;
+// Stability control: the yaw moment asks for the unwanted yaw gone in ESC_TAU seconds; sideslip
+// past the threshold counts ESC_KB rad/s per rad, and a growing slide ESC_KBD per rad/s (ESTIMATE,
+// set on the drive-feel bench: no overshoot to a step steer, a spin caught from full throttle).
+const ESC_TAU = 0.12, ESC_KB = 3, ESC_KBD = 0.3;
 
 export function createVehicle(courseId = DEFAULT_COURSE) {
   // A course id, or a course object (Free Drive's roads aren't in COURSES).
@@ -205,6 +220,11 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     crushE: new Float64Array(HULL.length), touchNow: new Uint8Array(HULL.length), engineMass: 0,
     // The hardest sink of this flight so far (m/s, 0 on the ground): LAND sizes its set-down to it.
     fallPeak: 0,
+    // Assist's crawl limit belongs to the curl: only the courses with the Wall have one.
+    crawl: course.id === 'wall' || course.id === 'show',
+    // Stability control (Assist): how hard it is working (0–1, for the HUD and the sound), the
+    // brake it adds per wheel this tick (N·m), and last tick's sideslip (rad).
+    esc: 0, escBrake: new Float64Array(4), escBeta: 0,
   };
   s.engineMass = massOf(s);
   attachCar(world, HULL_SHAPE, s.engineMass, { x: SPEC.inertia.pitch, y: SPEC.inertia.yaw, z: SPEC.inertia.roll });
@@ -227,7 +247,7 @@ export function pressureOf(air) {
 // Scratch (never reallocated).
 const tmp = v3(), tmp2 = v3(), r = v3(), pw = v3(), vp = v3(), force = v3(), fwd = v3(), right = v3(), upW = v3(),
   fTot = v3(), tTot = v3(), wb = v3(), Lb = v3(), cmdT = v3(), dn = v3(), hitN = v3(), wf = v3(), wl = v3(), worldUpB = v3(), rp = v3(),
-  imp = v3(), vPre = v3(), wPre = v3(), nb = v3(), lc = v3(), vo = v3();
+  imp = v3(), vPre = v3(), wPre = v3(), nb = v3(), lc = v3(), vo = v3(), vb = v3();
 const ePt = { x: 0, y: 0, z: 0 }, eN = { x: 0, y: 0, z: 0 };
 let hitBody = null, hitMat = MATERIALS.concrete, hitCar = false;
 const target = new Float64Array(NOZZLES.length);
@@ -606,17 +626,62 @@ export function step(s, inp) {
   scale(dn, upW, -1);
 
   // --- Steering (steer-by-wire: rate-limited, speed-sensitive) ---
-  // Full lock is 0.5 rad at parking speed. At speed the rack is scaled so full stick asks for
-  // the tyres' peak grip and no more: the kinematic angle for μg of lateral acceleration (L·μg/v²)
-  // plus 0.04 rad, the lock that measured the most steady cornering g at 12, 25 and 40 m/s. Every
-  // bit of stick travel is usable, and a full-stick flick at 200 km/h can't saw the front axle
-  // into understeer.
+  // Full lock is SPEC.steerLock at parking speed. At speed the rack is scaled so full stick asks for
+  // the tyres' peak grip and no more (rackLock). Every bit of stick travel is usable, and a
+  // full-stick flick at 200 km/h can't saw the front axle into understeer.
+  // Opposite lock: that window is centred on straight ahead, so at 140 km/h it held 4.6° either
+  // way, and a slide with the tail 20° out could not be caught (the wheels have to point where the
+  // car is going). In the direction that catches a slide, the limit grows by the rear axle's slip
+  // angle past COUNTER_DB, as a driver's hands let the wheel follow the slide. It never steers on
+  // its own: with the stick centred the wheels stay straight.
   const speed = dhypot(s.vel.x, s.vel.y, s.vel.z);
-  const vSq = Math.max(1, s.vel.x * s.vel.x + s.vel.z * s.vel.z);
-  const lock = Math.min(0.5, (SPEC.wheelbase * SPEC.tyreMu * G) / vSq + 0.04);
-  const steerTarget = -inp.steer * lock;        // driver's right is −x
-  s.steer += clamp(steerTarget - s.steer, -2.2 * dt, 2.2 * dt);
+  const lock = rackLock(s.vel.x * s.vel.x + s.vel.z * s.vel.z);
+  rotateInv(vb, s.quat, s.vel);
+  rotateInv(wb, s.quat, s.angVel);
+  const vFwd = vb.z;
+  let slideR = 0;   // the rear axle's slip past the dead band: + = the slide wants the wheels left
+  if (vFwd > 3) {
+    const th = datan2(vb.x + wb.y * AXLE_R, vFwd);
+    slideR = th > COUNTER_DB ? th - COUNTER_DB : th < -COUNTER_DB ? th + COUNTER_DB : 0;
+  }
+  let steerTarget = -inp.steer * lock;        // driver's right is −x
+  if (steerTarget * slideR > 0) steerTarget = -inp.steer * Math.min(SPEC.steerLock, lock + Math.abs(slideR));
+  // The rack's slew follows its variable ratio: at parking speed it is the motor's SPEC.steerRate,
+  // at road speed it crosses the (much smaller) window in no less than RACK_T(v), as a yoke geared
+  // slower at speed does. A 140 km/h flick of a gamepad stick reached full lock in 29 ms and the yaw
+  // overshot its steady rate by 56 %; real hands at that speed take a fifth of a second.
+  const rackRate = Math.min(SPEC.steerRate, (lock + Math.abs(slideR)) / (RACK_T0 + RACK_TV * vFwd));
+  s.steer += clamp(steerTarget - s.steer, -rackRate * dt, rackRate * dt);
 
+  // --- Stability control (Assist) ---
+  // Two signs of a car getting away: the tail sliding past escSlip (or sliding further, fast),
+  // and a yaw rate past what the tyres can carry at this speed (μg/v). The correction is a yaw
+  // moment toward the direction of travel, made the way a production ESC makes it: by braking the
+  // one front wheel that pulls the nose that way (through the tyre and ABS, so it is bounded by the
+  // grip that wheel has), and by trimming drive torque while it works.
+  s.esc = 0; s.escBrake.fill(0);
+  let escCut = 1;
+  {
+    // The slip that matters is the rear axle's: the body's own sideslip is ≈13° at full lock in a
+    // car park, while the rear axle tracks; past the tyres' grip it is the tail stepping out.
+    const beta = vFwd > 0.5 ? datan2(vb.x + wb.y * AXLE_R, vFwd) : 0;
+    const dBeta = (beta - s.escBeta) / dt;
+    s.escBeta = beta;
+    if (inp.assist && !inp.manual && s.grounded >= 3 && vFwd > 5) {
+      const r = wb.y, rMax = (SPEC.escYaw * SPEC.tyreMu * G) / vFwd;
+      // e: unwanted yaw (rad/s), + = the car needs turning to its right (−y).
+      const bx = beta > SPEC.escSlip ? beta - SPEC.escSlip : beta < -SPEC.escSlip ? beta + SPEC.escSlip : 0;
+      let e = r - clamp(r, -rMax, rMax) - ESC_KB * bx;
+      if (bx !== 0 && dBeta * bx > 0) e -= ESC_KBD * dBeta;   // sliding further: catch it early
+      if (e !== 0) {
+        const Mz = (SPEC.inertia.yaw * Math.abs(e)) / ESC_TAU;   // N·m, toward the travel
+        const i = e > 0 ? 0 : 1;                                 // front right pulls the nose right
+        s.escBrake[i] = Math.min(SPEC.brakeTorque * 1.15, (Mz / (SPEC.trackFront / 2)) * RW[i]);
+        s.esc = Math.min(1, Math.abs(e) * 4);
+        escCut = 1 - s.esc;
+      }
+    }
+  }
   // --- Suction fan: pulls the floor toward whatever surface is under it ---
   rotate(r, s.quat, FLOOR);
   add(pw, s.pos, r);
@@ -732,19 +797,34 @@ export function step(s, inp) {
     if (DRIVEN[i]) {
       const motorT = Math.min(SPEC.maxWheelTorque, (SPEC.power / 2) / Math.max(Math.abs(wh.omega), 8));
       T = inp.throttle * motorT;
-      // Assist's crawl limiter: on the curl, drive torque fades out above ASSIST_CRAWL.
-      if (inp.assist && s.onSlope) T *= clamp(ASSIST_CRAWL + 1 - speed, 0, 1);
+      // Assist's crawl limiter: on the curl, drive torque fades out above ASSIST_CRAWL. Only the
+      // Wall has a curl: on a road it read every grade over 5.7° as one and capped the car at
+      // 32 km/h up the Stelvio.
+      if (inp.assist && s.crawl && s.onSlope) T *= clamp(ASSIST_CRAWL + 1 - speed, 0, 1);
+      T *= escCut;
       // Traction control: past the slip peak, torque is cut to no less than 15 % of the command
       // (tuned on concrete). On loose ground (grass, gravel, rock: Free Drive's verges) it adapts
       // to the surface, as real systems estimate μ: the floor scales with grip², and the torque is
       // held to what the tyre can carry there (1.2·R·μFz). With the concrete law, 15 % of 11.8 kN·m
       // was more than a rear tyre's grip on grass, so the wheel stayed spun up at κ ≈ 13, where the
       // tyre gives about half its peak, and the car slid back down an 11 % verge it could climb.
+      // In reverse the same, mirrored (a spun-up wheel backing off a verge is the same problem).
+      // And (Assist and Pro; Advanced drives raw) it leaves the tyre the side force it is making:
+      // drive force is held inside the friction ellipse (Fx ≤ √(D² − Fy²)), as production systems
+      // lower their slip target with lateral acceleration. Holding it at the longitudinal peak in a
+      // bend took all the rear tyres' grip: full throttle with 1.4° of steering at 140 km/h put the
+      // tail 20° out, and full throttle out of a 40 km/h bend spun the car.
       const loose = hitMat.loose === true;
-      if (kappa > 0.12) { T *= clamp(1 - (kappa - 0.12) * 9, loose ? 0.15 * hitMat.grip * hitMat.grip : 0.15, 1); s.tcActive = true; }
-      if (T > (loose ? 1.2 : TC_CAP) * R * D) { T = (loose ? 1.2 : TC_CAP) * R * D; s.tcActive = true; }
+      const kd = T >= 0 ? kappa : -kappa;
+      if (kd > 0.12) { T *= clamp(1 - (kd - 0.12) * 9, loose ? 0.15 * hitMat.grip * hitMat.grip : 0.15, 1); s.tcActive = true; }
+      let cap = (loose ? 1.2 : TC_CAP) * R * D;
+      if (!inp.manual && Math.abs(vLong) > 3) {
+        const fy = tyreFy(D, alpha);
+        cap = Math.min(cap, R * Math.sqrt(Math.max(0, D * D - fy * fy)));
+      }
+      if (T > cap) { T = cap; s.tcActive = true; } else if (T < -cap) { T = -cap; s.tcActive = true; }
     }
-    const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85);
+    const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85) + s.escBrake[i];
     // Pacejka pure-slip forces, then the friction ellipse for combined slip.
     let Fx = tyreFx(D, kappa);
     const Fy0 = tyreFy(D, alpha);
