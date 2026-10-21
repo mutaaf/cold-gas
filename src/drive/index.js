@@ -329,7 +329,7 @@ export function createDrive(ctx) {
         const air = c.grounded === 0 && !c.hullContact;
         st.airT = air ? st.airT + DT : 0;
         const phase = st.airT > 0.25 ? 'air' : 'drive';
-        Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist()));
+        Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist(), undefined, false, c));
         inp.fan = st.fan ? 1 : 0;
         // Reverse: hold brake at a standstill.
         if (phase === 'drive') {

@@ -157,7 +157,7 @@ export function createSandbox(ctx) {
         const air = c.grounded === 0 && !c.hullContact;
         st.airT = air ? st.airT + DT : 0;
         const phase = st.airT > 0.25 ? 'air' : 'drive';
-        Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist()));
+        Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist(), undefined, false, c));
         if (st.fan) inp.fan = 1;
         if (phase === 'drive') {
           const fz = 1 - 2 * (c.quat.x * c.quat.x + c.quat.y * c.quat.y), fx = 2 * (c.quat.x * c.quat.z + c.quat.w * c.quat.y);

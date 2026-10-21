@@ -30,7 +30,7 @@ const flyDrill = (id, policy, course = 'show') => {
 };
 
 describe('SIM_VERSION 16: the rigid-body engine, the reveal G trace, relaxed tyres', () => {
-  it('is version 16 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015)', () => expect(SIM_VERSION).toBe(16));
+  it('is version 17 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak)', () => expect(SIM_VERSION).toBe(17));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
