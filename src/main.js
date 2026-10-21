@@ -349,7 +349,7 @@ function liveStep(dt) {
   const oneThumb = thumbActive();
   while (S.acc >= DT && run.phase !== 'done') {
     input = S.autopilot ? S.autopilot(run)
-      : wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released));
+      : wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released, run.car));
     stepRun(run, input);
     gWindow.push(run.car.vel);
     S.acc -= DT;

@@ -34,7 +34,9 @@ describe('vehicle: the numbers a car person checks', () => {
     };
     const tyres = t60({}), fan = t60({ fan: 1 }), all = t60({ fan: 1, thrust: 1 });
     // 2.45 t Rocket stunt car on μ 1.25 Trofeo RS (OFFICIAL grip): traction-limited RWD.
-    expect(tyres).toBeGreaterThan(3.6); expect(tyres).toBeLessThan(5.6);
+    // Rear load with transfer under ≈0.8 G is ≈0.69 of the weight: μ·0.69·g ≈ 8.5 m/s², 0–60 ≈ 3.2 s
+    // at the tyres' peak (traction control holds them there).
+    expect(tyres).toBeGreaterThan(3.2); expect(tyres).toBeLessThan(5.6);
     expect(fan).toBeLessThan(tyres - 0.8);
     expect(all).toBeLessThan(fan);
   });

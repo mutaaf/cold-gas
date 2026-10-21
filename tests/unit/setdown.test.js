@@ -1,4 +1,4 @@
-// The set-down follows the fall it ends (SIM_VERSION 17, ticket 0014). After the 20 m drop the
+// The set-down follows the fall it ends (SIM_VERSION 18, ticket 0014). After the 20 m drop the
 // reveal braked hard and then spent 2.0 s below 3 m (run 2 ALTITUDE, TELEMETRY); after the kickflip
 // it was upright at ≈t0 + 2.2 s and on its wheels by ≈t0 + 3 s, 20–25 m on, just beyond the last
 // vehicle (docs/REVEAL_RESEARCH.md §2.1.4, §2.2): no hover after a low stunt.

@@ -124,7 +124,7 @@ and 2 together, because the reveal itself did both:
 ## Out of scope
 The roll timing and apex (already within the reveal's bands).
 
-## Shipped (builder, 2026-10-21, SIM_VERSION 17)
+## Shipped (builder, 2026-10-21, SIM_VERSION 18)
 - `src/sim/vehicle.js`: the car keeps `fallPeak`, the hardest sink of the flight (0 on the ground).
   The top of LAND's set-down, `setdownTop`, grows with it: a 0.1 m flare below 8 m/s, rising to
   `HOVER` (2.5 m) at 14 m/s (ESTIMATE, fitted to the two stunts: the kickflip peaks at ≈7 m/s, the
@@ -140,7 +140,7 @@ The roll timing and apex (already within the reveal's bands).
 | reference | lift-off → wheels | upright → wheels | below 3 m | airborne | N2 | sink | off mark | total |
 |---|---|---|---|---|---|---|---|---|
 | Lineup (before) | 4.80 s | 2.97 s | 2.47 s | 34.9 m | 152 kg | 0.80 | 7.6 m | 85.3 |
-| Lineup | 3.52 s | 1.63 s | 1.14 s | 26.4 m | 107 kg | 0.78 | 0.5 m | 92.0 Perfect 10 |
+| Lineup (on #46's TC, SIM_VERSION 18) | 3.55 s | 1.66 s | 1.16 s | 26.4 m | 108 kg | 0.79 | 0.5 m | 92.0 Perfect 10 |
 | Wall | unchanged (bit-identical): release → wheels 4.77 s, 1.90 s below 3 m, 3.08 G | | | | 161 kg | 0.81 | 3.6 m | 96 |
 | Show | unchanged (bit-identical) | | 1.53 s | | 151 kg | 0.82 | 1.5 m | 94 |
 
