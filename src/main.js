@@ -113,7 +113,11 @@ const S = {
   idleThrottles: new Float64Array(NOZZLES.length),
   tier: 'assist',             // flight tier: assist | pro | advanced (src/sim/judge.js TIERS)
   drill: null, slowmo: 1, freezeT: 0, coach: null,   // practice (src/practice.js)
+  countLen: 3,                // the countdown: 3 s from the title, 1 s on a retry (READY · GO)
+  attempts: {},               // runs flown this session, per course (the results' "Run 4")
 };
+// The page knows the mode, so the quick Retry / Home buttons show only where they belong.
+const setMode = (m) => { S.mode = m; document.body.dataset.mode = m; };
 try {
   const saved = localStorage.getItem('coldgas_tier');
   S.tier = TIERS[saved] ? saved : localStorage.getItem('coldgas_assist') === '0' ? 'pro' : 'assist';
@@ -189,7 +193,7 @@ function closeOverlays() {
 
 function toTitle() {
   closeOverlays();
-  S.mode = 'title'; S.run = null; S.drill = null;
+  setMode('title'); S.run = null; S.drill = null;
   ui.only('title');
   drillBar.hidden = true;
   landing.show(false);
@@ -203,7 +207,7 @@ function toTitle() {
 }
 
 const startRun = whenPhysics(startRunNow);
-function startRunNow(kind = 'jump') {
+function startRunNow(kind = 'jump', quick = false) {
   closeOverlays();
   initAudio();
   S.run = createRun(stage.course);
@@ -211,7 +215,7 @@ function startRunNow(kind = 'jump') {
   S.released = false; S.drill = null; S.freezeT = 0; S.coach = null;
   ghostLoaded(stage.course);
   refGhost(stage.course);
-  S.mode = 'countdown'; S.countT = 0; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
+  setMode('countdown'); S.countT = 0; S.countLen = quick ? 1 : 3; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
   S.impacts = 0; S.impact = null;
   newFlight();
   ui.only('hud');
@@ -233,7 +237,7 @@ function startRunNow(kind = 'jump') {
 function finishRun() {
   const run = S.run;
   S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.assist });
-  S.mode = 'results';
+  setMode('results');
   ui.only('results');
   ui.touch.hidden = true;
   drillBar.hidden = true;
@@ -257,6 +261,12 @@ function finishRun() {
     return;
   }
   ui.results(S.card);
+  if (!S.autopilot) {
+    // Run n, and how it stands against your best on this device (before this run counts).
+    const n = (S.attempts[run.course] = (S.attempts[run.course] || 0) + 1);
+    const best = S.ghosts[run.course];
+    ui.runline(n, best && !best.ref ? best.total : null, S.card.total);
+  } else ui.runline(0, null, S.card.total);
   if (!S.autopilot) coachRun();
   // Your best run becomes the ghost for the next attempt (the reference jump only until you
   // finish one of your own). Storage keeps whichever is better, even across tabs.
@@ -623,13 +633,20 @@ function frame(now) {
     S.time += dt;
     if (S.mode === 'title') titleStep(dt);
     else if (S.mode === 'countdown') {
-      const before = Math.ceil(3 - S.countT);
-      S.countT += dt;
-      const after = Math.ceil(3 - S.countT);
-      if (S.countT < 0.02 || after !== before) ui.countdown(after > 0 ? after : 0);
-      if (S.countT >= 3) { S.mode = 'live'; ui.countdown(0); ui.cue_(S.autopilot ? 'The reference jump' : 'Go', 900); }
+      const L = S.countLen;
+      if (L < 3) {
+        // A retry: one beat of READY, then go. The car is already on its mark.
+        if (S.countT === 0) ui.countdown('Ready');
+        S.countT += dt;
+      } else {
+        const before = Math.ceil(L - S.countT);
+        S.countT += dt;
+        const after = Math.ceil(L - S.countT);
+        if (S.countT < 0.02 || after !== before) ui.countdown(after > 0 ? after : 0);
+      }
+      if (S.countT >= L) { setMode('live'); ui.countdown(0); ui.cue_(S.autopilot ? 'The reference jump' : 'Go', 900); }
       plumes.update(dt, S.time, S.idleThrottles.fill(0), zeroVel, 0);
-      ui.setClock(S.countT - 3);
+      ui.setClock(S.countT - L);
     } else if (S.mode === 'live') liveStep(dt * slow);
     else if (S.mode === 'results' || S.mode === 'replay') replayStep(dt * slow);
     else if (S.mode === 'drive') fd().frame(dt * crash.timeScale(), S.time);   // Free Drive / the Sandbox run their own cameras
@@ -661,11 +678,24 @@ bindInput(document.body, { onPause: () => pause() });
 const on = (sel, fn) => document.querySelectorAll(sel).forEach((el) => el.addEventListener('click', fn));
 on('[data-start]', () => startRun('jump'));
 on('[data-reveal]', () => startRun('reveal'));
-on('[data-again]', () => startRun('jump'));
+// Retry: straight back onto the mark with a one-beat READY (a drill restarts itself; the reference
+// jump hands over to you). Home: the title. Both from anywhere in a run: the HUD's quick buttons,
+// the results, the pause sheet, R / Enter and H.
+function retry() {
+  S.paused = false; ui.show('pause', false);
+  if (S.drill) return retryDrill();
+  startRun('jump', true);
+}
+function goHome() { S.paused = false; ui.show('pause', false); toTitle(); }
+// Delegated: the judges' theatre builds its own Retry / Home buttons after load.
+document.addEventListener('click', (e) => {
+  const b = e.target.closest?.('[data-again], [data-home]');
+  if (!b) return;
+  if (b.hasAttribute('data-again')) retry(); else goHome();
+});
 on('[data-replay]', () => { S.replayT = 0; director.restart(); hero.placed(); });
-on('[data-home]', () => { S.paused = false; toTitle(); });
 on('[data-resume]', () => pause(false));
-on('[data-restart]', () => { S.paused = false; ui.show('pause', false); startRun(S.autopilot ? 'reveal' : 'jump'); });
+on('[data-restart]', () => { if (S.autopilot) { S.paused = false; ui.show('pause', false); startRun('reveal', true); } else retry(); });
 on('[data-share]', async () => {
   if (!S.card) return;
   const f = S.card.facts;
@@ -769,7 +799,7 @@ function startDrillNow(id) {
   initAudio();
   const { run, released } = buildDrill(drill, stage.course);
   S.run = run; S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;
-  S.mode = 'live'; S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
+  setMode('live'); S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
   S.impacts = 0; S.impact = null;
   newFlight(run.tick);
   ui.only('hud');
@@ -806,6 +836,9 @@ on('[data-drill-next]', () => {
 addEventListener('keydown', (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.target?.closest?.('input, select, textarea, [data-ai-modal]')) return;
   if (e.code === 'KeyL' && (S.mode === 'live' || S.mode === 'countdown' || S.mode === 'title')) toggleView();
+  const inRun = S.mode === 'live' || S.mode === 'countdown' || S.mode === 'results' || S.mode === 'replay';
+  if (inRun && !S.drill && (e.code === 'KeyR' || (e.code === 'Enter' && S.mode === 'results'))) { e.preventDefault(); retry(); return; }
+  if (inRun && (e.code === 'KeyH' || (e.code === 'Escape' && S.mode === 'results'))) { e.preventDefault(); goHome(); return; }
   if (!S.drill) return;
   if (e.code === 'KeyR' && (S.mode === 'live' || S.mode === 'results')) retryDrill();
   if (e.code === 'KeyT' && S.mode === 'live') slowBtn.click();
@@ -867,7 +900,7 @@ function loadDrive() {
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
       audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch },
       assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
-      setMode: (m) => { S.mode = m; S.run = null; S.paused = false; ui.show('pause', false); },
+      setMode: (m) => { setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
     });
     return drive;
@@ -886,7 +919,7 @@ function loadSandbox() {
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse, CAR,
       audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch },
       assist: () => S.tier,
-      setMode: (m) => { S.mode = m; S.run = null; S.paused = false; ui.show('pause', false); },
+      setMode: (m) => { setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
     });
     return sandbox;
@@ -909,10 +942,10 @@ if (params.get('board')) openBoard(params.get('board') === 'all' ? 'all' : 'toda
 // e2e hooks. fastForward() runs the sim to the end without waiting on the wall clock, so slow
 // software-GL runners exercise the same flow (countdown → live → results) in seconds.
 function fastForward() {
-  if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); }
+  if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); }
   if (S.mode !== 'live') return;
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
-function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
+function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 window.__coldgas = { S, stage, physicsReady, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 requestAnimationFrame(frame);

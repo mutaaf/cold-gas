@@ -67,7 +67,7 @@ export function createUI() {
   };
   ui.clearCue = () => { ui.cue.classList.remove('on'); };
 
-  ui.countdown = (n) => { ui.count.innerHTML = n ? `<span>${n}</span>` : ''; if (n) tick(); };
+  ui.countdown = (n) => { ui.count.innerHTML = n ? `<span${typeof n === 'string' ? ' class="word"' : ''}>${n}</span>` : ''; if (n) tick(); };
 
   // The flight's phases, as the timeline shows them (src/main.js decides which one you're in).
   ui.timelineFor = (course) => {
@@ -186,6 +186,20 @@ export function createUI() {
   };
 
   // --- Results ---------------------------------------------------------------------------
+  // The run line over the actions: which run this is, and how it stands against your best on this
+  // device (`best` is the stored best before this run; null when there's none yet). n = 0: the
+  // reference jump, which isn't yours.
+  ui.runline = (n, best, total) => {
+    const line = $('[data-runline]'), pb = $('[data-r-pb]');
+    line.hidden = !n;
+    if (!n) return;
+    $('[data-r-attempt]').textContent = `Run ${n}`;
+    const d = best == null ? null : Math.round((total - best) * 10) / 10;
+    line.dataset.state = best == null ? (total > 0 ? 'first' : '') : d > 0 ? 'best' : d === 0 ? 'tie' : 'behind';
+    pb.textContent = best == null ? (total > 0 ? 'Your first mark on this event' : '')
+      : d > 0 ? `New best · +${d.toFixed(1)}` : d === 0 ? `Equals your best · ${best.toFixed(1)}` : `Best ${best.toFixed(1)} · ${d.toFixed(1)} to beat it`;
+  };
+
   // `practice`: { drill, result } for a drill (not scored: no panel, no board).
   ui.results = (card, practice = null) => {
     const sheet = ui.screens.results;
