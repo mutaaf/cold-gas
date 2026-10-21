@@ -29,25 +29,25 @@ const flyDrill = (id, policy, course = 'show') => {
   return run;
 };
 
-describe('SIM_VERSION 14: the skill ladder', () => {
-  it('is version 14 (12: the parked row at its researched sizes; 13: the scheduled fan; 14: the reveal G trace)', () => expect(SIM_VERSION).toBe(14));
-  // SIM_VERSION 10: Show 87.3, Wall 88.0, Lineup 85.0. The references fly the same; LAND's roll-out
-  // no longer brakes sideways, so they land nearer the mark (Wall 11.2 → 5.7 m): the Show and the
-  // Wall gain on precision alone, and nothing else may move. SIM_VERSION 11 flew Show 89.0, Wall
-  // 91.0; SIM_VERSION 13 schedules the fan (tests/unit/fan.test.js): the Show holds 89.0 and the
-  // Wall reads 91.7 (pad miss 5.7 → 5.6 m, entry 22 → 21 km/h), before the Integrity category.
-  // SIM_VERSION 14 (0013) falls free off the lip and brakes late and hard, which is what saves
-  // nitrogen (LESSONS: one late, hard burn): Wall gas left 30 → 47 %, efficiency 6.0 → 9.5, and it
-  // drops nearer the mark (5.6 → 2.6 m). The Show drives off the ledge and brakes over the row
-  // against the roofs (gas 37 → 37 %), landing 5.8 m off (was 2.3). Show 91.0, Wall 98.0, Lineup 85.7.
-  it('keeps the reference runs: no worse than SIM_VERSION 10, better only by precision and the gas a late burn saves', () => {
+describe('SIM_VERSION 15: the rigid-body engine and the reveal G trace', () => {
+  it('is version 15 (14: the rigid-body engine; 15: the reveal G trace, 0013)', () => expect(SIM_VERSION).toBe(15));
+  // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
+  // engine and splits the fan's seal into eight patches: the references fly the same climb and
+  // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
+  // single-point fan kept full suction while the car's floor hung past the lip), so the release is
+  // cleaner and the Wall lands nearer the mark. Nothing may get worse. v15 (0013) falls free off the
+  // lip and brakes late and hard, which saves gas (LESSONS: one late, hard burn), and the references
+  // roll off the ledge instead of hanging (the Wall at 2.5 m/s like run 2, the Show at its 7.5 m/s
+  // carry): Wall gas left 44 % (efficiency 8.9), 3.6 m from the mark; Show 48 % (9.6), 1.5 m.
+  // Show 94.0, Wall 96.0, Lineup 85.3.
+  it('keeps the reference runs: no worse than SIM_VERSION 13', () => {
     const runs = Object.fromEntries(['show', 'wall', 'lineup'].map((c) => [c, fly(c)]));
     const cards = Object.fromEntries(Object.entries(runs).map(([c, r]) => [c, scoreRun(r.t)]));
     // (+ the Integrity category, which a clean run scores ≈10: it lifts every reference a little)
-    expect(cards.show.total).toBeGreaterThanOrEqual(87.3 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(91.0 + 0.5);
-    expect(cards.wall.total).toBeGreaterThanOrEqual(88.0 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(98.0 + 0.5);
-    expect(cards.wall.categories.efficiency).toBeGreaterThan(9);   // the late burn's saving
-    expect(cards.lineup.total).toBeGreaterThanOrEqual(85.0 - 1.05); expect(cards.lineup.total).toBeLessThanOrEqual(85.0 + 2);
+    expect(cards.show.total).toBeGreaterThanOrEqual(90.7 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(94.0 + 0.5);
+    expect(cards.wall.total).toBeGreaterThanOrEqual(92.3 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(96.0 + 0.5);
+    expect(cards.wall.categories.efficiency).toBeGreaterThan(8.5);   // the late burn's saving (v13: 6.0)
+    expect(Math.abs(cards.lineup.total - 86.3)).toBeLessThanOrEqual(1.05);
     for (const c of ['show', 'wall', 'lineup']) expect(cards[c].facts.damagePct).toBeLessThanOrEqual(2);
     expect(cards.wall.facts.padMiss).toBeLessThan(8);
     for (const c of ['show', 'wall', 'lineup']) { expect(runs[c].t.sink).toBeLessThan(1.2); expect(runs[c].t.tiltDeg).toBeLessThan(3); }

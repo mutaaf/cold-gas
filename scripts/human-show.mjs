@@ -16,6 +16,8 @@ import { newInput, up, forward } from '../src/sim/vehicle.js';
 import { scoreRun } from '../src/sim/judge.js';
 import { SHOW } from '../src/sim/courses.js';
 import { SPEC } from '../src/sim/spec.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 
 const args = process.argv.slice(2);
 const N = +(args.find((a) => /^\d+$/.test(a)) || 300);

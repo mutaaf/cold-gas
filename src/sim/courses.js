@@ -201,149 +201,165 @@ export const COURSES = { show: SHOW, wall: WALL, lineup: LINEUP };
 export const DEFAULT_COURSE = 'show';
 
 // --- Objects: every solid has its own material, and every parked vehicle its own body -------------
-// Tyre grip is SPEC.tyreMu × `grip`; `slide` is the friction of bodywork scraping across it.
-// ESTIMATES: sealed show-floor concrete is the reference (the curl is poured concrete too); a
-// parked car's clearcoat and glass hold a tyre about half as well, and let a sill skate.
+// Each material answers two questions. `grip` is a tyre's: SPEC.tyreMu × grip is the peak μ on it.
+// `slide` is the Coulomb friction of bodywork sliding on it, and `bounce` its restitution: these
+// go to the rigid-body engine (src/sim/world.js) as the collider's friction and restitution, and a
+// contact takes the lower friction of the pair (Rapier's Min rule) and the mean restitution.
+// ESTIMATES, with their sources:
+//  - concrete: sealed show-floor concrete is the tyre reference (grip 1). Sheet metal or composite
+//    sliding on dry concrete μ ≈ 0.45–0.55 (accident-reconstruction tables, e.g. Fricke, Traffic
+//    Accident Reconstruction, 1990: a vehicle sliding on its side or roof 0.3–0.5 on dry pavement).
+//    A body that hits it keeps little bounce: e ≈ 0.1 (crash tests: 0.1–0.3 at crash speeds).
+//  - deck: the Wall's curl is poured, brushed concrete (the reveal footage): concrete's numbers, its
+//    own id so a crash can tell the deck from the floor.
+//  - pad: the landing mark is traffic paint on the concrete. Dry marking paint measures μ ≈ 0.6–0.7
+//    against ≈ 0.8 for the bare surface (pavement-marking skid tests): 0.85 of concrete's grip.
+//  - paint: a parked car's clearcoat and glass hold a tyre about half as well as concrete and let
+//    bodywork skate (car on car: painted steel on painted steel μ ≈ 0.3–0.4, e ≈ 0.15).
+//  - steel: the Wall's truss and its posts: steel on steel / composite μ ≈ 0.4, e ≈ 0.2.
+//  - body: the roadster's own skin (carbon and aluminium): μ 0.5 against anything rougher than it.
+//  - Free Drive's real roads (src/sim/roads.js), relative to the sealed concrete: dry dense asphalt
+//    grips about the same; loose gravel μ ≈ 0.5–0.7 of it; dry grass and soil ≈ 0.4–0.5; bare rock
+//    ≈ 0.7. Bodywork scrapes along a steel rail or a stone wall at μ ≈ 0.3–0.4.
 export const MATERIALS = {
-  concrete: { id: 'concrete', grip: 1, slide: 0.5 },
-  paint: { id: 'paint', grip: 0.55, slide: 0.3 },
-  // Free Drive's real roads (src/sim/roads.js). ESTIMATES from road-friction literature, relative
-  // to the sealed concrete above: dry dense asphalt grips about the same; loose gravel μ ≈ 0.5–0.7
-  // of it; dry grass and soil ≈ 0.4–0.5; bare rock ≈ 0.7. Bodywork scrapes along a steel rail or
-  // a stone wall at μ ≈ 0.3–0.4.
-  asphalt: { id: 'asphalt', grip: 1, slide: 0.55 },
-  gravel: { id: 'gravel', grip: 0.62, slide: 0.6 },
-  grass: { id: 'grass', grip: 0.45, slide: 0.45 },
-  rock: { id: 'rock', grip: 0.7, slide: 0.55 },
-  barrier: { id: 'barrier', grip: 0.5, slide: 0.35 },
+  concrete: { id: 'concrete', grip: 1, slide: 0.5, bounce: 0.1 },
+  deck: { id: 'deck', grip: 1, slide: 0.5, bounce: 0.1 },
+  pad: { id: 'pad', grip: 0.85, slide: 0.45, bounce: 0.1 },
+  paint: { id: 'paint', grip: 0.55, slide: 0.35, bounce: 0.15 },
+  steel: { id: 'steel', grip: 0.6, slide: 0.4, bounce: 0.2 },
+  body: { id: 'body', grip: 0.55, slide: 0.5, bounce: 0.12 },
+  asphalt: { id: 'asphalt', grip: 1, slide: 0.55, bounce: 0.1 },
+  gravel: { id: 'gravel', grip: 0.62, slide: 0.6, bounce: 0.05 },
+  grass: { id: 'grass', grip: 0.45, slide: 0.45, bounce: 0.05 },
+  rock: { id: 'rock', grip: 0.7, slide: 0.55, bounce: 0.15 },
+  barrier: { id: 'barrier', grip: 0.5, slide: 0.35, bounce: 0.2 },
 };
-// Parked vehicles: curb mass from LINEUP_SPEC (sourced in docs/VEHICLES.md). Parked means in Park
-// with the brake set: all four tyres resist sliding at μ ≈ 0.8 of their load.
-const PARKED_MASS = Object.fromEntries(LINEUP_SPEC.map((v) => [v.id, v.mass]));
-const PARK_MU = 0.8;
 
-// A world: the course plus its own moving bodies. Each vehicle run gets a fresh one, so a nudged
-// car stays nudged for that run only (and replays the same way, it is all in the sim).
-export function createWorld(course) {
-  const bodies = (course.boxes || []).map((b) => {
-    const hx = (b.maxX - b.minX) / 2, hz = (b.maxZ - b.minZ) / 2, m = PARKED_MASS[b.id] || 2000;
-    return {
-      id: b.id, hx, hz, h: b.maxY, cx: (b.minX + b.maxX) / 2, cz: (b.minZ + b.maxZ) / 2, yaw: 0, c: 1, s: 0,
-      vx: 0, vz: 0, w: 0, mass: m, inertia: (m * (4 * hx * hx + 4 * hz * hz)) / 12, mat: MATERIALS.paint,
-      fx: 0, fz: 0, fy: 0, tq: 0, moved: false,
-    };
-  });
-  const w = { bodies, minX: 0, maxX: 0, minZ: 0, maxZ: 0, maxY: 0 };
+// The parked vehicles as physical objects. LINEUP_SPEC is the data (docs/VEHICLES.md, every number
+// sourced): dimensions, curb mass, CoM height and its offset toward the nose, inertia, ground
+// clearance and the axles (position, track, tyre radius). Anything it doesn't carry falls back to a
+// class estimate here, so a better number in LINEUP_SPEC wins without touching the physics.
+// Fallback ESTIMATES: wheelbase ≈ 0.60 × length, track ≈ width − 0.28 m, CoM height ≈ 0.31 ×
+// height (floor batteries carry the mass low), inertia a uniform box × 0.8 (Heydinger et al., SAE
+// 1999-01-1336: measured cars sit ≈0.8 of the box), clearance 0.15 m (0.3 for a truck).
+// Suspension (ours, ESTIMATE): ride frequency 1.3 Hz for cars, 1.8 Hz for the tractor (Gillespie,
+// Fundamentals of Vehicle Dynamics, 1992: passenger cars 1–1.5 Hz, trucks higher), damping ratio
+// 0.3 (0.2–0.4), each corner's spring rated to the load it carries (lever rule over the axles; a
+// tandem shares as one axle at its middle), so the body sits level at its clearance.
+// Parked means in Park with the electric parking brake set: every tyre resists sliding, a locked
+// tyre on dry concrete at μ ≈ 0.8 of its load (skid-test values for dry concrete: 0.7–0.85).
+const PARKED_MASS = { sedan: 1800, suv: 2000, semi: 10500, pickup: 3100, cab: 1600 };
+export const PARK_MU = 0.8;
+const G0 = 9.81;
+export function parkedPhysics(v) {
+  const truck = v.h > 3;
+  const mass = v.mass ?? PARKED_MASS[v.id] ?? 2000;
+  const box = (a, b) => (mass * (a * a + b * b)) / 12 * 0.8;
+  const wheelbase = v.wheelbase ?? 0.6 * v.l, track = v.track ?? v.w - 0.28, wheelR = v.wheelR ?? v.tyreR ?? (truck ? 0.52 : 0.36);
+  const cgx = v.cgAt ?? 0;
+  const axles = v.axles ?? [{ at: wheelbase / 2, track, r: wheelR }, { at: -wheelbase / 2, track, r: wheelR }];
+  // Static axle loads by the lever rule between the front axle and the rear group's middle.
+  const front = axles[0], rear = axles.slice(1), rearAt = rear.reduce((a, x) => a + x.at, 0) / rear.length;
+  const span = front.at - rearAt, frontShare = span > 0 ? (cgx - rearAt) / span : 0.5;
+  const corners = [];
+  for (const ax of axles) {
+    const share = ax === front ? frontShare : (1 - frontShare) / rear.length;
+    for (const side of [1, -1]) corners.push({ x: ax.at, z: (side * ax.track) / 2, r: ax.r, load: (mass * G0 * share) / 2 });
+  }
+  return {
+    mass, wheelbase, track, wheelR, cgx, corners,
+    cgh: v.cgHeight ?? v.cgh ?? 0.31 * v.h,
+    clearance: v.clearance ?? (truck ? 0.3 : 0.15),
+    rideHz: v.rideHz ?? (truck ? 1.8 : 1.3),
+    damping: v.damping ?? 0.3,
+    // Principal moments in the body frame: x along the length (roll), y up (yaw), z across (pitch).
+    inertia: v.inertia ?? { roll: box(v.w, v.h), yaw: box(v.l, v.w), pitch: box(v.l, v.h) },
+  };
+}
+
+// A parked vehicle's state as everything outside the engine sees it: a box of the vehicle's size,
+// clearance to roof, posed by its chassis frame (origin on the ground under the box's centre when
+// it stands at rest, x along its length, y up, z across). `cx, cy, cz` + quaternion `qx..qw` is the
+// pose; `yaw` its heading. The engine's rigid body (src/sim/world.js) writes these every tick.
+export function parkedMirror(b) {
+  const ph = parkedPhysics(b);
+  return {
+    id: b.id, spec: b, phys: ph, mass: ph.mass, mat: MATERIALS.paint,
+    hx: (b.maxX - b.minX) / 2, hz: (b.maxZ - b.minZ) / 2, h: b.maxY, clr: ph.clearance,
+    cx: (b.minX + b.maxX) / 2, cy: 0, cz: (b.minZ + b.maxZ) / 2, qx: 0, qy: 0, qz: 0, qw: 1, yaw: 0,
+    vx: 0, vy: 0, vz: 0, wx: 0, wy: 0, wz: 0, pvx: 0, pvy: 0, pvz: 0, pwx: 0, pwy: 0, pwz: 0, moved: false, asleep: true, rb: null, collider: null,
+  };
+}
+export function refreshBounds(w) {
+  w.minX = Infinity; w.maxX = -Infinity; w.minZ = Infinity; w.maxZ = -Infinity; w.maxY = -Infinity;
+  for (const b of w.bodies) {
+    const r = Math.sqrt(b.hx * b.hx + b.hz * b.hz + b.h * b.h);
+    w.minX = Math.min(w.minX, b.cx - r); w.maxX = Math.max(w.maxX, b.cx + r);
+    w.minZ = Math.min(w.minZ, b.cz - r); w.maxZ = Math.max(w.maxZ, b.cz + r); w.maxY = Math.max(w.maxY, b.cy + r);
+  }
+}
+// The parked row where the course put it, for queries that don't belong to a run (the renderer's
+// debris, the HUD, tests). A run's own bodies live in its engine world (src/sim/world.js).
+export function staticWorld(course) {
+  const w = { bodies: (course.boxes || []).map(parkedMirror), minX: 0, maxX: 0, minZ: 0, maxZ: 0, maxY: 0 };
   refreshBounds(w);
   return w;
 }
 
-function refreshBounds(w) {
-  w.minX = Infinity; w.maxX = -Infinity; w.minZ = Infinity; w.maxZ = -Infinity; w.maxY = -Infinity;
-  for (const b of w.bodies) {
-    const ex = Math.abs(b.c) * b.hx + Math.abs(b.s) * b.hz, ez = Math.abs(b.s) * b.hx + Math.abs(b.c) * b.hz;
-    w.minX = Math.min(w.minX, b.cx - ex); w.maxX = Math.max(w.maxX, b.cx + ex);
-    w.minZ = Math.min(w.minZ, b.cz - ez); w.maxZ = Math.max(w.maxZ, b.cz + ez); w.maxY = Math.max(w.maxY, b.h);
-  }
+// World point → body frame (by the conjugate of the body's rotation).
+const lp = { x: 0, y: 0, z: 0 };
+function toLocal(b, x, y, z) {
+  const vx = x - b.cx, vy = y - b.cy, vz = z - b.cz;
+  const qx = -b.qx, qy = -b.qy, qz = -b.qz, qw = b.qw;
+  const tx = 2 * (qy * vz - qz * vy), ty = 2 * (qz * vx - qx * vz), tz = 2 * (qx * vy - qy * vx);
+  lp.x = vx + qw * tx + (qy * tz - qz * ty); lp.y = vy + qw * ty + (qz * tx - qx * tz); lp.z = vz + qw * tz + (qx * ty - qy * tx);
+  return lp;
+}
+const wn = { x: 0, y: 0, z: 0 };
+function toWorldDir(b, x, y, z) {
+  const qx = b.qx, qy = b.qy, qz = b.qz, qw = b.qw;
+  const tx = 2 * (qy * z - qz * y), ty = 2 * (qz * x - qx * z), tz = 2 * (qx * y - qy * x);
+  wn.x = x + qw * tx + (qy * tz - qz * ty); wn.y = y + qw * ty + (qz * tx - qx * tz); wn.z = z + qw * tz + (qx * ty - qy * tx);
+  return wn;
 }
 
-// Push on a body at world point (px, pz) with force (fx, fy, fz) for this tick.
-export function pushBody(b, px, pz, fx, fy, fz) {
-  b.fx += fx; b.fz += fz; b.fy += fy;
-  b.tq += (pz - b.cz) * fx - (px - b.cx) * fz;     // about +y
-}
-
-// Overlap of two yawed boxes in plan (separating axes): depth and unit axis from a to b, or 0.
-const sat = { d: 0, x: 0, z: 0 };
-function overlap2(a, b) {
-  const dx = b.cx - a.cx, dz = b.cz - a.cz;
-  const axes = [a.c, -a.s, a.s, a.c, b.c, -b.s, b.s, b.c];   // each box's local x and z, in world
-  sat.d = Infinity;
-  for (let k = 0; k < 8; k += 2) {
-    const ux = axes[k], uz = axes[k + 1];
-    const ra = a.hx * Math.abs(a.c * ux - a.s * uz) + a.hz * Math.abs(a.s * ux + a.c * uz);
-    const rb = b.hx * Math.abs(b.c * ux - b.s * uz) + b.hz * Math.abs(b.s * ux + b.c * uz);
-    const dist = dx * ux + dz * uz, o = ra + rb - Math.abs(dist);
-    if (o <= 0) return 0;
-    if (o < sat.d) { sat.d = o; const sg = dist < 0 ? -1 : 1; sat.x = ux * sg; sat.z = uz * sg; }
-  }
-  return sat.d;
-}
-
-// Step the parked bodies: whatever pushed them this tick, against their parked tyres. Sliding on
-// the concrete in the plane (x, z, yaw); a body at rest with nothing pushing costs nothing. A
-// shoved car shoves the next one: body against body is a stiff, damped contact in plan.
-export function stepWorld(w, dt, g) {
-  let moved = false;
-  const bs = w.bodies;
-  for (let i = 0; i < bs.length; i++) {
-    const a = bs[i];
-    if (!a.moved) continue;
-    for (let j = 0; j < bs.length; j++) {
-      const b = bs[j];
-      if (j === i || (b.moved && j < i)) continue;
-      const d = overlap2(a, b);
-      if (d <= 0) continue;
-      const vn = (b.vx - a.vx) * sat.x + (b.vz - a.vz) * sat.z;
-      const f = Math.max(0, 4e6 * d - 4e4 * vn);
-      const px = (a.cx + b.cx) / 2, pz = (a.cz + b.cz) / 2;
-      pushBody(b, px, pz, f * sat.x, 0, f * sat.z);
-      pushBody(a, px, pz, -f * sat.x, 0, -f * sat.z);
-    }
-  }
-  for (const b of w.bodies) {
-    const pushed = b.fx !== 0 || b.fz !== 0 || b.tq !== 0;
-    if (!pushed && b.vx === 0 && b.vz === 0 && b.w === 0) continue;
-    const N = b.mass * g + Math.max(0, -b.fy);
-    let vx = b.vx + (b.fx / b.mass) * dt, vz = b.vz + (b.fz / b.mass) * dt;
-    const v = dhypot(vx, vz), dv = (PARK_MU * N / b.mass) * dt;
-    if (v <= dv) { vx = 0; vz = 0; } else { vx -= (vx / v) * dv; vz -= (vz / v) * dv; }
-    // Yaw: the four tyre patches sit ≈ half the diagonal from the centre.
-    let wy = b.w + (b.tq / b.inertia) * dt;
-    const dw = (PARK_MU * N * 0.5 * dhypot(b.hx, b.hz) / b.inertia) * dt;
-    wy = Math.abs(wy) <= dw ? 0 : wy - Math.sign(wy) * dw;
-    b.vx = vx; b.vz = vz; b.w = wy;
-    b.fx = 0; b.fz = 0; b.fy = 0; b.tq = 0;
-    if (vx !== 0 || vz !== 0 || wy !== 0) {
-      b.cx += vx * dt; b.cz += vz * dt; b.yaw += wy * dt;
-      b.c = dcos(b.yaw); b.s = dsin(b.yaw);
-      b.moved = true; moved = true;
-    }
-  }
-  if (moved) refreshBounds(w);
-}
-
-// Signed distance to one (yawed) box, normal into `n`.
+// Signed distance to one parked body's box (clearance to roof, in its own frame), normal into `n`.
 function bodySdf(b, x, y, z, n) {
-  const dx = x - b.cx, dz = z - b.cz;
-  const lx = b.c * dx - b.s * dz, lz = b.s * dx + b.c * dz;          // world → body (yaw about +y)
-  const qx = Math.max(-b.hx - lx, 0, lx - b.hx), qy = Math.max(-y, 0, y - b.h), qz = Math.max(-b.hz - lz, 0, lz - b.hz);
+  const p = toLocal(b, x, y, z);
+  const cy = (b.clr + b.h) / 2, hy = (b.h - b.clr) / 2;
+  const lx = p.x, ly = p.y - cy, lz = p.z;
+  const qx = Math.max(-b.hx - lx, 0, lx - b.hx), qy = Math.max(-hy - ly, 0, ly - hy), qz = Math.max(-b.hz - lz, 0, lz - b.hz);
   let nx, ny, nz, d;
   const out = dhypot(qx, qy, qz);
   if (out > 0) {
     nx = (lx < -b.hx ? -qx : lx > b.hx ? qx : 0) / out;
-    ny = (y < 0 ? -qy : y > b.h ? qy : 0) / out;
+    ny = (ly < -hy ? -qy : ly > hy ? qy : 0) / out;
     nz = (lz < -b.hz ? -qz : lz > b.hz ? qz : 0) / out;
     d = out;
   } else {
-    // Inside: nearest face (never down; the floor handles that).
-    const f0 = lx + b.hx, f1 = b.hx - lx, f2 = b.h - y, f3 = lz + b.hz, f4 = b.hz - lz;
+    // Inside: the nearest face.
+    const f0 = lx + b.hx, f1 = b.hx - lx, f2 = hy - ly, f3 = lz + b.hz, f4 = b.hz - lz, f5 = ly + hy;
     d = f0; nx = -1; ny = 0; nz = 0;
     if (f1 < d) { d = f1; nx = 1; ny = 0; nz = 0; }
     if (f2 < d) { d = f2; nx = 0; ny = 1; nz = 0; }
     if (f3 < d) { d = f3; nx = 0; ny = 0; nz = -1; }
     if (f4 < d) { d = f4; nx = 0; ny = 0; nz = 1; }
+    if (f5 < d) { d = f5; nx = 0; ny = -1; nz = 0; }
     d = -d;
   }
-  n.nx = b.c * nx + b.s * nz; n.ny = ny; n.nz = -b.s * nx + b.c * nz;   // body → world
+  const r = toWorldDir(b, nx, ny, nz);
+  n.nx = r.x; n.ny = r.y; n.nz = r.z;
   return d;
 }
 
-// --- The query the physics asks ---------------------------------------------------------------------
+// --- The query the geometry answers -----------------------------------------------------------------
+// The physics itself runs in the engine (src/sim/world.js builds its colliders from these same
+// numbers). `surface` is the exact geometry for everything else that asks where the solids are:
+// the renderer's debris and camera, the HUD, the tests.
 const staticWorlds = new Map();
 const worldOf = (course) => {
   let w = staticWorlds.get(course);
-  if (!w) { w = createWorld(course); staticWorlds.set(course, w); }
+  if (!w) { w = staticWorld(course); staticWorlds.set(course, w); }
   return w;
 };
 const tmpN = { nx: 0, ny: 0, nz: 0 };
@@ -355,17 +371,19 @@ export function surface(course, x, y, z, out, world = worldOf(course)) {
   if (course.sdf) return course.sdf(x, y, z, out);
   // The ground: flat concrete everywhere (y = 0), plus the kicker where a course has one.
   let phi, nx = 0, ny = 1, nz = 0;
+  out.obstacle = false; out.body = null; out.mat = MATERIALS.concrete;
   if (course.ramp && Math.abs(x) <= RAMP.halfWidth && z >= RAMP.z0 && z <= RAMP.z1) {
     const L = RAMP.z1 - RAMP.z0, s = (z - RAMP.z0) / L, slope = (2 * RAMP.height * s) / L, k = 1 / Math.sqrt(1 + slope * slope);
     phi = (y - kickerHeight(z)) * k; ny = k; nz = -slope * k;
   } else {
     phi = y;
+    const pad = course.pad;
+    if (pad) { const dx = x - pad.x, dz = z - pad.z; if (dx * dx + dz * dz <= PAD_R * PAD_R) out.mat = MATERIALS.pad; }
   }
-  out.obstacle = false; out.body = null; out.mat = MATERIALS.concrete;
   if (course.id === 'wall' || course.id === 'show') {
     if (Math.abs(x) <= WALL.width / 2) {
       const d = wallSdf(z, y, tmpN);
-      if (d < phi) { phi = d; nx = 0; ny = tmpN.ny; nz = tmpN.nz; }
+      if (d < phi) { phi = d; nx = 0; ny = tmpN.ny; nz = tmpN.nz; out.mat = MATERIALS.deck; }
     }
   }
   // Parked vehicles. A body is never nearer than the row's bounding box, so skip the row whenever
@@ -380,14 +398,31 @@ export function surface(course, x, y, z, out, world = worldOf(course)) {
   out.x = nx; out.y = ny; out.z = nz;
   return phi;
 }
+// The landing pad's painted disc: the outer ring plus its 0.8 m border (src/render/wall.js), a
+// film of paint on the concrete (its material, not a step: a fraction of a millimetre).
+export const PAD_R = 7.8;
 
-// Height of the tallest roof under (x, z), or −Infinity (clearance telemetry).
+// Height of the tallest roof under (x, z), or −Infinity (clearance telemetry): where a vertical
+// line through (x, z) first enters each parked body's box, however it is tilted.
 export function roofUnder(world, x, z) {
   let top = -Infinity;
   for (const b of world.bodies) {
     const dx = x - b.cx, dz = z - b.cz;
-    const lx = b.c * dx - b.s * dz, lz = b.s * dx + b.c * dz;
-    if (lx > -b.hx && lx < b.hx && lz > -b.hz && lz < b.hz && b.h > top) top = b.h;
+    if (dx * dx + dz * dz > b.hx * b.hx + b.hz * b.hz + b.h * b.h) continue;
+    // The line, in the body's frame: from 100 m up, straight down.
+    const o = toLocal(b, x, b.cy + 100, z), ox = o.x, oy = o.y, oz = o.z;
+    const d = toLocal(b, b.cx, b.cy - 1, b.cz), dx2 = d.x, dy2 = d.y, dz2 = d.z;   // world down, in the body frame
+    let t0 = -Infinity, t1 = Infinity;
+    const slab = (o0, d0, lo, hi) => {
+      if (d0 > -1e-12 && d0 < 1e-12) return o0 >= lo && o0 <= hi;
+      let a = (lo - o0) / d0, c = (hi - o0) / d0;
+      if (a > c) { const s = a; a = c; c = s; }
+      if (a > t0) t0 = a; if (c < t1) t1 = c;
+      return t0 <= t1;
+    };
+    if (!slab(ox, dx2, -b.hx, b.hx) || !slab(oy, dy2, b.clr, b.h) || !slab(oz, dz2, -b.hz, b.hz)) continue;
+    const y = b.cy + 100 - t0;
+    if (t0 >= 0 && y > top) top = y;
   }
   return top;
 }

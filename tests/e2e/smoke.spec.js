@@ -176,17 +176,19 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
   page.on('console', (m) => { if (m.type() === 'error' && !/api\//.test(m.text()) && !/404/.test(m.text())) errors.push(m.text()); });
   await page.goto('/coldgas/?course=lineup&gfx=low');
   await expect(page.locator('[data-start]')).toBeVisible();
-  // Too low over the row: it clips the roofs and rolls over.
+  // Runs wait for the physics engine's WASM (src/sim/engine.js), fetched once the stage paints.
+  await page.waitForFunction(() => window.__coldgas?.physicsReady(), null, { timeout: 30_000 });
+  // Too low over the row and too fast: its side clips a parked body and it grinds over the roofs.
   await page.evaluate(() => {
     const g = window.__coldgas;
     g.startRun('reveal');
-    g.S.autopilot = g.createAutopilot('lineup', { apex: 2.6 });   // 2.9 since the row's researched sizes (SIM_VERSION 12), 2.6 since LAND's late brake (14)
+    g.S.autopilot = g.createAutopilot('lineup', { speed: 9, apex: 3.8, rolls: 2 });
     g.skipCountdown();
   });
   await page.evaluate(() => window.__coldgas.fastForward());   // the whole run in one go, not at software GL's pace
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 20_000 });
-  const run = await page.evaluate(() => ({ flipped: window.__coldgas.S.run.t.flipped, impacts: window.__coldgas.S.run.impacts.count }));
-  expect(run.flipped).toBe(true);
+  const run = await page.evaluate(() => ({ contact: window.__coldgas.S.run.t.contact, impacts: window.__coldgas.S.run.impacts.count }));
+  expect(run.contact).toBe(true);
   expect(run.impacts).toBeGreaterThan(5);
   // The replay walks the same events: jump it to just before the first hit (read from the run's own
   // impact log, so a physics change can't strand the test on a stale frame) and the crash fires

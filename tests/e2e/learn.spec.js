@@ -35,11 +35,13 @@ test('the landing HUD is up in the air: the sink in its band, the BRAKE line, th
   await ready(page);
   await page.evaluate(() => { window.__coldgas.setTier('pro'); window.__coldgas.startDrill('land'); });
   await live(page);
+  // The marker first: since SIM_VERSION 15 the reference brakes late, so the drill starts at the
+  // fastest point of the fall and is under 0.6 s from the ground with hands off.
+  await page.waitForFunction(() => window.__coldgas.landing.marker.visible, null, { timeout: 5_000 });
   await expect(page.locator('[data-descent]')).toBeVisible();
   await expect(page.locator('[data-d-sink]')).toHaveText(/^\d+\.\d$/);
   await expect(page.locator('[data-descent]')).toHaveAttribute('data-status', /green|amber|red/);
   await expect(page.locator('[data-d-brake-lbl]')).toContainText('BRAKE');
-  expect(await page.evaluate(() => window.__coldgas.landing.marker.visible)).toBe(true);
   // Hands off from 10 m, falling 13 m/s: the band goes red before the ground.
   await page.waitForFunction(() => document.querySelector('[data-descent]').dataset.status === 'red' || window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
   // (The crash's slow-motion beat takes minutes of wall clock on a software-GL runner: skip ahead.)

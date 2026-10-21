@@ -73,8 +73,8 @@ describe('bodywork: elastic to yield, then it folds and stays folded', () => {
 });
 
 describe('impact events', () => {
-  const slow = fly('show', noLand('show', { carry: 4 }));
-  it('letting go too slow (4 m/s off the lip) and never braking drops the car onto the row: hits on a parked body, then the ground', () => {
+  const slow = fly('show', noLand('show', { carry: 7 }));
+  it('letting go short of the carry (7 m/s off the lip) and never braking drops the car onto the row: hits on a parked body, then the ground', () => {
     expect(slow.t.contact).toBe(true);
     const hits = kinds(slow.impacts, HIT);
     expect(hits.some((e) => e[4] >= 0)).toBe(true);        // a parked vehicle
@@ -95,25 +95,25 @@ describe('impact events', () => {
     expect(events(re.impacts)).toEqual(events(slow.impacts));
     expect(scoreRun(re.t)).toEqual(scoreRun(slow.t));
   });
-  // Too low over the row: it clips the roofs and goes over (onto its side or roof: chaotic, so the
-  // exact resting face isn't pinned).
-  // (2.9 since the row took its researched sizes in SIM_VERSION 12: the semi stands 4.11 m; 2.6 since
-  // SIM_VERSION 14, when LAND's later, harder brake began to carry a 2.9 m apex onto the roofs upright.)
-  const roll = fly('lineup', { apex: 2.6 });
-  it('a rollover: clips the row, goes over, and replays bit-exactly', () => {
-    expect(roll.t.flipped).toBe(true);
-    expect(kinds(roll.impacts, HIT).some((e) => e[2] === PART.side && e[4] >= 0)).toBe(true);
-    expect(kinds(roll.impacts, SCRAPE).some((e) => e[2] === PART.roof || e[2] === PART.side)).toBe(true);   // grinds on its side or roof
-    expect(Math.max(...roll.car.crush)).toBeGreaterThan(0.05);
-    const re = simulate(roll.inputLog, 'lineup');
-    expect(re.tick).toBe(roll.tick);
-    expect(re.car.quat).toEqual(roll.car.quat);
-    expect(events(re.impacts)).toEqual(events(roll.impacts));
-    expect(scoreRun(re.t)).toEqual(scoreRun(roll.t));
+  // Too low over the row, two rolls asked for: the car's side clips a parked body, it grinds along
+  // the roofs, its bodywork folds (and Assist rights it: where it ends is chaotic, so not pinned).
+  const clip = fly('lineup', { speed: 9, apex: 3.2, rolls: 2 });   // (3.8 before SIM_VERSION 15's later brake)
+  it('a hard clip: hits a parked body side-on, grinds, folds the bodywork, and replays bit-exactly', () => {
+    expect(clip.t.contact).toBe(true);
+    expect(kinds(clip.impacts, HIT).some((e) => e[2] === PART.side && e[4] >= 0)).toBe(true);
+    expect(kinds(clip.impacts, SCRAPE).some((e) => e[2] === PART.roof || e[2] === PART.side)).toBe(true);   // grinds on its side or roof
+    expect(Math.max(...clip.car.crush)).toBeGreaterThan(0.05);
+    const re = simulate(clip.inputLog, 'lineup');
+    expect(re.tick).toBe(clip.tick);
+    expect(re.car.quat).toEqual(clip.car.quat);
+    expect(events(re.impacts)).toEqual(events(clip.impacts));
+    expect(re.car.world.bodies.map((b) => [b.cx, b.cy, b.cz, b.qw])).toEqual(clip.car.world.bodies.map((b) => [b.cx, b.cy, b.cz, b.qw]));
+    expect(scoreRun(re.t)).toEqual(scoreRun(clip.t));
   });
   it('a tyre slam and a slide are events too', () => {
-    expect(kinds(slow.impacts, WHEEL).length).toBeGreaterThan(0);
-    expect(kinds(slow.impacts, SCRAPE).length).toBeGreaterThan(0);
+    const drop = fly('lineup', noLand('lineup', {}));   // the kickflip with no brake: down on its wheels hard
+    expect(kinds(drop.impacts, WHEEL).length).toBeGreaterThan(0);
+    expect(kinds(drop.impacts, SCRAPE).length).toBeGreaterThan(0);
   });
   it('the reference runs stay clean: no crush, nothing harder than a skirt touching the ledge', () => {
     for (const course of ['show', 'wall', 'lineup']) {

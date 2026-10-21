@@ -174,13 +174,24 @@ function lineup(boxes) {
     g.add(car);
     return { car, home: { cx: (b.minX + b.maxX) / 2, cz: b.cz, yaw: 0 }, dx: 0 };   // models are built centred on their box
   });
+  // A body's pose is its chassis frame (src/sim/courses.js parkedMirror): origin on the ground under
+  // the box's centre at rest, x along its length. The mesh is built nose to +z, so it turns a
+  // quarter about y inside that frame.
+  const quarter = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), Math.PI / 2), off = new THREE.Vector3();
   g.userData.setBodies = (bodies) => {
     for (let i = 0; i < cars.length; i++) {
       const p = bodies ? bodies[i] : cars[i].home, k = cars[i];
       if (!p) continue;
+      if (p.qw !== undefined) {
+        k.car.quaternion.set(p.qx, p.qy, p.qz, p.qw);
+        off.set(k.dx, 0, 0).applyQuaternion(k.car.quaternion);
+        k.car.quaternion.multiply(quarter);
+        k.car.position.set(p.cx + off.x, (p.cy || 0) + off.y, p.cz + off.z);
+        continue;
+      }
       const c = Math.cos(p.yaw), s = Math.sin(p.yaw);
       k.car.position.set(p.cx + c * k.dx, 0, p.cz - s * k.dx);
-      k.car.rotation.y = Math.PI / 2 + p.yaw;
+      k.car.rotation.set(0, Math.PI / 2 + p.yaw, 0);
     }
   };
   return g;

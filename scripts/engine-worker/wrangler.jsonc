@@ -1,0 +1,7 @@
+{
+  // Test-only Worker for the engine determinism check (scripts/engine-worker/index.js). Never deployed.
+  "name": "cold-gas-engine-check",
+  "main": "index.js",
+  "compatibility_date": "2026-10-01",
+  "compatibility_flags": ["nodejs_compat"]
+}

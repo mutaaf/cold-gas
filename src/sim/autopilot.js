@@ -13,9 +13,14 @@ import { dhypot } from './dmath.js';
 // falling, braked hard on the down-jets and landed ≈4.5 s after release. The kickflip lifted off
 // flat ground at ≈7–8 m/s and peaked ≈7–8 m over the lineup.
 export const REVEAL = {
-  wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.97 },
+  // Run 2 (the G trace) hung under 1 s and moved forward off the lip during the roll, landing ≈8–12 m
+  // out from the ramp's base (research §2.1.4): it rolls out along the ledge at 2.5 m/s and lets go.
+  // (`hang`/`releaseAt: 0.93` stop it on the ledge instead, four wheels and the sealed floor on the
+  // deck: the drills and run 1's hang.)
+  wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.93, driveOff: true, driveSpeed: 2.5, driveFrom: 0.8, driveRelease: 0.96 },
   lineup: { speed: 7.5, apex: 5.0, rolls: 1, rollBrake: 14 },
-  show: { carry: 8.5, driveOff: true, driveFrom: 0.8 },
+  // The Show drives out along the ledge at the carry speed (driveSpeed falls back to `carry`) and lets go near the lip.
+  show: { carry: 7.5, driveSpeed: undefined, driveOff: true, driveFrom: 0.8, driveRelease: 0.95 },
 };
 
 const rates = v3(), upv = v3(), fwv = v3();
@@ -91,8 +96,8 @@ function wallPilot(plan, courseId) {
       // speed and lets go at the lip, so the car leaves already moving out over the row and falls
       // free (the reveal's 0.2–0.4 G off the lip) instead of being shoved by the rear jets.
       if (plan.driveOff && prog >= plan.driveFrom) {
-        out.throttle = speed < plan.carry ? 1 : 0;
-        if (prog >= plan.releaseAt) st.released = true;
+        out.throttle = speed < (plan.driveSpeed ?? plan.carry) ? 1 : 0;
+        if (prog >= plan.driveRelease) st.released = true;
         return out;
       }
       if (prog >= plan.releaseAt) {
