@@ -174,9 +174,23 @@ function sliceShape(sh) {
   const pr = profileOf(sh.kind);
   if (!pr) return out;
   const T = pr.top, m = T.length / 2, H = pr.half;
+  // Internal edges: a slice's end face stands up to the drawn curve, so a body bottomed onto the
+  // slice before it (the kicker at 80 km/h presses the hull ≈ 2 cm in) catches its top corner and
+  // the contact normal is the face's, horizontal: the car stopped dead from 22 m/s in one tick. At
+  // each concave turn the slice runs on under its neighbour along its own line (which a concave
+  // curve keeps below the neighbour's surface) and dips EDGE_DIP into the solid, so the corner left
+  // at the surface is a 6° slant and every vertical face is buried. Convex turns (a deck's lip)
+  // keep a plain end: running on there would stand proud of the next face.
+  const EDGE_RUN = 0.4, EDGE_DIP = 0.04;
+  const seg = (i) => { const du = T[2 * i + 2] - T[2 * i], dy = T[2 * i + 3] - T[2 * i + 1], L = Math.hypot(du, dy); return { du: du / L, dy: dy / L, L }; };
+  const concave = (a, b) => a.du * b.dy - a.dy * b.du > 1e-9;
   for (let i = 0; i + 1 < m; i++) {
+    const s = seg(i), u0 = T[2 * i], y0 = T[2 * i + 1], u1 = T[2 * i + 2], y1 = T[2 * i + 3];
+    const top = [[u0, y0], [u1, y1]];
+    if (i > 0) { const p = seg(i - 1); if (concave(p, s)) { const o = Math.min(EDGE_RUN, 0.9 * p.L); top.unshift([u0 - o * s.du + EDGE_DIP * s.dy, y0 - o * s.dy - EDGE_DIP * s.du]); } }
+    if (i + 2 < m) { const n = seg(i + 1); if (concave(s, n)) { const o = Math.min(EDGE_RUN, 0.9 * n.L); top.push([u1 + o * s.du + EDGE_DIP * s.dy, y1 + o * s.dy - EDGE_DIP * s.du]); } }
     const pts = [];
-    for (const l of [-H, H]) for (const [u, y] of [[T[2 * i], T[2 * i + 1]], [T[2 * i + 2], T[2 * i + 3]], [T[2 * i + 2], -SKIRT], [T[2 * i], -SKIRT]]) {
+    for (const l of [-H, H]) for (const [u, y] of [...top, ...top.map(([u]) => [u, -SKIRT])]) {
       if (pr.axis === 'x') pts.push(l, y, u); else pts.push(u, y, l);
     }
     out.push(Float32Array.from(pts));

@@ -2,6 +2,7 @@
 
 Mistakes already paid for. Read before working.
 
+- **Convex slices have internal edges.** Rapier resolves a contact by its shortest way out; when a body is pressed a centimetre into one slice, the next slice's end face, standing flush with the surface, is shorter, and the normal comes out horizontal. That is a dead stop at speed. Bury every internal face (`sliceShape` in src/build/objects.js runs each slice on under its neighbour and dips it); don't butt slices end to end.
 - **Loft winding.** `loft()` in src/render/cars.js must wind (a, b, c) so normals face out; inverted winding back-face-culls every body and lights the inside of the far wall (looked like black slabs).
 - **No MSAA HalfFloat render target.** A multisampled HalfFloat composer target rendered pure black on some GPU paths; we use SMAA after the OutputPass instead.
 - **Grounded attitude jets.** The flight computer must not fire on the wheels, or it damps suspension bounce with air and sheds mist on the start line.

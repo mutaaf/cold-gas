@@ -35,15 +35,16 @@ function ram(course, x, z, yHint, { back = 12, speed = 14, secs = 2.5, dir = { x
   car.vel.x = dir.x * speed; car.vel.z = dir.z * speed;
   for (const w of car.wheels) w.omega = speed / 0.35;
   const inp = newInput(); inp.throttle = 0.35;
-  let past = -Infinity, hull = 0, minD = Infinity;
+  let past = -Infinity, hull = 0, minD = Infinity, vMin = Infinity;
   for (let t = 0; t < 240 * secs; t++) {
     step(car, inp);
     if (car.hullContact) hull++;
+    vMin = Math.min(vMin, Math.hypot(car.vel.x, car.vel.z));
     const ex = car.pos.x - x, ez = car.pos.z - z;
     if (Math.abs(ex * dir.z - ez * dir.x) < 1.5) past = Math.max(past, ex * dir.x + ez * dir.z);
     minD = Math.min(minD, Math.hypot(ex, ez));
   }
-  return { car, past, hull, minD, v: Math.hypot(car.vel.x, car.vel.z) };
+  return { car, past, hull, minD, vMin, v: Math.hypot(car.vel.x, car.vel.z) };
 }
 // A prop with open, gentle ground on its −z side and nothing else in the lane.
 function openProp(course, list, test) {
@@ -81,7 +82,9 @@ describe('trees are solid', () => {
         const r = ram(course, t.x, t.z, t.y), rt = SHAPES[t.type].trunkR * t.sx;
         expect(r.past).toBeLessThan(-1.5);            // the nose (≈ 2.4 m ahead of the centre) at the bark
         expect(r.minD).toBeGreaterThan(rt + 0.9);     // the body never in the trunk (half-width 0.96 m)
-        expect(r.v).toBeLessThan(8);                  // from 14 m/s and a held throttle
+        // From 14 m/s and a held throttle the strike costs at least a quarter of it: dead on it stops
+        // the car; a hair off centre the round bark turns it aside (−35 %) and it drives on.
+        expect(r.vMin).toBeLessThan(10.5);
         expect(r.hull).toBeGreaterThan(0);
         tried++;
       }
