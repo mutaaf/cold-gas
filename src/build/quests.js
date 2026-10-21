@@ -107,7 +107,7 @@ export function createQuestRun(quest, objs) {
           case 'jump': label = `Jump ${o.min} m`; val = `${Math.round(st.best.jump)} m`; break;
           case 'airtime': label = `${o.min} s in the air`; val = `${st.best.airtime.toFixed(1)} s`; break;
           case 'flip': label = `${o.count} full rotation${o.count > 1 ? 's' : ''} in one flight`; val = `${st.best.flip.toFixed(1)}`; break;
-          case 'speed': label = `Reach ${o.min} km/h`; val = `${Math.round(st.best.speed)}`; break;
+          case 'speed': label = `Reach ${o.min} km/h`; val = `${Math.round(st.best.speed)} km/h`; break;
           case 'deliver': label = `Deliver the crate in ${o.within} s`; val = st.carrying ? `${Math.max(0, o.within - st.carryT).toFixed(0)} s` : st.delivered ? '' : 'find it'; break;
           case 'find': label = `Find the hidden ${PIECES[quest.pieces[o.target].t].name.toLowerCase()}`; break;
           case 'collect': label = `Collect ${o.count} power-ups`; val = `${Math.min(st.collected, o.count)}/${o.count}`; break;

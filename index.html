@@ -34,7 +34,7 @@
     <p class="tagline">Ten thrusters. One roll. Stick the landing.</p>
     <div class="courses" role="radiogroup" aria-label="Event">
       <button type="button" role="radio" class="course-btn" data-course="show" aria-checked="true"><b>The Show</b><span>Up the Wall · let go · boost over five parked EVs</span></button>
-      <button type="button" role="radio" class="course-btn" data-course="wall" aria-checked="false"><b>The Wall</b><span>28 m curl · 46 kN suction · inverted</span></button>
+      <button type="button" role="radio" class="course-btn" data-course="wall" aria-checked="false"><b>The Wall</b><span data-u-src="28 m curl · 46 kN suction · inverted">92 ft curl · 10,341 lbf suction · inverted</span></button>
       <button type="button" role="radio" class="course-btn" data-course="lineup" aria-checked="false"><b>The Lineup</b><span>No ramp · lift over five EVs · 360° roll</span></button>
     </div>
     <div class="drive-row">
@@ -50,9 +50,9 @@
     </div>
     <dl class="spec">
       <div><dt>Thrusters</dt><dd>10</dd></div>
-      <div><dt>Nitrogen</dt><dd>297 kg · 690 bar</dd></div>
-      <div><dt>Suction</dt><dd>46 kN</dd></div>
-      <div><dt>Power</dt><dd>1,000 kW</dd></div>
+      <div><dt>Nitrogen</dt><dd data-u-src="297 kg · 690 bar" data-units title="Tap to switch units">655 lb · 10,008 psi</dd></div>
+      <div><dt>Suction</dt><dd data-u-src="46 kN" data-units title="Tap to switch units">10,341 lbf</dd></div>
+      <div><dt>Power</dt><dd data-u-src="1,000 kW" data-units title="Tap to switch units">1,341 hp</dd></div>
     </dl>
     <p class="fineprint">Inspired by the October 2026 roadster reveal. An independent fan game, not affiliated with any automaker.</p>
   </section>
@@ -65,25 +65,25 @@
     <div class="h-scrim h-scrim-top" aria-hidden="true"></div>
     <div class="h-scrim h-scrim-bot" aria-hidden="true"></div>
     <header class="h-mission" data-hud-box="mission">
-      <div class="h-clock" aria-label="Mission clock"><span class="h-t">T</span><b data-clock>−00:03.0</b></div>
-      <ol class="h-timeline" data-timeline aria-label="Flight phase"></ol>
+      <div class="h-clock h-tap" data-inst="splits" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Mission clock: show the phase splits"><span class="h-t">T</span><b data-clock>−00:03.0</b></div>
+      <ol class="h-timeline h-tap" data-timeline data-inst="splits" aria-label="Flight phase"></ol>
     </header>
     <div class="h-primary" data-hud-box="primary">
-      <div class="speed h-big" data-big="speed"><span class="h-lbl">Speed</span><b data-speed-big>0</b><span class="h-unit">km/h</span></div>
+      <div class="speed h-big h-tap" data-big="speed" data-units role="button" tabindex="0" aria-label="Speed: switch units (U)"><span class="h-lbl">Speed</span><b data-speed-big>0</b><span class="h-unit" data-u="speed">mph</span><span class="h-alt" data-2="speedBig">0 km/h</span></div>
       <!-- The landing predictor (src/hud-landing.js): sink in its band, the descent tape with the BRAKE line. -->
       <div class="descent" data-descent data-status="green" hidden>
         <div class="d-main">
-          <div class="d-sink h-big"><span class="h-lbl">Sink</span><b data-d-sink>0.0</b><span class="h-unit">m/s</span></div>
+          <div class="d-sink h-big h-tap" data-units role="button" tabindex="0" aria-label="Sink rate: switch units (U)"><span class="h-lbl">Sink</span><b data-d-sink>0.0</b><span class="h-unit" data-u="rate">ft/s</span><span class="h-alt" data-2="dsink">0.0 m/s</span></div>
           <div class="d-meta">
             <span class="d-state" data-d-state>Nominal</span>
-            <span class="d-row"><span class="h-lbl">Limit</span><i data-d-target>9.0</i><span class="h-unit">m/s</span></span>
+            <span class="d-row"><span class="h-lbl">Limit</span><i data-d-target>9.0</i><span class="h-unit" data-u="rate" data-units>ft/s</span><span class="h-alt" data-2="dtarget" data-units>2.7 m/s</span></span>
             <span class="d-row"><span class="h-lbl">Ground</span><i data-d-ttg>2.0</i><span class="h-unit">s</span></span>
           </div>
         </div>
         <svg class="d-tape" viewBox="-30 -12 90 164" aria-label="Altitude and the brake-by line">
           <line class="d-axis" x1="8" y1="0" x2="8" y2="140" />
           <g class="d-ticks"><line x1="4" x2="12" y1="0" y2="0" /><line x1="6" x2="10" y1="23.3" y2="23.3" /><line x1="4" x2="12" y1="46.7" y2="46.7" /><line x1="6" x2="10" y1="70" y2="70" /><line x1="4" x2="12" y1="93.3" y2="93.3" /><line x1="6" x2="10" y1="116.7" y2="116.7" /><line x1="2" x2="14" y1="140" y2="140" /></g>
-          <text class="d-scale" x="16" y="4">30</text><text class="d-scale" x="16" y="144">0 m</text>
+          <text class="d-scale" data-d-top x="16" y="4">100</text><text class="d-scale" data-d-zero x="16" y="144">0 ft</text>
           <rect class="d-fill" data-d-fill x="6" y="140" width="4" height="0" />
           <line class="d-brake" data-d-brake x1="0" x2="58" y1="70" y2="70" />
           <text class="d-brake-lbl" data-d-brake-lbl x="16" y="65">BRAKE</text>
@@ -92,18 +92,18 @@
       </div>
     </div>
     <div class="h-strip" data-hud-box="strip" role="group" aria-label="Telemetry">
-      <div class="h-cell" data-ch="spd"><span class="h-lbl">Spd</span><b data-speed>0</b><span class="h-unit">km/h</span></div>
-      <div class="h-cell" data-ch="alt"><span class="h-lbl">Alt</span><b data-alt>0.0</b><span class="h-unit">m</span></div>
-      <div class="h-cell r-sink" data-ch="sink"><span class="h-lbl">Sink</span><b data-sink>0.0</b><span class="h-unit">m/s</span></div>
-      <div class="h-cell" data-ch="g"><span class="h-lbl">G</span><b data-g>1.0</b><span class="h-unit">g</span></div>
-      <!-- N₂: kg left and tank pressure (adiabatic blowdown from 690 bar); REG while the regulator holds line pressure. -->
-      <div class="h-cell tank" data-ch="n2" data-tank><span class="h-lbl">N₂ <i class="n2-st" data-n2-state>Reg</i></span><b data-air>297</b><span class="h-unit">kg</span>
-        <span class="n2-bar"><span data-tank-bar>690</span> bar</span>
+      <div class="h-cell h-tap" data-ch="spd" data-units role="button" tabindex="0" aria-label="Speed: switch units (U)"><span class="h-lbl">Spd</span><b data-speed>0</b><span class="h-unit" data-u="speed">mph</span><span class="h-alt" data-2="speed">0 km/h</span></div>
+      <div class="h-cell h-tap" data-ch="alt" data-units role="button" tabindex="0" aria-label="Altitude: switch units (U)"><span class="h-lbl">Alt</span><b data-alt>0.0</b><span class="h-unit" data-u="len">ft</span><span class="h-alt" data-2="alt">0.0 m</span></div>
+      <div class="h-cell r-sink h-tap" data-ch="sink" data-units role="button" tabindex="0" aria-label="Sink rate: switch units (U)"><span class="h-lbl">Sink</span><b data-sink>0.0</b><span class="h-unit" data-u="rate">ft/s</span><span class="h-alt" data-2="sink">0.0 m/s</span></div>
+      <div class="h-cell h-tap" data-ch="g" data-inst="g" role="button" tabindex="0" aria-haspopup="dialog" aria-label="G load: show the peak"><span class="h-lbl">G</span><b data-g>1.0</b><span class="h-unit">g</span></div>
+      <!-- N₂: mass left and tank pressure (adiabatic blowdown from 690 bar); REG while the regulator holds line pressure. -->
+      <div class="h-cell tank h-tap" data-ch="n2" data-tank data-inst="gas" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Nitrogen: show the burn time left"><span class="h-lbl">N₂ <i class="n2-st" data-n2-state>Reg</i></span><b data-air>655</b><span class="h-unit" data-u="mass" data-units>lb</span>
+        <span class="n2-bar"><span class="h-alt" data-2="kg" data-units>297 kg</span> · <span data-tank-bar>10.0k</span> <i data-u="press" data-units>psi</i> <span class="h-alt" data-2="bar" data-units>690&nbsp;bar</span></span>
         <div class="bar" aria-hidden="true"><span data-air-bar></span><i class="need" data-air-need></i></div></div>
-      <div class="h-cell h-pitch" data-ch="pitch"><span class="h-lbl">Pitch</span><b data-pitch>0</b><span class="h-unit">°</span></div>
-      <div class="h-cell r-fan" data-ch="fan"><span class="h-lbl">Fan</span><b data-fan>0</b><i class="h-unit">kgf</i></div>
+      <div class="h-cell h-pitch h-tap" data-ch="pitch" data-inst="att" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Pitch: show the rotation so far"><span class="h-lbl">Pitch</span><b data-pitch>0</b><span class="h-unit">°</span></div>
+      <div class="h-cell r-fan h-tap" data-ch="fan" data-units role="button" tabindex="0" aria-label="Fan suction: switch units (U)"><span class="h-lbl">Fan</span><b data-fan>0</b><i class="h-unit" data-u="kgf">lbf</i><span class="h-alt" data-2="fan">0 kgf</span></div>
     </div>
-    <div class="h-att adi-wrap" data-hud-box="att">
+    <div class="h-att adi-wrap h-tap" data-hud-box="att" data-inst="att" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Attitude: show the rotation so far">
       <svg class="dial adi" data-adi viewBox="0 0 120 120" aria-label="Attitude and roll">
         <defs><clipPath id="adi-clip"><circle cx="60" cy="60" r="43" /></clipPath></defs>
         <g transform="rotate(90 60 60)">
@@ -127,13 +127,13 @@
     </div>
     <!-- The vehicle: the thruster array and the damage sensor (src/sim/damage.js), both top-down, nose up. -->
     <div class="h-vehicle" data-hud-box="vehicle">
-      <div class="h-array">
+      <div class="h-array h-tap" data-inst="thrust" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Thruster array: show the valves and thrust">
         <svg class="nozzles" viewBox="0 0 120 200" aria-label="Thruster array">
           <rect class="body" x="22" y="16" width="76" height="168" rx="34" />
           <g data-nz></g>
         </svg>
       </div>
-      <div class="dmg" data-dmg data-state="ok">
+      <div class="dmg h-tap" data-dmg data-state="ok" data-inst="damage" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Damage map: open the full view">
         <svg viewBox="0 0 44 80" aria-label="Damage by zone">
           <rect class="z" data-z="floor" x="9" y="10" width="26" height="60" rx="9" />
           <path class="z" data-z="nose" d="M11 14 Q22 2 33 14 L33 18 L11 18 Z" />
@@ -142,6 +142,8 @@
           <rect class="z" data-z="right" x="33" y="20" width="5" height="40" rx="2" />
           <rect class="z" data-z="roof" x="15" y="28" width="14" height="20" rx="4" />
           <g class="z susp" data-z="susp"><circle cx="5" cy="21" r="3" /><circle cx="39" cy="21" r="3" /><circle cx="5" cy="59" r="3" /><circle cx="39" cy="59" r="3" /></g>
+          <g class="dmg-trail" data-dmg-trail></g>
+          <g class="dmg-fx" data-dmg-fx><circle class="fx-ring" r="4" /><circle class="fx-dot" r="1.6" /><path class="fx-arrow" d="M0 -14 L0 -6 M-2.6 -9 L0 -5.6 L2.6 -9" /></g>
         </svg>
         <div class="dmg-read"><span class="h-lbl">Damage</span><span class="dmg-v"><b data-dmg-pct>0</b><span class="h-unit">%</span></span><span class="dmg-word" data-dmg-word>Intact</span></div>
       </div>

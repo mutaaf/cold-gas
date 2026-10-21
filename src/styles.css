@@ -528,7 +528,7 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .h-timeline li[data-state='now'] em { font-family: var(--mono); }
 
 /* Primary instrument: speed on the ground; in the air, the descent and its predictor */
-.h-primary { position: absolute; left: 50%; bottom: calc(92px + var(--safe-b)); transform: translateX(-50%); display: grid; justify-items: center; }
+.h-primary { position: absolute; left: 50%; bottom: calc(104px + var(--safe-b)); transform: translateX(-50%); display: grid; justify-items: center; }
 .hud[data-air] .speed { display: none; }
 .descent { display: grid; grid-template-columns: auto auto; align-items: end; gap: 18px; justify-content: center; }
 .d-main { display: grid; gap: 10px; justify-items: end; }
@@ -553,7 +553,7 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .d-car text { font: 400 12px var(--mono); fill: var(--ink); text-anchor: end; paint-order: stroke; stroke: rgba(3, 5, 9, 0.85); stroke-width: 3px; stroke-linejoin: round; }
 
 /* The telemetry strip */
-.h-strip { position: absolute; left: 50%; bottom: calc(22px + var(--safe-b)); transform: translateX(-50%); display: flex; align-items: stretch; background: rgba(5, 7, 12, 0.62); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+.h-strip { position: absolute; left: 50%; bottom: calc(22px + var(--safe-b)); transform: translateX(-50%); width: max-content; max-width: calc(100vw - 2 * var(--m)); display: flex; align-items: stretch; background: rgba(5, 7, 12, 0.62); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
   border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
 .h-cell { position: relative; display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 5px; row-gap: 6px; align-items: baseline; justify-content: start; padding: 9px 16px 8px; min-width: 104px; }
 .h-cell + .h-cell { border-left: 1px solid var(--line); }
@@ -575,7 +575,7 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .tank.low .bar span { background: var(--warn); }
 
 /* Attitude */
-.h-att { position: absolute; right: calc(var(--m) + var(--safe-r)); bottom: calc(92px + var(--safe-b)); display: grid; justify-items: center; gap: 6px; }
+.h-att { position: absolute; right: calc(var(--m) + var(--safe-r)); bottom: calc(104px + var(--safe-b)); display: grid; justify-items: center; gap: 6px; }
 .dial { width: 104px; height: 104px; transform: rotate(-90deg); }
 .dial .ring { fill: none; stroke: var(--line); stroke-width: 1.2; }
 .dial .arc { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: 0 360; transition: stroke 0.3s; }
@@ -593,7 +593,7 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .roll-cue[data-kind='roll'] { color: var(--ink); }
 
 /* The vehicle: the thruster array and the damage sensor, side by side, both top-down, nose up */
-.h-vehicle { position: absolute; left: calc(var(--m) + var(--safe-l)); bottom: calc(92px + var(--safe-b)); display: flex; align-items: flex-end; gap: 22px; }
+.h-vehicle { position: absolute; left: calc(var(--m) + var(--safe-l)); bottom: calc(104px + var(--safe-b)); display: flex; align-items: flex-end; gap: 22px; }
 /* Damage: a first-class instrument. Zones shade by damage; the total and its word carry the state;
    a hit flashes the whole car (and buzzes, src/main.js). */
 .dmg { display: flex; align-items: flex-end; gap: 12px; }
@@ -647,9 +647,9 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .h-strip { flex-wrap: wrap; justify-content: center; width: calc(100vw - 2 * var(--m)); }
   .h-cell { flex: 1 1 30%; }
   .h-cell:nth-child(n) { border-left: 0; }
-  .h-att { bottom: calc(150px + var(--safe-b)); }
-  .h-primary { bottom: calc(150px + var(--safe-b)); }
-  .h-vehicle { bottom: calc(150px + var(--safe-b)); }
+  .h-att { bottom: calc(178px + var(--safe-b)); }
+  .h-primary { bottom: calc(178px + var(--safe-b)); }
+  .h-vehicle { bottom: calc(178px + var(--safe-b)); }
 }
 
 /* Coarse pointer (phones, tablets): the bottom of the glass belongs to the thumbs. */
@@ -696,10 +696,10 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .h-strip > .tank { grid-column: 1; grid-row: 2; }   /* N₂ heads row 2 in the wide column, on the ground and in the air */
   .hud .h-strip > .tank { border-left: 0; }   /* (beats .hud .h-cell:not(:first-child)) */
   .h-strip { row-gap: 0; }
-  .cue { --cue-top: 394px; }
+  .cue { --cue-top: 424px; }   /* under the strip (N₂ wraps to three lines with both unit systems) */
   /* The vehicle panel (damage) heads the strip: car health beside the telemetry. */
   .h-vehicle { top: calc(var(--top) + 206px); left: calc(var(--m) + var(--safe-l)); right: auto; width: 66px; height: 112px; justify-content: center; align-items: center; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(5, 7, 12, 0.62); }
-  body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 430px; }
+  body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 460px; }
   .h-scrim-top { height: calc(var(--top) + 300px); }
 }
 @media (pointer: coarse) and (orientation: portrait) and (min-width: 600px) {
@@ -727,7 +727,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .hud { --adi: 72px; }
   .dmg svg { width: 24px; height: 44px; }
   /* The strip becomes a dashboard along the bottom, between the stick and the right thumb's arc. */
-  .h-strip { left: calc(168px + var(--safe-l)); right: calc(271px + var(--safe-r)); bottom: calc(12px + var(--safe-b)); transform: none; }
+  .h-strip { left: calc(168px + var(--safe-l)); right: calc(271px + var(--safe-r)); bottom: calc(12px + var(--safe-b)); transform: none; width: auto; max-width: none; }
   .h-strip .h-pitch { display: none; }
   .h-strip .tank { flex-grow: 1.7; }
   .h-cell { flex: 1 1 0; min-width: 0; padding: 7px 8px 6px; row-gap: 5px; }
@@ -859,3 +859,62 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    car or the lit deck passes behind them. */
 .h-primary::before, .h-att::before { content: ''; position: absolute; inset: -22px -30px; z-index: -1; pointer-events: none;
   background: radial-gradient(closest-side, rgba(3, 5, 9, 0.6), rgba(3, 5, 9, 0.35) 60%, rgba(3, 5, 9, 0)); }
+
+/* --- Instruments answer a tap (src/instruments.js, src/units.js) ------------------------------------
+   Every instrument is a button: a hairline lift on hover, a ring on keyboard focus. Units lead in
+   one system with the other beside them, smaller and dimmer (.h-alt, .u2); a swap blurs them in. */
+.h-tap { pointer-events: auto; cursor: pointer; border-radius: 3px; outline: none; -webkit-tap-highlight-color: transparent; transition: background-color 0.2s var(--ease), box-shadow 0.2s var(--ease); }
+.h-tap:hover { background-color: rgba(245, 246, 248, 0.06); box-shadow: inset 0 0 0 1px rgba(245, 246, 248, 0.14); }
+.h-tap:focus-visible, .hud [data-units]:focus-visible { box-shadow: inset 0 0 0 1px var(--ink), 0 0 0 3px rgba(245, 246, 248, 0.18); }
+.h-tap[aria-expanded='true'] { background-color: rgba(245, 246, 248, 0.08); box-shadow: inset 0 0 0 1px rgba(245, 246, 248, 0.3); }
+[data-units] { cursor: pointer; }
+.h-unit[data-units]:hover, .h-alt[data-units]:hover { color: var(--ink); text-decoration: underline dotted 1px; text-underline-offset: 3px; }
+.h-alt { font: 400 11px/1 var(--mono); font-style: normal; color: rgba(245, 246, 248, 0.72); letter-spacing: 0; white-space: nowrap; }
+.h-cell { row-gap: 5px; }
+.h-cell > .h-alt { grid-column: 1 / -1; margin-top: -1px; }
+.h-big > .h-alt { grid-column: 1 / -1; justify-self: end; margin-top: 4px; font-size: 12px; }
+.tank { grid-template-columns: auto 1fr; }
+.tank .n2-bar { white-space: nowrap; line-height: 1.3; }
+@media (pointer: coarse) { .tank .n2-bar { white-space: normal; } }
+.tank .n2-bar .h-alt { font-size: 11px; }
+.d-row .h-alt { margin-left: 4px; }
+.u2 { font-size: 0.86em; color: rgba(245, 246, 248, 0.72); font-variant-numeric: tabular-nums; white-space: nowrap; }
+:root.u-flip :is([data-u], .h-alt, .u2, [data-u-src], .h-cell b, .h-big b, .fd-speed b, .fd-stats dd) { animation: u-flip 0.38s var(--ease); }
+@keyframes u-flip { 0% { opacity: 0.15; filter: blur(3px); transform: translateY(2px); } 100% { opacity: 1; filter: none; transform: none; } }
+@media (prefers-reduced-motion: reduce) { :root.u-flip * { animation: none !important; } }
+.dmg { padding: 4px; margin: -4px; }
+.h-array { padding: 4px; margin: -4px; }
+/* The popover: one sentence of glass beside the instrument. */
+.ipop { position: fixed; left: 0; top: 0; z-index: 7; width: min(300px, calc(100vw - 24px)); padding: 14px 16px 12px; border-radius: 6px; border: 1px solid rgba(245, 246, 248, 0.16);
+  background: rgba(5, 7, 12, 0.86); backdrop-filter: blur(14px) saturate(1.2); -webkit-backdrop-filter: blur(14px) saturate(1.2); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  color: var(--ink); font-variant-numeric: tabular-nums; pointer-events: auto; opacity: 0; }
+.ipop.on { animation: ip-in 0.22s var(--ease) forwards; }
+@keyframes ip-in { from { opacity: 0; margin-top: 6px; } to { opacity: 1; margin-top: 0; } }
+.ipop .ip-x { position: absolute; top: 6px; right: 6px; width: 28px; height: 28px; border: 0; background: none; color: var(--ink-2); font-size: 18px; line-height: 1; border-radius: 4px; }
+.ipop .ip-x:hover { color: var(--ink); background: rgba(245, 246, 248, 0.08); }
+.ip-t { margin: 0 0 8px; font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.ip-big { display: flex; align-items: baseline; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.ip-big b { font: 200 38px/0.95 var(--text); letter-spacing: -0.02em; font-weight: 200; }
+.ip-big .h-unit { font: 400 12px var(--mono); color: var(--ink-2); }
+.ip-sub { flex-basis: 100%; font: 400 12px/1.2 var(--text); color: var(--ink-2); }
+.ip-rows { display: grid; grid-template-columns: auto 1fr; gap: 5px 14px; margin: 0; padding-top: 9px; border-top: 1px solid var(--hair); font-size: 12px; }
+.ip-rows dt { color: var(--ink-2); white-space: nowrap; }
+.ip-rows dd { margin: 0; font: 400 12px var(--mono); text-align: right; }
+.ip-note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--ink-3); }
+@media (prefers-reduced-motion: reduce) { .ipop.on { animation: none; opacity: 1; } }
+/* The damage map's hit flash: a ring where it landed, an arrow the way it came in, and the last
+   few hits left as fading marks. */
+.dmg .z { transition: fill 0.5s var(--ease), stroke 0.5s var(--ease); }
+.dmg-fx { opacity: 0; pointer-events: none; }
+.dmg-fx .fx-ring { fill: none; stroke: var(--ink); stroke-width: 1; }
+.dmg-fx .fx-dot { fill: var(--ink); }
+.dmg-fx .fx-arrow { fill: none; stroke: var(--ink); stroke-width: 1.3; stroke-linecap: round; stroke-linejoin: round; }
+.dmg-fx.flat .fx-arrow { display: none; }
+.dmg-fx[data-sev='amber'] :is(.fx-ring, .fx-arrow) { stroke: var(--amber); } .dmg-fx[data-sev='amber'] .fx-dot { fill: var(--amber); }
+.dmg-fx[data-sev='red'] :is(.fx-ring, .fx-arrow) { stroke: var(--hot); } .dmg-fx[data-sev='red'] .fx-dot { fill: var(--hot); }
+.dmg-fx.on { animation: fx-out 1.6s ease-out forwards; }
+.dmg-fx.on .fx-ring { animation: fx-ring 0.7s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes fx-out { 0%, 55% { opacity: 1; } 100% { opacity: 0; } }
+@keyframes fx-ring { from { transform: scale(2.4); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
+.dmg-trail circle { fill: rgba(245, 246, 248, 0.9); }
+@media (prefers-reduced-motion: reduce) { .dmg-fx.on, .dmg-fx.on .fx-ring { animation: none; opacity: 1; } }

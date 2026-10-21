@@ -155,3 +155,70 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
   .fd-road { top: calc(56px + var(--safe-t)); }
 }
 @media (prefers-reduced-motion: reduce) { .fd-picker, .fd-card, .fd-endless { animation: none; } }
+
+/* --- Instruments (src/drive/hud.js, src/drive/minimap.js) --------------------------------------
+   Both unit systems on every readout, the leading one large; the map on canvas at the screen's
+   density; tap anything for more. */
+.fd-hud .h-tap { pointer-events: auto; }
+.fd-speed .fd-alt { margin-top: 4px; font: 400 11px/1 var(--mono); font-style: normal; color: rgba(245, 246, 248, 0.78); }
+@media (pointer: coarse) { .fd-tot { display: none; } }
+.fd-stats .u2 { font-size: 11px; }
+.fd-timer.h-tap { padding: 4px 8px; margin-top: -4px; }
+.fd-stats .h-tap { border-radius: 0; }
+.fd-map { pointer-events: auto; }
+.fd-mapbox { position: relative; cursor: pointer; border-radius: 4px; outline: none; }
+.fd-mapbox:hover .fd-minic { filter: brightness(1.15); }
+.fd-mapbox:focus-visible { box-shadow: 0 0 0 1px var(--ink), 0 0 0 4px rgba(245, 246, 248, 0.18); }
+.fd-minic { width: 150px; height: 150px; display: block; }
+.fd-profc { width: 150px; height: 34px; display: block; }
+.fd-maptag { position: absolute; top: 2px; right: 2px; min-width: 26px; padding: 3px 5px; border-radius: 3px; border: 1px solid var(--line); background: rgba(5, 7, 12, 0.6);
+  font: 500 11px/1 var(--mono); letter-spacing: 0.06em; color: var(--ink); text-align: center; cursor: pointer; text-shadow: none; }
+.fd-maptag:hover { background: rgba(245, 246, 248, 0.14); }
+@media (pointer: coarse) {
+  .fd-speed { grid-template-columns: auto auto; column-gap: 8px; align-items: end; }
+  .fd-speed b { grid-row: 1 / span 2; }
+  .fd-speed span { margin-top: 0; align-self: end; }
+  .fd-speed .fd-alt { margin: 0 0 4px; align-self: start; grid-column: 2; }
+  .fd-minic { width: 84px; height: 84px; }
+  .fd-profc { width: 84px; height: 22px; }
+  .fd-maptag { font-size: 11px; min-width: 30px; padding: 4px 6px; top: -4px; right: -4px; }
+}
+/* The full map: glass over the stage. The drive carries on behind it. */
+.fd-xmap { position: fixed; inset: 0; z-index: 7; display: grid; place-items: center; pointer-events: none; padding: calc(64px + var(--safe-t)) calc(24px + var(--safe-r)) calc(24px + var(--safe-b)) calc(24px + var(--safe-l)); }
+.fd-xmap.on .xm-panel { animation: xm-in 0.32s var(--ease); }
+@keyframes xm-in { from { opacity: 0; transform: scale(0.97); } }
+.xm-panel { pointer-events: auto; width: min(1080px, 100%); height: min(760px, 100%); display: grid; grid-template-rows: auto 1fr 96px; gap: 0; overflow: hidden;
+  border-radius: 10px; border: 1px solid rgba(245, 246, 248, 0.16); background: rgba(5, 7, 12, 0.93); backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2);
+  box-shadow: 0 30px 90px rgba(0, 0, 0, 0.6); color: var(--ink); font-variant-numeric: tabular-nums; text-shadow: none; }
+.xm-head { display: flex; align-items: center; gap: 20px; padding: 14px 16px 12px 20px; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.xm-title .eyebrow { margin: 0 0 4px; }
+.xm-title h3 { margin: 0; font: 400 17px/1.1 var(--display); letter-spacing: 0.05em; }
+.xm-stats { display: flex; gap: 22px; margin: 0 0 0 auto; }
+.xm-stats div { display: grid; gap: 5px; }
+.xm-stats dt { font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--lbl); }
+.xm-stats dd { margin: 0; font: 400 15px/1 var(--mono); }
+.xm-btns { display: flex; gap: 8px; align-items: center; }
+.xm-btns .chip[aria-pressed='true'] { color: #07090d; background: var(--ink); border-color: var(--ink); }
+.xm-x { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--ink); font-size: 20px; line-height: 1; }
+.xm-x:hover { background: rgba(245, 246, 248, 0.08); }
+.xm-stage { position: relative; min-height: 0; }
+.xm-map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: grab; touch-action: none; }
+.xm-map:active { cursor: grabbing; }
+.xm-tip { position: absolute; left: 0; top: 0; width: 220px; padding: 10px 12px; border-radius: 6px; border: 1px solid rgba(245, 246, 248, 0.2); background: rgba(5, 7, 12, 0.9); pointer-events: none; font-size: 12px; }
+.xm-tip > b { display: block; font: 400 18px/1.1 var(--mono); }
+.xm-tip > span { display: block; margin-top: 3px; color: var(--ink-2); }
+.xm-tip dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; margin: 8px 0 0; padding-top: 8px; border-top: 1px solid var(--line); }
+.xm-tip dt { color: var(--ink-2); } .xm-tip dd { margin: 0; font: 400 12px var(--mono); text-align: right; }
+.xm-hint { position: absolute; left: 14px; bottom: 10px; margin: 0; font-size: 11px; color: var(--ink-3); pointer-events: none; }
+.xm-hint kbd { font: 500 11px/1 var(--mono); padding: 2px 5px; border: 1px solid var(--line); border-radius: 3px; }
+.xm-prof { width: 100%; height: 96px; display: block; border-top: 1px solid var(--line); cursor: crosshair; touch-action: none; }
+@media (pointer: coarse), (max-width: 700px) {
+  .fd-xmap { padding: calc(8px + var(--safe-t)) 0 0; place-items: end stretch; }
+  .xm-panel { width: 100%; height: 100%; border-radius: 14px 14px 0 0; grid-template-rows: auto 1fr 76px; }
+  .xm-head { gap: 10px 14px; padding: 10px 12px; }
+  .xm-stats { margin: 0; order: 3; width: 100%; }
+  .xm-btns { margin-left: auto; }
+  .xm-prof { height: 76px; }
+  .xm-hint { display: none; }
+}
+@media (prefers-reduced-motion: reduce) { .fd-xmap.on .xm-panel { animation: none; } }

@@ -1,0 +1,74 @@
+/* The damage map, opened up (src/damage-view.js). Glass over the stage, never a modal: the run
+   carries on under it. Desktop: a panel above the HUD's vehicle corner. Phones: a bottom sheet. */
+.dmv { position: fixed; z-index: 7; left: calc(clamp(16px, 2.4vw, 36px) + var(--safe-l)); bottom: calc(210px + var(--safe-b)); width: min(420px, calc(100vw - 32px));
+  max-height: calc(100vh - 290px - var(--safe-t)); overflow-y: auto; overscroll-behavior: contain; padding: 18px 20px 16px;
+  border-radius: 8px; border: 1px solid rgba(245, 246, 248, 0.16); background: rgba(5, 7, 12, 0.88);
+  backdrop-filter: blur(16px) saturate(1.2); -webkit-backdrop-filter: blur(16px) saturate(1.2); box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  color: var(--ink); font-variant-numeric: tabular-nums; pointer-events: auto; user-select: none; --line: rgba(245, 246, 248, 0.16); }
+.dmv.on { animation: dmv-in 0.32s var(--ease); }
+@keyframes dmv-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } }
+.dmv-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+.dmv-eyebrow { margin: 0 0 6px; font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.dmv-title { margin: 0; display: flex; align-items: baseline; gap: 6px; font-weight: 400; }
+.dmv-title b { font: 200 44px/0.9 var(--text); letter-spacing: -0.02em; }
+.dmv-title span { font: 400 12px var(--mono); color: var(--ink-2); }
+.dmv-word { margin: 6px 0 0; font: 400 11px/1 var(--display); letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink-2); }
+.dmv[data-state='warn'] :is(.dmv-title b, .dmv-word) { color: var(--amber); }
+.dmv[data-state='wreck'] :is(.dmv-title b, .dmv-word) { color: var(--hot); }
+.dmv-x { width: 34px; height: 34px; border-radius: 50%; border: 1px solid var(--line); background: none; color: var(--ink); font-size: 20px; line-height: 1; flex: none; }
+.dmv-x:hover { background: rgba(245, 246, 248, 0.08); }
+.dmv-main { display: grid; grid-template-columns: 116px 1fr; gap: 18px; align-items: center; margin: 14px 0 6px; }
+.dmv-car { width: 116px; height: 182px; overflow: visible; }
+.dmv-car .z { fill: rgba(245, 246, 248, 0.05); stroke: rgba(245, 246, 248, 0.5); stroke-width: 0.6; cursor: pointer; outline: none; transition: fill 0.5s var(--ease), stroke 0.5s var(--ease), opacity 0.3s; }
+.dmv-car .z.susp circle { fill: inherit; stroke: inherit; }
+.dmv-car .z:hover, .dmv-car .z:focus-visible { stroke: var(--ink); stroke-width: 1; }
+.dmv-car .z[data-level='scuff'] { fill: rgba(245, 246, 248, calc(0.15 + var(--dmg) * 2)); }
+.dmv-car .z[data-level='amber'] { fill: rgba(255, 191, 90, calc(0.35 + var(--dmg))); stroke: var(--amber); }
+.dmv-car .z[data-level='red'] { fill: rgba(255, 90, 98, calc(0.45 + var(--dmg) * 0.5)); stroke: var(--hot); }
+.dmv.has-sel .dmv-car .z:not(.sel) { opacity: 0.35; }
+.dmv-car .z.sel { stroke: var(--ink); stroke-width: 1.2; }
+.dmv-hits .mk { pointer-events: none; transition: opacity 0.3s; }
+.dmv-hits .mk circle { fill: var(--ink); }
+.dmv-hits .mk path { fill: none; stroke: var(--ink); stroke-width: 0.9; stroke-linecap: round; stroke-linejoin: round; }
+.dmv-hits .mk.scr circle { fill: none; stroke: var(--ink-2); stroke-width: 0.6; }
+.dmv-hits .mk[data-sev='amber'] circle { fill: var(--amber); } .dmv-hits .mk[data-sev='amber'] path { stroke: var(--amber); }
+.dmv-hits .mk[data-sev='red'] circle { fill: var(--hot); } .dmv-hits .mk[data-sev='red'] path { stroke: var(--hot); }
+.dmv-hits .mk.dim { opacity: 0.2; }
+.dmv-hits .mk.new circle { animation: mk-new 1.2s ease-out; transform-box: fill-box; transform-origin: center; }
+@keyframes mk-new { from { transform: scale(2.6); } }
+.dmv-zones { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.dmv-zones button { width: 100%; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; align-items: baseline; padding: 4px 8px; border: 0; border-radius: 4px; background: none; color: var(--ink); text-align: left; }
+.dmv-zones button:hover, .dmv-zones button:focus-visible { background: rgba(245, 246, 248, 0.07); outline: none; }
+.dmv-zones button[aria-pressed='true'] { background: rgba(245, 246, 248, 0.12); box-shadow: inset 0 0 0 1px rgba(245, 246, 248, 0.3); }
+.dmv-zones .n { font-size: 12.5px; color: var(--ink-2); }
+.dmv-zones .pct { font: 400 12px var(--mono); color: var(--ink-2); }
+.dmv-zones .pct b { font-weight: 400; color: var(--ink); font-size: 14px; }
+.dmv-zones .bar { grid-column: 1 / -1; height: 2px; background: rgba(245, 246, 248, 0.1); overflow: hidden; display: block; }
+.dmv-zones .bar i { display: block; height: 100%; background: var(--ink); transform-origin: left; transition: transform 0.5s var(--ease), background 0.5s; }
+.dmv-zones [data-level='amber'] .bar i { background: var(--amber); } .dmv-zones [data-level='amber'] .pct b { color: var(--amber); }
+.dmv-zones [data-level='red'] .bar i { background: var(--hot); } .dmv-zones [data-level='red'] .pct b { color: var(--hot); }
+.dmv-sec { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); }
+.dmv-sec h3 { margin: 0 0 8px; font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+.dmv-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 1px; max-height: 190px; overflow-y: auto; }
+.dmv-list li { display: grid; grid-template-columns: 1fr auto auto; gap: 2px 12px; padding: 6px 2px; border-bottom: 1px solid rgba(245, 246, 248, 0.06); font-size: 12.5px; }
+.dmv-list li.empty { display: block; color: var(--ink-3); border: 0; }
+.dmv-list .w em { font-style: normal; color: var(--ink-3); margin-left: 4px; }
+.dmv-list .s { grid-row: 2; grid-column: 1; font: 400 12px var(--mono); color: var(--ink-2); }
+.dmv-list .g { grid-row: 1; grid-column: 2; font: 400 12px var(--mono); color: var(--ink-2); text-align: right; }
+.dmv-list .c { grid-row: 1; grid-column: 3; font: 400 12px var(--mono); text-align: right; }
+.dmv-list .t { grid-row: 2; grid-column: 2 / 4; font: 400 12px var(--mono); color: var(--ink-2); text-align: right; }
+.dmv-list [data-sev='amber'] .c { color: var(--amber); } .dmv-list [data-sev='red'] .c { color: var(--hot); }
+.dmv-does ul { margin: 0; padding: 0 0 0 16px; display: grid; gap: 6px; font-size: 12.5px; line-height: 1.45; color: var(--ink-2); }
+.dmv-does b { color: var(--ink); font-weight: 500; }
+.dmv-fine { margin: 10px 0 0; font-size: 11.5px; line-height: 1.4; color: var(--ink-3); }
+/* Phones: a sheet from the bottom, over the thumbs' band; the run goes on above it. */
+@media (pointer: coarse), (max-width: 760px) {
+  .dmv { left: 0; right: 0; bottom: 0; width: auto; max-height: 64vh; border-radius: 16px 16px 0 0; border-bottom: 0; padding: 14px 18px calc(16px + var(--safe-b)); }
+  .dmv::before { content: ''; display: block; width: 38px; height: 4px; border-radius: 2px; background: rgba(245, 246, 248, 0.3); margin: -4px auto 10px; }
+  .dmv.on { animation: dmv-sheet 0.34s var(--ease); }
+  .dmv-main { grid-template-columns: 96px 1fr; gap: 12px; }
+  .dmv-car { width: 96px; height: 152px; }
+  .dmv-title b { font-size: 36px; }
+}
+@keyframes dmv-sheet { from { transform: translateY(40%); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .dmv.on, .dmv-hits .mk.new circle { animation: none; } }

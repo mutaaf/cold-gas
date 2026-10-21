@@ -237,6 +237,11 @@ src/input.js          keyboard + gamepad + touch → sim input (context: ground 
 src/audio.js          procedural WebAudio: motor, tyres, wind, nozzle hiss, chimes, crash crunch/grind
 src/ui.js             the HUD as one instrument system (mission clock, phase timeline, primary, telemetry
                         strip, attitude, vehicle: thrusters + damage; values glide, DOM on change), results, board
+src/units.js          what the player reads: US customary first with metric beside it (or the other way,
+                        one tap on any unit readout or U); factors for live readouts, `localize` for SI prose
+src/instruments.js    every HUD instrument answers a tap: peak G, burn time, splits, attitude, thrusters
+src/damage-view.js    the damage map opened up (lazy): zones, hits, what damage does in this sim
+src/drive/minimap.js  Free Drive's canvas minimap (north/heading-up, trail, ghost, profile) and the full map
 src/panel.js          board client + local judge lines (offline fallback)
 src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: errors, rejections, traps,
                         lost context, shaders, fetches, lazy imports, audio; frames; beacons) ·
