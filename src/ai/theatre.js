@@ -180,7 +180,7 @@ function buildDom(root, stages = STAGES) {
 // Runs one judging call through the theatre. Resolves with { words, meta } when the show is over
 // (or skipped). `fallbackWords(card)` supplies local lines if the call fails. Aborting `abort`
 // (an AbortSignal: a restart, the title) tears it down at once and resolves with { aborted: true }.
-export function runTheatre(root, { log, assist, ai, card, course, fallbackWords, reduced = false, replay = null, abort = null }) {
+export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWords, reduced = false, replay = null, abort = null }) {
   registerShapes();
   root.classList.remove('th-quest');
   const dom = buildDom(root);
@@ -330,7 +330,7 @@ export function runTheatre(root, { log, assist, ai, card, course, fallbackWords,
   };
 
   let showFinal = null;
-  const source = replay ? replayEvents(replay, handlers) : streamPanel({ log, assist, ai, course }, handlers, { signal: abort });
+  const source = replay ? replayEvents(replay, handlers) : streamPanel({ log, t, assist, ai, course }, handlers, { signal: abort });
 
   (async () => {
     try { await source; } catch (err) { handlers.error({ message: 'The judges are offline.', fallback: true }); console.warn(err); }

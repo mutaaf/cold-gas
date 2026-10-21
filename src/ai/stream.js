@@ -4,14 +4,14 @@ import { postRetry } from '../net.js';
 
 const API = `${import.meta.env.BASE_URL}api`;
 
-export async function streamPanel({ log, assist, ai, course }, on, { signal } = {}) {
+export async function streamPanel({ log, t, assist, ai, course }, on, { signal } = {}) {
   const headers = { 'content-type': 'application/json' };
   if (ai.provider !== 'edge' && ai.key) headers['x-cg-key'] = ai.key;
   let res;
   try {
     res = await postRetry(`${API}/judge/stream`, {
       method: 'POST', headers, signal,
-      body: JSON.stringify({ log, assist, course, provider: ai.provider, model: ai.model }),
+      body: JSON.stringify({ log, t, assist, course, provider: ai.provider, model: ai.model }),
     });
   } catch {
     on.error?.({ message: 'The judges are offline.', fallback: true, offline: true });
