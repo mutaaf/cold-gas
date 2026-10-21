@@ -58,3 +58,13 @@ export function damageFacts(d) {
   for (let k = 0; k < ZONES.length; k++) zones[ZONES[k]] = Math.round(d.zones[k]);
   return { pct: Math.round(d.total), integrity: Math.round(100 - d.total), zones };
 }
+
+// What one impact event costs its zone, in % (the HIT / SCRAPE / WHEEL lines of updateDamage, for
+// the HUD's hit list). Read-only: updateDamage keeps its own arithmetic, and tests/unit/units.test.js
+// checks the two agree. CRUSH is a floor on the zone, not a cost, so it reads 0 here.
+export function hitCost(kind, v) {
+  if (kind === HIT) return 100 * (v / HIT_FULL) * (v / HIT_FULL);
+  if (kind === SCRAPE) return SCRAPE_PER * (v / 10);
+  if (kind === WHEEL) { const e = Math.max(0, v - WHEEL_SAFE) / (WHEEL_FULL - WHEEL_SAFE); return 100 * e * e; }
+  return 0;
+}

@@ -11,6 +11,7 @@ import { RAPIER, physicsMemoryBytes, physicsReady } from './sim/engine.js';
 import { SIM_VERSION } from './sim/run.js';
 import { SPEC, NOZZLE_SPEC } from './sim/spec.js';
 import { HEALTH_CSS, HEALTH_SECTION, renderHealth } from './obs/panel.js';
+import { fmtSpeed, fmtMass, fmtForce, fmtKgf, fmtSmall } from './units.js';
 
 const G = 9.81;
 const WHEEL_NAMES = ['FL', 'FR', 'RL', 'RR'];
@@ -319,25 +320,25 @@ function text(s, x, calls, tris) {
     const sp = Math.hypot(car.vel.x, car.vel.y, car.vel.z);
     const last = s.gg[s.gg.length - 1] || [0, 0];
     const yaw = car.angVel.y;   // world frame: rotation about vertical
-    set(K['ch.speed'], `${fmt(sp * 3.6)} km/h · ${fmt(sp, 1)} m/s`);
+    set(K['ch.speed'], `${fmtSpeed(sp)} · ${fmt(sp, 1)} m/s`);
     set(K['ch.g'], `${fmt(last[0], 2)} · ${fmt(last[1], 2)} g`);
     set(K['ch.yaw'], `${fmt(yaw * 57.2958, 1)} °/s`);
     set(K['ch.steer'], `${fmt(-car.steer * 57.2958, 1)}°`);
     set(K['ch.tc'], car.tcActive ? 'limiting torque' : 'idle', car.tcActive ? 'hot' : '');
     const dmg = x.run?.damage?.total;
     set(K['ch.dmg'], dmg != null ? `${fmt(dmg)} %` : '—', dmg >= 25 ? 'hot' : '');
-    set(K['ch.mass'], `${fmt(SPEC.dryMass)} kg dry + ${fmt(car.air)} kg N₂`);
+    set(K['ch.mass'], `${fmtMass(SPEC.dryMass)} dry + ${fmtMass(car.air)} N₂`);
     for (let i = 0; i < 4; i++) {
       const wh = car.wheels[i];
       set(s.wheelEls[i].v, wh.contact
-        ? `Fz ${fmt(wh.load / 1000, 2)} kN\nκ  ${fmt(wh.slip * 100, 1)} %\nα  ${fmt(wh.slipAngle * 57.2958, 1)}°\nsag ${fmt(wh.compression * 1000)} mm\nω  ${fmt(wh.omega * 9.549)} rpm`
+        ? `Fz ${fmtForce(wh.load)}\nκ  ${fmt(wh.slip * 100, 1)} %\nα  ${fmt(wh.slipAngle * 57.2958, 1)}°\nsag ${fmtSmall(wh.compression)}\nω  ${fmt(wh.omega * 9.549)} rpm`
         : `in the air\n\n\nω  ${fmt(wh.omega * 9.549)} rpm`);
     }
     const thrust = car.throttles ? NOZZLE_SPEC.reduce((t, n, i) => t + (car.throttles[i] || 0) * n.max, 0) : 0;
-    set(K['gas.kg'], `${fmt(car.air, 1)} kg`);
-    set(K['gas.thrust'], `${fmt(thrust / 1000, 1)} kN · ${fmt(thrust / G)} kgf`, thrust > 0 ? 'ok' : '');
-    set(K['gas.fan'], `${fmt((car.fanForce || 0) / G)} kgf · ${fmt((car.fanDemand || 0) * 100)} %`);
-    set(K['gas.gap'], Number.isFinite(car.floorGap) ? `${fmt(car.floorGap * 1000)} mm` : 'open sky');
+    set(K['gas.kg'], fmtMass(car.air, 1));
+    set(K['gas.thrust'], fmtForce(thrust), thrust > 0 ? 'ok' : '');
+    set(K['gas.fan'], `${fmtKgf((car.fanForce || 0) / G)} · ${fmt((car.fanDemand || 0) * 100)} %`);
+    set(K['gas.gap'], Number.isFinite(car.floorGap) ? fmtSmall(car.floorGap) : 'open sky');
     const vs = s.K.valves.children;
     for (let i = 0; i < vs.length; i++) vs[i].style.setProperty('--v', String(Math.max(0, Math.min(1, car.throttles?.[i] || 0)).toFixed(3)));
     set(K['det.hash'], `${fingerprint(car)} @ ${car.tick}`);

@@ -7,8 +7,12 @@ import { PIECES, PIECE_IDS, POWERUPS, POWERUP_IDS, MATERIAL_IDS, BUILD_MATERIALS
 import { builtInQuests, generateQuest } from './quest-gen.js';
 import { isUnlocked, saveProgress } from './quests.js';
 import { ROADSTER_MATERIALS } from '../render/roadster.js';
+import { localize, onUnits } from '../units.js';
 
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+// Prose with SI numbers in it, escaped, in both unit systems (src/units.js); `att` for a title attribute.
+const lz = (s) => localize(esc(s), { html: true });
+const att = (s) => esc(localize(s));
 
 // Small line icons, 24×24, one stroke.
 const ICON = {
@@ -66,9 +70,9 @@ export function createBuildUI(api, { coarse = false } = {}) {
         </div>
       </div>
       <div class="bq-palette" data-bq-palette role="listbox" aria-label="Pieces">
-        ${PIECE_IDS.map((id) => `<button type="button" class="bq-piece" role="option" data-bq-piece="${id}" aria-selected="false" title="${esc(PIECES[id].name)} (${PIECES[id].key}): ${esc(PIECES[id].blurb)}">${icon(id)}<span>${esc(PIECES[id].name)}</span><kbd>${PIECES[id].key}</kbd><em data-lock hidden>locked</em></button>`).join('')}
+        ${PIECE_IDS.map((id) => `<button type="button" class="bq-piece" role="option" data-bq-piece="${id}" aria-selected="false" title="${esc(PIECES[id].name)} (${PIECES[id].key}): ${att(PIECES[id].blurb)}">${icon(id)}<span>${esc(PIECES[id].name)}</span><kbd>${PIECES[id].key}</kbd><em data-lock hidden>locked</em></button>`).join('')}
         <span class="bq-sep" aria-hidden="true"></span>
-        ${POWERUP_IDS.map((id) => `<button type="button" class="bq-piece pu" role="option" data-bq-piece="pickup:${id}" aria-selected="false" title="${esc(POWERUPS[id].name)}: ${esc(POWERUPS[id].blurb)}" style="--pu:${hex(POWERUPS[id].color)}">${icon('pickup')}<span>${esc(POWERUPS[id].name)}</span></button>`).join('')}
+        ${POWERUP_IDS.map((id) => `<button type="button" class="bq-piece pu" role="option" data-bq-piece="pickup:${id}" aria-selected="false" title="${esc(POWERUPS[id].name)}: ${att(POWERUPS[id].blurb)}" style="--pu:${hex(POWERUPS[id].color)}">${icon('pickup')}<span>${esc(POWERUPS[id].name)}</span></button>`).join('')}
       </div>
       <p class="bq-hint">${coarse ? 'Tap to aim · tap the ghost to place · drag to pan · pinch to zoom · twist to turn' : 'Click to place · drag to orbit · right-drag to pan · wheel to zoom · Q/E turn · Z/X size · M material · Del remove · Tab edit'}</p>
       <button type="button" class="bq-fab" data-bq-fab aria-label="Pieces" aria-expanded="false">+</button>
@@ -237,6 +241,7 @@ export function createBuildUI(api, { coarse = false } = {}) {
   // --- Quest tracker ------------------------------------------------------------------------------
   const qEl = $('[data-bq-quest]');
   let qLast = '';
+  onUnits(() => { qLast = ''; });
   function quest(run) {
     if (!run) { qEl.hidden = true; qEl.innerHTML = ''; qLast = ''; return; }
     const q = run.quest;
@@ -253,7 +258,7 @@ export function createBuildUI(api, { coarse = false } = {}) {
     const sig = lines.map((l) => `${l.ok}${l.val}`).join('|');
     if (sig !== qLast) {
       qLast = sig;
-      qEl.querySelector('[data-q-lines]').innerHTML = lines.map((l) => `<li class="${l.ok ? 'ok' : ''}"><i aria-hidden="true"></i><span>${esc(l.label)}</span><b>${l.ok ? 'done' : esc(l.val)}</b></li>`).join('');
+      qEl.querySelector('[data-q-lines]').innerHTML = lines.map((l) => `<li class="${l.ok ? 'ok' : ''}"><i aria-hidden="true"></i><span>${lz(l.label)}</span><b>${l.ok ? 'done' : lz(l.val)}</b></li>`).join('');
     }
     const t = qEl.querySelector('[data-q-time]');
     const left = run.left;
@@ -262,7 +267,7 @@ export function createBuildUI(api, { coarse = false } = {}) {
   }
   function questResult(run, r) {
     const el = qEl.querySelector('[data-q-result]');
-    el.innerHTML = `<div class="bq-result ${r.ok ? 'ok' : 'no'}"><b>${r.ok ? 'Quest complete' : 'Out of time'}</b>${r.ok ? `<span>${run.time.toFixed(1)} s${r.line ? ` · ${esc(r.line)}` : ''}</span>` : ''}
+    el.innerHTML = `<div class="bq-result ${r.ok ? 'ok' : 'no'}"><b>${r.ok ? 'Quest complete' : 'Out of time'}</b>${r.ok ? `<span>${run.time.toFixed(1)} s${r.line ? ` · ${lz(r.line)}` : ''}</span>` : ''}
       <div class="bq-qacts"><button type="button" class="chip primary" data-r-again>${r.ok ? 'Again' : 'Retry'}</button><button type="button" class="chip" data-r-board>More quests</button><button type="button" class="chip" data-r-done>Done</button></div></div>`;
     el.querySelector('[data-r-again]').onclick = () => api.retryQuest();
     el.querySelector('[data-r-board]').onclick = () => { api.endQuest(false); openBoard(); };
@@ -297,8 +302,8 @@ export function createBuildUI(api, { coarse = false } = {}) {
     const done = api.progress.done[q.id] || 0;
     return `<button type="button" class="bq-card${done ? ' done' : ''}" data-q="${i}">
       <span class="bq-csrc">${q.source === 'ai' ? `AI · ${esc(q.model || '')}` : q.source === 'local' ? 'Generated' : 'Quest'}</span>
-      <b>${esc(q.title)}</b><span class="bq-cbrief">${esc(q.brief)}</span>
-      <span class="bq-cobj">${q.objectives.map((o) => esc(objLine(o, q))).join(' · ')}${q.timeLimit ? ` · ${q.timeLimit} s` : ''}</span>
+      <b>${esc(q.title)}</b><span class="bq-cbrief">${lz(q.brief)}</span>
+      <span class="bq-cobj">${q.objectives.map((o) => lz(objLine(o, q))).join(' · ')}${q.timeLimit ? ` · ${q.timeLimit} s` : ''}</span>
       <span class="bq-crew">${esc(rewardLine(q.reward))}${done ? ` <i>✓ ×${done}</i>` : ''}</span></button>`;
   }
   function openBoard() {

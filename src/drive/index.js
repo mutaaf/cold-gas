@@ -198,6 +198,7 @@ export function createDrive(ctx) {
     if (st.car) freeWorld(st.car.world);
     st.world = null; st.road = null; st.course = null; st.car = null;
     camera.near = 0.1; camera.far = 4000; camera.up.set(0, 1, 0); camera.updateProjectionMatrix();
+    st.hud?.dispose?.(); st.hud = null;
     hudRoot.hidden = true; hudRoot.innerHTML = '';
     pauseRoot.hidden = true;
     document.body.classList.remove('driving');
@@ -284,6 +285,7 @@ export function createDrive(ctx) {
     else if (e.code === 'KeyC') cycleCam();
     else if (e.code === 'KeyT') setTod(tod === 'day' ? 'dusk' : 'day');
     else if (e.code === 'KeyX') toggleFan();
+    else if (e.code === 'KeyM') st.hud?.toggleMap?.();
   };
   function bindKeys(on) { if (on) addEventListener('keydown', onKey); else removeEventListener('keydown', onKey); }
 
@@ -361,7 +363,7 @@ export function createDrive(ctx) {
     if (road.endless) {
       if (!st.paused && !layer?.editing) st.driveT += dt;
       if (!st.biomeAt || Math.abs(i - st.biomeAt) > 20) { st.biomeAt = i; st.biome = ['Mountain pass', 'Coast road', 'Desert', 'Forest'][road.biome[i]]; }
-      st.hud.update({ speed, ele: c.pos.y - SPEC.comHeight, grade: road.grade[m] * dirSign, i, heading: Math.atan2(fw.x, -fw.z), time: st.driveT, biome: st.biome });
+      st.hud.update({ speed, ele: c.pos.y - SPEC.comHeight, grade: road.grade[m] * dirSign, i, heading: Math.atan2(fw.x, -fw.z), time: st.driveT, biome: st.biome, x: c.pos.x, z: c.pos.z });
     } else {
       // Timer: from moving off the start to the end of the road.
       if (st.timer == null && !st.finished && i * road.meta.spacing > 30 && i * road.meta.spacing < 300 && speed > 1) st.timer = 0;
@@ -370,7 +372,7 @@ export function createDrive(ctx) {
       const shown = st.timer != null ? st.timer + st.penalty : null;
       st.hud.update({
         speed, ele: c.pos.y - SPEC.comHeight, grade: road.grade[m] * dirSign, i, heading: Math.atan2(fw.x, -fw.z),
-        time: st.finished ? st.finalTime : shown, best: st.best,
+        time: st.finished ? st.finalTime : shown, best: st.best, x: c.pos.x, z: c.pos.z,
       });
     }
     // Touch layout follows the car: pedals on the ground, LIFT/LAND in the air.

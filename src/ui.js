@@ -3,6 +3,9 @@ import { NOZZLES } from './sim/vehicle.js';
 import { categoriesFor, TIERS } from './sim/judge.js';
 import { NOZZLE_UI } from './valves.js';
 import { chime, tick } from './audio.js';
+import { speedK, lenK, rateK, massK, kgfK, pressK, k as uk, u as uu, onUnits, localize, unitText } from './units.js';
+import { ZONES, hitCost } from './sim/damage.js';
+import { HIT, SCRAPE, WHEEL, PART } from './sim/impacts.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -60,7 +63,7 @@ export function createUI() {
 
   let cueTimer = 0;
   ui.cue_ = (html, ms = 2600) => {
-    ui.cue.innerHTML = html;
+    ui.cue.innerHTML = localize(html, { html: true });
     ui.cue.classList.add('on');
     clearTimeout(cueTimer);
     if (ms) cueTimer = setTimeout(() => ui.cue.classList.remove('on'), ms);
@@ -82,6 +85,7 @@ export function createUI() {
     ui.timeline.dataset.course = course;
     ui.timeline.innerHTML = list.map(([id, label], i) => `<li data-ph="${id}"><i aria-hidden="true"></i><span><em>${String(i + 1).padStart(2, '0')}</em> ${label}</span></li>`).join('');
     ui.phaseEls = [...ui.timeline.children];
+    ui.phaseLabels = Object.fromEntries(list);
     last.phaseKey = '';
   };
 
@@ -90,6 +94,31 @@ export function createUI() {
   // change; tabular figures keep every digit in its place.
   const last = { speed: -1, speedBig: -1, air: -1, roll: -9999, bank: -1, alt: -1, sink: -1, g: -1, gState: '', fan: -1, phaseKey: '', airborne: null, clock: -99999, pitch: -999, n2: '', kg: -1, bar: -1, gas: '' };
   const tw = { speed: 0, alt: 0, sink: 0, t: 0 };
+  // A flip of the unit system: every unit-bearing readout writes again on the next frame.
+  // Every unit-bearing readout carries the other system beside it, smaller (src/units.js): a
+  // [data-2] sub-line written on change, like its primary.
+  const two = Object.fromEntries([...document.querySelectorAll('[data-screen="hud"] [data-2]')].map((el) => [el.dataset['2'], el]));
+  const last2 = {};
+  const set2 = (key, q, si, d = 0) => {
+    const v = si * uk(q, true), p = 10 ** d, r = Math.round(v * p);
+    if (r === last2[key] || !two[key]) return;
+    last2[key] = r;
+    const big = q === 'press' && v >= 1000;
+    two[key].textContent = big ? `${(Math.round(v / 100) / 10).toFixed(1)}k ${uu(q, true)}` : `${(r / p).toFixed(d)} ${uu(q, true)}`;
+  };
+  ui.set2 = set2;
+  onUnits(() => { last.speed = -1; last.alt = -1; last.sink = -1; last.fan = -1; last.kg = -1; last.bar = -1; for (const key in last2) delete last2[key]; });
+  // What the instruments remember about this flight, for their tap-to-open readouts
+  // (src/instruments.js): numbers only, updated in place, nothing allocated per frame.
+  const stats = ui.stats = {
+    peakG: 1, peakGAt: 0, peakGPhase: '', g: 1, clock: 0, maxSpeed: 0,
+    gasStart: -1, gasKg: 0, gasPrev: -1, gasPrevT: 0, draw: 0, peakDraw: 0, tankBar: 0, gasState: 'reg',
+    splits: [], throttles: null, phaseKey: '',
+  };
+  const resetStats = () => {
+    Object.assign(stats, { peakG: 1, peakGAt: 0, peakGPhase: '', g: 1, clock: 0, maxSpeed: 0, gasStart: -1, gasPrev: -1, gasPrevT: 0, draw: 0, peakDraw: 0, phaseKey: '' });
+    stats.splits.length = 0;
+  };
   const gEl = $('[data-g]'), fanEl = $('[data-fan]'), n2El = $('[data-tank]');
   const hudEl = ui.screens.hud;
   ui.setClock = (sec) => { const cl = Math.round(sec * 10); if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; } };
@@ -97,12 +126,25 @@ export function createUI() {
     tw.speed = 0; tw.alt = 0; tw.sink = 0; tw.t = 0; last.phaseKey = '';
     // A retry after a crash on the roof must not show the last flight's roll on the start line.
     ui.roll.textContent = '0'; ui.rollArc.style.strokeDasharray = '0 360'; ui.rollArc.classList.remove('done'); last.roll = 0; last.bank = 0;
+    resetStats();
   };
   ui.hud = ({ speed, air, gasKg = 0, tankBar = 0, gasState = 'reg', rollDeg, bankDeg = 0, alt, sink, phaseKey = '', clock = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
     const now = performance.now(), dt = tw.t ? Math.min(0.1, (now - tw.t) / 1000) : 1;
     tw.t = now;
     const k = 1 - Math.exp(-dt / 0.09);
     tw.speed += (speed - tw.speed) * k; tw.alt += (alt - tw.alt) * k; tw.sink += (sink - tw.sink) * k;
+    // The instruments' memory: peak load (after the first half second's window fills), top speed,
+    // the gas draw (lb or kg per second of sim time, smoothed over ≈0.3 s) and the throttles.
+    stats.g = g; stats.clock = clock; stats.throttles = throttles; stats.gasKg = gasKg; stats.tankBar = tankBar; stats.gasState = gasState;
+    if (clock > 0.5 && g > stats.peakG) { stats.peakG = g; stats.peakGAt = clock; stats.peakGPhase = phaseKey; }
+    if (speed > stats.maxSpeed) stats.maxSpeed = speed;
+    if (stats.gasStart < 0) stats.gasStart = gasKg;
+    if (stats.gasPrev >= 0 && clock > stats.gasPrevT + 0.05) {
+      const rate = Math.max(0, (stats.gasPrev - gasKg) / (clock - stats.gasPrevT));
+      stats.draw += (rate - stats.draw) * Math.min(1, (clock - stats.gasPrevT) / 0.3);
+      if (stats.draw > stats.peakDraw) stats.peakDraw = stats.draw;
+      stats.gasPrev = gasKg; stats.gasPrevT = clock;
+    } else if (stats.gasPrev < 0 || clock < stats.gasPrevT) { stats.gasPrev = gasKg; stats.gasPrevT = clock; }
     if (airborne !== last.airborne) { hudEl.toggleAttribute('data-air', airborne); last.airborne = airborne; }
     const gg = Math.round(g * 10);   // already a 0.5 s window (src/hud-telemetry.js): no glide on top
     if (gg !== last.g) {
@@ -110,10 +152,12 @@ export function createUI() {
       const st = g > 4.5 ? 'warn' : g > 3 ? 'caution' : '';
       if (st !== last.gState) { gEl.parentElement.dataset.state = st; last.gState = st; }
     }
-    const ff = Math.round(fan);   // kgf, as the livestream's DOWNFORCE channel reads it
+    const ff = Math.round(fan * kgfK());   // kgf (lbf in US units), as the livestream's DOWNFORCE channel reads it
     if (ff !== last.fan) { fanEl.textContent = String(ff); last.fan = ff; }
-    const sp = Math.round(tw.speed * 3.6);
+    set2('fan', 'kgf', fan);
+    const sp = Math.round(tw.speed * speedK());
     if (sp !== last.speed) { ui.speed.textContent = String(sp); ui.speedBig.textContent = String(sp); last.speed = sp; }
+    set2('speed', 'speed', tw.speed); set2('speedBig', 'speed', tw.speed);
     // N₂: kg left (the bar under it is the fraction of a fill), tank bar, and the regulator's state.
     const a = Math.round(air);
     if (a !== last.air) {
@@ -121,10 +165,12 @@ export function createUI() {
       const st = a < 15 ? 'warn' : a < 30 ? 'caution' : '';
       if (st !== last.n2) { n2El.dataset.state = st; last.n2 = st; }
     }
-    const kg = Math.round(gasKg);
+    const kg = Math.round(gasKg * massK());
     if (kg !== last.kg) { ui.air.textContent = String(Math.max(0, kg)); last.kg = kg; }
-    const br = Math.round(tankBar);
-    if (br !== last.bar) { ui.tankBar.textContent = String(br); last.bar = br; }
+    set2('kg', 'mass', Math.max(0, gasKg)); set2('bar', 'press', tankBar);
+    // Pressure: bar as it is; psi past 1,000 in thousands to a tenth (10.0k), so the cell keeps its width.
+    const pv = tankBar * pressK(), br = pv >= 1000 ? 100000 + Math.round(pv / 100) : Math.round(pv);
+    if (br !== last.bar) { ui.tankBar.textContent = pv >= 1000 ? `${(Math.round(pv / 100) / 10).toFixed(1)}k` : String(br); last.bar = br; }
     if (gasState !== last.gas) { ui.n2State.textContent = gasState === 'blowdown' ? 'Blowdown' : 'Reg'; n2El.dataset.gas = gasState; last.gas = gasState; }
     // Two roll numbers, one meaning each (ticket 0022): ROLL under the dial is the bank right now, the
     // angle from upright that the ADI draws (0 on the wheels, 90 on a side, 180 on the roof); the arc
@@ -138,9 +184,11 @@ export function createUI() {
     }
     const bk = rolledMode ? r : Math.round(bankDeg);
     if (bk !== last.bank) { ui.roll.textContent = String(bk); last.bank = bk; }
-    const al = Math.round(tw.alt * 10);
-    if (al !== last.alt) { ui.alt.textContent = (Math.max(0, al) / 10).toFixed(1); last.alt = al; }
-    const sk = Math.round(tw.sink * 10);
+    // Altitude to a tenth (whole feet or metres from 100 up, so the cell keeps its width).
+    const av = tw.alt * lenK(), al = av >= 99.95 ? 1e6 + Math.round(av) : Math.round(av * 10);
+    if (al !== last.alt) { ui.alt.textContent = al >= 1e6 ? String(al - 1e6) : (Math.max(0, al) / 10).toFixed(1); last.alt = al; }
+    set2('alt', 'len', Math.max(0, tw.alt), 1); set2('sink', 'rate', Math.max(0, tw.sink), 1);
+    const sk = Math.round(tw.sink * rateK() * 10);
     if (sk !== last.sink) { ui.sink.textContent = (Math.max(0, sk) / 10).toFixed(1); last.sink = sk; }
     // Pitch, whole degrees: up the deck 0–180 (unsigned), in the air signed (+ nose up). The bank is the ADI's.
     const pt = Math.round(pitch), pk = pt * 2 + (airborne ? 1 : 0);   // the sign shows only in the air
@@ -153,6 +201,8 @@ export function createUI() {
       ui.phaseEls.forEach((li, i) => { li.dataset.state = at < 0 ? '' : i < at ? 'done' : i === at ? 'now' : ''; });
       hudEl.dataset.phase = phaseKey;
       last.phaseKey = phaseKey;
+      if (phaseKey && stats.splits[stats.splits.length - 1]?.key !== phaseKey) stats.splits.push({ key: phaseKey, label: ui.phaseLabels?.[phaseKey] || phaseKey, t: clock });
+      stats.phaseKey = phaseKey;
     }
     for (let i = 0; i < ui.nz.length; i++) {
       const n = ui.nz[i], v = Math.round(throttles[i] * 40);
@@ -164,40 +214,109 @@ export function createUI() {
     }
   };
 
-  // The damage sensor: per-zone shading (caution from 10 %, warning from 40 %), the total with its
-  // state word, and a flash on every new hit.
+  // The damage sensor: per-zone shading that eases from scuffed ink through amber (10 %) to red
+  // (40 %), the total with its state word, and on every hit a flash where it landed with an arrow
+  // the way it came in; the last few hits stay on the car as fading marks. The hits themselves
+  // (zone, closing speed, what it cost, the load, when) are kept for the full view
+  // (src/damage-view.js). Everything is read from the sim's impact record; nothing is written back.
   const dmgEl = $('[data-dmg]'), dmgPct = $('[data-dmg-pct]'), dmgWord = $('[data-dmg-word]');
+  const dmgFx = $('[data-dmg-fx]'), dmgTrail = $('[data-dmg-trail]');
   const dmgZones = dmgEl ? Object.fromEntries([...dmgEl.querySelectorAll('[data-z]')].map((el) => [el.dataset.z, el])) : {};
-  const ZONE_ORDER = ['nose', 'tail', 'left', 'right', 'roof', 'floor', 'susp'];
-  const lastDmg = { total: -1, hit: -1, z: ZONE_ORDER.map(() => -1) };
-  ui.damage = (d) => {
+  const ZONE_ORDER = ZONES;
+  const lastDmg = { total: -1, hit: -1, z: ZONE_ORDER.map(() => -1), seen: 0 };
+  const hits = ui.hits = [];          // newest last, at most HIT_KEEP
+  const HIT_KEEP = 12;
+  const dmgListeners = new Set();
+  ui.onDamage = (fn) => { dmgListeners.add(fn); return () => dmgListeners.delete(fn); };
+  ui.damageState = { zones: new Float64Array(ZONE_ORDER.length), total: 0 };
+  // Where on the 44×80 top view a body-frame point (x left, z forward, m) falls: ≈13 px a metre.
+  const svgX = (lx) => Math.max(3, Math.min(41, 22 - lx * 13)), svgY = (lz) => Math.max(4, Math.min(76, 40 - lz * 13));
+  // A world vector into the car's frame (q⁻¹·v), into `o`.
+  const toBody = (q, x, y, z, o) => {
+    const ux = -q.x, uy = -q.y, uz = -q.z, w = q.w;
+    const tx = 2 * (uy * z - uz * y), ty = 2 * (uz * x - ux * z), tz = 2 * (ux * y - uy * x);
+    o.x = x + w * tx + (uy * tz - uz * ty); o.y = y + w * ty + (uz * tx - ux * tz); o.z = z + w * tz + (ux * ty - uy * tx);
+    return o;
+  };
+  const bp = { x: 0, y: 0, z: 0 }, bn = { x: 0, y: 0, z: 0 };
+  const zoneFor = (part, lx) => (part === PART.nose ? 0 : part === PART.tail ? 1 : part === PART.roof ? 4 : part === PART.floor ? 5 : part === PART.wheel ? 6 : lx > 0 ? 2 : 3);
+  function recordHits(car) {
+    const m = car.impacts;
+    if (m.count < lastDmg.seen) lastDmg.seen = 0;
+    let fresh = null;
+    for (let i = lastDmg.seen; i < m.count; i++) {
+      const kind = m.kind[i];
+      if (kind !== HIT && kind !== WHEEL && kind !== SCRAPE) continue;
+      const cost = hitCost(kind, m.speed[i]);
+      if (cost < 0.25) continue;
+      toBody(car.quat, m.x[i] - car.pos.x, m.y[i] - car.pos.y, m.z[i] - car.pos.z, bp);
+      toBody(car.quat, m.nx[i], m.ny[i], m.nz[i], bn);
+      const zone = zoneFor(m.part[i], bp.x);
+      const t = stats.clock - (car.tick - m.tick[i]) / 240;
+      const prev = hits[hits.length - 1];
+      // A slide is many samples: fold it into one entry per zone while it lasts.
+      if (kind === SCRAPE && prev && prev.kind === SCRAPE && prev.zone === zone && t - prev.tEnd < 0.5) {
+        prev.cost += cost; prev.speed = Math.max(prev.speed, m.speed[i]); prev.tEnd = t; continue;
+      }
+      const h = { kind, zone, speed: m.speed[i], cost, g: stats.g, t, tEnd: t, sx: svgX(bp.x), sy: svgY(bp.z), fx: -bn.x, fy: -bn.z, id: i };
+      hits.push(h); if (hits.length > HIT_KEEP) hits.shift();
+      if (kind !== SCRAPE) fresh = h;
+    }
+    lastDmg.seen = m.count;
+    return fresh;
+  }
+  function flash(h) {
+    if (!dmgFx) return;
+    // The arrow points along the force on the car (the surface's normal, in plan), ending on the hit.
+    const len = Math.hypot(h.fx, h.fy);
+    const rot = len > 0.35 ? (Math.atan2(-h.fx, h.fy) * 180) / Math.PI : 0;
+    dmgFx.setAttribute('transform', `translate(${h.sx.toFixed(1)} ${h.sy.toFixed(1)})`);
+    dmgFx.querySelector('.fx-arrow').setAttribute('transform', `rotate(${rot.toFixed(0)})`);
+    dmgFx.classList.toggle('flat', len <= 0.35);
+    dmgFx.dataset.sev = h.cost >= 15 ? 'red' : h.cost >= 4 ? 'amber' : '';
+    dmgFx.classList.remove('on'); void dmgEl.offsetWidth; dmgFx.classList.add('on');
+    if (dmgTrail) {
+      const marks = hits.filter((x) => x.kind !== SCRAPE).slice(-5);
+      dmgTrail.innerHTML = marks.map((x, i) => `<circle cx="${x.sx.toFixed(1)}" cy="${x.sy.toFixed(1)}" r="1.5" style="opacity:${(0.25 + (0.6 * (i + 1)) / marks.length).toFixed(2)}"/>`).join('');
+    }
+  }
+  ui.damage = (d, car) => {
     if (!dmgEl || !d) return;
+    let changed = false;
     for (let k = 0; k < ZONE_ORDER.length; k++) {
+      ui.damageState.zones[k] = d.zones[k];
       const v = Math.round(d.zones[k]);
       if (v === lastDmg.z[k]) continue;
-      lastDmg.z[k] = v;
+      lastDmg.z[k] = v; changed = true;
       const el = dmgZones[ZONE_ORDER[k]];
       el.style.setProperty('--dmg', String(v / 100));
       el.dataset.level = v >= 40 ? 'red' : v >= 10 ? 'amber' : v > 0 ? 'scuff' : '';
     }
+    ui.damageState.total = d.total;
     const t = Math.round(d.total);
     if (t !== lastDmg.total) {
       dmgPct.textContent = String(t);
       const st = t >= 60 ? 'wreck' : t >= 25 ? 'warn' : t > 0 ? 'scuffed' : 'ok';
       dmgEl.dataset.state = st;
       dmgWord.textContent = { ok: 'Intact', scuffed: 'Scuffed', warn: 'Damaged', wreck: 'Wrecked' }[st];
-      lastDmg.total = t;
+      lastDmg.total = t; changed = true;
     }
+    const fresh = car && car.impacts ? recordHits(car) : null;
     if (d.lastTick !== lastDmg.hit) {
       if (lastDmg.hit >= 0 || d.lastTick >= 0) { dmgEl.classList.remove('hit'); void dmgEl.offsetWidth; dmgEl.classList.add('hit'); }
-      lastDmg.hit = d.lastTick;
+      lastDmg.hit = d.lastTick; changed = true;
     }
+    if (fresh) flash(fresh);
+    if (changed || fresh) for (const fn of dmgListeners) fn(fresh);
   };
   ui.damageReset = () => {
-    lastDmg.total = -1; lastDmg.hit = -1; lastDmg.z.fill(-1);
+    lastDmg.total = -1; lastDmg.hit = -1; lastDmg.z.fill(-1); lastDmg.seen = 0; hits.length = 0;
+    ui.damageState.zones.fill(0); ui.damageState.total = 0;
     if (!dmgEl) return;
     dmgEl.classList.remove('hit'); dmgEl.dataset.state = 'ok'; dmgPct.textContent = '0'; dmgWord.textContent = 'Intact';
     for (const el of Object.values(dmgZones)) { el.dataset.level = ''; el.style.removeProperty('--dmg'); }
+    dmgFx?.classList.remove('on'); if (dmgTrail) dmgTrail.innerHTML = '';
+    for (const fn of dmgListeners) fn(null);
   };
 
   // --- Results ---------------------------------------------------------------------------
@@ -226,10 +345,10 @@ export function createUI() {
       : `Flown in <b>${tier.label}</b>${tier.factor > 1 ? ` · the panel pays <b>×${tier.factor.toFixed(2)}</b> for raw piloting` : ' · Pro pays ×1.08, Advanced ×1.15'}`;
     if (practice) {
       $('[data-r-verdict]').textContent = practice.result.headline;
-      $('[data-r-headline]').textContent = practice.result.pass ? `${practice.drill.goal} · done` : practice.drill.goal;
+      unitText($('[data-r-headline]'), practice.result.pass ? `${practice.drill.goal} · done` : practice.drill.goal);
       const ul = $('[data-drill-stats]');
       ul.innerHTML = '';
-      for (const [txt, bad] of practice.result.stats) { const li = document.createElement('li'); li.textContent = txt; if (bad) li.className = 'bad'; ul.appendChild(li); }
+      for (const [txt, bad] of practice.result.stats) { const li = document.createElement('li'); unitText(li, txt); if (bad) li.className = 'bad'; ul.appendChild(li); }
     }
     $('[data-r-verdict]').textContent = practice ? practice.result.headline : card.verdict;
     if (!practice) $('[data-r-headline]').textContent = 'The panel';
@@ -283,7 +402,7 @@ export function createUI() {
     if (f.damagePct != null) facts.push([f.damagePct >= 60 ? `wrecked · ${f.damagePct}% damage` : `${f.integrity}% intact`, f.damagePct >= 25]);
     const ul = $('[data-r-facts]');
     ul.innerHTML = '';
-    for (const [txt, bad] of facts) { const li = document.createElement('li'); li.textContent = txt; if (bad) li.className = 'bad'; ul.appendChild(li); }
+    for (const [txt, bad] of facts) { const li = document.createElement('li'); unitText(li, txt); if (bad) li.className = 'bad'; ul.appendChild(li); }
     $('[data-r-submit-msg]').textContent = '';
     $('[data-receipt]').hidden = true;
   };
@@ -296,9 +415,9 @@ export function createUI() {
       const li = document.createElement('li');
       li.dataset.fix = it.id;
       li.innerHTML = '<b></b><p class="cd"></p><p class="cf"></p>';
-      li.querySelector('b').textContent = it.title;
-      li.querySelector('.cd').textContent = it.detail;
-      li.querySelector('.cf').textContent = it.fix;
+      unitText(li.querySelector('b'), it.title);
+      unitText(li.querySelector('.cd'), it.detail);
+      unitText(li.querySelector('.cf'), it.fix);
       ol.appendChild(li);
     }
     box.hidden = !items?.length;
@@ -307,11 +426,14 @@ export function createUI() {
   // Type the words into each judge's quote.
   ui.words = (words) => {
     if (!words) return;
-    if (words.headline) $('[data-r-headline]').textContent = words.headline;
+    if (words.headline) unitText($('[data-r-headline]'), words.headline);
     for (const id of ['engineer', 'coordinator', 'designer']) {
       const q = document.querySelector(`[data-judge="${id}"] .quote`);
       if (!q) continue;
-      const text = words[id] || '';
+      // The words arrive in SI (the Worker writes the prompt from the verified card); they read in
+      // the player's units, and re-read on a flip once typed.
+      const src = words[id] || '', text = localize(src);
+      delete q.dataset.uSrc;
       let i = 0;
       q.textContent = '';
       q.classList.add('typing');
@@ -319,7 +441,7 @@ export function createUI() {
       setTimeout(function type() {
         q.textContent = text.slice(0, ++i);
         if (i < text.length) setTimeout(type, 14);
-        else q.classList.remove('typing');
+        else { q.classList.remove('typing'); unitText(q, src); }
       }, delay);
     }
   };
@@ -354,7 +476,7 @@ export function createUI() {
       const li = document.createElement('li');
       li.innerHTML = '<span class="ini"></span><span class="v"></span><span class="t"></span>';
       li.querySelector('.ini').textContent = r.initials;
-      li.querySelector('.v').textContent = `${r.verdict} · ${r.facts.rollDeg}° · ${r.facts.sink} m/s`;
+      unitText(li.querySelector('.v'), `${r.verdict} · ${r.facts.rollDeg}° · ${r.facts.sink} m/s`);
       li.querySelector('.t').textContent = Number(r.total).toFixed(1);
       ol.appendChild(li);
     }
