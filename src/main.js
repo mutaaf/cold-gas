@@ -331,9 +331,17 @@ syncAiChip();
 function wallAssist(run, input) {
   if (run.course === 'lineup') { input.fan = 0; return input; }
   const c = run.car;
-  if (!S.released && ((run.phase === 'ramp' && input.lift > 0) || run.phase === 'air')) { S.released = true; S.releaseTick = run.tick; buzz('release'); }
+  if (noteRelease(run, input)) buzz('release');
   input.fan = !S.released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
   return input;
+}
+
+// The release, read off the run for any pilot (a player, the reference, a drill): LIFT on the deck, or
+// the first tick in the air. The timeline's RELEASE → CARRY → BRAKE keys off it (ticket 0022).
+function noteRelease(run, input) {
+  if (S.released || run.course === 'lineup' || !((run.phase === 'ramp' && input.lift > 0) || run.phase === 'air')) return false;
+  S.released = true; S.releaseTick = run.tick;
+  return true;
 }
 
 const sn = { x: 0, y: 0, z: 0 }, padP = { x: 0, y: 0, z: 0 };
@@ -378,8 +386,8 @@ function liveStep(dt) {
   const oneThumb = thumbActive();
   const simT0 = performance.now(), tick0 = run.tick;
   while (S.acc >= DT && run.phase !== 'done') {
-    input = S.autopilot ? S.autopilot(run)
-      : wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released, run.car));
+    if (S.autopilot) noteRelease(run, input = S.autopilot(run));
+    else input = wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released, run.car));
     poseLerp.before(run.car);
     bodyLerp.before(run.car.world.bodies);
     stepRun(run, input);
@@ -434,7 +442,7 @@ function liveStep(dt) {
   landing.update(c, alt, S.autopilot ? '' : run.phase);
   const pr = landing.prediction;
   ui.hud({
-    speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI,
+    speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(pr.rollOut) * 180 / Math.PI,
     alt, airborne: run.phase === 'air',
     sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, pr), clock: (run.tick - S.startTick) / 240,
     pitch: hudPitch(c.quat, run.phase === 'ramp'),
@@ -1009,6 +1017,6 @@ function fastForward() {
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false) });
-window.__coldgas = { S, stage, physicsReady, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 Object.assign(window.__coldgas, { obs, heal });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

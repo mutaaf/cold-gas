@@ -1,5 +1,7 @@
 # Changelog
 
+2026-10-21 · #0022 · The reference flight's HUD tells the truth. Watching the reveal, the phase timeline now goes HANG → RELEASE → CARRY → BRAKE → TOUCHDOWN like a flown run (it stuck on HANG until touchdown, because only a player's controls marked the release; the release is now read off the run for any pilot). The number under the attitude dial, ROLL, is the bank right now, the same angle the dial draws: 0° on the wheels, 90° on a side, 180° on the roof or hanging on the ledge. It used to be the roll accumulated over the flight (177° with the car parked upright). The ring round the dial still fills with the roll so far and closes at 360°. No sim change.
+
 2026-10-21 · The pad is not the Wall (SIM_VERSION 25). Since the launch complex became solid, a car driven up onto its 3 m pad met the Wall's rule ("z > 0.5 m and 1.2 m up", anywhere across the stage) and its run turned into a jump and ended as a low-scoring landing. The rule now holds only over the Wall's own footprint. The altimeter reads height over the pad and over the launch mount's deck, not over the ground under them (it read 3 m high on the pad). The reference runs replay to the same bits.
 
 2026-10-21 · Observability and self-healing (src/obs/, src/worker/obs.js, scripts/heal.mjs). No sim change.

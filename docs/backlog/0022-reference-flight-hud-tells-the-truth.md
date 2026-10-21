@@ -1,7 +1,7 @@
 ---
 id: 0022
 title: The reference flight's phase timeline advances past HANG, and ROLL reads attitude
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
@@ -32,16 +32,21 @@ Its HUD lies twice (production, 2026-10-21, docs/critique/2026-10-21-0945/):
   show the bank angle under the dial; one roll number per meaning on screen.
 
 ## Acceptance criteria
-- [ ] e2e: during the Show reference, the timeline's active phase is RELEASE within 0.6 s after
+- [x] e2e: during the Show reference, the timeline's active phase is RELEASE within 0.6 s after
       the first `air` tick, CARRY or BRAKE while `phase === 'air'` afterwards, never HANG.
-- [ ] e2e: at the reference touchdown, no element labelled ROLL reads more than 5° while the car
+- [x] e2e: at the reference touchdown, no element labelled ROLL reads more than 5° while the car
       is upright on its wheels (or the label says it is accumulated).
-- [ ] e2e: a crash that ends `flipped` (the Show reference with every valve shut after release)
+- [x] e2e: a crash that ends `flipped` (the Show reference with every valve shut after release)
       reads ROLL ≥ 60° while the car lies on its side or roof. (Critic 2026-10-21 22:00: production
       read ROLL 2° with the car on its side, `docs/critique/2026-10-21-2200/phone-9b-crash-after.jpg`.)
-- [ ] Player runs unchanged: the Show reference fast-forwarded by a player log still advances
+- [x] Player runs unchanged: the Show reference fast-forwarded by a player log still advances
       the timeline as before.
-- [ ] 390×844 and 1280×720 screenshots in the PR.
+- [x] 390×844 and 1280×720 screenshots in the PR.
+
+Builder note (2026-10-21): under SIM_VERSION 25 the "every valve shut after release" crash lands on its
+wheels and settles upright, so tests/e2e/timeline.spec.js crashes the reference with a held full roll
+stick after the release instead (it tumbles onto its side and roof); every sample down on a side or the
+roof reads ROLL ≥ 60°.
 
 ## Test plan
 An e2e on the reveal run that samples the timeline's active `data-ph` at the release, over the row

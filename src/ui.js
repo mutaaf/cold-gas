@@ -82,13 +82,13 @@ export function createUI() {
   // Last-written values, so the DOM is only touched on change. Numbers glide to their targets (a
   // first-order lag of ≈90 ms: readable, never late) and are written only when the shown digits
   // change; tabular figures keep every digit in its place.
-  const last = { speed: -1, speedBig: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, gState: '', fan: -1, phaseKey: '', airborne: null, clock: -99999, pitch: -999, n2: '', kg: -1, bar: -1, gas: '' };
+  const last = { speed: -1, speedBig: -1, air: -1, roll: -9999, bank: -1, alt: -1, sink: -1, g: -1, gState: '', fan: -1, phaseKey: '', airborne: null, clock: -99999, pitch: -999, n2: '', kg: -1, bar: -1, gas: '' };
   const tw = { speed: 0, alt: 0, sink: 0, t: 0 };
   const gEl = $('[data-g]'), fanEl = $('[data-fan]'), n2El = $('[data-tank]');
   const hudEl = ui.screens.hud;
   ui.setClock = (sec) => { const cl = Math.round(sec * 10); if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; } };
   ui.resetHud = () => { tw.speed = 0; tw.alt = 0; tw.sink = 0; tw.t = 0; last.phaseKey = ''; };
-  ui.hud = ({ speed, air, gasKg = 0, tankBar = 0, gasState = 'reg', rollDeg, alt, sink, phaseKey = '', clock = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
+  ui.hud = ({ speed, air, gasKg = 0, tankBar = 0, gasState = 'reg', rollDeg, bankDeg = 0, alt, sink, phaseKey = '', clock = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
     const now = performance.now(), dt = tw.t ? Math.min(0.1, (now - tw.t) / 1000) : 1;
     tw.t = now;
     const k = 1 - Math.exp(-dt / 0.09);
@@ -116,13 +116,17 @@ export function createUI() {
     const br = Math.round(tankBar);
     if (br !== last.bar) { ui.tankBar.textContent = String(br); last.bar = br; }
     if (gasState !== last.gas) { ui.n2State.textContent = gasState === 'blowdown' ? 'Blowdown' : 'Reg'; n2El.dataset.gas = gasState; last.gas = gasState; }
+    // Two roll numbers, one meaning each (ticket 0022): ROLL under the dial is the bank right now, the
+    // angle from upright that the ADI draws (0 on the wheels, 90 on a side, 180 on the roof); the arc
+    // round the dial is how far the car has rolled in total, filling at 360°.
     const r = Math.round(rollDeg);
     if (r !== last.roll) {
-      ui.roll.textContent = String(r);
       ui.rollArc.style.strokeDasharray = `${Math.min(360, r)} 360`;
       ui.rollArc.classList.toggle('done', r >= 330);
       last.roll = r;
     }
+    const bk = Math.round(bankDeg);
+    if (bk !== last.bank) { ui.roll.textContent = String(bk); last.bank = bk; }
     const al = Math.round(tw.alt * 10);
     if (al !== last.alt) { ui.alt.textContent = (Math.max(0, al) / 10).toFixed(1); last.alt = al; }
     const sk = Math.round(tw.sink * 10);
