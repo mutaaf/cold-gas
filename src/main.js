@@ -34,6 +34,8 @@ import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableT
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
 import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0 } from './audio.js';
 import { createUI } from './ui.js';
+import { wireUnitToggles, localize, unitText } from './units.js';
+import { createInstruments } from './instruments.js';
 import { localWords, postScore, fetchBoard } from './panel.js';
 import { loadAI } from './ai/config.js';
 import { openSettings, aiLabel } from './ai/settings.js';
@@ -81,6 +83,10 @@ function whenPhysics(fn) {
   };
 }
 const ui = createUI();
+// Units (src/units.js): US by default, metric a tap away on any unit readout, or U.
+wireUnitToggles();
+// Every HUD instrument answers a tap: peak G, burn time, splits, attitude, the valves, the damage map.
+const instruments = createInstruments(ui, { getRun: () => S.run });
 
 // The car's root sits at the physics centre of mass; the model hangs below it.
 const carRoot = new THREE.Group();
@@ -201,6 +207,7 @@ function closeOverlays() {
   if (ai && !ai.hidden) ai.hidden = true;
   S.paused = false;
   ui.clearCue();
+  instruments.close();
 }
 
 function toTitle() {
@@ -440,7 +447,7 @@ function liveStep(dt) {
     pitch: hudPitch(c.quat, run.phase === 'ramp'),
     throttles: c.throttles, fan: c.fanForce / G, g: gWindow.read(),
   });
-  ui.damage(run.damage);
+  ui.damage(run.damage, c);
   hero.setFan?.(c.fan);
   hero.setWing?.(Math.min(1, Math.max(0, (speed - 20) / 20)));
   plumes.update(dt, S.time, c.throttles, c.vel, 0);
@@ -735,9 +742,10 @@ on('[data-restart]', () => { if (S.autopilot) { S.paused = false; ui.show('pause
 on('[data-share]', async () => {
   if (!S.card) return;
   const f = S.card.facts;
-  const text = f.course === 'show'
+  let text = f.course === 'show'
     ? `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. Up a ${f.height} m wall, ${f.invertedS} s inverted${f.crossedRow ? `, ${f.clearance} m over five parked vehicles, ${f.sink} m/s touchdown` : ''}.`
     : `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. ${f.rollDeg}° roll, ${f.apex} m apex, ${f.sink} m/s touchdown.`;
+  text = localize(text);
   const url = `${location.origin}${import.meta.env.BASE_URL}`;
   try {
     if (navigator.share) await navigator.share({ title: 'COLD GAS', text, url });
@@ -818,7 +826,7 @@ function openPractice() {
     li.innerHTML = '<button type="button" class="drill-btn"><span class="n"></span><b></b><span class="d"></span></button>';
     li.querySelector('.n').textContent = d.n;
     li.querySelector('b').textContent = d.label;
-    li.querySelector('.d').textContent = d.blurb;
+    unitText(li.querySelector('.d'), d.blurb);
     const btn = li.querySelector('button');
     btn.dataset.drill = d.id;
     btn.addEventListener('click', () => startDrill(d.id));
@@ -843,7 +851,7 @@ function startDrillNow(id) {
   drillBar.hidden = false;
   document.querySelector('[data-drill-name]').textContent = `${drill.n} ${drill.label}`;
   document.querySelector('[data-drill-n]').textContent = drill.n;
-  document.querySelector('[data-drill-goal]').textContent = drill.goal;
+  unitText(document.querySelector('[data-drill-goal]'), drill.goal);
   ui.touch.hidden = !(coarse || usingTouch());
   syncScheme();
   plumes.clear();

@@ -5,6 +5,7 @@ import { test, expect } from '@playwright/test';
 test('HUD fan readout shows the suction in kgf, matching the sim', async ({ page }) => {
   // Start on the ledge (drill 01): hanging inverted, the fan near its cap. Waiting for the
   // reference to climb in real time took over 90 s on CI's software GL.
+  await page.addInitScript(() => localStorage.setItem('coldgas.units', 'metric'));   // kgf leads; lbf is beside it
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.startDrill, null, { timeout: 30_000 });
   await page.evaluate(() => window.__coldgas.startDrill('ledge'));

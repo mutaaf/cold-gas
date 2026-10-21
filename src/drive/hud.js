@@ -2,6 +2,8 @@
 // grade, distance, a minimap of the whole route and its elevation profile, the run timer, the
 // data credits). Updated in place: text only changes when the rounded value does.
 import { OSM_CREDIT } from './manifest.js';
+import { createMinimap, createMapOverlay } from './minimap.js';
+import { fmtRoad, fmtLen, one, k as uk, u as uu, onUnits, unitText } from '../units.js';
 
 const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -44,7 +46,7 @@ export function renderPicker(root, roads, { selected, tod, seed = '', onPick, on
             <span class="fd-name">${esc(r.name)}</span>
             <span class="fd-local">${esc(r.local)}</span>
             <span class="fd-country">${esc(r.country)}</span>
-            <span class="fd-cstats"><b>${r.lengthKm.toFixed(1)}</b> km · <b>+${fmtInt(r.gain)}</b> m · top <b>${fmtInt(r.maxEle)}</b> m${r.hairpins ? ` · <b>${r.hairpins}</b> hairpins` : ''}</span>
+            <span class="fd-cstats" data-u-src="${r.lengthKm.toFixed(1)} km · +${fmtInt(r.gain)} m · top ${fmtInt(r.maxEle)} m${r.hairpins ? ` · ${r.hairpins} hairpins` : ''}"></span>
             <svg class="fd-prof" viewBox="0 0 160 28" preserveAspectRatio="none" aria-hidden="true"><path d="${profilePath(r, 160, 28)}" /></svg>
             <span class="fd-blurb">${esc(r.blurb)}</span>
           </button>`;
@@ -69,6 +71,7 @@ export function renderPicker(root, roads, { selected, tod, seed = '', onPick, on
       <div class="fd-loading" data-fd-loading hidden><span data-fd-load-label>Loading</span><i><b data-fd-load-bar></b></i></div>
       <p class="fd-credit">Roads ${esc(OSM_CREDIT)} · Terrain: AWS Terrain Tiles (Mapzen/Tilezen) from EU-DEM (Copernicus), USGS 3DEP, SRTM, ETOPO1, © Kartverket</p>
     </div>`;
+  root.querySelectorAll('.fd-cstats[data-u-src]').forEach((el) => unitText(el, el.dataset.uSrc));
   const seedIn = root.querySelector('[data-fd-seed]');
   seedIn.addEventListener('click', (e) => { e.stopPropagation(); onPick('endless'); });
   seedIn.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { onSeed(seedIn.value.trim()); onPick('endless'); onDrive(); } });
@@ -113,173 +116,184 @@ export function randomSeed() {
   return `${w(r[0])}-${w(r[0] >> 12)}-${(r[1] % 900) + 100}`;
 }
 
-// The endless road's HUD: the same instruments, with the distance driven, the land you're in, the
-// seed (and a link to share it), and a map of the road around you instead of the whole route.
-export function createEndlessHud(root, road, info, { onCamera, onTod, onReset, onExit, onFan, onShare }) {
-  root.innerHTML = `
-    <div class="fd-road">
-      <p class="fd-road-name">Endless</p>
-      <p class="fd-road-sub"><span data-h-stretch>${esc(info.local || '')}</span> · <button type="button" class="fd-seedchip" data-h-share title="Copy a link to this world">Seed ${esc(info.seedLabel || '')}</button></p>
-    </div>
-    <div class="fd-ctl">
-      <button type="button" class="chip" data-h-cam title="Camera (C)">Chase</button>
-      <button type="button" class="chip" data-h-tod title="Time of day (T)">Day</button>
-      <button type="button" class="chip" data-h-fan aria-pressed="false" title="Suction fan (X): 46 kN of grip">Fan</button>
-      <button type="button" class="chip" data-h-reset title="Back on the road (R)">Reset</button>
-      <button type="button" class="chip" data-h-exit title="Leave Free Drive (Esc)">Exit</button>
-    </div>
-    <div class="fd-timer running" data-h-timer><b data-h-time>0:00.0</b><span>Driving</span></div>
-    <div class="fd-speed"><b data-h-speed>0</b><span>km/h</span></div>
-    <dl class="fd-stats">
-      <div><dt>Elevation</dt><dd><b data-h-ele>0</b> m</dd></div>
-      <div><dt>Grade</dt><dd><b data-h-grade>0.0</b> %</dd></div>
-      <div><dt>Distance</dt><dd><b data-h-dist>0.0</b> km</dd></div>
-    </dl>
-    <div class="fd-map" aria-hidden="true">
-      <svg viewBox="-75 -75 150 150" class="fd-mini"><path class="route" data-h-route d="" /><path class="ahead" data-h-ahead d="" />
-        <g data-h-car><circle r="4" /><path d="M0 -8 L3 -2 L-3 -2Z" /></g></svg>
-      <svg viewBox="0 0 150 34" preserveAspectRatio="none" class="fd-profile"><path data-h-prof d="" /><line x1="75" x2="75" y1="0" y2="34" /></svg>
-    </div>
-    <p class="fd-fine">Endless: generated from its seed as you drive · same seed, same world</p>`;
-  const $ = (q) => root.querySelector(q);
-  const el = { speed: $('[data-h-speed]'), ele: $('[data-h-ele]'), grade: $('[data-h-grade]'), dist: $('[data-h-dist]'), car: $('[data-h-car]'), route: $('[data-h-route]'), ahead: $('[data-h-ahead]'),
-    prof: $('[data-h-prof]'), time: $('[data-h-time]'), stretch: $('[data-h-stretch]'), cam: $('[data-h-cam]'), tod: $('[data-h-tod]'), fan: $('[data-h-fan]'), share: $('[data-h-share]') };
-  $('[data-h-cam]').addEventListener('click', onCamera);
-  $('[data-h-tod]').addEventListener('click', onTod);
-  $('[data-h-reset]').addEventListener('click', onReset);
-  $('[data-h-exit]').addEventListener('click', onExit);
-  $('[data-h-fan]').addEventListener('click', onFan);
-  el.share.addEventListener('click', () => onShare?.(el.share));
-  const last = { speed: -1, ele: -1e9, grade: -1e9, dist: -1, mapI: -1e9, time: -1, stretch: '', heading: 1e9 };
-  // The map: 1.5 km of road around the car, north up, 150 px ≈ 3 km; redrawn every 30 m.
-  const K = 75 / 1500;
-  function drawMap(i) {
-    const cx = road.x[i], cz = road.z[i];
-    let back = '', ahead = '';
-    const a = Math.max(0, i - 500), b = Math.min(road.n - 1, i + 500);
-    for (let k = a; k <= b; k += 4) {
-      const p = `${((road.x[k] - cx) * K).toFixed(1)} ${((road.z[k] - cz) * K).toFixed(1)}`;
-      if (k <= i) back += `${back ? 'L' : 'M'}${p}`;
-      if (k >= i - 4) ahead += `${ahead ? 'L' : 'M'}${p}`;
-    }
-    el.route.setAttribute('d', back); el.ahead.setAttribute('d', ahead);
-    // Profile: 1.5 km either side.
-    let lo = Infinity, hi = -Infinity;
-    for (let k = a; k <= b; k += 8) { lo = Math.min(lo, road.y[k]); hi = Math.max(hi, road.y[k]); }
-    let d = 'M0 34';
-    for (let k = a; k <= b; k += 8) d += `L${(((k - i) / 1000) * 75 + 75).toFixed(1)} ${(31 - ((road.y[k] - lo) / Math.max(20, hi - lo)) * 26).toFixed(1)}`;
-    el.prof.setAttribute('d', `${d}L${((((b - i) / 1000) * 75) + 75).toFixed(1)} 34Z`);
-  }
-  return {
-    update({ speed, ele, grade, i, heading, time, biome }) {
-      const sp = Math.round(speed * 3.6);
-      if (sp !== last.speed) { el.speed.textContent = String(sp); last.speed = sp; }
-      const e = Math.round(ele);
-      if (e !== last.ele) { el.ele.textContent = fmtInt(e); last.ele = e; }
-      const g = Math.round(grade * 1000);
-      if (g !== last.grade) { el.grade.textContent = (g / 10).toFixed(1); last.grade = g; }
-      const dd = Math.round((i * road.meta.spacing) / 100);
-      if (dd !== last.dist) { el.dist.textContent = (dd / 10).toFixed(1); last.dist = dd; }
-      if (Math.abs(i - last.mapI) >= 10) { drawMap(i); last.mapI = i; }
-      const hd = Math.round((heading * 180) / Math.PI);
-      if (hd !== last.heading) { el.car.setAttribute('transform', `rotate(${hd})`); last.heading = hd; }
-      if (biome && biome !== last.stretch) { el.stretch.textContent = biome; last.stretch = biome; }
-      const tt = time == null ? -1 : Math.round(time * 10);
-      if (tt !== last.time) { el.time.textContent = fmtTime(time || 0); last.time = tt; }
-    },
-    setCam(m) { el.cam.textContent = { chase: 'Chase', bumper: 'Bumper', cinema: 'Cinema' }[m] || m; },
-    setTod(t) { el.tod.textContent = t === 'dusk' ? 'Dusk' : 'Day'; },
-    setFan(on) { el.fan.setAttribute('aria-pressed', String(on)); },
-    finish() {},
-  };
-}
 
-// The driving HUD. `road` is the built road, `info` its manifest entry.
-export function createHud(root, road, info, { onCamera, onTod, onReset, onExit, onFan }) {
-  // Minimap: the route drawn from the road's own samples (every 8th), in a 150×150 box.
-  const W = 150, step = 8, b = road.bounds, span = Math.max(b.maxX - b.minX, b.maxZ - b.minZ), k = (W - 16) / span;
-  const ox = (W - (b.maxX - b.minX) * k) / 2, oz = (W - (b.maxZ - b.minZ) * k) / 2;
-  const mx = (x) => ox + (x - b.minX) * k, mz = (z) => oz + (z - b.minZ) * k;
-  let route = '';
-  for (let i = 0; i < road.n; i += step) route += `${i ? 'L' : 'M'}${mx(road.x[i]).toFixed(1)} ${mz(road.z[i]).toFixed(1)}`;
-  route += `L${mx(road.x[road.n - 1]).toFixed(1)} ${mz(road.z[road.n - 1]).toFixed(1)}`;
-  const PW = 150, PH = 34;
-  let lo = Infinity, hi = -Infinity;
-  for (let i = 0; i < road.n; i++) { lo = Math.min(lo, road.y[i]); hi = Math.max(hi, road.y[i]); }
-  const py = (y) => PH - 3 - ((y - lo) / Math.max(1, hi - lo)) * (PH - 8);
-  let prof = `M0 ${PH}`;
-  for (let i = 0; i < road.n; i += step * 2) prof += `L${((i / (road.n - 1)) * PW).toFixed(1)} ${py(road.y[i]).toFixed(1)}`;
-  prof += `L${PW} ${py(road.y[road.n - 1]).toFixed(1)}L${PW} ${PH}Z`;
+// --- The driving HUD -----------------------------------------------------------------------------
+// One HUD for a real road and the endless one. Every instrument answers a tap: speed, elevation and
+// distance swap the leading unit system (both are always shown); the timer opens its splits (each
+// quarter of the route against your best, or each mile / kilometre on the endless road); the grade
+// opens the steepest so far; the map opens the full map (src/drive/minimap.js). Text changes only
+// when the rounded value does; canvases redraw only when due.
+function driveHud(root, road, info, h, endless) {
+  const total = endless ? 0 : road.length;
   root.innerHTML = `
     <div class="fd-road">
-      <p class="fd-road-name">${esc(info.name)}</p>
-      <p class="fd-road-sub"><span data-h-stretch>${esc(info.local)}</span> · ${esc(info.country)}</p>
+      <p class="fd-road-name">${esc(endless ? 'Endless' : info.name)}</p>
+      <p class="fd-road-sub">${endless
+        ? `<span data-h-stretch>${esc(info.local || '')}</span> · <button type="button" class="fd-seedchip" data-h-share title="Copy a link to this world">Seed ${esc(info.seedLabel || '')}</button>`
+        : `<span data-h-stretch>${esc(info.local)}</span> · ${esc(info.country)}`}</p>
     </div>
     <div class="fd-ctl">
       <button type="button" class="chip" data-h-cam title="Camera (C)">Chase</button>
       <button type="button" class="chip" data-h-tod title="Time of day (T)">Day</button>
-      <button type="button" class="chip" data-h-fan aria-pressed="false" title="Suction fan (X): 46 kN of grip">Fan</button>
+      <button type="button" class="chip" data-h-fan aria-pressed="false" title="Suction fan (X): 46 kN (10,341 lbf) of grip">Fan</button>
       <button type="button" class="chip" data-h-reset title="Back on the road (R)">Reset</button>
       <button type="button" class="chip" data-h-exit title="Leave Free Drive (Esc)">Exit</button>
     </div>
-    <div class="fd-timer" data-h-timer><b data-h-time>0:00.0</b><span data-h-best></span></div>
-    <div class="fd-speed"><b data-h-speed>0</b><span>km/h</span></div>
+    <div class="fd-timer h-tap${endless ? ' running' : ''}" data-h-timer role="button" tabindex="0" aria-haspopup="dialog" aria-label="Timer: show the splits"><b data-h-time>0:00.0</b><span data-h-best>${endless ? 'Driving' : ''}</span></div>
+    <div class="fd-speed h-tap" data-units role="button" tabindex="0" aria-label="Speed: swap the leading units (U)"><b data-h-speed>0</b><span data-u="speed">mph</span><i class="fd-alt" data-h-speed2>0 km/h</i></div>
     <dl class="fd-stats">
-      <div><dt>Elevation</dt><dd><b data-h-ele>0</b> m</dd></div>
-      <div><dt>Grade</dt><dd><b data-h-grade>0.0</b> %</dd></div>
-      <div><dt>Distance</dt><dd><b data-h-dist>0.0</b> / ${(road.length / 1000).toFixed(1)} km</dd></div>
+      <div class="h-tap" data-units role="button" tabindex="0" aria-label="Elevation: swap the leading units (U)"><dt>Elevation</dt><dd><b data-h-ele>0</b> <span data-u="len">ft</span> <span class="u2" data-h-ele2>0 m</span></dd></div>
+      <div class="h-tap" data-h-gradebox role="button" tabindex="0" aria-haspopup="dialog" aria-label="Grade: show the steepest so far"><dt>Grade</dt><dd><b data-h-grade>0.0</b> %</dd></div>
+      <div class="h-tap" data-units role="button" tabindex="0" aria-label="Distance: swap the leading units (U)"><dt>Distance</dt><dd><b data-h-dist>0.0</b>${endless ? '' : `<span class="fd-tot"> / <span data-h-total>0</span></span>`} <span data-u="dist">mi</span> <span class="u2" data-h-dist2></span></dd></div>
     </dl>
-    <div class="fd-map" aria-hidden="true">
-      <svg viewBox="0 0 ${W} ${W}" class="fd-mini"><path class="route" d="${route}" /><path class="done" data-h-done d="" />
-        <circle class="a" cx="${mx(road.x[0]).toFixed(1)}" cy="${mz(road.z[0]).toFixed(1)}" r="2.5" /><circle class="b" cx="${mx(road.x[road.n - 1]).toFixed(1)}" cy="${mz(road.z[road.n - 1]).toFixed(1)}" r="2.5" />
-        <g data-h-car><circle r="4" /><path d="M0 -8 L3 -2 L-3 -2Z" /></g></svg>
-      <svg viewBox="0 0 ${PW} ${PH}" preserveAspectRatio="none" class="fd-profile"><path d="${prof}" /><line data-h-pline x1="0" x2="0" y1="0" y2="${PH}" /></svg>
-    </div>
-    <p class="fd-fine">Map data ${esc(info.credit.osm)} · ${esc(info.credit.dem)}</p>`;
+    <div class="fd-map" data-h-mapwrap></div>
+    <p class="fd-fine">${endless ? 'Endless: generated from its seed as you drive · same seed, same world' : `Map data ${esc(info.credit.osm)} · ${esc(info.credit.dem)}`}</p>`;
   const $ = (s) => root.querySelector(s);
-  const el = { speed: $('[data-h-speed]'), ele: $('[data-h-ele]'), grade: $('[data-h-grade]'), dist: $('[data-h-dist]'), car: $('[data-h-car]'), pline: $('[data-h-pline]'),
-    time: $('[data-h-time]'), best: $('[data-h-best]'), timer: $('[data-h-timer]'), stretch: $('[data-h-stretch]'), cam: $('[data-h-cam]'), tod: $('[data-h-tod]'), fan: $('[data-h-fan]'), done: $('[data-h-done]') };
-  $('[data-h-cam]').addEventListener('click', onCamera);
-  $('[data-h-tod]').addEventListener('click', onTod);
-  $('[data-h-reset]').addEventListener('click', onReset);
-  $('[data-h-exit]').addEventListener('click', onExit);
-  $('[data-h-fan]').addEventListener('click', onFan);
-  const last = { speed: -1, ele: -1e9, grade: -1e9, dist: -1, mapI: -1, time: -1, stretch: '' };
-  const names = road.meta.names || [];
+  const el = { speed: $('[data-h-speed]'), speed2: $('[data-h-speed2]'), ele: $('[data-h-ele]'), ele2: $('[data-h-ele2]'), grade: $('[data-h-grade]'), dist: $('[data-h-dist]'), dist2: $('[data-h-dist2]'),
+    total: $('[data-h-total]'), time: $('[data-h-time]'), best: $('[data-h-best]'), timer: $('[data-h-timer]'), stretch: $('[data-h-stretch]'), cam: $('[data-h-cam]'), tod: $('[data-h-tod]'), fan: $('[data-h-fan]'), share: $('[data-h-share]') };
+  $('[data-h-cam]').addEventListener('click', h.onCamera);
+  $('[data-h-tod]').addEventListener('click', h.onTod);
+  $('[data-h-reset]').addEventListener('click', h.onReset);
+  $('[data-h-exit]').addEventListener('click', h.onExit);
+  $('[data-h-fan]').addEventListener('click', h.onFan);
+  el.share?.addEventListener('click', () => h.onShare?.(el.share));
+
+  // The map and its expanded view.
+  const mini = createMinimap($('[data-h-mapwrap]'), road, { endless, name: endless ? 'Endless' : info.name, onToggle: () => xmap.toggle() });
+  const xmap = createMapOverlay(root, road, mini, { endless, name: endless ? `Endless · seed ${info.seedLabel || ''}` : info.name });
+  if (!endless) {
+    try { mini.setBest(JSON.parse(localStorage.getItem(`coldgas_drive_pace_${info.id}`) || 'null')); } catch { /* no pace */ }
+  }
+
+  // What the instruments remember: the time at every 100 m, every 1 % of the route (the pace a
+  // best run leaves for its ghost), the grade's extremes.
+  const sp = road.meta.spacing;
+  const rec = { marks: [0], pace: new Array(101).fill(null), up: 0, down: 0, lastTime: null, i: 0, time: null, speed: 0 };
+  rec.pace[0] = 0;
+  const routeSteep = (() => { if (endless) return null; let up = 0, dn = 0; for (let i = 0; i < road.n; i++) { const g = road.grade[i]; if (g > up) up = g; if (g < dn) dn = g; } return { up, dn }; })();
+
+  // A small popover in the instrument style (src/styles.css .ipop), refreshed while open.
+  let pop = null, popFor = null, popTimer = 0;
+  const popClose = () => { clearInterval(popTimer); popTimer = 0; pop?.remove(); pop = null; popFor?.removeAttribute('aria-expanded'); popFor = null; };
+  function popOpen(anchor, render) {
+    if (popFor === anchor) { popClose(); return; }
+    popClose();
+    pop = document.createElement('div'); pop.className = 'ipop on'; pop.setAttribute('role', 'dialog');
+    pop.innerHTML = '<button type="button" class="ip-x" aria-label="Close">×</button><div class="ip-body"></div>';
+    pop.querySelector('.ip-x').addEventListener('click', popClose);
+    document.body.appendChild(pop); popFor = anchor; anchor.setAttribute('aria-expanded', 'true');
+    let last = '';
+    const paint = () => {
+      const p = render(), html = `<p class="ip-t">${esc(p.title)}</p><div class="ip-big"><b>${esc(p.big)}</b><span class="ip-sub">${esc(p.sub || '')}</span></div>
+        <dl class="ip-rows">${p.rows.map(([k, v]) => `<dt>${esc(k)}</dt><dd>${esc(v)}</dd>`).join('')}</dl>${p.note ? `<p class="ip-note">${esc(p.note)}</p>` : ''}`;
+      if (html !== last) { pop.querySelector('.ip-body').innerHTML = html; last = html; }
+      const r = anchor.getBoundingClientRect(), w = pop.offsetWidth, ht = pop.offsetHeight;
+      const y = r.bottom + 10 + ht < innerHeight - 12 ? r.bottom + 10 : Math.max(12, r.top - ht - 10);
+      pop.style.transform = `translate(${Math.round(Math.max(12, Math.min(innerWidth - w - 12, r.left + r.width / 2 - w / 2)))}px, ${Math.round(y)}px)`;
+    };
+    paint(); popTimer = setInterval(paint, 250);
+  }
+  const signed = (d) => `${d > 0 ? '+' : d < 0 ? '−' : '±'}${Math.abs(d).toFixed(1)} s`;
+  function splits() {
+    const t = rec.time;
+    if (!endless) {
+      const best = mini.state.best;
+      const rows = [25, 50, 75, 100].map((q) => {
+        const at = rec.pace[q];
+        return [`${q} % · ${fmtRoad((road.length * q) / 100).split(' · ')[0]}`, at == null ? '—' : `${fmtTime(at)}${best ? ` · ${signed(at - best[q])}` : ''}`];
+      });
+      return { title: 'Timer · splits', big: t == null ? '0:00.0' : fmtTime(t), sub: best ? `Best ${fmtTime(best[100])} · the ghost on the map is its pace` : 'No best on this road yet: finish one to race its ghost', rows,
+        note: 'Each quarter of the road, and the gap to your best run there (− is ahead).' };
+    }
+    // Endless: each mile (or kilometre) of road, its time.
+    const unitM = 1 / uk('dist'), per = Math.max(1, Math.round(unitM / 100)), rows = [];
+    for (let k = 1; k * per < rec.marks.length && rows.length < 8; k++) rows.push([`${k} ${uu('dist')}`, `${fmtTime(rec.marks[k * per])} · ${fmtTime(rec.marks[k * per] - rec.marks[(k - 1) * per])}`]);
+    const drove = rec.i * sp;
+    return { title: 'Timer · splits', big: fmtTime(t || 0), sub: `${fmtRoad(drove)} driven · avg ${t > 1 ? one('speed', drove / t, 0) : '—'}`, rows: rows.length ? rows.slice(-8) : [['—', `a split every ${uu('dist')}`]],
+      note: `The time at each ${uu('dist') === 'mi' ? 'mile' : 'kilometre'} of road, and how long that one took.` };
+  }
+  function grades() {
+    return { title: 'Grade · steepest', big: `${(rec.up * 100).toFixed(1)} %`, sub: 'steepest climb so far',
+      rows: [['Steepest descent so far', `${(rec.down * 100).toFixed(1)} %`], ...(routeSteep ? [['On this road', `+${(routeSteep.up * 100).toFixed(1)} % · ${(routeSteep.dn * 100).toFixed(1)} %`]] : []),
+        ['Elevation now', fmtLen(road.y[rec.i] ?? 0, 0)]],
+      note: 'Rise over run along the road, the way you are driving it: 10 % climbs a metre in ten (a foot in ten).' };
+  }
+  const tap = (sel, fn) => {
+    const a = $(sel);
+    a.addEventListener('click', (e) => { fn(a); if (e.detail > 0) a.blur(); });
+    a.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); fn(a); } });
+  };
+  tap('[data-h-timer]', (a) => popOpen(a, splits));
+  tap('[data-h-gradebox]', (a) => popOpen(a, grades));
+  const onKey = (e) => { if (pop && e.key === 'Escape') { e.preventDefault(); e.stopImmediatePropagation(); popClose(); } };
+  const onDown = (e) => { if (pop && !pop.contains(e.target) && !popFor?.contains(e.target)) popClose(); };
+  addEventListener('keydown', onKey, true);
+  document.addEventListener('pointerdown', onDown, true);
+
+  const last = { speed: -1, speed2: -1, ele: -1e9, ele2: -1e9, grade: -1e9, dist: -1, dist2: -1, time: -1, stretch: '', mapI: -1 };
+  const writeTotal = () => { if (el.total) el.total.textContent = (total * uk('dist')).toFixed(1); };
+  writeTotal();
+  const offUnits = onUnits(() => { for (const k of ['speed', 'speed2', 'dist', 'dist2']) last[k] = -1; last.ele = -1e9; last.ele2 = -1e9; writeTotal(); mini.redraw(); xmap.unitsChanged(); });
+  const names = endless ? [] : road.meta.names || [];
   return {
-    update({ speed, ele, grade, i, heading, time, best }) {
-      const sp = Math.round(speed * 3.6);
-      if (sp !== last.speed) { el.speed.textContent = String(sp); last.speed = sp; }
-      const e = Math.round(ele);
-      if (e !== last.ele) { el.ele.textContent = fmtInt(e); last.ele = e; }
+    update({ speed, ele, grade, i, heading, time, best, biome, x, z }) {
+      rec.i = i; rec.time = time; rec.speed = speed;
+      const sp1 = Math.round(speed * uk('speed')), sp2 = Math.round(speed * uk('speed', true));
+      if (sp1 !== last.speed) { el.speed.textContent = String(sp1); last.speed = sp1; }
+      if (sp2 !== last.speed2) { el.speed2.textContent = `${sp2} ${uu('speed', true)}`; last.speed2 = sp2; }
+      const e1 = Math.round(ele * uk('len')), e2 = Math.round(ele * uk('len', true));
+      if (e1 !== last.ele) { el.ele.textContent = fmtInt(e1); last.ele = e1; }
+      if (e2 !== last.ele2) { el.ele2.textContent = `${fmtInt(e2)} ${uu('len', true)}`; last.ele2 = e2; }
       const g = Math.round(grade * 1000);
       if (g !== last.grade) { el.grade.textContent = (g / 10).toFixed(1); last.grade = g; }
-      const d = Math.round((i * road.meta.spacing) / 100);
-      if (d !== last.dist) { el.dist.textContent = (d / 10).toFixed(1); last.dist = d; }
+      if (grade > rec.up) rec.up = grade; if (grade < rec.down) rec.down = grade;
+      const m = i * sp, d1 = Math.round(m * uk('dist') * 10), d2 = Math.round(m * uk('dist', true) * 10);
+      if (d1 !== last.dist) { el.dist.textContent = (d1 / 10).toFixed(1); last.dist = d1; }
+      if (d2 !== last.dist2) { el.dist2.textContent = `${(d2 / 10).toFixed(1)} ${uu('dist', true)}`; last.dist2 = d2; }
+      // Splits and pace: the time at each 100 m, and at each 1 % of a route.
+      if (time != null) {
+        while (rec.marks.length <= Math.floor(m / 100)) rec.marks.push(time);
+        if (!endless) { const q = Math.min(100, Math.floor((i / Math.max(1, road.n - 1)) * 100)); for (let k = 1; k <= q; k++) if (rec.pace[k] == null) rec.pace[k] = time; }
+      }
+      mini.update(i, heading, speed, time, x ?? road.x[i], z ?? road.z[i]);
+      xmap.tick();
       if (i !== last.mapI) {
-        el.car.setAttribute('transform', `translate(${mx(road.x[i]).toFixed(1)} ${mz(road.z[i]).toFixed(1)}) rotate(${((heading * 180) / Math.PI).toFixed(0)})`);
-        const px = ((i / (road.n - 1)) * PW).toFixed(1);
-        el.pline.setAttribute('x1', px); el.pline.setAttribute('x2', px);
         last.mapI = i;
-        // A bridge or a named stretch shows under the road's name.
-        let nm = '';
-        for (const [s, n] of names) { if (s > i) break; nm = n; }
-        const show = /bridge|bru|brua|ponte|tunel|tunnel|viaduct/i.test(nm) ? nm : info.local;
-        if (show !== last.stretch) { el.stretch.textContent = show; last.stretch = show; }
+        let show = '';
+        if (endless) show = biome || '';
+        else { let nm = ''; for (const [s, n] of names) { if (s > i) break; nm = n; } show = /bridge|bru|brua|ponte|tunel|tunnel|viaduct/i.test(nm) ? nm : info.local; }
+        if (show && show !== last.stretch) { el.stretch.textContent = show; last.stretch = show; }
       }
       const tt = time == null ? -1 : Math.round(time * 10);
       if (tt !== last.time) { el.time.textContent = time == null ? '0:00.0' : fmtTime(time); last.time = tt; }
-      el.timer.classList.toggle('running', time != null);
-      const bt = best ? `Best ${fmtTime(best)}` : '';
-      if (el.best.textContent !== bt) el.best.textContent = bt;
+      if (!endless) {
+        el.timer.classList.toggle('running', time != null);
+        const bt = best ? `Best ${fmtTime(best)}` : '';
+        if (el.best.textContent !== bt) el.best.textContent = bt;
+      }
     },
-    setCam(m) { el.cam.textContent = { chase: 'Chase', bumper: 'Bumper', cinema: 'Cinema' }[m] || m; },
+    setCam(mode) { el.cam.textContent = { chase: 'Chase', bumper: 'Bumper', cinema: 'Cinema' }[mode] || mode; },
     setTod(t) { el.tod.textContent = t === 'dusk' ? 'Dusk' : 'Day'; },
     setFan(on) { el.fan.setAttribute('aria-pressed', String(on)); },
+    toggleMap() { xmap.toggle(); },
+    get mapOpen() { return xmap.open; },
+    // The finish: a best run keeps its pace (the ghost on the map next time).
     finish(t, best, isBest) {
       el.timer.classList.add('finished');
       el.best.textContent = isBest ? 'Best time' : `Best ${fmtTime(best)}`;
-      void t;
+      if (!endless && isBest) {
+        rec.pace[100] = t;
+        for (let k = 1; k <= 100; k++) if (rec.pace[k] == null) rec.pace[k] = rec.pace[k - 1];
+        try { localStorage.setItem(`coldgas_drive_pace_${info.id}`, JSON.stringify(rec.pace.map((v) => Math.round(v * 100) / 100))); } catch { /* not kept */ }
+        mini.setBest(rec.pace.slice());
+      }
     },
+    dispose() { popClose(); xmap.dispose(); offUnits(); removeEventListener('keydown', onKey, true); document.removeEventListener('pointerdown', onDown, true); },
   };
 }
+
+// The endless road's HUD: the distance driven, the land you're in, the seed (and a link to share
+// it), and a map of the road around you instead of the whole route.
+export const createEndlessHud = (root, road, info, handlers) => driveHud(root, road, info, handlers, true);
+// The driving HUD on a real road. `road` is the built road, `info` its manifest entry.
+export const createHud = (root, road, info, handlers) => driveHud(root, road, info, handlers, false);

@@ -14,6 +14,8 @@ for (const [name, opts, must] of SIZES) {
     const page = await browser.newPage(opts);
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
+    // Metric leads here: these read the sim's SI numbers straight (US-led is tests/e2e/instruments.spec.js).
+    await page.addInitScript(() => localStorage.setItem('coldgas.units', 'metric'));
     await page.goto('/coldgas/?gfx=low');
     await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
     await page.evaluate(async () => { await window.__coldgas.physicsReady; window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); });
@@ -74,6 +76,7 @@ for (const [name, opts, must] of SIZES) {
 test('HUD telemetry is wired: deck PITCH on the ledge, BLOWDOWN below the regulator', async ({ page }) => {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => localStorage.setItem('coldgas.units', 'metric'));   // kg and bar lead
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
   await page.evaluate(async () => { await window.__coldgas.physicsReady; window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); window.__coldgas.startDrill('ledge'); });

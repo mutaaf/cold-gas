@@ -8,6 +8,7 @@ import { freeWorld } from '../sim/world.js';
 import { loadPhysics } from '../sim/engine-web.js';
 import { quatFromYaw } from '../sim/m3.js';
 import { SPEC } from '../sim/spec.js';
+import { k as uk, u as uu, onUnits, applyUnitText } from '../units.js';
 import { createDriveCamera } from '../drive/camera.js';
 import { createArenaCourse, inArena, ARENA } from './arena.js';
 import { createArenaWorld } from './arena-render.js';
@@ -87,27 +88,29 @@ export function createSandbox(ctx) {
   }
 
   function hud(on) {
-    if (!on) { hudRoot?.remove(); hudRoot = null; return; }
+    if (!on) { hudRoot?.remove(); hudRoot = null; st.offUnits?.(); st.offUnits = null; return; }
     hudRoot = document.createElement('section');
     hudRoot.className = 'fd-hud sb-hud';
     hudRoot.innerHTML = `
-      <div class="fd-road"><p class="fd-road-name">Sandbox</p><p class="fd-road-sub">${ARENA.half * 2} m of concrete · build, fly, quest</p></div>
+      <div class="fd-road"><p class="fd-road-name">Sandbox</p><p class="fd-road-sub" data-u-src="${ARENA.half * 2} m of concrete · build, fly, quest"></p></div>
       <div class="fd-ctl">
         <button type="button" class="chip" data-s-cam title="Camera (C)">Chase</button>
         <button type="button" class="chip" data-s-fan aria-pressed="false" title="Suction fan (X)">Fan</button>
         <button type="button" class="chip" data-s-reset title="Back to the start (R)">Reset</button>
         <button type="button" class="chip" data-s-exit title="Leave the Sandbox">Exit</button>
       </div>
-      <div class="fd-speed"><b data-s-speed>0</b><span>km/h</span></div>
+      <div class="fd-speed h-tap" data-units role="button" tabindex="0" aria-label="Speed: swap the leading units (U)"><b data-s-speed>0</b><span data-u="speed">mph</span><i class="fd-alt" data-s-speed2>0 km/h</i></div>
       <dl class="fd-stats">
-        <div><dt>Height</dt><dd><b data-s-h>0.0</b> m</dd></div>
+        <div class="h-tap" data-units role="button" tabindex="0" aria-label="Height: swap the leading units (U)"><dt>Height</dt><dd><b data-s-h>0.0</b> <span data-u="len">ft</span> <span class="u2" data-s-h2>0.0 m</span></dd></div>
         <div><dt>Gas</dt><dd><b data-s-gas>100</b> %</dd></div>
       </dl>
       <div class="fd-pause" data-s-pause hidden><div class="sheet"><h2>Paused</h2>
         <div class="actions"><button class="btn primary" data-s-resume>Resume</button><button class="btn ghost" data-s-start>Back to the start</button><button class="btn link" data-s-title>Title</button></div></div></div>`;
     document.body.appendChild(hudRoot);
+    applyUnitText(hudRoot);
     const $ = (s) => hudRoot.querySelector(s);
-    st.hud = { speed: $('[data-s-speed]'), h: $('[data-s-h]'), gas: $('[data-s-gas]'), cam: $('[data-s-cam]'), fan: $('[data-s-fan]'), pause: $('[data-s-pause]'), last: { s: -1, h: -1, g: -1 } };
+    st.hud = { speed: $('[data-s-speed]'), speed2: $('[data-s-speed2]'), h2: $('[data-s-h2]'), h: $('[data-s-h]'), gas: $('[data-s-gas]'), cam: $('[data-s-cam]'), fan: $('[data-s-fan]'), pause: $('[data-s-pause]'), last: { s: -1, h: -1, g: -1, s2: -1, h2: -1 } };
+    st.offUnits?.(); st.offUnits = onUnits(() => Object.assign(st.hud.last, { s: -1, h: -1, s2: -1, h2: -1 }));
     $('[data-s-cam]').onclick = cycleCam;
     $('[data-s-fan]').onclick = toggleFan;
     $('[data-s-reset]').onclick = () => place(START.x, START.z, START.yaw);
@@ -180,8 +183,12 @@ export function createSandbox(ctx) {
     const c = st.car;
     const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
     const L = st.hud.last;
-    const sp = Math.round(speed * 3.6); if (sp !== L.s) { st.hud.speed.textContent = String(sp); L.s = sp; }
-    const h = Math.round((c.pos.y - SPEC.comHeight) * 10); if (h !== L.h) { st.hud.h.textContent = (Math.max(0, h) / 10).toFixed(1); L.h = h; }
+    // Both unit systems, the leading one large (src/units.js).
+    const sp = Math.round(speed * uk('speed')); if (sp !== L.s) { st.hud.speed.textContent = String(sp); L.s = sp; }
+    const sp2 = Math.round(speed * uk('speed', true)); if (sp2 !== L.s2) { st.hud.speed2.textContent = `${sp2} ${uu('speed', true)}`; L.s2 = sp2; }
+    const hm = Math.max(0, c.pos.y - SPEC.comHeight);
+    const h = Math.round(hm * uk('len') * 10); if (h !== L.h) { st.hud.h.textContent = (h / 10).toFixed(1); L.h = h; }
+    const h2 = Math.round(hm * uk('len', true) * 10); if (h2 !== L.h2) { st.hud.h2.textContent = `${(h2 / 10).toFixed(1)} ${uu('len', true)}`; L.h2 = h2; }
     const g = Math.round((100 * Math.max(0, c.air)) / ctx.CAR.airMass); if (g !== L.g) { st.hud.gas.textContent = String(g); L.g = g; }
     const tp = st.airT > 0.25 ? 'air' : 'ground';
     if (ui.touch.dataset.phase !== tp) ui.touch.dataset.phase = tp;

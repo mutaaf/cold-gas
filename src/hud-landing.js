@@ -13,11 +13,13 @@
 import * as THREE from 'three';
 import { predict, newPrediction, REACTION } from './sim/predict.js';
 import { CAR } from './sim/vehicle.js';
+import { rateK, lenK, lenUnit, isMetric, onUnits, k as uk, u as uu } from './units.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 // Colour is state only: nominal ink, caution amber, warning red (the HUD's own palette).
 const COLORS = { green: 0xf5f6f8, amber: 0xffbf5a, red: 0xff5a62 };
-const TAPE_MAX = 30;            // m at the top of the tape
+// The tape's top, m: 30 m in metric, 100 ft (30.48 m) in US units, so its scale reads round.
+const tapeMax = () => (isMetric() ? 30 : 30.48);
 const ROLL_RATE = 4.6;          // rad/s, Assist/Pro full stick (src/sim/vehicle.js RATE.z)
 
 export function createLandingHud({ scene, onStatus = null }) {
@@ -32,7 +34,19 @@ export function createLandingHud({ scene, onStatus = null }) {
   const pr = newPrediction();
   const last = { sink: -1, status: '', target: -1, ttg: -1, brake: -1, car: -1, need: -1, low: null, cue: 0, on: null, adi: NaN, word: '' };
   const TAPE_H = 140;   // tape height in its viewBox units (0 m at the bottom)
+  let TAPE_MAX = tapeMax();
   const yOf = (h) => (TAPE_H - Math.max(0, Math.min(TAPE_MAX, h)) * (TAPE_H / TAPE_MAX)).toFixed(1);
+  const topEl = $('[data-d-top]'), zeroEl = $('[data-d-zero]');
+  const scale = () => {
+    TAPE_MAX = tapeMax();
+    if (topEl) topEl.textContent = isMetric() ? '30' : '100';
+    if (zeroEl) zeroEl.textContent = `0 ${lenUnit()}`;
+    last.sink = -1; last.target = -1; last.brake = -1; last.car = -1;
+  };
+  const s2 = { dsink: $('[data-2="dsink"]'), dtarget: $('[data-2="dtarget"]') }, l2 = { dsink: NaN, dtarget: NaN };
+  const set2 = (key, si) => { const r = Math.round(si * uk('rate', true) * 10); if (r !== l2[key] && s2[key]) { s2[key].textContent = `${(r / 10).toFixed(1)} ${uu('rate', true)}`; l2[key] = r; } };
+  scale();
+  onUnits(() => { scale(); l2.dsink = NaN; l2.dtarget = NaN; });
 
   // The touchdown marker: a hairline ring and a dot, flat on the ground.
   const mk = new THREE.Group();
@@ -78,8 +92,9 @@ export function createLandingHud({ scene, onStatus = null }) {
     show(air);
     if (!air) return;
 
-    const sink = Math.round(pr.sink * 10);
+    const sink = Math.round(pr.sink * rateK() * 10);
     if (sink !== last.sink) { el.sink.textContent = (Math.max(0, sink) / 10).toFixed(1); last.sink = sink; }
+    set2('dsink', Math.max(0, pr.sink));
     if (pr.status !== last.status) {
       root.dataset.status = pr.status;
       mat.color.setHex(COLORS[pr.status]);
@@ -89,8 +104,9 @@ export function createLandingHud({ scene, onStatus = null }) {
     // What the band asks of you: roof up first, then the brake.
     const word = pr.status === 'green' ? 'On profile' : pr.upY < 0.85 ? 'Roll out · now' : pr.status === 'amber' ? 'Brake' : 'Too fast';
     if (word !== last.word) { el.state.textContent = word; last.word = word; }
-    const tg = Math.round(pr.profileSink * 2);
+    const tg = Math.round(pr.profileSink * rateK() * 2);
     if (tg !== last.target) { el.target.textContent = (tg / 2).toFixed(1); last.target = tg; }
+    set2('dtarget', pr.profileSink);
     const ttg = Number.isFinite(pr.tGround) ? Math.round(pr.tGround * 10) : 999;
     if (ttg !== last.ttg) { el.ttg.textContent = ttg >= 999 ? '–' : (ttg / 10).toFixed(1); last.ttg = ttg; }
     // The tape.
@@ -100,13 +116,14 @@ export function createLandingHud({ scene, onStatus = null }) {
       el.brakeLine.setAttribute('y1', y); el.brakeLine.setAttribute('y2', y);
       el.brakeLbl.setAttribute('y', String(Number(y) - 6));
       el.fill.setAttribute('y', y); el.fill.setAttribute('height', String(Math.max(0, TAPE_H - Number(y))));
-      el.brakeLbl.textContent = pr.brakeBy > TAPE_MAX ? 'BRAKE ↑' : `BRAKE ${Math.ceil(pr.brakeBy)} m`;
+      el.brakeLbl.textContent = pr.brakeBy > TAPE_MAX ? 'BRAKE ↑' : `BRAKE ${Math.ceil(pr.brakeBy * lenK())} ${lenUnit()} · ${Math.ceil(pr.brakeBy * uk('len', true))} ${uu('len', true)}`;
       last.brake = by;
     }
     const ch = Math.round(Math.min(TAPE_MAX, h) * 4);
     if (ch !== last.car) {
       el.car.setAttribute('transform', `translate(0 ${yOf(ch / 4)})`);
-      el.carLbl.textContent = h >= 10 ? Math.round(h).toString() : h.toFixed(1);
+      const hs = h * lenK();
+      el.carLbl.textContent = hs >= 10 ? Math.round(hs).toString() : hs.toFixed(1);
       last.car = ch;
     }
     // Gas: what the stop costs, as a tick on the tank bar.
