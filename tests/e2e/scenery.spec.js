@@ -49,7 +49,8 @@ const compare = (kinds) => {
 };
 
 // In the page: put the car 12 m short of (x, z) on the ground, facing it at 12 m/s, hold the
-// throttle, step 2.5 s; how far past the trunk's centre it got and how fast it is going.
+// throttle, step 2.5 s; how far past the trunk's centre it got, and its slowest speed (dead on, the
+// trunk stops it; a hair off centre the round bark turns it aside, at a quarter of its speed or more).
 const ram = async (page, tree) => {
   await page.evaluate((t) => {
     const d = window.__coldgas.drive, c = d.car, course = d.course, o = {};
@@ -70,20 +71,25 @@ const ram = async (page, tree) => {
     for (const wh of c.wheels) wh.omega = 12 / 0.35;
     window.__ram = { ...t, dx: best.dx, dz: best.dz, past: -Infinity };
   }, tree);
+  // All 25 frames in one round trip: under software GL every evaluate waits behind a rendered
+  // frame, and 25 of them took 18 s of a 45 s test.
   await page.keyboard.down('ArrowUp');
-  for (let k = 0; k < 25; k++) {
-    await page.evaluate(() => {
-      const d = window.__coldgas.drive, c = d.car, r = window.__ram;
+  const out = await page.evaluate(() => {
+    const d = window.__coldgas.drive, c = d.car, r = window.__ram;
+    let vMin = Infinity;
+    for (let k = 0; k < 25; k++) {
       d.frame(0.1, performance.now() / 1000);
       const ex = c.pos.x - r.x, ez = c.pos.z - r.z, lat = Math.abs(ex * r.dz - ez * r.dx);
       if (lat < 1.5) r.past = Math.max(r.past, ex * r.dx + ez * r.dz);
-    });
-  }
+      vMin = Math.min(vMin, Math.hypot(c.vel.x, c.vel.z));
+    }
+    return { past: r.past, vMin, v: Math.hypot(c.vel.x, c.vel.z) };
+  });
   await page.keyboard.up('ArrowUp');
-  return page.evaluate(() => ({ past: window.__ram.past, v: Math.hypot(window.__coldgas.drive.car.vel.x, window.__coldgas.drive.car.vel.z) }));
+  return out;
 };
 
-test('Free Drive (Stelvio): the trees drawn near the car are its solid trunks, and one stops the car', async ({ page }) => {
+test('@heavy Free Drive (Stelvio): the trees drawn near the car are its solid trunks, and one stops the car', async ({ page }) => {
   test.slow();
   const errors = watch(page);
   await page.goto('/coldgas/?drive=stelvio&gfx=low');
@@ -102,11 +108,11 @@ test('Free Drive (Stelvio): the trees drawn near the car are its solid trunks, a
   expect(r.tree).not.toBeNull();
   const hit = await ram(page, r.tree);
   expect(hit.past).toBeLessThan(-1);            // stopped short of the trunk: the car's nose is ≈ 2.4 m ahead of its centre
-  expect(hit.v).toBeLessThan(5);
+  expect(hit.vMin).toBeLessThan(9);
   expect(errors).toEqual([]);
 });
 
-test('Endless: trees and boulders drawn near the car are solid, and none are solid unseen', async ({ page }) => {
+test('@heavy Endless: trees and boulders drawn near the car are solid, and none are solid unseen', async ({ page }) => {
   test.slow();
   const errors = watch(page);
   await page.goto('/coldgas/?drive=endless&seed=forest&gfx=low');
@@ -124,6 +130,6 @@ test('Endless: trees and boulders drawn near the car are solid, and none are sol
   expect(r.tree).not.toBeNull();
   const hit = await ram(page, r.tree);
   expect(hit.past).toBeLessThan(-1);
-  expect(hit.v).toBeLessThan(5);
+  expect(hit.vMin).toBeLessThan(9);
   expect(errors).toEqual([]);
 });

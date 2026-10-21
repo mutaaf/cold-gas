@@ -47,17 +47,21 @@ if (!specs.length) {
   process.exit(0);
 }
 // Keep the guard to a few minutes: fewer repeats when a branch touches many specs, or many tests
-// (the CI job has 25 minutes in all, and the main suite takes ≈10 of them; every changed test still
-// runs at least 3× with no retries). Touching smoke.spec (9 slow tests) at 5× ran past the limit.
-const countTests = () => {
+// (the CI job has 35 minutes in all, and the main suite takes ≈18 of them; every changed test still
+// runs at least 3× with no retries, @heavy ones 2×). Touching smoke.spec (9 slow tests) at 5× ran past the limit.
+// Tests tagged @heavy (a world built and driven under software GL: minutes each on CI) run 2×:
+// the solid-scenery spec's two at 5× ran the job past its limit.
+const listed = (() => {
   try {
     const out = execFileSync('npx', ['playwright', 'test', ...specs, '--project=desktop', '--list'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
-    return out.split('\n').filter((l) => l.includes('›')).length;
-  } catch { return 0; }
-};
+    return out.split('\n').filter((l) => l.includes('›'));
+  } catch { return []; }
+})();
+const countTests = () => listed.length;
+const heavy = listed.some((l) => l.includes('@heavy'));
 const bySpecs = specs.length <= 4 ? 5 : specs.length <= 10 ? 3 : 2;
 const tests = countTests();
-const repeat = Number(process.env.E2E_REPEAT) || (tests > 8 ? Math.min(bySpecs, Math.max(3, Math.floor(40 / tests))) : bySpecs);
+const repeat = Number(process.env.E2E_REPEAT) || (heavy ? 2 : tests > 8 ? Math.min(bySpecs, Math.max(3, Math.floor(40 / tests))) : bySpecs);
 console.log(`[flake guard] ${specs.length} changed spec(s), ${tests || "?"} test(s), ${repeat}× each, no retries:\n  ${specs.join("\n  ")}`);
 const res = spawnSync('npx', ['playwright', 'test', ...specs, '--project=desktop', `--repeat-each=${repeat}`, '--retries=0'], { stdio: 'inherit' });
 process.exit(res.status ?? 1);
