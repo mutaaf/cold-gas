@@ -1,5 +1,7 @@
 // Client for POST /coldgas/api/judge/stream: reads the server-sent events and hands each one to
 // a handler as it arrives. Also: list a BYOK provider's models.
+import { postRetry } from '../net.js';
+
 const API = `${import.meta.env.BASE_URL}api`;
 
 export async function streamPanel({ log, assist, ai, course }, on, { signal } = {}) {
@@ -7,7 +9,7 @@ export async function streamPanel({ log, assist, ai, course }, on, { signal } = 
   if (ai.provider !== 'edge' && ai.key) headers['x-cg-key'] = ai.key;
   let res;
   try {
-    res = await fetch(`${API}/judge/stream`, {
+    res = await postRetry(`${API}/judge/stream`, {
       method: 'POST', headers, signal,
       body: JSON.stringify({ log, assist, course, provider: ai.provider, model: ai.model }),
     });

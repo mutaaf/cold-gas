@@ -16,7 +16,7 @@
 // deterministic sim (src/sim/) and scores it itself. The AI writes words, never numbers.
 // Bring-your-own keys are used for one call and never stored or logged.
 // Operator-owned (agents/control.json → frozen_paths).
-import { simulate, MAX_TICKS, INPUT_KEYS, isLogEntryLength } from '../sim/run.js';
+import { simulate, MAX_TICKS, INPUT_KEYS, isLogEntryLength, SIM_VERSION } from '../sim/run.js';
 import { scoreRun } from '../sim/judge.js';
 import { SYSTEM, userPrompt, parseWords, estimateTokens } from './ai/prompt.js';
 import { PROVIDERS, EDGE_MODELS, streamJudge, listModels, pickModel, costUsd, describeError } from './ai/providers.js';
@@ -47,6 +47,7 @@ async function ensureTables(db) {
     db.prepare('CREATE TABLE IF NOT EXISTS scores (id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, initials TEXT NOT NULL, total REAL NOT NULL, verdict TEXT NOT NULL, facts TEXT NOT NULL, created INTEGER NOT NULL)'),
     db.prepare('CREATE INDEX IF NOT EXISTS scores_day ON scores(day, total DESC)'),
     db.prepare('CREATE TABLE IF NOT EXISTS ai_usage (bucket TEXT PRIMARY KEY, n INTEGER NOT NULL)'),
+    db.prepare('CREATE TABLE IF NOT EXISTS replays (k TEXT PRIMARY KEY, card TEXT NOT NULL, ticks INTEGER NOT NULL, created INTEGER NOT NULL)'),
   ]);
   tablesReady = true;
 }
@@ -63,11 +64,10 @@ async function ipHash(req) {
   return [...new Uint8Array(h)].slice(0, 8).map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-// Validate and replay a client input log → { run, card } or null. Entries carry every channel of
+// Validate a client input log → { log, course } or null. Entries carry every channel of
 // src/sim/run.js INPUT_KEYS (v11: 23 incl. Advanced's ten valves) or the 12 of an older client, whose
-// missing channels replay as zero. The tier (Assist / Pro / Advanced) comes from the replayed
-// inputs themselves, never from a flag the client sends.
-export function verify(body) {
+// missing channels replay as zero.
+function parseRun(body) {
   const log = body?.log;
   if (!Array.isArray(log) || log.length === 0 || log.length > MAX_LOG) return null;
   let last = -1;
@@ -77,10 +77,57 @@ export function verify(body) {
     last = e[0];
     for (let i = 1; i < e.length; i++) if (!Number.isInteger(e[i]) || e[i] < -100 || e[i] > 100) return null;
   }
-  const course = ['show', 'wall', 'lineup'].includes(body?.course) ? body.course : 'show';
-  const run = simulate(log, course);
-  const assist = log.some((e) => e[INPUT_KEYS.indexOf('assist') + 1] !== 0);
+  return { log, course: ['show', 'wall', 'lineup'].includes(body?.course) ? body.course : 'show' };
+}
+
+// Validate and replay a client input log → { run, card } or null. The tier (Assist / Pro / Advanced)
+// comes from the replayed inputs themselves, never from a flag the client sends.
+export function verify(body) {
+  const p = parseRun(body);
+  if (!p) return null;
+  const run = simulate(p.log, p.course);
+  const assist = p.log.some((e) => e[INPUT_KEYS.indexOf('assist') + 1] !== 0);
   return { run, card: scoreRun(run.t, { assist }) };
+}
+
+// --- Replays, once per run --------------------------------------------------------------------------
+// A replay is the costliest thing this Worker does: ≈150 ms of CPU for the Show on the rigid-body
+// engine, where the free plan budgets 10 ms a request and tolerates only the odd heavy one (past
+// that, Cloudflare answers 1102 "exceeded resource limits"). A run is judged and then, often,
+// submitted to the board: the second request reads the card the first one earned instead of
+// replaying it again. The key is the exact log, course and SIM_VERSION, and only the server writes
+// entries, so a client can only ever find the card its own log earned.
+const memo = new Map();
+export const replayStats = { replays: 0 };
+const MEMO_MAX = 64, REPLAY_TTL_MS = 2 * 86400e3;
+
+async function replayKey(p) {
+  const h = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(`${SIM_VERSION}|${p.course}|${JSON.stringify(p.log)}`));
+  return [...new Uint8Array(h)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+// → { card, ticks } or null for a malformed log. `db` (optional) shares cards across isolates.
+async function verified(body, db) {
+  const p = parseRun(body);
+  if (!p) return null;
+  const k = await replayKey(p);
+  let hit = memo.get(k);
+  if (!hit && db) {
+    const row = await db.prepare('SELECT card, ticks FROM replays WHERE k = ?').bind(k).first();
+    if (row) hit = { card: JSON.parse(row.card), ticks: row.ticks };
+  }
+  if (!hit) {
+    // The replay runs on the rigid-body engine's WASM: started once per isolate, on the first replay.
+    if (!physicsReady()) await (await import('./physics.js')).startPhysics();
+    const v = verify(body);
+    replayStats.replays++;
+    hit = { card: v.card, ticks: v.run.tick };
+    if (db) await db.prepare('INSERT OR REPLACE INTO replays (k, card, ticks, created) VALUES (?, ?, ?, ?)').bind(k, JSON.stringify(hit.card), hit.ticks, Date.now()).run();
+  }
+  memo.delete(k);
+  memo.set(k, hit);
+  if (memo.size > MEMO_MAX) memo.delete(memo.keys().next().value);
+  return hit;
 }
 
 // --- The streaming judge ------------------------------------------------------------------------
@@ -99,11 +146,11 @@ async function judgeStream(req, env, ctx) {
   const key = req.headers.get('x-cg-key') || '';
   if (PROVIDERS[provider].needsKey && !KEY_RE.test(key)) return json({ error: 'key' }, 400);
   if (body?.model && !MODEL_RE.test(body.model)) return json({ error: 'model' }, 400);
-  const v = verify(body);
-  if (!v) return json({ error: 'bad run' }, 400);
-
   const db = env.DB;
   if (db) await ensureTables(db);
+  const v = await verified(body, db);
+  if (!v) return json({ error: 'bad run' }, 400);
+
   const ip = await ipHash(req);
   let allowed = true;
   if (provider === 'edge') {
@@ -115,7 +162,7 @@ async function judgeStream(req, env, ctx) {
   const s = sse(ctx);
   const colo = req.cf?.colo || null;
   ctx.waitUntil((async () => {
-    s.send('verify', { ms: Date.now() - t0, card: v.card, ticks: v.run.tick });
+    s.send('verify', { ms: Date.now() - t0, card: v.card, ticks: v.ticks });
     const user = userPrompt(v.card);
     const model = provider === 'edge' ? (EDGE_MODELS.includes(body?.model) ? body.model : EDGE_MODELS[0]) : (body?.model || PROVIDERS[provider].fallbackModel);
     if (!model) { s.send('error', { message: 'Pick a model first.', fallback: true }); return s.close(); }
@@ -305,13 +352,15 @@ async function handle(req, env, ctx) {
     const body = await req.json().catch(() => null);
     const initials = String(body?.initials || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
     if (initials.length !== 3) return json({ error: 'initials' }, 400);
-    const v = verify(body);
+    const v = await verified(body, db);
     if (!v) return json({ error: 'bad run' }, 400);
     if (!v.card.facts.jumped || v.card.total <= 0) return json({ error: 'no jump' }, 400);
     if ((await bump(db, `submit:${await ipHash(req)}:${hour()}`)) > 60) return json({ error: 'slow down' }, 429);
     await db.prepare('INSERT INTO scores (day, initials, total, verdict, facts, created) VALUES (?, ?, ?, ?, ?, ?)')
       .bind(day(), initials, v.card.total, v.card.verdict, JSON.stringify(v.card.facts), Date.now()).run();
     const rank = await db.prepare('SELECT COUNT(*) AS r FROM scores WHERE day = ? AND total > ?').bind(day(), v.card.total).first();
+    // Cards are only needed between a run's judging and its submission: keep two days of them.
+    ctx.waitUntil(db.prepare('DELETE FROM replays WHERE created < ?').bind(Date.now() - REPLAY_TTL_MS).run().catch(() => {}));
     return json({ card: v.card, rank: (rank?.r ?? 0) + 1 });
   }
 
@@ -351,8 +400,6 @@ export default {
   async fetch(req, env, ctx) {
     if (PAGES.has(new URL(req.url).pathname) && (req.method === 'GET' || req.method === 'HEAD')) return page(req, env);
     try {
-      // The replay runs on the rigid-body engine's WASM: start it once per isolate.
-      if (!physicsReady()) await (await import('./physics.js')).startPhysics();
       return await handle(req, env, ctx);
     }
     catch (err) { console.error('worker error', err?.name, err?.status); return json({ error: 'server' }, 500); }

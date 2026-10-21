@@ -165,3 +165,19 @@ describe('quest designer endpoint', () => {
     expect(user.length).toBeLessThan(300);
   });
 });
+
+describe('replays, once per run', () => {
+  it('judging then submitting a run replays it once', async () => {
+    const { replayStats } = await import('../../src/worker/index.js');
+    const run = createRun('lineup'); const ap = createAutopilot('lineup');
+    while (run.phase !== 'done') stepRun(run, ap(run));
+    const ctx = { waitUntil: (p) => p };
+    const body = JSON.stringify({ log: run.inputLog, course: 'lineup', assist: true });
+    const before = replayStats.replays;
+    const a = await readSSE(await worker.fetch(new Request('https://x/coldgas/api/judge/stream', { method: 'POST', body }), { AI: fakeAI(REPLY) }, ctx));
+    const b = await readSSE(await worker.fetch(new Request('https://x/coldgas/api/judge/stream', { method: 'POST', body }), { AI: fakeAI(REPLY) }, ctx));
+    expect(replayStats.replays - before).toBe(1);
+    expect(b[0].data.card).toEqual(a[0].data.card);
+    expect(a[0].data.card.total).toBe(scoreRun(run.t, { assist: true }).total);
+  });
+});

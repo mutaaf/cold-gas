@@ -3,10 +3,11 @@
 // body (mass, CoM, inertia, suspension, parked tyres), the tyre curves peak where the spec says,
 // the springs ring at their design frequency, and the engine is deterministic.
 import { describe, it, expect } from 'vitest';
-import { createWorld, preStep, stepEngine, raycast } from '../../src/sim/world.js';
+import { createWorld, preStep, stepEngine, raycast, GATES } from '../../src/sim/world.js';
 import { LINEUP, SHOW, WALL, wallProfile, PARK_MU, parkedPhysics, LINEUP_SPEC, MATERIALS } from '../../src/sim/courses.js';
 import { createVehicle, step, newInput, tyreFx, tyreFy, CAR } from '../../src/sim/vehicle.js';
-import { createRun, stepRun } from '../../src/sim/run.js';
+import { createRun, stepRun, simulate, INPUT_KEYS } from '../../src/sim/run.js';
+import { scoreRun } from '../../src/sim/judge.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { RAPIER } from '../../src/sim/engine.js';
@@ -168,5 +169,31 @@ describe('the roadster\'s own force models', () => {
     const run = createRun('show'), ap = createAutopilot('show');
     while (run.phase !== 'done') stepRun(run, ap(run));
     for (const b of run.car.world.bodies) { expect(b.moved).toBe(false); expect(b.cy).toBe(0); }
+  });
+});
+
+// The server replays every run on a CPU budget (src/worker/index.js), so the sim skips engine work
+// it can prove is moot. A ray clear of every collider's bounds is a miss without asking the engine:
+// that leaves every bit as it was. The hull isn't tested against the curl's triangles while it is
+// provably clear of them (src/sim/world.js `gateCurl`): the engine's pair caches restart when the
+// pair comes back, so a crash into the curl can differ in the last bits (SIM_VERSION 20), but the
+// reference runs replay to the same bits and the same scores.
+describe("the replay's shortcuts", () => {
+  const state = (r) => JSON.stringify([r.tick, r.phase, r.car.pos, r.car.vel, r.car.quat, r.car.angVel, r.t]);
+  const logOf = (course) => { const run = createRun(course), ap = createAutopilot(course); while (run.phase !== 'done') stepRun(run, ap(run)); return run.inputLog; };
+  const without = (gate, log, course) => { GATES[gate] = false; try { return simulate(log, course); } finally { GATES[gate] = true; } };
+  it.each(['show', 'wall', 'lineup'])('leave the %s reference run as it was', (course) => {
+    const log = logOf(course), on = simulate(log, course);
+    expect(state(without('rays', log, course))).toBe(state(on));
+    const off = without('curl', log, course);
+    expect(scoreRun(off.t, { assist: true }).total).toBe(scoreRun(on.t, { assist: true }).total);
+  });
+  it('the ray shortcut changes no bit of a crash into the curl or a fall onto the row', () => {
+    for (const course of ['wall', 'show']) {
+      // The reference inputs until mid-climb, then the fan off: the car peels off the curl and tumbles.
+      const log = logOf(course), fan = INPUT_KEYS.indexOf('fan') + 1;
+      const cut = log.map((e) => (e[0] < 1600 ? e : e.map((v, i) => (i === fan ? 0 : v))));
+      expect(state(without('rays', cut, course))).toBe(state(simulate(cut, course)));
+    }
   });
 });

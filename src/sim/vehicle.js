@@ -16,8 +16,8 @@
 // scores this way). No allocation in step().
 import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
 import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf, AXLE_F } from './spec.js';
-import { COURSES, DEFAULT_COURSE, MATERIALS, roofUnder } from './courses.js';
-import { createWorld, attachCar, raycast as worldRay, preStep, stepEngine } from './world.js';
+import { COURSES, DEFAULT_COURSE, MATERIALS, WALL, roofUnder } from './courses.js';
+import { createWorld, attachCar, raycast as worldRay, preStep, stepEngine, gateCurl } from './world.js';
 import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
 import { createImpacts, pushImpact, HIT, SCRAPE, WHEEL, CRUSH, CRUSH_STEP, PART, SCRAPE_EVERY, HIT_MIN, SCRAPE_MIN, WHEEL_MIN } from './impacts.js';
 
@@ -888,6 +888,7 @@ export function step(s, inp) {
   rb.setAngvel(s.angVel, false);
   copy3(vPre, s.vel); copy3(wPre, s.angVel); qOld.x = s.quat.x; qOld.y = s.quat.y; qOld.z = s.quat.z; qOld.w = s.quat.w;
   copy3(pOld, s.pos);
+  if (w.curl) gateCurl(w, curlReach(s), (Math.sqrt(dot(s.vel, s.vel)) + Math.sqrt(dot(s.angVel, s.angVel)) * HULL_R) * dt);
   stepEngine(w);
   // Read the hull's contacts. While nothing touches it, the car's motion is exactly the integral of
   // our forces (in double precision; the engine stores single); in contact, the engine's answer.
@@ -918,6 +919,22 @@ export function step(s, inp) {
   return s;
 }
 const qTmp = { x: 0, y: 0, z: 0, w: 1 };
+// How far the hull's farthest corner is from the CoM, m (a hull point moves at most |v| + |ω|·HULL_R).
+const HULL_R = (() => { let r = 0; for (let i = 0; i < HULL_SHAPE.length; i += 3) { const x = HULL_SHAPE[i], y = HULL_SHAPE[i + 1], z = HULL_SHAPE[i + 2]; r = Math.max(r, Math.sqrt(x * x + y * y + z * z)); } return r; })();
+// The hull corner farthest from the curl's centre (z 0, y WALL.r1), in the side view: src/sim/world.js
+// `gateCurl` reads it as a lower bound on the hull's clearance to the deck.
+function curlReach(s) {
+  const q = s.quat, cy = s.pos.y - WALL.r1, cz = s.pos.z;
+  let far = 0;
+  for (let i = 0; i < HULL_SHAPE.length; i += 3) {
+    const x = HULL_SHAPE[i], y = HULL_SHAPE[i + 1], z = HULL_SHAPE[i + 2];
+    const tx = 2 * (q.y * z - q.z * y), ty = 2 * (q.z * x - q.x * z), tz = 2 * (q.x * y - q.y * x);
+    const py = cy + y + q.w * ty + (q.z * tx - q.x * tz), pz = cz + z + q.w * tz + (q.x * ty - q.y * tx);
+    const d = py * py + pz * pz;
+    if (d > far) far = d;
+  }
+  return Math.sqrt(far);
+}
 const ORIGIN = { x: 0, y: 0, z: 0 }, IDENTITY = { x: 0, y: 0, z: 0, w: 1 }, PRINCIPAL = { x: SPEC.inertia.pitch, y: SPEC.inertia.yaw, z: SPEC.inertia.roll };
 const copy3 = (o, a) => { o.x = a.x; o.y = a.y; o.z = a.z; return o; };
 
