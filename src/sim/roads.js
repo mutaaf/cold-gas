@@ -44,7 +44,6 @@ export const RAILS = {
   2: { id: 'stone', off: 0.3, t: 0.5, h: 0.62 },
   3: { id: 'tunnel', off: 0.6, t: 1.2, h: 6.2 },
 };
-const TUNNEL_ROOF = 5.4;         // m above the road
 
 // ---- Parsing the asset ---------------------------------------------------------------------------
 // Layout (little-endian): 'CGR1', u32 json length, json (padded to 4), then
@@ -197,6 +196,27 @@ export function nearestSeg(road, x, y, z, q = q0) {
     }
   }
   if (q.seg < 0) return false;
+  // Height chose the leg; along it, the nearest in plan. (Scored by height alone, a point high above a
+  // deep cut took the segment whose centreline was nearest its height, metres along the road, and
+  // the ground under it came out of that segment's cross-section: the land's height depended on how
+  // high you asked from, so the terrain drawn and the terrain driven on disagreed by up to 70 m.)
+  {
+    const a0 = q.seg;
+    let bd = Infinity;
+    for (let k = a; k < b; k++) {
+      const i = list[k], di = i - a0;
+      if (di >= 10 || di <= -10) continue;
+      const px = x - road.sx[i], pz = z - road.sz[i];
+      let t = px * road.dx[i] + pz * road.dz[i];
+      if (t < 0) t = 0; else if (t > road.len[i]) t = road.len[i];
+      const ex = px - road.dx[i] * t, ez = pz - road.dz[i] * t, d2 = ex * ex + ez * ez;
+      if (d2 > R2 || d2 >= bd) continue;
+      bd = d2; q.seg = i; q.t = t;
+      const side = px * road.dz[i] - pz * road.dx[i];
+      q.lat = side < 0 ? -Math.sqrt(d2) : Math.sqrt(d2);
+    }
+    q.yc = road.y[q.seg] + road.grade[q.seg] * q.t;
+  }
   // The nearest other leg (a segment more than 30 m along the road from this one): where two legs
   // are close (a hairpin, stacked switchbacks) the ground between them is the grid's blend of both.
   q.other = Infinity;
@@ -281,8 +301,12 @@ const APRON_RISE = earthwork(APRON, APRON_SLOPE)[0];
 const rs = [0, 0, 0], rs2 = [0, 0];
 function roadside(road, yEdge, hw, run, fx, fz, px, pz, hNat, out = rs) {
   if (run <= APRON) {
+    // The apron runs to the ground that stands at its outer edge: the ground past it (below) is
+    // the land held within the structural slopes, so they meet there without a step. (Aimed at the
+    // DEM while the land past it was the conformed grid, it met it up to 2.8 m apart: a cliff
+    // across the verge, 8 m out on the passes.) While the grid is being built, the DEM.
     const o = hw + SHOULDER + APRON;
-    let d = naturalAt(road, fx + px * o, fz + pz * o) - yEdge;
+    let d = (road.conform && !road.dem ? terrainAt(road, fx + px * o, fz + pz * o, s3r)[0] : naturalAt(road, fx + px * o, fz + pz * o)) - yEdge;
     if (d > APRON_RISE) d = APRON_RISE; else if (d < -APRON_RISE) d = -APRON_RISE;
     earthwork(run, APRON_SLOPE, rs2);
     out[0] = yEdge + (d * rs2[0]) / APRON_RISE; out[1] = (d * rs2[1]) / APRON_RISE; out[2] = 1;
@@ -389,28 +413,80 @@ function demAt(data, x, z, out) {
 // out)` → [h, dh/dx, dh/dz], src/sim/endless.js).
 const naturalAt = (road, x, z) => (road.dem ? road.dem(x, z, s3r)[0] : demAt(road.data, x, z, s3r));
 
-// Terrain height and slope at (x, z): conformed near the road, DEM elsewhere. out = [h, dhdx, dhdz].
-export function terrainAt(road, x, z, out) {
-  if (road.dem) return road.dem(x, z, out);
+// The terrain's height at a post of the 4 m lattice (x, z multiples of FINE): the conformed grid's
+// post where a road shaped the ground, the DEM (bilinear) elsewhere.
+const ps = [0, 0, 0];
+function postAt(road, x, z) {
   const c = road.conform;
-  const fa = (x - c.x0) / c.span, fb = (z - c.z0) / c.span;
-  const a = Math.floor(fa), b = Math.floor(fb);
+  const a = Math.floor((x - c.x0) / c.span), b = Math.floor((z - c.z0) / c.span);
   if (a >= 0 && b >= 0 && a < c.tw && b < c.th) {
     const t = c.tiles[b * c.tw + a];
     if (t >= 0) {
-      const lx = (fa - a) * TILE, lz = (fb - b) * TILE;
-      let i = Math.floor(lx), j = Math.floor(lz);
-      if (i > TILE - 1) i = TILE - 1;
-      if (j > TILE - 1) j = TILE - 1;
-      const u = lx - i, v = lz - j, P = c.P, k = t * P * P + j * P + i;
-      const h00 = c.h[k], h10 = c.h[k + 1], h01 = c.h[k + P], h11 = c.h[k + P + 1];
-      out[0] = (h00 + (h10 - h00) * u) * (1 - v) + (h01 + (h11 - h01) * u) * v;
-      out[1] = ((h10 - h00) * (1 - v) + (h11 - h01) * v) / FINE;
-      out[2] = ((h01 - h00) * (1 - u) + (h11 - h10) * u) / FINE;
-      return out;
+      const i = Math.round((x - c.x0 - a * c.span) / FINE), j = Math.round((z - c.z0 - b * c.span) / FINE);
+      return c.h[t * c.P * c.P + j * c.P + i];
     }
   }
-  return gridSample(inGrid(road.data.near, x, z) ? road.data.near : road.data.far, x, z, out);
+  return gridSample(inGrid(road.data.near, x, z) ? road.data.near : road.data.far, x, z, ps)[0];
+}
+
+// Terrain height and slope at (x, z): conformed near the road, DEM elsewhere. out = [h, dhdx, dhdz].
+// Between the 4 m posts it is exactly the triangle mesh the renderer draws (src/render/road.js: each
+// cell split from its (+x) corner to its (+z) corner): what you see is the ground you drive on, to
+// the millimetre, not a bilinear patch that stood up to 2 m off a steep cell's triangles.
+export function terrainAt(road, x, z, out) {
+  if (road.dem) return road.dem(x, z, out);
+  const fx = x / FINE, fz = z / FINE, i = Math.floor(fx), j = Math.floor(fz), u = fx - i, v = fz - j;
+  const X = i * FINE, Z = j * FINE;
+  const h10 = postAt(road, X + FINE, Z), h01 = postAt(road, X, Z + FINE);
+  if (u + v <= 1) {
+    const h00 = postAt(road, X, Z);
+    out[0] = h00 + (h10 - h00) * u + (h01 - h00) * v; out[1] = (h10 - h00) / FINE; out[2] = (h01 - h00) / FINE;
+  } else {
+    const h11 = postAt(road, X + FINE, Z + FINE);
+    out[0] = h11 + (h01 - h11) * (1 - u) + (h10 - h11) * (1 - v); out[1] = (h11 - h01) / FINE; out[2] = (h11 - h10) / FINE;
+  }
+  return out;
+}
+
+// What the land is beside each baked road (src/render/roadlook.js paints it from the same numbers):
+// e1 the height (m) above which bare scree shows on the slopes, the tree line, how many lone trees
+// stand outside the mapped woods, and whether its trees are broadleaf.
+export const LAND = {
+  stelvio: { e1: 2250, treeline: 2050, lone: 0.012, broad: false },
+  transfagarasan: { e1: 1950, treeline: 1750, lone: 0.01, broad: false },
+  bigsur: { e1: 300, treeline: 9000, lone: 0.018, broad: true },
+  atlantic: { e1: 120, treeline: 450, lone: 0, broad: false },
+};
+// The ground's material off the road, as the terrain shader paints it (src/render/roadlook.js
+// terrainMaterial: rock where the slope 1 − n.y passes ≈ 0.41, scree fans below it high up, the
+// forest floor under mapped woods, sand at the waterline, grass elsewhere).
+export function landMat(road, x, z, ny, h) {
+  const slope = 1 - ny;
+  if (slope > 0.41) return MATERIALS.rock;
+  const L = LAND[road.meta.id] || LAND.stelvio;
+  if (slope > 0.25 && h > L.e1 - 200) return MATERIALS.gravel;
+  if (road.meta.coast && h < 1.5) return MATERIALS.sand;
+  const tr = road.data.trees, ti = Math.floor((x - tr.x0) / tr.cell), tj = Math.floor((z - tr.z0) / tr.cell);
+  if (slope < 0.45 && ti >= 0 && tj >= 0 && ti < tr.nx && tj < tr.nz && tr.data[tj * tr.nx + ti] > 127) return MATERIALS.dirt;
+  return MATERIALS.grass;
+}
+
+// A bridge pier at sample k (src/render/road.js draws it; src/sim/world.js makes it solid): every
+// 8th sample of a bridge, where the ground is at least 4 m under the deck. Into out: the ground's
+// height, or null if there is none.
+const pq = [0, 0, 0];
+export function bridgePier(road, k) {
+  if (k % 8 !== 4 || !(road.flags[k] & 1)) return null;
+  const gy = terrainAt(road, road.x[k], road.z[k], pq)[0];
+  return gy > road.y[k] - 4 ? null : gy;
+}
+export const PIER = { half: 0.55, along: 0.9, top: 1.9, sink: 2, floor: -20 };   // × half-width; m
+
+// The tunnel's arch (src/render/road.js draws its shell): height above the road's edge line at
+// |lateral| = al, for a bore of half-width H (the wall's face).
+export function tunnelArch(al, H) {
+  if (al <= 0.7 * H) return 5.6 - (0.6 * al) / (0.7 * H);
+  return 5.0 - (1.4 * (al - 0.7 * H)) / (0.3 * H);
 }
 
 // ---- The query ---------------------------------------------------------------------------------
@@ -494,8 +570,12 @@ export function roadSurface(road, x, y, z, out, ground = false) {
     }
     if (tunnel && al < qs.hw + 3) skipTerrain = true;
     if (tunnel && al < qs.hw + 3 && !ground) {
-      const roof = qs.yc + TUNNEL_ROOF - y;                      // the roof, from below
-      if (roof < phi) { phi = roof; nx = 0; ny = -1; nz = 0; mat = MATERIALS.barrier; }
+      // The roof, from below: the arch the shell is drawn with (walls to 3.6 m, 5.6 m at the crown).
+      const H = qs.hw + RAILS[3].off, a = al < H ? al : H, cl = qs.lat < -qs.hw ? -qs.hw : qs.lat > qs.hw ? qs.hw : qs.lat;
+      const sl = (al < H ? (al <= 0.7 * H ? -0.6 / (0.7 * H) : -1.4 / (0.3 * H)) : 0) * (qs.lat < 0 ? -1 : 1);
+      const kr = 1 / Math.sqrt(1 + sl * sl);
+      const roof = (qs.yc + bk * cl + tunnelArch(a, H) - y) * kr;
+      if (roof < phi) { phi = roof; nx = sl * lx * kr; ny = -kr; nz = sl * lz * kr; mat = MATERIALS.barrier; }
     }
     // Barriers on either side: a box in the road's cross-section (lateral × height), from a
     // metre below the edge to its top, along this segment.
@@ -528,7 +608,7 @@ export function roadSurface(road, x, y, z, out, ground = false) {
     if (pt < phi) {
       phi = pt; nx = -hx * k; ny = k; nz = -hz * k;
       out.obstacle = false;
-      mat = on && al <= qs.hw + SHOULDER + 0.6 ? MATERIALS.gravel : road.matAt ? road.matAt(x, z, ny) : ny < 0.8 ? MATERIALS.rock : MATERIALS.grass;
+      mat = on && al <= qs.hw + SHOULDER + 0.6 ? MATERIALS.gravel : road.matAt ? road.matAt(x, z, ny) : landMat(road, x, z, ny, tq[0]);
     }
   }
   out.x = nx; out.y = ny; out.z = nz; out.mat = mat;

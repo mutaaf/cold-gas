@@ -174,10 +174,28 @@ export function createObjects({ seed = 0, groundY = () => 0 } = {}) {
     return out;
   }
 
+  // The same solids as colliders for the rigid-body engine (src/sim/world.js streams them near the
+  // car, for the hull): a box, the ramp's wedge as a convex hull, the loop's band as convex slabs.
+  function shapes(o) {
+    const T = OBJECT_TYPES[o.type];
+    if (!T.collider) return [];
+    if (T.collider === 'box') return [{ kind: 'box', x: o.x, y: o.y + o.h / 2, z: o.z, yaw: o.yaw, hx: o.w / 2, hy: o.h / 2, hz: o.l / 2, mat: MAT }];
+    if (T.collider === 'wedge') {
+      const a = o.w / 2, b = o.l / 2;
+      return [{ kind: 'hull', x: o.x, y: o.y, z: o.z, yaw: o.yaw, mat: MAT, points: new Float32Array([-a, 0, -b, a, 0, -b, -a, 0, b, a, 0, b, -a, o.h, b, a, o.h, b]) }];
+    }
+    // The loop's band in convex slabs, one per step of its drawn mesh (a solid shell, not a hollow
+    // surface: a body pressed into it is pushed back out of its riding face).
+    o.mesh ??= loopMesh(o);
+    const v = o.mesh.v, out = [];
+    for (let k = 0; k + 1 < v.length / 12; k++) out.push({ kind: 'hull', x: o.x, y: o.y, z: o.z, yaw: o.yaw, mat: MAT, points: v.slice(k * 12, k * 12 + 24) });
+    return out;
+  }
+
   function toJSON() {
     return [...byId.values()].sort((a, b) => (a.id < b.id ? -1 : 1)).map((o) => {
-      const { c, s, radius, top, chunks: _c, ...spec } = o;
-      void c; void s; void radius; void top; void _c;
+      const { c, s, radius, top, chunks: _c, mesh: _m, ...spec } = o;
+      void c; void s; void radius; void top; void _c; void _m;
       return spec;
     });
   }
@@ -185,10 +203,28 @@ export function createObjects({ seed = 0, groundY = () => 0 } = {}) {
 
   return {
     add, remove, clear, get: (id) => byId.get(id) || null, near, inChunk, all: () => [...byId.values()],
-    sdf, triggersAt, colliders, toJSON, load,
+    sdf, triggersAt, colliders, shapes, toJSON, load,
     onChange(fn) { listeners.add(fn); return () => listeners.delete(fn); },
     get count() { return count; }, get version() { return version; },
   };
+}
+
+// A loop's band as a triangle mesh in its own frame (src/world/objects-view.js draws exactly this, and
+// src/sim/world.js makes the hull's collider of it): 96 steps round the turn, the inner (riding) face
+// at radius r, the outer at r + t, both edges. { v: Float32Array xyz, idx: Uint32Array }.
+export function loopMesh(o, seg = 96) {
+  const v = new Float32Array((seg + 1) * 4 * 3), idx = [];
+  for (let k = 0; k <= seg; k++) {
+    const th = (k / seg) * TAU, xc = (o.shift * k) / seg, cth = dcos(th), sth = dsin(th);
+    const cy = o.r - cth * o.r, cz = sth * o.r;
+    let p = k * 12;
+    for (const rr of [0, o.t]) for (const dx of [-o.w / 2, o.w / 2]) { v[p++] = xc + dx; v[p++] = cy - cth * rr; v[p++] = cz + sth * rr; }
+  }
+  for (let k = 0; k < seg; k++) {
+    const a = k * 4, b = a + 4;
+    idx.push(a, b, a + 1, a + 1, b, b + 1, a + 2, a + 3, b + 2, a + 3, b + 3, b + 2, a, a + 2, b, b, a + 2, b + 2, a + 1, b + 1, a + 3, a + 3, b + 1, b + 3);
+  }
+  return { v, idx: new Uint32Array(idx) };
 }
 
 // ---- Shapes, in the object's frame (y up from its base, +z forward) --------------------------------

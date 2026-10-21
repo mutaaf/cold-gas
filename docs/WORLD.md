@@ -100,5 +100,12 @@ normal into `out.{x,y,z}`, `out.mat`, `out.obstacle`, `out.object`), which `src/
 `surface()` defers to. For an engine with its own colliders (Rapier-class), build from:
 `world.groundAt` / `road.dem` (heightfield tiles, sample at 4 m), the road arrays (ribbon:
 `x, z, y, hw, bank` per 3 m sample, `flags` for bridges and rails), and `objects.colliders()`
-(`box` half-extents + pose, `wedge` w/l/h + pose, `loop` r/w/shift/t + pose). Nothing else in the
-endless world touches the physics.
+(`box` half-extents + pose, `wedge` w/l/h + pose, `loop` r/w/shift/t + pose).
+
+The rigid-body engine (src/sim/world.js) does exactly that, near the car: the ground as heightfield
+cells, the road's structures, the objects (`objects.shapes(o)`: a box, the wedge's hull, the loop's
+band in convex slabs) and the vegetation. Trees, shrubs and boulders are placed by
+`src/sim/scenery.js` (`endlessPropAt`): the tiles draw that placement (src/world/tilegen.js), and the
+physics streams the same props, so a spruce is a solid trunk and a boulder the convex hull of the one
+drawn; shrubs and crowns are soft (a drag on the car). Level 0 uses one grid spacing on every tier
+(`VEG_SPACING`); the far tiers' trees are hidden within the near ring, where the solid ones stand.

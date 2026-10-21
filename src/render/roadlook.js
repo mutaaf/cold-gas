@@ -291,6 +291,27 @@ export function treeMaterial(U) {
   return patch(mat, U, {});
 }
 
+// Far trees (a coarser LOD, on tiles beyond the near ring): the same, but an instance within hideR
+// metres of the camera collapses to nothing. Near the car the near tiles' trees stand there, and
+// those are the trees the physics has (src/sim/scenery.js); a far tree drawn among them would be
+// one you could drive through.
+export function farTreeMaterial(U, hideR) {
+  const mat = treeMaterial(U);
+  mat.name = 'tree-far';
+  const hide = { value: hideR }, base = mat.onBeforeCompile;
+  mat.userData.hideR = hide;
+  mat.onBeforeCompile = (sh, r) => {
+    base(sh, r);
+    sh.uniforms.cgHideR = hide;
+    sh.vertexShader = sh.vertexShader.replace('#include <common>', '#include <common>\nuniform float cgHideR;')
+      .replace('#include <begin_vertex>', `#include <begin_vertex>
+#ifdef USE_INSTANCING
+{ vec3 cgO = (modelMatrix * instanceMatrix * vec4(0.0, 0.0, 0.0, 1.0)).xyz; if (distance(cgO.xz, cameraPosition.xz) < cgHideR) transformed = vec3(0.0); }
+#endif`);
+  };
+  return mat;
+}
+
 // The sky: gradient, a sun disk with its glow, a haze band, thin clouds, and stars at dusk.
 export function skyMaterial(U) {
   return new THREE.ShaderMaterial({

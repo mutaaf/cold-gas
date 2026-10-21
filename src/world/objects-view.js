@@ -4,6 +4,7 @@
 // concrete band, a boost pad glows, a power-up is a slowly turning prism.
 import * as THREE from 'three';
 import { patch } from '../render/roadlook.js';
+import { loopMesh } from '../sim/objects.js';
 
 export function createObjectView(objects, parent, U) {
   const group = new THREE.Group();
@@ -43,27 +44,12 @@ export function createObjectView(objects, parent, U) {
       }
       void k;
     } else if (o.type === 'loop') {
-      // The band: one turn of a helix of radius r, drifting `shift` m in x, the shell t thick.
-      const seg = 96, pts = [], idx = [];
-      for (let k = 0; k <= seg; k++) {
-        const th = (k / seg) * Math.PI * 2, xc = (o.shift * k) / seg;
-        const cy = o.r - Math.cos(th) * o.r, cz = Math.sin(th) * o.r, oy = -Math.cos(th), oz = Math.sin(th);
-        // Inner face (riding surface) and outer face, each across the band's width.
-        for (const [rr, side] of [[0, 0], [o.t, 1]]) for (const dx of [-o.w / 2, o.w / 2]) {
-          pts.push(xc + dx, cy + oy * rr, cz + oz * rr);
-          void side;
-        }
-      }
-      for (let k = 0; k < seg; k++) {
-        const a = k * 4, b = a + 4;
-        idx.push(a, b, a + 1, a + 1, b, b + 1);                   // inner
-        idx.push(a + 2, a + 3, b + 2, a + 3, b + 3, b + 2);       // outer
-        idx.push(a, a + 2, b, b, a + 2, b + 2);                   // one edge
-        idx.push(a + 1, b + 1, a + 3, a + 3, b + 1, b + 3);       // the other
-      }
+      // The band: one turn of a helix of radius r, drifting `shift` m in x, the shell t thick: the
+      // very mesh the hull collides with (src/sim/objects.js loopMesh).
+      const lm = loopMesh(o);
       const geo = new THREE.BufferGeometry();
-      geo.setAttribute('position', new THREE.Float32BufferAttribute(pts, 3));
-      geo.setIndex(idx); geo.computeVertexNormals();
+      geo.setAttribute('position', new THREE.BufferAttribute(lm.v, 3));
+      geo.setIndex(new THREE.BufferAttribute(lm.idx, 1)); geo.computeVertexNormals();
       const m = new THREE.Mesh(geo, concrete.clone());
       m.material.side = THREE.DoubleSide;
       m.castShadow = true; m.receiveShadow = true; g.add(m);

@@ -144,7 +144,7 @@ describe('driving a real road', () => {
     const ray = new RAPIER.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
     let sum = 0, n = 0;
     for (let dx = -40; dx <= 40; dx += 3.7) for (let dz = -40; dz <= 40; dz += 3.3) {
-      const x = w.chunk.x + dx, z = w.chunk.z + dz;
+      const x = car.pos.x + dx, z = car.pos.z + dz;
       ray.origin.x = x - w.ox; ray.origin.y = car.pos.y + 1.4 - w.oy; ray.origin.z = z - w.oz;
       const h = w.rw.castRay(ray, 200, true, undefined, ((0xffff << 16) | GROUP.approx) >>> 0);
       if (!h) continue;

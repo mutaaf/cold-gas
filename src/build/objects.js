@@ -15,9 +15,11 @@
 // verbs (world.addObject(spec) / world.objectsNear): hand it these specs as they are and let its
 // `sdf` call `objectSdf` for each solid near the query, or keep this store beside it. Either way
 // the colliders stay in src/build/colliders.js, behind one adapter.
-import { PIECES, BUILD_MATERIALS, POWERUPS } from './catalogue.js';
-import { shapeSdf, shapeBounds } from './colliders.js';
+import { PIECES, BUILD_MATERIALS, POWERUPS, SKIRT } from './catalogue.js';
+import { shapeSdf, shapeBounds, profileOf, loopShift } from './colliders.js';
 import { dsin, dcos } from '../sim/dmath.js';
+
+const TAU = 2 * Math.PI;
 
 const CELL = 16;
 const key = (ix, iz) => (ix + 32768) * 65536 + (iz + 32768);
@@ -144,6 +146,57 @@ export function createObjectStore() {
   };
 }
 
+// A piece's solid as colliders for the rigid-body engine (src/sim/world.js streams them near the car,
+// for the hull), from the same numbers its distance field and its mesh are built from
+// (src/build/colliders.js): a block is a box; a ramp, a quarter- or a half-pipe is its profile cut
+// into convex slices (each a step of the drawn curve, down to the skirt, across its width); the loop
+// is its band in 96 convex slabs. Solid volumes, not a hollow mesh: a body pressed into one at
+// 4–5 g (the kicker's curve at 80 km/h bottoms the suspension) is pushed back out of its top.
+// Sensors (rings, pads, crates, pickups) have none.
+const slices = new WeakMap(), physMats = new Map();
+const physMat = (m) => { let p = physMats.get(m); if (!p) physMats.set(m, (p = { ...m, bounce: 0.1 })); return p; };
+function sliceShape(sh) {
+  const out = [];
+  if (sh.kind === 'loop') {
+    const { r, w, t, rail } = sh, hw = w / 2, shift = loopShift(sh), RT = 0.15, N = 96;
+    // The deck (r … r + t) across the lane and both rails, and the rails (r − rail … r) at each edge.
+    const bands = [[r, r + t, -hw - RT, hw + RT], [r - rail, r, -hw - RT, -hw], [r - rail, r, hw, hw + RT]];
+    for (let i = 0; i < N; i++) for (const [r0, r1, x0, x1] of bands) {
+      const pts = [];
+      for (const k of [i, i + 1]) {
+        const phi = (k / N) * TAU, xc = shift / 2 - (shift * phi) / TAU, sz = dsin(phi), cy = -dcos(phi);
+        for (const rr of [r0, r1]) for (const xx of [x0, x1]) pts.push(xc + xx, r + rr * cy, rr * sz);
+      }
+      out.push(Float32Array.from(pts));
+    }
+    return out;
+  }
+  const pr = profileOf(sh.kind);
+  if (!pr) return out;
+  const T = pr.top, m = T.length / 2, H = pr.half;
+  for (let i = 0; i + 1 < m; i++) {
+    const pts = [];
+    for (const l of [-H, H]) for (const [u, y] of [[T[2 * i], T[2 * i + 1]], [T[2 * i + 2], T[2 * i + 3]], [T[2 * i + 2], -SKIRT], [T[2 * i], -SKIRT]]) {
+      if (pr.axis === 'x') pts.push(l, y, u); else pts.push(u, y, l);
+    }
+    out.push(Float32Array.from(pts));
+  }
+  return out;
+}
+export function pieceShapes(o) {
+  const sh = o.collider;
+  if (!sh) return [];
+  const t = o.transform, S = t.scale, mat = physMat(o.mat);
+  if (sh.kind === 'box') return [{ kind: 'box', x: t.x, y: t.y + ((sh.h - SKIRT) / 2) * S, z: t.z, yaw: t.yaw, hx: (sh.w / 2) * S, hy: ((sh.h + SKIRT) / 2) * S, hz: (sh.d / 2) * S, mat }];
+  let list = slices.get(sh);
+  if (!list) { list = sliceShape(sh); slices.set(sh, list); }
+  return list.map((pts) => {
+    const p = new Float32Array(pts.length);
+    for (let k = 0; k < p.length; k++) p[k] = pts[k] * S;
+    return { kind: 'hull', x: t.x, y: t.y, z: t.z, yaw: t.yaw, points: p, mat };
+  });
+}
+
 // A course for the sim with every solid of `store` folded into `base`'s ground. `base` is a course
 // object: its `sdf` (Free Drive's roads, the Sandbox) or courses.js `surface()` semantics.
 export function composeCourse(base, store) {
@@ -153,5 +206,7 @@ export function composeCourse(base, store) {
     id: `${base.id}+build`,
     sdf: (x, y, z, out) => store.sdf(x, y, z, out, baseSdf(x, y, z, out)),
     store,
+    // The hull's view of the same pieces (src/sim/world.js).
+    pieces: { get version() { return store.version; }, near: (x, z, r) => store.objectsNear(x, z, r), shapes: pieceShapes },
   };
 }

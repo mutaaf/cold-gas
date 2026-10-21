@@ -15,20 +15,27 @@
 // 15 km long draws with no float jitter. Nothing allocates per frame except new tiles/chunks,
 // which are built under a per-frame time budget.
 import * as THREE from 'three';
-import { terrainAt, RAILS } from '../sim/roads.js';
+import { terrainAt, groundAt, RAILS, bridgePier, PIER, tunnelArch } from '../sim/roads.js';
+import { bakedTrees, TREE_SPACING } from '../sim/scenery.js';
 import {
   createUniforms, applyLook, terrainMaterial, seaMaterial, lakeMaterial, roadMaterial, wallMaterial, steelMaterial,
-  propMaterial, treeMaterial, skyMaterial, panoMaterial, TODS, BIOMES,
+  propMaterial, treeMaterial, farTreeMaterial, skyMaterial, panoMaterial, TODS, BIOMES,
 } from './roadlook.js';
 
 const SHOULDER = 1.2;
 export const CHUNK = 64;                   // samples per road chunk (192 m)
-const VERGE = [SHOULDER, 3, 6.5, 12];      // verge rows: lateral metres past the edge
+// Verge rows: lateral metres past the edge, out past the road's earthwork (src/sim/roads.js: the
+// shoulder, the apron rounded over 2.5 m, its 1:4 run to 7 m, rounded again into the structural
+// slope, handed over to the land 11.5 m past the shoulder), dense where it bends, each row on the
+// ground the car drives on.
+const VERGE = [SHOULDER, 1.7, 2.3, 3.0, 3.7, 5.2, 6.7, 8.2, 8.8, 9.4, 10.0, 10.7, 11.7, 12.7, 13.5];
 const T0 = 128, T1 = 512, TF = 128, N = 32;
 const TIERS = {
-  high: { r0: 420, r1: 2400, roadR: 2400, tree0: 7, tree1: 15, treeR1: 1150, farStep: 1, budget: 6 },
-  mid: { r0: 330, r1: 1700, roadR: 1700, tree0: 9, tree1: 0, treeR1: 0, farStep: 1, budget: 5 },
-  low: { r0: 260, r1: 1150, roadR: 1150, tree0: 12, tree1: 0, treeR1: 0, farStep: 2, budget: 4 },
+  // Near trees are the physics' trees on every tier (src/sim/scenery.js TREE_SPACING): a tier draws
+  // them nearer or farther (r0), never fewer.
+  high: { r0: 420, r1: 2400, roadR: 2400, tree1: 15, treeR1: 1150, farStep: 1, budget: 6 },
+  mid: { r0: 330, r1: 1700, roadR: 1700, tree1: 0, treeR1: 0, farStep: 1, budget: 5 },
+  low: { r0: 260, r1: 1150, roadR: 1150, tree1: 0, treeR1: 0, farStep: 2, budget: 4 },
 };
 
 export function createRoadWorld({ road, info, tier = 'high', renderer, tod = 'day' }) {
@@ -41,7 +48,7 @@ export function createRoadWorld({ road, info, tier = 'high', renderer, tod = 'da
   U.cgCoast.value = coast ? 1 : 0;
   const mats = {
     terrain: terrainMaterial(U), road: roadMaterial(U, road.meta.marking), wall: wallMaterial(U), steel: steelMaterial(U),
-    prop: propMaterial(U), tree: treeMaterial(U), sea: seaMaterial(U), lake: lakeMaterial(U),
+    prop: propMaterial(U), tree: treeMaterial(U), treeFar: farTreeMaterial(U, cfg.r0 - 40), sea: seaMaterial(U), lake: lakeMaterial(U),
   };
   // Tree cover as a texture the terrain shader reads (R8, linear).
   const tr = road.data.trees;
@@ -131,7 +138,7 @@ export function createRoadWorld({ road, info, tier = 'high', renderer, tod = 'da
     const t = makeTile(lvl, i * size, j * size, size, N, H, dist, mats.terrain, coast, lvl ? covered.l1 : null);
     const near1 = lvl && cfg.tree1 && Math.hypot((i + 0.5) * size - planX, (j + 0.5) * size - planZ) < cfg.treeR1;
     if (lvl === 0 || near1) {
-      const tm = plantTrees(road, H, dist, i * size, j * size, size, lvl ? cfg.tree1 : cfg.tree0, mats.tree, biome, lvl);
+      const tm = plantTrees(road, i * size, j * size, size, lvl ? cfg.tree1 : TREE_SPACING, lvl ? mats.treeFar : mats.tree, biome, lvl);
       if (tm) { t.trees = tm; t.mesh.add(tm); tm.position.set(0, 0, 0); }
     }
     group.add(t.mesh);
@@ -310,7 +317,7 @@ function distanceField(road, P) {
 function makeTile(lvl, x0, z0, size, n, H, dist, mat, coast, coveredFn) {
   const step = size / n, V = (n + 1) * (n + 1), S = 4 * n;
   const pos = new Float32Array((V + S) * 3), nor = new Float32Array((V + S) * 3), dep = new Float32Array(V + S);
-  const sink = lvl ? [3.5, 16, 34] : [1.3, 9, 12.5];      // depth, full until, zero at (m past the half-width)
+  const sink = lvl ? [3.5, 16, 34] : [1.3, 12, 13.6];     // depth, full until, zero at (m past the half-width): under the verges
   for (let j = 0; j <= n; j++) for (let i = 0; i <= n; i++) {
     const x = x0 + i * step, z = z0 + j * step, k = j * (n + 1) + i;
     let h = H(x, z);
@@ -505,6 +512,7 @@ function writer(ox, oz, extras = {}) {
   return w;
 }
 
+const g3 = [0, 0, 0];
 export function buildRoadChunk(road, P, c, mats, H, info, tier) {
   const g = new THREE.Group();
   const i0 = c * CHUNK, i1 = Math.min(road.n - 1, (c + 1) * CHUNK);
@@ -561,7 +569,7 @@ export function buildRoadChunk(road, P, c, mats, H, info, tier) {
           const lat0 = side * (hw + VERGE[r]);
           const lat = clampLat(i, lat0);
           const x = road.x[i] + lx * lat, z = road.z[i] + lz * lat;
-          const y = r === 0 ? shoulderY(road, i, side * (hw + SHOULDER)) + 0.025 : H(x, z);
+          const y = r === 0 ? shoulderY(road, i, side * (hw + SHOULDER)) + 0.025 : groundAt(road, x, road.y[i], z, g3)[0];
           vw.v(x, y, z, 0, 1, 0, y);
         }
       }
@@ -624,7 +632,7 @@ export function buildRoadChunk(road, P, c, mats, H, info, tier) {
   }
   function extrudeVar(a, b, side, r, colr, stoneK) {
     const base = ww.pos.length / 3;
-    const prof = [[0, -0.5], [0, r.h], [0.06, r.h + 0.06], [r.t - 0.06, r.h + 0.06], [r.t, r.h], [r.t, -1.2]];
+    const prof = [[0, -0.5], [0, r.h - 0.06], [0.06, r.h], [r.t - 0.06, r.h], [r.t, r.h - 0.06], [r.t, -1.2]];   // its top is the solid's (RAILS)
     for (let i = a; i <= b; i++) {
       const [lx, lz] = L(i), c0 = road.hw[i] + r.off;
       const yE = road.y[i] + road.bank[i] * road.hw[i] * side;
@@ -640,10 +648,23 @@ export function buildRoadChunk(road, P, c, mats, H, info, tier) {
       if (side > 0) ww.idx.push(p, p + 1, q, p + 1, q + 1, q); else ww.idx.push(p, q, p + 1, p + 1, q, q + 1);
     }
   }
+  // The bore at each sample's own width: walls to 3.6 m, the arch to 5.6 m at the crown
+  // (src/sim/roads.js tunnelArch: the roof the car hits).
   function tunnelShell(a, b) {
-    const hw = road.hw[a] + RAILS[3].off;
-    const prof = [[-hw, -0.3], [-hw, 3.6], [-hw * 0.7, 5.0], [0, 5.6], [hw * 0.7, 5.0], [hw, 3.6], [hw, -0.3]];
-    extrude(a, b, prof.map(([l, dy]) => [l, dy]), tunnelC, 0, 1);
+    const base = ww.pos.length / 3, F = [-1, -1, -0.7, 0, 0.7, 1, 1];
+    for (let i = a; i <= b; i++) {
+      const [lx, lz] = L(i), H = road.hw[i] + RAILS[3].off;
+      for (let k = 0; k < F.length; k++) {
+        const lat = F[k] * H, dy = k === 0 || k === F.length - 1 ? -0.3 : tunnelArch(Math.abs(lat), H);
+        const y = road.y[i] + road.bank[i] * Math.sign(lat) * Math.min(Math.abs(lat), road.hw[i]) + dy;
+        ww.v(road.x[i] + lx * lat, y, road.z[i] + lz * lat, 0, 1, 0, i * sp, dy + 0.6, 0);
+        ww.c(...tunnelC);
+      }
+    }
+    for (let i = 0; i < b - a; i++) for (let k = 0; k < F.length - 1; k++) {
+      const p = base + i * F.length + k, q = p + F.length;
+      ww.idx.push(p, q, p + 1, p + 1, q, q + 1);
+    }
   }
   // Bridge decks: a box girder under the ribbon, and piers down to the ground every ≈24 m.
   let ba = -1;
@@ -656,20 +677,18 @@ export function buildRoadChunk(road, P, c, mats, H, info, tier) {
         const w = road.hw[ba] + 0.6 + 0.5;
         extrude(ba, b, [[-w, -0.2], [-w, -1.3], [-w + 0.8, -1.9], [w - 0.8, -1.9], [w, -1.3], [w, -0.2]], concrete, 0, 1);
         for (let k = ba; k <= b; k++) {
-          if (k % 8 !== 4) continue;
-          const gy = H(road.x[k], road.z[k]);
-          if (gy > road.y[k] - 4) continue;
-          pier(k, gy);
+          const gy = bridgePier(road, k);          // src/sim/roads.js: the same piers are solid
+          if (gy !== null) pier(k, gy);
         }
       }
       ba = -1;
     }
   }
   function pier(k, gy) {
-    const [lx, lz] = L(k), hw = road.hw[k] * 0.55;
-    const top = road.y[k] - 1.9, bot = Math.max(gy - 2, -20);
+    const [lx, lz] = L(k), hw = road.hw[k] * PIER.half, al = PIER.along;
+    const top = road.y[k] - PIER.top, bot = Math.max(gy - PIER.sink, PIER.floor);
     const tx = P.tx[k], tz = P.tz[k];
-    const corners = [[-hw, -0.9], [hw, -0.9], [hw, 0.9], [-hw, 0.9]];
+    const corners = [[-hw, -al], [hw, -al], [hw, al], [-hw, al]];
     const base = ww.pos.length / 3;
     for (const y of [top, bot]) for (const [l, f] of corners) {
       ww.v(road.x[k] + lx * l + tx * f, y, road.z[k] + lz * l + tz * f, 0, 1, 0, k * sp + f, y - bot, 0);
@@ -684,7 +703,7 @@ export function buildRoadChunk(road, P, c, mats, H, info, tier) {
   if (steelRuns.length) {
     const sw = writer(ox, oz);
     const r = RAILS[1];
-    const prof = [[0, 0.8], [0.035, 0.71], [0, 0.63], [0.035, 0.54], [0, 0.46]];
+    const prof = [[0, r.h], [0.035, r.h - 0.09], [0, r.h - 0.17], [0.035, r.h - 0.26], [0, r.h - 0.34]];   // the W-beam, its top the solid's (RAILS)
     const posts = [];
     for (const [a, b, side] of steelRuns) {
       const base = sw.pos.length / 3;
@@ -826,39 +845,20 @@ export function BROAD_GEO() {
   return broadGeo;
 }
 
-// Trees on one terrain tile: jittered grid, kept where OSM maps woods, off the road, below the
-// tree line, on slopes a tree can stand on. Deterministic per tile.
-function plantTrees(road, H, dist, x0, z0, size, spacing, mat, biome, lod = 0) {
+// Trees on one terrain tile: the very trees the physics streams (src/sim/scenery.js bakedTrees: a
+// jittered grid kept where OSM maps woods, off the road, below the tree line, on slopes a tree can
+// stand on), drawn at their size. Deterministic per tile.
+function plantTrees(road, x0, z0, size, spacing, mat, biome, lod = 0) {
   if (!spacing) return null;
-  const tr = road.data.trees, B = BIOMES[biome];
-  const list = [];
-  const n = Math.floor(size / spacing);
-  const hash = (a, b) => { let h = Math.imul(a, 374761393) ^ Math.imul(b, 668265263); h = Math.imul(h ^ (h >>> 13), 1274126177); return ((h ^ (h >>> 16)) >>> 0) / 4294967296; };
-  const gi = Math.round(x0 / spacing), gj = Math.round(z0 / spacing);
-  const broad = biome === 'bigsur';
-  for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-    const r1 = hash(gi + i, gj + j), r2 = hash(gi + i + 7919, gj + j - 104729), r3 = hash(gi + i - 31, gj + j + 977);
-    const x = x0 + (i + r1) * spacing, z = z0 + (j + r2) * spacing;
-    const ti = Math.floor((x - tr.x0) / tr.cell), tj = Math.floor((z - tr.z0) / tr.cell);
-    const cover = ti >= 0 && tj >= 0 && ti < tr.nx && tj < tr.nz ? tr.data[tj * tr.nx + ti] / 255 : 0;
-    // Forest where mapped; a scatter of lone trees elsewhere below the tree line.
-    if (r3 > cover * 0.9 + (B.lone ?? 0.01)) continue;
-    const y = H(x, z);
-    if (y < 1.5 || y > B.treeline + (r1 - 0.5) * 160) continue;
-    const e = 3;
-    const sx = (H(x + e, z) - H(x - e, z)) / (2 * e), sz = (H(x, z + e) - H(x, z - e)) / (2 * e);
-    if (sx * sx + sz * sz > 1.1) continue;
-    const r = dist(x, z);
-    if (r.seg >= 0 && r.d < r.hw + 9) continue;
-    list.push([x, y - 0.3, z, r3 * 6.283, r1, r2]);
-  }
+  const B = BIOMES[biome];
+  const list = bakedTrees(road, x0, z0, size, spacing);
   if (!list.length) return null;
+  const broad = list[0].type === 'broad';
   const geo = broad ? BROAD_GEO() : lod ? CONIFER_LOW_GEO() : CONIFER_GEO();
   const m = new THREE.InstancedMesh(geo, mat, list.length);
   const q = new THREE.Quaternion(), p = new THREE.Vector3(), s = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0), M = new THREE.Matrix4(), col = new THREE.Color();
   const base = new THREE.Color(B.tree || B.forest);
-  list.forEach(([x, y, z, yaw, a, b], k) => {
-    const hgt = broad ? 7 + a * 9 : 9 + a * 15, wid = hgt * (broad ? 1.0 : 0.7 + b * 0.25);
+  list.forEach(({ x, y, z, yaw, sx: wid, sy: hgt, r1: a, r2: b }, k) => {
     q.setFromAxisAngle(up, yaw); p.set(x - x0, y, z - z0); s.set(wid, hgt, wid);
     M.compose(p, q, s); m.setMatrixAt(k, M);
     col.copy(base).multiplyScalar(0.75 + 0.5 * b); col.offsetHSL((a - 0.5) * 0.03, 0, 0);
