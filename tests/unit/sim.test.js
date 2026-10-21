@@ -213,7 +213,7 @@ describe('the reference runs land, and replay bit-exactly', () => {
   }
   it('the Wall reference climbs the whole curl and hangs inverted', () => {
     const t = fly('wall').t;
-    expect(t.progress).toBeGreaterThan(0.99);       // the CoM, 1.62 m behind the nose's axle, at the lip
+    expect(t.progress).toBeGreaterThan(0.95);       // it hangs on the ledge with four wheels and its whole sealed floor on the deck (the fan can't seal on air past the lip)
     expect(t.maxRampHeight).toBeGreaterThan(WALL.lip.y - 3);   // the lip is 27.7 m (taller than the reveal's 19.8 m)
     expect(t.invertedTime).toBeGreaterThan(1.5);     // it hangs on the ledge like the reveal
   });

@@ -8,7 +8,7 @@
 //   SCRAPE  a stream of sparks and the grind of bodywork on concrete
 //   WHEEL   tyre smoke and dust from a slammed tyre
 //   CRUSH   the body dents where the physics folded it, as deep as it folded; a struck parked
-//           car dents and rocks on its springs
+//           car dents (it rocks, slides and tips in the sim itself: src/sim/world.js)
 //
 // Effects are seeded from the event (tick, probe), so a crash looks and sounds the same live and
 // in the replay. Pools are allocated once (sparks are instanced streak quads, chips one
@@ -355,15 +355,6 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
       dent(d, 0.45 + depth * 1.2, depth, salt);
     }
   }
-  function rockParked(i, x, z, nx, ny, nz, speed) {
-    const p = parkedFor(i);
-    if (!p) return;
-    const k = Math.min(1.6, speed * 0.09) * p.k;
-    // Pushed down where it was hit: the side it was hit on dips, the springs bring it back.
-    p.vsy -= k * 0.6 * Math.max(0.2, ny);
-    p.vax -= k * (z - p.car.position.z) * 0.9 * Math.max(0.2, ny) - k * nz * 0.4;
-    p.vaz += k * (x - p.car.position.x) * 0.25 * Math.max(0.2, ny) + k * nx * 0.4;
-  }
 
   // --- State ---
   const st = {
@@ -475,7 +466,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
     // A big hit vents a nitrogen line: a white jet of condensation for a moment.
     if (sev > 0.55) st.ventT = Math.max(st.ventT, 1.1 + sev);
     // Parked car: a dent and a rock on its springs.
-    if (body >= 0) { dentParked(body, x, y, z, nx, ny, nz, Math.min(0.14, 0.003 * v * v), imp.tick[i] * 0.29); rockParked(body, x, z, nx, ny, nz, v); }
+    if (body >= 0) dentParked(body, x, y, z, nx, ny, nz, Math.min(0.14, 0.003 * v * v), imp.tick[i] * 0.29);
     crunch(sev, { glass: glassy && v > 5, seed: imp.tick[i] * 31 + imp.probe[i] });
     if (!reduced) {
       director.shake(Math.min(2.6, 0.25 + v * 0.17));
@@ -618,16 +609,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
     // Torn-off parts: rigid boxes on the concrete.
     pieces.update(dt);
 
-    // Parked cars rock on their springs (ω ≈ 8 rad/s, ζ ≈ 0.3) after the setBodies pose.
-    for (const p of parked) {
-      if (!p || p.car.parent !== row) continue;
-      const w2 = 64, c2 = 4.8;
-      p.vax += (-w2 * p.ax - c2 * p.vax) * dt; p.ax += p.vax * dt;
-      p.vaz += (-w2 * p.az - c2 * p.vaz) * dt; p.az += p.vaz * dt;
-      p.vsy += (-w2 * p.sy - c2 * p.vsy) * dt; p.sy += p.vsy * dt;
-      p.ax = Math.max(-0.12, Math.min(0.12, p.ax)); p.az = Math.max(-0.12, Math.min(0.12, p.az)); p.sy = Math.max(-0.12, Math.min(0.05, p.sy));
-      p.car.rotation.x = p.ax; p.car.rotation.z = p.az; p.car.position.y = p.sy;
-    }
+    // (Parked cars rock on their own springs in the sim now: setBodies poses them, live and in replay.)
 
     // Lamps: flicker while failing, then out (or dimmed); hazards after a crash.
     if (st.headFail > 0) { st.headFail -= dtReal; st.head = Math.sin(st.clock * 61) * Math.sin(st.clock * 23.3) > 0.1 ? 1 : 0.05; if (st.headFail <= 0) st.head = st.headDead ? 0 : 0.55; }

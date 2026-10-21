@@ -50,5 +50,7 @@ export default defineConfig({
   base: BASE,
   plugins: [staticHeaders, inlineCss],
   build: { outDir: 'dist/coldgas', emptyOutDir: true, chunkSizeWarningLimit: 900 },
-  test: { include: ['tests/unit/**/*.test.js'], environment: 'node' },
+  test: { include: ['tests/unit/**/*.test.js'], environment: 'node', setupFiles: ['tests/unit/setup.js'],
+    // Whole flights through the engine: a fuzz of 40 Pro runs takes ≈5 s on a laptop, more on CI.
+    testTimeout: 30000 },
 });

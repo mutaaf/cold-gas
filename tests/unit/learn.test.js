@@ -29,20 +29,20 @@ const flyDrill = (id, policy, course = 'show') => {
   return run;
 };
 
-describe('SIM_VERSION 13: the skill ladder', () => {
-  it('is version 13 (12: the parked row at its researched sizes; 13: the scheduled fan)', () => expect(SIM_VERSION).toBe(13));
-  // SIM_VERSION 10: Show 87.3, Wall 88.0, Lineup 85.0. The references fly the same; LAND's roll-out
-  // no longer brakes sideways, so they land nearer the mark (Wall 11.2 → 5.7 m): the Show and the
-  // Wall gain on precision alone, and nothing else may move. SIM_VERSION 11 flew Show 89.0, Wall
-  // 91.0; SIM_VERSION 13 schedules the fan (tests/unit/fan.test.js): the Show holds 89.0 and the
-  // Wall reads 91.7 (pad miss 5.7 → 5.6 m, entry 22 → 21 km/h), before the Integrity category.
-  it('keeps the reference runs: no worse than SIM_VERSION 10, better only by landing nearer the mark', () => {
+describe('SIM_VERSION 14: the rigid-body engine', () => {
+  it('is version 14', () => expect(SIM_VERSION).toBe(14));
+  // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
+  // engine and splits the fan's seal into eight patches: the references fly the same climb and
+  // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
+  // single-point fan kept full suction while the car's floor hung past the lip), so the release is
+  // cleaner and the Wall lands nearer the mark. Nothing may get worse.
+  it('keeps the reference runs: no worse than SIM_VERSION 13', () => {
     const runs = Object.fromEntries(['show', 'wall', 'lineup'].map((c) => [c, fly(c)]));
     const cards = Object.fromEntries(Object.entries(runs).map(([c, r]) => [c, scoreRun(r.t)]));
     // (+ the Integrity category, which a clean run scores ≈10: it lifts every reference a little)
-    expect(cards.show.total).toBeGreaterThanOrEqual(87.3 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(87.3 + 4);
-    expect(cards.wall.total).toBeGreaterThanOrEqual(88.0 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(88.0 + 5);
-    expect(cards.lineup.total).toBeGreaterThanOrEqual(85.0 - 1.05); expect(cards.lineup.total).toBeLessThanOrEqual(85.0 + 2);
+    expect(cards.show.total).toBeGreaterThanOrEqual(90.7 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(90.7 + 2);
+    expect(cards.wall.total).toBeGreaterThanOrEqual(92.3 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(92.3 + 3.5);
+    expect(Math.abs(cards.lineup.total - 86.3)).toBeLessThanOrEqual(1.05);
     for (const c of ['show', 'wall', 'lineup']) expect(cards[c].facts.damagePct).toBeLessThanOrEqual(2);
     expect(cards.wall.facts.padMiss).toBeLessThan(8);
     for (const c of ['show', 'wall', 'lineup']) { expect(runs[c].t.sink).toBeLessThan(1.2); expect(runs[c].t.tiltDeg).toBeLessThan(3); }

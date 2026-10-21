@@ -1,6 +1,13 @@
-// The roadster, physics v2: a 6-DOF rigid body on four raycast-suspended wheels with slip-based
-// tyres, a suction fan and ten cold-gas thrusters. It drives on any surface the course defines
-// (src/sim/courses.js `surface()`): flat concrete, a vertical wall, or upside down under a ledge.
+// The roadster, physics v3: a 6-DOF rigid body on four raycast-suspended wheels with slip-based
+// tyres, a suction fan and ten cold-gas thrusters. It drives on any surface the course defines:
+// flat concrete, a vertical wall, or upside down under a ledge.
+//
+// The rigid-body engine (Rapier, src/sim/engine.js + src/sim/world.js) owns the world: the
+// course's colliders, the parked vehicles' bodies, and every contact of this car's rigid hull with
+// them. This file is what no engine ships, as forces on the car's engine body: the tyres (Pacejka,
+// combined slip, load sensitivity, implicit wheel spin), the suspension, the suction fan and its
+// sliding skirts, the nitrogen thrusters with blowdown, the mixer and the flight computer. The
+// wheels and the fan read the world through the engine's ray casts.
 //
 // Body frame: +x is the car's LEFT, +y up, +z forward (right-handed), origin at the centre of
 // mass. Inputs are driver-relative: steer, roll and yaw are positive to the driver's right (−x),
@@ -9,7 +16,8 @@
 // scores this way). No allocation in step().
 import { v3, q4, add, scale, addScaled, cross, dot, rotate, rotateInv, integrateQuat, quatFromYaw, clamp, set } from './m3.js';
 import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf, AXLE_F } from './spec.js';
-import { surface, COURSES, DEFAULT_COURSE, MATERIALS, createWorld, stepWorld, pushBody } from './courses.js';
+import { COURSES, DEFAULT_COURSE, MATERIALS } from './courses.js';
+import { createWorld, attachCar, raycast as worldRay, preStep, stepEngine } from './world.js';
 import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
 import { createImpacts, pushImpact, HIT, SCRAPE, WHEEL, CRUSH, CRUSH_STEP, PART, SCRAPE_EVERY, HIT_MIN, SCRAPE_MIN, WHEEL_MIN } from './impacts.js';
 
@@ -32,6 +40,12 @@ const RW = [0, 1, 2, 3].map(wheelRadiusOf);    // staggered: 20" front, 21" rear
 // Pacejka coefficients (peak at κ ≈ 0.10, α ≈ 8.4°): semi-slicks. Cornering stiffness B·C·D ≈ 21.6·μFz
 // (≈160 kN/rad per tyre at static load), crisp like a track tyre.
 const BX = 11.5, CX = 1.65, BY = 16, CY = 1.35;
+// The tyre's pure-slip curves (Pacejka's magic formula, F = D·sin(C·atan(B·x)), E = 0): the
+// longitudinal force at slip ratio κ and the lateral force at slip angle α (rad), for a peak
+// D = μ·Fz. Combined slip is the friction ellipse on top of these (step()).
+export const TYRE = { BX, CX, BY, CY };
+export const tyreFx = (D, kappa) => D * dsin(CX * datan(BX * kappa));
+export const tyreFy = (D, alpha) => -D * dsin(CY * datan(BY * alpha));
 
 export const CAR = {
   dryMass: SPEC.dryMass, airMass: SPEC.gasMass, isp: SPEC.ispFull,
@@ -84,6 +98,28 @@ const HULL = [], HULL_PART = [];
 }
 export { HULL, HULL_PART };
 
+// The rigid hull the engine collides: a convex hull of the body's faceted shape (nose, tail,
+// beltline, greenhouse). Its floor is the battery tub's structural pan, 6 cm above the floor probes:
+// below it the sliding skirts and the pan ride the deck compliantly (FLOOR_K, below), as they do on
+// the curl's sag, and only a hit hard enough to fold them reaches the rigid structure.
+const HULL_SHAPE = (() => {
+  const hw = SPEC.width / 2 - 0.04, zf = AXLE_F + SPEC.overhangFront - 0.05, zr = zf - SPEC.length + 0.1;
+  const yb = -(SPEC.comHeight - SPEC.rideHeight) + 0.05, yt = SPEC.height - SPEC.comHeight - 0.05;
+  const yPan = yb + 0.06, yNose = yb + 0.15, yTail = yb + 0.2, yBelt = yt * 0.55;
+  const pts = [];
+  for (const x of [-hw, hw]) {
+    pts.push(x, yNose, zf, x, yPan, zf - 0.9, x, yPan, zr + 0.9, x, yTail, zr);
+    pts.push(x * 0.9, yt * 0.4, zf, x * 0.9, yt * 0.6, zr);
+    for (const z of [zf * 0.9, ((zf + zr) / 2) * 0.9, zr * 0.9]) pts.push(x, yBelt, z);
+    pts.push(x * 0.36, yt, 0.2, x * 0.36, yt, -0.6);
+  }
+  pts.push(0, yt * 0.4, zf + 0.04, 0, yt * 0.6, zr - 0.02);
+  return new Float32Array(pts);
+})();
+const FLOOR_PROBES = HULL_PART.map((p, i) => (p === PART.floor ? i : -1)).filter((i) => i >= 0);
+// How far above a floor probe its skirt ray starts (inside the hull), m.
+const SKIRT_UP = 0.3;
+
 // Bodywork contact: elastic up to the structure's yield, then it crushes and stays crushed.
 // Each hull probe stands for a patch of structure. ESTIMATES from crash-test numbers:
 //  - Yield ≈100 kN per probe. A full-frontal rigid-barrier test at 56 km/h crushes a 1.5–2 t
@@ -103,7 +139,14 @@ const FLOOR_K = 300000, FLOOR_C = 11000;
 const PROBE_K = HULL_PART.map((p) => (p === PART.floor ? FLOOR_K : HULL_K));
 const PROBE_C = HULL_PART.map((p) => (p === PART.floor ? FLOOR_C : HULL_C));
 const PROBE_YIELD = HULL_PART.map((p) => (p === PART.floor ? Infinity : HULL_YIELD));
+// The energy a probe's structure stores elastically before it yields (½·F²/k ≈ 4.2 kJ): a hit that
+// puts more than that into one patch of structure folds it, by the excess over the yield force.
+const E_ELASTIC = (0.5 * HULL_YIELD * HULL_YIELD) / HULL_K;
 const FLOOR = v3(0, -(SPEC.comHeight - SPEC.rideHeight), 0);
+// The skirts' sealed floor (ESTIMATE): 1.5 m across inside the sills, 2.0 m long, centred on the
+// CoM; the suction is taken at the centre of each of eight patches (2 across × 4 along), so a lip
+// crossing loses it a quarter-metre at a time.
+const SEAL = [0.75, 0.25, -0.25, -0.75].flatMap((z) => [v3(0.375, FLOOR.y, z), v3(-0.375, FLOOR.y, z)]);
 
 // Advanced mode: one valve channel per nozzle, in NOZZLE_SPEC order (`manual` = 1 bypasses the
 // mixer and the flight computer; the valves go straight to the nozzles).
@@ -126,8 +169,9 @@ export const ASSIST_CRAWL = 8, ASSIST_CARRY = 10;
 export function createVehicle(courseId = DEFAULT_COURSE) {
   // A course id, or a course object (Free Drive's roads aren't in COURSES).
   const course = typeof courseId === 'object' ? courseId : COURSES[courseId] || COURSES[DEFAULT_COURSE];
+  const world = createWorld(course);
   const s = {
-    course, tick: 0, world: createWorld(course),
+    course, tick: 0, world,
     pos: v3(course.start.x, SPEC.comHeight, course.start.z), vel: v3(), quat: quatFromYaw(q4(), 0), angVel: v3(), angMom: v3(),
     air: CAR.airMass,
     throttles: new Float64Array(NOZZLES.length),
@@ -138,7 +182,12 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     // Crash state: each hull probe's permanent crush (m), its contact last tick, and the run's
     // impact events (src/sim/impacts.js).
     crush: new Float64Array(HULL.length), crushShown: new Float64Array(HULL.length), touch: new Uint8Array(HULL.length), impacts: createImpacts(),
+    // Energy each probe's structure has absorbed in contacts (J): its crush follows from it.
+    crushE: new Float64Array(HULL.length), touchNow: new Uint8Array(HULL.length), engineMass: 0,
   };
+  s.engineMass = massOf(s);
+  attachCar(world, HULL_SHAPE, s.engineMass, { x: SPEC.inertia.pitch, y: SPEC.inertia.yaw, z: SPEC.inertia.roll });
+  world.carPos = s.pos;
   return s;
 }
 
@@ -153,56 +202,41 @@ export function pressureOf(air) {
   return Math.min(1, tank / SPEC.regulatedFraction);
 }
 
+
 // Scratch (never reallocated).
 const tmp = v3(), tmp2 = v3(), r = v3(), pw = v3(), vp = v3(), force = v3(), fwd = v3(), right = v3(), upW = v3(),
-  fTot = v3(), tTot = v3(), wb = v3(), Lb = v3(), cmdT = v3(), dn = v3(), hitN = v3(), wf = v3(), wl = v3(), worldUpB = v3(), rp = v3();
-const sn = { x: 0, y: 0, z: 0, obstacle: false, body: null, mat: MATERIALS.concrete };
-let hitBody = null, hitMat = MATERIALS.concrete;
+  fTot = v3(), tTot = v3(), wb = v3(), Lb = v3(), cmdT = v3(), dn = v3(), hitN = v3(), wf = v3(), wl = v3(), worldUpB = v3(), rp = v3(),
+  imp = v3(), vPre = v3(), wPre = v3(), nb = v3(), lc = v3(), vo = v3();
+const ePt = { x: 0, y: 0, z: 0 }, eN = { x: 0, y: 0, z: 0 };
+let hitBody = null, hitMat = MATERIALS.concrete, hitCar = false;
 const target = new Float64Array(NOZZLES.length);
 // The strongest new hit / slide / tyre slam this tick: [speed, x, y, z, nx, ny, nz, probe, body, crush].
 const evHit = new Float64Array(10), evScr = new Float64Array(10), evWheel = new Float64Array(10);
 function keep(ev, speed, p, n, probe, body, crush) {
   ev[0] = speed; ev[1] = p.x; ev[2] = p.y; ev[3] = p.z; ev[4] = n.x; ev[5] = n.y; ev[6] = n.z; ev[7] = probe; ev[8] = body; ev[9] = crush;
 }
-const bodyIndex = (s, b) => (b ? s.world.bodies.indexOf(b) : -1);
+const bodyIndex = (b) => (b ? b.index : -1);
 const eff = { lift: 0, thrust: 0 };
 
 function pointVel(out, s, rw) { cross(out, s.angVel, rw); return add(out, out, s.vel); }
 function applyAt(rw, f) { add(fTot, fTot, f); cross(tmp2, rw, f); add(tTot, tTot, tmp2); }
-const phiAt = (s, p) => surface(s.course, p.x, p.y, p.z, sn, s.world);
-const hitFrom = () => { set(hitN, sn.x, sn.y, sn.z); hitBody = sn.body; hitMat = sn.mat; };
-
-// March a ray from `o` along unit `d` up to `maxT`; the first distance where it enters a solid
-// (or -1), with the hit normal left in hitN.
-function raycast(s, o, d, maxT) {
-  let prevT = 0, prevPhi = phiAt(s, o);
-  if (prevPhi <= 0) { hitFrom(); return 0; }
-  const steps = 6;
-  for (let i = 1; i <= steps; i++) {
-    const t = (maxT * i) / steps;
-    addScaled(rp, o, d, t);
-    const phi = phiAt(s, rp);
-    if (phi <= 0) {
-      // Bracketed: a few bisections, then a secant step on the (locally linear) distance field
-      // for a sub-micron hit, so the damper never sees quantisation noise.
-      let lo = prevT, hi = t, pLo = prevPhi, pHi = phi;
-      for (let k = 0; k < 5; k++) {
-        const mid = (lo + hi) / 2;
-        addScaled(rp, o, d, mid);
-        const pm = phiAt(s, rp);
-        if (pm <= 0) { hi = mid; pHi = pm; } else { lo = mid; pLo = pm; }
-      }
-      const th = pLo - pHi > 1e-12 ? lo + ((hi - lo) * pLo) / (pLo - pHi) : hi;
-      addScaled(rp, o, d, th);
-      phiAt(s, rp);
-      hitFrom();
-      return th;
-    }
-    prevT = t; prevPhi = phi;
-  }
-  return -1;
+// A force the car puts on a parked body it stands on, sucks at or scrapes (the opposite of `f`).
+function reactOn(w, body, p, f, dt) {
+  if (!body?.rb) return;
+  imp.x = -f.x * dt; imp.y = -f.y * dt; imp.z = -f.z * dt;
+  body.rb.applyImpulseAtPoint(imp, set(ePt, p.x - w.ox, p.y - w.oy, p.z - w.oz), true);
 }
 
+// Cast from `o` along unit `d` up to `maxT` through the engine's world (never into the car itself):
+// the first distance where it enters a solid (or −1), with the hit normal in hitN.
+function raycast(s, o, d, maxT) {
+  const w = s.world;
+  const t = worldRay(w, o.x, o.y, o.z, d.x, d.y, d.z, maxT, w.carRb);
+  if (t < 0) return -1;
+  const h = w.hit;
+  set(hitN, h.nx, h.ny, h.nz); hitBody = h.body; hitMat = h.mat; hitCar = h.car;
+  return t;
+}
 // Mixer: pilot command → valve targets. Attitude has priority over lift (quadcopter-style).
 export function mix(cmd, torqueCmd, out) {
   let maxDelta = 0;
@@ -335,11 +369,106 @@ export function computerValves(s, inp, out) {
   return computerTargets(s, inp, s.grounded, massOf(s), out);
 }
 
+// --- Contacts of the rigid hull, as the engine solved them ------------------------------------------
+// Which probe a contact belongs to: the part its outward normal says (roof up, floor down, nose and
+// tail along the car, sides across), then the nearest probe of that part.
+const PART_PROBES = [PART.floor, PART.nose, PART.tail, PART.side, PART.roof].reduce((a, p) => { a[p] = HULL_PART.map((q, i) => (q === p ? i : -1)).filter((i) => i >= 0); return a; }, []);
+function probeFor(nbx, nby, nbz, lx, ly, lz) {
+  const part = nby > 0.6 ? PART.roof : nby < -0.6 ? PART.floor : Math.abs(nbz) > Math.abs(nbx) ? (nbz > 0 ? PART.nose : PART.tail) : PART.side;
+  const list = PART_PROBES[part];
+  let best = list[0], bd = Infinity;
+  for (const i of list) {
+    const p = HULL[i], dx = p.x - lx, dy = p.y - ly, dz = p.z - lz, d = dx * dx + dy * dy + dz * dz;
+    if (d < bd) { bd = d; best = i; }
+  }
+  return best;
+}
+let cs = null, cOther = null, cTouched = false;
+const TOUCH_SKIN = 0.01;   // m
+const mN = { x: 0, y: 0, z: 0 }, mP = { x: 0, y: 0, z: 0 };
+function onManifold(manifold, flipped) {
+  const s = cs, w = s.world, info = w.info.get(cOther.handle);
+  if (!info) return;
+  manifold.normal(mN);
+  // The engine's normal points from the first collider to the second: turn it to point out of
+  // the other solid, toward the car.
+  const sg = flipped ? 1 : -1;
+  const nx = mN.x * sg, ny = mN.y * sg, nz = mN.z * sg;
+  for (let k = 0; k < manifold.numContacts(); k++) {
+    // Touching: pushed apart this tick, or resting within the contact skin (a body at rest on a
+    // face needs no impulse on some ticks; it is still lying there).
+    const J = manifold.contactImpulse(k);
+    if (!(J > 0) && !(manifold.contactDist(k) < TOUCH_SKIN)) continue;
+    const lp = flipped ? manifold.localContactPoint2(k, mP) : manifold.localContactPoint1(k, mP);
+    if (!lp) continue;
+    cTouched = true;
+    // Body frame → world: the contact point, and the car's velocity there before the contact.
+    set(lc, lp.x, lp.y, lp.z);
+    rotate(r, s.quat, lc); add(pw, s.pos, r);
+    cross(vp, wPre, r); add(vp, vp, vPre);
+    vo.x = 0; vo.y = 0; vo.z = 0;
+    // What it hit was moving too: its velocity there before this step (the closing speed is what
+    // the contact had to take out, not what is left after it).
+    const b = info.body;
+    if (b) {
+      const h = b.phys.cgh, q = b;
+      // CoM = frame origin + R·(0, cgh, 0); point velocity = v + ω × (p − CoM).
+      const cx = b.cx + 2 * (q.qx * q.qy - q.qw * q.qz) * h, cy = b.cy + (1 - 2 * (q.qx * q.qx + q.qz * q.qz)) * h, cz = b.cz + 2 * (q.qy * q.qz + q.qw * q.qx) * h;
+      const rx = pw.x - cx, ry = pw.y - cy, rz = pw.z - cz;
+      set(vo, b.pvx + b.pwy * rz - b.pwz * ry, b.pvy + b.pwz * rx - b.pwx * rz, b.pvz + b.pwx * ry - b.pwy * rx);
+    }
+    sub3(vp, vp, vo);
+    set(hitN, nx, ny, nz);
+    rotateInv(nb, s.quat, set(tmp, -nx, -ny, -nz));
+    const i = probeFor(nb.x, nb.y, nb.z, lc.x, lc.y, lc.z);
+    const vn = dot(vp, hitN);
+    if (info.body) { s.obstacleContact = true; s.obstacleSpeed = Math.max(s.obstacleSpeed, dhypot(vp.x + vo.x, vp.y + vo.y, vp.z + vo.z)); }
+    else s.hullGround = true;
+    s.hullContact = true;
+    s.hullImpulse = Math.max(s.hullImpulse, -vn);
+    addScaled(tmp, vp, hitN, -vn);
+    const vt = dhypot(tmp.x, tmp.y, tmp.z);
+    const bi = bodyIndex(info.body);
+    if (!s.touch[i] && !s.touchNow[i] && -vn > HIT_MIN && -vn > evHit[0]) keep(evHit, -vn, pw, hitN, i, bi, s.crush[i]);
+    if (vt > SCRAPE_MIN && vt > evScr[0]) keep(evScr, vt, pw, hitN, i, bi, s.crush[i]);
+    s.touchNow[i] = 1;
+    // Crush: the impulse J took the closing speed vn out of this patch, absorbing ½·J·|vn|. Up to
+    // the structure's elastic store it springs back; past it, the panel folds by the excess over
+    // the yield force, and stays folded (crash tests: little rebound at crash speeds).
+    if (PROBE_YIELD[i] < Infinity && vn < 0 && J > 0) {
+      s.crushE[i] += 0.5 * J * -vn;
+      const d = Math.min(CRUSH_MAX, (s.crushE[i] - E_ELASTIC) / PROBE_YIELD[i]);
+      if (d > s.crush[i]) s.crush[i] = d;
+      if (s.crush[i] - s.crushShown[i] >= CRUSH_STEP) {
+        s.crushShown[i] = s.crush[i];
+        pushImpact(s.impacts, s.tick + 1, CRUSH, HULL_PART[i], i, bi, pw.x, pw.y, pw.z, hitN.x, hitN.y, hitN.z, -vn, s.crush[i]);
+      }
+    }
+  }
+}
+function onPair(other) {
+  cOther = other;
+  cs.world.rw.contactPair(cs.world.carCol, other, onManifold);
+}
+const sub3 = (o, a, b) => { o.x = a.x - b.x; o.y = a.y - b.y; o.z = a.z - b.z; return o; };
+
+// World inertia times a vector: R·I·Rᵀ·v (I diagonal in the body frame).
+function inertiaTimes(out, q, v) {
+  rotateInv(out, q, v);
+  out.x *= SPEC.inertia.pitch; out.y *= SPEC.inertia.yaw; out.z *= SPEC.inertia.roll;
+  return rotate(out, q, out);
+}
+const qOld = q4(), pOld = v3();
+
 export function step(s, inp) {
-  const dt = DT;
+  const dt = DT, w = s.world;
   const m = massOf(s);
-  set(fTot, 0, -m * G, 0);
-  set(tTot, 0, 0, 0);
+  if (w.stream) w.stream(w, s.pos);
+  // The parked bodies' own suspension and tyres first: a parked car whose tyre stands on this one
+  // pushes back through w.carF / w.carT.
+  preStep(w);
+  set(fTot, w.carF.x, w.carF.y - m * G, w.carF.z);
+  set(tTot, w.carT.x, w.carT.y, w.carT.z);
   rotate(fwd, s.quat, set(tmp, 0, 0, 1));
   rotate(right, s.quat, set(tmp, 1, 0, 0));
   rotate(upW, s.quat, set(tmp, 0, 1, 0));
@@ -381,10 +510,25 @@ export function step(s, inp) {
   s.gripSat += (allIn - s.gripSat) * (dt / SPEC.fanGripTime);
   const fanTarget = armed * Math.max(s.fanDemand, clamp(2 * s.gripSat - 1, 0, 1));
   s.fan += (fanTarget - s.fan) * Math.min(1, dt / (fanTarget > s.fan ? SPEC.fanSpool / Math.LN10 : SPEC.fanDump));
-  // Skirts drop to seal; past their reach the leak grows and suction falls off fast.
-  const leak = gapT < 0 ? Infinity : Math.max(0, gapT - SPEC.fanSkirtReach) / SPEC.fanGapScale;
-  s.fanForce = gapT < 0 ? 0 : (s.fan * SPEC.fanMaxForce) / (1 + leak * leak);
-  if (s.fanForce > 0) { scale(force, dn, s.fanForce); applyAt(r, force); }
+  // The skirts seal a rectangle of floor; each patch of it seals (or leaks) on its own, so a car
+  // whose nose hangs past the Wall's lip keeps only the suction of the floor still over the deck,
+  // pulled where that floor is (the patch forces balance about the CoM when all seal). The
+  // controller above reads the deck under the centre; the force is the patches'.
+  s.fanForce = 0;
+  for (let k = 0; k < SEAL.length && s.fan > 0; k++) {
+    rotate(r, s.quat, SEAL[k]);
+    add(pw, s.pos, r);
+    const gapQ = raycast(s, pw, dn, 0.6);
+    if (gapQ < 0) continue;
+    // Skirts drop to seal; past their reach the leak grows and suction falls off fast.
+    const leak = Math.max(0, gapQ - SPEC.fanSkirtReach) / SPEC.fanGapScale;
+    const f = (s.fan * SPEC.fanMaxForce / SEAL.length) / (1 + leak * leak);
+    if (f <= 0) continue;
+    s.fanForce += f;
+    scale(force, dn, f); applyAt(r, force);
+    // The suction pulls whatever is under the car just as hard toward it.
+    if (hitBody) { addScaled(rp, pw, dn, gapQ); reactOn(w, hitBody, rp, force, dt); }
+  }
 
   // --- Wheels: raycast suspension + Pacejka tyres + wheel spin ---
   let grounded = 0, wallContact = false, sloped = false, wheelForce = 0;
@@ -392,48 +536,49 @@ export function step(s, inp) {
   s.tcActive = false;
   evHit[0] = 0; evScr[0] = 0; evWheel[0] = 0;
   for (let i = 0; i < 4; i++) {
-    const w = s.wheels[i];
+    const wh = s.wheels[i];
     rotate(r, s.quat, WHEELS[i]);
     add(pw, s.pos, r);
-    w.prevCompression = w.compression;
-    const wasContact = w.contact;
-    w.contact = false;
+    wh.prevCompression = wh.compression;
+    const wasContact = wh.contact;
+    wh.contact = false;
     const R = RW[i];
     const maxT = REST_LEN + R;
     const t = raycast(s, pw, dn, maxT);
     if (t < 0) {
-      w.compression = 0; w.load = 0;
+      wh.compression = 0; wh.load = 0;
       // Free wheel: driven wheels spin up under throttle, brakes stop them.
-      if (DRIVEN[i]) w.omega += ((inp.throttle * 600) / WHEEL_I) * dt;
-      if (inp.brake > 0) w.omega *= 0.9;
-      w.omega *= 0.999;
-      w.spin += w.omega * dt;
+      if (DRIVEN[i]) wh.omega += ((inp.throttle * 600) / WHEEL_I) * dt;
+      if (inp.brake > 0) wh.omega *= 0.9;
+      wh.omega *= 0.999;
+      wh.spin += wh.omega * dt;
       continue;
     }
-    w.contact = true; grounded++;
+    wh.contact = true; grounded++;
     if (hitBody) s.obstacleContact = true;      // a tyre on a parked car is contact
     if (hitN.y < 0.85) wallContact = true;
     if (hitN.y < 0.995) sloped = true;
-    w.nx = hitN.x; w.ny = hitN.y; w.nz = hitN.z;
+    wh.nx = hitN.x; wh.ny = hitN.y; wh.nz = hitN.z;
     const comp = maxT - t;
-    w.compression = Math.min(comp, REST_LEN + R);
-    const compRate = (w.compression - w.prevCompression) / dt;
+    wh.compression = Math.min(comp, REST_LEN + R);
+    const compRate = (wh.compression - wh.prevCompression) / dt;
     let fs = AXLE_K[i] * (K_SPRING * Math.min(comp, REST_LEN) + C_DAMP * compRate);
     const over = comp - (REST_LEN - MOUNT_TO_CENTRE + TRAVEL);
     if (over > 0) fs += BUMP * over;
     fs = Math.max(0, fs);
     const Fz = fs * Math.max(0.3, -dot(dn, hitN));
-    w.load = Fz;
-    // Contact patch and its velocity.
+    wh.load = Fz;
+    // Contact patch and its velocity (relative to what the tyre stands on).
     addScaled(tmp, r, dn, t);
     pointVel(vp, s, tmp);
+    if (hitBody?.rb) { add(rp, s.pos, tmp); hitBody.rb.velocityAtPoint(set(ePt, rp.x - w.ox, rp.y - w.oy, rp.z - w.oz), eN); vp.x -= eN.x; vp.y -= eN.y; vp.z -= eN.z; }
     if (!wasContact) {
       const close = -dot(vp, hitN);
-      if (close > WHEEL_MIN && close > evWheel[0]) { add(rp, s.pos, tmp); keep(evWheel, close, rp, hitN, i, bodyIndex(s, hitBody), 0); }
+      if (close > WHEEL_MIN && close > evWheel[0]) { add(rp, s.pos, tmp); keep(evWheel, close, rp, hitN, i, bodyIndex(hitBody), 0); }
     }
     // Wheel axes in the contact plane.
     const steerA = i < 2 ? s.steer : 0;
-    w.steer = steerA;
+    wh.steer = steerA;
     const cs = dcos(steerA), snA = dsin(steerA);
     set(wf, fwd.x * cs + right.x * snA, fwd.y * cs + right.y * snA, fwd.z * cs + right.z * snA);
     addScaled(wf, wf, hitN, -dot(wf, hitN));
@@ -442,7 +587,7 @@ export function step(s, inp) {
     cross(wl, hitN, wf);                         // wheel left
     const vLong = dot(vp, wf), vLat = dot(vp, wl);
     const den = Math.max(Math.abs(vLong), 3.0);
-    let kappa = (w.omega * R - vLong) / den;
+    let kappa = (wh.omega * R - vLong) / den;
     const alpha = datan2(vLat, Math.max(Math.abs(vLong), 1.5));
     const mu = SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (Fz / (STATIC_LOAD * AXLE_K[i]) - 1));   // load sensitivity, this surface
     const D = Math.max(0, mu * Fz);
@@ -450,7 +595,7 @@ export function step(s, inp) {
     // it's the drivetrain, not the flight computer).
     let T = 0;
     if (DRIVEN[i]) {
-      const motorT = Math.min(SPEC.maxWheelTorque, (SPEC.power / 2) / Math.max(Math.abs(w.omega), 8));
+      const motorT = Math.min(SPEC.maxWheelTorque, (SPEC.power / 2) / Math.max(Math.abs(wh.omega), 8));
       T = inp.throttle * motorT;
       // Assist's crawl limiter: on the curl, drive torque fades out above ASSIST_CRAWL.
       if (inp.assist && s.onSlope) T *= clamp(ASSIST_CRAWL + 1 - speed, 0, 1);
@@ -458,12 +603,12 @@ export function step(s, inp) {
     }
     const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85);
     // Pacejka pure-slip forces, then the friction ellipse for combined slip.
-    let Fx = D * dsin(CX * datan(BX * kappa));
-    const Fy0 = -D * dsin(CY * datan(BY * alpha));
+    let Fx = tyreFx(D, kappa);
+    const Fy0 = tyreFy(D, alpha);
     // Wheel spin, implicit in the tyre's longitudinal stiffness: stable at any speed.
     const slope = (D * CX * BX * dcos(CX * datan(BX * kappa))) / (1 + (BX * kappa) * (BX * kappa));
     const kEff = Math.max(slope, D * 2) / den;
-    let omega = w.omega + ((dt / WHEEL_I) * (T - R * Fx)) / (1 + (dt / WHEEL_I) * R * R * kEff);
+    let omega = wh.omega + ((dt / WHEEL_I) * (T - R * Fx)) / (1 + (dt / WHEEL_I) * R * R * kEff);
     if (brakeT > 0) {
       // Brakes pull toward zero and can lock the wheel, never reverse it. ABS (every tier):
       // release pressure once the wheel is past the slip peak.
@@ -471,16 +616,16 @@ export function step(s, inp) {
       const db = ((brakeT * abs) / WHEEL_I) * dt;
       omega = Math.abs(omega) <= db ? 0 : omega - Math.sign(omega) * db;
     }
-    w.omega = omega;
-    kappa = (w.omega * R - vLong) / den;
-    Fx = D * dsin(CX * datan(BX * kappa));
+    wh.omega = omega;
+    kappa = (wh.omega * R - vLong) / den;
+    Fx = tyreFx(D, kappa);
     let Fy = Fy0;
     // Stiction: a slip model has no static friction, so a braked car would creep down a slope.
     // At crawl speed, a locked (or stopped, undriven) tyre cancels sliding outright, up to its
     // friction limit, as a velocity constraint over one step.
     // The hold cancels this wheel's share of gravity along the tyre plus the residual velocity.
     const mEff = m * 0.25;
-    if (Math.abs(vLong) < 0.5 && w.omega === 0 && T === 0) Fx = clamp(-mEff * (vLong / dt * 0.5 - G * wf.y), -D, D);
+    if (Math.abs(vLong) < 0.5 && wh.omega === 0 && T === 0) Fx = clamp(-mEff * (vLong / dt * 0.5 - G * wf.y), -D, D);
     if (Math.abs(vLat) < 0.5 && Math.abs(vLong) < 2) {
       const hold = clamp(-mEff * (vLat / dt * 0.5 - G * wl.y), -D, D);
       if (Math.abs(hold) > Math.abs(Fy)) Fy = hold;
@@ -488,62 +633,52 @@ export function step(s, inp) {
     const mag = dhypot(Fx, Fy);
     if (mag > D && mag > 0) { Fx *= D / mag; Fy *= D / mag; }
     Fx -= vLong * 6;                              // rolling resistance
-    w.slip = kappa; w.slipAngle = alpha;
+    wh.slip = kappa; wh.slipAngle = alpha;
     scale(force, hitN, Fz);
     addScaled(force, force, wf, Fx);
     addScaled(force, force, wl, Fy);
     applyAt(tmp, force);
-    if (hitBody) pushBody(hitBody, s.pos.x + tmp.x, s.pos.z + tmp.z, -force.x, -force.y, -force.z);   // and back on what it stands on
+    if (hitBody) { add(rp, s.pos, tmp); reactOn(w, hitBody, rp, force, dt); }   // and back on what it stands on
     wheelForce += Fz;
-    w.spin += w.omega * dt;
+    wh.spin += wh.omega * dt;
   }
   s.grounded = grounded;
   s.onWall = wallContact;
   s.onSlope = sloped;   // any tyre off the level: the curl from its first metre (Assist's crawl limit)
   s.wheelForce = wheelForce;
 
-  // --- Hull contact (sills, bumpers, roof) against everything ---
-  for (let i = 0; i < HULL.length; i++) {
+  // --- Skirts and floor pan: compliant, under the rigid hull ---
+  // The floor probes are the fan's sliding skirts and the flat pan over the battery: they ride the
+  // deck under suction (the curl's sag brings them down onto it) and push back as springs.
+  s.touchNow.fill(0);
+  for (let k = 0; k < FLOOR_PROBES.length; k++) {
+    const i = FLOOR_PROBES[k];
     rotate(r, s.quat, HULL[i]);
+    addScaled(r, r, upW, SKIRT_UP);
     add(pw, s.pos, r);
-    const phi = phiAt(s, pw);
-    // Into the structure past what is already crushed (a crushed corner sits that much further in).
-    const dEl = -phi - s.crush[i];
-    if (dEl <= 0) { s.touch[i] = 0; continue; }
-    set(hitN, sn.x, sn.y, sn.z);
+    const t = raycast(s, pw, dn, SKIRT_UP);
+    if (t < 0) continue;
+    const pen = SKIRT_UP - t;
+    addScaled(r, r, dn, SKIRT_UP);             // back to the probe
+    add(pw, s.pos, r);
     pointVel(vp, s, r);
-    if (sn.obstacle) { s.obstacleContact = true; s.obstacleSpeed = Math.max(s.obstacleSpeed, dhypot(vp.x, vp.y, vp.z)); }
+    if (hitBody?.rb) { hitBody.rb.velocityAtPoint(set(ePt, pw.x - w.ox, pw.y - w.oy, pw.z - w.oz), eN); vp.x -= eN.x; vp.y -= eN.y; vp.z -= eN.z; }
+    if (hitBody) { s.obstacleContact = true; s.obstacleSpeed = Math.max(s.obstacleSpeed, dhypot(vp.x, vp.y, vp.z)); }
     else s.hullGround = true;
     s.hullContact = true;
     const vn = dot(vp, hitN);
-    const K = PROBE_K[i];
-    let fs = K * dEl;
-    if (fs > PROBE_YIELD[i] && s.crush[i] < CRUSH_MAX) {
-      s.crush[i] = Math.min(CRUSH_MAX, -phi - PROBE_YIELD[i] / K);    // it folds: the excess stays
-      fs = K * (-phi - s.crush[i]);
-    }
-    const fn = Math.max(0, fs - PROBE_C[i] * vn);
+    const fn = Math.max(0, PROBE_K[i] * pen - PROBE_C[i] * vn);
     s.hullImpulse = Math.max(s.hullImpulse, -vn);
     addScaled(tmp, vp, hitN, -vn);
     const vt = dhypot(tmp.x, tmp.y, tmp.z);
-    if (!s.touch[i] && -vn > HIT_MIN && -vn > evHit[0]) keep(evHit, -vn, pw, hitN, i, bodyIndex(s, sn.body), s.crush[i]);
-    if (s.crush[i] - s.crushShown[i] >= CRUSH_STEP) {
-      // The panel folded further: report the new depth (the renderer dents the body to match).
-      s.crushShown[i] = s.crush[i];
-      pushImpact(s.impacts, s.tick + 1, CRUSH, HULL_PART[i], i, bodyIndex(s, sn.body), pw.x, pw.y, pw.z, hitN.x, hitN.y, hitN.z, -vn, s.crush[i]);
-    }
-    if (vt > SCRAPE_MIN && vt > evScr[0]) keep(evScr, vt, pw, hitN, i, bodyIndex(s, sn.body), s.crush[i]);
-    s.touch[i] = 1;
+    if (!s.touch[i] && -vn > HIT_MIN && -vn > evHit[0]) keep(evHit, -vn, pw, hitN, i, bodyIndex(hitBody), 0);
+    if (vt > SCRAPE_MIN && vt > evScr[0]) keep(evScr, vt, pw, hitN, i, bodyIndex(hitBody), 0);
+    s.touchNow[i] = 1;
     scale(force, hitN, fn);
-    if (vt > 1e-4) addScaled(force, force, tmp, -Math.min(sn.mat.slide * fn, vt * 5000) / vt);
+    if (vt > 1e-4) addScaled(force, force, tmp, -Math.min(hitMat.slide * fn, vt * 5000) / vt);
     applyAt(r, force);
-    if (sn.body) pushBody(sn.body, pw.x, pw.z, -force.x, -force.y, -force.z);
+    reactOn(w, hitBody, pw, force, dt);
   }
-  // Impact events for this tick (the renderer, camera and sound key off them, live and in replay).
-  const evTick = s.tick + 1, imp = s.impacts;
-  if (evHit[0] > 0) record(imp, evTick, HIT, HULL_PART[evHit[7]], evHit);
-  if (evScr[0] > 0 && evTick - imp.lastScrape >= SCRAPE_EVERY) { imp.lastScrape = evTick; record(imp, evTick, SCRAPE, HULL_PART[evScr[7]], evScr); }
-  if (evWheel[0] > 0) record(imp, evTick, WHEEL, PART.wheel, evWheel);
 
   // --- Thrusters (nitrogen cold gas, blowdown) ---
   if (inp.manual && !inp.assist) {
@@ -573,9 +708,8 @@ export function step(s, inp) {
   const vmag = dhypot(s.vel.x, s.vel.y, s.vel.z);
   addScaled(fTot, fTot, s.vel, -0.5 * RHO * SPEC.cdA * vmag);
 
-  // --- Integrate (semi-implicit Euler), inertia tensor diagonal in the body frame ---
+  // --- Velocities from our forces (semi-implicit Euler), inertia diagonal in the body frame ---
   addScaled(s.vel, s.vel, fTot, dt / m);
-  addScaled(s.pos, s.pos, s.vel, dt);
   // Rotation integrates ANGULAR MOMENTUM in the world frame (L += τ·dt) and reads the body rates
   // back through the inertia (ω = I⁻¹·Rᵀ·L). The gyroscopic coupling falls out of the frame
   // change instead of an explicit ω × Iω term, which blew up at Pro-mode spin rates (a held roll
@@ -595,11 +729,53 @@ export function step(s, inp) {
   rotate(s.angMom, s.quat, Lb);
   set(wb, Lb.x / Ix, Lb.y / Iy, Lb.z / Iz);
   rotate(s.angVel, s.quat, wb);
-  integrateQuat(s.quat, s.angVel, dt);
-  stepWorld(s.world, dt, G);
+
+  // --- The engine's tick: the rigid hull's contacts, and everything else that moves ---
+  // The car enters the step with its pose and the velocities our forces gave it; the engine
+  // resolves its hull against the ground, the deck and the parked bodies (friction and
+  // restitution per material pair), moves the parked bodies, and hands back the result.
+  const rb = w.carRb;
+  if (Math.abs(m - s.engineMass) > 1) { s.engineMass = m; rb.setAdditionalMassProperties(m, ORIGIN, PRINCIPAL, IDENTITY, false); }
+  if (!s.engineHeld) {
+    rb.setTranslation(set(ePt, s.pos.x - w.ox, s.pos.y - w.oy, s.pos.z - w.oz), false);
+    rb.setRotation(s.quat, false);
+  }
+  rb.setLinvel(s.vel, false);
+  rb.setAngvel(s.angVel, false);
+  copy3(vPre, s.vel); copy3(wPre, s.angVel); qOld.x = s.quat.x; qOld.y = s.quat.y; qOld.z = s.quat.z; qOld.w = s.quat.w;
+  copy3(pOld, s.pos);
+  stepEngine(w);
+  // Read the hull's contacts. While nothing touches it, the car's motion is exactly the integral of
+  // our forces (in double precision; the engine stores single); in contact, the engine's answer.
+  cs = s; cTouched = false;
+  if (w.carTouching > 0) w.rw.contactPairsWith(w.carCol, onPair);
+  cs = null; cOther = null;
+  s.engineHeld = cTouched && !w.stream;
+  if (cTouched) {
+    const p = rb.translation(ePt);
+    set(s.pos, p.x + w.ox, p.y + w.oy, p.z + w.oz);
+    const q = rb.rotation(qTmp);
+    s.quat.x = q.x; s.quat.y = q.y; s.quat.z = q.z; s.quat.w = q.w;
+    const v = rb.linvel(ePt); set(s.vel, v.x, v.y, v.z);
+    const a = rb.angvel(ePt); set(s.angVel, a.x, a.y, a.z);
+    // The contact changed ω through the inertia at the start of the step: so did L.
+    inertiaTimes(s.angMom, qOld, s.angVel);
+  } else {
+    addScaled(s.pos, s.pos, s.vel, dt);
+    integrateQuat(s.quat, s.angVel, dt);
+  }
+  for (let i = 0; i < HULL.length; i++) s.touch[i] = s.touchNow[i];
+  // Impact events for this tick (the renderer, camera and sound key off them, live and in replay).
+  const evTick = s.tick + 1, imp2 = s.impacts;
+  if (evHit[0] > 0) record(imp2, evTick, HIT, HULL_PART[evHit[7]], evHit);
+  if (evScr[0] > 0 && evTick - imp2.lastScrape >= SCRAPE_EVERY) { imp2.lastScrape = evTick; record(imp2, evTick, SCRAPE, HULL_PART[evScr[7]], evScr); }
+  if (evWheel[0] > 0) record(imp2, evTick, WHEEL, PART.wheel, evWheel);
   s.tick++;
   return s;
 }
+const qTmp = { x: 0, y: 0, z: 0, w: 1 };
+const ORIGIN = { x: 0, y: 0, z: 0 }, IDENTITY = { x: 0, y: 0, z: 0, w: 1 }, PRINCIPAL = { x: SPEC.inertia.pitch, y: SPEC.inertia.yaw, z: SPEC.inertia.roll };
+const copy3 = (o, a) => { o.x = a.x; o.y = a.y; o.z = a.z; return o; };
 
 export function bodyRates(s, out) { return rotateInv(out, s.quat, s.angVel); }
 export function up(s, out) { return rotate(out, s.quat, set(out, 0, 1, 0)); }

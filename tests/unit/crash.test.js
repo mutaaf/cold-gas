@@ -88,20 +88,20 @@ describe('impact events', () => {
     expect(events(re.impacts)).toEqual(events(carry5.impacts));
     expect(scoreRun(re.t)).toEqual(scoreRun(carry5.t));
   });
-  // Too low over the row: it clips the roofs and goes over (onto its side or roof: chaotic, so the
-  // exact resting face isn't pinned).
-  // (2.9 since the row took its researched sizes in SIM_VERSION 12: the semi stands 4.11 m.)
-  const roll = fly('lineup', { apex: 2.9 });
-  it('a rollover: clips the row, goes over, and replays bit-exactly', () => {
-    expect(roll.t.flipped).toBe(true);
-    expect(kinds(roll.impacts, HIT).some((e) => e[2] === PART.side && e[4] >= 0)).toBe(true);
-    expect(kinds(roll.impacts, SCRAPE).some((e) => e[2] === PART.roof || e[2] === PART.side)).toBe(true);   // grinds on its side or roof
-    expect(Math.max(...roll.car.crush)).toBeGreaterThan(0.05);
-    const re = simulate(roll.inputLog, 'lineup');
-    expect(re.tick).toBe(roll.tick);
-    expect(re.car.quat).toEqual(roll.car.quat);
-    expect(events(re.impacts)).toEqual(events(roll.impacts));
-    expect(scoreRun(re.t)).toEqual(scoreRun(roll.t));
+  // Too low over the row, two rolls asked for: the car's side clips a parked body, it grinds along
+  // the roofs, its bodywork folds (and Assist rights it: where it ends is chaotic, so not pinned).
+  const clip = fly('lineup', { speed: 9, apex: 3.8, rolls: 2 });
+  it('a hard clip: hits a parked body side-on, grinds, folds the bodywork, and replays bit-exactly', () => {
+    expect(clip.t.contact).toBe(true);
+    expect(kinds(clip.impacts, HIT).some((e) => e[2] === PART.side && e[4] >= 0)).toBe(true);
+    expect(kinds(clip.impacts, SCRAPE).some((e) => e[2] === PART.roof || e[2] === PART.side)).toBe(true);   // grinds on its side or roof
+    expect(Math.max(...clip.car.crush)).toBeGreaterThan(0.05);
+    const re = simulate(clip.inputLog, 'lineup');
+    expect(re.tick).toBe(clip.tick);
+    expect(re.car.quat).toEqual(clip.car.quat);
+    expect(events(re.impacts)).toEqual(events(clip.impacts));
+    expect(re.car.world.bodies.map((b) => [b.cx, b.cy, b.cz, b.qw])).toEqual(clip.car.world.bodies.map((b) => [b.cx, b.cy, b.cz, b.qw]));
+    expect(scoreRun(re.t)).toEqual(scoreRun(clip.t));
   });
   it('a tyre slam and a slide are events too', () => {
     expect(kinds(carry5.impacts, WHEEL).length).toBeGreaterThan(0);
@@ -133,7 +133,7 @@ describe('damage sensor', () => {
     for (const course of ['show', 'wall', 'lineup']) expect(fly(course).t.damage.pct).toBeLessThanOrEqual(2);
   });
   it('dropping onto the row damages the car and the Integrity mark, and replays exactly', () => {
-    const r = fly('show', { carry: 3 });   // far too little carry: down onto the row hard
+    const r = fly('show', { carry: 5 });   // too little carry: down onto the row hard (carry 2–4: LAND sets it down on the roofs)
     expect(r.t.contact).toBe(true);
     expect(r.t.damage.pct).toBeGreaterThan(15);
     const card = scoreRun(r.t);

@@ -14,7 +14,9 @@ import { createDirector } from './render/director.js';
 import { landingImpact } from './render/impact.js';
 import { createCrash } from './render/crash.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
-import { createRun, stepRun, FRAME_EVERY, BODY_FRAME } from './sim/run.js';
+import { createRun, stepRun, FRAME_EVERY, BODY_FRAME, BODY_STRIDE } from './sim/run.js';
+import { physicsReady } from './sim/engine.js';
+import { loadPhysics } from './sim/engine-web.js';
 import { DT, G, CAR, NOZZLES, WHEELS, bodyRates, worldPoint, newInput } from './sim/vehicle.js';
 import { scoreRun, TIERS } from './sim/judge.js';
 import { coach } from './sim/coach.js';
@@ -31,6 +33,10 @@ import { loadAI } from './ai/config.js';
 import { openSettings, aiLabel } from './ai/settings.js';
 import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
 
+// The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
+// streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
+const physicsLoad = loadPhysics();
+physicsLoad.catch(() => {});
 const params = new URLSearchParams(location.search);
 const coarse = matchMedia('(pointer: coarse)').matches;
 const tier = params.get('gfx') || (coarse ? 'mid' : 'high');
@@ -46,6 +52,15 @@ try {
   throw err;
 }
 const { scene, camera, hero } = stage;
+// Runs wait for the engine (a beat on a cold load, nothing after).
+const physics = () => loadPhysics().catch((err) => { console.error(err); ui.cue_('The physics engine couldn’t load', 2400); throw err; });
+function whenPhysics(fn) {
+  return (...args) => {
+    if (physicsReady()) return fn(...args);
+    ui.cue_('Loading physics', 1200);
+    physics().then(() => fn(...args)).catch(() => {});
+  };
+}
 const ui = createUI();
 
 // The car's root sits at the physics centre of mass; the model hangs below it.
@@ -179,7 +194,8 @@ function toTitle() {
   history.replaceState(null, '', stage.course === 'show' ? location.pathname : `${location.pathname}?course=${stage.course}`);
 }
 
-function startRun(kind = 'jump') {
+const startRun = whenPhysics(startRunNow);
+function startRunNow(kind = 'jump') {
   closeOverlays();
   initAudio();
   S.run = createRun(stage.course);
@@ -424,8 +440,9 @@ const replayBodies = [];
 function replayStep(dt) {
   const frames = S.run?.frames;
   if (!frames?.length) return;
-  while (replayBodies.length < (frames[0].length - BODY_FRAME) / 3) replayBodies.push({ cx: 0, cz: 0, yaw: 0 });
-  replayBodies.length = (frames[0].length - BODY_FRAME) / 3;
+  const nb = (frames[0].length - BODY_FRAME) / BODY_STRIDE;
+  while (replayBodies.length < nb) replayBodies.push({ cx: 0, cy: 0, cz: 0, qx: 0, qy: 0, qz: 0, qw: 1 });
+  replayBodies.length = nb;
   const n = frames.length;
   const i0 = Math.min(n - 1, Math.floor(S.replayT));
   const f = frames[i0];
@@ -442,7 +459,10 @@ function replayStep(dt) {
   for (let j = 0; j < NOZZLES.length; j++) fthr[j] = f[15 + j];
   fvel.set(g[0] - f[0], g[1] - f[1], g[2] - f[2]).multiplyScalar(60);
   syncCar(fpos, fquat, fcomp, fspin, f[15 + NOZZLES.length] || 0);
-  for (let b = 0; b < replayBodies.length; b++) { const o = BODY_FRAME + 3 * b; replayBodies[b].cx = f[o]; replayBodies[b].cz = f[o + 1]; replayBodies[b].yaw = f[o + 2]; }
+  for (let b = 0; b < replayBodies.length; b++) {
+    const o = BODY_FRAME + BODY_STRIDE * b, r = replayBodies[b];
+    r.cx = f[o]; r.cy = f[o + 1]; r.cz = f[o + 2]; r.qx = f[o + 3]; r.qy = f[o + 4]; r.qz = f[o + 5]; r.qw = f[o + 6];
+  }
   stage.setBodies(replayBodies);
   // The crash, re-shown from the run's impact events at the tick on screen.
   crash.feed(S.run.impacts, Math.floor((S.replayT + 1) * FRAME_EVERY), fvel);
@@ -609,7 +629,8 @@ function openPractice() {
   ui.show('practice', true);
 }
 
-function startDrill(id) {
+const startDrill = whenPhysics(startDrillNow);
+function startDrillNow(id) {
   const drill = drillById(id);
   if (!drill || !drill.courses.includes(stage.course)) return;
   closeOverlays();
@@ -759,5 +780,5 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { S.mode = 'live'; ui.countdown(0); } }
-window.__coldgas = { S, stage, startRun, toTitle, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, startRun, toTitle, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 requestAnimationFrame(frame);

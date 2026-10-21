@@ -11,6 +11,8 @@ import { SHOW } from '../src/sim/courses.js';
 import { SPEC } from '../src/sim/spec.js';
 import { predict, newPrediction } from '../src/sim/predict.js';
 import { createKeyRamp } from '../src/valves.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 
 const args = process.argv.slice(2);
 const N = +(args.find((a) => /^\d+$/.test(a)) || 120);

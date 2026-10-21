@@ -1,5 +1,7 @@
 // Physics bench: the numbers a car person would check. node scripts/physics-bench.mjs
 import { createVehicle, step, newInput, DT } from '../src/sim/vehicle.js';
+import { initPhysics } from '../src/sim/engine.js';
+await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
 const mph = (v) => v * 2.23694;
 function settle() {
   const s = createVehicle('lineup'); s.pos.x = 30; const inp = newInput();   // open concrete, clear of ramps

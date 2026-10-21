@@ -13,7 +13,7 @@ import { dhypot } from './dmath.js';
 // falling, braked hard on the down-jets and landed ≈4.5 s after release. The kickflip lifted off
 // flat ground at ≈7–8 m/s and peaked ≈7–8 m over the lineup.
 export const REVEAL = {
-  wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.97 },
+  wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.93 },   // brake at 93 %: it stops on the ledge with four wheels and the whole sealed floor on the deck
   lineup: { speed: 7.5, apex: 5.0, rolls: 1, rollBrake: 14 },
   show: { carry: 8.5 },
 };

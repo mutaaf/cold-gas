@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased — the rigid-body engine (SIM_VERSION 14)
+
+**Every body and every contact on an open-source engine.** The sim's rigid-body dynamics, collisions and contacts now run on Rapier (rapier.rs, Apache-2.0), its cross-platform-deterministic WASM build. Evaluation (Rapier, Jolt, PhysX, Bullet/ammo.js, cannon-es, Oimo), the determinism proof and the numbers: docs/PHYSICS_ENGINE.md.
+- **Determinism, proven.** An engine spike and the game's own clean and crash logs replay bit-identically in Node, Chromium, WebKit and workerd (the Worker that verifies scores), parked bodies' poses included (`scripts/engine-determinism.mjs`, `scripts/determinism.mjs`, `scripts/engine-worker/check.mjs`).
+- **Every parked vehicle is its own 3D rigid body**: its own mass, CoM height and inertia tensor (LINEUP_SPEC first, class estimates after: `parkedPhysics`), a box collider from its ground clearance to its roof, and a suspended corner per wheel position from its axles (1.3 Hz cars / 1.8 Hz tractor, ζ 0.3) on parked tyres (locked, μ 0.8). It sleeps until touched; hit it and it rocks, slides at μ·g, shoves its neighbour, tips back below its static stability angle and rolls past it. Standing the roadster on a roof sinks it on its springs. Replay frames carry each body's full pose.
+- **The roadster's hull is rigid** (a convex hull of its faceted body) over compliant skirts; its bodywork folds by the energy a contact puts into it (past the 4.2 kJ a patch stores elastically, by the excess over its 100 kN yield). Impact events (hit, scrape, tyre slam, crush) come from the engine's contacts, closing speed measured against what was hit before the step.
+- **Materials per collider**: concrete floor, the Wall's deck (a closed trimesh sampled along its profile), the truss tower and the posts beside the curl (steel), the landing mark (paint: 0.85 of concrete's grip), parked paintwork, the roadster's skin; friction by the pair's lower value, restitution by their mean, with sources in courses.js.
+- **The fan seals in strips**: eight patches of the skirts' sealed floor (2 across × 4 along) each leak on their own and pull where they are; the scheduled controller (#31) still reads the deck under the centre. (The single-point fan held full suction with the floor half over the Wall's lip.)
+- **Touchdown sink** is read before the step as well as after (a rigid contact takes it out within the tick); a car at rest on its roof is flipped, not settled.
+- Free Drive: the tyres read the exact road; the engine gets a 96 m near-car heightfield and the rails, walls and tunnel roofs as boxes, with its origin moved along with the car.
+- The engine's WASM (1.2 MB gzip) streams in while the stage builds (first 3D frame +5 %); the Worker grows to 1.53 MB gzip (free limit 3 MB). A Show flight costs ≈0.8 ms per frame on a 4×-throttled CPU.
+- References (with the Integrity category): Show 91.0 (90.7), Wall 93.0 (92.3), Lineup 86.7 (86.3); Advanced 100 / 100 / 98. The Wall reference now brakes at 93 % of the curl so it hangs with four wheels and its whole sealed floor on the ledge (it used to hang over the lip on a seal the old geometry faked). Naive sweeps 32/32 and 54/54 (unchanged); human Show with Assist 162 → 164 of 300 (HUD followers 62 → 60 of 62), median clean score 81.7 → 84.7; Pro 39 → 34; Advanced by hand 0 → 2 of 120.
+
+
 2026-10-20 · #0012 · The fan is scheduled like the livestream's DOWNFORCE channel (SIM_VERSION 13): armed, it asks for the suction the deck's tilt needs (≈130 kgf rolling on the pad, ≈1,900 at 75°, ≈2,450 on the vertical, the 4,690 kgf cap hanging inverted), spools in 1.5 s and holds its demand; full throttle or a full stop fills the grip void up to the cap. The HUD's FAN reads kgf. The Wall reference climb reads within ±26 % of all six telemetry rows (was +981 % at 25°).
 ## 0.11.0 — 2026-10-20
 
