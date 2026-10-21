@@ -22,6 +22,13 @@ export const SPEC = {
   tyreWidthFront: 0.295,
   tyreWidthRear: 0.335,
   tyreMu: 1.25,            // OFFICIAL: Moravy, "typically 1.26 G" of tyre grip
+  // Relaxation length σ (m): a tyre's side force builds up over σ metres of rolling after a slip
+  // angle step, not at once (Pacejka, Tyre and Vehicle Dynamics, ch. 7 "transient behaviour";
+  // https://en.wikipedia.org/wiki/Tire_model). ESTIMATE for 295/30 R20 and 335/30 R21 low-profile
+  // track tyres at static load: stiff short sidewalls sit at the low end of the 0.2–0.5 m range.
+  // σ grows roughly with √(load) (vehicle.js); the wider, more loaded rear carries the longer one.
+  tyreRelaxFront: 0.35,    // ESTIMATE
+  tyreRelaxRear: 0.40,     // ESTIMATE
   rideHeight: 0.10,        // ESTIMATE (fan car, runs low)
   // Centre of mass (docs/REVEAL_RESEARCH.md §11, component build-up: floor battery, both motors at
   // the rear axle, 200 L tank behind the seats, 400 L in the passenger seat): 42 : 58 front:rear.
