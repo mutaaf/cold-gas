@@ -13,6 +13,13 @@ function fly(course, opts) {
   while (run.phase !== 'done') stepRun(run, ap(run));
   return run;
 }
+// The reference with LAND never pressed after the release: since SIM_VERSION 14 LAND reads the
+// roofs below and sets down over the row at a walking pace, so a crash onto the row is one flown
+// without it.
+const noLand = (course, opts) => {
+  const ap = createAutopilot(course, opts);
+  return (run) => { const inp = ap(run); if (run.phase === 'air') inp.level = 0; return inp; };
+};
 const events = (imp) => {
   const out = [];
   for (let i = 0; i < imp.count; i++) {
@@ -66,32 +73,33 @@ describe('bodywork: elastic to yield, then it folds and stays folded', () => {
 });
 
 describe('impact events', () => {
-  const carry5 = fly('show', { carry: 5 });
-  it('letting go without boosting drops the car onto the row: hits on a parked body, then the ground', () => {
-    expect(carry5.t.contact).toBe(true);
-    const hits = kinds(carry5.impacts, HIT);
+  const slow = fly('show', noLand('show', { carry: 4 }));
+  it('letting go too slow (4 m/s off the lip) and never braking drops the car onto the row: hits on a parked body, then the ground', () => {
+    expect(slow.t.contact).toBe(true);
+    const hits = kinds(slow.impacts, HIT);
     expect(hits.some((e) => e[4] >= 0)).toBe(true);        // a parked vehicle
     expect(hits.some((e) => e[4] === -1)).toBe(true);      // the concrete
-    for (const e of events(carry5.impacts)) {
+    for (const e of events(slow.impacts)) {
       expect(Math.hypot(e[8], e[9], e[10])).toBeCloseTo(1, 4);   // unit normals
       expect(e[11]).toBeGreaterThan(0);
     }
-    const ticks = events(carry5.impacts).map((e) => e[0]);
+    const ticks = events(slow.impacts).map((e) => e[0]);
     expect(ticks).toEqual([...ticks].sort((a, b) => a - b));     // in time order
-    expect(Math.max(...ticks)).toBeLessThanOrEqual(carry5.tick);
+    expect(Math.max(...ticks)).toBeLessThanOrEqual(slow.tick);
   });
   it('the crash replays bit-exactly from its input log, events included', () => {
-    const re = simulate(carry5.inputLog, 'show');
-    expect(re.tick).toBe(carry5.tick);
-    expect(re.car.pos).toEqual(carry5.car.pos);
-    expect(Array.from(re.car.crush)).toEqual(Array.from(carry5.car.crush));
-    expect(events(re.impacts)).toEqual(events(carry5.impacts));
-    expect(scoreRun(re.t)).toEqual(scoreRun(carry5.t));
+    const re = simulate(slow.inputLog, 'show');
+    expect(re.tick).toBe(slow.tick);
+    expect(re.car.pos).toEqual(slow.car.pos);
+    expect(Array.from(re.car.crush)).toEqual(Array.from(slow.car.crush));
+    expect(events(re.impacts)).toEqual(events(slow.impacts));
+    expect(scoreRun(re.t)).toEqual(scoreRun(slow.t));
   });
   // Too low over the row: it clips the roofs and goes over (onto its side or roof: chaotic, so the
   // exact resting face isn't pinned).
-  // (2.9 since the row took its researched sizes in SIM_VERSION 12: the semi stands 4.11 m.)
-  const roll = fly('lineup', { apex: 2.9 });
+  // (2.9 since the row took its researched sizes in SIM_VERSION 12: the semi stands 4.11 m; 2.6 since
+  // SIM_VERSION 14, when LAND's later, harder brake began to carry a 2.9 m apex onto the roofs upright.)
+  const roll = fly('lineup', { apex: 2.6 });
   it('a rollover: clips the row, goes over, and replays bit-exactly', () => {
     expect(roll.t.flipped).toBe(true);
     expect(kinds(roll.impacts, HIT).some((e) => e[2] === PART.side && e[4] >= 0)).toBe(true);
@@ -104,8 +112,8 @@ describe('impact events', () => {
     expect(scoreRun(re.t)).toEqual(scoreRun(roll.t));
   });
   it('a tyre slam and a slide are events too', () => {
-    expect(kinds(carry5.impacts, WHEEL).length).toBeGreaterThan(0);
-    expect(kinds(carry5.impacts, SCRAPE).length).toBeGreaterThan(0);
+    expect(kinds(slow.impacts, WHEEL).length).toBeGreaterThan(0);
+    expect(kinds(slow.impacts, SCRAPE).length).toBeGreaterThan(0);
   });
   it('the reference runs stay clean: no crush, nothing harder than a skirt touching the ledge', () => {
     for (const course of ['show', 'wall', 'lineup']) {
@@ -133,7 +141,7 @@ describe('damage sensor', () => {
     for (const course of ['show', 'wall', 'lineup']) expect(fly(course).t.damage.pct).toBeLessThanOrEqual(2);
   });
   it('dropping onto the row damages the car and the Integrity mark, and replays exactly', () => {
-    const r = fly('show', { carry: 3 });   // far too little carry: down onto the row hard
+    const r = fly('show', noLand('show', { carry: 3 }));   // far too little carry, no brake: down onto the row hard
     expect(r.t.contact).toBe(true);
     expect(r.t.damage.pct).toBeGreaterThan(15);
     const card = scoreRun(r.t);

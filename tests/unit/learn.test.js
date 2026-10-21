@@ -29,19 +29,24 @@ const flyDrill = (id, policy, course = 'show') => {
   return run;
 };
 
-describe('SIM_VERSION 13: the skill ladder', () => {
-  it('is version 13 (12: the parked row at its researched sizes; 13: the scheduled fan)', () => expect(SIM_VERSION).toBe(13));
+describe('SIM_VERSION 14: the skill ladder', () => {
+  it('is version 14 (12: the parked row at its researched sizes; 13: the scheduled fan; 14: the reveal G trace)', () => expect(SIM_VERSION).toBe(14));
   // SIM_VERSION 10: Show 87.3, Wall 88.0, Lineup 85.0. The references fly the same; LAND's roll-out
   // no longer brakes sideways, so they land nearer the mark (Wall 11.2 → 5.7 m): the Show and the
   // Wall gain on precision alone, and nothing else may move. SIM_VERSION 11 flew Show 89.0, Wall
   // 91.0; SIM_VERSION 13 schedules the fan (tests/unit/fan.test.js): the Show holds 89.0 and the
   // Wall reads 91.7 (pad miss 5.7 → 5.6 m, entry 22 → 21 km/h), before the Integrity category.
-  it('keeps the reference runs: no worse than SIM_VERSION 10, better only by landing nearer the mark', () => {
+  // SIM_VERSION 14 (0013) falls free off the lip and brakes late and hard, which is what saves
+  // nitrogen (LESSONS: one late, hard burn): Wall gas left 30 → 47 %, efficiency 6.0 → 9.5, and it
+  // drops nearer the mark (5.6 → 2.6 m). The Show drives off the ledge and brakes over the row
+  // against the roofs (gas 37 → 37 %), landing 5.8 m off (was 2.3). Show 91.0, Wall 98.0, Lineup 85.7.
+  it('keeps the reference runs: no worse than SIM_VERSION 10, better only by precision and the gas a late burn saves', () => {
     const runs = Object.fromEntries(['show', 'wall', 'lineup'].map((c) => [c, fly(c)]));
     const cards = Object.fromEntries(Object.entries(runs).map(([c, r]) => [c, scoreRun(r.t)]));
     // (+ the Integrity category, which a clean run scores ≈10: it lifts every reference a little)
-    expect(cards.show.total).toBeGreaterThanOrEqual(87.3 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(87.3 + 4);
-    expect(cards.wall.total).toBeGreaterThanOrEqual(88.0 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(88.0 + 5);
+    expect(cards.show.total).toBeGreaterThanOrEqual(87.3 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(91.0 + 0.5);
+    expect(cards.wall.total).toBeGreaterThanOrEqual(88.0 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(98.0 + 0.5);
+    expect(cards.wall.categories.efficiency).toBeGreaterThan(9);   // the late burn's saving
     expect(cards.lineup.total).toBeGreaterThanOrEqual(85.0 - 1.05); expect(cards.lineup.total).toBeLessThanOrEqual(85.0 + 2);
     for (const c of ['show', 'wall', 'lineup']) expect(cards[c].facts.damagePct).toBeLessThanOrEqual(2);
     expect(cards.wall.facts.padMiss).toBeLessThan(8);

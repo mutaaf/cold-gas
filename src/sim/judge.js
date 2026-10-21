@@ -168,7 +168,7 @@ function scoreWall(t, opts) {
     facts: {
       course: course.id, height: r1(t.maxRampHeight), progressPct: Math.round(t.progress * 100), invertedS: r1(t.invertedTime),
       launchHeight: r1(t.launchHeight), launchKmh: Math.round(t.launchSpeed * 3.6), entryKmh: Math.round(t.rampEntrySpeed * 3.6),
-      apex: r1(t.apex), maxG: r1(t.maxG), rollDeg: Math.round(rollDeg), pitchDeg: Math.round(pitchDeg), rotations: Math.round(turned / 360),
+      apex: r1(t.apex), maxG: r1(t.maxG), brakeG: r1(t.brakePeakG || 0), brakeH: r1(t.brakePeakH || 0), rollDeg: Math.round(rollDeg), pitchDeg: Math.round(pitchDeg), rotations: Math.round(turned / 360),
       sink: r1(t.sink), tiltDeg: r1(t.tiltDeg), headingDeg: r1(t.headingDeg), wheelSpreadMs: Math.round(t.wheelSpreadMs),
       padMiss: r1(padMiss), airPct: Math.round(airPct), zeroToSixty: t.zeroToSixty,
       bottomOut: t.bottomOut, bodyStrike: t.bodyStrike, contact: show && t.contact,

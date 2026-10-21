@@ -173,7 +173,7 @@ export function createUI() {
     }
     const f = card.facts;
     const facts = f.course === 'show' ? showFacts(f) : f.course === 'wall' ? [
-      [`${f.entryKmh} km/h into the curl`], [`${f.height} m up the wall`], [`${f.invertedS} s inverted`], [`${f.maxG} g peak`],
+      [`${f.entryKmh} km/h into the curl`], [`${f.height} m up the wall`], [`${f.invertedS} s inverted`], [gPeak(f)],
       ...(f.jumped ? [[`released at ${f.launchHeight} m`], [`${Math.max(f.rollDeg, f.pitchDeg)}° roll-out`], [`${f.sink} m/s touchdown`, f.sink > 4],
         [`${f.tiltDeg}° tilt`, f.tiltDeg > 15], [`${f.wheelSpreadMs} ms wheel sync`, f.wheelSpreadMs > 250], [`${f.padMiss} m from the mark`], [`${f.airPct}% gas left`]] : []),
       ...(f.zeroToSixty ? [[`0–60 in ${f.zeroToSixty.toFixed(2)} s`]] : []),
@@ -268,9 +268,13 @@ export function createUI() {
   return ui;
 }
 
+// The g number a player compares with the reveal's 3.3 G: the braking peak (0.5 s averaged, roof
+// up, down-jets on), not the release kick or a contact spike. No brake flown: the run's peak load.
+const gPeak = (f) => (f.brakeG > 0 ? `${f.brakeG} g braking peak at ${f.brakeH} m` : `${f.maxG} g peak`);
+
 // The Show's results: the climb, the carry over the row, the landing.
 function showFacts(f) {
-  const out = [[`${f.height} m up the wall`], [`${f.invertedS} s inverted`], [`${f.maxG} g peak`]];
+  const out = [[`${f.height} m up the wall`], [`${f.invertedS} s inverted`], [gPeak(f)]];
   if (f.fellOff) out.push(['slid off the deck', true]);
   if (f.landedOnRamp) out.push(['came down on the deck', true]);
   if (!f.jumped) return out;
