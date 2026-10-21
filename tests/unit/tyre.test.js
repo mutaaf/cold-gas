@@ -23,6 +23,7 @@ describe('tyre load sensitivity (ticket 0021)', () => {
   it('spec.js carries the published fit', () => {
     expect(SPEC.tyreLoadSens).toBeCloseTo(PDY2 / PDY1, 6);
     expect(SPEC.tyreKyLoad).toBeCloseTo(PKY2, 6);
+    expect(SPEC.tyreLoadSens).toBeLessThan(0);   // vehicle.js's held-peak branch assumes μ falls with load
     expect(nom.mu).toBeCloseTo(SPEC.tyreMu0, 3);
     expect(nom.K / SPEC.tyreMu0).toBeCloseTo(TYRE.BY * TYRE.CY, 3);   // the track tyre's own stiffness at Fz0
   });

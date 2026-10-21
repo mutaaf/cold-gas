@@ -34,7 +34,8 @@ export const SPEC = {
   // Table 2, 205/65 R15: PDY1 0.932775, PDY2 −0.128085, PKY1 −17.36, PKY2 2.293896. No fit of the
   // 295/30 R20 / 335/30 R21 semi-slick is public, so the RELATIVE shape is carried over (ESTIMATE):
   // μ falls 13.7 % per unit of normalised load, and cornering stiffness peaks at 2.29 × Fz0.
-  // The stiffness at Fz0 stays the track tyre's own (B·C ≈ 21.6, vehicle.js).
+  // The curve's shape at Fz0 stays the track tyre's own (B·C ≈ 21.6, vehicle.js); with tyreMu0 above
+  // tyreMu its cornering stiffness at Fz0 is 12 % higher than before (B·C·μ0 = 30.2 per rad, was 27.0).
   tyreLoadSens: -0.128085 / 0.932775,   // ESTIMATE: PDY2 / PDY1 (Cabrera 2018, Table 2) = −0.137
   tyreKyLoad: 2.293896,                 // ESTIMATE: PKY2 (Cabrera 2018, Table 2)
   // Peak μ at nominal load: ESTIMATE, the one number fitted here. Chosen so the car, through this
