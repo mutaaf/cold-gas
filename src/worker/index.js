@@ -1,8 +1,9 @@
 // COLD GAS Worker: only /coldgas/api/* runs here; everything else is static assets.
 //
-//   POST /coldgas/api/judge/stream  { log, assist, provider?, model? } (+ x-cg-key for BYOK)
+//   POST /coldgas/api/judge/stream  { log, t?, assist, provider?, model? } (+ x-cg-key for BYOK)
 //        → text/event-stream: verify → prompt → reasoning/token… → done | error
-//        The server replays the log, scores it, then streams the AI panel's words.
+//        The server scores the run (from its telemetry `t`, or by replaying the log for a client
+//        that doesn't send one), then streams the AI panel's words.
 //   POST /coldgas/api/models  { provider } + x-cg-key → { models, suggested } (BYOK connect)
 //   POST /coldgas/api/quest  { provider?, model?, arena, wish, seed } (+ x-cg-key for BYOK)
 //        → text/event-stream: prompt → reasoning/token… → done { quest | null, errors } | error
@@ -12,8 +13,9 @@
 //   POST /coldgas/api/scores  { log, assist, initials } → verified board entry
 //   GET  /coldgas/api/scores?board=today|all → top 20
 //
-// The client never sends a score: the server replays the input log through the same
-// deterministic sim (src/sim/) and scores it itself. The AI writes words, never numbers.
+// The client never sends a score: the board replays the input log through the same deterministic
+// sim (src/sim/) and scores it itself; the judges score the run's telemetry with the same code.
+// The AI writes words, never numbers.
 // Bring-your-own keys are used for one call and never stored or logged.
 // Operator-owned (agents/control.json → frozen_paths).
 import { simulate, MAX_TICKS, INPUT_KEYS, isLogEntryLength, SIM_VERSION } from '../sim/run.js';
@@ -130,6 +132,48 @@ async function verified(body, db) {
   return hit;
 }
 
+// --- The judges' card, without a replay -------------------------------------------------------------
+// The free plan can't afford a replay per judging (≈170 ms of CPU against a 10 ms budget: past the
+// first few, Cloudflare answers 1102). The judges only write words, so they work from the run's
+// telemetry (`run.t`, the client's own replay of the same deterministic sim), scored here by the
+// same `scoreRun`. Only numbers come from the client: every name, verdict, category and line of the
+// prompt is the server's. The board (POST /scores) still replays every log it accepts.
+const T_KEY = /^[A-Za-z][A-Za-z0-9]{0,31}$/;
+const T_ENUMS = { course: ['show', 'wall', 'lineup'], tier: ['assist', 'pro', 'advanced'] };
+const finite = (v) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e7;
+function cleanValue(k, v, depth) {
+  if (finite(v) || typeof v === 'boolean' || v === null) return v;
+  if (typeof v === 'string') {
+    if (T_ENUMS[k]) return T_ENUMS[k].includes(v) ? v : undefined;
+    return /^[a-z][a-z-]{0,23}$/.test(v) ? v : undefined;   // an end reason ('settled', 'no-jump', …)
+  }
+  if (Array.isArray(v)) return v.length <= 8 && v.every((x) => finite(x) || x === null) ? v.slice() : undefined;
+  if (v && typeof v === 'object' && depth < 2) return cleanTelemetry(v, depth + 1);
+  return undefined;
+}
+export function cleanTelemetry(t, depth = 0) {
+  if (!t || typeof t !== 'object' || Array.isArray(t)) return null;
+  const out = {};
+  let n = 0;
+  for (const [k, v] of Object.entries(t)) {
+    if (!T_KEY.test(k) || ++n > 160) continue;
+    const c = cleanValue(k, v, depth);
+    if (c !== undefined) out[k] = c;
+  }
+  return out;
+}
+// → { card, ticks } from the client's telemetry, or null when it doesn't score to a sane card.
+function telemetryCard(body, p) {
+  const t = cleanTelemetry(body?.t);
+  if (!t || t.course !== p.course) return null;
+  try {
+    const assist = p.log.some((e) => e[INPUT_KEYS.indexOf('assist') + 1] !== 0);
+    const card = scoreRun(t, { assist });
+    if (!Number.isFinite(card.total) || card.total < 0 || card.total > 100) return null;
+    return { card, ticks: finite(t.endTick) ? t.endTick : null, replayed: false };
+  } catch { return null; }
+}
+
 // --- The streaming judge ------------------------------------------------------------------------
 function sse(ctx) {
   const { readable, writable } = new TransformStream();
@@ -148,7 +192,10 @@ async function judgeStream(req, env, ctx) {
   if (body?.model && !MODEL_RE.test(body.model)) return json({ error: 'model' }, 400);
   const db = env.DB;
   if (db) await ensureTables(db);
-  const v = await verified(body, db);
+  // A client that sends its telemetry is judged from it (no replay); an older one is replayed.
+  const p = parseRun(body);
+  if (!p) return json({ error: 'bad run' }, 400);
+  const v = (body?.t && telemetryCard(body, p)) || await verified(body, db);
   if (!v) return json({ error: 'bad run' }, 400);
 
   const ip = await ipHash(req);
@@ -162,7 +209,7 @@ async function judgeStream(req, env, ctx) {
   const s = sse(ctx);
   const colo = req.cf?.colo || null;
   ctx.waitUntil((async () => {
-    s.send('verify', { ms: Date.now() - t0, card: v.card, ticks: v.ticks });
+    s.send('verify', { ms: Date.now() - t0, card: v.card, ticks: v.ticks, replayed: v.replayed !== false });
     const user = userPrompt(v.card);
     const model = provider === 'edge' ? (EDGE_MODELS.includes(body?.model) ? body.model : EDGE_MODELS[0]) : (body?.model || PROVIDERS[provider].fallbackModel);
     if (!model) { s.send('error', { message: 'Pick a model first.', fallback: true }); return s.close(); }
