@@ -211,29 +211,45 @@ export function attachCar(w, hullPoints, mass, inertia) {
 // from its centre, with the engine's origin moved there: the roads span kilometres and the engine
 // stores single-precision floats, so everything it holds stays near its origin.
 const CH = 96, CN = 48;
-function heightAt(sdf, x, z, y0) {
-  let y = y0;
+// The surface's height under (x, z), from y0 down: Newton steps on the distance field (two or three
+// do it on the road), then, if they haven't landed, bracket and bisect. Beside a vertical face the
+// field's gradient is level and a step falls only φ: five of them stopped 0.6 m above the road,
+// and the hull hit that vertex at speed like a kerb.
+export function surfaceHeight(sdf, x, z, y0) {
+  let y = y0, phi = 0;
   for (let k = 0; k < 5; k++) {
-    const phi = sdf(x, y, z, sdfOut), ny = sdfOut.y;
-    const dy = ny > 0.2 ? phi / ny : phi;
+    phi = sdf(x, y, z, sdfOut);
+    const ny = sdfOut.y, dy = ny > 0.2 ? phi / ny : phi;
     y -= dy;
-    if (dy < 0.005 && dy > -0.005) break;
+    if (dy < 0.005 && dy > -0.005) { phi = sdf(x, y, z, sdfOut); break; }
   }
-  return y;
+  // Landed: on the surface, and it faces up (beside a face, a small φ is a horizontal distance).
+  if (phi < 0.005 && phi > -0.005 && sdfOut.y > 0.5) return y;
+  // Bracket: a point above the surface (φ > 0) and one at or under it, stepping down from the
+  // higher of y and y0 in doubling strides (≤ 64 m), then halve to a millimetre.
+  let hi = Math.max(y, y0), lo = hi, d = 0.25;
+  while (sdf(x, hi, z, sdfOut) <= 0 && d <= 64) { hi += d; d *= 2; }
+  d = 0.25;
+  while (sdf(x, lo, z, sdfOut) > 0 && d <= 64) { hi = lo; lo -= d; d *= 2; }
+  for (let k = 0; k < 40 && hi - lo > 0.001; k++) {
+    const m = (lo + hi) / 2;
+    if (sdf(x, m, z, sdfOut) > 0) hi = m; else lo = m;
+  }
+  return (lo + hi) / 2;
 }
 const q0 = { x: 0, y: 0, z: 0, w: 1 };
 function streamRoad(w, pos) {
   const c = w.chunk;
   if (c && Math.abs(pos.x - c.x) < 24 && Math.abs(pos.z - c.z) < 24 && Math.abs(pos.y - c.y) < 30) return;
   if (c) for (const col of c.cols) { w.info.delete(col.handle); w.rw.removeCollider(col, false); }
-  const road = w.course.road, sdf = (x, y, z, out) => roadSurface(road, x, y, z, out);   // the road itself, not what's built on it
+  const road = w.course.road, sdf = (x, y, z, out) => roadSurface(road, x, y, z, out, true);   // the ground, not what's built on it (rails and roofs follow as boxes)
   const cx = Math.round(pos.x), cy = Math.round(pos.y), cz = Math.round(pos.z);
   w.ox = cx; w.oy = cy; w.oz = cz;
   const cols = [];
   const hs = new Float32Array((CN + 1) * (CN + 1)), step = CH / CN;
   // Column-major (rows along z, columns along x), as the engine's heightfield stores it.
   for (let j = 0; j <= CN; j++) for (let i = 0; i <= CN; i++) {
-    hs[j * (CN + 1) + i] = heightAt(sdf, cx - CH / 2 + j * step, cz - CH / 2 + i * step, pos.y + 1.5) - cy;
+    hs[j * (CN + 1) + i] = surfaceHeight(sdf, cx - CH / 2 + j * step, cz - CH / 2 + i * step, pos.y + 1.5) - cy;
   }
   cols.push(colliderFor(w, R.ColliderDesc.heightfield(CN, CN, hs, { x: CH, y: 1, z: CH }), MATERIALS.asphalt, GROUP.approx));
   if (road) {
