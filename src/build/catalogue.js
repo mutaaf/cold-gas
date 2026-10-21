@@ -30,7 +30,9 @@ export const MATERIAL_IDS = Object.keys(BUILD_MATERIALS);
 // The pieces. `shape` names a collider in src/build/colliders.js with its dimensions; `cost` counts
 // against a build's budget; `sensor` pieces have no collider (you pass through them); `locked`
 // pieces are unlocked by finishing quests (src/build/quests.js). `solid: 'obstacle'` tells the
-// crash code it is a wall rather than ground.
+// crash code it is a wall rather than ground. `body` pieces are loose: a rigid body of their own
+// (src/sim/props.js: mass, inertia, colliders, materials) that a car knocks, rolls and slides; their
+// `shape` is only their footprint for placing them.
 export const PIECES = {
   kicker: { id: 'kicker', name: 'Kicker', key: '1', cost: 1, mat: 'wood', shape: { kind: 'kicker', len: 6, h: 1.6, w: 4 }, blurb: 'A curved launch ramp: 1.6 m, lip at ≈28°.' },
   wedge: { id: 'wedge', name: 'Wedge', key: '2', cost: 1, mat: 'concrete', shape: { kind: 'wedge', len: 8, h: 2, w: 4 }, blurb: 'A straight 14° ramp. Up it, or land down it.' },
@@ -41,9 +43,11 @@ export const PIECES = {
   boost: { id: 'boost', name: 'Boost pad', key: '7', cost: 1, mat: 'rubber', sensor: true, shape: { kind: 'pad', w: 3, d: 4 }, blurb: 'Drive over it: +8 m/s the way the arrows point.' },
   pad: { id: 'pad', name: 'Landing pad', key: '8', cost: 1, mat: 'rubber', shape: { kind: 'box', w: 10, h: 0.1, d: 10 }, blurb: 'A 10 m rubber mat that grips the landing.' },
   ring: { id: 'ring', name: 'Ring', key: '9', cost: 1, sensor: true, shape: { kind: 'ring', r: 3.2, tube: 0.14, lift: 3.4 }, blurb: 'Fly through it. Quests count them.' },
-  car: { id: 'car', name: 'Parked car', key: '0', cost: 1, mat: 'concrete', solid: 'obstacle', locked: true, shape: { kind: 'box', w: 1.9, h: 1.45, d: 4.7 }, blurb: 'A parked sedan to clear. Static.' },
+  car: { id: 'car', name: 'Parked car', key: '0', cost: 1, mat: 'concrete', solid: 'obstacle', locked: true, body: 'parked', shape: { kind: 'box', w: 1.85, h: 1.44, d: 4.72 }, blurb: 'A parked sedan to clear: 1.7 t on its springs, brake set. Hit it and it moves.' },
   barge: { id: 'barge', name: 'Barge', key: '-', cost: 2, mat: 'steel', shape: { kind: 'box', w: 9, h: 1.4, d: 22 }, blurb: 'A 22 m steel deck. Land on it.' },
   crate: { id: 'crate', name: 'Crate', key: '=', cost: 1, sensor: true, shape: { kind: 'crate', s: 1.1 }, blurb: 'Pick it up by driving into it; deliver it.' },
+  cone: { id: 'cone', name: 'Cone', key: '[', cost: 1, mat: 'rubber', body: 'cone', shape: { kind: 'box', w: 0.36, h: 0.71, d: 0.36 }, blurb: 'A 71 cm traffic cone, 3.2 kg. Slalom it, or send it flying.' },
+  barrier: { id: 'barrier', name: 'Barrier', key: ']', cost: 1, mat: 'rubber', body: 'barrier', shape: { kind: 'box', w: 1.83, h: 0.81, d: 0.46 }, blurb: 'A 1.8 m plastic road barrier, empty: 34 kg. It gives.' },
 };
 export const PIECE_IDS = Object.keys(PIECES);
 export const PIECE_INDEX = Object.fromEntries(PIECE_IDS.map((id, i) => [id, i]));

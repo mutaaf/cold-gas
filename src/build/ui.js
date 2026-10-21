@@ -15,7 +15,7 @@ const ICON = {
   kicker: 'M3 18h18M5 18c6 0 11-3 14-9v9', wedge: 'M3 18h18L20 8z', quarter: 'M4 18h16V6M8 18c6 0 9-4 9-12', halfpipe: 'M2 6c0 7 4 12 10 12s10-5 10-12',
   loop: 'M12 19a7 7 0 1 1 0.01 0M3 19h18', block: 'M5 9h14v9H5zM5 13h14', boost: 'M7 15l5-4 5 4M7 10l5-4 5 4', pad: 'M3 16h18M12 16m-6 0a6 2 0 1 0 12 0a6 2 0 1 0-12 0',
   ring: 'M12 4a7 7 0 1 0 0.01 0', car: 'M4 16h16v-3l-3-3H8l-3 3zM7 16v2M17 16v2', barge: 'M2 14h20l-3 4H5zM6 14v-3h12v3', crate: 'M5 7h14v12H5zM5 7l14 12M19 7L5 19',
-  pickup: 'M12 4l5 8-5 8-5-8z',
+  pickup: 'M12 4l5 8-5 8-5-8z', cone: 'M6 19h12M8 19l4-14 4 14M9.5 13h5', barrier: 'M3 18h18M5 18l2-8h10l2 8M7 13h10',
 };
 // Turn and undo arrows (the font has no ⟲ ⟳ ↶ ↷).
 const ARC = { ccw: 'M8 5H4v4M4.5 8.5A8 8 0 1 1 6 17', cw: 'M16 5h4v4M19.5 8.5A8 8 0 1 0 18 17', undo: 'M9 7L4 12l5 5M4 12h11a5 5 0 0 1 0 10h-2', redo: 'M15 7l5 5-5 5M20 12H9a5 5 0 0 0 0 10h2' };

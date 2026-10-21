@@ -80,8 +80,13 @@ same IEEE-754 semantics; run `scripts/engine-determinism.mjs` on a machine where
   its scenery (src/sim/scenery.js: tree trunks as static cylinders, boulders as static convex hulls,
   brush and crowns as soft drag volumes). The cells next to the car's are built at once, the rest one
   a tick, nearest first. Build pieces and the world API's objects follow as their own colliders
-  (convex slices of the drawn shape). The engine's origin moves with the car in 384 m steps (the
-  engine stores single-precision floats; the roads span 6.5 km), translating what is built.
+  (convex slices of the drawn shape); the loose ones (cones, barriers, the parked car: src/sim/props.js)
+  as dynamic bodies, pooled, at most 48 in the engine and 8 brought in a tick, asleep until touched.
+  The engine's origin moves with the car in 384 m steps (the
+  engine stores single-precision floats; the roads span 6.5 km), translating what is built. On the
+  Show, the Wall and the Lineup, the stage's fixtures (uplights, searchlight drums, floodlight poles)
+  are static colliders, each built while the car is within 3 m of it, and the launch complex beyond the stage (src/sim/complex.js: 34 colliders)
+  is built the tick the car comes within 150 m of it and dropped past 180 m (docs/OBJECTS.md).
 - `src/sim/vehicle.js`: the roadster's own force models (below), then one engine step.
 
 ### What the engine does
@@ -107,6 +112,8 @@ same IEEE-754 semantics; run `scripts/engine-determinism.mjs` on a machine where
   computer (Assist / Pro), or ten valves by hand (Advanced).
 - **Angular momentum**: integrated in the world frame (LESSONS); after a contact the engine's new
   angular velocity is turned back into momentum through the inertia at the start of the step.
+- **The static fire's jet** (src/sim/rocket.js): a turbulent round jet out of the flame trench whose
+  drag on the car is a force and a rolling moment through `w.carF` / `w.carT`, while the range fires.
 - **Parked vehicles' suspension and parked tyres**: a raycast corner per wheel position from LINEUP_SPEC's axles (six on the tractor), each rated to its share of the load, ride frequency
   1.3 Hz (cars) / 1.8 Hz (the tractor), damping ratio 0.3, locked tyres at μ 0.8 of their load.
 - **Bodywork crush**: a contact puts ½·J·|v_n| into the patch of structure it hits (the nearest

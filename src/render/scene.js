@@ -9,7 +9,7 @@ import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
-import { RAMP, LINEUP, SHOW } from '../sim/courses.js';
+import { RAMP, LINEUP, SHOW, FIXTURES } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
 import { buildWall, nightSkyMaterial, bakeNightEnvironment, STARS } from './wall.js';
 import { sliver, sliverView, spreadAxes, spreadThin, spreadRing, DECAL, LAYER } from './sliver.js';
@@ -276,12 +276,14 @@ function buildLineup(tier) {
   // they crawled against the sky (and through the bloom) as the camera moved.
   const poleMat = sliver(new THREE.MeshStandardMaterial({ color: 0x15171a, roughness: 0.6, metalness: 0.6 }), { minPx: 1, dim: false, maxK: 4 });
   const headMat = sliver(lampWhite.clone(), { minPx: 1.5 });
-  const poleGeo = spreadAxes(new THREE.CylinderGeometry(0.06, 0.09, 9, 10), [1, 0, 1]), headGeo = spreadAxes(new THREE.BoxGeometry(0.9, 0.08, 0.3), [0, 1, 0]);
+  // (Solid: src/sim/courses.js FIXTURES.poles.)
+  const P = FIXTURES.poles;
+  const poleGeo = spreadAxes(new THREE.CylinderGeometry(P.r1, P.r0, P.h, 10), [1, 0, 1]), headGeo = spreadAxes(new THREE.BoxGeometry(0.9, 0.08, 0.3), [0, 1, 0]);
   const glows = [];
-  for (let z = START_Z + 10; z < 80; z += 24) {
+  for (let z = P.z0; z < P.z1; z += P.step) {
     for (const sx of [-1, 1]) {
       const pole = new THREE.Mesh(poleGeo, poleMat);
-      pole.position.set(sx * 13, 4.5, z); pole.castShadow = tier !== 'low'; group.add(pole);
+      pole.position.set(sx * P.x, P.h / 2, z); pole.castShadow = tier !== 'low'; group.add(pole);
       const head = new THREE.Mesh(headGeo, headMat);
       head.position.set(sx * 12.6, 9, z); head.renderOrder = LAYER.light; group.add(head);
       glows.push({ pos: new THREE.Vector3(sx * 12.6, 8.9, z), color: new THREE.Color(0.08, 0.085, 0.095), radius: 1.5 });

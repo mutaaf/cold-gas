@@ -40,7 +40,12 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // distribution; v7: body geometry; v6: The Show is one flight (off the Wall, over the row); parked
 // vehicles are bodies with mass, per-surface materials; v5: driver-relative steer/roll/yaw,
 // grip-limited steering; v4: sourced specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 23;
+// v24: the launch complex beyond the stage is solid (pad, mount, vehicle, strongback, masts, tank,
+// buildings: src/sim/complex.js) once the car comes within 150 m of it, and the range's static fire
+// (20 s into a run, then every 40 s) throws its jet out of the flame trench onto a car parked in it
+// (src/sim/rocket.js). A run that stays on the stage replays to the same bits (the references do);
+// one that drives out to the pad didn't meet anything there before.
+export const SIM_VERSION = 24;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 export const G_WIN = 120;               // 0.5 s of ticks: the braking peak's averaging window

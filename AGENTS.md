@@ -168,6 +168,13 @@ src/sim/              PURE, shared with the Worker:
                           and boulders solid, brush and crowns soft): what you see is what you hit
   objects.js            placed objects (ramps, loops, boost pads, power-ups): deterministic ids,
                           SDF colliders, triggers, collider primitives for another engine
+  complex.js            THE LAUNCH COMPLEX as geometry: pad, mount, vehicle, strongback, masts, tank,
+                          buildings; the renderer draws it, world.js makes it solid near the car
+  rocket.js             THE ROCKET as a machine: engines, static fire (thrust, mass flow, mass,
+                          hold-down), the trench's jet on a car, the ascent (Tsiolkovsky, drag, gravity turn)
+  props.js              loose things: cones, barriers, the Sandbox's parked car as rigid bodies
+                          (mass, CoM, inertia, colliders, materials), streamed and pooled by world.js
+                          (docs/OBJECTS.md: what every visible object is to the physics)
 src/build/            BUILD · POWER-UPS · SIDE QUESTS (the arcade layer; Free Drive and the Sandbox only,
                         never a scored event): catalogue.js (pieces, materials, power-ups, budgets) ·
                         colliders.js (each piece as an SDF + the mesh drawn from the same numbers: the
@@ -293,6 +300,7 @@ node scripts/grass-probe.mjs [roads] [off] [angle]    off the road and back on, 
 node scripts/verge-steps.mjs [roads]                  steps in the ground beside the road
 node scripts/ref-hash.mjs                             fingerprints of the stunt references (a physics change is bit-neutral or not)
 node scripts/drive-feel.mjs [bench|road] [assist|pro]   driving feel: step steer, lane change, on-centre, 60–0, slides; a keyboard driver on the four roads
+node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
 ```
 
 Local Worker: `npx wrangler dev` (serves dist + the API with a local D1, and uses

@@ -6,14 +6,19 @@
 // What the engine does: integrates every body, finds and solves every contact (body on body, body
 // on ground or deck), friction and restitution per material pair, sleeping.
 // What this file adds on top, as forces on the engine's bodies: the parked vehicles' suspension
-// (spring, damper, bump stop per corner) and their parked tyres (locked, friction-limited).
+// (spring, damper, bump stop per corner) and their parked tyres (locked, friction-limited); the launch
+// complex's solids, streamed in when the car comes near them, and the static fire's jet on the car
+// (src/sim/complex.js, src/sim/rocket.js); in Free Drive and the Sandbox, the loose things a car
+// knocks about (cones, barriers, a parked car: src/sim/props.js), pooled and streamed with the cells.
 // Pure and deterministic: the engine is the cross-platform-deterministic build, every input is
 // set in the same order on every host, and nothing here reads a clock or a random source.
 import { RAPIER as R, requirePhysics } from './engine.js';
-import { WALL, wallProfile, RAMP, MATERIALS, parkedMirror, refreshBounds, PAD_R, PARK_MU } from './courses.js';
+import { WALL, wallProfile, RAMP, MATERIALS, parkedMirror, refreshBounds, PAD_R, PARK_MU, fixturesOf } from './courses.js';
 import { RAILS, roadSurface, bridgePier, PIER, tunnelArch, cellKey } from './roads.js';
 import { CELL, bakedScenery, endlessScenery } from './scenery.js';
 import { dsin, dcos, datan2 } from './dmath.js';
+import { siteOf, siteSolids, toWorld as siteWorld, toLocal as siteLocal, SITE_RADIUS, SITE_TOP, PLUME } from './complex.js';
+import { staticFire, fireClock, jetSpeed, JET, CAR_CDA } from './rocket.js';
 
 export const WORLD_DT = 1 / 240;
 const G = 9.81;
@@ -124,7 +129,7 @@ function wallSteel(w) {
 function addParked(w, b, index) {
   const m = parkedMirror(b), ph = m.phys;
   m.index = index;
-  const rb = w.rw.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(m.cx, 0, m.cz).setSleeping(true));
+  const rb = w.rw.createRigidBody(R.RigidBodyDesc.dynamic().setTranslation(m.cx - w.ox, 0 - w.oy, m.cz - w.oz).setSleeping(true));
   rb.setAdditionalMassProperties(ph.mass, { x: ph.cgx, y: ph.cgh, z: 0 }, { x: ph.inertia.roll, y: ph.inertia.yaw, z: ph.inertia.pitch }, { x: 0, y: 0, z: 0, w: 1 }, false);
   m.rb = rb;
   const hy = (m.h - m.clr) / 2;
@@ -155,6 +160,9 @@ export function createWorld(course) {
     course, rw, info: new Map(), bodies: [], ox: 0, oy: 0, oz: 0,
     carRb: null, carCol: null, carF: { x: 0, y: 0, z: 0 }, carT: { x: 0, y: 0, z: 0 }, carPos: null,
     minX: 0, maxX: 0, minZ: 0, maxZ: 0, maxY: 0, stream: null, chunk: null, freed: false, solids: null, curl: false, curlOn: true,
+    // The run's tick (src/sim/vehicle.js sets it: the static fire's clock), the roadster's attitude,
+    // the launch complex (null where there is none) and the loose props in the engine now.
+    tick: 0, carQuat: null, site: null, props: [], fixtures: null,
     hit: { t: 0, nx: 0, ny: 1, nz: 0, mat: MATERIALS.concrete, body: null, car: false, x: 0, y: 0, z: 0 },
     ray: new R.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 }),
     // How many colliders the roadster's hull is in contact with (the engine's collision events):
@@ -172,6 +180,9 @@ export function createWorld(course) {
     w.free = {
       cells: new Map(), queue: [], qi: 0, ix: NaN, iz: NaN, init: false, near: null, fixed: [],
       pieces: new Map(), srcVer: [], px: NaN, pz: NaN, seen: new Set(),
+      // Loose props (cones, barriers, parked cars): the active ones by their store object, a pool of
+      // disabled bodies per kind, and where each knocked one was left when it streamed out.
+      props: new Map(), pool: new Map(), kept: new WeakMap(),
       scenery: course.scenery ?? (course.road ? (course.road.sceneryOf ??= (course.road.endless ? endlessScenery : bakedScenery)(course.road)) : null),
       sources: [course.pieces, course.objects].filter((src) => src && src.near && src.shapes),
     };
@@ -191,6 +202,15 @@ export function createWorld(course) {
     }
     if (course.ramp) { const k = kickerMesh(); colliderFor(w, R.ColliderDesc.trimesh(k.v, k.idx, R.TriMeshFlags.FIX_INTERNAL_EDGES), MATERIALS.deck, GROUP.static); (w.solids ??= []).push(meshBox(k.v)); }
     w.solids ??= [];
+    // The stage's fixtures (uplights, searchlight drums, floodlight poles): solid, as drawn, each in
+    // the engine only while the car is within reach of it (fixtureTick).
+    w.fixtures = fixturesOf(course.id).map((f) => {
+      const hx = f.hx ?? f.r, hz = f.hz ?? f.r, hy = f.hy ?? f.hh;
+      return { f, col: null, box: [f.x - hx, f.y - hy, f.z - hz, f.x + hx, f.y + hy, f.z + hz], reach: Math.sqrt(hx * hx + hy * hy + hz * hz) + FIX_REACH };
+    });
+    // The launch complex beyond the stage: its solids join the world when the car comes near.
+    const at = siteOf(course.id);
+    if (at) w.site = { at, cols: [], solid: null, f: {}, push: 0 };
   }
   (course.boxes || []).forEach((b, i) => w.bodies.push(addParked(w, b, i)));
   refreshBounds(w);
@@ -208,6 +228,9 @@ export function freeWorld(w) {
   w.events.free?.();
   w.rw.free();
   for (const b of w.bodies) { b.rb = null; b.collider = null; }
+  for (const b of w.props) { b.rb = null; }
+  if (w.free) { w.free.props.clear(); w.free.pool.clear(); }
+  w.props.length = 0;
   w.carRb = null; w.carCol = null;
 }
 
@@ -428,8 +451,12 @@ function syncPieces(w, pos) {
   F.px = pos.x; F.pz = pos.z;
   const seen = F.seen;
   seen.clear();
+  dyn.length = 0;
   for (const src of srcs) {
     for (const o of src.near(pos.x, pos.z, PIECE_R)) {
+      // A loose prop is a body of its own (below), not a static collider.
+      const body = src.body ? src.body(o) : null;
+      if (body) { dyn.push(o, body); continue; }
       seen.add(o);
       if (F.pieces.has(o)) continue;
       const cols = [];
@@ -443,6 +470,111 @@ function syncPieces(w, pos) {
     }
   }
   for (const [o, cols] of F.pieces) if (!seen.has(o)) { drop(w, cols); F.pieces.delete(o); }
+  syncProps(w, pos);
+}
+
+// --- Loose props: cones, barriers, parked cars (src/sim/props.js) ---------------------------------------
+// The budget, per world: at most PROP_CAP of them in the engine at once, the nearest to the car, each
+// asleep until something touches it (Rapier's islands: a sleeping body costs nothing a tick). A prop
+// that streams out is disabled and pooled for the next of its kind; where it was knocked to is kept
+// for when the car comes back. The light ones sweep (CCD): at 30 m/s a car moves 12 cm a tick and
+// throws a cone faster than its own size per tick; the parked cars and everything static don't.
+export const PROP_CAP = 48;
+// And at most PROP_BUILDS a tick come in (a new body, or one from the pool), nearest first: a car
+// arriving at a slalom of 48 cones spreads them over six ticks instead of one long one.
+export const PROP_BUILDS = 8;
+const PROP_LIFT = 0.005;
+const dyn = [], order = [];
+const placed = { x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 };
+function syncProps(w, pos) {
+  const F = w.free;
+  // A body knocked away from where it was placed is found by where it is now, not by the store's
+  // query (which knows the placement): keep every active one still within reach.
+  for (const [o, p] of F.props) {
+    const dx = p.cx - pos.x, dz = p.cz - pos.z;
+    if (dx * dx + dz * dz < PIECE_R * PIECE_R && dyn.indexOf(o) < 0) dyn.push(o, p.body);
+  }
+  // Nearest first, up to the cap (where it was left, if it was moved).
+  order.length = 0;
+  for (let k = 0; k < dyn.length; k += 2) {
+    const o = dyn[k], kept = F.kept.get(o), x = kept ? kept.cx : o.transform.x, z = kept ? kept.cz : o.transform.z;
+    order.push({ o, body: dyn[k + 1], d: (x - pos.x) * (x - pos.x) + (z - pos.z) * (z - pos.z) });
+  }
+  if (order.length > PROP_CAP) { order.sort((a, b) => a.d - b.d); order.length = PROP_CAP; }
+  const want = (F.want ??= new Set());
+  want.clear();
+  for (const e of order) want.add(e.o);
+  for (const [o, p] of F.props) if (!want.has(o)) releaseProp(w, o, p);
+  if (order.length > PROP_BUILDS) order.sort((a, b) => a.d - b.d);
+  let built = 0;
+  for (const e of order) {
+    if (F.props.has(e.o)) continue;
+    if (built++ === PROP_BUILDS) { F.px = NaN; break; }   // the rest next tick (syncPieces runs again)
+    acquireProp(w, e.o, e.body);
+  }
+}
+const yawQ = (q, th) => { q.qx = 0; q.qy = dsin(th / 2); q.qz = 0; q.qw = dcos(th / 2); return q; };
+function placedPose(o, body) {
+  const t = o.transform;
+  // A few millimetres up: a body put down touching the ground starts a contact, and a new contact
+  // wakes it for two seconds; one that drops 5 mm the first time it's woken never needed to be awake.
+  placed.x = t.x; placed.y = t.y + PROP_LIFT; placed.z = t.z;
+  // A parked car's frame runs its length along x; the piece faces +z (src/build/catalogue.js).
+  return yawQ(placed, body.kind === 'parked' ? t.yaw - Math.PI / 2 : t.yaw);
+}
+function newProp(w, body) {
+  const rb = w.rw.createRigidBody(R.RigidBodyDesc.dynamic().setCcdEnabled(!!body.ccd).setSleeping(true));
+  rb.setAdditionalMassProperties(body.mass, { x: 0, y: body.com, z: 0 }, body.inertia, { x: 0, y: 0, z: 0, w: 1 }, false);
+  const m = {
+    id: body.spec.id, kind: 'prop', phys: { cgh: body.com }, mass: body.mass, mat: body.mat, index: -1, rb, collider: null,
+    hx: body.size, hz: body.size, h: body.size, clr: 0,
+    cx: 0, cy: 0, cz: 0, qx: 0, qy: 0, qz: 0, qw: 1, yaw: 0, vx: 0, vy: 0, vz: 0, wx: 0, wy: 0, wz: 0, pvx: 0, pvy: 0, pvz: 0, pwx: 0, pwy: 0, pwz: 0,
+    moved: false, asleep: true,
+  };
+  for (const sh of body.shapes) {
+    const d = sh.kind === 'hull' ? R.ColliderDesc.convexHull(sh.points) : R.ColliderDesc.cuboid(sh.hx, sh.hy, sh.hz).setTranslation(sh.x, sh.y, sh.z);
+    if (d) m.collider = colliderFor(w, d.setDensity(0), body.mat, GROUP.parked, m);
+  }
+  return m;
+}
+function acquireProp(w, o, body) {
+  const F = w.free, key = body.kind === 'parked' ? `car:${body.s}` : `${body.spec.id}:${body.s}`;
+  let p = F.pool.get(key)?.pop();
+  if (!p) {
+    p = body.kind === 'parked' ? addParked(w, body.vehicle, -1) : newProp(w, body);
+    p.key = key;
+  } else p.rb.setEnabled(true);
+  const pose = F.kept.get(o) || placedPose(o, body);
+  const rb = p.rb;
+  rb.setTranslation({ x: (pose.cx ?? pose.x) - w.ox, y: (pose.cy ?? pose.y) - w.oy, z: (pose.cz ?? pose.z) - w.oz }, false);
+  rb.setRotation({ x: pose.qx, y: pose.qy, z: pose.qz, w: pose.qw }, false);
+  rb.setLinvel({ x: 0, y: 0, z: 0 }, false); rb.setAngvel({ x: 0, y: 0, z: 0 }, false);
+  rb.sleep();
+  p.cx = pose.cx ?? pose.x; p.cy = pose.cy ?? pose.y; p.cz = pose.cz ?? pose.z;
+  p.qx = pose.qx; p.qy = pose.qy; p.qz = pose.qz; p.qw = pose.qw;
+  p.vx = p.vy = p.vz = p.wx = p.wy = p.wz = 0;
+  p.moved = !!F.kept.get(o); p.asleep = true; p.o = o; p.body = body;
+  if (p.wheels) for (const wh of p.wheels) { wh.comp = p.susp.rest - p.susp.mount; wh.contact = true; }
+  F.props.set(o, p);
+  w.props.push(p);
+}
+function releaseProp(w, o, p) {
+  const F = w.free;
+  if (p.moved) F.kept.set(o, { cx: p.cx, cy: p.cy, cz: p.cz, qx: p.qx, qy: p.qy, qz: p.qz, qw: p.qw });
+  p.rb.setEnabled(false);
+  let pool = F.pool.get(p.key);
+  if (!pool) F.pool.set(p.key, (pool = []));
+  pool.push(p);
+  F.props.delete(o);
+  const i = w.props.indexOf(p);
+  if (i >= 0) w.props.splice(i, 1);
+  p.o = null;
+}
+/** Where a placed object's prop is now (its body's pose, or where it was left), or null if it never moved. */
+export function propPose(w, o) {
+  const p = w?.free?.props.get(o);
+  if (p) return p;
+  return w?.free?.kept.get(o) || null;
 }
 
 // Move the engine's origin to (x, y, z): everything built moves with it.
@@ -453,6 +585,7 @@ function rebase(w, x, y, z) {
   for (const c of F.cells.values()) c.cols.forEach(move);
   for (const cols of F.pieces.values()) cols.forEach(move);
   F.fixed.forEach(move);
+  for (const p of w.props) { const t = p.rb.translation(); p.rb.setTranslation({ x: t.x - dx, y: t.y - dy, z: t.z - dz }, false); }
 }
 
 const cheb = (c, ix, iz) => Math.max(Math.abs(c.ix - ix), Math.abs(c.iz - iz));
@@ -617,10 +750,40 @@ const up = { x: 0, y: 0, z: 0 }, anc = { x: 0, y: 0, z: 0 }, ctr = { x: 0, y: 0,
 // opposite push (another parked body directly; the roadster through `w.carF`/`w.carT`).
 export function preStep(w) {
   w.carF.x = 0; w.carF.y = 0; w.carF.z = 0; w.carT.x = 0; w.carT.y = 0; w.carT.z = 0;
+  for (const b of w.bodies) parkedForces(w, b);
+  for (let i = 0; i < w.props.length; i++) if (w.props[i].wheels) parkedForces(w, w.props[i]);
+  if (w.free) softDrag(w);
+  if (w.fixtures) fixtureTick(w);
+  if (w.site) siteTick(w);
+}
+
+// The stage's fixtures: a dozen small static solids beside the lane. Always in the engine they cost
+// a replay ≈ 4 % (every ray and the broad phase carry them), for things a run meets only if it
+// leaves the line. So each is built the tick the car's CoM comes within FIX_REACH of its surface
+// (the hull reaches 2.4 m from the CoM; 0.5 m more is two ticks at 60 m/s) and dropped 2 m further out.
+const FIX_REACH = 3, FIX_DROP = 2;
+function fixtureTick(w) {
+  const p = w.carPos;
+  if (!p) return;
+  for (let i = 0; i < w.fixtures.length; i++) {
+    const x = w.fixtures[i], f = x.f, dx = p.x - f.x, dy = p.y - f.y, dz = p.z - f.z, d2 = dx * dx + dy * dy + dz * dz;
+    if (!x.col) {
+      if (d2 >= x.reach * x.reach) continue;
+      const d = f.kind === 'box' ? R.ColliderDesc.cuboid(f.hx, f.hy, f.hz) : R.ColliderDesc.cylinder(f.hh, f.r);
+      x.col = colliderFor(w, d.setTranslation(f.x, f.y, f.z), MATERIALS.steel, GROUP.static);
+      w.solids.push(x.box);
+    } else if (d2 > (x.reach + FIX_DROP) * (x.reach + FIX_DROP)) {
+      w.info.delete(x.col.handle); w.rw.removeCollider(x.col, false); x.col = null;
+      const k = w.solids.indexOf(x.box);
+      if (k >= 0) w.solids.splice(k, 1);
+    }
+  }
+}
+function parkedForces(w, b) {
   const dt = WORLD_DT;
-  for (const b of w.bodies) {
+  {
     const rb = b.rb;
-    if (!rb || rb.isSleeping()) continue;
+    if (!rb || rb.isSleeping()) return;
     const q = rb.rotation(tq), p = rb.translation(ctr);
     rot(q, 0, -1, 0, up);                   // the body's down, in the world
     const S = b.susp;
@@ -668,29 +831,101 @@ export function preStep(w) {
       }
     }
   }
-  if (w.free) softDrag(w);
+}
+
+// --- The launch complex (the Show, the Wall and the Lineup: src/sim/complex.js) ----------------------
+// Its solids exist in the engine only while the car is within SITE_IN of the pad's centre (dropped past
+// SITE_OUT): a run on the stage, 270 m away, never meets them, so the stunts replay as they did and
+// the server's replay pays one distance check a tick. Built in one tick (≈ 30 colliders) the moment
+// the car comes within reach: 60 m of warning, a second at the fastest the car drives.
+const SITE_IN = SITE_RADIUS + 60, SITE_OUT = SITE_RADIUS + 90;
+const qy = { x: 0, y: 0, z: 0, w: 1 }, qc = { x: 0, y: 0, z: 0, w: 1 }, sp = { x: 0, y: 0, z: 0 }, ax = { x: 0, y: 0, z: 0 };
+function qmul(a, b, o) {
+  o.x = a.w * b.x + a.x * b.w + a.y * b.z - a.z * b.y; o.y = a.w * b.y - a.x * b.z + a.y * b.w + a.z * b.x;
+  o.z = a.w * b.z + a.x * b.y - a.y * b.x + a.z * b.w; o.w = a.w * b.w - a.x * b.x - a.y * b.y - a.z * b.z;
+  return o;
+}
+function buildSite(w) {
+  const S = w.site, at = S.at;
+  yawQuat(qy, at.yaw);
+  for (const sh of siteSolids()) {
+    const d = sh.kind === 'box' ? R.ColliderDesc.cuboid(sh.hx, sh.hy, sh.hz) : sh.kind === 'cyl' ? R.ColliderDesc.cylinder(sh.hh, sh.r)
+      : sh.kind === 'ball' ? R.ColliderDesc.ball(sh.r) : R.ColliderDesc.convexHull(sh.points);
+    if (!d) continue;
+    siteWorld(at, sh.x, sh.y, sh.z, sp);
+    S.cols.push(colliderFor(w, d.setRotation(qmul(qy, sh.q, qc)).setTranslation(sp.x - w.ox, sp.y - w.oy, sp.z - w.oz), sh.mat, GROUP.static));
+  }
+  // The rays' fast path (`clear`) must know it's there.
+  S.solid = [at.x - SITE_RADIUS, -1, at.z - SITE_RADIUS, at.x + SITE_RADIUS, SITE_TOP, at.z + SITE_RADIUS];
+  w.solids.push(S.solid);
+}
+function dropSite(w) {
+  const S = w.site;
+  drop(w, S.cols);
+  const i = w.solids.indexOf(S.solid);
+  if (i >= 0) w.solids.splice(i, 1);
+  S.solid = null;
+}
+/** Whether the complex's solids are in the engine now (tests, the nerds panel). */
+export const siteBuilt = (w) => !!w.site && w.site.cols.length > 0;
+function siteTick(w) {
+  const S = w.site, p = w.carPos;
+  if (!p) return;
+  const dx = p.x - S.at.x, dz = p.z - S.at.z, d2 = dx * dx + dz * dz;
+  if (!S.cols.length) { if (d2 < SITE_IN * SITE_IN) buildSite(w); } else if (d2 > SITE_OUT * SITE_OUT) dropSite(w);
+  S.push = 0;
+  // The static fire: on the range's schedule (src/sim/rocket.js), its jet out of the trench's exit.
+  const ft = fireClock(w.tick * WORLD_DT);
+  if (ft < 0) return;
+  // Where the car is against the jet: metres downstream of the exit (behind it, as the stage is: none).
+  siteLocal(S.at, p.x, p.y, p.z, sp);
+  const a = PLUME.exit[2] - sp.z, ey = sp.y - PLUME.exit[1], ex = sp.x - PLUME.exit[0];
+  if (a < 0 || a > JET.reach) return;
+  const f = staticFire(ft, S.f);
+  const U = jetSpeed(f.thrust, a, ex * ex + ey * ey, PLUME.halfWidth);
+  if (!(U > 0)) return;
+  // The jet runs along the site's −z: in the world, (−sin yaw, 0, −cos yaw). Drag on the air moving
+  // past the car, by the area it shows that air (src/sim/rocket.js CAR_CDA).
+  const v = w.carVel, q = w.carQuat;
+  const ux = -S.at.s * U - v.x, uy = -v.y, uz = -S.at.c * U - v.z, um = Math.sqrt(ux * ux + uy * uy + uz * uz);
+  if (!(um > 0) || !q) return;
+  rot(q, 0, 0, 1, ax); const cf = Math.abs(ax.x * ux + ax.y * uy + ax.z * uz) / um;
+  rot(q, 1, 0, 0, ax); const cs = Math.abs(ax.x * ux + ax.y * uy + ax.z * uz) / um;
+  rot(q, 0, 1, 0, ax); const cu = Math.abs(ax.x * ux + ax.y * uy + ax.z * uz) / um;
+  const k = 0.5 * JET.rho * (CAR_CDA.front * cf + CAR_CDA.side * cs + CAR_CDA.floor * cu) * um;
+  const fx = k * ux, fy = k * uy, fz = k * uz;
+  w.carF.x += fx; w.carF.y += fy; w.carF.z += fz;
+  // At the centre of pressure, above the CoM along the car's up (ax): it rolls the car away too.
+  const rx = ax.x * CAR_CDA.cpUp, ry = ax.y * CAR_CDA.cpUp, rz = ax.z * CAR_CDA.cpUp;
+  w.carT.x += ry * fz - rz * fy; w.carT.y += rz * fx - rx * fz; w.carT.z += rx * fy - ry * fx;
+  S.push = Math.sqrt(fx * fx + fy * fy + fz * fz);
 }
 
 // Step the engine one tick, then copy every moving parked body's pose back to its mirror.
 export function stepEngine(w) {
   // Each body's velocity going into the step (a contact's closing speed is measured against it).
   for (const b of w.bodies) { b.pvx = b.vx; b.pvy = b.vy; b.pvz = b.vz; b.pwx = b.wx; b.pwy = b.wy; b.pwz = b.wz; }
+  for (const b of w.props) { b.pvx = b.vx; b.pvy = b.vy; b.pvz = b.vz; b.pwx = b.wx; b.pwy = b.wy; b.pwz = b.wz; }
   w.rw.step(w.events);
   if (w.carCol) w.events.drainCollisionEvents(w.onCollision);
   let moved = false;
-  for (const b of w.bodies) {
-    const rb = b.rb;
-    if (!rb || rb.isSleeping()) { b.asleep = true; b.vx = 0; b.vy = 0; b.vz = 0; b.wx = 0; b.wy = 0; b.wz = 0; continue; }
-    b.asleep = false;
-    const p = rb.translation(tv), q = rb.rotation(tq);
-    b.cx = p.x + w.ox; b.cy = p.y + w.oy; b.cz = p.z + w.oz;
-    b.qx = q.x; b.qy = q.y; b.qz = q.z; b.qw = q.w;
-    // Heading: where the body's +x (its nose) points, about +y.
-    rot(q, 1, 0, 0, up);
-    b.yaw = datan2(-up.z, up.x);
-    const v = rb.linvel(tv); b.vx = v.x; b.vy = v.y; b.vz = v.z;
-    const a = rb.angvel(tv); b.wx = a.x; b.wy = a.y; b.wz = a.z;
-    b.moved = true; moved = true;
-  }
+  for (const b of w.bodies) if (readBody(w, b)) moved = true;
+  for (let i = 0; i < w.props.length; i++) readBody(w, w.props[i]);
   if (moved) refreshBounds(w);
+}
+// Copy a body's pose and velocities from the engine to its mirror; false while it sleeps.
+function readBody(w, b) {
+  const rb = b.rb;
+  if (!rb || rb.isSleeping()) { b.asleep = true; b.vx = 0; b.vy = 0; b.vz = 0; b.wx = 0; b.wy = 0; b.wz = 0; return false; }
+  b.asleep = false;
+  const p = rb.translation(tv), q = rb.rotation(tq);
+  b.cx = p.x + w.ox; b.cy = p.y + w.oy; b.cz = p.z + w.oz;
+  b.qx = q.x; b.qy = q.y; b.qz = q.z; b.qw = q.w;
+  // Heading: where the body's +x (its nose) points, about +y.
+  rot(q, 1, 0, 0, up);
+  b.yaw = datan2(-up.z, up.x);
+  const v = rb.linvel(tv); b.vx = v.x; b.vy = v.y; b.vz = v.z;
+  const a = rb.angvel(tv); b.wx = a.x; b.wy = a.y; b.wz = a.z;
+  b.moved = true;
+  return true;
 }

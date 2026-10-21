@@ -191,7 +191,7 @@ export function createSandbox(ctx) {
     plumes.update(dt, time, c.throttles, c.vel, 0);
     audio.updateAudio({ speed, grounded: c.grounded > 0, throttles: c.throttles });
     if (!layer.editing) st.cam.update(dt, { pos: carRoot.position, quat: carRoot.quaternion, vel: c.vel }, time);
-    layer.frame(dt, time);
+    layer.frame(dt, time, st.acc / DT);
   }
 
   function watchdog(dt, c) {
