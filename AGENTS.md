@@ -107,7 +107,10 @@ mark, and air left in the tanks.
    copy, assets or AI prompts. Vehicles are invented ("Sedan", "Crossover", "Pickup", "Cab",
    "Semi"). The fine print says it is an independent fan game.
 8. **Accessibility floor.** Every control has a keyboard path, text holds 4.5:1 contrast on the
-   HUD, and `prefers-reduced-motion` disables shakes and big transitions.
+   HUD (measured on screenshots: `node scripts/hud-audit.mjs <url> <dir>`), no HUD text under 11 px,
+   no overlaps at 390×844 · 430×932 · 768×1024 · 1280×720 · 1920×1080 (both orientations), colour
+   on the HUD means state only (ink nominal, amber caution, red warning), and `prefers-reduced-motion`
+   disables shakes and big transitions.
 
 ## 4 · System map
 
@@ -198,17 +201,22 @@ src/render/           three.js (r186):
   sliver.js             minimum on-screen width for thin lights/paint/struts (anti-flicker),
                           DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable
-src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier)
+src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone
+src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
+                        hold to land (LAND + the carry over the row); plain sim inputs, pure, no DOM
+src/touch-settings.js touch scheme (one-thumb | classic), hand, tilt steering (DeviceOrientation, iOS
+                        permission, calibrate, 5 % steps), haptics (navigator.vibrate)
 src/valves.js         Advanced: keyboard layout like the car, chords, key ramp, gamepad, the touch
                         nozzle pad
-src/hud-landing.js    the landing HUD (sink band, descent tape, ADI, roll-out cue) + touchdown ring
+src/hud-landing.js    the landing predictor (sink band, descent tape, ADI, roll-out cue) + touchdown ring
 src/practice.js       drills from moments of the reference flight, retry, drill scorecards
   road.js               Free Drive's world: 3-level streamed terrain, road chunks (ribbon,
                           verges, walls, rails, bridges, delineators), trees, sea, skyline ring
   roadlook.js           Free Drive's sky, time of day, haze and shader-patched materials
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air)
 src/audio.js          procedural WebAudio: motor, tyres, wind, nozzle hiss, chimes, crash crunch/grind
-src/ui.js             HUD (in-place updates), results sheet, board
+src/ui.js             the HUD as one instrument system (mission clock, phase timeline, primary, telemetry
+                        strip, attitude, vehicle: thrusters + damage; values glide, DOM on change), results, board
 src/panel.js          board client + local judge lines (offline fallback)
 src/ai/               config.js (provider/key on this device) · stream.js (SSE client) ·
                         settings.js (the judges' brain picker) · theatre.js (lazy: aurora-field show)
@@ -225,7 +233,12 @@ scripts/shots.mjs     Screenshots of key moments against a running preview
 scripts/human-show.mjs     human-like players on the Show (reaction time, keys, cues): the
                            learnability gate. --cues old|new, assist|pro
 scripts/human-advanced.mjs Advanced by a person: taps on the valve keys
-scripts/play-human.mjs     a cue-following player on the real page (keyboard or touch)
+scripts/play-human.mjs     a cue-following player on the real page (keyboard, touch or thumb)
+scripts/human-phone.mjs    the human-show population on a phone (thumbs, reach, a resting thumb):
+                           --scheme=classic|thumb --build=before|after --geom=<thumb-reach geom.json>
+scripts/thumb-reach.mjs    touch control geometry per phone viewport + reach heatmap screenshots
+scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11 px, WCAG contrast on screenshots
+scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view
 scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
 scripts/shots-lineup.mjs   studio shots of each parked vehicle + the row, and the row's draw budget
 scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)

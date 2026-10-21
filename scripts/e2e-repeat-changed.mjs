@@ -46,8 +46,18 @@ if (!specs.length) {
   console.log('[flake guard] no e2e specs changed');
   process.exit(0);
 }
-// Keep the guard to a few minutes: fewer repeats when a branch touches many specs.
-const repeat = Number(process.env.E2E_REPEAT) || (specs.length <= 4 ? 5 : specs.length <= 10 ? 3 : 2);
-console.log(`[flake guard] ${specs.length} changed spec(s), ${repeat}× each, no retries:\n  ${specs.join('\n  ')}`);
+// Keep the guard to a few minutes: fewer repeats when a branch touches many specs, or many tests
+// (the CI job has 25 minutes in all, and the main suite takes ≈10 of them; every changed test still
+// runs at least 3× with no retries). Touching smoke.spec (9 slow tests) at 5× ran past the limit.
+const countTests = () => {
+  try {
+    const out = execFileSync('npx', ['playwright', 'test', ...specs, '--project=desktop', '--list'], { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] });
+    return out.split('\n').filter((l) => l.includes('›')).length;
+  } catch { return 0; }
+};
+const bySpecs = specs.length <= 4 ? 5 : specs.length <= 10 ? 3 : 2;
+const tests = countTests();
+const repeat = Number(process.env.E2E_REPEAT) || (tests > 8 ? Math.min(bySpecs, Math.max(3, Math.floor(40 / tests))) : bySpecs);
+console.log(`[flake guard] ${specs.length} changed spec(s), ${tests || "?"} test(s), ${repeat}× each, no retries:\n  ${specs.join("\n  ")}`);
 const res = spawnSync('npx', ['playwright', 'test', ...specs, '--project=desktop', `--repeat-each=${repeat}`, '--retries=0'], { stdio: 'inherit' });
 process.exit(res.status ?? 1);

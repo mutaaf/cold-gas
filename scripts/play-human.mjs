@@ -2,22 +2,29 @@
 // numbers), press real keys (or tap the touch controls), with a person's reaction time. Nothing
 // here reads the sim. Run it against production and against a local build to compare.
 //
-//   node scripts/play-human.mjs <url> [keyboard|touch] [runs=3] [outdir]
+//   node scripts/play-human.mjs <url> [keyboard|touch|thumb] [runs=3] [outdir] [viewport=390x844]
+//
+// touch: the classic stick and pedals (the scheme is set to classic first). thumb: the one-thumb
+// Assist pad, read from its own words (Hold · Climb, Tap · Let go, Hold · Land), one finger.
 //
 // The player: crawl in at about 20 km/h, feather up the curl, let go when the cue says, then do
 // what the cues say (BOOST, roll, LAND) for as long as they say it, a reaction time late.
 import { chromium } from '@playwright/test';
 
-const [url = 'http://localhost:4391/coldgas/', mode = 'keyboard', runsArg = '3', out] = process.argv.slice(2);
+const [url = 'http://localhost:4391/coldgas/', mode = 'keyboard', runsArg = '3', out, vpArg = '390x844'] = process.argv.slice(2);
+const [VW, VH] = vpArg.split('x').map(Number);
 const RUNS = Number(runsArg);
-const touch = mode === 'touch';
+const thumbMode = mode === 'thumb';
+const touch = mode === 'touch' || thumbMode;
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
-const page = await browser.newPage(touch ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1280, height: 720 } });
+const page = await browser.newPage(touch ? { viewport: { width: VW, height: VH }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1280, height: 720 } });
 const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 await page.goto(`${url}${url.includes('?') ? '&' : '?'}gfx=low`);
 await page.waitForFunction(() => !!window.__coldgas, null, { timeout: 30000 });
 await page.waitForTimeout(1500);
+// (Builds before the one-thumb scheme have no touch settings: classic is all there is.)
+await page.evaluate((s) => window.__coldgas.touch?.set('scheme', s), thumbMode ? 'thumb' : 'classic');
 
 const REACT = 260;   // ms
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -69,7 +76,25 @@ for (let r = 0; r < RUNS; r++) {
   await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30000 });
   let released = false, landing = false, boostOff = 0;
   const t0 = Date.now();
-  while (Date.now() - t0 < 90000) {
+  // One-thumb: one finger on the pad, doing what the pad says, a reaction time late.
+  if (thumbMode) {
+    const pad = await centre('[data-onethumb]');
+    let down = false, tapped = false;
+    const set = async (on) => {
+      if (on === down) return;
+      down = on;
+      await cdp.send('Input.dispatchTouchEvent', { type: on ? 'touchStart' : 'touchEnd', touchPoints: on ? [{ x: pad.x, y: pad.y, id: 1 }] : [] });
+    };
+    while (Date.now() - t0 < 90000) {
+      const st = await page.evaluate(() => ({ mode: window.__coldgas.S.mode, verb: document.querySelector('[data-thumb-verb]')?.textContent || '', act: document.querySelector('[data-thumb-act]')?.textContent || '' }));
+      if (st.mode !== 'live') break;
+      if (/let go/i.test(st.act) && !tapped) { await set(false); await sleep(REACT); await set(true); tapped = true; }
+      else if (/^hold/i.test(st.verb)) { if (!down) await sleep(REACT); await set(true); }
+      await sleep(40);
+    }
+    await set(false);
+  }
+  while (!thumbMode && Date.now() - t0 < 90000) {
     const s = await read();
     if (s.mode !== 'live') break;
     const cue = s.cue.toLowerCase();

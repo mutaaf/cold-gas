@@ -15,11 +15,12 @@ import { predict, newPrediction, REACTION } from './sim/predict.js';
 import { CAR } from './sim/vehicle.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
-const COLORS = { green: 0x6ff0b5, amber: 0xffbf5a, red: 0xff5a62 };
+// Colour is state only: nominal ink, caution amber, warning red (the HUD's own palette).
+const COLORS = { green: 0xf5f6f8, amber: 0xffbf5a, red: 0xff5a62 };
 const TAPE_MAX = 30;            // m at the top of the tape
 const ROLL_RATE = 4.6;          // rad/s, Assist/Pro full stick (src/sim/vehicle.js RATE.z)
 
-export function createLandingHud({ scene }) {
+export function createLandingHud({ scene, onStatus = null }) {
   const root = $('[data-descent]');
   const el = {
     sink: $('[data-d-sink]'), sinkWrap: $('[data-d-sinkwrap]'), target: $('[data-d-target]'), state: $('[data-d-state]'),
@@ -82,13 +83,14 @@ export function createLandingHud({ scene }) {
     if (pr.status !== last.status) {
       root.dataset.status = pr.status;
       mat.color.setHex(COLORS[pr.status]);
+      onStatus?.(pr.status, last.status);
       last.status = pr.status;
     }
     // What the band asks of you: roof up first, then the brake.
     const word = pr.status === 'green' ? 'On profile' : pr.upY < 0.85 ? 'Roll out · now' : pr.status === 'amber' ? 'Brake' : 'Too fast';
     if (word !== last.word) { el.state.textContent = word; last.word = word; }
     const tg = Math.round(pr.profileSink * 2);
-    if (tg !== last.target) { el.target.textContent = `≤ ${(tg / 2).toFixed(1)}`; last.target = tg; }
+    if (tg !== last.target) { el.target.textContent = (tg / 2).toFixed(1); last.target = tg; }
     const ttg = Number.isFinite(pr.tGround) ? Math.round(pr.tGround * 10) : 999;
     if (ttg !== last.ttg) { el.ttg.textContent = ttg >= 999 ? '–' : (ttg / 10).toFixed(1); last.ttg = ttg; }
     // The tape.
@@ -96,9 +98,9 @@ export function createLandingHud({ scene }) {
     if (by !== last.brake) {
       const y = yOf(by / 2);
       el.brakeLine.setAttribute('y1', y); el.brakeLine.setAttribute('y2', y);
-      el.brakeLbl.setAttribute('y', String(Number(y) - 4));
+      el.brakeLbl.setAttribute('y', String(Number(y) - 6));
       el.fill.setAttribute('y', y); el.fill.setAttribute('height', String(Math.max(0, TAPE_H - Number(y))));
-      el.brakeLbl.textContent = pr.brakeBy > TAPE_MAX ? 'BRAKE ↑' : `BRAKE ${Math.ceil(pr.brakeBy)}`;
+      el.brakeLbl.textContent = pr.brakeBy > TAPE_MAX ? 'BRAKE ↑' : `BRAKE ${Math.ceil(pr.brakeBy)} m`;
       last.brake = by;
     }
     const ch = Math.round(Math.min(TAPE_MAX, h) * 4);

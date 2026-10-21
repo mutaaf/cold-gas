@@ -6,11 +6,25 @@ import { chime, tick } from './audio.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
+// The phase timeline: one flight, in order. The Show and the Wall share the Wall's sequence (the
+// Wall has no row: its carry is the fall off the lip); the Lineup lifts off flat ground and rolls.
+export const PHASES = {
+  show: [['runup', 'Run-up'], ['climb', 'Climb'], ['hang', 'Hang'], ['release', 'Release'], ['carry', 'Carry'], ['brake', 'Brake'], ['touchdown', 'Touchdown']],
+  wall: [['runup', 'Run-up'], ['climb', 'Climb'], ['hang', 'Hang'], ['release', 'Release'], ['carry', 'Carry'], ['brake', 'Brake'], ['touchdown', 'Touchdown']],
+  lineup: [['runup', 'Run-up'], ['liftoff', 'Lift-off'], ['roll', 'Roll'], ['brake', 'Brake'], ['touchdown', 'Touchdown']],
+};
+// Tenths of a second → "T+00:12.4" (minus sign in the countdown).
+export function missionClock(tenths) {
+  const neg = tenths < 0, t = Math.abs(tenths), m = Math.floor(t / 600), s = (t % 600) / 10;
+  return `${neg ? '−' : '+'}${m < 10 ? '0' : ''}${m}:${s < 10 ? '0' : ''}${s.toFixed(1)}`;
+}
+
 export function createUI() {
   const ui = {
     screens: Object.fromEntries([...document.querySelectorAll('[data-screen]')].map((el) => [el.dataset.screen, el])),
-    speed: $('[data-speed]'), phase: $('[data-phase]'), air: $('[data-air]'), airBar: $('[data-air-bar]'),
+    speed: $('[data-speed]'), speedBig: $('[data-speed-big]'), air: $('[data-air]'), airBar: $('[data-air-bar]'),
     roll: $('[data-roll]'), alt: $('[data-alt]'), sink: $('[data-sink]'), rollArc: $('[data-roll-arc]'),
+    bank: $('[data-bank]'), pitch: $('[data-pitch]'), clock: $('[data-clock]'), timeline: $('[data-timeline]'),
     cue: $('[data-cue]'), count: $('[data-count]'), touch: $('[data-touch]'),
   };
 
@@ -55,44 +69,84 @@ export function createUI() {
 
   ui.countdown = (n) => { ui.count.innerHTML = n ? `<span>${n}</span>` : ''; if (n) tick(); };
 
-  // Last-written values, so the DOM is only touched on change.
-  const last = { speed: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, fan: -1, phase: '', airborne: null };
-  const gEl = $('[data-g]'), fanEl = $('[data-fan]');
+  // The flight's phases, as the timeline shows them (src/main.js decides which one you're in).
+  ui.timelineFor = (course) => {
+    const list = PHASES[course] || PHASES.show;
+    if (ui.timeline.dataset.course === course) return;
+    ui.timeline.dataset.course = course;
+    ui.timeline.innerHTML = list.map(([id, label], i) => `<li data-ph="${id}"><i aria-hidden="true"></i><span><em>${String(i + 1).padStart(2, '0')}</em> ${label}</span></li>`).join('');
+    ui.phaseEls = [...ui.timeline.children];
+    last.phaseKey = '';
+  };
+
+  // Last-written values, so the DOM is only touched on change. Numbers glide to their targets (a
+  // first-order lag of ≈90 ms: readable, never late) and are written only when the shown digits
+  // change; tabular figures keep every digit in its place.
+  const last = { speed: -1, speedBig: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, gState: '', fan: -1, phaseKey: '', airborne: null, clock: -99999, bank: -999, pitch: -999, n2: '' };
+  const tw = { speed: 0, alt: 0, sink: 0, g: 1, t: 0 };
+  const gEl = $('[data-g]'), fanEl = $('[data-fan]'), n2El = $('[data-tank]');
   const hudEl = ui.screens.hud;
-  ui.hud = ({ speed, air, rollDeg, alt, sink, phase, throttles, g = 1, fan = 0, airborne = false }) => {
+  ui.setClock = (sec) => { const cl = Math.round(sec * 10); if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; } };
+  ui.resetHud = () => { tw.speed = 0; tw.alt = 0; tw.sink = 0; tw.g = 1; tw.t = 0; last.phaseKey = ''; };
+  ui.hud = ({ speed, air, rollDeg, alt, sink, phaseKey = '', clock = 0, bank = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
+    const now = performance.now(), dt = tw.t ? Math.min(0.1, (now - tw.t) / 1000) : 1;
+    tw.t = now;
+    const k = 1 - Math.exp(-dt / 0.09);
+    tw.speed += (speed - tw.speed) * k; tw.alt += (alt - tw.alt) * k; tw.sink += (sink - tw.sink) * k; tw.g += (g - tw.g) * k;
     if (airborne !== last.airborne) { hudEl.toggleAttribute('data-air', airborne); last.airborne = airborne; }
-    const gg = Math.round(g * 10);
-    if (gg !== last.g) { gEl.textContent = (gg / 10).toFixed(1); gEl.parentElement.classList.toggle('hot', g > 4.5); last.g = gg; }
+    const gg = Math.round(tw.g * 10);
+    if (gg !== last.g) {
+      gEl.textContent = (gg / 10).toFixed(1); last.g = gg;
+      const st = g > 4.5 ? 'warn' : g > 3 ? 'caution' : '';
+      if (st !== last.gState) { gEl.parentElement.dataset.state = st; last.gState = st; }
+    }
     const ff = Math.round(fan);   // kgf, as the livestream's DOWNFORCE channel reads it
     if (ff !== last.fan) { fanEl.textContent = String(ff); last.fan = ff; }
-    const sp = Math.round(speed * 3.6);
-    if (sp !== last.speed) { ui.speed.textContent = String(sp); last.speed = sp; }
+    const sp = Math.round(tw.speed * 3.6);
+    if (sp !== last.speed) { ui.speed.textContent = String(sp); ui.speedBig.textContent = String(sp); last.speed = sp; }
     const a = Math.round(air);
-    if (a !== last.air) { ui.air.textContent = String(a); ui.airBar.style.transform = `scaleX(${a / 100})`; last.air = a; }
+    if (a !== last.air) {
+      ui.air.textContent = String(a); ui.airBar.style.transform = `scaleX(${a / 100})`; last.air = a;
+      const st = a < 15 ? 'warn' : a < 30 ? 'caution' : '';
+      if (st !== last.n2) { n2El.dataset.state = st; last.n2 = st; }
+    }
     const r = Math.round(rollDeg);
     if (r !== last.roll) {
-      ui.roll.textContent = `${r}°`;
+      ui.roll.textContent = String(r);
       ui.rollArc.style.strokeDasharray = `${Math.min(360, r)} 360`;
       ui.rollArc.classList.toggle('done', r >= 330);
       last.roll = r;
     }
-    const al = Math.round(alt * 10);
-    if (al !== last.alt) { ui.alt.textContent = (al / 10).toFixed(1); last.alt = al; }
-    const sk = Math.round(sink * 10);
+    const al = Math.round(tw.alt * 10);
+    if (al !== last.alt) { ui.alt.textContent = (Math.max(0, al) / 10).toFixed(1); last.alt = al; }
+    const sk = Math.round(tw.sink * 10);
     if (sk !== last.sink) { ui.sink.textContent = (Math.max(0, sk) / 10).toFixed(1); last.sink = sk; }
-    if (phase !== last.phase) { ui.phase.textContent = phase; last.phase = phase; }
+    // Attitude: bank (+ right wing down) and pitch (+ nose up), whole degrees.
+    const bk = Math.round(bank), pt = Math.round(pitch);
+    if (bk !== last.bank) { ui.bank.textContent = bk > 0 ? `R${bk}` : bk < 0 ? `L${-bk}` : '0'; last.bank = bk; }
+    if (pt !== last.pitch) { ui.pitch.textContent = pt > 0 ? `+${pt}` : String(pt); last.pitch = pt; }
+    // The mission clock: T− in the countdown, T+ from the green light, in tenths.
+    const cl = Math.round(clock * 10);
+    if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; }
+    if (phaseKey !== last.phaseKey && ui.phaseEls) {
+      const at = ui.phaseEls.findIndex((li) => li.dataset.ph === phaseKey);
+      ui.phaseEls.forEach((li, i) => { li.dataset.state = at < 0 ? '' : i < at ? 'done' : i === at ? 'now' : ''; });
+      hudEl.dataset.phase = phaseKey;
+      last.phaseKey = phaseKey;
+    }
     for (let i = 0; i < ui.nz.length; i++) {
       const n = ui.nz[i], v = Math.round(throttles[i] * 40);
       if (v === n.last) continue;
       n.last = v;
       const p = v / 40;
-      n.dot.style.fill = p > 0.02 ? `rgba(191,230,255,${0.25 + p * 0.75})` : '';
+      n.dot.style.fill = p > 0.02 ? `rgba(245,246,248,${(0.3 + p * 0.7).toFixed(2)})` : '';
       n.ring.setAttribute('stroke-dasharray', `${(p * ringLen).toFixed(1)} ${ringLen.toFixed(1)}`);
     }
   };
 
-  // The damage sensor: per-zone shading (amber from 10 %, red from 40 %), the total, a flash on a hit.
-  const dmgEl = $('[data-dmg]'), dmgPct = $('[data-dmg-pct]');
+  // The damage sensor: per-zone shading (caution from 10 %, warning from 40 %), the total with its
+  // state word, and a flash on every new hit.
+  const dmgEl = $('[data-dmg]'), dmgPct = $('[data-dmg-pct]'), dmgWord = $('[data-dmg-word]');
   const dmgZones = dmgEl ? Object.fromEntries([...dmgEl.querySelectorAll('[data-z]')].map((el) => [el.dataset.z, el])) : {};
   const ZONE_ORDER = ['nose', 'tail', 'left', 'right', 'roof', 'floor', 'susp'];
   const lastDmg = { total: -1, hit: -1, z: ZONE_ORDER.map(() => -1) };
@@ -109,7 +163,9 @@ export function createUI() {
     const t = Math.round(d.total);
     if (t !== lastDmg.total) {
       dmgPct.textContent = String(t);
-      dmgEl.dataset.state = t >= 60 ? 'wreck' : t >= 25 ? 'warn' : t > 0 ? 'scuffed' : 'ok';
+      const st = t >= 60 ? 'wreck' : t >= 25 ? 'warn' : t > 0 ? 'scuffed' : 'ok';
+      dmgEl.dataset.state = st;
+      dmgWord.textContent = { ok: 'Intact', scuffed: 'Scuffed', warn: 'Damaged', wreck: 'Wrecked' }[st];
       lastDmg.total = t;
     }
     if (d.lastTick !== lastDmg.hit) {
@@ -117,7 +173,12 @@ export function createUI() {
       lastDmg.hit = d.lastTick;
     }
   };
-  ui.damageReset = () => { lastDmg.total = -1; lastDmg.hit = -1; lastDmg.z.fill(-1); dmgEl?.classList.remove('hit'); };
+  ui.damageReset = () => {
+    lastDmg.total = -1; lastDmg.hit = -1; lastDmg.z.fill(-1);
+    if (!dmgEl) return;
+    dmgEl.classList.remove('hit'); dmgEl.dataset.state = 'ok'; dmgPct.textContent = '0'; dmgWord.textContent = 'Intact';
+    for (const el of Object.values(dmgZones)) { el.dataset.level = ''; el.style.removeProperty('--dmg'); }
+  };
 
   // --- Results ---------------------------------------------------------------------------
   // `practice`: { drill, result } for a drill (not scored: no panel, no board).
