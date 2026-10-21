@@ -21,6 +21,8 @@ import { renderPicker, createHud, createEndlessHud, randomSeed, fmtTime } from '
 import { createPilot } from './pilot.js';
 import { createBuildLayer } from '../build/layer.js';
 import { roadHost } from '../build/road-host.js';
+import { createPoseLerp } from '../render/interp.js';
+import { createReverse } from '../hands.js';
 
 export { ROADS };
 export const DEFAULT_ROAD = 'stelvio';
@@ -48,6 +50,7 @@ export function createDrive(ctx) {
     pilot: null, lamp: null, sn: { x: 0, y: 0, z: 0 }, ground: 0, startedAt: 0, frames: 0, fpsT: 0, fps: 0,
   };
   const comps = [0, 0, 0, 0], spins = [0, 0, 0, 0];
+  const poseLerp = createPoseLerp(), reverse = createReverse();
   let picker = null;
 
   // --- The picker ------------------------------------------------------------------------------
@@ -324,6 +327,7 @@ export function createDrive(ctx) {
         const fxx = Math.sin(p.yaw), fzz = Math.cos(p.yaw);
         c.vel.x = fxx * cr.v; c.vel.y = 0; c.vel.z = fzz * cr.v;
         st.acc = 0;
+        poseLerp.before(c);   // carried, not stepped: drawn where it is
       }
       while (st.acc >= DT) {
         const air = c.grounded === 0 && !c.hullContact;
@@ -331,20 +335,18 @@ export function createDrive(ctx) {
         const phase = st.airT > 0.25 ? 'air' : 'drive';
         Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist(), undefined, false, c));
         inp.fan = st.fan ? 1 : 0;
-        // Reverse: hold brake at a standstill.
-        if (phase === 'drive') {
-          const fz = 1 - 2 * (c.quat.x * c.quat.x + c.quat.y * c.quat.y), fx = 2 * (c.quat.x * c.quat.z + c.quat.w * c.quat.y);
-          const vf = c.vel.x * fx + c.vel.z * fz;
-          if (inp.brake > 0 && inp.throttle === 0 && vf < 0.8) { inp.throttle = -0.35 * inp.brake; inp.brake = 0; }
-        }
+        // Reverse: hold the brake at a standstill (src/hands.js: a stop holds before it backs up).
+        if (phase === 'drive') reverse(c, inp);
         layer?.preStep(c, inp);
+        poseLerp.before(c);
         step(c, inp);
         layer?.postStep(c);
         st.acc -= DT;
       }
       c = st.car;
       for (let i = 0; i < 4; i++) { comps[i] = c.wheels[i].compression; spins[i] = c.wheels[i].spin; }
-      syncCar(c.pos, c.quat, comps, spins, c.steer);
+      const drawn = poseLerp.pose(c, st.acc / DT);
+      syncCar(drawn.pos, drawn.quat, comps, spins, c.steer);
       crash.feed(c.impacts, c.tick, c.vel);
       watchdog(dt, c);
     }

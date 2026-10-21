@@ -2,7 +2,7 @@
 // test's scripted drive): pure-pursuit steering on a point ahead in the right-hand lane, and a
 // speed from the tightest curve in the next stretch (v = √(a·R), a ≈ 0.8 g by default).
 import { poseAt, nearestSample } from '../sim/roads.js';
-import { newInput } from '../sim/vehicle.js';
+import { newInput, rackLock } from '../sim/vehicle.js';
 import { dsin, datan, datan2, dhypot } from '../sim/dmath.js';
 
 export function createPilot(road, { lat = 0.8, vmax = 40, dir = 1 } = {}) {
@@ -17,7 +17,7 @@ export function createPilot(road, { lat = 0.8, vmax = 40, dir = 1 } = {}) {
     const v = Math.sqrt(car.vel.x * car.vel.x + car.vel.z * car.vel.z);
     const s = hint * sp;
     // Pure pursuit: aim at a point ld ahead in the lane; δ = atan(2·L·sin α / ld), as a fraction of
-    // the steering rack's lock at this speed (vehicle.js: min(0.5, L·μ·g/v² + 0.04)).
+    // the steering rack's lock at this speed (vehicle.js rackLock).
     const ld = 4.5 + v * 0.38;
     poseAt(road, Math.max(0, Math.min(road.length - 1, s + dir * ld)), dir, p);
     // Through a hairpin, use the whole road (as drivers do): drift the aim from the right-hand
@@ -41,7 +41,7 @@ export function createPilot(road, { lat = 0.8, vmax = 40, dir = 1 } = {}) {
     // so the same scripted drive went somewhere else in CI's browser than in Node or a local one.
     const alpha = datan2(right, ahead), dist = Math.max(1, dhypot(ex, ez));
     const L = 2.825, delta = datan((2 * L * dsin(alpha)) / dist);
-    const lock = Math.min(0.5, (L * 1.25 * 9.81) / Math.max(1, v * v) + 0.04);
+    const lock = rackLock(v * v);
     // Tightest curve over the braking distance ahead.
     let kmax = 0;
     const look = Math.max(20, Math.ceil((v * v) / (2 * 6) / sp) + 8);

@@ -29,8 +29,8 @@ const flyDrill = (id, policy, course = 'show') => {
   return run;
 };
 
-describe('SIM_VERSION 20: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down, the Wall from its foot, the curl gate', () => {
-  it('is version 19 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it)', () => expect(SIM_VERSION).toBe(20));
+describe('SIM_VERSION 21: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down, the Wall from its foot, the curl gate, driving feel', () => {
+  it('is version 21 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock)', () => expect(SIM_VERSION).toBe(21));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
@@ -44,6 +44,8 @@ describe('SIM_VERSION 20: the rigid-body engine, the reveal G trace, relaxed tyr
   // landed: Lineup 92.0 (0.5 m from the mark, 0.78 m/s); the Wall and the Show are bit-identical.
   // v19 (0019): the Wall starts parked at the foot of the curl and spools at rest: Wall 96.0
   // (17.8 s start to settled, was 35.3); the Show and the Lineup are bit-identical.
+  // v21 (driving feel): the Show and the Wall are bit-identical; the Lineup's run moves by a
+  // tick (3418 ticks, was 3417) and still scores 92.0.
   it('keeps the reference runs: no worse than SIM_VERSION 13', () => {
     const runs = Object.fromEntries(['show', 'wall', 'lineup'].map((c) => [c, fly(c)]));
     const cards = Object.fromEntries(Object.entries(runs).map(([c, r]) => [c, scoreRun(r.t)]));

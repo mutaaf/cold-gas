@@ -48,3 +48,6 @@ asserting the bands above. Re-run `physics-bench`, `naive-players`, `human-phone
 
 ## Out of scope
 A yoke visual, steering feel on touch, speed-sensitive rack for Free Drive, active rear steer.
+
+## Note (2026-10-21, Driving feel 2, SIM_VERSION 20)
+`steerLock` and `steerRate` now live in spec.js with ESTIMATE notes (first bullet of What). The rack also opens up for opposite lock and slews at its variable ratio at speed (vehicle.js), and `scripts/drive-feel.mjs` has a step steer, a lane change and a flick at 100 km/h through the same hands a player has (tests/unit/drive.test.js). Still open here: the ISO 3888-2 cone course and its bands.

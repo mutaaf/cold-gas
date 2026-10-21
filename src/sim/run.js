@@ -21,6 +21,9 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // v18: LAND's set-down follows the fall it ends (none after the kickflip), the Lineup mark just
 // past the row (0014).
 // v19: the Wall starts parked at the foot of the curl (z −6, was −120), as run 1 did (0019).
+// v21: driving feel. Assist's crawl limit only on the Wall's curl; traction control keeps the
+// tyre's side force (friction ellipse); stability control (Assist) brakes a front wheel against a
+// slide; the rack opens up for opposite lock and slews at its variable ratio.
 // v12: the parked row at its researched sizes and curb masses (docs/VEHICLES.md).
 // v11: the input log gains `manual` + ten valve channels (Advanced: per-thruster control); LAND rolls
 // out decisively from inverted, plans its brake on the end-of-stop pressure, holds the line and
@@ -35,7 +38,7 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // distribution; v7: body geometry; v6: The Show is one flight (off the Wall, over the row); parked
 // vehicles are bodies with mass, per-surface materials; v5: driver-relative steer/roll/yaw,
 // grip-limited steering; v4: sourced specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 20;
+export const SIM_VERSION = 21;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 export const G_WIN = 120;               // 0.5 s of ticks: the braking peak's averaging window
