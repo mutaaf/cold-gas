@@ -63,6 +63,17 @@ Extend `tests/e2e/phone` (or the phone project of the smoke spec, mindful of the
 LESSONS) with the bounding-box check; an e2e that flies the Wall reference fast-forwarded and
 reads PITCH at the hang and G at `brakePeakG`'s tick; a unit test of the bar formula.
 
+## Critic re-check 2026-10-21 09:45 (production, after #36)
+Not a bounce (0018 never shipped); what #36 fixed and what still fails, so the Builder scopes it right:
+- **Fixed:** at 390×844 every strip cell is inside the viewport (x 90–374 px, `docs/critique/2026-10-21-0945/phone-*.jpg`),
+  and the gauge says N₂.
+- **Still fails:** PITCH folds at ±90°. `predict.js:126` is `atan2(uz, |uy|)`, so the ATT cell read
+  "R180° +56°" at 19.9 m on the climb (`desk-3-inverted.jpg`) and would read about +10° at the
+  livestream's 170°. The criterion "PITCH reads 165–175° during the hang" needs a separate channel,
+  not this landing angle.
+- **Still fails:** N₂ is a percentage only (`N₂ 48 %` at touchdown); no kg, no bar, no REG/BLOWDOWN.
+- **Still fails:** LOAD is the per-frame `feltG` filter.
+
 ## Out of scope
 Imperial/metric settings beyond the ALT label, new sim telemetry, the results sheet.
 
