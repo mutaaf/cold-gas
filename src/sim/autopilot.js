@@ -166,7 +166,11 @@ function lineupPilot(plan) {
       }
       if (st.rollDone) {
         out.level = 1;
-        steerToPad(c, pad, out, Math.max(0, c.pos.y - SPEC.comHeight));
+        // Steer only while the down-jets brake (as off the Wall): tilting in free fall moves nothing
+        // and starts the stop with its thrust off the vertical. Across the run only: the carry is
+        // the kickflip's (lift off short of the first vehicle, land just beyond the last, §2.2), and
+        // pitching back to slow it tilts the lift away from the brake and hovers over the row.
+        if (c.vel.y < landProfile(c) + 0.5 || c.vel.y > -3) { steerToPad(c, pad, out, Math.max(0, c.pos.y - SPEC.comHeight)); out.pitch = 0; }
       }
       return out;
     }

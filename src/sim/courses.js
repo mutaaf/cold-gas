@@ -155,7 +155,7 @@ export const LINEUP = {
   liftOffZ: 0,                // where the run-up ends and the lift-off marker sits
   boxes: LINEUP_BOXES,
   start: { z: -70, x: 0 },
-  pad: { z: 44, x: 0, rings: [2, 4, 7] },
+  pad: { z: 28, x: 0, rings: [2, 4, 7] },
   runout: { zMin: -120, zMax: 190 },
   lineupZ0: Z0,
   lineupEnd: LINEUP_BOXES[LINEUP_BOXES.length - 1].maxZ,
