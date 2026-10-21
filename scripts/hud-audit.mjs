@@ -16,7 +16,7 @@ mkdirSync(out, { recursive: true });
 const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430]];
 const TABLETS = [[768, 1024], [1024, 768]];
 const DESKTOPS = [[1280, 720], [1920, 1080], [720, 1280], [1080, 1920]];
-const VIEWPORTS = set === 'phones' ? PHONES : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : [...PHONES, ...TABLETS, ...DESKTOPS];
+const VIEWPORTS = set === 'phones' ? PHONES : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map((v) => v.split('x').map(Number)) : [...PHONES, ...TABLETS, ...DESKTOPS];
 const touchFor = (w, h) => [...PHONES, ...TABLETS].some(([a, b]) => a === w && b === h);
 
 // Everything that sits over the stage during a run (both the old markup and the new; missing ones
