@@ -9,6 +9,8 @@ import { roadSurface, poseAt, nearestSeg, groundAt } from '../../src/sim/roads.j
 import { seedOf } from '../../src/sim/noise.js';
 import { createVehicle, step, newInput } from '../../src/sim/vehicle.js';
 import { quatFromYaw } from '../../src/sim/m3.js';
+import { surfaceHeight, createWorld, freeWorld, GROUP } from '../../src/sim/world.js';
+import * as ENGINE from '../../src/sim/engine.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { createPilot } from '../../src/drive/pilot.js';
 import { createTileGen, buildTile, LEVELS, N } from '../../src/world/tilegen.js';
@@ -247,4 +249,53 @@ describe('the world API: placed objects', () => {
     expect(o.triggersAt(30, 0.5, 0).map((t) => t.type)).toEqual(['boost']);
     expect(o.colliders().map((c) => c.shape)).toEqual(['loop']);
   }, 60_000);
+});
+
+// The hull's near-car copy of the road (src/sim/world.js streamRoad) is a heightfield sampled from
+// the road's surface every 2 m, with the guard rails and tunnel roofs added as boxes. It sampled the
+// surface WITH the rails: a vertex on a rail took its top (0.8 m up), and the heightfield ramped up
+// to it over a whole 2 m cell, into the road. At 0.72 km on seed e2e-seed, at 136 km/h, the hull
+// hit that phantom kerb and was thrown 6 m up (the endless e2e drive's flake). And the sampler's
+// Newton march stopped after five steps wherever it was: beside a vertical face, 0.6 m high.
+describe('the hull heightfield is the ground', () => {
+  const course = createEndlessCourse('e2e-seed'), road = course.road;
+  road.ensure(3000);
+  const o = { x: 0, y: 0, z: 0 };
+  const ground = (x, z, y0) => { let lo = y0 - 20, hi = y0 + 20; for (let k = 0; k < 50; k++) { const m = (lo + hi) / 2; if (roadSurface(road, x, m, z, o, true) > 0) hi = m; else lo = m; } return (lo + hi) / 2; };
+  it('the sampler lands on the surface at every vertex, even beside a face', () => {
+    const sdf = (x, y, z, out) => roadSurface(road, x, y, z, out, true), i0 = poseAt(road, 60, 1).i;
+    let worst = 0;
+    for (const s of [600, 696, 717]) {
+      const a = i0 + Math.round(s / 3), cx = Math.round(road.x[a]), cz = Math.round(road.z[a]), cy = road.y[a] + 0.4;
+      for (let j = 0; j <= 48; j++) for (let i = 0; i <= 48; i++) {
+        const x = cx - 48 + j * 2, z = cz - 48 + i * 2;
+        worst = Math.max(worst, Math.abs(surfaceHeight(sdf, x, z, cy + 1.5) - ground(x, z, cy)));
+      }
+    }
+    expect(worst).toBeLessThan(0.01);
+  });
+  it('on the ribbon the engine\'s heightfield is the road: no ramps up to the rails (the 0.72 km strike)', () => {
+    const w = createWorld(course), pos = { x: 1151.97, y: 309.2, z: 745.07 };   // where the hull was hit
+    w.stream(w, pos);
+    w.rw.timestep = 0; w.rw.step();   // file the new colliders for queries (as createWorld does)
+    const R = ENGINE.RAPIER, ray = new R.Ray({ x: 0, y: 0, z: 0 }, { x: 0, y: -1, z: 0 });
+    const q = { seg: -1, lat: 0 };
+    let above = 0, below = 0, n = 0;
+    for (let dx = -20; dx <= 20; dx += 0.5) for (let dz = -20; dz <= 20; dz += 0.5) {
+      const x = pos.x + dx, z = pos.z + dz;
+      if (!nearestSeg(road, x, pos.y, z, q) || Math.abs(q.lat) > road.hw[q.seg]) continue;   // the ribbon
+      ray.origin.x = x - w.ox; ray.origin.y = pos.y + 5 - w.oy; ray.origin.z = z - w.oz;
+      const hit = w.rw.castRay(ray, 15, true, undefined, (((0xffff << 16) | GROUP.approx) >>> 0));
+      expect(hit).toBeTruthy();
+      const err = pos.y + 5 - hit.timeOfImpact - ground(x, z, pos.y);
+      above = Math.max(above, err); below = Math.min(below, err);
+      n++;
+    }
+    expect(n).toBeGreaterThan(200);
+    // Never above the road (a rail's ramp stood 0.6 m above it). A 2 m grid cuts a few cm under
+    // the shoulder's hinge at the very edge, which no hull can catch on.
+    expect(above).toBeLessThan(0.02);
+    expect(below).toBeGreaterThan(-0.1);
+    freeWorld(w);
+  });
 });

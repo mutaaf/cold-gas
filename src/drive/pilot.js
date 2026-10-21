@@ -3,6 +3,7 @@
 // speed from the tightest curve in the next stretch (v = √(a·R), a ≈ 0.8 g by default).
 import { poseAt, nearestSample } from '../sim/roads.js';
 import { newInput } from '../sim/vehicle.js';
+import { dsin, datan, datan2, dhypot } from '../sim/dmath.js';
 
 export function createPilot(road, { lat = 0.8, vmax = 40, dir = 1 } = {}) {
   const out = newInput();
@@ -36,8 +37,10 @@ export function createPilot(road, { lat = 0.8, vmax = 40, dir = 1 } = {}) {
     const ex = p.x - car.pos.x, ez = p.z - car.pos.z;
     // + = target to the driver's right (left is (fz, −fx) in this frame).
     const right = -(ex * fz - ez * fx), ahead = ex * fx + ez * fz;
-    const alpha = Math.atan2(right, ahead), dist = Math.max(1, Math.hypot(ex, ez));
-    const L = 2.825, delta = Math.atan((2 * L * Math.sin(alpha)) / dist);
+    // dmath, like the sim: a drive is chaotic, and Math.atan2/sin differ by an ulp between engines,
+    // so the same scripted drive went somewhere else in CI's browser than in Node or a local one.
+    const alpha = datan2(right, ahead), dist = Math.max(1, dhypot(ex, ez));
+    const L = 2.825, delta = datan((2 * L * dsin(alpha)) / dist);
     const lock = Math.min(0.5, (L * 1.25 * 9.81) / Math.max(1, v * v) + 0.04);
     // Tightest curve over the braking distance ahead.
     let kmax = 0;
