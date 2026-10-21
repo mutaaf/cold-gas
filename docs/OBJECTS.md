@@ -128,7 +128,8 @@ times the measured cost.
   terrain worker builds, so making them bodies needs per-post instances; they are flexible posts that
   a car flattens, the closest thing to a soft volume.
 - **Crash debris as bodies** (above): cosmetic by design.
-- **The scored courses' phase rules** read "on the Wall" as `z > 0.5 and y > 1.2`; a car driven up
-  onto the 3 m pad trips them, and its run can end as a (low-scoring) landing.
-- **`surface()`** (the exact geometry the HUD's altimeter and the debris floor read) doesn't know the
-  complex: over the pad the altimeter reads 3 m high.
+- ~~The scored courses' phase rules read the 3 m pad as the Wall~~ (fixed in v25: "on the Wall" is
+  the Wall's footprint, |x| < width/2 + 2 m).
+- **`surface()`** (the exact geometry the debris floor and the crash camera read) doesn't know the
+  complex; the HUD's altimeter measures from `siteFloor()` (src/sim/complex.js) over the pad and the
+  mount's deck.

@@ -8,7 +8,7 @@ import { createRun, stepRun, simulate, SIM_VERSION } from '../../src/sim/run.js'
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { LINEUP, SHOW, FIXTURES, fixturesOf } from '../../src/sim/courses.js';
 import { siteBuilt, propPose, PROP_CAP, PROP_BUILDS, freeWorld } from '../../src/sim/world.js';
-import { siteOf, toWorld, toLocal, siteSolids, PAD_Y, PLUME, TOWER_X, TOWER_W, SITE_RADIUS } from '../../src/sim/complex.js';
+import { siteOf, siteFloor, toWorld, toLocal, siteSolids, PAD_Y, MOUNT_TOP, PLUME, TOWER_X, TOWER_W, SITE_RADIUS } from '../../src/sim/complex.js';
 import { staticFire, fireClock, FIRE_SCHEDULE, ROCKET, LIFTOFF_MASS, MDOT1, G0, ascend, idealDeltaV, jetSpeed, JET } from '../../src/sim/rocket.js';
 import { CONE, BARRIER, propBody, parkedBody } from '../../src/sim/props.js';
 import { dexp, dlog, datan2 } from '../../src/sim/dmath.js';
@@ -220,6 +220,27 @@ describe('the launch complex is solid where it is drawn', () => {
     expect(c.pos.y).toBeGreaterThan(PAD_Y + 0.2);
     expect(c.pos.y).toBeLessThan(PAD_Y + 0.7);
   });
+  it('the pad is not the Wall: a car up on it stays in the drive phase (the run does not end as a landing)', () => {
+    // A point on the pad on the Wall's side of z (its rule was z > 0.5 and y > 1.2, anywhere in x).
+    // Inside the course's runout (z ≤ 40), facing back toward the pad's centre so it stays on it.
+    let lx = 0, lz = 0;
+    for (let x = -50; x <= 50; x += 10) for (let z = -50; z <= 50; z += 10) { const w = toWorld(site, x, 0, z).z; if (w > 8 && w < 25 && Math.hypot(x, z) < 55) { lx = x; lz = z; } }
+    const run = start(lx, lz, 0, 0), c = run.car;
+    expect(c.pos.z).toBeGreaterThan(0.5);
+    for (let k = 0; k < 240 * 3; k++) stepRun(run, { throttle: k < 240 ? 0.4 : 0, brake: k >= 240 * 2 ? 1 : 0, assist: 1 });
+    expect(c.pos.y).toBeGreaterThan(PAD_Y);
+    expect(run.phase).toBe('drive');
+  });
+  it('the altimeter\'s floor: the pad, its skirt and the mount\'s deck, only from above', () => {
+    const at = (lx, ly, lz) => { const p = toWorld(site, lx, 0, lz); return siteFloor('show', p.x, ly, p.z); };
+    expect(at(30, 10, 0)).toBe(PAD_Y);
+    expect(at(76, 10, 0)).toBeCloseTo(PAD_Y / 2, 6);          // halfway down the skirt (66 → 86 m)
+    expect(at(120, 10, 0)).toBe(-Infinity);
+    expect(at(0, MOUNT_TOP + 2, 0)).toBe(MOUNT_TOP);           // over the mount's deck
+    expect(at(0, MOUNT_TOP - 3, 0)).toBe(PAD_Y);               // under it, in the trench's headroom
+    expect(at(30, 1, 0)).toBe(-Infinity);                      // below the pad's top: not a floor
+    expect(siteFloor('freedrive', 0, 10, 0)).toBe(-Infinity);
+  });
   it('the strongback stops a car driven at it at 15 m/s', () => {
     const run = start(40, 0, 0, 0), c = run.car;
     let vMax = 0, hull = false;
@@ -259,7 +280,7 @@ describe('the launch complex is solid where it is drawn', () => {
     expect(Math.hypot(live.pos.x - site.x, live.pos.z - site.z)).toBeLessThan(SITE_RADIUS + 60);
     const re = simulate(run.inputLog, 'show', run.tick);
     expect(re.car.pos.x).toBe(live.pos.x); expect(re.car.pos.z).toBe(live.pos.z); expect(re.car.quat.w).toBe(live.quat.w);
-    expect(SIM_VERSION).toBe(24);
+    expect(SIM_VERSION).toBe(25);
   });
 });
 

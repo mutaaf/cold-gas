@@ -81,6 +81,22 @@ export function toLocal(site, x, y, z, out = { x: 0, y: 0, z: 0 }) {
   out.x = dx * site.c - dz * site.s; out.y = y; out.z = dx * site.s + dz * site.c;
   return out;
 }
+/**
+ * The complex's highest floor under (x, y, z) on a course: the hardstand (flat to r 66 m, then its
+ * straight skirt to the ground at 86 m, as its collider is built) or the launch mount's deck, only
+ * if it is below y. −Infinity off the site. For readouts (the HUD's altimeter): course surface()
+ * does not know the complex.
+ */
+export function siteFloor(courseId, x, y, z, tmp = { x: 0, y: 0, z: 0 }) {
+  const site = siteOf(courseId);
+  if (!site) return -Infinity;
+  const l = toLocal(site, x, y, z, tmp), r = Math.sqrt(l.x * l.x + l.z * l.z);
+  const r0 = PAD_PROFILE[1][0], r1 = PAD_PROFILE[3][0];
+  let f = r <= r0 ? PAD_Y : r < r1 ? (PAD_Y * (r1 - r)) / (r1 - r0) : -Infinity;
+  const [dw, , dd] = MOUNT.deck;
+  if (Math.abs(l.x) <= dw / 2 && Math.abs(l.z) <= dd / 2 && y >= MOUNT_TOP) f = MOUNT_TOP;
+  return f <= y ? f : -Infinity;
+}
 // Everything solid lies within this radius of the pad's centre (the skirt's foot at 86 m).
 export const SITE_RADIUS = 90;
 export const SITE_TOP = PAD_Y + MAST_H + 1;

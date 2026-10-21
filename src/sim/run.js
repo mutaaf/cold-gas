@@ -45,7 +45,9 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // (20 s into a run, then every 40 s) throws its jet out of the flame trench onto a car parked in it
 // (src/sim/rocket.js). A run that stays on the stage replays to the same bits (the references do);
 // one that drives out to the pad didn't meet anything there before.
-export const SIM_VERSION = 24;
+// v25: "on the Wall" is the Wall's footprint (|x| < width/2 + 2 m): the 3 m pad read as the Wall, and a
+// drive up onto it ended the run as a landing.
+export const SIM_VERSION = 25;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 export const G_WIN = 120;               // 0.5 s of ticks: the braking peak's averaging window
@@ -195,7 +197,9 @@ function advance(run, input) {
 
   if (run.phase === 'drive') {
     if (wall) {
-      if (c.onWall || (c.pos.z > 0.5 && c.pos.y > 1.2)) {
+      // On the Wall: touching its deck, or up off the ground over its footprint. The footprint's width
+      // matters since the launch complex is solid (v24): the 3 m pad, 265 m to the side, read as the Wall.
+      if (c.onWall || (c.pos.z > 0.5 && c.pos.y > 1.2 && Math.abs(c.pos.x) < WALL.width / 2 + 2)) {
         run.phase = 'ramp'; t.rampTick = run.tick; t.rampEntrySpeed = speed;
       }
     } else {
