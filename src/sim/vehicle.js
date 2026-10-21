@@ -202,6 +202,8 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     crush: new Float64Array(HULL.length), crushShown: new Float64Array(HULL.length), touch: new Uint8Array(HULL.length), impacts: createImpacts(),
     // Energy each probe's structure has absorbed in contacts (J): its crush follows from it.
     crushE: new Float64Array(HULL.length), touchNow: new Uint8Array(HULL.length), engineMass: 0,
+    // The hardest sink of this flight so far (m/s, 0 on the ground): LAND sizes its set-down to it.
+    fallPeak: 0,
   };
   s.engineMass = massOf(s);
   attachCar(world, HULL_SHAPE, s.engineMass, { x: SPEC.inertia.pitch, y: SPEC.inertia.yaw, z: SPEC.inertia.roll });
@@ -342,16 +344,28 @@ function record(imp, tick, kind, part, ev) {
 //  - LAND: lift is governed so the sink rate eases to a soft touchdown on the ground below.
 //  - CARRY: airborne, the rear jets fade out as the horizontal speed nears ASSIST_CARRY, and shut
 //    while LAND brakes.
-// LAND brakes to the top of the set-down, HOVER m up, then sets down at a sink easing from
-// SETDOWN + SETDOWN_K·h to SETDOWN at the wheels: 2.05 m/s at 2.5 m, 0.8 m/s at touchdown (the
-// judges' perfect band is ≤ 0.9). TELEMETRY (docs/REVEAL_RESEARCH.md §2.1.4): braked to ≈1.5 m/s
-// by ≈2.5 m, 1.5 s from 2.3 m to wheels down, touchdown at 1.1 G.
+// LAND brakes to the top of the set-down, `setdownTop` m up, then sets down at a sink easing from
+// SETDOWN + SETDOWN_K·h to SETDOWN at the wheels: after the Wall's drop 2.05 m/s at 2.5 m, 0.8 m/s
+// at touchdown (the judges' perfect band is ≤ 0.9). TELEMETRY (docs/REVEAL_RESEARCH.md §2.1.4):
+// braked to ≈1.5 m/s by ≈2.5 m, 2.0 s below 3 m, touchdown at 1.1 G.
 export const HOVER = 2.5, SETDOWN = 0.8, SETDOWN_K = 0.5;
-const V_HOVER = SETDOWN + SETDOWN_K * HOVER;
-// The vertical speed LAND wants at height h with a braking plan of aPlan m/s² (negative down).
-export function profileVy(h, aPlan) {
-  if (h <= HOVER) return -(SETDOWN + SETDOWN_K * Math.max(0, h));
-  return -Math.min(25, Math.sqrt(V_HOVER * V_HOVER + 2 * aPlan * (h - HOVER)));
+// The set-down follows the fall it ends. After the 20 m drop (a 15–16 m/s sink taken out in a 3.3 G
+// stop) the reveal spent 2.0 s below 3 m; after the 7 m kickflip it was upright at ≈t0 + 2.2 s and on
+// its wheels by ≈t0 + 3 s, and the standing flip went from upright to wheels in 0.8 s (§2.2, §2.4):
+// no hover after a low stunt. So the top of the set-down grows with the hardest sink of the flight,
+// from none below FALL_LOW m/s to HOVER at FALL_HIGH (ESTIMATE, fitted to those two stunts: the
+// kickflip peaks at ≈7 m/s, the Wall and the Show at 15–16). The sink at the wheels is SETDOWN
+// either way. A hard stop leaves the most to settle (the blowdown, the rate loop) before contact.
+const FALL_LOW = 8, FALL_HIGH = 14;
+const TOP_MIN = 0.1;
+export const setdownTop = (s) => TOP_MIN + (HOVER - TOP_MIN) * clamp((s.fallPeak - FALL_LOW) / (FALL_HIGH - FALL_LOW), 0, 1);
+const vTop = (top) => SETDOWN + SETDOWN_K * top;
+// The vertical speed LAND wants at height h with a braking plan of aPlan m/s² (negative down), for
+// a set-down from `top` m.
+export function profileVy(h, aPlan, top = HOVER) {
+  if (h <= top) return -(SETDOWN + SETDOWN_K * Math.max(0, h));
+  const v = vTop(top);
+  return -Math.min(25, Math.sqrt(v * v + 2 * aPlan * (h - top)));
 }
 let behind = 0;   // m/s the car is falling faster than the LAND profile wants (0 when not governed)
 function governor(s, inp, grounded, m) {
@@ -383,12 +397,12 @@ export function landProfile(s, m = massOf(s)) {
 // the target, so it doesn't dawdle in a set-down over each roof and drain the tanks. Stopped over
 // a roof, it sets down there, gently.
 function landWant(s, m) {
-  const h = landHeight(s), a = brakePlan(s, m);
-  if (roofBelow <= 0) return profileVy(h, a);
-  if (dhypot(s.vel.x, s.vel.z) <= 2) return profileVy(h, a);
+  const h = landHeight(s), a = brakePlan(s, m), top = setdownTop(s);
+  if (roofBelow <= 0) return profileVy(h, a, top);
+  if (dhypot(s.vel.x, s.vel.z) <= 2) return profileVy(h, a, top);
   const hRoof = h, hGround = h + roofBelow;
   if (hRoof < ROOF_HOLD) return clamp(ROOF_HOLD - hRoof, 0, 1);
-  return Math.max(profileVy(hGround, a), -Math.min(25, Math.sqrt(2 * a * (hRoof - ROOF_HOLD))));
+  return Math.max(profileVy(hGround, a, top), -Math.min(25, Math.sqrt(2 * a * (hRoof - ROOF_HOLD))));
 }
 // LAND's altimeter: the floor's height above whatever it would set down on, the ground or the
 // tallest parked roof under the car's footprint along its track, from its tail now to its nose
@@ -439,9 +453,9 @@ export function brakeAvailAtEnd(s, m = massOf(s)) {
 // (TELEMETRY, docs/REVEAL_RESEARCH.md §2.1.4). The share leaves the rate loop room to level.
 const BRAKE_SHARE = 0.8;   // ESTIMATE: the most the reference and human-model runs land reliably on
 export const brakePlan = (s, m = massOf(s)) => {
-  const v = Math.max(0, -s.vel.y);
-  if (v < V_HOVER + 0.5) return clamp(brakeAvail(s, m) * BRAKE_SHARE, 0.6, 30);
-  return clamp((v * v - V_HOVER * V_HOVER) / (2 * stopFull(s.air, m, v, V_HOVER)), 0.6, 30);
+  const v = Math.max(0, -s.vel.y), vt = vTop(setdownTop(s));
+  if (v < vt + 0.5) return clamp(brakeAvail(s, m) * BRAKE_SHARE, 0.6, 30);
+  return clamp((v * v - vt * vt) / (2 * stopFull(s.air, m, v, vt)), 0.6, 30);
 };
 // Distance (m) to slow a fall of v m/s to vEnd at BRAKE_SHARE of full lift, the gas, the mass and
 // the pressure falling as it burns (0.05 s steps; a stop that can't be made returns a long one).
@@ -771,6 +785,7 @@ export function step(s, inp) {
     wh.spin += wh.omega * dt;
   }
   s.grounded = grounded;
+  s.fallPeak = grounded > 0 ? 0 : Math.max(s.fallPeak, -s.vel.y);
   s.onWall = wallContact;
   s.onSlope = sloped;   // any tyre off the level: the curl from its first metre (Assist's crawl limit)
   s.wheelForce = wheelForce;

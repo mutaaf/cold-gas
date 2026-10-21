@@ -1,12 +1,12 @@
 ---
 id: 0014
 title: Lineup lands about 3 s after lift-off, not after a 2.3 s hover drift
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-10-20
-pr:
+pr: TBD
 by: critic
 ---
 
@@ -123,3 +123,26 @@ and 2 together, because the reveal itself did both:
 
 ## Out of scope
 The roll timing and apex (already within the reveal's bands).
+
+## Shipped (builder, 2026-10-21, SIM_VERSION 17)
+- `src/sim/vehicle.js`: the car keeps `fallPeak`, the hardest sink of the flight (0 on the ground).
+  The top of LAND's set-down, `setdownTop`, grows with it: a 0.1 m flare below 8 m/s, rising to
+  `HOVER` (2.5 m) at 14 m/s (ESTIMATE, fitted to the two stunts: the kickflip peaks at ≈7 m/s, the
+  Wall and the Show at 15–16). The brake plan and the profile end at that top, and the wheels still
+  meet the ground at `SETDOWN` (0.8 m/s). `src/sim/predict.js` (the HUD's band and time to land)
+  uses the same top. With no flare (0 m), the steep last metre touched down at 1.19 m/s.
+- `src/sim/courses.js`: the Lineup mark moves from z 44 to z 28, just past the row (its far edge is
+  z 19.6, and the 7 m ring clears it).
+- `src/sim/autopilot.js`: the Lineup pilot steers only while braking, like the Wall's (LESSONS
+  2026-10-21), and only across the run. Pitching back for the nearer mark tilted the lift off the
+  brake and hovered it over the row at −2.5 m/s (4.2 s airtime).
+
+| reference | lift-off → wheels | upright → wheels | below 3 m | airborne | N2 | sink | off mark | total |
+|---|---|---|---|---|---|---|---|---|
+| Lineup (before) | 4.80 s | 2.97 s | 2.47 s | 34.9 m | 152 kg | 0.80 | 7.6 m | 85.3 |
+| Lineup | 3.52 s | 1.63 s | 1.14 s | 26.4 m | 107 kg | 0.78 | 0.5 m | 92.0 Perfect 10 |
+| Wall | unchanged (bit-identical): release → wheels 4.77 s, 1.90 s below 3 m, 3.08 G | | | | 161 kg | 0.81 | 3.6 m | 96 |
+| Show | unchanged (bit-identical) | | 1.53 s | | 151 kg | 0.82 | 1.5 m | 94 |
+
+Gates: naive-players 32/32, naive-show 54/54 (51 over the row), human-show 300 assist --cues=new 186/300 (main 187/300 on the same machine; HUD followers 58/62 and 53/62 against 58/62 and 54/62; the Show reference is bit-identical, so the one player is the chaos of a smaller set-down on a short drop. The ≥ 95 % bar is not met on main either).
+`node scripts/setdown-probe.mjs` prints the table.

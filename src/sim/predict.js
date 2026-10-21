@@ -4,7 +4,7 @@
 //
 // The physics is the governor's own (src/sim/vehicle.js): the four down-jets' trimmed lift at the
 // feed pressure left at the end of the stop, times how upright the car is, minus gravity.
-import { G, HOVER, LIFT_MAX, NOZZLES, massOf, feedPressure, pressureOf, gasToStop, brakePlan, profileVy, up, CAR } from './vehicle.js';
+import { G, setdownTop, LIFT_MAX, NOZZLES, massOf, feedPressure, pressureOf, gasToStop, brakePlan, profileVy, up, CAR } from './vehicle.js';
 import { SPEC } from './spec.js';
 import { v3, rotateInv } from './m3.js';
 import { datan2, dhypot } from './dmath.js';
@@ -64,7 +64,8 @@ export function predict(c, h, out) {
   const levelDrop = sink * tLevel + 0.5 * G * tLevel * tLevel, sinkLevel = sink + G * tLevel;
   // The band's edge: the most sink you can carry here and still roll out (if you must), react and
   // stop at 70 % of a full-lift stop, down to a hover. (LAND's own plan flies well inside it.)
-  out.profileSink = h > HOVER ? maxSink(h - HOVER, tLevel, Math.max(0.6, 0.7 * out.aMax)) : -profileVy(h, out.aPlan);
+  const top = setdownTop(c);
+  out.profileSink = h > top ? maxSink(h - top, tLevel, Math.max(0.6, 0.7 * out.aMax)) : -profileVy(h, out.aPlan, top);
   // Touching down after braking from here at full lift (after the roll-out): v² = v² − 2·a·h.
   const v2 = sinkLevel * sinkLevel - 2 * Math.max(0, out.aMax) * Math.max(0, h - levelDrop - 0.3);
   out.touchSink = v2 > 0 ? Math.sqrt(v2) : 0;
@@ -76,7 +77,7 @@ export function predict(c, h, out) {
   // Free fall to the ground.
   out.tGround = (vy + Math.sqrt(vy * vy + 2 * G * Math.max(0, h))) / G;
   // On the profile: fall until the profile catches the sink rate, then ride it down.
-  out.tLand = profileTime(h, vy, out.aPlan);
+  out.tLand = profileTime(h, vy, out.aPlan, top);
   out.landX = c.pos.x + c.vel.x * out.tLand;
   out.landZ = c.pos.z + c.vel.z * out.tLand;
   out.gas = Math.max(0, c.air);
@@ -104,11 +105,11 @@ function maxSink(room, tLevel, a) {
 }
 
 // Seconds to touchdown riding the LAND profile (a coarse 1-D integration: 1/30 s steps).
-function profileTime(h, vy, aPlan) {
+function profileTime(h, vy, aPlan, top) {
   let y = Math.max(0, h), v = vy, t = 0;
   const dt = 1 / 30;
   while (y > 0.05 && t < 20) {
-    const want = profileVy(y, aPlan);
+    const want = profileVy(y, aPlan, top);
     v = v < want ? Math.min(want, v + aPlan * 2 * dt) : v - G * dt;
     if (v > -0.3) v = -0.3;
     y += v * dt; t += dt;

@@ -109,7 +109,8 @@ export function createDirector(camera) {
 
   function titleLineup(time) {
     const a = time * 0.12;
-    camera.position.set(PAD.x + Math.cos(a) * 9.6, 1.45 + Math.sin(time * 0.2) * 0.12, PAD.z + Math.sin(a) * 9.6);
+    // The mark sits just past the row: the orbit flattens on the row's side rather than skim the cab.
+    camera.position.set(PAD.x + Math.cos(a) * 9.6, 1.45 + Math.sin(time * 0.2) * 0.12, Math.max(LINEUP_END + 3, PAD.z + Math.sin(a) * 9.6));
     camera.lookAt(PAD.x, 0.55, PAD.z);
     st.fov = 34;
   }
