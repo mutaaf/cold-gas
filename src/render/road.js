@@ -22,7 +22,7 @@ import {
 } from './roadlook.js';
 
 const SHOULDER = 1.2;
-const CHUNK = 64;                          // samples per road chunk (192 m)
+export const CHUNK = 64;                   // samples per road chunk (192 m)
 const VERGE = [SHOULDER, 3, 6.5, 12];      // verge rows: lateral metres past the edge
 const T0 = 128, T1 = 512, TF = 128, N = 32;
 const TIERS = {
@@ -247,7 +247,7 @@ function inDem(road, x, z) {
   return x > f.x0 - 600 && z > f.z0 - 600 && x < f.x0 + (f.nx - 1) * f.cell + 600 && z < f.z0 + (f.nz - 1) * f.cell + 600;
 }
 
-function disposeTree(o) {
+export function disposeTree(o) {
   o.traverse((c) => { if (c.geometry) c.geometry.dispose(); if (c.isInstancedMesh) c.dispose?.(); });
 }
 
@@ -454,7 +454,7 @@ function lakeMesh(lake, mat) {
 }
 
 // Environment for the car's paint: the sky and a ground the colour of the land, baked once.
-function bakeEnv(renderer, U, T) {
+export function bakeEnv(renderer, U, T) {
   const scene = new THREE.Scene();
   const sky = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), skyMaterial(U));
   sky.material.uniforms.cgHaze.value.set(T.haze);
@@ -505,7 +505,7 @@ function writer(ox, oz, extras = {}) {
   return w;
 }
 
-function buildRoadChunk(road, P, c, mats, H, info, tier) {
+export function buildRoadChunk(road, P, c, mats, H, info, tier) {
   const g = new THREE.Group();
   const i0 = c * CHUNK, i1 = Math.min(road.n - 1, (c + 1) * CHUNK);
   const ox = road.x[i0], oz = road.z[i0];
@@ -741,17 +741,17 @@ function instanced(geo, mat, list, ox, oz) {
 
 // Shared prop geometries (made once).
 let postGeo = null, delinGeo = null, poleGeo = null;
-function POST_GEO() {
+export function POST_GEO() {
   if (!postGeo) { postGeo = new THREE.BoxGeometry(0.09, 1.1, 0.12); postGeo.translate(0, 0.25, 0); }
   return postGeo;
 }
-function colored(geo, rgb) {
+export function colored(geo, rgb) {
   const n = geo.attributes.position.count, c = new Float32Array(n * 3);
   for (let k = 0; k < n; k++) c.set(rgb, k * 3);
   geo.setAttribute('color', new THREE.BufferAttribute(c, 3));
   return geo;
 }
-function merge(geos) {
+export function merge(geos) {
   geos = geos.map((g) => (g.index ? g : g.setIndex([...Array(g.attributes.position.count).keys()])));
   let n = 0, ni = 0;
   for (const g of geos) { n += g.attributes.position.count; ni += g.index.count; }
@@ -769,7 +769,7 @@ function merge(geos) {
   out.setIndex(new THREE.BufferAttribute(idx, 1));
   return out;
 }
-function DELINEATOR_GEO() {
+export function DELINEATOR_GEO() {
   if (!delinGeo) {
     const body = colored(new THREE.BoxGeometry(0.1, 0.8, 0.12).translate(0, 0.4, 0), [0.93, 0.93, 0.92]);
     const band = colored(new THREE.BoxGeometry(0.105, 0.24, 0.125).translate(0, 0.86, 0), [0.06, 0.06, 0.06]);
@@ -778,7 +778,7 @@ function DELINEATOR_GEO() {
   }
   return delinGeo;
 }
-function POLE_GEO() {
+export function POLE_GEO() {
   if (!poleGeo) {
     const shaft = colored(new THREE.BoxGeometry(0.04, 1.9, 0.04).translate(0, 0.95, 0), [0.78, 0.66, 0.42]);
     const tip = colored(new THREE.BoxGeometry(0.045, 0.5, 0.045).translate(0, 2.15, 0), [1, 0.42, 0.06]);
@@ -787,7 +787,7 @@ function POLE_GEO() {
   return poleGeo;
 }
 let coniferGeo = null, broadGeo = null;
-function CONIFER_GEO() {
+export function CONIFER_GEO() {
   if (!coniferGeo) {
     // A spruce: a slim trunk and four stacked tiers, darker underneath (self-shadowing).
     const parts = [colored(new THREE.CylinderGeometry(0.018, 0.03, 0.2, 5).translate(0, 0.1, 0), [0.3, 0.24, 0.2])];
@@ -807,7 +807,7 @@ function CONIFER_GEO() {
 }
 // Far spruce: one cone (12 triangles), the same silhouette from a distance.
 let coniferLow = null;
-function CONIFER_LOW_GEO() {
+export function CONIFER_LOW_GEO() {
   if (!coniferLow) {
     const g = new THREE.ConeGeometry(0.28, 0.9, 6, 1, false).translate(0, 0.55, 0);
     const pos = g.attributes.position, col = new Float32Array(pos.count * 3);
@@ -817,7 +817,7 @@ function CONIFER_LOW_GEO() {
   }
   return coniferLow;
 }
-function BROAD_GEO() {
+export function BROAD_GEO() {
   if (!broadGeo) {
     const trunk = colored(new THREE.CylinderGeometry(0.04, 0.06, 0.4, 5).translate(0, 0.2, 0), [0.32, 0.25, 0.2]);
     const crown = colored(new THREE.IcosahedronGeometry(0.42, 0).scale(1.2, 0.8, 1.2).translate(0, 0.62, 0), [1, 1, 1]);

@@ -65,7 +65,30 @@ The damage sensor.
 - **Power-ups** (Arcade toggle, opt-in): nitrogen refill, overpressure, fan overdrive, slow-mo, magnet landing, shield (impact events dropped, crush held, and a damage sensor told to skip them). HUD gauges.
 - **Side quests** (J): rings, landings, jumps, airtime, rotations, speed, deliveries, hidden pieces, collecting; time limits; rewards unlock pieces, paints and titles on this device. Eight built-in quests, a deterministic offline generator, and an **AI quest designer**: the free edge model or the player's own key writes a quest as JSON; the Worker (`POST /coldgas/api/quest`) and then the browser validate it against a strict schema (closed keys, catalogue pieces, bounds, budget, winnable objectives, no brand names); anything else falls back to the local generator. The call plays through the theatre (prompt → compute → check → quest) with real model, tokens, time and cost.
 
-## Unreleased (Free Drive)
+
+**Free Drive: the endless road, and back on the road from the grass** (no SIM_VERSION change: the
+stunt courses never touch the changed surfaces, and their reference runs are bit-identical,
+`node scripts/ref-hash.mjs`).
+- **Back on the road from the grass.** Off the road you often couldn't get back on. Two causes: the
+  ground beside the road was the natural mountainside, or the structural 1:1.5 fill / 1:1 cut, right
+  up to the shoulder (34–45°, where a rear-driven car on grass climbs ≈ 17°, and a 1:1 cut tipped it
+  over its nose); and traction control's floor (15 % of 11.8 kN·m) was more than a tyre carries on
+  grass, so the wheels stayed spun up at κ ≈ 13, at half the tyre's force, and the car slid back down
+  an 11 % verge. Now the roadside is a graded 1:4 apron for 7 m past the shoulder (the AASHTO
+  "recoverable" slope; rounded hinge; blended where hairpin legs meet), and on loose ground (grass,
+  gravel, rock, sand: a new `loose` flag) traction control scales its floor with grip² and holds
+  torque to what the tyre can carry. Drives back on from 4 m out: 61–73 % → 84–100 % of verges per
+  road; from 8 m: 56–80 % → 76–97 % (`node scripts/grass-probe.mjs`, unit-tested on every road).
+- **Endless** (`?drive=endless&seed=…`, a fifth card in the road picker with a seed and a share
+  link): a world generated as you drive, deterministic from its seed (docs/WORLD.md). Mountain passes,
+  a coast road above the sea, desert mesas and dunes, forest; viaducts, guard rails, delineators;
+  spruces, broadleaves, shrubs and boulders. Terrain in four LOD rings out to the horizon and the
+  road chunks are built in a Web Worker; GPU-instanced vegetation pools; LRU + IndexedDB tile caches;
+  GPU and cache budgets with disposal; a per-frame upload budget; quality tiers. At 250 km/h on a
+  4×-throttled phone profile: 60 fps, 0.75 ms/frame on the main thread, never behind.
+- **A world API** for building in it: `addObject` / `removeObject` / `objectsNear` /
+  `objectsInChunk` / `groundAt` / `nearestRoad` / …, deterministic object ids, and ramps, blocks and
+  loops that collide through the course's one physics query (boost pads and power-ups are triggers).
 
 **Free Drive** (no SIM_VERSION change: the scored courses and their replays are untouched). The same roadster and physics on real roads rebuilt from open data: Stelvio Pass (13.3 km, 45 hairpins, to 2,749 m), Transfăgărășan (14.6 km to Bâlea Lake), Big Sur on CA-1 (15.4 km over Bixby Creek) and the Atlantic Ocean Road (9.0 km, eight bridges).
 - Data (build time only, `scripts/roads/build.mjs`, docs/ROADS.md): OpenStreetMap centrelines and tags (ODbL) and AWS Terrain Tiles (EU-DEM, USGS 3DEP, Kartverket, ETOPO1), resampled every 3 m, graded to each road's design maximum, widened through hairpins, banked from curvature; barriers from OSM and drop-offs; terrain, tree cover, lakes and a DEM skyline. 182–472 KB gzip per road, fetched from our own origin only when picked.

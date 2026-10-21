@@ -761,13 +761,13 @@ function loadSandbox() {
 }
 on('[data-sandbox-open]', () => { loadSandbox().then((s) => s.start()).catch((err) => { console.error(err); ui.cue_('The Sandbox couldn’t load', 2000); }); });
 
-// Deep links: ?play=jump|reveal, ?board=today|all, ?drive=<road>[&tod=dusk].
+// Deep links: ?play=jump|reveal, ?board=today|all, ?drive=<road>[&tod=dusk], ?drive=endless[&seed=…].
 const bootHash = location.hash;   // a shared build (#b=…) rides on a ?drive= link
 toTitle();
 // Keep a ?drive= link (and its build) in the address bar, so a reload or a copy brings it back.
-if (params.get('drive') !== null) history.replaceState(null, '', `${location.pathname}?drive=${encodeURIComponent(params.get('drive') || 'stelvio')}${bootHash}`);
+if (params.get('drive') !== null) history.replaceState(null, '', `${location.pathname}?drive=${encodeURIComponent(params.get('drive') || 'stelvio')}${params.get('seed') ? `&seed=${encodeURIComponent(params.get('seed'))}` : ''}${bootHash}`);
 if (params.get('drive') === 'sandbox') loadSandbox().then((s) => s.start());
-else if (params.get('drive') !== null) loadDrive().then((d) => d.start(params.get('drive') || 'stelvio', { tod: params.get('tod') || undefined }));
+else if (params.get('drive') !== null) loadDrive().then((d) => d.start(params.get('drive') || 'stelvio', { tod: params.get('tod') || undefined, seed: params.get('seed') || undefined, idb: params.get('idb') !== '0' }));
 const play = params.get('play');
 if (play === 'jump' || play === 'reveal') startRun(play);
 if (params.get('board')) openBoard(params.get('board') === 'all' ? 'all' : 'today');

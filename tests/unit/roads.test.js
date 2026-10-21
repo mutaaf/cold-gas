@@ -167,3 +167,114 @@ describe('driving a real road', () => {
     expect(car.grounded).toBe(4);
   });
 });
+
+// Off the road and back on (the bug: "the car can't get back on the track from grass"). The ground
+// beside the road was the natural mountainside and the structural 1:1.5 fill / 1:1 cut right up to
+// the shoulder, and traction control's torque floor was more than a tyre could carry on grass.
+describe('back on the road from the grass', () => {
+  const sn = {};
+  const groundY = (road, x, z, y0) => {
+    let lo = y0 - 120, hi = y0 + 120;
+    for (let k = 0; k < 50; k++) { const m = (lo + hi) / 2; if (roadSurface(road, x, m, z, sn) > 0) hi = m; else lo = m; }
+    roadSurface(road, x, hi + 0.01, z, sn);
+    return hi;
+  };
+  // The car sitting on ground of normal n with its nose along (tx, tz): body +x left, +y up, +z fwd.
+  const settle = (q, tx, tz, n) => {
+    const d = tx * n.x + tz * n.z;
+    let fx = tx - n.x * d, fy = -n.y * d, fz = tz - n.z * d;
+    const l = Math.hypot(fx, fy, fz); fx /= l; fy /= l; fz /= l;
+    const lx = n.y * fz - n.z * fy, ly = n.z * fx - n.x * fz, lz = n.x * fy - n.y * fx;
+    const S = Math.sqrt(lx + n.y + fz + 1) * 2;             // upright enough that the trace is > 0
+    q.w = 0.25 * S; q.x = (n.z - fy) / S; q.y = (fx - lz) / S; q.z = (ly - n.x) / S;
+  };
+  // A driver on the verge, `off` m past the edge, facing back at the road `ang`° off square, full
+  // throttle, steering at the road 12 m on. Back on = on the ribbon with 3+ wheels down.
+  function tryBack(road, s, side, off, ang) {
+    const p = poseAt(road, s, 1), i = p.i;
+    const lx = road.dz[i], lz = -road.dx[i], lat = side * (road.hw[i] + off);
+    const x = road.x[i] + lx * lat, z = road.z[i] + lz * lat, gy = groundY(road, x, z, road.y[i]);
+    if (sn.y < 0.6) return null;                                    // a cliff or a cut face: not a verge
+    const car = createVehicle(createRoadCourse(road));
+    car.pos.x = x; car.pos.y = gy + SPEC.comHeight + 0.15; car.pos.z = z;
+    const a = (ang * Math.PI) / 180, tx = road.dx[i] * Math.sin(a) - lx * side * Math.cos(a), tz = road.dz[i] * Math.sin(a) - lz * side * Math.cos(a);
+    settle(car.quat, tx, tz, { x: sn.x, y: sn.y, z: sn.z });
+    const hold = newInput(); hold.brake = 1;
+    for (let t = 0; t < 240; t++) step(car, hold);
+    const inp = newInput(); inp.throttle = 1;
+    const q = { seg: -1, t: 0, lat: 99, yc: 0, hw: 0, bank: 0, u: 0 };
+    for (let t = 0; t < 240 * 8; t++) {
+      if (nearestSeg(road, car.pos.x, car.pos.y, car.pos.z, q)) {
+        if (Math.abs(q.lat) < q.hw && car.grounded >= 3) return true;
+        const j = Math.min(road.m - 1, q.seg + 4), c = car.quat;
+        const fx = 2 * (c.x * c.z + c.w * c.y), fz = 1 - 2 * (c.x * c.x + c.y * c.y);
+        const ex = road.x[j] - car.pos.x, ez = road.z[j] - car.pos.z;
+        inp.steer = Math.max(-1, Math.min(1, Math.atan2(-(ex * fz - ez * fx), ex * fx + ez * fz) * 2));
+      }
+      step(car, inp);
+    }
+    return false;
+  }
+  for (const id of ['stelvio', 'transfagarasan', 'bigsur', 'atlantic']) {
+    it(`${id}: drives back on from the verge at 4 m and 8 m, both sides, all along it`, () => {
+      const road = roads[id], res = { 4: [0, 0], 8: [0, 0] };
+      for (let s = 180; s < road.length - 180; s += 577) for (const side of [1, -1]) {
+        const i = poseAt(road, s, 1).i;
+        if (road.flags[i] & 3 || (side > 0 ? (road.flags[i] >> 2) & 3 : (road.flags[i] >> 4) & 3)) continue;   // bridges, tunnels, rails
+        for (const [off, ang] of [[4, 30], [8, 40]]) {
+          const ok = tryBack(road, s, side, off, ang);
+          if (ok === null) continue;
+          res[off][1]++; if (ok) res[off][0]++;
+        }
+      }
+      // Before the fix: 4 m 61–73 %, 8 m 56–80 %. On the passes, 8 m out is the apron's edge, and the
+      // mountainside past it is often more than a car can climb (that's what R is for).
+      expect(res[4][1]).toBeGreaterThan(8);
+      expect(res[4][0] / res[4][1]).toBeGreaterThanOrEqual(0.9);
+      expect(res[8][0] / res[8][1]).toBeGreaterThanOrEqual({ stelvio: 0.7, transfagarasan: 0.75 }[id] ?? 0.9);
+    }, 60_000);
+  }
+  it('the roadside is a graded 1:4 apron: no steeper and no steps, 7 m past the shoulder', () => {
+    for (const id of ['bigsur', 'atlantic', 'transfagarasan']) {
+      const road = roads[id];
+      for (let s = 150; s < road.length - 150; s += 389) for (const side of [1, -1]) {
+        const i = Math.floor(s / 3);
+        if (road.flags[i] & 0x3f || road.flags[i + 1] & 0x3f) continue;
+        const lx = road.dz[i], lz = -road.dx[i], hw = road.hw[i];
+        const q = { seg: -1, lat: 0, other: Infinity };
+        let prev = null;
+        for (let e = 1.3; e < 8.1; e += 0.1) {
+          const x = road.x[i] + lx * side * (hw + e), z = road.z[i] + lz * side * (hw + e), y = groundY(road, x, z, road.y[i]);
+          nearestSeg(road, x, y + 0.5, z, q);
+          if (q.other - Math.abs(q.lat) < 6) { prev = null; continue; }         // another leg near: the blend
+          if (prev !== null) expect(Math.abs(y - prev)).toBeLessThan(0.1 * 0.27 + 0.004);
+          prev = y;
+        }
+      }
+    }
+  });
+});
+
+describe('traction control on loose ground', () => {
+  const plane = (slope, mat) => {
+    const k = 1 / Math.sqrt(1 + slope * slope);
+    // 100 m up: a course without a road gets a flat floor at y = 0 in the rigid-body engine.
+    return { id: 'plane', boxes: [], start: { x: 0, z: 0 }, runout: {}, sdf: (x, y, z, out) => { out.x = 0; out.y = k; out.z = -slope * k; out.mat = mat; out.obstacle = false; out.body = null; return (y - 100 - slope * z) * k; } };
+  };
+  it('climbs a 1:4 grass bank at full throttle (it slid back down an 11 % one)', () => {
+    for (const slope of [0.2, 0.25]) {
+      const car = createVehicle(plane(slope, MATERIALS.grass));
+      car.pos.x = 0; car.pos.z = 0; car.pos.y = 100 + SPEC.comHeight + 0.05;
+      const a = -Math.atan(slope) / 2; car.quat.x = Math.sin(a); car.quat.y = 0; car.quat.z = 0; car.quat.w = Math.cos(a);
+      const hold = newInput(); hold.brake = 1;
+      for (let t = 0; t < 240; t++) step(car, hold);
+      const inp = newInput(); inp.throttle = 1;
+      for (let t = 0; t < 240 * 4; t++) step(car, inp);
+      expect(car.pos.z).toBeGreaterThan(3);
+      expect(car.vel.z).toBeGreaterThan(1.5);
+    }
+  });
+  it('the stunt courses never touch loose ground, so their runs are unchanged', () => {
+    for (const m of ['concrete', 'paint', 'asphalt', 'barrier']) expect(MATERIALS[m].loose).toBeUndefined();
+  });
+});

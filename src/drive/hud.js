@@ -28,7 +28,7 @@ function profilePath(r, w, h) {
   return `${d}L${w} ${h}Z`;
 }
 
-export function renderPicker(root, roads, { selected, tod, onPick, onTod, onDrive, onBack }) {
+export function renderPicker(root, roads, { selected, tod, seed = '', onPick, onTod, onDrive, onBack, onSeed = () => {} }) {
   root.innerHTML = `
     <div class="fd-sheet" role="dialog" aria-modal="true" aria-labelledby="fd-title">
       <header class="fd-head">
@@ -49,6 +49,14 @@ export function renderPicker(root, roads, { selected, tod, onPick, onTod, onDriv
             <span class="fd-blurb">${esc(r.blurb)}</span>
           </button>`;
         }).join('')}
+        <div class="fd-endless" role="radio" tabindex="0" aria-checked="${selected === 'endless'}" data-road="endless">
+          <svg class="fd-sil" viewBox="0 0 132 96" aria-hidden="true"><path d="M8 88 C 30 70, 18 52, 44 44 S 70 30, 62 18 S 96 6, 124 4" /><path class="far" d="M8 70 L 30 52 L 46 60 L 70 30 L 88 46 L 106 22 L 124 34" /></svg>
+          <span class="fd-name">Endless</span>
+          <span class="fd-local">A road that never ends, built as you drive</span>
+          <span class="fd-country">Procedural · mountain · coast · desert · forest</span>
+          <span class="fd-seed"><label>Seed <input type="text" data-fd-seed value="${esc(seed)}" maxlength="24" spellcheck="false" autocomplete="off" aria-label="World seed" /></label><span role="button" tabindex="0" class="fd-reseed" data-fd-reseed title="New seed" aria-label="New seed">↻</span></span>
+          <span class="fd-blurb">Same seed, same world, anywhere: share it as a link.</span>
+        </div>
       </div>
       <div class="fd-actions">
         <div class="seg fd-tod" role="radiogroup" aria-label="Time of day">
@@ -61,8 +69,17 @@ export function renderPicker(root, roads, { selected, tod, onPick, onTod, onDriv
       <div class="fd-loading" data-fd-loading hidden><span data-fd-load-label>Loading</span><i><b data-fd-load-bar></b></i></div>
       <p class="fd-credit">Roads ${esc(OSM_CREDIT)} · Terrain: AWS Terrain Tiles (Mapzen/Tilezen) from EU-DEM (Copernicus), USGS 3DEP, SRTM, ETOPO1, © Kartverket</p>
     </div>`;
+  const seedIn = root.querySelector('[data-fd-seed]');
+  seedIn.addEventListener('click', (e) => { e.stopPropagation(); onPick('endless'); });
+  seedIn.addEventListener('keydown', (e) => { e.stopPropagation(); if (e.key === 'Enter') { onSeed(seedIn.value.trim()); onPick('endless'); onDrive(); } });
+  seedIn.addEventListener('input', () => onSeed(seedIn.value.trim()));
+  const reseed = root.querySelector('[data-fd-reseed]');
+  const newSeed = (e) => { e.stopPropagation(); e.preventDefault(); seedIn.value = randomSeed(); onSeed(seedIn.value); onPick('endless'); };
+  reseed.addEventListener('click', newSeed);
+  reseed.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') newSeed(e); });
   root.querySelectorAll('[data-road]').forEach((b) => {
     b.addEventListener('click', () => { onPick(b.dataset.road); });
+    if (b.tagName === 'DIV') b.addEventListener('keydown', (e) => { if (e.target === b && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); onPick(b.dataset.road); if (e.key === 'Enter') onDrive(); } });
     b.addEventListener('dblclick', () => { onPick(b.dataset.road); onDrive(); });
   });
   root.querySelectorAll('[data-tod]').forEach((b) => b.addEventListener('click', () => onTod(b.dataset.tod)));
@@ -70,7 +87,8 @@ export function renderPicker(root, roads, { selected, tod, onPick, onTod, onDriv
   root.querySelector('[data-fd-back]').addEventListener('click', onBack);
   // Arrow keys move between cards (a radio group).
   root.querySelector('.fd-cards').addEventListener('keydown', (e) => {
-    const ids = roads.map((r) => r.id), i = ids.indexOf(root.querySelector('.fd-card[aria-checked="true"]')?.dataset.road);
+    if (e.target.closest('[data-fd-seed]')) return;
+    const ids = [...roads.map((r) => r.id), 'endless'], i = ids.indexOf(root.querySelector('[data-road][aria-checked="true"]')?.dataset.road);
     if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); const n = ids[(i + 1) % ids.length]; onPick(n); root.querySelector(`[data-road="${n}"]`).focus(); }
     if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); const n = ids[(i - 1 + ids.length) % ids.length]; onPick(n); root.querySelector(`[data-road="${n}"]`).focus(); }
   });
@@ -83,6 +101,96 @@ export function renderPicker(root, roads, { selected, tod, onPick, onTod, onDriv
       root.querySelector('[data-fd-go]').disabled = on;
       if (on) { root.querySelector('[data-fd-load-bar]').style.transform = `scaleX(${frac})`; root.querySelector('[data-fd-load-label]').textContent = label; }
     },
+  };
+}
+
+// A short, speakable seed: two syllable words and a number.
+const SYL = ['ka', 'lo', 'mi', 'ra', 'to', 'ne', 'su', 'vi', 'da', 'ze', 'po', 'lu', 'ma', 'ri', 'so', 'te'];
+export function randomSeed() {
+  const r = new Uint32Array(2);
+  (globalThis.crypto || { getRandomValues: (a) => { for (let i = 0; i < a.length; i++) a[i] = Math.floor(Math.random() * 4294967296); return a; } }).getRandomValues(r);
+  const w = (n) => SYL[n & 15] + SYL[(n >> 4) & 15] + SYL[(n >> 8) & 15];
+  return `${w(r[0])}-${w(r[0] >> 12)}-${(r[1] % 900) + 100}`;
+}
+
+// The endless road's HUD: the same instruments, with the distance driven, the land you're in, the
+// seed (and a link to share it), and a map of the road around you instead of the whole route.
+export function createEndlessHud(root, road, info, { onCamera, onTod, onReset, onExit, onFan, onShare }) {
+  root.innerHTML = `
+    <div class="fd-road">
+      <p class="fd-road-name">Endless</p>
+      <p class="fd-road-sub"><span data-h-stretch>${esc(info.local || '')}</span> · <button type="button" class="fd-seedchip" data-h-share title="Copy a link to this world">Seed ${esc(info.seedLabel || '')}</button></p>
+    </div>
+    <div class="fd-ctl">
+      <button type="button" class="chip" data-h-cam title="Camera (C)">Chase</button>
+      <button type="button" class="chip" data-h-tod title="Time of day (T)">Day</button>
+      <button type="button" class="chip" data-h-fan aria-pressed="false" title="Suction fan (X): 46 kN of grip">Fan</button>
+      <button type="button" class="chip" data-h-reset title="Back on the road (R)">Reset</button>
+      <button type="button" class="chip" data-h-exit title="Leave Free Drive (Esc)">Exit</button>
+    </div>
+    <div class="fd-timer running" data-h-timer><b data-h-time>0:00.0</b><span>Driving</span></div>
+    <div class="fd-speed"><b data-h-speed>0</b><span>km/h</span></div>
+    <dl class="fd-stats">
+      <div><dt>Elevation</dt><dd><b data-h-ele>0</b> m</dd></div>
+      <div><dt>Grade</dt><dd><b data-h-grade>0.0</b> %</dd></div>
+      <div><dt>Distance</dt><dd><b data-h-dist>0.0</b> km</dd></div>
+    </dl>
+    <div class="fd-map" aria-hidden="true">
+      <svg viewBox="-75 -75 150 150" class="fd-mini"><path class="route" data-h-route d="" /><path class="ahead" data-h-ahead d="" />
+        <g data-h-car><circle r="4" /><path d="M0 -8 L3 -2 L-3 -2Z" /></g></svg>
+      <svg viewBox="0 0 150 34" preserveAspectRatio="none" class="fd-profile"><path data-h-prof d="" /><line x1="75" x2="75" y1="0" y2="34" /></svg>
+    </div>
+    <p class="fd-fine">Endless: generated from its seed as you drive · same seed, same world</p>`;
+  const $ = (q) => root.querySelector(q);
+  const el = { speed: $('[data-h-speed]'), ele: $('[data-h-ele]'), grade: $('[data-h-grade]'), dist: $('[data-h-dist]'), car: $('[data-h-car]'), route: $('[data-h-route]'), ahead: $('[data-h-ahead]'),
+    prof: $('[data-h-prof]'), time: $('[data-h-time]'), stretch: $('[data-h-stretch]'), cam: $('[data-h-cam]'), tod: $('[data-h-tod]'), fan: $('[data-h-fan]'), share: $('[data-h-share]') };
+  $('[data-h-cam]').addEventListener('click', onCamera);
+  $('[data-h-tod]').addEventListener('click', onTod);
+  $('[data-h-reset]').addEventListener('click', onReset);
+  $('[data-h-exit]').addEventListener('click', onExit);
+  $('[data-h-fan]').addEventListener('click', onFan);
+  el.share.addEventListener('click', () => onShare?.(el.share));
+  const last = { speed: -1, ele: -1e9, grade: -1e9, dist: -1, mapI: -1e9, time: -1, stretch: '', heading: 1e9 };
+  // The map: 1.5 km of road around the car, north up, 150 px ≈ 3 km; redrawn every 30 m.
+  const K = 75 / 1500;
+  function drawMap(i) {
+    const cx = road.x[i], cz = road.z[i];
+    let back = '', ahead = '';
+    const a = Math.max(0, i - 500), b = Math.min(road.n - 1, i + 500);
+    for (let k = a; k <= b; k += 4) {
+      const p = `${((road.x[k] - cx) * K).toFixed(1)} ${((road.z[k] - cz) * K).toFixed(1)}`;
+      if (k <= i) back += `${back ? 'L' : 'M'}${p}`;
+      if (k >= i - 4) ahead += `${ahead ? 'L' : 'M'}${p}`;
+    }
+    el.route.setAttribute('d', back); el.ahead.setAttribute('d', ahead);
+    // Profile: 1.5 km either side.
+    let lo = Infinity, hi = -Infinity;
+    for (let k = a; k <= b; k += 8) { lo = Math.min(lo, road.y[k]); hi = Math.max(hi, road.y[k]); }
+    let d = 'M0 34';
+    for (let k = a; k <= b; k += 8) d += `L${(((k - i) / 1000) * 75 + 75).toFixed(1)} ${(31 - ((road.y[k] - lo) / Math.max(20, hi - lo)) * 26).toFixed(1)}`;
+    el.prof.setAttribute('d', `${d}L${((((b - i) / 1000) * 75) + 75).toFixed(1)} 34Z`);
+  }
+  return {
+    update({ speed, ele, grade, i, heading, time, biome }) {
+      const sp = Math.round(speed * 3.6);
+      if (sp !== last.speed) { el.speed.textContent = String(sp); last.speed = sp; }
+      const e = Math.round(ele);
+      if (e !== last.ele) { el.ele.textContent = fmtInt(e); last.ele = e; }
+      const g = Math.round(grade * 1000);
+      if (g !== last.grade) { el.grade.textContent = (g / 10).toFixed(1); last.grade = g; }
+      const dd = Math.round((i * road.meta.spacing) / 100);
+      if (dd !== last.dist) { el.dist.textContent = (dd / 10).toFixed(1); last.dist = dd; }
+      if (Math.abs(i - last.mapI) >= 10) { drawMap(i); last.mapI = i; }
+      const hd = Math.round((heading * 180) / Math.PI);
+      if (hd !== last.heading) { el.car.setAttribute('transform', `rotate(${hd})`); last.heading = hd; }
+      if (biome && biome !== last.stretch) { el.stretch.textContent = biome; last.stretch = biome; }
+      const tt = time == null ? -1 : Math.round(time * 10);
+      if (tt !== last.time) { el.time.textContent = fmtTime(time || 0); last.time = tt; }
+    },
+    setCam(m) { el.cam.textContent = { chase: 'Chase', bumper: 'Bumper', cinema: 'Cinema' }[m] || m; },
+    setTod(t) { el.tod.textContent = t === 'dusk' ? 'Dusk' : 'Day'; },
+    setFan(on) { el.fan.setAttribute('aria-pressed', String(on)); },
+    finish() {},
   };
 }
 

@@ -599,7 +599,15 @@ export function step(s, inp) {
       T = inp.throttle * motorT;
       // Assist's crawl limiter: on the curl, drive torque fades out above ASSIST_CRAWL.
       if (inp.assist && s.onSlope) T *= clamp(ASSIST_CRAWL + 1 - speed, 0, 1);
-      if (kappa > 0.12) { T *= clamp(1 - (kappa - 0.12) * 9, 0.15, 1); s.tcActive = true; }
+      // Traction control: past the slip peak, torque is cut to no less than 15 % of the command
+      // (tuned on concrete). On loose ground (grass, gravel, rock: Free Drive's verges) it adapts
+      // to the surface, as real systems estimate μ: the floor scales with grip², and the torque is
+      // held to what the tyre can carry there (1.2·R·μFz). With the concrete law, 15 % of 11.8 kN·m
+      // was more than a rear tyre's grip on grass, so the wheel stayed spun up at κ ≈ 13, where the
+      // tyre gives about half its peak, and the car slid back down an 11 % verge it could climb.
+      const loose = hitMat.loose === true;
+      if (kappa > 0.12) { T *= clamp(1 - (kappa - 0.12) * 9, loose ? 0.15 * hitMat.grip * hitMat.grip : 0.15, 1); s.tcActive = true; }
+      if (loose && T > 1.2 * R * D) { T = 1.2 * R * D; s.tcActive = true; }
     }
     const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85);
     // Pacejka pure-slip forces, then the friction ellipse for combined slip.

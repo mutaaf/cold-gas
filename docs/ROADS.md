@@ -75,8 +75,13 @@ picker shows) each time the script runs.
    sources stop at the waterline, so the sea floor comes from the coarse bathymetry.
 
 At load (src/sim/roads.js, pure and deterministic like the rest of the sim) the game conforms the
-DEM to the road the way a road is built: flat under the shoulders, cut slopes no steeper than 1:1,
-fill slopes 1:1.5, precomputed on a 4 m grid around the road.
+DEM to the road the way a road is built: flat under the shoulders, then a graded, recoverable
+roadside (a ramp no steeper than 1:4 from the shoulder to the natural ground 7 m out, the hinge
+rounded; FHWA/AASHTO call 1:4 or flatter "recoverable"), then cut slopes no steeper than 1:1 and
+fill slopes 1:1.5, precomputed on a 4 m grid around the road (where two legs' aprons meet, their
+grades blend by inverse distance) and computed exactly within ≈ 11 m of the edge. Without the apron
+the natural mountainside and the structural slopes ran right up to the shoulder, and a car on the
+grass couldn't get back on (`node scripts/grass-probe.mjs`).
 
 ## Rebuilding
 
