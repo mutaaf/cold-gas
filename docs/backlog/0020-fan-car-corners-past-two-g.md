@@ -1,12 +1,12 @@
 ---
 id: 0020
 title: With the fans armed, a level corner pulls more than 2 g, like the stage claim
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 53
 by: critic
 ---
 
@@ -50,6 +50,15 @@ peak, so the same rack formula caps it).
 - [ ] Probe (a new `physics-bench` row): fans armed, full stick, steady state on the level at 30 and
       40 m/s: **≥ 2.0 g** lateral (OFFICIAL "> 2 G"), and ≤ the tyre limit at that load (no free g).
 - [ ] Same probe, `fan: 0`: **≥ 1.20 g** steady at 20, 30 and 40 m/s (OFFICIAL 1.26 g, ±5 %).
+      **Not met; moved to 0021** (builder, SIM_VERSION 21, measured on main 1be2f1a). The rack is not
+      what caps it. Sweeping the full-stick offset at 12/20/30/40 m/s with the fans off: +0.04 rad gives
+      1.08/1.12/1.12/1.14 g, +0.06 gives 1.07/1.13/1.12/1.20, +0.10 gives 1.05/1.11/1.10/1.13, and
+      +0.20 gives 1.08 g at 30 m/s. More lock means less g. At 30 m/s the fronts sit at 6.3°, where this
+      Pacejka shape (B 16, C 1.35) already gives 98.9 % of its peak. The front axle saturates: 42 % of
+      the weight, 2,728 N of lateral load transfer, μ 1.25 with −7 % per unit load. Its ceiling is
+      ≈ 1.19 g, and the car measures 1.14 g (Δv-based). "Typically 1.26 G's" is a car-level number, but
+      `spec.js` uses it as the tyre's μ. Meeting it means re-sourcing μ and its load sensitivity, which
+      is 0021's job, so this bar now lives there.
 - [ ] Fan force in that corner is reported (kgf) and stays within `[fanIdleForce, fanMaxForce]`; it
       falls back to idle within `fanHold` of the stick centring.
 - [ ] `tests/unit/fan.test.js` (six telemetry pitches ±30 %) and `tests/unit/gtrace.test.js` pass

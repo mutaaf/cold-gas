@@ -45,6 +45,9 @@ Today (`src/sim/vehicle.js:705-707` and `:40-48`):
       pitches) and `gtrace.test.js` pass unchanged.
 - [ ] `physics-bench`: tyres-only steady cornering and 60–0 reported before/after in the PR; 0–60 with
       all systems within 2 % of 0.67 s.
+- [ ] Tyres alone (`fan: 0`), the `physics-bench` steady-corner row: **≥ 1.20 g** at 20, 30 and 40 m/s
+      (OFFICIAL "typically 1.26 G's" is the car's number, not the tyre's μ; moved from 0020, where the
+      sweep showed the front axle at its friction plateau, not the rack, caps it at 1.12–1.14 g).
 - [ ] `naive-players` 32/32, `naive-show` 54/54, cue followers ≥ 95/100.
 - [ ] Node, Chromium and WebKit replays IDENTICAL.
 

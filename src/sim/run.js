@@ -27,7 +27,8 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // protects the lift it needs; Pro is rate control; Assist limits the crawl up the curl and the
 // airborne carry; TC/ABS in every tier; the tier is telemetry.
 // v10: angular momentum integration and rotational air drag (no NaN at Pro spin rates).
-// v20: the hull is tested against the curl only when it can reach it (src/sim/world.js `gateCurl`,
+// v21: a held stick asks the armed fans for a corner's suction and the rack opens to the grip
+// they add (> 2 g, ticket 0020); v20: the hull is tested against the curl only when it can reach it (src/sim/world.js `gateCurl`,
 // the server's CPU budget); v13: fan suction scheduled from the deck's tilt (and the grip void at a launch or a hard
 // stop), 1.5 s spool, held demand: the livestream DOWNFORCE channel; v11: the skill ladder;
 // v9: bodywork folds (elastic to a 100 kN yield per hull probe, then plastic crush), no artificial
@@ -35,7 +36,7 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // distribution; v7: body geometry; v6: The Show is one flight (off the Wall, over the row); parked
 // vehicles are bodies with mass, per-surface materials; v5: driver-relative steer/roll/yaw,
 // grip-limited steering; v4: sourced specs (docs/REVEAL_RESEARCH.md); v3: dmath; v2: physics v2
-export const SIM_VERSION = 20;
+export const SIM_VERSION = 21;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 export const G_WIN = 120;               // 0.5 s of ticks: the braking peak's averaging window

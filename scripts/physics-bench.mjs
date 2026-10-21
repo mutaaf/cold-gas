@@ -37,3 +37,19 @@ for (const [label, extra] of [['tyres only (TC)', {}], ['+ fan 2g', { fan: 1 }],
     console.log('steer', steer, 'lateral g', maxLat.toFixed(2), 'speed', Math.hypot(s.vel.x, s.vel.z).toFixed(1));
   }
 }
+// 5. Steady cornering on the level (ticket 0020): full stick, speed held, 2 s settle, 1 s mean.
+//    OFFICIAL (Moravy): "greater than 2 G's" with the fans, "typically 1.26 G's" on the tyres.
+for (const fan of [0, 1]) {
+  const row = [20, 30, 40].map((v) => {
+    const s = settle(); const inp = { ...newInput(), fan };
+    while (Math.hypot(s.vel.x, s.vel.z) < v) { inp.throttle = 1; step(s, inp); }
+    inp.steer = 1; let g = 0, kgf = 0, n = 0;
+    for (let i = 0; i < 240 * 3; i++) {
+      const sp = Math.hypot(s.vel.x, s.vel.z); inp.throttle = Math.max(0, Math.min(0.85, 0.3 + (v - sp) * 0.5));
+      step(s, inp);
+      if (i >= 480) { g += Math.abs(sp * s.angVel.y) / 9.81; kgf += s.fanForce / 9.81; n++; }
+    }
+    return `${v} m/s ${(g / n).toFixed(2)} g (${(kgf / n).toFixed(0)} kgf)`;
+  });
+  console.log(`steady corner, fan ${fan ? 'armed' : 'off  '}`, row.join('  '));
+}

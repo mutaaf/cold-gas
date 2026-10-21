@@ -195,7 +195,7 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     air: CAR.airMass,
     throttles: new Float64Array(NOZZLES.length),
     wheels: WHEELS.map(() => ({ contact: true, compression: REST_LEN - MOUNT_TO_CENTRE, prevCompression: REST_LEN - MOUNT_TO_CENTRE, omega: 0, spin: 0, steer: 0, slip: 0, slipAngle: 0, slipAngleKin: 0, relax: 0, load: STATIC_LOAD, nx: 0, ny: 1, nz: 0 })),
-    fan: 0, fanDemand: 0, fanForce: 0, gripSat: 0, floorGap: SPEC.rideHeight,
+    fan: 0, fanDemand: 0, fanForce: 0, gripSat: 0, fanLat: 0, floorGap: SPEC.rideHeight,
     hullContact: false, hullGround: false, obstacleContact: false, obstacleSpeed: 0, hullImpulse: 0,
     steer: 0, grounded: 4, onWall: false, onSlope: false, wheelForce: 0, tcActive: false,
     // Crash state: each hull probe's permanent crush (m), its contact last tick, and the run's
@@ -607,13 +607,15 @@ export function step(s, inp) {
 
   // --- Steering (steer-by-wire: rate-limited, speed-sensitive) ---
   // Full lock is 0.5 rad at parking speed. At speed the rack is scaled so full stick asks for
-  // the tyres' peak grip and no more: the kinematic angle for μg of lateral acceleration (L·μg/v²)
-  // plus 0.04 rad, the lock that measured the most steady cornering g at 12, 25 and 40 m/s. Every
-  // bit of stick travel is usable, and a full-stick flick at 200 km/h can't saw the front axle
-  // into understeer.
+  // the tyres' peak grip and no more: the kinematic angle for the lateral acceleration the tyres
+  // carry now, μ·(m·g + N_fan)/m (L·a/v²), plus 0.04 rad, the lock that measured the most steady
+  // cornering g at 12, 25 and 40 m/s. With the fans pulling, the same stick asks for the grip
+  // they add. Every bit of stick travel is usable, and a full-stick flick at 200 km/h can't saw
+  // the front axle into understeer.
   const speed = dhypot(s.vel.x, s.vel.y, s.vel.z);
   const vSq = Math.max(1, s.vel.x * s.vel.x + s.vel.z * s.vel.z);
-  const lock = Math.min(0.5, (SPEC.wheelbase * SPEC.tyreMu * G) / vSq + 0.04);
+  const aGrip = SPEC.tyreMu * (G + s.fanForce / m);
+  const lock = Math.min(0.5, (SPEC.wheelbase * aGrip) / vSq + 0.04);
   const steerTarget = -inp.steer * lock;        // driver's right is −x
   s.steer += clamp(steerTarget - s.steer, -2.2 * dt, 2.2 * dt);
 
@@ -639,7 +641,19 @@ export function step(s, inp) {
   // is tuned to the reveal's crawl, and full torque on it spins the rears to a stall).
   const allIn = speed < SPEC.fanVoidSpeed && (inp.throttle >= 0.9 || (inp.brake >= 0.9 && speed > 2)) ? 1 : 0;
   s.gripSat += (allIn - s.gripSat) * (dt / SPEC.fanGripTime);
-  const fanTarget = armed * Math.max(s.fanDemand, clamp(2 * s.gripSat - 1, 0, 1));
+  // A corner asks for suction too ("greater than 2 G's … beyond the tires", OFFICIAL, Moravy). The
+  // driver's stick, not the tyres' measured slip (that chattered: LESSONS), sets the lateral g
+  // wanted: full stick is the fan car's whole grip, μ·(m·g + fanMax)/m, or what full lock gives
+  // at this speed (0.5·v²/L) if that is less. The fan pulls N with μ·(m·g + N) = m·a, inside
+  // [idle, max]; below μ·g the tyres carry it alone and the fan idles. Filtered over fanGripTime,
+  // so a flick of the stick doesn't spool it.
+  let latNeed = 0;
+  if (armed > 0 && gapT >= 0) {
+    const aWant = Math.abs(inp.steer) * Math.min(SPEC.tyreMu * (G + SPEC.fanMaxForce / m), (0.5 * vSq) / SPEC.wheelbase);
+    latNeed = clamp((m * aWant) / SPEC.tyreMu - m * G, SPEC.fanIdleForce, SPEC.fanMaxForce) / SPEC.fanMaxForce;
+  }
+  s.fanLat += (latNeed - s.fanLat) * (dt / SPEC.fanGripTime);
+  const fanTarget = armed * Math.max(s.fanDemand, clamp(2 * s.gripSat - 1, 0, 1), s.fanLat);
   s.fan += (fanTarget - s.fan) * Math.min(1, dt / (fanTarget > s.fan ? SPEC.fanSpool / Math.LN10 : SPEC.fanDump));
   // The skirts seal a rectangle of floor; each patch of it seals (or leaks) on its own, so a car
   // whose nose hangs past the Wall's lip keeps only the suction of the floor still over the deck,
