@@ -29,8 +29,8 @@ const flyDrill = (id, policy, course = 'show') => {
   return run;
 };
 
-describe('SIM_VERSION 18: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down', () => {
-  it('is version 18 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014)', () => expect(SIM_VERSION).toBe(18));
+describe('SIM_VERSION 19: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down, the Wall from its foot', () => {
+  it('is version 19 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019)', () => expect(SIM_VERSION).toBe(19));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
@@ -42,6 +42,8 @@ describe('SIM_VERSION 18: the rigid-body engine, the reveal G trace, relaxed tyr
   // Show 94.0, Wall 96.0, Lineup 85.3. v16 (0015, tyre relaxation) moves the bits, not the scores.
   // v18 (0014): no hover after the kickflip and the Lineup mark just past the row, where the reveal
   // landed: Lineup 92.0 (0.5 m from the mark, 0.78 m/s); the Wall and the Show are bit-identical.
+  // v19 (0019): the Wall starts parked at the foot of the curl and spools at rest: Wall 96.0
+  // (17.8 s start to settled, was 35.3); the Show and the Lineup are bit-identical.
   it('keeps the reference runs: no worse than SIM_VERSION 13', () => {
     const runs = Object.fromEntries(['show', 'wall', 'lineup'].map((c) => [c, fly(c)]));
     const cards = Object.fromEntries(Object.entries(runs).map(([c, r]) => [c, scoreRun(r.t)]));

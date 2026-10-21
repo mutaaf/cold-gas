@@ -50,6 +50,9 @@ export function createDirector(camera) {
   }
 
   function snap() { st.init = false; }
+  // A new run, a replay from the top or its loop: forget the last stunt (the Wall starts a few
+  // metres from where it lands, so the car's position can't tell a new run from a landing).
+  function restart() { st.peak = 0; st.launched = false; snap(); }
 
   // Smoothly fly the camera toward want/lookWant (rate per second).
   function ease(dt, rate, lookRate = 8) {
@@ -118,7 +121,6 @@ export function createDirector(camera) {
   // --- Wall --------------------------------------------------------------------------------------
   // Where the stunt is, from the car's state alone: climbing, hanging on the ledge, launched.
   function trackWall(carPos, carVel, phase) {
-    if (carPos.z < WALL.start.z + 25 && carPos.y < 2) { st.peak = 0; st.launched = false; }   // a new run (or replay loop)
     st.peak = Math.max(st.peak, carPos.y);
     if (!st.launched && st.peak > 6 && (carPos.z < WALL.lip.z - 0.8 || (phase === 'air' && carVel.y < -1))) {
       st.launched = true; st.launchT = st.t;
@@ -263,6 +265,6 @@ export function createDirector(camera) {
   // Hold a locked-off camera at `pos` for `seconds` (crash cuts); a mode change cancels it.
   function cut(pos, seconds, fov = 40) { st.cutPos.copy(pos); st.cutT = seconds; st.cutFov = fov; }
 
-  return { update, snap, cut, setView: (v) => { st.view = v; }, view: () => st.view, reframe: () => frameOffset(st.mode === 'title'), shake: (s) => { st.shake = Math.max(st.shake, s); },
+  return { update, snap, restart, cut, setView: (v) => { st.view = v; }, view: () => st.view, reframe: () => frameOffset(st.mode === 'title'), shake: (s) => { st.shake = Math.max(st.shake, s); },
     impact: (dip, punch) => { st.dip = Math.max(st.dip, dip); st.punch = Math.max(st.punch, punch); }, state: st };
 }
