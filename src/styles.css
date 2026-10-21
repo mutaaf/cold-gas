@@ -477,7 +477,7 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .h-timeline li[data-state='now'] em { font-family: var(--mono); }
 
 /* Primary instrument: speed on the ground; in the air, the descent and its predictor */
-.h-primary { position: absolute; left: 50%; bottom: calc(76px + var(--safe-b)); transform: translateX(-50%); display: grid; justify-items: center; }
+.h-primary { position: absolute; left: 50%; bottom: calc(92px + var(--safe-b)); transform: translateX(-50%); display: grid; justify-items: center; }
 .hud[data-air] .speed { display: none; }
 .descent { display: grid; grid-template-columns: auto auto; align-items: end; gap: 18px; justify-content: center; }
 .d-main { display: grid; gap: 10px; justify-items: end; }
@@ -508,7 +508,11 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .h-cell + .h-cell { border-left: 1px solid var(--line); }
 .h-cell .h-lbl { grid-column: 1 / -1; }
 .h-cell b { font: 400 17px/1 var(--mono); font-weight: 400; justify-self: start; transition: color 0.25s var(--ease); }
-.h-att2 { grid-template-columns: auto auto auto auto; }
+.tank .n2-bar { grid-column: 1 / -1; margin-top: -2px; font: 400 11px/1 var(--mono); color: var(--lbl); white-space: nowrap; }
+.tank .n2-bar span { color: var(--ink); }
+.n2-st { font-style: normal; margin-left: 2px; letter-spacing: 0.04em; }
+.tank .h-lbl { white-space: nowrap; }
+.tank[data-gas='blowdown'] .n2-st { color: var(--caution); }
 .h-cell[data-state='caution'] b, .h-cell[data-state='caution'] .h-unit { color: var(--caution); }
 .h-cell[data-state='warn'] b, .h-cell[data-state='warn'] .h-unit { color: var(--warn); }
 .hud:not([data-air]) .r-sink, .hud[data-air] .r-fan { display: none; }
@@ -520,7 +524,7 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .tank.low .bar span { background: var(--warn); }
 
 /* Attitude */
-.h-att { position: absolute; right: calc(var(--m) + var(--safe-r)); bottom: calc(76px + var(--safe-b)); display: grid; justify-items: center; gap: 6px; }
+.h-att { position: absolute; right: calc(var(--m) + var(--safe-r)); bottom: calc(92px + var(--safe-b)); display: grid; justify-items: center; gap: 6px; }
 .dial { width: 104px; height: 104px; transform: rotate(-90deg); }
 .dial .ring { fill: none; stroke: var(--line); stroke-width: 1.2; }
 .dial .arc { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: 0 360; transition: stroke 0.3s; }
@@ -538,7 +542,7 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .roll-cue[data-kind='roll'] { color: var(--ink); }
 
 /* The vehicle: the thruster array and the damage sensor, side by side, both top-down, nose up */
-.h-vehicle { position: absolute; left: calc(var(--m) + var(--safe-l)); bottom: calc(76px + var(--safe-b)); display: flex; align-items: flex-end; gap: 22px; }
+.h-vehicle { position: absolute; left: calc(var(--m) + var(--safe-l)); bottom: calc(92px + var(--safe-b)); display: flex; align-items: flex-end; gap: 22px; }
 /* Damage: a first-class instrument. Zones shade by damage; the total and its word carry the state;
    a hit flashes the whole car (and buzzes, src/main.js). */
 .dmg { display: flex; align-items: flex-end; gap: 12px; }
@@ -633,16 +637,17 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .h-att { top: calc(var(--top) + 46px); bottom: auto; right: calc(var(--m) + var(--safe-r)); }
   .dial { width: 84px; height: 84px; }
   .h-strip { top: calc(var(--top) + 206px); bottom: auto; left: calc(var(--m) + 74px + var(--safe-l)); right: calc(var(--m) + var(--safe-r)); transform: none; width: auto;
-    display: grid; grid-template-columns: repeat(3, 1fr); }
+    display: grid; grid-template-columns: 1.3fr 1fr 1fr; }   /* the first column carries N₂ and its BLOWDOWN tag */
   .h-cell { min-width: 0; padding: 8px 10px 7px; }
   .h-cell:nth-child(n) { border-left: 0; }
   .h-cell b { font-size: 16px; }
   .hud .h-cell:not(:first-child) { border-left: 1px solid var(--line); }
-  .hud:not([data-air]) .h-strip > .h-cell:nth-child(5), .hud[data-air] .h-strip > .h-cell:nth-child(4) { border-left: 0; }
+  .h-strip > .tank { grid-column: 1; grid-row: 2; }   /* N₂ heads row 2 in the wide column, on the ground and in the air */
+  .hud .h-strip > .tank { border-left: 0; }   /* (beats .hud .h-cell:not(:first-child)) */
   .h-strip { row-gap: 0; }
   .cue { --cue-top: 394px; }
   /* The vehicle panel (damage) heads the strip: car health beside the telemetry. */
-  .h-vehicle { top: calc(var(--top) + 206px); left: calc(var(--m) + var(--safe-l)); right: auto; width: 66px; height: 102px; justify-content: center; align-items: center; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(5, 7, 12, 0.5); }
+  .h-vehicle { top: calc(var(--top) + 206px); left: calc(var(--m) + var(--safe-l)); right: auto; width: 66px; height: 112px; justify-content: center; align-items: center; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(5, 7, 12, 0.62); }
   body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 430px; }
   .h-scrim-top { height: calc(var(--top) + 300px); }
 }
@@ -672,7 +677,8 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .dmg svg { width: 24px; height: 44px; }
   /* The strip becomes a dashboard along the bottom, between the stick and the right thumb's arc. */
   .h-strip { left: calc(168px + var(--safe-l)); right: calc(271px + var(--safe-r)); bottom: calc(12px + var(--safe-b)); transform: none; }
-  .h-strip .h-att2 { display: none; }
+  .h-strip .h-pitch { display: none; }
+  .h-strip .tank { flex-grow: 1.7; }
   .h-cell { flex: 1 1 0; min-width: 0; padding: 7px 8px 6px; row-gap: 5px; }
   .h-cell b { font-size: 15px; }
   .cue { --cue-top: 112px; }

@@ -92,10 +92,12 @@
       <div class="h-cell" data-ch="spd"><span class="h-lbl">Spd</span><b data-speed>0</b><span class="h-unit">km/h</span></div>
       <div class="h-cell" data-ch="alt"><span class="h-lbl">Alt</span><b data-alt>0.0</b><span class="h-unit">m</span></div>
       <div class="h-cell r-sink" data-ch="sink"><span class="h-lbl">Sink</span><b data-sink>0.0</b><span class="h-unit">m/s</span></div>
-      <div class="h-cell" data-ch="g"><span class="h-lbl">Load</span><b data-g>1.0</b><span class="h-unit">g</span></div>
-      <div class="h-cell tank" data-ch="n2" data-tank><span class="h-lbl">N₂</span><b data-air>100</b><span class="h-unit">%</span>
+      <div class="h-cell" data-ch="g"><span class="h-lbl">G</span><b data-g>1.0</b><span class="h-unit">g</span></div>
+      <!-- N₂: kg left and tank pressure (adiabatic blowdown from 690 bar); REG while the regulator holds line pressure. -->
+      <div class="h-cell tank" data-ch="n2" data-tank><span class="h-lbl">N₂ <i class="n2-st" data-n2-state>Reg</i></span><b data-air>297</b><span class="h-unit">kg</span>
+        <span class="n2-bar"><span data-tank-bar>690</span> bar</span>
         <div class="bar" aria-hidden="true"><span data-air-bar></span><i class="need" data-air-need></i></div></div>
-      <div class="h-cell h-att2" data-ch="att"><span class="h-lbl">Att</span><b data-bank>0</b><span class="h-unit">°</span><b data-pitch>0</b><span class="h-unit">°</span></div>
+      <div class="h-cell h-pitch" data-ch="pitch"><span class="h-lbl">Pitch</span><b data-pitch>0</b><span class="h-unit">°</span></div>
       <div class="h-cell r-fan" data-ch="fan"><span class="h-lbl">Fan</span><b data-fan>0</b><i class="h-unit">kgf</i></div>
     </div>
     <div class="h-att adi-wrap" data-hud-box="att">

@@ -21,6 +21,7 @@ import { DT, G, CAR, NOZZLES, WHEELS, bodyRates, worldPoint, newInput } from './
 import { scoreRun, TIERS } from './sim/judge.js';
 import { coach } from './sim/coach.js';
 import { createLandingHud } from './hud-landing.js';
+import { hudPitch, createGWindow, tankBar, gasState } from './hud-telemetry.js';
 import { drillById, drillsFor, buildDrill, drillResult, drillCoach } from './practice.js';
 import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
@@ -316,15 +317,8 @@ function heightAboveSurface(c) {
   const h = sn.y > 0.9 ? d : c.pos.y;
   return Math.max(0, h - SPEC.comHeight);
 }
-// Felt g-load, smoothed (the occupant's view: specific force, not coordinate acceleration).
-const gState = { vx: 0, vy: 0, vz: 0, g: 1 };
-function feltG(c, dt) {
-  if (dt <= 0) return gState.g;
-  const ax = (c.vel.x - gState.vx) / dt, ay = (c.vel.y - gState.vy) / dt + 9.81, az = (c.vel.z - gState.vz) / dt;
-  gState.vx = c.vel.x; gState.vy = c.vel.y; gState.vz = c.vel.z;
-  gState.g += (Math.min(12, Math.hypot(ax, ay, az) / 9.81) - gState.g) * Math.min(1, dt * 6);
-  return gState.g;
-}
+// G as the livestream read it: specific force over the last 0.5 s, fed every sim tick (src/hud-telemetry.js).
+const gWindow = createGWindow();
 
 // The touchdown felt in the body: camera, mist from each tyre and the thud, all scaled by sink rate.
 const contactPts = new Float32Array(12), wp = { x: 0, y: 0, z: 0 };
@@ -357,6 +351,7 @@ function liveStep(dt) {
     input = S.autopilot ? S.autopilot(run)
       : wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released));
     stepRun(run, input);
+    gWindow.push(run.car.vel);
     S.acc -= DT;
   }
   if (run.t.contact && !S.contactBuzzed) { S.contactBuzzed = true; buzz('crash'); }
@@ -404,11 +399,11 @@ function liveStep(dt) {
   landing.update(c, alt, S.autopilot ? '' : run.phase);
   const pr = landing.prediction;
   ui.hud({
-    speed, air: (c.air / CAR.airMass) * 100, rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI,
+    speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI,
     alt, airborne: run.phase === 'air',
     sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, pr), clock: (run.tick - S.startTick) / 240,
-    bank: (-pr.rollOut * 180) / Math.PI, pitch: (pr.pitchOut * 180) / Math.PI,
-    throttles: c.throttles, fan: c.fanForce / G, g: feltG(c, dt),
+    pitch: hudPitch(c.quat, run.phase === 'ramp'),
+    throttles: c.throttles, fan: c.fanForce / G, g: gWindow.read(),
   });
   ui.damage(run.damage);
   hero.setFan?.(c.fan);
@@ -426,7 +421,7 @@ function liveStep(dt) {
 // A new attempt (or drill): the one-thumb control, the HUD's glide and the timeline start over.
 function newFlight(startTick = 0) {
   thumb.reset();
-  ui.resetHud(); ui.damageReset();
+  ui.resetHud(); ui.damageReset(); gWindow.reset();
   ui.timelineFor(stage.course);
   S.phaseMax = -1; S.startTick = startTick; S.contactBuzzed = false;
   S.releaseTick = S.released ? startTick - 240 : -1;

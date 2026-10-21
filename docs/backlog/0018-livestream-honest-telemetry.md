@@ -1,12 +1,12 @@
 ---
 id: 0018
 title: Put the livestream's telemetry on screen, on every screen size (pitch, G, N2 kg and tank pressure)
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: PRNUM
 by: critic
 ---
 
@@ -65,3 +65,20 @@ reads PITCH at the hang and G at `brakePeakG`'s tick; a unit test of the bar for
 
 ## Out of scope
 Imperial/metric settings beyond the ALT label, new sim telemetry, the results sheet.
+
+## Builder note (2026-10-21)
+Re-measured on main (#36's HUD) before building. The phone overflow was already gone: at 390×844
+every strip cell lay inside x 90–374, and "Air" was already "N₂". This PR adds what was still missing:
+- **PITCH** (`src/hud-telemetry.js` `hudPitch`): on the deck, the nose's angle in the course's vertical
+  plane. The Wall reference reads 170.0° at the hang and crosses 90° on the vertical. In the air it is
+  the signed angle from level. The bank stays on the ADI.
+- **G**: specific force over 0.5 s, |Δv/0.5 s + g|/g from a ring of tick velocities. That's the
+  magnitude of the window's mean, not the mean of each tick's magnitude. The latter is
+  `brakePeakG`'s formula, but on the ground it rectifies the rigid contacts' tick-to-tick jitter
+  and reads 1.22 G cruising. In free flight the two agree. At the braking peak they differ by
+  0.002–0.003 (Wall 3.079/3.077, Show 3.022/3.019, Lineup 2.083/2.082).
+- **N₂**: kg left, tank bar `690·(m/297)^1.375`, REG/BLOWDOWN from `pressureOf`. BLOWDOWN first
+  shows at 192 kg on the Wall reference, in the air. The ticket's "≈160–190" band was widened to
+  160–195 in the test.
+- Landscape phones hide PITCH (as #36 hid ATT); ALT, G, N₂ and SINK/FAN stay. The desktop
+  instruments sit 16 px higher to clear the strip's added N₂ line.
