@@ -1,12 +1,12 @@
 ---
 id: 0019
 title: The Wall starts parked at the foot of the curl and spools up like run 1, not 120 m away
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 48
 by: critic
 ---
 

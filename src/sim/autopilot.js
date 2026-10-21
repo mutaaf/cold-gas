@@ -17,10 +17,13 @@ export const REVEAL = {
   // out from the ramp's base (research §2.1.4): it rolls out along the ledge at 2.5 m/s and lets go.
   // (`hang`/`releaseAt: 0.93` stop it on the ledge instead, four wheels and the sealed floor on the
   // deck: the drills and run 1's hang.)
-  wall: { approach: 6, climb: 4, hang: 2.0, releaseAt: 0.93, driveOff: true, driveSpeed: 2.5, driveFrom: 0.8, driveRelease: 0.96 },
+  // Run 1 (§2.1.2) starts parked at the foot, fans idle: they spool at rest (≈1 s, brake held), then
+  // the car rolls onto the curl at the climb's crawl.
+  wall: { spool: 1.0, approach: 4, climb: 4, hang: 2.0, releaseAt: 0.93, driveOff: true, driveSpeed: 2.5, driveFrom: 0.8, driveRelease: 0.96 },
   lineup: { speed: 7.5, apex: 5.0, rolls: 1, rollBrake: 14 },
   // The Show drives out along the ledge at the carry speed (driveSpeed falls back to `carry`) and lets go near the lip.
-  show: { carry: 7.5, driveSpeed: undefined, driveOff: true, driveFrom: 0.8, driveRelease: 0.95 },
+  // (It keeps its own roll-in: a floored approach from the standing start, no spool at rest.)
+  show: { spool: 0, approach: 6, carry: 7.5, driveSpeed: undefined, driveOff: true, driveFrom: 0.8, driveRelease: 0.95 },
 };
 
 const rates = v3(), upv = v3(), fwv = v3();
@@ -83,9 +86,13 @@ function wallPilot(plan, courseId) {
     const speed = dhypot(c.vel.x, c.vel.y, c.vel.z);
     if (run.phase === 'drive') {
       laneKeep(c, out);
-      out.throttle = speed < plan.approach ? 1 : 0;
-      out.brake = speed > plan.approach + 0.8 ? 0.3 : 0;
       out.fan = c.pos.z > -14 ? 1 : 0;           // spool the fan up before the foot of the ramp
+      if (plan.spool && run.tick < plan.spool * 240) { out.brake = 1; return out; }   // parked: let it spool
+      // Roll to the approach speed on a governor, not a floored pedal: full throttle from rest is a
+      // launch, and the fan answers a launch with all its suction (it fills the grip void).
+      const err = plan.approach - speed;
+      out.throttle = !plan.spool ? (speed < plan.approach ? 1 : 0) : Math.max(0, Math.min(1, 0.45 + err * 0.3));
+      out.brake = speed > plan.approach + 0.8 ? 0.3 : 0;
       return out;
     }
     if (run.phase === 'ramp' && !st.released) {

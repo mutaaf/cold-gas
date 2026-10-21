@@ -32,7 +32,7 @@ export const WALL = {
   h: 0, r2: 0,                // (legacy fields the stage reads; the profile is arc + ledge)
   width: 3.7,                 // m, deck width (frame measurement)
   slab: 0.9,                  // m, deck thickness
-  start: { z: -120, x: 0 },
+  start: { z: -6, x: 0 },     // parked at the foot of the curl, as run 1 began (research §2.1.2; was -120)
   pad: { z: -9, x: 0, rings: [2, 4, 7] },   // landing target under the ledge, on the approach
   runout: { zMin: -260, zMax: 40 },
   lip: { z: P_END.z + T_LEDGE.z * LEDGE, y: P_END.y + T_LEDGE.y * LEDGE },

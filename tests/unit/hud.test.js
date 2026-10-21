@@ -55,9 +55,16 @@ describe('HUD telemetry (0018)', () => {
   it('G is specific force over the 0.5 s window: within ±0.15 of brakePeakG at its peak, 1 G cruising', () => {
     expect(wall.run.t.brakePeakG).toBeGreaterThan(2);
     expect(Math.abs(wall.ticks[wall.peakAt].g - wall.run.t.brakePeakG)).toBeLessThanOrEqual(0.15);
-    // Rolling steadily along the approach (10 s in) it reads 1 G.
-    expect(wall.ticks[2400].phase).toBe('drive');
-    expect(wall.ticks[2400].g).toBeCloseTo(1, 1);
+    // Parked at the foot of the Wall while the fans spool (0.9 s in: a full window at rest) it reads
+    // 1 G, and so does rolling steadily along the Lineup's approach (5 s in). (The Wall's 120 m
+    // approach, where this once read, went with 0019.)
+    expect(wall.ticks[215].phase).toBe('drive');
+    expect(wall.ticks[215].speed).toBeLessThan(0.05);
+    expect(wall.ticks[215].g).toBeCloseTo(1, 1);
+    const lineup = fly('lineup');
+    expect(lineup.ticks[1200].phase).toBe('drive');
+    expect(lineup.ticks[1200].speed).toBeGreaterThan(7);
+    expect(lineup.ticks[1200].g).toBeCloseTo(1, 1);
   });
 
   it('the N₂ gauge: 297 kg at 690 bar full, and bar = 690·(m/297)^1.375 within ±2 bar', () => {

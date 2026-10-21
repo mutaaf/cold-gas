@@ -6,6 +6,7 @@ import { createRun, stepRun, wallProgress } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { createVehicle, step, newInput, up, G, DT } from '../../src/sim/vehicle.js';
 import { DRILLS, buildDrill } from '../../src/practice.js';
+import { scoreRun } from '../../src/sim/judge.js';
 
 const TELEMETRY = [[25, 434], [50, 825], [75, 1544], [90, 3300], [127, 4510], [170, 4700]];   // pitch°, kgf
 const pitchOf = (c, u) => Math.acos(Math.max(-1, Math.min(1, up(c, u).y))) * 180 / Math.PI;
@@ -75,5 +76,38 @@ describe('fan suction follows the attitude (SIM_VERSION 13)', () => {
       expect(Math.hypot(c.pos.x - p0.x, c.pos.y - p0.y, c.pos.z - p0.z)).toBeLessThan(0.5);
       expect(c.fanForce / G).toBeGreaterThan(4500);   // telemetry: 4,697–4,700 kgf hanging
     }
+  });
+});
+
+// Run 1 starts parked at the foot of the curl, fans idle (SIM_VERSION 19, ticket 0019): the fans
+// spool at rest (t 8: 79 kgf), the car rolls (t 9: 186 kgf) and is on the curl by t 10–11 (434 kgf
+// at 25.5°): ≈ 3 s from rest to 25° of pitch (docs/REVEAL_RESEARCH.md §2.1.2, TELEMETRY 1 Hz).
+describe('the Wall starts at the foot of the curl, like run 1', () => {
+  it('spools at rest, rolls onto the curl and reaches 25° of pitch 2.5–5 s after the first tick', () => {
+    const run = createRun('wall'), ap = createAutopilot('wall'), u = {};
+    let arm = -1, f1 = -1, t25 = -1, f25 = 0;
+    while (run.phase !== 'done' && t25 < 0) {
+      const inp = ap(run);
+      if (arm < 0 && inp.fan) arm = run.tick;
+      stepRun(run, inp);
+      if (arm >= 0 && f1 < 0 && run.tick - arm >= 240) f1 = run.car.fanForce / G;
+      if (run.phase === 'ramp' && pitchOf(run.car, u) >= 25) { t25 = run.tick / 240; f25 = run.car.fanForce / G; }
+    }
+    expect(arm).toBe(0);                                      // armed at rest, on the first tick
+    expect(f1, `+1 s: ${f1.toFixed(0)} kgf`).toBeGreaterThanOrEqual(50);    // telemetry 186 kgf at t 9
+    expect(f1, `+1 s: ${f1.toFixed(0)} kgf`).toBeLessThanOrEqual(250);
+    expect(t25).toBeGreaterThanOrEqual(2.5);
+    expect(t25).toBeLessThanOrEqual(5);
+    expect(f25, `25°: ${f25.toFixed(0)} kgf`).toBeGreaterThanOrEqual(300);  // telemetry 434 kgf
+    expect(f25, `25°: ${f25.toFixed(0)} kgf`).toBeLessThanOrEqual(600);
+  });
+  it('the whole reference run, start to settled, takes ≤ 22 s and still scores 96 ± 3', () => {
+    const run = createRun('wall'), ap = createAutopilot('wall');
+    while (run.phase !== 'done') stepRun(run, ap(run));
+    expect(run.t.endReason).toBe('settled');
+    expect(run.tick / 240).toBeLessThanOrEqual(22);
+    const s = scoreRun(run.t);
+    expect(s.total).toBeGreaterThanOrEqual(93);
+    expect(s.total).toBeLessThanOrEqual(99);
   });
 });
