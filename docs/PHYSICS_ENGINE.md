@@ -53,8 +53,8 @@ Results (macOS 27, Node 25, Playwright Chromium/WebKit, wrangler 4.151 / workerd
 | | Node | Chromium | WebKit | workerd | Firefox |
 |---|---|---|---|---|---|
 | engine spike | `0ddfc5d3` | `0ddfc5d3` | `0ddfc5d3` | `0ddfc5d3` | not run* |
-| clean logs (Show Advanced 100, Wall 93.7, Lineup 86.7) | reference | IDENTICAL | IDENTICAL | IDENTICAL | not run* |
-| crash logs (Show 35, Wall 60, Lineup 28) | reference | IDENTICAL | IDENTICAL | IDENTICAL | not run* |
+| clean logs (Show Advanced 100, Wall 93, Lineup 86.7) | reference | IDENTICAL | IDENTICAL | IDENTICAL | not run* |
+| crash logs (Show 35, Wall 60.7, Lineup 28) | reference | IDENTICAL | IDENTICAL | IDENTICAL | not run* |
 
 \* Playwright's Firefox (Nightly) fails to launch on this machine's macOS beta ("Could not find
 profile folder"); it is skipped here as it was before. SpiderMonkey runs the same WASM under the
@@ -94,8 +94,9 @@ same IEEE-754 semantics; run `scripts/engine-determinism.mjs` on a machine where
 - **Tyres**: Pacejka magic formula (`tyreFx`/`tyreFy`), friction ellipse for combined slip, load
   sensitivity, implicit wheel spin, TC/ABS, stiction at crawl speed, rolling resistance.
 - **Suspension**: raycast spring/damper per corner, rated to each axle's load, bump stop.
-- **Suction fan**: four quarters of the skirts' sealed floor, each sealing or leaking on its own,
-  pulled where that floor is; the reaction pulls whatever is under the car.
+- **Suction fan**: the scheduled controller, then eight patches of the skirts' sealed floor (2 × 4),
+  each sealing or leaking on its own, pulled where that floor is; the reaction pulls whatever is
+  under the car.
 - **Skirts and floor pan**: compliant (0.3 MN/m) under the rigid hull, as on the curl's sag.
 - **Cold-gas thrusters**: ten nozzles, blowdown, regulator, Isp sag; the mixer and the flight
   computer (Assist / Pro), or ten valves by hand (Advanced).
@@ -127,9 +128,9 @@ computer, the engine's step and contacts), ticks per second; a 60 fps frame runs
 | | Show | Wall | Lineup |
 |---|---|---|---|
 | Node 25, M1 Max (before: own integrator, no engine) | 95,600 | 126,100 | 159,400 |
-| Node 25, M1 Max (Rapier; two runs on a busy machine) | 14,100–18,700 | 15,700–26,100 | 22,500–38,100 |
-| Chromium (Rapier) | 20,100 | 28,400 | 44,900 |
-| Chromium, 4× CPU throttle ≈ mid-range phone (Rapier) | 3,850 → **1.04 ms/frame** | 5,680 → 0.70 ms | 8,780 → 0.46 ms |
+| Node 25, M1 Max (Rapier) | 14,100–18,700 | 15,700–27,100 | 22,500–44,600 |
+| Chromium (Rapier) | 20,600 | 31,200 | 52,600 |
+| Chromium, 4× CPU throttle ≈ mid-range phone (Rapier) | 4,900 → **0.82 ms/frame** | 7,400 → 0.54 ms | 12,600 → 0.32 ms |
 
 Real time needs 240 ticks/s; the Show's worst case leaves the phone's frame budget to the renderer.
 First load: the 1.2 MB WASM and the 38 KB API are asked for before the stage starts building and

@@ -4,6 +4,8 @@
 // here touches the Show, the Wall or the Lineup.
 import '../drive/drive.css';
 import { createVehicle, step, DT } from '../sim/vehicle.js';
+import { freeWorld } from '../sim/world.js';
+import { loadPhysics } from '../sim/engine-web.js';
 import { quatFromYaw } from '../sim/m3.js';
 import { SPEC } from '../sim/spec.js';
 import { createDriveCamera } from '../drive/camera.js';
@@ -40,6 +42,7 @@ export function createSandbox(ctx) {
   };
 
   function place(x, z, yaw = 0) {
+    if (st.car) freeWorld(st.car.world);
     const car = createVehicle(st.course);
     car.pos.x = x; car.pos.y = SPEC.comHeight + 0.04; car.pos.z = z;
     quatFromYaw(car.quat, yaw);
@@ -54,7 +57,7 @@ export function createSandbox(ctx) {
   async function start() {
     if (st.active) return;
     audio.initAudio();
-    await stage.ready;
+    await Promise.all([stage.ready, loadPhysics()]);   // the rigid-body engine (src/sim/engine.js)
     st.world = createArenaWorld({ renderer: stage.renderer, tier });
     stage.setLook(st.world.look);
     st.layer = createBuildLayer(host, { ui, audio, tier, coarse: ctx.coarse, usingTouch: input.usingTouch, onEditing: onEditing });
@@ -137,6 +140,7 @@ export function createSandbox(ctx) {
     hud(false);
     camera.near = 0.1; camera.far = 4000; camera.up.set(0, 1, 0); camera.updateProjectionMatrix();
     document.body.classList.remove('driving');
+    if (st.car) freeWorld(st.car.world);
     st.active = false; st.car = null;
     crash.reset(); plumes.clear();
     ctx.onExit();

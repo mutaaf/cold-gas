@@ -170,6 +170,7 @@ export function createDrive(ctx) {
 
   // A fresh car at a pose (a quest's start): { x, y, z, yaw }.
   function placePose(p) {
+    if (st.car) freeWorld(st.car.world);
     const car = createVehicle(st.course);
     car.pos.x = p.x; car.pos.y = p.y + SPEC.comHeight + 0.04; car.pos.z = p.z;
     quatFromYaw(car.quat, p.yaw);

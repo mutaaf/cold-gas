@@ -144,8 +144,9 @@ const PROBE_YIELD = HULL_PART.map((p) => (p === PART.floor ? Infinity : HULL_YIE
 const E_ELASTIC = (0.5 * HULL_YIELD * HULL_YIELD) / HULL_K;
 const FLOOR = v3(0, -(SPEC.comHeight - SPEC.rideHeight), 0);
 // The skirts' sealed floor (ESTIMATE): 1.5 m across inside the sills, 2.0 m long, centred on the
-// CoM; the suction is taken at the centre of each quarter.
-const SEAL = [[0.375, 0.5], [-0.375, 0.5], [0.375, -0.5], [-0.375, -0.5]].map(([x, z]) => v3(x, FLOOR.y, z));
+// CoM; the suction is taken at the centre of each of eight patches (2 across × 4 along), so a lip
+// crossing loses it a quarter-metre at a time.
+const SEAL = [0.75, 0.25, -0.25, -0.75].flatMap((z) => [v3(0.375, FLOOR.y, z), v3(-0.375, FLOOR.y, z)]);
 
 // Advanced mode: one valve channel per nozzle, in NOZZLE_SPEC order (`manual` = 1 bypasses the
 // mixer and the flight computer; the valves go straight to the nozzles).
@@ -509,19 +510,19 @@ export function step(s, inp) {
   s.gripSat += (allIn - s.gripSat) * (dt / SPEC.fanGripTime);
   const fanTarget = armed * Math.max(s.fanDemand, clamp(2 * s.gripSat - 1, 0, 1));
   s.fan += (fanTarget - s.fan) * Math.min(1, dt / (fanTarget > s.fan ? SPEC.fanSpool / Math.LN10 : SPEC.fanDump));
-  // The skirts seal a rectangle of floor; each quarter of it seals (or leaks) on its own, so a car
+  // The skirts seal a rectangle of floor; each patch of it seals (or leaks) on its own, so a car
   // whose nose hangs past the Wall's lip keeps only the suction of the floor still over the deck,
-  // pulled where that floor is (the quarter forces balance about the CoM when all four seal). The
-  // controller above reads the deck under the centre; the force is the four quarters'.
+  // pulled where that floor is (the patch forces balance about the CoM when all seal). The
+  // controller above reads the deck under the centre; the force is the patches'.
   s.fanForce = 0;
-  for (let k = 0; k < 4 && s.fan > 0; k++) {
+  for (let k = 0; k < SEAL.length && s.fan > 0; k++) {
     rotate(r, s.quat, SEAL[k]);
     add(pw, s.pos, r);
     const gapQ = raycast(s, pw, dn, 0.6);
     if (gapQ < 0) continue;
     // Skirts drop to seal; past their reach the leak grows and suction falls off fast.
     const leak = Math.max(0, gapQ - SPEC.fanSkirtReach) / SPEC.fanGapScale;
-    const f = (s.fan * SPEC.fanMaxForce * 0.25) / (1 + leak * leak);
+    const f = (s.fan * SPEC.fanMaxForce / SEAL.length) / (1 + leak * leak);
     if (f <= 0) continue;
     s.fanForce += f;
     scale(force, dn, f); applyAt(r, force);

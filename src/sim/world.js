@@ -11,7 +11,7 @@
 // set in the same order on every host, and nothing here reads a clock or a random source.
 import { RAPIER as R, requirePhysics } from './engine.js';
 import { WALL, wallProfile, RAMP, MATERIALS, parkedMirror, refreshBounds, PAD_R, PARK_MU } from './courses.js';
-import { RAILS } from './roads.js';
+import { RAILS, roadSurface } from './roads.js';
 import { dsin, dcos, datan2 } from './dmath.js';
 
 export const WORLD_DT = 1 / 240;
@@ -157,7 +157,11 @@ export function createWorld(course) {
   if (course.sdf) {
     // Free Drive: the road is exact geometry (src/sim/roads.js) the tyres read directly; the
     // engine gets a near-car approximation of it for hull contacts, rebuilt as the car moves.
-    w.stream = streamRoad;
+    // (A course without a road, the flat Sandbox apron, gets its floor. Build pieces placed on
+    // either are exact for the tyres and fan; as hull colliders they are not mapped yet:
+    // src/build/colliders.js `shapeMesh` is the hook.)
+    if (course.road) w.stream = streamRoad;
+    else colliderFor(w, R.ColliderDesc.cuboid(1500, 1, 1500).setTranslation(0, -1, 0), MATERIALS.concrete, GROUP.approx);
   } else {
     const floor = colliderFor(w, R.ColliderDesc.cuboid(1500, 1, 1500).setTranslation(0, -1, 0), MATERIALS.concrete, GROUP.static);
     // The landing mark is a film of paint on that concrete: the floor's material inside its disc.
@@ -222,7 +226,7 @@ function streamRoad(w, pos) {
   const c = w.chunk;
   if (c && Math.abs(pos.x - c.x) < 24 && Math.abs(pos.z - c.z) < 24 && Math.abs(pos.y - c.y) < 30) return;
   if (c) for (const col of c.cols) { w.info.delete(col.handle); w.rw.removeCollider(col, false); }
-  const road = w.course.road, sdf = w.course.sdf;
+  const road = w.course.road, sdf = (x, y, z, out) => roadSurface(road, x, y, z, out);   // the road itself, not what's built on it
   const cx = Math.round(pos.x), cy = Math.round(pos.y), cz = Math.round(pos.z);
   w.ox = cx; w.oy = cy; w.oz = cz;
   const cols = [];

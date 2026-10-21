@@ -31,8 +31,8 @@ const flyDrill = (id, policy, course = 'show') => {
 
 describe('SIM_VERSION 14: the rigid-body engine', () => {
   it('is version 14', () => expect(SIM_VERSION).toBe(14));
-  // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show SHOWB, Wall WALLB, Lineup LINEB. v14 moves every body and contact into the
-  // engine and splits the fan's seal into four quarters: the references fly the same climb and
+  // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
+  // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
   // single-point fan kept full suction while the car's floor hung past the lip), so the release is
   // cleaner and the Wall lands nearer the mark. Nothing may get worse.
