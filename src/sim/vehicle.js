@@ -51,8 +51,13 @@ export const tyreFy = (D, alpha) => -D * dsin(CY * datan(BY * alpha));
 // after σ metres of rolling. σ grows with √(load) (bounded ×0.5–1.5). Below RELAX_VMIN the speed
 // is clamped: the lag stays finite at a standstill (the stiction hold keeps a parked car parked).
 // Stepped as 1 − 1/(1 + x + x²/2) of the gap, x = |vx|·dt/σ: e^−x to second order, so it never
-// overshoots at any speed.
-const RELAX_VMIN = 1.5;   // m/s, the same floor the slip angle itself uses
+// overshoots at any speed. At a crawl the first-order model goes under-damped (it's a lagged damper
+// on the sideways motion, and the real patch's own damping isn't in it: Pacejka ch. 7 adds a
+// low-speed correction for this), so the force fades back to the kinematic slip angle between
+// RELAX_VMIN + RELAX_FADE and RELAX_VMIN: a car nudged sideways at 3 m/s settled with 0.4 m/s of
+// overshoot on the lag alone, ten times what it did before.
+const RELAX_VMIN = 1.5, RELAX_FADE = 3;   // m/s; the floor is the one the slip angle itself uses
+export const relaxWeight = (vx) => clamp((Math.abs(vx) - RELAX_VMIN) / RELAX_FADE, 0, 1);
 export const relaxLength = (sigma0, Fz, Fz0) => sigma0 * clamp(Math.sqrt(Math.max(0, Fz) / Fz0), 0.5, 1.5);
 export function relaxSlip(alphaLag, alpha, vx, sigma, dt) {
   const x = (Math.max(Math.abs(vx), RELAX_VMIN) * dt) / sigma;
@@ -704,7 +709,8 @@ export function step(s, inp) {
     const mu = SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (Fz / (STATIC_LOAD * AXLE_K[i]) - 1));   // load sensitivity, this surface
     const D = Math.max(0, mu * Fz);
     const sigma = relaxLength(i < 2 ? SPEC.tyreRelaxFront : SPEC.tyreRelaxRear, Fz, STATIC_LOAD * AXLE_K[i]);
-    const alpha = relaxSlip(wh.slipAngle, alphaKin, vLong, sigma, dt);
+    const lag = relaxSlip(wh.slipAngle, alphaKin, vLong, sigma, dt);
+    const alpha = alphaKin + (lag - alphaKin) * relaxWeight(vLong);
     // Drive and brake torque. Two rear motors, 500 kW each, with traction control (every tier:
     // it's the drivetrain, not the flight computer).
     let T = 0;
@@ -755,7 +761,7 @@ export function step(s, inp) {
     const mag = dhypot(Fx, Fy);
     if (mag > D && mag > 0) { Fx *= D / mag; Fy *= D / mag; }
     Fx -= vLong * 6;                              // rolling resistance
-    wh.slip = kappa; wh.slipAngle = alpha; wh.slipAngleKin = alphaKin; wh.relax = sigma;
+    wh.slip = kappa; wh.slipAngle = lag; wh.slipAngleKin = alphaKin; wh.relax = sigma;
     scale(force, hitN, Fz);
     addScaled(force, force, wf, Fx);
     addScaled(force, force, wl, Fy);
