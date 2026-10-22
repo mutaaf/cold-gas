@@ -181,6 +181,8 @@ export function bindNozzlePad(root) {
     valves, el,
     active: () => !el.hidden,
     show(on) { el.hidden = !on; if (!on) { touches.clear(); recompute(); } },
+    // Every finger off (blur, a hidden tab, pause): no valve stays open, no pad stays lit.
+    reset() { if (touches.size) { touches.clear(); recompute(); } },
     // Each nozzle's live valve as a ring around its pad (only touched when it changes).
     sync(throttles) {
       for (let i = 0; i < VALVES; i++) {
