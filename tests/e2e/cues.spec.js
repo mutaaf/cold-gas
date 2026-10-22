@@ -30,9 +30,13 @@ const spans = (log) => {
 const game = (page, fn, arg) => page.evaluate(fn, arg);
 
 test('a player\'s Show run writes the cue only on change, holds each message, and shows "Go"', async ({ page }) => {
-  test.slow();   // a whole Show flown in real time on software GL (≈30–60 s of frames)
+  test.slow();   // a whole Show flown in real time
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+  // The cue line is DOM: nothing here needs the 3D. On CI's software GL a live frame takes 0.2–2 s,
+  // which made this cue-following bot (one read per frame) too coarse to fly the run and timed it
+  // out; with the draw stubbed the page runs at the display rate.
+  await game(page, () => { window.__coldgas.stage.render = () => {}; });
   await game(page, () => { window.__coldgas.setTier('assist'); });
   await game(page, watchCue);
   await game(page, () => window.__coldgas.startRun('jump'));
@@ -69,8 +73,10 @@ test('a player\'s Show run writes the cue only on change, holds each message, an
   const go = shown.find((s) => s.text === 'Go');
   expect(go, 'Go was never written').toBeTruthy();
   expect(go.ms).toBeGreaterThanOrEqual(400);
-  // No message under 400 ms, except one the run's end cleared.
-  for (const s of shown.slice(0, -1)) expect(s.ms, s.text).toBeGreaterThanOrEqual(400);
+  // No message under 400 ms, except one the run's end cleared. (The hold is timed on the frame's
+  // clock; these timestamps come from a MutationObserver callback a fraction of a millisecond away:
+  // 399.9 ms has been measured for a full hold. 2 ms of slack, far under a frame.)
+  for (const s of shown.slice(0, -1)) expect(s.ms, s.text).toBeGreaterThanOrEqual(398);
 });
 
 test('phone: "Go" holds after the countdown and the cue line does not flap', async ({ browser }) => {
