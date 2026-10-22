@@ -5,19 +5,22 @@
 //   - WCAG contrast of every visible HUD label, measured on the real screenshot: the text's
 //     luminance against the worst (closest) 10 % of the pixels behind it, with the text hidden.
 //
-//   node scripts/hud-audit.mjs <url> <outdir> [set=all|phones|tablets|safe|quick|WxH[s],…] [label]
+//   node scripts/hud-audit.mjs <url> <outdir> [set=all|phones|tablets|safe|quick|WxH[s],…] [label] [states=both|compact|full]
 //
 // Viewports: phones (incl. a 320 px Slide Over column and Safari's portrait with its bars), iPads in
 // both orientations, desktops. A trailing `s` (e.g. 844x390s) is the safe-area pass: the page's
 // --safe-* insets are forced to a notched phone's (47 px on the notch side in landscape, 34 px home
 // indicator in portrait, 21 px in landscape), as iOS reports them with viewport-fit=cover.
 // Touch viewports also fly a Lineup hop (attitude dial vs the LIFT slot).
+// Every viewport is flown with the HUD compact and full (0061, src/hud-mode.js: the choice is set
+// in localStorage before the page loads); a frame's name carries `-compact` or `-full`.
 //
 // Writes <outdir>/<label>-<viewport>-<phase>.png and <outdir>/<label>-report.json.
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
-const [url = 'http://localhost:4391/coldgas/', out = 'shots', set = 'all', label = 'audit'] = process.argv.slice(2);
+const [url = 'http://localhost:4391/coldgas/', out = 'shots', set = 'all', label = 'audit', states = 'both'] = process.argv.slice(2);
+const STATES = states === 'both' ? ['compact', 'full'] : [states];
 mkdirSync(out, { recursive: true });
 const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430], [320, 568], [814, 380], [393, 659]];
 const TABLETS = [[768, 1024], [1024, 768], [820, 1180], [1180, 820], [1024, 1366], [1366, 1024]];
@@ -45,6 +48,8 @@ const BOXES = [
   '[data-stick]', '.buttons', '.tbtn', '[data-onethumb]', '[data-nozzle-pad] svg',
   // Free Drive
   '.fd-road', '.fd-ctl', '.fd-timer', '.fd-speed', '.fd-stats', '.fd-map', '.fd-fine', '.bq-dock',
+  // the HUD's handle (compact ⇄ full), wherever it stands
+  '[data-hud-toggle]',
 ];
 const TEXT_ROOTS = '[data-screen="hud"], [data-touch], [data-cue], .top, [data-drill-bar], [data-drive-hud], [data-onethumb], .bq-dock';
 
@@ -146,12 +151,13 @@ async function measure(page, vpName, phase) {
   console.log(`${vpName} ${phase}: overlaps ${m.overlaps.length}${m.overlaps.length ? ` (${m.overlaps.map((o) => `${o.a}×${o.b} ${o.px}`).join('; ')})` : ''} · offscreen ${m.offscreen.length} · min text ${minPx}px (${small.length} < 11) · min contrast ${minRatio} (${low.length} < 4.5)`);
 }
 
-for (const [w, h, safe] of VIEWPORTS) {
+for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   const touch = safe || touchFor(w, h);
-  const vpName = `${w}x${h}${safe ? 's' : ''}`;
+  const vpBase = `${w}x${h}${safe ? 's' : ''}`, vpName = `${vpBase}-${hudState}`;
   const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript((m) => { try { localStorage.setItem('coldgas_hud', m); } catch { /* storage blocked */ } }, hudState);
   if (safe) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = css; document.head.append(s); }), insetCss(w, h));
   await page.goto(`${url}?gfx=low`);
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30000 });
@@ -225,7 +231,7 @@ for (const [w, h, safe] of VIEWPORTS) {
     await page.keyboard.up('Space'); await page.keyboard.up('ArrowUp');
   }
   // Free Drive on phones, iPads and the two desktop sizes.
-  if (['390x844', '844x390', '1280x720', '1920x1080', '768x1024', '1180x820', '844x390s'].includes(vpName)) {
+  if (['390x844', '844x390', '1280x720', '1920x1080', '768x1024', '820x1180', '1180x820', '844x390s'].includes(vpBase)) {
     await S(() => window.__coldgas.toTitle());
     await page.goto(`${url}?gfx=low&drive=stelvio`);
     const ok = await until(() => window.__coldgas?.drive?.active, 90000);

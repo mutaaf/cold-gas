@@ -31,6 +31,11 @@ export function createLandingHud({ scene, onStatus = null }) {
     need: $('[data-air-need]'), tank: $('[data-tank]'),
     horizon: $('[data-adi-horizon]'), adi: $('[data-adi]'), cue: $('[data-roll-cue]'),
   };
+  // The BRAKE label in two parts, the word and how far up it is: the compact HUD (src/hud-mode.js)
+  // keeps the word on its narrow tape, the full one shows both.
+  const brakeWord = document.createElementNS('http://www.w3.org/2000/svg', 'tspan'), brakeDist = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+  brakeDist.setAttribute('class', 'd-bd');
+  if (el.brakeLbl) { el.brakeLbl.textContent = ''; el.brakeLbl.append(brakeWord, brakeDist); }
   const pr = newPrediction();
   const last = { sink: -1, status: '', target: -1, ttg: -1, brake: -1, car: -1, need: -1, low: null, cue: 0, on: null, adi: NaN, word: '' };
   const TAPE_H = 140;   // tape height in its viewBox units (0 m at the bottom)
@@ -116,7 +121,9 @@ export function createLandingHud({ scene, onStatus = null }) {
       el.brakeLine.setAttribute('y1', y); el.brakeLine.setAttribute('y2', y);
       el.brakeLbl.setAttribute('y', String(Number(y) - 6));
       el.fill.setAttribute('y', y); el.fill.setAttribute('height', String(Math.max(0, TAPE_H - Number(y))));
-      el.brakeLbl.textContent = pr.brakeBy > TAPE_MAX ? 'BRAKE ↑' : `BRAKE ${Math.ceil(pr.brakeBy * lenK())} ${lenUnit()} · ${Math.ceil(pr.brakeBy * uk('len', true))} ${uu('len', true)}`;
+      const up = pr.brakeBy > TAPE_MAX;
+      brakeWord.textContent = up ? 'BRAKE ↑' : 'BRAKE';
+      brakeDist.textContent = up ? '' : ` ${Math.ceil(pr.brakeBy * lenK())} ${lenUnit()} · ${Math.ceil(pr.brakeBy * uk('len', true))} ${uu('len', true)}`;
       last.brake = by;
     }
     const ch = Math.round(Math.min(TAPE_MAX, h) * 4);

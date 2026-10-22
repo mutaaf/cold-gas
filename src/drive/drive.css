@@ -230,3 +230,55 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
 }
 @media (prefers-reduced-motion: reduce) { .fd-xmap.on .xm-panel { animation: none; } }
 body.xmap-open .fd-hud, body.xmap-open .bq-dock, body.xmap-open .touch { opacity: 0; transition: opacity 0.2s var(--ease); }
+
+/* --- The compact HUD (0061, src/hud-mode.js; the handle's own look is in src/styles.css) ------------
+   Free Drive and the Sandbox on a phone start with one line under the road's name: speed, elevation
+   and grade (height and gas in the Sandbox), and the handle (MORE ▾). The map, the camera, time and
+   fan chips, the road's subtitle and the build dock come back with it; Reset and Exit, the timer and
+   the map credit stay. .fd-dash and .fd-row are layout only: on a desktop's full HUD they vanish. */
+.fd-dash, .fd-row { display: contents; }
+@media (pointer: coarse) {
+  /* Full: the handle closes the stats' band (the row takes the stats' place on the glass). */
+  .fd-row { display: flex; position: absolute; align-items: stretch; }
+  .fd-row > .fd-stats { position: static; top: auto; bottom: auto; left: auto; right: auto; width: auto; margin: 0; transform: none; }
+  .fd-row > .h-handle { display: grid; height: auto; min-height: 44px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); border-left: 1px solid var(--line);
+    background: rgba(5, 7, 12, 0.5); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  .fd-row { top: calc(204px + var(--safe-t)); left: 50%; transform: translateX(-50%); }
+  .fd-stats div { padding: 8px 9px 7px; }   /* three stats and the handle in 358 px */
+}
+@media (pointer: coarse) and (orientation: landscape) {
+  .fd-row { top: calc(112px + var(--safe-t)); left: calc(250px + var(--safe-l)); right: calc(150px + var(--safe-r)); width: fit-content; margin: 0 auto; transform: none; }
+}
+/* Compact: the line. */
+:root[data-hud='compact'] .fd-hud :is(.fd-map, .fd-road-sub, .fd-alt, .fd-stats .u2, [data-h-cam], [data-h-tod], [data-h-fan], [data-s-cam], [data-s-fan]) { display: none; }
+:root[data-hud='compact'] body:has([data-drive-hud]:not([hidden])) .bq-dock { display: none; }   /* Build and Quests come back with MORE (B and J work throughout) */
+:root[data-hud='compact'] .fd-dash { display: flex; position: absolute; left: 50%; bottom: calc(34px + var(--safe-b)); transform: translateX(-50%); align-items: stretch;
+  border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: rgba(5, 7, 12, 0.56); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+:root[data-hud='compact'] .fd-row { display: contents; }
+:root[data-hud='compact'] .fd-dash :is(.fd-speed, .fd-stats) { position: static; inset: auto; width: auto; margin: 0; transform: none; border: 0; border-radius: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+:root[data-hud='compact'] .fd-dash .fd-speed { display: flex; align-items: baseline; gap: 5px; padding: 8px 12px 7px; flex: 0 0 auto; align-self: center; }
+:root[data-hud='compact'] .fd-dash .fd-speed b { font-size: 28px; line-height: 0.9; }
+:root[data-hud='compact'] .fd-dash .fd-speed span { margin: 0; font-size: 11px; }
+:root[data-hud='compact'] .fd-dash .fd-stats { display: flex; flex: 1 1 auto; }
+:root[data-hud='compact'] .fd-dash .fd-stats div { flex: 1 1 auto; padding: 8px 12px 7px; border-top: 0; border-left: 1px solid var(--line); }
+:root[data-hud='compact'] .fd-dash .h-handle { display: grid; height: auto; min-height: 44px; border: 0; border-left: 1px solid var(--line); background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+@media (pointer: coarse) {
+  :root[data-hud='compact'] .fd-fine { -webkit-line-clamp: 1; }
+  :root[data-hud='compact'] .fd-dash .fd-speed { padding: 6px 10px 5px; }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  :root[data-hud='compact'] .fd-fine { top: calc(84px + var(--safe-t)); }
+  :root[data-hud='compact'] .fd-dash { top: calc(108px + var(--safe-t)); bottom: auto; left: calc(16px + var(--safe-l)); right: calc(16px + var(--safe-r)); transform: none; }
+  :root[data-hud='compact'] .fd-dash .fd-stats > div:nth-child(3) { display: none; }   /* distance comes back with MORE */
+  :root[data-hud='compact'] .fd-dash .fd-stats div { padding: 8px 10px 7px; }
+  :root[data-hud='compact'] .fd-ctl { top: calc(164px + var(--safe-t)); right: calc(16px + var(--safe-r)); transform: none; }
+  :root[data-hud='compact'] .bq-dock { top: calc(164px + var(--safe-t)); }
+  :root[data-hud='compact'] body.driving .cue { top: calc(210px + var(--safe-t)); bottom: auto; left: calc(16px + var(--safe-l)); right: calc(16px + var(--safe-r)); }   /* the car rides low here: the cue stays up top */
+  :root[data-hud='compact'] .fd-hud::before { height: calc(212px + var(--safe-t)); }
+}
+@media (pointer: coarse) and (orientation: landscape) {
+  :root[data-hud='compact'] .fd-dash { top: calc(54px + var(--safe-t)); bottom: auto; left: calc(250px + var(--safe-l)); right: calc(150px + var(--safe-r)); width: fit-content; margin: 0 auto; transform: none; }
+  :root[data-hud='compact'] body.driving .cue { top: calc(112px + var(--safe-t)); bottom: auto; left: calc(250px + var(--safe-l)); right: calc(150px + var(--safe-r)); }
+}
