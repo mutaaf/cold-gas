@@ -114,8 +114,9 @@ mark, and air left in the tanks.
    "Semi"). The fine print says it is an independent fan game.
 8. **Accessibility floor.** Every control has a keyboard path, text holds 4.5:1 contrast on the
    HUD (measured on screenshots: `node scripts/hud-audit.mjs <url> <dir>`), no HUD text under 11 px,
-   no overlaps at 390×844 · 430×932 · 768×1024 · 1280×720 · 1920×1080 (both orientations), colour
-   on the HUD means state only (ink nominal, amber caution, red warning), and `prefers-reduced-motion`
+   no overlaps at 390×844 · 430×932 · 768×1024 · 1280×720 · 1920×1080 (both orientations), the iPads
+   (820×1180, 1024×1366, both ways), a 320 px column and a notch-inset pass (`node scripts/title-audit.mjs`
+   too), colour on the HUD means state only (ink nominal, amber caution, red warning), and `prefers-reduced-motion`
    disables shakes and big transitions.
 
 ## 4 · System map

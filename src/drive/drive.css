@@ -145,7 +145,9 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
 }
 @media (pointer: coarse) and (orientation: landscape) {
   .fd-speed { bottom: auto; top: calc(54px + var(--safe-t)); }
-  .fd-stats { bottom: auto; top: calc(116px + var(--safe-t)); left: 50%; transform: translateX(-50%); grid-auto-flow: column; gap: 0; }
+  .fd-stats { bottom: auto; top: calc(112px + var(--safe-t)); left: 50%; transform: translateX(-50%); grid-auto-flow: column; gap: 0; }
+  /* Centred between the chips (left) and the map (right), so a notch inset can't push them together. */
+  .fd-stats { left: calc(250px + var(--safe-l)); right: calc(150px + var(--safe-r)); width: fit-content; margin: 0 auto; transform: none; }
   .fd-ctl { top: calc(104px + var(--safe-t)); bottom: auto; left: calc(24px + var(--safe-l)); right: auto; transform: none; max-width: 210px; flex-wrap: wrap; justify-content: flex-start; }
   .fd-fine { top: auto; bottom: calc(6px + var(--safe-b)); left: calc(168px + var(--safe-l)); right: calc(271px + var(--safe-r)); transform: none; max-width: none; text-align: center; }
   .fd-map { top: calc(52px + var(--safe-t)); right: calc(14px + var(--safe-r)); padding: 5px; }
@@ -153,6 +155,11 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
   .fd-profile { display: none; }
   .fd-timer { top: calc(20px + var(--safe-t)); }
   .fd-road { top: calc(56px + var(--safe-t)); }
+  /* The cue line under the stats, narrow enough to clear the right thumb's slots. */
+  body.driving .cue { --cue-top: 172px; max-width: calc(100vw - 520px - var(--safe-l) - var(--safe-r)); }
+}
+@media (pointer: coarse) and (orientation: landscape) and (min-height: 700px) {
+  .fd-fine { left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
 }
 @media (prefers-reduced-motion: reduce) { .fd-picker, .fd-card, .fd-endless { animation: none; } }
 
