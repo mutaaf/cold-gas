@@ -14,7 +14,7 @@ import { createDirector } from './render/director.js';
 import { landingImpact } from './render/impact.js';
 import { createCrash } from './render/crash.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
-import { createRun, stepRun, FRAME_EVERY, BODY_FRAME, BODY_STRIDE } from './sim/run.js';
+import { createRun, stepRun, armAftermath, aftermathStep, FRAME_EVERY, BODY_FRAME, BODY_STRIDE } from './sim/run.js';
 import { freeWorld } from './sim/world.js';
 import { physicsReady, physicsMemoryBytes } from './sim/engine.js';
 import { loadPhysics } from './sim/engine-web.js';
@@ -308,7 +308,8 @@ function startRunNow(kind = 'jump', quick = false) {
   closeOverlays();
   initAudio();
   disposeRun();
-  S.run = createRun(stage.course);
+  // Armed for its aftermath: when it ends, the car finishes its crash before the results (0062).
+  S.run = armAftermath(createRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.released = false; S.drill = null; S.freezeT = 0; S.coach = null;
   ghostLoaded(stage.course);   // the reference ghost is flown on the title (precomputeRefGhosts)
@@ -332,9 +333,15 @@ function startRunNow(kind = 'jump', quick = false) {
   if (S.autopilot) ui.cue_({ show: 'The reference run: the Wall, then the lineup', wall: 'The reference run: up the Wall' }[stage.course] || 'The reference jump', 2400);
 }
 
+// The card is decided the moment the run ends (closeBook in src/sim/run.js); a drill's own card reads
+// the car there too. Taken before the aftermath moves it (beginAftermath), shown after.
+function closeCard(run) {
+  S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.assist });
+  S.drillSnap = S.drill ? { result: drillResult(S.drill, run, S.card), coach: drillCoach(S.drill, run) } : null;
+}
 function finishRun() {
   const run = S.run;
-  S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.assist });
+  if (!S.card) closeCard(run);
   setMode('results');
   ui.only('results');
   ui.touch.hidden = true;
@@ -346,14 +353,14 @@ function finishRun() {
   const coachRun = () => setTimeout(() => {
     if (S.run !== run) return;
     try {
-      const own = S.drill && drillCoach(S.drill, run);
+      const own = S.drill && S.drillSnap?.coach;
       S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0);
       ui.coaching(S.coach.items);
     } catch (err) { console.warn('coach', err); }
   }, 450);
   if (S.drill) {
     // Practice: the drill's own card and the coach. No panel, no board, no ghost.
-    ui.results(S.card, { drill: S.drill, result: drillResult(S.drill, run, S.card) });
+    ui.results(S.card, { drill: S.drill, result: S.drillSnap.result });
     coachRun();
     replayFrom(Math.max(0, (run.drillStartTick || 0) / FRAME_EVERY - 30));
     return;
@@ -484,7 +491,7 @@ function liveStep(dt) {
   let input = null;
   const oneThumb = thumbActive();
   const simT0 = performance.now(), tick0 = run.tick;
-  while (S.acc >= DT && run.phase !== 'done') {
+  while (S.acc >= DT && run.phase !== 'done' && !S.after) {
     if (S.autopilot) noteRelease(run, input = S.autopilot(run));
     else input = wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released, run.car));
     poseLerp.before(run.car);
@@ -492,6 +499,18 @@ function liveStep(dt) {
     stepRun(run, input);
     gWindow.push(run.car.vel);
     S.acc -= DT;
+  }
+  // The aftermath (0062): the run is over and scored, the car isn't stopped. The same world steps on
+  // the post-crash input (brakes through ABS, no drive, no fan, valves shut: src/sim/run.js) until it
+  // is at rest, then frees it. Slow motion slows it with everything else.
+  if (S.after && !run.after.done) {
+    while (S.acc >= DT) {
+      poseLerp.before(run.car);
+      bodyLerp.before(run.car.world.bodies);
+      gWindow.push(run.car.vel);
+      S.acc -= DT;
+      if (aftermathStep(run)) { S.acc = 0; break; }
+    }
   }
   S.simMs = performance.now() - simT0; S.simTicks = run.tick - tick0;   // the nerds panel's clock
   if (run.t.contact && !S.contactBuzzed) { S.contactBuzzed = true; buzz('crash'); }
@@ -532,7 +551,7 @@ function liveStep(dt) {
   // Touchdown, once per run (keyed on the sim's touch tick, so a fast-forward that steps past the
   // 'landed' phase in one frame still lands).
   if (run.t.touchTick >= 0 && S.impacts === 0) touchdown(run);
-  if (!S.autopilot) cues(run, c);
+  if (!S.autopilot && !S.after) cues(run, c);
 
   const speed = syncHud(run, c);
   ui.damage(run.damage, c);
@@ -541,15 +560,24 @@ function liveStep(dt) {
   plumes.update(dt, S.time, c.throttles, c.vel, 0);
   updateAudio({ speed, grounded: c.grounded > 0, throttles: c.throttles });
 
-  if (run.phase === 'done' || (S.drill?.done && S.drill.done(run))) {
+  // The end: a finished run (or a drill's moment) goes straight into its aftermath, and the results
+  // come up once the car is at rest, and no sooner than the beat they always had (1.4 s, a drill 0.5 s).
+  if (S.after) {
     S.doneT += dt;
-    if (S.doneT > (run.phase === 'done' ? 1.4 : 0.5)) finishRun();
+    if (run.after.done && S.doneT > (S.drill ? 0.5 : 1.4)) finishRun();
+  } else if (run.phase === 'done' || (S.drill?.done && S.drill.done(run))) {
+    S.doneT += dt;
+    if (run.phase === 'done' || S.doneT > 0.5) beginAftermath(run);
   } else S.doneT = 0;
+}
+function beginAftermath(run) {
+  closeCard(run);
+  S.after = true;
 }
 
 // The HUD from the run as it stands (every live frame, and once before a countdown so READY shows
 // this run's start). Returns the speed.
-function syncHud(run, c, clock = (run.tick - S.startTick) / 240) {
+function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTick : run.tick) - S.startTick) / 240) {
   const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
   bodyRates(c, rates);
   const alt = heightAboveSurface(c);
@@ -971,7 +999,8 @@ function startDrillNow(id) {
   initAudio();
   disposeRun();
   const { run, released } = buildDrill(drill, stage.course);
-  S.run = run; S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;
+  S.run = armAftermath(run); S.after = false; S.drillSnap = null;
+  S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;
   setMode('live'); S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
   S.impacts = 0; S.impact = null;
   newFlight(run.tick);

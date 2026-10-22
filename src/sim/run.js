@@ -306,8 +306,70 @@ function advance(run, input) {
 function finish(run, reason) {
   run.phase = 'done';
   closeBook(run, run.t, reason);
-  // The run is over: give the engine its memory back (the bodies' poses stay readable).
+  // The run is over: give the engine its memory back (the bodies' poses stay readable). A run armed
+  // for its aftermath (the browser's live runs) keeps the world until the car has come to rest.
+  if (!run.after) freeWorld(run.car.world);
+}
+
+// --- The aftermath: a crashed car finishes its crash (ticket 0062) --------------------------------
+// The score is decided when the run ends (closeBook, above), and the Worker replays to there and no
+// further. What a real car does next is still physics: it slides, scrubs, rocks and stops. The
+// browser keeps stepping the same deterministic world with one fixed input, unscored and unlogged,
+// and records the frames so the replay shows the car coming to rest.
+//
+// The input is what a crashed car of this kind does with no one at the controls:
+// - Brakes on, held to a standstill. Post-collision braking (VW's Multi-Collision Brake, Bosch's
+//   secondary-collision mitigation in ESP) brakes through the ESC hydraulics once the airbag
+//   controller has seen a crash, with ABS modulating each wheel (vehicle.js: ABS in every tier).
+//   Here it is the full pedal. Production systems hand back at ≈10 km/h for a driver to steer; with
+//   no driver here, the brakes hold the car to a stop, as a hill-hold does.
+// - No drive torque and no fan: an EV's crash sensor fires the pyrotechnic high-voltage disconnect,
+//   so the motors and the suction fan lose power (the fan's suction dumps: vehicle.js fanDump).
+// - Valves shut (ESTIMATE: normally-closed solenoids, so a dead controller fails them shut);
+//   `manual` with every valve at 0 bypasses the flight computer.
+// - Wheel straight: steer-by-wire with no command centres the rack.
+export const AFTER_CAP = 240 * 6;     // 6 s: a car still moving then is a car on its roof, sliding
+export const AFTER_STILL = 120;       // 0.5 s at rest ends it
+export const AFTER_SPEED = 0.3;       // m/s
+export const AFTER_SPIN = 0.3;        // rad/s
+const AFTER_INPUT = newInput();
+AFTER_INPUT.assist = 0; AFTER_INPUT.manual = 1; AFTER_INPUT.brake = 1;
+
+// Arm a run for its aftermath before it ends: finish() then keeps its world.
+export function armAftermath(run) {
+  run.after = { ticks: 0, still: 0, done: false, startTick: -1 };
+  return run;
+}
+
+// One aftermath tick. Returns true once the car is at rest (or at the cap), and frees the world then.
+// The run's telemetry, input log and damage sensor are not touched (the score stays as it was).
+export function aftermathStep(run) {
+  const a = run.after;
+  if (!a) return true;
+  if (a.done) return true;
+  const c = run.car;
+  if (c.world.freed || run.t.endReason === 'sim-fault') return endAftermath(run);
+  if (a.startTick < 0) a.startTick = run.tick;
+  step(c, AFTER_INPUT);
+  run.tick++; a.ticks++;
+  if (run.tick % FRAME_EVERY === 0) recordFrame(run);
+  if (!Number.isFinite(c.pos.x + c.pos.y + c.pos.z + c.vel.x + c.vel.y + c.vel.z + c.angVel.x + c.angVel.y + c.angVel.z)) return endAftermath(run);
+  const rest = dhypot(c.vel.x, c.vel.y, c.vel.z) < AFTER_SPEED && dhypot(c.angVel.x, c.angVel.y, c.angVel.z) < AFTER_SPIN;
+  a.still = rest ? a.still + 1 : 0;
+  if (a.still >= AFTER_STILL || a.ticks >= AFTER_CAP) return endAftermath(run);
+  return false;
+}
+function endAftermath(run) {
+  run.after.done = true;
   freeWorld(run.car.world);
+  return true;
+}
+
+// The whole aftermath at once (tests, tools): steps until the car is at rest or the cap.
+export function aftermath(run) {
+  if (!run.after) armAftermath(run);
+  while (!aftermathStep(run));
+  return run;
 }
 
 // Final bookkeeping for one stunt's telemetry.
