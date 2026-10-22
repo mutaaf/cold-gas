@@ -883,6 +883,18 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 .controls .actions { margin-top: 16px; }
 .touch-only { display: none; }
 @media (pointer: coarse) { .touch-only { display: inline-flex; align-items: center; } }
+/* Driving (0066): on every device, over Free Drive's pause sheet too; the touch rows only on touch. */
+.fine-only { display: inline-flex; align-items: center; gap: 8px; }
+.ctl-k + [data-driving-label] { color: var(--ink); }
+@media (pointer: coarse) { .fine-only { display: none; } }
+.controls { z-index: 30; }
+.controls .sheet { overflow-y: auto; }
+.ctl-touch { display: none; }
+@media (pointer: coarse) { .ctl-touch { display: block; } }
+.ctl-drive .ctl-row:first-child { border-top: 0; }
+.ctl-drive .seg button { padding: 0 11px; }
+/* Advanced's analog touch pedals: how far up the pad the finger is, as a fill. */
+.tbtn[style*='--amt'] { background: linear-gradient(to top, rgba(245, 246, 248, 0.9) calc(var(--amt) * 100%), rgba(6, 8, 13, 0.5) 0); }
 .ctl-k + [data-controls-label] { color: var(--ink); }
 
 /* --- Title layout that holds at every viewport ---------------------------------------------------

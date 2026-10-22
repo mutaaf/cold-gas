@@ -24,6 +24,7 @@ const ANCHOR = { x: 0, z: -150 };
 export function createSandbox(ctx) {
   const { stage, carRoot, plumes, crash, syncCar, ui, audio, input, tier } = ctx;
   const camera = stage.camera;
+  const FREE = { free: true, road: null };   // an unscored ground: the driving level owns ESC, TC, ABS and the handbrake
   const st = { active: false, opening: false, paused: false, car: null, course: null, world: null, layer: null, cam: null, acc: 0, airT: 0, flipT: 0, fan: false, hud: null, ground: 0 };
   const comps = [0, 0, 0, 0], spins = [0, 0, 0, 0];
   const poseLerp = createPoseLerp(), reverse = createReverse();
@@ -174,7 +175,7 @@ export function createSandbox(ctx) {
         const air = c.grounded === 0 && !c.hullContact;
         st.airT = air ? st.airT + DT : 0;
         const phase = st.airT > 0.25 ? 'air' : 'drive';
-        Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist(), undefined, false, c));
+        Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist(), undefined, false, c, FREE));
         if (st.fan) inp.fan = 1;
         // Reverse: hold the brake at a standstill (src/hands.js: a stop holds before it backs up).
         if (phase === 'drive') reverse(c, inp);
