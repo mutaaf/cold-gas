@@ -154,6 +154,8 @@ src/sim/              PURE, shared with the Worker:
                           logs still verify), tier telemetry, phases drive → ramp →
                           air → landed, telemetry (Show: clearance, crossedRow), simulate();
                           replay frames carry each parked body's pose; run.impacts = the crash
+                          ; the aftermath (browser only, unscored): after 'done' the car brakes to
+                          rest on a fixed post-crash input before the world is freed (0062)
   impacts.js            impact events (hit / scrape / tyre slam / crush: tick, point, normal,
                           speed, part, body) in fixed typed arrays, written by vehicle.step
   autopilot.js          reference runs for both courses, closed-loop through the same physics
