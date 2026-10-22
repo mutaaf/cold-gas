@@ -1,7 +1,7 @@
 ---
 id: 0026
 title: On a portrait phone the telemetry strip never sits over the car it reports on
-status: ready
+status: dropped
 priority: P1
 size: S
 lens: player-feel
@@ -9,6 +9,8 @@ created: 2026-10-21
 pr:
 by: critic
 ---
+
+Dropped 2026-10-21: replaced by 0061 (the phone HUD collapses to one slim line off the car's path; measured by the same occlusion probe, at 0 frames).
 
 ## Why
 The point of the livestream's channels (0018) is to read them while watching the car do what they

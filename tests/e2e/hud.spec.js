@@ -16,6 +16,8 @@ for (const [name, opts, must] of SIZES) {
     page.on('pageerror', (e) => errors.push(e.message));
     // Metric leads here: these read the sim's SI numbers straight (US-led is tests/e2e/instruments.spec.js).
     await page.addInitScript(() => localStorage.setItem('coldgas.units', 'metric'));
+    // The full instrument set (a phone starts compact since 0061; that layout is tests/e2e/hud-collapse.spec.js).
+    await page.addInitScript(() => localStorage.setItem('coldgas_hud', 'full'));
     await page.goto('/coldgas/?gfx=low');
     await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
     await page.evaluate(async () => { await window.__coldgas.physicsReady; window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); });

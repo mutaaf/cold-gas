@@ -6,6 +6,7 @@ import { chime, tick } from './audio.js';
 import { speedK, lenK, rateK, massK, kgfK, pressK, k as uk, u as uu, onUnits, localize, unitText } from './units.js';
 import { ZONES, hitCost } from './sim/damage.js';
 import { HIT, SCRAPE, WHEEL, PART } from './sim/impacts.js';
+import { initHudMode } from './hud-mode.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -23,6 +24,7 @@ export function missionClock(tenths) {
 }
 
 export function createUI() {
+  initHudMode();   // compact or full HUD on this device (src/hud-mode.js), before the HUD first shows
   const ui = {
     screens: Object.fromEntries([...document.querySelectorAll('[data-screen]')].map((el) => [el.dataset.screen, el])),
     speed: $('[data-speed]'), speedBig: $('[data-speed-big]'), air: $('[data-air]'), airBar: $('[data-air-bar]'),

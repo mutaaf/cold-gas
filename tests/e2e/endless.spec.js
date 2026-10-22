@@ -80,9 +80,13 @@ test('Endless deep link on a phone: HUD and pedals fit, the GO pedal drives', as
   const seen = watch(page);
   await page.goto('/coldgas/?drive=endless&seed=phone&gfx=low');
   await page.waitForFunction(() => window.__coldgas?.drive?.active, null, { timeout: 120_000 });
-  for (const sel of ['.fd-road-name', '.fd-speed', '.fd-stats', '[data-h-reset]', '[data-h-exit]', '[data-btn-go]', '[data-btn-brake]', '[data-stick]', '.fd-map']) {
+  for (const sel of ['.fd-road-name', '.fd-speed', '.fd-stats', '[data-h-reset]', '[data-h-exit]', '[data-btn-go]', '[data-btn-brake]', '[data-stick]']) {
     await expect(page.locator(sel)).toBeInViewport();
   }
+  // The phone starts with the compact HUD (0061): the map comes out with MORE, and folds back.
+  await page.locator('.fd-hud [data-hud-toggle]').tap();
+  await expect(page.locator('.fd-map')).toBeInViewport();
+  await page.locator('.fd-hud [data-hud-toggle]').tap();
   const s0 = await page.evaluate(() => window.__coldgas.drive.stats().i);
   const go = await page.locator('[data-btn-go]').boundingBox();
   await page.mouse.move(go.x + go.width / 2, go.y + go.height / 2);
