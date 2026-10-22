@@ -1,7 +1,10 @@
 // Temporal flicker probe: drives the real game frame by frame on a synthetic 60 Hz clock and
 // measures how much each pixel *jitters* between consecutive frames, by region.
 //
-//   node scripts/flicker.mjs [url] [--engine=chromium|webkit] [--phone] [--only=a,b] [--json=out.json]
+//   node scripts/flicker.mjs [url] [--engine=chromium|webkit] [--gl=swiftshader] [--phone] [--only=a,b] [--json=out.json]
+//
+// Then gate it: `node scripts/flicker-budget.mjs out.json` compares every region's pops with
+// docs/flicker-budget.json (per label: engine, GL and screen) and fails on a rise.
 //
 // Smooth motion (a camera dolly, a beam sweeping) changes a pixel along a straight line from one
 // frame to the next; flicker (z-fighting, shadow-texel crawl, texture moire, a bloom sparkle that
@@ -14,20 +17,25 @@
 //
 // requestAnimationFrame is stubbed before the game loads, so every run sees the same timestamps;
 // the scene clock (S.time) is pinned at the start of each scenario. Real GPU flags (Metal ANGLE)
-// as in scripts/shots-show.mjs; --engine=webkit runs Playwright's WebKit.
+// as in scripts/shots-show.mjs; --engine=webkit runs Playwright's WebKit; --gl=swiftshader runs CI's
+// software GL (no GPU needed: a cloud sandbox can measure, against its own budget label).
 import { chromium, webkit } from '@playwright/test';
 
 const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith('--')) || 'http://localhost:4320/coldgas/';
 const opt = (k, d) => { const a = args.find((x) => x.startsWith(`--${k}=`)); return a ? a.split('=')[1] : d; };
 const engine = opt('engine', 'chromium');
+const gl = opt('gl', '');   // '' = the GPU (Metal ANGLE); 'swiftshader' = software GL
 const phone = args.includes('--phone');
 const only = opt('only', '');
 const jsonOut = opt('json', '');
 const heatDir = opt('heat', '');   // write a per-pixel jitter heatmap + a frame per scenario here
 
 const launcher = engine === 'webkit' ? webkit : chromium;
-const browser = await launcher.launch(engine === 'webkit' ? {} : { args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const glArgs = gl === 'swiftshader'
+  ? ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
+  : ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'];
+const browser = await launcher.launch(engine === 'webkit' ? {} : { args: glArgs });
 const page = await browser.newPage(phone
   ? { viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: engine !== 'webkit' ? true : undefined, hasTouch: true }
   : { viewport: { width: 1280, height: 720 } });
@@ -45,6 +53,7 @@ await page.waitForFunction(() => window.__coldgas?.stage?.ready, null, { timeout
 await page.evaluate(() => window.__coldgas.stage.ready);
 await page.evaluate(() => window.__coldgas.stage.backdrop);   // the streamed-in backdrop (src/render/rocket.js), if any
 await page.waitForTimeout(3000);   // and its lights up
+await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 60000, polling: 100 });   // startRun runs at once
 
 // In-page harness: capture, ID pass, accumulators.
 await page.evaluate(() => {
@@ -202,6 +211,7 @@ await page.evaluate(() => {
 
 async function scenario(name, setup, frames, perFrame) {
   if (only && !only.split(',').includes(name)) return null;
+  const t0 = Date.now();
   await page.evaluate(`(${setup})()`);
   await page.evaluate(({ frames, perFrame }) => {
     const F = window.__flk;
@@ -218,6 +228,7 @@ async function scenario(name, setup, frames, perFrame) {
   }
   const tot = Object.values(rep).reduce((s, r) => s + r.px, 0);
   for (const r of Object.values(rep)) { r.share = +(r.px / tot).toFixed(3); delete r.px; }
+  console.error(`flicker: ${name} ${((Date.now() - t0) / 1000).toFixed(0)} s`);   // progress (software GL takes minutes)
   return rep;
 }
 
@@ -290,6 +301,24 @@ if (!only || only.split(',').includes('show-jets') || only.split(',').includes('
   })()`);
 }
 await page.evaluate(jetsOff);
+// 4d. A live run with the jets doing real work (0050): the reference jump, flown from the lip of the
+//     curl through the roll with the director's live cuts, so the cones, the mist and the car's
+//     motion blur are all as a player sees them.
+results['show-live-jets'] = await scenario('show-live-jets', `() => {
+  const G = window.__coldgas; ${free}
+  G.toTitle(); document.querySelector('[data-course="show"]')?.click(); window.__flk.step(1);
+  G.startRun('reveal'); G.skipCountdown();
+  for (let i = 0; i < 3000 && G.S.mode === 'live' && G.S.run.phase !== 'air'; i++) G.liveStep(1 / 60);
+  G.S.time = 4;
+}`, 240);
+// 4e. A retry's countdown (0050): a finished run, then Retry's one-beat READY and the first live
+//     frames, with the director's restart. The HUD and the scene must not pop as the run resets.
+results['retry-countdown'] = await scenario('retry-countdown', `() => {
+  const G = window.__coldgas; ${free}
+  G.toTitle(); window.__flk.step(1);
+  G.startRun('reveal'); G.skipCountdown(); G.fastForward();
+  G.startRun('jump', true); G.S.time = 4;
+}`, 90);
 // 5. The Lineup's title turntable (blue hour, the painted pad).
 results['lineup-title'] = await scenario('lineup-title', `() => {
   const G = window.__coldgas; ${free}
@@ -321,7 +350,31 @@ if (!only || only.split(',').includes('nudge')) {
   results.nudge = nudge;
 }
 
-const label = `${engine}${phone ? ' phone' : ' desktop'}`;
+// 8. Free Drive (0050): a real road and the endless world, the autopilot at cruise, the drive's own
+//    chase camera. Last, since leaving a drive rebuilds the title. Building a world waits on its
+//    chunk, the road data and (endless) its worker; the frames are stepped by hand meanwhile.
+async function driveScenario(name, road, opts) {
+  if (only && !only.split(',').includes(name)) return null;
+  await page.evaluate(async ({ road, opts }) => {
+    const G = window.__coldgas, F = window.__flk;
+    if (G.director.__u) G.director.update = G.director.__u;
+    const d = await G.loadDrive();
+    if (d.active) d.exit();
+    const go = d.start(road, opts);
+    // A rendered frame costs about a second on software GL: step one every 0.3 s while it loads.
+    for (let i = 0; i < 400 && !d.active; i++) { F.step(1); await new Promise((r) => setTimeout(r, 300)); }
+    await go;
+    if (!d.active) throw new Error(`${road}: the drive didn't start`);
+    d.autopilot(true, { vmax: 30 });
+    for (let n = 0; n < 60; n++) d.frame(0.1, F.now / 1000);   // up to speed, unrendered
+    for (let i = 0; i < 20; i++) { F.step(1); await new Promise((r) => setTimeout(r, 100)); }   // the tiles around it stream in
+  }, { road, opts });
+  return scenario(name, '() => {}', 150);
+}
+results['drive-road'] = await driveScenario('drive-road', 'stelvio', { tod: 'dusk', idb: false });
+results['endless-cruise'] = await driveScenario('endless-cruise', 'endless', { seed: 'flicker', idb: false });
+
+const label = `${engine}${gl ? `-${gl}` : ''}${phone ? ' phone' : ' desktop'}`;
 console.log(`\n${label}  jitter = mean |Δ²luma| (0–255), pops = ‰ pixel-frames with |Δ²luma| > 24`);
 for (const [sc, rep] of Object.entries(results)) {
   if (!rep || sc === 'nudge' || sc === 'nudgeJets') continue;
