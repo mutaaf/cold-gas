@@ -1,12 +1,12 @@
 ---
 id: 0067
 title: A player who presses LAND late still lands: the Show's learnability gate back to ≥ 95 %
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 78
 by: operator
 ---
 
@@ -33,11 +33,11 @@ make a late LAND survivable, within the nitrogen budget and the published brake 
 SIM_VERSION bump and CHANGELOG note if Assist outcomes change; Pro/Advanced untouched.
 
 ## Acceptance criteria
-- [ ] `node scripts/human-show.mjs 300 assist --cues=new` ≥ 95 % (≥ 285/300); every LAND population ≥ 80 %
-- [ ] `node scripts/naive-players.mjs` 32/32; `node scripts/naive-show.mjs` no worse than today
-- [ ] `node scripts/human-phone.mjs` (both schemes) ≥ 95 %
-- [ ] The reveal reference (Assist autopilot) still matches its telemetry tests (`npm test`)
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] `node scripts/human-show.mjs 300 assist --cues=new` ≥ 95 % (≥ 285/300); every LAND population ≥ 80 % — 291/300 (97 %); LAND 4 26/27, 4 +steer 28/28, 8 17/17, 8 +steer 26/26
+- [x] `node scripts/naive-players.mjs` 32/32; `node scripts/naive-show.mjs` no worse than today — 32/32; 54/54 (52 over the row, was 51)
+- [x] `node scripts/human-phone.mjs` (both schemes) ≥ 95 % — classic 289/300 (was 225), thumb 300/300
+- [x] The reveal reference (Assist autopilot) still matches its telemetry tests (`npm test`) — all three references bit-identical (`ref-hash`)
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse — sim-side; smoke/learn/retry e2e green
 
 ## Test plan
 The gate scripts above (numbers before/after in the PR); a unit test that a LAND pressed at 4 m and at
@@ -45,3 +45,9 @@ The gate scripts above (numbers before/after in the PR); a unit test that a LAND
 
 ## Out of scope
 Pro and Advanced flight; the Lineup and the Wall (measure them, file separately if they fail similarly).
+
+## Shipped (PR #78, SIM_VERSION 26)
+Physics can't save a LAND that arrives at 4 m (19 m/s, 0.2 s out, 4–5 G net needed vs 2.2), so Assist's
+computer arms LAND itself at the last stop that fits (0.4 s of free fall ahead, plus the roll-out), and
+LAND tops the carry up to 7 m/s over a parked row (only below 5 m/s). Same profile, nitrogen and blowdown;
+no added thrust. Unit test: tests/unit/late-land.test.js.
