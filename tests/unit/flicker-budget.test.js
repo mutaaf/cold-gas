@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { flatten, compare } from '../../scripts/flicker-budget.mjs';
+import { flatten, compare, lowered } from '../../scripts/flicker-budget.mjs';
 
 // The flicker gate (0050): a flicker.mjs run against docs/flicker-budget.json.
 const region = (pops) => ({ jitter: 1, popsPerMille: pops, share: 0.1 });
@@ -32,14 +32,23 @@ describe('flicker budget', () => {
     expect(rows.find((r) => r.key === 'show-wide/row').status).toBe('new');
   });
 
-  it('a planted NaN (a whole region popping) fails the gate', () => {
-    const doc = JSON.parse(readFileSync('docs/flicker-budget.json', 'utf8'));
-    const label = 'chromium-swiftshader desktop';
-    const budget = doc.budgets[label];
-    expect(Object.keys(budget).length).toBeGreaterThan(20);
-    // A NaN in the plumes smears through bloom: the car and its surroundings pop on every frame.
-    const run = { 'show-jets': { car: region(500), wall: region(300), sky: region(200) } };
-    expect(compare(run, budget, doc).pass).toBe(false);
+  it('a region gone from a scenario that ran fails the gate', () => {
+    const { rows, pass } = compare({ 'show-wide': { wall: region(4) } }, { 'show-wide/wall': 4, 'show-wide/car': 10 });
+    expect(pass).toBe(false);
+    expect(rows.find((r) => r.key === 'show-wide/car').status).toBe('gone');
+  });
+
+  it('a budget file without tolerance or floor keeps the defaults (the gate is never off)', () => {
+    const budget = { 'show-wide/car': 10 };
+    expect(compare({ 'show-wide': { car: region(13) } }, budget, { tolerance: undefined, floor: undefined }).pass).toBe(false);
+    expect(compare({ 'show-wide': { car: region(12) } }, budget, {}).pass).toBe(true);
+  });
+
+  it('--write lowers and adds, and raises only when told', () => {
+    const run = { 'show-wide': { car: region(8), wall: region(9) }, 'drive-road': { sky: region(1) } };
+    expect(lowered({ 'show-wide/car': 10, 'show-wide/wall': 5 }, run)).toEqual({ 'show-wide/car': 8, 'show-wide/wall': 5, 'drive-road/sky': 1 });
+    expect(lowered({ 'show-wide/wall': 5 }, run, { raise: true })['show-wide/wall']).toBe(9);
+    expect(lowered(undefined, run)).toEqual({ 'show-wide/car': 8, 'show-wide/wall': 9, 'drive-road/sky': 1 });
   });
 
   it('the committed budget covers every scenario on the GPU-free label, the new ones included', () => {

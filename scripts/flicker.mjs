@@ -60,7 +60,9 @@ await page.evaluate(() => {
   const F = window.__flk, G = window.__coldgas, stage = G.stage;
   const renderer = stage.renderer, gl = renderer.getContext(), scene = stage.scene, camera = stage.camera;
   const REG = ['other', 'ground', 'wall', 'car', 'row', 'sky', 'backdrop'];
-  // Region of each mesh, decided once from where it sits.
+  // Region of each mesh, decided once from where it sits. In a drive world (Free Drive, endless) the
+  // road surface is ground, walls and steel are wall, and the land around it (terrain, rocks, trees,
+  // props) is backdrop; its sky and panorama are sky.
   const regionOf = new Map();
   const heroSet = new Set(); G.hero.group.traverse((o) => heroSet.add(o));
   const classify = () => {
@@ -68,11 +70,13 @@ await page.evaluate(() => {
       if (!(o.isMesh || o.isInstancedMesh) || regionOf.has(o)) return;
       let r = 0;
       if (heroSet.has(o)) r = 3;
-      else if (o.geometry?.parameters?.radius >= 1000) r = 5;
+      else if (o.geometry?.parameters?.radius >= 1000 || o.renderOrder <= -900) r = 5;
       else {
-        let p = o, inCourse = false, inRow = false, inBackdrop = false;
-        while (p) { if (p.userData?.setBodies) inRow = true; if (p.name?.startsWith('course:')) inCourse = true; if (p.name?.startsWith('backdrop:')) inBackdrop = true; p = p.parent; }
-        if (inBackdrop) r = 6;
+        let p = o, inCourse = false, inRow = false, inBackdrop = false, inDrive = false;
+        while (p) { if (p.userData?.setBodies) inRow = true; if (p.name?.startsWith('course:')) inCourse = true; if (p.name?.startsWith('backdrop:')) inBackdrop = true; if (p.name === 'freedrive' || p.name === 'endless') inDrive = true; p = p.parent; }
+        const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+        if (inDrive) r = /^road/.test(mat?.name) ? 1 : /^(wall|steel)/.test(mat?.name) ? 2 : 6;
+        else if (inBackdrop) r = 6;
         else if (inRow) r = 4;
         else if (inCourse) {
           o.geometry.computeBoundingBox?.();
@@ -93,6 +97,9 @@ await page.evaluate(() => {
   // (no output conversion into a target). Falls back to the canvas where no target class is at hand.
   const RT = stage.bloom?.renderTargetsHorizontal?.[0]?.constructor ?? stage.key?.shadow?.map?.constructor ?? null;
   const idsLin = REG.map((_, i) => { const m = new Basic({ toneMapped: false, fog: false, side: 2 }); m.color.setRGB((i * 40) / 255, 0, 0); return m; });
+  // A sky drawn first with no depth test (the drive worlds: renderOrder ≤ -900) keeps that in the ID
+  // pass, or its 1 km sphere would hide all the land beyond it.
+  const skyBack = [ids[5], idsLin[5]].map((m) => { const c = m.clone(); c.depthTest = false; c.depthWrite = false; return c; });
   let idRT = null;
   let W = 0, H = 0, buf = null, luma = [], idb = [], k = 0;
   const alloc = () => {
@@ -134,7 +141,7 @@ await page.evaluate(() => {
       saved.push([o, o.material, o.visible]);
       const m = Array.isArray(o.material) ? o.material[0] : o.material;
       if (!o.isMesh || m?.transparent || m?.blending === 2) { o.visible = false; return; }
-      o.material = (idRT ? idsLin : ids)[regionOf.get(o) ?? 0];
+      o.material = o.renderOrder <= -900 ? skyBack[idRT ? 1 : 0] : (idRT ? idsLin : ids)[regionOf.get(o) ?? 0];
     });
     const fog = scene.fog; scene.fog = null;
     renderer.setRenderTarget(idRT);
@@ -309,10 +316,12 @@ results['show-live-jets'] = await scenario('show-live-jets', `() => {
   G.toTitle(); document.querySelector('[data-course="show"]')?.click(); window.__flk.step(1);
   G.startRun('reveal'); G.skipCountdown();
   for (let i = 0; i < 3000 && G.S.mode === 'live' && G.S.run.phase !== 'air'; i++) G.liveStep(1 / 60);
+  if (G.S.run?.phase !== 'air') throw new Error('show-live-jets: the reference never left the curl');
   G.S.time = 4;
 }`, 240);
 // 4e. A retry's countdown (0050): a finished run, then Retry's one-beat READY and the first live
-//     frames, with the director's restart. The HUD and the scene must not pop as the run resets.
+//     frames, with the director's restart: the scene must not pop as the run resets. (The canvas
+//     only: READY and the HUD are DOM, which tests/e2e/cues.spec.js holds still.)
 results['retry-countdown'] = await scenario('retry-countdown', `() => {
   const G = window.__coldgas; ${free}
   G.toTitle(); window.__flk.step(1);
@@ -366,15 +375,16 @@ async function driveScenario(name, road, opts) {
     await go;
     if (!d.active) throw new Error(`${road}: the drive didn't start`);
     d.autopilot(true, { vmax: 30 });
-    for (let n = 0; n < 60; n++) d.frame(0.1, F.now / 1000);   // up to speed, unrendered
+    for (let n = 0; n < 60; n++) d.frame(0.1, G.S.time);   // up to speed, unrendered
     for (let i = 0; i < 20; i++) { F.step(1); await new Promise((r) => setTimeout(r, 100)); }   // the tiles around it stream in
+    G.S.time = 4;   // the clouds, the water and the light the same every run
   }, { road, opts });
   return scenario(name, '() => {}', 150);
 }
 results['drive-road'] = await driveScenario('drive-road', 'stelvio', { tod: 'dusk', idb: false });
 results['endless-cruise'] = await driveScenario('endless-cruise', 'endless', { seed: 'flicker', idb: false });
 
-const label = `${engine}${gl ? `-${gl}` : ''}${phone ? ' phone' : ' desktop'}`;
+const label = `${engine}${gl && engine !== 'webkit' ? `-${gl}` : ''}${phone ? ' phone' : ' desktop'}`;
 console.log(`\n${label}  jitter = mean |Δ²luma| (0–255), pops = ‰ pixel-frames with |Δ²luma| > 24`);
 for (const [sc, rep] of Object.entries(results)) {
   if (!rep || sc === 'nudge' || sc === 'nudgeJets') continue;
@@ -384,5 +394,5 @@ for (const [sc, rep] of Object.entries(results)) {
 if (results.nudgeJets) nudge.jets = results.nudgeJets;
 for (const [c, v] of Object.entries(nudge)) console.log(`z-fight ${c.padEnd(8)} mean |Δluma| ${v.meanDelta.toFixed(3)}, ${v.popsPerMille.toFixed(2)}‰ px flip > 24 under a 0.1 mm camera shift  per pose ‰ [${v.perPose.join(" ")}]`);
 if (errors.length) console.log('errors:', errors.slice(0, 5).join(' | '));
-if (jsonOut) (await import('node:fs')).writeFileSync(jsonOut, JSON.stringify({ label, url, results }, null, 2));
+if (jsonOut) (await import('node:fs')).writeFileSync(jsonOut, JSON.stringify({ label, url, only, errors, results }, null, 2));
 await browser.close();
