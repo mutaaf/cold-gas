@@ -73,8 +73,14 @@ export function createUI() {
   ui.countdown = (n) => { ui.count.innerHTML = n ? `<span${typeof n === 'string' ? ' class="word"' : ''}>${n}</span>` : ''; if (n) tick(); };
 
   // The flight's phases, as the timeline shows them (src/main.js decides which one you're in).
+  const rollLbl = $('.adi-roll .h-lbl');
+  let rolledMode = false;
   ui.timelineFor = (course) => {
     const list = PHASES[course] || PHASES.show;
+    // The Lineup is scored on whole turns (judge.js), so its readout is the roll so far, labelled as
+    // such; the Wall and the Show read the bank right now (ticket 0022).
+    rolledMode = course === 'lineup';
+    rollLbl.textContent = rolledMode ? 'Rolled' : 'Roll';
     if (ui.timeline.dataset.course === course) return;
     ui.timeline.dataset.course = course;
     ui.timeline.innerHTML = list.map(([id, label], i) => `<li data-ph="${id}"><i aria-hidden="true"></i><span><em>${String(i + 1).padStart(2, '0')}</em> ${label}</span></li>`).join('');
@@ -86,7 +92,7 @@ export function createUI() {
   // Last-written values, so the DOM is only touched on change. Numbers glide to their targets (a
   // first-order lag of ≈90 ms: readable, never late) and are written only when the shown digits
   // change; tabular figures keep every digit in its place.
-  const last = { speed: -1, speedBig: -1, air: -1, roll: -9999, alt: -1, sink: -1, g: -1, gState: '', fan: -1, phaseKey: '', airborne: null, clock: -99999, pitch: -999, n2: '', kg: -1, bar: -1, gas: '' };
+  const last = { speed: -1, speedBig: -1, air: -1, roll: -9999, bank: -1, alt: -1, sink: -1, g: -1, gState: '', fan: -1, phaseKey: '', airborne: null, clock: -99999, pitch: -999, n2: '', kg: -1, bar: -1, gas: '' };
   const tw = { speed: 0, alt: 0, sink: 0, t: 0 };
   // A flip of the unit system: every unit-bearing readout writes again on the next frame.
   // Every unit-bearing readout carries the other system beside it, smaller (src/units.js): a
@@ -116,8 +122,13 @@ export function createUI() {
   const gEl = $('[data-g]'), fanEl = $('[data-fan]'), n2El = $('[data-tank]');
   const hudEl = ui.screens.hud;
   ui.setClock = (sec) => { const cl = Math.round(sec * 10); if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; } };
-  ui.resetHud = () => { tw.speed = 0; tw.alt = 0; tw.sink = 0; tw.t = 0; last.phaseKey = ''; resetStats(); };
-  ui.hud = ({ speed, air, gasKg = 0, tankBar = 0, gasState = 'reg', rollDeg, alt, sink, phaseKey = '', clock = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
+  ui.resetHud = () => {
+    tw.speed = 0; tw.alt = 0; tw.sink = 0; tw.t = 0; last.phaseKey = '';
+    // A retry after a crash on the roof must not show the last flight's roll on the start line.
+    ui.roll.textContent = '0'; ui.rollArc.style.strokeDasharray = '0 360'; ui.rollArc.classList.remove('done'); last.roll = 0; last.bank = 0;
+    resetStats();
+  };
+  ui.hud = ({ speed, air, gasKg = 0, tankBar = 0, gasState = 'reg', rollDeg, bankDeg = 0, alt, sink, phaseKey = '', clock = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
     const now = performance.now(), dt = tw.t ? Math.min(0.1, (now - tw.t) / 1000) : 1;
     tw.t = now;
     const k = 1 - Math.exp(-dt / 0.09);
@@ -161,13 +172,18 @@ export function createUI() {
     const pv = tankBar * pressK(), br = pv >= 1000 ? 100000 + Math.round(pv / 100) : Math.round(pv);
     if (br !== last.bar) { ui.tankBar.textContent = pv >= 1000 ? `${(Math.round(pv / 100) / 10).toFixed(1)}k` : String(br); last.bar = br; }
     if (gasState !== last.gas) { ui.n2State.textContent = gasState === 'blowdown' ? 'Blowdown' : 'Reg'; n2El.dataset.gas = gasState; last.gas = gasState; }
+    // Two roll numbers, one meaning each (ticket 0022): ROLL under the dial is the bank right now, the
+    // angle from upright that the ADI draws (0 on the wheels, 90 on a side, 180 on the roof); the arc
+    // round the dial is how far the car has rolled in total, filling at 360°. On the Lineup the number
+    // is ROLLED, that total (its score counts whole turns).
     const r = Math.round(rollDeg);
     if (r !== last.roll) {
-      ui.roll.textContent = String(r);
       ui.rollArc.style.strokeDasharray = `${Math.min(360, r)} 360`;
       ui.rollArc.classList.toggle('done', r >= 330);
       last.roll = r;
     }
+    const bk = rolledMode ? r : Math.round(bankDeg);
+    if (bk !== last.bank) { ui.roll.textContent = String(bk); last.bank = bk; }
     // Altitude to a tenth (whole feet or metres from 100 up, so the cell keeps its width).
     const av = tw.alt * lenK(), al = av >= 99.95 ? 1e6 + Math.round(av) : Math.round(av * 10);
     if (al !== last.alt) { ui.alt.textContent = al >= 1e6 ? String(al - 1e6) : (Math.max(0, al) / 10).toFixed(1); last.alt = al; }
