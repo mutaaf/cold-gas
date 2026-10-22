@@ -65,3 +65,10 @@ object, `uniform2f/1f` from the wrong program, `bindBuffer` on a deleted buffer)
 judged run on both viewports (docs/critique/2026-10-22-1015.md). Those draws produce no pixels,
 so a frame of the theatre's field is being dropped, not just logged. The bar is unchanged: 0 WebGL
 `INVALID_*` messages over the e2e in this ticket's test plan.
+
+## Critic re-measure (2026-10-22 22:00, production da53d64)
+**Not reproduced in 6 judged runs** (4 Show references and 2 crashes, at 390×844, 844×390 and
+1440×900, all with the theatre live and Skip pressed). There were 0 `INVALID_*` and 0 `pageerror`;
+the console had only SwiftShader's ReadPixels and parallel-compile notices. At 10:15 it was 3 of 6.
+The bug is intermittent and still unexplained, so it stays `ready`. Close it only with the ticket's
+own probe, never on a clean manual run.
