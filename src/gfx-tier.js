@@ -1,7 +1,7 @@
 // The graphics tier a device boots with before its own history (src/obs/ledger.js) moves it.
 // Pure: everything it reads is passed in, so tests/unit/gfx-tier.test.js can play any device.
 //
-// A fine pointer (a desktop or laptop) boots 'high'. A touch device boots 'mid': bloom, SMAA and
+// A fine pointer (a desktop or laptop) boots 'high'. A touch device boots 'mid': bloom, FXAA and
 // 1.5× resolution, and the resolution governor steps it down in-session if it can't keep up.
 // Core counts are not a signal: Safari caps `hardwareConcurrency` (an iPhone or iPad reports 4 or
 // fewer) and has no `deviceMemory`, so the old "≤ 4 cores → low" test sent every iOS device to
