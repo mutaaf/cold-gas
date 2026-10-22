@@ -15,7 +15,8 @@ import { landingImpact } from './render/impact.js';
 import { createCrash } from './render/crash.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
 import { createRun, stepRun, FRAME_EVERY, BODY_FRAME, BODY_STRIDE } from './sim/run.js';
-import { physicsReady } from './sim/engine.js';
+import { freeWorld } from './sim/world.js';
+import { physicsReady, physicsMemoryBytes } from './sim/engine.js';
 import { loadPhysics } from './sim/engine-web.js';
 import { DT, G, CAR, NOZZLES, WHEELS, bodyRates, worldPoint, newInput } from './sim/vehicle.js';
 import { scoreRun, TIERS } from './sim/judge.js';
@@ -29,6 +30,7 @@ import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
 import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, pollPads, heldState } from './input.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
+import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
 import { thumbStage } from './onethumb.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
@@ -60,6 +62,9 @@ const tier = obs.boot({ forced: params.get('gfx'), deviceTier: pickDeviceTier(de
 obs.init({ deviceClass: deviceClass(navigator, coarse, deviceKind(device)) });
 // Audio is a breaker-guarded subsystem: if it throws, the game goes quiet instead of stopping.
 const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updateAudio0), thud = guard('audio', thud0), chime = guard('audio', chime0);
+// The audio graph is built on the first touch, click or key anywhere (a user gesture, so the
+// context may start), not inside the Jump tap: building it can take a long task of its own.
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => initAudio(), { capture: true, once: true, passive: true });
 
 const canvas = document.getElementById('stage');
 let stage;
@@ -75,13 +80,20 @@ try {
   throw err;
 }
 const { scene, camera, hero } = stage;
-// Runs wait for the engine (a beat on a cold load, nothing after).
+// Runs wait for the engine (a beat on a cold load, nothing after). Only the latest start asked for
+// while it loads goes ahead, and only if nothing else happened meanwhile: every mode change (and
+// opening Free Drive or the Sandbox) retires the token, so a Start tapped during the load can't fire
+// later into a drive, and several taps start one run.
 const physics = () => loadPhysics().catch((err) => { console.error(err); ui.cue_('The physics engine couldn’t load', 2400); throw err; });
+let startToken = 0;
+const cancelPendingStart = () => { startToken++; };
 function whenPhysics(fn) {
   return (...args) => {
+    cancelPendingStart();
     if (physicsReady()) return fn(...args);
+    const token = startToken;
     ui.cue_('Loading physics', 1200);
-    physics().then(() => fn(...args)).catch(() => {});
+    physics().then(() => { if (token === startToken) fn(...args); }).catch(() => {});
   };
 }
 const ui = createUI();
@@ -128,7 +140,7 @@ const S = {
   mode: 'title',          // title | countdown | live | results | replay | drive (Free Drive, src/drive/)
   run: null, autopilot: null, card: null, words: null,
   assist: true, acc: 0, countT: 0, doneT: 0, paused: false,
-  replayT: 0, prevPhase: '', time: 0,
+  replayT: 0, replaySlow: 1, prevPhase: '', time: 0,   // the replay's clock (src/render/replay.js)
   impacts: 0, impact: null,   // touchdowns this run, and the last one's cues (src/render/impact.js)
   idleThrottles: new Float64Array(NOZZLES.length),
   tier: 'assist',             // flight tier: assist | pro | advanced (src/sim/judge.js TIERS)
@@ -137,7 +149,7 @@ const S = {
   attempts: {},               // runs flown this session, per course (the results' "Run 4")
 };
 // The page knows the mode, so the quick Retry / Home buttons show only where they belong.
-const setMode = (m) => { S.mode = m; document.body.dataset.mode = m; };
+const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); S.mode = m; document.body.dataset.mode = m; };
 try {
   const saved = localStorage.getItem('coldgas_tier');
   S.tier = TIERS[saved] ? saved : localStorage.getItem('coldgas_assist') === '0' ? 'pro' : 'assist';
@@ -150,12 +162,15 @@ const ghostLoaded = (course) => (ghostLoads[course] ??= loadBest(course).then((g
 ghostLoaded(stage.course);
 const gpose = newGhostPose();
 // Shown only in your own live runs; it fades out where it overlaps the car (the start line).
+// It rides on the same fractional tick the car is drawn at (src/render/interp.js: the previous tick's
+// pose toward this one's), so the two glide together at 120/144 Hz instead of the ghost stepping.
 function syncGhost() {
   const live = (S.mode === 'live' || S.mode === 'countdown') && !S.autopilot;
   const best = S.ghosts[S.run?.course];
-  ghostRoot.visible = live && S.ghostOn && !!best && !best.ref && ghostAt(best, S.run.tick, gpose);
+  const tick = live && S.run ? (S.mode === 'live' && S.run.tick > 0 ? S.run.tick - 1 + Math.min(1, S.acc / DT) : S.run.tick) : 0;
+  ghostRoot.visible = live && S.ghostOn && !!best && !best.ref && ghostAt(best, tick, gpose);
   if (ghostRoot.visible) placeGhost(ghostRoot, ghostMat);
-  refGhostRoot.visible = live && S.ghostOn && ghostAt(refGhost(S.run.course), S.run.tick, gpose);
+  refGhostRoot.visible = live && S.ghostOn && ghostAt(refGhost(S.run.course, true), tick, gpose);
   if (refGhostRoot.visible) placeGhost(refGhostRoot, refGhostMat);
 }
 function placeGhost(root, mat) {
@@ -164,17 +179,54 @@ function placeGhost(root, mat) {
   const d = root.position.distanceTo(carRoot.position);
   mat.opacity = 0.18 * Math.min(1, Math.max(0, (d - 1.5) / 2.5));
 }
-// The reference flight's frames, flown once per course on first use (≈30–90 ms).
-const refGhosts = {};
-function refGhost(course) {
-  if (!course) return null;
-  if (!refGhosts[course]) {
-    const run = createRun(course), ap = createAutopilot(course);
-    while (run.phase !== 'done') stepRun(run, ap(run));
-    refGhosts[course] = packFrames(run.frames, scoreRun(run.t).total, true, course);
+// The reference flight's frames, once per course: ≈3,450 engine ticks, 0.13 s on a desktop and
+// ≈0.7 s on a phone. Flown in the background on the title (precomputeRefGhosts, ≤ 5 ms slices), so
+// the first Jump starts at once; `peek` asks without flying (the ghost shows once it's ready). A
+// drill asks without peeking and finishes the flight there and then if it isn't done.
+const refGhosts = {}, refFlights = {};
+function refFly(course, budgetMs) {
+  const fl = (refFlights[course] ??= { run: createRun(course), ap: createAutopilot(course) });
+  const { run, ap } = fl, t0 = performance.now();
+  while (run.phase !== 'done') {
+    for (let i = 0; i < 8 && run.phase !== 'done'; i++) stepRun(run, ap(run));
+    if (performance.now() - t0 >= budgetMs) break;
   }
-  return refGhosts[course];
+  if (run.phase !== 'done') return;
+  refGhosts[course] = packFrames(run.frames, scoreRun(run.t).total, true, course);
+  delete refFlights[course];
 }
+function refGhost(course, peek = false) {
+  if (!course) return null;
+  if (!refGhosts[course] && !peek) refFly(course, Infinity);
+  return refGhosts[course] || null;
+}
+// The HUD's (and the touch controls') first style and layout, done once on the title while they're
+// invisible: the first time they appear costs ≈40–60 ms on a 4×-throttled CPU (fonts, glyphs, a
+// big subtree), which used to land in the Jump tap's frame. Caches persist once they're hidden again.
+function warmHud() {
+  if (S.mode !== 'title') return;
+  for (const el of [ui.screens.hud, ui.touch]) {
+    if (!el?.hidden) continue;
+    el.style.visibility = 'hidden'; el.hidden = false;
+    void el.offsetHeight;
+    el.hidden = true; el.style.visibility = '';
+  }
+}
+// Between frames on the title (and the countdown and results, which don't step the sim), the
+// course on show first. Never during a live run or a drive: their frames need the time.
+async function precomputeRefGhosts() {
+  await Promise.all([stage.ready, physicsLoad]);
+  warmHud();
+  const idle = () => S.mode === 'title' || S.mode === 'countdown' || S.mode === 'results' || S.mode === 'replay';
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  for (;;) {
+    const course = !refGhosts[stage.course] ? stage.course : ['show', 'wall', 'lineup'].find((c) => !refGhosts[c]);
+    if (!course) return;
+    if (idle()) refFly(course, 5);
+    await (idle() ? (globalThis.scheduler?.yield?.() ?? wait(0)) : wait(250));
+  }
+}
+precomputeRefGhosts().catch((err) => console.warn('reference ghost', err));
 
 const rates = { x: 0, y: 0, z: 0 };
 const zeroVel = new THREE.Vector3();
@@ -212,8 +264,32 @@ function closeOverlays() {
   instruments.close();
 }
 
+// The run's engine world goes back as soon as the run is left (a finished run already freed it;
+// freeWorld is idempotent): retry mid-run, Home, a drill, a double-tapped Start each used to leak one.
+function disposeRun() {
+  if (S.run?.car?.world) freeWorld(S.run.car.world);
+}
+
+// Back to the title from anywhere, Free Drive and the Sandbox included (heal's escalation calls it
+// too). Their exit() calls back into toTitle (onExit): the guard keeps that from recursing.
+let leaving = false;
 function toTitle() {
+  if (!leaving) {
+    leaving = true;
+    try {
+      if (sandbox?.active) sandbox.exit();
+      if (drive?.active) drive.exit(); else drive?.closePicker();
+    } catch (err) {
+      console.error(err);
+    } finally {
+      leaving = false;
+    }
+    // Whatever a broken exit left behind, the title has no driving chrome.
+    document.body.classList.remove('driving');
+  }
+  cancelPendingStart();
   closeOverlays();
+  disposeRun();
   setMode('title'); S.run = null; S.drill = null;
   ui.only('title');
   drillBar.hidden = true;
@@ -231,11 +307,11 @@ const startRun = whenPhysics(startRunNow);
 function startRunNow(kind = 'jump', quick = false) {
   closeOverlays();
   initAudio();
+  disposeRun();
   S.run = createRun(stage.course);
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.released = false; S.drill = null; S.freezeT = 0; S.coach = null;
-  ghostLoaded(stage.course);
-  refGhost(stage.course);
+  ghostLoaded(stage.course);   // the reference ghost is flown on the title (precomputeRefGhosts)
   setMode('countdown'); S.countT = 0; S.countLen = quick ? 1 : 3; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
   S.impacts = 0; S.impact = null;
   newFlight();
@@ -252,6 +328,7 @@ function startRunNow(kind = 'jump', quick = false) {
   const sag = c.wheels[0].compression;
   syncCar(c.pos, c.quat, [sag, sag, sag, sag], [0, 0, 0, 0], 0);
   director.restart(); hero.placed();
+  syncHud(S.run, c, -S.countLen);   // READY shows this run's start, not the last run's end
   if (S.autopilot) ui.cue_({ show: 'The reference run: the Wall, then the lineup', wall: 'The reference run: up the Wall' }[stage.course] || 'The reference jump', 2400);
 }
 
@@ -278,7 +355,7 @@ function finishRun() {
     // Practice: the drill's own card and the coach. No panel, no board, no ghost.
     ui.results(S.card, { drill: S.drill, result: drillResult(S.drill, run, S.card) });
     coachRun();
-    S.replayT = Math.max(0, (run.drillStartTick || 0) / FRAME_EVERY - 30);
+    replayFrom(Math.max(0, (run.drillStartTick || 0) / FRAME_EVERY - 30));
     return;
   }
   ui.results(S.card);
@@ -299,7 +376,7 @@ function finishRun() {
   // it shown live (src/ai/theatre.js, a lazy chunk with the aurora-field particle engine).
   runPanel(run);
   // Replay plays behind the sheet.
-  S.replayT = 0;
+  replayFrom(0);
 }
 
 const theatreRoot = document.querySelector('[data-theatre]');
@@ -402,7 +479,7 @@ const bodyLerp = createBodiesLerp(); // and the parked bodies with it
 function liveStep(dt) {
   const run = S.run;
   // A drill opens on a beat with the car frozen at its start, so you see where you are first.
-  if (S.freezeT > 0) { S.freezeT -= dt; if (S.freezeT <= 0) ui.cue_('Go', 600); dt = 0; }
+  if (S.freezeT > 0) { S.freezeT -= dt; if (S.freezeT <= 0) ui.cue_('Go', 600, { hold: 700 }); dt = 0; }
   S.acc += Math.min(dt, 0.1) * (S.drill ? S.slowmo : 1);
   let input = null;
   const oneThumb = thumbActive();
@@ -419,9 +496,8 @@ function liveStep(dt) {
   S.simMs = performance.now() - simT0; S.simTicks = run.tick - tick0;   // the nerds panel's clock
   if (run.t.contact && !S.contactBuzzed) { S.contactBuzzed = true; buzz('crash'); }
   const c = run.car;
-  for (let i = 0; i < 4; i++) { fcomp[i] = c.wheels[i].compression; fspin[i] = c.wheels[i].spin; }
-  const drawn = poseLerp.pose(c, S.acc / DT);
-  syncCar(drawn.pos, drawn.quat, fcomp, fspin, c.steer);
+  const drawn = poseLerp.pose(c, S.acc / DT);   // body and wheels at the clock's fraction of a tick
+  syncCar(drawn.pos, drawn.quat, drawn.comp, drawn.spin, drawn.steer);
   stage.setBodies(bodyLerp.poses(c.world.bodies, S.acc / DT));
   stage.rocket?.simClock(run.tick * DT);   // the range's static fire, on the sim's schedule
   crash.feed(run.impacts, run.tick, c.vel);
@@ -458,18 +534,7 @@ function liveStep(dt) {
   if (run.t.touchTick >= 0 && S.impacts === 0) touchdown(run);
   if (!S.autopilot) cues(run, c);
 
-  const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
-  bodyRates(c, rates);
-  const alt = heightAboveSurface(c);
-  landing.update(c, alt, S.autopilot ? '' : run.phase);
-  const pr = landing.prediction;
-  ui.hud({
-    speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(pr.rollOut) * 180 / Math.PI,
-    alt, airborne: run.phase === 'air',
-    sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, pr), clock: (run.tick - S.startTick) / 240,
-    pitch: hudPitch(c.quat, run.phase === 'ramp'),
-    throttles: c.throttles, fan: c.fanForce / G, g: gWindow.read(),
-  });
+  const speed = syncHud(run, c);
   ui.damage(run.damage, c);
   hero.setFan?.(c.fan);
   hero.setWing?.(Math.min(1, Math.max(0, (speed - 20) / 20)));
@@ -482,6 +547,23 @@ function liveStep(dt) {
   } else S.doneT = 0;
 }
 
+// The HUD from the run as it stands (every live frame, and once before a countdown so READY shows
+// this run's start). Returns the speed.
+function syncHud(run, c, clock = (run.tick - S.startTick) / 240) {
+  const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
+  bodyRates(c, rates);
+  const alt = heightAboveSurface(c);
+  landing.update(c, alt, S.autopilot ? '' : run.phase);
+  ui.hud({
+    speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(landing.prediction.rollOut) * 180 / Math.PI,
+    alt, airborne: run.phase === 'air',
+    sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, landing.prediction), clock,
+    pitch: hudPitch(c.quat, run.phase === 'ramp'),
+    throttles: c.throttles, fan: c.fanForce / G, g: gWindow.read(),
+  });
+  return speed;
+}
+
 // --- The flight, as the HUD and the controls see it ---------------------------------------------
 // A new attempt (or drill): the one-thumb control, the HUD's glide and the timeline start over.
 function newFlight(startTick = 0) {
@@ -489,6 +571,7 @@ function newFlight(startTick = 0) {
   ui.resetHud(); ui.damageReset(); gWindow.reset();
   ui.timelineFor(stage.course);
   S.phaseMax = -1; S.startTick = startTick; S.contactBuzzed = false;
+  cueHys.slow = false; cueHys.tilted = false;
   S.releaseTick = S.released ? startTick - 240 : -1;
 }
 // Where in the flight you are, for the timeline: run-up → climb → hang → release → carry → brake →
@@ -592,6 +675,7 @@ const kbd = (touchLabel, keyLabel) => {
 // The cues teach the sequence for the tier you fly. With Assist: release, then hold BOOST and LAND
 // together (the computer caps the carry and rolls you out). Pro and Advanced fly by the HUD: roll
 // out by the dial, brake at the BRAKE line.
+const cueHys = { slow: false, tilted: false };   // which side of each cue threshold the flight is on
 function cues(run, c) {
   const v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
   const tier = S.tier, adv = tier === 'advanced';
@@ -604,14 +688,20 @@ function cues(run, c) {
     if (run.phase === 'ramp' && !S.released && run.t.progress < 0.92) return ui.cue_('Onto the ledge, then stop', 500);
     if (run.phase === 'ramp' && !S.released) return ui.cue_(`Upside down on the ledge · ${kbd('RELEASE', 'Space')} to let go`, 500);
     // The Show: the row is under you. The rear jets carry you out over it (≈10 m/s is enough).
-    const boostCue = show && run.phase === 'air' && !run.t.crossedRow && Math.hypot(c.vel.x, c.vel.z) < 9.5 && c.pos.z > COURSES.show.rowNear;
+    // Thresholds have an enter and an exit (hysteresis), so a speed or an attitude hovering on the
+    // line can't flip the cue between two messages.
+    const vh = Math.hypot(c.vel.x, c.vel.z);
+    cueHys.slow = cueHys.slow ? vh < 10.5 : vh < 9.5;
+    const boostCue = show && run.phase === 'air' && !run.t.crossedRow && cueHys.slow && c.pos.z > COURSES.show.rowNear;
     if (tier === 'assist') {
       if (boostCue) return ui.cue_(`Hold ${kbd('BOOST', 'F')} + ${kbd('LAND', 'Shift')} · over the row`, 400);
       if (run.phase === 'air') return ui.cue_(`Hold ${kbd('LAND', 'Shift')}: it rolls you out and brakes`, 500);
       return;
     }
     if (boostCue) return ui.cue_(adv ? `${kbd('BOOST', 'F')} the rear row · carry over the roofs` : `${kbd('BOOST', 'F')} · carry about 10 m/s over the row`, 400);
-    if (run.phase === 'air' && landing.prediction.upY < 0.85) return ui.cue_(adv ? `Roll out: ${kbd('Q+Z or E+C', 'A or D')} · watch the dial` : `Roll out: ${kbd('stick', '← →')} · let go early`, 400);
+    const upY = landing.prediction.upY;
+    cueHys.tilted = cueHys.tilted ? upY < 0.9 : upY < 0.85;
+    if (run.phase === 'air' && cueHys.tilted) return ui.cue_(adv ? `Roll out: ${kbd('Q+Z or E+C', 'A or D')} · watch the dial` : `Roll out: ${kbd('stick', '← →')} · let go early`, 400);
     if (run.phase === 'air') return ui.cue_(`Brake: ${kbd('LIFT', 'Space')} at the BRAKE line`, 400);
     return;
   }
@@ -633,33 +723,29 @@ function thumbCues(run, c, v) {
 }
 
 // --- Replay (behind the results sheet, and on demand) ----------------------------------------
-const fpos = { x: 0, y: 0, z: 0 }, fquat = { x: 0, y: 0, z: 0, w: 1 };
+// The clock advances first, then the pose is sampled between frames (src/render/replay.js).
 const fcomp = [0, 0, 0, 0], fspin = [0, 0, 0, 0];
-const fthr = new Float64Array(NOZZLES.length);
 const fvel = new THREE.Vector3();
 const replayBodies = [];
+const rpose = newReplayPose();
+// Start the replay at frame t, already at that moment's speed (no ease from wherever it was).
+function replayFrom(t) {
+  S.replayT = t;
+  const fr = S.run?.frames;
+  S.replaySlow = fr?.length ? slowTarget(fr[Math.min(fr.length - 1, Math.floor(t))], S.run.course) : 1;
+}
 function replayStep(dt) {
   const frames = S.run?.frames;
   if (!frames?.length) return;
   const nb = (frames[0].length - BODY_FRAME) / BODY_STRIDE;
   while (replayBodies.length < nb) replayBodies.push({ cx: 0, cy: 0, cz: 0, qx: 0, qy: 0, qz: 0, qw: 1 });
   replayBodies.length = nb;
-  const n = frames.length;
-  const i0 = Math.min(n - 1, Math.floor(S.replayT));
-  const f = frames[i0];
-  // Slow motion where it matters: over the lineup, or up the wall and through the roll.
-  const L = COURSES.lineup;
-  const slow = stage.course !== 'lineup' ? (f[1] > 3 ? 0.45 : 1) : (f[2] > L.liftOffZ - 2 && f[2] < L.pad.z - 6 ? 0.42 : 1);
-  S.replayT += dt * (240 / FRAME_EVERY) * slow;
-  if (S.replayT >= n + 90) { S.replayT = 0; director.restart(); hero.placed(); }   // hold a beat, loop
-  const i1 = Math.min(n - 1, i0 + 1), k = Math.min(1, S.replayT - i0);
-  const g = frames[i1];
-  fpos.x = f[0] + (g[0] - f[0]) * k; fpos.y = f[1] + (g[1] - f[1]) * k; fpos.z = f[2] + (g[2] - f[2]) * k;
-  fquat.x = f[3]; fquat.y = f[4]; fquat.z = f[5]; fquat.w = f[6];
-  for (let w = 0; w < 4; w++) { fcomp[w] = f[7 + w]; fspin[w] = f[11 + w]; }
-  for (let j = 0; j < NOZZLES.length; j++) fthr[j] = f[15 + j];
+  if (stepReplayClock(S, frames, dt, S.run.course)) { director.restart(); hero.placed(); }   // hold a beat, loop
+  const slow = S.replaySlow;
+  const p = sampleReplay(frames, S.replayT, rpose);
+  const f = frames[p.i0], g = frames[p.i1], k = p.k;
   fvel.set(g[0] - f[0], g[1] - f[1], g[2] - f[2]).multiplyScalar(60);
-  syncCar(fpos, fquat, fcomp, fspin, f[15 + NOZZLES.length] || 0);
+  syncCar(p.pos, p.quat, p.comp, p.spin, p.steer);
   // The bodies between this frame and the next, as the car is (positions lerped, attitude nlerped).
   for (let b = 0; b < replayBodies.length; b++) {
     const o = BODY_FRAME + BODY_STRIDE * b, r = replayBodies[b], j = 1 - k;
@@ -673,9 +759,9 @@ function replayStep(dt) {
   stage.rocket?.simClock((S.replayT * FRAME_EVERY) / 240);
   // The crash, re-shown from the run's impact events at the tick on screen.
   crash.feed(S.run.impacts, Math.floor((S.replayT + 1) * FRAME_EVERY), fvel);
-  hero.setFan?.(f[16 + NOZZLES.length] || 0);
-  plumes.update(dt * slow, S.time, fthr, fvel, 0);
-  updateAudio({ speed: fvel.length() * slow, grounded: fpos.y < 0.7, throttles: fthr });
+  hero.setFan?.(p.fan);
+  plumes.update(dt * slow, S.time, p.thr, fvel, 0);
+  updateAudio({ speed: fvel.length() * slow, grounded: p.pos.y < 0.7, throttles: p.thr });
 }
 
 // --- Title idle: an occasional breath from the lift jets --------------------------------------
@@ -695,6 +781,9 @@ let lastT = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   heal.frame(now, frameBody);
+  // The cue line's deadlines (src/ui.js), after the frame has asked for its cues: a message asked
+  // for every frame stays up however long a frame takes; paused, or if the frame threw, they still run.
+  ui.tickCue();
 }
 function frameBody(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000);
@@ -718,7 +807,8 @@ function frameBody(now) {
         const after = Math.ceil(L - S.countT);
         if (S.countT < 0.02 || after !== before) ui.countdown(after > 0 ? after : 0);
       }
-      if (S.countT >= L) { setMode('live'); ui.countdown(0); ui.cue_(S.autopilot ? 'The reference jump' : 'Go', 900); }
+      // "Go" holds for its moment (0.7 s) before the first live cue may replace it.
+      if (S.countT >= L) { setMode('live'); ui.countdown(0); ui.cue_(S.autopilot ? 'The reference jump' : 'Go', 900, { hold: 700 }); }
       plumes.update(dt, S.time, S.idleThrottles.fill(0), zeroVel, 0);
       ui.setClock(S.countT - L);
     } else if (S.mode === 'live') liveStep(dt * slow);
@@ -774,7 +864,7 @@ document.addEventListener('click', (e) => {
   if (!b) return;
   if (b.hasAttribute('data-again')) retry(); else goHome();
 });
-on('[data-replay]', () => { S.replayT = 0; director.restart(); hero.placed(); });
+on('[data-replay]', () => { replayFrom(0); director.restart(); hero.placed(); });
 on('[data-resume]', () => pause(false));
 on('[data-restart]', () => { if (S.autopilot) { S.paused = false; ui.show('pause', false); startRun('reveal', true); } else retry(); });
 on('[data-share]', async () => {
@@ -879,6 +969,7 @@ function startDrillNow(id) {
   if (!drill || !drill.courses.includes(stage.course)) return;
   closeOverlays();
   initAudio();
+  disposeRun();
   const { run, released } = buildDrill(drill, stage.course);
   S.run = run; S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;
   setMode('live'); S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
@@ -919,7 +1010,9 @@ addEventListener('keydown', (e) => {
   if (e.repeat || e.metaKey || e.ctrlKey || e.altKey || e.target?.closest?.('input, select, textarea, [data-ai-modal]')) return;
   if (e.code === 'KeyL' && (S.mode === 'live' || S.mode === 'countdown' || S.mode === 'title')) toggleView();
   const inRun = S.mode === 'live' || S.mode === 'countdown' || S.mode === 'results' || S.mode === 'replay';
-  if (inRun && !S.drill && (e.code === 'KeyR' || (e.code === 'Enter' && S.mode === 'results'))) { e.preventDefault(); retry(); return; }
+  // Enter on a focused button is that button's click (Retry included): don't start a second run.
+  const enterOnButton = e.code === 'Enter' && !!e.target?.closest?.('button, a, [role="button"]');
+  if (inRun && !S.drill && (e.code === 'KeyR' || (e.code === 'Enter' && S.mode === 'results' && !enterOnButton))) { e.preventDefault(); retry(); return; }
   if (inRun && (e.code === 'KeyH' || (e.code === 'Escape' && S.mode === 'results'))) { e.preventDefault(); goHome(); return; }
   if (!S.drill) return;
   if (e.code === 'KeyR' && (S.mode === 'live' || S.mode === 'results')) retryDrill();
@@ -1027,14 +1120,14 @@ function loadDrive() {
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
       audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch },
       assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
-      setMode: (m) => { setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
+      setMode: (m) => { disposeRun(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
     });
     return drive;
   });
   return driveLoad;
 }
-on('[data-drive-open]', () => { loadDrive().then((d) => d.openPicker()).catch((err) => { console.error(err); ui.cue_('Free Drive couldn’t load', 2000); }); });
+on('[data-drive-open]', () => { cancelPendingStart(); loadDrive().then((d) => d.openPicker()).catch((err) => { console.error(err); ui.cue_('Free Drive couldn’t load', 2000); }); });
 
 // --- The Sandbox: build, power-ups, side quests (a lazy chunk, src/build/) ----------------------------
 let sandbox = null, sandboxLoad = null;
@@ -1046,25 +1139,27 @@ function loadSandbox() {
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse, CAR,
       audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch },
       assist: () => S.tier,
-      setMode: (m) => { setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
+      setMode: (m) => { disposeRun(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
     });
     return sandbox;
   });
   return sandboxLoad;
 }
-on('[data-sandbox-open]', () => { loadSandbox().then((s) => s.start()).catch((err) => { console.error(err); ui.cue_('The Sandbox couldn’t load', 2000); }); });
+on('[data-sandbox-open]', () => { cancelPendingStart(); loadSandbox().then((s) => s.start()).catch((err) => { console.error(err); ui.cue_('The Sandbox couldn’t load', 2000); }); });
 
 // Deep links: ?play=jump|reveal, ?board=today|all, ?drive=<road>[&tod=dusk], ?drive=endless[&seed=…].
+// One of them wins (AGENTS.md, URL parameters): ?drive= over ?play= over ?board=.
 const bootHash = location.hash;   // a shared build (#b=…) rides on a ?drive= link
 toTitle();
-// Keep a ?drive= link (and its build) in the address bar, so a reload or a copy brings it back.
-if (params.get('drive') !== null) history.replaceState(null, '', `${location.pathname}?drive=${encodeURIComponent(params.get('drive') || 'stelvio')}${params.get('seed') ? `&seed=${encodeURIComponent(params.get('seed'))}` : ''}${bootHash}`);
-if (params.get('drive') === 'sandbox') loadSandbox().then((s) => s.start());
-else if (params.get('drive') !== null) loadDrive().then((d) => d.start(params.get('drive') || 'stelvio', { tod: params.get('tod') || undefined, seed: params.get('seed') || undefined, idb: params.get('idb') !== '0' }));
 const play = params.get('play');
-if (play === 'jump' || play === 'reveal') startRun(play);
-if (params.get('board')) openBoard(params.get('board') === 'all' ? 'all' : 'today');
+if (params.get('drive') !== null) {
+  // Keep a ?drive= link (and its build) in the address bar, so a reload or a copy brings it back.
+  history.replaceState(null, '', `${location.pathname}?drive=${encodeURIComponent(params.get('drive') || 'stelvio')}${params.get('seed') ? `&seed=${encodeURIComponent(params.get('seed'))}` : ''}${bootHash}`);
+  if (params.get('drive') === 'sandbox') loadSandbox().then((s) => s.start());
+  else loadDrive().then((d) => d.start(params.get('drive') || 'stelvio', { tod: params.get('tod') || undefined, seed: params.get('seed') || undefined, idb: params.get('idb') !== '0' }));
+} else if (play === 'jump' || play === 'reveal') startRun(play);
+else if (params.get('board')) openBoard(params.get('board') === 'all' ? 'all' : 'today');
 
 // e2e hooks. fastForward() runs the sim to the end without waiting on the wall clock, so slow
 // software-GL runners exercise the same flow (countdown → live → results) in seconds.
@@ -1075,6 +1170,6 @@ function fastForward() {
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { S, stage, physicsReady, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 Object.assign(window.__coldgas, { obs, heal });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

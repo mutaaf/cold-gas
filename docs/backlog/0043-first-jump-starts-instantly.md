@@ -1,12 +1,12 @@
 ---
 id: 0043
 title: The first Jump starts instantly: the reference ghost is flown before you press it
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: performance
 created: 2026-10-21
-pr:
+pr: 70
 by: operator
 ---
 

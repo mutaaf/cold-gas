@@ -5,25 +5,37 @@
 // has reached (the previous tick's pose toward this one's) costs at most one tick of latency
 // (4 ms) and never changes the sim. No allocation per frame.
 export function createPoseLerp() {
-  const prev = { x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 };
+  const prev = { x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1, comp: [0, 0, 0, 0], spin: [0, 0, 0, 0], steer: 0 };
   const pos = { x: 0, y: 0, z: 0 }, quat = { x: 0, y: 0, z: 0, w: 1 };
-  const out = { pos, quat };
+  // The wheels too (compression, spin, steer), so they ride with the body, not a tick behind it.
+  const comp = [0, 0, 0, 0], spin = [0, 0, 0, 0];
+  const out = { pos, quat, comp, spin, steer: 0 };
+  const wheelsAt = (c, a) => {
+    const b = 1 - a;
+    for (let i = 0; i < 4; i++) {
+      comp[i] = prev.comp[i] * b + c.wheels[i].compression * a;
+      spin[i] = prev.spin[i] * b + c.wheels[i].spin * a;
+    }
+    out.steer = prev.steer * b + c.steer * a;
+  };
   let car = null;
   return {
     // Before each sim step: remember where the car was.
     before(c) {
       prev.x = c.pos.x; prev.y = c.pos.y; prev.z = c.pos.z;
       prev.qx = c.quat.x; prev.qy = c.quat.y; prev.qz = c.quat.z; prev.qw = c.quat.w;
+      if (c.wheels) { for (let i = 0; i < 4; i++) { prev.comp[i] = c.wheels[i].compression; prev.spin[i] = c.wheels[i].spin; } prev.steer = c.steer; }
       car = c;
     },
     // The pose to draw, `alpha` (0–1) of the way from the previous tick to the current one. A car
     // that hasn't stepped since it was placed (a reset, a new run) is drawn where it is.
     pose(c, alpha) {
-      if (car !== c) { out.pos = c.pos; out.quat = c.quat; return out; }
+      if (car !== c) { out.pos = c.pos; out.quat = c.quat; if (c.wheels) wheelsAt(c, 1); return out; }
       const a = Math.max(0, Math.min(1, alpha)), b = 1 - a;
       // A teleport (the world shifted, a respawn into the same car) is drawn as is.
       const dx = c.pos.x - prev.x, dy = c.pos.y - prev.y, dz = c.pos.z - prev.z;
-      if (dx * dx + dy * dy + dz * dz > 4) { out.pos = c.pos; out.quat = c.quat; return out; }
+      if (dx * dx + dy * dy + dz * dz > 4) { out.pos = c.pos; out.quat = c.quat; if (c.wheels) wheelsAt(c, 1); return out; }
+      if (c.wheels) wheelsAt(c, a);
       pos.x = prev.x * b + c.pos.x * a; pos.y = prev.y * b + c.pos.y * a; pos.z = prev.z * b + c.pos.z * a;
       const s = prev.qx * c.quat.x + prev.qy * c.quat.y + prev.qz * c.quat.z + prev.qw * c.quat.w < 0 ? -1 : 1;
       let x = prev.qx * b * s + c.quat.x * a, y = prev.qy * b * s + c.quat.y * a, z = prev.qz * b * s + c.quat.z * a, w = prev.qw * b * s + c.quat.w * a;
