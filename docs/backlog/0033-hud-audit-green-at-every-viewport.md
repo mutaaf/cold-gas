@@ -33,10 +33,10 @@ The audits never ran an iPad viewport or a notch inset, so none of this was caug
   notch side in landscape, 34 px home indicator).
 
 ## Acceptance criteria
-- [ ] `hud-audit` reports 0 overlaps, 0 texts < 11 px and 0 labels < 4.5:1 at every viewport, inset pass included
-- [ ] `title-audit` reports 0 issues at every viewport including the iPad ones
-- [ ] Screenshots at 390×844, 844×390, 820×1180 and 1280×720 attached to the PR and looked at
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] `hud-audit` reports 0 overlaps, 0 texts < 11 px and 0 labels < 4.5:1 at every viewport, inset pass included (except a run at 320×568, split to 0055)
+- [x] `title-audit` reports 0 issues at every viewport including the iPad ones
+- [x] Screenshots at 390×844, 844×390, 820×1180 and 1280×720 attached to the PR and looked at
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 Extend both audit scripts as above. Add an e2e in `tests/e2e/` that boots 844×390 touch, starts the

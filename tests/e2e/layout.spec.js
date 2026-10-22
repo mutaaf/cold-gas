@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test';
 // Layout at the viewports the HUD audit found broken (0033): phones and iPads lying down (the
 // mission clock under Home and Retry), Slide Over at 320 px (the top bar off screen), a notch's
 // safe-area insets, and the desktop's key caps. scripts/hud-audit.mjs measures the rest.
-const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+// physicsReady is a function (docs/LESSONS.md): wait on it, or startRun defers and skipCountdown does nothing.
+const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage && window.__coldgas.physicsReady(), null, { timeout: 30_000 });
 const touch = (width, height) => ({ viewport: { width, height }, hasTouch: true, isMobile: true });
 const SAFE_LANDSCAPE = ':root { --safe-t: 0px !important; --safe-r: 47px !important; --safe-b: 21px !important; --safe-l: 47px !important; }';
 const rect = (page, sel) => page.locator(sel).first().evaluate((el) => { const r = el.getBoundingClientRect(); return { x: r.x, y: r.y, r: r.right, b: r.bottom }; });

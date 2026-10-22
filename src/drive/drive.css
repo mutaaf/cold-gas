@@ -154,7 +154,7 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
   .fd-profile { display: none; }
   .fd-timer { top: calc(20px + var(--safe-t)); }
   .fd-road { top: calc(56px + var(--safe-t)); }
-  body.driving .cue { --cue-top: 178px; }   /* under the stats row, not over it */
+  body.driving .cue { --cue-top: 178px; max-width: calc(100vw - 32px); }   /* under the stats row, not over it; the Show's side reserve doesn't apply */
 }
 @media (prefers-reduced-motion: reduce) { .fd-picker, .fd-card, .fd-endless { animation: none; } }
 

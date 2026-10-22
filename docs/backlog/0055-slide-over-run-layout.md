@@ -39,5 +39,5 @@ the pad, the cue and the primary don't intersect; in Free Drive assert the stick
 slot C don't intersect each other or the chips.
 
 ## Out of scope
-The left-handed mirror at landscape (slot C lands on the primary there); file it if the audit adds a
-left-hand pass.
+The left-handed mirror in landscape (pre-existing: slot C lands on the primary, slot B on the strip's
+left end); it needs a left-hand pass in the audit and its own ticket.

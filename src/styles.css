@@ -651,6 +651,9 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .h-primary { bottom: calc(178px + var(--safe-b)); }
   .h-vehicle { bottom: calc(178px + var(--safe-b)); }
 }
+/* A tall desktop window: the stacked strip lifts the primary, so the scrim rises with it (its labels
+   would sit at the scrim's clear top edge over the lit pad). */
+@media (pointer: fine) and (orientation: portrait) { .h-scrim-bot { height: min(62vh, 600px); } }
 
 /* Coarse pointer (phones, tablets): the bottom of the glass belongs to the thumbs. */
 @media (pointer: coarse) {
@@ -732,7 +735,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .h-strip .tank { flex-grow: 1.7; }
   .h-cell { flex: 1 1 0; min-width: 0; padding: 7px 8px 6px; row-gap: 5px; }
   .h-cell b { font-size: 15px; }
-  .cue { --cue-top: 112px; max-width: calc(100vw - 2 * clamp(16px, 2.4vw, 36px) - 480px - var(--safe-l) - var(--safe-r)); }   /* between the primary and the vehicle */
+  .cue { --cue-top: 112px; max-width: max(240px, calc(100vw - 2 * clamp(16px, 2.4vw, 36px) - 480px - var(--safe-l) - var(--safe-r))); overflow-wrap: anywhere; }   /* between the primary and the vehicle */
   .h-scrim-top { height: 190px; }
   /* Mid-run the clock and timeline take the brand's place in the top band, and the AI and tier chips
      (title-screen settings) step aside for Home and Retry. */
@@ -937,12 +940,13 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 @keyframes fx-ring { from { transform: scale(2.4); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
 .dmg-trail circle { fill: rgba(245, 246, 248, 0.9); }
 @media (prefers-reduced-motion: reduce) { .dmg-fx.on, .dmg-fx.on .fx-ring { animation: none; opacity: 1; } }
-/* Slide Over and the smallest phones (≤ 360 px): the top bar keeps the settings that matter (the
-   wordmark is the brand on the title, and For nerds is a keyboard toy), and the title stack tightens
-   so the wordmark stays on screen. */
-@media (max-width: 360px) {
-  .top .brand, .top .nerds-btn { display: none; }
-  .top { justify-content: flex-end; }
+/* Slide Over and the smallest phones (under 340 px; 360 px phones keep the phone layout): the brand
+   leaves the top bar (the wordmark is the brand on the title) so every setting fits, and the title
+   stack tightens so the wordmark stays on screen. */
+@media (max-width: 339.98px) {
+  .top .brand { display: none; }
+  .top { justify-content: flex-end; padding-left: calc(10px + var(--safe-l)); padding-right: calc(10px + var(--safe-r)); }
+  .top-actions { gap: 5px; }
   .wordmark br { display: none; }
   .wordmark { font-size: 30px; white-space: nowrap; }
   .tagline { font-size: 15px; margin: 10px 0 14px; }

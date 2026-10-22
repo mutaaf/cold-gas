@@ -44,6 +44,7 @@ const TEXT_ROOTS = '[data-screen="hud"], [data-touch], [data-cue], .top, [data-d
 
 const browser = await chromium.launch(launchOpts());
 const report = [];
+let misses = 0, pageErrors = 0;   // a phase never reached (measured at the wrong moment) or a page error fails the audit too
 
 async function measure(page, vpName, phase) {
   const file = `${out}/${label}-${vpName}-${phase}.png`;
@@ -153,7 +154,7 @@ for (const [w, h, safe] of VIEWPORTS) {
   const S = (fn, arg) => page.evaluate(fn, arg);
   const freeze = () => S(() => { window.__coldgas.S.paused = true; });
   const thaw = () => S(() => { window.__coldgas.S.paused = false; const c = document.querySelector('[data-cue]'); if (c) c.style.transition = ''; });
-  const until = (fn, timeout = 60000) => page.waitForFunction(fn, null, { timeout, polling: 'raf' }).then(() => true).catch(() => { console.log('  missed', fn.toString().slice(0, 90)); return false; });
+  const until = (fn, timeout = 60000) => page.waitForFunction(fn, null, { timeout, polling: 'raf' }).then(() => true).catch(() => { misses++; console.log('  missed', fn.toString().slice(0, 90)); return false; });
   await S(() => { window.__auditStop = false; window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
   // A page-side driver (synthetic key events, read by src/input.js like real ones): crawl in at
   // ≈5 m/s, up the curl, brake on the ledge (as scripts/human-show.mjs's players do).
@@ -216,11 +217,12 @@ for (const [w, h, safe] of VIEWPORTS) {
       await measure(page, vpName, '7-drive');
     }
   }
-  if (errors.length) console.log('  errors:', errors.slice(0, 3).join(' | '));
+  if (errors.length) { pageErrors += errors.length; console.log('  errors:', errors.slice(0, 3).join(' | ')); }
   await page.close();
 }
 writeFileSync(`${out}/${label}-report.json`, JSON.stringify(report, null, 1));
 const tot = report.reduce((a, r) => ({ ov: a.ov + r.overlaps.length, sm: a.sm + r.small.length, lc: a.lc + r.lowContrast.length, off: a.off + r.offscreen.length }), { ov: 0, sm: 0, lc: 0, off: 0 });
 console.log(`TOTAL ${label}: ${report.length} frames · overlaps ${tot.ov} · offscreen ${tot.off} · text < 11 px ${tot.sm} · labels < 4.5:1 ${tot.lc}`);
 await browser.close();
-process.exitCode = tot.ov + tot.sm + tot.lc + tot.off ? 1 : 0;
+if (misses || pageErrors) console.log(`  ${misses} phases missed · ${pageErrors} page errors`);
+process.exitCode = tot.ov + tot.sm + tot.lc + tot.off + misses + pageErrors ? 1 : 0;

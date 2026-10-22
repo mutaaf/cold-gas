@@ -7,7 +7,7 @@ import { mkdirSync } from 'node:fs';
 
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', label = 'title'] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
-const VPS = [[1280, 720, 0], [1440, 900, 0], [1920, 1080, 0], [390, 844, 1], [430, 932, 1], [844, 390, 1], [814, 380, 1],
+const VPS = [[1280, 720, 0], [1440, 900, 0], [1920, 1080, 0], [360, 780, 1], [390, 844, 1], [430, 932, 1], [844, 390, 1], [814, 380, 1],
   // iPads: mini, Air, Pro 12.9 (both ways) and Slide Over
   [768, 1024, 1], [1024, 768, 1], [820, 1180, 1], [1180, 820, 1], [1024, 1366, 1], [1366, 1024, 1], [320, 568, 1],
   // a notched phone's safe areas (see hud-audit.mjs)
