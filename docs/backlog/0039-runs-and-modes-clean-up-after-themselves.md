@@ -1,12 +1,12 @@
 ---
 id: 0039
 title: Every run and mode cleans up after itself: no leaked physics worlds, no stale starts
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: tech-health
 created: 2026-10-21
-pr:
+pr: 70
 by: operator
 ---
 
