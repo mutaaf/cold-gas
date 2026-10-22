@@ -9,10 +9,34 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Four jobs side by side, and `check` (the required status) passes only if all of them did.
+# The e2e suite runs under software GL and grew to 20–27 min serially (45+ on a slow runner):
+# split into shards it fits well inside its limit, and a slow runner costs one shard, not the run.
 jobs:
-  check:
+  static:
+    name: Backlog, lint, unit tests, build
     runs-on: ubuntu-latest
-    timeout-minutes: 50   # the main suite ≈ 20–27 min under software GL (2026-10-22, after the lockdown's e2e), plus the flake guard
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: node scripts/check-backlog.mjs
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  e2e:
+    name: e2e ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -21,17 +45,51 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - name: Backlog, lint, unit tests, build, e2e
-        run: npm run check
-      # Flake guard: e2e specs this PR adds or changes run several times in a row.
-      - name: Flake guard (changed e2e specs, repeated)
-        if: github.event_name == 'pull_request' && hashFiles('scripts/e2e-repeat-changed.mjs') != ''
-        run: node scripts/e2e-repeat-changed.mjs
+      - run: npx playwright test --shard=${{ matrix.shard }}/3
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report
+          name: playwright-report-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
           retention-days: 7
+
+  # Flake guard: e2e specs this PR adds or changes run several times in a row, with no retries.
+  guard:
+    name: Flake guard (changed e2e specs, repeated)
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - if: hashFiles('scripts/e2e-repeat-changed.mjs') != ''
+        run: node scripts/e2e-repeat-changed.mjs
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report-guard
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
+
+  check:
+    name: check
+    needs: [static, e2e, guard]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Every job passed (the guard is skipped on main)
+        run: |
+          echo "static=${{ needs.static.result }} e2e=${{ needs.e2e.result }} guard=${{ needs.guard.result }}"
+          [ "${{ needs.static.result }}" = success ] || exit 1
+          [ "${{ needs.e2e.result }}" = success ] || exit 1
+          case "${{ needs.guard.result }}" in success|skipped) ;; *) exit 1 ;; esac

@@ -47,7 +47,7 @@ if (!specs.length) {
   process.exit(0);
 }
 // Keep the guard to a few minutes: fewer repeats when a branch touches many specs, or many tests
-// (the CI job has 50 minutes in all, and the main suite takes ≈20–27 of them; every changed test still
+// (the guard is its own CI job with 35 minutes; every changed test still
 // runs at least 3× with no retries, @heavy ones 2×). Touching smoke.spec (9 slow tests) at 5× ran past the limit.
 // Tests tagged @heavy (a world built and driven under software GL: minutes each on CI) run 2×:
 // the solid-scenery spec's two at 5× ran the job past its limit.
