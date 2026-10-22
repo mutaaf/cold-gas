@@ -49,7 +49,7 @@ await page.addInitScript(() => {
   window.requestAnimationFrame = (cb) => { if (F.manual) { F.q.push(cb); return 1; } return native(cb); };
 });
 await page.goto(url);
-await page.waitForFunction(() => window.__coldgas?.stage?.ready, null, { timeout: 30000 });
+await page.waitForFunction(() => window.__coldgas?.stage?.ready, null, { timeout: 120000 });   // software GL under load boots slowly
 await page.evaluate(() => window.__coldgas.stage.ready);
 await page.evaluate(() => window.__coldgas.stage.backdrop);   // the streamed-in backdrop (src/render/rocket.js), if any
 await page.waitForTimeout(3000);   // and its lights up
