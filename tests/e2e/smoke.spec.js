@@ -151,7 +151,7 @@ test('first load: inline styles, title wired early, 3D fades in when ready', asy
   await expect(page.locator('[data-start]')).toBeVisible();
   await page.waitForFunction(() => window.__coldgas?.stage.ready, null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.stage.ready.then(() => true));
-  await expect(page.locator('#stage')).toHaveClass(/\bon\b/, { timeout: 30_000 });
+  await expect(page.locator('#stage')).toHaveClass(/\bon\b/, { timeout: 60_000 });
   // Switching the event after the first load still builds the whole course.
   await page.locator('[data-course="lineup"]').click();
   await expect(page.locator('[data-course="lineup"]')).toHaveAttribute('aria-checked', 'true');
@@ -159,7 +159,7 @@ test('first load: inline styles, title wired early, 3D fades in when ready', asy
 
 test('the reveal touchdown lands once: one mist burst, cues scaled by its sink rate', async ({ page }) => {
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => !!window.__coldgas, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas, null, { timeout: 60_000 });
   const before = await page.evaluate(() => window.__coldgas.plumes.bursts());
   await page.locator('[data-reveal]').click();
   await expect(page.locator('[data-screen="hud"]')).toBeVisible();

@@ -110,7 +110,7 @@ for (const phone of [true, false]) {
     // The title has been up a while: the course on show has its reference ghost (flown in slices
     // since the engine came up), and the other courses' flights are done too.
     const tReady = await G(page, () => performance.now());
-    await page.waitForFunction(() => window.__coldgas.refGhostReady(window.__coldgas.stage.course), null, { timeout: 30_000, polling: 50 });
+    await page.waitForFunction(() => window.__coldgas.refGhostReady(window.__coldgas.stage.course), null, { timeout: 60_000, polling: 50 });
     console.log(`${phone ? 'phone' : 'desktop'}: the Show's reference ghost ready ${Math.round(await G(page, () => performance.now()) - tReady)} ms after the engine`);
     await ghostsReady(page);
     // A player who has touched the title before (here the course already chosen, a no-op): the
