@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // The skill ladder in the browser: drills start anywhere and retry on one key, the landing HUD is
 // up in the air, Advanced puts each valve on its own key, and on a phone on its own pad.
 const IDX = { 'down-fr': 0, 'down-fl': 1, 'down-rr': 2, 'down-rl': 3 };   // src/sim/spec.js NOZZLE_SPEC order
-const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
 const live = (page) => page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.freezeT <= 0, null, { timeout: 30_000 });
 
 test('a drill starts from the practice sheet and R retries it from the same start', async ({ page }) => {

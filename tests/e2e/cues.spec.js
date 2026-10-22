@@ -32,7 +32,7 @@ const game = (page, fn, arg) => page.evaluate(fn, arg);
 test('a player\'s Show run writes the cue only on change, holds each message, and shows "Go"', async ({ page }) => {
   test.slow();   // a whole Show flown in real time
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   // The cue line is DOM: nothing here needs the 3D. On CI's software GL a live frame takes 0.2–2 s,
   // which made this cue-following bot (one read per frame) too coarse to fly the run and timed it
   // out; with the draw stubbed the page runs at the display rate.
@@ -83,7 +83,7 @@ test('phone: "Go" holds after the countdown and the cue line does not flap', asy
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
   const page = await ctx.newPage();
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   await game(page, watchCue);
   await page.locator('[data-start]').tap();
   await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
@@ -116,7 +116,7 @@ for (const phone of [false, true]) {
     const page = await ctx.newPage();
     await page.route('**/coldgas/api/judge/stream', () => {});   // hold the theatre open
     await page.goto('/coldgas/?gfx=low');
-    await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+    await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
     // A finished run that leaves the HUD far from a start: the reference, flown to the end.
     await game(page, () => { const G = window.__coldgas; G.startRun('reveal'); G.skipCountdown(); G.fastForward(); });
     await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });

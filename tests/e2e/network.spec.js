@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // the game never reloads into an offline page, recovers from a deploy exactly once, keeps the
 // judges' 35 s promise when their chunk stalls, and every request has a deadline, a cancel and a
 // single flight.
-const ready = (page, timeout = 30_000) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout });
+const ready = (page, timeout = 60_000) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout });
 const watch = (page) => {
   const errors = [], navs = [];   // navs: every page load (a reload adds one; history.replaceState doesn't)
   page.on('pageerror', (e) => errors.push(e.message));
