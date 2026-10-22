@@ -44,8 +44,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-        timeout-minutes: 10   # an apt mirror once hung this step for the job's whole 35 minutes
+      # The runner's apt mirror hangs now and then (once for a job's whole 35 minutes): try three
+      # times, four minutes each, instead of waiting it out.
+      - run: for i in 1 2 3; do timeout 240 npx playwright install --with-deps chromium && exit 0; echo "browser install attempt $i stalled; retrying"; done; exit 1
+        timeout-minutes: 14
       - run: npx playwright test --shard=${{ matrix.shard }}/3
       - uses: actions/upload-artifact@v4
         if: failure()
@@ -73,8 +75,10 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      - run: npx playwright install --with-deps chromium
-        timeout-minutes: 10   # an apt mirror once hung this step for the job's whole 35 minutes
+      # The runner's apt mirror hangs now and then (once for a job's whole 35 minutes): try three
+      # times, four minutes each, instead of waiting it out.
+      - run: for i in 1 2 3; do timeout 240 npx playwright install --with-deps chromium && exit 0; echo "browser install attempt $i stalled; retrying"; done; exit 1
+        timeout-minutes: 14
       - if: hashFiles('scripts/e2e-repeat-changed.mjs') != ''
         run: node scripts/e2e-repeat-changed.mjs
         env:
