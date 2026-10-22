@@ -1,12 +1,12 @@
 ---
 id: 0066
 title: One driving setting, Easy to Advanced, the same in every mode
-status: ready
+status: shipped
 priority: P0
 size: L
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 75
 by: operator
 ---
 
@@ -47,16 +47,16 @@ Default: Easy on a touch-first device with no saved choice (a phone player has a
 pedals), Standard elsewhere (a keyboard or pad player gets the feel the game was tuned and gated on).
 
 ## Acceptance criteria
-- [ ] A Driving control labelled Easy / Standard / Advanced in the existing settings UI, keyboard-accessible
+- [x] A Driving control labelled Easy / Standard / Advanced in the existing settings UI, keyboard-accessible
       (radiogroup, arrow keys), remembered per device (try/catch storage), reachable in Free Drive
-- [ ] Default Easy on touch-first devices with no saved choice, Standard on desktop
-- [ ] Standard is today's driving: hands output identical, `node scripts/ref-hash.mjs` unchanged, no SIM_VERSION bump
-- [ ] `node scripts/drive-feel.mjs levels`: Easy has ≥ 50 % fewer spins + off-road excursions than today's Assist
+- [x] Default Easy on touch-first devices with no saved choice, Standard on desktop
+- [x] Standard is today's driving: hands output identical, `node scripts/ref-hash.mjs` unchanged, no SIM_VERSION bump
+- [x] `node scripts/drive-feel.mjs levels`: Easy has ≥ 50 % fewer spins + off-road excursions than today's Assist
       for the scripted naive driver, keyboard and touch stick, over the four roads
-- [ ] Advanced reaches a higher cornering g and/or a faster segment time than Standard for the skilled scripted driver
-- [ ] Unit tests (tests/unit/driving-levels.test.js) for the mapping; e2e (tests/e2e/driving-levels.spec.js):
+- [x] Advanced reaches a higher cornering g and/or a faster segment time than Standard for the skilled scripted driver
+- [x] Unit tests (tests/unit/driving-levels.test.js) for the mapping; e2e (tests/e2e/driving-levels.spec.js):
       the setting persists and changes behaviour in Free Drive and on the Show run-up
-- [ ] naive-players 32/32; lint, unit, build, the touched e2e specs green
+- [x] naive-players 32/32; lint, unit, build, the touched e2e specs green
 
 ## Test plan
 tests/unit/driving-levels.test.js, tests/e2e/driving-levels.spec.js, `node scripts/drive-feel.mjs levels`,
