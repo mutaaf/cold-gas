@@ -44,9 +44,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # The runner's apt mirror hangs now and then (once for a job's whole 35 minutes): try three
-      # times, four minutes each, instead of waiting it out.
-      - run: for i in 1 2 3; do timeout 240 npx playwright install --with-deps chromium && exit 0; echo "browser install attempt $i stalled; retrying"; done; exit 1
+      # The browser only: the runner image ships Chrome, so Chromium's system libraries are already
+      # there. The apt mirror behind --with-deps hung one job for 35 minutes and failed three
+      # outright (exit 100); it is the fallback now, only if the browser won't launch without it.
+      - run: |
+          npx playwright install chromium
+          node -e "require('@playwright/test').chromium.launch().then((b) => b.close())" && exit 0
+          for i in 1 2 3; do timeout 240 npx playwright install --with-deps chromium && exit 0; echo "browser deps attempt $i failed; retrying"; done; exit 1
         timeout-minutes: 14
       - run: npx playwright test --shard=${{ matrix.shard }}/3
       - uses: actions/upload-artifact@v4
@@ -75,9 +79,13 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
-      # The runner's apt mirror hangs now and then (once for a job's whole 35 minutes): try three
-      # times, four minutes each, instead of waiting it out.
-      - run: for i in 1 2 3; do timeout 240 npx playwright install --with-deps chromium && exit 0; echo "browser install attempt $i stalled; retrying"; done; exit 1
+      # The browser only: the runner image ships Chrome, so Chromium's system libraries are already
+      # there. The apt mirror behind --with-deps hung one job for 35 minutes and failed three
+      # outright (exit 100); it is the fallback now, only if the browser won't launch without it.
+      - run: |
+          npx playwright install chromium
+          node -e "require('@playwright/test').chromium.launch().then((b) => b.close())" && exit 0
+          for i in 1 2 3; do timeout 240 npx playwright install --with-deps chromium && exit 0; echo "browser deps attempt $i failed; retrying"; done; exit 1
         timeout-minutes: 14
       - if: hashFiles('scripts/e2e-repeat-changed.mjs') != ''
         run: node scripts/e2e-repeat-changed.mjs
