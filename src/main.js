@@ -27,7 +27,7 @@ import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
-import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad } from './input.js';
+import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, pollPads, heldState } from './input.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { thumbStage } from './onethumb.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
@@ -243,7 +243,7 @@ function startRunNow(kind = 'jump', quick = false) {
   landing.show(false);
   getNozzlePad().show(false);
   director.setView(S.pilotView ? 'pilot' : 'broadcast');
-  ui.touch.hidden = !(coarse || usingTouch()) || !!S.autopilot;
+  ui.touch.hidden = !usingTouch() || !!S.autopilot;
   syncScheme();
   plumes.clear();
   crash.reset();
@@ -568,7 +568,13 @@ ctlScreen.querySelector('[data-controls-close]').addEventListener('click', () =>
 for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
 document.addEventListener('dblclick', (e) => { if (!e.target.closest?.('input, textarea')) e.preventDefault(); }, { passive: false });
 
-const kbd = (touchLabel, keyLabel) => `<kbd>${usingTouch() ? touchLabel : keyLabel}</kbd>`;
+// The cue's glyph follows the device last used: the touch button, the key, or the pad's button.
+const PAD_GLYPH = { '↑': 'RT', Space: 'A', Shift: 'B', F: 'RB', '← →': 'stick', 'A or D': 'LB or RB' };
+const kbd = (touchLabel, keyLabel) => {
+  const dev = lastDevice();
+  const pad = dev === 'pad' ? (keyLabel === 'F' && S.tier === 'advanced' ? 'A' : PAD_GLYPH[keyLabel]) : null;
+  return `<kbd>${dev === 'touch' ? touchLabel : pad || keyLabel}</kbd>`;
+};
 // The cues teach the sequence for the tier you fly. With Assist: release, then hold BOOST and LAND
 // together (the computer caps the carry and rolls you out). Pro and Advanced fly by the HUD: roll
 // out by the dial, brake at the BRAKE line.
@@ -679,6 +685,7 @@ function frame(now) {
 function frameBody(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
+  pollPads();   // a pad in use becomes the device; Start pauses (and resumes)
   if (!S.paused) {
     // A crash's slow-motion beat scales the game clock (live and replay); the effects run on it too.
     const slow = S.mode === 'live' || S.mode === 'results' || S.mode === 'replay' ? crash.timeScale() : 1;
@@ -718,15 +725,23 @@ function frameBody(now) {
 
 // --- Wiring ---------------------------------------------------------------------------------
 function pause(on) {
-  if (S.mode === 'drive') { fd().pause(on ?? !fd().paused); return; }
+  if (S.mode === 'drive') { on ??= !fd().paused; if (on) resetInput(); fd().pause(on); return; }
   on ??= !S.paused;
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
+  if (on) resetInput();   // nothing held comes back held from the pause sheet
   S.paused = on;
   ui.show('pause', on);
   lastT = performance.now();
 }
 
-bindInput(document.body, { onPause: () => pause() });
+bindInput(document.body, { onPause: () => pause(), running: () => S.mode === 'live' || S.mode === 'countdown' });
+// The device changed mid-run (a key or a pad on an iPad, a finger on a touchscreen laptop): the touch
+// controls follow it, and one-thumb with them (thumbActive reads the overlay).
+onDevice(() => {
+  if (S.mode !== 'live' && S.mode !== 'countdown') return;
+  ui.touch.hidden = !usingTouch() || !!S.autopilot;
+  syncScheme();
+});
 const on = (sel, fn) => document.querySelectorAll(sel).forEach((el) => el.addEventListener('click', fn));
 on('[data-start]', () => startRun('jump'));
 on('[data-reveal]', () => startRun('reveal'));
@@ -861,7 +876,7 @@ function startDrillNow(id) {
   document.querySelector('[data-drill-name]').textContent = `${drill.n} ${drill.label}`;
   document.querySelector('[data-drill-n]').textContent = drill.n;
   unitText(document.querySelector('[data-drill-goal]'), drill.goal);
-  ui.touch.hidden = !(coarse || usingTouch());
+  ui.touch.hidden = !usingTouch();
   syncScheme();
   plumes.clear();
   crash.reset();
@@ -1028,6 +1043,6 @@ function fastForward() {
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false) });
-window.__coldgas = { S, stage, physicsReady, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 Object.assign(window.__coldgas, { obs, heal });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

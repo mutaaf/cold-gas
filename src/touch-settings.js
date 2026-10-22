@@ -57,7 +57,10 @@ export async function enableTilt() {
   const DOE = typeof DeviceOrientationEvent !== 'undefined' ? DeviceOrientationEvent : null;
   if (!DOE) return false;
   if (typeof DOE.requestPermission === 'function') {
-    try { if ((await DOE.requestPermission()) !== 'granted') return false; } catch { return false; }
+    let answer;
+    try { answer = await DOE.requestPermission(); } catch { return false; }
+    // Refused: iOS won't ask again, so the setting says Off rather than On-but-dead.
+    if (answer !== 'granted') { if (answer === 'denied' && settings.tilt) setSetting('tilt', false); return false; }
   }
   listen(true);
   setSetting('tilt', true);
@@ -70,3 +73,15 @@ export const tiltSeen = () => tilt.seen;
 export const tiltSteer = () => (settings.tilt && tilt.listening ? tilt.value : 0);
 // A saved "on" still needs the listener (Android needs no prompt; iOS asks again on the next tap).
 if (settings.tilt && typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission !== 'function') listen(true);
+// On iOS a saved "on" isn't granted after a reload: the permission prompt must come from a tap, so the
+// next Jump (or Retry) asks. requestPermission is called inside the click, before any await.
+export const tiltNeedsGrant = () => !!settings.tilt && !tilt.listening;
+export function armTiltGrant(doc = typeof document !== 'undefined' ? document : null) {
+  doc?.addEventListener('click', (e) => {
+    if (tiltNeedsGrant() && e.target?.closest?.('[data-start], [data-again], [data-drill-again], [data-drill-retry]')) enableTilt();
+  }, true);
+}
+// Turning the phone round changes which axis is roll and where level is: zero again on the next reading.
+function rezero() { tilt.needZero = true; tilt.value = 0; }
+if (typeof screen !== 'undefined' && screen.orientation?.addEventListener) screen.orientation.addEventListener('change', rezero);
+else if (typeof addEventListener === 'function') addEventListener('orientationchange', rezero);
