@@ -138,8 +138,11 @@ for (const [name, opts] of [['phone portrait', { viewport: { width: 390, height:
   });
 }
 
-test('Free Drive: the minimap opens the full map, a tap reads the road, Escape closes it without pausing', async ({ page }) => {
-  test.slow();   // building a road world on CI's software GL takes a while
+test('@heavy Free Drive: the minimap opens the full map, a tap reads the road, Escape closes it without pausing', async ({ page }) => {
+  // Building a road world on CI's software GL takes a while: 2.1 min locally, and on a slow runner
+  // (a 22-minute suite instead of 15) it ran past test.slow()'s 3 minutes twice in a row on PR #63.
+  // Five minutes, and @heavy so the flake guard runs it 2×, like the other built-world tests.
+  test.setTimeout(300_000);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/coldgas/?gfx=low&drive=stelvio');
