@@ -1,0 +1,57 @@
+---
+id: 0063
+title: The drop off the ledge stays in frame, clear of the top bar and the timeline
+status: ready
+priority: P1
+size: S
+lens: player-feel
+created: 2026-10-22
+pr:
+by: critic
+---
+
+## Why
+The release (the car letting go of the inverted ledge and falling away) is the moment the whole Show
+builds to, and on production it happens behind the HUD. Measured 2026-10-22 on production (81899cb),
+the Show reference, the hero's projected centre (`carRoot` through `camera`) sampled every rendered
+frame (docs/critique/2026-10-22-0400.md):
+
+- **1440×900: the car's centre is above the bottom of the phase timeline (y 129 px) in 10 of 41 air
+  frames (24 %)**, at y 66–91 px for the first ≈ 0.9 s after the release. `desk-4-release.jpg`: the car
+  is drawn behind "03 HANG · 04 RELEASE", the top third of it cut by the frame edge, while the lower
+  70 % of the frame is empty ground and sky.
+- **390×844 portrait: 9 of 41 air frames (22 %)** under the mission block (bottom y 112 px), centre at
+  y 62–85 px, i.e. behind the Retry button and the timeline dots. `phone-4-release.jpg` and
+  `phone-C1-rolling.jpg` show the car half off the top edge.
+
+Cause: the Show's carry camera aims at 55 % of the car's height (`src/render/director.js:155-159`,
+`lookWant.y = carPos.y * 0.55 + 0.8`) from a camera capped at 10 m, so at the 27 m release the car sits
+near the top edge until it has fallen about 10 m. The run-2 livestream kept the falling car mid-frame.
+
+## What
+- `src/render/director.js` (Show carry, and the Wall's "fall and roll" rig if it shows the same):
+  aim so the car's projected centre stays inside a safe band below the top HUD (the mission block's
+  bottom + a margin) and above the strip, e.g. look nearer the car's height early in the fall and ease
+  toward the roofs as it descends, or raise the camera's cap. Keep the roofs of the row in frame over
+  the row (the reason the low rig exists).
+- No sim change. The replay rigs are out of scope unless they share the code.
+
+## Acceptance criteria
+- [ ] A probe (the critique's: project `__coldgas.carRoot` with `__coldgas.camera` each frame, compare
+      with `[data-hud-box=mission]` and `.top-actions` rects) through the Show reference: the car's
+      centre is below the mission block's bottom + 24 px in **100 %** of air frames at 1440×900,
+      1280×720, 390×844 and 844×390.
+- [ ] Over the row (car z between the row's ends) at least one parked roof is still in frame at
+      1440×900 and 390×844 (screenshot in the PR).
+- [ ] 0026's occlusion bar is not made worse: frames with the car's centre inside `.h-strip` at 390×844
+      do not increase.
+- [ ] Before/after screenshots of release + 0.5 s at 1440×900 and 390×844 in the PR.
+- [ ] `flicker.mjs` regions unchanged or lower for show-* scenarios.
+
+## Test plan
+Add the in-frame probe as an e2e (phone and desktop projects) stepping the reference with
+`liveStep` after `physicsReady()` (LESSONS: it is a function), reading the director's camera after each
+step. Tag `@heavy` if it flies the whole reference under software GL.
+
+## Out of scope
+The strip covering the car on portrait phones (0026), the title and replay cameras.
