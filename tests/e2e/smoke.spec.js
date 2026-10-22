@@ -188,7 +188,7 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
   await page.evaluate(() => {
     const g = window.__coldgas;
     g.startRun('reveal');
-    g.S.autopilot = g.createAutopilot('lineup', { speed: 9, apex: 3.8, rolls: 2 });
+    g.S.autopilot = g.createAutopilot('lineup', { speed: 9, apex: 2.8, rolls: 2 });   // (3.8 before SIM_VERSION 26: Assist's auto-land caught it)
     g.skipCountdown();
   });
   await page.evaluate(() => window.__coldgas.fastForward());   // the whole run in one go, not at software GL's pace

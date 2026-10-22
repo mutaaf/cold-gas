@@ -761,6 +761,8 @@ function cues(run, c) {
     const boostCue = show && run.phase === 'air' && !run.t.crossedRow && cueHys.slow && c.pos.z > COURSES.show.rowNear;
     if (tier === 'assist') {
       if (boostCue) return ui.cue_(`Hold ${kbd('BOOST', 'F')} + ${kbd('LAND', 'Shift')} · over the row`, 400);
+      // Assist's auto-land (src/sim/vehicle.js): LAND came too late to stop, so the computer started it.
+      if (run.phase === 'air' && c.autoLand) return ui.cue_(`Auto-LAND · braking for you · ${kbd('LAND', 'Shift')} next time`, 500);
       if (run.phase === 'air') return ui.cue_(`Hold ${kbd('LAND', 'Shift')}: it rolls you out and brakes`, 500);
       return;
     }
@@ -784,6 +786,7 @@ function thumbCues(run, c, v) {
   if (run.phase === 'ramp' && !S.released) return ui.cue_(run.t.progress >= 0.92 ? 'On the ledge · tap to let go' : 'Up the curl on suction', 600);
   if (run.phase === 'air' || S.released) {
     if (run.course === 'show' && !run.t.crossedRow && c.pos.z > COURSES.show.rowNear) return ui.cue_('Carrying you over the row', 500);
+    if (!held && c.autoLand) return ui.cue_('Auto-land · braking for you', 500);
     if (!held) return ui.cue_('Hold to land: it rolls you out and brakes', 500);
   }
 }

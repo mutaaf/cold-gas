@@ -17,6 +17,8 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // by the energy a contact puts into it; each parked vehicle is a 3D rigid body with its own mass,
 // CoM and inertia on four suspended, parked tyres (it rocks, slides, tips and rolls); every collider
 // has its own material (deck, pad, steel, paint); replay frames carry each body's full 3D pose.
+// v26: Assist's auto-land starts LAND at the last stop that fits when the player hasn't, and LAND
+// carries over a parked row at 7 m/s on the rear jets (ticket 0067).
 // v16: tyres build side force over a relaxation length (σ ≈ 0.35 m front, 0.4 m rear, √load).
 // v18: LAND's set-down follows the fall it ends (none after the kickflip), the Lineup mark just
 // past the row (0014).
@@ -47,7 +49,7 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // one that drives out to the pad didn't meet anything there before.
 // v25: "on the Wall" is the Wall's footprint (|x| < width/2 + 2 m): the 3 m pad read as the Wall, and a
 // drive up onto it ended the run as a landing.
-export const SIM_VERSION = 25;
+export const SIM_VERSION = 26;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 export const G_WIN = 120;               // 0.5 s of ticks: the braking peak's averaging window

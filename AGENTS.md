@@ -148,7 +148,7 @@ src/sim/              PURE, shared with the Worker:
   vehicle.js            physics v3: 6-DOF body (its contacts in the engine), raycast suspension, Pacejka tyres
                           with implicit wheel spin, TC/ABS, stiction, 2 g suction fan, cold-gas
                           nozzles with blowdown, mixer, flight computer (Assist: rates, LAND roll-out,
-                          brake governor, line hold, envelope, crawl and carry limits / Pro: rates /
+                          brake governor, auto-land, carry over the row, line hold, envelope, crawl and carry limits / Pro: rates /
                           Advanced: `manual`, valves straight to the nozzles)
   run.js                one attempt: input log (23 channels: 12, `manual`, ten valves; 12-channel
                           logs still verify), tier telemetry, phases drive → ramp →
