@@ -1,12 +1,12 @@
 ---
 id: 0022
 title: The reference flight's phase timeline advances past HANG, and ROLL reads attitude
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: authenticity
 created: 2026-10-21
-pr:
+pr: 63
 by: critic
 ---
 
