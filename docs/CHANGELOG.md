@@ -1,5 +1,6 @@
 # Changelog
 
+2026-10-22 · On a phone held upright, the compact HUD's SINK reading (up to "40.7 ft/s") fits inside its rail again; it ran 1 px past the edge (fixes main's CI after #79).
 2026-10-22 · #0050 · Flicker has a budget now: the flicker probe covers a live run with the jets, a retry's countdown, Free Drive and the endless road, and a gate fails any rendering change that makes a region pop 25 % more than main or blacks out the frame (no player-facing change; #86).
 2026-10-21 · #0058 · The nerds panel test waits for the panel on CI's software GL and opens it before the run starts (no player-facing change).
 2026-10-22 · Software rendering skips canvas anti-aliasing: on a machine with no usable GPU (SwiftShader, llvmpipe, WARP) the lowest graphics tier no longer pays a third of its frame rate for MSAA (the Show on SwiftShader: 6.2 → 10.8 fps). Fixes main's CI, whose e2e suite runs on SwiftShader and had slowed past its time limit after #68. No sim change.
