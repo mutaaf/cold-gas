@@ -2,7 +2,7 @@ import { test, expect, devices } from '@playwright/test';
 
 // 0037: an iPhone or iPad (Safari caps hardwareConcurrency, has no deviceMemory) boots 'mid', with
 // edge anti-aliasing after the output pass, and obs labels an iPad a tablet.
-const ready = (page) => page.waitForFunction(() => window.__coldgas?.stage?.ready, null, { timeout: 30_000 });
+const ready = (page) => page.waitForFunction(() => window.__coldgas?.stage?.ready, null, { timeout: 60_000 });
 const fourCores = () => {
   Object.defineProperty(Navigator.prototype, 'hardwareConcurrency', { get: () => 4, configurable: true });
   Object.defineProperty(Navigator.prototype, 'deviceMemory', { get: () => undefined, configurable: true });

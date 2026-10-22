@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // mode, the title tears down Free Drive and the Sandbox, and a double tap opens one Sandbox.
 // And the first Jump starts at once (0043): the reference ghost is flown on the title.
 const G = (page, fn, arg) => page.evaluate(fn, arg);
-const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
 const ghostsReady = (page) => page.waitForFunction(() => ['show', 'wall', 'lineup'].every((c) => window.__coldgas.refGhostReady(c)), null, { timeout: 60_000 });
 
 test('200 × (start → title, or retry mid-run) keeps the engine\'s memory flat', async ({ page }) => {

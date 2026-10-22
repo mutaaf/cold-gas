@@ -4,7 +4,8 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 
 export default defineConfig({
   testDir: 'tests/e2e',
-  timeout: 60_000,
+  // CI's runners vary (unit tests alone have run 1.8× slower on some): 90 s there, 60 s locally.
+  timeout: process.env.CI ? 90_000 : 60_000,
   retries: process.env.CI ? 1 : 0,
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {

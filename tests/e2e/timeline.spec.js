@@ -8,9 +8,9 @@ async function boot(page, query = '') {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto(`/coldgas/?gfx=low${query}`);
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
   // physicsReady is a function: until it says yes, startRun defers to a later task.
-  await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 60_000 });
   return errors;
 }
 

@@ -11,7 +11,7 @@ async function toResults(page) {
 test('R retries with a one-second READY (not a 3-2-1), H goes home, and the run line counts runs', async ({ page }) => {
   await page.route('**/coldgas/api/judge/stream', () => {});   // hold the theatre open
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.startRun('jump'));
   await expect(page.locator('.quick-retry')).toBeVisible();
   await toResults(page);
@@ -36,7 +36,7 @@ test('phone: Retry and Home are on the theatre and pinned under the results', as
   const page = await ctx.newPage();
   await page.route('**/coldgas/api/judge/stream', () => {});
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.startRun('jump'));
   await toResults(page);
   await page.locator('.th-quick [data-again]').tap();

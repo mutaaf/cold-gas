@@ -17,7 +17,7 @@ for (const [name, opts, must] of SIZES) {
     // Metric leads here: these read the sim's SI numbers straight (US-led is tests/e2e/instruments.spec.js).
     await page.addInitScript(() => localStorage.setItem('coldgas.units', 'metric'));
     await page.goto('/coldgas/?gfx=low');
-    await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+    await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
     await page.evaluate(async () => { await window.__coldgas.physicsReady; window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); });
     await page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.run.tick > 60, null, { timeout: 30_000 });
     const { w, h, cells, boxes } = await page.evaluate(() => {
@@ -78,7 +78,7 @@ test('HUD telemetry is wired: deck PITCH on the ledge, BLOWDOWN below the regula
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript(() => localStorage.setItem('coldgas.units', 'metric'));   // kg and bar lead
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
   await page.evaluate(async () => { await window.__coldgas.physicsReady; window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); window.__coldgas.startDrill('ledge'); });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.run.phase === 'ramp', null, { timeout: 30_000 });
   await expect.poll(async () => Number(await page.locator('[data-pitch]').textContent()), { timeout: 10_000 }).toBeGreaterThanOrEqual(165);

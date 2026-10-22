@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // Observability and self-heal (src/obs/): errors are captured with stable signatures, a lost WebGL
 // context is restored and the stage rebuilt, a physics trap stops the run instead of freezing the
 // page, and For nerds → Health shows all of it.
-const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
 const frameCount = (page) => page.evaluate(() => window.__coldgas.stage.renderer.info.render.frame);
 
 test('an injected error is captured once per signature, counted, batched and shown in Health', async ({ page }) => {
@@ -33,6 +33,8 @@ test('an injected error is captured once per signature, counted, batched and sho
   if (payload.fr) expect(payload.fr.h.reduce((a, c) => a + c, 0)).toBe(payload.fr.n);
   // For nerds → Health.
   await page.keyboard.press('Backquote');
+  // The panel is a lazy chunk, loaded behind software GL's slow frames on CI (nerds.spec waits the same way).
+  await expect(page.locator('[data-nerds]')).toHaveAttribute('aria-pressed', 'true', { timeout: 45_000 });
   await expect(page.locator('[data-k="h.errs"]')).toContainText(/\d+ · \d+ signature/, { timeout: 10_000 });
   await expect(page.locator('[data-k="h.list"]')).toContainText('injected boom');
   await expect(page.locator('[data-k="h.tier"]')).toContainText('low');

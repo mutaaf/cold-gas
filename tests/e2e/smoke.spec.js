@@ -149,7 +149,7 @@ test('first load: inline styles, title wired early, 3D fades in when ready', asy
   expect(html).not.toMatch(/<link rel="stylesheet"/);
   expect(html).toContain('<style>');
   await expect(page.locator('[data-start]')).toBeVisible();
-  await page.waitForFunction(() => window.__coldgas?.stage.ready, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.stage.ready, null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.stage.ready.then(() => true));
   await expect(page.locator('#stage')).toHaveClass(/\bon\b/, { timeout: 30_000 });
   // Switching the event after the first load still builds the whole course.
@@ -183,7 +183,7 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
   await page.goto('/coldgas/?course=lineup&gfx=low');
   await expect(page.locator('[data-start]')).toBeVisible();
   // Runs wait for the physics engine's WASM (src/sim/engine.js), fetched once the stage paints.
-  await page.waitForFunction(() => window.__coldgas?.physicsReady(), null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady(), null, { timeout: 60_000 });
   // Too low over the row and too fast: its side clips a parked body and it grinds over the roofs.
   await page.evaluate(() => {
     const g = window.__coldgas;

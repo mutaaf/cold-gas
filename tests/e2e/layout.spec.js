@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
 const touch = (width, height) => ({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 const boot = async (page, q = '') => {
   await page.goto(`/coldgas/?gfx=low${q}`);
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
 };
 const rect = (page, sel) => page.evaluate((sel) => {
   const r = document.querySelector(sel).getBoundingClientRect();
