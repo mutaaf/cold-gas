@@ -1104,20 +1104,22 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    the phase and the clock, the cells, the handle, and in the air the descent under them. The cue
    line sits at the foot of the car's band, right of the rail, above the thumbs. */
 @media (pointer: coarse) and (orientation: portrait) {
-  :root[data-hud='compact'] .hud { --rail: 100px; }
+  :root[data-hud='compact'] .hud { --rail: 120px; }   /* m + 120 stays left of the car's 37 % on a 390 px phone */
   /* The rail's head: the clock over the phase you're in. */
   :root[data-hud='compact'] .hud .h-mission { right: auto; width: var(--rail); height: 47px; grid-template-columns: auto; align-content: start; gap: 6px 0; padding: 8px 10px 0;
     border-top: 1px solid var(--line); background: rgba(5, 7, 12, 0.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   :root[data-hud='compact'] .hud .h-clock b { font-size: 14px; }
   :root[data-hud='compact'] .hud .h-strip { top: calc(var(--top) + 47px); left: calc(var(--m) + var(--safe-l)); right: auto; width: var(--rail); max-width: none; flex-direction: column; }
-  :root[data-hud='compact'] .hud .h-strip > .h-cell { flex: none; padding: 8px 10px 7px; border-left: 0; border-top: 1px solid var(--line); }
+  /* One line a cell, the label beside its value: the rail is half as tall as a stacked one. */
+  :root[data-hud='compact'] .hud .h-strip > .h-cell { flex: none; flex-wrap: nowrap; align-items: baseline; column-gap: 6px; min-height: 30px; padding: 6px 10px 5px; border-left: 0; border-top: 1px solid var(--line); white-space: nowrap; }
+  :root[data-hud='compact'] .hud .h-strip > .h-cell > .h-lbl { flex: none; }
   :root[data-hud='compact'] .hud .h-strip > .h-cell:first-child, :root[data-hud='compact'] .hud[data-air] .h-strip > .r-sink { border-top: 0; }
   :root[data-hud='compact'] .hud[data-air] .h-strip > [data-ch='alt'] { display: none; }   /* in the air the tape carries the height */
-  :root[data-hud='compact'] .hud .h-strip > .h-handle { grid-auto-flow: column; justify-content: start; gap: 8px; padding: 0 10px; border-left: 0; border-top: 1px solid var(--line); }
-  :root[data-hud='compact'] .hud .h-primary { top: calc(var(--top) + 252px); left: calc(var(--m) + var(--safe-l)); width: var(--rail); }
+  :root[data-hud='compact'] .hud .h-strip > .h-handle { grid-auto-flow: column; justify-content: start; gap: 8px; min-height: 44px; padding: 0 10px; border-left: 0; border-top: 1px solid var(--line); }
+  :root[data-hud='compact'] .hud .h-primary { top: calc(var(--top) + 196px); left: calc(var(--m) + var(--safe-l)); width: var(--rail); }   /* head 47 + three cells in the air + the handle */
   /* On the ground the car is low (below 35 % of the height): the cue line stands right of the rail's
      head. In the air the car is high: it drops to the foot of the car's band, above the thumbs. */
-  :root[data-hud='compact'] .cue { top: calc(62px + var(--safe-t)); bottom: auto; left: calc(clamp(16px, 2.4vw, 36px) + 112px + var(--safe-l)); right: calc(clamp(16px, 2.4vw, 36px) + var(--safe-r));
+  :root[data-hud='compact'] .cue { top: calc(62px + var(--safe-t)); bottom: auto; left: calc(clamp(16px, 2.4vw, 36px) + var(--rail, 120px) + 12px + var(--safe-l)); right: calc(clamp(16px, 2.4vw, 36px) + var(--safe-r));
     width: fit-content; max-width: none; margin: 0 auto; transform: none; }
   :root[data-hud='compact'] body:has([data-drill-bar]:not([hidden])) .cue { top: calc(112px + var(--safe-t)); }
   :root[data-hud='compact'] body:has(.hud[data-air]:not([hidden])) .cue { top: auto; bottom: calc(300px + var(--safe-b)); }
@@ -1127,8 +1129,8 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   :root[data-hud='compact'] body:has(.hud[data-air]:not([hidden])) .cue { bottom: calc(190px + var(--safe-b)); }   /* above slot C and the one-thumb pad, which come down here */
 }
 @media (pointer: coarse) and (orientation: portrait) and (max-height: 620px) {
-  :root[data-hud='compact'] .hud .h-strip > .h-cell { padding: 6px 10px 5px; }
-  :root[data-hud='compact'] .hud .h-primary { top: calc(var(--top) + 232px); }
+  :root[data-hud='compact'] .hud .h-strip > .h-cell { padding: 5px 10px 4px; }
+  :root[data-hud='compact'] .hud .h-primary { top: calc(var(--top) + 190px); }
   :root[data-hud='compact'] body:has(.hud[data-air]:not([hidden])) .cue { bottom: calc(184px + var(--safe-b)); }
 }
 /* Sideways the car keeps to the top 62 % (and right of 47 % of the width): the line runs along the
