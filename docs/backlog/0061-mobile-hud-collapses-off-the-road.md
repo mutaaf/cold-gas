@@ -1,12 +1,12 @@
 ---
 id: 0061
 title: On a phone the HUD collapses to one slim line off the road; one tap brings everything back
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 79
 by: operator
 ---
 
@@ -50,19 +50,19 @@ This absorbs 0026 (the strip over the car in portrait), which it replaces.
 - No sim change.
 
 ## Acceptance criteria
-- [ ] Compact, every frame of the Show's reference flight at 390×844, 844×390 and 820×1180 (touch):
+- [x] Compact, every frame of the Show's reference flight at 390×844, 844×390 and 820×1180 (touch):
       the HUD covers **≤ 12 %** of the screen and the car's projected centre is under a HUD element in
       **0 frames** (`tests/e2e/hud-collapse.spec.js`).
-- [ ] Compact, Free Drive (Stelvio, throttle held) at the same three sizes: **≤ 12 %**, **0 frames**.
-- [ ] A phone (coarse pointer) starts compact; one tap on the handle (a button, ≥ 44×44 px, in both
+- [x] Compact, Free Drive (Stelvio, throttle held) at the same three sizes: **≤ 12 %**, **0 frames**.
+- [x] A phone (coarse pointer) starts compact; one tap on the handle (a button, ≥ 44×44 px, in both
       states) shows every instrument and another folds them; the choice survives a reload; Enter on the
       focused handle and `I` toggle it; a tap leaves no focus behind.
-- [ ] A desktop starts full with today's layout (no handle); `I` folds it and the handle unfolds it.
-- [ ] Compact, a landing drill on a phone: the descent's tape, its state and the BRAKE line are
+- [x] A desktop starts full with today's layout (no handle); `I` folds it and the handle unfolds it.
+- [x] Compact, a landing drill on a phone: the descent's tape, its state and the BRAKE line are
       visible, and the touchdown ring is up.
-- [ ] `node scripts/hud-audit.mjs` (flies every viewport compact and full) and
+- [x] `node scripts/hud-audit.mjs` (flies every viewport compact and full) and
       `node scripts/title-audit.mjs`: 0 overlaps, 0 text < 11 px, 0 labels < 4.5:1.
-- [ ] Screenshots at 390×844, 844×390, 820×1180 (touch) and 1280×720, compact and full, in the Show
+- [x] Screenshots at 390×844, 844×390, 820×1180 (touch) and 1280×720, compact and full, in the Show
       and in Free Drive, checked by eye.
 
 ## Test plan
