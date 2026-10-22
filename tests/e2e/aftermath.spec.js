@@ -2,14 +2,17 @@ import { test, expect } from '@playwright/test';
 
 // Ticket 0062: a crashed car finishes its crash. When a Show run ends with the car still moving, it
 // doesn't freeze: it brakes to rest under the same physics, and the results come up after that.
-// The crash: full throttle at the Wall with no release, so the car falls off the curl and lands on
-// its roof doing ≈12 m/s (the run ends 'flipped').
+// The crash: full throttle at the Wall with no release, so the car falls off the curl. The run ends on
+// its first contact, still ≈2 m up and falling at ≈6 m/s; the aftermath plays out the rest of the fall.
+// A boot, a crash and its aftermath on software GL: CI's busy runners need the slow budget.
+test.slow();
+
 async function crashToDone(page) {
   await page.route('**/coldgas/api/judge/stream', () => {});   // hold the theatre
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.startRun('reveal'));
-  await page.waitForFunction(() => window.__coldgas.S.run, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__coldgas.S.run, null, { timeout: 30_000 });
   return page.evaluate(() => {
     const cg = window.__coldgas, S = cg.S;
     S.autopilot = () => ({ throttle: 1, assist: 1 });
@@ -48,8 +51,11 @@ test('a Show crash brakes to rest before the results: the speed falls to ~0, the
   expect(trace.at(-1).v).toBeLessThan(0.3);
   // It slid there: the drawn car moved after the run ended, and it slowed all the way.
   expect(Math.abs(last.z - end.z)).toBeGreaterThan(1);
-  const half = live.slice(Math.floor(live.length / 2));
-  expect(Math.max(...half.map((f) => f.v))).toBeLessThan(end.speed);
+  // Gravity can add speed until it touches down (the fastest frame); from there it only slows.
+  const peak = live.reduce((k, f, i) => (f.v > live[k].v ? i : k), 0);
+  const settle = live.slice(peak + Math.ceil((live.length - peak) / 2));
+  expect(settle.length).toBeGreaterThan(2);
+  expect(Math.max(...settle.map((f) => f.v))).toBeLessThan(end.speed);
   // The card is the one decided at the end of the run.
   expect(trace.at(-1).total).not.toBeNull();
   const frames = await page.evaluate(() => [window.__coldgas.S.run.frames.length, window.__coldgas.S.run.t.endTick]);
@@ -72,6 +78,6 @@ test('Retry during the aftermath starts a fresh run and gives the crashed world 
     return { mode: S.mode, fresh: S.run !== window.__oldRun, phase: S.run.phase, tick: S.run.tick, after: S.after, oldFreed: window.__oldRun.car.world.freed, card: S.card };
   });
   expect(now).toEqual({ mode: 'countdown', fresh: true, phase: 'drive', tick: 0, after: false, oldFreed: true, card: null });
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.run.tick > 0, null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.run.tick > 0, null, { timeout: 30_000 });
   expect(await page.evaluate(() => window.__coldgas.S.run.phase)).not.toBe('done');
 });

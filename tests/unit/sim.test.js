@@ -232,7 +232,8 @@ describe('judging', () => {
   });
   it('a Wall run that never leaves the wall scores low', () => {
     const run = createRun('wall');
-    const inp = { ...newInput(), throttle: 1 };
+    // Pro: in Assist the computer would start LAND itself when it falls off the ledge (0067).
+    const inp = { ...newInput(), throttle: 1, assist: 0 };
     for (let i = 0; i < 240 * 20 && run.phase !== 'done'; i++) stepRun(run, inp);
     expect(scoreRun(run.t).total).toBeLessThan(40);
   });

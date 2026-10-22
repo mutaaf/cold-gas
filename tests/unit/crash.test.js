@@ -14,11 +14,12 @@ function fly(course, opts) {
   return run;
 }
 // The reference with LAND never pressed after the release: since SIM_VERSION 14 LAND reads the
-// roofs below and sets down over the row at a walking pace, so a crash onto the row is one flown
-// without it.
+// roofs below and sets down over the row at a walking pace, and since 26 Assist starts LAND itself
+// when the player leaves it too late (0067), so a crash onto the row is one flown without the
+// computer: Pro after the release.
 const noLand = (course, opts) => {
   const ap = createAutopilot(course, opts);
-  return (run) => { const inp = ap(run); if (run.phase === 'air') inp.level = 0; return inp; };
+  return (run) => { const inp = ap(run); if (run.phase === 'air') { inp.level = 0; inp.assist = 0; } return inp; };
 };
 const events = (imp) => {
   const out = [];
@@ -97,7 +98,7 @@ describe('impact events', () => {
   });
   // Too low over the row, two rolls asked for: the car's side clips a parked body, it grinds along
   // the roofs, its bodywork folds (and Assist rights it: where it ends is chaotic, so not pinned).
-  const clip = fly('lineup', { speed: 9, apex: 3.2, rolls: 2 });   // (3.8 before SIM_VERSION 15's later brake)
+  const clip = fly('lineup', { speed: 9, apex: 2.8, rolls: 2 });   // (3.8 before SIM_VERSION 15's later brake; 3.2 before 26's auto-land)
   it('a hard clip: hits a parked body side-on, grinds, folds the bodywork, and replays bit-exactly', () => {
     expect(clip.t.contact).toBe(true);
     expect(kinds(clip.impacts, HIT).some((e) => e[2] === PART.side && e[4] >= 0)).toBe(true);
