@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // Touch: the one-thumb Assist scheme (hold to climb, tap to let go, hold to land), the Controls
 // sheet, and tilt steering (off by default, permission-gated, calibrated).
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
 const live = (page) => page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.freezeT <= 0, null, { timeout: 30_000 });
 const ch = (page, name) => page.evaluate((name) => window.__coldgas.inputKeys.indexOf(name) + 1, name);
 

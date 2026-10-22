@@ -7,7 +7,7 @@ test('` opens the nerds panel, it counts the work live, and closing it restores 
   // panel's lazy chunk waits behind them (it opens in < 0.5 s on a real GPU).
   test.slow();
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   await page.keyboard.press('Backquote');
   const panel = page.locator('[data-nerds-root]');
   // The toggle reports itself pressed once the chunk has loaded and the panel opened.

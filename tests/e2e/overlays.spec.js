@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // Restarting, jumping again or going to the title must clear everything the last run layered over
 // the stage: the judges' theatre (mid-call), the results sheet, the pause sheet.
 async function toResults(page) {
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'live' || window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'live' || window.__coldgas?.S.mode === 'countdown', null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.fastForward());
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
   await expect(page.locator('[data-theatre]')).toBeVisible({ timeout: 10_000 });

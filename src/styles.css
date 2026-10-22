@@ -631,7 +631,7 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 
 /* The cue line: one sentence on glass, under the mission header */
 .cue { position: fixed; left: 50%; top: calc(var(--cue-top, 132px) + var(--safe-t)); transform: translateX(-50%); max-width: calc(100vw - 32px); width: max-content;
-  padding: 9px 16px 8px; border-radius: 4px; border: 1px solid rgba(245, 246, 248, 0.14); background: rgba(5, 7, 12, 0.72); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  padding: 9px 16px 8px; border-radius: 4px; border: 1px solid rgba(245, 246, 248, 0.14); background: rgba(5, 7, 12, 0.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   font: 500 12px/1.45 var(--text); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); text-align: center; white-space: normal; text-shadow: none;
   pointer-events: none; opacity: 0; transition: opacity 0.35s var(--ease); z-index: 4; }
 .cue:empty { display: none; }
@@ -1003,3 +1003,157 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 @keyframes fx-ring { from { transform: scale(2.4); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
 .dmg-trail circle { fill: rgba(245, 246, 248, 0.9); }
 @media (prefers-reduced-motion: reduce) { .dmg-fx.on, .dmg-fx.on .fx-ring { animation: none; opacity: 1; } }
+
+/* --- The compact HUD (0061, src/hud-mode.js) -----------------------------------------------------
+   Phones and small tablets start with one slim line of telemetry, docked at an edge away from the car
+   and the thumbs: speed (sink in the air), altitude, G and N₂, with the phase and the clock. The
+   handle at its end (MORE ▾) brings out every instrument; on the full HUD (LESS ▴) it is a tab standing
+   on the strip's top edge sideways, and closes the mission row upright. The cue line, the descent's state and BRAKE line and the touchdown
+   ring are up in both. Colour still means state only. */
+.h-handle { display: none; flex: none; place-items: center; align-content: center; gap: 6px; min-width: 48px; height: 44px; margin: 0; padding: 0 8px;
+  border: 0; border-radius: 0; background: none; color: var(--ink); font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase;
+  pointer-events: auto; cursor: pointer; text-shadow: inherit; transition: background-color 0.2s var(--ease); }
+.hh-w { color: var(--lbl); }
+.hh-less { display: none; }
+:root[data-hud='full'] .hh-more { display: none; }
+:root[data-hud='full'] .hh-less { display: block; }
+.hh-chev { display: block; width: 12px; height: 8px; overflow: visible; fill: none; stroke: var(--ink); stroke-width: 1.4; stroke-linecap: round; stroke-linejoin: round; transition: transform 0.3s var(--ease); }
+:root[data-hud='full'] .hh-chev { transform: rotate(180deg); }
+.h-handle:hover { background-color: rgba(245, 246, 248, 0.06); }
+.h-handle:focus-visible { outline: none; box-shadow: inset 0 0 0 1px var(--ink), 0 0 0 3px rgba(245, 246, 248, 0.18); }
+.h-handle:active { background-color: rgba(245, 246, 248, 0.12); }
+@media (prefers-reduced-motion: reduce) { .hh-chev { transition: none; } }
+/* Full, on a touch screen: a tab standing on the strip's top edge at its right end. */
+@media (pointer: coarse) {
+  .hud .h-strip > .h-handle { display: grid; position: absolute; right: -1px; bottom: 100%; border: 1px solid var(--line); border-bottom: 0; border-radius: 4px 4px 0 0;
+    background: rgba(5, 7, 12, 0.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+}
+/* Full, upright: the descent's meta row runs on past its box, over the car; its second unit reads at the
+   labels' weight so it holds 4.5:1 there. */
+@media (pointer: coarse) and (orientation: portrait) {
+  .hud .d-meta .h-alt { color: var(--lbl); }
+}
+/* Full, upright on a phone or tablet: the strip's top edge belongs to the descent's meta row, so the
+   handle closes the mission row instead, top right (210 px over the strip, which sits at --top + 206;
+   the dots close up to make room). */
+@media (pointer: coarse) and (orientation: portrait) {
+  :root[data-hud='full'] .hud .h-strip > .h-handle { top: -210px; bottom: auto; right: 0; border: 1px solid var(--line); border-radius: 4px; }
+  :root[data-hud='full'] .hud .h-mission { right: calc(var(--m) + 56px + var(--safe-r)); }
+  :root[data-hud='full'] .hud .h-timeline li { width: min(34px, calc((100vw - 2 * var(--m) - 206px) / 7)); }
+}
+@media (pointer: coarse) and (orientation: portrait) and (max-height: 620px) {
+  :root[data-hud='full'] .hud .h-strip > .h-handle { top: -184px; }   /* the strip sits at --top + 180 here */
+}
+/* A tablet upright: the strip stops short of the right edge, so the tab hangs under its right end
+   (the dial owns the corner above it) and the cue line steps down past it. */
+@media (pointer: coarse) and (orientation: portrait) and (min-width: 600px) {
+  :root[data-hud='full'] .hud .h-strip > .h-handle { top: 100%; bottom: auto; border: 1px solid var(--line); border-top: 0; border-radius: 0 0 4px 4px; }
+  :root[data-hud='full'] .hud .h-mission { right: calc(var(--m) + var(--safe-r)); }
+  :root[data-hud='full'] .hud .h-timeline li { width: min(34px, calc((100vw - 2 * var(--m) - 150px) / 7)); }
+  :root[data-hud='full'] .cue { --cue-top: 460px; }
+  :root[data-hud='full'] body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 496px; }
+}
+/* Compact, everywhere (a desktop gets here with I): the line, the clock with only the phase you're in,
+   the descent as its tape over its state. */
+:root[data-hud='compact'] .hud :is(.h-att, .h-vehicle, .h-primary .speed) { display: none; }
+:root[data-hud='compact'] .hud .h-strip :is(.h-alt, .n2-bar) { display: none; }
+:root[data-hud='compact'] .hud .h-strip { display: flex; flex-wrap: nowrap; align-items: stretch; row-gap: 0; grid-template-columns: none; }
+:root[data-hud='compact'] .hud .h-strip > .h-cell { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; align-content: flex-start; column-gap: 4px; row-gap: 5px;
+  padding: 8px 12px 7px; grid-column: auto; grid-row: auto; border-left: 1px solid var(--line); }
+:root[data-hud='compact'] .hud .h-strip > .h-cell:first-child, :root[data-hud='compact'] .hud[data-air] .h-strip > [data-ch='alt'] { border-left: 0; }
+/* (After the cell's display, and as specific: what the line leaves out.) */
+:root[data-hud='compact'] .hud .h-strip > :is(.h-pitch, .r-fan), :root[data-hud='compact'] .hud:not([data-air]) .h-strip > .r-sink,
+:root[data-hud='compact'] .hud[data-air] .h-strip > [data-ch='spd'] { display: none; }
+:root[data-hud='compact'] .hud .h-strip > .h-cell > .h-lbl { flex: 0 0 100%; }
+:root[data-hud='compact'] .hud .h-strip .n2-st { display: none; }
+:root[data-hud='compact'] .hud .h-strip .tank[data-gas='blowdown'] .h-lbl { color: var(--caution); }   /* below the regulator: N₂ goes amber (the word is in the full set) */
+:root[data-hud='compact'] .hud .h-strip > .h-cell b { font-size: 16px; }
+:root[data-hud='compact'] .hud .h-strip > .h-handle { display: grid; position: static; height: auto; min-height: 44px; border: 0; border-left: 1px solid var(--line); border-radius: 0;
+  background: none; -webkit-backdrop-filter: none; backdrop-filter: none; }
+/* The sink in the line wears the descent's band (amber: brake; red: past stopping). */
+:root[data-hud='compact'] .hud:has(.descent[data-status='amber']) .r-sink :is(b, .h-unit) { color: var(--caution); }
+:root[data-hud='compact'] .hud:has(.descent[data-status='red']) .r-sink :is(b, .h-unit) { color: var(--warn); }
+:root[data-hud='compact'] .hud .h-mission { grid-template-columns: auto auto; align-items: baseline; justify-items: start; gap: 0 12px; padding-bottom: 0; }
+:root[data-hud='compact'] .hud .h-timeline li:not([data-state='now']) { display: none; }
+:root[data-hud='compact'] .hud .h-timeline li { display: block; width: auto; }
+:root[data-hud='compact'] .hud .h-timeline li::before, :root[data-hud='compact'] .hud .h-timeline i { display: none; }
+:root[data-hud='compact'] .hud .h-timeline li span { position: static; visibility: visible; transform: none; }
+:root[data-hud='compact'] .hud .descent { grid-template-columns: auto; grid-template-areas: 'tape' 'meta'; gap: 6px 0; align-items: start; justify-content: start; justify-items: start; }
+:root[data-hud='compact'] .hud .d-main { display: contents; }
+:root[data-hud='compact'] .hud .d-sink, :root[data-hud='compact'] .hud .d-meta .d-row { display: none; }
+:root[data-hud='compact'] .hud .d-meta { grid-area: meta; display: grid; justify-items: start; width: auto; }
+:root[data-hud='compact'] .hud .d-tape { grid-area: tape; width: 64px; height: 116px; margin: 0; }
+:root[data-hud='compact'] .hud .d-tape text { font-size: 16px; }   /* 11.4 px on screen at this scale */
+:root[data-hud='compact'] .hud .d-bd { display: none; }   /* the tape keeps the word BRAKE; the distance is in the full set */
+/* The descent on glass, like the line: tape over state. */
+:root[data-hud='compact'] .hud .h-primary { justify-items: start; width: 100px; padding: 8px 10px 9px; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  background: rgba(5, 7, 12, 0.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+:root[data-hud='compact'] .hud .h-primary:not(:has(.descent:not([hidden]))) { display: none; }
+:root[data-hud='compact'] .hud .h-primary::before { display: none; }
+:root[data-hud='compact'] .hud .d-state { max-width: 100%; white-space: normal; line-height: 1.35; }
+/* A desktop folded with I: the phase and the clock as a tab on the line at the bottom, the descent at
+   the left (the air cam flies the car through the top of the frame). */
+@media not (pointer: coarse) {
+  :root[data-hud='compact'] .hud .h-mission { top: auto; bottom: calc(22px + 49px + var(--safe-b)); padding: 7px 12px 6px; border: 1px solid var(--line); border-bottom: 0;
+    border-radius: 4px 4px 0 0; background: rgba(5, 7, 12, 0.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  :root[data-hud='compact'] .hud .h-primary { left: calc(var(--m) + var(--safe-l)); transform: none; }
+}
+/* Where the car isn't (measured: carRoot through the camera, every frame of the reference flight,
+   tests/e2e/hud-collapse.spec.js). Upright, the car's centre stays right of 37 % of the width at every
+   height and flies up to the top edge in the air, so the line stands on the left edge as a rail:
+   the phase and the clock, the cells, the handle, and in the air the descent under them. The cue
+   line sits at the foot of the car's band, right of the rail, above the thumbs. */
+@media (pointer: coarse) and (orientation: portrait) {
+  :root[data-hud='compact'] .hud { --rail: 120px; }   /* m + 120 stays left of the car's 37 % on a 390 px phone */
+  /* The rail's head: the clock over the phase you're in. */
+  :root[data-hud='compact'] .hud .h-mission { right: auto; width: var(--rail); height: 47px; grid-template-columns: auto; align-content: start; gap: 6px 0; padding: 8px 10px 0;
+    border-top: 1px solid var(--line); background: rgba(5, 7, 12, 0.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  :root[data-hud='compact'] .hud .h-clock b { font-size: 14px; }
+  :root[data-hud='compact'] .hud .h-strip { top: calc(var(--top) + 47px); left: calc(var(--m) + var(--safe-l)); right: auto; width: var(--rail); max-width: none; flex-direction: column; }
+  /* One line a cell, the label beside its value: the rail is half as tall as a stacked one. */
+  :root[data-hud='compact'] .hud .h-strip > .h-cell { flex: none; flex-wrap: nowrap; align-items: baseline; column-gap: 6px; min-height: 30px; padding: 6px 10px 5px; border-left: 0; border-top: 1px solid var(--line); white-space: nowrap; }
+  :root[data-hud='compact'] .hud .h-strip > .h-cell > .h-lbl { flex: none; }
+  :root[data-hud='compact'] .hud .h-strip > .h-cell:first-child, :root[data-hud='compact'] .hud[data-air] .h-strip > .r-sink { border-top: 0; }
+  :root[data-hud='compact'] .hud[data-air] .h-strip > [data-ch='alt'] { display: none; }   /* in the air the tape carries the height */
+  :root[data-hud='compact'] .hud .h-strip > .h-handle { grid-auto-flow: column; justify-content: start; gap: 8px; min-height: 44px; padding: 0 10px; border-left: 0; border-top: 1px solid var(--line); }
+  :root[data-hud='compact'] .hud .h-primary { top: calc(var(--top) + 196px); left: calc(var(--m) + var(--safe-l)); width: var(--rail); }   /* head 47 + three cells in the air + the handle */
+  /* On the ground the car is low (below 35 % of the height): the cue line stands right of the rail's
+     head. In the air the car is high: it drops to the foot of the car's band, above the thumbs. */
+  :root[data-hud='compact'] .cue { top: calc(62px + var(--safe-t)); bottom: auto; left: calc(clamp(16px, 2.4vw, 36px) + var(--rail, 120px) + 12px + var(--safe-l)); right: calc(clamp(16px, 2.4vw, 36px) + var(--safe-r));
+    width: fit-content; max-width: none; margin: 0 auto; transform: none; }
+  :root[data-hud='compact'] body:has([data-drill-bar]:not([hidden])) .cue { top: calc(112px + var(--safe-t)); }
+  :root[data-hud='compact'] body:has(.hud[data-air]:not([hidden])) .cue { top: auto; bottom: calc(300px + var(--safe-b)); }
+  :root[data-hud='compact'] .hud .h-scrim-top { height: calc(var(--top) + 80px); }
+}
+@media (pointer: coarse) and (orientation: portrait) and (max-height: 740px) {
+  :root[data-hud='compact'] body:has(.hud[data-air]:not([hidden])) .cue { bottom: calc(190px + var(--safe-b)); }   /* above slot C and the one-thumb pad, which come down here */
+}
+@media (pointer: coarse) and (orientation: portrait) and (max-height: 620px) {
+  :root[data-hud='compact'] .hud .h-strip > .h-cell { padding: 5px 10px 4px; }
+  :root[data-hud='compact'] .hud .h-primary { top: calc(var(--top) + 190px); }
+  :root[data-hud='compact'] body:has(.hud[data-air]:not([hidden])) .cue { bottom: calc(184px + var(--safe-b)); }
+}
+/* Sideways the car keeps to the top 62 % (and right of 47 % of the width): the line runs along the
+   bottom between the stick and the right thumb, the phase and the clock just above it, the cue line
+   above them; the descent stays top left. */
+@media (pointer: coarse) and (orientation: landscape) {
+  /* A band from the stick to the right thumb, like the full strip; a notch can leave it under 330 px,
+     and then G steps out (it comes back with MORE). */
+  :root[data-hud='compact'] .hud .h-strip { container-type: inline-size; }
+  :root[data-hud='compact'] .hud .h-strip > .h-cell { padding: 7px 8px 6px; }
+  :root[data-hud='compact'] .hud[data-air] .h-strip > [data-ch='alt'] { display: none; }   /* in the air the tape carries the height */
+  :root[data-hud='compact'] .hud[data-air] .h-strip > .r-sink { border-left: 0; }
+  /* The phase and the clock: a tab standing on the line, as LESS stands on the full strip. */
+  :root[data-hud='compact'] .hud .h-mission { top: auto; bottom: calc(12px + var(--line-h, 47px) + var(--safe-b)); left: calc(168px + var(--safe-l)); right: calc(271px + var(--safe-r));
+    padding: 7px 12px 6px; border: 1px solid var(--line); border-bottom: 0; border-radius: 4px 4px 0 0; background: rgba(5, 7, 12, 0.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+  :root[data-hud='compact'] .cue { top: auto; bottom: calc(100px + var(--safe-b)); left: calc(168px + var(--safe-l)); right: calc(271px + var(--safe-r)); }
+  :root[data-hud='compact'] .hud .h-scrim-top { height: calc(var(--top) + 200px); }
+  :root[data-hud='compact'] .hud .h-scrim-bot { height: 34vh; }
+}
+@container (max-width: 330px) {
+  :root[data-hud='compact'] .hud .h-strip > [data-ch='g'] { display: none; }
+}
+@media (pointer: coarse) and (orientation: landscape) and (min-height: 700px) {
+  :root[data-hud='compact'] .hud .h-mission { bottom: calc(18px + var(--line-h, 47px) + var(--safe-b)); left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
+  :root[data-hud='compact'] .cue { bottom: calc(106px + var(--safe-b)); left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
+}

@@ -4,6 +4,7 @@
 import { OSM_CREDIT } from './manifest.js';
 import { createMinimap, createMapOverlay } from './minimap.js';
 import { fmtRoad, fmtLen, one, k as uk, u as uu, onUnits, unitText } from '../units.js';
+import { hudToggleHtml } from '../hud-mode.js';
 
 const fmtInt = (n) => Math.round(n).toLocaleString('en-US');
 const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -122,7 +123,8 @@ export function randomSeed() {
 // distance swap the leading unit system (both are always shown); the timer opens its splits (each
 // quarter of the route against your best, or each mile / kilometre on the endless road); the grade
 // opens the steepest so far; the map opens the full map (src/drive/minimap.js). Text changes only
-// when the rounded value does; canvases redraw only when due.
+// when the rounded value does; canvases redraw only when due. The speed, the stats and the handle
+// share .fd-dash: on a phone in the compact HUD (src/hud-mode.js) they are one line.
 function driveHud(root, road, info, h, endless) {
   const total = endless ? 0 : road.length;
   root.innerHTML = `
@@ -140,12 +142,17 @@ function driveHud(root, road, info, h, endless) {
       <button type="button" class="chip" data-h-exit title="Leave Free Drive (Esc)">Exit</button>
     </div>
     <div class="fd-timer h-tap${endless ? ' running' : ''}" data-h-timer role="button" tabindex="0" aria-haspopup="dialog" aria-label="Timer: show the splits"><b data-h-time>0:00.0</b><span data-h-best>${endless ? 'Driving' : ''}</span></div>
+    <div class="fd-dash">
     <div class="fd-speed h-tap" data-units role="button" tabindex="0" aria-label="Speed: swap the leading units (U)"><b data-h-speed>0</b><span data-u="speed">mph</span><i class="fd-alt" data-h-speed2>0 km/h</i></div>
+    <div class="fd-row">
     <dl class="fd-stats">
       <div class="h-tap" data-units role="button" tabindex="0" aria-label="Elevation: swap the leading units (U)"><dt>Elevation</dt><dd><b data-h-ele>0</b> <span data-u="len">ft</span> <span class="u2" data-h-ele2>0 m</span></dd></div>
       <div class="h-tap" data-h-gradebox role="button" tabindex="0" aria-haspopup="dialog" aria-label="Grade: show the steepest so far"><dt>Grade</dt><dd><b data-h-grade>0.0</b> %</dd></div>
       <div class="h-tap" data-units role="button" tabindex="0" aria-label="Distance: swap the leading units (U)"><dt>Distance</dt><dd><b data-h-dist>0.0</b>${endless ? '' : `<span class="fd-tot"> / <span data-h-total>0</span></span>`} <span data-u="dist">mi</span> <span class="u2" data-h-dist2></span></dd></div>
     </dl>
+    ${hudToggleHtml()}
+    </div>
+    </div>
     <div class="fd-map" data-h-mapwrap></div>
     <p class="fd-fine">${endless ? 'Endless: generated from its seed as you drive · same seed, same world' : `Map data ${esc(info.credit.osm)} · ${esc(info.credit.dem)}`}</p>`;
   const $ = (s) => root.querySelector(s);

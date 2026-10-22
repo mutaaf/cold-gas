@@ -15,6 +15,7 @@ import { createArenaWorld } from './arena-render.js';
 import { createBuildLayer } from './layer.js';
 import { createPoseLerp } from '../render/interp.js';
 import { createReverse } from '../hands.js';
+import { hudToggleHtml } from '../hud-mode.js';
 
 const D2R = Math.PI / 180;
 const START = { x: 0, z: -165, yaw: 0 };
@@ -104,11 +105,16 @@ export function createSandbox(ctx) {
         <button type="button" class="chip" data-s-reset title="Back to the start (R)">Reset</button>
         <button type="button" class="chip" data-s-exit title="Leave the Sandbox">Exit</button>
       </div>
+      <div class="fd-dash">
       <div class="fd-speed h-tap" data-units role="button" tabindex="0" aria-label="Speed: swap the leading units (U)"><b data-s-speed>0</b><span data-u="speed">mph</span><i class="fd-alt" data-s-speed2>0 km/h</i></div>
+      <div class="fd-row">
       <dl class="fd-stats">
         <div class="h-tap" data-units role="button" tabindex="0" aria-label="Height: swap the leading units (U)"><dt>Height</dt><dd><b data-s-h>0.0</b> <span data-u="len">ft</span> <span class="u2" data-s-h2>0.0 m</span></dd></div>
         <div><dt>Gas</dt><dd><b data-s-gas>100</b> %</dd></div>
       </dl>
+      ${hudToggleHtml()}
+      </div>
+      </div>
       <div class="fd-pause" data-s-pause hidden><div class="sheet"><h2>Paused</h2>
         <div class="actions"><button class="btn primary" data-s-resume>Resume</button><button class="btn ghost" data-s-start>Back to the start</button><button class="btn link" data-s-title>Title</button></div></div></div>`;
     document.body.appendChild(hudRoot);

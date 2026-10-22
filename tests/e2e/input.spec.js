@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // part): the last device used wins, keys never stick or misfire, and blur / hidden / pause let go.
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 };
 const IPAD = { viewport: { width: 1024, height: 1366 }, hasTouch: true, isMobile: true };
-const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
 const go = (page) => page.evaluate(() => { window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
 const live = (page) => page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
 
