@@ -8,7 +8,7 @@
 import './drive.css';
 import * as THREE from 'three';
 import { ROADS } from './manifest.js';
-import { loadRoad } from './load.js';
+import { loadRoad, checkAbort } from './load.js';
 import { createRoadWorld } from '../render/road.js';
 import { createRoadCourse, poseAt, nearestSample, roadSurface } from '../sim/roads.js';
 import { createVehicle, step, DT, CAR } from '../sim/vehicle.js';
@@ -62,11 +62,29 @@ export function createDrive(ctx) {
       onTod: (t) => { tod = t; picker.tod(t); },
       onSeed: (v) => { seed = sanitizeSeed(v) || seed; },
       onDrive: () => start(selected, { tod, seed }),
-      onBack: closePicker,
+      onBack: back,
     });
     pickerRoot.querySelector('[data-road][aria-checked="true"]')?.focus({ preventScroll: true });
   }
   function closePicker() { pickerRoot.hidden = true; pickerRoot.innerHTML = ''; picker = null; }
+  // Back on the picker: a load in flight is cancelled (it never drops you into the drive after all).
+  function back() { st.loadCtl?.abort(); closePicker(); }
+  // A load's cancel token: a newer load, Back, or the title cancels the one in flight.
+  function beginLoad() {
+    st.loadCtl?.abort();
+    st.loadCtl = new AbortController();
+    return st.loadCtl.signal;
+  }
+  // A failed or cancelled start leaves nothing behind: a world built but never entered is disposed
+  // (terrain workers, GPU buffers), one already entered is torn down.
+  function failStart(err, world, signal, msg) {
+    if (st.world && st.world === world) teardown();
+    else { try { world?.dispose(); } catch (e2) { console.warn('drive dispose', e2); } }
+    if (signal.aborted || err?.name === 'AbortError') return;
+    console.error(err);
+    picker?.loading(true, 0, msg);
+    setTimeout(() => picker?.loading(false), 2400);
+  }
 
   // --- Start / stop ----------------------------------------------------------------------------
   async function start(id, opts = {}) {
@@ -78,32 +96,35 @@ export function createDrive(ctx) {
     try { localStorage.setItem('coldgas_drive_road', info.id); localStorage.setItem('coldgas_drive_tod', tod); } catch { /* storage blocked */ }
     st.loading = true;
     if (!picker) openPicker();
-    const prog = (f, label) => picker?.loading(true, f, label);
+    const signal = beginLoad();
+    const prog = (f, label) => { if (!signal.aborted) picker?.loading(true, f, label); };
+    let world = null;
     try {
       audio.initAudio();
       if (st.active) teardown();
-      const [road] = await Promise.all([loadRoad(info.id, prog), loadPhysics()]);
+      const [road] = await Promise.all([loadRoad(info.id, prog, { signal }), loadPhysics()]);
       await stage.ready;
+      checkAbort(signal);
       prog(0.75, 'Raising the mountains');
       await new Promise((r) => setTimeout(r, 0));
-      const world = createRoadWorld({ road, info, tier, renderer: stage.renderer, tod });
+      checkAbort(signal);
+      world = createRoadWorld({ road, info, tier, renderer: stage.renderer, tod });
       const pose = poseAt(road, 18, 1);
       world.prime(pose.x, pose.z, (f) => prog(0.75 + f * 0.2, 'Laying the road'));
       prog(0.97, 'Warming up');
-      await enter(road, info, world, createRoadCourse(road, { name: info.name }), 18);
+      await enter(road, info, world, createRoadCourse(road, { name: info.name }), 18, signal);
       ui.cue_(`${info.name} · ${info.country}`, 2600);
     } catch (err) {
-      console.error(err);
-      picker?.loading(true, 0, 'Couldn’t load this road. Try again.');
-      setTimeout(() => picker?.loading(false), 2400);
+      failStart(err, world, signal, 'Couldn’t load this road. Try again.');
     } finally {
       st.loading = false;
+      if (st.loadCtl?.signal === signal) st.loadCtl = null;
     }
   }
 
   // Everything after the world is built, for a real road or the endless one: camera, light,
   // the car at distance s, the HUD, and into the drive.
-  async function enter(road, info, world, course, s) {
+  async function enter(road, info, world, course, s, signal = null) {
     st.road = road; st.info = info; st.world = world; st.course = course;
     // The build / power-up / quest layer (src/build/): its pieces join the road's ground.
     st.layer = createBuildLayer(roadHost({ road, info, course: st.course, stage, carRoot, getCar: () => st.car, placeCar: placePose }), {
@@ -128,6 +149,7 @@ export function createDrive(ctx) {
     st.hud = road.endless ? createEndlessHud(hudRoot, road, info, handlers) : createHud(hudRoot, road, info, handlers);
     st.hud.setTod(tod); st.hud.setCam(st.cam.mode); st.hud.setFan(st.fan);
     await stage.renderer.compileAsync?.(stage.scene, camera).catch?.(() => {});
+    checkAbort(signal);   // Back while the shaders compiled: the caller tears this down
     closePicker();
     ui.only();
     hudRoot.hidden = false;
@@ -148,7 +170,9 @@ export function createDrive(ctx) {
     try { localStorage.setItem('coldgas_drive_road', ENDLESS); localStorage.setItem('coldgas_drive_tod', tod); localStorage.setItem('coldgas_drive_seed', seed); } catch { /* storage blocked */ }
     st.loading = true;
     if (!picker) openPicker();
-    const prog = (f, label) => picker?.loading(true, f, label);
+    const signal = beginLoad();
+    const prog = (f, label) => { if (!signal.aborted) picker?.loading(true, f, label); };
+    let world = null;
     try {
       audio.initAudio();
       if (st.active) teardown();
@@ -157,25 +181,26 @@ export function createDrive(ctx) {
         import('../sim/endless.js'), import('../sim/objects.js'), import('../world/endless-world.js'),
       ]);
       await stage.ready;
+      checkAbort(signal);
       // The course, and the registry of things placed in it (they sit on its ground, and collide).
       const course = createEndlessCourse(seed);
       const road = course.road;
       course.objects = createObjects({ seed: road.seed, groundY: (x, z) => course.world?.groundAt(x, z).y ?? road.dem(x, z, [0, 0, 0])[0] });
       const info = { id: ENDLESS, name: 'Endless', local: biomeName(road, 30), country: `Seed ${seed}`, seedLabel: seed, sun: { az: 205, el: 34 }, credit: { osm: '', dem: '' } };
       prog(0.15, 'Raising the land');
-      const world = createEndlessWorld({ course, tier, renderer: stage.renderer, tod, info, idb: opts.idb !== false });
+      world = createEndlessWorld({ course, tier, renderer: stage.renderer, tod, info, idb: opts.idb !== false });
       course.world = world;
       const pose = poseAt(road, 60, 1);
-      await world.prime(pose.x, pose.z, (f) => prog(0.15 + f * 0.8, f < 0.5 ? 'Raising the land' : 'Laying the road'));
+      await world.prime(pose.x, pose.z, (f) => prog(0.15 + f * 0.8, f < 0.5 ? 'Raising the land' : 'Laying the road'), { signal });
+      checkAbort(signal);
       prog(0.97, 'Warming up');
-      await enter(road, info, world, course, 60);
+      await enter(road, info, world, course, 60, signal);
       ui.cue_(`Endless · seed ${seed}`, 2600);
     } catch (err) {
-      console.error(err);
-      picker?.loading(true, 0, 'Couldn’t build this world. Try again.');
-      setTimeout(() => picker?.loading(false), 2400);
+      failStart(err, world, signal, 'Couldn’t build this world. Try again.');
     } finally {
       st.loading = false;
+      if (st.loadCtl?.signal === signal) st.loadCtl = null;
     }
   }
 

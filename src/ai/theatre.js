@@ -180,7 +180,9 @@ function buildDom(root, stages = STAGES) {
 // Runs one judging call through the theatre. Resolves with { words, meta } when the show is over
 // (or skipped). `fallbackWords(card)` supplies local lines if the call fails. Aborting `abort`
 // (an AbortSignal: a restart, the title) tears it down at once and resolves with { aborted: true }.
-export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWords, reduced = false, replay = null, abort = null }) {
+// `deadlineMs` is what is left of the judges' 35 s (invariant 5½) once the caller has spent some of
+// it (loading this chunk). When the show ends, however it ends, the call's stream is cancelled.
+export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWords, reduced = false, replay = null, abort = null, deadlineMs = 35_000 }) {
   registerShapes();
   root.classList.remove('th-quest');
   const dom = buildDom(root);
@@ -255,7 +257,10 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   safe(() => field?.setShape('cg:circuit', { pin: 1e9 }));
   const pulse = setInterval(() => safe(() => field?.signal(undefined, 30, 3)), 180);
   // Hard deadline: whatever happens to the network or the visuals, the words land.
-  const deadline = setTimeout(() => { if (!finished) { if (!words) { words = fallbackWords(card); meta.error = meta.error || 'The judges took too long.'; } finish(); } }, 35_000);
+  const deadline = setTimeout(() => { if (!finished) { if (!words) { words = fallbackWords(card); meta.error = meta.error || 'The judges took too long.'; } finish(); } }, Math.max(0, Math.min(35_000, deadlineMs)));
+  // The call's own cancel: a restart or the title (abort), the deadline, Skip, the end of the show.
+  const call = new AbortController();
+  if (abort) { if (abort.aborted) call.abort(); else abort.addEventListener('abort', () => call.abort(), { once: true }); }
 
   let showText = null;          // promise: TEXT stage done
   let computing = null;          // promise: COMPUTE stage entered (one per show)
@@ -330,10 +335,11 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   };
 
   let showFinal = null;
-  const source = replay ? replayEvents(replay, handlers) : streamPanel({ log, t, assist, ai, course }, handlers, { signal: abort });
+  const source = replay ? replayEvents(replay, handlers, call.signal) : streamPanel({ log, t, assist, ai, course }, handlers, { signal: call.signal });
 
   (async () => {
-    try { await source; } catch (err) { handlers.error({ message: 'The judges are offline.', fallback: true }); console.warn(err); }
+    try { await source; } catch (err) { if (finished) return; handlers.error({ message: 'The judges are offline.', fallback: true }); console.warn(err); }
+    if (finished) return;
     if (!showText) handlers.prompt({ provider: ai.provider, providerLabel: PROVIDER_INFO[ai.provider]?.label || '', vendor: PROVIDER_INFO[ai.provider]?.vendor || '', model: ai.model, where: '—', inTokensEst: 0 });
     await startCompute().catch((err) => console.warn('theatre', err));
     callOver = true;
@@ -362,6 +368,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
     finished = true;
     clearInterval(pulse);
     clearTimeout(deadline);
+    call.abort();   // the deadline or Skip ended the show: nothing more is read from the stream
     meta.words = words || fallbackWords(card);
     root.classList.add('out');
     setTimeout(() => { safe(() => field?.destroy()); root.hidden = true; root.classList.remove('on', 'out'); }, 650);
@@ -385,10 +392,11 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   return done;
 }
 
-// Replays a recorded call with its original timing.
-async function replayEvents(timeline, handlers) {
+// Replays a recorded call with its original timing (until `signal` cancels it).
+async function replayEvents(timeline, handlers, signal = null) {
   const start = performance.now();
   for (const [ev, at, data] of timeline) {
+    if (signal?.aborted) return;
     const delay = at - (performance.now() - start);
     if (delay > 0) await new Promise((r) => setTimeout(r, delay));
     handlers[ev]?.(data);

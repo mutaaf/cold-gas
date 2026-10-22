@@ -1,12 +1,12 @@
 ---
 id: 0048
 title: Every network call has a deadline, a cancel and a single flight
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: tech-health
 created: 2026-10-21
-pr:
+pr: 69
 by: operator
 ---
 
@@ -28,10 +28,10 @@ board requests keyed by sequence; Submit disabled in flight; tolerant row render
 stream in `finish()`; replay-the-call guard and cancelled timers.
 
 ## Acceptance criteria
-- [ ] `/roads/*` that never answers: an error card within 20 s and Drive works again
-- [ ] Board: slow 'today' after 'all' doesn't overwrite 'all'
-- [ ] Double-click Submit posts once
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] `/roads/*` that never answers: an error card within 20 s and Drive works again
+- [x] Board: slow 'today' after 'all' doesn't overwrite 'all'
+- [x] Double-click Submit posts once
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 e2e with `page.route` stalls; unit test for `fetchWithDeadline`.

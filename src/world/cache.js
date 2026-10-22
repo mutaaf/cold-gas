@@ -39,22 +39,29 @@ export function createLru(maxBytes) {
 
 // IndexedDB: one object store, values are the tile objects (structured clone keeps typed arrays).
 // Capped at `maxEntries`; the oldest written are dropped first. Every call is best-effort.
-export function createIdbCache(name = 'coldgas-endless', maxEntries = 600) {
+// Opening it can hang (WebKit, a blocked upgrade in another tab): after `openMs` the cache is off
+// for this world and every tile is built instead (a late open is closed, not used).
+export const IDB_OPEN_MS = 1500;
+export function createIdbCache(name = 'coldgas-endless', maxEntries = 600, { openMs = IDB_OPEN_MS, idb } = {}) {
   let dbp = null, writes = 0, hits = 0, misses = 0;
   const open = () => {
     if (dbp) return dbp;
     dbp = new Promise((resolve) => {
+      let settled = false;
+      const done = (db) => { if (settled) { try { db?.close(); } catch { /* closing */ } return; } settled = true; clearTimeout(timer); resolve(db); };
+      const timer = setTimeout(() => done(null), openMs);
       try {
-        if (typeof indexedDB === 'undefined') return resolve(null);
-        const req = indexedDB.open(name, 1);
+        const factory = idb === undefined ? globalThis.indexedDB : idb;
+        if (!factory) return done(null);
+        const req = factory.open(name, 1);
         req.onupgradeneeded = () => {
           const db = req.result;
           if (!db.objectStoreNames.contains('tiles')) db.createObjectStore('tiles').createIndex('t', 't');
         };
-        req.onsuccess = () => resolve(req.result);
-        req.onerror = () => resolve(null);
-        req.onblocked = () => resolve(null);
-      } catch { resolve(null); }
+        req.onsuccess = () => done(req.result);
+        req.onerror = () => done(null);
+        req.onblocked = () => done(null);
+      } catch { done(null); }
     });
     return dbp;
   };

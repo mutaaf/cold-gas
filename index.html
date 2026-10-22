@@ -327,6 +327,42 @@
   </section>
 
   <noscript><p class="noscript">COLD GAS needs JavaScript and WebGL.</p></noscript>
+  <!-- Boot watchdog (0040): if the game hasn't wired the title in 15 s (a chunk that never came, a
+       throw while src/main.js evaluated, before the self-heal is installed), offer a reload rather
+       than leave dead buttons. Offline it says so instead of reloading into the browser's error page.
+       Gone the moment the game is up (window.__coldgas). -->
+  <script>
+    (function () {
+      var shown = null, waited = 0;
+      function up() { return !!(window.__coldgas && window.__coldgas.S); }
+      function offer(why) {
+        if (shown || up()) return;
+        var d = document.createElement('div');
+        d.setAttribute('role', 'alert');
+        d.setAttribute('data-boot-watchdog', '');
+        d.style.cssText = 'position:fixed;left:50%;bottom:max(24px,env(safe-area-inset-bottom));transform:translateX(-50%);z-index:9999;max-width:calc(100vw - 32px);box-sizing:border-box;padding:14px 18px;display:flex;gap:14px;align-items:center;flex-wrap:wrap;justify-content:center;background:#0b0f17;color:#e9edf3;border:1px solid rgba(233,237,243,.22);border-radius:10px;font:14px/1.4 system-ui,sans-serif;text-align:center';
+        var p = document.createElement('span');
+        var b = document.createElement('button');
+        b.type = 'button';
+        b.textContent = 'Reload';
+        b.style.cssText = 'font:inherit;font-weight:600;padding:8px 16px;border-radius:8px;border:0;background:#e9edf3;color:#05070c;cursor:pointer;min-height:40px';
+        function say() { p.textContent = navigator.onLine === false ? 'You are offline. Reconnect, then reload.' : why; b.disabled = navigator.onLine === false; b.style.opacity = b.disabled ? '.5' : '1'; }
+        b.addEventListener('click', function () { if (navigator.onLine !== false) location.reload(); else say(); });
+        addEventListener('online', say); addEventListener('offline', say);
+        say();
+        d.appendChild(p); d.appendChild(b);
+        document.body.appendChild(d);
+        shown = d;
+      }
+      // A throw before the title is wired: offer it after a short grace (late chunks may still land).
+      addEventListener('error', function () { if (!up()) setTimeout(function () { offer('COLD GAS hit a problem while starting.'); }, 3000); }, true);
+      var iv = setInterval(function () {
+        waited += 1000;
+        if (up()) { clearInterval(iv); if (shown) { shown.remove(); shown = null; } return; }
+        if (waited >= 15000) offer('COLD GAS is taking longer than it should to start.');
+      }, 1000);
+    })();
+  </script>
   <script type="module" src="/src/main.js"></script>
 </body>
 </html>

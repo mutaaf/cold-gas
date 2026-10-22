@@ -49,8 +49,12 @@ function createObs() {
   };
 
   const log1 = new Set();
+  // One fault object is one report: a failed import reaches us as vite:preloadError, then perhaps as
+  // an unhandled rejection, then from the caller's own catch. Count it once.
+  const seen = typeof WeakSet === 'function' ? new WeakSet() : null;
   o.error = (module, err, kind = 'error') => {
     try {
+      if (seen && err && typeof err === 'object') { if (seen.has(err)) return null; seen.add(err); }
       const mod = MODULE_IDS.includes(module) ? module : moduleOf(err?.stack);
       const k = KIND_IDS.includes(kind) ? kind : 'error';
       const s = signature(err, o.build, k);
@@ -74,6 +78,15 @@ function createObs() {
     onChange: (n, s) => { if (o.ledger) { o.ledger.breakers[n] = { ...s }; persist(); } emit('breaker', { name: n, ...s }); },
   }));
   o.fail = (name, err, kind = 'error') => { o.breaker(name).failure(err); return o.error(name, err, kind); };
+  // A lazy chunk failed (a deploy replaced the build, or the network dropped it): recorded once, and
+  // the self-heal decides what to do (src/obs/heal.js: probe the build, reload only into a new one).
+  const lazySeen = seen ? new WeakSet() : null;
+  o.lazyFailed = (err) => {
+    const e = err instanceof Error ? err : new Error(String(err || 'lazy chunk failed'));
+    if (lazySeen) { if (lazySeen.has(e)) return; lazySeen.add(e); }
+    o.error('lazy', e, 'lazy');
+    emit('lazy', e);
+  };
   o.ok = (name) => { o.breakers[name]?.success(); };
 
   o.recovery = (kind, ok, detail = '') => {
@@ -146,18 +159,24 @@ function createObs() {
     if (typeof addEventListener !== 'function') return;
     on(globalThis, 'error', (e) => {
       // A failed <script>/<link> load is an Event with a target, not an ErrorEvent.
-      if (!(e instanceof ErrorEvent) && e.target && e.target !== globalThis) { o.error('lazy', new Error(`resource failed: ${e.target.tagName || '?'}`), 'lazy'); return; }
+      if (!(e instanceof ErrorEvent) && e.target && e.target !== globalThis) {
+        // A modulepreload hint that failed is the same fault as the import it was warming, which
+        // reports itself (vite:preloadError): one failed chunk, one report.
+        if (e.target.tagName === 'LINK' && /modulepreload/i.test(e.target.rel || '')) return;
+        o.error('lazy', new Error(`resource failed: ${e.target.tagName || '?'}`), 'lazy');
+        return;
+      }
       const err = e.error || new Error(e.message || 'script error');
       if (!e.error && e.filename) err.stack = `    at ${e.filename}:${e.lineno}:${e.colno}`;
       o.error(classify(err), err, isTrap(err) ? 'trap' : 'error');
     }, true);
     on(globalThis, 'unhandledrejection', (e) => {
       const r = e.reason, err = r instanceof Error ? r : new Error(typeof r === 'string' ? r : 'unhandled rejection');
-      if (isLazy(err)) { o.error('lazy', err, 'lazy'); emit('lazy', err); return; }
+      if (isLazy(err)) { o.lazyFailed(err); return; }
       o.error(classify(err), err, isTrap(err) ? 'trap' : 'rejection');
     });
     // Vite's own event for a failed dynamic import (a chunk gone after a deploy, a dropped network).
-    on(globalThis, 'vite:preloadError', (e) => { o.error('lazy', e.payload || new Error('preload failed'), 'lazy'); emit('lazy', e.payload); });
+    on(globalThis, 'vite:preloadError', (e) => { o.lazyFailed(e.payload || new Error('preload failed')); });
     on(globalThis, 'pagehide', () => { if (o.session) { o.session.ended = true; saveSession(); } o.flush('pagehide'); });
     on(document, 'visibilitychange', () => { if (document.visibilityState === 'hidden') { saveSession(); o.flush('hidden'); } });
     wrapFetch();

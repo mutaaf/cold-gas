@@ -41,3 +41,9 @@ e2e `tests/e2e/lifecycle.spec.js` additions for each criterion.
 
 ## Out of scope
 Background audio playback.
+
+## Progress (PR #69, heal part only; still `ready`)
+- Done: the context-loss give-up timer counts visible time only (e2e: lost while hidden 20 s, no reload),
+  and a restore rebakes the active look (Free Drive road / endless via `setTod`, Sandbox via `look.rebake()`).
+- Not done: audio suspend/resume and the iOS 'interrupted' unlock, `resetInput()` on blur/hide/pause,
+  render on resize while paused, wake lock, tilt permission/re-zero.

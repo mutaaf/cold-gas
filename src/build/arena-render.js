@@ -65,25 +65,30 @@ export function createArenaWorld({ renderer, tier = 'high' }) {
   group.add(hemi);
   const fog = new THREE.Fog(0x3a4c62, 240, 1500);
   // Reflections from this sky over this concrete (clearcoat should show the horizon, not a room).
-  const envScene = new THREE.Scene();
-  const envSky = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), sky.material);
-  const envGround = new THREE.Mesh(new THREE.CircleGeometry(48, 32), new THREE.MeshBasicMaterial({ color: 0x23272c }));
-  envGround.rotation.x = -Math.PI / 2; envGround.position.y = -1.5;
-  envScene.add(envSky, envGround);
-  const pm = new THREE.PMREMGenerator(renderer);
-  const env = pm.fromScene(envScene, 0.03).texture;
-  pm.dispose(); envSky.geometry.dispose(); envGround.geometry.dispose(); envGround.material.dispose();
+  // (Baked again after a lost WebGL context: src/obs/heal.js calls look.rebake().)
+  const bake = () => {
+    const envScene = new THREE.Scene();
+    const envSky = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), sky.material);
+    const envGround = new THREE.Mesh(new THREE.CircleGeometry(48, 32), new THREE.MeshBasicMaterial({ color: 0x23272c }));
+    envGround.rotation.x = -Math.PI / 2; envGround.position.y = -1.5;
+    envScene.add(envSky, envGround);
+    const pm = new THREE.PMREMGenerator(renderer);
+    const tex = pm.fromScene(envScene, 0.03).texture;
+    pm.dispose(); envSky.geometry.dispose(); envGround.geometry.dispose(); envGround.material.dispose();
+    return tex;
+  };
   const look = {
-    group, fog, env, envIntensity: 0.85, exposure: 1.0,
+    group, fog, env: bake(), envIntensity: 0.85, exposure: 1.0,
     bloom: { strength: 0.14, radius: 0.45, threshold: 0.95 },
     keyLight: { color: 0xffdcbc, intensity: 2.6, offset: new THREE.Vector3(-34, 42, 26) },
     lamps: 0, update: () => {},
+    rebake() { look.env?.dispose(); look.env = bake(); return look; },
   };
   return {
     look, group,
     dispose() {
       group.traverse((o) => { o.geometry?.dispose?.(); if (o.material) (Array.isArray(o.material) ? o.material : [o.material]).forEach((m) => m.dispose()); });
-      env.dispose();
+      look.env.dispose();
     },
   };
 }
