@@ -242,14 +242,17 @@ src/units.js          what the player reads: US customary first with metric besi
 src/instruments.js    every HUD instrument answers a tap: peak G, burn time, splits, attitude, thrusters
 src/damage-view.js    the damage map opened up (lazy): zones, hits, what damage does in this sim
 src/drive/minimap.js  Free Drive's canvas minimap (north/heading-up, trail, ghost, profile) and the full map
-src/panel.js          board client + local judge lines (offline fallback)
+src/panel.js          board client (tolerant rows) + local judge lines (offline fallback)
+src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry
 src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: errors, rejections, traps,
                         lost context, shaders, fetches, lazy imports, audio; frames; beacons) ·
                         signature.js (stable ids, shared with the Worker) · frames.js (ring +
                         histogram, zero per-frame allocation) · ledger.js (per-device health ledger,
                         boot tier from past runs, resolution governor) · breaker.js (judge, audio,
-                        world, rocket) · heal.js (guarded frame loop, context restore, trap → title,
-                        reload-once) · panel.js (For nerds → Health)
+                        world, rocket) · heal.js (guarded frame loop, context restore + look rebake,
+                        trap → title, reload-once) · reload.js (when a reload is allowed: online, origin
+                        answers, a new build for a missing chunk) · panel.js (For nerds → Health).
+                        index.html's boot watchdog offers a reload if the title isn't wired in 15 s
 src/worker/obs.js     POST /obs + GET /obs/digest (regression detection); scripts/heal.mjs files tickets
 src/ai/               config.js (provider/key on this device) · stream.js (SSE client) ·
                         settings.js (the judges' brain picker) · theatre.js (lazy: aurora-field show)

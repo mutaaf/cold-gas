@@ -4,5 +4,14 @@
 import wasmUrl from '@dimforge/rapier3d-deterministic/rapier_wasm3d_bg.wasm?url';
 import { initPhysics } from './engine.js';
 
-export const loadPhysics = () => initPhysics(fetch(wasmUrl));
+// One fetch for the page's lifetime: every caller (boot, each run, Free Drive, the Sandbox) shares
+// it. A failed load is forgotten, so the next press fetches again instead of replaying the failure.
+let loading = null;
+export function loadPhysics() {
+  if (!loading) {
+    loading = initPhysics(fetch(wasmUrl));
+    loading.catch(() => { loading = null; });
+  }
+  return loading;
+}
 export { wasmUrl };
