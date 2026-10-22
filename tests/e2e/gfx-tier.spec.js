@@ -33,8 +33,16 @@ for (const [name, dev, kind] of [['iPhone', devices['iPhone 13'], 'phone'], ['iP
   });
 }
 
-test('the low tier draws to an antialiased canvas', async ({ page }) => {
+test('the low tier draws to an antialiased canvas, except on a software rasterizer', async ({ page }) => {
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
-  expect(await page.evaluate(() => window.__coldgas.stage.renderer.getContextAttributes().antialias)).toBe(true);
+  // This suite runs on SwiftShader (playwright.config.js), where MSAA costs a third of the frame and
+  // 'low' skips it (src/gfx-tier.js). A GPU gets it.
+  const r = await page.evaluate(() => {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    const ext = gl?.getExtension('WEBGL_debug_renderer_info');
+    return { name: ext ? String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL)) : '', aa: window.__coldgas.stage.renderer.getContextAttributes().antialias };
+  });
+  const software = /swiftshader|llvmpipe|softpipe|software|basic render/i.test(r.name);
+  expect(r.aa).toBe(!software);
 });
