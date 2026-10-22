@@ -10,14 +10,15 @@ test.describe.configure({ mode: 'parallel' });
 const touch = (width, height) => ({ viewport: { width, height }, hasTouch: true, isMobile: true });
 const boot = async (page, q = '') => {
   await page.goto(`/coldgas/?gfx=low${q}`);
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
 };
-// (physicsReady is a function: wait on it, docs/LESSONS.md.)
-const physics = (page) => page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 30_000 });
+// (physicsReady is a function: wait on it, docs/LESSONS.md.) Waits after a page load get 60 s, as
+// across the suite since #84: a fresh shard boots slowly on a busy runner.
+const physics = (page) => page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 60_000 });
 const live = async (page, kind = 'jump') => {
   await physics(page);
   await page.evaluate((kind) => { window.__coldgas.startRun(kind); window.__coldgas.skipCountdown(); }, kind);
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 60_000 });
 };
 const mode = (page) => page.evaluate(() => document.documentElement.dataset.hud);
 const stored = (page) => page.evaluate(() => localStorage.getItem('coldgas_hud'));
@@ -65,6 +66,11 @@ function startProbe() {
   window.__hudProbe = st;
   requestAnimationFrame(tick);
 }
+// The coverage probes measure DOM boxes against the camera's projection of the car: the canvas's
+// resolution never enters. Draw it at a quarter of the pixels (and keep the resolution governor from
+// raising it), so CI's software GL keeps up with a whole flight at 820×1180: at a few frames a second
+// the 0.1 s frame cap stretched the Show's flight past the 150 s wait on a busy runner.
+const lean = (page) => page.evaluate(() => { const s = window.__coldgas.stage; s.setPixelScale(0.5); s.setPixelScale = () => {}; });
 const stopProbe = (page) => page.evaluate(() => { const st = window.__hudProbe; st.stop = true; return st; });
 
 test('phone: compact by default; one tap shows every instrument, another folds them, and it is kept', async ({ browser }) => {
@@ -100,7 +106,7 @@ test('phone: compact by default; one tap shows every instrument, another folds t
   expect(await stored(page)).toBe('full');
   // Kept on this device.
   await page.reload();
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
   expect(await mode(page)).toBe('full');
   await live(page);
   await handle.tap();
@@ -116,7 +122,7 @@ test('phone: compact by default; one tap shows every instrument, another folds t
   await page.keyboard.press('KeyI');
   expect(await mode(page)).toBe('compact');
   await page.reload();
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
   expect(await mode(page)).toBe('compact');
   expect(errors).toEqual([]);
   await page.close();
@@ -142,7 +148,7 @@ test('compact phone: the landing cues stay up (the descent band, its state, the 
   expect(await mode(page)).toBe('compact');
   await physics(page);
   await page.evaluate(() => { window.__coldgas.setTier('pro'); window.__coldgas.startDrill('land'); });
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 60_000 });
   // The drill starts under a second from the ground: hold the sim the moment the marker is up.
   await page.waitForFunction(() => { const on = window.__coldgas.landing.marker.visible; if (on) window.__coldgas.S.paused = true; return on; }, null, { timeout: 10_000, polling: 'raf' });
   await expect(page.locator('[data-descent]')).toBeVisible();
@@ -166,6 +172,7 @@ for (const [w, h] of VIEWS) {
     const page = await browser.newPage(touch(w, h));
     await boot(page);
     expect(await mode(page)).toBe('compact');
+    await lean(page);
     await live(page, 'reveal');
     await page.evaluate(startProbe);
     await page.waitForFunction(() => window.__coldgas.S.mode !== 'live', null, { timeout: 150_000, polling: 1000 });
@@ -186,6 +193,7 @@ for (const [w, h] of VIEWS) {
     await expect(page.locator('[data-h-reset]')).toBeInViewport();
     await expect(page.locator('[data-h-exit]')).toBeInViewport();
     await expect(page.locator('.fd-fine')).toContainText('OpenStreetMap');
+    await lean(page);
     await page.evaluate(startProbe);
     await page.keyboard.down('ArrowUp');
     await page.waitForFunction(() => window.__hudProbe.frames >= 40, null, { timeout: 60_000, polling: 500 });
