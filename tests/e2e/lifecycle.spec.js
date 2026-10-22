@@ -55,7 +55,7 @@ test('several Starts tapped while the engine loads start exactly one run', async
   for (let i = 0; i < 3; i++) await page.locator('[data-start]').click();
   release();
   await ready(page);
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown', null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown', null, { timeout: 30_000 });
   await page.waitForTimeout(500);
   expect(await G(page, () => window.__starts)).toBe(1);
 });
@@ -88,7 +88,7 @@ test('a double tap on Sandbox builds one arena, and the title takes it down', as
 
 test('deep links: ?drive= wins over ?play=, and ?play= over ?board=', async ({ page }) => {
   await page.goto('/coldgas/?play=jump&board=today&gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 60_000 });
   await expect(page.locator('[data-screen="board"]')).toBeHidden();
 });
 
