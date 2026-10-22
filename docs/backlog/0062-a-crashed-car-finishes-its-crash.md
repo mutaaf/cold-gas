@@ -1,12 +1,12 @@
 ---
 id: 0062
 title: A crashed car finishes its crash: it brakes to rest under the real physics before the results
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 73
 by: operator
 ---
 
