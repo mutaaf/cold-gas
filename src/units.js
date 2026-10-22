@@ -100,7 +100,10 @@ export const fmtRoad1 = (m, secondary = false) => road1(m, secondary ? other(sys
 // `html` the secondary goes in a dimmer <span class="u2">.
 const NUM = String.raw`([+−-]?)(\d{1,3}(?:,\d{3})+|\d+)(\.\d+)?`;
 const UNIT = String.raw`(km\/h|m\/s²|m\/s|kgf|kg|kN|kW|km|cm|mm|bar|metres|metre|meters|meter|m)`;
-const RX = () => new RegExp(String.raw`(?<![\w.,])${NUM}(\s?| )${UNIT}(?![\w²/])`, 'g');
+// Built once: String.prototype.replace resets a global RegExp's lastIndex, so one instance serves
+// every call (it used to be rebuilt per call, every frame the cue line was asked).
+const RX_ONE = new RegExp(String.raw`(?<![\w.,])${NUM}(\s?| )${UNIT}(?![\w²/])`, 'g');
+const RX = () => RX_ONE;
 const CONV = {
   'km/h': [1 / 1.609344, 'mph'], 'm/s': [M_TO_FT, 'ft/s'], 'm/s²': [M_TO_FT, 'ft/s²'], kg: [KG_TO_LB, 'lb'], kgf: [KGF_TO_LBF, 'lbf'],
   kN: [1000 * N_TO_LBF, 'lbf'], kW: [KW_TO_HP, 'hp'], km: [1 / 1.609344, 'mi'], cm: [1 / 2.54, 'in'], mm: [1 / 25.4, 'in'], bar: [BAR_TO_PSI, 'psi'],

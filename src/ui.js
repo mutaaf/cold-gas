@@ -61,14 +61,40 @@ export function createUI() {
   ui.show = (name, on = true) => { if (ui.screens[name]) ui.screens[name].hidden = !on; };
   ui.only = (...names) => { for (const k of Object.keys(ui.screens)) ui.screens[k].hidden = !names.includes(k); };
 
-  let cueTimer = 0;
-  ui.cue_ = (html, ms = 2600) => {
+  // The cue line. Callers may ask every frame (src/main.js cues()): the DOM is written only when the
+  // message changes; the same message just pushes its hide deadline out. A new message waits until
+  // the one on screen has held for its minimum (400 ms, longer for "Go"), so two conditions on a
+  // threshold can't flap the line; only the latest waiting message is kept. Deadlines are checked
+  // from the frame loop (ui.tickCue), not timers. `ms` 0 holds the message until it's replaced.
+  const CUE_HOLD = 400;
+  const cue = { html: '', on: false, at: 0, hold: 0, until: 0, next: null, nextMs: 0, nextHold: 0 };
+  const showCue = (html, ms, hold, now) => {
     ui.cue.innerHTML = localize(html, { html: true });
-    ui.cue.classList.add('on');
-    clearTimeout(cueTimer);
-    if (ms) cueTimer = setTimeout(() => ui.cue.classList.remove('on'), ms);
+    if (!cue.on) { ui.cue.classList.add('on'); cue.on = true; }
+    cue.html = html; cue.at = now; cue.hold = hold; cue.until = ms ? now + ms : Infinity;
   };
-  ui.clearCue = () => { ui.cue.classList.remove('on'); };
+  ui.cue_ = (html, ms = 2600, { hold = CUE_HOLD } = {}) => {
+    const now = performance.now();
+    if (cue.on && html === cue.html) {
+      cue.next = null;   // asked again for what's showing: whatever was waiting is stale
+      cue.until = ms ? Math.max(cue.until, now + ms) : Infinity;
+      return;
+    }
+    if (cue.on && now - cue.at < cue.hold) { cue.next = html; cue.nextMs = ms; cue.nextHold = hold; return; }
+    cue.next = null;
+    showCue(html, ms, hold, now);
+  };
+  ui.tickCue = (now = performance.now()) => {
+    if (!cue.on) return;
+    if (cue.next !== null && now - cue.at >= cue.hold) { const h = cue.next; cue.next = null; showCue(h, cue.nextMs, cue.nextHold, now); return; }
+    if (now >= cue.until && now - cue.at >= cue.hold) { ui.cue.classList.remove('on'); cue.on = false; cue.html = ''; }
+  };
+  ui.clearCue = () => {
+    cue.next = null; cue.html = '';
+    if (cue.on) { ui.cue.classList.remove('on'); cue.on = false; }
+  };
+  // A unit swap re-renders the next ask of the same message in the new units.
+  onUnits(() => { if (cue.on) cue.html = ''; });
 
   ui.countdown = (n) => { ui.count.innerHTML = n ? `<span${typeof n === 'string' ? ' class="word"' : ''}>${n}</span>` : ''; if (n) tick(); };
 
@@ -92,7 +118,8 @@ export function createUI() {
   // Last-written values, so the DOM is only touched on change. Numbers glide to their targets (a
   // first-order lag of ≈90 ms: readable, never late) and are written only when the shown digits
   // change; tabular figures keep every digit in its place.
-  const last = { speed: -1, speedBig: -1, air: -1, roll: -9999, bank: -1, alt: -1, sink: -1, g: -1, gState: '', fan: -1, phaseKey: '', airborne: null, clock: -99999, pitch: -999, n2: '', kg: -1, bar: -1, gas: '' };
+  const LAST0 = { speed: -1, speedBig: -1, air: -1, roll: -9999, bank: -1, alt: -1, sink: -1, g: -1, gState: null, fan: -1, phaseKey: '', airborne: null, clock: -99999, pitch: -999, n2: null, kg: -1, bar: -1, gas: '' };
+  const last = { ...LAST0 };
   const tw = { speed: 0, alt: 0, sink: 0, t: 0 };
   // A flip of the unit system: every unit-bearing readout writes again on the next frame.
   // Every unit-bearing readout carries the other system beside it, smaller (src/units.js): a
@@ -122,8 +149,13 @@ export function createUI() {
   const gEl = $('[data-g]'), fanEl = $('[data-fan]'), n2El = $('[data-tank]');
   const hudEl = ui.screens.hud;
   ui.setClock = (sec) => { const cl = Math.round(sec * 10); if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; } };
+  // A new flight: forget every written value (the next ui.hud writes every cell from scratch, so a
+  // retry's countdown shows this run's start, not the last run's end) and the glide.
   ui.resetHud = () => {
-    tw.speed = 0; tw.alt = 0; tw.sink = 0; tw.t = 0; last.phaseKey = '';
+    tw.speed = 0; tw.alt = 0; tw.sink = 0; tw.t = 0;
+    Object.assign(last, LAST0);
+    for (const key in last2) delete last2[key];
+    for (const n of ui.nz) n.last = -1;
     // A retry after a crash on the roof must not show the last flight's roll on the start line.
     ui.roll.textContent = '0'; ui.rollArc.style.strokeDasharray = '0 360'; ui.rollArc.classList.remove('done'); last.roll = 0; last.bank = 0;
     resetStats();
