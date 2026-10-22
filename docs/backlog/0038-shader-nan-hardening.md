@@ -1,12 +1,12 @@
 ---
 id: 0038
 title: No shader can make a NaN pixel (plumes, wall, road paint, sky)
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: tech-health
 created: 2026-10-21
-pr:
+pr: 68
 by: operator
 ---
 
@@ -23,9 +23,9 @@ Add a `show-jets` scenario to scripts/flicker.mjs (the car in frame with valves 
 `grep`-style unit test that fails on `pow(` with an unclamped first argument in `src/render/**`.
 
 ## Acceptance criteria
-- [ ] flicker.mjs `show-jets` exists; its z-fight nudge poses never flip ≥ 400‰
-- [ ] The lint test passes and catches a planted `pow(1.-vUv.y, 2.)`
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] flicker.mjs `show-jets` exists; its z-fight nudge poses never flip ≥ 400‰
+- [x] The lint test passes and catches a planted `pow(1.-vUv.y, 2.)`
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 `tests/unit/shaders.test.js` scanning shader strings; flicker.mjs numbers in the PR.

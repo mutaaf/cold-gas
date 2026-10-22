@@ -160,7 +160,7 @@ void main() {
   }
   vec3 c = alb * floodLight(vWp, n, v, shin, spec) + emit;
   // Rim: the night sky catching the curve of the tanks.
-  c += uSky * 0.6 * pow(1.0 - max(dot(n, v), 0.0), 4.0);
+  c += uSky * 0.6 * pow(clamp(1.0 - dot(n, v), 0.0, 1.0), 4.0);
   gl_FragColor = vec4(haze(c, vWp), 1.0);
   #include <tonemapping_fragment>
   #include <colorspace_fragment>

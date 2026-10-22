@@ -42,20 +42,21 @@ import { openSettings, aiLabel } from './ai/settings.js';
 import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
 import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
+import { pickDeviceTier, deviceKind, readDevice } from './gfx-tier.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
 const physicsLoad = loadPhysics();
 physicsLoad.catch(() => {});
 const params = new URLSearchParams(location.search);
-const coarse = matchMedia('(pointer: coarse)').matches;
-// Graphics defaults per device: phones get 'mid', and a phone that reports little memory or few
-// cores gets 'low' (its frame budget goes to the sim and the HUD, not the mist). ?gfx= overrides.
-const lowEnd = coarse && ((navigator.deviceMemory || 8) <= 4 || (navigator.hardwareConcurrency || 8) <= 4);
+const device = readDevice();
+const coarse = device.coarse;
+// Graphics defaults per device (src/gfx-tier.js): touch devices, iPhones and iPads included, start
+// 'mid'; only a phone reporting ≤ 2 GB starts 'low'. ?gfx= overrides.
 // [obs] …then this device's own history (src/obs/ledger.js) moves it: down after a bad session, back up
 // after several smooth ones. The reason shows in For nerds → Health.
-const tier = obs.boot({ forced: params.get('gfx'), deviceTier: coarse ? (lowEnd ? 'low' : 'mid') : 'high' }).tier;
-obs.init({ deviceClass: deviceClass(navigator, coarse) });
+const tier = obs.boot({ forced: params.get('gfx'), deviceTier: pickDeviceTier(device).tier }).tier;
+obs.init({ deviceClass: deviceClass(navigator, coarse, deviceKind(device)) });
 // Audio is a breaker-guarded subsystem: if it throws, the game goes quiet instead of stopping.
 const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updateAudio0), thud = guard('audio', thud0), chime = guard('audio', chime0);
 
@@ -111,7 +112,7 @@ refGhostModel.position.y = -hero.comY;
 refGhostRoot.add(refGhostModel);
 scene.add(refGhostRoot);
 refGhostRoot.visible = false;
-const plumes = createPlumes(scene, carRoot, { maxMist: tier === 'low' ? 500 : 1800 });
+const plumes = createPlumes(scene, carRoot, { maxMist: tier === 'low' ? 500 : tier === 'mid' ? 900 : 1800 });
 const director = createDirector(camera);
 // The landing HUD and its touchdown marker (src/hud-landing.js).
 // Leaving the green band is a warning you can feel: one buzz (Android), once per change for the worse.
@@ -965,8 +966,10 @@ on('[data-board-open]', () => openBoard());
 on('[data-board-close]', () => ui.show('board', false));
 document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('click', () => openBoard(b.dataset.board)));
 
-addEventListener('resize', () => { stage.resize(); plumes.setScale(innerHeight); crash.setScale(innerHeight); director.reframe(); });
-plumes.setScale(innerHeight); crash.setScale(innerHeight);
+addEventListener('resize', () => { stage.resize(); director.reframe(); });
+// Mist and crash smoke size in drawing-buffer pixels, kept current through resizes and the
+// resolution governor's steps (src/render/scene.js onResize).
+stage.onResize((h) => { plumes.setScale(h); crash.setScale(h); });
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(true); });
 
 // --- Free Drive (a lazy chunk: real roads from open data, src/drive/) ------------------------------

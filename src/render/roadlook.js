@@ -111,7 +111,7 @@ export const WATER_GLSL = /* glsl */`
     float n1 = cgNoise(p * 0.11 + vec2(t * 0.05, t * 0.03)), n2 = cgNoise(p * 0.43 - vec2(t * 0.11, -t * 0.07));
     float n3 = cgNoise(p * 1.7 + vec2(t * 0.3, t * 0.2));
     vec3 n = normalize(vec3((n1 - 0.5) * 0.22 + (n2 - 0.5) * 0.14 + (n3 - 0.5) * 0.06, 1.0, (n2 - 0.5) * 0.22 + (n1 - 0.5) * 0.12 + (n3 - 0.5) * 0.06));
-    float fres = 0.02 + 0.98 * pow(1.0 - max(dot(n, v), 0.0), 5.0);
+    float fres = 0.02 + 0.98 * pow(clamp(1.0 - dot(n, v), 0.0, 1.0), 5.0);
     vec3 r = reflect(-v, n);
     vec3 sky = mix(cgHorizon, cgZenith, smoothstep(0.0, 0.5, r.y));
     vec3 body = mix(cgWater, cgWaterDeep, smoothstep(0.5, 18.0, -depth));
@@ -225,7 +225,8 @@ export function roadMaterial(U, marking = 'eu') {
       vec3 asphalt = vec3(0.105, 0.108, 0.115) * (0.78 + 0.32 * patchy) * (0.88 + 0.24 * g);
       // Polished tyre tracks in each lane.
       float lane = hw * 0.5;
-      float track = exp(-pow((au - lane + 0.8) / 0.35, 2.0)) + exp(-pow((au - lane - 0.8) / 0.35, 2.0));
+      float tl = (au - lane + 0.8) / 0.35, tr = (au - lane - 0.8) / 0.35;   // squared, not pow(): its base goes negative
+      float track = exp(-tl * tl) + exp(-tr * tr);
       asphalt *= 1.0 - 0.18 * track;
       vec3 c = asphalt;
       ${centre}
@@ -327,7 +328,7 @@ export function skyMaterial(U) {
         float mu = max(dot(d, cgSunDir), 0.0);
         vec3 c = mix(cgHorizon, cgZenith, pow(smoothstep(-0.02, 0.75, h), 0.55));
         // The horizon glows toward the sun.
-        float sunSide = pow(max(dot(normalize(vec3(d.x, 0.0, d.z)), normalize(vec3(cgSunDir.x, 0.0, cgSunDir.z))), 0.0), 2.0);
+        float sunSide = pow(max(dot(normalize(vec3(d.x, 0.0, d.z) + vec3(1e-5, 0.0, 0.0)), normalize(vec3(cgSunDir.x, 0.0, cgSunDir.z))), 0.0), 2.0);
         c = mix(c, cgSunGlow, exp(-max(h, 0.0) * 9.0) * sunSide * 0.45);
         c += cgSunGlow * pow(mu, 12.0) * 0.35 + cgSunGlow * pow(mu, 120.0) * 0.6;
         c += cgSun * smoothstep(0.99955, 0.99975, mu) * 18.0;
@@ -362,7 +363,7 @@ export function panoMaterial(U) {
       void main(){
         float k = clamp((vY - cgPanoBase) / max(1.0, cgPanoTop - cgPanoBase), 0.0, 1.0);
         vec3 d = normalize(vW - cameraPosition);
-        float toSun = pow(max(dot(normalize(vec3(d.x, 0.0, d.z)), normalize(vec3(cgSunDir.x, 0.0, cgSunDir.z))), 0.0), 4.0);
+        float toSun = pow(max(dot(normalize(vec3(d.x, 0.0, d.z) + vec3(1e-5, 0.0, 0.0)), normalize(vec3(cgSunDir.x, 0.0, cgSunDir.z))), 0.0), 4.0);
         vec3 c = mix(cgHaze, mix(cgHaze, cgZenith, 0.28), k);
         c = mix(c, cgSunGlow * 0.9 + cgHaze * 0.3, toSun * 0.3 * (1.0 - k));
         gl_FragColor = vec4(c, 1.0);

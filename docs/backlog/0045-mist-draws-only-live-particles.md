@@ -24,11 +24,19 @@ governor step.
 
 ## Acceptance criteria
 - [ ] `perf-show.mjs phone show`: p95 frame time over the 3 s after touchdown improves
-- [ ] Mist screenshot at DPR 1 and DPR 2 the same apparent size
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] Mist screenshot at DPR 1 and DPR 2 the same apparent size
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 perf-show numbers in the PR; a unit test that the pool reports 0 live after decay and skips uploads.
 
 ## Out of scope
 New mist look.
+
+## Progress (PR #68, 2026-10-21)
+Done in #68: dead mist and smoke clipped with zero size, clouds hidden and uploads skipped when nothing is
+alive (unit test), 900 on `mid`, a full pool waits for its oldest to fade (no visible overwrite), size from the
+drawing buffer via `stage.onResize` (incl. governor steps); DPR 1 and 2 screenshots match.
+**Still missing (criterion 1):** `perf-show.mjs` (now with a `touchdown` window) can't show a p95 gain on the
+Metal dev rig: p95 sits at the 16.8 ms vsync floor before and after (render CPU p95 10.6→10.2 ms Show,
+8.2→7.8 ms Lineup). Needs a real phone or a GPU-timer measure.

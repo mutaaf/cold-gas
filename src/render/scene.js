@@ -35,7 +35,7 @@ function skyMaterial() {
         float h = clamp(vDir.y, -1., 1.);
         vec3 c = mix(mid, zenith, smoothstep(0.02, 0.55, h));
         float band = exp(-max(h, 0.) * 14.0);
-        float sunSide = pow(max(dot(normalize(vec3(vDir.x, 0., vDir.z)), normalize(vec3(sunDir.x, 0., sunDir.z))), 0.), 3.0);
+        float sunSide = pow(max(dot(normalize(vec3(vDir.x, 0., vDir.z) + vec3(1e-5, 0., 0.)), normalize(vec3(sunDir.x, 0., sunDir.z))), 0.), 3.0);
         c = mix(c, horizon, band * (0.35 + 0.65 * sunSide));
         c += horizon * pow(max(dot(vDir, sunDir), 0.), 220.) * 1.4;
         // A few stars high up.
@@ -368,7 +368,10 @@ async function buildSliced(look) {
 // compileAsync), and only then does `render` draw: the canvas fades in on its first frame
 // (`.on`), and `stage.ready` resolves.
 export function createStage(canvas, { tier = 'high', course = 'show', backdrop = true, onBackdropError = null } = {}) {
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier !== 'low', powerPreference: 'high-performance' });
+  // Canvas MSAA only where the scene draws straight to the canvas ('low'). The composer tiers draw
+  // into a HalfFloat target with no MSAA (LESSONS), so canvas MSAA there only smoothed the final
+  // quad; their edges come from SMAA after the OutputPass instead.
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier === 'low', powerPreference: 'high-performance' });
   const basePixelRatio = Math.min(window.devicePixelRatio, tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1);
   renderer.setPixelRatio(basePixelRatio);
   renderer.toneMapping = THREE.AgXToneMapping;
@@ -412,10 +415,10 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 3000);
   camera.position.set(0, 3, -100);
 
-  let composer = null, bloom = null, smaa = null;
+  let composer = null, bloom = null, aaPass = null;
   if (tier !== 'low') {
     // No MSAA render target: multisampled HalfFloat targets render black on some GPU paths.
-    // SMAA after the output pass does the edges instead.
+    // SMAA or FXAA after the output pass does the edges instead.
     // The high tier keeps the depth as a texture: the atmosphere pass reads it (src/render/film.js).
     const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: tier === 'high' ? new THREE.DepthTexture(1, 1) : null });
     composer = new EffectComposer(renderer, rt);
@@ -423,9 +426,15 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
     bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 0.92);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
-    // SMAA (desktop only) carries ~45 kB of lookup images: its own chunk, fetched in parallel
-    // with the course build, so phones never download it.
-    if (tier === 'high') smaa = import('three/examples/jsm/postprocessing/SMAAPass.js').then(({ SMAAPass }) => composer.addPass(new SMAAPass()));
+    // Edges, after the OutputPass. 'high' (desktop): SMAA, ~45 kB of lookup images in its own
+    // chunk, fetched in parallel with the course build. 'mid' (phones, tablets): FXAA, one pass and
+    // 2 kB. On the phone profile SMAA (even its LOW preset) made sub-pixel edges pop more frame to
+    // frame (flicker.mjs --phone show-wide car/row/wall up 5–50 %), while FXAA's sub-pixel blend
+    // brought the title, the Lineup's row and the replay's car down (0037).
+    aaPass = (tier === 'high'
+      ? import('three/examples/jsm/postprocessing/SMAAPass.js').then(({ SMAAPass }) => new SMAAPass())
+      : import('three/examples/jsm/postprocessing/FXAAPass.js').then(({ FXAAPass }) => new FXAAPass())
+    ).then((pass) => { composer.addPass(pass); stage.aa = pass; resize(); });
   }
 
   const looks = {};
@@ -441,7 +450,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
   const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
   const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
-  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, rocket: null, film: null, resize, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL };
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, rocket: null, film: null, aa: null, resize, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
@@ -514,7 +523,14 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
     sliverView.value.set(w, h).multiplyScalar(renderer.getPixelRatio() / 2);
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    // Point sprites (mist, crash smoke) size in drawing-buffer pixels: tell them on every resize
+    // and every resolution step (setPixelScale), not just on a window resize.
+    const bh = Math.round(h * renderer.getPixelRatio());
+    for (const fn of resizeFns) fn(bh);
   }
+  const resizeFns = [];
+  // onResize(fn): fn(drawingBufferHeight) now and after every resize or resolution change.
+  function onResize(fn) { resizeFns.push(fn); fn(Math.round((canvas.clientHeight || window.innerHeight) * renderer.getPixelRatio())); }
   resize();
 
   // Self-heal (src/obs/heal.js): the resolution governor's knob, and the rebuild after a lost WebGL
@@ -578,7 +594,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
       scene.environment = envFor(stage.course);
       await nextTask();
       await precompile();
-      await smaa;
+      await aaPass;
     } catch (err) {
       console.warn('stage warm-up', err);
     }

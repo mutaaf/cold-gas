@@ -26,12 +26,22 @@ screen, no AA, no bloom. Lockdown sweep: phone flicker show-wide car 76‰, row 
 
 ## Acceptance criteria
 - [ ] `scripts/flicker.mjs --phone`: every region's pops fall vs the baseline in this ticket, none rises
-- [ ] An iPad/iPhone UA with `hardwareConcurrency` 4 boots `mid`
-- [ ] `scripts/perf-show.mjs phone` p95 frame time within 10 % of before
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] An iPad/iPhone UA with `hardwareConcurrency` 4 boots `mid`
+- [x] `scripts/perf-show.mjs phone` p95 frame time within 10 % of before
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 Unit test for the tier picker (pure: inputs → tier). flicker.mjs and perf-show.mjs numbers in the PR.
 
 ## Out of scope
 New quality settings UI.
+
+## Progress (PR #68, 2026-10-21)
+Shipped in #68: canvas MSAA only on `low`; FXAA after the OutputPass on `mid` (SMAA-LOW measured worse on the
+phone probe); tier picker in src/gfx-tier.js (iOS and every touch device boot `mid`); obs labels `tablet-*`
+(the beacon maps it to `phone-*` until src/worker/obs.js `DCS` accepts tablets: a Worker change, frozen here).
+**Still missing (criterion 1):** with the fixed probe (ID pass in its own target), `--phone` pops fall almost
+everywhere (show-title wall 14.9→2.2, lineup-title row 60→31, replay car 94→68, jets wall 64→17) but some rise:
+show-approach row 14.1→30.4, lineup-approach row 17.0→35.4, show-wide row 17.5→19.7 and ground 1.1→1.9,
+lineup-title ground 2.0→2.3. Distant thin row geometry down a dolly needs something FXAA can't give
+(temporal AA, or wider slivers at range).

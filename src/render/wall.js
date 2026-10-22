@@ -590,7 +590,7 @@ export function* buildWall(tier, pad = WALL.pad) {
     polygonOffset: true, polygonOffsetFactor: -3, polygonOffsetUnits: -3,
     uniforms: { uC: { value: new THREE.Color(1.0, 0.07, 0.1) } },
     vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = projectionMatrix * modelViewMatrix * vec4(position,1.); }',
-    fragmentShader: 'uniform vec3 uC; varying vec2 vUv; void main(){ float a = 0.12 * pow(vUv.x, 4.0); gl_FragColor = vec4(uC * a, a); }',
+    fragmentShader: 'uniform vec3 uC; varying vec2 vUv; void main(){ float a = 0.12 * pow(clamp(vUv.x, 0.0, 1.0), 4.0); gl_FragColor = vec4(uC * a, a); }',
   });
   group.add(new THREE.Mesh(ribbon(S, W / 2 - 0.85, W / 2, 0.004), spill));
   const spillL = new THREE.Mesh(ribbon(S, -W / 2 + 0.85, -W / 2, 0.004), spill);
