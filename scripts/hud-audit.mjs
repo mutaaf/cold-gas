@@ -5,7 +5,13 @@
 //   - WCAG contrast of every visible HUD label, measured on the real screenshot: the text's
 //     luminance against the worst (closest) 10 % of the pixels behind it, with the text hidden.
 //
-//   node scripts/hud-audit.mjs <url> <outdir> [set=all|phones|quick] [label]
+//   node scripts/hud-audit.mjs <url> <outdir> [set=all|phones|tablets|safe|quick|WxH[s],…] [label]
+//
+// Viewports: phones (incl. a 320 px Slide Over column and Safari's portrait with its bars), iPads in
+// both orientations, desktops. A trailing `s` (e.g. 844x390s) is the safe-area pass: the page's
+// --safe-* insets are forced to a notched phone's (47 px on the notch side in landscape, 34 px home
+// indicator in portrait, 21 px in landscape), as iOS reports them with viewport-fit=cover.
+// Touch viewports also fly a Lineup hop (attitude dial vs the LIFT slot).
 //
 // Writes <outdir>/<label>-<viewport>-<phase>.png and <outdir>/<label>-report.json.
 import { chromium } from '@playwright/test';
@@ -13,11 +19,19 @@ import { writeFileSync, mkdirSync } from 'node:fs';
 
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', set = 'all', label = 'audit'] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
-const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430]];
-const TABLETS = [[768, 1024], [1024, 768]];
+const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430], [320, 568], [814, 380], [393, 659]];
+const TABLETS = [[768, 1024], [1024, 768], [820, 1180], [1180, 820], [1024, 1366], [1366, 1024]];
 const DESKTOPS = [[1280, 720], [1920, 1080], [720, 1280], [1080, 1920]];
-const VIEWPORTS = set === 'phones' ? PHONES : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map((v) => v.split('x').map(Number)) : [...PHONES, ...TABLETS, ...DESKTOPS];
+const SAFE = [[390, 844, 1], [430, 932, 1], [844, 390, 1], [932, 430, 1], [814, 380, 1]];
+const parse = (v) => { const m = v.match(/^(\d+)x(\d+)(s?)$/); return [Number(m[1]), Number(m[2]), m[3] ? 1 : 0]; };
+const VIEWPORTS = set === 'phones' ? PHONES : set === 'tablets' ? TABLETS : set === 'safe' ? SAFE
+  : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map(parse) : [...PHONES, ...TABLETS, ...DESKTOPS, ...SAFE];
 const touchFor = (w, h) => [...PHONES, ...TABLETS].some(([a, b]) => a === w && b === h);
+// A notched phone's insets with viewport-fit=cover (the notch side is reported on both sides in
+// landscape, as iOS does).
+const insetCss = (w, h) => (w > h
+  ? ':root { --safe-t: 0px !important; --safe-l: 47px !important; --safe-r: 47px !important; --safe-b: 21px !important; }'
+  : ':root { --safe-t: 47px !important; --safe-l: 0px !important; --safe-r: 0px !important; --safe-b: 34px !important; }');
 
 // Everything that sits over the stage during a run (both the old markup and the new; missing ones
 // are skipped). Pairs where one contains the other are not overlaps.
@@ -28,11 +42,11 @@ const BOXES = [
   // new HUD
   '[data-hud-box]',
   // touch
-  '[data-stick]', '.buttons', '[data-onethumb]', '[data-nozzle-pad] svg',
+  '[data-stick]', '.buttons', '.tbtn', '[data-onethumb]', '[data-nozzle-pad] svg',
   // Free Drive
-  '.fd-road', '.fd-ctl', '.fd-timer', '.fd-speed', '.fd-stats', '.fd-map', '.fd-fine',
+  '.fd-road', '.fd-ctl', '.fd-timer', '.fd-speed', '.fd-stats', '.fd-map', '.fd-fine', '.bq-dock',
 ];
-const TEXT_ROOTS = '[data-screen="hud"], [data-touch], [data-cue], .top, [data-drill-bar], [data-drive-hud], [data-onethumb]';
+const TEXT_ROOTS = '[data-screen="hud"], [data-touch], [data-cue], .top, [data-drill-bar], [data-drive-hud], [data-onethumb], .bq-dock';
 
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 const report = [];
@@ -132,12 +146,13 @@ async function measure(page, vpName, phase) {
   console.log(`${vpName} ${phase}: overlaps ${m.overlaps.length}${m.overlaps.length ? ` (${m.overlaps.map((o) => `${o.a}×${o.b} ${o.px}`).join('; ')})` : ''} · offscreen ${m.offscreen.length} · min text ${minPx}px (${small.length} < 11) · min contrast ${minRatio} (${low.length} < 4.5)`);
 }
 
-for (const [w, h] of VIEWPORTS) {
-  const touch = touchFor(w, h);
-  const vpName = `${w}x${h}`;
+for (const [w, h, safe] of VIEWPORTS) {
+  const touch = safe || touchFor(w, h);
+  const vpName = `${w}x${h}${safe ? 's' : ''}`;
   const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  if (safe) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = css; document.head.append(s); }), insetCss(w, h));
   await page.goto(`${url}?gfx=low`);
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30000 });
   await page.waitForTimeout(1500);
@@ -196,8 +211,21 @@ for (const [w, h] of VIEWPORTS) {
   await freeze(); await measure(page, vpName, '6-touchdown'); await thaw();
   if (thumbMode) await S(() => window.__coldgas.thumb.up()); else { await page.keyboard.up('KeyF'); await page.keyboard.up('ShiftLeft'); }
   await until(() => window.__coldgas.S.mode === 'results', 30000);
-  // Free Drive on phones and the two desktop sizes.
-  if (['390x844', '844x390', '1280x720', '1920x1080', '768x1024'].includes(vpName)) {
+  // The Lineup in the air (touch): its air layout adds LIFT in slot B beside the attitude dial.
+  if (touch) {
+    await S(() => window.__coldgas.toTitle());
+    await page.goto(`${url}?gfx=low&course=lineup`);
+    await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30000 });
+    await page.waitForTimeout(800);
+    await S(() => { window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
+    await page.keyboard.down('ArrowUp'); await page.waitForTimeout(1200); await page.keyboard.down('Space');
+    if (await until(() => window.__coldgas.S.run.phase === 'air' && window.__coldgas.S.run.car.pos.y > 1.5, 30000)) {
+      await freeze(); await measure(page, vpName, '8-lineup-air'); await thaw();
+    }
+    await page.keyboard.up('Space'); await page.keyboard.up('ArrowUp');
+  }
+  // Free Drive on phones, iPads and the two desktop sizes.
+  if (['390x844', '844x390', '1280x720', '1920x1080', '768x1024', '1180x820', '844x390s'].includes(vpName)) {
     await S(() => window.__coldgas.toTitle());
     await page.goto(`${url}?gfx=low&drive=stelvio`);
     const ok = await until(() => window.__coldgas?.drive?.active, 90000);
