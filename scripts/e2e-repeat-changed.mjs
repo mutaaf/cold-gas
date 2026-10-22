@@ -5,6 +5,7 @@
 //
 //   node scripts/e2e-repeat-changed.mjs            # specs changed vs origin/main, 5 times each
 //   E2E_REPEAT=10 node scripts/e2e-repeat-changed.mjs tests/e2e/race.spec.js
+//   E2E_SHARD=2/3 node scripts/e2e-repeat-changed.mjs   # one third of the repeated runs (CI splits the guard 3 ways)
 //
 // Frame-time tests (@perf) are left out: they run once, on their own, in the main suite.
 import { execFileSync, spawnSync } from 'node:child_process';
@@ -63,5 +64,6 @@ const bySpecs = specs.length <= 4 ? 5 : specs.length <= 10 ? 3 : 2;
 const tests = countTests();
 const repeat = Number(process.env.E2E_REPEAT) || (heavy ? 2 : tests > 8 ? Math.min(bySpecs, Math.max(3, Math.floor(40 / tests))) : bySpecs);
 console.log(`[flake guard] ${specs.length} changed spec(s), ${tests || "?"} test(s), ${repeat}× each, no retries:\n  ${specs.join("\n  ")}`);
-const res = spawnSync('npx', ['playwright', 'test', ...specs, '--project=desktop', `--repeat-each=${repeat}`, '--retries=0'], { stdio: 'inherit' });
+const shard = process.env.E2E_SHARD ? [`--shard=${process.env.E2E_SHARD}`] : [];
+const res = spawnSync('npx', ['playwright', 'test', ...specs, '--project=desktop', `--repeat-each=${repeat}`, '--retries=0', ...shard], { stdio: 'inherit' });
 process.exit(res.status ?? 1);

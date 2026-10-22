@@ -57,10 +57,14 @@ jobs:
 
   # Flake guard: e2e specs this PR adds or changes run several times in a row, with no retries.
   guard:
-    name: Flake guard (changed e2e specs, repeated)
+    name: Flake guard ${{ matrix.shard }}/3 (changed e2e specs, repeated)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 50   # a PR that touches many specs repeats all of them (each at least 3×)
+    timeout-minutes: 35   # split 3 ways: a PR touching 14 specs ran one guard past 50 minutes
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -71,10 +75,12 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - if: hashFiles('scripts/e2e-repeat-changed.mjs') != ''
         run: node scripts/e2e-repeat-changed.mjs
+        env:
+          E2E_SHARD: ${{ matrix.shard }}/3
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
-          name: playwright-report-guard
+          name: playwright-report-guard-${{ matrix.shard }}
           path: |
             playwright-report/
             test-results/
