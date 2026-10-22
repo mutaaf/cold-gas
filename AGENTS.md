@@ -298,6 +298,8 @@ state. It never writes it.
 | `?drive=sandbox[#b=<build>]` | The Sandbox (build, power-ups, side quests); `#b=` carries a shared build (also on a road link) |
 | `?drive=endless[&seed=<text>][&tod=dusk][&idb=0]` | Free Drive's endless road from that seed (same seed, same world) |
 
+One deep link wins when several are given: `?drive=` over `?play=` over `?board=` (the others are
+ignored; `?gfx=` and `?course=` combine with any of them).
 Renaming or removing a deep link breaks the mutaafaziz.com launcher and Digital Craft /labs.
 Keep the old ones working.
 

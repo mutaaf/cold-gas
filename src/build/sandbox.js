@@ -23,7 +23,7 @@ const ANCHOR = { x: 0, z: -150 };
 export function createSandbox(ctx) {
   const { stage, carRoot, plumes, crash, syncCar, ui, audio, input, tier } = ctx;
   const camera = stage.camera;
-  const st = { active: false, paused: false, car: null, course: null, world: null, layer: null, cam: null, acc: 0, airT: 0, flipT: 0, fan: false, hud: null, ground: 0 };
+  const st = { active: false, opening: false, paused: false, car: null, course: null, world: null, layer: null, cam: null, acc: 0, airT: 0, flipT: 0, fan: false, hud: null, ground: 0 };
   const comps = [0, 0, 0, 0], spins = [0, 0, 0, 0];
   const poseLerp = createPoseLerp(), reverse = createReverse();
   let hudRoot = null;
@@ -59,7 +59,12 @@ export function createSandbox(ctx) {
   }
 
   async function start() {
-    if (st.active) return;
+    // In flight already (a double tap while the engine loads) or open: one arena, built once.
+    if (st.active || st.opening) return;
+    st.opening = true;
+    try { await open(); } finally { st.opening = false; }
+  }
+  async function open() {
     audio.initAudio();
     await Promise.all([stage.ready, loadPhysics()]);   // the rigid-body engine (src/sim/engine.js)
     st.world = createArenaWorld({ renderer: stage.renderer, tier });

@@ -1,12 +1,12 @@
 ---
 id: 0036
 title: The replay behind the results and the ghost glide instead of stepping
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 70
 by: operator
 ---
 
@@ -23,9 +23,9 @@ Take `i0` and `k` after advancing; slerp the quaternion as the parked bodies alr
 interpolate wheel compression/steer; drive the ghost from the fractional tick.
 
 ## Acceptance criteria
-- [ ] Drawn car z per frame in the replay has a second difference within 2× the live run's
-- [ ] `scripts/flicker.mjs` show-replay and show-replay-rigs car pops ≤ 10‰ desktop and phone
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] Drawn car z per frame in the replay has a second difference within 2× the live run's (0.1147 m → 0.0033 m, equal to live)
+- [x] ~~`scripts/flicker.mjs` show-replay and show-replay-rigs car pops ≤ 10‰ desktop and phone~~ Withdrawn by the operator (2026-10-21): the probe's car region counts the silhouette's edge sweeping across pixels as pops, so a smoothly moving car can't reach 10‰ (heatmap: pops lie along the car's path). Measured 31.6 → 31.0‰ desktop, 50.8 → 48.9‰ phone. Replaced by the jerk criterion above; a silhouette-excluding car metric belongs to 0050.
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 Unit test for the replay sampler (pure function: frames, t → pose) covering frame boundaries;

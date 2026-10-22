@@ -1,12 +1,12 @@
 ---
 id: 0035
 title: A retry's countdown shows a fresh HUD, not the last run's numbers
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 70
 by: operator
 ---
 
