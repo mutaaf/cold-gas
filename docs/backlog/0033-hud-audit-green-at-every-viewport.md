@@ -1,12 +1,12 @@
 ---
 id: 0033
 title: The HUD audit passes at every phone, iPad and desktop viewport, with safe-area insets
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: accessibility
 created: 2026-10-21
-pr:
+pr: 71
 by: operator
 ---
 
@@ -33,10 +33,10 @@ The audits never ran an iPad viewport or a notch inset, so none of this was caug
   notch side in landscape, 34 px home indicator).
 
 ## Acceptance criteria
-- [ ] `hud-audit` reports 0 overlaps, 0 texts < 11 px and 0 labels < 4.5:1 at every viewport, inset pass included
-- [ ] `title-audit` reports 0 issues at every viewport including the iPad ones
-- [ ] Screenshots at 390×844, 844×390, 820×1180 and 1280×720 attached to the PR and looked at
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] `hud-audit` reports 0 overlaps, 0 texts < 11 px and 0 labels < 4.5:1 at every viewport, inset pass included
+- [x] `title-audit` reports 0 issues at every viewport including the iPad ones
+- [x] Screenshots at 390×844, 844×390, 820×1180 and 1280×720 attached to the PR and looked at
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 Extend both audit scripts as above. Add an e2e in `tests/e2e/` that boots 844×390 touch, starts the
