@@ -34,6 +34,9 @@ test('a drill starts from the practice sheet and R retries it from the same star
 });
 
 test('the landing HUD is up in the air: the sink in its band, the BRAKE line, the touchdown marker', async ({ page }) => {
+  // Slow but correct: a drill's start flies the reference on the main thread, then the run is flown
+  // out to the coach's card; on CI's software GL that took 57 s of a 60 s budget.
+  test.slow();
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
   await page.evaluate(() => { window.__coldgas.setTier('pro'); window.__coldgas.startDrill('land'); });
