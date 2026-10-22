@@ -1,12 +1,12 @@
 ---
 id: 0041
 title: Keyboard, gamepad and touch all work on every device, and keys never stick or misfire
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 67
 by: operator
 ---
 
@@ -28,11 +28,11 @@ is active and hides the touch overlay; a document `pointerdown` with `pointerTyp
 follow the last device.
 
 ## Acceptance criteria
-- [ ] iPad emulation (touch + isMobile), Show, ArrowUp held: car moves within 2 s
-- [ ] Desktop with a touch tap on the canvas shows the touch overlay
-- [ ] Click Retry, press and release Space: same run continues
-- [ ] Holding Escape toggles pause once
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] iPad emulation (touch + isMobile), Show, ArrowUp held: car moves within 2 s
+- [x] Desktop with a touch tap on the canvas shows the touch overlay
+- [x] Click Retry, press and release Space: same run continues
+- [x] Holding Escape toggles pause once
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 e2e for each criterion; unit tests in `tests/unit/` for the last-device arbitration in input.js.
