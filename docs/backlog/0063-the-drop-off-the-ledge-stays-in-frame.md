@@ -55,3 +55,20 @@ step. Tag `@heavy` if it flies the whole reference under software GL.
 
 ## Out of scope
 The strip covering the car on portrait phones (0026), the title and replay cameras.
+
+## Critic re-measure (2026-10-22 22:00, production da53d64)
+Still failing, and worse than the centre probe suggests. Measured on the Show reference with the
+compact phone HUD #79 shipped (docs/critique/2026-10-22-2200.md):
+- **Above the mission block's bottom + 24 px**: 12 of 41 air frames at 1440×900 (centre y 66–127, block
+  bottom 115) and 12 of 41 at 390×844 (y 62–119, bottom 109), from release + 0.15 s to + 1.25 s. At
+  1440×900, 10 of those frames have the centre *inside* the timeline's box.
+- **844×390 (compact)**: the centre is in the top 15 % of the screen (y 29–55 of 390) in 12 of 41 air
+  frames. The car is a dark upside-down sliver at the top edge, and the parked row is under the HUD
+  line at the bottom (`phoneL-4-release.jpg`).
+- **New, 390×844**: the car's projected bounding box (every visible mesh's box, through the camera) is
+  **40–47 % covered** by the compact rail and the top bar in 15 of 41 air frames (release + 0.25 s to
+  + 1.35 s, box x 52–255, y 4–178). The centre sits just right of the rail (x 136), so 0061's
+  centre-only probe passes, but the car's tail is drawn under the rail (`phone-4-release.jpg`).
+
+Added criterion: at 390×844 and 844×390, no air frame has more than 10 % of the car's projected
+bounding box under any `[data-hud-box]`, `[data-hud-toggle]` or `.top-actions` rect.
