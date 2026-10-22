@@ -93,7 +93,7 @@ test('deep links: ?drive= wins over ?play=, and ?play= over ?board=', async ({ p
 });
 
 for (const phone of [true, false]) {
-  test(`${phone ? 'phone (4× CPU)' : 'desktop'}: the first Jump starts at once, with the reference ghost`, async ({ browser }) => {
+  test(`${phone ? 'phone (4× CPU)' : 'desktop'}: the first Jump starts at once, with the reference ghost`, { tag: '@perf' }, async ({ browser }) => {
     test.slow();   // a throttled CPU on software GL
     const ctx = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 } : { viewport: { width: 1280, height: 720 } });
     const page = await ctx.newPage();
