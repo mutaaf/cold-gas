@@ -224,6 +224,10 @@ src/render/           three.js (r186):
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone
 src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
                         stick shaping, reverse at a standstill; shared with the drive bench and tests
+src/driving.js        driving levels (pure, 0066): Easy / Standard / Advanced on the ground in every mode. Writes only
+                        the ordinary input channels (unscored grounds also: assist, and the car's tcOff / tcSport /
+                        absOff / handbrake flags, never set on a scored run). Easy: road-speed governor, lane keep,
+                        slide catch; Standard: the hands, bit for bit; Advanced: direct, analog pedals
 src/render/interp.js  the car drawn between 240 Hz ticks (no sim change)
 src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
                         hold to land (LAND + the carry over the row); plain sim inputs, pure, no DOM
@@ -327,7 +331,7 @@ node scripts/endless-probe.mjs [seed] [km] [secs]     endless road in Node: gene
 node scripts/grass-probe.mjs [roads] [off] [angle]    off the road and back on, every road (the verge regression)
 node scripts/verge-steps.mjs [roads]                  steps in the ground beside the road
 node scripts/ref-hash.mjs                             fingerprints of the stunt references (a physics change is bit-neutral or not)
-node scripts/drive-feel.mjs [bench|road] [assist|pro]   driving feel: step steer, lane change, on-centre, 60–0, slides; a keyboard driver on the four roads
+node scripts/drive-feel.mjs [bench|road|levels|bench-levels] [assist|pro]   driving feel: step steer, lane change, on-centre, 60–0, slides; a keyboard driver on the four roads; `levels`: the driving levels (naive keys/touch, skilled pad)
 node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
 npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
 npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)

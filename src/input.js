@@ -21,10 +21,10 @@ import { newInput, VALVE_KEYS } from './sim/vehicle.js';
 import { createKeyRamp, padValves, bindNozzlePad, VALVES } from './valves.js';
 import { createOneThumb } from './onethumb.js';
 import { tiltSteer, buzz, armTiltGrant } from './touch-settings.js';
-import { createHands, stickShape } from './hands.js';
+import { createDriver, shapeStick, applyGround, loadDriving, saveDriving, validLevel, TC_MODES } from './driving.js';
 
 const keys = new Set();
-const touch = { active: false, x: 0, y: 0, lift: false, land: false, go: false, brk: false };
+const touch = { active: false, x: 0, y: 0, lift: false, land: false, go: false, brk: false, goAmt: 1, brkAmt: 1 };
 
 let nozzlePad = { valves: new Float64Array(VALVES), active: () => false, show: () => {}, sync: () => {}, reset: () => {} };
 export const getNozzlePad = () => nozzlePad;
@@ -144,8 +144,17 @@ export function bindInput(root, { onPause, running = () => false } = {}) {
   for (const [sel, k] of [['[data-btn-lift]', 'lift'], ['[data-btn-land]', 'land'], ['[data-btn-go]', 'go'], ['[data-btn-brake]', 'brk']]) {
     const b = root.querySelector(sel);
     if (!b) continue;
-    b.addEventListener('pointerdown', (e) => { e.preventDefault(); touch[k] = true; touch.active = true; b.classList.add('on'); b.setPointerCapture(e.pointerId); buzz('tap'); });
-    const off = () => { touch[k] = false; b.classList.remove('on'); };
+    // GO and BRAKE are analog pedals in Advanced driving: how far up the pad the finger is (or slides).
+    const pedal = k === 'go' ? 'goAmt' : k === 'brk' ? 'brkAmt' : null;
+    const press = (e) => {
+      if (!pedal) return;
+      const r = b.getBoundingClientRect();
+      touch[pedal] = r.height > 0 ? pedalAmount((e.clientY - r.top) / r.height) : 1;
+      if (driver.level === 'advanced') b.style.setProperty('--amt', touch[pedal].toFixed(2));
+    };
+    b.addEventListener('pointerdown', (e) => { e.preventDefault(); touch[k] = true; touch.active = true; press(e); b.classList.add('on'); b.setPointerCapture(e.pointerId); buzz('tap'); });
+    if (pedal) b.addEventListener('pointermove', (e) => { if (touch[k]) press(e); });
+    const off = () => { touch[k] = false; b.classList.remove('on'); b.style.removeProperty('--amt'); };
     b.addEventListener('pointerup', off); b.addEventListener('pointercancel', off);
     resetters.push(off);
   }
@@ -197,20 +206,47 @@ const k = (...codes) => codes.some((c) => keys.has(c));
 
 // Keys are on/off; a driver's hands aren't: src/hands.js turns keys and the touch stick into a
 // steering wheel and pedals (speed-aware), once per 240 Hz sim tick, the same hands the drive
-// bench (scripts/drive-feel.mjs) and the unit tests use.
-const hands = createHands();
+// bench (scripts/drive-feel.mjs) and the unit tests use. On the ground they belong to the driving
+// level (src/driving.js: Easy / Standard / Advanced, one setting for every mode); in the air the
+// flight keeps the hands it always had, whatever the level.
+export const driving = loadDriving(primaryCoarse);
+const driver = createDriver(driving.level, driving);
+const hands = driver.hands;
+const drivingFns = new Set();
+export const onDriving = (fn) => { drivingFns.add(fn); return () => drivingFns.delete(fn); };
+export const drivingLevel = () => driver.level;
+// Change the driving setting (level, tc, abs) and remember it on this device.
+export function setDriving(patch = {}) {
+  if (validLevel(patch.level)) driving.level = patch.level;
+  if (TC_MODES.includes(patch.tc)) driving.tc = patch.tc;
+  if (typeof patch.abs === 'boolean') driving.abs = patch.abs;
+  driving.saved = true;
+  saveDriving(driving);
+  driver.set(driving.level, driving);
+  for (const fn of drivingFns) fn(driving);
+  return driving;
+}
+// What the driver did on the last ground tick (tests): the level, the steer, Easy's aids (allocates).
+export const drivingState = () => ({ level: driver.level, steer: driver.steer, throttle: driver.throttle, aid: { ...driver.aid } });
+// A finger near the top of an Advanced pedal is full; near the bottom about a third.
+export const pedalAmount = (fy) => Math.max(0.35, Math.min(1, 0.35 + 0.65 * (1 - fy)));
 const dz = (v) => (Math.abs(v) < 0.12 ? 0 : v);
+const raw = { keyAx: 0, stickAx: 0, tilt: 0, up: false, down: false, thrA: 0, brkA: 0, hb: 0 };
+const drv = { steer: 0, throttle: 0, brake: 0, ground: null };
 
 // Touch is the device in use: its controls are on screen and the cues name its buttons.
 export const usingTouch = () => device.touch;
 
 // Sample into a sim input. `phase` is the run phase; `tier` the flight tier ('assist' | 'pro' |
 // 'advanced'; a boolean means assist on/off); `released` whether the car has let go of the Wall;
-// `car` (optional) the vehicle state, for the keyboard's speed-sensitive steering.
+// `car` (optional) the vehicle state, for the keyboard's speed-sensitive steering and the driving
+// aids; `ctx` (optional) { free: an unscored mode (Free Drive, the Sandbox), road: Free Drive's road }.
+// On a scored run the flight tier keeps the `assist`/`manual` channels (any Assist tick makes an Assist
+// run); on an unscored ground the driving level sets them, and the car's TC/ABS/handbrake.
 // Everything is driver-relative: + steer, roll and yaw are to the right (src/sim/vehicle.js).
 const vScratch = new Float64Array(VALVES);
 const keyRamp = createKeyRamp(), isDown = (c) => keys.has(c);
-export function sample(phase, tier, out = newInput(), released = false, car = null) {
+export function sample(phase, tier, out = newInput(), released = false, car = null, ctx = null) {
   Object.assign(out, newInput());
   if (typeof tier === 'boolean') tier = tier ? 'assist' : 'pro';
   out.assist = tier === 'assist' ? 1 : 0;
@@ -221,15 +257,17 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
   const v = !air && car ? Math.hypot(car.vel.x, car.vel.z) : 0;
   // On the ground the touch stick goes through the same hands as the keys: a thumb can't feather
   // a 2 cm stick, so it sets where the wheel is going and the wheel follows at the speed's rate
-  // (with a mild expo: the middle of the stick is the fine part of the lock).
-  const stickGround = touch.active && !air ? stickShape(touch.x, STICK_DEAD, 0.3) : 0;
+  // (with a mild expo: the middle of the stick is the fine part of the lock). The level shapes it.
+  const lvl = driver.level;
+  const stickGround = touch.active && !air ? shapeStick(lvl, touch.x, 'touch') : 0;
   // A gamepad's stick too: shaped (src/hands.js stickShape) and rate-limited like a thumb, or a
   // full flick at 140 km/h reached the rack's lock in 29 ms and the yaw overshot by half.
   const pads = navigator.getGamepads?.() || [];
   let padGround = 0;
-  if (!air && !out.manual) for (const p of pads) if (p) padGround += stickShape(p.axes[0] || 0);
+  if (!air) for (const p of pads) if (p) padGround += shapeStick(lvl, p.axes[0] || 0, 'pad');
   const keyAx = (k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0), stickAx = stickGround + padGround;
-  ax = hands.steer(Math.max(-1, Math.min(1, keyAx + stickAx)), v, keyAx === 0 && stickAx !== 0);
+  // The air's roll keeps the hands it always had; the ground's wheel is the driving level's (below).
+  if (air) ax = hands.steer(Math.max(-1, Math.min(1, keyAx + stickAx)), v, keyAx === 0 && stickAx !== 0);
   if (k('ArrowUp', 'KeyW')) ay -= 1;
   if (k('ArrowDown', 'KeyS')) ay += 1;
   if (k('KeyQ')) yaw -= 1;
@@ -239,16 +277,35 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
   let boost = k('KeyF') ? 1 : 0;
   // The phone's GO and BRAKE are buttons too: on the ground they press the pedals like the keys.
   const tGo = touch.active && touch.go && !air, tBrk = touch.active && touch.brk && !air;
-  ({ thr, brk } = hands.pedals(ay < 0 || tGo, ay > 0 || tBrk));
+  if (air) ({ thr, brk } = hands.pedals(ay < 0 || tGo, ay > 0 || tBrk));
 
+  let thrA = 0, brkA = 0, hb = 0;
   for (const p of pads) {
-    if (!p || out.manual) continue;
-    if (air) ax += dz(p.axes[0] || 0);
+    if (!p) continue;
+    const rt = p.buttons[7]?.value || 0, lt = p.buttons[6]?.value || 0;
+    if (!air) {
+      // Driving: the triggers are analog pedals, A is LIFT (the ledge's RELEASE), B the handbrake.
+      thrA = Math.max(thrA, rt); brkA = Math.max(brkA, lt);
+      if (p.buttons[0]?.pressed) lift = 1;
+      if (p.buttons[1]?.pressed) hb = 1;
+      continue;
+    }
+    if (out.manual) continue;
+    ax += dz(p.axes[0] || 0);
     ay += dz(p.axes[1] || 0);
     yaw += dz(p.axes[2] || 0) * 0.8;
-    const rt = p.buttons[7]?.value || 0, lt = p.buttons[6]?.value || 0;
-    if (air) { lift = Math.max(lift, rt, p.buttons[0]?.pressed ? 1 : 0); land = Math.max(land, lt > 0.3 || p.buttons[1]?.pressed ? 1 : 0); if (p.buttons[5]?.pressed) boost = 1; }
-    else { thr = Math.max(thr, rt); brk = Math.max(brk, lt); if (p.buttons[0]?.pressed) lift = 1; }
+    lift = Math.max(lift, rt, p.buttons[0]?.pressed ? 1 : 0); land = Math.max(land, lt > 0.3 || p.buttons[1]?.pressed ? 1 : 0); if (p.buttons[5]?.pressed) boost = 1;
+  }
+  if (!air) {
+    // The driving level turns keys, sticks, triggers, the touch pedals and the tilt into the wheel and
+    // the pedals (src/driving.js). Advanced's touch pedals are analog: how far up the pad the finger is.
+    const adv = lvl === 'advanced';
+    raw.keyAx = keyAx; raw.stickAx = stickAx; raw.tilt = tiltSteer();
+    raw.up = ay < 0 || (tGo && !adv); raw.down = ay > 0 || (tBrk && !adv);
+    raw.thrA = Math.max(thrA, tGo && adv ? touch.goAmt : 0); raw.brkA = Math.max(brkA, tBrk && adv ? touch.brkAmt : 0);
+    raw.hb = ctx?.free && (k('KeyH') || hb) ? 1 : 0;
+    driver.tick(raw, car, ctx, drv);
+    ax = drv.steer; thr = drv.throttle; brk = drv.brake;
   }
 
   if (touch.active) {
@@ -260,10 +317,12 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
     if (touch.go && air) { thr = 1; boost = 1; }
     if (touch.brk && air) brk = 1;
   }
-  if (!air) ax += tiltSteer();
   ax = Math.max(-1, Math.min(1, ax)); ay = Math.max(-1, Math.min(1, ay));
 
-  if (out.manual) return advanced(out, air, lift, ax, thr, brk, pads);
+  // An unscored ground: the level's stability control, traction control, ABS and handbrake. In the air,
+  // and on every scored run, the flight tier's channels and a stock car.
+  if (ctx?.free && car) applyGround(air ? null : drv.ground, out, car, air);
+  if (out.manual) return advanced(out, air, lift, ax, thr, brk);
   if (air) {
     out.roll = ax; out.pitch = -ay; out.yaw = yaw; out.lift = lift; out.level = land; out.thrust = boost;
   } else {
@@ -276,18 +335,15 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
 }
 
 // Advanced: off the Wall the valves are yours; on the ground (and up the curl) you drive.
-// Space on the ledge is still RELEASE (and opens the four down-jets, like the real push-off).
-function advanced(out, flying, liftKey, ax, thr, brk, pads) {
+// Space on the ledge is still RELEASE (and opens the four down-jets, like the real push-off). On the
+// ground the wheel and pedals come through the driving level like every tier's (this used to add the
+// raw gamepad stick and skip the hands).
+function advanced(out, flying, liftKey, ax, thr, brk) {
   if (!flying) {
-    for (const p of pads) {
-      if (!p) continue;
-      ax += dz(p.axes[0] || 0);
-      thr = Math.max(thr, p.buttons[7]?.value || 0); brk = Math.max(brk, p.buttons[6]?.value || 0);
-      if (p.buttons[0]?.pressed) liftKey = 1;
-    }
-    out.steer = Math.max(-1, Math.min(1, ax)); out.throttle = thr; out.brake = brk; out.lift = liftKey;
+    out.steer = ax; out.throttle = thr; out.brake = brk; out.lift = liftKey;
     return out;
   }
+  const pads = navigator.getGamepads?.() || [];
   vScratch.fill(0);
   keyRamp(isDown, vScratch);
   for (const p of pads) if (p) padValves(p, vScratch);

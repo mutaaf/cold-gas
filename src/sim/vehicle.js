@@ -242,6 +242,9 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     // Stability control (Assist): how hard it is working (0–1, for the HUD and the sound), the
     // brake it adds per wheel this tick (N·m), and last tick's sideslip (rad).
     esc: 0, escBrake: new Float64Array(4), escBeta: 0,
+    // The drivetrain's own settings, for an unscored ground only (Free Drive, the Sandbox: src/driving.js
+    // Advanced). Never set on a scored run, so the Worker's car (always off) replays every log the same.
+    tcOff: false, tcSport: false, absOff: false, handbrake: 0,
   };
   s.engineMass = massOf(s);
   attachCar(world, HULL_SHAPE, s.engineMass, { x: SPEC.inertia.pitch, y: SPEC.inertia.yaw, z: SPEC.inertia.roll });
@@ -857,13 +860,13 @@ export function step(s, inp) {
       // tail 20° out, and full throttle out of a 40 km/h bend spun the car.
       const loose = hitMat.loose === true;
       const kd = T >= 0 ? kappa : -kappa;
-      if (kd > 0.12) { T *= clamp(1 - (kd - 0.12) * 9, loose ? 0.15 * hitMat.grip * hitMat.grip : 0.15, 1); s.tcActive = true; }
+      if (kd > 0.12 && !s.tcOff) { T *= clamp(1 - (kd - 0.12) * 9, loose ? 0.15 * hitMat.grip * hitMat.grip : 0.15, 1); s.tcActive = true; }
       let cap = (loose ? 1.2 : TC_CAP) * R * D;
-      if (!inp.manual && Math.abs(vLong) > 3) {
+      if (!inp.manual && !s.tcSport && Math.abs(vLong) > 3) {
         const fy = Dy > 0 ? tyreFy(Dy, alpha, By) / Dy : 0;
         cap = Math.min(cap, R * D * Math.sqrt(Math.max(0, 1 - fy * fy)));
       }
-      if (T > cap) { T = cap; s.tcActive = true; } else if (T < -cap) { T = -cap; s.tcActive = true; }
+      if (s.tcOff) { /* TC off: the motors' whole torque, whatever the tyre makes of it */ } else if (T > cap) { T = cap; s.tcActive = true; } else if (T < -cap) { T = -cap; s.tcActive = true; }
     }
     const brakeT = inp.brake * SPEC.brakeTorque * (i < 2 ? 1.15 : 0.85) + s.escBrake[i];
     // Pacejka pure-slip forces, then the friction ellipse for combined slip.
@@ -876,8 +879,13 @@ export function step(s, inp) {
     if (brakeT > 0) {
       // Brakes pull toward zero and can lock the wheel, never reverse it. ABS (every tier):
       // release pressure once the wheel is past the slip peak.
-      const abs = kappa < -0.1 && Math.abs(vLong) > 2 ? clamp(1 - (-kappa - 0.1) * 10, 0.05, 1) : 1;
+      const abs = !s.absOff && kappa < -0.1 && Math.abs(vLong) > 2 ? clamp(1 - (-kappa - 0.1) * 10, 0.05, 1) : 1;
       const db = ((brakeT * abs) / WHEEL_I) * dt;
+      omega = Math.abs(omega) <= db ? 0 : omega - Math.sign(omega) * db;
+    }
+    // The handbrake (unscored grounds only): the rear wheels, no ABS, so it locks them.
+    if (s.handbrake > 0 && i >= 2) {
+      const db = ((s.handbrake * SPEC.brakeTorque) / WHEEL_I) * dt;
       omega = Math.abs(omega) <= db ? 0 : omega - Math.sign(omega) * db;
     }
     wh.omega = omega;

@@ -1,8 +1,11 @@
 // Driving feel bench: the manoeuvres a test driver runs, through the same keyboard hands a player
-// has (src/hands.js), on open concrete. node scripts/drive-feel.mjs [assist|pro]
+// has (src/hands.js), on open concrete. node scripts/drive-feel.mjs [bench|road|levels] [assist|pro]
+// `levels` (0066): the driving levels (src/driving.js) on the four roads, a naive driver on the keys and
+// on the touch stick (Easy vs today's Standard) and a skilled one on a gamepad (Advanced vs Standard).
 import { createVehicle, step, newInput, DT } from '../src/sim/vehicle.js';
 import { initPhysics } from '../src/sim/engine.js';
 import { createHands } from '../src/hands.js';
+import { createDriver, shapeStick, applyGround } from '../src/driving.js';
 
 const KM = 3.6;
 export const spd = (s) => Math.hypot(s.vel.x, s.vel.z);
@@ -19,12 +22,20 @@ export function fresh(x = 200) {
   return s;
 }
 // Keyboard hands; `cruise` holds a speed with a proportional throttle (a driver's right foot).
-export function kbHands(tier = 'assist') {
-  const k = createHands();
+export function kbHands(tier = 'assist', level = null) {
+  const k = createHands(), drv = level ? createDriver(level) : null;
+  const raw = { keyAx: 0, stickAx: 0, tilt: 0, up: 0, down: 0, thrA: 0, brkA: 0, hb: 0 }, ctx = { free: true };
   return {
-    reset: () => k.reset(),
+    reset: () => { k.reset(); drv?.reset(); },
     tick(s, keys) {
-      const inp = k.keyboard(keys, s, tier);
+      let inp;
+      if (drv) {
+        raw.keyAx = (keys.right ? 1 : 0) - (keys.left ? 1 : 0); raw.up = !!keys.up; raw.down = !!keys.down;
+        const d = drv.tick(raw, s, ctx);
+        inp = newInput(); inp.assist = tier === 'assist' ? 1 : 0;
+        inp.steer = d.steer; inp.throttle = d.throttle; inp.brake = d.brake;
+        applyGround(d.ground, inp, s, false);
+      } else inp = k.keyboard(keys, s, tier);
       if (keys.cruise != null) { const e = keys.cruise - spd(s); inp.throttle = Math.max(0, Math.min(1, e * 0.5 + 0.12)); inp.brake = 0; }
       return inp;
     },
@@ -38,10 +49,10 @@ export function toSpeed(s, v, h) {
 const yawR = (s) => -s.angVel.y;   // + = turning right
 const latG = (s) => (spd(s) * Math.abs(s.angVel.y)) / 9.81;
 
-export function bench(tier = 'assist', log = console.log) {
+export function bench(tier = 'assist', log = console.log, level = null) {
   const out = {};
   const report = (name, o) => { out[name] = o; log(name.padEnd(30), Object.entries(o).map(([k, v]) => `${k} ${v.toFixed(Math.abs(v) < 10 ? 3 : 1)}`).join('  ')); };
-  const h = kbHands(tier);
+  const h = kbHands(tier, level);
   // 1. Step steer at 100 km/h: hold right 2.5 s, then let go.
   {
     const s = fresh(); toSpeed(s, 100 / KM, h);
@@ -159,7 +170,10 @@ export async function loadRoad(id) {
   const raw = gunzipSync(readFileSync(new URL(`../public/roads/${id}.bin.gz`, import.meta.url)));
   return buildRoad(parseRoad(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)));
 }
-export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, react = 0.18, start = 18, pilot = null, vmax = 45, analog = false } = {}) {
+// `level` drives through src/driving.js (null: the old keyboard hands straight into the sim); `device`
+// 'keys' | 'touch' (a thumb chasing the wheel on the stick) | 'pad' (a skilled analog stick and triggers).
+// Spins and excursions count each time the car starts sliding past 50° or leaves the tarmac.
+export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, react = 0.18, start = 18, pilot = null, vmax = 45, analog = false, level = null, device = 'keys', tc = 'on', abs = true } = {}) {
   const { createRoadCourse, poseAt, nearestSample } = await import('../src/sim/roads.js');
   const drive = pilot ? (await import('../src/drive/pilot.js')).createPilot(road, pilot) : null;
   const { quatFromYaw } = await import('../src/sim/m3.js');
@@ -171,6 +185,9 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
   const k = createHands();
   const sp = road.meta.spacing;
   const eye = (await import('../src/drive/pilot.js')).createPilot(road, { vmax, lat: push });
+  const drv = level ? createDriver(level, { tc, abs }) : null, raw = { keyAx: 0, stickAx: 0, tilt: 0, up: 0, down: 0, thrA: 0, brkA: 0, hb: 0 };
+  const ctx = { free: true, road };
+  let thumbX = 0, padX = 0, pvx = 0, pvz = 0, spins = 0, spinWas = false, excursions = 0, offWas = false, latG = 0, latF = 0;
   let hint = p0.i, maxBeta = 0, offRoad = 0, rail = 0, railWas = false, resets = 0, maxOff = 0, se = 0, ns = 0;
   const delay = Math.round(react * 240), seen = [];
   let keys = { left: 0, right: 0, up: 0, down: 0 }, stuck = 0;
@@ -184,14 +201,36 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
     const want = eye(c);
     seen.push({ steer: want.steer, thr: want.throttle, brk: want.brake });
     const o = seen.length > delay ? seen.shift() : seen[0];
-    const err = o.steer - k.ax;
+    const err = o.steer - (drv ? drv.ax : k.ax);
     const band = 0.03 + 0.05 * Math.abs(o.steer);
     keys.right = err > band ? 1 : err < -band ? 0 : keys.right && err > 0 ? 1 : 0;
     keys.left = err < -band ? 1 : err > band ? 0 : keys.left && err < 0 ? 1 : 0;
     keys.up = o.thr > 0.35 ? 1 : 0;
     keys.down = o.brk > 0.15 ? 1 : 0;
-    const inp = drive ? drive(c) : k.keyboard(keys, c, tier);
-    if (analog) inp.steer = Math.max(-1, Math.min(1, o.steer));
+    let inp;
+    if (drive) inp = drive(c);
+    else if (drv) {
+      raw.keyAx = 0; raw.stickAx = 0; raw.up = keys.up; raw.down = keys.down; raw.thrA = 0; raw.brkA = 0;
+      if (device === 'keys') raw.keyAx = keys.right - keys.left;
+      else if (device === 'touch') {
+        // A thumb on a 2 cm stick: it chases the wheel it sees, at a thumb's speed, past the dead zone.
+        thumbX = Math.max(-1, Math.min(1, thumbX + Math.max(-0.03, Math.min(0.03, (o.steer - drv.ax) * 0.6))));
+        raw.stickAx = shapeStick(level, thumbX, 'touch');
+      } else {
+        // A skilled thumb: smooth (≈80 ms), on the wanted steer, and it catches a slide the way a driver
+        // does (opposite lock with the tail's slip, and a lift), as stability control would.
+        const bb = bodyV(c), slip = bb.vf > 5 ? Math.atan2(bb.vl - c.angVel.y * 1.5, bb.vf) : 0;
+        const sx = slip > 0.05 ? slip - 0.05 : slip < -0.05 ? slip + 0.05 : 0;
+        padX += (Math.max(-1, Math.min(1, o.steer - 2.5 * sx)) - padX) * (DT / 0.08);
+        raw.stickAx = invShape(level, padX);
+        raw.up = 0; raw.down = 0; raw.thrA = o.thr * Math.max(0, 1 - 6 * Math.abs(sx)); raw.brkA = o.brk;
+      }
+      const d = drv.tick(raw, c, ctx);
+      inp = newInput(); inp.assist = tier === 'assist' ? 1 : 0;
+      inp.steer = d.steer; inp.throttle = d.throttle; inp.brake = d.brake;
+      applyGround(d.ground, inp, c, false);
+    } else inp = k.keyboard(keys, c, tier);
+    if (analog && !drv) inp.steer = Math.max(-1, Math.min(1, o.steer));
     // Reverse is the drive's own rule (src/drive/index.js); a stuck driver backs off and resets.
     globalThis.__trace?.(c, inp, n);
     step(c, inp);
@@ -203,6 +242,19 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
     if (v > 5) { const e = lat + Math.min(1.6, road.hw[hint] * 0.4); se += e * e; ns++; }
     maxOff = Math.max(maxOff, off);
     if (off > road.hw[hint] + 0.2) offRoad++;
+    const isOff = off > road.hw[hint] + 0.2;
+    if (isOff && !offWas) excursions++;
+    offWas = isOff;
+    const spinning = v > 4 && Math.abs(Math.atan2(b.vl, Math.abs(b.vf))) > 0.87;
+    if (spinning && !spinWas) spins++;
+    spinWas = spinning;
+    // Cornering g: the body's sideways acceleration (from the velocity change), held 0.25 s, wheels down.
+    {
+      const qq = c.quat, lfx = 1 - 2 * (qq.y * qq.y + qq.z * qq.z), lfz = 2 * (qq.x * qq.z - qq.w * qq.y);
+      const aL = ((c.vel.x - pvx) * lfx + (c.vel.z - pvz) * lfz) / DT;
+      pvx = c.vel.x; pvz = c.vel.z;
+      if (c.grounded === 4 && v > 8) { latF += (Math.abs(aL) / 9.81 - latF) * (DT / 0.25); latG = Math.max(latG, latF); } else latF = 0;
+    }
     const hitRail = c.hullContact && off > road.hw[hint] - 1.3;
     if (hitRail && !railWas) rail++;
     railWas = hitRail;
@@ -210,6 +262,8 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
     const upY = 1 - 2 * (q.x * q.x + q.z * q.z);
     if (stuck > 240 * 2 || off > 30 || upY < 0.2) {
       resets++;
+      if (upY < 0.2 && !spinWas) spins++;
+      drv?.reset(); thumbX = 0;
       const pr = poseAt(road, Math.min(road.length - 6, hint * sp + 3), 1);
       c.pos.x = pr.x; c.pos.y = pr.y + SPEC.comHeight + 0.04; c.pos.z = pr.z; quatFromYaw(c.quat, pr.yaw);
       c.vel.x = c.vel.y = c.vel.z = 0; c.angVel.x = c.angVel.y = c.angVel.z = 0; c.angMom.x = c.angMom.y = c.angMom.z = 0;
@@ -217,7 +271,42 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
     }
     if (hint >= road.n - 10) break;
   }
-  return { km: (hint * sp) / 1000, kmh: (hint * sp) / secs * 3.6, offRoadPct: (offRoad / N) * 100, rails: rail, resets, maxBetaDeg: maxBeta, maxOff, laneRms: Math.sqrt(se / Math.max(1, ns)) };
+  return { km: (hint * sp) / 1000, kmh: (hint * sp) / secs * 3.6, offRoadPct: (offRoad / N) * 100, rails: rail, resets, maxBetaDeg: maxBeta, maxOff, laneRms: Math.sqrt(se / Math.max(1, ns)), spins, excursions, latG };
+}
+// The stick position a skilled thumb holds for a wanted steer, through the level's shaping (bisection).
+function invShape(level, want) {
+  if (want === 0) return 0;
+  let lo = 0, hi = 1;
+  for (let i = 0; i < 30; i++) { const m = (lo + hi) / 2; if (shapeStick(level, m, 'pad') < Math.abs(want)) lo = m; else hi = m; }
+  return Math.sign(want) * shapeStick(level, hi, 'pad');
+}
+
+// The levels on the four roads: totals of spins + excursions per driver and level (0066's gates).
+export async function levels(log = console.log, { secs = 60 } = {}) {
+  const roads = ['stelvio', 'transfagarasan', 'bigsur', 'atlantic'];
+  const drivers = [
+    { name: 'naive keys', device: 'keys', push: 1.25, react: 0.25, levels: ['standard', 'easy'] },
+    { name: 'naive touch', device: 'touch', push: 1.25, react: 0.25, levels: ['standard', 'easy'] },
+    // A skilled driver on a gamepad, at the limit of the technical passes (1.3 g bends, 50 ms reaction, catching
+    // slides by hand); and at speed on the coast roads, where without ESC a slip is a spin.
+    { name: 'skilled passes', device: 'pad', push: 1.3, react: 0.05, vmax: 60, levels: ['standard', 'advanced'], roads: ['stelvio', 'transfagarasan'] },
+    { name: 'skilled coast', device: 'pad', push: 1.15, react: 0.05, vmax: 60, levels: ['standard', 'advanced'], roads: ['bigsur', 'atlantic'] },
+  ];
+  const out = {};
+  for (const id of roads) {
+    const road = await loadRoad(id);
+    for (const d of drivers) for (const level of d.levels) {
+      if (d.roads && !d.roads.includes(id)) continue;
+      const r = await roadDrive(road, { level, device: d.device, push: d.push, react: d.react, vmax: d.vmax ?? 45, secs });
+      const key = `${d.name}|${level}`;
+      const t = (out[key] ||= { spins: 0, excursions: 0, resets: 0, km: 0, latG: 0, offRoadPct: 0, n: 0 });
+      t.spins += r.spins; t.excursions += r.excursions; t.resets += r.resets; t.km += r.km; t.latG = Math.max(t.latG, r.latG); t.offRoadPct += r.offRoadPct; t.n++;
+      log(`${id.padEnd(15)} ${d.name.padEnd(12)} ${level.padEnd(9)}`, ['km', 'kmh', 'spins', 'excursions', 'resets', 'offRoadPct', 'maxBetaDeg', 'latG'].map((k) => `${k} ${r[k].toFixed(2)}`).join('  '));
+    }
+  }
+  log('--- totals over the four roads');
+  for (const [k, t] of Object.entries(out)) log(k.padEnd(24), `spins ${t.spins}  excursions ${t.excursions}  spins+exc ${t.spins + t.excursions}  resets ${t.resets}  km ${t.km.toFixed(2)}  offRoad% ${(t.offRoadPct / t.n).toFixed(2)}  peak latG ${t.latG.toFixed(2)}`);
+  return out;
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
@@ -225,6 +314,8 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   const [what = 'all', tierArg] = process.argv.slice(2);
   const tiers = tierArg ? [tierArg] : ['assist', 'pro'];
   if (what === 'all' || what === 'bench') for (const t of tiers) { console.log(`--- ${t}`); bench(t); }
+  if (what === 'bench-levels') for (const l of ['easy', 'standard', 'advanced']) { console.log(`--- ${l}`); bench('assist', console.log, l); }
+  if (what === 'levels') await levels();
   if (what === 'all' || what === 'road') {
     for (const id of ['stelvio', 'transfagarasan', 'bigsur', 'atlantic']) {
       const road = await loadRoad(id);

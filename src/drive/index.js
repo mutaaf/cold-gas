@@ -51,6 +51,7 @@ export function createDrive(ctx) {
   };
   const comps = [0, 0, 0, 0], spins = [0, 0, 0, 0];
   const poseLerp = createPoseLerp(), reverse = createReverse();
+  const driveCtx = { free: true, road: null };   // an unscored ground: the driving level owns ESC, TC, ABS and the handbrake
   let picker = null;
 
   // --- The picker ------------------------------------------------------------------------------
@@ -360,7 +361,8 @@ export function createDrive(ctx) {
         const air = c.grounded === 0 && !c.hullContact;
         st.airT = air ? st.airT + DT : 0;
         const phase = st.airT > 0.25 ? 'air' : 'drive';
-        Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist(), undefined, false, c));
+        driveCtx.road = st.road;   // the driving level (src/driving.js): Easy reads the road ahead
+        Object.assign(inp, st.pilot ? st.pilot(c) : input.sample(phase, ctx.assist(), undefined, false, c, driveCtx));
         inp.fan = st.fan ? 1 : 0;
         // Reverse: hold the brake at a standstill (src/hands.js: a stop holds before it backs up).
         if (phase === 'drive') reverse(c, inp);

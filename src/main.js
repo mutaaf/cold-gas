@@ -28,7 +28,8 @@ import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
-import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, pollPads, heldState } from './input.js';
+import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState } from './input.js';
+import { LEVEL_INFO } from './driving.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
 import { thumbStage } from './onethumb.js';
@@ -688,6 +689,43 @@ ctlScreen.querySelector('[data-tilt-calibrate]').addEventListener('click', () =>
 onSettings(syncControlsSheet);
 syncControlsSheet();
 document.querySelectorAll('[data-controls-open]').forEach((b) => b.addEventListener('click', () => { syncControlsSheet(); ui.show('controls', true); }));
+
+// Driving (0066, src/driving.js): Easy / Standard / Advanced on the ground in every mode, on this device.
+// Radiogroups take the arrow keys (and Tab lands on the checked one).
+const driveNote = ctlScreen.querySelector('[data-drive-note]');
+function syncDriving() {
+  const d = drivingSettings, adv = d.level === 'advanced';
+  for (const [sel, key, val] of [['[data-drive-level]', 'driveLevel', d.level], ['[data-drive-tc]', 'driveTc', d.tc]]) {
+    ctlScreen.querySelectorAll(sel).forEach((b) => { const on = b.dataset[key] === val; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+  }
+  ctlScreen.querySelector('[data-drive-abs]').setAttribute('aria-checked', String(d.abs));
+  ctlScreen.querySelectorAll('[data-drive-adv]').forEach((el) => { el.hidden = !adv; });
+  driveNote.textContent = LEVEL_INFO[d.level].blurb;
+  document.querySelectorAll('[data-driving-label]').forEach((el) => { el.textContent = LEVEL_INFO[d.level].name; });
+}
+function radioKeys(group, sel, pick) {
+  group.addEventListener('keydown', (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault(); e.stopPropagation();
+    const opts = [...group.querySelectorAll(sel)], i = opts.indexOf(document.activeElement);
+    const next = opts[(Math.max(0, i) + step + opts.length) % opts.length];
+    pick(next); next.focus();
+  });
+}
+const pickLevel = (b) => setDriving({ level: b.dataset.driveLevel });
+const pickTc = (b) => setDriving({ tc: b.dataset.driveTc });
+ctlScreen.querySelectorAll('[data-drive-level]').forEach((b) => b.addEventListener('click', () => pickLevel(b)));
+ctlScreen.querySelectorAll('[data-drive-tc]').forEach((b) => b.addEventListener('click', () => pickTc(b)));
+radioKeys(ctlScreen.querySelector('[data-drive-levels]'), '[data-drive-level]', pickLevel);
+radioKeys(ctlScreen.querySelector('[data-drive-tcs]'), '[data-drive-tc]', pickTc);
+ctlScreen.querySelector('[data-drive-abs]').addEventListener('click', () => setDriving({ abs: !drivingSettings.abs }));
+onDriving(syncDriving);
+syncDriving();
+document.querySelectorAll('[data-driving-open]').forEach((b) => b.addEventListener('click', () => {
+  syncControlsSheet(); ui.show('controls', true);
+  ctlScreen.querySelector('[data-drive-level][aria-checked="true"]')?.focus({ preventScroll: true });
+}));
 ctlScreen.querySelector('[data-controls-close]').addEventListener('click', () => ui.show('controls', false));
 // No page zoom or scroll from a stray gesture (iOS ignores user-scalable=no for pinch).
 for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
@@ -1199,6 +1237,6 @@ function fastForward() {
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 Object.assign(window.__coldgas, { obs, heal });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);
