@@ -11,7 +11,9 @@ const fourCores = () => {
 for (const [name, dev, kind] of [['iPhone', devices['iPhone 13'], 'phone'], ['iPad', devices['iPad Pro 11'], 'tablet']]) {
   test(`an ${name} with 4 cores boots mid with anti-aliasing`, async ({ browser }) => {
     const { defaultBrowserType, ...opts } = dev;
-    const ctx = await browser.newContext(opts);
+    // The tier reads the user agent, touch and cores, not the pixel ratio: draw at 1× so software GL
+    // is not filling an iPad Pro's 1668×2388 through the mid tier's passes (a boot past 60 s on CI).
+    const ctx = await browser.newContext({ ...opts, deviceScaleFactor: 1 });
     const page = await ctx.newPage();
     // A fresh device: no ledger history to move the tier.
     await page.addInitScript(fourCores);
