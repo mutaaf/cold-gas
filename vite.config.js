@@ -43,8 +43,9 @@ const inlineCss = {
         html = html.replace(link, () => `<style>${String(asset.source).trim()}</style>`);
         delete bundle[file];
       }
-      // Preload the two faces the title paints with: the wordmark and the text face.
-      for (const re of [/michroma-latin-400-normal-[\w-]+\.woff2$/, /geist-latin-wght-normal-[\w-]+\.woff2$/]) {
+      // Preload the three faces the title paints with: the wordmark, the text face and the mono
+      // (the spec's numbers; without it they paint in a fallback and swap when it lands).
+      for (const re of [/michroma-latin-400-normal-[\w-]+\.woff2$/, /geist-latin-wght-normal-[\w-]+\.woff2$/, /geist-mono-latin-400-normal-[\w-]+\.woff2$/]) {
         const font = Object.keys(bundle).find((f) => re.test(f));
         if (font) html = html.replace('</title>', `</title>\n  <link rel="preload" href="${BASE}${font}" as="font" type="font/woff2" crossorigin />`);
       }
