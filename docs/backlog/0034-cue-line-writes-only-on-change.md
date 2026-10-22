@@ -1,12 +1,12 @@
 ---
 id: 0034
 title: The cue line writes only when it changes, holds each message, and "Go" shows
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 70
 by: operator
 ---
 
