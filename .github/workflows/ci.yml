@@ -12,7 +12,7 @@ concurrency:
 jobs:
   check:
     runs-on: ubuntu-latest
-    timeout-minutes: 35   # the main suite ≈ 18 min under software GL, plus the flake guard
+    timeout-minutes: 50   # the main suite ≈ 20–27 min under software GL (2026-10-22, after the lockdown's e2e), plus the flake guard
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
