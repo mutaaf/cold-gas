@@ -114,6 +114,9 @@ export function createDriver(level = 'standard', opts = {}) {
   const aid = { governor: 0, keep: 0, catch: 0, allow: Infinity };   // what Easy did this tick (tests, HUD)
   const def = { steer: 0, throttle: 0, brake: 0, ground: null };
   return {
+    // The flight's wheel and pedals (src/input.js steers the air with them): the same filter the ground
+    // used, so the wheel carries over the lip.
+    hands,
     get level() { return lvl; },
     get tc() { return tc; },
     get abs() { return abs; },

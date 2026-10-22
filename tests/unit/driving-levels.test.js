@@ -52,6 +52,13 @@ describe('the setting', () => {
 });
 
 describe('Standard is today\'s driving, bit for bit', () => {
+  it('hands the flight its wheel and pedals (src/input.js steers the air with driver.hands)', () => {
+    for (const level of ['easy', 'standard', 'advanced']) {
+      const d = createDriver(level);
+      expect(typeof d.hands.steer).toBe('function');
+      expect(typeof d.hands.pedals).toBe('function');
+    }
+  });
   it('keys, a stick, the pedals and the tilt make exactly what the old hands made', () => {
     const d = createDriver('standard'), h = createHands();
     const car = settled();
