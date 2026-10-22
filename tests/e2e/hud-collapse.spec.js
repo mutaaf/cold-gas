@@ -65,6 +65,11 @@ function startProbe() {
   window.__hudProbe = st;
   requestAnimationFrame(tick);
 }
+// The coverage probes measure DOM boxes against the camera's projection of the car: the canvas's
+// resolution never enters. Draw it at a quarter of the pixels (and keep the resolution governor from
+// raising it), so CI's software GL keeps up with a whole flight at 820×1180: at a few frames a second
+// the 0.1 s frame cap stretched the Show's flight past the 150 s wait on a busy runner.
+const lean = (page) => page.evaluate(() => { const s = window.__coldgas.stage; s.setPixelScale(0.5); s.setPixelScale = () => {}; });
 const stopProbe = (page) => page.evaluate(() => { const st = window.__hudProbe; st.stop = true; return st; });
 
 test('phone: compact by default; one tap shows every instrument, another folds them, and it is kept', async ({ browser }) => {
@@ -166,6 +171,7 @@ for (const [w, h] of VIEWS) {
     const page = await browser.newPage(touch(w, h));
     await boot(page);
     expect(await mode(page)).toBe('compact');
+    await lean(page);
     await live(page, 'reveal');
     await page.evaluate(startProbe);
     await page.waitForFunction(() => window.__coldgas.S.mode !== 'live', null, { timeout: 150_000, polling: 1000 });
@@ -186,6 +192,7 @@ for (const [w, h] of VIEWS) {
     await expect(page.locator('[data-h-reset]')).toBeInViewport();
     await expect(page.locator('[data-h-exit]')).toBeInViewport();
     await expect(page.locator('.fd-fine')).toContainText('OpenStreetMap');
+    await lean(page);
     await page.evaluate(startProbe);
     await page.keyboard.down('ArrowUp');
     await page.waitForFunction(() => window.__hudProbe.frames >= 40, null, { timeout: 60_000, polling: 500 });
