@@ -55,3 +55,13 @@ flies `startRun('reveal')` + `skipCountdown()`, and collects console messages th
 
 ## Out of scope
 The theatre's design and copy, the AI providers, deadlines (0048).
+
+## Critic re-measure (2026-10-22 10:15, production 2ad8d46)
+Still failing, and it reaches the draw calls. One Show reference per viewport, the theatre left to run:
+at 390×844 and 1440×900 the same burst as at 04:00 (`useProgram` / `getUniformLocation` on a deleted
+object, `uniform2f/1f` from the wrong program, `bindBuffer` on a deleted buffer), plus, within the same
+6 ms, **`drawArrays: no buffer is bound to enabled attribute` (×3), `bufferSubData: no buffer` (×2) and
+`vertexAttribPointer: no ARRAY_BUFFER is bound and offset is non-zero` (×4)**: 23 WebGL `INVALID_*` errors per
+judged run on both viewports (docs/critique/2026-10-22-1015.md). Those draws produce no pixels,
+so a frame of the theatre's field is being dropped, not just logged. The bar is unchanged: 0 WebGL
+`INVALID_*` messages over the e2e in this ticket's test plan.
