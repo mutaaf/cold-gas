@@ -7,6 +7,9 @@ const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, nu
 const live = (page) => page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.freezeT <= 0, null, { timeout: 30_000 });
 
 test('a drill starts from the practice sheet and R retries it from the same start', async ({ page }) => {
+  // Slow but correct: a drill's start flies the reference flight on the main thread (ticket 0043
+  // moves it off the tap), which on CI's software GL took 52 s of a 60 s budget before any change.
+  test.slow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/coldgas/?gfx=low');

@@ -38,3 +38,21 @@ export function readDevice(nav = globalThis.navigator, win = globalThis) {
     screenW: win?.screen?.width || 0, screenH: win?.screen?.height || 0,
   };
 }
+
+// A software rasterizer (SwiftShader, llvmpipe, WARP: no usable GPU, a blocklisted driver, CI)
+// draws every pixel on the CPU, where canvas MSAA costs about a third of the frame rate (the Show
+// on SwiftShader: 9.7 fps without it, 6.2 with). 'low' skips MSAA there.
+export const isSoftwareRenderer = (renderer = '') => /swiftshader|llvmpipe|softpipe|software|basic render/i.test(renderer);
+
+// The renderer's name from a throwaway context. Firefox names it in RENDERER (and warns about the
+// debug extension); Chromium and WebKit answer "WebKit WebGL" there and name it in the extension.
+export function probeRenderer(doc = globalThis.document, ua = globalThis.navigator?.userAgent || '') {
+  try {
+    const gl = doc.createElement('canvas').getContext('webgl2') || doc.createElement('canvas').getContext('webgl');
+    if (!gl) return '';
+    const ext = /Firefox\//.test(ua) ? null : gl.getExtension('WEBGL_debug_renderer_info');
+    const name = String(gl.getParameter(ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER) || '');
+    gl.getExtension('WEBGL_lose_context')?.loseContext();
+    return name;
+  } catch { return ''; }
+}

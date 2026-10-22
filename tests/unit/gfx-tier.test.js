@@ -1,6 +1,6 @@
 // The boot tier per device (src/gfx-tier.js, 0037) and the device class obs reports.
 import { describe, it, expect } from 'vitest';
-import { pickDeviceTier, deviceKind, isIOS } from '../../src/gfx-tier.js';
+import { pickDeviceTier, deviceKind, isIOS, isSoftwareRenderer } from '../../src/gfx-tier.js';
 import { deviceClass } from '../../src/obs/index.js';
 
 const UA = {
@@ -60,5 +60,12 @@ describe('deviceClass', () => {
     expect(deviceClass({ hardwareConcurrency: 4 }, true, 'tablet')).toBe('tablet-lo');
     expect(deviceClass({ hardwareConcurrency: 8, deviceMemory: 8 }, true)).toBe('phone-hi');
     expect(deviceClass({ hardwareConcurrency: 8, deviceMemory: 8 }, false)).toBe('desktop-hi');
+  });
+});
+
+describe('software rasterizers skip canvas MSAA', () => {
+  it('names the CPU renderers and only those', () => {
+    for (const r of ['ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero)), SwiftShader driver)', 'llvmpipe (LLVM 15.0.7, 256 bits)', 'Microsoft Basic Render Driver', 'Google SwiftShader']) expect(isSoftwareRenderer(r)).toBe(true);
+    for (const r of ['Apple GPU', 'ANGLE (Apple, ANGLE Metal Renderer: Apple M2, Unspecified Version)', 'Adreno (TM) 740', 'Mali-G710', 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)', '']) expect(isSoftwareRenderer(r)).toBe(false);
   });
 });
