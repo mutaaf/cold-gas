@@ -12,6 +12,7 @@ const watch = (page) => {
 };
 
 test('desktop: Standard by default; the keyboard picks Advanced, and it is remembered', async ({ page }) => {
+  test.slow();   // two boots (the reload) on software GL: 1.6 min on CI against the 90 s default
   const errors = watch(page);
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
