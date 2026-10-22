@@ -1,7 +1,10 @@
 // Temporal flicker probe: drives the real game frame by frame on a synthetic 60 Hz clock and
 // measures how much each pixel *jitters* between consecutive frames, by region.
 //
-//   node scripts/flicker.mjs [url] [--engine=chromium|webkit] [--phone] [--only=a,b] [--json=out.json]
+//   node scripts/flicker.mjs [url] [--engine=chromium|webkit] [--gl=swiftshader] [--phone] [--only=a,b] [--json=out.json]
+//
+// Then gate it: `node scripts/flicker-budget.mjs out.json` compares every region's pops with
+// docs/flicker-budget.json (per label: engine, GL and screen) and fails on a rise.
 //
 // Smooth motion (a camera dolly, a beam sweeping) changes a pixel along a straight line from one
 // frame to the next; flicker (z-fighting, shadow-texel crawl, texture moire, a bloom sparkle that
@@ -14,20 +17,25 @@
 //
 // requestAnimationFrame is stubbed before the game loads, so every run sees the same timestamps;
 // the scene clock (S.time) is pinned at the start of each scenario. Real GPU flags (Metal ANGLE)
-// as in scripts/shots-show.mjs; --engine=webkit runs Playwright's WebKit.
+// as in scripts/shots-show.mjs; --engine=webkit runs Playwright's WebKit; --gl=swiftshader runs CI's
+// software GL (no GPU needed: a cloud sandbox can measure, against its own budget label).
 import { chromium, webkit } from '@playwright/test';
 
 const args = process.argv.slice(2);
 const url = args.find((a) => !a.startsWith('--')) || 'http://localhost:4320/coldgas/';
 const opt = (k, d) => { const a = args.find((x) => x.startsWith(`--${k}=`)); return a ? a.split('=')[1] : d; };
 const engine = opt('engine', 'chromium');
+const gl = opt('gl', '');   // '' = the GPU (Metal ANGLE); 'swiftshader' = software GL
 const phone = args.includes('--phone');
 const only = opt('only', '');
 const jsonOut = opt('json', '');
 const heatDir = opt('heat', '');   // write a per-pixel jitter heatmap + a frame per scenario here
 
 const launcher = engine === 'webkit' ? webkit : chromium;
-const browser = await launcher.launch(engine === 'webkit' ? {} : { args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const glArgs = gl === 'swiftshader'
+  ? ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist']
+  : ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'];
+const browser = await launcher.launch(engine === 'webkit' ? {} : { args: glArgs });
 const page = await browser.newPage(phone
   ? { viewport: { width: 844, height: 390 }, deviceScaleFactor: 2, isMobile: engine !== 'webkit' ? true : undefined, hasTouch: true }
   : { viewport: { width: 1280, height: 720 } });
@@ -41,17 +49,20 @@ await page.addInitScript(() => {
   window.requestAnimationFrame = (cb) => { if (F.manual) { F.q.push(cb); return 1; } return native(cb); };
 });
 await page.goto(url);
-await page.waitForFunction(() => window.__coldgas?.stage?.ready, null, { timeout: 30000 });
+await page.waitForFunction(() => window.__coldgas?.stage?.ready, null, { timeout: 120000 });   // software GL under load boots slowly
 await page.evaluate(() => window.__coldgas.stage.ready);
 await page.evaluate(() => window.__coldgas.stage.backdrop);   // the streamed-in backdrop (src/render/rocket.js), if any
 await page.waitForTimeout(3000);   // and its lights up
+await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 60000, polling: 100 });   // startRun runs at once
 
 // In-page harness: capture, ID pass, accumulators.
 await page.evaluate(() => {
   const F = window.__flk, G = window.__coldgas, stage = G.stage;
   const renderer = stage.renderer, gl = renderer.getContext(), scene = stage.scene, camera = stage.camera;
   const REG = ['other', 'ground', 'wall', 'car', 'row', 'sky', 'backdrop'];
-  // Region of each mesh, decided once from where it sits.
+  // Region of each mesh, decided once from where it sits. In a drive world (Free Drive, endless) the
+  // road surface is ground, walls and steel are wall, and the land around it (terrain, rocks, trees,
+  // props) is backdrop; its sky and panorama are sky.
   const regionOf = new Map();
   const heroSet = new Set(); G.hero.group.traverse((o) => heroSet.add(o));
   const classify = () => {
@@ -59,11 +70,13 @@ await page.evaluate(() => {
       if (!(o.isMesh || o.isInstancedMesh) || regionOf.has(o)) return;
       let r = 0;
       if (heroSet.has(o)) r = 3;
-      else if (o.geometry?.parameters?.radius >= 1000) r = 5;
+      else if (o.geometry?.parameters?.radius >= 1000 || o.renderOrder <= -900) r = 5;
       else {
-        let p = o, inCourse = false, inRow = false, inBackdrop = false;
-        while (p) { if (p.userData?.setBodies) inRow = true; if (p.name?.startsWith('course:')) inCourse = true; if (p.name?.startsWith('backdrop:')) inBackdrop = true; p = p.parent; }
-        if (inBackdrop) r = 6;
+        let p = o, inCourse = false, inRow = false, inBackdrop = false, inDrive = false;
+        while (p) { if (p.userData?.setBodies) inRow = true; if (p.name?.startsWith('course:')) inCourse = true; if (p.name?.startsWith('backdrop:')) inBackdrop = true; if (p.name === 'freedrive' || p.name === 'endless') inDrive = true; p = p.parent; }
+        const mat = Array.isArray(o.material) ? o.material[0] : o.material;
+        if (inDrive) r = /^road/.test(mat?.name) ? 1 : /^(wall|steel)/.test(mat?.name) ? 2 : 6;
+        else if (inBackdrop) r = 6;
         else if (inRow) r = 4;
         else if (inCourse) {
           o.geometry.computeBoundingBox?.();
@@ -84,6 +97,9 @@ await page.evaluate(() => {
   // (no output conversion into a target). Falls back to the canvas where no target class is at hand.
   const RT = stage.bloom?.renderTargetsHorizontal?.[0]?.constructor ?? stage.key?.shadow?.map?.constructor ?? null;
   const idsLin = REG.map((_, i) => { const m = new Basic({ toneMapped: false, fog: false, side: 2 }); m.color.setRGB((i * 40) / 255, 0, 0); return m; });
+  // A sky drawn first with no depth test (the drive worlds: renderOrder ≤ -900) keeps that in the ID
+  // pass, or its 1 km sphere would hide all the land beyond it.
+  const skyBack = [ids[5], idsLin[5]].map((m) => { const c = m.clone(); c.depthTest = false; c.depthWrite = false; return c; });
   let idRT = null;
   let W = 0, H = 0, buf = null, luma = [], idb = [], k = 0;
   const alloc = () => {
@@ -95,7 +111,7 @@ await page.evaluate(() => {
     idb = [0, 1, 2].map(() => new Uint8Array(W * H));
     k = 0;
   };
-  const acc = () => ({ sum: Object.fromEntries(REG.map((r) => [r, 0])), pops: Object.fromEntries(REG.map((r) => [r, 0])), n: Object.fromEntries(REG.map((r) => [r, 0])), shots: [] });
+  const acc = () => ({ sum: Object.fromEntries(REG.map((r) => [r, 0])), pops: Object.fromEntries(REG.map((r) => [r, 0])), black: Object.fromEntries(REG.map((r) => [r, 0])), n: Object.fromEntries(REG.map((r) => [r, 0])), shots: [] });
   F.acc = acc();
   F.reset = () => { F.acc = acc(); k = 0; F.heat?.fill(0); F.frames = 0; };
   // Heatmap (jitter summed over the scenario, white = 24+ per frame) beside the last frame.
@@ -125,7 +141,7 @@ await page.evaluate(() => {
       saved.push([o, o.material, o.visible]);
       const m = Array.isArray(o.material) ? o.material[0] : o.material;
       if (!o.isMesh || m?.transparent || m?.blending === 2) { o.visible = false; return; }
-      o.material = (idRT ? idsLin : ids)[regionOf.get(o) ?? 0];
+      o.material = o.renderOrder <= -900 ? skyBack[idRT ? 1 : 0] : (idRT ? idsLin : ids)[regionOf.get(o) ?? 0];
     });
     const fog = scene.fog; scene.fog = null;
     renderer.setRenderTarget(idRT);
@@ -145,13 +161,13 @@ await page.evaluate(() => {
     if (s[0] !== s[1] || s[1] !== s[2]) return;
     const a = luma[(k - 3) % 3], b = luma[(k - 2) % 3], c = luma[(k - 1) % 3], id = idb[(k - 2) % 3];
     F.frames++;
-    const sum = new Float64Array(REG.length), pops = new Float64Array(REG.length), n = new Float64Array(REG.length);
+    const sum = new Float64Array(REG.length), pops = new Float64Array(REG.length), black = new Float64Array(REG.length), n = new Float64Array(REG.length);
     for (let i = 0; i < c.length; i++) {
       const d = Math.abs(c[i] - 2 * b[i] + a[i]), r = id[i] < REG.length ? id[i] : 0;
-      sum[r] += d; n[r]++; if (d > 24) pops[r]++;
+      sum[r] += d; n[r]++; if (d > 24) pops[r]++; if (c[i] < 1) black[r]++;   // black: a NaN smeared by bloom holds still (no pops) but blacks the frame
       if (F.heatReg == null || F.heatReg === r) F.heat[i] += d;
     }
-    REG.forEach((r, i) => { F.acc.sum[r] += sum[i]; F.acc.pops[r] += pops[i]; F.acc.n[r] += n[i]; });
+    REG.forEach((r, i) => { F.acc.sum[r] += sum[i]; F.acc.pops[r] += pops[i]; F.acc.black[r] += black[i]; F.acc.n[r] += n[i]; });
   };
   const orig = stage.render;
   stage.render = (t) => { orig(t); if (F.capture) grab(); };
@@ -195,6 +211,7 @@ await page.evaluate(() => {
   F.report = () => Object.fromEntries(REG.filter((r) => F.acc.n[r] > 0).map((r) => [r, {
     jitter: +(F.acc.sum[r] / F.acc.n[r]).toFixed(4),
     popsPerMille: +((1000 * F.acc.pops[r]) / F.acc.n[r]).toFixed(4),
+    blackPerMille: +((1000 * F.acc.black[r]) / F.acc.n[r]).toFixed(2),
     share: 0,
     px: F.acc.n[r],
   }]));
@@ -202,6 +219,7 @@ await page.evaluate(() => {
 
 async function scenario(name, setup, frames, perFrame) {
   if (only && !only.split(',').includes(name)) return null;
+  const t0 = Date.now();
   await page.evaluate(`(${setup})()`);
   await page.evaluate(({ frames, perFrame }) => {
     const F = window.__flk;
@@ -218,6 +236,7 @@ async function scenario(name, setup, frames, perFrame) {
   }
   const tot = Object.values(rep).reduce((s, r) => s + r.px, 0);
   for (const r of Object.values(rep)) { r.share = +(r.px / tot).toFixed(3); delete r.px; }
+  console.error(`flicker: ${name} ${((Date.now() - t0) / 1000).toFixed(0)} s`);   // progress (software GL takes minutes)
   return rep;
 }
 
@@ -290,6 +309,26 @@ if (!only || only.split(',').includes('show-jets') || only.split(',').includes('
   })()`);
 }
 await page.evaluate(jetsOff);
+// 4d. A live run with the jets doing real work (0050): the reference jump, flown from the lip of the
+//     curl through the roll with the director's live cuts, so the cones, the mist and the car's
+//     motion blur are all as a player sees them.
+results['show-live-jets'] = await scenario('show-live-jets', `() => {
+  const G = window.__coldgas; ${free}
+  G.toTitle(); document.querySelector('[data-course="show"]')?.click(); window.__flk.step(1);
+  G.startRun('reveal'); G.skipCountdown();
+  for (let i = 0; i < 3000 && G.S.mode === 'live' && G.S.run.phase !== 'air'; i++) G.liveStep(1 / 60);
+  if (G.S.run?.phase !== 'air') throw new Error('show-live-jets: the reference never left the curl');
+  G.S.time = 4;
+}`, 240);
+// 4e. A retry's countdown (0050): a finished run, then Retry's one-beat READY and the first live
+//     frames, with the director's restart: the scene must not pop as the run resets. (The canvas
+//     only: READY and the HUD are DOM, which tests/e2e/cues.spec.js holds still.)
+results['retry-countdown'] = await scenario('retry-countdown', `() => {
+  const G = window.__coldgas; ${free}
+  G.toTitle(); window.__flk.step(1);
+  G.startRun('reveal'); G.skipCountdown(); G.fastForward();
+  G.startRun('jump', true); G.S.time = 4;
+}`, 90);
 // 5. The Lineup's title turntable (blue hour, the painted pad).
 results['lineup-title'] = await scenario('lineup-title', `() => {
   const G = window.__coldgas; ${free}
@@ -321,7 +360,32 @@ if (!only || only.split(',').includes('nudge')) {
   results.nudge = nudge;
 }
 
-const label = `${engine}${phone ? ' phone' : ' desktop'}`;
+// 8. Free Drive (0050): a real road and the endless world, the autopilot at cruise, the drive's own
+//    chase camera. Last, since leaving a drive rebuilds the title. Building a world waits on its
+//    chunk, the road data and (endless) its worker; the frames are stepped by hand meanwhile.
+async function driveScenario(name, road, opts) {
+  if (only && !only.split(',').includes(name)) return null;
+  await page.evaluate(async ({ road, opts }) => {
+    const G = window.__coldgas, F = window.__flk;
+    if (G.director.__u) G.director.update = G.director.__u;
+    const d = await G.loadDrive();
+    if (d.active) d.exit();
+    const go = d.start(road, opts);
+    // A rendered frame costs about a second on software GL: step one every 0.3 s while it loads.
+    for (let i = 0; i < 400 && !d.active; i++) { F.step(1); await new Promise((r) => setTimeout(r, 300)); }
+    await go;
+    if (!d.active) throw new Error(`${road}: the drive didn't start`);
+    d.autopilot(true, { vmax: 30 });
+    for (let n = 0; n < 60; n++) d.frame(0.1, G.S.time);   // up to speed, unrendered
+    for (let i = 0; i < 20; i++) { F.step(1); await new Promise((r) => setTimeout(r, 100)); }   // the tiles around it stream in
+    G.S.time = 4;   // the clouds, the water and the light the same every run
+  }, { road, opts });
+  return scenario(name, '() => {}', 150);
+}
+results['drive-road'] = await driveScenario('drive-road', 'stelvio', { tod: 'dusk', idb: false });
+results['endless-cruise'] = await driveScenario('endless-cruise', 'endless', { seed: 'flicker', idb: false });
+
+const label = `${engine}${gl && engine !== 'webkit' ? `-${gl}` : ''}${phone ? ' phone' : ' desktop'}`;
 console.log(`\n${label}  jitter = mean |Δ²luma| (0–255), pops = ‰ pixel-frames with |Δ²luma| > 24`);
 for (const [sc, rep] of Object.entries(results)) {
   if (!rep || sc === 'nudge' || sc === 'nudgeJets') continue;
@@ -331,5 +395,5 @@ for (const [sc, rep] of Object.entries(results)) {
 if (results.nudgeJets) nudge.jets = results.nudgeJets;
 for (const [c, v] of Object.entries(nudge)) console.log(`z-fight ${c.padEnd(8)} mean |Δluma| ${v.meanDelta.toFixed(3)}, ${v.popsPerMille.toFixed(2)}‰ px flip > 24 under a 0.1 mm camera shift  per pose ‰ [${v.perPose.join(" ")}]`);
 if (errors.length) console.log('errors:', errors.slice(0, 5).join(' | '));
-if (jsonOut) (await import('node:fs')).writeFileSync(jsonOut, JSON.stringify({ label, url, results }, null, 2));
+if (jsonOut) (await import('node:fs')).writeFileSync(jsonOut, JSON.stringify({ label, url, only, errors, results }, null, 2));
 await browser.close();

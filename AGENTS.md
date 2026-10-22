@@ -279,6 +279,7 @@ scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view
 scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
 scripts/shots-lineup.mjs   studio shots of each parked vehicle + the row, and the row's draw budget
 scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)
+scripts/flicker-budget.mjs  gates a flicker.mjs --json run against docs/flicker-budget.json (per label)
 scripts/roads/        build-time only: OSM + terrain → public/roads/*.bin.gz (docs/ROADS.md)
 public/roads/         the baked Free Drive roads (fetched only when a road is picked)
 ```
@@ -328,6 +329,8 @@ node scripts/drive-feel.mjs [bench|road] [assist|pro]   driving feel: step steer
 node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
 npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
 npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)
+node scripts/flicker.mjs <url> [--gl=swiftshader] [--phone] [--only=a,b] --json=run.json   flicker probe (title, approach, wide, replay, jets, live jets, retry countdown, lineup, Free Drive, endless, z-fight)
+node scripts/flicker-budget.mjs run.json [--write]    fail if any region's pops rise > 25 % (or 0.5 ‰) over docs/flicker-budget.json
 ```
 
 Local Worker: `npx wrangler dev` (serves dist + the API with a local D1, and uses
@@ -366,6 +369,8 @@ prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.
 - `npm run check` is green locally or in CI.
 - Works at 390×844 touch and 1280×720 keyboard.
 - No new runtime hosts, no brand names, no per-frame allocations.
+- Rendering, camera or effects changed → `flicker-budget` passes for both screens of your label
+  (`--gl=swiftshader` in a sandbox, about an hour a screen; `--only=` the scenarios you touched when short).
 - Sim or scoring outcome changed → `SIM_VERSION` bumped and noted in the CHANGELOG.
 - **Launcher registration** (standing policy): a new or changed deep link, or a rename, also
   updates the mutaafaziz.com ⌘K launcher (mutaaf/mutaafaziz-site) and the Digital Craft
