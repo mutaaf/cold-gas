@@ -2,6 +2,7 @@
   "_readme": "Flicker budgets (0050): pops ‰ per scenario/region from scripts/flicker.mjs, per label (engine[-gl] screen). node scripts/flicker-budget.mjs run.json fails when any budgeted region rises more than tolerance (25 %) or floor ‰ over its budget. Lower a budget with --write after a change that measurably cut flicker; never raise one to make a rise pass. The 'chromium desktop' / 'chromium phone' labels (Metal ANGLE on a Mac GPU) hold the lockdown sweep's baseline from 0050 (bbcb526) for the regions it measured; the 'chromium-swiftshader' labels are main measured on software GL (no GPU needed, so any sandbox can run the gate).",
   "tolerance": 0.25,
   "floor": 0.5,
+  "blackout": 500,
   "budgets": {
     "chromium desktop": {
       "show-wide/wall": 64,

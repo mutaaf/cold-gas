@@ -111,7 +111,7 @@ await page.evaluate(() => {
     idb = [0, 1, 2].map(() => new Uint8Array(W * H));
     k = 0;
   };
-  const acc = () => ({ sum: Object.fromEntries(REG.map((r) => [r, 0])), pops: Object.fromEntries(REG.map((r) => [r, 0])), n: Object.fromEntries(REG.map((r) => [r, 0])), shots: [] });
+  const acc = () => ({ sum: Object.fromEntries(REG.map((r) => [r, 0])), pops: Object.fromEntries(REG.map((r) => [r, 0])), black: Object.fromEntries(REG.map((r) => [r, 0])), n: Object.fromEntries(REG.map((r) => [r, 0])), shots: [] });
   F.acc = acc();
   F.reset = () => { F.acc = acc(); k = 0; F.heat?.fill(0); F.frames = 0; };
   // Heatmap (jitter summed over the scenario, white = 24+ per frame) beside the last frame.
@@ -161,13 +161,13 @@ await page.evaluate(() => {
     if (s[0] !== s[1] || s[1] !== s[2]) return;
     const a = luma[(k - 3) % 3], b = luma[(k - 2) % 3], c = luma[(k - 1) % 3], id = idb[(k - 2) % 3];
     F.frames++;
-    const sum = new Float64Array(REG.length), pops = new Float64Array(REG.length), n = new Float64Array(REG.length);
+    const sum = new Float64Array(REG.length), pops = new Float64Array(REG.length), black = new Float64Array(REG.length), n = new Float64Array(REG.length);
     for (let i = 0; i < c.length; i++) {
       const d = Math.abs(c[i] - 2 * b[i] + a[i]), r = id[i] < REG.length ? id[i] : 0;
-      sum[r] += d; n[r]++; if (d > 24) pops[r]++;
+      sum[r] += d; n[r]++; if (d > 24) pops[r]++; if (c[i] < 1) black[r]++;   // black: a NaN smeared by bloom holds still (no pops) but blacks the frame
       if (F.heatReg == null || F.heatReg === r) F.heat[i] += d;
     }
-    REG.forEach((r, i) => { F.acc.sum[r] += sum[i]; F.acc.pops[r] += pops[i]; F.acc.n[r] += n[i]; });
+    REG.forEach((r, i) => { F.acc.sum[r] += sum[i]; F.acc.pops[r] += pops[i]; F.acc.black[r] += black[i]; F.acc.n[r] += n[i]; });
   };
   const orig = stage.render;
   stage.render = (t) => { orig(t); if (F.capture) grab(); };
@@ -211,6 +211,7 @@ await page.evaluate(() => {
   F.report = () => Object.fromEntries(REG.filter((r) => F.acc.n[r] > 0).map((r) => [r, {
     jitter: +(F.acc.sum[r] / F.acc.n[r]).toFixed(4),
     popsPerMille: +((1000 * F.acc.pops[r]) / F.acc.n[r]).toFixed(4),
+    blackPerMille: +((1000 * F.acc.black[r]) / F.acc.n[r]).toFixed(2),
     share: 0,
     px: F.acc.n[r],
   }]));

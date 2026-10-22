@@ -14,7 +14,16 @@
 import { readFileSync, writeFileSync } from 'node:fs';
 import { pathToFileURL } from 'node:url';
 
-export const DEFAULTS = { tolerance: 0.25, floor: 0.5 };
+export const DEFAULTS = { tolerance: 0.25, floor: 0.5, blackout: 500 };
+
+// Share of a scenario's pixel-frames that are pure black (‰, weighted by each region's share of the
+// frame), or null for a run from before the probe counted it. A NaN pixel smeared by bloom blacks
+// most of the frame and then holds still, so it pops nowhere: this is how the gate sees it.
+export function blackShare(rep) {
+  const rs = Object.values(rep || {}).filter((r) => r && typeof r.blackPerMille === 'number');
+  if (!rs.length) return null;
+  return rs.reduce((s, r) => s + r.blackPerMille * r.share, 0) / rs.reduce((s, r) => s + r.share, 0);
+}
 
 // The pops ‰ a run measured, flattened to { 'scenario/region': ‰ } (nudge: 'nudge/<course>').
 export function flatten(results) {
@@ -33,16 +42,24 @@ export function flatten(results) {
 // that ran is 'gone', and fails (the hero stopped drawing, a mask broke). A region the run has that
 // the budget lacks is 'new' (reported, not failed: write it in once it is measured).
 export function compare(run, budget, opts = {}) {
-  const tolerance = opts.tolerance ?? DEFAULTS.tolerance, floor = opts.floor ?? DEFAULTS.floor;
+  const tolerance = opts.tolerance ?? DEFAULTS.tolerance, floor = opts.floor ?? DEFAULTS.floor, blackout = opts.blackout ?? DEFAULTS.blackout;
   const got = flatten(run);
   const ran = new Set(Object.keys(got).map((k) => k.split('/')[0]));
   const rows = [];
   for (const [key, b] of Object.entries(budget)) {
     const limit = Math.max(b * (1 + tolerance), b + floor);
-    if (!(key in got)) { rows.push({ key, budget: b, got: null, limit, status: ran.has(key.split('/')[0]) ? 'gone' : 'missing' }); continue; }
+    // (The z-fight probes run per course, some only with --only=nudge: absent is never 'gone'.)
+    const sc = key.split('/')[0];
+    if (!(key in got)) { rows.push({ key, budget: b, got: null, limit, status: ran.has(sc) && sc !== 'nudge' ? 'gone' : 'missing' }); continue; }
     rows.push({ key, budget: b, got: got[key], limit, status: got[key] > limit ? 'over' : 'ok' });
   }
   for (const [key, g] of Object.entries(got)) if (!(key in budget)) rows.push({ key, budget: null, got: g, limit: null, status: 'new' });
+  // Any scenario mostly black is a blackout, budget or not.
+  for (const [sc, rep] of Object.entries(run || {})) {
+    if (sc === 'nudge' || sc === 'nudgeJets') continue;
+    const k = blackShare(rep);
+    if (k != null && k > blackout) rows.push({ key: `${sc}/black`, budget: null, got: k, limit: blackout, status: 'over' });
+  }
   return { rows, pass: rows.every((r) => r.status !== 'over' && r.status !== 'gone') };
 }
 
@@ -70,7 +87,7 @@ function main() {
   }
   const budget = doc.budgets[run.label];
   if (!budget) { console.error(`flicker-budget: no budget for "${run.label}" in ${budgetPath} (measure main and --write it)`); process.exit(2); }
-  const { rows, pass } = compare(run.results, budget, { tolerance: doc.tolerance, floor: doc.floor });
+  const { rows, pass } = compare(run.results, budget, { tolerance: doc.tolerance, floor: doc.floor, blackout: doc.blackout });
   const f = (v) => (v == null ? '—' : v.toFixed(2));
   for (const r of rows) {
     if (r.status === 'ok') continue;
