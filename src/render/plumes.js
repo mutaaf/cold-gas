@@ -18,8 +18,10 @@ const coneFS = `
     float a=hash(i.x+i.y*57.), b=hash(i.x+1.+i.y*57.), c=hash(i.x+(i.y+1.)*57.), d=hash(i.x+1.+(i.y+1.)*57.);
     return mix(mix(a,b,f.x), mix(c,d,f.x), f.y); }
   void main(){
-    float along = vUv.y;                   // 0 at the nozzle, 1 at the tip
-    float rim = pow(1. - abs(dot(vN, vView)), 1.6);
+    float along = clamp(vUv.y, 0., 1.);    // 0 at the nozzle, 1 at the tip
+    // Clamped: the interpolated normal and view aren't unit length, a dot can come out a hair over 1,
+    // and pow() of a negative base is NaN, which the bloom smears over the frame (LESSONS).
+    float rim = pow(clamp(1. - abs(dot(vN, vView)), 0., 1.), 1.6);
     float core = 1. - rim;
     float diamonds = 0.55 + 0.45 * cos(along * 38. - uTime * 30. + uSeed);
     float n = noise(vec2(vUv.x * 12. + uSeed, along * 6. - uTime * 14.));
@@ -30,6 +32,7 @@ const coneFS = `
   }`;
 
 function mistTexture() {
+  if (typeof document === 'undefined') return new THREE.Texture();   // Node (unit tests)
   const c = document.createElement('canvas'); c.width = c.height = 64;
   const x = c.getContext('2d');
   const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
@@ -74,19 +77,32 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
   const pmat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
     uniforms: { map: { value: mistTexture() }, scale: { value: 600 } },
+    // A dead particle (alpha 0) is clipped with no size: it used to keep its last size (metres,
+    // hundreds of pixels up close) and be shaded at alpha 0. `scale` is in drawing-buffer pixels
+    // (setScale), as gl_PointSize is, so the mist is the same apparent size at any DPR.
     vertexShader: `attribute float aSize; attribute float aAlpha; varying float vA; uniform float scale;
-      void main(){ vA = aAlpha; vec4 mv = modelViewMatrix * vec4(position,1.); gl_PointSize = aSize * scale / -mv.z; gl_Position = projectionMatrix * mv; }`,
+      void main(){ vA = aAlpha;
+        if (aAlpha <= 0.) { gl_PointSize = 0.; gl_Position = vec4(2., 2., 2., 1.); return; }
+        vec4 mv = modelViewMatrix * vec4(position,1.); gl_PointSize = aSize * scale / max(-mv.z, 0.05); gl_Position = projectionMatrix * mv; }`,
     fragmentShader: `uniform sampler2D map; varying float vA; void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vec3(0.86,0.9,0.95), t.a * vA); }`,
   });
   const points = new THREE.Points(pgeo, pmat);
   points.frustumCulled = false;
+  points.visible = false;   // nothing live yet
   scene.add(points);
   let head = 0;
+  // The pool is a ring, so its head is the oldest particle. A full pool used to overwrite it while
+  // it was still visible, and it vanished mid-fade: a pop every frame under full jets (the mid
+  // tier's 900 most of all). Now a spawn waits until the oldest has faded out (life ≤ 0.15 is
+  // alpha < 0.01), and a smaller pool draws each particle a little denser instead.
+  const FADED = 0.15, density = Math.min(2, Math.sqrt(1800 / maxMist)) * 0.16;
   let seed = 11;
   const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
 
   const wp = new THREE.Vector3(), wd = new THREE.Vector3(), q = new THREE.Quaternion();
   let spawnAcc = 0;
+  // Live particles after the last update, and whether the buffers changed (no upload when idle).
+  let live = 0, uploads = 0;
 
   function update(dt, time, throttles, carVel, groundY = 0) {
     hero.userData.thr = throttles;   // the car model reads the valve states (nozzle core / frost)
@@ -110,6 +126,7 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
         const c = cones[i];
         c.mesh.getWorldPosition(wp);
         wd.copy(c.jet).applyQuaternion(q);
+        if (life[head] > FADED) continue;   // the pool is full of visible mist
         const j = head; head = (head + 1) % maxMist;
         const sp = 7 + rnd() * 9;
         pos[j * 3] = wp.x + wd.x * 0.3; pos[j * 3 + 1] = wp.y + wd.y * 0.3; pos[j * 3 + 2] = wp.z + wd.z * 0.3;
@@ -121,8 +138,10 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
       }
     }
     // Integrate.
+    let n0 = 0, dirty = false;
     for (let j = 0; j < maxMist; j++) {
-      if (life[j] <= 0) { alpha[j] = 0; continue; }
+      if (life[j] <= 0) { if (alpha[j] !== 0) { alpha[j] = 0; dirty = true; } continue; }
+      n0++; dirty = true;
       life[j] -= dt * 0.55;
       const drag = Math.exp(-dt * 4.5);
       vel[j * 3] *= drag; vel[j * 3 + 1] = vel[j * 3 + 1] * drag + dt * 0.6; vel[j * 3 + 2] *= drag;
@@ -136,11 +155,16 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
       const age = 1 - life[j];
       size[j] = 0.35 + age * 4.2;
       // Fade in over the first moments (no hard-edged pop), then dissolve.
-      alpha[j] = Math.min(1, age * 7) * Math.max(0, life[j]) ** 1.6 * 0.16;
+      alpha[j] = Math.min(1, age * 7) * Math.max(0, life[j]) ** 1.6 * density;
     }
-    pgeo.attributes.position.needsUpdate = true;
-    pgeo.attributes.aSize.needsUpdate = true;
-    pgeo.attributes.aAlpha.needsUpdate = true;
+    live = n0;
+    points.visible = live > 0;
+    if (dirty) {
+      uploads++;
+      pgeo.attributes.position.needsUpdate = true;
+      pgeo.attributes.aSize.needsUpdate = true;
+      pgeo.attributes.aAlpha.needsUpdate = true;
+    }
   }
 
   // Touchdown: a flat ring of mist from each tyre contact (`pts` = x,y,z per contact, flat), pushed
@@ -152,6 +176,7 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
       for (let m = 0; m < perPoint; m++) {
         const a = (m / perPoint + rnd() * 0.15) * Math.PI * 2;
         const sp = speed * (0.6 + rnd() * 0.6);
+        if (life[head] > FADED) return;
         const j = head; head = (head + 1) % maxMist;
         pos[j * 3] = pts[k]; pos[j * 3 + 1] = pts[k + 1]; pos[j * 3 + 2] = pts[k + 2];
         vel[j * 3] = Math.cos(a) * sp; vel[j * 3 + 1] = rnd() * speed * 0.15; vel[j * 3 + 2] = Math.sin(a) * sp;
@@ -161,8 +186,9 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
     }
   }
 
-  function clear() { life.fill(0); alpha.fill(0); }
+  function clear() { life.fill(0); alpha.fill(0); live = 0; points.visible = false; pgeo.attributes.aAlpha.needsUpdate = true; }
+  // h = the drawing buffer's height in pixels (stage.onResize), not CSS pixels.
   function setScale(h) { pmat.uniforms.scale.value = h * 0.6; }
 
-  return { update, clear, setScale, burst, bursts: () => bursts };
+  return { update, clear, setScale, burst, bursts: () => bursts, live: () => live, uploads: () => uploads, points };
 }

@@ -1,6 +1,7 @@
 // Stage frame-time probe: the title and the reference run on each course, on a phone profile
 // (390×844, DPR 3, touch, CPU throttled 4×, so tier 'mid') or desktop (1440×900, tier 'high').
-// Reports average fps and frame-time percentiles per scene, and the frame's draw calls.
+// Reports average fps and frame-time percentiles per scene (title, run, the 3 s after touchdown),
+// and the frame's draw calls.
 //   node scripts/perf-show.mjs [url] [phone|desktop] [courses] [seconds] [gfx]
 //   node scripts/perf-show.mjs http://localhost:4320/coldgas/ phone show,lineup 8
 import { chromium } from '@playwright/test';
@@ -39,6 +40,10 @@ for (const course of coursesArg.split(',')) {
   console.log(fmt(`${course} title`, await sample(Number(secs))));
   await page.evaluate(() => { window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); });
   console.log(fmt(`${course} run`, await sample(Number(secs))));
+  // The 3 s after touchdown: the landing's mist burst and the jets' last puffs (0045).
+  await page.evaluate(() => { window.__coldgas.toTitle(); window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); });
+  const landed = await page.waitForFunction(() => ['landed', 'done'].includes(window.__coldgas.S.run?.phase), null, { timeout: 60000 }).then(() => true, () => false);
+  if (landed) console.log(fmt(`${course} touchdown`, await sample(3)));
 }
 console.log(`[${profile}${gfx ? ` gfx=${gfx}` : ''}] errors:`, errors.slice(0, 5).join(' | ') || 'none');
 await browser.close();

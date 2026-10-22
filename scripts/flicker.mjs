@@ -78,10 +78,18 @@ await page.evaluate(() => {
   let Basic = null;
   scene.traverse((o) => { if (!Basic && o.material?.isMeshBasicMaterial) Basic = o.material.constructor; });
   const ids = REG.map((_, i) => new Basic({ color: (i * 40) << 16, toneMapped: false, fog: false, side: 2 }));
+  // The ID pass draws into its own single-sampled target, so the region masks are crisp and don't
+  // depend on whether the canvas has MSAA (a gfx-tier setting: 0037 turned it off on the composer
+  // tiers, and MSAA-blended IDs at edges rounded to a neighbouring region). Linear colours there
+  // (no output conversion into a target). Falls back to the canvas where no target class is at hand.
+  const RT = stage.bloom?.renderTargetsHorizontal?.[0]?.constructor ?? stage.key?.shadow?.map?.constructor ?? null;
+  const idsLin = REG.map((_, i) => { const m = new Basic({ toneMapped: false, fog: false, side: 2 }); m.color.setRGB((i * 40) / 255, 0, 0); return m; });
+  let idRT = null;
   let W = 0, H = 0, buf = null, luma = [], idb = [], k = 0;
   const alloc = () => {
     W = gl.drawingBufferWidth; H = gl.drawingBufferHeight;
     buf = new Uint8Array(W * H * 4);
+    if (RT) { idRT?.dispose(); idRT = new RT(W, H); }
     luma = [0, 1, 2].map(() => new Float32Array(W * H));
     F.heat = new Float32Array(W * H);
     idb = [0, 1, 2].map(() => new Uint8Array(W * H));
@@ -117,14 +125,15 @@ await page.evaluate(() => {
       saved.push([o, o.material, o.visible]);
       const m = Array.isArray(o.material) ? o.material[0] : o.material;
       if (!o.isMesh || m?.transparent || m?.blending === 2) { o.visible = false; return; }
-      o.material = ids[regionOf.get(o) ?? 0];
+      o.material = (idRT ? idsLin : ids)[regionOf.get(o) ?? 0];
     });
     const fog = scene.fog; scene.fog = null;
-    renderer.setRenderTarget(null);
+    renderer.setRenderTarget(idRT);
     renderer.render(scene, camera);
     scene.fog = fog;
     for (const [o, m, v] of saved) { o.material = m; o.visible = v; }
-    gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+    if (idRT) { renderer.readRenderTargetPixels(idRT, 0, 0, W, H, buf); renderer.setRenderTarget(null); }
+    else gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf);
     const I = idb[k % 3];
     for (let i = 0, j = 0; i < I.length; i++, j += 4) I[i] = Math.round(buf[j] / 40);
     const shot = G.director.state.shot + ':' + G.director.state.mode;
@@ -248,6 +257,39 @@ results['show-replay-rigs'] = await scenario('show-replay-rigs', `() => {
   G.startRun('reveal'); G.fastForward(); G.S.replayT = 0; G.S.time = 4; window.__flk.staticOnly = true;
 }`, 600);
 await page.evaluate(() => { window.__flk.staticOnly = false; });
+// 4c. Jets firing (0038): the car on the Show's title with every valve open in a slow pattern, the
+//     camera orbiting it at a few metres. The cones' rim/fade pow()s and the mist are on screen
+//     every frame, so a NaN pixel in them shows up here (and in the nudge probe below).
+const jetsOn = `{
+  const P = window.__coldgas.plumes;
+  if (!P.__u) P.__u = P.update;
+  const thr = new Float64Array(10);
+  P.update = (dt, t, _thr, vel, gy) => { for (let j = 0; j < thr.length; j++) thr[j] = 0.55 + 0.45 * Math.sin(t * 1.7 + j * 0.9); return P.__u(dt, t, thr, vel, gy); }; }`;
+const jetsOff = '{ const P = window.__coldgas.plumes; if (P.__u) { P.update = P.__u; delete P.__u; } }';
+results['show-jets'] = await scenario('show-jets', `() => {
+  const G = window.__coldgas; ${free}
+  G.toTitle(); document.querySelector('[data-course="show"]')?.click(); G.S.time = 4; ${jetsOn}
+}`, 150, `
+  if (!G.director.__u) G.director.__u = G.director.update;
+  G.director.update = () => {};
+  const c = G.carRoot.position, a = 2.2 + i * 0.0015;
+  G.camera.position.set(c.x + Math.sin(a) * 7.5, c.y + 1.6, c.z + Math.cos(a) * 7.5); G.camera.lookAt(c.x, c.y + 0.2, c.z);
+  if (G.camera.view?.enabled) G.camera.clearViewOffset();`);
+if (!only || only.split(',').includes('show-jets') || only.split(',').includes('nudge')) {
+  results.nudgeJets = await page.evaluate(`(() => {
+    const G = window.__coldgas; ${free}
+    if (G.stage.course !== 'show') { G.toTitle(); document.querySelector('[data-course="show"]').click(); }
+    ${jetsOn}
+    window.__flk.step(30);   // the cones open and the mist builds
+    const c = G.carRoot.position, poses = [];
+    for (const [a, r, h] of [[0.4, 6, 1.2], [1.6, 4.5, 0.6], [2.6, 7, 2.2], [3.6, 5, 0.3], [4.8, 9, 3.5], [5.7, 3.5, 1.0]])
+      poses.push([c.x + Math.sin(a) * r, c.y + h, c.z + Math.cos(a) * r, c.x, c.y + 0.1, c.z]);
+    const res = window.__flk.nudge(poses);
+    ${jetsOff}
+    return res;
+  })()`);
+}
+await page.evaluate(jetsOff);
 // 5. The Lineup's title turntable (blue hour, the painted pad).
 results['lineup-title'] = await scenario('lineup-title', `() => {
   const G = window.__coldgas; ${free}
@@ -282,10 +324,11 @@ if (!only || only.split(',').includes('nudge')) {
 const label = `${engine}${phone ? ' phone' : ' desktop'}`;
 console.log(`\n${label}  jitter = mean |Δ²luma| (0–255), pops = ‰ pixel-frames with |Δ²luma| > 24`);
 for (const [sc, rep] of Object.entries(results)) {
-  if (!rep || sc === 'nudge') continue;
+  if (!rep || sc === 'nudge' || sc === 'nudgeJets') continue;
   const cells = Object.entries(rep).map(([r, v]) => `${r} ${v.jitter.toFixed(3)}/${v.popsPerMille.toFixed(2)}‰ (${Math.round(v.share * 100)}%)`);
   console.log(`${sc.padEnd(16)} ${cells.join('  ')}`);
 }
+if (results.nudgeJets) nudge.jets = results.nudgeJets;
 for (const [c, v] of Object.entries(nudge)) console.log(`z-fight ${c.padEnd(8)} mean |Δluma| ${v.meanDelta.toFixed(3)}, ${v.popsPerMille.toFixed(2)}‰ px flip > 24 under a 0.1 mm camera shift  per pose ‰ [${v.perPose.join(" ")}]`);
 if (errors.length) console.log('errors:', errors.slice(0, 5).join(' | '));
 if (jsonOut) (await import('node:fs')).writeFileSync(jsonOut, JSON.stringify({ label, url, results }, null, 2));

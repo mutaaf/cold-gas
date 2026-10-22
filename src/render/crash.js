@@ -58,8 +58,10 @@ const sparkFS = `
 const smokeVS = `
   attribute float aSize; attribute float aAlpha; attribute vec3 aColor;
   varying float vA; varying vec3 vC; uniform float scale;
-  void main(){ vA = aAlpha; vC = aColor; vec4 mv = modelViewMatrix * vec4(position, 1.0);
-    gl_PointSize = aSize * scale / -mv.z; gl_Position = projectionMatrix * mv; }`;
+  void main(){ vA = aAlpha; vC = aColor;
+    if (aAlpha <= 0.0) { gl_PointSize = 0.0; gl_Position = vec4(2.0, 2.0, 2.0, 1.0); return; }   // dead: no size, clipped
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = aSize * scale / max(-mv.z, 0.05); gl_Position = projectionMatrix * mv; }`;
 const smokeFS = `
   uniform sampler2D map; varying float vA; varying vec3 vC;
   void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vC, t.a * vA); }`;
@@ -164,7 +166,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
   const soft = softTexture();
   const mmat = new THREE.ShaderMaterial({ vertexShader: smokeVS, fragmentShader: smokeFS, transparent: true, depthWrite: false, uniforms: { map: { value: soft }, scale: { value: 600 } } });
   const smoke = new THREE.Points(mgeo, mmat);
-  smoke.frustumCulled = false; smoke.renderOrder = 2;
+  smoke.frustumCulled = false; smoke.renderOrder = 2; smoke.visible = false;   // drawn only while a puff lives
   root.add(smoke);
   let mHead = 0;
   function puff(x, y, z, vx, vy, vz, size, grow, life, alpha, r, g, b) {
@@ -583,11 +585,11 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
       for (let k = 0; k < n; k++) puff(tailW.x, tailW.y, tailW.z, up.x * 3 + sgn() * 2.5, up.y * 3 + 1.5 + rnd() * 2, up.z * 3 + sgn() * 2.5, 0.35, 4.5, 1.3 + rnd(), 0.2 * Math.min(1, st.ventT), 0.9, 0.94, 0.98);
     }
     // Smoke and dust: drift, slow, grow, fade.
-    let smokeAny = false;
+    let smokeAny = false, smokeLive = 0;
     const sd = Math.exp(-dt * 2.2);
     for (let j = 0; j < NM; j++) {
       if (mLife[j] <= 0) { if (mAlpha[j] !== 0) { mAlpha[j] = 0; smokeAny = true; } continue; }
-      smokeAny = true;
+      smokeAny = true; smokeLive++;
       mLife[j] -= dt * mDecay[j];
       const o = j * 3;
       mVel[o] *= sd; mVel[o + 1] = mVel[o + 1] * sd + dt * 0.25; mVel[o + 2] *= sd;
@@ -597,6 +599,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
       mSize[j] = mSize0[j] + age * mGrow[j];
       mAlpha[j] = Math.min(1, age * 9) * Math.max(0, mLife[j]) ** 1.3 * mAlpha0[j];
     }
+    smoke.visible = smokeLive > 0;
     if (smokeAny) { mgeo.attributes.position.needsUpdate = true; mgeo.attributes.aSize.needsUpdate = true; mgeo.attributes.aAlpha.needsUpdate = true; mgeo.attributes.aColor.needsUpdate = true; }
 
     // Flash.
@@ -622,6 +625,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
     setGrind(st.grind * st.slowK);
   }
 
+  // h = the drawing buffer's height in pixels (stage.onResize), as gl_PointSize is.
   function setScale(h) { mmat.uniforms.scale.value = h * 0.6; }
 
   return { feed, update, reset, timeScale, setScale, state: st, fx: { sparks, chips, smoke, flash, pieces } };

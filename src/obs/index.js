@@ -28,10 +28,10 @@ const SAVE_EVERY_MS = 10_000; // the ledger's session record is refreshed this o
 const storage = (() => { try { return globalThis.localStorage ?? null; } catch { return null; } })();
 
 // A coarse device class: form factor × a memory/cores bucket. Nothing finer.
-export function deviceClass(nav = globalThis.navigator, coarse = globalThis.matchMedia?.('(pointer: coarse)').matches) {
+export function deviceClass(nav = globalThis.navigator, coarse = globalThis.matchMedia?.('(pointer: coarse)').matches, kind = coarse ? 'phone' : 'desktop') {
   const mem = nav?.deviceMemory || 8, cores = nav?.hardwareConcurrency || 8;
   const b = mem <= 4 || cores <= 4 ? 'lo' : mem >= 8 && cores >= 8 ? 'hi' : 'mid';
-  return `${coarse ? 'phone' : 'desktop'}-${b}`;
+  return `${kind}-${b}`;   // phone | tablet | desktop (src/gfx-tier.js deviceKind)
 }
 
 function createObs() {
@@ -208,7 +208,7 @@ function createObs() {
     const f = o.frames;
     const hist = Array.from(f.hist);
     return {
-      v: 1, build: o.build, dc: o.deviceClass, tier: o.tier, scale: o.scale,
+      v: 1, build: o.build, dc: o.deviceClass.replace(/^tablet/, 'phone'), tier: o.tier, scale: o.scale,   // the Worker's classes (src/worker/obs.js DCS) have no tablet yet
       errs,
       fr: f.frames ? { h: hist, n: f.frames, hitch: f.hitches, low: f.lowFpsWindows, drop: Math.round(f.droppedTicks), sim: summary(f).simMs, ren: summary(f).renderMs } : null,
       rec: o.recoveries.filter((r) => !r.sent).slice(-8).map((r) => ({ kind: r.kind, ok: r.ok })),
