@@ -5,6 +5,7 @@
 // bullseye landing pad. `stage.setCourse(id)` swaps the course group, environment, fog, exposure
 // and bloom without recreating the renderer.
 import * as THREE from 'three';
+import { isSoftwareRenderer, probeRenderer } from '../gfx-tier.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
@@ -370,8 +371,10 @@ async function buildSliced(look) {
 export function createStage(canvas, { tier = 'high', course = 'show', backdrop = true, onBackdropError = null } = {}) {
   // Canvas MSAA only where the scene draws straight to the canvas ('low'). The composer tiers draw
   // into a HalfFloat target with no MSAA (LESSONS), so canvas MSAA there only smoothed the final
-  // quad; their edges come from SMAA after the OutputPass instead.
-  const renderer = new THREE.WebGLRenderer({ canvas, antialias: tier === 'low', powerPreference: 'high-performance' });
+  // quad; their edges come from SMAA after the OutputPass instead. A software rasterizer skips it
+  // (src/gfx-tier.js: a third of its frame rate).
+  const msaa = tier === 'low' && !isSoftwareRenderer(probeRenderer());
+  const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance' });
   const basePixelRatio = Math.min(window.devicePixelRatio, tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1);
   renderer.setPixelRatio(basePixelRatio);
   renderer.toneMapping = THREE.AgXToneMapping;
