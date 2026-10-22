@@ -1,12 +1,12 @@
 ---
 id: 0040
 title: A flaky network never reloads the game into an offline page; a stale deploy recovers once
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: tech-health
 created: 2026-10-21
-pr:
+pr: 69
 by: operator
 ---
 
@@ -27,10 +27,10 @@ failure mark the page stale so the next `toTitle` reloads. Memoise the WASM fetc
 Install a tiny boot watchdog early in index.html that offers a reload if the title isn't wired in 15 s.
 
 ## Acceptance criteria
-- [ ] Offline + aborted `rocket-*.js`: no reload, title playable, no unhandled rejection
-- [ ] A 404 on a lazy chunk after a "new build": exactly one reload, then it works
-- [ ] Theatre import stalled forever: local judge lines appear by 35 s
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] Offline + aborted `rocket-*.js`: no reload, title playable, no unhandled rejection
+- [x] A 404 on a lazy chunk after a "new build": exactly one reload, then it works
+- [x] Theatre import stalled forever: local judge lines appear by 35 s
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 e2e with `context.setOffline` and `page.route` aborts/stalls; unit test for the reload decision.
