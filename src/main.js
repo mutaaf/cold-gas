@@ -37,6 +37,7 @@ import { createUI } from './ui.js';
 import { wireUnitToggles, localize, unitText } from './units.js';
 import { createInstruments } from './instruments.js';
 import { localWords, postScore, fetchBoard } from './panel.js';
+import { withDeadline } from './net.js';
 import { loadAI } from './ai/config.js';
 import { openSettings, aiLabel } from './ai/settings.js';
 import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
@@ -304,6 +305,8 @@ function finishRun() {
 const theatreRoot = document.querySelector('[data-theatre]');
 const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]'), goLabel = document.querySelector('[data-go-label]');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+const JUDGE_MS = 35_000;   // invariant 5½: no AI call may block the results longer than this
+let replayingCall = false;
 async function runPanel(run, replay = null) {
   const assist = !!(S.assist || S.autopilot);
   const card = S.card;
@@ -313,10 +316,20 @@ async function runPanel(run, replay = null) {
   // [obs] The judges are a breaker-guarded subsystem: after repeated failures the panel speaks local
   // lines for a while (a cooldown that doubles), then tries the call again.
   if (!replay && !obs.breaker('judge').allow()) { S.words = localWords(card); ui.words(S.words); ui.cue_('The judges are resting: local lines for now', 1800); return; }
-  try { mod = await import('./ai/theatre.js'); } catch (err) { obs.fail('judge', err, 'lazy'); S.words = localWords(card); ui.words(S.words); return; }
-  if (S.run !== run) return;
+  // [obs] The theatre is a lazy chunk, and loading it spends the same 35 s (invariant 5½). A chunk
+  // that fails or stalls isn't the judges' fault (no breaker): local lines now, and the page is
+  // marked stale so the next title checks for a new build (src/obs/heal.js).
+  const t0 = performance.now();
+  try { mod = await withDeadline(import('./ai/theatre.js'), JUDGE_MS, 'the judges’ chunk'); } catch (err) {
+    obs.lazyFailed(err);
+    try { heal.markStale('the judges’ chunk failed to load'); } catch { /* heal not installed yet */ }
+    if (S.run === run && !signal?.aborted) { S.words = localWords(card); ui.words(S.words); }
+    return;
+  }
+  if (S.run !== run || signal?.aborted) return;
   const { words, meta, aborted } = await mod.runTheatre(theatreRoot, {
     log: run.inputLog, t: run.t, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay, abort: signal,
+    deadlineMs: replay ? JUDGE_MS : JUDGE_MS - (performance.now() - t0),
   });
   if (aborted || S.run !== run) return;
   if (!replay && /too long/.test(meta.error || '')) obs.fail('judge', new Error('judge deadline'), 'fetch');
@@ -325,7 +338,8 @@ async function runPanel(run, replay = null) {
     S.words = words; S.callMeta = meta;
   }
   ui.words(S.words);
-  ui.receipt(S.callMeta, { onReplay: () => runPanel(run, S.callMeta.events), onChange: () => openAI() });
+  // Replay the call: one at a time (a second press while it plays does nothing).
+  ui.receipt(S.callMeta, { onReplay: () => { if (replayingCall) return; replayingCall = true; runPanel(run, S.callMeta.events).finally(() => { replayingCall = false; }); }, onChange: () => openAI() });
 }
 
 const aiChip = document.querySelector('[data-ai-open]');
@@ -963,19 +977,37 @@ document.querySelector('[data-r-submit]').addEventListener('submit', async (e) =
   const msg = document.querySelector('[data-r-submit-msg]');
   if (initials.length !== 3) { msg.textContent = 'Three letters.'; return; }
   if (S.autopilot) { msg.textContent = 'The reference jump can’t be posted.'; return; }
+  // One post per run, one request in flight: a double click (or Enter twice) posts once.
+  const run = S.run;
+  if (!run || postingRun === run) return;
+  if (postedRun === run) { msg.textContent = 'Already posted.'; return; }
   try { localStorage.setItem('coldgas_initials', initials); } catch { /* storage blocked */ }
+  const btn = e.target.querySelector('button[type="submit"]');
+  postingRun = run;
+  if (btn) btn.disabled = true;
   msg.textContent = 'Verifying…';
-  const res = await postScore(S.run.inputLog, S.assist, initials, S.run.course);
-  msg.textContent = res.ok ? `Posted. #${res.rank} today.` : res.status === 429 ? 'Slow down a little.' : 'The board is offline.';
+  let res;
+  try { res = await postScore(run.inputLog, S.assist, initials, run.course); } finally { postingRun = null; if (btn) btn.disabled = false; }
+  if (res.ok) postedRun = run;
+  if (S.run !== run) return;   // a new run's sheet: this answer belongs to the last one
+  msg.textContent = res.ok ? `Posted. #${res.rank} today.` : res.status === 429 ? 'Slow down a little.' : res.timeout ? 'The board didn’t answer. Try again.' : 'The board is offline.';
 });
+let postingRun = null, postedRun = null;
 try { document.getElementById('initials').value = localStorage.getItem('coldgas_initials') || ''; } catch { /* storage blocked */ }
 
-let boardKind = 'today';
+// The board: the latest request wins (a slow 'today' never overwrites the 'all' asked for after it).
+let boardKind = 'today', boardSeq = 0, boardAbort = null;
 async function openBoard(kind = boardKind) {
   boardKind = kind;
   ui.show('board', true);
   document.querySelectorAll('[data-board]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.board === kind)));
-  ui.board(await fetchBoard(kind));
+  const seq = ++boardSeq;
+  boardAbort?.abort();
+  boardAbort = new AbortController();
+  const rows = await fetchBoard(kind, { signal: boardAbort.signal });
+  if (seq !== boardSeq) return;
+  boardAbort = null;
+  try { ui.board(rows); } catch (err) { obs.error('app', err); ui.board(null); }
 }
 on('[data-board-open]', () => openBoard());
 on('[data-board-close]', () => ui.show('board', false));
@@ -1042,7 +1074,7 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
-const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false) });
+const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
 window.__coldgas = { S, stage, physicsReady, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 Object.assign(window.__coldgas, { obs, heal });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

@@ -423,9 +423,12 @@ export function createUI() {
     box.hidden = !items?.length;
   };
 
-  // Type the words into each judge's quote.
+  // Type the words into each judge's quote. A new set (Replay the call, the next run) cancels the
+  // typing still in flight, so two typewriters never write into the same quote.
+  const typing = {};
   ui.words = (words) => {
     if (!words) return;
+    for (const id in typing) { clearTimeout(typing[id]); delete typing[id]; }
     if (words.headline) unitText($('[data-r-headline]'), words.headline);
     for (const id of ['engineer', 'coordinator', 'designer']) {
       const q = document.querySelector(`[data-judge="${id}"] .quote`);
@@ -438,10 +441,10 @@ export function createUI() {
       q.textContent = '';
       q.classList.add('typing');
       const delay = { engineer: 0, coordinator: 500, designer: 1000 }[id];
-      setTimeout(function type() {
+      typing[id] = setTimeout(function type() {
         q.textContent = text.slice(0, ++i);
-        if (i < text.length) setTimeout(type, 14);
-        else { q.classList.remove('typing'); unitText(q, src); }
+        if (i < text.length) typing[id] = setTimeout(type, 14);
+        else { delete typing[id]; q.classList.remove('typing'); unitText(q, src); }
       }, delay);
     }
   };

@@ -137,20 +137,33 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
   };
   // A worker that died (an uncaught error, out of memory) loses its jobs: record it, respawn it if
   // the breaker allows, and re-ask for everything in flight (late replies are dropped by epoch).
+  // A worker that never answered and died without a message never loaded: its script is gone (a
+  // deploy replaced the build) or the network dropped it. Respawning would only fail again, so it's
+  // a stale build: the self-heal checks for a new one (src/obs/heal.js), and prime() gives up now.
+  let workersDown = 0;
   const crashed = (entry, e) => {
     e?.preventDefault?.();
+    if (!entry.alive && !e?.message) {
+      try { entry.worker.terminate(); } catch { /* already gone */ }
+      if (entry.busy !== Infinity) { entry.busy = Infinity; workersDown++; }
+      pending.clear();
+      obs.lazyFailed(Object.assign(new Error('terrain worker failed to load'), { stack: '    at onerror (terrain.worker.js:0:0)' }));
+      obs.recovery('world', false, 'terrain worker never loaded (stale build?)');
+      return;
+    }
     obs.fail('world', Object.assign(new Error(`terrain worker crashed: ${e?.message || 'no message'}`), { stack: '    at onerror (terrain.worker.js:0:0)' }), 'worker');
     try { entry.worker.terminate(); } catch { /* already gone */ }
     entry.busy = 0; epoch++; pending.clear();
-    if (obs.breaker('world').allow()) { entry.worker = spawn(); entry.worker.onmessage = entry.onmessage; entry.worker.onerror = (e2) => crashed(entry, e2); obs.recovery('world', true, 'terrain worker respawned'); }
-    else { entry.busy = Infinity; obs.recovery('world', false, 'terrain worker left down (breaker open)'); }
+    if (obs.breaker('world').allow()) { entry.worker = spawn(); entry.alive = false; entry.worker.onmessage = entry.onmessage; entry.worker.onerror = (e2) => crashed(entry, e2); obs.recovery('world', true, 'terrain worker respawned'); }
+    else { entry.busy = Infinity; workersDown++; obs.recovery('world', false, 'terrain worker left down (breaker open)'); }
   };
   for (let w = 0; w < cfg.workers; w++) {
     const worker = spawn();
-    const entry = { worker, busy: 0 };
+    const entry = { worker, busy: 0, alive: false };
     worker.onerror = (e) => crashed(entry, e);
     entry.onmessage = worker.onmessage = (e) => {
       const m = e.data;
+      entry.alive = true;
       entry.busy--;
       if (wake) { const w = wake; wake = null; w(); }
       if (m.gen !== epoch) return;
@@ -455,7 +468,7 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
   }
 
   // Everything near a point, now (behind the loading screen): waits for the workers.
-  async function prime(x, z, onProgress) {
+  async function prime(x, z, onProgress, { signal = null } = {}) {
     planX = x; planZ = z; lastX = x; lastZ = z;
     rebase(x, z);
     road.ensure(z + cfg.roadR + 400);
@@ -470,6 +483,9 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
       const left = need.filter((j) => (j.kind === 't' ? !tiles[j.lvl].has(j.key) : !chunks.has(j.c))).length;
       onProgress?.(1 - left / Math.max(1, total));
       if (!left || performance.now() - t0 > 30000) break;
+      // Cancelled (Back), or no worker left to build anything: stop waiting.
+      if (signal?.aborted) { inflight = cfg.inflight; throw Object.assign(new Error('cancelled'), { name: 'AbortError' }); }
+      if (workersDown >= workers.length) { inflight = cfg.inflight; throw new Error('the terrain workers could not start'); }
       await new Promise((r) => { wake = r; setTimeout(r, 40); });
     }
     inflight = cfg.inflight;
