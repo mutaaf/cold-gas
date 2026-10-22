@@ -62,7 +62,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .cta { display: flex; flex-wrap: wrap; gap: 12px; align-items: center; }
 .spec { display: flex; gap: clamp(18px, 3vw, 40px); margin: 40px 0 0; padding: 18px 0 0; border-top: 1px solid var(--hair-2); }
 .spec div { display: grid; gap: 6px; }
-.spec dt { font: 500 10px/1 var(--text); letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink-3); }
+.spec dt { font: 500 11px/1 var(--text); letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-3); }
 .spec dd { margin: 0; font: 400 15px/1 var(--mono); color: var(--ink); }
 .fineprint { margin: 22px 0 0; font-size: 11px; color: var(--ink-3); max-width: 46ch; }
 
@@ -155,7 +155,7 @@ button { font: inherit; color: inherit; cursor: pointer; }
 .quick { display: none; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 16px; border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px);
   color: var(--ink); font: 500 12px/1 var(--text); letter-spacing: 0.02em; }
 .quick svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
-.quick kbd { font: 500 9px/1 var(--mono); padding: 2px 4px; border: 1px solid var(--hair); border-radius: 3px; color: var(--ink-3); }
+.quick kbd { font: 500 11px/1 var(--mono); padding: 1px 4px; border: 1px solid var(--hair); border-radius: 3px; color: var(--ink-2); }
 body[data-mode='live'] .quick, body[data-mode='countdown'] .quick, body[data-mode='results'] .quick, body[data-mode='replay'] .quick { display: inline-flex; }
 body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own Retry is right there */
 .quick:hover { border-color: rgba(255, 255, 255, 0.35); }
@@ -709,9 +709,9 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .hud { --adi: 104px; }
 }
 @media (pointer: coarse) and (orientation: landscape) {
-  /* Top band: brand · clock + timeline · chips; under it the strip in one row; primary left; attitude right. */
+  /* Top band: clock + timeline · Home, Retry, icons; primary left; attitude right; the strip along the bottom. */
   .hud { --top: calc(14px + var(--safe-t)); }
-  .h-mission { top: var(--top); left: calc(50% - 36px); grid-template-columns: auto auto; align-items: center; gap: 12px; padding: 0 0 0; }
+  .h-mission { top: calc(28px + var(--safe-t)); left: calc(var(--m) + var(--safe-l)); transform: none; grid-template-columns: auto auto; align-items: center; gap: 12px; padding: 0 0 0; }
   .h-timeline li { width: 22px; }
   .h-timeline li::before { top: 3px; }
   .h-primary { top: calc(var(--top) + 46px); bottom: auto; left: calc(var(--m) + var(--safe-l)); transform: none; justify-items: start; }
@@ -732,10 +732,20 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .h-strip .tank { flex-grow: 1.7; }
   .h-cell { flex: 1 1 0; min-width: 0; padding: 7px 8px 6px; row-gap: 5px; }
   .h-cell b { font-size: 15px; }
-  .cue { --cue-top: 112px; }
+  .cue { --cue-top: 112px; max-width: calc(100vw - 2 * clamp(16px, 2.4vw, 36px) - 480px - var(--safe-l) - var(--safe-r)); }   /* between the primary and the vehicle */
   .h-scrim-top { height: 190px; }
+  /* Mid-run the clock and timeline take the brand's place in the top band, and the AI and tier chips
+     (title-screen settings) step aside for Home and Retry. */
+  body:is([data-mode='live'], [data-mode='countdown'], [data-mode='results'], [data-mode='replay']) :is(.ai-chip, .tier-chip) { display: none; }
+  body:is([data-mode='live'], [data-mode='countdown'], [data-mode='results'], [data-mode='replay']) .top .brand { visibility: hidden; }
 }
 
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 520px) {
+  /* Phones lying down: slot C (LIFT on the Lineup's run-up and the Wall's ledge) is in the top-right
+     corner, so the attitude and the vehicle step left of it. */
+  .h-att { right: calc(100px + var(--safe-r)); }
+  .h-vehicle { right: calc(100px + var(--adi) + 14px + var(--safe-r)); }
+}
 @media (pointer: coarse) and (orientation: landscape) and (min-height: 700px) {
   .h-strip { left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); bottom: calc(18px + var(--safe-b)); }
 }
@@ -776,7 +786,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 
 /* One-thumb */
 .thumb { display: none; position: absolute; --x: var(--ax); --y: var(--ay); --s: 132px; right: calc(var(--x) - var(--s) / 2 + var(--safe-r)); bottom: calc(var(--y) - var(--s) / 2 + var(--safe-b));
-  width: var(--s); height: var(--s); border-radius: 50%; border: 1px solid rgba(245, 246, 248, 0.34); background: rgba(6, 8, 13, 0.5); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  width: var(--s); height: var(--s); border-radius: 50%; border: 1px solid rgba(245, 246, 248, 0.34); background: rgba(6, 8, 13, 0.56); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   place-items: center; align-content: center; gap: 6px; padding: 0; color: var(--ink); pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent;
   transition: background 0.12s, transform 0.12s, border-color 0.2s; }
 .touch[data-scheme='thumb'] .thumb { display: grid; }
@@ -784,7 +794,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 .thumb-ring { position: absolute; inset: -7px; width: calc(100% + 14px); height: calc(100% + 14px); transform: rotate(-90deg); pointer-events: none; }
 .thumb-ring .tr-bg { fill: none; stroke: rgba(245, 246, 248, 0.14); stroke-width: 1.2; }
 .thumb-ring .tr-arc { fill: none; stroke: var(--ink); stroke-width: 1.6; stroke-dasharray: 0 100; transition: stroke-dasharray 0.15s linear; }
-.thumb-verb { font: 500 11px/1 var(--text); letter-spacing: 0.18em; text-transform: uppercase; color: rgba(245, 246, 248, 0.8); }
+.thumb-verb { font: 500 11px/1 var(--text); letter-spacing: 0.18em; text-transform: uppercase; color: rgba(245, 246, 248, 0.94); }   /* ≥ 4.5:1 over a lit car */
 .thumb-act { font: 400 15px/1.1 var(--display); letter-spacing: 0.04em; text-transform: uppercase; }
 .thumb.on { background: rgba(245, 246, 248, 0.9); color: #06080c; transform: scale(0.97); }
 .thumb.on .thumb-verb { color: rgba(6, 8, 12, 0.72); }
@@ -886,7 +896,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 }
 .tank .n2-bar .h-alt { font-size: 11px; }
 .d-row .h-alt { margin-left: 4px; }
-.u2 { font-size: 0.86em; color: rgba(245, 246, 248, 0.72); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.u2 { font-size: max(11px, 0.86em); color: rgba(245, 246, 248, 0.72); font-variant-numeric: tabular-nums; white-space: nowrap; }
 :root.u-flip :is([data-u], .h-alt, .u2, [data-u-src], .h-cell b, .h-big b, .fd-speed b, .fd-stats dd) { animation: u-flip 0.38s var(--ease); }
 @keyframes u-flip { 0% { opacity: 0.15; filter: blur(3px); transform: translateY(2px); } 100% { opacity: 1; filter: none; transform: none; } }
 @media (prefers-reduced-motion: reduce) { :root.u-flip * { animation: none !important; } }
@@ -927,3 +937,18 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 @keyframes fx-ring { from { transform: scale(2.4); opacity: 0.2; } to { transform: scale(1); opacity: 1; } }
 .dmg-trail circle { fill: rgba(245, 246, 248, 0.9); }
 @media (prefers-reduced-motion: reduce) { .dmg-fx.on, .dmg-fx.on .fx-ring { animation: none; opacity: 1; } }
+/* Slide Over and the smallest phones (≤ 360 px): the top bar keeps the settings that matter (the
+   wordmark is the brand on the title, and For nerds is a keyboard toy), and the title stack tightens
+   so the wordmark stays on screen. */
+@media (max-width: 360px) {
+  .top .brand, .top .nerds-btn { display: none; }
+  .top { justify-content: flex-end; }
+  .wordmark br { display: none; }
+  .wordmark { font-size: 30px; white-space: nowrap; }
+  .tagline { font-size: 15px; margin: 10px 0 14px; }
+  .course-btn { padding: 10px 6px; }
+  .course-btn b { font-size: 11px; letter-spacing: 0.02em; }
+  .drive-row { margin-bottom: 12px; }
+  .cta { gap: 8px; }
+  .cta .btn { height: 40px; padding: 0 18px; font-size: 14px; }
+}

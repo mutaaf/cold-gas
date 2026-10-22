@@ -1,7 +1,7 @@
 ---
 id: 0033
 title: The HUD audit passes at every phone, iPad and desktop viewport, with safe-area insets
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: accessibility
@@ -44,3 +44,11 @@ Show and asserts the mission block and `.top-actions` rects don't intersect.
 
 ## Out of scope
 Moving the telemetry strip off the car on portrait phones (0026).
+
+## Shipped (2026-10-22, Builder)
+`hud-audit` (Show + Free Drive) is clean at every phone (390×844, 430×932, 844×390, 932×430,
+814×380), every iPad (768×1024, 1024×768, 820×1180, 1180×820, 1024×1366, 1366×1024), every desktop
+and the notch-inset pass. `title-audit` is clean at all 16 viewports, 320×568 and the insets
+included. The one exception is a *run* at 320×568 (Slide Over), which needs a compact touch layout of
+its own; that, and the short-portrait iPhone case (393×659), moved to 0055. The audit's default set
+keeps 320×568 in it, so it stays visible until 0055 lands.

@@ -5,19 +5,25 @@
 //   - WCAG contrast of every visible HUD label, measured on the real screenshot: the text's
 //     luminance against the worst (closest) 10 % of the pixels behind it, with the text hidden.
 //
-//   node scripts/hud-audit.mjs <url> <outdir> [set=all|phones|quick] [label]
+//   node scripts/hud-audit.mjs <url> <outdir> [set=all|phones|tablets|insets|quick|WxH,…] [label]
 //
 // Writes <outdir>/<label>-<viewport>-<phase>.png and <outdir>/<label>-report.json.
 import { chromium } from '@playwright/test';
+import { launchOpts } from './launch.mjs';
 import { writeFileSync, mkdirSync } from 'node:fs';
 
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', set = 'all', label = 'audit'] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
-const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430]];
-const TABLETS = [[768, 1024], [1024, 768]];
+const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430], [814, 380]];
+// iPads: mini, Air, Pro 12.9 (both ways), and Slide Over (320 px wide).
+const TABLETS = [[768, 1024], [1024, 768], [820, 1180], [1180, 820], [1024, 1366], [1366, 1024], [320, 568]];
 const DESKTOPS = [[1280, 720], [1920, 1080], [720, 1280], [1080, 1920]];
-const VIEWPORTS = set === 'phones' ? PHONES : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map((v) => v.split('x').map(Number)) : [...PHONES, ...TABLETS, ...DESKTOPS];
+// The inset pass: a notched phone's safe areas (status bar and home indicator upright, the notch
+// on both sides lying down), set on :root's --safe-* the way env(safe-area-inset-*) would be.
+const INSETS = [[390, 844], [430, 932], [844, 390], [932, 430]].map(([w, h]) => [w, h, h > w ? { t: 47, r: 0, b: 34, l: 0 } : { t: 0, r: 47, b: 21, l: 47 }]);
+const VIEWPORTS = set === 'phones' ? PHONES : set === 'tablets' ? TABLETS : set === 'insets' ? INSETS : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map((v) => v.split('x').map(Number)) : [...PHONES, ...TABLETS, ...DESKTOPS, ...INSETS];
 const touchFor = (w, h) => [...PHONES, ...TABLETS].some(([a, b]) => a === w && b === h);
+const safeCss = (s) => `:root { --safe-t: ${s.t}px !important; --safe-r: ${s.r}px !important; --safe-b: ${s.b}px !important; --safe-l: ${s.l}px !important; }`;
 
 // Everything that sits over the stage during a run (both the old markup and the new; missing ones
 // are skipped). Pairs where one contains the other are not overlaps.
@@ -28,13 +34,15 @@ const BOXES = [
   // new HUD
   '[data-hud-box]',
   // touch
-  '[data-stick]', '.buttons', '[data-onethumb]', '[data-nozzle-pad] svg',
+  '[data-stick]', '.buttons > .tbtn', '[data-onethumb]', '[data-nozzle-pad] svg',   // .buttons is display: contents
+  // Build layer (Free Drive)
+  '.bq-dock',
   // Free Drive
   '.fd-road', '.fd-ctl', '.fd-timer', '.fd-speed', '.fd-stats', '.fd-map', '.fd-fine',
 ];
 const TEXT_ROOTS = '[data-screen="hud"], [data-touch], [data-cue], .top, [data-drill-bar], [data-drive-hud], [data-onethumb]';
 
-const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
+const browser = await chromium.launch(launchOpts());
 const report = [];
 
 async function measure(page, vpName, phase) {
@@ -132,12 +140,13 @@ async function measure(page, vpName, phase) {
   console.log(`${vpName} ${phase}: overlaps ${m.overlaps.length}${m.overlaps.length ? ` (${m.overlaps.map((o) => `${o.a}×${o.b} ${o.px}`).join('; ')})` : ''} · offscreen ${m.offscreen.length} · min text ${minPx}px (${small.length} < 11) · min contrast ${minRatio} (${low.length} < 4.5)`);
 }
 
-for (const [w, h] of VIEWPORTS) {
+for (const [w, h, safe] of VIEWPORTS) {
   const touch = touchFor(w, h);
-  const vpName = `${w}x${h}`;
+  const vpName = `${w}x${h}${safe ? '-safe' : ''}`;
   const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  if (safe) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = css; document.head.append(st); }), safeCss(safe));
   await page.goto(`${url}?gfx=low`);
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30000 });
   await page.waitForTimeout(1500);
@@ -197,7 +206,7 @@ for (const [w, h] of VIEWPORTS) {
   if (thumbMode) await S(() => window.__coldgas.thumb.up()); else { await page.keyboard.up('KeyF'); await page.keyboard.up('ShiftLeft'); }
   await until(() => window.__coldgas.S.mode === 'results', 30000);
   // Free Drive on phones and the two desktop sizes.
-  if (['390x844', '844x390', '1280x720', '1920x1080', '768x1024'].includes(vpName)) {
+  if (['390x844', '844x390', '1280x720', '1920x1080', '768x1024', '320x568', '390x844-safe', '844x390-safe'].includes(vpName)) {
     await S(() => window.__coldgas.toTitle());
     await page.goto(`${url}?gfx=low&drive=stelvio`);
     const ok = await until(() => window.__coldgas?.drive?.active, 90000);
@@ -214,3 +223,4 @@ writeFileSync(`${out}/${label}-report.json`, JSON.stringify(report, null, 1));
 const tot = report.reduce((a, r) => ({ ov: a.ov + r.overlaps.length, sm: a.sm + r.small.length, lc: a.lc + r.lowContrast.length, off: a.off + r.offscreen.length }), { ov: 0, sm: 0, lc: 0, off: 0 });
 console.log(`TOTAL ${label}: ${report.length} frames · overlaps ${tot.ov} · offscreen ${tot.off} · text < 11 px ${tot.sm} · labels < 4.5:1 ${tot.lc}`);
 await browser.close();
+process.exitCode = tot.ov + tot.sm + tot.lc + tot.off ? 1 : 0;
