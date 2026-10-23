@@ -1,11 +1,12 @@
 ---
 id: 0081
 title: Installs like a flagship app; one mark, a real manifest, link previews and a share card worth sending
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-23
+pr: 102
 by: operator
 ---
 
