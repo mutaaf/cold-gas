@@ -89,7 +89,7 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 @keyframes more-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 
 /* --- Title --- */
-.title { position: fixed; left: calc(clamp(24px, 6vw, 96px) + var(--safe-l)); bottom: calc(clamp(32px, 9vh, 110px) + var(--safe-b)); max-width: 640px; z-index: 4; }
+.title { position: fixed; left: calc(clamp(24px, 6vw, 96px) + var(--safe-l)); bottom: calc(clamp(32px, 9dvh, 110px) + var(--safe-b)); max-width: 640px; z-index: 4; }
 .eyebrow { margin: 0 0 18px; font: 500 11px/1 var(--text); letter-spacing: 0.32em; text-transform: uppercase; color: var(--ink-3); }
 .wordmark { margin: 0; font: 400 clamp(56px, 11vw, 148px)/0.92 var(--display); letter-spacing: 0.02em; color: var(--ink);
   background: linear-gradient(180deg, #fff 30%, rgba(255, 255, 255, 0.55)); -webkit-background-clip: text; background-clip: text; -webkit-text-fill-color: transparent; }
@@ -449,7 +449,7 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
 @media (max-width: 720px) { .course-btn { min-width: 0; flex: 1; padding: 10px 12px; } .course-btn span { display: none; } }
 
 /* Titles that fit any screen: the wordmark scales with the shorter side. */
-.wordmark { font-size: clamp(44px, min(11vw, 16vh), 148px); }
+.wordmark { font-size: clamp(44px, min(11vw, 16dvh), 148px); }
 @media (max-height: 500px) and (orientation: landscape) {
   .title { top: auto; bottom: calc(14px + var(--safe-b)); }
   .title .eyebrow { display: none; }
@@ -558,7 +558,7 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
 body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t)); }
 .h-scrim { position: absolute; left: 0; right: 0; pointer-events: none; }
 .h-scrim-top { top: 0; height: calc(var(--top) + 120px); background: linear-gradient(rgba(3, 5, 9, 0.8), rgba(3, 5, 9, 0.62) 62%, rgba(3, 5, 9, 0)); }
-.h-scrim-bot { bottom: 0; height: min(60vh, 460px); background: linear-gradient(rgba(3, 5, 9, 0), rgba(3, 5, 9, 0.56) 35%, rgba(3, 5, 9, 0.8)); }
+.h-scrim-bot { bottom: 0; height: min(60dvh, 460px); background: linear-gradient(rgba(3, 5, 9, 0), rgba(3, 5, 9, 0.56) 35%, rgba(3, 5, 9, 0.8)); }
 .h-lbl { font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--lbl); }
 .h-unit { font: 400 11px/1 var(--mono); font-style: normal; color: var(--lbl); letter-spacing: 0; }
 .h-big { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: end; justify-content: center; }
@@ -718,7 +718,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 /* Coarse pointer (phones, tablets): the bottom of the glass belongs to the thumbs. */
 @media (pointer: coarse) {
   .hud { --top: calc(62px + var(--safe-t)); }
-  .h-scrim-bot { height: 34vh; background: linear-gradient(rgba(3, 5, 9, 0), rgba(3, 5, 9, 0.42)); }
+  .h-scrim-bot { height: 34dvh; background: linear-gradient(rgba(3, 5, 9, 0), rgba(3, 5, 9, 0.42)); }
   .h-array { display: none; }
   .h-vehicle { bottom: auto; left: auto; top: calc(var(--top) + 48px); right: calc(var(--m) + var(--adi, 84px) + 14px + var(--safe-r)); }
   .dmg { flex-direction: column; align-items: center; gap: 6px; }
@@ -962,7 +962,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    them), and the optional rows (eyebrow, spec) step aside when the height runs out. The fine print
    (an independent fan game) always stays. scripts/title-audit.mjs checks it. */
 .title { top: auto; max-height: calc(100dvh - 72px - var(--safe-t) - var(--safe-b)); display: flex; flex-direction: column; justify-content: flex-end; }
-.wordmark { font-size: clamp(40px, min(10vw, 12.5vh), 140px); }
+.wordmark { font-size: clamp(40px, min(10vw, 12.5dvh), 140px); }
 .courses { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin: 0 0 8px; width: min(640px, calc(100vw - 2 * clamp(24px, 6vw, 96px))); }
 .course-btn { min-width: 0; }
 .drive-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin: 0 0 18px; width: min(640px, calc(100vw - 2 * clamp(24px, 6vw, 96px))); }
@@ -1229,7 +1229,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
     padding: 7px 12px 6px; border: 1px solid var(--line); border-bottom: 0; border-radius: 4px 4px 0 0; background: rgba(5, 7, 12, 0.62); -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
   :root[data-hud='compact'] .cue { top: auto; bottom: calc(100px + var(--safe-b)); left: calc(168px + var(--safe-l)); right: calc(271px + var(--safe-r)); }
   :root[data-hud='compact'] .hud .h-scrim-top { height: calc(var(--top) + 200px); }
-  :root[data-hud='compact'] .hud .h-scrim-bot { height: 34vh; }
+  :root[data-hud='compact'] .hud .h-scrim-bot { height: 34dvh; }
 }
 @container (max-width: 330px) {
   :root[data-hud='compact'] .hud .h-strip > [data-ch='g'] { display: none; }
@@ -1239,4 +1239,91 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 @media (pointer: coarse) and (orientation: landscape) and (min-height: 700px) {
   :root[data-hud='compact'] .hud .h-mission { bottom: calc(18px + var(--line-h, 47px) + var(--safe-b)); left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
   :root[data-hud='compact'] .cue { bottom: calc(106px + var(--safe-b)); left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
+}
+
+/* A short upright window (a folding phone's 466×498 mid-swing, a phone with its keyboard up): the
+   title packs down so the wordmark never rises under the top bar; and a phone a few px narrower than
+   390 (the folding phone closed, 382) keeps the whole top bar on screen. (0075) */
+@media (orientation: portrait) and (max-height: 540px) {
+  .title { bottom: calc(18px + var(--safe-b)); }
+  .wordmark { font-size: 40px; }
+  .tagline { margin: 6px 0 12px; }
+}
+@media (max-width: 386px) { .top-actions { gap: 4px; } }
+
+/* --- A folding phone (0075) ------------------------------------------------------------------------
+   Closed, it is a phone like any other (382×580 upright, 678×340 sideways in its browser, the bars
+   and the tool column already outside the viewport): the phone rules above hold, sized in dvh, never
+   100vh (18 px too tall there). Opened, the inner screen is regular width at a phone's height (669×825
+   upright, 951×543 sideways): the room is an upgrade, not a different game. The sheets that scroll on
+   a phone lay out in two even columns; the HUD keeps the same band (a wide band shows PITCH too, by
+   its own width, below). The query names that shape (touch, at least 600 × 500, at most 1000 × 900),
+   so no phone, iPad or desktop we audit matches it; inside it everything is fluid. A fold or an
+   unfold is only a resize: nothing reloads and the run carries on (src/render/scene.js reshape). */
+@media (pointer: coarse) and (min-width: 600px) and (min-height: 500px) and (max-width: 1000px) and (max-height: 900px) {
+  /* The title: who you are on the left (the wordmark, the line, the fine print), what to do on the
+     right (the events, now with their one-line descriptions, Free Drive, Jump under the right thumb). */
+  .title { right: calc(clamp(24px, 6vw, 96px) + var(--safe-r)); max-width: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: clamp(24px, 4vw, 48px);
+    grid-template-areas: 'eyebrow events' 'word events' 'tag drive' 'fine cta'; grid-template-rows: auto auto auto 1fr; align-content: end; align-items: end; }
+  .title > .eyebrow { grid-area: eyebrow; }
+  .title > .wordmark { grid-area: word; font-size: clamp(40px, min(8vw, 12dvh), 96px); }
+  .title > .tagline { grid-area: tag; align-self: start; margin: 16px 0 0; }
+  .title > .courses { grid-area: events; grid-template-columns: minmax(0, 1fr); width: auto; margin: 0 0 8px; align-self: end; }
+  .title > .courses .course-btn > span { display: block; }
+  .title > .drive-row { grid-area: drive; width: auto; margin: 0 0 16px; align-self: start; }
+  .title > .cta { grid-area: cta; align-self: end; }
+  .title > .spec { display: none; }
+  .title > .fineprint { grid-area: fine; align-self: end; margin: 0; }
+  /* Sideways the column is short: the events go back to one row of three, names only. */
+  @media (orientation: landscape) {
+    .title > .courses { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .title > .courses .course-btn > span, .title > .drive-row .drive-btn > span { display: none; }
+  }
+  /* The judges' theatre takes the whole screen, as on a phone (beside a two-column sheet there is no
+     room for it); the sheet is there when it ends. */
+  .theatre { inset: 0; z-index: 8; background: radial-gradient(120% 80% at 40% 45%, rgb(7, 11, 20), rgb(2, 3, 6)); }
+  /* Results: the sheet reads down two even columns, the verdict, the run and the actions at the head
+     of the first, each block whole (a judge's words never split across the columns). The section
+     scrolls (the sheet is as tall as its columns); the action row stays at the head of the first
+     column instead of pinned under the thumb. */
+  .results { display: block; overflow-y: auto; overscroll-behavior: contain; }
+  .results .sheet { display: block; width: 100vw; min-height: 100%; overflow: visible; columns: 2; column-gap: 40px; column-fill: balance;
+    padding-bottom: calc(32px + var(--safe-b)); }
+  .results .sheet > *, .results .judges > li { break-inside: avoid; -webkit-column-break-inside: avoid; }
+  .results .sheet > .top-actions-row { position: static; order: 0; margin: 18px 0 0; padding: 0; background: none; flex-wrap: wrap; }
+  .results[data-practice] .sheet { columns: auto; width: min(100vw, 560px); }
+  /* Practice: the drills two by two. */
+  .practice .sheet { width: min(880px, calc(100vw - 32px)); }
+  .drills { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+/* A very narrow band (a folding phone closed and turned sideways: 678 px less the stick and the
+   right thumb leaves 239): every reading keeps to one line, so the band stays one cell tall and the
+   phase tab standing on it stays clear. The handle shows its chevron alone (it keeps its 44 px target
+   and its name), and the cells pack tighter. */
+@container (max-width: 260px) {
+  :root[data-hud='compact'] .hud .h-strip > .h-cell { padding-left: 6px; padding-right: 6px; column-gap: 3px; flex-wrap: wrap; }
+  :root[data-hud='compact'] .hud .h-strip > .h-cell > :not(.h-lbl) { white-space: nowrap; }
+  :root[data-hud='compact'] .hud .h-strip > .h-handle { min-width: 44px; padding: 0; }
+  :root[data-hud='compact'] .hud .h-strip > .h-handle .hh-w { display: none; }
+}
+/* A wide band (an opened folding phone or a tablet sideways): the compact line has room for one more
+   instrument, the pitch. By the band's own width (it is a container in landscape), not the device. */
+@container (min-width: 480px) {
+  :root[data-hud='compact'] .hud .h-strip > .h-pitch { display: flex; }
+}
+
+/* --- A screen in two segments (0075; Chromium's Viewport Segments, where a foldable reports its
+   hinge). Nothing here applies anywhere else: the queries are false without segments. What would
+   straddle the fold is displaced to one side of it, not redesigned. Beside a vertical fold the band,
+   the phase tab and the cue line keep their left edge and stop short of the fold (the right segment
+   belongs to the right thumb); below a horizontal fold the cue line moves into the lower segment. */
+@media (pointer: coarse) and (horizontal-viewport-segments: 2) {
+  :root { --fold-gap: calc(100vw - env(viewport-segment-right 0 0, 50vw) + 12px); }
+  .hud .h-mission, .hud .h-strip, .cue { right: var(--fold-gap) !important; max-width: none !important; }
+  .cue { width: fit-content; margin: 0 auto; transform: none !important; }
+  :root[data-hud='full'] .hud .h-strip { flex-wrap: wrap; }
+  @media (orientation: portrait) { :root[data-hud='full'] .cue { left: calc(16px + var(--safe-l)) !important; } }
+}
+@media (pointer: coarse) and (vertical-viewport-segments: 2) {
+  .cue { top: calc(env(viewport-segment-top 0 1, 50dvh) + 12px) !important; bottom: auto !important; }
 }

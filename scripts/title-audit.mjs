@@ -1,7 +1,7 @@
 // The title at every viewport we ship to: no overlaps between the top bar and the title block,
 // the CTA in view, the event cards in a tidy grid, no title text under 11 px. Phones (incl. a 320 px
 // Slide Over column), iPads both ways, desktops, and a safe-area pass (`s`: a notched phone's insets
-// forced on --safe-*, as in scripts/hud-audit.mjs).
+// forced on --safe-*, as in scripts/hud-audit.mjs), and a folding phone's poses (0075).
 //   node scripts/title-audit.mjs <url> <outdir> [label]
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
@@ -10,7 +10,10 @@ const [url = 'http://localhost:4391/coldgas/', out = 'shots', label = 'title'] =
 mkdirSync(out, { recursive: true });
 const VPS = [[1280, 720, 0], [1440, 900, 0], [1920, 1080, 0], [390, 844, 1], [430, 932, 1], [768, 1024, 1], [844, 390, 1], [1024, 768, 1],
   [320, 568, 1], [814, 380, 1], [393, 659, 1], [820, 1180, 1], [1180, 820, 1], [1024, 1366, 1], [1366, 1024, 1],
-  [390, 844, 1, 1], [844, 390, 1, 1], [932, 430, 1, 1]];
+  [390, 844, 1, 1], [844, 390, 1, 1], [932, 430, 1, 1],
+  // A folding phone in its browser (0075): closed upright and sideways, open upright and sideways, and
+  // the size it passes through mid-swing.
+  [382, 580, 1], [678, 340, 1], [669, 825, 1], [951, 543, 1], [466, 498, 1]];
 const insetCss = (w, h) => (w > h
   ? ':root { --safe-t: 0px !important; --safe-l: 47px !important; --safe-r: 47px !important; --safe-b: 21px !important; }'
   : ':root { --safe-t: 47px !important; --safe-l: 0px !important; --safe-r: 0px !important; --safe-b: 34px !important; }');

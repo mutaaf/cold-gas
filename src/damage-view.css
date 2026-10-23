@@ -1,7 +1,7 @@
 /* The damage map, opened up (src/damage-view.js). Glass over the stage, never a modal: the run
    carries on under it. Desktop: a panel above the HUD's vehicle corner. Phones: a bottom sheet. */
 .dmv { position: fixed; z-index: 7; left: calc(clamp(16px, 2.4vw, 36px) + var(--safe-l)); bottom: calc(210px + var(--safe-b)); width: min(420px, calc(100vw - 32px));
-  max-height: calc(100vh - 290px - var(--safe-t)); overflow-y: auto; overscroll-behavior: contain; padding: 18px 20px 16px;
+  max-height: calc(100dvh - 290px - var(--safe-t)); overflow-y: auto; overscroll-behavior: contain; padding: 18px 20px 16px;
   border-radius: 8px; border: 1px solid rgba(245, 246, 248, 0.16); background: linear-gradient(180deg, #0b0e15, #06080d);   /* opaque: nothing under it reads through */
   box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
   color: var(--ink); font-variant-numeric: tabular-nums; pointer-events: auto; user-select: none; --line: rgba(245, 246, 248, 0.16); }
@@ -66,7 +66,7 @@
 body.dmv-open .hud > :not(.h-vehicle), body.dmv-open .cue { opacity: 0.2; transition: opacity 0.25s var(--ease); }
 /* Phones: a sheet from the bottom, over the thumbs' band; the run goes on above it. */
 @media (pointer: coarse), (max-width: 760px) {
-  .dmv { left: 0; right: 0; bottom: 0; width: auto; max-height: 64vh; border-radius: 16px 16px 0 0; border-bottom: 0; padding: 14px 18px calc(16px + var(--safe-b)); }
+  .dmv { left: 0; right: 0; bottom: 0; width: auto; max-height: 64dvh; border-radius: 16px 16px 0 0; border-bottom: 0; padding: 14px 18px calc(16px + var(--safe-b)); }
   .dmv::before { content: ''; display: block; width: 38px; height: 4px; border-radius: 2px; background: rgba(245, 246, 248, 0.3); margin: -4px auto 10px; }
   .dmv.on { animation: dmv-sheet 0.34s var(--ease); }
   .dmv-main { grid-template-columns: 96px 1fr; gap: 12px; }

@@ -9,7 +9,7 @@ const ENUMS = {
   status: ['proposed', 'ready', 'in-progress', 'shipped', 'dropped'],
   priority: ['P0', 'P1', 'P2'],
   size: ['S', 'M', 'L'],
-  lens: ['player-feel', 'content', 'authenticity', 'performance', 'accessibility', 'tech-health'],
+  lens: ['player-feel', 'content', 'authenticity', 'performance', 'accessibility', 'tech-health', 'platform'],
 };
 const SECTIONS = ['## Why', '## What', '## Acceptance criteria', '## Test plan'];
 
@@ -37,7 +37,7 @@ for (const file of files) {
   }
   if (!/^\d{4}-\d{2}-\d{2}$/.test(fm.created || '')) problems.push(`${file}: created must be YYYY-MM-DD`);
   if (fm.status === 'shipped' && !/^#?\d+$/.test(fm.pr || '')) problems.push(`${file}: shipped tickets need pr: <number>`);
-  if (fm.by && !['scout', 'critic', 'operator'].includes(fm.by)) problems.push(`${file}: by must be scout|critic|operator (got "${fm.by}")`);
+  if (fm.by && !['scout', 'critic', 'operator', 'builder'].includes(fm.by)) problems.push(`${file}: by must be scout|critic|operator|builder (got "${fm.by}")`);
   for (const s of SECTIONS) if (!text.includes(s)) problems.push(`${file}: missing section "${s}"`);
   if (fm.status === 'ready' && !/- \[[ x]\] /.test(text)) problems.push(`${file}: ready tickets need checkbox acceptance criteria`);
 }
