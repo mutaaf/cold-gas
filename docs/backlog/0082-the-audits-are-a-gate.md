@@ -1,12 +1,12 @@
 ---
 id: 0082
 title: The HUD and title audits are a gate; the full HUD fits a 340 px landscape screen; the judges' theatre has 44 px controls and fits sideways
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-23
-pr:
+pr: 105
 by: builder
 ---
 
