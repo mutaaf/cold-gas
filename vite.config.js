@@ -49,6 +49,11 @@ const inlineCss = {
         const font = Object.keys(bundle).find((f) => re.test(f));
         if (font) html = html.replace('</title>', `</title>\n  <link rel="preload" href="${BASE}${font}" as="font" type="font/woff2" crossorigin />`);
       }
+      // Start the physics engine's WASM (1.1 MB on the wire, the largest download) with the HTML, not
+      // after the 180 KB entry script has loaded and run: src/sim/engine-web.js fetch()es the same
+      // URL (cors, same-origin credentials = crossorigin), so the request is reused, not repeated.
+      const wasm = Object.keys(bundle).find((f) => /rapier_wasm3d_bg-[\w-]+\.wasm$/.test(f));
+      if (wasm) html = html.replace('</title>', `</title>\n  <link rel="preload" href="${BASE}${wasm}" as="fetch" type="application/wasm" crossorigin />`);
       return html;
     },
   },
