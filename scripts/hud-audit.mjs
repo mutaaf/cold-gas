@@ -326,7 +326,9 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   await page.waitForTimeout(ms(200));
   await freeze(); await measure(page, vpName, '6-touchdown'); await thaw();
   if (thumbMode) await S(() => window.__coldgas.thumb.up()); else { await page.keyboard.up('KeyF'); await page.keyboard.up('ShiftLeft'); }
-  if (await until(() => window.__coldgas.S.mode === 'results', 30000) && hudState === STATES[0]) await measureTheatre(page, vpBase);
+  // The roll-out to the results runs on the page's frames: software GL draws a 1920×1080 (or 1080×1920)
+  // page at about 2 fps, and the run reached its results just past 60 s there (2 × 30 s on CI).
+  if (await until(() => window.__coldgas.S.mode === 'results', 120000) && hudState === STATES[0]) await measureTheatre(page, vpBase);
   // A wreck (0072): the reference with every input zeroed from the release + 0.125 s ends flipped,
   // 66 % Wrecked. Stepped to its end in the page, then a beat of its aftermath on the page's own
   // frames: the damage on the compact line and the crash on the timeline, as a player sees them.

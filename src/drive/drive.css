@@ -69,7 +69,7 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
 .fd-road-sub { margin-top: 6px !important; font-size: 13px; color: var(--lbl); }
 .fd-ctl { position: absolute; right: calc(24px + var(--safe-r)); top: calc(62px + var(--safe-t)); display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
 .fd-ctl [data-h-fan][aria-pressed='true'] { color: #07090d; background: var(--ink); border-color: var(--ink); }
-.fd-timer { position: absolute; left: 50%; top: calc(20px + var(--safe-t)); transform: translateX(-50%); display: grid; justify-items: center; gap: 5px; opacity: 0.6; transition: opacity 0.4s var(--ease); }
+.fd-timer { position: absolute; left: 50%; top: calc(20px + var(--safe-t)); transform: translateX(-50%); display: grid; justify-items: center; gap: 5px; opacity: 0.8; transition: opacity 0.4s var(--ease); }
 .fd-timer.running, .fd-timer.finished { opacity: 1; }
 .fd-timer b { font: 400 16px/1 var(--mono); letter-spacing: 0.02em; }
 .fd-timer span { font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--lbl); }

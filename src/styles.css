@@ -850,6 +850,9 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 /* Short portrait: the cue line rides just under the strip, above the thumb's slots. */
 @media (pointer: coarse) and (orientation: portrait) and (max-height: 740px) {
   .cue { --cue-top: 414px; }
+  /* The cue sits 3 px under the strip here, so the first row must not wrap: SINK's 27.9 ft/s had 2 px
+     to spare in an 87 px cell and broke its unit on CI's Chromium (the row grew 21 px, into the cue). */
+  .hud .h-strip > .h-cell { padding-left: 6px; padding-right: 6px; column-gap: 3px; }
   body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 450px; }
 }
 /* Very short portrait (320×568): a compact stack. The strip keeps what the primary and the dial don't
@@ -1218,6 +1221,14 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 :root[data-hud='compact'] .hud .h-strip > .h-cell { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; align-content: flex-start; column-gap: 4px; row-gap: 5px;
   padding: 8px 12px 7px; grid-column: auto; grid-row: auto; border-left: 1px solid var(--line); }
 :root[data-hud='compact'] .hud .h-strip > .h-cell:first-child, :root[data-hud='compact'] .hud[data-air] .h-strip > [data-ch='alt'] { border-left: 0; }
+/* Sideways the line is a band one cell tall with the phase tab standing on it (below): each cell goes
+   back to its own grid, label over value and unit, never narrower than its reading. As a wrapping flex
+   cell, a few px short split the value from its unit (655 / lb at 678x340, 16.5 / ft at 814x380 with
+   the notch, on CI's Chromium), the band grew a row and stood into the tab. Here, before the rules
+   that leave cells out, so they still win. */
+@media (pointer: coarse) and (orientation: landscape) {
+  :root[data-hud='compact'] .hud .h-strip > .h-cell { display: grid; grid-template-columns: max-content max-content; min-width: max-content; }
+}
 /* (After the cell's display, and as specific: what the line leaves out.) */
 :root[data-hud='compact'] .hud .h-strip > :is(.h-pitch, .r-fan), :root[data-hud='compact'] .hud:not([data-air]) .h-strip > .r-sink,
 :root[data-hud='compact'] .hud[data-air] .h-strip > [data-ch='spd'] { display: none; }
@@ -1387,7 +1398,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    phase tab standing on it stays clear. The handle shows its chevron alone (it keeps its 44 px target
    and its name), and the cells pack tighter. */
 @container (max-width: 260px) {
-  :root[data-hud='compact'] .hud .h-strip > .h-cell { padding-left: 6px; padding-right: 6px; column-gap: 3px; flex-wrap: wrap; }
+  :root[data-hud='compact'] .hud .h-strip > .h-cell { padding-left: 6px; padding-right: 6px; column-gap: 3px; }
   :root[data-hud='compact'] .hud .h-strip > .h-cell > :not(.h-lbl) { white-space: nowrap; }
   :root[data-hud='compact'] .hud .h-strip > .h-handle { min-width: 44px; padding: 0; }
   :root[data-hud='compact'] .hud .h-strip > .h-handle .hh-w { display: none; }
