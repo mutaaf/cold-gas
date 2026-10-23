@@ -148,12 +148,14 @@ src/sim/              PURE, shared with the Worker:
   vehicle.js            physics v3: 6-DOF body (its contacts in the engine), raycast suspension, Pacejka tyres
                           with implicit wheel spin, TC/ABS, stiction, 2 g suction fan, cold-gas
                           nozzles with blowdown, mixer, flight computer (Assist: rates, LAND roll-out,
-                          brake governor, line hold, envelope, crawl and carry limits / Pro: rates /
+                          brake governor, auto-land, carry over the row, line hold, envelope, crawl and carry limits / Pro: rates /
                           Advanced: `manual`, valves straight to the nozzles)
   run.js                one attempt: input log (23 channels: 12, `manual`, ten valves; 12-channel
                           logs still verify), tier telemetry, phases drive → ramp →
                           air → landed, telemetry (Show: clearance, crossedRow), simulate();
                           replay frames carry each parked body's pose; run.impacts = the crash
+                          ; the aftermath (browser only, unscored): after 'done' the car brakes to
+                          rest on a fixed post-crash input before the world is freed (0062)
   impacts.js            impact events (hit / scrape / tyre slam / crush: tick, point, normal,
                           speed, part, body) in fixed typed arrays, written by vehicle.step
   autopilot.js          reference runs for both courses, closed-loop through the same physics
@@ -222,6 +224,10 @@ src/render/           three.js (r186):
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone
 src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
                         stick shaping, reverse at a standstill; shared with the drive bench and tests
+src/driving.js        driving levels (pure, 0066): Easy / Standard / Advanced on the ground in every mode. Writes only
+                        the ordinary input channels (unscored grounds also: assist, and the car's tcOff / tcSport /
+                        absOff / handbrake flags, never set on a scored run). Easy: road-speed governor, lane keep,
+                        slide catch; Standard: the hands, bit for bit; Advanced: direct, analog pedals
 src/render/interp.js  the car drawn between 240 Hz ticks (no sim change)
 src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
                         hold to land (LAND + the carry over the row); plain sim inputs, pure, no DOM
@@ -279,6 +285,7 @@ scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view
 scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
 scripts/shots-lineup.mjs   studio shots of each parked vehicle + the row, and the row's draw budget
 scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)
+scripts/flicker-budget.mjs  gates a flicker.mjs --json run against docs/flicker-budget.json (per label)
 scripts/roads/        build-time only: OSM + terrain → public/roads/*.bin.gz (docs/ROADS.md)
 public/roads/         the baked Free Drive roads (fetched only when a road is picked)
 ```
@@ -324,10 +331,12 @@ node scripts/endless-probe.mjs [seed] [km] [secs]     endless road in Node: gene
 node scripts/grass-probe.mjs [roads] [off] [angle]    off the road and back on, every road (the verge regression)
 node scripts/verge-steps.mjs [roads]                  steps in the ground beside the road
 node scripts/ref-hash.mjs                             fingerprints of the stunt references (a physics change is bit-neutral or not)
-node scripts/drive-feel.mjs [bench|road] [assist|pro]   driving feel: step steer, lane change, on-centre, 60–0, slides; a keyboard driver on the four roads
+node scripts/drive-feel.mjs [bench|road|levels|bench-levels] [assist|pro]   driving feel: step steer, lane change, on-centre, 60–0, slides; a keyboard driver on the four roads; `levels`: the driving levels (naive keys/touch, skilled pad)
 node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
 npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
 npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)
+node scripts/flicker.mjs <url> [--gl=swiftshader] [--phone] [--only=a,b] --json=run.json   flicker probe (title, approach, wide, replay, jets, live jets, retry countdown, lineup, Free Drive, endless, z-fight)
+node scripts/flicker-budget.mjs run.json [--write]    fail if any region's pops rise > 25 % (or 0.5 ‰) over docs/flicker-budget.json
 ```
 
 Local Worker: `npx wrangler dev` (serves dist + the API with a local D1, and uses
@@ -366,6 +375,8 @@ prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.
 - `npm run check` is green locally or in CI.
 - Works at 390×844 touch and 1280×720 keyboard.
 - No new runtime hosts, no brand names, no per-frame allocations.
+- Rendering, camera or effects changed → `flicker-budget` passes for both screens of your label
+  (`--gl=swiftshader` in a sandbox, about an hour a screen; `--only=` the scenarios you touched when short).
 - Sim or scoring outcome changed → `SIM_VERSION` bumped and noted in the CHANGELOG.
 - **Launcher registration** (standing policy): a new or changed deep link, or a rename, also
   updates the mutaafaziz.com ⌘K launcher (mutaaf/mutaafaziz-site) and the Digital Craft

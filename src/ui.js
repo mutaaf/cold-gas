@@ -1,11 +1,12 @@
 // DOM: the HUD (updated in place, no layout thrash), the results sheet, the board.
 import { NOZZLES } from './sim/vehicle.js';
-import { categoriesFor, TIERS } from './sim/judge.js';
+import { categoriesFor, TIERS, WRECK_PCT } from './sim/judge.js';
 import { NOZZLE_UI } from './valves.js';
 import { chime, tick } from './audio.js';
 import { speedK, lenK, rateK, massK, kgfK, pressK, k as uk, u as uu, onUnits, localize, unitText } from './units.js';
 import { ZONES, hitCost } from './sim/damage.js';
 import { HIT, SCRAPE, WHEEL, PART } from './sim/impacts.js';
+import { initHudMode } from './hud-mode.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -16,6 +17,17 @@ export const PHASES = {
   wall: [['runup', 'Run-up'], ['climb', 'Climb'], ['hang', 'Hang'], ['release', 'Release'], ['carry', 'Carry'], ['brake', 'Brake'], ['touchdown', 'Touchdown']],
   lineup: [['runup', 'Run-up'], ['liftoff', 'Lift-off'], ['roll', 'Roll'], ['brake', 'Brake'], ['touchdown', 'Touchdown']],
 };
+// The timeline's last step on a run that ended in a crash (0072): the end the sim called, or what
+// the judge saw, never TOUCHDOWN over a car on its roof. '' for a clean end (it stays TOUCHDOWN).
+export function crashStep(card) {
+  const f = card?.facts;
+  if (!f?.crashed) return '';
+  if (f.endReason === 'flipped' || f.flipped) return 'Flipped';
+  if (f.endReason === 'contact' || f.contact) return 'Contact';
+  if (f.damagePct >= WRECK_PCT) return 'Wrecked';
+  if (f.fellOff) return 'Fell off';
+  return 'Crash';
+}
 // Tenths of a second → "T+00:12.4" (minus sign in the countdown).
 export function missionClock(tenths) {
   const neg = tenths < 0, t = Math.abs(tenths), m = Math.floor(t / 600), s = (t % 600) / 10;
@@ -23,6 +35,7 @@ export function missionClock(tenths) {
 }
 
 export function createUI() {
+  initHudMode();   // compact or full HUD on this device (src/hud-mode.js), before the HUD first shows
   const ui = {
     screens: Object.fromEntries([...document.querySelectorAll('[data-screen]')].map((el) => [el.dataset.screen, el])),
     speed: $('[data-speed]'), speedBig: $('[data-speed-big]'), air: $('[data-air]'), airBar: $('[data-air-bar]'),
@@ -118,7 +131,7 @@ export function createUI() {
   // Last-written values, so the DOM is only touched on change. Numbers glide to their targets (a
   // first-order lag of ≈90 ms: readable, never late) and are written only when the shown digits
   // change; tabular figures keep every digit in its place.
-  const LAST0 = { speed: -1, speedBig: -1, air: -1, roll: -9999, bank: -1, alt: -1, sink: -1, g: -1, gState: null, fan: -1, phaseKey: '', airborne: null, clock: -99999, pitch: -999, n2: null, kg: -1, bar: -1, gas: '' };
+  const LAST0 = { speed: -1, speedBig: -1, air: -1, roll: -9999, bank: -1, alt: -1, sink: -1, g: -1, gState: null, fan: -1, phaseKey: '', crash: '', airborne: null, clock: -99999, pitch: -999, n2: null, kg: -1, bar: -1, gas: '' };
   const last = { ...LAST0 };
   const tw = { speed: 0, alt: 0, sink: 0, t: 0 };
   // A flip of the unit system: every unit-bearing readout writes again on the next frame.
@@ -160,7 +173,7 @@ export function createUI() {
     ui.roll.textContent = '0'; ui.rollArc.style.strokeDasharray = '0 360'; ui.rollArc.classList.remove('done'); last.roll = 0; last.bank = 0;
     resetStats();
   };
-  ui.hud = ({ speed, air, gasKg = 0, tankBar = 0, gasState = 'reg', rollDeg, bankDeg = 0, alt, sink, phaseKey = '', clock = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
+  ui.hud = ({ speed, air, gasKg = 0, tankBar = 0, gasState = 'reg', rollDeg, bankDeg = 0, alt, sink, phaseKey = '', crash = '', clock = 0, pitch = 0, throttles, g = 1, fan = 0, airborne = false }) => {
     const now = performance.now(), dt = tw.t ? Math.min(0.1, (now - tw.t) / 1000) : 1;
     tw.t = now;
     const k = 1 - Math.exp(-dt / 0.09);
@@ -228,11 +241,18 @@ export function createUI() {
     // The mission clock: T− in the countdown, T+ from the green light, in tenths.
     const cl = Math.round(clock * 10);
     if (cl !== last.clock) { ui.clock.textContent = missionClock(cl); last.clock = cl; }
-    if (phaseKey !== last.phaseKey && ui.phaseEls) {
+    if ((phaseKey !== last.phaseKey || crash !== last.crash) && ui.phaseEls) {
       const at = ui.phaseEls.findIndex((li) => li.dataset.ph === phaseKey);
-      ui.phaseEls.forEach((li, i) => { li.dataset.state = at < 0 ? '' : i < at ? 'done' : i === at ? 'now' : ''; });
+      ui.phaseEls.forEach((li, i) => {
+        li.dataset.state = at < 0 ? '' : i < at ? 'done' : i === at ? 'now' : '';
+        // A crashed end: the step you're on reads as the crash, in signal red (0072).
+        const cr = i === at ? crash : '';
+        if ((li.dataset.crash || '') === cr) return;
+        if (cr) li.dataset.crash = cr; else delete li.dataset.crash;
+        li.querySelector('span').lastChild.nodeValue = ` ${cr || ui.phaseLabels[li.dataset.ph]}`;
+      });
       hudEl.dataset.phase = phaseKey;
-      last.phaseKey = phaseKey;
+      last.phaseKey = phaseKey; last.crash = crash;
       if (phaseKey && stats.splits[stats.splits.length - 1]?.key !== phaseKey) stats.splits.push({ key: phaseKey, label: ui.phaseLabels?.[phaseKey] || phaseKey, t: clock });
       stats.phaseKey = phaseKey;
     }
@@ -253,6 +273,9 @@ export function createUI() {
   // (src/damage-view.js). Everything is read from the sim's impact record; nothing is written back.
   const dmgEl = $('[data-dmg]'), dmgPct = $('[data-dmg-pct]'), dmgWord = $('[data-dmg-word]');
   const dmgFx = $('[data-dmg-fx]'), dmgTrail = $('[data-dmg-trail]');
+  // The compact line's damage cell (0072): the vehicle panel folds away on a phone, so once the car
+  // is hurt the line carries the state word and the % (the HUD's data-damage shows it, in G's place).
+  const dmgPct2 = $('[data-dmg-pct2]'), dmgWord2 = $('[data-dmg-word2]');
   const dmgZones = dmgEl ? Object.fromEntries([...dmgEl.querySelectorAll('[data-z]')].map((el) => [el.dataset.z, el])) : {};
   const ZONE_ORDER = ZONES;
   const lastDmg = { total: -1, hit: -1, z: ZONE_ORDER.map(() => -1), seen: 0 };
@@ -330,7 +353,9 @@ export function createUI() {
       dmgPct.textContent = String(t);
       const st = t >= 60 ? 'wreck' : t >= 25 ? 'warn' : t > 0 ? 'scuffed' : 'ok';
       dmgEl.dataset.state = st;
-      dmgWord.textContent = { ok: 'Intact', scuffed: 'Scuffed', warn: 'Damaged', wreck: 'Wrecked' }[st];
+      dmgWord.textContent = dmgWord2.textContent = { ok: 'Intact', scuffed: 'Scuffed', warn: 'Damaged', wreck: 'Wrecked' }[st];
+      dmgPct2.textContent = String(t);
+      if (st === 'ok') delete hudEl.dataset.damage; else hudEl.dataset.damage = st;
       lastDmg.total = t; changed = true;
     }
     const fresh = car && car.impacts ? recordHits(car) : null;
@@ -345,7 +370,8 @@ export function createUI() {
     lastDmg.total = -1; lastDmg.hit = -1; lastDmg.z.fill(-1); lastDmg.seen = 0; hits.length = 0;
     ui.damageState.zones.fill(0); ui.damageState.total = 0;
     if (!dmgEl) return;
-    dmgEl.classList.remove('hit'); dmgEl.dataset.state = 'ok'; dmgPct.textContent = '0'; dmgWord.textContent = 'Intact';
+    dmgEl.classList.remove('hit'); dmgEl.dataset.state = 'ok'; dmgPct.textContent = dmgPct2.textContent = '0'; dmgWord.textContent = dmgWord2.textContent = 'Intact';
+    delete hudEl.dataset.damage;
     for (const el of Object.values(dmgZones)) { el.dataset.level = ''; el.style.removeProperty('--dmg'); }
     dmgFx?.classList.remove('on'); if (dmgTrail) dmgTrail.innerHTML = '';
     for (const fn of dmgListeners) fn(null);

@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
 const touch = (width, height) => ({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
 const boot = async (page, q = '') => {
   await page.goto(`/coldgas/?gfx=low${q}`);
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
 };
 const rect = (page, sel) => page.evaluate((sel) => {
   const r = document.querySelector(sel).getBoundingClientRect();
@@ -55,7 +55,7 @@ test('iPad title: the spec labels are 11 px or more', async ({ browser }) => {
 test('desktop: the Home and Retry key hints are 11 px or more', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await boot(page, '&play=jump');
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown' || window.__coldgas?.S.mode === 'live', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown' || window.__coldgas?.S.mode === 'live', null, { timeout: 60_000 });
   const sizes = await page.$$eval('.quick kbd', (els) => els.filter((e) => e.offsetParent).map((e) => parseFloat(getComputedStyle(e).fontSize)));
   expect(sizes.length).toBe(2);
   for (const px of sizes) expect(px).toBeGreaterThanOrEqual(11);

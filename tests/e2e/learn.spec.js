@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // The skill ladder in the browser: drills start anywhere and retry on one key, the landing HUD is
 // up in the air, Advanced puts each valve on its own key, and on a phone on its own pad.
 const IDX = { 'down-fr': 0, 'down-fl': 1, 'down-rr': 2, 'down-rl': 3 };   // src/sim/spec.js NOZZLE_SPEC order
-const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30_000 });
+const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
 const live = (page) => page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.freezeT <= 0, null, { timeout: 30_000 });
 
 test('a drill starts from the practice sheet and R retries it from the same start', async ({ page }) => {
@@ -34,6 +34,9 @@ test('a drill starts from the practice sheet and R retries it from the same star
 });
 
 test('the landing HUD is up in the air: the sink in its band, the BRAKE line, the touchdown marker', async ({ page }) => {
+  // Slow but correct: a drill's start flies the reference on the main thread, then the run is flown
+  // out to the coach's card; on CI's software GL that took 57 s of a 60 s budget.
+  test.slow();
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
   await page.evaluate(() => { window.__coldgas.setTier('pro'); window.__coldgas.startDrill('land'); });

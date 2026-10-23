@@ -53,3 +53,15 @@ Extend `tests/e2e/timeline.spec.js`: sample `dataset.phase` with the G window pe
 
 ## Out of scope
 Where the brake itself happens (0028, the brake height in the sim), the descent tape (0055).
+
+## Critic re-measure (2026-10-22 22:00, production da53d64)
+Still failing, to the frame:
+- **Reference**: `05 CARRY` at release + 0.65 s, `06 BRAKE` from + 0.85 s (23.3 m). Of 33 BRAKE air
+  frames, 22 have ≥ 1.0 g (67 %, the bar is 95 %) and 8 have < 0.3 g (+ 1.05 to + 1.75 s, 21.7 → 13.2 m,
+  0.02–0.22 g). CARRY shows for 0.2 s against the ≥ 1.0 s bar. The HUD reads "06 BRAKE · G 0.2 g"
+  (`phone-4-release.jpg`).
+- **A no-brake crash shows BRAKE** (fails criterion 3). Every input was zeroed from release + 0.125 s,
+  so the valves are shut and the fall is free (0.00 g). The timeline still went `05 CARRY` at + 0.65 s,
+  then `06 BRAKE` at + 0.75 s (23.3 m) and held it to impact. It then marked `07 TOUCHDOWN` over the
+  car on its roof (`phone-C-7-touchdown.jpg`, `desk-C-7-touchdown.jpg`). 0072 owns the wreck's label.
+  The BRAKE half is this ticket's.

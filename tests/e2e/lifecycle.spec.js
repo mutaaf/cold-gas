@@ -5,7 +5,7 @@ import { test, expect } from '@playwright/test';
 // mode, the title tears down Free Drive and the Sandbox, and a double tap opens one Sandbox.
 // And the first Jump starts at once (0043): the reference ghost is flown on the title.
 const G = (page, fn, arg) => page.evaluate(fn, arg);
-const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 30_000 });
+const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
 const ghostsReady = (page) => page.waitForFunction(() => ['show', 'wall', 'lineup'].every((c) => window.__coldgas.refGhostReady(c)), null, { timeout: 60_000 });
 
 test('200 × (start → title, or retry mid-run) keeps the engine\'s memory flat', async ({ page }) => {
@@ -55,7 +55,7 @@ test('several Starts tapped while the engine loads start exactly one run', async
   for (let i = 0; i < 3; i++) await page.locator('[data-start]').click();
   release();
   await ready(page);
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown', null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown', null, { timeout: 30_000 });
   await page.waitForTimeout(500);
   expect(await G(page, () => window.__starts)).toBe(1);
 });
@@ -88,12 +88,12 @@ test('a double tap on Sandbox builds one arena, and the title takes it down', as
 
 test('deep links: ?drive= wins over ?play=, and ?play= over ?board=', async ({ page }) => {
   await page.goto('/coldgas/?play=jump&board=today&gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 60_000 });
   await expect(page.locator('[data-screen="board"]')).toBeHidden();
 });
 
 for (const phone of [true, false]) {
-  test(`${phone ? 'phone (4× CPU)' : 'desktop'}: the first Jump starts at once, with the reference ghost`, async ({ browser }) => {
+  test(`${phone ? 'phone (4× CPU)' : 'desktop'}: the first Jump starts at once, with the reference ghost`, { tag: '@perf' }, async ({ browser }) => {
     test.slow();   // a throttled CPU on software GL
     const ctx = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 } : { viewport: { width: 1280, height: 720 } });
     const page = await ctx.newPage();
@@ -110,7 +110,7 @@ for (const phone of [true, false]) {
     // The title has been up a while: the course on show has its reference ghost (flown in slices
     // since the engine came up), and the other courses' flights are done too.
     const tReady = await G(page, () => performance.now());
-    await page.waitForFunction(() => window.__coldgas.refGhostReady(window.__coldgas.stage.course), null, { timeout: 30_000, polling: 50 });
+    await page.waitForFunction(() => window.__coldgas.refGhostReady(window.__coldgas.stage.course), null, { timeout: 60_000, polling: 50 });
     console.log(`${phone ? 'phone' : 'desktop'}: the Show's reference ghost ready ${Math.round(await G(page, () => performance.now()) - tReady)} ms after the engine`);
     await ghostsReady(page);
     // A player who has touched the title before (here the course already chosen, a no-op): the

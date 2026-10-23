@@ -19,7 +19,7 @@ const fly = (course, opts) => {
   return run.inputLog;
 };
 writeFileSync(`${dir}/clean.json`, JSON.stringify({ show: fly('show', { advanced: true }), wall: fly('wall'), lineup: fly('lineup') }));
-writeFileSync(`${dir}/crash.json`, JSON.stringify({ show: fly('show', { carry: 5 }), wall: fly('wall', { releaseAt: 0.6 }), lineup: fly('lineup', { speed: 9, apex: 3.8, rolls: 2 }) }));
+writeFileSync(`${dir}/crash.json`, JSON.stringify({ show: fly('show', { carry: 5 }), wall: fly('wall', { releaseAt: 0.6 }), lineup: fly('lineup', { speed: 9, apex: 2.8, rolls: 2 }) }));   // (apex 3.8 before SIM_VERSION 26's auto-land)
 // Out to the complex: steer through waypoints in its frame at up to 25 m/s, brake at the last one
 // (`stop`) or drive on into whatever is there, and hold the input until `secs`.
 const drive = (course, points, secs, stop = true) => {

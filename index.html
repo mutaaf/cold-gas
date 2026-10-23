@@ -47,6 +47,7 @@
       <button class="btn ghost" data-practice-open>Practice</button>
       <button class="btn link" data-board-open>Today’s board</button>
       <button class="btn link touch-only" data-controls-open aria-haspopup="dialog"><span class="ctl-k">Controls</span> <span data-controls-label>One-thumb</span></button>
+      <button class="btn link fine-only" data-driving-open aria-haspopup="dialog"><span class="ctl-k">Driving</span> <span data-driving-label>Standard</span></button>
     </div>
     <dl class="spec">
       <div><dt>Thrusters</dt><dd>10</dd></div>
@@ -96,12 +97,16 @@
       <div class="h-cell h-tap" data-ch="alt" data-units role="button" tabindex="0" aria-label="Altitude: switch units (U)"><span class="h-lbl">Alt</span><b data-alt>0.0</b><span class="h-unit" data-u="len">ft</span><span class="h-alt" data-2="alt">0.0 m</span></div>
       <div class="h-cell r-sink h-tap" data-ch="sink" data-units role="button" tabindex="0" aria-label="Sink rate: switch units (U)"><span class="h-lbl">Sink</span><b data-sink>0.0</b><span class="h-unit" data-u="rate">ft/s</span><span class="h-alt" data-2="sink">0.0 m/s</span></div>
       <div class="h-cell h-tap" data-ch="g" data-inst="g" role="button" tabindex="0" aria-haspopup="dialog" aria-label="G load: show the peak"><span class="h-lbl">G</span><b data-g>1.0</b><span class="h-unit">g</span></div>
+      <!-- The damage sensor on the compact line (0072): only once the car is hurt, in G's place; the state word, then the %. -->
+      <div class="h-cell r-dmg h-tap" data-ch="dmg" data-inst="damage" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Damage map: open the full view"><span class="h-lbl" data-dmg-word2>Intact</span><b data-dmg-pct2>0</b><span class="h-unit">%</span></div>
       <!-- N₂: mass left and tank pressure (adiabatic blowdown from 690 bar); REG while the regulator holds line pressure. -->
       <div class="h-cell tank h-tap" data-ch="n2" data-tank data-inst="gas" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Nitrogen: show the burn time left"><span class="h-lbl">N₂ <i class="n2-st" data-n2-state>Reg</i></span><b data-air>655</b><span class="h-unit" data-u="mass" data-units>lb</span>
         <span class="n2-bar"><span class="h-alt" data-2="kg" data-units>297 kg</span><span class="n2-sep"> · </span><span data-tank-bar>10.0k</span> <i data-u="press" data-units>psi</i> <span class="h-alt" data-2="bar" data-units>690&nbsp;bar</span></span>
         <div class="bar" aria-hidden="true"><span data-air-bar></span><i class="need" data-air-need></i></div></div>
       <div class="h-cell h-pitch h-tap" data-ch="pitch" data-inst="att" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Pitch: show the rotation so far"><span class="h-lbl">Pitch</span><b data-pitch>0</b><span class="h-unit">°</span></div>
       <div class="h-cell r-fan h-tap" data-ch="fan" data-units role="button" tabindex="0" aria-label="Fan suction: switch units (U)"><span class="h-lbl">Fan</span><b data-fan>0</b><i class="h-unit" data-u="kgf">lbf</i><span class="h-alt" data-2="fan">0 kgf</span></div>
+      <!-- The handle (src/hud-mode.js): compact, the end of the one slim line; full, a tab on the strip. -->
+      <button type="button" class="h-handle" data-hud-toggle aria-expanded="true" aria-label="Show fewer instruments (I)" title="Instruments (I)"><span class="hh-w hh-more">More</span><span class="hh-w hh-less">Less</span><svg class="hh-chev" viewBox="0 0 12 8" aria-hidden="true"><path d="M1.5 1.75 6 6.25l4.5-4.5" /></svg></button>
     </div>
     <div class="h-att adi-wrap h-tap" data-hud-box="att" data-inst="att" role="button" tabindex="0" aria-haspopup="dialog" aria-label="Attitude: show the rotation so far">
       <svg class="dial adi" data-adi viewBox="0 0 120 120" aria-label="Attitude, and the roll so far round the rim">
@@ -188,11 +193,22 @@
     <button class="chip" data-drill-exit>Done</button>
   </div>
 
-  <!-- Touch controls (src/touch-settings.js): the scheme, the hand, tilt steering, haptics. -->
+  <!-- Controls on this device: driving (src/driving.js: Easy / Standard / Advanced, every mode, every
+       device) and, on touch, the scheme, the hand, tilt steering, haptics (src/touch-settings.js). -->
   <section class="controls" data-screen="controls" hidden>
     <div class="sheet narrow" role="dialog" aria-modal="true" aria-labelledby="ctl-title">
-      <p class="eyebrow">Touch controls · this device</p>
+      <p class="eyebrow">Controls · this device</p>
       <h2 id="ctl-title">Controls</h2>
+      <div class="ctl-drive" data-driving>
+        <div class="ctl-row"><span class="ctl-k" id="drv-k">Driving</span>
+          <div class="seg" role="radiogroup" aria-labelledby="drv-k" data-drive-levels><button type="button" role="radio" data-drive-level="easy" aria-checked="false">Easy</button><button type="button" role="radio" data-drive-level="standard" aria-checked="true">Standard</button><button type="button" role="radio" data-drive-level="advanced" aria-checked="false">Advanced</button></div></div>
+        <p class="ctl-note" data-drive-note>Assist driving: speed-sensitive steering, stability and traction control.</p>
+        <div class="ctl-row" data-drive-adv hidden><span class="ctl-k" id="drv-tc">Traction control</span>
+          <div class="seg" role="radiogroup" aria-labelledby="drv-tc" data-drive-tcs><button type="button" role="radio" data-drive-tc="on" aria-checked="true">On</button><button type="button" role="radio" data-drive-tc="sport" aria-checked="false">Sport</button><button type="button" role="radio" data-drive-tc="off" aria-checked="false">Off</button></div></div>
+        <div class="ctl-row" data-drive-adv hidden><span class="ctl-k">ABS</span>
+          <button type="button" class="switch" role="switch" data-drive-abs aria-checked="true" aria-label="ABS"><i></i></button></div>
+      </div>
+      <div class="ctl-touch">
       <div class="ctl-group" role="radiogroup" aria-label="Scheme">
         <button type="button" role="radio" class="ctl-opt" data-scheme-opt="thumb" aria-checked="true"><b>One-thumb</b><span>Assist. Hold to climb, tap to let go, hold to land. The computer rolls you out and brakes.</span></button>
         <button type="button" role="radio" class="ctl-opt" data-scheme-opt="classic" aria-checked="false"><b>Classic</b><span>A stick and the pedals. Roll, boost and land by hand. Every tier.</span></button>
@@ -205,6 +221,7 @@
       <p class="ctl-note" data-tilt-note>Off. Steer by tilting the phone; hold it how you play and press Calibrate.</p>
       <div class="ctl-row" data-haptics-row><span class="ctl-k">Haptics</span>
         <button type="button" class="switch" role="switch" data-haptics aria-checked="true" aria-label="Haptics"><i></i></button></div>
+      </div>
       <div class="actions"><button class="btn primary" data-controls-close>Done</button></div>
     </div>
   </section>
@@ -299,7 +316,7 @@
       <div class="actions">
         <button class="btn primary" data-resume>Resume</button>
         <button class="btn ghost" data-restart>Restart <kbd>R</kbd></button>
-        <button class="btn ghost touch-only" data-controls-open>Controls</button>
+        <button class="btn ghost" data-controls-open aria-haspopup="dialog">Controls</button>
         <button class="btn ghost" data-home>Home <kbd>H</kbd></button>
       </div>
     </div>
@@ -320,6 +337,7 @@
         <button class="btn primary" data-dp-resume>Resume</button>
         <button class="btn ghost" data-dp-reset>Back on the road</button>
         <button class="btn ghost" data-dp-restart>From the start</button>
+        <button class="btn ghost" data-driving-open aria-haspopup="dialog">Driving · <span data-driving-label>Standard</span></button>
         <button class="btn ghost" data-dp-roads>Another road</button>
         <button class="btn link" data-dp-exit>Title</button>
       </div>

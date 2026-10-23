@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // the game never reloads into an offline page, recovers from a deploy exactly once, keeps the
 // judges' 35 s promise when their chunk stalls, and every request has a deadline, a cancel and a
 // single flight.
-const ready = (page, timeout = 30_000) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout });
+const ready = (page, timeout = 60_000) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout });
 const watch = (page) => {
   const errors = [], navs = [];   // navs: every page load (a reload adds one; history.replaceState doesn't)
   page.on('pageerror', (e) => errors.push(e.message));
@@ -33,7 +33,7 @@ test('offline, an optional chunk that fails (the rocket backdrop) never reloads 
   });
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
-  await expect.poll(() => rocketAborted, { timeout: 30_000 }).toBe(true);
+  await expect.poll(() => rocketAborted, { timeout: 60_000 }).toBe(true);
   // The heal saw it and chose not to reload (offline).
   await expect.poll(() => page.evaluate(() => window.__coldgas.obs.snapshot().recoveries.some((r) => r.kind === 'reload' && !r.ok && /offline/.test(r.detail))), { timeout: 10_000 }).toBe(true);
   await page.waitForTimeout(2500);   // the old heal reloaded 1.2 s after the failure

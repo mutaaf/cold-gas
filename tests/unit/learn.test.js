@@ -30,7 +30,7 @@ const flyDrill = (id, policy, course = 'show') => {
 };
 
 describe('SIM_VERSION 21: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down, the Wall from its foot, the curl gate, driving feel, the fans in a corner', () => {
-  it('is version 25 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock; 22: the fans answer a held corner, 0020; 23: tyre load sensitivity from a published fit, 0021; 24: the launch complex is solid and its static fire blows a car off the pad; 25: the pad is not the Wall)', () => expect(SIM_VERSION).toBe(25));
+  it('is version 26 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock; 22: the fans answer a held corner, 0020; 23: tyre load sensitivity from a published fit, 0021; 24: the launch complex is solid and its static fire blows a car off the pad; 25: the pad is not the Wall; 26: Assist auto-land and the carry over the row, 0067)', () => expect(SIM_VERSION).toBe(26));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
@@ -123,14 +123,18 @@ describe('Assist: LAND is enough for a novice', () => {
 });
 
 describe('the predictor agrees with what happens', () => {
-  it('hands off from 10 m, it goes red before the impact; with LAND held it never goes red and lands soft', () => {
+  it('hands off from 10 m (Pro), it goes red before the impact; with LAND held it never goes red and lands soft', () => {
     const seen = { off: new Set(), land: new Set() };
     const pr = newPrediction();
     const watch = (key) => (inp, run) => {
       if (key === 'land') inp.level = 1;
+      if (key === 'off') inp.assist = 0;   // Pro: Assist would start LAND itself (auto-land, 0067)
       if (run.phase === 'air') { predict(run.car, run.car.pos.y - SPEC.comHeight, pr); seen[key].add(pr.status); }
     };
     const off = flyDrill('land', watch('off'));
+    // Hands off in Assist, the computer starts LAND at the last stop that fits, and it lands.
+    const auto = flyDrill('land', () => {});
+    expect(auto.t.sink).toBeLessThan(3);
     const land = flyDrill('land', watch('land'));
     expect(off.t.sink).toBeGreaterThan(6);
     expect(seen.off.has('red')).toBe(true);

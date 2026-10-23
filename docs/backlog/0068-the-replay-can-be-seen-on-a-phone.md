@@ -57,3 +57,13 @@ replay's frames, and that one tap brings the sheet back.
 
 ## Out of scope
 New replay cameras, replay scrubbing, and the theatre's own full-screen layout (it has a Skip).
+
+## Critic re-measure (2026-10-22 22:00, production da53d64)
+Still failing at every phone size measured. After Skip and then Replay, the results sheet is
+0,0 → 390×844 (portrait) and 844×390 (landscape). 4 s after the tap the screen shows the same sheet
+(`phone-9-replay.jpg`, `phoneL-9-replay.jpg`). At 1440×900 the replay shows in the left 62 %, but it
+starts with the car under the sheet. In the first 36 frames of the replay behind the results, the car's
+projected centre is at x 1037 → 693, and x ≥ 960 (the sheet's text column) in 9 of them. That's
+about the first second. In `desk-9-replay.jpg`, 4 s after Replay, the car can't be seen in the
+uncovered left 62 %: only the curl is there. Added criterion: at 1440×900 the hero's centre is left of the sheet's left edge in ≥ 90 % of
+replay frames.

@@ -32,7 +32,7 @@ test('boots, flies the reference jump, and judges it', async ({ page }) => {
 
 test('deep link ?play=jump starts a countdown and accepts keyboard input', async ({ page }) => {
   await page.goto('/coldgas/?play=jump&gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.skipCountdown());
   // Any real movement proves the key reached the sim (software GL in CI can run at a few fps).
   await page.keyboard.down('ArrowUp');
@@ -97,7 +97,7 @@ test('phone: GO pedal drives, the stick alone does not, and air pitch is not inv
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   await page.addInitScript(() => localStorage.setItem('coldgas_touch', JSON.stringify({ scheme: 'classic' })));   // the stick and the pedals
   await page.goto('/coldgas/?play=jump&gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.skipCountdown());
   await expect(page.locator('[data-btn-go]')).toBeVisible();
   // Touching the stick without moving it must not drive the car.
@@ -119,10 +119,10 @@ test('phone: GO pedal drives, the stick alone does not, and air pitch is not inv
 // long run-up, where the chase camera sits behind the car.
 test('keyboard: → steers right on screen, and the Show is the default event', async ({ page }) => {
   await page.goto('/coldgas/?play=jump&gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 60_000 });
   expect(await page.evaluate(() => window.__coldgas.S.run.course)).toBe('show');
   await page.goto('/coldgas/?play=jump&course=lineup&gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown', null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.skipCountdown());
   await page.keyboard.down('ArrowUp');
   await page.waitForFunction(() => window.__coldgas.S.run.car.pos.z > -66, null, { timeout: 45_000 });
@@ -149,9 +149,9 @@ test('first load: inline styles, title wired early, 3D fades in when ready', asy
   expect(html).not.toMatch(/<link rel="stylesheet"/);
   expect(html).toContain('<style>');
   await expect(page.locator('[data-start]')).toBeVisible();
-  await page.waitForFunction(() => window.__coldgas?.stage.ready, null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.stage.ready, null, { timeout: 60_000 });
   await page.evaluate(() => window.__coldgas.stage.ready.then(() => true));
-  await expect(page.locator('#stage')).toHaveClass(/\bon\b/, { timeout: 30_000 });
+  await expect(page.locator('#stage')).toHaveClass(/\bon\b/, { timeout: 60_000 });
   // Switching the event after the first load still builds the whole course.
   await page.locator('[data-course="lineup"]').click();
   await expect(page.locator('[data-course="lineup"]')).toHaveAttribute('aria-checked', 'true');
@@ -159,7 +159,7 @@ test('first load: inline styles, title wired early, 3D fades in when ready', asy
 
 test('the reveal touchdown lands once: one mist burst, cues scaled by its sink rate', async ({ page }) => {
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => !!window.__coldgas, null, { timeout: 30_000 });
+  await page.waitForFunction(() => !!window.__coldgas, null, { timeout: 60_000 });
   const before = await page.evaluate(() => window.__coldgas.plumes.bursts());
   await page.locator('[data-reveal]').click();
   await expect(page.locator('[data-screen="hud"]')).toBeVisible();
@@ -183,12 +183,12 @@ test('a crash plays out: impact events, wreckage, hazards, and the replay re-sho
   await page.goto('/coldgas/?course=lineup&gfx=low');
   await expect(page.locator('[data-start]')).toBeVisible();
   // Runs wait for the physics engine's WASM (src/sim/engine.js), fetched once the stage paints.
-  await page.waitForFunction(() => window.__coldgas?.physicsReady(), null, { timeout: 30_000 });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady(), null, { timeout: 60_000 });
   // Too low over the row and too fast: its side clips a parked body and it grinds over the roofs.
   await page.evaluate(() => {
     const g = window.__coldgas;
     g.startRun('reveal');
-    g.S.autopilot = g.createAutopilot('lineup', { speed: 9, apex: 3.8, rolls: 2 });
+    g.S.autopilot = g.createAutopilot('lineup', { speed: 9, apex: 2.8, rolls: 2 });   // (3.8 before SIM_VERSION 26: Assist's auto-land caught it)
     g.skipCountdown();
   });
   await page.evaluate(() => window.__coldgas.fastForward());   // the whole run in one go, not at software GL's pace

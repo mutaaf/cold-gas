@@ -14,7 +14,7 @@ import { createDirector } from './render/director.js';
 import { landingImpact } from './render/impact.js';
 import { createCrash } from './render/crash.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
-import { createRun, stepRun, FRAME_EVERY, BODY_FRAME, BODY_STRIDE } from './sim/run.js';
+import { createRun, stepRun, armAftermath, aftermathStep, FRAME_EVERY, BODY_FRAME, BODY_STRIDE } from './sim/run.js';
 import { freeWorld } from './sim/world.js';
 import { physicsReady, physicsMemoryBytes } from './sim/engine.js';
 import { loadPhysics } from './sim/engine-web.js';
@@ -28,14 +28,15 @@ import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
-import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, pollPads, heldState } from './input.js';
+import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState } from './input.js';
+import { LEVEL_INFO } from './driving.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
 import { thumbStage } from './onethumb.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
 import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0 } from './audio.js';
-import { createUI } from './ui.js';
+import { createUI, crashStep } from './ui.js';
 import { wireUnitToggles, localize, unitText } from './units.js';
 import { createInstruments } from './instruments.js';
 import { localWords, postScore, fetchBoard } from './panel.js';
@@ -308,7 +309,8 @@ function startRunNow(kind = 'jump', quick = false) {
   closeOverlays();
   initAudio();
   disposeRun();
-  S.run = createRun(stage.course);
+  // Armed for its aftermath: when it ends, the car finishes its crash before the results (0062).
+  S.run = armAftermath(createRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.released = false; S.drill = null; S.freezeT = 0; S.coach = null;
   ghostLoaded(stage.course);   // the reference ghost is flown on the title (precomputeRefGhosts)
@@ -332,9 +334,15 @@ function startRunNow(kind = 'jump', quick = false) {
   if (S.autopilot) ui.cue_({ show: 'The reference run: the Wall, then the lineup', wall: 'The reference run: up the Wall' }[stage.course] || 'The reference jump', 2400);
 }
 
+// The card is decided the moment the run ends (closeBook in src/sim/run.js); a drill's own card reads
+// the car there too. Taken before the aftermath moves it (beginAftermath), shown after.
+function closeCard(run) {
+  S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.assist });
+  S.drillSnap = S.drill ? { result: drillResult(S.drill, run, S.card), coach: drillCoach(S.drill, run) } : null;
+}
 function finishRun() {
   const run = S.run;
-  S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.assist });
+  if (!S.card) closeCard(run);
   setMode('results');
   ui.only('results');
   ui.touch.hidden = true;
@@ -346,14 +354,14 @@ function finishRun() {
   const coachRun = () => setTimeout(() => {
     if (S.run !== run) return;
     try {
-      const own = S.drill && drillCoach(S.drill, run);
+      const own = S.drill && S.drillSnap?.coach;
       S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0);
       ui.coaching(S.coach.items);
     } catch (err) { console.warn('coach', err); }
   }, 450);
   if (S.drill) {
     // Practice: the drill's own card and the coach. No panel, no board, no ghost.
-    ui.results(S.card, { drill: S.drill, result: drillResult(S.drill, run, S.card) });
+    ui.results(S.card, { drill: S.drill, result: S.drillSnap.result });
     coachRun();
     replayFrom(Math.max(0, (run.drillStartTick || 0) / FRAME_EVERY - 30));
     return;
@@ -484,7 +492,7 @@ function liveStep(dt) {
   let input = null;
   const oneThumb = thumbActive();
   const simT0 = performance.now(), tick0 = run.tick;
-  while (S.acc >= DT && run.phase !== 'done') {
+  while (S.acc >= DT && run.phase !== 'done' && !S.after) {
     if (S.autopilot) noteRelease(run, input = S.autopilot(run));
     else input = wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released, run.car));
     poseLerp.before(run.car);
@@ -493,6 +501,21 @@ function liveStep(dt) {
     gWindow.push(run.car.vel);
     S.acc -= DT;
   }
+  // The aftermath (0062): the run is over and scored, the car isn't stopped. The same world steps on
+  // the post-crash input (brakes through ABS, no drive, no fan, valves shut: src/sim/run.js) until it
+  // is at rest, then frees it. Slow motion slows it with everything else.
+  if (S.after && !run.after.done) {
+    while (S.acc >= DT) {
+      poseLerp.before(run.car);
+      bodyLerp.before(run.car.world.bodies);
+      gWindow.push(run.car.vel);
+      S.acc -= DT;
+      if (aftermathStep(run)) { S.acc = 0; break; }
+    }
+  }
+  // The card is decided on the frame the run ends, before the HUD reads it: a crash ends the
+  // timeline as a crash on that frame, not one frame of TOUCHDOWN first (0072).
+  if (run.phase === 'done' && !S.card) closeCard(run);
   S.simMs = performance.now() - simT0; S.simTicks = run.tick - tick0;   // the nerds panel's clock
   if (run.t.contact && !S.contactBuzzed) { S.contactBuzzed = true; buzz('crash'); }
   const c = run.car;
@@ -532,7 +555,7 @@ function liveStep(dt) {
   // Touchdown, once per run (keyed on the sim's touch tick, so a fast-forward that steps past the
   // 'landed' phase in one frame still lands).
   if (run.t.touchTick >= 0 && S.impacts === 0) touchdown(run);
-  if (!S.autopilot) cues(run, c);
+  if (!S.autopilot && !S.after) cues(run, c);
 
   const speed = syncHud(run, c);
   ui.damage(run.damage, c);
@@ -541,15 +564,24 @@ function liveStep(dt) {
   plumes.update(dt, S.time, c.throttles, c.vel, 0);
   updateAudio({ speed, grounded: c.grounded > 0, throttles: c.throttles });
 
-  if (run.phase === 'done' || (S.drill?.done && S.drill.done(run))) {
+  // The end: a finished run (or a drill's moment) goes straight into its aftermath, and the results
+  // come up once the car is at rest, and no sooner than the beat they always had (1.4 s, a drill 0.5 s).
+  if (S.after) {
     S.doneT += dt;
-    if (S.doneT > (run.phase === 'done' ? 1.4 : 0.5)) finishRun();
+    if (run.after.done && S.doneT > (S.drill ? 0.5 : 1.4)) finishRun();
+  } else if (run.phase === 'done' || (S.drill?.done && S.drill.done(run))) {
+    S.doneT += dt;
+    if (run.phase === 'done' || S.doneT > 0.5) beginAftermath(run);
   } else S.doneT = 0;
+}
+function beginAftermath(run) {
+  if (!S.card) closeCard(run);   // (a run's end has it already; a drill's moment decides it here)
+  S.after = true;
 }
 
 // The HUD from the run as it stands (every live frame, and once before a countdown so READY shows
 // this run's start). Returns the speed.
-function syncHud(run, c, clock = (run.tick - S.startTick) / 240) {
+function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTick : run.tick) - S.startTick) / 240) {
   const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
   bodyRates(c, rates);
   const alt = heightAboveSurface(c);
@@ -557,7 +589,7 @@ function syncHud(run, c, clock = (run.tick - S.startTick) / 240) {
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(landing.prediction.rollOut) * 180 / Math.PI,
     alt, airborne: run.phase === 'air',
-    sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, landing.prediction), clock,
+    sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, landing.prediction), clock, crash: run.phase === 'done' ? crashStep(S.card) : '',
     pitch: hudPitch(c.quat, run.phase === 'ramp'),
     throttles: c.throttles, fan: c.fanForce / G, g: gWindow.read(),
   });
@@ -660,6 +692,43 @@ ctlScreen.querySelector('[data-tilt-calibrate]').addEventListener('click', () =>
 onSettings(syncControlsSheet);
 syncControlsSheet();
 document.querySelectorAll('[data-controls-open]').forEach((b) => b.addEventListener('click', () => { syncControlsSheet(); ui.show('controls', true); }));
+
+// Driving (0066, src/driving.js): Easy / Standard / Advanced on the ground in every mode, on this device.
+// Radiogroups take the arrow keys (and Tab lands on the checked one).
+const driveNote = ctlScreen.querySelector('[data-drive-note]');
+function syncDriving() {
+  const d = drivingSettings, adv = d.level === 'advanced';
+  for (const [sel, key, val] of [['[data-drive-level]', 'driveLevel', d.level], ['[data-drive-tc]', 'driveTc', d.tc]]) {
+    ctlScreen.querySelectorAll(sel).forEach((b) => { const on = b.dataset[key] === val; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+  }
+  ctlScreen.querySelector('[data-drive-abs]').setAttribute('aria-checked', String(d.abs));
+  ctlScreen.querySelectorAll('[data-drive-adv]').forEach((el) => { el.hidden = !adv; });
+  driveNote.textContent = LEVEL_INFO[d.level].blurb;
+  document.querySelectorAll('[data-driving-label]').forEach((el) => { el.textContent = LEVEL_INFO[d.level].name; });
+}
+function radioKeys(group, sel, pick) {
+  group.addEventListener('keydown', (e) => {
+    const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
+    if (!step) return;
+    e.preventDefault(); e.stopPropagation();
+    const opts = [...group.querySelectorAll(sel)], i = opts.indexOf(document.activeElement);
+    const next = opts[(Math.max(0, i) + step + opts.length) % opts.length];
+    pick(next); next.focus();
+  });
+}
+const pickLevel = (b) => setDriving({ level: b.dataset.driveLevel });
+const pickTc = (b) => setDriving({ tc: b.dataset.driveTc });
+ctlScreen.querySelectorAll('[data-drive-level]').forEach((b) => b.addEventListener('click', () => pickLevel(b)));
+ctlScreen.querySelectorAll('[data-drive-tc]').forEach((b) => b.addEventListener('click', () => pickTc(b)));
+radioKeys(ctlScreen.querySelector('[data-drive-levels]'), '[data-drive-level]', pickLevel);
+radioKeys(ctlScreen.querySelector('[data-drive-tcs]'), '[data-drive-tc]', pickTc);
+ctlScreen.querySelector('[data-drive-abs]').addEventListener('click', () => setDriving({ abs: !drivingSettings.abs }));
+onDriving(syncDriving);
+syncDriving();
+document.querySelectorAll('[data-driving-open]').forEach((b) => b.addEventListener('click', () => {
+  syncControlsSheet(); ui.show('controls', true);
+  ctlScreen.querySelector('[data-drive-level][aria-checked="true"]')?.focus({ preventScroll: true });
+}));
 ctlScreen.querySelector('[data-controls-close]').addEventListener('click', () => ui.show('controls', false));
 // No page zoom or scroll from a stray gesture (iOS ignores user-scalable=no for pinch).
 for (const ev of ['gesturestart', 'gesturechange']) document.addEventListener(ev, (e) => e.preventDefault(), { passive: false });
@@ -695,6 +764,8 @@ function cues(run, c) {
     const boostCue = show && run.phase === 'air' && !run.t.crossedRow && cueHys.slow && c.pos.z > COURSES.show.rowNear;
     if (tier === 'assist') {
       if (boostCue) return ui.cue_(`Hold ${kbd('BOOST', 'F')} + ${kbd('LAND', 'Shift')} · over the row`, 400);
+      // Assist's auto-land (src/sim/vehicle.js): LAND came too late to stop, so the computer started it.
+      if (run.phase === 'air' && c.autoLand) return ui.cue_(`Auto-LAND · braking for you · ${kbd('LAND', 'Shift')} next time`, 500);
       if (run.phase === 'air') return ui.cue_(`Hold ${kbd('LAND', 'Shift')}: it rolls you out and brakes`, 500);
       return;
     }
@@ -718,6 +789,7 @@ function thumbCues(run, c, v) {
   if (run.phase === 'ramp' && !S.released) return ui.cue_(run.t.progress >= 0.92 ? 'On the ledge · tap to let go' : 'Up the curl on suction', 600);
   if (run.phase === 'air' || S.released) {
     if (run.course === 'show' && !run.t.crossedRow && c.pos.z > COURSES.show.rowNear) return ui.cue_('Carrying you over the row', 500);
+    if (!held && c.autoLand) return ui.cue_('Auto-land · braking for you', 500);
     if (!held) return ui.cue_('Hold to land: it rolls you out and brakes', 500);
   }
 }
@@ -971,7 +1043,8 @@ function startDrillNow(id) {
   initAudio();
   disposeRun();
   const { run, released } = buildDrill(drill, stage.course);
-  S.run = run; S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;
+  S.run = armAftermath(run); S.after = false; S.drillSnap = null;
+  S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;
   setMode('live'); S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
   S.impacts = 0; S.impact = null;
   newFlight(run.tick);
@@ -1170,6 +1243,6 @@ function fastForward() {
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 Object.assign(window.__coldgas, { obs, heal });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);
