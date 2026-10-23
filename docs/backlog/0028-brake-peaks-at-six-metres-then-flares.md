@@ -1,7 +1,7 @@
 ---
 id: 0028
 title: The landing brake peaks near 6.5 m, eases to a near-hover, then flares, like the livestream G trace
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity

@@ -1,7 +1,7 @@
 ---
 id: 0030
 title: The suction fans draw their ~80 kW from the same 1 MW the motors use
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: authenticity

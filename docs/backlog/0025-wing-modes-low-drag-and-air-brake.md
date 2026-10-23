@@ -1,7 +1,7 @@
 ---
 id: 0025
 title: Rear wing has two modes — low-drag and high-downforce air-brake — with sourced CdA
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity

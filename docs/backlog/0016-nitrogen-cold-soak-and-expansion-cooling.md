@@ -1,7 +1,7 @@
 ---
 id: 0016
 title: Nitrogen cools as it expands — thrust and Isp fall with gas temperature
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity
