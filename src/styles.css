@@ -395,6 +395,13 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   .th-ticker { width: calc(100vw - 32px); bottom: calc(272px + var(--safe-b)); font-size: 15px; max-height: min(calc(5 * 1.6em + 24px), calc(100dvh - 472px - var(--safe-t) - var(--safe-b))); }
   .ai-chip { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
+/* A 320 px column: the counters' names wrap beside their values (0078's larger figures), so the
+   counters stand 30 px taller; the card and the stream step up with them (0082). */
+@media (max-width: 360px) {
+  .th-card { bottom: calc(166px + var(--safe-b)); }
+  .th-ticker { bottom: calc(288px + var(--safe-b)); max-height: min(calc(5 * 1.6em + 24px), calc(100dvh - 488px - var(--safe-t) - var(--safe-b))); }
+  .theatre.th-rookie:not(.th-quest) .th-ticker { max-height: min(calc(5 * 1.6em + 24px), calc(100dvh - 540px - var(--safe-t) - var(--safe-b))); }
+}
 @media (prefers-reduced-motion: reduce) { .theatre::before { animation: none; } }
 /* A short landscape screen (0082: a phone sideways, a folding phone closed and sideways; ≤ 480 px tall).
    Beside the sheet the theatre was a 324 px column at 844×390, its rail clipped and Skip sitting on it,
@@ -428,15 +435,15 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   }
   @container theatre (max-width: 560px) {
     .th-rail li { width: min(120px, calc((100cqw - 24px) / 4)); }
-    .th-card { left: 16px; right: 16px; width: auto; bottom: calc(var(--th-stats-h, 120px) + var(--safe-b)); padding: 14px 16px; }
+    .th-card { left: 16px; right: 16px; width: auto; bottom: calc(var(--th-stats-h, 128px) + var(--safe-b)); padding: 14px 16px; }
     .th-card .th-meta { display: none; }
     .th-stats { left: 16px; right: 16px; width: auto; bottom: calc(16px + var(--safe-b)); grid-template-columns: 1fr 1fr; column-gap: 16px; padding: 12px 16px; }
-    .th-ticker { left: 16px; right: 16px; width: auto; transform: none; bottom: calc(var(--th-stats-h, 120px) + 144px + var(--safe-b));
-      max-height: min(calc(8 * 1.55em + 24px), calc(100dvh - var(--th-stats-h, 120px) - 350px - var(--safe-t) - var(--safe-b))); }
+    .th-ticker { left: 16px; right: 16px; width: auto; transform: none; bottom: calc(var(--th-stats-h, 128px) + 144px + var(--safe-b));
+      max-height: min(calc(8 * 1.55em + 24px), calc(100dvh - var(--th-stats-h, 128px) - 350px - var(--safe-t) - var(--safe-b))); }
   }
   @container theatre (max-width: 360px) {
     .th-rail li:not(.on) .l { visibility: hidden; }
-    .th-card, .th-ticker { --th-stats-h: 190px; }
+    .th-card, .th-ticker { --th-stats-h: 216px; }
     .th-stats { grid-template-columns: none; }
   }
 }
