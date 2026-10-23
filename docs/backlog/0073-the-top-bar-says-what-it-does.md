@@ -1,11 +1,12 @@
 ---
 id: 0073
 title: On a touch screen the top bar says what it does; the icon-only controls fold into one labelled Menu
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-22
+pr: 97
 by: operator
 ---
 
