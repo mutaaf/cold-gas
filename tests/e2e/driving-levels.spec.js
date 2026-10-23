@@ -40,18 +40,27 @@ test('desktop: Standard by default; the keyboard picks Advanced, and it is remem
   expect(errors).toEqual([]);
 });
 
-test('a phone starts on Easy; the touch Controls sheet has Driving on top', async ({ browser }) => {
+// 0074: a phone starts on Standard like every device (it started on Easy before), and flies Assist.
+// Easy stays one tap away in the sheet, and a phone player's saved Easy is kept.
+test('a phone starts on Standard + Assist; the touch Controls sheet has Driving on top; a saved Easy stays', async ({ browser }) => {
+  test.slow();   // two boots (the reload) on software GL
   const page = await browser.newPage(PHONE);
   const errors = watch(page);
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
-  expect(await page.evaluate(() => window.__coldgas.driving.settings.level)).toBe('easy');
+  expect(await page.evaluate(() => ({ level: window.__coldgas.driving.settings.level, saved: window.__coldgas.driving.settings.saved, tier: window.__coldgas.S.tier })))
+    .toEqual({ level: 'standard', saved: false, tier: 'assist' });
   await page.locator('.cta [data-controls-open]').tap();
-  await expect(page.locator('[data-drive-level="easy"]')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.locator('[data-drive-level="standard"]')).toHaveAttribute('aria-checked', 'true');
   await expect(page.locator('[data-drive-level="easy"]')).toBeInViewport();
-  await expect(page.locator('[data-drive-note]')).toContainText('Brakes for the bend ahead');
   await expect(page.locator('[data-scheme-opt="thumb"]')).toBeVisible();
+  await page.locator('[data-drive-level="easy"]').tap();
+  await expect(page.locator('[data-drive-level="easy"]')).toHaveAttribute('aria-checked', 'true');
+  await expect(page.locator('[data-drive-note]')).toContainText('Brakes for the bend ahead');
   await page.locator('[data-controls-close]').tap();
+  await page.reload();
+  await ready(page);
+  expect(await page.evaluate(() => ({ ...window.__coldgas.driving.settings }))).toMatchObject({ level: 'easy', saved: true });
   expect(errors).toEqual([]);
   await page.close();
 });
