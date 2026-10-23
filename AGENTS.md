@@ -116,7 +116,7 @@ mark, and air left in the tanks.
    HUD (measured on screenshots: `node scripts/hud-audit.mjs <url> <dir>`), no HUD text under 11 px,
    no overlaps at 390×844 · 430×932 · 768×1024 · 1280×720 · 1920×1080 (both orientations), the iPads
    (820×1180, 1024×1366, both ways), a 320 px column and a notch-inset pass (`node scripts/title-audit.mjs`
-   too), colour on the HUD means state only (ink nominal, amber caution, red warning), and `prefers-reduced-motion`
+   too; both are a gate, `npm run audit`, and the judges' theatre's controls are 44 px targets), colour on the HUD means state only (ink nominal, amber caution, red warning), and `prefers-reduced-motion`
    disables shakes and big transitions.
 
 ## 4 · System map
@@ -289,8 +289,10 @@ scripts/play-human.mjs     a cue-following player on the real page (keyboard, to
 scripts/human-phone.mjs    the human-show population on a phone (thumbs, reach, a resting thumb):
                            --scheme=classic|thumb --build=before|after --geom=<thumb-reach geom.json>
 scripts/thumb-reach.mjs    touch control geometry per phone viewport + reach heatmap screenshots
-scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11 px, WCAG contrast on screenshots
-scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view
+scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11 px, WCAG contrast on screenshots;
+                           the judges' theatre too (44 px targets); a gate (exit 1), --shard=N/M
+scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view; a gate (exit 1)
+scripts/serve-and-audit.mjs  `npm run audit`: vite preview on a private port + both audits, their exit code
 scripts/brand.mjs          the install assets from brand/icon.svg (the mark: icons, maskable, Apple, favicons;
                            --check the safe zone) and, with --shots <url>, og.png + the manifest's screenshots
 scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
@@ -333,6 +335,9 @@ npm test           unit tests (fast, pure)
 npm run e2e        Playwright against a production build
 npm run check      backlog + lint + unit + e2e (what CI runs)
 npm run check:fast backlog + lint + unit + build (cloud sandboxes)
+npm run audit [-- --shard=N/M] [--port=4655]   the HUD + title audits as a gate on dist/ (build first): serves it, runs
+                   one HUD shard (+ the title audit with shard 1), exits 1 on any overlap, offscreen box, text < 11 px,
+                   label < 4.5:1, theatre target < 44 px or missed frame (0077); CI runs shards 1/3, 2/3, 3/3 in parallel
 node scripts/fly.mjs '{"apex":7,"rolls":1}'   headless reference flight telemetry
 node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title wired, first 3D frame, long tasks, bytes
 node scripts/roads/build.mjs [road]             rebuild Free Drive roads from OSM + terrain (network; cached)

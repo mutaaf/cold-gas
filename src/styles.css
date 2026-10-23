@@ -259,7 +259,7 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
    text sits on: a 1 px contact shadow plus a dark halo that dims any particle behind a glyph. */
 .theatre, .results { --ink-2: rgba(245, 246, 248, 0.86); --ink-3: rgba(245, 246, 248, 0.66);
   --th-lift: 0 1px 1px rgba(0, 0, 0, 0.9), 0 0 10px rgba(2, 3, 6, 0.95), 0 0 22px rgba(2, 3, 6, 0.8); }
-.theatre { position: fixed; inset: 0 min(520px, 100vw) 0 0; z-index: 6; overflow: hidden; opacity: 0; transition: opacity 0.6s var(--ease);
+.theatre { position: fixed; inset: 0 min(520px, 100vw) 0 0; z-index: 6; overflow: hidden; opacity: 0; transition: opacity 0.6s var(--ease); container: theatre / inline-size;
   background: radial-gradient(120% 80% at 40% 45%, rgba(7, 11, 20, 0.93), rgba(2, 3, 6, 0.985)); }
 .theatre.on { opacity: 1; }
 .theatre.out { opacity: 0; transition-duration: 0.6s; }
@@ -272,8 +272,8 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
 .th-rail li { position: relative; display: grid; justify-items: center; gap: 6px; width: clamp(78px, 11vw, 132px); color: var(--ink-3); transition: color 0.4s; text-shadow: var(--th-lift); }
 .th-rail li::before { content: ''; position: absolute; top: 6px; left: -50%; right: 50%; height: 1px; background: var(--hair); }
 .th-rail li:first-child::before { display: none; }
-.th-rail .n { font: 400 10px/1 var(--mono); }
-.th-rail .l { font: 500 10px/1 var(--text); letter-spacing: 0.3em; text-transform: uppercase; }
+.th-rail .n { font: 400 11px/1 var(--mono); }
+.th-rail .l { font: 500 11px/1 var(--text); letter-spacing: 0.26em; text-transform: uppercase; }
 .th-rail .d { position: absolute; top: 2px; width: 9px; height: 9px; border-radius: 50%; background: var(--bg); border: 1px solid var(--hair); }
 .th-rail .n { margin-top: 18px; }
 .th-rail li.done { color: var(--ink-2); }
@@ -285,13 +285,13 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
 .th-caption { position: absolute; top: calc(126px + var(--safe-t)); left: 0; right: 0; text-align: center; font: 400 14px/1.4 var(--text); color: var(--ink); padding: 0 24px; z-index: 1; text-shadow: var(--th-lift); }
 .th-card { position: absolute; left: calc(28px + var(--safe-l)); bottom: calc(28px + var(--safe-b)); width: min(300px, 40%); z-index: 1;
   padding: 18px 20px; border: 1px solid var(--hair); border-radius: 16px; background: rgba(4, 6, 11, 0.82); backdrop-filter: blur(14px); }
-.th-eyebrow { font: 500 10px/1 var(--text); letter-spacing: 0.3em; text-transform: uppercase; color: var(--aur-1); }
+.th-eyebrow { font: 500 11px/1 var(--text); letter-spacing: 0.3em; text-transform: uppercase; color: var(--aur-1); }
 .th-model { display: grid; gap: 4px; margin: 12px 0 14px; }
 .th-model b { font: 400 17px/1.2 var(--mono); color: var(--ink); word-break: break-all; }
 .th-model span { font-size: 12px; color: var(--ink-3); }
 .th-meta, .th-stats { margin: 0; display: grid; gap: 8px; }
 .th-meta div, .th-stats div { display: flex; justify-content: space-between; gap: 12px; }
-.th-meta dt, .th-stats dt { font: 500 10px/1.4 var(--text); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-3); }
+.th-meta dt, .th-stats dt { font: 500 11px/1.4 var(--text); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink-3); }
 .th-meta dd, .th-stats dd { margin: 0; font: 400 12px/1.4 var(--mono); color: var(--ink); text-align: right; }
 .th-stats { position: absolute; right: calc(28px + var(--safe-r)); bottom: calc(28px + var(--safe-b)); width: min(240px, 34%); z-index: 1;
   padding: 18px 20px; border: 1px solid var(--hair); border-radius: 16px; background: rgba(4, 6, 11, 0.82); backdrop-filter: blur(14px); }
@@ -334,8 +334,13 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   .th-rookie-btn span { font: 500 12px/1.2 var(--mono); letter-spacing: 0.04em; text-transform: none; color: var(--ink); opacity: 0.86; }
   .theatre.th-rookie:not(.th-quest) .th-rail { top: calc(116px + var(--safe-t)); }
   .theatre.th-rookie:not(.th-quest) .th-caption { top: calc(180px + var(--safe-t)); }
-  .theatre.th-rookie:not(.th-quest) .th-ticker { max-height: min(calc(5 * 1.6em + 24px), calc(100dvh - 478px - var(--safe-t) - var(--safe-b))); }
+  .theatre.th-rookie:not(.th-quest) .th-ticker { max-height: min(calc(5 * 1.6em + 24px), calc(100dvh - 524px - var(--safe-t) - var(--safe-b))); }
 }
+/* Every control in the theatre is a 44 px target (0077): the pills stay slim and the hit area runs
+   past them, as the top bar's Menu does (0073). Retry and Home sit side by side, so it grows only up
+   and down. */
+.th-skip::after, .th-quick .quick-btn::after { content: ''; position: absolute; left: -1px; right: -1px; top: 50%; height: 44px; transform: translateY(-50%); }
+.th-quick .quick-btn { position: relative; }
 
 /* Receipt in the results sheet */
 .receipt { margin: 14px 0 0; padding: 14px 16px; border: 1px solid var(--hair-2); border-radius: 14px; background: rgba(255, 255, 255, 0.02); }
@@ -386,10 +391,72 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   .th-card { left: 16px; right: 16px; width: auto; bottom: calc(150px + var(--safe-b)); padding: 14px 16px; }
   .th-card .th-meta { display: none; }
   .th-stats { left: 16px; right: 16px; width: auto; bottom: calc(16px + var(--safe-b)); grid-template-columns: 1fr 1fr; padding: 12px 16px; }
-  .th-ticker { width: calc(100vw - 32px); bottom: calc(272px + var(--safe-b)); font-size: 15px; max-height: calc(5 * 1.6em + 24px); }
+  /* Under the caption (at 126 px, up to three lines on a 320 px column) and over the card: the stream keeps its newest lines. */
+  .th-ticker { width: calc(100vw - 32px); bottom: calc(272px + var(--safe-b)); font-size: 15px; max-height: min(calc(5 * 1.6em + 24px), calc(100dvh - 472px - var(--safe-t) - var(--safe-b))); }
   .ai-chip { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .theatre::before { animation: none; } }
+/* A short landscape screen (0077: a phone sideways, a folding phone closed and sideways; ≤ 480 px tall).
+   Beside the sheet the theatre was a 324 px column at 844×390, its rail clipped and Skip sitting on it,
+   its panels piled up; full screen it had a phone's tall stack in 340 px. So, as on a phone, it takes
+   the screen (the sheet is there when it ends) with Retry and Home (and the Rookie offer, 0076) in its
+   bar; and it reads across instead of down: the bar, the rail, the caption, then the model card, the
+   stream and the counters side by side (30 · 40 · 30 of the width inside the insets). The bar is the same
+   wherever the theatre covers the sheet beyond a phone's width: here, and on an opened folding phone
+   (0075's query), whose theatre took the screen without it. */
+@media (orientation: landscape) and (max-height: 480px), (pointer: coarse) and (min-width: 600px) and (min-height: 500px) and (max-width: 1000px) and (max-height: 900px) {
+  .th-quick { display: flex; flex-wrap: nowrap; gap: 8px; position: absolute; top: calc(14px + var(--safe-t)); left: calc(16px + var(--safe-l)); right: calc(96px + var(--safe-r)); z-index: 2; pointer-events: none; }
+  .th-quick > * { pointer-events: auto; }
+  .th-quick .quick-btn { height: 34px; padding: 0 14px; border-radius: 17px; border: 1px solid var(--hair); background: rgba(6, 9, 15, 0.82);
+    font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
+  .th-quick .quick-btn.primary { background: var(--ink); color: #07090d; border-color: transparent; }
+  .th-quick .th-rookie-btn { display: none; }
+  .theatre.th-rookie:not(.th-quest) .th-quick .th-rookie-btn { display: flex; flex: 0 1 auto; min-width: 0; min-height: 44px; height: auto; margin-top: -5px; padding: 6px 16px; align-items: center;
+    gap: 2px 12px; border-radius: 22px; border-color: rgba(150, 220, 255, 0.7); background: rgba(14, 26, 38, 0.92); color: var(--ink); font-weight: 600; text-align: left; }
+  .th-rookie-btn span { font: 500 12px/1.2 var(--mono); letter-spacing: 0.04em; text-transform: none; color: var(--ink); opacity: 0.86; white-space: nowrap; }
+  .th-skip { top: calc(14px + var(--safe-t)); right: calc(16px + var(--safe-r)); height: 34px; }
+}
+/* Beside the sheet on a tablet (0077) the theatre is a column 248 px (768 upright) to 660 px (1180 sideways)
+   wide: Skip sat on the rail and the stream's glass on the card. By the column's own width (a container),
+   only where it stands beside the sheet (wider than a phone: a phone's theatre is the whole screen): Skip
+   goes up to the corner; a column under 560 px stacks as a phone's does (the counters at the foot, the card
+   over them, the stream over the card, as tall as the room under the caption), and under 360 px the rail
+   names only the stage it is on. */
+@media (min-width: 721px) {
+  @container theatre (max-width: 700px) {
+    .th-skip { top: calc(14px + var(--safe-t)); }
+  }
+  @container theatre (max-width: 560px) {
+    .th-rail li { width: min(120px, calc((100cqw - 24px) / 4)); }
+    .th-card { left: 16px; right: 16px; width: auto; bottom: calc(var(--th-stats-h, 120px) + var(--safe-b)); padding: 14px 16px; }
+    .th-card .th-meta { display: none; }
+    .th-stats { left: 16px; right: 16px; width: auto; bottom: calc(16px + var(--safe-b)); grid-template-columns: 1fr 1fr; column-gap: 16px; padding: 12px 16px; }
+    .th-ticker { left: 16px; right: 16px; width: auto; transform: none; bottom: calc(var(--th-stats-h, 120px) + 144px + var(--safe-b));
+      max-height: min(calc(8 * 1.55em + 24px), calc(100dvh - var(--th-stats-h, 120px) - 350px - var(--safe-t) - var(--safe-b))); }
+  }
+  @container theatre (max-width: 360px) {
+    .th-rail li:not(.on) .l { visibility: hidden; }
+    .th-card, .th-ticker { --th-stats-h: 190px; }
+    .th-stats { grid-template-columns: none; }
+  }
+}
+@media (orientation: landscape) and (max-height: 480px) {
+  .theatre { inset: 0; z-index: 8; background: radial-gradient(120% 80% at 40% 45%, rgb(7, 11, 20), rgb(2, 3, 6));
+    --th-in: calc(100% - var(--safe-l) - var(--safe-r) - 64px); }
+  .theatre .th-rail, .theatre.th-rookie:not(.th-quest) .th-rail { top: calc(64px + var(--safe-t)); }
+  .th-rail li { width: 76px; }
+  .th-rail .l { letter-spacing: 0.2em; }
+  .theatre .th-caption, .theatre.th-rookie:not(.th-quest) .th-caption { top: calc(116px + var(--safe-t)); left: var(--safe-l); right: var(--safe-r); }
+  .th-card, .th-stats { bottom: calc(12px + var(--safe-b)); width: calc(var(--th-in) * 0.3); padding: 12px 14px; }
+  .th-card { left: calc(16px + var(--safe-l)); right: auto; }
+  .th-card .th-meta { display: none; }
+  .th-model { margin: 10px 0 0; }
+  .th-model b { font-size: 15px; }
+  .th-stats { left: auto; right: calc(16px + var(--safe-r)); grid-template-columns: none; gap: 6px; }
+  .th-meta dt, .th-stats dt { letter-spacing: 0.12em; }
+  .theatre .th-ticker, .theatre.th-rookie:not(.th-quest) .th-ticker { left: calc(32px + var(--safe-l) + var(--th-in) * 0.3); bottom: calc(12px + var(--safe-b)); transform: none; width: calc(var(--th-in) * 0.4);
+    max-height: min(calc(8 * 1.55em + 24px), calc(100dvh - 164px - var(--safe-t) - var(--safe-b))); }
+}
 /* Phones: brand, AI, Assist, Ghost and Sound all fit on one 390 px bar. */
 @media (max-width: 480px) {
   .top { padding-left: calc(16px + var(--safe-l)); padding-right: calc(16px + var(--safe-r)); }
@@ -1321,6 +1388,47 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    instrument, the pitch. By the band's own width (it is a container in landscape), not the device. */
 @container (min-width: 480px) {
   :root[data-hud='compact'] .hud .h-strip > .h-pitch { display: flex; }
+}
+
+/* --- The full HUD on a very short landscape screen (0077) -------------------------------------------
+   340 px of height (a folding phone closed and turned sideways; a small phone sideways with its bars)
+   is too short for the band's stack: the readings got 239 px in one wrapped row, the dial ran into the
+   thumb pad, the mission row into the vehicle panel. Everything stays, rearranged by the height it
+   needs (≈ 370 px for the stack), not by a device: the mission row rides up into the top bar's gap,
+   between the brand and the buttons; the cue line takes the band it leaves, between the primary and
+   the right column; the right column is the dial with its roll beside it, and the damage read in one
+   line under it, all above the thumb's arc; the primary packs down (time to ground stays on the tape);
+   the readings sit in two rows of three between the stick and the right thumb, LESS on their top edge.
+   The car keeps to the top 62 % right of centre: the band over it holds only the cue line. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 370px) {
+  :root[data-hud='full'] .hud .h-mission { top: calc(30px + var(--safe-t)); left: calc(170px + var(--safe-l)); right: calc(256px + var(--safe-r)); padding: 0; }
+  :root[data-hud='full'] .hud .h-timeline li { width: 18px; }
+  :root[data-hud='full'] .cue { --cue-top: 64px; left: calc(252px + var(--safe-l)); right: calc(172px + var(--safe-r)); }
+  :root[data-hud='full'] .hud .h-primary { top: calc(var(--top) + 44px); }
+  :root[data-hud='full'] .hud .h-big b { font-size: 40px; }
+  :root[data-hud='full'] .hud .d-meta .d-row:last-child { display: none; }
+  :root[data-hud='full'] .hud .descent { row-gap: 4px; }
+  :root[data-hud='full'] .hud .h-att { top: calc(var(--top) + 46px); grid-template-columns: auto auto; grid-template-areas: 'roll dial' 'cue dial'; align-items: center; justify-items: end; gap: 2px 10px; }
+  :root[data-hud='full'] .hud .h-att .dial { grid-area: dial; width: 64px; height: 64px; }
+  :root[data-hud='full'] .hud .h-att .adi-roll { grid-area: roll; align-self: end; }
+  :root[data-hud='full'] .hud .h-att .roll-cue { grid-area: cue; align-self: start; }
+  :root[data-hud='full'] .hud .h-vehicle { top: calc(var(--top) + 118px); right: calc(var(--m) + var(--safe-r)); }
+  :root[data-hud='full'] .hud .dmg { flex-direction: row; gap: 8px; }
+  :root[data-hud='full'] .hud .dmg svg { display: none; }
+  :root[data-hud='full'] .hud .dmg-read { display: flex; align-items: baseline; gap: 8px; padding: 0; }
+  :root[data-hud='full'] .hud .h-strip { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); row-gap: 0; }
+  :root[data-hud='full'] .hud .h-strip { bottom: calc(10px + var(--safe-b)); }
+  :root[data-hud='full'] .hud .h-strip > .h-cell { padding: 6px 6px 5px; column-gap: 4px; row-gap: 4px; border-left: 1px solid var(--line); }
+  :root[data-hud='full'] .hud .h-strip > .h-cell b { font-size: 14px; }
+  :root[data-hud='full'] .hud .h-strip .n2-bar { white-space: normal; }
+  :root[data-hud='full'] .hud .h-strip .n2-sep { display: none; }
+  :root[data-hud='full'] .hud .h-strip .n2-bar > .h-alt:first-child { display: block; margin-bottom: 3px; }
+}
+/* The same squeeze upright (a folding phone's 466×498 mid-swing): the cue line under the strip would
+   sit on the thumb's pad, so it keeps to the left of it, just under the strip (which sits at
+   --top + 180 here and is about 66 px tall: 304 px down). */
+@media (pointer: coarse) and (orientation: portrait) and (max-height: 540px) {
+  :root[data-hud='full'] .cue { --cue-top: 312px; left: calc(var(--m) + var(--safe-l)); right: calc(170px + var(--safe-r)); width: fit-content; max-width: none; margin: 0; transform: none; }
 }
 
 /* --- A screen in two segments (0075; Chromium's Viewport Segments, where a foldable reports its

@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",
+    "audit": "node scripts/serve-and-audit.mjs",
     "lint": "eslint .",
     "check": "node scripts/check-backlog.mjs && npm run lint && npm test && npm run e2e",
     "check:fast": "node scripts/check-backlog.mjs && npm run lint && npm test && npm run build",
