@@ -334,20 +334,24 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   await S(() => window.__coldgas.fastForward());
   if (await until(() => window.__coldgas.S.mode === 'results', 30000) && hudState === STATES[0]) await measureTheatre(page, vpBase);
   // A wreck (0072): the reference with every input zeroed from the release + 0.125 s ends flipped,
-  // 66 % Wrecked. Stepped to its end in the page, then a beat of its aftermath on the page's own
-  // frames: the damage on the compact line and the crash on the timeline, as a player sees them.
+  // 66 % Wrecked. Stepped to its end in the page, then a beat of its aftermath (0.6 s, stepped too: on
+  // the wall clock the car and the debris were somewhere else at every frame rate, and the labels over
+  // them measured 4.5 to 5.8:1 from run to run, 0083): the damage on the compact line and the crash on
+  // the timeline, as a player sees them; frozen there, then two of the page's own frames to draw it.
   const wrecked = await S(() => {
     const g = window.__coldgas, G = g.S;
     g.startRun('reveal'); g.skipCountdown();
     const ap = G.autopilot;
     G.autopilot = (run) => { const i = ap(run); if (G.released && run.tick - G.releaseTick >= 30) for (const k of g.inputKeys) i[k] = 0; return i; };
     for (let i = 0; i < 900 && G.run.phase !== 'done'; i++) g.liveStep(0.1);
+    for (let i = 0; i < 36 && G.mode === 'live'; i++) g.liveStep(1 / 60);
+    G.paused = true;   // frozen here, before the page's own clock can step it on
     // The reference autopilot announces itself on the cue line ("The reference run…"), which a player's
     // own wreck never shows: cleared, so the frame doesn't depend on whether its 2.4 s ran out.
     const c = document.querySelector('[data-cue]'); if (c) c.textContent = '';
     return G.run.phase === 'done';
   });
-  if (wrecked) { await page.waitForTimeout(600); await freeze(); await measure(page, vpName, '9-wreck'); await thaw(); }
+  if (wrecked) { await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))); await measure(page, vpName, '9-wreck'); await thaw(); }
   else { missed.push(`${vpName} 9-wreck`); console.log('  missed the wreck'); }
   // The Lineup in the air (touch): its air layout adds LIFT in slot B beside the attitude dial.
   if (touch) {

@@ -42,6 +42,11 @@ And a stray "E" showed behind QUESTS in Free Drive at 844×390 with a notch's in
 - **The "E" (real):** the stick's STEER label stands 26 px above the stick, outside its box, so the audit
   never measured it; in Free Drive sideways the full set's third row of chips (BUILD · QUESTS · ARCADE)
   reaches down to it once a notch's insets lift the stick, and its E showed between two chips.
+- **Thin margins (found by `minLabel` in the local gate runs, all above 4.5 but not by much):** the wreck
+  frame's aftermath beat was 600 ms of wall clock, so the car and its debris behind the labels moved with
+  the frame rate (393×659 full: FAN's `0 kgf` at 5.79:1 in one run, 4.51:1 in the next); the strip's
+  second units are drawn at 0.72; the one-thumb pad's glass is 0.5, and HOLDING over the parked row's gold
+  car read 4.73:1 at 669×825.
 - Also found: `npm run audit` never got an answer from `vite preview` in a Docker image whose `/etc/hosts`
   lists `localhost` as both 127.0.0.1 and ::1 (vite bound ::1, Node's fetch tried 127.0.0.1).
 
@@ -52,6 +57,8 @@ And a stray "E" showed behind QUESTS in Free Drive at 844×390 with a notch's in
   `11 mph · 31.1 ft · 655 lb` leave 9 px.
   Upright under 740 px, N₂'s line reads in the leading units only (as at 320×568): one line, whatever the
   reading; the strip's foot is at 396 px under a cue line at 414.
+- `src/styles.css`, margins: the strip's second units at a label's weight (`--lbl`, 0.86; still the smaller
+  line); the one-thumb pad's glass as dark as the HUD's (0.62).
 - `src/drive/drive.css`: the waiting clock at a label's weight (0.86, as `--lbl`, ≈ 6.5:1 over that sky);
   sideways, the stick's STEER label sits inside its ring, at the top above the dashed circle.
 - `scripts/audit-plan.mjs` (new): the viewports and a shard plan by estimated cost (seconds on a runner,
@@ -62,7 +69,9 @@ And a stray "E" showed behind QUESTS in Free Drive at 844×390 with a notch's in
 - `scripts/hud-audit.mjs`: after touchdown the aftermath and the results are stepped in the page
   (`fastForward`, the e2e hook); every wait is on a condition and generous (120 s, × 2 on CI; a frame is
   taken as soon as it holds); Free Drive presses on to 6 m/s instead of 2.5 s of wall clock; the stick's
-  label is a measured box; each frame reports its lowest label (`minLabel`), so a margin can be watched.
+  label is a measured box; the wreck's 0.6 s aftermath beat is stepped in the page and frozen there; each
+  frame reports its lowest label (`minLabel`), so a margin can be watched, and each
+  viewport's seconds (the report's `seconds`, the title audit's log), to re-fit the cost model.
 - `scripts/serve-and-audit.mjs`: serves on 127.0.0.1 and browses there.
 - No threshold, viewport or frame was loosened or dropped. No sim change.
 
