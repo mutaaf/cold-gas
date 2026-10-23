@@ -637,7 +637,7 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 
 /* The cue line: one sentence on glass, under the mission header */
 .cue { position: fixed; left: 50%; top: calc(var(--cue-top, 132px) + var(--safe-t)); transform: translateX(-50%); max-width: calc(100vw - 32px); width: max-content;
-  padding: 9px 16px 8px; border-radius: 4px; border: 1px solid rgba(245, 246, 248, 0.14); background: rgba(5, 7, 12, 0.82); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
+  padding: 9px 16px 8px; border-radius: 4px; border: 1px solid rgba(245, 246, 248, 0.14); background: rgba(5, 7, 12, 0.9); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   font: 500 12px/1.45 var(--text); letter-spacing: 0.16em; text-transform: uppercase; color: var(--ink); text-align: center; white-space: normal; text-shadow: none;
   pointer-events: none; opacity: 0; transition: opacity 0.35s var(--ease); z-index: 4; }
 .cue:empty { display: none; }
