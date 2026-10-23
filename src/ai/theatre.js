@@ -11,18 +11,25 @@
 import { create, register, fromText } from 'aurora-field';
 import { streamPanel, streamQuest } from './stream.js';
 import { shortModel, PROVIDER_INFO } from './config.js';
+import { one, k } from '../units.js';
 import monoBoldUrl from '@fontsource/geist-mono/files/geist-mono-latin-700-normal.woff2?url';
 
 const STAGES = ['telemetry', 'text', 'compute', 'app'];
-// Each morph needs time to read; the call itself usually finishes inside these.
-// TEXT holds long enough after its 700 ms arrival for the figures to be read (~1.7 s settled).
-const MIN_MS = { telemetry: 1700, text: 2400, compute: 1500 };
+// Each morph needs time to read; the call itself usually finishes inside these. TEXT is a
+// sequence of the run's figures (FIG_MS each: a 450 ms morph, then ~1 s settled to read):
+// FIG_MIN of them always, more while the call is still thinking (up to FIG_MAX), then the call's
+// own numbers (CALL_MS each) once it has answered. Against the old single 2.4 s frame that adds
+// at most 6 × 1.4 − 2.4 + 3 × 1.3 ≈ 9.9 s to a fast call; a slow call fills its wait with figures
+// instead of adding time. Skip (once the words are in) still ends the show at once.
+const MIN_MS = { telemetry: 1700, text: 0, compute: 1500 };
+const FIG_MS = 1400, FIG_MIN = 6, FIG_MAX = 10, CALL_MS = 1300, MORPH_MS = 450;
 // How alive the field is per stage. Text stages hold still (no drifting, place-trading or scouts)
 // so the particle letters stay crisp; the circuit and the die breathe.
 const AUTONOMY = { telemetry: 0.3, text: 0, compute: 0.3, app: 0 };
 // While the field spells something, its points burn brighter (same aurora hue, lifted toward
 // white) and far points fade toward a light fog instead of the dark one, so letters read as light.
-const SPELL = { preset: 'aurora', point: [176, 255, 228], accent: [176, 255, 228], glow: [150, 245, 210], fog: [120, 180, 170] };
+// Near white with the aurora's green-cyan tint, so the figures burn rather than glimmer.
+const SPELL = { preset: 'aurora', point: [222, 255, 242], accent: [222, 255, 242], glow: [160, 250, 218], fog: [200, 240, 226] };
 const PALETTE = { telemetry: 'aurora', text: SPELL, compute: 'aurora', app: SPELL };
 
 // The particle letters are rasterised from a real bold face (a synthesised bold of the 400 cut is
@@ -119,21 +126,102 @@ function registerShapes() {
   });
 }
 
-let textSeq = 0;
-// Particle text. The words stack one per line, so each glyph gets several times the particles
-// and the height to read (one 17-character line was ~17 px a letter of scattered dots on a 390 px
-// phone, ~28 px on a laptop). Most particles go to the outlines (edges) so the letters read crisp,
-// and the shape is flat (depth 0) so nothing fogs toward the background colour. On a wide stage
-// the stack is scaled down to stay between the caption and the cards.
-function textShape(text, narrow) {
-  const name = `cg:text:${++textSeq}`;
+// Particle text, fitted to the free stage. Two short lines a figure (label over value), so each
+// glyph gets the particles and the height to read. Most particles go to the outlines (edges) so
+// letters read crisp. The glyphs sit on a flat plane pulled toward the viewer (TEXT_Z): the field
+// sizes, fogs and fades points by depth, so a plane at the centre (z 0) drew 2 px dots at ~43 %
+// alpha; at TEXT_Z they draw ~3.2 px at ~80 % with a white core. The plane is fitted (in screen px)
+// into the box between the caption and the cards, measured when the figure is registered.
+// aurora-field has no unregister: names come from a fixed ring of slots, re-registered on reuse
+// (which clears the library's cache for that name) and stubbed when a show ends, so a run's
+// rasters never pile up. A field never sees a slot twice (it is rebuilt every show).
+const TEXT_Z = -0.7, FIELD_DEPTH = 3.0, SLOTS = 32;
+let slotSeq = 0;
+const STUB = (n) => { const points = []; for (let i = 0; i < n; i++) points.push([0, 0, 0]); return { points }; };
+function textShape(text, fit, used) {
+  const name = `cg:text:${slotSeq++ % SLOTS}`;
   try {
-    register(name, fromText(text.split(' ').join('\n'), { font: '700 160px "Geist Mono", ui-monospace, monospace', edges: 0.72, depth: 0, scale: narrow ? 0.86 : 0.66 }));
+    // fromText sets every line flush left; in a monospace face leading spaces centre them.
+    const lines = text.split('\n'), wide = Math.max(...lines.map((l) => l.length));
+    const centred = lines.map((l) => ' '.repeat(Math.floor((wide - l.length) / 2)) + l).join('\n');
+    const build = fromText(centred, { font: '700 160px "Geist Mono", ui-monospace, monospace', edges: 0.78, depth: 0, scale: 1 });
+    const box = fit?.();
+    register(name, (n, rnd) => {
+      const s = build(n, rnd), P = s.points;
+      if (!box) { for (const p of P) { p[0] *= 0.7; p[1] *= 0.7; p[2] = TEXT_Z; } return s; }
+      let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9;
+      for (const p of P) { if (p[0] < x0) x0 = p[0]; if (p[0] > x1) x1 = p[0]; if (p[1] < y0) y0 = p[1]; if (p[1] > y1) y1 = p[1]; }
+      const px = box.R * FIELD_DEPTH / (FIELD_DEPTH + TEXT_Z);   // screen px per shape unit on the plane
+      const k = Math.min(box.w / Math.max(1e-6, x1 - x0), box.h / Math.max(1e-6, y1 - y0)) / px;
+      const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, ox = box.dx / px, oy = box.dy / px;
+      for (const p of P) { p[0] = (p[0] - mx) * k + ox; p[1] = (p[1] - my) * k + oy; p[2] = TEXT_Z; }
+      return s;
+    });
+    used?.add(name);
     return name;
   } catch (err) {
     console.warn('theatre text shape', err);
     return 'cg:compute';
   }
+}
+const releaseShapes = (used) => { for (const n of used) safe(() => register(n, STUB)); used.clear(); };
+
+// The free box for particle text, in px relative to the stage's centre: below the caption, above
+// the cards, inset from the sides. `geo` is the field's last stage size and radius.
+function freeBox(root, geo) {
+  if (!geo.R) return null;
+  const r = root.getBoundingClientRect(), H = r.height, W = r.width;
+  const cap = root.querySelector('.th-caption')?.getBoundingClientRect();
+  let top = cap && cap.height ? cap.bottom - r.top + 14 : H * 0.2, bottom = H - 16;
+  for (const sel of ['.th-card', '.th-stats']) {
+    const b = root.querySelector(sel)?.getBoundingClientRect();
+    if (b && b.height && getComputedStyle(root.querySelector(sel)).display !== 'none') bottom = Math.min(bottom, b.top - r.top - 14);
+  }
+  // A layout with no room between them (a short sideways screen): use the middle of the stage.
+  if (bottom - top < Math.min(120, H * 0.3)) { top = H * 0.22; bottom = H * 0.78; }
+  // Big where there's room, but clear of the edges and never a wall of dots on a wide screen.
+  const w = Math.min(W - 40, W * 0.84, 680), h = Math.min(bottom - top, w * 0.56, 340);
+  const dy = (top + bottom) / 2 - H / 2;
+  // Where the figure sits on screen (tests measure its contrast there).
+  root.dataset.figBox = [r.left + W / 2 - w / 2, r.top + H / 2 + dy - h / 2, w, h].map(Math.round).join(',');
+  return { R: geo.R, w, h, dx: 0, dy };
+}
+
+// The run's facts as the particle figures spell them: label over value, in the player's units
+// (src/units.js, as the HUD shows them). `pri` picks which make the short show; they play in
+// flight order. Only facts this run really has.
+const up = (s) => s.toUpperCase();
+const lenOf = (m) => up(one('len', m, m * k('len') < 10 ? 1 : 0));
+function figuresOf(card, t) {
+  const f = card.facts || {}, out = [];
+  const add = (pri, label, value) => { if (value != null && value !== '') out.push({ pri, text: `${label}\n${value}` }); };
+  const fin = (v) => Number.isFinite(v);
+  const wall = f.course === 'wall' || f.course === 'show';
+  const airS = t && t.airStartTick >= 0 && t.touchTick > t.airStartTick ? (t.touchTick - t.airStartTick) / 240 : null;
+  if (fin(f.launchKmh) && f.launchKmh > 0) add(5, 'LIP', up(one('speed', f.launchKmh / 3.6)));
+  if (wall && fin(f.height) && f.height > 0) add(10, 'WALL', lenOf(f.height));
+  if (wall && fin(f.invertedS) && f.invertedS > 0) add(9, 'INVERTED', `${f.invertedS.toFixed(1)} S`);
+  if (f.jumped && fin(f.apex)) add(2, 'APEX', lenOf(f.apex));
+  if (!wall && f.jumped && fin(f.apexOverRoof)) add(9, 'OVER ROOF', lenOf(f.apexOverRoof));
+  if (airS != null) add(7, 'AIR', `${airS.toFixed(1)} S`);
+  if (fin(f.rollDeg) && f.rollDeg > 0) add(3, 'ROLL', `${f.rollDeg}°`);
+  if (fin(f.maxG) && f.maxG > 0) add(6, 'PEAK', `${f.maxG.toFixed(1)} G`);
+  if (fin(f.clearance) && (f.crossedRow ?? true) && !f.contact) add(4.5, 'CLEAR', lenOf(f.clearance));
+  if (f.jumped && fin(f.sink)) add(4, 'SINK', up(one('rate', f.sink, 1)));
+  if (f.jumped && !f.crashed && fin(f.wheelSpreadMs)) add(14, 'SYNC', `${f.wheelSpreadMs} MS`);
+  if (f.jumped && fin(f.padMiss)) add(13, 'MISS', lenOf(f.padMiss));
+  if (fin(f.airPct)) add(11, 'N2 LEFT', `${f.airPct}%`);
+  if (fin(f.integrity)) add(f.integrity < 100 ? 3.5 : 12, 'HULL', `${Math.round(f.integrity)}%`);
+  if (fin(card.total)) add(1, 'SCORE', card.total.toFixed(1));
+  return out;
+}
+// The call's own numbers, once it has answered.
+function callFigures(d) {
+  const out = [];
+  if (Number.isFinite(d.outTokens)) out.push(`OUT\n${d.outTokens} TOK`);
+  if (d.tokensPerSec) out.push(`SPEED\n${d.tokensPerSec} TOK/S`);
+  if (Number.isFinite(d.ttftMs)) out.push(`TTFT\n${d.ttftMs < 1000 ? `${Math.round(d.ttftMs)} MS` : `${(d.ttftMs / 1000).toFixed(1)} S`}`);
+  return out;
 }
 
 // Visuals must never block the judges' words: any failure in the field is logged and skipped.
@@ -197,12 +285,28 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
 
   let field = null;
   loadMonoBold();
-  const narrow = () => root.clientWidth < 560;
+  const geo = { R: 0 }, used = new Set();
+  const fit = () => freeBox(root, geo);
   if (!reduced) safe(() => { field = create(dom.canvas, {
     container: root.querySelector('.th-canvas').parentElement, shapes: ['cg:circuit', 'cg:compute'], initial: 'cg:circuit',
-    cycle: 0, palette: 'aurora', blank: true, interactive: false, stars: 60, autonomy: 0.3, depth: 3.0, intro: 0,
-    count: (w) => (w < 700 ? 2600 : 3600), radius: (w, h) => Math.min(w * 0.42, h * 0.36),
+    cycle: 0, palette: 'aurora', blank: true, interactive: false, stars: 60, autonomy: 0.3, depth: FIELD_DEPTH, intro: 0,
+    count: (w) => (w < 700 ? 3000 : 4200), radius: (w, h) => (geo.R = Math.min(w * 0.42, h * 0.36)),
   }); });
+  // Facing shapes (the text) follow a fixed pose: square to the viewer, no sway, so figures hold still.
+  safe(() => field?.setPose({ yaw: 0, pitch: 0.06, roll: 0 }));
+  // Spell one figure: registered (and compiled in idle time) ahead where it can be.
+  let ahead = null;
+  const shapeFor = (text) => (ahead?.text === text ? ahead.name : textShape(text, fit, used));
+  const prepare = (text) => { if (!field || !text) return; safe(() => { const name = textShape(text, fit, used); if (name === 'cg:compute') return; ahead = { text, name }; field.add([name]); field.prepare([name]); }); };
+  const spell = (text, ms = MORPH_MS) => {
+    root.dataset.fig = text.replace(/\n/g, ' ');
+    if (!field) return;
+    safe(() => {
+      const name = shapeFor(text); ahead = null;
+      if (name !== 'cg:compute') field.add([name]);
+      field.setShape(name, { pin: 1e9, arrive: { from: [-0.4, 0, 0], ms } });
+    });
+  };
   const timeline = [];               // recorded events, for "Replay the call"
   const t0 = performance.now();
   let stage = null, stageAt = t0, finished = false, skipResolve = null;
@@ -212,6 +316,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   const setStage = (s) => {
     stage = s; stageAt = performance.now();
     root.dataset.stage = s;
+    delete root.dataset.fig; delete root.dataset.spell;
     safe(() => field?.set({ autonomy: AUTONOMY[s], palette: PALETTE[s] }));
     for (const k of STAGES) dom.railItems[k].className = k === s ? 'on' : STAGES.indexOf(k) < STAGES.indexOf(s) ? 'done' : '';
   };
@@ -219,14 +324,17 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   const dwell = (s) => wait(Math.max(0, (MIN_MS[s] || 0) - (performance.now() - stageAt)));
   let tokenCount = 0, lastSignal = 0, outText = '', reasonText = '';
   // Tokens are queued as they arrive and played through the COMPUTE stage at their recorded
-  // pace (a fast edge model can answer before the show reaches COMPUTE). The counters always
-  // show the call's real timings.
+  // pace (a fast edge model can answer before the show reaches COMPUTE), but never faster than a
+  // reading pace (STREAM_MS) unless the backlog would take longer than STREAM_BUDGET to play.
+  // The counters always show the call's real timings.
+  const STREAM_MS = 34, STREAM_MAX = 80, STREAM_BUDGET = 5000;
   const queue = [];
   let drained = null;
   const drain = () => {
     drained ??= (async () => {
       await computing;
       let prevAt = null;
+      const from = performance.now();
       for (;;) {
         const item = queue.shift();
         if (!item) {
@@ -235,12 +343,19 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
           continue;
         }
         const [kind, text, at] = item;
-        if (prevAt != null) await wait(Math.min(45, Math.max(12, at - prevAt)));
+        if (prevAt != null) {
+          const left = STREAM_BUDGET - (performance.now() - from);
+          await wait(Math.max(10, Math.min(Math.min(STREAM_MAX, Math.max(STREAM_MS, at - prevAt)), left / (queue.length + 1))));
+        }
         prevAt = at;
         if (kind === 'reasoning') { reasonText = (reasonText + text).slice(-220); dom.reason.textContent = reasonText; }
         else {
           if (!tokenCount && meta.ttft != null) dom.stat('ttft', fmtMs(meta.ttft));
-          outText += text; dom.out.textContent = outText.slice(-360);
+          // The whole text stays in the box (it shows its last lines): trimming a few characters a
+          // token reflowed every line on every token. Trim rarely, at a line break.
+          outText += text;
+          if (outText.length > 1400) { const cut = outText.indexOf('\n', outText.length - 900); outText = outText.slice(cut > 0 ? cut + 1 : -900); }
+          dom.out.textContent = outText;
         }
         tokenCount++; dom.stat('out', String(tokenCount)); signal();
       }
@@ -297,13 +412,20 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
       showText = (async () => {
         await dwell('telemetry').catch(() => {});
         setStage('text');
-        const f = card.facts;
         caption('Your telemetry becomes text: the facts the model reads.');
-        if (field) safe(() => {
-          const name = textShape(f.course === 'wall' ? `${f.height}M ${f.invertedS}S ${f.sink}M/S` : f.course === 'show' ? `${f.height}M ${f.rollDeg}° ${f.sink}M/S` : `${f.rollDeg}° ${f.apex}M ${f.sink}M/S`, narrow());
-          if (name !== 'cg:compute') field.add([name]);
-          field.setShape(name, { pin: 1e9, arrive: { from: [-1, 0, 0], ms: 700 } });
-        });
+        // The most telling figures make the short show; they play in flight order. Past FIG_MIN the
+        // rest only fill time the call is still taking (no token yet, no answer).
+        const all = figuresOf(card, t), keep = new Set(all.slice().sort((a, b) => a.pri - b.pri).slice(0, FIG_MIN));
+        const figs = [...all.filter((x) => keep.has(x)), ...all.filter((x) => !keep.has(x))].slice(0, FIG_MAX);
+        const order = figs.slice(0, FIG_MIN).sort((a, b) => all.indexOf(a) - all.indexOf(b)).concat(figs.slice(FIG_MIN));
+        // No field (reduced motion, or it failed): nothing to spell, the old short beat.
+        if (!field) { await wait(reduced ? 0 : 2400); return; }
+        for (let i = 0; i < order.length && !finished; i++) {
+          if (i >= FIG_MIN && (queue.length || callOver || words || failure)) break;
+          spell(order[i].text, i ? MORPH_MS : 700);
+          prepare(order[i + 1]?.text);
+          await wait(i ? FIG_MS : FIG_MS + 250);
+        }
       })();
     },
     reasoning: (d) => {
@@ -326,7 +448,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
       dom.stat('in', String(d.inTokens)); dom.stat('out', String(d.outTokens));
       dom.stat('ttft', fmtMs(d.ttftMs)); dom.stat('rate', d.tokensPerSec ? `${d.tokensPerSec} tok/s` : '—');
       dom.stat('neurons', d.neurons != null ? String(d.neurons) : '—');
-      dom.stat('cost', d.costUsd != null ? fmtUsd(d.costUsd) : 'Billed by provider');
+      dom.stat('cost', d.costUsd != null ? fmtUsd(d.costUsd) : 'By provider');
       };
     },
     error: (d) => {
@@ -354,13 +476,20 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
       await wait(900);
     }
     await dwell('compute');
+    // The call's own numbers, spelled once known (the stream steps aside). Skipped when the
+    // deadline is close: the verdict must still have its moment.
+    const calls = meta.ok && field && performance.now() - t0 < deadlineMs - 9000 ? callFigures(meta) : [];
+    if (calls.length) {
+      root.dataset.spell = '';
+      caption('The call, by its own numbers.');
+      safe(() => field?.set({ autonomy: 0, palette: SPELL }));
+      prepare(calls[0]);
+      for (let i = 0; i < calls.length && !finished; i++) { spell(calls[i]); prepare(calls[i + 1]); await wait(CALL_MS); }
+      if (finished) return;
+    }
     setStage('app');
     caption('The words land in the app.');
-    if (field) safe(() => {
-      const name = textShape((card.verdict || 'JUDGED').toUpperCase(), narrow());
-      if (name !== 'cg:compute') field.add([name]);
-      field.setShape(name, { pin: 1e9, arrive: { from: [0, 0, 0], ms: 800 } });
-    });
+    spell((card.verdict || 'JUDGED').toUpperCase().split(' ').join('\n'), 800);
     await wait(reduced ? 0 : 1900);
     finish();
   })();
@@ -373,7 +502,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
     call.abort();   // the deadline or Skip ended the show: nothing more is read from the stream
     meta.words = words || fallbackWords(card);
     root.classList.add('out');
-    setTimeout(() => { safe(() => field?.destroy()); root.hidden = true; root.classList.remove('on', 'out'); }, 650);
+    setTimeout(() => { safe(() => field?.destroy()); releaseShapes(used); root.hidden = true; root.classList.remove('on', 'out'); }, 650);
     skipResolve({ words: meta.words, meta });
   }
   abort?.addEventListener('abort', () => {
@@ -382,6 +511,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
     clearInterval(pulse);
     clearTimeout(deadline);
     safe(() => field?.destroy());
+    releaseShapes(used);
     root.hidden = true;
     root.classList.remove('on', 'out');
     skipResolve({ aborted: true, words: null, meta });
@@ -423,12 +553,14 @@ export function runQuestTheatre(root, { ai, wish, arena, seed, reduced = false, 
   requestAnimationFrame(() => root.classList.add('on'));
   let field = null;
   loadMonoBold();
-  const narrow = () => root.clientWidth < 560;
+  const geo = { R: 0 }, used = new Set();
+  const fit = () => freeBox(root, geo);
   if (!reduced) safe(() => { field = create(dom.canvas, {
     container: root.querySelector('.th-canvas').parentElement, shapes: ['cg:circuit', 'cg:compute'], initial: 'cg:circuit',
-    cycle: 0, palette: 'aurora', blank: true, interactive: false, stars: 60, autonomy: 0.3, depth: 3.0, intro: 0,
-    count: (w) => (w < 700 ? 2400 : 3200), radius: (w, h) => Math.min(w * 0.42, h * 0.34),
+    cycle: 0, palette: 'aurora', blank: true, interactive: false, stars: 60, autonomy: 0.3, depth: FIELD_DEPTH, intro: 0,
+    count: (w) => (w < 700 ? 2400 : 3200), radius: (w, h) => (geo.R = Math.min(w * 0.42, h * 0.34)),
   }); });
+  safe(() => field?.setPose({ yaw: 0, pitch: 0.06, roll: 0 }));
   const t0 = performance.now();
   const meta = { provider: ai.provider, model: ai.model, kind: 'quest' };
   let stage = null, stageAt = t0, finished = false, resolve;
@@ -441,8 +573,8 @@ export function runQuestTheatre(root, { ai, wish, arena, seed, reduced = false, 
   };
   const dwell = (s) => wait(reduced ? 0 : Math.max(0, (Q_MIN[s] || 0) - (performance.now() - stageAt)));
   const caption = (t) => { dom.caption.textContent = t; };
-  const spell = (text) => { if (field) safe(() => { const n = textShape(text, narrow()); if (n !== 'cg:compute') field.add([n]); field.setShape(n, { pin: 1e9, arrive: { from: [-1, 0, 0], ms: 650 } }); }); };
-  let out = '', tokens = 0, lastSignal = 0, result = null, failure = null, computing = null;
+  const spell = (text) => { if (field) safe(() => { const n = textShape(text.split(' ').join('\n'), fit, used); if (n !== 'cg:compute') field.add([n]); field.setShape(n, { pin: 1e9, arrive: { from: [-1, 0, 0], ms: 650 } }); }); };
+  let out = '', shown = '', tokens = 0, lastSignal = 0, result = null, failure = null, computing = null;
   setStage('prompt');
   caption(wish ? `Your wish becomes a prompt: “${wish.slice(0, 80)}” + the catalogue, the bounds, the budget.` : 'A prompt: the catalogue, the bounds, the budget. The model designs; the schema decides.');
   safe(() => field?.setShape('cg:circuit', { pin: 1e9 }));
@@ -467,7 +599,7 @@ export function runQuestTheatre(root, { ai, wish, arena, seed, reduced = false, 
     token: (d) => {
       startCompute();
       if (meta.ttft == null) { meta.ttft = performance.now() - t0; dom.stat('ttft', fmtMs(meta.ttft)); }
-      out += d.t; tokens++; dom.out.textContent = out.slice(-360); dom.stat('out', String(tokens));
+      out += d.t; tokens++; shown += d.t; if (shown.length > 1400) shown = shown.slice(-900); dom.out.textContent = shown; dom.stat('out', String(tokens));
       const now = performance.now();
       if (field && now - lastSignal > 33) { safe(() => field.signal(undefined, 14, 2)); lastSignal = now; }
     },
@@ -477,7 +609,7 @@ export function runQuestTheatre(root, { ai, wish, arena, seed, reduced = false, 
       dom.stat('in', String(d.inTokens ?? '—')); dom.stat('out', String(d.outTokens ?? tokens));
       dom.stat('ttft', fmtMs(d.ttftMs)); dom.stat('rate', d.tokensPerSec ? `${d.tokensPerSec} tok/s` : '—');
       dom.stat('neurons', d.neurons != null ? String(d.neurons) : '—');
-      dom.stat('cost', d.costUsd != null ? fmtUsd(d.costUsd) : d.provider === 'edge' ? '—' : 'Billed by provider');
+      dom.stat('cost', d.costUsd != null ? fmtUsd(d.costUsd) : d.provider === 'edge' ? '—' : 'By provider');
     },
     error: (d) => { failure = d; meta.error = d.message; },
   };
@@ -510,10 +642,10 @@ export function runQuestTheatre(root, { ai, wish, arena, seed, reduced = false, 
     finished = true;
     clearInterval(pulse); clearTimeout(deadline);
     root.classList.add('out');
-    setTimeout(() => { safe(() => field?.destroy()); root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); }, reduced ? 0 : 600);
+    setTimeout(() => { safe(() => field?.destroy()); releaseShapes(used); root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); }, reduced ? 0 : 600);
     resolve({ quest: result?.quest || null, errors: result?.errors || null, raw: result?.raw || out, meta: { ...meta, error: failure?.message || null } });
   }
   dom.skip.addEventListener('click', () => { if (result || failure) finish(); else { caption('Finishing the call…'); } });
-  abort?.addEventListener('abort', () => { if (!finished) { finished = true; clearInterval(pulse); clearTimeout(deadline); safe(() => field?.destroy()); root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); resolve({ quest: null, aborted: true, meta }); } }, { once: true });
+  abort?.addEventListener('abort', () => { if (!finished) { finished = true; clearInterval(pulse); clearTimeout(deadline); safe(() => field?.destroy()); releaseShapes(used); root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); resolve({ quest: null, aborted: true, meta }); } }, { once: true });
   return done;
 }
