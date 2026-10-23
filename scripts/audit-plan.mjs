@@ -4,12 +4,13 @@
 //
 //   planShards(viewports, M) → M lists of items, each a viewport [w, h, safe] or 'title'
 //
-// Cost model: seconds on a CI runner (ubuntu-latest, SwiftShader), both HUD states, fitted on the first
-// CI run (0087): 90 s a viewport (two page loads, the theatre, the wreck) + 155 s per CSS megapixel
-// (software GL fills every pixel) + 50 s with Free Drive (a third page, the road) + 15 s on a touch
-// screen (the Lineup hop). It predicted every viewport within 0.8–1.3×. The title audit is one item
-// (23 viewports at ≈ 40 s: two page loads' worth each on software GL). Longest first, each to the
-// least-loaded shard (LPT): deterministic, and every shard within a few percent of the mean estimate.
+// Cost model: seconds on a CI runner (ubuntu-latest, SwiftShader), both HUD states, fitted on the
+// per-viewport seconds of this PR's own CI run (0087; each report's `seconds`): 20 s a viewport + 145 s
+// per CSS megapixel (software GL fills every pixel) + 110 s per megapixel more with Free Drive (a third
+// page, the road and its terrain: 1920×1080 is the dearest viewport, ≈ 600 s) + 85 s on a touch screen
+// (the Lineup hop, a 2–3× pixel ratio). Within 0.8–1.4× of every viewport; most of what is left is the
+// runner (the same viewport ran up to 1.5× slower on one runner than another). The title audit is one
+// item (≈ 460 s there). Longest first, each to the least-loaded shard (LPT): deterministic.
 export const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430], [320, 568], [814, 380], [393, 659]];
 export const TABLETS = [[768, 1024], [1024, 768], [820, 1180], [1180, 820], [1024, 1366], [1366, 1024]];
 export const FOLD = [[382, 580], [678, 340], [669, 825], [951, 543], [466, 498]];
@@ -26,11 +27,12 @@ export function viewportsFor(set) {
 export const vpBase = ([w, h, safe]) => `${w}x${h}${safe ? 's' : ''}`;
 export const touchFor = (w, h) => [...PHONES, ...TABLETS, ...FOLD].some(([a, b]) => a === w && b === h);
 
-export const TITLE_COST = 920;
+export const TITLE_COST = 460;
 export function cost(item) {
   if (item === 'title') return TITLE_COST;
   const [w, h, safe] = item;
-  return 90 + 155 * (w * h) / 1e6 + (DRIVE.includes(vpBase(item)) ? 50 : 0) + (safe || touchFor(w, h) ? 15 : 0);
+  const mpx = (w * h) / 1e6;
+  return 20 + 145 * mpx + (DRIVE.includes(vpBase(item)) ? 110 * mpx : 0) + (safe || touchFor(w, h) ? 85 : 0);
 }
 
 export function planShards(viewports, M, { title = true } = {}) {
