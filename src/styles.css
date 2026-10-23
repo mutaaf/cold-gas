@@ -530,6 +530,12 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .h-timeline em { font: 400 11px/1 var(--mono); font-style: normal; letter-spacing: 0; margin-right: 2px; }
 .h-timeline li[data-state='now'] span { color: var(--ink); font-weight: 600; }
 .h-timeline li[data-state='now'] em { font-family: var(--mono); }
+/* A run that ended in a crash (0072): the step you're on is the crash, in signal red, never TOUCHDOWN. */
+.h-timeline li[data-crash] span, .h-timeline li[data-crash] em { color: var(--warn); }
+.h-timeline li[data-crash] i { background: var(--warn); border-color: var(--warn); box-shadow: 0 0 0 3px rgba(255, 90, 98, 0.2); }
+/* Full, the label stands on the scene under its dot: red holds 4.5:1 only on dark glass (a lit deck
+   behind a wreck measured 4.2). Compact, it is in the head's glass already. */
+:root[data-hud='full'] .h-timeline li[data-crash] span { padding: 3px 5px; border-radius: 3px; background: rgba(5, 7, 12, 0.78); }
 
 /* Primary instrument: speed on the ground; in the air, the descent and its predictor */
 .h-primary { position: absolute; left: 50%; bottom: calc(104px + var(--safe-b)); transform: translateX(-50%); display: grid; justify-items: center; }
@@ -1077,6 +1083,15 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 :root[data-hud='compact'] .hud .h-strip > :is(.h-pitch, .r-fan), :root[data-hud='compact'] .hud:not([data-air]) .h-strip > .r-sink,
 :root[data-hud='compact'] .hud[data-air] .h-strip > [data-ch='spd'] { display: none; }
 :root[data-hud='compact'] .hud .h-strip > .h-cell > .h-lbl { flex: 0 0 100%; }
+/* The damage cell (0072): the full set has the vehicle panel; the line shows the state word and the %
+   only once the car is hurt, in G's place (the line never grows), in the panel's colours. */
+.hud .h-strip > .r-dmg { display: none; }
+:root[data-hud='compact'] .hud:not([data-damage]) .h-strip > .r-dmg, :root[data-hud='compact'] .hud[data-damage] .h-strip > [data-ch='g'] { display: none; }
+:root[data-hud='compact'] .hud[data-damage='warn'] .h-strip > .r-dmg > * { color: var(--caution); }
+:root[data-hud='compact'] .hud[data-damage='wreck'] .h-strip > .r-dmg > * { color: var(--warn); }
+/* Its own darker glass over the line's: amber and red need it over a lit deck (red read 3.5:1 on the
+   line's glass alone at 320×568, the car's lamps behind it). */
+:root[data-hud='compact'] .hud[data-damage] .h-strip > .r-dmg { background: rgba(5, 7, 12, 0.7); }
 :root[data-hud='compact'] .hud .h-strip .n2-st { display: none; }
 :root[data-hud='compact'] .hud .h-strip .tank[data-gas='blowdown'] .h-lbl { color: var(--caution); }   /* below the regulator: N₂ goes amber (the word is in the full set) */
 :root[data-hud='compact'] .hud .h-strip > .h-cell b { font-size: 16px; }
@@ -1165,6 +1180,8 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 }
 @container (max-width: 330px) {
   :root[data-hud='compact'] .hud .h-strip > [data-ch='g'] { display: none; }
+  /* G is already out here: on the ground the damage cell takes N₂'s place (a hurt car's gas is moot). */
+  :root[data-hud='compact'] .hud[data-damage]:not([data-air]) .h-strip > .tank { display: none; }
 }
 @media (pointer: coarse) and (orientation: landscape) and (min-height: 700px) {
   :root[data-hud='compact'] .hud .h-mission { bottom: calc(18px + var(--line-h, 47px) + var(--safe-b)); left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
