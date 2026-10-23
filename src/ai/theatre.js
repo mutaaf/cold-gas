@@ -187,8 +187,10 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   root.classList.remove('th-quest');
   const dom = buildDom(root);
   // Full screen on a phone: Retry and Home stay one tap away while the show plays (src/main.js
-  // handles [data-again] / [data-home] wherever they are).
-  root.append(el('div', 'th-quick', '<button type="button" class="quick-btn primary" data-again>Retry</button><button type="button" class="quick-btn" data-home>Home</button>'));
+  // handles [data-again] / [data-home] / [data-rookie-go] wherever they are). Rookie mode (0076) is
+  // there too, shown only while the results offer it: src/main.js's syncRookie sets .th-rookie on the root.
+  root.append(el('div', 'th-quick', '<button type="button" class="quick-btn primary" data-again>Retry</button><button type="button" class="quick-btn" data-home>Home</button>'
+    + '<button type="button" class="quick-btn th-rookie-btn" data-rookie-go>Rookie mode<span>easier car · auto-land</span></button>'));
   root.hidden = false;
   root.classList.remove('out');
   requestAnimationFrame(() => root.classList.add('on'));
