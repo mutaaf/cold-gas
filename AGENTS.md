@@ -293,6 +293,7 @@ scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11
                            the judges' theatre too (44 px targets); a gate (exit 1), --shard=N/M
 scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view; a gate (exit 1)
 scripts/serve-and-audit.mjs  `npm run audit`: vite preview on a private port + both audits, their exit code
+scripts/audit-plan.mjs     the audit's viewports and its shard plan, balanced by estimated CI seconds (0083)
 scripts/brand.mjs          the install assets from brand/icon.svg (the mark: icons, maskable, Apple, favicons;
                            --check the safe zone) and, with --shots <url>, og.png + the manifest's screenshots
 scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
@@ -336,8 +337,10 @@ npm run e2e        Playwright against a production build
 npm run check      backlog + lint + unit + e2e (what CI runs)
 npm run check:fast backlog + lint + unit + build (cloud sandboxes)
 npm run audit [-- --shard=N/M] [--port=4655]   the HUD + title audits as a gate on dist/ (build first): serves it, runs
-                   one HUD shard (+ the title audit with shard 1), exits 1 on any overlap, offscreen box, text < 11 px,
-                   label < 4.5:1, theatre target < 44 px or missed frame (0082); CI runs shards 1/3, 2/3, 3/3 in parallel
+                   one HUD shard (+ the title audit with the shard the plan gives it), exits 1 on any overlap, offscreen box,
+                   text < 11 px, label < 4.5:1, theatre target < 44 px or missed frame (0082); shards are balanced by
+                   estimated cost (scripts/audit-plan.mjs, 0083); CI runs --shard=1/6 … 6/6 in parallel. Its frames are
+                   deterministic: condition waits (CI=1 doubles them), the results stepped in the page, not the wall clock
 node scripts/fly.mjs '{"apex":7,"rolls":1}'   headless reference flight telemetry
 node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title wired, first 3D frame, long tasks, bytes
 node scripts/roads/build.mjs [road]             rebuild Free Drive roads from OSM + terrain (network; cached)

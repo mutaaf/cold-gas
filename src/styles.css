@@ -849,6 +849,10 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 }
 /* Short portrait: the cue line rides just under the strip, above the thumb's slots. */
 @media (pointer: coarse) and (orientation: portrait) and (max-height: 740px) {
+  /* N₂'s line in the leading units only (as at 320×568): with both unit systems it wrapped to two lines
+     or three by a pixel of the cell's width (393×659: three on the CI runner's fonts, two on a Mac), and
+     at three the strip ran 10 px into the cue line (0083). One line, whatever the reading. */
+  .tank .n2-bar :is(.h-alt, .n2-sep) { display: none; }
   .cue { --cue-top: 414px; }
   /* The cue sits 3 px under the strip here, so the first row must not wrap: SINK's 27.9 ft/s had 2 px
      to spare in an 87 px cell and broke its unit on CI's Chromium (the row grew 21 px, into the cue). */
@@ -1394,11 +1398,12 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .drills { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 /* A very narrow band (a folding phone closed and turned sideways: 678 px less the stick and the
-   right thumb leaves 239): every reading keeps to one line, so the band stays one cell tall and the
-   phase tab standing on it stays clear. The handle shows its chevron alone (it keeps its 44 px target
-   and its name), and the cells pack tighter. */
+   right thumb leaves 239): every reading keeps to one line (the cell's grid, sideways above), so the band stays
+   one cell tall and the phase tab standing on it stays clear. The handle shows its chevron alone (it
+   keeps its 44 px target and its name), and the cells pack tighter: 11 mph · 31.1 ft · 655 lb leave
+   the band 9 px to spare. */
 @container (max-width: 260px) {
-  :root[data-hud='compact'] .hud .h-strip > .h-cell { padding-left: 6px; padding-right: 6px; column-gap: 3px; }
+  :root[data-hud='compact'] .hud .h-strip > .h-cell { padding-left: 5px; padding-right: 5px; column-gap: 2px; }
   :root[data-hud='compact'] .hud .h-strip > .h-cell > :not(.h-lbl) { white-space: nowrap; }
   :root[data-hud='compact'] .hud .h-strip > .h-handle { min-width: 44px; padding: 0; }
   :root[data-hud='compact'] .hud .h-strip > .h-handle .hh-w { display: none; }

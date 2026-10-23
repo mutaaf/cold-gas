@@ -27,12 +27,14 @@
 // A gate (0082): the exit code is 1 when any count is non-zero (overlaps, offscreen, text < 11 px,
 // labels < 4.5:1, targets < 44 px, anything that changed between the two shots, frames missed), and
 // the offenders are listed at the end.
-// --shard=N/M flies every M-th viewport from the N-th (CI splits `all` across parallel jobs).
+// --shard=N/M flies the N-th of M shares of the viewports, balanced by estimated cost (scripts/audit-plan.mjs;
+// CI splits `all` across parallel jobs).
 // CI (software GL, about 2× slower): AUDIT_SLOW (default 2 when CI is set) scales every wait.
 //
 // Writes <outdir>/<label>-<viewport>-<phase>.png and <outdir>/<label>-report.json.
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync } from 'node:fs';
+import { FOLD, DRIVE, viewportsFor, planShards, touchFor } from './audit-plan.mjs';
 
 const flags = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v = 'true'] = a.slice(2).split('='); return [k, v]; }));
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', set = 'all', label = 'audit', states = 'both'] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
@@ -42,16 +44,10 @@ const [shardN, shardM] = (flags.shard || '1/1').split('/').map(Number);
 if (!(shardM >= 1 && shardN >= 1 && shardN <= shardM)) { console.error(`bad --shard=${flags.shard} (want N/M, 1 ≤ N ≤ M)`); process.exit(2); }
 const STATES = states === 'both' ? ['compact', 'full'] : [states];
 mkdirSync(out, { recursive: true });
-const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430], [320, 568], [814, 380], [393, 659]];
-const TABLETS = [[768, 1024], [1024, 768], [820, 1180], [1180, 820], [1024, 1366], [1366, 1024]];
-const FOLD = [[382, 580], [678, 340], [669, 825], [951, 543], [466, 498]];
-const DESKTOPS = [[1280, 720], [1920, 1080], [720, 1280], [1080, 1920]];
-const SAFE = [[390, 844, 1], [430, 932, 1], [844, 390, 1], [932, 430, 1], [814, 380, 1]];
-const parse = (v) => { const m = v.match(/^(\d+)x(\d+)(s?)$/); return [Number(m[1]), Number(m[2]), m[3] ? 1 : 0]; };
-const ALL_VIEWPORTS = set === 'phones' ? PHONES : set === 'tablets' ? TABLETS : set === 'fold' ? FOLD : set === 'safe' ? SAFE
-  : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map(parse) : [...PHONES, ...TABLETS, ...FOLD, ...DESKTOPS, ...SAFE];
-const VIEWPORTS = ALL_VIEWPORTS.filter((_, i) => i % shardM === shardN - 1);
-const touchFor = (w, h) => [...PHONES, ...TABLETS, ...FOLD].some(([a, b]) => a === w && b === h);
+const ALL_VIEWPORTS = viewportsFor(set);
+// A shard is a cost-balanced share of the viewports (scripts/audit-plan.mjs; the title audit is one
+// of its items, run by scripts/serve-and-audit.mjs with the shard that holds it).
+const VIEWPORTS = shardM > 1 ? planShards(ALL_VIEWPORTS, shardM, { title: set === 'all' })[shardN - 1].filter((v) => v !== 'title') : ALL_VIEWPORTS;
 const dprFor = (w, h) => (FOLD.some(([a, b]) => a === w && b === h) ? 3 : 2);
 // A notched phone's insets with viewport-fit=cover (the notch side is reported on both sides in
 // landscape, as iOS does).
@@ -67,8 +63,8 @@ const BOXES = [
   '.hud-left', '.hud .speed', '.descent', '.hud .phase', '.adi-wrap', '.readouts',
   // new HUD
   '[data-hud-box]',
-  // touch
-  '[data-stick]', '.buttons', '.tbtn', '[data-onethumb]', '[data-nozzle-pad] svg',
+  // touch (the stick's label stands outside the stick's box: a box of its own, 0083)
+  '[data-stick]', '[data-stick-hint]', '.buttons', '.tbtn', '[data-onethumb]', '[data-nozzle-pad] svg',
   // Free Drive
   '.fd-road', '.fd-ctl', '.fd-timer', '.fd-speed', '.fd-stats', '.fd-map', '.fd-fine', '.bq-dock',
   // the HUD's handle (compact ⇄ full), wherever it stands
@@ -226,9 +222,10 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
   const low = contrast.filter((c) => c.ratio !== null && c.ratio < 4.5).map((c) => `${c.t} ${c.ratio}`);
   const minPx = Math.min(...m.texts.map((t) => t.px));
   const minRatio = Math.min(...contrast.filter((c) => c.ratio !== null).map((c) => c.ratio));
-  const row = { vp: vpName, phase, file, overlaps: m.overlaps, offscreen: m.offscreen, minPx, small, minRatio, lowContrast: low, smallTargets: m.smallTargets, changed };
+  const minLabel = contrast.find((c) => c.ratio === minRatio)?.t ?? null;   // which label it is (the margin to watch)
+  const row = { vp: vpName, phase, file, overlaps: m.overlaps, offscreen: m.offscreen, minPx, small, minRatio, minLabel, lowContrast: low, smallTargets: m.smallTargets, changed };
   report.push(row);
-  console.log(`${vpName} ${phase}: overlaps ${m.overlaps.length}${m.overlaps.length ? ` (${m.overlaps.map((o) => `${o.a}×${o.b} ${o.px}`).join('; ')})` : ''} · offscreen ${m.offscreen.length}${m.offscreen.length ? ` (${m.offscreen.join(', ')})` : ''} · min text ${minPx}px (${small.length} < 11) · min contrast ${minRatio} (${low.length} < 4.5)${targets ? ` · targets < 44 px ${m.smallTargets.length}` : ''}${changed.length ? ` · changed during measure ${changed.length} (${changed.join('; ')})` : ''}`);
+  console.log(`${vpName} ${phase}: overlaps ${m.overlaps.length}${m.overlaps.length ? ` (${m.overlaps.map((o) => `${o.a}×${o.b} ${o.px}`).join('; ')})` : ''} · offscreen ${m.offscreen.length}${m.offscreen.length ? ` (${m.offscreen.join(', ')})` : ''} · min text ${minPx}px (${small.length} < 11) · min contrast ${minRatio}${minLabel ? ` "${minLabel}"` : ''} (${low.length} < 4.5)${targets ? ` · targets < 44 px ${m.smallTargets.length}` : ''}${changed.length ? ` · changed during measure ${changed.length} (${changed.join('; ')})` : ''}`);
 }
 
 // The judges' theatre, held up and made still (0082): a fixed, worst-case call (the longest lines it
@@ -258,7 +255,10 @@ async function measureTheatre(page, vpName) {
   }
 }
 
+// Seconds each viewport took (both states), for the shard plan's cost model (scripts/audit-plan.mjs).
+const seconds = {};
 for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
+  const t0 = Date.now();
   const touch = safe || touchFor(w, h);
   const vpBase = `${w}x${h}${safe ? 's' : ''}`, vpName = `${vpBase}-${hudState}`;
   const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: dprFor(w, h), isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
@@ -274,8 +274,10 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   const S = (fn, arg) => page.evaluate(fn, arg);
   const freeze = () => S(() => { window.__coldgas.S.paused = true; });
   const thaw = () => S(() => { window.__coldgas.S.paused = false; document.querySelector('[data-cue]')?.classList.remove('audit-hold'); });
-  // A frame that is never reached is a failure of the gate, not a skip.
-  const until = (fn, timeout = 60000) => page.waitForFunction(fn, null, { timeout: ms(timeout), polling: 'raf' }).then(() => true).catch(() => { missed.push(`${vpName} ${fn.toString().slice(0, 90)}`); console.log('  missed', fn.toString().slice(0, 90)); return false; });
+  // A frame that is never reached is a failure of the gate, not a skip. The waits are on a condition and
+  // generous (a frame is taken as soon as it holds): on software GL a 1080×1920 frame takes ≈ 0.5 s and
+  // the clock caps the sim at 0.1 s a frame, so the run-up and the climb run at a fifth of real time.
+  const until = (fn, timeout = 120000) => page.waitForFunction(fn, null, { timeout: ms(timeout), polling: 'raf' }).then(() => true).catch(() => { missed.push(`${vpName} ${fn.toString().slice(0, 90)}`); console.log('  missed', fn.toString().slice(0, 90)); return false; });
   await S(() => { window.__auditStop = false; window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
   // A page-side driver (synthetic key events, read by src/input.js like real ones): crawl in at
   // ≈5 m/s, up the curl, brake on the ledge (as scripts/human-show.mjs's players do).
@@ -310,7 +312,7 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   await freeze(); await measure(page, vpName, '1-runup'); await thaw();
   await until(() => window.__coldgas.S.run.phase === 'ramp' && window.__coldgas.S.run.car.pos.y > 10);
   await freeze(); await measure(page, vpName, '2-climb'); await thaw();
-  await until(() => { const r = window.__coldgas.S.run; return r.phase === 'ramp' && r.t.progress >= 0.95 && Math.hypot(r.car.vel.x, r.car.vel.y, r.car.vel.z) < 0.2; }, 60000);
+  await until(() => { const r = window.__coldgas.S.run; return r.phase === 'ramp' && r.t.progress >= 0.95 && Math.hypot(r.car.vel.x, r.car.vel.y, r.car.vel.z) < 0.2; });
   await S(() => { window.__auditStop = true; });
   await page.waitForTimeout(ms(300));
   await freeze(); await measure(page, vpName, '3-hang'); await thaw();
@@ -322,13 +324,15 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   await freeze(); await measure(page, vpName, '4-carry'); await thaw();
   await until(() => window.__coldgas.S.run.phase === 'air' && window.__coldgas.S.run.car.pos.y < 9);
   await freeze(); await measure(page, vpName, '5-brake'); await thaw();
-  await until(() => window.__coldgas.S.run.t.touchTick >= 0, 30000);
+  await until(() => window.__coldgas.S.run.t.touchTick >= 0);
   await page.waitForTimeout(ms(200));
   await freeze(); await measure(page, vpName, '6-touchdown'); await thaw();
   if (thumbMode) await S(() => window.__coldgas.thumb.up()); else { await page.keyboard.up('KeyF'); await page.keyboard.up('ShiftLeft'); }
-  // The roll-out to the results runs on the page's frames: software GL draws a 1920×1080 (or 1080×1920)
-  // page at about 2 fps, and the run reached its results just past 60 s there (2 × 30 s on CI).
-  if (await until(() => window.__coldgas.S.mode === 'results', 120000) && hudState === STATES[0]) await measureTheatre(page, vpBase);
+  // The aftermath and the results' beat, stepped in the page (the e2e hook): on the wall clock they ran
+  // at a fifth of real time at 1080×1920 on software GL (the clock caps the sim at 0.1 s a frame) and
+  // missed a 60 s wait (0083). The results are the same either way; only the theatre is measured there.
+  await S(() => window.__coldgas.fastForward());
+  if (await until(() => window.__coldgas.S.mode === 'results', 30000) && hudState === STATES[0]) await measureTheatre(page, vpBase);
   // A wreck (0072): the reference with every input zeroed from the release + 0.125 s ends flipped,
   // 66 % Wrecked. Stepped to its end in the page, then a beat of its aftermath on the page's own
   // frames: the damage on the compact line and the crash on the timeline, as a player sees them.
@@ -353,26 +357,33 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
     await page.waitForTimeout(ms(800));
     await S(() => { window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
     await page.keyboard.down('ArrowUp'); await page.waitForTimeout(ms(1200)); await page.keyboard.down('Space');
-    if (await until(() => window.__coldgas.S.run.phase === 'air' && window.__coldgas.S.run.car.pos.y > 1.5, 30000)) {
+    if (await until(() => window.__coldgas.S.run.phase === 'air' && window.__coldgas.S.run.car.pos.y > 1.5)) {
       await freeze(); await measure(page, vpName, '8-lineup-air'); await thaw();
     }
     await page.keyboard.up('Space'); await page.keyboard.up('ArrowUp');
   }
   // Free Drive on phones, iPads and the two desktop sizes.
-  if (['390x844', '844x390', '1280x720', '1920x1080', '768x1024', '820x1180', '1180x820', '844x390s'].includes(vpBase)) {
+  if (DRIVE.includes(vpBase)) {
     await S(() => window.__coldgas.toTitle());
     await page.goto(`${url}?gfx=low&drive=stelvio`);
     const ok = await until(() => window.__coldgas?.drive?.active, 90000);
     if (ok) {
-      await page.keyboard.down('ArrowUp'); await page.waitForTimeout(ms(2500)); await page.keyboard.up('ArrowUp');
+      // Off the start to a fixed speed, then coast (not 2.5 s of wall clock: on software GL the clock caps
+      // the sim at 0.1 s a frame, so a timed press left the car, the camera and what lies behind the
+      // labels somewhere else on every runner).
+      await page.keyboard.down('ArrowUp');
+      await until(() => window.__coldgas.drive.stats().speed > 6, 60000);
+      await page.keyboard.up('ArrowUp');
       await S(() => window.__coldgas.drive.pause?.(false));
       await measure(page, vpName, '7-drive');
     }
   }
   if (errors.length) console.log('  errors:', errors.slice(0, 3).join(' | '));
   await page.close();
+  seconds[vpBase] = Math.round((seconds[vpBase] || 0) + (Date.now() - t0) / 1000);
+  if (hudState === STATES[STATES.length - 1]) console.log(`  ${vpBase}: ${seconds[vpBase]} s`);
 }
-writeFileSync(`${out}/${label}-report.json`, JSON.stringify({ shard: `${shardN}/${shardM}`, viewports: VIEWPORTS.map(([w, h, s]) => `${w}x${h}${s ? 's' : ''}`), missed, frames: report }, null, 1));
+writeFileSync(`${out}/${label}-report.json`, JSON.stringify({ shard: `${shardN}/${shardM}`, viewports: VIEWPORTS.map(([w, h, s]) => `${w}x${h}${s ? 's' : ''}`), seconds, missed, frames: report }, null, 1));
 const tot = report.reduce((a, r) => ({ ov: a.ov + r.overlaps.length, sm: a.sm + r.small.length, lc: a.lc + r.lowContrast.length, off: a.off + r.offscreen.length, tg: a.tg + (r.smallTargets?.length || 0), ch: a.ch + (r.changed?.length || 0) }), { ov: 0, sm: 0, lc: 0, off: 0, tg: 0, ch: 0 });
 console.log(`TOTAL ${label}${shardM > 1 ? ` (shard ${shardN}/${shardM})` : ''}: ${report.length} frames · overlaps ${tot.ov} · offscreen ${tot.off} · text < 11 px ${tot.sm} · labels < 4.5:1 ${tot.lc} · targets < 44 px ${tot.tg} · changed during measure ${tot.ch} · missed ${missed.length}`);
 // The gate: every offender, then a non-zero exit code.

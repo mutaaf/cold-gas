@@ -26,6 +26,7 @@ const browser = await chromium.launch({ args: GL });
 let bad = 0;
 const offenders = [];
 for (const [w, h, touch, safe] of VPS) {
+  const t0 = Date.now();
   const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
   if (safe) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = css; document.head.append(s); }), insetCss(w, h));
   await page.goto(`${url}?gfx=low`);
@@ -65,7 +66,7 @@ for (const [w, h, touch, safe] of VPS) {
   await page.screenshot({ path: `${out}/${label}-${name}.png` });
   bad += r.length;
   if (r.length) offenders.push(`${name}: ${r.join('; ')}`);
-  console.log(`${name}: ${r.length ? r.join('; ') : 'ok'}`);
+  console.log(`${name}: ${r.length ? r.join('; ') : 'ok'} (${Math.round((Date.now() - t0) / 1000)} s)`);
   await page.close();
 }
 console.log(`TOTAL ${label}: ${bad} issues`);
