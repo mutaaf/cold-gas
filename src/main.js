@@ -1161,9 +1161,32 @@ addEventListener('keydown', (e) => {
   if (e.target?.closest?.('input, select, textarea, [contenteditable], dialog, [data-ai-modal]')) return;
   toggleGhost();
 });
+// Pressed = sound on, so the Menu row's name ("Sound") and its On / Off word agree.
 const muteBtn = document.querySelector('[data-mute]');
-muteBtn.setAttribute('aria-pressed', String(isMuted()));
-muteBtn.addEventListener('click', () => { initAudio(); setMuted(!isMuted()); muteBtn.setAttribute('aria-pressed', String(isMuted())); });
+const syncMuteBtn = () => muteBtn.setAttribute('aria-pressed', String(!isMuted()));
+syncMuteBtn();
+muteBtn.addEventListener('click', () => { initAudio(); setMuted(!isMuted()); syncMuteBtn(); });
+
+// --- Menu (0073): on a touch screen Ghost, Sound and For nerds sit behind one labelled disclosure.
+// Escape or a tap outside closes it and gives focus back to the toggle; on a fine pointer the toggle
+// is display: none and none of this ever fires.
+const more = document.querySelector('[data-more]'), moreBtn = more.querySelector('[data-more-toggle]');
+const moreOpen = () => more.hasAttribute('data-open');
+function setMore(open, { refocus = false } = {}) {
+  more.toggleAttribute('data-open', open);
+  moreBtn.setAttribute('aria-expanded', String(open));
+  if (!open && refocus) moreBtn.focus();
+}
+moreBtn.addEventListener('click', () => setMore(!moreOpen()));
+nerdsBtn.addEventListener('click', () => { if (moreOpen()) setMore(false, { refocus: true }); });   // the panel takes the screen
+// Capture, so Escape closes the menu before the game reads it (Escape on results goes Home).
+addEventListener('keydown', (e) => {
+  if (e.code !== 'Escape' || !moreOpen()) return;
+  e.preventDefault(); e.stopImmediatePropagation();
+  setMore(false, { refocus: true });
+}, true);
+document.addEventListener('pointerdown', (e) => { if (moreOpen() && !more.contains(e.target)) setMore(false); }, true);
+more.addEventListener('focusout', (e) => { if (moreOpen() && e.relatedTarget && !more.contains(e.relatedTarget)) setMore(false); });
 
 document.querySelector('[data-r-submit]').addEventListener('submit', async (e) => {
   e.preventDefault();

@@ -51,9 +51,42 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .tier-chip[data-tier='advanced'] i { color: #ff8a8f; }
 .icon-btn { width: 32px; height: 32px; border-radius: 50%; border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px); display: grid; place-items: center; padding: 0; }
 .icon-btn svg { width: 16px; height: 16px; fill: none; stroke: var(--ink-2); stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
-.icon-btn[aria-pressed='true'] [data-wave] { opacity: 0; }
+.icon-btn[data-mute][aria-pressed='false'] [data-wave] { opacity: 0; }   /* pressed = sound on */
 .icon-btn[data-ghost][aria-pressed='false'] svg { opacity: 0.4; }
 .icon-btn[data-ghost][aria-pressed='false'] [data-echo] { opacity: 0; }
+/* Menu (0073). A fine pointer keeps the icon row (hover gives the title): the toggle is hidden and the
+   sheet dissolves into the bar. A touch screen can't hover, so the icons fold into one labelled button
+   whose sheet names each control and says On or Off in words. */
+.more, .more-sheet { display: contents; }
+.more-toggle, .m-txt, .m-state { display: none; }
+@media (pointer: coarse) {
+  .more { display: block; position: relative; }
+  .more-toggle { display: inline-flex; align-items: center; gap: 6px; position: relative; height: 32px; padding: 0 12px; border-radius: 18px;
+    border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px); color: var(--ink); font: 500 12px/1 var(--text); letter-spacing: 0.02em; }
+  /* The chips' 32 px on the title and Home and Retry's 36 px in a run, so the bar's edge doesn't move
+     (Free Drive's map sits 52 px down); the hit area is 44 px either way. */
+  body:is([data-mode='live'], [data-mode='countdown'], [data-mode='results'], [data-mode='replay']) .more-toggle { height: 36px; }
+  .more-toggle::after { content: ''; position: absolute; left: -1px; right: -1px; top: 50%; height: 44px; transform: translateY(-50%); }
+  .more-toggle svg { width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; }
+  .more-toggle[aria-expanded='true'] { background: var(--ink); color: #07090d; border-color: var(--ink); }
+  .more-sheet { display: none; position: absolute; top: calc(100% + 8px); right: 0; width: max-content; min-width: 236px; max-width: calc(100vw - 32px);
+    padding: 6px; border-radius: 14px; border: 1px solid var(--hair); background: rgba(6, 9, 15, 0.94); backdrop-filter: blur(18px);
+    box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5); transform-origin: top right; animation: more-in 0.18s var(--ease) both; }
+  .more[data-open] .more-sheet { display: grid; gap: 2px; }
+  .more-sheet .icon-btn { width: auto; height: auto; min-height: 48px; display: grid; grid-template-columns: 20px 1fr auto; place-items: center start; gap: 12px;
+    padding: 8px 10px 8px 12px; border: 0; border-radius: 9px; background: none; backdrop-filter: none; text-align: left; color: var(--ink); }
+  .more-sheet .icon-btn:active { background: rgba(245, 246, 248, 0.08); }
+  .more-sheet .icon-btn svg { width: 20px; height: 20px; }
+  .more-sheet .icon-btn[data-ghost][aria-pressed='false'] svg { opacity: 1; }   /* the word says Off; the icon stays legible */
+  .m-txt { display: block; font: 400 12px/1.3 var(--text); color: var(--ink-2); }
+  .m-txt b { display: block; font: 500 14px/1.25 var(--text); color: var(--ink); }
+  .m-state { display: block; justify-self: end; min-width: 36px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--hair); text-align: center;
+    font: 500 11px/1 var(--text); letter-spacing: 0.12em; text-transform: uppercase; color: var(--ink-2); }
+  .m-state::before { content: 'Off'; }
+  [aria-pressed='true'] > .m-state { background: var(--ink); border-color: var(--ink); color: #07090d; }
+  [aria-pressed='true'] > .m-state::before { content: 'On'; }
+}
+@keyframes more-in { from { opacity: 0; transform: translateY(-4px) scale(0.98); } }
 
 /* --- Title --- */
 .title { position: fixed; left: calc(clamp(24px, 6vw, 96px) + var(--safe-l)); bottom: calc(clamp(32px, 9vh, 110px) + var(--safe-b)); max-width: 640px; z-index: 4; }
@@ -86,7 +119,8 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .btn.link { background: none; padding: 0 8px; color: var(--ink-2); }
 .btn.link:hover { color: var(--ink); }
 .btn.small { height: 38px; padding: 0 18px; font-size: 13px; background: var(--ink); color: #07090d; }
-.btn:focus-visible, .chip:focus-visible, .icon-btn:focus-visible, input:focus-visible { outline: 2px solid var(--ice); outline-offset: 3px; }
+.btn:focus-visible, .chip:focus-visible, .icon-btn:focus-visible, .more-toggle:focus-visible, input:focus-visible { outline: 2px solid var(--ice); outline-offset: 3px; }
+.more-sheet .icon-btn:focus-visible { outline-offset: -2px; }
 
 
 .cue { position: fixed; left: 50%; top: 30%; transform: translateX(-50%); font: 500 12px/1.4 var(--text); letter-spacing: 0.32em; text-transform: uppercase;
