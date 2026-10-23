@@ -856,6 +856,10 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   font: 500 12px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink); pointer-events: auto; touch-action: none; padding: 0;
   transition: background 0.1s, transform 0.1s, color 0.1s; -webkit-tap-highlight-color: transparent; }
 .tbtn.on { background: rgba(245, 246, 248, 0.9); color: #06080c; transform: scale(0.96); }
+/* Free modes (0080): held high above the ground the jets fade (ground effect); LIFT says so with a dashed rim and a
+   thinner fill, its label still full ink. */
+.tbtn.lift[data-faded] { border-style: dashed; }
+.tbtn.lift.on[data-faded] { background: rgba(245, 246, 248, 0.68); }
 /* Slots, by phase */
 .touch:is([data-phase='ground'], [data-phase='ramp']) .go,
 .touch[data-phase='air'][data-tier='assist'] .land,

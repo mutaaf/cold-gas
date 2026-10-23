@@ -186,6 +186,6 @@ export function schemaBrief(arena = 'sandbox') {
     'objectives (1–4): {"type":"rings","count":n} (needs n ring pieces; a ring is centred 3.4 m up so you can drive through it; y raises it) · {"type":"land","target":<piece index of a pad|barge|block>} · {"type":"jump","min":metres} · {"type":"airtime","min":seconds} · {"type":"flip","count":rolls} · {"type":"speed","min":km/h} · {"type":"deliver","from":<crate index>,"to":<pad|barge|block index>,"within":seconds} · {"type":"find","target":<index of a hidden piece>} · {"type":"collect","count":n}',
     `reward: "piece:${PIECE_IDS.filter((id) => PIECES[id].locked).join('|')}" or "paint:${Object.keys(PAINTS).filter((id) => !PAINTS[id].base).join('|')}" or "title:<2–24 chars>"`,
     `Budget: at most ${BUDGET.questPieces} pieces costing ≤ ${BUDGET.questCost} (loop 4, half-pipe 3, quarter-pipe and barge 2, others 1), ≤ ${BUDGET.questPickups} pickups.`,
-    'Physics: the car does ~25 m/s; a kicker at that speed flies ≈ 40 m and 6 m high; a wedge ≈ 30 m. Put landing pads or barges where the car comes down. No brand names.',
+    'Physics: the car does ~25 m/s; a kicker at that speed flies ≈ 40 m and 6 m high; a wedge ≈ 30 m. Put landing pads or barges where the car comes down. The jets only lift the car near the ground (none from 12 m up), so anything higher than ~10 m must be reached off a ramp. No brand names.',
   ].join('\n');
 }

@@ -39,6 +39,7 @@ export function createSandbox(ctx) {
     get scene() { return stage.scene; }, camera, get canvas() { return stage.renderer.domElement; }, carRoot,
     getCar: () => st.car,
     placeCar: (p) => place(p.x, p.z, p.yaw),
+    rescue: () => { place(START.x, START.z, START.yaw); ui.cue_('Too high for the jets · back to the start', 1800); },
     // Quests start from the south end of the apron, facing north (+z): x right, z ahead.
     questFrame() {
       const map = (x, z, yawDeg = 0, y = 0) => ({ x: ANCHOR.x - x, y: Math.max(0, y), z: ANCHOR.z + z, yaw: -yawDeg * D2R });

@@ -13,11 +13,13 @@
 //   questFrame(car) → (x, z, yawDeg, y) → { x, y, z, yaw }: the quest frame anchored at the car
 //                 (on a road it follows the road), and .start: the pose the quest starts the car at
 //   placeCar(pose) put a fresh car at { x, y, z, yaw }
+//   rescue()      the mode's own reset, with a cue (the ground-effect ceiling's last resort, 0080)
 //   scene, camera, canvas, carRoot, getCar()
 import { PIECES, POWERUPS, BUDGET, pieceCost } from './catalogue.js';
 import { createObjectStore, composeCourse, toLocal } from './objects.js';
 import { shapeBounds } from './colliders.js';
 import { createPowerups } from './powerups.js';
+import { createCeiling } from './ceiling.js';
 import { createQuestRun, loadProgress, saveProgress, applyReward, isUnlocked } from './quests.js';
 import { encodeBuild, decodeBuild } from './encode.js';
 import { createBuildRender } from './render.js';
@@ -36,6 +38,8 @@ export function createBuildLayer(host, { ui: gameUi, audio, tier = 'high', coars
   const course = composeCourse(host.base, store);
   const render = createBuildRender(host.scene, { tier });
   const power = createPowerups();
+  // The jets hop and hover near the ground; they don't fly the car into the sky (src/build/ceiling.js).
+  const ceiling = createCeiling(() => course.sdf);
   const progress = loadProgress();
   const st = {
     arcade: false, editing: false, quest: null, questObjs: [], cleared: new Set(), taken: new Set(), respawn: new Map(),
@@ -191,9 +195,11 @@ export function createBuildLayer(host, { ui: gameUi, audio, tier = 'high', coars
     render.before(car.world);   // the loose pieces' poses before this tick (drawn between ticks)
     if (arcadeOn()) power.preStep(car, inp);
     else { st.airBefore = car.air; }
+    ceiling.preStep(car, inp);   // last: a power-up's BOOST fades with height too
   }
   function postStep(car) {
     if (arcadeOn()) power.postStep(car, DT);
+    ceiling.postStep(car, DT);
     const p = car.pos;
     if (!st.hasPrev) { st.prev.x = p.x; st.prev.y = p.y; st.prev.z = p.z; st.hasPrev = true; }
     if (st.boostCool > 0) st.boostCool -= DT;
@@ -294,7 +300,17 @@ export function createBuildLayer(host, { ui: gameUi, audio, tier = 'high', coars
 
   // --- Per rendered frame --------------------------------------------------------------------------
   const activeList = [];
+  let liftBtn = null;
+  // The ceiling, said once and shown while it bites: the LIFT button dims (DOM on change only).
+  function ceilingFrame() {
+    if (ceiling.takeRescue()) { host.rescue?.(); return; }
+    const bite = ceiling.biting;
+    if (bite && !st.ceilingSaid) { st.ceilingSaid = true; cue('Ground effect · the jets only lift you near the ground', 2600); }
+    if (liftBtn === null) liftBtn = gameUi?.touch?.querySelector?.('[data-btn-lift]') || false;
+    if (liftBtn && bite !== st.liftDim) { st.liftDim = bite; liftBtn.toggleAttribute('data-faded', bite); }
+  }
   function frame(dt, time, alpha = 1) {
+    ceilingFrame();
     for (const [id, t] of st.respawn) { const n = t - dt; if (n <= 0) { st.respawn.delete(id); st.taken.delete(id); st.rev++; } else st.respawn.set(id, n); }
     render.sync(store, { cleared: st.cleared, taken: st.taken, rev: st.rev });
     render.poses(host.getCar()?.world, alpha);   // the loose pieces where their bodies are
@@ -307,7 +323,7 @@ export function createBuildLayer(host, { ui: gameUi, audio, tier = 'high', coars
 
   // --- UI ------------------------------------------------------------------------------------------
   const api = {
-    host, store, course, render, power, progress, get arcade() { return arcadeOn(); },
+    host, store, course, render, power, ceiling, progress, get arcade() { return arcadeOn(); },
     canPlace, add, remove, specOf, buildCost, setArcade, saves, saveAs, deleteSave, loadCode, shareUrl, buildItems,
     startQuest, endQuest, get quest() { return st.quest; },
     retryQuest: () => { const q = st.quest?.quest; if (q) startQuest(q); },
@@ -340,8 +356,9 @@ export function createBuildLayer(host, { ui: gameUi, audio, tier = 'high', coars
     place(type, x, z, { yaw = 0, scale = 1, material, y } = {}) {
       return add({ type, material, transform: { x, y: y ?? host.groundAt(x, z), z, yaw, scale } });
     },
-    reset() { power.reset(); st.flight.on = false; st.hasPrev = false; },
+    reset() { power.reset(); ceiling.reset(); st.flight.on = false; st.hasPrev = false; },
     dispose() {
+      if (liftBtn) liftBtn.removeAttribute('data-faded');
       clearTimeout(saveTimer);
       endQuest(false);
       editor.dispose(); bui.dispose(); render.dispose();

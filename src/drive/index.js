@@ -128,7 +128,7 @@ export function createDrive(ctx) {
   async function enter(road, info, world, course, s, signal = null) {
     st.road = road; st.info = info; st.world = world; st.course = course;
     // The build / power-up / quest layer (src/build/): its pieces join the road's ground.
-    st.layer = createBuildLayer(roadHost({ road, info, course: st.course, stage, carRoot, getCar: () => st.car, placeCar: placePose }), {
+    st.layer = createBuildLayer(roadHost({ road, info, course: st.course, stage, carRoot, getCar: () => st.car, placeCar: placePose, rescue: () => { respawn(); ui.cue_('Too high for the jets · back on the road', 1800); } }), {
       ui, audio, tier, coarse: ctx.coarse, usingTouch: input.usingTouch,
       onEditing: (on) => { ui.touch.hidden = on || !(ctx.coarse || input.usingTouch()); hudRoot.hidden = on; if (!on) st.cam?.snap(); },
     });
@@ -430,7 +430,9 @@ export function createDrive(ctx) {
     const i = nearestSample(road, c.pos.x, c.pos.z, st.hint, 40);
     if (road.meta.coast && c.pos.y < 0.2) { ui.cue_('Into the sea', 1400); respawn(); return; }
     if (c.pos.y < road.y[i] - 150 || c.pos.y < -50) { respawn(); return; }
-    st.stuckT = speed < 0.6 && c.grounded === 0 ? st.stuckT + dt : 0;
+    // Stuck: still, off its wheels, and not holding itself up on the jets (a hover is not stuck, 0080).
+    const jets = c.throttles[0] + c.throttles[1] + c.throttles[2] + c.throttles[3];
+    st.stuckT = speed < 0.6 && c.grounded === 0 && jets < 0.4 ? st.stuckT + dt : 0;
     if (st.stuckT > 3) { respawn(); return; }
     const off = Math.hypot(c.pos.x - road.x[i], c.pos.z - road.z[i]);
     if (off > 120 && performance.now() - st.lastCue > 6000) { st.lastCue = performance.now(); ui.cue_(`${input.usingTouch() ? 'RESET' : '<kbd>R</kbd>'} puts you back on the road`, 2400); }
