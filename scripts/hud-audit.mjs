@@ -5,10 +5,12 @@
 //   - WCAG contrast of every visible HUD label, measured on the real screenshot: the text's
 //     luminance against the worst (closest) 10 % of the pixels behind it, with the text hidden.
 //
-//   node scripts/hud-audit.mjs <url> <outdir> [set=all|phones|tablets|safe|quick|WxH[s],…] [label] [states=both|compact|full]
+//   node scripts/hud-audit.mjs <url> <outdir> [set=all|phones|tablets|fold|safe|quick|WxH[s],…] [label] [states=both|compact|full]
 //
 // Viewports: phones (incl. a 320 px Slide Over column and Safari's portrait with its bars), iPads in
-// both orientations, desktops. A trailing `s` (e.g. 844x390s) is the safe-area pass: the page's
+// both orientations, a folding phone (0075: what its browser gives a page closed upright 382×580 and
+// sideways 678×340, open 669×825 and 951×543, and the 466×498 it passes through mid-swing; touch at
+// 3× like the device), desktops. A trailing `s` (e.g. 844x390s) is the safe-area pass: the page's
 // --safe-* insets are forced to a notched phone's (47 px on the notch side in landscape, 34 px home
 // indicator in portrait, 21 px in landscape), as iOS reports them with viewport-fit=cover.
 // Touch viewports also fly a Lineup hop (attitude dial vs the LIFT slot).
@@ -24,12 +26,14 @@ const STATES = states === 'both' ? ['compact', 'full'] : [states];
 mkdirSync(out, { recursive: true });
 const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430], [320, 568], [814, 380], [393, 659]];
 const TABLETS = [[768, 1024], [1024, 768], [820, 1180], [1180, 820], [1024, 1366], [1366, 1024]];
+const FOLD = [[382, 580], [678, 340], [669, 825], [951, 543], [466, 498]];
 const DESKTOPS = [[1280, 720], [1920, 1080], [720, 1280], [1080, 1920]];
 const SAFE = [[390, 844, 1], [430, 932, 1], [844, 390, 1], [932, 430, 1], [814, 380, 1]];
 const parse = (v) => { const m = v.match(/^(\d+)x(\d+)(s?)$/); return [Number(m[1]), Number(m[2]), m[3] ? 1 : 0]; };
-const VIEWPORTS = set === 'phones' ? PHONES : set === 'tablets' ? TABLETS : set === 'safe' ? SAFE
-  : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map(parse) : [...PHONES, ...TABLETS, ...DESKTOPS, ...SAFE];
-const touchFor = (w, h) => [...PHONES, ...TABLETS].some(([a, b]) => a === w && b === h);
+const VIEWPORTS = set === 'phones' ? PHONES : set === 'tablets' ? TABLETS : set === 'fold' ? FOLD : set === 'safe' ? SAFE
+  : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map(parse) : [...PHONES, ...TABLETS, ...FOLD, ...DESKTOPS, ...SAFE];
+const touchFor = (w, h) => [...PHONES, ...TABLETS, ...FOLD].some(([a, b]) => a === w && b === h);
+const dprFor = (w, h) => (FOLD.some(([a, b]) => a === w && b === h) ? 3 : 2);
 // A notched phone's insets with viewport-fit=cover (the notch side is reported on both sides in
 // landscape, as iOS does).
 const insetCss = (w, h) => (w > h
@@ -154,7 +158,7 @@ async function measure(page, vpName, phase) {
 for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   const touch = safe || touchFor(w, h);
   const vpBase = `${w}x${h}${safe ? 's' : ''}`, vpName = `${vpBase}-${hudState}`;
-  const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
+  const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: dprFor(w, h), isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.addInitScript((m) => { try { localStorage.setItem('coldgas_hud', m); } catch { /* storage blocked */ } }, hudState);

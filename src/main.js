@@ -1237,7 +1237,10 @@ on('[data-board-open]', () => openBoard());
 on('[data-board-close]', () => ui.show('board', false));
 document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('click', () => openBoard(b.dataset.board)));
 
-addEventListener('resize', () => { stage.resize(); director.reframe(); });
+// The window changed shape (a rotation, a folding phone opened or closed mid-anything, 0075): the
+// camera re-fits now and the drawing buffer once the size settles (stage.reshape); nothing reloads,
+// and the run, the replay or the title carries on.
+addEventListener('resize', () => { stage.reshape(); director.reframe(); });
 // Mist and crash smoke size in drawing-buffer pixels, kept current through resizes and the
 // resolution governor's steps (src/render/scene.js onResize).
 stage.onResize((h) => { plumes.setScale(h); crash.setScale(h); });

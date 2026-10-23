@@ -4,10 +4,10 @@ title: Short imperative title
 status: ready        # proposed | ready | in-progress | shipped | dropped
 priority: P1         # P0 (broken/urgent) | P1 (next) | P2 (later)
 size: M              # S (<1h) | M (one sitting) | L (split it if it touches >3 systems)
-lens: player-feel    # player-feel | content | authenticity | performance | accessibility | tech-health
+lens: player-feel    # player-feel | content | authenticity | performance | accessibility | tech-health | platform
 created: YYYY-MM-DD
 pr:                  # filled in by the Builder when shipped
-by: scout            # scout | critic | operator (critic tickets are re-checked live and can bounce)
+by: scout            # scout | critic | operator | builder (critic tickets are re-checked live and can bounce)
 ---
 
 ## Why

@@ -361,7 +361,7 @@ async function buildSliced(look) {
 }
 
 // createStage(canvas, { tier: 'low' | 'mid' | 'high', course: 'show' | 'wall' | 'lineup' })
-//   → { renderer, scene, camera, hero, key, course, ready, resize, render(time), setCourse(id), titlePose() }
+//   → { renderer, scene, camera, hero, key, course, ready, resize, reshape, render(time), setCourse(id), titlePose() }
 //
 // First load: createStage returns as soon as the renderer, camera and car exist, so the title is
 // wired and usable at once. The course is then built in slices between frames, the environment
@@ -453,7 +453,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
   const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
   const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
-  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, rocket: null, film: null, aa: null, resize, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, rocket: null, film: null, aa: null, resize, reshape, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
@@ -519,8 +519,31 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   // Where the car sits on the title screen for this course: { x, z, yaw }.
   function titlePose() { return current.titlePose; }
 
+  // The canvas fills the window in CSS (100vw × 100dvh); resize() fits the drawing buffer, the
+  // composer's targets and the camera to it. reshape() is the window's resize event (0075: a folding
+  // phone opened or closed mid-run, a rotation, a split view): the camera takes the new shape at once,
+  // so the very next frame is drawn in the right proportions (into the old buffer, which the browser
+  // scales: softer for a moment, never stretched), and the buffer and the targets are reallocated
+  // once the size has held for SETTLE_MS. A fold swings through a size no pose has (466×498 on the one
+  // we measured, between 382×580 and 669×825): that costs a projection matrix, not a reallocation.
+  const SETTLE_MS = 150;
+  let fitW = 0, fitH = 0, settle = 0;
+  const cssSize = () => [canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight];
+  function reshape() {
+    const [w, h] = cssSize();
+    clearTimeout(settle);
+    if (w === fitW && h === fitH) {   // back to the size the buffer already has
+      if (camera.aspect !== w / h) { camera.aspect = w / h; camera.updateProjectionMatrix(); }
+      return;
+    }
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+    settle = setTimeout(resize, SETTLE_MS);
+  }
   function resize() {
-    const w = canvas.clientWidth || window.innerWidth, h = canvas.clientHeight || window.innerHeight;
+    clearTimeout(settle);
+    const [w, h] = cssSize();
+    fitW = w; fitH = h;
     renderer.setSize(w, h, false);
     composer?.setSize(w, h);
     sliverView.value.set(w, h).multiplyScalar(renderer.getPixelRatio() / 2);

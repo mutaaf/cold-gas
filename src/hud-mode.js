@@ -20,11 +20,24 @@ function stored() {
   try { const v = localStorage.getItem(KEY); return HUD_MODES.includes(v) ? v : null; } catch { return null; }
 }
 
+function deviceDefault() {
+  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+  return defaultHudMode({ coarse, w: globalThis.innerWidth || 0, h: globalThis.innerHeight || 0 });
+}
+
 export function hudMode() {
   if (mode) return mode;
-  const coarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
-  mode = stored() || defaultHudMode({ coarse, w: globalThis.innerWidth || 0, h: globalThis.innerHeight || 0 });
+  mode = stored() || deviceDefault();
   return mode;
+}
+
+// The screen changed shape (0075: a folding phone opened or closed, a window resized, a tablet's
+// split view): the default follows the new shape, but only while the player hasn't chosen. A choice
+// (one tap on the handle, or I) is kept on this device and a fold never flips it.
+export function refitHudMode() {
+  if (stored()) return;
+  const next = deviceDefault();
+  if (next !== hudMode()) setHudMode(next, { persist: false });
 }
 
 // Every handle says what a tap will do, and whether the full set is out.
@@ -71,6 +84,9 @@ export function initHudMode() {
     toggleHudMode();
     if (e.detail > 0) t.blur();   // a tap leaves no focus behind: Space is the game's
   }, true);
+  // Settled, not per event: a fold swings through sizes no pose has (466×498 on the one we measured).
+  let settle = 0;
+  addEventListener('resize', () => { clearTimeout(settle); settle = setTimeout(refitHudMode, 200); });
   document.addEventListener('keydown', (e) => {
     if (e.code !== 'KeyI' || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;
