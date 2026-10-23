@@ -1,12 +1,12 @@
 ---
-id: 0083
+id: 0087
 title: The audit gate is green on CI — two layouts that depended on a pixel of text, a faint clock, deterministic waits, shards by cost
 status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-23
-pr: 108
+pr: 111
 by: operator
 ---
 
@@ -19,6 +19,12 @@ Mac. #106 ran it on CI (ubuntu-latest, SwiftShader, `CI=1`) in three shards, and
 - 1080×1920 compact and full: the results never came up inside the 60 s wait;
 - shard 1 (both 1080×1920s, 1280×720, the title audit) ran into the job's 45 minute timeout.
 And a stray "E" showed behind QUESTS in Free Drive at 844×390 with a notch's insets.
+
+While this was in progress #109 fixed main's red gate on the same frames (sideways cells as a grid that
+never splits a reading, 6 px padding in the short-portrait strip, the waiting clock at 0.8, a 120 s wait
+for the results). This ticket is rebased on it: it keeps #109's sideways grid and padding, and adds what
+#109 left text- or clock-dependent (N₂'s three-line wrap at 393×659 kept the strip 3 px from the cue; the
+results and the wreck beat still ran on the wall clock), the shard plan, and the margins below.
 
 ## Root causes
 - **678×340 (real):** the band's cells were wrapping lines. With `11 mph · 31.1 ft · 655 lb` the N₂ cell had
@@ -51,10 +57,9 @@ And a stray "E" showed behind QUESTS in Free Drive at 844×390 with a notch's in
   lists `localhost` as both 127.0.0.1 and ::1 (vite bound ::1, Node's fetch tried 127.0.0.1).
 
 ## What
-- `src/styles.css`: sideways, a cell of the compact band is a grid: its label over one line, the reading
-  and its unit, which never part (a reading that outgrows its cell spills sideways by a few px; the band's
-  height never depends on text). On a band ≤ 260 px the cells pack 1 px tighter a side:
-  `11 mph · 31.1 ft · 655 lb` leave 9 px.
+- `src/styles.css`: sideways the band's cells are #109's grid (a reading and its unit never part); on a band
+  ≤ 260 px they pack 1 px tighter a side than #109's (5 px, 2 px gap): `11 mph · 31.1 ft · 655 lb` leave
+  the 239 px band 9 px (#109's cells are never narrower than their reading, so the band needs the room).
   Upright under 740 px, N₂'s line reads in the leading units only (as at 320×568): one line, whatever the
   reading; the strip's foot is at 396 px under a cue line at 414.
 - `src/styles.css`, margins: the strip's second units at a label's weight (`--lbl`, 0.86; still the smaller

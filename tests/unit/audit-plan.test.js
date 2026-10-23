@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { planShards, planLoad, viewportsFor, vpBase, cost, TITLE_COST } from '../../scripts/audit-plan.mjs';
 
-// Ticket 0083: the audit gate's shards are balanced by estimated cost (scripts/audit-plan.mjs), so no
+// Ticket 0087: the audit gate's shards are balanced by estimated cost (scripts/audit-plan.mjs), so no
 // CI job runs into its timeout while another idles; every viewport and the title audit run exactly once.
 describe('audit shard plan', () => {
   const all = viewportsFor('all');

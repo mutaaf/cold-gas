@@ -23,7 +23,7 @@ const out = flags.out || 'audit-shots';
 const shard = flags.shard || '1/1';
 const [shardN, shardM] = shard.split('/').map(Number);
 // One address for the server and the browser: `localhost` can resolve to ::1 for vite and 127.0.0.1 for
-// Node's fetch (a Docker image's /etc/hosts lists both), and the preview never answered (0083).
+// Node's fetch (a Docker image's /etc/hosts lists both), and the preview never answered (0087).
 const url = `http://127.0.0.1:${port}/coldgas/`;
 const runHud = flags['title-only'] !== 'true';
 const set = flags.set || 'all';

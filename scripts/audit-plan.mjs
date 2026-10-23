@@ -1,11 +1,11 @@
-// What the HUD audit flies and how the gate splits it (0083): the viewports, and a shard plan by
+// What the HUD audit flies and how the gate splits it (0087): the viewports, and a shard plan by
 // estimated cost, so no CI job runs past its timeout while another idles (every M-th viewport put both
 // 1080×1920 and 1280×720 with the title audit in one shard: 45 minutes, cancelled).
 //
 //   planShards(viewports, M) → M lists of items, each a viewport [w, h, safe] or 'title'
 //
 // Cost model: seconds on a CI runner (ubuntu-latest, SwiftShader), both HUD states, fitted on the first
-// CI run (0083): 90 s a viewport (two page loads, the theatre, the wreck) + 155 s per CSS megapixel
+// CI run (0087): 90 s a viewport (two page loads, the theatre, the wreck) + 155 s per CSS megapixel
 // (software GL fills every pixel) + 50 s with Free Drive (a third page, the road) + 15 s on a touch
 // screen (the Lineup hop). It predicted every viewport within 0.8–1.3×. The title audit is one item
 // (23 viewports at ≈ 40 s: two page loads' worth each on software GL). Longest first, each to the

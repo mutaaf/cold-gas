@@ -63,7 +63,7 @@ const BOXES = [
   '.hud-left', '.hud .speed', '.descent', '.hud .phase', '.adi-wrap', '.readouts',
   // new HUD
   '[data-hud-box]',
-  // touch (the stick's label stands outside the stick's box: a box of its own, 0083)
+  // touch (the stick's label stands outside the stick's box: a box of its own, 0087)
   '[data-stick]', '[data-stick-hint]', '.buttons', '.tbtn', '[data-onethumb]', '[data-nozzle-pad] svg',
   // Free Drive
   '.fd-road', '.fd-ctl', '.fd-timer', '.fd-speed', '.fd-stats', '.fd-map', '.fd-fine', '.bq-dock',
@@ -330,13 +330,13 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   if (thumbMode) await S(() => window.__coldgas.thumb.up()); else { await page.keyboard.up('KeyF'); await page.keyboard.up('ShiftLeft'); }
   // The aftermath and the results' beat, stepped in the page (the e2e hook): on the wall clock they ran
   // at a fifth of real time at 1080×1920 on software GL (the clock caps the sim at 0.1 s a frame) and
-  // missed a 60 s wait (0083). The results are the same either way; only the theatre is measured there.
+  // missed a 60 s wait (0087). The results are the same either way; only the theatre is measured there.
   await S(() => window.__coldgas.fastForward());
   if (await until(() => window.__coldgas.S.mode === 'results', 30000) && hudState === STATES[0]) await measureTheatre(page, vpBase);
   // A wreck (0072): the reference with every input zeroed from the release + 0.125 s ends flipped,
   // 66 % Wrecked. Stepped to its end in the page, then a beat of its aftermath (0.6 s, stepped too: on
   // the wall clock the car and the debris were somewhere else at every frame rate, and the labels over
-  // them measured 4.5 to 5.8:1 from run to run, 0083): the damage on the compact line and the crash on
+  // them measured 4.5 to 5.8:1 from run to run, 0087): the damage on the compact line and the crash on
   // the timeline, as a player sees them; frozen there, then two of the page's own frames to draw it.
   const wrecked = await S(() => {
     const g = window.__coldgas, G = g.S;

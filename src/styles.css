@@ -851,7 +851,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 @media (pointer: coarse) and (orientation: portrait) and (max-height: 740px) {
   /* N₂'s line in the leading units only (as at 320×568): with both unit systems it wrapped to two lines
      or three by a pixel of the cell's width (393×659: three on the CI runner's fonts, two on a Mac), and
-     at three the strip ran 10 px into the cue line (0083). One line, whatever the reading. */
+     at three the strip ran 10 px into the cue line (0087). One line, whatever the reading. */
   .tank .n2-bar :is(.h-alt, .n2-sep) { display: none; }
   .cue { --cue-top: 414px; }
   /* The cue sits 3 px under the strip here, so the first row must not wrap: SINK's 27.9 ft/s had 2 px
@@ -968,7 +968,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 .touch[data-hand='left'] .tbtn, .touch[data-hand='left'] .thumb { right: auto; left: calc(var(--x) - var(--s) / 2 + var(--safe-l)); }
 
 /* One-thumb. Its glass as dark as the HUD's (0.62, was 0.5): over the parked row's gold car its HOLDING
-   read 4.73:1 (0083). */
+   read 4.73:1 (0087). */
 .thumb { display: none; position: absolute; --x: var(--ax); --y: var(--ay); --s: 132px; right: calc(var(--x) - var(--s) / 2 + var(--safe-r)); bottom: calc(var(--y) - var(--s) / 2 + var(--safe-b));
   width: var(--s); height: var(--s); border-radius: 50%; border: 1px solid rgba(245, 246, 248, 0.34); background: rgba(6, 8, 13, 0.62); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px);
   place-items: center; align-content: center; gap: 6px; padding: 0; color: var(--ink); pointer-events: auto; touch-action: none; -webkit-tap-highlight-color: transparent;
@@ -1112,7 +1112,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 .h-unit[data-units]:hover, .h-alt[data-units]:hover { color: var(--ink); text-decoration: underline dotted 1px; text-underline-offset: 3px; }
 .h-alt { font: 400 11px/1 var(--mono); font-style: normal; color: rgba(245, 246, 248, 0.72); letter-spacing: 0; white-space: nowrap; }
 /* In the telemetry strip the second unit reads at the labels' weight (it is still the smaller line): at
-   0.72 on the strip's glass, a wreck's lights behind FAN's 0 kgf measured 4.51:1 at 393×659 (0083). */
+   0.72 on the strip's glass, a wreck's lights behind FAN's 0 kgf measured 4.51:1 at 393×659 (0087). */
 .hud .h-strip .h-alt { color: var(--lbl); }
 .h-cell { row-gap: 5px; }
 .h-cell > .h-alt { grid-column: 1 / -1; margin-top: -1px; }
