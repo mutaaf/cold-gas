@@ -39,7 +39,7 @@ test('desktop: the third crash in a row offers Rookie mode (not before), keyboar
   }
   const r3 = await fly(page, true);
   expect(r3, JSON.stringify(r3)).toMatchObject({ mode: 'results', crashed: true, streak: 3, offered: true });
-  const go = page.locator('[data-rookie-go]');
+  const go = page.locator('[data-rookie] [data-rookie-go]');
   await expect(go).toBeVisible();
   await expect(go).toContainText(/rookie mode/i);
   await expect(page.locator('[data-rookie-why]')).toBeVisible();
@@ -100,15 +100,66 @@ test('phone: a clean landing ends the streak; the offer holds on the fourth cras
   await page.waitForTimeout(1200);   // the sheet's slide-in and the button's rise
   const lay = await page.evaluate(() => {
     const r = (el) => el.getBoundingClientRect();
-    const go = r(document.querySelector('[data-rookie-go]')), bar = r(document.querySelector('.results .top-actions-row'));
+    const go = r(document.querySelector('[data-rookie] [data-rookie-go]')), bar = r(document.querySelector('.results .top-actions-row'));
     return { top: go.top, bottom: go.bottom, h: go.height, barTop: bar.top, vh: innerHeight };
   });
   expect(lay.h).toBeGreaterThanOrEqual(44);
   expect(lay.top).toBeGreaterThanOrEqual(0);
   expect(lay.bottom).toBeLessThanOrEqual(lay.barTop + 1);
-  await page.locator('[data-rookie-go]').tap();
+  await page.locator('[data-rookie] [data-rookie-go]').tap();
   expect(await page.evaluate(() => ({ level: window.__coldgas.driving.settings.level, tier: window.__coldgas.S.tier, mode: window.__coldgas.S.mode })))
     .toMatchObject({ level: 'easy', tier: 'assist' });
+  expect(errors).toEqual([]);
+  await page.close();
+});
+
+// Ticket 0076: on a phone held upright the judges' theatre covers the sheet while it plays, so its own
+// action bar carries the offer too (the same syncRookie, the same handler). The judge's stream is held
+// open (never answered), so the show keeps playing; nothing here waits for it to finish.
+test('phone: the theatre\'s bar offers Rookie mode while the show plays; a tap sets Easy + Assist and goes again', async ({ browser }) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await page.route('**/coldgas/api/judge/stream', () => { /* held open: the theatre stays up */ });
+  const errors = await boot(page);
+  const th = page.locator('[data-theatre] .th-quick [data-rookie-go]');
+  for (let k = 1; k <= 2; k++) expect((await fly(page, true)).streak).toBe(k);
+  await expect(page.locator('[data-theatre] .th-quick [data-again]')).toBeVisible({ timeout: 60_000 });
+  await expect(th).toBeHidden();   // two crashes: no offer in the theatre either
+  const r3 = await fly(page, true);
+  expect(r3, JSON.stringify(r3)).toMatchObject({ mode: 'results', crashed: true, streak: 3, offered: true });
+  await expect(th).toBeVisible({ timeout: 60_000 });
+  await expect(th).toContainText(/rookie mode/i);
+  await page.waitForTimeout(800);   // the theatre's fade-in
+  // The floor: ≥ 44 px, text ≥ 11 px, on screen, on top, clear of Retry / Home / Skip, the rail and the caption.
+  const m = await th.evaluate((el) => {
+    const b = el.getBoundingClientRect();
+    const sizes = [el, ...el.querySelectorAll('*')].map((e) => parseFloat(getComputedStyle(e).fontSize));
+    const hit = ['.th-quick [data-again]', '.th-quick [data-home]', '.th-skip', '.th-rail', '.th-caption'].filter((s) => {
+      const r = document.querySelector(`[data-theatre] ${s}`).getBoundingClientRect();
+      return r.width > 0 && !(r.right <= b.left || r.left >= b.right || r.bottom <= b.top || r.top >= b.bottom);
+    });
+    const at = document.elementFromPoint(b.left + b.width / 2, b.top + b.height / 2);
+    return { h: b.height, w: b.width, minFont: Math.min(...sizes), top: b.top, right: b.right, vw: innerWidth, hit, onTop: el.contains(at) };
+  });
+  expect(m, JSON.stringify(m)).toMatchObject({ hit: [], onTop: true });
+  expect(m.h).toBeGreaterThanOrEqual(44);
+  expect(m.w).toBeGreaterThanOrEqual(44);
+  expect(m.minFont).toBeGreaterThanOrEqual(11);
+  expect(m.top).toBeGreaterThanOrEqual(0);
+  expect(m.right).toBeLessThanOrEqual(m.vw);
+  // Keyboard: Tab from the theatre's Retry reaches it.
+  await page.locator('[data-theatre] .th-quick [data-again]').focus();
+  let reached = false;
+  for (let i = 0; i < 4 && !reached; i++) { await page.keyboard.press('Tab'); reached = await th.evaluate((el) => el === document.activeElement); }
+  expect(reached).toBe(true);
+  await page.evaluate(() => { window.__coldgas.S.prevRun = window.__coldgas.S.run; });
+  await th.tap();
+  const after = await page.evaluate(() => {
+    const g = window.__coldgas, S = g.S;
+    let saved = null; try { saved = JSON.parse(localStorage.getItem('coldgas_driving')); } catch { /* */ }
+    return { level: g.driving.settings.level, tier: S.tier, savedLevel: saved?.level, savedTier: localStorage.getItem('coldgas_tier'), mode: S.mode, newRun: S.run !== S.prevRun, kind: S.runKind, streak: S.crashStreak, theatre: !document.querySelector('[data-theatre]').hidden };
+  });
+  expect(after, JSON.stringify(after)).toMatchObject({ level: 'easy', tier: 'assist', savedLevel: 'easy', savedTier: 'assist', newRun: true, kind: 'jump', streak: 0, theatre: false });
+  expect(['countdown', 'live']).toContain(after.mode);
   expect(errors).toEqual([]);
   await page.close();
 });

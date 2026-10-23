@@ -283,6 +283,17 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
     font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--ink-2); }
   .th-quick .quick-btn.primary { background: var(--ink); color: #07090d; border-color: transparent; }
   .theatre:not(.th-quest) .th-rail { top: calc(62px + var(--safe-t)); }
+  /* Rookie mode (0076): while the results offer it, a second row of the bar, the width of the screen, ice-edged
+     like the sheet's; the rail and the caption step down one row to make room. */
+  .th-quick { flex-wrap: wrap; right: calc(16px + var(--safe-r)); pointer-events: none; }
+  .th-quick > * { pointer-events: auto; }
+  .th-quick .th-rookie-btn { display: none; }
+  .theatre.th-rookie:not(.th-quest) .th-quick .th-rookie-btn { display: flex; flex: 1 0 100%; min-height: 44px; height: auto; padding: 6px 16px; align-items: center; justify-content: space-between;
+    flex-wrap: wrap; gap: 2px 12px; border-radius: 22px; border-color: rgba(150, 220, 255, 0.7); background: rgba(14, 26, 38, 0.92); color: var(--ink); font-weight: 600; text-align: left; }
+  .th-rookie-btn span { font: 500 12px/1.2 var(--mono); letter-spacing: 0.04em; text-transform: none; color: var(--ink); opacity: 0.86; }
+  .theatre.th-rookie:not(.th-quest) .th-rail { top: calc(116px + var(--safe-t)); }
+  .theatre.th-rookie:not(.th-quest) .th-caption { top: calc(180px + var(--safe-t)); }
+  .theatre.th-rookie:not(.th-quest) .th-ticker { max-height: min(calc(7 * 1.55em + 24px), calc(100dvh - 478px - var(--safe-t) - var(--safe-b))); }
 }
 
 /* Receipt in the results sheet */

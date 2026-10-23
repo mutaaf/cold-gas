@@ -394,7 +394,9 @@ function finishRun() {
 // one button: Easy driving + Assist flight (auto-land), saved, and straight into the retry. Any clean run
 // ends the streak, and so does a change of driving level or flight tier (the player chose; the offer
 // waits for three new crashes).
-const rookieBox = document.querySelector('[data-rookie]');
+// The theatre (full screen on a phone, over the sheet) carries the same button in its action bar (0076):
+// one offer, drawn twice, both from syncRookie, both clicks through goRookie (delegated, below).
+const rookieBox = document.querySelector('[data-rookie]'), rookieTheatre = document.querySelector('[data-theatre]');
 S.crashStreak = loadStreak();
 let streakRun = null;
 function setStreak(n) { S.crashStreak = n; saveStreak(n); }
@@ -404,15 +406,19 @@ function countCrash(run) {
 }
 let streakLevel = drivingSettings.level;
 onDriving((d) => { if (d.level !== streakLevel) { streakLevel = d.level; if (S.crashStreak) setStreak(0); syncRookie(); } });
-function syncRookie() { rookieBox.hidden = !(S.mode === 'results' && offerRookie(S.crashStreak, drivingSettings.level, S.tier)); }
-rookieBox.querySelector('[data-rookie-go]').addEventListener('click', () => {
+function syncRookie() {
+  const offer = S.mode === 'results' && offerRookie(S.crashStreak, drivingSettings.level, S.tier);
+  rookieBox.hidden = !offer;
+  rookieTheatre.classList.toggle('th-rookie', offer);
+}
+function goRookie() {
   setDriving({ level: 'easy' });
   setTier('assist');
   setStreak(0);
-  rookieBox.hidden = true;
+  syncRookie();
   ui.cue_('Rookie mode: Easy driving, Assist flying, auto-land', 2400);
   retry();
-});
+}
 
 const theatreRoot = document.querySelector('[data-theatre]');
 const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]'), goLabel = document.querySelector('[data-go-label]');
@@ -957,11 +963,11 @@ function retry() {
   startRun('jump', true);
 }
 function goHome() { S.paused = false; ui.show('pause', false); toTitle(); }
-// Delegated: the judges' theatre builds its own Retry / Home buttons after load.
+// Delegated: the judges' theatre builds its own Retry / Home / Rookie mode buttons after load.
 document.addEventListener('click', (e) => {
-  const b = e.target.closest?.('[data-again], [data-home]');
+  const b = e.target.closest?.('[data-again], [data-home], [data-rookie-go]');
   if (!b) return;
-  if (b.hasAttribute('data-again')) retry(); else goHome();
+  if (b.hasAttribute('data-rookie-go')) goRookie(); else if (b.hasAttribute('data-again')) retry(); else goHome();
 });
 on('[data-replay]', () => { replayFrom(0); director.restart(); hero.placed(); });
 on('[data-resume]', () => pause(false));
