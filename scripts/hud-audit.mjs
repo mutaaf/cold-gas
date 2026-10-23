@@ -17,15 +17,16 @@
 // Every viewport is flown with the HUD compact and full (0061, src/hud-mode.js: the choice is set
 // in localStorage before the page loads); a frame's name carries `-compact` or `-full`.
 //
-// Once per viewport the judges' theatre is measured too (0077): its judge stream is held open so the
+// Once per viewport the judges' theatre is measured too (0082): its judge stream is held open so the
 // show stays up, its content is set to a fixed worst case (the stream's text, the model card, the
 // counters; a phone also with its Rookie row), its motion is stopped (the particle field is hidden: any
 // frame of it is a sample, and its legibility is scripts/theatre-shots.mjs's job), and its boxes are
 // checked for overlaps and for leaving the theatre, its text for size and contrast, and every control
 // for a 44 × 44 px target (its centre's 44 px square, sampled with elementFromPoint, must hit it).
 //
-// A gate (0077): the exit code is 1 when any count is non-zero (overlaps, offscreen, text < 11 px,
-// labels < 4.5:1, targets < 44 px, frames missed), and the offenders are listed at the end.
+// A gate (0082): the exit code is 1 when any count is non-zero (overlaps, offscreen, text < 11 px,
+// labels < 4.5:1, targets < 44 px, anything that changed between the two shots, frames missed), and
+// the offenders are listed at the end.
 // --shard=N/M flies every M-th viewport from the N-th (CI splits `all` across parallel jobs).
 // CI (software GL, about 2× slower): AUDIT_SLOW (default 2 when CI is set) scales every wait.
 //
@@ -75,7 +76,7 @@ const BOXES = [
 ];
 const TEXT_ROOTS = '[data-screen="hud"], [data-touch], [data-cue], .top, [data-drill-bar], [data-drive-hud], [data-onethumb], .bq-dock';
 
-// The judges' theatre (0077): its panels and controls, measured inside the theatre's own box.
+// The judges' theatre (0082): its panels and controls, measured inside the theatre's own box.
 const THEATRE = {
   boxes: ['.th-rail', '.th-caption', '.th-card', '.th-stats', '.th-ticker', '.th-skip', '.th-quick button'].map((s) => `[data-theatre] ${s}`),
   textRoots: '[data-theatre]', targets: '[data-theatre] button', within: '[data-theatre]',
@@ -86,6 +87,21 @@ const GL = process.platform === 'darwin' ? ['--use-angle=metal', '--enable-gpu',
 const browser = await chromium.launch({ args: GL });
 const report = [];
 const missed = [];
+
+// What is on the glass, as the contrast pass depends on it: every measured box and every label (its rect,
+// its effective opacity). Taken with the frame shot and again with the text-hidden shot; anything that
+// differs moved or faded between the two, and its contrast would be measured against the wrong pixels
+// (0077: a wall-clock cue faded out between them and measured 1.99:1). Reported, and counted.
+function snapGlass({ BOXES, TEXT_ROOTS }) {
+  const shown = (el) => { for (let e = el; e && e.nodeType === 1; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.05 || e.hidden) return false; } const r = el.getBoundingClientRect(); return r.width > 1 && r.height > 1; };
+  const sig = (el) => { const r = el.getBoundingClientRect(); let op = 1; for (let e = el; e && e.nodeType === 1; e = e.parentElement) op *= Number(getComputedStyle(e).opacity); return `${Math.round(r.x)},${Math.round(r.y)},${Math.round(r.width)}x${Math.round(r.height)}@${op.toFixed(2)}`; };
+  const out = {};
+  for (const sel of BOXES) document.querySelectorAll(sel).forEach((el, i) => { if (shown(el)) out[`${el.dataset.hudBox || sel}#${i}`] = sig(el); });
+  for (const root of document.querySelectorAll(TEXT_ROOTS)) [root, ...root.querySelectorAll('*')].forEach((el, i) => {
+    if ([...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) && shown(el)) out[`${el.tagName.toLowerCase()}.${el.getAttribute('class') || ''}#${i} "${el.textContent.trim().slice(0, 16)}"`] = sig(el);
+  });
+  return out;
+}
 
 async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_ROOTS, targets = null, within = null } = {}) {
   const file = `${out}/${label}-${vpName}-${phase}.png`;
@@ -99,14 +115,20 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
     if (c?.textContent.trim() && c.classList.contains('on')) c.classList.add('audit-hold');
   });
   await page.waitForTimeout(ms(450));   // let transitions settle
-  // Hold the 3D frame still while it is measured (the sim is frozen, but the renderer would keep drawing
-  // render-time effects: sparks, dust, the camera's drift), so the text and the bare pass see the same
-  // pixels behind every label. CSS motion is settled too: every animation at its resting state (a
-  // blinking BRAKE or a pulsing pad is measured lit, not at a random phase; the damage flash, which
-  // ends hidden, keeps its own) and transitions done. Two frames for the last draw to reach the screen.
+  // Hold the page still while it is measured: every frame loop waits (requestAnimationFrame callbacks are
+  // queued, then released after the bare shot), so the 3D frame (the sim is frozen, but render-time
+  // sparks, dust and the camera's drift would go on), Free Drive's live readouts and the cue's clock
+  // (src/ui.js tickCue) are the same for the text shot and the bare shot. CSS motion is settled too:
+  // every animation at its resting state (a blinking BRAKE or a pulsing pad is measured lit, not at a
+  // random phase; the damage flash, which ends hidden, keeps its own) and transitions done. The loops'
+  // frames already in flight land in the queue first (two timer ticks).
   await page.addStyleTag({ content: '*:not(.dmg-fx), *::before, *::after { animation: none !important; transition: none !important; }' }).then((h) => page.evaluate((el) => { el.id = 'audit-still'; }, h));
-  await page.evaluate(() => new Promise((res) => { const st = window.__coldgas?.stage; if (st && !st.__auditRender) { st.__auditRender = st.render; st.render = () => {}; } requestAnimationFrame(() => requestAnimationFrame(res)); }));
+  await page.evaluate(() => new Promise((res) => {
+    if (!window.__auditRaf) { const q = []; window.__auditRaf = { q, raf: window.requestAnimationFrame }; window.requestAnimationFrame = (cb) => { q.push(cb); return 0; }; }
+    setTimeout(() => setTimeout(res, 50), 50);
+  }));
   const shot = await page.screenshot({ path: file });
+  const before = await page.evaluate(snapGlass, { BOXES: boxes, TEXT_ROOTS: textRoots });
   const m = await page.evaluate(({ BOXES, TEXT_ROOTS, targets, within }) => {
     const vis = (el) => {
       if (!el || !el.isConnected) return false;
@@ -166,7 +188,9 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
   await page.addStyleTag({ content: `${textRoots.split(', ').map((s) => `${s}, ${s} *`).join(', ')} { color: transparent !important; fill: transparent !important; text-shadow: none !important; -webkit-text-fill-color: transparent !important; }` }).then((h) => page.evaluate((el) => { el.id = 'audit-hide'; }, h));
   await page.waitForTimeout(ms(80));
   const bare = await page.screenshot();
-  await page.evaluate(() => { document.getElementById('audit-hide')?.remove(); document.getElementById('audit-still')?.remove(); const st = window.__coldgas?.stage; if (st?.__auditRender) { st.render = st.__auditRender; delete st.__auditRender; } });
+  const after = await page.evaluate(snapGlass, { BOXES: boxes, TEXT_ROOTS: textRoots });
+  const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => before[k] !== after[k]).map((k) => `${k} ${before[k] || 'absent'} → ${after[k] || 'gone'}`);
+  await page.evaluate(() => { document.getElementById('audit-hide')?.remove(); document.getElementById('audit-still')?.remove(); const h = window.__auditRaf; if (h) { delete window.__auditRaf; window.requestAnimationFrame = h.raf; for (const cb of h.q) h.raf.call(window, cb); } });
   const contrast = await page.evaluate(async ({ shotB64, bareB64, texts, dpr }) => {
     const load = (b64) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.src = `data:image/png;base64,${b64}`; });
     const [img, bimg] = await Promise.all([load(shotB64), load(bareB64)]);
@@ -202,12 +226,12 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
   const low = contrast.filter((c) => c.ratio !== null && c.ratio < 4.5).map((c) => `${c.t} ${c.ratio}`);
   const minPx = Math.min(...m.texts.map((t) => t.px));
   const minRatio = Math.min(...contrast.filter((c) => c.ratio !== null).map((c) => c.ratio));
-  const row = { vp: vpName, phase, file, overlaps: m.overlaps, offscreen: m.offscreen, minPx, small, minRatio, lowContrast: low, smallTargets: m.smallTargets };
+  const row = { vp: vpName, phase, file, overlaps: m.overlaps, offscreen: m.offscreen, minPx, small, minRatio, lowContrast: low, smallTargets: m.smallTargets, changed };
   report.push(row);
-  console.log(`${vpName} ${phase}: overlaps ${m.overlaps.length}${m.overlaps.length ? ` (${m.overlaps.map((o) => `${o.a}×${o.b} ${o.px}`).join('; ')})` : ''} · offscreen ${m.offscreen.length}${m.offscreen.length ? ` (${m.offscreen.join(', ')})` : ''} · min text ${minPx}px (${small.length} < 11) · min contrast ${minRatio} (${low.length} < 4.5)${targets ? ` · targets < 44 px ${m.smallTargets.length}` : ''}`);
+  console.log(`${vpName} ${phase}: overlaps ${m.overlaps.length}${m.overlaps.length ? ` (${m.overlaps.map((o) => `${o.a}×${o.b} ${o.px}`).join('; ')})` : ''} · offscreen ${m.offscreen.length}${m.offscreen.length ? ` (${m.offscreen.join(', ')})` : ''} · min text ${minPx}px (${small.length} < 11) · min contrast ${minRatio} (${low.length} < 4.5)${targets ? ` · targets < 44 px ${m.smallTargets.length}` : ''}${changed.length ? ` · changed during measure ${changed.length} (${changed.join('; ')})` : ''}`);
 }
 
-// The judges' theatre, held up and made still (0077): a fixed, worst-case call (the longest lines it
+// The judges' theatre, held up and made still (0082): a fixed, worst-case call (the longest lines it
 // shows), at COMPUTE (every panel up, the stream on its glass), no motion. On a phone it is measured
 // again with the Rookie row (0076) in its bar.
 async function measureTheatre(page, vpName) {
@@ -347,14 +371,14 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   await page.close();
 }
 writeFileSync(`${out}/${label}-report.json`, JSON.stringify({ shard: `${shardN}/${shardM}`, viewports: VIEWPORTS.map(([w, h, s]) => `${w}x${h}${s ? 's' : ''}`), missed, frames: report }, null, 1));
-const tot = report.reduce((a, r) => ({ ov: a.ov + r.overlaps.length, sm: a.sm + r.small.length, lc: a.lc + r.lowContrast.length, off: a.off + r.offscreen.length, tg: a.tg + (r.smallTargets?.length || 0) }), { ov: 0, sm: 0, lc: 0, off: 0, tg: 0 });
-console.log(`TOTAL ${label}${shardM > 1 ? ` (shard ${shardN}/${shardM})` : ''}: ${report.length} frames · overlaps ${tot.ov} · offscreen ${tot.off} · text < 11 px ${tot.sm} · labels < 4.5:1 ${tot.lc} · targets < 44 px ${tot.tg} · missed ${missed.length}`);
+const tot = report.reduce((a, r) => ({ ov: a.ov + r.overlaps.length, sm: a.sm + r.small.length, lc: a.lc + r.lowContrast.length, off: a.off + r.offscreen.length, tg: a.tg + (r.smallTargets?.length || 0), ch: a.ch + (r.changed?.length || 0) }), { ov: 0, sm: 0, lc: 0, off: 0, tg: 0, ch: 0 });
+console.log(`TOTAL ${label}${shardM > 1 ? ` (shard ${shardN}/${shardM})` : ''}: ${report.length} frames · overlaps ${tot.ov} · offscreen ${tot.off} · text < 11 px ${tot.sm} · labels < 4.5:1 ${tot.lc} · targets < 44 px ${tot.tg} · changed during measure ${tot.ch} · missed ${missed.length}`);
 // The gate: every offender, then a non-zero exit code.
-const bad = report.filter((r) => r.overlaps.length || r.offscreen.length || r.small.length || r.lowContrast.length || r.smallTargets?.length);
+const bad = report.filter((r) => r.overlaps.length || r.offscreen.length || r.small.length || r.lowContrast.length || r.smallTargets?.length || r.changed?.length);
 if (bad.length || missed.length) {
   console.log('FAIL — offenders:');
   for (const r of bad) {
-    const why = [...r.overlaps.map((o) => `overlap ${o.a}×${o.b} ${o.px}px²`), ...r.offscreen.map((o) => `offscreen ${o}`), ...r.small.map((t) => `small "${t}"`), ...r.lowContrast.map((t) => `contrast "${t}"`), ...(r.smallTargets || []).map((t) => `target ${t}`)];
+    const why = [...r.overlaps.map((o) => `overlap ${o.a}×${o.b} ${o.px}px²`), ...r.offscreen.map((o) => `offscreen ${o}`), ...r.small.map((t) => `small "${t}"`), ...r.lowContrast.map((t) => `contrast "${t}"`), ...(r.smallTargets || []).map((t) => `target ${t}`), ...(r.changed || []).map((t) => `changed during measure ${t}`)];
     console.log(`  ${r.vp} ${r.phase}: ${why.join('; ')}`);
   }
   for (const m of missed) console.log(`  missed: ${m}`);

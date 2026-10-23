@@ -1,11 +1,11 @@
 ---
-id: 0077
+id: 0082
 title: The HUD and title audits are a gate; the full HUD fits a 340 px landscape screen; the judges' theatre has 44 px controls and fits sideways
 status: in-progress
 priority: P1
 size: M
 lens: platform
-created: 2026-10-22
+created: 2026-10-23
 pr:
 by: builder
 ---
@@ -44,10 +44,17 @@ clipped on the left, Skip sitting on it, its panels piled on each other.
   stream over the card, as tall as the room under the caption); under 360 px the rail names only the stage
   it is on. On a phone the stream's glass is capped by the room under the caption (it reached a three-line
   caption at 320×568, 382×580 and 466×498).
-- The audit's cue line was held on whenever it had text, even after it had faded, racing the page's own
-  clock (a stale "The reference run…" from the wreck's autopilot measured 1.9:1 once): now it is held only
-  if it is showing at the freeze, and the wreck clears the autopilot's announcement, which a player's own
-  wreck never shows.
+- The critic's 0077 (the wreck frame's false contrast failure), found here independently: the audit held
+  the cue line on whenever it had text, even after it had faded, racing the page's own clock (a stale
+  "The reference run…" from the wreck's autopilot measured 1.93:1 at 430×932s). Now it is held only if it
+  is showing at the freeze, pinned until the thaw; the wreck clears the autopilot's announcement, which a
+  player's own wreck never shows; and `measure()` compares every measured box and label (rect, effective
+  opacity) between the frame shot and the text-hidden shot, reporting and counting any "changed during
+  measure".
+- Found by the second gate run: at 678×340 a wide LIMIT (`63.5 ft/s 19.4 m/s`) pushed the primary into the
+  cue line (the limit reads in one unit system there now, as at 320×568), and in Free Drive sideways with a
+  notch's insets the arrival title sat on LIFT (`src/drive/drive.css`: the cue stops at the right thumb's
+  arc, 271 px in, as the strip does).
 - `scripts/hud-audit.mjs`: once per viewport the theatre is measured, held up by a judge stream that is
   never answered (`page.route`), at COMPUTE with a fixed worst-case call (the stream on its glass, a long
   model id), its motion stopped and its particle field hidden (any frame of it is a sample;

@@ -109,7 +109,7 @@ test('judges theatre: Skip during the figures ends the show at once', async ({ p
   await expect(page.locator('[data-judge="coordinator"] .quote')).toHaveText(canned().words.coordinator, { timeout: 30_000 });
 });
 
-// Ticket 0077: every theatre control is a 44 px target (the pills keep their size; the hit area runs past
+// Ticket 0082: every theatre control is a 44 px target (the pills keep their size; the hit area runs past
 // them, as the top bar's Menu does), and on a short landscape screen the theatre takes the screen and reads
 // across: nothing overlaps or leaves it (the rail was clipped on the left at 844×390, Skip sat on it). The
 // judges' stream is held open so the show stays up; its panels get a fixed, long call (as

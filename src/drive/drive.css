@@ -157,7 +157,7 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
   .fd-road { top: calc(56px + var(--safe-t)); }
   /* The cue line under the stats, narrow enough to clear the right thumb's slots, and stopping short of
      their arc (LIFT in slot C reaches 271 px in from the edge: the arrival title sat on it at 844×390
-     with a notch's insets, 0077). */
+     with a notch's insets, 0082). */
   body.driving .cue { --cue-top: 172px; right: calc(271px + var(--safe-r)); max-width: calc(100vw - 520px - var(--safe-l) - var(--safe-r)); }
 }
 @media (pointer: coarse) and (orientation: landscape) and (min-height: 700px) {

@@ -1,4 +1,4 @@
-// The HUD and title audits as one gate (0077): serves the production build (dist/, so `npm run build`
+// The HUD and title audits as one gate (0082): serves the production build (dist/, so `npm run build`
 // first) with `vite preview` on a private port, waits for it, runs scripts/hud-audit.mjs (one shard
 // of it) and scripts/title-audit.mjs, stops the server, and exits with their code: 0 only when every
 // count of both is zero.

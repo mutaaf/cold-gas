@@ -337,7 +337,7 @@ npm run check      backlog + lint + unit + e2e (what CI runs)
 npm run check:fast backlog + lint + unit + build (cloud sandboxes)
 npm run audit [-- --shard=N/M] [--port=4655]   the HUD + title audits as a gate on dist/ (build first): serves it, runs
                    one HUD shard (+ the title audit with shard 1), exits 1 on any overlap, offscreen box, text < 11 px,
-                   label < 4.5:1, theatre target < 44 px or missed frame (0077); CI runs shards 1/3, 2/3, 3/3 in parallel
+                   label < 4.5:1, theatre target < 44 px or missed frame (0082); CI runs shards 1/3, 2/3, 3/3 in parallel
 node scripts/fly.mjs '{"apex":7,"rolls":1}'   headless reference flight telemetry
 node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title wired, first 3D frame, long tasks, bytes
 node scripts/roads/build.mjs [road]             rebuild Free Drive roads from OSM + terrain (network; cached)

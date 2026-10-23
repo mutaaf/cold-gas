@@ -3,7 +3,7 @@
 // Slide Over column), iPads both ways, desktops, and a safe-area pass (`s`: a notched phone's insets
 // forced on --safe-*, as in scripts/hud-audit.mjs), and a folding phone's poses (0075).
 //   node scripts/title-audit.mjs <url> <outdir> [label]
-// A gate (0077): the exit code is 1 when any viewport has an issue, and the offenders are listed at
+// A gate (0082): the exit code is 1 when any viewport has an issue, and the offenders are listed at
 // the end. CI (software GL, about 2× slower): AUDIT_SLOW (default 2 when CI is set) scales the waits.
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';

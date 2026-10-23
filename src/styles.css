@@ -336,7 +336,7 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   .theatre.th-rookie:not(.th-quest) .th-caption { top: calc(180px + var(--safe-t)); }
   .theatre.th-rookie:not(.th-quest) .th-ticker { max-height: min(calc(5 * 1.6em + 24px), calc(100dvh - 524px - var(--safe-t) - var(--safe-b))); }
 }
-/* Every control in the theatre is a 44 px target (0077): the pills stay slim and the hit area runs
+/* Every control in the theatre is a 44 px target (0082): the pills stay slim and the hit area runs
    past them, as the top bar's Menu does (0073). Retry and Home sit side by side, so it grows only up
    and down. */
 .th-skip::after, .th-quick .quick-btn::after { content: ''; position: absolute; left: -1px; right: -1px; top: 50%; height: 44px; transform: translateY(-50%); }
@@ -396,7 +396,7 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   .ai-chip { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .theatre::before { animation: none; } }
-/* A short landscape screen (0077: a phone sideways, a folding phone closed and sideways; ≤ 480 px tall).
+/* A short landscape screen (0082: a phone sideways, a folding phone closed and sideways; ≤ 480 px tall).
    Beside the sheet the theatre was a 324 px column at 844×390, its rail clipped and Skip sitting on it,
    its panels piled up; full screen it had a phone's tall stack in 340 px. So, as on a phone, it takes
    the screen (the sheet is there when it ends) with Retry and Home (and the Rookie offer, 0076) in its
@@ -416,7 +416,7 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   .th-rookie-btn span { font: 500 12px/1.2 var(--mono); letter-spacing: 0.04em; text-transform: none; color: var(--ink); opacity: 0.86; white-space: nowrap; }
   .th-skip { top: calc(14px + var(--safe-t)); right: calc(16px + var(--safe-r)); height: 34px; }
 }
-/* Beside the sheet on a tablet (0077) the theatre is a column 248 px (768 upright) to 660 px (1180 sideways)
+/* Beside the sheet on a tablet (0082) the theatre is a column 248 px (768 upright) to 660 px (1180 sideways)
    wide: Skip sat on the rail and the stream's glass on the card. By the column's own width (a container),
    only where it stands beside the sheet (wider than a phone: a phone's theatre is the whole screen): Skip
    goes up to the corner; a column under 560 px stacks as a phone's does (the counters at the foot, the card
@@ -1390,7 +1390,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   :root[data-hud='compact'] .hud .h-strip > .h-pitch { display: flex; }
 }
 
-/* --- The full HUD on a very short landscape screen (0077) -------------------------------------------
+/* --- The full HUD on a very short landscape screen (0082) -------------------------------------------
    340 px of height (a folding phone closed and turned sideways; a small phone sideways with its bars)
    is too short for the band's stack: the readings got 239 px in one wrapped row, the dial ran into the
    thumb pad, the mission row into the vehicle panel. Everything stays, rearranged by the height it
