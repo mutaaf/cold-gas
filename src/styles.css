@@ -1222,7 +1222,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   padding: 8px 12px 7px; grid-column: auto; grid-row: auto; border-left: 1px solid var(--line); }
 :root[data-hud='compact'] .hud .h-strip > .h-cell:first-child, :root[data-hud='compact'] .hud[data-air] .h-strip > [data-ch='alt'] { border-left: 0; }
 /* Sideways the line is a band one cell tall with the phase tab standing on it (below): each cell goes
-   back to its own grid, label over value and unit, never narrower than its reading. As a wrapping flex
+   back to its own grid, label over value and unit (.h-cell .h-lbl spans the row), never narrower than its reading. As a wrapping flex
    cell, a few px short split the value from its unit (655 / lb at 678x340, 16.5 / ft at 814x380 with
    the notch, on CI's Chromium), the band grew a row and stood into the tab. Here, before the rules
    that leave cells out, so they still win. */
@@ -1406,7 +1406,7 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 /* A wide band (an opened folding phone or a tablet sideways): the compact line has room for one more
    instrument, the pitch. By the band's own width (it is a container in landscape), not the device. */
 @container (min-width: 480px) {
-  :root[data-hud='compact'] .hud .h-strip > .h-pitch { display: flex; }
+  :root[data-hud='compact'] .hud .h-strip > .h-pitch { display: grid; }   /* the band's cell grid (above), not the line's flex */
 }
 
 /* --- The full HUD on a very short landscape screen (0082) -------------------------------------------

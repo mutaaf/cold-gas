@@ -10,9 +10,13 @@ test.describe.configure({ mode: 'parallel' });
 const touch = (viewport) => ({ viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
 const WIDE = '.h-strip b, .h-strip .h-unit, .h-strip .h-alt { letter-spacing: 0.6px !important; }';
 
-async function flyAt(browser, viewport, hud) {
+// A notched phone sideways, as scripts/hud-audit.mjs forces it (the `s` viewports).
+const NOTCH = ':root { --safe-t: 0px !important; --safe-l: 47px !important; --safe-r: 47px !important; --safe-b: 21px !important; }';
+
+async function flyAt(browser, viewport, hud, { notch = false } = {}) {
   const page = await browser.newPage(touch(viewport));
   await page.addInitScript((m) => { try { localStorage.setItem('coldgas_hud', m); } catch { /* storage blocked */ } }, hud);
+  if (notch) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const st = document.createElement('style'); st.textContent = css; document.head.append(st); }), NOTCH);
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
   await page.evaluate(() => { window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
@@ -22,22 +26,26 @@ async function flyAt(browser, viewport, hud) {
 }
 
 // Sets the readings and measures in one task (no frame runs between them to redraw the HUD).
-const measure = (page, { readings, air }) => page.evaluate(({ readings, air }) => {
+const measure = (page, { readings, air, damage }) => page.evaluate(({ readings, air, damage }) => {
   window.__coldgas.S.paused = true;
   const hud = document.querySelector('.hud');
   if (air) hud.setAttribute('data-air', ''); else hud.removeAttribute('data-air');
+  if (damage) hud.setAttribute('data-damage', damage);
   for (const [sel, t] of Object.entries(readings)) document.querySelectorAll(sel).forEach((e) => { e.textContent = t; });
-  const box = (sel) => { const r = document.querySelector(sel).getBoundingClientRect(); return { top: r.top, bottom: r.bottom, height: r.height }; };
+  const box = (sel) => { const e = document.querySelector(sel); if (!e) return null; const r = e.getBoundingClientRect(); return { top: r.top, bottom: r.bottom, height: r.height }; };
   return { strip: box('[data-hud-box="strip"]'), mission: box('[data-hud-box="mission"]'), cue: box('[data-cue]') };
-}, { readings, air });
+}, { readings, air, damage });
 
-for (const [viewport, readings] of [
-  [{ width: 678, height: 340 }, { '[data-speed]': '11', '[data-alt]': '32.2', '[data-air]': '655' }],
-  [{ width: 814, height: 380 }, { '[data-speed]': '13', '[data-alt]': '16.5', '[data-air]': '655', '[data-g]': '1.0' }],
+// 678×340: a folding phone closed, sideways (a 239 px band). 814×380 with the notch: the wreck on the
+// ground CI caught (281 px; G steps out and the damage cell stands in its place).
+for (const [name, viewport, opts, state] of [
+  ['678×340', { width: 678, height: 340 }, {}, { readings: { '[data-speed]': '11', '[data-alt]': '32.2', 'b[data-air]': '655' } }],
+  ['814×380 notch, wrecked', { width: 814, height: 380 }, { notch: true },
+    { damage: 'wreck', readings: { '[data-speed]': '13', '[data-alt]': '16.5', 'b[data-air]': '655', '[data-dmg-word2]': 'Wrecked', '[data-dmg-pct2]': '66' } }],
 ]) {
-  test(`${viewport.width}×${viewport.height} compact: wider figures keep the band one row, under the phase tab`, async ({ browser }) => {
-    const page = await flyAt(browser, viewport, 'compact');
-    const m = await measure(page, { readings });
+  test(`${name} compact: wider figures keep the band one row, under the phase tab`, async ({ browser }) => {
+    const page = await flyAt(browser, viewport, 'compact', opts);
+    const m = await measure(page, state);
     expect(m.strip.height, JSON.stringify(m)).toBeLessThanOrEqual(48);
     expect(m.strip.top, JSON.stringify(m)).toBeGreaterThanOrEqual(m.mission.bottom - 1);
     await page.close();
@@ -46,7 +54,7 @@ for (const [viewport, readings] of [
 
 test('393×659 full: wider figures keep the strip clear of the cue line', async ({ browser }) => {
   const page = await flyAt(browser, { width: 393, height: 659 }, 'full');
-  const m = await measure(page, { air: true, readings: { '[data-speed]': '25', '[data-alt]': '60.8', '[data-sink]': '27.9', '[data-air]': '564' } });
+  const m = await measure(page, { air: true, readings: { '[data-speed]': '25', '[data-alt]': '60.8', '[data-sink]': '27.9', 'b[data-air]': '564' } });
   expect(m.strip.bottom, JSON.stringify(m)).toBeLessThanOrEqual(m.cue.top + 1);
   await page.close();
 });
