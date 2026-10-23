@@ -251,6 +251,8 @@ src/units.js          what the player reads: US customary first with metric besi
 src/instruments.js    every HUD instrument answers a tap: peak G, burn time, splits, attitude, thrusters
 src/damage-view.js    the damage map opened up (lazy): zones, hits, what damage does in this sim
 src/drive/minimap.js  Free Drive's canvas minimap (north/heading-up, trail, ghost, profile) and the full map
+src/share-card.js     Share (0081): the run as a 1080×1350 card drawn on the device (replay frame, score, verdict,
+                        three numbers) → navigator.share({ files }) → text + link → copy + toast
 src/panel.js          board client (tolerant rows) + local judge lines (offline fallback)
 src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry
 src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: errors, rejections, traps,
@@ -284,11 +286,15 @@ scripts/human-phone.mjs    the human-show population on a phone (thumbs, reach, 
 scripts/thumb-reach.mjs    touch control geometry per phone viewport + reach heatmap screenshots
 scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11 px, WCAG contrast on screenshots
 scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view
+scripts/brand.mjs          the install assets from brand/icon.svg (the mark: icons, maskable, Apple, favicons;
+                           --check the safe zone) and, with --shots <url>, og.png + the manifest's screenshots
 scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
 scripts/shots-lineup.mjs   studio shots of each parked vehicle + the row, and the row's draw budget
 scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)
 scripts/flicker-budget.mjs  gates a flicker.mjs --json run against docs/flicker-budget.json (per label)
 scripts/roads/        build-time only: OSM + terrain → public/roads/*.bin.gz (docs/ROADS.md)
+public/               manifest.webmanifest, icons/, apple-touch-icon.png, favicon*, og.png, screenshots/ (0081;
+                        rendered by scripts/brand.mjs, never hand-edited). No service worker, on purpose
 public/roads/         the baked Free Drive roads (fetched only when a road is picked)
 ```
 

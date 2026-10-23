@@ -38,7 +38,8 @@ import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableT
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
 import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0 } from './audio.js';
 import { createUI, crashStep } from './ui.js';
-import { wireUnitToggles, localize, unitText } from './units.js';
+import { wireUnitToggles, unitText } from './units.js';
+import { drawShareCard, shareRun } from './share-card.js';
 import { createInstruments } from './instruments.js';
 import { localWords, postScore, fetchBoard } from './panel.js';
 import { withDeadline } from './net.js';
@@ -972,19 +973,21 @@ document.addEventListener('click', (e) => {
 on('[data-replay]', () => { replayFrom(0); director.restart(); hero.placed(); });
 on('[data-resume]', () => pause(false));
 on('[data-restart]', () => { if (S.autopilot) { S.paused = false; ui.show('pause', false); startRun('reveal', true); } else retry(); });
-on('[data-share]', async () => {
-  if (!S.card) return;
-  const f = S.card.facts;
-  let text = f.course === 'show'
-    ? `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. Up a ${f.height} m wall, ${f.invertedS} s inverted${f.crossedRow ? `, ${f.clearance} m over five parked vehicles, ${f.sink} m/s touchdown` : ''}.`
-    : `COLD GAS ${S.card.total.toFixed(1)}: ${S.card.verdict}. ${f.rollDeg}° roll, ${f.apex} m apex, ${f.sink} m/s touchdown.`;
-  text = localize(text);
-  const url = `${location.origin}${import.meta.env.BASE_URL}`;
-  try {
-    if (navigator.share) await navigator.share({ title: 'COLD GAS', text, url });
-    else { await navigator.clipboard.writeText(`${text} ${url}`); ui.cue_('Copied', 1400); }
-  } catch { /* cancelled */ }
-});
+// Share (0081): the run as a card image (src/share-card.js) on the phone's share sheet; text + link
+// where files can't go; else the link is copied. The card starts drawing on pointerdown, so it's
+// ready by the click (the sheet must open inside the tap's activation), and it's drawn only then.
+let shareCard = null;
+const startCard = () => {
+  if (!S.card) return null;
+  if (shareCard?.card !== S.card) {
+    shareCard = { card: S.card, promise: drawShareCard({ frame: canvas, render: () => stage.render(S.time, S.mode), card: S.card, url: shareUrl(), mark: `${import.meta.env.BASE_URL}favicon.svg` }) };
+    shareCard.promise.catch(() => {});
+  }
+  return shareCard.promise;
+};
+const shareUrl = () => `${location.origin}${import.meta.env.BASE_URL}`;
+document.querySelectorAll('[data-share]').forEach((b) => b.addEventListener('pointerdown', startCard));
+on('[data-share]', () => { if (S.card) shareRun({ card: S.card, url: shareUrl(), cardPromise: startCard() }); });
 
 // Event picker on the title (also ?course=wall|lineup; the Show is the default).
 const courseBtns = document.querySelectorAll('[data-course]');
