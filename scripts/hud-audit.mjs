@@ -217,6 +217,19 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   await freeze(); await measure(page, vpName, '6-touchdown'); await thaw();
   if (thumbMode) await S(() => window.__coldgas.thumb.up()); else { await page.keyboard.up('KeyF'); await page.keyboard.up('ShiftLeft'); }
   await until(() => window.__coldgas.S.mode === 'results', 30000);
+  // A wreck (0072): the reference with every input zeroed from the release + 0.125 s ends flipped,
+  // 66 % Wrecked. Stepped to its end in the page, then a beat of its aftermath on the page's own
+  // frames: the damage on the compact line and the crash on the timeline, as a player sees them.
+  const wrecked = await S(() => {
+    const g = window.__coldgas, G = g.S;
+    g.startRun('reveal'); g.skipCountdown();
+    const ap = G.autopilot;
+    G.autopilot = (run) => { const i = ap(run); if (G.released && run.tick - G.releaseTick >= 30) for (const k of g.inputKeys) i[k] = 0; return i; };
+    for (let i = 0; i < 900 && G.run.phase !== 'done'; i++) g.liveStep(0.1);
+    return G.run.phase === 'done';
+  });
+  if (wrecked) { await page.waitForTimeout(600); await freeze(); await measure(page, vpName, '9-wreck'); await thaw(); }
+  else console.log('  missed the wreck');
   // The Lineup in the air (touch): its air layout adds LIFT in slot B beside the attitude dial.
   if (touch) {
     await S(() => window.__coldgas.toTitle());

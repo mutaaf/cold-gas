@@ -36,7 +36,7 @@ import { thumbStage } from './onethumb.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
 import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0 } from './audio.js';
-import { createUI } from './ui.js';
+import { createUI, crashStep } from './ui.js';
 import { wireUnitToggles, localize, unitText } from './units.js';
 import { createInstruments } from './instruments.js';
 import { localWords, postScore, fetchBoard } from './panel.js';
@@ -513,6 +513,9 @@ function liveStep(dt) {
       if (aftermathStep(run)) { S.acc = 0; break; }
     }
   }
+  // The card is decided on the frame the run ends, before the HUD reads it: a crash ends the
+  // timeline as a crash on that frame, not one frame of TOUCHDOWN first (0072).
+  if (run.phase === 'done' && !S.card) closeCard(run);
   S.simMs = performance.now() - simT0; S.simTicks = run.tick - tick0;   // the nerds panel's clock
   if (run.t.contact && !S.contactBuzzed) { S.contactBuzzed = true; buzz('crash'); }
   const c = run.car;
@@ -572,7 +575,7 @@ function liveStep(dt) {
   } else S.doneT = 0;
 }
 function beginAftermath(run) {
-  closeCard(run);
+  if (!S.card) closeCard(run);   // (a run's end has it already; a drill's moment decides it here)
   S.after = true;
 }
 
@@ -586,7 +589,7 @@ function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTi
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(landing.prediction.rollOut) * 180 / Math.PI,
     alt, airborne: run.phase === 'air',
-    sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, landing.prediction), clock,
+    sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, landing.prediction), clock, crash: run.phase === 'done' ? crashStep(S.card) : '',
     pitch: hudPitch(c.quat, run.phase === 'ramp'),
     throttles: c.throttles, fan: c.fanForce / G, g: gWindow.read(),
   });

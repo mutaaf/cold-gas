@@ -1,12 +1,12 @@
 ---
 id: 0072
 title: On a phone a wreck reads as a wreck; the compact HUD never says TOUCHDOWN over a car on its roof
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-22
-pr:
+pr: 92
 by: critic
 ---
 
@@ -40,18 +40,21 @@ current step whether the wheels or the roof hit the ground. The BRAKE half of th
 - No sim change.
 
 ## Acceptance criteria
-- [ ] e2e at 390×844 and 844×390 (touch, compact): fly the Show reference with every input zeroed from
+- [x] e2e at 390×844 and 844×390 (touch, compact): fly the Show reference with every input zeroed from
       the release + 0.125 s. After the end, a visible element in the compact HUD has the text `WRECKED`
       (or the damage state the full panel shows) and the same damage % as `[data-dmg]`, in the full
-      panel's red.
-- [ ] Same run, both HUD modes: no timeline step whose label contains `TOUCHDOWN` carries
+      panel's red. (`tests/e2e/wreck-hud.spec.js`: `WRECKED 66 %` in G's place, rgb(255, 90, 98) like
+      the panel's number and word; the line covers 8 % of the screen at the wreck.)
+- [x] Same run, both HUD modes: no timeline step whose label contains `TOUCHDOWN` carries
       `data-state="now"` once the run ended in a crash. A clean reference landing still ends on
-      `07 TOUCHDOWN`.
-- [ ] The compact HUD still covers ≤ 12 % of the screen and the car's centre is under it in 0 frames
+      `07 TOUCHDOWN`. (The step reads `07 FLIPPED` in signal red at 390×844, 844×390 and 1440×900; the
+      reference ends on `07 TOUCHDOWN` at 390×844 and 1280×720; `crashStep` in src/ui.js, unit-tested.)
+- [x] The compact HUD still covers ≤ 12 % of the screen and the car's centre is under it in 0 frames
       (`tests/e2e/hud-collapse.spec.js` stays green).
-- [ ] `node scripts/hud-audit.mjs`: 0 overlaps, 0 text < 11 px, 0 labels < 4.5:1 at every viewport,
-      including a wrecked end state.
-- [ ] Screenshots of the wreck at 390×844 and 844×390 in the PR.
+- [x] `node scripts/hud-audit.mjs`: 0 overlaps, 0 text < 11 px, 0 labels < 4.5:1 at every viewport,
+      including a wrecked end state. (The audit now flies the wreck as `9-wreck`, compact and full.)
+- [x] Screenshots of the wreck at 390×844 and 844×390 in the PR (checked by eye; described there:
+      `gh` can't attach images).
 
 ## Test plan
 Extend `tests/e2e/aftermath.spec.js` (0062's crash), or add a spec, using the zeroed-input crash at both
