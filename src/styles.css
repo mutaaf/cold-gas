@@ -304,8 +304,9 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
 /* A short sideways screen beside the sheet leaves the counters a narrow column: one size down. */
 @media (max-height: 500px) and (orientation: landscape) { .th-stats dd { font-size: 13px; } }
 /* The raw stream sits on its own dark glass (like the cards), so the words never share pixels
-   with the compute die behind them. Empty until the first token; gone when the words land. */
-.th-ticker { position: absolute; left: 50%; bottom: calc(216px + var(--safe-b)); transform: translateX(-50%); width: min(560px, 70%); z-index: 1; text-align: center;
+   with the compute die behind them. Empty until the first token; gone when the words land. It stands
+   clear of the counters (205 px tall with 0078's figures, 28 px up: 248, 0082). */
+.th-ticker { position: absolute; left: 50%; bottom: calc(248px + var(--safe-b)); transform: translateX(-50%); width: min(560px, 70%); z-index: 1; text-align: center;
   font: 400 14px/1.6 var(--mono); color: var(--ink); max-height: calc(5 * 1.6em + 24px); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
   padding: 12px 16px; box-sizing: border-box; border-radius: 14px; border: 1px solid var(--hair-2); background: rgba(3, 5, 10, 0.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   white-space: pre-wrap; word-break: break-word; transition: opacity 0.4s var(--ease); }
