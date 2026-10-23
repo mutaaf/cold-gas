@@ -1,11 +1,12 @@
 ---
 id: 0074
 title: Standard driving and Assist flight by default on every device; a Rookie mode button after three crashes in a row
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-22
+pr: 95
 by: operator
 ---
 
