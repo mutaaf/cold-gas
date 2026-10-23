@@ -69,7 +69,9 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
 .fd-road-sub { margin-top: 6px !important; font-size: 13px; color: var(--lbl); }
 .fd-ctl { position: absolute; right: calc(24px + var(--safe-r)); top: calc(62px + var(--safe-t)); display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
 .fd-ctl [data-h-fan][aria-pressed='true'] { color: #07090d; background: var(--ink); border-color: var(--ink); }
-.fd-timer { position: absolute; left: 50%; top: calc(20px + var(--safe-t)); transform: translateX(-50%); display: grid; justify-items: center; gap: 5px; opacity: 0.8; transition: opacity 0.4s var(--ease); }
+.fd-timer { position: absolute; left: 50%; top: calc(20px + var(--safe-t)); transform: translateX(-50%); display: grid; justify-items: center; gap: 5px; opacity: 0.86; transition: opacity 0.4s var(--ease); }
+/* Waiting to start, the clock reads at a label's weight (0.86, as --lbl), not 0.6: over a day sky at
+   the top of an iPad's frame 0:00.0 measured 4.28:1 at 0.6 (0087); 0.86 holds 6:1 there. */
 .fd-timer.running, .fd-timer.finished { opacity: 1; }
 .fd-timer b { font: 400 16px/1 var(--mono); letter-spacing: 0.02em; }
 .fd-timer span { font: 500 11px/1 var(--text); letter-spacing: 0.14em; text-transform: uppercase; color: var(--lbl); }
@@ -159,6 +161,10 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
      their arc (LIFT in slot C reaches 271 px in from the edge: the arrival title sat on it at 844×390
      with a notch's insets, 0082). */
   body.driving .cue { --cue-top: 172px; right: calc(271px + var(--safe-r)); max-width: calc(100vw - 520px - var(--safe-l) - var(--safe-r)); }
+  /* The stick's STEER label inside its ring, at the top (above the dashed circle): standing over the
+     ring it sat under the third row of chips (BUILD · QUESTS · ARCADE, the full set) with a notch's
+     insets lifting the stick, its E showing between them (0087). Inside, nothing can reach it. */
+  body.driving .stick-hint { top: 9px; }
 }
 @media (pointer: coarse) and (orientation: landscape) and (min-height: 700px) {
   .fd-fine { left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
