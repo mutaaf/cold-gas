@@ -31,6 +31,8 @@ import { SPEC } from './sim/spec.js';
 import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState } from './input.js';
 import { LEVEL_INFO } from './driving.js';
 import { isCrash, nextStreak, offerRookie, loadStreak, saveStreak } from './rookie.js';
+import { loadPerf, savePerf, record, decide, outcomeOf, afterChange, coachLive, loadFlown, saveFlown, loadAdapt, saveAdapt, TIER_WORDS, factorText, stepDownBanner, offerWords } from './adapt.js';
+import { deviceOf, howtoRows, deviceTitle, pickPointer, livePointer } from './pointer.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
 import { thumbStage } from './onethumb.js';
@@ -146,7 +148,8 @@ const S = {
   replayT: 0, replaySlow: 1, prevPhase: '', time: 0,   // the replay's clock (src/render/replay.js)
   impacts: 0, impact: null,   // touchdowns this run, and the last one's cues (src/render/impact.js)
   idleThrottles: new Float64Array(NOZZLES.length),
-  tier: 'assist',             // flight tier: assist | pro | advanced (src/sim/judge.js TIERS)
+  tier: 'assist',             // flight tier for the next run: assist | pro | advanced (src/sim/judge.js TIERS)
+  flyTier: 'assist',          // the tier of the run on screen: latched at its start, never changed mid-run (0079)
   drill: null, slowmo: 1, freezeT: 0, coach: null,   // practice (src/practice.js)
   countLen: 3,                // the countdown: 3 s from the title, 1 s on a retry (READY · GO)
   attempts: {},               // runs flown this session, per course (the results' "Run 4")
@@ -158,6 +161,12 @@ try {
   S.tier = TIERS[saved] ? saved : localStorage.getItem('coldgas_assist') === '0' ? 'pro' : 'assist';
 } catch { /* storage blocked */ }
 S.assist = S.tier === 'assist';
+S.flyTier = S.tier;
+// A run's tier is the one in effect at its start: the picker, Rookie mode and Adapt to me change S.tier
+// (the next run); everything a run flies, scores and posts reads S.flyTier.
+const inRun = () => S.mode === 'live' || S.mode === 'countdown';
+const runTier = () => (inRun() ? S.flyTier : S.tier);
+function latchTier() { S.flyTier = S.tier; ui.screens.hud.dataset.tier = S.flyTier; }
 // One ghost per course, loaded on first use.
 S.ghosts = {}; S.ghostOn = ghostEnabled();
 const ghostLoads = {};
@@ -315,6 +324,10 @@ function startRunNow(kind = 'jump', quick = false) {
   S.run = armAftermath(createRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.runKind = kind;   // the reference jump never counts toward Rookie mode's streak (0074)
+  latchTier();
+  S.adaptNow = null;
+  // Live pointers on the cue line (0079): a new player's first runs, or while Adapt to me says they're struggling.
+  S.coachLive = kind === 'jump' && coachLive(S.perf, S.flown, S.adapt);
   S.released = false; S.drill = null; S.freezeT = 0; S.coach = null;
   ghostLoaded(stage.course);   // the reference ghost is flown on the title (precomputeRefGhosts)
   setMode('countdown'); S.countT = 0; S.countLen = quick ? 1 : 3; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
@@ -335,12 +348,14 @@ function startRunNow(kind = 'jump', quick = false) {
   director.restart(); hero.placed();
   syncHud(S.run, c, -S.countLen);   // READY shows this run's start, not the last run's end
   if (S.autopilot) ui.cue_({ show: 'The reference run: the Wall, then the lineup', wall: 'The reference run: up the Wall' }[stage.course] || 'The reference jump', 2400);
+  // The last run's pointer, once more, as this one counts down (≈2.5 s: "Go" waits behind it on a retry).
+  else if (S.tip) { ui.cue_(`Tip: ${S.tip}`, 2800, { hold: 2300 }); S.tip = ''; }
 }
 
 // The card is decided the moment the run ends (closeBook in src/sim/run.js); a drill's own card reads
 // the car there too. Taken before the aftermath moves it (beginAftermath), shown after.
 function closeCard(run) {
-  S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.assist });
+  S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.flyTier === 'assist' });
   S.drillSnap = S.drill ? { result: drillResult(S.drill, run, S.card), coach: drillCoach(S.drill, run) } : null;
 }
 function finishRun() {
@@ -353,7 +368,7 @@ function finishRun() {
   landing.show(false);
   getNozzlePad().show(false);
   ui.clearCue();
-  countCrash(run);
+  countRun(run);
   // The coach re-flies the log (≈30–60 ms) a beat after the sheet slides in.
   const coachRun = () => setTimeout(() => {
     if (S.run !== run) return;
@@ -361,16 +376,19 @@ function finishRun() {
       const own = S.drill && S.drillSnap?.coach;
       S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0);
       ui.coaching(S.coach.items);
+      if (!own && S.runKind === 'jump') showPointer(run);
     } catch (err) { console.warn('coach', err); }
   }, 450);
   if (S.drill) {
     // Practice: the drill's own card and the coach. No panel, no board, no ghost.
     ui.results(S.card, { drill: S.drill, result: S.drillSnap.result });
+    pointerBox.hidden = true;
     coachRun();
     replayFrom(Math.max(0, (run.drillStartTick || 0) / FRAME_EVERY - 30));
     return;
   }
   ui.results(S.card);
+  pointerBox.hidden = true;
   if (!S.autopilot) {
     // Run n, and how it stands against your best on this device (before this run counts).
     const n = (S.attempts[run.course] = (S.attempts[run.course] || 0) + 1);
@@ -391,26 +409,86 @@ function finishRun() {
   replayFrom(0);
 }
 
+// The coach's pointer (0079, src/pointer.js): the one fix that matters most, in this device's controls,
+// as one large line on the sheet and again as the next run counts down ("Tip: …"). "Better: …" once
+// last run's fix is fixed; never the same pointer three runs running.
+const pointerBox = document.querySelector('[data-pointer]');
+S.pointerHist = [];
+S.tip = '';
+function pointerCtx(course = S.run?.course || stage.course, tier = S.flyTier) {
+  const device = deviceOf(lastDevice());
+  const scheme = device === 'touch' && touchSet.scheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic';
+  return { device, scheme, tier, course };
+}
+function showPointer(run) {
+  // Worded for the tier the next run flies (an Adapt step down changes the controls that matter).
+  const p = pickPointer(S.coach.items, pointerCtx(run.course, S.tier), { history: S.pointerHist, card: S.card, flight: S.coach.flight, crashed: !!S.card?.facts?.crashed });
+  if (p.id) { S.pointerHist.push(p.id); if (S.pointerHist.length > 4) S.pointerHist.shift(); }
+  const text = p.text || '';
+  pointerBox.querySelector('[data-pointer-better]').textContent = '';
+  if (p.better) unitText(pointerBox.querySelector('[data-pointer-better]'), p.better);
+  pointerBox.querySelector('[data-pointer-better]').hidden = !p.better;
+  unitText(pointerBox.querySelector('[data-pointer-text]'), text);
+  pointerBox.dataset.fix = p.id;
+  pointerBox.toggleAttribute('data-clean', p.id === 'clean');
+  pointerBox.hidden = !text && !p.better;
+  S.tip = p.id === 'clean' ? '' : text;
+}
+
 // Rookie mode (0074, src/rookie.js): crashed runs in a row, this session. From the third the results offer
 // one button: Easy driving + Assist flight (auto-land), saved, and straight into the retry. Any clean run
 // ends the streak, and so does a change of driving level or flight tier (the player chose; the offer
 // waits for three new crashes).
 // The theatre (full screen on a phone, over the sheet) carries the same button in its action bar (0076):
 // one offer, drawn twice, both from syncRookie, both clicks through goRookie (delegated, below).
+// Adapt to me (0079, src/adapt.js) is the same model, grown: per session it also counts crashes on this
+// tier and good runs in a row. Between runs only, it steps the tier down after crashes (Adapt to me on,
+// with Undo on the sheet) and offers a harder step after clean landings (never forced).
 const rookieBox = document.querySelector('[data-rookie]'), rookieTheatre = document.querySelector('[data-theatre]');
+S.perf = loadPerf();
 S.crashStreak = loadStreak();
+S.perf.crashes = S.crashStreak;   // one streak: Rookie's (0074) is the model's crash count
+S.flown = loadFlown();            // runs ever finished on this device (a new player gets live pointers)
+S.adapt = loadAdapt();
+S.adaptNow = null;                // what this sheet shows: { stepDown: { from, to } | null, offer } (adapt.js decide)
 let streakRun = null;
-function setStreak(n) { S.crashStreak = n; saveStreak(n); }
-function countCrash(run) {
-  if (run !== streakRun && S.runKind !== 'reveal' && S.card) { streakRun = run; setStreak(nextStreak(S.crashStreak, isCrash(S.card))); }
+function setStreak(n) { S.crashStreak = n; S.perf.crashes = n; saveStreak(n); savePerf(S.perf); }
+// A finished run of the player's own (not the reference, not a drill): the model hears it once.
+function countRun(run) {
+  if (run === streakRun || S.runKind === 'reveal' || !S.card) return syncRookie();
+  streakRun = run;
+  // A drill's crash counts toward Rookie's streak as it always did (0074); the rest is for real runs.
+  if (S.runKind !== 'jump') { S.adaptNow = null; setStreak(nextStreak(S.crashStreak, isCrash(S.card))); return syncRookie(); }
+  const best = S.ghosts[run.course];
+  S.perf = record(S.perf, outcomeOf(S.card, { best: best && !best.ref ? best.total : null }));
+  S.crashStreak = S.perf.crashes; saveStreak(S.crashStreak); savePerf(S.perf);
+  saveFlown(++S.flown);
+  const d = decide(S.perf, { tier: S.tier, level: drivingSettings.level, adapt: S.adapt });
+  S.adaptNow = { stepDown: null, offer: d.offerLevel || d.offerTier ? d : null };
+  // The step down happens here, between runs: the next run flies it; this run's card keeps its tier.
+  if (d.stepDown) { const from = S.tier; setTier(d.stepDown, { auto: true }); S.adaptNow.stepDown = { from, to: S.tier }; }
   syncRookie();
 }
 let streakLevel = drivingSettings.level;
-onDriving((d) => { if (d.level !== streakLevel) { streakLevel = d.level; if (S.crashStreak) setStreak(0); syncRookie(); } });
+onDriving((d) => { if (d.level !== streakLevel) { streakLevel = d.level; S.perf = afterChange(S.perf); if (S.crashStreak) setStreak(0); else savePerf(S.perf); syncRookie(); } });
+const adaptBox = document.querySelector('[data-adapt-box]'), adaptDown = document.querySelector('[data-adapt-down]'), adaptUp = document.querySelector('[data-adapt-up]');
 function syncRookie() {
-  const offer = S.mode === 'results' && offerRookie(S.crashStreak, drivingSettings.level, S.tier);
+  const results = S.mode === 'results';
+  const offer = results && !S.adaptNow?.stepDown && offerRookie(S.crashStreak, drivingSettings.level, S.tier);
   rookieBox.hidden = !offer;
   rookieTheatre.classList.toggle('th-rookie', offer);
+  // Adapt to me: the step it took (and Undo), or the harder step it offers. Rookie's offer wins the sheet.
+  const a = results ? S.adaptNow : null;
+  const down = a?.stepDown || null, up = !offer && !down && a?.offer ? offerWords(a.offer) : null;
+  adaptDown.hidden = !down;
+  if (down) document.querySelector('[data-adapt-why]').textContent = stepDownBanner(down.from, down.to);
+  adaptUp.hidden = !up;
+  if (up) {
+    document.querySelector('[data-adapt-label]').textContent = up.label;
+    document.querySelector('[data-adapt-sub]').textContent = up.sub;
+    document.querySelector('[data-adapt-up-why]').textContent = up.why;
+  }
+  adaptBox.hidden = !down && !up;
 }
 function goRookie() {
   setDriving({ level: 'easy' });
@@ -420,6 +498,25 @@ function goRookie() {
   ui.cue_('Rookie mode: Easy driving, Assist flying, auto-land', 2400);
   retry();
 }
+// Undo the step down: back to the tier the player had (their choice again: the counts start over).
+document.querySelector('[data-adapt-undo]').addEventListener('click', () => {
+  const down = S.adaptNow?.stepDown;
+  if (!down) return;
+  S.adaptNow.stepDown = null;
+  setTier(down.from);
+  syncRookie();
+  ui.cue_(`${TIER_WORDS[down.from].name} again for the next run`, 2000);
+  document.querySelector('.results [data-again]')?.focus({ preventScroll: true });
+});
+// The harder step, offered: one tap takes it and goes again.
+document.querySelector('[data-adapt-go]').addEventListener('click', () => {
+  const o = S.adaptNow?.offer;
+  if (!o) return;
+  S.adaptNow.offer = null;
+  if (o.offerLevel) setDriving({ level: o.offerLevel }); else if (o.offerTier) setTier(o.offerTier);
+  ui.cue_(o.offerLevel ? 'Standard driving' : `${TIER_WORDS[S.tier].name} · ${factorText(S.tier)}`, 2000);
+  retry();
+});
 
 const theatreRoot = document.querySelector('[data-theatre]');
 const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]'), goLabel = document.querySelector('[data-go-label]');
@@ -427,7 +524,7 @@ const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const JUDGE_MS = 35_000;   // invariant 5½: no AI call may block the results longer than this
 let replayingCall = false;
 async function runPanel(run, replay = null) {
-  const assist = !!(S.assist || S.autopilot);
+  const assist = !!(S.flyTier === 'assist' || S.autopilot);
   const card = S.card;
   if (!replay) { panelAbort?.abort(); panelAbort = new AbortController(); }
   const signal = panelAbort?.signal;
@@ -528,7 +625,7 @@ function liveStep(dt) {
   const simT0 = performance.now(), tick0 = run.tick;
   while (S.acc >= DT && run.phase !== 'done' && !S.after) {
     if (S.autopilot) noteRelease(run, input = S.autopilot(run));
-    else input = wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.tier, liveInput, S.released, run.car));
+    else input = wallAssist(run, oneThumb ? sampleThumb(run, S.released, liveInput) : sample(run.phase, S.flyTier, liveInput, S.released, run.car));
     poseLerp.before(run.car);
     bodyLerp.before(run.car.world.bodies);
     stepRun(run, input);
@@ -579,7 +676,7 @@ function liveStep(dt) {
   if (oneThumb) syncThumb(run, c);
   // Advanced on a touch screen: off the Wall the nozzle pad replaces the stick and the buttons.
   const pad = getNozzlePad();
-  const padOn = S.tier === 'advanced' && !S.autopilot && !ui.touch.hidden && (tp === 'air' || (tp === 'ramp' && S.released));
+  const padOn = S.flyTier === 'advanced' && !S.autopilot && !ui.touch.hidden && (tp === 'air' || (tp === 'ramp' && S.released));
   if (pad.active() !== padOn) { pad.show(padOn); ui.touch.classList.toggle('np-on', padOn); }
   if (padOn) pad.sync(c.throttles);
   if (run.phase !== S.prevPhase) {
@@ -619,6 +716,7 @@ function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTi
   const speed = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
   bodyRates(c, rates);
   const alt = heightAboveSurface(c);
+  S.hudAlt = alt;   // the live pointer's BRAKE window reads it (cues, next frame)
   landing.update(c, alt, S.autopilot ? '' : run.phase);
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(landing.prediction.rollOut) * 180 / Math.PI,
@@ -638,6 +736,8 @@ function newFlight(startTick = 0) {
   ui.timelineFor(stage.course);
   S.phaseMax = -1; S.startTick = startTick; S.contactBuzzed = false;
   cueHys.slow = false; cueHys.tilted = false;
+  S.ptr.release = 0; S.ptr.land = 0; S.ptr.brake = 0;
+  S.ptrCtx = pointerCtx(S.run?.course || stage.course, S.flyTier);
   S.releaseTick = S.released ? startTick - 240 : -1;
 }
 // Where in the flight you are, for the timeline: run-up → climb → hang → release → carry → brake →
@@ -667,10 +767,10 @@ const thumbPad = document.querySelector('[data-onethumb]');
 const thumbVerb = document.querySelector('[data-thumb-verb]'), thumbAct = document.querySelector('[data-thumb-act]'), thumbArc = document.querySelector('[data-thumb-arc]');
 const thumbActive = () => !ui.touch.hidden && ui.touch.dataset.scheme === 'thumb' && !S.autopilot;
 function syncScheme() {
-  const can = !!S.run && S.run.course !== 'lineup' && S.tier === 'assist';
+  const can = !!S.run && S.run.course !== 'lineup' && runTier() === 'assist';
   ui.touch.dataset.scheme = touchSet.scheme === 'thumb' && can ? 'thumb' : 'classic';
   ui.touch.dataset.hand = touchSet.hand;
-  ui.touch.dataset.tier = S.tier;
+  ui.touch.dataset.tier = runTier();
   ui.touch.dataset.course = S.run?.course || stage.course;
   document.querySelectorAll('[data-controls-label]').forEach((el) => { el.textContent = touchSet.scheme === 'thumb' ? 'One-thumb' : 'Classic'; });
 }
@@ -772,16 +872,28 @@ document.addEventListener('dblclick', (e) => { if (!e.target.closest?.('input, t
 const PAD_GLYPH = { '↑': 'RT', Space: 'A', Shift: 'B', F: 'RB', '← →': 'stick', 'A or D': 'LB or RB' };
 const kbd = (touchLabel, keyLabel) => {
   const dev = lastDevice();
-  const pad = dev === 'pad' ? (keyLabel === 'F' && S.tier === 'advanced' ? 'A' : PAD_GLYPH[keyLabel]) : null;
+  const pad = dev === 'pad' ? (keyLabel === 'F' && S.flyTier === 'advanced' ? 'A' : PAD_GLYPH[keyLabel]) : null;
   return `<kbd>${dev === 'touch' ? touchLabel : pad || keyLabel}</kbd>`;
 };
 // The cues teach the sequence for the tier you fly. With Assist: release, then hold BOOST and LAND
 // together (the computer caps the carry and rolls you out). Pro and Advanced fly by the HUD: roll
 // out by the dial, brake at the BRAKE line.
 const cueHys = { slow: false, tilted: false };   // which side of each cue threshold the flight is on
+// Live pointers (0079): for a new player (or a struggling one, S.coachLive), the one timely pointer
+// just before the mistake, from the predictor (read-only): "Let go now" on the ledge, "Land now" as the
+// descent leaves the green with LAND not held (Assist), "Brake now" at the BRAKE line (Pro, Advanced).
+// One per phase per run: a window opens once, shows while it holds, and never reopens (0 → 1 → 2).
+S.ptr = { release: 0, land: 0, brake: 0 };
+function livePtr(kind, want) {
+  const st = S.ptr[kind];
+  if (st === 0 && want) S.ptr[kind] = 1;
+  else if (st === 1 && !want) S.ptr[kind] = 2;
+  return S.ptr[kind] === 1;
+}
+const kbdWrap = (k) => `<kbd>${k}</kbd>`;
 function cues(run, c) {
   const v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
-  const tier = S.tier, adv = tier === 'advanced';
+  const tier = S.flyTier, adv = tier === 'advanced';
   if (thumbActive()) return thumbCues(run, c, v);
   if (run.phase === 'drive' && v < 2) return ui.cue_(`Hold ${kbd('GO', '↑')} to drive`, 600);
   if (run.course !== 'lineup') {
@@ -789,7 +901,10 @@ function cues(run, c) {
     if (run.phase === 'drive' && c.pos.z > -40) return ui.cue_(`Fan spooling · crawl in, about 20 km/h`, 600);
     if (run.phase === 'ramp' && run.t.progress < 0.88) return ui.cue_(tier === 'assist' ? `Hold ${kbd('GO', '↑')}: Assist holds a crawl on suction` : `Feather ${kbd('GO', '↑')}: crawl up on suction`, 500);
     if (run.phase === 'ramp' && !S.released && run.t.progress < 0.92) return ui.cue_('Onto the ledge, then stop', 500);
-    if (run.phase === 'ramp' && !S.released) return ui.cue_(`Upside down on the ledge · ${kbd('RELEASE', 'Space')} to let go`, 500);
+    if (run.phase === 'ramp' && !S.released) {
+      if (S.coachLive && livePtr('release', true)) return ui.cue_(livePointer('release', S.ptrCtx, kbdWrap), 500);
+      return ui.cue_(`Upside down on the ledge · ${kbd('RELEASE', 'Space')} to let go`, 500);
+    }
     // The Show: the row is under you. The rear jets carry you out over it (≈10 m/s is enough).
     // Thresholds have an enter and an exit (hysteresis), so a speed or an attitude hovering on the
     // line can't flip the cue between two messages.
@@ -800,6 +915,7 @@ function cues(run, c) {
       if (boostCue) return ui.cue_(`Hold ${kbd('BOOST', 'F')} + ${kbd('LAND', 'Shift')} · over the row`, 400);
       // Assist's auto-land (src/sim/vehicle.js): LAND came too late to stop, so the computer started it.
       if (run.phase === 'air' && c.autoLand) return ui.cue_(`Auto-LAND · braking for you · ${kbd('LAND', 'Shift')} next time`, 500);
+      if (S.coachLive && livePtr('land', run.phase === 'air' && !liveInput.level && landing.prediction.status !== 'green')) return ui.cue_(livePointer('land', S.ptrCtx, kbdWrap), 500);
       if (run.phase === 'air') return ui.cue_(`Hold ${kbd('LAND', 'Shift')}: it rolls you out and brakes`, 500);
       return;
     }
@@ -807,6 +923,10 @@ function cues(run, c) {
     const upY = landing.prediction.upY;
     cueHys.tilted = cueHys.tilted ? upY < 0.9 : upY < 0.85;
     if (run.phase === 'air' && cueHys.tilted) return ui.cue_(adv ? `Roll out: ${kbd('Q+Z or E+C', 'A or D')} · watch the dial` : `Roll out: ${kbd('stick', '← →')} · let go early`, 400);
+    if (S.coachLive) {
+      const lift = c.throttles[0] + c.throttles[1] + c.throttles[2] + c.throttles[3];
+      if (livePtr('brake', run.phase === 'air' && c.vel.y < -1 && lift < 1 && S.hudAlt <= landing.prediction.brakeBy + 1.5)) return ui.cue_(livePointer('brake', S.ptrCtx, kbdWrap), 400);
+    }
     if (run.phase === 'air') return ui.cue_(`Brake: ${kbd('LIFT', 'Space')} at the BRAKE line`, 400);
     return;
   }
@@ -951,9 +1071,11 @@ onDevice(() => {
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
   ui.touch.hidden = !usingTouch() || !!S.autopilot;
   syncScheme();
+  S.ptrCtx = pointerCtx(S.run?.course || stage.course, S.flyTier);
 });
 const on = (sel, fn) => document.querySelectorAll(sel).forEach((el) => el.addEventListener('click', fn));
-on('[data-start]', () => startRun('jump'));
+// The first Jump on this device shows how to fly first (skippable, remembered); a deep link never waits.
+on('[data-start]', (e) => (howtoSeen() ? startRun('jump') : openHowto({ then: () => startRun('jump'), from: e.currentTarget })));
 on('[data-reveal]', () => startRun('reveal'));
 // Retry: straight back onto the mark with a one-beat READY (a drill restarts itself; the reference
 // jump hands over to you). Home: the title. Both from anywhere in a run: the HUD's quick buttons,
@@ -1002,32 +1124,135 @@ courseBtns.forEach((b) => b.addEventListener('click', () => {
 }));
 syncCourseBtns();
 
-// The flight tier: Assist → Pro → Advanced. The chip says what the panel pays for it.
+// The flight tier: Assist → Pro → Advanced, for the next run (a run keeps the tier it started with:
+// latchTier). The top bar's chip says what the panel pays for it; the AI assist control on the title and
+// the results says in words what the computer does (0079), and both open the tier picker, where every
+// tier is explained and Adapt to me is a switch. Nothing about a tier lives only in a hover title.
 const tierBtn = document.querySelector('[data-tier]');
-const TIER_CUES = {
-  assist: 'Assist: the computer holds rates, LAND rolls you out and brakes',
-  pro: 'Pro: rate control, no LAND. Brake at the line yourself · ×1.08',
-  advanced: 'Advanced: ten valves by hand, no computer · ×1.15',
-};
-function setTier(tier) {
+const assistCtls = document.querySelectorAll('[data-assist-open]');
+// `auto`: Adapt to me stepped it (the model's counts, not Rookie's streak: the player didn't choose).
+function setTier(tier, { auto = false } = {}) {
   const was = S.tier;
   S.tier = TIERS[tier] ? tier : 'assist';
-  if (S.tier !== was && S.crashStreak) { setStreak(0); syncRookie(); }
+  if (S.tier !== was) {
+    S.perf = afterChange(S.perf);
+    if (!auto && S.crashStreak) setStreak(0); else savePerf(S.perf);
+    syncRookie();
+  }
   S.assist = S.tier === 'assist';
   const t = TIERS[S.tier];
   tierBtn.dataset.tier = S.tier;
-  ui.screens.hud.dataset.tier = S.tier;
+  if (!inRun()) ui.screens.hud.dataset.tier = S.tier;
   const short = { assist: 'Assist', pro: 'Pro', advanced: 'Adv' }[S.tier];
   tierBtn.innerHTML = `<span class="tl">${t.label}</span><span class="ts">${short}</span>${t.factor > 1 ? ` <i>×${t.factor.toFixed(2)}</i>` : ''}`;
-  tierBtn.setAttribute('aria-label', `Flight tier: ${t.label}`);
+  tierBtn.setAttribute('aria-label', `AI assist: ${S.assist ? 'on' : `off, ${t.label} ×${t.factor.toFixed(2)}`}. Choose the flight tier`);
   try { localStorage.setItem('coldgas_tier', S.tier); localStorage.setItem('coldgas_assist', S.assist ? '1' : '0'); } catch { /* storage blocked */ }
+  syncAssist();
   syncScheme();
 }
+// The labelled control: "AI ASSIST · ON — rolls you out, levels and brakes" (or OFF · PRO ×1.08 …).
+function syncAssist() {
+  const w = TIER_WORDS[S.tier], f = TIERS[S.tier].factor;
+  const state = S.assist ? 'On' : `Off · ${w.name}`, sub = f > 1 ? `${w.sub} · ${factorText(S.tier)}` : w.sub;
+  assistCtls.forEach((b) => {
+    b.dataset.assistTier = S.tier;
+    b.querySelector('[data-assist-state]').textContent = state;
+    b.querySelector('[data-assist-sub]').textContent = sub;
+  });
+  assistScreen.querySelectorAll('[data-tier-opt]').forEach((b) => { const on = b.dataset.tierOpt === S.tier; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
+}
+const assistScreen = ui.screens.assist;
+assistScreen.querySelectorAll('[data-tier-long]').forEach((el) => { el.textContent = TIER_WORDS[el.dataset.tierLong].long; });
+let assistOpener = null;
+function openAssist(from) {
+  assistOpener = from || document.activeElement;
+  syncAssist(); syncAdapt();
+  ui.show('assist', true);
+  assistScreen.querySelector('[data-tier-opt][aria-checked="true"]')?.focus({ preventScroll: true });
+}
+function closeAssist() {
+  if (assistScreen.hidden) return;
+  ui.show('assist', false);
+  if (assistOpener?.isConnected && !assistOpener.closest('[hidden]')) assistOpener.focus({ preventScroll: true });
+  assistOpener = null;
+}
+const pickTier = (b) => {
+  if (b.dataset.tierOpt === S.tier) return;
+  setTier(b.dataset.tierOpt);
+  ui.cue_(`${TIER_WORDS[S.tier].name}${TIERS[S.tier].factor > 1 ? ` · ${factorText(S.tier)}` : ' · on'}${inRun() ? ' · from the next run' : ''}`, 2200);
+};
+assistScreen.querySelectorAll('[data-tier-opt]').forEach((b) => b.addEventListener('click', () => pickTier(b)));
+radioKeys(assistScreen.querySelector('[data-tier-opts]'), '[data-tier-opt]', pickTier);
+assistScreen.querySelector('[data-assist-close]').addEventListener('click', closeAssist);
+assistScreen.addEventListener('click', (e) => { if (e.target === assistScreen) closeAssist(); });
+tierBtn.addEventListener('click', () => openAssist(tierBtn));
+assistCtls.forEach((b) => b.addEventListener('click', () => openAssist(b)));
+// Adapt to me: one setting, two switches (the tier picker and the Controls sheet).
+function syncAdapt() {
+  document.querySelectorAll('[data-adapt]').forEach((b) => b.setAttribute('aria-checked', String(S.adapt)));
+  document.querySelectorAll('[data-adapt-note]').forEach((el) => {
+    el.textContent = S.adapt ? 'On: three crashes in a row on Pro or Advanced turn more AI assist on for the next run (Undo on the results); clean landings offer a harder step. Never mid-run.'
+      : 'Off: the tier stays where you put it. Clean landings still offer a harder step.';
+  });
+}
+document.querySelectorAll('[data-adapt]').forEach((b) => b.addEventListener('click', () => { S.adapt = !S.adapt; saveAdapt(S.adapt); syncAdapt(); }));
+syncAdapt();
 setTier(S.tier);
-tierBtn.addEventListener('click', () => {
-  setTier({ assist: 'pro', pro: 'advanced', advanced: 'assist' }[S.tier]);
-  ui.cue_(TIER_CUES[S.tier], 2800);
-});
+
+// --- How to fly (0079, src/pointer.js howtoRows): this device's controls, per phase --------------------
+// Shown on the first Jump (before the run, skippable, remembered in localStorage) and any time from the
+// title's "How to fly" or the pause sheet. The device is the one in use (src/input.js lastDevice): touch
+// (the one-thumb or the two-thumb scheme actually active), a keyboard, or a gamepad.
+// A browser under automation (navigator.webdriver) counts as a returning player, so the audits and the
+// specs fly straight in; a spec that wants the first visit sets coldgas_howto = 'new'.
+const howtoScreen = ui.screens.howto, HOWTO_KEY = 'coldgas_howto';
+function howtoSeen() {
+  try { const v = localStorage.getItem(HOWTO_KEY); if (v === 'seen') return true; if (v === 'new') return false; } catch { return true; }
+  return !!navigator.webdriver;
+}
+let howtoThen = null, howtoOpener = null;
+function openHowto({ then = null, from = null } = {}) {
+  howtoThen = then; howtoOpener = from || document.activeElement;
+  const ctx = pointerCtx(stage.course, S.tier);
+  howtoScreen.querySelector('[data-howto-device]').textContent = deviceTitle(ctx);
+  const ol = howtoScreen.querySelector('[data-howto-rows]');
+  ol.innerHTML = '';
+  for (const r of howtoRows(ctx)) {
+    const li = document.createElement('li');
+    li.innerHTML = '<span class="hw-phase"></span><span class="hw-ctl"><i></i><kbd></kbd></span><span class="hw-what"></span>';
+    li.querySelector('.hw-phase').textContent = r.phase;
+    li.querySelector('.hw-ctl i').textContent = r.verb;
+    li.querySelector('.hw-ctl kbd').textContent = r.ctl;
+    unitText(li.querySelector('.hw-what'), r.what);
+    ol.appendChild(li);
+  }
+  howtoScreen.querySelector('[data-howto-assist]').textContent = S.assist
+    ? `AI assist is on: it ${TIER_WORDS.assist.sub}. Change it any time with the AI assist button.`
+    : `AI assist is off (${TIER_WORDS[S.tier].name}). Turn it on with the AI assist button.`;
+  howtoScreen.querySelector('[data-howto-go]').textContent = then ? 'Got it · Jump' : 'Got it';
+  howtoScreen.querySelector('[data-howto-skip]').hidden = !then;
+  ui.show('howto', true);
+  howtoScreen.querySelector('[data-howto-go]').focus({ preventScroll: true });
+}
+function closeHowto() {
+  if (howtoScreen.hidden) return;
+  try { localStorage.setItem(HOWTO_KEY, 'seen'); } catch { /* storage blocked: it may show again */ }
+  ui.show('howto', false);
+  const then = howtoThen;
+  howtoThen = null;
+  if (then) return then();
+  if (howtoOpener?.isConnected && !howtoOpener.closest('[hidden]')) howtoOpener.focus({ preventScroll: true });
+}
+on('[data-howto-open]', (e) => openHowto({ from: e.currentTarget }));
+on('[data-howto-go]', closeHowto);
+on('[data-howto-skip]', closeHowto);
+howtoScreen.addEventListener('click', (e) => { if (e.target === howtoScreen) closeHowto(); });
+// Escape closes the card or the tier picker before the game reads it (Escape on the results goes Home).
+addEventListener('keydown', (e) => {
+  if (e.code !== 'Escape') return;
+  if (!howtoScreen.hidden) closeHowto(); else if (!assistScreen.hidden) closeAssist(); else return;
+  e.preventDefault(); e.stopImmediatePropagation();
+}, true);
 
 // --- Practice (src/practice.js) -----------------------------------------------------------------
 const drillBar = document.querySelector('[data-drill-bar]');
@@ -1083,6 +1308,8 @@ function startDrillNow(id) {
   const { run, released } = buildDrill(drill, stage.course);
   S.run = armAftermath(run); S.after = false; S.drillSnap = null;
   S.autopilot = null; S.released = released; S.drill = drill; S.coach = null; S.runKind = 'drill';
+  latchTier();
+  S.adaptNow = null; S.coachLive = false;
   setMode('live'); S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
   S.impacts = 0; S.impact = null;
   newFlight(run.tick);
@@ -1214,7 +1441,7 @@ document.querySelector('[data-r-submit]').addEventListener('submit', async (e) =
   if (btn) btn.disabled = true;
   msg.textContent = 'Verifying…';
   let res;
-  try { res = await postScore(run.inputLog, S.assist, initials, run.course); } finally { postingRun = null; if (btn) btn.disabled = false; }
+  try { res = await postScore(run.inputLog, S.flyTier === 'assist', initials, run.course); } finally { postingRun = null; if (btn) btn.disabled = false; }
   if (res.ok) postedRun = run;
   if (S.run !== run) return;   // a new run's sheet: this answer belongs to the last one
   msg.textContent = res.ok ? `Posted. #${res.rank} today.` : res.status === 429 ? 'Slow down a little.' : res.timeout ? 'The board didn’t answer. Try again.' : 'The board is offline.';

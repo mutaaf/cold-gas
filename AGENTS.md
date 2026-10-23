@@ -230,6 +230,11 @@ src/driving.js        driving levels (pure, 0066): Easy / Standard / Advanced on
                         slide catch; Standard: the hands, bit for bit; Advanced: direct, analog pedals
 src/rookie.js         Rookie mode (pure, 0074): crashed runs in a row; from the third the results offer Easy driving +
                         Assist flight in one tap (src/main.js draws it on the sheet and, 0076, the theatre's phone bar; reset by a clean run or a level/tier change)
+src/adapt.js          Adapt to me (pure, 0079): the session's performance model over rookie.js; between runs only, 3 crashes in a
+                        row on Pro/Advanced step the tier down (Undo), every 3 good runs offer a harder step; a run's tier is
+                        latched at its start (S.flyTier)
+src/pointer.js        the coach in the device's words (pure, 0079): controls per device/scheme, the "how to fly" card's rows,
+                        the post-run pointer (no third repeat, "Better: …"), the live cue-line pointers
 src/render/interp.js  the car drawn between 240 Hz ticks (no sim change)
 src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
                         hold to land (LAND + the carry over the row); plain sim inputs, pure, no DOM
