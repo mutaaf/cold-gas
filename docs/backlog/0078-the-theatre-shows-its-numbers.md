@@ -6,7 +6,7 @@ priority: P1
 size: M
 lens: player-feel
 created: 2026-10-22
-pr: TBD
+pr: 104
 by: operator
 ---
 
