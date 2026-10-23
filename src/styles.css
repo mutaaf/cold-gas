@@ -295,14 +295,21 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
 .th-meta dd, .th-stats dd { margin: 0; font: 400 12px/1.4 var(--mono); color: var(--ink); text-align: right; }
 .th-stats { position: absolute; right: calc(28px + var(--safe-r)); bottom: calc(28px + var(--safe-b)); width: min(240px, 34%); z-index: 1;
   padding: 18px 20px; border: 1px solid var(--hair); border-radius: 16px; background: rgba(4, 6, 11, 0.82); backdrop-filter: blur(14px); }
-.th-stats dd { font-variant-numeric: tabular-nums; }
+/* The counters are what the call cost: read at a glance (0078). Labels in the raised ink, values
+   larger and in the aurora's near-white, so they read from arm's length on a phone. */
+.th-stats { gap: 10px; }
+.th-stats div { align-items: baseline; }
+.th-stats dt { font-size: 11px; color: var(--ink-2); }
+.th-stats dd { font: 500 15px/1.3 var(--mono); color: #eafff7; font-variant-numeric: tabular-nums; white-space: nowrap; }
+/* A short sideways screen beside the sheet leaves the counters a narrow column: one size down. */
+@media (max-height: 500px) and (orientation: landscape) { .th-stats dd { font-size: 13px; } }
 /* The raw stream sits on its own dark glass (like the cards), so the words never share pixels
    with the compute die behind them. Empty until the first token; gone when the words land. */
 .th-ticker { position: absolute; left: 50%; bottom: calc(216px + var(--safe-b)); transform: translateX(-50%); width: min(560px, 70%); z-index: 1; text-align: center;
-  font: 400 12px/1.55 var(--mono); color: var(--ink); max-height: calc(8 * 1.55em + 24px); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
+  font: 400 14px/1.6 var(--mono); color: var(--ink); max-height: calc(5 * 1.6em + 24px); overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end;
   padding: 12px 16px; box-sizing: border-box; border-radius: 14px; border: 1px solid var(--hair-2); background: rgba(3, 5, 10, 0.88); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
   white-space: pre-wrap; word-break: break-word; transition: opacity 0.4s var(--ease); }
-.th-ticker:has(.th-reason:empty):has(.th-out:empty), .theatre[data-stage='app'] .th-ticker { opacity: 0; }
+.th-ticker:has(.th-reason:empty):has(.th-out:empty), .theatre[data-stage='app'] .th-ticker, .theatre[data-spell] .th-ticker { opacity: 0; }
 .th-ticker::before { content: ''; position: absolute; inset: 0 0 auto; height: 2.4em; border-radius: 14px 14px 0 0; pointer-events: none;
   background: linear-gradient(rgba(3, 5, 10, 0.95), rgba(3, 5, 10, 0)); }
 .th-reason { color: #cdb3ff; font-style: italic; }
@@ -327,7 +334,7 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   .th-rookie-btn span { font: 500 12px/1.2 var(--mono); letter-spacing: 0.04em; text-transform: none; color: var(--ink); opacity: 0.86; }
   .theatre.th-rookie:not(.th-quest) .th-rail { top: calc(116px + var(--safe-t)); }
   .theatre.th-rookie:not(.th-quest) .th-caption { top: calc(180px + var(--safe-t)); }
-  .theatre.th-rookie:not(.th-quest) .th-ticker { max-height: min(calc(7 * 1.55em + 24px), calc(100dvh - 478px - var(--safe-t) - var(--safe-b))); }
+  .theatre.th-rookie:not(.th-quest) .th-ticker { max-height: min(calc(5 * 1.6em + 24px), calc(100dvh - 478px - var(--safe-t) - var(--safe-b))); }
 }
 
 /* Receipt in the results sheet */
@@ -379,7 +386,7 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   .th-card { left: 16px; right: 16px; width: auto; bottom: calc(150px + var(--safe-b)); padding: 14px 16px; }
   .th-card .th-meta { display: none; }
   .th-stats { left: 16px; right: 16px; width: auto; bottom: calc(16px + var(--safe-b)); grid-template-columns: 1fr 1fr; padding: 12px 16px; }
-  .th-ticker { width: calc(100vw - 32px); bottom: calc(272px + var(--safe-b)); font-size: 13px; max-height: calc(7 * 1.55em + 24px); }
+  .th-ticker { width: calc(100vw - 32px); bottom: calc(272px + var(--safe-b)); font-size: 15px; max-height: calc(5 * 1.6em + 24px); }
   .ai-chip { max-width: 120px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 @media (prefers-reduced-motion: reduce) { .theatre::before { animation: none; } }
