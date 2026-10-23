@@ -228,6 +228,8 @@ src/driving.js        driving levels (pure, 0066): Easy / Standard / Advanced on
                         the ordinary input channels (unscored grounds also: assist, and the car's tcOff / tcSport /
                         absOff / handbrake flags, never set on a scored run). Easy: road-speed governor, lane keep,
                         slide catch; Standard: the hands, bit for bit; Advanced: direct, analog pedals
+src/rookie.js         Rookie mode (pure, 0074): crashed runs in a row; from the third the results offer Easy driving +
+                        Assist flight in one tap (src/main.js draws it; reset by a clean run or a level/tier change)
 src/render/interp.js  the car drawn between 240 Hz ticks (no sim change)
 src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
                         hold to land (LAND + the carry over the row); plain sim inputs, pure, no DOM

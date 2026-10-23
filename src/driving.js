@@ -21,9 +21,10 @@ export const LEVEL_INFO = {
 };
 export const TC_MODES = ['on', 'sport', 'off'];
 export const validLevel = (l) => (LEVELS.includes(l) ? l : null);
-// A touch-first device starts on Easy (a 2 cm stick and on/off pedals); a keyboard or pad starts on
-// Standard, the feel every gate was tuned on.
-export const defaultLevel = (coarse) => (coarse ? 'easy' : 'standard');
+// Every device starts on Standard, the feel every gate was tuned on (0074: phones started on Easy before;
+// a saved choice is still the player's). Easy is one tap away: the Controls sheet, or the results' Rookie
+// mode after three crashes in a row (src/rookie.js). Callers still pass the pointer kind; it no longer matters.
+export const defaultLevel = () => 'standard';
 
 // The stick on the ground, per level and kind ('touch' | 'pad'). Standard is exactly what input.js did.
 export function shapeStick(level, x, kind = 'pad') {

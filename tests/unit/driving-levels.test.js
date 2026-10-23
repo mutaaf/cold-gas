@@ -32,11 +32,13 @@ function testRoad(straight = 300, R = 30, hw = 3.5) {
 }
 
 describe('the setting', () => {
-  it('starts on Easy on a touch-first device and Standard elsewhere, and remembers a choice', () => {
-    expect(defaultLevel(true)).toBe('easy');
+  it('starts on Standard on every device (0074: a touch-first one too), and remembers a choice', () => {
+    expect(defaultLevel(true)).toBe('standard');
     expect(defaultLevel(false)).toBe('standard');
     const mem = new Map(), store = { getItem: (k) => mem.get(k) ?? null, setItem: (k, v) => mem.set(k, v) };
-    expect(loadDriving(true, store)).toMatchObject({ level: 'easy', tc: 'on', abs: true, saved: false });
+    expect(loadDriving(true, store)).toMatchObject({ level: 'standard', tc: 'on', abs: true, saved: false });
+    saveDriving({ level: 'easy', tc: 'on', abs: true }, store);
+    expect(loadDriving(true, store)).toMatchObject({ level: 'easy', saved: true });   // a phone player's saved Easy stays Easy
     saveDriving({ level: 'advanced', tc: 'sport', abs: false }, store);
     expect(loadDriving(true, store)).toMatchObject({ level: 'advanced', tc: 'sport', abs: false, saved: true });
     expect(loadDriving(false, store).level).toBe('advanced');
@@ -46,7 +48,7 @@ describe('the setting', () => {
     expect(loadDriving(false, blocked).level).toBe('standard');
     expect(() => saveDriving({ level: 'easy', tc: 'on', abs: true }, blocked)).not.toThrow();
     const junk = { getItem: () => '{"level":"insane","tc":7}' };
-    expect(loadDriving(true, junk)).toMatchObject({ level: 'easy', tc: 'on' });
+    expect(loadDriving(true, junk)).toMatchObject({ level: 'standard', tc: 'on' });
     expect(LEVELS).toEqual(['easy', 'standard', 'advanced']);
   });
 });

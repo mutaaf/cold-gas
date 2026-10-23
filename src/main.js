@@ -30,6 +30,7 @@ import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
 import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState } from './input.js';
 import { LEVEL_INFO } from './driving.js';
+import { isCrash, nextStreak, offerRookie, loadStreak, saveStreak } from './rookie.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
 import { thumbStage } from './onethumb.js';
@@ -312,6 +313,7 @@ function startRunNow(kind = 'jump', quick = false) {
   // Armed for its aftermath: when it ends, the car finishes its crash before the results (0062).
   S.run = armAftermath(createRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
+  S.runKind = kind;   // the reference jump never counts toward Rookie mode's streak (0074)
   S.released = false; S.drill = null; S.freezeT = 0; S.coach = null;
   ghostLoaded(stage.course);   // the reference ghost is flown on the title (precomputeRefGhosts)
   setMode('countdown'); S.countT = 0; S.countLen = quick ? 1 : 3; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
@@ -350,6 +352,7 @@ function finishRun() {
   landing.show(false);
   getNozzlePad().show(false);
   ui.clearCue();
+  countCrash(run);
   // The coach re-flies the log (≈30–60 ms) a beat after the sheet slides in.
   const coachRun = () => setTimeout(() => {
     if (S.run !== run) return;
@@ -386,6 +389,30 @@ function finishRun() {
   // Replay plays behind the sheet.
   replayFrom(0);
 }
+
+// Rookie mode (0074, src/rookie.js): crashed runs in a row, this session. From the third the results offer
+// one button: Easy driving + Assist flight (auto-land), saved, and straight into the retry. Any clean run
+// ends the streak, and so does a change of driving level or flight tier (the player chose; the offer
+// waits for three new crashes).
+const rookieBox = document.querySelector('[data-rookie]');
+S.crashStreak = loadStreak();
+let streakRun = null;
+function setStreak(n) { S.crashStreak = n; saveStreak(n); }
+function countCrash(run) {
+  if (run !== streakRun && S.runKind !== 'reveal' && S.card) { streakRun = run; setStreak(nextStreak(S.crashStreak, isCrash(S.card))); }
+  syncRookie();
+}
+let streakLevel = drivingSettings.level;
+onDriving((d) => { if (d.level !== streakLevel) { streakLevel = d.level; if (S.crashStreak) setStreak(0); syncRookie(); } });
+function syncRookie() { rookieBox.hidden = !(S.mode === 'results' && offerRookie(S.crashStreak, drivingSettings.level, S.tier)); }
+rookieBox.querySelector('[data-rookie-go]').addEventListener('click', () => {
+  setDriving({ level: 'easy' });
+  setTier('assist');
+  setStreak(0);
+  rookieBox.hidden = true;
+  ui.cue_('Rookie mode: Easy driving, Assist flying, auto-land', 2400);
+  retry();
+});
 
 const theatreRoot = document.querySelector('[data-theatre]');
 const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]'), goLabel = document.querySelector('[data-go-label]');
@@ -974,7 +1001,9 @@ const TIER_CUES = {
   advanced: 'Advanced: ten valves by hand, no computer · ×1.15',
 };
 function setTier(tier) {
+  const was = S.tier;
   S.tier = TIERS[tier] ? tier : 'assist';
+  if (S.tier !== was && S.crashStreak) { setStreak(0); syncRookie(); }
   S.assist = S.tier === 'assist';
   const t = TIERS[S.tier];
   tierBtn.dataset.tier = S.tier;
@@ -1044,7 +1073,7 @@ function startDrillNow(id) {
   disposeRun();
   const { run, released } = buildDrill(drill, stage.course);
   S.run = armAftermath(run); S.after = false; S.drillSnap = null;
-  S.autopilot = null; S.released = released; S.drill = drill; S.coach = null;
+  S.autopilot = null; S.released = released; S.drill = drill; S.coach = null; S.runKind = 'drill';
   setMode('live'); S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
   S.impacts = 0; S.impact = null;
   newFlight(run.tick);
