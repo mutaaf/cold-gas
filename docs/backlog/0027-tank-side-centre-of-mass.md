@@ -1,7 +1,7 @@
 ---
 id: 0027
 title: The passenger-seat tank moves the CoM 6 cm toward it, and the jets trim for it as it empties
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity

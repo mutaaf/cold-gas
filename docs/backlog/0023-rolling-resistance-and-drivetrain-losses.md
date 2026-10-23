@@ -1,7 +1,7 @@
 ---
 id: 0023
 title: The car coasts down like a real one — rolling resistance and a speed-dependent tyre drag
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: authenticity

@@ -1,7 +1,7 @@
 ---
 id: 0017
 title: Touchdown loads — suspension bottoming and tyre spin-up transient
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity

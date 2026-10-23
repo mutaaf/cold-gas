@@ -1,7 +1,7 @@
 ---
 id: 0069
 title: The title's fine print, controls row and spec strip stay legible over the 3D scene
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: accessibility
@@ -37,3 +37,8 @@ Extend title-audit with the contrast sampler (shared helper with hud-audit); run
 
 ## Out of scope
 Redesigning the title layout or copy.
+
+## Scout re-check (2026-10-23, 1440×900, SwiftShader)
+Still reproduces on `main` (39ae0db): "Today's board" (the ghost button, no glass) is white-on-white where the red
+ring's bloom passes behind it, and the spec strip's "THRUSTERS" label vanishes against the lit fog. Both are
+legible only by luck of the camera angle, so the fix must be a backing (glass or scrim), not a colour nudge.

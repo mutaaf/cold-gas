@@ -1,7 +1,7 @@
 ---
 id: 0029
 title: Park the row in the reveal's order, colours and 15–17 m span
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity

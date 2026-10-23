@@ -1,7 +1,7 @@
 ---
 id: 0070
 title: The countdown numeral is never half-hidden behind the telemetry panel
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: player-feel

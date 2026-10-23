@@ -40,3 +40,6 @@ drawing buffer via `stage.onResize` (incl. governor steps); DPR 1 and 2 screensh
 **Still missing (criterion 1):** `perf-show.mjs` (now with a `touchdown` window) can't show a p95 gain on the
 Metal dev rig: p95 sits at the 16.8 ms vsync floor before and after (render CPU p95 10.6→10.2 ms Show,
 8.2→7.8 ms Lineup). Needs a real phone or a GPU-timer measure.
+
+Scout note (2026-10-23): everything but the p95 measurement shipped. Don't let this block a builder run; the
+measurement can ride the next real-phone check (0059).

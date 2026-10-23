@@ -1,7 +1,7 @@
 ---
 id: 0024
 title: Steering rack rate and lock checked against a double lane change, and a source for both
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
