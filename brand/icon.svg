@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <!-- COLD GAS · the mark (source of truth: scripts/brand.mjs renders every icon from this file).
+       The wordmark's own wide G (Michroma's geometry: a rounded-rectangle C, open at the upper right),
+       cut from chrome; its crossbar is a cold-gas jet, white at the nozzle and gone to ice by the
+       centre. C and G in one form. The chrome's horizon line runs along the top of the jet.
+       Geometry on a 32-unit grid (704 × 512, stroke 96, the jet's top on the centre line), so the
+       edges land on whole pixels at 16, 32, 64, 192 and 512 px. -->
+  <defs>
+    <radialGradient id="cg-plate" cx="512" cy="170" r="980" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1a2433" />
+      <stop offset=".42" stop-color="#0a0e16" />
+      <stop offset="1" stop-color="#030408" />
+    </radialGradient>
+    <radialGradient id="cg-bloom" cx="620" cy="540" r="320" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#bfe6ff" stop-opacity=".16" />
+      <stop offset="1" stop-color="#bfe6ff" stop-opacity="0" />
+    </radialGradient>
+    <linearGradient id="cg-rim" x1="0" y1="0" x2="0" y2="1024" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" stop-opacity=".2" />
+      <stop offset=".5" stop-color="#ffffff" stop-opacity=".03" />
+      <stop offset="1" stop-color="#ffffff" stop-opacity=".08" />
+    </linearGradient>
+    <linearGradient id="cg-chrome" x1="0" y1="256" x2="0" y2="768" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset=".28" stop-color="#e6ebf1" />
+      <stop offset=".46" stop-color="#a3adba" />
+      <stop offset=".5" stop-color="#58616d" />
+      <stop offset=".535" stop-color="#cdd4dd" />
+      <stop offset=".8" stop-color="#f1f4f7" />
+      <stop offset="1" stop-color="#8f99a7" />
+    </linearGradient>
+    <linearGradient id="cg-jet" x1="768" y1="0" x2="448" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#ffffff" />
+      <stop offset=".4" stop-color="#e4f5ff" />
+      <stop offset="1" stop-color="#bfe6ff" stop-opacity="0" />
+    </linearGradient>
+    <mask id="cg-open">
+      <rect width="1024" height="1024" fill="#fff" />
+      <rect x="728" y="416" width="300" height="96" fill="#000" />
+    </mask>
+    <filter id="cg-glow" x="-30%" y="-200%" width="160%" height="500%">
+      <feGaussianBlur stdDeviation="16" />
+    </filter>
+  </defs>
+  <g id="plate">
+    <rect width="1024" height="1024" rx="228" fill="url(#cg-plate)" />
+    <rect width="1024" height="1024" rx="228" fill="url(#cg-bloom)" />
+    <rect x="3" y="3" width="1018" height="1018" rx="225" fill="none" stroke="url(#cg-rim)" stroke-width="6" />
+  </g>
+  <g id="mark">
+    <path d="M340 256H684A180 180 0 0 1 864 436V588A180 180 0 0 1 684 768H340A180 180 0 0 1 160 588V436A180 180 0 0 1 340 256ZM340 352A84 84 0 0 0 256 436V588A84 84 0 0 0 340 672H684A84 84 0 0 0 768 588V436A84 84 0 0 0 684 352Z" fill="url(#cg-chrome)" mask="url(#cg-open)" />
+    <path d="M768 512L768 608L448 518L448 512Z" fill="#bfe6ff" opacity=".65" filter="url(#cg-glow)" />
+    <path d="M768 512L768 608L448 518L448 512Z" fill="url(#cg-jet)" />
+  </g>
+</svg>

@@ -1,14 +1,43 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" style="background:#05070c">
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no" />
   <title>COLD GAS</title>
   <meta name="description" content="Ten cold-gas thrusters. One roll. Stick the landing. A minimal 3D stunt game judged by an AI panel." />
   <meta name="theme-color" content="#05070c" />
-  <meta property="og:title" content="COLD GAS" />
-  <meta property="og:description" content="Ramp, ten thrusters, a row of parked EVs, one 360° roll. Stick the landing." />
+  <meta name="color-scheme" content="dark" />
+  <!-- Installed (0081): the manifest names it, the icons are brand/icon.svg rendered by scripts/brand.mjs.
+       iOS reads its own tags: the home-screen title, the icon (180, no transparency) and a status bar
+       the game draws under (it keeps clear of it with --safe-*). The first paint is #05070c (the
+       html style above), so a launch never flashes white. -->
+  <link rel="manifest" href="./manifest.webmanifest" />
   <link rel="icon" href="./favicon.svg" type="image/svg+xml" />
+  <link rel="icon" href="./favicon-32.png" type="image/png" sizes="32x32" />
+  <link rel="icon" href="./favicon-16.png" type="image/png" sizes="16x16" />
+  <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="COLD GAS" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="application-name" content="COLD GAS" />
+  <!-- Link previews: scrapers need absolute URLs; %VITE_CG_SITE% is the production address (vite.config.js). -->
+  <link rel="canonical" href="%VITE_CG_SITE%" />
+  <meta property="og:type" content="website" />
+  <meta property="og:site_name" content="COLD GAS" />
+  <meta property="og:url" content="%VITE_CG_SITE%" />
+  <meta property="og:title" content="COLD GAS" />
+  <meta property="og:description" content="Ten cold-gas thrusters, one roll, a row of parked cars beneath you. Stick the landing." />
+  <meta property="og:image" content="%VITE_CG_SITE%og.png" />
+  <meta property="og:image:type" content="image/png" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="A silver roadster leaving the top of a curved steel wall upside down at night, red light along the wall’s edges, beside the COLD GAS wordmark." />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="COLD GAS" />
+  <meta name="twitter:description" content="Ten cold-gas thrusters, one roll, a row of parked cars beneath you. Stick the landing." />
+  <meta name="twitter:image" content="%VITE_CG_SITE%og.png" />
+  <meta name="twitter:image:alt" content="A silver roadster leaving the top of a curved steel wall upside down at night, red light along the wall’s edges, beside the COLD GAS wordmark." />
 </head>
 <body>
   <canvas id="stage" aria-label="3D view of the test range"></canvas>

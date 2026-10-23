@@ -11,15 +11,24 @@ if (!process.env.VITE_CG_BUILD) {
   process.env.VITE_CG_BUILD = sha.slice(0, 7) || 'dev';
 }
 
+// The production address, for the few places that must be absolute (link previews: og:url, og:image,
+// canonical in index.html as %VITE_CG_SITE%). Everything else stays relative to the base path.
+process.env.VITE_CG_SITE ||= 'https://mutaafaziz.com/coldgas/';
+
 // Response headers for the static assets (Workers Static Assets reads dist/_headers).
 // - HTML: Cloudflare Web Analytics auto-injects a beacon into HTML on the mutaafaziz.com zone; the
 //   game opts out with `Cache-Control: no-transform` (AGENTS.md §3.3: no analytics, no third
 //   parties). It revalidates on every load so a deploy shows up at once.
 // - Everything under assets/ has a content hash in its name, so it never changes: cache it for a
 //   year and never revalidate (a repeat visit costs one request, the HTML).
+// - The install files (0081) keep their names, so they revalidate: the manifest every time (an
+//   installed app re-reads it), the icons, screenshots and share card after a day.
 const HEADERS = ['/coldgas/', '/coldgas/index.html']
   .map((path) => `${path}\n  Cache-Control: public, max-age=0, must-revalidate, no-transform\n`)
-  .join('') + '/coldgas/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n';
+  .join('') + '/coldgas/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n'
+  + '/coldgas/manifest.webmanifest\n  Content-Type: application/manifest+json\n  Cache-Control: public, max-age=0, must-revalidate\n'
+  + ['/coldgas/icons/*', '/coldgas/screenshots/*', '/coldgas/og.png', '/coldgas/apple-touch-icon.png', '/coldgas/favicon*']
+    .map((path) => `${path}\n  Cache-Control: public, max-age=86400\n`).join('');
 const staticHeaders = {
   name: 'static-headers',
   apply: 'build',
