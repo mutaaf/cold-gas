@@ -18,7 +18,7 @@ export function roadGround(road, x, z) {
   return Math.round(y * 100) / 100;
 }
 
-export function roadHost({ road, info, course, stage, carRoot, getCar, placeCar }) {
+export function roadHost({ road, info, course, stage, carRoot, getCar, placeCar, rescue }) {
   const sp = road.meta.spacing;
   return {
     id: info.id, kind: 'road', name: info.name,
@@ -29,7 +29,7 @@ export function roadHost({ road, info, course, stage, carRoot, getCar, placeCar 
       return Math.hypot(x - road.x[i], z - road.z[i]) < 120;
     },
     get scene() { return stage.scene; }, camera: stage.camera, get canvas() { return stage.renderer.domElement; }, carRoot,
-    getCar, placeCar,
+    getCar, placeCar, rescue,
     questFrame(car) {
       const i0 = nearestSample(road, car.pos.x, car.pos.z);
       const m0 = Math.min(i0, road.m - 1);
