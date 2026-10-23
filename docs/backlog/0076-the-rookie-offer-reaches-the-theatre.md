@@ -1,11 +1,12 @@
 ---
 id: 0076
 title: The Rookie mode offer reaches the judges' theatre on a phone
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: accessibility
 created: 2026-10-22
+pr: 96
 by: operator
 ---
 
