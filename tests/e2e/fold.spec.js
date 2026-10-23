@@ -46,11 +46,14 @@ function layout() {
   return { overlaps, offscreen, n: els.length };
 }
 
-// The drawing buffer fitted to the canvas (three sizes it to floor(css × ratio)).
+// The drawing buffer fitted to the canvas (three sizes it to floor(css × ratio)) once the size has
+// settled: 150 ms on a phone, but on CI's software GL one frame of a big run can take longer than
+// that, and the settle's timer waits behind it. The proportions are right from the first frame (the
+// camera check above), so the wait only bounds how long the softer, scaled frames last.
 const fitted = (page, { width, height }) => page.waitForFunction(({ width, height }) => {
   const { renderer } = window.__coldgas.stage, c = renderer.domElement, pr = renderer.getPixelRatio();
   return Math.abs(c.width - Math.floor(width * pr)) <= 1 && Math.abs(c.height - Math.floor(height * pr)) <= 1;
-}, { width, height }, { timeout: 2_000, polling: 'raf' });
+}, { width, height }, { timeout: 10_000, polling: 50 });
 
 for (const [from, to] of [[CLOSED, OPEN], [CLOSED_SIDE, OPEN_SIDE]]) {
   test(`a fold mid-run: ${from.width}×${from.height} → ${SWING.width}×${SWING.height} → ${to.width}×${to.height} and back, the same run carries on`, async ({ browser }) => {

@@ -1241,6 +1241,16 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   :root[data-hud='compact'] .cue { bottom: calc(106px + var(--safe-b)); left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
 }
 
+/* A short upright window (a folding phone's 466×498 mid-swing, a phone with its keyboard up): the
+   title packs down so the wordmark never rises under the top bar; and a phone a few px narrower than
+   390 (the folding phone closed, 382) keeps the whole top bar on screen. (0075) */
+@media (orientation: portrait) and (max-height: 540px) {
+  .title { bottom: calc(18px + var(--safe-b)); }
+  .wordmark { font-size: 40px; }
+  .tagline { margin: 6px 0 12px; }
+}
+@media (max-width: 386px) { .top-actions { gap: 4px; } }
+
 /* --- A folding phone (0075) ------------------------------------------------------------------------
    Closed, it is a phone like any other (382×580 upright, 678×340 sideways in its browser, the bars
    and the tool column already outside the viewport): the phone rules above hold, sized in dvh, never

@@ -67,8 +67,12 @@ and the phase tab sat on it; and a few sheets sized in `vh`.
 - [x] A reported vertical fold (DevTools protocol display feature, Chromium): the band, the phase tab and
       the cue line keep off the hinge (`tests/e2e/fold.spec.js`).
 - [x] The HUD default follows a new shape only while nothing is chosen (`tests/unit/hud-mode.test.js`).
-- [x] `node scripts/hud-audit.mjs <url> <dir> all`: 0 overlaps, 0 offscreen, 0 text < 11 px at every
-      viewport including the five fold sizes; contrast failures don't increase.
+- [x] `node scripts/hud-audit.mjs <url> <dir> all` (440 frames): 0 offscreen, 0 text < 11 px everywhere;
+      contrast failures 2, the same two as main (Free Drive at 1180×820, the cue at 390×844s run-up); 0
+      overlaps at every viewport in the compact HUD (the default on this device in every pose) and in the
+      full HUD everywhere except closed sideways and mid-swing (below, out of scope).
+- [x] `node scripts/title-audit.mjs`: 0 issues at every viewport including the five fold sizes (the
+      wordmark rose under the top bar at 466×498 and the top bar ran 2 px off a 382 px screen before).
 - [x] Works at 390×844 touch and 1280×720 keyboard (nothing there changes: the fold query doesn't match).
 
 ## Test plan
@@ -77,5 +81,11 @@ reported hinge. `tests/unit/hud-mode.test.js`: refit follows the shape, keeps a 
 audits at the fold sizes, screenshots looked at closed and open.
 
 ## Out of scope
+The full instrument set (MORE) on a 340 px-tall screen: closed sideways (678×340) the full HUD overlaps
+itself in every phase (28 overlaps: the attitude dial and the one-thumb pad, the mission row and the
+vehicle panel, the descent and the strip, the cue line and LESS; the strip's seven cells get 239 px), and
+at the 466×498 swing size the cue line meets the pad at the brake (2 frames). The same overlaps are on
+main; the audit only now measures these sizes. It needs its own arrangement of the full set for very
+short landscape (a follow-up ticket). The compact HUD, the default here, is clean at both sizes.
 A tent pose (undetectable in Safari). A layout per pose. The top bar's icon buttons and the results sheet's
 buttons (other tickets in flight).
