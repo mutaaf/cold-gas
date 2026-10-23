@@ -1,12 +1,12 @@
 ---
 id: 0075
 title: Built for the folding phone; a fold or an unfold mid-anything is seamless, the open screen is an upgrade
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-22
-pr:
+pr: 98
 by: builder
 ---
 
