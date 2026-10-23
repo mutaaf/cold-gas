@@ -67,10 +67,12 @@ results and the wreck beat still ran on the wall clock), the shard plan, and the
 - `src/drive/drive.css`: the waiting clock at a label's weight (0.86, as `--lbl`, ≈ 6.5:1 over that sky);
   sideways, the stick's STEER label sits inside its ring, at the top above the dashed circle.
 - `scripts/audit-plan.mjs` (new): the viewports and a shard plan by estimated cost (seconds on a runner,
-  fitted on #106's run: 90 + 155 per CSS megapixel + 50 with Free Drive + 15 with touch; within 0.8–1.3×
-  of every viewport), the title audit one item of it; longest first to the least-loaded shard.
-  `hud-audit.mjs --shard=N/M` flies its share; `serve-and-audit.mjs` runs the title with the shard that
-  holds it. 6 shards: 1123–1206 s estimated (1.07×).
+  fitted on the per-viewport seconds of this PR's first CI run: 20 + 145 per CSS megapixel, + 110 per
+  megapixel with Free Drive, + 85 with touch; the title audit 460; within 0.8–1.4× of every viewport, the
+  rest is the runner), longest first to the least-loaded shard. `hud-audit.mjs --shard=N/M` flies its
+  share; `serve-and-audit.mjs` runs the title with the shard that holds it. The first CI run, on the
+  first fit (from #106's wall-clock run), took 778–1474 s a shard (1.89×); the same viewports' CI seconds
+  under the refitted plan give 931–1310 s (1.41×), estimated 962–1082 s (1.12×).
 - `scripts/hud-audit.mjs`: after touchdown the aftermath and the results are stepped in the page
   (`fastForward`, the e2e hook); every wait is on a condition and generous (120 s, × 2 on CI; a frame is
   taken as soon as it holds); Free Drive presses on to 6 m/s instead of 2.5 s of wall clock; the stick's
