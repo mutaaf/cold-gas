@@ -1397,16 +1397,16 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    needs (≈ 370 px for the stack), not by a device: the mission row rides up into the top bar's gap,
    between the brand and the buttons; the cue line takes the band it leaves, between the primary and
    the right column; the right column is the dial with its roll beside it, and the damage read in one
-   line under it, all above the thumb's arc; the primary packs down (time to ground stays on the tape);
+   line under it, all above the thumb's arc; the primary packs down (time to ground stays on the tape, the limit in one unit system);
    the readings sit in two rows of three between the stick and the right thumb, LESS on their top edge.
    The car keeps to the top 62 % right of centre: the band over it holds only the cue line. */
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 370px) {
   :root[data-hud='full'] .hud .h-mission { top: calc(30px + var(--safe-t)); left: calc(170px + var(--safe-l)); right: calc(256px + var(--safe-r)); padding: 0; }
   :root[data-hud='full'] .hud .h-timeline li { width: 18px; }
-  :root[data-hud='full'] .cue { --cue-top: 64px; left: calc(252px + var(--safe-l)); right: calc(172px + var(--safe-r)); }
+  :root[data-hud='full'] .cue { --cue-top: 64px; left: calc(262px + var(--safe-l)); right: calc(172px + var(--safe-r)); }
   :root[data-hud='full'] .hud .h-primary { top: calc(var(--top) + 44px); }
   :root[data-hud='full'] .hud .h-big b { font-size: 40px; }
-  :root[data-hud='full'] .hud .d-meta .d-row:last-child { display: none; }
+  :root[data-hud='full'] .hud .d-meta .d-row:last-child, :root[data-hud='full'] .hud .d-meta .h-alt { display: none; }   /* one line, one unit system, as at 320×568: the limit's twin widened the primary into the cue */
   :root[data-hud='full'] .hud .descent { row-gap: 4px; }
   :root[data-hud='full'] .hud .h-att { top: calc(var(--top) + 46px); grid-template-columns: auto auto; grid-template-areas: 'roll dial' 'cue dial'; align-items: center; justify-items: end; gap: 2px 10px; }
   :root[data-hud='full'] .hud .h-att .dial { grid-area: dial; width: 64px; height: 64px; }

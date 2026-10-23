@@ -37,6 +37,17 @@ clipped on the left, Skip sitting on it, its panels piled on each other.
   and the caption under it, and the model card, the stream and the counters side by side (30 · 40 · 30 of
   the width inside the insets). An opened folding phone (951×543) gets the bar too: its theatre already
   covered the sheet's Retry and Home (0075).
+- Found by the new theatre frame: beside the sheet on a tablet the theatre is a 248–660 px column, and
+  Skip sat on the rail (all six iPad sizes and 1080×1920) and the stream's glass on the card. By the
+  column's own width (a container query, only where it stands beside the sheet): under 700 px Skip goes up
+  to the corner; under 560 px the column stacks as a phone's (counters at the foot, the card over them, the
+  stream over the card, as tall as the room under the caption); under 360 px the rail names only the stage
+  it is on. On a phone the stream's glass is capped by the room under the caption (it reached a three-line
+  caption at 320×568, 382×580 and 466×498).
+- The audit's cue line was held on whenever it had text, even after it had faded, racing the page's own
+  clock (a stale "The reference run…" from the wreck's autopilot measured 1.9:1 once): now it is held only
+  if it is showing at the freeze, and the wreck clears the autopilot's announcement, which a player's own
+  wreck never shows.
 - `scripts/hud-audit.mjs`: once per viewport the theatre is measured, held up by a judge stream that is
   never answered (`page.route`), at COMPUTE with a fixed worst-case call (the stream on its glass, a long
   model id), its motion stopped and its particle field hidden (any frame of it is a sample;
