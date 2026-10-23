@@ -62,6 +62,38 @@ jobs:
             test-results/
           retention-days: 7
 
+  # The HUD and title audits (scripts/hud-audit.mjs, title-audit.mjs via npm run audit): every viewport,
+  # both HUD states, measured on screenshots: overlaps, offscreen, text < 11 px, labels < 4.5:1, theatre
+  # targets < 44 px. Not in 'check' yet: it becomes required once it has run green on these runners.
+  audit:
+    name: audit ${{ matrix.shard }}/3
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: |
+          npx playwright install chromium
+          node -e "require('@playwright/test').chromium.launch().then((b) => b.close())" && exit 0
+          for i in 1 2 3; do timeout 240 npx playwright install --with-deps chromium && exit 0; echo "browser deps attempt $i failed; retrying"; done; exit 1
+        timeout-minutes: 14
+      - run: npm run build
+      - run: npm run audit -- --shard=${{ matrix.shard }}/3 --out=audit-shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: audit-shots-${{ matrix.shard }}
+          path: audit-shots/
+          retention-days: 7
+
   # Flake guard: e2e specs this PR adds or changes run several times in a row, with no retries.
   guard:
     name: Flake guard ${{ matrix.shard }}/3 (changed e2e specs, repeated)
