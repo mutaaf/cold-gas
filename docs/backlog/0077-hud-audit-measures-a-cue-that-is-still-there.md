@@ -1,12 +1,12 @@
 ---
 id: 0077
 title: The HUD audit's wreck frame measures a cue that is still there; no false contrast failures
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: tech-health
 created: 2026-10-23
-pr:
+pr: 105
 by: critic
 ---
 

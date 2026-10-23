@@ -7,3 +7,4 @@ playwright-report/
 tests/balance/out/
 .claude/
 scripts/roads/.cache/
+audit-shots/
