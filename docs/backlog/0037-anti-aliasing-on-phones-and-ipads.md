@@ -1,12 +1,12 @@
 ---
 id: 0037
 title: Phones and iPads get anti-aliasing, and iOS devices get the tier they can run
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: performance
 created: 2026-10-21
-pr:
+pr: 68
 by: operator
 ---
 

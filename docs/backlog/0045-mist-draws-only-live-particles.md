@@ -1,12 +1,12 @@
 ---
 id: 0045
 title: Mist and crash smoke draw only live particles, at the right size on every screen
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: performance
 created: 2026-10-21
-pr:
+pr: 68
 by: operator
 ---
 
