@@ -50,7 +50,7 @@ Unit test on the governor decision (pure); e2e screenshot after a forced step.
 - The step lands on the next frame even mid-run (not deferred until outside `live`): with no black frame,
   the only cost left is the reallocation.
 - Not done: effect steps on the ladder (mirror, haze, SMAA, bloom size, shadows). That changes what each
-  tier looks like and needs its own flicker-budget pass; it is 0089 (proposed).
+  tier looks like and needs its own flicker-budget pass; it is 0091 (proposed).
 - Trade-off: a GPU-bound device that sits on a steady 33.3 ms with light CPU work from its first frame reads like a 30 fps cap
   and is no longer stepped down. JavaScript can't see GPU time, so the two can't be told apart.
 
