@@ -144,6 +144,7 @@ for (const phone of [true, false]) {
 const live = async (page) => {
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
+  await page.waitForFunction(() => window.__coldgas.stage.renderer.info.render.frame > 0, null, { timeout: 60_000 });   // the stage draws
   await page.mouse.click(5, 5);   // a gesture: the audio graph is built (src/main.js)
   await G(page, () => { window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
@@ -159,6 +160,11 @@ for (const phone of [true, false]) {
     await page.keyboard.press('Escape');   // a gesture of its own: it must not wake the audio it pauses
     await expect(page.locator('[data-screen="pause"]')).toBeVisible();
     await expect.poll(() => audio(page)).toBe('suspended');
+    // Any other key or tap on the pause sheet is a gesture too: it must not bring the sound back.
+    await page.keyboard.press('KeyG');
+    await page.locator('[data-screen="pause"]').click({ position: { x: 5, y: 5 }, force: true });
+    await page.waitForTimeout(500);
+    expect(await audio(page)).toBe('suspended');
     await page.locator('[data-resume]').click();
     await expect.poll(() => audio(page)).toBe('running');
     // A hidden tab: paused and quiet; back, a tap on Resume brings the sound back.

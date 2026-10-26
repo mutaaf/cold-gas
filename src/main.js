@@ -72,7 +72,14 @@ const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updat
 // context may start), not inside the Jump tap: building it can take a long task of its own. Every
 // later gesture brings back a context that stopped (iOS 'interrupted' too), unless it should be quiet.
 let lastGesture = performance.now();
-for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { lastGesture = performance.now(); initAudio(); syncLife(true); }, { capture: true, passive: true });
+for (const ev of ['pointerdown', 'keydown']) {
+  addEventListener(ev, (e) => {
+    if (e.repeat) return;
+    lastGesture = performance.now();
+    if (audioState() === 'none') initAudio();
+    syncLife(true);   // inside the gesture: resumes only if it shouldn't be quiet
+  }, { capture: true, passive: true });
+}
 
 const canvas = document.getElementById('stage');
 let stage;
@@ -1018,7 +1025,7 @@ function frame(now) {
 function frameBody(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
-  pollPads();   // a pad in use becomes the device; Start pauses (and resumes)
+  if (pollPads()) lastGesture = now;   // a pad in use becomes the device; Start pauses (and resumes)
   if (!S.paused) {
     // A crash's slow-motion beat scales the game clock (live and replay); the effects run on it too.
     const slow = S.mode === 'live' || S.mode === 'results' || S.mode === 'replay' ? crash.timeScale() : 1;

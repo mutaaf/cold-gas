@@ -182,6 +182,15 @@ export const isMuted = () => muted;
 
 // Pause, a hidden tab and a long-idle title go quiet for real (0060): the context stops, so the last gains
 // a frozen frame left behind (the motor, the hiss, the title drone) don't keep playing.
-export function suspendAudio() { if (ctx?.state === 'running') ctx.suspend().catch(() => {}); }
-export function resumeAudio() { if (ctx && ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume().catch(() => {}); }
+// `ctx.state` only changes when a suspend or resume settles, so a wish that flips meanwhile (a tap on the pause
+// sheet, a tab hidden and back within a few ms) is applied again once the one in flight lands.
+let wanted = true;
+function applyWanted() {
+  if (!ctx || ctx.state === 'closed') return;
+  const target = wanted;
+  const p = target ? (ctx.state !== 'running' ? ctx.resume() : null) : (ctx.state === 'running' ? ctx.suspend() : null);
+  p?.then(() => { if (wanted !== target) applyWanted(); }, () => {});
+}
+export function suspendAudio() { wanted = false; applyWanted(); }
+export function resumeAudio() { wanted = true; applyWanted(); }
 export const audioState = () => ctx?.state ?? 'none';
