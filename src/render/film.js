@@ -12,12 +12,20 @@
 //   material (src/render/wall.js wetSlab) mixes in where it's wet, blurred by the mip chain.
 //
 // Nothing here changes a material's program after first load: the slab was compiled with the
-// reflection lookup, sampling a black texel until this arrives.
+// reflection lookup, sampling a black texel until this arrives. And nothing arrives in one frame:
+// the haze, vignette and mirror ease in over FILM_FADE_MS from the film's first frame (0046).
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
 
 export const REFLECT = 1;
 const MAX_GLOWS = 20;
+
+// The film look's ease-in: 0 → 1 (smoothstep) over FILM_FADE_MS after its first frame.
+export const FILM_FADE_MS = 1000;
+export function filmFade(ms) {
+  const t = ms <= 0 ? 0 : ms >= FILM_FADE_MS ? 1 : ms / FILM_FADE_MS;
+  return t * t * (3 - 2 * t);
+}
 
 const HAZE_FS = /* glsl */`
 uniform sampler2D tDiffuse;
@@ -34,6 +42,7 @@ uniform vec3 uGlowPos[${MAX_GLOWS}];
 uniform vec4 uGlowCol[${MAX_GLOWS}];   // rgb, halo radius (m)
 uniform int uGlows;
 uniform float uVignette;
+uniform float uMix;      // the look's ease-in (filmFade): 0 = the frame untouched
 uniform vec2 uAspect;
 varying vec2 vUv;
 void main() {
@@ -72,7 +81,7 @@ void main() {
   col += s;
   vec2 q = (vUv - 0.5) * uAspect;
   col *= 1.0 - uVignette * smoothstep(0.35, 1.05, dot(q, q) * 1.6);
-  gl_FragColor = vec4(col, c.a);
+  gl_FragColor = vec4(mix(c.rgb, col, uMix), c.a);
 }`;
 
 class HazePass extends Pass {
@@ -86,7 +95,7 @@ class HazePass extends Pass {
       uSunDir: { value: new THREE.Vector3(0, 1, 0) }, uSunCol: { value: new THREE.Color(0, 0, 0) },
       uGlowPos: { value: Array.from({ length: MAX_GLOWS }, () => new THREE.Vector3()) },
       uGlowCol: { value: Array.from({ length: MAX_GLOWS }, () => new THREE.Vector4()) },
-      uGlows: { value: 0 }, uVignette: { value: 0.3 }, uAspect: { value: new THREE.Vector2(1, 1) },
+      uGlows: { value: 0 }, uVignette: { value: 0.3 }, uMix: { value: 0 }, uAspect: { value: new THREE.Vector2(1, 1) },
     };
     this.material = new THREE.ShaderMaterial({
       uniforms: this.uniforms, depthTest: false, depthWrite: false,
@@ -174,7 +183,7 @@ export function createFilm({ renderer, scene, camera, composer, tier }) {
   const haze = high ? new HazePass(camera) : null;
   if (haze) composer.insertPass(haze, 1);
   const mirror = high ? createMirror(renderer) : null;
-  let reflecting = false, slabs = [];
+  let reflecting = false, slabs = [], born = -1, fade = 0;
 
   function setLook(id, glows = [], wet = []) {
     if (haze) {
@@ -190,17 +199,22 @@ export function createFilm({ renderer, scene, camera, composer, tier }) {
     reflecting = !!mirror && wet.length > 0;
     for (const s of slabs) {
       s.tReflect.value = reflecting ? mirror.rt.texture : s.tReflect.value;
-      s.uReflK.value = reflecting ? 1 : 0;
+      s.uReflK.value = reflecting ? fade : 0;
     }
   }
 
-  // Before the frame: the mirror view (when the stage has a wet slab).
-  function render(active = true) {
+  // Before the frame: the mirror view (when the stage has a wet slab). nowMs: the frame's wall clock.
+  function render(active = true, nowMs = performance.now()) {
     if (haze) haze.enabled = active;   // an outside look (Free Drive) brings its own air
+    if (active && fade < 1) {
+      if (born < 0) born = nowMs;
+      fade = filmFade(nowMs - born);
+      if (haze) haze.uniforms.uMix.value = fade;
+    }
     if (!reflecting) return;
     if (!active) { for (const s of slabs) s.uReflK.value = 0; return; }
     mirror.render(scene, camera);
-    for (const s of slabs) { s.uReflMat.value.copy(mirror.matrix); s.uReflK.value = 1; }
+    for (const s of slabs) { s.uReflMat.value.copy(mirror.matrix); s.uReflK.value = fade; }
   }
 
   return { setLook, render, haze, mirror };

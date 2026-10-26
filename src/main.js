@@ -86,7 +86,8 @@ let stage;
 try {
   // [stage] ?course=wall|lineup practises one stunt; the Show (one flight off the Wall) is the default.
   stage = createStage(canvas, { tier, course: ['wall', 'lineup'].includes(params.get('course')) ? params.get('course') : 'show',
-    backdrop: obs.breaker('rocket').allow(), onBackdropError: (err) => obs.fail('rocket', err) });
+    backdrop: obs.breaker('rocket').allow(), onBackdropError: (err) => obs.fail('rocket', err),
+    warm: params.get('warm') === '1' ? true : null });   // [stage] ?warm=1: warm the other courses even on software GL (e2e)
 } catch (err) {
   console.error(err);
   obs.error('webgl', err);
@@ -95,6 +96,8 @@ try {
   throw err;
 }
 const { scene, camera, hero } = stage;
+// [stage] the other courses are warmed only on the title: a run's or a drive's frames need the time (0046).
+stage.warmGate = () => S.mode === 'title' && !S.paused;
 // Runs wait for the engine (a beat on a cold load, nothing after). Only the latest start asked for
 // while it loads goes ahead, and only if nothing else happened meanwhile: every mode change (and
 // opening Free Drive or the Sandbox) retires the token, so a Start tapped during the load can't fire

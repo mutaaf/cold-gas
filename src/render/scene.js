@@ -368,12 +368,13 @@ async function buildSliced(look) {
 // is baked, every shader is compiled off the main thread (KHR_parallel_shader_compile, via
 // compileAsync), and only then does `render` draw: the canvas fades in on its first frame
 // (`.on`), and `stage.ready` resolves.
-export function createStage(canvas, { tier = 'high', course = 'show', backdrop = true, onBackdropError = null } = {}) {
+export function createStage(canvas, { tier = 'high', course = 'show', backdrop = true, onBackdropError = null, warm = null } = {}) {
   // Canvas MSAA only where the scene draws straight to the canvas ('low'). The composer tiers draw
   // into a HalfFloat target with no MSAA (LESSONS), so canvas MSAA there only smoothed the final
   // quad; their edges come from SMAA after the OutputPass instead. A software rasterizer skips it
   // (src/gfx-tier.js: a third of its frame rate).
-  const msaa = tier === 'low' && !isSoftwareRenderer(probeRenderer());
+  const software = isSoftwareRenderer(probeRenderer());
+  const msaa = tier === 'low' && !software;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance' });
   // The drawing buffer's pixel ratio: the device's (capped by tier) × the resolution governor's scale.
   // The device's is read again whenever it changes (another monitor, browser zoom, Stage Manager): render()
@@ -420,7 +421,8 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   // out of it at range. The closest rigs sit 0.35 m over the slab looking along it and about a
   // metre from the car, so 0.3 m clips nothing; the far ridges are 1.4 km out, and the sky draws
   // at the far plane whatever its value.
-  const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 3000);
+  const NEAR = 0.3, FAR = 3000;
+  const camera = new THREE.PerspectiveCamera(52, 1, NEAR, FAR);
   camera.position.set(0, 3, -100);
 
   let composer = null, bloom = null, aaPass = null;
@@ -458,14 +460,14 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
   const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
   const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
-  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, rocket: null, film: null, aa: null, resize, reshape, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, warm: null, warmGate: () => true, rocket: null, film: null, aa: null, resize, reshape, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
     if (stage.course === id) return stage;
     if (current) scene.remove(current.group);
     current = lookFor(id);
-    if (!sliced) finishBuild(current);
+    if (!sliced) { finishBuild(current); tagLook(current); }
     scene.add(current.group);
     stage.course = id;
     sky.material = skies[id];
@@ -487,11 +489,12 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
 
   // An outside look takes the stage (Free Drive's roads, src/drive/): its own group with its own
   // sky, plus fog, environment, exposure, bloom and the key light. setLook(null) gives the stage
-  // back to the course.
+  // back to the course, and the camera its own clip planes (an outside look sets its own).
   let external = null;
   function setLook(look) {
     if (external) { scene.remove(external.group); external = null; }
     if (!look) {
+      if (camera.near !== NEAR || camera.far !== FAR) { camera.near = NEAR; camera.far = FAR; camera.updateProjectionMatrix(); }
       sky.visible = true;
       if (stage.rocket) stage.rocket.group.visible = true;
       heroBlob.visible = true;
@@ -624,8 +627,17 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
     const hidden = [];
     scene.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
     let done;
-    try { done = renderer.compileAsync(scene, camera); } finally { for (const o of hidden) o.visible = false; }
+    try { done = compileFor(scene); } finally { for (const o of hidden) o.visible = false; }
     return Promise.race([done, new Promise((r) => setTimeout(r, 4000))]);
+  }
+  // compileAsync, keyed the way the frame will draw: three picks a program's tone mapping and output colour
+  // space from the bound render target, and the composer tiers draw the scene into the composer's HalfFloat
+  // target (no tone mapping, linear), not the canvas. Compiled against the canvas, every program would be
+  // compiled again on its first real frame (0046).
+  function compileFor(object, target = null) {
+    const prev = renderer.getRenderTarget();
+    if (composer) renderer.setRenderTarget(composer.readBuffer);
+    try { return renderer.compileAsync(object, camera, target); } finally { renderer.setRenderTarget(prev); }
   }
 
   async function boot() {
@@ -655,29 +667,78 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
     const glows = [...(current.glows || []), ...(stage.rocket?.glows || [])];
     film.setLook(stage.course, glows, current.wet || []);
   }
+  // What the wet slab mirrors: everything standing on the stage (not the slab, its paint or the
+  // glows lying on it), the sky, the car and the backdrop. Lights too, so the mirror pass sees
+  // the same lights and reuses every program. A look built after the film arrived (the warm-up, a
+  // course picked later) is tagged when it's built (tagLook).
+  let REFLECT = 0;
+  const tagLook = (look) => {
+    if (!film || look.tagged) return;
+    look.tagged = true;
+    look.group.updateMatrixWorld(true);
+    tag(look.group);
+  };
+  const tag = (root) => root.traverse((o) => {
+    if (o.isLight) { o.layers.enable(REFLECT); return; }
+    if (!o.isMesh && !o.isInstancedMesh) return;
+    if (o.geometry && !o.isInstancedMesh) {
+      o.geometry.computeBoundingBox();
+      const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
+      if (b.max.y < 0.12 && o.geometry.parameters?.radius !== 2000) return;
+    }
+    o.layers.enable(REFLECT);
+  });
   async function loadFilm() {
-    const { createFilm, REFLECT } = await import('./film.js');
-    // What the wet slab mirrors: everything standing on the stage (not the slab, its paint or the
-    // glows lying on it), the sky, the car and the backdrop. Lights too, so the mirror pass sees
-    // the same lights and reuses every program.
-    const tag = (root) => root.traverse((o) => {
-      if (o.isLight) { o.layers.enable(REFLECT); return; }
-      if (!o.isMesh && !o.isInstancedMesh) return;
-      if (o.geometry && !o.isInstancedMesh) {
-        o.geometry.computeBoundingBox();
-        const b = o.geometry.boundingBox.clone().applyMatrix4(o.matrixWorld);
-        if (b.max.y < 0.12 && o.geometry.parameters?.radius !== 2000) return;
-      }
-      o.layers.enable(REFLECT);
-    });
+    const mod = await import('./film.js');
+    REFLECT = mod.REFLECT;
     scene.updateMatrixWorld(true);
-    for (const id of ['show', 'wall']) if (looks[id]) { finishBuild(looks[id]); tag(looks[id].group); }
+    for (const id of ['show', 'wall']) if (looks[id]) { finishBuild(looks[id]); tag(looks[id].group); looks[id].tagged = true; }
     tag(sky); sky.layers.enable(REFLECT); tag(hero.group); key.layers.enable(REFLECT);
     if (stage.rocket) tag(stage.rocket.group);
-    const f = createFilm({ renderer, scene, camera, composer, tier });
-    if (f.haze) await Promise.race([renderer.compileAsync(f.haze.quad._mesh ?? new THREE.Mesh(), camera), new Promise((r) => setTimeout(r, 2000))]).catch(() => {});
+    const f = mod.createFilm({ renderer, scene, camera, composer, tier });
+    if (f.haze) await Promise.race([compileFor(f.haze.quad._mesh ?? new THREE.Mesh()), new Promise((r) => setTimeout(r, 2000))]).catch(() => {});
     film = stage.film = f;
     filmLook();
+  }
+
+  // The other courses, made ready while the page is idle after the first load, so a course click (or
+  // coming back from Free Drive) is a swap: no build, no environment bake and no shader compile on the
+  // click's frame (0046). Each look's materials are compiled under its own lights, environment and fog:
+  // the scene is set up as that course for the synchronous part of compileAsync and put back in the
+  // same task, so no frame ever draws it.
+  // stage.warmGate(): when the game allows the work (main.js: on the title); never while an outside look has the stage.
+  const idle = async () => {
+    for (;;) {
+      await new Promise((r) => (globalThis.requestIdleCallback ? requestIdleCallback(r, { timeout: 2000 }) : setTimeout(r, 200)));
+      if (!external && stage.warmGate()) return;
+      await new Promise((r) => setTimeout(r, 500));
+    }
+  };
+  function compileAs(id) {
+    const look = looks[id];
+    if (!look || external || !current || stage.course === id) return null;
+    const was = { group: current.group, sky: sky.material, env: scene.environment, fog: scene.fog };
+    scene.remove(was.group); scene.add(look.group);
+    sky.material = skies[id]; scene.environment = envFor(id); scene.fog = look.look.fog;
+    try { return precompile(); } finally {
+      scene.remove(look.group); scene.add(was.group);
+      sky.material = was.sky; scene.environment = was.env; scene.fog = was.fog;
+    }
+  }
+  async function warmLooks() {
+    for (const id of COURSE_IDS) {
+      if (id === stage.course) continue;
+      try {
+        await idle();
+        await buildSliced(lookFor(id));
+        tagLook(looks[id]);
+        await idle();
+        envFor(id);
+        await idle();
+        await compileAs(id);
+      } catch (err) { console.warn('warm', id, err); }
+    }
+    return stage;
   }
 
   async function loadBackdrop() {
@@ -697,7 +758,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
     const hidden = [];
     rocket.group.traverse((o) => { if (!o.visible) { hidden.push(o); o.visible = true; } });
     try {
-      await Promise.race([renderer.compileAsync(rocket.group, camera, scene), new Promise((r) => setTimeout(r, 4000))]);
+      await Promise.race([compileFor(rocket.group, scene), new Promise((r) => setTimeout(r, 4000))]);
     } finally { for (const o of hidden) o.visible = false; }
     rocket.group.visible = !external;
     scene.add(rocket.group);
@@ -710,5 +771,8 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   setCourse(course, { sliced: true });
   stage.ready = boot();
   stage.backdrop = backdrop ? stage.ready.then(loadBackdrop).catch((err) => { console.warn('backdrop', err); onBackdropError?.(err); return null; }) : Promise.resolve(null);
+  // Not on a software rasterizer (warm: null): it links shaders on the main thread, so warming the other courses
+  // would take seconds of the title's input away from a player who may never switch (?warm=1 forces it, for tests).
+  stage.warm = (warm ?? !software) ? Promise.all([stage.ready, stage.backdrop]).then(warmLooks) : Promise.resolve(stage);
   return stage;
 }

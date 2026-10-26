@@ -157,7 +157,7 @@ export function createSandbox(ctx) {
     stage.setLook(null);
     st.world?.dispose(); st.world = null;
     hud(false);
-    camera.near = 0.1; camera.far = 4000; camera.up.set(0, 1, 0); camera.updateProjectionMatrix();
+    camera.up.set(0, 1, 0); camera.updateProjectionMatrix();   // near/far: stage.setLook(null)
     document.body.classList.remove('driving');
     if (st.car) freeWorld(st.car.world);
     st.active = false; st.car = null;
