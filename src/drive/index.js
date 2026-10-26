@@ -223,7 +223,7 @@ export function createDrive(ctx) {
     st.world?.dispose();
     if (st.car) freeWorld(st.car.world);
     st.world = null; st.road = null; st.course = null; st.car = null;
-    camera.near = 0.1; camera.far = 4000; camera.up.set(0, 1, 0); camera.updateProjectionMatrix();
+    camera.up.set(0, 1, 0); camera.updateProjectionMatrix();   // near/far: stage.setLook(null)
     st.hud?.dispose?.(); st.hud = null;
     hudRoot.hidden = true; hudRoot.innerHTML = '';
     pauseRoot.hidden = true;

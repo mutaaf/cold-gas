@@ -420,7 +420,8 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   // out of it at range. The closest rigs sit 0.35 m over the slab looking along it and about a
   // metre from the car, so 0.3 m clips nothing; the far ridges are 1.4 km out, and the sky draws
   // at the far plane whatever its value.
-  const camera = new THREE.PerspectiveCamera(52, 1, 0.3, 3000);
+  const NEAR = 0.3, FAR = 3000;
+  const camera = new THREE.PerspectiveCamera(52, 1, NEAR, FAR);
   camera.position.set(0, 3, -100);
 
   let composer = null, bloom = null, aaPass = null;
@@ -458,7 +459,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
   const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
   const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
-  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, rocket: null, film: null, aa: null, resize, reshape, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, warm: null, rocket: null, film: null, aa: null, resize, reshape, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
@@ -487,11 +488,12 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
 
   // An outside look takes the stage (Free Drive's roads, src/drive/): its own group with its own
   // sky, plus fog, environment, exposure, bloom and the key light. setLook(null) gives the stage
-  // back to the course.
+  // back to the course, and the camera its own clip planes (an outside look sets its own).
   let external = null;
   function setLook(look) {
     if (external) { scene.remove(external.group); external = null; }
     if (!look) {
+      if (camera.near !== NEAR || camera.far !== FAR) { camera.near = NEAR; camera.far = FAR; camera.updateProjectionMatrix(); }
       sky.visible = true;
       if (stage.rocket) stage.rocket.group.visible = true;
       heroBlob.visible = true;
@@ -680,6 +682,38 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
     filmLook();
   }
 
+  // The other courses, made ready while the page is idle after the first load, so a course click (or
+  // coming back from Free Drive) is a swap: no build, no environment bake and no shader compile on the
+  // click's frame (0046). Each look's materials are compiled under its own lights, environment and fog:
+  // the scene is set up as that course for the synchronous part of compileAsync and put back in the
+  // same task, so no frame ever draws it.
+  const idle = () => new Promise((r) => (globalThis.requestIdleCallback ? requestIdleCallback(r, { timeout: 2000 }) : setTimeout(r, 200)));
+  function compileAs(id) {
+    const look = looks[id];
+    if (!look || external || !current || stage.course === id) return null;
+    const was = { group: current.group, sky: sky.material, env: scene.environment, fog: scene.fog };
+    scene.remove(was.group); scene.add(look.group);
+    sky.material = skies[id]; scene.environment = envFor(id); scene.fog = look.look.fog;
+    try { return precompile(); } finally {
+      scene.remove(look.group); scene.add(was.group);
+      sky.material = was.sky; scene.environment = was.env; scene.fog = was.fog;
+    }
+  }
+  async function warmLooks() {
+    for (const id of COURSE_IDS) {
+      if (id === stage.course) continue;
+      try {
+        await idle();
+        await buildSliced(lookFor(id));
+        await idle();
+        envFor(id);
+        await idle();
+        await compileAs(id);
+      } catch (err) { console.warn('warm', id, err); }
+    }
+    return stage;
+  }
+
   async function loadBackdrop() {
     await new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)));   // the first frame is on screen
     await new Promise((r) => (globalThis.requestIdleCallback ? requestIdleCallback(r, { timeout: 1500 }) : setTimeout(r, 300)));
@@ -710,5 +744,6 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   setCourse(course, { sliced: true });
   stage.ready = boot();
   stage.backdrop = backdrop ? stage.ready.then(loadBackdrop).catch((err) => { console.warn('backdrop', err); onBackdropError?.(err); return null; }) : Promise.resolve(null);
+  stage.warm = Promise.all([stage.ready, stage.backdrop]).then(warmLooks);
   return stage;
 }
