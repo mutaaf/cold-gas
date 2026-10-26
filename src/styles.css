@@ -1601,9 +1601,10 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 
 /* --- Easy on the battery (0049) ---
    A backdrop blur samples the canvas under it again on every frame the canvas changes, and through a run's
-   countdown, the run and the replay it changes every frame. There the glass is a solid fill, a step denser
-   (0.62 → 0.72, the compact tabs 0.84) so the HUD's words keep their contrast without the blur, and the grain's
-   full-screen overlay blend is off. The results (the sheet and the judges' theatre) keep both: without them
+   countdown and the run it changes every frame. There the glass is a solid fill, a step denser (0.62 → 0.72,
+   the compact tabs 0.84) so the HUD's words keep their contrast without the blur, and the grain's full-screen
+   overlay blend is off. The results (the sheet, the judges' theatre and the replay behind them: the replay
+   plays in the 'results' mode, nothing sets 'replay') keep both: without them
    software GL's main thread ran 2–3× further behind there (timer lag 0.7–1.1 s against 0.2–0.4 s) and the
    theatre's words missed their deadline. (Free Drive and the Sandbox keep their blur for now: their panels
    were not measured without it.) */
