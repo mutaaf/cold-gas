@@ -56,9 +56,10 @@ Changing sim behaviour.
   always did in a replay (`unpack`), so a live run and its replay agree. ref-hash unchanged.
 - Not in this pass: `vehicle.js` reads the ten valves by computed key in Advanced (the sim's step, not the input path).
 - The title draws at ≈30 fps (src/pace.js: a deadline a whole period on, so 60/90/120/144/165/240 Hz all draw ≤ 30);
-  a skipped frame only keeps the cue clock. The title's drawn frames are still recorded by obs, timed from the last
-  skipped frame (the display's interval), but are kept from the resolution governor, which would read them as
-  headroom (or, timed from the last drawn frame, as hitching). Live, countdown, results, replay and Free Drive are
+  a skipped frame only keeps the cue clock, and the drawn frame is timed from it (the display's interval), so
+  the governor doesn't read the pacing as hitching; a costly title still can't read as headroom, since a step up
+  needs the frames' work under 8 ms. (Keeping the title from the governor doubled CI's e2e time: on software GL
+  the title is where it used to step the resolution down.) Live, countdown, results, replay and Free Drive are
   not paced.
 - The shadow map (mid/high) is drawn on the title only when the hero moves, the mode, course or look changes, the
   context comes back, or 30 title frames pass, and on every frame for the first 60 title frames (the wing and the
