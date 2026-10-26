@@ -67,7 +67,7 @@ test('the title tears down Free Drive (as heal\'s escalation does): no driving c
   await expect(page.locator('body')).toHaveClass(/driving/);
   await G(page, () => window.__coldgas.toTitle());
   await expect(page.locator('body')).not.toHaveClass(/driving/);
-  expect(await G(page, () => ({ mode: window.__coldgas.S.mode, active: window.__coldgas.drive.active, far: window.__coldgas.camera.far }))).toEqual({ mode: 'title', active: false, far: 4000 });
+  expect(await G(page, () => ({ mode: window.__coldgas.S.mode, active: window.__coldgas.drive.active, near: window.__coldgas.camera.near, far: window.__coldgas.camera.far }))).toEqual({ mode: 'title', active: false, near: 0.3, far: 3000 });   // the stage's own planes (0046)
   await expect(page.locator('[data-drive-hud]')).toBeHidden();
   await expect(page.locator('[data-screen="title"]')).toBeVisible();
 });
