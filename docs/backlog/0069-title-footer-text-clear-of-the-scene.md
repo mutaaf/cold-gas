@@ -19,6 +19,9 @@ legal line is the one line that must stay readable. W3C F83 says the test is the
 https://www.w3.org/WAI/WCAG22/Techniques/failures/F83. `title-audit.mjs` checks overlaps and the CTA but not
 contrast of title text against the rendered scene.
 
+Scout 2026-10-26 (desktop 1280x720, `?gfx=low`): the tertiary link "Today's board" also sits across the bright arc of the Wall's
+ring, so its grey text loses contrast there too; include the whole controls row in the backing.
+
 ## What
 Give the title's lower block (controls row, spec strip, fine print) a backing: a bottom gradient scrim in CSS
 (transparent to ~0.72 ink, no new colours) that sits above the canvas and below the text, or lift the scene's
