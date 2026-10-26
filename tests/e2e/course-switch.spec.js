@@ -5,17 +5,21 @@ import { test, expect } from '@playwright/test';
 // slab's paint doesn't z-fight for the rest of the session.
 const frames = (page, n = 2) => page.evaluate((n) => new Promise((r) => { const f = () => (--n ? requestAnimationFrame(f) : r()); requestAnimationFrame(f); }), n);
 
-test('@heavy switching course compiles no new shader once the stage has warmed the other looks', async ({ page }) => {
+// low draws straight to the canvas; mid (phones, tablets) draws through the composer's HalfFloat target, whose
+// programs are keyed differently (no tone mapping, linear output): both must be warmed as they will draw.
+for (const gfx of ['low', 'mid']) test(`@heavy switching course compiles no new shader once the stage has warmed the other looks (${gfx})`, async ({ page }) => {
   // The warm-up waits for the backdrop and for idle time, then builds, bakes and compiles two courses: on CI's
   // software GL that runs past a minute, so it gets the slow test's whole budget (@heavy: the flake guard runs it 2×).
   test.slow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto('/coldgas/?gfx=low');
+  await page.goto(`/coldgas/?gfx=${gfx}`);
   await page.waitForFunction(() => !!window.__coldgas?.stage?.warm);
   await page.evaluate(() => window.__coldgas.stage.warm.then(() => true));
   await frames(page);
-  const programs = () => page.evaluate(() => window.__coldgas.stage.renderer.info.programs.length);
+  // Not counted: the shadow pass's depth program (cacheKey 'depth,…'), which three makes only while drawing a shadow
+  // map, keyed by the course's light counts: one tiny shader per course on the shadowed tiers, not warmable by compile.
+  const programs = () => page.evaluate(() => window.__coldgas.stage.renderer.info.programs.filter((x) => !x.cacheKey.startsWith('depth,')).length);
   const before = await programs();
   for (const id of ['wall', 'lineup', 'show', 'lineup']) {
     await page.locator(`.course-btn[data-course="${id}"]`).click();
@@ -36,7 +40,7 @@ test('@heavy Free Drive and the Sandbox hand the camera back with the stage\'s n
 
   await page.evaluate(() => window.__coldgas.loadSandbox().then((s) => s.start()));
   await page.waitForFunction(() => window.__coldgas.sandbox?.active, null, { timeout: 90_000 });
-  expect((await planes())[0]).not.toBe(0.1);
+  expect(await planes()).toEqual([0.3, 4000]);
   await page.evaluate(() => window.__coldgas.sandbox.exit());
   await expect(page.locator('[data-screen="title"]')).toBeVisible();
   expect(await planes()).toEqual(stagePlanes);

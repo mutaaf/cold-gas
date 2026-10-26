@@ -35,8 +35,13 @@ describe('film look fade-in', () => {
     film.render(true, 5000);
     expect(mix.value).toBe(0);
     expect(slab.uReflK.value).toBe(0);
+    // A course switch mid-fade keeps the fade where it is.
+    film.setLook('wall', [], [slab]);
+    expect(slab.uReflK.value).toBe(0);
     film.render(true, 5000 + FILM_FADE_MS / 2);
     expect(mix.value).toBeCloseTo(0.5, 6);
+    expect(slab.uReflK.value).toBeCloseTo(0.5, 6);
+    film.setLook('show', [], [slab]);
     expect(slab.uReflK.value).toBeCloseTo(0.5, 6);
     film.render(true, 5000 + FILM_FADE_MS);
     expect(mix.value).toBe(1);

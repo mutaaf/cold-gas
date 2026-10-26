@@ -42,8 +42,21 @@ e2e: camera.near/far after drive exit; perf.mjs long-task measurement around cou
 - Measured on this sandbox's SwiftShader (every frame ≈ 350 ms there, so no GPU number): `setCourse` 0 ms; the
   first draw of a warmed course 107–174 ms (geometry upload); before, the click's frame compiled 19 shaders and its
   long task ran 3.0–4.7 s. The < 50 ms on a real desktop GPU is for the Critic to confirm live.
-- `stage.setLook(null)` puts the camera's near/far back to the stage's 0.3 / 3000 m; Free Drive (0.1/4000) and the
-  Sandbox (0.1/4000) no longer leave their own behind (e2e: both round trips).
+- `stage.setLook(null)` puts the camera's near/far back to the stage's 0.3 / 3000 m; leaving Free Drive (0.5/46000)
+  or the Sandbox (0.3/4000) used to set 0.1/4000, and no longer does (e2e: both round trips).
+- Warmed the way the frame draws: on the composer tiers (mid, high) the scene draws into the composer's HalfFloat
+  target, whose programs are keyed with no tone mapping and linear output, so every compile (boot's precompile, the
+  backdrop, the warm-up) now binds that target for the synchronous compile. Before, mid/high compiled the canvas
+  variant and recompiled everything on first draw (a review measured +24 programs on the click to the Wall at mid).
+  The e2e program test runs at low and mid.
+- High tier: a look built after the film arrived is tagged for the mirror (REFLECT) when it's built, so the warmed
+  Wall's lights and geometry are in the reflection and the mirror pass's programs match.
+- The warm-up runs only on the title, not paused, never under an outside look (`stage.warmGate`, main.js), and waits
+  (rather than skips) when it can't.
+- Not warmed: the shadow pass's depth program, which three builds only while drawing a shadow map (keyed by the
+  course's light counts): one trivial shader per course on mid/high, compiled on the click's frame. The e2e count
+  leaves it out, by name.
+- Not done: a restored WebGL context loses the warmed programs (the next click compiles, as before 0046).
 - The film look (haze, vignette, the wet slab's mirror) eases in with a smoothstep over 1 s from its first frame
   (`uMix` in the haze pass, `uReflK` on the slab); a course switch mid-fade keeps the fade (tests/unit/film.test.js).
 - Not done: geometry upload on a warmed course's first draw (no public three API short of drawing it), and the
