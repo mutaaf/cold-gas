@@ -1,12 +1,12 @@
 ---
 id: 0049
 title: Easy on the battery: no full-screen blends while flying, an idle title that idles, no per-tick garbage
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: performance
 created: 2026-10-21
-pr:
+pr: 122
 by: operator
 ---
 
