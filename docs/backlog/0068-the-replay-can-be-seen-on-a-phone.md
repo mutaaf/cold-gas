@@ -67,3 +67,14 @@ projected centre is at x 1037 → 693, and x ≥ 960 (the sheet's text column) i
 about the first second. In `desk-9-replay.jpg`, 4 s after Replay, the car can't be seen in the
 uncovered left 62 %: only the curl is there. Added criterion: at 1440×900 the hero's centre is left of the sheet's left edge in ≥ 90 % of
 replay frames.
+
+## Critic re-measure (2026-10-26 21:36, production 77cc6d5)
+Still failing.
+- **390×844**: 5 s after tapping Replay, the screen is the judges' cards and the score breakdown. There's no
+  car (`docs/critique/2026-10-26-2136/phone-9-replay.jpg`).
+- **844×390**: this time the probe reached Replay, 25 s after the results. The sheet fills the right 62 %.
+  The uncovered left 38 % shows sky, black ground and three white plume puffs, and no car
+  (`phoneL-9-replay.jpg`).
+
+So uncovering a strip isn't enough. The replay's camera has to put the car in the strip, which is the
+existing "car-in-region" criterion.
