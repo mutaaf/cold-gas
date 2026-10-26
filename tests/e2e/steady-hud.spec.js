@@ -14,12 +14,13 @@ test('the telemetry strip holds still through a whole Show run (1280×720)', asy
   // Every frame, where SPD and the strip's edges are, and whether the HUD is in its air layout.
   await page.evaluate(() => {
     const spd = document.querySelector('[data-ch="spd"]'), strip = document.querySelector('.h-strip'), hud = document.querySelector('[data-screen="hud"]');
-    const out = window.__steady = { xs: [], ws: [], air: new Set(), pitch: new Set(), fan: new Set() };
+    const out = window.__steady = { xs: [], ws: [], air: new Set(), pitch: new Set(), fan: new Set(), signed: false };
     const tick = () => {
       if (window.__coldgas.S.mode === 'live' && !hud.hidden) {
         out.xs.push(spd.getBoundingClientRect().left); out.ws.push(strip.getBoundingClientRect().width);
         out.air.add(hud.hasAttribute('data-air'));
-        out.pitch.add(document.querySelector('[data-pitch]').textContent.length);
+        const pt = document.querySelector('[data-pitch]').textContent;
+        out.pitch.add(pt.length); if (pt.startsWith('+')) out.signed = true;
         out.fan.add(document.querySelector('[data-fan]').textContent.length);
       }
       if (window.__coldgas.S.mode !== 'results') requestAnimationFrame(tick);
@@ -33,7 +34,9 @@ test('the telemetry strip holds still through a whole Show run (1280×720)', asy
   expect(m.xs.length, 'frames sampled').toBeGreaterThan(30);
   // The run covers the cases that used to move it: both layouts, and readouts of different lengths.
   expect(m.air.sort()).toEqual([false, true]);
-  expect(m.pitch.length + m.fan.length).toBeGreaterThan(2);
+  expect(m.signed, 'pitch read with its + sign').toBe(true);
+  expect(m.pitch.length, 'pitch lengths seen').toBeGreaterThan(1);
+  expect(m.fan.length, 'fan lengths seen').toBeGreaterThan(1);
   expect(Math.max(...m.xs) - Math.min(...m.xs), 'SPD x range, px').toBeLessThan(0.5);
   expect(Math.max(...m.ws) - Math.min(...m.ws), 'strip width range, px').toBeLessThan(0.5);
 });

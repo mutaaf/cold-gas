@@ -78,12 +78,12 @@ export function createLandingHud({ scene, onStatus = null }) {
     last.on = on;
     root.hidden = !on;
     mk.visible = on;
-    if (!on) { el.tank.classList.remove('low'); el.need.style.opacity = '0'; el.cue.textContent = ''; last.cue = 0; band.status = ''; }
+    if (!on) { el.tank.classList.remove('low'); el.need.style.opacity = '0'; el.cue.textContent = ''; last.cue = 0; band.status = ''; last.status = ''; }
   }
 
   // Every frame of a live run. `h`: the floor's height over what's below (the HUD's altitude);
-  // `t`: sim time, s (the band's hold runs on it, so a pause doesn't count).
-  function update(car, h, phase, t = 0) {
+  // `t`: sim time, s (the band's hold runs on it, so a pause doesn't count; without it, the raw band).
+  function update(car, h, phase, t) {
     const air = phase === 'air';
     // The attitude indicator runs whenever you're live (on the wall it shows you're upside down).
     predict(car, h, pr);
@@ -102,7 +102,7 @@ export function createLandingHud({ scene, onStatus = null }) {
     if (sink !== last.sink) { el.sink.textContent = (Math.max(0, sink) / 10).toFixed(1); last.sink = sink; }
     set2('dsink', Math.max(0, pr.sink));
     // The band with hysteresis and a hold (0047): colour, word, ring and buzz change once, not every frame at an edge.
-    const status = steadyStatus(band, pr, t);
+    const status = t === undefined ? pr.status : steadyStatus(band, pr, t);
     if (status !== last.status) {
       root.dataset.status = status;
       mat.color.setHex(COLORS[status]);
@@ -147,15 +147,15 @@ export function createLandingHud({ scene, onStatus = null }) {
     const deg = Math.abs(pr.rollOut) * 180 / Math.PI;
     // The cue as a number (0 none, 1 LEVEL, 2 LET GO, ±(5..180) roll that way): text only on change.
     let cue = 0;
+    // Body roll rate has the stick's sign (+ = rolling right), so it's turning the right way
+    // when it matches the roll-out's sign.
+    const rate = rollRate(car), toward = Math.sign(rate) === Math.sign(pr.rollOut);
     if (deg > 12) {
-      // Body roll rate has the stick's sign (+ = rolling right), so it's turning the right way
-      // when it matches the roll-out's sign.
-      const rate = rollRate(car), toward = Math.sign(rate) === Math.sign(pr.rollOut);
       const lead = Math.min(ROLL_RATE, Math.abs(rate)) * REACTION;
       const letGo = last.cue === 2 ? toward && Math.abs(rate) > 0.5 : toward && Math.abs(rate) > 1 && lead > Math.abs(pr.rollOut) * 0.9;
       cue = letGo ? 2 : (pr.rollOut > 0 ? 1 : -1) * Math.round(deg / 5) * 5;
     } else if (level) cue = 1;
-    else if (last.cue === 2 && deg > 6) cue = 2;
+    else if (last.cue === 2 && deg > 6 && toward && Math.abs(rate) > 0.5) cue = 2;
     if (cue !== last.cue) {
       el.cue.textContent = cue === 0 ? '' : cue === 1 ? 'LEVEL' : cue === 2 ? 'LET GO' : `ROLL ${cue > 0 ? '→' : '←'} ${Math.abs(cue)}°`;
       el.cue.dataset.kind = cue === 2 ? 'go' : cue === 1 ? 'ok' : cue ? 'roll' : '';
@@ -167,7 +167,8 @@ export function createLandingHud({ scene, onStatus = null }) {
     mk.scale.set(s, s, s);
   }
 
-  return { update, show, prediction: pr, marker: mk };
+  // `status()`: the band as shown (steady), for the HUD's other live cues (the one-thumb pad, the coach's pointer).
+  return { update, show, prediction: pr, status: () => last.status || pr.status, marker: mk };
 }
 
 // Roll rate about the car's long axis (rad/s): angular velocity · forward.

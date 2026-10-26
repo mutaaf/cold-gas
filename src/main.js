@@ -809,7 +809,7 @@ function syncThumb(run, c) {
     thumbLast.word = word;
   }
   // Not holding while the descent leaves green: the pad asks for the thumb (amber, a pulse).
-  const warn = stage_ === 'fly' && !held && landing.prediction.status !== 'green';
+  const warn = stage_ === 'fly' && !held && landing.status() !== 'green';
   if (warn !== thumbLast.warn) { thumbPad.toggleAttribute('data-warn', warn); thumbLast.warn = warn; }
   // The ring: how far up the curl; in the air, how far down to the ground.
   const k = stage_ === 'climb' || stage_ === 'ledge' ? (run.phase === 'ramp' ? wallProgress(c.pos) : 0)
@@ -935,7 +935,7 @@ function cues(run, c) {
       if (boostCue) return ui.cue_(`Hold ${kbd('BOOST', 'F')} + ${kbd('LAND', 'Shift')} · over the row`, 400);
       // Assist's auto-land (src/sim/vehicle.js): LAND came too late to stop, so the computer started it.
       if (run.phase === 'air' && c.autoLand) return ui.cue_(`Auto-LAND · braking for you · ${kbd('LAND', 'Shift')} next time`, 500);
-      if (S.coachLive && livePtr('land', run.phase === 'air' && !liveInput.level && landing.prediction.status !== 'green')) return ui.cue_(livePointer('land', S.ptrCtx, kbdWrap), 500);
+      if (S.coachLive && livePtr('land', run.phase === 'air' && !liveInput.level && landing.status() !== 'green')) return ui.cue_(livePointer('land', S.ptrCtx, kbdWrap), 500);
       if (run.phase === 'air') return ui.cue_(`Hold ${kbd('LAND', 'Shift')}: it rolls you out and brakes`, 500);
       return;
     }

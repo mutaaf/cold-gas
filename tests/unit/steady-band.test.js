@@ -29,9 +29,10 @@ describe('the landing band holds still (0047)', () => {
   for (const course of ['show', 'lineup', 'wall']) {
     it(`${course}: the reference landing changes band at most 6 times (it flapped before)`, () => {
       const { raw, steady } = bands(course);
-      expect(changes(raw)).toBeGreaterThan(6);   // the premise: predict alone flaps at the edges
+      // (On SIM_VERSION 26's references the raw band changed 8 / 14 / 16 times: Show / Lineup / Wall.)
+      expect(changes(steady)).toBeLessThanOrEqual(changes(raw));
       expect(changes(steady)).toBeLessThanOrEqual(6);
-      // Every steady band lasts at least the hold (bar the first, taken at once).
+      // Every band the HUD shows lasts at least the hold (the first included).
       let run = 1;
       for (let i = 1; i < steady.length; i++) {
         if (steady[i] === steady[i - 1]) { run++; continue; }
@@ -62,6 +63,25 @@ describe('the landing band holds still (0047)', () => {
     expect(steadyStatus(band, pr, 61 / 60)).toBe('amber');
     for (let f = 62; f <= 72; f++) steadyStatus(band, pr, f / 60);
     expect(band.status).toBe('green');
+    // A flap between two worse bands still warns: the hold isn't restarted, and the worst seen shows.
+    const flap = newBand(), p2 = { status: 'green', marginAhead: 2, touchSink: 0, sink: 2, profileSink: 8 };
+    steadyStatus(flap, p2, 0);
+    let f = 1;
+    for (; f <= 60 && flap.status === 'green'; f++) {
+      p2.status = f % 2 ? 'amber' : 'red'; p2.touchSink = f % 2 ? 2 : 4; p2.marginAhead = -1;
+      steadyStatus(flap, p2, f / 60);
+    }
+    expect(flap.status).toBe('red');
+    expect(f / 60).toBeLessThanOrEqual(BAND_HOLD + 2 / 60 + 1e-9);
+    // …and so does green ⇄ red (a tilt hovering where the roll-out starts to count).
+    const gr = newBand(), p3 = { status: 'green', marginAhead: 2, touchSink: 0, sink: 2, profileSink: 8 };
+    steadyStatus(gr, p3, 0);
+    for (f = 1; f <= 60 && gr.status === 'green'; f++) {
+      const red = f % 2 === 1;
+      Object.assign(p3, red ? { status: 'red', touchSink: 4, marginAhead: -1 } : { status: 'green', touchSink: 0, marginAhead: 2 });
+      steadyStatus(gr, p3, f / 60);
+    }
+    expect(gr.status).toBe('red');
     // A new flight (time runs backwards) takes the status at once.
     pr.status = 'red'; pr.touchSink = 5;
     expect(steadyStatus(band, pr, 0)).toBe('red');

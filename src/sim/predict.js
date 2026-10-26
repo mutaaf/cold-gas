@@ -89,22 +89,35 @@ export function predict(c, h, out) {
 
 // The band as the HUD shows it (0047): `predict`'s status flaps at a band's edge (the margin ahead
 // crosses zero every few frames while LAND rides the profile), and with it the colour, the word,
-// the ring and the buzz. A worse band is entered at `predict`'s own thresholds, a better one only
-// once the numbers are clear of them by a margin, and either change must hold for BAND_HOLD s.
+// the ring and the buzz. A worse band is entered at `predict`'s own thresholds once worse readings
+// have run for BAND_HOLD s; frames in between don't restart that (a flap between amber and red, or
+// green and red, still warns: the worst seen is shown), only BAND_HOLD s of none do. A better band
+// is entered only once the numbers are clear of the edges for BAND_HOLD s without a break.
 // `t` is sim time in seconds; a fresh band (or time running backwards) takes the status at once.
 export const BAND_HOLD = 0.15;
 const RANK = { green: 0, amber: 1, red: 2 };
-export const newBand = () => ({ status: '', cand: '', since: 0, t: 0 });
+export const newBand = () => ({ status: '', up: '', upAt: 0, calmAt: -1, down: '', downAt: 0, t: 0 });
 export function steadyStatus(b, pr, t) {
-  if (!b.status || t < b.t) { b.status = pr.status; b.cand = ''; b.t = t; return b.status; }
+  if (!b.status || t < b.t) { b.status = pr.status; b.up = ''; b.down = ''; b.t = t; return b.status; }
   b.t = t;
+  const cur = RANK[b.status];
+  if (RANK[pr.status] > cur) {
+    if (!b.up) { b.up = pr.status; b.upAt = t; } else if (RANK[pr.status] > RANK[b.up]) b.up = pr.status;
+    b.calmAt = -1; b.down = '';
+    if (t - b.upAt >= BAND_HOLD) { b.status = b.up; b.up = ''; }
+    return b.status;
+  }
+  if (b.up) {
+    if (b.calmAt < 0) b.calmAt = t;
+    if (t - b.calmAt < BAND_HOLD) return b.status;
+    b.up = '';
+  }
   // Clear of the edges: what the band must read before it is allowed to step down.
   const clear = pr.touchSink > SINK_FIRM - 0.3 ? 'red'
     : pr.marginAhead < 0.5 || pr.touchSink > SINK_SOFT - 0.2 || pr.sink > pr.profileSink + 0.2 ? 'amber' : 'green';
-  const want = RANK[pr.status] > RANK[b.status] ? pr.status : RANK[clear] < RANK[b.status] ? clear : b.status;
-  if (want === b.status) { b.cand = ''; return b.status; }
-  if (want !== b.cand) { b.cand = want; b.since = t; }
-  if (t - b.since >= BAND_HOLD) { b.status = want; b.cand = ''; }
+  if (RANK[clear] >= cur) { b.down = ''; return b.status; }
+  if (b.down !== clear) { b.down = clear; b.downAt = t; }
+  if (t - b.downAt >= BAND_HOLD) { b.status = clear; b.down = ''; }
   return b.status;
 }
 
