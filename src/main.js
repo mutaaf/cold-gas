@@ -86,7 +86,8 @@ let stage;
 try {
   // [stage] ?course=wall|lineup practises one stunt; the Show (one flight off the Wall) is the default.
   stage = createStage(canvas, { tier, course: ['wall', 'lineup'].includes(params.get('course')) ? params.get('course') : 'show',
-    backdrop: obs.breaker('rocket').allow(), onBackdropError: (err) => obs.fail('rocket', err) });
+    backdrop: obs.breaker('rocket').allow(), onBackdropError: (err) => obs.fail('rocket', err),
+    warm: params.get('warm') === '1' ? true : null });   // [stage] ?warm=1: warm the other courses even on software GL (e2e)
 } catch (err) {
   console.error(err);
   obs.error('webgl', err);

@@ -13,7 +13,7 @@ for (const gfx of ['low', 'mid']) test(`@heavy switching course compiles no new 
   test.slow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`/coldgas/?gfx=${gfx}`);
+  await page.goto(`/coldgas/?gfx=${gfx}&warm=1`);   // CI's software GL skips the warm-up unless asked
   await page.waitForFunction(() => !!window.__coldgas?.stage?.warm);
   await page.evaluate(() => window.__coldgas.stage.warm.then(() => true));
   await frames(page);

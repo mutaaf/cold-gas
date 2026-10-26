@@ -56,6 +56,9 @@ e2e: camera.near/far after drive exit; perf.mjs long-task measurement around cou
 - Not warmed: the shadow pass's depth program, which three builds only while drawing a shadow map (keyed by the
   course's light counts): one trivial shader per course on mid/high, compiled on the click's frame. The e2e count
   leaves it out, by name.
+- Not on a software rasterizer (SwiftShader, llvmpipe, WARP: `gfx-tier.isSoftwareRenderer`), which links shaders on
+  the main thread: there the warm-up took seconds of the title's input (CI's BYOK and theatre tests starved), so
+  those devices compile on the click as before. `?warm=1` forces it (the course-switch e2e).
 - Not done: a restored WebGL context loses the warmed programs (the next click compiles, as before 0046).
 - The film look (haze, vignette, the wet slab's mirror) eases in with a smoothstep over 1 s from its first frame
   (`uMix` in the haze pass, `uReflK` on the slab); a course switch mid-fade keeps the fade (tests/unit/film.test.js).

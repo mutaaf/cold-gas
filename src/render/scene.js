@@ -368,12 +368,13 @@ async function buildSliced(look) {
 // is baked, every shader is compiled off the main thread (KHR_parallel_shader_compile, via
 // compileAsync), and only then does `render` draw: the canvas fades in on its first frame
 // (`.on`), and `stage.ready` resolves.
-export function createStage(canvas, { tier = 'high', course = 'show', backdrop = true, onBackdropError = null } = {}) {
+export function createStage(canvas, { tier = 'high', course = 'show', backdrop = true, onBackdropError = null, warm = null } = {}) {
   // Canvas MSAA only where the scene draws straight to the canvas ('low'). The composer tiers draw
   // into a HalfFloat target with no MSAA (LESSONS), so canvas MSAA there only smoothed the final
   // quad; their edges come from SMAA after the OutputPass instead. A software rasterizer skips it
   // (src/gfx-tier.js: a third of its frame rate).
-  const msaa = tier === 'low' && !isSoftwareRenderer(probeRenderer());
+  const software = isSoftwareRenderer(probeRenderer());
+  const msaa = tier === 'low' && !software;
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance' });
   // The drawing buffer's pixel ratio: the device's (capped by tier) × the resolution governor's scale.
   // The device's is read again whenever it changes (another monitor, browser zoom, Stage Manager): render()
@@ -770,6 +771,8 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   setCourse(course, { sliced: true });
   stage.ready = boot();
   stage.backdrop = backdrop ? stage.ready.then(loadBackdrop).catch((err) => { console.warn('backdrop', err); onBackdropError?.(err); return null; }) : Promise.resolve(null);
-  stage.warm = Promise.all([stage.ready, stage.backdrop]).then(warmLooks);
+  // Not on a software rasterizer (warm: null): it links shaders on the main thread, so warming the other courses
+  // would take seconds of the title's input away from a player who may never switch (?warm=1 forces it, for tests).
+  stage.warm = (warm ?? !software) ? Promise.all([stage.ready, stage.backdrop]).then(warmLooks) : Promise.resolve(stage);
   return stage;
 }
