@@ -265,8 +265,10 @@ src/wake.js           the screen wake lock (0060): held through a run, the judgi
 src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: errors, rejections, traps,
                         lost context, shaders, fetches, lazy imports, audio; frames; beacons) ·
                         signature.js (stable ids, shared with the Worker) · frames.js (ring +
-                        histogram, zero per-frame allocation) · ledger.js (per-device health ledger,
-                        boot tier from past runs, resolution governor) · breaker.js (judge, audio,
+                        histogram, zero per-frame allocation; slow = past the display's own cadence,
+                        so a 30 fps cap isn't a hitch) · ledger.js (per-device health ledger,
+                        boot tier from past runs, resolution governor; scene.js applies a step at the
+                        next render, never between a draw and its presentation) · breaker.js (judge, audio,
                         world, rocket) · heal.js (guarded frame loop, context restore + look rebake,
                         trap → title, reload-once) · reload.js (when a reload is allowed: online, origin
                         answers, a new build for a missing chunk) · panel.js (For nerds → Health).

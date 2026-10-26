@@ -375,7 +375,12 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   // (src/gfx-tier.js: a third of its frame rate).
   const msaa = tier === 'low' && !isSoftwareRenderer(probeRenderer());
   const renderer = new THREE.WebGLRenderer({ canvas, antialias: msaa, powerPreference: 'high-performance' });
-  const basePixelRatio = Math.min(window.devicePixelRatio, tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1);
+  // The drawing buffer's pixel ratio: the device's (capped by tier) × the resolution governor's scale.
+  // The device's is read again whenever it changes (another monitor, browser zoom, Stage Manager): render()
+  // compares it every frame, a number read with no allocation, and refits.
+  const dprCap = tier === 'high' ? 2 : tier === 'mid' ? 1.5 : 1;
+  let basePixelRatio = Math.min(window.devicePixelRatio || 1, dprCap), pixelScale = 1;
+  const pixelRatio = () => Math.max(0.5, basePixelRatio * pixelScale);
   renderer.setPixelRatio(basePixelRatio);
   renderer.toneMapping = THREE.AgXToneMapping;
   renderer.toneMappingExposure = 1.05;
@@ -542,8 +547,13 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   }
   function resize() {
     clearTimeout(settle);
+    refit = false;
     const [w, h] = cssSize();
     fitW = w; fitH = h;
+    seenDpr = window.devicePixelRatio || 1;
+    basePixelRatio = Math.min(seenDpr, dprCap);
+    const pr = pixelRatio();
+    if (renderer.getPixelRatio() !== pr) { renderer.setPixelRatio(pr); composer?.setPixelRatio(pr); }
     renderer.setSize(w, h, false);
     composer?.setSize(w, h);
     sliverView.value.set(w, h).multiplyScalar(renderer.getPixelRatio() / 2);
@@ -557,15 +567,19 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   const resizeFns = [];
   // onResize(fn): fn(drawingBufferHeight) now and after every resize or resolution change.
   function onResize(fn) { resizeFns.push(fn); fn(Math.round((canvas.clientHeight || window.innerHeight) * renderer.getPixelRatio())); }
+  // A resize clears the drawing buffer. Done after a frame has drawn (the governor decides at the end of
+  // a frame), the browser would present that cleared buffer: a black flash. So a resolution step only
+  // marks the stage `refit`, and the next render() refits first and draws in the same task (0044); a
+  // changed device pixel ratio is found there too.
+  let refit = false, seenDpr = 0;
   resize();
 
   // Self-heal (src/obs/heal.js): the resolution governor's knob, and the rebuild after a lost WebGL
   // context (three re-creates its GL state; the baked environments lived only on the GPU).
   function setPixelScale(k) {
-    const pr = Math.max(0.5, basePixelRatio * k);
-    renderer.setPixelRatio(pr);
-    composer?.setPixelRatio(pr);
-    resize();
+    if (k === pixelScale) return;
+    pixelScale = k;
+    refit = true;   // applied by the next render(), never between a draw and its presentation
   }
   function restoreGL() {
     for (const k of Object.keys(envs)) { envs[k]?.dispose?.(); delete envs[k]; }
@@ -576,6 +590,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   // render(time, mode): mode is the game's ('title' on the title screen), for the backdrop's moments.
   function render(time, mode) {
     if (!drawing) return;
+    if (refit || (window.devicePixelRatio || 1) !== seenDpr) resize();
     (external || current).update(time);
     if (stage.rocket && !external) stage.rocket.update(time, mode);
     if (!external) {
