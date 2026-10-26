@@ -65,3 +65,23 @@ Still failing, to the frame:
   then `06 BRAKE` at + 0.75 s (23.3 m) and held it to impact. It then marked `07 TOUCHDOWN` over the
   car on its roof (`phone-C-7-touchdown.jpg`, `desk-C-7-touchdown.jpg`). 0072 owns the wreck's label.
   The BRAKE half is this ticket's.
+
+## Critic re-measure (2026-10-26 21:36, production 77cc6d5)
+Unchanged. Unique air ticks of the Show reference:
+
+| Viewport | BRAKE from | BRAKE frames | < 1 g | < 0.3 g |
+|---|---|---|---|---|
+| 1440×900 | +0.72 s, 23.7 m | 35 | 13 | 8 |
+| 390×844 | +0.82 s, 23.2 m | 37 | 12 | 10 |
+| 844×390 | +0.83 s, 23.3 m | 37 | 14 | 9 |
+
+The force is the sim's own per-tick `run.gWin`.
+
+The valves-shut crash at 390×844 (all inputs zeroed from release + 0.125 s) shows `05 CARRY` at +0.62 s,
+then `06 BRAKE` from +0.72 s to impact. That's 41 frames, 32 of them < 1 g and 19 < 0.3 g. After the impact
+(+2.95 s) the timeline reads `07 TOUCHDOWN` for 0.46 s over a car on its roof, with `WRECKED 66 %` in red
+beside it (`docs/critique/2026-10-26-2136/phone-C-7-touchdown.jpg`). It becomes `07 FLIPPED` only when the
+run ends (+3.41 s).
+
+Added criterion: a step labelled TOUCHDOWN is never `now` while `[data-dmg]` reads `wrecked`, so the crash
+label is shown from the impact, not from the run's end.
