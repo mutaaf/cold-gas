@@ -1601,19 +1601,21 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 
 /* --- Easy on the battery (0049) ---
    A backdrop blur samples the canvas under it again on every frame the canvas changes, and through a run's
-   countdown, the run, and the results over the replay, it changes every frame. There the glass is a solid
-   fill, a step denser (0.62 → 0.72, the compact tabs 0.84) so the HUD's words keep their contrast without the blur. The grain's
-   overlay blend is a full-screen composite on every frame: the title alone keeps it. (Free Drive and the
-   Sandbox keep their blur for now: their panels were not measured without it.) */
-body[data-mode]:not([data-mode='title']) .grain { display: none; }
-body:is([data-mode='countdown'], [data-mode='live'], [data-mode='results'], [data-mode='replay']) * {
+   countdown, the run and the replay it changes every frame. There the glass is a solid fill, a step denser
+   (0.62 → 0.72, the compact tabs 0.84) so the HUD's words keep their contrast without the blur, and the grain's
+   full-screen overlay blend is off. The results (the sheet and the judges' theatre) keep both: without them
+   software GL's main thread ran 2–3× further behind there (timer lag 0.7–1.1 s against 0.2–0.4 s) and the
+   theatre's words missed their deadline. (Free Drive and the Sandbox keep their blur for now: their panels
+   were not measured without it.) */
+body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .grain { display: none; }
+body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) * {
   -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
-body:is([data-mode='countdown'], [data-mode='live'], [data-mode='results'], [data-mode='replay']) { --glass: rgba(10, 13, 20, 0.7); }
+body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) { --glass: rgba(10, 13, 20, 0.7); }
 @media (pointer: coarse) {   /* the full HUD's handle is a tab of its own on a touch screen */
-  :root:not([data-hud='compact']) body:is([data-mode='countdown'], [data-mode='live'], [data-mode='results'], [data-mode='replay']) .hud .h-strip > .h-handle { background-color: rgba(5, 7, 12, 0.76); } }
-body:is([data-mode='countdown'], [data-mode='live'], [data-mode='results'], [data-mode='replay']) :is(.h-strip, .thumb:not(.on)) { background-color: rgba(5, 7, 12, 0.72); }
+  :root:not([data-hud='compact']) body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .hud .h-strip > .h-handle { background-color: rgba(5, 7, 12, 0.76); } }
+body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) :is(.h-strip, .thumb:not(.on)) { background-color: rgba(5, 7, 12, 0.72); }
 /* The compact tabs sit over the wreck on a phone held sideways, and the timeline's crash label is signal red
    (4.5:1 on dense glass only, LESSONS 0072): 3.83:1 at 0.62 unblurred (audit, 814×380 and 844×390). */
-:root[data-hud='compact'] body:is([data-mode='countdown'], [data-mode='live'], [data-mode='results'], [data-mode='replay']) .hud :is(.h-primary, .h-mission) { background-color: rgba(5, 7, 12, 0.84); }
-body:is([data-mode='countdown'], [data-mode='live'], [data-mode='results'], [data-mode='replay']) .stick { background-color: rgba(6, 8, 13, 0.46); }
-body:is([data-mode='countdown'], [data-mode='live'], [data-mode='results'], [data-mode='replay']) .tbtn:not(.on, [style*='--amt']) { background-color: rgba(6, 8, 13, 0.56); }
+:root[data-hud='compact'] body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .hud :is(.h-primary, .h-mission) { background-color: rgba(5, 7, 12, 0.84); }
+body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .stick { background-color: rgba(6, 8, 13, 0.46); }
+body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .tbtn:not(.on, [style*='--amt']) { background-color: rgba(6, 8, 13, 0.56); }

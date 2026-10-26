@@ -64,10 +64,13 @@ Changing sim behaviour.
 - The shadow map (mid/high) is drawn on the title only when the hero moves, the mode, course or look changes, the
   context comes back, or 30 title frames pass, and on every frame for the first 60 title frames (the wing and the
   skirts ease home after a run); every other mode draws it every frame as before.
-- CSS: the grain (an overlay blend over the whole screen) shows on the title only. During the countdown, a run, the
-  results and the replay no element blurs the canvas behind it (`backdrop-filter: none`); the glass is a step
+- CSS: the grain (an overlay blend over the whole screen) is off during the countdown, a run and the replay, and
+  there no element blurs the canvas behind it (`backdrop-filter: none`); the glass is a step
   denser instead (`--glass` 0.58 → 0.70; the strip and the one-thumb pad 0.62 → 0.72, the touch HUD handle
   tab 0.62 → 0.76, the compact descent and clock tabs 0.62 → 0.84 (unblurred at 0.62 the audit read the timeline's
   red crash label at 3.83–3.89:1 over the wreck at 814×380 and 844×390); the stick 0.36 → 0.46, idle touch buttons 0.46 → 0.56; pressed buttons keep
-  their own fill). tests/e2e/battery.spec.js. Free Drive and the Sandbox keep their blur: their panels (0.5–0.62
+  their own fill). tests/e2e/battery.spec.js. The results (the sheet and the judges' theatre) keep the grain and
+  the blur, as on main: with both off there, software GL's main thread ran 2–3× further behind (setTimeout lag
+  0.7–1.1 s against main's 0.2–0.4 s, two pages at once) and the theatre's figures and the judges' words missed
+  their deadlines on CI (smoke.spec, theatre.spec, on two runs). Free Drive and the Sandbox keep their blur: their panels (0.5–0.62
   glass) weren't measured without it, a follow-up for 0052's pass.

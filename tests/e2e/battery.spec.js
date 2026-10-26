@@ -42,5 +42,10 @@ test('the title draws at no more than 30 fps; flying, no backdrop blur and no gr
   // The HUD's strip still has its glass: a solid fill now, not a see-through one.
   const strip = await G(page, () => getComputedStyle(document.querySelector('.h-strip')).backgroundColor);
   expect(strip).toMatch(/rgba\(5, 7, 12, 0\.7\d*\)/);
+  // The results keep the title's look: without the grain and the blur there, software GL's main thread fell
+  // seconds behind and the judges' theatre missed its deadlines (smoke.spec, theatre.spec).
+  await G(page, () => window.__coldgas.fastForward());
+  await expect(page.locator('body')).toHaveAttribute('data-mode', 'results', { timeout: 30_000 });
+  await expect(page.locator('.grain')).toBeVisible();
   expect(errors).toEqual([]);
 });
