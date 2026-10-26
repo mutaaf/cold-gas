@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { signature, normMessage, normFile, parseFrames, moduleOf, hash12 } from '../../src/obs/signature.js';
 import { createBreaker } from '../../src/obs/breaker.js';
 import { chooseBoot, createGovernor, loadLedger, saveLedger, emptyLedger, LEDGER_KEY } from '../../src/obs/ledger.js';
-import { createFrameStats, recordFrame, percentile, bucketOf, summary, NB } from '../../src/obs/frames.js';
+import { createFrameStats, recordFrame, percentile, bucketOf, summary, isSlow, NB } from '../../src/obs/frames.js';
 
 const withStack = (msg, stack, name = 'TypeError') => Object.assign(new Error(msg), { name, stack: `${name}: ${msg}\n${stack}` });
 
@@ -123,6 +123,13 @@ describe('health ledger: boot tier from past runs', () => {
     expect(ups).toBeLessThanOrEqual(3);   // tries high again only after 5 smooth sessions each time
     expect(tiers.filter((t) => t === 'mid').length).toBeGreaterThan(14);
   });
+  it('a 30 fps cap (Low Power Mode) keeps its tier: its p95 reads ≈48 ms but no frame missed the cadence (0044)', () => {
+    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0 })], deviceTier: 'mid' }).tier).toBe('mid');
+    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0.02 })], deviceTier: 'mid' }).tier).toBe('mid');
+    // A device that really missed its frames still steps down, and old sessions (no `slow`) read as before.
+    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0.6 })], deviceTier: 'mid' }).tier).toBe('low');
+    expect(chooseBoot({ sessions: [sess('mid', 47.9)], deviceTier: 'mid' }).tier).toBe('low');
+  });
   it('two killed tabs in the last three sessions step down; one does not', () => {
     expect(chooseBoot({ sessions: [sess('high', 12), sess('high', 12, { ended: false }), sess('high', 12)] }).tier).toBe('high');
     expect(chooseBoot({ sessions: [sess('high', 12, { ended: false }), sess('high', 12), sess('high', 12, { ended: false })] }).tier).toBe('mid');
@@ -180,6 +187,72 @@ describe('frame stats', () => {
     expect(sm.p99).toBeGreaterThan(100);
     expect(sm.hitches).toBe(20);
     expect(percentile(new Uint32Array(NB), 0.5)).toBe(0);
+  });
+  // Feed `secs` of frames at a fixed interval (with a little rAF jitter) and CPU work; return the closed
+  // windows and what the governor did with them.
+  function fly(secs, dt, work, g = createGovernor({ now: () => 0 }), s = createFrameStats(), t0 = 0) {
+    const windows = [];
+    let t = t0, steps = 0;
+    for (let i = 0; t < t0 + secs * 1000; i++) {
+      const d = dt + ((i * 7919) % 5 - 2) * 0.3;   // ±0.6 ms, deterministic
+      t += d;
+      const w = recordFrame(s, t, d, work * 0.4, work * 0.5, work, 0);
+      if (w) { windows.push({ ...w }); steps += g.feed(w); }
+    }
+    return { windows, steps, g, s, t };
+  }
+  it('a steady 30 fps cap with 6 ms of work never steps the resolution down (Low Power Mode, battery saver; 0044)', () => {
+    const { windows, steps, g, s } = fly(60, 33.3, 6);
+    expect(windows.length).toBeGreaterThan(25);
+    expect(steps).toBe(0);
+    expect(g.level).toBe(0);
+    expect(s.cadence).toBeGreaterThan(32); expect(s.cadence).toBeLessThan(34);
+    for (const w of windows) expect(w.slowShare).toBe(0);   // the first window too
+  });
+  it('the same 33 ms with the CPU working most of it is slow, and steps down after 6 s', () => {
+    const { windows, steps, g } = fly(7, 33.3, 25);
+    expect(windows[0].slowShare).toBeGreaterThan(0.9);
+    expect(steps).toBe(-1); expect(g.level).toBe(1);
+  });
+  it('a 60 Hz display dropping frames is still caught: its cadence stays 16.7 and the misses are slow', () => {
+    const g = createGovernor({ now: () => 0 }), s = createFrameStats();
+    let t = 0, steps = 0;
+    for (let i = 0; t < 7000; i++) {   // two of every three frames miss a vsync, CPU light (a GPU-bound phone)
+      const d = i % 3 === 0 ? 16.7 : 33.3;
+      t += d;
+      const w = recordFrame(s, t, d, 1, 2, 4, 0);
+      if (w) steps += g.feed(w);
+    }
+    expect(s.cadence).toBeLessThan(17);
+    expect(steps).toBe(-1);
+  });
+  it('a steady slow rate is not a cap: 50 ms (20 fps) or a VRR panel at 40 ms with light work steps down', () => {
+    for (const dt of [50, 40, 66.7]) {
+      const { steps, g, s } = fly(7, dt, 4);
+      expect(s.cadence).toBeLessThanOrEqual(33.4);
+      expect(steps).toBe(-1); expect(g.level).toBe(1);
+    }
+  });
+  it('a session that has shown 60 fps and now sits at 33.3 ms is struggling, not capped', () => {
+    const g = createGovernor({ now: () => 0 }), s = createFrameStats();
+    const { t } = fly(4, 16.7, 4, g, s);
+    expect(g.level).toBe(0);
+    const { steps } = fly(7, 33.3, 4, g, s, t);
+    expect(s.cadence).toBeLessThan(17.5);
+    expect(steps).toBe(-1);
+  });
+  it('the session records how many frames missed the cadence (the ledger reads it, not p95 alone)', () => {
+    expect(summary(fly(30, 33.3, 6).s).slowShare).toBe(0);
+    expect(summary(fly(30, 50, 4).s).slowShare).toBeGreaterThan(0.9);
+  });
+  it('a 120 Hz display at 60 fps is not slow (frames under 25 ms never are)', () => {
+    expect(isSlow(16.7, 2, 8.3)).toBe(false);
+    expect(isSlow(24.9, 20, 8.3)).toBe(false);
+    expect(isSlow(33.4, 2, 8.3)).toBe(true);
+    expect(isSlow(33.4, 2, 33.3)).toBe(false);
+    expect(isSlow(36, 2, 33.3)).toBe(false);   // a jittery 30 Hz frame
+    expect(isSlow(40, 2, 33.3)).toBe(true);
+    expect(isSlow(50, 2, 33.3)).toBe(true);
   });
   it('costs well under a microsecond per frame and allocates nothing', () => {
     const s = createFrameStats();
