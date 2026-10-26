@@ -8,7 +8,9 @@ import { newInput, clearInput } from '../../src/sim/vehicle.js';
 const oldQuantise = (raw, out) => { for (const k of INPUT_KEYS) out[k] = Math.round(Math.max(-1, Math.min(1, raw[k] || 0)) * 100) / 100; return out; };
 
 describe('the input log (0049)', () => {
-  it('quantises bit-identically to the per-key formula, odd inputs included', () => {
+  // One difference, on purpose: a tiny negative that rounds to −0 now reaches the live sim as +0, as it
+  // always did in a replay (run.js unpack: (n || 0) / 100), so the live run and its replay agree.
+  it('quantises bit-identically to the per-key formula, odd inputs included (−0 is +0, as in a replay)', () => {
     let seed = 11;
     const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2.4 - 1.2;
     const odd = [NaN, undefined, -0, 1e-9, 0.005, -0.005, 0.015, 0.125, -0.995, 1.5, -7, true];
@@ -16,7 +18,7 @@ describe('the input log (0049)', () => {
       const raw = {};
       INPUT_KEYS.forEach((k, j) => { raw[k] = i < odd.length ? odd[(i + j) % odd.length] : rnd(); });
       const a = quantise(raw, newInput()), b = oldQuantise(raw, newInput());
-      for (const k of INPUT_KEYS) expect(Object.is(a[k] + 0, b[k] + 0), `${k} ${raw[k]}`).toBe(true);
+      for (const k of INPUT_KEYS) expect(Object.is(a[k], b[k] === 0 ? 0 : b[k]), `${k} ${raw[k]}`).toBe(true);
     }
   });
   it('logs an entry only when the quantised input changes, with the same integers as before', () => {

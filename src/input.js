@@ -186,11 +186,10 @@ export function bindInput(root, { onPause, running = () => false } = {}) {
 // 240 Hz ticks. So the pads are copied once a frame into reused objects of the same shape (every axis and
 // button there, as plain numbers). Before the first poll (tests, benches) a sample copies them itself.
 let startWas = false;
-const NO_PADS = [], PAD_SLOTS = 4, PAD_BUTTONS = 18;
-const padCopies = Array.from({ length: PAD_SLOTS }, () => ({
-  axes: new Float64Array(4), buttons: Array.from({ length: PAD_BUTTONS }, () => ({ pressed: false, value: 0 })),
-}));
-const padsFrame = new Array(PAD_SLOTS).fill(null);
+const NO_PADS = [], PAD_BUTTONS = 18;
+const newPadCopy = () => ({ axes: new Float64Array(4), buttons: Array.from({ length: PAD_BUTTONS }, () => ({ pressed: false, value: 0 })) });
+const padCopies = [newPadCopy(), newPadCopy(), newPadCopy(), newPadCopy()];   // more if a browser lists more slots
+const padsFrame = [null, null, null, null];
 let padsNow = null;
 function copyPad(p, c) {
   for (let a = 0; a < 4; a++) c.axes[a] = p.axes[a] || 0;
@@ -202,7 +201,9 @@ function copyPad(p, c) {
 }
 function copyPads() {
   const pads = navigator.getGamepads?.();
-  for (let i = 0; i < PAD_SLOTS; i++) padsFrame[i] = pads?.[i] ? copyPad(pads[i], padCopies[i]) : null;
+  const n = pads ? pads.length : 0;
+  while (padCopies.length < n) { padCopies.push(newPadCopy()); padsFrame.push(null); }
+  for (let i = 0; i < padsFrame.length; i++) padsFrame[i] = i < n && pads[i] ? copyPad(pads[i], padCopies[i]) : null;
   return pads;
 }
 const readPads = () => padsNow || (copyPads(), padsFrame);
@@ -273,6 +274,7 @@ export const usingTouch = () => device.touch;
 // run); on an unscored ground the driving level sets them, and the car's TC/ABS/handbrake.
 // Everything is driver-relative: + steer, roll and yaw are to the right (src/sim/vehicle.js).
 const vScratch = new Float64Array(VALVES);
+if (VALVE_KEYS.join() !== 'v0,v1,v2,v3,v4,v5,v6,v7,v8,v9') throw new Error('input.js: the valves changed; update advanced()');
 const keyRamp = createKeyRamp(), isDown = (c) => keys.has(c);
 export function sample(phase, tier, out = newInput(), released = false, car = null, ctx = null) {
   clearInput(out);
@@ -377,7 +379,11 @@ function advanced(out, flying, liftKey, ax, thr, brk) {
   keyRamp(isDown, vScratch);
   for (let i = 0; i < pads.length; i++) if (pads[i]) padValves(pads[i], vScratch);
   const pad = nozzlePad.valves;
-  for (let i = 0; i < VALVES; i++) out[VALVE_KEYS[i]] = Math.max(vScratch[i], pad[i]);
+  // By name, not out[VALVE_KEYS[i]]: a store by a computed key boxes the number (0049; ten valves, v0…v9).
+  const v = vScratch;
+  out.v0 = Math.max(v[0], pad[0]); out.v1 = Math.max(v[1], pad[1]); out.v2 = Math.max(v[2], pad[2]); out.v3 = Math.max(v[3], pad[3]);
+  out.v4 = Math.max(v[4], pad[4]); out.v5 = Math.max(v[5], pad[5]); out.v6 = Math.max(v[6], pad[6]); out.v7 = Math.max(v[7], pad[7]);
+  out.v8 = Math.max(v[8], pad[8]); out.v9 = Math.max(v[9], pad[9]);
   out.lift = liftKey;   // the sim ignores it in Advanced; the ledge reads it as RELEASE
   return out;
 }

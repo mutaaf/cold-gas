@@ -5,7 +5,7 @@
 //   obs.error(module, err, kind)    capture (deduped by signature: one entry per fault, with a count)
 //   obs.fail(name, err) / obs.ok(name)   a breaker-guarded subsystem failed / worked
 //   obs.breaker(name)               the circuit breaker for a subsystem (src/obs/breaker.js)
-//   obs.frame(now, dt, sim, render, work, dropped)   once per frame: zero allocations
+//   obs.frame(now, dt, sim, render, work, dropped, govern)   once per frame: zero allocations
 //   obs.recovery(kind, ok, detail)  a self-heal happened (or failed)
 //   obs.snapshot()                  for the For nerds panel's Health section
 //   obs.payload() / obs.flush()     the batch sent to POST /coldgas/api/obs (sendBeacon)
@@ -100,9 +100,9 @@ function createObs() {
 
   // --- Frames: the hot path ---------------------------------------------------------------------
   let nextSave = 0;
-  o.frame = (now, dtMs, simMs, renMs, workMs, dropped) => {
+  o.frame = (now, dtMs, simMs, renMs, workMs, dropped, govern = true) => {
     const w = recordFrame(o.frames, now, dtMs, simMs, renMs, workMs, dropped);
-    if (w !== null && o.governor) {
+    if (w !== null && o.governor && govern) {
       const step = o.governor.feed(w);
       if (step !== 0) setScale(o.governor.level, step < 0 ? 'hitching' : 'headroom');
     }

@@ -185,9 +185,12 @@ export function installHeal({ stage, canvas, ui, S, toTitle, pause = () => {}, c
   }
 
   // A frame the loop chose not to draw (the paced title, main.js): the next drawn one is timed from here,
-  // so obs reads the display's interval, not the pacing, as the frame time.
+  // so obs reads the display's interval, not the pacing, as its frame time.
   heal.skip = (now) => { heal.lastNow = now; };
-  heal.frame = (now, body) => {
+  // `govern` false (the paced title, 0049): recorded, but not shown to the resolution governor. A paced
+  // frame timed from the last skipped one shows the display's interval, not what drawing it cost, so it
+  // would read as headroom (and timed from the last drawn one, as hitching).
+  heal.frame = (now, body, govern = true) => {
     const dtMs = heal.lastNow < 0 ? 16.7 : now - heal.lastNow;
     heal.lastNow = now;
     // Back on the title with a stale mark: the safe moment to check the build.
@@ -201,7 +204,7 @@ export function installHeal({ stage, canvas, ui, S, toTitle, pause = () => {}, c
     const work = performance.now() - t0;
     const live = S.mode === 'live' && !S.paused;
     // The sim clock keeps at most 100 ms a frame (main.js): the rest is dropped ticks (240 Hz).
-    obs.frame(now, dtMs, live ? S.simMs || 0 : 0, heal.renMs, work, live && dtMs > 100 && dtMs < 1000 ? (dtMs - 100) * 0.24 : 0);
+    obs.frame(now, dtMs, live ? S.simMs || 0 : 0, heal.renMs, work, live && dtMs > 100 && dtMs < 1000 ? (dtMs - 100) * 0.24 : 0, govern);
   };
 
   // Retry later: the physics breaker belongs to this page's WASM instance, not to the device.

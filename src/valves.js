@@ -100,7 +100,7 @@ export function createKeyRamp() {
 const step5 = (v) => Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
 // Once per 240 Hz tick in the air: no closures, no iterators (0049).
 const btn = (p, i) => p.buttons[i]?.value || (p.buttons[i]?.pressed ? 1 : 0);
-const setV = (out, i, v) => { out[i] = Math.max(out[i], step5(v)); };
+const setV = (out, i, v) => { const s = Math.round(Math.max(0, Math.min(1, v)) * 20) / 20; if (s > out[i]) out[i] = s; };   // step5, inline
 const I_FL = IDX['down-fl'], I_FR = IDX['down-fr'], I_RL = IDX['down-rl'], I_RR = IDX['down-rr'], I_YL = IDX['yaw-l'], I_YR = IDX['yaw-r'];
 export function padValves(p, out) {
   setV(out, I_FL, btn(p, 4)); setV(out, I_FR, btn(p, 5));

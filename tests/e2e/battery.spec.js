@@ -11,6 +11,7 @@ const blurred = (page) => G(page, () => [...document.querySelectorAll('body *')]
 }).map((el) => el.className || el.tagName));
 
 test('the title draws at no more than 30 fps; flying, no backdrop blur and no grain', async ({ page }) => {
+  test.slow();   // boot, two seconds of title frames and a run's first frames on software GL: past 60 s under load
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/coldgas/?gfx=low');
