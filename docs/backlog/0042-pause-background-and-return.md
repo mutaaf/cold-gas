@@ -6,7 +6,7 @@ priority: P1
 size: M
 lens: tech-health
 created: 2026-10-21
-pr: PRNUM
+pr: 115
 by: operator
 ---
 
@@ -48,7 +48,7 @@ Background audio playback.
 - Not done: audio suspend/resume and the iOS 'interrupted' unlock, `resetInput()` on blur/hide/pause,
   render on resize while paused, wake lock, tilt permission/re-zero.
 
-## Closed by 0060 (PR #PRNUM)
+## Closed by 0060 (PR #115)
 The rest shipped with 0060: audio suspends on pause, a hidden tab and a minute's idle title and resumes from any
 non-running state ('interrupted' included) on the next gesture; a resize while paused redraws the frozen frame;
 a screen wake lock holds through runs, judging and the replay. Input reset and tilt shipped in #67, heal in #69.
