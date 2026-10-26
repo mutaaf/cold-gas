@@ -38,7 +38,8 @@ import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './rend
 import { thumbStage } from './onethumb.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
-import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0 } from './audio.js';
+import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0, suspendAudio, resumeAudio, audioState } from './audio.js';
+import { syncWake, wakeHeld } from './wake.js';
 import { createUI, crashStep } from './ui.js';
 import { wireUnitToggles, unitText } from './units.js';
 import { drawShareCard, shareRun } from './share-card.js';
@@ -68,8 +69,10 @@ obs.init({ deviceClass: deviceClass(navigator, coarse, deviceKind(device)) });
 // Audio is a breaker-guarded subsystem: if it throws, the game goes quiet instead of stopping.
 const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updateAudio0), thud = guard('audio', thud0), chime = guard('audio', chime0);
 // The audio graph is built on the first touch, click or key anywhere (a user gesture, so the
-// context may start), not inside the Jump tap: building it can take a long task of its own.
-for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => initAudio(), { capture: true, once: true, passive: true });
+// context may start), not inside the Jump tap: building it can take a long task of its own. Every
+// later gesture brings back a context that stopped (iOS 'interrupted' too), unless it should be quiet.
+let lastGesture = performance.now();
+for (const ev of ['pointerdown', 'keydown']) addEventListener(ev, () => { lastGesture = performance.now(); initAudio(); syncLife(true); }, { capture: true, passive: true });
 
 const canvas = document.getElementById('stage');
 let stage;
@@ -1007,6 +1010,7 @@ let lastT = performance.now();
 function frame(now) {
   requestAnimationFrame(frame);
   heal.frame(now, frameBody);
+  syncLife();
   // The cue line's deadlines (src/ui.js), after the frame has asked for its cues: a message asked
   // for every frame stays up however long a frame takes; paused, or if the frame threw, they still run.
   ui.tickCue();
@@ -1052,6 +1056,22 @@ function frameBody(now) {
     stage.render(S.time, S.mode);
   }
 }
+
+// --- Pause, background and return (0060) --------------------------------------------------------
+// Quiet: paused (a run or Free Drive), a hidden tab, or the title left alone for a minute; the context
+// stops rather than holding the last gains. Awake: a run, the judging and the replay keep the screen on.
+const TITLE_IDLE_MS = 60_000;
+let quiet = false, awake = false;
+function syncLife(force = false) {
+  const hidden = document.hidden;
+  const q = hidden || S.paused || (S.mode === 'drive' && !!fd()?.paused) || (S.mode === 'title' && performance.now() - lastGesture > TITLE_IDLE_MS);
+  if (q !== quiet || force) { quiet = q; if (q) suspendAudio(); else resumeAudio(); }
+  const a = !hidden && !S.paused && (S.mode === 'countdown' || S.mode === 'live' || S.mode === 'results' || S.mode === 'replay');
+  if (a !== awake || force) { awake = a; syncWake(a); }
+}
+// Paused, the loop draws nothing: a rotation or a resize would leave the canvas blank (a resized
+// buffer is cleared). Draw the frozen frame again, now in the new shape and once the buffer settles.
+function redrawPaused() { if (S.paused && stage) stage.render(S.time, S.mode); }
 
 // --- Wiring ---------------------------------------------------------------------------------
 function pause(on) {
@@ -1470,11 +1490,12 @@ document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('cli
 // The window changed shape (a rotation, a folding phone opened or closed mid-anything, 0075): the
 // camera re-fits now and the drawing buffer once the size settles (stage.reshape); nothing reloads,
 // and the run, the replay or the title carries on.
-addEventListener('resize', () => { stage.reshape(); director.reframe(); });
+addEventListener('resize', () => { stage.reshape(); director.reframe(); redrawPaused(); });
 // Mist and crash smoke size in drawing-buffer pixels, kept current through resizes and the
 // resolution governor's steps (src/render/scene.js onResize).
-stage.onResize((h) => { plumes.setScale(h); crash.setScale(h); });
-document.addEventListener('visibilitychange', () => { if (document.hidden) pause(true); });
+stage.onResize((h) => { plumes.setScale(h); crash.setScale(h); redrawPaused(); });
+// Hidden: pause, go quiet, let the screen go. Back: the browser dropped the wake lock, so ask again.
+document.addEventListener('visibilitychange', () => { if (document.hidden) pause(true); syncLife(true); });
 
 // --- Free Drive (a lazy chunk: real roads from open data, src/drive/) ------------------------------
 let drive = null, driveLoad = null;
@@ -1535,5 +1556,5 @@ function fastForward() {
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
 window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
-Object.assign(window.__coldgas, { obs, heal });   // [obs] e2e: tests/e2e/obs.spec.js
+Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

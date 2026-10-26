@@ -21,8 +21,10 @@ function loopNoise(c, freq, q, type = 'bandpass') {
   return { src, f, g };
 }
 
+// Built on the first gesture; any later gesture brings a context that isn't running back: 'suspended'
+// (ours, or the browser's autoplay hold) and Safari's 'interrupted' (a phone call, Siri, another app's audio).
 export function initAudio() {
-  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  if (ctx) { resumeAudio(); return; }
   const AC = window.AudioContext || window.webkitAudioContext;
   if (!AC) return;
   ctx = new AC();
@@ -177,3 +179,9 @@ export function setMuted(m) {
   if (master) master.gain.value = m ? 0 : 0.8;
 }
 export const isMuted = () => muted;
+
+// Pause, a hidden tab and a long-idle title go quiet for real (0060): the context stops, so the last gains
+// a frozen frame left behind (the motor, the hiss, the title drone) don't keep playing.
+export function suspendAudio() { if (ctx?.state === 'running') ctx.suspend().catch(() => {}); }
+export function resumeAudio() { if (ctx && ctx.state !== 'running' && ctx.state !== 'closed') ctx.resume().catch(() => {}); }
+export const audioState = () => ctx?.state ?? 'none';

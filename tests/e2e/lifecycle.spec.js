@@ -138,3 +138,103 @@ for (const phone of [true, false]) {
     await ctx.close();
   });
 }
+
+// Pause, background and return (0060): pause goes quiet for real, a resize while paused redraws the
+// frozen frame, and the screen stays on through a run, the judging and the replay.
+const live = async (page) => {
+  await page.goto('/coldgas/?gfx=low');
+  await ready(page);
+  await page.mouse.click(5, 5);   // a gesture: the audio graph is built (src/main.js)
+  await G(page, () => { window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
+};
+const audio = (page) => G(page, () => window.__coldgas.life.audio());
+
+for (const phone of [true, false]) {
+  test(`${phone ? 'phone' : 'desktop'}: pause suspends the audio, resume brings it back, hidden goes quiet`, async ({ browser }) => {
+    const ctx = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true } : { viewport: { width: 1280, height: 720 } });
+    const page = await ctx.newPage();
+    await live(page);
+    await expect.poll(() => audio(page)).toBe('running');
+    await page.keyboard.press('Escape');   // a gesture of its own: it must not wake the audio it pauses
+    await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+    await expect.poll(() => audio(page)).toBe('suspended');
+    await page.locator('[data-resume]').click();
+    await expect.poll(() => audio(page)).toBe('running');
+    // A hidden tab: paused and quiet; back, a tap on Resume brings the sound back.
+    await G(page, () => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
+    await expect.poll(() => audio(page)).toBe('suspended');
+    await G(page, () => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange')); });
+    expect(await audio(page)).toBe('suspended');   // still paused: still quiet
+    await page.locator('[data-resume]').click();
+    await expect.poll(() => audio(page)).toBe('running');
+    await ctx.close();
+  });
+}
+
+test('a resize while paused redraws the frozen frame: the canvas is not blank', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await live(page);
+  await page.waitForTimeout(500);
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+  const frames = () => G(page, () => window.__coldgas.stage.renderer.info.render.frame);
+  const before = await frames();
+  await page.waitForTimeout(400);
+  expect(await frames()).toBe(before);   // paused: the loop draws nothing
+  await page.setViewportSize({ width: 390, height: 844 });   // a rotation to a phone's shape
+  await expect.poll(frames).toBeGreaterThan(before);
+  await page.waitForTimeout(600);   // past the buffer's settle (scene.js SETTLE_MS): it was reallocated and drawn again
+  await G(page, () => { document.querySelector('[data-screen="pause"]').style.visibility = 'hidden'; });
+  const png = (await page.locator('#stage').screenshot()).toString('base64');
+  // Spread of the canvas's pixels, measured in the page (no image library here): a cleared canvas is one colour.
+  const spread = await G(page, (b64) => new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+      const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+      const d = x.getImageData(0, 0, c.width, c.height).data;
+      let lo = 255, hi = 0;
+      for (let i = 0; i < d.length; i += 4) { const l = (d[i] + d[i + 1] + d[i + 2]) / 3; if (l < lo) lo = l; if (l > hi) hi = l; }
+      resolve(hi - lo);
+    };
+    img.src = `data:image/png;base64,${b64}`;
+  }), png);
+  expect(spread).toBeGreaterThan(30);
+});
+
+test('the screen stays on through a run, the judging and the replay, and lets go on the title and when paused', async ({ page }) => {
+  // Headless Chromium's wake lock depends on the platform: a stand-in records what the page asks for.
+  await page.addInitScript(() => {
+    window.__wake = { held: 0, asks: 0 };
+    const request = () => {
+      window.__wake.asks++; window.__wake.held++;
+      const l = new EventTarget();
+      l.release = async () => { if (l.released) return; l.released = true; window.__wake.held--; l.dispatchEvent(new Event('release')); };
+      return Promise.resolve(l);
+    };
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request } });
+  });
+  await live(page);
+  const held = () => G(page, () => window.__wake.held);
+  await expect.poll(held).toBe(1);
+  expect(await G(page, () => window.__coldgas.life.wake())).toBe(true);
+  await page.keyboard.press('Escape');
+  await expect.poll(held).toBe(0);
+  await page.locator('[data-resume]').click();
+  await expect.poll(held).toBe(1);
+  // The browser drops the lock on a hidden page; back, the page asks again.
+  const asks = await G(page, () => window.__wake.asks);
+  await G(page, () => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => true }); document.dispatchEvent(new Event('visibilitychange')); });
+  await expect.poll(held).toBe(0);
+  await G(page, () => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => false }); document.dispatchEvent(new Event('visibilitychange')); });
+  await page.locator('[data-resume]').click();
+  await expect.poll(held).toBe(1);
+  expect(await G(page, () => window.__wake.asks)).toBe(asks + 1);
+  // The judging and the replay: still held. The title: let go.
+  await G(page, () => window.__coldgas.fastForward());
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 60_000 });
+  expect(await held()).toBe(1);
+  await G(page, () => window.__coldgas.toTitle());
+  await expect.poll(held).toBe(0);
+});
