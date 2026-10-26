@@ -11,7 +11,8 @@ const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsRead
 async function stepMidRun(page, scale) {
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
-  await page.evaluate(() => { window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); });
+  // The real governor steps on software GL (fold.spec, hud-collapse.spec): off, so only the forced step happens.
+  await page.evaluate(() => { window.__coldgas.obs.governor = null; window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); });
   await expect.poll(() => page.evaluate(() => window.__coldgas.S.mode)).toBe('live');
   const f0 = await page.evaluate(() => window.__coldgas.stage.renderer.info.render.frame);
   await expect.poll(() => page.evaluate(() => window.__coldgas.stage.renderer.info.render.frame), { timeout: 30_000 }).toBeGreaterThan(f0 + 2);
@@ -29,13 +30,13 @@ async function stepMidRun(page, scale) {
       for (let i = 0; i < d.length; i += 4) sum += 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
       return sum / (d.length / 4);
     };
-    const pr0 = stage.renderer.getPixelRatio();
+    const base = Math.min(devicePixelRatio, 1);   // ?gfx=low's cap
     // Registered from a task, this callback runs after the game's (registered by its previous frame).
     requestAnimationFrame(() => {
       const before = luma();
       obs.onScale(k);              // what the governor does at the end of a frame
       const presented = luma();    // nothing draws between here and the browser presenting the frame
-      requestAnimationFrame(() => resolve({ before, presented, next: luma(), pr0, pr1: stage.renderer.getPixelRatio(), mode: S.mode, w: c.width }));
+      requestAnimationFrame(() => resolve({ before, presented, next: luma(), base, pr1: stage.renderer.getPixelRatio(), mode: S.mode, w: c.width }));
     });
   }), scale);
 }
@@ -46,8 +47,8 @@ test('a forced resolution step mid-run never presents a black frame (1280x720)',
   expect(r.before).toBeGreaterThan(3);                     // the stage is lit, so black would show
   expect(r.presented).toBeGreaterThan(r.before * 0.8);     // the frame the browser shows is the drawn one
   expect(r.next).toBeGreaterThan(r.before * 0.5);          // and the next, at the new resolution, draws too
-  expect(r.pr1).toBeCloseTo(Math.max(0.5, r.pr0 * 0.55), 5);
-  expect(r.w).toBe(Math.round(1280 * r.pr1));
+  expect(r.pr1).toBeCloseTo(Math.max(0.5, r.base * 0.55), 5);
+  expect(r.w).toBe(Math.floor(1280 * r.pr1));
 });
 
 test.describe('phone', () => {
@@ -58,7 +59,7 @@ test.describe('phone', () => {
     expect(r.before).toBeGreaterThan(3);
     expect(r.presented).toBeGreaterThan(r.before * 0.8);
     expect(r.next).toBeGreaterThan(r.before * 0.5);
-    expect(r.pr1).toBeCloseTo(Math.max(0.5, r.pr0 * 0.7), 5);
+    expect(r.pr1).toBeCloseTo(Math.max(0.5, r.base * 0.7), 5);
   });
 });
 
@@ -67,6 +68,7 @@ test('the drawing buffer follows a change of device pixel ratio (another monitor
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 1, mobile: false });
   await page.goto('/coldgas/?gfx=mid');
   await ready(page);
+  await page.evaluate(() => { window.__coldgas.obs.governor = null; window.__coldgas.obs.onScale(1); });
   await expect.poll(() => page.evaluate(() => window.__coldgas.stage.renderer.getPixelRatio())).toBe(1);
   // Dragged to a 2× display: the ratio follows (capped at 1.5 on mid), and the canvas keeps drawing.
   await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 720, deviceScaleFactor: 2, mobile: false });

@@ -536,7 +536,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   const cssSize = () => [canvas.clientWidth || window.innerWidth, canvas.clientHeight || window.innerHeight];
   function reshape() {
     const [w, h] = cssSize();
-    clearTimeout(settle);
+    clearTimeout(settle); settle = 0;
     if (w === fitW && h === fitH) {   // back to the size the buffer already has
       if (camera.aspect !== w / h) { camera.aspect = w / h; camera.updateProjectionMatrix(); }
       return;
@@ -546,7 +546,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
     settle = setTimeout(resize, SETTLE_MS);
   }
   function resize() {
-    clearTimeout(settle);
+    clearTimeout(settle); settle = 0;
     refit = false;
     const [w, h] = cssSize();
     fitW = w; fitH = h;
@@ -590,7 +590,8 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   // render(time, mode): mode is the game's ('title' on the title screen), for the backdrop's moments.
   function render(time, mode) {
     if (!drawing) return;
-    if (refit || (window.devicePixelRatio || 1) !== seenDpr) resize();
+    // (A reshape waiting to settle refits by itself: a fold's mid-swing size never gets a buffer, 0075.)
+    if (!settle && (refit || (window.devicePixelRatio || 1) !== seenDpr)) resize();
     (external || current).update(time);
     if (stage.rocket && !external) stage.rocket.update(time, mode);
     if (!external) {

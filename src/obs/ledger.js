@@ -21,8 +21,13 @@ export const P95_GOOD = 20;      // comfortably smooth: counts toward stepping u
 export const UP_AFTER = 3;       // good sessions in a row at a tier before trying the next one up
 export const UP_AFTER_FAILED = 5; // …if that next tier failed on this device in the last 10 sessions
 const MIN_FRAMES = 600;          // ≈10 s of frames before a session's percentiles count
+export const SLOW_OK = 0.05;     // a session with fewer frames than this missing the display's cadence wasn't struggling
 
 const tierIdx = (t) => Math.max(0, TIER_IDS.indexOf(t));
+// A session too slow for its tier: a p95 past 30 fps, unless its frames kept the display's own cadence (a
+// 30 fps cap's p95 reads ≈48 ms with a little jitter, src/obs/frames.js isSlow; 0044). Sessions from before
+// `slow` was recorded are judged on p95 alone.
+const slowSession = (x) => (x.frames || 0) >= MIN_FRAMES && x.p95 > P95_BAD && !(typeof x.slow === 'number' && x.slow < SLOW_OK);
 const fatal = (x) => !!x && ((x.ctxLost || 0) > 0 || (x.crashes?.physics || 0) > 0 || (x.crashes?.render || 0) + (x.crashes?.webgl || 0) + (x.crashes?.frame || 0) > 0);
 
 export function emptyLedger() { return { v: 1, sessions: [], breakers: {}, recoveries: [] }; }
@@ -63,15 +68,15 @@ export function chooseBoot({ sessions = [], deviceTier = 'high', forced = null }
   if (fatal(last)) return down(last.ctxLost ? 'the last session lost the GPU' : `the last session crashed in ${Object.keys(last.crashes || {}).filter((k) => last.crashes[k] > 0).join(', ') || 'render'}`);
   const recent = past.slice(-3);
   if (recent.length >= 2 && recent.filter((x) => x.ended === false && (x.frames || 0) > MIN_FRAMES).length >= 2) return down('two of the last three sessions ended without closing (a killed tab)');
-  if ((last.frames || 0) >= MIN_FRAMES && last.p95 > P95_BAD && (last.scale ?? 0) >= SCALES.length - 1) return down(`its p95 frame was ${last.p95} ms even at ${Math.round(SCALES[SCALES.length - 1] * 100)} % resolution`);
-  if ((last.frames || 0) >= MIN_FRAMES && last.p95 > P95_BAD) return down(`its p95 frame was ${last.p95} ms`);
+  if (slowSession(last) && (last.scale ?? 0) >= SCALES.length - 1) return down(`its p95 frame was ${last.p95} ms even at ${Math.round(SCALES[SCALES.length - 1] * 100)} % resolution`);
+  if (slowSession(last)) return down(`its p95 frame was ${last.p95} ms`);
   // Keep the resolution the last session settled on (minus one step of optimism).
   const scale = Math.max(0, (last.scale ?? 0) - 1);
   // Step up only after a run of smooth sessions at this tier, and more of them if the tier above
   // failed here recently.
   if (at < cap) {
     const up = TIER_IDS[at + 1];
-    const failedAbove = sessions.slice(-10).some((x) => x?.tier === up && (fatal(x) || ((x.frames || 0) >= MIN_FRAMES && x.p95 > P95_BAD)));
+    const failedAbove = sessions.slice(-10).some((x) => x?.tier === up && (fatal(x) || slowSession(x)));
     const need = failedAbove ? UP_AFTER_FAILED : UP_AFTER;
     let run = 0;
     for (let k = past.length - 1; k >= 0; k--) {

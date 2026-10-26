@@ -120,7 +120,7 @@ function createObs() {
     const x = o.session;
     if (!x) return;
     const sm = summary(o.frames);
-    x.frames = sm.frames; x.p50 = sm.p50; x.p95 = sm.p95; x.p99 = sm.p99; x.hitches = sm.hitches;
+    x.frames = sm.frames; x.p50 = sm.p50; x.p95 = sm.p95; x.p99 = sm.p99; x.hitches = sm.hitches; x.slow = sm.slowShare;
     x.scale = Math.max(x.scale || 0, o.scale);   // the lowest resolution this session needed
     x.ctxLost = o.session.ctxLost || 0;
     persist();

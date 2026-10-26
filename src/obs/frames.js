@@ -7,11 +7,15 @@ export const EDGES = [6, 9, 12, 15, 17.5, 20, 25, 33.4, 50, 66.7, 100, 250];
 export const NB = EDGES.length + 1;
 export const HITCH_MS = 50;      // a visible stutter: three frames lost at 60 Hz
 export const LONG_MS = 25;       // a frame that missed 60 Hz by a third
-// A frame is slow only past LONG_MS AND past the display's own cadence (by a quarter), or when its CPU
-// work ate most of it. iOS Low Power Mode and Android battery saver deliver a steady 33.3 ms with an idle
-// GPU: lowering the resolution there costs sharpness and buys nothing (0044).
-export const CADENCE_SLACK = 1.25;
+// A frame is slow only past LONG_MS AND past the display's own cadence (by CADENCE_SLACK), or when its
+// CPU work ate most of it. iOS Low Power Mode and Android battery saver deliver a steady 33.3 ms with an
+// idle GPU: lowering the resolution there costs sharpness and buys nothing (0044). The cadence judged
+// against is the slowest of: this window's, the session's best, and CAP_MS. Nothing caps a display under
+// 30 fps, so a steady 50 ms is a device that can't keep up; and a session that has shown 16.7 ms and now
+// sits on 33.3 ms is struggling, not capped.
+export const CADENCE_SLACK = 1.15;
 export const WORK_SHARE = 0.6;
+export const CAP_MS = 33.4;
 export const LOW_FPS_MS = 33.4;  // a window that averages under 30 fps is "sustained low fps"
 export const WINDOW_MS = 2000;   // the governor's window
 
@@ -48,7 +52,9 @@ export function createFrameStats(ring = 600) {
     simSum: 0, renSum: 0, workSum: 0,
     // The current governor window.
     w: { t0: -1, frames: 0, dtSum: 0, slow: 0, workOver: 0, hitches: 0 },
-    cadence: 0,                          // the last closed window's steady frame interval (ms; 0 = not yet known)
+    cadence: 0,                          // the cadence the last closed window was judged against (ms; 0 = not yet)
+    bestCadence: Infinity,               // the session's fastest window cadence
+    slowFrames: 0,                       // frames judged slow (isSlow), the session's
     scratch: new Float32Array(ring),     // a window's intervals, sorted at its close (no allocation)
     lastHitchAt: 0, worstMs: 0,
   };
@@ -74,7 +80,7 @@ export function cadenceOf(s, n) {
   return a[Math.floor(0.1 * (n - 1))];
 }
 
-// Did this frame miss? Past LONG_MS and past the cadence by a quarter (a dropped vsync at the rate the
+// Did this frame miss? Past LONG_MS and past the cadence by CADENCE_SLACK (a dropped vsync at the rate the
 // display is really running), or past LONG_MS with its CPU work most of the interval.
 export function isSlow(dtMs, workMs, cadence) {
   if (dtMs <= LONG_MS) return false;
@@ -104,10 +110,13 @@ export function recordFrame(s, now, dtMs, simMs, renMs, workMs, dropped) {
   // The window's frames are the last w.frames in the ring (a > 1 s gap is in the ring but not the window:
   // it sits at the top of the sort and moves neither the cadence nor the count by more than a frame).
   const n = Math.min(w.frames, s.count);
-  const cad = (s.cadence = cadenceOf(s, n));
+  const own = cadenceOf(s, n);
+  if (own > 0 && own < s.bestCadence) s.bestCadence = own;
+  const cad = (s.cadence = Math.min(own, s.bestCadence, CAP_MS));
   for (let k = 0; k < n; k++) { const j = (s.head - 1 - k + s.ring) % s.ring; if (s.dt[j] <= 1000 && isSlow(s.dt[j], s.work[j], cad)) w.slow++; }
   closed.frames = w.frames; closed.meanDt = w.dtSum / w.frames; closed.cadence = cad; closed.slowShare = w.slow / w.frames;
   closed.workOverShare = w.workOver / w.frames; closed.hitches = w.hitches;
+  s.slowFrames += w.slow;
   if (closed.meanDt > LOW_FPS_MS) s.lowFpsWindows++;
   w.t0 = now; w.frames = 0; w.dtSum = 0; w.slow = 0; w.workOver = 0; w.hitches = 0;
   return closed;
@@ -130,5 +139,6 @@ export function summary(s) {
     hitches: s.hitches, longFrames: s.longFrames, lowFpsWindows: s.lowFpsWindows, droppedTicks: Math.round(s.droppedTicks), simHeavy: s.simHeavy,
     simMs: Math.round((s.simSum / n) * 100) / 100, renderMs: Math.round((s.renSum / n) * 100) / 100, workMs: Math.round((s.workSum / n) * 100) / 100,
     worstMs: Math.round(s.worstMs),
+    slowShare: Math.round((s.slowFrames / n) * 1000) / 1000,   // frames that missed the display's cadence (isSlow)
   };
 }
