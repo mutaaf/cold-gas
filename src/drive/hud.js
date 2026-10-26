@@ -237,6 +237,7 @@ function driveHud(root, road, info, h, endless) {
   addEventListener('keydown', onKey, true);
   document.addEventListener('pointerdown', onDown, true);
 
+  const glide = { v: 0, t: 0 };
   const last = { speed: -1, speed2: -1, ele: -1e9, ele2: -1e9, grade: -1e9, dist: -1, dist2: -1, time: -1, stretch: '', mapI: -1 };
   const writeTotal = () => { if (el.total) el.total.textContent = (total * uk('dist')).toFixed(1); };
   writeTotal();
@@ -245,7 +246,10 @@ function driveHud(root, road, info, h, endless) {
   return {
     update({ speed, ele, grade, i, heading, time, best, biome, x, z }) {
       rec.i = i; rec.time = time; rec.speed = speed;
-      const sp1 = Math.round(speed * uk('speed')), sp2 = Math.round(speed * uk('speed', true));
+      // The speed glides like the stunt HUD's (src/ui.js, ≈90 ms): the raw number dithered a digit a frame (0047).
+      const now = performance.now(), dt = glide.t ? Math.min(0.1, (now - glide.t) / 1000) : 1;
+      glide.t = now; glide.v += (speed - glide.v) * (1 - Math.exp(-dt / 0.09));
+      const sp1 = Math.round(glide.v * uk('speed')), sp2 = Math.round(glide.v * uk('speed', true));
       if (sp1 !== last.speed) { el.speed.textContent = String(sp1); last.speed = sp1; }
       if (sp2 !== last.speed2) { el.speed2.textContent = `${sp2} ${uu('speed', true)}`; last.speed2 = sp2; }
       const e1 = Math.round(ele * uk('len')), e2 = Math.round(ele * uk('len', true));

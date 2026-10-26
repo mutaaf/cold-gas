@@ -718,6 +718,17 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 .tank .bar .need::before { content: ''; position: absolute; left: 0; top: 0; width: 1px; height: 9px; background: var(--caution); }
 .tank.low b, .tank.low .h-unit { color: var(--warn); }
 .tank.low .bar span { background: var(--warn); }
+/* A steady strip (0047): it is centred, so a cell that grows slides every cell sideways. Each figure
+   that changes length holds a slot as wide as its longest (in ch: the figures are mono), and SINK and
+   FAN, which trade places in the air, are one width. */
+@media (pointer: fine) and (min-width: 1101px) {
+  :root:not([data-hud='compact']) .h-strip > :is(.r-sink, .r-fan) { min-width: 118px; }
+  :root:not([data-hud='compact']) .h-strip [data-fan] { min-width: 5ch; }
+  :root:not([data-hud='compact']) .tank .n2-bar :is([data-2='kg'], [data-tank-bar]) { display: inline-block; text-align: right; }
+  :root:not([data-hud='compact']) .tank .n2-bar [data-2='kg'] { min-width: 6ch; }
+  :root:not([data-hud='compact']) .tank .n2-bar [data-tank-bar] { min-width: 5ch; }
+  :root:not([data-hud='compact']) .tank .n2-bar [data-2='bar'] { display: inline-block; min-width: 9ch; }
+}
 
 /* Attitude */
 .h-att { position: absolute; right: calc(var(--m) + var(--safe-r)); bottom: calc(104px + var(--safe-b)); display: grid; justify-items: center; gap: 6px; }

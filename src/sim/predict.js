@@ -87,6 +87,27 @@ export function predict(c, h, out) {
   return out;
 }
 
+// The band as the HUD shows it (0047): `predict`'s status flaps at a band's edge (the margin ahead
+// crosses zero every few frames while LAND rides the profile), and with it the colour, the word,
+// the ring and the buzz. A worse band is entered at `predict`'s own thresholds, a better one only
+// once the numbers are clear of them by a margin, and either change must hold for BAND_HOLD s.
+// `t` is sim time in seconds; a fresh band (or time running backwards) takes the status at once.
+export const BAND_HOLD = 0.15;
+const RANK = { green: 0, amber: 1, red: 2 };
+export const newBand = () => ({ status: '', cand: '', since: 0, t: 0 });
+export function steadyStatus(b, pr, t) {
+  if (!b.status || t < b.t) { b.status = pr.status; b.cand = ''; b.t = t; return b.status; }
+  b.t = t;
+  // Clear of the edges: what the band must read before it is allowed to step down.
+  const clear = pr.touchSink > SINK_FIRM - 0.3 ? 'red'
+    : pr.marginAhead < 0.5 || pr.touchSink > SINK_SOFT - 0.2 || pr.sink > pr.profileSink + 0.2 ? 'amber' : 'green';
+  const want = RANK[pr.status] > RANK[b.status] ? pr.status : RANK[clear] < RANK[b.status] ? clear : b.status;
+  if (want === b.status) { b.cand = ''; return b.status; }
+  if (want !== b.cand) { b.cand = want; b.since = t; }
+  if (t - b.since >= BAND_HOLD) { b.status = want; b.cand = ''; }
+  return b.status;
+}
+
 // Height a stop from `sink` takes: the roll-out (falling `tLevel` s), then braking at `a`.
 const WARN = 0.6;
 function stopFrom(sink, tLevel, a) {

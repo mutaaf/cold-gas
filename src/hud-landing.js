@@ -11,7 +11,7 @@
 //    roll-out cue: which way and how far, and LET GO a reaction time before upright.
 //  - On the ground: a ring where you'll touch down if you ride the profile from here.
 import * as THREE from 'three';
-import { predict, newPrediction, REACTION } from './sim/predict.js';
+import { predict, newPrediction, newBand, steadyStatus, REACTION } from './sim/predict.js';
 import { CAR } from './sim/vehicle.js';
 import { rateK, lenK, lenUnit, isMetric, onUnits, k as uk, u as uu } from './units.js';
 
@@ -36,7 +36,7 @@ export function createLandingHud({ scene, onStatus = null }) {
   const brakeWord = document.createElementNS('http://www.w3.org/2000/svg', 'tspan'), brakeDist = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
   brakeDist.setAttribute('class', 'd-bd');
   if (el.brakeLbl) { el.brakeLbl.textContent = ''; el.brakeLbl.append(brakeWord, brakeDist); }
-  const pr = newPrediction();
+  const pr = newPrediction(), band = newBand();
   const last = { sink: -1, status: '', target: -1, ttg: -1, brake: -1, car: -1, need: -1, low: null, cue: 0, on: null, adi: NaN, word: '' };
   const TAPE_H = 140;   // tape height in its viewBox units (0 m at the bottom)
   let TAPE_MAX = tapeMax();
@@ -78,11 +78,12 @@ export function createLandingHud({ scene, onStatus = null }) {
     last.on = on;
     root.hidden = !on;
     mk.visible = on;
-    if (!on) { el.tank.classList.remove('low'); el.need.style.opacity = '0'; el.cue.textContent = ''; last.cue = 0; }
+    if (!on) { el.tank.classList.remove('low'); el.need.style.opacity = '0'; el.cue.textContent = ''; last.cue = 0; band.status = ''; }
   }
 
-  // Every frame of a live run. `h`: the floor's height over what's below (the HUD's altitude).
-  function update(car, h, phase) {
+  // Every frame of a live run. `h`: the floor's height over what's below (the HUD's altitude);
+  // `t`: sim time, s (the band's hold runs on it, so a pause doesn't count).
+  function update(car, h, phase, t = 0) {
     const air = phase === 'air';
     // The attitude indicator runs whenever you're live (on the wall it shows you're upside down).
     predict(car, h, pr);
@@ -100,14 +101,16 @@ export function createLandingHud({ scene, onStatus = null }) {
     const sink = Math.round(pr.sink * rateK() * 10);
     if (sink !== last.sink) { el.sink.textContent = (Math.max(0, sink) / 10).toFixed(1); last.sink = sink; }
     set2('dsink', Math.max(0, pr.sink));
-    if (pr.status !== last.status) {
-      root.dataset.status = pr.status;
-      mat.color.setHex(COLORS[pr.status]);
-      onStatus?.(pr.status, last.status);
-      last.status = pr.status;
+    // The band with hysteresis and a hold (0047): colour, word, ring and buzz change once, not every frame at an edge.
+    const status = steadyStatus(band, pr, t);
+    if (status !== last.status) {
+      root.dataset.status = status;
+      mat.color.setHex(COLORS[status]);
+      onStatus?.(status, last.status);
+      last.status = status;
     }
     // What the band asks of you: roof up first, then the brake.
-    const word = pr.status === 'green' ? 'On profile' : pr.upY < 0.85 ? 'Roll out · now' : pr.status === 'amber' ? 'Brake' : 'Too fast';
+    const word = status === 'green' ? 'On profile' : pr.upY < 0.85 ? 'Roll out · now' : status === 'amber' ? 'Brake' : 'Too fast';
     if (word !== last.word) { el.state.textContent = word; last.word = word; }
     const tg = Math.round(pr.profileSink * rateK() * 2);
     if (tg !== last.target) { el.target.textContent = (tg / 2).toFixed(1); last.target = tg; }
@@ -139,7 +142,8 @@ export function createLandingHud({ scene, onStatus = null }) {
     const low = pr.gas < pr.gasNeed;
     if (low !== last.low) { el.tank.classList.toggle('low', low); last.low = low; }
     // Roll-out cue: the way round and how far; LET GO once the car will coast the rest within a
-    // reaction time at the rate it's turning.
+    // reaction time at the rate it's turning. Once shown, LET GO stays while the car keeps turning
+    // the right way (0047: it flapped with ROLL as the rate wobbled about the lead).
     const deg = Math.abs(pr.rollOut) * 180 / Math.PI;
     // The cue as a number (0 none, 1 LEVEL, 2 LET GO, ±(5..180) roll that way): text only on change.
     let cue = 0;
@@ -148,8 +152,10 @@ export function createLandingHud({ scene, onStatus = null }) {
       // when it matches the roll-out's sign.
       const rate = rollRate(car), toward = Math.sign(rate) === Math.sign(pr.rollOut);
       const lead = Math.min(ROLL_RATE, Math.abs(rate)) * REACTION;
-      cue = toward && Math.abs(rate) > 1 && lead > Math.abs(pr.rollOut) * 0.9 ? 2 : (pr.rollOut > 0 ? 1 : -1) * Math.round(deg / 5) * 5;
+      const letGo = last.cue === 2 ? toward && Math.abs(rate) > 0.5 : toward && Math.abs(rate) > 1 && lead > Math.abs(pr.rollOut) * 0.9;
+      cue = letGo ? 2 : (pr.rollOut > 0 ? 1 : -1) * Math.round(deg / 5) * 5;
     } else if (level) cue = 1;
+    else if (last.cue === 2 && deg > 6) cue = 2;
     if (cue !== last.cue) {
       el.cue.textContent = cue === 0 ? '' : cue === 1 ? 'LEVEL' : cue === 2 ? 'LET GO' : `ROLL ${cue > 0 ? '→' : '←'} ${Math.abs(cue)}°`;
       el.cue.dataset.kind = cue === 2 ? 'go' : cue === 1 ? 'ok' : cue ? 'roll' : '';

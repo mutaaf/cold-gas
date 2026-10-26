@@ -671,9 +671,10 @@ function liveStep(dt) {
 
   // Phase cues and moments.
   // Touch layout follows the phase: pedals on the ground and up the wall, LIFT/LAND in the air.
-  // (Let go of the Wall, the air controls come up at once, not when the sim calls it airborne.)
+  // (Let go of the Wall, the air controls come up at once, not when the sim calls it airborne;
+  // a hop off the ground swaps nothing until it has lasted AIR_HOLD, 0047.)
   const tp = run.phase === 'landed' || run.phase === 'done' ? 'landed'
-    : run.phase === 'air' || (run.phase === 'ramp' && S.released) ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
+    : flying(run) || (run.phase === 'ramp' && S.released) ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
   if (ui.touch.dataset.phase !== tp) {
     ui.touch.dataset.phase = tp;
     liftLabel.textContent = tp === 'ramp' ? 'Release' : 'Lift';
@@ -723,6 +724,11 @@ function beginAftermath(run) {
   S.after = true;
 }
 
+// Flying, as the HUD and the touch layout show it (0047): a hop off the ground (the sim goes back to
+// 'drive' if the wheels touch within 0.15 s of lift-off) swaps nothing; off the Wall it's at once.
+const AIR_HOLD = 60;   // ticks from lift-off: 0.25 s
+const flying = (run) => run.phase === 'air' && (S.released || run.tick - run.t.airStartTick >= AIR_HOLD);
+
 // The HUD from the run as it stands (every live frame, and once before a countdown so READY shows
 // this run's start). Returns the speed.
 function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTick : run.tick) - S.startTick) / 240) {
@@ -730,10 +736,11 @@ function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTi
   bodyRates(c, rates);
   const alt = heightAboveSurface(c);
   S.hudAlt = alt;   // the live pointer's BRAKE window reads it (cues, next frame)
-  landing.update(c, alt, S.autopilot ? '' : run.phase);
+  const air = flying(run);
+  landing.update(c, alt, !S.autopilot && air ? 'air' : run.phase === 'air' ? '' : run.phase, run.tick / 240);
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(landing.prediction.rollOut) * 180 / Math.PI,
-    alt, airborne: run.phase === 'air',
+    alt, airborne: air,
     sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, landing.prediction), clock, crash: run.phase === 'done' ? crashStep(S.card) : '',
     pitch: hudPitch(c.quat, run.phase === 'ramp'),
     throttles: c.throttles, fan: c.fanForce / G, g: gWindow.read(),
