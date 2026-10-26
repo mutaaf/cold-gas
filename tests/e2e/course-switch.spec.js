@@ -5,13 +5,15 @@ import { test, expect } from '@playwright/test';
 // slab's paint doesn't z-fight for the rest of the session.
 const frames = (page, n = 2) => page.evaluate((n) => new Promise((r) => { const f = () => (--n ? requestAnimationFrame(f) : r()); requestAnimationFrame(f); }), n);
 
-test('switching course compiles no new shader once the stage has warmed the other looks', async ({ page }) => {
+test('@heavy switching course compiles no new shader once the stage has warmed the other looks', async ({ page }) => {
+  // The warm-up waits for the backdrop and for idle time, then builds, bakes and compiles two courses: on CI's
+  // software GL that runs past a minute, so it gets the slow test's whole budget (@heavy: the flake guard runs it 2×).
   test.slow();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/coldgas/?gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.stage?.warm, null, { timeout: 60_000 });
-  await page.evaluate(() => window.__coldgas.stage.warm);
+  await page.waitForFunction(() => !!window.__coldgas?.stage?.warm);
+  await page.evaluate(() => window.__coldgas.stage.warm.then(() => true));
   await frames(page);
   const programs = () => page.evaluate(() => window.__coldgas.stage.renderer.info.programs.length);
   const before = await programs();
@@ -24,8 +26,8 @@ test('switching course compiles no new shader once the stage has warmed the othe
   expect(errors).toEqual([]);
 });
 
-test('Free Drive and the Sandbox hand the camera back with the stage\'s near and far planes', async ({ page }) => {
-  test.slow();
+test('@heavy Free Drive and the Sandbox hand the camera back with the stage\'s near and far planes', async ({ page }) => {
+  test.slow();   // two worlds built and compiled on software GL
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.stage && window.__coldgas.physicsReady(), null, { timeout: 60_000 });
   const planes = () => page.evaluate(() => { const c = window.__coldgas.camera; return [c.near, c.far]; });
