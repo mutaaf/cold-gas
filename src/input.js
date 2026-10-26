@@ -194,6 +194,7 @@ export function pollPads() {
   if (intent || start) device.note('pad');
   if (start && !startWas) onPauseCb?.();
   startWas = start;
+  return intent || start;   // a pad in use: the title isn't idle (src/main.js syncLife)
 }
 
 // One-thumb: the run's input for this tick from the one control (and tilt, on the ground).

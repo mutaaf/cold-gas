@@ -1,12 +1,12 @@
 ---
 id: 0060
 title: Finish 0042: audio suspends and unlocks right, the canvas redraws while paused, the screen stays on
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: tech-health
 created: 2026-10-21
-pr:
+pr: 115
 by: operator
 ---
 
@@ -25,10 +25,10 @@ the next gesture. Render one frame on resize while paused. `navigator.wakeLock` 
 the replay, re-acquired when visible. Close 0042 when this ships.
 
 ## Acceptance criteria
-- [ ] Pause → AudioContext 'suspended'; resume → 'running'
-- [ ] Resize while paused: canvas not blank (screenshot)
-- [ ] Wake lock held during judging (where supported), released on the title
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] Pause → AudioContext 'suspended'; resume → 'running'
+- [x] Resize while paused: canvas not blank (screenshot)
+- [x] Wake lock held during judging (where supported), released on the title
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 e2e in `tests/e2e/lifecycle.spec.js` for each criterion.
