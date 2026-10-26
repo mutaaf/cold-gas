@@ -1598,3 +1598,18 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    short one (a folding phone closed, 382×580; the 466×498 mid-swing; an SE) the tagline steps aside for it. */
 @media (max-width: 480px) { .cta .howto-link { order: 1; } .cta .assist-ctl { order: 2; } }
 @media (orientation: portrait) and (max-height: 620px) { .title .tagline { display: none; } .title .wordmark { margin-bottom: 14px; } }
+
+/* --- Easy on the battery (0049) ---
+   A backdrop blur samples the canvas under it again on every frame the canvas changes, and while a run,
+   its countdown, the results over the replay or Free Drive are on, the canvas changes every frame. There
+   the glass is a solid fill, a step denser so the HUD's words keep their contrast without the blur. The
+   grain's overlay blend is a full-screen composite on every frame: the title alone keeps it. */
+body[data-mode]:not([data-mode='title']) .grain { display: none; }
+body:is([data-mode='countdown'], [data-mode='live'], [data-mode='results'], [data-mode='replay'], [data-mode='drive']) * {
+  -webkit-backdrop-filter: none !important; backdrop-filter: none !important; }
+body:is([data-mode='countdown'], [data-mode='live'], [data-mode='results'], [data-mode='replay'], [data-mode='drive']) {
+  --glass: rgba(10, 13, 20, 0.7); }
+body:is([data-mode='countdown'], [data-mode='live']) .h-strip,
+:root[data-hud='compact'] body:is([data-mode='countdown'], [data-mode='live']) .hud .h-primary { background-color: rgba(5, 7, 12, 0.72); }
+body:is([data-mode='countdown'], [data-mode='live']) .stick { background-color: rgba(6, 8, 13, 0.46); }
+body:is([data-mode='countdown'], [data-mode='live']) .tbtn:not(.on, [style*='--amt']) { background-color: rgba(6, 8, 13, 0.56); }

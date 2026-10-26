@@ -51,6 +51,7 @@ import { openSettings, aiLabel } from './ai/settings.js';
 import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
 import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
+import { createPacer } from './pace.js';
 import { pickDeviceTier, deviceKind, readDevice } from './gfx-tier.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
@@ -1022,10 +1023,15 @@ function titleStep(dt) {
 
 // --- Main loop ------------------------------------------------------------------------------
 let lastT = performance.now();
+// The title draws at ~30 fps (src/pace.js, 0049): a skipped frame does nothing but keep the cue line's
+// clock, and heal hears of it, so the frame the title does draw is timed against the display's interval.
+const titlePace = createPacer();
 // [obs] The loop is scheduled first, so nothing below can stop it; heal.frame times the frame and
 // catches, records and recovers from anything it throws (src/obs/heal.js).
 function frame(now) {
   requestAnimationFrame(frame);
+  if (S.mode !== 'title') titlePace.reset();
+  else if (!titlePace.due(now)) { heal.skip(now); syncLife(); ui.tickCue(); return; }
   heal.frame(now, frameBody);
   syncLife();
   // The cue line's deadlines (src/ui.js), after the frame has asked for its cues: a message asked

@@ -387,6 +387,13 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   renderer.toneMappingExposure = 1.05;
   renderer.shadowMap.enabled = tier !== 'low';
   renderer.shadowMap.type = THREE.PCFShadowMap;
+  // The shadow map is drawn when what casts a shadow may have moved (0049). On the title nothing does but
+  // the hero, so there it's drawn again when the hero moves, the mode, course or look changes, the context
+  // comes back, or a second (30 title frames) has passed; in every other mode on every frame, as three does.
+  renderer.shadowMap.autoUpdate = false;
+  const shadowAt = new THREE.Matrix4();
+  let shadowAge = Infinity, shadowMode = '';
+  canvas.addEventListener('webglcontextrestored', () => { shadowAge = Infinity; });
 
   const scene = new THREE.Scene();
   // Two skies and two environments, each made on first use and swapped with the course.
@@ -465,6 +472,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
     if (stage.course === id) return stage;
+    shadowAge = Infinity;
     if (current) scene.remove(current.group);
     current = lookFor(id);
     if (!sliced) { finishBuild(current); tagLook(current); }
@@ -492,6 +500,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   // back to the course, and the camera its own clip planes (an outside look sets its own).
   let external = null;
   function setLook(look) {
+    shadowAge = Infinity;
     if (external) { scene.remove(external.group); external = null; }
     if (!look) {
       if (camera.near !== NEAR || camera.far !== FAR) { camera.near = NEAR; camera.far = FAR; camera.updateProjectionMatrix(); }
@@ -617,6 +626,12 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
     snap.x = Math.round(snap.x / texel) * texel; snap.y = Math.round(snap.y / texel) * texel;
     key.target.position.copy(snap.applyMatrix4(lightRot));
     key.position.copy(key.target.position).add(keyOffset);
+    if (renderer.shadowMap.enabled) {
+      const still = mode === 'title' && !external && mode === shadowMode && shadowAge < 30 && shadowAt.equals(hero.group.matrixWorld);
+      renderer.shadowMap.needsUpdate = !still;
+      if (still) shadowAge++; else { shadowAge = 0; shadowAt.copy(hero.group.matrixWorld); }
+      shadowMode = mode;
+    }
     if (composer) composer.render(); else renderer.render(scene, camera);
     if (!canvas.classList.contains('on')) canvas.classList.add('on');
   }

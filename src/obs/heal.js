@@ -184,6 +184,9 @@ export function installHeal({ stage, canvas, ui, S, toTitle, pause = () => {}, c
     if (heal.consecutive === 600) reloadOnce('the frame loop kept failing');
   }
 
+  // A frame the loop chose not to draw (the paced title, main.js): the next drawn one is timed from here,
+  // so obs reads the display's interval, not the pacing, as the frame time.
+  heal.skip = (now) => { heal.lastNow = now; };
   heal.frame = (now, body) => {
     const dtMs = heal.lastNow < 0 ? 16.7 : now - heal.lastNow;
     heal.lastNow = now;

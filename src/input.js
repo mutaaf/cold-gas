@@ -17,7 +17,7 @@
 // Device     the last one used wins (`device`): a key or a pad hides the touch controls and takes
 //            the run off one-thumb; a finger brings them back. Blur, a hidden tab, pagehide and
 //            pause let go of everything (`resetInput`). Gamepad Start pauses.
-import { newInput, VALVE_KEYS } from './sim/vehicle.js';
+import { newInput, clearInput, VALVE_KEYS } from './sim/vehicle.js';
 import { createKeyRamp, padValves, bindNozzlePad, VALVES } from './valves.js';
 import { createOneThumb } from './onethumb.js';
 import { tiltSteer, buzz, armTiltGrant } from './touch-settings.js';
@@ -181,12 +181,38 @@ export function bindInput(root, { onPause, running = () => false } = {}) {
 
 // Once a frame: a gamepad in use becomes the device, and its Start button pauses (on the press,
 // not while it is held).
+// What it read is what every tick of this frame samples (0049): Chrome's getGamepads() makes a new array
+// on every call, each axis and button value read from a pad is a new number, and a frame runs up to eight
+// 240 Hz ticks. So the pads are copied once a frame into reused objects of the same shape (every axis and
+// button there, as plain numbers). Before the first poll (tests, benches) a sample copies them itself.
 let startWas = false;
-export function pollPads() {
+const NO_PADS = [], PAD_SLOTS = 4, PAD_BUTTONS = 18;
+const padCopies = Array.from({ length: PAD_SLOTS }, () => ({
+  axes: new Float64Array(4), buttons: Array.from({ length: PAD_BUTTONS }, () => ({ pressed: false, value: 0 })),
+}));
+const padsFrame = new Array(PAD_SLOTS).fill(null);
+let padsNow = null;
+function copyPad(p, c) {
+  for (let a = 0; a < 4; a++) c.axes[a] = p.axes[a] || 0;
+  for (let b = 0; b < PAD_BUTTONS; b++) {
+    const s = p.buttons[b], d = c.buttons[b];
+    d.pressed = !!s?.pressed; d.value = s?.value || 0;
+  }
+  return c;
+}
+function copyPads() {
   const pads = navigator.getGamepads?.();
+  for (let i = 0; i < PAD_SLOTS; i++) padsFrame[i] = pads?.[i] ? copyPad(pads[i], padCopies[i]) : null;
+  return pads;
+}
+const readPads = () => padsNow || (copyPads(), padsFrame);
+export function pollPads() {
+  const pads = copyPads();
+  padsNow = padsFrame;
   if (!pads) return;
   let start = false, intent = false;
-  for (const p of pads) {
+  for (let i = 0; i < pads.length; i++) {
+    const p = pads[i];
     if (!p) continue;
     if (p.buttons[9]?.pressed) start = true;
     else if (!intent && padIntent(p)) intent = true;
@@ -199,11 +225,12 @@ export function pollPads() {
 
 // One-thumb: the run's input for this tick from the one control (and tilt, on the ground).
 export function sampleThumb(run, released, out = newInput()) {
-  Object.assign(out, newInput());
+  clearInput(out);
   return thumb.sample(run, released, out, tiltSteer());
 }
 
-const k = (...codes) => codes.some((c) => keys.has(c));
+const k = (a, b) => keys.has(a) || (b !== undefined && keys.has(b));   // no rest args: 240 calls a second each (0049)
+
 
 // Keys are on/off; a driver's hands aren't: src/hands.js turns keys and the touch stick into a
 // steering wheel and pedals (speed-aware), once per 240 Hz sim tick, the same hands the drive
@@ -248,14 +275,14 @@ export const usingTouch = () => device.touch;
 const vScratch = new Float64Array(VALVES);
 const keyRamp = createKeyRamp(), isDown = (c) => keys.has(c);
 export function sample(phase, tier, out = newInput(), released = false, car = null, ctx = null) {
-  Object.assign(out, newInput());
+  clearInput(out);
   if (typeof tier === 'boolean') tier = tier ? 'assist' : 'pro';
   out.assist = tier === 'assist' ? 1 : 0;
   out.manual = tier === 'advanced' ? 1 : 0;
   // Let go of the Wall, you're flying (the sim calls it airborne 0.1 s later).
   const air = phase === 'air' || (phase === 'ramp' && released);
   let ax = 0, ay = 0, lift = 0, land = 0, thr = 0, brk = 0, yaw = 0;
-  const v = !air && car ? Math.hypot(car.vel.x, car.vel.z) : 0;
+  const v = !air && car ? Math.sqrt(car.vel.x * car.vel.x + car.vel.z * car.vel.z) : 0;   // not Math.hypot: it boxes its answer
   // On the ground the touch stick goes through the same hands as the keys: a thumb can't feather
   // a 2 cm stick, so it sets where the wheel is going and the wheel follows at the speed's rate
   // (with a mild expo: the middle of the stick is the fine part of the lock). The level shapes it.
@@ -263,9 +290,9 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
   const stickGround = touch.active && !air ? shapeStick(lvl, touch.x, 'touch') : 0;
   // A gamepad's stick too: shaped (src/hands.js stickShape) and rate-limited like a thumb, or a
   // full flick at 140 km/h reached the rack's lock in 29 ms and the yaw overshot by half.
-  const pads = navigator.getGamepads?.() || [];
+  const pads = readPads();
   let padGround = 0;
-  if (!air) for (const p of pads) if (p) padGround += shapeStick(lvl, p.axes[0] || 0, 'pad');
+  if (!air) for (let i = 0; i < pads.length; i++) if (pads[i]) padGround += shapeStick(lvl, pads[i].axes[0], 'pad');
   const keyAx = (k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0), stickAx = stickGround + padGround;
   // The air's roll keeps the hands it always had; the ground's wheel is the driving level's (below).
   if (air) ax = hands.steer(Math.max(-1, Math.min(1, keyAx + stickAx)), v, keyAx === 0 && stickAx !== 0);
@@ -281,21 +308,22 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
   if (air) ({ thr, brk } = hands.pedals(ay < 0 || tGo, ay > 0 || tBrk));
 
   let thrA = 0, brkA = 0, hb = 0;
-  for (const p of pads) {
+  for (let i = 0; i < pads.length; i++) {
+    const p = pads[i];
     if (!p) continue;
-    const rt = p.buttons[7]?.value || 0, lt = p.buttons[6]?.value || 0;
+    const rt = p.buttons[7].value, lt = p.buttons[6].value;
     if (!air) {
       // Driving: the triggers are analog pedals, A is LIFT (the ledge's RELEASE), B the handbrake.
       thrA = Math.max(thrA, rt); brkA = Math.max(brkA, lt);
-      if (p.buttons[0]?.pressed) lift = 1;
-      if (p.buttons[1]?.pressed) hb = 1;
+      if (p.buttons[0].pressed) lift = 1;
+      if (p.buttons[1].pressed) hb = 1;
       continue;
     }
     if (out.manual) continue;
-    ax += dz(p.axes[0] || 0);
-    ay += dz(p.axes[1] || 0);
-    yaw += dz(p.axes[2] || 0) * 0.8;
-    lift = Math.max(lift, rt, p.buttons[0]?.pressed ? 1 : 0); land = Math.max(land, lt > 0.3 || p.buttons[1]?.pressed ? 1 : 0); if (p.buttons[5]?.pressed) boost = 1;
+    ax += dz(p.axes[0]);
+    ay += dz(p.axes[1]);
+    yaw += dz(p.axes[2]) * 0.8;
+    lift = Math.max(lift, rt, p.buttons[0].pressed ? 1 : 0); land = Math.max(land, lt > 0.3 || p.buttons[1].pressed ? 1 : 0); if (p.buttons[5].pressed) boost = 1;
   }
   if (!air) {
     // The driving level turns keys, sticks, triggers, the touch pedals and the tilt into the wheel and
@@ -344,10 +372,10 @@ function advanced(out, flying, liftKey, ax, thr, brk) {
     out.steer = ax; out.throttle = thr; out.brake = brk; out.lift = liftKey;
     return out;
   }
-  const pads = navigator.getGamepads?.() || [];
+  const pads = readPads();
   vScratch.fill(0);
   keyRamp(isDown, vScratch);
-  for (const p of pads) if (p) padValves(p, vScratch);
+  for (let i = 0; i < pads.length; i++) if (pads[i]) padValves(pads[i], vScratch);
   const pad = nozzlePad.valves;
   for (let i = 0; i < VALVES; i++) out[VALVE_KEYS[i]] = Math.max(vScratch[i], pad[i]);
   out.lift = liftKey;   // the sim ignores it in Advanced; the ledge reads it as RELEASE

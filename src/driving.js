@@ -109,7 +109,10 @@ export function createDriver(level = 'standard', opts = {}) {
   const hands = createHands();
   let lvl = validLevel(level) || 'standard';
   let tc = TC_MODES.includes(opts.tc) ? opts.tc : 'on', abs = opts.abs !== false;
-  let thrE = 0, hint = -1, lastSteer = 0, lastThr = 0, kAx = 0, lastRoad = null;
+  // Doubles that change every tick live on an object: a closure variable would box a new heap number
+  // on every write (0049).
+  const m = { thrE: 0, lastSteer: 0, lastThr: 0, kAx: 0 };
+  let hint = -1, lastRoad = null;
   const st = { fx: 0, fz: 1, v: 0, vf: 0, yaw: 0, beta: 0 };
   const ground = { assist: 1, manual: 0, tcOff: false, tcSport: false, absOff: false, handbrake: 0 };
   const aid = { governor: 0, keep: 0, catch: 0, allow: Infinity };   // what Easy did this tick (tests, HUD)
@@ -122,9 +125,9 @@ export function createDriver(level = 'standard', opts = {}) {
     get tc() { return tc; },
     get abs() { return abs; },
     // Where the wheel the player holds is (Advanced: the delivered steer, there are no hands).
-    get ax() { return lvl === 'advanced' ? lastSteer : hands.ax; },
-    get steer() { return lastSteer; },
-    get throttle() { return lastThr; },
+    get ax() { return lvl === 'advanced' ? m.lastSteer : hands.ax; },
+    get steer() { return m.lastSteer; },
+    get throttle() { return m.lastThr; },
     aid,
     set(l, o = {}) {
       const nl = validLevel(l) || lvl;
@@ -133,7 +136,7 @@ export function createDriver(level = 'standard', opts = {}) {
       if (TC_MODES.includes(o.tc)) tc = o.tc;
       if (typeof o.abs === 'boolean') abs = o.abs;
     },
-    reset() { hands.reset(); thrE = 0; hint = -1; lastSteer = 0; kAx = 0; },
+    reset() { hands.reset(); m.thrE = 0; hint = -1; m.lastSteer = 0; m.kAx = 0; },
     tick(raw, car, ctx = null, out = def) {
       const s = car ? carState(car, st) : st;
       const v = car ? s.v : 0;
@@ -144,8 +147,8 @@ export function createDriver(level = 'standard', opts = {}) {
         // Direct: the stick is the wheel (the rack's own slew is all the filter). A key is on/off, so it
         // gets the quickest hand there is (full lock in ADV_KEY_T, at any speed) and no more.
         const kt = raw.keyAx || 0;
-        kAx += clamp(kt - kAx, -1 / (240 * ADV_KEY_T), 1 / (240 * ADV_KEY_T));
-        steer = clamp(kAx + (raw.stickAx || 0) + (raw.tilt || 0), -1, 1);
+        m.kAx += clamp(kt - m.kAx, -1 / (240 * ADV_KEY_T), 1 / (240 * ADV_KEY_T));
+        steer = clamp(m.kAx + (raw.stickAx || 0) + (raw.tilt || 0), -1, 1);
         thr = Math.max(raw.up ? 1 : 0, raw.thrA || 0);
         brk = Math.max(raw.down ? 1 : 0, raw.brkA || 0);
       } else if (lvl === 'easy') {
@@ -154,9 +157,9 @@ export function createDriver(level = 'standard', opts = {}) {
         const ax = hands.steer(target, v, analog);
         const gain = v > EASY.steerV0 ? Math.max(EASY.steerMin, 1 / (1 + (v - EASY.steerV0) / EASY.steerV1)) : 1;
         steer = ax * gain;
-        thrE = clamp(thrE + (raw.up ? 1 / (240 * EASY.pedalIn) : -2 / (240 * EASY.pedalIn)), 0, 1);
+        m.thrE = clamp(m.thrE + (raw.up ? 1 / (240 * EASY.pedalIn) : -2 / (240 * EASY.pedalIn)), 0, 1);
         const p = hands.pedals(false, !!raw.down);
-        thr = Math.max(thrE, raw.thrA || 0);
+        thr = Math.max(m.thrE, raw.thrA || 0);
         brk = Math.max(p.brk, raw.brkA || 0);
         if (car) {
           // The tyres keep their side force: throttle inside the friction ellipse while steering at speed.
@@ -210,7 +213,7 @@ export function createDriver(level = 'standard', opts = {}) {
         brk = Math.max(p.brk, raw.brkA || 0);
       }
       out.steer = steer; out.throttle = thr; out.brake = brk;
-      lastSteer = steer; lastThr = thr;
+      m.lastSteer = steer; m.lastThr = thr;
       if (free) {
         const adv = lvl === 'advanced';
         ground.assist = adv ? 0 : 1;
