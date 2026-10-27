@@ -80,3 +80,15 @@ run): the car's projected centre is in the top 15 % for **18 of 51** sampled air
 car, upside down, fills the top 13 % behind the `T +00:10.5 · 04 RELEASE` stack; `ipadP-4-release-rot.jpg`,
 0.4 s after the rotation, it is a ghost at the top edge over an empty pad and rocket. Add 820×1180 and
 1180×820 to the probe's viewports.
+
+## Shipped (#129)
+`keepClear` in src/render/director.js turns the live Wall/Show camera just enough to hold the car's centre
+below the top HUD (and right of the upright phone's rail); the Show carry rig stands back and rises with the
+car while it is high, so the roofs stay in frame. `tests/e2e/release-frame.spec.js` flies the reference at
+1440×900, 1280×720, 390×844, 844×390 and the iPads (820×1180, 1180×820): 0 air frames above the HUD + 24 px,
+none in the top 15 % (main: 0.079 on both iPads), a roof in frame over the whole row. Still blocked on the flicker
+gate: the tilt shows more of the lit curl, and `show-live-jets/wall` reads 226 ‰ desktop / 205 ‰ phone (main
+130 / 115, limits 161 / 144) on software GL, after main's #131. Attribution in the PR (#129) and LESSONS.
+
+Known limit: the safe line is a quarter of the way down the frame, not the HUD's measured bottom, so a desktop
+window under ≈ 556 px tall (mission block bottom 115 px + 24) can still put the car's centre under the block.

@@ -41,7 +41,7 @@ function fly() {
     return { x0, y0, x1, y1 };
   };
   const overlap = (b, r) => Math.max(0, Math.min(b.x1, r.right) - Math.max(b.x0, r.left)) * Math.max(0, Math.min(b.y1, r.bottom) - Math.max(b.y0, r.top));
-  const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity, overRow: 0, noRoof: [] };
+  const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity, minY: Infinity, overRow: 0, noRoof: [] };
   // The parked row as it stands (each vehicle's footprint and height), and the stretch it covers.
   const row = S.run.car.world.bodies.map((b) => ({ x0: b.cx - b.hx, x1: b.cx + b.hx, z0: b.cz - b.hz, z1: b.cz + b.hz, h: b.h }));
   const rowZ0 = Math.min(...row.map((b) => b.z0)), rowZ1 = Math.max(...row.map((b) => b.z1));
@@ -71,6 +71,7 @@ function fly() {
     out.topBottom = Math.max(out.topBottom, top); out.minTop = Math.min(out.minTop, top);
     const [px, py] = toPx(v.copy(car.position).project(cam));
     if (py < top + 24) out.aboveTop.push(Math.round(py));
+    out.minY = Math.min(out.minY, py / h);
     const strip = rects.find(([k]) => k === 'strip');
     if (strip && px >= strip[1].left && px <= strip[1].right && py >= strip[1].top && py <= strip[1].bottom) out.inStrip++;
     const b = carBox(), area = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
@@ -94,6 +95,9 @@ const VIEWS = [
   { name: 'desktop 1280×720', viewport: { width: 1280, height: 720 } },
   { name: 'phone 390×844', viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, phone: true },
   { name: 'phone 844×390', viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, phone: true },
+  // The iPads (the critic's 2026-10-27 re-measure): touch, held either way.
+  { name: 'iPad 820×1180', viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true },
+  { name: 'iPad 1180×820', viewport: { width: 1180, height: 820 }, hasTouch: true, isMobile: true },
 ];
 
 for (const { name, phone, ...opts } of VIEWS) {
@@ -102,12 +106,15 @@ for (const { name, phone, ...opts } of VIEWS) {
     const page = await browser.newPage(opts);
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
+    // A shader that fails to compile (three reports it on the console) fails the probe too.
+    page.on('console', (m) => { if (m.type() === 'error' && !/api\//.test(m.text()) && !/404/.test(m.text())) errors.push(m.text()); });
     await page.goto('/coldgas/?gfx=low&course=show');
     await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
     await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 60_000 });
     await page.evaluate(() => { const s = window.__coldgas.stage; s.setPixelScale(0.5); s.setPixelScale = () => {}; });
     await page.evaluate(() => { window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); });
     await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 60_000 });
+    await page.evaluate(() => { window.__coldgas.S.paused = true; });   // held at the start line while the HUD fades in
     // The flight is stepped in one task, where no CSS transition advances: start once the HUD has faded in.
     await page.waitForFunction(() => {
       for (let e = document.querySelector('[data-hud-box=mission]'); e && e.nodeType === 1; e = e.parentElement) if (Number(getComputedStyle(e).opacity) < 0.99) return false;
@@ -116,9 +123,11 @@ for (const { name, phone, ...opts } of VIEWS) {
     const r = await page.evaluate(fly);
     console.log(name, JSON.stringify(r));
     expect(r.air).toBeGreaterThan(20);
-    // Every frame saw the top HUD: the mission block (on a landscape phone it docks at the bottom, and the
-    // top bar is what stands at the top).
-    expect(r.minTop).toBeGreaterThan(opts.viewport.width > opts.viewport.height && phone ? 50 : 100);
+    // Every frame saw the top HUD: the mission block (on a touch screen held sideways it docks at the bottom,
+    // and the top bar is what stands at the top).
+    expect(r.minTop).toBeGreaterThan(opts.viewport.width > opts.viewport.height && opts.hasTouch ? 50 : 100);
+    // And never in the top 15 % of the screen, whatever stands there (the critic's iPad bar).
+    expect(r.minY).toBeGreaterThanOrEqual(0.15);
     // The car's centre is below the top HUD's bottom + 24 px in every air frame, and the car is in frame.
     expect(r.aboveTop, `centre y above ${Math.round(r.topBottom + 24)}`).toEqual([]);
     expect(r.offscreen).toEqual([]);

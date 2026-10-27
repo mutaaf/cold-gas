@@ -82,7 +82,7 @@ export function createDirector(camera) {
   function keepClear(carPos, on, dt) {
     st.clear += ((on ? 1 : 0) - st.clear) * (1 - Math.exp(-dt * 5));
     if (st.clear < 0.002) return;
-    const tv = Math.tan(st.fov * Math.PI / 360);
+    const tv = Math.tan((st.fov - st.punch) * Math.PI / 360);   // the lens as drawn (a touchdown punches in)
     if (st.launched && camera.aspect < 1 && coarse?.matches && hudMode() === 'compact') {
       tmp.copy(carPos).sub(camera.position).applyQuaternion(qInv.copy(camera.quaternion).invert());
       if (tmp.z > -0.5) return;
