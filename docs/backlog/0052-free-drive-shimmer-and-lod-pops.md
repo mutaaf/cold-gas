@@ -1,12 +1,12 @@
 ---
 id: 0052
 title: Free Drive and the endless road: no shimmering paint, no LOD pops
-status: ready
+status: shipped
 priority: P2
 size: M
 lens: player-feel
 created: 2026-10-21
-pr:
+pr: 140
 by: operator
 ---
 
