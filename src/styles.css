@@ -244,6 +244,30 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
   .cats { grid-template-columns: 1fr; }
   .spec { gap: 18px; }
 }
+/* Replay where the sheet covers the screen (a phone upright, 0068): the sheet slides down out of view, kept
+   as it was (scroll, the judges still typing), and a peek holds the verdict and the way back at the bottom
+   while the replay plays full-frame above it (src/main.js peek(); the director frames it above the peek).
+   `translate` rides beside the sheet's slide-in animation instead of fighting its transform; the sheet is
+   `inert` while it is down (no focus, not read out), not `visibility: hidden`, so focus can come straight
+   back to it (reduced motion's 0.01 ms transitions would hold its children hidden for a frame). */
+.results .sheet { translate: 0 0; transition: translate 0.45s var(--ease); }
+.results[data-peek] .sheet { translate: 0 100%; }
+.results[data-peek] { overflow: hidden; }
+body[data-peek] .top .brand { visibility: hidden; }   /* a hairline over the lit curl: the peek names the run */   /* a folding phone's results scroll as a whole: held where they were */
+.peek { position: fixed; left: 0; right: 0; bottom: 0; z-index: 2; pointer-events: auto; display: grid; gap: 10px;
+  padding: 12px calc(16px + var(--safe-r)) calc(12px + var(--safe-b)) calc(16px + var(--safe-l));
+  background: linear-gradient(180deg, rgba(5, 7, 12, 0.72), rgba(5, 7, 12, 0.94)); border-top: 1px solid var(--hair);
+  animation: peek-in 0.45s var(--ease) both; cursor: pointer; }
+.peek[hidden] { display: none; }
+@keyframes peek-in { from { translate: 0 100%; } to { translate: 0 0; } }
+.peek-line { margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; min-width: 0; }
+.peek-verdict { font: 400 16px/1.2 var(--display); letter-spacing: 0.04em; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.peek-total { flex: none; font: 400 12px/1 var(--text); color: var(--ink-2); white-space: nowrap; }
+.peek-total b { font: 300 22px/1 var(--text); color: var(--ink); font-variant-numeric: tabular-nums; }
+.peek-actions { display: flex; gap: 6px; }
+.peek-actions .btn { display: inline-flex; align-items: center; height: 48px; min-width: 76px; padding: 0 14px; font-size: 13px; flex: none; justify-content: center; }   /* a whole 44 px square inside the rounded ends */
+.peek-actions .btn.primary { flex: 1 1 auto; justify-content: center; }
+@media (prefers-reduced-motion: reduce) { .results .sheet, .results[data-peek] .sheet { transition: none; } .peek { animation: none; } }
 @media (max-height: 500px) and (orientation: landscape) {
   .title { bottom: 18px; } .spec, .fineprint { display: none; } .tagline { margin: 10px 0 16px; }
 }

@@ -34,6 +34,10 @@ export function createDirector(camera) {
     hx: 0, hz: 1,                 // chase heading (unit, xz), follows the car's travel
     cutT: 0, cutPos: new THREE.Vector3(), cutFov: 40,   // a crash cut (src/render/crash.js)
     view: 'broadcast', px: 0, pz: -1,                    // pilot view: on/off, its heading
+    // The replay's own region of the screen (0068): what the results leave uncovered, in CSS px. The
+    // replay's lens is shifted to its centre, and the wide locked-off rig aims toward the car's path by
+    // `aim` (0 = the reference framing, 1 = on the path) as the region narrows.
+    rl: 0, rt: 0, rr: 0, rb: 0, aim: 0,
   };
 
   // Behind, above and to the side of the car along its line of flight (the last good heading when
@@ -185,8 +189,27 @@ export function createDirector(camera) {
     switch (shot) {
       case 0: // low tracking on the approach, front quarter
         camera.position.set(carPos.x - 3.4, 0.55, carPos.z + 9); camera.lookAt(carPos.x, carPos.y + 0.4, carPos.z); st.fov = 38; break;
-      case 1: // the reference image: wide from the side, the whole curl, truss and beams
-        camera.position.set(31 * K, 8.5 * K, -9 * K); camera.lookAt(0.5, 11.5 * K, 5.5 * K); st.fov = 47; break;
+      case 1: { // the reference image: wide from the side, the whole curl, truss and beams
+        const a = st.aim;
+        if (a === 0) { camera.position.set(31 * K, 8.5 * K, -9 * K); camera.lookAt(0.5, 11.5 * K, 5.5 * K); st.fov = 47; break; }
+        // In a narrow region (0068) it stays locked off but turns toward the middle of the car's path still to
+        // come in the shot (from where the car is to the curl at 8 K), so the climb plays in the strip the
+        // results leave. Locked off, not a pan (a pan over the lit truss shimmers, flicker.mjs); a strip too
+        // narrow for the whole climb gets a hard cut to the rest of it when the car nears its edge.
+        camera.position.set(31 * K, 8.5 * K, -9 * K);
+        if (st.init) {
+          camera.lookAt(st.lookS); camera.updateMatrixWorld();
+          tmp.copy(carPos).project(camera);
+          const px = (tmp.x + 1) / 2 * innerWidth, mx = (st.rr - st.rl) * 0.1;
+          if (px < st.rl + mx || px > st.rr - mx) st.init = false;
+        }
+        if (!st.init) {
+          st.lookS.set(carPos.x / 2, (carPos.y + 8 * K) / 2, (carPos.z + 9.3 * K) / 2);
+          st.lookS.set(0.5 + (st.lookS.x - 0.5) * a, 11.5 * K + (st.lookS.y - 11.5 * K) * a, 5.5 * K + (st.lookS.z - 5.5 * K) * a);
+          st.init = true;
+        }
+        camera.lookAt(st.lookS); st.fov = 47; break;
+      }
       case 2: // at the foot of the wall, looking straight up it
         camera.position.set(1.9, 0.45, -2.6); camera.lookAt(carPos.x, carPos.y, carPos.z); st.fov = 60; break;
       case 3: // ledge close-up: below and in front of the overhang, looking up at the car hanging under it
@@ -220,10 +243,27 @@ export function createDirector(camera) {
     st.fov = 56;
   }
 
-  function frameOffset(on) {
+  // The title's lens sits right of the panel on a wide screen. The replay's sits at the centre of the
+  // region the results leave uncovered (0068): left of the sheet on a wide screen, above the peek on a
+  // phone. A full-screen region is no shift at all.
+  function frameOffset(mode) {
     const w = innerWidth, h = innerHeight;
-    if (on && w / h > 1.15) camera.setViewOffset(w, h, -w * 0.2, h * 0.04, w, h);
-    else if (camera.view?.enabled) camera.clearViewOffset();
+    if (mode === 'title' && w / h > 1.15) return camera.setViewOffset(w, h, -w * 0.2, h * 0.04, w, h);
+    if (mode === 'replay' && st.rr > 0) {
+      const dx = w / 2 - (st.rl + st.rr) / 2, dy = h / 2 - (st.rt + st.rb) / 2;
+      if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) return camera.setViewOffset(w, h, dx, dy, w, h);
+    }
+    if (camera.view?.enabled) camera.clearViewOffset();
+  }
+  // Where the replay can be seen (CSS px); nothing given, or nothing left, is the whole screen.
+  function setRegion(l = 0, t = 0, r = innerWidth, b = innerHeight) {
+    if (r - l < 40 || b - t < 40) { l = 0; t = 0; r = innerWidth; b = innerHeight; }
+    st.rl = l; st.rt = t; st.rr = r; st.rb = b;
+    // As wide as tall or wider: the reference framing. A portrait strip: on the car. The whole screen (no
+    // results beside or under the replay) keeps the reference framing whatever its shape.
+    const full = l === 0 && t === 0 && r === innerWidth && b === innerHeight;
+    st.aim = full ? 0 : clamp((1 - (r - l) / (b - t)) / 0.4, 0, 1);
+    if (st.mode === 'replay') frameOffset('replay');
   }
 
   // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup' })
@@ -231,7 +271,7 @@ export function createDirector(camera) {
     if (mode !== st.mode || course !== st.course) {
       st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.dip = 0; st.punch = 0;
       st.hx = 0; st.hz = 1; st.cutT = 0;
-      snap(); frameOffset(mode === 'title');
+      snap(); frameOffset(mode);
     }
     st.t += dt;
     if (st.cutT > 0) {
@@ -265,6 +305,6 @@ export function createDirector(camera) {
   // Hold a locked-off camera at `pos` for `seconds` (crash cuts); a mode change cancels it.
   function cut(pos, seconds, fov = 40) { st.cutPos.copy(pos); st.cutT = seconds; st.cutFov = fov; }
 
-  return { update, snap, restart, cut, setView: (v) => { st.view = v; }, view: () => st.view, reframe: () => frameOffset(st.mode === 'title'), shake: (s) => { st.shake = Math.max(st.shake, s); },
+  return { update, snap, restart, cut, setView: (v) => { st.view = v; }, view: () => st.view, reframe: () => frameOffset(st.mode), setRegion, shake: (s) => { st.shake = Math.max(st.shake, s); },
     impact: (dip, punch) => { st.dip = Math.max(st.dip, dip); st.punch = Math.max(st.punch, punch); }, state: st };
 }
