@@ -35,3 +35,5 @@ warning; a hash of each generated texture compared against the pre-change value.
 
 ## Out of scope
 Moving texture generation to a worker or to shaders.
+
+Scout 2026-10-27: still reproduces on `main` 90dc6b6 — a 390×844 touch title load logs "GPU stall due to ReadPixels" four times.
