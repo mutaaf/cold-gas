@@ -189,6 +189,13 @@ export const newInput = () => {
   for (const k of VALVE_KEYS) inp[k] = 0;
   return inp;
 };
+// newInput()'s values written into an input that already exists: once per 240 Hz tick, so no garbage (0049).
+export const clearInput = (inp) => {
+  inp.throttle = 0; inp.brake = 0; inp.steer = 0; inp.pitch = 0; inp.roll = 0; inp.yaw = 0; inp.lift = 0;
+  inp.thrust = 0; inp.retro = 0; inp.level = 0; inp.fan = 0; inp.assist = 1; inp.manual = 0;
+  for (let i = 0; i < VALVE_KEYS.length; i++) inp[VALVE_KEYS[i]] = 0;
+  return inp;
+};
 // Flight tiers. Assist: the computer holds rates, LAND levels and governs the descent, and it
 // limits the crawl up the curl and the carry off the ledge. Pro: the stick still commands body
 // rates, but there is no LAND governor and nothing limits you. Advanced: per-valve, no computer.

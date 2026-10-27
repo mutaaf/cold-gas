@@ -1,7 +1,7 @@
 // The driver's hands: what keys and a thumb on a stick become at the wheel and the pedals, once
 // per 240 Hz sim tick. Pure (no DOM), so the bench and the unit tests drive through the same
 // hands a player has. src/input.js owns the devices and calls these.
-import { newInput } from './sim/vehicle.js';
+import { newInput, clearInput } from './sim/vehicle.js';
 
 const KEY_IN = 4 / 240, KEY_OUT = 8 / 240, STICK_RATE = 4;
 
@@ -35,25 +35,28 @@ export function createReverse() {
 }
 
 export function createHands() {
-  let ax = 0, thr = 0, brk = 0;
+  // The hands' state lives on objects, not in closure variables: a double written to a closure slot is a
+  // new heap number on every write, 240 times a second (0049). `pd` is pedals()'s answer, reused.
+  const h = { ax: 0, thr: 0, brk: 0 }, pd = { thr: 0, brk: 0 };
   const pedal = (cur, on, tIn) => Math.max(0, Math.min(1, cur + (on ? 1 / (240 * tIn) : -2 / (240 * tIn))));
   return {
-    reset() { ax = 0; thr = 0; brk = 0; },
-    get ax() { return ax; },
+    reset() { h.ax = 0; h.thr = 0; h.brk = 0; },
+    get ax() { return h.ax; },
     // A steering target in [−1, 1] (keys, or the touch stick) at ground speed v (m/s). Keys: full
     // lock in 0.25 s at a crawl, ≈0.6 s at 60 km/h, ≈1 s at 120 km/h, back to centre twice as fast.
     // A stick (`analog`) already is a hand: it gets STICK_RATE times that, enough to take the edge
     // off a thumb's jab without adding the lag that made phone steering late into every bend.
     steer(target, v = 0, analog = false) {
+      const ax = h.ax;
       const into = Math.abs(target) > Math.abs(ax) && Math.sign(target) !== -Math.sign(ax);
       const rate = (into ? KEY_IN / (1 + v / 12) : KEY_OUT) * (analog ? STICK_RATE : 1);
-      ax += Math.max(-rate, Math.min(rate, target - ax));
-      return ax;
+      h.ax = ax + Math.max(-rate, Math.min(rate, target - ax));
+      return h.ax;
     },
-    pedals(up, down) { thr = pedal(thr, up, 0.3); brk = pedal(brk, down, 0.15); return { thr, brk }; },
+    pedals(up, down) { h.thr = pedal(h.thr, up, 0.3); h.brk = pedal(h.brk, down, 0.15); pd.thr = h.thr; pd.brk = h.brk; return pd; },
     // Keyboard only, straight into a sim input (the bench and the tests).
     keyboard(keys, car, tier = 'assist', out = newInput()) {
-      Object.assign(out, newInput());
+      clearInput(out);
       out.assist = tier === 'assist' ? 1 : 0;
       const v = car ? Math.sqrt(car.vel.x * car.vel.x + car.vel.z * car.vel.z) : 0;
       out.steer = this.steer((keys.right ? 1 : 0) - (keys.left ? 1 : 0), v);

@@ -259,6 +259,7 @@ src/drive/minimap.js  Free Drive's canvas minimap (north/heading-up, trail, ghos
 src/share-card.js     Share (0081): the run as a 1080×1350 card drawn on the device (replay frame, score, verdict,
                         three numbers) → navigator.share({ files }) → text + link → copy + toast
 src/panel.js          board client (tolerant rows) + local judge lines (offline fallback)
+src/pace.js           the title draws at ~30 fps (pure pacer, 0049); the shadow map redraws on the title only when the hero moves
 src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry
 src/wake.js           the screen wake lock (0060): held through a run, the judging and the replay, asked again on return;
                         main.js syncLife() also suspends the audio when paused, hidden or idle on the title
@@ -360,6 +361,7 @@ node scripts/drive-feel.mjs [bench|road|levels|bench-levels] [assist|pro]   driv
 node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
 npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
 npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)
+npm run alloc:bench                                   what the per-tick input path allocates (sample, hands, the input log): 0 B/tick with keys and touch
 node scripts/flicker.mjs <url> [--gl=swiftshader] [--phone] [--only=a,b] --json=run.json   flicker probe (title, approach, wide, replay, jets, live jets, retry countdown, lineup, Free Drive, endless, z-fight)
 node scripts/flicker-budget.mjs run.json [--write]    fail if any region's pops rise > 25 % (or 0.5 ‰) over docs/flicker-budget.json
 ```

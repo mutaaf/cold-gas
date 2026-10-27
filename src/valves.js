@@ -98,16 +98,18 @@ export function createKeyRamp() {
 // fender jet, d-pad ← / → = the left / right pair of the rear row. Analog values go in 5 % steps
 // (a trigger's noise would otherwise fill the input log).
 const step5 = (v) => Math.round(Math.max(0, Math.min(1, v)) * 20) / 20;
+// Once per 240 Hz tick in the air: no closures, no iterators (0049).
+const btn = (p, i) => p.buttons[i]?.value || (p.buttons[i]?.pressed ? 1 : 0);
+const setV = (out, i, v) => { const s = Math.round(Math.max(0, Math.min(1, v)) * 20) / 20; if (s > out[i]) out[i] = s; };   // step5, inline
+const I_FL = IDX['down-fl'], I_FR = IDX['down-fr'], I_RL = IDX['down-rl'], I_RR = IDX['down-rr'], I_YL = IDX['yaw-l'], I_YR = IDX['yaw-r'];
 export function padValves(p, out) {
-  const b = (i) => p.buttons[i]?.value || (p.buttons[i]?.pressed ? 1 : 0);
-  const set = (i, v) => { out[i] = Math.max(out[i], step5(v)); };
-  set(IDX['down-fl'], b(4)); set(IDX['down-fr'], b(5));
-  set(IDX['down-rl'], b(6)); set(IDX['down-rr'], b(7));
-  set(IDX['yaw-l'], b(2)); set(IDX['yaw-r'], b(1));
-  if (b(0) > 0.5) for (const i of REAR) set(i, 1);
-  if (b(3) > 0.5) for (const [i, v] of CHORDS.lift.valves) set(i, v);
-  if (b(14) > 0.5) { set(REAR[0], 1); set(REAR[1], 1); }
-  if (b(15) > 0.5) { set(REAR[2], 1); set(REAR[3], 1); }
+  setV(out, I_FL, btn(p, 4)); setV(out, I_FR, btn(p, 5));
+  setV(out, I_RL, btn(p, 6)); setV(out, I_RR, btn(p, 7));
+  setV(out, I_YL, btn(p, 2)); setV(out, I_YR, btn(p, 1));
+  if (btn(p, 0) > 0.5) for (let j = 0; j < REAR.length; j++) setV(out, REAR[j], 1);
+  if (btn(p, 3) > 0.5) { const lv = CHORDS.lift.valves; for (let j = 0; j < lv.length; j++) setV(out, lv[j][0], lv[j][1]); }
+  if (btn(p, 14) > 0.5) { setV(out, REAR[0], 1); setV(out, REAR[1], 1); }
+  if (btn(p, 15) > 0.5) { setV(out, REAR[2], 1); setV(out, REAR[3], 1); }
   return out;
 }
 

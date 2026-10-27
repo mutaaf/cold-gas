@@ -66,13 +66,32 @@ export const isLogEntryLength = (n) => n === KEYS.length + 1 || n === LEGACY_KEY
 
 // Quantise a raw input to the canonical integers both client and server use.
 export function quantise(raw, out) {
-  for (let i = 0; i < KEYS.length; i++) {
-    const k = KEYS[i];
-    out[k] = Math.round(Math.max(-1, Math.min(1, raw[k] || 0)) * 100) / 100;
-  }
-  return out;
+  return unpackInts(packInput(raw, packScratch), out);
 }
-const pack = (q) => KEYS.map((k) => Math.round(q[k] * 100));
+// The same, per channel, as integers (hundredths): the input log's entries. Spelled out channel by channel
+// on purpose: a load or store by a computed key (raw[KEYS[i]]) boxes every number it moves, and this runs
+// every 240 Hz tick (0049). The order is KEYS's, checked below.
+const qi = (v) => Math.round(Math.max(-1, Math.min(1, v || 0)) * 100);
+function packInput(r, n) {
+  n[0] = qi(r.throttle); n[1] = qi(r.brake); n[2] = qi(r.steer); n[3] = qi(r.pitch); n[4] = qi(r.roll); n[5] = qi(r.yaw);
+  n[6] = qi(r.lift); n[7] = qi(r.thrust); n[8] = qi(r.retro); n[9] = qi(r.level); n[10] = qi(r.fan); n[11] = qi(r.assist);
+  n[12] = qi(r.manual);
+  n[13] = qi(r.v0); n[14] = qi(r.v1); n[15] = qi(r.v2); n[16] = qi(r.v3); n[17] = qi(r.v4);
+  n[18] = qi(r.v5); n[19] = qi(r.v6); n[20] = qi(r.v7); n[21] = qi(r.v8); n[22] = qi(r.v9);
+  return n;
+}
+function unpackInts(n, o) {
+  o.throttle = n[0] / 100; o.brake = n[1] / 100; o.steer = n[2] / 100; o.pitch = n[3] / 100; o.roll = n[4] / 100; o.yaw = n[5] / 100;
+  o.lift = n[6] / 100; o.thrust = n[7] / 100; o.retro = n[8] / 100; o.level = n[9] / 100; o.fan = n[10] / 100; o.assist = n[11] / 100;
+  o.manual = n[12] / 100;
+  o.v0 = n[13] / 100; o.v1 = n[14] / 100; o.v2 = n[15] / 100; o.v3 = n[16] / 100; o.v4 = n[17] / 100;
+  o.v5 = n[18] / 100; o.v6 = n[19] / 100; o.v7 = n[20] / 100; o.v8 = n[21] / 100; o.v9 = n[22] / 100;
+  return o;
+}
+if (KEYS.join() !== 'throttle,brake,steer,pitch,roll,yaw,lift,thrust,retro,level,fan,assist,manual,v0,v1,v2,v3,v4,v5,v6,v7,v8,v9') {
+  throw new Error('run.js: the input channels changed; update packInput and unpackInts');
+}
+const packScratch = new Int16Array(KEYS.length);
 const unpack = (arr, out) => { for (let i = 0; i < KEYS.length; i++) out[KEYS[i]] = (arr[i] || 0) / 100; return out; };
 
 // Everything the judges score.
@@ -112,7 +131,7 @@ export function createRun(courseId = DEFAULT_COURSE) {
     phase: 'drive',            // drive → ramp (Wall, Show) → air → landed → done
     tick: 0,
     inputLog: [],              // [tick, ...ints] whenever the quantised input changes
-    lastPacked: '',
+    lastPacked: null,          // the last logged channels (Int16Array), compared in place every tick
     flippedTicks: 0, airTicks: 0, offTicks: 0,
     frames: [],                // see recordFrame for the layout
     gWin: new Float64Array(G_WIN), gSum: 0,   // the last 0.5 s of specific force (g), for brakePeakG
@@ -150,11 +169,23 @@ function recordFrame(run) {
 // Advance one tick with a raw input. Returns the run.
 export function stepRun(run, raw) {
   if (run.phase === 'done') return run;
-  quantise(raw, q);
-  const packed = pack(q);
-  const key = packed.join(',');
-  if (key !== run.lastPacked) { run.inputLog.push([run.tick, ...packed]); run.lastPacked = key; }
-  return advance(run, q);
+  return advance(run, logInput(run, raw));
+}
+// Quantise this tick's input, log it if it changed, and return it (quantised, in a shared object). Nothing
+// is allocated unless the input changed (0049).
+export function logInput(run, raw) {
+  const n = packInput(raw, packScratch);
+  if (!sameInts(n, run.lastPacked)) logEntry(run, n);
+  return unpackInts(n, q);
+}
+function sameInts(a, b) {
+  if (b === null) return false;
+  for (let i = 0; i < a.length; i++) if (a[i] !== b[i]) return false;
+  return true;
+}
+function logEntry(run, n) {
+  run.inputLog.push([run.tick, ...n]);
+  (run.lastPacked ??= new Int16Array(n.length)).set(n);
 }
 
 // Progress along the Wall's profile (0 at the foot, 1 at the lip) for a point near the deck.
