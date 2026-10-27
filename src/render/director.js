@@ -21,7 +21,7 @@ import * as THREE from 'three';
 import { LINEUP, WALL, SHOW } from '../sim/courses.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
-const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3();
+const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion();
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // The Wall's rigs were framed on a 19.8 m lip; they scale with the wall's real height.
 const K = WALL.lip.y / 19.8;
@@ -63,6 +63,25 @@ export function createDirector(camera) {
     camera.lookAt(st.lookS);
   }
   const fovTo = (f, dt, rate = 2) => { st.fov += (f - st.fov) * (1 - Math.exp(-dt * rate)); };
+
+  // Keep the car out from under the HUD (0063): after a shot has looked where it wants, turn the camera
+  // just enough that the car's centre is no higher than a quarter of the way down the frame (under the
+  // top bar and the timeline), and, on a phone held upright, as it rises into the top third, right of
+  // the instrument rail on the left edge. A car already clear is left where the shot put it, and the turn
+  // grows from zero as the car crosses the line, so it never cuts.
+  const TOP = 0.5, RAIL = 0.3;   // NDC: the highest the car's centre goes; upright, the leftmost it goes up there
+  function keepClear(carPos) {
+    tmp.copy(carPos).sub(camera.position).applyQuaternion(qInv.copy(camera.quaternion).invert());
+    if (tmp.z > -0.5) return;
+    const tv = Math.tan(st.fov * Math.PI / 360), ax = Math.atan2(tmp.x, -tmp.z), ay = Math.atan2(tmp.y, -tmp.z);
+    if (camera.aspect < 0.8) {
+      const ny = Math.tan(ay) / tv, w = clamp((ny - 0.1) / 0.25, 0, 1);
+      const min = Math.atan(RAIL * w * tv * camera.aspect);
+      if (ax < min) camera.rotateY(min - ax);
+    }
+    const max = Math.atan(TOP * tv);
+    if (ay > max) camera.rotateX(ay - max);
+  }
 
   // --- Lineup -----------------------------------------------------------------------------------
   function chase(carPos, carVel, phase, dt) {
@@ -244,7 +263,7 @@ export function createDirector(camera) {
     } else if (course === 'wall' || course === 'show') {
       if (mode === 'title') (course === 'show' ? titleShow : titleWall)(time);
       else if (mode === 'replay') wallReplay(carPos, carVel, phase);
-      else wallLive(carPos, carVel, phase, dt);
+      else { wallLive(carPos, carVel, phase, dt); if (st.view !== 'pilot') keepClear(carPos); }
     } else if (mode === 'title') titleLineup(time);
     else if (mode === 'replay') replay(carPos);
     else chase(carPos, carVel, phase, dt);
