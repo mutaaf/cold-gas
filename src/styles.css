@@ -224,8 +224,28 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
 .rows .ini { font: 400 15px/1 var(--mono); letter-spacing: 0.2em; }
 .rows .v { font-size: 12px; color: var(--ink-3); }
 .rows .t { font: 300 20px/1 var(--text); font-variant-numeric: tabular-nums; }
-.keys p { margin: 14px 0; color: var(--ink-2); font-size: 13px; }
-.keys b { display: inline-block; width: 64px; font: 500 10px/1 var(--text); letter-spacing: 0.22em; text-transform: uppercase; color: var(--ink-3); }
+/* Key lists: the labels in a column of their own, as wide as the widest, with a gap before the text
+   (0092: "ADVANCEDQ E Z C" ran together in a fixed 64 px box). Subgrid lines every row up; without it
+   a label sits above its line. */
+.keys { display: grid; grid-template-columns: max-content 1fr; column-gap: 14px; }
+.keys p { display: grid; grid-column: 1 / -1; grid-template-columns: subgrid; align-items: baseline; margin: 14px 0; color: var(--ink-2); font-size: 13px; line-height: 1.45; }
+.keys b { font: 500 11px/1.45 var(--text); letter-spacing: 0.18em; text-transform: uppercase; color: var(--ink-3); }
+/* The pause sheet (0092): Paused, then the actions (Resume and Home on the glass at any size), then the
+   controls, which scroll. A touch screen has no R or H key to show. */
+.pause .sheet { display: flex; flex-direction: column; }
+.pause .sheet > * { flex: none; }
+.pause { --ink-3: rgba(245, 246, 248, 0.66); }   /* the labels hold 4.5:1 on the sheet's glass (0.46 read 4.38) */
+.pause .actions { margin-top: 20px; }
+.pause .actions .btn { min-height: 44px; }   /* a 44 px target, also where a short landscape screen trims buttons to 40 */
+.pause .keys { margin-top: 22px; padding-top: 8px; border-top: 1px solid var(--hair-2); }
+.pause .keys p { margin: 8px 0; }
+.pause .btn kbd { font-size: 11px; }
+.pause[data-device="touch"] .btn kbd { display: none; }
+@media (max-width: 720px), (max-height: 520px) {
+  .pause .sheet { padding: 22px 24px; max-height: calc(100dvh - 24px - var(--safe-t) - var(--safe-b)); }
+  .pause .actions { margin-top: 16px; }
+  .pause .keys { margin-top: 16px; }
+}
 
 .noscript { position: fixed; inset: 0; display: grid; place-items: center; }
 
