@@ -19,7 +19,7 @@ import { freeWorld } from './sim/world.js';
 import { physicsReady, physicsMemoryBytes } from './sim/engine.js';
 import { loadPhysics } from './sim/engine-web.js';
 import { DT, G, CAR, NOZZLES, WHEELS, bodyRates, worldPoint, newInput } from './sim/vehicle.js';
-import { scoreRun, TIERS } from './sim/judge.js';
+import { scoreRun, TIERS, WRECK_PCT } from './sim/judge.js';
 import { coach } from './sim/coach.js';
 import { createLandingHud } from './hud-landing.js';
 import { hudPitch, createGWindow, tankBar, gasState } from './hud-telemetry.js';
@@ -644,6 +644,7 @@ function liveStep(dt) {
     bodyLerp.before(run.car.world.bodies);
     stepRun(run, input);
     gWindow.push(run.car.vel);
+    braking(run);
     S.acc -= DT;
   }
   // The aftermath (0062): the run is over and scored, the car isn't stopped. The same world steps on
@@ -738,11 +739,16 @@ function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTi
   const alt = heightAboveSurface(c);
   S.hudAlt = alt;   // the live pointer's BRAKE window reads it (cues, next frame)
   const air = flying(run);
+  const phaseKey = flightPhase(run);
+  // A crashed end reads as the crash (0072); before the run is called, a car on the ground that the
+  // damage panel already calls wrecked isn't a TOUCHDOWN either (0065).
+  const crash = run.phase === 'done' ? crashStep(S.card)
+    : phaseKey === 'touchdown' && Math.round(run.damage.total) >= WRECK_PCT ? 'Wrecked' : '';
   landing.update(c, alt, !S.autopilot && air ? 'air' : run.phase === 'air' ? '' : run.phase, run.tick / 240);
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(landing.prediction.rollOut) * 180 / Math.PI,
     alt, airborne: air,
-    sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, landing.prediction), clock, crash: run.phase === 'done' ? crashStep(S.card) : '',
+    sink: -c.vel.y, phaseKey, clock, crash,
     pitch: hudPitch(c.quat, run.phase === 'ramp'),
     throttles: c.throttles, fan: c.fanForce / G, g: gWindow.read(),
   });
@@ -755,7 +761,7 @@ function newFlight(startTick = 0) {
   thumb.reset();
   ui.resetHud(); ui.damageReset(); gWindow.reset();
   ui.timelineFor(stage.course);
-  S.phaseMax = -1; S.startTick = startTick; S.contactBuzzed = false;
+  S.phaseMax = -1; S.brakeTicks = 0; S.braked = false; S.startTick = startTick; S.contactBuzzed = false;
   cueHys.slow = false; cueHys.tilted = false;
   S.ptr.release = 0; S.ptr.land = 0; S.ptr.brake = 0;
   S.ptrCtx = pointerCtx(S.run?.course || stage.course, S.flyTier);
@@ -763,24 +769,34 @@ function newFlight(startTick = 0) {
 }
 // Where in the flight you are, for the timeline: run-up → climb → hang → release → carry → brake →
 // touchdown (the Lineup: run-up → lift-off → roll → brake → touchdown). It only moves forward.
+// BRAKE means the car is braking (0065): a sustained deceleration, read every sim tick by braking(),
+// not a nozzle sum (the roll-out's attitude pulses pushed the lift jets' sum past 1.2 in free fall)
+// and not a height (a car falling with its valves shut passes the BRAKE line too).
 const PHASE_ORDER = { show: ['runup', 'climb', 'hang', 'release', 'carry', 'brake', 'touchdown'], lineup: ['runup', 'liftoff', 'roll', 'brake', 'touchdown'] };
-function flightPhase(run, c, alt, pr) {
+function flightPhase(run) {
   const order = run.course === 'lineup' ? PHASE_ORDER.lineup : PHASE_ORDER.show;
   let key;
   if (run.phase === 'landed' || run.phase === 'done') key = 'touchdown';
-  else if (run.course === 'lineup') {
-    const roll = Math.abs(run.t.rollAccum);
-    key = run.phase === 'drive' ? 'runup' : roll > 5.6 || (c.vel.y < 0 && alt <= pr.brakeBy) ? 'brake' : roll > 0.3 ? 'roll' : 'liftoff';
-  } else if (run.phase === 'drive') key = 'runup';
+  else if (run.course === 'lineup') key = run.phase === 'drive' ? 'runup' : S.braked ? 'brake' : Math.abs(run.t.rollAccum) > 0.3 ? 'roll' : 'liftoff';
+  else if (run.phase === 'drive') key = 'runup';
   else if (!S.released) key = run.t.progress >= 0.92 ? 'hang' : 'climb';
   else if (run.tick - S.releaseTick < 0.6 * 240) key = 'release';
-  else {
-    const lift = c.throttles[0] + c.throttles[1] + c.throttles[2] + c.throttles[3];
-    key = run.phase === 'air' && c.vel.y < -0.5 && (lift > 1.2 || alt <= pr.brakeBy) ? 'brake' : 'carry';
-  }
+  else key = S.braked ? 'brake' : 'carry';
   const i = order.indexOf(key);
   if (i > S.phaseMax) S.phaseMax = i;
   return order[S.phaseMax];
+}
+// Braking, as the timeline names it (0065): in the air with no bodywork on anything (an impact is not
+// a brake), sinking (> 0.5 m/s), the lift jets open, and the HUD's 0.5 s G window (Δv, LESSONS 0018)
+// at ≥ 1.2 g for 0.15 s on end. Once seen it holds for the rest of the flight (the timeline is
+// monotonic, 0047). Called after every sim tick; no allocation.
+const BRAKE_G = 1.2, BRAKE_HOLD = 36;   // 0.15 s
+function braking(run) {
+  if (S.braked) return;
+  const c = run.car, th = c.throttles;
+  const on = run.phase === 'air' && !c.hullContact && c.vel.y < -0.5 && th[0] + th[1] + th[2] + th[3] > 0.1 && gWindow.read() >= BRAKE_G;
+  S.brakeTicks = on ? S.brakeTicks + 1 : 0;
+  if (S.brakeTicks >= BRAKE_HOLD) S.braked = true;
 }
 
 // One-thumb Assist: touch, the Show or the Wall, Assist, the scheme chosen (src/touch-settings.js).

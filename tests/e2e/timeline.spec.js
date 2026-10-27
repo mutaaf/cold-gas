@@ -132,3 +132,102 @@ test('the Lineup reads ROLLED: the roll so far, which its score counts in whole 
   expect(r.roll).toBe(r.accum);
   expect(errors).toEqual([]);
 });
+
+// Ticket 0065: BRAKE means braking. The timeline lit 06 BRAKE on a nozzle sum (the roll-out's attitude
+// pulses), so it read BRAKE through a second of free fall on the Show, BRAKE on a crash with every
+// valve shut, and TOUCHDOWN over a wreck. Sampled every 0.05 s (12 sim ticks: every sample a new tick)
+// with the car's velocity, so the test takes the specific force over 0.5 s (the HUD's G window) and
+// over 0.25 s from Δv itself. `shut`: every input zeroed from the release + 0.125 s (the critic's
+// no-brake crash).
+const sampleFine = (page, shut = false) => page.evaluate((shut) => {
+  const g = window.__coldgas, S = g.S, hud = document.querySelector('[data-screen="hud"]');
+  const dmg = document.querySelector('[data-dmg]'), tl = document.querySelector('[data-timeline]');
+  g.startRun('reveal'); g.skipCountdown();
+  if (shut) {
+    const ap = S.autopilot;
+    S.autopilot = (run) => {
+      const i = ap(run);
+      if (S.released && run.tick - S.releaseTick >= 30) for (const k of g.inputKeys) i[k] = 0;
+      return i;
+    };
+  }
+  const out = [];
+  for (let i = 0; i < 1400 && S.mode === 'live'; i++) {
+    g.liveStep(0.05);
+    const run = S.run, v = run.car.vel, now = tl.querySelector('[data-state="now"]');
+    out.push({
+      tick: run.tick, phase: run.phase, ph: hud.dataset.phase, vx: v.x, vy: v.y, vz: v.z,
+      rel: S.released ? (run.tick - S.releaseTick) / 240 : -1, dmg: dmg.dataset.state,
+      nowText: now ? now.textContent.trim() : '', alt: S.hudAlt,
+    });
+    if (run.phase === 'done') break;
+  }
+  return out;
+}, shut);
+// Specific force (g) over `n` samples back (0.05 s each): |Δv/Δt + g| / g, or null without the history.
+const sf = (out, i, n) => {
+  const a = out[i], b = out[i - n];
+  if (!b || a.tick - b.tick !== n * 12) return null;
+  const dt = n * 0.05;
+  return Math.hypot((a.vx - b.vx) / dt, (a.vy - b.vy) / dt + 9.81, (a.vz - b.vz) / dt) / 9.81;
+};
+function brakeStats(out) {
+  const air = out.map((s, i) => ({ ...s, g5: sf(out, i, 10), g25: sf(out, i, 5) })).filter((s) => s.phase === 'air' && s.ph === 'brake');
+  const first = out.find((s) => s.ph === 'brake');
+  return {
+    air, frames: air.length,
+    under1: air.filter((s) => s.g5 != null && s.g5 < 1).length,
+    under03: air.filter((s) => s.g25 != null && s.g25 < 0.3).length,
+    carry: out.filter((s) => s.phase === 'air' && s.ph === 'carry').length * 0.05,
+    from: first ? `+${first.rel.toFixed(2)} s, ${first.alt.toFixed(1)} m` : 'never',
+  };
+}
+const brakeLine = (st) => `BRAKE from ${st.from}, ${st.frames} air frames, ${st.under1} < 1 g, ${st.under03} < 0.3 g, CARRY ${st.carry.toFixed(2)} s`;
+
+for (const vp of [{ width: 390, height: 844 }, { width: 1280, height: 720 }]) {
+  test(`0065 Show reference at ${vp.width}×${vp.height}: BRAKE only under a sustained brake, CARRY over the row`, async ({ page }) => {
+    test.slow();
+    await page.setViewportSize(vp);
+    const errors = await boot(page);
+    const out = await sampleFine(page);
+    const st = brakeStats(out);
+    console.log(`0065 show ${vp.width}x${vp.height}: ${brakeLine(st)}`);
+    expect(st.frames, 'BRAKE is shown in the air').toBeGreaterThan(5);
+    const ok = st.air.filter((s) => s.g5 != null && s.g5 >= 1).length;
+    expect(ok / st.frames, `BRAKE samples at ≥ 1 g over 0.5 s: ${ok}/${st.frames}`).toBeGreaterThanOrEqual(0.95);
+    expect(st.under03, 'BRAKE samples under 0.3 g over 0.25 s').toBe(0);
+    expect(st.carry, 'CARRY over the row (s)').toBeGreaterThanOrEqual(1.0);
+    const b = out.findIndex((s) => s.ph === 'brake'), t = out.findIndex((s) => s.ph === 'touchdown');
+    expect(b, 'BRAKE is reached').toBeGreaterThan(0);
+    expect(t, 'TOUCHDOWN after BRAKE').toBeGreaterThan(b);
+    expect(errors).toEqual([]);
+  });
+}
+
+for (const course of ['wall', 'lineup']) {
+  test(`0065 the ${course} reference still reaches BRAKE before TOUCHDOWN`, async ({ page }) => {
+    test.slow();
+    const errors = await boot(page, `&course=${course}`);
+    const out = await sampleFine(page);
+    console.log(`0065 ${course}: ${brakeLine(brakeStats(out))}`);
+    const b = out.findIndex((s) => s.ph === 'brake'), t = out.findIndex((s) => s.ph === 'touchdown');
+    expect(b, 'BRAKE is reached').toBeGreaterThan(0);
+    expect(t, 'TOUCHDOWN after BRAKE').toBeGreaterThan(b);
+    expect(errors).toEqual([]);
+  });
+}
+
+test('0065 a valves-shut crash never shows BRAKE, and never TOUCHDOWN over a wreck', async ({ page }) => {
+  test.slow();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await boot(page);
+  const out = await sampleFine(page, true);
+  const st = brakeStats(out);
+  const wrecked = out.filter((s) => s.dmg === 'wreck');
+  const lie = wrecked.filter((s) => /touchdown/i.test(s.nowText));
+  console.log(`0065 valves-shut crash: ${brakeLine(st)}; ${wrecked.length} wrecked samples, ${lie.length} under TOUCHDOWN; ends "${out.at(-1).nowText}"`);
+  expect(out.filter((s) => s.ph === 'brake').length, 'BRAKE with the valves shut').toBe(0);
+  expect(wrecked.length, 'the crash wrecks the car').toBeGreaterThan(0);
+  expect(lie.map((s) => JSON.stringify(s)), 'TOUCHDOWN is now while the car reads wrecked').toEqual([]);
+  expect(errors).toEqual([]);
+});
