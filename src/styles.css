@@ -121,6 +121,8 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .btn.small { height: 38px; padding: 0 18px; font-size: 13px; background: var(--ink); color: #07090d; }
 .btn:focus-visible, .chip:focus-visible, .icon-btn:focus-visible, .more-toggle:focus-visible, input:focus-visible { outline: 2px solid var(--ice); outline-offset: 3px; }
 .more-sheet .icon-btn:focus-visible { outline-offset: -2px; }
+/* A sheet given focus as it opens (src/focus-trap.js) shows no ring: its first control gets one on Tab. */
+[role="dialog"][tabindex="-1"]:focus { outline: none; }
 
 
 .cue { position: fixed; left: 50%; top: 30%; transform: translateX(-50%); font: 500 12px/1.4 var(--text); letter-spacing: 0.32em; text-transform: uppercase;
