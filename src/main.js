@@ -53,7 +53,7 @@ import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostE
 import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
 import { createPacer } from './pace.js';
-import { pickDeviceTier, deviceKind, readDevice } from './gfx-tier.js';
+import { pickDeviceTier, pickAA, deviceKind, readDevice, isIOS } from './gfx-tier.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
@@ -62,8 +62,8 @@ physicsLoad.catch(() => {});
 const params = new URLSearchParams(location.search);
 const device = readDevice();
 const coarse = device.coarse;
-// Graphics defaults per device (src/gfx-tier.js): touch devices, iPhones and iPads included, start
-// 'mid'; only a phone reporting ≤ 2 GB starts 'low'. ?gfx= overrides.
+// Graphics defaults per device (src/gfx-tier.js): one look everywhere (0097). Desktops, phones and
+// tablets start 'high'; only a phone reporting ≤ 2 GB starts 'low'. ?gfx= overrides.
 // [obs] …then this device's own history (src/obs/ledger.js) moves it: down after a bad session, back up
 // after several smooth ones. The reason shows in For nerds → Health.
 const tier = obs.boot({ forced: params.get('gfx'), deviceTier: pickDeviceTier(device).tier }).tier;
@@ -88,6 +88,7 @@ let stage;
 try {
   // [stage] ?course=wall|lineup practises one stunt; the Show (one flight off the Wall) is the default.
   stage = createStage(canvas, { tier, course: ['wall', 'lineup'].includes(params.get('course')) ? params.get('course') : 'show',
+    aa: pickAA({ tier, touch: coarse || isIOS(device) }),
     backdrop: obs.breaker('rocket').allow(), onBackdropError: (err) => obs.fail('rocket', err),
     warm: params.get('warm') === '1' ? true : null });   // [stage] ?warm=1: warm the other courses even on software GL (e2e)
 } catch (err) {

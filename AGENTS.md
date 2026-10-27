@@ -108,7 +108,11 @@ mark, and air left in the tanks.
    the provider doesn't report them. Keys are never logged, persisted server-side or echoed.
    No AI call may block the results: a 35 s deadline falls back to local lines.
 6. **Frame budget.** 60 fps on a mid-range laptop and playable on a recent phone. No per-frame
-   allocations in hot paths (reuse vectors and arrays). Graphics tiers: `?gfx=low|mid|high`.
+   allocations in hot paths (reuse vectors and arrays). Graphics tiers: `?gfx=low|mid|high`. One look
+   everywhere (0097): phones and tablets boot `high` like a desktop (same effects, shadows, film look,
+   reflection, mist, geometry, pixel-ratio cap 2); only a ≤ 2 GB Android phone starts `low`. What a device
+   can't afford comes out of its pixels first (the governor in-session, the ledger at boot); a tier drops
+   only for a device still slow at the resolution floor (src/gfx-tier.js, src/obs/ledger.js).
 7. **IP caution.** No real brand, product or person names, logos or likenesses anywhere: code,
    copy, assets or AI prompts. Vehicles are invented ("Sedan", "Crossover", "Pickup", "Cab",
    "Semi"). The fine print says it is an independent fan game.
@@ -269,7 +273,8 @@ src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: err
                         signature.js (stable ids, shared with the Worker) · frames.js (ring +
                         histogram, zero per-frame allocation; slow = past the display's own cadence,
                         so a 30 fps cap isn't a hitch) · ledger.js (per-device health ledger,
-                        boot tier from past runs, resolution governor; scene.js applies a step at the
+                        boot tier and resolution from past runs: a slow session costs a resolution step,
+                        a tier only at the floor (0097); resolution governor; scene.js applies a step at the
                         next render, never between a draw and its presentation) · breaker.js (judge, audio,
                         world, rocket) · heal.js (guarded frame loop, context restore + look rebake,
                         trap → title, reload-once) · reload.js (when a reload is allowed: online, origin
@@ -305,6 +310,8 @@ scripts/brand.mjs          the install assets from brand/icon.svg (the mark: ico
                            --check the safe zone) and, with --shots <url>, og.png + the manifest's screenshots
 scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
 scripts/shots-lineup.mjs   studio shots of each parked vehicle + the row, and the row's draw budget
+scripts/shots-look.mjs     the same moments (title, release, landing, results, a road) on desktop, phone and iPad,
+                           before vs after side by side (0097: one look everywhere)
 scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)
 scripts/flicker-budget.mjs  gates a flicker.mjs --json run against docs/flicker-budget.json (per label)
 scripts/roads/        build-time only: OSM + terrain → public/roads/*.bin.gz (docs/ROADS.md)

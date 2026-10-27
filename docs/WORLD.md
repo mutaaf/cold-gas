@@ -46,7 +46,7 @@ possible: `road.dem(x, z, out)` (the natural ground) and an open-ended segment m
 ## Streaming and budgets
 
 Four tile levels (32 × 32 cells + skirts): 128 m within ≈ 480 m, 512 m within ≈ 2.3 km, 2 km within
-≈ 9 km, 8 km to the horizon (`TIERS` in endless-world.js; `?gfx=high|mid|low`, phones get mid).
+≈ 9 km, 8 km to the horizon (`TIERS` in endless-world.js; `?gfx=high|mid|low`; phones and tablets get high like a desktop, 0097).
 A finer tile cuts its hole in the coarser one; wholly covered tiles aren't drawn. Road chunks
 (192 m) within ≈ 2 km. Everything is built in the worker(s); the main thread wraps typed arrays in
 buffers under `budget` ms per frame, nearest-and-ahead first (priorities use the camera's velocity
