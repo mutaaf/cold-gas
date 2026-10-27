@@ -19,12 +19,15 @@
 // toward the pad read at a glance.
 import * as THREE from 'three';
 import { LINEUP, WALL, SHOW } from '../sim/courses.js';
+import { hudMode } from '../hud-mode.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
 const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3();
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // The Wall's rigs were framed on a 19.8 m lip; they scale with the wall's real height.
 const K = WALL.lip.y / 19.8;
+// The Show's carry (0063): its FOV, the lowest roof in the row, and how far down the frame (NDC) a roof may sit.
+const CARRY_FOV = 54, ROOF_Y = Math.min(...SHOW.boxes.map((b) => b.h)), ROOF_NDC = 0.88;
 
 export function createDirector(camera) {
   const st = {
@@ -34,6 +37,7 @@ export function createDirector(camera) {
     hx: 0, hz: 1,                 // chase heading (unit, xz), follows the car's travel
     cutT: 0, cutPos: new THREE.Vector3(), cutFov: 40,   // a crash cut (src/render/crash.js)
     view: 'broadcast', px: 0, pz: -1,                    // pilot view: on/off, its heading
+    carryD: 0,                                           // the Show's carry: its camera's distance (0063)
   };
 
   // Behind, above and to the side of the car along its line of flight (the last good heading when
@@ -145,6 +149,7 @@ export function createDirector(camera) {
       fovTo(50, dt);
     } else if (!st.launched) {
       // Hanging inverted on the ledge: the dramatic wide shot.
+      st.carryD = 0;
       want.set(27 * K, 13.5 * K, -13 * K);
       lookWant.set(carPos.x * 0.3, carPos.y * 0.6 + 6, carPos.z * 0.5 + 2.5);
       ease(dt, 1.8, 4);
@@ -152,11 +157,7 @@ export function createDirector(camera) {
     } else if (!landed && st.view === 'pilot') {
       pilot(carPos, carVel, dt);
     } else if (!landed && st.course === 'show') {
-      // The carry over the row: low and wide from the side, so the roofs under the car stay in frame.
-      want.set(carPos.x + 21, clamp(carPos.y * 0.4 + 2.2, 2.2, 10), carPos.z + 2);
-      lookWant.set(carPos.x * 0.5, carPos.y * 0.55 + 0.8, carPos.z - 2);
-      ease(dt, 3.2, 9);
-      fovTo(54, dt);
+      carry(carPos, dt);
     } else if (!landed) {
       // The fall and the roll: wide from the side, tracking.
       want.set(carPos.x + 19, clamp(carPos.y * 0.55 + 3.5, 3, 18), carPos.z + 5);
@@ -170,6 +171,50 @@ export function createDirector(camera) {
       ease(dt, 3, 8);
       fovTo(40, dt);
     }
+  }
+
+  // The Show's carry, from the release over the row (0063): low and wide from the side, framed on two
+  // points, the car and the roofs under it. The car's centre stays below the top HUD (the mission
+  // block, or the compact rail on a portrait phone) and the roofs above the bottom of the frame: the
+  // camera backs off as far as that takes (the drop starts 22 m above the roofs) and closes back in
+  // as the car comes down, and its tilt is solved from where the camera actually is, so the ease
+  // can't carry the car up behind the HUD.
+  function carry(carPos, dt) {
+    const H = innerHeight || 1, portrait = camera.aspect < 0.8, compact = hudMode() === 'compact';
+    // Highest the car's centre may sit, px from the top: under the rail (portrait, compact: the rail
+    // reaches ≈ 260 px, plus half the car), under the mission block + 24 px (full: its bottom ≈ 130 px),
+    // or clear of the top bar (a compact landscape phone keeps its block at the bottom).
+    const topPx = compact ? (portrait ? 300 : Math.max(80, H * 0.22)) : 175;
+    const t = Math.tan(CARRY_FOV * Math.PI / 360);
+    const aTop = Math.max(0.05, 1 - 2 * topPx / H);
+    const upMax = Math.atan(aTop * t), downMax = Math.atan(ROOF_NDC * t);
+    const yc = carPos.y, yr = Math.min(ROOF_Y, yc - 1);
+    const h = clamp(yc * 0.4 + 2.2, 2.2, 12);
+    // The nearest distance at which both fit (bisection: the angle between them falls with distance).
+    let lo = 21, hi = 90;
+    if (Math.atan2(yc - h, lo) + Math.atan2(h - yr, lo) > upMax + downMax) {
+      for (let i = 0; i < 18; i++) {
+        const d = (lo + hi) / 2;
+        if (Math.atan2(yc - h, d) + Math.atan2(h - yr, d) > upMax + downMax) lo = d; else hi = d;
+      }
+      lo = hi;
+    }
+    // Backed off, it closes in no faster than 3 m/s: dollying in at the fall's pace made the curl's deck
+    // crawl (scripts/flicker.mjs show-live-jets, wall region).
+    st.carryD = Math.max(lo, st.carryD - dt * 3);
+    want.set(carPos.x + st.carryD, h, carPos.z + 2);
+    // Tilt from the camera as it stands: the car no higher than the band, the roofs no lower than
+    // the frame's foot; with room to spare, the car mid-frame.
+    const c = st.init ? st.smooth : want;
+    const ax = carPos.x * 0.5 - c.x, az = carPos.z - 2 - c.z, al = Math.hypot(ax, az) || 1;
+    const dc = Math.hypot(carPos.x - c.x, carPos.z - c.z) || 1, dr = Math.hypot(c.x, carPos.z - c.z) || 1;
+    // (At the FOV the camera has now: it is still easing in from the hang's.)
+    const tNow = Math.tan(st.fov * Math.PI / 360);
+    const pc = Math.atan2(yc - c.y, dc), pLo = pc - Math.atan(aTop * tNow), pHi = Math.atan2(yr - c.y, dr) + Math.atan(ROOF_NDC * tNow);
+    const p = Math.max(pLo, Math.min(pc, pHi)), cp = Math.cos(p);
+    lookWant.set(c.x + ax * cp, c.y + Math.sin(p) * al, c.z + az * cp);
+    ease(dt, 3.2, 9);
+    fovTo(CARRY_FOV, dt);
   }
 
   function wallReplay(carPos, carVel, phase) {
