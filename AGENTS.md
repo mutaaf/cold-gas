@@ -233,7 +233,8 @@ src/rookie.js         Rookie mode (pure, 0074): crashed runs in a row; from the 
 src/adapt.js          Adapt to me (pure, 0079): the session's performance model over rookie.js; between runs only, 3 crashes in a
                         row on Pro/Advanced step the tier down (Undo), every 3 good runs offer a harder step; a run's tier is
                         latched at its start (S.flyTier)
-src/pointer.js        the coach in the device's words (pure, 0079): controls per device/scheme, the "how to fly" card's rows,
+src/pointer.js        the coach in the device's words (pure, 0079): controls per device/scheme, the "how to fly" card's rows
+                        (and the pause sheet's, 0092: touch and pad never see the keyboard's key lists),
                         the post-run pointer (no third repeat, "Better: …"), the live cue-line pointers
 src/render/interp.js  the car drawn between 240 Hz ticks (no sim change)
 src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
@@ -295,7 +296,8 @@ scripts/human-phone.mjs    the human-show population on a phone (thumbs, reach, 
                            --scheme=classic|thumb --build=before|after --geom=<thumb-reach geom.json>
 scripts/thumb-reach.mjs    touch control geometry per phone viewport + reach heatmap screenshots
 scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11 px, WCAG contrast on screenshots;
-                           the judges' theatre too (44 px targets); a gate (exit 1), --shard=N/M
+                           the judges' theatre and the pause sheet too (44 px targets; Resume and Home on the glass,
+                           0092); a gate (exit 1), --shard=N/M
 scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view; a gate (exit 1)
 scripts/serve-and-audit.mjs  `npm run audit`: vite preview on a private port + both audits, their exit code
 scripts/audit-plan.mjs     the audit's viewports and its shard plan, balanced by estimated CI seconds (0087)

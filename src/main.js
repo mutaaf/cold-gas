@@ -32,7 +32,7 @@ import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevi
 import { LEVEL_INFO } from './driving.js';
 import { isCrash, nextStreak, offerRookie, loadStreak, saveStreak } from './rookie.js';
 import { loadPerf, savePerf, record, decide, outcomeOf, afterChange, coachLive, loadFlown, saveFlown, loadAdapt, saveAdapt, TIER_WORDS, factorText, stepDownBanner, offerWords } from './adapt.js';
-import { deviceOf, howtoRows, deviceTitle, pickPointer, livePointer } from './pointer.js';
+import { deviceOf, howtoRows, pauseRows, deviceTitle, pickPointer, livePointer } from './pointer.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
 import { thumbStage } from './onethumb.js';
@@ -1096,6 +1096,17 @@ function syncLife(force = false) {
 // buffer is cleared). Draw the frozen frame again, now in the new shape and once the buffer settles.
 function redrawPaused() { if (S.paused && stage) stage.render(S.time, S.mode); }
 
+// The pause sheet's controls (0092): a keyboard keeps its key lists; a touch screen or a pad gets its
+// own controls for the scheme in use (src/pointer.js pauseRows), never a keyboard map.
+function drawPauseKeys() {
+  const el = ui.screens.pause, ctx = pointerCtx(S.run?.course || stage.course, S.flyTier), own = ctx.device !== 'key';
+  el.dataset.device = ctx.device;
+  el.querySelector('[data-pause-keys="key"]').hidden = own;
+  const box = el.querySelector('[data-pause-keys="device"]');
+  box.hidden = !own;
+  if (own) box.replaceChildren(...pauseRows(ctx).map((r) => { const p = document.createElement('p'), b = document.createElement('b'); b.textContent = r.label; p.append(b, r.text); return p; }));
+}
+
 // --- Wiring ---------------------------------------------------------------------------------
 function pause(on) {
   if (S.mode === 'drive') { on ??= !fd().paused; if (on) resetInput(); fd().pause(on); return; }
@@ -1103,6 +1114,7 @@ function pause(on) {
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
   if (on) resetInput();   // nothing held comes back held from the pause sheet
   S.paused = on;
+  if (on) { drawPauseKeys(); ui.screens.pause.querySelector('.sheet').scrollTop = 0; }   // Resume first, at the top
   ui.show('pause', on);
   lastT = performance.now();
 }
@@ -1115,6 +1127,7 @@ onDevice(() => {
   ui.touch.hidden = !usingTouch() || !!S.autopilot;
   syncScheme();
   S.ptrCtx = pointerCtx(S.run?.course || stage.course, S.flyTier);
+  if (S.paused) drawPauseKeys();
 });
 const on = (sel, fn) => document.querySelectorAll(sel).forEach((el) => el.addEventListener('click', fn));
 // The first Jump on this device shows how to fly first (skippable, remembered); a deep link never waits.

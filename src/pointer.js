@@ -67,6 +67,14 @@ export function howtoRows(ctx) {
       : row('Brake', brakeAct(ctx), 'At the BRAKE line on the descent tape, hard.'),
   ];
 }
+// The pause sheet's lines (0092): the same phases, short ("hold GO"), plus steering where the player
+// steers. A touch screen or a pad is never handed the keyboard's key lists; the keyboard keeps them
+// (index.html), and the full card is one tap away (How to fly).
+export function pauseRows(ctx) {
+  const rows = howtoRows(ctx).map((r) => ({ label: r.phase, text: r.verb ? `${r.verb} ${r.ctl}` : r.ctl }));
+  if (!thumbOn(ctx) && ctx.device !== 'key') rows.push({ label: 'Steer', text: keyOf(ctx, 'steer') });
+  return rows;
+}
 export const deviceTitle = (ctx) => (thumbOn(ctx) ? 'Touch · one thumb' : ctx.device === 'touch' ? 'Touch · two thumbs' : ctx.device === 'pad' ? 'Gamepad' : 'Keyboard');
 
 // --- The pointer after a run --------------------------------------------------------------------

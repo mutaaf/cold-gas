@@ -23,6 +23,8 @@
 // frame of it is a sample, and its legibility is scripts/theatre-shots.mjs's job), and its boxes are
 // checked for overlaps and for leaving the theatre, its text for size and contrast, and every control
 // for a 44 × 44 px target (its centre's 44 px square, sampled with elementFromPoint, must hit it).
+// And once per viewport the pause sheet (0092), paused mid-run as a phone pauses: the same checks, with
+// every button (Resume and Home above all) inside the sheet's visible box and the viewport at its top.
 //
 // A gate (0082): the exit code is 1 when any count is non-zero (overlaps, offscreen, text < 11 px,
 // labels < 4.5:1, targets < 44 px, anything that changed between the two shots, frames missed), and
@@ -76,6 +78,15 @@ const TEXT_ROOTS = '[data-screen="hud"], [data-touch], [data-cue], .top, [data-d
 const THEATRE = {
   boxes: ['.th-rail', '.th-caption', '.th-card', '.th-stats', '.th-ticker', '.th-skip', '.th-quick button'].map((s) => `[data-theatre] ${s}`),
   textRoots: '[data-theatre]', targets: '[data-theatre] button', within: '[data-theatre]',
+};
+
+// The pause sheet (0092): its heading and actions against the sheet's visible box and the viewport (with
+// the sheet at its top: Resume and Home must be on the glass without scrolling), its text for size and
+// contrast, its buttons for 44 px targets. The sheet itself is a box, so a sheet taller than the
+// viewport is offscreen too. --plant=pause-spacer pushes the actions 600 px down (the gate must fail).
+const PAUSE = {
+  boxes: ['.sheet', '.sheet h2', '[data-resume]', '[data-restart]', '[data-controls-open]', '[data-howto-open]', '[data-home]'].map((s) => `[data-screen="pause"] ${s}`),
+  textRoots: '[data-screen="pause"]', targets: '[data-screen="pause"] .actions .btn', within: '[data-screen="pause"] .sheet',
 };
 
 // A GPU where there is one (macOS: Metal); software GL elsewhere (CI), as the e2e config does.
@@ -149,8 +160,10 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
       const h = Math.min(a.r.y + a.r.h, b.r.y + b.r.h) - Math.max(a.r.y, b.r.y);
       if (w > 1 && h > 1) overlaps.push({ a: a.sel, b: b.sel, px: Math.round(w * h) });
     }
-    // Off the glass: outside the viewport, or outside the panel the boxes live in (the theatre clips).
-    const W = within ? document.querySelector(within).getBoundingClientRect() : { x: 0, y: 0, right: innerWidth, bottom: innerHeight };
+    // Off the glass: outside the viewport, or outside the panel the boxes live in (the theatre and the
+    // pause sheet clip), whichever is tighter.
+    const P = within ? document.querySelector(within).getBoundingClientRect() : { x: 0, y: 0, right: innerWidth, bottom: innerHeight };
+    const W = { x: Math.max(0, P.x), y: Math.max(0, P.y), right: Math.min(innerWidth, P.right), bottom: Math.min(innerHeight, P.bottom) };
     const offscreen = boxes.filter((b) => b.r.x < W.x - 1 || b.r.y < W.y - 1 || b.r.x + b.r.w > W.right + 1 || b.r.y + b.r.h > W.bottom + 1).map((b) => b.sel);
     // Touch targets: the 44 × 44 px square on each control's centre is all the control's (a hit area
     // may extend past the visual box, as the top bar's Menu does), and on the glass.
@@ -175,7 +188,10 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
         // effective opacity up the tree
         let op = 1; for (let e = el; e && e.nodeType === 1; e = e.parentElement) op *= Number(getComputedStyle(e).opacity);
         const color = el instanceof SVGElement ? cs.fill : cs.color;
-        texts.push({ t: el.textContent.trim().slice(0, 24), px: Math.round(px * 10) / 10, color, op, r: { x: r.x, y: r.y, w: r.width, h: r.height } });
+        // Scrolled out of a clipping panel (the pause sheet's lower key lines): its size counts, but it
+        // isn't on the glass, so there is no background to measure it against.
+        const clipped = !!within && (r.y < W.y - 1 || r.y + r.height > W.bottom + 1 || r.x < W.x - 1 || r.x + r.width > W.right + 1);
+        texts.push({ t: el.textContent.trim().slice(0, 24), px: Math.round(px * 10) / 10, color, op, clipped, r: { x: r.x, y: r.y, w: r.width, h: r.height } });
       }
     }
     return { overlaps, offscreen, texts, smallTargets };
@@ -198,6 +214,7 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
     const L = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
     const parse = (s) => { const m = s.match(/[\d.]+/g)?.map(Number) || [255, 255, 255, 1]; return { r: m[0], g: m[1], b: m[2], a: m[3] ?? 1 }; };
     return texts.map((t) => {
+      if (t.clipped) return { t: t.t, px: t.px, ratio: null };
       const c = parse(t.color), a = c.a * t.op;
       // Inset 2 px: a box's own border is not the background behind its glyphs.
       const ins = Math.min(2, t.r.w / 4, t.r.h / 4);
@@ -253,6 +270,27 @@ async function measureTheatre(page, vpName) {
     await page.evaluate(() => document.querySelector('[data-theatre]').classList.add('th-rookie'));
     await measure(page, vpName, '10-theatre-rookie', THEATRE);
   }
+}
+
+// The pause sheet (0092), once per viewport: a fresh run, paused the way a phone pauses one (the tab goes
+// hidden and comes back: a key would make the keyboard the device and show its key lists on a touch
+// screen), the sheet at its top, measured, then Home.
+async function measurePause(page, vpName) {
+  await page.evaluate(() => { const g = window.__coldgas; g.S.paused = false; g.startRun('jump'); g.skipCountdown(); });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: ms(30000) }).catch(() => {});
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'hidden', { configurable: true, get: () => true });
+    document.dispatchEvent(new Event('visibilitychange'));
+    delete document.hidden;
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  const up = await page.waitForFunction(() => { const p = document.querySelector('[data-screen="pause"]'); return p && !p.hidden && window.__coldgas.S.paused; }, null, { timeout: ms(10000) }).then(() => true).catch(() => false);
+  if (!up) { missed.push(`${vpName} 11-pause`); console.log('  missed the pause sheet'); return; }
+  if (flags.plant === 'pause-spacer') await page.evaluate(() => { const d = document.createElement('div'); d.style.height = '600px'; document.querySelector('[data-screen="pause"] .actions').before(d); });
+  await page.waitForTimeout(ms(700));   // the sheet's rise
+  await page.evaluate(() => { document.querySelector('[data-screen="pause"] .sheet').scrollTop = 0; });
+  await measure(page, vpName, '11-pause', PAUSE);
+  await page.evaluate(() => document.querySelector('[data-screen="pause"] [data-home]').click());
 }
 
 // Seconds each viewport took (both states), for the shard plan's cost model (scripts/audit-plan.mjs).
@@ -353,6 +391,7 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   });
   if (wrecked) { await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))); await measure(page, vpName, '9-wreck'); await thaw(); }
   else { missed.push(`${vpName} 9-wreck`); console.log('  missed the wreck'); }
+  if (hudState === STATES[0]) await measurePause(page, vpBase);
   // The Lineup in the air (touch): its air layout adds LIFT in slot B beside the attitude dial.
   if (touch) {
     await S(() => window.__coldgas.toTitle());
