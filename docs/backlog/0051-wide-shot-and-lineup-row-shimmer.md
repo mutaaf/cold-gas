@@ -32,7 +32,7 @@ flicker.mjs numbers and heatmaps; update `docs/flicker-budget.json` (0050) to th
 ## Out of scope
 Changing the vehicle designs.
 
-## Progress (PR #PR, the Show's truss; still `ready`)
+## Progress (PR #131, the Show's truss; still `ready`)
 Attribution on CI's software GL (`--gl=swiftshader`, same build A/B against main, heatmaps per region with
 `FLK_PRE="window.__flk.heatReg=<n>"`), by switching one layer off at a time before the capture:
 - **show-wide wall** was the truss's shading, not its edges: flat-shading only the truss took it 111 → 31‰ (phone);
