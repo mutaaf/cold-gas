@@ -41,6 +41,7 @@ import { wallProgress, INPUT_KEYS } from './sim/run.js';
 import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0, suspendAudio, resumeAudio, audioState } from './audio.js';
 import { syncWake, wakeHeld } from './wake.js';
 import { createUI, crashStep } from './ui.js';
+import { initFocusTrap } from './focus-trap.js';
 import { wireUnitToggles, unitText } from './units.js';
 import { drawShareCard, shareRun } from './share-card.js';
 import { createInstruments } from './instruments.js';
@@ -116,6 +117,9 @@ function whenPhysics(fn) {
   };
 }
 const ui = createUI();
+// The modal sheets hold focus while they're up and hand it back when they close (0054, src/focus-trap.js).
+initFocusTrap([ui.screens.pause, ui.screens.controls, ui.screens.howto, ui.screens.assist, ui.screens.board,
+  document.querySelector('[data-drive-pause]'), document.querySelector('[data-ai-modal]')]);
 // Units (src/units.js): US by default, metric a tap away on any unit readout, or U.
 wireUnitToggles();
 // Every HUD instrument answers a tap: peak G, burn time, splits, attitude, the valves, the damage map.
@@ -1163,6 +1167,7 @@ function pause(on) {
   on ??= !S.paused;
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
   if (on) resetInput();   // nothing held comes back held from the pause sheet
+  else ui.show('controls', false);   // P or a pad's Start resumes from under Controls too: it goes with the pause
   S.paused = on;
   if (on) { drawPauseKeys(); ui.screens.pause.querySelector('.sheet').scrollTop = 0; }   // Resume first, at the top
   ui.show('pause', on);
@@ -1353,10 +1358,12 @@ on('[data-howto-open]', (e) => openHowto({ from: e.currentTarget }));
 on('[data-howto-go]', closeHowto);
 on('[data-howto-skip]', closeHowto);
 howtoScreen.addEventListener('click', (e) => { if (e.target === howtoScreen) closeHowto(); });
-// Escape closes the card or the tier picker before the game reads it (Escape on the results goes Home).
+// Escape closes the card, the tier picker, the controls or the board before the game reads it (Escape on
+// the results goes Home, on a run the pause sheet toggles): the sheet on top goes, not what's under it.
 addEventListener('keydown', (e) => {
   if (e.code !== 'Escape') return;
-  if (!howtoScreen.hidden) closeHowto(); else if (!assistScreen.hidden) closeAssist(); else return;
+  if (!howtoScreen.hidden) closeHowto(); else if (!assistScreen.hidden) closeAssist();
+  else if (!ctlScreen.hidden) ui.show('controls', false); else if (!ui.screens.board.hidden) ui.show('board', false); else return;
   e.preventDefault(); e.stopImmediatePropagation();
 }, true);
 
