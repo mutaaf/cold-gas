@@ -1,7 +1,7 @@
 // The coach's pointers in this device's words (0079, src/pointer.js): the "how to fly" rows, the one
 // pointer after a run (no third repeat, "Better: …" once fixed) and the live pointers.
 import { describe, it, expect } from 'vitest';
-import { deviceOf, ctl, howtoRows, deviceTitle, pointerText, pickPointer, betterText, livePointer } from '../../src/pointer.js';
+import { deviceOf, ctl, howtoRows, pauseRows, deviceTitle, pointerText, pickPointer, betterText, livePointer } from '../../src/pointer.js';
 
 const KEY = { device: 'key', scheme: 'classic', tier: 'assist', course: 'show' };
 const PAD = { ...KEY, device: 'pad' };
@@ -45,6 +45,17 @@ describe('how to fly', () => {
     expect(howtoRows(PRO).map((r) => r.ctl)).toEqual(['↑', 'Space', '← →', 'Space']);
     expect(howtoRows({ ...KEY, course: 'lineup' })[1].phase).toMatch(/lift/i);
     expect([KEY, PAD, TOUCH, THUMB].map(deviceTitle)).toEqual(['Keyboard', 'Gamepad', 'Touch · two thumbs', 'Touch · one thumb']);
+  });
+});
+
+describe('the pause sheet (0092)', () => {
+  it('touch and pad get their own controls, short, and never a keyboard key', () => {
+    expect(pauseRows(TOUCH).map((r) => r.text)).toEqual(['hold GO', 'tap RELEASE', 'hold LAND', 'hold LAND', 'the stick']);
+    expect(pauseRows(THUMB).map((r) => r.text)).toEqual(['hold the pad', 'tap the pad', 'hold the pad', 'keep holding']);
+    expect(pauseRows(PAD).map((r) => r.text)).toEqual(['hold RT', 'press A', 'hold B', 'hold B', 'the left stick']);
+    for (const ctx of [TOUCH, THUMB, PAD, { ...TOUCH, tier: 'pro' }, { ...TOUCH, tier: 'advanced' }, { ...TOUCH, course: 'lineup' }]) {
+      for (const r of pauseRows(ctx)) { expect(r.label).toBeTruthy(); expect(`${r.label} ${r.text}`).not.toMatch(/\b(Shift|Space|Q E|W S A D|V B N M)\b/); }
+    }
   });
 });
 

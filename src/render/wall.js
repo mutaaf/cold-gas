@@ -356,7 +356,7 @@ function truss(tier) {
 
   // Members are unit boxes stretched along y: kept at least a pixel thick in the distance.
   const geo = spreadAxes(new THREE.BoxGeometry(1, 1, 1), [1, 0, 1]);
-  const mat = sliver(new THREE.MeshStandardMaterial({ color: 0x2b2e33, metalness: 0.85, roughness: 0.42, envMapIntensity: 1.2 }), { minPx: 1, dim: false, maxK: 4 });
+  const mat = sliver(new THREE.MeshStandardMaterial({ color: 0x2b2e33, metalness: 0.85, roughness: 0.42, envMapIntensity: 1.2 }), { minPx: 1, dim: false, maxK: 4, rough: 8 });
   const total = members.length + boxes.length;
   const mesh = new THREE.InstancedMesh(geo, mat, total);
   const a = new THREE.Vector3(), b = new THREE.Vector3(), d = new THREE.Vector3(), up = new THREE.Vector3(0, 1, 0);

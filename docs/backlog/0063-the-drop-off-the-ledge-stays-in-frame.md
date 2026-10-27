@@ -72,3 +72,11 @@ compact phone HUD #79 shipped (docs/critique/2026-10-22-2200.md):
 
 Added criterion: at 390×844 and 844×390, no air frame has more than 10 % of the car's projected
 bounding box under any `[data-hud-box]`, `[data-hud-toggle]` or `.top-actions` rect.
+
+## Critic re-measure (2026-10-27 15:37, production 7866072): the iPads too
+The same carry camera on an iPad. 820×1180 touch (rotated to 1180×820 at release + 0.25 s, the reference
+run): the car's projected centre is in the top 15 % for **18 of 51** sampled air frames (minimum y 0.071).
+1180×820 touch (valves shut at release + 0.125 s): **11 of 48** (minimum 0.079). `ipadP-4a-prerotate.jpg`: the
+car, upside down, fills the top 13 % behind the `T +00:10.5 · 04 RELEASE` stack; `ipadP-4-release-rot.jpg`,
+0.4 s after the rotation, it is a ghost at the top edge over an empty pad and rocket. Add 820×1180 and
+1180×820 to the probe's viewports.
