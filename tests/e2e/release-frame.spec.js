@@ -41,7 +41,18 @@ function fly() {
     return { x0, y0, x1, y1 };
   };
   const overlap = (b, r) => Math.max(0, Math.min(b.x1, r.right) - Math.max(b.x0, r.left)) * Math.max(0, Math.min(b.y1, r.bottom) - Math.max(b.y0, r.top));
-  const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity };
+  const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity, overRow: 0, noRoof: [] };
+  // The parked row as it stands (each vehicle's footprint and height), and the stretch it covers.
+  const row = S.run.car.world.bodies.map((b) => ({ x0: b.cx - b.hx, x1: b.cx + b.hx, z0: b.cz - b.hz, z1: b.cz + b.hz, h: b.h }));
+  const rowZ0 = Math.min(...row.map((b) => b.z0)), rowZ1 = Math.max(...row.map((b) => b.z1));
+  // A roof is in frame when any corner of its top 15 % projects inside the screen.
+  const roofIn = (b) => {
+    for (let i = 0; i < 8; i++) {
+      c.set(i & 1 ? b.x1 : b.x0, i & 2 ? b.h : b.h * 0.85, i & 4 ? b.z1 : b.z0).project(cam);
+      if (c.z < 1 && Math.abs(c.x) <= 1 && Math.abs(c.y) <= 1) return true;
+    }
+    return false;
+  };
   S.paused = true;   // the frame loop stands still; the probe steps the run and the director itself
   const DT = 1 / 30;
   for (let f = 0; f < 30 * 40 && S.mode === 'live' && S.run.phase !== 'done'; f++) {
@@ -67,6 +78,10 @@ function fly() {
     for (const [k, r] of rects) { const s = overlap(b, r) / area; if (s > worst) { worst = s; worstK = k; } }
     if (worst > 0.1) out.covered.push(`${worstK} ${Math.round(worst * 100)}%`);
     const inside = overlap(b, { left: 0, top: 0, right: w, bottom: h }) / area;
+    if (car.position.z >= rowZ0 && car.position.z <= rowZ1) {
+      out.overRow++;
+      if (!row.some(roofIn)) out.noRoof.push(`z ${car.position.z.toFixed(1)} y ${car.position.y.toFixed(1)}`);
+    }
     if (inside < 0.9) out.offscreen.push(`${Math.round(inside * 100)}% ${Math.round(b.x0)},${Math.round(b.y0)} ${Math.round(b.x1)},${Math.round(b.y1)} y ${car.position.y.toFixed(1)}`);
   }
   S.paused = false;
@@ -109,6 +124,11 @@ for (const { name, phone, ...opts } of VIEWS) {
     expect(r.offscreen).toEqual([]);
     // On a phone no more than a tenth of the car's box is under any HUD box or the top bar.
     if (phone) expect(r.covered).toEqual([]);
+    // 0026's bar holds: the car's centre is never inside the telemetry strip.
+    expect(r.inStrip).toBe(0);
+    // Over the parked row a roof is always in frame (the reason the carry camera is low and wide).
+    expect(r.overRow).toBeGreaterThan(20);
+    expect(r.noRoof).toEqual([]);
     expect(errors).toEqual([]);
     await page.close();
   });

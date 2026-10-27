@@ -19,9 +19,10 @@
 // toward the pad read at a glance.
 import * as THREE from 'three';
 import { LINEUP, WALL, SHOW } from '../sim/courses.js';
+import { hudMode } from '../hud-mode.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
-const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion();
+const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // The Wall's rigs were framed on a 19.8 m lip; they scale with the wall's real height.
 const K = WALL.lip.y / 19.8;
@@ -34,6 +35,7 @@ export function createDirector(camera) {
     hx: 0, hz: 1,                 // chase heading (unit, xz), follows the car's travel
     cutT: 0, cutPos: new THREE.Vector3(), cutFov: 40,   // a crash cut (src/render/crash.js)
     view: 'broadcast', px: 0, pz: -1,                    // pilot view: on/off, its heading
+    clear: 1,                                            // keepClear's strength (0 in the pilot view)
   };
 
   // Behind, above and to the side of the car along its line of flight (the last good heading when
@@ -66,21 +68,28 @@ export function createDirector(camera) {
 
   // Keep the car out from under the HUD (0063): after a shot has looked where it wants, turn the camera
   // just enough that the car's centre is no higher than a quarter of the way down the frame (under the
-  // top bar and the timeline), and, on a phone held upright, as it rises into the top third, right of
-  // the instrument rail on the left edge. A car already clear is left where the shot put it, and the turn
-  // grows from zero as the car crosses the line, so it never cuts.
-  const TOP = 0.5, RAIL = 0.3;   // NDC: the highest the car's centre goes; upright, the leftmost it goes up there
-  function keepClear(carPos) {
+  // top bar and the timeline), and, once launched, where the compact HUD stands as a rail on the left
+  // edge (a touch screen held upright), right of it as the car rises into the top third. A car already
+  // clear is left where the shot put it; the turn comes in through a soft knee as the car nears the line,
+  // and the whole correction fades in and out (the pilot view goes without it), so it never cuts.
+  const TOP = 0.5, RAIL = 0.3, KNEE = 0.06;   // NDC: the highest the car's centre goes; upright, the leftmost up there; rad
+  const coarse = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : null;
+  const knee = (e) => (e <= 0 ? 0 : e < KNEE ? (e * e) / (2 * KNEE) : e - KNEE / 2);   // 0 → e − k/2, C¹
+  function keepClear(carPos, on, dt) {
+    st.clear += ((on ? 1 : 0) - st.clear) * (1 - Math.exp(-dt * 5));
+    if (st.clear < 0.002) return;
+    const tv = Math.tan(st.fov * Math.PI / 360);
+    if (st.launched && camera.aspect < 1 && coarse?.matches && hudMode() === 'compact') {
+      tmp.copy(carPos).sub(camera.position).applyQuaternion(qInv.copy(camera.quaternion).invert());
+      if (tmp.z > -0.5) return;
+      const ny = tmp.y / -tmp.z / tv, w = clamp((ny - 0.1) / 0.25, 0, 1);
+      const min = Math.atan(RAIL * w * tv * camera.aspect) + KNEE / 2;
+      // About the world's up, so the horizon stays level.
+      camera.rotateOnWorldAxis(UP, st.clear * knee(min - Math.atan2(tmp.x, -tmp.z)));
+    }
     tmp.copy(carPos).sub(camera.position).applyQuaternion(qInv.copy(camera.quaternion).invert());
     if (tmp.z > -0.5) return;
-    const tv = Math.tan(st.fov * Math.PI / 360), ax = Math.atan2(tmp.x, -tmp.z), ay = Math.atan2(tmp.y, -tmp.z);
-    if (camera.aspect < 0.8) {
-      const ny = Math.tan(ay) / tv, w = clamp((ny - 0.1) / 0.25, 0, 1);
-      const min = Math.atan(RAIL * w * tv * camera.aspect);
-      if (ax < min) camera.rotateY(min - ax);
-    }
-    const max = Math.atan(TOP * tv);
-    if (ay > max) camera.rotateX(ay - max);
+    camera.rotateX(st.clear * knee(Math.atan2(tmp.y, -tmp.z) - Math.atan(TOP * tv) + KNEE / 2));
   }
 
   // --- Lineup -----------------------------------------------------------------------------------
@@ -172,7 +181,9 @@ export function createDirector(camera) {
       pilot(carPos, carVel, dt);
     } else if (!landed && st.course === 'show') {
       // The carry over the row: low and wide from the side, so the roofs under the car stay in frame.
-      want.set(carPos.x + 21, clamp(carPos.y * 0.4 + 2.2, 2.2, 10), carPos.z + 2);
+      // High in the fall it stands back and rises with the car, so the car (held under the top HUD by
+      // keepClear) and the roofs below it both fit (0063).
+      want.set(carPos.x + 21 + 0.5 * Math.max(0, carPos.y - 10), clamp(carPos.y * 0.5 + 1.5, 2.2, 14), carPos.z + 2);
       lookWant.set(carPos.x * 0.5, carPos.y * 0.55 + 0.8, carPos.z - 2);
       ease(dt, 3.2, 9);
       fovTo(54, dt);
@@ -263,7 +274,7 @@ export function createDirector(camera) {
     } else if (course === 'wall' || course === 'show') {
       if (mode === 'title') (course === 'show' ? titleShow : titleWall)(time);
       else if (mode === 'replay') wallReplay(carPos, carVel, phase);
-      else { wallLive(carPos, carVel, phase, dt); if (st.view !== 'pilot') keepClear(carPos); }
+      else { wallLive(carPos, carVel, phase, dt); keepClear(carPos, st.view !== 'pilot', dt); }
     } else if (mode === 'title') titleLineup(time);
     else if (mode === 'replay') replay(carPos);
     else chase(carPos, carVel, phase, dt);
