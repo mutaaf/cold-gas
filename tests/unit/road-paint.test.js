@@ -22,6 +22,9 @@ describe('road paint', () => {
       if (marking !== 'us') expect(body).toContain('cgDash(v');
       // The glow follows the paint's coverage, not a threshold on the colour.
       expect(body).toContain('cgPaintGlow * 0.6 * vec3(1.0, 0.97, 0.9) * cgPaint');
+      // …and none of it lands on the gravel shoulder (the old threshold never lit gravel).
+      expect(body).toMatch(/cgPaint = [^;]*\(1\.0 - sh \* \(1\.0 - vRoad\.w\)\)/);
+      expect(body.lastIndexOf('cgPaint =')).toBeGreaterThan(body.indexOf('float sh ='));
     });
   }
   it('the helpers are defined once and filter by fwidth', () => {

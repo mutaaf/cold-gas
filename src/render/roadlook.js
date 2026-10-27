@@ -253,9 +253,11 @@ export function roadMaterial(U, marking = 'eu') {
       ${centre}
       float edge = cgLine(u - (hw - 0.22), 0.15) + cgLine(u + (hw - 0.22), 0.15);
       float paint = min(cl + edge, 1.0);
-      cgPaint = paint;
-      // Worn paint (its threshold blurred over the noise's own footprint).
-      float wn = cgNoise(vec2(u * 3.0, v * 0.8)), fn = fwidth(wn) + 1e-4;
+      // Worn paint (its threshold blurred over the noise's own footprint, the noise fading to its
+      // mean once its cells are under a pixel).
+      vec2 wq = vec2(u * 3.0, v * 0.8);
+      float wn = cgNoise(wq), fn = fwidth(wn) + 1e-4;
+      wn = mix(wn, 0.5, smoothstep(0.25, 0.6, length(fwidth(wq))));
       paint *= 0.75 + 0.25 * smoothstep(0.3 - fn, 0.3 + fn, wn);
       vec3 pcol = (cl * pc + edge * vec3(0.92)) / max(cl + edge, 1e-4);
       c = mix(c, pcol, paint);
@@ -264,6 +266,8 @@ export function roadMaterial(U, marking = 'eu') {
       float sh = smoothstep(hw - 0.5 * fu, hw + 0.08 + 0.5 * fu, au);
       vec3 gravel = vec3(0.25, 0.24, 0.22) * (0.7 + 0.5 * g);
       c = mix(c, gravel, sh * (1.0 - vRoad.w));
+      // The dusk glow: the paint's coverage, none where the shoulder has taken the pixel.
+      cgPaint = min(cl + edge, 1.0) * (1.0 - sh * (1.0 - vRoad.w));
       diffuseColor.rgb = c;
       cgRough = mix(0.86, 0.55, paint) - track * 0.12;
     }`,
