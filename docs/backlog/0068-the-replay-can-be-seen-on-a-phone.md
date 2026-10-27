@@ -1,12 +1,12 @@
 ---
 id: 0068
 title: On a phone the replay can be seen; Replay is not a button that does nothing visible
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-22
-pr:
+pr: 128
 by: critic
 ---
 
@@ -39,16 +39,16 @@ ends it), so on a phone the flight is never seen again after touchdown.
 - No sim change. The replay rigs are not in scope.
 
 ## Acceptance criteria
-- [ ] At 390×844, 430×932 and 320×568 portrait, after Replay, the canvas region not covered by any
+- [x] At 390×844, 430×932 and 320×568 portrait, after Replay, the canvas region not covered by any
       results/sheet element is ≥ 75 % of the viewport height (measured from the DOM rects), and the
       hero's projected centre (`__coldgas.carRoot` through `__coldgas.camera`) is inside that region in
       ≥ 90 % of replay frames over one full replay of the Show reference.
-- [ ] One tap (or Esc) returns the full sheet with its scroll position, and the judges' words are
+- [x] One tap (or Esc) returns the full sheet with its scroll position, and the judges' words are
       complete or still typing (not restarted).
-- [ ] 844×390, 820×1180 and 1440×900 behave as today (no regression: the sheet stays where it is).
-- [ ] `node scripts/hud-audit.mjs` and `node scripts/title-audit.mjs` clean at every viewport they
+- [x] 844×390, 820×1180 and 1440×900 behave as today (no regression: the sheet stays where it is).
+- [x] `node scripts/hud-audit.mjs` and `node scripts/title-audit.mjs` clean at every viewport they
       cover, including the results/peek state at the phone sizes. `flicker.mjs` regions unchanged or lower.
-- [ ] Before/after screenshots at 390×844 (results, then 2 s into the replay) in the PR.
+- [x] Before/after screenshots at 390×844 (results, then 2 s into the replay) in the PR.
 
 ## Test plan
 An e2e (phone project): fly the reference with `fastForward()`, wait for `mode === 'results'`, skip the
