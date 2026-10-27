@@ -19,7 +19,7 @@ import { freeWorld } from './sim/world.js';
 import { physicsReady, physicsMemoryBytes } from './sim/engine.js';
 import { loadPhysics } from './sim/engine-web.js';
 import { DT, G, CAR, NOZZLES, WHEELS, bodyRates, worldPoint, newInput } from './sim/vehicle.js';
-import { scoreRun, TIERS } from './sim/judge.js';
+import { scoreRun, TIERS, WRECK_PCT } from './sim/judge.js';
 import { coach } from './sim/coach.js';
 import { createLandingHud } from './hud-landing.js';
 import { hudPitch, createGWindow, tankBar, gasState } from './hud-telemetry.js';
@@ -169,7 +169,7 @@ const S = {
   attempts: {},               // runs flown this session, per course (the results' "Run 4")
 };
 // The page knows the mode, so the quick Retry / Home buttons show only where they belong.
-const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); S.mode = m; document.body.dataset.mode = m; };
+const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); S.mode = m; document.body.dataset.mode = m; };
 try {
   const saved = localStorage.getItem('coldgas_tier');
   S.tier = TIERS[saved] ? saved : localStorage.getItem('coldgas_assist') === '0' ? 'pro' : 'assist';
@@ -644,6 +644,7 @@ function liveStep(dt) {
     bodyLerp.before(run.car.world.bodies);
     stepRun(run, input);
     gWindow.push(run.car.vel);
+    braking(run);
     S.acc -= DT;
   }
   // The aftermath (0062): the run is over and scored, the car isn't stopped. The same world steps on
@@ -738,11 +739,16 @@ function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTi
   const alt = heightAboveSurface(c);
   S.hudAlt = alt;   // the live pointer's BRAKE window reads it (cues, next frame)
   const air = flying(run);
+  const phaseKey = flightPhase(run);
+  // A crashed end reads as the crash (0072); before the run is called, a car on the ground that the
+  // damage panel already calls wrecked isn't a TOUCHDOWN either (0065).
+  const crash = run.phase === 'done' ? crashStep(S.card)
+    : phaseKey === 'touchdown' && Math.round(run.damage.total) >= WRECK_PCT ? 'Wrecked' : '';
   landing.update(c, alt, !S.autopilot && air ? 'air' : run.phase === 'air' ? '' : run.phase, run.tick / 240);
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(landing.prediction.rollOut) * 180 / Math.PI,
     alt, airborne: air,
-    sink: -c.vel.y, phaseKey: flightPhase(run, c, alt, landing.prediction), clock, crash: run.phase === 'done' ? crashStep(S.card) : '',
+    sink: -c.vel.y, phaseKey, clock, crash,
     pitch: hudPitch(c.quat, run.phase === 'ramp'),
     throttles: c.throttles, fan: c.fanForce / G, g: gWindow.read(),
   });
@@ -755,7 +761,7 @@ function newFlight(startTick = 0) {
   thumb.reset();
   ui.resetHud(); ui.damageReset(); gWindow.reset();
   ui.timelineFor(stage.course);
-  S.phaseMax = -1; S.startTick = startTick; S.contactBuzzed = false;
+  S.phaseMax = -1; S.brakeTicks = 0; S.braked = false; S.startTick = startTick; S.contactBuzzed = false;
   cueHys.slow = false; cueHys.tilted = false;
   S.ptr.release = 0; S.ptr.land = 0; S.ptr.brake = 0;
   S.ptrCtx = pointerCtx(S.run?.course || stage.course, S.flyTier);
@@ -763,24 +769,34 @@ function newFlight(startTick = 0) {
 }
 // Where in the flight you are, for the timeline: run-up → climb → hang → release → carry → brake →
 // touchdown (the Lineup: run-up → lift-off → roll → brake → touchdown). It only moves forward.
+// BRAKE means the car is braking (0065): a sustained deceleration, read every sim tick by braking(),
+// not a nozzle sum (the roll-out's attitude pulses pushed the lift jets' sum past 1.2 in free fall)
+// and not a height (a car falling with its valves shut passes the BRAKE line too).
 const PHASE_ORDER = { show: ['runup', 'climb', 'hang', 'release', 'carry', 'brake', 'touchdown'], lineup: ['runup', 'liftoff', 'roll', 'brake', 'touchdown'] };
-function flightPhase(run, c, alt, pr) {
+function flightPhase(run) {
   const order = run.course === 'lineup' ? PHASE_ORDER.lineup : PHASE_ORDER.show;
   let key;
   if (run.phase === 'landed' || run.phase === 'done') key = 'touchdown';
-  else if (run.course === 'lineup') {
-    const roll = Math.abs(run.t.rollAccum);
-    key = run.phase === 'drive' ? 'runup' : roll > 5.6 || (c.vel.y < 0 && alt <= pr.brakeBy) ? 'brake' : roll > 0.3 ? 'roll' : 'liftoff';
-  } else if (run.phase === 'drive') key = 'runup';
+  else if (run.course === 'lineup') key = run.phase === 'drive' ? 'runup' : S.braked ? 'brake' : Math.abs(run.t.rollAccum) > 0.3 ? 'roll' : 'liftoff';
+  else if (run.phase === 'drive') key = 'runup';
   else if (!S.released) key = run.t.progress >= 0.92 ? 'hang' : 'climb';
   else if (run.tick - S.releaseTick < 0.6 * 240) key = 'release';
-  else {
-    const lift = c.throttles[0] + c.throttles[1] + c.throttles[2] + c.throttles[3];
-    key = run.phase === 'air' && c.vel.y < -0.5 && (lift > 1.2 || alt <= pr.brakeBy) ? 'brake' : 'carry';
-  }
+  else key = S.braked ? 'brake' : 'carry';
   const i = order.indexOf(key);
   if (i > S.phaseMax) S.phaseMax = i;
   return order[S.phaseMax];
+}
+// Braking, as the timeline names it (0065): in the air with no bodywork on anything (an impact is not
+// a brake), sinking (> 0.5 m/s), the lift jets open, and the HUD's 0.5 s G window (Δv, LESSONS 0018)
+// at ≥ 1.2 g for 0.15 s on end. Once seen it holds for the rest of the flight (the timeline is
+// monotonic, 0047). Called after every sim tick; no allocation.
+const BRAKE_G = 1.2, BRAKE_HOLD = 36;   // 0.15 s
+function braking(run) {
+  if (S.braked) return;
+  const c = run.car, th = c.throttles;
+  const on = run.phase === 'air' && !c.hullContact && c.vel.y < -0.5 && th[0] + th[1] + th[2] + th[3] > 0.1 && gWindow.read() >= BRAKE_G;
+  S.brakeTicks = on ? S.brakeTicks + 1 : 0;
+  if (S.brakeTicks >= BRAKE_HOLD) S.braked = true;
 }
 
 // One-thumb Assist: touch, the Show or the Wall, Assist, the scheme chosen (src/touch-settings.js).
@@ -980,14 +996,48 @@ function replayFrom(t) {
   S.replayT = t;
   const fr = S.run?.frames;
   S.replaySlow = fr?.length ? slowTarget(fr[Math.min(fr.length - 1, Math.floor(t))], S.run.course) : 1;
+  frameReplay();
 }
+// Replay on a phone (0068). Where the results sheet covers the screen (a phone upright), Replay folds it
+// down to a peek (verdict, total, Retry · Home · Scores) and the replay plays full-frame above it; a tap on
+// the peek, Scores, Esc or the replay's end brings the sheet back. The sheet is only moved and hidden, never
+// re-rendered, so its scroll and the judges' typing carry on underneath. Wherever the sheet sits beside the
+// replay, Replay leaves it there. Either way the director frames the replay in what the results leave.
+const resultsEl = document.querySelector('[data-screen="results"]');
+const sheetEl = resultsEl.querySelector('.sheet'), peekEl = resultsEl.querySelector('[data-peek]');
+S.peek = false;
+function peek(on) {
+  if (on === !!S.peek) return;   // (setMode calls this from boot, before S.peek is set)
+  // Only where the sheet leaves under a quarter of the width to the replay.
+  if (on && innerWidth - sheetEl.offsetWidth >= innerWidth * 0.25) return;
+  const hadFocus = resultsEl.contains(document.activeElement);
+  S.peek = on;
+  if (on) {
+    peekEl.querySelector('[data-p-verdict]').textContent = resultsEl.querySelector('[data-r-verdict]').textContent;
+    peekEl.querySelector('[data-p-total]').textContent = resultsEl.querySelector('[data-r-total]').textContent;
+    resultsEl.dataset.peek = '';
+  } else delete resultsEl.dataset.peek;
+  peekEl.hidden = !on;
+  document.body.toggleAttribute('data-peek', on);
+  sheetEl.inert = on;
+  if (hadFocus) (on ? peekEl.querySelector('[data-peek-back]') : sheetEl.querySelector('[data-replay]'))?.focus({ preventScroll: true });
+  frameReplay();
+}
+// The region the replay is framed in: above the peek, left of a sheet beside it, or the whole screen.
+function frameReplay() {
+  const w = innerWidth, h = innerHeight;
+  if (S.peek) director.setRegion(0, 0, w, h - peekEl.offsetHeight);
+  else if (!resultsEl.hidden && sheetEl.offsetLeft >= w * 0.25) director.setRegion(0, 0, sheetEl.offsetLeft, h);
+  else director.setRegion();
+}
+peekEl.addEventListener('click', (e) => { if (!e.target.closest('button') || e.target.closest('[data-peek-back]')) peek(false); });
 function replayStep(dt) {
   const frames = S.run?.frames;
   if (!frames?.length) return;
   const nb = (frames[0].length - BODY_FRAME) / BODY_STRIDE;
   while (replayBodies.length < nb) replayBodies.push({ cx: 0, cy: 0, cz: 0, qx: 0, qy: 0, qz: 0, qw: 1 });
   replayBodies.length = nb;
-  if (stepReplayClock(S, frames, dt, S.run.course)) { director.restart(); hero.placed(); }   // hold a beat, loop
+  if (stepReplayClock(S, frames, dt, S.run.course)) { director.restart(); hero.placed(); peek(false); }   // hold a beat, loop (the sheet comes back)
   const slow = S.replaySlow;
   const p = sampleReplay(frames, S.replayT, rpose);
   const f = frames[p.i0], g = frames[p.i1], k = p.k;
@@ -1135,7 +1185,7 @@ document.addEventListener('click', (e) => {
   if (!b) return;
   if (b.hasAttribute('data-rookie-go')) goRookie(); else if (b.hasAttribute('data-again')) retry(); else goHome();
 });
-on('[data-replay]', () => { replayFrom(0); director.restart(); hero.placed(); });
+on('[data-replay]', () => { peek(true); replayFrom(0); director.restart(); hero.placed(); });
 on('[data-resume]', () => pause(false));
 on('[data-restart]', () => { if (S.autopilot) { S.paused = false; ui.show('pause', false); startRun('reveal', true); } else retry(); });
 // Share (0081): the run as a card image (src/share-card.js) on the phone's share sheet; text + link
@@ -1394,6 +1444,7 @@ addEventListener('keydown', (e) => {
   // Enter on a focused button is that button's click (Retry included): don't start a second run.
   const enterOnButton = e.code === 'Enter' && !!e.target?.closest?.('button, a, [role="button"]');
   if (inRun && !S.drill && (e.code === 'KeyR' || (e.code === 'Enter' && S.mode === 'results' && !enterOnButton))) { e.preventDefault(); retry(); return; }
+  if (e.code === 'Escape' && S.peek) { e.preventDefault(); peek(false); return; }   // Esc on the peek: back to the scores (0068)
   if (inRun && (e.code === 'KeyH' || (e.code === 'Escape' && S.mode === 'results'))) { e.preventDefault(); goHome(); return; }
   if (!S.drill) return;
   if (e.code === 'KeyR' && (S.mode === 'live' || S.mode === 'results')) retryDrill();
@@ -1513,7 +1564,7 @@ document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('cli
 // The window changed shape (a rotation, a folding phone opened or closed mid-anything, 0075): the
 // camera re-fits now and the drawing buffer once the size settles (stage.reshape); nothing reloads,
 // and the run, the replay or the title carries on.
-addEventListener('resize', () => { stage.reshape(); director.reframe(); redrawPaused(); });
+addEventListener('resize', () => { stage.reshape(); director.reframe(); frameReplay(); redrawPaused(); });
 // Mist and crash smoke size in drawing-buffer pixels, kept current through resizes and the
 // resolution governor's steps (src/render/scene.js onResize).
 stage.onResize((h) => { plumes.setScale(h); crash.setScale(h); redrawPaused(); });
