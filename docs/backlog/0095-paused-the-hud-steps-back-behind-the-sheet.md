@@ -60,3 +60,14 @@ Add the opacity check to hud-audit's pause pass, with a `--plant=pause-hud-lit` 
 ## Out of scope
 The Free Drive pause sheet (`[data-drive-pause]`), unless it shares the rule. The theatre and the results
 screens.
+
+## Critic note 2026-10-27 21:36
+Re-measured on production `370bf2d` (docs/critique/2026-10-27-2136.md). The defect is unchanged at 1440×900
+(`desk-paused-tab.jpg`: the bottom band, the timeline and the damage figure stay at full brightness). There
+is one more element: on a phone, **the top bar's Menu popover stays open and lit over the pause sheet**.
+`phone-paused.jpg` (390×844) shows `Ghost ON · Sound ON · For nerds OFF` at full strength, and its bottom
+edge overlaps the sheet's top edge at CSS y ≈ 217.
+
+Added criterion:
+- [ ] Pausing closes the Menu popover (`[data-more-toggle]` `aria-expanded="false"`, `#more-sheet` not
+      visible), or it falls under the same effective-opacity ≤ 0.2 rule as the rest of the top bar.
