@@ -401,14 +401,11 @@
 
   <!-- Pause -->
   <section class="pause" data-screen="pause" hidden>
+    <!-- The actions first, so Resume and Home are on the glass at any size (0092: a landscape phone hid
+         all five under the key lists); the controls follow and scroll. A keyboard gets its key lists; a
+         touch screen or a pad gets its own controls (src/pointer.js pauseRows), drawn by src/main.js. -->
     <div class="sheet narrow">
       <h2>Paused</h2>
-      <div class="keys">
-        <p><b>Ground</b> ↑ throttle · ↓ brake · ← → steer · Space lift / release · Shift boost</p>
-        <p><b>Air</b> ← → roll · ↑ ↓ pitch · Q E yaw · Space lift · F boost · Shift land</p>
-        <p><b>Advanced</b> Q E Z C the down-jets · W S A D a pair · Space all four · V B N M the rear row · F all four · 1 3 fender jets · Shift half open</p>
-        <p><b>Any time</b> G ghost · L pilot view · Practice: R retry · T slow motion</p>
-      </div>
       <div class="actions">
         <button class="btn primary" data-resume>Resume</button>
         <button class="btn ghost" data-restart>Restart <kbd>R</kbd></button>
@@ -416,6 +413,13 @@
         <button class="btn ghost" data-howto-open aria-haspopup="dialog">How to fly</button>
         <button class="btn ghost" data-home>Home <kbd>H</kbd></button>
       </div>
+      <div class="keys" data-pause-keys="key">
+        <p><b>Ground</b> ↑ throttle · ↓ brake · ← → steer · Space lift / release · Shift boost</p>
+        <p><b>Air</b> ← → roll · ↑ ↓ pitch · Q E yaw · Space lift · F boost · Shift land</p>
+        <p><b>Advanced</b> Q E Z C the down-jets · W S A D a pair · Space all four · V B N M the rear row · F all four · 1 3 fender jets · Shift half open</p>
+        <p><b>Any time</b> G ghost · L pilot view · Practice: R retry · T slow motion</p>
+      </div>
+      <div class="keys" data-pause-keys="device" hidden></div>
     </div>
   </section>
 

@@ -1,12 +1,12 @@
 ---
 id: 0092
 title: On a landscape phone the pause sheet shows Resume; a touch player isn't handed a keyboard map
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: platform
 created: 2026-10-26
-pr:
+pr: 126
 by: critic
 ---
 

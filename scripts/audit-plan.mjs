@@ -5,7 +5,8 @@
 //   planShards(viewports, M) → M lists of items, each a viewport [w, h, safe] or 'title'
 //
 // Cost model: seconds on a CI runner (ubuntu-latest, SwiftShader), both HUD states, fitted on the
-// per-viewport seconds of this PR's own CI run (0087; each report's `seconds`): 20 s a viewport + 145 s
+// per-viewport seconds of this PR's own CI run (0087; each report's `seconds`): 28 s a viewport (20, and
+// about 8 more since 0092 opens and measures the pause sheet once per viewport) + 145 s
 // per CSS megapixel (software GL fills every pixel) + 110 s per megapixel more with Free Drive (a third
 // page, the road and its terrain: 1920×1080 is the dearest viewport, ≈ 600 s) + 85 s on a touch screen
 // (the Lineup hop, a 2–3× pixel ratio). Within 0.8–1.4× of every viewport; most of what is left is the
@@ -32,7 +33,7 @@ export function cost(item) {
   if (item === 'title') return TITLE_COST;
   const [w, h, safe] = item;
   const mpx = (w * h) / 1e6;
-  return 20 + 145 * mpx + (DRIVE.includes(vpBase(item)) ? 110 * mpx : 0) + (safe || touchFor(w, h) ? 85 : 0);
+  return 28 + 145 * mpx + (DRIVE.includes(vpBase(item)) ? 110 * mpx : 0) + (safe || touchFor(w, h) ? 85 : 0);
 }
 
 export function planShards(viewports, M, { title = true } = {}) {
