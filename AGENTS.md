@@ -220,7 +220,9 @@ src/render/           three.js (r186):
   debris.js             torn-off parts as small rigid boxes on the concrete (cosmetic)
   sliver.js             minimum on-screen width for thin lights/paint/struts (anti-flicker),
                           DECAL polygon-offset layering for anything painted on the ground
-  director.js           chase / broadcast air cam / replay rigs / title turntable
+  director.js           chase / broadcast air cam / replay rigs / title turntable; live on the Wall and the
+                          Show it turns just enough to keep the car below the top HUD and, upright, right of the rail;
+                          the Show's release cuts to a locked-off hold, then to the tracking carry before the row
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone
 src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
                         stick shaping, reverse at a standstill; shared with the drive bench and tests
