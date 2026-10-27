@@ -1,12 +1,12 @@
 ---
 id: 0065
 title: The timeline says BRAKE only while the car is braking, not through the free fall
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-22
-pr:
+pr: 125
 by: critic
 ---
 
@@ -40,13 +40,13 @@ it reads BRAKE while the car falls at 0.03 g. On screen: "06 BRAKE" over G 0.5 a
 - No sim change.
 
 ## Acceptance criteria
-- [ ] e2e on the Show reference: while the timeline reads BRAKE in the air, the 0.5 s G window reads
+- [x] e2e on the Show reference: while the timeline reads BRAKE in the air, the 0.5 s G window reads
       ≥ 1.0 g in ≥ 95 % of 0.05 s samples, and no BRAKE sample has a 0.25 s specific force < 0.3 g.
-- [ ] CARRY is shown for ≥ 1.0 s of the reference's fall (it is the carry over the row).
-- [ ] The timeline still reaches BRAKE before TOUCHDOWN on the Show, the Wall and the Lineup references,
+- [x] CARRY is shown for ≥ 1.0 s of the reference's fall (it is the carry over the row).
+- [x] The timeline still reaches BRAKE before TOUCHDOWN on the Show, the Wall and the Lineup references,
       and a player's no-brake crash (all valves shut after the release) never shows BRAKE.
-- [ ] `tests/e2e/timeline.spec.js` (0022) stays green.
-- [ ] Screenshots at 390×844 and 1280×720 of the carry and the brake in the PR.
+- [x] `tests/e2e/timeline.spec.js` (0022) stays green.
+- [x] Screenshots at 390×844 and 1280×720 of the carry and the brake in the PR.
 
 ## Test plan
 Extend `tests/e2e/timeline.spec.js`: sample `dataset.phase` with the G window per `liveStep(0.05)`.
@@ -85,3 +85,22 @@ run ends (+3.41 s).
 
 Added criterion: a step labelled TOUCHDOWN is never `now` while `[data-dmg]` reads `wrecked`, so the crash
 label is shown from the impact, not from the run's end.
+
+## Shipped
+`flightPhase` no longer reads the nozzles or the BRAKE height. `braking()` runs after every sim tick: in the air,
+no bodywork touching anything, sinking > 0.5 m/s, the lift jets open (> 0.1 summed) and the HUD's 0.5 s G window
+(Δv) ≥ 1.2 g for 0.15 s on end. Once seen it latches for the flight (monotonic, 0047). The Lineup uses the same
+latch. While the car is down and the damage panel reads wrecked (≥ 60 %) before the run is called, the
+TOUCHDOWN step reads `WRECKED` in red (0072's crash label, from the impact rather than the end). No sim change.
+
+Measured by `tests/e2e/timeline.spec.js` (unique air ticks every 0.05 s; identical at 390×844 and 1280×720,
+since the test steps the sim):
+
+| Run | Before (main 23d018f) | After |
+|---|---|---|
+| Show reference | BRAKE from +0.80 s, 66 frames, 25 < 1 g, 13 < 0.3 g, CARRY 0.20 s | BRAKE from +2.25 s, 37 frames, 0 < 1 g, 0 < 0.3 g, CARRY 1.65 s |
+| Wall reference | BRAKE from +0.83 s, 69 frames, 23 < 1 g, 12 < 0.3 g | BRAKE from +2.18 s, 42 frames, 0, 0 |
+| Lineup reference | 39 BRAKE frames, 26 < 1 g, 10 < 0.3 g | 5 frames (its brake is one short low burn), 0, 0 |
+| Valves-shut crash | BRAKE from +0.75 s, 45 frames; 10 wrecked samples under TOUCHDOWN | no BRAKE; 0 under TOUCHDOWN (`WRECKED`, then `07 FLIPPED`) |
+
+Screenshots: `docs/shots/0065/`.
