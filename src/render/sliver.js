@@ -41,14 +41,17 @@ vec3 transformed = vec3( position );
   if ( uSize > 0.0 ) {
     // A small blob (a beacon): one factor for the whole object, from its size.
     px = uSize * projectionMatrix[ 1 ][ 1 ] * uHalfView.y / max( -( mv * vec4( 0.0, 0.0, 0.0, 1.0 ) ).z, 1e-3 );
+    vPx = px;
   } else {
     // A strip: its on-screen width here, projecting the spine and spine + spread, in pixels.
     vec4 c0 = mv * vec4( spine, 1.0 );
     vec4 a = projectionMatrix * c0, b = projectionMatrix * ( c0 + mv * vec4( aSpread, 0.0 ) );
     px = 2.0 * length( ( b.xy / max( b.w, 1e-3 ) - a.xy / max( a.w, 1e-3 ) ) * uHalfView );
+    // The width for rough, whichever way the spread points: px above shrinks to nothing where a
+    // box's corner diagonal lies along the view ray, even on a member 40 px across.
+    vPx = 2.0 * length( ( mv * vec4( aSpread, 0.0 ) ).xyz ) * projectionMatrix[ 1 ][ 1 ] * uHalfView.y / max( -c0.z, 1e-3 );
   }
   px = max( px, 1e-5 );
-  vPx = px;
   float w = max( px, uMinPx );                       // the width it should look
   float k = clamp( w / px, 1.0, uMaxK );
   vSliver = 1.0 / k;                                 // light kept constant as it's widened
@@ -87,6 +90,7 @@ varying float vPx;`;
 // (Toksvig), not whichever face the pixel centre happens to hit, which flipped between a bright
 // face and a dark one as the camera moved (the Show's truss: show-wide wall 111 → 28‰, phone).
 export function sliver(material, { minPx = 1.25, dim = 'color', maxK = 8, size = 0, rough = 0 } = {}) {
+  if (rough && !(rough > 1)) throw new Error('sliver: rough is a width in px, > 1');
   const define = dim === 'alpha' ? '#define SLIVER_AA\n' : dim === 'color' ? '#define SLIVER_PAD\n' : '';
   material.onBeforeCompile = (sh) => {
     sh.uniforms.uHalfView = sliverView;
@@ -105,10 +109,11 @@ export function sliver(material, { minPx = 1.25, dim = 'color', maxK = 8, size =
           : 'diffuseColor.rgb *= vSliver;'}`);
     }
     if (rough) {
+      // normalize( vViewPosition ) is the way to the eye under a perspective camera (every stage camera).
       sh.fragmentShader = sh.fragmentShader.replace('#include <roughnessmap_fragment>',
-        `#include <roughnessmap_fragment>\nroughnessFactor = mix( 1.0, roughnessFactor, smoothstep( 1.0, ${rough.toFixed(1)}, vPx ) );`)
+        `#include <roughnessmap_fragment>\nroughnessFactor = mix( 1.0, roughnessFactor, smoothstep( 1.0, ${rough.toFixed(2)}, vPx ) );`)
         .replace('#include <normal_fragment_maps>',
-          `#include <normal_fragment_maps>\n{ vec3 sV = normalize( vViewPosition ); normal = normalize( mix( sV, normal, smoothstep( 1.0, ${rough.toFixed(1)}, vPx ) ) + sV * 1e-4 ); }`);
+          `#include <normal_fragment_maps>\n{ vec3 sV = normalize( vViewPosition ); normal = normalize( mix( sV, normal, smoothstep( 1.0, ${rough.toFixed(2)}, vPx ) ) + sV * 1e-4 ); }`);
     }
   };
   material.customProgramCacheKey = () => `sliver:${minPx}:${dim}:${maxK}:${size}:${rough}`;

@@ -37,10 +37,13 @@ Attribution on CI's software GL (`--gl=swiftshader`, same build A/B against main
 `FLK_PRE="window.__flk.heatReg=<n>"`), by switching one layer off at a time before the capture:
 - **show-wide wall** was the truss's shading, not its edges: flat-shading only the truss took it 111 → 31‰ (phone);
   bloom off, shadows off, the deck flat: no change. Fixed: `sliver(…, { rough })` (src/render/sliver.js) eases a
-  member's roughness to 1 and its normal toward the viewer under 8 px on screen (the average of its faces). Full
-  probe, this branch vs main, phone: show-wide/wall 113.2 → 28.7, retry-countdown/wall 39.3 → 20.0, show-title/wall
-  5.6 → 3.0; desktop: show-wide/wall 131.0 → 46.2, retry-countdown/wall 31.0 → 18.2, show-title/wall 7.2 → 4.8.
-  No region rose on either screen (all others within 3.5 %).
+  member's roughness to 1 and its normal toward the viewer under 8 px on screen (the average of its faces); the
+  width is measured from the member's size and distance, not a corner's projected spread, which collapses to ~0 px
+  where a box's diagonal points along the view ray (review of #131: the first cut flattened close faces too).
+  Branch vs main, same machine, phone: show-wide/wall 113.2 → 27.7, retry-countdown/wall 39.3 → 29.8, show-title/wall
+  5.6 → 3.2; desktop: show-wide/wall 131.0 → 46.1, retry-countdown/wall 31.0 → 26.0, show-title/wall 7.2 → 4.8.
+  No region rose on either screen (full probes of the first cut, all others within 3.5 %; the three scenarios that
+  show the truss re-run after the fix).
 - **show-wide car, lineup-title row and the Lineup's poles (lineup-title wall)** are geometric edge aliasing of a
   moving silhouette: roughness 1 and clearcoat 0 on the hero or the row, lamps hidden, bloom off, shadows off all
   left them within a few ‰ (hiding the poles took lineup-title wall 50 → 0.7, and the same `rough` on them did

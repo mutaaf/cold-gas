@@ -15,11 +15,13 @@ const compile = (mat) => {
 describe('sliver rough (specular AA)', () => {
   it('eases roughness and the normal by the on-screen width, after three sets them', () => {
     const sh = compile(sliver(new THREE.MeshStandardMaterial({ roughness: 0.42, metalness: 0.85 }), { minPx: 1, dim: false, rough: 8 }));
-    expect(sh.vertexShader).toMatch(/vPx = px;/);
+    // The width it reads doesn't depend on which way a corner's spread points (a box corner whose
+    // diagonal lies along the view ray projects to ~0 px on a member 40 px wide: review of #131).
+    expect(sh.vertexShader).toMatch(/vPx = 2\.0 \* length\( \( mv \* vec4\( aSpread, 0\.0 \) \)\.xyz \)/);
     expect(sh.fragmentShader).toMatch(/varying float vPx;/);
     const f = sh.fragmentShader;
-    const r = f.indexOf('roughnessFactor = mix( 1.0, roughnessFactor, smoothstep( 1.0, 8.0, vPx ) );');
-    const n = f.indexOf('normal = normalize( mix( sV, normal, smoothstep( 1.0, 8.0, vPx ) )');
+    const r = f.indexOf('roughnessFactor = mix( 1.0, roughnessFactor, smoothstep( 1.0, 8.00, vPx ) );');
+    const n = f.indexOf('normal = normalize( mix( sV, normal, smoothstep( 1.0, 8.00, vPx ) )');
     expect(r).toBeGreaterThan(f.indexOf('#include <roughnessmap_fragment>'));
     expect(n).toBeGreaterThan(f.indexOf('#include <normal_fragment_maps>'));
     // The roughness three lights with (lights_physical_fragment) is read after both.
@@ -31,6 +33,10 @@ describe('sliver rough (specular AA)', () => {
     const aa = sliver(new THREE.MeshStandardMaterial(), { minPx: 1, dim: false, maxK: 4, rough: 8 });
     expect(compile(plain).fragmentShader).toBe(THREE.ShaderLib.standard.fragmentShader);
     expect(plain.customProgramCacheKey()).not.toBe(aa.customProgramCacheKey());
+  });
+
+  it('takes only a width over 1 px', () => {
+    expect(() => sliver(new THREE.MeshStandardMaterial(), { dim: false, rough: 1 })).toThrow();
   });
 
   it('the Show truss uses it', async () => {
