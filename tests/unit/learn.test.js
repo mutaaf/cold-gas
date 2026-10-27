@@ -304,4 +304,12 @@ describe('the Advanced keyboard (src/valves.js)', () => {
     held = false; v.fill(0); ramp(() => false, v);
     expect(v[IDX['down-fl']]).toBe(0);
   });
+  it('a new run starts the key ramp shut (0099): a key held over a restart ramps from zero again', () => {
+    const ramp = createKeyRamp(), v = new Float64Array(10);
+    for (let i = 0; i < 60; i++) { v.fill(0); ramp((c) => c === 'KeyQ', v); }
+    expect(v[IDX['down-fl']]).toBe(1);
+    ramp.reset();
+    v.fill(0); ramp((c) => c === 'KeyQ', v);
+    expect(v[IDX['down-fl']]).toBeLessThan(0.1);
+  });
 });

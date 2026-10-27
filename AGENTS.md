@@ -221,7 +221,8 @@ src/render/           three.js (r186):
   sliver.js             minimum on-screen width for thin lights/paint/struts (anti-flicker),
                           DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable
-src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone
+src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone;
+                        every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099)
 src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
                         stick shaping, reverse at a standstill; shared with the drive bench and tests
 src/driving.js        driving levels (pure, 0066): Easy / Standard / Advanced on the ground in every mode. Writes only
