@@ -1,12 +1,12 @@
 ---
 id: 0063
 title: The drop off the ledge stays in frame, clear of the top bar and the timeline
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-22
-pr:
+pr: 129
 by: critic
 ---
 
