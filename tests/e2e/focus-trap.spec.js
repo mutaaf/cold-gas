@@ -93,6 +93,9 @@ test('1280×720: the board holds Tab and Escape gives focus back to the title li
   await page.route('**/coldgas/api/scores**', (r) => r.fulfill({ json: { rows: [] } }));
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.S?.mode === 'title', null, { timeout: 60_000 });
+  // Focus only, no pixels: skip the title's draw. On CI's software GL it starved the page's main thread,
+  // and a key press waited out the test (flake guard on #134).
+  await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
   const link = page.locator('[data-screen="title"] [data-board-open]');
   await link.focus();
   await page.keyboard.press('Enter');
