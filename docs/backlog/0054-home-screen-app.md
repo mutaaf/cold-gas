@@ -6,7 +6,7 @@ priority: P1
 size: S
 lens: content
 created: 2026-10-21
-pr:
+pr: 134
 by: operator
 ---
 
@@ -32,7 +32,7 @@ e2e: open the pause sheet, press Tab 20 times, focus never leaves it; Escape clo
 ## Out of scope
 A service worker / offline play; any manifest change.
 
-## Shipped (PR #PR)
+## Shipped (PR #134)
 `src/focus-trap.js` watches each modal sheet's `hidden` (pause, controls, how to fly, AI assist, board, Free Drive's
 pause, the judges' brain): an opened sheet takes focus (its dialog box, or the control it already focused), Tab and
 Shift+Tab cycle its controls only, and closing it returns focus to the opener (or the sheet under it). Escape closes
