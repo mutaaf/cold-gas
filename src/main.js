@@ -169,7 +169,7 @@ const S = {
   attempts: {},               // runs flown this session, per course (the results' "Run 4")
 };
 // The page knows the mode, so the quick Retry / Home buttons show only where they belong.
-const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); S.mode = m; document.body.dataset.mode = m; };
+const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); S.mode = m; document.body.dataset.mode = m; };
 try {
   const saved = localStorage.getItem('coldgas_tier');
   S.tier = TIERS[saved] ? saved : localStorage.getItem('coldgas_assist') === '0' ? 'pro' : 'assist';
@@ -996,14 +996,48 @@ function replayFrom(t) {
   S.replayT = t;
   const fr = S.run?.frames;
   S.replaySlow = fr?.length ? slowTarget(fr[Math.min(fr.length - 1, Math.floor(t))], S.run.course) : 1;
+  frameReplay();
 }
+// Replay on a phone (0068). Where the results sheet covers the screen (a phone upright), Replay folds it
+// down to a peek (verdict, total, Retry · Home · Scores) and the replay plays full-frame above it; a tap on
+// the peek, Scores, Esc or the replay's end brings the sheet back. The sheet is only moved and hidden, never
+// re-rendered, so its scroll and the judges' typing carry on underneath. Wherever the sheet sits beside the
+// replay, Replay leaves it there. Either way the director frames the replay in what the results leave.
+const resultsEl = document.querySelector('[data-screen="results"]');
+const sheetEl = resultsEl.querySelector('.sheet'), peekEl = resultsEl.querySelector('[data-peek]');
+S.peek = false;
+function peek(on) {
+  if (on === !!S.peek) return;   // (setMode calls this from boot, before S.peek is set)
+  // Only where the sheet leaves under a quarter of the width to the replay.
+  if (on && innerWidth - sheetEl.offsetWidth >= innerWidth * 0.25) return;
+  const hadFocus = resultsEl.contains(document.activeElement);
+  S.peek = on;
+  if (on) {
+    peekEl.querySelector('[data-p-verdict]').textContent = resultsEl.querySelector('[data-r-verdict]').textContent;
+    peekEl.querySelector('[data-p-total]').textContent = resultsEl.querySelector('[data-r-total]').textContent;
+    resultsEl.dataset.peek = '';
+  } else delete resultsEl.dataset.peek;
+  peekEl.hidden = !on;
+  document.body.toggleAttribute('data-peek', on);
+  sheetEl.inert = on;
+  if (hadFocus) (on ? peekEl.querySelector('[data-peek-back]') : sheetEl.querySelector('[data-replay]'))?.focus({ preventScroll: true });
+  frameReplay();
+}
+// The region the replay is framed in: above the peek, left of a sheet beside it, or the whole screen.
+function frameReplay() {
+  const w = innerWidth, h = innerHeight;
+  if (S.peek) director.setRegion(0, 0, w, h - peekEl.offsetHeight);
+  else if (!resultsEl.hidden && sheetEl.offsetLeft >= w * 0.25) director.setRegion(0, 0, sheetEl.offsetLeft, h);
+  else director.setRegion();
+}
+peekEl.addEventListener('click', (e) => { if (!e.target.closest('button') || e.target.closest('[data-peek-back]')) peek(false); });
 function replayStep(dt) {
   const frames = S.run?.frames;
   if (!frames?.length) return;
   const nb = (frames[0].length - BODY_FRAME) / BODY_STRIDE;
   while (replayBodies.length < nb) replayBodies.push({ cx: 0, cy: 0, cz: 0, qx: 0, qy: 0, qz: 0, qw: 1 });
   replayBodies.length = nb;
-  if (stepReplayClock(S, frames, dt, S.run.course)) { director.restart(); hero.placed(); }   // hold a beat, loop
+  if (stepReplayClock(S, frames, dt, S.run.course)) { director.restart(); hero.placed(); peek(false); }   // hold a beat, loop (the sheet comes back)
   const slow = S.replaySlow;
   const p = sampleReplay(frames, S.replayT, rpose);
   const f = frames[p.i0], g = frames[p.i1], k = p.k;
@@ -1151,7 +1185,7 @@ document.addEventListener('click', (e) => {
   if (!b) return;
   if (b.hasAttribute('data-rookie-go')) goRookie(); else if (b.hasAttribute('data-again')) retry(); else goHome();
 });
-on('[data-replay]', () => { replayFrom(0); director.restart(); hero.placed(); });
+on('[data-replay]', () => { peek(true); replayFrom(0); director.restart(); hero.placed(); });
 on('[data-resume]', () => pause(false));
 on('[data-restart]', () => { if (S.autopilot) { S.paused = false; ui.show('pause', false); startRun('reveal', true); } else retry(); });
 // Share (0081): the run as a card image (src/share-card.js) on the phone's share sheet; text + link
@@ -1410,6 +1444,7 @@ addEventListener('keydown', (e) => {
   // Enter on a focused button is that button's click (Retry included): don't start a second run.
   const enterOnButton = e.code === 'Enter' && !!e.target?.closest?.('button, a, [role="button"]');
   if (inRun && !S.drill && (e.code === 'KeyR' || (e.code === 'Enter' && S.mode === 'results' && !enterOnButton))) { e.preventDefault(); retry(); return; }
+  if (e.code === 'Escape' && S.peek) { e.preventDefault(); peek(false); return; }   // Esc on the peek: back to the scores (0068)
   if (inRun && (e.code === 'KeyH' || (e.code === 'Escape' && S.mode === 'results'))) { e.preventDefault(); goHome(); return; }
   if (!S.drill) return;
   if (e.code === 'KeyR' && (S.mode === 'live' || S.mode === 'results')) retryDrill();
@@ -1529,7 +1564,7 @@ document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('cli
 // The window changed shape (a rotation, a folding phone opened or closed mid-anything, 0075): the
 // camera re-fits now and the drawing buffer once the size settles (stage.reshape); nothing reloads,
 // and the run, the replay or the title carries on.
-addEventListener('resize', () => { stage.reshape(); director.reframe(); redrawPaused(); });
+addEventListener('resize', () => { stage.reshape(); director.reframe(); frameReplay(); redrawPaused(); });
 // Mist and crash smoke size in drawing-buffer pixels, kept current through resizes and the
 // resolution governor's steps (src/render/scene.js onResize).
 stage.onResize((h) => { plumes.setScale(h); crash.setScale(h); redrawPaused(); });
