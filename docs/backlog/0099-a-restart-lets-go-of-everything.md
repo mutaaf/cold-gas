@@ -1,12 +1,12 @@
 ---
 id: 0099
 title: A restart lets go of everything; a held control counts again only on a fresh press
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: platform
 created: 2026-10-27
-pr:
+pr: 139
 by: operator
 ---
 
@@ -53,14 +53,14 @@ Retry was hit was still held when the new run went live:
 - No sim change: the input log records what the player pressed, as before (invariant 4).
 
 ## Acceptance criteria
-- [ ] Space, ↑ and Shift held across HUD Retry, R, the results' Retry, the pause sheet's Restart and a Retry
+- [x] Space, ↑ and Shift held across HUD Retry, R, the results' Retry, the pause sheet's Restart and a Retry
       during the aftermath: the new run's first second has no lift / level / thrust / throttle, the car is
       on the ground and not released; a fresh press of ↑ drives
-- [ ] Touch (390×844): GO, LAND and BOOST held across HUD / theatre / aftermath / pause Retry are let go,
+- [x] Touch (390×844): GO, LAND and BOOST held across HUD / theatre / aftermath / pause Retry are let go,
       unlit, and the READY layout is the run-up's; one-thumb held across the results' Retry is let go and
       answers the next press
-- [ ] A gamepad held across Retry drives nothing until it is let go
-- [ ] Unit: `keyHolds`, the gamepad hold-off, `createKeyRamp().reset()`
+- [x] A gamepad held across Retry drives nothing until it is let go
+- [x] Unit: `keyHolds`, the gamepad hold-off, `createKeyRamp().reset()`
 
 ## Test plan
 `tests/e2e/restart-lets-go.spec.js` (fails on main, passes with the fix); `tests/unit/input.test.js`,
