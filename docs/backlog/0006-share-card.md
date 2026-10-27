@@ -1,12 +1,12 @@
 ---
 id: 0006
 title: Share card — a still from the replay with the scorecard
-status: proposed
+status: shipped
 priority: P2
 size: S
 lens: player-feel
 created: 2026-10-19
-pr:
+pr: 102
 ---
 
 ## Why
