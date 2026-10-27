@@ -27,7 +27,8 @@ uniform float uMaxK;
 uniform float uSize;
 varying float vSliver;
 varying float vEdge;
-varying float vHalf;`;
+varying float vHalf;
+varying float vPx;`;
 const VERT_BODY = `
 vec3 transformed = vec3( position );
 {
@@ -47,6 +48,7 @@ vec3 transformed = vec3( position );
     px = 2.0 * length( ( b.xy / max( b.w, 1e-3 ) - a.xy / max( a.w, 1e-3 ) ) * uHalfView );
   }
   px = max( px, 1e-5 );
+  vPx = px;
   float w = max( px, uMinPx );                       // the width it should look
   float k = clamp( w / px, 1.0, uMaxK );
   vSliver = 1.0 / k;                                 // light kept constant as it's widened
@@ -71,14 +73,20 @@ vec3 transformed = vec3( position );
 const FRAG_HEAD = `
 varying float vSliver;
 varying float vEdge;
-varying float vHalf;`;
+varying float vHalf;
+varying float vPx;`;
 
 // Patch a material in place. dim: 'color' (lights: stay opaque, padded), 'alpha' (transparent
 // paint: coverage-faded edges) or false (solid structure: just widened). size (m): treat each mesh
 // as a blob of that diameter (its spread is from the mesh origin) instead of a strip.
 // (Alpha-blended lights were tried and measured worse: blended edges over the moving car and
 // mist added jitter of their own.)
-export function sliver(material, { minPx = 1.25, dim = 'color', maxK = 8, size = 0 } = {}) {
+// rough (px, lit solids only): specular anti-aliasing (0051). Under this on-screen width the
+// material's roughness eases up to 1 and its normal toward the viewer: a member a pixel or two
+// across shows all its faces inside one pixel, so the honest shade there is their average
+// (Toksvig), not whichever face the pixel centre happens to hit, which flipped between a bright
+// face and a dark one as the camera moved (the Show's truss: show-wide wall 111 → 28‰, phone).
+export function sliver(material, { minPx = 1.25, dim = 'color', maxK = 8, size = 0, rough = 0 } = {}) {
   const define = dim === 'alpha' ? '#define SLIVER_AA\n' : dim === 'color' ? '#define SLIVER_PAD\n' : '';
   material.onBeforeCompile = (sh) => {
     sh.uniforms.uHalfView = sliverView;
@@ -88,16 +96,22 @@ export function sliver(material, { minPx = 1.25, dim = 'color', maxK = 8, size =
     sh.vertexShader = define + sh.vertexShader
       .replace('#include <common>', `#include <common>${VERT_HEAD}`)
       .replace('#include <begin_vertex>', VERT_BODY);
+    if (dim || rough) sh.fragmentShader = sh.fragmentShader.replace('#include <common>', `#include <common>${FRAG_HEAD}`);
     if (dim) {
       const cov = 'clamp( vHalf + 0.5 - abs( vEdge ), 0.0, 1.0 )';
       sh.fragmentShader = sh.fragmentShader
-        .replace('#include <common>', `#include <common>${FRAG_HEAD}`)
         .replace('#include <color_fragment>', `#include <color_fragment>\n${dim === 'alpha'
           ? `diffuseColor.a *= vSliver * ${cov};`
           : 'diffuseColor.rgb *= vSliver;'}`);
     }
+    if (rough) {
+      sh.fragmentShader = sh.fragmentShader.replace('#include <roughnessmap_fragment>',
+        `#include <roughnessmap_fragment>\nroughnessFactor = mix( 1.0, roughnessFactor, smoothstep( 1.0, ${rough.toFixed(1)}, vPx ) );`)
+        .replace('#include <normal_fragment_maps>',
+          `#include <normal_fragment_maps>\n{ vec3 sV = normalize( vViewPosition ); normal = normalize( mix( sV, normal, smoothstep( 1.0, ${rough.toFixed(1)}, vPx ) ) + sV * 1e-4 ); }`);
+    }
   };
-  material.customProgramCacheKey = () => `sliver:${minPx}:${dim}:${maxK}:${size}`;
+  material.customProgramCacheKey = () => `sliver:${minPx}:${dim}:${maxK}:${size}:${rough}`;
   return material;
 }
 
