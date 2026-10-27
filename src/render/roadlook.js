@@ -200,27 +200,48 @@ export function lakeMaterial(U) {
   return patch(mat, U, { fragment: WATER_GLSL, post: 'outgoingLight = cgWaterShade(vCgWPos, -6.0);' });
 }
 
+// Road paint, anti-aliased (0052): a line's or a dash's exact coverage of this pixel's footprint (a
+// box filter), so paint 12 cm wide dims into the distance instead of sparkling as it goes under a
+// pixel (the hard step()s did), and its light (the dusk glow, into the bloom) fades with it.
+export const PAINT_GLSL = /* glsl */`
+  // A line of width w centred on x = 0.
+  float cgLine(float x, float w) {
+    float f = max(fwidth(x), 1e-5), h = 0.5 * f;
+    return clamp((min(x + h, 0.5 * w) - max(x - h, -0.5 * w)) / f, 0.0, 1.0);
+  }
+  // Dashes len long every period along v (from v = 0), averaging to len / period far away.
+  float cgDash(float v, float period, float len) {
+    float f = max(fwidth(v), 1e-5), h = 0.5 * f, x = mod(v, period);
+    float cov = clamp((min(x + h, len) - max(x - h, 0.0)) / f, 0.0, 1.0)
+      + clamp((min(x - period + h, len) - max(x - period - h, 0.0)) / f, 0.0, 1.0)
+      + clamp((min(x + period + h, len) - max(x + period - h, 0.0)) / f, 0.0, 1.0);
+    return mix(min(cov, 1.0), len / period, smoothstep(0.25 * period, period, f));
+  }`;
+
 // Asphalt and its paint. `aRoad` = (lateral offset m, distance along m, half-width m, bridge).
 export function roadMaterial(U, marking = 'eu') {
   const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.82, metalness: 0 });
   mat.name = `road-${marking}`;
   const centre = {
     // White dashed: 4.5 m dash, 7.5 m gap (Italian/Romanian rural standard), 12 cm wide.
-    eu: 'float cl = step(au, 0.065) * step(fract(v / 12.0), 0.375); vec3 pc = vec3(0.92);',
+    eu: 'float cl = cgLine(u, 0.13) * cgDash(v, 12.0, 4.5); vec3 pc = vec3(0.92);',
     // Double yellow: two 10 cm lines 10 cm apart.
-    us: 'float cl = step(abs(au - 0.15), 0.05); vec3 pc = vec3(0.93, 0.72, 0.18);',
+    us: 'float cl = cgLine(u - 0.15, 0.1) + cgLine(u + 0.15, 0.1); vec3 pc = vec3(0.93, 0.72, 0.18);',
     // Norway: yellow dashed centre (3 m dash, 9 m gap), 10 cm.
-    no: 'float cl = step(au, 0.055) * step(fract(v / 12.0), 0.25); vec3 pc = vec3(0.95, 0.75, 0.2);',
+    no: 'float cl = cgLine(u, 0.11) * cgDash(v, 12.0, 3.0); vec3 pc = vec3(0.95, 0.75, 0.2);',
   }[marking] || '';
   return patch(mat, U, {
     vertex: 'attribute vec4 aRoad; varying vec4 vRoad;',
     vertexMain: 'vRoad = aRoad;',
-    fragment: 'varying vec4 vRoad; uniform float cgPaintGlow;',
-    color: `float cgRough = 0.85;
+    fragment: `varying vec4 vRoad; uniform float cgPaintGlow;${PAINT_GLSL}`,
+    color: `float cgRough = 0.85, cgPaint = 0.0;
     {
       float u = vRoad.x, v = vRoad.y, hw = vRoad.z, au = abs(u);
       vec2 wp = vCgWPos.xz;
-      float g = cgNoise(wp * 2.3) * 0.5 + cgNoise(wp * 9.0) * 0.5;
+      // The grain's octaves fade to their mean once they're finer than a pixel (0052): unfiltered,
+      // they crawled as the car moved.
+      float fp = length(fwidth(wp));
+      float g = mix(cgNoise(wp * 2.3), 0.5, smoothstep(0.25, 0.6, fp * 2.3)) * 0.5 + mix(cgNoise(wp * 9.0), 0.5, smoothstep(0.25, 0.6, fp * 9.0)) * 0.5;
       float patchy = cgFbm(wp * 0.06);
       vec3 asphalt = vec3(0.105, 0.108, 0.115) * (0.78 + 0.32 * patchy) * (0.88 + 0.24 * g);
       // Polished tyre tracks in each lane.
@@ -230,21 +251,24 @@ export function roadMaterial(U, marking = 'eu') {
       asphalt *= 1.0 - 0.18 * track;
       vec3 c = asphalt;
       ${centre}
-      float edge = step(abs(au - (hw - 0.22)), 0.075);
-      float paint = max(cl, edge);
-      // Worn paint.
-      paint *= 0.75 + 0.25 * step(0.3, cgNoise(vec2(u * 3.0, v * 0.8)));
-      vec3 pcol = (cl > 0.5 ? pc : vec3(0.92));
+      float edge = cgLine(u - (hw - 0.22), 0.15) + cgLine(u + (hw - 0.22), 0.15);
+      float paint = min(cl + edge, 1.0);
+      cgPaint = paint;
+      // Worn paint (its threshold blurred over the noise's own footprint).
+      float wn = cgNoise(vec2(u * 3.0, v * 0.8)), fn = fwidth(wn) + 1e-4;
+      paint *= 0.75 + 0.25 * smoothstep(0.3 - fn, 0.3 + fn, wn);
+      vec3 pcol = (cl * pc + edge * vec3(0.92)) / max(cl + edge, 1e-4);
       c = mix(c, pcol, paint);
-      // Gravel shoulder past the edge.
-      float sh = smoothstep(hw, hw + 0.08, au);
+      // Gravel shoulder past the edge, its start no sharper than a pixel.
+      float fu = fwidth(u);
+      float sh = smoothstep(hw - 0.5 * fu, hw + 0.08 + 0.5 * fu, au);
       vec3 gravel = vec3(0.25, 0.24, 0.22) * (0.7 + 0.5 * g);
       c = mix(c, gravel, sh * (1.0 - vRoad.w));
       diffuseColor.rgb = c;
       cgRough = mix(0.86, 0.55, paint) - track * 0.12;
     }`,
     rough: 'roughnessFactor = cgRough;',
-    post: 'outgoingLight += cgPaintGlow * 0.6 * vec3(1.0, 0.97, 0.9) * step(0.5, diffuseColor.r);',
+    post: 'outgoingLight += cgPaintGlow * 0.6 * vec3(1.0, 0.97, 0.9) * cgPaint;',
   });
 }
 
