@@ -1,6 +1,6 @@
 ---
 id: 0099
-title: The wet slab's reflection and Free Drive's far-tree ring hold still on every screen
+title: The wet slab's reflection, Free Drive's far-tree ring and the burn's haze over the Wall hold still on every screen
 status: ready
 priority: P1
 size: M
@@ -23,6 +23,7 @@ has, and phones have it now too. One-layer-off attribution (`flicker.mjs --phone
 | drive-road/other | 4.16 | 9.59 | 5.20 | far trees hidden: 5.19 |
 | drive-road/sky | 0.85 | 1.96 | 1.35 | far trees hidden: 0.80 |
 | endless-cruise/ground | 4.71 | 6.01 | 5.89 | far trees hidden: 4.77 |
+| show-live-jets/wall (after #138) | 76.99 | 102.28 | 96.24 | haze and halos off: 88.32; DPR 1.5: 97.72 |
 
 - **The wet slab's mirror** (src/render/film.js createMirror): a half-resolution planar reflection. The heat map
   puts the pops on the reflection of the Wall's truss and the floodlight. 0097 already sized the slivers to the
@@ -35,10 +36,15 @@ has, and phones have it now too. One-layer-off attribution (`flicker.mjs --phone
   widening to a 2 px footprint and a larger hide radius all changed nothing or moved pops between regions. Note
   that the probe's ID pass draws `tree-far` instances without their hide-radius collapse, so region accounting
   shifts when they change; judge by the frame-wide total as well as by region.
-- Shadow map size: no effect. The haze lowers flicker.
+- **The film look's haze and lamp halos over the Wall during the burn** (src/render/film.js HazePass; the fifth
+  region, approved after 0063's still release camera, #138, cut main's number to 77). Mist count (1800 vs 900),
+  the mirror and the shadow size had no effect there. Its stored phone budget (115.0089) was left as is: it
+  already holds the high look, under the desktop label's 128.6584. Calm it until it's back under main's 76.99 on the
+  same machine.
+- Shadow map size: no effect anywhere. The haze lowers the title's flicker but raises the live burn's wall.
 
 ## What
-Calm both on every screen without dropping content. The candidate is temporal AA for the composer (a jittered
+Calm all three on every screen without dropping content. The candidate is temporal AA for the composer (a jittered
 projection plus history with reprojection from the depth texture the high tier already keeps). That would also help
 the parked row, the truss and the desktop's SMAA shimmer. Smaller alternatives: the mirror at a higher fraction of
 the drawing buffer, measured for cost on the phone profile; reprojected history for the mirror only.

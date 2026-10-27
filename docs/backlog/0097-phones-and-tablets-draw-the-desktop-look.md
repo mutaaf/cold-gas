@@ -73,6 +73,13 @@ Effect steps on the governor's ladder (0091). A user-facing quality menu. Real-d
   on the phone). Desktop label, main vs this change on the same machine: 71 ok, 0 over; show-title/ground
   21.46 → 10.79 ‰, nothing else moved (its budget is left as it was; 0099 can lower it). The final phone run:
   67 ok, over only in the four re-baselined regions.
+- After 0063 (#138, a still camera at the release) the phone re-check (show-live-jets, show-wide, show-replay,
+  retry-countdown; same-machine main 1f68989 vs this) put one more region over: show-live-jets/wall 76.99 → 102.28
+  (limit 96.24). One layer off: haze and halos off 88.32, DPR 1.5 97.72, mist 900 / mirror frozen / shadow 1024 no
+  change; AA is FXAA on both. Desktop content (same pass, no phone-specific code), under the desktop budget
+  (128.66): approved as a fifth region under the parity decision; its stored phone value (115.0089) already holds it,
+  so only the budget's notes changed. In 0099. Everything else in those scenarios went down (show-wide car
+  124.5 → 36.2, show-replay wall 6.3 → 0.4, retry-countdown car 55.6 → 15.0).
 - Perf, phone profile (4× CPU, the Mac's GPU), main → this: first load usable 13.29 → 13.20 s; Free Drive stelvio
   59.1 → 58.6 fps (draws 332 → 448); the Show run render CPU p50 6.6 → 10.3 ms at 59–60 fps. Real-device GPU
   cost unverified: the governor and the ledger are the net, and they take pixels first.
