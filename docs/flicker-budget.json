@@ -1,5 +1,5 @@
 {
-  "_readme": "Flicker budgets (0050): pops ‰ per scenario/region from scripts/flicker.mjs, per label (engine[-gl] screen). node scripts/flicker-budget.mjs run.json fails when any budgeted region rises more than tolerance (25 %) or floor ‰ over its budget. Lower a budget with --write after a change that measurably cut flicker; never raise one to make a rise pass. The 'chromium desktop' / 'chromium phone' labels (Metal ANGLE on a Mac GPU) hold the lockdown sweep's baseline from 0050 (bbcb526) for the regions it measured; the 'chromium-swiftshader' labels are main measured on software GL (no GPU needed, so any sandbox can run the gate).",
+  "_readme": "Flicker budgets (0050): pops ‰ per scenario/region from scripts/flicker.mjs, per label (engine[-gl] screen). node scripts/flicker-budget.mjs run.json fails when any budgeted region rises more than tolerance (25 %) or floor ‰ over its budget. Lower a budget with --write after a change that measurably cut flicker; never raise one to make a rise pass. The 'chromium desktop' / 'chromium phone' labels (Metal ANGLE on a Mac GPU) hold the lockdown sweep's baseline from 0050 (bbcb526) for the regions it measured; the 'chromium-swiftshader' labels are main measured on software GL (no GPU needed, so any sandbox can run the gate). Rebaselined on purpose, 2026-10-27 (0097, #136; operator decision: phones and tablets draw the desktop look): four 'chromium-swiftshader phone' regions rose with the high tier and were raised to the branch's numbers, each at or below the desktop label's value for the same region: show-title/ground 0.6966 → 2.4354 (desktop 8.7198; the wet slab's mirror), drive-road/other 4.1619 → 9.5868 (desktop 35.6189), drive-road/sky 0.8477 → 1.9575 (desktop 2.0723), endless-cruise/ground 4.7021 → 6.0061 (desktop 6.8577; those three: Free Drive's far-tree ring). Ticket 0098 calms them and restores the old values.",
   "tolerance": 0.25,
   "floor": 0.5,
   "blackout": 500,
@@ -94,7 +94,7 @@
       "endless-cruise/backdrop": 15.8296
     },
     "chromium-swiftshader phone": {
-      "show-title/ground": 0.6966,
+      "show-title/ground": 2.4354,
       "show-title/wall": 2.2622,
       "show-title/car": 10.4706,
       "show-title/row": 4.7316,
@@ -154,14 +154,14 @@
       "lineup-approach/backdrop": 4.2265,
       "nudge/lineup": 0.0384,
       "nudge/show": 0.0306,
-      "drive-road/other": 4.1619,
+      "drive-road/other": 9.5868,
       "drive-road/ground": 4.2574,
       "drive-road/wall": 22.4575,
       "drive-road/car": 8.2458,
-      "drive-road/sky": 0.8477,
+      "drive-road/sky": 1.9575,
       "drive-road/backdrop": 1.1035,
       "endless-cruise/other": 98.3086,
-      "endless-cruise/ground": 4.7021,
+      "endless-cruise/ground": 6.0061,
       "endless-cruise/car": 4.8933,
       "endless-cruise/sky": 49.5724,
       "endless-cruise/backdrop": 15.403
