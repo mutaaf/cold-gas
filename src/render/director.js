@@ -26,6 +26,14 @@ const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THRE
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // The Wall's rigs were framed on a 19.8 m lip; they scale with the wall's real height.
 const K = WALL.lip.y / 19.8;
+// The live Show after the release (0063), as st.shot: a locked-off hold on the drop off the lip, then
+// the tracking carry over the row, each entered by a hard cut.
+const HOLD = 'hold', CARRY = 'carry';
+const HOLD_POS = [30, 12, -6];      // from the car at the release: out to the side, level with the curl's middle, ahead (m)
+const HOLD_LOOK = [21, -4];         // aim: this height, this far ahead of the release point (m)
+const HOLD_MAX = 1.6;               // s: the latest the hold lasts
+// The hold cuts to the carry a metre before the car reaches the row, so the roofs are in shot over it.
+const ROW_FRONT = Math.max(...SHOW.boxes.map((b) => b.maxZ)) + 1;
 
 export function createDirector(camera) {
   const st = {
@@ -34,6 +42,7 @@ export function createDirector(camera) {
     peak: 0, launched: false, launchT: 0,
     hx: 0, hz: 1,                 // chase heading (unit, xz), follows the car's travel
     cutT: 0, cutPos: new THREE.Vector3(), cutFov: 40,   // a crash cut (src/render/crash.js)
+    holdPos: new THREE.Vector3(), holdLook: new THREE.Vector3(),   // the Show's locked-off release shot (0063)
     view: 'broadcast', px: 0, pz: -1,                    // pilot view: on/off, its heading
     clear: 1,                                            // keepClear's strength (0 in the pilot view)
     // The replay's own region of the screen (0068): what the results leave uncovered, in CSS px. The
@@ -58,7 +67,7 @@ export function createDirector(camera) {
   function snap() { st.init = false; }
   // A new run, a replay from the top or its loop: forget the last stunt (the Wall starts a few
   // metres from where it lands, so the car's position can't tell a new run from a landing).
-  function restart() { st.peak = 0; st.launched = false; snap(); }
+  function restart() { st.peak = 0; st.launched = false; st.shot = -1; snap(); }
 
   // Smoothly fly the camera toward want/lookWant (rate per second).
   function ease(dt, rate, lookRate = 8) {
@@ -190,6 +199,23 @@ export function createDirector(camera) {
       // The carry over the row: low and wide from the side, so the roofs under the car stay in frame.
       // High in the fall it stands back and rises with the car, so the car (held under the top HUD by
       // keepClear) and the roofs below it both fit (0063).
+      // The release is a hard cut, broadcast-style (0063), to a locked-off camera standing out to the side
+      // and ahead of the ledge: it holds still while the car drops off the lip toward the row (keepClear
+      // turns it only if the car would rise under the top HUD), then cuts to the tracking carry as the car
+      // reaches the row. A tracking camera there followed the car past the lit curl and the tower close
+      // up, and every lit edge of the Wall crawled 2–4 px a frame through it (show-live-jets wall 226‰
+      // on a desktop against main's 128‰).
+      if (st.shot !== HOLD && st.shot !== CARRY) {
+        st.shot = HOLD; st.fov = 54; snap();
+        st.holdPos.set(carPos.x + HOLD_POS[0], HOLD_POS[1], carPos.z + HOLD_POS[2]);
+        st.holdLook.set(carPos.x * 0.5, HOLD_LOOK[0], carPos.z + HOLD_LOOK[1]);
+      }
+      if (st.shot === HOLD && (carPos.z < ROW_FRONT || st.t - st.launchT > HOLD_MAX)) { st.shot = CARRY; snap(); }
+      if (st.shot === HOLD) {
+        camera.position.copy(st.holdPos);
+        camera.lookAt(st.holdLook);
+        return;
+      }
       want.set(carPos.x + 21 + 0.5 * Math.max(0, carPos.y - 10), clamp(carPos.y * 0.5 + 1.5, 2.2, 14), carPos.z + 2);
       lookWant.set(carPos.x * 0.5, carPos.y * 0.55 + 0.8, carPos.z - 2);
       ease(dt, 3.2, 9);

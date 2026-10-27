@@ -80,3 +80,25 @@ run): the car's projected centre is in the top 15 % for **18 of 51** sampled air
 car, upside down, fills the top 13 % behind the `T +00:10.5 · 04 RELEASE` stack; `ipadP-4-release-rot.jpg`,
 0.4 s after the rotation, it is a ghost at the top edge over an empty pad and rocket. Add 820×1180 and
 1180×820 to the probe's viewports.
+
+## Shipped (2026-10-27)
+keepClear() (the cloud Builder's #129) holds the car under the top HUD and clear of the rail; the iPads are in
+the probe (upright with the full HUD the line drops to NDC 0.3). The flicker gate failed on that camera alone:
+standing higher and tilting up, the carry camera tracked the car past the lit curl and the tower at 2–4 px a
+frame, and `show-live-jets/wall` rose 128 → 226‰ (desktop) and 119 → 204‰ (phone). That was camera motion, not
+the Wall's shading (stepping at 1/120 s halved every region; no material change helped without dulling the truss).
+Fix: the release cuts to a locked-off hold (out to the side, ahead of the lip; keepClear may only turn it), then to
+the tracking carry a metre before the row. Software GL, same machine as main 370bf2d:
+
+| show-live-jets | main desk | after desk | main phone | after phone |
+|---|---|---|---|---|
+| wall | 128.35 | 75.54 | 119.28 | 76.99 |
+| ground | 35.79 | 37.04 | 36.26 | 36.10 |
+| car | 207.20 | 202.81 | 187.07 | 182.04 |
+| row | 282.85 | 288.70 | 265.06 | 270.16 |
+| sky | 16.82 | 13.55 | 18.80 | 15.07 |
+| backdrop | 162.77 | 147.78 | 174.94 | 150.13 |
+
+show-wide, show-replay and retry-countdown are identical to main on both screens. `release-frame.spec.js` passes at
+all 8 viewports (no air frame above the line, none covered, the strip never over the car, roofs in shot over the
+row). Shots and heat maps in docs/shots/0063/ (the "before" heat maps are the wall region only, on #129's camera).
