@@ -366,6 +366,16 @@
       </form>
 
     </div>
+    <!-- Replay on a phone (0068): the sheet folds down to this peek while the replay plays above it; a tap
+         on it, Scores, Esc or the replay's end brings the sheet back as it was -->
+    <div class="peek" data-peek hidden role="group" aria-label="Replay">
+      <p class="peek-line"><span class="peek-verdict" data-p-verdict></span><span class="peek-total"><b data-p-total></b> / 100</span></p>
+      <div class="peek-actions">
+        <button class="btn primary" data-again>Retry</button>
+        <button class="btn ghost" data-home>Home</button>
+        <button class="btn ghost" data-peek-back>Scores</button>
+      </div>
+    </div>
   </section>
 
   <!-- For nerds: the live engineering readout (src/nerds.js, a lazy chunk) -->

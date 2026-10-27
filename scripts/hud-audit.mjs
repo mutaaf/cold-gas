@@ -23,6 +23,8 @@
 // frame of it is a sample, and its legibility is scripts/theatre-shots.mjs's job), and its boxes are
 // checked for overlaps and for leaving the theatre, its text for size and contrast, and every control
 // for a 44 × 44 px target (its centre's 44 px square, sampled with elementFromPoint, must hit it).
+// Then, where Replay folds the results to a peek (0068: the sheet covers the screen), the peek is measured
+// the same way over the replay (11-peek).
 // And once per viewport the pause sheet (0092), paused mid-run as a phone pauses: the same checks, with
 // every button (Resume and Home above all) inside the sheet's visible box and the viewport at its top.
 //
@@ -87,6 +89,12 @@ const THEATRE = {
 const PAUSE = {
   boxes: ['.sheet', '.sheet h2', '[data-resume]', '[data-restart]', '[data-controls-open]', '[data-howto-open]', '[data-home]'].map((s) => `[data-screen="pause"] ${s}`),
   textRoots: '[data-screen="pause"]', targets: '[data-screen="pause"] .actions .btn', within: '[data-screen="pause"] .sheet',
+};
+
+// Replay on a phone (0068): the results folded to their peek at the bottom, the replay above it.
+const PEEK = {
+  boxes: ['.top .brand', '.top-actions', '.results [data-peek] .peek-line', '.results [data-peek] .btn'],
+  textRoots: '.results [data-peek], .top', targets: '.results [data-peek] button',
 };
 
 // A GPU where there is one (macOS: Metal); software GL elsewhere (CI), as the e2e config does.
@@ -285,12 +293,27 @@ async function measurePause(page, vpName) {
     document.dispatchEvent(new Event('visibilitychange'));
   });
   const up = await page.waitForFunction(() => { const p = document.querySelector('[data-screen="pause"]'); return p && !p.hidden && window.__coldgas.S.paused; }, null, { timeout: ms(10000) }).then(() => true).catch(() => false);
-  if (!up) { missed.push(`${vpName} 11-pause`); console.log('  missed the pause sheet'); return; }
+  if (!up) { missed.push(`${vpName} 12-pause`); console.log('  missed the pause sheet'); return; }
   if (flags.plant === 'pause-spacer') await page.evaluate(() => { const d = document.createElement('div'); d.style.height = '600px'; document.querySelector('[data-screen="pause"] .actions').before(d); });
   await page.waitForTimeout(ms(700));   // the sheet's rise
   await page.evaluate(() => { document.querySelector('[data-screen="pause"] .sheet').scrollTop = 0; });
-  await measure(page, vpName, '11-pause', PAUSE);
+  await measure(page, vpName, '12-pause', PAUSE);
   await page.evaluate(() => document.querySelector('[data-screen="pause"] [data-home]').click());
+}
+
+// The peek opens only where the sheet covers the screen (a phone upright, a folding phone open); elsewhere
+// Replay leaves the sheet where it is and there is nothing new to measure. The call is held open, so the
+// theatre is put away as the call's end would (Skip waits for the words).
+async function measurePeek(page, vpName) {
+  const open = await page.evaluate(() => {
+    const th = document.querySelector('[data-theatre]');
+    if (th) { th.hidden = true; th.classList.remove('on', 'out'); }
+    document.querySelector('.results .sheet [data-replay]')?.click();
+    return window.__coldgas.S.peek;
+  });
+  if (!open) return;
+  await measure(page, vpName, '11-peek', PEEK);
+  await page.evaluate(() => document.querySelector('.results [data-peek-back]')?.click());
 }
 
 // Seconds each viewport took (both states), for the shard plan's cost model (scripts/audit-plan.mjs).
@@ -370,7 +393,7 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   // at a fifth of real time at 1080×1920 on software GL (the clock caps the sim at 0.1 s a frame) and
   // missed a 60 s wait (0087). The results are the same either way; only the theatre is measured there.
   await S(() => window.__coldgas.fastForward());
-  if (await until(() => window.__coldgas.S.mode === 'results', 30000) && hudState === STATES[0]) await measureTheatre(page, vpBase);
+  if (await until(() => window.__coldgas.S.mode === 'results', 30000) && hudState === STATES[0]) { await measureTheatre(page, vpBase); await measurePeek(page, vpBase); }
   // A wreck (0072): the reference with every input zeroed from the release + 0.125 s ends flipped,
   // 66 % Wrecked. Stepped to its end in the page, then a beat of its aftermath (0.6 s, stepped too: on
   // the wall clock the car and the debris were somewhere else at every frame rate, and the labels over
