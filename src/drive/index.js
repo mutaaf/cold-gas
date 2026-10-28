@@ -4,7 +4,7 @@
 // 1 MW, the fan, all ten thrusters) on a road course built from OpenStreetMap and open terrain
 // (src/sim/roads.js). No score and no judges; a best time from the start to the end of the road
 // is kept on this device. R puts the car back on the road, C changes the camera, T the time of
-// day, X the suction fan.
+// day, X the suction fan, O AI drive (0108, src/driving.js: on unless the player turned it off).
 import './drive.css';
 import * as THREE from 'three';
 import { ROADS } from './manifest.js';
@@ -29,6 +29,8 @@ export const DEFAULT_ROAD = 'stelvio';
 export const ENDLESS = 'endless';
 const sanitizeSeed = (v) => String(v ?? '').trim().slice(0, 24).replace(/[^\w\-. ]/g, '');
 const RESET_PENALTY = 5;     // s added to a timed run per reset
+// AI drive off and the car back on the road this many times inside OFFER_S: the HUD offers it (0108).
+const OFFER_CRASHES = 2, OFFER_S = 120;
 
 export function createDrive(ctx) {
   const { stage, hero, carRoot, plumes, crash, syncCar, ui, audio, input, tier } = ctx;
@@ -48,6 +50,7 @@ export function createDrive(ctx) {
     active: false, loading: false, paused: false, road: null, info: null, world: null, course: null, car: null, cam: null, hud: null,
     acc: 0, hint: 0, fan: false, airT: 0, flipT: 0, stuckT: 0, timer: null, best: null, finished: false, penalty: 0, lastCue: 0,
     pilot: null, lamp: null, sn: { x: 0, y: 0, z: 0 }, ground: 0, startedAt: 0, frames: 0, fpsT: 0, fps: 0,
+    crashes: [], offered: false, offAi: null, offPad: null,
   };
   const comps = [0, 0, 0, 0], spins = [0, 0, 0, 0];
   const poseLerp = createPoseLerp(), reverse = createReverse();
@@ -146,9 +149,13 @@ export function createDrive(ctx) {
     setLamps();
     try { st.best = road.endless ? null : Number(localStorage.getItem(`coldgas_drive_best_${info.id}`)) || null; } catch { st.best = null; }
     placeAt(s, 1, true);
-    const handlers = { onCamera: cycleCam, onTod: () => setTod(tod === 'day' ? 'dusk' : 'day'), onReset: () => respawn(), onExit: exit, onFan: toggleFan, onShare: shareSeed };
+    const handlers = { onCamera: cycleCam, onTod: () => setTod(tod === 'day' ? 'dusk' : 'day'), onReset: () => respawn(), onExit: exit, onFan: toggleFan, onShare: shareSeed, onAi: toggleAi, ai: aiOn() };
     st.hud = road.endless ? createEndlessHud(hudRoot, road, info, handlers) : createHud(hudRoot, road, info, handlers);
     st.hud.setTod(tod); st.hud.setCam(st.cam.mode); st.hud.setFan(st.fan);
+    // AI drive's switch follows the setting wherever it changes (the HUD, O, a pad's Y, the Controls sheet).
+    st.offAi?.(); st.offAi = input.onDriving?.((d) => st.hud?.setAi(d.ai !== false)) || null;
+    st.offPad?.(); st.offPad = input.onPadY?.(() => { if (st.active && !st.paused && !st.layer?.editing && st.airT < 0.25) toggleAi(); }) || null;
+    st.crashes.length = 0; st.offered = false;
     await stage.renderer.compileAsync?.(stage.scene, camera).catch?.(() => {});
     checkAbort(signal);   // Back while the shaders compiled: the caller tears this down
     closePicker();
@@ -216,6 +223,7 @@ export function createDrive(ctx) {
 
   function teardown() {
     bindKeys(false);
+    st.offAi?.(); st.offAi = null; st.offPad?.(); st.offPad = null;
     st.layer?.dispose(); st.layer = null;
     if (st.lamp) { carRoot.remove(st.lamp, st.lamp.target); st.lamp.dispose(); st.lamp = null; }
     stage.setLook(null);
@@ -289,8 +297,34 @@ export function createDrive(ctx) {
     const dir = road.dx[m] * (Math.abs(c.vel.x) + Math.abs(c.vel.z) > 2 ? c.vel.x : fx) + road.dz[m] * (Math.abs(c.vel.x) + Math.abs(c.vel.z) > 2 ? c.vel.z : fz) >= 0 ? 1 : -1;
     const s = Math.max(6, Math.min(road.length - 6, i * road.meta.spacing));
     placeAt(s, dir, false);
+    if (offerAi()) return;
     if (st.timer != null && !st.finished) { st.penalty += RESET_PENALTY; ui.cue_(`Back on the road · +${RESET_PENALTY} s`, 1600); }
     else ui.cue_('Back on the road', 1200);
+  }
+
+  // --- AI drive (0108) -------------------------------------------------------------------------
+  // On unless the player turned it off (src/driving.js): the computer holds the road, the player sets the pace
+  // and the lane. One tap on the HUD's switch, O, or a pad's Y.
+  function aiOn() { return input.driving?.ai !== false; }
+  function toggleAi() {
+    if (!input.setDriving) return;
+    const on = !aiOn();
+    input.setDriving({ ai: on });
+    st.hud?.setAi(on);
+    ui.cue_(on ? 'AI drive on · it holds the road, you set the pace' : 'AI drive off · you drive', 1600);
+  }
+  // Off the road with AI drive off, twice inside two minutes: offer it once a drive (the Show's Rookie mode
+  // waits for three crashed runs; a reset here comes every few seconds when a road is beating someone).
+  function offerAi() {
+    if (aiOn() || st.offered) return false;
+    const now = performance.now() / 1000;
+    st.crashes.push(now);
+    while (st.crashes.length && now - st.crashes[0] > OFFER_S) st.crashes.shift();
+    if (st.crashes.length < OFFER_CRASHES) return false;
+    st.offered = true;
+    st.hud?.offerAi(true);
+    ui.cue_(`Off the road again? ${input.usingTouch() ? 'Tap <b>AI drive</b>' : '<kbd>O</kbd> turns on AI drive'}: it holds the road, you set the pace`, 4200);
+    return true;
   }
 
   function restart() { placeAt(st.road?.endless ? 60 : 18, 1, true); pause(false); ui.cue_('From the start', 1200); }
@@ -316,6 +350,7 @@ export function createDrive(ctx) {
     else if (e.code === 'KeyC') cycleCam();
     else if (e.code === 'KeyT') setTod(tod === 'day' ? 'dusk' : 'day');
     else if (e.code === 'KeyX') toggleFan();
+    else if (e.code === 'KeyO') toggleAi();
     else if (e.code === 'KeyM') st.hud?.toggleMap?.();
   };
   function bindKeys(on) { if (on) addEventListener('keydown', onKey); else removeEventListener('keydown', onKey); }

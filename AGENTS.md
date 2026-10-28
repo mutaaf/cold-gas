@@ -201,9 +201,10 @@ src/build/            BUILD · POWER-UPS · SIDE QUESTS (the arcade layer; Free 
                         quest-schema.js (the gate every quest passes, shared with the Worker) ·
                         quest-gen.js (deterministic local generator) · ai-quest.js · powerups.js ·
                         quests.js · sandbox.js / arena*.js (the Sandbox) · road-host.js (roads)
-src/drive/            FREE DRIVE (lazy chunk): index.js (picker → load → drive loop, reset, timer),
+src/drive/            FREE DRIVE (lazy chunk): index.js (picker → load → drive loop, reset (lets go: freshRun),
+                        timer, AI drive: O / a pad's Y / the HUD switch, offered after two resets in 2 min),
                         load.js (fetch + gunzip from our origin), camera.js (chase / bumper /
-                        cinema), hud.js (picker cards, HUD, minimap, credits), pilot.js (a road-
+                        cinema), hud.js (picker cards, HUD + the AI drive switch, minimap, credits), pilot.js (a road-
                         following driver for tests and shots), manifest.js (GENERATED), drive.css
 src/world/            THE ENDLESS WORLD, drawn (lazy, docs/WORLD.md): endless-world.js (LOD rings,
                         budgets, caches, the world API), terrain.worker.js (tilegen.js tiles and
@@ -237,7 +238,12 @@ src/hands.js          the driver's hands (pure): keys and sticks → wheel and p
 src/driving.js        driving levels (pure, 0066): Easy / Standard / Advanced on the ground in every mode. Writes only
                         the ordinary input channels (unscored grounds also: assist, and the car's tcOff / tcSport /
                         absOff / handbrake flags, never set on a scored run). Easy: road-speed governor, lane keep,
-                        slide catch; Standard: the hands, bit for bit; Advanced: direct, analog pedals
+                        slide catch; Standard: the hands, bit for bit; Advanced: direct, analog pedals. AI drive
+                        (0108, `ai`, on unless turned off; only where ctx.road is given: Free Drive's roads and the
+                        endless road, never a scored run or the Sandbox): over any level, pure pursuit along the lane
+                        (dmath; the whole road through a hairpin), the safe speed for the bend ahead, slide catch, a
+                        stock car with ESC; the player's GO is the pace, steer past what the bend asks moves the target
+                        across the road (lane, pull-over), a hard one held ≥ 0.8 s takes the wheel inside the edges
 src/rookie.js         Rookie mode (pure, 0074): crashed runs in a row; from the third the results offer Easy driving +
                         Assist flight in one tap (src/main.js draws it on the sheet and, 0076, the theatre's phone bar; reset by a clean run or a level/tier change)
 src/adapt.js          Adapt to me (pure, 0079): the session's performance model over rookie.js; between runs only, 3 crashes in a
@@ -373,6 +379,7 @@ node scripts/grass-probe.mjs [roads] [off] [angle]    off the road and back on, 
 node scripts/verge-steps.mjs [roads]                  steps in the ground beside the road
 node scripts/ref-hash.mjs                             fingerprints of the stunt references (a physics change is bit-neutral or not)
 node scripts/drive-feel.mjs [bench|road|levels|bench-levels] [assist|pro]   driving feel: step steer, lane change, on-centre, 60–0, slides; a keyboard driver on the four roads; `levels`: the driving levels (naive keys/touch, skilled pad)
+node scripts/drive-feel.mjs diag [standard,easy,ai] [roads]   0108: the four roads + the endless one, road-reading drivers (keys, stick, tilt) and naive input (mash, hold, zigzag, swerve, GO only): exits and rails per km, spins, first loss, pace
 node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
 npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
 npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)

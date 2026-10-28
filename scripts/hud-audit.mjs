@@ -66,7 +66,7 @@ const BOXES = [
   // touch (the stick's label stands outside the stick's box: a box of its own, 0087)
   '[data-stick]', '[data-stick-hint]', '.buttons', '.tbtn', '[data-onethumb]', '[data-nozzle-pad] svg',
   // Free Drive
-  '.fd-road', '.fd-ctl', '.fd-timer', '.fd-speed', '.fd-stats', '.fd-map', '.fd-fine', '.bq-dock',
+  '.fd-road', '.fd-ctl', '.fd-timer', '.fd-speed', '.fd-stats', '.fd-map', '.fd-fine', '.bq-dock', '.fd-ai',
   // the HUD's handle (compact ⇄ full), wherever it stands
   '[data-hud-toggle]',
 ];

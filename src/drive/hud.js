@@ -125,6 +125,9 @@ export function randomSeed() {
 // opens the steepest so far; the map opens the full map (src/drive/minimap.js). Text changes only
 // when the rounded value does; canvases redraw only when due. The speed, the stats and the handle
 // share .fd-dash: on a phone in the compact HUD (src/hud-mode.js) they are one line.
+// AI drive's line (0108): what it does, in a phrase, on or off.
+const AI_ON = 'Keeps you on the road · GO sets the pace · steer changes lane';
+const AI_OFF = 'Off: you drive · tap to let it hold the road';
 function driveHud(root, road, info, h, endless) {
   const total = endless ? 0 : road.length;
   root.innerHTML = `
@@ -134,6 +137,10 @@ function driveHud(root, road, info, h, endless) {
         ? `<span data-h-stretch>${esc(info.local || '')}</span> · <button type="button" class="fd-seedchip" data-h-share title="Copy a link to this world">Seed ${esc(info.seedLabel || '')}</button>`
         : `<span data-h-stretch>${esc(info.local)}</span> · ${esc(info.country)}`}</p>
     </div>
+    <button type="button" class="fd-ai" data-h-ai role="switch" aria-label="AI drive" aria-checked="${h.ai ? 'true' : 'false'}" aria-describedby="fd-ai-line" title="AI drive (O)">
+      <i class="fd-ai-sw" aria-hidden="true"></i><b>AI drive</b><span class="fd-ai-st" data-h-ai-st aria-hidden="true">${h.ai ? 'On' : 'Off'}</span>
+      <small id="fd-ai-line" data-h-ai-line>${h.ai ? AI_ON : AI_OFF}</small>
+    </button>
     <div class="fd-ctl">
       <button type="button" class="chip" data-h-cam title="Camera (C)">Chase</button>
       <button type="button" class="chip" data-h-tod title="Time of day (T)">Day</button>
@@ -163,6 +170,8 @@ function driveHud(root, road, info, h, endless) {
   $('[data-h-reset]').addEventListener('click', h.onReset);
   $('[data-h-exit]').addEventListener('click', h.onExit);
   $('[data-h-fan]').addEventListener('click', h.onFan);
+  const ai = { btn: $('[data-h-ai]'), st: $('[data-h-ai-st]'), line: $('[data-h-ai-line]') };
+  ai.btn.addEventListener('click', () => h.onAi?.());
   el.share?.addEventListener('click', () => h.onShare?.(el.share));
 
   // The map and its expanded view.
@@ -286,6 +295,14 @@ function driveHud(root, road, info, h, endless) {
     setCam(mode) { el.cam.textContent = { chase: 'Chase', bumper: 'Bumper', cinema: 'Cinema' }[mode] || mode; },
     setTod(t) { el.tod.textContent = t === 'dusk' ? 'Dusk' : 'Day'; },
     setFan(on) { el.fan.setAttribute('aria-pressed', String(on)); },
+    // AI drive (0108): the switch, its state word and the line under it; `offer` marks it after a crash or two.
+    setAi(on) {
+      ai.btn.setAttribute('aria-checked', String(!!on));
+      ai.st.textContent = on ? 'On' : 'Off';
+      ai.line.textContent = on ? AI_ON : AI_OFF;
+      if (on) ai.btn.removeAttribute('data-offer');
+    },
+    offerAi(on = true) { if (on) ai.btn.setAttribute('data-offer', ''); else ai.btn.removeAttribute('data-offer'); },
     toggleMap() { xmap.toggle(); },
     get mapOpen() { return xmap.open; },
     // The finish: a best run keeps its pace (the ghost on the map next time).

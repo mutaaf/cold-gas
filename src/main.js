@@ -28,7 +28,7 @@ import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
-import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, freshRun, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState } from './input.js';
+import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, freshRun, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState, onPadY } from './input.js';
 import { LEVEL_INFO } from './driving.js';
 import { isCrash, nextStreak, offerRookie, loadStreak, saveStreak } from './rookie.js';
 import { loadPerf, savePerf, record, decide, outcomeOf, afterChange, coachLive, loadFlown, saveFlown, loadAdapt, saveAdapt, TIER_WORDS, factorText, stepDownBanner, offerWords } from './adapt.js';
@@ -1609,7 +1609,7 @@ function loadDrive() {
   driveLoad ??= import('./drive/index.js').then((mod) => {
     drive = mod.createDrive({
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
-      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun },
+      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun, driving: drivingSettings, setDriving, onDriving, onPadY },
       assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
       setMode: (m) => { disposeRun(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
