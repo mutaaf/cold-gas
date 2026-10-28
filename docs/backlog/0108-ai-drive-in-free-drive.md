@@ -1,12 +1,12 @@
 ---
 id: 0108
 title: AI drive in Free Drive; the computer holds the road and the player drives the intent (and a reset lets go)
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: player-feel
 created: 2026-10-27
-pr:
+pr: 145
 by: operator
 ---
 
