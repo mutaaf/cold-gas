@@ -1,12 +1,14 @@
 // The title at every viewport we ship to: no overlaps between the top bar and the title block,
 // the CTA in view, the event cards in a tidy grid, no title text under 11 px. Phones (incl. a 320 px
 // Slide Over column), iPads both ways, desktops, and a safe-area pass (`s`: a notched phone's insets
-// forced on --safe-*, as in scripts/hud-audit.mjs), and a folding phone's poses (0075).
+// forced on --safe-*, as in scripts/hud-audit.mjs), and a folding phone's poses as measured, each with its
+// own insets (scripts/audit-plan.mjs FOLD, 0103), plus Safari's two windows side by side on its open screen.
 //   node scripts/title-audit.mjs <url> <outdir> [label]
 // A gate (0082): the exit code is 1 when any viewport has an issue, and the offenders are listed at
 // the end. CI (software GL, about 2× slower): AUDIT_SLOW (default 2 when CI is set) scales the waits.
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
+import { FOLD, dprFor, insetCss } from './audit-plan.mjs';
 
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', label = 'title'] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const SLOW = Number(process.env.AUDIT_SLOW || (process.env.CI ? 2 : 1));
@@ -14,12 +16,9 @@ mkdirSync(out, { recursive: true });
 const VPS = [[1280, 720, 0], [1440, 900, 0], [1920, 1080, 0], [390, 844, 1], [430, 932, 1], [768, 1024, 1], [844, 390, 1], [1024, 768, 1],
   [320, 568, 1], [814, 380, 1], [393, 659, 1], [820, 1180, 1], [1180, 820, 1], [1024, 1366, 1], [1366, 1024, 1],
   [390, 844, 1, 1], [844, 390, 1, 1], [932, 430, 1, 1],
-  // A folding phone in its browser (0075): closed upright and sideways, open upright and sideways, and
-  // the size it passes through mid-swing.
-  [382, 580, 1], [678, 340, 1], [669, 825, 1], [951, 543, 1], [466, 498, 1]];
-const insetCss = (w, h) => (w > h
-  ? ':root { --safe-t: 0px !important; --safe-l: 47px !important; --safe-r: 47px !important; --safe-b: 21px !important; }'
-  : ':root { --safe-t: 47px !important; --safe-l: 0px !important; --safe-r: 0px !important; --safe-b: 34px !important; }');
+  // The folding phone (0103): every measured pose, in a tab and installed, and one of two Safari windows
+  // side by side on the open screen (WebKit's Safari 27.1 notes: 385×571).
+  ...FOLD.map(([w, h]) => [w, h, 1]), [385, 571, 1]];
 // A GPU where there is one (macOS: Metal); software GL elsewhere (CI), as the e2e config does.
 const GL = process.platform === 'darwin' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 const browser = await chromium.launch({ args: GL });
@@ -27,8 +26,9 @@ let bad = 0;
 const offenders = [];
 for (const [w, h, touch, safe] of VPS) {
   const t0 = Date.now();
-  const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
-  if (safe) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = css; document.head.append(s); }), insetCss(w, h));
+  const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: dprFor(w, h), isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
+  const forced = touch && insetCss(w, h, safe);
+  if (forced) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = css; document.head.append(s); }), forced);
   await page.goto(`${url}?gfx=low`);
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30000 * SLOW });
   // The title settles (its rise-in, the fonts): then nothing on it moves.

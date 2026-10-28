@@ -14,7 +14,16 @@
 // item (≈ 460 s there). Longest first, each to the least-loaded shard (LPT): deterministic.
 export const PHONES = [[390, 844], [430, 932], [844, 390], [932, 430], [320, 568], [814, 380], [393, 659]];
 export const TABLETS = [[768, 1024], [1024, 768], [820, 1180], [1180, 820], [1024, 1366], [1366, 1024]];
-export const FOLD = [[382, 580], [678, 340], [669, 825], [951, 543], [466, 498]];
+// The book-style folding phone (0103), as Safari gives a page, measured on the simulated device (Device Hub,
+// docs/backlog/0102): in a tab closed upright 382×580, closed sideways 594×368 one way and 678×384 the other,
+// open 669×871 and 951×589, and the 466×498 a fold passes through; installed (0081, standalone) open 669×930
+// and 951×648, closed 466×657 (with an 84 px side inset) and sideways 678×445. Each flies with its own
+// measured safe-area insets (FOLD_INSETS) at 3×, the device's ratio.
+export const FOLD = [[382, 580], [594, 368], [678, 384], [669, 871], [951, 589], [466, 498], [669, 930], [951, 648], [466, 657], [678, 445]];
+export const FOLD_INSETS = {
+  '594x368': { l: 84 }, '678x384': { b: 34 }, '669x871': { t: 2, b: 34 }, '951x589': { t: 2, b: 34 }, '466x498': { r: 84 },
+  '669x930': { t: 61, b: 34 }, '951x648': { t: 2, b: 34 }, '466x657': { r: 84 }, '678x445': { l: 84, b: 34 },
+};
 export const DESKTOPS = [[1280, 720], [1920, 1080], [720, 1280], [1080, 1920]];
 export const SAFE = [[390, 844, 1], [430, 932, 1], [844, 390, 1], [932, 430, 1], [814, 380, 1]];
 // Free Drive is flown at these (phones, iPads and the two desktop sizes).
@@ -27,8 +36,22 @@ export function viewportsFor(set) {
 }
 export const vpBase = ([w, h, safe]) => `${w}x${h}${safe ? 's' : ''}`;
 export const touchFor = (w, h) => [...PHONES, ...TABLETS, ...FOLD].some(([a, b]) => a === w && b === h);
+// The device pixel ratio a viewport flies at: the fold's measured 3, else 2.
+export const dprFor = (w, h) => (FOLD.some(([a, b]) => a === w && b === h) ? 3 : 2);
+// The --safe-* insets forced on a viewport: a notched phone's on the safe-area pass (`s`: 47 px on the notch
+// side in landscape, as iOS reports both sides, 34 px home indicator upright, 21 px sideways), a fold pose's
+// measured ones, else none (null).
+export function insetsFor(w, h, safe = 0) {
+  if (safe) return w > h ? { t: 0, l: 47, r: 47, b: 21 } : { t: 47, l: 0, r: 0, b: 34 };
+  const m = FOLD_INSETS[`${w}x${h}`];
+  return m ? { t: 0, l: 0, r: 0, b: 0, ...m } : null;
+}
+export const insetCss = (w, h, safe = 0) => {
+  const i = insetsFor(w, h, safe);
+  return i && `:root { --safe-t: ${i.t}px !important; --safe-l: ${i.l}px !important; --safe-r: ${i.r}px !important; --safe-b: ${i.b}px !important; }`;
+};
 
-export const TITLE_COST = 460;
+export const TITLE_COST = 560;   // 460 s for 23 viewports on CI; 29 since 0103
 export function cost(item) {
   if (item === 'title') return TITLE_COST;
   const [w, h, safe] = item;

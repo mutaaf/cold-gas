@@ -13,6 +13,17 @@ export function defaultHudMode({ coarse = false, w = 0, h = 0 } = {}) {
   return coarse && Math.min(w, h) <= 900 ? 'compact' : 'full';
 }
 
+// Room for every instrument (0103): sideways, the full set needs 720 px between the edges (the stick, the
+// band and the right thumb's slots side by side). A phone that narrow sideways (the folding phone closed
+// and turned: 594 or 678 px, 0102) shows the compact line, and the handle that would open MORE is put away;
+// the player's choice is kept and comes back on a screen with the room (unfolded, or upright).
+export function fullFits({ coarse = false, w = 0, h = 0 } = {}) {
+  return !(coarse && w > h && w < 720);
+}
+const fitsNow = () => fullFits({ coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, w: globalThis.innerWidth || 0, h: globalThis.innerHeight || 0 });
+// What the HUD shows: the mode, unless the full set has no room here.
+export const shownHudMode = () => (hudMode() === 'full' && !fitsNow() ? 'compact' : hudMode());
+
 let mode = null;
 const subs = new Set();
 
@@ -35,16 +46,18 @@ export function hudMode() {
 // split view): the default follows the new shape, but only while the player hasn't chosen. A choice
 // (one tap on the handle, or I) is kept on this device and a fold never flips it.
 export function refitHudMode() {
-  if (stored()) return;
-  const next = deviceDefault();
+  const next = stored() || deviceDefault();
   if (next !== hudMode()) setHudMode(next, { persist: false });
+  else paint(next);   // the same choice, but the room for it may have changed (0103)
 }
 
 // Every handle says what a tap will do, and whether the full set is out.
 function label(m) { return m === 'compact' ? 'Show all instruments (I)' : 'Show fewer instruments (I)'; }
 function paint(m) {
   if (typeof document === 'undefined') return;
-  document.documentElement.dataset.hud = m;
+  const fits = fitsNow();
+  document.documentElement.dataset.hud = m === 'full' && !fits ? 'compact' : m;
+  document.documentElement.toggleAttribute('data-hud-tight', !fits);   // CSS puts the handle away
   for (const b of document.querySelectorAll('[data-hud-toggle]')) {
     b.setAttribute('aria-expanded', String(m === 'full'));
     b.setAttribute('aria-label', label(m));

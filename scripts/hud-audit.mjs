@@ -8,8 +8,8 @@
 //   node scripts/hud-audit.mjs <url> <outdir> [set=all|phones|tablets|fold|safe|quick|WxH[s],…] [label] [states=both|compact|full] [--shard=N/M]
 //
 // Viewports: phones (incl. a 320 px Slide Over column and Safari's portrait with its bars), iPads in
-// both orientations, a folding phone (0075: what its browser gives a page closed upright 382×580 and
-// sideways 678×340, open 669×825 and 951×543, and the 466×498 it passes through mid-swing; touch at
+// both orientations, a folding phone (0075, measured in 0103: scripts/audit-plan.mjs FOLD, in a tab and
+// installed, each pose with its measured insets, and the 466×498 it passes through mid-swing; touch at
 // 3× like the device), desktops. A trailing `s` (e.g. 844x390s) is the safe-area pass: the page's
 // --safe-* insets are forced to a notched phone's (47 px on the notch side in landscape, 34 px home
 // indicator in portrait, 21 px in landscape), as iOS reports them with viewport-fit=cover.
@@ -38,7 +38,7 @@
 // Writes <outdir>/<label>-<viewport>-<phase>.png and <outdir>/<label>-report.json.
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { FOLD, DRIVE, viewportsFor, planShards, touchFor } from './audit-plan.mjs';
+import { DRIVE, viewportsFor, planShards, touchFor, dprFor, insetCss } from './audit-plan.mjs';
 
 const flags = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v = 'true'] = a.slice(2).split('='); return [k, v]; }));
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', set = 'all', label = 'audit', states = 'both'] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
@@ -52,12 +52,8 @@ const ALL_VIEWPORTS = viewportsFor(set);
 // A shard is a cost-balanced share of the viewports (scripts/audit-plan.mjs; the title audit is one
 // of its items, run by scripts/serve-and-audit.mjs with the shard that holds it).
 const VIEWPORTS = shardM > 1 ? planShards(ALL_VIEWPORTS, shardM, { title: set === 'all' })[shardN - 1].filter((v) => v !== 'title') : ALL_VIEWPORTS;
-const dprFor = (w, h) => (FOLD.some(([a, b]) => a === w && b === h) ? 3 : 2);
-// A notched phone's insets with viewport-fit=cover (the notch side is reported on both sides in
-// landscape, as iOS does).
-const insetCss = (w, h) => (w > h
-  ? ':root { --safe-t: 0px !important; --safe-l: 47px !important; --safe-r: 47px !important; --safe-b: 21px !important; }'
-  : ':root { --safe-t: 47px !important; --safe-l: 0px !important; --safe-r: 0px !important; --safe-b: 34px !important; }');
+// The ratio and the forced insets per viewport (scripts/audit-plan.mjs: a notched phone's on the `s` pass, the
+// folding phone's measured ones on its poses, 0103).
 
 // Everything that sits over the stage during a run (both the old markup and the new; missing ones
 // are skipped). Pairs where one contains the other are not overlaps.
@@ -328,7 +324,8 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   // The judges' stream is held open (never answered), so the theatre stays up to be measured.
   await page.route('**/coldgas/api/judge/stream', () => { /* held open */ });
   await page.addInitScript((m) => { try { localStorage.setItem('coldgas_hud', m); } catch { /* storage blocked */ } }, hudState);
-  if (safe) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = css; document.head.append(s); }), insetCss(w, h));
+  const forced = insetCss(w, h, safe);
+  if (forced) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = css; document.head.append(s); }), forced);
   await page.goto(`${url}?gfx=low`);
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: ms(30000) });
   await page.waitForTimeout(ms(1500));

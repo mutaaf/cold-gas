@@ -17,10 +17,12 @@
   --display: 'Michroma', 'Geist Variable', sans-serif;
   --text: 'Geist Variable', ui-sans-serif, sans-serif;
   --mono: 'Geist Mono', ui-monospace, monospace;
-  --safe-t: env(safe-area-inset-top, 0px);
-  --safe-b: env(safe-area-inset-bottom, 0px);
-  --safe-l: env(safe-area-inset-left, 0px);
-  --safe-r: env(safe-area-inset-right, 0px);
+  /* Never below 0 (0103): mid-fold, Safari on the folding phone reports insets like right −84 or −282 for
+     up to half a second, which would push every edge-anchored box past the glass. */
+  --safe-t: max(0px, env(safe-area-inset-top, 0px));
+  --safe-b: max(0px, env(safe-area-inset-bottom, 0px));
+  --safe-l: max(0px, env(safe-area-inset-left, 0px));
+  --safe-r: max(0px, env(safe-area-inset-right, 0px));
   color-scheme: dark;
 }
 
@@ -458,7 +460,7 @@ body[data-peek] .top .brand { visibility: hidden; }   /* a hairline over the lit
    stream and the counters side by side (30 · 40 · 30 of the width inside the insets). The bar is the same
    wherever the theatre covers the sheet beyond a phone's width: here, and on an opened folding phone
    (0075's query), whose theatre took the screen without it. */
-@media (orientation: landscape) and (max-height: 480px), (pointer: coarse) and (min-width: 600px) and (min-height: 500px) and (max-width: 1000px) and (max-height: 900px) {
+@media (orientation: landscape) and (max-height: 480px), (pointer: coarse) and (min-width: 600px) and (min-height: 500px) and (max-width: 1000px) and (max-height: 960px) {
   .th-quick { display: flex; flex-wrap: nowrap; gap: 8px; position: absolute; top: calc(14px + var(--safe-t)); left: calc(16px + var(--safe-l)); right: calc(96px + var(--safe-r)); z-index: 2; pointer-events: none; }
   .th-quick > * { pointer-events: auto; }
   .th-quick .quick-btn { height: 34px; padding: 0 14px; border-radius: 17px; border: 1px solid var(--hair); background: rgba(6, 9, 15, 0.82);
@@ -1131,6 +1133,12 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .drive-row { margin-bottom: 10px; }
   .title .fineprint { display: block; margin-top: 8px; font-size: 11px; max-width: none; }
 }
+/* Narrow and short sideways (the folding phone closed and turned, 594 × 368, 0103): the block is taller than
+   the glass under the top bar, so the big wordmark steps out; the top bar's brand names the game (the 320 px
+   column does the opposite: it keeps the wordmark and drops the brand). */
+@media (max-height: 400px) and (max-width: 719px) and (orientation: landscape) {
+  .title > .wordmark { display: none; }
+}
 .cta [data-controls-open] { gap: 8px; }
 .cta .ctl-k { font: 500 11px/1 var(--text); letter-spacing: 0.16em; text-transform: uppercase; color: rgba(245, 246, 248, 0.7); }
 @media (max-width: 480px) { .course-btn b { font-size: 12px; white-space: nowrap; } .course-btn { padding: 12px 10px; } }
@@ -1419,10 +1427,10 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    100vh (18 px too tall there). Opened, the inner screen is regular width at a phone's height (669×825
    upright, 951×543 sideways): the room is an upgrade, not a different game. The sheets that scroll on
    a phone lay out in two even columns; the HUD keeps the same band (a wide band shows PITCH too, by
-   its own width, below). The query names that shape (touch, at least 600 × 500, at most 1000 × 900),
+   its own width, below). The query names that shape (touch, at least 600 × 500, at most 1000 × 960: installed, open upright is 669 × 930, 0103),
    so no phone, iPad or desktop we audit matches it; inside it everything is fluid. A fold or an
    unfold is only a resize: nothing reloads and the run carries on (src/render/scene.js reshape). */
-@media (pointer: coarse) and (min-width: 600px) and (min-height: 500px) and (max-width: 1000px) and (max-height: 900px) {
+@media (pointer: coarse) and (min-width: 600px) and (min-height: 500px) and (max-width: 1000px) and (max-height: 960px) {
   /* The title: who you are on the left (the wordmark, the line, the fine print), what to do on the
      right (the events, now with their one-line descriptions, Free Drive, Jump under the right thumb). */
   .title { right: calc(clamp(24px, 6vw, 96px) + var(--safe-r)); max-width: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: clamp(24px, 4vw, 48px);
@@ -1514,6 +1522,32 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    --top + 180 here and is about 66 px tall: 304 px down). */
 @media (pointer: coarse) and (orientation: portrait) and (max-height: 540px) {
   :root[data-hud='full'] .cue { --cue-top: 312px; left: calc(var(--m) + var(--safe-l)); right: calc(170px + var(--safe-r)); width: fit-content; max-width: none; margin: 0; transform: none; }
+}
+
+/* --- A narrow screen sideways (0103): the folding phone closed and turned, 594 × 368 with the camera's 84 px
+   on one side (510 px of glass) or 678 × 384 / 445, measured. The phone layout's band runs from the stick
+   (154 px) to B beside A (271 px): it had under 100 px here. So the right thumb's slots stand in one column,
+   B under A and C over it (all within 70–240 px of the thumb's pivot, scripts/thumb-reach.mjs), the stick
+   narrows, and the band, the phase tab and the cue line take what is left between them; with one thumb
+   (no stick) they start at the left margin. The full set has no room here: the handle is put away
+   (src/hud-mode.js fullFits; the choice comes back unfolded or upright). By the size, not the device. */
+@media (pointer: coarse) and (orientation: landscape) and (max-width: 719px) {
+  .touch { --ax: 118px; --ay: 150px; --as: 92px; --bx: 118px; --by: 52px; --bs: 70px; --cx: 118px; --cy: 248px; --cs: 64px; --stick: 112px; }
+  .stick { left: calc(14px + var(--safe-l)); bottom: calc(22px + var(--safe-b)); }
+  .thumb { --ay: 132px; }
+  :root { --narrow-l: calc(138px + var(--safe-l)); --narrow-r: calc(190px + var(--safe-r)); }
+  :root:has(.touch[data-scheme='thumb']:not([hidden])) { --narrow-l: calc(clamp(16px, 2.4vw, 36px) + var(--safe-l)); }
+  :root[data-hud] .hud .h-strip { left: var(--narrow-l); right: var(--narrow-r); }
+  :root[data-hud] .hud .h-mission { left: var(--narrow-l); right: var(--narrow-r); grid-template-columns: auto; gap: 2px 0; }
+  :root[data-hud] .cue { left: var(--narrow-l); right: var(--narrow-r); bottom: calc(132px + var(--safe-b)); }
+  /* In the air the descent stands top left (100 px wide, down to ≈ 240 px): the cue keeps right of it. */
+  :root[data-hud] body:has(.hud[data-air]:not([hidden])) .cue { left: max(var(--narrow-l), calc(clamp(16px, 2.4vw, 36px) + 112px + var(--safe-l))); }
+}
+:root[data-hud-tight] [data-hud-toggle] { display: none !important; }
+/* The narrowest band (the 594 px pose, two thumbs: ≈ 180 px): on the ground ALT steps out (the tape has
+   the height in the air, and on the ground the run-up is at 0), so speed and the gas keep one line. */
+@container (max-width: 200px) {
+  :root[data-hud='compact'] .hud:not([data-air]) .h-strip > [data-ch='alt'] { display: none; }
 }
 
 /* --- A screen in two segments (0075; Chromium's Viewport Segments, where a foldable reports its

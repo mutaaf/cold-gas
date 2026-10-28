@@ -12,14 +12,16 @@
 // `deviceMemory` ≤ 2 GB) starts 'low', the floor.
 
 // 'phone' | 'tablet' | 'desktop'. iPadOS reports a Mac UA but has touch points; Android tablets
-// leave "Mobile" out of the UA; any other coarse pointer on a screen ≥ 600 CSS px short side is
-// a tablet too.
-export function deviceKind({ ua = '', maxTouchPoints = 0, coarse = false, screenW = 0, screenH = 0 } = {}) {
+// leave "Mobile" out of the UA; any other coarse pointer on a page ≥ 600 CSS px short side is
+// a tablet too. The page's own size, not `screen`: a book-style folding phone reports its outer
+// screen (466×678) in every pose, open too (0103, measured); `screen` is only the fallback.
+export function deviceKind({ ua = '', maxTouchPoints = 0, coarse = false, screenW = 0, screenH = 0, viewW = 0, viewH = 0 } = {}) {
   if (/iPad/.test(ua) || (/Macintosh/.test(ua) && maxTouchPoints > 1)) return 'tablet';
   if (/iPhone|iPod/.test(ua)) return 'phone';
   if (/Android/.test(ua)) return /Mobile/.test(ua) ? 'phone' : 'tablet';
   if (!coarse) return 'desktop';
-  return Math.min(screenW || 0, screenH || 0) >= 600 ? 'tablet' : 'phone';
+  const [w, h] = viewW && viewH ? [viewW, viewH] : [screenW || 0, screenH || 0];
+  return Math.min(w, h) >= 600 ? 'tablet' : 'phone';
 }
 
 export const isIOS = ({ ua = '', maxTouchPoints = 0 } = {}) => /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && maxTouchPoints > 1);
@@ -48,7 +50,7 @@ export function readDevice(nav = globalThis.navigator, win = globalThis) {
   return {
     ua: nav?.userAgent || '', maxTouchPoints: nav?.maxTouchPoints || 0, deviceMemory: nav?.deviceMemory,
     coarse: !!win?.matchMedia?.('(pointer: coarse)').matches,
-    screenW: win?.screen?.width || 0, screenH: win?.screen?.height || 0,
+    screenW: win?.screen?.width || 0, screenH: win?.screen?.height || 0, viewW: win?.innerWidth || 0, viewH: win?.innerHeight || 0,
   };
 }
 
