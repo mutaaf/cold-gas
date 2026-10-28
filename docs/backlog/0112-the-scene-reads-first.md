@@ -1,12 +1,12 @@
 ---
 id: 0112
 title: The scene reads first - the HUD's footprint on phones and the foldables, and the installed app edge to edge
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-28
-pr:
+pr: 153
 by: operator
 ---
 
@@ -44,13 +44,13 @@ in the air with both touch schemes, Free Drive rolling; 15 sizes):
   360×380, 424×360, 800×300 (0110).
 
 ## Acceptance criteria
-- [ ] The HUD audit: Free Drive at 594×368, 678×445, 466×657, 360×380, 424×360, 800×300 with 0 overlaps, 0 offscreen,
+- [x] The HUD audit: Free Drive at 594×368, 678×445, 466×657, 360×380, 424×360, 800×300 with 0 overlaps, 0 offscreen,
       0 labels < 4.5:1 (0110); `npm run audit` green on CI's six shards with the cover ceiling on.
-- [ ] Before/after cover, solid and shade per size in the PR (scripts/hud-cover.mjs); the shade on a phone sideways
+- [x] Before/after cover, solid and shade per size in the PR (scripts/hud-cover.mjs); the shade on a phone sideways
       under 10 %; the car's box ≤ 25 % covered at every size measured on the Show's run-up.
-- [ ] Installed (emulated: navigator.standalone), the canvas is the window's width and its height + 24 px and its
+- [x] Installed (emulated: navigator.standalone), the canvas is the window's width and its height + 24 px and its
       buffer follows at the 'high' tier's ratio; in a tab exactly the window (tests/e2e/install.spec.js).
-- [ ] Works at 390×844 touch and 1280×720 keyboard.
+- [x] Works at 390×844 touch and 1280×720 keyboard.
 
 ## Test plan
 `npm test` (foldables: the drive's room for the full set), `npm run audit` (cover ceiling, DRIVE sizes), the install

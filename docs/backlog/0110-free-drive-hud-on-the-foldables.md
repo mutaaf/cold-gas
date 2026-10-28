@@ -1,12 +1,12 @@
 ---
 id: 0110
 title: Free Drive's HUD fits the foldables - the closed fold sideways, the flip's cover screen and its tall screen sideways
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-28
-pr:
+pr: 153
 by: operator
 ---
 
@@ -35,9 +35,9 @@ Clean: 669×871, 951×589, 360×748.
   CI shard plan; re-check the shard balance test).
 
 ## Acceptance criteria
-- [ ] The HUD audit, Free Drive frames at 594×368, 360×380, 424×360, 800×300: 0 overlaps, 0 offscreen, 0 text < 11 px, 0 labels < 4.5:1.
-- [ ] Those four sizes in DRIVE; `npm run audit` green on CI's six shards.
-- [ ] Works at 390×844 touch and 1280×720 keyboard (unchanged).
+- [x] The HUD audit, Free Drive frames at 594×368, 360×380, 424×360, 800×300: 0 overlaps, 0 offscreen, 0 text < 11 px, 0 labels < 4.5:1.
+- [x] Those four sizes in DRIVE; `npm run audit` green on CI's six shards.
+- [x] Works at 390×844 touch and 1280×720 keyboard (unchanged).
 
 ## Test plan
 The HUD audit (it flies Free Drive at every DRIVE size); `tests/unit/audit-plan.test.js` / `foldables.test.js`
