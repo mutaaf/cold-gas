@@ -121,7 +121,9 @@ mark, and air left in the tanks.
    no overlaps at 390×844 · 430×932 · 768×1024 · 1280×720 · 1920×1080 (both orientations), the iPads
    (820×1180, 1024×1366, both ways), a 320 px column, a notch-inset pass, and the book-style folding phone
    as measured, each pose with its own insets (in a tab 382×580 · 594×368 · 678×384 · 669×871 · 951×589 and
-   the 466×498 mid-fold; installed 669×930 · 951×648 · 466×657 · 678×445; scripts/audit-plan.mjs FOLD, 0103)
+   the 466×498 mid-fold; installed 669×930 · 951×648 · 466×657 · 678×445; scripts/audit-plan.mjs FOLD, 0103), a flip
+   phone's screens (estimates: 360×748 · 800×300 inner, 360×380 · 424×360 cover; FLIP, 0104), and a reported hinge kept
+   clear (tests/e2e/segments.spec.js, 0105)
    (`node scripts/title-audit.mjs`
    too; both are a gate, `npm run audit`, and the judges' theatre's controls are 44 px targets), colour on the HUD means state only (ink nominal, amber caution, red warning), and `prefers-reduced-motion`
    disables shakes and big transitions.
@@ -229,7 +231,7 @@ src/render/           three.js (r186):
   sliver.js             minimum on-screen width for thin lights/paint/struts (anti-flicker),
                           DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable; live on the Wall and the
-                          Show it turns just enough to keep the car below the top HUD and, upright, right of the rail;
+                          Show it turns just enough to keep the car below the top HUD (on a very short touch screen also a set number of px down, 0107) and, upright, right of the rail;
                           the Show's release cuts to a locked-off hold, then to the tracking carry before the row
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone;
                         every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099)

@@ -1629,7 +1629,7 @@ function foldPause() {
   else if (S.mode === 'drive' && fd() && !fd().paused) pause(true);
 }
 const onShape = () => { const was = document.documentElement.dataset.fold; syncFold(); if (document.documentElement.dataset.fold !== was) refitHudMode(); foldPause(); stage.reshape(); director.reframe(); frameReplay(); redrawPaused(); };
-syncFold();
+syncFold(); director.reframe();   // (the canvas may already be the top segment: the director reads its height)
 addEventListener('resize', onShape);
 for (const q of ['(horizontal-viewport-segments: 2)', '(vertical-viewport-segments: 2)', '(device-posture: folded)']) matchMedia(q).addEventListener?.('change', onShape);
 // Mist and crash smoke size in drawing-buffer pixels, kept current through resizes and the

@@ -1579,7 +1579,12 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    air the descent comes up under them, its tape shorter (its figures scaled up to stay 11 px on screen). */
 @media (pointer: coarse) and (orientation: portrait) and (max-height: 440px) {
   :root[data-hud='compact'] .hud .h-strip > [data-ch='g'] { display: none; }
-  :root[data-hud='compact'] .hud .h-primary { top: calc(var(--top) + 116px); }
+  /* The rail's head (the clock over the phase) rides up into the top bar's left corner, where the brand
+     would be (it steps out at this width): the top HUD ends with the top bar, so the camera can keep the car
+     under it and the parked row's roofs in frame (0107). */
+  :root[data-hud='compact'] .hud .h-mission { top: calc(8px + var(--safe-t)); width: 108px; height: auto; padding: 4px 0 0 2px; border-top: 0; background: none; -webkit-backdrop-filter: none; backdrop-filter: none; gap: 3px 0; }
+  :root[data-hud='compact'] .hud .h-strip { top: var(--top); }
+  :root[data-hud='compact'] .hud .h-primary { top: calc(var(--top) + 100px); }
   :root[data-hud='compact'] .hud .d-tape { height: 84px; }
   :root[data-hud='compact'] .hud .d-tape text { font-size: 22px; }
 }
