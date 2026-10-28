@@ -177,7 +177,7 @@ export async function loadRoad(id) {
   const raw = gunzipSync(readFileSync(new URL(`../public/roads/${id}.bin.gz`, import.meta.url)));
   return buildRoad(parseRoad(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)));
 }
-// Naive input (0108): a person who doesn't read the road at all. Whole key presses (or a thumb thrown
+// Naive input (0109): a person who doesn't read the road at all. Whole key presses (or a thumb thrown
 // anywhere on the stick), from a seeded generator, so a run is the same run every time.
 //   mash    a new random mix of ← / → / nothing, GO (70 %) and BRAKE (10 %) every 0.15–1.2 s
 //   hold    GO and → held the whole way          hold-l   GO and ←
@@ -205,7 +205,7 @@ function naiveInput(kind, n, st, rnd) {
 // 'keys' | 'touch' (a thumb chasing the wheel on the stick) | 'pad' (a skilled analog stick and triggers)
 // | 'tilt' (the phone tilted to chase the wheel: a hand's rate and tremor, read in 5 % steps like
 // src/touch-settings.js). `naive` (one of NAIVE) replaces the eye on the road with naive input on that device.
-// `ai` (0108): Free Drive's AI assist on. Spins and excursions count each time the car starts sliding past
+// `ai` (0109): Free Drive's AI assist on. Spins and excursions count each time the car starts sliding past
 // 50° or leaves the tarmac; `firstLoss` is the time of the first of either (s, Infinity: never).
 export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, react = 0.18, start = 18, pilot = null, vmax = 45, analog = false, level = null, device = 'keys', tc = 'on', abs = true, naive = null, seed = 1, ai = false } = {}) {
   const { createRoadCourse, poseAt, nearestSample } = await import('../src/sim/roads.js');
@@ -364,7 +364,7 @@ export async function levels(log = console.log, { secs = 60 } = {}) {
   return out;
 }
 
-// The diagnosis (0108): every road (the four baked ones and the endless road), Standard and Easy (and Free
+// The diagnosis (0109): every road (the four baked ones and the endless road), Standard and Easy (and Free
 // Drive's AI assist), with drivers who read the road (keys, a thumb on the stick, a tilted phone) and naive
 // input that doesn't (NAIVE). Exits and rail hits per km, spins, the first loss of control, the pace.
 export const DIAG_ROADS = ['stelvio', 'transfagarasan', 'bigsur', 'atlantic', 'endless'];

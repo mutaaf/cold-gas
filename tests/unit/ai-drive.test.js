@@ -1,4 +1,4 @@
-// Free Drive's AI drive (0108, src/driving.js): the computer holds the car on the road (pure pursuit along
+// Free Drive's AI drive (0109, src/driving.js): the computer holds the car on the road (pure pursuit along
 // the lane, a safe speed from the bends ahead, slides caught) and the player gives intent (GO sets the pace,
 // steer moves across the road, a hard sustained steer takes the wheel inside the edges). Pure, writes only
 // the ordinary input channels, never on a scored run (no road in the context: the level drives as before).
@@ -31,7 +31,7 @@ describe('the setting', () => {
     expect(loadDriving(true, store)).toMatchObject({ ai: false });
     saveDriving({ level: 'easy', tc: 'on', abs: true, ai: true }, store);
     expect(loadDriving(false, store)).toMatchObject({ level: 'easy', ai: true });
-    // A setting saved before 0108 (no `ai`): on.
+    // A setting saved before 0109 (no `ai`): on.
     mem.set('coldgas_driving', JSON.stringify({ level: 'advanced', tc: 'on', abs: true }));
     expect(loadDriving(false, store)).toMatchObject({ level: 'advanced', ai: true });
   });

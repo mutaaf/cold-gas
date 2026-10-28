@@ -125,7 +125,7 @@ export function randomSeed() {
 // opens the steepest so far; the map opens the full map (src/drive/minimap.js). Text changes only
 // when the rounded value does; canvases redraw only when due. The speed, the stats and the handle
 // share .fd-dash: on a phone in the compact HUD (src/hud-mode.js) they are one line.
-// AI drive's line (0108): what it does, in a phrase, on or off.
+// AI drive's line (0109): what it does, in a phrase, on or off.
 const AI_ON = 'Keeps you on the road · GO sets the pace · steer changes lane';
 const AI_OFF = 'Off: you drive · tap to let it hold the road';
 function driveHud(root, road, info, h, endless) {
@@ -295,7 +295,7 @@ function driveHud(root, road, info, h, endless) {
     setCam(mode) { el.cam.textContent = { chase: 'Chase', bumper: 'Bumper', cinema: 'Cinema' }[mode] || mode; },
     setTod(t) { el.tod.textContent = t === 'dusk' ? 'Dusk' : 'Day'; },
     setFan(on) { el.fan.setAttribute('aria-pressed', String(on)); },
-    // AI drive (0108): the switch, its state word and the line under it; `offer` marks it after a crash or two.
+    // AI drive (0109): the switch, its state word and the line under it; `offer` marks it after a crash or two.
     setAi(on) {
       ai.btn.setAttribute('aria-checked', String(!!on));
       ai.st.textContent = on ? 'On' : 'Off';

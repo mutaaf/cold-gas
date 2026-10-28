@@ -1,5 +1,5 @@
 ---
-id: 0108
+id: 0109
 title: AI drive in Free Drive; the computer holds the road and the player drives the intent (and a reset lets go)
 status: shipped
 priority: P1
@@ -67,7 +67,7 @@ On the real page (Playwright, 1280×720 keys and 390×844 touch), checking for b
   - No lateral-g cap of its own: the rack already stops at the tyres' peak, and a kinematic cap ran the car
     wide (docs/LESSONS.md).
 - **Setting:** `coldgas_driving.ai`, on for a player with no saved choice (and for a setting saved before
-  0108). One tap on the HUD's **AI drive** switch (a 44 px `role="switch"` with its line: "Keeps you on the
+  0109). One tap on the HUD's **AI drive** switch (a 44 px `role="switch"` with its line: "Keeps you on the
   road · GO sets the pace · steer changes lane"), **O**, or a gamepad's **Y** on the ground. The switch sits up
   top with the chips on a phone (compact: left of Reset and Exit; full: under the dock, clear of the map;
   sideways: between the wordmark and the clock) and under the build dock on a desktop.
@@ -107,7 +107,7 @@ On the real page (Playwright, 1280×720 keys and 390×844 touch), checking for b
 `node scripts/drive-feel.mjs diag standard,easy,ai` before and after; the multi-seed sweep in the PR.
 `tests/unit/ai-drive.test.js`, `tests/unit/driving-levels.test.js` (unchanged, green),
 `tests/e2e/wheel-ai-drive.spec.js`, `tests/e2e/driving-levels.spec.js` (Free Drive's level test turns AI drive off
-first: it measures the levels' own pedals and TC/ABS flags). Screenshots: `docs/shots/0108/`.
+first: it measures the levels' own pedals and TC/ABS flags). Screenshots: `docs/shots/0109/`.
 
 ## Out of scope
 - Real phones: the touch feel of the switch and of driving the intent with a thumb, iOS Safari's own

@@ -69,7 +69,7 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
 .fd-road-sub { margin-top: 6px !important; font-size: 13px; color: var(--lbl); }
 .fd-ctl { position: absolute; right: calc(24px + var(--safe-r)); top: calc(62px + var(--safe-t)); display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
 .fd-ctl [data-h-fan][aria-pressed='true'] { color: #07090d; background: var(--ink); border-color: var(--ink); }
-/* AI drive (0108): one tap, always on screen, a switch and a line saying what it does. Ink on glass like the
+/* AI drive (0109): one tap, always on screen, a switch and a line saying what it does. Ink on glass like the
    chips; the switch carries the state (filled: on). A 44 px target. */
 .fd-ai { position: absolute; left: calc(24px + var(--safe-l)); top: calc(156px + var(--safe-t)); pointer-events: auto; display: grid; grid-template-columns: auto auto 1fr;
   align-items: center; column-gap: 9px; row-gap: 3px; min-height: 44px; max-width: min(340px, calc(100vw - 48px - var(--safe-l) - var(--safe-r))); padding: 6px 16px 6px 11px; border-radius: 22px;

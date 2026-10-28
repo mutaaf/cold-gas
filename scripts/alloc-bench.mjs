@@ -62,7 +62,7 @@ async function bench(fn) {
 const run = createRun('show'), car = run.car;
 car.vel.z = 12;   // rolling: the hands' speed-aware steering and the driving aids are awake
 const out = newInput(), hands = createHands(), keysDown = { up: true, right: true }, raw = newInput();
-// Free Drive on Stelvio, rolling in the lane: AI drive (0108, on by default) follows the road every tick.
+// Free Drive on Stelvio, rolling in the lane: AI drive (0109, on by default) follows the road every tick.
 const { loadRoad } = await import('./drive-feel.mjs');
 const { createRoadCourse, poseAt } = await import('../src/sim/roads.js');
 const { createVehicle } = await import('../src/sim/vehicle.js');

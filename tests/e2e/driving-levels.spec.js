@@ -105,7 +105,7 @@ test('Free Drive: the setting is in the pause sheet, and each level drives diffe
   // Driving and the sheets only, no pixels: skip the draw. Stelvio on software GL took seconds a frame on
   // CI, between every step here (the test ran past 4.5 minutes in the flake guard).
   await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
-  // The levels themselves: AI drive (0108, on by default in Free Drive) off, so each level drives the car.
+  // The levels themselves: AI drive (0109, on by default in Free Drive) off, so each level drives the car.
   await page.evaluate(() => window.__coldgas.driving.set({ ai: false }));
   const frames = (n) => page.evaluate((n) => { const d = window.__coldgas.drive; for (let k = 0; k < n; k++) d.frame(0.05, performance.now() / 1000); }, n);
   // Esc pauses; Driving is there, and opens the sheet over the pause.

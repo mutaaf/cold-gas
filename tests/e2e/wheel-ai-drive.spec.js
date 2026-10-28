@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// AI drive (0108): Free Drive's computer-held road, on by default. Random input on the keyboard at 1280×720 and
+// AI drive (0109): Free Drive's computer-held road, on by default. Random input on the keyboard at 1280×720 and
 // on a phone's stick and pedals at 390×844 keeps the car on the road; the HUD's switch (and O) turns it off and
 // on; and a reset lets go of what was held (0099's rule, which Free Drive's own reset skipped).
 // The sim is stepped in the page in 50 ms frames with the draw skipped: only the driving is under test.
@@ -59,25 +59,30 @@ test('keyboard 1280×720: on by default, random keys stay on the road, O toggles
   for (const code of [...held]) await set(code, false);
   expect(worst).toBeLessThan(0.2);   // never off the tarmac (the car's centre within 0.2 m of the edge line)
   expect((await drive(page, 1)).i - i0).toBeGreaterThan(60);   // and it went somewhere (> 120 m)
-  // O: off (the level drives), O again: on.
+  // O: off (the level drives).
   await page.keyboard.press('KeyO');
   await expect(sw).toHaveAttribute('aria-checked', 'false');
   await page.keyboard.down('ArrowUp'); await drive(page, 4);
   expect(await page.evaluate(() => window.__coldgas.driving.get().ai)).toBe(false);
   await page.keyboard.up('ArrowUp');
-  await page.keyboard.press('KeyO');
-  await expect(sw).toHaveAttribute('aria-checked', 'true');
   // A reset lets go: ↑ and ← held through R put the fresh car at rest, the wheel centred, until pressed again.
+  // Checked with AI drive off, where the wheel is the player's alone: with it on, the bend under the fresh car
+  // sets the wheel (CI's 0.06 on a Stelvio curve), and a held ← only nudges the lane target in one tick.
   await page.keyboard.down('ArrowUp'); await page.keyboard.down('ArrowLeft');
   await drive(page, 10);
+  expect(await page.evaluate(() => window.__coldgas.driving.get().steer)).toBeLessThan(-0.3);   // the held lock
   await page.keyboard.press('KeyR');
   await page.evaluate(() => window.__coldgas.drive.frame(1 / 240, performance.now() / 1000));
-  // (Before 0108 the fresh car had the wheel at −1 and full throttle, into the rail it had just left.)
+  // (Before 0109 the fresh car had the wheel at −1 and full throttle, into the rail it had just left.)
   const after = await page.evaluate(() => { const g = window.__coldgas.driving.get(); return { thr: g.throttle, steer: g.steer, keys: window.__coldgas.input.held().keys.length }; });
   expect(after.thr).toBe(0);
-  expect(Math.abs(after.steer)).toBeLessThan(0.05);   // AI drive's own trim on the lane, not the held lock
+  expect(Math.abs(after.steer)).toBeLessThan(0.01);
   expect(after.keys).toBe(0);
   await page.keyboard.up('ArrowUp'); await page.keyboard.up('ArrowLeft');
+  // O again: on.
+  await page.keyboard.press('KeyO');
+  await expect(sw).toHaveAttribute('aria-checked', 'true');
+  expect(await page.evaluate(() => window.__coldgas.driving.get().ai)).toBe(true);
   expect(errors).toEqual([]);
 });
 

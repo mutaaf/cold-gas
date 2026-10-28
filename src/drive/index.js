@@ -4,7 +4,7 @@
 // 1 MW, the fan, all ten thrusters) on a road course built from OpenStreetMap and open terrain
 // (src/sim/roads.js). No score and no judges; a best time from the start to the end of the road
 // is kept on this device. R puts the car back on the road, C changes the camera, T the time of
-// day, X the suction fan, O AI drive (0108, src/driving.js: on unless the player turned it off).
+// day, X the suction fan, O AI drive (0109, src/driving.js: on unless the player turned it off).
 import './drive.css';
 import * as THREE from 'three';
 import { ROADS } from './manifest.js';
@@ -29,7 +29,7 @@ export const DEFAULT_ROAD = 'stelvio';
 export const ENDLESS = 'endless';
 const sanitizeSeed = (v) => String(v ?? '').trim().slice(0, 24).replace(/[^\w\-. ]/g, '');
 const RESET_PENALTY = 5;     // s added to a timed run per reset
-// AI drive off and the car back on the road this many times inside OFFER_S: the HUD offers it (0108).
+// AI drive off and the car back on the road this many times inside OFFER_S: the HUD offers it (0109).
 const OFFER_CRASHES = 2, OFFER_S = 120;
 
 export function createDrive(ctx) {
@@ -249,7 +249,7 @@ export function createDrive(ctx) {
 
   // --- The car ---------------------------------------------------------------------------------
   // Put a fresh car on the road at distance s (m), facing dir (+1 up the road, −1 back down).
-  // A fresh car lets go of everything (0099's rule, 0108): a key or a pedal held through R, Reset, From
+  // A fresh car lets go of everything (0099's rule, 0109): a key or a pedal held through R, Reset, From
   // the start or the road's start counts again only on a fresh press, and the wheel starts centred (it
   // used to put the new car at full lock and full throttle into the rail it had just been lifted off).
   function placeAt(s, dir, resetTimer) {
@@ -302,7 +302,7 @@ export function createDrive(ctx) {
     else ui.cue_('Back on the road', 1200);
   }
 
-  // --- AI drive (0108) -------------------------------------------------------------------------
+  // --- AI drive (0109) -------------------------------------------------------------------------
   // On unless the player turned it off (src/driving.js): the computer holds the road, the player sets the pace
   // and the lane. One tap on the HUD's switch, O, or a pad's Y.
   function aiOn() { return input.driving?.ai !== false; }

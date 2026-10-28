@@ -11,7 +11,7 @@
 //   Advanced  direct: no hands filter, a linear stick, analog pedals (gamepad triggers, the touch pads
 //             by slide); unscored: ESC off, TC On / Sport / Off, ABS On / Off, a handbrake.
 //
-// AI drive (0108), Free Drive's roads and the endless road only (it needs `ctx.road`: never a scored run,
+// AI drive (0109), Free Drive's roads and the endless road only (it needs `ctx.road`: never a scored run,
 // never the Sandbox's open arena): over any level, the computer drives the line and the player gives intent.
 // It steers along the lane by pure pursuit (src/drive/pilot.js's geometry, the whole road through a
 // hairpin), takes the bend ahead no faster than its tyres allow, catches slides, and drives a stock car
@@ -254,7 +254,7 @@ function aiDrive(A, hands, raw, car, s, road, aid, o) {
   let steer = want + (own - want) * w;
   // No lateral-g cap of its own: the rack already stops at the tyres' peak (vehicle.js rackLock), and a
   // kinematic cap (δ = atan(L·a/v²)) ignores the car's understeer, so it held the wheel short of what a
-  // bend at the safe speed needs and ran the car wide (drive-feel diag, 0108).
+  // bend at the safe speed needs and ran the car wide (drive-feel diag, 0109).
   // A slide: steer where the car is going, and lift.
   const beta = s.vf > 3 ? atanA((s.vl - car.angVel.y * AXLE_R) / s.vf) : 0;
   const bx = beta > AI.slip0 ? beta - AI.slip0 : beta < -AI.slip0 ? beta + AI.slip0 : 0;
@@ -429,7 +429,7 @@ export function applyGround(g, inp, car, flying) {
 
 // --- The setting on this device ---------------------------------------------------------------------
 const KEY = 'coldgas_driving';
-// AI drive (0108) is on in Free Drive for a player who hasn't chosen (a setting saved before it had no `ai`).
+// AI drive (0109) is on in Free Drive for a player who hasn't chosen (a setting saved before it had no `ai`).
 export function loadDriving(coarse, store = typeof localStorage !== 'undefined' ? localStorage : null) {
   const d = { level: defaultLevel(coarse), tc: 'on', abs: true, ai: true, saved: false };
   try {

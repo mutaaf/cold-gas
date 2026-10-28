@@ -206,7 +206,7 @@ export function bindInput(root, { onPause, running = () => false } = {}) {
 // 240 Hz ticks. So the pads are copied once a frame into reused objects of the same shape (every axis and
 // button there, as plain numbers). Before the first poll (tests, benches) a sample copies them itself.
 let startWas = false, yWas = false;
-// A gamepad's Y, pressed (the edge, once a frame): Free Drive toggles AI drive with it on the ground (0108).
+// A gamepad's Y, pressed (the edge, once a frame): Free Drive toggles AI drive with it on the ground (0109).
 const padYFns = new Set();
 export const onPadY = (fn) => { padYFns.add(fn); return () => padYFns.delete(fn); };
 const NO_PADS = [], PAD_BUTTONS = 18;
@@ -278,7 +278,7 @@ const hands = driver.hands;
 const drivingFns = new Set();
 export const onDriving = (fn) => { drivingFns.add(fn); return () => drivingFns.delete(fn); };
 export const drivingLevel = () => driver.level;
-// Change the driving setting (level, tc, abs, ai: Free Drive's AI drive, 0108) and remember it on this device.
+// Change the driving setting (level, tc, abs, ai: Free Drive's AI drive, 0109) and remember it on this device.
 export function setDriving(patch = {}) {
   if (validLevel(patch.level)) driving.level = patch.level;
   if (TC_MODES.includes(patch.tc)) driving.tc = patch.tc;

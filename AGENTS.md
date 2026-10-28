@@ -239,7 +239,7 @@ src/driving.js        driving levels (pure, 0066): Easy / Standard / Advanced on
                         the ordinary input channels (unscored grounds also: assist, and the car's tcOff / tcSport /
                         absOff / handbrake flags, never set on a scored run). Easy: road-speed governor, lane keep,
                         slide catch; Standard: the hands, bit for bit; Advanced: direct, analog pedals. AI drive
-                        (0108, `ai`, on unless turned off; only where ctx.road is given: Free Drive's roads and the
+                        (0109, `ai`, on unless turned off; only where ctx.road is given: Free Drive's roads and the
                         endless road, never a scored run or the Sandbox): over any level, pure pursuit along the lane
                         (dmath; the whole road through a hairpin), the safe speed for the bend ahead, slide catch, a
                         stock car with ESC; the player's GO is the pace, steer past what the bend asks moves the target
@@ -379,7 +379,7 @@ node scripts/grass-probe.mjs [roads] [off] [angle]    off the road and back on, 
 node scripts/verge-steps.mjs [roads]                  steps in the ground beside the road
 node scripts/ref-hash.mjs                             fingerprints of the stunt references (a physics change is bit-neutral or not)
 node scripts/drive-feel.mjs [bench|road|levels|bench-levels] [assist|pro]   driving feel: step steer, lane change, on-centre, 60–0, slides; a keyboard driver on the four roads; `levels`: the driving levels (naive keys/touch, skilled pad)
-node scripts/drive-feel.mjs diag [standard,easy,ai] [roads]   0108: the four roads + the endless one, road-reading drivers (keys, stick, tilt) and naive input (mash, hold, zigzag, swerve, GO only): exits and rails per km, spins, first loss, pace
+node scripts/drive-feel.mjs diag [standard,easy,ai] [roads]   0109: the four roads + the endless one, road-reading drivers (keys, stick, tilt) and naive input (mash, hold, zigzag, swerve, GO only): exits and rails per km, spins, first loss, pace
 node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
 npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
 npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)
