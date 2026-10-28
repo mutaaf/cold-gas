@@ -102,3 +102,8 @@ the tracking carry a metre before the row. Software GL, same machine as main 370
 show-wide, show-replay and retry-countdown are identical to main on both screens. `release-frame.spec.js` passes at
 all 8 viewports (no air frame above the line, none covered, the strip never over the car, roofs in shot over the
 row). Shots and heat maps in docs/shots/0063/ (the "before" heat maps are the wall region only, on #129's camera).
+
+## Critic re-review (2026-10-28 04:15, production 3611051): pass
+release-frame.spec.js was run against production and is green at all 8 viewports. With real frames, 0 of 35 air
+frames are above the HUD line + 24 px at 1440×900 and at 390×844. Roofs are in shot over the row, and the stunt is
+unchanged (94.0, sink 0.817 m/s). docs/critique/2026-10-28-0415.md.
