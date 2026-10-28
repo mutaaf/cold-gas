@@ -114,7 +114,10 @@ test('judges theatre: Skip during the figures ends the show at once', async ({ p
 // across: nothing overlaps or leaves it (the rail was clipped on the left at 844×390, Skip sat on it). The
 // judges' stream is held open so the show stays up; its panels get a fixed, long call (as
 // scripts/hud-audit.mjs measures it), so the stream's glass is up too.
-const THEATRE_VIEWPORTS = [[844, 390], [932, 430], [678, 340], [951, 543], [390, 844]];
+// The folding phone as measured (0103: 594×368 closed sideways, 951×589 open) and a flip phone (0104: 800×300
+// sideways with Chrome's bars, 424×360 its cover screen), where the raw stream steps out (the receipt has it).
+const THEATRE_VIEWPORTS = [[844, 390], [932, 430], [594, 368], [951, 589], [390, 844], [800, 300], [424, 360]];
+const streamShown = (w, h) => !(h <= 330 || (w <= 520 && h <= 440));
 for (const [w, h] of THEATRE_VIEWPORTS) {
   test(`judges theatre at ${w}×${h}: controls are 44 px targets, nothing overlaps or clips`, async ({ browser }) => {
     test.setTimeout(150_000);
@@ -167,7 +170,7 @@ for (const [w, h] of THEATRE_VIEWPORTS) {
       const controls = [...root.querySelectorAll('button')].filter(shown).map((el) => el.textContent.trim());
       return { overlaps, clipped, small, controls, ticker: shown(root.querySelector('.th-ticker')) };
     });
-    expect(m, JSON.stringify(m)).toMatchObject({ overlaps: [], clipped: [], small: [], ticker: true });
+    expect(m, JSON.stringify(m)).toMatchObject({ overlaps: [], clipped: [], small: [], ticker: streamShown(w, h) });
     // Retry, Home and Skip are all there (on a short screen the theatre covers the sheet's own).
     expect(m.controls).toEqual(expect.arrayContaining(['Retry', 'Home', 'Skip']));
     expect(errors).toEqual([]);

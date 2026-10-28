@@ -16,9 +16,13 @@ export function defaultHudMode({ coarse = false, w = 0, h = 0 } = {}) {
 // Room for every instrument (0103): sideways, the full set needs 720 px between the edges (the stick, the
 // band and the right thumb's slots side by side). A phone that narrow sideways (the folding phone closed
 // and turned: 594 or 678 px, 0102) shows the compact line, and the handle that would open MORE is put away;
-// the player's choice is kept and comes back on a screen with the room (unfolded, or upright).
+// the player's choice is kept and comes back on a screen with the room (unfolded, or upright). Nor is there
+// room under 320 px of height sideways (a flip phone's tall screen turned, with Chrome's bars: 300), or on a
+// screen under 440 px both ways (a flip phone's cover screen, 0104).
 export function fullFits({ coarse = false, w = 0, h = 0 } = {}) {
-  return !(coarse && w > h && w < 720);
+  if (!coarse) return true;
+  if (Math.max(w, h) < 440) return false;
+  return !(w > h && (w < 720 || h < 320));
 }
 const fitsNow = () => fullFits({ coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, w: globalThis.innerWidth || 0, h: globalThis.innerHeight || 0 });
 // What the HUD shows: the mode, unless the full set has no room here.

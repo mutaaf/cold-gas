@@ -11,12 +11,12 @@
 // Oulasvirta 2014). The same constants live in human-phone.mjs.
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
-import { FOLD, dprFor, insetCss } from './audit-plan.mjs';
+import { FOLD, FLIP, dprFor, insetCss } from './audit-plan.mjs';
 
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', label = 'after'] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
-// Phones, and the folding phone's measured poses (0103: scripts/audit-plan.mjs FOLD, with their insets).
-const VPS = [[390, 844], [430, 932], [844, 390], [932, 430], ...FOLD.filter(([w, h]) => w !== 466)];
+// Phones, the folding phone's measured poses (0103, with their insets) and a flip phone's screens (0104).
+const VPS = [[390, 844], [430, 932], [844, 390], [932, 430], ...FOLD.filter(([w, h]) => w !== 466), ...FLIP];
 const geomFile = `${out}/geom.json`;
 const geom = existsSync(geomFile) ? JSON.parse(readFileSync(geomFile, 'utf8')) : {};
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });

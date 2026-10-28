@@ -24,6 +24,11 @@ export const FOLD_INSETS = {
   '594x368': { l: 84 }, '678x384': { b: 34 }, '669x871': { t: 2, b: 34 }, '951x589': { t: 2, b: 34 }, '466x498': { r: 84 },
   '669x930': { t: 61, b: 34 }, '951x648': { t: 2, b: 34 }, '466x657': { r: 84 }, '678x445': { l: 84, b: 34 },
 };
+// A flip phone (0104), in Chrome: the tall inner screen upright (360×748: 1080 px across at 3×, less Chrome's
+// bars) and sideways (800×300: less the URL bar and the status bar), and the near-square cover screen when
+// the browser runs there (360×380, a Flip's; 424×360, a razr's). Estimates: no primary source gives Chrome's
+// CSS viewport on any of them (docs/backlog/0102); each is the cramped end of its range. 3×.
+export const FLIP = [[360, 748], [800, 300], [360, 380], [424, 360]];
 export const DESKTOPS = [[1280, 720], [1920, 1080], [720, 1280], [1080, 1920]];
 export const SAFE = [[390, 844, 1], [430, 932, 1], [844, 390, 1], [932, 430, 1], [814, 380, 1]];
 // Free Drive is flown at these (phones, iPads and the two desktop sizes).
@@ -31,13 +36,13 @@ export const DRIVE = ['390x844', '844x390', '1280x720', '1920x1080', '768x1024',
 
 const parse = (v) => { const m = v.match(/^(\d+)x(\d+)(s?)$/); return [Number(m[1]), Number(m[2]), m[3] ? 1 : 0]; };
 export function viewportsFor(set) {
-  return set === 'phones' ? PHONES : set === 'tablets' ? TABLETS : set === 'fold' ? FOLD : set === 'safe' ? SAFE
-    : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map(parse) : [...PHONES, ...TABLETS, ...FOLD, ...DESKTOPS, ...SAFE];
+  return set === 'phones' ? PHONES : set === 'tablets' ? TABLETS : set === 'fold' ? FOLD : set === 'flip' ? FLIP : set === 'safe' ? SAFE
+    : set === 'quick' ? [[390, 844], [844, 390], [1280, 720]] : /^\d+x\d+/.test(set) ? set.split(',').map(parse) : [...PHONES, ...TABLETS, ...FOLD, ...FLIP, ...DESKTOPS, ...SAFE];
 }
 export const vpBase = ([w, h, safe]) => `${w}x${h}${safe ? 's' : ''}`;
-export const touchFor = (w, h) => [...PHONES, ...TABLETS, ...FOLD].some(([a, b]) => a === w && b === h);
+export const touchFor = (w, h) => [...PHONES, ...TABLETS, ...FOLD, ...FLIP].some(([a, b]) => a === w && b === h);
 // The device pixel ratio a viewport flies at: the fold's measured 3, else 2.
-export const dprFor = (w, h) => (FOLD.some(([a, b]) => a === w && b === h) ? 3 : 2);
+export const dprFor = (w, h) => ([...FOLD, ...FLIP].some(([a, b]) => a === w && b === h) ? 3 : 2);
 // The --safe-* insets forced on a viewport: a notched phone's on the safe-area pass (`s`: 47 px on the notch
 // side in landscape, as iOS reports both sides, 34 px home indicator upright, 21 px sideways), a fold pose's
 // measured ones, else none (null).
@@ -51,7 +56,7 @@ export const insetCss = (w, h, safe = 0) => {
   return i && `:root { --safe-t: ${i.t}px !important; --safe-l: ${i.l}px !important; --safe-r: ${i.r}px !important; --safe-b: ${i.b}px !important; }`;
 };
 
-export const TITLE_COST = 560;   // 460 s for 23 viewports on CI; 29 since 0103
+export const TITLE_COST = 640;   // 460 s for 23 viewports on CI; 29 since 0103, 33 since 0104
 export function cost(item) {
   if (item === 'title') return TITLE_COST;
   const [w, h, safe] = item;
