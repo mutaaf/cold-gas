@@ -1448,10 +1448,10 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
 /* Sideways and short (the fold closed and turned, 594×368 and installed 678×445; a phone at 390; the flip's screens),
    the car on the ground rides at 60–75 % of the height, right where the cue line stood over the band and the phase
    tab: it hid the car outright at the start of a run (0112, scripts/hud-cover.mjs). On the ground the line goes up
-   under the top bar, into the sky, from edge to edge; in the air the car is high and the line comes back down. */
+   under the top bar, into the sky, left of the right thumb's column; in the air the car is high and the line comes back down. */
 @media (pointer: coarse) and (orientation: landscape) and (max-height: 460px) {
   :root[data-hud='compact'] body:not(.driving):not(:has(.hud[data-air]:not([hidden]))) .cue { top: calc(66px + var(--safe-t)); bottom: auto;
-    left: calc(clamp(16px, 2.4vw, 36px) + var(--safe-l)); right: calc(clamp(16px, 2.4vw, 36px) + var(--safe-r)); }
+    left: calc(clamp(16px, 2.4vw, 36px) + var(--safe-l)); right: calc(164px + var(--safe-r)); }   /* short of the right thumb's column (LIFT rises to 80 px on a razr's cover) */
   :root[data-hud='compact'] body:not(.driving):has([data-drill-bar]:not([hidden])):not(:has(.hud[data-air]:not([hidden]))) .cue { top: calc(116px + var(--safe-t)); }
 }
 @container (max-width: 330px) {

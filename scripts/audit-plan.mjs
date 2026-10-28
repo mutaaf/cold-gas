@@ -132,7 +132,10 @@ export function measureCover(ROOTS) {
 }
 
 
-// The ceiling the audit holds every touch frame of a run to (0112): the HUD may cover at most this share of the glass.
-// Measured after 0112 (scripts/hud-cover.mjs): ≤ 30 % on a phone, a fold or an iPad; a flip's cover screen (under
-// 160 000 px², 360×380 and 424×360) has the same controls on a quarter of the glass, so it is held to 45 %.
-export const coverCeiling = (w, h) => (w * h < 160000 ? 0.45 : 0.3);
+// The ceiling the audit holds a touch frame of a run to (0112), with the HUD compact (what a touch screen starts with;
+// the full set is the player's own choice, one tap away): the HUD may cover at most this share of the glass. By the
+// glass's area, as the thumbs' controls keep their size whatever the screen: a phone, a fold or an iPad (≥ 300 000 px²)
+// 33 %; a small phone, the fold closed in a tab or mid-swing, a flip's screens (≥ 160 000) 40 %; a flip's cover screen
+// 60 %. Measured after 0112, every compact frame of the audit (Free Drive's with its arrival title up): at most 30.3 %
+// (844×390 with a notch's insets), 37.1 % (320×568) and 55.8 % (360×380).
+export const coverCeiling = (w, h) => (w * h >= 300000 ? 0.33 : w * h >= 160000 ? 0.4 : 0.6);

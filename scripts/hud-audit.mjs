@@ -30,7 +30,7 @@
 //
 // A gate (0082): the exit code is 1 when any count is non-zero (overlaps, offscreen, text < 11 px,
 // labels < 4.5:1, targets < 44 px, anything that changed between the two shots, frames missed, and since 0112 a touch
-// frame of a run whose HUD covers more of the glass than scripts/audit-plan.mjs coverCeiling allows), and
+// frame of a run, HUD compact, that covers more of the glass than scripts/audit-plan.mjs coverCeiling allows), and
 // the offenders are listed at the end.
 // --shard=N/M flies the N-th of M shares of the viewports, balanced by estimated cost (scripts/audit-plan.mjs;
 // CI splits `all` across parallel jobs).
@@ -240,8 +240,9 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
       return { t: t.t, px: t.px, ratio: Math.round(worst * 100) / 100 };
     });
   }, { shotB64: shot.toString('base64'), bareB64: bare.toString('base64'), texts: m.texts, dpr: await page.evaluate(() => devicePixelRatio) });
-  // How much of the glass the HUD covers (0112), on a touch screen's run frames: a ceiling, so the footprint can't creep back.
-  const cover = boxes !== BOXES ? null : await page.evaluate(({ ROOTS, src }) => {
+  // How much of the glass the HUD covers (0112), on a touch screen's run frames with the HUD compact: a ceiling, so the
+  // footprint can't creep back (the full set is the player's choice).
+  const cover = boxes !== BOXES || !vpName.endsWith('-compact') ? null : await page.evaluate(({ ROOTS, src }) => {
     if (!matchMedia('(pointer: coarse)').matches) return null;
     const g = new Function(`return (${src})`)()(ROOTS).any;
     return Math.round(1000 * g.reduce((a, v) => a + v, 0) / g.length) / 1000;
