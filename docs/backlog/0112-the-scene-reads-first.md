@@ -40,7 +40,7 @@ in the air with both touch schemes, Free Drive rolling; 15 sizes):
 - The canvas is 100 % of the window's box; installed (`:root[data-installed]` from index.html: display-mode standalone
   or fullscreen, or iOS's navigator.standalone) it bleeds 24 px past the window's bottom.
 - `scripts/hud-cover.mjs` (the probe); `scripts/audit-plan.mjs` measureCover + coverCeiling; the HUD audit gates every
-  touch frame of a run with the HUD compact at the ceiling (by area: 33 %; 40 % under 300 000 px²; 60 % on a flip's cover screen). DRIVE gains 594×368, 678×445, 466×657,
+  touch frame of a run with the HUD compact at the ceiling (by area: 33 %; 46 % under 300 000 px²; 60 % on a flip's cover screen). DRIVE gains 594×368, 678×445, 466×657,
   360×380, 424×360, 800×300 (0110).
 
 ## Acceptance criteria

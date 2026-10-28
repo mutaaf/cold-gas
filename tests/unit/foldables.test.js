@@ -105,11 +105,11 @@ describe('Free Drive on the cramped screens, and the cover ceiling', () => {
       expect(all).toContain(v);
     }
   });
-  it('holds a phone to a third of the glass, a small screen to 40 %, a cover screen to 60 %', () => {
+  it('holds a phone to a third of the glass, a small screen to 46 %, a cover screen to 60 %', () => {
     expect(coverCeiling(390, 844)).toBe(0.33);
     expect(coverCeiling(669, 930)).toBe(0.33);
-    expect(coverCeiling(320, 568)).toBe(0.4);
-    expect(coverCeiling(800, 300)).toBe(0.4);
+    expect(coverCeiling(320, 568)).toBe(0.46);
+    expect(coverCeiling(800, 300)).toBe(0.46);
     expect(coverCeiling(360, 380)).toBe(0.6);
   });
 });

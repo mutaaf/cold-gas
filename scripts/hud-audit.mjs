@@ -201,6 +201,16 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
     }
     return { overlaps, offscreen, texts, smallTargets };
   }, { BOXES: boxes, TEXT_ROOTS: textRoots, targets, within });
+  // How much of the glass the HUD covers (0112), on a touch screen's run frames with the HUD compact: a ceiling, so the
+  // footprint can't creep back (the full set is the player's choice). Measured here, with the page still held (after the
+  // thaw a cue line can fade or a transition run: 29 % one run, 43 % the next).
+  const cover = boxes !== BOXES || !vpName.endsWith('-compact') ? null : await page.evaluate(({ ROOTS, src }) => {
+    if (!matchMedia('(pointer: coarse)').matches) return null;
+    const g = new Function(`return (${src})`)()(ROOTS).any;
+    return Math.round(1000 * g.reduce((a, v) => a + v, 0) / g.length) / 1000;
+  }, { ROOTS: COVER_ROOTS, src: measureCover.toString() });
+  const [cw, ch] = vpName.match(/^(\d+)x(\d+)/).slice(1).map(Number);
+  const overCover = cover !== null && cover > coverCeiling(cw, ch) ? `${Math.round(cover * 100)}% > ${coverCeiling(cw, ch) * 100}%` : null;
   // Contrast: hide the HUD's text, screenshot the same frame (the sim is frozen), compare.
   await page.addStyleTag({ content: `${textRoots.split(', ').map((s) => `${s}, ${s} *`).join(', ')} { color: transparent !important; fill: transparent !important; text-shadow: none !important; -webkit-text-fill-color: transparent !important; }` }).then((h) => page.evaluate((el) => { el.id = 'audit-hide'; }, h));
   await page.waitForTimeout(ms(80));
@@ -240,15 +250,6 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
       return { t: t.t, px: t.px, ratio: Math.round(worst * 100) / 100 };
     });
   }, { shotB64: shot.toString('base64'), bareB64: bare.toString('base64'), texts: m.texts, dpr: await page.evaluate(() => devicePixelRatio) });
-  // How much of the glass the HUD covers (0112), on a touch screen's run frames with the HUD compact: a ceiling, so the
-  // footprint can't creep back (the full set is the player's choice).
-  const cover = boxes !== BOXES || !vpName.endsWith('-compact') ? null : await page.evaluate(({ ROOTS, src }) => {
-    if (!matchMedia('(pointer: coarse)').matches) return null;
-    const g = new Function(`return (${src})`)()(ROOTS).any;
-    return Math.round(1000 * g.reduce((a, v) => a + v, 0) / g.length) / 1000;
-  }, { ROOTS: COVER_ROOTS, src: measureCover.toString() });
-  const [cw, ch] = vpName.match(/^(\d+)x(\d+)/).slice(1).map(Number);
-  const overCover = cover !== null && cover > coverCeiling(cw, ch) ? `${Math.round(cover * 100)}% > ${coverCeiling(cw, ch) * 100}%` : null;
   const small = m.texts.filter((t) => t.px < 11).map((t) => `${t.t} ${t.px}px`);
   const low = contrast.filter((c) => c.ratio !== null && c.ratio < 4.5).map((c) => `${c.t} ${c.ratio}`);
   const minPx = Math.min(...m.texts.map((t) => t.px));
