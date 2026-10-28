@@ -41,6 +41,8 @@ export function createHands() {
   const pedal = (cur, on, tIn) => Math.max(0, Math.min(1, cur + (on ? 1 / (240 * tIn) : -2 / (240 * tIn))));
   return {
     reset() { h.ax = 0; h.thr = 0; h.brk = 0; },
+    // Put the wheel where it is (AI assist handing it back, 0109): the hands carry on from there.
+    hold(ax) { h.ax = Math.max(-1, Math.min(1, ax)); },
     get ax() { return h.ax; },
     // A steering target in [−1, 1] (keys, or the touch stick) at ground speed v (m/s). Keys: full
     // lock in 0.25 s at a crawl, ≈0.6 s at 60 km/h, ≈1 s at 120 km/h, back to centre twice as fast.

@@ -62,6 +62,13 @@ async function bench(fn) {
 const run = createRun('show'), car = run.car;
 car.vel.z = 12;   // rolling: the hands' speed-aware steering and the driving aids are awake
 const out = newInput(), hands = createHands(), keysDown = { up: true, right: true }, raw = newInput();
+// Free Drive on Stelvio, rolling in the lane: AI drive (0109, on by default) follows the road every tick.
+const { loadRoad } = await import('./drive-feel.mjs');
+const { createRoadCourse, poseAt } = await import('../src/sim/roads.js');
+const { createVehicle } = await import('../src/sim/vehicle.js');
+const { quatFromYaw } = await import('../src/sim/m3.js');
+const road = await loadRoad('stelvio'), fdCar = createVehicle(createRoadCourse(road)), fdCtx = { free: true, road };
+{ const p = poseAt(road, 200, 1); fdCar.pos.x = p.x; fdCar.pos.y = p.y + 0.5; fdCar.pos.z = p.z; quatFromYaw(fdCar.quat, p.yaw); fdCar.vel.x = 14 * Math.sin(p.yaw); fdCar.vel.z = 14 * Math.cos(p.yaw); }
 const rows = {
   'sample ground': () => sample('drive', 'assist', out, false, car),
   'sample air': () => sample('air', 'pro', out, true, car),
@@ -71,6 +78,8 @@ const rows = {
   // The game's own chain, a tick of a live run: sample the devices, then quantise, compare and log
   // (logInput is stepRun less the physics; the pads are copied once a frame, not here).
   'sample → run log': () => { logInput(run, sample('air', 'pro', out, true, car)); run.tick++; },
+  // Last: a road in the context makes sample() see a second shape of ctx, and the rows after it would measure that.
+  'sample Free Drive (AI drive)': () => sample('drive', 'assist', out, false, fdCar, fdCtx),
 };
 let bad = 0;
 pollPads();   // once a frame in the game: every tick of the frame samples the pads it copied

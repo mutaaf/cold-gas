@@ -205,7 +205,10 @@ export function bindInput(root, { onPause, running = () => false } = {}) {
 // on every call, each axis and button value read from a pad is a new number, and a frame runs up to eight
 // 240 Hz ticks. So the pads are copied once a frame into reused objects of the same shape (every axis and
 // button there, as plain numbers). Before the first poll (tests, benches) a sample copies them itself.
-let startWas = false;
+let startWas = false, yWas = false;
+// A gamepad's Y, pressed (the edge, once a frame): Free Drive toggles AI drive with it on the ground (0109).
+const padYFns = new Set();
+export const onPadY = (fn) => { padYFns.add(fn); return () => padYFns.delete(fn); };
 const NO_PADS = [], PAD_BUTTONS = 18;
 const newPadCopy = () => ({ axes: new Float64Array(4), buttons: Array.from({ length: PAD_BUTTONS }, () => ({ pressed: false, value: 0 })) });
 const padCopies = [newPadCopy(), newPadCopy(), newPadCopy(), newPadCopy()];   // more if a browser lists more slots
@@ -239,16 +242,19 @@ export function pollPads() {
   const pads = copyPads();
   padsNow = padsFrame;
   if (!pads) return;
-  let start = false, intent = false;
+  let start = false, intent = false, y = false;
   for (let i = 0; i < pads.length; i++) {
     const p = pads[i];
     if (!p) continue;
     if (p.buttons[9]?.pressed) start = true;
     else if (!intent && padIntent(p)) intent = true;
+    if (padsFrame[i] && padsFrame[i].buttons[3].pressed) y = true;   // a pad held off by a reset doesn't count
   }
   if (intent || start) device.note('pad');
   if (start && !startWas) onPauseCb?.();
   startWas = start;
+  if (y && !yWas) for (const fn of padYFns) fn();
+  yWas = y;
   return intent || start;   // a pad in use: the title isn't idle (src/main.js syncLife)
 }
 
@@ -272,19 +278,20 @@ const hands = driver.hands;
 const drivingFns = new Set();
 export const onDriving = (fn) => { drivingFns.add(fn); return () => drivingFns.delete(fn); };
 export const drivingLevel = () => driver.level;
-// Change the driving setting (level, tc, abs) and remember it on this device.
+// Change the driving setting (level, tc, abs, ai: Free Drive's AI drive, 0109) and remember it on this device.
 export function setDriving(patch = {}) {
   if (validLevel(patch.level)) driving.level = patch.level;
   if (TC_MODES.includes(patch.tc)) driving.tc = patch.tc;
   if (typeof patch.abs === 'boolean') driving.abs = patch.abs;
+  if (typeof patch.ai === 'boolean') driving.ai = patch.ai;
   driving.saved = true;
   saveDriving(driving);
   driver.set(driving.level, driving);
   for (const fn of drivingFns) fn(driving);
   return driving;
 }
-// What the driver did on the last ground tick (tests): the level, the steer, Easy's aids (allocates).
-export const drivingState = () => ({ level: driver.level, steer: driver.steer, throttle: driver.throttle, aid: { ...driver.aid } });
+// What the driver did on the last ground tick (tests): the level, AI drive, the steer, the aids (allocates).
+export const drivingState = () => ({ level: driver.level, ai: driver.ai, steer: driver.steer, throttle: driver.throttle, aid: { ...driver.aid } });
 // A finger near the top of an Advanced pedal is full; near the bottom about a third.
 export const pedalAmount = (fy) => Math.max(0.35, Math.min(1, 0.35 + 0.65 * (1 - fy)));
 const dz = (v) => (Math.abs(v) < 0.12 ? 0 : v);

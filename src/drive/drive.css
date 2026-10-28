@@ -69,6 +69,25 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
 .fd-road-sub { margin-top: 6px !important; font-size: 13px; color: var(--lbl); }
 .fd-ctl { position: absolute; right: calc(24px + var(--safe-r)); top: calc(62px + var(--safe-t)); display: flex; gap: 8px; flex-wrap: wrap; justify-content: flex-end; max-width: 60vw; }
 .fd-ctl [data-h-fan][aria-pressed='true'] { color: #07090d; background: var(--ink); border-color: var(--ink); }
+/* AI drive (0109): one tap, always on screen, a switch and a line saying what it does. Ink on glass like the
+   chips; the switch carries the state (filled: on). A 44 px target. */
+.fd-ai { position: absolute; left: calc(24px + var(--safe-l)); top: calc(156px + var(--safe-t)); pointer-events: auto; display: grid; grid-template-columns: auto auto 1fr;
+  align-items: center; column-gap: 9px; row-gap: 3px; min-height: 44px; max-width: min(340px, calc(100vw - 48px - var(--safe-l) - var(--safe-r))); padding: 6px 16px 6px 11px; border-radius: 22px;
+  border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px); color: var(--ink); text-align: left; text-shadow: none; cursor: pointer;
+  font: 500 12px/1 var(--text); letter-spacing: 0.12em; text-transform: uppercase; transition: background-color 0.18s var(--ease), color 0.18s var(--ease); }
+.fd-ai b { font-weight: 500; white-space: nowrap; }
+.fd-ai-st { justify-self: end; font: 400 11px/1 var(--mono); letter-spacing: 0.06em; }
+.fd-ai small { grid-column: 2 / -1; font: 400 11px/1.3 var(--text); letter-spacing: 0.01em; text-transform: none; color: rgba(245, 246, 248, 0.86); }
+.fd-ai-sw { position: relative; grid-row: 1 / span 2; width: 28px; height: 16px; border-radius: 8px; border: 1px solid currentColor; }
+.fd-ai-sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 10px; height: 10px; border-radius: 50%; background: currentColor; transition: transform 0.18s var(--ease); }
+.fd-ai[aria-checked='true'] { border-color: rgba(245, 246, 248, 0.5); }
+.fd-ai[aria-checked='true'] .fd-ai-sw { background: var(--ink); border-color: var(--ink); }
+.fd-ai[aria-checked='true'] .fd-ai-sw::after { transform: translateX(12px); background: #07090d; }
+.fd-ai[aria-checked='false'] .fd-ai-st, .fd-ai[aria-checked='false'] small { color: var(--lbl); }
+/* Offered after a crash or two (src/drive/index.js offerAi): a ring that says "here". */
+.fd-ai[data-offer] { box-shadow: 0 0 0 2px var(--ink), 0 0 0 6px rgba(245, 246, 248, 0.22); }
+.fd-ai:focus-visible { outline: 2px solid var(--ice); outline-offset: 3px; }
+@media (prefers-reduced-motion: reduce) { .fd-ai, .fd-ai-sw::after { transition: none; } }
 .fd-timer { position: absolute; left: 50%; top: calc(20px + var(--safe-t)); transform: translateX(-50%); display: grid; justify-items: center; gap: 5px; opacity: 0.86; transition: opacity 0.4s var(--ease); }
 /* Waiting to start, the clock reads at a label's weight (0.86, as --lbl), not 0.6: over a day sky at
    the top of an iPad's frame 0:00.0 measured 4.28:1 at 0.6 (0087); 0.86 holds 6:1 there. */
@@ -144,6 +163,9 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
   .fd-map { top: calc(312px + var(--safe-t)); right: calc(14px + var(--safe-r)); }
   .fd-hud::before { height: calc(330px + var(--safe-t)); }
   body.driving .cue { --cue-top: 470px; }
+  /* AI drive: on the left, under the chips and the dock and over the cue line; compact (below), in the
+     chips' row. */
+  .fd-ai { left: calc(16px + var(--safe-l)); top: calc(392px + var(--safe-t)); max-width: min(256px, calc(100vw - 134px - var(--safe-l) - var(--safe-r))); }   /* clear of the map (98 px with its padding) */
 }
 @media (pointer: coarse) and (orientation: landscape) {
   .fd-speed { bottom: auto; top: calc(54px + var(--safe-t)); }
@@ -165,6 +187,15 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
      ring it sat under the third row of chips (BUILD · QUESTS · ARCADE, the full set) with a notch's
      insets lifting the stick, its E showing between them (0087). Inside, nothing can reach it. */
   body.driving .stick-hint { top: 9px; }
+  /* AI drive: up top between the wordmark and the clock, clear of the thumbs, the map and the chips in either
+     HUD; the switch and its word (the line is the cue's when it changes, and the title's). */
+  .fd-ai { left: calc(176px + var(--safe-l)); top: calc(8px + var(--safe-t)); max-width: 190px; }
+  .fd-ai small { display: none; }
+}
+/* Narrower than 720 sideways (a folding phone closed and turned, 0103: the compact line only), the clock comes
+   within reach of the wordmark: the switch goes under Reset and Exit instead. */
+@media (pointer: coarse) and (orientation: landscape) and (max-width: 719px) {
+  .fd-ai { left: calc(24px + var(--safe-l)); top: calc(144px + var(--safe-t)); }
 }
 @media (pointer: coarse) and (orientation: landscape) and (min-height: 700px) {
   .fd-fine { left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
@@ -285,6 +316,10 @@ body.xmap-open .fd-hud, body.xmap-open .bq-dock, body.xmap-open .touch { opacity
   :root[data-hud='compact'] .bq-dock { top: calc(164px + var(--safe-t)); }
   :root[data-hud='compact'] body.driving .cue { top: calc(210px + var(--safe-t)); bottom: auto; left: calc(16px + var(--safe-l)); right: calc(16px + var(--safe-r)); }   /* the car rides low here: the cue stays up top */
   :root[data-hud='compact'] .fd-hud::before { height: calc(212px + var(--safe-t)); }
+  /* AI drive in the chips' row, left of Reset and Exit; the cue line steps down under it (Free Drive only). */
+  :root[data-hud='compact'] .fd-ai { top: calc(162px + var(--safe-t)); max-width: calc(100vw - 160px - var(--safe-l) - var(--safe-r)); }
+  :root[data-hud='compact'] body.driving:has([data-h-ai]) .cue { top: calc(238px + var(--safe-t)); }
+  :root[data-hud='compact'] body:has([data-h-ai]) .fd-hud::before { height: calc(240px + var(--safe-t)); }
 }
 @media (pointer: coarse) and (orientation: landscape) {
   :root[data-hud='compact'] .fd-dash { top: calc(54px + var(--safe-t)); bottom: auto; left: calc(250px + var(--safe-l)); right: calc(150px + var(--safe-r)); width: fit-content; margin: 0 auto; transform: none; }

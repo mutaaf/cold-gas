@@ -164,35 +164,76 @@ export function bench(tier = 'assist', log = console.log, level = null) {
 // bend ahead and lift or brake for it, a little too fast (`push` × the grip they think they have).
 // Reports how far they got in `secs`, rail and verge contacts, and the worst slide.
 export async function loadRoad(id) {
+  if (id === 'endless' || id.startsWith('endless:')) {
+    // The endless road from a seed (default 'cold-gas'): its course rides along (objects, the ground).
+    const { createEndlessCourse } = await import('../src/sim/endless.js');
+    const course = createEndlessCourse(id.slice(8) || 'cold-gas');
+    course.road.course = course;
+    return course.road;
+  }
   const { readFileSync } = await import('node:fs');
   const { gunzipSync } = await import('node:zlib');
   const { parseRoad, buildRoad } = await import('../src/sim/roads.js');
   const raw = gunzipSync(readFileSync(new URL(`../public/roads/${id}.bin.gz`, import.meta.url)));
   return buildRoad(parseRoad(raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength)));
 }
+// Naive input (0109): a person who doesn't read the road at all. Whole key presses (or a thumb thrown
+// anywhere on the stick), from a seeded generator, so a run is the same run every time.
+//   mash    a new random mix of ← / → / nothing, GO (70 %) and BRAKE (10 %) every 0.15–1.2 s
+//   hold    GO and → held the whole way          hold-l   GO and ←
+//   zigzag  GO, and ← / → swapped every 1.2 s     swerve   GO, a full-lock jab of 0.3–0.8 s every ≈ 2 s
+//   go      GO held, hands off the wheel
+export const NAIVE = ['mash', 'hold', 'hold-l', 'zigzag', 'swerve', 'go'];
+function naiveInput(kind, n, st, rnd) {
+  const t = n * DT;
+  if (kind === 'go') { st.ax = 0; st.up = 1; st.down = 0; return st; }
+  if (kind === 'hold' || kind === 'hold-l') { st.ax = kind === 'hold' ? 1 : -1; st.up = 1; st.down = 0; return st; }
+  if (kind === 'zigzag') { st.ax = Math.floor(t / 1.2) % 2 ? 1 : -1; st.up = 1; st.down = 0; return st; }
+  if (t < st.next) return st;
+  if (kind === 'swerve') {
+    st.up = 1; st.down = 0;
+    if (st.ax !== 0) { st.ax = 0; st.next = t + 1 + rnd() * 2; } else { st.ax = rnd() < 0.5 ? -1 : 1; st.next = t + 0.3 + rnd() * 0.5; }
+    return st;
+  }
+  st.ax = [-1, 0, 1][Math.floor(rnd() * 3)]; st.up = rnd() < 0.7 ? 1 : 0; st.down = rnd() < 0.1 ? 1 : 0;
+  if (st.analog) st.ax = st.ax * (0.3 + 0.7 * rnd());   // a thumb lands anywhere on the stick
+  st.next = t + 0.15 + rnd() * 1.05;
+  return st;
+}
+
 // `level` drives through src/driving.js (null: the old keyboard hands straight into the sim); `device`
-// 'keys' | 'touch' (a thumb chasing the wheel on the stick) | 'pad' (a skilled analog stick and triggers).
-// Spins and excursions count each time the car starts sliding past 50° or leaves the tarmac.
-export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, react = 0.18, start = 18, pilot = null, vmax = 45, analog = false, level = null, device = 'keys', tc = 'on', abs = true } = {}) {
+// 'keys' | 'touch' (a thumb chasing the wheel on the stick) | 'pad' (a skilled analog stick and triggers)
+// | 'tilt' (the phone tilted to chase the wheel: a hand's rate and tremor, read in 5 % steps like
+// src/touch-settings.js). `naive` (one of NAIVE) replaces the eye on the road with naive input on that device.
+// `ai` (0109): Free Drive's AI assist on. Spins and excursions count each time the car starts sliding past
+// 50° or leaves the tarmac; `firstLoss` is the time of the first of either (s, Infinity: never).
+export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, react = 0.18, start = 18, pilot = null, vmax = 45, analog = false, level = null, device = 'keys', tc = 'on', abs = true, naive = null, seed = 1, ai = false } = {}) {
   const { createRoadCourse, poseAt, nearestSample } = await import('../src/sim/roads.js');
   const drive = pilot ? (await import('../src/drive/pilot.js')).createPilot(road, pilot) : null;
   const { quatFromYaw } = await import('../src/sim/m3.js');
   const { SPEC } = await import('../src/sim/spec.js');
-  const course = createRoadCourse(road, { name: 'bench' });
+  const course = road.course || createRoadCourse(road, { name: 'bench' });
+  if (road.endless) start = Math.max(start, 60);
+  let rs = (seed * 2654435761) % 2147483647 || 7;
+  const rnd = () => ((rs = (rs * 16807) % 2147483647) / 2147483647);
+  const nv = { ax: 0, up: 0, down: 0, next: 0, analog: device !== 'keys' };
+  let firstLoss = Infinity, tiltX = 0;
   const c = createVehicle(course);
   const p0 = poseAt(road, start, 1);
   c.pos.x = p0.x; c.pos.y = p0.y + SPEC.comHeight + 0.04; c.pos.z = p0.z; quatFromYaw(c.quat, p0.yaw);
   const k = createHands();
   const sp = road.meta.spacing;
   const eye = (await import('../src/drive/pilot.js')).createPilot(road, { vmax, lat: push });
-  const drv = level ? createDriver(level, { tc, abs }) : null, raw = { keyAx: 0, stickAx: 0, tilt: 0, up: 0, down: 0, thrA: 0, brkA: 0, hb: 0 };
+  const drv = level ? createDriver(level, { tc, abs, ai }) : null, raw = { keyAx: 0, stickAx: 0, tilt: 0, up: 0, down: 0, thrA: 0, brkA: 0, hb: 0 };
   const ctx = { free: true, road };
   let thumbX = 0, padX = 0, pvx = 0, pvz = 0, spins = 0, spinWas = false, excursions = 0, offWas = false, latG = 0, latF = 0;
   let hint = p0.i, maxBeta = 0, offRoad = 0, rail = 0, railWas = false, resets = 0, maxOff = 0, se = 0, ns = 0;
   const delay = Math.round(react * 240), seen = [];
   let keys = { left: 0, right: 0, up: 0, down: 0 }, stuck = 0;
   const N = secs * 240;
-  for (let n = 0; n < N; n++) {
+  let n = 0;
+  for (; n < N; n++) {
+    if (road.endless) road.ensure(c.pos.z + 800);
     hint = nearestSample(road, c.pos.x, c.pos.z, hint, 40);
     const q = c.quat, fx = 2 * (q.x * q.z + q.w * q.y), fz = 1 - 2 * (q.x * q.x + q.y * q.y);
     const v = Math.hypot(c.vel.x, c.vel.z);
@@ -207,12 +248,25 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
     keys.left = err < -band ? 1 : err > band ? 0 : keys.left && err < 0 ? 1 : 0;
     keys.up = o.thr > 0.35 ? 1 : 0;
     keys.down = o.brk > 0.15 ? 1 : 0;
+    if (naive) {
+      naiveInput(naive, n, nv, rnd);
+      keys.right = nv.ax > 0 ? 1 : 0; keys.left = nv.ax < 0 ? 1 : 0; keys.up = nv.up; keys.down = nv.down;
+    }
     let inp;
     if (drive) inp = drive(c);
     else if (drv) {
       raw.keyAx = 0; raw.stickAx = 0; raw.up = keys.up; raw.down = keys.down; raw.thrA = 0; raw.brkA = 0;
       if (device === 'keys') raw.keyAx = keys.right - keys.left;
-      else if (device === 'touch') {
+      else if (naive) {
+        // A thumb (or a tilted phone) put where the naive input says, at once.
+        if (device === 'tilt') raw.tilt = Math.round(nv.ax * 20) / 20;
+        else raw.stickAx = shapeStick(level, nv.ax, device === 'pad' ? 'pad' : 'touch');
+      } else if (device === 'tilt') {
+        // A phone tilted to chase the wheel it sees: ≈ 3 steer units a second (60°/s of roll over the 17° of
+        // travel), a hand's tremor (±1° at 8 Hz, ±0.06 of steer), read in 5 % steps (src/touch-settings.js).
+        tiltX += Math.max(-3 * DT, Math.min(3 * DT, o.steer - tiltX));
+        raw.tilt = Math.round(Math.max(-1, Math.min(1, tiltX + 0.06 * Math.sin(n * DT * 2 * Math.PI * 8))) * 20) / 20;
+      } else if (device === 'touch') {
         // A thumb on a 2 cm stick: it chases the wheel it sees, at a thumb's speed, past the dead zone.
         thumbX = Math.max(-1, Math.min(1, thumbX + Math.max(-0.03, Math.min(0.03, (o.steer - drv.ax) * 0.6))));
         raw.stickAx = shapeStick(level, thumbX, 'touch');
@@ -232,7 +286,7 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
     } else inp = k.keyboard(keys, c, tier);
     if (analog && !drv) inp.steer = Math.max(-1, Math.min(1, o.steer));
     // Reverse is the drive's own rule (src/drive/index.js); a stuck driver backs off and resets.
-    globalThis.__trace?.(c, inp, n);
+    globalThis.__trace?.(c, inp, n, drv, hint);
     step(c, inp);
     const b = bodyV(c);
     if (v > 5) maxBeta = Math.max(maxBeta, Math.abs(Math.atan2(b.vl, Math.abs(b.vf))) * 57.3);
@@ -243,10 +297,10 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
     maxOff = Math.max(maxOff, off);
     if (off > road.hw[hint] + 0.2) offRoad++;
     const isOff = off > road.hw[hint] + 0.2;
-    if (isOff && !offWas) excursions++;
+    if (isOff && !offWas) { excursions++; firstLoss = Math.min(firstLoss, n * DT); }
     offWas = isOff;
     const spinning = v > 4 && Math.abs(Math.atan2(b.vl, Math.abs(b.vf))) > 0.87;
-    if (spinning && !spinWas) spins++;
+    if (spinning && !spinWas) { spins++; firstLoss = Math.min(firstLoss, n * DT); }
     spinWas = spinning;
     // Cornering g: the body's sideways acceleration (from the velocity change), held 0.25 s, wheels down.
     {
@@ -262,7 +316,7 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
     const upY = 1 - 2 * (q.x * q.x + q.z * q.z);
     if (stuck > 240 * 2 || off > 30 || upY < 0.2) {
       resets++;
-      if (upY < 0.2 && !spinWas) spins++;
+      if (upY < 0.2 && !spinWas) { spins++; firstLoss = Math.min(firstLoss, n * DT); }
       drv?.reset(); thumbX = 0;
       const pr = poseAt(road, Math.min(road.length - 6, hint * sp + 3), 1);
       c.pos.x = pr.x; c.pos.y = pr.y + SPEC.comHeight + 0.04; c.pos.z = pr.z; quatFromYaw(c.quat, pr.yaw);
@@ -271,7 +325,8 @@ export async function roadDrive(road, { tier = 'assist', secs = 90, push = 1.0, 
     }
     if (hint >= road.n - 10) break;
   }
-  return { km: (hint * sp) / 1000, kmh: (hint * sp) / secs * 3.6, offRoadPct: (offRoad / N) * 100, rails: rail, resets, maxBetaDeg: maxBeta, maxOff, laneRms: Math.sqrt(se / Math.max(1, ns)), spins, excursions, latG };
+  const km = Math.max(1e-3, ((hint - (start / sp)) * sp) / 1000);
+  return { km: (hint * sp) / 1000, kmh: (hint * sp) / secs * 3.6, avgKmh: (km * 1000) / Math.max(1, n * DT) * 3.6, exitsKm: excursions / km, railsKm: rail / km, firstLoss, offRoadPct: (offRoad / N) * 100, rails: rail, resets, maxBetaDeg: maxBeta, maxOff, laneRms: Math.sqrt(se / Math.max(1, ns)), spins, excursions, latG };
 }
 // The stick position a skilled thumb holds for a wanted steer, through the level's shaping (bisection).
 function invShape(level, want) {
@@ -309,6 +364,33 @@ export async function levels(log = console.log, { secs = 60 } = {}) {
   return out;
 }
 
+// The diagnosis (0109): every road (the four baked ones and the endless road), Standard and Easy (and Free
+// Drive's AI assist), with drivers who read the road (keys, a thumb on the stick, a tilted phone) and naive
+// input that doesn't (NAIVE). Exits and rail hits per km, spins, the first loss of control, the pace.
+export const DIAG_ROADS = ['stelvio', 'transfagarasan', 'bigsur', 'atlantic', 'endless'];
+export const DIAG_DRIVERS = [
+  { name: 'eye keys', device: 'keys' }, { name: 'eye touch', device: 'touch' }, { name: 'eye tilt', device: 'tilt' },
+  ...NAIVE.map((k) => ({ name: `${k} keys`, device: 'keys', naive: k })),
+  { name: 'mash touch', device: 'touch', naive: 'mash' }, { name: 'mash tilt', device: 'tilt', naive: 'mash' },
+];
+export async function diag(log = console.log, { secs = 60, modes = ['standard', 'easy', 'ai'], roads = DIAG_ROADS, drivers = DIAG_DRIVERS } = {}) {
+  const out = {};
+  for (const id of roads) {
+    const road = await loadRoad(id);
+    for (const d of drivers) for (const mode of modes) {
+      const ai = mode === 'ai', level = ai ? 'standard' : mode;
+      const r = await roadDrive(road, { level, ai, device: d.device, naive: d.naive || null, push: 1.25, react: 0.25, secs, seed: 3 });
+      const t = (out[`${mode}|${d.name}`] ||= { exits: 0, spins: 0, rails: 0, km: 0, firstLoss: Infinity, kmh: 0, n: 0 });
+      t.exits += r.excursions; t.spins += r.spins; t.rails += r.rails; t.km += r.km - (road.endless ? 0.06 : 0.018); t.kmh += r.avgKmh; t.n++;
+      t.firstLoss = Math.min(t.firstLoss, r.firstLoss);
+      log(`${id.padEnd(15)} ${d.name.padEnd(12)} ${mode.padEnd(8)}`, `exits ${r.excursions}  spins ${r.spins}  rails ${r.rails}  exits/km ${r.exitsKm.toFixed(2)}  rails/km ${r.railsKm.toFixed(2)}  firstLoss ${Number.isFinite(r.firstLoss) ? r.firstLoss.toFixed(1) + ' s' : '—'}  avg ${r.avgKmh.toFixed(0)} km/h  resets ${r.resets}`);
+    }
+  }
+  log('--- totals over the roads');
+  for (const [k, t] of Object.entries(out)) log(k.padEnd(24), `exits ${t.exits}  spins ${t.spins}  rails ${t.rails}  exits/km ${(t.exits / t.km).toFixed(2)}  rails/km ${(t.rails / t.km).toFixed(2)}  first loss ${Number.isFinite(t.firstLoss) ? t.firstLoss.toFixed(1) + ' s' : 'never'}  avg ${(t.kmh / t.n).toFixed(0)} km/h`);
+  return out;
+}
+
 if (import.meta.url === `file://${process.argv[1]}`) {
   await initPhysics();
   const [what = 'all', tierArg] = process.argv.slice(2);
@@ -316,6 +398,7 @@ if (import.meta.url === `file://${process.argv[1]}`) {
   if (what === 'all' || what === 'bench') for (const t of tiers) { console.log(`--- ${t}`); bench(t); }
   if (what === 'bench-levels') for (const l of ['easy', 'standard', 'advanced']) { console.log(`--- ${l}`); bench('assist', console.log, l); }
   if (what === 'levels') await levels();
+  if (what === 'diag') await diag(console.log, { modes: (process.argv[3] || 'standard,easy,ai').split(','), roads: process.argv[4] ? process.argv[4].split(',') : DIAG_ROADS });
   if (what === 'all' || what === 'road') {
     for (const id of ['stelvio', 'transfagarasan', 'bigsur', 'atlantic']) {
       const road = await loadRoad(id);
