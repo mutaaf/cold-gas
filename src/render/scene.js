@@ -360,7 +360,7 @@ async function buildSliced(look) {
   }
 }
 
-// createStage(canvas, { tier: 'low' | 'mid' | 'high', course: 'show' | 'wall' | 'lineup' })
+// createStage(canvas, { tier: 'low' | 'mid' | 'high', course: 'show' | 'wall' | 'lineup', aa: 'smaa' | 'fxaa' })
 //   → { renderer, scene, camera, hero, key, course, ready, resize, reshape, render(time), setCourse(id), titlePose() }
 //
 // First load: createStage returns as soon as the renderer, camera and car exist, so the title is
@@ -368,7 +368,7 @@ async function buildSliced(look) {
 // is baked, every shader is compiled off the main thread (KHR_parallel_shader_compile, via
 // compileAsync), and only then does `render` draw: the canvas fades in on its first frame
 // (`.on`), and `stage.ready` resolves.
-export function createStage(canvas, { tier = 'high', course = 'show', backdrop = true, onBackdropError = null, warm = null } = {}) {
+export function createStage(canvas, { tier = 'high', course = 'show', aa = null, backdrop = true, onBackdropError = null, warm = null } = {}) {
   // Canvas MSAA only where the scene draws straight to the canvas ('low'). The composer tiers draw
   // into a HalfFloat target with no MSAA (LESSONS), so canvas MSAA there only smoothed the final
   // quad; their edges come from SMAA after the OutputPass instead. A software rasterizer skips it
@@ -444,15 +444,15 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
     bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 0.92);
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
-    // Edges, after the OutputPass. 'high' (desktop): SMAA, ~45 kB of lookup images in its own
-    // chunk, fetched in parallel with the course build. 'mid' (phones, tablets): FXAA, one pass and
-    // 2 kB. On the phone profile SMAA (even its LOW preset) made sub-pixel edges pop more frame to
-    // frame (flicker.mjs --phone show-wide car/row/wall up 5–50 %), while FXAA's sub-pixel blend
-    // brought the title, the Lineup's row and the replay's car down (0037).
-    aaPass = (tier === 'high'
+    // Edges, after the OutputPass: `aa` (src/gfx-tier.js pickAA), by default SMAA on 'high' (~45 kB of
+    // lookup images in its own chunk, fetched in parallel with the course build) and FXAA on 'mid' (one
+    // pass, 2 kB). The filter is the one thing besides pixels a phone may draw differently (0097): it is
+    // chosen by the flicker probe, not by the device's class.
+    const kind = aa ?? (tier === 'high' ? 'smaa' : 'fxaa');
+    aaPass = (kind === 'smaa'
       ? import('three/examples/jsm/postprocessing/SMAAPass.js').then(({ SMAAPass }) => new SMAAPass())
       : import('three/examples/jsm/postprocessing/FXAAPass.js').then(({ FXAAPass }) => new FXAAPass())
-    ).then((pass) => { composer.addPass(pass); stage.aa = pass; resize(); });
+    ).then((pass) => { composer.addPass(pass); stage.aa = pass; stage.aaKind = kind; resize(); });
   }
 
   const looks = {};
@@ -468,7 +468,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', backdrop =
   const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
   const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
   const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
-  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, warm: null, warmGate: () => true, rocket: null, film: null, aa: null, resize, reshape, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, warm: null, warmGate: () => true, rocket: null, film: null, aa: null, aaKind: '', resize, reshape, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';

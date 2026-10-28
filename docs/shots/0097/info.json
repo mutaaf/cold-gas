@@ -1,0 +1,44 @@
+{
+  "before-desktop": {
+    "tier": "high",
+    "pixelRatio": 2,
+    "buffer": "2880x1800",
+    "shadow": 2048,
+    "film": true
+  },
+  "before-phone": {
+    "tier": "mid",
+    "pixelRatio": 1.5,
+    "buffer": "585x1266",
+    "shadow": 1024,
+    "film": false
+  },
+  "before-ipad": {
+    "tier": "mid",
+    "pixelRatio": 1.5,
+    "buffer": "1230x1770",
+    "shadow": 1024,
+    "film": false
+  },
+  "after-desktop": {
+    "tier": "high",
+    "pixelRatio": 2,
+    "buffer": "2880x1800",
+    "shadow": 2048,
+    "film": true
+  },
+  "after-phone": {
+    "tier": "high",
+    "pixelRatio": 2,
+    "buffer": "780x1688",
+    "shadow": 2048,
+    "film": true
+  },
+  "after-ipad": {
+    "tier": "high",
+    "pixelRatio": 2,
+    "buffer": "1640x2360",
+    "shadow": 2048,
+    "film": true
+  }
+}

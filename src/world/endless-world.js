@@ -31,8 +31,8 @@ import { createPool } from './pool.js';
 import { wantHi } from './lod.js';
 import { obs } from '../obs/index.js';
 
-// Quality tiers (?gfx=high|mid|low; phones get mid). radius: each level's ring (m). veg0/veg1:
-// vegetation spacing (m) per prop on level-0 / near level-1 tiles. Level 0's are the props the
+// Quality tiers (?gfx=high|mid|low; phones and tablets get high like a desktop, 0097). radius: each
+// level's ring (m). veg0/veg1: vegetation spacing (m) per prop on level-0 / near level-1 tiles. Level 0's are the props the
 // physics has (src/sim/scenery.js VEG_SPACING) on every tier: a tier draws them nearer or farther,
 // never fewer. hiR: level-0 tiles nearer than
 // this get the detailed trees. pool: instance capacity per prop. budget: main-thread ms per frame

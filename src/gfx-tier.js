@@ -1,12 +1,15 @@
 // The graphics tier a device boots with before its own history (src/obs/ledger.js) moves it.
 // Pure: everything it reads is passed in, so tests/unit/gfx-tier.test.js can play any device.
 //
-// A fine pointer (a desktop or laptop) boots 'high'. A touch device boots 'mid': bloom, FXAA and
-// 1.5× resolution, and the resolution governor steps it down in-session if it can't keep up.
+// One look everywhere (0097): a phone or a tablet boots 'high' like a desktop, so it draws the same
+// scene: the same shadows (2048), film look (atmosphere, height fog, lamp halos, vignette), the wet
+// slab's reflection, the plume mist and the geometry detail, at the same pixel-ratio cap (2). What a
+// device can't afford is taken from its pixels first: the resolution governor steps the drawing
+// buffer down in-session, and the ledger boots a slow device at a lower resolution; only a device
+// still slow at the resolution floor drops a tier (src/obs/ledger.js chooseBoot).
 // Core counts are not a signal: Safari caps `hardwareConcurrency` (an iPhone or iPad reports 4 or
-// fewer) and has no `deviceMemory`, so the old "≤ 4 cores → low" test sent every iOS device to
-// 'low' (DPR 1 on a 3× screen, no AA, no bloom). Only a device that reports very little memory
-// (Android's `deviceMemory` ≤ 2 GB) starts 'low'.
+// fewer) and has no `deviceMemory`. Only a device that reports very little memory (Android's
+// `deviceMemory` ≤ 2 GB) starts 'low', the floor.
 
 // 'phone' | 'tablet' | 'desktop'. iPadOS reports a Mac UA but has touch points; Android tablets
 // leave "Mobile" out of the UA; any other coarse pointer on a screen ≥ 600 CSS px short side is
@@ -25,9 +28,19 @@ export const isIOS = ({ ua = '', maxTouchPoints = 0 } = {}) => /iPhone|iPad|iPod
 export function pickDeviceTier({ coarse = false, ua = '', maxTouchPoints = 0, deviceMemory } = {}) {
   const touch = coarse || isIOS({ ua, maxTouchPoints });
   if (!touch) return { tier: 'high', reason: 'fine pointer' };
-  if (isIOS({ ua, maxTouchPoints })) return { tier: 'mid', reason: 'iOS touch device' };
-  if (deviceMemory && deviceMemory <= 2) return { tier: 'low', reason: `touch device with ${deviceMemory} GB` };
-  return { tier: 'mid', reason: 'touch device' };
+  if (!isIOS({ ua, maxTouchPoints }) && deviceMemory && deviceMemory <= 2) return { tier: 'low', reason: `touch device with ${deviceMemory} GB` };
+  return { tier: 'high', reason: `${isIOS({ ua, maxTouchPoints }) ? 'iOS ' : ''}touch device: the desktop look, resolution governed` };
+}
+
+// The edge filter after the OutputPass on the composer tiers → 'smaa' | 'fxaa': the one thing besides
+// the pixel count a touch device draws differently from a desktop. 0037 gave phones FXAA because SMAA
+// raised their flicker; 0097 re-measured it on the high look (flicker.mjs --phone --gl=swiftshader, same
+// machine, main vs each filter): SMAA still raised 14 regions over main (show-wide wall 29 → 50 ‰,
+// drive-road other 4 → 25 ‰), FXAA lowered most of them (show-wide car 96 → 37 ‰). So touch keeps FXAA.
+export const AA_TOUCH = 'fxaa';
+export function pickAA({ tier = 'high', touch = false } = {}) {
+  if (tier !== 'high') return 'fxaa';
+  return touch ? AA_TOUCH : 'smaa';
 }
 
 // The browser's own readings, for the two functions above.

@@ -16,6 +16,7 @@
 // the haze, vignette and mirror ease in over FILM_FADE_MS from the film's first frame (0046).
 import * as THREE from 'three';
 import { Pass, FullScreenQuad } from 'three/examples/jsm/postprocessing/Pass.js';
+import { sliverView } from './sliver.js';
 
 export const REFLECT = 1;
 const MAX_GLOWS = 20;
@@ -169,7 +170,15 @@ function createMirror(renderer) {
     renderer.shadowMap.autoUpdate = false;
     renderer.setRenderTarget(rt);
     renderer.clear();
+    // Slivers (src/render/sliver.js) widen thin lights, paint and struts to a minimum width in pixels of
+    // the target they draw into. The mirror draws at half resolution, so with the stage's view size a
+    // 1 px sliver was half a mirror pixel and blinked on and off in the reflection as the camera moved
+    // (0097: on the phone probe the title's slab read 1.85 ‰ with the mirror frozen, 2.95 with it live,
+    // and 2.44 with the slivers sized to the mirror).
+    const hv = sliverView.value, hx = hv.x, hy = hv.y;
+    hv.set(rt.width / 2, rt.height / 2);
     renderer.render(scene, cam);
+    hv.set(hx, hy);
     renderer.setRenderTarget(prev);
     renderer.shadowMap.autoUpdate = auto;
   }

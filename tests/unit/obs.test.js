@@ -1,7 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { signature, normMessage, normFile, parseFrames, moduleOf, hash12 } from '../../src/obs/signature.js';
 import { createBreaker } from '../../src/obs/breaker.js';
-import { chooseBoot, createGovernor, loadLedger, saveLedger, emptyLedger, LEDGER_KEY } from '../../src/obs/ledger.js';
+import { chooseBoot, createGovernor, loadLedger, saveLedger, emptyLedger, LEDGER_KEY, SCALES } from '../../src/obs/ledger.js';
+import { pickDeviceTier } from '../../src/gfx-tier.js';
 import { createFrameStats, recordFrame, percentile, bucketOf, summary, isSlow, NB } from '../../src/obs/frames.js';
 
 const withStack = (msg, stack, name = 'TypeError') => Object.assign(new Error(msg), { name, stack: `${name}: ${msg}\n${stack}` });
@@ -93,42 +94,71 @@ describe('health ledger: boot tier from past runs', () => {
     const first = chooseBoot({ sessions: [], deviceTier: 'mid' });
     expect(first).toMatchObject({ tier: 'mid', from: 'device' });
   });
-  it('steps down after one bad session (slow p95, a lost GPU, a physics crash)', () => {
-    expect(chooseBoot({ sessions: [sess('high', 45)], deviceTier: 'high' })).toMatchObject({ tier: 'mid', from: 'ledger' });
+  it('steps down after one bad session at the resolution floor, a lost GPU or a physics crash', () => {
+    const floor = SCALES.length - 1;
+    expect(chooseBoot({ sessions: [sess('high', 45, { scale: floor })], deviceTier: 'high' })).toMatchObject({ tier: 'mid', scale: 0, from: 'ledger' });
     expect(chooseBoot({ sessions: [sess('mid', 12, { ctxLost: 1 })], deviceTier: 'high' }).tier).toBe('low');
     expect(chooseBoot({ sessions: [sess('high', 12, { crashes: { physics: 1 } })] }).reason).toMatch(/crashed in physics/);
-    expect(chooseBoot({ sessions: [sess('low', 80)] }).tier).toBe('low');
+    expect(chooseBoot({ sessions: [sess('low', 80, { scale: floor })] }).tier).toBe('low');
+  });
+  it('a slow session steps the resolution down first and keeps the look; the tier drops only at the floor (0097)', () => {
+    // high at 100 % → 85 % → 70 % → 55 % → only then mid.
+    const order = [];
+    let sessions = [];
+    for (let i = 0; i < 5; i++) {
+      const b = chooseBoot({ sessions, deviceTier: 'high' });
+      order.push(`${b.tier}@${SCALES[b.scale]}`);
+      sessions = [...sessions, sess(b.tier, b.tier === 'high' ? 45 : 15, { scale: b.scale })];
+    }
+    expect(order).toEqual(['high@1', 'high@0.85', 'high@0.7', 'high@0.55', 'mid@1']);
+    expect(chooseBoot({ sessions: [sess('high', 45)], deviceTier: 'high' }).reason).toMatch(/resolution/);
+    // A session whose own governor already reached a lower step boots there, not back at the top.
+    expect(chooseBoot({ sessions: [sess('high', 45, { scale: 2 })], deviceTier: 'high' })).toMatchObject({ tier: 'high', scale: 3 });
   });
   it('steps up only after 3 smooth sessions, 5 if the tier above failed here recently, never past the device class', () => {
     const smooth = (n) => Array.from({ length: n }, () => sess('mid', 15));
-    expect(chooseBoot({ sessions: smooth(2), deviceTier: 'high' }).tier).toBe('mid');
-    expect(chooseBoot({ sessions: smooth(3), deviceTier: 'high' }).tier).toBe('high');
-    expect(chooseBoot({ sessions: smooth(3), deviceTier: 'mid' }).tier).toBe('mid');   // phone ceiling
-    const failedHigh = [sess('high', 50), ...smooth(4)];
+    // Two killed tabs sent it to mid: high was tried here, but didn't fail on frames.
+    const killed = [sess('high', 12, { ended: false }), sess('high', 12), sess('high', 12, { ended: false })];
+    expect(chooseBoot({ sessions: [...killed, ...smooth(2)], deviceTier: 'high' }).tier).toBe('mid');
+    expect(chooseBoot({ sessions: [...killed, ...smooth(3)], deviceTier: 'high' }).tier).toBe('high');
+    expect(chooseBoot({ sessions: smooth(3), deviceTier: 'mid' }).tier).toBe('mid');   // a lower ceiling holds
+    const failedHigh = [sess('high', 50, { scale: 3 }), ...smooth(4)];
     expect(chooseBoot({ sessions: failedHigh, deviceTier: 'high' }).tier).toBe('mid');
     expect(chooseBoot({ sessions: [...failedHigh, sess('mid', 15)], deviceTier: 'high' }).tier).toBe('high');
     // A smooth run that needed a lower resolution doesn't count toward stepping up.
-    expect(chooseBoot({ sessions: [...smooth(2), sess('mid', 15, { scale: 1 })], deviceTier: 'high' }).tier).toBe('mid');
+    expect(chooseBoot({ sessions: [...killed, ...smooth(2), sess('mid', 15, { scale: 1 })], deviceTier: 'high' }).tier).toBe('mid');
+  });
+  it('a tier never tried on this device is tried: a phone that booted mid before 0097 goes to high at once', () => {
+    const iphone = pickDeviceTier({ coarse: true, ua: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)', maxTouchPoints: 5 }).tier;
+    expect(iphone).toBe('high');
+    expect(chooseBoot({ sessions: [], deviceTier: iphone })).toMatchObject({ tier: 'high', from: 'device' });
+    const before = Array.from({ length: 6 }, () => sess('mid', 18));
+    expect(chooseBoot({ sessions: before, deviceTier: iphone })).toMatchObject({ tier: 'high', from: 'ledger' });
+    expect(chooseBoot({ sessions: before, deviceTier: iphone }).reason).toMatch(/never/);
+    // …but not one whose last session was bad: that steps the resolution down at mid as usual.
+    expect(chooseBoot({ sessions: [...before, sess('mid', 45)], deviceTier: iphone })).toMatchObject({ tier: 'mid', scale: 1 });
   });
   it('hysteresis: no flapping between tiers on alternating sessions', () => {
     const tiers = [];
     let sessions = [];
-    // A device that is just too slow for high (p95 40 there) and smooth at mid (p95 15).
-    for (let i = 0; i < 20; i++) {
-      const { tier } = chooseBoot({ sessions, deviceTier: 'high' });
+    // A device that is too slow for high at any resolution (p95 40 there) and smooth at mid (p95 15).
+    // Each session records the lowest step it ran (here: where it booted).
+    for (let i = 0; i < 30; i++) {
+      const { tier, scale } = chooseBoot({ sessions, deviceTier: 'high' });
       tiers.push(tier);
-      sessions = [...sessions, sess(tier, tier === 'high' ? 40 : 15)].slice(-12);
+      sessions = [...sessions, sess(tier, tier === 'high' ? 40 : 15, { scale: tier === 'high' ? scale : 0 })].slice(-12);
     }
     const ups = tiers.filter((t, i) => i && t === 'high' && tiers[i - 1] === 'mid').length;
-    expect(ups).toBeLessThanOrEqual(3);   // tries high again only after 5 smooth sessions each time
+    expect(ups).toBeLessThanOrEqual(4);   // tries high again only after 5 smooth sessions each time
     expect(tiers.filter((t) => t === 'mid').length).toBeGreaterThan(14);
   });
-  it('a 30 fps cap (Low Power Mode) keeps its tier: its p95 reads ≈48 ms but no frame missed the cadence (0044)', () => {
-    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0 })], deviceTier: 'mid' }).tier).toBe('mid');
-    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0.02 })], deviceTier: 'mid' }).tier).toBe('mid');
-    // A device that really missed its frames still steps down, and old sessions (no `slow`) read as before.
-    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0.6 })], deviceTier: 'mid' }).tier).toBe('low');
-    expect(chooseBoot({ sessions: [sess('mid', 47.9)], deviceTier: 'mid' }).tier).toBe('low');
+  it('a 30 fps cap (Low Power Mode) keeps its tier and resolution: its p95 reads ≈48 ms but no frame missed the cadence (0044)', () => {
+    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0 })], deviceTier: 'mid' })).toMatchObject({ tier: 'mid', scale: 0 });
+    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0.02 })], deviceTier: 'mid' })).toMatchObject({ tier: 'mid', scale: 0 });
+    // A device that really missed its frames steps its resolution down, and old sessions (no `slow`) read as before.
+    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0.6 })], deviceTier: 'mid' })).toMatchObject({ tier: 'mid', scale: 1 });
+    expect(chooseBoot({ sessions: [sess('mid', 47.9)], deviceTier: 'mid' })).toMatchObject({ tier: 'mid', scale: 1 });
+    expect(chooseBoot({ sessions: [sess('mid', 47.9, { slow: 0.6, scale: 3 })], deviceTier: 'mid' }).tier).toBe('low');
   });
   it('two killed tabs in the last three sessions step down; one does not', () => {
     expect(chooseBoot({ sessions: [sess('high', 12), sess('high', 12, { ended: false }), sess('high', 12)] }).tier).toBe('high');
@@ -169,6 +199,13 @@ describe('in-session governor', () => {
     t = 200_000;
     for (let i = 0; i < 40; i++) g.feed(good);
     expect(g.level).toBe(1);                                     // stays down: no flapping
+  });
+  it('on a run that stays slow it steps the resolution down to the floor, one step per 6 s, and no further (0097)', () => {
+    const g = createGovernor({ now: () => 0 });
+    const steps = [];
+    for (let i = 0; i < 30; i++) { const s = g.feed(bad); if (s) steps.push([i, s, g.level]); }
+    expect(steps).toEqual([[2, -1, 1], [5, -1, 2], [8, -1, 3]]);
+    expect(g.level).toBe(SCALES.length - 1);
   });
   it('ignores near-empty windows (a background tab)', () => {
     const g = createGovernor();

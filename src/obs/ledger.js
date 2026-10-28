@@ -3,9 +3,11 @@
 // resolution scale it ran, its errors per module and whether it ended cleanly. The breakers'
 // states live here too, so a subsystem that broke stays off across a reload until it's due a retry.
 //
-// Boot reads it to pick the tier from experience instead of from the device's spec sheet
-// (`chooseBoot`), and the in-session governor (`createGovernor`) steps the resolution down when a run
-// hitches and back up when the headroom returns. Both have hysteresis: one bad session or 6 s of
+// Boot reads it to pick the tier and resolution from experience instead of from the device's spec
+// sheet (`chooseBoot`), and the in-session governor (`createGovernor`) steps the resolution down when a
+// run hitches and back up when the headroom returns. Pixels go before the look (0097): a slow session
+// boots the next one a resolution step lower at the same tier, and only a session still slow at the
+// resolution floor drops a tier (fewer effects). Both have hysteresis: one bad session or 6 s of
 // stutter is enough to step down; it takes several good ones to step back up, more for a tier that
 // already failed here.
 //
@@ -55,7 +57,7 @@ export function saveLedger(storage, l) {
 
 // Which tier and resolution scale to boot with → { tier, scale, reason, from }.
 //   forced      ?gfx= (always wins)
-//   deviceTier  the spec-sheet default (phone mid/low, desktop high): the ceiling for stepping up
+//   deviceTier  the spec-sheet default (src/gfx-tier.js: high, or low for a ≤ 2 GB phone): the ceiling for stepping up
 export function chooseBoot({ sessions = [], deviceTier = 'high', forced = null } = {}) {
   if (TIER_IDS.includes(forced)) return { tier: forced, scale: 0, reason: `forced by ?gfx=${forced}`, from: 'url' };
   const cap = tierIdx(deviceTier);
@@ -68,13 +70,21 @@ export function chooseBoot({ sessions = [], deviceTier = 'high', forced = null }
   if (fatal(last)) return down(last.ctxLost ? 'the last session lost the GPU' : `the last session crashed in ${Object.keys(last.crashes || {}).filter((k) => last.crashes[k] > 0).join(', ') || 'render'}`);
   const recent = past.slice(-3);
   if (recent.length >= 2 && recent.filter((x) => x.ended === false && (x.frames || 0) > MIN_FRAMES).length >= 2) return down('two of the last three sessions ended without closing (a killed tab)');
-  if (slowSession(last) && (last.scale ?? 0) >= SCALES.length - 1) return down(`its p95 frame was ${last.p95} ms even at ${Math.round(SCALES[SCALES.length - 1] * 100)} % resolution`);
-  if (slowSession(last)) return down(`its p95 frame was ${last.p95} ms`);
+  // Too slow: the resolution steps down first and the look stays; a tier drop waits for the floor (0097).
+  const floor = SCALES.length - 1;
+  if (slowSession(last) && (last.scale ?? 0) >= floor) return down(`its p95 frame was ${last.p95} ms even at ${Math.round(SCALES[floor] * 100)} % resolution`);
+  if (slowSession(last)) {
+    const sc = Math.min(floor, (last.scale ?? 0) + 1);
+    return { tier: TIER_IDS[at], scale: sc, reason: `kept ${TIER_IDS[at]} at ${Math.round(SCALES[sc] * 100)} % resolution: its p95 frame was ${last.p95} ms (pixels go before the look)`, from: 'ledger' };
+  }
   // Keep the resolution the last session settled on (minus one step of optimism).
   const scale = Math.max(0, (last.scale ?? 0) - 1);
   // Step up only after a run of smooth sessions at this tier, and more of them if the tier above
   // failed here recently.
   if (at < cap) {
+    // A tier above that this device has never run (in the ledger) is tried: nothing says it can't hold
+    // it. A phone that booted 'mid' before 0097 made 'high' its class default goes there at once.
+    if (!past.some((x) => tierIdx(x.tier) > at)) return { tier: TIER_IDS[cap], scale: 0, reason: `stepped up to ${TIER_IDS[cap]}: never run at ${TIER_IDS[cap]} on this device`, from: 'ledger' };
     const up = TIER_IDS[at + 1];
     const failedAbove = sessions.slice(-10).some((x) => x?.tier === up && (fatal(x) || slowSession(x)));
     const need = failedAbove ? UP_AFTER_FAILED : UP_AFTER;

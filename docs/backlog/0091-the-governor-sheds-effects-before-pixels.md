@@ -18,6 +18,10 @@ On a fill-bound phone, dropping the wet slab's mirror or halving the bloom likel
 resolution step, and looks better for it. This was part of 0044's What and was split out, because it
 changes what each tier looks like and needs its own flicker-budget pass.
 
+0097 (2026-10-27) put phones and tablets on `high` and made the ledger take a resolution step before a tier
+(a tier drops only at the resolution floor). Effect steps inside a tier are still this ticket: on a fill-bound
+phone they may beat the lower resolution steps, measured on a real device.
+
 ## What
 Interleave effect steps with the resolution steps in `createGovernor` (src/obs/ledger.js) and apply them
 in src/render/scene.js / film.js through the same deferred `refit` (applied at the next render, never

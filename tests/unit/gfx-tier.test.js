@@ -1,6 +1,6 @@
 // The boot tier per device (src/gfx-tier.js, 0037) and the device class obs reports.
 import { describe, it, expect } from 'vitest';
-import { pickDeviceTier, deviceKind, isIOS, isSoftwareRenderer } from '../../src/gfx-tier.js';
+import { pickDeviceTier, pickAA, deviceKind, isIOS, isSoftwareRenderer } from '../../src/gfx-tier.js';
 import { deviceClass } from '../../src/obs/index.js';
 
 const UA = {
@@ -13,21 +13,26 @@ const UA = {
 };
 
 describe('pickDeviceTier', () => {
-  it('boots an iPhone with 4 cores and no deviceMemory at mid', () => {
-    expect(pickDeviceTier({ coarse: true, ua: UA.iphone, maxTouchPoints: 5 }).tier).toBe('mid');
+  // 0097: a phone or tablet draws what a desktop draws. Touch devices boot 'high' (the same effects,
+  // shadows, film look, reflection and mist); the resolution governor and the ledger keep the frame.
+  it('boots an iPhone with 4 cores and no deviceMemory at high', () => {
+    expect(pickDeviceTier({ coarse: true, ua: UA.iphone, maxTouchPoints: 5 }).tier).toBe('high');
   });
-  it('boots an iPad (old UA and the iPadOS desktop UA) at mid', () => {
-    expect(pickDeviceTier({ coarse: true, ua: UA.ipadOld, maxTouchPoints: 5 }).tier).toBe('mid');
-    expect(pickDeviceTier({ coarse: true, ua: UA.ipados, maxTouchPoints: 5 }).tier).toBe('mid');
-    // An iPad with a trackpad attached reports a fine primary pointer: still a touch device.
-    expect(pickDeviceTier({ coarse: false, ua: UA.ipados, maxTouchPoints: 5 }).tier).toBe('mid');
+  it('boots an iPad (old UA and the iPadOS desktop UA) at high', () => {
+    expect(pickDeviceTier({ coarse: true, ua: UA.ipadOld, maxTouchPoints: 5 }).tier).toBe('high');
+    expect(pickDeviceTier({ coarse: true, ua: UA.ipados, maxTouchPoints: 5 }).tier).toBe('high');
+    // An iPad with a trackpad attached reports a fine primary pointer: still a touch device, still high.
+    expect(pickDeviceTier({ coarse: false, ua: UA.ipados, maxTouchPoints: 5 }).tier).toBe('high');
   });
-  it('ignores core counts on touch devices', () => {
-    expect(pickDeviceTier({ coarse: true, ua: UA.pixel, maxTouchPoints: 5, deviceMemory: 4 }).tier).toBe('mid');
-    expect(pickDeviceTier({ coarse: true, ua: UA.pixel, maxTouchPoints: 5 }).tier).toBe('mid');
+  it('boots an Android phone or tablet with 3 GB or more (or no reading) at high', () => {
+    for (const deviceMemory of [3, 4, 8, undefined]) {
+      expect(pickDeviceTier({ coarse: true, ua: UA.pixel, maxTouchPoints: 5, deviceMemory }).tier).toBe('high');
+      expect(pickDeviceTier({ coarse: true, ua: UA.tab, maxTouchPoints: 5, deviceMemory }).tier).toBe('high');
+    }
   });
-  it('starts a phone reporting 2 GB or less at low', () => {
+  it('starts a phone reporting 2 GB or less at low (the floor)', () => {
     expect(pickDeviceTier({ coarse: true, ua: UA.pixel, maxTouchPoints: 5, deviceMemory: 2 })).toMatchObject({ tier: 'low' });
+    expect(pickDeviceTier({ coarse: true, ua: UA.pixel, maxTouchPoints: 5, deviceMemory: 1 })).toMatchObject({ tier: 'low' });
   });
   it('boots a fine pointer at high', () => {
     expect(pickDeviceTier({ coarse: false, ua: UA.mac, maxTouchPoints: 0, deviceMemory: 8 }).tier).toBe('high');
@@ -35,6 +40,17 @@ describe('pickDeviceTier', () => {
   });
   it('always gives a reason', () => {
     for (const d of [{}, { coarse: true }, { coarse: true, deviceMemory: 1 }, { ua: UA.iphone, coarse: true }]) expect(pickDeviceTier(d).reason).toBeTruthy();
+  });
+});
+
+describe('pickAA', () => {
+  // 0097: the edge filter is the one thing besides pixels a touch device may draw differently, chosen by the
+  // flicker probe: SMAA on the high look raised phone flicker, FXAA lowered it.
+  it('desktop high draws SMAA, touch high FXAA, mid FXAA', () => {
+    expect(pickAA({ tier: 'high', touch: false })).toBe('smaa');
+    expect(pickAA({ tier: 'high', touch: true })).toBe('fxaa');
+    expect(pickAA({ tier: 'mid', touch: false })).toBe('fxaa');
+    expect(pickAA({ tier: 'mid', touch: true })).toBe('fxaa');
   });
 });
 
