@@ -192,6 +192,11 @@ body.driving .ai-chip, body.driving [data-ghost], body.driving [data-assist] { d
   .fd-ai { left: calc(176px + var(--safe-l)); top: calc(8px + var(--safe-t)); max-width: 190px; }
   .fd-ai small { display: none; }
 }
+/* Narrower than 720 sideways (a folding phone closed and turned, 0103: the compact line only), the clock comes
+   within reach of the wordmark: the switch goes under Reset and Exit instead. */
+@media (pointer: coarse) and (orientation: landscape) and (max-width: 719px) {
+  .fd-ai { left: calc(24px + var(--safe-l)); top: calc(144px + var(--safe-t)); }
+}
 @media (pointer: coarse) and (orientation: landscape) and (min-height: 700px) {
   .fd-fine { left: calc(212px + var(--safe-l)); right: calc(292px + var(--safe-r)); }
 }
