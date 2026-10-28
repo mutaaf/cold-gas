@@ -279,9 +279,10 @@ function scheduleSpare() {
     if (!idle || !physicsReady() || drive?.active || sandbox?.active || !refGhosts[stage.course]) return;
     if (spareRun?.course === stage.course) return;
     freeSpare();
-    spareRun = createRun(stage.course);
+    try { spareRun = createRun(stage.course); } catch (err) { spareRun = null; console.warn('spare run', err); }   // after a trap: the tap builds it
   };
-  if (typeof requestIdleCallback === 'function') requestIdleCallback(build, { timeout: 1000 }); else setTimeout(build, 50);
+  // Idle only, no deadline: a page that never idles (a replay on a slow phone) builds at the tap as before.
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(build); else setTimeout(build, 250);
 }
 function takeRun(course) {
   const run = spareRun?.course === course ? spareRun : null;
