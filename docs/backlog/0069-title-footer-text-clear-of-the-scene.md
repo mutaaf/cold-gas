@@ -45,3 +45,7 @@ Redesigning the title layout or copy.
 Still reproduces on `main` (39ae0db): "Today's board" (the ghost button, no glass) is white-on-white where the red
 ring's bloom passes behind it, and the spec strip's "THRUSTERS" label vanishes against the lit fog. Both are
 legible only by luck of the camera angle, so the fix must be a backing (glass or scrim), not a colour nudge.
+
+Scout 2026-10-28 (390x844, `?gfx=low`): still reproduces, and the AI ASSIST pill's second line ("rolls you out, levels and
+brakes") also runs across the roadster's wheel and body, so include it in the backing. At 844x390 the fine print sits
+clear of the car but over the Wall's ring glow.
