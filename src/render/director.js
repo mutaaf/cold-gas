@@ -89,6 +89,13 @@ export function createDirector(camera) {
   // about 29 % of the height, so the line drops to 35 % there.
   const TOP = 0.5, TOP_TALL = 0.3, RAIL = 0.3, KNEE = 0.06;   // NDC: the highest the car's centre goes (upright, full HUD); upright, the leftmost up there; rad
   const coarse = typeof matchMedia === 'function' ? matchMedia('(pointer: coarse)') : null;
+  // On a very short touch screen a quarter of the way down is still under the top HUD (0107: a flip phone's
+  // cover screen upright, 380 px, under the compact rail's head; its tall screen sideways with the bars,
+  // 300 px, under the top bar). So the line is also held this many CSS px down: the HUD's foot (the rail's
+  // head ≈ 105 px upright, the top bar ≈ 56 px sideways) plus 0063's 24 px and a little. It binds only under
+  // 524 px upright and 336 px sideways (no phone, tablet or desktop we fly the flicker probe at).
+  const CLEAR_TALL = 131, CLEAR_WIDE = 84;
+  let viewH = typeof innerHeight === 'number' ? innerHeight : 0;   // the canvas's height (reframe: every resize)
   const knee = (e) => (e <= 0 ? 0 : e < KNEE ? (e * e) / (2 * KNEE) : e - KNEE / 2);   // 0 → e − k/2, C¹
   function keepClear(carPos, on, dt) {
     st.clear += ((on ? 1 : 0) - st.clear) * (1 - Math.exp(-dt * 5));
@@ -104,7 +111,9 @@ export function createDirector(camera) {
     }
     tmp.copy(carPos).sub(camera.position).applyQuaternion(qInv.copy(camera.quaternion).invert());
     if (tmp.z > -0.5) return;
-    const top = camera.aspect < 1 && hudMode() === 'full' ? TOP_TALL : TOP;
+    // (Under 440 px upright the rail's head rides in the top bar, src/styles.css: the top bar's clearance.)
+    const clearPx = coarse?.matches && viewH ? (camera.aspect < 1 && viewH >= 440 ? CLEAR_TALL : CLEAR_WIDE) : 0;
+    const top = Math.min(camera.aspect < 1 && hudMode() === 'full' ? TOP_TALL : TOP, clearPx ? 1 - (2 * clearPx) / viewH : 1);
     camera.rotateX(st.clear * knee(Math.atan2(tmp.y, -tmp.z) - Math.atan(top * tv) + KNEE / 2));
   }
 
@@ -364,6 +373,6 @@ export function createDirector(camera) {
   // Hold a locked-off camera at `pos` for `seconds` (crash cuts); a mode change cancels it.
   function cut(pos, seconds, fov = 40) { st.cutPos.copy(pos); st.cutT = seconds; st.cutFov = fov; }
 
-  return { update, snap, restart, cut, setView: (v) => { st.view = v; }, view: () => st.view, reframe: () => frameOffset(st.mode), setRegion, shake: (s) => { st.shake = Math.max(st.shake, s); },
+  return { update, snap, restart, cut, setView: (v) => { st.view = v; }, view: () => st.view, reframe: () => { viewH = (typeof document !== 'undefined' && document.getElementById('stage')?.clientHeight) || innerHeight; frameOffset(st.mode); }, setRegion, shake: (s) => { st.shake = Math.max(st.shake, s); },
     impact: (dip, punch) => { st.dip = Math.max(st.dip, dip); st.punch = Math.max(st.punch, punch); }, state: st };
 }
