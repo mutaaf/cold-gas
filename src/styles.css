@@ -1754,3 +1754,28 @@ body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .tbtn
   .title > .cta .ac-sub { display: none; }
   .title > .fineprint { margin-top: 6px; }
 }
+
+/* --- A screen in two segments, by the page's own reading (0105, src/fold.js via src/main.js syncFold) --------
+   Rows (a horizontal fold: a flip phone half-folded on a table): the scene is drawn in the top segment only
+   (the canvas stops at the fold; the camera takes its shape), and everything the thumbs and the eyes work
+   with sits in the bottom one. */
+:root[data-fold='rows'] #stage { height: var(--fold-a); }
+/* The descent (in the air) stands just under the fold, at the left margin; the cue line beside it; the line of
+   readings keeps its rail at the top left of the scene, as on a phone. The full set steps back to the line
+   here (src/hud-mode.js). */
+:root[data-fold='rows'] .hud .h-primary { top: calc(var(--fold-b) + 12px) !important; bottom: auto !important; }
+:root[data-fold='rows'] .cue { top: calc(var(--fold-b) + 12px) !important; bottom: auto !important; }
+/* The title starts under the fold (the hero car is in the scene above it) and scrolls there if it must. */
+:root[data-fold='rows'] .title { top: calc(var(--fold-b) + 8px); bottom: calc(8px + var(--safe-b)); max-height: none; justify-content: flex-start; align-content: start; overflow-y: auto; overscroll-behavior: contain; }
+/* The sheets: the pause sheet, the board and the results stand in the bottom segment (the scene, or the replay,
+   above them); their scrim still covers the whole screen. */
+:root[data-fold='rows'] :is(.pause, .board, .results) { padding-top: var(--fold-b); }
+:root[data-fold='rows'] :is(.pause, .board) .sheet { max-height: calc(100dvh - var(--fold-b) - 24px); }
+/* Columns (a vertical fold: a book fold half-open): the centred sheets stand in the left segment, the results
+   (docked at the right edge on a wide screen) in the right one; nothing straddles the hinge. */
+:root[data-fold='cols'] :is(.pause, .board) { padding-right: calc(100vw - var(--fold-a)); }
+:root[data-fold='cols'] :is(.pause, .board) .sheet { width: min(560px, calc(var(--fold-a) - 32px)); }
+:root[data-fold='cols'] .results { padding-left: var(--fold-b); }
+:root[data-fold='cols'] .results .sheet { width: auto; max-width: calc(100vw - var(--fold-b)); columns: auto; }
+/* The judges' theatre, where it takes the screen, takes the left segment (the results are in the right one). */
+:root[data-fold='cols'] .theatre { right: calc(100vw - var(--fold-a)); }

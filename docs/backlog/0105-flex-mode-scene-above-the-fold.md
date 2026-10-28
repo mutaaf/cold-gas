@@ -20,22 +20,32 @@ sheet, the results and the board centre on it. Safari reports neither (measured,
 progressive enhancement, inert there.
 
 ## What
-- A small pure module (`src/fold.js`): the segments and the posture from `window.viewport.segments` and the
-  media queries, as one state `{ split: 'none'|'rows'|'cols', fold: {…} }`, with a change callback.
-- Rows (a horizontal fold): the scene is drawn for the top segment (the camera's view offset), the HUD's
-  band, the cue, the touch controls and the sheets sit in the bottom segment, the top bar in the top one.
-- Columns (a vertical fold): the centred sheets (pause, results, board, controls) sit in one segment.
-- `tests/e2e/flex.spec.js`: the DevTools protocol's display feature and posture override.
+- `src/fold.js` (pure): `foldState({ segments, folded })` → `{ split: 'none'|'rows'|'cols', fold, folded }`;
+  `readFold(win)` reads `window.viewport.segments` and `(device-posture: folded)` (the media query: headless
+  Chromium 156 has no `navigator.devicePosture`).
+- `src/main.js` `syncFold`: `:root[data-fold]` and the hinge's edges as `--fold-a` / `--fold-b` (px), on every
+  resize and when the segment or posture queries change (a posture change need not resize the window); the
+  camera and the drawing buffer re-fit (stage.reshape), the HUD density refits.
+- `src/styles.css`, rows (a horizontal fold): the canvas stops at the fold, so the scene (and the camera's
+  aspect) is the top segment; the descent and the cue line stand just under the fold; the touch controls
+  were already low; the title starts under the fold and scrolls there if it must; the pause sheet, the board
+  and the results stand in the bottom segment. `src/hud-mode.js`: no room for the full set in rows.
+- Columns (a vertical fold): the pause sheet and the board in the left segment, the results in the right,
+  the judges' theatre (where it takes the screen) in the left. (0075 already kept the band, the phase tab
+  and the cue line off it.)
 
 ## Acceptance criteria
-- [ ] A horizontal fold at 360×748 and 744×780: no HUD box, control or sheet button crosses the fold's band; the car's projected centre is in the top segment through a run.
-- [ ] A vertical fold at 951×589 and 744×780: the pause sheet, the results and the board sit in one segment.
-- [ ] Unfolding back to one segment restores the layout in the same run (no reload, same run).
-- [ ] Without segments nothing changes (the queries are false; the audit unchanged).
-- [ ] Works at 390×844 touch and 1280×720 keyboard (unchanged).
+- [x] A horizontal fold at 360×748: no control, HUD box or text crosses the hinge's band on the title, in the run (in the air too), or on the pause sheet; the car's projected centre stays in the top segment through the air (e2e). 744×780 rows and 951×589 columns checked the same way with a probe (no e2e: CI time).
+- [x] A vertical fold at 744×780: the title, the run, the pause sheet, the theatre and the results keep off it (e2e).
+- [x] Opening flat restores the layout in the same run (same `S.run`, no reload; the canvas and the camera take the whole screen again).
+- [x] Without segments nothing changes (no `data-fold`; the audits and every other e2e unchanged).
+- [x] Works at 390×844 touch and 1280×720 keyboard (unchanged).
 
 ## Test plan
-`tests/e2e/flex.spec.js`; `tests/unit/fold.test.js` for the pure state.
+`tests/unit/fold.test.js` (the pure state); `tests/e2e/segments.spec.js` (rows at 360×748 and columns at 744×780
+over the DevTools protocol: `setDeviceMetricsOverride.displayFeature` and `setDevicePostureOverride`;
+`setDisplayFeaturesForTesting` doesn't exist and `setDisplayFeaturesOverride` isn't in Chromium 156). Shots
+in docs/shots/0105/ (taken with CDP's own capture: Playwright's screenshot resets the emulated fold).
 
 ## Out of scope
 A tent pose. Safari (no APIs, 0102).

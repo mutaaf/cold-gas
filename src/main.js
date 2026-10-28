@@ -54,6 +54,8 @@ import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
 import { createPacer } from './pace.js';
 import { pickDeviceTier, pickAA, deviceKind, readDevice, isIOS } from './gfx-tier.js';
+import { readFold } from './fold.js';
+import { refitHudMode } from './hud-mode.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
@@ -1596,7 +1598,24 @@ document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('cli
 // The window changed shape (a rotation, a folding phone opened or closed mid-anything, 0075): the
 // camera re-fits now and the drawing buffer once the size settles (stage.reshape); nothing reloads,
 // and the run, the replay or the title carries on.
-addEventListener('resize', () => { stage.reshape(); director.reframe(); frameReplay(); redrawPaused(); });
+// A screen in two segments (0105; Chromium's Viewport Segments, where a foldable reports its hinge: a flip phone
+// half-folded on a table, a book fold half-open). :root[data-fold] and the fold's edges in px (--fold-a, --fold-b:
+// where the first segment ends and the second starts, down the screen for rows, across for columns) let the CSS
+// draw the scene in the top segment and keep the HUD, the controls and the sheets off the hinge. Read on every
+// resize and when the segments or the posture change (a posture change need not resize the window).
+function syncFold() {
+  const f = readFold(window), root = document.documentElement;
+  if (f.split === 'none') { if (root.hasAttribute('data-fold')) { root.removeAttribute('data-fold'); root.style.removeProperty('--fold-a'); root.style.removeProperty('--fold-b'); } }
+  else {
+    const [a, b] = f.split === 'rows' ? [f.fold.y, f.fold.y + f.fold.h] : [f.fold.x, f.fold.x + f.fold.w];
+    root.dataset.fold = f.split; root.style.setProperty('--fold-a', `${a}px`); root.style.setProperty('--fold-b', `${b}px`);
+  }
+  root.toggleAttribute('data-folded', f.folded);
+}
+const onShape = () => { const was = document.documentElement.dataset.fold; syncFold(); if (document.documentElement.dataset.fold !== was) refitHudMode(); stage.reshape(); director.reframe(); frameReplay(); redrawPaused(); };
+syncFold();
+addEventListener('resize', onShape);
+for (const q of ['(horizontal-viewport-segments: 2)', '(vertical-viewport-segments: 2)', '(device-posture: folded)']) matchMedia(q).addEventListener?.('change', onShape);
 // Mist and crash smoke size in drawing-buffer pixels, kept current through resizes and the
 // resolution governor's steps (src/render/scene.js onResize).
 stage.onResize((h) => { plumes.setScale(h); crash.setScale(h); redrawPaused(); });
