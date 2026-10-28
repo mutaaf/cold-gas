@@ -113,6 +113,8 @@ for (const phone of [true, false]) {
     await page.waitForFunction(() => window.__coldgas.refGhostReady(window.__coldgas.stage.course), null, { timeout: 60_000, polling: 50 });
     console.log(`${phone ? 'phone' : 'desktop'}: the Show's reference ghost ready ${Math.round(await G(page, () => performance.now()) - tReady)} ms after the engine`);
     await ghostsReady(page);
+    // …and the next run's engine world is built, between frames, so the tap doesn't build it.
+    await page.waitForFunction(() => window.__coldgas.spareRun() === window.__coldgas.stage.course, null, { timeout: 30_000, polling: 50 });
     // A player who has touched the title before (here the course already chosen, a no-op): the
     // first gesture builds the audio graph. Headless Chromium has no audio device and its
     // AudioContext constructor alone takes ≈300 ms, which a phone's does not.
@@ -135,6 +137,7 @@ for (const phone of [true, false]) {
     const bar = process.env.CI && phone ? 150 : 50;
     expect(long.filter((e) => e.ms > bar)).toEqual([]);
     expect(await G(page, () => window.__coldgas.refGhostRoot.visible)).toBe(true);
+    expect(await G(page, () => window.__coldgas.spareRun())).toBe(null);   // the run took it
     await ctx.close();
   });
 }
