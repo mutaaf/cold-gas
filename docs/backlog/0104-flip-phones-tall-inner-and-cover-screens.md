@@ -1,12 +1,12 @@
 ---
 id: 0104
 title: Flip phones play on the tall inner screen both ways and on the near-square cover screen
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-27
-pr:
+pr: 146
 by: operator
 ---
 
