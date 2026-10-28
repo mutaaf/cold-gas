@@ -49,6 +49,7 @@ export function createSandbox(ctx) {
   };
 
   function place(x, z, yaw = 0) {
+    input.freshRun?.();   // a fresh car lets go of everything (0099, 0108)
     if (st.car) freeWorld(st.car.world);
     const car = createVehicle(st.course);
     car.pos.x = x; car.pos.y = SPEC.comHeight + 0.04; car.pos.z = z;

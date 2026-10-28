@@ -241,9 +241,13 @@ export function createDrive(ctx) {
 
   // --- The car ---------------------------------------------------------------------------------
   // Put a fresh car on the road at distance s (m), facing dir (+1 up the road, −1 back down).
+  // A fresh car lets go of everything (0099's rule, 0108): a key or a pedal held through R, Reset, From
+  // the start or the road's start counts again only on a fresh press, and the wheel starts centred (it
+  // used to put the new car at full lock and full throttle into the rail it had just been lifted off).
   function placeAt(s, dir, resetTimer) {
     const road = st.road;
     const p = poseAt(road, s, dir);
+    input.freshRun?.();
     if (st.car) freeWorld(st.car.world);
     const car = createVehicle(st.course);
     car.pos.x = p.x; car.pos.y = p.y + SPEC.comHeight + 0.04; car.pos.z = p.z;
@@ -261,6 +265,7 @@ export function createDrive(ctx) {
 
   // A fresh car at a pose (a quest's start): { x, y, z, yaw }.
   function placePose(p) {
+    input.freshRun?.();
     if (st.car) freeWorld(st.car.world);
     const car = createVehicle(st.course);
     car.pos.x = p.x; car.pos.y = p.y + SPEC.comHeight + 0.04; car.pos.z = p.z;

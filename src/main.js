@@ -1609,7 +1609,7 @@ function loadDrive() {
   driveLoad ??= import('./drive/index.js').then((mod) => {
     drive = mod.createDrive({
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
-      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch },
+      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun },
       assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
       setMode: (m) => { disposeRun(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
@@ -1628,7 +1628,7 @@ function loadSandbox() {
   sandboxLoad ??= import('./build/sandbox.js').then((mod) => {
     sandbox = mod.createSandbox({
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse, CAR,
-      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch },
+      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun },
       assist: () => S.tier,
       setMode: (m) => { disposeRun(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
