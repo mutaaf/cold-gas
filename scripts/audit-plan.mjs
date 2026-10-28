@@ -31,8 +31,11 @@ export const FOLD_INSETS = {
 export const FLIP = [[360, 748], [800, 300], [360, 380], [424, 360]];
 export const DESKTOPS = [[1280, 720], [1920, 1080], [720, 1280], [1080, 1920]];
 export const SAFE = [[390, 844, 1], [430, 932, 1], [844, 390, 1], [932, 430, 1], [814, 380, 1]];
-// Free Drive is flown at these (phones, iPads and the two desktop sizes).
-export const DRIVE = ['390x844', '844x390', '1280x720', '1920x1080', '768x1024', '820x1180', '1180x820', '844x390s'];
+// Free Drive is flown at these (phones, iPads and the two desktop sizes), and since 0110/0112 at the cramped screens
+// of the fold and the flip (the fold closed and turned in a tab and installed, closed upright installed; the flip's
+// two cover screens and its tall screen turned).
+export const DRIVE = ['390x844', '844x390', '1280x720', '1920x1080', '768x1024', '820x1180', '1180x820', '844x390s',
+  '594x368', '678x445', '466x657', '360x380', '424x360', '800x300'];
 
 const parse = (v) => { const m = v.match(/^(\d+)x(\d+)(s?)$/); return [Number(m[1]), Number(m[2]), m[3] ? 1 : 0]; };
 export function viewportsFor(set) {
@@ -78,3 +81,62 @@ export function planShards(viewports, M, { title = true } = {}) {
   return shards.map((s) => s.items.sort((a, b) => a.i - b.i).map((it) => it.v));
 }
 export const planLoad = (items) => items.reduce((a, v) => a + cost(v), 0);
+
+// How much of the scene the HUD covers (0112), measured in the page (serialised into it: no closures). Painted HUD chrome
+// (a background with alpha ≥ 0.08, a backdrop filter, a visible border, an SVG/canvas/img, a line of text's glyph boxes)
+// is unioned on a 4 px grid: `any` (cover), `solid` (a background ≥ 0.5: hides the scene outright), `tint` (a gradient
+// shade alone: darkens it). scripts/hud-cover.mjs reports it per size; scripts/hud-audit.mjs gates `any` (coverCeiling).
+export const COVER_ROOTS = '[data-screen="hud"], [data-touch], [data-cue], .top, [data-drill-bar], [data-drive-hud], [data-onethumb], .bq-dock, .fd-ai';
+export function measureCover(ROOTS) {
+  const W = innerWidth, H = innerHeight, C = 4, cols = Math.ceil(W / C), rows = Math.ceil(H / C);
+  const any = new Uint8Array(cols * rows), solid = new Uint8Array(cols * rows), tint = new Uint8Array(cols * rows);
+  const alpha = (c) => { const m = c.match(/[\d.]+/g); if (!m) return 0; return c.startsWith('rgba') ? Number(m[3]) : 1; };
+  const shown = (el) => { for (let e = el; e && e.nodeType === 1; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.05 || e.hidden) return false; } return true; };
+  const opac = (el) => { let o = 1; for (let e = el; e && e.nodeType === 1; e = e.parentElement) o *= Number(getComputedStyle(e).opacity); return o; };
+  const paint = (r, grid) => {
+    const x0 = Math.max(0, Math.floor(r.left / C)), x1 = Math.min(cols, Math.ceil(r.right / C)), y0 = Math.max(0, Math.floor(r.top / C)), y1 = Math.min(rows, Math.ceil(r.bottom / C));
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) grid[y * cols + x] = 1;
+  };
+  const who = new Map();
+  const seen = new Set();
+  for (const root of document.querySelectorAll(ROOTS)) for (const el of [root, ...root.querySelectorAll('*')]) {
+    if (seen.has(el)) continue; seen.add(el);
+    if (!shown(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;
+    const cs = getComputedStyle(el), op = opac(el);
+    const bg = alpha(cs.backgroundColor) * op, img = cs.backgroundImage !== 'none';
+    const bd = ['Top', 'Right', 'Bottom', 'Left'].some((s) => parseFloat(cs[`border${s}Width`]) > 0 && alpha(cs[`border${s}Color`]) * op > 0.08);
+    const blur = cs.backdropFilter && cs.backdropFilter !== 'none';
+    const media = el instanceof SVGSVGElement || el.tagName === 'CANVAS' || el.tagName === 'IMG';
+    const key = el.dataset.hudBox || (el.className?.baseVal ?? el.className);
+    // A gradient alone (the scrims behind the HUD's band) darkens the scene rather than hiding it: tint.
+    if (img && !(bg >= 0.08 || bd || blur || media)) paint(r, tint);
+    else if (bg >= 0.08 || bd || blur || media) {
+      paint(r, any); if (bg >= 0.5) paint(r, solid);
+      who.set(String(key).split(' ')[0] || el.tagName, (who.get(String(key).split(' ')[0] || el.tagName) || 0) + Math.round(r.width * r.height));
+    }
+    // A shade drawn as a pseudo-element (Free Drive's ::before / ::after): its box from its computed edges.
+    for (const ps of ['::before', '::after']) {
+      const pc = getComputedStyle(el, ps);
+      if (pc.content === 'none' || pc.display === 'none' || pc.position !== 'absolute' || pc.backgroundImage === 'none') continue;
+      const h = parseFloat(pc.height), t = pc.top === 'auto' ? r.height - parseFloat(pc.bottom) - h : parseFloat(pc.top);
+      paint({ left: r.left, right: r.right, top: r.top + t, bottom: r.top + t + h }, tint);
+    }
+    for (const n of el.childNodes) if (n.nodeType === 3 && n.textContent.trim() && op > 0.05) {
+      const rg = document.createRange(); rg.selectNodeContents(n);
+      for (const tr of rg.getClientRects()) paint(tr, any);
+    }
+  }
+  return { any, solid, tint, cols, rows, C, W, H, who: [...who].sort((a, b) => b[1] - a[1]).slice(0, 6).map(([k, v]) => `${k} ${Math.round(100 * v / (W * H))}%`) };
+}
+
+
+// The ceiling the audit holds a touch frame of a run to (0112), with the HUD compact (what a touch screen starts with;
+// the full set is the player's own choice, one tap away): the HUD may cover at most this share of the glass. By the
+// glass's area, as the thumbs' controls keep their size whatever the screen: a phone, a fold or an iPad (≥ 300 000 px²)
+// 33 %; a small phone, the 320 px column, the fold closed in a tab or mid-swing, a flip's screens (≥ 160 000) 46 %; a
+// flip's cover screen 60 %. Measured after 0112 on every compact frame of the audit, with the page held as it is measured
+// (Free Drive's with its arrival title up): at most 30.3 % (844×390 with a notch's insets), 42.7 % (320×568, the carry
+// with its cue line) and 55.8 % (360×380).
+export const coverCeiling = (w, h) => (w * h >= 300000 ? 0.33 : w * h >= 160000 ? 0.46 : 0.6);

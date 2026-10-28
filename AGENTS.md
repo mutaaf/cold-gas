@@ -318,7 +318,9 @@ scripts/human-phone.mjs    the human-show population on a phone (thumbs, reach, 
 scripts/thumb-reach.mjs    touch control geometry per phone viewport + reach heatmap screenshots
 scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11 px, WCAG contrast on screenshots;
                            the judges' theatre and the pause sheet too (44 px targets; Resume and Home on the glass,
-                           0092); a gate (exit 1), --shard=N/M
+                           0092); a touch frame's HUD cover under audit-plan.mjs coverCeiling (0112); a gate (exit 1), --shard=N/M
+scripts/hud-cover.mjs      how much of the scene the HUD covers, per size and touch scheme (the Show's run-up and air, Free
+                           Drive): cover / solid / shade %, the car's and the road ahead's box under chrome; `p` = installed (0112)
 scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view; a gate (exit 1)
 scripts/serve-and-audit.mjs  `npm run audit`: vite preview on a private port + both audits, their exit code
 scripts/audit-plan.mjs     the audit's viewports and its shard plan, balanced by estimated CI seconds (0087)

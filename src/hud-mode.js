@@ -18,16 +18,20 @@ export function defaultHudMode({ coarse = false, w = 0, h = 0 } = {}) {
 // and turned: 594 or 678 px, 0102) shows the compact line, and the handle that would open MORE is put away;
 // the player's choice is kept and comes back on a screen with the room (unfolded, or upright). Nor is there
 // room under 320 px of height sideways (a flip phone's tall screen turned, with Chrome's bars: 300), or on a
-// screen under 440 px both ways (a flip phone's cover screen, 0104).
-export function fullFits({ coarse = false, w = 0, h = 0 } = {}) {
+// screen under 440 px both ways (a flip phone's cover screen, 0104). Driving (Free Drive, the Sandbox: `drive`), an upright
+// screen under 700 px tall has no room either (0112): the full set (the road's lines, the band, two rows of chips, the
+// map, the AI switch with its sentence) filled 466×657 down to the thumbs and the cue line sat on them.
+export function fullFits({ coarse = false, w = 0, h = 0, drive = false } = {}) {
   if (!coarse) return true;
   if (Math.max(w, h) < 440) return false;
+  if (drive && h > w && h < 700) return false;
   return !(w > h && (w < 720 || h < 320));
 }
 // Half-folded with the fold across the screen (0105: src/main.js marks :root[data-fold='rows']), the scene has the
 // top segment and the HUD's line, the descent and the controls the bottom one: no room for the full set either.
 const folded = () => typeof document !== 'undefined' && document.documentElement.dataset.fold === 'rows';
-const fitsNow = () => !folded() && fullFits({ coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, w: globalThis.innerWidth || 0, h: globalThis.innerHeight || 0 });
+const driving = () => typeof document !== 'undefined' && !!document.body?.classList.contains('driving');
+const fitsNow = () => !folded() && fullFits({ coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, w: globalThis.innerWidth || 0, h: globalThis.innerHeight || 0, drive: driving() });
 // What the HUD shows: the mode, unless the full set has no room here.
 export const shownHudMode = () => (hudMode() === 'full' && !fitsNow() ? 'compact' : hudMode());
 
@@ -107,6 +111,9 @@ export function initHudMode() {
   // Settled, not per event: a fold swings through sizes no pose has (466×498 on the one we measured).
   let settle = 0;
   addEventListener('resize', () => { clearTimeout(settle); settle = setTimeout(refitHudMode, 200); });
+  // Into a drive and out of it (body.driving): the room for the full set is measured again (0112).
+  let wasDriving = driving();
+  if (typeof MutationObserver === 'function' && document.body) new MutationObserver(() => { if (driving() !== wasDriving) { wasDriving = driving(); paint(hudMode()); } }).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   document.addEventListener('keydown', (e) => {
     if (e.code !== 'KeyI' || e.repeat || e.metaKey || e.ctrlKey || e.altKey) return;
     if (e.target.closest?.('input, textarea, select, [contenteditable]')) return;

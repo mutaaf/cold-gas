@@ -126,3 +126,30 @@ test('without a share sheet, Share copies the link and says so', async ({ page, 
   await expect(page.locator('[data-toast]')).toHaveText('Link copied');
   expect(await page.evaluate(() => navigator.clipboard.readText())).toMatch(/^COLD GAS .+ http:\/\/localhost:\d+\/coldgas\/$/);
 });
+
+// Installed, the scene fills the glass (0112): the canvas is the window's box (never 100dvh, which WebKit resolves apart
+// from innerHeight in an installed app) and, installed, bleeds 24 px past the window's bottom so no strip of the page's
+// black shows under the home indicator; its drawing buffer follows at the renderer's ratio. In a tab it is exactly the
+// window. The book fold opened upright, installed: 669×930. Kept light (low tier, one page each, no run): the 'high'
+// tier's ratio at that size is in the PR's measurements (scripts/hud-cover.mjs `p` sizes print the stage).
+test('installed, the canvas draws edge to edge and past the bottom; in a tab, exactly the window', async ({ browser }) => {
+  for (const standalone of [true, false]) {
+    const ctx = await browser.newContext({ viewport: { width: 669, height: 930 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+    const page = await ctx.newPage();
+    // Chromium can't emulate display-mode: iOS's home-screen flag (navigator.standalone), which index.html also reads.
+    if (standalone) await page.addInitScript(() => Object.defineProperty(Navigator.prototype, 'standalone', { get: () => true, configurable: true }));
+    await page.goto('/coldgas/?gfx=low', { waitUntil: 'domcontentloaded' });
+    await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
+    const s = await page.evaluate(() => {
+      const c = document.getElementById('stage'), r = c.getBoundingClientRect(), pr = window.__coldgas.stage.renderer.getPixelRatio();
+      return { x: r.left, y: r.top, w: r.width, h: r.height, iw: innerWidth, ih: innerHeight, bw: c.width, bh: c.height, pr, installed: document.documentElement.hasAttribute('data-installed') };
+    });
+    const at = JSON.stringify(s);
+    expect(s.installed, at).toBe(standalone);
+    expect([s.x, s.y, s.w], at).toEqual([0, 0, s.iw]);
+    expect(s.h, at).toBe(s.ih + (standalone ? 24 : 0));
+    expect(Math.abs(s.bw - Math.round(s.w * s.pr)), at).toBeLessThanOrEqual(1);
+    expect(Math.abs(s.bh - Math.round(s.h * s.pr)), at).toBeLessThanOrEqual(1);
+    await ctx.close();
+  }
+});

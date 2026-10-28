@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { deviceKind, pickDeviceTier } from '../../src/gfx-tier.js';
 import { defaultHudMode, fullFits } from '../../src/hud-mode.js';
-import { FOLD, FLIP, FOLD_INSETS, insetsFor, dprFor, viewportsFor, touchFor, planShards, planLoad } from '../../scripts/audit-plan.mjs';
+import { FOLD, FLIP, FOLD_INSETS, DRIVE, insetsFor, dprFor, viewportsFor, touchFor, planShards, planLoad, coverCeiling } from '../../scripts/audit-plan.mjs';
 
 // Ticket 0103: the book-style folding phone as Safari reports it (measured on the simulated device in
 // Device Hub, docs/backlog/0102): an iPhone UA in every pose, `screen` stuck at the outer screen's 466×678.
@@ -62,6 +62,16 @@ describe('room for the full set', () => {
     expect(fullFits({ coarse: true, w: 382, h: 580 })).toBe(true);
     expect(fullFits({ coarse: false, w: 600, h: 400 })).toBe(true);
   });
+  // 0112: driving, an upright screen under 700 px tall shows the compact line (the fold closed, installed: 466×657);
+  // the Show keeps the full set there, and a tall phone keeps it driving.
+  it('driving, upright under 700 px tall: no room; the Show there, or a tall phone driving: room', () => {
+    expect(fullFits({ coarse: true, w: 466, h: 657, drive: true })).toBe(false);
+    expect(fullFits({ coarse: true, w: 382, h: 580, drive: true })).toBe(false);
+    expect(fullFits({ coarse: true, w: 466, h: 657 })).toBe(true);
+    expect(fullFits({ coarse: true, w: 390, h: 844, drive: true })).toBe(true);
+    expect(fullFits({ coarse: true, w: 951, h: 648, drive: true })).toBe(true);
+    expect(fullFits({ coarse: false, w: 466, h: 657, drive: true })).toBe(true);
+  });
 });
 
 // Ticket 0104: a flip phone's screens (estimates, docs/backlog/0102) are in the gate at 3×, and the full set
@@ -82,5 +92,24 @@ describe('flip phones', () => {
     expect(fullFits({ coarse: true, w: 360, h: 380 })).toBe(false);
     expect(fullFits({ coarse: true, w: 424, h: 360 })).toBe(false);
     expect(fullFits({ coarse: true, w: 844, h: 390 })).toBe(true);   // a phone sideways keeps it
+  });
+});
+
+// Ticket 0110 / 0112: Free Drive is flown at the fold's and the flip's cramped screens, and the HUD audit holds a
+// compact touch frame to a cover ceiling by the glass's area.
+describe('Free Drive on the cramped screens, and the cover ceiling', () => {
+  it('flies Free Drive at the fold closed and turned (tab and installed), closed upright installed, and the flip', () => {
+    const all = viewportsFor('all').map(([w, h, s]) => `${w}x${h}${s ? 's' : ''}`);
+    for (const v of ['594x368', '678x445', '466x657', '360x380', '424x360', '800x300']) {
+      expect(DRIVE).toContain(v);
+      expect(all).toContain(v);
+    }
+  });
+  it('holds a phone to a third of the glass, a small screen to 46 %, a cover screen to 60 %', () => {
+    expect(coverCeiling(390, 844)).toBe(0.33);
+    expect(coverCeiling(669, 930)).toBe(0.33);
+    expect(coverCeiling(320, 568)).toBe(0.46);
+    expect(coverCeiling(800, 300)).toBe(0.46);
+    expect(coverCeiling(360, 380)).toBe(0.6);
   });
 });

@@ -34,7 +34,17 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 @media (pointer: coarse) { input, select, textarea { font-size: max(16px, 1em) !important; } }
 [hidden] { display: none !important; }
 
-#stage { position: fixed; inset: 0; width: 100vw; height: 100vh; height: 100dvh; display: block; opacity: 0; transition: opacity 0.9s var(--ease); }
+/* The canvas is the window's own box (0112): 100 % of the fixed containing block, which is what innerWidth × innerHeight
+   measure and what the director, the replay's region and every HUD edge are laid out against; never 100vh/100dvh, a
+   second answer WebKit computes apart from innerHeight (in an installed app with a black-translucent status bar the
+   two have disagreed). Installed (:root[data-installed]: standalone or fullscreen, or iOS's navigator.standalone; set
+   in index.html's head) it also bleeds past the bottom of the window by --bleed:
+   installed on the book fold, the closed screen's poses are 21 px short of its 466×678 glass (466×657, 678×445) and
+   the open ones fit the same 21 px (669×930 upright, 951×648 sideways; docs/backlog/0102), so whatever the web view shows past innerHeight is still
+   the scene, not the page's black. The top edge stays the window's, so no coordinate above the bottom moves. */
+#stage { position: fixed; left: 0; top: 0; width: 100%; height: 100%; display: block; opacity: 0; transition: opacity 0.9s var(--ease); }
+:root[data-installed] { --bleed: 24px; }
+:root[data-installed] #stage { height: calc(100% + var(--bleed)); }
 #stage.on { opacity: 1; }   /* the first 3D frame fades in under the title (src/render/scene.js) */
 .grain { position: fixed; inset: 0; pointer-events: none; opacity: 0.05; mix-blend-mode: overlay;
   background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>"); }
@@ -1423,6 +1433,26 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   :root[data-hud='compact'] .cue { top: auto; bottom: calc(100px + var(--safe-b)); left: calc(168px + var(--safe-l)); right: calc(271px + var(--safe-r)); }
   :root[data-hud='compact'] .hud .h-scrim-top { height: calc(var(--top) + 200px); }
   :root[data-hud='compact'] .hud .h-scrim-bot { height: 34dvh; }
+}
+/* The scene reads first (0112). Compact, every instrument stands on its own glass (the rail's cells, the descent's
+   panel, the band, the phase's tab, the cue's box, the thumbs' rings), so the scrims had nothing left to carry but
+   the wordmark: they darkened 51 % of a phone upright and 90 % of one sideways, the car in the air with it. What is
+   left is a short shade behind the top bar; nothing at the bottom. */
+@media (pointer: coarse) {
+  :root[data-hud='compact'] .hud .h-scrim-top { height: calc(var(--safe-t) + 28px); background: linear-gradient(rgba(3, 5, 9, 0.5), rgba(3, 5, 9, 0)); }   /* the status bar's own text, installed */
+  :root[data-hud='compact'] .hud .h-scrim-bot { display: none; }
+  /* The wordmark is the title's, not the run's: mid-run on a touch screen it stood bare over the Wall's lit edge
+     (1.9:1 once the shade was gone) and took a corner the scene can have. Hidden, its place kept (the actions stay right). */
+  :root[data-hud='compact'] body:has(.hud:not([hidden])) .top .brand, :root[data-hud='compact'] body.driving .top .brand { visibility: hidden; }
+}
+/* Sideways and short (the fold closed and turned, 594×368 and installed 678×445; a phone at 390; the flip's screens),
+   the car on the ground rides at 60–75 % of the height, right where the cue line stood over the band and the phase
+   tab: it hid the car outright at the start of a run (0112, scripts/hud-cover.mjs). On the ground the line goes up
+   under the top bar, into the sky, left of the right thumb's column; in the air the car is high and the line comes back down. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 460px) {
+  :root[data-hud='compact'] body:not(.driving):not(:has(.hud[data-air]:not([hidden]))) .cue { top: calc(66px + var(--safe-t)); bottom: auto;
+    left: calc(clamp(16px, 2.4vw, 36px) + var(--safe-l)); right: calc(164px + var(--safe-r)); }   /* short of the right thumb's column (LIFT rises to 80 px on a razr's cover) */
+  :root[data-hud='compact'] body:not(.driving):has([data-drill-bar]:not([hidden])):not(:has(.hud[data-air]:not([hidden]))) .cue { top: calc(116px + var(--safe-t)); }
 }
 @container (max-width: 330px) {
   :root[data-hud='compact'] .hud .h-strip > [data-ch='g'] { display: none; }
