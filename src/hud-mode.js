@@ -24,7 +24,10 @@ export function fullFits({ coarse = false, w = 0, h = 0 } = {}) {
   if (Math.max(w, h) < 440) return false;
   return !(w > h && (w < 720 || h < 320));
 }
-const fitsNow = () => fullFits({ coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, w: globalThis.innerWidth || 0, h: globalThis.innerHeight || 0 });
+// Half-folded with the fold across the screen (0105: src/main.js marks :root[data-fold='rows']), the scene has the
+// top segment and the HUD's line, the descent and the controls the bottom one: no room for the full set either.
+const folded = () => typeof document !== 'undefined' && document.documentElement.dataset.fold === 'rows';
+const fitsNow = () => !folded() && fullFits({ coarse: typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches, w: globalThis.innerWidth || 0, h: globalThis.innerHeight || 0 });
 // What the HUD shows: the mode, unless the full set has no room here.
 export const shownHudMode = () => (hudMode() === 'full' && !fitsNow() ? 'compact' : hudMode());
 
