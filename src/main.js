@@ -54,7 +54,7 @@ import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
 import { createPacer } from './pace.js';
 import { pickDeviceTier, pickAA, deviceKind, readDevice, isIOS } from './gfx-tier.js';
-import { readFold } from './fold.js';
+import { readFold, drastic } from './fold.js';
 import { refitHudMode } from './hud-mode.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
@@ -1612,7 +1612,23 @@ function syncFold() {
   }
   root.toggleAttribute('data-folded', f.folded);
 }
-const onShape = () => { const was = document.documentElement.dataset.fold; syncFold(); if (document.documentElement.dataset.fold !== was) refitHudMode(); stage.reshape(); director.reframe(); frameReplay(); redrawPaused(); };
+// A fold or an unfold mid-run (0106): the player's hands leave the glass, the controls move and the browser may
+// never send a finger's pointerup. On a touch screen a drastic change of size (src/fold.js drastic: the area by
+// more than a third, or the screen turned; never a toolbar) pauses a run, a countdown or a Free Drive at the first
+// resize, against the size the screen last settled at, so the transient mid-fold sizes count; pausing lets go of
+// everything (0099: a finger still down counts again only on a fresh press). Resume carries on the same run.
+// The orientation type is not read: it is stale for a few ms after a fold (measured, docs/backlog/0102).
+let settledShape = { w: innerWidth, h: innerHeight }, shapeSettle = 0;
+const touchScreen = () => matchMedia('(pointer: coarse)').matches || usingTouch();
+function foldPause() {
+  const now = { w: innerWidth, h: innerHeight };
+  clearTimeout(shapeSettle);
+  shapeSettle = setTimeout(() => { settledShape = { w: innerWidth, h: innerHeight }; }, 500);
+  if (!touchScreen() || !drastic(settledShape, now)) return;
+  if (S.mode === 'live' || S.mode === 'countdown') { if (!S.paused) pause(true); }
+  else if (S.mode === 'drive' && fd() && !fd().paused) pause(true);
+}
+const onShape = () => { const was = document.documentElement.dataset.fold; syncFold(); if (document.documentElement.dataset.fold !== was) refitHudMode(); foldPause(); stage.reshape(); director.reframe(); frameReplay(); redrawPaused(); };
 syncFold();
 addEventListener('resize', onShape);
 for (const q of ['(horizontal-viewport-segments: 2)', '(vertical-viewport-segments: 2)', '(device-posture: folded)']) matchMedia(q).addEventListener?.('change', onShape);
