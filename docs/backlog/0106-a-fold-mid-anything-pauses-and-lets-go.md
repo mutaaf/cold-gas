@@ -1,12 +1,12 @@
 ---
 id: 0106
 title: A fold mid-run pauses the run and lets go of every touch; a fold paused, on the results or in the replay re-lays out
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-27
-pr:
+pr: 148
 by: operator
 ---
 
