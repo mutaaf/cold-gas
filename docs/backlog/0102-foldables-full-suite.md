@@ -1,12 +1,12 @@
 ---
 id: 0102
 title: Foldables, the full suite (umbrella) - the book-style fold and the flip phones in every screen state
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: platform
 created: 2026-10-27
-pr:
+pr: 149
 by: operator
 ---
 
@@ -105,8 +105,8 @@ keeps the band, the phase tab and the cue line off it; a horizontal one moves th
 The five tickets above, in order, one PR each, test-first.
 
 ## Acceptance criteria
-- [ ] 0103, 0104, 0105, 0106 and 0107 shipped.
-- [ ] AGENTS.md invariant 8 lists the foldables' viewports.
+- [x] 0103 (#143), 0104 (#146), 0105 (#147), 0106 (#148) and 0107 (#149) shipped.
+- [x] AGENTS.md invariant 8 lists the foldables' viewports.
 
 ## Test plan
 Each child ticket's own.

@@ -1,12 +1,12 @@
 ---
 id: 0107
 title: The car stays framed under the HUD on the foldables' aspect ratios, live and in the replay
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: platform
 created: 2026-10-27
-pr:
+pr: 149
 by: operator
 ---
 
