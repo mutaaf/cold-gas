@@ -1,12 +1,12 @@
 ---
 id: 0105
 title: Flex Mode and a reported hinge - the scene above the fold, the controls below, no sheet on the crease
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-27
-pr:
+pr: 147
 by: operator
 ---
 
