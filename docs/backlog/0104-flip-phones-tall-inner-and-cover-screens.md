@@ -20,20 +20,27 @@ and GO (two-thumb), and the full set's mission row under the top bar.
 
 ## What
 - `scripts/audit-plan.mjs`: a flip set (both inner poses, both covers) at 3×, in `all`.
-- `src/styles.css`: a layout for a very small screen (both sides ≤ 440 px) by size, not device: the
-  controls keep their 44 px targets and reach; the band and the cue keep clear of them; the full set
-  shows what fits. The ≤ 370 px-tall landscape arrangement extended to a 300 px one.
-- `scripts/thumb-reach.mjs`: the flip sizes, both schemes.
+- `src/hud-mode.js` `fullFits`: no room for the full set under 320 px tall sideways or on a screen under
+  440 px both ways: the compact line shows, MORE is put away, the choice kept (as 0103 closed sideways).
+- `src/styles.css`, by size, not device: upright under 440 px tall the rail keeps three cells and the
+  descent rises under it (tape shorter, figures scaled to stay 11 px); the title packs into rows of 44 px
+  targets (wordmark on one line, the AI assist pill keeps its state); the judges' theatre under 330 px tall
+  sideways or on the cover screen drops the raw stream (the receipt has it) and reads its counters in two
+  columns (one at 424 wide), and upright on the cover screen the model card too (the caption names the
+  model); the Rookie offer is its name alone there. Sideways under 720 px the two-thumb band stops at the
+  slots' column (176 px) and the phase tab packs tighter.
+- `scripts/title-audit.mjs --only=WxH,…`; `scripts/thumb-reach.mjs` with the flip sizes.
+- (The ≤ 370 px-tall landscape full set stays for 320–370 px; at 300 px the full set doesn't fit.)
 
 ## Acceptance criteria
-- [ ] `npm run audit` green with the flip set (overlaps, offscreen, text ≥ 11 px, 4.5:1, theatre/pause 44 px targets).
-- [ ] The title audit is clean at the flip sizes.
-- [ ] Both schemes at the flip sizes: every control a ≥ 44 px target, none under a HUD box (e2e).
-- [ ] thumb-reach numbers for the flip sizes in the PR.
-- [ ] Works at 390×844 touch and 1280×720 keyboard (unchanged).
+- [x] `npm run audit` green with the flip set (overlaps, offscreen, text ≥ 11 px, 4.5:1, theatre/pause 44 px targets).
+- [x] The title audit is clean at the flip sizes.
+- [x] Both schemes at the flip sizes: every control a ≥ 44 px target, none under a HUD box (e2e).
+- [x] thumb-reach numbers for the flip sizes in the PR.
+- [x] Works at 390×844 touch and 1280×720 keyboard (unchanged).
 
 ## Test plan
-`tests/e2e/flip.spec.js` (both schemes, three phases, both HUD states at the four sizes); the audits.
+`tests/e2e/phone-flip.spec.js` (both schemes, three phases, the full set asked for, at the four sizes); `tests/e2e/theatre.spec.js` at 800×300 and 424×360 (and the fold's measured 594×368, 951×589); `tests/unit/foldables.test.js`; the audits.
 
 ## Out of scope
 Flex Mode (0105). Whether Chrome can run on a given cover screen (a launcher matter).

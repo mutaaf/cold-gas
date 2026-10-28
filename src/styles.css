@@ -513,6 +513,29 @@ body[data-peek] .top .brand { visibility: hidden; }   /* a hairline over the lit
   .theatre .th-ticker, .theatre.th-rookie:not(.th-quest) .th-ticker { left: calc(32px + var(--safe-l) + var(--th-in) * 0.3); bottom: calc(12px + var(--safe-b)); transform: none; width: calc(var(--th-in) * 0.4);
     max-height: min(calc(8 * 1.55em + 24px), calc(100dvh - 164px - var(--safe-t) - var(--safe-b))); }
 }
+/* A flip phone (0104): sideways on its tall screen with Chrome's bars (≈ 300 px tall), or on its cover screen
+   (≈ 360 × 380, 424 × 360). The three panels across (or a phone's stack) need more room than that. The model
+   is named in the caption ("… is writing the judges' remarks") and the counters stay (tokens, time to first
+   token, speed, neurons, cost: invariant 5½); the raw stream steps out here (the receipt's Inspect the call
+   has it, whole, once the panel has spoken), and the counters read in two columns. On the cover screen
+   upright the model card steps out too (the caption names the model), and the Rookie offer is its name alone. */
+@media (orientation: landscape) and (max-height: 330px), (max-width: 520px) and (max-height: 440px) {
+  .theatre .th-ticker, .theatre.th-rookie:not(.th-quest) .th-ticker { display: none; }
+  .th-quick .th-rookie-btn span { display: none; }
+}
+@media (orientation: landscape) and (max-height: 330px), (orientation: landscape) and (max-width: 520px) and (max-height: 440px) {
+  .th-card { width: calc(var(--th-in) * 0.36); }
+  .th-stats { width: calc(var(--th-in) * 0.64 - 16px); grid-template-columns: 1fr 1fr; column-gap: 16px; }
+}
+/* The cover screen sideways (424 wide): two columns of counters didn't fit their figures; one column fits
+   under the caption. */
+@media (orientation: landscape) and (max-width: 520px) and (max-height: 440px) {
+  .th-card { width: calc(var(--th-in) * 0.42); }
+  .th-stats { width: calc(var(--th-in) * 0.58 - 16px); grid-template-columns: none; gap: 4px; }
+}
+@media (orientation: portrait) and (max-width: 520px) and (max-height: 440px) {
+  .th-card { display: none; }
+}
 /* Phones: brand, AI, Assist, Ghost and Sound all fit on one 390 px bar. */
 @media (max-width: 480px) {
   .top { padding-left: calc(16px + var(--safe-l)); padding-right: calc(16px + var(--safe-r)); }
@@ -1535,10 +1558,12 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
   .touch { --ax: 118px; --ay: 150px; --as: 92px; --bx: 118px; --by: 52px; --bs: 70px; --cx: 118px; --cy: 248px; --cs: 64px; --stick: 112px; }
   .stick { left: calc(14px + var(--safe-l)); bottom: calc(22px + var(--safe-b)); }
   .thumb { --ay: 132px; }
-  :root { --narrow-l: calc(138px + var(--safe-l)); --narrow-r: calc(190px + var(--safe-r)); }
-  :root:has(.touch[data-scheme='thumb']:not([hidden])) { --narrow-l: calc(clamp(16px, 2.4vw, 36px) + var(--safe-l)); }
+  /* Two thumbs: the stick's 126 px on the left, the slots' column (164 px from the edge) on the right. One
+     thumb: no stick; the pad (120 px) reaches 178 px in. */
+  :root { --narrow-l: calc(138px + var(--safe-l)); --narrow-r: calc(176px + var(--safe-r)); }
+  :root:has(.touch[data-scheme='thumb']:not([hidden])) { --narrow-l: calc(clamp(16px, 2.4vw, 36px) + var(--safe-l)); --narrow-r: calc(190px + var(--safe-r)); }
   :root[data-hud] .hud .h-strip { left: var(--narrow-l); right: var(--narrow-r); }
-  :root[data-hud] .hud .h-mission { left: var(--narrow-l); right: var(--narrow-r); grid-template-columns: auto; gap: 2px 0; }
+  :root[data-hud] .hud .h-mission { left: var(--narrow-l); right: var(--narrow-r); grid-template-columns: auto; gap: 2px 0; padding-left: 8px; padding-right: 8px; }
   :root[data-hud] .cue { left: var(--narrow-l); right: var(--narrow-r); bottom: calc(132px + var(--safe-b)); }
   /* In the air the descent stands top left (100 px wide, down to ≈ 240 px): the cue keeps right of it. */
   :root[data-hud] body:has(.hud[data-air]:not([hidden])) .cue { left: max(var(--narrow-l), calc(clamp(16px, 2.4vw, 36px) + 112px + var(--safe-l))); }
@@ -1548,6 +1573,15 @@ body:has([data-drill-bar]:not([hidden])) .cue { --cue-top: 180px; }
    the height in the air, and on the ground the run-up is at 0), so speed and the gas keep one line. */
 @container (max-width: 200px) {
   :root[data-hud='compact'] .hud:not([data-air]) .h-strip > [data-ch='alt'] { display: none; }
+}
+/* A tiny square held upright (a flip phone's cover screen, ≈ 360 × 380, 0104): the rail keeps three cells
+   (G steps out: the line says the car's state, and the handle is away, src/hud-mode.js fullFits), and in the
+   air the descent comes up under them, its tape shorter (its figures scaled up to stay 11 px on screen). */
+@media (pointer: coarse) and (orientation: portrait) and (max-height: 440px) {
+  :root[data-hud='compact'] .hud .h-strip > [data-ch='g'] { display: none; }
+  :root[data-hud='compact'] .hud .h-primary { top: calc(var(--top) + 116px); }
+  :root[data-hud='compact'] .hud .d-tape { height: 84px; }
+  :root[data-hud='compact'] .hud .d-tape text { font-size: 22px; }
 }
 
 /* --- A screen in two segments (0075; Chromium's Viewport Segments, where a foldable reports its
@@ -1700,3 +1734,23 @@ body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) :is(.
 :root[data-hud='compact'] body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .hud :is(.h-primary, .h-mission) { background-color: rgba(5, 7, 12, 0.84); }
 body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .stick { background-color: rgba(6, 8, 13, 0.46); }
 body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .tbtn:not(.on, [style*='--amt']) { background-color: rgba(6, 8, 13, 0.56); }
+
+/* --- The title on a flip phone's cover screen held upright (≈ 360 × 380, 0104) -------------------------------
+   A phone's title block is ≈ 560 px tall; here 318 px stand under the top bar. Nothing leaves: the wordmark
+   takes one line, the events and the drives keep their rows (names only), and the actions pack into rows of
+   44 px targets (the AI assist pill keeps its state, its sentence steps out; the tier picker explains it). */
+@media (pointer: coarse) and (orientation: portrait) and (max-height: 440px) {
+  .title { bottom: calc(8px + var(--safe-b)); }
+  .title > .wordmark { font-size: 22px; white-space: nowrap; margin: 0 0 8px; }
+  .title > .wordmark br, .title > .tagline, .title > .eyebrow, .title > .spec { display: none; }
+  .title > .courses { margin-bottom: 6px; gap: 6px; }
+  .title .course-btn { min-height: 44px; padding: 6px 10px; }
+  .title > .drive-row { margin-bottom: 8px; gap: 6px; }
+  .title > .cta { gap: 6px 8px; }
+  .title > .cta .btn { height: 44px; padding: 0 14px; font-size: 13px; }
+  .title > .cta .btn.link { padding: 0 6px; }
+  .title > .cta .assist-ctl { padding: 4px 12px 4px 26px; }
+  .title > .cta .assist-ctl::before { left: 10px; }
+  .title > .cta .ac-sub { display: none; }
+  .title > .fineprint { margin-top: 6px; }
+}

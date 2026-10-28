@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { deviceKind, pickDeviceTier } from '../../src/gfx-tier.js';
 import { defaultHudMode, fullFits } from '../../src/hud-mode.js';
-import { FOLD, FOLD_INSETS, insetsFor, dprFor, viewportsFor, touchFor, planShards, planLoad } from '../../scripts/audit-plan.mjs';
+import { FOLD, FLIP, FOLD_INSETS, insetsFor, dprFor, viewportsFor, touchFor, planShards, planLoad } from '../../scripts/audit-plan.mjs';
 
 // Ticket 0103: the book-style folding phone as Safari reports it (measured on the simulated device in
 // Device Hub, docs/backlog/0102): an iPhone UA in every pose, `screen` stuck at the outer screen's 466×678.
@@ -61,5 +61,26 @@ describe('room for the full set', () => {
     expect(fullFits({ coarse: true, w: 814, h: 380 })).toBe(true);
     expect(fullFits({ coarse: true, w: 382, h: 580 })).toBe(true);
     expect(fullFits({ coarse: false, w: 600, h: 400 })).toBe(true);
+  });
+});
+
+// Ticket 0104: a flip phone's screens (estimates, docs/backlog/0102) are in the gate at 3×, and the full set
+// has room on the tall screen upright only.
+describe('flip phones', () => {
+  it('flies the inner screen both ways and both cover screens, touch at 3×, in `all`', () => {
+    const all = viewportsFor('all');
+    for (const [w, h] of [[360, 748], [800, 300], [360, 380], [424, 360]]) {
+      expect(FLIP).toContainEqual([w, h]);
+      expect(all).toContainEqual([w, h]);
+      expect(touchFor(w, h)).toBe(true);
+      expect(dprFor(w, h)).toBe(3);
+    }
+  });
+  it('the full set fits the tall screen upright, not sideways with the bars, not the cover screen', () => {
+    expect(fullFits({ coarse: true, w: 360, h: 748 })).toBe(true);
+    expect(fullFits({ coarse: true, w: 800, h: 300 })).toBe(false);
+    expect(fullFits({ coarse: true, w: 360, h: 380 })).toBe(false);
+    expect(fullFits({ coarse: true, w: 424, h: 360 })).toBe(false);
+    expect(fullFits({ coarse: true, w: 844, h: 390 })).toBe(true);   // a phone sideways keeps it
   });
 });

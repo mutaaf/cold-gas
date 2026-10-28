@@ -3,12 +3,12 @@
 // Slide Over column), iPads both ways, desktops, and a safe-area pass (`s`: a notched phone's insets
 // forced on --safe-*, as in scripts/hud-audit.mjs), and a folding phone's poses as measured, each with its
 // own insets (scripts/audit-plan.mjs FOLD, 0103), plus Safari's two windows side by side on its open screen.
-//   node scripts/title-audit.mjs <url> <outdir> [label]
+//   node scripts/title-audit.mjs <url> <outdir> [label] [--only=WxH,WxH]
 // A gate (0082): the exit code is 1 when any viewport has an issue, and the offenders are listed at
 // the end. CI (software GL, about 2× slower): AUDIT_SLOW (default 2 when CI is set) scales the waits.
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
-import { FOLD, dprFor, insetCss } from './audit-plan.mjs';
+import { FOLD, FLIP, dprFor, insetCss } from './audit-plan.mjs';
 
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', label = 'title'] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const SLOW = Number(process.env.AUDIT_SLOW || (process.env.CI ? 2 : 1));
@@ -18,13 +18,17 @@ const VPS = [[1280, 720, 0], [1440, 900, 0], [1920, 1080, 0], [390, 844, 1], [43
   [390, 844, 1, 1], [844, 390, 1, 1], [932, 430, 1, 1],
   // The folding phone (0103): every measured pose, in a tab and installed, and one of two Safari windows
   // side by side on the open screen (WebKit's Safari 27.1 notes: 385×571).
-  ...FOLD.map(([w, h]) => [w, h, 1]), [385, 571, 1]];
+  ...FOLD.map(([w, h]) => [w, h, 1]), [385, 571, 1],
+  // A flip phone (0104): the tall inner screen both ways and the cover screens (estimates).
+  ...FLIP.map(([w, h]) => [w, h, 1])];
 // A GPU where there is one (macOS: Metal); software GL elsewhere (CI), as the e2e config does.
 const GL = process.platform === 'darwin' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 const browser = await chromium.launch({ args: GL });
 let bad = 0;
 const offenders = [];
+const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7).split(',');
 for (const [w, h, touch, safe] of VPS) {
+  if (only && !only.includes(`${w}x${h}${safe ? 's' : ''}`)) continue;
   const t0 = Date.now();
   const page = await browser.newPage(touch ? { viewport: { width: w, height: h }, deviceScaleFactor: dprFor(w, h), isMobile: true, hasTouch: true } : { viewport: { width: w, height: h } });
   const forced = touch && insetCss(w, h, safe);
