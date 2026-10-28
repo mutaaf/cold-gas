@@ -59,7 +59,7 @@ const fitted = (page, { width, height }) => page.waitForFunction(({ width, heigh
 }, { width, height }, { timeout: 10_000, polling: 50 });
 
 for (const [from, mid0, to] of [[CLOSED, SWING, OPEN], [CLOSED_SIDE, SWING_SIDE, OPEN_SIDE]]) {
-  test(`a fold mid-run: ${from.width}×${from.height} → ${mid0.width}×${mid0.height} → ${to.width}×${to.height} and back, the same run carries on`, async ({ browser }) => {
+  test(`a fold mid-run: ${from.width}×${from.height} → ${mid0.width}×${mid0.height} → ${to.width}×${to.height} and back pauses the same run, lets go, and Resume carries on`, async ({ browser }) => {
     test.slow();   // a run on software GL
     const page = await browser.newPage(touch(from));
     const errors = [];
@@ -80,14 +80,20 @@ for (const [from, mid0, to] of [[CLOSED, SWING, OPEN], [CLOSED_SIDE, SWING_SIDE,
     });
     await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 60_000 });
     await page.evaluate(() => { window.__run = window.__coldgas.S.run; });
+    const cdp = await page.context().newCDPSession(page);
     for (const [mid, end] of [[mid0, to], [SWING, from]]) {
+      // A thumb on the pad (one-thumb, the touch default on the Show) as the phone folds: held going in.
+      const pad = await page.locator('[data-onethumb]').boundingBox();
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: pad.x + pad.width / 2, y: pad.y + pad.height / 2 }] });
+      await page.waitForFunction(() => window.__coldgas.input.held().thumb, null, { timeout: 5_000 });
       const before = await page.evaluate(() => { window.__resizes.length = 0; window.__fitSizes.length = 0; return { tick: window.__coldgas.S.run.tick, fits: window.__fits }; });
       await page.setViewportSize(mid);
-      await page.waitForTimeout(40);   // a frame or two at the swing's size
-      // Mid-swing the camera already has the new shape (no stretched frame), the buffer waits.
-      expect(await page.evaluate(({ width, height }) => Math.abs(window.__coldgas.camera.aspect - width / height) < 1e-6, mid)).toBe(true);
+      // Mid-swing the camera takes the new shape as the resize lands (no stretched frame), the buffer waits.
+      // (Paused, headless Chromium asks for no frame, so the resize event lands a little later than on a phone.)
+      const aspect = ({ width, height }) => page.waitForFunction(({ width, height }) => Math.abs(window.__coldgas.camera.aspect - width / height) < 1e-6, { width, height }, { timeout: 5_000, polling: 20 }).catch(async (e) => { throw new Error(`aspect ${width}x${height}: ${await page.evaluate(() => [window.__coldgas.camera.aspect, innerWidth, innerHeight, document.getElementById('stage').clientWidth, document.getElementById('stage').clientHeight, window.__coldgas.S.paused].join(' '))}`); });
+      await aspect(mid);
       await page.setViewportSize(end);
-      expect(await page.evaluate(({ width, height }) => Math.abs(window.__coldgas.camera.aspect - width / height) < 1e-6, end)).toBe(true);
+      await aspect(end);
       await fitted(page, end);
       const after = await page.evaluate(() => ({
         marker: window.__foldMarker, same: window.__coldgas.S.run === window.__run, mode: window.__coldgas.S.mode,
@@ -96,9 +102,19 @@ for (const [from, mid0, to] of [[CLOSED, SWING, OPEN], [CLOSED_SIDE, SWING_SIDE,
       expect(after.marker).toBe('still here');
       expect(after.same).toBe(true);
       expect(after.mode).toBe('live');
-      // The run kept going (the clock runs on through the fold).
-      await page.waitForFunction((t) => window.__coldgas.S.run.tick > t, after.tick, { timeout: 10_000 });
-      expect(after.tick).toBeGreaterThan(before.tick);
+      // A drastic change paused the run at the first size (0106): the pause sheet is up, the clock stopped,
+      // and nothing is held (the finger still on the glass counts again only on a fresh press, 0099).
+      expect(await page.evaluate(() => window.__coldgas.S.paused)).toBe(true);
+      await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+      expect(await page.evaluate(() => { const h = window.__coldgas.input.held(); return { thumb: h.thumb, on: h.on, go: h.go }; })).toEqual({ thumb: false, on: 0, go: false });
+      await page.waitForTimeout(200);
+      expect(await page.evaluate(() => window.__coldgas.S.run.tick)).toBe(after.tick);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      // Resume (a tap) carries on the same run.
+      await page.locator('[data-resume]').tap();
+      await page.waitForFunction((t) => !window.__coldgas.S.paused && window.__coldgas.S.run.tick > t, after.tick, { timeout: 10_000 });
+      expect(await page.evaluate(() => window.__coldgas.S.run === window.__run)).toBe(true);
+      expect(after.tick).toBeGreaterThanOrEqual(before.tick);
       // The buffer ends fitted to the pose. And the size no pose has never got a buffer of its own
       // when it passed quicker than the settle (150 ms; a busy runner can take longer between the two
       // viewport calls, and then it is a real size for a moment and may be fitted).

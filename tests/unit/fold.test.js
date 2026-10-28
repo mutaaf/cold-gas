@@ -1,5 +1,28 @@
 import { describe, it, expect } from 'vitest';
-import { foldState, readFold } from '../../src/fold.js';
+import { foldState, readFold, drastic } from '../../src/fold.js';
+
+// Ticket 0106: which change of size stops a run (src/fold.js drastic), measured sizes from docs/backlog/0102.
+describe('drastic', () => {
+  const s = (w, h) => ({ w, h });
+  it('a fold or an unfold, and its mid-swing sizes, are drastic', () => {
+    expect(drastic(s(382, 580), s(669, 871))).toBe(true);    // unfold
+    expect(drastic(s(669, 871), s(466, 498))).toBe(true);    // folding, the first size Safari reports
+    expect(drastic(s(594, 368), s(867, 589))).toBe(true);    // unfold sideways
+    expect(drastic(s(951, 589), s(382, 580))).toBe(true);
+  });
+  it('turning the screen is drastic; a toolbar is not', () => {
+    expect(drastic(s(390, 844), s(844, 390))).toBe(true);
+    expect(drastic(s(669, 871), s(669, 906))).toBe(false);   // Safari's toolbar collapsing
+    expect(drastic(s(382, 580), s(382, 618))).toBe(false);
+    expect(drastic(s(951, 589), s(951, 648))).toBe(false);
+    expect(drastic(s(466, 657), s(382, 657))).toBe(false);   // installed, closed: the side inset coming and going
+  });
+  it('a near-square turning (a flip cover screen) is not a turn; nothing known is nothing', () => {
+    expect(drastic(s(360, 380), s(380, 360))).toBe(false);
+    expect(drastic(null, s(390, 844))).toBe(false);
+    expect(drastic(s(0, 0), s(390, 844))).toBe(false);
+  });
+});
 
 // Ticket 0105: what a fold the browser reports means for the layout (src/fold.js).
 describe('foldState', () => {

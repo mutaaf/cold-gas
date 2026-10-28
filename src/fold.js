@@ -1,4 +1,4 @@
-// A screen that folds (0105). Pure: everything it reads is passed in, so tests/unit/fold.test.js can
+// A screen that folds (0105, 0106). Pure: everything it reads is passed in, so tests/unit/fold.test.js can
 // play any device. The DOM half (readFold) only gathers the browser's answers.
 //
 // What a browser tells a page about a fold (docs/backlog/0102):
@@ -30,4 +30,16 @@ export function readFold(win = globalThis) {
   try { segments = [...(win.viewport?.segments || [])].map((r) => ({ x: r.x, y: r.y, width: r.width, height: r.height })); } catch { segments = null; }
   const folded = !!win.matchMedia?.('(device-posture: folded)').matches;
   return foldState({ segments, folded });
+}
+
+// A change of screen drastic enough to stop a run (0106): the player's hands leave the glass to fold or
+// unfold it, and the controls move. By the size alone (the orientation type is wrong for a few ms after a
+// fold, measured): the area grows or shrinks by more than a third, or the screen turns (its long side
+// changes axis). A toolbar showing or hiding (≈ 60 px) is neither.
+export function drastic(prev, next) {
+  if (!prev || !next || !prev.w || !prev.h || !next.w || !next.h) return false;
+  const r = (next.w * next.h) / (prev.w * prev.h);
+  if (r > 4 / 3 || r < 3 / 4) return true;
+  const turned = (prev.w > prev.h) !== (next.w > next.h) && Math.abs(next.w - next.h) > 40 && Math.abs(prev.w - prev.h) > 40;
+  return turned;
 }
