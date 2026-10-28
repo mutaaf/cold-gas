@@ -325,3 +325,61 @@ body.xmap-open .fd-hud, body.xmap-open .bq-dock, body.xmap-open .touch { opacity
   :root[data-hud='compact'] .fd-dash { top: calc(54px + var(--safe-t)); bottom: auto; left: calc(250px + var(--safe-l)); right: calc(150px + var(--safe-r)); width: fit-content; margin: 0 auto; transform: none; }
   :root[data-hud='compact'] body.driving .cue { top: calc(112px + var(--safe-t)); bottom: auto; left: calc(250px + var(--safe-l)); right: calc(150px + var(--safe-r)); }
 }
+
+/* The road reads first (0112). Compact on a touch screen the line, the switch, the chips and the cue line each
+   stand on their own glass: the shade at the top only has to carry what stands bare (the road's name, the clock,
+   the map credit), and the shade at the bottom nothing upright (the stick's label has its own pill) and the credit
+   sideways. The AI switch is one line (its sentence comes back while it is offered, and in the full HUD). */
+@media (pointer: coarse) {
+  :root[data-hud='compact'] .fd-ai:not([data-offer]) small { display: none; }
+  :root[data-hud='compact'] .fd-ai:not([data-offer]) .fd-ai-sw { grid-row: auto; }
+}
+@media (pointer: coarse) and (orientation: portrait) {
+  :root[data-hud='compact'] .fd-hud::before, :root[data-hud='compact'] body:has([data-h-ai]) .fd-hud::before { height: calc(150px + var(--safe-t));
+    background: linear-gradient(rgba(3, 5, 9, 0.7), rgba(3, 5, 9, 0.56) 70%, rgba(3, 5, 9, 0)); }   /* the credit's line (84–100 px) at the old shade's depth */
+  :root[data-hud='compact'] .fd-hud::after { display: none; }
+}
+/* A screen under 440 px tall upright (a flip's cover screen, 360×380; 0110): the thumbs take everything below 136 px on
+   the right and 210 px on the left. Reset and Exit go up into the top bar's empty left (the wordmark is put away
+   mid-drive), the line right under it, the clock and the AI switch beside each other under the line, the cue line
+   under them clear of LIFT and GO, the road's name goes (the arrival title says it) and the map credit takes the foot
+   of the glass, under the stick and BRAKE. */
+@media (pointer: coarse) and (orientation: portrait) and (max-height: 440px) {
+  :root[data-hud='compact'] .fd-road { display: none; }
+  :root[data-hud='compact'] .fd-ctl { top: calc(20px + var(--safe-t)); left: calc(16px + var(--safe-l)); right: auto; transform: none; }
+  :root[data-hud='compact'] .fd-dash { top: calc(60px + var(--safe-t)); }
+  :root[data-hud='compact'] .fd-timer { top: calc(112px + var(--safe-t)); gap: 0; padding: 3px 8px; border-radius: 4px; background: rgba(5, 7, 12, 0.56); }   /* on its own glass: under the shade's end, over trees */
+  :root[data-hud='compact'] .fd-timer span:empty { display: none; }
+  :root[data-hud='compact'] .fd-ai { top: calc(112px + var(--safe-t)); max-width: calc(100vw - 160px - var(--safe-l) - var(--safe-r)); }
+  :root[data-hud='compact'] body.driving .cue, :root[data-hud='compact'] body.driving:has([data-h-ai]) .cue { top: calc(162px + var(--safe-t)); right: calc(76px + var(--safe-r)); }
+  :root[data-hud='compact'] .fd-fine { top: auto; bottom: calc(3px + var(--safe-b)); right: calc(16px + var(--safe-r)); max-width: none; text-align: center; }
+  :root[data-hud='compact'] .fd-hud::before, :root[data-hud='compact'] body:has([data-h-ai]) .fd-hud::before { height: calc(136px + var(--safe-t)); }
+  :root[data-hud='compact'] .fd-hud::after { display: block; height: calc(30px + var(--safe-b)); }
+}
+@media (pointer: coarse) and (orientation: landscape) {
+  :root[data-hud='compact'] .fd-hud::before { height: calc(100px + var(--safe-t)); }
+  :root[data-hud='compact'] .fd-hud::after { height: calc(64px + var(--safe-b)); }
+}
+/* Sideways under 320 px tall (a flip's tall screen turned, with Chrome's bars: 800×300; 0110): LIFT rises to 96 px, under
+   the line's right end. The line keeps three cells (distance comes back where the full set fits) and starts at the
+   chips' edge instead of centring; the cue line stops short of LIFT. */
+@media (pointer: coarse) and (orientation: landscape) and (max-height: 320px) {
+  :root[data-hud='compact'] .fd-dash { margin: 0; }
+  :root[data-hud='compact'] .fd-dash .fd-stats > div:nth-child(3) { display: none; }
+  :root[data-hud='compact'] body.driving .cue { right: calc(280px + var(--safe-r)); }
+}
+/* Sideways and narrower than 720 (the fold closed and turned: 594×368 with its 84 px inset, 678×445 installed; a razr's
+   cover, 424×360; 0110): the slots stand in a column 164 px in from the right edge from 80 px down, and the line
+   centred between 250 and 150 px in from the edges ran past the glass. Everything goes to the left of that column,
+   one thing a row: Reset and Exit in the top bar's empty left, the line, the AI switch, the cue line; the road's name
+   goes (the arrival title says it) and the map credit sits at the foot between the stick and BRAKE. */
+@media (pointer: coarse) and (orientation: landscape) and (max-width: 719px) {
+  :root[data-hud='compact'] .fd-road { display: none; }
+  :root[data-hud='compact'] .fd-ctl { top: calc(20px + var(--safe-t)); left: calc(16px + var(--safe-l)); }
+  :root[data-hud='compact'] .fd-dash { top: calc(60px + var(--safe-t)); left: calc(16px + var(--safe-l)); right: auto; margin: 0; }
+  :root[data-hud='compact'] .fd-dash .fd-stats > div:nth-child(3) { display: none; }   /* distance comes back where the full set fits */
+  :root[data-hud='compact'] .fd-dash .fd-stats div { padding: 7px 9px 6px; }
+  :root[data-hud='compact'] .fd-ai { top: calc(114px + var(--safe-t)); left: calc(16px + var(--safe-l)); }
+  :root[data-hud='compact'] body.driving .cue { top: calc(166px + var(--safe-t)); left: calc(16px + var(--safe-l)); right: calc(172px + var(--safe-r)); width: fit-content; max-width: none; margin: 0; transform: none; }
+  :root[data-hud='compact'] .fd-fine { left: calc(132px + var(--safe-l)); right: calc(172px + var(--safe-r)); }
+}

@@ -21,6 +21,9 @@
   <meta name="apple-mobile-web-app-title" content="COLD GAS" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="application-name" content="COLD GAS" />
+  <!-- Installed (0112): :root[data-installed] before the first layout, so the canvas bleeds under the home indicator from
+       the first frame. iOS's home-screen app also says so as navigator.standalone (src/styles.css #stage). -->
+  <script>if (navigator.standalone || matchMedia('(display-mode: standalone), (display-mode: fullscreen)').matches) document.documentElement.setAttribute('data-installed', '');</script>
   <!-- Link previews: scrapers need absolute URLs; %VITE_CG_SITE% is the production address (vite.config.js). -->
   <link rel="canonical" href="%VITE_CG_SITE%" />
   <meta property="og:type" content="website" />

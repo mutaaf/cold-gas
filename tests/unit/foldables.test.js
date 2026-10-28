@@ -62,6 +62,16 @@ describe('room for the full set', () => {
     expect(fullFits({ coarse: true, w: 382, h: 580 })).toBe(true);
     expect(fullFits({ coarse: false, w: 600, h: 400 })).toBe(true);
   });
+  // 0112: driving, an upright screen under 700 px tall shows the compact line (the fold closed, installed: 466×657);
+  // the Show keeps the full set there, and a tall phone keeps it driving.
+  it('driving, upright under 700 px tall: no room; the Show there, or a tall phone driving: room', () => {
+    expect(fullFits({ coarse: true, w: 466, h: 657, drive: true })).toBe(false);
+    expect(fullFits({ coarse: true, w: 382, h: 580, drive: true })).toBe(false);
+    expect(fullFits({ coarse: true, w: 466, h: 657 })).toBe(true);
+    expect(fullFits({ coarse: true, w: 390, h: 844, drive: true })).toBe(true);
+    expect(fullFits({ coarse: true, w: 951, h: 648, drive: true })).toBe(true);
+    expect(fullFits({ coarse: false, w: 466, h: 657, drive: true })).toBe(true);
+  });
 });
 
 // Ticket 0104: a flip phone's screens (estimates, docs/backlog/0102) are in the gate at 3×, and the full set

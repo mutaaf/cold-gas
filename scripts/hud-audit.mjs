@@ -29,7 +29,8 @@
 // every button (Resume and Home above all) inside the sheet's visible box and the viewport at its top.
 //
 // A gate (0082): the exit code is 1 when any count is non-zero (overlaps, offscreen, text < 11 px,
-// labels < 4.5:1, targets < 44 px, anything that changed between the two shots, frames missed), and
+// labels < 4.5:1, targets < 44 px, anything that changed between the two shots, frames missed, and since 0112 a touch
+// frame of a run whose HUD covers more of the glass than scripts/audit-plan.mjs coverCeiling allows), and
 // the offenders are listed at the end.
 // --shard=N/M flies the N-th of M shares of the viewports, balanced by estimated cost (scripts/audit-plan.mjs;
 // CI splits `all` across parallel jobs).
@@ -38,7 +39,7 @@
 // Writes <outdir>/<label>-<viewport>-<phase>.png and <outdir>/<label>-report.json.
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { DRIVE, viewportsFor, planShards, touchFor, dprFor, insetCss } from './audit-plan.mjs';
+import { DRIVE, viewportsFor, planShards, touchFor, dprFor, insetCss, measureCover, COVER_ROOTS, coverCeiling } from './audit-plan.mjs';
 
 const flags = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v = 'true'] = a.slice(2).split('='); return [k, v]; }));
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', set = 'all', label = 'audit', states = 'both'] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
@@ -239,14 +240,22 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
       return { t: t.t, px: t.px, ratio: Math.round(worst * 100) / 100 };
     });
   }, { shotB64: shot.toString('base64'), bareB64: bare.toString('base64'), texts: m.texts, dpr: await page.evaluate(() => devicePixelRatio) });
+  // How much of the glass the HUD covers (0112), on a touch screen's run frames: a ceiling, so the footprint can't creep back.
+  const cover = boxes !== BOXES ? null : await page.evaluate(({ ROOTS, src }) => {
+    if (!matchMedia('(pointer: coarse)').matches) return null;
+    const g = new Function(`return (${src})`)()(ROOTS).any;
+    return Math.round(1000 * g.reduce((a, v) => a + v, 0) / g.length) / 1000;
+  }, { ROOTS: COVER_ROOTS, src: measureCover.toString() });
+  const [cw, ch] = vpName.match(/^(\d+)x(\d+)/).slice(1).map(Number);
+  const overCover = cover !== null && cover > coverCeiling(cw, ch) ? `${Math.round(cover * 100)}% > ${coverCeiling(cw, ch) * 100}%` : null;
   const small = m.texts.filter((t) => t.px < 11).map((t) => `${t.t} ${t.px}px`);
   const low = contrast.filter((c) => c.ratio !== null && c.ratio < 4.5).map((c) => `${c.t} ${c.ratio}`);
   const minPx = Math.min(...m.texts.map((t) => t.px));
   const minRatio = Math.min(...contrast.filter((c) => c.ratio !== null).map((c) => c.ratio));
   const minLabel = contrast.find((c) => c.ratio === minRatio)?.t ?? null;   // which label it is (the margin to watch)
-  const row = { vp: vpName, phase, file, overlaps: m.overlaps, offscreen: m.offscreen, minPx, small, minRatio, minLabel, lowContrast: low, smallTargets: m.smallTargets, changed };
+  const row = { vp: vpName, phase, file, overlaps: m.overlaps, offscreen: m.offscreen, minPx, small, minRatio, minLabel, lowContrast: low, smallTargets: m.smallTargets, changed, cover, overCover };
   report.push(row);
-  console.log(`${vpName} ${phase}: overlaps ${m.overlaps.length}${m.overlaps.length ? ` (${m.overlaps.map((o) => `${o.a}×${o.b} ${o.px}`).join('; ')})` : ''} · offscreen ${m.offscreen.length}${m.offscreen.length ? ` (${m.offscreen.join(', ')})` : ''} · min text ${minPx}px (${small.length} < 11) · min contrast ${minRatio}${minLabel ? ` "${minLabel}"` : ''} (${low.length} < 4.5)${targets ? ` · targets < 44 px ${m.smallTargets.length}` : ''}${changed.length ? ` · changed during measure ${changed.length} (${changed.join('; ')})` : ''}`);
+  console.log(`${vpName} ${phase}: overlaps ${m.overlaps.length}${m.overlaps.length ? ` (${m.overlaps.map((o) => `${o.a}×${o.b} ${o.px}`).join('; ')})` : ''} · offscreen ${m.offscreen.length}${m.offscreen.length ? ` (${m.offscreen.join(', ')})` : ''} · min text ${minPx}px (${small.length} < 11) · min contrast ${minRatio}${minLabel ? ` "${minLabel}"` : ''} (${low.length} < 4.5)${targets ? ` · targets < 44 px ${m.smallTargets.length}` : ''}${changed.length ? ` · changed during measure ${changed.length} (${changed.join('; ')})` : ''}${cover !== null ? ` · cover ${Math.round(cover * 100)}%${overCover ? ' (OVER)' : ''}` : ''}`);
 }
 
 // The judges' theatre, held up and made still (0082): a fixed, worst-case call (the longest lines it
@@ -447,14 +456,14 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   if (hudState === STATES[STATES.length - 1]) console.log(`  ${vpBase}: ${seconds[vpBase]} s`);
 }
 writeFileSync(`${out}/${label}-report.json`, JSON.stringify({ shard: `${shardN}/${shardM}`, viewports: VIEWPORTS.map(([w, h, s]) => `${w}x${h}${s ? 's' : ''}`), seconds, missed, frames: report }, null, 1));
-const tot = report.reduce((a, r) => ({ ov: a.ov + r.overlaps.length, sm: a.sm + r.small.length, lc: a.lc + r.lowContrast.length, off: a.off + r.offscreen.length, tg: a.tg + (r.smallTargets?.length || 0), ch: a.ch + (r.changed?.length || 0) }), { ov: 0, sm: 0, lc: 0, off: 0, tg: 0, ch: 0 });
-console.log(`TOTAL ${label}${shardM > 1 ? ` (shard ${shardN}/${shardM})` : ''}: ${report.length} frames · overlaps ${tot.ov} · offscreen ${tot.off} · text < 11 px ${tot.sm} · labels < 4.5:1 ${tot.lc} · targets < 44 px ${tot.tg} · changed during measure ${tot.ch} · missed ${missed.length}`);
+const tot = report.reduce((a, r) => ({ ov: a.ov + r.overlaps.length, sm: a.sm + r.small.length, lc: a.lc + r.lowContrast.length, off: a.off + r.offscreen.length, tg: a.tg + (r.smallTargets?.length || 0), ch: a.ch + (r.changed?.length || 0), cv: a.cv + (r.overCover ? 1 : 0) }), { ov: 0, sm: 0, lc: 0, off: 0, tg: 0, ch: 0, cv: 0 });
+console.log(`TOTAL ${label}${shardM > 1 ? ` (shard ${shardN}/${shardM})` : ''}: ${report.length} frames · overlaps ${tot.ov} · offscreen ${tot.off} · text < 11 px ${tot.sm} · labels < 4.5:1 ${tot.lc} · targets < 44 px ${tot.tg} · changed during measure ${tot.ch} · over the cover ceiling ${tot.cv} · missed ${missed.length}`);
 // The gate: every offender, then a non-zero exit code.
-const bad = report.filter((r) => r.overlaps.length || r.offscreen.length || r.small.length || r.lowContrast.length || r.smallTargets?.length || r.changed?.length);
+const bad = report.filter((r) => r.overlaps.length || r.offscreen.length || r.small.length || r.lowContrast.length || r.smallTargets?.length || r.changed?.length || r.overCover);
 if (bad.length || missed.length) {
   console.log('FAIL — offenders:');
   for (const r of bad) {
-    const why = [...r.overlaps.map((o) => `overlap ${o.a}×${o.b} ${o.px}px²`), ...r.offscreen.map((o) => `offscreen ${o}`), ...r.small.map((t) => `small "${t}"`), ...r.lowContrast.map((t) => `contrast "${t}"`), ...(r.smallTargets || []).map((t) => `target ${t}`), ...(r.changed || []).map((t) => `changed during measure ${t}`)];
+    const why = [...r.overlaps.map((o) => `overlap ${o.a}×${o.b} ${o.px}px²`), ...r.offscreen.map((o) => `offscreen ${o}`), ...r.small.map((t) => `small "${t}"`), ...r.lowContrast.map((t) => `contrast "${t}"`), ...(r.smallTargets || []).map((t) => `target ${t}`), ...(r.changed || []).map((t) => `changed during measure ${t}`), ...(r.overCover ? [`HUD covers ${r.overCover} of the glass`] : [])];
     console.log(`  ${r.vp} ${r.phase}: ${why.join('; ')}`);
   }
   for (const m of missed) console.log(`  missed: ${m}`);
