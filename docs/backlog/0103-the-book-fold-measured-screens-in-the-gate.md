@@ -1,12 +1,12 @@
 ---
 id: 0103
 title: The book-style fold's measured screens are in the gate, in a tab and installed, with their insets
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-10-27
-pr:
+pr: 143
 by: operator
 ---
 
