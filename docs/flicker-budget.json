@@ -81,17 +81,17 @@
       "lineup-approach/backdrop": 0.4051,
       "nudge/lineup": 0.0177,
       "nudge/show": 0.0405,
-      "drive-road/other": 35.6189,
-      "drive-road/ground": 5.2223,
-      "drive-road/wall": 35.3268,
+      "drive-road/other": 35.6156,
+      "drive-road/ground": 3.0207,
+      "drive-road/wall": 35.3204,
       "drive-road/car": 6.909,
-      "drive-road/sky": 2.0723,
-      "drive-road/backdrop": 3.8494,
-      "endless-cruise/other": 98.4978,
-      "endless-cruise/ground": 6.8577,
-      "endless-cruise/car": 5.9112,
-      "endless-cruise/sky": 41.4919,
-      "endless-cruise/backdrop": 15.8296
+      "drive-road/sky": 2.0719,
+      "drive-road/backdrop": 3.8186,
+      "endless-cruise/other": 98.3681,
+      "endless-cruise/ground": 5.7059,
+      "endless-cruise/car": 5.6909,
+      "endless-cruise/sky": 41.4356,
+      "endless-cruise/backdrop": 15.728
     },
     "chromium-swiftshader phone": {
       "show-title/ground": 0.6966,
@@ -154,17 +154,17 @@
       "lineup-approach/backdrop": 4.2265,
       "nudge/lineup": 0.0384,
       "nudge/show": 0.0306,
-      "drive-road/other": 4.1619,
-      "drive-road/ground": 4.2574,
-      "drive-road/wall": 22.4575,
-      "drive-road/car": 8.2458,
+      "drive-road/other": 4.1184,
+      "drive-road/ground": 1.5823,
+      "drive-road/wall": 22.4471,
+      "drive-road/car": 7.747,
       "drive-road/sky": 0.8477,
       "drive-road/backdrop": 1.1035,
       "endless-cruise/other": 98.3086,
-      "endless-cruise/ground": 4.7021,
-      "endless-cruise/car": 4.8933,
-      "endless-cruise/sky": 49.5724,
-      "endless-cruise/backdrop": 15.403
+      "endless-cruise/ground": 3.6379,
+      "endless-cruise/car": 4.8929,
+      "endless-cruise/sky": 49.4758,
+      "endless-cruise/backdrop": 15.2822
     }
   }
 }

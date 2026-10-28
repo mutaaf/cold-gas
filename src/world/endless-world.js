@@ -28,6 +28,7 @@ import { createLru, createIdbCache, tileBytes } from './cache.js';
 import { endlessTerrainMaterial, rockMaterial, SHRUB_GEO, ROCK_GEO } from './look.js';
 import { createObjectView } from './objects-view.js';
 import { createPool } from './pool.js';
+import { wantHi } from './lod.js';
 import { obs } from '../obs/index.js';
 
 // Quality tiers (?gfx=high|mid|low; phones get mid). radius: each level's ring (m). veg0/veg1:
@@ -283,7 +284,7 @@ export function createEndlessWorld({ course, tier = 'high', renderer, tod = 'day
   }
   // Detailed spruces on the level-0 tiles nearest the camera, simple ones beyond; a tile swaps its
   // spruces between the pools as the camera comes and goes (from the cached arrays).
-  const nearHi = (t, cx, cz) => cfg.hiR > 0 && Math.hypot(t.x0 + 64 - cx, t.z0 + 64 - cz) < cfg.hiR + 64;
+  const nearHi = (t, cx, cz) => wantHi(Math.hypot(t.x0 + 64 - cx, t.z0 + 64 - cz), cfg.hiR, !!t.hi);
   function swapSpruces(t, hi) {
     const d = lru.get(keyOf(0, t.i, t.j));
     if (!d || !d.veg || !d.veg.conifer) return false;
