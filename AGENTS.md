@@ -205,7 +205,7 @@ src/drive/            FREE DRIVE (lazy chunk): index.js (picker → load → dri
 src/world/            THE ENDLESS WORLD, drawn (lazy, docs/WORLD.md): endless-world.js (LOD rings,
                         budgets, caches, the world API), terrain.worker.js (tilegen.js tiles and
                         roadchunk.js road chunks off the main thread), cache.js (LRU + IndexedDB),
-                        pool.js (instanced props), look.js, objects-view.js
+                        pool.js (instanced props), lod.js (detail swaps with hysteresis), look.js, objects-view.js
 src/render/           three.js (r186):
   scene.js              renderer, composer, course switching (`setCourse`), lineup world,
                           sliced first load (`stage.ready`: build, bake, compileAsync, fade in)

@@ -20,9 +20,9 @@ has, and phones have it now too. One-layer-off attribution (`flicker.mjs --phone
 | region | main (mid) | high, FXAA | old limit | with the layer off |
 |---|---|---|---|---|
 | show-title/ground | 1.32 ‰ | 2.44 ‰ | 1.82 | mirror frozen: 1.85 |
-| drive-road/other | 4.16 | 9.59 | 5.20 | far trees hidden: 5.19 |
+| drive-road/other | 4.10 | 9.63 | 5.13 | far trees hidden: 5.19 (before #140) |
 | drive-road/sky | 0.85 | 1.96 | 1.35 | far trees hidden: 0.80 |
-| endless-cruise/ground | 4.71 | 6.01 | 5.89 | far trees hidden: 4.77 |
+| endless-cruise/ground | 3.64 | 5.02 | 4.55 | far trees hidden: 4.77 (before #140) |
 | show-live-jets/wall (after #138) | 76.99 | 102.28 | 96.24 | haze and halos off: 88.32; DPR 1.5: 97.72 |
 
 - **The wet slab's mirror** (src/render/film.js createMirror): a half-resolution planar reflection. The heat map
@@ -50,7 +50,7 @@ the parked row, the truss and the desktop's SMAA shimmer. Smaller alternatives: 
 the drawing buffer, measured for cost on the phone profile; reprojected history for the mirror only.
 
 ## Acceptance criteria
-- [ ] The four phone regions back at or under their pre-0097 limits: show-title/ground 0.6966, drive-road/other 4.1619, drive-road/sky 0.8477, endless-cruise/ground 4.7021 (or, on a machine where main reads differently, under main's same-machine numbers by the gate's rule), and those values restored in docs/flicker-budget.json
+- [ ] The five phone regions back at or under their pre-0097 limits: show-title/ground 0.6966, drive-road/other 4.1184, drive-road/sky 0.8477, endless-cruise/ground 3.6379 (the Free Drive values as 0052, #140, left them), show-live-jets/wall under main's same-machine number (76.99 here) (or, on a machine where main reads differently, under main's same-machine numbers by the gate's rule), and those values restored in docs/flicker-budget.json
 - [ ] No region rises on either swiftshader label (desktop and phone)
 - [ ] The reflection and the far forest look as they do now in screenshots (no visible smear or thinning)
 - [ ] Works at 390x844 touch and 1280x720 keyboard/mouse

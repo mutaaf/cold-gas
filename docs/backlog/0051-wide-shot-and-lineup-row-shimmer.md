@@ -50,3 +50,12 @@ Attribution on CI's software GL (`--gl=swiftshader`, same build A/B against main
   nothing). The phone tier's FXAA trims some (AA off: row 88 → 123). What remains needs coverage AA in the composer
   target (MSAA there is LESSONS' black-frame risk on some GPUs) or a temporal resolve; that is the open part.
 - show-wide backdrop (the launch complex, 46–65‰) not attributed yet.
+- **show-wide backdrop attributed (2026-10-27, builder, swiftshader desktop `--only=show-wide`, this sandbox's main: 56.5‰).**
+  All of it is the rocket complex's one merged structure mesh (`struct` in src/render/rocket.js): hiding the lattice,
+  lamps, beacons, beams or vapour leaves it within 1‰. Its shading is a small part: no specular 56.4, plain albedo
+  (no soot noise, rings or seams) 54.8, every normal toward the viewer 51.0, a constant colour 37.9. Thin steel
+  (masts, arms, legs) is not it: dimming spread members by their true width, padding them, or a 1 px / 3 px minimum
+  all stay at 56–57 (LESSONS: guard `vSliver` on `vPx > 0`). What remains is the silhouettes of the big lit parts
+  (vehicle, buildings, tank, spheres) moving a fraction of a pixel a frame: coverage aliasing, the same open part as
+  the car and the row. No per-material fix keeps the look; it needs composer AA (#136 option c).
+

@@ -66,9 +66,11 @@ Effect steps on the governor's ladder (0091). A user-facing quality menu. Real-d
   | region | main | now | old limit | cause (one layer off) | desktop budget |
   |---|---|---|---|---|---|
   | show-title/ground | 1.32 | 2.44 | 1.82 | the wet slab's half-res mirror (frozen: 1.85) | 8.72 |
-  | drive-road/other | 4.16 | 9.59 | 5.20 | Free Drive's far-tree ring (hidden: 5.19) | 35.62 |
+  | drive-road/other | 4.10 | 9.63 | 5.13 | Free Drive's far-tree ring (hidden: 5.19 before #140) | 35.62 |
   | drive-road/sky | 0.85 | 1.96 | 1.35 | the same (hidden: 0.80) | 2.07 |
-  | endless-cruise/ground | 4.71 | 6.01 | 5.89 | the same (hidden: 4.77) | 6.86 |
+  | endless-cruise/ground | 3.64 | 5.02 | 4.55 | the same (hidden: 4.77 before #140) | 5.71 |
+  The Free Drive rows are re-measured after 0052 (#140, road paint) landed, against main deb8e84 on the same
+  machine; on the desktop label this branch and main read the same in Free Drive.
 - film.js: the slivers drawn into the half-resolution mirror are sized to its target (the title's slab 2.95 → 2.44 ‰
   on the phone). Desktop label, main vs this change on the same machine: 71 ok, 0 over; show-title/ground
   21.46 → 10.79 ‰, nothing else moved (its budget is left as it was; 0100 can lower it). The final phone run:
