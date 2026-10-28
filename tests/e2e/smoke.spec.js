@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 
 // The game boots, plays the reference jump end to end, and talks to nobody but its own origin.
 test('boots, flies the reference jump, and judges it', async ({ page }) => {
+  test.slow(); // boot + the reference + up to the judges' 35 s on software GL
   const errors = [];
   const foreign = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -21,8 +22,10 @@ test('boots, flies the reference jump, and judges it', async ({ page }) => {
   await expect.poll(async () => Number(await page.locator('[data-r-total]').textContent())).toBeGreaterThan(70);
   await expect(page.locator('[data-judge]')).toHaveCount(3);
   // The judges' theatre runs the call (here the preview server has no API, so it falls back to
-  // the local lines), then the words land and the receipt says what happened.
-  await expect(page.locator('[data-judge="engineer"] .quote')).not.toBeEmpty({ timeout: 20_000 });
+  // the local lines), then the words land and the receipt says what happened. The show plays the
+  // run's figures first (17.6 s locally at full speed), so wait out its own 35 s deadline
+  // (invariant 5½) plus the first typed letter, not less: a 20 s wait failed on CI's software GL.
+  await expect(page.locator('[data-judge="engineer"] .quote')).not.toBeEmpty({ timeout: 40_000 });
   await expect(page.locator('[data-receipt]')).toBeVisible();
   await expect(page.locator('[data-receipt]')).toContainText('local lines');
   expect(total).toBeGreaterThanOrEqual(0);
