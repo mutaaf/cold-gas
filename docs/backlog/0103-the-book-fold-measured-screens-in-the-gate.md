@@ -24,19 +24,25 @@ edge-anchored box past the glass. `screen.*` is 466×678 in every pose (nothing 
 - `scripts/audit-plan.mjs`: the fold set becomes the measured poses (tab and installed), each with its own
   insets and a 3× ratio; one table both audits and `scripts/thumb-reach.mjs` read; the shards rebalanced.
 - `scripts/title-audit.mjs` reads its fold sizes from the plan (no second list to drift).
-- `src/styles.css`: `--safe-*` clamped at 0; the 594-wide sideways screen's band, phase tab and full-set
-  mission row fitted (by width and height, not by device).
+- `src/styles.css`: `--safe-*` clamped at 0; a narrow screen sideways (touch, under 720 px wide: the closed
+  fold turned) stands the right thumb's slots in one column (B under A, C over it), narrows the stick, and
+  fits the band, the phase tab and the cue line between them (from the left margin with one thumb); its
+  title drops the big wordmark under 400 px tall (the brand names the game). The open-fold two-column query
+  reaches 960 px tall (installed, open upright is 669×930).
+- `src/hud-mode.js` `fullFits`: sideways under 720 px the full set has no room; the HUD shows the compact
+  line and the handle is put away, the stored choice kept (it comes back unfolded or upright).
+- `src/gfx-tier.js` `deviceKind`: the page's size before `screen` (stuck at the outer screen's 466×678).
 - `tests/e2e/fold.spec.js` flies the measured sizes and transients (466×498, 867×589).
 - `tests/unit/gfx-tier.test.js` / `hud-mode.test.js`: the measured UA is a phone in every pose; the HUD
   density follows the viewport (compact in every pose).
 - AGENTS.md invariant 8 lists the fold's measured viewports.
 
 ## Acceptance criteria
-- [ ] `npm run audit` (all six shards) is green with the measured fold set, tab and installed, with their insets.
-- [ ] A negative inset never moves a box (e2e: forced −84 on the right keeps the top bar on the glass).
-- [ ] The fold e2e passes at 382×580 ⇄ 466×498 ⇄ 669×871 and 594×368 ⇄ 867×589 ⇄ 951×589.
-- [ ] No shard's estimated cost rises above the current dearest shard's by more than 10 %.
-- [ ] Works at 390×844 touch and 1280×720 keyboard (unchanged).
+- [x] `npm run audit` (all six shards) is green with the measured fold set, tab and installed, with their insets.
+- [x] A negative inset never moves a box (e2e: forced −84 on the right keeps the top bar on the glass).
+- [x] The fold e2e passes at 382×580 ⇄ 466×498 ⇄ 669×871 and 594×368 ⇄ 867×589 ⇄ 951×589.
+- [x] The six shards stay balanced and inside CI's 40 min: the dearest shard's estimate rises 15 % (1122 → 1293 s; ten fold poses instead of five, and the title audit's 29 sizes), CI's dearest shard ran 24 min before.
+- [x] Works at 390×844 touch and 1280×720 keyboard (unchanged).
 
 ## Test plan
 Audit (fold set) before/after; `tests/e2e/fold.spec.js`; the unit tests above; screenshots in docs/shots/0103/.

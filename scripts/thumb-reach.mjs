@@ -11,15 +11,19 @@
 // Oulasvirta 2014). The same constants live in human-phone.mjs.
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync, existsSync, readFileSync } from 'node:fs';
+import { FOLD, dprFor, insetCss } from './audit-plan.mjs';
 
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', label = 'after'] = process.argv.slice(2);
 mkdirSync(out, { recursive: true });
-const VPS = [[390, 844], [430, 932], [844, 390], [932, 430]];
+// Phones, and the folding phone's measured poses (0103: scripts/audit-plan.mjs FOLD, with their insets).
+const VPS = [[390, 844], [430, 932], [844, 390], [932, 430], ...FOLD.filter(([w, h]) => w !== 466)];
 const geomFile = `${out}/geom.json`;
 const geom = existsSync(geomFile) ? JSON.parse(readFileSync(geomFile, 'utf8')) : {};
 const browser = await chromium.launch({ args: ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] });
 for (const [w, h] of VPS) {
-  const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+  const page = await browser.newPage({ viewport: { width: w, height: h }, deviceScaleFactor: dprFor(w, h), isMobile: true, hasTouch: true });
+  const forced = insetCss(w, h);
+  if (forced) await page.addInitScript((css) => addEventListener('DOMContentLoaded', () => { const s = document.createElement('style'); s.textContent = css; document.head.append(s); }), forced);
   await page.goto(`${url}?gfx=low`);
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 30000 });
   await page.waitForTimeout(1200);

@@ -1,14 +1,17 @@
 import { test, expect } from '@playwright/test';
 
-// Ticket 0075: a folding phone. Its browser gives a page 382×580 closed upright, 678×340 closed
-// sideways, 669×825 open upright and 951×543 open sideways, and a fold or an unfold is only a resize
-// (no reload), passing through 466×498 mid-swing. These pages are touch at 1× (the device is 3×; 1×
-// keeps CI's software GL fast, and nothing here depends on the pixel ratio: the buffer check reads
-// the renderer's own ratio). scripts/hud-audit.mjs and scripts/title-audit.mjs fly the same sizes at 3×.
+// Tickets 0075 and 0103: a book-style folding phone. Measured on the simulated device (Device Hub,
+// docs/backlog/0102), Safari gives a page 382×580 closed upright, 594×368 (or 678×384) closed sideways,
+// 669×871 open upright and 951×589 open sideways in a tab; installed, 669×930 and 951×648 open, 678×445
+// closed sideways. A fold or an unfold is only a resize (no reload), passing through 466×498 (folding)
+// or 867×589 (unfolding sideways). These pages are touch at 1× (the device is 3×; 1× keeps CI's software
+// GL fast, and nothing here depends on the pixel ratio: the buffer check reads the renderer's own ratio).
+// scripts/hud-audit.mjs and scripts/title-audit.mjs fly the same sizes at 3× with their measured insets.
 test.describe.configure({ mode: 'parallel' });
-const CLOSED = { width: 382, height: 580 }, CLOSED_SIDE = { width: 678, height: 340 };
-const OPEN = { width: 669, height: 825 }, OPEN_SIDE = { width: 951, height: 543 };
-const SWING = { width: 466, height: 498 };
+const CLOSED = { width: 382, height: 580 }, CLOSED_SIDE = { width: 594, height: 368 }, CLOSED_SIDE2 = { width: 678, height: 384 };
+const OPEN = { width: 669, height: 871 }, OPEN_SIDE = { width: 951, height: 589 };
+const APP_OPEN = { width: 669, height: 930 }, APP_OPEN_SIDE = { width: 951, height: 648 }, APP_CLOSED_SIDE = { width: 678, height: 445 };
+const SWING = { width: 466, height: 498 }, SWING_SIDE = { width: 867, height: 589 };
 const touch = (viewport) => ({ viewport, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
 const boot = async (page, q = '') => {
   await page.goto(`/coldgas/?gfx=low${q}`);
@@ -55,8 +58,8 @@ const fitted = (page, { width, height }) => page.waitForFunction(({ width, heigh
   return Math.abs(c.width - Math.floor(width * pr)) <= 1 && Math.abs(c.height - Math.floor(height * pr)) <= 1;
 }, { width, height }, { timeout: 10_000, polling: 50 });
 
-for (const [from, to] of [[CLOSED, OPEN], [CLOSED_SIDE, OPEN_SIDE]]) {
-  test(`a fold mid-run: ${from.width}×${from.height} → ${SWING.width}×${SWING.height} → ${to.width}×${to.height} and back, the same run carries on`, async ({ browser }) => {
+for (const [from, mid0, to] of [[CLOSED, SWING, OPEN], [CLOSED_SIDE, SWING_SIDE, OPEN_SIDE]]) {
+  test(`a fold mid-run: ${from.width}×${from.height} → ${mid0.width}×${mid0.height} → ${to.width}×${to.height} and back, the same run carries on`, async ({ browser }) => {
     test.slow();   // a run on software GL
     const page = await browser.newPage(touch(from));
     const errors = [];
@@ -77,7 +80,7 @@ for (const [from, to] of [[CLOSED, OPEN], [CLOSED_SIDE, OPEN_SIDE]]) {
     });
     await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 60_000 });
     await page.evaluate(() => { window.__run = window.__coldgas.S.run; });
-    for (const [mid, end] of [[SWING, to], [SWING, from]]) {
+    for (const [mid, end] of [[mid0, to], [SWING, from]]) {
       const before = await page.evaluate(() => { window.__resizes.length = 0; window.__fitSizes.length = 0; return { tick: window.__coldgas.S.run.tick, fits: window.__fits }; });
       await page.setViewportSize(mid);
       await page.waitForTimeout(40);   // a frame or two at the swing's size
@@ -126,7 +129,7 @@ const columns = (page, sel) => page.evaluate((sel) => {
   return { cols: lefts.length, off, n: kids.length };
 }, sel);
 
-for (const [vp, want] of [[CLOSED, 1], [CLOSED_SIDE, 1], [OPEN, 2], [OPEN_SIDE, 2]]) {
+for (const [vp, want] of [[CLOSED, 1], [CLOSED_SIDE, 1], [CLOSED_SIDE2, 1], [APP_CLOSED_SIDE, 1], [OPEN, 2], [OPEN_SIDE, 2], [APP_OPEN, 2], [APP_OPEN_SIDE, 2]]) {
   test(`${vp.width}×${vp.height}: the title and the results in ${want} column${want > 1 ? 's' : ''}, all in view`, async ({ browser }) => {
     test.slow();
     const page = await browser.newPage(touch(vp));
@@ -178,5 +181,43 @@ test('a reported fold: the band, the phase and the cue line keep off the hinge',
     expect(b.w, JSON.stringify(b)).toBeGreaterThan(100);
     expect(b.r <= 440 || b.l >= 460, JSON.stringify(b)).toBe(true);
   }
+  await page.close();
+});
+
+// Mid-fold Safari reports nonsense insets for up to half a second (measured: right −84, −282). A negative
+// inset never moves a box: the top bar and the title stay on the glass (0103; the insets are real
+// env() values here, set over the DevTools protocol).
+test('a negative safe-area inset mid-fold moves nothing off the glass', async ({ browser }) => {
+  const page = await browser.newPage(touch(CLOSED));
+  const cdp = await page.context().newCDPSession(page);
+  await boot(page);
+  await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
+  const edges = () => page.evaluate(() => [...document.querySelectorAll('.top .brand, .top-actions, .title > *')]
+    .filter((e) => getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0)
+    .map((e) => { const r = e.getBoundingClientRect(); return { k: e.className, l: Math.round(r.left), r: Math.round(r.right) }; }));
+  const before = await edges();
+  await cdp.send('Emulation.setSafeAreaInsetsOverride', { insets: { right: -84, left: -282 } });
+  await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--safe-r').trim() !== '', null, { timeout: 5_000 });
+  await page.waitForTimeout(100);
+  const after = await edges();
+  expect(after.length).toBeGreaterThan(3);
+  for (const e of after) expect(e.l >= -1 && e.r <= CLOSED.width + 1, JSON.stringify(e)).toBe(true);
+  expect(after).toEqual(before);
+  await page.close();
+});
+
+// Closed and turned (594×368, 678×384) the full set has no room (0103): the HUD shows the compact line and
+// the handle is put away; the player's choice is kept, and unfolding (951×589) brings the full set back.
+test('closed sideways the full set steps back to the compact line; unfolded it comes back', async ({ browser }) => {
+  const page = await browser.newPage(touch(CLOSED_SIDE));
+  await page.addInitScript(() => { try { localStorage.setItem('coldgas_hud', 'full'); } catch { /* storage blocked */ } });
+  await boot(page);
+  await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
+  const state = () => page.evaluate(() => ({ hud: document.documentElement.dataset.hud, tight: document.documentElement.hasAttribute('data-hud-tight'), stored: localStorage.getItem('coldgas_hud') }));
+  expect(await state()).toEqual({ hud: 'compact', tight: true, stored: 'full' });
+  await page.setViewportSize(OPEN_SIDE);
+  await expect.poll(state, { timeout: 5_000 }).toEqual({ hud: 'full', tight: false, stored: 'full' });
+  await page.setViewportSize(CLOSED_SIDE2);
+  await expect.poll(state, { timeout: 5_000 }).toEqual({ hud: 'compact', tight: true, stored: 'full' });
   await page.close();
 });
