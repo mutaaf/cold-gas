@@ -47,7 +47,10 @@ correct for the HUD with keepClear (0063). The ground rig has no correction for 
 - [ ] With the probe above (the hero's box through the camera on every tick from `t.touchTick` to
       `mode === 'results'`), the Show reference and the valves-shut crash (`S.autopilot` wrapped,
       zeros from release + 0.125 s, LESSONS 2026-10-27) each keep **≥ 0.95 of the box on screen in every
-      frame**, with box width ≤ 0.85 of the screen, at 390×844, 360×748 and 820×1180.
+      frame**, with box width ≤ 0.85 of the screen, at 390×844, 360×748 (also the flip phone's inner screen),
+      382×580 (the book fold's cover in a tab) and 820×1180.
+- [ ] The other foldable shapes keep the whole car on screen (share 1.00) and stay ≤ 0.85 wide: 669×871,
+      466×498, 360×380, 424×360, 594×368, 800×300 (scripts/audit-plan.mjs FOLD / FLIP).
 - [ ] 1440×900, 1280×720 and 844×390 framing is unchanged: the same box width ±0.02 of the screen.
 - [ ] The box stays out from under `[data-hud-box]` and `.top-actions` for more than 10 % of its area at
       390×844 (0063's rule, extended to the ground).
@@ -61,5 +64,23 @@ touchdown with `liveStep` and the director, and asserts the box share and width 
 Add a crash variant with the valves shut.
 
 ## Out of scope
-The replay's cameras (0068), the air rigs (0063, 0107), and the foldables' shapes (0107; add them here only
-if 0107 lands first).
+The replay's cameras (0068) and the air rigs (0063, 0107). (0107 landed first, so the foldables' shapes are
+in the acceptance above.)
+
+## Critic re-measure 2026-10-28 09:50
+Not a bounce: 0108 hasn't shipped yet. Production `ca1c5bb`, after 0103–0107. This is 0063's stepped probe
+extended past the touchdown: the hero's box at 30 fps from `t.touchTick` to the results. Reference and
+valves-shut crash (docs/critique/2026-10-28-0950.md):
+
+| Viewport | Box width / screen (ref · crash) | Min share on screen | Frames < 0.9 |
+|---|---|---|---|
+| 390×844 | 1.23–1.32 · 1.17–1.38 | 0.76 · 0.73 | 53/53 · 60/60 |
+| 360×748 | 1.18–1.26 · 1.13–1.32 | 0.79 · 0.76 | 53/53 · 60/60 |
+| 382×580 | 0.86–0.93 · 0.81–0.94 | 0.94 · 0.98 | 0 |
+| 820×1180 | 0.81–0.88 · 0.78–0.92 | 0.97 · 1.00 | 0 |
+| 669×871 | 0.74–0.79 · 0.71–0.83 | 1.00 | 0 |
+| 466×498 · 360×380 · 424×360 | 0.45–0.68 | 1.00 | 0 |
+| 1440×900 · 1280×720 · 844×390 · 594×368 · 800×300 | 0.20–0.40 | 1.00 | 0 |
+
+The fix is still the same: hold a horizontal framing when the aspect is narrow. Every shape at aspect
+≥ 0.75 already fits.
