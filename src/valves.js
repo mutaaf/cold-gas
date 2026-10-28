@@ -82,7 +82,11 @@ export function keyValves(down, out) {
 export const KEY_RAMP = 1 / (0.2 * 240);
 export function createKeyRamp() {
   const level = new Float64Array(VALVES), want = new Float64Array(VALVES);
-  return function ramp(down, out) {
+  // A new run starts with every valve shut (0099): a key held as the last run ended doesn't open
+  // its valves at once in the next one.
+  ramp.reset = () => { level.fill(0); };
+  return ramp;
+  function ramp(down, out) {
     want.fill(0);
     keyValves(down, want);
     for (let i = 0; i < VALVES; i++) {
@@ -90,7 +94,7 @@ export function createKeyRamp() {
       out[i] = Math.max(out[i], Math.round(level[i] * 20) / 20);
     }
     return out;
-  };
+  }
 }
 
 // Gamepad (standard mapping) → valves, in the air. The shoulders are the corners: bumpers are the
