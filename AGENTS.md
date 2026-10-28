@@ -227,7 +227,8 @@ src/render/           three.js (r186):
   director.js           chase / broadcast air cam / replay rigs / title turntable; live on the Wall and the
                           Show it turns just enough to keep the car below the top HUD and, upright, right of the rail;
                           the Show's release cuts to a locked-off hold, then to the tracking carry before the row
-src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone
+src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone;
+                        every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099)
 src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
                         stick shaping, reverse at a standstill; shared with the drive bench and tests
 src/driving.js        driving levels (pure, 0066): Easy / Standard / Advanced on the ground in every mode. Writes only

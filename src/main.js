@@ -28,7 +28,7 @@ import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
-import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState } from './input.js';
+import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, freshRun, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState } from './input.js';
 import { LEVEL_INFO } from './driving.js';
 import { isCrash, nextStreak, offerRookie, loadStreak, saveStreak } from './rookie.js';
 import { loadPerf, savePerf, record, decide, outcomeOf, afterChange, coachLive, loadFlown, saveFlown, loadAdapt, saveAdapt, TIER_WORDS, factorText, stepDownBanner, offerWords } from './adapt.js';
@@ -359,6 +359,8 @@ function startRunNow(kind = 'jump', quick = false) {
   director.setView(S.pilotView ? 'pilot' : 'broadcast');
   ui.touch.hidden = !usingTouch() || !!S.autopilot;
   syncScheme();
+  syncTouchPhase(S.run);
+  if (thumbActive()) syncThumb(S.run, S.run.car);
   plumes.clear();
   crash.reset();
   const c = S.run.car;
@@ -680,20 +682,7 @@ function liveStep(dt) {
   // Touch layout follows the phase: pedals on the ground and up the wall, LIFT/LAND in the air.
   // (Let go of the Wall, the air controls come up at once, not when the sim calls it airborne;
   // a hop off the ground swaps nothing until it has lasted AIR_HOLD, 0047.)
-  const tp = run.phase === 'landed' || run.phase === 'done' ? 'landed'
-    : flying(run) || (run.phase === 'ramp' && S.released) ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
-  if (ui.touch.dataset.phase !== tp) {
-    ui.touch.dataset.phase = tp;
-    liftLabel.textContent = tp === 'ramp' ? 'Release' : 'Lift';
-    stickHint.textContent = tp === 'air' ? 'Roll · Pitch' : 'Steer';
-    goLabel.textContent = tp === 'air' ? 'Boost' : 'Go';
-  }
-  // Only what this moment uses: RELEASE once you're near the top of the curl, BOOST until the row
-  // is behind you (the Show).
-  const ledge = run.phase === 'ramp' && !S.released && run.t.progress >= 0.8;
-  if (ui.touch.hasAttribute('data-ledge') !== ledge) ui.touch.toggleAttribute('data-ledge', ledge);
-  const rowDone = run.course === 'show' && (run.t.crossedRow || run.t.contact);
-  if (ui.touch.hasAttribute('data-row-done') !== rowDone) ui.touch.toggleAttribute('data-row-done', rowDone);
+  const tp = syncTouchPhase(run);
   if (oneThumb) syncThumb(run, c);
   // Advanced on a touch screen: off the Wall the nozzle pad replaces the stick and the buttons.
   const pad = getNozzlePad();
@@ -725,6 +714,25 @@ function liveStep(dt) {
     S.doneT += dt;
     if (run.phase === 'done' || S.doneT > 0.5) beginAftermath(run);
   } else S.doneT = 0;
+}
+// The touch layout for where the run is (every live frame, and once as a run starts: a retry's READY
+// shows the run-up's GO and BRAKE, not the last run's LAND or its landed BRAKE, 0099). Returns the phase.
+function syncTouchPhase(run) {
+  const tp = run.phase === 'landed' || run.phase === 'done' ? 'landed'
+    : flying(run) || (run.phase === 'ramp' && S.released) ? 'air' : run.phase === 'ramp' ? 'ramp' : 'ground';
+  if (ui.touch.dataset.phase !== tp) {
+    ui.touch.dataset.phase = tp;
+    liftLabel.textContent = tp === 'ramp' ? 'Release' : 'Lift';
+    stickHint.textContent = tp === 'air' ? 'Roll · Pitch' : 'Steer';
+    goLabel.textContent = tp === 'air' ? 'Boost' : 'Go';
+  }
+  // Only what this moment uses: RELEASE once you're near the top of the curl, BOOST until the row
+  // is behind you (the Show).
+  const ledge = run.phase === 'ramp' && !S.released && run.t.progress >= 0.8;
+  if (ui.touch.hasAttribute('data-ledge') !== ledge) ui.touch.toggleAttribute('data-ledge', ledge);
+  const rowDone = run.course === 'show' && (run.t.crossedRow || run.t.contact);
+  if (ui.touch.hasAttribute('data-row-done') !== rowDone) ui.touch.toggleAttribute('data-row-done', rowDone);
+  return tp;
 }
 function beginAftermath(run) {
   if (!S.card) closeCard(run);   // (a run's end has it already; a drill's moment decides it here)
@@ -763,6 +771,9 @@ function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTi
 // --- The flight, as the HUD and the controls see it ---------------------------------------------
 // A new attempt (or drill): the one-thumb control, the HUD's glide and the timeline start over.
 function newFlight(startTick = 0) {
+  // A restart lets go of everything, like pause (0099): every key, finger and pad held as the last run
+  // ended (or as Retry was hit) counts again only on a fresh press; the one-thumb starts unheld.
+  freshRun();
   thumb.reset();
   ui.resetHud(); ui.damageReset(); gWindow.reset();
   ui.timelineFor(stage.course);

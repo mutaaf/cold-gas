@@ -15,8 +15,9 @@
 // One-thumb  Assist on the Show and the Wall: one control (src/onethumb.js), hold / tap / hold.
 // Tilt       optional steering by tilting the phone (src/touch-settings.js), on the ground only.
 // Device     the last one used wins (`device`): a key or a pad hides the touch controls and takes
-//            the run off one-thumb; a finger brings them back. Blur, a hidden tab, pagehide and
-//            pause let go of everything (`resetInput`). Gamepad Start pauses.
+//            the run off one-thumb; a finger brings them back. Blur, a hidden tab, pagehide, pause
+//            and every new run or drill let go of everything (`resetInput`, `freshRun`), and what was
+//            held then counts again only once it is pressed again (0099). Gamepad Start pauses.
 import { newInput, clearInput, VALVE_KEYS } from './sim/vehicle.js';
 import { createKeyRamp, padValves, bindNozzlePad, VALVES } from './valves.js';
 import { createOneThumb } from './onethumb.js';
@@ -68,11 +69,30 @@ export const lastDevice = () => device.last;
 export const onDevice = (fn) => device.on(fn);
 
 // Let go of everything: keys, the stick, GO / BRAKE / LIFT / LAND, the one-thumb pad and the nozzle
-// pad, and the pressed look on each. On blur, a hidden tab, pagehide and pause: a finger or a key
-// lifted while the page wasn't listening must not stay held.
+// pad, and the pressed look on each. On blur, a hidden tab, pagehide, pause and every new run: a finger
+// or a key lifted while the page wasn't listening must not stay held.
+// And what is still down then waits for a fresh press (0099): a key's auto-repeat doesn't bring it back
+// (keydown below), a finger still on a button sends no new pointerdown, and a gamepad is ignored until
+// it has been at rest once (`padHeld`, copyPads). A restart with Space held used to lift the new run
+// off the line within a second; a finger left on LAND as the results hid it boosted the next run-up.
 const resetters = [];
 function resetTouch() { for (const fn of resetters) fn(); }
-export function resetInput() { keys.clear(); resetTouch(); }
+export function resetInput() {
+  keys.clear(); resetTouch();
+  for (let i = 0; i < padHeld.length; i++) padHeld[i] = true;
+}
+// A new run or drill: let go of everything, and the hands start from rest (the wheel centred, no
+// pedal still ramping down from the last run, no valve still open on the key ramp).
+export function freshRun() {
+  resetInput();
+  driver.reset();
+  keyRamp.reset();
+}
+
+// Does this keydown hold its key? An auto-repeat of a key that isn't held is a key we let go of (a
+// restart, pause, blur): it counts again on its next real press, not on the repeats of the press from
+// before (0099). The first press, and a repeat of a key still held, do.
+export const keyHolds = (e, held) => !e.repeat || held.has(e.code);
 
 let onPauseCb = null;
 const MODS = new Set(['MetaLeft', 'MetaRight', 'OSLeft', 'OSRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight']);
@@ -92,7 +112,7 @@ export function bindInput(root, { onPause, running = () => false } = {}) {
     if (GAME_KEYS.has(e.code) && (running() || !onControl(e.target))) e.preventDefault();
     if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) onPause?.();
     if (!MODS.has(e.code)) device.note('key');
-    keys.add(e.code);
+    if (keyHolds(e, keys)) keys.add(e.code);
   });
   addEventListener('keyup', (e) => {
     keys.delete(e.code);
@@ -190,6 +210,7 @@ const NO_PADS = [], PAD_BUTTONS = 18;
 const newPadCopy = () => ({ axes: new Float64Array(4), buttons: Array.from({ length: PAD_BUTTONS }, () => ({ pressed: false, value: 0 })) });
 const padCopies = [newPadCopy(), newPadCopy(), newPadCopy(), newPadCopy()];   // more if a browser lists more slots
 const padsFrame = [null, null, null, null];
+const padHeld = [false, false, false, false];   // let go of (resetInput) and not yet back at rest: ignored
 let padsNow = null;
 function copyPad(p, c) {
   for (let a = 0; a < 4; a++) c.axes[a] = p.axes[a] || 0;
@@ -202,8 +223,15 @@ function copyPad(p, c) {
 function copyPads() {
   const pads = navigator.getGamepads?.();
   const n = pads ? pads.length : 0;
-  while (padCopies.length < n) { padCopies.push(newPadCopy()); padsFrame.push(null); }
-  for (let i = 0; i < padsFrame.length; i++) padsFrame[i] = i < n && pads[i] ? copyPad(pads[i], padCopies[i]) : null;
+  while (padCopies.length < n) { padCopies.push(newPadCopy()); padsFrame.push(null); padHeld.push(false); }
+  for (let i = 0; i < padsFrame.length; i++) {
+    const c = i < n && pads[i] ? copyPad(pads[i], padCopies[i]) : null;
+    // A pad held through a reset drives nothing until it has been let go (padIntent: a button, a trigger
+    // past 0.3 or a stick past half; a stick resting under half and its drift never hold it off).
+    if (c && padHeld[i] && padIntent(c)) { padsFrame[i] = null; continue; }
+    padHeld[i] = false;
+    padsFrame[i] = c;
+  }
   return pads;
 }
 const readPads = () => padsNow || (copyPads(), padsFrame);

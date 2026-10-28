@@ -1,7 +1,7 @@
 // The last device used wins (src/input.js): a key or a pad hides the touch controls and takes the run
 // off one-thumb, a finger brings them back, and only a change across touch / not-touch is heard.
 import { describe, it, expect } from 'vitest';
-import { createDevice, padIntent, isEditable } from '../../src/input.js';
+import { createDevice, padIntent, isEditable, keyHolds, resetInput, freshRun, pollPads, sample } from '../../src/input.js';
 
 const pad = ({ axes = [0, 0, 0, 0], pressed = [], values = {} } = {}) => ({
   axes,
@@ -64,5 +64,47 @@ describe('the editable-target guard', () => {
     expect(isEditable({ closest: () => null })).toBe(false);
     expect(isEditable(null)).toBe(false);
     expect(isEditable({})).toBe(false);
+  });
+});
+
+// A restart lets go of everything, like pause (0099): what is still held then counts again only on a
+// fresh press. A restart with Space held used to lift the new run off the line inside a second.
+describe('a reset waits for a fresh press', () => {
+  it("a key's auto-repeat doesn't bring back a key we let go of; a real press does", () => {
+    const held = new Set();
+    expect(keyHolds({ code: 'Space', repeat: false }, held)).toBe(true);
+    held.add('Space');
+    expect(keyHolds({ code: 'Space', repeat: true }, held)).toBe(true);    // still held: repeats are harmless
+    held.clear();                                                          // resetInput
+    expect(keyHolds({ code: 'Space', repeat: true }, held)).toBe(false);   // the old press, repeating
+    expect(keyHolds({ code: 'Space', repeat: false }, held)).toBe(true);   // pressed again
+  });
+
+  it('a gamepad held through a reset drives nothing until it has been at rest once', () => {
+    const p = pad({ pressed: [0, 7], values: { 7: 1 } });
+    const nav = globalThis.navigator;
+    const had = Object.getOwnPropertyDescriptor(nav, 'getGamepads');
+    Object.defineProperty(nav, 'getGamepads', { configurable: true, value: () => [p, null, null, null] });
+    try {
+      const drive = () => { pollPads(); const o = sample('drive', 'assist'); return [o.lift, o.throttle > 0]; };
+      expect(drive()).toEqual([1, true]);          // A (LIFT) and RT, held
+      resetInput();
+      expect(drive()).toEqual([0, false]);          // still held from before the reset: ignored
+      expect(drive()).toEqual([0, false]);
+      const btn = (i, on) => { p.buttons[i].pressed = on; p.buttons[i].value = on ? 1 : 0; };
+      btn(0, false); btn(7, false);
+      expect(drive()).toEqual([0, false]);          // let go: at rest
+      btn(0, true);
+      expect(drive()[0]).toBe(1);                   // a fresh press counts
+      // A pad at rest (a little stick drift) is never held off by a reset.
+      btn(0, false); p.axes[0] = 0.3;
+      resetInput();
+      pollPads();
+      btn(0, true);
+      expect(drive()[0]).toBe(1);
+    } finally {
+      if (had) Object.defineProperty(nav, 'getGamepads', had); else delete nav.getGamepads;
+      freshRun();
+    }
   });
 });

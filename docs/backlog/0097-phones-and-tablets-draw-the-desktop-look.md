@@ -50,7 +50,7 @@ resolution, the tier stays). `node scripts/shots-look.mjs docs/shots/0097 <after
 ## Out of scope
 Effect steps on the governor's ladder (0091). A user-facing quality menu. Real-device GPU timing.
 
-## Shipped (#136, 2026-10-27; operator decision: parity first, the flicker after in 0099)
+## Shipped (#136, 2026-10-27; operator decision: parity first, the flicker after in 0100)
 - Touch boots `high` (DPR cap 2, shadows 2048, film look, wet-slab reflection, mist 1800, Free Drive's far rings);
   ≤ 2 GB Android stays `low`. The ledger tries a never-run `high` at once, and a slow session costs a resolution
   step (100 → 85 → 70 → 55 %) before a tier. The governor steps resolution on slow frames at the phone profile
@@ -62,7 +62,7 @@ Effect steps on the governor's ladder (0091). A user-facing quality menu. Real-d
 - The stored swiftshader phone budget doesn't match this machine (main itself reads 25 regions over, e.g.
   lineup-title/row 89.0, as #131 found); the gate here was main's own run on this machine (25 % or 0.5 ‰).
 - Four phone regions stay over main, re-baselined by operator decision in docs/flicker-budget.json, each at or
-  under the desktop label's value for that region; 0099 calms them and restores the old values:
+  under the desktop label's value for that region; 0100 calms them and restores the old values:
   | region | main | now | old limit | cause (one layer off) | desktop budget |
   |---|---|---|---|---|---|
   | show-title/ground | 1.32 | 2.44 | 1.82 | the wet slab's half-res mirror (frozen: 1.85) | 8.72 |
@@ -71,14 +71,14 @@ Effect steps on the governor's ladder (0091). A user-facing quality menu. Real-d
   | endless-cruise/ground | 4.71 | 6.01 | 5.89 | the same (hidden: 4.77) | 6.86 |
 - film.js: the slivers drawn into the half-resolution mirror are sized to its target (the title's slab 2.95 → 2.44 ‰
   on the phone). Desktop label, main vs this change on the same machine: 71 ok, 0 over; show-title/ground
-  21.46 → 10.79 ‰, nothing else moved (its budget is left as it was; 0099 can lower it). The final phone run:
+  21.46 → 10.79 ‰, nothing else moved (its budget is left as it was; 0100 can lower it). The final phone run:
   67 ok, over only in the four re-baselined regions.
 - After 0063 (#138, a still camera at the release) the phone re-check (show-live-jets, show-wide, show-replay,
   retry-countdown; same-machine main 1f68989 vs this) put one more region over: show-live-jets/wall 76.99 → 102.28
   (limit 96.24). One layer off: haze and halos off 88.32, DPR 1.5 97.72, mist 900 / mirror frozen / shadow 1024 no
   change; AA is FXAA on both. Desktop content (same pass, no phone-specific code), under the desktop budget
   (128.66): approved as a fifth region under the parity decision; its stored phone value (115.0089) already holds it,
-  so only the budget's notes changed. In 0099. Everything else in those scenarios went down (show-wide car
+  so only the budget's notes changed. In 0100. Everything else in those scenarios went down (show-wide car
   124.5 → 36.2, show-replay wall 6.3 → 0.4, retry-countdown car 55.6 → 15.0).
 - Perf, phone profile (4× CPU, the Mac's GPU), main → this: first load usable 13.29 → 13.20 s; Free Drive stelvio
   59.1 → 58.6 fps (draws 332 → 448); the Show run render CPU p50 6.6 → 10.3 ms at 59–60 fps. Real-device GPU
