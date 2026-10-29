@@ -1,12 +1,12 @@
 ---
 id: 0064
 title: The judges' theatre never draws with a deleted WebGL program or buffer
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: tech-health
 created: 2026-10-22
-pr:
+pr: 158
 by: critic
 ---
 
@@ -41,13 +41,13 @@ frame in the one screen that shows the AI working. Invariant 1 asks for a clean 
   docs/LESSONS.md; don't patch node_modules.
 
 ## Acceptance criteria
-- [ ] e2e: with the judge stream stubbed (no network), three judged runs in a row at 390×844 touch and
+- [x] e2e: with the judge stream stubbed (no network), three judged runs in a row at 390×844 touch and
       at 1440×900, including a Skip mid-stream and a Retry while the theatre is still fading: **0** console
       messages matching `/WebGL: INVALID_/`.
-- [ ] The quest theatre (Free Drive or the Sandbox side quest) opened twice: 0 such messages.
-- [ ] After 20 theatre opens, the page holds at most 2 live WebGL contexts (the game's and the theatre's);
+- [x] The quest theatre (Free Drive or the Sandbox side quest) opened twice: 0 such messages.
+- [x] After 20 theatre opens, the page holds at most 2 live WebGL contexts (the game's and the theatre's);
       the game canvas never logs "context lost".
-- [ ] Theatre visuals unchanged: `node scripts/theatre-shots.mjs` before/after in the PR.
+- [x] Theatre visuals unchanged: `node scripts/theatre-shots.mjs` before/after in the PR.
 
 ## Test plan
 A new e2e that stubs `/coldgas/api/judge/stream` with a canned SSE (verify → prompt → tokens → done),
@@ -72,3 +72,14 @@ so a frame of the theatre's field is being dropped, not just logged. The bar is 
 the console had only SwiftShader's ReadPixels and parallel-compile notices. At 10:15 it was 3 of 6.
 The bug is intermittent and still unexplained, so it stays `ready`. Close it only with the ticket's
 own probe, never on a clean manual run.
+
+## Shipped (2026-10-29, builder)
+Root cause: aurora-field 3.2.0 draws a still frame on `set()` / `setShape()` when its loop isn't running
+(`if (!running) draw(0)`), and after `destroy()` its loop never runs. A show cut short by Skip, Retry or the
+fade still had `startCompute` queued behind the figures; when it came due, `setStage('compute')` called
+`field.set()` + `setShape()` on the destroyed field, which drew with its deleted programs and buffers: the
+exact burst above, every time a show ends during TEXT with the answer already in. Separately, every show made a
+new canvas, whose context lived until GC: 20 shows left 16 live contexts (Chrome's cap). Now each show's field
+is nulled before it's destroyed (every call goes through `field?.`), and one canvas serves every show, the last
+show's field ended before the next is created. `tests/e2e/theatre-gl.spec.js` fails on main (64 INVALID_*
+messages at 390×844; 16 live contexts after 20 shows; 3 after two quest designs) and passes here.
