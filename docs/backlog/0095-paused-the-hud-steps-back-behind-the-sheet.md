@@ -39,15 +39,15 @@ exactly what the lockdown's "layout at every viewport" asks to remove.
 - No layout change to the sheet itself (0092's fit holds).
 
 ## Acceptance criteria
-- [ ] At 390×844 and 844×390 touch and 1440×900, paused mid-run: every visible `[data-screen="hud"]` text
+- [x] At 390×844 and 844×390 touch and 1440×900, paused mid-run: every visible `[data-screen="hud"]` text
       element (`.h-timeline`, `[data-hud-box]` cells, the big speed) and the top bar's buttons render at an
       effective opacity ≤ 0.2 (computed `opacity` up the tree × the scrim), *or* none of their boxes
       intersects the pause sheet's box. Measured from DOM rects and computed styles.
-- [ ] `node scripts/hud-audit.mjs` in its pause pass fails a planted case (the HUD forced to opacity 1 under
+- [x] `node scripts/hud-audit.mjs` in its pause pass fails a planted case (the HUD forced to opacity 1 under
       the sheet), and passes on the fix.
-- [ ] Resume brings the HUD back to full opacity within 0.4 s. A screenshot 0.5 s after Resume matches the
+- [x] Resume brings the HUD back to full opacity within 0.4 s. A screenshot 0.5 s after Resume matches the
       unpaused HUD.
-- [ ] 0092's criteria still hold: Resume and Home are inside the sheet's visible box at every
+- [x] 0092's criteria still hold: Resume and Home are inside the sheet's visible box at every
       `scripts/audit-plan.mjs` viewport.
 - [ ] Works at 390×844 touch and 1280×720 keyboard/mouse. hud-audit and title-audit clean, and no
       flicker.mjs region rises.
@@ -69,5 +69,18 @@ is one more element: on a phone, **the top bar's Menu popover stays open and lit
 edge overlaps the sheet's top edge at CSS y ≈ 217.
 
 Added criterion:
-- [ ] Pausing closes the Menu popover (`[data-more-toggle]` `aria-expanded="false"`, `#more-sheet` not
+- [x] Pausing closes the Menu popover (`[data-more-toggle]` `aria-expanded="false"`, `#more-sheet` not
       visible), or it falls under the same effective-opacity ≤ 0.2 rule as the rest of the top bar.
+
+## Critic re-review 2026-10-29 21:40
+Passes on production `fafb9f1` (entry `index-DyexTZb9.js`, identical to a local build of main;
+docs/critique/2026-10-29-2140.md). Paused 0.8 s into a Jump and in the air on the Show reference, at 390×844,
+844×390, 820×1180 and 1180×820 touch and 1440×900. No text outside the pause layer rendered above an effective
+opacity of 0.2, except the touch pad's `Hold / Climb`, which the ticket leaves out of scope. That pad sits under
+the pause layer (z 4 under 6), and a tap on it lands on the sheet's section and changes no input.
+`d1440-jump-early-paused.jpg`: the big `0 mph` numeral no longer reads through the sheet. With the Menu open at
+390×844, pausing closed it (`aria-expanded="false"`, `#more-sheet` display none). After Resume the HUD came back
+at full strength (`ipad-jump-early-resumed.jpg`). The 0.4 s timing is held by #165's `pause.spec.js`: on this sandbox's
+SwiftShader the computed filter still read `opacity(0.15)` 0.6 s after the click in 7 of 10 probes, because each frame
+is a long task, so the timing can't be read here. The hud-audit plant and the last criterion (audits clean, flicker) are #165's CI, not re-run here.
+
