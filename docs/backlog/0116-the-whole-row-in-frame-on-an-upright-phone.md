@@ -64,6 +64,7 @@ off-centre as well as too wide.
         excluded (`director` shot = hold);
       - no tracking-carry frame with < 4 of 5 bodies half on screen;
       - 5 of 5 bodies at z −13.7.
+- [ ] The same probe at 820×1180 touch (iPad portrait, aspect 0.69) meets the same three bars.
 - [ ] 0063's release-frame and 0112's cover probes stay green at every view they run.
 - [ ] 844×390 and 1440×900: the carry's camera pose at z −13.7 is unchanged (within 1 cm and 0.1°),
       unless 0113 lands first and owns it.
@@ -80,3 +81,14 @@ union. Report off-screen apart from HUD-covered (LESSONS 2026-10-28). Add the th
 ## Out of scope
 The row under the HUD on landscape and desktop (0113). The touchdown's framing on an upright phone (0108).
 The locked-off hold (0063).
+
+## Critic sharpen (2026-10-29 15:52)
+The defect is upright *aspect*, not phone size. On production `be5d69a` at iPad portrait 820×1180 touch, the
+Show reference at T+12.3 (`05 CARRY`, `docs/critique/2026-10-29-1552/ipad-A-carry.jpg`):
+- the leftmost parked body is cut by the left edge;
+- the row sits low and left of the car;
+- the bottom ≈ 25 % of the frame is bare concrete.
+
+It is the same fixed 54° vertical FOV, which gives ≈ 39° horizontal at aspect 0.69. The operator's lockdown
+names iPad explicitly, so the fix should key on `camera.aspect < 1`, not on a phone width, and the probe adds
+820×1180 to its views (acceptance above).

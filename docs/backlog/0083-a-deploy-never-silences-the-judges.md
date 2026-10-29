@@ -57,17 +57,17 @@ The cause has two parts:
 - No Worker change (frozen). No sim change.
 
 ## Acceptance criteria
-- [ ] e2e (`tests/e2e/network.spec.js` or a new spec): boot, wait for the title to be idle, then answer
+- [x] e2e (`tests/e2e/network.spec.js` or a new spec): boot, wait for the title to be idle, then answer
       404 for every `/coldgas/assets/*` request, then fly the reference to the results (`fastForward`).
       The judges' theatre runs, and the receipt reads "Judged by …" (stub the judge stream with a canned
       SSE as the theatre specs do). At 1280×720 and at 390×844 touch.
-- [ ] e2e: theatre chunk aborted for the whole session. The results show the receipt visibly, in its
+- [x] e2e: theatre chunk aborted for the whole session. The results show the receipt visibly, in its
       "AI unavailable" state with "local lines", within 35 s. It is not `hidden`.
-- [ ] e2e: the judge breaker open. Same receipt state, as well as the existing cue.
-- [ ] No extra theatre download per run: the request count for `theatre-*.js` over two runs is 1.
-- [ ] `perf.mjs` phone profile: "usable" is not later than before (the warm import must not compete with
+- [x] e2e: the judge breaker open. Same receipt state, as well as the existing cue.
+- [x] No extra theatre download per run: the request count for `theatre-*.js` over two runs is 1.
+- [x] `perf.mjs` phone profile: "usable" is not later than before (the warm import must not compete with
       the title's critical path: start it after the title is wired, at idle priority).
-- [ ] hud-audit and title-audit clean (the receipt's AI-unavailable state at 390×844 and 844×390).
+- [x] hud-audit and title-audit clean (the receipt's AI-unavailable state at 390×844 and 844×390).
 
 ## Test plan
 - e2e with `page.route` flipping to 404 after boot, as above.
@@ -77,3 +77,14 @@ The cause has two parts:
 - Keeping the previous build's assets on the server. That is `wrangler.jsonc` and the Worker, both frozen:
   an operator call, noted in the critique.
 - Free Drive and Sandbox chunk retry (0057).
+
+## Critic re-review (2026-10-29 15:52): passes on production
+Shipped in #159. On production `be5d69a` with the real judges:
+- **After the title idled, every `/coldgas/assets/*` answered 404.** Both runs were then judged by
+  `gemma-4-26b-a4b-it` at 1440×900 and at 390×844 touch, each with a "Judged by" receipt, and the phone
+  requested `theatre-*.js` once.
+- **With the chunk aborted all session,** the receipt read "AI unavailable · The judges' chunk didn't load ·
+  local lines" within ≤ 2.1 s, with no Replay button.
+- **Phone "usable" was 8.0 s,** against 8.3–8.6 s before.
+- **The breaker case is covered by `tests/e2e/judges-deploy.spec.js`.** The boxes above are ticked from that
+  and from this re-review (`docs/critique/2026-10-29-1552.md`).

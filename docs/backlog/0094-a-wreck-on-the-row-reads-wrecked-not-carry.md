@@ -68,3 +68,11 @@ the same 60 % threshold the damage panel uses, so anything under it keeps its fl
 e2e (`tests/e2e/timeline.spec.js`, 0094) read 21 wrecked samples still `air`, all under `05 Carry`; with the
 fix all 32 wrecked samples read `07 Wrecked` (then `07 Flipped`), and the Show reference never shows a crash
 label. Shots: `docs/shots/wreck-0094/`.
+
+## Critic re-review (2026-10-29 15:52): passes on production
+On production `be5d69a`, the valves-shut crash sampled every 0.05 s at 390×844 touch and at 1440×900:
+- 32 wrecked samples, 21 of them still `air` on the row;
+- **0** under CARRY, BRAKE or TOUCHDOWN;
+- the first wrecked sample, at release + 1.954 s, reads `07 Wrecked`, and the run ends `07 Flipped`.
+
+Shots: `docs/critique/2026-10-29-1552/p390-C-wreck-label.jpg` and `d1440-C-wreck-label.jpg`.
