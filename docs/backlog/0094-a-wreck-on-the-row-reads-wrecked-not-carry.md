@@ -1,7 +1,7 @@
 ---
 id: 0094
 title: A car wrecked on top of the row reads WRECKED, not 05 CARRY
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
@@ -42,16 +42,16 @@ from the hit, as 0072 and 0065 already decided for a crash on the concrete.
 - No sim change.
 
 ## Acceptance criteria
-- [ ] e2e, the valves-shut crash above (Show reference, inputs zeroed from release + 0.125 s), sampled every
+- [x] e2e, the valves-shut crash above (Show reference, inputs zeroed from release + 0.125 s), sampled every
       0.05 s: no sample has the timeline's `now` on CARRY, BRAKE or TOUCHDOWN while `[data-dmg]` reads `wreck`
       (today: 21 of 21 wrecked air samples read `05 CARRY`). The first wrecked sample already reads the crash
       label.
-- [ ] The Show, Wall and Lineup references still run RELEASE → CARRY → BRAKE → TOUCHDOWN with no WRECKED
+- [x] The Show, Wall and Lineup references still run RELEASE → CARRY → BRAKE → TOUCHDOWN with no WRECKED
       (their damage stays below the wreck threshold), and `tests/e2e/timeline.spec.js` stays green.
-- [ ] A light scrape that does not reach the wreck threshold (e.g. the crash-probe's `rollover` case, if it
+- [x] A light scrape that does not reach the wreck threshold (e.g. the crash-probe's `rollover` case, if it
       stays under 60 %) does not flip the label.
-- [ ] Screenshot at 390×844 of the car on the row under the crash label, in the PR.
-- [ ] hud-audit and title-audit stay clean (lockdown focus).
+- [x] Screenshot at 390×844 of the car on the row under the crash label, in the PR.
+- [x] hud-audit and title-audit stay clean (lockdown focus).
 
 ## Test plan
 Extend `tests/e2e/timeline.spec.js`'s `sampleFine(page, true)` (0065's crash sampler) to read
@@ -59,3 +59,12 @@ Extend `tests/e2e/timeline.spec.js`'s `sampleFine(page, true)` (0065's crash sam
 
 ## Out of scope
 Where the car hits the row, the damage model, the brake height (0028).
+
+## Shipped (2026-10-29, builder)
+`flightPhase` (src/main.js) takes the TOUCHDOWN step, which `syncHud` reads as `Wrecked`, from the first frame
+the run's damage reaches `WRECK_PCT` in the air: damage is written only by impacts, so a wrecked car has hit
+something, and its contact flag may already be off on the frame that draws it. The light-scrape case keys off
+the same 60 % threshold the damage panel uses, so anything under it keeps its flight step. On main the new
+e2e (`tests/e2e/timeline.spec.js`, 0094) read 21 wrecked samples still `air`, all under `05 Carry`; with the
+fix all 32 wrecked samples read `07 Wrecked` (then `07 Flipped`), and the Show reference never shows a crash
+label. Shots: `docs/shots/wreck-0094/`.
