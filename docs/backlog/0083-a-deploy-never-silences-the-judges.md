@@ -1,12 +1,12 @@
 ---
 id: 0083
 title: A deploy mid-session never silences the AI judges, and local lines always say they are local
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: tech-health
 created: 2026-10-23
-pr:
+pr: 159
 by: critic
 ---
 
