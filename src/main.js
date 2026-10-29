@@ -859,7 +859,10 @@ const PHASE_ORDER = { show: ['runup', 'climb', 'hang', 'release', 'carry', 'brak
 function flightPhase(run) {
   const order = run.course === 'lineup' ? PHASE_ORDER.lineup : PHASE_ORDER.show;
   let key;
-  if (run.phase === 'landed' || run.phase === 'done') key = 'touchdown';
+  // A wreck in the air is the end of the flight (0094): a car lying on the parked row's roofs is still
+  // 'air' to the sim. Damage is written only by impacts, so a wrecked car has hit something; the step
+  // reads as the crash from the hit (syncHud), not CARRY or BRAKE.
+  if (run.phase === 'landed' || run.phase === 'done' || (run.phase === 'air' && Math.round(run.damage.total) >= WRECK_PCT)) key = 'touchdown';
   else if (run.course === 'lineup') key = run.phase === 'drive' ? 'runup' : S.braked ? 'brake' : Math.abs(run.t.rollAccum) > 0.3 ? 'roll' : 'liftoff';
   else if (run.phase === 'drive') key = 'runup';
   else if (!S.released) key = run.t.progress >= 0.92 ? 'hang' : 'climb';

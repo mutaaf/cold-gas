@@ -213,6 +213,8 @@ for (const course of ['wall', 'lineup']) {
     const b = out.findIndex((s) => s.ph === 'brake'), t = out.findIndex((s) => s.ph === 'touchdown');
     expect(b, 'BRAKE is reached').toBeGreaterThan(0);
     expect(t, 'TOUCHDOWN after BRAKE').toBeGreaterThan(b);
+    // 0094: no wreck, so never a crash label.
+    expect(out.filter((s) => s.dmg === 'wreck' || /wrecked|flipped|crash/i.test(s.nowText)).map((s) => s.nowText)).toEqual([]);
     expect(errors).toEqual([]);
   });
 }
@@ -229,5 +231,34 @@ test('0065 a valves-shut crash never shows BRAKE, and never TOUCHDOWN over a wre
   expect(out.filter((s) => s.ph === 'brake').length, 'BRAKE with the valves shut').toBe(0);
   expect(wrecked.length, 'the crash wrecks the car').toBeGreaterThan(0);
   expect(lie.map((s) => JSON.stringify(s)), 'TOUCHDOWN is now while the car reads wrecked').toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+// Ticket 0094: a car that falls onto the parked row is still 'air' to the sim (it lies on the roofs, not
+// the concrete), and the timeline read 05 CARRY next to WRECKED for a second. The crash label takes over
+// from the first sample the damage panel reads wrecked, wherever the car lies; the references (no wreck)
+// never show one.
+test('0094 a wreck on the row reads as the crash from the hit, never CARRY, BRAKE or TOUCHDOWN', async ({ page }) => {
+  test.slow();
+  await page.setViewportSize({ width: 390, height: 844 });
+  const errors = await boot(page);
+  const out = await sampleFine(page, true);
+  const wrecked = out.filter((s) => s.dmg === 'wreck');
+  const onRow = wrecked.filter((s) => s.phase === 'air');
+  const lie = wrecked.filter((s) => /carry|brake|touchdown/i.test(s.nowText));
+  console.log(`0094 valves-shut crash: ${wrecked.length} wrecked samples (${onRow.length} still 'air'), ${lie.length} under a flight step; first wrecked "${wrecked[0]?.nowText}", ends "${out.at(-1).nowText}"`);
+  expect(onRow.length, 'the car lies wrecked on the row while the sim still says air').toBeGreaterThan(0);
+  expect(lie.map((s) => JSON.stringify(s)), 'a flight step is now while the car reads wrecked').toEqual([]);
+  expect(wrecked[0].nowText, 'the first wrecked sample').toMatch(/wrecked/i);
+  expect(errors).toEqual([]);
+});
+
+test('0094 the Show reference never shows a crash label', async ({ page }) => {
+  test.slow();
+  const errors = await boot(page);
+  const out = await sampleFine(page);
+  expect(out.filter((s) => s.dmg === 'wreck').length, 'the reference is no wreck').toBe(0);
+  expect(out.filter((s) => /wrecked|flipped|crash/i.test(s.nowText)).map((s) => s.nowText)).toEqual([]);
+  expect(out.at(-1).nowText).toMatch(/touchdown/i);
   expect(errors).toEqual([]);
 });
