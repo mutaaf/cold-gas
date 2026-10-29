@@ -1814,3 +1814,11 @@ body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .tbtn
 :root[data-fold='cols'] .results .sheet { width: auto; max-width: calc(100vw - var(--fold-b)); columns: auto; }
 /* The judges' theatre, where it takes the screen, takes the left segment (the results are in the right one). */
 :root[data-fold='cols'] .theatre { right: calc(100vw - var(--fold-a)); }
+
+/* Paused (0095): the flight readouts, the cue, the count and the top bar step back behind the sheet, so no live
+   readout reads under its glass or is cut in half by its edge (the scrim alone left them at 55 %). A filter, not
+   opacity: the HUD's `rise` fill holds its opacity at 1. Resume brings them back in the same 0.35 s. Last in the
+   file, so the cue's own opacity fade keeps its place in the list. */
+:is(.hud, .top, .count, .drill-bar) { transition: filter 0.35s var(--ease); }
+.cue { transition: opacity 0.35s var(--ease), filter 0.35s var(--ease); }
+body:has(> .pause:not([hidden])) :is(.hud, .top, .cue, .count, .drill-bar) { filter: opacity(0.15); }

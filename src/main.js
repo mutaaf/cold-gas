@@ -1245,10 +1245,10 @@ function drawPauseKeys() {
 
 // --- Wiring ---------------------------------------------------------------------------------
 function pause(on) {
-  if (S.mode === 'drive') { on ??= !fd().paused; if (on) resetInput(); fd().pause(on); return; }
+  if (S.mode === 'drive') { on ??= !fd().paused; if (on) { resetInput(); setMore(false); } fd().pause(on); return; }
   on ??= !S.paused;
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
-  if (on) resetInput();   // nothing held comes back held from the pause sheet
+  if (on) { resetInput(); setMore(false); }   // nothing held comes back held from the pause sheet; the Menu goes with the run (0095)
   else ui.show('controls', false);   // P or a pad's Start resumes from under Controls too: it goes with the pause
   S.paused = on;
   if (on) { drawPauseKeys(); ui.screens.pause.querySelector('.sheet').scrollTop = 0; }   // Resume first, at the top
