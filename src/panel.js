@@ -47,6 +47,16 @@ export async function fetchBoard(board = 'today', { signal } = {}) {
 }
 
 // --- Local lines -------------------------------------------------------------------------
+// The receipt for local lines (0083, invariant 5½): "AI unavailable", why, and "local lines".
+export const LOCAL_WHY = {
+  stale: 'A new version is live: the AI judges come back from the title',
+  chunk: 'The judges’ chunk didn’t load',
+  breaker: 'The judges are resting',
+};
+export function localMeta(reason) {
+  return { ok: false, local: reason, error: LOCAL_WHY[reason] || LOCAL_WHY.chunk, model: '', where: '' };
+}
+
 const pick = (arr, seed) => arr[Math.abs(Math.round(seed * 997)) % arr.length];
 
 export function localWords(card) {

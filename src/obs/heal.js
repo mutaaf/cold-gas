@@ -59,6 +59,12 @@ export function installHeal({ stage, canvas, ui, S, toTitle, pause = () => {}, c
   heal.reloadOnce = reloadOnce;
   heal.decide = decide;
   heal.markStale = (why) => { heal.stale = String(why || 'a chunk failed to load'); };
+  // Has a deploy replaced this page's build? (The results' receipt says so when the judges' chunk is gone, 0083.)
+  heal.newBuild = async () => {
+    const p = globalThis.navigator?.onLine === false ? null : await probe();
+    const next = p?.ok ? entryOf(p.html) : null;
+    return !!(next && bootEntry && next !== bootEntry);
+  };
 
   // --- The renderer: timed, and skipped while the context is lost ----------------------------------
   const render = stage.render;
