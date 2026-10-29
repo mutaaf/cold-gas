@@ -45,7 +45,7 @@ import { initFocusTrap } from './focus-trap.js';
 import { wireUnitToggles, unitText } from './units.js';
 import { drawShareCard, shareRun } from './share-card.js';
 import { createInstruments } from './instruments.js';
-import { localWords, postScore, fetchBoard } from './panel.js';
+import { localWords, localMeta, postScore, fetchBoard } from './panel.js';
 import { withDeadline } from './net.js';
 import { loadAI } from './ai/config.js';
 import { openSettings, aiLabel } from './ai/settings.js';
@@ -370,6 +370,7 @@ const startRun = whenPhysics(startRunNow);
 function startRunNow(kind = 'jump', quick = false) {
   closeOverlays();
   initAudio();
+  warmJudges();   // at the latest as a run starts (a deep link never idles on the title)
   disposeRun();
   // Armed for its aftermath: when it ends, the car finishes its crash before the results (0062).
   S.run = armAftermath(takeRun(stage.course)); S.after = false; S.drillSnap = null;
@@ -573,6 +574,25 @@ document.querySelector('[data-adapt-go]').addEventListener('click', () => {
 });
 
 const theatreRoot = document.querySelector('[data-theatre]');
+// The judges' chunk, fetched once while the title idles or as the first run starts (0083): a deploy
+// 404s every chunk of the old build, so a page that asked for it only at the results lost its judges.
+// One promise for the session; a failed or stalled fetch is dropped, so the next run asks again.
+let judgesChunk = null, judgesOk = false;
+function judgesMod() {
+  if (!judgesChunk) {
+    const p = import('./ai/theatre.js');
+    judgesChunk = p;
+    p.then(() => { judgesOk = true; }, () => { if (judgesChunk === p) judgesChunk = null; });
+  }
+  return judgesChunk;
+}
+function warmJudges() { if (!judgesChunk) judgesMod().catch((err) => obs.lazyFailed(err)); }
+// After the title is wired, at idle priority: never on the first load's critical path.
+Promise.all([stage.ready, physicsLoad]).then(() => {
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(warmJudges, { timeout: 4000 }); else setTimeout(warmJudges, 500);
+}).catch(() => { /* the boot's own failure path reports it */ });
+// Local lines are never passed off as the judges' (0083): the receipt says why the AI didn't speak.
+const localReceipt = (reason) => { S.callMeta = localMeta(reason); ui.receipt(S.callMeta, { onChange: () => openAI() }); };
 const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]'), goLabel = document.querySelector('[data-go-label]');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const JUDGE_MS = 35_000;   // invariant 5½: no AI call may block the results longer than this
@@ -585,15 +605,22 @@ async function runPanel(run, replay = null) {
   let mod;
   // [obs] The judges are a breaker-guarded subsystem: after repeated failures the panel speaks local
   // lines for a while (a cooldown that doubles), then tries the call again.
-  if (!replay && !obs.breaker('judge').allow()) { S.words = localWords(card); ui.words(S.words); ui.cue_('The judges are resting: local lines for now', 1800); return; }
+  if (!replay && !obs.breaker('judge').allow()) { S.words = localWords(card); ui.words(S.words); localReceipt('breaker'); ui.cue_('The judges are resting: local lines for now', 1800); return; }
   // [obs] The theatre is a lazy chunk, and loading it spends the same 35 s (invariant 5½). A chunk
   // that fails or stalls isn't the judges' fault (no breaker): local lines now, and the page is
   // marked stale so the next title checks for a new build (src/obs/heal.js).
   const t0 = performance.now();
-  try { mod = await withDeadline(import('./ai/theatre.js'), JUDGE_MS, 'the judges’ chunk'); } catch (err) {
+  const chunk = judgesMod();
+  try { mod = await withDeadline(chunk, JUDGE_MS, 'the judges’ chunk'); } catch (err) {
+    if (judgesChunk === chunk) judgesChunk = null;   // stalled: the next run asks again
     obs.lazyFailed(err);
     try { heal.markStale('the judges’ chunk failed to load'); } catch { /* heal not installed yet */ }
-    if (S.run === run && !signal?.aborted) { S.words = localWords(card); ui.words(S.words); }
+    if (S.run === run && !signal?.aborted) {
+      S.words = localWords(card); ui.words(S.words);
+      localReceipt('chunk');
+      // A deploy took the chunk: say so (the title loads the new build).
+      heal.newBuild?.().then((yes) => { if (yes && S.run === run && S.callMeta?.local === 'chunk') localReceipt('stale'); }, () => {});
+    }
     return;
   }
   if (S.run !== run || signal?.aborted) return;
@@ -1728,6 +1755,6 @@ function fastForward() {
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);
