@@ -254,12 +254,41 @@ async function precomputeRefGhosts() {
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   for (;;) {
     const course = !refGhosts[stage.course] ? stage.course : ['show', 'wall', 'lineup'].find((c) => !refGhosts[c]);
-    if (!course) return;
+    if (!course) { scheduleSpare(); return; }
     if (idle()) refFly(course, 5);
     await (idle() ? (globalThis.scheduler?.yield?.() ?? wait(0)) : wait(250));
   }
 }
 precomputeRefGhosts().catch((err) => console.warn('reference ghost', err));
+
+// The next run's engine world, built while nothing flies: the Jump tap takes it instead of building
+// one (≈35 ms on a 4×-throttled CPU, most of it the deck's trimesh, which CI's slower runner put past
+// the tap's 150 ms bar on top of the HUD's first layout). A fresh createRun is the same whenever
+// it's built, so a spare run starts bit-identically. One at a time, for the course on show.
+let spareRun = null, sparePending = false;
+function freeSpare() {
+  if (spareRun) freeWorld(spareRun.car.world);
+  spareRun = null;
+}
+function scheduleSpare() {
+  if (sparePending) return;
+  sparePending = true;
+  const build = () => {
+    sparePending = false;
+    const idle = S.mode === 'title' || S.mode === 'results' || S.mode === 'replay';
+    if (!idle || !physicsReady() || drive?.active || sandbox?.active || !refGhosts[stage.course]) return;
+    if (spareRun?.course === stage.course) return;
+    freeSpare();
+    try { spareRun = createRun(stage.course); } catch (err) { spareRun = null; console.warn('spare run', err); }   // after a trap: the tap builds it
+  };
+  // Idle only, no deadline: a page that never idles (a replay on a slow phone) builds at the tap as before.
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(build); else setTimeout(build, 250);
+}
+function takeRun(course) {
+  const run = spareRun?.course === course ? spareRun : null;
+  if (run) spareRun = null; else freeSpare();
+  return run || createRun(course);
+}
 
 const rates = { x: 0, y: 0, z: 0 };
 const zeroVel = new THREE.Vector3();
@@ -333,6 +362,7 @@ function toTitle() {
   plumes.clear();
   crash.reset();
   placeOnPad();
+  scheduleSpare();
   history.replaceState(null, '', stage.course === 'show' ? location.pathname : `${location.pathname}?course=${stage.course}`);
 }
 
@@ -342,7 +372,7 @@ function startRunNow(kind = 'jump', quick = false) {
   initAudio();
   disposeRun();
   // Armed for its aftermath: when it ends, the car finishes its crash before the results (0062).
-  S.run = armAftermath(createRun(stage.course)); S.after = false; S.drillSnap = null;
+  S.run = armAftermath(takeRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.runKind = kind;   // the reference jump never counts toward Rookie mode's streak (0074)
   latchTier();
@@ -386,6 +416,7 @@ function finishRun() {
   if (!S.card) closeCard(run);
   setMode('results');
   ui.only('results');
+  scheduleSpare();   // a Retry from here takes it
   ui.touch.hidden = true;
   drillBar.hidden = true;
   landing.show(false);
@@ -1242,6 +1273,7 @@ function syncCourseBtns() { courseBtns.forEach((b) => b.setAttribute('aria-check
 courseBtns.forEach((b) => b.addEventListener('click', () => {
   if (b.dataset.course === stage.course) return;
   stage.setCourse(b.dataset.course);
+  freeSpare(); scheduleSpare();
   syncCourseBtns();
   placeOnPad();
   director.snap();
@@ -1646,7 +1678,7 @@ function loadDrive() {
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
       audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun, driving: drivingSettings, setDriving, onDriving, onPadY },
       assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
-      setMode: (m) => { disposeRun(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
+      setMode: (m) => { disposeRun(); freeSpare(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
     });
     return drive;
@@ -1665,7 +1697,7 @@ function loadSandbox() {
       stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse, CAR,
       audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun },
       assist: () => S.tier,
-      setMode: (m) => { disposeRun(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
+      setMode: (m) => { disposeRun(); freeSpare(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
       onExit: () => { toTitle(); director.snap(); director.reframe(); },
     });
     return sandbox;
@@ -1696,6 +1728,6 @@ function fastForward() {
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
 Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);
