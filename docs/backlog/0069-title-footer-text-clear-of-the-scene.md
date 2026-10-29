@@ -49,3 +49,10 @@ legible only by luck of the camera angle, so the fix must be a backing (glass or
 Scout 2026-10-28 (390x844, `?gfx=low`): still reproduces, and the AI ASSIST pill's second line ("rolls you out, levels and
 brakes") also runs across the roadster's wheel and body, so include it in the backing. At 844x390 the fine print sits
 clear of the car but over the Wall's ring glow.
+
+Critic 2026-10-29 (production 7c617be, 820×1180 touch, `?gfx=low`, docs/critique/2026-10-29-0411.md,
+`ipad-0-title.jpg`): still reproduces on the iPad held upright. `SUCTION 10,341 lbf 46 kN` runs across the
+roadster's flank and wheels, `POWER 1,341 hp` across the parked Sedan's windscreen, the fine print is cut by the
+red plume beam, and the top-left `COLD GAS` wordmark has the Wall ring's pink edge through its last letter. Add the
+wordmark to the sampler's node list. The bar is the same as above: ≥ 4.5:1 against the lightest pixels behind each
+text node, at 820×1180 as well as 390×844.
