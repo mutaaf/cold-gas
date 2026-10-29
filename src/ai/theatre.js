@@ -227,6 +227,23 @@ function callFigures(d) {
 // Visuals must never block the judges' words: any failure in the field is logged and skipped.
 const safe = (fn) => { try { fn(); } catch (err) { console.warn('theatre visual', err); } };
 
+// A show's field, ended for good (0064). aurora-field draws a still frame on set() / setShape() whenever
+// its loop isn't running, and after destroy() that frame used the deleted programs and buffers: a step of
+// the show that resumed after a Skip, a restart or the fade (setStage('compute') once the figures ended)
+// logged a burst of WebGL INVALID_* errors and dropped the frame. So a show's `field` is set to null
+// before it is destroyed, and every call on it goes through `field?.` or `if (field)`. One canvas (one
+// WebGL context) serves every show: a canvas per show kept its context alive until GC, and twenty shows
+// reached the browser's limit, where the oldest context (the game's) is the one dropped. The last show's
+// field is ended before the next one is made on it, so two fields never share the context.
+let showCanvas = null, endLive = null;
+// `kill` nulls the show's field and destroys it; `current()` says the root is still this show's.
+function ownCanvas(kill) {
+  endLive?.();
+  const end = () => { if (endLive === end) endLive = null; kill(); };
+  endLive = end;
+  return { end, current: () => endLive === end };
+}
+
 // --- DOM ------------------------------------------------------------------------------------------
 function el(tag, cls, html) { const e = document.createElement(tag); if (cls) e.className = cls; if (html != null) e.innerHTML = html; return e; }
 const fmtMs = (ms) => (ms == null ? '—' : ms < 1000 ? `${Math.round(ms)} ms` : `${(ms / 1000).toFixed(2)} s`);
@@ -234,7 +251,10 @@ const fmtUsd = (u) => (u == null ? '—' : u < 0.0001 ? `$${u.toFixed(6)}` : `$$
 
 function buildDom(root, stages = STAGES) {
   root.innerHTML = '';
-  const canvas = el('canvas', 'th-canvas');
+  // A context the browser took away between shows is never given back (no field is listening to ask for
+  // it), so a lost one costs the canvas: the next show starts on a fresh one.
+  if (showCanvas?.getContext('webgl')?.isContextLost()) showCanvas = null;
+  const canvas = showCanvas ??= el('canvas', 'th-canvas');
   const rail = el('ol', 'th-rail');
   const railItems = {};
   for (const [i, s] of stages.entries()) {
@@ -284,6 +304,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   requestAnimationFrame(() => root.classList.add('on'));
 
   let field = null;
+  const own = ownCanvas(() => { const f = field; field = null; if (f) safe(() => f.destroy()); });
   loadMonoBold();
   const geo = { R: 0 }, used = new Set();
   const fit = () => freeBox(root, geo);
@@ -315,6 +336,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
 
   const setStage = (s) => {
     stage = s; stageAt = performance.now();
+    if (!own.current()) return;   // a newer show has the root
     root.dataset.stage = s;
     delete root.dataset.fig; delete root.dataset.spell;
     safe(() => field?.set({ autonomy: AUTONOMY[s], palette: PALETTE[s] }));
@@ -501,8 +523,8 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
     clearTimeout(deadline);
     call.abort();   // the deadline or Skip ended the show: nothing more is read from the stream
     meta.words = words || fallbackWords(card);
-    root.classList.add('out');
-    setTimeout(() => { safe(() => field?.destroy()); releaseShapes(used); root.hidden = true; root.classList.remove('on', 'out'); }, 650);
+    if (own.current()) root.classList.add('out');
+    setTimeout(() => { const mine = own.current(); own.end(); releaseShapes(used); if (mine) { root.hidden = true; root.classList.remove('on', 'out'); } }, 650);
     skipResolve({ words: meta.words, meta });
   }
   abort?.addEventListener('abort', () => {
@@ -510,7 +532,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
     finished = true;
     clearInterval(pulse);
     clearTimeout(deadline);
-    safe(() => field?.destroy());
+    own.end();
     releaseShapes(used);
     root.hidden = true;
     root.classList.remove('on', 'out');
@@ -552,6 +574,7 @@ export function runQuestTheatre(root, { ai, wish, arena, seed, reduced = false, 
   root.classList.remove('out');
   requestAnimationFrame(() => root.classList.add('on'));
   let field = null;
+  const own = ownCanvas(() => { const f = field; field = null; if (f) safe(() => f.destroy()); });
   loadMonoBold();
   const geo = { R: 0 }, used = new Set();
   const fit = () => freeBox(root, geo);
@@ -567,7 +590,7 @@ export function runQuestTheatre(root, { ai, wish, arena, seed, reduced = false, 
   const done = new Promise((r) => { resolve = r; });
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const setStage = (s) => {
-    stage = s; stageAt = performance.now(); root.dataset.stage = s;
+    stage = s; stageAt = performance.now(); if (!own.current()) return; root.dataset.stage = s;
     safe(() => field?.set({ autonomy: s === 'compute' ? 0.3 : s === 'prompt' ? 0.3 : 0, palette: s === 'check' || s === 'quest' ? SPELL : 'aurora' }));
     for (const k of Q_STAGES) dom.railItems[k].className = k === s ? 'on' : Q_STAGES.indexOf(k) < Q_STAGES.indexOf(s) ? 'done' : '';
   };
@@ -641,11 +664,11 @@ export function runQuestTheatre(root, { ai, wish, arena, seed, reduced = false, 
     if (finished) return;
     finished = true;
     clearInterval(pulse); clearTimeout(deadline);
-    root.classList.add('out');
-    setTimeout(() => { safe(() => field?.destroy()); releaseShapes(used); root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); }, reduced ? 0 : 600);
+    if (own.current()) root.classList.add('out');
+    setTimeout(() => { const mine = own.current(); own.end(); releaseShapes(used); if (mine) { root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); } }, reduced ? 0 : 600);
     resolve({ quest: result?.quest || null, errors: result?.errors || null, raw: result?.raw || out, meta: { ...meta, error: failure?.message || null } });
   }
   dom.skip.addEventListener('click', () => { if (result || failure) finish(); else { caption('Finishing the call…'); } });
-  abort?.addEventListener('abort', () => { if (!finished) { finished = true; clearInterval(pulse); clearTimeout(deadline); safe(() => field?.destroy()); releaseShapes(used); root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); resolve({ quest: null, aborted: true, meta }); } }, { once: true });
+  abort?.addEventListener('abort', () => { if (!finished) { finished = true; clearInterval(pulse); clearTimeout(deadline); own.end(); releaseShapes(used); root.hidden = true; root.classList.remove('on', 'out', 'th-quest'); resolve({ quest: null, aborted: true, meta }); } }, { once: true });
   return done;
 }
