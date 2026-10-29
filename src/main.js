@@ -1245,7 +1245,7 @@ function drawPauseKeys() {
 
 // --- Wiring ---------------------------------------------------------------------------------
 function pause(on) {
-  if (S.mode === 'drive') { on ??= !fd().paused; if (on) resetInput(); fd().pause(on); return; }
+  if (S.mode === 'drive') { on ??= !fd().paused; if (on) { resetInput(); setMore(false); } fd().pause(on); return; }
   on ??= !S.paused;
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
   if (on) { resetInput(); setMore(false); }   // nothing held comes back held from the pause sheet; the Menu goes with the run (0095)

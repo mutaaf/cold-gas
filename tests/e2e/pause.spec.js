@@ -135,19 +135,20 @@ for (const [w, h, touch] of [[390, 844, true], [844, 390, true], [1440, 900, fal
     expect(paused.length, 'the HUD has text on screen').toBeGreaterThan(4);
     for (const x of paused) expect(x.op, x.el).toBeLessThanOrEqual(0.2);
     // Back within 0.4 s by the clock the page declares (a wall-clock wait flakes on software GL's busy main thread).
-    const fades = await G(page, () => ['.hud', '.top'].map((s) => {
+    const STEP = ['.hud', '.top', '[data-cue]', '[data-count]', '[data-drill-bar]'];
+    const fades = await G(page, (sels) => sels.map((s) => {
       const cs = getComputedStyle(document.querySelector(s)), props = cs.transitionProperty.split(', ');
-      const i = props.indexOf('filter'), durs = cs.transitionDuration.split(', ');
-      return i < 0 ? null : parseFloat(durs[i % durs.length]);
-    }));
+      const i = props.indexOf('filter'), durs = cs.transitionDuration.split(', '), dels = cs.transitionDelay.split(', ');
+      return i < 0 ? null : parseFloat(durs[i % durs.length]) + parseFloat(dels[i % dels.length]);
+    }), STEP);
     for (const d of fades) {
       expect(d).not.toBeNull();
       expect(d).toBeLessThanOrEqual(0.4);
     }
     await page.locator('[data-resume]').click();
     await expect.poll(() => G(page, () => window.__coldgas.S.paused)).toBe(false);
-    // The containers themselves are back at full strength (a label's own dimming is its design).
-    await expect.poll(() => G(page, () => ['.hud', '.top'].map((s) => getComputedStyle(document.querySelector(s)).filter))).toEqual(['none', 'none']);
+    // Every layer that stepped back is back at full strength (a label's own dimming is its design).
+    await expect.poll(() => G(page, (sels) => sels.map((s) => getComputedStyle(document.querySelector(s)).filter), STEP)).toEqual(STEP.map(() => 'none'));
     const back = await lit(page, '.h-timeline *, [data-hud-box] *, .top .brand, .top button');
     expect(back.length).toBeGreaterThan(4);
     expect(Math.max(...back.map((x) => x.op))).toBeGreaterThanOrEqual(0.95);
