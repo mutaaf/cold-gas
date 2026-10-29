@@ -213,6 +213,8 @@ for (const course of ['wall', 'lineup']) {
     const b = out.findIndex((s) => s.ph === 'brake'), t = out.findIndex((s) => s.ph === 'touchdown');
     expect(b, 'BRAKE is reached').toBeGreaterThan(0);
     expect(t, 'TOUCHDOWN after BRAKE').toBeGreaterThan(b);
+    // 0094: no wreck, so never a crash label.
+    expect(out.filter((s) => s.dmg === 'wreck' || /wrecked|flipped|crash/i.test(s.nowText)).map((s) => s.nowText)).toEqual([]);
     expect(errors).toEqual([]);
   });
 }
