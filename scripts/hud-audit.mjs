@@ -26,10 +26,12 @@
 // Then, where Replay folds the results to a peek (0068: the sheet covers the screen), the peek is measured
 // the same way over the replay (11-peek).
 // And once per viewport the pause sheet (0092), paused mid-run as a phone pauses: the same checks, with
-// every button (Resume and Home above all) inside the sheet's visible box and the viewport at its top.
+// every button (Resume and Home above all) inside the sheet's visible box and the viewport at its top, and (0095)
+// nothing of the HUD or the top bar lit under it (effective opacity ≤ 0.2; --plant=pause-hud-lit must fail).
 //
 // A gate (0082): the exit code is 1 when any count is non-zero (overlaps, offscreen, text < 11 px,
-// labels < 4.5:1, targets < 44 px, anything that changed between the two shots, frames missed, and since 0112 a touch
+// labels < 4.5:1, targets < 44 px, anything that changed between the two shots, frames missed, HUD text lit under the
+// pause sheet (0095), and since 0112 a touch
 // frame of a run, HUD compact, that covers more of the glass than scripts/audit-plan.mjs coverCeiling allows), and
 // the offenders are listed at the end.
 // --shard=N/M flies the N-th of M shares of the viewports, balanced by estimated cost (scripts/audit-plan.mjs;
@@ -87,6 +89,9 @@ const PAUSE = {
   boxes: ['.sheet', '.sheet h2', '[data-resume]', '[data-restart]', '[data-controls-open]', '[data-howto-open]', '[data-home]'].map((s) => `[data-screen="pause"] ${s}`),
   textRoots: '[data-screen="pause"]', targets: '[data-screen="pause"] .actions .btn', within: '[data-screen="pause"] .sheet',
 };
+
+// Paused, what must step back behind the sheet (0095): the HUD's text, the cue, the count and the top bar.
+const PAUSE_LIT = '[data-screen="hud"] *, .top .brand, .top button, [data-cue], [data-count] *';
 
 // Replay on a phone (0068): the results folded to their peek at the bottom, the replay above it.
 const PEEK = {
@@ -305,6 +310,32 @@ async function measurePause(page, vpName) {
   await page.waitForTimeout(ms(700));   // the sheet's rise
   await page.evaluate(() => { document.querySelector('[data-screen="pause"] .sheet').scrollTop = 0; });
   await measure(page, vpName, '12-pause', PAUSE);
+  // 0095: under the sheet nothing live stays lit. Every visible text of the HUD, the cue, the count and the top bar
+  // at an effective opacity (opacity and filter: opacity() up the tree) ≤ 0.2. --plant=pause-hud-lit keeps them lit.
+  report[report.length - 1].lit = await page.evaluate(({ sel, plant }) => {
+    // Settled, as measure() holds it: every animation at rest and every transition done (the HUD's `rise` would
+    // otherwise be replaying from 0 after measure() lets it go, and read as stepped back).
+    const still = document.createElement('style');
+    still.textContent = `*, *::before, *::after { animation: none !important; transition: none !important; }${plant ? ' :is(.hud, .top, .cue, .count, .drill-bar) { filter: none !important; }' : ''}`;
+    document.head.append(still);
+    const eff = (el) => {
+      let op = 1;
+      for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+        const cs = getComputedStyle(e);
+        if (cs.display === 'none' || cs.visibility === 'hidden' || e.hidden) return 0;
+        op *= Number(cs.opacity);
+        for (const m of cs.filter.matchAll(/opacity\(([\d.]+)(%?)\)/g)) op *= m[2] ? m[1] / 100 : Number(m[1]);
+      }
+      return op;
+    };
+    const lit = [...document.querySelectorAll(sel)].filter((el) => {
+      const r = el.getBoundingClientRect();
+      return r.width > 1 && r.height > 1 && (el.tagName === 'BUTTON' || [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
+    }).map((el) => [el, eff(el)]).filter(([, op]) => op > 0.2).map(([el, op]) => `${el.dataset.hudBox || el.tagName.toLowerCase()} "${el.textContent.trim().slice(0, 16)}" @${op.toFixed(2)}`);
+    still.remove();
+    return lit;
+  }, { sel: PAUSE_LIT, plant: flags.plant === 'pause-hud-lit' });
+  if (report[report.length - 1].lit.length) console.log(`  lit under the pause sheet: ${report[report.length - 1].lit.join('; ')}`);
   await page.evaluate(() => document.querySelector('[data-screen="pause"] [data-home]').click());
 }
 
@@ -458,14 +489,14 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   if (hudState === STATES[STATES.length - 1]) console.log(`  ${vpBase}: ${seconds[vpBase]} s`);
 }
 writeFileSync(`${out}/${label}-report.json`, JSON.stringify({ shard: `${shardN}/${shardM}`, viewports: VIEWPORTS.map(([w, h, s]) => `${w}x${h}${s ? 's' : ''}`), seconds, missed, frames: report }, null, 1));
-const tot = report.reduce((a, r) => ({ ov: a.ov + r.overlaps.length, sm: a.sm + r.small.length, lc: a.lc + r.lowContrast.length, off: a.off + r.offscreen.length, tg: a.tg + (r.smallTargets?.length || 0), ch: a.ch + (r.changed?.length || 0), cv: a.cv + (r.overCover ? 1 : 0) }), { ov: 0, sm: 0, lc: 0, off: 0, tg: 0, ch: 0, cv: 0 });
-console.log(`TOTAL ${label}${shardM > 1 ? ` (shard ${shardN}/${shardM})` : ''}: ${report.length} frames · overlaps ${tot.ov} · offscreen ${tot.off} · text < 11 px ${tot.sm} · labels < 4.5:1 ${tot.lc} · targets < 44 px ${tot.tg} · changed during measure ${tot.ch} · over the cover ceiling ${tot.cv} · missed ${missed.length}`);
+const tot = report.reduce((a, r) => ({ ov: a.ov + r.overlaps.length, sm: a.sm + r.small.length, lc: a.lc + r.lowContrast.length, off: a.off + r.offscreen.length, tg: a.tg + (r.smallTargets?.length || 0), ch: a.ch + (r.changed?.length || 0), cv: a.cv + (r.overCover ? 1 : 0), lit: a.lit + (r.lit?.length || 0) }), { ov: 0, sm: 0, lc: 0, off: 0, tg: 0, ch: 0, cv: 0, lit: 0 });
+console.log(`TOTAL ${label}${shardM > 1 ? ` (shard ${shardN}/${shardM})` : ''}: ${report.length} frames · overlaps ${tot.ov} · offscreen ${tot.off} · text < 11 px ${tot.sm} · labels < 4.5:1 ${tot.lc} · targets < 44 px ${tot.tg} · changed during measure ${tot.ch} · over the cover ceiling ${tot.cv} · lit under the pause sheet ${tot.lit} · missed ${missed.length}`);
 // The gate: every offender, then a non-zero exit code.
-const bad = report.filter((r) => r.overlaps.length || r.offscreen.length || r.small.length || r.lowContrast.length || r.smallTargets?.length || r.changed?.length || r.overCover);
+const bad = report.filter((r) => r.overlaps.length || r.offscreen.length || r.small.length || r.lowContrast.length || r.smallTargets?.length || r.changed?.length || r.overCover || r.lit?.length);
 if (bad.length || missed.length) {
   console.log('FAIL — offenders:');
   for (const r of bad) {
-    const why = [...r.overlaps.map((o) => `overlap ${o.a}×${o.b} ${o.px}px²`), ...r.offscreen.map((o) => `offscreen ${o}`), ...r.small.map((t) => `small "${t}"`), ...r.lowContrast.map((t) => `contrast "${t}"`), ...(r.smallTargets || []).map((t) => `target ${t}`), ...(r.changed || []).map((t) => `changed during measure ${t}`), ...(r.overCover ? [`HUD covers ${r.overCover} of the glass`] : [])];
+    const why = [...r.overlaps.map((o) => `overlap ${o.a}×${o.b} ${o.px}px²`), ...r.offscreen.map((o) => `offscreen ${o}`), ...r.small.map((t) => `small "${t}"`), ...r.lowContrast.map((t) => `contrast "${t}"`), ...(r.smallTargets || []).map((t) => `target ${t}`), ...(r.changed || []).map((t) => `changed during measure ${t}`), ...(r.overCover ? [`HUD covers ${r.overCover} of the glass`] : []), ...(r.lit || []).map((t) => `lit under the pause sheet ${t}`)];
     console.log(`  ${r.vp} ${r.phase}: ${why.join('; ')}`);
   }
   for (const m of missed) console.log(`  missed: ${m}`);

@@ -9,11 +9,12 @@ const touchCtx = (w, h) => ({ viewport: { width: w, height: h }, hasTouch: true,
 
 // A live run, paused the way a phone pauses one: the tab goes hidden (the phone rings), then comes
 // back with the sheet up. A key would make the keyboard the device in use.
-async function pausedRun(page, { key = false } = {}) {
+async function pausedRun(page, { key = false, before = null } = {}) {
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   await G(page, () => { window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
+  if (before) await before(page);
   if (key) await page.keyboard.press('Escape');
   else {
     await G(page, () => {
@@ -99,3 +100,73 @@ for (const [w, h, touch] of [[320, 568, true], [390, 844, true], [1440, 900, fal
     await ctx.close();
   });
 }
+
+// Paused, the flight readouts step back (0095): the sheet's scrim alone left the HUD at 55 %, legible under the
+// glass and cut in half by its edges. Every visible HUD text, the cue, the count and the top bar render at an
+// effective opacity ≤ 0.2 (opacity and filter: opacity() up the tree), and Resume brings them back.
+const LIT = '[data-screen="hud"] *, .top .brand, .top button, [data-cue], [data-count] *';
+const lit = (page, sel) => G(page, (sel) => {
+  const eff = (el) => {
+    let op = 1;
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      const cs = getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || e.hidden) return 0;
+      op *= Number(cs.opacity);
+      for (const m of cs.filter.matchAll(/opacity\(([\d.]+)(%?)\)/g)) op *= m[2] ? m[1] / 100 : Number(m[1]);
+    }
+    return op;
+  };
+  return [...document.querySelectorAll(sel)].filter((el) => {
+    const r = el.getBoundingClientRect();
+    return r.width > 1 && r.height > 1 && (el.tagName === 'BUTTON' || [...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()));
+  }).map((el) => ({ el: `${el.tagName.toLowerCase()}.${el.getAttribute('class') || ''} "${el.textContent.trim().slice(0, 16)}"`, op: Math.round(eff(el) * 1000) / 1000 }))
+    .filter((x) => x.op > 0.02);
+}, sel);
+
+for (const [w, h, touch] of [[390, 844, true], [844, 390, true], [1440, 900, false]]) {
+  test(`${w}×${h} ${touch ? 'touch' : 'keyboard'}: paused, the HUD and the top bar step back; Resume brings them back`, async ({ browser }) => {
+    const ctx = await browser.newContext(touch ? touchCtx(w, h) : { viewport: { width: w, height: h } });
+    const page = await ctx.newPage();
+    await pausedRun(page, { key: !touch });
+    // Polled: the step back is a 0.35 s fade, and a busy software-GL page can still be inside it.
+    await expect.poll(async () => Math.max(...(await lit(page, LIT)).map((x) => x.op)), { timeout: 10_000 }).toBeLessThanOrEqual(0.2);
+    const paused = await lit(page, LIT);
+    expect(paused.filter((x) => x.el.startsWith('button')).length, 'the top bar has buttons').toBeGreaterThan(0);
+    expect(paused.length, 'the HUD has text on screen').toBeGreaterThan(4);
+    for (const x of paused) expect(x.op, x.el).toBeLessThanOrEqual(0.2);
+    // Back within 0.4 s by the clock the page declares (a wall-clock wait flakes on software GL's busy main thread).
+    const fades = await G(page, () => ['.hud', '.top'].map((s) => {
+      const cs = getComputedStyle(document.querySelector(s)), props = cs.transitionProperty.split(', ');
+      const i = props.indexOf('filter'), durs = cs.transitionDuration.split(', ');
+      return i < 0 ? null : parseFloat(durs[i % durs.length]);
+    }));
+    for (const d of fades) {
+      expect(d).not.toBeNull();
+      expect(d).toBeLessThanOrEqual(0.4);
+    }
+    await page.locator('[data-resume]').click();
+    await expect.poll(() => G(page, () => window.__coldgas.S.paused)).toBe(false);
+    // The containers themselves are back at full strength (a label's own dimming is its design).
+    await expect.poll(() => G(page, () => ['.hud', '.top'].map((s) => getComputedStyle(document.querySelector(s)).filter))).toEqual(['none', 'none']);
+    const back = await lit(page, '.h-timeline *, [data-hud-box] *, .top .brand, .top button');
+    expect(back.length).toBeGreaterThan(4);
+    expect(Math.max(...back.map((x) => x.op))).toBeGreaterThanOrEqual(0.95);
+    await ctx.close();
+  });
+}
+
+// On a phone the top bar's Menu (0073) stays open over the sheet unless the pause closes it (critic, 0095).
+test('390×844 touch: pausing closes the Menu', async ({ browser }) => {
+  const ctx = await browser.newContext(touchCtx(390, 844));
+  const page = await ctx.newPage();
+  await pausedRun(page, {
+    before: async (p) => {
+      await p.locator('[data-more-toggle]').tap();
+      await expect(p.locator('[data-more-toggle]')).toHaveAttribute('aria-expanded', 'true');
+      await expect(p.locator('#more-sheet')).toBeVisible();
+    },
+  });
+  await expect(page.locator('[data-more-toggle]')).toHaveAttribute('aria-expanded', 'false');
+  await expect(page.locator('#more-sheet')).toBeHidden();
+  await ctx.close();
+});

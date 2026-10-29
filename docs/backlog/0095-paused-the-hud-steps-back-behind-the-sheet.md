@@ -1,12 +1,12 @@
 ---
 id: 0095
 title: Paused, the flight readouts step back; the pause sheet never slices a live readout in half
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: platform
 created: 2026-10-27
-pr:
+pr: 165
 by: critic
 ---
 
