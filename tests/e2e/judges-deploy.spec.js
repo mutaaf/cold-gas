@@ -29,9 +29,13 @@ for (const phone of [false, true]) {
     let gone = 0;
     await page.route(/\/coldgas\/assets\//, (route) => { gone++; return route.fulfill({ status: 404, body: 'gone' }); });
     for (let i = 0; i < 2; i++) {
+      await page.evaluate(() => { window.__prevCall = window.__coldgas.S.callMeta; });
       await fly(page);
       await toResults(page);
-      await expect(page.locator('[data-receipt]')).toContainText('Judged by', { timeout: 90_000 });   // set once the show ends
+      // This run's own call (the receipt keeps the last run's text while hidden): judged by the model.
+      await page.waitForFunction(() => { const S = window.__coldgas.S; return S.callMeta && S.callMeta !== window.__prevCall && S.callMeta.ok === true && S.words?.source === 'ai'; }, null, { timeout: 90_000 });
+      await expect(page.locator('[data-receipt]')).toBeVisible();
+      await expect(page.locator('[data-receipt]')).toContainText('Judged by');
     }
     expect(theatreGets).toHaveLength(1);   // fetched once for the session, not per run
     console.log('assets 404ed after the deploy:', gone);
@@ -58,6 +62,11 @@ test('the judges’ chunk 404s on a stale build: the receipt says a new version 
   await page.route((url) => url.pathname === '/coldgas/', (route) => (route.request().resourceType() === 'fetch'
     ? route.fulfill({ status: 200, contentType: 'text/html', body: html }) : route.continue()));
   await page.route(/\/assets\/theatre-[\w-]+\.js$/, (route) => route.fulfill({ status: 404, body: 'gone' }));
+  // The warm fetch may fail on the title, where the heal reloads into the new build: as if it had just
+  // reloaded, it doesn't (a reload loop guard), so this page stays the stale one under test.
+  await page.addInitScript(() => { try { sessionStorage.setItem('coldgas_heal_reload', String(Date.now())); } catch { /* blocked */ } });
+  const navs = [];
+  page.on('load', () => navs.push(page.url()));
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
   await fly(page);
@@ -65,6 +74,7 @@ test('the judges’ chunk 404s on a stale build: the receipt says a new version 
   const receipt = page.locator('[data-receipt]');
   await expect(receipt).toContainText('A new version is live', { timeout: 35_000 });
   await expect(receipt).toContainText('local lines');
+  expect(navs).toHaveLength(1);
 });
 
 test('the judge breaker is open: the receipt says so, beside the cue', async ({ page }) => {
@@ -72,6 +82,8 @@ test('the judge breaker is open: the receipt says so, beside the cue', async ({ 
   await ready(page);
   await page.evaluate(() => { const b = window.__coldgas.obs.breaker('judge'); b.failure(new Error('t')); b.failure(new Error('t')); });
   expect(await page.evaluate(() => window.__coldgas.obs.breaker('judge').state)).toBe('open');
+  // Held open past its 30 s cooldown (software GL can take that long to reach the results): no trial call.
+  await page.evaluate(() => { window.__coldgas.obs.breaker('judge').allow = () => false; });
   await fly(page);
   await toResults(page);
   const receipt = page.locator('[data-receipt]');

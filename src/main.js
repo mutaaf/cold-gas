@@ -577,7 +577,7 @@ const theatreRoot = document.querySelector('[data-theatre]');
 // The judges' chunk, fetched once while the title idles or as the first run starts (0083): a deploy
 // 404s every chunk of the old build, so a page that asked for it only at the results lost its judges.
 // One promise for the session; a failed or stalled fetch is dropped, so the next run asks again.
-let judgesChunk = null, judgesOk = false;
+let judgesChunk = null, judgesOk = false, judgesWarmed = false;
 function judgesMod() {
   if (!judgesChunk) {
     const p = import('./ai/theatre.js');
@@ -586,7 +586,12 @@ function judgesMod() {
   }
   return judgesChunk;
 }
-function warmJudges() { if (!judgesChunk) judgesMod().catch((err) => obs.lazyFailed(err)); }
+// Once: a warm fetch that failed is left to the results (one failed import, one report, 0040).
+function warmJudges() {
+  if (judgesWarmed) return;
+  judgesWarmed = true;
+  judgesMod().catch((err) => obs.lazyFailed(err));   // on the title the heal checks for a new build
+}
 // After the title is wired, at idle priority: never on the first load's critical path.
 Promise.all([stage.ready, physicsLoad]).then(() => {
   if (typeof requestIdleCallback === 'function') requestIdleCallback(warmJudges, { timeout: 4000 }); else setTimeout(warmJudges, 500);
@@ -619,7 +624,9 @@ async function runPanel(run, replay = null) {
       S.words = localWords(card); ui.words(S.words);
       localReceipt('chunk');
       // A deploy took the chunk: say so (the title loads the new build).
-      heal.newBuild?.().then((yes) => { if (yes && S.run === run && S.callMeta?.local === 'chunk') localReceipt('stale'); }, () => {});
+      try {
+        heal.newBuild().then((yes) => { if (yes && S.run === run && S.callMeta?.local === 'chunk') localReceipt('stale'); }, () => {});
+      } catch { /* heal not installed yet */ }
     }
     return;
   }
