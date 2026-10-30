@@ -1,12 +1,12 @@
 ---
 id: 0055
 title: The descent tape's BRAKE label never draws over the ground label
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: accessibility
 created: 2026-10-21
-pr:
+pr: 176
 by: operator
 ---
 
