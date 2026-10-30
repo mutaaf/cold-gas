@@ -59,7 +59,7 @@ export function createDirector(camera) {
     // `aim` (0 = the reference framing, 1 = on the path) as the region narrows.
     rl: 0, rt: 0, rr: 0, rb: 0, aim: 0,
     bandT: 1, bandB: -1,                                 // the carry's band (0113, NDC): under the top HUD, over the bottom one
-    placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(),   // the carry's locked-off placement (0113)
+    placed: false, carryT: 0, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(),   // the carry's locked-off placement (0113)
   };
 
   // Behind, above and to the side of the car along its line of flight (the last good heading when
@@ -172,7 +172,19 @@ export function createDirector(camera) {
     const ahead = Math.min(CARRY_AHEAD * d * tanH, Math.max(0, (carPos.z - SHOW.pad.z) / 2));
     want.z -= ahead; lookWant.z -= ahead;
     fitCarry(carPos);
-    st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true;
+  }
+  // Placed at the cut; placed again when the car's nose nears the far edge, or once the car has come down far enough
+  // that a fresh placement stands this much closer (the first is framed for the car at its highest), no sooner than
+  // CARRY_GAP after the last.
+  const CARRY_CLOSER = 1.4, CARRY_GAP = 0.6;
+  function carry(carPos) {
+    const due = st.t - st.carryT >= CARRY_GAP;
+    if (st.placed && !(due && carryOut(carPos))) {
+      if (!due) return;
+      placeCarry(carPos);
+      if (st.carryPos.distanceTo(carPos) < want.distanceTo(carPos) * CARRY_CLOSER) return;
+    } else placeCarry(carPos);
+    st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true; st.carryT = st.t;
   }
   // The car's nose near the far edge of the locked-off frame (or the car behind it).
   function carryOut(carPos) {
@@ -338,7 +350,7 @@ export function createDirector(camera) {
       // Past the row's back it cuts to the tracking follow down to the pad, which the landing rig eases out of.
       if (st.shot === CARRY && carPos.z < ROW_Z0) { st.shot = FOLLOW; snap(); }
       if (st.shot === CARRY) {
-        if (!st.placed || carryOut(carPos)) placeCarry(carPos);
+        carry(carPos);
         camera.position.copy(st.carryPos);
         camera.lookAt(st.carryLook);
         // A car that comes down on the row: the landing rig eases in from here.

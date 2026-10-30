@@ -85,3 +85,22 @@ sibling at the viewports above, with the 25 % bound.
 ## Out of scope
 The ground shot after touchdown (0108). The replay's rigs (0068). The HUD's own layout (0112: this ticket
 moves the picture, not the instruments).
+
+## Shipped (2026-10-30, builder)
+- `src/render/director.js`: the carry over the row is a locked-off shot, like the hold. At the cut it reads the band
+  the HUD leaves (under the mission block / top bar + 24 px, over whatever is docked at the bottom across the middle
+  of the screen; once per run, after a resize and on a HUD mode change), takes the tracking framing for the car where
+  it is, trucks it so the car stands left of centre with the flight ahead, and fits it (`fitCarry`): the car's centre
+  under the top line and the row's near foot over the band, by pitching within the band and, only where the span is
+  taller than the band, standing back about the car–row midpoint (≤ 2.5×). It re-places on the far edge or when a
+  placement 1.4× closer is possible (≥ 0.6 s apart). Past the row's back it cuts to the old tracking follow, so the
+  touchdown frames are main's. Where the framing already fit nothing moves; upright, the row's near foot is now kept
+  on screen.
+- Row under the HUD, worst frame, car z −9 → −22.6 (`frame-probe.js`, each body's box, 16×16 samples): 0 % at every
+  view (844×390, 667×375, 740×360, 932×430, 1180×820 touch, 1440×900, 1280×720, 390×844, the iPads, the FOLD / FLIP
+  shapes); main 94–97 % on landscape phones, 62–66 % desktop. Row on screen at least 98 % on every screen wider
+  than tall (main 14 %).
+- show-live-jets, same machine, swiftshader (main → branch ‰): phone wall 103.6 → 1.1, ground 31.3 → 13.4, row
+  281.6 → 167.7, backdrop 135.1 → 88.6, car 181.8 → 234.7; desktop wall 77.2 → 0.2, car 204.2 → 252.9. Budgets
+  lowered for the regions that fell; the car's rise is inside tolerance.
+- Shots: `docs/shots/row-carry-0113/`.
