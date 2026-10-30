@@ -92,8 +92,9 @@ moves the picture, not the instruments).
   of the screen; once per run, after a resize and on a HUD mode change), takes the tracking framing for the car where
   it is, trucks it so the car stands left of centre with the flight ahead, and fits it (`fitCarry`): the car's centre
   under the top line and the row's near foot over the band, by pitching within the band and, only where the span is
-  taller than the band, standing back about the car–row midpoint (≤ 2.5×). It re-places on the far edge or when a
-  placement 1.4× closer is possible (≥ 0.6 s apart). Past the row's back it cuts to the old tracking follow, so the
+  taller than the band, standing back about the car–row midpoint (≤ 2.5×). It re-places only if the car's nose nears the
+  far edge (a narrow screen, a long flight). Cutting in closer as the car came down was tried and dropped: the
+  closer car swept the still frame faster (show-live-jets car 295 / 313‰, over budget). Past the row's back it cuts to the old tracking follow, so the
   touchdown frames are main's. Where the framing already fit nothing moves; upright, the row's near foot is now kept
   on screen.
 - Row under the HUD, worst frame, car z −9 → −22.6 (`frame-probe.js`, each body's box, 16×16 samples): 0 % at every
