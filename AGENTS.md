@@ -85,6 +85,22 @@ mark, and air left in the tanks.
 3. **Own origin only.** Everything is bundled (fonts via `@fontsource`), and the only API is
    `/coldgas/api/*`. No third-party hosts, analytics, trackers or CDNs. The smoke test fails on
    any non-localhost request. No accounts and no personal data. Initials are 3 letters.
+   **One exception: ads (the owner's decision, 2026-10-30, "split by audience").** The page may load
+   Marquee's same-origin loader `/ads/v1/ads.js` (the Marquee Worker beside ours on mutaafaziz.com, so
+   this one URL is root-absolute, an exception to 3.2) through `src/ads.js` only, with `data-app="coldgas"`
+   and the slots `title:banner:menu`, `postrun:interstitial:menu` and `reroll:rewarded:menu`. Rules:
+   - **No ads during a run.** Nothing in the countdown, a live run, a drill or Free Drive/the Sandbox: the
+     banner is on the title, the interstitial fires only when a results sheet is left (Retry/Home) after the
+     judges have spoken, never after the first run of a session and at most once per 3 minutes.
+   - **Google ads (via Marquee) appear only in menu contexts.** Every slot is declared `menu`; never declare
+     a `gameplay` slot.
+   - **Rewarded is opt-in only:** the player presses "Watch an ad · ask the panel again"; the reward is fresh
+     words from the panel, never a score (5). The button is hidden when the slot can't fill.
+   - **Never block the game on an ad:** every call resolves at once with no fill; `beforeAd` holds the
+     replay and the audio, `afterAd` resumes them; a missing `window.marquee` is a no-op.
+   - The loader is fetched only off localhost (or with `?marquee=`), so the smoke test's own-origin rule still
+     holds locally; `tests/e2e/ads.spec.js` proves no ad call fires during a run.
+   No other third party, analytics or tracker is allowed by this.
 4. **Determinism and realism.** `src/sim/*` is pure. Its rigid-body engine is Rapier's
    cross-platform-deterministic WASM build (docs/PHYSICS_ENGINE.md: bit-identical in Node,
    Chromium, WebKit and workerd; re-run `scripts/engine-determinism.mjs` and
@@ -284,6 +300,8 @@ src/pace.js           the title draws at ~30 fps (pure pacer, 0049); the shadow 
 src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry
 src/wake.js           the screen wake lock (0060): held through a run, the judging and the replay, asked again on return;
                         main.js syncLife() also suspends the audio when paused, hidden or idle on the title
+src/ads.js            Marquee ads between runs only (§3.3's exception): loader on production, title banner,
+                        postrun interstitial, opt-in reroll rewarded; a no-op without window.marquee
 src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: errors, rejections, traps,
                         lost context, shaders, fetches, lazy imports, audio; frames; beacons) ·
                         signature.js (stable ids, shared with the Worker) · frames.js (ring +
@@ -429,7 +447,7 @@ prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.
 - Acceptance criteria met, and tests added or updated (unit for sim/scoring, e2e for flows).
 - `npm run check` is green locally or in CI.
 - Works at 390×844 touch and 1280×720 keyboard.
-- No new runtime hosts, no brand names, no per-frame allocations.
+- No new runtime hosts (Marquee's same-origin `/ads/` is the one allowed, §3.3), no brand names, no per-frame allocations.
 - Rendering, camera or effects changed → `flicker-budget` passes for both screens of your label
   (`--gl=swiftshader` in a sandbox, about an hour a screen; `--only=` the scenarios you touched when short).
 - Sim or scoring outcome changed → `SIM_VERSION` bumped and noted in the CHANGELOG.
