@@ -276,6 +276,10 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
 // shows), at COMPUTE (every panel up, the stream on its glass), no motion. On a phone it is measured
 // again with the Rookie row (0076) in its bar.
 async function measureTheatre(page, vpName) {
+  // Where the theatre would cover the score, the call runs docked on the sheet's strip (audit 2026-10-30):
+  // "Watch the call" puts the theatre up, as a player would.
+  await page.waitForFunction(() => { const w = document.querySelector('[data-call-watch]'); const t = document.querySelector('[data-theatre]'); return (w && w.offsetParent) || (t && !t.hidden); }, null, { timeout: ms(60000) }).catch(() => {});
+  await page.evaluate(() => { const w = document.querySelector('[data-call-watch]'); if (w && w.offsetParent) w.click(); });
   const up = await page.waitForFunction(() => { const t = document.querySelector('[data-theatre]'); return t && !t.hidden && t.classList.contains('on') && t.querySelector('.th-rail'); }, null, { timeout: ms(60000) }).then(() => true).catch(() => false);
   if (!up) { missed.push(`${vpName} 10-theatre`); console.log('  missed the theatre'); return; }
   await page.waitForTimeout(ms(900));   // its fade-in

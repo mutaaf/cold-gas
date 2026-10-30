@@ -152,27 +152,78 @@ test('board: a slow Today asked first never overwrites All time asked after it',
   await expect(page.locator('[data-board="all"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('double-click Submit posts once', async ({ page }) => {
-  let posts = 0;
+// Post sits beside Retry (audit 2026-10-30): the first time, three letters right there; a double click posts once,
+// the rank shows inline, and the body is the run's log and telemetry, never a score.
+test('double-click Post posts once, with the run\'s telemetry and no score', async ({ page }) => {
+  let posts = 0, sent = null;
   await page.route(/\/api\/scores$/, async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     posts++;
+    sent = route.request().postDataJSON();
     await new Promise((r) => setTimeout(r, 800));
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, rank: 3 }) });
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rank: 3, card: { total: 94 }, course: 'show', tier: 'assist' }) });
   });
   await page.route(/\/api\/judge\/stream$/, (route) => route.abort());
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
-  await page.evaluate(() => { window.__coldgas.startRun('jump'); window.__coldgas.fastForward(); });
+  // A jump of the player's own, flown by the reference pilot (a board jump: it lands).
+  await page.evaluate(() => {
+    const g = window.__coldgas;
+    g.startRun('jump'); g.S.autopilot = g.createAutopilot(g.stage.course); g.skipCountdown();
+    for (let i = 0; i < 4000 && g.S.run.phase !== 'done'; i++) g.liveStep(0.05);
+    g.S.autopilot = null;
+    g.fastForward();
+  });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
   await expect(page.locator('[data-theatre]')).toBeHidden({ timeout: 30_000 });
-  await page.locator('#initials').fill('ABC');
-  const btn = page.locator('[data-r-submit] button[type="submit"]');
+  const btn = page.locator('[data-r-post-btn]');
+  await expect(btn).toBeVisible();
+  await page.locator('#initials').fill('abc');
   await btn.dblclick();
-  await expect(page.locator('[data-r-submit-msg]')).toHaveText(/Posted\. #3 today\./, { timeout: 10_000 });
-  await btn.click();
-  await expect(page.locator('[data-r-submit-msg]')).toHaveText('Already posted.');
+  await expect(page.locator('[data-r-submit-msg]')).toHaveText('Posted · #3 today', { timeout: 10_000 });
+  await expect(btn).toBeHidden();
   expect(posts).toBe(1);
+  expect(sent).toMatchObject({ initials: 'ABC', course: 'show' });
+  expect(sent.t.course).toBe('show');
+  expect(Array.isArray(sent.log)).toBe(true);
+  expect(sent).not.toHaveProperty('total');
+  expect(sent).not.toHaveProperty('assist');
+  // Remembered: the next jump's sheet offers "Post · ABC" in one tap.
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_initials'))).toBe('ABC');
+});
+
+// Home with an unposted board jump asks once, inline (no browser dialog); Leave goes, a second Home goes at once.
+// Escape on the results never goes Home.
+test('Home asks once before an unposted board jump is left; Escape stays', async ({ page }) => {
+  page.on('dialog', () => { throw new Error('no browser dialogs'); });
+  await page.route(/\/api\/judge\/stream$/, (route) => route.abort());
+  await page.goto('/coldgas/?gfx=low');
+  await ready(page);
+  const flyJump = () => page.evaluate(() => {
+    const g = window.__coldgas;
+    g.startRun('jump'); g.S.autopilot = g.createAutopilot(g.stage.course); g.skipCountdown();
+    for (let i = 0; i < 4000 && g.S.run.phase !== 'done'; i++) g.liveStep(0.05);
+    g.S.autopilot = null;
+    g.fastForward();
+  });
+  await flyJump();
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
+  await page.keyboard.press('Escape');
+  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('results');
+  await page.locator('.results .top-actions-row [data-home]').click();
+  await expect(page.locator('[data-leave]')).toBeVisible();
+  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('results');
+  await page.keyboard.press('Escape');   // closes the question, stays
+  await expect(page.locator('[data-leave]')).toBeHidden();
+  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('results');
+  await page.keyboard.press('KeyH');      // asked once already: H goes
+  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
+  // A second jump: the question, then Leave.
+  await flyJump();
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
+  await page.locator('.results .top-actions-row [data-home]').click();
+  await page.locator('[data-leave-go]').click();
+  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
 });
 
 test('the boot watchdog offers a reload when the game never wires its title', async ({ page }) => {
