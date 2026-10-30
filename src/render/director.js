@@ -19,7 +19,7 @@
 // toward the pad read at a glance.
 import * as THREE from 'three';
 import { LINEUP, WALL, SHOW } from '../sim/courses.js';
-import { hudMode } from '../hud-mode.js';
+import { hudMode, onHudMode } from '../hud-mode.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
 const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
@@ -144,38 +144,63 @@ export function createDirector(camera) {
     const ndc = (y) => 1 - (2 * (y - c.top)) / c.height;
     for (const el of document.querySelectorAll(HUD_SEL)) {
       const r = el.getBoundingClientRect();
-      if (r.width <= 1 || r.height <= 1 || el.closest('[hidden]') || getComputedStyle(el).visibility === 'hidden') continue;
-      if (r.top + r.bottom < 2 * c.top + c.height) st.bandT = Math.min(st.bandT, ndc(r.bottom + 24));
-      else if (r.right > c.left + c.width * 0.15 && r.left < c.left + c.width * 0.85) st.bandB = Math.max(st.bandB, ndc(r.top));
+      if (r.width <= 1 || r.height <= 1 || !shown(el)) continue;
+      // Up top only the mission block and the top bar count (the side instruments stand beside the car, not over it);
+      // at the bottom whatever stands across the middle of the screen, where the row is.
+      const top = r.top + r.bottom < 2 * c.top + c.height;
+      if (top && (el.dataset.hudBox === 'mission' || el.classList.contains('top-actions'))) st.bandT = Math.min(st.bandT, ndc(r.bottom + 24));
+      else if (!top && r.right > c.left + c.width * 0.15 && r.left < c.left + c.width * 0.85) st.bandB = Math.max(st.bandB, ndc(r.top));
     }
   }
+  const shown = (el) => {
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (e.hidden) return false;
+      const cs = getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.05) return false;
+    }
+    return true;
+  };
+  onHudMode(() => { bandDirty = true; });   // compact ⇄ full reflows the boxes without a resize
   // After the carry has looked where it wants (want, lookWant), fit the car and the row between those lines: the car's
   // centre under the top line, the row's near foot over the bottom band. A framing that already fits is left as it is
   // (the upright phone, whose HUD is at the top); one that needs it is pitched within the band, and where the span
   // from the car to the row's foot is taller than the band at this lens the camera stands back, about the middle of
   // the two, just as far as it needs. All from the car's state alone, so the move is as smooth as the car.
+  // A point's angle above the camera's level line, from `want`, with its depth along the shot's bearing (ux, uz), so a
+  // point off to the side comes out lower as it does on the screen (rad).
+  let ux = 0, uz = -1;
+  const elev = (x, y, z) => Math.atan2(y - want.y, Math.max(0.5, (x - want.x) * ux + (z - want.z) * uz));
+  const bearing = () => {   // sets (ux, uz) from want toward lookWant; returns that horizontal distance
+    const d = Math.hypot(lookWant.x - want.x, lookWant.z - want.z);
+    if (d >= 0.5) { ux = (lookWant.x - want.x) / d; uz = (lookWant.z - want.z) / d; }
+    return d;
+  };
+  const footElev = (z) => Math.min(elev(ROW_X, 0, z), elev(ROW_X, 0, ROW_Z0), elev(ROW_X, 0, ROW_Z1));
   const FIT_CAR = 0.06, FIT_ROW = 0.04;   // NDC margins: the car under the top line, the row's foot over the band
+  // The farthest it stands back, × the shot's distance (the 300 px-tall flip screen sideways needs ≈ 1.9×, a desktop ≈ 1.35×).
+  const FIT_BACK = 2.5;
   function fitCarry(carPos) {
     if (bandDirty) measureBand();
     const T = Math.tan(st.fov * Math.PI / 360);
     const tN = Math.min(topLine(), st.bandT) - FIT_CAR, bN = st.bandB + FIT_ROW;
     if (tN - bN < 0.2) return;
     const aC = Math.atan(tN * T), aB = Math.atan(bN * T), span = aC - aB;   // the angles the band allows
-    // The row's foot nearest the camera: the bottom of its near side, level with the camera along the row.
-    const bx = ROW_X, bz = clamp(want.z, ROW_Z0, ROW_Z1);
-    const elev = (x, y, z) => Math.atan2(y - want.y, Math.hypot(x - want.x, z - want.z));
-    let eC = elev(carPos.x, carPos.y, carPos.z), eB = elev(bx, 0, bz);
-    if (eC - eB > span) {
-      const s = Math.tan((eC - eB) / 2) / Math.tan(span / 2);
-      const mx = (carPos.x + bx) / 2, my = carPos.y / 2, mz = (carPos.z + bz) / 2;
-      want.set(mx + (want.x - mx) * s, my + (want.y - my) * s, mz + (want.z - mz) * s);
-      eC = elev(carPos.x, carPos.y, carPos.z); eB = elev(bx, 0, bz);
-    }
-    // The pitch: as the shot had it, within [car on the top line, foot on the bottom line] (their middle if they cross).
-    const dh = Math.hypot(lookWant.x - want.x, lookWant.z - want.z);
+    // The row's foot: the bottom of its near side, at the camera's own place along the row or at whichever end sits lower.
+    const bz = clamp(want.z, ROW_Z0, ROW_Z1);
+    let dh = bearing();
     if (dh < 0.5) return;
+    const phi0 = Math.atan2(lookWant.y - want.y, dh);   // the shot's own pitch
+    let eC = elev(carPos.x, carPos.y, carPos.z), eB = footElev(bz);
+    if (eC - eB > span) {
+      const s = Math.min(FIT_BACK, Math.tan((eC - eB) / 2) / Math.tan(span / 2));
+      const mx = (carPos.x + ROW_X) / 2, my = carPos.y / 2, mz = (carPos.z + bz) / 2;
+      want.set(mx + (want.x - mx) * s, my + (want.y - my) * s, mz + (want.z - mz) * s);
+      dh = bearing();
+      eC = elev(carPos.x, carPos.y, carPos.z); eB = footElev(clamp(want.z, ROW_Z0, ROW_Z1));
+    }
+    // The pitch: the shot's, within [car on the top line, foot on the bottom line] (their middle if they cross).
     const lo = eC - aC, hi = eB - aB;
-    const phi = lo > hi ? (lo + hi) / 2 : clamp(Math.atan2(lookWant.y - want.y, dh), lo, hi);
+    const phi = lo > hi ? (lo + hi) / 2 : clamp(phi0, lo, hi);
     lookWant.y = want.y + dh * Math.tan(phi);
   }
 
