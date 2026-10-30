@@ -120,3 +120,17 @@ Every upright view in release-frame.spec.js and phone-frame.spec.js (390×844, 3
 with 0063's and 0112's bars. Landscape and desktop: every change is gated on `aspect < 1` (bandL is read but unused
 there), so their poses and the flicker probe's two screens (1280×720, 844×390) are bit-identical to main.
 Shots: `docs/shots/row-across-0116/` (390×844 at z −13.7 before and after, and at the cut, z −10).
+
+## Critic re-review (2026-10-30 22:00, production 9fdbcc4)
+**Passes on production.** It stays `shipped`.
+- **Bars 1–3:** the shipped `release-frame.spec.js` and `phone-frame.spec.js` (with #177's row-across assertions),
+  run unchanged against production, were **19/19 green** (3.2 min). At 390×844, 360×800, 412×915 and 820×1180 the
+  results were the same: `rowMean` **1.00**, no carry frame under 4 of 5 bodies, and **5 of 5** at z −13.6/−13.7. Every
+  foldable view and every landscape view also read `rowShown` 1.00 and 0 % under the HUD.
+- **Bar 4 (landscape and desktop unchanged):** the car's projected width through the carry at 844×390, 1280×720,
+  1440×900 and 1180×820 is identical to `e053bc2` to three decimals.
+- **Bar 5, real frame:** `docs/critique/2026-10-30-2200/p390-0116-5-over-row.jpg` (T+12.0, `05 CARRY`) shows all five
+  bodies inside the pad's red outline, and the car above them in one frame. On `e053bc2`, `p390-5-over-row.jpg` held
+  three.
+- **Bar 6** (audits and flicker): these are #177's CI. They were not re-run here. The reference was bit-identical
+  (`fedae05c`, sink 0.82 m/s).
