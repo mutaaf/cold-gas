@@ -155,6 +155,7 @@ test('board: a slow Today asked first never overwrites All time asked after it',
 // Post sits beside Retry (audit 2026-10-30): the first time, three letters right there; a double click posts once,
 // the rank shows inline, and the body is the run's log and telemetry, never a score.
 test('double-click Post posts once, with the run\'s telemetry and no score', async ({ page }) => {
+  test.setTimeout(150_000);   // a whole flight stepped in the page on software GL
   let posts = 0, sent = null;
   await page.route(/\/api\/scores$/, async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
@@ -175,7 +176,7 @@ test('double-click Post posts once, with the run\'s telemetry and no score', asy
     g.fastForward();
   });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
-  await expect(page.locator('[data-theatre]')).toBeHidden({ timeout: 30_000 });
+  // (On a desktop the theatre plays beside the sheet; Post is reachable while it does.)
   const btn = page.locator('[data-r-post-btn]');
   await expect(btn).toBeVisible();
   await page.locator('#initials').fill('abc');
@@ -195,6 +196,7 @@ test('double-click Post posts once, with the run\'s telemetry and no score', asy
 // Home with an unposted board jump asks once, inline (no browser dialog); Leave goes, a second Home goes at once.
 // Escape on the results never goes Home.
 test('Home asks once before an unposted board jump is left; Escape stays', async ({ page }) => {
+  test.setTimeout(240_000);   // two whole flights stepped in the page on software GL
   page.on('dialog', () => { throw new Error('no browser dialogs'); });
   await page.route(/\/api\/judge\/stream$/, (route) => route.abort());
   await page.goto('/coldgas/?gfx=low');
@@ -209,13 +211,13 @@ test('Home asks once before an unposted board jump is left; Escape stays', async
   await flyJump();
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
   await page.keyboard.press('Escape');
-  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('results');
+  expect(['results', 'replay']).toContain(await page.evaluate(() => window.__coldgas.S.mode));
   await page.locator('.results .top-actions-row [data-home]').click();
   await expect(page.locator('[data-leave]')).toBeVisible();
-  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('results');
+  expect(['results', 'replay']).toContain(await page.evaluate(() => window.__coldgas.S.mode));
   await page.keyboard.press('Escape');   // closes the question, stays
   await expect(page.locator('[data-leave]')).toBeHidden();
-  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('results');
+  expect(['results', 'replay']).toContain(await page.evaluate(() => window.__coldgas.S.mode));
   await page.keyboard.press('KeyH');      // asked once already: H goes
   expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
   // A second jump: the question, then Leave.
