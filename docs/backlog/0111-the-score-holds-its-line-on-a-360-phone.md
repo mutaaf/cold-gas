@@ -1,12 +1,12 @@
 ---
 id: 0111
 title: The score and the verdict hold their lines on a 360 px phone
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: platform
 created: 2026-10-28
-pr:
+pr: 173
 by: critic
 ---
 

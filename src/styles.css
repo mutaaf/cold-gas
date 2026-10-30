@@ -154,10 +154,14 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .sheet.narrow { width: min(440px, calc(100vw - 32px)); }
 @keyframes slide { from { opacity: 0; transform: translateX(40px); } to { opacity: 1; transform: none; } }
 .sheet h2 { margin: 0; font: 400 22px/1.2 var(--display); letter-spacing: 0.04em; }
-.total-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: 22px; border-bottom: 1px solid var(--hair-2); }
+.total-row { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 6px 16px; padding-bottom: 22px; border-bottom: 1px solid var(--hair-2); }
 .verdict { font: 400 clamp(22px, 3vw, 30px)/1.1 var(--display) !important; }
 .total b { font: 200 64px/0.9 var(--text); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
 .total span { font: 400 13px/1 var(--mono); color: var(--ink-3); margin-left: 6px; }
+/* `/ 100` never breaks from its number. When the verdict and the total don't fit side by side, by the row's
+   own width (a 360 px phone, a fold's half, a drill's long headline), the verdict takes the line above, whole,
+   and the total keeps its own on the right; where they fit, as before (0111). */
+.total { flex: none; margin-left: auto; white-space: nowrap; }
 .judges { list-style: none; margin: 0; padding: 0; }
 .judges li { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: 15px 0; border-bottom: 1px solid var(--hair-2); opacity: 0; animation: rise 0.7s var(--ease) both; }
 .judges .who { font: 500 12px/1.2 var(--text); letter-spacing: 0.04em; }
