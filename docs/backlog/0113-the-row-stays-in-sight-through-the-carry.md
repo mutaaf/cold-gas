@@ -1,7 +1,7 @@
 ---
 id: 0113
 title: The parked row stays in sight through the carry, above the HUD, on a landscape phone and the desktop
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: platform
