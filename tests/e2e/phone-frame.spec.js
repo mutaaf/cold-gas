@@ -20,6 +20,10 @@ releaseFrameTests([
   // under a 56 px top bar).
   { name: 'flip cover 360×380', viewport: { width: 360, height: 380 }, minTop: 50, ...T },   // the rail's head rides in the top bar here
   { name: 'flip sideways 800×300', viewport: { width: 800, height: 300 }, ...T },
+  // 0116: the upright phones the critic measured beside 390×844 (release-frame.spec.js), where the carry showed three of
+  // the row's five bodies; every upright view above and there holds the row-across bars too.
+  { name: 'phone 360×800', viewport: { width: 360, height: 800 }, ...T },
+  { name: 'phone 412×915', viewport: { width: 412, height: 915 }, ...T },
 ]);
 
 // 0068's replay on the book-style fold: open (669×871, 951×589) the results take the whole screen in two
