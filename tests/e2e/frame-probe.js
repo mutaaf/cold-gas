@@ -36,7 +36,7 @@ export function fly() {
   };
   const overlap = (b, r) => Math.max(0, Math.min(b.x1, r.right) - Math.max(b.x0, r.left)) * Math.max(0, Math.min(b.y1, r.bottom) - Math.max(b.y0, r.top));
   const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity, overRow: 0, noRoof: [], carry: 0, rowCover: 0, rowCoverAt: '', rowCovered: [], rowShown: 1,
-    rowMean: 0, fewBodies: [], midBodies: 0, midZ: Infinity };
+    rowMean: 0, fewBodies: [], midBodies: 0, midZ: Infinity, bodies: 0 };
   // The parked row as it stands (each vehicle's footprint and height), and the stretch it covers.
   const row = S.run.car.world.bodies.map((b) => ({ x0: b.cx - b.hx, x1: b.cx + b.hx, z0: b.cz - b.hz, z1: b.cz + b.hz, h: b.h }));
   const rowZ0 = Math.min(...row.map((b) => b.z0)), rowZ1 = Math.max(...row.map((b) => b.z1));
@@ -133,6 +133,7 @@ export function fly() {
   }
   S.paused = false;
   out.rowMean = out.carry ? rowSum / out.carry : 0;
+  out.bodies = row.length;
   out.phase = S.run.phase;
   return out;
 }
@@ -182,7 +183,7 @@ export function releaseFrameTests(VIEWS) {
       else {
         expect(r.rowMean, 'row on screen, mean over the carry').toBeGreaterThanOrEqual(0.9);
         expect(r.fewBodies, 'carry frames with fewer than four bodies half on screen').toEqual([]);
-        expect(r.midBodies, `bodies half on screen at z ${r.midZ.toFixed(1)}`).toBe(5);
+        expect(r.midBodies, `bodies half on screen at z ${r.midZ.toFixed(1)}`).toBe(r.bodies);
       }
       expect(errors).toEqual([]);
       await page.close();
