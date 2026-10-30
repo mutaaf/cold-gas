@@ -157,7 +157,14 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .total-row { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; padding-bottom: 22px; border-bottom: 1px solid var(--hair-2); }
 .verdict { font: 400 clamp(22px, 3vw, 30px)/1.1 var(--display) !important; }
 .total b { font: 200 64px/0.9 var(--text); letter-spacing: -0.03em; font-variant-numeric: tabular-nums; }
+.total { flex: none; white-space: nowrap; }   /* `/ 100` never breaks from its number (0111) */
 .total span { font: 400 13px/1 var(--mono); color: var(--ink-3); margin-left: 6px; }
+/* Under 375 px the verdict and the total don't share a line: the verdict gives way, whole, to a line above and
+   the total keeps its own, right (0111). A short verdict never breaks at its space; the longest wraps in a line of its own. */
+@media (max-width: 374px) {
+  .total-row { flex-wrap: wrap; row-gap: 6px; }
+  .total-row > .total { margin-left: auto; }
+}
 .judges { list-style: none; margin: 0; padding: 0; }
 .judges li { display: grid; grid-template-columns: 1fr auto; gap: 4px 14px; padding: 15px 0; border-bottom: 1px solid var(--hair-2); opacity: 0; animation: rise 0.7s var(--ease) both; }
 .judges .who { font: 500 12px/1.2 var(--text); letter-spacing: 0.04em; }
