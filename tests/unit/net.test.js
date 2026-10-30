@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchWithDeadline, withDeadline, isTimeout, isAbort, lazyOnce, judgesOverran, JUDGES_FAIR_MS } from '../../src/net.js';
+import { fetchWithDeadline, withDeadline, isTimeout, isAbort, lazyOnce, reimport, judgesOverran, JUDGES_FAIR_MS } from '../../src/net.js';
 import { decideReload, entryOf, RELOAD_GAP_MS } from '../../src/obs/reload.js';
 import { createIdbCache } from '../../src/world/cache.js';
 import { boardRow } from '../../src/panel.js';
@@ -163,6 +163,33 @@ describe('lazyOnce', () => {
     await expect(get()).rejects.toBe(err);
     expect(await get()).toBe('mod');
     expect(seen).toEqual([null, err]);
+  });
+});
+
+describe('reimport', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  it('first time, or an error naming no script (WebKit), just asks again', async () => {
+    const again = vi.fn(async () => 'mod');
+    expect(await reimport(null, again)).toBe('mod');
+    expect(await reimport(new TypeError('Importing a module script failed.'), again)).toBe('mod');
+    expect(again).toHaveBeenCalledTimes(2);
+  });
+  it('a script on another origin is never imported by URL', async () => {
+    vi.stubGlobal('location', { origin: 'https://mutaafaziz.com' });
+    const again = vi.fn(async () => 'mod');
+    expect(await reimport(new TypeError('Failed to fetch dynamically imported module: https://evil.example/x.js'), again)).toBe('mod');
+    expect(again).toHaveBeenCalledOnce();
+  });
+  it("a stylesheet Vite couldn't preload is taken out of the page, then the import asks again", async () => {
+    const href = 'https://mutaafaziz.com/coldgas/assets/layer-x.css';
+    const failedLink = { href, remove: vi.fn() }, other = { href: 'https://mutaafaziz.com/coldgas/assets/index-y.css', remove: vi.fn() };
+    vi.stubGlobal('location', { origin: 'https://mutaafaziz.com' });
+    vi.stubGlobal('document', { querySelectorAll: () => [failedLink, other] });
+    const again = vi.fn(async () => 'mod');
+    expect(await reimport(new Error(`Unable to preload CSS for ${href}`), again)).toBe('mod');
+    expect(failedLink.remove).toHaveBeenCalledOnce();
+    expect(other.remove).not.toHaveBeenCalled();
+    expect(again).toHaveBeenCalledOnce();
   });
 });
 

@@ -580,15 +580,29 @@ document.querySelector('[data-adapt-go]').addEventListener('click', () => {
 });
 
 const theatreRoot = document.querySelector('[data-theatre]');
+// A lazy chunk, asked again after a failure past the browser's memory of it (reimport, 0057). A retry that
+// fails too is recorded, and on the title the page reloads (heal: only online, with the origin answering,
+// once per 2 min): a shared chunk the retry can't re-ask poisons every later import until a reload.
+// (`report: false` where the caller reports the failure itself: the judges.)
+function lazyChunk(failed, load, { report = true } = {}) {
+  return reimport(failed, load).catch((err) => {
+    if (failed) {
+      // (After the first failure's build check, if it's still asking: a decision in flight is single.)
+      try { if (S.mode === 'title') Promise.resolve(heal.deciding).then(() => { if (S.mode === 'title') heal.reloadOnce('a lazy chunk failed again on a retry'); }); } catch { /* heal not installed yet */ }
+      if (report) obs.lazyFailed(err);
+    }
+    throw err;
+  });
+}
 // The judges' chunk, fetched once while the title idles or as the first run starts (0083): a deploy
 // 404s every chunk of the old build, so a page that asked for it only at the results lost its judges.
 // One promise for the session; a failed or stalled fetch is dropped, so the next run asks again.
-let judgesChunk = null, judgesOk = false, judgesWarmed = false;
+let judgesChunk = null, judgesOk = false, judgesWarmed = false, judgesFailed = null;
 function judgesMod() {
   if (!judgesChunk) {
-    const p = import('./ai/theatre.js');
+    const p = lazyChunk(judgesFailed, () => import('./ai/theatre.js'), { report: false });
     judgesChunk = p;
-    p.then(() => { judgesOk = true; }, () => { if (judgesChunk === p) judgesChunk = null; });
+    p.then(() => { judgesOk = true; judgesFailed = null; }, (err) => { judgesFailed = err; if (judgesChunk === p) judgesChunk = null; });
   }
   return judgesChunk;
 }
@@ -1750,7 +1764,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) pause
 // --- Free Drive (a lazy chunk: real roads from open data, src/drive/) ------------------------------
 // A failed fetch of the chunk is forgotten: the next press asks again (0057).
 let drive = null;
-const loadDrive = lazyOnce((failed) => reimport(failed, () => import('./drive/index.js')).then((mod) => {
+const loadDrive = lazyOnce((failed) => lazyChunk(failed, () => import('./drive/index.js')).then((mod) => {
   drive = mod.createDrive({
     stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
     audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun, driving: drivingSettings, setDriving, onDriving, onPadY },
@@ -1766,7 +1780,7 @@ on('[data-drive-open]', () => { cancelPendingStart(); loadDrive().then((d) => d.
 let sandbox = null;
 // Whichever driving world is live: the Sandbox or Free Drive.
 function fd() { return sandbox?.active ? sandbox : drive; }
-const loadSandbox = lazyOnce((failed) => reimport(failed, () => import('./build/sandbox.js')).then((mod) => {
+const loadSandbox = lazyOnce((failed) => lazyChunk(failed, () => import('./build/sandbox.js')).then((mod) => {
   sandbox = mod.createSandbox({
     stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse, CAR,
     audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun },

@@ -79,10 +79,16 @@ export function lazyOnce(load) {
 
 // Chromium keeps a failed dynamic import in its module map: the same URL fails again at once, with no
 // request. So a retry asks for the URL the error names (Chromium, Firefox) with a query, a fresh fetch and
-// a fresh module record; an error that names none (WebKit) just asks again.
+// a fresh module record; an error that names none (WebKit) just asks again. A stylesheet Vite couldn't
+// preload stays in the page as a failed <link>, and Vite skips any href already there: it's taken out first,
+// so the retry's preload asks for it again. (A shared chunk the root imports can't be re-asked this way:
+// Chromium names the root, and the copy's imports hit the remembered failure. Only a reload cures that.)
 export function reimport(failed, again) {
-  const url = /https?:\/\/[^\s'"]+\.js/.exec(String(failed?.message || ''))?.[0];
-  if (!failed || !url || new URL(url).origin !== globalThis.location?.origin) return again();
+  const msg = String(failed?.message || '');
+  const css = /Unable to preload CSS for (\S+)/.exec(msg)?.[1];
+  if (css) for (const l of globalThis.document?.querySelectorAll('link[rel="stylesheet"]') ?? []) if (l.href === css) l.remove();
+  const url = css ? null : /https?:\/\/[^\s'"]+\.js/.exec(msg)?.[0];
+  if (!url || new URL(url).origin !== globalThis.location?.origin) return again();
   return import(/* @vite-ignore */ `${url}?retry=${Date.now()}`);
 }
 
