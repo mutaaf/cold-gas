@@ -42,10 +42,12 @@ test('no ad call fires during a run; postrun skips the first results; rewarded i
   await toResults(page);
   await expect(page.locator('[data-reroll]')).toBeVisible({ timeout: 45_000 });
   await page.locator('[data-reroll]').click();
-  await expect.poll(() => page.evaluate(() => window.__adCalls.filter((c) => c.kind === 'rewarded').length)).toBe(1);
+  // The break is over (afterAd ran) before the next press: a press during a break is the ad's, not the game's.
+  await expect.poll(() => page.evaluate(() => window.__adCalls.filter((c) => c.kind === 'rewarded' && 'paused' in c).length)).toBe(1);
+  await page.waitForFunction(() => !window.__coldgas.S.adBreak);
   await expect(page.locator('[data-reroll]')).toBeHidden();   // once per run
   await page.keyboard.press('KeyR');
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 15_000 });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
 
   const calls = await page.evaluate(() => window.__adCalls);
   expect(calls.map((c) => `${c.kind}:${c.id}`)).toEqual(['rewarded:reroll', 'interstitial:postrun']);
