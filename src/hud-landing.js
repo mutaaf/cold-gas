@@ -42,11 +42,24 @@ export function createLandingHud({ scene, onStatus = null }) {
   let TAPE_MAX = tapeMax();
   const yOf = (h) => (TAPE_H - Math.max(0, Math.min(TAPE_MAX, h)) * (TAPE_H / TAPE_MAX)).toFixed(1);
   const topEl = $('[data-d-top]'), zeroEl = $('[data-d-zero]');
+  // The scale labels' boxes and BRAKE's own extent, in the tape's units (0055): read when the tape's layout
+  // changes (its size follows every HUD mode and screen rule that resizes its type), never per frame.
+  const geo = { ok: false, asc: 0, desc: 0, topBottom: 0, zeroTop: TAPE_H };
+  const measure = () => {
+    geo.ok = false;
+    if (!el.brakeLbl?.getBBox || !topEl || !zeroEl) return;
+    const b = el.brakeLbl.getBBox(), t = topEl.getBBox(), z = zeroEl.getBBox(), y = Number(el.brakeLbl.getAttribute('y'));
+    if (!(b.height > 0 && t.height > 0 && z.height > 0)) return;   // not laid out (the descent is hidden)
+    geo.asc = y - b.y; geo.desc = b.y + b.height - y; geo.topBottom = t.y + t.height; geo.zeroTop = z.y;
+    geo.ok = true;
+  };
+  const tape = el.brakeLbl?.ownerSVGElement;
+  if (tape && typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { geo.ok = false; last.brake = -1; }).observe(tape);
   const scale = () => {
     TAPE_MAX = tapeMax();
     if (topEl) topEl.textContent = isMetric() ? '30' : '100';
     if (zeroEl) zeroEl.textContent = `0 ${lenUnit()}`;
-    last.sink = -1; last.target = -1; last.brake = -1; last.car = -1;
+    last.sink = -1; last.target = -1; last.brake = -1; last.car = -1; geo.ok = false;
   };
   const s2 = { dsink: $('[data-2="dsink"]'), dtarget: $('[data-2="dtarget"]') }, l2 = { dsink: NaN, dtarget: NaN };
   const set2 = (key, si) => { const r = Math.round(si * uk('rate', true) * 10); if (r !== l2[key] && s2[key]) { s2[key].textContent = `${(r / 10).toFixed(1)} ${uu('rate', true)}`; l2[key] = r; } };
@@ -122,11 +135,13 @@ export function createLandingHud({ scene, onStatus = null }) {
     if (by !== last.brake) {
       const y = yOf(by / 2);
       el.brakeLine.setAttribute('y1', y); el.brakeLine.setAttribute('y2', y);
-      el.brakeLbl.setAttribute('y', String(Number(y) - 6));
       el.fill.setAttribute('y', y); el.fill.setAttribute('height', String(Math.max(0, TAPE_H - Number(y))));
       const up = pr.brakeBy > TAPE_MAX;
       brakeWord.textContent = up ? 'BRAKE ↑' : 'BRAKE';
       brakeDist.textContent = up ? '' : ` ${Math.ceil(pr.brakeBy * lenK())} ${lenUnit()} · ${Math.ceil(pr.brakeBy * uk('len', true))} ${uu('len', true)}`;
+      // The label over its tick, but never on the scale's labels: the tick stays true, the label moves.
+      if (!geo.ok) measure();
+      el.brakeLbl.setAttribute('y', (geo.ok ? brakeLabelY(Number(y), geo) : Number(y) - 6).toFixed(1));
       last.brake = by;
     }
     const ch = Math.round(Math.min(TAPE_MAX, h) * 4);
@@ -169,6 +184,16 @@ export function createLandingHud({ scene, onStatus = null }) {
 
   // `status()`: the band as shown (steady), for the HUD's other live cues (the one-thumb pad, the coach's pointer).
   return { update, show, prediction: pr, status: () => last.status || pr.status, marker: mk };
+}
+
+// Where BRAKE's label stands on the descent tape (0055): its baseline, in the tape's units (y down, 0 m at
+// TAPE_H). It sits 6 units over its tick, unless that puts it on a scale label: near the ground it stays
+// `gap` above "0 ft" (the top of its box, `zeroTop`), near the top `gap` below "100" (`topBottom`). `asc` and
+// `desc` are the label's own extent above and below its baseline.
+export function brakeLabelY(tick, { asc, desc, topBottom, zeroTop }, gap = 2) {
+  const want = tick - 6, lo = topBottom + gap + asc, hi = zeroTop - gap - desc;
+  if (lo > hi) return want;   // a tape too short for three labels: leave it where it was
+  return Math.min(hi, Math.max(lo, want));
 }
 
 // Roll rate about the car's long axis (rad/s): angular velocity · forward.

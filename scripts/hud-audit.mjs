@@ -170,6 +170,13 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
       const h = Math.min(a.r.y + a.r.h, b.r.y + b.r.h) - Math.max(a.r.y, b.r.y);
       if (w > 1 && h > 1) overlaps.push({ a: a.sel, b: b.sel, px: Math.round(w * h) });
     }
+    // The descent tape's labels among themselves (0055): BRAKE, the scale's top and "0 ft", the car's height.
+    const tape = [...document.querySelectorAll('.d-tape text')].filter(vis).map((el) => [['top', 'zero', 'brake-lbl', 'car-lbl'].find((k) => el.hasAttribute(`data-d-${k}`)) || 'text', el.getBoundingClientRect()]);
+    for (let i = 0; i < tape.length; i++) for (let j = i + 1; j < tape.length; j++) {
+      const [ka, a] = tape[i], [kb, b] = tape[j];
+      const w = Math.min(a.right, b.right) - Math.max(a.left, b.left), h = Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top);
+      if (w > 1 && h > 1) overlaps.push({ a: `[data-d-${ka}]`, b: `[data-d-${kb}]`, px: Math.round(w * h) });
+    }
     // Off the glass: outside the viewport, or outside the panel the boxes live in (the theatre and the
     // pause sheet clip), whichever is tighter.
     const P = within ? document.querySelector(within).getBoundingClientRect() : { x: 0, y: 0, right: innerWidth, bottom: innerHeight };
