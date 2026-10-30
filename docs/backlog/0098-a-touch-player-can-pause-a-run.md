@@ -38,14 +38,14 @@ puts pause one tap away. This one makes you leave it.
 - index.html (the button), src/main.js (wire it, show/hide by mode), src/styles.css.
 
 ## Acceptance criteria
-- [ ] At 390×844, 844×390, 820×1180 and 1180×820 touch, in countdown and live (ground and air): exactly one
+- [x] At 390×844, 844×390, 820×1180 and 1180×820 touch, in countdown and live (ground and air): exactly one
       visible `[aria-label^="Pause"]` button, with a box ≥ 44 × 44 CSS px fully inside the viewport and the
       safe area. A tap pauses (`S.paused === true`, `[data-screen="pause"]` visible). A tap on Resume
       resumes.
-- [ ] Hidden (`getClientRects().length === 0`) on the title, the results and the replay.
-- [ ] At 1280×720 mouse, clicking it pauses, and it keeps no focus afterwards, as src/input.js wants for a
+- [x] Hidden (`getClientRects().length === 0`) on the title, the results and the replay.
+- [x] At 1280×720 mouse, clicking it pauses, and it keeps no focus afterwards, as src/input.js wants for a
       mouse click. Escape and P still toggle.
-- [ ] The Show reference paused mid-air with the button still scores 94.0, sink 0.817 m/s (determinism).
+- [x] The Show reference paused mid-air with the button still scores 94.0, sink 0.817 m/s (determinism).
 - [ ] 0063's in-frame measure is not worse: the car's centre is in the top 15 % in no more air frames than
       before at 390×844 (12 of 41 on `7866072`).
 - [ ] hud-audit and title-audit clean, and no flicker.mjs region rises.
@@ -58,3 +58,14 @@ button's box, tap it, assert paused, tap Resume, assert live. On the title and r
 ## Out of scope
 A confirm on Retry and Home mid-run (worth a look, but separate). The pause sheet's own layout (0092) and
 the HUD under it (0095).
+
+## Critic re-review 2026-10-30 09:45
+Passes on production `d87f057` (entry `index-D0wnJqDo.js`, identical to a local build of main;
+docs/critique/2026-10-30-0945.md). On the Show reference at 390×844, 844×390, 820×1180, 1180×820 and the flip's
+360×748 inner screen, touch: exactly one visible `[aria-label^="Pause"]`, 44×44 CSS px at y 16, inside the
+viewport, in the countdown and in the air. A real touch tap paused (`S.paused` true, the sheet shown), a tap on
+Resume resumed, and the run still scored 94.0 with a 0.8175 m/s touchdown at all five. No visible Pause on the title
+or the results (the replay and live-on-the-ground cases were not probed separately here; #169's `pause.spec.js` holds them). At 1280×720 mouse, a click paused, focus went into the sheet's dialog, and after Resume
+`document.activeElement` was `BODY`; P paused and Escape resumed. The 0063 in-frame count and the audits/flicker
+are #169's CI (main run 41008155007 green), not re-run here.
+
