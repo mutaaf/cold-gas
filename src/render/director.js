@@ -34,6 +34,11 @@ const HOLD_LOOK = [21, -4];         // aim: this height, this far ahead of the r
 const HOLD_MAX = 1.6;               // s: the latest the hold lasts
 // The hold cuts to the carry a metre before the car reaches the row, so the roofs are in shot over it.
 const ROW_FRONT = Math.max(...SHOW.boxes.map((b) => b.maxZ)) + 1;
+// The ground shots (the landed rig, a crash cut) are framed side-on to a 4.65 m car with a vertical lens, so on a
+// screen narrower than it is tall the car came out wider than the screen (0108: 1.2–1.45 screens upright on a
+// phone). Under this aspect they hold the horizontal lens they have at it, so the car keeps its share of the
+// width (at most ≈ 0.75 of it); at this aspect and wider the lens is unchanged.
+const LENS_ASPECT = 0.9;
 
 export function createDirector(camera) {
   const st = {
@@ -78,6 +83,7 @@ export function createDirector(camera) {
     camera.lookAt(st.lookS);
   }
   const fovTo = (f, dt, rate = 2) => { st.fov += (f - st.fov) * (1 - Math.exp(-dt * rate)); };
+  const lens = (f) => (camera.aspect >= LENS_ASPECT ? f : (Math.atan(Math.tan(f * Math.PI / 360) * LENS_ASPECT / camera.aspect) * 360) / Math.PI);
 
   // Keep the car out from under the HUD (0063): after a shot has looked where it wants, turn the camera
   // just enough that the car's centre is no higher than a quarter of the way down the frame (under the
@@ -240,7 +246,7 @@ export function createDirector(camera) {
       want.set(carPos.x + 6.5, 1.25, carPos.z - 9);
       lookWant.set(carPos.x, carPos.y + 0.2, carPos.z);
       ease(dt, 3, 8);
-      fovTo(40, dt);
+      fovTo(lens(40), dt);
     }
   }
 
@@ -347,8 +353,9 @@ export function createDirector(camera) {
       st.cutT -= dt;
       camera.position.copy(st.cutPos);
       camera.lookAt(carPos.x, carPos.y + 0.15, carPos.z);
-      st.fov = st.cutFov;
-      if (st.cutT <= 0) { st.shot = -1; snap(); }
+      st.fov = lens(st.cutFov);
+      // The Lineup's chase eases its lens back from the cut's, as it did before 0108 (not from the wider one).
+      if (st.cutT <= 0) { st.shot = -1; snap(); if (course === 'lineup') st.fov = st.cutFov; }
     } else if (course === 'wall' || course === 'show') {
       if (mode === 'title') (course === 'show' ? titleShow : titleWall)(time);
       else if (mode === 'replay') wallReplay(carPos, carVel, phase);

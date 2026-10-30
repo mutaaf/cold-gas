@@ -1,12 +1,12 @@
 ---
 id: 0108
 title: The touchdown and the wreck fit a portrait phone's width
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: platform
 created: 2026-10-28
-pr:
+pr: 170
 by: critic
 ---
 
@@ -84,3 +84,22 @@ valves-shut crash (docs/critique/2026-10-28-0950.md):
 
 The fix is still the same: hold a horizontal framing when the aspect is narrow. Every shape at aspect
 ≥ 0.75 already fits.
+
+## Shipped (2026-10-30, builder)
+`src/render/director.js` `lens()`: under aspect 0.9 the landed rig (40°) and the crash cut (42°) hold the horizontal
+lens they have at 0.9 (tan(v/2) × 0.9 / aspect); at 0.9 and wider nothing changes. The camera doesn't move, so the
+low, ahead-of-the-car composition stays and it can't be walked into the row or the Wall. `tests/e2e/touchdown-frame.spec.js`
+(0063's stepped probe from `t.touchTick` to the results, reference and valves-shut crash): before → after, box width / screen,
+min share on screen:
+
+| Viewport | Reference | Crash |
+|---|---|---|
+| 390×844 | 1.23–1.32, 0.76 → 0.66–0.77, 1.00 | 1.02–1.18, 0.85 → 0.53–0.59, 1.00 |
+| 360×748 | 1.18–1.27, 0.79 → 0.66–0.76, 1.00 | 0.98–1.14, 0.88 → 0.53–0.59, 1.00 |
+| 382×580 | 0.86–0.93, 0.94 → 0.66–0.72, 1.00 | 0.72–0.83 → 0.53–0.60, 1.00 |
+| 820×1180 | 0.82–0.88, 0.97 → 0.66–0.71, 1.00 | 0.68–0.78 → 0.53–0.60, 1.00 |
+| 669×871 | 0.74–0.79 → 0.66–0.70, 1.00 | 0.62–0.71 → 0.53–0.60, 1.00 |
+| 466×498 · 360×380 · 424×360 · 594×368 · 800×300 · 844×390 · 1440×900 · 1280×720 | unchanged (aspect ≥ 0.9) | unchanged |
+
+No frame at 390×844 had more than a tenth of the box under a HUD box or the top bar. The phone flicker probe runs at
+844×390 (aspect ≥ 0.9, the lens untouched), so flicker-budget can't move.
