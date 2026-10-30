@@ -12,7 +12,7 @@
 // only ever the daily salted hash in a rate-limit bucket (as for the judges), no user agent, no
 // headers read (so a BYOK `x-cg-key` can't reach a row), and every message is normalised and redacted
 // again here, whatever the client did.
-import { normMessage, redact, MODULE_IDS, KIND_IDS } from '../obs/signature.js';
+import { normMessage, redact, MODULE_IDS, KIND_IDS, PLAY_EVENTS } from '../obs/signature.js';
 import { EDGES, NB, percentile } from '../obs/frames.js';
 
 export const OBS_LIMITS = { maxBytes: 8192, maxErrs: 16, maxRec: 8, hourlyPerIp: 30, dailyCap: 3000, windowDays: 14 };
@@ -33,7 +33,9 @@ const cleanStack = (st) => (typeof st === 'string' ? st.split(' < ').slice(0, 6)
 export function cleanObs(b) {
   if (!b || typeof b !== 'object' || Array.isArray(b) || b.v !== 1) return null;
   if (typeof b.build !== 'string' || !BUILD_RE.test(b.build) || !DCS.includes(b.dc) || !TIERS.includes(b.tier)) return null;
-  const out = { build: b.build.toLowerCase(), dc: b.dc, tier: b.tier, first: b.first === true, errs: [], fr: null, rec: [], br: [] };
+  const out = { build: b.build.toLowerCase(), dc: b.dc, tier: b.tier, first: b.first === true, auto: b.auto === true, errs: [], fr: null, rec: [], br: [], play: {} };
+  if (b.play !== undefined && (!b.play || typeof b.play !== 'object' || Array.isArray(b.play))) return null;
+  for (const [k, n] of Object.entries(b.play || {})) if (PLAY_EVENTS.includes(k) && int(n, 1, 500)) out.play[k] = n;
   if (b.errs !== undefined && (!Array.isArray(b.errs) || b.errs.length > OBS_LIMITS.maxErrs)) return null;
   const seen = new Set();
   for (const e of b.errs || []) {
@@ -96,6 +98,9 @@ export async function postObs(req, env, ctx, { json, ipHash, day, hour }) {
   const evt = (name, n = 1) => st.push(db.prepare('INSERT INTO obs_evt (day, build, name, n) VALUES (?, ?, ?, ?) ON CONFLICT(day, build, name) DO UPDATE SET n = n + excluded.n').bind(d, b.build, name, n));
   evt('beacons');
   if (b.first) evt('sessions');
+  // Players vs automation (the agents' own browsers): the funnel counts people only.
+  if (b.first) evt(b.auto ? 'sessions:auto' : 'sessions:human');
+  if (!b.auto) for (const [k, n] of Object.entries(b.play)) evt(`play:${k}`, n);
   for (const e of b.errs) {
     st.push(db.prepare('INSERT INTO obs_err (day, build, sig, key, mod, kind, n, sessions, msg, fr) VALUES (?, ?, ?, ?, ?, ?, ?, 1, ?, ?) ON CONFLICT(day, sig) DO UPDATE SET n = n + excluded.n, sessions = sessions + 1')
       .bind(d, b.build, e.sig, e.key, e.mod, e.kind, e.n, e.msg, e.fr));
@@ -118,6 +123,21 @@ export async function postObs(req, env, ctx, { json, ipHash, day, hour }) {
     ]).catch(() => {}));
   }
   return json({ ok: true, stored: true, errs: b.errs.length, frames: b.fr?.n ?? 0 });
+}
+
+// --- Players (pure: unit-tested) ---------------------------------------------------------------------
+// rows: [{ day, name: 'play:<event>' | 'sessions:human' | 'sessions:auto', n }] →
+// { days: [{ day, human, auto, <event>: n… }] newest first, total: { human, auto, <event>: n… } }
+export function playersOf(rows) {
+  const byDay = new Map(), total = { human: 0, auto: 0 };
+  for (const r of rows) {
+    const k = r.name === 'sessions:human' ? 'human' : r.name === 'sessions:auto' ? 'auto' : r.name.startsWith('play:') ? r.name.slice(5) : null;
+    if (!k) continue;
+    const d = byDay.get(r.day) || { day: r.day, human: 0, auto: 0 };
+    d[k] = (d[k] || 0) + r.n; total[k] = (total[k] || 0) + r.n;
+    byDay.set(r.day, d);
+  }
+  return { days: [...byDay.values()].sort((a, b) => (a.day < b.day ? 1 : -1)), total };
 }
 
 // --- Regressions (pure: unit-tested) -------------------------------------------------------------------
@@ -192,6 +212,11 @@ export async function obsDigest(req, env, ctx, { json }) {
   const frRows = cur ? ((await db.prepare(`SELECT build, dc, tier, ${H.map((h) => `SUM(${h}) AS ${h}`).join(', ')}, SUM(n) AS n, SUM(hitch) AS hitch, SUM(low) AS low, SUM(dropped) AS dropped FROM obs_frames WHERE day >= ? AND build IN (?, ?) GROUP BY build, dc, tier`).bind(since, cur, prev || cur).all()).results || []) : [];
   const evts = cur ? ((await db.prepare("SELECT build, name, SUM(n) AS n FROM obs_evt WHERE day >= ? AND build IN (?, ?) AND name <> 'sessions' GROUP BY build, name").bind(since, cur, prev || cur).all()).results || []) : [];
 
+  // The players' funnel, per UTC day across every build: people (sessions:human, play:*) and the
+  // automation beside them (sessions:auto), so nobody mistakes the agents' traffic for an audience.
+  const playRows = (await db.prepare("SELECT day, name, SUM(n) AS n FROM obs_evt WHERE day >= ? AND (name LIKE 'play:%' OR name LIKE 'sessions:%') GROUP BY day, name ORDER BY day DESC").bind(since).all()).results || [];
+  const players = playersOf(playRows);
+
   const frames = {};
   for (const r of frRows) ((frames[r.dc] ??= {})[r.tier] ??= {})[r.build] = frameStats(r);
   const regressions = [...detectRegressions(rows, builds, cur, prev), ...detectFrameRegressions(frames, cur, prev)];
@@ -213,7 +238,7 @@ export async function obsDigest(req, env, ctx, { json }) {
     generated: new Date().toISOString(), windowDays: OBS_LIMITS.windowDays, edges: EDGES,
     current: cur ? builds[ci] : null, previous: prev ? builds[ci + 1] : null, builds,
     top: [...totals.values()].sort((a, b) => b.n - a.n).slice(0, 20),
-    regressions, frames, events,
+    regressions, frames, events, players,
   };
   digestMemo.at = Date.now(); digestMemo.key = cacheKey; digestMemo.body = body;
   const res = digestResponse(body, 'fresh');
