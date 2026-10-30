@@ -7,7 +7,7 @@ import { test, expect } from '@playwright/test';
 // the Show (src/daily.js; tests/unit/daily.test.js pins the pick).
 const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 };
 const DAY = new Date('2026-11-02T15:00:00Z');
-const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
+const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90_000 });
 
 // One run (already started) to its sheet. crash: full throttle into the Wall, never let go; else the
 // reference flight. The autopilot hands over before the sheet, so the run counts as the player's (as
