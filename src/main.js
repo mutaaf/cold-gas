@@ -45,7 +45,8 @@ import { initFocusTrap } from './focus-trap.js';
 import { wireUnitToggles, unitText } from './units.js';
 import { drawShareCard, shareRun } from './share-card.js';
 import { createInstruments } from './instruments.js';
-import { localWords, localMeta, postScore, fetchBoard } from './panel.js';
+import { localWords, localMeta, fetchBoard } from './panel.js';
+import { createPost } from './post.js';
 import { withDeadline } from './net.js';
 import { loadAI } from './ai/config.js';
 import { openSettings, aiLabel } from './ai/settings.js';
@@ -319,13 +320,14 @@ function syncCar(pos, quat, comps, spins, steer) {
 // --- Flow --------------------------------------------------------------------------------
 // Everything layered over the stage that belongs to the last run: the judges' theatre (and its
 // call), the AI settings sheet, cues. A restart, a new run or the title clears it all at once.
-let panelAbort = null;
+let panelAbort = null, poster = null;
 function closeOverlays() {
   panelAbort?.abort(); panelAbort = null;
   const th = document.querySelector('[data-theatre]');
   th.hidden = true; th.classList.remove('on', 'out');
   const ai = document.querySelector('[data-ai-modal]');
   if (ai && !ai.hidden) ai.hidden = true;
+  poster?.hideLeave();
   S.paused = false;
   ui.clearCue();
   instruments.close();
@@ -429,6 +431,7 @@ function finishRun() {
   getNozzlePad().show(false);
   ui.clearCue();
   countRun(run);
+  poster?.reset();   // Post · ABC beside Retry when this is a board jump (src/post.js)
   // The coach re-flies the log (≈30–60 ms) a beat after the sheet slides in.
   const coachRun = () => setTimeout(() => {
     if (S.run !== run) return;
@@ -635,6 +638,10 @@ rerollBtn?.addEventListener('click', async () => {
 const localReceipt = (reason) => { S.callMeta = localMeta(reason); ui.receipt(S.callMeta, { onChange: () => openAI() }); };
 const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]'), goLabel = document.querySelector('[data-go-label]');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
+// Where the theatre takes the whole screen over the sheet (styles.css: a phone, a short landscape screen, a
+// folding tablet opened): there the call runs docked on the sheet until "Watch the call".
+const theatreCovers = matchMedia('(max-width: 720px), (orientation: landscape) and (max-height: 480px), (pointer: coarse) and (min-width: 600px) and (min-height: 500px) and (max-width: 1000px) and (max-height: 960px)');
+let theatreMod = null;
 const JUDGE_MS = 35_000;   // invariant 5½: no AI call may block the results longer than this
 let replayingCall = false;
 async function runPanel(run, replay = null) {
@@ -666,10 +673,28 @@ async function runPanel(run, replay = null) {
     return;
   }
   if (S.run !== run || signal?.aborted) return;
+  // Where the theatre would cover the score (a phone, a short landscape screen, a folding tablet) the call runs
+  // docked: a live strip on the sheet, "Watch the call" for the full show (audit 2026-10-30). Asked for (Replay
+  // the call), it always plays.
+  theatreMod = mod;
+  const docked = !replay && theatreCovers.matches;
+  let liveQueued = null, liveOver = false;
+  const onLive = (st) => {
+    if (S.run !== run || replay) return;
+    // Drawn once a frame, however fast the tokens come; never after the call's receipt is up.
+    if (!liveQueued) requestAnimationFrame(() => {
+      const q = liveQueued; liveQueued = null;
+      if (S.run !== run || !q || liveOver) return;
+      ui.liveCall(q, { onWatch: () => mod.watchCall() });
+      ui.liveWords(q.words);
+    });
+    liveQueued = st;
+  };
   const { words, meta, aborted } = await mod.runTheatre(theatreRoot, {
     log: run.inputLog, t: run.t, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay, abort: signal,
-    deadlineMs: replay ? JUDGE_MS : JUDGE_MS - (performance.now() - t0),
+    deadlineMs: replay ? JUDGE_MS : JUDGE_MS - (performance.now() - t0), docked, onLive,
   });
+  liveOver = true;
   if (aborted || S.run !== run) return;
   if (!replay && /too long/.test(meta.error || '')) obs.fail('judge', new Error('judge deadline'), 'fetch');
   if (!replay) {
@@ -1314,7 +1339,11 @@ function retry() {
   if (S.drill) return retryDrill();
   afterResults(() => startRun('jump', true));
 }
-function goHome() { S.paused = false; ui.show('pause', false); afterResults(toTitle); }
+function goHome() {
+  // An unposted board jump on the sheet (or under the theatre): asked once, inline, before it's thrown away.
+  if ((S.mode === 'results' || S.mode === 'replay') && poster?.confirmLeave(goHome)) return;
+  S.paused = false; ui.show('pause', false); afterResults(toTitle);
+}
 // Delegated: the judges' theatre builds its own Retry / Home / Rookie mode buttons after load.
 document.addEventListener('click', (e) => {
   const b = e.target.closest?.('[data-again], [data-home], [data-rookie-go]');
@@ -1587,7 +1616,14 @@ addEventListener('keydown', (e) => {
   const enterOnButton = e.code === 'Enter' && !!e.target?.closest?.('button, a, [role="button"]');
   if (inRun && !S.drill && (e.code === 'KeyR' || (e.code === 'Enter' && S.mode === 'results' && !enterOnButton))) { e.preventDefault(); retry(); return; }
   if (e.code === 'Escape' && S.peek) { e.preventDefault(); peek(false); return; }   // Esc on the peek: back to the scores (0068)
-  if (inRun && (e.code === 'KeyH' || (e.code === 'Escape' && S.mode === 'results'))) { e.preventDefault(); goHome(); return; }
+  // Escape on the results never leaves them (audit 2026-10-30): it closes what's open on top (the leave question,
+  // the theatre back to its strip) or does nothing. H is Home.
+  if (e.code === 'Escape' && (S.mode === 'results' || S.mode === 'replay')) {
+    e.preventDefault();
+    if (poster?.leaveOpen()) poster.hideLeave(); else theatreMod?.dockCall();
+    return;
+  }
+  if (inRun && e.code === 'KeyH') { e.preventDefault(); goHome(); return; }
   if (!S.drill) return;
   if (e.code === 'KeyR' && (S.mode === 'live' || S.mode === 'results')) retryDrill();
   if (e.code === 'KeyT' && S.mode === 'live') slowBtn.click();
@@ -1660,46 +1696,34 @@ addEventListener('keydown', (e) => {
 document.addEventListener('pointerdown', (e) => { if (moreOpen() && !more.contains(e.target)) setMore(false); }, true);
 more.addEventListener('focusout', (e) => { if (moreOpen() && e.relatedTarget && !more.contains(e.relatedTarget)) setMore(false); });
 
-document.querySelector('[data-r-submit]').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  const input = e.target.initials;
-  const initials = input.value.toUpperCase().replace(/[^A-Z]/g, '');
-  const msg = document.querySelector('[data-r-submit-msg]');
-  if (initials.length !== 3) { msg.textContent = 'Three letters.'; return; }
-  if (S.autopilot) { msg.textContent = 'The reference jump can’t be posted.'; return; }
-  // One post per run, one request in flight: a double click (or Enter twice) posts once.
-  const run = S.run;
-  if (!run || postingRun === run) return;
-  if (postedRun === run) { msg.textContent = 'Already posted.'; return; }
-  try { localStorage.setItem('coldgas_initials', initials); } catch { /* storage blocked */ }
-  const btn = e.target.querySelector('button[type="submit"]');
-  postingRun = run;
-  if (btn) btn.disabled = true;
-  msg.textContent = 'Verifying…';
-  let res;
-  try { res = await postScore(run.inputLog, S.flyTier === 'assist', initials, run.course); } finally { postingRun = null; if (btn) btn.disabled = false; }
-  if (res.ok) postedRun = run;
-  if (S.run !== run) return;   // a new run's sheet: this answer belongs to the last one
-  msg.textContent = res.ok ? `Posted. #${res.rank} today.` : res.status === 429 ? 'Slow down a little.' : res.timeout ? 'The board didn’t answer. Try again.' : 'The board is offline.';
+// Post to the board from the sheet (src/post.js): eligible for the player's own landed jump, not the reference or a
+// drill. The Worker scores it from the run's telemetry; the client never sends a score.
+poster = createPost({
+  ctx: () => ({ run: S.run, card: S.card, eligible: (S.mode === 'results' || S.mode === 'replay') && S.runKind === 'jump' && !S.drill && !S.autopilot && !!S.card?.facts?.jumped && S.card.total > 0 }),
+  onLeaveOpen: () => { if (S.peek) peek(false); },
+  onLeavePost: () => theatreMod?.dockCall(),   // the sheet, to see the post land
 });
-let postingRun = null, postedRun = null;
-try { document.getElementById('initials').value = localStorage.getItem('coldgas_initials') || ''; } catch { /* storage blocked */ }
 
 // The board: the latest request wins (a slow 'today' never overwrites the 'all' asked for after it).
-let boardKind = 'today', boardSeq = 0, boardAbort = null;
-async function openBoard(kind = boardKind) {
-  boardKind = kind;
+// One course at a time: the one on the stage when it opens, the tabs for the others.
+let boardKind = 'today', boardCourse = null, boardSeq = 0, boardAbort = null;
+const BOARD_COURSE = { show: 'the Show', wall: 'the Wall', lineup: 'the Lineup' };
+async function openBoard(kind = boardKind, course = boardCourse || stage.course) {
+  boardKind = kind; boardCourse = BOARD_COURSE[course] ? course : 'show';
   ui.show('board', true);
   document.querySelectorAll('[data-board]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.board === kind)));
+  document.querySelectorAll('[data-board-course]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.boardCourse === boardCourse)));
   const seq = ++boardSeq;
   boardAbort?.abort();
   boardAbort = new AbortController();
-  const rows = await fetchBoard(kind, { signal: boardAbort.signal });
+  const rows = await fetchBoard(kind, { signal: boardAbort.signal, course: boardCourse });
   if (seq !== boardSeq) return;
   boardAbort = null;
-  try { ui.board(rows); } catch (err) { obs.error('app', err); ui.board(null); }
+  const empty = `No jumps on ${BOARD_COURSE[boardCourse]} ${kind === 'all' ? 'yet' : 'yet today'}. Be the first.`;
+  try { ui.board(rows, empty); } catch (err) { obs.error('app', err); ui.board(null); }
 }
-on('[data-board-open]', () => openBoard());
+on('[data-board-open]', () => { boardCourse = null; openBoard(); });
+document.querySelectorAll('[data-board-course]').forEach((b) => b.addEventListener('click', () => openBoard(boardKind, b.dataset.boardCourse)));
 on('[data-board-close]', () => ui.show('board', false));
 document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('click', () => openBoard(b.dataset.board)));
 

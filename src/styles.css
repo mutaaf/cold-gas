@@ -212,6 +212,58 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
   animation: pb-in 0.7s var(--ease) 0.5s both, pb-flow 3s linear infinite; }
 @keyframes pb-in { from { opacity: 0; transform: scale(0.6) translateY(4px); filter: blur(6px); } 60% { transform: scale(1.08); filter: none; } to { opacity: 1; transform: none; } }
 @keyframes pb-flow { to { background-position: -300% 0; } }
+/* Visually hidden, still read out (a label the field's placeholder stands in for). */
+.vh { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* A crash or a wreck gets a plain tag, never the aurora (audit 2026-10-30). */
+.runline[data-state='neutral'] .pb { color: var(--ink-2); }
+
+/* The panel's call on the sheet (src/ui.js liveCall): one hairline strip, live dot, the model in mono, the tokens
+   counting; "Watch the call" opens the theatre over it. Then the call's receipt in the same line. */
+.call-strip { display: flex; align-items: center; gap: 10px; margin: 14px 0 0; padding: 7px 8px 7px 14px; min-height: 46px; border: 1px solid var(--hair-2); border-radius: 12px;
+  background: linear-gradient(100deg, rgba(92, 255, 200, 0.05), rgba(79, 179, 255, 0.025) 60%, rgba(255, 255, 255, 0.015)); font: 400 12px/1.35 var(--text); color: var(--ink-2); }
+.call-strip[hidden] { display: none; }
+.cs-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--aur-1); box-shadow: 0 0 10px var(--aur-1); }
+.cs-dot.live { animation: beat 1s ease-in-out infinite; }
+.cs-dot.off { background: var(--ink-3); box-shadow: none; }
+.cs-text { flex: 1 1 auto; min-width: 0; display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 8px; }
+.cs-what { font-weight: 500; color: var(--ink); }
+.cs-model { font: 400 12px/1.35 var(--mono); color: var(--aur-1); overflow-wrap: anywhere; }
+.cs-model:empty { display: none; }
+.cs-stats { display: inline-flex; flex-wrap: wrap; gap: 2px 10px; font: 400 11px/1.35 var(--mono); color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.cs-watch { position: relative; flex: none; height: 34px; padding: 0 13px; font-size: 12px; white-space: nowrap; }
+.cs-watch::after { content: ''; position: absolute; left: 0; right: 0; top: 50%; height: 44px; transform: translateY(-50%); }
+@media (prefers-reduced-motion: reduce) { .cs-dot.live { animation: none; } }
+
+/* Post to the board, beside Retry (src/post.js): ice-edged like the sheet's offers, the initials in mono. */
+.r-post { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; min-width: 0; }
+.r-post[hidden] { display: none; }
+.r-post [hidden] { display: none !important; }
+.r-post-field input { width: 74px; height: 40px; border-radius: 10px; border: 1px solid var(--hair); background: rgba(255, 255, 255, 0.05); color: var(--ink);
+  font: 400 16px/1 var(--mono); letter-spacing: 0.3em; text-indent: 0.3em; text-transform: uppercase; text-align: center; user-select: text; -webkit-user-select: text; }
+.top-actions-row .r-post-btn { border-color: rgba(150, 220, 255, 0.6); background: rgba(150, 220, 255, 0.1); color: var(--ink); font-weight: 600; white-space: nowrap; }
+.top-actions-row .r-post-btn:hover { background: rgba(150, 220, 255, 0.18); border-color: rgba(150, 220, 255, 0.9); }
+.r-post-ini { font: 500 13px/1 var(--mono); letter-spacing: 0.16em; }
+.top-actions-row .r-post-edit { height: 40px; padding: 0 6px; font-size: 12px; }
+.r-post-msg { font: 500 12px/1.3 var(--text); color: var(--ink-2); }
+.r-post-msg:empty { display: none; }
+.r-post[data-state='posted'] .r-post-msg { font: 700 12px/1 var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: #07090d; padding: 9px 11px; border-radius: 8px;
+  background: linear-gradient(100deg, var(--aur-1), var(--aur-2)); animation: pb-in 0.6s var(--ease) both; }
+
+/* Leave without posting? (src/post.js): asked once, inline, over the sheet or the theatre; never a browser dialog. */
+.leave { position: fixed; left: 50%; bottom: calc(112px + var(--safe-b)); z-index: 9; translate: -50% 0; width: min(440px, calc(100vw - 32px));
+  display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 14px; padding: 12px 12px 12px 18px;
+  border-radius: 16px; border: 1px solid var(--hair); background: rgba(8, 10, 16, 0.95); backdrop-filter: blur(20px); box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55); animation: rise 0.35s var(--ease) both; }
+.leave[hidden] { display: none; }
+.leave p { margin: 0; font: 500 14px/1.3 var(--text); color: var(--ink); }
+.leave-actions { display: flex; gap: 8px; margin-left: auto; }
+.leave .btn { display: inline-flex; align-items: center; height: 44px; padding: 0 16px; font-size: 13px; }
+
+/* The board: one event at a time, and the tier each entry was flown in. */
+.board-courses { width: fit-content; max-width: 100%; margin: -6px 0 14px; }
+.board-courses button { white-space: nowrap; }
+.rows .tier-tag { display: inline-block; margin-right: 7px; padding: 2px 5px; border: 1px solid var(--hair); border-radius: 4px; font: 500 11px/1 var(--text); letter-spacing: 0.08em; color: var(--ink-2); vertical-align: 1px; }
+.rows .tier-tag[data-tier='pro'] { border-color: rgba(150, 220, 255, 0.5); color: var(--ink); }
+.rows .tier-tag[data-tier='advanced'] { border-color: rgba(92, 255, 200, 0.55); color: var(--aur-1); }
 .count span.word { font-size: clamp(54px, 9vw, 120px); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 300; animation-duration: 1s; }
 
 /* Quick Retry / Home in the top bar: only while a run is on screen (body[data-mode]). */
@@ -295,6 +347,13 @@ body.building .quick-pause { visibility: hidden; }   /* build mode can't pause; 
   .results .top-actions-row .retry-btn { flex: 1 1 auto; justify-content: center; }
   .results .top-actions-row .btn:not(.retry-btn) { padding: 0 12px; font-size: 13px; flex: none; }
   .top-actions-row .btn kbd { display: none; }
+  /* Post rides the pinned bar too, its own line over Retry: never a scroll away (audit 2026-10-30). */
+  .results .top-actions-row { flex-wrap: wrap; row-gap: 8px; }
+  .results .top-actions-row:has(.r-post:not([hidden])) { background: linear-gradient(180deg, rgba(5, 7, 12, 0), rgba(5, 7, 12, 0.96) 14px); }
+  .results .top-actions-row .r-post { order: -1; flex: 1 0 100%; flex-wrap: nowrap; }
+  .results .top-actions-row .r-post .r-post-btn { flex: 0 1 auto; justify-content: center; min-width: 0; }
+  .results .top-actions-row .r-post-msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .leave { bottom: calc(168px + var(--safe-b)); }
   .total b { font-size: 52px; }
   .cats { grid-template-columns: 1fr; }
   .spec { gap: 18px; }
@@ -687,7 +746,7 @@ body[data-peek] .top .brand { visibility: hidden; }   /* a hairline over the lit
 .tier-line b { font-weight: 500; color: var(--ink); }
 .drill-card { padding: 16px 0 4px; }
 .drill-card .facts { padding: 0 0 14px; }
-.results[data-practice] .judges, .results[data-practice] .cats, .results[data-practice] .facts:not([data-drill-stats]), .results[data-practice] .submit,
+.results[data-practice] .judges, .results[data-practice] .cats, .results[data-practice] .facts:not([data-drill-stats]), .results[data-practice] .submit, .results[data-practice] .call-strip,
 .results[data-practice] .receipt, .results[data-practice] .top-actions-row [data-again], .results[data-practice] .top-actions-row [data-share] { display: none; }
 .coach { margin: 16px 0 6px; padding: 16px 18px; border-radius: 14px; border: 1px solid rgba(255, 191, 90, 0.28); background: rgba(255, 191, 90, 0.04); }
 .coach .eyebrow { margin-bottom: 10px; color: var(--amber); }

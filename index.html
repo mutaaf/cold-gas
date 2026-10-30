@@ -335,6 +335,9 @@
         <span class="run-n" data-r-attempt>Run 1</span>
         <span class="pb" data-r-pb></span>
       </div>
+      <!-- The panel's call, live (src/ai/theatre.js onLive → ui.liveCall): the model, the tokens so far, Watch the
+           call; then its receipt in a line. The score above never waits for it. -->
+      <div class="call-strip" data-call hidden role="group" aria-label="The panel’s call"></div>
       <!-- The coach's pointer (0079, src/pointer.js): the one fix, in this device's controls -->
       <div class="pointer" data-pointer hidden><span class="pt-better" data-pointer-better></span><span class="pt-k">Next run</span><b class="pt-text" data-pointer-text></b></div>
       <div class="r-assist"><button type="button" class="assist-ctl" data-assist-open aria-haspopup="dialog"><span class="ac-top"><span class="ac-k">AI assist</span><b class="ac-state" data-assist-state>On</b></span><span class="ac-sub" data-assist-sub>rolls you out, levels and brakes</span></button></div>
@@ -343,6 +346,14 @@
         <button class="btn ghost" data-home>Home<kbd>H</kbd></button>
         <button class="btn ghost" data-replay>Replay</button>
         <button class="btn ghost" data-share>Share</button>
+        <!-- Post to the board, beside Retry (src/post.js): "Post · ABC" once initials are remembered, the three
+             letters right here the first time; the rank inline once it's on. A board-eligible jump only. -->
+        <form class="r-post" data-r-submit data-r-post hidden autocomplete="off">
+          <label class="r-post-field" data-r-post-field><span class="vh">Initials</span><input id="initials" name="initials" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AAA" enterkeyhint="send" /></label>
+          <button class="btn r-post-btn" type="submit" data-r-post-btn>Post<span class="r-post-ini" data-r-post-ini></span></button>
+          <button class="btn link r-post-edit" type="button" data-r-post-edit hidden aria-label="Change initials">Change</button>
+          <span class="submit-msg r-post-msg" data-r-submit-msg role="status"></span>
+        </form>
       </div>
       <!-- Rookie mode (0074, src/rookie.js): after three crashes in a row, one tap to Easy + Assist and go -->
       <div class="rookie" data-rookie hidden>
@@ -359,18 +370,14 @@
         <p class="eyebrow">What happened</p>
         <ol class="coach-items" data-coach-items></ol>
       </div>
-      <div class="receipt" data-receipt hidden></div>
       <!-- Opt-in rewarded ad (src/ads.js): shown only when the slot can fill; fresh words, same score -->
       <button type="button" class="btn ghost reroll-btn" data-reroll hidden>Watch an ad · ask the panel again</button>
       <ol class="judges" data-r-judges></ol>
+      <!-- The call's full receipt (model, where, tokens, time, cost; Replay and Inspect the call), under the words it
+           wrote; its one-line form rides the strip at the top -->
+      <div class="receipt" data-receipt hidden></div>
       <div class="cats" data-r-cats></div>
       <ul class="facts" data-r-facts></ul>
-      <form class="submit" data-r-submit>
-        <label for="initials">Initials</label>
-        <input id="initials" name="initials" maxlength="3" autocomplete="off" spellcheck="false" placeholder="AAA" />
-        <button class="btn small" type="submit">Post to today’s board</button>
-        <span class="submit-msg" data-r-submit-msg></span>
-      </form>
 
     </div>
     <!-- Replay on a phone (0068): the sheet folds down to this peek while the replay plays above it; a tap
@@ -391,6 +398,12 @@
   <!-- The judges' theatre: every AI call, visible (src/ai/theatre.js) -->
   <section class="theatre" data-theatre hidden aria-live="polite"></section>
 
+  <!-- Leaving an unposted board jump (src/post.js): asked once, inline, over the sheet or the theatre -->
+  <div class="leave" data-leave hidden role="alertdialog" aria-labelledby="leave-q">
+    <p id="leave-q">Leave without posting?</p>
+    <div class="leave-actions"><button type="button" class="btn ghost" data-leave-go>Leave</button><button type="button" class="btn primary" data-leave-post>Post</button></div>
+  </div>
+
   <!-- The judges' brain: provider and key settings (src/ai/settings.js) -->
   <section class="ai-modal" data-ai-modal hidden></section>
 
@@ -401,6 +414,7 @@
         <h2 id="board-title">Today’s board</h2>
         <div class="seg"><button data-board="today" aria-pressed="true">Today</button><button data-board="all" aria-pressed="false">All time</button></div>
       </div>
+      <div class="seg board-courses" role="group" aria-label="Event"><button data-board-course="show" aria-pressed="true">The Show</button><button data-board-course="wall" aria-pressed="false">The Wall</button><button data-board-course="lineup" aria-pressed="false">The Lineup</button></div>
       <ol class="rows" data-board-rows><li class="empty">Loading…</li></ol>
       <button class="btn ghost" data-board-close>Close</button>
     </div>
