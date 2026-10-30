@@ -33,3 +33,8 @@ e2e: load `?play=jump`, collect console, assert no AudioContext warning; dispatc
 
 ## Out of scope
 An on-screen "tap for sound" prompt; any change to the mute setting.
+
+## Scout note (2026-10-30)
+On `main` `c1dccf1` a single `?play=jump` load (1280x720 and 390x844, headless) logs 13 "The AudioContext was not
+allowed to start" warnings: not one, so something retries `resume()`/construction outside a gesture. Acceptance should
+count them (0 before the first gesture).

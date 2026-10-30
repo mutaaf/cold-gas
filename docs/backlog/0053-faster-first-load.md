@@ -1,7 +1,7 @@
 ---
 id: 0053
 title: Faster first load on a phone: the physics starts downloading with the page
-status: ready
+status: proposed
 priority: P2
 size: S
 lens: performance
