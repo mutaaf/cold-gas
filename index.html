@@ -94,6 +94,8 @@
       <button type="button" class="assist-ctl" data-assist-open aria-haspopup="dialog"><span class="ac-top"><span class="ac-k">AI assist</span><b class="ac-state" data-assist-state>On</b></span><span class="ac-sub" data-assist-sub>rolls you out, levels and brakes</span></button>
       <button class="btn link howto-link" data-howto-open aria-haspopup="dialog">How to fly</button>
     </div>
+    <!-- [comeback] a challenge someone sent, else today's daily jump and the streak (src/comeback.js) -->
+    <div class="title-extra" data-title-extra></div>
     <dl class="spec">
       <div><dt>Thrusters</dt><dd>10</dd></div>
       <div><dt>Nitrogen</dt><dd data-u-src="297 kg · 690 bar" data-units title="Tap to switch units">655 lb · 10,008 psi</dd></div>
@@ -335,6 +337,8 @@
         <span class="run-n" data-r-attempt>Run 1</span>
         <span class="pb" data-r-pb></span>
       </div>
+      <!-- [comeback] the challenge's and the daily's one-line results (src/comeback.js) -->
+      <div class="daily-result" data-daily-result role="status" aria-live="polite"></div>
       <!-- The coach's pointer (0079, src/pointer.js): the one fix, in this device's controls -->
       <div class="pointer" data-pointer hidden><span class="pt-better" data-pointer-better></span><span class="pt-k">Next run</span><b class="pt-text" data-pointer-text></b></div>
       <div class="r-assist"><button type="button" class="assist-ctl" data-assist-open aria-haspopup="dialog"><span class="ac-top"><span class="ac-k">AI assist</span><b class="ac-state" data-assist-state>On</b></span><span class="ac-sub" data-assist-sub>rolls you out, levels and brakes</span></button></div>

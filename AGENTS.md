@@ -294,7 +294,20 @@ src/instruments.js    every HUD instrument answers a tap: peak G, burn time, spl
 src/damage-view.js    the damage map opened up (lazy): zones, hits, what damage does in this sim
 src/drive/minimap.js  Free Drive's canvas minimap (north/heading-up, trail, ghost, profile) and the full map
 src/share-card.js     Share (0081): the run as a 1080×1350 card drawn on the device (replay frame, score, verdict,
-                        three numbers) → navigator.share({ files }) → text + link → copy + toast
+                        three numbers) → navigator.share({ files }) → text + link → copy + toast; the link is the run's
+                        challenge link (#vs=) when it has one
+src/challenge.js      challenge links (pure): a run's input log + course + SIM_VERSION + score + tier + initials as bytes
+                        (varint tick deltas, changed channels as zigzag deltas) → deflate-raw (CompressionStream, else
+                        plain) → base64url; every decoded field bounded (VS_MAX_CHARS, 256 kB inflated, course/tier enums,
+                        ticks < MAX_TICKS and increasing, values ±100, no trailing bytes); createReplay/replayAsync re-fly a
+                        log a slice at a time (= simulate); coarsen() for a log too long for ~2,000 chars
+src/daily.js          the daily jump (pure): ten objectives on the existing events, one per UTC day (a seeded walk that
+                        never repeats a day running), judged from scoreRun's card; the streak of consecutive UTC days
+                        (localStorage coldgas_daily)
+src/comeback.js       the title's card ([data-title-extra]: a challenge, else the daily and the streak; fits itself under
+                        the top bar), the challenger's replay as the ghost (main.js syncGhost), the results' lines
+                        ([data-daily-result]: "You beat ABC by 2.1" + Send it back, "Daily ✓ complete · streak 4"), and the
+                        link a Share carries (lossless, else a coarser log re-flown and checked, else the plain address)
 src/panel.js          board client (tolerant rows) + local judge lines (offline fallback)
 src/pace.js           the title draws at ~30 fps (pure pacer, 0049); the shadow map redraws on the title only when the hero moves
 src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry
@@ -371,6 +384,7 @@ state. It never writes it.
 | `?drive=stelvio\|transfagarasan\|bigsur\|atlantic[&tod=dusk]` | Free Drive on that road |
 | `?drive=sandbox[#b=<build>]` | The Sandbox (build, power-ups, side quests); `#b=` carries a shared build (also on a road link) |
 | `?drive=endless[&seed=<text>][&tod=dusk][&idb=0]` | Free Drive's endless road from that seed (same seed, same world) |
+| `?play=jump&course=<course>#vs=<run>` | A challenge (src/challenge.js): the title holds on the challenge card instead of skipping to the countdown; Take the challenge races the sender's run as the ghost. A payload that can't be read or is from another `SIM_VERSION` shows "from an older version" and falls back to `?play=jump`. `#vs=` alone (no `?play=`) shows the card too |
 
 One deep link wins when several are given: `?drive=` over `?play=` over `?board=` (the others are
 ignored; `?gfx=` and `?course=` combine with any of them).
