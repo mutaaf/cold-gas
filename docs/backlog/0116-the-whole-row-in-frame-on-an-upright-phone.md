@@ -6,7 +6,7 @@ priority: P1
 size: M
 lens: platform
 created: 2026-10-29
-pr:
+pr: 177
 by: critic
 ---
 
@@ -93,7 +93,7 @@ It is the same fixed 54° vertical FOV, which gives ≈ 39° horizontal at aspec
 names iPad explicitly, so the fix should key on `camera.aspect < 1`, not on a phone width, and the probe adds
 820×1180 to its views (acceptance above).
 
-## Shipped (#PR)
+## Shipped (#177)
 Measured on this branch with 0063's stepped probe (frame-probe.js, Show reference at 30 fps, every carry frame,
 the hold excluded); main `e10b4ee` (after 0113's locked-off carry) → branch:
 
