@@ -1,12 +1,12 @@
 ---
 id: 0098
 title: A touch player can pause a run without leaving the game
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: platform
 created: 2026-10-27
-pr:
+pr: 169
 by: critic
 ---
 

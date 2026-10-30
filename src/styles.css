@@ -220,6 +220,23 @@ body[data-mode='results'] .quick-retry { display: none; }   /* the sheet's own R
 .quick:hover { border-color: rgba(255, 255, 255, 0.35); }
 .quick:active { transform: scale(0.96); }
 @media (pointer: coarse) { .quick kbd { display: none; } .quick { height: 36px; padding: 0 12px; } }
+/* Pause (0098): only where pause() acts, a run (countdown and live) and Free Drive; never the title, results or replay.
+   On touch its box is a 44 px square, the 36 px glass circle drawn inside it, and -4 px margins keep the bar's row at 36 and its gaps at 6. */
+.quick-pause { position: relative; isolation: isolate; }
+body:not([data-mode='live'], [data-mode='countdown'], [data-mode='drive']) .quick-pause { display: none; }
+body[data-mode='drive'] .quick-pause { display: inline-flex; }
+body.building .quick-pause { visibility: hidden; }   /* build mode can't pause; its place in the row stays */
+/* Free Drive on a flip phone's cover screen (424×360): Menu goes to its icon, so the bar clears the timer. */
+@media (max-width: 440px) { body[data-mode='drive'] .more-toggle span { display: none; } }
+@media (pointer: coarse) {
+  .quick-pause { width: 44px; height: 44px; margin: -4px; padding: 0; justify-content: center; border: 0; background: none; backdrop-filter: none; }
+  .quick-pause::before { content: ''; position: absolute; inset: 4px; z-index: -1; border-radius: 18px; border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px); }
+  /* Free Drive's bar is the chips' 32 px (its map sits 52 px down): a 32 px circle, -6 px margins. */
+  body[data-mode='drive'] .quick-pause { margin: -6px; }
+  body[data-mode='drive'] .quick-pause::before { inset: 6px; border-radius: 16px; }
+}
+/* A 390 px phone mid-run has no room for Retry's word beside Pause; the icon and its label stay. */
+@media (max-width: 440px) { body:is([data-mode='live'], [data-mode='countdown']) .quick-retry span { display: none; } }
 /* Narrow and touch screens mid-run: the AI and tier chips are title-screen settings; Home and Retry
    take their place (in landscape the bar shares its row with the HUD's mission block). */
 @media (max-width: 720px), (pointer: coarse) {

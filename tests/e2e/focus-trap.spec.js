@@ -111,11 +111,8 @@ test('390×844 touch: the pause sheet takes focus without a ring, and a tap on R
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   const page = await ctx.newPage();
   await live(page);
-  // A phone pauses the way it does when it rings: the tab goes hidden and comes back.
-  await G(page, () => {
-    const set = (v) => { Object.defineProperty(document, 'hidden', { configurable: true, get: () => v }); document.dispatchEvent(new Event('visibilitychange')); };
-    set(true); set(false);
-  });
+  // A phone pauses with the top bar's Pause (0098).
+  await page.locator('.top [data-pause]').tap();
   await expect(page.locator('[data-screen="pause"]')).toBeVisible();
   const sheet = '[data-screen="pause"] .sheet';
   expect(await inside(page, sheet)).toBe(true);
