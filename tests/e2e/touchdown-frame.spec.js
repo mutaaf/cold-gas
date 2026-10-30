@@ -41,6 +41,7 @@ function touchdown(crash) {
     return r.width > 1 && r.height > 1;
   };
   g.startRun('reveal'); g.skipCountdown();
+  S.time = 0;   // the shake's phase: the same on every flight
   if (crash) {
     // The critic's crash: the Show reference with every input zeroed from the release + 0.125 s.
     const ap = S.autopilot;
@@ -127,7 +128,10 @@ for (const crash of [false, true]) {
     for (const v of [...UPRIGHT, ...FOLDS, [844, 390]]) {
       const r = await flyAt(page, v, crash);
       const name = v.join('×');
-      if (crash) expect(r.reason, name).not.toBe('settled');
+      if (crash) {
+        expect(r.reason, name).not.toBe('settled');
+        expect(r.cut, `${name}: the crash cut ran`).toBe(true);
+      }
       if (UPRIGHT.some((u) => u.join('×') === name)) expect(r.minShare, `${name}: share of the box on screen`).toBeGreaterThanOrEqual(0.95);
       else expect(r.minShare, `${name}: share of the box on screen`).toBe(1);
       if (WIDE[name]) unchanged(r, name, crash);

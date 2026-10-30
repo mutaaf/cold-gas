@@ -354,7 +354,8 @@ export function createDirector(camera) {
       camera.position.copy(st.cutPos);
       camera.lookAt(carPos.x, carPos.y + 0.15, carPos.z);
       st.fov = lens(st.cutFov);
-      if (st.cutT <= 0) { st.shot = -1; snap(); }
+      // The Lineup's chase eases its lens back from the cut's, as it did before 0108 (not from the wider one).
+      if (st.cutT <= 0) { st.shot = -1; snap(); if (course === 'lineup') st.fov = st.cutFov; }
     } else if (course === 'wall' || course === 'show') {
       if (mode === 'title') (course === 'show' ? titleShow : titleWall)(time);
       else if (mode === 'replay') wallReplay(carPos, carVel, phase);
