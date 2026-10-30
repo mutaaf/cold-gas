@@ -44,15 +44,15 @@ correct for the HUD with keepClear (0063). The ground rig has no correction for 
 - No sim change.
 
 ## Acceptance criteria
-- [ ] With the probe above (the hero's box through the camera on every tick from `t.touchTick` to
+- [x] With the probe above (the hero's box through the camera on every tick from `t.touchTick` to
       `mode === 'results'`), the Show reference and the valves-shut crash (`S.autopilot` wrapped,
       zeros from release + 0.125 s, LESSONS 2026-10-27) each keep **≥ 0.95 of the box on screen in every
       frame**, with box width ≤ 0.85 of the screen, at 390×844, 360×748 (also the flip phone's inner screen),
       382×580 (the book fold's cover in a tab) and 820×1180.
-- [ ] The other foldable shapes keep the whole car on screen (share 1.00) and stay ≤ 0.85 wide: 669×871,
+- [x] The other foldable shapes keep the whole car on screen (share 1.00) and stay ≤ 0.85 wide: 669×871,
       466×498, 360×380, 424×360, 594×368, 800×300 (scripts/audit-plan.mjs FOLD / FLIP).
-- [ ] 1440×900, 1280×720 and 844×390 framing is unchanged: the same box width ±0.02 of the screen.
-- [ ] The box stays out from under `[data-hud-box]` and `.top-actions` for more than 10 % of its area at
+- [x] 1440×900, 1280×720 and 844×390 framing is unchanged: the same box width ±0.02 of the screen.
+- [x] The box stays out from under `[data-hud-box]` and `.top-actions` for more than 10 % of its area at
       390×844 (0063's rule, extended to the ground).
 - [ ] Before/after screenshots of touchdown + 0.3 s at 390×844 (reference and crash) in the PR.
 - [ ] `flicker.mjs --phone` regions for the show-* scenarios are not raised (flicker-budget).
@@ -103,3 +103,14 @@ min share on screen:
 
 No frame at 390×844 had more than a tenth of the box under a HUD box or the top bar. The phone flicker probe runs at
 844×390 (aspect ≥ 0.9, the lens untouched), so flicker-budget can't move.
+
+## Critic re-review 2026-10-30 15:30
+**Passes on production** (`9f293d8`, entry `index-OHIkh2Yg.js`, the same as a local build of main).
+`tests/e2e/touchdown-frame.spec.js` ran unchanged against https://mutaafaziz.com through a throwaway config
+(LESSONS 2026-10-28): 4/4 green in 1.1 min. Reference · crash, box width / screen, min share on screen:
+390×844 0.66–0.77 · 0.53–0.59, 1.00; 360×748 0.66–0.76 · 0.53–0.59, 1.00; 382×580 0.66–0.72 · 0.53–0.60, 1.00;
+820×1180 0.66–0.71 · 0.53–0.60, 1.00; every foldable shape 1.00 and ≤ 0.65 wide; 0 frames with a tenth of the
+box under the HUD. Confirmed with real frames: `docs/critique/2026-10-30-1530/p390-7-touchdown.jpg` and
+`p390-C-7-down.jpg` show the whole car and the whole wreck, nose to tail, inside a 390 px screen. Desktop is
+unchanged by construction (the lens only acts under aspect 0.9). The flicker bar is #170's CI and main's run
+41068841808, not re-run here.

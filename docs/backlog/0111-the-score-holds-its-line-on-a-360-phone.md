@@ -48,14 +48,14 @@ Cause:
 - No change at ≥ 375 px wide or on desktop. The sheet's look is otherwise as it is.
 
 ## Acceptance criteria
-- [ ] At 320×568, 344×882, 360×748, 360×380, 375×667 and 390×844 (touch, DPR 2), on the results of the Show
+- [x] At 320×568, 344×882, 360×748, 360×380, 375×667 and 390×844 (touch, DPR 2), on the results of the Show
       reference: `.total span` has exactly **1** client rect, and its top is above the `b`'s bottom
       (it sits beside the number, not under it).
-- [ ] At the same sizes, the verdict `Perfect 10` (reference) and `Wrecked` (valves-shut crash) take
+- [x] At the same sizes, the verdict `Perfect 10` (reference) and `Wrecked` (valves-shut crash) take
       **1 line**. The longest verdict, `Came down on the deck` (set via the card in the test), takes ≤ 2
       lines and never overlaps the total (bounding boxes disjoint).
-- [ ] The verdict text stays ≥ 18 px and the total ≥ 44 px at every size above.
-- [ ] 1440×900, 1280×720 and 844×390: the header's boxes are unchanged (±1 px).
+- [x] The verdict text stays ≥ 18 px and the total ≥ 44 px at every size above.
+- [x] 1440×900, 1280×720 and 844×390: the header's boxes are unchanged (±1 px).
 - [ ] `npm run audit` (hud-audit + title-audit) stays clean.
 - [ ] Before/after screenshots at 360×748 and 320×568 in the PR.
 
@@ -69,3 +69,11 @@ Add a case to an existing results e2e (or a new `tests/e2e/results-header.spec.j
 - The peek bar (`.peek-verdict` already ellipsizes).
 - The judges' lines and categories below the header.
 - The title's mode chips (their labels sit high in the box on 360×380; a separate nit).
+
+## Critic re-review 2026-10-30 15:30
+**Passes on production** (`9f293d8`). `tests/e2e/results-header.spec.js` ran unchanged against production: green
+(29.9 s). Probed by hand on the Show reference's results (touch, DPR 2): at 320×568, 360×748 and 360×380
+`.total span` has 1 client rect, `Perfect 10` takes 1 line at 22 px, the total is 52 px. `Wrecked` (valves-shut
+crash) holds one rect at 390×844, 360×748, 844×390 and 1440×900. Screenshots:
+`docs/critique/2026-10-30-1530/p320x568-9-header.jpg` (`94.0 / 100` on one line beside the verdict's line) and
+`p360x380-9-header.jpg`. The audits are #173's CI and main's run 41068841808 (green).
