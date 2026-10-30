@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchWithDeadline, withDeadline, isTimeout, isAbort } from '../../src/net.js';
+import { fetchWithDeadline, withDeadline, isTimeout, isAbort, lazyOnce, judgesOverran, JUDGES_FAIR_MS } from '../../src/net.js';
 import { decideReload, entryOf, RELOAD_GAP_MS } from '../../src/obs/reload.js';
 import { createIdbCache } from '../../src/world/cache.js';
 import { boardRow } from '../../src/panel.js';
@@ -127,5 +127,56 @@ describe('board rows (0048)', () => {
     expect(boardRow({ initials: 'XYZ', facts: null })).toBeNull();
     expect(boardRow(null)).toBeNull();
     expect(boardRow({ initials: '<b>', total: 1, facts: { rollDeg: 'x' } }).initials).toBe('B');
+  });
+});
+
+// 0057: a failed lazy chunk is asked for again on the next press; the judges' breaker counts only their own overrun.
+
+describe('lazyOnce', () => {
+  it('shares one load while it is pending or loaded', async () => {
+    let n = 0;
+    const get = lazyOnce(async () => ++n);
+    const a = get(), b = get();
+    expect(a).toBe(b);
+    expect(await a).toBe(1);
+    expect(await get()).toBe(1);
+    expect(n).toBe(1);
+  });
+  it('forgets a failed load, so the next call asks again', async () => {
+    let n = 0;
+    const get = lazyOnce(async () => { if (++n === 1) throw new TypeError('Failed to fetch dynamically imported module'); return 'mod'; });
+    await expect(get()).rejects.toThrow(/dynamically imported/);
+    expect(await get()).toBe('mod');
+    expect(await get()).toBe('mod');
+    expect(n).toBe(2);
+  });
+  it('a loader that throws synchronously is a rejection, and forgotten too', async () => {
+    let n = 0;
+    const get = lazyOnce(() => { if (++n === 1) throw new Error('boom'); return Promise.resolve(n); });
+    await expect(get()).rejects.toThrow('boom');
+    expect(await get()).toBe(2);
+  });
+  it('hands the loader the last failure, and forgets it once a load lands', async () => {
+    const seen = [];
+    const err = new TypeError('Failed to fetch dynamically imported module: http://localhost/coldgas/assets/drive-x.js');
+    const get = lazyOnce(async (failed) => { seen.push(failed); if (seen.length === 1) throw err; return 'mod'; });
+    await expect(get()).rejects.toBe(err);
+    expect(await get()).toBe('mod');
+    expect(seen).toEqual([null, err]);
+  });
+});
+
+describe('judgesOverran', () => {
+  it('counts the deadline when the provider had (nearly) all 35 s', () => {
+    expect(judgesOverran('The judges took too long.', 35_000)).toBe(true);
+    expect(judgesOverran('The judges took too long.', JUDGES_FAIR_MS)).toBe(true);
+  });
+  it('does not count it when a slow chunk spent most of the 35 s', () => {
+    expect(judgesOverran('The judges took too long.', 5_000)).toBe(false);
+    expect(judgesOverran('The judges took too long.', JUDGES_FAIR_MS - 1)).toBe(false);
+  });
+  it('anything but the deadline is not an overrun (other failures are counted where they happen)', () => {
+    expect(judgesOverran('The judges are offline.', 35_000)).toBe(false);
+    expect(judgesOverran(undefined, 35_000)).toBe(false);
   });
 });

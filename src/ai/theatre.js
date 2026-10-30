@@ -474,6 +474,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
       };
     },
     error: (d) => {
+      if (finished) return;   // the deadline or Skip already ended it: the call's own cancel isn't news (0057)
       timeline.push(['error', performance.now() - t0, d]);
       failure = d;
       meta.error = d.message;

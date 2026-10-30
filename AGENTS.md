@@ -297,7 +297,8 @@ src/share-card.js     Share (0081): the run as a 1080×1350 card drawn on the de
                         three numbers) → navigator.share({ files }) → text + link → copy + toast
 src/panel.js          board client (tolerant rows) + local judge lines (offline fallback)
 src/pace.js           the title draws at ~30 fps (pure pacer, 0049); the shadow map redraws on the title only when the hero moves
-src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry
+src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry; lazyOnce + reimport
+                        (a failed lazy chunk is asked for again, 0057), judgesOverran (the judge breaker counts their own overrun)
 src/wake.js           the screen wake lock (0060): held through a run, the judging and the replay, asked again on return;
                         main.js syncLife() also suspends the audio when paused, hidden or idle on the title
 src/ads.js            Marquee ads between runs only (§3.3's exception): loader on production, title banner,

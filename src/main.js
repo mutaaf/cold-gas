@@ -46,7 +46,7 @@ import { wireUnitToggles, unitText } from './units.js';
 import { drawShareCard, shareRun } from './share-card.js';
 import { createInstruments } from './instruments.js';
 import { localWords, localMeta, postScore, fetchBoard } from './panel.js';
-import { withDeadline } from './net.js';
+import { withDeadline, lazyOnce, reimport, judgesOverran } from './net.js';
 import { loadAI } from './ai/config.js';
 import { openSettings, aiLabel } from './ai/settings.js';
 import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
@@ -666,12 +666,13 @@ async function runPanel(run, replay = null) {
     return;
   }
   if (S.run !== run || signal?.aborted) return;
+  const deadlineMs = replay ? JUDGE_MS : JUDGE_MS - (performance.now() - t0);   // the provider's own time
   const { words, meta, aborted } = await mod.runTheatre(theatreRoot, {
     log: run.inputLog, t: run.t, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay, abort: signal,
-    deadlineMs: replay ? JUDGE_MS : JUDGE_MS - (performance.now() - t0),
+    deadlineMs,
   });
   if (aborted || S.run !== run) return;
-  if (!replay && /too long/.test(meta.error || '')) obs.fail('judge', new Error('judge deadline'), 'fetch');
+  if (!replay && judgesOverran(meta.error, deadlineMs)) obs.fail('judge', new Error('judge deadline'), 'fetch');
   if (!replay) {
     if (meta.verify?.card && Math.abs(meta.verify.card.total - card.total) > 0.05) console.warn('server card differs', meta.verify.card.total, card.total);
     S.words = words; S.callMeta = meta;
@@ -1747,39 +1748,34 @@ stage.onResize((h) => { plumes.setScale(h); crash.setScale(h); redrawPaused(); }
 document.addEventListener('visibilitychange', () => { if (document.hidden) pause(true); syncLife(true); });
 
 // --- Free Drive (a lazy chunk: real roads from open data, src/drive/) ------------------------------
-let drive = null, driveLoad = null;
-function loadDrive() {
-  driveLoad ??= import('./drive/index.js').then((mod) => {
-    drive = mod.createDrive({
-      stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
-      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun, driving: drivingSettings, setDriving, onDriving, onPadY },
-      assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
-      setMode: (m) => { disposeRun(); freeSpare(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
-      onExit: () => { toTitle(); director.snap(); director.reframe(); },
-    });
-    return drive;
+// A failed fetch of the chunk is forgotten: the next press asks again (0057).
+let drive = null;
+const loadDrive = lazyOnce((failed) => reimport(failed, () => import('./drive/index.js')).then((mod) => {
+  drive = mod.createDrive({
+    stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse,
+    audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun, driving: drivingSettings, setDriving, onDriving, onPadY },
+    assist: () => S.tier,   // the flight tier (assist | pro | advanced): Advanced drives the valves on the road too
+    setMode: (m) => { disposeRun(); freeSpare(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
+    onExit: () => { toTitle(); director.snap(); director.reframe(); },
   });
-  return driveLoad;
-}
+  return drive;
+}));
 on('[data-drive-open]', () => { cancelPendingStart(); loadDrive().then((d) => d.openPicker()).catch((err) => { console.error(err); ui.cue_('Free Drive couldn’t load', 2000); }); });
 
 // --- The Sandbox: build, power-ups, side quests (a lazy chunk, src/build/) ----------------------------
-let sandbox = null, sandboxLoad = null;
+let sandbox = null;
 // Whichever driving world is live: the Sandbox or Free Drive.
 function fd() { return sandbox?.active ? sandbox : drive; }
-function loadSandbox() {
-  sandboxLoad ??= import('./build/sandbox.js').then((mod) => {
-    sandbox = mod.createSandbox({
-      stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse, CAR,
-      audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun },
-      assist: () => S.tier,
-      setMode: (m) => { disposeRun(); freeSpare(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
-      onExit: () => { toTitle(); director.snap(); director.reframe(); },
-    });
-    return sandbox;
+const loadSandbox = lazyOnce((failed) => reimport(failed, () => import('./build/sandbox.js')).then((mod) => {
+  sandbox = mod.createSandbox({
+    stage, hero, carRoot, plumes, crash, syncCar, ui, tier, coarse, CAR,
+    audio: { initAudio, updateAudio, chime }, input: { sample, usingTouch, freshRun },
+    assist: () => S.tier,
+    setMode: (m) => { disposeRun(); freeSpare(); setMode(m); S.run = null; S.paused = false; ui.show('pause', false); },
+    onExit: () => { toTitle(); director.snap(); director.reframe(); },
   });
-  return sandboxLoad;
-}
+  return sandbox;
+}));
 on('[data-sandbox-open]', () => { cancelPendingStart(); loadSandbox().then((s) => s.start()).catch((err) => { console.error(err); ui.cue_('The Sandbox couldn’t load', 2000); }); });
 
 // Deep links: ?play=jump|reveal, ?board=today|all, ?drive=<road>[&tod=dusk], ?drive=endless[&seed=…].
