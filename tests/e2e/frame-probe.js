@@ -35,7 +35,7 @@ export function fly() {
     return { x0, y0, x1, y1 };
   };
   const overlap = (b, r) => Math.max(0, Math.min(b.x1, r.right) - Math.max(b.x0, r.left)) * Math.max(0, Math.min(b.y1, r.bottom) - Math.max(b.y0, r.top));
-  const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity, overRow: 0, noRoof: [] };
+  const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity, overRow: 0, noRoof: [], carry: 0, rowCover: 0, rowCoverAt: '', rowCovered: [], rowShown: 1 };
   // The parked row as it stands (each vehicle's footprint and height), and the stretch it covers.
   const row = S.run.car.world.bodies.map((b) => ({ x0: b.cx - b.hx, x1: b.cx + b.hx, z0: b.cz - b.hz, z1: b.cz + b.hz, h: b.h }));
   const rowZ0 = Math.min(...row.map((b) => b.z0)), rowZ1 = Math.max(...row.map((b) => b.z1));
@@ -46,6 +46,38 @@ export function fly() {
       if (c.z < 1 && Math.abs(c.x) <= 1 && Math.abs(c.y) <= 1) return true;
     }
     return false;
+  };
+  // The row under the HUD (0113): each parked body's box (footprint × 0…h) through the camera, clipped to the
+  // screen, sampled on a 16 × 16 grid; the share of those samples, over all bodies, under any HUD rect.
+  // Also the share of the row's boxes on the screen at all (LESSONS 2026-10-29: 0 % under the HUD is not in sight).
+  let full = 0, shown = 0;
+  const bodyBox = (b) => {
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      c.set(i & 1 ? b.x1 : b.x0, i & 2 ? b.h : 0, i & 4 ? b.z1 : b.z0).project(cam);
+      if (c.z >= 1) return null;
+      const [px, py] = toPx(c);
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+    }
+    full += (x1 - x0) * (y1 - y0);
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(w, x1); y1 = Math.min(h, y1);
+    if (x1 - x0 > 0.5 && y1 - y0 > 0.5) shown += (x1 - x0) * (y1 - y0);
+    return x1 - x0 > 0.5 && y1 - y0 > 0.5 ? { x0, y0, x1, y1 } : null;
+  };
+  const rowCover = (rects) => {
+    let all = 0, under = 0;
+    full = 0; shown = 0;
+    for (const b of row) {
+      const p = bodyBox(b);
+      if (!p) continue;
+      const a = (p.x1 - p.x0) * (p.y1 - p.y0) / 256;
+      for (let i = 0; i < 16; i++) for (let j = 0; j < 16; j++) {
+        const x = p.x0 + (i + 0.5) * (p.x1 - p.x0) / 16, y = p.y0 + (j + 0.5) * (p.y1 - p.y0) / 16;
+        all += a;
+        if (rects.some(([, r]) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) under += a;
+      }
+    }
+    return all > 0 ? under / all : 0;
   };
   S.paused = true;   // the frame loop stands still; the probe steps the run and the director itself
   const DT = 1 / 30;
@@ -75,6 +107,14 @@ export function fly() {
     if (car.position.z >= rowZ0 && car.position.z <= rowZ1) {
       out.overRow++;
       if (!row.some(roofIn)) out.noRoof.push(`z ${car.position.z.toFixed(1)} y ${car.position.y.toFixed(1)}`);
+    }
+    // Over the row in the tracking carry (after the hold's cut): car z from 1 m before the row's front to its back.
+    if (g.director.state.shot === 'carry' && car.position.z <= rowZ1 + 1 && car.position.z >= rowZ0) {
+      out.carry++;
+      const s = rowCover(rects);
+      if (s > out.rowCover) { out.rowCover = s; out.rowCoverAt = `z ${car.position.z.toFixed(1)}`; }
+      out.rowShown = Math.min(out.rowShown, full > 0 ? shown / full : 0);
+      if (s > 0.25) out.rowCovered.push(`${Math.round(s * 100)}% z ${car.position.z.toFixed(1)}`);
     }
     if (inside < 0.9) out.offscreen.push(`${Math.round(inside * 100)}% ${Math.round(b.x0)},${Math.round(b.y0)} ${Math.round(b.x1)},${Math.round(b.y1)} y ${car.position.y.toFixed(1)}`);
   }
@@ -118,6 +158,11 @@ export function releaseFrameTests(VIEWS) {
       // Over the parked row a roof is always in frame (the reason the carry camera is low and wide).
       expect(r.overRow).toBeGreaterThan(20);
       expect(r.noRoof).toEqual([]);
+      // 0113: over the row in the tracking carry, no more than a quarter of the parked bodies' projected pixels are under
+      // a HUD box in any frame, and on a screen wider than tall the row is on the screen (an upright screen's width is 0116's).
+      expect(r.carry).toBeGreaterThan(20);
+      expect(r.rowCovered, `row under the HUD (worst ${Math.round(r.rowCover * 100)}% at ${r.rowCoverAt})`).toEqual([]);
+      if (opts.viewport.width > opts.viewport.height) expect(r.rowShown).toBeGreaterThanOrEqual(0.9);
       expect(errors).toEqual([]);
       await page.close();
     });
