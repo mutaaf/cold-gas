@@ -1,8 +1,8 @@
 ---
 id: 0086
 title: The title scene reads blue-hour, with one signal red, on every tier
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: M
 lens: player-feel
 created: 2026-10-23
@@ -37,3 +37,10 @@ measure on a synthetic image; attach before/after screenshots to the PR.
 
 ## Out of scope
 Changing the Wall's ring geometry, the in-run lighting, or the vehicles' paint.
+
+## Scout re-check (2026-10-29)
+Still reproduces on `main` `09b6c3f` (SwiftShader, `?gfx` default): the 1280x720 title is red from the ring across the
+truss, sky and concrete, and the 390x844 run-up frame is a red wash. Promoted to ready, P1: it is the largest gap
+between the shipped look and pillar 4 ("a single signal red"), and a lockdown polish item.
+
+Re-checked 2026-10-30 on `main` `c1dccf1`: the 390x844 title is still red across the sky, headline and footer copy.
