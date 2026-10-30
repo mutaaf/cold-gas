@@ -276,7 +276,7 @@ export function coarsen(log, step) {
   let prev = null;
   for (const e of log) {
     const q = [e[0]];
-    for (let c = 1; c < e.length; c++) q.push(Math.round(e[c] / step) * step);
+    for (let c = 1; c < e.length; c++) q.push(Math.round(e[c] / step) * step || 0);   // (never -0)
     if (prev && q.length === prev.length && q.every((v, i) => i === 0 || v === prev[i])) continue;
     out.push(q); prev = q;
   }

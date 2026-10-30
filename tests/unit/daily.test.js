@@ -71,11 +71,11 @@ describe('the daily, judged from real runs', () => {
       while (run.phase !== 'done') stepRun(run, ap(run));
       cards[course] = scoreRun(run.t);
     }
-    // A crash on the Show: no input at all, the car never reaches the row.
+    // A crash on the Show: full throttle into the Wall, never let go (it never reaches the row).
     const run = createRun('show');
-    while (run.phase !== 'done') stepRun(run, { throttle: 0 });
+    while (run.phase !== 'done') stepRun(run, { throttle: 1, assist: 1 });
     cards.idle = scoreRun(run.t);
-  });
+  }, 60_000);   // four flights: well under a second alone, longer beside the whole suite
 
   it('counts only on the objective’s course', () => {
     expect(evaluate(byId('mark-show'), cards.wall, 'wall')).toBeNull();

@@ -153,10 +153,17 @@ export function createComeback(o) {
     ch.rp = null;
     return true;
   }
-  function take() {
-    if (!ch) return;
+  let taking = false;
+  async function take() {
+    if (!ch || taking) return;
     if (ch.state === 'checking') {
-      if (!ch.rp) { ch.rp = createReplay(ch.dec.log, ch.dec.course); }
+      // Tapped before the engine is up (a slow phone's first seconds): wait for it, then finish the replay here.
+      if (!ch.rp) {
+        taking = true;
+        try { await o.ready(); } finally { taking = false; }
+        if (!ch || ch.state !== 'checking') return take();
+        ch.rp ??= createReplay(ch.dec.log, ch.dec.course);
+      }
       if (!settle()) { render(); o.toast(OLD, 4200); o.jump(); return; }
     }
     armed = true;

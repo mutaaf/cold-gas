@@ -384,7 +384,7 @@ state. It never writes it.
 | `?drive=stelvio\|transfagarasan\|bigsur\|atlantic[&tod=dusk]` | Free Drive on that road |
 | `?drive=sandbox[#b=<build>]` | The Sandbox (build, power-ups, side quests); `#b=` carries a shared build (also on a road link) |
 | `?drive=endless[&seed=<text>][&tod=dusk][&idb=0]` | Free Drive's endless road from that seed (same seed, same world) |
-| `?play=jump&course=<course>#vs=<run>` | A challenge (src/challenge.js): the title holds on the challenge card instead of skipping to the countdown; Take the challenge races the sender's run as the ghost. A payload that can't be read or is from another `SIM_VERSION` shows "from an older version" and falls back to `?play=jump`. `#vs=` alone (no `?play=`) shows the card too |
+| `?play=jump&course=<course>#vs=<run>` | A challenge (src/challenge.js): the title holds on the challenge card instead of skipping to the countdown; Take the challenge races the sender's run as the ghost. A payload that can't be read or is from another `SIM_VERSION` shows "from an older version" and falls back to `?play=jump`. `#vs=` with no `?play=` (and no `?board=`) shows the card too; `?drive=` still wins over it |
 
 One deep link wins when several are given: `?drive=` over `?play=` over `?board=` (the others are
 ignored; `?gfx=` and `?course=` combine with any of them).

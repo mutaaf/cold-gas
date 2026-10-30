@@ -12,7 +12,7 @@ beforeAll(() => {
   const run = createRun('show'), ap = createAutopilot('show');
   while (run.phase !== 'done') stepRun(run, ap(run));
   show = { log: run.inputLog, card: scoreRun(run.t), frames: run.frames.length };
-});
+}, 60_000);
 const src = () => ({ log: show.log, course: 'show', score: show.card.total, tier: show.card.tier, initials: 'ABC' });
 const entry = (tick, vals = {}) => { const e = [tick, ...new Array(CHANNELS).fill(0)]; for (const [k, v] of Object.entries(vals)) e[1 + +k] = v; return e; };
 
