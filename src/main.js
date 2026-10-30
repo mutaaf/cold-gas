@@ -1245,7 +1245,7 @@ function drawPauseKeys() {
 
 // --- Wiring ---------------------------------------------------------------------------------
 function pause(on) {
-  if (S.mode === 'drive') { on ??= !fd().paused; if (on) { resetInput(); setMore(false); } fd().pause(on); return; }
+  if (S.mode === 'drive') { if (fd().layer?.editing) return; on ??= !fd().paused; if (on) { resetInput(); setMore(false); } fd().pause(on); return; }
   on ??= !S.paused;
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
   if (on) { resetInput(); setMore(false); }   // nothing held comes back held from the pause sheet; the Menu goes with the run (0095)
@@ -1286,6 +1286,9 @@ document.addEventListener('click', (e) => {
   if (b.hasAttribute('data-rookie-go')) goRookie(); else if (b.hasAttribute('data-again')) retry(); else goHome();
 });
 on('[data-replay]', () => { peek(true); replayFrom(0); director.restart(); hero.placed(); });
+// The top bar's Pause (0098): a run, or Free Drive. A mouse click gives up focus before the sheet takes it, so
+// closing the sheet hands focus back to nothing (a focused Pause would take Space or Enter on the road).
+on('[data-pause]', (e) => { if (e.detail) e.currentTarget.blur(); pause(true); });
 on('[data-resume]', () => pause(false));
 on('[data-restart]', () => { if (S.autopilot) { S.paused = false; ui.show('pause', false); startRun('reveal', true); } else retry(); });
 // Share (0081): the run as a card image (src/share-card.js) on the phone's share sheet; text + link

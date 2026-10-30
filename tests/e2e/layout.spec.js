@@ -52,12 +52,12 @@ test('iPad title: the spec labels are 11 px or more', async ({ browser }) => {
   await page.close();
 });
 
-test('desktop: the Home and Retry key hints are 11 px or more', async ({ page }) => {
+test('desktop: the Home, Retry and Pause key hints are 11 px or more', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await boot(page, '&play=jump');
   await page.waitForFunction(() => window.__coldgas?.S.mode === 'countdown' || window.__coldgas?.S.mode === 'live', null, { timeout: 60_000 });
   const sizes = await page.$$eval('.quick kbd', (els) => els.filter((e) => e.offsetParent).map((e) => parseFloat(getComputedStyle(e).fontSize)));
-  expect(sizes.length).toBe(2);
+  expect(sizes.length).toBe(3);
   for (const px of sizes) expect(px).toBeGreaterThanOrEqual(11);
 });
 

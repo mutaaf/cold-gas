@@ -79,6 +79,17 @@ test('1280×720 keyboard: the key lists are still there', async ({ page }) => {
   expect(text).toMatch(/Space/);
   expect(text).toMatch(/Q E Z C/);
   expect(Object.values(await fit(page)).every(Boolean)).toBe(true);
+  // The top bar's Pause (0098) works with a mouse too and keeps no focus (Space and the arrows are the game's);
+  // Escape and P still toggle.
+  await page.locator('[data-resume]').click();
+  await expect.poll(() => G(page, () => window.__coldgas.S.paused)).toBe(false);
+  await page.locator('.top [data-pause]').click();
+  await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect.poll(() => G(page, () => window.__coldgas.S.paused)).toBe(false);
+  expect(await G(page, () => !!document.activeElement?.matches('[data-pause]'))).toBe(false);   // not handed back on close
+  await page.keyboard.press('p');
+  await expect.poll(() => G(page, () => window.__coldgas.S.paused)).toBe(true);
 });
 
 // Each label's box ends ≥ 4 px before its text starts (it read "ADVANCEDQ E Z C").
@@ -169,5 +180,82 @@ test('390×844 touch: pausing closes the Menu', async ({ browser }) => {
   });
   await expect(page.locator('[data-more-toggle]')).toHaveAttribute('aria-expanded', 'false');
   await expect(page.locator('#more-sheet')).toBeHidden();
+  await ctx.close();
+});
+
+// A touch player can pause (0098): the top bar's Pause, a 44 px box inside the screen, one tap from the countdown and
+// the live run (ground and air) at every touch size; hidden on the title, the results and the replay. One page and one
+// boot for every size (the suite's shards have no minutes to spare, LESSONS 2026-10-29). Paused mid-air by the button,
+// the Show's reference flight still scores 94.0 with a 0.817 m/s touchdown: the pause holds the sim, it doesn't touch it.
+test('touch: Pause is one tap from a run at every size, hidden off a run, and a mid-air pause leaves the score', async ({ browser }) => {
+  test.slow();
+  const ctx = await browser.newContext(touchCtx(390, 844));
+  const page = await ctx.newPage();
+  const btn = page.locator('.top [data-pause]');
+  const hidden = () => G(page, () => document.querySelector('.top [data-pause]').getClientRects().length === 0);
+  // Exactly one visible Pause, its box ≥ 44 × 44 and inside the viewport.
+  const box = () => G(page, () => {
+    const vis = [...document.querySelectorAll('[aria-label^="Pause"]')].filter((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
+    const r = vis[0]?.getBoundingClientRect();
+    return { n: vis.length, big: !!r && r.width >= 44 && r.height >= 44, inside: !!r && r.left >= 0 && r.top >= 0 && r.right <= innerWidth && r.bottom <= innerHeight };
+  });
+  const ok = { n: 1, big: true, inside: true };
+  const tapPauseAndResume = async () => {
+    await btn.tap();
+    await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+    expect(await G(page, () => window.__coldgas.S.paused)).toBe(true);
+    await page.locator('[data-resume]').tap();
+    await expect.poll(() => G(page, () => window.__coldgas.S.paused)).toBe(false);
+    await expect(page.locator('[data-screen="pause"]')).toBeHidden();   // its "Paused" dialog out of the count
+  };
+  await page.route('**/coldgas/api/**', (r) => r.abort());   // the results' judges from local lines, no call to wait on
+  await page.goto('/coldgas/?gfx=low');
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
+  await G(page, () => { window.__coldgas.stage.render = () => {}; });   // DOM boxes only: no software-GL frames to wait on
+  await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 60_000 });
+  expect(await hidden()).toBe(true);   // the title
+
+  for (const [w, h] of [[390, 844], [844, 390], [820, 1180], [1180, 820]]) {
+    // Turned on the title: a drastic resize mid-run pauses it (0106), which is not what's under test here.
+    await G(page, () => window.__coldgas.toTitle());
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(600);   // the new size settles (main.js foldPause: 500 ms)
+    await G(page, () => window.__coldgas.startRun('jump'));
+    expect(await G(page, () => window.__coldgas.S.mode)).toBe('countdown');
+    expect(await box(), `${w}×${h} countdown`).toEqual(ok);
+    await tapPauseAndResume();
+    await G(page, () => window.__coldgas.skipCountdown());
+    expect(await box(), `${w}×${h} live`).toEqual(ok);
+    await tapPauseAndResume();
+    expect(await G(page, () => window.__coldgas.S.mode)).toBe('live');
+  }
+
+  // The reference flight, paused by the button in the air, then flown to the end.
+  await G(page, () => window.__coldgas.toTitle());
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(600);
+  await G(page, () => { const cg = window.__coldgas; cg.startRun('reveal'); cg.skipCountdown(); });
+  await G(page, () => { const cg = window.__coldgas; for (let i = 0; i < 4000 && cg.S.run.phase !== 'air'; i++) cg.liveStep(1 / 60); for (let i = 0; i < 20; i++) cg.liveStep(1 / 60); });
+  expect(await box(), 'air').toEqual(ok);
+  await btn.tap();
+  await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+  // Read after the sheet is up: the live loop kept flying until the tap, so this is where the pause landed.
+  const at = await G(page, () => ({ tick: window.__coldgas.S.run.tick, phase: window.__coldgas.S.run.phase, grounded: window.__coldgas.S.run.car.grounded }));
+  expect(at.phase).toBe('air');
+  expect(at.grounded, 'no wheel on the ground: in the air').toBe(0);
+  await page.waitForTimeout(600);   // frames go by under the sheet; the sim holds
+  expect(await G(page, () => window.__coldgas.S.run.tick)).toBe(at.tick);
+  await page.locator('[data-resume]').tap();
+  await expect.poll(() => G(page, () => window.__coldgas.S.paused)).toBe(false);
+  await G(page, () => window.__coldgas.fastForward());
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results' && window.__coldgas.S.card, null, { timeout: 30_000 });
+  const card = await G(page, () => ({ total: window.__coldgas.S.card.total, sink: window.__coldgas.S.run?.t.sink ?? null }));
+  expect(card.total).toBe(94.0);
+  expect(card.sink).toBeCloseTo(0.817, 3);
+  expect(await hidden()).toBe(true);   // the results
+  // The replay plays under the results (S.mode stays 'results', the sheet folded to its peek on a phone).
+  await G(page, () => document.querySelector('.results .sheet [data-replay]').click());
+  await expect(page.locator('.results .peek[data-peek]')).toBeVisible();
+  expect(await hidden()).toBe(true);   // the replay
   await ctx.close();
 });
