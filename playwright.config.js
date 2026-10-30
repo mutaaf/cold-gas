@@ -22,7 +22,10 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // a third worker buys nothing on these 4-CPU runners). Main on #169 then ran 30.3 / 17.0 / 31.6 min: shard 2's 88 tests
 // are short ones (≈ 34 worker-minutes), shard 3's long. 0108 adds touchdown-frame (3 tests, 26 stepped flights, ≈ 3.4
 // worker-minutes) to shard 3, and 71:109:70 cuts 74 / 112 / 67: phone-frame's replay tests, replay-phone and
-// restart-lets-go (≈ 9.5 worker-minutes on #169) join shard 2, ≈ 30.3 / 21.7 / 28.6 min by that run's per-test times. Check a cut with
+// restart-lets-go (≈ 9.5 worker-minutes on #169) join shard 2, ≈ 30.3 / 21.7 / 28.6 min by that run's per-test times. Main on
+// #171 then cancelled e2e 2/3 at 35 min (95 of 112 green, a 1.22× runner): by per-test times from three runs (#170, #171 as
+// PRs, main on #171), each job's runner factored out, 71:109:70 is 32.6 / 33.3 / 25.0 min. 65:100:85 cuts 66 / 101 / 86 ≈
+// 30.4 / 30.4 / 30.2, the floor for the ≈ 91-minute suite (a 1.15× runner still fails). Check a cut with
 // `PWTEST_SHARD_WEIGHTS=a:b:c npx playwright test --list --shard=N/3`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -30,7 +33,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const thirds = args.some((a, i) => /^--shard=\d+\/3$/.test(a) || (a === '--shard' && /^\d+\/3$/.test(args[i + 1] ?? '')));
-if (wholeSuite && thirds) process.env.PWTEST_SHARD_WEIGHTS ??= '71:109:70';
+if (wholeSuite && thirds) process.env.PWTEST_SHARD_WEIGHTS ??= '65:100:85';
 
 export default defineConfig({
   testDir: 'tests/e2e',
