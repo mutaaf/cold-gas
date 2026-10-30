@@ -1843,3 +1843,9 @@ body:is([data-mode='countdown'], [data-mode='live'], [data-mode='replay']) .tbtn
 :is(.hud, .top, .count, .drill-bar) { transition: filter 0.35s var(--ease); }
 .cue { transition: opacity 0.35s var(--ease), filter 0.35s var(--ease); }
 body:has(> .pause:not([hidden])) :is(.hud, .top, .cue, .count, .drill-bar) { filter: opacity(0.15); }
+
+/* --- Marquee (src/ads.js): between runs only ------------------------------------------------ */
+/* The title's banner exists only when the slot can fill; it never covers the CTA, and short screens skip it. */
+.title .ad-banner { margin: 18px 0 0; width: min(100%, 468px); max-height: 90px; overflow: hidden; border-radius: 8px; animation: none; }
+@media (max-height: 620px), (max-width: 360px) { .title .ad-banner { display: none; } }
+.reroll-btn { margin: 12px 0 0; min-height: 44px; }

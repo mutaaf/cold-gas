@@ -52,6 +52,7 @@ import { openSettings, aiLabel } from './ai/settings.js';
 import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
 import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
+import { createAds } from './ads.js';
 import { createPacer } from './pace.js';
 import { pickDeviceTier, pickAA, deviceKind, readDevice, isIOS } from './gfx-tier.js';
 import { readFold, drastic } from './fold.js';
@@ -176,7 +177,11 @@ const S = {
   attempts: {},               // runs flown this session, per course (the results' "Run 4")
 };
 // The page knows the mode, so the quick Retry / Home buttons show only where they belong.
-const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); S.mode = m; document.body.dataset.mode = m; };
+// Marquee (src/ads.js): declared before anything can change the mode (setMode syncs the rewarded button).
+const ads = createAds();
+const rerollBtn = document.querySelector('[data-reroll]');
+let rerolled = null;
+const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); };
 try {
   const saved = localStorage.getItem('coldgas_tier');
   S.tier = TIERS[saved] ? saved : localStorage.getItem('coldgas_assist') === '0' ? 'pro' : 'assist';
@@ -518,6 +523,7 @@ function countRun(run) {
   S.perf = record(S.perf, outcomeOf(S.card, { best: best && !best.ref ? best.total : null }));
   S.crashStreak = S.perf.crashes; saveStreak(S.crashStreak); savePerf(S.perf);
   saveFlown(++S.flown);
+  ads.noteRun();
   const d = decide(S.perf, { tier: S.tier, level: drivingSettings.level, adapt: S.adapt });
   S.adaptNow = { stepDown: null, offer: d.offerLevel || d.offerTier ? d : null };
   // The step down happens here, between runs: the next run flies it; this run's card keeps its tier.
@@ -595,7 +601,36 @@ function warmJudges() {
 // After the title is wired, at idle priority: never on the first load's critical path.
 Promise.all([stage.ready, physicsLoad]).then(() => {
   if (typeof requestIdleCallback === 'function') requestIdleCallback(warmJudges, { timeout: 4000 }); else setTimeout(warmJudges, 500);
+  // Marquee (src/ads.js): the loader after the title is up, at idle priority; the title's banner only if it can fill.
+  const startAds = () => { ads.start(); ads.titleBanner(document.querySelector('[data-screen="title"]')); ads.onConfig(() => syncReroll()); };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(startAds, { timeout: 6000 }); else setTimeout(startAds, 1500);
 }).catch(() => { /* the boot's own failure path reports it */ });
+
+// Ads between runs only (AGENTS.md §3.3, the owner's 2026-10-30 decision): never in a run, the countdown or Free Drive.
+// While a break shows, the replay and the audio hold (S.adBreak), and pick up where they were after it.
+const adHooks = {
+  beforeAd() { S.adBreak = true; suspendAudio(); },
+  afterAd() { S.adBreak = false; lastT = performance.now(); syncLife(true); },
+};
+// Leaving a results sheet of your own run (Retry, Home): the between-runs interstitial, if one is due.
+// With no ad (the usual case) `go` runs at once, synchronously.
+function afterResults(go) {
+  if ((S.mode === 'results' || S.mode === 'replay') && S.runKind === 'jump' && !S.drill && !S.autopilot) ads.postrun(go, adHooks);
+  else go();
+}
+// The opt-in rewarded break: watch an ad, and the panel is asked again for fresh words. The score is
+// scoreRun's and never changes; once per run; hidden unless the slot can fill.
+function syncReroll() {
+  if (!rerollBtn) return;
+  rerollBtn.hidden = !(S.mode === 'results' && S.runKind === 'jump' && !S.drill && !S.autopilot && S.run && S.words && rerolled !== S.run && ads.rewardReady());
+}
+rerollBtn?.addEventListener('click', async () => {
+  const run = S.run;
+  rerollBtn.hidden = true;
+  const earned = await ads.reward(adHooks);
+  if (earned && S.run === run && S.mode === 'results') { rerolled = run; ui.cue_('The panel takes another look', 1600); runPanel(run); }
+  else syncReroll();
+});
 // Local lines are never passed off as the judges' (0083): the receipt says why the AI didn't speak.
 const localReceipt = (reason) => { S.callMeta = localMeta(reason); ui.receipt(S.callMeta, { onChange: () => openAI() }); };
 const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]'), goLabel = document.querySelector('[data-go-label]');
@@ -644,6 +679,7 @@ async function runPanel(run, replay = null) {
   ui.words(S.words);
   // Replay the call: one at a time (a second press while it plays does nothing).
   ui.receipt(S.callMeta, { onReplay: () => { if (replayingCall) return; replayingCall = true; runPanel(run, S.callMeta.events).finally(() => { replayingCall = false; }); }, onChange: () => openAI() });
+  if (!replay) syncReroll();
 }
 
 const aiChip = document.querySelector('[data-ai-open]');
@@ -1178,7 +1214,7 @@ function frameBody(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
   if (pollPads()) lastGesture = now;   // a pad in use becomes the device; Start pauses (and resumes)
-  if (!S.paused) {
+  if (!S.paused && !S.adBreak) {
     // A crash's slow-motion beat scales the game clock (live and replay); the effects run on it too.
     const slow = S.mode === 'live' || S.mode === 'results' || S.mode === 'replay' ? crash.timeScale() : 1;
     crash.update(dt);
@@ -1223,7 +1259,7 @@ const TITLE_IDLE_MS = 60_000;
 let quiet = false, awake = false;
 function syncLife(force = false) {
   const hidden = document.hidden;
-  const q = hidden || S.paused || (S.mode === 'drive' && !!fd()?.paused) || (S.mode === 'title' && performance.now() - lastGesture > TITLE_IDLE_MS);
+  const q = hidden || S.paused || !!S.adBreak || (S.mode === 'drive' && !!fd()?.paused) || (S.mode === 'title' && performance.now() - lastGesture > TITLE_IDLE_MS);
   if (q !== quiet || force) { quiet = q; if (q) suspendAudio(); else resumeAudio(); }
   const a = !hidden && !S.paused && (S.mode === 'countdown' || S.mode === 'live' || S.mode === 'results' || S.mode === 'replay');
   if (a !== awake || force) { awake = a; syncWake(a); }
@@ -1276,9 +1312,9 @@ on('[data-reveal]', () => startRun('reveal'));
 function retry() {
   S.paused = false; ui.show('pause', false);
   if (S.drill) return retryDrill();
-  startRun('jump', true);
+  afterResults(() => startRun('jump', true));
 }
-function goHome() { S.paused = false; ui.show('pause', false); toTitle(); }
+function goHome() { S.paused = false; ui.show('pause', false); afterResults(toTitle); }
 // Delegated: the judges' theatre builds its own Retry / Home / Rookie mode buttons after load.
 document.addEventListener('click', (e) => {
   const b = e.target.closest?.('[data-again], [data-home], [data-rookie-go]');
