@@ -59,6 +59,7 @@ export function createDirector(camera) {
     // `aim` (0 = the reference framing, 1 = on the path) as the region narrows.
     rl: 0, rt: 0, rr: 0, rb: 0, aim: 0,
     bandT: 1, bandB: -1,                                 // the carry's band (0113, NDC): under the top HUD, over the bottom one
+    bandL: 1,                                            // under the HUD standing at the top of the left edge (0116, NDC)
     placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(),   // the carry's locked-off placement (0113)
   };
 
@@ -113,7 +114,7 @@ export function createDirector(camera) {
     st.clear += ((on ? 1 : 0) - st.clear) * (1 - Math.exp(-dt * 5));
     if (st.clear < 0.002) return;
     const tv = Math.tan(st.fov * Math.PI / 360);
-    if (st.launched && camera.aspect < 1 && coarse?.matches && hudMode() === 'compact') {
+    if (st.launched && camera.aspect < 1 && coarse?.matches && hudMode() === 'compact' && st.shot !== CARRY) {
       tmp.copy(carPos).sub(camera.position).applyQuaternion(qInv.copy(camera.quaternion).invert());
       if (tmp.z > -0.5) return;
       const ny = tmp.y / -tmp.z / tv, w = clamp((ny - 0.1) / 0.25, 0, 1);
@@ -135,9 +136,11 @@ export function createDirector(camera) {
   // The carry over the row (0113): the band the HUD leaves, read from the DOM once per run and after a resize (NDC:
   // `bandT` under the top HUD's foot + 24 px, `bandB` over the top of the HUD docked at the bottom across the middle
   // of the screen, −1 when nothing is). On a landscape phone and the desktop that bottom band is where the row is.
+  // `bandL` under the foot of whatever stands up top at the left edge + 24 px (an upright touch screen's compact rail,
+  // 0116), where the upright carry brings the car in.
   let bandDirty = true;
   function measureBand() {
-    bandDirty = false; st.bandT = 1; st.bandB = -1;
+    bandDirty = false; st.bandT = 1; st.bandB = -1; st.bandL = 1;
     const cv = typeof document !== 'undefined' && document.getElementById('stage');
     if (!cv) return;
     const c = cv.getBoundingClientRect();
@@ -149,6 +152,7 @@ export function createDirector(camera) {
       // Up top only the mission block and the top bar count (the side instruments stand beside the car, not over it);
       // at the bottom whatever stands across the middle of the screen, where the row is.
       const top = r.top + r.bottom < 2 * c.top + c.height;
+      if (top && r.left < c.left + c.width * 0.15) st.bandL = Math.min(st.bandL, ndc(r.bottom + 24));
       if (top && (el.dataset.hudBox === 'mission' || el.classList.contains('top-actions'))) st.bandT = Math.min(st.bandT, ndc(r.bottom + 24));
       else if (!top && r.right > c.left + c.width * 0.15 && r.left < c.left + c.width * 0.85) st.bandB = Math.max(st.bandB, ndc(r.top));
     }
@@ -171,8 +175,19 @@ export function createDirector(camera) {
     const d = Math.hypot(want.x - carPos.x, want.z - carPos.z), tanH = Math.tan(st.fov * Math.PI / 360) * camera.aspect;
     const ahead = Math.min(CARRY_AHEAD * d * tanH, Math.max(0, (carPos.z - SHOW.pad.z) / 2));
     want.z -= ahead; lookWant.z -= ahead;
+    if (camera.aspect < 1) fitRowAcross(tanH);
     fitCarry(carPos);
     st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true;
+  }
+  // On a screen taller than it is wide the vertical lens leaves a narrow one across (≈ 26° at 390×844), and the carry
+  // framed for the car showed three of the row's five bodies (0116). There the camera stands abeam of the row's middle,
+  // back far enough that the stretch from the car's tail at the cut to its nose at the row's back fits across the frame
+  // inside the edge carryOut cuts at, so the whole row is in shot and the car crosses it without a re-placement.
+  const ROW_MID = (ROW_FRONT + ROW_Z0) / 2, ROW_HALF = (ROW_FRONT - ROW_Z0) / 2 + CAR_HALF;
+  function fitRowAcross(tanH) {
+    const back = ROW_X + ROW_HALF / (CARRY_EDGE * tanH);
+    if (want.x < back) want.x = back;
+    want.z = ROW_MID; lookWant.z = ROW_MID;
   }
   // The car's nose near the far edge of the locked-off frame (or the car behind it).
   function carryOut(carPos) {
@@ -201,7 +216,7 @@ export function createDirector(camera) {
   function fitCarry(carPos) {
     if (bandDirty) measureBand();
     const T = Math.tan(st.fov * Math.PI / 360);
-    const tN = Math.min(topLine(), st.bandT) - FIT_CAR, bN = st.bandB + FIT_ROW;
+    const tN = Math.min(topLine(), st.bandT, camera.aspect < 1 ? st.bandL : 1) - FIT_CAR, bN = st.bandB + FIT_ROW;
     if (tN - bN < 0.2) return;
     const aC = Math.atan(tN * T), aB = Math.atan(bN * T), span = aC - aB;   // the angles the band allows
     // The row's foot: the bottom of its near side, at the camera's own place along the row or at whichever end sits lower.

@@ -1,7 +1,7 @@
 ---
 id: 0116
 title: On an upright phone the carry shows the whole parked row, not three of its five
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: platform
@@ -92,3 +92,30 @@ Show reference at T+12.3 (`05 CARRY`, `docs/critique/2026-10-29-1552/ipad-A-carr
 It is the same fixed 54° vertical FOV, which gives ≈ 39° horizontal at aspect 0.69. The operator's lockdown
 names iPad explicitly, so the fix should key on `camera.aspect < 1`, not on a phone width, and the probe adds
 820×1180 to its views (acceptance above).
+
+## Shipped (#PR)
+Measured on this branch with 0063's stepped probe (frame-probe.js, Show reference at 30 fps, every carry frame,
+the hold excluded); main `e10b4ee` (after 0113's locked-off carry) → branch:
+
+| Viewport | Row on screen, mean | Carry frames with < 4 bodies half on | At z −13.7 |
+|---|---|---|---|
+| 390×844 touch | 71 % → **100 %** | 27 → **0** | 5 → 5 |
+| 360×800 touch | 69 % → **100 %** | 28 → **0** | 4 → **5** |
+| 412×915 touch | 70 % → **100 %** | 27 → **0** | 4 → **5** |
+| 820×1180 touch | 94 % → **100 %** | 7 → **0** | 5 → 5 |
+
+Two causes, both upright-only:
+- The carry framed the car, not the row: on `camera.aspect < 1` it now stands abeam of the row's middle, back as far as
+  the stretch from the car's tail at the cut to its nose at the row's back needs across the frame inside carryOut's
+  edge (≈ 47 m at 390×844), so no re-placement fires (`fitRowAcross`).
+- keepClear's rail yaw (upright touch, compact HUD) holds the car at or right of the frame's centre on every frame,
+  even when it is low, so the "locked-off" carry panned with the car until it passed mid-screen and pushed the row's
+  far end off the right edge. In the carry the yaw is off; instead the carry's fit holds the car's centre under the
+  foot of the HUD standing at the top of the left edge + 24 px (`bandL`, measured with 0113's band), so it still never
+  sits under the rail (`covered` stays empty at every upright view).
+
+Every upright view in release-frame.spec.js and phone-frame.spec.js (390×844, 360×800, 412×915, 820×1180,
+1024×1366, 669×871, 360×748, 360×380) now asserts mean ≥ 90 %, no carry frame under 4 of 5, 5 of 5 at mid-row, along
+with 0063's and 0112's bars. Landscape and desktop: every change is gated on `aspect < 1` (bandL is read but unused
+there), so their poses and the flicker probe's two screens (1280×720, 844×390) are bit-identical to main.
+Shots: `docs/shots/row-across-0116/` (390×844 at z −13.7 before and after, and at the cut, z −10).

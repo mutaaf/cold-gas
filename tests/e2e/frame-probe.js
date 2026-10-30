@@ -35,7 +35,8 @@ export function fly() {
     return { x0, y0, x1, y1 };
   };
   const overlap = (b, r) => Math.max(0, Math.min(b.x1, r.right) - Math.max(b.x0, r.left)) * Math.max(0, Math.min(b.y1, r.bottom) - Math.max(b.y0, r.top));
-  const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity, overRow: 0, noRoof: [], carry: 0, rowCover: 0, rowCoverAt: '', rowCovered: [], rowShown: 1 };
+  const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity, overRow: 0, noRoof: [], carry: 0, rowCover: 0, rowCoverAt: '', rowCovered: [], rowShown: 1,
+    rowMean: 0, fewBodies: [], midBodies: 0, midZ: Infinity };
   // The parked row as it stands (each vehicle's footprint and height), and the stretch it covers.
   const row = S.run.car.world.bodies.map((b) => ({ x0: b.cx - b.hx, x1: b.cx + b.hx, z0: b.cz - b.hz, z1: b.cz + b.hz, h: b.h }));
   const rowZ0 = Math.min(...row.map((b) => b.z0)), rowZ1 = Math.max(...row.map((b) => b.z1));
@@ -79,6 +80,13 @@ export function fly() {
     }
     return all > 0 ? under / all : 0;
   };
+  // The share of one body's projected box on the screen (0116: the row cut by the edges of an upright screen).
+  const onScreen = (b) => {
+    full = 0; shown = 0;
+    bodyBox(b);
+    return full > 0 ? shown / full : 0;
+  };
+  let rowSum = 0;
   S.paused = true;   // the frame loop stands still; the probe steps the run and the director itself
   const DT = 1 / 30;
   for (let f = 0; f < 30 * 40 && S.mode === 'live' && S.run.phase !== 'done'; f++) {
@@ -115,10 +123,16 @@ export function fly() {
       if (s > out.rowCover) { out.rowCover = s; out.rowCoverAt = `z ${car.position.z.toFixed(1)}`; }
       out.rowShown = Math.min(out.rowShown, full > 0 ? shown / full : 0);
       if (s > 0.25) out.rowCovered.push(`${Math.round(s * 100)}% z ${car.position.z.toFixed(1)}`);
+      rowSum += full > 0 ? shown / full : 0;
+      // 0116: how many of the bodies are half or more on the screen, every frame and at mid-row (z −13.7).
+      const n = row.filter((rb) => onScreen(rb) >= 0.5).length;
+      if (n < row.length - 1) out.fewBodies.push(`${n} z ${car.position.z.toFixed(1)}`);
+      if (Math.abs(car.position.z + 13.7) < Math.abs(out.midZ + 13.7)) { out.midZ = car.position.z; out.midBodies = n; }
     }
     if (inside < 0.9) out.offscreen.push(`${Math.round(inside * 100)}% ${Math.round(b.x0)},${Math.round(b.y0)} ${Math.round(b.x1)},${Math.round(b.y1)} y ${car.position.y.toFixed(1)}`);
   }
   S.paused = false;
+  out.rowMean = out.carry ? rowSum / out.carry : 0;
   out.phase = S.run.phase;
   return out;
 }
@@ -163,6 +177,13 @@ export function releaseFrameTests(VIEWS) {
       expect(r.carry).toBeGreaterThan(20);
       expect(r.rowCovered, `row under the HUD (worst ${Math.round(r.rowCover * 100)}% at ${r.rowCoverAt})`).toEqual([]);
       if (opts.viewport.width > opts.viewport.height) expect(r.rowShown).toBeGreaterThanOrEqual(0.9);
+      // 0116: on an upright screen the carry fits the row's length across the screen: on average nine tenths of the
+      // bodies' pixels on the screen, never fewer than four of the five half on it, and all five at mid-row.
+      else {
+        expect(r.rowMean, 'row on screen, mean over the carry').toBeGreaterThanOrEqual(0.9);
+        expect(r.fewBodies, 'carry frames with fewer than four bodies half on screen').toEqual([]);
+        expect(r.midBodies, `bodies half on screen at z ${r.midZ.toFixed(1)}`).toBe(5);
+      }
       expect(errors).toEqual([]);
       await page.close();
     });
