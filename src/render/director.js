@@ -19,7 +19,7 @@
 // toward the pad read at a glance.
 import * as THREE from 'three';
 import { LINEUP, WALL, SHOW } from '../sim/courses.js';
-import { hudMode } from '../hud-mode.js';
+import { hudMode, onHudMode } from '../hud-mode.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
 const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
@@ -28,12 +28,16 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const K = WALL.lip.y / 19.8;
 // The live Show after the release (0063), as st.shot: a locked-off hold on the drop off the lip, then
 // the tracking carry over the row, each entered by a hard cut.
-const HOLD = 'hold', CARRY = 'carry';
+const HOLD = 'hold', CARRY = 'carry', FOLLOW = 'follow';
 const HOLD_POS = [30, 12, -6];      // from the car at the release: out to the side, level with the curl's middle, ahead (m)
 const HOLD_LOOK = [21, -4];         // aim: this height, this far ahead of the release point (m)
 const HOLD_MAX = 1.6;               // s: the latest the hold lasts
 // The hold cuts to the carry a metre before the car reaches the row, so the roofs are in shot over it.
 const ROW_FRONT = Math.max(...SHOW.boxes.map((b) => b.maxZ)) + 1;
+// The row's near side (the camera stands out at +x) and its length, for the carry's fit (0113).
+const ROW_X = Math.max(...SHOW.boxes.map((b) => b.maxX)), ROW_Z0 = Math.min(...SHOW.boxes.map((b) => b.minZ)), ROW_Z1 = ROW_FRONT - 1;
+// The HUD boxes the carry frames the row above (tests/e2e/frame-probe.js measures against the same).
+const HUD_SEL = '[data-hud-box], [data-hud-toggle], .top-actions';
 // The ground shots (the landed rig, a crash cut) are framed side-on to a 4.65 m car with a vertical lens, so on a
 // screen narrower than it is tall the car came out wider than the screen (0108: 1.2–1.45 screens upright on a
 // phone). Under this aspect they hold the horizontal lens they have at it, so the car keeps its share of the
@@ -54,6 +58,8 @@ export function createDirector(camera) {
     // replay's lens is shifted to its centre, and the wide locked-off rig aims toward the car's path by
     // `aim` (0 = the reference framing, 1 = on the path) as the region narrows.
     rl: 0, rt: 0, rr: 0, rb: 0, aim: 0,
+    bandT: 1, bandB: -1,                                 // the carry's band (0113, NDC): under the top HUD, over the bottom one
+    placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(),   // the carry's locked-off placement (0113)
   };
 
   // Behind, above and to the side of the car along its line of flight (the last good heading when
@@ -118,9 +124,103 @@ export function createDirector(camera) {
     tmp.copy(carPos).sub(camera.position).applyQuaternion(qInv.copy(camera.quaternion).invert());
     if (tmp.z > -0.5) return;
     // (Under 440 px upright the rail's head rides in the top bar, src/styles.css: the top bar's clearance.)
+    camera.rotateX(st.clear * knee(Math.atan2(tmp.y, -tmp.z) - Math.atan(topLine() * tv) + KNEE / 2));
+  }
+  // The highest the car's centre goes, in NDC.
+  function topLine() {
     const clearPx = coarse?.matches && viewH ? (camera.aspect < 1 && viewH >= 440 ? CLEAR_TALL : CLEAR_WIDE) : 0;
-    const top = Math.min(camera.aspect < 1 && hudMode() === 'full' ? TOP_TALL : TOP, clearPx ? 1 - (2 * clearPx) / viewH : 1);
-    camera.rotateX(st.clear * knee(Math.atan2(tmp.y, -tmp.z) - Math.atan(top * tv) + KNEE / 2));
+    return Math.min(camera.aspect < 1 && hudMode() === 'full' ? TOP_TALL : TOP, clearPx ? 1 - (2 * clearPx) / viewH : 1);
+  }
+
+  // The carry over the row (0113): the band the HUD leaves, read from the DOM once per run and after a resize (NDC:
+  // `bandT` under the top HUD's foot + 24 px, `bandB` over the top of the HUD docked at the bottom across the middle
+  // of the screen, −1 when nothing is). On a landscape phone and the desktop that bottom band is where the row is.
+  let bandDirty = true;
+  function measureBand() {
+    bandDirty = false; st.bandT = 1; st.bandB = -1;
+    const cv = typeof document !== 'undefined' && document.getElementById('stage');
+    if (!cv) return;
+    const c = cv.getBoundingClientRect();
+    if (c.height < 40) return;
+    const ndc = (y) => 1 - (2 * (y - c.top)) / c.height;
+    for (const el of document.querySelectorAll(HUD_SEL)) {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 1 || r.height <= 1 || !shown(el)) continue;
+      // Up top only the mission block and the top bar count (the side instruments stand beside the car, not over it);
+      // at the bottom whatever stands across the middle of the screen, where the row is.
+      const top = r.top + r.bottom < 2 * c.top + c.height;
+      if (top && (el.dataset.hudBox === 'mission' || el.classList.contains('top-actions'))) st.bandT = Math.min(st.bandT, ndc(r.bottom + 24));
+      else if (!top && r.right > c.left + c.width * 0.15 && r.left < c.left + c.width * 0.85) st.bandB = Math.max(st.bandB, ndc(r.top));
+    }
+  }
+  const shown = (el) => {
+    for (let e = el; e && e.nodeType === 1; e = e.parentElement) {
+      if (e.hidden) return false;
+      const cs = getComputedStyle(e);
+      if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.05) return false;
+    }
+    return true;
+  };
+  onHudMode(() => { bandDirty = true; });   // compact ⇄ full reflows the boxes without a resize
+  // The carry's placement: the tracking framing for the car where it is, trucked along the flight so the car stands
+  // left of centre with the way it's going in frame (no further than halfway to the pad), then fitted to the band.
+  const CARRY_AHEAD = 0.5, CARRY_EDGE = 0.9, CAR_HALF = 2.6;   // NDC: where the car starts across the frame, where its nose cuts again; m
+  function placeCarry(carPos) {
+    want.set(carPos.x + 21 + 0.5 * Math.max(0, carPos.y - 10), clamp(carPos.y * 0.5 + 1.5, 2.2, 14), carPos.z + 2);
+    lookWant.set(carPos.x * 0.5, carPos.y * 0.55 + 0.8, carPos.z - 2);
+    const d = Math.hypot(want.x - carPos.x, want.z - carPos.z), tanH = Math.tan(st.fov * Math.PI / 360) * camera.aspect;
+    const ahead = Math.min(CARRY_AHEAD * d * tanH, Math.max(0, (carPos.z - SHOW.pad.z) / 2));
+    want.z -= ahead; lookWant.z -= ahead;
+    fitCarry(carPos);
+    st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true;
+  }
+  // The car's nose near the far edge of the locked-off frame (or the car behind it).
+  function carryOut(carPos) {
+    tmp.copy(carPos).sub(st.carryPos).applyQuaternion(qInv.copy(camera.quaternion).invert());
+    return tmp.z > -0.5 || (tmp.x + CAR_HALF) / -tmp.z > CARRY_EDGE * Math.tan(st.fov * Math.PI / 360) * camera.aspect;
+  }
+
+  // After the carry has looked where it wants (want, lookWant), fit the car and the row between those lines: the car's
+  // centre under the top line, the row's near foot over the bottom band. A framing that already fits is left as it is
+  // (the upright phone, whose HUD is at the top); one that needs it is pitched within the band, and where the span
+  // from the car to the row's foot is taller than the band at this lens the camera stands back, about the middle of
+  // the two, just as far as it needs. All from the car's state alone, so the move is as smooth as the car.
+  // A point's angle above the camera's level line, from `want`, with its depth along the shot's bearing (ux, uz), so a
+  // point off to the side comes out lower as it does on the screen (rad).
+  let ux = 0, uz = -1;
+  const elev = (x, y, z) => Math.atan2(y - want.y, Math.max(0.5, (x - want.x) * ux + (z - want.z) * uz));
+  const bearing = () => {   // sets (ux, uz) from want toward lookWant; returns that horizontal distance
+    const d = Math.hypot(lookWant.x - want.x, lookWant.z - want.z);
+    if (d >= 0.5) { ux = (lookWant.x - want.x) / d; uz = (lookWant.z - want.z) / d; }
+    return d;
+  };
+  const footElev = (z) => Math.min(elev(ROW_X, 0, z), elev(ROW_X, 0, ROW_Z0), elev(ROW_X, 0, ROW_Z1));
+  const FIT_CAR = 0.06, FIT_ROW = 0.04;   // NDC margins: the car under the top line, the row's foot over the band
+  // The farthest it stands back, × the shot's distance (the 300 px-tall flip screen sideways needs ≈ 1.9×, a desktop ≈ 1.35×).
+  const FIT_BACK = 2.5;
+  function fitCarry(carPos) {
+    if (bandDirty) measureBand();
+    const T = Math.tan(st.fov * Math.PI / 360);
+    const tN = Math.min(topLine(), st.bandT) - FIT_CAR, bN = st.bandB + FIT_ROW;
+    if (tN - bN < 0.2) return;
+    const aC = Math.atan(tN * T), aB = Math.atan(bN * T), span = aC - aB;   // the angles the band allows
+    // The row's foot: the bottom of its near side, at the camera's own place along the row or at whichever end sits lower.
+    const bz = clamp(want.z, ROW_Z0, ROW_Z1);
+    let dh = bearing();
+    if (dh < 0.5) return;
+    const phi0 = Math.atan2(lookWant.y - want.y, dh);   // the shot's own pitch
+    let eC = elev(carPos.x, carPos.y, carPos.z), eB = footElev(bz);
+    if (eC - eB > span) {
+      const s = Math.min(FIT_BACK, Math.tan((eC - eB) / 2) / Math.tan(span / 2));
+      const mx = (carPos.x + ROW_X) / 2, my = carPos.y / 2, mz = (carPos.z + bz) / 2;
+      want.set(mx + (want.x - mx) * s, my + (want.y - my) * s, mz + (want.z - mz) * s);
+      dh = bearing();
+      eC = elev(carPos.x, carPos.y, carPos.z); eB = footElev(clamp(want.z, ROW_Z0, ROW_Z1));
+    }
+    // The pitch: the shot's, within [car on the top line, foot on the bottom line] (their middle if they cross).
+    const lo = eC - aC, hi = eB - aB;
+    const phi = lo > hi ? (lo + hi) / 2 : clamp(phi0, lo, hi);
+    lookWant.y = want.y + dh * Math.tan(phi);
   }
 
   // --- Lineup -----------------------------------------------------------------------------------
@@ -216,19 +316,33 @@ export function createDirector(camera) {
       // keepClear) and the roofs below it both fit (0063).
       // The release is a hard cut, broadcast-style (0063), to a locked-off camera standing out to the side
       // and ahead of the ledge: it holds still while the car drops off the lip toward the row (keepClear
-      // turns it only if the car would rise under the top HUD), then cuts to the tracking carry as the car
-      // reaches the row. A tracking camera there followed the car past the lit curl and the tower close
-      // up, and every lit edge of the Wall crawled 2–4 px a frame through it (show-live-jets wall 226‰
-      // on a desktop against main's 128‰).
-      if (st.shot !== HOLD && st.shot !== CARRY) {
+      // turns it only if the car would rise under the top HUD), then cuts to the carry as the car reaches the
+      // row. A tracking camera there followed the car past the lit curl and the tower close up, and every lit
+      // edge of the Wall crawled 2–4 px a frame through it (show-live-jets wall 226‰ on a desktop against
+      // main's 128‰).
+      if (st.shot !== HOLD && st.shot !== CARRY && st.shot !== FOLLOW) {
         st.shot = HOLD; st.fov = 54; snap();
         st.holdPos.set(carPos.x + HOLD_POS[0], HOLD_POS[1], carPos.z + HOLD_POS[2]);
         st.holdLook.set(carPos.x * 0.5, HOLD_LOOK[0], carPos.z + HOLD_LOOK[1]);
       }
-      if (st.shot === HOLD && (carPos.z < ROW_FRONT || st.t - st.launchT > HOLD_MAX)) { st.shot = CARRY; snap(); }
+      if (st.shot === HOLD && (carPos.z < ROW_FRONT || st.t - st.launchT > HOLD_MAX)) { st.shot = CARRY; snap(); bandDirty = true; st.placed = false; }
       if (st.shot === HOLD) {
         camera.position.copy(st.holdPos);
         camera.lookAt(st.holdLook);
+        return;
+      }
+      // The carry is locked off too (0113): placed at the cut so the car (at its highest) and the whole row fit the
+      // band the HUD leaves, aimed ahead along the flight, then still while the car crosses it. A camera tracking the
+      // car from that far out walked the lit Wall across the frame (show-live-jets wall 104 → 188‰ on a phone). If
+      // the car nears the far edge (a narrow screen, a long flight) it cuts to a fresh placement from there.
+      // Past the row's back it cuts to the tracking follow down to the pad, which the landing rig eases out of.
+      if (st.shot === CARRY && carPos.z < ROW_Z0) { st.shot = FOLLOW; snap(); }
+      if (st.shot === CARRY) {
+        if (!st.placed || carryOut(carPos)) placeCarry(carPos);
+        camera.position.copy(st.carryPos);
+        camera.lookAt(st.carryLook);
+        // A car that comes down on the row: the landing rig eases in from here.
+        st.smooth.copy(st.carryPos); st.lookS.copy(st.carryLook); st.init = true;
         return;
       }
       want.set(carPos.x + 21 + 0.5 * Math.max(0, carPos.y - 10), clamp(carPos.y * 0.5 + 1.5, 2.2, 14), carPos.z + 2);
@@ -380,6 +494,6 @@ export function createDirector(camera) {
   // Hold a locked-off camera at `pos` for `seconds` (crash cuts); a mode change cancels it.
   function cut(pos, seconds, fov = 40) { st.cutPos.copy(pos); st.cutT = seconds; st.cutFov = fov; }
 
-  return { update, snap, restart, cut, setView: (v) => { st.view = v; }, view: () => st.view, reframe: () => { viewH = (typeof document !== 'undefined' && document.getElementById('stage')?.clientHeight) || innerHeight; frameOffset(st.mode); }, setRegion, shake: (s) => { st.shake = Math.max(st.shake, s); },
+  return { update, snap, restart, cut, setView: (v) => { st.view = v; }, view: () => st.view, reframe: () => { viewH = (typeof document !== 'undefined' && document.getElementById('stage')?.clientHeight) || innerHeight; bandDirty = true; frameOffset(st.mode); }, setRegion, shake: (s) => { st.shake = Math.max(st.shake, s); },
     impact: (dip, punch) => { st.dip = Math.max(st.dip, dip); st.punch = Math.max(st.punch, punch); }, state: st };
 }
