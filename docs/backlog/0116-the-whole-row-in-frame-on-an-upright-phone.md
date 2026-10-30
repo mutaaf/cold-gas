@@ -107,7 +107,8 @@ the hold excluded); main `e10b4ee` (after 0113's locked-off carry) → branch:
 Two causes, both upright-only:
 - The carry framed the car, not the row: on `camera.aspect < 1` it now stands abeam of the row's middle, back as far as
   the stretch from the car's tail at the cut to its nose at the row's back needs across the frame inside carryOut's
-  edge (≈ 47 m at 390×844), so no re-placement fires (`fitRowAcross`).
+  edge (≈ 47 m at 390×844), so no re-placement fires (`fitRowAcross`; a cut on the hold's 1.6 s timeout, car still short
+  of the row, starts the stretch at the car).
 - keepClear's rail yaw (upright touch, compact HUD) holds the car at or right of the frame's centre on every frame,
   even when it is low, so the "locked-off" carry panned with the car until it passed mid-screen and pushed the row's
   far end off the right edge. In the carry the yaw is off; instead the carry's fit holds the car's centre under the

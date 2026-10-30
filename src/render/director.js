@@ -175,19 +175,20 @@ export function createDirector(camera) {
     const d = Math.hypot(want.x - carPos.x, want.z - carPos.z), tanH = Math.tan(st.fov * Math.PI / 360) * camera.aspect;
     const ahead = Math.min(CARRY_AHEAD * d * tanH, Math.max(0, (carPos.z - SHOW.pad.z) / 2));
     want.z -= ahead; lookWant.z -= ahead;
-    if (camera.aspect < 1) fitRowAcross(tanH);
+    if (camera.aspect < 1) fitRowAcross(carPos, tanH);
     fitCarry(carPos);
     st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true;
   }
   // On a screen taller than it is wide the vertical lens leaves a narrow one across (≈ 26° at 390×844), and the carry
   // framed for the car showed three of the row's five bodies (0116). There the camera stands abeam of the row's middle,
   // back far enough that the stretch from the car's tail at the cut to its nose at the row's back fits across the frame
-  // inside the edge carryOut cuts at, so the whole row is in shot and the car crosses it without a re-placement.
-  const ROW_MID = (ROW_FRONT + ROW_Z0) / 2, ROW_HALF = (ROW_FRONT - ROW_Z0) / 2 + CAR_HALF;
-  function fitRowAcross(tanH) {
-    const back = ROW_X + ROW_HALF / (CARRY_EDGE * tanH);
+  // inside the edge carryOut cuts at, so the whole row is in shot and the car crosses it without a re-placement. A cut
+  // on the hold's timeout can come with the car still short of the row: the stretch then starts where the car is.
+  function fitRowAcross(carPos, tanH) {
+    const z1 = Math.max(carPos.z, ROW_FRONT) + CAR_HALF, z0 = ROW_Z0 - CAR_HALF;
+    const back = ROW_X + (z1 - z0) / 2 / (CARRY_EDGE * tanH);
     if (want.x < back) want.x = back;
-    want.z = ROW_MID; lookWant.z = ROW_MID;
+    want.z = lookWant.z = (z1 + z0) / 2;
   }
   // The car's nose near the far edge of the locked-off frame (or the car behind it).
   function carryOut(carPos) {
