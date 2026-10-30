@@ -44,22 +44,27 @@ export function createLandingHud({ scene, onStatus = null }) {
   const topEl = $('[data-d-top]'), zeroEl = $('[data-d-zero]');
   // The scale labels' boxes and BRAKE's own extent, in the tape's units (0055): read when the tape's layout
   // changes (its size follows every HUD mode and screen rule that resizes its type), never per frame.
-  const geo = { ok: false, asc: 0, desc: 0, topBottom: 0, zeroTop: TAPE_H };
+  // A failed read (not laid out yet) waits for the next layout change instead of reading again every frame.
+  const geo = { ok: false, tried: false, asc: 0, desc: 0, topBottom: 0, zeroTop: TAPE_H };
   const measure = () => {
-    geo.ok = false;
+    geo.ok = false; geo.tried = true;
     if (!el.brakeLbl?.getBBox || !topEl || !zeroEl) return;
-    const b = el.brakeLbl.getBBox(), t = topEl.getBBox(), z = zeroEl.getBBox(), y = Number(el.brakeLbl.getAttribute('y'));
-    if (!(b.height > 0 && t.height > 0 && z.height > 0)) return;   // not laid out (the descent is hidden)
-    geo.asc = y - b.y; geo.desc = b.y + b.height - y; geo.topBottom = t.y + t.height; geo.zeroTop = z.y;
-    geo.ok = true;
+    try {
+      const b = el.brakeLbl.getBBox(), t = topEl.getBBox(), z = zeroEl.getBBox(), y = Number(el.brakeLbl.getAttribute('y'));
+      if (!(b.height > 0 && t.height > 0 && z.height > 0)) return;   // not laid out (the descent is hidden)
+      geo.asc = y - b.y; geo.desc = b.y + b.height - y; geo.topBottom = t.y + t.height; geo.zeroTop = z.y;
+      geo.ok = true;
+    } catch { /* an engine that throws on a text not rendered: retry on the next layout change */ }
   };
+  const remeasure = () => { geo.ok = false; geo.tried = false; last.brake = -1; };
   const tape = el.brakeLbl?.ownerSVGElement;
-  if (tape && typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { geo.ok = false; last.brake = -1; }).observe(tape);
+  if (tape && typeof ResizeObserver !== 'undefined') new ResizeObserver(remeasure).observe(tape);
+  document.fonts?.addEventListener?.('loadingdone', remeasure);   // a web font swapped in changes the metrics
   const scale = () => {
     TAPE_MAX = tapeMax();
     if (topEl) topEl.textContent = isMetric() ? '30' : '100';
     if (zeroEl) zeroEl.textContent = `0 ${lenUnit()}`;
-    last.sink = -1; last.target = -1; last.brake = -1; last.car = -1; geo.ok = false;
+    last.sink = -1; last.target = -1; last.car = -1; remeasure();
   };
   const s2 = { dsink: $('[data-2="dsink"]'), dtarget: $('[data-2="dtarget"]') }, l2 = { dsink: NaN, dtarget: NaN };
   const set2 = (key, si) => { const r = Math.round(si * uk('rate', true) * 10); if (r !== l2[key] && s2[key]) { s2[key].textContent = `${(r / 10).toFixed(1)} ${uu('rate', true)}`; l2[key] = r; } };
@@ -140,7 +145,7 @@ export function createLandingHud({ scene, onStatus = null }) {
       brakeWord.textContent = up ? 'BRAKE ↑' : 'BRAKE';
       brakeDist.textContent = up ? '' : ` ${Math.ceil(pr.brakeBy * lenK())} ${lenUnit()} · ${Math.ceil(pr.brakeBy * uk('len', true))} ${uu('len', true)}`;
       // The label over its tick, but never on the scale's labels: the tick stays true, the label moves.
-      if (!geo.ok) measure();
+      if (!geo.ok && !geo.tried) measure();
       el.brakeLbl.setAttribute('y', (geo.ok ? brakeLabelY(Number(y), geo) : Number(y) - 6).toFixed(1));
       last.brake = by;
     }
@@ -190,10 +195,11 @@ export function createLandingHud({ scene, onStatus = null }) {
 // TAPE_H). It sits 6 units over its tick, unless that puts it on a scale label: near the ground it stays
 // `gap` above "0 ft" (the top of its box, `zeroTop`), near the top `gap` below "100" (`topBottom`). `asc` and
 // `desc` are the label's own extent above and below its baseline.
+// Where over-the-tick would reach "100", it goes under its tick instead (never across its own line).
 export function brakeLabelY(tick, { asc, desc, topBottom, zeroTop }, gap = 2) {
   const want = tick - 6, lo = topBottom + gap + asc, hi = zeroTop - gap - desc;
   if (lo > hi) return want;   // a tape too short for three labels: leave it where it was
-  return Math.min(hi, Math.max(lo, want));
+  return Math.min(hi, want >= lo ? want : Math.max(lo, tick + gap + asc));
 }
 
 // Roll rate about the car's long axis (rad/s): angular velocity · forward.

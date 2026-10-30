@@ -20,9 +20,17 @@ describe('brakeLabelY', () => {
         expect(t).toBeGreaterThanOrEqual(g.topBottom + 2 - 1e-9);
       }
     });
-    it(`at ${em} units: moves monotonically with its tick (never jumps past it)`, () => {
-      let prev = -Infinity;
-      for (let tick = 0; tick <= 140; tick += 0.5) { const y = brakeLabelY(tick, g); expect(y).toBeGreaterThanOrEqual(prev); prev = y; }
+    it(`at ${em} units: never across its own tick (over it, or under it near the top)`, () => {
+      for (let tick = 0; tick <= 140; tick += 0.5) {
+        const [t, b] = box(brakeLabelY(tick, g), g);
+        expect(b < tick || t > tick, `tick ${tick}: label ${t.toFixed(1)}..${b.toFixed(1)}`).toBe(true);
+      }
+    });
+    it(`at ${em} units: over its tick wherever that clears "100", under it only above that`, () => {
+      for (let tick = 0; tick <= 140; tick += 0.5) {
+        const [t] = box(tick - 6, g), y = brakeLabelY(tick, g);
+        if (t >= g.topBottom + 2) expect(y).toBeLessThan(tick); else expect(y).toBeGreaterThan(tick);
+      }
     });
   }
   it('near the ground it stands just above "0 ft" (the reference descent: tick 133.1 at 16 units)', () => {
