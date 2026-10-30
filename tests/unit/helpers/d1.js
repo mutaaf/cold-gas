@@ -13,7 +13,7 @@ export function fakeD1() {
   });
   function exec(sql, args) {
     const s = db.prepare(sql);
-    if (/^\s*(select|with)\b/i.test(sql) || /\breturning\b/i.test(sql)) return { results: s.all(...args).map((r) => ({ ...r })), success: true };
+    if (/^\s*(select|with|pragma)\b/i.test(sql) || /\breturning\b/i.test(sql)) return { results: s.all(...args).map((r) => ({ ...r })), success: true };
     s.run(...args);
     return { results: [], success: true };
   }
