@@ -28,7 +28,7 @@ const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 const K = WALL.lip.y / 19.8;
 // The live Show after the release (0063), as st.shot: a locked-off hold on the drop off the lip, then
 // the tracking carry over the row, each entered by a hard cut.
-const HOLD = 'hold', CARRY = 'carry';
+const HOLD = 'hold', CARRY = 'carry', FOLLOW = 'follow';
 const HOLD_POS = [30, 12, -6];      // from the car at the release: out to the side, level with the curl's middle, ahead (m)
 const HOLD_LOOK = [21, -4];         // aim: this height, this far ahead of the release point (m)
 const HOLD_MAX = 1.6;               // s: the latest the hold lasts
@@ -59,6 +59,7 @@ export function createDirector(camera) {
     // `aim` (0 = the reference framing, 1 = on the path) as the region narrows.
     rl: 0, rt: 0, rr: 0, rb: 0, aim: 0,
     bandT: 1, bandB: -1,                                 // the carry's band (0113, NDC): under the top HUD, over the bottom one
+    placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(),   // the carry's locked-off placement (0113)
   };
 
   // Behind, above and to the side of the car along its line of flight (the last good heading when
@@ -161,6 +162,24 @@ export function createDirector(camera) {
     return true;
   };
   onHudMode(() => { bandDirty = true; });   // compact ⇄ full reflows the boxes without a resize
+  // The carry's placement: the tracking framing for the car where it is, trucked along the flight so the car stands
+  // left of centre with the way it's going in frame (no further than halfway to the pad), then fitted to the band.
+  const CARRY_AHEAD = 0.5, CARRY_EDGE = 0.9, CAR_HALF = 2.6;   // NDC: where the car starts across the frame, where its nose cuts again; m
+  function placeCarry(carPos) {
+    want.set(carPos.x + 21 + 0.5 * Math.max(0, carPos.y - 10), clamp(carPos.y * 0.5 + 1.5, 2.2, 14), carPos.z + 2);
+    lookWant.set(carPos.x * 0.5, carPos.y * 0.55 + 0.8, carPos.z - 2);
+    const d = Math.hypot(want.x - carPos.x, want.z - carPos.z), tanH = Math.tan(st.fov * Math.PI / 360) * camera.aspect;
+    const ahead = Math.min(CARRY_AHEAD * d * tanH, Math.max(0, (carPos.z - SHOW.pad.z) / 2));
+    want.z -= ahead; lookWant.z -= ahead;
+    fitCarry(carPos);
+    st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true;
+  }
+  // The car's nose near the far edge of the locked-off frame (or the car behind it).
+  function carryOut(carPos) {
+    tmp.copy(carPos).sub(st.carryPos).applyQuaternion(qInv.copy(camera.quaternion).invert());
+    return tmp.z > -0.5 || (tmp.x + CAR_HALF) / -tmp.z > CARRY_EDGE * Math.tan(st.fov * Math.PI / 360) * camera.aspect;
+  }
+
   // After the carry has looked where it wants (want, lookWant), fit the car and the row between those lines: the car's
   // centre under the top line, the row's near foot over the bottom band. A framing that already fits is left as it is
   // (the upright phone, whose HUD is at the top); one that needs it is pitched within the band, and where the span
@@ -297,24 +316,37 @@ export function createDirector(camera) {
       // keepClear) and the roofs below it both fit (0063).
       // The release is a hard cut, broadcast-style (0063), to a locked-off camera standing out to the side
       // and ahead of the ledge: it holds still while the car drops off the lip toward the row (keepClear
-      // turns it only if the car would rise under the top HUD), then cuts to the tracking carry as the car
-      // reaches the row. A tracking camera there followed the car past the lit curl and the tower close
-      // up, and every lit edge of the Wall crawled 2–4 px a frame through it (show-live-jets wall 226‰
-      // on a desktop against main's 128‰).
-      if (st.shot !== HOLD && st.shot !== CARRY) {
+      // turns it only if the car would rise under the top HUD), then cuts to the carry as the car reaches the
+      // row. A tracking camera there followed the car past the lit curl and the tower close up, and every lit
+      // edge of the Wall crawled 2–4 px a frame through it (show-live-jets wall 226‰ on a desktop against
+      // main's 128‰).
+      if (st.shot !== HOLD && st.shot !== CARRY && st.shot !== FOLLOW) {
         st.shot = HOLD; st.fov = 54; snap();
         st.holdPos.set(carPos.x + HOLD_POS[0], HOLD_POS[1], carPos.z + HOLD_POS[2]);
         st.holdLook.set(carPos.x * 0.5, HOLD_LOOK[0], carPos.z + HOLD_LOOK[1]);
       }
-      if (st.shot === HOLD && (carPos.z < ROW_FRONT || st.t - st.launchT > HOLD_MAX)) { st.shot = CARRY; snap(); bandDirty = true; }
+      if (st.shot === HOLD && (carPos.z < ROW_FRONT || st.t - st.launchT > HOLD_MAX)) { st.shot = CARRY; snap(); bandDirty = true; st.placed = false; }
       if (st.shot === HOLD) {
         camera.position.copy(st.holdPos);
         camera.lookAt(st.holdLook);
         return;
       }
+      // The carry is locked off too (0113): placed at the cut so the car (at its highest) and the whole row fit the
+      // band the HUD leaves, aimed ahead along the flight, then still while the car crosses it. A camera tracking the
+      // car from that far out walked the lit Wall across the frame (show-live-jets wall 104 → 188‰ on a phone). If
+      // the car nears the far edge (a narrow screen, a long flight) it cuts to a fresh placement from there.
+      // Past the row's back it cuts to the tracking follow down to the pad, which the landing rig eases out of.
+      if (st.shot === CARRY && carPos.z < ROW_Z0) { st.shot = FOLLOW; snap(); }
+      if (st.shot === CARRY) {
+        if (!st.placed || carryOut(carPos)) placeCarry(carPos);
+        camera.position.copy(st.carryPos);
+        camera.lookAt(st.carryLook);
+        // A car that comes down on the row: the landing rig eases in from here.
+        st.smooth.copy(st.carryPos); st.lookS.copy(st.carryLook); st.init = true;
+        return;
+      }
       want.set(carPos.x + 21 + 0.5 * Math.max(0, carPos.y - 10), clamp(carPos.y * 0.5 + 1.5, 2.2, 14), carPos.z + 2);
       lookWant.set(carPos.x * 0.5, carPos.y * 0.55 + 0.8, carPos.z - 2);
-      fitCarry(carPos);
       ease(dt, 3.2, 9);
       fovTo(54, dt);
     } else if (!landed) {
