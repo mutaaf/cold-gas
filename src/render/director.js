@@ -63,7 +63,7 @@ export function createDirector(camera) {
     rl: 0, rt: 0, rr: 0, rb: 0, aim: 0,
     bandT: 1, bandB: -1,                                 // the carry's band (0113, NDC): under the top HUD, over the bottom one
     bandL: 1,                                            // under the HUD standing at the top of the left edge (0116, NDC)
-    placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(), carryY: 0, recuts: 0,   // the carry's locked-off placement (0113); the car's height there, re-cuts so far (0118)
+    placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(), carryY: 0, carryT: 0, recuts: 0,   // the carry's locked-off placement (0113); the car's height and the time there, re-cuts so far (0118)
   };
 
   // Behind, above and to the side of the car along its line of flight (the last good heading when
@@ -181,7 +181,7 @@ export function createDirector(camera) {
     if (camera.aspect < 1) fitRowAcross(carPos, tanH);
     fitCarry(carPos);
     if (camera.aspect >= 1) keepFront(carPos, tanH);
-    st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true; st.carryY = carPos.y;
+    st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true; st.carryY = carPos.y; st.carryT = st.t;
   }
   // The carry is placed for the car at its highest over the row's front, and the span from the car down to the row's
   // foot closes by more than half as it comes down to the pad, so a frame held to the end left the car a speck in an
@@ -189,11 +189,14 @@ export function createDirector(camera) {
   // it was placed at, the carry cuts to a fresh placement, at most twice: still locked off (a camera moving this far
   // out walks the lit Wall across the frame), so the car grows as the span closes. On the reference the cuts fall
   // before the row's middle and over its back half. Upright screens keep their one placement across the row (0116).
-  const RECUT = 0.64, RECUT_MAX = 2;
-  const recut = (carPos) => camera.aspect >= 1 && st.recuts < RECUT_MAX && carPos.y < st.carryY * RECUT;
+  // Not below RECUT_FLOOR (a low flight comes down to the landing rig soon after) nor within RECUT_GAP s of the last
+  // placement (the reference's two cuts fall ≈ 0.37 s apart).
+  const RECUT = 0.64, RECUT_MAX = 2, RECUT_FLOOR = 4, RECUT_GAP = 0.3;
+  const recut = (carPos) => camera.aspect >= 1 && st.recuts < RECUT_MAX && carPos.y < st.carryY * RECUT && carPos.y > RECUT_FLOOR && st.t - st.carryT >= RECUT_GAP;
   // A placement for the car low over the row's back half (a re-cut, 0118) stands near enough that, trucked ahead along
   // the flight, the row's front body went out past the frame's edge behind the car (13 % of the row off a 1366×1024
-  // screen). Truck it back along the row until that body is inside FRONT_EDGE, as far as the car's nose stays inside
+  // screen). Every placement on a screen wider than tall is checked (one that already has the body in frame is left
+  // as it is). Truck it back along the row until that body is inside FRONT_EDGE, as far as the car's nose stays inside
   // NOSE_KEEP (room ahead before carryOut cuts again). A truck moves the camera and its aim together, so the fit above
   // holds. Two secant steps: the screen offset is near enough linear in the truck.
   const FRONT_EDGE = 0.94, NOSE_KEEP = 0.55;
@@ -213,10 +216,11 @@ export function createDirector(camera) {
     const df = frontNdc(1, tanH) - f0, nose = (dz) => xNdc(carPos.x, carPos.y, carPos.z - CAR_HALF, dz, tanH);
     const dn = nose(1) - nose(0);
     if (Math.abs(df) < 1e-4) return;
-    let dz = (-FRONT_EDGE - f0) / df;
-    if (dn > 1e-4) dz = Math.min(dz, Math.max(0, (NOSE_KEEP - nose(0)) / dn));
+    const noseMax = dn > 1e-4 ? Math.max(0, (NOSE_KEEP - nose(0)) / dn) : Infinity;
+    let dz = Math.min((-FRONT_EDGE - f0) / df, noseMax);
     const f1 = frontNdc(dz, tanH);
-    if (f1 < -FRONT_EDGE && dz > 0) dz = Math.min(dz * (-FRONT_EDGE - f0) / (f1 - f0), dn > 1e-4 ? Math.max(0, (NOSE_KEEP - nose(0)) / dn) : Infinity);
+    if (f1 < -FRONT_EDGE && dz > 0 && f1 - f0 > 1e-4) dz = Math.min(dz * (-FRONT_EDGE - f0) / (f1 - f0), noseMax);
+    dz = clamp(dz, 0, ROW_Z1 - ROW_Z0);   // never toward the pad, never further back than the row is long
     want.z += dz; lookWant.z += dz;
   }
   // On a screen taller than it is wide the vertical lens leaves a narrow one across (≈ 26° at 390×844), and the carry

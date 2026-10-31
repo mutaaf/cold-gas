@@ -145,9 +145,9 @@ export function fly() {
 }
 
 // One test per view: { name, phone, minTop (the top HUD at least this far down), ...newPage options }.
-// `carW`: 0118's bar for the car's mean width / screen width over the carry frames (see the assertion below).
+// `carW`: 0118's bar for the car's mean width / screen width over the carry frames; `grow`: its growth bar alone.
 export function releaseFrameTests(VIEWS) {
-  for (const { name, phone, minTop, carW, ...opts } of VIEWS) {
+  for (const { name, phone, minTop, carW, grow, ...opts } of VIEWS) {
     test(`${name}: the drop off the ledge stays in frame, below the top HUD`, async ({ browser }) => {
       test.slow();   // the whole Show reference, stepped in the page
       const page = await browser.newPage(opts);
@@ -192,17 +192,21 @@ export function releaseFrameTests(VIEWS) {
         expect(r.fewBodies, 'carry frames with fewer than four bodies half on screen').toEqual([]);
         expect(r.midBodies, `bodies half on screen at z ${r.midZ.toFixed(1)}`).toBe(r.bodies);
       }
-      // 0118: the car reads through the carry. The frame placed for the car at its highest over the row's front cuts
-      // closer as the car comes down, so its mean width / screen over the carry meets the view's bar, and past the row's
+      // 0118: the car reads through the carry. On a screen wider than tall the frame placed for the car at its highest
+      // over the row's front cuts closer as the car comes down: locked off between cuts, at most two of them over the row
+      // (three frames in ≈ 1.9 s; any more is choppy; an upright screen keeps 0116's placements). Where a view sets
+      // `carW`, the car's mean width / screen over the carry meets that bar, and with `grow` (or a bar) past the row's
       // middle it is at least 1.4× its width at the cut.
+      if (opts.viewport.width > opts.viewport.height) expect(r.cuts, 'cuts inside the carry').toBeLessThanOrEqual(2);
+      const ws = r.carW.map(([cw]) => cw);
       if (carW) {
-        const ws = r.carW.map(([cw]) => cw), mean = ws.reduce((a, b) => a + b, 0) / ws.length;
-        const late = r.carW.filter(([, z]) => z < r.rowMid).map(([cw]) => cw);
+        const mean = ws.reduce((a, b) => a + b, 0) / ws.length;
         expect(mean, `car width / screen, mean over the carry: ${JSON.stringify(r.carW)}`).toBeGreaterThanOrEqual(carW);
+      }
+      if (carW || grow) {
+        const late = r.carW.filter(([, z]) => z < r.rowMid).map(([cw]) => cw);
         expect(late.length).toBeGreaterThan(5);
         expect(Math.min(...late) / ws[0], 'car width past the row\'s middle / at the cut').toBeGreaterThanOrEqual(1.4);
-        // Locked off between cuts, and at most two cuts closer over the row (three frames in ≈ 1.9 s; any more is choppy).
-        expect(r.cuts, 'cuts inside the carry').toBeLessThanOrEqual(2);
       }
       expect(errors).toEqual([]);
       await page.close();
