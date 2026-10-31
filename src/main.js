@@ -43,7 +43,8 @@ import { syncWake, wakeHeld } from './wake.js';
 import { createUI, crashStep } from './ui.js';
 import { initFocusTrap } from './focus-trap.js';
 import { wireUnitToggles, unitText } from './units.js';
-import { drawShareCard, shareRun } from './share-card.js';
+import { drawShareCard, shareRun, toast } from './share-card.js';
+import { createComeback } from './comeback.js';   // [comeback] challenge links + the daily jump (src/comeback.js)
 import { createInstruments } from './instruments.js';
 import { localWords, localMeta, fetchBoard } from './panel.js';
 import { createPost } from './post.js';
@@ -205,11 +206,12 @@ const gpose = newGhostPose();
 // pose toward this one's), so the two glide together at 120/144 Hz instead of the ghost stepping.
 function syncGhost() {
   const live = (S.mode === 'live' || S.mode === 'countdown') && !S.autopilot;
-  const best = S.ghosts[S.run?.course];
+  const vsGhost = comeback.ghost(S.run?.course);   // [comeback] a challenger's run rides as the ghost, in place of your best
+  const best = vsGhost || S.ghosts[S.run?.course];
   const tick = live && S.run ? (S.mode === 'live' && S.run.tick > 0 ? S.run.tick - 1 + Math.min(1, S.acc / DT) : S.run.tick) : 0;
-  ghostRoot.visible = live && S.ghostOn && !!best && !best.ref && ghostAt(best, tick, gpose);
+  ghostRoot.visible = live && (S.ghostOn || !!vsGhost) && !!best && !best.ref && ghostAt(best, tick, gpose);
   if (ghostRoot.visible) placeGhost(ghostRoot, ghostMat);
-  refGhostRoot.visible = live && S.ghostOn && ghostAt(refGhost(S.run.course, true), tick, gpose);
+  refGhostRoot.visible = live && S.ghostOn && !vsGhost && ghostAt(refGhost(S.run.course, true), tick, gpose);
   if (refGhostRoot.visible) placeGhost(refGhostRoot, refGhostMat);
 }
 function placeGhost(root, mat) {
@@ -435,6 +437,7 @@ function finishRun() {
   countRun(run);
   if (S.runKind === 'jump' && !S.drill && S.card) obs.play(S.card.facts?.crashed ? 'run-wrecked' : 'run-landed');
   poster?.reset();   // Post · ABC beside Retry when this is a board jump (src/post.js)
+  comeback.results(run, S.card, { autopilot: !!S.autopilot, drill: !!S.drill });   // [comeback] "You beat ABC by 2.1", the daily's line
   // The coach re-flies the log (≈30–60 ms) a beat after the sheet slides in.
   const coachRun = () => setTimeout(() => {
     if (S.run !== run) return;
@@ -1335,7 +1338,8 @@ onDevice(() => {
 });
 const on = (sel, fn) => document.querySelectorAll(sel).forEach((el) => el.addEventListener('click', fn));
 // The first Jump on this device shows how to fly first (skippable, remembered); a deep link never waits.
-on('[data-start]', (e) => (howtoSeen() ? startRun('jump') : openHowto({ then: () => startRun('jump'), from: e.currentTarget })));
+const jump = (from = null) => (howtoSeen() ? startRun('jump') : openHowto({ then: () => startRun('jump'), from }));
+on('[data-start]', (e) => jump(e.currentTarget));
 on('[data-reveal]', () => startRun('reveal'));
 // Retry: straight back onto the mark with a one-beat READY (a drill restarts itself; the reference
 // jump hands over to you). Home: the title. Both from anywhere in a run: the HUD's quick buttons,
@@ -1377,7 +1381,8 @@ const startCard = () => {
 };
 const shareUrl = () => `${location.origin}${import.meta.env.BASE_URL}`;
 document.querySelectorAll('[data-share]').forEach((b) => b.addEventListener('pointerdown', startCard));
-on('[data-share]', () => { if (S.card) shareRun({ card: S.card, url: shareUrl(), cardPromise: startCard() }); });
+// [comeback] the link carries the run (#vs=, src/challenge.js): a shared run is a rematch
+on('[data-share]', () => { if (S.card) obs.play('share'); if (S.card) shareRun({ card: S.card, url: comeback.linkFor(S.card), cardPromise: startCard() }); });
 
 // Event picker on the title (also ?course=wall|lineup; the Show is the default).
 const courseBtns = document.querySelectorAll('.courses [data-course]');
@@ -1397,17 +1402,25 @@ function syncCourseBtns() {
   syncTitlePb();
   ghostLoaded(stage.course).then(() => syncTitlePb(), () => {});
 }
-courseBtns.forEach((b) => b.addEventListener('click', () => {
-  if (b.dataset.course === stage.course) return;
-  stage.setCourse(b.dataset.course);
+courseBtns.forEach((b) => b.addEventListener('click', () => selectCourse(b.dataset.course)));
+function selectCourse(id) {
+  if (id === stage.course || !['show', 'wall', 'lineup'].includes(id)) return;
+  stage.setCourse(id);
   freeSpare(); scheduleSpare();
   syncCourseBtns();
   placeOnPad();
   director.snap();
   const u = new URL(location.href); u.searchParams.set('course', stage.course); history.replaceState(null, '', u);
-}));
+}
 syncCourseBtns();
 S.titleSync = syncCourseBtns;
+// [comeback] the title's challenge / daily card and the results' lines (src/comeback.js; mounts in index.html)
+const comeback = createComeback({
+  mount: document.querySelector('[data-title-extra]'), resultMount: document.querySelector('[data-daily-result]'),
+  base: shareUrl(), selectCourse, getTier: () => S.tier, setTier: (t) => setTier(t), jump: () => jump(),
+  ready: () => Promise.all([stage.ready, physicsLoad]), toast,
+  share: ({ card, url, text }) => shareRun({ card, url, text, cardPromise: startCard() }),
+});
 
 // The flight tier: Assist → Pro → Advanced, for the next run (a run keeps the tier it started with:
 // latchTier). The top bar's chip says what the panel pays for it (off the title: on the title the Assist
@@ -1847,6 +1860,8 @@ if (params.get('drive') !== null) {
   history.replaceState(null, '', `${location.pathname}?drive=${encodeURIComponent(params.get('drive') || 'stelvio')}${params.get('seed') ? `&seed=${encodeURIComponent(params.get('seed'))}` : ''}${bootHash}`);
   if (params.get('drive') === 'sandbox') loadSandbox().then((s) => s.start());
   else loadDrive().then((d) => d.start(params.get('drive') || 'stelvio', { tod: params.get('tod') || undefined, seed: params.get('seed') || undefined, idb: params.get('idb') !== '0' }));
+} else if ((play === 'jump' || (!play && !params.get('board'))) && comeback.boot(bootHash, () => { if (play === 'jump') startRun('jump'); })) {
+  // [comeback] a challenge link (#vs=): the title holds for its card; a bad or stale one falls back to the jump
 } else if (play === 'jump' || play === 'reveal') startRun(play);
 else if (params.get('board')) openBoard(params.get('board') === 'all' ? 'all' : 'today');
 
@@ -1859,6 +1874,6 @@ function fastForward() {
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; } };
+window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
 Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

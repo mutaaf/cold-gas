@@ -1,0 +1,83 @@
+/* Reasons to come back (src/comeback.js): the title's card (a challenge, else the daily jump and its
+   streak) and the results' one-line verdicts. Ink on glass, hairlines, one amber accent (amber is the
+   daily's and the challenge's colour; red stays for warnings). */
+.title-extra { width: min(640px, calc(100vw - 2 * clamp(24px, 6vw, 96px))); margin: 14px 0 0; }
+.title-extra:empty { display: none; }
+.xc { position: relative; display: flex; align-items: center; gap: 14px; padding: 12px 12px 12px 18px; border: 1px solid var(--hair);
+  border-radius: 14px; background: var(--glass); backdrop-filter: blur(14px); overflow: hidden; }
+/* The amber rule down the left edge: the one accent, the thing the eye finds first. */
+.xc::before { content: ''; position: absolute; left: 0; top: 12px; bottom: 12px; width: 2px; border-radius: 0 2px 2px 0; background: var(--amber); }
+.xc-text { flex: 1; min-width: 0; }
+/* The daily: the kicker across, the objective beside its button, the streak across under both. */
+.xc-daily { display: grid; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: 'k k' 'goal go' 'streak streak'; column-gap: 14px; align-items: center; }
+.xc-daily .xc-text { display: contents; }
+.xc-daily .xc-k { grid-area: k; }
+.xc-daily .xc-goal { grid-area: goal; }
+.xc-daily .xc-go { grid-area: go; margin-top: 7px; }
+.xc-daily .xc-streak { grid-area: streak; }
+.xc p { margin: 0; }
+.xc-k { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 7px; font: 500 11px/1.2 var(--text); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ink-2); }
+.xc-dot { color: var(--ink-3); letter-spacing: 0; }
+.xc-tick { margin-left: auto; color: var(--amber); letter-spacing: 0.14em; }
+.xc-goal { margin-top: 7px !important; font: 400 15px/1.3 var(--text); color: var(--ink); text-wrap: balance; }
+.xc-streak { display: flex; align-items: center; gap: 9px; margin-top: 9px !important; font: 400 11px/1 var(--mono); letter-spacing: 0.06em; color: var(--ink-2); }
+.xc-pips { display: inline-flex; gap: 3px; }
+.xc-pips i { width: 11px; height: 4px; border-radius: 1px; background: rgba(245, 246, 248, 0.16); }
+.xc-pips i.on { background: var(--amber); box-shadow: 0 0 8px rgba(255, 191, 90, 0.35); }
+.xc-go { flex: none; height: 46px; padding: 0 20px; border-color: rgba(255, 191, 90, 0.7); background: rgba(255, 191, 90, 0.08); color: var(--ink); font-weight: 600; }
+.xc-go:hover { border-color: var(--amber); background: rgba(255, 191, 90, 0.16); }
+.xc-daily.done .xc-go { border-color: var(--hair); background: transparent; color: var(--ink-2); font-weight: 500; }
+
+/* The challenge: a name, a number, one big button. */
+.xc-vs { flex-direction: column; align-items: stretch; gap: 0; padding: 14px 14px 12px 18px; }
+.xc-vs .xc-goal { font-size: 17px; }
+.xc-who { font: 400 17px/1 var(--display); letter-spacing: 0.12em; }
+.xc-num { font: 400 18px/1 var(--display); letter-spacing: 0.04em; color: var(--amber); }
+.xc-row { display: flex; align-items: center; gap: 10px; margin-top: 12px; }
+.xc-take { flex: 1; height: 50px; border: 0; background: var(--amber); color: #0d0a04; font-size: 16px; letter-spacing: 0.01em; }
+.xc-take:hover { background: #ffcd7d; }
+.xc-x { flex: none; height: 44px; }
+
+/* Tight on room (src/comeback.js fit(), never under the top bar): 1 the card packs to one line and its
+   button; 2 the tagline, the eyebrow and the spec step aside too; 3 the card steps out. */
+.title[data-extra-fit] .xc :is(.xc-sub, .xc-k) { display: none; }
+.title[data-extra-fit] .title-extra { margin-top: 10px; }
+.title[data-extra-fit] .xc { padding: 7px 7px 7px 16px; }
+.title[data-extra-fit] .xc::before { top: 8px; bottom: 8px; }
+.title[data-extra-fit] .xc-goal { margin-top: 0 !important; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 14px; }
+.xc-ck { display: none; }
+.title[data-extra-fit] .xc-ck { display: inline; margin-right: 10px; font: 500 11px/1 var(--text); letter-spacing: 0.16em; text-transform: uppercase; color: var(--amber); }
+.title[data-extra-fit] .xc-go { height: 44px; padding: 0 16px; font-size: 14px; margin-top: 0; }
+.title[data-extra-fit] .xc-daily { grid-template-areas: 'goal go'; }
+.title[data-extra-fit] .xc-vs .xc-row { margin-top: 6px; }
+.title[data-extra-fit='2'] > :is(.tagline, .eyebrow, .spec) { display: none; }
+.title[data-extra-fit='3'] > .title-extra { display: none; }
+
+/* The folding phone's two-column title (styles.css, 0075): the card sits under the actions, right column. */
+@media (pointer: coarse) and (min-width: 600px) and (min-height: 500px) and (max-width: 1000px) and (max-height: 960px) {
+  .title > .title-extra { grid-column: 2; width: auto; }
+}
+@media (max-width: 360px) {
+  .title-extra { width: calc(100vw - 32px - var(--safe-l) - var(--safe-r)); }
+  .xc { gap: 10px; padding-left: 14px; }
+  .xc-go { padding: 0 14px; }
+}
+
+/* --- The results' lines -------------------------------------------------------------------------- */
+.daily-result:empty { display: none; }
+.xr { margin: 12px 0 0; }
+.xr-vs { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 12px; padding: 8px 8px 8px 14px; border: 1px solid var(--hair); border-radius: 12px; }
+.xr-line { flex: 1 1 180px; margin: 0; font: 500 16px/1.3 var(--text); color: var(--ink); }
+.xr-vs[data-state='won'] { border-color: rgba(255, 191, 90, 0.55); }
+.xr-vs[data-state='won'] .xr-line { color: var(--amber); }
+.xr-send { height: 44px; padding: 0 18px; font-size: 14px; }
+.xr-daily { font: 500 12px/1.4 var(--mono); letter-spacing: 0.05em; color: var(--ink-2); }
+.xr-daily.ok { color: var(--amber); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .xc-pips i.on { animation: xc-pip 0.5s var(--ease) both; }
+  .xc-pips i.on:nth-child(2) { animation-delay: 0.05s; } .xc-pips i.on:nth-child(3) { animation-delay: 0.1s; }
+  .xc-pips i.on:nth-child(4) { animation-delay: 0.15s; } .xc-pips i.on:nth-child(5) { animation-delay: 0.2s; }
+  .xc-pips i.on:nth-child(6) { animation-delay: 0.25s; } .xc-pips i.on:nth-child(7) { animation-delay: 0.3s; }
+}
+@keyframes xc-pip { from { transform: scaleX(0); transform-origin: left; } to { transform: none; } }
