@@ -11,33 +11,44 @@ const watch = (page) => {
   return { errors, navs };
 };
 
-test('Free Drive and the Sandbox: a chunk that fails once loads on the next press', async ({ page }) => {
+// One chunk aborted once (its own request and the retry's are both counted).
+async function failOnce(page, name) {
+  const st = { fail: true, asked: 0 };
+  await page.route(new RegExp(`/assets/${name}-[\\w-]+\\.js(\\?|$)`), (route) => { st.asked++; return st.fail ? route.abort('connectionreset') : route.continue(); });
+  return st;
+}
+
+test('Free Drive: a chunk that fails once loads on the next press', async ({ page }) => {
   const seen = watch(page);
-  const fail = { drive: true, sandbox: true }, asked = { drive: 0, sandbox: 0 };
-  await page.route(/\/assets\/(drive|sandbox)-[\w-]+\.js(\?|$)/, (route, req) => {
-    const k = /\/drive-/.test(req.url()) ? 'drive' : 'sandbox';
-    asked[k]++;
-    return fail[k] ? route.abort('connectionreset') : route.continue();
-  });
+  const drive = await failOnce(page, 'drive');
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
-  const cue = page.locator('[data-cue]');
   await page.locator('[data-drive-open]').click();
-  await expect(cue).toHaveText(/Free Drive couldn’t load/, { timeout: 15_000 });
-  fail.drive = false;
-  const before = asked.drive;
+  await expect(page.locator('[data-cue]')).toHaveText(/Free Drive couldn’t load/, { timeout: 15_000 });
+  drive.fail = false;
+  const before = drive.asked;
   await page.locator('[data-drive-open]').click();
   await expect(page.locator('.fd-card').first()).toBeVisible({ timeout: 20_000 });
-  expect(asked.drive).toBeGreaterThan(before);   // the retry really fetched the chunk again
-  await page.locator('[data-fd-back]').click();
-  await expect(page.locator('[data-drive-picker]')).toBeHidden();
-  await page.locator('[data-sandbox-open]').click();
-  await expect.poll(() => page.evaluate(() => window.__coldgas.obs.snapshot().errors.filter((e) => e.kind === 'lazy').reduce((a, e) => a + e.n, 0)), { timeout: 15_000 }).toBe(2);
-  expect(await page.evaluate(() => !!window.__coldgas.sandbox?.active)).toBe(false);
-  fail.sandbox = false;
-  await page.locator('[data-sandbox-open]').click();
-  await page.waitForFunction(() => window.__coldgas.sandbox?.active, null, { timeout: 60_000 });
+  expect(drive.asked).toBeGreaterThan(before);   // the retry really fetched the chunk again
   expect(seen.navs).toHaveLength(1);   // the same build answered: no reload
+  expect(seen.errors).toEqual([]);
+});
+
+test('the Sandbox: a chunk that fails once loads on the next press', async ({ page }) => {
+  test.slow();   // builds the Sandbox's world on software GL
+  const seen = watch(page);
+  const sandbox = await failOnce(page, 'sandbox');
+  await page.goto('/coldgas/?gfx=low');
+  await ready(page);
+  await page.locator('[data-sandbox-open]').click();
+  await expect.poll(() => page.evaluate(() => window.__coldgas.obs.snapshot().errors.filter((e) => e.kind === 'lazy').reduce((a, e) => a + e.n, 0)), { timeout: 15_000 }).toBe(1);
+  expect(await page.evaluate(() => !!window.__coldgas.sandbox?.active)).toBe(false);
+  sandbox.fail = false;
+  const before = sandbox.asked;
+  await page.locator('[data-sandbox-open]').click();
+  await page.waitForFunction(() => window.__coldgas.sandbox?.active, null, { timeout: 90_000 });
+  expect(sandbox.asked).toBeGreaterThan(before);
+  expect(seen.navs).toHaveLength(1);
   expect(seen.errors).toEqual([]);
 });
 
