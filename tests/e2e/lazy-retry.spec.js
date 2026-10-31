@@ -41,8 +41,10 @@ test('Free Drive and the Sandbox: a chunk that fails once loads on the next pres
   expect(seen.errors).toEqual([]);
 });
 
-test("a shared chunk that fails once: the retry can't reach it, so the title reloads once and Free Drive works", async ({ page }) => {
-  test.slow();   // boots the game twice on software GL
+// A Chromium that remembers the failed shared chunk (1243) needs the reload; one that asks again (1248) opens
+// Free Drive on the retry. Either way: it opens, with at most one reload and no loop.
+test("a shared chunk that fails once: the retry opens Free Drive, or the title reloads once and it opens", async ({ page }) => {
+  test.slow();   // may boot the game twice on software GL
   const seen = watch(page);
   let fail = true;
   await page.route(/\/assets\/layer-[\w-]+\.js(\?|$)/, (route) => (fail ? route.abort('connectionreset') : route.continue()));
@@ -51,13 +53,17 @@ test("a shared chunk that fails once: the retry can't reach it, so the title rel
   await page.locator('[data-drive-open]').click();
   await expect(page.locator('[data-cue]')).toHaveText(/Free Drive couldn’t load/, { timeout: 15_000 });
   fail = false;
-  await page.locator('[data-drive-open]').click();   // the retry: layer-*.js stays failed in this page's module map
-  await expect.poll(() => seen.navs.length, { timeout: 20_000, message: await page.evaluate(() => JSON.stringify([window.__coldgas.obs.snapshot().recoveries, window.__coldgas.S.mode])) }).toBe(2);
-  await ready(page);
   await page.locator('[data-drive-open]').click();
-  await expect(page.locator('.fd-card').first()).toBeVisible({ timeout: 20_000 });
+  const card = page.locator('.fd-card').first();
+  await expect.poll(async () => seen.navs.length > 1 || await card.isVisible(), { timeout: 20_000 }).toBe(true);
+  if (seen.navs.length > 1) {
+    await ready(page);
+    await page.locator('[data-drive-open]').click();
+  }
+  await expect(card).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(1500);
-  expect(seen.navs).toHaveLength(2);   // one reload, no loop
+  expect(seen.navs.length).toBeLessThanOrEqual(2);   // one reload at most, no loop
+  expect(seen.errors).toEqual([]);
 });
 
 test("the judges' chunk fails once: the next run's judges load it", async ({ page }) => {
