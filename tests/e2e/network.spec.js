@@ -57,11 +57,13 @@ test('a lazy chunk 404s after a deploy: exactly one reload into the new build, t
   });
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   // The heal probes, sees a new build and reloads once.
   await expect.poll(() => seen.navs.length, { timeout: 20_000 }).toBe(2);
   await ready(page, 60_000);
   // The new page works: Free Drive opens.
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   await expect(page.locator('.fd-card').first()).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(2000);
@@ -73,6 +75,7 @@ test('the same build answers (it was the network): a failed lazy chunk does not 
   await page.route(/\/assets\/drive-[\w-]+\.js$/, (route) => route.abort('connectionreset'));
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   await expect.poll(() => page.evaluate(() => window.__coldgas.obs.snapshot().recoveries.some((r) => r.kind === 'reload' && /same build/.test(r.detail))), { timeout: 15_000,
     message: await page.evaluate(() => JSON.stringify(window.__coldgas.obs.snapshot().recoveries)) }).toBe(true);
@@ -109,6 +112,7 @@ test('a road that never answers: an error card within 20 s, then Drive works aga
   await page.route(/\/roads\/[\w-]+\.bin\.gz$/, (route) => (stall ? undefined : route.continue()));
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').tap();
   await page.locator('.fd-card[data-road="stelvio"]').tap();
   const t0 = Date.now();
@@ -128,6 +132,7 @@ test('a road that never answers: an error card within 20 s, then Drive works aga
   await expect(page.locator('[data-screen="title"]')).toBeVisible();
   // And once the road answers, it drives.
   stall = false;
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').tap();
   await page.locator('[data-fd-go]').tap();
   await page.waitForFunction(() => window.__coldgas.drive.active, null, { timeout: 90_000 });

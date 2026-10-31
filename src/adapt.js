@@ -73,14 +73,14 @@ export const coachLive = (p, flownEver, adapt = true) => flownEver < NEW_PLAYER_
 
 // The words the sheet uses (one source for the banner, the offer and the tier picker).
 export const TIER_WORDS = {
-  assist: { name: 'AI Assist', state: 'On', sub: 'rolls you out, levels and brakes', long: 'The computer holds the rates; LAND rolls you out, carries you over the row, levels and brakes. Late? It lands for you.' },
+  assist: { name: 'Assist', state: 'On', sub: 'rolls you out, levels and brakes', long: 'The computer holds the rates; LAND rolls you out, carries you over the row, levels and brakes. Late? It lands for you.' },
   pro: { name: 'Pro', state: 'Off', sub: 'you fly it; brake at the line', long: 'Rate control, no LAND: roll out by the dial and brake at the BRAKE line yourself.' },
   advanced: { name: 'Advanced', state: 'Off', sub: 'ten valves by hand', long: 'No computer: ten valves by hand, a key or a pad per nozzle.' },
 };
 export const factorText = (tier) => `×${(TIERS[tier] || TIERS.assist).factor.toFixed(2)}`;
 
 export function stepDownBanner(from, to, n = STEP_DOWN_AFTER) {
-  const what = to === 'assist' ? 'AI Assist turned on' : `${TIER_WORDS[to].name} turned on`;
+  const what = to === 'assist' ? 'Assist turned on' : `${TIER_WORDS[to].name} turned on`;
   return `${what}: ${n} crashes in a row on ${TIER_WORDS[from].name}.`;
 }
 export function offerWords(o) {

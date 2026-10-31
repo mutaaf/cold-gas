@@ -1,7 +1,7 @@
 // The coach's pointers in this device's words (0079, src/pointer.js): the "how to fly" rows, the one
 // pointer after a run (no third repeat, "Better: …" once fixed) and the live pointers.
 import { describe, it, expect } from 'vitest';
-import { deviceOf, ctl, howtoRows, pauseRows, deviceTitle, pointerText, pickPointer, betterText, livePointer } from '../../src/pointer.js';
+import { deviceOf, ctl, howtoRows, pauseRows, deviceTitle, pointerText, pickPointer, betterText, livePointer, coachWords } from '../../src/pointer.js';
 
 const KEY = { device: 'key', scheme: 'classic', tier: 'assist', course: 'show' };
 const PAD = { ...KEY, device: 'pad' };
@@ -69,7 +69,7 @@ describe('the pointer after a run', () => {
     expect(pointerText('no-release', TOUCH)).toMatch(/tap RELEASE/);
     expect(pointerText('short', KEY)).toMatch(/hold F/);
     // Pro brakes by hand: LIFT, at the BRAKE line, the height from the coach's flight.
-    expect(pointerText('late-brake', PRO, { needH: 11.2 })).toBe('Brake sooner: press Space at the BRAKE line, 12 m up');
+    expect(pointerText('late-brake', PRO, { needH: 11.2 })).toBe('Brake sooner: hold Space at the BRAKE line, 12 m up');
     expect(pointerText('late-brake', { ...PRO, device: 'touch' })).toBe('Brake sooner: hold LIFT at the BRAKE line');
     expect(pointerText('late-brake', KEY)).toMatch(/Land sooner: hold Shift/);   // Assist: LAND paces the fall
   });
@@ -102,7 +102,24 @@ describe('the live pointer', () => {
     expect(livePointer('release', KEY)).toBe('Let go now: press Space');
     expect(livePointer('release', TOUCH)).toBe('Let go now: tap RELEASE');
     expect(livePointer('land', KEY, (k) => `<kbd>${k}</kbd>`)).toBe('Land now: hold <kbd>Shift</kbd>');
-    expect(livePointer('brake', PRO)).toBe('Brake now: press Space');
-    expect(livePointer('brake', { ...PRO, device: 'pad' })).toBe('Brake now: press A');
+    expect(livePointer('brake', PRO)).toBe('Brake now: hold Space');
+    expect(livePointer('brake', { ...PRO, device: 'pad' })).toBe('Brake now: hold A');
+  });
+});
+
+describe('one brake instruction per device and tier (audit 2026-10-30)', () => {
+  it('braking is a hold on every tier, and the coach names the same controls', () => {
+    for (const tier of ['assist', 'pro', 'advanced']) {
+      const ctx = { ...KEY, tier };
+      const brake = howtoRows(ctx).at(-1);
+      expect(brake.phase).toBe('Brake');
+      expect(brake.verb).toBe('hold');
+      expect(brake.ctl).toBe(tier === 'assist' ? 'Shift' : 'Space');
+      expect(livePointer('brake', ctx)).toMatch(/^Brake now: hold /);
+    }
+    expect(coachWords(KEY).land).toBe('LAND (Shift)');
+    expect(coachWords({ ...PRO, device: 'pad' }).lift).toBe('LIFT (A)');
+    expect(coachWords({ ...PRO, device: 'touch' }).lift).toBe('LIFT');
+    expect(coachWords(THUMB).land).toBe('the pad');
   });
 });
