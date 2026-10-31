@@ -20,7 +20,7 @@ for (const phone of [false, true]) {
     test.slow();   // two judged runs on software GL
     const page = await browser.newPage(phone ? { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true } : { viewport: { width: 1280, height: 720 } });
     const theatreGets = [];
-    page.on('request', (r) => { if (/\/assets\/theatre-[\w-]+\.js$/.test(r.url())) theatreGets.push(r.url()); });
+    page.on('request', (r) => { if (/\/assets\/theatre-[\w-]+\.js(\?|$)/.test(r.url())) theatreGets.push(r.url()); });
     await page.route('**/coldgas/api/judge/stream', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: sse() }));
     await page.goto('/coldgas/?gfx=low');
     await ready(page);
@@ -44,7 +44,7 @@ for (const phone of [false, true]) {
 }
 
 test('the judges’ chunk never loads: the receipt says AI unavailable, local lines', async ({ page }) => {
-  await page.route(/\/assets\/theatre-[\w-]+\.js$/, (route) => route.abort('connectionreset'));
+  await page.route(/\/assets\/theatre-[\w-]+\.js(\?|$)/, (route) => route.abort('connectionreset'));
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
   await fly(page);
@@ -61,7 +61,7 @@ test('the judges’ chunk 404s on a stale build: the receipt says a new version 
   const html = (await (await page.request.get('/coldgas/')).text()).replace(/assets\/index-[\w-]+\.js/, 'assets/index-NEWBUILD.js');
   await page.route((url) => url.pathname === '/coldgas/', (route) => (route.request().resourceType() === 'fetch'
     ? route.fulfill({ status: 200, contentType: 'text/html', body: html }) : route.continue()));
-  await page.route(/\/assets\/theatre-[\w-]+\.js$/, (route) => route.fulfill({ status: 404, body: 'gone' }));
+  await page.route(/\/assets\/theatre-[\w-]+\.js(\?|$)/, (route) => route.fulfill({ status: 404, body: 'gone' }));
   // The warm fetch may fail on the title, where the heal reloads into the new build: as if it had just
   // reloaded, it doesn't (a reload loop guard), so this page stays the stale one under test.
   await page.addInitScript(() => { try { sessionStorage.setItem('coldgas_heal_reload', String(Date.now())); } catch { /* blocked */ } });

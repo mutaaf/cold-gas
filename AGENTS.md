@@ -337,7 +337,8 @@ src/panel.js          board client (post with telemetry, tolerant rows, per-cour
 src/post.js           Post · ABC beside Retry (the initials remembered, or three letters right there), the rank inline,
                         and "Leave without posting?" asked once on Home with an unposted board jump (no browser dialogs)
 src/pace.js           the title draws at ~30 fps (pure pacer, 0049); the shadow map redraws on the title only when the hero moves
-src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry
+src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry; lazyOnce + reimport
+                        (a failed lazy chunk is asked for again, 0057), judgesOverran (the judge breaker counts their own overrun)
 src/wake.js           the screen wake lock (0060): held through a run, the judging and the replay, asked again on return;
                         main.js syncLife() also suspends the audio when paused, hidden or idle on the title
 src/ads.js            Marquee ads between runs only (§3.3's exception): loader on production, title banner,

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { fetchWithDeadline, withDeadline, isTimeout, isAbort } from '../../src/net.js';
+import { fetchWithDeadline, withDeadline, isTimeout, isAbort, lazyOnce, reimport, judgesOverran, JUDGES_FAIR_MS } from '../../src/net.js';
 import { decideReload, entryOf, RELOAD_GAP_MS } from '../../src/obs/reload.js';
 import { createIdbCache } from '../../src/world/cache.js';
 import { boardRow } from '../../src/panel.js';
@@ -127,5 +127,83 @@ describe('board rows (0048)', () => {
     expect(boardRow({ initials: 'XYZ', facts: null })).toBeNull();
     expect(boardRow(null)).toBeNull();
     expect(boardRow({ initials: '<b>', total: 1, facts: { rollDeg: 'x' } }).initials).toBe('B');
+  });
+});
+
+// 0057: a failed lazy chunk is asked for again on the next press; the judges' breaker counts only their own overrun.
+
+describe('lazyOnce', () => {
+  it('shares one load while it is pending or loaded', async () => {
+    let n = 0;
+    const get = lazyOnce(async () => ++n);
+    const a = get(), b = get();
+    expect(a).toBe(b);
+    expect(await a).toBe(1);
+    expect(await get()).toBe(1);
+    expect(n).toBe(1);
+  });
+  it('forgets a failed load, so the next call asks again', async () => {
+    let n = 0;
+    const get = lazyOnce(async () => { if (++n === 1) throw new TypeError('Failed to fetch dynamically imported module'); return 'mod'; });
+    await expect(get()).rejects.toThrow(/dynamically imported/);
+    expect(await get()).toBe('mod');
+    expect(await get()).toBe('mod');
+    expect(n).toBe(2);
+  });
+  it('a loader that throws synchronously is a rejection, and forgotten too', async () => {
+    let n = 0;
+    const get = lazyOnce(() => { if (++n === 1) throw new Error('boom'); return Promise.resolve(n); });
+    await expect(get()).rejects.toThrow('boom');
+    expect(await get()).toBe(2);
+  });
+  it('hands the loader the last failure, and forgets it once a load lands', async () => {
+    const seen = [];
+    const err = new TypeError('Failed to fetch dynamically imported module: http://localhost/coldgas/assets/drive-x.js');
+    const get = lazyOnce(async (failed) => { seen.push(failed); if (seen.length === 1) throw err; return 'mod'; });
+    await expect(get()).rejects.toBe(err);
+    expect(await get()).toBe('mod');
+    expect(seen).toEqual([null, err]);
+  });
+});
+
+describe('reimport', () => {
+  afterEach(() => { vi.unstubAllGlobals(); });
+  it('first time, or an error naming no script (WebKit), just asks again', async () => {
+    const again = vi.fn(async () => 'mod');
+    expect(await reimport(null, again)).toBe('mod');
+    expect(await reimport(new TypeError('Importing a module script failed.'), again)).toBe('mod');
+    expect(again).toHaveBeenCalledTimes(2);
+  });
+  it('a script on another origin is never imported by URL', async () => {
+    vi.stubGlobal('location', { origin: 'https://mutaafaziz.com' });
+    const again = vi.fn(async () => 'mod');
+    expect(await reimport(new TypeError('Failed to fetch dynamically imported module: https://evil.example/x.js'), again)).toBe('mod');
+    expect(again).toHaveBeenCalledOnce();
+  });
+  it("a stylesheet Vite couldn't preload is taken out of the page, then the import asks again", async () => {
+    const href = 'https://mutaafaziz.com/coldgas/assets/layer-x.css';
+    const failedLink = { href, remove: vi.fn() }, other = { href: 'https://mutaafaziz.com/coldgas/assets/index-y.css', remove: vi.fn() };
+    vi.stubGlobal('location', { origin: 'https://mutaafaziz.com' });
+    vi.stubGlobal('document', { querySelectorAll: () => [failedLink, other] });
+    const again = vi.fn(async () => 'mod');
+    expect(await reimport(new Error(`Unable to preload CSS for ${href}`), again)).toBe('mod');
+    expect(failedLink.remove).toHaveBeenCalledOnce();
+    expect(other.remove).not.toHaveBeenCalled();
+    expect(again).toHaveBeenCalledOnce();
+  });
+});
+
+describe('judgesOverran', () => {
+  it('counts the deadline when the provider had (nearly) all 35 s', () => {
+    expect(judgesOverran('The judges took too long.', 35_000)).toBe(true);
+    expect(judgesOverran('The judges took too long.', JUDGES_FAIR_MS)).toBe(true);
+  });
+  it('does not count it when a slow chunk spent most of the 35 s', () => {
+    expect(judgesOverran('The judges took too long.', 5_000)).toBe(false);
+    expect(judgesOverran('The judges took too long.', JUDGES_FAIR_MS - 1)).toBe(false);
+  });
+  it('anything but the deadline is not an overrun (other failures are counted where they happen)', () => {
+    expect(judgesOverran('The judges are offline.', 35_000)).toBe(false);
+    expect(judgesOverran(undefined, 35_000)).toBe(false);
   });
 });
