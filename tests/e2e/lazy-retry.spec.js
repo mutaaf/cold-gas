@@ -76,20 +76,21 @@ test("the judges' chunk fails once: the next run's judges load it", async ({ pag
   expect(asked).toBeGreaterThan(before);
 });
 
-// The chunk spent 30 of the judges' 35 s; the provider's answer is late for the 5 s left. That deadline is the
+// The chunk spent ~27 of the judges' 35 s (leaving the chunk time to finish on a slow runner); the provider's answer
+// is late for the ~8 s left, under the 30 s that count as the provider's own. That deadline is the
 // network's, not the judges': the breaker that turns the AI panel off (persisted) doesn't count it.
-test("the judges' chunk stalls 30 s and the provider answers late: the judge breaker doesn't count it", async ({ page }) => {
+test("the judges' chunk stalls 27 s and the provider answers late: the judge breaker doesn't count it", async ({ page }) => {
   test.slow();   // the judges' 35 s in real time
   let release = null;
   const held = new Promise((r) => { release = r; });
-  await page.route(/\/assets\/theatre-[\w-]+\.js$/, async (route) => { await held; await route.continue().catch(() => {}); });
+  await page.route(/\/assets\/theatre-[\w-]+\.js(\?|$)/, async (route) => { await held; await route.continue().catch(() => {}); });
   await page.route(/\/api\/judge\/stream$/, () => { /* the provider: answers after the deadline */ });
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
   expect(await page.evaluate(() => window.__coldgas.obs.breaker('judge').snapshot().fails)).toBe(0);
   await page.evaluate(() => { window.__coldgas.startRun('jump'); window.__coldgas.fastForward(); });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
-  await page.waitForTimeout(30_000);
+  await page.waitForTimeout(27_000);
   release();
   await page.waitForFunction(() => window.__coldgas.S.words?.source === 'local', null, { timeout: 15_000 });
   await expect.poll(() => page.evaluate(() => window.__coldgas.S.callMeta?.error || ''), { timeout: 5000 }).toMatch(/too long/);
