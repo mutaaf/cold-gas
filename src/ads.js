@@ -14,6 +14,11 @@ export const POSTRUN_GAP_MS = 180_000;
 export function wantLoader(loc) {
   return /[?&]marquee=/.test(loc.search || '') || !['localhost', '127.0.0.1', ''].includes(loc.hostname || '');
 }
+/** May the loader be injected, or the title's banner be asked for, in this mode? Only between runs (0117):
+ *  the title and the results. Never the countdown, a run, a drill, a replay or Free Drive. */
+export function mayStartAds(mode) {
+  return mode === 'title' || mode === 'results';
+}
 /** A slot that can fill, read from a resolved config: config.slots[id].source is 'none' when nothing can. */
 export function canFill(cfg, id) {
   const s = cfg && cfg.enabled ? cfg.slots?.[id] : null;
@@ -24,16 +29,21 @@ export function postrunDue({ runs, lastAt, now, gap = POSTRUN_GAP_MS }) {
   return runs >= 2 && (!lastAt || now - lastAt >= gap);
 }
 
-export function createAds({ win = globalThis.window, doc = globalThis.document, now = () => Date.now() } = {}) {
-  let cfg = null, runs = 0, lastAt = 0, busy = false;
+export function createAds({ win = globalThis.window, doc = globalThis.document, now = () => Date.now(), mode = () => 'title' } = {}) {
+  let cfg = null, runs = 0, lastAt = 0, busy = false, started = false, armed = false, titleParent = null, titleEl = null;
   const api = () => (win?.marquee?.v ? win.marquee : null);   // the real loader, not the {q:[]} stub
+  // Read from the boot URL: the title rewrites the address (?course=), which drops a ?marquee= asked for.
+  const wanted = !!win && wantLoader(win.location || {});
   const listeners = [];
-  function config(c) { cfg = c; for (const f of listeners) { try { f(c); } catch { /* a listener's fault */ } } }
+  function config(c) { cfg = c; for (const f of listeners) { try { f(c); } catch { /* a listener's fault */ } } syncTitle(); }
 
+  // Injects the loader once, and only between runs (0117): the loader's own work and the network it starts
+  // (the config, then AdSense for a banner) must never land in a countdown or a run.
   function start() {
-    if (!win || !doc) return;
+    if (started || !win || !doc || !mayStartAds(mode())) return;
+    started = true;
     if (api()) { api().ready().then(config, () => {}); return; }
-    if (!wantLoader(win.location || {})) return;
+    if (!wanted) return;
     const m = win.marquee || (win.marquee = { q: [] });
     m.q = m.q || [];
     m.q.push((a) => a.ready().then(config, () => {}));
@@ -44,21 +54,39 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
     s.dataset.slots = SLOTS;
     doc.head.appendChild(s);
   }
-  /** The title's banner: placed only once the slot can fill, so an empty slot changes no layout. */
-  function titleBanner(parent) {
-    const place = (c) => {
-      if (!canFill(c, 'title') || !parent || parent.querySelector('[data-marquee]')) return;
+  // The title's banner exists only while the title shows: placed once the slot can fill (an empty slot changes
+  // no layout), taken out the moment the title goes, so a pipeline still in flight finds no slot to ask an ad
+  // for (Marquee loads AdSense only for a placed slot), and placed afresh on the next title.
+  function syncTitle() {
+    if (!titleParent) return;
+    if (mode() === 'title' && canFill(cfg, 'title')) {
+      if (titleEl || titleParent.querySelector('[data-marquee]')) return;
       const el = doc.createElement('div');
       el.className = 'ad-banner';
       el.dataset.marquee = 'title';
       el.dataset.marqueeContext = 'menu';
-      parent.appendChild(el);
-    };
-    if (cfg) place(cfg); else listeners.push(place);
+      titleParent.appendChild(el);
+      titleEl = el;
+    } else if (titleEl) {
+      titleEl.remove();
+      titleEl = null;
+    }
+  }
+  /** The title's banner, wanted in this parent (placed and removed by the mode, see syncTitle). */
+  function titleBanner(parent) { titleParent = parent || null; syncTitle(); }
+  /** After boot: from now on every mode change may start the loader or move the banner. */
+  function arm(parent) { armed = true; titleBanner(parent); sync(); }
+  /** Call on every mode change. Before arm() it does nothing (the first load's critical path stays clear). */
+  function sync() {
+    if (!armed) return;
+    start();
+    syncTitle();
   }
   return {
     start,
     titleBanner,
+    arm,
+    sync,
     get config() { return cfg; },
     /** A run of the player's own reached its results (counts toward "skip the first"). */
     noteRun() { runs++; },

@@ -1,12 +1,12 @@
 ---
 id: 0117
 title: The ad network stays off the wire in the countdown and the run (a quick Jump and ?play=jump)
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: performance
 created: 2026-10-30
-pr:
+pr: 183
 by: critic
 ---
 
