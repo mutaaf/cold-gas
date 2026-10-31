@@ -31,13 +31,15 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // `PWTEST_SHARD_WEIGHTS=a:b:c npx playwright test --list --shard=N/3`.
 // 0117 adds two ads.spec tests (≈ 1 min) to shard 1; 71:92:89 keeps shards 2 and 3 exactly main's cut (with 69:92:89
 // hud-collapse's 820×1180 flight moved into shard 2, and #183's e2e 1/3 and 2/3 both ran into 35 min on slow runners).
+// On 615a079 71:92:89 ran 35+ (76 of 77) / 27.1 / 33.3 min: 68:95:89 hands shard 1's last three hud-collapse flights
+// (≈ 2.5 min) to shard 2 and leaves shard 3 main's cut.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
 // Three weights fit only a total of 3 (Playwright throws on any other), so a hand-run `--shard=1/2` stays even.
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const thirds = args.some((a, i) => /^--shard=\d+\/3$/.test(a) || (a === '--shard' && /^\d+\/3$/.test(args[i + 1] ?? '')));
-if (wholeSuite && thirds) process.env.PWTEST_SHARD_WEIGHTS ??= '71:92:89';
+if (wholeSuite && thirds) process.env.PWTEST_SHARD_WEIGHTS ??= '68:95:89';
 
 export default defineConfig({
   testDir: 'tests/e2e',
