@@ -45,6 +45,9 @@ function watch(page) {
 async function toTheatre(page) {
   await page.evaluate(() => { const g = window.__coldgas; g.startRun('reveal'); g.skipCountdown(); g.fastForward(); });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 60_000 });
+  // A phone runs the call docked on the sheet (the score first): "Watch the call" puts the theatre up.
+  const watch = page.locator('[data-call-watch]');
+  if (page.viewportSize().width < 720) await watch.waitFor({ state: 'visible', timeout: 15_000 }).then(() => watch.click(), () => {});
   await page.waitForFunction(() => { const t = document.querySelector('[data-theatre]'); return t && !t.hidden && t.querySelector('.th-canvas') && t.dataset.stage; }, null, { timeout: 60_000 });
 }
 const stageIs = (page, s) => page.waitForFunction((s) => document.querySelector('[data-theatre]')?.dataset.stage === s, s, { timeout: 90_000 });

@@ -2009,7 +2009,7 @@ body:has(> .pause:not([hidden])) :is(.hud, .top, .cue, .count, .drill-bar) { fil
 :root[data-hud='compact'] .hud[data-tier='assist'] .tank .n2-st { display: none; }
 /* The full set shows speed big on the ground: the strip doesn't say it twice (in the air the big readout is the
    descent, and SPD comes back). */
-:root:not([data-hud='compact']) .hud:not([data-air]) .h-strip > [data-ch='spd'] { display: none; }
+:root:not([data-hud='compact']) .hud:not([data-air]) .h-strip > [data-ch='spd'] { visibility: hidden; }   /* the slot stays: the strip never shifts when it comes back in the air (0047) */
 
 /* --- Marquee (src/ads.js): between runs only ------------------------------------------------ */
 /* The title's banner exists only when the slot can fill; it never covers the CTA, and short screens skip it. */
