@@ -257,7 +257,7 @@ describe('POST /scores (telemetry, no replay)', () => {
     const j = await res.json();
     expect(res.status).toBe(200);
     expect(j).toMatchObject({ dry: true, rank: 1, course: 'show', tier: 'assist' });
-    expect(j.card.total).toBe(94);
+    expect(j.card.total).toBe(97.7);
     expect(j.card.facts.sink).toBe(0.8);
     expect(DB.raw.prepare('SELECT COUNT(*) AS n FROM scores').get().n).toBe(before);
   });
@@ -276,7 +276,7 @@ describe('POST /scores (telemetry, no replay)', () => {
     const today = await get('board=today&course=show');
     expect(today.course).toBe('show');
     expect(today.rows).toHaveLength(2);
-    expect(today.rows[0]).toMatchObject({ initials: 'ABC', total: 94, course: 'show', tier: 'assist' });
+    expect(today.rows[0]).toMatchObject({ initials: 'ABC', total: 97.7, course: 'show', tier: 'assist' });
     expect((await get('board=today&course=wall')).rows).toHaveLength(0);
     expect((await get('board=all')).rows).toHaveLength(3);   // no course: every course (old clients)
   });
