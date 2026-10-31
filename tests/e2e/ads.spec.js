@@ -98,8 +98,8 @@ async function adPage(page, url) {
   await page.goto(url);
 }
 
-// One test, three pages: ads.spec keeps main's test count, so no e2e shard's cut moves (docs/LESSONS.md, 0117).
-test('no loader on a local preview; with ?marquee= (0117) the loader and the title slot stay out of the countdown and the run', async ({ page, context }) => {
+// One test, three pages (each in its own context): ads.spec keeps main's test count, so no e2e shard's cut moves (docs/LESSONS.md, 0117).
+test('no loader on a local preview; with ?marquee= (0117) the loader and the title slot stay out of the countdown and the run', async ({ page, browser, baseURL }) => {
   test.slow();
 
   const asked = [];
@@ -113,10 +113,14 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
   await expect(page.locator('[data-marquee]')).toHaveCount(0);
   await expect(page.locator('[data-reroll]')).toBeHidden();
   expect(asked).toEqual([]);
+  // Each 0117 flight gets a fresh context, as if it were its own test: no storage from this page, and no run left
+  // going in a same-origin tab beside it (on CI's software GL a second tab's boot ran past 60 s, #183).
+  await page.close();
+  const freshPage = async () => (await browser.newContext({ baseURL, viewport: { width: 1280, height: 720 } })).newPage();
 
   // 0117 · a Jump before the title banner is asked for leaves no slot and no loader work in the run.
   {
-    const p = await context.newPage();
+    const p = await freshPage();
     await adPage(p, '/coldgas/?gfx=low&marquee=1');
     await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
     // The loader goes in on the title, at idle; Jump at once, before its config resolves.
@@ -130,12 +134,12 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     expect(log.filter((e) => e.what === 'loader')).toEqual([{ what: 'loader', mode: 'title' }]);
     expect(log.filter((e) => e.what === 'title+')).toEqual([]);
     expect(log.filter((e) => e.what === 'title-in-run')).toEqual([]);
-    await p.close();
+    await p.context().close();
   }
 
   // 0117 · under ?play=jump the loader waits for the first results.
   {
-    const p = await context.newPage();
+    const p = await freshPage();
     await adPage(p, '/coldgas/?gfx=low&marquee=1&play=jump');
     await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
     await p.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
@@ -146,6 +150,6 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     const log = await p.evaluate(() => window.__adLog);
     expect(log.filter((e) => e.what === 'loader').map((e) => e.mode)).toEqual(['results']);
     expect(log.filter((e) => e.what === 'title+')).toEqual([]);
-    await p.close();
+    await p.context().close();
   }
 });
