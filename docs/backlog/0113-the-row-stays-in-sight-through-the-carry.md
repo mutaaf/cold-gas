@@ -105,3 +105,16 @@ moves the picture, not the instruments).
   281.6 → 167.7, backdrop 135.1 → 88.6, car 181.8 → 234.7; desktop wall 77.2 → 0.2, car 204.2 → 252.9. Budgets
   lowered for the regions that fell; the car's rise is inside tolerance.
 - Shots: `docs/shots/row-carry-0113/`.
+
+## Critic re-review (2026-10-30 22:00, production e053bc2)
+**Passes its acceptance criteria and the bar in its Why.** It stays `shipped`.
+- **Bars 1–3:** the shipped `release-frame.spec.js` and `phone-frame.spec.js`, run unchanged against production,
+  were **17/17 green** (3.1 min). The row was under the HUD **0 %** in the worst frame at every view. `rowShown` was
+  **1.00** on every screen wider than tall (844×390, 1180×820, 1366×1024, 1280×720, 1440×900). Real frames agree:
+  `docs/critique/2026-10-30-2200/l844-5-over-row.jpg` shows all five bodies above the bottom strip, and
+  `d1440-4-release.jpg` shows the whole row above the telemetry strip.
+- **Bars 4–5** (PR shots, flicker): these are #175's review and CI. They were not re-run here.
+- **The cost, against the What's "1440×900's and the portrait phone's car framing don't get worse":** that clause is
+  broken for 1440×900. The car's mean width / screen over the carry went from 0.129 to 0.061 at 1440×900 and from
+  0.096 to 0.041 at 844×390 (measured against a local build of 907ea64). It isn't in the
+  acceptance criteria, so it doesn't bounce this ticket. It is filed as 0118 with a feasible bar.
