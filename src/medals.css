@@ -1,4 +1,4 @@
-/* Medals on the results sheet (src/medals.js, 0117): one hairline row under the score.
+/* Medals on the results sheet (src/medals.js, 0120): one hairline row under the score.
    Ink and amber only: gold is the amber, silver the ink, bronze the quiet ink; red stays for warnings. */
 .medals { margin: 12px 0 0; }
 .medals[hidden] { display: none; }

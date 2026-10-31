@@ -1,9 +1,9 @@
-// Medals (0117): bronze, silver and gold per event and flight tier, the best on this device.
+// Medals (0120): bronze, silver and gold per event and flight tier, the best on this device.
 //
 // Thresholds are score totals (src/sim/judge.js scoreRun, the same number the Worker verifies) and
 // are calibrated from measured populations, not from 100: gold is what a skilled player reaches on
 // that tier, silver what a careful one does, bronze a clean landing. The numbers and where they come
-// from are in docs/backlog/0117-thumb-mastery.md. A medal is a reading of the score, never a score:
+// from are in docs/backlog/0120-thumb-mastery.md. A medal is a reading of the score, never a score:
 // nothing here feeds back into a run.
 //
 // Storage: one localStorage key on this device (coldgas_medals), { "<course>:<tier>": best total }.
@@ -16,16 +16,16 @@ export const MEDAL_ORDER = ['bronze', 'silver', 'gold'];
 export const MEDAL_LABEL = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 
 // [bronze, silver, gold] per course and tier.
-//  - The Show, Assist (the phone's default, one-thumb): measured with scripts/human-phone.mjs (300 each):
-//    one-thumb never sliding 89.3–90.3 (bronze); sliding onto the sight's dot, median 91, best 91.7
-//    (silver); the classic two-thumb scheme's p90 92 and best 93.7, the keyboard population's median 88,
-//    the reference 94 (gold at 92.5: a flight on the mark with gas left).
+//  - The Show, Assist (the phone's default, one-thumb), SIM_VERSION 27 judging, scripts/human-phone.mjs 300
+//    each: a thumb that never aims lands 81.7–86 (median 83.7: bronze); one that slides onto the sight's dot,
+//    median 92.7 (silver) and p90 95.7 (gold); sloppy aiming median 90.3; the classic two-thumb scheme and
+//    the keyboard population median 73; the reference 97.7.
 //  - The Wall, Assist: scripts/naive-players.mjs (32 naive strategies: 84–88) and the reference (96).
 //  - The Lineup, Assist: the reference kickflip is 92; a clean 360 by hand is the bronze.
 //  - Pro and Advanced: the panel pays ×1.08 and ×1.15 (judge.js TIERS) for flying with less computer;
 //    the bars rise by less than that (ESTIMATE: the same flight is harder to fly, so not the full factor).
 export const MEDALS = {
-  show: { assist: [84, 91, 92.5], pro: [86, 93, 95], advanced: [87, 94, 96.5] },
+  show: { assist: [80, 90, 95], pro: [82, 92, 96.5], advanced: [83, 93, 97.5] },
   wall: { assist: [84, 90, 94], pro: [86, 92, 96], advanced: [87, 93, 97.5] },
   lineup: { assist: [72, 84, 90], pro: [75, 87, 93], advanced: [77, 89, 95] },
 };
@@ -58,7 +58,7 @@ export function nextMedal(course, tier, best, from = best) {
   return null;
 }
 
-// "Silver at 91 · 3.2 to go" (or the gold line when it's held).
+// "Silver at 90 · 3.2 to go" (or the gold line when it's held).
 export function nextTargetText(course, tier, best, from = best) {
   const n = nextMedal(course, tier, best, from);
   if (!n) return 'Gold held · beat your best';

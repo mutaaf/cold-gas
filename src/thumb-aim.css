@@ -14,5 +14,5 @@
 .thumb.on .thumb-aim .ta-mark { border-color: #06080c; }
 .thumb.on .thumb-aim::before, .thumb.on .thumb-aim::after { background: rgba(6, 8, 12, 0.18); }
 .thumb-aim[data-wait] .ta-mark { opacity: 0.45; }
-/* Held and aiming, the pad's words step back behind the sight (they come back the moment you let go). */
-.thumb.on:has(.thumb-aim[data-on]) .thumb-verb, .thumb.on:has(.thumb-aim[data-on]) .thumb-act { opacity: 0.35; }
+/* Held and aiming, the sight takes the pad: its words step out (they come back the moment you let go). */
+.thumb.on:has(.thumb-aim[data-on]) .thumb-verb, .thumb.on:has(.thumb-aim[data-on]) .thumb-act { visibility: hidden; }

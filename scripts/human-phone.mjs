@@ -14,8 +14,8 @@
 // --scheme=thumb flies the one-thumb Assist (src/onethumb.js, the code the page runs): hold to
 // climb, tap to let go, hold to land. The release is the page's (src/main.js noteRelease): the tap
 // starts the drive-off, and the car is let go on its push-off (LIFT on the deck) or the first tick in
-// the air (before 0117 this script let go on the tap itself, skipping the drive-off).
-// --skill (thumb, 0117: the touchdown slide, src/thumb-aim.js's sight):
+// the air (before 0120 this script let go on the tap itself, skipping the drive-off).
+// --skill (thumb, 0120: the touchdown slide, src/thumb-aim.js's sight):
 //   none     never slides (the accessibility population; the default)
 //   careful  holding in the air, puts the thumb on the amber dot (the mark from the predicted
 //            touchdown), a reaction late, re-reading it every 0.25–0.5 s
@@ -32,7 +32,10 @@ import { SHOW } from '../src/sim/courses.js';
 import { SPEC } from '../src/sim/spec.js';
 import { predict, newPrediction } from '../src/sim/predict.js';
 import { initPhysics } from '../src/sim/engine.js';
-await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
+await initPhysics();
+// --dump=<file>: every run's telemetry as JSON (re-score offline with a candidate judge).
+const DUMP = (process.argv.find((a) => a.startsWith('--dump=')) || '').slice(7);
+const dumped = [];   // the rigid-body engine's WASM (src/sim/engine.js)
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
@@ -115,7 +118,7 @@ for (let n = 0; n < N; n++) {
   if (scheme === 'thumb') {
     const th = createOneThumb();
     let released = false, tapped = false, ledgeT = -1, tapAt = -1, holdFrom = -1, holding = false, lapseAt = -1, landSeen = -1;
-    // The slide (0117), drawn from its own stream so the base population is the same with or without it.
+    // The slide (0120), drawn from its own stream so the base population is the same with or without it.
     const sk = skill === 'mixed' ? ['none', 'careful', 'sloppy'][Math.floor(rnd3() * 3)] : skill;
     const A = { every: Math.round((0.25 + rnd3() * 0.25) * 240), over: 2 + rnd3(), flip: rnd3() < 0.5, shove: rnd3() < 0.4 ? 20 + rnd3() * 40 : 0, flipFor: Math.round((0.4 + rnd3() * 0.6) * 240) };
     let aimNext = -1, aimAt = -1, want = null, flipUntil = -1;
@@ -251,6 +254,7 @@ for (let n = 0; n < N; n++) {
     }
   }
   const t = run.t, s = scoreRun(t);
+  if (DUMP) dumped.push({ t: { ...t }, why: null });
   if (t.airStartTick < 0) why = t.fellOff ? 'climb: fell off' : 'climb: stalled';
   else if (t.fellOff) why = 'climb: fell off';
   else if (t.contact) why = 'contact with the row';
@@ -267,3 +271,4 @@ const q = (f) => totals[Math.min(totals.length - 1, Math.floor(totals.length * f
 console.log(`Phone ${vp} · ${scheme}${scheme === 'thumb' ? ` · skill ${skill}` : ''} · ${build}: ${ok}/${N} landed clean (${Math.round((100 * ok) / N)}%), ${onPad} inside the 7 m ring; median clean score ${q(0.5)} · mis-taps ${missed}/${presses}`);
 console.log(`  clean scores: min ${totals[0] ?? '–'} · p10 ${q(0.1)} · median ${q(0.5)} · p90 ${q(0.9)} · max ${totals[totals.length - 1] ?? '–'}`);
 console.log('  failures:', JSON.stringify(fails));
+if (DUMP) { const { writeFileSync } = await import('node:fs'); writeFileSync(DUMP, JSON.stringify(dumped)); }

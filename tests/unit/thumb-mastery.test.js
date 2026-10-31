@@ -1,4 +1,4 @@
-// 0117 thumb mastery: the one-thumb touchdown slide (src/onethumb.js) is plain sim input (it replays and
+// 0120 thumb mastery: the one-thumb touchdown slide (src/onethumb.js) is plain sim input (it replays and
 // scores bit-exactly), a thumb that never slides flies exactly as before, a careful slide lands nearer
 // the mark and scores more, and no slide, however wild, puts the car on the row. Plus the medals
 // (src/medals.js): bars, the next-target line, and storage that may not be there.
@@ -49,7 +49,7 @@ function careful() {
 }
 const pitchRoll = (run) => run.inputLog.some((e) => e[4] !== 0 || e[5] !== 0);   // [tick, throttle, brake, steer, pitch, roll, …]
 
-describe('one-thumb touchdown slide (0117)', () => {
+describe('one-thumb touchdown slide (0120)', () => {
   it('a thumb that never slides writes no pitch or roll (it flies as before)', () => {
     const run = flyThumb({ holdAt: 12 });
     expect(pitchRoll(run)).toBe(false);
@@ -115,7 +115,7 @@ function fakeStorage({ throws = false } = {}) {
   return { getItem: (k) => { if (throws) throw new Error('denied'); return m.has(k) ? m.get(k) : null; }, setItem: (k, v) => { if (throws) throw new Error('denied'); m.set(k, String(v)); }, removeItem: (k) => m.delete(k), _m: m };
 }
 
-describe('medals (0117)', () => {
+describe('medals (0120)', () => {
   beforeEach(() => { globalThis.localStorage = fakeStorage(); _resetMedalCache(); });
 
   it('bars rise bronze → silver → gold for every event and tier, and gold is under 100', () => {
@@ -130,12 +130,12 @@ describe('medals (0117)', () => {
   });
 
   it('a never-slide one-thumb run is bronze on the Show, and the reference flight is gold', () => {
-    expect(medalFor('show', 'assist', 90.3)).toBe('bronze');
-    expect(medalFor('show', 'assist', 94)).toBe('gold');
+    expect(medalFor('show', 'assist', 83.7)).toBe('bronze');   // the never-aiming median (v27)
+    expect(medalFor('show', 'assist', 97.7)).toBe('gold');     // the reference
     expect(medalFor('show', 'assist', 50)).toBe(null);
   });
 
-  it('the next-target line reads "Silver at 91 · 3.2 to go"', () => {
+  it('the next-target line reads "Silver at 90 · 3.2 to go"', () => {
     const { silver } = thresholds('show', 'assist');
     expect(nextTargetText('show', 'assist', 87.8, 87.8)).toBe(`Silver at ${silver} · ${(silver - 87.8).toFixed(1)} to go`);
     expect(nextMedal('show', 'assist', 99)).toBe(null);
@@ -148,10 +148,10 @@ describe('medals (0117)', () => {
     expect(r.isNew).toBe(true); expect(r.after.medal).toBe('bronze');
     r = recordRun('show', 'assist', 80);
     expect(r.isNew).toBe(false); expect(r.after.best).toBe(88);
-    r = recordRun('show', 'assist', 93.4);
+    r = recordRun('show', 'assist', 95.4);
     expect(r.after.medal).toBe('gold'); expect(r.isNew).toBe(true);
     expect(getMedals('show', 'pro').best).toBe(null);   // tiers apart
-    expect(JSON.parse(globalThis.localStorage.getItem(MEDAL_KEY))['show:assist']).toBe(93.4);
+    expect(JSON.parse(globalThis.localStorage.getItem(MEDAL_KEY))['show:assist']).toBe(95.4);
     _resetMedalCache();
     expect(getMedals('show', 'assist').medal).toBe('gold');   // back from storage
   });

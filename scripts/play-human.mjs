@@ -4,8 +4,8 @@
 //
 //   node scripts/play-human.mjs <url> [keyboard|touch|thumb] [runs=3] [outdir] [viewport=390x844] [--skill=careless|careful|sloppy]
 //
-// --skill (thumb, 0117): what the thumb does with the pad's sight in the air (src/thumb-aim.js).
-//   careless  never slides (the default; the only one-thumb player before 0117)
+// --skill (thumb, 0120): what the thumb does with the pad's sight in the air (src/thumb-aim.js).
+//   careless  never slides (the default; the only one-thumb player before 0120)
 //   careful   slides onto the amber dot, a reaction late, re-reading it every 0.3 s
 //   sloppy    slides 2.5× too far, the first second the wrong way up, with a shaky thumb
 //

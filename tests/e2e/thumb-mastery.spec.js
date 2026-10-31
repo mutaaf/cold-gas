@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 
-// 0117: one-thumb's touchdown slide and the medals. In the air the held pad turns into a sight (the
+// 0120: one-thumb's touchdown slide and the medals. In the air the held pad turns into a sight (the
 // amber dot is the mark), a slide of the held finger writes pitch / roll into the input log, and the
 // results sheet shows the medal row under the score with the next target.
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };

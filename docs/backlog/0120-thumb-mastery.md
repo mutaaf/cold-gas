@@ -1,5 +1,5 @@
 ---
-id: 0117
+id: 0120
 title: One thumb can place the touchdown, and medals say how well
 status: in-progress   # shipped once a PR number exists (check-backlog requires it); branch audit/thumb-mastery
 priority: P1
@@ -56,79 +56,106 @@ tick). Its thumb population therefore flew a different flight from the page (med
   dot." The words step back while aiming. The dot dims when the slide can't act yet.
 - **Medals** (src/medals.js, src/medals.css). Bronze / silver / gold per event and tier, best per device in
   localStorage `coldgas_medals`; a hairline row under the score (`<div data-medals>` in index.html) with the next
-  target ("Silver at 91 · 0.7 to go"). `getMedals(course, tier)` for the title and the daily. Drills and the
+  target ("Silver at 90 · 1.3 to go"). `getMedals(course, tier)` for the title and the daily. Drills and the
   reference flight earn none.
-- **Teaching** (src/pointer.js, thumb scheme only): the how-to's fourth row is "Aim & brake · hold and slide the
-  pad"; the post-run pointer's `mark` and `clean` lines name the dot.
+- **Teaching** (src/pointer.js, thumb scheme only): the how-to's fourth row is "Aim & brake · hold, slide the pad ·
+  Slide onto the amber dot to hit the mark"; the post-run pointer's `mark` and `clean` lines name the dot.
 
-### Medal bars ([bronze, silver, gold])
+- **The Show's judging, SIM_VERSION 26 → 27** (src/sim/judge.js, a second commit, the orchestrator's decision after
+  the input-only version below). Scores only: the physics is untouched (ref-hash: same hashes).
+  - *Precision* is read off the pad's painted rings: `curve(padMiss, [[3.5,1],[5,0.85],[7,0.45],[12,0.15],[20,0]])`
+    (was `band(padMiss, 20, 1)`, 74 % of the marks for a 6 m miss outside the 4 m ring; now 65 %).
+  - *Gas left* is full marks from 45 % (was 50 %; the reference keeps 48 %).
+  - *Clearance* no longer marks a safe crossing down like a timid one: 1.0 from 0.8 to 2 m, 0.85 at 6 m, 0.75 from 12 m
+    (was 0.72 from 4.8 m, which docked the reference's 5 m).
+  - *The panel's weights* move off the climb, the hang and the roll-out (Assist flies them to 9.7–10 for everyone:
+    climb + inversion + rotation 0.28 / 0.54 / 0.36 → 0.12 / 0.32 / 0.18 for the Engineer / Coordinator / Designer)
+    onto the mark (precision 0.14 / 0.05 / 0.12 → 0.36 / 0.28 / 0.34). Landing weights unchanged; gas 0.12/0.05/0.16
+    → 0.10/0.08/0.14; clearance 0.12/0.20/0.14 → 0.08/0.16/0.10.
+  - The Wall and the Lineup are judged as before.
+  - *How it was chosen:* every run's telemetry from the five 300-player populations was dumped
+    (`--dump=` on human-phone.mjs and human-show.mjs) and re-scored offline over a grid of precision curves (flat to
+    2 / 2.5 / 3 / 3.5 m), gas bands (35–50 %), clearance curves and weight shifts. Constraints: never-aiming median
+    80–86, careful median 91–94 with p90 ≥ 95, sloppy below careful, the reference above every thumb. Heavier gas
+    weights (×1.5, ×2) failed: the careful thumb's gas (24–33 %) is no better than the careless one's, so gas weight
+    only compressed the scale. A carry chosen by the thumb was not needed to reach the targets (not built).
+
+### Medal bars ([bronze, silver, gold]), recalibrated for v27
 | | Assist | Pro | Advanced |
 |---|---|---|---|
-| Show | 84 · 91 · 92.5 | 86 · 93 · 95 | 87 · 94 · 96.5 |
+| Show | 80 · 90 · 95 | 82 · 92 · 96.5 | 83 · 93 · 97.5 |
 | Wall | 84 · 90 · 94 | 86 · 92 · 96 | 87 · 93 · 97.5 |
 | Lineup | 72 · 84 · 90 | 75 · 87 · 93 | 77 · 89 · 95 |
 
-Show/Assist from the populations below (one-thumb never sliding 89.3–90.3 → bronze; sliding onto the dot,
-median 91 → silver; gold 92.5 = the careful thumb's top decile and the classic scheme's p90 (92), short of the
-reference's 94). Wall/Assist from naive-players (65–87.3) and the
-reference (96); Lineup from the reference (92). Pro/Advanced are ESTIMATES (the panel pays ×1.08/×1.15; the bars
-rise by less, as the same flight is harder to fly).
+Show/Assist from the v27 populations below: bronze 80 = the never-aiming thumb's floor (min 80.7); silver 90 =
+aiming at all (careful p25 ≈ 91, sloppy median 90.3); gold 95 = the careful thumb's top decile (p90 95.7), under the
+reference's 97.7. Wall/Assist from naive-players (65–87.3) and the reference (96); Lineup from the reference (92).
+Pro/Advanced are ESTIMATES.
 
-## Measurements (before → after)
-Node, the page's own src/onethumb.js, `scripts/human-phone.mjs 300 --scheme=thumb` (the release now as the page
-flies it; "before" = main's onethumb.js with the corrected release model):
+## Measurements
+Node, the page's own src/onethumb.js, `scripts/human-phone.mjs 300 --scheme=thumb --skill=…` (the release as the page
+flies it). Clean-landing scores, min · p10 · median · p90 · max:
 
-| Population (300 each) | Land clean | Clean scores min · p10 · median · p90 · max |
-|---|---|---|
-| before: every thumb (nothing to slide) | 300/300 | 89.3 · 89.3 · 90.3 · 90.3 · 90.3 |
-| after: `--skill=none` (never slides) | 300/300 | 89.3 · 89.3 · 90.3 · 90.3 · 90.3 (identical inputs) |
-| after: `--skill=careful` (thumb on the dot) | 300/300 | 89.3 · 90.3 · 91 · 91.7 · 93.7 |
-| after: `--skill=sloppy` (×2–3 overshoot, upside-down reads, shaky) | 300/300 | 89.3 · 89.3 · 91 · 92 · 93.7 |
-| after: `--skill=mixed` | 300/300 | 89.3 · 89.3 · 90.3 · 91.3 · 93.7 |
-| 400 random slide policies (scratch search: hold time, gain, re-read period) | 400/400, no contact | 89.3 · 90 · 90.7 · 92 · 93.7 |
+| Population (300 each) | Land clean | before (main) | input only (v26) | **v27 judging** |
+|---|---|---|---|---|
+| never aims (`none`) | 300/300 | 89.3 · 89.3 · 90.3 · 90.3 · 90.3 | same | **80.7 · 81.7 · 83.7 · 86 · 86** |
+| careful (thumb on the dot) | 300/300 | (no aim existed) | 89.3 · 90.3 · 91 · 91.7 · 93.7 | **80.7 · 82.7 · 93 · 95.7 · 96.3** |
+| sloppy (×2–3 overshoot, upside-down reads, shaky) | 300/300 | — | 89.3 · 89.3 · 91 · 92 · 93.7 | **79.7 · 81.7 · 90.3 · 94 · 95.7** |
+| classic two-thumb (`--scheme=classic`) | 289/300 (96 %) | median 87.7, p90 92 | same | **50 · 64.7 · 73 · 83.3 · 97.7** |
+| keyboard (`human-show 300 assist --cues=new`) | 291/300 (97 %) | median 88 | same | **median 73** |
+| reference (autopilot) | — | 94 | 94 | **97.7** |
+
+Verdicts read sensibly: the never-aiming thumb is "Clean" (72–84) or "Stuck it" (84–86), never "Perfect 10" (≥ 92);
+the careful median 93 is "Perfect 10". The careful/sloppy p10 (≈ 82) is the ≈ 23 % of careful flights (69/300) where
+the slide never takes effect and the car lands ≈ 6 m off like `none`: some hold LAND only from 4–8 m (too late to aim
+above the 1.5–2.5 m set-down floor), the rest hold early but are held by the safety gates (beside the row after the
+roll-out kick, the flank check refuses the slide back in). Not investigated further.
 
 The real page, `scripts/play-human.mjs <local preview> thumb 3 --skill=…` (before = production):
 
-| Player (3 runs each) | Scores | padMiss |
+| Player (3 runs each) | v26 (input only) | **v27** |
 |---|---|---|
-| before, production, careless (the only thumb player there was) | 90.7 · 90.7 · 90.7 | 6.1 |
-| after, careless (never slides) | 90.7 · 90.7 · 90.7 | 6.1–6.3 |
-| after, careful (onto the dot, 260 ms late, every 0.3 s) | 91.3 · 92 · 91.3 | 4.2–4.9 |
-| after, sloppy (2.5× too far, first second upside down, shaky) | 91.3 · 91.3 · 92 | ≈ 4.5 |
+| before, production, careless | 90.7 · 90.7 · 90.7 | — |
+| careless (never slides) | 90.7 · 90.7 · 90.7 | **85.3 · 84.3 · 84.3** |
+| careful (onto the dot, 260 ms late, every 0.3 s) | 91.3 · 92 · 91.3 | **88.3 · 92 · 90.7** (padMiss 4.5–5.5) |
+| sloppy (2.5× too far, first second upside down, shaky) | 91.3 · 91.3 · 92 | **93 · 94 · 92.3** |
 
-Gates (sim untouched, so these can't move; run on this branch): `node scripts/naive-players.mjs` 32/32 upright
-(before 32/32); `node scripts/human-show.mjs 300 assist --cues=new` 291/300 = 97 % (before 97 %);
-`scripts/human-phone.mjs 300 --scheme=classic` 289/300 = 96 %, median 87.7 (unchanged); `node scripts/ref-hash.mjs`
-show 94 / wall 96 / lineup 92, hashes fedae05c / bacb4720 / 8b2c2c9a (unchanged).
+On the real page the scripted sloppy player beat the careful one: with the page's latency (a 40 ms read loop, 260 ms
+reaction, 0.3 s re-reads, CDP touch) "thumb on the dot" is too gentle a gain to finish the correction before the
+set-down floor, and the 2.5× overshoot acts as a higher gain. A 10 px/m sight (full command at ≈ 4.8 m) was tried:
+Node careful 92.3 / sloppy 89.3 (more separation) but the page's careful runs were 82.7 · 83.7 · 92.3 (noisier), so
+the sight stays at 6 px/m. Three page runs per player are too few to call; the Node populations are the measure.
+
+Gates: `node scripts/naive-players.mjs` 32/32 upright; `human-show 300 assist --cues=new` 291/300 = 97 %;
+`human-phone --scheme=classic` 289/300 = 96 % (unchanged land rate; its scores fall, see above); `node scripts/ref-hash.mjs`
+show 97.7 (was 94) / wall 96 / lineup 92, hashes fedae05c / bacb4720 / 8b2c2c9a (unchanged: no physics change);
+`npm run determinism` on scripts/engine-logs.mjs's clean + crash logs and a careful one-thumb log: node, Chromium and
+WebKit IDENTICAL (Firefox not installed here, skipped); `npm test` 565/565.
 
 ## Honest limits
-The input-side headroom on one thumb is real but narrow, and smaller than the brief hoped for:
-- Never sliding stays exactly where it was (89.3–90.3; the page's careless player 90.7). Sliding onto the dot moves
-  the population median +0.7 (91), its top decile to 91.7–92 and its best to 93.7; the page's careful player went
-  90.7 → 91.3–92. Most of what's left is gas (26–36 % vs the reference's 48 %), which the computer spends
-  hovering over the semi's roof; no one-thumb input changes that without the scorer or the sim.
-- Sloppy slides don't punish: the safety gates (needed for the 100 % land rate) turn a bad slide into no slide, so
-  the sloppy population lands 89.3–93.7 (median 91), not in the 70s–80s. The spread a careless vs a careful thumb
-  sees is ≈ 1–3 points, not 15.
-- Getting a careless thumb into the 80s and a skilled one to 95+ needs the scorer (precision is 7.2/10 at a 6 m miss,
-  outside the 4 m ring; auto-land and the roll-out flatten landing and rotation). Not shipped: it's an outcome change
-  (SIM_VERSION, every board score moves). Estimate for `precision = 10·band(padMiss, 10, 0.8)` on the Wall/Show
-  (≈ 0.91 total per precision point): never-slide (6.2 m) 90.3 → ≈ 87.4; careful (≈ 4.5 m) 91 → ≈ 89; the reference
-  (1.5 m) 94 → ≈ 93.5. That only widens the gap to ≈ 2–4 points, because the slide's reach is limited by the
-  flank safety, not by the scorer. A real fix is a design question for the owner (e.g. pay gas left more on Assist,
-  or let the thumb choose the carry with a safe floor), worth its own ticket.
+- The input-only version (first commit) moved a careful thumb only ≈ +1 (91 vs 90.3): the slide's reach is bounded by
+  the flank safety and the gas is the computer's. v27 makes the mark worth what it should: the same slide is now
+  ≈ +9 (93 vs 83.7).
+- Classic two-thumb and keyboard players score much lower (median 88 → 73): they land 10–11 m off the mark (median),
+  which the old line forgave. Their land rates are unchanged. That is the intended reading (the mark matters), but it
+  is a big visible change for desktop players; the panel's "what happened" already coaches the mark for them.
+- Sloppy aiming isn't punished below never aiming: the gates turn a bad slide into no slide (sloppy median 90.3 vs
+  careful 93, never-aiming 83.7).
+- A keyboard player's best (98.3 in the population) can beat the reference (97.7); every thumb (max 96.3) stays under it.
+- Gas: no one-thumb input changes it much (the computer hovers over the semi). A thumb-chosen carry is the next lever.
 
 ## Acceptance criteria
 - [x] A one-thumb slide writes pitch / roll into the log; the log replays and scores bit-exactly (unit)
 - [x] Never sliding writes no pitch / roll (unit); no constant full slide in 8 directions × 2 hold styles lands on the row (unit)
-- [x] Gates: naive-players 32/32; human-show assist ≥ 95 %; human-phone thumb (none / careful / sloppy) land rates in the table
+- [x] Gates: naive-players 32/32; human-show assist ≥ 95 %; human-phone thumb (none / careful / sloppy) and classic land rates in the table; determinism IDENTICAL
+- [x] v27: never-aiming median 80–86 (83.7), careful 91–94 (93) with p90 ≥ 95 (95.7), sloppy below careful (90.3), reference on top (97.7)
 - [x] Medal row under the score on the results (e2e), stored per device, hidden for the reference and drills
 - [x] Works at 390×844 touch (e2e) and 1280×720 keyboard (the row is the same markup)
 
 ## Test plan
-tests/unit/thumb-mastery.test.js (slide, gates, replay, medals, storage off); tests/unit/pointer.test.js (thumb
+tests/unit/thumb-mastery.test.js (slide, gates, replay, medals, storage off); tests/unit/learn.test.js (SIM_VERSION 27, the Show reference 97.7 ± 0.5, deliberately moved from 94); tests/unit/pointer.test.js (thumb
 pause rows); tests/e2e/thumb-mastery.spec.js (the sight comes on, a CDP touch slide reaches the thumb, the
 medal row under the score and in localStorage, none for the reference).
 
 ## Out of scope
-A scoring change (above). The title / daily showing medals (they can call `getMedals`).
+The Wall's and the Lineup's judging. The title / daily showing medals (they can call `getMedals`). A thumb-chosen carry.
