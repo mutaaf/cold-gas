@@ -1,7 +1,7 @@
 ---
 id: 0118
 title: The car reads through the carry again, with the row still in sight (0113 halved it)
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: platform
