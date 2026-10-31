@@ -1,12 +1,12 @@
 ---
 id: 0057
 title: A network blip never breaks Free Drive, the Sandbox or the judges for the rest of the session
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: tech-health
 created: 2026-10-21
-pr:
+pr: 180
 by: operator
 ---
 
@@ -21,9 +21,9 @@ Drop the cached promise on rejection (retry on the next press, with the stale-bu
 don't count chunk-load time against the judge breaker, only the provider's own time.
 
 ## Acceptance criteria
-- [ ] Abort `drive-*.js` once: the first Free Drive press shows an error, the second works
-- [ ] Theatre chunk stalled 30 s then the provider answers late: the judge breaker count doesn't rise
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] Abort `drive-*.js` once: the first Free Drive press shows an error, the second works
+- [x] Theatre chunk stalled 30 s then the provider answers late: the judge breaker count doesn't rise
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 e2e in `tests/e2e/network.spec.js` with `page.route` abort-once and stall.
