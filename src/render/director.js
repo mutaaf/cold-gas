@@ -90,6 +90,8 @@ export function createDirector(camera) {
     camera.lookAt(st.lookS);
   }
   const fovTo = (f, dt, rate = 2) => { st.fov += (f - st.fov) * (1 - Math.exp(-dt * rate)); };
+  // 0 at LENS_ASPECT and wider, 1 by an aspect of 0.65 (every upright phone): how far the landed rig takes its upright placement.
+  const upright = () => clamp((LENS_ASPECT - camera.aspect) / 0.25, 0, 1);
   const lens = (f) => (camera.aspect >= LENS_ASPECT ? f : (Math.atan(Math.tan(f * Math.PI / 360) * LENS_ASPECT / camera.aspect) * 360) / Math.PI);
 
   // Keep the car out from under the HUD (0063): after a shot has looked where it wants, turn the camera
@@ -372,9 +374,14 @@ export function createDirector(camera) {
       ease(dt, 3.2, 9);
       fovTo(48, dt);
     } else {
-      // Landed: low, ahead of the car as it rolls back down the approach.
-      want.set(carPos.x + 6.5, 1.25, carPos.z - 9);
-      lookWant.set(carPos.x, carPos.y + 0.2, carPos.z);
+      // Landed: low, ahead of the car as it rolls back down the approach. On the Show held upright (0119) the
+      // tall lens left the car mid-screen over 40 % of floor that renders black: the near slab, seen steeply from
+      // 1.25 m up, mirrors only the dark sky. There it stands out to the side and a little back toward the row
+      // (where the carry's follow already stands), a touch higher and aimed above the car, so the car sits ≈ 0.6
+      // down the screen on the lit pad with the launch complex behind it. It blends in under LENS_ASPECT.
+      const u = st.course === 'show' ? upright() : 0;
+      want.set(carPos.x + 6.5 + 5.5 * u, 1.25 + 0.55 * u, carPos.z - 9 + 12 * u);
+      lookWant.set(carPos.x, carPos.y + 0.2 + 1.5 * u, carPos.z);
       ease(dt, 3, 8);
       fovTo(lens(40), dt);
     }
