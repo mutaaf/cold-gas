@@ -7,13 +7,16 @@
 //   obs.breaker(name)               the circuit breaker for a subsystem (src/obs/breaker.js)
 //   obs.frame(now, dt, sim, render, work, dropped)   once per frame: zero allocations
 //   obs.recovery(kind, ok, detail)  a self-heal happened (or failed)
+//   obs.play(name)                  a player did something worth counting (PLAY_EVENTS: runs, posts,
+//                                   shares, return visits…); counts only, never who. Automated
+//                                   browsers (navigator.webdriver) count as `auto`, never as players
 //   obs.snapshot()                  for the For nerds panel's Health section
 //   obs.payload() / obs.flush()     the batch sent to POST /coldgas/api/obs (sendBeacon)
 //
 // What leaves the device: error signatures (normalised message, top frame as function@file, the
 // build), counts, a frame-time histogram, the graphics tier and a coarse device class
 // ('phone-lo' … 'desktop-hi'). No URLs beyond a file's name, no user agent, no keys, no ids.
-import { signature, moduleOf, redact, MODULE_IDS, KIND_IDS } from './signature.js';
+import { signature, moduleOf, redact, MODULE_IDS, KIND_IDS, PLAY_EVENTS } from './signature.js';
 import { createBreaker } from './breaker.js';
 import { createFrameStats, recordFrame, summary, NB } from './frames.js';
 import { loadLedger, saveLedger, chooseBoot, createGovernor, SCALES, TIER_IDS } from './ledger.js';
@@ -25,6 +28,7 @@ const MAX_SEND_ERRS = 16;     // per beacon
 const MIN_FLUSH_MS = 30_000;  // at most one beacon per 30 s…
 const MAX_BEACONS = 6;        // …and six per session
 const SAVE_EVERY_MS = 10_000; // the ledger's session record is refreshed this often (never per frame)
+const SEEN_KEY = 'coldgas_seen_day';   // the last UTC day this device visited (visit-new / visit-return)
 const storage = (() => { try { return globalThis.localStorage ?? null; } catch { return null; } })();
 
 // A coarse device class: form factor × a memory/cores bucket. Nothing finer.
@@ -46,6 +50,13 @@ function createObs() {
     governor: null, onScale: null,
     beacons: 0, lastFlush: 0, sentErr: new Map(), sendEnabled: false,
     glLost: false, listeners: [],
+    plays: {}, sentPlays: {}, auto: !!globalThis.navigator?.webdriver,
+  };
+
+  // --- Player counts (the funnel the agents steer by) ---------------------------------------------
+  o.play = (name) => {
+    if (!PLAY_EVENTS.includes(name)) return;
+    o.plays[name] = (o.plays[name] || 0) + 1;
   };
 
   const log1 = new Set();
@@ -146,6 +157,11 @@ function createObs() {
     if (prev && prev.ended === false && (prev.frames || 0) > 600) o.error('page', Object.assign(new Error('previous session ended without pagehide'), { stack: '' }), 'unclean');
     o.ledger.sessions.push(o.session);
     persist();
+    // A visit: new on this device, or back on a later UTC day (one count a day, nothing else kept).
+    try {
+      const today = new Date().toISOString().slice(0, 10), last = storage?.getItem(SEEN_KEY);
+      if (last !== today) { o.play(last ? 'visit-return' : 'visit-new'); storage?.setItem(SEEN_KEY, today); }
+    } catch { /* storage blocked: no visit count */ }
     // Beacons go to production only (or with ?obs=1): a dev server or a test runner has no Worker.
     const host = globalThis.location?.hostname || '';
     o.sendEnabled = send ?? (!['localhost', '127.0.0.1', ''].includes(host) || /[?&]obs=1\b/.test(globalThis.location?.search || ''));
@@ -232,8 +248,15 @@ function createObs() {
       fr: f.frames ? { h: hist, n: f.frames, hitch: f.hitches, low: f.lowFpsWindows, drop: Math.round(f.droppedTicks), sim: summary(f).simMs, ren: summary(f).renderMs } : null,
       rec: o.recoveries.filter((r) => !r.sent).slice(-8).map((r) => ({ kind: r.kind, ok: r.ok })),
       br: Object.values(o.breakers).filter((b) => b.state !== 'closed').map((b) => b.name).slice(0, 8),
+      auto: o.auto,
+      play: playDelta(),
     };
   };
+  function playDelta() {
+    const out = {};
+    for (const [k, n] of Object.entries(o.plays)) { const d = n - (o.sentPlays[k] || 0); if (d > 0) out[k] = d; }
+    return out;
+  }
   // Frames are cumulative per session: the server counts a session's histogram once (`first`),
   // so later beacons send only what's new.
   let sentFrames = null, sessionSent = false;
@@ -249,7 +272,7 @@ function createObs() {
     }
     if (p.fr && p.fr.n < 60) p.fr = null;
     p.first = !sessionSent;
-    if (!p.errs.length && !p.fr && !p.rec.length && sessionSent) return null;
+    if (!p.errs.length && !p.fr && !p.rec.length && !Object.keys(p.play).length && sessionSent) return null;
     const body = JSON.stringify(p);
     if (body.length > 8000) { p.errs = p.errs.slice(0, 4).map((e) => ({ ...e, st: '' })); }
     const out = JSON.stringify(p);
@@ -263,6 +286,7 @@ function createObs() {
     if (sent || !o.sendEnabled) {
       for (const e of p.errs) o.sentErr.set(e.sig, (o.sentErr.get(e.sig) || 0) + e.n);
       for (const r of o.recoveries) r.sent = true;
+      for (const [k, n] of Object.entries(p.play)) o.sentPlays[k] = (o.sentPlays[k] || 0) + n;
       if (o.frames.frames) { const fr = o.frames; sentFrames = { h: Array.from(fr.hist), n: fr.frames, hitch: fr.hitches, low: fr.lowFpsWindows, drop: Math.round(fr.droppedTicks) }; }
       sessionSent = true;
       o.beacons++; o.lastFlush = now;

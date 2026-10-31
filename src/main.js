@@ -381,6 +381,7 @@ function startRunNow(kind = 'jump', quick = false) {
   S.run = armAftermath(takeRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.runKind = kind;   // the reference jump never counts toward Rookie mode's streak (0074)
+  if (kind === 'jump') obs.play('run');   // the players' funnel (src/obs: counts only)
   latchTier();
   S.adaptNow = null;
   // Live pointers on the cue line (0079): a new player's first runs, or while Adapt to me says they're struggling.
@@ -429,6 +430,7 @@ function finishRun() {
   getNozzlePad().show(false);
   ui.clearCue();
   countRun(run);
+  if (S.runKind === 'jump' && !S.drill && S.card) obs.play(S.card.facts?.crashed ? 'run-wrecked' : 'run-landed');
   // The coach re-flies the log (≈30–60 ms) a beat after the sheet slides in.
   const coachRun = () => setTimeout(() => {
     if (S.run !== run) return;
@@ -1311,6 +1313,7 @@ on('[data-reveal]', () => startRun('reveal'));
 // the results, the pause sheet, R / Enter and H.
 function retry() {
   S.paused = false; ui.show('pause', false);
+  obs.play('retry');
   if (S.drill) return retryDrill();
   afterResults(() => startRun('jump', true));
 }
@@ -1445,6 +1448,7 @@ function howtoSeen() {
 }
 let howtoThen = null, howtoOpener = null;
 function openHowto({ then = null, from = null } = {}) {
+  obs.play('howto');
   howtoThen = then; howtoOpener = from || document.activeElement;
   const ctx = pointerCtx(stage.course, S.tier);
   howtoScreen.querySelector('[data-howto-device]').textContent = deviceTitle(ctx);
@@ -1688,6 +1692,7 @@ try { document.getElementById('initials').value = localStorage.getItem('coldgas_
 // The board: the latest request wins (a slow 'today' never overwrites the 'all' asked for after it).
 let boardKind = 'today', boardSeq = 0, boardAbort = null;
 async function openBoard(kind = boardKind) {
+  obs.play('board-open');
   boardKind = kind;
   ui.show('board', true);
   document.querySelectorAll('[data-board]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.board === kind)));
@@ -1761,7 +1766,7 @@ function loadDrive() {
   });
   return driveLoad;
 }
-on('[data-drive-open]', () => { cancelPendingStart(); loadDrive().then((d) => d.openPicker()).catch((err) => { console.error(err); ui.cue_('Free Drive couldn’t load', 2000); }); });
+on('[data-drive-open]', () => { cancelPendingStart(); obs.play('drive'); loadDrive().then((d) => d.openPicker()).catch((err) => { console.error(err); ui.cue_('Free Drive couldn’t load', 2000); }); });
 
 // --- The Sandbox: build, power-ups, side quests (a lazy chunk, src/build/) ----------------------------
 let sandbox = null, sandboxLoad = null;
@@ -1780,7 +1785,7 @@ function loadSandbox() {
   });
   return sandboxLoad;
 }
-on('[data-sandbox-open]', () => { cancelPendingStart(); loadSandbox().then((s) => s.start()).catch((err) => { console.error(err); ui.cue_('The Sandbox couldn’t load', 2000); }); });
+on('[data-sandbox-open]', () => { cancelPendingStart(); obs.play('sandbox'); loadSandbox().then((s) => s.start()).catch((err) => { console.error(err); ui.cue_('The Sandbox couldn’t load', 2000); }); });
 
 // Deep links: ?play=jump|reveal, ?board=today|all, ?drive=<road>[&tod=dusk], ?drive=endless[&seed=…].
 // One of them wins (AGENTS.md, URL parameters): ?drive= over ?play= over ?board=.

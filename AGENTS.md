@@ -53,9 +53,14 @@ mark, and air left in the tanks.
   - `POST /coldgas/api/obs` (src/worker/obs.js): the client's observability beacon. ≤ 8 kB, strictly
     validated (`cleanObs`), 30/h per player and 3,000/day overall; aggregated in D1 (`obs_err` per
     signature/build/day, `obs_frames` histograms per device class/tier, `obs_evt` counters, `obs_ex`
-    exemplar stacks; month-long retention). No IPs, user agents or headers stored.
+    exemplar stacks; month-long retention). No IPs, user agents or headers stored. It also carries
+    the players' funnel as counts (`obs.play`, PLAY_EVENTS in src/obs/signature.js: visits new and
+    returning, runs, landed/wrecked, retries, posts, shares…), stored as `play:<event>` per day for
+    people only; an automated browser (`navigator.webdriver`, i.e. our own agents and tests) is
+    counted as `sessions:auto`, never as a player.
   - `GET /coldgas/api/obs/digest[?build=]`: top signatures, `regressions` (new or ≥ 2× per session
-    vs the previous build, and p95 frame-time regressions), frame percentiles. Cached 5 min.
+    vs the previous build, and p95 frame-time regressions), frame percentiles, and `players` (per
+    UTC day: `human`, `auto` and each funnel count; the Scout and the Critic read it). Cached 5 min.
   - D1 database `cold-gas` (binding `DB`, auto-provisioned, tables self-created).
 - **The judges' brain** (src/worker/ai/):
   - Default: Workers AI (binding `AI`). `@cf/google/gemma-4-26b-a4b-it` runs with thinking off;
@@ -438,6 +443,11 @@ as a new or regressed signature, and `npm run heal` turns that into a `ready` ti
 every run (keeper.md step 2) and PRs the tickets; the **Builder** runs `npm run heal -- --check`
 before picking (builder.md step 2) and heals first if the digest has something unticketed.
 Production's own health: For nerds (`) → Health.
+
+**Steering by players.** The agents read the players' funnel (`/obs/digest` → `players`) before
+choosing work, and play one run as a first-time visitor on a phone (`coldgas_howto = 'new'`: an
+automated browser otherwise counts as a returning player). Lens `engagement` covers reasons to retry,
+return and share, never dark patterns.
 
 The operator steers through `agents/control.json` (paused, focus, caps, frozen_paths). Branch
 prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.
