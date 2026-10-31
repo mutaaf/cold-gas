@@ -33,7 +33,7 @@ At 1440×900 with Jump 0.5–3 s after the title, 27–28 requests landed in the
 in the countdown (MutationObserver). None was visible, because the title's slot is `display: none` by then
 (`p390-ad-live.jpg`: nothing on screen). So this is network and main-thread work in the run, not a visible ad.
 
-There are two causes in `src/main.js:602-606` and `src/ads.js`:
+There are two causes in `src/main.js:619-620` (was 602-606 at `e053bc2`) and `src/ads.js:48`:
 - `startAds` runs at idle after `stage.ready` whatever the mode, so under `?play=jump` it injects the loader during the
   countdown.
 - `titleBanner` places the slot whenever the config resolves, even after the title has gone. Marquee then fills it.
@@ -65,3 +65,8 @@ an immediate Jump and `?play=jump`. Unit: a pure "may start ads now" gate in `sr
 ## Out of scope
 Anything the Marquee loader or AdSense does on the title itself. Slot policy and the allowed host (operator's call,
 §3.3).
+
+## Critic note 2026-10-31
+Still open on production `0856de8`. `startAds` is unchanged: it still runs at idle whatever the mode
+(`src/main.js:619-620`), and `titleBanner` is unchanged (`src/ads.js:48`). This is the only P0 in the
+critic's queue. The ticket's bars stand as written.
