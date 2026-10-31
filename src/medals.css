@@ -1,0 +1,19 @@
+/* Medals on the results sheet (src/medals.js, 0120): one hairline row under the score.
+   Ink and amber only: gold is the amber, silver the ink, bronze the quiet ink; red stays for warnings. */
+.medals { margin: 12px 0 0; }
+.medals[hidden] { display: none; }
+.md-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 14px; font: 500 11px/1.2 var(--text); letter-spacing: 0.08em; text-transform: uppercase; color: var(--ink-3); }
+.md-pip { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.md-pip i { width: 9px; height: 9px; border-radius: 50%; border: 1px solid var(--hair); box-sizing: border-box; }
+.md-pip[data-held] { color: var(--ink-2); }
+.md-pip[data-k='bronze'][data-held] i { background: var(--ink-3); border-color: var(--ink-3); }
+.md-pip[data-k='silver'][data-held] i { background: var(--ink); border-color: var(--ink); }
+.md-pip[data-k='gold'][data-held] i { background: var(--amber); border-color: var(--amber); }
+.md-pip[data-k='gold'][data-held] { color: var(--amber); }
+.md-pip[data-new] i { box-shadow: 0 0 0 3px var(--hair-2); }
+.md-next { flex-basis: 100%; letter-spacing: 0.04em; text-transform: none; font-size: 12px; color: var(--ink-2); }
+@media (min-width: 560px) { .md-next { flex-basis: auto; margin-left: auto; } }
+@media (prefers-reduced-motion: no-preference) {
+  .md-pip[data-new] i { animation: md-in 0.6s var(--ease) both; }
+  @keyframes md-in { from { transform: scale(0.4); opacity: 0; } }
+}

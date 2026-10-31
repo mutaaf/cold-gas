@@ -1,0 +1,18 @@
+/* One-thumb AIM (src/thumb-aim.js): on the pad, in the air. The ring's centre is your touchdown; the
+   amber dot is the mark, where it lies from there (up = further along the run); the ink dot is your
+   thumb's slide. Slide onto the mark and the touchdown follows it in. */
+.thumb-aim { position: absolute; inset: 14px; border-radius: 50%; pointer-events: none; opacity: 0; transition: opacity 0.2s var(--ease); }
+.thumb[data-stage='fly'] .thumb-aim[data-on] { opacity: 1; }
+.thumb-aim::before, .thumb-aim::after { content: ''; position: absolute; left: 50%; top: 50%; background: var(--hair); }
+.thumb-aim::before { width: 1px; height: 100%; transform: translate(-50%, -50%); }
+.thumb-aim::after { height: 1px; width: 100%; transform: translate(-50%, -50%); }
+.thumb-aim .ta-mark, .thumb-aim .ta-you { position: absolute; left: 50%; top: 50%; width: 12px; height: 12px; margin: -6px 0 0 -6px; border-radius: 50%; box-sizing: border-box; will-change: transform; }
+.thumb-aim .ta-mark { border: 1.5px solid var(--amber); }
+.thumb-aim[data-near] .ta-mark { background: var(--amber); }
+.thumb-aim .ta-you { width: 6px; height: 6px; margin: -3px 0 0 -3px; background: var(--ink); }
+.thumb.on .thumb-aim .ta-you { background: #06080c; }
+.thumb.on .thumb-aim .ta-mark { border-color: #06080c; }
+.thumb.on .thumb-aim::before, .thumb.on .thumb-aim::after { background: rgba(6, 8, 12, 0.18); }
+.thumb-aim[data-wait] .ta-mark { opacity: 0.45; }
+/* Held and aiming, the sight takes the pad: its words step out (they come back the moment you let go). */
+.thumb.on:has(.thumb-aim[data-on]) .thumb-verb, .thumb.on:has(.thumb-aim[data-on]) .thumb-act { visibility: hidden; }

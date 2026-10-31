@@ -2,7 +2,12 @@
 // numbers), press real keys (or tap the touch controls), with a person's reaction time. Nothing
 // here reads the sim. Run it against production and against a local build to compare.
 //
-//   node scripts/play-human.mjs <url> [keyboard|touch|thumb] [runs=3] [outdir] [viewport=390x844]
+//   node scripts/play-human.mjs <url> [keyboard|touch|thumb] [runs=3] [outdir] [viewport=390x844] [--skill=careless|careful|sloppy]
+//
+// --skill (thumb, 0120): what the thumb does with the pad's sight in the air (src/thumb-aim.js).
+//   careless  never slides (the default; the only one-thumb player before 0120)
+//   careful   slides onto the amber dot, a reaction late, re-reading it every 0.3 s
+//   sloppy    slides 2.5× too far, the first second the wrong way up, with a shaky thumb
 //
 // touch: the classic stick and pedals (the scheme is set to classic first). thumb: the one-thumb
 // Assist pad, read from its own words (Hold · Climb, Tap · Let go, Hold · Land), one finger.
@@ -11,7 +16,9 @@
 // what the cues say (BOOST, roll, LAND) for as long as they say it, a reaction time late.
 import { chromium } from '@playwright/test';
 
-const [url = 'http://localhost:4391/coldgas/', mode = 'keyboard', runsArg = '3', out, vpArg = '390x844'] = process.argv.slice(2);
+const argv = process.argv.slice(2);
+const skill = (argv.find((a) => a.startsWith('--skill=')) || '--skill=careless').split('=')[1];
+const [url = 'http://localhost:4391/coldgas/', mode = 'keyboard', runsArg = '3', out, vpArg = '390x844'] = argv.filter((a) => !a.startsWith('--'));
 const [VW, VH] = vpArg.split('x').map(Number);
 const RUNS = Number(runsArg);
 const thumbMode = mode === 'thumb';
@@ -71,6 +78,7 @@ const read = () => page.evaluate(() => ({
 }));
 
 const results = [];
+let slidMax = 0, aimReads = 0;
 for (let r = 0; r < RUNS; r++) {
   if (touch) await page.locator('[data-start]').tap(); else await page.locator('[data-start]').click();
   await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30000 });
@@ -79,17 +87,34 @@ for (let r = 0; r < RUNS; r++) {
   // One-thumb: one finger on the pad, doing what the pad says, a reaction time late.
   if (thumbMode) {
     const pad = await centre('[data-onethumb]');
-    let down = false, tapped = false;
+    let down = false, tapped = false, lastAim = 0, aimT0 = 0;
+    slidMax = 0; aimReads = 0;
     const set = async (on) => {
       if (on === down) return;
       down = on;
       await cdp.send('Input.dispatchTouchEvent', { type: on ? 'touchStart' : 'touchEnd', touchPoints: on ? [{ x: pad.x, y: pad.y, id: 1 }] : [] });
     };
+    // The slide: the finger moves (it never lifts) to where the sight says, or near it.
+    const slideTo = (dx, dy) => cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: pad.x + dx, y: pad.y + dy, id: 1 }] });
+    const shake = () => (Math.random() - 0.5) * 28;
     while (Date.now() - t0 < 90000) {
-      const st = await page.evaluate(() => ({ mode: window.__coldgas.S.mode, verb: document.querySelector('[data-thumb-verb]')?.textContent || '', act: document.querySelector('[data-thumb-act]')?.textContent || '' }));
+      const st = await page.evaluate(() => {
+        const aim = document.querySelector('[data-thumb-aim]');
+        return { mode: window.__coldgas.S.mode, verb: document.querySelector('[data-thumb-verb]')?.textContent || '', act: document.querySelector('[data-thumb-act]')?.textContent || '',
+          aim: aim && aim.hasAttribute('data-on') ? { x: Number(aim.dataset.ex || 0), y: Number(aim.dataset.ey || 0) } : null,
+          slid: Math.max(Math.abs(window.__coldgas.thumb.aim?.x || 0), Math.abs(window.__coldgas.thumb.aim?.y || 0)) };
+      });
       if (st.mode !== 'live') break;
+      slidMax = Math.max(slidMax, st.slid); if (st.aim) aimReads++;
       if (/let go/i.test(st.act) && !tapped) { await set(false); await sleep(REACT); await set(true); tapped = true; }
       else if (/^hold/i.test(st.verb)) { if (!down) await sleep(REACT); await set(true); }
+      if (down && st.aim && skill !== 'careless' && Date.now() - lastAim > 300) {
+        if (!aimT0) aimT0 = Date.now();
+        lastAim = Date.now();
+        await sleep(REACT);
+        if (skill === 'careful') await slideTo(st.aim.x, st.aim.y);
+        else { const flip = Date.now() - aimT0 < 1000 ? -1 : 1; await slideTo(2.5 * st.aim.x + shake(), flip * 2.5 * st.aim.y + shake()); }
+      }
       await sleep(40);
     }
     await set(false);
@@ -122,7 +147,8 @@ for (let r = 0; r < RUNS; r++) {
   }
   for (const k of [...held]) await press(k, false);
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 60000 }).catch(() => {});
-  const card = await page.evaluate(() => { const c = window.__coldgas.S.card; return c && { total: c.total, verdict: c.verdict, landed: !!c.facts.jumped, sink: c.facts.sink, padMiss: c.facts.padMiss, crossed: c.facts.crossedRow, tier: c.tier || (window.__coldgas.S.assist ? 'assist' : 'pro') }; });
+  const card = await page.evaluate(() => { const c = window.__coldgas.S.card; return c && { total: c.total, verdict: c.verdict, landed: !!c.facts.jumped, sink: c.facts.sink, padMiss: c.facts.padMiss, landZ: Math.round(window.__coldgas.S.run.t.landZ * 10) / 10, lateral: Math.round(window.__coldgas.S.run.t.lateral * 10) / 10, crossed: c.facts.crossedRow, tier: c.tier || (window.__coldgas.S.assist ? 'assist' : 'pro') }; });
+  if (card && thumbMode) { card.slid = Math.round(slidMax * 100) / 100; card.aimReads = aimReads; }
   results.push(card);
   console.log(`run ${r + 1}:`, JSON.stringify(card));
   if (out) { await page.waitForTimeout(2500); await page.screenshot({ path: `${out}/human-${mode}-${r + 1}.png` }); }
@@ -130,6 +156,6 @@ for (let r = 0; r < RUNS; r++) {
   await page.waitForTimeout(800);
 }
 const clean = results.filter((c) => c && c.landed && !/crash|rolled|contact|fell|deck|short|no /i.test(c.verdict) && c.sink <= 3).length;
-console.log(`${mode}: ${clean}/${RUNS} landed clean`);
+console.log(`${mode}${thumbMode ? ` · ${skill}` : ''}: ${clean}/${RUNS} landed clean · scores ${results.map((c) => c?.total).join(' ')}`);
 console.log('errors:', errors.slice(0, 5).join(' | ') || 'none');
 await browser.close();

@@ -295,7 +295,11 @@ src/pointer.js        the coach in the device's words (pure, 0079): controls per
                         the post-run pointer (no third repeat, "Better: …"), the live cue-line pointers
 src/render/interp.js  the car drawn between 240 Hz ticks (no sim change)
 src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
-                        hold to land (LAND + the carry over the row); plain sim inputs, pure, no DOM
+                        hold to land (LAND + the carry over the row), slide to aim the touchdown (0120: pitch/roll,
+                        roof up, never back over the row or in against a flank); plain sim inputs, pure, no DOM
+src/thumb-aim.js      the one-thumb pad's sight in the air (the mark from the predicted touchdown) + the slide's pointers
+src/medals.js         bronze/silver/gold per event and tier, best per device (localStorage coldgas_medals), the
+                        results row under the score; getMedals(course, tier) for other screens (0120)
 src/touch-settings.js touch scheme (one-thumb | classic), hand, tilt steering (DeviceOrientation, iOS
                         permission, calibrate, 5 % steps), haptics (navigator.vibrate)
 src/valves.js         Advanced: keyboard layout like the car, chords, key ramp, gamepad, the touch
@@ -366,9 +370,9 @@ scripts/shots.mjs     Screenshots of key moments against a running preview
 scripts/human-show.mjs     human-like players on the Show (reaction time, keys, cues): the
                            learnability gate. --cues old|new, assist|pro
 scripts/human-advanced.mjs Advanced by a person: taps on the valve keys
-scripts/play-human.mjs     a cue-following player on the real page (keyboard, touch or thumb)
+scripts/play-human.mjs     a cue-following player on the real page (keyboard, touch or thumb; --skill=careless|careful|sloppy)
 scripts/human-phone.mjs    the human-show population on a phone (thumbs, reach, a resting thumb):
-                           --scheme=classic|thumb --build=before|after --geom=<thumb-reach geom.json>
+                           --scheme=classic|thumb --skill=none|careful|sloppy|mixed --build=before|after --geom=<thumb-reach geom.json>
 scripts/thumb-reach.mjs    touch control geometry per phone viewport + reach heatmap screenshots
 scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11 px, WCAG contrast on screenshots;
                            the judges' theatre and the pause sheet too (44 px targets; Resume and Home on the glass,

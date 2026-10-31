@@ -49,7 +49,10 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // one that drives out to the pad didn't meet anything there before.
 // v25: "on the Wall" is the Wall's footprint (|x| < width/2 + 2 m): the 3 m pad read as the Wall, and a
 // drive up onto it ended the run as a landing.
-export const SIM_VERSION = 26;
+// v27: the Show's judging pays for what the pilot decides (0120): precision read off the pad's rings, gas
+// full from 45 %, a safe clearance marked down less, and the panel's weight moved off the climb, the hang
+// and the roll-out (which Assist flies to 9.7–10 for everyone) onto the mark. Scores only; no physics.
+export const SIM_VERSION = 27;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 export const G_WIN = 120;               // 0.5 s of ticks: the braking peak's averaging window
