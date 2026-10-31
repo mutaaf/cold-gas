@@ -113,7 +113,7 @@ export function pointerText(id, ctx, flight = null) {
     case 'mark': return 'Aim for the rings: lean toward the pad above 5 m, then level';
     case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
-    case 'clean': return assist ? 'Clean. Next: a softer touchdown, or Pro for ×1.08' : 'Clean. Next: under 1 m/s and the 2 m ring';
+    case 'clean': return assist ? 'Clean. Next: a softer touchdown, closer to the mark' : 'Clean. Next: under 1 m/s and the 2 m ring';
     default: return '';
   }
 }

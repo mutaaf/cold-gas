@@ -164,7 +164,7 @@ function finish(out, f, card) {
   out.sort((a, b) => b.weight - a.weight);
   if (!out.length) {
     out.push({ id: 'clean', weight: 0, title: 'Clean', detail: card ? `${card.verdict}: nothing big to fix.` : 'Nothing big to fix.',
-      fix: card && card.tier === 'assist' ? 'Try Pro next (no LAND governor, ×1.08), or Advanced (ten valves by hand, ×1.15).' : 'Chase the details: sink under 1 m/s, the 2 m ring, more gas left.' });
+      fix: card && card.tier === 'assist' ? 'Want more? Try Pro: you fly the landing yourself, and it scores ×1.08.' : 'Chase the details: sink under 1 m/s, the 2 m ring, more gas left.' });
   }
   return { items: out.slice(0, 3), flight: f };
 }

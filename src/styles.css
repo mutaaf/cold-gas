@@ -350,7 +350,8 @@ body.building .quick-pause { visibility: hidden; }   /* build mode can't pause; 
   .top-actions-row .btn kbd { display: none; }
   /* Post rides the pinned bar too, its own line over Retry: never a scroll away (audit 2026-10-30). */
   .results .top-actions-row { flex-wrap: wrap; row-gap: 8px; }
-  .results .top-actions-row:has(.r-post:not([hidden])) { background: linear-gradient(180deg, rgba(5, 7, 12, 0), rgba(5, 7, 12, 0.96) 14px); }
+  /* With Post on it the bar is solid (the judges' words scrolling under it read through a fade), and the fade sits above it. */
+  .results .top-actions-row:has(.r-post:not([hidden])) { background: rgb(5, 7, 12); box-shadow: 0 -18px 18px -4px rgb(5, 7, 12); }
   .results .top-actions-row .r-post { order: -1; flex: 1 0 100%; flex-wrap: nowrap; }
   .results .top-actions-row .r-post .r-post-btn { flex: 0 1 auto; justify-content: center; min-width: 0; }
   .results .top-actions-row .r-post-msg { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
