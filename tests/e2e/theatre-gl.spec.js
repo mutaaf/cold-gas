@@ -45,6 +45,9 @@ function watch(page) {
 async function toTheatre(page) {
   await page.evaluate(() => { const g = window.__coldgas; g.startRun('reveal'); g.skipCountdown(); g.fastForward(); });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 60_000 });
+  // A phone runs the call docked on the sheet (the score first): "Watch the call" puts the theatre up.
+  const watch = page.locator('[data-call-watch]');
+  if (page.viewportSize().width < 720) await watch.waitFor({ state: 'visible', timeout: 15_000 }).then(() => watch.click(), () => {});
   await page.waitForFunction(() => { const t = document.querySelector('[data-theatre]'); return t && !t.hidden && t.querySelector('.th-canvas') && t.dataset.stage; }, null, { timeout: 60_000 });
 }
 const stageIs = (page, s) => page.waitForFunction((s) => document.querySelector('[data-theatre]')?.dataset.stage === s, s, { timeout: 90_000 });
@@ -62,7 +65,13 @@ for (const vp of VIEWPORTS) {
     const page = await browser.newPage(opts);
     await page.addInitScript(trackContexts);
     const seen = watch(page);
-    await page.route('**/coldgas/api/judge/stream', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: judgeBody }));
+    // A phone runs the call docked and a docked call ends the moment it answers: the answer is held a few
+    // seconds there, so "Watch the call" has a live show to put up (Skip and Retry mid-stream, as on a desktop).
+    const hold = opts.hasTouch ? 6000 : 0;
+    await page.route('**/coldgas/api/judge/stream', async (route) => {
+      if (hold) await new Promise((r) => setTimeout(r, hold));
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: judgeBody }).catch(() => {});
+    });
     await page.goto('/coldgas/?gfx=low');
     await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
 

@@ -10,6 +10,7 @@
 // out, time to first token, tokens/s, neurons, cost) and the raw stream as it arrives.
 import { create, register, fromText } from 'aurora-field';
 import { streamPanel, streamQuest } from './stream.js';
+import { parseWords } from '../worker/ai/prompt.js';
 import { shortModel, PROVIDER_INFO } from './config.js';
 import { one, k } from '../units.js';
 import monoBoldUrl from '@fontsource/geist-mono/files/geist-mono-latin-700-normal.woff2?url';
@@ -290,7 +291,16 @@ function buildDom(root, stages = STAGES) {
 // (an AbortSignal: a restart, the title) tears it down at once and resolves with { aborted: true }.
 // `deadlineMs` is what is left of the judges' 35 s (invariant 5½) once the caller has spent some of
 // it (loading this chunk). When the show ends, however it ends, the call's stream is cancelled.
-export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWords, reduced = false, replay = null, abort = null, deadlineMs = 35_000 }) {
+//
+// Docked (`docked: true`, where the theatre would cover the results: a phone, a short landscape screen, a
+// folding tablet): the call runs with the theatre put away, and the sheet shows it as a live strip
+// (`onLive`: the model, where it runs, the tokens so far, the words parsed as they stream) with "Watch the
+// call" (watchCall()) opening the full show over it; Skip puts it away again until the words are in. A
+// docked call ends the moment it answers (no show to sit through): the score was never waiting on it.
+let liveShow = null;
+export const watchCall = () => liveShow?.watch();
+export const dockCall = () => liveShow?.dock();
+export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWords, reduced = false, replay = null, abort = null, deadlineMs = 35_000, docked = false, onLive = null }) {
   registerShapes();
   root.classList.remove('th-quest');
   const dom = buildDom(root);
@@ -299,22 +309,28 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   // there too, shown only while the results offer it: src/main.js's syncRookie sets .th-rookie on the root.
   root.append(el('div', 'th-quick', '<button type="button" class="quick-btn primary" data-again>Retry</button><button type="button" class="quick-btn" data-home>Home</button>'
     + '<button type="button" class="quick-btn th-rookie-btn" data-rookie-go>Rookie mode<span>easier car · auto-land</span></button>'));
-  root.hidden = false;
-  root.classList.remove('out');
-  requestAnimationFrame(() => root.classList.add('on'));
+  root.classList.remove('out', 'on');
+  root.hidden = docked;
+  if (!docked) requestAnimationFrame(() => root.classList.add('on'));
 
   let field = null;
   const own = ownCanvas(() => { const f = field; field = null; if (f) safe(() => f.destroy()); });
   loadMonoBold();
   const geo = { R: 0 }, used = new Set();
   const fit = () => freeBox(root, geo);
-  if (!reduced) safe(() => { field = create(dom.canvas, {
-    container: root.querySelector('.th-canvas').parentElement, shapes: ['cg:circuit', 'cg:compute'], initial: 'cg:circuit',
-    cycle: 0, palette: 'aurora', blank: true, interactive: false, stars: 60, autonomy: 0.3, depth: FIELD_DEPTH, intro: 0,
-    count: (w) => (w < 700 ? 3000 : 4200), radius: (w, h) => (geo.R = Math.min(w * 0.42, h * 0.36)),
-  }); });
-  // Facing shapes (the text) follow a fixed pose: square to the viewer, no sway, so figures hold still.
-  safe(() => field?.setPose({ yaw: 0, pitch: 0.06, roll: 0 }));
+  // The particle field is made when the show is seen (at once, or on Watch the call), and given back when
+  // it is put away: a docked call costs no GPU.
+  const makeField = () => {
+    if (reduced || field) return;
+    safe(() => { field = create(dom.canvas, {
+      container: root.querySelector('.th-canvas').parentElement, shapes: ['cg:circuit', 'cg:compute'], initial: 'cg:circuit',
+      cycle: 0, palette: 'aurora', blank: true, interactive: false, stars: 60, autonomy: 0.3, depth: FIELD_DEPTH, intro: 0,
+      count: (w) => (w < 700 ? 3000 : 4200), radius: (w, h) => (geo.R = Math.min(w * 0.42, h * 0.36)),
+    }); });
+    // Facing shapes (the text) follow a fixed pose: square to the viewer, no sway, so figures hold still.
+    safe(() => field?.setPose({ yaw: 0, pitch: 0.06, roll: 0 }));
+  };
+  if (!docked) makeField();
   // Spell one figure: registered (and compiled in idle time) ahead where it can be.
   let ahead = null;
   const shapeFor = (text) => (ahead?.text === text ? ahead.name : textShape(text, fit, used));
@@ -333,6 +349,9 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   let stage = null, stageAt = t0, finished = false, skipResolve = null;
   const meta = { provider: ai.provider, model: ai.model, events: timeline };
   const done = new Promise((resolve) => { skipResolve = resolve; });
+  // The live strip's state (onLive): every token counted as it arrives, the words parsed from the stream.
+  const live = { phase: 'verify', model: ai.model, where: '', providerLabel: '', tokens: 0, text: '', words: null, docked, error: null };
+  const report = () => { if (onLive && !finished) safe(() => onLive({ ...live, docked })); };
 
   const setStage = (s) => {
     stage = s; stageAt = performance.now();
@@ -392,7 +411,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   const caption = (t) => { dom.caption.textContent = t; };
 
   setStage('telemetry');
-  caption('The server re-simulates your run from its inputs…');
+  caption('The server scores your run from its telemetry…');
   safe(() => field?.setShape('cg:circuit', { pin: 1e9 }));
   const pulse = setInterval(() => safe(() => field?.signal(undefined, 30, 3)), 180);
   // Hard deadline: whatever happens to the network or the visuals, the words land.
@@ -421,7 +440,8 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
     verify: (d) => {
       timeline.push(['verify', performance.now() - t0, d]);
       meta.verify = d;
-      caption(`Verified: ${d.ticks.toLocaleString()} physics ticks replayed in ${fmtMs(d.ms)}. Score ${d.card.total.toFixed(1)}.`);
+      caption(d.replayed === false ? `Scored on the server from your run's telemetry in ${fmtMs(d.ms)}. Score ${d.card.total.toFixed(1)}.`
+        : `Verified: ${(d.ticks ?? 0).toLocaleString()} physics ticks replayed in ${fmtMs(d.ms)}. Score ${d.card.total.toFixed(1)}.`);
     },
     prompt: (d) => {
       timeline.push(['prompt', performance.now() - t0, d]);
@@ -431,6 +451,8 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
       dom.set('where', d.where);
       dom.set('billed', d.provider === 'edge' ? 'COLD GAS · free allowance' : `Your ${d.providerLabel} key`);
       dom.stat('in', `~${d.inTokensEst}`);
+      Object.assign(live, { phase: 'prompt', model: d.model, where: d.where, providerLabel: d.providerLabel || '' });
+      report();
       showText = (async () => {
         await dwell('telemetry').catch(() => {});
         setStage('text');
@@ -454,18 +476,21 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
       timeline.push(['reasoning', performance.now() - t0, d]);
       startCompute();
       queue.push(['reasoning', d.t, performance.now()]);
+      live.phase = 'stream'; live.tokens++; report();
     },
     token: (d) => {
       timeline.push(['token', performance.now() - t0, d]);
       startCompute();
       if (meta.ttft == null) meta.ttft = performance.now() - t0;
       queue.push(['token', d.t, performance.now()]);
+      live.phase = 'stream'; live.tokens++; live.text += d.t; live.words = parseWords(live.text); report();
     },
-    note: (d) => { timeline.push(['note', performance.now() - t0, d]); meta.model = d.model; dom.set('model', shortModel(d.model)); },
+    note: (d) => { timeline.push(['note', performance.now() - t0, d]); meta.model = d.model; dom.set('model', shortModel(d.model)); live.model = d.model; report(); },
     done: (d) => {
       timeline.push(['done', performance.now() - t0, d]);
       Object.assign(meta, d, { ok: true });
       words = d.words;
+      Object.assign(live, { phase: 'done', model: d.model, words: d.words }); report();
       showFinal = () => {
       dom.stat('in', String(d.inTokens)); dom.stat('out', String(d.outTokens));
       dom.stat('ttft', fmtMs(d.ttftMs)); dom.stat('rate', d.tokensPerSec ? `${d.tokensPerSec} tok/s` : '—');
@@ -478,6 +503,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
       timeline.push(['error', performance.now() - t0, d]);
       failure = d;
       meta.error = d.message;
+      Object.assign(live, { phase: 'error', error: d.message }); report();
     },
   };
 
@@ -487,6 +513,11 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   (async () => {
     try { await source; } catch (err) { if (finished) return; handlers.error({ message: 'The judges are offline.', fallback: true }); console.warn(err); }
     if (finished) return;
+    // Docked: the call is over, and nobody is watching a show. The words (or local lines) land now.
+    if (docked) {
+      if (!words) { words = fallbackWords(card); meta.error = meta.error || failure?.message || 'No answer.'; }
+      return finish();
+    }
     if (!showText) handlers.prompt({ provider: ai.provider, providerLabel: PROVIDER_INFO[ai.provider]?.label || '', vendor: PROVIDER_INFO[ai.provider]?.vendor || '', model: ai.model, where: '—', inTokensEst: 0 });
     await startCompute().catch((err) => console.warn('theatre', err));
     callOver = true;
@@ -520,6 +551,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   function finish() {
     if (finished) return;
     finished = true;
+    if (liveShow === show) liveShow = null;
     clearInterval(pulse);
     clearTimeout(deadline);
     call.abort();   // the deadline or Skip ended the show: nothing more is read from the stream
@@ -531,6 +563,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   abort?.addEventListener('abort', () => {
     if (finished) return;
     finished = true;
+    if (liveShow === show) liveShow = null;
     clearInterval(pulse);
     clearTimeout(deadline);
     own.end();
@@ -540,10 +573,39 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
     skipResolve({ aborted: true, words: null, meta });
   }, { once: true });
   dom.skip.addEventListener('click', () => {
-    // Skipping only hurries the show; the words still come from the call if it has answered.
-    if (!words && !failure) { caption('Finishing the call…'); return; }
+    // Skipping only hurries the show; the words still come from the call if it has answered. A call that
+    // can run docked goes back to the sheet's strip while it finishes.
+    if (!words && !failure) { if (dockable) show.dock(); else caption('Finishing the call…'); return; }
     finish();
   });
+  // Watch the call / put it away (src/main.js: the strip's button, Skip, Escape, Home's confirm).
+  const dockable = docked;
+  const show = {
+    watch() {
+      if (finished || !docked) return;
+      docked = false;
+      root.hidden = false;
+      root.classList.remove('out');
+      requestAnimationFrame(() => root.classList.add('on'));
+      makeField();
+      safe(() => field?.set({ autonomy: AUTONOMY[stage], palette: PALETTE[stage] }));
+      safe(() => field?.setShape(stage === 'compute' ? 'cg:compute' : 'cg:circuit', { pin: 1e9 }));
+      report();
+    },
+    dock() {
+      if (finished || docked || !dockable) return;
+      docked = true;
+      root.classList.remove('on', 'out');
+      root.hidden = true;
+      const f = field; field = null;
+      if (f) safe(() => f.destroy());
+      report();
+      // Already answered while it was watched: nothing left to wait for.
+      if (callOver || words || failure) finish();
+    },
+  };
+  liveShow = show;
+  report();
   return done;
 }
 

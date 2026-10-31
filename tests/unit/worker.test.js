@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import worker from '../../src/worker/index.js';
 import { parseWords, userPrompt, complete } from '../../src/worker/ai/prompt.js';
 import { pickModel, costUsd } from '../../src/worker/ai/providers.js';
-import { createRun, stepRun } from '../../src/sim/run.js';
+import { createRun, stepRun, MAX_TICKS, INPUT_KEYS } from '../../src/sim/run.js';
+import { fakeD1 } from './helpers/d1.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 
@@ -214,5 +215,135 @@ describe('judging from telemetry (no replay)', () => {
     // Telemetry for another course than the log's: replayed instead of believed.
     const ev2 = await readSSE(await worker.fetch(post({ log, course: 'lineup', t: { ...run.t, course: 'show' } }), { AI: fakeAI(REPLY) }, ctx));
     expect(ev2[0].data.replayed).toBe(true);
+  });
+});
+
+// --- The board: scored from the client's telemetry, never replayed (owner's decision, 2026-10-30) ---
+describe('POST /scores (telemetry, no replay)', () => {
+  const ctx = { waitUntil: (p) => p };
+  const DB = fakeD1();
+  // A board made before course and tier existed, with one row in it: the Worker migrates it in place.
+  DB.raw.exec('CREATE TABLE scores (id INTEGER PRIMARY KEY AUTOINCREMENT, day TEXT NOT NULL, initials TEXT NOT NULL, total REAL NOT NULL, verdict TEXT NOT NULL, facts TEXT NOT NULL, created INTEGER NOT NULL)');
+  DB.raw.prepare('INSERT INTO scores (day, initials, total, verdict, facts, created) VALUES (?, ?, ?, ?, ?, ?)').run('2026-01-01', 'OLD', 50, 'Clean', JSON.stringify({ course: 'wall', rollDeg: 180, sink: 1 }), 1);
+  let show = null;
+  const reference = () => {
+    if (show) return show;
+    const run = createRun('show'); const ap = createAutopilot('show');
+    while (run.phase !== 'done') stepRun(run, ap(run));
+    return (show = { log: run.inputLog, t: JSON.parse(JSON.stringify(run.t)), card: scoreRun(run.t, { assist: true }) });
+  };
+  let ip = 0;
+  const post = (body, addr = `10.1.0.${++ip}`) => worker.fetch(new Request('https://x/coldgas/api/scores', { method: 'POST', headers: { 'cf-connecting-ip': addr }, body: JSON.stringify(body) }), { DB }, ctx);
+  const get = (q) => worker.fetch(new Request(`https://x/coldgas/api/scores?${q}`), { DB }, ctx).then((r) => r.json());
+  const entry = (over = {}, tOver = {}) => ({ log: reference().log, t: { ...reference().t, ...tOver }, course: 'show', initials: 'abc', ...over });
+  const reject = async (body, error, why) => {
+    const res = await post(body);
+    const j = await res.json();
+    expect(res.status, JSON.stringify(j)).toBe(400);
+    expect(j.error, JSON.stringify(j)).toBe(error);
+    if (why) expect(j.why).toBe(why);
+  };
+
+  it('migrates an old board: course and tier columns, old rows keep their course', async () => {
+    const all = await get('board=all');
+    expect(all.rows.map((r) => [r.initials, r.course])).toEqual([['OLD', 'wall']]);
+    const cols = DB.raw.prepare('PRAGMA table_info(scores)').all().map((c) => c.name);
+    expect(cols).toEqual(expect.arrayContaining(['course', 'tier']));
+  });
+
+  it('dry: every check, the card and the rank it would get, nothing stored', async () => {
+    const before = DB.raw.prepare('SELECT COUNT(*) AS n FROM scores').get().n;
+    const res = await post({ ...entry(), dry: true, initials: undefined });
+    const j = await res.json();
+    expect(res.status).toBe(200);
+    expect(j).toMatchObject({ dry: true, rank: 1, course: 'show', tier: 'assist' });
+    expect(j.card.total).toBe(97.7);
+    expect(j.card.facts.sink).toBe(0.8);
+    expect(DB.raw.prepare('SELECT COUNT(*) AS n FROM scores').get().n).toBe(before);
+  });
+
+  it('posts the reference Show from its telemetry, scored by the server, without a replay', async () => {
+    const { replayStats } = await import('../../src/worker/index.js');
+    const before = replayStats.replays;
+    const res = await post(entry());
+    const j = await res.json();
+    expect(res.status).toBe(200);
+    expect(replayStats.replays).toBe(before);
+    expect(j.card.total).toBe(reference().card.total);
+    expect(j).toMatchObject({ rank: 1, tier: 'assist', course: 'show', dry: false });
+    // A second, the same: still #1 (a tie doesn't push you down).
+    expect((await (await post(entry())).json()).rank).toBe(1);
+    const today = await get('board=today&course=show');
+    expect(today.course).toBe('show');
+    expect(today.rows).toHaveLength(2);
+    expect(today.rows[0]).toMatchObject({ initials: 'ABC', total: 97.7, course: 'show', tier: 'assist' });
+    expect((await get('board=today&course=wall')).rows).toHaveLength(0);
+    expect((await get('board=all')).rows).toHaveLength(3);   // no course: every course (old clients)
+  });
+
+  it('the tier is the log’s, never the telemetry’s claim', async () => {
+    const j = await (await post({ ...entry({}, { tier: 'advanced', usedManual: true, usedAssist: false }), dry: true })).json();
+    expect(j.tier).toBe('assist');
+    expect(j.card.multiplier).toBe(1);
+    // The same flight with Assist stripped from the log is a Pro run (×1.08), and manual on every tick Advanced.
+    const A = INPUT_KEYS.indexOf('assist') + 1, M = INPUT_KEYS.indexOf('manual') + 1;
+    const pro = reference().log.map((e) => { const x = e.slice(); x[A] = 0; return x; });
+    expect((await (await post({ ...entry({ log: pro }), dry: true })).json()).tier).toBe('pro');
+    const adv = pro.map((e) => { const x = e.slice(); x[M] = 100; return x; });
+    expect((await (await post({ ...entry({ log: adv }), dry: true })).json()).tier).toBe('advanced');
+  });
+
+  it('an old client (no telemetry) is told to update', async () => {
+    await reject({ log: reference().log, course: 'show', initials: 'ABC', assist: true }, 'update');
+  });
+
+  it('refuses what it can’t believe', async () => {
+    const { log, t } = reference();
+    await reject(entry({ initials: 'A1' }), 'initials');
+    await reject(entry({ course: 'moon' }), 'course');
+    await reject(entry({ course: undefined }), 'course');
+    await reject(entry({ log: [] }), 'bad run');
+    await reject(entry({ log: [[0, 1]] }), 'bad run');
+    await reject(entry({ log: log.slice(1) }), 'bad run');                              // doesn't start at tick 0
+    await reject(entry({}, { course: 'wall' }), 'implausible', 'course');              // telemetry of another course
+    await reject(entry({ t: 'x' }), 'implausible', 'course');
+    await reject(entry({}, { endTick: log.at(-1)[0] - 1 }), 'implausible', 'endTick');  // ended before its last input
+    await reject(entry({}, { endTick: MAX_TICKS + 1 }), 'implausible', 'endTick');
+    await reject(entry({}, { endTick: 3500.5 }), 'implausible', 'endTick');
+    await reject(entry({}, { touchTick: -1 }), 'no jump');
+    await reject(entry({}, { airStartTick: 0, rampTick: -1, touchTick: 240 * 21, endTick: 240 * 22 }), 'implausible', 'air');   // 21 s of air
+    await reject(entry({}, { rampTick: t.airStartTick + 100 }), 'implausible', 'rampTick');
+    await reject(entry({}, { sink: -1 }), 'implausible', 'sink');
+    await reject(entry({}, { sink: 'soft' }), 'implausible', 'sink');
+    await reject(entry({}, { sink: 900.5 }), 'implausible', 'sink');
+    await reject(entry({}, { tiltDeg: 200 }), 'implausible', 'tiltDeg');
+    await reject(entry({}, { headingDeg: -400 }), 'implausible', 'headingDeg');
+    await reject(entry({}, { wheelSpreadMs: -3 }), 'implausible', 'wheelSpreadMs');
+    await reject(entry({}, { apex: 5000 }), 'implausible', 'apex');
+    await reject(entry({}, { rollAccum: 12 * 2 * Math.PI }), 'implausible', 'rollAccum');   // 12 turns in 4.2 s
+    await reject(entry({}, { pitchAccum: 1e5 }), 'implausible', 'pitchAccum');
+    await reject(entry({}, { lateral: 9000 }), 'implausible', 'lateral');
+    await reject(entry({}, { airEnd: 400 }), 'implausible', 'gas');                    // more gas than the tanks hold
+    await reject(entry({}, { airAtTouch: 10, airEnd: 141 }), 'implausible', 'gas');    // gas that came back
+    await reject(entry({}, { maxSpeed: 250 }), 'implausible', 'speed');
+    await reject(entry({}, { launchSpeed: 40, maxSpeed: 20 }), 'implausible', 'speed');               // faster off the lip than ever on the run
+    await reject(entry({}, { minClearance: -50 }), 'implausible', 'clearance');
+    await reject(entry({}, { progress: 3 }), 'implausible', 'progress');
+    await reject(entry({}, { invertedTime: 9999 }), 'implausible', 'invertedTime');
+    await reject(entry({}, { damage: { pct: 140 } }), 'implausible', 'damage');
+    expect((await get('board=today&course=show')).rows).toHaveLength(2);              // none of them stored
+  });
+
+  it('a run that never left the ground isn’t a board entry', async () => {
+    const run = createRun('show');
+    while (run.phase !== 'done' && run.tick < 240 * 3) stepRun(run, {});
+    await reject({ log: run.inputLog, t: { ...JSON.parse(JSON.stringify(run.t)), endTick: run.tick }, course: 'show', initials: 'ABC' }, 'no jump');
+  });
+
+  it('keeps 60 posts an hour per player', async () => {
+    let last;
+    for (let i = 0; i < 61; i++) last = await post({ ...entry(), dry: true }, '9.9.9.9');
+    expect(last.status).toBe(429);
+    expect((await post({ ...entry(), dry: true }, '9.9.9.8')).status).toBe(200);
   });
 });

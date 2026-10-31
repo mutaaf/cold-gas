@@ -138,6 +138,10 @@ for (const [w, h] of THEATRE_VIEWPORTS) {
       return S.mode;
     });
     expect(mode).toBe('results');
+    // These screens run the call docked on the sheet (audit 2026-10-30): the score shows, and "Watch the call"
+    // puts the theatre up.
+    await expect(page.locator('[data-theatre]')).toBeHidden();
+    await page.locator('[data-call-watch]').tap({ timeout: 60_000 });
     await page.waitForFunction(() => { const t = document.querySelector('[data-theatre]'); return t && !t.hidden && t.classList.contains('on') && t.querySelector('.th-skip'); }, null, { timeout: 60_000 });
     await page.addStyleTag({ content: '[data-theatre], [data-theatre] * { animation: none !important; transition: none !important; }' });
     const m = await page.evaluate(() => {

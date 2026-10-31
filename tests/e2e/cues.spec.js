@@ -131,7 +131,8 @@ for (const phone of [false, true]) {
       };
       requestAnimationFrame(loop);
     }, cells.toString());
-    if (phone) await page.locator('.th-quick [data-again]').tap();
+    // A phone's sheet carries the call docked (the score first): its pinned Retry is the thumb's.
+    if (phone) await page.locator('.results .retry-btn[data-again]').tap();
     else await page.keyboard.press('KeyR');
     const first = await game(page, cells);
     expect(await game(page, () => window.__coldgas.S.mode)).toBe('countdown');

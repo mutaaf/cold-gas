@@ -19,8 +19,12 @@ const live = async (page, opts = {}) => {
 
 test('both unit systems show, US leading; a tap swaps which leads, and it is kept', async ({ page }) => {  const errors = await live(page);
   const spd = page.locator('[data-ch="spd"]');
+  // On the ground the full set shows speed once, big (audit 2026-10-30): the strip's SPD steps aside for it.
+  await expect(spd).toBeHidden();
+  const big = page.locator('[data-big="speed"]');
+  await expect(big).toBeVisible();
+  await expect(big.locator('[data-2="speedBig"]')).toBeVisible();
   await expect(spd.locator('.h-unit')).toHaveText('mph');
-  await expect(spd.locator('[data-2="speed"]')).toBeVisible();
   await expect(spd.locator('[data-2="speed"]')).toHaveText(/^\d+ km\/h$/);
   await expect(page.locator('[data-ch="alt"] .h-unit')).toHaveText('ft');
   await expect(page.locator('[data-ch="alt"] [data-2="alt"]')).toHaveText(/ m$/);
@@ -39,7 +43,7 @@ test('both unit systems show, US leading; a tap swaps which leads, and it is kep
   expect(Math.abs(kmh - mph * 1.609)).toBeLessThan(3);
 
   // One tap on the speed readout: metric leads everywhere, US is beside it.
-  await spd.click();
+  await big.click();
   await expect(spd.locator('.h-unit')).toHaveText('km/h');
   await expect(spd.locator('[data-2="speed"]')).toHaveText(/ mph$/);
   await expect(page.locator('[data-ch="alt"] .h-unit')).toHaveText('m');
