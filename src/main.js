@@ -178,10 +178,10 @@ const S = {
 };
 // The page knows the mode, so the quick Retry / Home buttons show only where they belong.
 // Marquee (src/ads.js): declared before anything can change the mode (setMode syncs the rewarded button).
-const ads = createAds();
+const ads = createAds({ mode: () => S.mode });
 const rerollBtn = document.querySelector('[data-reroll]');
 let rerolled = null;
-const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); };
+const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); ads.sync(); };
 try {
   const saved = localStorage.getItem('coldgas_tier');
   S.tier = TIERS[saved] ? saved : localStorage.getItem('coldgas_assist') === '0' ? 'pro' : 'assist';
@@ -615,8 +615,9 @@ function warmJudges() {
 // After the title is wired, at idle priority: never on the first load's critical path.
 Promise.all([stage.ready, physicsLoad]).then(() => {
   if (typeof requestIdleCallback === 'function') requestIdleCallback(warmJudges, { timeout: 4000 }); else setTimeout(warmJudges, 500);
-  // Marquee (src/ads.js): the loader after the title is up, at idle priority; the title's banner only if it can fill.
-  const startAds = () => { ads.start(); ads.titleBanner(document.querySelector('[data-screen="title"]')); ads.onConfig(() => syncReroll()); };
+  // Marquee (src/ads.js): the loader after the title is up, at idle priority, and only on the title or the results
+  // (0117: a quick Jump or ?play=jump waits for the next one); the title's banner only while the title shows.
+  const startAds = () => { ads.onConfig(() => syncReroll()); ads.arm(document.querySelector('[data-screen="title"]')); };
   if (typeof requestIdleCallback === 'function') requestIdleCallback(startAds, { timeout: 6000 }); else setTimeout(startAds, 1500);
 }).catch(() => { /* the boot's own failure path reports it */ });
 
