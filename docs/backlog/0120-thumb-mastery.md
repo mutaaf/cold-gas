@@ -1,12 +1,12 @@
 ---
 id: 0120
 title: One thumb can place the touchdown, and medals say how well
-status: in-progress   # shipped once a PR number exists (check-backlog requires it); branch audit/thumb-mastery
+status: shipped
 priority: P1
 size: L
 lens: player-feel
 created: 2026-10-30
-pr:                  # local branch audit/thumb-mastery (not pushed)
+pr: 181
 by: operator
 ---
 
