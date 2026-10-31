@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test';
 // 0057: a network blip never breaks Free Drive, the Sandbox or the judges for the rest of the session.
 // Chromium remembers a failed dynamic import (the same URL fails again with no request), so a retry asks for the
 // failed chunk with a query; a shared chunk it can't re-ask that way costs one reload from the title.
-const ready = (page, timeout = 60_000) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout });
+const ready = (page, timeout = 60_000) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout })
+  .then(() => page.evaluate(() => { document.querySelector('[data-play-more]').open = true; }));   // More ways to play (the title's disclosure)
 const watch = (page) => {
   const errors = [], navs = [];
   page.on('pageerror', (e) => errors.push(e.message));
