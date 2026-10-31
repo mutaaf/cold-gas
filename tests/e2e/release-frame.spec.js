@@ -11,16 +11,19 @@ import { releaseFrameTests } from './frame-probe.js';
 test.describe.configure({ mode: 'parallel' });
 
 const VIEWS = [
-  { name: 'desktop 1440×900', viewport: { width: 1440, height: 900 } },
-  { name: 'desktop 1280×720', viewport: { width: 1280, height: 720 } },
+  { name: 'desktop 1440×900', viewport: { width: 1440, height: 900 }, carW: 0.085 },
+  { name: 'desktop 1280×720', viewport: { width: 1280, height: 720 }, carW: 0.075 },
   { name: 'phone 390×844', viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, phone: true },
-  { name: 'phone 844×390', viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, phone: true },
+  { name: 'phone 844×390', viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, phone: true, carW: 0.06 },
   // The iPads (the critic's 2026-10-27 re-measure): 11" both ways (compact HUD), 13" both ways (the full set;
   // upright, its telemetry strip stands a fifth of the way down, under the mission block).
   { name: 'iPad 820×1180', viewport: { width: 820, height: 1180 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true },
-  { name: 'iPad 1180×820', viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true },
+  { name: 'iPad 1180×820', viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true, carW: 0.075 },
   { name: 'iPad 1024×1366', viewport: { width: 1024, height: 1366 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true },
-  { name: 'iPad 1366×1024', viewport: { width: 1366, height: 1024 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true },
+  { name: 'iPad 1366×1024', viewport: { width: 1366, height: 1024 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true, grow: true },
 ];
 
+// 0118's car-width bars (carW) are the ticket's: ≥ 1.45× the 0113 framing at 844×390 and 1440×900, still under the
+// pre-0113 framing that hid the row. 1366×1024 (no bar in the ticket) holds the growth bar. 667×375 (bar 0.060) is
+// checked by hand with the same probe (in the PR), not as a ninth flight: each flight here costs CI shard time.
 releaseFrameTests(VIEWS);

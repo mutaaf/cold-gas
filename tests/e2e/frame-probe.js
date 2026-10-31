@@ -36,7 +36,7 @@ export function fly() {
   };
   const overlap = (b, r) => Math.max(0, Math.min(b.x1, r.right) - Math.max(b.x0, r.left)) * Math.max(0, Math.min(b.y1, r.bottom) - Math.max(b.y0, r.top));
   const out = { air: 0, aboveTop: [], covered: [], offscreen: [], inStrip: 0, topBottom: 0, minTop: Infinity, overRow: 0, noRoof: [], carry: 0, rowCover: 0, rowCoverAt: '', rowCovered: [], rowShown: 1,
-    rowMean: 0, fewBodies: [], midBodies: 0, midZ: Infinity, bodies: 0 };
+    rowMean: 0, fewBodies: [], midBodies: 0, midZ: Infinity, bodies: 0, carW: [], cuts: 0 };
   // The parked row as it stands (each vehicle's footprint and height), and the stretch it covers.
   const row = S.run.car.world.bodies.map((b) => ({ x0: b.cx - b.hx, x1: b.cx + b.hx, z0: b.cz - b.hz, z1: b.cz + b.hz, h: b.h }));
   const rowZ0 = Math.min(...row.map((b) => b.z0)), rowZ1 = Math.max(...row.map((b) => b.z1));
@@ -87,6 +87,7 @@ export function fly() {
     return full > 0 ? shown / full : 0;
   };
   let rowSum = 0;
+  const camAt = new V(Infinity, 0, 0);   // the carry's camera in the frame before: a jump is a cut (0118)
   S.paused = true;   // the frame loop stands still; the probe steps the run and the director itself
   const DT = 1 / 30;
   for (let f = 0; f < 30 * 40 && S.mode === 'live' && S.run.phase !== 'done'; f++) {
@@ -119,6 +120,10 @@ export function fly() {
     // Over the row in the tracking carry (after the hold's cut): car z from 1 m before the row's front to its back.
     if (g.director.state.shot === 'carry' && car.position.z <= rowZ1 + 1 && car.position.z >= rowZ0) {
       out.carry++;
+      // 0118: the car's width across the screen, with where it is (z, y), every carry frame.
+      if (camAt.x !== Infinity && camAt.distanceTo(cam.position) > 0.01) out.cuts++;
+      camAt.copy(cam.position);
+      out.carW.push([Math.round(((b.x1 - b.x0) / w) * 1000) / 1000, Math.round(car.position.z * 10) / 10, Math.round(car.position.y * 10) / 10]);
       const s = rowCover(rects);
       if (s > out.rowCover) { out.rowCover = s; out.rowCoverAt = `z ${car.position.z.toFixed(1)}`; }
       out.rowShown = Math.min(out.rowShown, full > 0 ? shown / full : 0);
@@ -134,13 +139,15 @@ export function fly() {
   S.paused = false;
   out.rowMean = out.carry ? rowSum / out.carry : 0;
   out.bodies = row.length;
+  out.rowMid = (rowZ0 + rowZ1) / 2;
   out.phase = S.run.phase;
   return out;
 }
 
 // One test per view: { name, phone, minTop (the top HUD at least this far down), ...newPage options }.
+// `carW`: 0118's bar for the car's mean width / screen width over the carry frames; `grow`: its growth bar alone.
 export function releaseFrameTests(VIEWS) {
-  for (const { name, phone, minTop, ...opts } of VIEWS) {
+  for (const { name, phone, minTop, carW, grow, ...opts } of VIEWS) {
     test(`${name}: the drop off the ledge stays in frame, below the top HUD`, async ({ browser }) => {
       test.slow();   // the whole Show reference, stepped in the page
       const page = await browser.newPage(opts);
@@ -184,6 +191,22 @@ export function releaseFrameTests(VIEWS) {
         expect(r.rowMean, 'row on screen, mean over the carry').toBeGreaterThanOrEqual(0.9);
         expect(r.fewBodies, 'carry frames with fewer than four bodies half on screen').toEqual([]);
         expect(r.midBodies, `bodies half on screen at z ${r.midZ.toFixed(1)}`).toBe(r.bodies);
+      }
+      // 0118: the car reads through the carry. On a screen wider than tall the frame placed for the car at its highest
+      // over the row's front cuts closer as the car comes down: locked off between cuts, at most two of them over the row
+      // (three frames in ≈ 1.9 s; any more is choppy; an upright screen keeps 0116's placements). Where a view sets
+      // `carW`, the car's mean width / screen over the carry meets that bar, and with `grow` (or a bar) past the row's
+      // middle it is at least 1.4× its width at the cut.
+      if (opts.viewport.width > opts.viewport.height) expect(r.cuts, 'cuts inside the carry').toBeLessThanOrEqual(2);
+      const ws = r.carW.map(([cw]) => cw);
+      if (carW) {
+        const mean = ws.reduce((a, b) => a + b, 0) / ws.length;
+        expect(mean, `car width / screen, mean over the carry: ${JSON.stringify(r.carW)}`).toBeGreaterThanOrEqual(carW);
+      }
+      if (carW || grow) {
+        const late = r.carW.filter(([, z]) => z < r.rowMid).map(([cw]) => cw);
+        expect(late.length).toBeGreaterThan(5);
+        expect(Math.min(...late) / ws[0], 'car width past the row\'s middle / at the cut').toBeGreaterThanOrEqual(1.4);
       }
       expect(errors).toEqual([]);
       await page.close();

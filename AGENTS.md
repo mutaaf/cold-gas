@@ -248,7 +248,8 @@ src/render/           three.js (r186):
                           DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable; live on the Wall and the
                           Show it turns just enough to keep the car below the top HUD (on a very short touch screen also a set number of px down, 0107) and, upright, right of the rail;
-                          the Show's release cuts to a locked-off hold, then to the tracking carry before the row
+                          the Show's release cuts to a locked-off hold, then to the locked-off carry before the row, which on a screen wider than
+                          tall cuts closer (at most twice) as the car comes down, the row's front still in frame (0118)
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone;
                         every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099)
 src/fold.js           a screen that folds (pure, 0105): the segments and the posture Chromium reports → rows | cols and the
