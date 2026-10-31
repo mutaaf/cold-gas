@@ -102,4 +102,8 @@ export function moduleOf(stack) {
 }
 
 export const MODULE_IDS = ['app', 'render', 'webgl', 'shader', 'physics', 'audio', 'judge', 'world', 'rocket', 'net', 'lazy', 'nerds', 'drive', 'frame', 'page'];
+// What players do, as counts (obs.play; src/worker/obs.js stores them as `play:<name>` per day). The
+// funnel: a visit (new, or back on a later UTC day) → a run → landed or wrecked → posted / shared.
+export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'run', 'run-landed', 'run-wrecked', 'retry',
+  'post', 'post-fail', 'share', 'board-open', 'challenge-open', 'challenge-run', 'daily-run', 'daily-done', 'drive', 'sandbox'];
 export const KIND_IDS = ['error', 'rejection', 'trap', 'ctxlost', 'shader', 'fetch', 'lazy', 'audio', 'worker', 'frame', 'unclean'];

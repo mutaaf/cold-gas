@@ -280,7 +280,7 @@ describe('the launch complex is solid where it is drawn', () => {
     expect(Math.hypot(live.pos.x - site.x, live.pos.z - site.z)).toBeLessThan(SITE_RADIUS + 60);
     const re = simulate(run.inputLog, 'show', run.tick);
     expect(re.car.pos.x).toBe(live.pos.x); expect(re.car.pos.z).toBe(live.pos.z); expect(re.car.quat.w).toBe(live.quat.w);
-    expect(SIM_VERSION).toBe(26);
+    expect(SIM_VERSION).toBe(27);
   });
 });
 

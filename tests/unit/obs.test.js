@@ -305,3 +305,17 @@ describe('frame stats', () => {
     expect(grew).toBeLessThan(8 * 1024 * 1024);   // a million frames: < 8 B each (an object per frame would be ≥ 16 MB)
   });
 });
+
+describe('player counts (obs.play)', () => {
+  it('counts known events only, sends each count once, and marks automation', async () => {
+    const { obs } = await import('../../src/obs/index.js');
+    obs.sendEnabled = false;
+    obs.play('run'); obs.play('run'); obs.play('post'); obs.play('not-an-event');
+    const p = obs.payload();
+    expect(p.play).toEqual({ run: 2, post: 1 });
+    expect(p.auto).toBe(!!globalThis.navigator?.webdriver);
+    obs.flush('test', { force: true });
+    obs.play('run');
+    expect(obs.payload().play).toEqual({ run: 1 });
+  });
+});

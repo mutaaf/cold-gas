@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import worker from '../../src/worker/index.js';
-import { cleanObs, detectRegressions, detectFrameRegressions, resetObsMemo, OBS_LIMITS } from '../../src/worker/obs.js';
+import { cleanObs, detectRegressions, detectFrameRegressions, resetObsMemo, playersOf, OBS_LIMITS } from '../../src/worker/obs.js';
 import { NB } from '../../src/obs/frames.js';
 import { fakeD1 } from './helpers/d1.js';
 
@@ -77,6 +77,34 @@ describe('POST /obs: aggregation', () => {
   });
 });
 
+describe('POST /obs: players', () => {
+  it('counts play events for people only, and splits sessions into human and auto', async () => {
+    const DB = fakeD1();
+    resetObsMemo();
+    await worker.fetch(post(batch({ play: { run: 3, 'run-landed': 2, post: 1, 'visit-new': 1 } }), {}, '10.1.0.1'), { DB }, ctx);
+    await worker.fetch(post(batch({ play: { run: 2, 'visit-return': 1 } }), {}, '10.1.0.2'), { DB }, ctx);
+    await worker.fetch(post(batch({ auto: true, play: { run: 9 } }), {}, '10.1.0.3'), { DB }, ctx);
+    const ev = Object.fromEntries(DB.raw.prepare('SELECT name, n FROM obs_evt').all().map((r) => [r.name, r.n]));
+    expect(ev).toMatchObject({ sessions: 3, 'sessions:human': 2, 'sessions:auto': 1, 'play:run': 5, 'play:run-landed': 2, 'play:post': 1, 'play:visit-new': 1, 'play:visit-return': 1 });
+  });
+  it('drops unknown events and silly counts, and rejects a malformed play field', () => {
+    expect(cleanObs(batch({ play: { run: 2, hack: 5, post: 0, share: 9999, retry: 1.5 } })).play).toEqual({ run: 2 });
+    expect(cleanObs(batch({ play: [1, 2] }))).toBeNull();
+    expect(cleanObs(batch({ play: 'run' }))).toBeNull();
+    expect(cleanObs(batch({})).play).toEqual({});
+  });
+  it('folds rows into days, newest first, and totals', () => {
+    const p = playersOf([
+      { day: '2026-10-29', name: 'sessions:human', n: 4 }, { day: '2026-10-30', name: 'sessions:auto', n: 9 },
+      { day: '2026-10-30', name: 'sessions:human', n: 2 }, { day: '2026-10-30', name: 'play:run', n: 5 },
+      { day: '2026-10-29', name: 'play:post', n: 1 }, { day: '2026-10-29', name: 'beacons', n: 7 },
+    ]);
+    expect(p.days.map((d) => d.day)).toEqual(['2026-10-30', '2026-10-29']);
+    expect(p.days[0]).toEqual({ day: '2026-10-30', human: 2, auto: 9, run: 5 });
+    expect(p.total).toEqual({ human: 6, auto: 9, run: 5, post: 1 });
+  });
+});
+
 describe('GET /obs/digest', () => {
   beforeEach(() => { vi.useFakeTimers({ toFake: ['Date'] }); resetObsMemo(); });
   afterEach(() => vi.useRealTimers());
@@ -114,6 +142,7 @@ describe('GET /obs/digest', () => {
     expect(fr.cur.p95).toBeGreaterThan(fr.prev.p95);
     expect(d.frames['desktop-hi'].high.new.p50).toBeGreaterThan(33);
     expect(d.top[0].n).toBeGreaterThanOrEqual(d.top[1].n);
+    expect(d.players.total.human).toBe(20);   // every test batch is a person's first beacon
     // Read-only and cached: a second call within a minute comes from memory.
     expect((await worker.fetch(digest(), { DB }, ctx)).headers.get('x-obs-digest')).toBe('memo');
   });

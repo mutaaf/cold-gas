@@ -57,11 +57,13 @@ test('a lazy chunk 404s after a deploy: exactly one reload into the new build, t
   });
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   // The heal probes, sees a new build and reloads once.
   await expect.poll(() => seen.navs.length, { timeout: 20_000 }).toBe(2);
   await ready(page, 60_000);
   // The new page works: Free Drive opens.
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   await expect(page.locator('.fd-card').first()).toBeVisible({ timeout: 20_000 });
   await page.waitForTimeout(2000);
@@ -73,6 +75,7 @@ test('the same build answers (it was the network): a failed lazy chunk does not 
   await page.route(/\/assets\/drive-[\w-]+\.js$/, (route) => route.abort('connectionreset'));
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   await expect.poll(() => page.evaluate(() => window.__coldgas.obs.snapshot().recoveries.some((r) => r.kind === 'reload' && /same build/.test(r.detail))), { timeout: 15_000,
     message: await page.evaluate(() => JSON.stringify(window.__coldgas.obs.snapshot().recoveries)) }).toBe(true);
@@ -109,6 +112,7 @@ test('a road that never answers: an error card within 20 s, then Drive works aga
   await page.route(/\/roads\/[\w-]+\.bin\.gz$/, (route) => (stall ? undefined : route.continue()));
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').tap();
   await page.locator('.fd-card[data-road="stelvio"]').tap();
   const t0 = Date.now();
@@ -128,6 +132,7 @@ test('a road that never answers: an error card within 20 s, then Drive works aga
   await expect(page.locator('[data-screen="title"]')).toBeVisible();
   // And once the road answers, it drives.
   stall = false;
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').tap();
   await page.locator('[data-fd-go]').tap();
   await page.waitForFunction(() => window.__coldgas.drive.active, null, { timeout: 90_000 });
@@ -152,27 +157,80 @@ test('board: a slow Today asked first never overwrites All time asked after it',
   await expect(page.locator('[data-board="all"]')).toHaveAttribute('aria-pressed', 'true');
 });
 
-test('double-click Submit posts once', async ({ page }) => {
-  let posts = 0;
+// Post sits beside Retry (audit 2026-10-30): the first time, three letters right there; a double click posts once,
+// the rank shows inline, and the body is the run's log and telemetry, never a score.
+test('double-click Post posts once, with the run\'s telemetry and no score', async ({ page }) => {
+  test.setTimeout(150_000);   // a whole flight stepped in the page on software GL
+  let posts = 0, sent = null;
   await page.route(/\/api\/scores$/, async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
     posts++;
+    sent = route.request().postDataJSON();
     await new Promise((r) => setTimeout(r, 800));
-    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ ok: true, rank: 3 }) });
+    route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rank: 3, card: { total: 94 }, course: 'show', tier: 'assist' }) });
   });
   await page.route(/\/api\/judge\/stream$/, (route) => route.abort());
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
-  await page.evaluate(() => { window.__coldgas.startRun('jump'); window.__coldgas.fastForward(); });
+  // A jump of the player's own, flown by the reference pilot (a board jump: it lands).
+  await page.evaluate(() => {
+    const g = window.__coldgas;
+    g.startRun('jump'); g.S.autopilot = g.createAutopilot(g.stage.course); g.skipCountdown();
+    for (let i = 0; i < 4000 && g.S.run.phase !== 'done'; i++) g.liveStep(0.05);
+    g.S.autopilot = null;
+    g.fastForward();
+  });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
-  await expect(page.locator('[data-theatre]')).toBeHidden({ timeout: 30_000 });
-  await page.locator('#initials').fill('ABC');
-  const btn = page.locator('[data-r-submit] button[type="submit"]');
+  // (On a desktop the theatre plays beside the sheet; Post is reachable while it does.)
+  const btn = page.locator('[data-r-post-btn]');
+  await expect(btn).toBeVisible();
+  await page.locator('#initials').fill('abc');
   await btn.dblclick();
-  await expect(page.locator('[data-r-submit-msg]')).toHaveText(/Posted\. #3 today\./, { timeout: 10_000 });
-  await btn.click();
-  await expect(page.locator('[data-r-submit-msg]')).toHaveText('Already posted.');
+  await expect(page.locator('[data-r-submit-msg]')).toHaveText('Posted · #3 today', { timeout: 10_000 });
+  await expect(btn).toBeHidden();
   expect(posts).toBe(1);
+  expect(sent).toMatchObject({ initials: 'ABC', course: 'show' });
+  expect(sent.t.course).toBe('show');
+  expect(Array.isArray(sent.log)).toBe(true);
+  expect(sent).not.toHaveProperty('total');
+  expect(sent).not.toHaveProperty('assist');
+  // Remembered: the next jump's sheet offers "Post · ABC" in one tap.
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_initials'))).toBe('ABC');
+});
+
+// Home with an unposted board jump asks once, inline (no browser dialog); Leave goes, a second Home goes at once.
+// Escape on the results never goes Home.
+test('Home asks once before an unposted board jump is left; Escape stays', async ({ page }) => {
+  test.setTimeout(240_000);   // two whole flights stepped in the page on software GL
+  page.on('dialog', () => { throw new Error('no browser dialogs'); });
+  await page.route(/\/api\/judge\/stream$/, (route) => route.abort());
+  await page.goto('/coldgas/?gfx=low');
+  await ready(page);
+  const flyJump = () => page.evaluate(() => {
+    const g = window.__coldgas;
+    g.startRun('jump'); g.S.autopilot = g.createAutopilot(g.stage.course); g.skipCountdown();
+    for (let i = 0; i < 4000 && g.S.run.phase !== 'done'; i++) g.liveStep(0.05);
+    g.S.autopilot = null;
+    g.fastForward();
+  });
+  await flyJump();
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
+  await page.keyboard.press('Escape');
+  expect(['results', 'replay']).toContain(await page.evaluate(() => window.__coldgas.S.mode));
+  await page.locator('.results .top-actions-row [data-home]').click();
+  await expect(page.locator('[data-leave]')).toBeVisible();
+  expect(['results', 'replay']).toContain(await page.evaluate(() => window.__coldgas.S.mode));
+  await page.keyboard.press('Escape');   // closes the question, stays
+  await expect(page.locator('[data-leave]')).toBeHidden();
+  expect(['results', 'replay']).toContain(await page.evaluate(() => window.__coldgas.S.mode));
+  await page.keyboard.press('KeyH');      // asked once already: H goes
+  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
+  // A second jump: the question, then Leave.
+  await flyJump();
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
+  await page.locator('.results .top-actions-row [data-home]').click();
+  await page.locator('[data-leave-go]').click();
+  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
 });
 
 test('the boot watchdog offers a reload when the game never wires its title', async ({ page }) => {

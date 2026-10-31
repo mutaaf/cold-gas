@@ -32,7 +32,9 @@ stage?** Where yes, that's a ticket.
 3. **Play it, for real.** `npm ci && npx playwright install chromium && npm run build`, then
    drive production and the local build with Playwright (scripts/shots-show.mjs,
    scripts/shots-car.mjs and scripts/perf.mjs show how; `window.__coldgas` exposes the sim).
-   Capture desktop 1440×900 and phone 390×844: title, start, climb, inverted hang, release,
+   Phone 390×844 touch comes first (most players are on phones), then desktop 1440×900. One
+   of the phone runs is a first visit: an automated browser counts as a returning player
+   (src/main.js howtoSeen), so set `localStorage.coldgas_howto = 'new'` before load. Capture: title, start, climb, inverted hang, release,
    the carry over the row, roll-out, touchdown, a deliberate crash (e.g. no boost), the
    replay and the results/judges. Look at every screenshot like a critic.
 4. **Measure.** Run `node scripts/naive-players.mjs`, `node scripts/naive-show.mjs`,

@@ -71,14 +71,22 @@ for (const [w, h] of [[390, 844], [844, 390]]) {
   });
 }
 
-test('1280×720 keyboard: the key lists are still there', async ({ page }) => {
+test('1280×720 keyboard: the four keys that matter, and All controls opens every key', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await pausedRun(page, { key: true });
   const text = await sheetText(page);
   expect(text).toMatch(/Shift/);
   expect(text).toMatch(/Space/);
-  expect(text).toMatch(/Q E Z C/);
+  // Trimmed (audit 2026-10-30): four rows, not the full key map; the rest is one tap away.
+  expect(await page.locator('[data-screen="pause"] .keys p').count()).toBe(4);
+  expect(text).not.toMatch(/Q E Z C/);
   expect(Object.values(await fit(page)).every(Boolean)).toBe(true);
+  await page.locator('[data-all-controls]').click();
+  await expect(page.locator('[data-screen="controls"]')).toBeVisible();
+  await expect(page.locator('[data-ctl-keys]')).toBeVisible();
+  await expect(page.locator('[data-ctl-keys]')).toContainText('Q E Z C');
+  await page.locator('[data-controls-close]').click();
+  await expect(page.locator('[data-screen="controls"]')).toBeHidden();
   // The top bar's Pause (0098) works with a mouse too and keeps no focus (Space and the arrows are the game's);
   // Escape and P still toggle.
   await page.locator('[data-resume]').click();
@@ -186,7 +194,7 @@ test('390×844 touch: pausing closes the Menu', async ({ browser }) => {
 // A touch player can pause (0098): the top bar's Pause, a 44 px box inside the screen, one tap from the countdown and
 // the live run (ground and air) at every touch size; hidden on the title, the results and the replay. One page and one
 // boot for every size (the suite's shards have no minutes to spare, LESSONS 2026-10-29). Paused mid-air by the button,
-// the Show's reference flight still scores 94.0 with a 0.817 m/s touchdown: the pause holds the sim, it doesn't touch it.
+// the Show's reference flight still scores 97.7 (94.0 before the v27 Show judging, 0121) with a 0.817 m/s touchdown: the pause holds the sim, it doesn't touch it.
 test('touch: Pause is one tap from a run at every size, hidden off a run, and a mid-air pause leaves the score', async ({ browser }) => {
   test.slow();
   const ctx = await browser.newContext(touchCtx(390, 844));
@@ -250,7 +258,7 @@ test('touch: Pause is one tap from a run at every size, hidden off a run, and a 
   await G(page, () => window.__coldgas.fastForward());
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results' && window.__coldgas.S.card, null, { timeout: 30_000 });
   const card = await G(page, () => ({ total: window.__coldgas.S.card.total, sink: window.__coldgas.S.run?.t.sink ?? null }));
-  expect(card.total).toBe(94.0);
+  expect(card.total).toBe(97.7);
   expect(card.sink).toBeCloseTo(0.817, 3);
   expect(await hidden()).toBe(true);   // the results
   // The replay plays under the results (S.mode stays 'results', the sheet folded to its peek on a phone).

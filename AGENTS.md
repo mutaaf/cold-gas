@@ -22,8 +22,8 @@ mark, and air left in the tanks.
 1. **Perfection of the one moment.** Physics that feels exact (the sim is the IP), a landing
    you can feel in the camera and the sound, plumes that look like cold gas rather than fire,
    and a replay you want to watch twice. Polish beats features.
-2. **Mastery and fairness.** A deterministic sim, server-verified scores (the Worker replays
-   the input log), legible judging (every category explained), three flight tiers (Assist,
+2. **Mastery and fairness.** A deterministic sim, server-decided scores (the Worker scores the
+   run's telemetry with the same `scoreRun`, after plausibility checks against the input log), legible judging (every category explained), three flight tiers (Assist,
    Pro, Advanced: ten valves by hand), a skill ladder (drills, the landing HUD, the coach), and an
    honest leaderboard.
 3. **The panel.** The AI judges' voices (src/worker → Claude) must be specific, short and in
@@ -41,21 +41,38 @@ mark, and air left in the tanks.
   route `mutaafaziz.com/coldgas*`. The rest of mutaafaziz.com is another repo. Never touch it
   from here.
 - API (src/worker/, frozen):
-  - `POST /coldgas/api/judge/stream` replays the log, scores it, and streams the AI panel as
-    server-sent events: `verify → prompt → reasoning/token… → done | error`.
+  - `POST /coldgas/api/judge/stream` scores the run's telemetry `t` with `scoreRun` (an old client that sends
+    no `t` is replayed, ≈150 ms of CPU), and streams the AI panel as server-sent events:
+    `verify → prompt → reasoning/token… → done | error`.
   - `POST /coldgas/api/quest` (side-quest designer) calls the same providers (edge default, or the
     player's key as `x-cg-key` for that one call), streams through the theatre, and sends a quest only
     if it passes `src/build/quest-schema.js` (the browser checks again). Rate-limited (edge: 12/h per
     player, 250/day; BYOK shares the judges' 90/h).
   - `POST /coldgas/api/models` (BYOK connect) asks a provider for its live models and suggests one.
   - `GET /coldgas/api/providers`.
-  - `POST /coldgas/api/scores` (verified board entry) and `GET /coldgas/api/scores?board=today|all`.
+  - `POST /coldgas/api/scores` `{ log, t, course, initials, dry? }`: a board entry scored from the client's telemetry
+    by `scoreRun` on the server, **no replay** (a replay is ≈150 ms of CPU against the free plan's 10 ms: Cloudflare
+    answered 1102/503, and the board never had a row). `boardCheck` (src/worker/index.js) refuses what it can't
+    believe: the course, a log that starts at tick 0, an end inside `MAX_TICKS` and after the last input, a real
+    jump, then every number the scorer reads finite and inside the car's envelope (air time, apex, speeds, rotation
+    per second of air, gas only ever falling, …; each bound is commented with its source). The tier (Assist / Pro
+    ×1.08 / Advanced ×1.15) comes from the log's own inputs, never the telemetry's claim. 60 posts an hour per
+    player. A client that sends no `t` gets `400 { error: 'update' }`. `dry: true` runs every check and answers
+    the card and the rank it would get without storing anything (`scripts/board-probe.mjs`). Rows keep `course`
+    and `tier` (columns added in place to the old table on first use).
+  - `GET /coldgas/api/scores?board=today|all[&course=show|wall|lineup]` (no course: every course, for old clients;
+    the game asks for the course on the stage, with tabs for the others).
   - `POST /coldgas/api/obs` (src/worker/obs.js): the client's observability beacon. ≤ 8 kB, strictly
     validated (`cleanObs`), 30/h per player and 3,000/day overall; aggregated in D1 (`obs_err` per
     signature/build/day, `obs_frames` histograms per device class/tier, `obs_evt` counters, `obs_ex`
-    exemplar stacks; month-long retention). No IPs, user agents or headers stored.
+    exemplar stacks; month-long retention). No IPs, user agents or headers stored. It also carries
+    the players' funnel as counts (`obs.play`, PLAY_EVENTS in src/obs/signature.js: visits new and
+    returning, runs, landed/wrecked, retries, posts, shares…), stored as `play:<event>` per day for
+    people only; an automated browser (`navigator.webdriver`, i.e. our own agents and tests) is
+    counted as `sessions:auto`, never as a player.
   - `GET /coldgas/api/obs/digest[?build=]`: top signatures, `regressions` (new or ≥ 2× per session
-    vs the previous build, and p95 frame-time regressions), frame percentiles. Cached 5 min.
+    vs the previous build, and p95 frame-time regressions), frame percentiles, and `players` (per
+    UTC day: `human`, `auto` and each funnel count; the Scout and the Critic read it). Cached 5 min.
   - D1 database `cold-gas` (binding `DB`, auto-provisioned, tables self-created).
 - **The judges' brain** (src/worker/ai/):
   - Default: Workers AI (binding `AI`). `@cf/google/gemma-4-26b-a4b-it` runs with thinking off;
@@ -118,11 +135,15 @@ mark, and air left in the tanks.
    gates: run them for any physics change, with `node scripts/human-show.mjs 300 assist --cues=new`
    (players who follow the cue or the HUD land ≥ 95 %).
 5. **Scores are decided by `scoreRun`.** The AI writes words only. The client never sends a
-   score: the Worker replays the log.
+   score: board entries (and the judges' card) are scored from the client's telemetry by `scoreRun` on the
+   server, after plausibility checks against the input log (`boardCheck`); the tier comes from the log.
 5½. **AI usage is always visible and honest.** Every model call goes through the theatre and
    the receipt. Real model ids, token counts and costs are shown, with an estimate only where
    the provider doesn't report them. Keys are never logged, persisted server-side or echoed.
-   No AI call may block the results: a 35 s deadline falls back to local lines.
+   No AI call may block the results: a 35 s deadline falls back to local lines. The score never waits for the
+   call: where the theatre would cover the sheet (a phone, a short landscape screen, a folding tablet) the call runs
+   docked as a live strip on the sheet (model, where, tokens so far; then its receipt in a line) with "Watch the
+   call" for the full show.
 6. **Frame budget.** 60 fps on a mid-range laptop and playable on a recent phone. No per-frame
    allocations in hot paths (reuse vectors and arrays). Graphics tiers: `?gfx=low|mid|high`. One look
    everywhere (0097): phones and tablets boot `high` like a desktop (same effects, shadows, film look,
@@ -274,7 +295,11 @@ src/pointer.js        the coach in the device's words (pure, 0079): controls per
                         the post-run pointer (no third repeat, "Better: …"), the live cue-line pointers
 src/render/interp.js  the car drawn between 240 Hz ticks (no sim change)
 src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
-                        hold to land (LAND + the carry over the row); plain sim inputs, pure, no DOM
+                        hold to land (LAND + the carry over the row), slide to aim the touchdown (0121: pitch/roll,
+                        roof up, never back over the row or in against a flank); plain sim inputs, pure, no DOM
+src/thumb-aim.js      the one-thumb pad's sight in the air (the mark from the predicted touchdown) + the slide's pointers
+src/medals.js         bronze/silver/gold per event and tier, best per device (localStorage coldgas_medals), the
+                        results row under the score; getMedals(course, tier) for other screens (0121)
 src/touch-settings.js touch scheme (one-thumb | classic), hand, tilt steering (DeviceOrientation, iOS
                         permission, calibrate, 5 % steps), haptics (navigator.vibrate)
 src/valves.js         Advanced: keyboard layout like the car, chords, key ramp, gamepad, the touch
@@ -294,8 +319,23 @@ src/instruments.js    every HUD instrument answers a tap: peak G, burn time, spl
 src/damage-view.js    the damage map opened up (lazy): zones, hits, what damage does in this sim
 src/drive/minimap.js  Free Drive's canvas minimap (north/heading-up, trail, ghost, profile) and the full map
 src/share-card.js     Share (0081): the run as a 1080×1350 card drawn on the device (replay frame, score, verdict,
-                        three numbers) → navigator.share({ files }) → text + link → copy + toast
-src/panel.js          board client (tolerant rows) + local judge lines (offline fallback)
+                        three numbers) → navigator.share({ files }) → text + link → copy + toast; the link is the run's
+                        challenge link (#vs=) when it has one
+src/challenge.js      challenge links (pure): a run's input log + course + SIM_VERSION + score + tier + initials as bytes
+                        (varint tick deltas, changed channels as zigzag deltas) → deflate-raw (CompressionStream, else
+                        plain) → base64url; every decoded field bounded (VS_MAX_CHARS, 256 kB inflated, course/tier enums,
+                        ticks < MAX_TICKS and increasing, values ±100, no trailing bytes); createReplay/replayAsync re-fly a
+                        log a slice at a time (= simulate); coarsen() for a log too long for ~2,000 chars
+src/daily.js          the daily jump (pure): ten objectives on the existing events, one per UTC day (a seeded walk that
+                        never repeats a day running), judged from scoreRun's card; the streak of consecutive UTC days
+                        (localStorage coldgas_daily)
+src/comeback.js       the title's card ([data-title-extra]: a challenge, else the daily and the streak; fits itself under
+                        the top bar), the challenger's replay as the ghost (main.js syncGhost), the results' lines
+                        ([data-daily-result]: "You beat ABC by 2.1" + Send it back, "Daily ✓ complete · streak 4"), and the
+                        link a Share carries (lossless, else a coarser log re-flown and checked, else the plain address)
+src/panel.js          board client (post with telemetry, tolerant rows, per-course board) + local judge lines (offline fallback)
+src/post.js           Post · ABC beside Retry (the initials remembered, or three letters right there), the rank inline,
+                        and "Leave without posting?" asked once on Home with an unposted board jump (no browser dialogs)
 src/pace.js           the title draws at ~30 fps (pure pacer, 0049); the shadow map redraws on the title only when the hero moves
 src/net.js            every network call: fetchWithDeadline (deadline + cancel), withDeadline, postRetry; lazyOnce + reimport
                         (a failed lazy chunk is asked for again, 0057), judgesOverran (the judge breaker counts their own overrun)
@@ -319,7 +359,7 @@ src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: err
 src/worker/obs.js     POST /obs + GET /obs/digest (regression detection); scripts/heal.mjs files tickets
 src/ai/               config.js (provider/key on this device) · stream.js (SSE client) ·
                         settings.js (the judges' brain picker) · theatre.js (lazy: aurora-field show)
-src/worker/index.js   Worker (frozen): verify by replay, streaming judge, BYOK models, D1 board
+src/worker/index.js   Worker (frozen): telemetry scoring + boardCheck, streaming judge, BYOK models, D1 board
 src/worker/ai/        prompt.js (brief + tolerant line parser) · providers.js (edge, anthropic,
                         openai, xai, gemini; model picking; prices)
 tests/unit/           Vitest: sim, course, mixer, determinism, judging, engine (parked bodies, tyres, springs)
@@ -332,9 +372,9 @@ scripts/shots.mjs     Screenshots of key moments against a running preview
 scripts/human-show.mjs     human-like players on the Show (reaction time, keys, cues): the
                            learnability gate. --cues old|new, assist|pro
 scripts/human-advanced.mjs Advanced by a person: taps on the valve keys
-scripts/play-human.mjs     a cue-following player on the real page (keyboard, touch or thumb)
+scripts/play-human.mjs     a cue-following player on the real page (keyboard, touch or thumb; --skill=careless|careful|sloppy)
 scripts/human-phone.mjs    the human-show population on a phone (thumbs, reach, a resting thumb):
-                           --scheme=classic|thumb --build=before|after --geom=<thumb-reach geom.json>
+                           --scheme=classic|thumb --skill=none|careful|sloppy|mixed --build=before|after --geom=<thumb-reach geom.json>
 scripts/thumb-reach.mjs    touch control geometry per phone viewport + reach heatmap screenshots
 scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11 px, WCAG contrast on screenshots;
                            the judges' theatre and the pause sheet too (44 px targets; Resume and Home on the glass,
@@ -373,6 +413,7 @@ state. It never writes it.
 | `?drive=stelvio\|transfagarasan\|bigsur\|atlantic[&tod=dusk]` | Free Drive on that road |
 | `?drive=sandbox[#b=<build>]` | The Sandbox (build, power-ups, side quests); `#b=` carries a shared build (also on a road link) |
 | `?drive=endless[&seed=<text>][&tod=dusk][&idb=0]` | Free Drive's endless road from that seed (same seed, same world) |
+| `?play=jump&course=<course>#vs=<run>` | A challenge (src/challenge.js): the title holds on the challenge card instead of skipping to the countdown; Take the challenge races the sender's run as the ghost. A payload that can't be read or is from another `SIM_VERSION` shows "from an older version" and falls back to `?play=jump`. `#vs=` with no `?play=` (and no `?board=`) shows the card too; `?drive=` still wins over it |
 
 One deep link wins when several are given: `?drive=` over `?play=` over `?board=` (the others are
 ignored; `?gfx=` and `?course=` combine with any of them).
@@ -394,6 +435,10 @@ npm run audit [-- --shard=N/M] [--port=4655]   the HUD + title audits as a gate 
                    estimated cost (scripts/audit-plan.mjs, 0087); CI runs --shard=1/6 … 6/6 in parallel. Its frames are
                    deterministic: condition waits (CI=1 doubles them), the results stepped in the page, not the wall clock
 node scripts/fly.mjs '{"apex":7,"rolls":1}'   headless reference flight telemetry
+node scripts/board-probe.mjs [url]             flies the reference Show in Node and POSTs it to <url>api/scores with dry:true
+                   (default https://mutaafaziz.com/coldgas/): exit 1 unless 200 with a card matching the local one. Nothing
+                   is stored (it sends no initials, so a Worker from before `dry` answers 400 instead of storing it).
+                   Never post a non-dry entry to production from a script
 node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title wired, first 3D frame, long tasks, bytes
 node scripts/roads/build.mjs [road]             rebuild Free Drive roads from OSM + terrain (network; cached)
 node scripts/perf-drive.mjs <url> [phone|desktop] [roads] [secs]   Free Drive frame times (phone = 4× CPU throttle)
@@ -440,6 +485,11 @@ as a new or regressed signature, and `npm run heal` turns that into a `ready` ti
 every run (keeper.md step 2) and PRs the tickets; the **Builder** runs `npm run heal -- --check`
 before picking (builder.md step 2) and heals first if the digest has something unticketed.
 Production's own health: For nerds (`) → Health.
+
+**Steering by players.** The agents read the players' funnel (`/obs/digest` → `players`) before
+choosing work, and play one run as a first-time visitor on a phone (`coldgas_howto = 'new'`: an
+automated browser otherwise counts as a returning player). Lens `engagement` covers reasons to retry,
+return and share, never dark patterns.
 
 The operator steers through `agents/control.json` (paused, focus, caps, frozen_paths). Branch
 prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.

@@ -13,11 +13,11 @@ export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ?
 const C = {
   key: {
     drive: ['hold', '↑'], steer: ['', '← →'], release: ['press', 'Space'], boost: ['hold', 'F'], land: ['hold', 'Shift'],
-    brake: ['press', 'Space'], brakeAdv: ['press', 'Space'], roll: ['', '← →'], rollAdv: ['', 'Q+Z or E+C'], stop: ['hold', '↓'], lift: ['hold', 'Space'],
+    brake: ['hold', 'Space'], brakeAdv: ['hold', 'Space'], roll: ['', '← →'], rollAdv: ['', 'Q+Z or E+C'], stop: ['hold', '↓'], lift: ['hold', 'Space'],
   },
   pad: {
     drive: ['hold', 'RT'], steer: ['', 'the left stick'], release: ['press', 'A'], boost: ['hold', 'RB'], land: ['hold', 'B'],
-    brake: ['press', 'A'], brakeAdv: ['press', 'A'], roll: ['', 'the left stick'], rollAdv: ['', 'LB or RB'], stop: ['hold', 'LT'], lift: ['hold', 'A'],
+    brake: ['hold', 'A'], brakeAdv: ['hold', 'A'], roll: ['', 'the left stick'], rollAdv: ['', 'LB or RB'], stop: ['hold', 'LT'], lift: ['hold', 'A'],
   },
   touch: {
     drive: ['hold', 'GO'], steer: ['', 'the stick'], release: ['tap', 'RELEASE'], boost: ['hold', 'BOOST'], land: ['hold', 'LAND'],
@@ -37,6 +37,17 @@ const brakeAct = (ctx) => (ctx.tier === 'assist' ? 'land' : ctx.tier === 'advanc
 const rollAct = (ctx) => (ctx.tier === 'assist' ? 'land' : ctx.tier === 'advanced' ? 'rollAdv' : 'roll');
 const thumbOn = (ctx) => ctx.device === 'touch' && ctx.scheme === 'thumb';
 
+// The coach's fixes (src/sim/coach.js) name controls in these words: the control's name and, on a keyboard or
+// a pad, its key ("LAND (Shift)", "LAND (B)"); on touch the button itself ("LAND"); one-thumb, the pad. So the
+// results' "What happened" says what the how-to card, the cue line and the pointer say, on every device.
+export function coachWords(ctx) {
+  const v = vocab(ctx), adv = ctx.tier === 'advanced';
+  if (thumbOn(ctx)) return { land: 'the pad', lift: 'the pad', release: 'the pad', boost: 'the pad', roll: 'the pad' };
+  if (ctx.device === 'touch') return { land: 'LAND', lift: adv ? v.brakeAdv[1] : 'LIFT', release: 'RELEASE', boost: 'BOOST', roll: adv ? v.rollAdv[1] : v.roll[1] };
+  const named = (name, act) => `${name} (${v[act][1]})`;
+  return { land: named('LAND', 'land'), lift: named('LIFT', 'lift'), release: named('RELEASE', 'release'), boost: named('BOOST', 'boost'), roll: adv ? v.rollAdv[1] : v.roll[1] };
+}
+
 // The "how to fly" card: the inputs that matter, per phase, on this device. Each row:
 // { phase, ctl: the control as shown (a key cap), verb, what }.
 export function howtoRows(ctx) {
@@ -54,7 +65,8 @@ export function howtoRows(ctx) {
       row('Drive & climb', 'drive', 'Crawls you up the Wall on suction; let go to stop.'),
       row('Let go', 'release', 'On the ledge, upside down, when the cue says.'),
       row('Roll & land', 'land', 'Rolls you out, carries you over the row and levels.'),
-      { phase: 'Brake', verb: 'keep', ctl: 'holding', what: 'It brakes to a soft touchdown and stops.' },
+      // 0121: the one skill input on one thumb, the touchdown slide (src/onethumb.js, src/thumb-aim.js).
+      { phase: 'Aim & brake', verb: 'hold, slide', ctl: 'the pad', what: 'Slide onto the amber dot to hit the mark.' },
     ];
   }
   const assist = ctx.tier === 'assist';
@@ -99,10 +111,11 @@ export function pointerText(id, ctx, flight = null) {
     case 'over-roll': return `Stop the roll early: let go of ${keyOf(ctx, rollAct(ctx))} about 40° before level`;
     case 'no-roll': return assist ? `Roll upright: ${ctl(ctx, 'land')} after you let go` : `Roll upright: ${ctl(ctx, rollAct(ctx))} after you let go`;
     case 'tilt': return assist ? `Level it for the last 2 m: ${ctl(ctx, 'land')} and stop steering` : 'Level it by the dial before the last 2 m';
-    case 'mark': return 'Aim for the rings: lean toward the pad above 5 m, then level';
-    case 'gas': return 'Save nitrogen: shorter boosts, one hard late brake';
+    case 'mark': return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
+    case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
-    case 'clean': return assist ? 'Clean. Next: a softer touchdown, or Pro for ×1.08' : 'Clean. Next: under 1 m/s and the 2 m ring';
+    case 'clean': if (thumbOn(ctx)) return 'Clean. Next: hold in the air and slide onto the amber dot to land on the mark';
+      return assist ? 'Clean. Next: a softer touchdown, closer to the mark' : 'Clean. Next: under 1 m/s and the 2 m ring';
     default: return '';
   }
 }
