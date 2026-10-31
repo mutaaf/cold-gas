@@ -186,7 +186,7 @@ test('390×844 touch: pausing closes the Menu', async ({ browser }) => {
 // A touch player can pause (0098): the top bar's Pause, a 44 px box inside the screen, one tap from the countdown and
 // the live run (ground and air) at every touch size; hidden on the title, the results and the replay. One page and one
 // boot for every size (the suite's shards have no minutes to spare, LESSONS 2026-10-29). Paused mid-air by the button,
-// the Show's reference flight still scores 94.0 with a 0.817 m/s touchdown: the pause holds the sim, it doesn't touch it.
+// the Show's reference flight still scores 97.7 (94.0 before the v27 Show judging, 0120) with a 0.817 m/s touchdown: the pause holds the sim, it doesn't touch it.
 test('touch: Pause is one tap from a run at every size, hidden off a run, and a mid-air pause leaves the score', async ({ browser }) => {
   test.slow();
   const ctx = await browser.newContext(touchCtx(390, 844));
@@ -250,7 +250,7 @@ test('touch: Pause is one tap from a run at every size, hidden off a run, and a 
   await G(page, () => window.__coldgas.fastForward());
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results' && window.__coldgas.S.card, null, { timeout: 30_000 });
   const card = await G(page, () => ({ total: window.__coldgas.S.card.total, sink: window.__coldgas.S.run?.t.sink ?? null }));
-  expect(card.total).toBe(94.0);
+  expect(card.total).toBe(97.7);
   expect(card.sink).toBeCloseTo(0.817, 3);
   expect(await hidden()).toBe(true);   // the results
   // The replay plays under the results (S.mode stays 'results', the sheet folded to its peek on a phone).
