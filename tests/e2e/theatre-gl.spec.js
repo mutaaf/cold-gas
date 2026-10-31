@@ -65,7 +65,13 @@ for (const vp of VIEWPORTS) {
     const page = await browser.newPage(opts);
     await page.addInitScript(trackContexts);
     const seen = watch(page);
-    await page.route('**/coldgas/api/judge/stream', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: judgeBody }));
+    // A phone runs the call docked and a docked call ends the moment it answers: the answer is held a few
+    // seconds there, so "Watch the call" has a live show to put up (Skip and Retry mid-stream, as on a desktop).
+    const hold = opts.hasTouch ? 6000 : 0;
+    await page.route('**/coldgas/api/judge/stream', async (route) => {
+      if (hold) await new Promise((r) => setTimeout(r, hold));
+      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: judgeBody }).catch(() => {});
+    });
     await page.goto('/coldgas/?gfx=low');
     await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
 
