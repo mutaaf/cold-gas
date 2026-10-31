@@ -36,6 +36,9 @@ import { deviceOf, howtoRows, pauseRows, deviceTitle, pickPointer, livePointer }
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
 import { thumbStage } from './onethumb.js';
+// 0117 thumb mastery (own modules): the one-thumb touchdown sight on the pad, and the medals row.
+import { mountThumbAim } from './thumb-aim.js';
+import { showMedals, hideMedals } from './medals.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
 import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0, suspendAudio, resumeAudio, audioState } from './audio.js';
@@ -442,12 +445,15 @@ function finishRun() {
   if (S.drill) {
     // Practice: the drill's own card and the coach. No panel, no board, no ghost.
     ui.results(S.card, { drill: S.drill, result: S.drillSnap.result });
+    hideMedals();   // 0117: a drill earns no medal
     pointerBox.hidden = true;
     coachRun();
     replayFrom(Math.max(0, (run.drillStartTick || 0) / FRAME_EVERY - 30));
     return;
   }
   ui.results(S.card);
+  // 0117: medals (src/medals.js) for your own runs, not the reference's.
+  if (S.autopilot) hideMedals(); else showMedals(run.course, S.card.tier, S.card.total);
   pointerBox.hidden = true;
   if (!S.autopilot) {
     // Run n, and how it stands against your best on this device (before this run counts).
@@ -925,6 +931,7 @@ function braking(run) {
 const thumbPad = document.querySelector('[data-onethumb]');
 const thumbVerb = document.querySelector('[data-thumb-verb]'), thumbAct = document.querySelector('[data-thumb-act]'), thumbArc = document.querySelector('[data-thumb-arc]');
 const thumbActive = () => !ui.touch.hidden && ui.touch.dataset.scheme === 'thumb' && !S.autopilot;
+const thumbAim = mountThumbAim(thumbPad, thumb);   // 0117: the slide to aim and its sight (src/thumb-aim.js)
 function syncScheme() {
   const can = !!S.run && S.run.course !== 'lineup' && runTier() === 'assist';
   ui.touch.dataset.scheme = touchSet.scheme === 'thumb' && can ? 'thumb' : 'classic';
@@ -955,6 +962,7 @@ function syncThumb(run, c) {
     : stage_ === 'fly' ? 1 - Math.min(1, Math.max(0, c.pos.y - SPEC.comHeight) / 27) : 1;
   const q = Math.round(k * 100);
   if (q !== thumbLast.arc) { thumbArc.style.strokeDasharray = `${q} 100`; thumbLast.arc = q; }
+  thumbAim.sync(run, c, landing.prediction, stage_);   // 0117
 }
 
 // --- Touch controls sheet ----------------------------------------------------------------------

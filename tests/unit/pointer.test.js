@@ -51,7 +51,7 @@ describe('how to fly', () => {
 describe('the pause sheet (0092)', () => {
   it('touch and pad get their own controls, short, and never a keyboard key', () => {
     expect(pauseRows(TOUCH).map((r) => r.text)).toEqual(['hold GO', 'tap RELEASE', 'hold LAND', 'hold LAND', 'the stick']);
-    expect(pauseRows(THUMB).map((r) => r.text)).toEqual(['hold the pad', 'tap the pad', 'hold the pad', 'keep holding']);
+    expect(pauseRows(THUMB).map((r) => r.text)).toEqual(['hold the pad', 'tap the pad', 'hold the pad', 'hold, slide the pad']);
     expect(pauseRows(PAD).map((r) => r.text)).toEqual(['hold RT', 'press A', 'hold B', 'hold B', 'the left stick']);
     for (const ctx of [TOUCH, THUMB, PAD, { ...TOUCH, tier: 'pro' }, { ...TOUCH, tier: 'advanced' }, { ...TOUCH, course: 'lineup' }]) {
       for (const r of pauseRows(ctx)) { expect(r.label).toBeTruthy(); expect(`${r.label} ${r.text}`).not.toMatch(/\b(Shift|Space|Q E|W S A D|V B N M)\b/); }

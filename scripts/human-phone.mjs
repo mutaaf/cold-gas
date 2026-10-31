@@ -12,9 +12,18 @@
 //     the control geometry measured on the real page, --geom=file from scripts/thumb-reach.mjs).
 //   - A layout that changes under you (GO becomes BOOST, LIFT becomes RELEASE) costs a search.
 // --scheme=thumb flies the one-thumb Assist (src/onethumb.js, the code the page runs): hold to
-// climb, tap to let go, hold to land.
+// climb, tap to let go, hold to land. The release is the page's (src/main.js noteRelease): the tap
+// starts the drive-off, and the car is let go on its push-off (LIFT on the deck) or the first tick in
+// the air (before 0117 this script let go on the tap itself, skipping the drive-off).
+// --skill (thumb, 0117: the touchdown slide, src/thumb-aim.js's sight):
+//   none     never slides (the accessibility population; the default)
+//   careful  holding in the air, puts the thumb on the amber dot (the mark from the predicted
+//            touchdown), a reaction late, re-reading it every 0.25–0.5 s
+//   sloppy   slides, badly: overshoots ×2–3, half of them read the sight upside down for a beat, and
+//            some shove it up early (more carry) and leave it there
+//   mixed    a third of each
 //
-//   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--build=before|after] [--geom=file.json] [--vp=390x844] [-v]
+//   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [-v]
 import { readFileSync } from 'node:fs';
 import { createRun, stepRun, wallProgress } from '../src/sim/run.js';
 import { newInput, up, forward } from '../src/sim/vehicle.js';
@@ -32,7 +41,8 @@ const scheme = opt('scheme', 'classic');
 const build = opt('build', 'after');
 const vp = opt('vp', '390x844');
 const verbose = args.includes('-v');
-const { createOneThumb } = scheme === 'thumb' ? await import('../src/onethumb.js') : {};
+const skill = opt('skill', 'none');
+const { createOneThumb, markOffset } = scheme === 'thumb' ? await import('../src/onethumb.js') : {};
 
 // Control geometry (CSS px): centre and radius per control, per viewport. Defaults are the
 // pre-redesign layout measured at 390×844; --geom reads what scripts/thumb-reach.mjs measured.
@@ -63,6 +73,8 @@ function pressCost(ctrl, hand = 'R') {
 let seed = 12345;
 const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 const pick = (a) => a[Math.floor(rnd() * a.length)];
+let seed3 = 4242;
+const rnd3 = () => ((seed3 = (seed3 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 let seed2 = 777;
 const rnd2 = () => ((seed2 = (seed2 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 const gauss = () => Math.sqrt(-2 * Math.log(rnd2() + 1e-12)) * Math.cos(2 * Math.PI * rnd2());
@@ -102,25 +114,30 @@ for (let n = 0; n < N; n++) {
   let why = '';
   if (scheme === 'thumb') {
     const th = createOneThumb();
-    let released = false, ledgeT = -1, tapAt = -1, holdFrom = -1, holding = false, lapseAt = -1, landSeen = -1;
+    let released = false, tapped = false, ledgeT = -1, tapAt = -1, holdFrom = -1, holding = false, lapseAt = -1, landSeen = -1;
+    // The slide (0117), drawn from its own stream so the base population is the same with or without it.
+    const sk = skill === 'mixed' ? ['none', 'careful', 'sloppy'][Math.floor(rnd3() * 3)] : skill;
+    const A = { every: Math.round((0.25 + rnd3() * 0.25) * 240), over: 2 + rnd3(), flip: rnd3() < 0.5, shove: rnd3() < 0.4 ? 20 + rnd3() * 40 : 0, flipFor: Math.round((0.4 + rnd3() * 0.6) * 240) };
+    let aimNext = -1, aimAt = -1, want = null, flipUntil = -1;
+    const off = { x: 0, y: 0, m: 0 };
     // Lifting the thumb mid-climb (20 % do, once): a second, then back on.
     th.down();
     while (run.phase !== 'done') {
       const c = run.car, t = run.tick, inp = newInput();
-      if (!released) {
+      if (!tapped) {
         if (F.lapse && lapseAt < 0 && run.phase === 'ramp' && run.t.progress > 0.4) { lapseAt = t; th.up(); }
         if (lapseAt > 0 && t - lapseAt === 240) th.down();
         if (run.phase === 'ramp' && run.t.progress >= 0.92 && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3) {
           if (ledgeT < 0) { ledgeT = t; th.up(); }
           if (tapAt < 0) tapAt = ledgeT + Math.round(P.hangWait * 240) + pressDelay('thumb', 'R');
           if (t === tapAt) {
-            th.down(); released = true; holding = true;
+            th.down(); tapped = true; holding = true;
             // Hold on from the tap ('with-boost'), or let go and press again later.
             if (P.landAt !== 'with-boost') { holding = false; }
           }
         }
       }
-      if (released) {
+      if (tapped) {
         const h = Math.max(0, c.pos.y - SPEC.comHeight);
         predict(c, h, pr);
         if (!holding && t > tapAt + 24 && th.held) th.up();
@@ -131,8 +148,26 @@ for (let n = 0; n < N; n++) {
           if (WARN && pr.status !== 'green' && t > tapAt + lagT) want = true;   // the descent warning (flash + buzz)
           if (want && landSeen < 0) landSeen = t;
           if (landSeen >= 0 && holdFrom < 0) holdFrom = landSeen + pressDelay('thumb', 'R');
-          if (holdFrom >= 0 && t >= holdFrom) { holding = true; th.down(); }
+          if (holdFrom >= 0 && t >= holdFrom && !th.held) { holding = true; th.down(); }
         }
+      }
+      // The slide: holding in the air, roof up, onto the sight's dot (or, sloppy, near it).
+      if (sk !== 'none' && released && run.phase === 'air' && th.held) {
+        if (sk === 'sloppy' && A.shove && !run.t.crossedRow) th.move(0, A.shove);
+        else if (t >= aimNext) {
+          const h = Math.max(0, c.pos.y - SPEC.comHeight);
+          predict(c, h, pr);
+          markOffset(c, pr, 'show', off);
+          let x = off.x, y = -off.y;   // the dot's offset, +y up the glass
+          if (sk === 'sloppy') {
+            x *= A.over; y *= A.over;
+            if (A.flip && flipUntil < 0) flipUntil = t + A.flipFor;
+            if (t < flipUntil) y = -y;   // read the sight upside down
+            x += 14 * gauss(); y += 14 * gauss();
+          }
+          want = { x, y }; aimAt = t + lagT; aimNext = t + A.every;
+        }
+        if (want && t >= aimAt) th.move(want.x, want.y);
       }
       th.sample(run, released, inp);
       // main.js wallAssist: a lift on the deck is the release; the fan holds the car until then.
@@ -228,5 +263,7 @@ for (let n = 0; n < N; n++) {
   if (verbose) console.log(JSON.stringify(P), JSON.stringify(F), why || 'OK', s.total, 'sink', t.sink.toFixed(1), 'pad', s.facts.padMiss);
 }
 totals.sort((a, b) => a - b);
-console.log(`Phone ${vp} · ${scheme} · ${build}: ${ok}/${N} landed clean (${Math.round((100 * ok) / N)}%), ${onPad} inside the 7 m ring; median clean score ${totals[Math.floor(totals.length / 2)] ?? '–'} · mis-taps ${missed}/${presses}`);
+const q = (f) => totals[Math.min(totals.length - 1, Math.floor(totals.length * f))] ?? '–';
+console.log(`Phone ${vp} · ${scheme}${scheme === 'thumb' ? ` · skill ${skill}` : ''} · ${build}: ${ok}/${N} landed clean (${Math.round((100 * ok) / N)}%), ${onPad} inside the 7 m ring; median clean score ${q(0.5)} · mis-taps ${missed}/${presses}`);
+console.log(`  clean scores: min ${totals[0] ?? '–'} · p10 ${q(0.1)} · median ${q(0.5)} · p90 ${q(0.9)} · max ${totals[totals.length - 1] ?? '–'}`);
 console.log('  failures:', JSON.stringify(fails));
