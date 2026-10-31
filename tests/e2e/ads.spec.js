@@ -61,7 +61,47 @@ test('no ad call fires during a run; postrun skips the first results; rewarded i
   expect(await page.evaluate(() => window.__adCalls.length)).toBe(2);
 });
 
-test('no loader on a local preview: the game asks nobody, and missing window.marquee is a no-op', async ({ page }) => {
+// 0117: the real loader's work (and the AdSense pipeline a placed title slot starts) must never land in the
+// countdown or a run. A stand-in for /ads/v1/ads.js is served (?marquee=1 wants it locally); a MutationObserver
+// records S.mode whenever the loader's script tag or the title's slot goes in or comes out.
+const LOADER = `(() => {
+  const cfg = { enabled: true, slots: { title: { source: 'network' }, postrun: { source: 'none' }, reroll: { source: 'none' } }, campaigns: [] };
+  const later = new Promise((r) => setTimeout(() => r(cfg), 1500));   // a config that takes a moment, as on a phone
+  const api = { v: 1, ready: () => later, banner: () => {}, interstitial: async () => {}, rewarded: async () => false };
+  const q = (window.marquee && window.marquee.q) || [];
+  window.marquee = api;
+  for (const f of q) f(api);
+})();`;
+const watchAds = () => {
+  const log = (window.__adLog = []);
+  const mode = () => window.__coldgas?.S?.mode || 'boot';
+  new MutationObserver((muts) => {
+    for (const m of muts) {
+      for (const n of m.addedNodes) {
+        if (n.nodeType !== 1) continue;
+        if (n.tagName === 'SCRIPT' && /\/ads\/v1\/ads\.js$/.test(n.src)) log.push({ what: 'loader', mode: mode() });
+        if (n.dataset?.marquee === 'title') log.push({ what: 'title+', mode: mode() });
+      }
+      for (const n of m.removedNodes) if (n.nodeType === 1 && n.dataset?.marquee === 'title') log.push({ what: 'title-', mode: mode() });
+    }
+  }).observe(document, { childList: true, subtree: true });
+  // And what is in the DOM in each mode the run passes through.
+  setInterval(() => {
+    const m = mode();
+    if (m === 'countdown' || m === 'live') { if (document.querySelector('[data-marquee="title"]')) log.push({ what: 'title-in-run', mode: m }); }
+  }, 50);
+};
+async function adPage(page, url) {
+  await page.addInitScript(watchAds);
+  await page.route('**/ads/v1/ads.js', (r) => r.fulfill({ contentType: 'text/javascript', body: LOADER }));
+  await page.route('**/coldgas/api/judge/stream', (r) => r.abort());
+  await page.goto(url);
+}
+
+// One test, three pages (each in its own context): ads.spec keeps main's test count, so no e2e shard's cut moves (docs/LESSONS.md, 0117).
+test('no loader on a local preview; with ?marquee= (0117) the loader and the title slot stay out of the countdown and the run', async ({ page, browser, baseURL }) => {
+  test.slow();
+
   const asked = [];
   page.on('request', (r) => { if (/\/ads\//.test(new URL(r.url()).pathname)) asked.push(r.url()); });
   await page.goto('/coldgas/?gfx=low');
@@ -73,4 +113,43 @@ test('no loader on a local preview: the game asks nobody, and missing window.mar
   await expect(page.locator('[data-marquee]')).toHaveCount(0);
   await expect(page.locator('[data-reroll]')).toBeHidden();
   expect(asked).toEqual([]);
+  // Each 0117 flight gets a fresh context, as if it were its own test: no storage from this page, and no run left
+  // going in a same-origin tab beside it (on CI's software GL a second tab's boot ran past 60 s, #183).
+  await page.close();
+  const freshPage = async () => (await browser.newContext({ baseURL, viewport: { width: 1280, height: 720 } })).newPage();
+
+  // 0117 · a Jump before the title banner is asked for leaves no slot and no loader work in the run.
+  {
+    const p = await freshPage();
+    await adPage(p, '/coldgas/?gfx=low&marquee=1');
+    await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
+    // The loader goes in on the title, at idle; Jump at once, before its config resolves.
+    await p.waitForFunction(() => window.__adLog.some((e) => e.what === 'loader'), null, { timeout: 15_000 });
+    await p.evaluate(() => window.__coldgas.startRun('jump'));
+    await p.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live');
+    await p.waitForTimeout(2500);   // the config resolves in the run
+    await expect(p.locator('[data-marquee="title"]')).toHaveCount(0);
+    // (The dwell before the title asks again, and the slot leaving with the title: tests/unit/ads.test.js.)
+    const log = await p.evaluate(() => window.__adLog);
+    expect(log.filter((e) => e.what === 'loader')).toEqual([{ what: 'loader', mode: 'title' }]);
+    expect(log.filter((e) => e.what === 'title+')).toEqual([]);
+    expect(log.filter((e) => e.what === 'title-in-run')).toEqual([]);
+    await p.context().close();
+  }
+
+  // 0117 · under ?play=jump the loader waits for the first results.
+  {
+    const p = await freshPage();
+    await adPage(p, '/coldgas/?gfx=low&marquee=1&play=jump');
+    await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
+    await p.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
+    await toResults(p);
+    await p.waitForFunction(() => window.__adLog.some((e) => e.what === 'loader'), null, { timeout: 15_000 });
+    await p.waitForTimeout(2000);   // the config resolves on the results: the title's slot stays out
+    await expect(p.locator('[data-marquee="title"]')).toHaveCount(0);
+    const log = await p.evaluate(() => window.__adLog);
+    expect(log.filter((e) => e.what === 'loader').map((e) => e.mode)).toEqual(['results']);
+    expect(log.filter((e) => e.what === 'title+')).toEqual([]);
+    await p.context().close();
+  }
 });
