@@ -78,8 +78,13 @@ export function readFlight(inputLog, courseId, fromTick = 0) {
   return { run, flight: f };
 }
 
-// The fixes, most costly first. Each: { id, title, detail, fix, weight }.
-export function coach(inputLog, courseId, card = null, fromTick = 0) {
+// The controls a fix names, in the device's words (src/pointer.js coachWords; this default is a keyboard's).
+// One instruction per device and tier: on Assist the brake is LAND, on Pro and Advanced it's LIFT by the
+// BRAKE line (Pro has no LAND governor), as the how-to card, the cue line and the pointer say it.
+export const KEY_WORDS = { land: 'LAND (Shift)', lift: 'LIFT (Space)', release: 'RELEASE (Space)', boost: 'BOOST (F)', roll: '← →' };
+
+// The fixes, most costly first. Each: { id, title, detail, fix, weight }. Only the words depend on `say`.
+export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_WORDS) {
   const { run, flight: f } = readFlight(inputLog, courseId, fromTick);
   const assist = (card?.tier || run.t.tier) === 'assist';
   const t = run.t, course = COURSES[courseId];
@@ -89,7 +94,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0) {
 
   if (wall && t.airStartTick < 0) {
     if (t.fellOff) add('fell-off', 10, 'Slid off the deck', `The car left the side of the curl ${r1(t.maxRampHeight)} m up.`, 'Keep it on the centreline: small steering corrections, and crawl (≈20 km/h) so the fan holds you.');
-    else add('no-release', 10, 'Never let go', `You hung ${r1(t.invertedTime)} s inverted but never released.`, 'On the ledge, tap RELEASE (Space) to let go.');
+    else add('no-release', 10, 'Never let go', `You hung ${r1(t.invertedTime)} s inverted but never released.`, `On the ledge, tap ${say.release} to let go.`);
     return finish(out, f);
   }
   if (wall && f.releaseProgress < 0.95 && f.releaseTick >= 0) {
@@ -98,12 +103,12 @@ export function coach(inputLog, courseId, card = null, fromTick = 0) {
   if (show && t.contact) {
     const need = 9.5;
     add('short', 9, 'Came down on the row', `You carried ${r1(f.carry)} m/s off the ledge; the far roofs need about ${need} m/s.`,
-      f.boostTicks === 0 ? 'Right after the release, hold BOOST (F) until the cue goes: about a third of a second.' : 'Hold BOOST a little longer, and don\'t pitch back to chase the mark until you\'re past the roofs.');
+      f.boostTicks === 0 ? `Right after the release, hold ${say.boost} until the cue goes: about a third of a second.` : 'Hold BOOST a little longer, and don\'t pitch back to chase the mark until you\'re past the roofs.');
   }
   // Braking.
   if (t.touchTick >= 0 && f.t.sink > SINK_SOFT && !t.contact) {
     if (f.brakeTick < 0) {
-      add('no-brake', 9, 'Never braked', `You hit the ground at ${r1(t.sink)} m/s.`, `Hold LAND (Shift) or LIFT (Space) by the BRAKE line on the descent tape${f.needTick >= 0 ? `: it passed at ${Math.ceil(f.needH)} m on this fall` : ''}.`);
+      add('no-brake', 9, 'Never braked', `You hit the ground at ${r1(t.sink)} m/s.`, assist ? `Hold ${say.land} right after you let go: it rolls you out and brakes you to the ground.` : `Hold ${say.lift} by the BRAKE line on the descent tape${f.needTick >= 0 ? `: it passed at ${Math.ceil(f.needH)} m on this fall` : ''}.`);
     } else {
       const late = f.needTick >= 0 && f.brakeTick > f.needTick + 12;
       // With LAND held the computer brakes as soon as the car is roof-up: a late brake there is a
@@ -112,13 +117,13 @@ export function coach(inputLog, courseId, card = null, fromTick = 0) {
       if (governedLate) {
         if (!(f.uprightH >= 0 && f.uprightH < 12)) {
           add('late-land', 8, 'LAND came too late', `The stop needed to start at ${Math.ceil(f.needH)} m; LAND was braking from ${r1(f.brakeH)} m.`,
-            'Hold LAND from the release: it rolls you out and paces the whole fall.');
+            `Hold ${say.land} from the release: it rolls you out and paces the whole fall.`);
         }
       } else if (late) {
         const needAt = Math.ceil(f.needH);
         add('late-brake', 8 + Math.min(2, (f.needH - f.brakeH) / 3), 'Braked too late',
           `You started braking at ${r1(f.brakeH)} m, falling ${r1(f.brakeSink)} m/s. With ${r1(f.needA)} m/s² of braking available, the stop needed to start at ${needAt} m (you were falling ${r1(f.needSink)} m/s there${f.needUp < 0.85 ? ', still rolling out' : ''}).`,
-          `Start at ${needAt} m or higher: the BRAKE line on the descent tape. Or hold LAND early and let it pace the fall.`);
+          `Hold ${assist ? say.land : say.lift} from ${needAt} m or higher: the BRAKE line on the descent tape.${assist ? ' Or hold it from the release and let it pace the fall.' : ''}`);
       } else {
         add('ran-out', 6, 'Out of braking at the bottom', `You braked from ${r1(f.brakeH)} m but still touched down at ${r1(t.sink)} m/s with ${Math.round(f.gasAtTouch)} % gas.`,
           f.gasAtTouch < 25 ? 'The tanks blow down as they empty: below about 40 % the jets lose thrust. Boost less and brake once, hard, near the BRAKE line.' : 'Stay on the brake through the last 2 m: hold the sink in the green band to the ground.');
@@ -128,19 +133,19 @@ export function coach(inputLog, courseId, card = null, fromTick = 0) {
   // Roll-out.
   if (wall && f.uprightTick > 0 && f.uprightH >= 0 && f.uprightH < 12 && f.releaseTick >= 0) {
     add('late-roll', f.t.sink > SINK_SOFT ? 8.5 : 6, 'Upright too low', `You were roof-up only ${r1(f.uprightH)} m above the ground: the roll-out ate the height the brake needed.`,
-      'Roll straight after the release (or hold LAND from the release: it rolls you out the nearer way).');
+      assist ? `Hold ${say.land} straight after the release: it rolls you out the nearer way.` : `Roll with ${say.roll} straight after the release.`);
   }
   if (wall && f.rollDeg > 230 && !t.flipped) {
     add('over-roll', 4, 'Rolled past upright', `The car turned ${Math.round(f.rollDeg)}°: about ${Math.round(f.rollDeg - 180)}° more than the half-roll you needed.`,
       'Let go of the roll about 40° early: the car keeps turning for a reaction time. Watch the roll-out arrow on the dial.');
   }
   if (wall && f.wasInverted && f.uprightTick < 0 && t.touchTick >= 0) {
-    add('no-roll', 9, 'Never rolled upright', `You touched down ${Math.round(t.tiltDeg)}° from level.`, 'Roll out with ← → straight after the release, or hold LAND.');
+    add('no-roll', 9, 'Never rolled upright', `You touched down ${Math.round(t.tiltDeg)}° from level.`, assist ? `Hold ${say.land} after the release: it rolls you upright.` : `Roll out with ${say.roll} straight after the release.`);
   }
   // Touchdown attitude and the mark.
   if (t.touchTick >= 0 && t.tiltDeg > 10 && f.uprightTick >= 0) {
     add('tilt', 4, 'Touched down tilted', `${Math.round(t.tiltDeg)}° off level at touchdown: the wheels met the ground one at a time.`,
-      assist ? 'Stop steering for the last 2 m and let the car level (LAND levels it for you).' : 'Level it by the dial before the last 2 m: the horizon flat, the roll and pitch cues gone.');
+      assist ? `Stop steering for the last 2 m and let the car level (${say.land} levels it for you).` : 'Level it by the dial before the last 2 m: the horizon flat, the roll and pitch cues gone.');
   }
   if (f.touch && f.touch.padMiss > 7 && !t.contact) {
     const past = show ? f.touch.along < 0 : false;
@@ -149,7 +154,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0) {
       show && f.carry > 11 ? `You carried ${r1(f.carry)} m/s: about 9.5 clears the roofs. Then pitch the nose up a touch to walk the touchdown marker onto the pad.` : 'Watch the touchdown marker on the ground: lean toward the pad (pitch or roll) above 5 m to walk it onto the rings, then level.');
   }
   if (t.touchTick >= 0 && f.gasAtTouch < 10) {
-    add('gas', 3, 'Nearly out of nitrogen', `${Math.round(f.gasAtTouch)} % left at touchdown.`, 'Shorter boosts and one hard, late brake use the least gas.');
+    add('gas', 3, 'Nearly out of gas', `${Math.round(f.gasAtTouch)} % left at touchdown.`, 'Shorter boosts and one hard, late brake use the least gas.');
   }
   if (t.flipped && !out.length) add('flipped', 8, 'Rolled over', 'The car ended on its roof.', 'Touch down level, slowly: watch the sink band and the attitude dial.');
   return finish(out, f, card);

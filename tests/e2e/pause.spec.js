@@ -71,14 +71,22 @@ for (const [w, h] of [[390, 844], [844, 390]]) {
   });
 }
 
-test('1280×720 keyboard: the key lists are still there', async ({ page }) => {
+test('1280×720 keyboard: the four keys that matter, and All controls opens every key', async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 720 });
   await pausedRun(page, { key: true });
   const text = await sheetText(page);
   expect(text).toMatch(/Shift/);
   expect(text).toMatch(/Space/);
-  expect(text).toMatch(/Q E Z C/);
+  // Trimmed (audit 2026-10-30): four rows, not the full key map; the rest is one tap away.
+  expect(await page.locator('[data-screen="pause"] .keys p').count()).toBe(4);
+  expect(text).not.toMatch(/Q E Z C/);
   expect(Object.values(await fit(page)).every(Boolean)).toBe(true);
+  await page.locator('[data-all-controls]').click();
+  await expect(page.locator('[data-screen="controls"]')).toBeVisible();
+  await expect(page.locator('[data-ctl-keys]')).toBeVisible();
+  await expect(page.locator('[data-ctl-keys]')).toContainText('Q E Z C');
+  await page.locator('[data-controls-close]').click();
+  await expect(page.locator('[data-screen="controls"]')).toBeHidden();
   // The top bar's Pause (0098) works with a mouse too and keeps no focus (Space and the arrows are the game's);
   // Escape and P still toggle.
   await page.locator('[data-resume]').click();

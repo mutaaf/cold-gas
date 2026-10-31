@@ -32,7 +32,7 @@ import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevi
 import { LEVEL_INFO } from './driving.js';
 import { isCrash, nextStreak, offerRookie, loadStreak, saveStreak } from './rookie.js';
 import { loadPerf, savePerf, record, decide, outcomeOf, afterChange, coachLive, loadFlown, saveFlown, loadAdapt, saveAdapt, TIER_WORDS, factorText, stepDownBanner, offerWords } from './adapt.js';
-import { deviceOf, howtoRows, pauseRows, deviceTitle, pickPointer, livePointer } from './pointer.js';
+import { deviceOf, howtoRows, pauseRows, deviceTitle, pickPointer, livePointer, coachWords } from './pointer.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
 import { thumbStage } from './onethumb.js';
@@ -361,6 +361,7 @@ function toTitle() {
   disposeRun();
   setMode('title'); S.run = null; S.drill = null;
   ui.only('title');
+  S.titleSync?.();   // the event's line and your best on it (set once the title is wired, below)
   drillBar.hidden = true;
   landing.show(false);
   getNozzlePad().show(false);
@@ -439,7 +440,7 @@ function finishRun() {
     if (S.run !== run) return;
     try {
       const own = S.drill && S.drillSnap?.coach;
-      S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0);
+      S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0, coachWords(pointerCtx(run.course, S.card?.tier || S.flyTier)));
       ui.coaching(S.coach.items);
       if (!own && S.runKind === 'jump') showPointer(run);
     } catch (err) { console.warn('coach', err); }
@@ -457,6 +458,7 @@ function finishRun() {
   if (!S.autopilot) {
     // Run n, and how it stands against your best on this device (before this run counts).
     const n = (S.attempts[run.course] = (S.attempts[run.course] || 0) + 1);
+    S.howtoDone?.();   // a run of your own, flown to its card: how to fly counts as seen (a Skip didn't)
     const best = S.ghosts[run.course];
     ui.runline(n, best && !best.ref ? best.total : null, S.card.total);
   } else ui.runline(0, null, S.card.total);
@@ -710,7 +712,9 @@ async function runPanel(run, replay = null) {
 }
 
 const aiChip = document.querySelector('[data-ai-open]');
-const syncAiChip = () => { aiChip.textContent = aiLabel(); };
+// Who writes the judges' words (the free edge model, or your own key): "Judges · Free". Not "AI": the flight
+// computer is Assist, and one word for two things was one too many (audit 2026-10-30).
+const syncAiChip = () => { aiChip.textContent = aiLabel().replace(/^AI · /, 'Judges · '); };
 function openAI() { openSettings(document.querySelector('[data-ai-modal]'), { onChange: syncAiChip }); }
 aiChip.addEventListener('click', openAI);
 syncAiChip();
@@ -1011,7 +1015,8 @@ ctlScreen.querySelector('[data-tilt]').addEventListener('click', async () => {
 ctlScreen.querySelector('[data-tilt-calibrate]').addEventListener('click', () => { calibrateTilt(); buzz('tap'); tiltNote.textContent = 'Calibrated: this is straight ahead.'; });
 onSettings(syncControlsSheet);
 syncControlsSheet();
-document.querySelectorAll('[data-controls-open]').forEach((b) => b.addEventListener('click', () => { syncControlsSheet(); ui.show('controls', true); }));
+// The pause sheet's All controls (a keyboard) opens the same sheet, where every key is listed.
+document.querySelectorAll('[data-controls-open], [data-all-controls]').forEach((b) => b.addEventListener('click', () => { syncControlsSheet(); ui.show('controls', true); }));
 
 // Driving (0066, src/driving.js): Easy / Standard / Advanced on the ground in every mode, on this device.
 // Radiogroups take the arrow keys (and Tab lands on the checked one).
@@ -1113,7 +1118,7 @@ function cues(run, c) {
       const lift = c.throttles[0] + c.throttles[1] + c.throttles[2] + c.throttles[3];
       if (livePtr('brake', run.phase === 'air' && c.vel.y < -1 && lift < 1 && S.hudAlt <= landing.prediction.brakeBy + 1.5)) return ui.cue_(livePointer('brake', S.ptrCtx, kbdWrap), 400);
     }
-    if (run.phase === 'air') return ui.cue_(`Brake: ${kbd('LIFT', 'Space')} at the BRAKE line`, 400);
+    if (run.phase === 'air') return ui.cue_(`Brake: hold ${kbd('LIFT', 'Space')} at the BRAKE line`, 400);
     return;
   }
   const lz = c.pos.z;
@@ -1295,15 +1300,14 @@ function syncLife(force = false) {
 // buffer is cleared). Draw the frozen frame again, now in the new shape and once the buffer settles.
 function redrawPaused() { if (S.paused && stage) stage.render(S.time, S.mode); }
 
-// The pause sheet's controls (0092): a keyboard keeps its key lists; a touch screen or a pad gets its
-// own controls for the scheme in use (src/pointer.js pauseRows), never a keyboard map.
+// The pause sheet's controls (0092, audit 2026-10-30): the four that matter for the tier and the device in
+// use (src/pointer.js pauseRows), never another device's map. A keyboard gets All controls under them: the
+// Controls sheet lists every key (the four paragraphs that used to fill this sheet).
 function drawPauseKeys() {
-  const el = ui.screens.pause, ctx = pointerCtx(S.run?.course || stage.course, S.flyTier), own = ctx.device !== 'key';
+  const el = ui.screens.pause, ctx = pointerCtx(S.run?.course || stage.course, S.flyTier);
   el.dataset.device = ctx.device;
-  el.querySelector('[data-pause-keys="key"]').hidden = own;
-  const box = el.querySelector('[data-pause-keys="device"]');
-  box.hidden = !own;
-  if (own) box.replaceChildren(...pauseRows(ctx).map((r) => { const p = document.createElement('p'), b = document.createElement('b'); b.textContent = r.label; p.append(b, r.text); return p; }));
+  el.querySelector('[data-pause-keys="device"]').replaceChildren(...pauseRows(ctx).map((r) => { const p = document.createElement('p'), b = document.createElement('b'); b.textContent = r.label; p.append(b, r.text); return p; }));
+  el.querySelector('[data-all-controls]').hidden = ctx.device !== 'key';
 }
 
 // --- Wiring ---------------------------------------------------------------------------------
@@ -1376,8 +1380,23 @@ document.querySelectorAll('[data-share]').forEach((b) => b.addEventListener('poi
 on('[data-share]', () => { if (S.card) shareRun({ card: S.card, url: shareUrl(), cardPromise: startCard() }); });
 
 // Event picker on the title (also ?course=wall|lineup; the Show is the default).
-const courseBtns = document.querySelectorAll('[data-course]');
-function syncCourseBtns() { courseBtns.forEach((b) => b.setAttribute('aria-checked', String(b.dataset.course === stage.course))); }
+const courseBtns = document.querySelectorAll('.courses [data-course]');
+// The picked event in one line under the picker (every viewport: a newcomer picks by what it is, not its
+// name), Jump names it, and your best on it (this device's best run, the ghost's record: src/ghost.js).
+const courseDesc = document.querySelector('[data-course-desc]'), startEvent = document.querySelector('[data-start-event]');
+const titlePb = document.querySelector('[data-title-pb]'), titlePbV = document.querySelector('[data-title-pb-v]');
+function syncTitlePb() {
+  const best = S.ghosts[stage.course];
+  titlePb.hidden = !(best && !best.ref);
+  if (!titlePb.hidden) titlePbV.textContent = best.total.toFixed(1);
+}
+function syncCourseBtns() {
+  let picked = null;
+  courseBtns.forEach((b) => { const on = b.dataset.course === stage.course; b.setAttribute('aria-checked', String(on)); if (on) picked = b; });
+  if (picked) { unitText(courseDesc, picked.dataset.desc); startEvent.textContent = picked.querySelector('b').textContent; }
+  syncTitlePb();
+  ghostLoaded(stage.course).then(() => syncTitlePb(), () => {});
+}
 courseBtns.forEach((b) => b.addEventListener('click', () => {
   if (b.dataset.course === stage.course) return;
   stage.setCourse(b.dataset.course);
@@ -1388,11 +1407,13 @@ courseBtns.forEach((b) => b.addEventListener('click', () => {
   const u = new URL(location.href); u.searchParams.set('course', stage.course); history.replaceState(null, '', u);
 }));
 syncCourseBtns();
+S.titleSync = syncCourseBtns;
 
 // The flight tier: Assist → Pro → Advanced, for the next run (a run keeps the tier it started with:
-// latchTier). The top bar's chip says what the panel pays for it; the AI assist control on the title and
-// the results says in words what the computer does (0079), and both open the tier picker, where every
-// tier is explained and Adapt to me is a switch. Nothing about a tier lives only in a hover title.
+// latchTier). The top bar's chip says what the panel pays for it (off the title: on the title the Assist
+// control is the one place it shows, audit 2026-10-30); the Assist control on the title and the results says
+// in words what the computer does (0079), and both open the tier picker, where every tier is explained, with
+// its factor, and Adapt to me is a switch. Nothing about a tier lives only in a hover title.
 const tierBtn = document.querySelector('[data-tier]');
 const assistCtls = document.querySelectorAll('[data-assist-open]');
 // `auto`: Adapt to me stepped it (the model's counts, not Rookie's streak: the player didn't choose).
@@ -1410,19 +1431,21 @@ function setTier(tier, { auto = false } = {}) {
   if (!inRun()) ui.screens.hud.dataset.tier = S.tier;
   const short = { assist: 'Assist', pro: 'Pro', advanced: 'Adv' }[S.tier];
   tierBtn.innerHTML = `<span class="tl">${t.label}</span><span class="ts">${short}</span>${t.factor > 1 ? ` <i>×${t.factor.toFixed(2)}</i>` : ''}`;
-  tierBtn.setAttribute('aria-label', `AI assist: ${S.assist ? 'on' : `off, ${t.label} ×${t.factor.toFixed(2)}`}. Choose the flight tier`);
+  tierBtn.setAttribute('aria-label', `Assist: ${S.assist ? 'on' : `off, ${t.label} ×${t.factor.toFixed(2)}`}. Choose the flight tier`);
   try { localStorage.setItem('coldgas_tier', S.tier); localStorage.setItem('coldgas_assist', S.assist ? '1' : '0'); } catch { /* storage blocked */ }
   syncAssist();
   syncScheme();
 }
-// The labelled control: "AI ASSIST · ON — rolls you out, levels and brakes" (or OFF · PRO ×1.08 …).
+// The labelled control: "ASSIST · ON — rolls you out, levels and brakes" (or OFF · PRO — you fly it …).
+// What the panel pays for a tier is the tier picker's to say (and the results'), never the title's: a first
+// visit reads what the computer does, not a multiplier (audit 2026-10-30).
 function syncAssist() {
   const w = TIER_WORDS[S.tier], f = TIERS[S.tier].factor;
-  const state = S.assist ? 'On' : `Off · ${w.name}`, sub = f > 1 ? `${w.sub} · ${factorText(S.tier)}` : w.sub;
+  const state = S.assist ? 'On' : `Off · ${w.name}`;
   assistCtls.forEach((b) => {
     b.dataset.assistTier = S.tier;
     b.querySelector('[data-assist-state]').textContent = state;
-    b.querySelector('[data-assist-sub]').textContent = sub;
+    b.querySelector('[data-assist-sub]').textContent = f > 1 && !b.closest('.title') ? `${w.sub} · ${factorText(S.tier)}` : w.sub;
   });
   assistScreen.querySelectorAll('[data-tier-opt]').forEach((b) => { const on = b.dataset.tierOpt === S.tier; b.setAttribute('aria-checked', String(on)); b.tabIndex = on ? 0 : -1; });
 }
@@ -1456,7 +1479,7 @@ assistCtls.forEach((b) => b.addEventListener('click', () => openAssist(b)));
 function syncAdapt() {
   document.querySelectorAll('[data-adapt]').forEach((b) => b.setAttribute('aria-checked', String(S.adapt)));
   document.querySelectorAll('[data-adapt-note]').forEach((el) => {
-    el.textContent = S.adapt ? 'On: three crashes in a row on Pro or Advanced turn more AI assist on for the next run (Undo on the results); clean landings offer a harder step. Never mid-run.'
+    el.textContent = S.adapt ? 'On: three crashes in a row on Pro or Advanced step you down a tier (more assist) for the next run (Undo on the results); clean landings offer a harder step. Never mid-run.'
       : 'Off: the tier stays where you put it. Clean landings still offer a harder step.';
   });
 }
@@ -1465,8 +1488,10 @@ syncAdapt();
 setTier(S.tier);
 
 // --- How to fly (0079, src/pointer.js howtoRows): this device's controls, per phase --------------------
-// Shown on the first Jump (before the run, skippable, remembered in localStorage) and any time from the
-// title's "How to fly" or the pause sheet. The device is the one in use (src/input.js lastDevice): touch
+// Shown on the first Jump (before the run) and any time from the title or the pause sheet. Got it marks it
+// seen (localStorage); Skip skips it this time only (audit 2026-10-30), and a finished run of your own marks it
+// seen too (markHowtoSeen in the results), so a player who skipped and never flew gets it on the next Jump.
+// The device is the one in use (src/input.js lastDevice): touch
 // (the one-thumb or the two-thumb scheme actually active), a keyboard, or a gamepad.
 // A browser under automation (navigator.webdriver) counts as a returning player, so the audits and the
 // specs fly straight in; a spec that wants the first visit sets coldgas_howto = 'new'.
@@ -1493,16 +1518,18 @@ function openHowto({ then = null, from = null } = {}) {
     ol.appendChild(li);
   }
   howtoScreen.querySelector('[data-howto-assist]').textContent = S.assist
-    ? `AI assist is on: it ${TIER_WORDS.assist.sub}. Change it any time with the AI assist button.`
-    : `AI assist is off (${TIER_WORDS[S.tier].name}). Turn it on with the AI assist button.`;
+    ? `Assist is on: it ${TIER_WORDS.assist.sub}. Change it any time with the Assist button.`
+    : `Assist is off (${TIER_WORDS[S.tier].name}). Turn it on with the Assist button.`;
   howtoScreen.querySelector('[data-howto-go]').textContent = then ? 'Got it · Jump' : 'Got it';
   howtoScreen.querySelector('[data-howto-skip]').hidden = !then;
   ui.show('howto', true);
   howtoScreen.querySelector('[data-howto-go]').focus({ preventScroll: true });
 }
-function closeHowto() {
+function markHowtoSeen() { try { localStorage.setItem(HOWTO_KEY, 'seen'); } catch { /* storage blocked: it may show again */ } }
+S.howtoDone = markHowtoSeen;   // the results call it once a run of your own is scored
+function closeHowto({ seen = true } = {}) {
   if (howtoScreen.hidden) return;
-  try { localStorage.setItem(HOWTO_KEY, 'seen'); } catch { /* storage blocked: it may show again */ }
+  if (seen) markHowtoSeen();
   ui.show('howto', false);
   const then = howtoThen;
   howtoThen = null;
@@ -1510,14 +1537,14 @@ function closeHowto() {
   if (howtoOpener?.isConnected && !howtoOpener.closest('[hidden]')) howtoOpener.focus({ preventScroll: true });
 }
 on('[data-howto-open]', (e) => openHowto({ from: e.currentTarget }));
-on('[data-howto-go]', closeHowto);
-on('[data-howto-skip]', closeHowto);
-howtoScreen.addEventListener('click', (e) => { if (e.target === howtoScreen) closeHowto(); });
+on('[data-howto-go]', () => closeHowto());
+on('[data-howto-skip]', () => closeHowto({ seen: false }));
+howtoScreen.addEventListener('click', (e) => { if (e.target === howtoScreen) closeHowto({ seen: !howtoThen }); });
 // Escape closes the card, the tier picker, the controls or the board before the game reads it (Escape on
 // the results goes Home, on a run the pause sheet toggles): the sheet on top goes, not what's under it.
 addEventListener('keydown', (e) => {
   if (e.code !== 'Escape') return;
-  if (!howtoScreen.hidden) closeHowto(); else if (!assistScreen.hidden) closeAssist();
+  if (!howtoScreen.hidden) closeHowto({ seen: !howtoThen }); else if (!assistScreen.hidden) closeAssist();
   else if (!ctlScreen.hidden) ui.show('controls', false); else if (!ui.screens.board.hidden) ui.show('board', false); else return;
   e.preventDefault(); e.stopImmediatePropagation();
 }, true);

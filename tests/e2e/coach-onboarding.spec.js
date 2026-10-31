@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // Ticket 0079: a new player knows the controls and gets coached. The first Jump shows how to fly on
-// this device (skippable, remembered); the AI assist control is labelled in words on every screen; Adapt
+// this device (Skip skips it this time; Got it or a finished run remembers it); the Assist control is labelled in words on every screen; Adapt
 // to me steps the tier down after crashes (with Undo) and offers a harder step after clean landings,
 // between runs only; the coach's pointer is one line in the device's words, again as the next run counts
 // down; a new player's cue line gives the timely pointer. Runs are stepped from the test (liveStep), the
@@ -68,7 +68,7 @@ const cardFits = (page) => page.evaluate(() => {
   return issues;
 });
 
-test('keyboard: the first Jump shows how to fly (keys), Skip goes straight into the run, and a reload never shows it again', async ({ page }) => {
+test('keyboard: the first Jump shows how to fly (keys), Skip goes straight into the run (this time only), Got it remembers it', async ({ page }) => {
   const errors = await boot(page, { firstVisit: true });
   await page.locator('[data-start]').click();
   const card = page.locator('[data-screen="howto"]');
@@ -76,11 +76,18 @@ test('keyboard: the first Jump shows how to fly (keys), Skip goes straight into 
   await expect(page.locator('[data-howto-device]')).toHaveText('Keyboard');
   await expect(page.locator('[data-howto-rows] li')).toHaveCount(4);
   await expect(page.locator('[data-howto-rows] kbd')).toHaveText(['↑', 'Space', 'Shift', 'Shift']);
-  await expect(page.locator('[data-howto-assist]')).toContainText(/AI assist is on/i);
+  await expect(page.locator('[data-howto-assist]')).toContainText(/^Assist is on/);
   await expect(page.locator('[data-howto-go]')).toBeFocused();
   expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');   // nothing started under it
   await page.locator('[data-howto-skip]').click();
   await expect(card).toBeHidden();
+  await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+  // Skip skips it this time only (audit 2026-10-30): the next Jump (no run finished yet) shows it again.
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('new');
+  await page.evaluate(() => window.__coldgas.toTitle());
+  await page.locator('[data-start]').click();
+  await expect(card).toBeVisible();
+  await page.locator('[data-howto-go]').click();
   await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
   expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('seen');
   await page.reload();
@@ -129,6 +136,14 @@ test('touch: the first Jump shows the one-thumb controls; Got it starts the run;
   await page.close();
 });
 
+test('a run of your own flown to its card counts as having seen how to fly (a Skip alone does not)', async ({ page }) => {
+  const errors = await boot(page, { firstVisit: true });
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('new');
+  expect((await fly(page, true)).mode).toBe('results');
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('seen');
+  expect(errors).toEqual([]);
+});
+
 test('the how-to card fits whole, with no overlaps, at every size (folding phone, phones both ways, desktop)', async ({ browser }) => {
   const touch = await touchPage(browser, 382, 580);
   const desk = await browser.newPage({ viewport: { width: 1280, height: 720 } });
@@ -145,12 +160,13 @@ test('the how-to card fits whole, with no overlaps, at every size (folding phone
 });
 
 for (const [w, h, touch] of [[390, 844, true], [844, 390, true], [1280, 720, false]]) {
-  test(`${w}×${h}: the AI assist control says what it does, opens the tiers in words, and the sheet carries it too`, async ({ browser }) => {
+  test(`${w}×${h}: the Assist control says what it does, opens the tiers in words, and the sheet carries it too`, async ({ browser }) => {
     const page = touch ? await touchPage(browser, w, h) : await browser.newPage({ viewport: { width: w, height: h } });
     const errors = await boot(page);
     const ctlT = page.locator('.cta [data-assist-open]');
     await expect(ctlT).toBeVisible();
-    await expect(ctlT).toContainText(/AI assist/i);
+    await expect(ctlT).toContainText(/Assist/);
+    await expect(ctlT).not.toContainText(/\bAI\b/);
     await expect(ctlT.locator('[data-assist-state]')).toHaveText('On');
     await expect(ctlT.locator('[data-assist-sub]')).toHaveText(/rolls you out, levels and brakes/);
     const m = await floor(ctlT);
@@ -175,7 +191,8 @@ for (const [w, h, touch] of [[390, 844, true], [844, 390, true], [1280, 720, fal
     if (touch) await sheet.locator('[data-assist-close]').tap(); else await page.keyboard.press('Escape');
     await expect(sheet).toBeHidden();
     await expect(ctlT.locator('[data-assist-state]')).toHaveText('Off · Pro');
-    await expect(ctlT.locator('[data-assist-sub]')).toContainText('×1.08');
+    await expect(ctlT.locator('[data-assist-sub]')).toContainText(/you fly it/);
+    await expect(ctlT).not.toContainText('×');   // the multiplier is the tier picker's (and the results'), not the title's
     if (!touch) await expect(ctlT).toBeFocused();
     // A run keeps the tier it started with: a change mid-run is for the next one.
     const mid = await page.evaluate(() => {
@@ -200,13 +217,13 @@ for (const [w, h, touch] of [[390, 844, true], [844, 390, true], [1280, 720, fal
   });
 }
 
-test('Adapt to me: three crashes in a row on Pro turn AI assist on for the next run, with Undo; off, it stays off and Rookie mode is offered', async ({ page }) => {
+test('Adapt to me: three crashes in a row on Pro turn Assist on for the next run, with Undo; off, it stays off and Rookie mode is offered', async ({ page }) => {
   const errors = await boot(page);
   for (let k = 1; k <= 2; k++) expect(await fly(page, true, k === 1 ? { tier: 'pro' } : {})).toMatchObject({ crashed: true, cardTier: 'pro', tier: 'pro', down: false });
   const r3 = await fly(page, true);
   // The third run was flown and scored on Pro; the step is for the next one, said on the sheet.
   expect(r3, JSON.stringify(r3)).toMatchObject({ crashed: true, flew: 'pro', cardTier: 'pro', tier: 'assist', down: true, rookie: false });
-  await expect(page.locator('[data-adapt-why]')).toHaveText('AI Assist turned on: 3 crashes in a row on Pro.');
+  await expect(page.locator('[data-adapt-why]')).toHaveText('Assist turned on: 3 crashes in a row on Pro.');
   await expect(page.locator('.results [data-assist-open] [data-assist-state]')).toHaveText('On');
   const undo = page.locator('[data-adapt-undo]');
   const m = await floor(undo);
@@ -233,7 +250,7 @@ test('Adapt to me: three crashes in a row on Pro turn AI assist on for the next 
   expect(errors).toEqual([]);
 });
 
-test('three clean landings on AI Assist offer Pro ×1.08 (one tap, never forced); on Easy driving, Standard first', async ({ page }) => {
+test('three clean landings on Assist offer Pro ×1.08 (one tap, never forced); on Easy driving, Standard first', async ({ page }) => {
   const errors = await boot(page);
   const runs = [];
   for (let k = 0; k < 3; k++) runs.push(await fly(page, false, k === 0 ? { tier: 'assist' } : {}));
