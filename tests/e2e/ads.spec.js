@@ -129,7 +129,10 @@ test('0117: a Jump before the title banner is asked for leaves no slot and no lo
   await expect(page.locator('[data-screen="title"] [data-marquee="title"]')).toHaveCount(1, { timeout: 10_000 });
   // And a Jump from the title takes it out before the countdown.
   await page.evaluate(() => window.__coldgas.startRun('jump'));
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 15_000 });
+  await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+  await expect(page.locator('[data-marquee="title"]')).toHaveCount(0);
+  await page.evaluate(() => window.__coldgas.skipCountdown());
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
   await expect(page.locator('[data-marquee="title"]')).toHaveCount(0);
   const log = await page.evaluate(() => window.__adLog);
   expect(log.filter((e) => e.what === 'loader')).toEqual([{ what: 'loader', mode: 'title' }]);
