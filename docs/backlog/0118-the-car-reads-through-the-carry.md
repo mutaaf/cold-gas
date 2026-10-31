@@ -64,3 +64,8 @@ and the last-third growth in `release-frame.spec.js` at the views above.
 ## Out of scope
 Upright screens (0116 owns their carry: there the stand-back is across the row, and this probe's upright readings didn't match the real frames, so no bar is set for them). The hold before the cut. The touchdown
 rig (0108).
+
+## Critic note 2026-10-31
+Still open on production `0856de8`. A spot check with the critic's real-frame probe, the 8-corner box of the hero at
+the frame where car z first passes −16 (not the 56-frame probe above), gave car width / screen = **0.060** at
+1440×900 (`2026-10-31-0400/d-ref-4-over-row.jpg`: ≈ 90 px of 1440). The bars stand as written.
