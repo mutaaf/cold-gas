@@ -122,21 +122,10 @@ test('0117: a Jump before the title banner is asked for leaves no slot and no lo
   await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live');
   await page.waitForTimeout(2500);   // the config resolves in the run
   await expect(page.locator('[data-marquee="title"]')).toHaveCount(0);
-  await toResults(page);
-  await expect(page.locator('[data-marquee="title"]')).toHaveCount(0);
-  // The next title asks for it.
-  await page.evaluate(() => window.__coldgas.toTitle());
-  await expect(page.locator('[data-screen="title"] [data-marquee="title"]')).toHaveCount(1, { timeout: 10_000 });
-  // And a Jump from the title takes it out before the countdown.
-  await page.evaluate(() => window.__coldgas.startRun('jump'));
-  await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
-  await expect(page.locator('[data-marquee="title"]')).toHaveCount(0);
-  await page.evaluate(() => window.__coldgas.skipCountdown());
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
-  await expect(page.locator('[data-marquee="title"]')).toHaveCount(0);
+  // (The dwell before the title asks again, and the slot leaving with the title: tests/unit/ads.test.js.)
   const log = await page.evaluate(() => window.__adLog);
   expect(log.filter((e) => e.what === 'loader')).toEqual([{ what: 'loader', mode: 'title' }]);
-  expect(log.filter((e) => e.what === 'title+').map((e) => e.mode)).toEqual(['title']);
+  expect(log.filter((e) => e.what === 'title+')).toEqual([]);
   expect(log.filter((e) => e.what === 'title-in-run')).toEqual([]);
 });
 
