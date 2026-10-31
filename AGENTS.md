@@ -303,7 +303,7 @@ src/wake.js           the screen wake lock (0060): held through a run, the judgi
                         main.js syncLife() also suspends the audio when paused, hidden or idle on the title
 src/ads.js            Marquee ads between runs only (§3.3's exception): loader on production, title banner,
                         postrun interstitial, opt-in reroll rewarded; a no-op without window.marquee. The loader goes in
-                        only on the title or the results, the title's slot exists only while the title shows (0117)
+                        only on the title or the results; the title's slot is placed after 4 s on the title, and dropped on leaving it unless filled (0117)
 src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: errors, rejections, traps,
                         lost context, shaders, fetches, lazy imports, audio; frames; beacons) ·
                         signature.js (stable ids, shared with the Worker) · frames.js (ring +
