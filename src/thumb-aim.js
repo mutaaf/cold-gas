@@ -1,4 +1,4 @@
-// One-thumb AIM on the pad (0120): the DOM half of src/onethumb.js's touchdown slide.
+// One-thumb AIM on the pad (0121): the DOM half of src/onethumb.js's touchdown slide.
 //
 //  - Input: the held thumb's slide from where it pressed goes to thumb.move(dx, dy) (CSS px, +y up the
 //    glass). onethumb.js turns it into the ordinary pitch / roll channels (the input log replays and the

@@ -1,4 +1,4 @@
-// 0120 thumb mastery: the one-thumb touchdown slide (src/onethumb.js) is plain sim input (it replays and
+// 0121 thumb mastery: the one-thumb touchdown slide (src/onethumb.js) is plain sim input (it replays and
 // scores bit-exactly), a thumb that never slides flies exactly as before, a careful slide lands nearer
 // the mark and scores more, and no slide, however wild, puts the car on the row. Plus the medals
 // (src/medals.js): bars, the next-target line, and storage that may not be there.
@@ -49,7 +49,7 @@ function careful() {
 }
 const pitchRoll = (run) => run.inputLog.some((e) => e[4] !== 0 || e[5] !== 0);   // [tick, throttle, brake, steer, pitch, roll, …]
 
-describe('one-thumb touchdown slide (0120)', () => {
+describe('one-thumb touchdown slide (0121)', () => {
   it('a thumb that never slides writes no pitch or roll (it flies as before)', () => {
     const run = flyThumb({ holdAt: 12 });
     expect(pitchRoll(run)).toBe(false);
@@ -115,7 +115,7 @@ function fakeStorage({ throws = false } = {}) {
   return { getItem: (k) => { if (throws) throw new Error('denied'); return m.has(k) ? m.get(k) : null; }, setItem: (k, v) => { if (throws) throw new Error('denied'); m.set(k, String(v)); }, removeItem: (k) => m.delete(k), _m: m };
 }
 
-describe('medals (0120)', () => {
+describe('medals (0121)', () => {
   beforeEach(() => { globalThis.localStorage = fakeStorage(); _resetMedalCache(); });
 
   it('bars rise bronze → silver → gold for every event and tier, and gold is under 100', () => {

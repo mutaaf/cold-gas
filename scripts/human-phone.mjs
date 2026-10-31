@@ -14,8 +14,8 @@
 // --scheme=thumb flies the one-thumb Assist (src/onethumb.js, the code the page runs): hold to
 // climb, tap to let go, hold to land. The release is the page's (src/main.js noteRelease): the tap
 // starts the drive-off, and the car is let go on its push-off (LIFT on the deck) or the first tick in
-// the air (before 0120 this script let go on the tap itself, skipping the drive-off).
-// --skill (thumb, 0120: the touchdown slide, src/thumb-aim.js's sight):
+// the air (before 0121 this script let go on the tap itself, skipping the drive-off).
+// --skill (thumb, 0121: the touchdown slide, src/thumb-aim.js's sight):
 //   none     never slides (the accessibility population; the default)
 //   careful  holding in the air, puts the thumb on the amber dot (the mark from the predicted
 //            touchdown), a reaction late, re-reading it every 0.25–0.5 s
@@ -118,7 +118,7 @@ for (let n = 0; n < N; n++) {
   if (scheme === 'thumb') {
     const th = createOneThumb();
     let released = false, tapped = false, ledgeT = -1, tapAt = -1, holdFrom = -1, holding = false, lapseAt = -1, landSeen = -1;
-    // The slide (0120), drawn from its own stream so the base population is the same with or without it.
+    // The slide (0121), drawn from its own stream so the base population is the same with or without it.
     const sk = skill === 'mixed' ? ['none', 'careful', 'sloppy'][Math.floor(rnd3() * 3)] : skill;
     const A = { every: Math.round((0.25 + rnd3() * 0.25) * 240), over: 2 + rnd3(), flip: rnd3() < 0.5, shove: rnd3() < 0.4 ? 20 + rnd3() * 40 : 0, flipFor: Math.round((0.4 + rnd3() * 0.6) * 240) };
     let aimNext = -1, aimAt = -1, want = null, flipUntil = -1;

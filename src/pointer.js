@@ -65,7 +65,7 @@ export function howtoRows(ctx) {
       row('Drive & climb', 'drive', 'Crawls you up the Wall on suction; let go to stop.'),
       row('Let go', 'release', 'On the ledge, upside down, when the cue says.'),
       row('Roll & land', 'land', 'Rolls you out, carries you over the row and levels.'),
-      // 0120: the one skill input on one thumb, the touchdown slide (src/onethumb.js, src/thumb-aim.js).
+      // 0121: the one skill input on one thumb, the touchdown slide (src/onethumb.js, src/thumb-aim.js).
       { phase: 'Aim & brake', verb: 'hold, slide', ctl: 'the pad', what: 'Slide onto the amber dot to hit the mark.' },
     ];
   }

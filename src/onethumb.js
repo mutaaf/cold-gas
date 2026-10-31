@@ -7,7 +7,7 @@
 //   flight         HOLD to land: Assist's LAND (the roll-out, the brake governor) plus the carry
 //                  over the row (the rear jets, until the row is behind you; Assist caps the carry
 //                  at 10 m/s and the governor shuts them when it brakes).
-//                  SLIDE to aim (0120): the held thumb slid off where it pressed places the touchdown.
+//                  SLIDE to aim (0121): the held thumb slid off where it pressed places the touchdown.
 //                  Roof up, the slide tilts the lift vector
 //                  (pitch / roll, as the reference pilot steers onto the pad): up = further, down =
 //                  shorter, sideways = sideways. Never upside down, never low beside the row, never
@@ -35,7 +35,7 @@ export const THUMB = {
   carry: 5.5,      // m/s along the run off the lip (the rear jets top up any shortfall). Clears the row
                    // from 4; every m/s more lands ≈1.2 m further past the mark (the reference's 7.5 is ≈11 m)
   lip: 0.98,       // curl progress where the drive-off lets go
-  // AIM (0120): in the air, roof up, the held thumb slid off where it pressed tilts the lift vector like
+  // AIM (0121): in the air, roof up, the held thumb slid off where it pressed tilts the lift vector like
   // a drone's stick (LAND's level law makes the stick an attitude: pitch 0.55 ≈ 20°): up = longer, down =
   // shorter, sideways = sideways. The reference pilot's steerToPad limits (src/sim/autopilot.js).
   aimPx: 48,       // px of slide for a full command

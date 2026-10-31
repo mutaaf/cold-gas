@@ -295,11 +295,11 @@ src/pointer.js        the coach in the device's words (pure, 0079): controls per
                         the post-run pointer (no third repeat, "Better: …"), the live cue-line pointers
 src/render/interp.js  the car drawn between 240 Hz ticks (no sim change)
 src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on the ledge), tap to let go,
-                        hold to land (LAND + the carry over the row), slide to aim the touchdown (0120: pitch/roll,
+                        hold to land (LAND + the carry over the row), slide to aim the touchdown (0121: pitch/roll,
                         roof up, never back over the row or in against a flank); plain sim inputs, pure, no DOM
 src/thumb-aim.js      the one-thumb pad's sight in the air (the mark from the predicted touchdown) + the slide's pointers
 src/medals.js         bronze/silver/gold per event and tier, best per device (localStorage coldgas_medals), the
-                        results row under the score; getMedals(course, tier) for other screens (0120)
+                        results row under the score; getMedals(course, tier) for other screens (0121)
 src/touch-settings.js touch scheme (one-thumb | classic), hand, tilt steering (DeviceOrientation, iOS
                         permission, calibrate, 5 % steps), haptics (navigator.vibrate)
 src/valves.js         Advanced: keyboard layout like the car, chords, key ramp, gamepad, the touch

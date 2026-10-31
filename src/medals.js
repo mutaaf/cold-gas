@@ -1,9 +1,9 @@
-// Medals (0120): bronze, silver and gold per event and flight tier, the best on this device.
+// Medals (0121): bronze, silver and gold per event and flight tier, the best on this device.
 //
 // Thresholds are score totals (src/sim/judge.js scoreRun, the same number the Worker verifies) and
 // are calibrated from measured populations, not from 100: gold is what a skilled player reaches on
 // that tier, silver what a careful one does, bronze a clean landing. The numbers and where they come
-// from are in docs/backlog/0120-thumb-mastery.md. A medal is a reading of the score, never a score:
+// from are in docs/backlog/0121-thumb-mastery.md. A medal is a reading of the score, never a score:
 // nothing here feeds back into a run.
 //
 // Storage: one localStorage key on this device (coldgas_medals), { "<course>:<tier>": best total }.

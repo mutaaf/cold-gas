@@ -77,9 +77,9 @@ const WALL_W = {
   coordinator: { climb: 0.24, inversion: 0.24, rotation: 0.22, landing: 0.18, precision: 0.06, efficiency: 0.06 },
   designer: { climb: 0.14, inversion: 0.16, rotation: 0.16, landing: 0.24, precision: 0.14, efficiency: 0.16 },
 };
-// The Show's weights (SIM_VERSION 27, ticket 0120). On Assist the computer flies the climb, the hang and the
+// The Show's weights (SIM_VERSION 27, ticket 0121). On Assist the computer flies the climb, the hang and the
 // roll-out to 9.7–10 for everyone, so weight there paid every run the same; it now sits on what the pilot
-// decides: the mark, the touchdown and the gas. Measured on 300-player populations (docs/backlog/0120):
+// decides: the mark, the touchdown and the gas. Measured on 300-player populations (docs/backlog/0121):
 // a one-thumb player who never aims 90.3 → 83.7 median, one who aims onto the mark 91 → 92.7 (p90 95.7),
 // the reference 94 → 97.7, still above every thumb.
 const SHOW_W = {
