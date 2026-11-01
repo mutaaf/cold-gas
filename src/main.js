@@ -637,7 +637,8 @@ Promise.all([stage.ready, physicsLoad]).then(() => {
   // a Jump makes to a title slot still filling (window.stop, src/ads.js) never takes one of ours with it.
   const startAds = () => {
     warmJudges();
-    Promise.allSettled([stage.backdrop, judgesChunk]).then(() => { ads.onConfig(() => syncReroll()); ads.arm(document.querySelector('[data-screen="title"]')); });
+    // (A load that hangs on a bad link must not keep the ads off for the session: 20 s at most.)
+    Promise.race([Promise.allSettled([stage.backdrop, judgesChunk]), new Promise((r) => setTimeout(r, 20_000))]).then(() => { ads.onConfig(() => syncReroll()); ads.arm(document.querySelector('[data-screen="title"]')); });
   };
   if (typeof requestIdleCallback === 'function') requestIdleCallback(startAds, { timeout: 6000 }); else setTimeout(startAds, 1500);
 }).catch(() => { /* the boot's own failure path reports it */ });

@@ -55,7 +55,8 @@ describe('ads (Marquee, between runs only)', () => {
       appendChild(c) { c.parent = this; this.children.push(c); return c; },
       remove() { if (this.parent) this.parent.children = this.parent.children.filter((x) => x !== this); this.parent = null; },
       querySelector(sel) { return sel === '[data-marquee]' ? this.children.find((c) => c.dataset.marquee) || null : null; } });
-    return { head: node('head'), createElement: node };
+    const head = node('head');
+    return { head, createElement: node, querySelectorAll: (sel) => (sel === 'script[src]' ? head.children.filter((c) => c.src) : []) };
   };
   it('the loader waits for the title or the results, and starts once (0117)', () => {
     let mode = 'countdown';
@@ -129,7 +130,15 @@ describe('ads (Marquee, between runs only)', () => {
       const m = { v: 1, ready: () => Promise.resolve(cfg), interstitial: vi.fn(), rewarded: vi.fn() };
       const doc = fakeDoc();
       const title = doc.createElement('section');
-      const win = { marquee: m, location: {}, stop: vi.fn() };
+      const loaded = new Set();   // resource timing: a finished load has an entry
+      const performance = { getEntriesByName: (u) => (loaded.has(u) ? [{}] : []) };
+      const gs = doc.createElement('script');
+      gs.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=x';
+      const own = doc.createElement('script');
+      own.src = 'https://mutaafaziz.com/ads/v1/ads.js';    // our origin's: never a reason to cut
+      doc.head.appendChild(own);
+      const location = { origin: 'https://mutaafaziz.com' };
+      const win = { marquee: m, location, stop: vi.fn(), performance };
       const ads = createAds({ win, doc, mode: () => mode });
       ads.arm(title);
       await Promise.resolve(); await Promise.resolve();
@@ -137,7 +146,12 @@ describe('ads (Marquee, between runs only)', () => {
       expect(win.stop).not.toHaveBeenCalled();
       mode = 'title'; ads.sync();
       vi.advanceTimersByTime(TITLE_DWELL_MS + 500);
-      expect(title.children).toHaveLength(1);            // placed: Marquee's AdSense download is under way
+      expect(title.children).toHaveLength(1);            // placed
+      mode = 'countdown'; ads.sync();                     // only our own loader in the page: nothing to cut
+      expect(win.stop).not.toHaveBeenCalled();
+      mode = 'title'; ads.sync();
+      vi.advanceTimersByTime(TITLE_DWELL_MS);
+      doc.head.appendChild(gs);                           // Marquee's AdSense download is under way
       mode = 'countdown'; ads.sync();                     // Jump at dwell + 0.5 s
       expect(title.children).toHaveLength(0);
       expect(win.stop).toHaveBeenCalledTimes(1);          // the download and the ad request are cancelled, not left to land in the run
@@ -145,11 +159,27 @@ describe('ads (Marquee, between runs only)', () => {
       expect(win.stop).toHaveBeenCalledTimes(1);          // once, at the Jump
       mode = 'title'; ads.sync();
       vi.advanceTimersByTime(TITLE_DWELL_MS);
+      mode = 'countdown'; ads.sync();                     // a second cut this session: never (stop takes what else is in flight)
+      expect(win.stop).toHaveBeenCalledTimes(1);
+      mode = 'title'; ads.sync();
+      vi.advanceTimersByTime(TITLE_DWELL_MS);
       title.children[0].hidden = true;                    // settled (filled or nothing to show): seen, so kept
       mode = 'countdown'; ads.sync();
       expect(win.stop).toHaveBeenCalledTimes(1);
+      // A script that has finished loading has run: stopping now cancels nothing of its, only our own loads.
+      const win3 = { marquee: m, location, stop: vi.fn(), performance };
+      const title3 = doc.createElement('section');
+      mode = 'title';
+      const ads3 = createAds({ win: win3, doc, mode: () => mode });
+      ads3.arm(title3);
+      await Promise.resolve(); await Promise.resolve();
+      vi.advanceTimersByTime(TITLE_DWELL_MS);
+      loaded.add(gs.src);
+      mode = 'countdown'; ads3.sync();
+      expect(title3.children).toHaveLength(0);
+      expect(win3.stop).not.toHaveBeenCalled();
       // Free Drive's own chunk and road load as it opens: a cut there would take them too, so only a run cuts.
-      const win2 = { marquee: m, location: {}, stop: vi.fn() };
+      const win2 = { marquee: m, location, stop: vi.fn(), performance };
       const title2 = doc.createElement('section');
       mode = 'title';
       const ads2 = createAds({ win: win2, doc, mode: () => mode });

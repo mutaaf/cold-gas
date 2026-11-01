@@ -28,6 +28,20 @@ export function mayStartAds(mode) {
 export function isRun(mode) {
   return mode === 'countdown' || mode === 'live';
 }
+/** Is an ad network's script (another origin's: AdSense's loader stub, then the ≈ 250 KB implementation it adds) in
+ *  the page and still downloading? A finished load has a resource timing entry, cross-origin ones too. */
+export function adScriptLoading(win, doc) {
+  if (!win?.stop || !doc?.querySelectorAll) return false;
+  const own = win.location?.origin;
+  try {
+    for (const el of doc.querySelectorAll('script[src]')) {
+      const src = el.src || '';
+      if (!/^https?:/.test(src) || (own && src.startsWith(own + '/'))) continue;
+      if ((win.performance?.getEntriesByName?.(src) || []).length === 0) return true;
+    }
+  } catch { /* no timing: don't cut */ }
+  return false;
+}
 /** A slot that can fill, read from a resolved config: config.slots[id].source is 'none' when nothing can. */
 export function canFill(cfg, id) {
   const s = cfg && cfg.enabled ? cfg.slots?.[id] : null;
@@ -39,7 +53,7 @@ export function postrunDue({ runs, lastAt, now, gap = POSTRUN_GAP_MS }) {
 }
 
 export function createAds({ win = globalThis.window, doc = globalThis.document, now = () => Date.now(), mode = () => 'title' } = {}) {
-  let cfg = null, runs = 0, lastAt = 0, busy = false, started = false, armed = false, titleParent = null, titleEl = null;
+  let cfg = null, runs = 0, lastAt = 0, busy = false, started = false, armed = false, titleParent = null, titleEl = null, cut = false;
   const api = () => (win?.marquee?.v ? win.marquee : null);   // the real loader, not the {q:[]} stub
   // Read from the boot URL: the title rewrites the address (?course=), which drops a ?marquee= asked for.
   const wanted = !!win && wantLoader(win.location || {});
@@ -89,12 +103,14 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
     if (dwell) { clearTimeout(dwell); dwell = 0; }
     if (titleEl && !settled(titleEl)) {
       titleEl.remove(); titleEl = null;
-      // 0122: the slot's AdSense pipeline (≈ 400 KB of script, then the ad request) is already on the wire, and
-      // taking the slot out can't call a download back; it would finish in the countdown. window.stop() cancels the
-      // page's in-flight loads, as leaving the page would. The game's own loads are done by now: main.js arms the
-      // ads only after the backdrop and the judges' chunk have settled, and a beacon (sendBeacon/keepalive) survives.
-      // Marquee then falls back to its direct sponsors for this session's breaks (its AdSense script never ran).
-      if (isRun(mode())) { try { win?.stop?.(); } catch { /* nothing to stop */ } }
+      // 0122: the slot's AdSense script (≈ 250–400 KB) may still be downloading, and taking the slot out can't call
+      // that back; it would finish, then run, in the countdown. window.stop() cancels the page's in-flight loads, as
+      // leaving the page would, so AdSense never runs. Only while that script is in flight (once it has run, its
+      // requests are new ones nothing here can stop) and once a session: stop() takes whatever else is in flight too.
+      // main.js arms the ads only after the backdrop and the judges' chunk settle, so on the usual path none of the
+      // game's own loads is in flight then (sendBeacon survives a stop). After a cut, Marquee's breaks this session
+      // fall back to its direct sponsors (its AdSense script never ran).
+      if (isRun(mode()) && !cut && adScriptLoading(win, doc)) { cut = true; try { win.stop(); } catch { /* nothing to stop */ } }
     }
   }
   /** The title's banner, wanted in this parent (placed and removed by the mode, see syncTitle). */
