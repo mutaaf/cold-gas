@@ -14,6 +14,20 @@ test.describe.configure({ mode: 'parallel' });
 
 function touchdown(crash) {
   const g = window.__coldgas, S = g.S, cam = g.camera, car = g.carRoot;
+  // 0119: on an upright screen, a real frame at touchdown + 0.3 s and + 0.8 s (still live): the share of the
+  // lower 40 % of the canvas under luminance 12 (sRGB 0–255). The probe's render is a no-op; the real one is kept
+  // as __render and read back in the same task (no preserveDrawingBuffer).
+  const darkShare = () => {
+    g.stage.__render(S.time, 'live');
+    const src = g.stage.renderer.domElement, cw = src.width, ch = src.height, y0 = Math.floor(ch * 0.6);
+    const cv = document.createElement('canvas'); cv.width = cw; cv.height = ch - y0;
+    const cx = cv.getContext('2d'); cx.drawImage(src, 0, y0, cw, ch - y0, 0, 0, cw, ch - y0);
+    const px = cx.getImageData(0, 0, cw, ch - y0).data;
+    let dark = 0;
+    for (let i = 0; i < px.length; i += 4) if (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2] < 12) dark++;
+    return Math.round((dark / (px.length / 4)) * 1000) / 1000;
+  };
+  const upright = innerWidth / innerHeight < 0.9;
   const c = new car.position.constructor();
   const w = innerWidth, h = innerHeight;
   const carBox = () => {
@@ -51,7 +65,8 @@ function touchdown(crash) {
       return i;
     };
   }
-  const out = { frames: 0, minShare: 1, minW: Infinity, maxW: 0, covered: 0, cut: false, reason: '' };
+  const out = { frames: 0, minShare: 1, minW: Infinity, maxW: 0, covered: 0, cut: false, reason: '', minCy: 1, maxCy: 0, dark: [] };
+  const shots = [0.3, 0.8];
   S.paused = true;   // the frame loop stands still; the probe steps the run and the director itself
   const DT = 1 / 30;
   for (let f = 0; f < 30 * 60 && S.mode === 'live'; f++) {
@@ -66,6 +81,12 @@ function touchdown(crash) {
     const b = carBox(), area = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
     const share = overlap(b, { left: 0, top: 0, right: w, bottom: h }) / area, bw = (b.x1 - b.x0) / w;
     out.minShare = Math.min(out.minShare, share); out.minW = Math.min(out.minW, bw); out.maxW = Math.max(out.maxW, bw);
+    // The box's centre height (share of the screen) from 0.3 s after the touch, once the landed rig has swung in.
+    if (S.run.tick >= S.run.t.touchTick + 0.3 * 240) {
+      const cy = (b.y0 + b.y1) / 2 / h;
+      out.minCy = Math.min(out.minCy, cy); out.maxCy = Math.max(out.maxCy, cy);
+    }
+    if (upright && shots.length && S.run.tick >= S.run.t.touchTick + shots[0] * 240) { shots.shift(); out.dark.push(darkShare()); }
     for (const el of document.querySelectorAll('[data-hud-box], .top-actions')) {
       if (vis(el) && overlap(b, el.getBoundingClientRect()) / area > 0.1) { out.covered++; break; }
     }
@@ -73,7 +94,7 @@ function touchdown(crash) {
   S.paused = false;
   out.reason = S.run.t.endReason;
   out.mode = S.mode;
-  for (const k of ['minShare', 'minW', 'maxW']) out[k] = Math.round(out[k] * 1000) / 1000;
+  for (const k of ['minShare', 'minW', 'maxW', 'minCy', 'maxCy']) out[k] = Math.round(out[k] * 1000) / 1000;
   return out;
 }
 
@@ -84,7 +105,7 @@ async function boot(page) {
   await page.goto('/coldgas/?gfx=low&course=show');
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
   await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 60_000 });
-  await page.evaluate(() => { const s = window.__coldgas.stage; s.setPixelScale(0.5); s.setPixelScale = () => {}; s.render = () => {}; });
+  await page.evaluate(() => { const s = window.__coldgas.stage; s.setPixelScale(0.5); s.setPixelScale = () => {}; s.__render = s.render; s.render = () => {}; });
   return errors;
 }
 
@@ -102,7 +123,9 @@ async function flyAt(page, [width, height], crash) {
 }
 
 // Upright: the whole touchdown in frame (≥ 0.95 of the box on screen in every frame), at most 0.85 of the width.
-const UPRIGHT = [[390, 844], [360, 748], [382, 580], [820, 1180]];
+const UPRIGHT = [[390, 844], [360, 800], [360, 748], [382, 580], [820, 1180]];
+// The upright phones 0119 measures the touchdown's floor and the car's height on.
+const PHONES = ['390×844', '360×800'];
 // The other foldable shapes (scripts/audit-plan.mjs FOLD / FLIP): the whole car on screen, at most 0.85 wide.
 const FOLDS = [[669, 871], [466, 498], [360, 380], [424, 360], [594, 368], [800, 300]];
 // As wide as tall or wider: today's framing. Main's box width / screen width before 0108 on this probe, as
@@ -136,6 +159,14 @@ for (const crash of [false, true]) {
       else expect(r.minShare, `${name}: share of the box on screen`).toBe(1);
       if (WIDE[name]) unchanged(r, name, crash);
       else expect(r.maxW, `${name}: box width / screen width`).toBeLessThanOrEqual(0.85);
+      // 0119: on an upright phone the landed car sits between 50 % and 70 % down, over a lit floor: at most half of
+      // the lower 40 % of the frame under luminance 12 at touchdown + 0.3 s and + 0.8 s on `low` (main: 0.98).
+      if (PHONES.includes(name)) {
+        expect(r.minCy, `${name}: the landed car's centre, highest`).toBeGreaterThanOrEqual(0.5);
+        expect(r.maxCy, `${name}: the landed car's centre, lowest`).toBeLessThanOrEqual(0.7);
+        expect(r.dark.length, `${name}: frames read`).toBe(2);
+        for (const d of r.dark) expect(d, `${name}: black share of the lower 40 %`).toBeLessThanOrEqual(0.5);
+      }
       // 0063's rule on the ground: never more than a tenth of the box under a HUD box or the top bar.
       if (name === '390×844') expect(r.covered, `${name}: frames with the car under the HUD`).toBe(0);
     }
