@@ -1,12 +1,12 @@
 ---
 id: 0119
 title: The upright touchdown frames the car on a lit pad, not over 40 % black floor
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: platform
 created: 2026-10-31
-pr:
+pr: 192
 by: critic
 ---
 
@@ -48,18 +48,18 @@ so it is a defect. The lockdown asks for layout at every viewport.
 - No sim change. The desktop and landscape framings stay as they are (aspect ≥ 0.9 → unchanged).
 
 ## Acceptance criteria
-- [ ] At 390×844 and 360×800 touch, default tier, Show reference: on real frames at touchdown + 0.3 s and + 1.0 s,
+- [x] At 390×844 and 360×800 touch, default tier, Show reference: on real frames at touchdown + 0.3 s and + 1.0 s,
       **≤ 0.35** of the pixels in the lower 40 % of the frame are under luminance 12. Today: 0.78.
-- [ ] Same frames at `?gfx=low`: ≤ 0.5. Today: 0.975.
-- [ ] The valves-shut crash (autopilot `{ carry: 5 }`) at 390×844: its final frame meets the same bar as the
+- [x] Same frames at `?gfx=low`: ≤ 0.5. Today: 0.975.
+- [x] The valves-shut crash (autopilot `{ carry: 5 }`) at 390×844: its final frame meets the same bar as the
       reference at each tier.
-- [ ] The car's projected box centre is between 50 % and 70 % of the screen's height on those frames, and 0108's
+- [x] The car's projected box centre is between 50 % and 70 % of the screen's height on those frames, and 0108's
       bars still hold (`tests/e2e/phone-frame.spec.js` green).
-- [ ] At 1280×720 and 1440×900 the landed rig's camera is unchanged (same position and target to 1 mm on the
+- [x] At 1280×720 and 1440×900 the landed rig's camera is unchanged (same position and target to 1 mm on the
       stepped probe).
-- [ ] `hud-audit` and `title-audit` are clean. `flicker.mjs --phone` doesn't raise a region past
+- [x] `hud-audit` and `title-audit` are clean. `flicker.mjs --phone` doesn't raise a region past
       `docs/flicker-budget.json`.
-- [ ] Before/after shots at 390×844 (default tier and `low`) in the PR.
+- [x] Before/after shots at 390×844 (default tier and `low`) in the PR.
 
 ## Test plan
 Extend `tests/e2e/phone-frame.spec.js`. Over the landed frames of the stepped flight, assert the car's projected

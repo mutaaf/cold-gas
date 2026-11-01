@@ -43,6 +43,11 @@ const HUD_SEL = '[data-hud-box], [data-hud-toggle], .top-actions';
 // phone). Under this aspect they hold the horizontal lens they have at it, so the car keeps its share of the
 // width (at most ≈ 0.75 of it); at this aspect and wider the lens is unchanged.
 const LENS_ASPECT = 0.9;
+// The landed rig's stand from the car (x, z m): ahead of it on a wide screen; on an upright one (0119) beside it on
+// the open side, broadside, so its view runs across the lit floor to the launch complex (src/sim/complex.js, far −x).
+// 12 m keeps the 4.65 m car under 0.75 of an upright phone's width (0108).
+const LAND_AHEAD = [6.5, -9], LAND_SIDE = [12, 0];
+const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the middle (≈ 60 % down)
 
 export function createDirector(camera) {
   const st = {
@@ -90,6 +95,16 @@ export function createDirector(camera) {
     camera.lookAt(st.lookS);
   }
   const fovTo = (f, dt, rate = 2) => { st.fov += (f - st.fov) * (1 - Math.exp(-dt * rate)); };
+  // How far under LENS_ASPECT the screen is: 0 at it and wider, 1 from an upright phone's 0.5 down (0119).
+  const upright = () => clamp((LENS_ASPECT - camera.aspect) / 0.4, 0, 1);
+  // The height to add to a ground shot's aim, `d` m from it under lens(fov), so the car sits about LAND_LIFT × u of
+  // the half-frame below the middle (0119).
+  const liftFor = (u, d, fov) => d * LAND_LIFT * u * Math.tan(lens(fov) * Math.PI / 360);
+  // Whether a parked body stands across the level line from the car to `dx` m out at +x, the side stand's sight (0119).
+  const rowBlocks = (c, dx) => {
+    for (const b of SHOW.boxes) if (c.z >= b.minZ - 0.5 && c.z <= b.maxZ + 0.5 && b.maxX >= c.x - 0.5 && b.minX <= c.x + dx) return true;
+    return false;
+  };
   const lens = (f) => (camera.aspect >= LENS_ASPECT ? f : (Math.atan(Math.tan(f * Math.PI / 360) * LENS_ASPECT / camera.aspect) * 360) / Math.PI);
 
   // Keep the car out from under the HUD (0063): after a shot has looked where it wants, turn the camera
@@ -372,9 +387,15 @@ export function createDirector(camera) {
       ease(dt, 3.2, 9);
       fovTo(48, dt);
     } else {
-      // Landed: low, ahead of the car as it rolls back down the approach.
-      want.set(carPos.x + 6.5, 1.25, carPos.z - 9);
-      lookWant.set(carPos.x, carPos.y + 0.2, carPos.z);
+      // Landed: low, ahead of the car as it rolls back down the approach. On the Show, on a screen narrower than it
+      // is tall (0119), the rig swings round to the car's open side, broadside on, looking across it at the lit launch
+      // complex, and lifts its aim so the car sits under the middle: from ahead, 0108's wider lens spent the
+      // lower 40 % of an upright phone on unlit floor at the camera's feet (78–98 % black).
+      // The Wall's landed shot is unchanged; so is a car that comes to rest with a parked body between it and the side stand.
+      const u = st.course === 'show' && !rowBlocks(carPos, LAND_SIDE[0]) ? upright() : 0;
+      const ox = LAND_AHEAD[0] + u * (LAND_SIDE[0] - LAND_AHEAD[0]), oz = LAND_AHEAD[1] + u * (LAND_SIDE[1] - LAND_AHEAD[1]);
+      want.set(carPos.x + ox, 1.25, carPos.z + oz);
+      lookWant.set(carPos.x, carPos.y + 0.2 + liftFor(u, Math.hypot(ox, oz), 40), carPos.z);
       ease(dt, 3, 8);
       fovTo(lens(40), dt);
     }
