@@ -7,7 +7,7 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun, TIERS } from '../../src/sim/judge.js';
 import { createVehicle, step, newInput, up, NOZZLES, VALVE_KEYS, ASSIST_CARRY, ASSIST_CRAWL, TRIM } from '../../src/sim/vehicle.js';
 import { predict, newPrediction, SINK_SOFT } from '../../src/sim/predict.js';
-import { coach, markCost, MARK_POINTS, KEY_WORDS, AIM_THUMB } from '../../src/sim/coach.js';
+import { coach, markCost, namesMark, MARK_POINTS, KEY_WORDS, AIM_THUMB } from '../../src/sim/coach.js';
 import { coachWords, pointerText } from '../../src/pointer.js';
 import { createOneThumb, thumbStage } from '../../src/onethumb.js';
 import { COURSES } from '../../src/sim/courses.js';
@@ -250,6 +250,21 @@ describe('the coach', () => {
     const { items } = coach(ref.inputLog, 'show', scoreRun(ref.t), 0, KEY_WORDS);
     expect(items.map((i) => i.id)).toEqual(['clean']);
     expect(AIM_THUMB).toMatch(/amber dot/);
+  });
+  it('past 7 m the mark is always named (a capped Pro/Advanced card, a drill, the Wall); a drill never quotes points (0124)', () => {
+    // A strong Advanced run's judges sit at the 10 cap: 6 m off costs the total nothing, 7.5 m still names it.
+    const adv = { ...fly('show').t, tier: 'advanced', lateral: 6, landZ: COURSES.show.pad.z };
+    expect(markCost(adv)).toBeLessThan(MARK_POINTS);
+    expect(namesMark(7.5, markCost({ ...adv, lateral: 7.5 }), { show: true })).toBe(true);
+    expect(namesMark(5, 4, { show: true })).toBe(true);
+    expect(namesMark(5, 4, { show: true, drill: true })).toBe(false);
+    expect(namesMark(7.5, 0, { show: true, drill: true })).toBe(true);
+    expect(namesMark(5, 4, { show: false })).toBe(false);
+    expect(namesMark(3, 0, { show: true })).toBe(false);
+    // A no-slide thumb flight coached from a drill-style hand-over: the 6 m miss isn't named (its card flags 7 m).
+    const run = flyThumb(12);
+    const { items } = coach(run.inputLog, 'show', scoreRun(run.t), run.t.airStartTick);
+    expect(items.some((i) => i.id === 'mark')).toBe(false);
   });
 });
 

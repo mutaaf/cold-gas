@@ -7,7 +7,7 @@
 
 // The device a player is on, from src/input.js's lastDevice ('touch' | 'key' | 'pad' | 'mouse' | 'none'):
 // a mouse or nothing yet is a desktop, so its keyboard.
-import { AIM_LEAN, AIM_THUMB } from './sim/coach.js';
+import { AIM_LEAN, AIM_THUMB } from './sim/aim-words.js';
 
 export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ? 'pad' : 'key');
 

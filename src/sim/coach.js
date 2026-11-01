@@ -8,6 +8,9 @@ import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { predict, newPrediction, SINK_SOFT } from './predict.js';
 import { scoreRun } from './judge.js';
+import { AIM_LEAN, AIM_THUMB } from './aim-words.js';
+
+export { AIM_LEAN, AIM_THUMB };
 import { v3 } from './m3.js';
 import { dhypot } from './dmath.js';
 
@@ -83,8 +86,6 @@ export function readFlight(inputLog, courseId, fromTick = 0) {
 // One instruction per device and tier: on Assist the brake is LAND, on Pro and Advanced it's LIFT by the
 // BRAKE line (Pro has no LAND governor), as the how-to card, the cue line and the pointer say it.
 // `aim`: how this device walks the touchdown onto the mark (one-thumb: the pad's slide, 0121; else lean with the stick).
-export const AIM_LEAN = 'lean toward the pad (pitch or roll) above 5 m to walk the touchdown marker onto the rings, then level';
-export const AIM_THUMB = 'hold the pad in the air and slide onto the amber dot: the touchdown follows it onto the rings';
 export const KEY_WORDS = { land: 'LAND (Shift)', lift: 'LIFT (Space)', release: 'RELEASE (Space)', boost: 'BOOST (F)', roll: '← →', aim: AIM_LEAN };
 
 // What the mark cost the total: the run re-scored as if it had touched down on the mark, everything else the
@@ -96,9 +97,14 @@ export function markCost(t) {
   const onMark = scoreRun({ ...t, lateral: 0, landZ: pad.z }).total;
   return Math.max(0, Math.round((onMark - scoreRun(t).total) * 10) / 10);
 }
-// The Show names the mark once a miss costs this many points of the total (≈ 4.4 m with the rings' curve);
-// under it a run with nothing else to fix is "Clean". The Wall and the Lineup keep their 7 m.
+// The Show names the mark once a miss costs this many points of the total (≈ 4.4 m on Assist with the rings' curve);
+// under it a run with nothing else to fix is "Clean". Past 7 m it is always named: on Pro and Advanced a strong
+// run's judges sit at the 10 cap, so a 5–6 m miss can cost the total nothing. A drill (fromTick > 0) has no total
+// on its card, so it keeps the 7 m its stat line flags. The Wall and the Lineup keep their 7 m.
 export const MARK_POINTS = 3;
+export function namesMark(padMiss, cost, { show = false, drill = false } = {}) {
+  return padMiss > 7 || (show && !drill && cost >= MARK_POINTS);
+}
 
 // The fixes, most costly first. Each: { id, title, detail, fix, weight }. Only the words depend on `say`.
 export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_WORDS) {
@@ -166,14 +172,15 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
   }
   if (f.touch && !t.contact) {
     const aim = say.aim || AIM_LEAN, Aim = aim[0].toUpperCase() + aim.slice(1);
-    const cost = show ? markCost(t) : 0;
-    if (show ? cost >= MARK_POINTS : f.touch.padMiss > 7) {
+    const drill = fromTick > 0;
+    const cost = show && !drill ? markCost(t) : 0;
+    if (namesMark(f.touch.padMiss, cost, { show, drill })) {
       const past = show ? f.touch.along < 0 : false;
       // On the Show the finding weighs what it cost: a 6–7 m miss (≈ 15–17 points) outranks a tilt or the gas,
       // never a crash-grade braking or carry fix (8–10).
-      const weight = show ? Math.min(7.5, 2 + cost / 3) : 3 + Math.min(3, f.touch.padMiss / 15);
+      const weight = Math.max(3 + Math.min(3, f.touch.padMiss / 15), Math.min(7.5, 2 + cost / 3));
       add('mark', weight, past ? 'Long of the mark' : 'Off the mark',
-        `You landed ${r1(f.touch.padMiss)} m from the mark${past ? ` (${r1(-f.touch.along)} m past it)` : ''}${show ? `: about ${Math.round(cost)} points` : ''}.`,
+        `You landed ${r1(f.touch.padMiss)} m from the mark${past ? ` (${r1(-f.touch.along)} m past it)` : ''}${cost >= 1 ? `: about ${Math.round(cost)} points` : ''}.`,
         show && f.carry > 11 && say.aim !== AIM_THUMB ? `You carried ${r1(f.carry)} m/s: about 9.5 clears the roofs. Then pitch the nose up a touch to walk the touchdown marker onto the pad.` : `${Aim}.`);
     }
   }
