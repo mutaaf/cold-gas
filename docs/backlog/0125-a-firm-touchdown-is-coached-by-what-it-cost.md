@@ -1,12 +1,12 @@
 ---
 id: 0125
 title: The coach weighs a firm touchdown by the points it cost, and gives the one thumb a fix it can do
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-01
-pr:
+pr: 201
 by: critic
 ---
 
