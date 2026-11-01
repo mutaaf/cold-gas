@@ -6,8 +6,8 @@ import { createRun, stepRun, simulate, INPUT_KEYS, LEGACY_INPUT_KEYS, quantise, 
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun, TIERS } from '../../src/sim/judge.js';
 import { createVehicle, step, newInput, up, NOZZLES, VALVE_KEYS, ASSIST_CARRY, ASSIST_CRAWL, TRIM } from '../../src/sim/vehicle.js';
-import { predict, newPrediction, SINK_SOFT } from '../../src/sim/predict.js';
-import { coach, markCost, namesMark, MARK_POINTS, KEY_WORDS, AIM_THUMB } from '../../src/sim/coach.js';
+import { predict, newPrediction, SINK_SOFT, SINK_FIRM } from '../../src/sim/predict.js';
+import { coach, markCost, namesMark, MARK_POINTS, KEY_WORDS, AIM_THUMB, sinkCost, namesBraking, SINK_PERFECT, RANOUT_THUMB } from '../../src/sim/coach.js';
 import { coachWords, pointerText } from '../../src/pointer.js';
 import { createOneThumb, thumbStage } from '../../src/onethumb.js';
 import { COURSES } from '../../src/sim/courses.js';
@@ -265,6 +265,87 @@ describe('the coach', () => {
     const run = flyThumb(12);
     const { items } = coach(run.inputLog, 'show', scoreRun(run.t), run.t.airStartTick);
     expect(items.some((i) => i.id === 'mark')).toBe(false);
+  });
+});
+
+// 0125: the Show's reference on Assist with the brake eased off below `h` m (lift `k`, LAND's level law off): a firm
+// touchdown the computer didn't pace to the ground.
+const flyFirm = (h, k) => fly('show', {}, (run, inp) => {
+  if (run.phase === 'air' && run.car.vel.y < 0 && up(run.car, { x: 0, y: 0, z: 0 }).y > 0.9 && run.car.pos.y - SPEC.comHeight < h) { inp.level = 0; inp.lift = k; }
+});
+const THUMB_SHOW = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' };
+describe('the coach weighs the touchdown by what it cost (0125)', () => {
+  it('a firm 1.6–1.9 m/s touchdown a few metres off, on Assist, is Clean (it cost about a point), not Out of braking', () => {
+    const run = flyFirm(1, 0.5);
+    const card = scoreRun(run.t);
+    expect(card.facts.crashed).toBe(false);
+    expect(card.tier).toBe('assist');
+    expect(run.t.sink).toBeGreaterThan(1.55);
+    expect(run.t.sink).toBeLessThan(1.95);
+    expect(card.facts.padMiss).toBeGreaterThan(3);
+    expect(card.facts.padMiss).toBeLessThan(4.5);
+    // The judges' own cost: the run re-scored at 0.9 m/s.
+    const cost = sinkCost(run.t);
+    expect(cost).toBeCloseTo(Math.max(0, scoreRun({ ...run.t, sink: SINK_PERFECT }).total - card.total), 1);
+    expect(cost).toBeLessThan(MARK_POINTS);
+    for (const say of [coachWords(THUMB_SHOW), KEY_WORDS]) {
+      const { items } = coach(run.inputLog, 'show', card, 0, say);
+      expect(items.some((i) => ['ran-out', 'late-brake', 'no-brake', 'late-land'].includes(i.id))).toBe(false);
+      expect(items[0].id).toBe('clean');
+    }
+  });
+  it('a hard touchdown still leads with a braking finding, its cost in the detail within ±1 of the re-score', () => {
+    const run = flyFirm(1, 0);
+    const card = scoreRun(run.t);
+    expect(card.facts.crashed).toBe(false);
+    expect(run.t.sink).toBeGreaterThan(3.5);
+    const cost = scoreRun({ ...run.t, sink: SINK_PERFECT }).total - card.total;
+    const { items } = coach(run.inputLog, 'show', card, 0, coachWords(THUMB_SHOW));
+    expect(['ran-out', 'late-brake', 'no-brake', 'late-land']).toContain(items[0].id);
+    const pts = Number(items[0].detail.match(/about (\d+) points?/)[1]);
+    expect(Math.abs(pts - cost)).toBeLessThanOrEqual(1);
+  });
+  it('the bar: the Show (not a drill) names braking from 3 points or 3 m/s; drills, the Wall and the Lineup from 1.5 m/s', () => {
+    expect(namesBraking(1.6, 1.3, { show: true })).toBe(false);
+    expect(namesBraking(2.4, MARK_POINTS, { show: true })).toBe(true);
+    expect(namesBraking(SINK_FIRM, 0, { show: true })).toBe(true);   // a capped Pro/Advanced card
+    expect(namesBraking(1.6, 0, { show: true, drill: true })).toBe(true);
+    expect(namesBraking(1.6, 0, { show: false })).toBe(true);
+    expect(namesBraking(1.4, 9, { show: true })).toBe(false);
+    expect(sinkCost({ ...fly('show').t, sink: 0.8 })).toBe(0);
+  });
+  it('one thumb is told what the pad can do: no green band, no separate brake; the keyboard keeps its words', () => {
+    const thumb = coachWords(THUMB_SHOW);
+    expect(thumb.ranOut).toBe(RANOUT_THUMB);
+    for (const text of [thumb.ranOut, pointerText('ran-out', THUMB_SHOW)]) {
+      expect(text).not.toMatch(/green band|stay on the brake/i);
+      expect(text).toMatch(/holding the pad/);
+      expect(text).toMatch(/slide less/);
+    }
+    expect(KEY_WORDS.ranOut).toMatch(/green band/);
+    expect(coachWords({ device: 'key', tier: 'assist', course: 'show' }).ranOut).toMatch(/green band/);
+    expect(pointerText('ran-out', { device: 'key', tier: 'assist' })).toMatch(/Stay on the brake to the ground: keep holding Shift/);
+  });
+  it('the slide the thumb words name does cost braking: a held sideways slide lands harder than none', () => {
+    const slide = (dx) => {
+      const run = createRun('show'), th = createOneThumb();
+      let released = false, ledgeT = -1, tapT = -1;
+      th.down();
+      while (run.phase !== 'done') {
+        const c = run.car, inp = newInput();
+        if (tapT < 0 && thumbStage(run, released) === 'ledge' && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3) {
+          if (ledgeT < 0) { ledgeT = run.tick; th.up(); }
+          if (run.tick === ledgeT + 120) { th.down(); tapT = run.tick; }
+        }
+        if (run.phase === 'air') th.move(dx, 0);
+        th.sample(run, released, inp);
+        if ((run.phase === 'ramp' && inp.lift > 0) || run.phase === 'air') released = true;
+        inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
+        stepRun(run, inp);
+      }
+      return run.t.sink;
+    };
+    expect(slide(40)).toBeGreaterThan(slide(0) + 0.2);
   });
 });
 

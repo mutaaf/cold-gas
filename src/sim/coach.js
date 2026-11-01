@@ -6,11 +6,11 @@ import { simulate } from './run.js';
 import { up, CAR, NOZZLES, forward } from './vehicle.js';
 import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
-import { predict, newPrediction, SINK_SOFT } from './predict.js';
+import { predict, newPrediction, SINK_SOFT, SINK_FIRM } from './predict.js';
 import { scoreRun } from './judge.js';
-import { AIM_LEAN, AIM_THUMB } from './aim-words.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB } from './aim-words.js';
 
-export { AIM_LEAN, AIM_THUMB };
+export { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB };
 import { v3 } from './m3.js';
 import { dhypot } from './dmath.js';
 
@@ -86,16 +86,31 @@ export function readFlight(inputLog, courseId, fromTick = 0) {
 // One instruction per device and tier: on Assist the brake is LAND, on Pro and Advanced it's LIFT by the
 // BRAKE line (Pro has no LAND governor), as the how-to card, the cue line and the pointer say it.
 // `aim`: how this device walks the touchdown onto the mark (one-thumb: the pad's slide, 0121; else lean with the stick).
-export const KEY_WORDS = { land: 'LAND (Shift)', lift: 'LIFT (Space)', release: 'RELEASE (Space)', boost: 'BOOST (F)', roll: '← →', aim: AIM_LEAN };
+export const KEY_WORDS = { land: 'LAND (Shift)', lift: 'LIFT (Space)', release: 'RELEASE (Space)', boost: 'BOOST (F)', roll: '← →', aim: AIM_LEAN, ranOut: RANOUT_LEAN };
 
 // What the mark cost the total: the run re-scored as if it had touched down on the mark, everything else the
 // same (the judges' own weights and the tier, from scoreRun, so it can't drift from judge.js). 0124.
+// One helper for both costs, so neither can drift from judge.js: the total with `patch` minus the total as flown.
+const costOf = (t, patch) => Math.max(0, Math.round((scoreRun({ ...t, ...patch }).total - scoreRun(t).total) * 10) / 10);
 export function markCost(t) {
   if (!t || t.touchTick < 0) return 0;
   const pad = COURSES[t.course]?.pad;
   if (!pad) return 0;
-  const onMark = scoreRun({ ...t, lateral: 0, landZ: pad.z }).total;
-  return Math.max(0, Math.round((onMark - scoreRun(t).total) * 10) / 10);
+  return costOf(t, { lateral: 0, landZ: pad.z });
+}
+// What the touchdown's sink cost the total (0125): the run re-scored at 0.9 m/s, the judges' full-marks sink
+// (judge.js band(sink, 6, 0.9)), everything else the same.
+export const SINK_PERFECT = 0.9;
+export function sinkCost(t) {
+  if (!t || t.touchTick < 0 || !(t.sink > SINK_PERFECT)) return 0;
+  return costOf(t, { sink: SINK_PERFECT });
+}
+// The Show names its braking findings once the sink cost MARK_POINTS of the total; from SINK_FIRM (3 m/s, the
+// predictor's red band) always, as a capped Pro/Advanced card can hide a hard landing's cost. A drill, the Wall and
+// the Lineup name any sink over SINK_SOFT, as before.
+export function namesBraking(sink, cost, { show = false, drill = false } = {}) {
+  if (!(sink > SINK_SOFT)) return false;
+  return !(show && !drill) || sink >= SINK_FIRM || cost >= MARK_POINTS;
 }
 // The Show names the mark once a miss costs this many points of the total (≈ 4.4 m on Assist with the rings' curve);
 // under it a run with nothing else to fix is "Clean". Past 7 m it is always named: on Pro and Advanced a strong
@@ -114,6 +129,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
   const wall = courseId !== 'lineup', show = courseId === 'show';
   const out = [];
   const add = (id, weight, title, detail, fix) => out.push({ id, weight, title, detail, fix });
+  const drill = fromTick > 0, scored = show && !drill;
 
   if (wall && t.airStartTick < 0) {
     if (t.fellOff) add('fell-off', 10, 'Slid off the deck', `The car left the side of the curl ${r1(t.maxRampHeight)} m up.`, 'Keep it on the centreline: small steering corrections, and crawl (≈20 km/h) so the fan holds you.');
@@ -128,10 +144,14 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
     add('short', 9, 'Came down on the row', `You carried ${r1(f.carry)} m/s off the ledge; the far roofs need about ${need} m/s.`,
       f.boostTicks === 0 ? `Right after the release, hold ${say.boost} until the cue goes: about a third of a second.` : 'Hold BOOST a little longer, and don\'t pitch back to chase the mark until you\'re past the roofs.');
   }
-  // Braking.
-  if (t.touchTick >= 0 && f.t.sink > SINK_SOFT && !t.contact) {
+  // Braking. On the Show (not a drill) it weighs what the sink cost the total, as the mark does (0125): a firm
+  // 1.6 m/s touchdown (≈ 1 point) isn't the headline; 3 points and up are, ranked against the mark by their cost.
+  const sinkPts = scored ? sinkCost(t) : 0;
+  const brakeW = (w) => (scored ? Math.min(w, Math.max(3, 2 + sinkPts / 3)) : w);
+  const brakePts = sinkPts >= 1 ? `: about ${Math.round(sinkPts)} point${Math.round(sinkPts) === 1 ? '' : 's'}` : '';
+  if (t.touchTick >= 0 && !t.contact && namesBraking(f.t.sink, sinkPts, { show, drill })) {
     if (f.brakeTick < 0) {
-      add('no-brake', 9, 'Never braked', `You hit the ground at ${r1(t.sink)} m/s.`, assist ? `Hold ${say.land} right after you let go: it rolls you out and brakes you to the ground.` : `Hold ${say.lift} by the BRAKE line on the descent tape${f.needTick >= 0 ? `: it passed at ${Math.ceil(f.needH)} m on this fall` : ''}.`);
+      add('no-brake', brakeW(9), 'Never braked', `You hit the ground at ${r1(t.sink)} m/s${brakePts}.`, assist ? `Hold ${say.land} right after you let go: it rolls you out and brakes you to the ground.` : `Hold ${say.lift} by the BRAKE line on the descent tape${f.needTick >= 0 ? `: it passed at ${Math.ceil(f.needH)} m on this fall` : ''}.`);
     } else {
       const late = f.needTick >= 0 && f.brakeTick > f.needTick + 12;
       // With LAND held the computer brakes as soon as the car is roof-up: a late brake there is a
@@ -139,17 +159,17 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
       const governedLate = late && f.brakeGoverned && f.levelHeld > 0;
       if (governedLate) {
         if (!(f.uprightH >= 0 && f.uprightH < 12)) {
-          add('late-land', 8, 'LAND came too late', `The stop needed to start at ${Math.ceil(f.needH)} m; LAND was braking from ${r1(f.brakeH)} m.`,
+          add('late-land', brakeW(8), 'LAND came too late', `The stop needed to start at ${Math.ceil(f.needH)} m; LAND was braking from ${r1(f.brakeH)} m.`,
             `Hold ${say.land} from the release: it rolls you out and paces the whole fall.`);
         }
       } else if (late) {
         const needAt = Math.ceil(f.needH);
-        add('late-brake', 8 + Math.min(2, (f.needH - f.brakeH) / 3), 'Braked too late',
-          `You started braking at ${r1(f.brakeH)} m, falling ${r1(f.brakeSink)} m/s. With ${r1(f.needA)} m/s² of braking available, the stop needed to start at ${needAt} m (you were falling ${r1(f.needSink)} m/s there${f.needUp < 0.85 ? ', still rolling out' : ''}).`,
+        add('late-brake', brakeW(8 + Math.min(2, (f.needH - f.brakeH) / 3)), 'Braked too late',
+          `You started braking at ${r1(f.brakeH)} m, falling ${r1(f.brakeSink)} m/s${brakePts ? ` (it cost${brakePts.slice(1)})` : ''}. With ${r1(f.needA)} m/s² of braking available, the stop needed to start at ${needAt} m (you were falling ${r1(f.needSink)} m/s there${f.needUp < 0.85 ? ', still rolling out' : ''}).`,
           `Hold ${assist ? say.land : say.lift} from ${needAt} m or higher: the BRAKE line on the descent tape.${assist ? ' Or hold it from the release and let it pace the fall.' : ''}`);
       } else {
-        add('ran-out', 6, 'Out of braking at the bottom', `You braked from ${r1(f.brakeH)} m but still touched down at ${r1(t.sink)} m/s with ${Math.round(f.gasAtTouch)} % gas.`,
-          f.gasAtTouch < 25 ? 'The tanks blow down as they empty: below about 40 % the jets lose thrust. Boost less and brake once, hard, near the BRAKE line.' : 'Stay on the brake through the last 2 m: hold the sink in the green band to the ground.');
+        add('ran-out', brakeW(6), 'Out of braking at the bottom', `You braked from ${r1(f.brakeH)} m but still touched down at ${r1(t.sink)} m/s with ${Math.round(f.gasAtTouch)} % gas${brakePts}.`,
+          f.gasAtTouch < 25 ? 'The tanks blow down as they empty: below about 40 % the jets lose thrust. Boost less and brake once, hard, near the BRAKE line.' : (say.ranOut || RANOUT_LEAN));
       }
     }
   }
@@ -172,8 +192,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
   }
   if (f.touch && !t.contact) {
     const aim = say.aim || AIM_LEAN, Aim = aim[0].toUpperCase() + aim.slice(1);
-    const drill = fromTick > 0;
-    const cost = show && !drill ? markCost(t) : 0;
+    const cost = scored ? markCost(t) : 0;
     if (namesMark(f.touch.padMiss, cost, { show, drill })) {
       const past = show ? f.touch.along < 0 : false;
       // On the Show the finding weighs what it cost: a 6–7 m miss (≈ 15–17 points) outranks a tilt or the gas,
