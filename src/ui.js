@@ -7,6 +7,7 @@ import { speedK, lenK, rateK, massK, kgfK, pressK, k as uk, u as uu, onUnits, lo
 import { ZONES, hitCost } from './sim/damage.js';
 import { HIT, SCRAPE, WHEEL, PART } from './sim/impacts.js';
 import { initHudMode } from './hud-mode.js';
+import { countSlot } from './count-slot.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -109,7 +110,37 @@ export function createUI() {
   // A unit swap re-renders the next ask of the same message in the new units.
   onUnits(() => { if (cue.on) cue.html = ''; });
 
-  ui.countdown = (n) => { ui.count.innerHTML = n ? `<span${typeof n === 'string' ? ' class="word"' : ''}>${n}</span>` : ''; if (n) tick(); };
+  // The numeral stands in the free band of the screen (0070, src/count-slot.js): measured once as a countdown
+  // starts and held for its ticks. By then the HUD, the top bar and the touch controls are placed, and a cue the
+  // countdown carries (a tip, the reference's name, a tier change) is up: startRun sets them before the first tick.
+  // Everything the HUD audit holds the numeral clear of (scripts/hud-audit.mjs BOXES); a cue only while it shows.
+  const COUNT_CLEAR = '.top .brand, .top-actions, [data-screen="hud"] [data-hud-box], [data-hud-toggle], [data-drill-bar], [data-stick], [data-stick-hint], .buttons, .tbtn, [data-onethumb], [data-nozzle-pad] svg, [data-cue].on';
+  const placeCount = (span) => {
+    const st = ui.count.style;
+    st.removeProperty('--count-top'); st.removeProperty('--count-bot'); st.removeProperty('--count-scale');
+    const vw = innerWidth, vh = innerHeight, boxes = [];
+    for (const el of document.querySelectorAll(COUNT_CLEAR)) {
+      const r = el.getBoundingClientRect();
+      if (el.closest('[hidden]')) continue;
+      const cs = getComputedStyle(el);
+      if (r.width < 2 || r.height < 2 || cs.visibility === 'hidden' || cs.display === 'none') continue;
+      boxes.push({ x: r.left, r: r.right, y: r.top, b: r.bottom });
+    }
+    const s = countSlot(vh, boxes, span.offsetWidth, span.offsetHeight, vw);
+    if (s.top) st.setProperty('--count-top', `${s.top}px`);
+    if (s.bottom) st.setProperty('--count-bot', `${s.bottom}px`);
+    if (s.scale < 1) st.setProperty('--count-scale', String(s.scale));
+  };
+  // Placed on a countdown's first beat, or when the beat changes kind (a digit to READY: a retry from inside a
+  // countdown), and again if the screen changes shape under it (a turn, a fold, a resized window).
+  ui.countdown = (n) => {
+    const prev = ui.count.firstElementChild, word = typeof n === 'string';
+    ui.count.innerHTML = n ? `<span${word ? ' class="word"' : ''}>${n}</span>` : '';
+    if (!n) return;
+    if (!prev || prev.classList.contains('word') !== word) placeCount(ui.count.firstElementChild);
+    tick();
+  };
+  addEventListener('resize', () => { const span = ui.count.firstElementChild; if (span) placeCount(span); });
 
   // The flight's phases, as the timeline shows them (src/main.js decides which one you're in).
   const rollLbl = $('.adi-roll .h-lbl');
