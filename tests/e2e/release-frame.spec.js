@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { releaseFrameTests } from './frame-probe.js';
+import { releaseFrameTests, thumbFrameTests } from './frame-probe.js';
 
 // Ticket 0063: the drop off the ledge is the moment the Show builds to, and the carry camera used to
 // draw it behind the top HUD (the car's centre above the mission block's bottom in a quarter of the
@@ -24,3 +24,14 @@ const VIEWS = [
 ];
 
 releaseFrameTests(VIEWS);
+
+// 0128: the same carry flown by a first visit's one thumb (the autopilot hides the touch controls, so the flights above
+// never saw the pad): the held pad is opaque, and over the back of the row the car flew behind it (≥ 99 % of its box
+// for half a second at 390×844). Small, mid and large upright phones, and the pad on the left.
+const TOUCH = { hasTouch: true, isMobile: true, deviceScaleFactor: 2 };
+thumbFrameTests([
+  { name: 'phone 390×844', viewport: { width: 390, height: 844 }, ...TOUCH },
+  { name: 'phone 360×780', viewport: { width: 360, height: 780 }, ...TOUCH },
+  { name: 'phone 430×932', viewport: { width: 430, height: 932 }, ...TOUCH },
+  { name: 'phone 390×844, left hand', hand: 'left', viewport: { width: 390, height: 844 }, ...TOUCH },
+]);
