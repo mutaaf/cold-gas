@@ -3,7 +3,10 @@ import { test, expect } from '@playwright/test';
 // The drop off the ledge in frame (0063's probe, shared with 0107's foldables): flies the Show reference with the
 // frame loop held, steps the run, the director and the probe together at 30 frames a second, and measures every
 // air frame against the HUD's rects (see tests/e2e/release-frame.spec.js).
-export function fly() {
+// `{ thumb: true }` (0128): the flight is a one-thumb player's, not the autopilot's, so the touch controls are on the
+// screen: hold the pad up the curl, tap on the ledge, hold it to the ground. Every air frame then also measures the
+// share of the car's box under the pad's circle (`padCover`, sampled 21 × 11), as the held pad is opaque.
+export function fly(opts = {}) {
   const g = window.__coldgas, S = g.S, cam = g.camera, car = g.carRoot;
   const V = car.position.constructor, v = new V(), c = new V();
   const SEL = '[data-hud-box], [data-hud-toggle], .top-actions';
@@ -86,9 +89,40 @@ export function fly() {
     bodyBox(b);
     return full > 0 ? shown / full : 0;
   };
+  // The one-thumb pad's circle (0128) and the share of a projected box inside it.
+  const padEl = document.querySelector('[data-onethumb]');
+  const padCircle = () => {
+    if (!padEl || !vis(padEl)) return null;
+    const r = padEl.getBoundingClientRect();
+    return { cx: (r.left + r.right) / 2, cy: (r.top + r.bottom) / 2, r: r.width / 2 };
+  };
+  const inCircle = (b, p) => {
+    let n = 0;
+    for (let i = 0; i < 21; i++) for (let j = 0; j < 11; j++) {
+      const x = b.x0 + (i + 0.5) * (b.x1 - b.x0) / 21 - p.cx, y = b.y0 + (j + 0.5) * (b.y1 - b.y0) / 11 - p.cy;
+      if (x * x + y * y <= p.r * p.r) n++;
+    }
+    return n / 231;
+  };
+  out.pad = 0; out.padCover = []; out.padWorst = 0; out.padWorstAt = ''; out.carW = []; out.thumbHeld = 0;
   let rowSum = 0;
   S.paused = true;   // the frame loop stands still; the probe steps the run and the director itself
   const DT = 1 / 30;
+  if (opts.thumb) {
+    // Hold up the curl (the pad's governor stops on the ledge), then tap: let go and hold again, held to the ground.
+    g.thumb.down();
+    let tapped = false;
+    for (let f = 0; f < 30 * 60 && S.mode === 'live' && S.run.phase !== 'air'; f++) {
+      const cv = S.run.car.vel;
+      if (!tapped && S.run.phase === 'ramp' && S.run.t.progress >= 0.92 && Math.hypot(cv.x, cv.y, cv.z) < 0.3) {
+        g.thumb.up(); g.liveStep(DT); g.thumb.down(); tapped = true;
+      }
+      g.liveStep(DT);
+      S.time += DT;
+      g.director.update(DT, S.time, { carPos: car.position, carVel: S.run.car.vel, phase: S.run.phase, mode: 'live', course: g.stage.course });
+    }
+    padEl?.classList.add('on');   // what the player sees: the held pad (src/input.js marks a pressed one)
+  }
   for (let f = 0; f < 30 * 40 && S.mode === 'live' && S.run.phase !== 'done'; f++) {
     g.liveStep(DT);
     S.time += DT;
@@ -108,6 +142,16 @@ export function fly() {
     const strip = rects.find(([k]) => k === 'strip');
     if (strip && px >= strip[1].left && px <= strip[1].right && py >= strip[1].top && py <= strip[1].bottom) out.inStrip++;
     const b = carBox(), area = Math.max(1, (b.x1 - b.x0) * (b.y1 - b.y0));
+    // 0128: the car under the pad the player's thumb is holding.
+    const pc = padCircle();
+    if (pc) {
+      out.pad++;
+      if (g.thumb.held) out.thumbHeld++;
+      const s = inCircle(b, pc);
+      if (s > out.padWorst) { out.padWorst = s; out.padWorstAt = `z ${car.position.z.toFixed(1)} y ${car.position.y.toFixed(1)}`; }
+      if (s > 0.1) out.padCover.push(`${Math.round(s * 100)}% z ${car.position.z.toFixed(1)} ${g.director.state.shot}`);
+    }
+    if (g.director.state.shot === 'carry') out.carW.push(b.x1 - b.x0);
     let worst = 0, worstK = '';
     for (const [k, r] of rects) { const s = overlap(b, r) / area; if (s > worst) { worst = s; worstK = k; } }
     if (worst > 0.1) out.covered.push(`${worstK} ${Math.round(worst * 100)}%`);
@@ -132,6 +176,9 @@ export function fly() {
     if (inside < 0.9) out.offscreen.push(`${Math.round(inside * 100)}% ${Math.round(b.x0)},${Math.round(b.y0)} ${Math.round(b.x1)},${Math.round(b.y1)} y ${car.position.y.toFixed(1)}`);
   }
   S.paused = false;
+  if (opts.thumb) { g.thumb.up(); padEl?.classList.remove('on'); }
+  out.carWMean = out.carW.length ? out.carW.reduce((a, x) => a + x, 0) / out.carW.length : 0;
+  out.carW = undefined;
   out.rowMean = out.carry ? rowSum / out.carry : 0;
   out.bodies = row.length;
   out.phase = S.run.phase;
@@ -185,6 +232,58 @@ export function releaseFrameTests(VIEWS) {
         expect(r.fewBodies, 'carry frames with fewer than four bodies half on screen').toEqual([]);
         expect(r.midBodies, `bodies half on screen at z ${r.midZ.toFixed(1)}`).toBe(r.bodies);
       }
+      expect(errors).toEqual([]);
+      await page.close();
+    });
+  }
+}
+
+// 0128: the carry on one thumb. A first visit on an upright phone flies the Show with the one-thumb pad, and the pad
+// is held (opaque) from the tap on the ledge to the ground: the car must cross the row in sight, not under it.
+// { name, hand, ...newPage options }.
+export function thumbFrameTests(VIEWS) {
+  for (const { name, hand, minCarW, ...opts } of VIEWS) {
+    test(`${name}: on one thumb the car crosses the row clear of the held pad`, async ({ browser }) => {
+      test.slow();   // a whole one-thumb flight, stepped in the page
+      const page = await browser.newPage(opts);
+      const errors = [];
+      page.on('pageerror', (e) => errors.push(e.message));
+      await page.goto('/coldgas/?gfx=low&course=show');
+      await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
+      await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 60_000 });
+      await page.evaluate((h) => {
+        const g = window.__coldgas;
+        g.stage.setPixelScale(0.5); g.stage.setPixelScale = () => {};
+        g.touch.set('scheme', 'thumb'); g.touch.set('hand', h); g.setTier('assist');
+        g.startRun('jump'); g.skipCountdown();
+      }, hand || 'right');
+      await page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.freezeT <= 0, null, { timeout: 60_000 });
+      await page.waitForFunction(() => {
+        const t = document.querySelector('[data-touch]');
+        if (!t || t.hidden || t.dataset.scheme !== 'thumb') return false;
+        for (let e = document.querySelector('[data-hud-box=mission]'); e && e.nodeType === 1; e = e.parentElement) if (Number(getComputedStyle(e).opacity) < 0.99) return false;
+        return true;
+      }, null, { timeout: 30_000 });
+      const r = await page.evaluate(fly, { thumb: true });
+      console.log(name, 'thumb', JSON.stringify(r));
+      expect(r.air).toBeGreaterThan(20);
+      // The pad was on the screen and held in every air frame.
+      expect(r.pad).toBe(r.air);
+      expect(r.thumbHeld).toBe(r.air);
+      // No more than a tenth of the car's box under the pad's circle in any air frame (0128: 29 frames ≥ 50 % before).
+      expect(r.padCover, `car under the held pad (worst ${Math.round(r.padWorst * 100)}% at ${r.padWorstAt})`).toEqual([]);
+      // 0113/0116 hold: the car under the top HUD's line, a roof in frame over the row, the row across the screen.
+      expect(r.aboveTop).toEqual([]);
+      expect(r.offscreen).toEqual([]);
+      expect(r.covered).toEqual([]);
+      expect(r.noRoof).toEqual([]);
+      expect(r.carry).toBeGreaterThan(20);
+      expect(r.rowCovered).toEqual([]);
+      expect(r.rowMean, 'row on screen, mean over the carry').toBeGreaterThanOrEqual(0.9);
+      expect(r.fewBodies).toEqual([]);
+      expect(r.midBodies).toBe(r.bodies);
+      // The car over the carry is no smaller than before 0128 (≈ 69.6 px wide at 390×844).
+      if (minCarW) expect(r.carWMean, 'car width over the carry (px)').toBeGreaterThanOrEqual(minCarW);
       expect(errors).toEqual([]);
       await page.close();
     });
