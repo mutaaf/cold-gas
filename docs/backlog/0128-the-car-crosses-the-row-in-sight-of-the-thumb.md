@@ -1,12 +1,12 @@
 ---
 id: 0128
 title: On one thumb the car crosses the row in sight, not under the held pad
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-11-01
-pr:
+pr: 204
 by: critic
 ---
 
