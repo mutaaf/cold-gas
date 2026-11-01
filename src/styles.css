@@ -142,7 +142,8 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
   color: var(--ink); text-align: center; text-shadow: 0 1px 24px rgba(0, 0, 0, 0.6); pointer-events: none; opacity: 0; transition: opacity 0.4s var(--ease); z-index: 3; white-space: nowrap; }
 .cue.on { opacity: 1; }
 .cue kbd { font: 500 11px/1 var(--mono); padding: 3px 7px; border: 1px solid var(--hair); border-radius: 5px; margin: 0 2px; }
-.count { position: fixed; inset: 0; display: grid; place-items: center; font: 200 clamp(90px, 16vw, 200px)/1 var(--text); pointer-events: none; z-index: 3; }
+/* The numeral's band (0070): src/ui.js measures the free space between the HUD's boxes as a countdown starts. */
+.count { position: fixed; inset: 0; box-sizing: border-box; padding: var(--count-top, 0px) 0 var(--count-bot, 0px); display: grid; place-items: center; font: 200 calc(clamp(90px, 16vw, 200px) * var(--count-scale, 1))/1 var(--text); pointer-events: none; z-index: 3; }
 .count span { animation: count 0.9s var(--ease) both; }
 @keyframes count { from { opacity: 0; transform: scale(1.25); filter: blur(10px); } 30% { opacity: 1; transform: none; filter: none; } to { opacity: 0; transform: scale(0.94); } }
 
@@ -265,7 +266,7 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .rows .tier-tag { display: inline-block; margin-right: 7px; padding: 2px 5px; border: 1px solid var(--hair); border-radius: 4px; font: 500 11px/1 var(--text); letter-spacing: 0.08em; color: var(--ink-2); vertical-align: 1px; }
 .rows .tier-tag[data-tier='pro'] { border-color: rgba(150, 220, 255, 0.5); color: var(--ink); }
 .rows .tier-tag[data-tier='advanced'] { border-color: rgba(92, 255, 200, 0.55); color: var(--aur-1); }
-.count span.word { font-size: clamp(54px, 9vw, 120px); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 300; animation-duration: 1s; }
+.count span.word { font-size: calc(clamp(54px, 9vw, 120px) * var(--count-scale, 1)); letter-spacing: 0.18em; text-transform: uppercase; font-weight: 300; animation-duration: 1s; }
 
 /* Quick Retry / Home in the top bar: only while a run is on screen (body[data-mode]). */
 .quick { display: none; align-items: center; gap: 6px; height: 32px; padding: 0 10px; border-radius: 16px; border: 1px solid var(--hair); background: var(--glass); backdrop-filter: blur(14px);

@@ -14,6 +14,7 @@
 // --safe-* insets are forced to a notched phone's (47 px on the notch side in landscape, 34 px home
 // indicator in portrait, 21 px in landscape), as iOS reports them with viewport-fit=cover.
 // Touch viewports also fly a Lineup hop (attitude dial vs the LIFT slot).
+// Each flight starts with its countdown frozen on its first beat (0-countdown, 0070): the numeral against every box.
 // Every viewport is flown with the HUD compact and full (0061, src/hud-mode.js: the choice is set
 // in localStorage before the page loads); a frame's name carries `-compact` or `-full`.
 //
@@ -72,6 +73,8 @@ const BOXES = [
   '.fd-road', '.fd-ctl', '.fd-timer', '.fd-speed', '.fd-stats', '.fd-map', '.fd-fine', '.bq-dock', '.fd-ai',
   // the HUD's handle (compact ⇄ full), wherever it stands
   '[data-hud-toggle]',
+  // the countdown's numeral (0070): only shown in the countdown, measured there (frame 0-countdown)
+  '[data-count] > span',
 ];
 const TEXT_ROOTS = '[data-screen="hud"], [data-touch], [data-cue], .top, [data-drill-bar], [data-drive-hud], [data-onethumb], .bq-dock';
 
@@ -389,7 +392,11 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   // generous (a frame is taken as soon as it holds): on software GL a 1080×1920 frame takes ≈ 0.5 s and
   // the clock caps the sim at 0.1 s a frame, so the run-up and the climb run at a fifth of real time.
   const until = (fn, timeout = 120000) => page.waitForFunction(fn, null, { timeout: ms(timeout), polling: 'raf' }).then(() => true).catch(() => { missed.push(`${vpName} ${fn.toString().slice(0, 90)}`); console.log('  missed', fn.toString().slice(0, 90)); return false; });
-  await S(() => { window.__auditStop = false; window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
+  await S(() => { window.__auditStop = false; window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); });
+  // The countdown (0070): its numeral, frozen on its first beat, against everything else on the glass.
+  await until(() => !!document.querySelector('[data-count] > span'), 30000);
+  await freeze(); await measure(page, vpName, '0-countdown'); await thaw();
+  await S(() => window.__coldgas.skipCountdown());
   // A page-side driver (synthetic key events, read by src/input.js like real ones): crawl in at
   // ≈5 m/s, up the curl, brake on the ledge (as scripts/human-show.mjs's players do).
   await S(() => {
