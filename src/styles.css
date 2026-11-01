@@ -118,7 +118,8 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
    a feathered scrim of the page's own ground, under the text and over the canvas: every title label holds 4.5:1 on
    the brightest pixels behind it (scripts/title-audit.mjs). No box-shadow overflow: it scrolls nothing. */
 .title::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: 28px;
-  background: rgba(5, 7, 12, 0.72); box-shadow: 0 0 44px 30px rgba(5, 7, 12, 0.72); }
+  background: rgba(5, 7, 12, 0.72); box-shadow: 0 0 44px 30px rgba(5, 7, 12, 0.72); animation: scrim-in 0.9s var(--ease) 0.1s both; }
+@keyframes scrim-in { from { opacity: 0; } }   /* in with the text's rise, not ahead of it as an empty panel */
 body[data-mode='title'] .brand { position: relative; isolation: isolate; }
 body[data-mode='title'] .brand::before { content: ''; position: absolute; inset: -4px -8px; z-index: -1; border-radius: 10px;
   background: rgba(5, 7, 12, 0.72); box-shadow: 0 0 18px 10px rgba(5, 7, 12, 0.72); }
