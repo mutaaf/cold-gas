@@ -44,6 +44,7 @@
 import { chromium } from '@playwright/test';
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { DRIVE, viewportsFor, planShards, touchFor, dprFor, insetCss, measureCover, COVER_ROOTS, coverCeiling } from './audit-plan.mjs';
+import { textContrast } from './contrast.mjs';
 
 const flags = Object.fromEntries(process.argv.slice(2).filter((a) => a.startsWith('--')).map((a) => { const [k, v = 'true'] = a.slice(2).split('='); return [k, v]; }));
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', set = 'all', label = 'audit', states = 'both'] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
@@ -234,38 +235,7 @@ async function measure(page, vpName, phase, { boxes = BOXES, textRoots = TEXT_RO
   const after = await page.evaluate(snapGlass, { BOXES: boxes, TEXT_ROOTS: textRoots });
   const changed = [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((k) => before[k] !== after[k]).map((k) => `${k} ${before[k] || 'absent'} → ${after[k] || 'gone'}`);
   await page.evaluate(() => { document.getElementById('audit-hide')?.remove(); document.getElementById('audit-still')?.remove(); const h = window.__auditRaf; if (h) { delete window.__auditRaf; window.requestAnimationFrame = h.raf; for (const cb of h.q) h.raf.call(window, cb); } });
-  const contrast = await page.evaluate(async ({ shotB64, bareB64, texts, dpr }) => {
-    const load = (b64) => new Promise((res) => { const i = new Image(); i.onload = () => res(i); i.src = `data:image/png;base64,${b64}`; });
-    const [img, bimg] = await Promise.all([load(shotB64), load(bareB64)]);
-    const cv = new OffscreenCanvas(bimg.width, bimg.height), cx = cv.getContext('2d');
-    cx.drawImage(bimg, 0, 0);
-    const bg = cx.getImageData(0, 0, cv.width, cv.height).data;
-    void img;
-    const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
-    const L = (r, g, b) => 0.2126 * lin(r) + 0.7152 * lin(g) + 0.0722 * lin(b);
-    const parse = (s) => { const m = s.match(/[\d.]+/g)?.map(Number) || [255, 255, 255, 1]; return { r: m[0], g: m[1], b: m[2], a: m[3] ?? 1 }; };
-    return texts.map((t) => {
-      if (t.clipped) return { t: t.t, px: t.px, ratio: null };
-      const c = parse(t.color), a = c.a * t.op;
-      // Inset 2 px: a box's own border is not the background behind its glyphs.
-      const ins = Math.min(2, t.r.w / 4, t.r.h / 4);
-      const x0 = Math.max(0, Math.floor((t.r.x + ins) * dpr)), y0 = Math.max(0, Math.floor((t.r.y + ins) * dpr));
-      const x1 = Math.min(cv.width, Math.ceil((t.r.x + t.r.w - ins) * dpr)), y1 = Math.min(cv.height, Math.ceil((t.r.y + t.r.h - ins) * dpr));
-      const ls = [];
-      let worst = null;
-      for (let y = y0; y < y1; y += 2) for (let x = x0; x < x1; x += 2) {
-        const i = (y * cv.width + x) * 4;
-        // the text's own colour composited over this background pixel
-        const tr = c.r * a + bg[i] * (1 - a), tg = c.g * a + bg[i + 1] * (1 - a), tb = c.b * a + bg[i + 2] * (1 - a);
-        const lt = L(tr, tg, tb), lb = L(bg[i], bg[i + 1], bg[i + 2]);
-        ls.push((Math.max(lt, lb) + 0.05) / (Math.min(lt, lb) + 0.05));
-      }
-      if (!ls.length) return { ...t, ratio: null };
-      ls.sort((p, q) => p - q);
-      worst = ls[Math.floor(ls.length * 0.1)];   // the worst 10 % of the background behind it
-      return { t: t.t, px: t.px, ratio: Math.round(worst * 100) / 100 };
-    });
-  }, { shotB64: shot.toString('base64'), bareB64: bare.toString('base64'), texts: m.texts, dpr: await page.evaluate(() => devicePixelRatio) });
+  const contrast = await textContrast(page, shot, bare, m.texts);
   const small = m.texts.filter((t) => t.px < 11).map((t) => `${t.t} ${t.px}px`);
   const low = contrast.filter((c) => c.ratio !== null && c.ratio < 4.5).map((c) => `${c.t} ${c.ratio}`);
   const minPx = Math.min(...m.texts.map((t) => t.px));
