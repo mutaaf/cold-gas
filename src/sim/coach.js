@@ -7,6 +7,7 @@ import { up, CAR, NOZZLES, forward } from './vehicle.js';
 import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { predict, newPrediction, SINK_SOFT } from './predict.js';
+import { scoreRun } from './judge.js';
 import { v3 } from './m3.js';
 import { dhypot } from './dmath.js';
 
@@ -81,7 +82,23 @@ export function readFlight(inputLog, courseId, fromTick = 0) {
 // The controls a fix names, in the device's words (src/pointer.js coachWords; this default is a keyboard's).
 // One instruction per device and tier: on Assist the brake is LAND, on Pro and Advanced it's LIFT by the
 // BRAKE line (Pro has no LAND governor), as the how-to card, the cue line and the pointer say it.
-export const KEY_WORDS = { land: 'LAND (Shift)', lift: 'LIFT (Space)', release: 'RELEASE (Space)', boost: 'BOOST (F)', roll: '← →' };
+// `aim`: how this device walks the touchdown onto the mark (one-thumb: the pad's slide, 0121; else lean with the stick).
+export const AIM_LEAN = 'lean toward the pad (pitch or roll) above 5 m to walk the touchdown marker onto the rings, then level';
+export const AIM_THUMB = 'hold the pad in the air and slide onto the amber dot: the touchdown follows it onto the rings';
+export const KEY_WORDS = { land: 'LAND (Shift)', lift: 'LIFT (Space)', release: 'RELEASE (Space)', boost: 'BOOST (F)', roll: '← →', aim: AIM_LEAN };
+
+// What the mark cost the total: the run re-scored as if it had touched down on the mark, everything else the
+// same (the judges' own weights and the tier, from scoreRun, so it can't drift from judge.js). 0124.
+export function markCost(t) {
+  if (!t || t.touchTick < 0) return 0;
+  const pad = COURSES[t.course]?.pad;
+  if (!pad) return 0;
+  const onMark = scoreRun({ ...t, lateral: 0, landZ: pad.z }).total;
+  return Math.max(0, Math.round((onMark - scoreRun(t).total) * 10) / 10);
+}
+// The Show names the mark once a miss costs this many points of the total (≈ 4.4 m with the rings' curve);
+// under it a run with nothing else to fix is "Clean". The Wall and the Lineup keep their 7 m.
+export const MARK_POINTS = 3;
 
 // The fixes, most costly first. Each: { id, title, detail, fix, weight }. Only the words depend on `say`.
 export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_WORDS) {
@@ -147,11 +164,18 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
     add('tilt', 4, 'Touched down tilted', `${Math.round(t.tiltDeg)}° off level at touchdown: the wheels met the ground one at a time.`,
       assist ? `Stop steering for the last 2 m and let the car level (${say.land} levels it for you).` : 'Level it by the dial before the last 2 m: the horizon flat, the roll and pitch cues gone.');
   }
-  if (f.touch && f.touch.padMiss > 7 && !t.contact) {
-    const past = show ? f.touch.along < 0 : false;
-    add('mark', 3 + Math.min(3, f.touch.padMiss / 15), past ? 'Long of the mark' : 'Off the mark',
-      `You landed ${r1(f.touch.padMiss)} m from the mark${past ? ` (${r1(-f.touch.along)} m past it)` : ''}.`,
-      show && f.carry > 11 ? `You carried ${r1(f.carry)} m/s: about 9.5 clears the roofs. Then pitch the nose up a touch to walk the touchdown marker onto the pad.` : 'Watch the touchdown marker on the ground: lean toward the pad (pitch or roll) above 5 m to walk it onto the rings, then level.');
+  if (f.touch && !t.contact) {
+    const aim = say.aim || AIM_LEAN, Aim = aim[0].toUpperCase() + aim.slice(1);
+    const cost = show ? markCost(t) : 0;
+    if (show ? cost >= MARK_POINTS : f.touch.padMiss > 7) {
+      const past = show ? f.touch.along < 0 : false;
+      // On the Show the finding weighs what it cost: a 6–7 m miss (≈ 15–17 points) outranks a tilt or the gas,
+      // never a crash-grade braking or carry fix (8–10).
+      const weight = show ? Math.min(7.5, 2 + cost / 3) : 3 + Math.min(3, f.touch.padMiss / 15);
+      add('mark', weight, past ? 'Long of the mark' : 'Off the mark',
+        `You landed ${r1(f.touch.padMiss)} m from the mark${past ? ` (${r1(-f.touch.along)} m past it)` : ''}${show ? `: about ${Math.round(cost)} points` : ''}.`,
+        show && f.carry > 11 && say.aim !== AIM_THUMB ? `You carried ${r1(f.carry)} m/s: about 9.5 clears the roofs. Then pitch the nose up a touch to walk the touchdown marker onto the pad.` : `${Aim}.`);
+    }
   }
   if (t.touchTick >= 0 && f.gasAtTouch < 10) {
     add('gas', 3, 'Nearly out of gas', `${Math.round(f.gasAtTouch)} % left at touchdown.`, 'Shorter boosts and one hard, late brake use the least gas.');

@@ -7,6 +7,8 @@
 
 // The device a player is on, from src/input.js's lastDevice ('touch' | 'key' | 'pad' | 'mouse' | 'none'):
 // a mouse or nothing yet is a desktop, so its keyboard.
+import { AIM_LEAN, AIM_THUMB } from './sim/coach.js';
+
 export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ? 'pad' : 'key');
 
 // One control: what to do with what, as a player reads it ("hold Shift", "tap the pad").
@@ -40,12 +42,13 @@ const thumbOn = (ctx) => ctx.device === 'touch' && ctx.scheme === 'thumb';
 // The coach's fixes (src/sim/coach.js) name controls in these words: the control's name and, on a keyboard or
 // a pad, its key ("LAND (Shift)", "LAND (B)"); on touch the button itself ("LAND"); one-thumb, the pad. So the
 // results' "What happened" says what the how-to card, the cue line and the pointer say, on every device.
+// `aim` (0124): how this device walks the touchdown onto the mark, as the pointer's 'mark' line says it.
 export function coachWords(ctx) {
   const v = vocab(ctx), adv = ctx.tier === 'advanced';
-  if (thumbOn(ctx)) return { land: 'the pad', lift: 'the pad', release: 'the pad', boost: 'the pad', roll: 'the pad' };
-  if (ctx.device === 'touch') return { land: 'LAND', lift: adv ? v.brakeAdv[1] : 'LIFT', release: 'RELEASE', boost: 'BOOST', roll: adv ? v.rollAdv[1] : v.roll[1] };
+  if (thumbOn(ctx)) return { land: 'the pad', lift: 'the pad', release: 'the pad', boost: 'the pad', roll: 'the pad', aim: AIM_THUMB };
+  if (ctx.device === 'touch') return { land: 'LAND', lift: adv ? v.brakeAdv[1] : 'LIFT', release: 'RELEASE', boost: 'BOOST', roll: adv ? v.rollAdv[1] : v.roll[1], aim: AIM_LEAN };
   const named = (name, act) => `${name} (${v[act][1]})`;
-  return { land: named('LAND', 'land'), lift: named('LIFT', 'lift'), release: named('RELEASE', 'release'), boost: named('BOOST', 'boost'), roll: adv ? v.rollAdv[1] : v.roll[1] };
+  return { land: named('LAND', 'land'), lift: named('LIFT', 'lift'), release: named('RELEASE', 'release'), boost: named('BOOST', 'boost'), roll: adv ? v.rollAdv[1] : v.roll[1], aim: AIM_LEAN };
 }
 
 // The "how to fly" card: the inputs that matter, per phase, on this device. Each row:
