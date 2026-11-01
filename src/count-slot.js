@@ -5,11 +5,12 @@
 // A box counts when it crosses the numeral's column (it is centred on the screen). The bands between
 // them (each box padded by `pad`) are the candidates: the one nearest the middle of the screen that
 // holds the numeral wins; if none does, the tallest, and the numeral is scaled to fit it.
-export function countSlot(vh, boxes, numW, numH, vw, pad = 8) {
+// `pad` defaults to an eighth of the numeral: it grows in from 1.25x (styles.css @keyframes count).
+export function countSlot(vh, boxes, numW, numH, vw, pad = Math.max(8, Math.round(numH * 0.125))) {
   const x0 = (vw - numW) / 2, x1 = (vw + numW) / 2;
   const spans = [];
   for (const b of boxes) {
-    if (!(b.r > x0 && b.x < x1 && b.b > b.y)) continue;
+    if (!(b.r > x0 && b.x < x1 && b.b > b.y) || b.b <= 0 || b.y >= vh) continue;
     spans.push([Math.max(0, b.y - pad), Math.min(vh, b.b + pad)]);
   }
   spans.sort((a, b) => a[0] - b[0]);
@@ -23,5 +24,5 @@ export function countSlot(vh, boxes, numW, numH, vw, pad = 8) {
   const pick = fits.length ? fits.reduce((p, g) => (off(g) < off(p) ? g : p))
     : gaps.reduce((p, g) => (g[1] - g[0] > p[1] - p[0] ? g : p));
   const scale = fits.length ? 1 : Math.max(0.4, (pick[1] - pick[0]) / numH);
-  return { top: Math.round(pick[0]), bottom: Math.round(vh - pick[1]), scale: Math.round(scale * 1000) / 1000 };
+  return { top: Math.max(0, Math.round(pick[0])), bottom: Math.max(0, Math.round(vh - pick[1])), scale: Math.round(scale * 1000) / 1000 };
 }

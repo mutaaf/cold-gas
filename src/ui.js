@@ -113,7 +113,8 @@ export function createUI() {
   // The numeral stands in the free band of the screen (0070, src/count-slot.js): measured once as a countdown
   // starts and held for its ticks. By then the HUD, the top bar and the touch controls are placed, and a cue the
   // countdown carries (a tip, the reference's name, a tier change) is up: startRun sets them before the first tick.
-  const COUNT_CLEAR = '.top .brand, .top-actions, [data-screen="hud"] [data-hud-box], [data-hud-toggle], [data-drill-bar], [data-stick], .tbtn, [data-onethumb], [data-nozzle-pad] svg, [data-cue]';
+  // Everything the HUD audit holds the numeral clear of (scripts/hud-audit.mjs BOXES); a cue only while it shows.
+  const COUNT_CLEAR = '.top .brand, .top-actions, [data-screen="hud"] [data-hud-box], [data-hud-toggle], [data-drill-bar], [data-stick], [data-stick-hint], .buttons, .tbtn, [data-onethumb], [data-nozzle-pad] svg, [data-cue].on';
   const placeCount = (span) => {
     const st = ui.count.style;
     st.removeProperty('--count-top'); st.removeProperty('--count-bot'); st.removeProperty('--count-scale');
@@ -130,13 +131,16 @@ export function createUI() {
     if (s.bottom) st.setProperty('--count-bot', `${s.bottom}px`);
     if (s.scale < 1) st.setProperty('--count-scale', String(s.scale));
   };
+  // Placed on a countdown's first beat, or when the beat changes kind (a digit to READY: a retry from inside a
+  // countdown), and again if the screen changes shape under it (a turn, a fold, a resized window).
   ui.countdown = (n) => {
-    const fresh = !ui.count.firstElementChild;
-    ui.count.innerHTML = n ? `<span${typeof n === 'string' ? ' class="word"' : ''}>${n}</span>` : '';
+    const prev = ui.count.firstElementChild, word = typeof n === 'string';
+    ui.count.innerHTML = n ? `<span${word ? ' class="word"' : ''}>${n}</span>` : '';
     if (!n) return;
-    if (fresh) placeCount(ui.count.firstElementChild);
+    if (!prev || prev.classList.contains('word') !== word) placeCount(ui.count.firstElementChild);
     tick();
   };
+  addEventListener('resize', () => { const span = ui.count.firstElementChild; if (span) placeCount(span); });
 
   // The flight's phases, as the timeline shows them (src/main.js decides which one you're in).
   const rollLbl = $('.adi-roll .h-lbl');

@@ -40,10 +40,22 @@ describe('the countdown slot', () => {
 
   it('prefers the band nearest the middle among those that fit', () => {
     const s = countSlot(1000, [box(0, 300, 1000, 340)], 100, 100, 1000);
-    expect(s).toEqual({ top: 348, bottom: 0, scale: 1 });
+    expect(s).toEqual({ top: 353, bottom: 0, scale: 1 });   // 340 + an eighth of 100
   });
 
   it('ignores boxes beside the numeral\'s column', () => {
     expect(countSlot(720, [box(0, 300, 500, 400), box(780, 300, 1280, 400)], 116, 188, 1280)).toEqual({ top: 0, bottom: 0, scale: 1 });
+  });
+
+  it('ignores a box off the screen, and never returns a negative band', () => {
+    const s = countSlot(390, [box(0, 300, 844, 390), box(0, 420, 844, 600), box(0, -200, 844, -10)], 60, 98, 844);
+    expect(s.top).toBe(0);
+    expect(s.bottom).toBeGreaterThanOrEqual(90);
+    expect(s.scale).toBe(1);
+  });
+
+  it('pads by an eighth of the numeral, for its grow-in from 1.25x', () => {
+    const s = countSlot(1000, [box(0, 300, 1000, 340)], 100, 200, 1000);
+    expect(s.top).toBe(365);
   });
 });

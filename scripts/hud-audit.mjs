@@ -14,7 +14,8 @@
 // --safe-* insets are forced to a notched phone's (47 px on the notch side in landscape, 34 px home
 // indicator in portrait, 21 px in landscape), as iOS reports them with viewport-fit=cover.
 // Touch viewports also fly a Lineup hop (attitude dial vs the LIFT slot).
-// Each flight starts with its countdown frozen on its first beat (0-countdown, 0070): the numeral against every box.
+// Each flight starts with its countdown frozen on its first numeral shown (0-countdown, 0070): the numeral against every
+// box; once per viewport a retry from inside it, frozen on READY (0-ready).
 // Every viewport is flown with the HUD compact and full (0061, src/hud-mode.js: the choice is set
 // in localStorage before the page loads); a frame's name carries `-compact` or `-full`.
 //
@@ -396,6 +397,12 @@ for (const [w, h, safe] of VIEWPORTS) for (const hudState of STATES) {
   // The countdown (0070): its numeral, frozen on its first beat, against everything else on the glass.
   await until(() => !!document.querySelector('[data-count] > span'), 30000);
   await freeze(); await measure(page, vpName, '0-countdown'); await thaw();
+  // A retry from inside the countdown (once per viewport): its one beat is the word READY, four times as wide.
+  if (hudState === STATES[0]) {
+    await S(() => window.__coldgas.startRun('jump', true));
+    await until(() => !!document.querySelector('[data-count] > span.word'), 30000);
+    await freeze(); await measure(page, vpName, '0-ready'); await thaw();
+  }
   await S(() => window.__coldgas.skipCountdown());
   // A page-side driver (synthetic key events, read by src/input.js like real ones): crawl in at
   // ≈5 m/s, up the curl, brake on the ledge (as scripts/human-show.mjs's players do).
