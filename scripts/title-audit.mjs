@@ -4,11 +4,14 @@
 // forced on --safe-*, as in scripts/hud-audit.mjs), and a folding phone's poses as measured, each with its
 // own insets (scripts/audit-plan.mjs FOLD, 0103), plus Safari's two windows side by side on its open screen.
 //   node scripts/title-audit.mjs <url> <outdir> [label] [--only=WxH,WxH]
+// Every title text under 24 px (and the top bar's wordmark) holds 4.5:1 against the scene behind it (0069):
+// measured on the screenshot as scripts/hud-audit.mjs does (scripts/contrast.mjs), with the page held still.
 // A gate (0082): the exit code is 1 when any viewport has an issue, and the offenders are listed at
 // the end. CI (software GL, about 2× slower): AUDIT_SLOW (default 2 when CI is set) scales the waits.
 import { chromium } from '@playwright/test';
 import { mkdirSync } from 'node:fs';
 import { FOLD, FLIP, dprFor, insetCss } from './audit-plan.mjs';
+import { textContrast } from './contrast.mjs';
 
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', label = 'title'] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const SLOW = Number(process.env.AUDIT_SLOW || (process.env.CI ? 2 : 1));
@@ -24,6 +27,45 @@ const VPS = [[1280, 720, 0], [1440, 900, 0], [1920, 1080, 0], [390, 844, 1], [43
 // A GPU where there is one (macOS: Metal); software GL elsewhere (CI), as the e2e config does.
 const GL = process.platform === 'darwin' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 const browser = await chromium.launch({ args: GL });
+// The title's text against the 3D scene (0069). The page is held still (every frame loop waits, CSS motion
+// settled), shot with its text and again with the text hidden; each text under 24 px, and the top bar's
+// wordmark, must hold 4.5:1 against the worst 10 % of the pixels behind it. Returns the issues.
+const TEXT = '.title, .top .brand';
+const LARGE = 24;
+async function lowContrast(page, file) {
+  await page.addStyleTag({ content: '*, *::before, *::after { animation: none !important; transition: none !important; }' }).then((h) => page.evaluate((el) => { el.id = 'audit-still'; }, h));
+  await page.evaluate(() => new Promise((res) => {
+    if (!window.__auditRaf) { const q = []; window.__auditRaf = { q, raf: window.requestAnimationFrame }; window.requestAnimationFrame = (cb) => { q.push(cb); return 0; }; }
+    setTimeout(() => setTimeout(res, 50), 50);
+  }));
+  const shot = await page.screenshot({ path: file });
+  const texts = await page.evaluate(({ TEXT, LARGE }) => {
+    const shown = (el) => { for (let e = el; e && e.nodeType === 1; e = e.parentElement) { const cs = getComputedStyle(e); if (cs.display === 'none' || cs.visibility === 'hidden' || Number(cs.opacity) < 0.05 || e.hidden) return false; } const b = el.getBoundingClientRect(); return b.width > 1 && b.height > 1; };
+    const out = [];
+    for (const root of document.querySelectorAll(TEXT)) for (const el of [root, ...root.querySelectorAll('*')]) {
+      if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim()) || !shown(el)) continue;
+      const cs = getComputedStyle(el), px = parseFloat(cs.fontSize);
+      if (px >= LARGE && !el.matches('.top .brand')) continue;
+      let op = 1; for (let e = el; e && e.nodeType === 1; e = e.parentElement) op *= Number(getComputedStyle(e).opacity);
+      // The box of the element's own text (a Range over its text nodes), not the element's: a decoration beside
+      // the words (Assist's state dot) is not behind them.
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const n of el.childNodes) if (n.nodeType === 3 && n.textContent.trim()) {
+        const rg = document.createRange(); rg.selectNodeContents(n); const q = rg.getBoundingClientRect();
+        if (q.width > 0 && q.height > 0) { x0 = Math.min(x0, q.left); y0 = Math.min(y0, q.top); x1 = Math.max(x1, q.right); y1 = Math.max(y1, q.bottom); }
+      }
+      if (!(x1 > x0)) continue;
+      const b = { x: x0, y: y0, width: x1 - x0, height: y1 - y0 };
+      out.push({ t: el.textContent.trim().slice(0, 24), px, color: cs.color, op, r: { x: b.x, y: b.y, w: b.width, h: b.height } });
+    }
+    return out;
+  }, { TEXT, LARGE });
+  await page.addStyleTag({ content: `${TEXT.split(', ').map((s) => `${s}, ${s} *`).join(', ')} { color: transparent !important; text-shadow: none !important; -webkit-text-fill-color: transparent !important; } .title .wordmark { background: none !important; }` });   // the wordmark's glyphs are its clipped gradient
+  await page.waitForTimeout(80);
+  const bare = await page.screenshot();
+  const c = await textContrast(page, shot, bare, texts);
+  return c.filter((x) => x.ratio !== null && x.ratio < 4.5).map((x) => `contrast "${x.t}" ${x.ratio}`);
+}
 let bad = 0;
 const offenders = [];
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7).split(',');
@@ -67,7 +109,7 @@ for (const [w, h, touch, safe] of VPS) {
     return issues;
   });
   const name = `${w}x${h}${safe ? 's' : ''}`;
-  await page.screenshot({ path: `${out}/${label}-${name}.png` });
+  r.push(...await lowContrast(page, `${out}/${label}-${name}.png`));
   bad += r.length;
   if (r.length) offenders.push(`${name}: ${r.join('; ')}`);
   console.log(`${name}: ${r.length ? r.join('; ') : 'ok'} (${Math.round((Date.now() - t0) / 1000)} s)`);
