@@ -1,12 +1,12 @@
 ---
 id: 0070
 title: The countdown numeral is never half-hidden behind the telemetry panel
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-10-22
-pr:
+pr: 196
 by: scout
 ---
 
@@ -22,10 +22,10 @@ measured rects (CSS custom properties or a measure-on-show step in src/ui.js), a
 orientations. Hold the numeral still across ticks (no layout shift when it changes).
 
 ## Acceptance criteria
-- [ ] During the countdown, the numeral's rect intersects no HUD, top-bar, panel or touch-pad rect at every viewport hud-audit covers
-- [ ] hud-audit samples a countdown frame (it currently flies the Show past it) and fails on overlap
-- [ ] No flicker.mjs region rises; reduced motion unchanged
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] During the countdown, the numeral's rect intersects no HUD, top-bar, panel or touch-pad rect at every viewport hud-audit covers
+- [x] hud-audit samples a countdown frame (it currently flies the Show past it) and fails on overlap
+- [x] No flicker.mjs region rises; reduced motion unchanged
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 
 ## Test plan
 hud-audit: add a countdown capture and the overlap check; unit test for the placement helper if one is added.
