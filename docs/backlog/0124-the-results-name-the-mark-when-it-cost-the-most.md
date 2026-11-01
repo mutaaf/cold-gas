@@ -1,12 +1,12 @@
 ---
 id: 0124
 title: The results name the missed mark when it cost the most points, not "nothing big to fix"
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-01
-pr:
+pr: 197
 by: critic
 ---
 

@@ -23,7 +23,10 @@
 //            some shove it up early (more carry) and leave it there
 //   mixed    a third of each
 //
-//   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [-v]
+// --coach (0124): also re-fly each landed run through the results' coach (src/sim/coach.js, in this scheme's words) and
+// tally its first finding: how many players the What happened card tells "Clean".
+//
+//   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [--coach] [-v]
 import { readFileSync } from 'node:fs';
 import { createRun, stepRun, wallProgress } from '../src/sim/run.js';
 import { newInput, up, forward } from '../src/sim/vehicle.js';
@@ -45,6 +48,10 @@ const build = opt('build', 'after');
 const vp = opt('vp', '390x844');
 const verbose = args.includes('-v');
 const skill = opt('skill', 'none');
+const COACH = args.includes('--coach');
+const { coach } = COACH ? await import('../src/sim/coach.js') : {};
+const { coachWords } = COACH ? await import('../src/pointer.js') : {};
+const firsts = {};
 const { createOneThumb, markOffset } = scheme === 'thumb' ? await import('../src/onethumb.js') : {};
 
 // Control geometry (CSS px): centre and radius per control, per viewport. Defaults are the
@@ -264,6 +271,10 @@ for (let n = 0; n < N; n++) {
   else if (t.sink > 3) why = `hard touchdown (${t.sink > 6 ? '>6' : '3–6'} m/s)`;
   else if (t.tiltDeg > 15) why = 'landed tilted';
   if (!why) { ok++; if (s.facts.padMiss < 7) onPad++; totals.push(s.total); } else fails[why] = (fails[why] || 0) + 1;
+  if (COACH && !why) {
+    const id = coach(run.inputLog, 'show', s, 0, coachWords({ device: 'touch', scheme, tier: s.tier, course: 'show' })).items[0].id;
+    firsts[id] = (firsts[id] || 0) + 1;
+  }
   if (verbose) console.log(JSON.stringify(P), JSON.stringify(F), why || 'OK', s.total, 'sink', t.sink.toFixed(1), 'pad', s.facts.padMiss);
 }
 totals.sort((a, b) => a - b);
@@ -271,4 +282,5 @@ const q = (f) => totals[Math.min(totals.length - 1, Math.floor(totals.length * f
 console.log(`Phone ${vp} · ${scheme}${scheme === 'thumb' ? ` · skill ${skill}` : ''} · ${build}: ${ok}/${N} landed clean (${Math.round((100 * ok) / N)}%), ${onPad} inside the 7 m ring; median clean score ${q(0.5)} · mis-taps ${missed}/${presses}`);
 console.log(`  clean scores: min ${totals[0] ?? '–'} · p10 ${q(0.1)} · median ${q(0.5)} · p90 ${q(0.9)} · max ${totals[totals.length - 1] ?? '–'}`);
 console.log('  failures:', JSON.stringify(fails));
+if (COACH) console.log(`  coach's first finding (landed runs): ${JSON.stringify(firsts)} · clean ${Math.round((100 * (firsts.clean || 0)) / Math.max(1, ok))}%`);
 if (DUMP) { const { writeFileSync } = await import('node:fs'); writeFileSync(DUMP, JSON.stringify(dumped)); }

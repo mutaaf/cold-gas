@@ -65,6 +65,13 @@ test('the results sheet shows the medal row under the score, and it is kept on t
   expect(row.y - (total.y + total.height)).toBeLessThan(40);
   const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('coldgas_medals') || '{}'));
   expect(stored['show:assist']).toBe(await page.evaluate(() => window.__coldgas.S.card.total));
+  // 0124: this flight never slid (the computer's touchdown, ≈ 6 m off), so What happened names the mark first,
+  // with the points it cost, in the thumb's words (the NEXT RUN pointer's), not "nothing big to fix".
+  const first = page.locator('[data-coach-items] li').first();
+  await expect(first).toHaveAttribute('data-fix', 'mark', { timeout: 10_000 });
+  await expect(first).toContainText(/from the mark.*about \d+ points/);
+  await expect(first.locator('.cf')).toContainText('slide onto the amber dot');
+  await expect(page.locator('[data-coach]')).not.toContainText('nothing big to fix');
   // The reference flight is not yours: no medal row for it.
   await page.evaluate(() => { window.__coldgas.toTitle(); window.__coldgas.startRun('reveal'); window.__coldgas.fastForward(); });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });

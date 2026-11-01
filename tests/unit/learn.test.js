@@ -7,7 +7,10 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun, TIERS } from '../../src/sim/judge.js';
 import { createVehicle, step, newInput, up, NOZZLES, VALVE_KEYS, ASSIST_CARRY, ASSIST_CRAWL, TRIM } from '../../src/sim/vehicle.js';
 import { predict, newPrediction, SINK_SOFT } from '../../src/sim/predict.js';
-import { coach } from '../../src/sim/coach.js';
+import { coach, markCost, namesMark, MARK_POINTS, KEY_WORDS, AIM_THUMB } from '../../src/sim/coach.js';
+import { coachWords, pointerText } from '../../src/pointer.js';
+import { createOneThumb, thumbStage } from '../../src/onethumb.js';
+import { COURSES } from '../../src/sim/courses.js';
 import { wallProgress } from '../../src/sim/run.js';
 import { DRILLS, buildDrill } from '../../src/practice.js';
 import { keyValves, createKeyRamp, CHORDS } from '../../src/valves.js';
@@ -15,6 +18,27 @@ import { verify } from '../../src/worker/index.js';
 import { SPEC, NOZZLE_SPEC } from '../../src/sim/spec.js';
 import { dhypot } from '../../src/sim/dmath.js';
 
+// The Show on one thumb, the way main.js flies it, with no slide (0124: the default one-thumb player): hold up
+// the curl, a tap to let go, then hold from `holdAt` m (or straight on from the tap).
+const flyThumb = (holdAt = 'tap') => {
+  const run = createRun('show'), th = createOneThumb();
+  let released = false, ledgeT = -1, tapT = -1;
+  th.down();
+  while (run.phase !== 'done') {
+    const c = run.car, inp = newInput();
+    if (tapT < 0 && thumbStage(run, released) === 'ledge' && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3) {
+      if (ledgeT < 0) { ledgeT = run.tick; th.up(); }
+      if (run.tick === ledgeT + 120) { th.down(); tapT = run.tick; }
+    }
+    if (tapT > 0 && run.tick === tapT + 24 && holdAt !== 'tap') th.up();
+    if (released && holdAt !== 'tap' && !th.held && c.vel.y < 0 && c.pos.y < holdAt) th.down();
+    th.sample(run, released, inp);
+    if ((run.phase === 'ramp' && inp.lift > 0) || run.phase === 'air') released = true;
+    inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
+    stepRun(run, inp);
+  }
+  return run;
+};
 const IDX = Object.fromEntries(NOZZLE_SPEC.map((n, i) => [n.id, i]));
 const fly = (course, opts, mut) => {
   const run = createRun(course), ap = createAutopilot(course, opts);
@@ -186,6 +210,61 @@ describe('the coach', () => {
     const { items } = coach(run.inputLog, 'show', scoreRun(run.t));
     expect(items[0].id).toBe('clean');
     expect(items[0].fix).toMatch(/Pro|Advanced/);
+  });
+  // 0124: the Show's weight is on the mark (SHOW_W), so a 6–7 m miss is most of what a soft, clean landing lost.
+  it('a one-thumb landing 6–7 m off the mark names the mark first, with the points it cost (0124)', () => {
+    const run = flyThumb(12);
+    const card = scoreRun(run.t);
+    expect(card.facts.crashed).toBe(false);
+    expect(card.tier).toBe('assist');
+    expect(card.facts.sink).toBeLessThan(SINK_SOFT);
+    expect(card.facts.padMiss).toBeGreaterThan(5.5);
+    expect(card.facts.padMiss).toBeLessThan(8);
+    const { items } = coach(run.inputLog, 'show', card, 0, coachWords({ device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' }));
+    expect(items[0].id).toBe('mark');
+    expect(items.some((i) => i.id === 'clean')).toBe(false);
+    // The detail: the miss in metres and the points, within ±1 of the run re-scored on the mark.
+    const [, m, pts] = items[0].detail.match(/(\d+(?:\.\d)?) m from the mark.*about (\d+) points/);
+    expect(Number(m)).toBeCloseTo(card.facts.padMiss, 1);
+    const onMark = scoreRun({ ...run.t, lateral: 0, landZ: COURSES.show.pad.z }).total;
+    expect(Math.abs(Number(pts) - (onMark - card.total))).toBeLessThanOrEqual(1);
+    expect(Number(pts)).toBeGreaterThan(10);
+    // The thumb's words, the same as the NEXT RUN pointer's: the slide onto the amber dot, not pitch or roll.
+    expect(items[0].fix).toMatch(/slide onto the amber dot/);
+    expect(items[0].fix).not.toMatch(/pitch|roll/);
+    expect(pointerText('mark', { device: 'touch', scheme: 'thumb', tier: 'assist' })).toMatch(/slide onto the amber dot/);
+    // A keyboard's words for the same flight.
+    const keys = coach(run.inputLog, 'show', card).items[0];
+    expect(keys.id).toBe('mark');
+    expect(keys.fix).toMatch(/lean toward the pad/i);
+  });
+  it('the cost is the judges\' own: on the mark nothing, inside the full-marks ring nothing, 3 m with nothing else wrong stays Clean (0124)', () => {
+    const ref = fly('show');
+    const t0 = { ...ref.t, lateral: 0, landZ: COURSES.show.pad.z };
+    expect(markCost(t0)).toBe(0);
+    expect(markCost({ ...t0, lateral: 3.0 })).toBe(0);
+    expect(markCost({ ...t0, lateral: 5 })).toBeGreaterThan(MARK_POINTS);
+    expect(markCost({ ...t0, lateral: 6.8 })).toBeGreaterThan(14);
+    // The reference touches down 1.5 m off: Clean, with Pro as the next step.
+    expect(scoreRun(ref.t).facts.padMiss).toBeLessThan(3.5);
+    const { items } = coach(ref.inputLog, 'show', scoreRun(ref.t), 0, KEY_WORDS);
+    expect(items.map((i) => i.id)).toEqual(['clean']);
+    expect(AIM_THUMB).toMatch(/amber dot/);
+  });
+  it('past 7 m the mark is always named (a capped Pro/Advanced card, a drill, the Wall); a drill never quotes points (0124)', () => {
+    // A strong Advanced run's judges sit at the 10 cap: 6 m off costs the total nothing, 7.5 m still names it.
+    const adv = { ...fly('show').t, tier: 'advanced', lateral: 6, landZ: COURSES.show.pad.z };
+    expect(markCost(adv)).toBeLessThan(MARK_POINTS);
+    expect(namesMark(7.5, markCost({ ...adv, lateral: 7.5 }), { show: true })).toBe(true);
+    expect(namesMark(5, 4, { show: true })).toBe(true);
+    expect(namesMark(5, 4, { show: true, drill: true })).toBe(false);
+    expect(namesMark(7.5, 0, { show: true, drill: true })).toBe(true);
+    expect(namesMark(5, 4, { show: false })).toBe(false);
+    expect(namesMark(3, 0, { show: true })).toBe(false);
+    // A no-slide thumb flight coached from a drill-style hand-over: the 6 m miss isn't named (its card flags 7 m).
+    const run = flyThumb(12);
+    const { items } = coach(run.inputLog, 'show', scoreRun(run.t), run.t.airStartTick);
+    expect(items.some((i) => i.id === 'mark')).toBe(false);
   });
 });
 
