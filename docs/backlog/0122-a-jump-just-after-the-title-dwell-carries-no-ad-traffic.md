@@ -1,14 +1,23 @@
 ---
 id: 0122
 title: A Jump just after the title's ad dwell carries no ad traffic into the countdown or the run
-status: ready
+status: in-progress
 priority: P1
 size: M
 lens: performance
 created: 2026-10-31
-pr:
+pr: PRNUM
 by: critic
 ---
+
+## Status (2026-11-01, builder)
+**Part one shipped in #PRNUM; the rest needs the operator.** If Jump comes while the slot's AdSense script is still
+downloading, `window.stop()` now cancels it, so AdSense never runs (src/ads.js). Throttled probe (slow 4G, 4× CPU, 390×844),
+production vs this build: Jump at slot + 0.5 s went from 26 req / 321 KB in `countdown` + 1 in `live` to **0 / 0**. At slot + 2 s
+and + 4 s, AdSense's script had already run, and the cascade it starts (consent, sodar, the ad request) is new requests that no
+in-document call can prevent: 25 req / 74 KB and 14 / 116 KB, the same as production. Unthrottled, the script lands within about
+0.1 s of placement, so the cut rarely fires there. Every remaining case needs the slot in a frame the game can remove (the
+`proposal/` PR), so this ticket stays `in-progress` and isn't marked shipped. The AC below is not met yet.
 
 ## Why
 AGENTS.md §3.3 says: "Nothing in the countdown, a live run, a drill or Free Drive". 0117 holds for a quick Jump, because

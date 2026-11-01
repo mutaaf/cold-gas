@@ -121,6 +121,46 @@ describe('ads (Marquee, between runs only)', () => {
       expect(title.children).toEqual([second]);         // a settled slot stays: no new ad per visit
     } finally { vi.useRealTimers(); }
   });
+  it("a Jump while the title's slot is still filling cuts its loads off; a filled slot, or no slot, stops nothing (0122)", async () => {
+    vi.useFakeTimers();
+    try {
+      let mode = 'title';
+      const cfg = { enabled: true, slots: { title: { source: 'network' } } };
+      const m = { v: 1, ready: () => Promise.resolve(cfg), interstitial: vi.fn(), rewarded: vi.fn() };
+      const doc = fakeDoc();
+      const title = doc.createElement('section');
+      const win = { marquee: m, location: {}, stop: vi.fn() };
+      const ads = createAds({ win, doc, mode: () => mode });
+      ads.arm(title);
+      await Promise.resolve(); await Promise.resolve();
+      mode = 'countdown'; ads.sync();                     // a quick Jump: nothing was asked for, nothing to stop
+      expect(win.stop).not.toHaveBeenCalled();
+      mode = 'title'; ads.sync();
+      vi.advanceTimersByTime(TITLE_DWELL_MS + 500);
+      expect(title.children).toHaveLength(1);            // placed: Marquee's AdSense download is under way
+      mode = 'countdown'; ads.sync();                     // Jump at dwell + 0.5 s
+      expect(title.children).toHaveLength(0);
+      expect(win.stop).toHaveBeenCalledTimes(1);          // the download and the ad request are cancelled, not left to land in the run
+      mode = 'live'; ads.sync();
+      expect(win.stop).toHaveBeenCalledTimes(1);          // once, at the Jump
+      mode = 'title'; ads.sync();
+      vi.advanceTimersByTime(TITLE_DWELL_MS);
+      title.children[0].hidden = true;                    // settled (filled or nothing to show): seen, so kept
+      mode = 'countdown'; ads.sync();
+      expect(win.stop).toHaveBeenCalledTimes(1);
+      // Free Drive's own chunk and road load as it opens: a cut there would take them too, so only a run cuts.
+      const win2 = { marquee: m, location: {}, stop: vi.fn() };
+      const title2 = doc.createElement('section');
+      mode = 'title';
+      const ads2 = createAds({ win: win2, doc, mode: () => mode });
+      ads2.arm(title2);
+      await Promise.resolve(); await Promise.resolve();
+      vi.advanceTimersByTime(TITLE_DWELL_MS);
+      mode = 'drive'; ads2.sync();
+      expect(title2.children).toHaveLength(0);
+      expect(win2.stop).not.toHaveBeenCalled();
+    } finally { vi.useRealTimers(); }
+  });
   it('the ?marquee= ask is read at boot: the title rewriting the address keeps it', () => {
     const doc = fakeDoc();
     const location = { hostname: 'localhost', search: '?marquee=1' };

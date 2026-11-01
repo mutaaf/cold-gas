@@ -23,6 +23,11 @@ export function wantLoader(loc) {
 export function mayStartAds(mode) {
   return mode === 'title' || mode === 'results';
 }
+/** Modes that are a run (0122): leaving the title for one cuts off a title slot still filling. Not Free Drive or
+ *  the Sandbox: their own chunk and road are loading at that moment, and a cut would take those too. */
+export function isRun(mode) {
+  return mode === 'countdown' || mode === 'live';
+}
 /** A slot that can fill, read from a resolved config: config.slots[id].source is 'none' when nothing can. */
 export function canFill(cfg, id) {
   const s = cfg && cfg.enabled ? cfg.slots?.[id] : null;
@@ -82,7 +87,15 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
       return;
     }
     if (dwell) { clearTimeout(dwell); dwell = 0; }
-    if (titleEl && !settled(titleEl)) { titleEl.remove(); titleEl = null; }
+    if (titleEl && !settled(titleEl)) {
+      titleEl.remove(); titleEl = null;
+      // 0122: the slot's AdSense pipeline (≈ 400 KB of script, then the ad request) is already on the wire, and
+      // taking the slot out can't call a download back; it would finish in the countdown. window.stop() cancels the
+      // page's in-flight loads, as leaving the page would. The game's own loads are done by now: main.js arms the
+      // ads only after the backdrop and the judges' chunk have settled, and a beacon (sendBeacon/keepalive) survives.
+      // Marquee then falls back to its direct sponsors for this session's breaks (its AdSense script never ran).
+      if (isRun(mode())) { try { win?.stop?.(); } catch { /* nothing to stop */ } }
+    }
   }
   /** The title's banner, wanted in this parent (placed and removed by the mode, see syncTitle). */
   function titleBanner(parent) { titleParent = parent || null; syncTitle(); }
