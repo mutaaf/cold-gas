@@ -1,7 +1,7 @@
 ---
 id: 0123
 title: A first touch on the road, off the pad, answers instead of doing nothing
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: engagement
