@@ -242,7 +242,7 @@ export function releaseFrameTests(VIEWS) {
 // is held (opaque) from the tap on the ledge to the ground: the car must cross the row in sight, not under it.
 // { name, hand, ...newPage options }.
 export function thumbFrameTests(VIEWS) {
-  for (const { name, hand, ...opts } of VIEWS) {
+  for (const { name, hand, minCarW, ...opts } of VIEWS) {
     test(`${name}: on one thumb the car crosses the row clear of the held pad`, async ({ browser }) => {
       test.slow();   // a whole one-thumb flight, stepped in the page
       const page = await browser.newPage(opts);
@@ -282,6 +282,8 @@ export function thumbFrameTests(VIEWS) {
       expect(r.rowMean, 'row on screen, mean over the carry').toBeGreaterThanOrEqual(0.9);
       expect(r.fewBodies).toEqual([]);
       expect(r.midBodies).toBe(r.bodies);
+      // The car over the carry is no smaller than before 0128 (≈ 69.6 px wide at 390×844).
+      if (minCarW) expect(r.carWMean, 'car width over the carry (px)').toBeGreaterThanOrEqual(minCarW);
       expect(errors).toEqual([]);
       await page.close();
     });

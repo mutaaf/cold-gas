@@ -38,9 +38,13 @@ const ROW_FRONT = Math.max(...SHOW.boxes.map((b) => b.maxZ)) + 1;
 const ROW_X = Math.max(...SHOW.boxes.map((b) => b.maxX)), ROW_Z0 = Math.min(...SHOW.boxes.map((b) => b.minZ)), ROW_Z1 = ROW_FRONT - 1;
 // The HUD boxes the carry frames the row above (tests/e2e/frame-probe.js measures against the same).
 const HUD_SEL = '[data-hud-box], [data-hud-toggle], .top-actions';
-// The touch controls the player's thumbs are on (0128): the one-thumb pad (held, it is opaque), classic's stick and its
-// buttons. On an upright screen the carry hands over to the follow before the car would come down behind them.
-const TOUCH_SEL = '[data-touch] [data-onethumb], [data-touch] [data-stick], [data-touch] .tbtn';
+// The touch controls the player's thumbs are on (0128): the one-thumb pad (held, it is opaque), classic's buttons and
+// Advanced's nozzle pad. On an upright screen the carry hands over to the follow before the car would come down behind
+// one of them. Each is kept as its own box (at most PAD_MAX, preallocated), so classic's buttons bottom right don't
+// turn the whole bottom of the screen into one band.
+const TOUCH_SEL = '[data-touch] [data-onethumb], [data-touch] .tbtn, [data-nozzle-pad]';
+const PAD_MAX = 6;
+const CARRY_MIN = 0.3;   // s: the carry stands at least this long before the hand-over (no two hard cuts a frame apart)
 // m: how far under its centre the car's projected box reaches (≈ half its 1.6–1.8 m box in the air) plus a frame's fall.
 const CAR_LOW = 1.2;
 // The ground shots (the landed rig, a crash cut) are framed side-on to a 4.65 m car with a vertical lens, so on a
@@ -71,7 +75,8 @@ export function createDirector(camera) {
     bandT: 1, bandB: -1,                                 // the carry's band (0113, NDC): under the top HUD, over the bottom one
     bandL: 1,                                            // under the HUD standing at the top of the left edge (0116, NDC)
     railR: -1, railF: 1,                                 // the upright left rail's right edge and its foot (0128, NDC; −1/1 when none)
-    padT: -1, padL: 1, padR: -1,                         // the touch controls at the bottom (0128, NDC: their top, left, right; −1/1/−1 when none)
+    pads: new Float64Array(PAD_MAX * 3), padN: 0,        // the touch controls at the bottom (0128, NDC: top, left, right of each)
+    carryT: 0,                                           // when the carry cut in (0128)
     placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(),   // the carry's locked-off placement (0113)
   };
 
@@ -144,7 +149,8 @@ export function createDirector(camera) {
       // The follow (0128: on one thumb it takes over from the carry before the pad) frames the car ≈ half the width of
       // an upright phone: its centre right of the line still left its tail under the rail (10–19 % of its box at
       // 390×844). While the car's box reaches up into the rail's rows, its left edge goes right of the rail's edge.
-      if (st.shot === FOLLOW) {
+      // Only with touch controls up, where the follow comes early; the autopilot's and a keyboard's follow are unchanged.
+      if (st.shot === FOLLOW && st.padN > 0) {
         if (bandDirty) measureBand();
         const d = -tmp.z, v = st.railR > -1 ? clamp(((tmp.y + CAR_LOW) / d / tv - st.railF) / 0.1, 0, 1) : 0;
         if (v > 0) min = Math.max(min, v * (Math.atan(st.railR * tv * camera.aspect) + Math.atan(CAR_HALF / d)) + KNEE / 2);
@@ -170,7 +176,7 @@ export function createDirector(camera) {
   // 0116), where the upright carry brings the car in.
   let bandDirty = true;
   function measureBand() {
-    bandDirty = false; st.bandT = 1; st.bandB = -1; st.bandL = 1; st.padT = -1; st.padL = 1; st.padR = -1; st.railR = -1; st.railF = 1;
+    bandDirty = false; st.bandT = 1; st.bandB = -1; st.bandL = 1; st.padN = 0; st.railR = -1; st.railF = 1;
     const cv = typeof document !== 'undefined' && document.getElementById('stage');
     if (!cv) return;
     const c = cv.getBoundingClientRect();
@@ -193,7 +199,9 @@ export function createDirector(camera) {
     for (const el of document.querySelectorAll(TOUCH_SEL)) {
       const r = el.getBoundingClientRect();
       if (r.width <= 1 || r.height <= 1 || r.top + r.bottom < 2 * c.top + c.height || !shown(el)) continue;
-      st.padT = Math.max(st.padT, ndc(r.top)); st.padL = Math.min(st.padL, ndcX(r.left)); st.padR = Math.max(st.padR, ndcX(r.right));
+      if (st.padN >= PAD_MAX) break;
+      const k = st.padN++ * 3;
+      st.pads[k] = ndc(r.top); st.pads[k + 1] = ndcX(r.left); st.pads[k + 2] = ndcX(r.right);
     }
   }
   const shown = (el) => {
@@ -236,12 +244,16 @@ export function createDirector(camera) {
   // carry hands over to the follow (bigger, tracking, the car mid-frame) as the car's box nears the controls' top in
   // their column. Without touch controls (keyboard, a pad, the autopilot, sideways) nothing changes.
   function carryUnderPad(carPos) {
-    if (!st.placed || camera.aspect >= 1 || st.padT <= -1) return false;
+    if (!st.placed || camera.aspect >= 1 || st.padN === 0 || st.t - st.carryT < CARRY_MIN) return false;
     tmp.copy(carPos).sub(st.carryPos).applyQuaternion(qInv.copy(camera.quaternion).invert());
     if (tmp.z > -0.5) return false;
     const tv = Math.tan(st.fov * Math.PI / 360), th = tv * camera.aspect;
     const ny = (tmp.y - CAR_LOW) / -tmp.z / tv, nx = tmp.x / -tmp.z / th, hw = CAR_HALF / -tmp.z / th;
-    return ny < st.padT && nx + hw > st.padL && nx - hw < st.padR;
+    for (let i = 0; i < st.padN; i++) {
+      const k = i * 3;
+      if (ny < st.pads[k] && nx + hw > st.pads[k + 1] && nx - hw < st.pads[k + 2]) return true;
+    }
+    return false;
   }
   // The car's nose near the far edge of the locked-off frame (or the car behind it).
   function carryOut(carPos) {
@@ -394,7 +406,7 @@ export function createDirector(camera) {
         st.holdPos.set(carPos.x + HOLD_POS[0], HOLD_POS[1], carPos.z + HOLD_POS[2]);
         st.holdLook.set(carPos.x * 0.5, HOLD_LOOK[0], carPos.z + HOLD_LOOK[1]);
       }
-      if (st.shot === HOLD && (carPos.z < ROW_FRONT || st.t - st.launchT > HOLD_MAX)) { st.shot = CARRY; snap(); bandDirty = true; st.placed = false; }
+      if (st.shot === HOLD && (carPos.z < ROW_FRONT || st.t - st.launchT > HOLD_MAX)) { st.shot = CARRY; snap(); bandDirty = true; st.placed = false; st.carryT = st.t; }
       if (st.shot === HOLD) {
         camera.position.copy(st.holdPos);
         camera.lookAt(st.holdLook);
