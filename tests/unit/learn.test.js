@@ -304,6 +304,13 @@ describe('the coach weighs the touchdown by what it cost (0125)', () => {
     expect(['ran-out', 'late-brake', 'no-brake', 'late-land']).toContain(items[0].id);
     const pts = Number(items[0].detail.match(/about (\d+) points?/)[1]);
     expect(Math.abs(pts - cost)).toBeLessThanOrEqual(1);
+    // From 3 m/s it keeps its full weight, above a tilt or the mark's small misses, whatever a capped card prices it at.
+    expect(items[0].weight).toBeGreaterThanOrEqual(6);
+  });
+  it('a drill keeps the 1.5 m/s bar: the same firm touchdown coached from the hand-over names the braking', () => {
+    const run = flyFirm(1, 0.5);
+    const { items } = coach(run.inputLog, 'show', scoreRun(run.t), run.t.airStartTick, coachWords(THUMB_SHOW));
+    expect(items.some((i) => ['ran-out', 'late-brake', 'no-brake', 'late-land'].includes(i.id))).toBe(true);
   });
   it('the bar: the Show (not a drill) names braking from 3 points or 3 m/s; drills, the Wall and the Lineup from 1.5 m/s', () => {
     expect(namesBraking(1.6, 1.3, { show: true })).toBe(false);
@@ -320,7 +327,7 @@ describe('the coach weighs the touchdown by what it cost (0125)', () => {
     for (const text of [thumb.ranOut, pointerText('ran-out', THUMB_SHOW)]) {
       expect(text).not.toMatch(/green band|stay on the brake/i);
       expect(text).toMatch(/holding the pad/);
-      expect(text).toMatch(/slide less/);
+      expect(text).toMatch(/slide small/);
     }
     expect(KEY_WORDS.ranOut).toMatch(/green band/);
     expect(coachWords({ device: 'key', tier: 'assist', course: 'show' }).ranOut).toMatch(/green band/);

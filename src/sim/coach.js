@@ -146,10 +146,14 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
   }
   // Braking. On the Show (not a drill) it weighs what the sink cost the total, as the mark does (0125): a firm
   // 1.6 m/s touchdown (≈ 1 point) isn't the headline; 3 points and up are, ranked against the mark by their cost.
-  const sinkPts = scored ? sinkCost(t) : 0;
-  const brakeW = (w) => (scored ? Math.min(w, Math.max(3, 2 + sinkPts / 3)) : w);
+  // A crash scores its landing 0 whatever the sink, so the re-score can't price it: a crashed run keeps the old bar.
+  // From SINK_FIRM a hard landing keeps its full weight (a capped Pro/Advanced card can price it at nothing).
+  const priced = scored && !(card?.facts?.crashed ?? scoreRun(t).facts?.crashed);
+  const sinkPts = priced ? sinkCost(t) : 0;
+  const brakeW = (w) => (priced && !(t.sink >= SINK_FIRM) ? Math.min(w, Math.max(3, 2 + sinkPts / 3)) : w);
+  const brakeNamed = namesBraking(f.t.sink, sinkPts, { show: priced, drill });
   const brakePts = sinkPts >= 1 ? `: about ${Math.round(sinkPts)} point${Math.round(sinkPts) === 1 ? '' : 's'}` : '';
-  if (t.touchTick >= 0 && !t.contact && namesBraking(f.t.sink, sinkPts, { show, drill })) {
+  if (t.touchTick >= 0 && !t.contact && brakeNamed) {
     if (f.brakeTick < 0) {
       add('no-brake', brakeW(9), 'Never braked', `You hit the ground at ${r1(t.sink)} m/s${brakePts}.`, assist ? `Hold ${say.land} right after you let go: it rolls you out and brakes you to the ground.` : `Hold ${say.lift} by the BRAKE line on the descent tape${f.needTick >= 0 ? `: it passed at ${Math.ceil(f.needH)} m on this fall` : ''}.`);
     } else {
@@ -175,7 +179,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
   }
   // Roll-out.
   if (wall && f.uprightTick > 0 && f.uprightH >= 0 && f.uprightH < 12 && f.releaseTick >= 0) {
-    add('late-roll', f.t.sink > SINK_SOFT ? 8.5 : 6, 'Upright too low', `You were roof-up only ${r1(f.uprightH)} m above the ground: the roll-out ate the height the brake needed.`,
+    add('late-roll', brakeNamed ? 8.5 : 6, 'Upright too low', `You were roof-up only ${r1(f.uprightH)} m above the ground: the roll-out ate the height the brake needed.`,
       assist ? `Hold ${say.land} straight after the release: it rolls you out the nearer way.` : `Roll with ${say.roll} straight after the release.`);
   }
   if (wall && f.rollDeg > 230 && !t.flipped) {
