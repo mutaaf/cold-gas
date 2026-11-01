@@ -100,6 +100,11 @@ export function createDirector(camera) {
   // The height to add to a ground shot's aim, `d` m from it under lens(fov), so the car sits about LAND_LIFT × u of
   // the half-frame below the middle (0119).
   const liftFor = (u, d, fov) => d * LAND_LIFT * u * Math.tan(lens(fov) * Math.PI / 360);
+  // Whether a parked body stands across the level line from the car to `dx` m out at +x, the side stand's sight (0119).
+  const rowBlocks = (c, dx) => {
+    for (const b of SHOW.boxes) if (c.z >= b.minZ - 0.5 && c.z <= b.maxZ + 0.5 && b.maxX >= c.x - 0.5 && b.minX <= c.x + dx) return true;
+    return false;
+  };
   const lens = (f) => (camera.aspect >= LENS_ASPECT ? f : (Math.atan(Math.tan(f * Math.PI / 360) * LENS_ASPECT / camera.aspect) * 360) / Math.PI);
 
   // Keep the car out from under the HUD (0063): after a shot has looked where it wants, turn the camera
@@ -386,7 +391,8 @@ export function createDirector(camera) {
       // is tall (0119), the rig swings round to the car's open side, broadside on, looking across it at the lit launch
       // complex, and lifts its aim so the car sits under the middle: from ahead, 0108's wider lens spent the
       // lower 40 % of an upright phone on unlit floor at the camera's feet (78–98 % black).
-      const u = st.course === 'show' ? upright() : 0;   // the Wall's landed shot is unchanged
+      // The Wall's landed shot is unchanged; so is a car that comes to rest with a parked body between it and the side stand.
+      const u = st.course === 'show' && !rowBlocks(carPos, LAND_SIDE[0]) ? upright() : 0;
       const ox = LAND_AHEAD[0] + u * (LAND_SIDE[0] - LAND_AHEAD[0]), oz = LAND_AHEAD[1] + u * (LAND_SIDE[1] - LAND_AHEAD[1]);
       want.set(carPos.x + ox, 1.25, carPos.z + oz);
       lookWant.set(carPos.x, carPos.y + 0.2 + liftFor(u, Math.hypot(ox, oz), 40), carPos.z);

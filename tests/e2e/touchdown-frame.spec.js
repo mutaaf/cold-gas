@@ -14,7 +14,7 @@ test.describe.configure({ mode: 'parallel' });
 
 function touchdown(crash) {
   const g = window.__coldgas, S = g.S, cam = g.camera, car = g.carRoot;
-  // 0119: on an upright screen, a real frame at touchdown + 0.3 s and + 0.8 s (still live): the share of the
+  // 0119: on the upright phones (PHONES), a real frame at touchdown + 0.3 s and + 0.8 s (still live): the share of the
   // lower 40 % of the canvas under luminance 12 (sRGB 0–255). The probe's render is a no-op; the real one is kept
   // as __render and read back in the same task (no preserveDrawingBuffer).
   const darkShare = () => {
@@ -27,7 +27,7 @@ function touchdown(crash) {
     for (let i = 0; i < px.length; i += 4) if (0.2126 * px[i] + 0.7152 * px[i + 1] + 0.0722 * px[i + 2] < 12) dark++;
     return Math.round((dark / (px.length / 4)) * 1000) / 1000;
   };
-  const upright = innerWidth / innerHeight < 0.9;
+  const phone = (innerWidth === 390 && innerHeight === 844) || (innerWidth === 360 && innerHeight === 800);   // PHONES
   const c = new car.position.constructor();
   const w = innerWidth, h = innerHeight;
   const carBox = () => {
@@ -86,7 +86,7 @@ function touchdown(crash) {
       const cy = (b.y0 + b.y1) / 2 / h;
       out.minCy = Math.min(out.minCy, cy); out.maxCy = Math.max(out.maxCy, cy);
     }
-    if (upright && shots.length && S.run.tick >= S.run.t.touchTick + shots[0] * 240) { shots.shift(); out.dark.push(darkShare()); }
+    if (phone && shots.length && S.run.tick >= S.run.t.touchTick + shots[0] * 240) { shots.shift(); out.dark.push(darkShare()); }
     for (const el of document.querySelectorAll('[data-hud-box], .top-actions')) {
       if (vis(el) && overlap(b, el.getBoundingClientRect()) / area > 0.1) { out.covered++; break; }
     }
@@ -105,6 +105,8 @@ async function boot(page) {
   await page.goto('/coldgas/?gfx=low&course=show');
   await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
   await page.waitForFunction(() => window.__coldgas.physicsReady(), null, { timeout: 60_000 });
+  // The real frames (0119) need the stage drawing and the launch complex in: render() draws nothing before stage.ready.
+  await page.evaluate(() => Promise.all([window.__coldgas.stage.ready, window.__coldgas.stage.backdrop]));
   await page.evaluate(() => { const s = window.__coldgas.stage; s.setPixelScale(0.5); s.setPixelScale = () => {}; s.__render = s.render; s.render = () => {}; });
   return errors;
 }
@@ -145,7 +147,7 @@ const unchanged = (r, name, crash) => {
 for (const crash of [false, true]) {
   const what = crash ? 'the valves-shut crash' : 'the Show reference';
   test(`touch: ${what}'s touchdown fits every upright and folding screen`, async ({ browser }) => {
-    test.setTimeout(480_000);   // eleven whole flights, stepped in the page
+    test.setTimeout(480_000);   // twelve whole flights, stepped in the page
     const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
     const errors = await boot(page);
     for (const v of [...UPRIGHT, ...FOLDS, [844, 390]]) {
