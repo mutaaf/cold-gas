@@ -1574,14 +1574,14 @@ function howtoSeen() {
   return !!navigator.webdriver;
 }
 let howtoThen = null, howtoOpener = null;
-function openHowto({ then = null, from = null } = {}) {
-  obs.play('howto');
-  howtoThen = then; howtoOpener = from || document.activeElement;
-  const ctx = pointerCtx(stage.course, S.tier);
-  howtoScreen.querySelector('[data-howto-device]').textContent = deviceTitle(ctx);
+// 0127: a newcomer's Jump on one thumb asks for one sentence (step 01: hold the pad), not four rows: the cue line
+// says each later step at the moment it applies. "All four steps" opens the full card in place. The title's and the
+// pause sheet's How to fly, and every other device and scheme, keep the full card.
+function drawHowto(ctx, short) {
   const ol = howtoScreen.querySelector('[data-howto-rows]');
   ol.innerHTML = '';
-  for (const r of howtoRows(ctx)) {
+  const rows = howtoRows(ctx);
+  for (const r of short ? rows.slice(0, 1) : rows) {
     const li = document.createElement('li');
     li.innerHTML = '<span class="hw-phase"></span><span class="hw-ctl"><i></i><kbd></kbd></span><span class="hw-what"></span>';
     li.querySelector('.hw-phase').textContent = r.phase;
@@ -1590,6 +1590,20 @@ function openHowto({ then = null, from = null } = {}) {
     unitText(li.querySelector('.hw-what'), r.what);
     ol.appendChild(li);
   }
+  howtoScreen.querySelector('#howto-title').textContent = short ? 'One thing to know' : 'Four things to know';
+  const all = howtoScreen.querySelector('[data-howto-all]');
+  all.hidden = !short;
+  all.setAttribute('aria-expanded', String(!short));
+  howtoScreen.querySelector('[data-howto-assist]').hidden = short;
+  howtoScreen.classList.toggle('short', short);
+}
+let howtoCtx = null;
+function openHowto({ then = null, from = null } = {}) {
+  obs.play('howto');
+  howtoThen = then; howtoOpener = from || document.activeElement;
+  const ctx = howtoCtx = pointerCtx(stage.course, S.tier);
+  howtoScreen.querySelector('[data-howto-device]').textContent = deviceTitle(ctx);
+  drawHowto(ctx, !!then && ctx.device === 'touch' && ctx.scheme === 'thumb' && ctx.course !== 'lineup');
   howtoScreen.querySelector('[data-howto-assist]').textContent = S.assist
     ? `Assist is on: it ${TIER_WORDS.assist.sub}. Change it any time with the Assist button.`
     : `Assist is off (${TIER_WORDS[S.tier].name}). Turn it on with the Assist button.`;
@@ -1612,6 +1626,13 @@ function closeHowto({ seen = true } = {}) {
 on('[data-howto-open]', (e) => openHowto({ from: e.currentTarget }));
 on('[data-howto-go]', () => closeHowto());
 on('[data-howto-skip]', () => closeHowto({ seen: false }));
+// The rows it opened take the focus at step 02, so a screen reader reads on from there (Tab goes on to Got it).
+on('[data-howto-all]', () => {
+  if (howtoCtx) drawHowto(howtoCtx, false);
+  const next = howtoScreen.querySelector('[data-howto-rows] li:nth-child(2)') || howtoScreen.querySelector('[data-howto-go]');
+  if (next.tagName === 'LI') next.tabIndex = -1;
+  next.focus({ preventScroll: true });
+});
 howtoScreen.addEventListener('click', (e) => { if (e.target === howtoScreen) closeHowto({ seen: !howtoThen }); });
 // Escape closes the card, the tier picker, the controls or the board before the game reads it (Escape on
 // the results goes Home, on a run the pause sheet toggles): the sheet on top goes, not what's under it.

@@ -52,7 +52,7 @@ const floor = (loc) => loc.evaluate((el) => {
 // The card fits whole: every row, the note and both buttons on screen, nothing overlapping, no scroll.
 const cardFits = (page) => page.evaluate(() => {
   const sheet = document.querySelector('[data-screen="howto"] .sheet');
-  const parts = [...sheet.querySelectorAll('.eyebrow, h2, .howto-rows li, .howto-assist, .actions .btn')].filter((e) => !e.closest('[hidden]'));
+  const parts = [...sheet.querySelectorAll('.eyebrow, h2, .howto-rows li, .howto-all, .howto-assist, .actions .btn')].filter((e) => !e.closest('[hidden]'));
   const r = parts.map((e) => e.getBoundingClientRect());
   const issues = [];
   r.forEach((a, i) => {
@@ -109,19 +109,55 @@ test('keyboard: the first Jump shows how to fly (keys), Skip goes straight into 
   expect(errors).toEqual([]);
 });
 
-test('touch: the first Jump shows the one-thumb controls; Got it starts the run; not again after a reload', async ({ browser }) => {
+// 0127: a newcomer's first Jump on one thumb asks for one sentence (step 01), not the four-row card; "All four steps"
+// opens the rest in place, and the cue line carries it in the run.
+test('touch: the first Jump on one thumb shows one row (All four steps opens the rest); Got it · Jump starts the run in one tap; not again after a reload', async ({ browser }) => {
   const page = await touchPage(browser);
   const errors = await boot(page, { firstVisit: true });
+  const rows = page.locator('[data-howto-rows] li'), all = page.locator('[data-howto-all]');
   await page.locator('[data-start]').tap();
   await expect(page.locator('[data-screen="howto"]')).toBeVisible();
   await expect(page.locator('[data-howto-device]')).toHaveText('Touch · one thumb');
-  await expect(page.locator('[data-howto-rows] li').first()).toContainText(/hold\s*the pad/i);
-  await expect(page.locator('[data-howto-rows] li').nth(1)).toContainText(/tap\s*the pad/i);
-  // The two-thumb scheme, when it's the one in use: its own buttons.
-  await page.evaluate(() => window.__coldgas.touch.set('scheme', 'classic'));
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText(/hold\s*the pad/i);
+  await expect(rows.first()).toContainText(/crawls you up the Wall/i);
+  await expect(page.locator('#howto-title')).toHaveText('One thing to know');
+  await expect(page.locator('[data-howto-assist]')).toBeHidden();
+  await expect(page.locator('[data-howto-go]')).toHaveText('Got it · Jump');
+  await expect(page.locator('[data-howto-skip]')).toBeVisible();
+  await expect(all).toBeVisible();
+  await page.waitForTimeout(700);   // the sheet's rise
+  const share = await page.evaluate(() => document.querySelector('[data-screen="howto"] .sheet').getBoundingClientRect().height / innerHeight);
+  expect(share, 'card height / viewport').toBeLessThan(0.45);
+  expect(await cardFits(page)).toEqual([]);
+  const link = await floor(all);
+  expect(link.h).toBeGreaterThanOrEqual(44);
+  expect(link.minFont).toBeGreaterThanOrEqual(11);
+  expect(link.inView).toBe(true);
+  // All four steps: the full card, in place (the run hasn't started, the Jump still waits on Got it).
+  await all.tap();
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(1)).toContainText(/tap\s*the pad/i);
+  await expect(page.locator('#howto-title')).toHaveText('Four things to know');
+  await expect(page.locator('[data-howto-assist]')).toBeVisible();
+  await expect(all).toBeHidden();
+  await expect(rows.nth(1)).toBeFocused();   // a screen reader reads on from step 02
+  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
+  expect(await cardFits(page)).toEqual([]);
+  // Skip (this time only): the next Jump asks for the one sentence again, and Got it · Jump starts the run in one tap.
   await page.locator('[data-howto-skip]').tap();
   await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('new');
   await page.evaluate(() => window.__coldgas.toTitle());
+  await page.locator('[data-start]').tap();
+  await expect(rows).toHaveCount(1);
+  await expect(all).toBeVisible();
+  await page.locator('[data-howto-go]').tap();
+  await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('seen');
+  // The two-thumb scheme, when it's the one in use: its own buttons, all four (only one thumb gets the short card).
+  await page.evaluate(() => window.__coldgas.toTitle());
+  await page.evaluate(() => window.__coldgas.touch.set('scheme', 'classic'));
   await page.locator('.cta [data-howto-open]').tap();
   await expect(page.locator('[data-howto-device]')).toHaveText('Touch · two thumbs');
   await expect(page.locator('[data-howto-rows] kbd')).toHaveText(['GO', 'RELEASE', 'LAND', 'LAND']);
@@ -155,6 +191,17 @@ test('the how-to card fits whole, with no overlaps, at every size (folding phone
     await page.waitForTimeout(700);   // the sheet's rise
     expect(await cardFits(page), `${w}×${h}`).toEqual([]);
     await page.keyboard.press('Escape');
+    if (page !== touch) continue;
+    // 0127: a newcomer's Jump on one thumb, the one-row card (Escape on it goes on into the run; back to the title).
+    await page.evaluate(() => localStorage.setItem('coldgas_howto', 'new'));
+    await page.locator('[data-start]').tap();
+    await expect(page.locator('[data-howto-all]')).toBeVisible();
+    await page.waitForTimeout(700);
+    expect(await cardFits(page), `short ${w}×${h}`).toEqual([]);
+    const link = await floor(page.locator('[data-howto-all]'));
+    expect(link.h >= 44 && link.minFont >= 11 && link.inView, `short ${w}×${h} link`).toBe(true);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.__coldgas.toTitle());
   }
   await touch.close(); await desk.close();
 });
