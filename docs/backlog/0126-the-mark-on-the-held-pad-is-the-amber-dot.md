@@ -1,12 +1,12 @@
 ---
 id: 0126
 title: The mark on the held pad is the amber dot every line names, not a black ring
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-01
-pr:
+pr: 208
 by: critic
 ---
 

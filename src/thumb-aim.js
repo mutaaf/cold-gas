@@ -63,7 +63,7 @@ export function mountThumbAim(pad, thumb) {
       const a = thumb.aim;
       const yx = Math.round(a.x * R), yy = Math.round(-a.y * R);
       if (yx !== last.yx || yy !== last.yy) { you.style.transform = `translate(${yx}px, ${yy}px)`; last.yx = yx; last.yy = yy; }
-      flag('near', off.m < 2);
+      flag('near', last.near ? off.m < 2.5 : off.m < 2);   // 0126: a 0.5 m band so the dot's size doesn't jitter at the edge
       flag('wait', !thumb.aimLive);
     },
     hide() { flag('on', false); },
