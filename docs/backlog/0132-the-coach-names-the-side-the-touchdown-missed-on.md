@@ -1,12 +1,12 @@
 ---
 id: 0132
 title: The coach names the side the touchdown missed on, not "long" for a miss that is mostly sideways
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-02
-pr:
+pr: 210
 by: critic
 ---
 
@@ -46,18 +46,18 @@ point at the miss the player actually made. Every number it prints must be the o
 - No sim change: ref-hash, determinism, 32/32 naive landings, scores unchanged.
 
 ## Acceptance criteria
-- [ ] Unit (tests/unit/coach*.test.js): a Show flight with `lateral 5.31`, along −2.67 (the one-thumb no-slide flight
+- [x] Unit (tests/unit/coach*.test.js): a Show flight with `lateral 5.31`, along −2.67 (the one-thumb no-slide flight
       above, re-flown from its input log) gives the title "Wide of the mark" and a detail with the side and both
       distances. The mirror flight (`lateral −5.31`) gives the other side.
-- [ ] Unit: a flight past the mark with |along| > |across| (e.g. the reference's carry at 11 m/s) still says "Long of
+- [x] Unit: a flight past the mark with |along| > |across| (e.g. the reference's carry at 11 m/s) still says "Long of
       the mark". One short of it says "Short of the mark".
-- [ ] The side word agrees with the sight. For both mirror flights, the sign of `markOffset(...).x` at 3 m up is the
+- [x] The side word agrees with the sight. For both mirror flights, the sign of `markOffset(...).x` at 3 m up is the
       opposite of the side named. In words: the dot is on the side to slide toward.
-- [ ] e2e or screenshot at 390×844 one-thumb, first visit, no slide: the What happened card reads "Wide of the mark".
+- [x] e2e or screenshot at 390×844 one-thumb, first visit, no slide: the What happened card reads "Wide of the mark".
       Before/after screenshots are in the PR.
-- [ ] `human-phone.mjs 300 --scheme=thumb --skill=none --coach`: the tally of first findings is reported before and
+- [x] `human-phone.mjs 300 --scheme=thumb --skill=none --coach`: the tally of first findings is reported before and
       after. "Long of the mark" no longer leads a flight whose |lateral| > |along|.
-- [ ] ref-hash, determinism, `naive-players` 32/32 and `naive-show` unchanged. Desktop 1440×900 keyboard results read
+- [x] ref-hash, determinism, `naive-players` 32/32 and `naive-show` unchanged. Desktop 1440×900 keyboard results read
       the same for the reference flight.
 
 ## Test plan
