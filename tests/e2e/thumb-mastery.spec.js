@@ -67,16 +67,25 @@ test('one-thumb: in the air the pad is a sight, a slide aims, and the results sh
       aim.toggleAttribute('data-near', was);
       return r;
     };
-    return { held: document.querySelector('[data-onethumb]').classList.contains('on'), far: read(false), near: read(true), you: getComputedStyle(you).backgroundColor };
+    const pad = document.querySelector('[data-onethumb]'), held = pad.classList.contains('on');
+    const out = { held, far: read(false), near: read(true), you: getComputedStyle(you).backgroundColor };
+    pad.classList.remove('on');   // the un-held (dark) pad keeps today's hollow amber ring, filled when near
+    out.darkFar = read(false); out.darkNear = read(true);
+    pad.classList.toggle('on', held);
+    return out;
   });
   expect(sight.held).toBe(true);
   for (const k of ['far', 'near']) {
     expect(sight[k].bg).toBe('rgb(255, 191, 90)');
     expect(sight[k].border).toBe('rgb(6, 8, 12)');
-    expect(sight[k].bw).toBeGreaterThanOrEqual(1.5);
+    expect(sight[k].bw).toBe(2);
   }
   expect(sight.near.w).toBeGreaterThan(sight.far.w);   // "on it" still reads: the dot grows round the ink dot
   expect(sight.you).not.toBe('rgb(255, 191, 90)');
+  expect(sight.darkFar.bg).toBe('rgba(0, 0, 0, 0)');
+  expect(sight.darkFar.border).toBe('rgb(255, 191, 90)');
+  expect(sight.darkNear.bg).toBe('rgb(255, 191, 90)');
+  expect(sight.darkNear.w).toBe(sight.far.w);
   // Slide the held finger right and up: the thumb reads it.
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: at.x + 40, y: at.y - 40, id: 1 }] });
   await expect.poll(() => page.evaluate(() => window.__coldgas.thumb.aim.x)).toBeGreaterThan(0.5);

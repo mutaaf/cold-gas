@@ -13,8 +13,8 @@
 .thumb.on .thumb-aim .ta-you { background: #06080c; }
 .thumb.on .thumb-aim .ta-mark { border: 2px solid #06080c; background: var(--amber); }
 /* 0126: held, the pad is light and amber on it is ≈ 1.3:1, so the mark stays the amber dot every line names with a
-   2 px dark keyline that holds it (≈ 16:1; 1.5 px snaps to 1 at DPR 1). On it, the dot grows so its amber still
-   rings the ink dot sitting in it. */
+   2 px dark keyline that holds it (≈ 14:1 over the pad; 1.5 px snaps to 1 at DPR 1). On target (the mark back at the
+   sight's centre), the dot grows 12 → 16 px, so the amber still shows around the ink dot when it sits there too. */
 .thumb.on .thumb-aim[data-near] .ta-mark { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
 .thumb.on .thumb-aim::before, .thumb.on .thumb-aim::after { background: rgba(6, 8, 12, 0.18); }
 .thumb-aim[data-wait] .ta-mark { opacity: 0.45; }
