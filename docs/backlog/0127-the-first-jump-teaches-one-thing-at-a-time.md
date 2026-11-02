@@ -1,12 +1,12 @@
 ---
 id: 0127
 title: A newcomer's first Jump asks for one sentence, not a four-row card
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-01
-pr:
+pr: 212
 by: scout
 ---
 
