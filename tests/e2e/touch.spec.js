@@ -27,9 +27,15 @@ test('one-thumb: hold to climb, tap to let go on the ledge, hold to land', async
   await live(page);
   const off = { x: 195, y: 420 };
   expect(await page.evaluate(({ x, y }) => !!document.elementFromPoint(x, y)?.closest('[data-onethumb], button'), off)).toBe(false);
-  const was = await page.evaluate(() => { const { S } = window.__coldgas; return { log: S.run.inputLog.length, z: S.run.car.pos.z, n: S.nudge.n }; });
+  // The pulse lives 400 ms: a mutation observer keeps a mark of it, so a slow frame can't hide it from the poll.
+  const was = await page.evaluate(() => {
+    const { S } = window.__coldgas, el = document.querySelector('[data-onethumb]');
+    window.__nudged = false;
+    new MutationObserver(() => { if (el.hasAttribute('data-nudge')) window.__nudged = true; }).observe(el, { attributes: true, attributeFilter: ['data-nudge'] });
+    return { log: S.run.inputLog.length, z: S.run.car.pos.z, n: S.nudge.n };
+  });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...off, id: 9 }] });
-  await expect(pad).toHaveAttribute('data-nudge', '');
+  await page.waitForFunction(() => window.__nudged, null, { timeout: 10_000 });
   await expect(page.locator('[data-cue]')).toHaveText('Hold the pad');
   await page.waitForTimeout(500);
   const held = await page.evaluate(() => { const { S, thumb } = window.__coldgas; return { log: S.run.inputLog.length, z: S.run.car.pos.z, n: S.nudge.n, held: thumb.held, on: document.querySelector('[data-onethumb]').classList.contains('on') }; });
@@ -37,7 +43,8 @@ test('one-thumb: hold to climb, tap to let go on the ledge, hold to land', async
   expect(Math.abs(held.z - was.z)).toBeLessThan(0.05);
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   await expect(pad).not.toHaveAttribute('data-nudge', '');
-  // A second miss inside 3 s doesn't pulse again.
+  // A second miss inside 3 s doesn't pulse again (the last pulse is set to just now, so slow CI timers can't open the gap).
+  await page.evaluate(() => { window.__coldgas.S.nudge.at = performance.now(); });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...off, id: 10 }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   expect(await page.evaluate(() => window.__coldgas.S.nudge.n)).toBe(was.n + 1);

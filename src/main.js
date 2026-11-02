@@ -999,11 +999,12 @@ ui.touch.addEventListener('pointerdown', (e) => {
 // motion) and, once a run, the cue line says "Hold the pad". Nothing reaches the sim: no input, no press.
 // A touch on any control (the pad, the top bar, an instrument, a sheet's buttons) is left alone.
 const NUDGE_MS = 400, NUDGE_GAP = 3000, NUDGE_CUE = 2000;   // the cue window outlasts the countdown's "Go" hold
-const OFF_PAD_SKIP = 'button, a, input, select, textarea, summary, label, [role="button"], [data-inst], [data-onethumb]';
+const OFF_PAD_SKIP = 'button, a, input, select, textarea, summary, label, [role="button"], [role="dialog"], [data-inst], [data-onethumb], .ipop, .dmv';
 S.nudge = { at: -Infinity, n: 0, cued: false, cueUntil: 0, timer: 0 };
 document.addEventListener('pointerdown', (e) => {
   if (e.pointerType !== 'touch' || S.mode !== 'live' || S.paused || !S.run || !thumbActive()) return;
-  if (thumbStage(S.run, S.released) !== 'climb' || e.target?.closest?.(OFF_PAD_SKIP)) return;
+  // A second finger while the thumb holds the pad isn't a miss.
+  if (thumb.held || thumbStage(S.run, S.released) !== 'climb' || e.target?.closest?.(OFF_PAD_SKIP)) return;
   const now = performance.now();
   if (now - S.nudge.at < NUDGE_GAP) return;
   S.nudge.at = now; S.nudge.n++;
@@ -1190,7 +1191,7 @@ function cues(run, c) {
 // One-thumb: the pad itself says hold / tap; the cue line names the moment.
 function thumbCues(run, c, v) {
   const held = thumb.held;
-  if (!held && performance.now() < S.nudge.cueUntil) return ui.cue_('Hold the pad', 600);   // 0123
+  if (!held && performance.now() < S.nudge.cueUntil && thumbStage(run, S.released) === 'climb') return ui.cue_('Hold the pad', 600);   // 0123
   if (run.phase === 'drive') return ui.cue_(held || v > 2 ? 'Climbing · let go to stop' : 'Hold the pad to climb', 600);
   if (run.phase === 'ramp' && !S.released && run.t.progress >= THUMB.tapAt && (thumb.driving || thumb.pending)) return ui.cue_('Letting go · out to the lip', 600);
   if (run.phase === 'ramp' && !S.released) return ui.cue_(run.t.progress >= 0.92 ? 'On the ledge · tap to let go' : 'Up the curl on suction', 600);
