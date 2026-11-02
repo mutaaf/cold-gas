@@ -121,6 +121,28 @@ export function namesMark(padMiss, cost, { show = false, drill = false } = {}) {
   return padMiss > 7 || (show && !drill && cost >= MARK_POINTS);
 }
 
+// Which way the touchdown missed the mark (0132), so a player slides the way that fixes it. On the Show the run
+// heads down -z: `along` = landZ − pad.z (< 0 past the mark, > 0 short of it), `across` = lateral (x − pad.x), and
+// the car's right is +x (forward −z × up +y). The pad's sight (markOffset, src/onethumb.js) puts the amber dot on the
+// other side: told "right of it", you see the dot left of centre and slide toward it. The title names the bigger
+// part; the detail gives both. The Wall and the Lineup keep "Off the mark".
+const SIDE_MIN = 0.5;   // m: a part this small isn't worth a word
+export function markMiss(touch, show = true) {
+  if (!show || !touch) return { title: 'Off the mark', where: '', side: null };
+  const along = touch.along, across = touch.x;
+  const past = r1(-along) + ' m past', short = r1(along) + ' m short';
+  const side = across > 0 ? 'right' : 'left';
+  const sideTxt = `${r1(Math.abs(across))} m ${side}`;
+  if (Math.abs(across) > Math.abs(along)) {
+    const a = Math.abs(along) >= SIDE_MIN ? `, ${along < 0 ? past : short}` : '';
+    return { title: 'Wide of the mark', where: ` (${sideTxt} of it${a})`, side };
+  }
+  const s = Math.abs(across) >= SIDE_MIN ? `, ${sideTxt}` : '';
+  return along < 0
+    ? { title: 'Long of the mark', where: ` (${past} it${s})`, side: s ? side : null }
+    : { title: 'Short of the mark', where: ` (${short} of it${s})`, side: s ? side : null };
+}
+
 // The fixes, most costly first. Each: { id, title, detail, fix, weight }. Only the words depend on `say`.
 export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_WORDS) {
   const { run, flight: f } = readFlight(inputLog, courseId, fromTick);
@@ -198,13 +220,13 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
     const aim = say.aim || AIM_LEAN, Aim = aim[0].toUpperCase() + aim.slice(1);
     const cost = scored ? markCost(t) : 0;
     if (namesMark(f.touch.padMiss, cost, { show, drill })) {
-      const past = show ? f.touch.along < 0 : false;
+      const { title, where } = markMiss(f.touch, show);
       // On the Show the finding weighs what it cost: a 6–7 m miss (≈ 15–17 points) outranks a tilt or the gas,
       // never a crash-grade braking or carry fix (8–10).
       const weight = Math.max(3 + Math.min(3, f.touch.padMiss / 15), Math.min(7.5, 2 + cost / 3));
-      add('mark', weight, past ? 'Long of the mark' : 'Off the mark',
-        `You landed ${r1(f.touch.padMiss)} m from the mark${past ? ` (${r1(-f.touch.along)} m past it)` : ''}${cost >= 1 ? `: about ${Math.round(cost)} points` : ''}.`,
-        show && f.carry > 11 && say.aim !== AIM_THUMB ? `You carried ${r1(f.carry)} m/s: about 9.5 clears the roofs. Then pitch the nose up a touch to walk the touchdown marker onto the pad.` : `${Aim}.`);
+      add('mark', weight, title,
+        `You landed ${r1(f.touch.padMiss)} m from the mark${where}${cost >= 1 ? `: about ${Math.round(cost)} points` : ''}.`,
+        title === 'Long of the mark' && f.carry > 11 && say.aim !== AIM_THUMB ? `You carried ${r1(f.carry)} m/s: about 9.5 clears the roofs. Then pitch the nose up a touch to walk the touchdown marker onto the pad.` : `${Aim}.`);
     }
   }
   if (t.touchTick >= 0 && f.gasAtTouch < 10) {
