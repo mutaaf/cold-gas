@@ -58,12 +58,19 @@ test('one-thumb: hold to climb, tap to let go on the ledge, hold to land', async
   await page.evaluate(() => window.__coldgas.startDrill('ledge'));
   await live(page);
   await expect(page.locator('[data-thumb-act]')).toHaveText('Let go');
-  // 0133: every word the descent's state box shows in the air, from the tap to the touchdown.
+  // 0133: every word the descent's state box shows in the air, from the tap to the touchdown, each rendered frame,
+  // with whether the pad was held on that frame (critic bounce: "Hold · Land" on a held pad asks for what the
+  // player is already doing).
   await page.evaluate(() => {
-    const el = document.querySelector('[data-d-state]');
-    window.__dWords = new Set();
-    new MutationObserver(() => { if (!document.querySelector('[data-descent]').hidden) window.__dWords.add(el.textContent); })
-      .observe(el, { childList: true, characterData: true, subtree: true });
+    const el = document.querySelector('[data-d-state]'), panel = document.querySelector('[data-descent]');
+    const pad = document.querySelector('[data-onethumb]');
+    window.__dWords = [];
+    const look = () => {
+      const { S } = window.__coldgas;
+      if (S.mode === 'live' && S.run?.phase === 'air' && !panel.hidden) window.__dWords.push({ w: el.textContent, on: pad.classList.contains('on') });
+      requestAnimationFrame(look);
+    };
+    requestAnimationFrame(look);
   });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, id: 2 }] });
   await page.waitForFunction(() => window.__coldgas.S.released, null, { timeout: 30_000 });
@@ -71,14 +78,19 @@ test('one-thumb: hold to climb, tap to let go on the ledge, hold to land', async
   await expect(page.locator('[data-thumb-act]')).toHaveText('Land');
   const level = await ch(page, 'level');
   await page.waitForFunction((i) => window.__coldgas.S.run.inputLog.some((e) => e[i] === 100), level, { timeout: 30_000 });
+  // Held through the roll-out off the ledge: the first air frames are the ones the bounce caught.
+  await page.waitForFunction(() => window.__dWords.filter((f) => f.on).length >= 6 || window.__coldgas.S.run.phase === 'done', null, { timeout: 60_000 });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   expect(await page.evaluate(() => window.__coldgas.S.run.inputLog.every((e) => e[window.__coldgas.inputKeys.indexOf('assist') + 1] === 100))).toBe(true);
   // Lifted, the fall leaves green until auto-land takes it: the box asks for the pad, never for a roll or a
   // brake this scheme hasn't got (0133).
   await page.waitForFunction(() => { const { S } = window.__coldgas; return S.mode !== 'live' || S.run.phase !== 'air'; }, null, { timeout: 60_000 });
-  const words = await page.evaluate(() => [...window.__dWords]);
-  expect(words.length).toBeGreaterThan(0);
-  for (const w of words) expect(['On profile', 'Hold · Land']).toContain(w);
+  const frames = await page.evaluate(() => window.__dWords);
+  expect(frames.length).toBeGreaterThan(0);
+  for (const f of frames) expect(['On profile', 'Hold · Land']).toContain(f.w);
+  const onPad = frames.filter((f) => f.on);
+  expect(onPad.length).toBeGreaterThan(0);
+  expect(onPad.filter((f) => f.w !== 'On profile')).toEqual([]);
   expect(errors).toEqual([]);
   await page.close();
 });

@@ -75,6 +75,27 @@ describe('the descent band on a soft landing (0133)', () => {
     expect(greenAfterUp(ticks)).toBeGreaterThanOrEqual(0.8);
   });
 
+  // Critic bounce (2026-11-02 15:40): the first 0.37 s after the tap (88 of 151 ticks before roof up, still
+  // inverted off the ledge) read amber while LAND was engaged and rolling it out. Nothing needs to change on
+  // that flight, so the box reads On profile from the release.
+  it('one thumb, the pad held from the tap, reads green on every air tick from the release', () => {
+    const { run, ticks } = flyThumb();
+    expect(run.t.sink).toBeLessThanOrEqual(SINK_SOFT);
+    expect(ticks.length).toBeGreaterThan(240);
+    expect(ticks.filter((t) => t.s !== 'green').map((t) => t.h.toFixed(1))).toEqual([]);
+  });
+
+  // LAND engaged too low to roll out and stop: the computer can't make it soft, so the band must not be green.
+  it('LAND engaged upside down too close to the ground is never green', () => {
+    const s = createVehicle('lineup'), pr = newPrediction();
+    s.pos.x = 30; s.pos.y = SPEC.comHeight + 6; s.vel.y = -4;
+    // Roof down: a half-roll about the long axis.
+    s.quat.x = 0; s.quat.y = 0; s.quat.z = 1; s.quat.w = 0;
+    predict(s, hOf(s), pr, true);
+    expect(pr.upY).toBeLessThan(-0.9);
+    expect(pr.status).not.toBe('green');
+  });
+
   // A car let go 20 m over the ground, roof up and falling at 2 m/s, on Pro with nothing held (no auto-land).
   const drop = () => { const s = createVehicle('lineup'); s.pos.x = 30; s.pos.y = SPEC.comHeight + 20; s.vel.y = -2; return s; };
 

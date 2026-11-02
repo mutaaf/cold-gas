@@ -75,9 +75,13 @@ export function predict(c, h, out, land = false) {
   // (at least at the governor's share of full lift): where that sets down, flown out with the tanks blowing
   // down as it burns (the end-point estimate in aEnd is too kind to a part-empty tank). A brake on a plan
   // that sets down soft is nominal, however close to the ground it started.
+  // With LAND engaged the computer flies the roll-out too: past the bank it brakes through (tLevel > 0), the stop
+  // starts roof up after the roll-out's fall (sinkLevel, levelDrop), so it is flown at full uprightness, not at
+  // today's (a car just let go off the ledge is still upside down: critic bounce, 2026-11-02 15:40).
   const liftFlown = land ? Math.max(lift, LIFT_MAX * LAND_SHARE) : lift;
+  const upFlown = land && tLevel > 0 ? 1 : Math.max(0, upv.y);
   out.brakeSink = (land || aUp > 0.05) && liftFlown > 0
-    ? flownSink(c.air, m, sinkLevel, h - levelDrop - 0.3, liftFlown * Math.max(0, upv.y)) : Infinity;
+    ? flownSink(c.air, m, sinkLevel, h - levelDrop - 0.3, liftFlown * upFlown) : Infinity;
   // Red: even full lift from now touches down harder than a firm landing. Green: the stop is flying
   // and sets down soft. Amber: the stop has to start within WARN s (a person needs the warning before
   // the BRAKE line, not at it), or it would touch down firm, or the sink is past the band. Green

@@ -1,12 +1,12 @@
 ---
 id: 0133
 title: The descent band is green on a descent that lands soft, and on one thumb it names the pad, not a brake you don't have
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-02
-pr: 214
+pr: 214, PRNUM
 by: critic
 ---
 
@@ -105,9 +105,17 @@ every rendered frame from the release to the touchdown):
 nothing needs to change, so the box must read On profile from the release.
 
 **Still to meet:**
-- [ ] **Unit:** `band-soft.test.js`'s one-thumb flight held from the tap reads green on **100 % of its air
+- [x] **Unit:** `band-soft.test.js`'s one-thumb flight held from the tap reads green on **100 % of its air
       ticks from the release** (not only after roof up), and still touches down ≤ `SINK_SOFT`.
-- [ ] **e2e (390×844 one thumb):** with the pad held from the tap, every air frame of `[data-d-state]` reads
+- [x] **e2e (390×844 one thumb):** with the pad held from the tap, every air frame of `[data-d-state]` reads
       On profile. "Hold · Land" is allowed only on a frame where `[data-onethumb]` isn't `.on`.
-- [ ] Unchanged: the free-fall amber before `brakeBy`, the late-brake amber/red, the keyboard words,
+- [x] Unchanged: the free-fall amber before `brakeBy`, the late-brake amber/red, the keyboard words,
       ref-hash, 32/32 and 54/54.
+
+## Builder (2026-11-02, after bounce 1)
+Cause: `brakeSink` (src/sim/predict.js) flew the stop at today's `upY` (−0.95 off the ledge), so LAND read as free
+fall until the car was past level. With LAND engaged and a roll-out ahead (`tLevel > 0`) the stop is now flown roof
+up after the roll-out's fall, which the model already accounted for. `band-soft.test.js`: the held-from-the-tap
+flight is green on every air tick from the release (was 88 amber ticks); LAND engaged upside down 6 m up at 4 m/s
+is never green. `touch.spec.js` samples `[data-d-state]` and `[data-onethumb].on` each rendered frame: every
+held frame reads On profile (fails on main with six "Hold · Land" frames).
