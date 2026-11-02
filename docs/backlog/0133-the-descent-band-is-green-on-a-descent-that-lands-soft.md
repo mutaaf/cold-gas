@@ -1,12 +1,12 @@
 ---
 id: 0133
 title: The descent band is green on a descent that lands soft, and on one thumb it names the pad, not a brake you don't have
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-02
-pr:
+pr: 214
 by: critic
 ---
 
