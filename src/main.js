@@ -945,6 +945,7 @@ function newFlight(startTick = 0) {
   S.phaseMax = -1; S.brakeTicks = 0; S.braked = false; S.startTick = startTick; S.contactBuzzed = false;
   cueHys.slow = false; cueHys.tilted = false;
   S.ptr.release = 0; S.ptr.land = 0; S.ptr.brake = 0;
+  if (S.nudge) { S.nudge.cued = false; S.nudge.cueUntil = 0; clearTimeout(S.nudge.timer); thumbPad?.removeAttribute('data-nudge'); }
   S.ptrCtx = pointerCtx(S.run?.course || stage.course, S.flyTier);
   S.releaseTick = S.released ? startTick - 240 : -1;
 }
@@ -993,6 +994,25 @@ const thumbAim = mountThumbAim(thumbPad, thumb);   // 0121: the slide to aim and
 ui.touch.addEventListener('pointerdown', (e) => {
   if (S.mode === 'live' && S.run && thumbActive() && thumbPad.contains(e.target)) syncThumb(S.run, S.run.car);
 });
+// 0123: a finger that lands off the pad in the run-up or the climb (a newcomer's thumb on the road, or
+// the car) was seen, not taken: the pad pulses (at most once per 3 s; a still outline under reduced
+// motion) and, once a run, the cue line says "Hold the pad". Nothing reaches the sim: no input, no press.
+// A touch on any control (the pad, the top bar, an instrument, a sheet's buttons) is left alone.
+const NUDGE_MS = 400, NUDGE_GAP = 3000, NUDGE_CUE = 2000;   // the cue window outlasts the countdown's "Go" hold
+const OFF_PAD_SKIP = 'button, a, input, select, textarea, summary, label, [role="button"], [data-inst], [data-onethumb]';
+S.nudge = { at: -Infinity, n: 0, cued: false, cueUntil: 0, timer: 0 };
+document.addEventListener('pointerdown', (e) => {
+  if (e.pointerType !== 'touch' || S.mode !== 'live' || S.paused || !S.run || !thumbActive()) return;
+  if (thumbStage(S.run, S.released) !== 'climb' || e.target?.closest?.(OFF_PAD_SKIP)) return;
+  const now = performance.now();
+  if (now - S.nudge.at < NUDGE_GAP) return;
+  S.nudge.at = now; S.nudge.n++;
+  thumbPad.removeAttribute('data-nudge'); void thumbPad.offsetWidth;   // restart the pulse
+  thumbPad.setAttribute('data-nudge', '');
+  clearTimeout(S.nudge.timer);
+  S.nudge.timer = setTimeout(() => thumbPad.removeAttribute('data-nudge'), NUDGE_MS);
+  if (!S.nudge.cued) { S.nudge.cued = true; S.nudge.cueUntil = now + NUDGE_CUE; }
+}, true);
 function syncScheme() {
   const can = !!S.run && S.run.course !== 'lineup' && runTier() === 'assist';
   ui.touch.dataset.scheme = touchSet.scheme === 'thumb' && can ? 'thumb' : 'classic';
@@ -1170,6 +1190,7 @@ function cues(run, c) {
 // One-thumb: the pad itself says hold / tap; the cue line names the moment.
 function thumbCues(run, c, v) {
   const held = thumb.held;
+  if (!held && performance.now() < S.nudge.cueUntil) return ui.cue_('Hold the pad', 600);   // 0123
   if (run.phase === 'drive') return ui.cue_(held || v > 2 ? 'Climbing · let go to stop' : 'Hold the pad to climb', 600);
   if (run.phase === 'ramp' && !S.released && run.t.progress >= THUMB.tapAt && (thumb.driving || thumb.pending)) return ui.cue_('Letting go · out to the lip', 600);
   if (run.phase === 'ramp' && !S.released) return ui.cue_(run.t.progress >= 0.92 ? 'On the ledge · tap to let go' : 'Up the curl on suction', 600);
