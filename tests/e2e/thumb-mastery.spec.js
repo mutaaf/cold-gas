@@ -24,18 +24,26 @@ test('one-thumb: in the air the pad is a sight, a slide aims, and the results sh
   // 0129: the tap on the ledge answers at once. Watch the label from the page itself (a MutationObserver, so
   // no poll interval hides a late answer) and every frame's label until the release.
   await page.evaluate(() => {
-    const act = document.querySelector('[data-thumb-act]'), w = (window.__tap = { up: -1, changed: -1, frames: [] });
+    const act = document.querySelector('[data-thumb-act]'), pad = document.querySelector('[data-onethumb]');
+    const w = (window.__tap = { down: -1, up: -1, changed: -1, stage: '', act: '', frames: [] });
+    addEventListener('pointerdown', () => { if (w.down < 0) w.down = performance.now(); }, { capture: true });
     addEventListener('touchend', () => { if (w.up < 0) { w.up = performance.now(); requestAnimationFrame(tick); } }, { capture: true });
-    new MutationObserver(() => { if (w.changed < 0 && act.textContent !== 'Let go') w.changed = performance.now(); }).observe(act, { childList: true, characterData: true, subtree: true });
+    new MutationObserver(() => {
+      if (w.changed < 0 && act.textContent !== 'Let go') { w.changed = performance.now(); w.stage = pad.dataset.stage; w.act = act.textContent; }
+    }).observe(act, { childList: true, characterData: true, subtree: true });
     const S = window.__coldgas.S;
     function tick() { w.frames.push([S.released, act.textContent]); if (w.frames.length < 600 && !S.released) requestAnimationFrame(tick); }
   });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, id: 1 }] });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
-  const tap = await page.evaluate(() => ({ ...window.__tap, stage: document.querySelector('[data-onethumb]').dataset.stage, act: document.querySelector('[data-thumb-act]').textContent }));
+  const tap = await page.evaluate(() => ({ ...window.__tap }));
+  expect(tap.down).toBeGreaterThan(0);
   expect(tap.up).toBeGreaterThan(0);
   expect(tap.changed).toBeGreaterThan(0);
-  expect(tap.changed - tap.up).toBeLessThanOrEqual(100);   // ≤ 0.1 s: here it answers in the press's own task
+  // ≤ 0.1 s from the finger touching the pad (here it answers in the press's own task), and so from the lift too.
+  expect(tap.changed - tap.down).toBeGreaterThanOrEqual(0);
+  expect(tap.changed - tap.down).toBeLessThanOrEqual(100);
+  expect(tap.changed - tap.up).toBeLessThanOrEqual(100);
   expect(tap.stage).toBe('going');
   expect(tap.act).toBe('Go');
   // A second press during the drive-off is no new tap: held from here on, it lands (the sight below).

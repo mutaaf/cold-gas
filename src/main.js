@@ -35,7 +35,7 @@ import { loadPerf, savePerf, record, decide, outcomeOf, afterChange, coachLive, 
 import { deviceOf, howtoRows, pauseRows, deviceTitle, pickPointer, livePointer, coachWords } from './pointer.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
-import { thumbStage } from './onethumb.js';
+import { thumbStage, THUMB } from './onethumb.js';
 // 0121 thumb mastery (own modules): the one-thumb touchdown sight on the pad, and the medals row.
 import { mountThumbAim } from './thumb-aim.js';
 import { showMedals, hideMedals } from './medals.js';
@@ -1171,7 +1171,7 @@ function cues(run, c) {
 function thumbCues(run, c, v) {
   const held = thumb.held;
   if (run.phase === 'drive') return ui.cue_(held || v > 2 ? 'Climbing · let go to stop' : 'Hold the pad to climb', 600);
-  if (run.phase === 'ramp' && !S.released && (thumb.driving || thumb.pending)) return ui.cue_('Letting go · out to the lip', 600);
+  if (run.phase === 'ramp' && !S.released && run.t.progress >= THUMB.tapAt && (thumb.driving || thumb.pending)) return ui.cue_('Letting go · out to the lip', 600);
   if (run.phase === 'ramp' && !S.released) return ui.cue_(run.t.progress >= 0.92 ? 'On the ledge · tap to let go' : 'Up the curl on suction', 600);
   if (run.phase === 'air' || S.released) {
     if (run.course === 'show' && !run.t.crossedRow && c.pos.z > COURSES.show.rowNear) return ui.cue_('Carrying you over the row', 500);
