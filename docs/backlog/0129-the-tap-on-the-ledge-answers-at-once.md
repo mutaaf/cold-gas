@@ -1,12 +1,12 @@
 ---
 id: 0129
 title: On one thumb, the tap on the ledge answers at once, not 0.9 s later at the lip
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-01
-pr:
+pr: 207
 by: critic
 ---
 
