@@ -1912,6 +1912,7 @@ body:is(:not([data-mode]), [data-mode='title']) .ai-chip { max-width: 160px; }
 .howto-all:hover, .howto-all:focus-visible { color: var(--ink); text-decoration-color: currentColor; }
 .howto-all[hidden], .howto-assist[hidden] { display: none; }
 .howto.short .howto-rows { grid-template-columns: minmax(0, 1fr); }
+.howto-rows li:focus { outline: none; }
 /* The tier picker: the factor beside each name. */
 .assist .ctl-opt b i { font: 400 12px/1 var(--mono); font-style: normal; color: rgba(245, 246, 248, 0.7); margin-left: 6px; letter-spacing: 0; }
 .assist .ctl-opt[data-tier-opt='pro'] b i { color: var(--amber); }
@@ -1926,6 +1927,7 @@ body:is(:not([data-mode]), [data-mode='title']) .ai-chip { max-width: 160px; }
   .howto-assist { padding-top: 6px; }
   .howto .actions { margin-top: 8px; }
   .howto .actions .btn { height: 44px; }
+  .howto.short .sheet { width: min(460px, calc(100vw - 24px - var(--safe-l) - var(--safe-r))); }
   .assist .sheet { width: min(680px, calc(100vw - 24px)); padding: 16px 22px; max-height: calc(100dvh - 16px); }
   .assist .ctl-group { grid-template-columns: repeat(3, minmax(0, 1fr)); margin: 10px 0 8px; }
   .assist .ctl-opt { padding: 10px 12px; }

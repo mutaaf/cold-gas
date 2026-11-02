@@ -52,7 +52,7 @@ const floor = (loc) => loc.evaluate((el) => {
 // The card fits whole: every row, the note and both buttons on screen, nothing overlapping, no scroll.
 const cardFits = (page) => page.evaluate(() => {
   const sheet = document.querySelector('[data-screen="howto"] .sheet');
-  const parts = [...sheet.querySelectorAll('.eyebrow, h2, .howto-rows li, .howto-assist, .actions .btn')].filter((e) => !e.closest('[hidden]'));
+  const parts = [...sheet.querySelectorAll('.eyebrow, h2, .howto-rows li, .howto-all, .howto-assist, .actions .btn')].filter((e) => !e.closest('[hidden]'));
   const r = parts.map((e) => e.getBoundingClientRect());
   const issues = [];
   r.forEach((a, i) => {
@@ -141,7 +141,7 @@ test('touch: the first Jump on one thumb shows one row (All four steps opens the
   await expect(page.locator('#howto-title')).toHaveText('Four things to know');
   await expect(page.locator('[data-howto-assist]')).toBeVisible();
   await expect(all).toBeHidden();
-  await expect(page.locator('[data-howto-go]')).toBeFocused();
+  await expect(rows.nth(1)).toBeFocused();   // a screen reader reads on from step 02
   expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
   expect(await cardFits(page)).toEqual([]);
   // Skip (this time only): the next Jump asks for the one sentence again, and Got it · Jump starts the run in one tap.
@@ -191,6 +191,17 @@ test('the how-to card fits whole, with no overlaps, at every size (folding phone
     await page.waitForTimeout(700);   // the sheet's rise
     expect(await cardFits(page), `${w}×${h}`).toEqual([]);
     await page.keyboard.press('Escape');
+    if (page !== touch) continue;
+    // 0127: a newcomer's Jump on one thumb, the one-row card (Escape on it goes on into the run; back to the title).
+    await page.evaluate(() => localStorage.setItem('coldgas_howto', 'new'));
+    await page.locator('[data-start]').tap();
+    await expect(page.locator('[data-howto-all]')).toBeVisible();
+    await page.waitForTimeout(700);
+    expect(await cardFits(page), `short ${w}×${h}`).toEqual([]);
+    const link = await floor(page.locator('[data-howto-all]'));
+    expect(link.h >= 44 && link.minFont >= 11 && link.inView, `short ${w}×${h} link`).toBe(true);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.__coldgas.toTitle());
   }
   await touch.close(); await desk.close();
 });

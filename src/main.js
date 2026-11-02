@@ -1626,7 +1626,13 @@ function closeHowto({ seen = true } = {}) {
 on('[data-howto-open]', (e) => openHowto({ from: e.currentTarget }));
 on('[data-howto-go]', () => closeHowto());
 on('[data-howto-skip]', () => closeHowto({ seen: false }));
-on('[data-howto-all]', () => { if (howtoCtx) drawHowto(howtoCtx, false); howtoScreen.querySelector('[data-howto-go]').focus({ preventScroll: true }); });
+// The rows it opened take the focus at step 02, so a screen reader reads on from there (Tab goes on to Got it).
+on('[data-howto-all]', () => {
+  if (howtoCtx) drawHowto(howtoCtx, false);
+  const next = howtoScreen.querySelector('[data-howto-rows] li:nth-child(2)') || howtoScreen.querySelector('[data-howto-go]');
+  if (next.tagName === 'LI') next.tabIndex = -1;
+  next.focus({ preventScroll: true });
+});
 howtoScreen.addEventListener('click', (e) => { if (e.target === howtoScreen) closeHowto({ seen: !howtoThen }); });
 // Escape closes the card, the tier picker, the controls or the board before the game reads it (Escape on
 // the results goes Home, on a run the pause sheet toggles): the sheet on top goes, not what's under it.
