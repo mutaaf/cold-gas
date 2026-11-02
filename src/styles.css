@@ -1181,6 +1181,11 @@ body .touch .thumb[data-stage='going']:not(.on) { background-color: rgba(58, 42,
 .thumb[data-warn] { border-color: var(--amber); animation: thumbpulse 0.9s var(--ease) infinite; }
 .thumb[data-warn] .thumb-act, .thumb[data-warn] .thumb-verb { color: var(--amber); }
 @keyframes thumbpulse { 50% { box-shadow: 0 0 0 10px rgba(255, 191, 90, 0.16); } }
+/* 0123: a touch off the pad in the climb was seen: a ring sweeps out from the pad once (ink: nominal, not a
+   warning), a still outline under reduced motion. */
+.thumb[data-nudge] { border-color: var(--ink); animation: thumbnudge 0.4s var(--ease) both; }
+@keyframes thumbnudge { from { box-shadow: 0 0 0 0 rgba(245, 246, 248, 0.55); } to { box-shadow: 0 0 0 16px rgba(245, 246, 248, 0); } }
+@media (prefers-reduced-motion: reduce) { .thumb[data-nudge] { animation: none; box-shadow: 0 0 0 4px rgba(245, 246, 248, 0.45); } }
 @media (orientation: landscape) and (max-height: 520px) {
   /* Slot C sits above B, left of A: the corner above A belongs to the attitude dial. */
   .touch { --ax: 118px; --ay: 120px; --as: 100px; --bx: 226px; --by: 58px; --bs: 70px; --cx: 228px; --cy: 170px; --cs: 70px; --stick: 124px; }

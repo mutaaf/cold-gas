@@ -1,12 +1,12 @@
 ---
 id: 0123
 title: A first touch on the road, off the pad, answers instead of doing nothing
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-01
-pr:
+pr: 211
 by: scout
 ---
 
