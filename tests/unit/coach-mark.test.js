@@ -2,7 +2,7 @@
 // and only ≈2.7 m past the mark; "Long of the mark" sent the player sliding down the pad. Now the title names the
 // bigger part (Wide / Long / Short), the detail gives both, and the side word agrees with the pad's sight (the amber
 // dot is on the side to slide toward). Only the words change: the weight and the points are markCost's, as before.
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll } from 'vitest';
 import { createRun, stepRun } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { newInput } from '../../src/sim/vehicle.js';
@@ -44,7 +44,8 @@ function flyThumb(tapAfter) {
 
 describe('the coach names the side the touchdown missed on (0132)', () => {
   // A tap 0.25 s after the stop and one 0.5 s after land on opposite sides of the mark.
-  const flights = [60, 120].map((d) => ({ d, ...flyThumb(d) }));
+  let flights;
+  beforeAll(() => { flights = [60, 120].map((d) => ({ d, ...flyThumb(d) })); });
 
   it('a mostly-sideways miss reads "Wide of the mark", with the side and both distances; the mirror names the other side', () => {
     const sides = [];
@@ -81,6 +82,7 @@ describe('the coach names the side the touchdown missed on (0132)', () => {
     expect(markMiss({ x: 1.2, along: -6 }).title).toBe('Long of the mark');
     expect(markMiss({ x: 1.2, along: -6 }).where).toBe(' (6 m past it, 1.2 m right)');
     expect(markMiss({ x: -0.2, along: -6 }).where).toBe(' (6 m past it)');
+    expect(markMiss({ x: 5.31, along: -5.28 }).title).toBe('Long of the mark');   // equal as printed: not "Wide"
     expect(markMiss({ x: -1.5, along: 5 }).title).toBe('Short of the mark');
     expect(markMiss({ x: -1.5, along: 5 }).where).toBe(' (5 m short of it, 1.5 m left)');
     expect(markMiss({ x: 6, along: 0.3 }).where).toBe(' (6 m right of it)');

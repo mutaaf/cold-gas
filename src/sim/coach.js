@@ -125,7 +125,8 @@ export function namesMark(padMiss, cost, { show = false, drill = false } = {}) {
 // heads down -z: `along` = landZ − pad.z (< 0 past the mark, > 0 short of it), `across` = lateral (x − pad.x), and
 // the car's right is +x (forward −z × up +y). The pad's sight (markOffset, src/onethumb.js) puts the amber dot on the
 // other side: told "right of it", you see the dot left of centre and slide toward it. The title names the bigger
-// part; the detail gives both. The Wall and the Lineup keep "Off the mark".
+// part; the detail gives both. A drill on the Show names the side too (same geometry). The Wall and the Lineup keep
+// "Off the mark". The keyboard's carry hint (pitch the nose up) is along-track advice, so it follows a Long title only.
 const SIDE_MIN = 0.5;   // m: a part this small isn't worth a word
 export function markMiss(touch, show = true) {
   if (!show || !touch) return { title: 'Off the mark', where: '', side: null };
@@ -133,7 +134,7 @@ export function markMiss(touch, show = true) {
   const past = r1(-along) + ' m past', short = r1(along) + ' m short';
   const side = across > 0 ? 'right' : 'left';
   const sideTxt = `${r1(Math.abs(across))} m ${side}`;
-  if (Math.abs(across) > Math.abs(along)) {
+  if (r1(Math.abs(across)) > r1(Math.abs(along))) {   // as printed: never "Wide" over two equal figures
     const a = Math.abs(along) >= SIDE_MIN ? `, ${along < 0 ? past : short}` : '';
     return { title: 'Wide of the mark', where: ` (${sideTxt} of it${a})`, side };
   }
