@@ -89,9 +89,11 @@ test('a physics trap mid-run stops the run with a toast instead of freezing the 
   await page.evaluate(() => {
     const obs = window.__coldgas.obs, f = obs.flush;
     window.__beacons = [];
+    window.__trapQuit = obs.payload().play['run-quit'] ?? 0;   // the trapped run: the game's fault, not a quit
     obs.flush('test', { force: true });   // what came before (the trapped run, this run's start) is sent
     obs.flush = (reason, o) => { const p = f(reason, o); window.__beacons.push({ reason, play: p?.play || {} }); return p; };
   });
+  expect(await page.evaluate(() => window.__trapQuit)).toBe(0);
   const leave = () => page.evaluate(() => { dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })); return window.__beacons.at(-1); });
   // Pause → Home during a live Jump: one run-quit, no card.
   await page.keyboard.press('Escape');
@@ -101,6 +103,18 @@ test('a physics trap mid-run stops the run with a toast instead of freezing the 
   let b = await leave();
   expect(b.reason).toBe('pagehide');
   expect(b.play).toEqual({ 'run-quit': 1 });
+  // R in the aftermath (the card is decided, the sheet not up yet): that run landed, it wasn't left.
+  await page.evaluate(() => {
+    const cg = window.__coldgas;
+    cg.startRun('jump'); cg.S.autopilot = cg.createAutopilot(cg.stage.course); cg.skipCountdown();
+    for (let i = 0; i < 20000 && !cg.S.card; i++) cg.liveStep(1 / 60);
+  });
+  expect(await page.evaluate(() => ({ mode: window.__coldgas.S.mode, card: !!window.__coldgas.S.card }))).toEqual({ mode: 'live', card: true });
+  await page.keyboard.press('KeyR');
+  await page.waitForFunction(() => !window.__coldgas.S.card);   // the retry's new run
+  await page.evaluate(() => window.__coldgas.toTitle());        // …left before its card
+  b = await leave();
+  expect(b.play).toMatchObject({ run: 2, 'run-landed': 1, 'run-quit': 1 });
   // The reference run left is never a player's quit; nor is a second Home from the title.
   await page.evaluate(() => { window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); window.__coldgas.toTitle(); window.__coldgas.toTitle(); });
   expect((await leave()).play).toEqual({});
