@@ -318,4 +318,12 @@ describe('player counts (obs.play)', () => {
     obs.play('run');
     expect(obs.payload().play).toEqual({ run: 1 });
   });
+  it('0130: counts howto-skip and run-quit (the pagehide path is e2e: obs.spec.js)', async () => {
+    const { obs } = await import('../../src/obs/index.js');
+    obs.sendEnabled = false;
+    obs.flush('test', { force: true });
+    obs.play('howto-skip'); obs.play('run-quit');
+    expect(obs.payload().play).toEqual({ 'howto-skip': 1, 'run-quit': 1 });
+    obs.flush('test', { force: true });
+  });
 });

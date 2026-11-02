@@ -92,6 +92,8 @@ describe('POST /obs: players', () => {
     expect(cleanObs(batch({ play: [1, 2] }))).toBeNull();
     expect(cleanObs(batch({ play: 'run' }))).toBeNull();
     expect(cleanObs(batch({})).play).toEqual({});
+    // 0130: where a run ends when it's neither landed nor wrecked, and a Skip on the how-to card
+    expect(cleanObs(batch({ play: { 'run-quit': 1, 'howto-skip': 2, 'run-quitt': 1, 'run-phase-air': 1 } })).play).toEqual({ 'run-quit': 1, 'howto-skip': 2 });
   });
   it('folds rows into days, newest first, and totals', () => {
     const p = playersOf([

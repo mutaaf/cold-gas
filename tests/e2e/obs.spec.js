@@ -83,4 +83,34 @@ test('a physics trap mid-run stops the run with a toast instead of freezing the 
   await expect.poll(() => frameCount(page), { timeout: 15_000 }).toBeGreaterThan(f0 + 3);
   await page.evaluate(() => { window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.run.tick > 10, null, { timeout: 30_000 });
+
+  // 0130, folded in here (no new boot: the shards have no minutes to spare): where a run ends when it's neither
+  // landed nor wrecked. Every beacon's play counts are kept as the page hands them to flush.
+  await page.evaluate(() => {
+    const obs = window.__coldgas.obs, f = obs.flush;
+    window.__beacons = [];
+    obs.flush('test', { force: true });   // what came before (the trapped run, this run's start) is sent
+    obs.flush = (reason, o) => { const p = f(reason, o); window.__beacons.push({ reason, play: p?.play || {} }); return p; };
+  });
+  const leave = () => page.evaluate(() => { dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })); return window.__beacons.at(-1); });
+  // Pause → Home during a live Jump: one run-quit, no card.
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-screen="pause"]')).toBeVisible();
+  await page.locator('[data-screen="pause"] [data-home]').click();
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'title');
+  let b = await leave();
+  expect(b.reason).toBe('pagehide');
+  expect(b.play).toEqual({ 'run-quit': 1 });
+  // The reference run left is never a player's quit; nor is a second Home from the title.
+  await page.evaluate(() => { window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); window.__coldgas.toTitle(); window.__coldgas.toTitle(); });
+  expect((await leave()).play).toEqual({});
+  // A newcomer skips the how-to card, and the page goes with the run live: howto-skip, then run-quit, once each.
+  await page.evaluate(() => localStorage.setItem('coldgas_howto', 'new'));
+  await page.locator('[data-start]').click();
+  await page.locator('[data-howto-skip]').click();
+  await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode));
+  b = await leave();
+  expect(b.play).toMatchObject({ howto: 1, 'howto-skip': 1, run: 1, 'run-quit': 1 });
+  expect(b.play['run-landed'] ?? 0).toBe(0);
+  expect((await leave()).play['run-quit'] ?? 0).toBe(0);   // once per run, however often the page hides
 });
