@@ -28,11 +28,13 @@ export const newPrediction = () => ({
   rollOut: 0,              // signed roll to upright, rad (+ = roll right), 0 when upright
   pitchOut: 0,             // signed pitch to level, rad (+ = nose down, like the stick)
   touchSink: 0,            // the sink you'd touch down at if you started braking now, at full lift
+  brakeSink: Infinity,     // braking already (or LAND engaged): the sink the stop as flown sets down at (0133)
 });
 
 const upv = v3();
 // `h` is the height of the floor above whatever is below (the HUD measures it against the course).
-export function predict(c, h, out) {
+// `land`: LAND is flying the descent (Assist, held or auto-land): the governor brakes on its plan (0133).
+export function predict(c, h, out, land = false) {
   const m = massOf(c);
   up(c, upv);
   const vy = c.vel.y, sink = Math.max(0, -vy);
@@ -69,10 +71,20 @@ export function predict(c, h, out) {
   // Touching down after braking from here at full lift (after the roll-out): v² = v² − 2·a·h.
   const v2 = sinkLevel * sinkLevel - 2 * Math.max(0, out.aMax) * Math.max(0, h - levelDrop - 0.3);
   out.touchSink = v2 > 0 ? Math.sqrt(v2) : 0;
-  // Red: even full lift from now touches down harder than a firm landing. Amber: the stop has to
-  // start within WARN s (a person needs the warning before the BRAKE line, not at it), or it would
-  // touch down firm, or the sink is past the band. Green: on or under the band, with room.
+  // The stop as it is being flown (0133): the down-jets already lifting (at today's lift), or LAND engaged
+  // (at the governor's plan, or more if it's lifting harder): where that sets down. A brake on a plan that
+  // sets down soft is nominal, however close to the ground it started.
+  const aFlown = land ? Math.max(aUp, out.aPlan) : aUp;
+  if ((land || aUp > 0.05) && aFlown > 0.05) {
+    const vb = sinkLevel * sinkLevel - 2 * aFlown * Math.max(0, h - levelDrop - 0.3);
+    out.brakeSink = vb > 0 ? Math.sqrt(vb) : 0;
+  } else out.brakeSink = Infinity;
+  // Red: even full lift from now touches down harder than a firm landing. Green: the stop is flying
+  // and sets down soft. Amber: the stop has to start within WARN s (a person needs the warning before
+  // the BRAKE line, not at it), or it would touch down firm, or the sink is past the band. Green
+  // otherwise: on or under the band, with room.
   out.status = out.touchSink > SINK_FIRM ? 'red'
+    : out.brakeSink <= SINK_SOFT ? 'green'
     : out.marginAhead < 0 || out.touchSink > SINK_SOFT || sink > out.profileSink + 0.5 ? 'amber' : 'green';
   // Free fall to the ground.
   out.tGround = (vy + Math.sqrt(vy * vy + 2 * G * Math.max(0, h))) / G;
@@ -114,6 +126,7 @@ export function steadyStatus(b, pr, t) {
   }
   // Clear of the edges: what the band must read before it is allowed to step down.
   const clear = pr.touchSink > SINK_FIRM - 0.3 ? 'red'
+    : pr.brakeSink <= SINK_SOFT - 0.2 ? 'green'
     : pr.marginAhead < 0.5 || pr.touchSink > SINK_SOFT - 0.2 || pr.sink > pr.profileSink + 0.2 ? 'amber' : 'green';
   if (RANK[clear] >= cur) { b.down = ''; return b.status; }
   if (b.down !== clear) { b.down = clear; b.downAt = t; }
