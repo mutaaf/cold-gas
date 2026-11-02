@@ -1,7 +1,7 @@
 ---
 id: 0130
 title: The players' funnel sees where a run ends when it is neither landed nor wrecked
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: engagement
