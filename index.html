@@ -297,12 +297,14 @@
   </section>
 
   <!-- How to fly (0079, src/pointer.js howtoRows): this device's controls, per phase. On the first Jump
-       (skippable, remembered) and any time from the title or the pause sheet. -->
+       (skippable, remembered) and any time from the title or the pause sheet. A newcomer's Jump on one thumb gets
+       step 01 alone (0127), with All four steps to open the rest in place. -->
   <section class="controls howto" data-screen="howto" hidden>
     <div class="sheet narrow" role="dialog" aria-modal="true" aria-labelledby="howto-title" aria-describedby="howto-rows">
       <p class="eyebrow">How to fly · <span data-howto-device>Keyboard</span></p>
       <h2 id="howto-title">Four things to know</h2>
       <ol class="howto-rows" id="howto-rows" data-howto-rows></ol>
+      <button class="howto-all" data-howto-all aria-controls="howto-rows" aria-expanded="false" hidden>All four steps</button>
       <p class="howto-assist" data-howto-assist></p>
       <div class="actions"><button class="btn primary" data-howto-go>Got it</button><button class="btn ghost" data-howto-skip>Skip</button></div>
     </div>
