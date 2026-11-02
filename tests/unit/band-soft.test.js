@@ -9,6 +9,7 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { predict, newPrediction, newBand, steadyStatus, SINK_SOFT } from '../../src/sim/predict.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { createOneThumb, thumbStage } from '../../src/onethumb.js';
+import { stateWord, THUMB_WORD } from '../../src/hud-landing.js';
 
 const hOf = (c) => Math.max(0, c.pos.y - SPEC.comHeight);
 
@@ -94,6 +95,36 @@ describe('the descent band on a soft landing (0133)', () => {
     expect(lineT).toBeGreaterThan(0);
     expect(lineT - amberT).toBeGreaterThanOrEqual(0.6 - 1 / 240 - 1e-9);
     expect(redH).toBeGreaterThan(1);
+  });
+
+  it('a brake on a part-empty tank that the blowdown leaves firm is never green (review: 180 of 297 kg)', () => {
+    // Full lift from 10 m reads like a soft stop at today's pressure, but the burn drains the tank below the
+    // regulator and the last metres come down at 2.25 m/s.
+    const s = drop(), pr = newPrediction(), band = newBand(), seen = [];
+    s.air = 180;
+    let td = -1;
+    for (let i = 0; i < 240 * 6; i++) {
+      const h = hOf(s);
+      if (h <= 0.35) { td = -s.vel.y; break; }
+      const on = h < 10 || seen.length > 0;
+      predict(s, h, pr);
+      const st = steadyStatus(band, pr, i / 240);
+      if (on) seen.push(st);
+      step(s, { ...newInput(), assist: 0, lift: on ? 1 : 0 });
+    }
+    expect(td).toBeGreaterThan(SINK_SOFT);
+    expect(seen.length).toBeGreaterThan(100);
+    expect(seen.filter((st) => st === 'green')).toEqual([]);
+  });
+
+  it('the state box: keyboard and classic touch name the brake, one thumb names the pad', () => {
+    expect(stateWord('amber', 1)).toBe('Brake');
+    expect(stateWord('red', 1)).toBe('Too fast');
+    expect(stateWord('amber', 0.2)).toBe('Roll out · now');
+    expect(stateWord('green', 0.2)).toBe('On profile');
+    for (const st of ['amber', 'red']) for (const up of [1, 0.2]) expect(stateWord(st, up, true)).toBe(THUMB_WORD);
+    expect(stateWord('green', 1, true)).toBe('On profile');
+    expect(THUMB_WORD).toBe('Hold · Land');
   });
 
   it('a brake started below the BRAKE line lands firm, and reads amber or red from the brake to the ground', () => {

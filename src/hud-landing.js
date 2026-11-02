@@ -132,7 +132,7 @@ export function createLandingHud({ scene, onStatus = null }) {
     }
     // What the band asks of you: roof up first, then the brake. On one thumb there's no roll or brake to
     // press, only the pad, whose verb is Land: the band asks for that (0133).
-    const word = status === 'green' ? 'On profile' : thumb ? THUMB_WORD : pr.upY < 0.85 ? 'Roll out · now' : status === 'amber' ? 'Brake' : 'Too fast';
+    const word = stateWord(status, pr.upY, thumb);
     if (word !== last.word) { el.state.textContent = word; last.word = word; }
     const tg = Math.round(pr.profileSink * rateK() * 2);
     if (tg !== last.target) { el.target.textContent = (tg / 2).toFixed(1); last.target = tg; }
@@ -193,6 +193,14 @@ export function createLandingHud({ scene, onStatus = null }) {
 
   // `status()`: the band as shown (steady), for the HUD's other live cues (the one-thumb pad, the coach's pointer).
   return { update, show, prediction: pr, status: () => last.status || pr.status, marker: mk };
+}
+
+// The state box's word: what the band asks of you, roof up first, then the brake (keyboard, pad, classic
+// touch, Advanced). On one thumb, whatever it asks is the pad's own action (0133).
+export function stateWord(status, upY, thumb = false) {
+  if (status === 'green') return 'On profile';
+  if (thumb) return THUMB_WORD;
+  return upY < 0.85 ? 'Roll out · now' : status === 'amber' ? 'Brake' : 'Too fast';
 }
 
 // Where BRAKE's label stands on the descent tape (0055): its baseline, in the tape's units (y down, 0 m at

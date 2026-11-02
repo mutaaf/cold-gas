@@ -71,20 +71,19 @@ export function predict(c, h, out, land = false) {
   // Touching down after braking from here at full lift (after the roll-out): v² = v² − 2·a·h.
   const v2 = sinkLevel * sinkLevel - 2 * Math.max(0, out.aMax) * Math.max(0, h - levelDrop - 0.3);
   out.touchSink = v2 > 0 ? Math.sqrt(v2) : 0;
-  // The stop as it is being flown (0133): the down-jets already lifting (at today's lift), or LAND engaged
-  // (at the governor's plan, or more if it's lifting harder): where that sets down. A brake on a plan that
-  // sets down soft is nominal, however close to the ground it started.
-  const aFlown = land ? Math.max(aUp, out.aPlan) : aUp;
-  if ((land || aUp > 0.05) && aFlown > 0.05) {
-    const vb = sinkLevel * sinkLevel - 2 * aFlown * Math.max(0, h - levelDrop - 0.3);
-    out.brakeSink = vb > 0 ? Math.sqrt(vb) : 0;
-  } else out.brakeSink = Infinity;
+  // The stop as it is being flown (0133): the down-jets already lifting (at today's valves), or LAND engaged
+  // (at least at the governor's share of full lift): where that sets down, flown out with the tanks blowing
+  // down as it burns (the end-point estimate in aEnd is too kind to a part-empty tank). A brake on a plan
+  // that sets down soft is nominal, however close to the ground it started.
+  const liftFlown = land ? Math.max(lift, LIFT_MAX * LAND_SHARE) : lift;
+  out.brakeSink = (land || aUp > 0.05) && liftFlown > 0
+    ? flownSink(c.air, m, sinkLevel, h - levelDrop - 0.3, liftFlown * Math.max(0, upv.y)) : Infinity;
   // Red: even full lift from now touches down harder than a firm landing. Green: the stop is flying
   // and sets down soft. Amber: the stop has to start within WARN s (a person needs the warning before
   // the BRAKE line, not at it), or it would touch down firm, or the sink is past the band. Green
   // otherwise: on or under the band, with room.
   out.status = out.touchSink > SINK_FIRM ? 'red'
-    : out.brakeSink <= SINK_SOFT ? 'green'
+    : out.brakeSink <= SINK_SOFT && out.touchSink <= SINK_SOFT ? 'green'
     : out.marginAhead < 0 || out.touchSink > SINK_SOFT || sink > out.profileSink + 0.5 ? 'amber' : 'green';
   // Free fall to the ground.
   out.tGround = (vy + Math.sqrt(vy * vy + 2 * G * Math.max(0, h))) / G;
@@ -126,12 +125,31 @@ export function steadyStatus(b, pr, t) {
   }
   // Clear of the edges: what the band must read before it is allowed to step down.
   const clear = pr.touchSink > SINK_FIRM - 0.3 ? 'red'
-    : pr.brakeSink <= SINK_SOFT - 0.2 ? 'green'
+    : pr.brakeSink <= SINK_SOFT - 0.2 && pr.touchSink <= SINK_SOFT - 0.2 ? 'green'
     : pr.marginAhead < 0.5 || pr.touchSink > SINK_SOFT - 0.2 || pr.sink > pr.profileSink + 0.2 ? 'amber' : 'green';
   if (RANK[clear] >= cur) { b.down = ''; return b.status; }
   if (b.down !== clear) { b.down = clear; b.downAt = t; }
   if (t - b.downAt >= BAND_HOLD) { b.status = clear; b.down = ''; }
   return b.status;
+}
+
+// The sink a stop flown at a fixed valve opening (`lift`: the down-jets' summed thrust at full pressure,
+// vertical) sets down at, `room` m below, from `sink`: thrust follows the feed pressure, and the gas the
+// burn takes lowers it (vehicle.js's own blowdown and Isp sag). 0 if it stops short (it hovers, the next
+// frame re-reads it). Coarse steps, no allocation.
+const LAND_SHARE = 0.8;   // the governor's planned share of full lift (vehicle.js BRAKE_SHARE)
+function flownSink(air, m, sink, room, lift) {
+  const dt = 1 / 30;
+  let v = sink, y = Math.max(0, room);
+  for (let i = 0; i < 240 && y > 0; i++) {
+    const pr = pressureOf(air), F = air > 0.5 ? lift * pr : 0;
+    v -= (F / m - G) * dt;
+    if (v <= 0) return 0;
+    y -= v * dt;
+    const used = (F / (SPEC.ispFull * (0.7 + 0.3 * pr) * G)) * dt;
+    air -= used; m -= used;
+  }
+  return Math.max(0, v);
 }
 
 // Height a stop from `sink` takes: the roll-out (falling `tLevel` s), then braking at `a`.
