@@ -922,7 +922,10 @@ function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTi
   // damage panel already calls wrecked isn't a TOUCHDOWN either (0065).
   const crash = run.phase === 'done' ? crashStep(S.card)
     : phaseKey === 'touchdown' && Math.round(run.damage.total) >= WRECK_PCT ? 'Wrecked' : '';
-  landing.update(c, alt, !S.autopilot && air ? 'air' : run.phase === 'air' ? '' : run.phase, run.tick / 240);
+  // LAND flies it (Assist, held or auto-land) the way the sim's governor reads it (0133).
+  const land = liveInput.assist > 0 && (liveInput.level > 0 || c.autoLand > 0);
+  const thumbOn = !ui.touch.hidden && ui.touch.dataset.scheme === 'thumb' && !S.autopilot;   // (thumbActive(), declared below)
+  landing.update(c, alt, !S.autopilot && air ? 'air' : run.phase === 'air' ? '' : run.phase, run.tick / 240, land, thumbOn);
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(landing.prediction.rollOut) * 180 / Math.PI,
     alt, airborne: air,

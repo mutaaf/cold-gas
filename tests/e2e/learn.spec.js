@@ -50,6 +50,8 @@ test('the landing HUD is up in the air: the sink in its band, the BRAKE line, th
   await expect(page.locator('[data-d-brake-lbl]')).toContainText('BRAKE');
   // Hands off from 10 m, falling 13 m/s: the band goes red before the ground.
   await page.waitForFunction(() => document.querySelector('[data-descent]').dataset.status === 'red' || window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
+  // On the keyboard the box still names the brake (0133: only the one-thumb pad's words change).
+  expect(await page.locator('[data-d-state]').textContent()).toMatch(/^(Brake|Too fast|Roll out · now)$/);
   // (The crash's slow-motion beat takes minutes of wall clock on a software-GL runner: skip ahead.)
   await page.evaluate(() => window.__coldgas.fastForward());
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
