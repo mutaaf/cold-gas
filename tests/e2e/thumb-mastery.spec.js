@@ -21,7 +21,29 @@ test('one-thumb: in the air the pad is a sight, a slide aims, and the results sh
   const box = await pad.boundingBox();
   const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
   const cdp = await page.context().newCDPSession(page);
+  // 0129: the tap on the ledge answers at once. Watch the label from the page itself (a MutationObserver, so
+  // no poll interval hides a late answer) and every frame's label until the release.
+  await page.evaluate(() => {
+    const act = document.querySelector('[data-thumb-act]'), w = (window.__tap = { up: -1, changed: -1, frames: [] });
+    addEventListener('touchend', () => { if (w.up < 0) { w.up = performance.now(); requestAnimationFrame(tick); } }, { capture: true });
+    new MutationObserver(() => { if (w.changed < 0 && act.textContent !== 'Let go') w.changed = performance.now(); }).observe(act, { childList: true, characterData: true, subtree: true });
+    const S = window.__coldgas.S;
+    function tick() { w.frames.push([S.released, act.textContent]); if (w.frames.length < 600 && !S.released) requestAnimationFrame(tick); }
+  });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, id: 1 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  const tap = await page.evaluate(() => ({ ...window.__tap, stage: document.querySelector('[data-onethumb]').dataset.stage, act: document.querySelector('[data-thumb-act]').textContent }));
+  expect(tap.up).toBeGreaterThan(0);
+  expect(tap.changed).toBeGreaterThan(0);
+  expect(tap.changed - tap.up).toBeLessThanOrEqual(100);   // ≤ 0.1 s: here it answers in the press's own task
+  expect(tap.stage).toBe('going');
+  expect(tap.act).toBe('Go');
+  // A second press during the drive-off is no new tap: held from here on, it lands (the sight below).
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, id: 1 }] });
+  await page.waitForFunction(() => window.__coldgas.S.released, null, { timeout: 30_000 });
+  await expect(page.locator('[data-thumb-act]')).toHaveText('Land');
+  const frames = await page.evaluate(() => window.__tap.frames);
+  expect(frames.filter(([rel, a]) => !rel && a === 'Let go')).toEqual([]);   // never "Let go" again after the tap
   // Held through the roll-out: the sight comes on once the car is roof up.
   await page.waitForFunction(() => document.querySelector('[data-thumb-aim]')?.hasAttribute('data-on'), null, { timeout: 30_000 });
   // Slide the held finger right and up: the thumb reads it.

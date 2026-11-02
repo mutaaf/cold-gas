@@ -100,6 +100,10 @@ export function createOneThumb() {
     move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx; st.ay = dy / THUMB.aimPx; } },
     reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; },
     get held() { return st.held; },
+    // 0129: the drive-off is under way (a tap on the ledge was taken; it lets go at the lip), and a press
+    // the next tick hasn't read yet. The pad shows "Letting go" from either, on the frame of the tap.
+    get driving() { return st.drive; },
+    get pending() { return st.pressed; },
     // The slide as the pad draws it: -1..1 each way, 0 inside the dead zone.
     get aim() { aim.x = shape(st.ax); aim.y = shape(st.ay); return aim; },
     // Whether the last tick could aim (held, in the air, roof up, high enough, the row allowing).
