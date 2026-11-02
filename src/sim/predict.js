@@ -75,13 +75,23 @@ export function predict(c, h, out, land = false) {
   // (at least at the governor's share of full lift): where that sets down, flown out with the tanks blowing
   // down as it burns (the end-point estimate in aEnd is too kind to a part-empty tank). A brake on a plan
   // that sets down soft is nominal, however close to the ground it started.
-  // With LAND engaged the computer flies the roll-out too: past the bank it brakes through (tLevel > 0), the stop
-  // starts roof up after the roll-out's fall (sinkLevel, levelDrop), so it is flown at full uprightness, not at
-  // today's (a car just let go off the ledge is still upside down: critic bounce, 2026-11-02 15:40).
+  // With LAND engaged upside down or banked hard, the computer flies the roll-out first (vehicle.js: the
+  // fast roll-out, only where its own branch takes it), then brakes roof up. That stop is judged after a
+  // roll-out measured against the sim, not tLevel's: ≈ 0.3 + 0.2·tilt s (180° in 0.88 s) falling at 1.3 G
+  // (the rolling jets push the car at the ground), so a car just let go off the ledge isn't read as free
+  // fall (critic bounce, 2026-11-02 15:40), and a roll-out too low to finish isn't read as soft. Elsewhere
+  // the stop is flown at today's uprightness.
   const liftFlown = land ? Math.max(lift, LIFT_MAX * LAND_SHARE) : lift;
-  const upFlown = land && tLevel > 0 ? 1 : Math.max(0, upv.y);
-  out.brakeSink = (land || aUp > 0.05) && liftFlown > 0
-    ? flownSink(c.air, m, sinkLevel, h - levelDrop - 0.3, liftFlown * upFlown) : Infinity;
+  let bs = Infinity;
+  if (land && tLevel > 0 && rollsOut(c)) {
+    const tR = ROLL_T0 + ROLL_T1 * tilt + ROLL_TP * Math.abs(wur.z), aR = ROLL_G * G;
+    // The roll burns one side's down-jets (≈ 10 kN, vehicle.js ROLL_ACC on Iroll) for tR first.
+    const burnt = (ROLL_N * tR) / (SPEC.ispFull * G);
+    bs = flownSink(c.air - burnt, m - burnt, sink + aR * tR, h - sink * tR - 0.5 * aR * tR * tR - ROLL_ROOM, liftFlown);
+  } else if ((land || aUp > 0.05) && liftFlown > 0) {
+    bs = flownSink(c.air, m, sinkLevel, h - levelDrop - 0.3, liftFlown * Math.max(0, upv.y));
+  }
+  out.brakeSink = bs;
   // Red: even full lift from now touches down harder than a firm landing. Green: the stop is flying
   // and sets down soft. Amber: the stop has to start within WARN s (a person needs the warning before
   // the BRAKE line, not at it), or it would touch down firm, or the sink is past the band. Green
@@ -154,6 +164,18 @@ function flownSink(air, m, sink, room, lift) {
     air -= used; m -= used;
   }
   return Math.max(0, v);
+}
+
+// LAND's roll-out as the sim flies it (vehicle.js flightComputer): the branch that takes it, and a
+// conservative time and fall for it. Measured from rest with LAND held (time to uy 0.95, drop): rolled 180°
+// 0.88 s / 4.8 m, 2.3 rad 0.70 s / 2.7 m; pitched over 2.7 rad (the roll-out holds the pitch) 0.98 s / 5.4 m.
+// Pitched further than |uz| 0.7 the fast roll-out doesn't run and the stop is read at today's uprightness.
+// ROLL_ROOM: a roll-out that ends within 5 m of the ground sets down firm in the sim. ESTIMATE with margin.
+const ROLL_N = 10e3, ROLL_T0 = 0.3, ROLL_T1 = 0.2, ROLL_TP = 0.5, ROLL_G = 1.3, ROLL_ROOM = 5;
+const wur = v3();
+function rollsOut(c) {
+  rotateInv(wur, c.quat, Y);
+  return (wur.y < -0.2 && Math.abs(wur.z) < 0.7) || (wur.y < 0.94 && Math.abs(wur.x) > Math.abs(wur.z));
 }
 
 // Height a stop from `sink` takes: the roll-out (falling `tLevel` s), then braking at `a`.

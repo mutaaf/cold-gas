@@ -114,8 +114,17 @@ nothing needs to change, so the box must read On profile from the release.
 
 ## Builder (2026-11-02, after bounce 1)
 Cause: `brakeSink` (src/sim/predict.js) flew the stop at today's `upY` (−0.95 off the ledge), so LAND read as free
-fall until the car was past level. With LAND engaged and a roll-out ahead (`tLevel > 0`) the stop is now flown roof
-up after the roll-out's fall, which the model already accounted for. `band-soft.test.js`: the held-from-the-tap
-flight is green on every air tick from the release (was 88 amber ticks); LAND engaged upside down 6 m up at 4 m/s
-is never green. `touch.spec.js` samples `[data-d-state]` and `[data-onethumb].on` each rendered frame: every
-held frame reads On profile (fails on main with six "Hold · Land" frames).
+fall until the car was past level. With LAND engaged and the sim's fast roll-out ahead (`rollsOut`: the same branch
+vehicle.js takes), the stop is now judged roof up after a roll-out measured against the sim (0.3 + 0.2·tilt +
+0.5·|uz| s at 1.3 G, its gas burnt, finishing ≥ 5 m up). A first cut that took `tLevel`'s roll-out made 162 of
+1,260 LAND-held states read green and land firm (self-review); this one makes none at 297 or 270 kg.
+- `band-soft.test.js`: the held-from-the-tap flight is green on every air tick from the release (was 88 amber ticks);
+  a grid of LAND-held tilted states (roll and pitch 1.3–π rad, 3–32 m, 0–10 m/s, 297 and 270 kg): every one that
+  reads green through the flown stop touches down ≤ SINK_SOFT; the review's low roll-outs are not green and land firm.
+- `touch.spec.js` samples `[data-d-state]` and `[data-onethumb].on` each rendered frame: every held frame reads On
+  profile (fails on main with six "Hold · Land" frames).
+
+**Left open (not this ticket, worth one of its own):** on a part-empty tank the flown stop's blowdown estimate is too
+kind on every path, upright too: an upright car with LAND from 32 m at 200 kg reads a soft stop and lands at
+6.7 m/s; at 230 kg tilted states from 26–32 m land at 1.5–2.6. The self-review also found the "green otherwise"
+branch green on firm landings at ≤ 150 kg (tilt 1.1, ≥ 11 m). Both are on main before this change.

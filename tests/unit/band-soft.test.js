@@ -85,15 +85,44 @@ describe('the descent band on a soft landing (0133)', () => {
     expect(ticks.filter((t) => t.s !== 'green').map((t) => t.h.toFixed(1))).toEqual([]);
   });
 
-  // LAND engaged too low to roll out and stop: the computer can't make it soft, so the band must not be green.
-  it('LAND engaged upside down too close to the ground is never green', () => {
-    const s = createVehicle('lineup'), pr = newPrediction();
-    s.pos.x = 30; s.pos.y = SPEC.comHeight + 6; s.vel.y = -4;
-    // Roof down: a half-roll about the long axis.
-    s.quat.x = 0; s.quat.y = 0; s.quat.z = 1; s.quat.w = 0;
-    predict(s, hOf(s), pr, true);
-    expect(pr.upY).toBeLessThan(-0.9);
-    expect(pr.status).not.toBe('green');
+  // Review of the bounce fix: the roll-out LAND flies before it brakes is judged as the sim flies it, so a green
+  // with LAND engaged upside down or banked hard is a soft touchdown. Every state on the grid that reads green
+  // through the flown stop, flown on with LAND held, touches down at ≤ SINK_SOFT. (Full tank and 270 kg: on a
+  // part-empty tank the flown stop's blowdown is too kind on every path, upright too; a ticket of its own.)
+  const tilted = (axis, ang, h, sink, gas) => {
+    const s = createVehicle('lineup'), a = Math.min(ang, Math.PI - 1e-6) / 2;
+    s.pos.x = 30; s.pos.y = SPEC.comHeight + h; s.vel.y = -sink; s.air = gas;
+    s.quat.x = axis === 'pitch' ? Math.sin(a) : 0; s.quat.y = 0; s.quat.z = axis === 'roll' ? Math.sin(a) : 0; s.quat.w = Math.cos(a);
+    return s;
+  };
+  const touchdown = (s) => {
+    for (let i = 0; i < 240 * 12; i++) { if (hOf(s) <= 0.35) return -s.vel.y; step(s, { ...newInput(), assist: 1, level: 1 }); }
+    return 0;
+  };
+  it('LAND engaged upside down or banked hard: green through the flown stop means a soft touchdown', () => {
+    const bad = [];
+    let greens = 0;
+    for (const axis of ['roll', 'pitch']) for (const ang of [1.3, 1.6, 2.0, 2.3, 2.7, Math.PI]) for (const h of [3, 5, 7, 9, 12, 16, 20, 26, 32])
+      for (const sink of [0, 2, 4, 7, 10]) for (const gas of [297, 270]) {
+        const s = tilted(axis, ang, h, sink, gas), pr = newPrediction();
+        predict(s, hOf(s), pr, true);
+        if (!(pr.brakeSink <= SINK_SOFT && pr.touchSink <= SINK_SOFT)) continue;
+        greens++;
+        const td = touchdown(s);
+        if (td > SINK_SOFT) bad.push(`${axis} ${ang.toFixed(2)} h ${h} sink ${sink} gas ${gas}: ${td.toFixed(2)} m/s`);
+      }
+    expect(greens).toBeGreaterThan(100);
+    expect(bad).toEqual([]);
+  });
+
+  it('LAND engaged too low to finish the roll-out and the stop is not green (the review\'s states)', () => {
+    for (const [axis, ang, h, sink] of [['roll', Math.PI, 6, 0], ['roll', Math.PI, 7, 0], ['roll', 2.2, 3, 0], ['roll', 2.2, 4, 0],
+      ['pitch', 2.3, 10, 4], ['pitch', 2.3, 13, 4], ['roll', 1.06, 3, 4]]) {
+      const s = tilted(axis, ang, h, sink, 297), pr = newPrediction();
+      predict(s, hOf(s), pr, true);
+      expect(pr.status, `${axis} ${ang} h ${h} sink ${sink}`).not.toBe('green');
+      expect(touchdown(s)).toBeGreaterThan(SINK_SOFT);
+    }
   });
 
   // A car let go 20 m over the ground, roof up and falling at 2 m/s, on Pro with nothing held (no auto-land).
