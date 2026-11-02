@@ -1,7 +1,7 @@
 ---
 id: 0127
 title: A newcomer's first Jump asks for one sentence, not a four-row card
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: engagement
