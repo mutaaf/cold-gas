@@ -341,8 +341,23 @@ function closeOverlays() {
 // The run's engine world goes back as soon as the run is left (a finished run already freed it;
 // freeWorld is idempotent): retry mid-run, Home, a drill, a double-tapped Start each used to leak one.
 function disposeRun() {
+  quitRun();
   if (S.run?.car?.world) freeWorld(S.run.car.world);
 }
+// The players' funnel (0130): a Jump run counts `run` as it starts and exactly one of run-landed, run-wrecked
+// (its card) or run-quit (left before its card: every way out of a run passes disposeRun, or the page goes).
+// Once the run's card is decided (its end, before the aftermath's ≈1.4 s and the sheet) it is landed or wrecked:
+// a Retry, Home or a closed tab in the aftermath isn't a quit.
+let runOpen = null;
+function settleRun(left) {
+  if (runOpen && runOpen === S.run) {
+    if (S.card) obs.play(S.card.facts?.crashed ? 'run-wrecked' : 'run-landed');
+    else if (left) obs.play('run-quit');
+  }
+  runOpen = null;
+}
+const quitRun = () => settleRun(true);
+obs.beforeLeave(quitRun);
 
 // Back to the title from anywhere, Free Drive and the Sandbox included (heal's escalation calls it
 // too). Their exit() calls back into toTitle (onExit): the guard keeps that from recursing.
@@ -389,7 +404,7 @@ function startRunNow(kind = 'jump', quick = false) {
   S.run = armAftermath(takeRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.runKind = kind;   // the reference jump never counts toward Rookie mode's streak (0074)
-  if (kind === 'jump') obs.play('run');   // the players' funnel (src/obs: counts only)
+  if (kind === 'jump') { obs.play('run'); runOpen = S.run; }   // the players' funnel (src/obs: counts only)
   latchTier();
   S.adaptNow = null;
   // Live pointers on the cue line (0079): a new player's first runs, or while Adapt to me says they're struggling.
@@ -438,7 +453,7 @@ function finishRun() {
   getNozzlePad().show(false);
   ui.clearCue();
   countRun(run);
-  if (S.runKind === 'jump' && !S.drill && S.card) obs.play(S.card.facts?.crashed ? 'run-wrecked' : 'run-landed');
+  settleRun(false);   // a Jump run's card: run-landed or run-wrecked, once (0130)
   poster?.reset();   // Post · ABC beside Retry when this is a board jump (src/post.js)
   comeback.results(run, S.card, { autopilot: !!S.autopilot, drill: !!S.drill });   // [comeback] "You beat ABC by 2.1", the daily's line
   // The coach re-flies the log (≈30–60 ms) a beat after the sheet slides in.
@@ -1628,7 +1643,7 @@ function closeHowto({ seen = true } = {}) {
 }
 on('[data-howto-open]', (e) => openHowto({ from: e.currentTarget }));
 on('[data-howto-go]', () => closeHowto());
-on('[data-howto-skip]', () => closeHowto({ seen: false }));
+on('[data-howto-skip]', () => { obs.play('howto-skip'); closeHowto({ seen: false }); });
 // The rows it opened take the focus at step 02, so a screen reader reads on from there (Tab goes on to Got it).
 on('[data-howto-all]', () => {
   if (howtoCtx) drawHowto(howtoCtx, false);
@@ -1952,7 +1967,10 @@ function fastForward() {
   for (let i = 0; i < 4000 && S.mode === 'live'; i++) liveStep(0.1);
 }
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
-const heal = installHeal({ stage, canvas, ui, S, toTitle, pause, closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
+const heal = installHeal({
+  stage, canvas, ui, S, pause,
+  toTitle: () => { runOpen = null; toTitle(); },   // a trap or an escalation is the game's fault, never the player's quit (0130)
+  closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
 window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
 Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

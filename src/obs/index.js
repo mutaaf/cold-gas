@@ -10,6 +10,7 @@
 //   obs.play(name)                  a player did something worth counting (PLAY_EVENTS: runs, posts,
 //                                   shares, return visits…); counts only, never who. Automated
 //                                   browsers (navigator.webdriver) count as `auto`, never as players
+//   obs.beforeLeave(fn)            fn runs as the page is hidden for good (pagehide), before the last beacon
 //   obs.snapshot()                  for the For nerds panel's Health section
 //   obs.payload() / obs.flush()     the batch sent to POST /coldgas/api/obs (sendBeacon)
 //
@@ -58,6 +59,10 @@ function createObs() {
     if (!PLAY_EVENTS.includes(name)) return;
     o.plays[name] = (o.plays[name] || 0) + 1;
   };
+  // Last words before the page goes (a run still live counts as left, 0130): they ride on the pagehide beacon.
+  const leaving = [];
+  o.beforeLeave = (fn) => { leaving.push(fn); };
+  const leave = () => { for (const fn of leaving) { try { fn(); } catch (err) { o.error('page', err); } } };
 
   const log1 = new Set();
   // One fault object is one report: a failed import reaches us as vite:preloadError, then perhaps as
@@ -193,7 +198,7 @@ function createObs() {
     });
     // Vite's own event for a failed dynamic import (a chunk gone after a deploy, a dropped network).
     on(globalThis, 'vite:preloadError', (e) => { o.lazyFailed(e.payload || new Error('preload failed')); });
-    on(globalThis, 'pagehide', () => { if (o.session) { o.session.ended = true; saveSession(); } o.flush('pagehide'); });
+    on(globalThis, 'pagehide', () => { leave(); if (o.session) { o.session.ended = true; saveSession(); } o.flush('pagehide'); });
     on(document, 'visibilitychange', () => { if (document.visibilityState === 'hidden') { saveSession(); o.flush('hidden'); } });
     wrapFetch();
   }
