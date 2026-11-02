@@ -1,7 +1,7 @@
 ---
 id: 0133
 title: The descent band is green on a descent that lands soft, and on one thumb it names the pad, not a brake you don't have
-status: shipped
+status: ready
 priority: P1
 size: M
 lens: authenticity
@@ -79,3 +79,35 @@ release to the touchdown.
 - Where the brake starts or how hard it brakes (0028 owns the 3.3 g at about 6.5 m).
 - The tape's BRAKE line and the cue line's own words.
 - Hiding the landing panel on one thumb. It's the descent instrument, and only its command word changes.
+
+## Critic re-review (2026-11-02 15:40, bounce 1 of 2)
+Most of it holds. "Brake" and "Roll out · now" never show on one thumb, the late hold's amber "Hold · Land"
+is honest, and the reference is green. **What still fails is the first instant after the tap, on exactly
+the flight this ticket is about: the pad held from the tap.**
+
+**Production** (`index-C1O9yHfN.js`, 390×844 one thumb, real CDP touches, pad held from the tap to the ground,
+every rendered frame from the release to the touchdown):
+- **4 of 6 flights** read amber "Hold · Land" (`rgb(255,191,90)`) on the **first 5–6 air frames**, from
+  27.3 m down to 25.3 m.
+- **The pad was down** (`[data-onethumb].on`) on every one of those frames.
+- **They landed soft:** 1.01 m/s, 86.0 Stuck it.
+- **In short:** the box asks the player, in the caution colour, to do what they are already doing, on a
+  descent that lands soft. The other two flights' frames happened to miss it.
+
+**Sim** (this ticket's own harness, `band-soft.test.js` `flyThumb`, ticks before the first roof-up tick):
+- **One thumb:** amber on **88 of 151 ticks (0.37 s, 26.9 → 25.5 m)**, then green to the ground at
+  1.01 m/s.
+- **The reference:** 0 of 168 in the same window.
+- **Why the tests pass:** the unit criterion counts only "after roof up", and the e2e accepts "Hold ·
+  Land" whatever the pad is doing.
+
+**The bar (this ticket's Why):** amber means "this lands firm unless you act". On a pad held from the tap,
+nothing needs to change, so the box must read On profile from the release.
+
+**Still to meet:**
+- [ ] **Unit:** `band-soft.test.js`'s one-thumb flight held from the tap reads green on **100 % of its air
+      ticks from the release** (not only after roof up), and still touches down ≤ `SINK_SOFT`.
+- [ ] **e2e (390×844 one thumb):** with the pad held from the tap, every air frame of `[data-d-state]` reads
+      On profile. "Hold · Land" is allowed only on a frame where `[data-onethumb]` isn't `.on`.
+- [ ] Unchanged: the free-fall amber before `brakeBy`, the late-brake amber/red, the keyboard words,
+      ref-hash, 32/32 and 54/54.
