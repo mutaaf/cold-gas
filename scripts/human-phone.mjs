@@ -51,7 +51,8 @@ const skill = opt('skill', 'none');
 const COACH = args.includes('--coach');
 const { coach } = COACH ? await import('../src/sim/coach.js') : {};
 const { coachWords } = COACH ? await import('../src/pointer.js') : {};
-const firsts = {};
+const firsts = {}, markTitles = {};
+let longButWide = 0;
 const { createOneThumb, markOffset } = scheme === 'thumb' ? await import('../src/onethumb.js') : {};
 
 // Control geometry (CSS px): centre and radius per control, per viewport. Defaults are the
@@ -272,8 +273,13 @@ for (let n = 0; n < N; n++) {
   else if (t.tiltDeg > 15) why = 'landed tilted';
   if (!why) { ok++; if (s.facts.padMiss < 7) onPad++; totals.push(s.total); } else fails[why] = (fails[why] || 0) + 1;
   if (COACH && !why) {
-    const id = coach(run.inputLog, 'show', s, 0, coachWords({ device: 'touch', scheme, tier: s.tier, course: 'show' })).items[0].id;
+    const first = coach(run.inputLog, 'show', s, 0, coachWords({ device: 'touch', scheme, tier: s.tier, course: 'show' })).items[0], id = first.id;
     firsts[id] = (firsts[id] || 0) + 1;
+    // 0132: the mark's title, and how often "Long" leads a miss that is mostly sideways.
+    if (id === 'mark') {
+      markTitles[first.title] = (markTitles[first.title] || 0) + 1;
+      if (first.title === 'Long of the mark' && Math.abs(t.lateral) > Math.abs(t.landZ - SHOW.pad.z)) longButWide++;
+    }
   }
   if (verbose) console.log(JSON.stringify(P), JSON.stringify(F), why || 'OK', s.total, 'sink', t.sink.toFixed(1), 'pad', s.facts.padMiss);
 }
@@ -283,4 +289,5 @@ console.log(`Phone ${vp} · ${scheme}${scheme === 'thumb' ? ` · skill ${skill}`
 console.log(`  clean scores: min ${totals[0] ?? '–'} · p10 ${q(0.1)} · median ${q(0.5)} · p90 ${q(0.9)} · max ${totals[totals.length - 1] ?? '–'}`);
 console.log('  failures:', JSON.stringify(fails));
 if (COACH) console.log(`  coach's first finding (landed runs): ${JSON.stringify(firsts)} · clean ${Math.round((100 * (firsts.clean || 0)) / Math.max(1, ok))}%`);
+if (COACH) console.log(`  the mark's title when it leads: ${JSON.stringify(markTitles)} · "Long" on a mostly-sideways miss: ${longButWide}`);
 if (DUMP) { const { writeFileSync } = await import('node:fs'); writeFileSync(DUMP, JSON.stringify(dumped)); }

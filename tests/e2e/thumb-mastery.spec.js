@@ -132,6 +132,9 @@ test('the results sheet shows the medal row under the score, and it is kept on t
   const first = page.locator('[data-coach-items] li').first();
   await expect(first).toHaveAttribute('data-fix', 'mark', { timeout: 10_000 });
   await expect(first).toContainText(/from the mark.*about \d+ points/);
+  // 0132: the no-slide miss is mostly sideways (≈5.3 m across, ≈2.7 m past): it names the side, not "Long".
+  await expect(first).toContainText('Wide of the mark');
+  await expect(first).toContainText(/(left|right) of it/);
   await expect(first.locator('.cf')).toContainText('slide onto the amber dot');
   await expect(page.locator('[data-coach]')).not.toContainText('nothing big to fix');
   // The reference flight is not yours: no medal row for it.
