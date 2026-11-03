@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 import { createRun, stepRun, simulate } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
@@ -131,7 +131,7 @@ describe('the gas day’s miss line', () => {
   });
   it('flown on one thumb, a miss names the pad and the hold; on keys it names no pad', () => {
     const t = lineOf(short(), { device: 'touch', scheme: 'thumb' });
-    expect(t.line).toBe('Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; lifting and sliding costs gas');
+    expect(t.line).toBe('Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; letting go and then sliding costs gas');
     expect(t.asked).toEqual([['show', ref.card.tier]]);   // asked for the run's course and tier
     const k = lineOf(short(), { device: 'key', scheme: 'classic' });
     expect(k.line).not.toMatch(/pad/);
@@ -140,5 +140,40 @@ describe('the gas day’s miss line', () => {
   it('a met gas Daily is unchanged', () => {
     expect(ref.card.facts.airPct).toBeGreaterThan(25);
     expect(lineOf(ref.card, { device: 'touch', scheme: 'thumb' }).line).toMatch(/^Daily ✓ complete · streak \d+$/);
+  });
+});
+
+// 0139: the title card's hint. A device, scheme or tier change redraws the card only when the hint changes (a redraw replaces
+// the buttons, and the switch is noted on the very press that is pressing one); Play today's hands the hint to the countdown.
+describe('the gas day’s title hint', () => {
+  const GAS_DAY = Date.parse('2026-11-15T12:00:00Z');
+  const mountStub = () => {
+    const handlers = {};
+    let html = '';
+    const m = { writes: 0, handlers, closest: () => null,
+      get innerHTML() { return html; }, set innerHTML(v) { html = v; m.writes++; },
+      querySelector: (sel) => ({ addEventListener: (k, fn) => { handlers[sel] = fn; }, setAttribute() {}, focus() {} }) };
+    return m;
+  };
+  // A title mount wires a resize listener, the fonts and a day-change timer: stand-ins for the browser's.
+  beforeAll(() => { vi.useFakeTimers(); globalThis.addEventListener ??= () => {}; globalThis.document ??= {}; });
+  afterAll(() => { vi.useRealTimers(); });
+  it('shows on one thumb only, redraws only when it changes, and goes to the countdown on Play today’s', () => {
+    let ctx = { device: 'key', scheme: 'classic' };
+    const tips = [], mount = mountStub();
+    const cb = createComeback({ mount, resultMount: null, base: BASE, selectCourse() {}, getTier: () => 'assist', setTier() {}, jump() {}, ready: async () => {}, toast() {}, share() {}, now: () => GAS_DAY,
+      how: (course, tier) => ({ ...ctx, course, tier }), tip: (t) => tips.push(t) });
+    expect(mount.innerHTML).not.toContain('data-daily-hint');
+    const w = mount.writes;
+    cb.refresh();
+    expect(mount.writes).toBe(w);   // same words: the card (and the button under a finger) is left alone
+    ctx = { device: 'touch', scheme: 'thumb' };
+    cb.refresh();
+    expect(mount.writes).toBe(w + 1);
+    expect(mount.innerHTML).toContain('Hold the pad from the tap to the ground');
+    cb.refresh();
+    expect(mount.writes).toBe(w + 1);
+    mount.handlers['[data-daily-play]']();
+    expect(tips).toEqual(['Hold the pad from the tap to the ground']);
   });
 });

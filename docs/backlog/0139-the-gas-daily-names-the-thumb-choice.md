@@ -86,7 +86,7 @@ more than 25 % gas left", `src/daily.js`) is reachable there, but surely only by
 
   So holding from the tap is the sure way, and a slide after a lift is what costs the day (a slide while holding costs ≈ nothing).
 - **The words** (`src/daily.js` `missLine` / `titleHint`, in the device's words from `src/pointer.js`): one thumb
-  `Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; lifting and sliding costs gas`; keys
+  `Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; letting go and then sliding costs gas`; keys
   `· shorter BOOST (F) bursts and one late LAND (Shift)` (LIFT on Pro; classic touch and a pad name their own buttons). A
   miss before the number ("clear the row and land clean first") and every other objective still say "try again".
 - **The title:** on one thumb on a gas day the Daily card's streak block carries "Hold the pad from the tap to the ground"

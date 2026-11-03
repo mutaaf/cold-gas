@@ -131,7 +131,7 @@ describe('what a miss can change (0139)', () => {
   const classic = { device: 'touch', scheme: 'classic', tier: 'assist', course: 'show' };
   const short = gas.check({}, { jumped: true, crossedRow: true, airPct: 24 });
   it('on one thumb, a gas miss names the pad and the hold, and what costs it', () => {
-    expect(missLine(gas, short, thumb)).toBe('Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; lifting and sliding costs gas');
+    expect(missLine(gas, short, thumb)).toBe('Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; letting go and then sliding costs gas');
   });
   it('on keys or classic touch it names their own controls, never the pad', () => {
     const k = missLine(gas, short, keys), c = missLine(gas, short, classic), pro = missLine(gas, short, { ...keys, tier: 'pro' });

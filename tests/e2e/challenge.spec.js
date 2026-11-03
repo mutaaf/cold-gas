@@ -141,7 +141,7 @@ test('the daily card: today’s objective, Play today’s picks its course, and 
     for (let i = 0; i < 4000 && S.mode !== 'results'; i++) g.liveStep(0.1);
   });
   const line = p2.locator('[data-daily-line]');
-  await expect(line).toHaveText('Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; lifting and sliding costs gas');
+  await expect(line).toHaveText('Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; letting go and then sliding costs gas');
   const lb = await line.boundingBox();
   expect(lb.y).toBeGreaterThanOrEqual(0); expect(lb.y + lb.height).toBeLessThanOrEqual(844);   // in view as the sheet opens
   expect(await line.evaluate((e) => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(11);

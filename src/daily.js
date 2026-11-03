@@ -46,7 +46,7 @@ export const OBJECTIVES = [
     check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.padMiss <= 3.5 ? done() : miss(`${len(f.padMiss, 1)} off the mark`)) },
   { id: 'gas-show', course: 'show', goal: () => 'Clear the row with more than 25 % gas left',
     check: (c, f) => (!cleanOver(f) ? miss('clear the row and land clean first') : f.airPct > 25 ? done() : miss(`${f.airPct} % gas left, need 26 %`, true)),
-    hint: (ctx) => (thumbOn(ctx) ? 'hold the pad from the tap to the ground; lifting and sliding costs gas'
+    hint: (ctx) => (thumbOn(ctx) ? 'hold the pad from the tap to the ground; letting go and then sliding costs gas'
       : `shorter ${coachWords(ctx).boost} bursts and one late ${ctx.tier === 'assist' ? coachWords(ctx).land : coachWords(ctx).lift}`),
     titleHint: (ctx) => (thumbOn(ctx) ? 'Hold the pad from the tap to the ground' : '') },
   { id: 'soft-wall', course: 'wall', goal: () => `Touch down at ${rate(0.8)} or softer`,
