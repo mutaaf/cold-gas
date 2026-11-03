@@ -140,12 +140,16 @@ test('first paint: the mono face is preloaded with the display and text faces', 
 // the wire beside the entry script, which then landed at 4.7 s instead of 3.4 s (scripts/perf.mjs, Slow 4G) and held
 // the title's Jump back by over a second. The engine is asked for by main.js (src/sim/engine-web.js), once the entry is in.
 test('first load: the engine WASM is not on the wire until the entry script has landed', async ({ page }) => {
-  const seq = [];
-  page.on('requestfinished', (r) => { if (/\/assets\/index-[\w-]+\.js$/.test(r.url())) seq.push('entry'); });
-  page.on('request', (r) => { if (/\.wasm$/.test(r.url())) seq.push('wasm'); });
   const res = await page.goto('/coldgas/?gfx=low');
-  expect(await res.text()).not.toMatch(/<link rel="preload"[^>]*\.wasm/);
-  await page.waitForFunction(() => window.__coldgas?.physicsReady(), null, { timeout: 60_000 });
-  expect(seq.indexOf('entry')).toBeGreaterThanOrEqual(0);
-  expect(seq.indexOf('wasm')).toBeGreaterThan(seq.indexOf('entry'));
+  const html = await res.text();
+  expect(html).not.toMatch(/<link\b[^>]*\.wasm/);   // no preload of any kind, in any attribute order
+  // The page's own Resource Timing: the entry (the module script index.html names) has its last byte before the
+  // WASM is asked for.
+  const entry = html.match(/<script type="module"[^>]*src="([^"]+)"/)[1];
+  const t = await page.waitForFunction((entry) => {
+    const all = performance.getEntriesByType('resource');
+    const e = all.find((r) => new URL(r.name).pathname === entry), w = all.find((r) => /\.wasm$/.test(r.name));
+    return e && w ? { entryEnd: e.responseEnd, wasmStart: w.startTime } : null;
+  }, entry, { timeout: 60_000 }).then((h) => h.jsonValue());
+  expect(t.wasmStart).toBeGreaterThanOrEqual(t.entryEnd);
 });
