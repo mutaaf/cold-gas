@@ -4,7 +4,7 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { setUnits } from '../../src/units.js';
 import { OBJECTIVES, objectiveIndex, objectiveFor, evaluate, dayNumber, dayKey, keyToDay, readStreak, streakNow, complete,
-  loadStreak, saveStreak, EPOCH, DAY_MS } from '../../src/daily.js';
+  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint } from '../../src/daily.js';
 
 // The daily jump (src/daily.js): one objective a UTC day for everyone, judged from scoreRun's card,
 // and a streak of consecutive UTC days.
@@ -117,9 +117,41 @@ describe('the daily, judged from real runs', () => {
     expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { padMiss: 7 }), 'lineup').ok).toBe(true);
     expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { padMiss: 7.1 }), 'lineup').ok).toBe(false);
     expect(evaluate(byId('gas-show'), withFacts(cards.show, { airPct: 26 }), 'show').ok).toBe(true);
-    expect(evaluate(byId('gas-show'), withFacts(cards.show, { airPct: 25 }), 'show')).toEqual({ ok: false, miss: '25 % gas left, need 26 %' });
+    expect(evaluate(byId('gas-show'), withFacts(cards.show, { airPct: 25 }), 'show')).toEqual({ ok: false, miss: '25 % gas left, need 26 %', fix: true });
   });
   afterEach(() => setUnits('us', { persist: false }));
+});
+
+// 0139: a missed gas day names the choice that meets it, in this device's words (human-phone.mjs --daily's split: held
+// from the tap 37/39 met, lifted and slid 5/80). Only the gas number gets the hint; "land clean first" stays as it was.
+describe('what a miss can change (0139)', () => {
+  const gas = byId('gas-show');
+  const thumb = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' };
+  const keys = { device: 'key', scheme: 'classic', tier: 'assist', course: 'show' };
+  const classic = { device: 'touch', scheme: 'classic', tier: 'assist', course: 'show' };
+  const short = gas.check({}, { jumped: true, crossedRow: true, airPct: 24 });
+  it('on one thumb, a gas miss names the pad and the hold, and what costs it', () => {
+    expect(missLine(gas, short, thumb)).toBe('Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; lifting and sliding costs gas');
+  });
+  it('on keys or classic touch it names their own controls, never the pad', () => {
+    const k = missLine(gas, short, keys), c = missLine(gas, short, classic), pro = missLine(gas, short, { ...keys, tier: 'pro' });
+    for (const line of [k, c, pro]) { expect(line).not.toMatch(/pad/); expect(line).toMatch(/^Daily: 24 % gas left, need 26 % · shorter BOOST/); }
+    expect(k).toContain('BOOST (F)'); expect(k).toContain('LAND (Shift)');
+    expect(c).toContain('one late LAND'); expect(c).not.toContain('(');
+    expect(pro).toContain('LIFT (Space)');
+  });
+  it('a miss before the number ("land clean first") and the other objectives keep "try again"', () => {
+    expect(missLine(gas, gas.check({}, {}), thumb)).toBe('Daily: clear the row and land clean first — try again');
+    const mark = byId('mark-show');
+    expect(missLine(mark, mark.check({}, { jumped: true, padMiss: 5 }), thumb)).toMatch(/off the mark — try again$/);
+    expect(missLine(gas, short, undefined)).toMatch(/^Daily: 24 % gas left, need 26 % · shorter BOOST/);   // no ctx: no throw
+  });
+  it('the title card hints only on one thumb, only on the gas day', () => {
+    expect(titleHint(gas, thumb)).toBe('Hold the pad from the tap to the ground');
+    expect(titleHint(gas, keys)).toBe('');
+    expect(titleHint(gas, classic)).toBe('');
+    for (const o of OBJECTIVES.filter((x) => x !== gas)) expect(titleHint(o, thumb)).toBe('');
+  });
 });
 
 describe('the streak (UTC days)', () => {

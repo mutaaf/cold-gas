@@ -112,3 +112,33 @@ describe('the daily in the funnel', () => {
     obs.flush('test', { force: true });
   });
 });
+
+// 0139: the results' Daily line on a gas day says what to change, in the words of the device the run was flown on.
+describe('the gas day’s miss line', () => {
+  const GAS_DAY = Date.parse('2026-11-15T12:00:00Z');
+  const stub = () => ({ innerHTML: '', replaceChildren() { this.innerHTML = ''; }, querySelector: () => null });
+  const lineOf = (card, ctx) => {
+    const resultMount = stub(), asked = [];
+    const cb = createComeback({ mount: null, resultMount, base: BASE, selectCourse() {}, getTier: () => 'assist', setTier() {}, jump() {}, ready: async () => {}, toast() {}, share() {}, now: () => GAS_DAY,
+      how: (course, tier) => { asked.push([course, tier]); return { ...ctx, tier, course }; } });
+    cb.results({ inputLog: ref.log, course: 'show' }, card);
+    return { line: resultMount.innerHTML.replace(/<[^>]+>/g, ''), asked };
+  };
+  const short = () => ({ ...ref.card, facts: { ...ref.card.facts, airPct: 24 } });
+  it('the day is a gas-show day', async () => {
+    const { objectiveFor } = await import('../../src/daily.js');
+    expect(objectiveFor(GAS_DAY).id).toBe('gas-show');
+  });
+  it('flown on one thumb, a miss names the pad and the hold; on keys it names no pad', () => {
+    const t = lineOf(short(), { device: 'touch', scheme: 'thumb' });
+    expect(t.line).toBe('Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; lifting and sliding costs gas');
+    expect(t.asked).toEqual([['show', ref.card.tier]]);   // asked for the run's course and tier
+    const k = lineOf(short(), { device: 'key', scheme: 'classic' });
+    expect(k.line).not.toMatch(/pad/);
+    expect(k.line).toContain('BOOST (F)');
+  });
+  it('a met gas Daily is unchanged', () => {
+    expect(ref.card.facts.airPct).toBeGreaterThan(25);
+    expect(lineOf(ref.card, { device: 'touch', scheme: 'thumb' }).line).toMatch(/^Daily ✓ complete · streak \d+$/);
+  });
+});

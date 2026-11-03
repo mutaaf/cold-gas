@@ -7,7 +7,7 @@ import './comeback.css';
 import { decodeChallenge, encodeChallenge, vsFromHash, challengeUrl, compare, createReplay, replayAsync, coarsen,
   COARSE_STEPS, VS_TARGET_CHARS, VS_MAX_CHARS } from './challenge.js';
 import { obs } from './obs/index.js';
-import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, courseName, dayNumber, DAY_MS } from './daily.js';
+import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, courseName, dayNumber, DAY_MS, missLine, titleHint } from './daily.js';
 import { packFrames } from './ghost.js';
 import { freeWorld } from './sim/world.js';
 import { onUnits } from './units.js';
@@ -29,6 +29,8 @@ const TIER = { assist: 'Assist', pro: 'Pro', advanced: 'Advanced' };
  * @param {() => Promise<unknown>} o.ready  physics (and the stage) up
  * @param {(blobOrText: object) => void} o.share   share-card's shareRun, bound to this run's card
  * @param {(msg: string, ms?: number) => void} o.toast
+ * @param {(course: string, tier?: string) => object} [o.how]   the device's words (src/pointer.js ctx) for a course
+ * @param {(text: string) => void} [o.tip]  the next countdown's tip (0139: today's hint on a Play today's)
  * @param {() => number} [o.now]
  */
 export function createComeback(o) {
@@ -56,12 +58,14 @@ export function createComeback(o) {
       m.querySelector('[data-vs-dismiss]').addEventListener('click', dismiss);
     } else {
       const obj = objectiveFor(now()), st = streakNow(loadStreak(), now());
+      // 0139: today's hint for this device, inside the streak's row (no new row; it steps aside with the row when tight).
+      const hint = st.doneToday ? '' : titleHint(obj, o.how?.(obj.course, obj.tier && o.getTier() === 'assist' ? obj.tier : o.getTier()));
       const pips = Array.from({ length: 7 }, (_, i) => `<i${i < Math.min(7, st.streak) ? ' class="on"' : ''}></i>`).join('');
       m.innerHTML = `<div class="xc xc-daily${st.doneToday ? ' done' : ''}" role="group" aria-label="Today’s daily jump">
         <div class="xc-text">
           <p class="xc-k"><span>Daily · ${utcLabel(now())}</span><span class="xc-dot" aria-hidden="true">·</span><span>${courseName(obj.course)}</span>${st.doneToday ? '<span class="xc-tick">✓ Done</span>' : ''}</p>
           <p class="xc-goal"><span class="xc-ck">${st.doneToday ? 'Daily ✓' : 'Daily'} · ${courseName(obj.course)}</span>${obj.goal()}</p>
-          <p class="xc-streak xc-sub"><span class="xc-pips" aria-hidden="true">${pips}</span><span>${st.streak ? `${st.streak}-day streak` : 'Start a streak today'}</span></p>
+          <p class="xc-streak xc-sub"><span class="xc-pips" aria-hidden="true">${pips}</span><span>${st.streak ? `${st.streak}-day streak` : 'Start a streak today'}</span>${hint ? `<span class="xc-hint" data-daily-hint>${hint}</span>` : ''}</p>
         </div>
         <button type="button" class="btn xc-go" data-daily-play>${st.doneToday ? 'Play again' : 'Play today’s'}</button>
       </div>`;
@@ -69,6 +73,7 @@ export function createComeback(o) {
         obs.play('daily-start');   // 0136: the funnel's first step, tapped → finished (done | miss)
         o.selectCourse(obj.course);
         if (obj.tier && o.getTier() === 'assist') o.setTier(obj.tier);
+        if (hint) o.tip?.(hint);   // and once more as the run counts down (the card may have stepped aside on a short screen)
         o.jump();
       });
     }
@@ -210,7 +215,7 @@ export function createComeback(o) {
         const s = complete(loadStreak(), now());
         saveStreak(s);
         text = `Daily ✓ complete · streak ${s.streak}`;
-      } else text = `Daily: ${r.miss} — try again`;
+      } else text = missLine(obj, r, o.how?.(run.course, card.tier));   // 0139: what to change, in this device's words
       lines.push(`<p class="xr xr-daily${r.ok ? ' ok' : ''}" data-daily-line>${text}</p>`);
     }
     render();   // the title's card under the sheet: where the challenge stands, the daily done, the streak
