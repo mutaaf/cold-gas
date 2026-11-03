@@ -3,9 +3,9 @@ import { test, expect } from '@playwright/test';
 // Driving levels (0066): one setting, Easy / Standard / Advanced, in the Controls sheet on every device,
 // remembered on this device, and the same on the ground in every mode: the Show's run-up and Free Drive.
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
-// A boot after page.reload() takes ≈ 1.4× a fresh one on software GL (the old page's teardown shares the renderer):
-// 60–67 s locally at 4× CPU, where a first boot takes 41 s. 60 s ran out twice on main (ab2b795), so each boot gets
-// 150 s; the tests' own timeouts (test.slow()) still bound the whole.
+// A boot after page.reload() takes ≈ 1.5× a fresh one on software GL: 60–67 s locally at 4× CPU, where a first boot
+// takes 41 s, and a new page with the same storage boots in normal time (likely the old page's teardown). 60 s ran out
+// twice on main (ab2b795), so a boot may take up to 150 s; each test's own timeout caps it first where it is shorter.
 const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 150_000 });
 const watch = (page) => {
   const errors = [];
