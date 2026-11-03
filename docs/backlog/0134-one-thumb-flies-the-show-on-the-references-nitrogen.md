@@ -108,8 +108,8 @@ fix could not reach the bar without costing the flight:
   the clearance 4.5 → 6.5 m and the miss 6.0 → 6.5 m (85.7 → 82.7); the careful population's median score fell
   93 → 84.7 and `ninety-show` 73 → 23 %. Stopping earlier on the ledge (0.93) and letting go later (0.995) peaked at
   39 % with `ninety-show` 45–50 %. No variant put a careful player over 41 %.
-- **What a thumb chooses** is when to hold the pad: from the tap it lands with 33–37 %, held for the fall 23–26 %, so
-  > 30 % rewards the efficient flight and is not a lottery.
+- **What a thumb chooses** is when to hold the pad: from the tap it lands with 33–37 %, picked up after the fall has begun
+  (at any height) 23–26 %, so > 30 % turns on one learnable choice and is not a lottery.
 
 `node scripts/human-phone.mjs 300 --scheme=thumb --skill=<…> --daily` (new flag), all 300/300 landed clean:
 
@@ -120,3 +120,8 @@ fix could not reach the bar without costing the flight:
 | mixed | 67/300 (22 %) | 10 % | 76 % | 41 % | 100 % | 23 / 26 / 35 |
 
 Keyboard Assist (`human-show.mjs 300 assist --cues=new`): > 30 % on 195/300 (65 %), > 40 % on 47 (16 %).
+
+**Acceptance under the fallback.** Met: `gas-show` reached by 19 % of `careful` (bar ≥ 15 %), 300/300 clean in all three
+populations, no sim change, one-thumb replays verify (`thumb-gas.test.js`). Replaced by the fallback, not met: ≥ 44 % gas
+held from the tap (33 %), ≤ 6 kg on the ramp, the e2e GAS ≥ 44 % check. Known trade-offs for the next bar review: the
+miss line still names only the number (not "keep the thumb down from the tap"), and keyboard Assist meets > 30 % on 65 %.

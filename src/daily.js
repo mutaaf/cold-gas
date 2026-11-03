@@ -5,14 +5,14 @@
 //
 // The thresholds were set against scripts/human-show.mjs's populations (Assist and Pro, cues new) and
 // the reference flights, so most days are a stretch for a player who lands, none a lottery:
-//   within 3 m of the Show's mark  ≈ 10 % of clean Assist landings · gas > 40 %  ≈ 18 %
+//   within 3 m of the Show's mark  ≈ 10 % of clean Assist landings · gas: see below
 //   roofs by under 1.5 m           ≈ 23 %                          · 90+ on the Show ≈ 30 %
 // The gas bar is set on phones (0134): most players fly the Show on one thumb, where the computer flies the
 // push-off and the carry, and none of 900 one-thumb players (scripts/human-phone.mjs --scheme=thumb --daily,
 // skill none / careful / mixed) landed with more than 40 % (37 % at best; the reference flown without its pad
-// steering lands with 41 %). What a thumb chooses is when to hold the pad: held from the tap (LAND from the
-// release) it lands with 33–37 %, held for the fall 23–26 %. More than 30 % sits in that gap: 19 % of careful
-// one-thumb players, 26 % of the no-skill ones, ≈ 65 % of keyboard Assist landings.
+// steering lands with 41 %). What a thumb chooses is when to hold the pad: kept down from the tap through the
+// let-go (LAND from the release) it lands with 33–37 %; picked up after the fall has begun, at any height, 23–26 %. More than 30 % sits in that gap: 19 % of careful
+// one-thumb players, 26 % of the no-skill ones; keyboard Assist landings ≈ 65 % (> 40 % was ≈ 16 %), an easier day there.
 import { one } from './units.js';
 
 export const DAY_MS = 86_400_000;

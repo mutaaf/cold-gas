@@ -3,7 +3,7 @@
 // chooses is when to hold the pad, and holding it from the tap (LAND from the release, the reveal's way)
 // is what lands with the most gas. So the bar sits between those two flights, set on the phone population
 // (scripts/human-phone.mjs --daily): a thumb held from the tap meets it, one that waits for the fall
-// doesn't, and the reference flight still does.
+// doesn't (at any height: 25 m and 3 m land the same), and the reference flight still does.
 import { describe, it, expect } from 'vitest';
 import { createRun, stepRun, simulate } from '../../src/sim/run.js';
 import { newInput } from '../../src/sim/vehicle.js';
@@ -47,7 +47,7 @@ describe('the gas Daily on one thumb (0134)', () => {
     expect(scoreRun(again.t).facts.airPct).toBe(s.facts.airPct);
   });
 
-  it('a thumb that waits for the fall to hold lands with less and is told the number it needs', () => {
+  it('a thumb picked up only after the fall has begun (here at 12 m) lands with less and is told the number it needs', () => {
     const tap = scoreRun(flyThumb('tap').t), late = scoreRun(flyThumb(12).t);
     expect(late.facts.crashed).toBe(false);
     expect(late.facts.airPct).toBeLessThan(tap.facts.airPct);
