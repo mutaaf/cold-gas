@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // Challenge links and the daily jump (src/comeback.js), on a phone first: a finished run's Share carries
 // the run (#vs=); opening that link shows the challenge card on the title, the run races the challenger's
 // ghost, and the results say how it went, with a way to send it back. The daily's objective comes from
-// the UTC date: the clock is fixed on 2026-11-02, whose objective is "Land within 10 ft of the mark" on
+// the UTC date: the clock is fixed on 2026-11-02, whose objective is "Land within 11.5 ft of the mark" on
 // the Show (src/daily.js; tests/unit/daily.test.js pins the pick).
 const phone = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 };
 const DAY = new Date('2026-11-02T15:00:00Z');
@@ -71,7 +71,7 @@ test('a shared run is a rematch: the card, the challenger as the ghost, and the 
   const send = b.page.locator('[data-vs-send]');
   await expect(send).toBeVisible();
   expect((await send.boundingBox()).height).toBeGreaterThanOrEqual(44);
-  // The daily (land within 10 ft of the mark on the Show): the reference lands 1.5 m from it.
+  // The daily (land within 11.5 ft of the mark on the Show): the reference lands 1.5 m from it.
   await expect(b.page.locator('[data-daily-line]')).toHaveText('Daily ✓ complete · streak 1');
   expect([...a.errors, ...b.errors]).toEqual([]);
   await a.ctx.close(); await b.ctx.close();
@@ -95,7 +95,7 @@ test('the daily card: today’s objective, Play today’s picks its course, and 
   const card = page.locator('[data-title-extra] .xc-daily');
   await expect(card).toBeVisible();
   await expect(card.locator('.xc-k')).toContainText('Daily · Nov 2');
-  await expect(card.locator('.xc-goal')).toHaveText('Land within 10 ft of the mark', { useInnerText: true });
+  await expect(card.locator('.xc-goal')).toHaveText('Land within 11.5 ft of the mark', { useInnerText: true });
   await expect(card.locator('.xc-streak')).toContainText('Start a streak today');
   const play = () => page.evaluate(() => window.__coldgas.obs.payload().play);
   expect((await play())['daily-start'] ?? 0).toBe(0);
