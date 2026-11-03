@@ -18,6 +18,7 @@ page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 const tag = phone ? `-${phone}` : '';
 await page.goto(url);
 await page.waitForTimeout(2000);
+await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
 await page.click('[data-drive-open]');
 await page.waitForSelector('.fd-card');
 await page.waitForTimeout(900);

@@ -50,7 +50,12 @@ async function restart(page, path, { tap = false } = {}) {
   }
   if (path === 'R') await page.keyboard.press('KeyR');
   else {
-    if (path === 'theatre') await expect(page.locator(SEL.theatre)).toBeVisible({ timeout: 30_000 });
+    if (path === 'theatre') {
+      // A phone runs the call docked on the sheet (audit 2026-10-30): Watch the call puts the theatre up.
+      await page.waitForFunction(() => { const w = document.querySelector('[data-call-watch]'); return (w && w.offsetParent) || !document.querySelector('[data-theatre]').hidden; }, null, { timeout: 30_000 });
+      await G(page, () => { const w = document.querySelector('[data-call-watch]'); if (w && w.offsetParent) w.click(); });
+      await expect(page.locator(SEL.theatre)).toBeVisible({ timeout: 30_000 });
+    }
     if (tap) await G(page, (s) => [...document.querySelectorAll(s)].find((b) => b.offsetParent).click(), SEL[path]);
     else await page.locator(SEL[path]).first().click();
   }

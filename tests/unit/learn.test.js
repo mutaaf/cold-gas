@@ -6,8 +6,11 @@ import { createRun, stepRun, simulate, INPUT_KEYS, LEGACY_INPUT_KEYS, quantise, 
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun, TIERS } from '../../src/sim/judge.js';
 import { createVehicle, step, newInput, up, NOZZLES, VALVE_KEYS, ASSIST_CARRY, ASSIST_CRAWL, TRIM } from '../../src/sim/vehicle.js';
-import { predict, newPrediction, SINK_SOFT } from '../../src/sim/predict.js';
-import { coach } from '../../src/sim/coach.js';
+import { predict, newPrediction, SINK_SOFT, SINK_FIRM } from '../../src/sim/predict.js';
+import { coach, markCost, namesMark, MARK_POINTS, KEY_WORDS, AIM_THUMB, sinkCost, namesBraking, SINK_PERFECT, RANOUT_THUMB } from '../../src/sim/coach.js';
+import { coachWords, pointerText } from '../../src/pointer.js';
+import { createOneThumb, thumbStage } from '../../src/onethumb.js';
+import { COURSES } from '../../src/sim/courses.js';
 import { wallProgress } from '../../src/sim/run.js';
 import { DRILLS, buildDrill } from '../../src/practice.js';
 import { keyValves, createKeyRamp, CHORDS } from '../../src/valves.js';
@@ -15,6 +18,27 @@ import { verify } from '../../src/worker/index.js';
 import { SPEC, NOZZLE_SPEC } from '../../src/sim/spec.js';
 import { dhypot } from '../../src/sim/dmath.js';
 
+// The Show on one thumb, the way main.js flies it, with no slide (0124: the default one-thumb player): hold up
+// the curl, a tap to let go, then hold from `holdAt` m (or straight on from the tap).
+const flyThumb = (holdAt = 'tap') => {
+  const run = createRun('show'), th = createOneThumb();
+  let released = false, ledgeT = -1, tapT = -1;
+  th.down();
+  while (run.phase !== 'done') {
+    const c = run.car, inp = newInput();
+    if (tapT < 0 && thumbStage(run, released) === 'ledge' && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3) {
+      if (ledgeT < 0) { ledgeT = run.tick; th.up(); }
+      if (run.tick === ledgeT + 120) { th.down(); tapT = run.tick; }
+    }
+    if (tapT > 0 && run.tick === tapT + 24 && holdAt !== 'tap') th.up();
+    if (released && holdAt !== 'tap' && !th.held && c.vel.y < 0 && c.pos.y < holdAt) th.down();
+    th.sample(run, released, inp);
+    if ((run.phase === 'ramp' && inp.lift > 0) || run.phase === 'air') released = true;
+    inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
+    stepRun(run, inp);
+  }
+  return run;
+};
 const IDX = Object.fromEntries(NOZZLE_SPEC.map((n, i) => [n.id, i]));
 const fly = (course, opts, mut) => {
   const run = createRun(course), ap = createAutopilot(course, opts);
@@ -30,7 +54,7 @@ const flyDrill = (id, policy, course = 'show') => {
 };
 
 describe('SIM_VERSION 21: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down, the Wall from its foot, the curl gate, driving feel, the fans in a corner', () => {
-  it('is version 26 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock; 22: the fans answer a held corner, 0020; 23: tyre load sensitivity from a published fit, 0021; 24: the launch complex is solid and its static fire blows a car off the pad; 25: the pad is not the Wall; 26: Assist auto-land and the carry over the row, 0067)', () => expect(SIM_VERSION).toBe(26));
+  it('is version 27 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock; 22: the fans answer a held corner, 0020; 23: tyre load sensitivity from a published fit, 0021; 24: the launch complex is solid and its static fire blows a car off the pad; 25: the pad is not the Wall; 26: Assist auto-land and the carry over the row, 0067; 27: the Show judged on what the pilot decides, 0121)', () => expect(SIM_VERSION).toBe(27));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
@@ -50,7 +74,7 @@ describe('SIM_VERSION 21: the rigid-body engine, the reveal G trace, relaxed tyr
     const runs = Object.fromEntries(['show', 'wall', 'lineup'].map((c) => [c, fly(c)]));
     const cards = Object.fromEntries(Object.entries(runs).map(([c, r]) => [c, scoreRun(r.t)]));
     // (+ the Integrity category, which a clean run scores ≈10: it lifts every reference a little)
-    expect(cards.show.total).toBeGreaterThanOrEqual(90.7 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(94.0 + 0.5);
+    expect(cards.show.total).toBeGreaterThanOrEqual(97.7 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(97.7 + 0.5);   // 94.0 before the v27 Show judging (0121)
     expect(cards.wall.total).toBeGreaterThanOrEqual(92.3 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(96.0 + 0.5);
     expect(cards.wall.categories.efficiency).toBeGreaterThan(8.5);   // the late burn's saving (v13: 6.0)
     expect(cards.lineup.total).toBeGreaterThanOrEqual(86.3 - 1.05); expect(cards.lineup.total).toBeLessThanOrEqual(92.0 + 0.5);
@@ -186,6 +210,149 @@ describe('the coach', () => {
     const { items } = coach(run.inputLog, 'show', scoreRun(run.t));
     expect(items[0].id).toBe('clean');
     expect(items[0].fix).toMatch(/Pro|Advanced/);
+  });
+  // 0124: the Show's weight is on the mark (SHOW_W), so a 6–7 m miss is most of what a soft, clean landing lost.
+  it('a one-thumb landing 6–7 m off the mark names the mark first, with the points it cost (0124)', () => {
+    const run = flyThumb(12);
+    const card = scoreRun(run.t);
+    expect(card.facts.crashed).toBe(false);
+    expect(card.tier).toBe('assist');
+    expect(card.facts.sink).toBeLessThan(SINK_SOFT);
+    expect(card.facts.padMiss).toBeGreaterThan(5.5);
+    expect(card.facts.padMiss).toBeLessThan(8);
+    const { items } = coach(run.inputLog, 'show', card, 0, coachWords({ device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' }));
+    expect(items[0].id).toBe('mark');
+    expect(items.some((i) => i.id === 'clean')).toBe(false);
+    // The detail: the miss in metres and the points, within ±1 of the run re-scored on the mark.
+    const [, m, pts] = items[0].detail.match(/(\d+(?:\.\d)?) m from the mark.*about (\d+) points/);
+    expect(Number(m)).toBeCloseTo(card.facts.padMiss, 1);
+    const onMark = scoreRun({ ...run.t, lateral: 0, landZ: COURSES.show.pad.z }).total;
+    expect(Math.abs(Number(pts) - (onMark - card.total))).toBeLessThanOrEqual(1);
+    expect(Number(pts)).toBeGreaterThan(10);
+    // The thumb's words, the same as the NEXT RUN pointer's: the slide onto the amber dot, not pitch or roll.
+    expect(items[0].fix).toMatch(/slide onto the amber dot/);
+    expect(items[0].fix).not.toMatch(/pitch|roll/);
+    expect(pointerText('mark', { device: 'touch', scheme: 'thumb', tier: 'assist' })).toMatch(/slide onto the amber dot/);
+    // A keyboard's words for the same flight.
+    const keys = coach(run.inputLog, 'show', card).items[0];
+    expect(keys.id).toBe('mark');
+    expect(keys.fix).toMatch(/lean toward the pad/i);
+  });
+  it('the cost is the judges\' own: on the mark nothing, inside the full-marks ring nothing, 3 m with nothing else wrong stays Clean (0124)', () => {
+    const ref = fly('show');
+    const t0 = { ...ref.t, lateral: 0, landZ: COURSES.show.pad.z };
+    expect(markCost(t0)).toBe(0);
+    expect(markCost({ ...t0, lateral: 3.0 })).toBe(0);
+    expect(markCost({ ...t0, lateral: 5 })).toBeGreaterThan(MARK_POINTS);
+    expect(markCost({ ...t0, lateral: 6.8 })).toBeGreaterThan(14);
+    // The reference touches down 1.5 m off: Clean, with Pro as the next step.
+    expect(scoreRun(ref.t).facts.padMiss).toBeLessThan(3.5);
+    const { items } = coach(ref.inputLog, 'show', scoreRun(ref.t), 0, KEY_WORDS);
+    expect(items.map((i) => i.id)).toEqual(['clean']);
+    expect(AIM_THUMB).toMatch(/amber dot/);
+  });
+  it('past 7 m the mark is always named (a capped Pro/Advanced card, a drill, the Wall); a drill never quotes points (0124)', () => {
+    // A strong Advanced run's judges sit at the 10 cap: 6 m off costs the total nothing, 7.5 m still names it.
+    const adv = { ...fly('show').t, tier: 'advanced', lateral: 6, landZ: COURSES.show.pad.z };
+    expect(markCost(adv)).toBeLessThan(MARK_POINTS);
+    expect(namesMark(7.5, markCost({ ...adv, lateral: 7.5 }), { show: true })).toBe(true);
+    expect(namesMark(5, 4, { show: true })).toBe(true);
+    expect(namesMark(5, 4, { show: true, drill: true })).toBe(false);
+    expect(namesMark(7.5, 0, { show: true, drill: true })).toBe(true);
+    expect(namesMark(5, 4, { show: false })).toBe(false);
+    expect(namesMark(3, 0, { show: true })).toBe(false);
+    // A no-slide thumb flight coached from a drill-style hand-over: the 6 m miss isn't named (its card flags 7 m).
+    const run = flyThumb(12);
+    const { items } = coach(run.inputLog, 'show', scoreRun(run.t), run.t.airStartTick);
+    expect(items.some((i) => i.id === 'mark')).toBe(false);
+  });
+});
+
+// 0125: the Show's reference on Assist with the brake eased off below `h` m (lift `k`, LAND's level law off): a firm
+// touchdown the computer didn't pace to the ground.
+const flyFirm = (h, k) => fly('show', {}, (run, inp) => {
+  if (run.phase === 'air' && run.car.vel.y < 0 && up(run.car, { x: 0, y: 0, z: 0 }).y > 0.9 && run.car.pos.y - SPEC.comHeight < h) { inp.level = 0; inp.lift = k; }
+});
+const THUMB_SHOW = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' };
+describe('the coach weighs the touchdown by what it cost (0125)', () => {
+  it('a firm 1.6–1.9 m/s touchdown a few metres off, on Assist, is Clean (it cost about a point), not Out of braking', () => {
+    const run = flyFirm(1, 0.5);
+    const card = scoreRun(run.t);
+    expect(card.facts.crashed).toBe(false);
+    expect(card.tier).toBe('assist');
+    expect(run.t.sink).toBeGreaterThan(1.55);
+    expect(run.t.sink).toBeLessThan(1.95);
+    expect(card.facts.padMiss).toBeGreaterThan(3);
+    expect(card.facts.padMiss).toBeLessThan(4.5);
+    // The judges' own cost: the run re-scored at 0.9 m/s.
+    const cost = sinkCost(run.t);
+    expect(cost).toBeCloseTo(Math.max(0, scoreRun({ ...run.t, sink: SINK_PERFECT }).total - card.total), 1);
+    expect(cost).toBeLessThan(MARK_POINTS);
+    for (const say of [coachWords(THUMB_SHOW), KEY_WORDS]) {
+      const { items } = coach(run.inputLog, 'show', card, 0, say);
+      expect(items.some((i) => ['ran-out', 'late-brake', 'no-brake', 'late-land'].includes(i.id))).toBe(false);
+      expect(items[0].id).toBe('clean');
+    }
+  });
+  it('a hard touchdown still leads with a braking finding, its cost in the detail within ±1 of the re-score', () => {
+    const run = flyFirm(1, 0);
+    const card = scoreRun(run.t);
+    expect(card.facts.crashed).toBe(false);
+    expect(run.t.sink).toBeGreaterThan(3.5);
+    const cost = scoreRun({ ...run.t, sink: SINK_PERFECT }).total - card.total;
+    const { items } = coach(run.inputLog, 'show', card, 0, coachWords(THUMB_SHOW));
+    expect(['ran-out', 'late-brake', 'no-brake', 'late-land']).toContain(items[0].id);
+    const pts = Number(items[0].detail.match(/about (\d+) points?/)[1]);
+    expect(Math.abs(pts - cost)).toBeLessThanOrEqual(1);
+    // From 3 m/s it keeps its full weight, above a tilt or the mark's small misses, whatever a capped card prices it at.
+    expect(items[0].weight).toBeGreaterThanOrEqual(6);
+  });
+  it('a drill keeps the 1.5 m/s bar: the same firm touchdown coached from the hand-over names the braking', () => {
+    const run = flyFirm(1, 0.5);
+    const { items } = coach(run.inputLog, 'show', scoreRun(run.t), run.t.airStartTick, coachWords(THUMB_SHOW));
+    expect(items.some((i) => ['ran-out', 'late-brake', 'no-brake', 'late-land'].includes(i.id))).toBe(true);
+  });
+  it('the bar: the Show (not a drill) names braking from 3 points or 3 m/s; drills, the Wall and the Lineup from 1.5 m/s', () => {
+    expect(namesBraking(1.6, 1.3, { show: true })).toBe(false);
+    expect(namesBraking(2.4, MARK_POINTS, { show: true })).toBe(true);
+    expect(namesBraking(SINK_FIRM, 0, { show: true })).toBe(true);   // a capped Pro/Advanced card
+    expect(namesBraking(1.6, 0, { show: true, drill: true })).toBe(true);
+    expect(namesBraking(1.6, 0, { show: false })).toBe(true);
+    expect(namesBraking(1.4, 9, { show: true })).toBe(false);
+    expect(sinkCost({ ...fly('show').t, sink: 0.8 })).toBe(0);
+  });
+  it('one thumb is told what the pad can do: no green band, no separate brake; the keyboard keeps its words', () => {
+    const thumb = coachWords(THUMB_SHOW);
+    expect(thumb.ranOut).toBe(RANOUT_THUMB);
+    for (const text of [thumb.ranOut, pointerText('ran-out', THUMB_SHOW)]) {
+      expect(text).not.toMatch(/green band|stay on the brake/i);
+      expect(text).toMatch(/holding the pad/);
+      expect(text).toMatch(/slide small/);
+    }
+    expect(KEY_WORDS.ranOut).toMatch(/green band/);
+    expect(coachWords({ device: 'key', tier: 'assist', course: 'show' }).ranOut).toMatch(/green band/);
+    expect(pointerText('ran-out', { device: 'key', tier: 'assist' })).toMatch(/Stay on the brake to the ground: keep holding Shift/);
+  });
+  it('the slide the thumb words name does cost braking: a held sideways slide lands harder than none', () => {
+    const slide = (dx) => {
+      const run = createRun('show'), th = createOneThumb();
+      let released = false, ledgeT = -1, tapT = -1;
+      th.down();
+      while (run.phase !== 'done') {
+        const c = run.car, inp = newInput();
+        if (tapT < 0 && thumbStage(run, released) === 'ledge' && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3) {
+          if (ledgeT < 0) { ledgeT = run.tick; th.up(); }
+          if (run.tick === ledgeT + 120) { th.down(); tapT = run.tick; }
+        }
+        if (run.phase === 'air') th.move(dx, 0);
+        th.sample(run, released, inp);
+        if ((run.phase === 'ramp' && inp.lift > 0) || run.phase === 'air') released = true;
+        inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
+        stepRun(run, inp);
+      }
+      return run.t.sink;
+    };
+    expect(slide(40)).toBeGreaterThan(slide(0) + 0.2);
   });
 });
 

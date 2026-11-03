@@ -77,11 +77,30 @@ const WALL_W = {
   coordinator: { climb: 0.24, inversion: 0.24, rotation: 0.22, landing: 0.18, precision: 0.06, efficiency: 0.06 },
   designer: { climb: 0.14, inversion: 0.16, rotation: 0.16, landing: 0.24, precision: 0.14, efficiency: 0.16 },
 };
+// The Show's weights (SIM_VERSION 27, ticket 0121). On Assist the computer flies the climb, the hang and the
+// roll-out to 9.7–10 for everyone, so weight there paid every run the same; it now sits on what the pilot
+// decides: the mark, the touchdown and the gas. Measured on 300-player populations (docs/backlog/0121):
+// a one-thumb player who never aims 90.3 → 83.7 median, one who aims onto the mark 91 → 92.7 (p90 95.7),
+// the reference 94 → 97.7, still above every thumb.
 const SHOW_W = {
-  engineer: { climb: 0.1, inversion: 0.08, rotation: 0.1, clearance: 0.12, landing: 0.34, precision: 0.14, efficiency: 0.12 },
-  coordinator: { climb: 0.16, inversion: 0.18, rotation: 0.2, clearance: 0.2, landing: 0.16, precision: 0.05, efficiency: 0.05 },
-  designer: { climb: 0.1, inversion: 0.12, rotation: 0.14, clearance: 0.14, landing: 0.22, precision: 0.12, efficiency: 0.16 },
+  engineer: { climb: 0.04, inversion: 0.03, rotation: 0.05, clearance: 0.08, landing: 0.34, precision: 0.36, efficiency: 0.10 },
+  coordinator: { climb: 0.08, inversion: 0.10, rotation: 0.14, clearance: 0.16, landing: 0.16, precision: 0.28, efficiency: 0.08 },
+  designer: { climb: 0.04, inversion: 0.06, rotation: 0.08, clearance: 0.10, landing: 0.24, precision: 0.34, efficiency: 0.14 },
 };
+// Through points [[x, v], …] (v 0..1): flat before the first, straight between, the last value after.
+function curve(x, pts) {
+  if (x <= pts[0][0]) return pts[0][1];
+  for (let i = 1; i < pts.length; i++) {
+    if (x <= pts[i][0]) { const [a, va] = pts[i - 1], [b, vb] = pts[i]; return va + ((vb - va) * (x - a)) / (b - a); }
+  }
+  return pts[pts.length - 1][1];
+}
+// The Show's mark, read off the pad's painted rings (2 · 4 · 7 m, courses.js): full marks inside 3.5 m,
+// 0.85 at 5 m, under half at the outer ring's 7 m, a sliver at 12 m and nothing from 20. (Was a straight
+// line from 1 m to 20 m, which kept 74 % of the marks for a 6 m miss outside the 4 m ring.)
+const SHOW_PRECISION = [[3.5, 1], [5, 0.85], [7, 0.45], [12, 0.15], [20, 0]];
+// Gas left on the Show: full marks from 45 % (the reference keeps 48 %).
+const SHOW_GAS_FULL = 45;
 
 // Damage (src/sim/damage.js): every judge marks the car's integrity, each with their own weight
 // (the Engineer cares most: they have to fix it). 60 % or worse is a wreck, whatever else happened.
@@ -103,9 +122,12 @@ function landingScore(t) {
 
 // Clearance over the parked row: contact is a zero; close-but-clean is the art (≈0.8 m is
 // perfect, 3 m+ is safe).
+// (SIM_VERSION 27: a margin up to 2 m is as good as a skim, and a high, safe crossing costs less: 0.85 at
+// 6 m, 0.75 from 12 m. It was 0.72 from 4.8 m, which marked down the reference's 5 m for being safe.)
+const CLEARANCE = [[0, 0.82], [0.8, 1], [2, 1], [6, 0.85], [12, 0.75]];
 function clearanceScore(t) {
   const clearance = Number.isFinite(t.minClearance) ? t.minClearance : 0;
-  return t.contact ? 0 : clearance <= 0 ? 0 : 10 * (clearance < 0.8 ? lerp(0.82, 1, clearance / 0.8) : lerp(1, 0.72, clamp01((clearance - 0.8) / 4)));
+  return t.contact ? 0 : clearance <= 0 ? 0 : 10 * curve(clearance, CLEARANCE);
 }
 
 // The Wall, and the Show (the Wall with the row under the ledge: clearance counts, contact
@@ -130,8 +152,8 @@ function scoreWall(t, opts) {
   // roll; a roll-dominant turn scores higher than a flip.
   c.rotation = 10 * clamp01(turned / 160) * (0.7 + 0.3 * rollShare);
   c.landing = landingScore(t);
-  c.precision = 10 * band(padMiss, 20, 1);
-  c.efficiency = 10 * band(airPct, 0, 50) * clamp01(turned / 120);
+  c.precision = show ? 10 * curve(padMiss, SHOW_PRECISION) : 10 * band(padMiss, 20, 1);
+  c.efficiency = 10 * band(airPct, 0, show ? SHOW_GAS_FULL : 50) * clamp01(turned / 120);
   if (show) c.clearance = t.crossedRow ? clearanceScore(t) : 0;
   c.damage = 10 * (1 - damagePct(t) / 100);
   if (!jumped) { c.rotation = 0; c.landing = 0; c.precision = 0; c.efficiency = 0; c.clearance = 0; }

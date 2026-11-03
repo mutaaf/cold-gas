@@ -137,11 +137,22 @@ export function toast(msg, ms = 1800) {
   el._t = setTimeout(() => el.classList.remove('on'), ms);
 }
 
+// A link that carries the run (`#vs=`, src/challenge.js) is a rematch: the words say so.
+export const isChallengeUrl = (url) => /#vs=/.test(String(url || ''));
+export function inviteText(card, url) {
+  return isChallengeUrl(url) ? `${shareText(card)} Beat my run:` : shareText(card);
+}
+
 // Share a run: the card as a file where the platform takes files (phones, desktop Safari), else
 // text + link, else copy the link. `cardPromise` is started on pointerdown so it's usually ready by
-// the click (the share sheet must open inside the tap's user activation).
-export async function shareRun({ card, url, cardPromise }) {
-  const text = shareText(card);
+// the click (the share sheet must open inside the tap's user activation). `url` may be a promise (the
+// challenge link is packed when the results open, src/comeback.js); `text` overrides the words
+// ("Send it back").
+export async function shareRun({ card, url: urlIn, cardPromise, text: said = '' }) {
+  let url = '';
+  try { url = await urlIn; } catch { /* the plain address below */ }
+  url ||= `${location.origin}${import.meta.env.BASE_URL}`;
+  const text = said || inviteText(card, url);
   const data = { title: 'COLD GAS', text, url };
   try {
     const blob = await cardPromise;
@@ -154,5 +165,5 @@ export async function shareRun({ card, url, cardPromise }) {
       if (data.files) { delete data.files; try { await navigator.share(data); return 'shared'; } catch (e2) { if (e2?.name === 'AbortError') return 'cancelled'; } }
     }
   }
-  try { await navigator.clipboard.writeText(`${text} ${url}`); toast('Link copied'); return 'copied'; } catch { toast(url, 4000); return 'shown'; }
+  try { await navigator.clipboard.writeText(`${text} ${url}`); toast(isChallengeUrl(url) ? 'Challenge link copied' : 'Link copied'); return 'copied'; } catch { toast(isChallengeUrl(url) ? 'Copy failed: share from a phone or try again' : url, 4000); return 'shown'; }
 }

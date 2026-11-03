@@ -85,7 +85,7 @@ describe('harder: the offer', () => {
     expect(offerWords({ offerTier: 'pro' }).label).toBe('Ready for Pro? ×1.08');
     expect(offerWords({ offerTier: 'advanced' }).label).toBe('Ready for Advanced? ×1.15');
     expect(offerWords({ offerLevel: 'standard' }).label).toMatch(/standard driving/i);
-    expect(stepDownBanner('pro', 'assist')).toBe('AI Assist turned on: 3 crashes in a row on Pro.');
+    expect(stepDownBanner('pro', 'assist')).toBe('Assist turned on: 3 crashes in a row on Pro.');
     expect(stepDownBanner('advanced', 'pro')).toBe('Pro turned on: 3 crashes in a row on Advanced.');
   });
 });

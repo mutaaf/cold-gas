@@ -1,0 +1,146 @@
+import { test, expect } from '@playwright/test';
+
+// 0121: one-thumb's touchdown slide and the medals. In the air the held pad turns into a sight (the
+// amber dot is the mark), a slide of the held finger writes pitch / roll into the input log, and the
+// results sheet shows the medal row under the score with the next target.
+const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
+const ready = (page) => page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
+const live = (page) => page.waitForFunction(() => window.__coldgas.S.mode === 'live' && window.__coldgas.S.freezeT <= 0, null, { timeout: 30_000 });
+
+test('one-thumb: in the air the pad is a sight, a slide aims, and the results show medals', async ({ browser }) => {
+  const page = await browser.newPage(PHONE);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/coldgas/?gfx=low');
+  await ready(page);
+  await page.evaluate(() => { localStorage.removeItem('coldgas_medals'); window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
+  await page.evaluate(() => window.__coldgas.startDrill('ledge'));
+  await live(page);
+  const pad = page.locator('[data-onethumb]');
+  await expect(page.locator('[data-thumb-act]')).toHaveText('Let go');
+  const box = await pad.boundingBox();
+  const at = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const cdp = await page.context().newCDPSession(page);
+  // 0129: the tap on the ledge answers at once. Watch the label from the page itself (a MutationObserver, so
+  // no poll interval hides a late answer) and every frame's label until the release.
+  await page.evaluate(() => {
+    const act = document.querySelector('[data-thumb-act]'), pad = document.querySelector('[data-onethumb]');
+    const w = (window.__tap = { down: -1, up: -1, changed: -1, stage: '', act: '', frames: [] });
+    addEventListener('pointerdown', () => { if (w.down < 0) w.down = performance.now(); }, { capture: true });
+    addEventListener('touchend', () => { if (w.up < 0) { w.up = performance.now(); requestAnimationFrame(tick); } }, { capture: true });
+    new MutationObserver(() => {
+      if (w.changed < 0 && act.textContent !== 'Let go') { w.changed = performance.now(); w.stage = pad.dataset.stage; w.act = act.textContent; }
+    }).observe(act, { childList: true, characterData: true, subtree: true });
+    const S = window.__coldgas.S;
+    function tick() { w.frames.push([S.released, act.textContent]); if (w.frames.length < 600 && !S.released) requestAnimationFrame(tick); }
+  });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, id: 1 }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  const tap = await page.evaluate(() => ({ ...window.__tap }));
+  expect(tap.down).toBeGreaterThan(0);
+  expect(tap.up).toBeGreaterThan(0);
+  expect(tap.changed).toBeGreaterThan(0);
+  // ≤ 0.1 s from the finger touching the pad (here it answers in the press's own task), and so from the lift too.
+  expect(tap.changed - tap.down).toBeGreaterThanOrEqual(0);
+  expect(tap.changed - tap.down).toBeLessThanOrEqual(100);
+  expect(tap.changed - tap.up).toBeLessThanOrEqual(100);
+  expect(tap.stage).toBe('going');
+  expect(tap.act).toBe('Go');
+  // A second press during the drive-off is no new tap: held from here on, it lands (the sight below).
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, id: 1 }] });
+  await page.waitForFunction(() => window.__coldgas.S.released, null, { timeout: 30_000 });
+  await expect(page.locator('[data-thumb-act]')).toHaveText('Land');
+  const frames = await page.evaluate(() => window.__tap.frames);
+  expect(frames.filter(([rel, a]) => !rel && a === 'Let go')).toEqual([]);   // never "Let go" again after the tap
+  // Held through the roll-out: the sight comes on once the car is roof up.
+  await page.waitForFunction(() => document.querySelector('[data-thumb-aim]')?.hasAttribute('data-on'), null, { timeout: 30_000 });
+  // 0126: on the held (light) pad the mark is the amber dot every line names, near or not, with a dark
+  // keyline that holds it against the pad; the ink "you" dot is not amber. Read in one task, with data-near
+  // flipped both ways, so the frame loop can't move it in between.
+  const sight = await page.evaluate(() => {
+    const aim = document.querySelector('[data-thumb-aim]'), mark = aim.querySelector('.ta-mark'), you = aim.querySelector('.ta-you');
+    const read = (near) => {
+      const was = aim.hasAttribute('data-near');
+      aim.toggleAttribute('data-near', near);
+      const s = getComputedStyle(mark);
+      const r = { bg: s.backgroundColor, border: s.borderTopColor, bw: parseFloat(s.borderTopWidth), w: parseFloat(s.width) };
+      aim.toggleAttribute('data-near', was);
+      return r;
+    };
+    const pad = document.querySelector('[data-onethumb]'), held = pad.classList.contains('on');
+    const out = { held, far: read(false), near: read(true), you: getComputedStyle(you).backgroundColor };
+    pad.classList.remove('on');   // the un-held (dark) pad keeps today's hollow amber ring, filled when near
+    out.darkFar = read(false); out.darkNear = read(true);
+    pad.classList.toggle('on', held);
+    return out;
+  });
+  expect(sight.held).toBe(true);
+  for (const k of ['far', 'near']) {
+    expect(sight[k].bg).toBe('rgb(255, 191, 90)');
+    expect(sight[k].border).toBe('rgb(6, 8, 12)');
+    expect(sight[k].bw).toBe(2);
+  }
+  expect(sight.near.w).toBeGreaterThan(sight.far.w);   // "on it" still reads: the dot grows round the ink dot
+  expect(sight.you).not.toBe('rgb(255, 191, 90)');
+  expect(sight.darkFar.bg).toBe('rgba(0, 0, 0, 0)');
+  expect(sight.darkFar.border).toBe('rgb(255, 191, 90)');
+  expect(sight.darkNear.bg).toBe('rgb(255, 191, 90)');
+  expect(sight.darkNear.w).toBe(sight.far.w);
+  // Slide the held finger right and up: the thumb reads it.
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x: at.x + 40, y: at.y - 40, id: 1 }] });
+  await expect.poll(() => page.evaluate(() => window.__coldgas.thumb.aim.x)).toBeGreaterThan(0.5);
+  expect(await page.evaluate(() => window.__coldgas.thumb.aim.y)).toBeGreaterThan(0.5);
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  expect(await page.evaluate(() => window.__coldgas.thumb.aim.x)).toBe(0);   // let go: the slide is gone
+  expect(errors).toEqual([]);
+  await page.close();
+});
+
+test('the results sheet shows the medal row under the score, and it is kept on this device', async ({ browser }) => {
+  const page = await browser.newPage(PHONE);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/coldgas/?gfx=low');
+  await ready(page);
+  await page.evaluate(() => { localStorage.removeItem('coldgas_medals'); window.__coldgas.setTier('assist'); window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });
+  await live(page);
+  // A one-thumb flight, stepped in the page: hold up the curl, stop on the ledge, tap, hold to land.
+  await page.evaluate(() => {
+    const g = window.__coldgas, S = g.S;
+    g.thumb.down();
+    for (let i = 0; i < 4000 && S.mode === 'live'; i++) {
+      const c = S.run.car;
+      if (S.run.phase === 'ramp' && S.run.t.progress >= 0.92 && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3 && !S.released) {
+        g.thumb.up(); g.liveStep(0.1); g.thumb.down();
+      }
+      g.liveStep(0.1);
+    }
+    g.thumb.up();
+  });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
+  const medals = page.locator('[data-medals]');
+  await expect(medals).toBeVisible();
+  await expect(medals).toContainText(/to go|Gold held/);
+  // Right under the score.
+  const total = await page.locator('.total-row').boundingBox(), row = await medals.boundingBox();
+  expect(row.y).toBeGreaterThanOrEqual(total.y + total.height - 1);
+  expect(row.y - (total.y + total.height)).toBeLessThan(40);
+  const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('coldgas_medals') || '{}'));
+  expect(stored['show:assist']).toBe(await page.evaluate(() => window.__coldgas.S.card.total));
+  // 0124: this flight never slid (the computer's touchdown, ≈ 6 m off), so What happened names the mark first,
+  // with the points it cost, in the thumb's words (the NEXT RUN pointer's), not "nothing big to fix".
+  const first = page.locator('[data-coach-items] li').first();
+  await expect(first).toHaveAttribute('data-fix', 'mark', { timeout: 10_000 });
+  await expect(first).toContainText(/from the mark.*about \d+ points/);
+  // 0132: the no-slide miss is mostly sideways (≈5.3 m across, ≈2.7 m past): it names the side, not "Long".
+  await expect(first).toContainText('Wide of the mark');
+  await expect(first).toContainText(/(left|right) of it/);
+  await expect(first.locator('.cf')).toContainText('slide onto the amber dot');
+  await expect(page.locator('[data-coach]')).not.toContainText('nothing big to fix');
+  // The reference flight is not yours: no medal row for it.
+  await page.evaluate(() => { window.__coldgas.toTitle(); window.__coldgas.startRun('reveal'); window.__coldgas.fastForward(); });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
+  await expect(medals).toBeHidden();
+  expect(errors).toEqual([]);
+  await page.close();
+});

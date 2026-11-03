@@ -36,6 +36,7 @@ test('a Start tapped while the engine loads, then Free Drive opened: no run star
   expect(await G(page, () => window.__coldgas.physicsReady())).toBe(false);
   await page.locator('[data-start]').click();
   await page.locator('[data-start]').click();   // and again: still one start at most
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   await expect(page.locator('[data-drive-picker]')).toBeVisible({ timeout: 30_000 });
   release();
@@ -76,6 +77,7 @@ test('a double tap on Sandbox builds one arena, and the title takes it down', as
   test.slow();   // the arena builds and compiles on software GL
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-sandbox-open]').dblclick();
   await page.waitForFunction(() => window.__coldgas.sandbox?.active, null, { timeout: 60_000 });
   await page.waitForTimeout(1000);

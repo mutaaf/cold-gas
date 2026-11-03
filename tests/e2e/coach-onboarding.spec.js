@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 
 // Ticket 0079: a new player knows the controls and gets coached. The first Jump shows how to fly on
-// this device (skippable, remembered); the AI assist control is labelled in words on every screen; Adapt
+// this device (Skip skips it this time; Got it or a finished run remembers it); the Assist control is labelled in words on every screen; Adapt
 // to me steps the tier down after crashes (with Undo) and offers a harder step after clean landings,
 // between runs only; the coach's pointer is one line in the device's words, again as the next run counts
 // down; a new player's cue line gives the timely pointer. Runs are stepped from the test (liveStep), the
@@ -52,7 +52,7 @@ const floor = (loc) => loc.evaluate((el) => {
 // The card fits whole: every row, the note and both buttons on screen, nothing overlapping, no scroll.
 const cardFits = (page) => page.evaluate(() => {
   const sheet = document.querySelector('[data-screen="howto"] .sheet');
-  const parts = [...sheet.querySelectorAll('.eyebrow, h2, .howto-rows li, .howto-assist, .actions .btn')].filter((e) => !e.closest('[hidden]'));
+  const parts = [...sheet.querySelectorAll('.eyebrow, h2, .howto-rows li, .howto-all, .howto-assist, .actions .btn')].filter((e) => !e.closest('[hidden]'));
   const r = parts.map((e) => e.getBoundingClientRect());
   const issues = [];
   r.forEach((a, i) => {
@@ -68,7 +68,7 @@ const cardFits = (page) => page.evaluate(() => {
   return issues;
 });
 
-test('keyboard: the first Jump shows how to fly (keys), Skip goes straight into the run, and a reload never shows it again', async ({ page }) => {
+test('keyboard: the first Jump shows how to fly (keys), Skip goes straight into the run (this time only), Got it remembers it', async ({ page }) => {
   const errors = await boot(page, { firstVisit: true });
   await page.locator('[data-start]').click();
   const card = page.locator('[data-screen="howto"]');
@@ -76,11 +76,18 @@ test('keyboard: the first Jump shows how to fly (keys), Skip goes straight into 
   await expect(page.locator('[data-howto-device]')).toHaveText('Keyboard');
   await expect(page.locator('[data-howto-rows] li')).toHaveCount(4);
   await expect(page.locator('[data-howto-rows] kbd')).toHaveText(['↑', 'Space', 'Shift', 'Shift']);
-  await expect(page.locator('[data-howto-assist]')).toContainText(/AI assist is on/i);
+  await expect(page.locator('[data-howto-assist]')).toContainText(/^Assist is on/);
   await expect(page.locator('[data-howto-go]')).toBeFocused();
   expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');   // nothing started under it
   await page.locator('[data-howto-skip]').click();
   await expect(card).toBeHidden();
+  await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+  // Skip skips it this time only (audit 2026-10-30): the next Jump (no run finished yet) shows it again.
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('new');
+  await page.evaluate(() => window.__coldgas.toTitle());
+  await page.locator('[data-start]').click();
+  await expect(card).toBeVisible();
+  await page.locator('[data-howto-go]').click();
   await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
   expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('seen');
   await page.reload();
@@ -102,19 +109,55 @@ test('keyboard: the first Jump shows how to fly (keys), Skip goes straight into 
   expect(errors).toEqual([]);
 });
 
-test('touch: the first Jump shows the one-thumb controls; Got it starts the run; not again after a reload', async ({ browser }) => {
+// 0127: a newcomer's first Jump on one thumb asks for one sentence (step 01), not the four-row card; "All four steps"
+// opens the rest in place, and the cue line carries it in the run.
+test('touch: the first Jump on one thumb shows one row (All four steps opens the rest); Got it · Jump starts the run in one tap; not again after a reload', async ({ browser }) => {
   const page = await touchPage(browser);
   const errors = await boot(page, { firstVisit: true });
+  const rows = page.locator('[data-howto-rows] li'), all = page.locator('[data-howto-all]');
   await page.locator('[data-start]').tap();
   await expect(page.locator('[data-screen="howto"]')).toBeVisible();
   await expect(page.locator('[data-howto-device]')).toHaveText('Touch · one thumb');
-  await expect(page.locator('[data-howto-rows] li').first()).toContainText(/hold\s*the pad/i);
-  await expect(page.locator('[data-howto-rows] li').nth(1)).toContainText(/tap\s*the pad/i);
-  // The two-thumb scheme, when it's the one in use: its own buttons.
-  await page.evaluate(() => window.__coldgas.touch.set('scheme', 'classic'));
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText(/hold\s*the pad/i);
+  await expect(rows.first()).toContainText(/crawls you up the Wall/i);
+  await expect(page.locator('#howto-title')).toHaveText('One thing to know');
+  await expect(page.locator('[data-howto-assist]')).toBeHidden();
+  await expect(page.locator('[data-howto-go]')).toHaveText('Got it · Jump');
+  await expect(page.locator('[data-howto-skip]')).toBeVisible();
+  await expect(all).toBeVisible();
+  await page.waitForTimeout(700);   // the sheet's rise
+  const share = await page.evaluate(() => document.querySelector('[data-screen="howto"] .sheet').getBoundingClientRect().height / innerHeight);
+  expect(share, 'card height / viewport').toBeLessThan(0.45);
+  expect(await cardFits(page)).toEqual([]);
+  const link = await floor(all);
+  expect(link.h).toBeGreaterThanOrEqual(44);
+  expect(link.minFont).toBeGreaterThanOrEqual(11);
+  expect(link.inView).toBe(true);
+  // All four steps: the full card, in place (the run hasn't started, the Jump still waits on Got it).
+  await all.tap();
+  await expect(rows).toHaveCount(4);
+  await expect(rows.nth(1)).toContainText(/tap\s*the pad/i);
+  await expect(page.locator('#howto-title')).toHaveText('Four things to know');
+  await expect(page.locator('[data-howto-assist]')).toBeVisible();
+  await expect(all).toBeHidden();
+  await expect(rows.nth(1)).toBeFocused();   // a screen reader reads on from step 02
+  expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
+  expect(await cardFits(page)).toEqual([]);
+  // Skip (this time only): the next Jump asks for the one sentence again, and Got it · Jump starts the run in one tap.
   await page.locator('[data-howto-skip]').tap();
   await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('new');
   await page.evaluate(() => window.__coldgas.toTitle());
+  await page.locator('[data-start]').tap();
+  await expect(rows).toHaveCount(1);
+  await expect(all).toBeVisible();
+  await page.locator('[data-howto-go]').tap();
+  await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('seen');
+  // The two-thumb scheme, when it's the one in use: its own buttons, all four (only one thumb gets the short card).
+  await page.evaluate(() => window.__coldgas.toTitle());
+  await page.evaluate(() => window.__coldgas.touch.set('scheme', 'classic'));
   await page.locator('.cta [data-howto-open]').tap();
   await expect(page.locator('[data-howto-device]')).toHaveText('Touch · two thumbs');
   await expect(page.locator('[data-howto-rows] kbd')).toHaveText(['GO', 'RELEASE', 'LAND', 'LAND']);
@@ -129,6 +172,14 @@ test('touch: the first Jump shows the one-thumb controls; Got it starts the run;
   await page.close();
 });
 
+test('a run of your own flown to its card counts as having seen how to fly (a Skip alone does not)', async ({ page }) => {
+  const errors = await boot(page, { firstVisit: true });
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('new');
+  expect((await fly(page, true)).mode).toBe('results');
+  expect(await page.evaluate(() => localStorage.getItem('coldgas_howto'))).toBe('seen');
+  expect(errors).toEqual([]);
+});
+
 test('the how-to card fits whole, with no overlaps, at every size (folding phone, phones both ways, desktop)', async ({ browser }) => {
   const touch = await touchPage(browser, 382, 580);
   const desk = await browser.newPage({ viewport: { width: 1280, height: 720 } });
@@ -140,17 +191,29 @@ test('the how-to card fits whole, with no overlaps, at every size (folding phone
     await page.waitForTimeout(700);   // the sheet's rise
     expect(await cardFits(page), `${w}×${h}`).toEqual([]);
     await page.keyboard.press('Escape');
+    if (page !== touch) continue;
+    // 0127: a newcomer's Jump on one thumb, the one-row card (Escape on it goes on into the run; back to the title).
+    await page.evaluate(() => localStorage.setItem('coldgas_howto', 'new'));
+    await page.locator('[data-start]').tap();
+    await expect(page.locator('[data-howto-all]')).toBeVisible();
+    await page.waitForTimeout(700);
+    expect(await cardFits(page), `short ${w}×${h}`).toEqual([]);
+    const link = await floor(page.locator('[data-howto-all]'));
+    expect(link.h >= 44 && link.minFont >= 11 && link.inView, `short ${w}×${h} link`).toBe(true);
+    await page.keyboard.press('Escape');
+    await page.evaluate(() => window.__coldgas.toTitle());
   }
   await touch.close(); await desk.close();
 });
 
 for (const [w, h, touch] of [[390, 844, true], [844, 390, true], [1280, 720, false]]) {
-  test(`${w}×${h}: the AI assist control says what it does, opens the tiers in words, and the sheet carries it too`, async ({ browser }) => {
+  test(`${w}×${h}: the Assist control says what it does, opens the tiers in words, and the sheet carries it too`, async ({ browser }) => {
     const page = touch ? await touchPage(browser, w, h) : await browser.newPage({ viewport: { width: w, height: h } });
     const errors = await boot(page);
     const ctlT = page.locator('.cta [data-assist-open]');
     await expect(ctlT).toBeVisible();
-    await expect(ctlT).toContainText(/AI assist/i);
+    await expect(ctlT).toContainText(/Assist/);
+    await expect(ctlT).not.toContainText(/\bAI\b/);
     await expect(ctlT.locator('[data-assist-state]')).toHaveText('On');
     await expect(ctlT.locator('[data-assist-sub]')).toHaveText(/rolls you out, levels and brakes/);
     const m = await floor(ctlT);
@@ -175,7 +238,8 @@ for (const [w, h, touch] of [[390, 844, true], [844, 390, true], [1280, 720, fal
     if (touch) await sheet.locator('[data-assist-close]').tap(); else await page.keyboard.press('Escape');
     await expect(sheet).toBeHidden();
     await expect(ctlT.locator('[data-assist-state]')).toHaveText('Off · Pro');
-    await expect(ctlT.locator('[data-assist-sub]')).toContainText('×1.08');
+    await expect(ctlT.locator('[data-assist-sub]')).toContainText(/you fly it/);
+    await expect(ctlT).not.toContainText('×');   // the multiplier is the tier picker's (and the results'), not the title's
     if (!touch) await expect(ctlT).toBeFocused();
     // A run keeps the tier it started with: a change mid-run is for the next one.
     const mid = await page.evaluate(() => {
@@ -200,13 +264,13 @@ for (const [w, h, touch] of [[390, 844, true], [844, 390, true], [1280, 720, fal
   });
 }
 
-test('Adapt to me: three crashes in a row on Pro turn AI assist on for the next run, with Undo; off, it stays off and Rookie mode is offered', async ({ page }) => {
+test('Adapt to me: three crashes in a row on Pro turn Assist on for the next run, with Undo; off, it stays off and Rookie mode is offered', async ({ page }) => {
   const errors = await boot(page);
   for (let k = 1; k <= 2; k++) expect(await fly(page, true, k === 1 ? { tier: 'pro' } : {})).toMatchObject({ crashed: true, cardTier: 'pro', tier: 'pro', down: false });
   const r3 = await fly(page, true);
   // The third run was flown and scored on Pro; the step is for the next one, said on the sheet.
   expect(r3, JSON.stringify(r3)).toMatchObject({ crashed: true, flew: 'pro', cardTier: 'pro', tier: 'assist', down: true, rookie: false });
-  await expect(page.locator('[data-adapt-why]')).toHaveText('AI Assist turned on: 3 crashes in a row on Pro.');
+  await expect(page.locator('[data-adapt-why]')).toHaveText('Assist turned on: 3 crashes in a row on Pro.');
   await expect(page.locator('.results [data-assist-open] [data-assist-state]')).toHaveText('On');
   const undo = page.locator('[data-adapt-undo]');
   const m = await floor(undo);
@@ -233,7 +297,7 @@ test('Adapt to me: three crashes in a row on Pro turn AI assist on for the next 
   expect(errors).toEqual([]);
 });
 
-test('three clean landings on AI Assist offer Pro ×1.08 (one tap, never forced); on Easy driving, Standard first', async ({ page }) => {
+test('three clean landings on Assist offer Pro ×1.08 (one tap, never forced); on Easy driving, Standard first', async ({ page }) => {
   const errors = await boot(page);
   const runs = [];
   for (let k = 0; k < 3; k++) runs.push(await fly(page, false, k === 0 ? { tier: 'assist' } : {}));

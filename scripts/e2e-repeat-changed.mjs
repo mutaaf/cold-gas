@@ -5,7 +5,7 @@
 //
 //   node scripts/e2e-repeat-changed.mjs            # specs changed vs origin/main, 5 times each
 //   E2E_REPEAT=10 node scripts/e2e-repeat-changed.mjs tests/e2e/race.spec.js
-//   E2E_SHARD=2/3 node scripts/e2e-repeat-changed.mjs   # one third of the repeated runs (CI splits the guard 3 ways)
+//   E2E_SHARD=2/4 node scripts/e2e-repeat-changed.mjs   # one quarter of the repeated runs (CI splits the guard 4 ways)
 //
 // Frame-time tests (@perf) are left out: they run once in the main suite. In the guard they share
 // the runner with a second worker, which makes a timing bar measure the neighbour (a 249 ms task).

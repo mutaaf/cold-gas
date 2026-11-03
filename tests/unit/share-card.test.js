@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { shareFacts, shareText } from '../../src/share-card.js';
+import { shareFacts, shareText, inviteText } from '../../src/share-card.js';
 import { setUnits } from '../../src/units.js';
 
 // The share card's words (0081): three numbers per event, in the player's primary units, and a
@@ -31,6 +31,11 @@ describe('share card', () => {
 
   it('the text names the score, verdict and event, with no URL (the share sheet carries it)', () => {
     expect(shareText(show)).toBe('COLD GAS 94.0: Perfect 10 on The Show. Up the wall 88 ft · Over the roofs 17 ft · Touchdown 2.6 ft/s.');
+  });
+
+  it('a link that carries the run (#vs=) invites a rematch; the plain address does not', () => {
+    expect(inviteText(show, 'https://mutaafaziz.com/coldgas/?play=jump&course=show#vs=zAbC')).toBe(`${shareText(show)} Beat my run:`);
+    expect(inviteText(show, 'https://mutaafaziz.com/coldgas/')).toBe(shareText(show));
   });
 });
 

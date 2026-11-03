@@ -3,7 +3,8 @@ import { test, expect } from '@playwright/test';
 // 0057: a network blip never breaks Free Drive, the Sandbox or the judges for the rest of the session.
 // Chromium remembers a failed dynamic import (the same URL fails again with no request), so a retry asks for the
 // failed chunk with a query; a shared chunk it can't re-ask that way costs one reload from the title.
-const ready = (page, timeout = 60_000) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout });
+const ready = (page, timeout = 60_000) => page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout })
+  .then(() => page.evaluate(() => { document.querySelector('[data-play-more]').open = true; }));   // More ways to play (the title's disclosure)
 const watch = (page) => {
   const errors = [], navs = [];
   page.on('pageerror', (e) => errors.push(e.message));
@@ -105,9 +106,12 @@ test("the judges' chunk stalls 27 s and the provider answers late: the judge bre
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
   expect(await page.evaluate(() => window.__coldgas.obs.breaker('judge').snapshot().fails)).toBe(0);
+  // The 27 s count from the run's start, which the page's 35 s can't start before: waiting for the results on a
+  // loaded software-GL runner (the check runs once a frame) can lag seconds, and 27 s after that ran past the 35.
+  const start = Date.now();
   await page.evaluate(() => { window.__coldgas.startRun('jump'); window.__coldgas.fastForward(); });
-  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000 });
-  await page.waitForTimeout(27_000);
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 30_000, polling: 100 });
+  await page.waitForTimeout(Math.max(0, 27_000 - (Date.now() - start)));
   release();
   await page.waitForFunction(() => window.__coldgas.S.words?.source === 'local', null, { timeout: 15_000 });
   await expect.poll(() => page.evaluate(() => window.__coldgas.S.callMeta?.error || ''), { timeout: 5000 }).toMatch(/too long/);

@@ -9,7 +9,7 @@ const ENUMS = {
   status: ['proposed', 'ready', 'in-progress', 'shipped', 'dropped'],
   priority: ['P0', 'P1', 'P2'],
   size: ['S', 'M', 'L'],
-  lens: ['player-feel', 'content', 'authenticity', 'performance', 'accessibility', 'tech-health', 'platform'],
+  lens: ['player-feel', 'content', 'authenticity', 'performance', 'accessibility', 'tech-health', 'platform', 'engagement'],
 };
 const SECTIONS = ['## Why', '## What', '## Acceptance criteria', '## Test plan'];
 

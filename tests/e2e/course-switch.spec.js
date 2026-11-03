@@ -45,6 +45,7 @@ test('@heavy Free Drive and the Sandbox hand the camera back with the stage\'s n
   await expect(page.locator('[data-screen="title"]')).toBeVisible();
   expect(await planes()).toEqual(stagePlanes);
 
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   await page.locator('.fd-card[data-road="stelvio"]').click();
   await page.locator('[data-fd-go]').click();

@@ -1,0 +1,199 @@
+// 0133: the descent band is green on a descent that lands soft. Amber is the caution colour: it means this
+// descent, flown on as it is, lands firmer than SINK_SOFT, or the stop hasn't started and has to start within
+// WARN s. A brake already lifting on a plan that sets down soft is nominal. Read the way the HUD reads it:
+// `predict` + `steadyStatus` every air tick, height = pos.y − comHeight. Not scored: predict.js never changes a run.
+import { describe, it, expect } from 'vitest';
+import { createRun, stepRun } from '../../src/sim/run.js';
+import { newInput, createVehicle, step } from '../../src/sim/vehicle.js';
+import { createAutopilot } from '../../src/sim/autopilot.js';
+import { predict, newPrediction, newBand, steadyStatus, SINK_SOFT } from '../../src/sim/predict.js';
+import { SPEC } from '../../src/sim/spec.js';
+import { createOneThumb, thumbStage } from '../../src/onethumb.js';
+import { stateWord, THUMB_WORD } from '../../src/hud-landing.js';
+
+const hOf = (c) => Math.max(0, c.pos.y - SPEC.comHeight);
+
+// Every air tick before the touchdown: the steady band, the height and whether the car is roof up.
+function watch() {
+  const pr = newPrediction(), band = newBand(), ticks = [];
+  return {
+    ticks,
+    // `inp`: this tick's input, so LAND reads engaged the way main.js passes it (held, or auto-land, in Assist).
+    see(run, inp) {
+      if (run.phase !== 'air') return;
+      const c = run.car, h = hOf(c);
+      predict(c, h, pr, inp.assist > 0 && (inp.level > 0 || c.autoLand > 0));
+      ticks.push({ s: steadyStatus(band, pr, run.tick / 240), h, up: pr.upY >= 0.85 });
+    },
+  };
+}
+// Share of the air ticks after the car is first roof up that read green.
+function greenAfterUp(ticks) {
+  const i = ticks.findIndex((t) => t.up);
+  const after = ticks.slice(i);
+  return after.filter((t) => t.s === 'green').length / after.length;
+}
+
+function flyReference() {
+  const run = createRun('show'), ap = createAutopilot('show'), w = watch();
+  while (run.phase !== 'done') { const inp = ap(run); w.see(run, inp); stepRun(run, inp); }
+  return { run, ticks: w.ticks };
+}
+
+// The Show on one thumb as main.js flies it (tests/unit/thumb-mastery.test.js): hold up the curl, stop on
+// the ledge, a tap to let go and, held from the tap, the pad's LAND to the ground.
+function flyThumb() {
+  const run = createRun('show'), th = createOneThumb(), w = watch();
+  let released = false, ledgeT = -1, tapT = -1;
+  th.down();
+  while (run.phase !== 'done') {
+    const c = run.car, inp = newInput();
+    if (tapT < 0 && thumbStage(run, released) === 'ledge' && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3) {
+      if (ledgeT < 0) { ledgeT = run.tick; th.up(); }
+      if (run.tick === ledgeT + 120) { th.down(); tapT = run.tick; }
+    }
+    th.sample(run, released, inp);
+    if ((run.phase === 'ramp' && inp.lift > 0) || run.phase === 'air') released = true;
+    inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
+    w.see(run, inp);
+    stepRun(run, inp);
+  }
+  return { run, ticks: w.ticks };
+}
+
+describe('the descent band on a soft landing (0133)', () => {
+  it('the reference reads green on ≥ 80 % of its air after roof up, and never amber in the last 10 m', () => {
+    const { run, ticks } = flyReference();
+    expect(run.t.sink).toBeLessThan(SINK_SOFT);
+    expect(greenAfterUp(ticks)).toBeGreaterThanOrEqual(0.8);
+    expect(ticks.filter((t) => t.h < 10 && t.s !== 'green').length).toBe(0);
+  });
+
+  it('one thumb, the pad held from the tap, reads green on ≥ 80 % of its air after roof up', () => {
+    const { run, ticks } = flyThumb();
+    expect(run.t.sink).toBeLessThan(SINK_SOFT);
+    expect(greenAfterUp(ticks)).toBeGreaterThanOrEqual(0.8);
+  });
+
+  // Critic bounce (2026-11-02 15:40): the first 0.37 s after the tap (88 of 151 ticks before roof up, still
+  // inverted off the ledge) read amber while LAND was engaged and rolling it out. Nothing needs to change on
+  // that flight, so the box reads On profile from the release.
+  it('one thumb, the pad held from the tap, reads green on every air tick from the release', () => {
+    const { run, ticks } = flyThumb();
+    expect(run.t.sink).toBeLessThanOrEqual(SINK_SOFT);
+    expect(ticks.length).toBeGreaterThan(240);
+    expect(ticks.filter((t) => t.s !== 'green').map((t) => t.h.toFixed(1))).toEqual([]);
+  });
+
+  // Review of the bounce fix: the roll-out LAND flies before it brakes is judged as the sim flies it, so a green
+  // with LAND engaged upside down or banked hard is a soft touchdown. Every state on the grid that reads green
+  // through the flown stop, flown on with LAND held, touches down at ≤ SINK_SOFT. (Full tank and 270 kg: on a
+  // part-empty tank the flown stop's blowdown is too kind on every path, upright too; a ticket of its own.)
+  const tilted = (axis, ang, h, sink, gas) => {
+    const s = createVehicle('lineup'), a = Math.min(ang, Math.PI - 1e-6) / 2;
+    s.pos.x = 30; s.pos.y = SPEC.comHeight + h; s.vel.y = -sink; s.air = gas;
+    s.quat.x = axis === 'pitch' ? Math.sin(a) : 0; s.quat.y = 0; s.quat.z = axis === 'roll' ? Math.sin(a) : 0; s.quat.w = Math.cos(a);
+    return s;
+  };
+  const touchdown = (s) => {
+    for (let i = 0; i < 240 * 12; i++) { if (hOf(s) <= 0.35) return -s.vel.y; step(s, { ...newInput(), assist: 1, level: 1 }); }
+    return 0;
+  };
+  it('LAND engaged upside down or banked hard: green through the flown stop means a soft touchdown', () => {
+    const bad = [];
+    let greens = 0;
+    for (const axis of ['roll', 'pitch']) for (const ang of [1.3, 1.6, 2.0, 2.3, 2.7, Math.PI]) for (const h of [3, 5, 7, 9, 12, 16, 20, 26, 32])
+      for (const sink of [0, 2, 4, 7, 10]) for (const gas of [297, 270]) {
+        const s = tilted(axis, ang, h, sink, gas), pr = newPrediction();
+        predict(s, hOf(s), pr, true);
+        if (!(pr.brakeSink <= SINK_SOFT && pr.touchSink <= SINK_SOFT)) continue;
+        greens++;
+        const td = touchdown(s);
+        if (td > SINK_SOFT) bad.push(`${axis} ${ang.toFixed(2)} h ${h} sink ${sink} gas ${gas}: ${td.toFixed(2)} m/s`);
+      }
+    expect(greens).toBeGreaterThan(100);
+    expect(bad).toEqual([]);
+  });
+
+  it('LAND engaged too low to finish the roll-out and the stop is not green (the review\'s states)', () => {
+    for (const [axis, ang, h, sink] of [['roll', Math.PI, 6, 0], ['roll', Math.PI, 7, 0], ['roll', 2.2, 3, 0], ['roll', 2.2, 4, 0],
+      ['pitch', 2.3, 10, 4], ['pitch', 2.3, 13, 4], ['roll', 1.06, 3, 4]]) {
+      const s = tilted(axis, ang, h, sink, 297), pr = newPrediction();
+      predict(s, hOf(s), pr, true);
+      expect(pr.status, `${axis} ${ang} h ${h} sink ${sink}`).not.toBe('green');
+      expect(touchdown(s)).toBeGreaterThan(SINK_SOFT);
+    }
+  });
+
+  // A car let go 20 m over the ground, roof up and falling at 2 m/s, on Pro with nothing held (no auto-land).
+  const drop = () => { const s = createVehicle('lineup'); s.pos.x = 30; s.pos.y = SPEC.comHeight + 20; s.vel.y = -2; return s; };
+
+  // (predict's own band: the HUD's shows it BAND_HOLD s later, as it does every change.)
+  it('a free fall with no brake still goes amber ≥ 0.6 s before the BRAKE line, and red before the ground', () => {
+    const s = drop(), pr = newPrediction();
+    let amberT = -1, lineT = -1, redH = -1;
+    for (let i = 0; i < 240 * 4 && hOf(s) > 0.35; i++) {
+      const h = hOf(s);
+      predict(s, h, pr);
+      const st = pr.status;
+      if (amberT < 0 && st !== 'green') amberT = i / 240;
+      if (lineT < 0 && pr.margin <= 0) lineT = i / 240;
+      if (redH < 0 && st === 'red') redH = h;
+      step(s, { ...newInput(), assist: 0 });
+    }
+    expect(amberT).toBeGreaterThan(0);
+    expect(lineT).toBeGreaterThan(0);
+    expect(lineT - amberT).toBeGreaterThanOrEqual(0.6 - 1 / 240 - 1e-9);
+    expect(redH).toBeGreaterThan(1);
+  });
+
+  it('a brake on a part-empty tank that the blowdown leaves firm is never green (review: 180 of 297 kg)', () => {
+    // Full lift from 10 m reads like a soft stop at today's pressure, but the burn drains the tank below the
+    // regulator and the last metres come down at 2.25 m/s.
+    const s = drop(), pr = newPrediction(), band = newBand(), seen = [];
+    s.air = 180;
+    let td = -1;
+    for (let i = 0; i < 240 * 6; i++) {
+      const h = hOf(s);
+      if (h <= 0.35) { td = -s.vel.y; break; }
+      const on = h < 10 || seen.length > 0;
+      predict(s, h, pr);
+      const st = steadyStatus(band, pr, i / 240);
+      if (on) seen.push(st);
+      step(s, { ...newInput(), assist: 0, lift: on ? 1 : 0 });
+    }
+    expect(td).toBeGreaterThan(SINK_SOFT);
+    expect(seen.length).toBeGreaterThan(100);
+    expect(seen.filter((st) => st === 'green')).toEqual([]);
+  });
+
+  it('the state box: keyboard and classic touch name the brake, one thumb names the pad', () => {
+    expect(stateWord('amber', 1)).toBe('Brake');
+    expect(stateWord('red', 1)).toBe('Too fast');
+    expect(stateWord('amber', 0.2)).toBe('Roll out · now');
+    expect(stateWord('green', 0.2)).toBe('On profile');
+    for (const st of ['amber', 'red']) for (const up of [1, 0.2]) expect(stateWord(st, up, true)).toBe(THUMB_WORD);
+    expect(stateWord('green', 1, true)).toBe('On profile');
+    expect(THUMB_WORD).toBe('Hold · Land');
+  });
+
+  it('a brake started below the BRAKE line lands firm, and reads amber or red from the brake to the ground', () => {
+    const s = drop(), pr = newPrediction(), band = newBand(), seen = [];
+    let braking = false, td = -1;
+    for (let i = 0; i < 240 * 5; i++) {
+      const h = hOf(s);
+      // The wheels: the car stands at ≈ 0.3 m on its suspension.
+      if (h <= 0.35) { td = -s.vel.y; break; }
+      predict(s, h, pr);
+      const st = steadyStatus(band, pr, i / 240);
+      // Late: the brake starts 5.5 m under the BRAKE line, then full lift to the ground.
+      if (!braking && pr.margin < -5.5) braking = true;
+      if (braking) seen.push(st);
+      step(s, { ...newInput(), assist: 0, lift: braking ? 1 : 0 });
+    }
+    expect(td).toBeGreaterThan(SINK_SOFT);
+    expect(td).toBeLessThan(6);
+    expect(seen.length).toBeGreaterThan(10);
+    expect(seen.filter((st) => st === 'green')).toEqual([]);
+  });
+});

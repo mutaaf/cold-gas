@@ -14,6 +14,23 @@ const fake = () => {
     return new Promise((r) => setTimeout(() => { h.afterAd?.(); calls.at(-1).paused = paused; r(kind === 'rewarded' ? true : undefined); }, 50));
   };
   window.__adCalls = calls;
+  // 0122: like Marquee, a placed title slot starts AdSense's script download. Here a stand-in adsbygoogle.js that takes
+  // 3 s; it logs the mode it loads in, or that it was cut off. The first slot's Jump comes 0.5 s after it, from the page
+  // itself (a poll from the test could see the slot a second late on a slow runner and miss the window).
+  const pipe = (window.__adPipe = []);
+  new MutationObserver((muts) => {
+    for (const mu of muts) for (const n of mu.addedNodes) {
+      if (n.nodeType !== 1 || n.dataset?.marquee !== 'title') continue;
+      const e = { start: mode() };
+      pipe.push(e);
+      const s = document.createElement('script');
+      s.src = `https://ads.stand-in.example/adsbygoogle.js?${pipe.length}`;   // another origin, as AdSense's is (routed)
+      s.onload = () => { e.done = mode(); };
+      s.onerror = () => { e.cut = mode(); };
+      document.head.appendChild(s);
+      if (pipe.length === 1) setTimeout(() => window.__coldgas.startRun('jump'), 500);
+    }
+  }).observe(document, { childList: true, subtree: true });
   window.marquee = { v: 1, ready: () => Promise.resolve(cfg), banner: () => {}, interstitial: brk('interstitial'), rewarded: brk('rewarded') };
 };
 async function toResults(page) {
@@ -25,13 +42,22 @@ test('no ad call fires during a run; postrun skips the first results; rewarded i
   test.slow();
   await page.addInitScript(fake);
   await page.route('**/coldgas/api/judge/stream', (r) => r.abort());   // local lines, fast
+  const late = [];   // stand-in ad requests that finished (Playwright's view, beside the page's own)
+  await page.route('https://ads.stand-in.example/**', async (r) => {
+    await new Promise((res) => setTimeout(res, 3000));
+    await r.fulfill({ contentType: 'text/javascript', body: `/*${'x'.repeat(400_000)}*/` }).catch(() => { /* cut off: the page is gone from it */ });
+  });
+  page.on('requestfinished', (r) => { if (r.url().includes('ads.stand-in.example')) late.push(r.url()); });
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
-  await expect(page.locator('[data-screen="title"] [data-marquee="title"]')).toHaveCount(1, { timeout: 15_000 });
-
+  // (Armed once the backdrop and the judges' chunk have settled, then the 4 s dwell.)
   // Run 1 → Retry: the first session never gets an interstitial.
-  await page.evaluate(() => window.__coldgas.startRun('jump'));
+  // 0122: the page itself Jumps at dwell + 0.5 s, with the slot's stand-in script still downloading. It is cut off.
+  await page.waitForFunction(() => window.__adPipe.length === 1, null, { timeout: 45_000 });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live');
+  await page.waitForTimeout(3500);   // past the moment the stand-in would have finished
+  expect(await page.evaluate(() => window.__adPipe)).toEqual([{ start: 'title', cut: 'countdown' }]);
+  expect(late).toEqual([]);
   await toResults(page);
   await expect(page.locator('[data-reroll]')).toBeVisible({ timeout: 45_000 });
   await page.keyboard.press('KeyR');

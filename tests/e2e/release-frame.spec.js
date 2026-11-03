@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { releaseFrameTests } from './frame-probe.js';
+import { releaseFrameTests, thumbFrameTests } from './frame-probe.js';
 
 // Ticket 0063: the drop off the ledge is the moment the Show builds to, and the carry camera used to
 // draw it behind the top HUD (the car's centre above the mission block's bottom in a quarter of the
@@ -27,3 +27,16 @@ const VIEWS = [
 // pre-0113 framing that hid the row. 1366×1024 (no bar in the ticket) holds the growth bar. 667×375 (bar 0.060) is
 // checked by hand with the same probe (in the PR), not as a ninth flight: each flight here costs CI shard time.
 releaseFrameTests(VIEWS);
+
+// 0128: the same carry flown by a first visit's one thumb (the autopilot hides the touch controls, so the flights above
+// never saw the pad): the held pad is opaque, and over the back of the row the car flew behind it (≥ 99 % of its box
+// for half a second at 390×844). Small, mid and large upright phones, the pad on the left, an 11" iPad upright.
+// The car's width over the carry is held at what it was before (0128's bar).
+const TOUCH = { hasTouch: true, isMobile: true, deviceScaleFactor: 2 };
+thumbFrameTests([
+  { name: 'phone 390×844', minCarW: 69, viewport: { width: 390, height: 844 }, ...TOUCH },
+  { name: 'phone 360×780', minCarW: 57, viewport: { width: 360, height: 780 }, ...TOUCH },
+  { name: 'phone 430×932', minCarW: 86, viewport: { width: 430, height: 932 }, ...TOUCH },
+  { name: 'phone 390×844, left hand', hand: 'left', minCarW: 69, viewport: { width: 390, height: 844 }, ...TOUCH },
+  { name: 'iPad 820×1180', viewport: { width: 820, height: 1180 }, ...TOUCH },
+]);

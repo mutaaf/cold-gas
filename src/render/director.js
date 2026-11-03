@@ -41,11 +41,28 @@ const FRONT = SHOW.boxes.reduce((a, b) => (b.maxZ > a.maxZ ? b : a));
 const ROW_X = Math.max(...SHOW.boxes.map((b) => b.maxX)), ROW_Z0 = Math.min(...SHOW.boxes.map((b) => b.minZ)), ROW_Z1 = ROW_FRONT - 1;
 // The HUD boxes the carry frames the row above (tests/e2e/frame-probe.js measures against the same).
 const HUD_SEL = '[data-hud-box], [data-hud-toggle], .top-actions';
+// The touch controls the player's thumbs are on (0128): the one-thumb pad (held, it is opaque), classic's buttons and
+// Advanced's nozzle pad. On an upright screen the carry hands over to the follow before the car would come down behind
+// one of them. Each is kept as its own box (at most PAD_MAX, preallocated), so classic's buttons bottom right don't
+// turn the whole bottom of the screen into one band.
+const TOUCH_SEL = '[data-touch] [data-onethumb], [data-touch] .tbtn, [data-nozzle-pad]';
+const PAD_MAX = 6;
+const CARRY_MIN = 0.3;   // s: the carry stands at least this long before the hand-over (no two hard cuts a frame apart)
+// m: how far under its centre the car's projected box reaches (≈ half its 1.6–1.8 m box in the air) plus a frame's fall.
+const CAR_LOW = 1.2;
 // The ground shots (the landed rig, a crash cut) are framed side-on to a 4.65 m car with a vertical lens, so on a
 // screen narrower than it is tall the car came out wider than the screen (0108: 1.2–1.45 screens upright on a
 // phone). Under this aspect they hold the horizontal lens they have at it, so the car keeps its share of the
 // width (at most ≈ 0.75 of it); at this aspect and wider the lens is unchanged.
 const LENS_ASPECT = 0.9;
+// The landed rig's stand from the car (x, z m): ahead of it on a wide screen; on an upright one (0119) beside it on
+// the open side, broadside, so its view runs across the lit floor to the launch complex (src/sim/complex.js, far −x).
+// 12 m keeps the 4.65 m car under 0.75 of an upright phone's width (0108).
+const LAND_AHEAD = [6.5, -9], LAND_SIDE = [12, 0];
+const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the middle (≈ 60 % down)
+const TITLE_COVER = 0.4;   // the share of the car's box the title's panel may cover before the lens moves it (0131)
+const TITLE_FILL = 0.85;   // the most of that band's height the car's box may take; past it the lens widens (0131)
+const TITLE_FOV_MAX = 70;  // deg: how wide the title's lens may go for that
 
 export function createDirector(camera) {
   const st = {
@@ -63,7 +80,12 @@ export function createDirector(camera) {
     rl: 0, rt: 0, rr: 0, rb: 0, aim: 0,
     bandT: 1, bandB: -1,                                 // the carry's band (0113, NDC): under the top HUD, over the bottom one
     bandL: 1,                                            // under the HUD standing at the top of the left edge (0116, NDC)
-    placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(), carryY: 0, carryT: 0, recuts: 0,   // the carry's locked-off placement (0113); the car's height and the time there, re-cuts so far (0118)
+    railR: -1, railF: 1,                                 // the upright left rail's right edge and its foot (0128, NDC; −1/1 when none)
+    pads: new Float64Array(PAD_MAX * 3), padN: 0,        // the touch controls at the bottom (0128, NDC: top, left, right of each)
+    carryT: 0,                                           // when the carry cut in (0128)
+    titleSide: '', titleY: 0, titleAnchor: 0,            // where titleHold keeps the car's box: the band, its middle (px)
+    titleFov: 0,                                         // the title's wider lens on an upright screen, when the car needs it (0131)
+    placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(), carryY: 0, placeT: 0, recuts: 0,   // the carry's locked-off placement (0113); the car's height and the time there, re-cuts so far (0118)
   };
 
   // Behind, above and to the side of the car along its line of flight (the last good heading when
@@ -93,6 +115,16 @@ export function createDirector(camera) {
     camera.lookAt(st.lookS);
   }
   const fovTo = (f, dt, rate = 2) => { st.fov += (f - st.fov) * (1 - Math.exp(-dt * rate)); };
+  // How far under LENS_ASPECT the screen is: 0 at it and wider, 1 from an upright phone's 0.5 down (0119).
+  const upright = () => clamp((LENS_ASPECT - camera.aspect) / 0.4, 0, 1);
+  // The height to add to a ground shot's aim, `d` m from it under lens(fov), so the car sits about LAND_LIFT × u of
+  // the half-frame below the middle (0119).
+  const liftFor = (u, d, fov) => d * LAND_LIFT * u * Math.tan(lens(fov) * Math.PI / 360);
+  // Whether a parked body stands across the level line from the car to `dx` m out at +x, the side stand's sight (0119).
+  const rowBlocks = (c, dx) => {
+    for (const b of SHOW.boxes) if (c.z >= b.minZ - 0.5 && c.z <= b.maxZ + 0.5 && b.maxX >= c.x - 0.5 && b.minX <= c.x + dx) return true;
+    return false;
+  };
   const lens = (f) => (camera.aspect >= LENS_ASPECT ? f : (Math.atan(Math.tan(f * Math.PI / 360) * LENS_ASPECT / camera.aspect) * 360) / Math.PI);
 
   // Keep the car out from under the HUD (0063): after a shot has looked where it wants, turn the camera
@@ -121,7 +153,16 @@ export function createDirector(camera) {
       tmp.copy(carPos).sub(camera.position).applyQuaternion(qInv.copy(camera.quaternion).invert());
       if (tmp.z > -0.5) return;
       const ny = tmp.y / -tmp.z / tv, w = clamp((ny - 0.1) / 0.25, 0, 1);
-      const min = Math.atan(RAIL * w * tv * camera.aspect) + KNEE / 2;
+      let min = Math.atan(RAIL * w * tv * camera.aspect) + KNEE / 2;
+      // The follow (0128: on one thumb it takes over from the carry before the pad) frames the car ≈ half the width of
+      // an upright phone: its centre right of the line still left its tail under the rail (10–19 % of its box at
+      // 390×844). While the car's box reaches up into the rail's rows, its left edge goes right of the rail's edge.
+      // Only with touch controls up, where the follow comes early; the autopilot's and a keyboard's follow are unchanged.
+      if (st.shot === FOLLOW && st.padN > 0) {
+        if (bandDirty) measureBand();
+        const d = -tmp.z, v = st.railR > -1 ? clamp(((tmp.y + CAR_LOW) / d / tv - st.railF) / 0.1, 0, 1) : 0;
+        if (v > 0) min = Math.max(min, v * (Math.atan(st.railR * tv * camera.aspect) + Math.atan(CAR_HALF / d)) + KNEE / 2);
+      }
       // About the world's up, so the horizon stays level.
       camera.rotateOnWorldAxis(UP, st.clear * knee(min - Math.atan2(tmp.x, -tmp.z)));
     }
@@ -143,7 +184,7 @@ export function createDirector(camera) {
   // 0116), where the upright carry brings the car in.
   let bandDirty = true;
   function measureBand() {
-    bandDirty = false; st.bandT = 1; st.bandB = -1; st.bandL = 1;
+    bandDirty = false; st.bandT = 1; st.bandB = -1; st.bandL = 1; st.padN = 0; st.railR = -1; st.railF = 1;
     const cv = typeof document !== 'undefined' && document.getElementById('stage');
     if (!cv) return;
     const c = cv.getBoundingClientRect();
@@ -155,9 +196,20 @@ export function createDirector(camera) {
       // Up top only the mission block and the top bar count (the side instruments stand beside the car, not over it);
       // at the bottom whatever stands across the middle of the screen, where the row is.
       const top = r.top + r.bottom < 2 * c.top + c.height;
-      if (top && r.left < c.left + c.width * 0.15) st.bandL = Math.min(st.bandL, ndc(r.bottom + 24));
+      if (top && r.left < c.left + c.width * 0.15) {
+        st.bandL = Math.min(st.bandL, ndc(r.bottom + 24));
+        st.railR = Math.max(st.railR, (2 * (r.right - c.left)) / c.width - 1); st.railF = Math.min(st.railF, ndc(r.bottom));
+      }
       if (top && (el.dataset.hudBox === 'mission' || el.classList.contains('top-actions'))) st.bandT = Math.min(st.bandT, ndc(r.bottom + 24));
       else if (!top && r.right > c.left + c.width * 0.15 && r.left < c.left + c.width * 0.85) st.bandB = Math.max(st.bandB, ndc(r.top));
+    }
+    const ndcX = (x) => (2 * (x - c.left)) / c.width - 1;
+    for (const el of document.querySelectorAll(TOUCH_SEL)) {
+      const r = el.getBoundingClientRect();
+      if (r.width <= 1 || r.height <= 1 || r.top + r.bottom < 2 * c.top + c.height || !shown(el)) continue;
+      if (st.padN >= PAD_MAX) break;
+      const k = st.padN++ * 3;
+      st.pads[k] = ndc(r.top); st.pads[k + 1] = ndcX(r.left); st.pads[k + 2] = ndcX(r.right);
     }
   }
   const shown = (el) => {
@@ -181,7 +233,7 @@ export function createDirector(camera) {
     if (camera.aspect < 1) fitRowAcross(carPos, tanH);
     fitCarry(carPos);
     if (camera.aspect >= 1) keepFront(carPos, tanH);
-    st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true; st.carryY = carPos.y; st.carryT = st.t;
+    st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true; st.carryY = carPos.y; st.placeT = st.t;
   }
   // The carry is placed for the car at its highest over the row's front, and the span from the car down to the row's
   // foot closes by more than half as it comes down to the pad, so a frame held to the end left the car a speck in an
@@ -192,7 +244,7 @@ export function createDirector(camera) {
   // Not below RECUT_FLOOR (a low flight comes down to the landing rig soon after) nor within RECUT_GAP s of the last
   // placement (the reference's two cuts fall ≈ 0.37 s apart).
   const RECUT = 0.64, RECUT_MAX = 2, RECUT_FLOOR = 4, RECUT_GAP = 0.3;
-  const recut = (carPos) => camera.aspect >= 1 && st.recuts < RECUT_MAX && carPos.y < st.carryY * RECUT && carPos.y > RECUT_FLOOR && st.t - st.carryT >= RECUT_GAP;
+  const recut = (carPos) => camera.aspect >= 1 && st.recuts < RECUT_MAX && carPos.y < st.carryY * RECUT && carPos.y > RECUT_FLOOR && st.t - st.placeT >= RECUT_GAP;
   // A placement for the car low over the row's back half (a re-cut, 0118) stands near enough that, trucked ahead along
   // the flight, the row's front body went out past the frame's edge behind the car (13 % of the row off a 1366×1024
   // screen). Every placement on a screen wider than tall is checked (one that already has the body in frame is left
@@ -233,6 +285,24 @@ export function createDirector(camera) {
     const back = ROW_X + (z1 - z0) / 2 / (CARRY_EDGE * tanH);
     if (want.x < back) want.x = back;
     want.z = lookWant.z = (z1 + z0) / 2;
+  }
+  // Upright with the touch controls up (0128): the carry stands abeam of the row (0116) and the car comes down across it
+  // toward the bottom right, where the one-thumb pad is; over the row's back it flew behind the held, opaque pad (≥ 99 %
+  // of its box for half a second at 390×844). A pitch can't keep it clear: at the cut the car is already just under
+  // the left rail's foot, and it falls ≈ 290 px across the frame where the rail's foot to the pad's top is ≈ 150. So the
+  // carry hands over to the follow (bigger, tracking, the car mid-frame) as the car's box nears the controls' top in
+  // their column. Without touch controls (keyboard, a pad, the autopilot, sideways) nothing changes.
+  function carryUnderPad(carPos) {
+    if (!st.placed || camera.aspect >= 1 || st.padN === 0 || st.t - st.carryT < CARRY_MIN) return false;
+    tmp.copy(carPos).sub(st.carryPos).applyQuaternion(qInv.copy(camera.quaternion).invert());
+    if (tmp.z > -0.5) return false;
+    const tv = Math.tan(st.fov * Math.PI / 360), th = tv * camera.aspect;
+    const ny = (tmp.y - CAR_LOW) / -tmp.z / tv, nx = tmp.x / -tmp.z / th, hw = CAR_HALF / -tmp.z / th;
+    for (let i = 0; i < st.padN; i++) {
+      const k = i * 3;
+      if (ny < st.pads[k] && nx + hw > st.pads[k + 1] && nx - hw < st.pads[k + 2]) return true;
+    }
+    return false;
   }
   // The car's nose near the far edge of the locked-off frame (or the car behind it).
   function carryOut(carPos) {
@@ -385,7 +455,7 @@ export function createDirector(camera) {
         st.holdPos.set(carPos.x + HOLD_POS[0], HOLD_POS[1], carPos.z + HOLD_POS[2]);
         st.holdLook.set(carPos.x * 0.5, HOLD_LOOK[0], carPos.z + HOLD_LOOK[1]);
       }
-      if (st.shot === HOLD && (carPos.z < ROW_FRONT || st.t - st.launchT > HOLD_MAX)) { st.shot = CARRY; snap(); bandDirty = true; st.placed = false; st.recuts = 0; }
+      if (st.shot === HOLD && (carPos.z < ROW_FRONT || st.t - st.launchT > HOLD_MAX)) { st.shot = CARRY; snap(); bandDirty = true; st.placed = false; st.carryT = st.t; st.recuts = 0; }
       if (st.shot === HOLD) {
         camera.position.copy(st.holdPos);
         camera.lookAt(st.holdLook);
@@ -396,7 +466,7 @@ export function createDirector(camera) {
       // car from that far out walked the lit Wall across the frame (show-live-jets wall 104 → 188‰ on a phone). If
       // the car nears the far edge (a narrow screen, a long flight) it cuts to a fresh placement from there.
       // Past the row's back it cuts to the tracking follow down to the pad, which the landing rig eases out of.
-      if (st.shot === CARRY && carPos.z < ROW_Z0) { st.shot = FOLLOW; snap(); }
+      if (st.shot === CARRY && (carPos.z < ROW_Z0 || carryUnderPad(carPos))) { st.shot = FOLLOW; snap(); }
       if (st.shot === CARRY) {
         if (!st.placed || carryOut(carPos)) placeCarry(carPos);
         else if (recut(carPos)) { st.recuts++; placeCarry(carPos); }
@@ -417,9 +487,15 @@ export function createDirector(camera) {
       ease(dt, 3.2, 9);
       fovTo(48, dt);
     } else {
-      // Landed: low, ahead of the car as it rolls back down the approach.
-      want.set(carPos.x + 6.5, 1.25, carPos.z - 9);
-      lookWant.set(carPos.x, carPos.y + 0.2, carPos.z);
+      // Landed: low, ahead of the car as it rolls back down the approach. On the Show, on a screen narrower than it
+      // is tall (0119), the rig swings round to the car's open side, broadside on, looking across it at the lit launch
+      // complex, and lifts its aim so the car sits under the middle: from ahead, 0108's wider lens spent the
+      // lower 40 % of an upright phone on unlit floor at the camera's feet (78–98 % black).
+      // The Wall's landed shot is unchanged; so is a car that comes to rest with a parked body between it and the side stand.
+      const u = st.course === 'show' && !rowBlocks(carPos, LAND_SIDE[0]) ? upright() : 0;
+      const ox = LAND_AHEAD[0] + u * (LAND_SIDE[0] - LAND_AHEAD[0]), oz = LAND_AHEAD[1] + u * (LAND_SIDE[1] - LAND_AHEAD[1]);
+      want.set(carPos.x + ox, 1.25, carPos.z + oz);
+      lookWant.set(carPos.x, carPos.y + 0.2 + liftFor(u, Math.hypot(ox, oz), 40), carPos.z);
       ease(dt, 3, 8);
       fovTo(lens(40), dt);
     }
@@ -492,12 +568,89 @@ export function createDirector(camera) {
     st.fov = 56;
   }
 
+  // The title on an upright screen (0131): the panel fills it from the top bar to near the bottom, and the
+  // turntable's car stood behind its lower half (the Daily card). The lens is shifted (a view offset: the camera and
+  // its sway are unchanged) so the car's box sits in the taller clear band, under the panel or over it, when the
+  // panel covers more than TITLE_COVER of it. Measured once per change (a resize, the title's own reflow, a course
+  // or mode change), never per frame. The panel's scrim feathers less on that side (styles.css, data-car-band).
+  let titleDirty = true;
+  const titleEl = typeof document !== 'undefined' ? document.querySelector('[data-screen="title"]') : null;
+  if (titleEl && typeof ResizeObserver === 'function') new ResizeObserver(() => { titleDirty = true; }).observe(titleEl);
+  function titleFit(subject, carPos) {
+    titleDirty = false; st.titleFov = 0; st.titleSide = '';
+    const w = innerWidth, h = viewH || innerHeight;
+    let dy = 0, side = '';
+    if (titleEl && camera.aspect < 1 && titleEl.getClientRects().length) {
+      if (camera.view?.enabled) camera.clearViewOffset();
+      camera.fov = st.fov; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const corner = (x, y, z) => {
+        tmp.set(x, y, z).project(camera);
+        const px = (tmp.x + 1) / 2 * w, py = (1 - tmp.y) / 2 * h;
+        if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
+      };
+      if (subject) {
+        subject.updateMatrixWorld(true);
+        subject.traverseVisible((o) => {
+          const g = o.isMesh && !o.isInstancedMesh && o.geometry;
+          if (!g) return;
+          const bb = g.boundingBox || (g.computeBoundingBox(), g.boundingBox);
+          for (let i = 0; i < 8; i++) { want.set(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z).applyMatrix4(o.matrixWorld); corner(want.x, want.y, want.z); }
+        });
+      }
+      if (!(x1 > x0)) for (let i = 0; i < 8; i++) corner(carPos.x + (i & 1 ? 2.3 : -2.3), carPos.y + (i & 2 ? 1.3 : 0), carPos.z + (i & 4 ? 2.3 : -2.3));
+      // In the canvas's own coordinates (a fold's top segment starts below nothing, but say so).
+      const st0 = document.getElementById('stage')?.getBoundingClientRect().top || 0, rr = titleEl.getBoundingClientRect();
+      const r = { left: rr.left, right: rr.right, top: rr.top - st0, bottom: Math.min(h, rr.bottom - st0) }, area = Math.max(1, (x1 - x0) * (y1 - y0));
+      const cover = Math.max(0, Math.min(x1, r.right) - Math.max(x0, r.left)) * Math.max(0, Math.min(y1, r.bottom) - Math.max(y0, r.top)) / area;
+      if (cover > TITLE_COVER) {
+        let bar = 0;
+        for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const b = e.getBoundingClientRect(); if (b.height > 1) bar = Math.max(bar, b.bottom - st0); }
+        const above = r.top - bar, below = h - r.bottom;
+        side = above > below ? 'above' : 'below';
+        // A car taller than the band (the Lineup's close orbit) is drawn smaller with a wider lens: the screen scales
+        // about its middle by s.
+        const band = Math.max(above, below), boxH = y1 - y0;
+        let s = 1;
+        if (boxH > TITLE_FILL * band) {
+          const t0 = Math.tan(st.fov * Math.PI / 360);
+          const f = Math.min(TITLE_FOV_MAX, Math.atan(t0 * boxH / (TITLE_FILL * band)) * 360 / Math.PI);
+          if (f > st.fov) { st.titleFov = f; s = t0 / Math.tan(f * Math.PI / 360); }
+        }
+        dy = (side === 'above' ? (bar + r.top) / 2 : (r.bottom + h) / 2) - (h / 2 + ((y0 + y1) / 2 - h / 2) * s);
+        // The sway moves the car on screen; titleHold keeps its box's middle on the band's from the car's own point.
+        tmp.copy(carPos).project(camera);
+        st.titleY = (side === 'above' ? (bar + r.top) / 2 : (r.bottom + h) / 2);
+        st.titleAnchor = ((y0 + y1) / 2 - (1 - tmp.y) / 2 * h) * s;
+      }
+    }
+    st.titleSide = side;
+    if (side) titleEl.dataset.carBand = side; else if (titleEl) delete titleEl.dataset.carBand;
+    if (Math.abs(dy) >= 1) camera.setViewOffset(w, h, 0, -dy, w, h);
+    else if (camera.view?.enabled) camera.clearViewOffset();
+  }
+
+  // Each title frame after the fit: one projected point, and the offset moves by what the sway moved it (no traversal).
+  function titleHold(carPos) {
+    const v = camera.view;
+    if (!v?.enabled) return;
+    camera.updateMatrixWorld();
+    tmp.copy(carPos).project(camera);
+    const e = st.titleY - ((1 - tmp.y) / 2 * v.fullHeight + st.titleAnchor);
+    if (Math.abs(e) > 0.25) camera.setViewOffset(v.fullWidth, v.fullHeight, 0, v.offsetY - e, v.width, v.height);
+  }
+
   // The title's lens sits right of the panel on a wide screen. The replay's sits at the centre of the
   // region the results leave uncovered (0068): left of the sheet on a wide screen, above the peek on a
   // phone. A full-screen region is no shift at all.
   function frameOffset(mode) {
     const w = innerWidth, h = innerHeight;
-    if (mode === 'title' && w / h > 1.15) return camera.setViewOffset(w, h, -w * 0.2, h * 0.04, w, h);
+    if (mode === 'title' && w / h > 1.15) {
+      // Turned or widened from upright: the upright fit lets go (its offset, lens and scrim side).
+      st.titleSide = ''; st.titleFov = 0; if (titleEl) delete titleEl.dataset.carBand;
+      return camera.setViewOffset(w, h, -w * 0.2, h * 0.04, w, h);
+    }
+    if (mode === 'title') { titleDirty = true; return; }   // upright: titleFit places it on the next title frame
     if (mode === 'replay' && st.rr > 0) {
       const dx = w / 2 - (st.rl + st.rr) / 2, dy = h / 2 - (st.rt + st.rb) / 2;
       if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) return camera.setViewOffset(w, h, dx, dy, w, h);
@@ -516,10 +669,10 @@ export function createDirector(camera) {
   }
 
   // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup' })
-  function update(dt, time, { carPos, carVel, phase, mode, course = 'show' }) {
+  function update(dt, time, { carPos, carVel, phase, mode, course = 'show', subject = null }) {
     if (mode !== st.mode || course !== st.course) {
       st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.dip = 0; st.punch = 0;
-      st.hx = 0; st.hz = 1; st.cutT = 0;
+      st.hx = 0; st.hz = 1; st.cutT = 0; st.titleFov = 0; st.titleSide = '';
       snap(); frameOffset(mode);
     }
     st.t += dt;
@@ -538,6 +691,8 @@ export function createDirector(camera) {
     } else if (mode === 'title') titleLineup(time);
     else if (mode === 'replay') replay(carPos);
     else chase(carPos, carVel, phase, dt);
+    if (mode === 'title' && titleDirty && st.cutT <= 0 && innerWidth / innerHeight <= 1.15) titleFit(subject, carPos);
+    if (mode === 'title' && st.titleFov) st.fov = st.titleFov;
     if (st.shake > 0) {
       st.shake = Math.max(0, st.shake - dt * 3);
       tmp.set(Math.sin(time * 91), Math.sin(time * 77 + 1), 0).multiplyScalar(st.shake * 0.08);
@@ -550,6 +705,7 @@ export function createDirector(camera) {
     if (st.punch > 0.01) st.punch *= k; else st.punch = 0;
     const fov = st.fov - st.punch;
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    if (mode === 'title' && st.titleSide) titleHold(carPos);
   }
 
   // Hold a locked-off camera at `pos` for `seconds` (crash cuts); a mode change cancels it.

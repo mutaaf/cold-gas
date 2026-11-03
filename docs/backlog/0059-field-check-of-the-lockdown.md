@@ -1,7 +1,7 @@
 ---
 id: 0059
 title: Check the lockdown in the field: tiers, frame times and errors per device class from production
-status: ready
+status: dropped
 priority: P1
 size: S
 lens: performance
@@ -32,3 +32,6 @@ None (a measurement ticket); the report is the artefact.
 
 ## Out of scope
 Changing the Worker.
+
+
+> Dropped 2026-11-02 (scout): stale. The lockdown's P0s shipped and the funnel shows 1 human session, so a per-device-class field read has no data to read; the Critic and `npm run heal` already watch the digest.

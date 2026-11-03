@@ -10,18 +10,23 @@
 //        The AI designs a side quest as JSON; the server validates it against the schema
 //        (src/build/quest-schema.js) before it leaves. Data, never code.
 //   GET  /coldgas/api/providers → providers and the edge default
-//   POST /coldgas/api/scores  { log, assist, initials } → verified board entry
-//   GET  /coldgas/api/scores?board=today|all → top 20
+//   POST /coldgas/api/scores  { log, t, course, initials, dry? } → board entry scored from the run's telemetry
+//        (scoreRun on the server, after plausibility checks; no replay). `dry: true` runs every check and
+//        answers the card and the rank it would get, storing nothing (scripts/board-probe.mjs).
+//   GET  /coldgas/api/scores?board=today|all[&course=show|wall|lineup] → top 20 (every course without one)
 //   POST /coldgas/api/obs  the client's observability batch (src/obs/ → src/worker/obs.js)
 //   GET  /coldgas/api/obs/digest → top signatures, regressions vs the previous build, frame percentiles
 //
-// The client never sends a score: the board replays the input log through the same deterministic
-// sim (src/sim/) and scores it itself; the judges score the run's telemetry with the same code.
-// The AI writes words, never numbers.
+// The client never sends a score: the board and the judges both score the run's telemetry (the client's
+// own run of the same deterministic sim, src/sim/) with the server's `scoreRun`. A replay of the whole log
+// costs ≈150 ms of CPU against the free plan's 10 ms (Cloudflare answers 1102 past it), so the board
+// checks the telemetry for plausibility against the log instead (boardCheck). The AI writes words, never
+// numbers.
 // Bring-your-own keys are used for one call and never stored or logged.
 // Operator-owned (agents/control.json → frozen_paths).
 import { simulate, MAX_TICKS, INPUT_KEYS, isLogEntryLength, SIM_VERSION } from '../sim/run.js';
 import { scoreRun } from '../sim/judge.js';
+import { CAR } from '../sim/vehicle.js';
 import { SYSTEM, userPrompt, parseWords, estimateTokens } from './ai/prompt.js';
 import { PROVIDERS, EDGE_MODELS, streamJudge, listModels, pickModel, costUsd, describeError } from './ai/providers.js';
 import { detectProvider } from '../ai/detect.js';
@@ -54,6 +59,17 @@ async function ensureTables(db) {
     db.prepare('CREATE TABLE IF NOT EXISTS ai_usage (bucket TEXT PRIMARY KEY, n INTEGER NOT NULL)'),
     db.prepare('CREATE TABLE IF NOT EXISTS replays (k TEXT PRIMARY KEY, card TEXT NOT NULL, ticks INTEGER NOT NULL, created INTEGER NOT NULL)'),
   ]);
+  // The board's course and tier (2026-10-30): added to a `scores` table made before them, once. Rows from
+  // before carry their course in their facts (the Wall's and the Show's) or are the Lineup's.
+  const cols = new Set(((await db.prepare('PRAGMA table_info(scores)').all()).results || []).map((c) => c.name));
+  const add = [];
+  if (!cols.has('course')) add.push(db.prepare('ALTER TABLE scores ADD COLUMN course TEXT'));
+  if (!cols.has('tier')) add.push(db.prepare('ALTER TABLE scores ADD COLUMN tier TEXT'));
+  if (add.length) {
+    await db.batch(add).catch((err) => { if (!/duplicate column/i.test(String(err?.message))) throw err; });   // a racing isolate added it
+    await db.prepare("UPDATE scores SET course = COALESCE(json_extract(facts, '$.course'), 'lineup') WHERE course IS NULL").run();
+  }
+  await db.prepare('CREATE INDEX IF NOT EXISTS scores_course_day ON scores(course, day, total DESC)').run();
   tablesReady = true;
 }
 
@@ -98,10 +114,10 @@ export function verify(body) {
 // --- Replays, once per run --------------------------------------------------------------------------
 // A replay is the costliest thing this Worker does: ≈150 ms of CPU for the Show on the rigid-body
 // engine, where the free plan budgets 10 ms a request and tolerates only the odd heavy one (past
-// that, Cloudflare answers 1102 "exceeded resource limits"). A run is judged and then, often,
-// submitted to the board: the second request reads the card the first one earned instead of
-// replaying it again. The key is the exact log, course and SIM_VERSION, and only the server writes
-// entries, so a client can only ever find the card its own log earned.
+// that, Cloudflare answers 1102 "exceeded resource limits"). Only an old client's judging (no `t`)
+// still replays; a log judged twice reads the card the first replay earned. The key is the exact
+// log, course and SIM_VERSION, and only the server writes entries, so a client can only ever find
+// the card its own log earned. The board never replays (boardCheck).
 const memo = new Map();
 export const replayStats = { replays: 0 };
 const MEMO_MAX = 64, REPLAY_TTL_MS = 2 * 86400e3;
@@ -127,7 +143,11 @@ async function verified(body, db) {
     const v = verify(body);
     replayStats.replays++;
     hit = { card: v.card, ticks: v.run.tick };
-    if (db) await db.prepare('INSERT OR REPLACE INTO replays (k, card, ticks, created) VALUES (?, ?, ?, ?)').bind(k, JSON.stringify(hit.card), hit.ticks, Date.now()).run();
+    if (db) {
+      await db.prepare('INSERT OR REPLACE INTO replays (k, card, ticks, created) VALUES (?, ?, ?, ?)').bind(k, JSON.stringify(hit.card), hit.ticks, Date.now()).run();
+      // Cards are only needed between a run's judgings: keep two days of them.
+      await db.prepare('DELETE FROM replays WHERE created < ?').bind(Date.now() - REPLAY_TTL_MS).run().catch(() => {});
+    }
   }
   memo.delete(k);
   memo.set(k, hit);
@@ -140,7 +160,7 @@ async function verified(body, db) {
 // first few, Cloudflare answers 1102). The judges only write words, so they work from the run's
 // telemetry (`run.t`, the client's own replay of the same deterministic sim), scored here by the
 // same `scoreRun`. Only numbers come from the client: every name, verdict, category and line of the
-// prompt is the server's. The board (POST /scores) still replays every log it accepts.
+// prompt is the server's. The board (POST /scores) scores the same way, after boardCheck (below).
 const T_KEY = /^[A-Za-z][A-Za-z0-9]{0,31}$/;
 const T_ENUMS = { course: ['show', 'wall', 'lineup'], tier: ['assist', 'pro', 'advanced'] };
 const finite = (v) => typeof v === 'number' && Number.isFinite(v) && Math.abs(v) < 1e7;
@@ -170,11 +190,91 @@ function telemetryCard(body, p) {
   const t = cleanTelemetry(body?.t);
   if (!t || t.course !== p.course) return null;
   try {
+    // The tier is the log's, as on the board (tierFromLog), never the client's own word for it.
+    const tier = isInt(t.endTick) ? tierFromLog(p.log, t) : null;
     const assist = p.log.some((e) => e[INPUT_KEYS.indexOf('assist') + 1] !== 0);
-    const card = scoreRun(t, { assist });
+    const card = scoreRun(tier ? { ...t, tier } : t, { assist });
     if (!Number.isFinite(card.total) || card.total < 0 || card.total > 100) return null;
     return { card, ticks: finite(t.endTick) ? t.endTick : null, replayed: false };
   } catch { return null; }
+}
+
+// --- The board, from telemetry ------------------------------------------------------------------
+// The owner's decision (2026-10-30): the board is scored from the client's telemetry exactly as the
+// judges are, with no replay on the submit path. The telemetry can't be proven without a replay, so it
+// has to be *plausible*: consistent with the input log it came with and inside what the car can
+// physically do (src/sim/spec.js). Every bound is generous against the references (scripts/fly.mjs: the
+// Show scores 94.0 with sink 0.817 m/s, 4.2 s of air, 27.4 m apex, 5 rad/s peak rotation) so no honest
+// run is ever refused; a forged one has to stay inside them and agree with its own log.
+const AIR_MAX_S = 20;          // ≤ 10 s of hover on all 297 kg of N2 at Isp 72 s (2,150 kg dry), plus the fall
+const APEX_MAX = 300;          // m: the lip (≈27 m) plus every kilogram of gas fired straight up (78 kN down-jets)
+// m/s, any speed (sink included): a run-up (≤ 25 m/s), plus every kilogram of gas as ideal Δv (Isp 72 s ·
+// g0 · ln(2,447 / 2,150) ≈ 91 m/s; the 80 kN rear jets reach ≈ 94 m/s), plus a free fall from APEX_MAX (≈ 77 m/s).
+const SPEED_MAX = 200;
+const SPIN_MAX = 10;           // rad/s of roll or pitch, averaged over the flight: twice the references' 5 rad/s peak
+const SPAN_MAX = 500;          // m: past any course's runout
+const isInt = (v) => Number.isInteger(v);
+const within = (v, lo, hi) => finite(v) && v >= lo && v <= hi;
+
+// The tier the log itself was flown in, as src/sim/run.js decides it (any Assist tick: Assist; manual on
+// every tick from the ramp (or the release) to touchdown: Advanced; else Pro). The window comes from the
+// telemetry's ticks, which have to agree with the log; the client's own `tier` is never read.
+export function tierFromLog(log, t) {
+  const A = INPUT_KEYS.indexOf('assist') + 1, M = INPUT_KEYS.indexOf('manual') + 1;
+  const from = t.rampTick >= 0 ? t.rampTick : t.airStartTick, to = t.touchTick >= 0 ? t.touchTick : t.endTick;
+  let assist = false, manual = false, pro = false;
+  for (let i = 0; i < log.length && log[i][0] <= t.endTick; i++) {
+    const e = log[i], a = e[A] || 0, m = e[M] || 0, next = i + 1 < log.length ? log[i + 1][0] : t.endTick + 1;
+    if (a) assist = true;
+    else if (m) manual = true;
+    else if (from >= 0 && e[0] <= to && next > from) pro = true;
+  }
+  return assist ? 'assist' : manual && !pro ? 'advanced' : 'pro';
+}
+
+// → { card, tier, course } or { error[, why] } for a board entry: the log (parsed), its telemetry, the
+// plausibility checks, then the server's own scoreRun.
+export function boardCheck(body) {
+  if (!body || typeof body !== 'object') return { error: 'bad run' };
+  if (!T_ENUMS.course.includes(body.course)) return { error: 'course' };
+  const p = parseRun(body);
+  if (!p || p.log[0][0] !== 0) return { error: 'bad run' };
+  if (body.t == null) return { error: 'update' };   // a client from before the board scored telemetry
+  const t = cleanTelemetry(body.t);
+  const bad = (why) => ({ error: 'implausible', why });
+  if (!t || t.course !== p.course) return bad('course');
+  const lastTick = p.log[p.log.length - 1][0];
+  // The run's clock: it ended inside the cap, after its last logged input (the aftermath is never logged).
+  if (!isInt(t.endTick) || t.endTick <= 0 || t.endTick > MAX_TICKS || lastTick > t.endTick) return bad('endTick');
+  if (!isInt(t.airStartTick) || !isInt(t.touchTick)) return bad('ticks');
+  if (!(t.airStartTick >= 0 && t.touchTick > t.airStartTick && t.touchTick <= t.endTick)) return { error: 'no jump' };
+  const rampTick = t.rampTick ?? -1;
+  if (!isInt(rampTick) || rampTick > t.airStartTick + 24) return bad('rampTick');
+  const airS = (t.touchTick - t.airStartTick) / 240;
+  if (airS > AIR_MAX_S) return bad('air');
+  // Every number the scorer reads, finite and inside the car's envelope.
+  const gasTouch = t.airAtTouch ?? t.airEnd;
+  const checks = {
+    sink: within(t.sink, 0, SPEED_MAX), tiltDeg: within(t.tiltDeg, 0, 180), headingDeg: within(t.headingDeg, -180, 180),
+    wheelSpreadMs: within(t.wheelSpreadMs, 0, 1000), apex: within(t.apex, -5, APEX_MAX),
+    rollAccum: finite(t.rollAccum) && Math.abs(t.rollAccum) <= SPIN_MAX * airS + 0.5,
+    pitchAccum: finite(t.pitchAccum) && Math.abs(t.pitchAccum) <= SPIN_MAX * airS + 0.5,
+    offAxis: within(t.offAxis ?? 0, 0, 1e3), lateral: within(t.lateral, -SPAN_MAX, SPAN_MAX), landZ: within(t.landZ, -SPAN_MAX, SPAN_MAX),
+    gas: within(t.airEnd, 0, CAR.airMass) && within(gasTouch, t.airEnd - 0.5, CAR.airMass) && within(t.airAtLaunch ?? CAR.airMass, gasTouch - 0.5, CAR.airMass + 0.01),
+    speed: within(t.maxSpeed ?? 0, 0, SPEED_MAX) && within(t.launchSpeed, 0, (t.maxSpeed ?? SPEED_MAX) + 0.5),
+    clearance: t.minClearance == null || within(t.minClearance, -5, APEX_MAX),
+    progress: within(t.progress ?? 0, 0, 1.05), invertedTime: within(t.invertedTime ?? 0, 0, t.endTick / 240),
+    height: within(t.maxRampHeight ?? 0, 0, APEX_MAX) && within(t.launchHeight ?? 0, -5, APEX_MAX),
+    damage: t.damage == null || within(t.damage.pct, 0, 100),
+  };
+  for (const [k, ok] of Object.entries(checks)) if (!ok) return bad(k);
+  // The tier is the log's: the multiplier can't be claimed, only flown.
+  const tier = tierFromLog(p.log, t);
+  let card;
+  try { card = scoreRun({ ...t, tier }, { assist: tier === 'assist' }); } catch { return bad('score'); }
+  if (!Number.isFinite(card.total) || card.total < 0 || card.total > 100) return bad('total');
+  if (!card.facts.jumped || card.total <= 0) return { error: 'no jump' };
+  return { card, tier, course: p.course };
 }
 
 // --- The streaming judge ------------------------------------------------------------------------
@@ -403,29 +503,33 @@ async function handle(req, env, ctx) {
     if (!db) return json({ error: 'no board' }, 503);
     await ensureTables(db);
     const body = await req.json().catch(() => null);
-    const initials = String(body?.initials || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
+    const dry = body?.dry === true;
+    const initials = String(body?.initials || (dry ? 'DRY' : '')).toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
     if (initials.length !== 3) return json({ error: 'initials' }, 400);
-    const v = await verified(body, db);
-    if (!v) return json({ error: 'bad run' }, 400);
-    if (!v.card.facts.jumped || v.card.total <= 0) return json({ error: 'no jump' }, 400);
-    if ((await bump(db, `submit:${await ipHash(req)}:${hour()}`)) > 60) return json({ error: 'slow down' }, 429);
-    await db.prepare('INSERT INTO scores (day, initials, total, verdict, facts, created) VALUES (?, ?, ?, ?, ?, ?)')
-      .bind(day(), initials, v.card.total, v.card.verdict, JSON.stringify(v.card.facts), Date.now()).run();
-    const rank = await db.prepare('SELECT COUNT(*) AS r FROM scores WHERE day = ? AND total > ?').bind(day(), v.card.total).first();
-    // Cards are only needed between a run's judging and its submission: keep two days of them.
-    ctx.waitUntil(db.prepare('DELETE FROM replays WHERE created < ?').bind(Date.now() - REPLAY_TTL_MS).run().catch(() => {}));
-    return json({ card: v.card, rank: (rank?.r ?? 0) + 1 });
+    const v = boardCheck(body);
+    if (v.error) return json(v, 400);
+    if ((await bump(db, `${dry ? 'dry' : 'submit'}:${await ipHash(req)}:${hour()}`)) > 60) return json({ error: 'slow down' }, 429);
+    const { card, tier, course } = v;
+    if (!dry) {
+      await db.prepare('INSERT INTO scores (day, initials, total, verdict, facts, created, course, tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+        .bind(day(), initials, card.total, card.verdict, JSON.stringify(card.facts), Date.now(), course, tier).run();
+    }
+    // The rank today on this course (a dry run: the rank it would get).
+    const rank = await db.prepare('SELECT COUNT(*) AS r FROM scores WHERE day = ? AND course = ? AND total > ?').bind(day(), course, card.total).first();
+    return json({ card, course, tier, rank: (rank?.r ?? 0) + 1, dry });
   }
 
   if (path === '/scores' && req.method === 'GET') {
     if (!db) return json({ rows: [] });
     await ensureTables(db);
     const board = url.searchParams.get('board') === 'all' ? 'all' : 'today';
-    const q = board === 'all'
-      ? db.prepare('SELECT initials, total, verdict, facts, day FROM scores ORDER BY total DESC, created ASC LIMIT 20')
-      : db.prepare('SELECT initials, total, verdict, facts, day FROM scores WHERE day = ? ORDER BY total DESC, created ASC LIMIT 20').bind(day());
-    const { results } = await q.all();
-    return json({ board, rows: results.map((r) => ({ ...r, facts: JSON.parse(r.facts) })) });
+    const course = T_ENUMS.course.includes(url.searchParams.get('course')) ? url.searchParams.get('course') : null;
+    const where = [], args = [];
+    if (board === 'today') { where.push('day = ?'); args.push(day()); }
+    if (course) { where.push('course = ?'); args.push(course); }
+    const q = db.prepare(`SELECT initials, total, verdict, facts, day, course, tier FROM scores${where.length ? ` WHERE ${where.join(' AND ')}` : ''} ORDER BY total DESC, created ASC LIMIT 20`);
+    const { results } = await (args.length ? q.bind(...args) : q).all();
+    return json({ board, course, rows: results.map((r) => ({ ...r, facts: JSON.parse(r.facts) })) });
   }
 
   return json({ error: 'not found' }, 404);

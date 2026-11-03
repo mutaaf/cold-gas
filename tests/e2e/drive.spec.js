@@ -15,6 +15,7 @@ test('Free Drive: pick Stelvio on the title, the car drives up the real road', a
   test.slow();
   const seen = watch(page);
   await page.goto('/coldgas/?gfx=low');
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   await expect(page.locator('.fd-card')).toHaveCount(4);
   await expect(page.locator('.fd-card[data-road="stelvio"]')).toContainText('Stelvio Pass');

@@ -1,12 +1,12 @@
 ---
 id: 0069
 title: The title's fine print, controls row and spec strip stay legible over the 3D scene
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: accessibility
 created: 2026-10-22
-pr:
+pr: 198
 by: scout
 ---
 

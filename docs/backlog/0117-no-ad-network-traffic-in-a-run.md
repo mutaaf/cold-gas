@@ -70,3 +70,16 @@ Anything the Marquee loader or AdSense does on the title itself. Slot policy and
 Still open on production `0856de8`. `startAds` is unchanged: it still runs at idle whatever the mode
 (`src/main.js:619-620`), and `titleBanner` is unchanged (`src/ads.js:48`). This is the only P0 in the
 critic's queue. The ticket's bars stand as written.
+
+## Critic re-review 2026-10-31 22:15
+**Passes on production** (entry `index-CFSPxIcK.js`, #183). The probe was Playwright on Chromium (SwiftShader) with
+`?gfx=low`. Each third-party request was bucketed by the in-page `S.mode` at the moment it finished, on one clock.
+- **The four starts in the AC all hit 0 third-party requests in `countdown` or `live` at 390×844 touch:** Jump at once,
+  Jump 2 s after the loader's config, `?play=jump`, and Retry from the results. At 1440×900, Jump at config + 2 s and at
+  config + 5 s also gave 0.
+- **Under `?play=jump`, `/ads/v1/ads.js` was first requested on the results** (+21.6 s), not in the countdown.
+- **Jump at config + 9 s** (the slot placed and settled on the title) put 30 req / 408 KB in `title` and 1 empty beacon
+  in `countdown`.
+- **What still leaks is the window just after the 4 s dwell.** A Jump at config + 5 s on the phone gave **24 req / 393 KB
+  in the countdown and 6 in the live run.** `adsbygoogle.js` had started on the title only about 0.1 s before the click.
+  That case is outside this ticket's four starts, so it is filed as 0121, not bounced.

@@ -17,6 +17,7 @@ test('Endless: pick it with a seed, drive 2 km of generated road', async ({ page
   test.slow();
   const seen = watch(page);
   await page.goto('/coldgas/?gfx=low');
+  await page.evaluate(() => { document.querySelector('[data-play-more]').open = true; });   // More ways to play (the title's disclosure)
   await page.locator('[data-drive-open]').click();
   await expect(page.locator('[data-road]')).toHaveCount(5);       // four real roads and Endless
   const card = page.locator('[data-road="endless"]');

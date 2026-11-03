@@ -30,13 +30,13 @@ jobs:
       - run: npm run build
 
   e2e:
-    name: e2e ${{ matrix.shard }}/3
+    name: e2e ${{ matrix.shard }}/4
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 35   # four ways since #181: the suite (≈ 101 min on these runners) outgrew three
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -52,7 +52,7 @@ jobs:
           node -e "require('@playwright/test').chromium.launch().then((b) => b.close())" && exit 0
           for i in 1 2 3; do timeout 240 npx playwright install --with-deps chromium && exit 0; echo "browser deps attempt $i failed; retrying"; done; exit 1
         timeout-minutes: 14
-      - run: npx playwright test --shard=${{ matrix.shard }}/3
+      - run: npx playwright test --shard=${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v4
         if: failure()
         with:
@@ -96,14 +96,14 @@ jobs:
 
   # Flake guard: e2e specs this PR adds or changes run several times in a row, with no retries.
   guard:
-    name: Flake guard ${{ matrix.shard }}/3 (changed e2e specs, repeated)
+    name: Flake guard ${{ matrix.shard }}/4 (changed e2e specs, repeated)
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
-    timeout-minutes: 35   # split 3 ways: a PR touching 14 specs ran one guard past 50 minutes
+    timeout-minutes: 35   # split 4 ways: a PR touching 14 specs ran one of 2 past 50 minutes, #181's 20 one of 3 past 35
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3]
+        shard: [1, 2, 3, 4]
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -122,7 +122,7 @@ jobs:
       - if: hashFiles('scripts/e2e-repeat-changed.mjs') != ''
         run: node scripts/e2e-repeat-changed.mjs
         env:
-          E2E_SHARD: ${{ matrix.shard }}/3
+          E2E_SHARD: ${{ matrix.shard }}/4
       - uses: actions/upload-artifact@v4
         if: failure()
         with:

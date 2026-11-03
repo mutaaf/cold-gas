@@ -17,7 +17,10 @@ import { scoreRun } from '../src/sim/judge.js';
 import { SHOW } from '../src/sim/courses.js';
 import { SPEC } from '../src/sim/spec.js';
 import { initPhysics } from '../src/sim/engine.js';
-await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
+await initPhysics();
+// --dump=<file>: every run's telemetry as JSON (re-score offline with a candidate judge).
+const DUMP = (process.argv.find((a) => a.startsWith('--dump=')) || '').slice(7);
+const dumped = [];   // the rigid-body engine's WASM (src/sim/engine.js)
 
 const args = process.argv.slice(2);
 const N = +(args.find((a) => /^\d+$/.test(a)) || 300);
@@ -134,6 +137,7 @@ for (let n = 0; n < N; n++) {
     stepRun(run, inp);
   }
   const t = run.t, s = scoreRun(t);
+  if (DUMP) dumped.push({ t: { ...t }, why: null });
   let why = '';
   if (t.airStartTick < 0) why = t.fellOff ? 'climb: fell off' : 'climb: stalled';
   else if (t.fellOff) why = 'climb: fell off';
@@ -154,3 +158,4 @@ totals.sort((a, b) => a - b);
 console.log(`${assistMode ? 'Assist' : 'Pro'} · cues ${cues}: ${ok}/${N} landed clean (${Math.round((100 * ok) / N)}%), ${onPad} inside the 7 m ring; median clean score ${totals[Math.floor(totals.length / 2)] ?? '–'}`);
 console.log('  by when they braked:', Object.entries(byClass).map(([k, [a, b]]) => `${k} ${a}/${b}`).join(' · '));
 console.log('  failures:', JSON.stringify(fails));
+if (DUMP) { const { writeFileSync } = await import('node:fs'); writeFileSync(DUMP, JSON.stringify(dumped)); }

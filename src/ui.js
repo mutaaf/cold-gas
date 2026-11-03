@@ -7,6 +7,7 @@ import { speedK, lenK, rateK, massK, kgfK, pressK, k as uk, u as uu, onUnits, lo
 import { ZONES, hitCost } from './sim/damage.js';
 import { HIT, SCRAPE, WHEEL, PART } from './sim/impacts.js';
 import { initHudMode } from './hud-mode.js';
+import { countSlot } from './count-slot.js';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 
@@ -109,7 +110,37 @@ export function createUI() {
   // A unit swap re-renders the next ask of the same message in the new units.
   onUnits(() => { if (cue.on) cue.html = ''; });
 
-  ui.countdown = (n) => { ui.count.innerHTML = n ? `<span${typeof n === 'string' ? ' class="word"' : ''}>${n}</span>` : ''; if (n) tick(); };
+  // The numeral stands in the free band of the screen (0070, src/count-slot.js): measured once as a countdown
+  // starts and held for its ticks. By then the HUD, the top bar and the touch controls are placed, and a cue the
+  // countdown carries (a tip, the reference's name, a tier change) is up: startRun sets them before the first tick.
+  // Everything the HUD audit holds the numeral clear of (scripts/hud-audit.mjs BOXES); a cue only while it shows.
+  const COUNT_CLEAR = '.top .brand, .top-actions, [data-screen="hud"] [data-hud-box], [data-hud-toggle], [data-drill-bar], [data-stick], [data-stick-hint], .buttons, .tbtn, [data-onethumb], [data-nozzle-pad] svg, [data-cue].on';
+  const placeCount = (span) => {
+    const st = ui.count.style;
+    st.removeProperty('--count-top'); st.removeProperty('--count-bot'); st.removeProperty('--count-scale');
+    const vw = innerWidth, vh = innerHeight, boxes = [];
+    for (const el of document.querySelectorAll(COUNT_CLEAR)) {
+      const r = el.getBoundingClientRect();
+      if (el.closest('[hidden]')) continue;
+      const cs = getComputedStyle(el);
+      if (r.width < 2 || r.height < 2 || cs.visibility === 'hidden' || cs.display === 'none') continue;
+      boxes.push({ x: r.left, r: r.right, y: r.top, b: r.bottom });
+    }
+    const s = countSlot(vh, boxes, span.offsetWidth, span.offsetHeight, vw);
+    if (s.top) st.setProperty('--count-top', `${s.top}px`);
+    if (s.bottom) st.setProperty('--count-bot', `${s.bottom}px`);
+    if (s.scale < 1) st.setProperty('--count-scale', String(s.scale));
+  };
+  // Placed on a countdown's first beat, or when the beat changes kind (a digit to READY: a retry from inside a
+  // countdown), and again if the screen changes shape under it (a turn, a fold, a resized window).
+  ui.countdown = (n) => {
+    const prev = ui.count.firstElementChild, word = typeof n === 'string';
+    ui.count.innerHTML = n ? `<span${word ? ' class="word"' : ''}>${n}</span>` : '';
+    if (!n) return;
+    if (!prev || prev.classList.contains('word') !== word) placeCount(ui.count.firstElementChild);
+    tick();
+  };
+  addEventListener('resize', () => { const span = ui.count.firstElementChild; if (span) placeCount(span); });
 
   // The flight's phases, as the timeline shows them (src/main.js decides which one you're in).
   const rollLbl = $('.adi-roll .h-lbl');
@@ -381,20 +412,33 @@ export function createUI() {
   // The run line over the actions: which run this is, and how it stands against your best on this
   // device (`best` is the stored best before this run; null when there's none yet). n = 0: the
   // reference jump, which isn't yours.
+  // A crash or a wreck is never celebrated (no "first mark", no "new best"): it gets a neutral tag. Run 1
+  // reads its tier plainly (no "Pro pays ×1.08" before the player has landed anything).
+  let lastCard = null;
   ui.runline = (n, best, total) => {
     const line = $('[data-runline]'), pb = $('[data-r-pb]');
     line.hidden = !n;
     if (!n) return;
     $('[data-r-attempt]').textContent = `Run ${n}`;
+    const f = lastCard?.facts || {};
+    const crashed = !!(f.crashed || f.damagePct >= WRECK_PCT);
     const d = best == null ? null : Math.round((total - best) * 10) / 10;
-    line.dataset.state = best == null ? (total > 0 ? 'first' : '') : d > 0 ? 'best' : d === 0 ? 'tie' : 'behind';
-    pb.textContent = best == null ? (total > 0 ? 'Your first mark on this event' : '')
-      : d > 0 ? `New best · +${d.toFixed(1)}` : d === 0 ? `Equals your best · ${best.toFixed(1)}` : `Best ${best.toFixed(1)} · ${d.toFixed(1)} to beat it`;
+    if (crashed && (best == null || d >= 0)) {
+      line.dataset.state = 'neutral';
+      pb.textContent = !f.jumped ? 'No jump · not a mark yet' : f.damagePct >= WRECK_PCT ? 'Wrecked · not a mark yet' : 'Crashed · not a mark yet';
+    } else {
+      line.dataset.state = best == null ? (total > 0 ? 'first' : '') : d > 0 ? 'best' : d === 0 ? 'tie' : 'behind';
+      pb.textContent = best == null ? (total > 0 ? 'Your first mark on this event' : '')
+        : d > 0 ? `New best · +${d.toFixed(1)}` : d === 0 ? `Equals your best · ${best.toFixed(1)}` : `Best ${best.toFixed(1)} · ${d.toFixed(1)} to beat it`;
+    }
+    if (n === 1 && lastCard) $('[data-r-tier]').innerHTML = `Flown in <b>${(TIERS[lastCard.tier] || TIERS.assist).label}</b>`;
   };
 
   // `practice`: { drill, result } for a drill (not scored: no panel, no board).
   ui.results = (card, practice = null) => {
     const sheet = ui.screens.results;
+    lastCard = practice ? null : card;
+    ui.liveCall(null);
     sheet.toggleAttribute('data-practice', !!practice);
     $('[data-drill-card]').hidden = !practice;
     $('[data-coach]').hidden = true;
@@ -494,6 +538,9 @@ export function createUI() {
       // The words arrive in SI (the Worker writes the prompt from the verified card); they read in
       // the player's units, and re-read on a flip once typed.
       const src = words[id] || '', text = localize(src);
+      // Streamed in already (ui.liveWords): the final words are the same, so no second typewriter.
+      if (q.dataset.live === src && src) { delete q.dataset.live; q.classList.remove('typing'); unitText(q, src); continue; }
+      delete q.dataset.live;
       delete q.dataset.uSrc;
       let i = 0;
       q.textContent = '';
@@ -505,6 +552,52 @@ export function createUI() {
         else { delete typing[id]; q.classList.remove('typing'); unitText(q, src); }
       }, delay);
     }
+  };
+
+  // The judges' words as the call streams them (src/ai/theatre.js parses the stream): each quote shows what
+  // has arrived so far; ui.words then lands the final set without typing it twice.
+  ui.liveWords = (words) => {
+    if (!words) return;
+    for (const id in typing) { clearTimeout(typing[id]); delete typing[id]; }
+    if (words.headline) unitText($('[data-r-headline]'), words.headline);
+    for (const id of ['engineer', 'coordinator', 'designer']) {
+      const q = document.querySelector(`[data-judge="${id}"] .quote`);
+      if (!q || !words[id] || q.dataset.live === words[id]) continue;
+      q.dataset.live = words[id];
+      q.textContent = localize(words[id]);
+      q.classList.add('typing');
+    }
+  };
+
+  // The panel's call as a strip near the top of the sheet (invariant 5½: every call visible): live, the model,
+  // where it runs and the tokens so far, with "Watch the call" while the full theatre is put away; then the
+  // call's receipt in one line (the full receipt, with Inspect, is further down). null clears it.
+  const strip = $('[data-call]');
+  let stripT0 = 0;
+  ui.liveCall = (st, { onWatch } = {}) => {
+    if (!strip) return;
+    if (!st) { strip.hidden = true; strip.innerHTML = ''; delete strip.dataset.phase; stripT0 = 0; return; }
+    const esc = (x) => String(x ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+    const model = String(st.model || '').replace(/^@cf\/[^/]+\//, '');
+    if (!stripT0) stripT0 = performance.now();
+    const fresh = strip.dataset.phase !== st.phase || strip.dataset.docked !== String(!!st.docked);
+    strip.dataset.phase = st.phase; strip.dataset.docked = String(!!st.docked);
+    if (fresh || !strip.firstChild) {
+      const live = st.phase !== 'done' && st.phase !== 'error' && st.phase !== 'receipt';
+      strip.innerHTML = `<span class="cs-dot${live ? ' live' : st.ok === false || st.phase === 'error' ? ' off' : ''}" aria-hidden="true"></span>`
+        + `<span class="cs-text"><b class="cs-what"></b> <code class="cs-model"></code><span class="cs-stats"></span></span>`
+        + (live && st.docked ? '<button type="button" class="btn ghost cs-watch" data-call-watch>Watch the call</button>' : '');
+      const w = strip.querySelector('[data-call-watch]');
+      if (w) w.onclick = onWatch;
+    }
+    const what = st.phase === 'receipt' ? (st.ok ? 'Judged by' : 'AI unavailable · local lines') : st.phase === 'error' ? 'The panel’s call failed:' : st.phase === 'done' ? 'Judged by' : st.tokens ? 'The panel is writing' : 'The panel is deliberating…';
+    strip.querySelector('.cs-what').textContent = what;
+    strip.querySelector('.cs-model').textContent = st.phase === 'error' ? (st.error || '') : model;
+    const stats = st.phase === 'receipt'
+      ? (st.ok ? [`${st.inTokens} → ${st.outTokens} tok`, st.costUsd != null ? `$${st.costUsd.toFixed(6)}` : 'billed by provider'] : [st.error || 'offline'])
+      : [st.where || '', st.tokens ? `${st.tokens} tok` : ''];
+    strip.querySelector('.cs-stats').innerHTML = stats.filter(Boolean).map((x) => `<span>${esc(x)}</span>`).join('');
+    strip.hidden = false;
   };
 
   // The AI receipt: what ran, where, how fast, what it cost, and the call itself on request.
@@ -524,21 +617,24 @@ export function createUI() {
         <h4>System</h4><pre>${esc(meta.system)}</pre><h4>Prompt</h4><pre>${esc(meta.user)}</pre>
         ${meta.raw ? `<h4>Response</h4><pre>${esc(meta.raw)}</pre>` : ''}</details>` : ''}`;
     r.hidden = false;
+    ui.liveCall({ phase: 'receipt', ok: !!meta.ok, model: meta.ok ? meta.model : '', inTokens: meta.inTokens, outTokens: meta.outTokens, costUsd: meta.costUsd, error: meta.error });
     const rp = r.querySelector('[data-rc-replay]');   // local lines: no call to replay
     if (rp) rp.onclick = onReplay;
     r.querySelector('[data-rc-change]').onclick = onChange;
   };
 
-  ui.board = (rows) => {
+  ui.board = (rows, empty = '') => {
     const ol = $('[data-board-rows]');
     ol.innerHTML = '';
     if (!rows) { ol.innerHTML = '<li class="empty">The board is offline right now.</li>'; return; }
-    if (!rows.length) { ol.innerHTML = '<li class="empty">No jumps yet today. Be the first.</li>'; return; }
+    if (!rows.length) { ol.innerHTML = `<li class="empty">${empty || 'No jumps yet today. Be the first.'}</li>`; return; }
     for (const r of rows) {
       const li = document.createElement('li');
       li.innerHTML = '<span class="ini"></span><span class="v"></span><span class="t"></span>';
       li.querySelector('.ini').textContent = r.initials;
       unitText(li.querySelector('.v'), `${r.verdict} · ${r.facts.rollDeg}° · ${r.facts.sink} m/s`);
+      // The tier it was flown in (the Worker's, from the log): Assist, Pro ×1.08 or Advanced ×1.15.
+      if (r.tier) { const tg = document.createElement('b'); tg.className = 'tier-tag'; tg.dataset.tier = r.tier.toLowerCase(); tg.textContent = r.tier; li.querySelector('.v').prepend(tg); }
       li.querySelector('.t').textContent = Number(r.total).toFixed(1);
       ol.appendChild(li);
     }

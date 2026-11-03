@@ -71,7 +71,7 @@ test('bring your own key: paste one key and it is done', async ({ page }) => {
     await route.fulfill({ json: { provider: 'anthropic', models: ['claude-haiku-5-5', 'claude-opus-5-5', 'claude-sonnet-5-5'], suggested: 'claude-haiku-5-5' } });
   });
   await page.goto('/coldgas/?gfx=low');
-  await expect(page.locator('[data-ai-open]')).toHaveText('AI · Free');
+  await expect(page.locator('[data-ai-open]')).toHaveText('Judges · Free');
   await page.locator('[data-ai-open]').click();
   await expect(page.locator('#ai-title')).toHaveText('Use your own AI');
 
@@ -87,11 +87,11 @@ test('bring your own key: paste one key and it is done', async ({ page }) => {
   expect(calls).toHaveLength(1);
   expect(calls[0].body.provider).toBe('auto');
   expect(calls[0].key).toBe('sk-ant-api03-' + 'k'.repeat(40));
-  await expect(page.locator('[data-ai-open]')).toHaveText('AI · Claude');
+  await expect(page.locator('[data-ai-open]')).toHaveText('Judges · Claude');
 
   // Back to free in one tap.
   await page.locator('[data-free]').click();
-  await expect(page.locator('[data-ai-open]')).toHaveText('AI · Free');
+  await expect(page.locator('[data-ai-open]')).toHaveText('Judges · Free');
   await page.locator('[data-done]').click();
   await expect(page.locator('[data-ai-modal]')).toBeHidden();
 });

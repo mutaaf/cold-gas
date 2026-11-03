@@ -4,42 +4,65 @@
 import { postRetry, fetchWithDeadline } from './net.js';
 
 const API = `${import.meta.env.BASE_URL}api`;
-// The server replays the whole log before it ranks it (and a 503 is retried twice): give it room,
-// but never leave "Verifying…" up forever.
-const POST_MS = 25_000, BOARD_MS = 8000;
+// The server scores the run from its telemetry (no replay: a few ms), but a 503 is retried twice: give it
+// room, never leave "Posting…" up forever.
+const POST_MS = 15_000, BOARD_MS = 8000;
+export const COURSE_IDS = ['show', 'wall', 'lineup'];
 
-export async function postScore(log, assist, initials, course) {
+// A board entry: the input log, the run's telemetry `t` (the same object the judges get) and the course.
+// Never a score: the Worker scores `t` with scoreRun after its plausibility checks (src/worker/index.js).
+export async function postScore({ log, t, initials, course }) {
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), POST_MS);
   try {
     const res = await postRetry(`${API}/scores`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, signal: ctl.signal,
-      body: JSON.stringify({ log, assist, initials, course }),
+      body: JSON.stringify({ log, t, initials, course }),
     });
     return { ok: res.ok, status: res.status, ...(await res.json().catch(() => ({}))) };
   } catch { return { ok: false, status: 0, timeout: ctl.signal.aborted }; } finally { clearTimeout(timer); }
 }
 
+// What the player reads after a post (`res` from postScore).
+export function postMessage(res) {
+  if (res.ok) return `Posted · #${res.rank} today`;
+  if (res.status === 429) return 'Slow down a little.';
+  if (res.timeout || res.status === 0) return 'The board didn’t answer. Try again.';
+  switch (res.error) {
+    case 'update': return 'This page is out of date: reload to post.';
+    case 'no jump': return 'Only a landed jump goes on the board.';
+    case 'implausible': case 'bad run': return 'The board couldn’t check this run.';
+    case 'initials': return 'Three letters.';
+    default: return 'The board is offline.';
+  }
+}
+
 // A row as the board draws it, or null if it can't be drawn. The board renders what it can: one
 // malformed row from the server never blanks (or throws in) the whole list.
 const num = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+const TIER_LABEL = { assist: 'Assist', pro: 'Pro', advanced: 'Advanced' };
 export function boardRow(r) {
   if (!r || typeof r !== 'object') return null;
   const total = num(r.total);
   if (total === null) return null;
   const f = r.facts && typeof r.facts === 'object' ? r.facts : {};
-  return {
+  const row = {
     initials: String(r.initials ?? '???').replace(/[^A-Z]/gi, '').slice(0, 3).toUpperCase() || '???',
     verdict: String(r.verdict ?? '').slice(0, 40) || 'Judged',
     facts: { rollDeg: num(f.rollDeg) ?? 0, sink: num(f.sink) ?? 0 },
     total,
   };
+  if (TIER_LABEL[r.tier]) row.tier = TIER_LABEL[r.tier];
+  if (COURSE_IDS.includes(r.course)) row.course = r.course;
+  return row;
 }
 
-// The board's rows (null: offline). `signal` cancels it (a newer request has taken over).
-export async function fetchBoard(board = 'today', { signal } = {}) {
+// The board's rows (null: offline), for one course (every course without one). `signal` cancels it (a
+// newer request has taken over).
+export async function fetchBoard(board = 'today', { signal, course = null } = {}) {
   try {
-    const res = await fetchWithDeadline(`${API}/scores?board=${board === 'all' ? 'all' : 'today'}`, { ms: BOARD_MS, signal });
+    const q = `board=${board === 'all' ? 'all' : 'today'}${COURSE_IDS.includes(course) ? `&course=${course}` : ''}`;
+    const res = await fetchWithDeadline(`${API}/scores?${q}`, { ms: BOARD_MS, signal });
     if (!res.ok) return null;
     const rows = (await res.json())?.rows;
     return Array.isArray(rows) ? rows.map(boardRow).filter(Boolean) : null;

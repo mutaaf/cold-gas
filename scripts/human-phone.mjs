@@ -12,9 +12,25 @@
 //     the control geometry measured on the real page, --geom=file from scripts/thumb-reach.mjs).
 //   - A layout that changes under you (GO becomes BOOST, LIFT becomes RELEASE) costs a search.
 // --scheme=thumb flies the one-thumb Assist (src/onethumb.js, the code the page runs): hold to
-// climb, tap to let go, hold to land.
+// climb, tap to let go, hold to land. The release is the page's (src/main.js noteRelease): the tap
+// starts the drive-off, and the car is let go on its push-off (LIFT on the deck) or the first tick in
+// the air (before 0121 this script let go on the tap itself, skipping the drive-off).
+// --skill (thumb, 0121: the touchdown slide, src/thumb-aim.js's sight):
+//   none     never slides (the accessibility population; the default)
+//   careful  holding in the air, puts the thumb on the amber dot (the mark from the predicted
+//            touchdown), a reaction late, re-reading it every 0.25–0.5 s
+//   sloppy   slides, badly: overshoots ×2–3, half of them read the sight upside down for a beat, and
+//            some shove it up early (more carry) and leave it there
+//   mixed    a third of each
 //
-//   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--build=before|after] [--geom=file.json] [--vp=390x844] [-v]
+// --coach (0124): also re-fly each landed run through the results' coach (src/sim/coach.js, in this scheme's words) and
+// tally its first finding: how many players the What happened card tells "Clean".
+//
+// --daily (0134): also check each landed-or-not run against every Show objective of the daily jump (src/daily.js
+// evaluate, on scoreRun's card) and print each one's completion, so a Daily bar is set on phones as well as keyboards.
+// On one thumb it also splits gas-show by the thumb's choice (0139): held from the tap or lifted and pressed again, slid or not.
+//
+//   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [--coach] [--daily] [-v]
 import { readFileSync } from 'node:fs';
 import { createRun, stepRun, wallProgress } from '../src/sim/run.js';
 import { newInput, up, forward } from '../src/sim/vehicle.js';
@@ -23,7 +39,10 @@ import { SHOW } from '../src/sim/courses.js';
 import { SPEC } from '../src/sim/spec.js';
 import { predict, newPrediction } from '../src/sim/predict.js';
 import { initPhysics } from '../src/sim/engine.js';
-await initPhysics();   // the rigid-body engine's WASM (src/sim/engine.js)
+await initPhysics();
+// --dump=<file>: every run's telemetry as JSON (re-score offline with a candidate judge).
+const DUMP = (process.argv.find((a) => a.startsWith('--dump=')) || '').slice(7);
+const dumped = [];   // the rigid-body engine's WASM (src/sim/engine.js)
 
 const args = process.argv.slice(2);
 const opt = (k, d) => (args.find((a) => a.startsWith(`--${k}=`)) || '').split('=')[1] || d;
@@ -32,7 +51,18 @@ const scheme = opt('scheme', 'classic');
 const build = opt('build', 'after');
 const vp = opt('vp', '390x844');
 const verbose = args.includes('-v');
-const { createOneThumb } = scheme === 'thumb' ? await import('../src/onethumb.js') : {};
+const skill = opt('skill', 'none');
+const COACH = args.includes('--coach');
+const { coach } = COACH ? await import('../src/sim/coach.js') : {};
+const { coachWords } = COACH ? await import('../src/pointer.js') : {};
+const DAILY = args.includes('--daily');
+const { OBJECTIVES, evaluate } = DAILY ? await import('../src/daily.js') : {};
+const dailyMet = {}, gasLeft = [];
+// 0139: gas-show split by what the thumb chose: held from the tap or lifted and pressed again, and slid onto the mark or not.
+const split = {};
+const firsts = {}, markTitles = {};
+let longButWide = 0;
+const { createOneThumb, markOffset } = scheme === 'thumb' ? await import('../src/onethumb.js') : {};
 
 // Control geometry (CSS px): centre and radius per control, per viewport. Defaults are the
 // pre-redesign layout measured at 390×844; --geom reads what scripts/thumb-reach.mjs measured.
@@ -63,6 +93,8 @@ function pressCost(ctrl, hand = 'R') {
 let seed = 12345;
 const rnd = () => ((seed = (seed * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 const pick = (a) => a[Math.floor(rnd() * a.length)];
+let seed3 = 4242;
+const rnd3 = () => ((seed3 = (seed3 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 let seed2 = 777;
 const rnd2 = () => ((seed2 = (seed2 * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff);
 const gauss = () => Math.sqrt(-2 * Math.log(rnd2() + 1e-12)) * Math.cos(2 * Math.PI * rnd2());
@@ -99,28 +131,33 @@ for (let n = 0; n < N; n++) {
     for (let k = 0; k < 3 && rnd2() > p; k++) { missed++; t += P.lag + mt; }
     return Math.round(t * 240);
   };
-  let why = '';
+  let why = '', choice = '';
   if (scheme === 'thumb') {
     const th = createOneThumb();
-    let released = false, ledgeT = -1, tapAt = -1, holdFrom = -1, holding = false, lapseAt = -1, landSeen = -1;
+    let released = false, tapped = false, ledgeT = -1, tapAt = -1, holdFrom = -1, holding = false, lapseAt = -1, landSeen = -1;
+    // The slide (0121), drawn from its own stream so the base population is the same with or without it.
+    const sk = skill === 'mixed' ? ['none', 'careful', 'sloppy'][Math.floor(rnd3() * 3)] : skill;
+    const A = { every: Math.round((0.25 + rnd3() * 0.25) * 240), over: 2 + rnd3(), flip: rnd3() < 0.5, shove: rnd3() < 0.4 ? 20 + rnd3() * 40 : 0, flipFor: Math.round((0.4 + rnd3() * 0.6) * 240) };
+    let aimNext = -1, aimAt = -1, want = null, flipUntil = -1, slid = false;
+    const off = { x: 0, y: 0, m: 0 };
     // Lifting the thumb mid-climb (20 % do, once): a second, then back on.
     th.down();
     while (run.phase !== 'done') {
       const c = run.car, t = run.tick, inp = newInput();
-      if (!released) {
+      if (!tapped) {
         if (F.lapse && lapseAt < 0 && run.phase === 'ramp' && run.t.progress > 0.4) { lapseAt = t; th.up(); }
         if (lapseAt > 0 && t - lapseAt === 240) th.down();
         if (run.phase === 'ramp' && run.t.progress >= 0.92 && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3) {
           if (ledgeT < 0) { ledgeT = t; th.up(); }
           if (tapAt < 0) tapAt = ledgeT + Math.round(P.hangWait * 240) + pressDelay('thumb', 'R');
           if (t === tapAt) {
-            th.down(); released = true; holding = true;
+            th.down(); tapped = true; holding = true;
             // Hold on from the tap ('with-boost'), or let go and press again later.
             if (P.landAt !== 'with-boost') { holding = false; }
           }
         }
       }
-      if (released) {
+      if (tapped) {
         const h = Math.max(0, c.pos.y - SPEC.comHeight);
         predict(c, h, pr);
         if (!holding && t > tapAt + 24 && th.held) th.up();
@@ -131,8 +168,26 @@ for (let n = 0; n < N; n++) {
           if (WARN && pr.status !== 'green' && t > tapAt + lagT) want = true;   // the descent warning (flash + buzz)
           if (want && landSeen < 0) landSeen = t;
           if (landSeen >= 0 && holdFrom < 0) holdFrom = landSeen + pressDelay('thumb', 'R');
-          if (holdFrom >= 0 && t >= holdFrom) { holding = true; th.down(); }
+          if (holdFrom >= 0 && t >= holdFrom && !th.held) { holding = true; th.down(); }
         }
+      }
+      // The slide: holding in the air, roof up, onto the sight's dot (or, sloppy, near it).
+      if (sk !== 'none' && released && run.phase === 'air' && th.held) {
+        if (sk === 'sloppy' && A.shove && !run.t.crossedRow) th.move(0, A.shove);
+        else if (t >= aimNext) {
+          const h = Math.max(0, c.pos.y - SPEC.comHeight);
+          predict(c, h, pr);
+          markOffset(c, pr, 'show', off);
+          let x = off.x, y = -off.y;   // the dot's offset, +y up the glass
+          if (sk === 'sloppy') {
+            x *= A.over; y *= A.over;
+            if (A.flip && flipUntil < 0) flipUntil = t + A.flipFor;
+            if (t < flipUntil) y = -y;   // read the sight upside down
+            x += 14 * gauss(); y += 14 * gauss();
+          }
+          want = { x, y }; aimAt = t + lagT; aimNext = t + A.every;
+        }
+        if (want && t >= aimAt) { th.move(want.x, want.y); if (Math.abs(want.x) + Math.abs(want.y) > 1) slid = true; }
       }
       th.sample(run, released, inp);
       // main.js wallAssist: a lift on the deck is the release; the fan holds the car until then.
@@ -141,6 +196,7 @@ for (let n = 0; n < N; n++) {
       inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
       stepRun(run, inp);
     }
+    choice = `${P.landAt === 'with-boost' ? 'held from the tap' : 'lifted, pressed again'} · ${slid ? 'slid' : 'no slide'}`;
   } else {
     let released = false, relT = -1, ledgeT = -1, relPress = -1, boostOn = false, cueOffT = -1, rollOn = false, rollDone = false, rollUprightT = -1;
     let landing = false, landSeen = -1, landPress = -1, wHeld = false, wChange = 0, ax = 0, noise = 0, boostPress = -1;
@@ -216,6 +272,16 @@ for (let n = 0; n < N; n++) {
     }
   }
   const t = run.t, s = scoreRun(t);
+  if (DUMP) dumped.push({ t: { ...t }, why: null });
+  if (DAILY) {
+    for (const o of OBJECTIVES) if (o.course === 'show') dailyMet[o.id] = (dailyMet[o.id] || 0) + (evaluate(o, s, 'show').ok ? 1 : 0);
+    if (s.facts.jumped && !s.facts.crashed) gasLeft.push(s.facts.airPct);
+    if (choice) {
+      const g = (split[choice] ||= { n: 0, met: 0, gas: [] });
+      g.n++; if (evaluate(OBJECTIVES.find((o) => o.id === 'gas-show'), s, 'show').ok) g.met++;
+      if (s.facts.jumped && !s.facts.crashed) g.gas.push(s.facts.airPct);
+    }
+  }
   if (t.airStartTick < 0) why = t.fellOff ? 'climb: fell off' : 'climb: stalled';
   else if (t.fellOff) why = 'climb: fell off';
   else if (t.contact) why = 'contact with the row';
@@ -225,8 +291,33 @@ for (let n = 0; n < N; n++) {
   else if (t.sink > 3) why = `hard touchdown (${t.sink > 6 ? '>6' : '3–6'} m/s)`;
   else if (t.tiltDeg > 15) why = 'landed tilted';
   if (!why) { ok++; if (s.facts.padMiss < 7) onPad++; totals.push(s.total); } else fails[why] = (fails[why] || 0) + 1;
+  if (COACH && !why) {
+    const first = coach(run.inputLog, 'show', s, 0, coachWords({ device: 'touch', scheme, tier: s.tier, course: 'show' })).items[0], id = first.id;
+    firsts[id] = (firsts[id] || 0) + 1;
+    // 0132: the mark's title, and how often "Long" leads a miss that is mostly sideways.
+    if (id === 'mark') {
+      markTitles[first.title] = (markTitles[first.title] || 0) + 1;
+      if (first.title === 'Long of the mark' && Math.abs(t.lateral) > Math.abs(t.landZ - SHOW.pad.z)) longButWide++;
+    }
+  }
   if (verbose) console.log(JSON.stringify(P), JSON.stringify(F), why || 'OK', s.total, 'sink', t.sink.toFixed(1), 'pad', s.facts.padMiss);
 }
 totals.sort((a, b) => a - b);
-console.log(`Phone ${vp} · ${scheme} · ${build}: ${ok}/${N} landed clean (${Math.round((100 * ok) / N)}%), ${onPad} inside the 7 m ring; median clean score ${totals[Math.floor(totals.length / 2)] ?? '–'} · mis-taps ${missed}/${presses}`);
+const q = (f) => totals[Math.min(totals.length - 1, Math.floor(totals.length * f))] ?? '–';
+console.log(`Phone ${vp} · ${scheme}${scheme === 'thumb' ? ` · skill ${skill}` : ''} · ${build}: ${ok}/${N} landed clean (${Math.round((100 * ok) / N)}%), ${onPad} inside the 7 m ring; median clean score ${q(0.5)} · mis-taps ${missed}/${presses}`);
+console.log(`  clean scores: min ${totals[0] ?? '–'} · p10 ${q(0.1)} · median ${q(0.5)} · p90 ${q(0.9)} · max ${totals[totals.length - 1] ?? '–'}`);
 console.log('  failures:', JSON.stringify(fails));
+if (COACH) console.log(`  coach's first finding (landed runs): ${JSON.stringify(firsts)} · clean ${Math.round((100 * (firsts.clean || 0)) / Math.max(1, ok))}%`);
+if (COACH) console.log(`  the mark's title when it leads: ${JSON.stringify(markTitles)} · "Long" on a mostly-sideways miss: ${longButWide}`);
+if (DAILY) {
+  gasLeft.sort((a, b) => a - b);
+  const g = (f) => gasLeft[Math.min(gasLeft.length - 1, Math.floor(gasLeft.length * f))] ?? '–';
+  console.log(`  the daily (Show objectives, n ${N}): ${OBJECTIVES.filter((o) => o.course === 'show').map((o) => `${o.id}${o.tier ? ` (${o.tier})` : ''} ${dailyMet[o.id]}/${N} (${Math.round((100 * dailyMet[o.id]) / N)}%)`).join(' · ')}`);
+  const over = (x) => `> ${x} % ${gasLeft.filter((a) => a > x).length}/${N}`;
+  for (const [k, g] of Object.entries(split).sort()) {
+    g.gas.sort((a, b) => a - b);
+    console.log(`  gas-show by the thumb's choice: ${k}: ${g.met}/${g.n} met (${Math.round((100 * g.met) / Math.max(1, g.n))}%) · gas left min ${g.gas[0] ?? '–'} · median ${g.gas[Math.floor(g.gas.length / 2)] ?? '–'} · max ${g.gas.at(-1) ?? '–'} %`);
+  }
+  console.log(`  gas left at touchdown, landed runs: min ${gasLeft[0] ?? '–'} · median ${g(0.5)} · max ${gasLeft[gasLeft.length - 1] ?? '–'} % · ${[25, 28, 30, 32, 35, 40].map(over).join(' · ')}`);
+}
+if (DUMP) { const { writeFileSync } = await import('node:fs'); writeFileSync(DUMP, JSON.stringify(dumped)); }

@@ -115,17 +115,21 @@ test('phone: a clean landing ends the streak; the offer holds on the fourth cras
 
 // Ticket 0076: on a phone held upright the judges' theatre covers the sheet while it plays, so its own
 // action bar carries the offer too (the same syncRookie, the same handler). The judge's stream is held
-// open (never answered), so the show keeps playing; nothing here waits for it to finish.
+// open (never answered), so the show keeps playing; nothing here waits for it to finish. Since the audit of
+// 2026-10-30 the call runs docked on the sheet's strip on a phone: "Watch the call" puts the theatre up.
+const watch = (page) => page.locator('[data-call-watch]').tap({ timeout: 60_000 });
 test('phone: the theatre\'s bar offers Rookie mode while the show plays; a tap sets Easy + Assist and goes again', async ({ browser }) => {
   const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
   await page.route('**/coldgas/api/judge/stream', () => { /* held open: the theatre stays up */ });
   const errors = await boot(page);
   const th = page.locator('[data-theatre] .th-quick [data-rookie-go]');
   for (let k = 1; k <= 2; k++) expect((await fly(page, true)).streak).toBe(k);
+  await watch(page);
   await expect(page.locator('[data-theatre] .th-quick [data-again]')).toBeVisible({ timeout: 60_000 });
   await expect(th).toBeHidden();   // two crashes: no offer in the theatre either
   const r3 = await fly(page, true);
   expect(r3, JSON.stringify(r3)).toMatchObject({ mode: 'results', crashed: true, streak: 3, offered: true });
+  await watch(page);
   await expect(th).toBeVisible({ timeout: 60_000 });
   await expect(th).toContainText(/rookie mode/i);
   await page.waitForTimeout(800);   // the theatre's fade-in
