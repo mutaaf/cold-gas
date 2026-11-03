@@ -11,7 +11,7 @@ by: operator
 ---
 
 ## Why
-PART ONE SHIPPED 2026-11-03 (builder, #PRNUM): the WASM preload is gone. Measured (scripts/perf.mjs against dist served
+PART ONE SHIPPED 2026-11-03 (builder, #231): the WASM preload is gone. Measured (scripts/perf.mjs against dist served
 gzipped like production, phone 4×CPU Slow 4G, medians of 3): usable 7,871 → 6,578 ms, first 3D frame 16,836 → 13,047 ms,
 desktop unchanged, physics ready no later (≈ 44 s both, the 4×-CPU compile dominates). The waterfall showed why: the
 preloaded 1.15 MB WASM shared the link with the entry from 0.6 s, so the 217 kB entry landed at 4.7 s, not 3.4 s.
