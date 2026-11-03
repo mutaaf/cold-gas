@@ -106,6 +106,28 @@ export const MODULE_IDS = ['app', 'render', 'webgl', 'shader', 'physics', 'audio
 // funnel: a visit (new, or back on a later UTC day) → a run → landed or wrecked → posted / shared.
 // howto-skip: Skip on the how-to card before a Jump. run-quit: a Jump run left before its card (Pause → Home or
 // Restart, a drill or Free Drive opened mid-run, the page closed with it live); once per run (0130).
+// 0138: a Jump run's decided card also counts how it was flown (ctl-*: the one-thumb pad, the classic touch stick
+// and buttons, a keyboard or a gamepad; fly-*: the flight tier) and, for a wreck, what wrecked it (wreck-*: the
+// coach's first finding, folded by wreckCause). Counts only, once per run.
+export const CTL_EVENTS = ['ctl-thumb', 'ctl-classic', 'ctl-keys', 'ctl-pad'];
+export const FLY_EVENTS = ['fly-assist', 'fly-pro', 'fly-advanced'];
+export const WRECK_EVENTS = ['wreck-short', 'wreck-brake', 'wreck-ran-out', 'wreck-roll', 'wreck-flipped', 'wreck-fell-off', 'wreck-release', 'wreck-other'];
 export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 'run', 'run-quit', 'run-landed', 'run-wrecked', 'retry',
-  'post', 'post-fail', 'share', 'board-open', 'challenge-open', 'challenge-run', 'daily-run', 'daily-done', 'drive', 'sandbox'];
+  'post', 'post-fail', 'share', 'board-open', 'challenge-open', 'challenge-run', 'daily-run', 'daily-done', 'drive', 'sandbox',
+  ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS];
+// The coach's finding ids (src/sim/coach.js) → the wreck's cause. Into the row; a hard touchdown (never braked,
+// braked or landed late); braked but ran out at the bottom; the roll-out or the attitude; on its roof; off the
+// curl's side; the release. Anything else (the mark, the gas, clean, no coach) is `other`.
+const WRECK_OF = {
+  short: 'short', 'no-brake': 'brake', 'late-brake': 'brake', 'late-land': 'brake', 'ran-out': 'ran-out',
+  'late-roll': 'roll', 'no-roll': 'roll', 'over-roll': 'roll', tilt: 'roll', flipped: 'flipped', 'fell-off': 'fell-off',
+  'no-release': 'release', 'early-release': 'release',
+};
+export const wreckCause = (items) => `wreck-${WRECK_OF[items?.[0]?.id] || 'other'}`;
+// How a run was flown: the device in use (src/input.js lastDevice) and, on touch, the scheme on screen.
+export function ctlOf(device, scheme) {
+  if (device === 'touch') return scheme === 'thumb' ? 'ctl-thumb' : 'ctl-classic';
+  return device === 'pad' ? 'ctl-pad' : 'ctl-keys';
+}
+export const flyOf = (tier) => (FLY_EVENTS.includes(`fly-${tier}`) ? `fly-${tier}` : 'fly-assist');
 export const KIND_IDS = ['error', 'rejection', 'trap', 'ctxlost', 'shader', 'fetch', 'lazy', 'audio', 'worker', 'frame', 'unclean'];
