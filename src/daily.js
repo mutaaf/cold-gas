@@ -7,6 +7,12 @@
 // the reference flights, so most days are a stretch for a player who lands, none a lottery:
 //   within 3 m of the Show's mark  ≈ 10 % of clean Assist landings · gas > 40 %  ≈ 18 %
 //   roofs by under 1.5 m           ≈ 23 %                          · 90+ on the Show ≈ 30 %
+// The gas bar is set on phones (0134): most players fly the Show on one thumb, where the computer flies the
+// push-off and the carry, and none of 900 one-thumb players (scripts/human-phone.mjs --scheme=thumb --daily,
+// skill none / careful / mixed) landed with more than 40 % (37 % at best; the reference flown without its pad
+// steering lands with 41 %). What a thumb chooses is when to hold the pad: held from the tap (LAND from the
+// release) it lands with 33–37 %, held for the fall 23–26 %. More than 30 % sits in that gap: 19 % of careful
+// one-thumb players, 26 % of the no-skill ones, ≈ 65 % of keyboard Assist landings.
 import { one } from './units.js';
 
 export const DAY_MS = 86_400_000;
@@ -22,8 +28,8 @@ const r1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
 export const OBJECTIVES = [
   { id: 'mark-show', course: 'show', goal: () => `Land within ${len(3)} of the mark`,
     check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.padMiss <= 3 ? done() : miss(`${len(f.padMiss, 1)} off the mark`)) },
-  { id: 'gas-show', course: 'show', goal: () => 'Clear the row with more than 40 % gas left',
-    check: (c, f) => (!cleanOver(f) ? miss('clear the row and land clean first') : f.airPct > 40 ? done() : miss(`${f.airPct} % gas left, need 41 %`)) },
+  { id: 'gas-show', course: 'show', goal: () => 'Clear the row with more than 30 % gas left',
+    check: (c, f) => (!cleanOver(f) ? miss('clear the row and land clean first') : f.airPct > 30 ? done() : miss(`${f.airPct} % gas left, need 31 %`)) },
   { id: 'soft-wall', course: 'wall', goal: () => `Touch down at ${rate(0.8)} or softer`,
     check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.sink <= 0.8 ? done() : miss(`touched down at ${rate(f.sink)}`)) },
   { id: 'pro-show', course: 'show', tier: 'pro', goal: () => 'Score 85+ on Pro or Advanced',

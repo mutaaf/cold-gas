@@ -1,7 +1,7 @@
 ---
 id: 0134
 title: On one thumb the computer flies the push-off and the carry on the reference's nitrogen, so a phone player can meet the gas Daily
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
@@ -97,3 +97,26 @@ Daily objectives out of reach of every phone player.
     a note for the next bar review, not this ticket.
 - The brake profile (0028).
 - The keyboard and classic schemes.
+
+## Outcome (builder, 2026-11-03)
+Shipped the ticket's fallback: `gas-show`'s bar is set on the phone population (> 30 %, was > 40 %). The input-only
+fix could not reach the bar without costing the flight:
+- **The ceiling.** The reference flown without its pad steering (`steerToPad`) lands with **41 %** and 10.3 m off the
+  mark; its 48 % comes from pitching the lift back over the pad, which on one thumb is the player's slide (0121). The
+  rest of the one-thumb spend is LAND's own set-down (a sim change, out of scope).
+- **The push-off buys score.** Cutting `THUMB.push` 36 → 1 tick raised the held-from-the-tap flight 33 → 36 % but lifted
+  the clearance 4.5 → 6.5 m and the miss 6.0 → 6.5 m (85.7 → 82.7); the careful population's median score fell
+  93 → 84.7 and `ninety-show` 73 → 23 %. Stopping earlier on the ledge (0.93) and letting go later (0.995) peaked at
+  39 % with `ninety-show` 45–50 %. No variant put a careful player over 41 %.
+- **What a thumb chooses** is when to hold the pad: from the tap it lands with 33–37 %, held for the fall 23–26 %, so
+  > 30 % rewards the efficient flight and is not a lottery.
+
+`node scripts/human-phone.mjs 300 --scheme=thumb --skill=<…> --daily` (new flag), all 300/300 landed clean:
+
+| population | gas-show (> 30 %) | mark-show | skim-show | ninety-show | scratch-show | gas left min / median / max |
+|---|---|---|---|---|---|---|
+| none | 78/300 (26 %) | 0 % | 68 % | 0 % | 100 % | 26 / 26 / 33 |
+| careful | 57/300 (19 %) | 14 % | 82 % | 74 % | 100 % | 23 / 24 / 37 |
+| mixed | 67/300 (22 %) | 10 % | 76 % | 41 % | 100 % | 23 / 26 / 35 |
+
+Keyboard Assist (`human-show.mjs 300 assist --cues=new`): > 30 % on 195/300 (65 %), > 40 % on 47 (16 %).
