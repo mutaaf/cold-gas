@@ -5,7 +5,9 @@
 //   thumb  The Show and the Wall on a phone (most players): the one-thumb Assist (src/onethumb.js, the code the page
 //          runs), modelled as scripts/human-phone.mjs --scheme=thumb --skill=careful models it: a reaction time
 //          (0.18–0.43 s) + a 0.1 s press on every decision, a wait on the ledge, then either the pad held from the tap
-//          or let go and pressed again when the band leaves green (or at a height), and, holding in the air, the thumb
+//          or let go and pressed again on the descent warning (the band leaving green: the drive-off is the computer's, so
+//          for every let-go thumb it comes 0.65 s after the tap, before any height trigger; as in human-phone.mjs, the
+//          'hud' / 8 m / 4 m habits collapse into that one), and, holding in the air, the thumb
 //          put on the sight's amber dot a reaction late, re-read every 0.25–0.5 s. 20 % lift the thumb once mid-climb.
 //   touch  The Lineup (no one-thumb scheme there: main.js flies it classic on touch, Assist): their own run-up speed,
 //          LIFT timed to the marker and held for their own press, the stick over until the roll-out cue says upright, then
@@ -139,6 +141,7 @@ export function flyTouch(course, r) {
 // One Pro player on the Show or the Wall (scripts/human-show.mjs, `pro --cues=new`; the BOOST cue is the Show's only).
 export function flyPro(course, r) {
   const P = { lag: 0.18 + r() * 0.25, climb: r.pick([3, 4, 5, 6, 8, 'hold']), hangWait: r.pick([0.2, 0.8, 2]), spaceHold: r.pick([0.1, 0.2, 0.5]),
+    // `roll` is drawn and not read (Pro rolls by the cue): kept so the draws match human-show.mjs's order.
     boost: r.pick(['cue', 'cue', 0.2, 0.5, 1.0]), roll: r.pick(['none', 'left', 'right', 'left']), steer: r.pick(['none', 'marker']),
     landAt: r.pick(['hud', 'hud', 'hud', 'hud', 8]) };
   const run = createRun(course), lagT = Math.round(P.lag * 240);

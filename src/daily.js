@@ -17,8 +17,13 @@
 //   mark-lineup  within 7 m (the pad)       31 %  (1.5 m was 10 %: 40 % of Lineup flights land at all)
 // The gas bar (0134, then 0135): on one thumb the computer flies the push-off and the carry; what a thumb chooses is when
 // to hold the pad. Kept down from the tap through the let-go it lands with 33–37 %; picked up after the fall has begun,
-// at any height, 23–26 %. 0134 set the bar in that gap (> 30 %), which only 19–23 % of careful thumbs met; > 25 % lets a
-// thumb that came back early in the fall meet it too, and holding from the tap still lands with more (a better score).
+// at any height, 23–27 %. 0134 set the bar in that gap (> 30 %), which only 19–23 % of careful thumbs met. > 25 % is met
+// by every thumb held from the tap and by about a third of those that let go: in the model the let-go thumbs all come
+// back on the descent warning and land in two clusters, 24 % (64 of 109) and 26 % (40), split by nothing they choose, so
+// for them the day is partly luck. Holding from the tap is the sure way. A 1–2 % change in the flight's gas swings this
+// day's reach a lot: tests/unit/daily-reach.test.js will catch the downside.
+// The Lineup sits on the floor: at other seeds (n 80) mark-lineup measures 26–31 % and roll-lineup 29–44 %; the next
+// bar review should start there. The Pro day is measured on the keys; classic-touch Pro (a phone on Pro) is not modelled.
 import { one } from './units.js';
 
 export const DAY_MS = 86_400_000;

@@ -3,8 +3,8 @@
 // chooses is when to hold the pad, and holding it from the tap (LAND from the release, the reveal's way)
 // is what lands with the most gas. So the bar sits between those two flights, set on the phone population
 // (scripts/human-phone.mjs --daily): a thumb held from the tap meets it, and the reference flight still does.
-// 0135 lowered it to > 25 % (scripts/daily-reach.mjs: > 30 % reached 23 % of careful thumbs, under the 30 % floor), so a
-// thumb back on the pad early in the fall (26 % at any height) meets it too, with less gas than the held one.
+// 0135 lowered it to > 25 % (scripts/daily-reach.mjs: > 30 % reached 23 % of careful thumbs, under the 30 % floor), and a
+// thumb back on the pad in the fall can meet it too (this one, at 12 m, lands with 26 %), with less gas than the held one.
 import { describe, it, expect } from 'vitest';
 import { createRun, stepRun, simulate } from '../../src/sim/run.js';
 import { newInput } from '../../src/sim/vehicle.js';

@@ -40,11 +40,11 @@ goal they cannot meet, then told "try again". Nothing in the repo checks that a 
   known miss in the test with a pointer, not a skip of the others.
 
 ## Acceptance criteria
-- [ ] The reach table is printed for all ten objectives with n and the population named
-- [ ] Every objective has ≥ 30 % reach in its population (gas-show excepted until 0134 ships, then included)
-- [ ] The title card and the results' Daily line read the new numbers in both unit systems
-- [ ] `reference-hash`, naive-players 32/32 and the daily unit tests unchanged or updated with reasons; no dark patterns
-- [ ] 390×844 touch: the Daily card still fits on one line of goal text
+- [x] The reach table is printed for all ten objectives with n and the population named
+- [x] Every objective has ≥ 30 % reach in its population (gas-show excepted until 0134 ships, then included)
+- [x] The title card and the results' Daily line read the new numbers in both unit systems
+- [x] `reference-hash`, naive-players 32/32 and the daily unit tests unchanged or updated with reasons; no dark patterns
+- [ ] 390×844 touch: the Daily card still fits on one line of goal text (**not met**, see the note)
 
 ## Test plan
 `tests/unit/daily-reach.test.js` (seeded, n = 40) plus the existing `tests/unit/daily.test.js`; a screenshot of the title's
@@ -71,5 +71,10 @@ two thumbs, classic touch, Assist; Pro on the keys, human-show's Pro population;
 Notes: the Pro day moved because no Show bar was both a stretch and in reach for Pro (only 33 % of Pro Show flights clear
 the row and land clean at all). The 390×844 card: every changed goal wraps to two lines, as the old ones did ("Land within
 10 ft of the mark" was two lines too). Only "Stick it: score 84+" and "Score 90 or more" fit on one; the one-line criterion
-holds for no ten-word goal beside the Play today's button. Line counts are unchanged, so it stays as it was. `mark-lineup` sits
-at the floor (31 %).
+holds for no ten-word goal beside the Play today's button. Line counts are unchanged, so it stays as it was, but this criterion is **not met** as written.
+Caveats from the review:
+- The ≥ 30 % floor is shown for seed 12345 only. At other seeds (n 80) mark-lineup measures 26–31 % and roll-lineup
+  29–44 %, so the Lineup sits on the floor.
+- The Pro day is measured on the keys. A phone on Pro flies classic touch, which is not modelled (one thumb flies only Assist).
+- In the model, gas-show for a thumb that lets go is partly luck: the let-go thumbs land with 24 % or 26 %, split by nothing
+  they choose. Holding from the tap is the sure way.
