@@ -5,9 +5,12 @@ import { test, expect } from '@playwright/test';
 // and fields that don't make iOS zoom. scripts/hud-audit.mjs and scripts/title-audit.mjs measure
 // the whole matrix on screenshots; these are the cheap guards that run on every PR.
 const touch = (width, height) => ({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+// Title frames render while the page boots, so a costly title frame slows the boot. Since 0131 the upright iPad's title
+// looks down on the lit floor (the car in the band above the panel): 667 ms a frame on software GL against 367 ms
+// before, and its boot ran past 60 s on CI twice (#232). 150 s per boot; each test's own timeout caps it first.
 const boot = async (page, q = '') => {
   await page.goto(`/coldgas/?gfx=low${q}`);
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 150_000 });
 };
 const rect = (page, sel) => page.evaluate((sel) => {
   const r = document.querySelector(sel).getBoundingClientRect();
