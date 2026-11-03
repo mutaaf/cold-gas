@@ -57,6 +57,9 @@ const LENS_ASPECT = 0.9;
 // 12 m keeps the 4.65 m car under 0.75 of an upright phone's width (0108).
 const LAND_AHEAD = [6.5, -9], LAND_SIDE = [12, 0];
 const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the middle (≈ 60 % down)
+const TITLE_COVER = 0.4;   // the share of the car's box the title's panel may cover before the lens moves it (0131)
+const TITLE_FILL = 0.85;   // the most of that band's height the car's box may take; past it the lens widens (0131)
+const TITLE_FOV_MAX = 70;  // deg: how wide the title's lens may go for that
 
 export function createDirector(camera) {
   const st = {
@@ -77,6 +80,8 @@ export function createDirector(camera) {
     railR: -1, railF: 1,                                 // the upright left rail's right edge and its foot (0128, NDC; −1/1 when none)
     pads: new Float64Array(PAD_MAX * 3), padN: 0,        // the touch controls at the bottom (0128, NDC: top, left, right of each)
     carryT: 0,                                           // when the carry cut in (0128)
+    titleSide: '', titleY: 0, titleAnchor: 0,            // where titleHold keeps the car's box: the band, its middle (px)
+    titleFov: 0,                                         // the title's wider lens on an upright screen, when the car needs it (0131)
     placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(),   // the carry's locked-off placement (0113)
   };
 
@@ -518,12 +523,83 @@ export function createDirector(camera) {
     st.fov = 56;
   }
 
+  // The title on an upright screen (0131): the panel fills it from the top bar to near the bottom, and the
+  // turntable's car stood behind its lower half (the Daily card). The lens is shifted (a view offset: the camera and
+  // its sway are unchanged) so the car's box sits in the taller clear band, under the panel or over it, when the
+  // panel covers more than TITLE_COVER of it. Measured once per change (a resize, the title's own reflow, a course
+  // or mode change), never per frame. The panel's scrim feathers less on that side (styles.css, data-car-band).
+  let titleDirty = true;
+  const titleEl = typeof document !== 'undefined' ? document.querySelector('[data-screen="title"]') : null;
+  if (titleEl && typeof ResizeObserver === 'function') new ResizeObserver(() => { titleDirty = true; }).observe(titleEl);
+  function titleFit(subject, carPos) {
+    titleDirty = false; st.titleFov = 0; st.titleSide = '';
+    const w = innerWidth, h = viewH || innerHeight;
+    let dy = 0, side = '';
+    if (titleEl && camera.aspect < 1 && titleEl.getClientRects().length) {
+      if (camera.view?.enabled) camera.clearViewOffset();
+      camera.fov = st.fov; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const corner = (x, y, z) => {
+        tmp.set(x, y, z).project(camera);
+        const px = (tmp.x + 1) / 2 * w, py = (1 - tmp.y) / 2 * h;
+        if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
+      };
+      if (subject) {
+        subject.updateMatrixWorld(true);
+        subject.traverseVisible((o) => {
+          const g = o.isMesh && !o.isInstancedMesh && o.geometry;
+          if (!g) return;
+          const bb = g.boundingBox || (g.computeBoundingBox(), g.boundingBox);
+          for (let i = 0; i < 8; i++) { want.set(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z).applyMatrix4(o.matrixWorld); corner(want.x, want.y, want.z); }
+        });
+      }
+      if (!(x1 > x0)) for (let i = 0; i < 8; i++) corner(carPos.x + (i & 1 ? 2.3 : -2.3), carPos.y + (i & 2 ? 1.3 : 0), carPos.z + (i & 4 ? 2.3 : -2.3));
+      const r = titleEl.getBoundingClientRect(), area = Math.max(1, (x1 - x0) * (y1 - y0));
+      const cover = Math.max(0, Math.min(x1, r.right) - Math.max(x0, r.left)) * Math.max(0, Math.min(y1, r.bottom) - Math.max(y0, r.top)) / area;
+      if (cover > TITLE_COVER) {
+        let bar = 0;
+        for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const b = e.getBoundingClientRect(); if (b.height > 1) bar = Math.max(bar, b.bottom); }
+        const above = r.top - bar, below = h - r.bottom;
+        side = above > below ? 'above' : 'below';
+        // A car taller than the band (the Lineup's close orbit) is drawn smaller with a wider lens: the screen scales
+        // about its middle by s.
+        const band = Math.max(above, below), boxH = y1 - y0;
+        let s = 1;
+        if (boxH > TITLE_FILL * band) {
+          const t0 = Math.tan(st.fov * Math.PI / 360);
+          const f = Math.min(TITLE_FOV_MAX, Math.atan(t0 * boxH / (TITLE_FILL * band)) * 360 / Math.PI);
+          if (f > st.fov) { st.titleFov = f; s = t0 / Math.tan(f * Math.PI / 360); }
+        }
+        dy = (side === 'above' ? (bar + r.top) / 2 : (r.bottom + h) / 2) - (h / 2 + ((y0 + y1) / 2 - h / 2) * s);
+        // The sway moves the car on screen; titleHold keeps its box's middle on the band's from the car's own point.
+        tmp.copy(carPos).project(camera);
+        st.titleY = (side === 'above' ? (bar + r.top) / 2 : (r.bottom + h) / 2);
+        st.titleAnchor = ((y0 + y1) / 2 - (1 - tmp.y) / 2 * h) * s;
+      }
+    }
+    st.titleSide = side;
+    if (side) titleEl.dataset.carBand = side; else if (titleEl) delete titleEl.dataset.carBand;
+    if (Math.abs(dy) >= 1) camera.setViewOffset(w, h, 0, -dy, w, h);
+    else if (camera.view?.enabled) camera.clearViewOffset();
+  }
+
+  // Each title frame after the fit: one projected point, and the offset moves by what the sway moved it (no traversal).
+  function titleHold(carPos) {
+    const v = camera.view;
+    if (!v?.enabled) return;
+    camera.updateMatrixWorld();
+    tmp.copy(carPos).project(camera);
+    const e = st.titleY - ((1 - tmp.y) / 2 * v.fullHeight + st.titleAnchor);
+    if (Math.abs(e) > 0.25) camera.setViewOffset(v.fullWidth, v.fullHeight, 0, v.offsetY - e, v.width, v.height);
+  }
+
   // The title's lens sits right of the panel on a wide screen. The replay's sits at the centre of the
   // region the results leave uncovered (0068): left of the sheet on a wide screen, above the peek on a
   // phone. A full-screen region is no shift at all.
   function frameOffset(mode) {
     const w = innerWidth, h = innerHeight;
     if (mode === 'title' && w / h > 1.15) return camera.setViewOffset(w, h, -w * 0.2, h * 0.04, w, h);
+    if (mode === 'title') { titleDirty = true; return; }   // upright: titleFit places it on the next title frame
     if (mode === 'replay' && st.rr > 0) {
       const dx = w / 2 - (st.rl + st.rr) / 2, dy = h / 2 - (st.rt + st.rb) / 2;
       if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) return camera.setViewOffset(w, h, dx, dy, w, h);
@@ -542,10 +618,10 @@ export function createDirector(camera) {
   }
 
   // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup' })
-  function update(dt, time, { carPos, carVel, phase, mode, course = 'show' }) {
+  function update(dt, time, { carPos, carVel, phase, mode, course = 'show', subject = null }) {
     if (mode !== st.mode || course !== st.course) {
       st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.dip = 0; st.punch = 0;
-      st.hx = 0; st.hz = 1; st.cutT = 0;
+      st.hx = 0; st.hz = 1; st.cutT = 0; st.titleFov = 0; st.titleSide = '';
       snap(); frameOffset(mode);
     }
     st.t += dt;
@@ -564,6 +640,8 @@ export function createDirector(camera) {
     } else if (mode === 'title') titleLineup(time);
     else if (mode === 'replay') replay(carPos);
     else chase(carPos, carVel, phase, dt);
+    if (mode === 'title' && titleDirty && st.cutT <= 0 && innerWidth / innerHeight <= 1.15) titleFit(subject, carPos);
+    if (mode === 'title' && st.titleFov) st.fov = st.titleFov;
     if (st.shake > 0) {
       st.shake = Math.max(0, st.shake - dt * 3);
       tmp.set(Math.sin(time * 91), Math.sin(time * 77 + 1), 0).multiplyScalar(st.shake * 0.08);
@@ -576,6 +654,7 @@ export function createDirector(camera) {
     if (st.punch > 0.01) st.punch *= k; else st.punch = 0;
     const fov = st.fov - st.punch;
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
+    if (mode === 'title' && st.titleSide) titleHold(carPos);
   }
 
   // Hold a locked-off camera at `pos` for `seconds` (crash cuts); a mode change cancels it.

@@ -1,7 +1,7 @@
 ---
 id: 0131
 title: On a 390×844 phone the title's first screen shows the roadster, not only haze and a card
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel

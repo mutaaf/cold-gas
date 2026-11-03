@@ -29,7 +29,34 @@ test('phone landscape: the mission block sits clear of Home and Retry during the
   await page.close();
 });
 
-test('320 px column: the top bar and the title fit, nothing under the bar', async ({ browser }) => {
+// 0131: the share of the roadster's projected box (every visible hero mesh's bounding box through the camera) that is
+// on screen and outside every title text, button and card box, sampled on a 24 × 24 grid.
+const heroClear = (page) => page.evaluate(() => {
+  const g = window.__coldgas, cam = g.camera, W = innerWidth, H = innerHeight, c = g.hero.group.position.clone();
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  g.hero.group.updateMatrixWorld(true);
+  g.hero.group.traverseVisible((o) => {
+    const bb = o.isMesh && !o.isInstancedMesh && o.geometry && (o.geometry.boundingBox || (o.geometry.computeBoundingBox(), o.geometry.boundingBox));
+    if (!bb) return;
+    for (let i = 0; i < 8; i++) {
+      c.set(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z).applyMatrix4(o.matrixWorld).project(cam);
+      const px = (c.x + 1) / 2 * W, py = (1 - c.y) / 2 * H;
+      x0 = Math.min(x0, px); x1 = Math.max(x1, px); y0 = Math.min(y0, py); y1 = Math.max(y1, py);
+    }
+  });
+  const own = (e) => [...e.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim());
+  const boxes = [...document.querySelectorAll('[data-screen="title"] *')]
+    .filter((e) => e.matches('button, a, .xc') || own(e))
+    .map((e) => e.getBoundingClientRect()).filter((r) => r.width > 0 && r.height > 0);
+  let free = 0;
+  for (let i = 0; i < 24; i++) for (let j = 0; j < 24; j++) {
+    const x = x0 + (x1 - x0) * (i + 0.5) / 24, y = y0 + (y1 - y0) * (j + 0.5) / 24;
+    if (x >= 0 && y >= 0 && x <= W && y <= H && !boxes.some((r) => x >= r.left && x <= r.right && y >= r.top && y <= r.bottom)) free++;
+  }
+  return { free: free / 576, box: [x0, y0, x1, y1].map(Math.round), band: document.querySelector('[data-screen="title"]').dataset.carBand || '' };
+});
+
+test('320 px column: the top bar and the title fit, nothing under the bar; on a phone the car shows beside the title', async ({ browser }) => {
   test.slow();
   const page = await browser.newPage(touch(320, 568));
   await boot(page);
@@ -39,6 +66,15 @@ test('320 px column: the top bar and the title fit, nothing under the bar', asyn
   expect(actions.r).toBeLessThanOrEqual(320);
   expect(apart(actions, wordmark), JSON.stringify({ actions, wordmark })).toBe(true);
   expect(cta.b).toBeLessThanOrEqual(568);
+  // 0131: the title's panel filled an upright phone and the turntable's car stood behind the Daily card. Now ≥ 60 % of
+  // its box is clear of every title box at the phone sizes the ticket names (the same page, resized: the lens refits).
+  for (const [w, h] of [[390, 844], [430, 932]]) {
+    await page.setViewportSize({ width: w, height: h });
+    await page.waitForTimeout(1500);
+    const m = await heroClear(page);
+    expect(m.free, `${w}×${h} ${JSON.stringify(m)}`).toBeGreaterThanOrEqual(0.6);
+    expect(m.band, `${w}×${h}`).toBe('below');
+  }
   await page.close();
 });
 
