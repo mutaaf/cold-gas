@@ -75,7 +75,18 @@ test('320 px column: the top bar and the title fit, nothing under the bar; on a 
     expect(m.free, `${w}×${h} ${JSON.stringify(m)}`).toBeGreaterThanOrEqual(0.6);
     expect(m.band, `${w}×${h}`).toBe('below');
   }
+  // Turned to landscape: the upright fit lets go and the wide title's lens (right of the panel) is back.
+  await page.setViewportSize({ width: 844, height: 390 });
+  await expect.poll(() => page.evaluate(() => {
+    const v = window.__coldgas.camera.view;
+    return `${document.querySelector('[data-screen="title"]').dataset.carBand || ''}|${v?.enabled && v.offsetX < 0}`;
+  }), { timeout: 10_000 }).toBe('|true');
   await page.close();
+  // And on a first load at 390×844 (fonts, the rise-in and the Daily card all arriving), not only after a resize.
+  const fresh = await browser.newPage(touch(390, 844));
+  await boot(fresh);
+  await expect.poll(async () => (await heroClear(fresh)).free, { timeout: 20_000 }).toBeGreaterThanOrEqual(0.6);
+  await fresh.close();
 });
 
 test('iPad title: the spec labels are 11 px or more', async ({ browser }) => {

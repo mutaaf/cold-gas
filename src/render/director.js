@@ -554,11 +554,13 @@ export function createDirector(camera) {
         });
       }
       if (!(x1 > x0)) for (let i = 0; i < 8; i++) corner(carPos.x + (i & 1 ? 2.3 : -2.3), carPos.y + (i & 2 ? 1.3 : 0), carPos.z + (i & 4 ? 2.3 : -2.3));
-      const r = titleEl.getBoundingClientRect(), area = Math.max(1, (x1 - x0) * (y1 - y0));
+      // In the canvas's own coordinates (a fold's top segment starts below nothing, but say so).
+      const st0 = document.getElementById('stage')?.getBoundingClientRect().top || 0, rr = titleEl.getBoundingClientRect();
+      const r = { left: rr.left, right: rr.right, top: rr.top - st0, bottom: Math.min(h, rr.bottom - st0) }, area = Math.max(1, (x1 - x0) * (y1 - y0));
       const cover = Math.max(0, Math.min(x1, r.right) - Math.max(x0, r.left)) * Math.max(0, Math.min(y1, r.bottom) - Math.max(y0, r.top)) / area;
       if (cover > TITLE_COVER) {
         let bar = 0;
-        for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const b = e.getBoundingClientRect(); if (b.height > 1) bar = Math.max(bar, b.bottom); }
+        for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const b = e.getBoundingClientRect(); if (b.height > 1) bar = Math.max(bar, b.bottom - st0); }
         const above = r.top - bar, below = h - r.bottom;
         side = above > below ? 'above' : 'below';
         // A car taller than the band (the Lineup's close orbit) is drawn smaller with a wider lens: the screen scales
@@ -598,7 +600,11 @@ export function createDirector(camera) {
   // phone. A full-screen region is no shift at all.
   function frameOffset(mode) {
     const w = innerWidth, h = innerHeight;
-    if (mode === 'title' && w / h > 1.15) return camera.setViewOffset(w, h, -w * 0.2, h * 0.04, w, h);
+    if (mode === 'title' && w / h > 1.15) {
+      // Turned or widened from upright: the upright fit lets go (its offset, lens and scrim side).
+      st.titleSide = ''; st.titleFov = 0; if (titleEl) delete titleEl.dataset.carBand;
+      return camera.setViewOffset(w, h, -w * 0.2, h * 0.04, w, h);
+    }
     if (mode === 'title') { titleDirty = true; return; }   // upright: titleFit places it on the next title frame
     if (mode === 'replay' && st.rr > 0) {
       const dx = w / 2 - (st.rl + st.rr) / 2, dy = h / 2 - (st.rt + st.rb) / 2;
