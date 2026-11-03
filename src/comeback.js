@@ -66,6 +66,7 @@ export function createComeback(o) {
         <button type="button" class="btn xc-go" data-daily-play>${st.doneToday ? 'Play again' : 'Play today’s'}</button>
       </div>`;
       m.querySelector('[data-daily-play]').addEventListener('click', () => {
+        obs.play('daily-start');   // 0136: the funnel's first step, tapped → finished (done | miss)
         o.selectCourse(obj.course);
         if (obj.tier && o.getTier() === 'assist') o.setTier(obj.tier);
         o.jump();
@@ -200,7 +201,10 @@ export function createComeback(o) {
     const obj = objectiveFor(now());
     const r = evaluate(obj, card, run.course);
     if (r) {
-      obs.play(r.ok ? 'daily-done' : 'daily-run');
+      // 0136: a finished Daily on its course is met (daily-done) or missed (daily-miss). daily-run meant a miss
+      // before daily-miss existed; it is still counted on a miss for one release so the digest's history reads on.
+      if (r.ok) obs.play('daily-done');
+      else { obs.play('daily-miss'); obs.play('daily-run'); }
       let text;
       if (r.ok) {
         const s = complete(loadStreak(), now());

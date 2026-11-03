@@ -1,7 +1,7 @@
 ---
 id: 0136
 title: The players' funnel counts a Daily start, and a Daily miss apart from a Daily done
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
@@ -24,10 +24,10 @@ players never tried. The next scout needs "tapped → finished → met" to pick 
   documentation that lists the events (AGENTS.md observability section, `docs/CHANGELOG.md` entry).
 
 ## Acceptance criteria
-- [ ] Tapping Play today's counts `daily-start` once; a missed Daily counts `daily-miss` (and still `daily-run`); a met one `daily-done`
-- [ ] `tests/unit` obs tests: the new names are accepted by `PLAY_EVENTS`, an unknown name is still dropped
-- [ ] No new network call or host; the beacon stays ≤ 8 kB
-- [ ] `npm run check:fast` passes
+- [x] Tapping Play today's counts `daily-start` once; a missed Daily counts `daily-miss` (and still `daily-run`); a met one `daily-done`
+- [x] `tests/unit` obs tests: the new names are accepted by `PLAY_EVENTS`, an unknown name is still dropped
+- [x] No new network call or host; the beacon stays ≤ 8 kB
+- [x] `npm run check:fast` passes
 
 ## Test plan
 Extend the existing e2e/unit obs spec (`tests/e2e/obs.spec.js`) to click Play today's with the beacon stubbed and assert the counts.

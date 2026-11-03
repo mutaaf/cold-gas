@@ -97,11 +97,17 @@ test('the daily card: today’s objective, Play today’s picks its course, and 
   await expect(card.locator('.xc-k')).toContainText('Daily · Nov 2');
   await expect(card.locator('.xc-goal')).toHaveText('Land within 10 ft of the mark', { useInnerText: true });
   await expect(card.locator('.xc-streak')).toContainText('Start a streak today');
+  const play = () => page.evaluate(() => window.__coldgas.obs.payload().play);
+  expect((await play())['daily-start'] ?? 0).toBe(0);
   await page.locator('[data-daily-play]').tap();
   await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 15_000 });
   expect(await page.evaluate(() => window.__coldgas.S.run.course)).toBe('show');
+  expect((await play())['daily-start']).toBe(1);   // 0136: the tap is counted, once
   await fly(page, true);
   await expect(page.locator('[data-daily-line]')).toHaveText('Daily: no clean landing yet — try again');
+  // 0136: a missed Daily is a daily-miss (and still daily-run for one release), never a daily-done.
+  expect(await play()).toMatchObject({ 'daily-start': 1, 'daily-miss': 1, 'daily-run': 1 });
+  expect((await play())['daily-done'] ?? 0).toBe(0);
   expect(errors).toEqual([]);
   await ctx.close();
 });

@@ -72,3 +72,39 @@ describe('the share link', () => {
     expect(await cb.linkFor(ref.card)).toBe(BASE);
   });
 });
+
+// 0136: the players' funnel tells a Daily met from a Daily missed (daily-run, kept one release, meant a miss).
+describe('the daily in the funnel', () => {
+  const MARK_DAY = 20770 * 86_400_000 + 3_600_000;   // a UTC day whose objective is mark-show (tests/unit/daily.test.js pins the walk)
+  const cbAt = (ms) => createComeback({ mount: null, resultMount: null, base: BASE, selectCourse() {}, getTier: () => 'assist', setTier() {}, jump() {}, ready: async () => {}, toast() {}, share() {}, now: () => ms });
+  const counted = async (card, course = 'show') => {
+    const { obs } = await import('../../src/obs/index.js');
+    obs.sendEnabled = false;
+    obs.flush('test', { force: true });
+    cbAt(MARK_DAY).results({ inputLog: ref.log, course }, card);
+    const p = { ...obs.payload().play };
+    obs.flush('test', { force: true });
+    return p;
+  };
+  it('a met Daily counts daily-done, and no miss', async () => {
+    expect(ref.card.facts.padMiss).toBeLessThanOrEqual(3);   // the reference lands on the mark
+    expect(await counted(ref.card)).toEqual({ 'daily-done': 1 });
+  });
+  it('a missed Daily counts daily-miss, and still daily-run for one release', async () => {
+    const card = { ...ref.card, facts: { ...ref.card.facts, padMiss: 6 } };
+    expect(await counted(card)).toEqual({ 'daily-miss': 1, 'daily-run': 1 });
+  });
+  it('a run on another course is not a Daily run', async () => {
+    expect(await counted(ref.card, 'wall')).toEqual({});
+  });
+  it('the new names are funnel events; an unknown one is still dropped', async () => {
+    const { PLAY_EVENTS } = await import('../../src/obs/signature.js');
+    expect(PLAY_EVENTS).toEqual(expect.arrayContaining(['daily-start', 'daily-miss', 'daily-done', 'daily-run']));
+    const { obs } = await import('../../src/obs/index.js');
+    obs.sendEnabled = false;
+    obs.flush('test', { force: true });
+    obs.play('daily-start'); obs.play('daily-started');
+    expect(obs.payload().play).toEqual({ 'daily-start': 1 });
+    obs.flush('test', { force: true });
+  });
+});
