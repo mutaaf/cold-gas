@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { wreckCause } from '../../src/obs/signature.js';
 
 // Observability and self-heal (src/obs/): errors are captured with stable signatures, a lost WebGL
 // context is restored and the stage rebuilt, a physics trap stops the run instead of freezing the
@@ -146,13 +147,15 @@ test('a physics trap mid-run stops the run with a toast instead of freezing the 
     cg.skipCountdown(); cg.fastForward();
   });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results' && !!window.__coldgas.S.coach, null, { timeout: 30_000 });
-  const tier = await page.evaluate(() => window.__coldgas.S.card.tier);   // the card's, from the log (the reference's own inputs)
+  // The card's tier (from the log: the reference's own inputs) and the cause the results' coach names.
+  const { tier, coachCause } = await page.evaluate(() => ({ tier: window.__coldgas.S.card.tier, coachCause: window.__coldgas.S.coach.items }));
   b = await leave();
   await page.evaluate(() => window.__coldgas.setTier('assist'));
   expect(b.play).toMatchObject({ run: 1, 'run-wrecked': 1, 'ctl-keys': 1, [`fly-${tier}`]: 1 });
   const keys = (p) => Object.keys(p).filter((k) => /^(ctl|fly|wreck)-/.test(k)).map((k) => k.split('-')[0]).sort();
   expect(keys(b.play)).toEqual(['ctl', 'fly', 'wreck']);
   const cause = Object.keys(b.play).find((k) => k.startsWith('wreck-'));
+  expect(cause).toBe(wreckCause(coachCause));
   expect(cause).not.toBe('wreck-other');
   expect(keys((await leave()).play)).toEqual([]);
 });

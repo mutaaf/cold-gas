@@ -351,11 +351,12 @@ function disposeRun() {
 // a Retry, Home or a closed tab in the aftermath isn't a quit. 0138: the decided card also counts how the run was
 // flown (ctl-*, fly-*) and a wreck what wrecked it (wreck-*, the coach's first finding): src/obs/run-end.js.
 const runEnd = createRunEnd(obs.play, (run, card) => coach(run.inputLog, run.course, card).items);
-function settleRun(left) {
-  runEnd.settle(S.run, S.card, left, { device: lastDevice(), scheme: ui.touch.dataset.scheme, tier: S.flyTier });
+// How it was flown is taken as its card is decided (closeCard), before a Retry's key or a mouse on Home can change it.
+function settleRun(left, now = false) {
+  runEnd.settle(S.run, S.card, left, S.cardHow, now);
 }
 const quitRun = () => settleRun(true);
-obs.beforeLeave(quitRun);
+obs.beforeLeave(() => settleRun(true, true));   // the page going: the cause re-flown now, onto its last beacon
 
 // Back to the title from anywhere, Free Drive and the Sandbox included (heal's escalation calls it
 // too). Their exit() calls back into toTitle (onExit): the guard keeps that from recursing.
@@ -437,6 +438,7 @@ function startRunNow(kind = 'jump', quick = false) {
 // the car there too. Taken before the aftermath moves it (beginAftermath), shown after.
 function closeCard(run) {
   S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.flyTier === 'assist' });
+  S.cardHow = { device: lastDevice(), scheme: ui.touch.dataset.scheme, tier: S.flyTier };   // the funnel's ctl-*/fly-* (0138)
   S.drillSnap = S.drill ? { result: drillResult(S.drill, run, S.card), coach: drillCoach(S.drill, run) } : null;
 }
 function finishRun() {

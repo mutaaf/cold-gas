@@ -4,10 +4,11 @@
 // A run counts `run` as it starts (in main.js) and exactly one of run-landed, run-wrecked (its decided card) or
 // run-quit (left before its card). A decided card also counts how it was flown: ctl-* and fly-*. A wreck counts
 // what wrecked it (wreck-*: the coach's first finding) once: from the results' own coach a beat after the sheet
-// (no extra re-fly on the frame the sheet slides in), or re-flown here if the run is left before that coach ran.
+// (no extra re-fly on the frame the sheet slides in), or re-flown here if the run is left before that coach ran:
+// at once when the page goes (its last beacon), else deferred off the Retry/Home tap (`defer`).
 import { wreckCause, ctlOf, flyOf } from './signature.js';
 
-export function createRunEnd(play, coachOf) {
+export function createRunEnd(play, coachOf, defer = (fn) => setTimeout(fn, 0)) {
   let open = null, owed = null;
   const pay = (items) => {
     if (!owed) return;
@@ -17,10 +18,10 @@ export function createRunEnd(play, coachOf) {
     play(wreckCause(items));
   };
   return {
-    start(run) { pay(); open = run; },
+    start(run) { open = run; },
     // current: the run on stage; card: its decided card (or null); left: it is being left (Retry, Home, the page
-    // going); how: { device, scheme, tier } (src/input.js lastDevice, the touch scheme on screen, the flight tier).
-    settle(current, card, left, how = {}) {
+    // going: `now`); how: { device, scheme, tier } as the run was flown (taken when its card was decided).
+    settle(current, card, left, how = {}, now = false) {
       if (open && open === current) {
         if (card) {
           const wrecked = !!card.facts?.crashed;
@@ -31,7 +32,7 @@ export function createRunEnd(play, coachOf) {
         } else if (left) play('run-quit');
       }
       open = null;
-      if (left) pay();
+      if (left && owed) { if (now) pay(); else defer(() => pay()); }
     },
     // The results' coach ran for `run`: its findings name the cause (no second re-fly).
     coached(run, items) { if (owed && owed.run === run) pay(items); },

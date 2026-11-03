@@ -60,7 +60,7 @@ describe('0138: what wrecked it', () => {
       const plays = [];
       const end = createRunEnd((n) => plays.push(n), coachOf);
       end.start(run);
-      end.settle(run, scoreRun(run.t), true, { device: 'touch', scheme: 'thumb', tier: 'assist' });
+      end.settle(run, scoreRun(run.t), true, { device: 'touch', scheme: 'thumb', tier: 'assist' }, true);
       expect(plays).toEqual(['run-wrecked', 'ctl-thumb', 'fly-assist', expected[name]]);
     }
   });
@@ -69,9 +69,10 @@ describe('0138: what wrecked it', () => {
 describe('0138: how it was flown, once per run', () => {
   const card = (crashed, tier = 'assist') => ({ tier, facts: { crashed } });
   const make = () => {
-    const plays = [], coached = [];
-    const end = createRunEnd((n) => plays.push(n), (run) => { coached.push(run); return [{ id: 'late-brake' }]; });
-    return { plays, coached, end };
+    const plays = [], coached = [], later = [];
+    const end = createRunEnd((n) => plays.push(n), (run) => { coached.push(run); return [{ id: 'late-brake' }]; }, (fn) => later.push(fn));
+    const flush = () => { while (later.length) later.shift()(); };
+    return { plays, coached, end, flush, later };
   };
 
   it('a wreck counts its cause from the results\' coach, once; leaving afterwards adds nothing', () => {
@@ -88,14 +89,39 @@ describe('0138: how it was flown, once per run', () => {
     expect(coached).toEqual([]);             // no second re-fly
   });
 
-  it('a wreck left before its coach ran is re-flown then, once', () => {
-    const { plays, coached, end } = make();
+  it('a wreck left by the page going is re-flown at once, onto its last beacon', () => {
+    const { plays, coached, end, later } = make();
     const run = {};
     end.start(run);
-    end.settle(run, card(true), true, { device: 'key' });   // R in the aftermath, or the page going
-    end.settle(run, card(true), true, { device: 'key' });
-    end.coached(run, [{ id: 'short' }]);
+    end.settle(run, card(true), true, { device: 'key' }, true);
     expect(plays).toEqual(['run-wrecked', 'ctl-keys', 'fly-assist', 'wreck-brake']);
+    expect(coached).toEqual([run]);
+    expect(later).toEqual([]);
+  });
+
+  it('a wreck left by Retry or Home before its coach ran is re-flown after the tap, once', () => {
+    const { plays, coached, end, flush } = make();
+    const run = {}, next = {};
+    end.start(run);
+    end.settle(run, card(true), true, { device: 'key' });   // R in the aftermath
+    end.start(next);                                         // the retry's run: nothing re-flown in the tap
+    expect(coached).toEqual([]);
+    expect(plays).toEqual(['run-wrecked', 'ctl-keys', 'fly-assist']);
+    end.settle(next, null, true, {}, true);                  // …and the page goes before the deferred re-fly: paid now, once
+    flush();
+    end.coached(run, [{ id: 'short' }]);
+    expect(plays).toEqual(['run-wrecked', 'ctl-keys', 'fly-assist', 'run-quit', 'wreck-brake']);
+    expect(coached).toEqual([run]);
+  });
+
+  it('a Retry within the coach\'s beat: the sheet owes it, the tap defers it, it is paid once', () => {
+    const { plays, coached, end, flush } = make();
+    const run = {};
+    end.start(run);
+    end.settle(run, card(true), false, { device: 'touch', scheme: 'thumb' });
+    end.settle(run, card(true), true);
+    flush(); flush();
+    expect(plays.filter((p) => p.startsWith('wreck-'))).toEqual(['wreck-brake']);
     expect(coached).toEqual([run]);
   });
 
@@ -104,7 +130,7 @@ describe('0138: how it was flown, once per run', () => {
     const end = createRunEnd((n) => plays.push(n), () => { throw new Error('boom'); });
     const run = {};
     end.start(run);
-    end.settle(run, card(true), true, { device: 'touch', scheme: 'thumb' });
+    end.settle(run, card(true), true, { device: 'touch', scheme: 'thumb' }, true);
     expect(plays.filter((p) => p.startsWith('wreck-'))).toEqual(['wreck-other']);
   });
 
