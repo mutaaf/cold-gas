@@ -1367,6 +1367,7 @@ function frameBody(now) {
       phase: S.run?.phase || 'drive',
       mode: S.mode === 'title' ? 'title' : S.mode === 'results' || S.mode === 'replay' ? 'replay' : 'live',
       course: stage.course,   // [stage]
+      subject: hero.group,    // the title's upright framing measures the car's own box (0131)
     });
     stage.render(S.time, S.mode);
   }

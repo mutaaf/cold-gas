@@ -1,5 +1,5 @@
 ---
-id: 0140
+id: 0141
 title: On a decided run, "Post" names the rank it would get today ("Post · #1 on an empty board")
 status: ready
 priority: P1

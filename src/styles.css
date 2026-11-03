@@ -119,6 +119,10 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
    the brightest pixels behind it (scripts/title-audit.mjs). No box-shadow overflow: it scrolls nothing. */
 .title::before { content: ''; position: absolute; inset: 0; z-index: -1; pointer-events: none; border-radius: 28px;
   background: rgba(5, 7, 12, 0.72); box-shadow: 0 0 44px 30px rgba(5, 7, 12, 0.72); animation: scrim-in 0.9s var(--ease) 0.1s both; }
+/* 0131: on an upright screen the car stands in the band beside the panel (src/render/director.js titleFit), so the
+   feather on that side stops at the panel's edge; the text's own backing (inset 0) is unchanged. */
+.title[data-car-band='below']::before { box-shadow: 0 -26px 44px 26px rgba(5, 7, 12, 0.72); }
+.title[data-car-band='above']::before { box-shadow: 0 26px 44px 26px rgba(5, 7, 12, 0.72); }
 @keyframes scrim-in { from { opacity: 0; } }   /* in with the text's rise, not ahead of it as an empty panel */
 body[data-mode='title'] .brand { position: relative; isolation: isolate; }
 body[data-mode='title'] .brand::before { content: ''; position: absolute; inset: -4px -8px; z-index: -1; border-radius: 10px;
