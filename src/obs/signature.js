@@ -109,11 +109,14 @@ export const MODULE_IDS = ['app', 'render', 'webgl', 'shader', 'physics', 'audio
 // 0138: a Jump run's decided card also counts how it was flown (ctl-*: the one-thumb pad, the classic touch stick
 // and buttons, a keyboard or a gamepad; fly-*: the flight tier) and, for a wreck, what wrecked it (wreck-*: the
 // coach's first finding, folded by wreckCause). Counts only, once per run.
+// 0136: the Daily, tapped → finished → met: daily-start (a tap on Play today's or Play again), then daily-done or daily-miss
+// on every finished run on the Daily's course, however it was started (a plain Jump or a Retry there counts toward the
+// Daily too, as the streak does), so read done / (done + miss) as the met rate, and start as the taps. daily-run is the old name for a miss, still counted beside daily-miss for one release (src/comeback.js).
 export const CTL_EVENTS = ['ctl-thumb', 'ctl-classic', 'ctl-keys', 'ctl-pad'];
 export const FLY_EVENTS = ['fly-assist', 'fly-pro', 'fly-advanced'];
 export const WRECK_EVENTS = ['wreck-short', 'wreck-brake', 'wreck-ran-out', 'wreck-roll', 'wreck-flipped', 'wreck-fell-off', 'wreck-release', 'wreck-other'];
 export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 'run', 'run-quit', 'run-landed', 'run-wrecked', 'retry',
-  'post', 'post-fail', 'share', 'board-open', 'challenge-open', 'challenge-run', 'daily-run', 'daily-done', 'drive', 'sandbox',
+  'post', 'post-fail', 'share', 'board-open', 'challenge-open', 'challenge-run', 'daily-start', 'daily-miss', 'daily-run', 'daily-done', 'drive', 'sandbox',
   ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS];
 // The coach's finding ids (src/sim/coach.js) → the wreck's cause. Into the row; a hard touchdown (never braked,
 // braked or landed late); braked but ran out at the bottom; the roll-out or the attitude; on its roof; off the
