@@ -58,11 +58,12 @@ const inlineCss = {
         const font = Object.keys(bundle).find((f) => re.test(f));
         if (font) html = html.replace('</title>', `</title>\n  <link rel="preload" href="${BASE}${font}" as="font" type="font/woff2" crossorigin />`);
       }
-      // Start the physics engine's WASM (1.1 MB on the wire, the largest download) with the HTML, not
-      // after the 180 KB entry script has loaded and run: src/sim/engine-web.js fetch()es the same
-      // URL (cors, same-origin credentials = crossorigin), so the request is reused, not repeated.
-      const wasm = Object.keys(bundle).find((f) => /rapier_wasm3d_bg-[\w-]+\.wasm$/.test(f));
-      if (wasm) html = html.replace('</title>', `</title>\n  <link rel="preload" href="${BASE}${wasm}" as="fetch" type="application/wasm" crossorigin />`);
+      // No preload for the physics engine's WASM (1.17 MB gzip, the largest download), on purpose (0053). On a
+      // phone over cellular the link is the bottleneck: preloaded with the HTML it shared the link with the
+      // entry script (≈ 220 kB), which landed at 4.7 s instead of 3.4 s (Slow 4G), and the Jump was wired 1.3 s
+      // later. main.js asks for it first thing (src/sim/engine-web.js), once the entry is in. Its last byte
+      // arrives ≈ 0.7 s later, but the engine was ready no later in our runs: at 4× CPU its compile dominates.
+      // tests/e2e/layout.spec.js holds the order; scripts/serve-gz.mjs + scripts/perf.mjs measure it.
       return html;
     },
   },
