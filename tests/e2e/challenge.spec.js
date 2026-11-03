@@ -108,6 +108,46 @@ test('the daily card: today’s objective, Play today’s picks its course, and 
   // 0136: a missed Daily is a daily-miss (and still daily-run for one release), never a daily-done.
   expect(await play()).toMatchObject({ 'daily-start': 1, 'daily-miss': 1, 'daily-run': 1 });
   expect((await play())['daily-done'] ?? 0).toBe(0);
+
+  // 0139: a gas day (2026-11-15) on one thumb, the phone's default. The card carries the hint in the streak's row (no new row:
+  // the card stays whole, not packed to one line),
+  // Play today's says it again as the run counts down, and a gas miss says what to change. A fresh page from the same
+  // context, not a new test (LESSONS 2026-10-31: keep the file's test count).
+  const p2 = await ctx.newPage();
+  await p2.clock.setFixedTime(new Date('2026-11-15T15:00:00Z'));
+  await p2.route('**/coldgas/api/**', (r) => r.abort());
+  p2.on('pageerror', (e) => errors.push(e.message));
+  await p2.goto('/coldgas/?gfx=low');
+  await ready(p2);
+  const gasCard = p2.locator('[data-title-extra] .xc-daily');
+  await expect(gasCard.locator('.xc-goal')).toHaveText('Clear the row with more than 25 % gas left', { useInnerText: true });
+  const hint = gasCard.locator('[data-daily-hint]');
+  await expect(hint).toHaveText('Hold the pad from the tap');
+  expect(await hint.evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5)).toBe(true);   // whole, not cut off with an ellipsis
+  expect(await p2.evaluate(() => document.querySelector('.title').dataset.extraFit ?? '')).toBe('');
+  const [hb, cb, go] = await Promise.all([hint.boundingBox(), gasCard.boundingBox(), p2.locator('[data-daily-play]').boundingBox()]);
+  expect(hb.x).toBeGreaterThanOrEqual(cb.x); expect(hb.x + hb.width).toBeLessThanOrEqual(cb.x + cb.width + 0.5);
+  expect(hb.y + hb.height).toBeLessThanOrEqual(cb.y + cb.height + 0.5);
+  expect(hb.y).toBeGreaterThanOrEqual(go.y + go.height - 0.5);   // under the button, never over it
+  expect(cb.y + cb.height).toBeLessThanOrEqual(844);
+  expect(await hint.evaluate((e) => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(11);
+  await p2.locator('[data-daily-play]').tap();
+  await expect(p2.locator('[data-cue]')).toContainText('Tip: Hold the pad from the tap to the ground', { timeout: 15_000 });
+  // The reference flight, its card's gas set under the bar (the card is decided at the run's end, shown after).
+  await p2.evaluate(() => {
+    const g = window.__coldgas, S = g.S;
+    S.autopilot = g.createAutopilot(g.stage.course);
+    g.skipCountdown();
+    for (let i = 0; i < 4000 && !S.card; i++) g.liveStep(0.1);
+    S.card.facts.airPct = 24;
+    S.autopilot = null;
+    for (let i = 0; i < 4000 && S.mode !== 'results'; i++) g.liveStep(0.1);
+  });
+  const line = p2.locator('[data-daily-line]');
+  await expect(line).toHaveText('Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; letting go and then sliding costs gas');
+  const lb = await line.boundingBox();
+  expect(lb.y).toBeGreaterThanOrEqual(0); expect(lb.y + lb.height).toBeLessThanOrEqual(844);   // in view as the sheet opens
+  expect(await line.evaluate((e) => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(11);
   expect(errors).toEqual([]);
   await ctx.close();
 });

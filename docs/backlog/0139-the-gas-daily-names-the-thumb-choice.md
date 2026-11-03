@@ -1,12 +1,12 @@
 ---
 id: 0139
 title: On one thumb, the gas Daily names the choice that meets it, and aiming never makes it harder to read
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-03
-pr:
+pr: 227
 by: critic
 ---
 
@@ -73,3 +73,25 @@ more than 25 % gas left", `src/daily.js`) is reachable there, but surely only by
 - Changing the gas bar or any other objective's bar (0135).
 - The one-thumb push-off's 28.6 kg (0134's accepted trade).
 - The other Daily objectives' wording.
+
+## Outcome (2026-11-03, builder)
+- **The lever, measured** (`node scripts/human-phone.mjs 150 --scheme=thumb --skill=careful --daily`, which now prints the split):
+
+  | the thumb's choice | n | gas-show met | gas left min / median / max |
+  |---|---|---|---|
+  | held from the tap · no slide | 10 | 10 (100 %) | 33 / 33 / 33 % |
+  | held from the tap · slid | 29 | 27 (93 %) | 25 / 33 / 37 % |
+  | lifted, pressed again · no slide | 31 | 31 (100 %) | 26 / 26 / 26 % |
+  | lifted, pressed again · slid | 80 | 5 (6 %) | 23 / 24 / 27 % |
+
+  So holding from the tap is the sure way, and a slide after a lift is what costs the day (a slide while holding costs ≈ nothing).
+- **The words** (`src/daily.js` `missLine` / `titleHint`, in the device's words from `src/pointer.js`): one thumb
+  `Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; letting go and then sliding costs gas`; keys
+  `· shorter BOOST (F) bursts and one late LAND (Shift)` (LIFT on Pro; classic touch and a pad name their own buttons). A
+  miss before the number ("clear the row and land clean first") and every other objective still say "try again".
+- **The title:** on one thumb on a gas day the Daily card's streak row says "Hold the pad from the tap" in place of the
+  streak's words (kept for a screen reader; a second line packed the card to one line on CI's 390×844), and Play today's
+  puts "Hold the pad from the tap to the ground" on the countdown's tip. The title audit run on a stubbed gas day (2026-11-15, every viewport) is clean.
+- **Following the words meets it:** `tests/unit/thumb-gas.test.js` (0134) flies the one-thumb Show held from the tap and
+  meets gas-show; this PR did not add a page flight of it.
+- ref-hash identical (show `fedae05c`, wall `bacb4720`, lineup `8b2c2c9a`).

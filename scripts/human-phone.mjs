@@ -28,6 +28,7 @@
 //
 // --daily (0134): also check each landed-or-not run against every Show objective of the daily jump (src/daily.js
 // evaluate, on scoreRun's card) and print each one's completion, so a Daily bar is set on phones as well as keyboards.
+// On one thumb it also splits gas-show by the thumb's choice (0139): held from the tap or lifted and pressed again, slid or not.
 //
 //   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [--coach] [--daily] [-v]
 import { readFileSync } from 'node:fs';
@@ -57,6 +58,8 @@ const { coachWords } = COACH ? await import('../src/pointer.js') : {};
 const DAILY = args.includes('--daily');
 const { OBJECTIVES, evaluate } = DAILY ? await import('../src/daily.js') : {};
 const dailyMet = {}, gasLeft = [];
+// 0139: gas-show split by what the thumb chose: held from the tap or lifted and pressed again, and slid onto the mark or not.
+const split = {};
 const firsts = {}, markTitles = {};
 let longButWide = 0;
 const { createOneThumb, markOffset } = scheme === 'thumb' ? await import('../src/onethumb.js') : {};
@@ -128,14 +131,14 @@ for (let n = 0; n < N; n++) {
     for (let k = 0; k < 3 && rnd2() > p; k++) { missed++; t += P.lag + mt; }
     return Math.round(t * 240);
   };
-  let why = '';
+  let why = '', choice = '';
   if (scheme === 'thumb') {
     const th = createOneThumb();
     let released = false, tapped = false, ledgeT = -1, tapAt = -1, holdFrom = -1, holding = false, lapseAt = -1, landSeen = -1;
     // The slide (0121), drawn from its own stream so the base population is the same with or without it.
     const sk = skill === 'mixed' ? ['none', 'careful', 'sloppy'][Math.floor(rnd3() * 3)] : skill;
     const A = { every: Math.round((0.25 + rnd3() * 0.25) * 240), over: 2 + rnd3(), flip: rnd3() < 0.5, shove: rnd3() < 0.4 ? 20 + rnd3() * 40 : 0, flipFor: Math.round((0.4 + rnd3() * 0.6) * 240) };
-    let aimNext = -1, aimAt = -1, want = null, flipUntil = -1;
+    let aimNext = -1, aimAt = -1, want = null, flipUntil = -1, slid = false;
     const off = { x: 0, y: 0, m: 0 };
     // Lifting the thumb mid-climb (20 % do, once): a second, then back on.
     th.down();
@@ -184,7 +187,7 @@ for (let n = 0; n < N; n++) {
           }
           want = { x, y }; aimAt = t + lagT; aimNext = t + A.every;
         }
-        if (want && t >= aimAt) th.move(want.x, want.y);
+        if (want && t >= aimAt) { th.move(want.x, want.y); if (Math.abs(want.x) + Math.abs(want.y) > 1) slid = true; }
       }
       th.sample(run, released, inp);
       // main.js wallAssist: a lift on the deck is the release; the fan holds the car until then.
@@ -193,6 +196,7 @@ for (let n = 0; n < N; n++) {
       inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
       stepRun(run, inp);
     }
+    choice = `${P.landAt === 'with-boost' ? 'held from the tap' : 'lifted, pressed again'} · ${slid ? 'slid' : 'no slide'}`;
   } else {
     let released = false, relT = -1, ledgeT = -1, relPress = -1, boostOn = false, cueOffT = -1, rollOn = false, rollDone = false, rollUprightT = -1;
     let landing = false, landSeen = -1, landPress = -1, wHeld = false, wChange = 0, ax = 0, noise = 0, boostPress = -1;
@@ -272,6 +276,11 @@ for (let n = 0; n < N; n++) {
   if (DAILY) {
     for (const o of OBJECTIVES) if (o.course === 'show') dailyMet[o.id] = (dailyMet[o.id] || 0) + (evaluate(o, s, 'show').ok ? 1 : 0);
     if (s.facts.jumped && !s.facts.crashed) gasLeft.push(s.facts.airPct);
+    if (choice) {
+      const g = (split[choice] ||= { n: 0, met: 0, gas: [] });
+      g.n++; if (evaluate(OBJECTIVES.find((o) => o.id === 'gas-show'), s, 'show').ok) g.met++;
+      if (s.facts.jumped && !s.facts.crashed) g.gas.push(s.facts.airPct);
+    }
   }
   if (t.airStartTick < 0) why = t.fellOff ? 'climb: fell off' : 'climb: stalled';
   else if (t.fellOff) why = 'climb: fell off';
@@ -305,6 +314,10 @@ if (DAILY) {
   const g = (f) => gasLeft[Math.min(gasLeft.length - 1, Math.floor(gasLeft.length * f))] ?? '–';
   console.log(`  the daily (Show objectives, n ${N}): ${OBJECTIVES.filter((o) => o.course === 'show').map((o) => `${o.id}${o.tier ? ` (${o.tier})` : ''} ${dailyMet[o.id]}/${N} (${Math.round((100 * dailyMet[o.id]) / N)}%)`).join(' · ')}`);
   const over = (x) => `> ${x} % ${gasLeft.filter((a) => a > x).length}/${N}`;
+  for (const [k, g] of Object.entries(split).sort()) {
+    g.gas.sort((a, b) => a - b);
+    console.log(`  gas-show by the thumb's choice: ${k}: ${g.met}/${g.n} met (${Math.round((100 * g.met) / Math.max(1, g.n))}%) · gas left min ${g.gas[0] ?? '–'} · median ${g.gas[Math.floor(g.gas.length / 2)] ?? '–'} · max ${g.gas.at(-1) ?? '–'} %`);
+  }
   console.log(`  gas left at touchdown, landed runs: min ${gasLeft[0] ?? '–'} · median ${g(0.5)} · max ${gasLeft[gasLeft.length - 1] ?? '–'} % · ${[25, 28, 30, 32, 35, 40].map(over).join(' · ')}`);
 }
 if (DUMP) { const { writeFileSync } = await import('node:fs'); writeFileSync(DUMP, JSON.stringify(dumped)); }

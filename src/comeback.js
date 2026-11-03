@@ -7,7 +7,7 @@ import './comeback.css';
 import { decodeChallenge, encodeChallenge, vsFromHash, challengeUrl, compare, createReplay, replayAsync, coarsen,
   COARSE_STEPS, VS_TARGET_CHARS, VS_MAX_CHARS } from './challenge.js';
 import { obs } from './obs/index.js';
-import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, courseName, dayNumber, DAY_MS } from './daily.js';
+import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, courseName, dayNumber, DAY_MS, missLine, titleHint } from './daily.js';
 import { packFrames } from './ghost.js';
 import { freeWorld } from './sim/world.js';
 import { onUnits } from './units.js';
@@ -29,6 +29,9 @@ const TIER = { assist: 'Assist', pro: 'Pro', advanced: 'Advanced' };
  * @param {() => Promise<unknown>} o.ready  physics (and the stage) up
  * @param {(blobOrText: object) => void} o.share   share-card's shareRun, bound to this run's card
  * @param {(msg: string, ms?: number) => void} o.toast
+ * @param {(course: string, tier?: string, flown?: boolean) => object} [o.how]   the device's words (src/pointer.js ctx) for a
+ *                                          course; `flown`: as the run on the sheet was flown (its card's device and scheme)
+ * @param {(text: string) => void} [o.tip]  the next countdown's tip (0139: today's hint on a Play today's)
  * @param {() => number} [o.now]
  */
 export function createComeback(o) {
@@ -38,6 +41,13 @@ export function createComeback(o) {
   let ch = null, armed = false;
   let last = null;   // { run, card, link: Promise<string> } for the run on the results sheet
   let shownDay = dayNumber(now());
+  let shownHint = '';   // the hint the daily card was last drawn with (0139)
+  // 0139: today's hint for this device, flown at the tier Play today's would set ('' when there is none, or done).
+  const todayHint = (whole = false) => {
+    const obj = objectiveFor(now());
+    if (streakNow(loadStreak(), now()).doneToday) return '';
+    return titleHint(obj, o.how?.(obj.course, obj.tier && o.getTier() === 'assist' ? obj.tier : o.getTier()), whole);
+  };
 
   // --- the title card ----------------------------------------------------------------------------
   function render() {
@@ -56,12 +66,16 @@ export function createComeback(o) {
       m.querySelector('[data-vs-dismiss]').addEventListener('click', dismiss);
     } else {
       const obj = objectiveFor(now()), st = streakNow(loadStreak(), now());
+      // 0139: today's hint takes the streak words' place in their row (no new row: the title has no height to spare on a
+      // phone); the words stay for a screen reader. It steps aside with the row when the card is tight.
+      const hint = shownHint = todayHint();
+      const streakWords = st.streak ? `${st.streak}-day streak` : 'Start a streak today';
       const pips = Array.from({ length: 7 }, (_, i) => `<i${i < Math.min(7, st.streak) ? ' class="on"' : ''}></i>`).join('');
       m.innerHTML = `<div class="xc xc-daily${st.doneToday ? ' done' : ''}" role="group" aria-label="Today’s daily jump">
         <div class="xc-text">
           <p class="xc-k"><span>Daily · ${utcLabel(now())}</span><span class="xc-dot" aria-hidden="true">·</span><span>${courseName(obj.course)}</span>${st.doneToday ? '<span class="xc-tick">✓ Done</span>' : ''}</p>
           <p class="xc-goal"><span class="xc-ck">${st.doneToday ? 'Daily ✓' : 'Daily'} · ${courseName(obj.course)}</span>${obj.goal()}</p>
-          <p class="xc-streak xc-sub"><span class="xc-pips" aria-hidden="true">${pips}</span><span>${st.streak ? `${st.streak}-day streak` : 'Start a streak today'}</span></p>
+          <p class="xc-streak xc-sub"><span class="xc-pips" aria-hidden="true">${pips}</span>${hint ? `<span class="vh">${streakWords}</span><span class="xc-hint" data-daily-hint>${hint}</span>` : `<span>${streakWords}</span>`}</p>
         </div>
         <button type="button" class="btn xc-go" data-daily-play>${st.doneToday ? 'Play again' : 'Play today’s'}</button>
       </div>`;
@@ -69,6 +83,8 @@ export function createComeback(o) {
         obs.play('daily-start');   // 0136: the funnel's first step, tapped → finished (done | miss)
         o.selectCourse(obj.course);
         if (obj.tier && o.getTier() === 'assist') o.setTier(obj.tier);
+        const tip = todayHint(true);
+        if (tip) o.tip?.(tip);   // and once more as the run counts down (the card may have stepped aside on a short screen)
         o.jump();
       });
     }
@@ -179,6 +195,13 @@ export function createComeback(o) {
     o.mount?.querySelector('[data-daily-play]')?.focus();
   }
 
+  // 0139: the device, the touch scheme or the tier changed. Redraw the daily card only if its hint did: a redraw replaces
+  // the card's buttons, and a device switch is noted on the very pointerdown or keydown that is pressing one.
+  function refresh() {
+    if (!o.mount || (ch && ch.state !== 'bad')) return;
+    if (todayHint() !== shownHint) render();
+  }
+
   // The challenger's frames for the ghost in a run on its course, once taken.
   const ghost = (course) => (armed && ch?.state === 'ready' && ch.dec.course === course ? ch.ghost : null);
 
@@ -210,7 +233,7 @@ export function createComeback(o) {
         const s = complete(loadStreak(), now());
         saveStreak(s);
         text = `Daily ✓ complete · streak ${s.streak}`;
-      } else text = `Daily: ${r.miss} — try again`;
+      } else text = missLine(obj, r, o.how?.(run.course, card.tier, true));   // 0139: what to change, in the words of how it was flown
       lines.push(`<p class="xr xr-daily${r.ok ? ' ok' : ''}" data-daily-line>${text}</p>`);
     }
     render();   // the title's card under the sheet: where the challenge stands, the daily done, the streak
@@ -251,7 +274,7 @@ export function createComeback(o) {
 
   render();
   return {
-    boot, ghost, results, linkFor, render,
+    boot, ghost, results, linkFor, render, refresh,
     get active() { return armed; },
     // e2e
     get state() { return ch ? { state: ch.state, armed, initials: ch.dec.initials, score: ch.dec.score, course: ch.dec.course } : null; },

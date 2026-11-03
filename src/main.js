@@ -512,6 +512,11 @@ function pointerCtx(course = S.run?.course || stage.course, tier = S.flyTier) {
   const scheme = device === 'touch' && touchSet.scheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic';
   return { device, scheme, tier, course };
 }
+// The words for the run on the sheet as it was flown (S.cardHow, taken when its card was decided; 0139).
+function flownCtx(how, course, tier) {
+  const device = deviceOf(how.device);
+  return { device, scheme: device === 'touch' && how.scheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic', tier, course };
+}
 function showPointer(run) {
   // Worded for the tier the next run flies (an Adapt step down changes the controls that matter).
   const p = pickPointer(S.coach.items, pointerCtx(run.course, S.tier), { history: S.pointerHist, card: S.card, flight: S.coach.flight, crashed: !!S.card?.facts?.crashed });
@@ -1094,6 +1099,7 @@ ctlScreen.querySelector('[data-tilt]').addEventListener('click', async () => {
 });
 ctlScreen.querySelector('[data-tilt-calibrate]').addEventListener('click', () => { calibrateTilt(); buzz('tap'); tiltNote.textContent = 'Calibrated: this is straight ahead.'; });
 onSettings(syncControlsSheet);
+onSettings(() => S.titleCard?.());   // 0139: one-thumb or classic changes the Daily card's hint
 syncControlsSheet();
 // The pause sheet's All controls (a keyboard) opens the same sheet, where every key is listed.
 document.querySelectorAll('[data-controls-open], [data-all-controls]').forEach((b) => b.addEventListener('click', () => { syncControlsSheet(); ui.show('controls', true); }));
@@ -1409,6 +1415,7 @@ bindInput(document.body, { onPause: () => pause(), running: () => S.mode === 'li
 // The device changed mid-run (a key or a pad on an iPad, a finger on a touchscreen laptop): the touch
 // controls follow it, and one-thumb with them (thumbActive reads the overlay).
 onDevice(() => {
+  S.titleCard?.();   // 0139: the Daily card's hint is in the device's words
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
   ui.touch.hidden = !usingTouch() || !!S.autopilot;
   syncScheme();
@@ -1499,7 +1506,9 @@ const comeback = createComeback({
   base: shareUrl(), selectCourse, getTier: () => S.tier, setTier: (t) => setTier(t), jump: () => jump(),
   ready: () => Promise.all([stage.ready, physicsLoad]), toast,
   share: ({ card, url, text }) => shareRun({ card, url, text, cardPromise: startCard() }),
+  how: (course, tier, flown) => (flown && S.cardHow ? flownCtx(S.cardHow, course, tier) : pointerCtx(course, tier)), tip: (text) => { S.tip = text; },
 });
+S.titleCard = () => comeback.refresh();
 
 // The flight tier: Assist → Pro → Advanced, for the next run (a run keeps the tier it started with:
 // latchTier). The top bar's chip says what the panel pays for it (off the title: on the title the Assist
@@ -1527,6 +1536,7 @@ function setTier(tier, { auto = false } = {}) {
   try { localStorage.setItem('coldgas_tier', S.tier); localStorage.setItem('coldgas_assist', S.assist ? '1' : '0'); } catch { /* storage blocked */ }
   syncAssist();
   syncScheme();
+  S.titleCard?.();   // 0139: the Daily card's hint depends on the tier (one-thumb flies Assist only)
 }
 // The labelled control: "ASSIST · ON — rolls you out, levels and brakes" (or OFF · PRO — you fly it …).
 // What the panel pays for a tier is the tier picker's to say (and the results'), never the title's: a first
