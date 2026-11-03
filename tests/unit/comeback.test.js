@@ -75,7 +75,7 @@ describe('the share link', () => {
 
 // 0136: the players' funnel tells a Daily met from a Daily missed (daily-run, kept one release, meant a miss).
 describe('the daily in the funnel', () => {
-  const MARK_DAY = 20770 * 86_400_000 + 3_600_000;   // a UTC day whose objective is mark-show (tests/unit/daily.test.js pins the walk)
+  const MARK_DAY = 20770 * 86_400_000 + 3_600_000;   // a UTC day whose objective is mark-show (asserted below)
   const cbAt = (ms) => createComeback({ mount: null, resultMount: null, base: BASE, selectCourse() {}, getTier: () => 'assist', setTier() {}, jump() {}, ready: async () => {}, toast() {}, share() {}, now: () => ms });
   const counted = async (card, course = 'show') => {
     const { obs } = await import('../../src/obs/index.js');
@@ -86,6 +86,10 @@ describe('the daily in the funnel', () => {
     obs.flush('test', { force: true });
     return p;
   };
+  it('the day is a mark-show day', async () => {
+    const { objectiveFor } = await import('../../src/daily.js');
+    expect(objectiveFor(MARK_DAY).id).toBe('mark-show');
+  });
   it('a met Daily counts daily-done, and no miss', async () => {
     expect(ref.card.facts.padMiss).toBeLessThanOrEqual(3);   // the reference lands on the mark
     expect(await counted(ref.card)).toEqual({ 'daily-done': 1 });
