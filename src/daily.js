@@ -3,16 +3,27 @@
 // facts, total and tier), never from anything the sim doesn't already measure; and a streak of
 // consecutive UTC days completed, kept on this device only (localStorage `coldgas_daily`).
 //
-// The thresholds were set against scripts/human-show.mjs's populations (Assist and Pro, cues new) and
-// the reference flights, so most days are a stretch for a player who lands, none a lottery:
-//   within 3 m of the Show's mark  ≈ 10 % of clean Assist landings · gas: see below
-//   roofs by under 1.5 m           ≈ 23 %                          · 90+ on the Show ≈ 30 %
-// The gas bar is set on phones (0134): most players fly the Show on one thumb, where the computer flies the
-// push-off and the carry, and none of 900 one-thumb players (scripts/human-phone.mjs --scheme=thumb --daily,
-// skill none / careful / mixed) landed with more than 40 % (37 % at best; the reference flown without its pad
-// steering lands with 41 %). What a thumb chooses is when to hold the pad: kept down from the tap through the
-// let-go (LAND from the release) it lands with 33–37 %; picked up after the fall has begun, at any height, 23–26 %. More than 30 % sits in that gap: 19 % of careful
-// one-thumb players, 26 % of the no-skill ones; keyboard Assist landings ≈ 65 % (> 40 % was ≈ 16 %), an easier day there.
+// The bars are set on the players who fly each course the way they fly it (0135: scripts/daily-reach.mjs prints the
+// table, tests/unit/daily-reach.test.js holds a 30 % floor): the Show and the Wall on one thumb (a phone, Assist, careful),
+// the Lineup on two thumbs (classic touch, Assist), Pro on the keys. Measured n 150, seed 12345:
+//   mark-show    within 3.5 m of the mark   44 %  (3 m was 11 %: the careful thumb's touchdowns sit at 3.0–3.7 m)
+//   gas-show     more than 25 % gas left    51 %  (see below)
+//   soft-wall    0.8 m/s or softer          57 %  · stick-wall 84+ 100 % · ninety-show 90+ 69 %
+//   pro-wall     85+ on Pro or Advanced     43 %  on the Wall; it was on the Show, where 9 % of Pro flights score
+//                85+ and only 33 % clear the row and land clean at all (the row is Pro's hardest part), so no bar there
+//                is both a stretch and in reach
+//   skim-show    roofs by under 1.5 m       78 %  · scratch-show 100 %
+//   roll-lineup  a clean 360°               37 %
+//   mark-lineup  within 7 m (the pad)       31 %  (1.5 m was 10 %: 40 % of Lineup flights land at all)
+// The gas bar (0134, then 0135): on one thumb the computer flies the push-off and the carry; what a thumb chooses is when
+// to hold the pad. Kept down from the tap through the let-go it lands with 33–37 %; picked up after the fall has begun,
+// at any height, 23–27 %. 0134 set the bar in that gap (> 30 %), which only 19–23 % of careful thumbs met. > 25 % is met
+// by every thumb held from the tap and by about a third of those that let go: in the model the let-go thumbs all come
+// back on the descent warning and land in two clusters, 24 % (64 of 109) and 26 % (40), split by nothing they choose, so
+// for them the day is partly luck. Holding from the tap is the sure way. A 1–2 % change in the flight's gas swings this
+// day's reach a lot: tests/unit/daily-reach.test.js will catch the downside.
+// The Lineup sits on the floor: at other seeds (n 80) mark-lineup measures 26–31 % and roll-lineup 29–44 %; the next
+// bar review should start there. The Pro day is measured on the keys; classic-touch Pro (a phone on Pro) is not modelled.
 import { one } from './units.js';
 
 export const DAY_MS = 86_400_000;
@@ -26,13 +37,13 @@ const r1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
 // Each objective: the course it's flown on, the line the title shows, and `check(card)` → { ok, miss }
 // (`miss` is the results line's reason when it isn't done: specific, with the number).
 export const OBJECTIVES = [
-  { id: 'mark-show', course: 'show', goal: () => `Land within ${len(3)} of the mark`,
-    check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.padMiss <= 3 ? done() : miss(`${len(f.padMiss, 1)} off the mark`)) },
-  { id: 'gas-show', course: 'show', goal: () => 'Clear the row with more than 30 % gas left',
-    check: (c, f) => (!cleanOver(f) ? miss('clear the row and land clean first') : f.airPct > 30 ? done() : miss(`${f.airPct} % gas left, need 31 %`)) },
+  { id: 'mark-show', course: 'show', goal: () => `Land within ${len(3.5, 1)} of the mark`,
+    check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.padMiss <= 3.5 ? done() : miss(`${len(f.padMiss, 1)} off the mark`)) },
+  { id: 'gas-show', course: 'show', goal: () => 'Clear the row with more than 25 % gas left',
+    check: (c, f) => (!cleanOver(f) ? miss('clear the row and land clean first') : f.airPct > 25 ? done() : miss(`${f.airPct} % gas left, need 26 %`)) },
   { id: 'soft-wall', course: 'wall', goal: () => `Touch down at ${rate(0.8)} or softer`,
     check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.sink <= 0.8 ? done() : miss(`touched down at ${rate(f.sink)}`)) },
-  { id: 'pro-show', course: 'show', tier: 'pro', goal: () => 'Score 85+ on Pro or Advanced',
+  { id: 'pro-wall', course: 'wall', tier: 'pro', goal: () => 'Score 85+ on Pro or Advanced',
     check: (c) => (c.tier === 'assist' ? miss('fly it on Pro or Advanced') : c.total >= 85 ? done() : miss(`${r1(c.total)}, need 85`)) },
   { id: 'skim-show', course: 'show', goal: () => `Clear the roofs by under ${len(1.5, 1)} and land clean`,
     check: (c, f) => (!cleanOver(f) ? miss('clear the row and land clean first') : f.clearance < 1.5 ? done() : miss(`cleared by ${len(f.clearance, 1)}`)) },
@@ -42,8 +53,8 @@ export const OBJECTIVES = [
     check: (c, f) => (c.total >= 84 && landed(f) ? done() : miss(`${r1(c.total)}, need 84`)) },
   { id: 'ninety-show', course: 'show', goal: () => 'Score 90 or more',
     check: (c) => (c.total >= 90 ? done() : miss(`${r1(c.total)}, need 90`)) },
-  { id: 'mark-lineup', course: 'lineup', goal: () => `Land within ${len(1.5, 1)} of the mark`,
-    check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.padMiss <= 1.5 ? done() : miss(`${len(f.padMiss, 1)} off the mark`)) },
+  { id: 'mark-lineup', course: 'lineup', goal: () => `Land within ${len(7)} of the mark`,
+    check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.padMiss <= 7 ? done() : miss(`${len(f.padMiss, 1)} off the mark`)) },
   { id: 'scratch-show', course: 'show', goal: () => 'Clear the row without a scratch',
     check: (c, f) => (cleanOver(f) && (f.damagePct ?? 0) === 0 ? done() : !cleanOver(f) ? miss('clear the row and land clean first') : miss(`${f.damagePct} % damage`)) },
 ];

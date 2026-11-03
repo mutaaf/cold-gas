@@ -2,8 +2,9 @@
 // Assist). The one-thumb flight's nitrogen is the computer's up to the release; after it, what the player
 // chooses is when to hold the pad, and holding it from the tap (LAND from the release, the reveal's way)
 // is what lands with the most gas. So the bar sits between those two flights, set on the phone population
-// (scripts/human-phone.mjs --daily): a thumb held from the tap meets it, one that waits for the fall
-// doesn't (at any height: 25 m and 3 m land the same), and the reference flight still does.
+// (scripts/human-phone.mjs --daily): a thumb held from the tap meets it, and the reference flight still does.
+// 0135 lowered it to > 25 % (scripts/daily-reach.mjs: > 30 % reached 23 % of careful thumbs, under the 30 % floor), and a
+// thumb back on the pad in the fall can meet it too (this one, at 12 m, lands with 26 %), with less gas than the held one.
 import { describe, it, expect } from 'vitest';
 import { createRun, stepRun, simulate } from '../../src/sim/run.js';
 import { newInput } from '../../src/sim/vehicle.js';
@@ -47,17 +48,18 @@ describe('the gas Daily on one thumb (0134)', () => {
     expect(scoreRun(again.t).facts.airPct).toBe(s.facts.airPct);
   });
 
-  it('a thumb picked up only after the fall has begun (here at 12 m) lands with less and is told the number it needs', () => {
+  it('a thumb picked up only after the fall has begun (here at 12 m) lands with less, and since 0135 meets it too', () => {
     const tap = scoreRun(flyThumb('tap').t), late = scoreRun(flyThumb(12).t);
     expect(late.facts.crashed).toBe(false);
     expect(late.facts.airPct).toBeLessThan(tap.facts.airPct);
-    const r = evaluate(gasShow, late, 'show');
-    expect(r.ok).toBe(false);
-    expect(r.miss).toBe(`${late.facts.airPct} % gas left, need 31 %`);
+    expect(late.facts.airPct).toBeGreaterThan(25);
+    expect(evaluate(gasShow, late, 'show')).toEqual({ ok: true, miss: '' });
+    // One that lands with 25 % is told the number it needs.
+    expect(evaluate(gasShow, { ...late, facts: { ...late.facts, airPct: 25 } }, 'show').miss).toBe('25 % gas left, need 26 %');
   });
 
   it('the goal names the new bar, and the reference flight (48 %) still meets it', () => {
-    expect(gasShow.goal()).toBe('Clear the row with more than 30 % gas left');
+    expect(gasShow.goal()).toBe('Clear the row with more than 25 % gas left');
     const run = createRun('show'), ap = createAutopilot('show');
     while (run.phase !== 'done') stepRun(run, ap(run));
     expect(evaluate(gasShow, scoreRun(run.t), 'show').ok).toBe(true);
