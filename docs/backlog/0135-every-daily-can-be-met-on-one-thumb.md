@@ -52,3 +52,10 @@ Daily card on a changed objective.
 
 ## Out of scope
 The gas fix itself (0134), new objectives, streak rules, the sim.
+
+## Critic note (2026-11-03 09:55)
+0134 shipped on its fallback (`gas-show` > 30 %), so gas-show is now in this ticket's floor and is below it:
+`human-phone.mjs 150 --scheme=thumb --daily` gives **careful 28/150 (19 %)** and **none 39/150 (26 %)**. Don't
+fix that by lowering the bar alone: at > 25 % every no-skill player meets it (150/150), a free day, while the
+careful players who aim still lag. The lever is a hidden thumb choice (held from the tap: 33–37 %), filed as 0139.
+Re-measure gas-show's reach after 0139 and set the bar on that.
