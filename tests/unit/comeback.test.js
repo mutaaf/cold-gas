@@ -170,7 +170,8 @@ describe('the gas day’s title hint', () => {
     ctx = { device: 'touch', scheme: 'thumb' };
     cb.refresh();
     expect(mount.writes).toBe(w + 1);
-    expect(mount.innerHTML).toContain('Hold the pad from the tap to the ground');
+    expect(mount.innerHTML).toContain('>Hold the pad from the tap<');
+    expect(mount.innerHTML).toContain('class="vh">Start a streak today<');   // the streak's words, for a screen reader
     cb.refresh();
     expect(mount.writes).toBe(w + 1);
     mount.handlers['[data-daily-play]']();

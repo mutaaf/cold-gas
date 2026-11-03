@@ -109,7 +109,8 @@ test('the daily card: today’s objective, Play today’s picks its course, and 
   expect(await play()).toMatchObject({ 'daily-start': 1, 'daily-miss': 1, 'daily-run': 1 });
   expect((await play())['daily-done'] ?? 0).toBe(0);
 
-  // 0139: a gas day (2026-11-15) on one thumb, the phone's default. The card carries the hint inside the streak's row,
+  // 0139: a gas day (2026-11-15) on one thumb, the phone's default. The card carries the hint in the streak's row (no new row:
+  // the card stays whole, not packed to one line),
   // Play today's says it again as the run counts down, and a gas miss says what to change. A fresh page from the same
   // context, not a new test (LESSONS 2026-10-31: keep the file's test count).
   const p2 = await ctx.newPage();
@@ -121,7 +122,9 @@ test('the daily card: today’s objective, Play today’s picks its course, and 
   const gasCard = p2.locator('[data-title-extra] .xc-daily');
   await expect(gasCard.locator('.xc-goal')).toHaveText('Clear the row with more than 25 % gas left', { useInnerText: true });
   const hint = gasCard.locator('[data-daily-hint]');
-  await expect(hint).toHaveText('Hold the pad from the tap to the ground');
+  await expect(hint).toHaveText('Hold the pad from the tap');
+  expect(await hint.evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5)).toBe(true);   // whole, not cut off with an ellipsis
+  expect(await p2.evaluate(() => document.querySelector('.title').dataset.extraFit ?? '')).toBe('');
   const [hb, cb, go] = await Promise.all([hint.boundingBox(), gasCard.boundingBox(), p2.locator('[data-daily-play]').boundingBox()]);
   expect(hb.x).toBeGreaterThanOrEqual(cb.x); expect(hb.x + hb.width).toBeLessThanOrEqual(cb.x + cb.width + 0.5);
   expect(hb.y + hb.height).toBeLessThanOrEqual(cb.y + cb.height + 0.5);

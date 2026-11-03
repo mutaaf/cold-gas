@@ -48,7 +48,8 @@ export const OBJECTIVES = [
     check: (c, f) => (!cleanOver(f) ? miss('clear the row and land clean first') : f.airPct > 25 ? done() : miss(`${f.airPct} % gas left, need 26 %`, true)),
     hint: (ctx) => (thumbOn(ctx) ? 'hold the pad from the tap to the ground; letting go and then sliding costs gas'
       : `shorter ${coachWords(ctx).boost} bursts and one late ${ctx.tier === 'assist' ? coachWords(ctx).land : coachWords(ctx).lift}`),
-    titleHint: (ctx) => (thumbOn(ctx) ? 'Hold the pad from the tap to the ground' : '') },
+    // The card's line is short enough to share the streak's row with its pips at 320 px; the countdown's tip says it whole.
+    titleHint: (ctx, whole) => (!thumbOn(ctx) ? '' : whole ? 'Hold the pad from the tap to the ground' : 'Hold the pad from the tap') },
   { id: 'soft-wall', course: 'wall', goal: () => `Touch down at ${rate(0.8)} or softer`,
     check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.sink <= 0.8 ? done() : miss(`touched down at ${rate(f.sink)}`)) },
   { id: 'pro-wall', course: 'wall', tier: 'pro', goal: () => 'Score 85+ on Pro or Advanced',
@@ -77,8 +78,8 @@ export function missLine(obj, r, ctx) {
   const hint = r?.fix && obj?.hint ? obj.hint(ctx || {}) : '';
   return hint ? `Daily: ${r.miss} · ${hint}` : `Daily: ${r.miss} — try again`;
 }
-// The title card's one-line hint for today's objective on this device ('' when there is none).
-export const titleHint = (obj, ctx) => (obj?.titleHint ? obj.titleHint(ctx || {}) : '');
+// The title card's hint for today's objective on this device ('' when there is none); `whole`: the countdown tip's wording.
+export const titleHint = (obj, ctx, whole = false) => (obj?.titleHint ? obj.titleHint(ctx || {}, whole) : '');
 
 export const courseName = (id) => COURSE[id] || id;
 

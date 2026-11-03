@@ -147,7 +147,8 @@ describe('what a miss can change (0139)', () => {
     expect(missLine(gas, short, undefined)).toMatch(/^Daily: 24 % gas left, need 26 % · shorter BOOST/);   // no ctx: no throw
   });
   it('the title card hints only on one thumb, only on the gas day', () => {
-    expect(titleHint(gas, thumb)).toBe('Hold the pad from the tap to the ground');
+    expect(titleHint(gas, thumb)).toBe('Hold the pad from the tap');
+    expect(titleHint(gas, thumb, true)).toBe('Hold the pad from the tap to the ground');   // the countdown's tip
     expect(titleHint(gas, keys)).toBe('');
     expect(titleHint(gas, classic)).toBe('');
     for (const o of OBJECTIVES.filter((x) => x !== gas)) expect(titleHint(o, thumb)).toBe('');

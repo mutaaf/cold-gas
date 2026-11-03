@@ -89,9 +89,9 @@ more than 25 % gas left", `src/daily.js`) is reachable there, but surely only by
   `Daily: 24 % gas left, need 26 % · hold the pad from the tap to the ground; letting go and then sliding costs gas`; keys
   `· shorter BOOST (F) bursts and one late LAND (Shift)` (LIFT on Pro; classic touch and a pad name their own buttons). A
   miss before the number ("clear the row and land clean first") and every other objective still say "try again".
-- **The title:** on one thumb on a gas day the Daily card's streak block carries "Hold the pad from the tap to the ground"
-  (a second line of that block; it steps aside with the streak when the card is tight), and Play today's puts it on the
-  countdown's tip. The title audit run on a stubbed gas day (2026-11-15, every viewport) is clean.
+- **The title:** on one thumb on a gas day the Daily card's streak row says "Hold the pad from the tap" in place of the
+  streak's words (kept for a screen reader; a second line packed the card to one line on CI's 390×844), and Play today's
+  puts "Hold the pad from the tap to the ground" on the countdown's tip. The title audit run on a stubbed gas day (2026-11-15, every viewport) is clean.
 - **Following the words meets it:** `tests/unit/thumb-gas.test.js` (0134) flies the one-thumb Show held from the tap and
   meets gas-show; this PR did not add a page flight of it.
 - ref-hash identical (show `fedae05c`, wall `bacb4720`, lineup `8b2c2c9a`).

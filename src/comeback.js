@@ -43,10 +43,10 @@ export function createComeback(o) {
   let shownDay = dayNumber(now());
   let shownHint = '';   // the hint the daily card was last drawn with (0139)
   // 0139: today's hint for this device, flown at the tier Play today's would set ('' when there is none, or done).
-  const todayHint = () => {
+  const todayHint = (whole = false) => {
     const obj = objectiveFor(now());
     if (streakNow(loadStreak(), now()).doneToday) return '';
-    return titleHint(obj, o.how?.(obj.course, obj.tier && o.getTier() === 'assist' ? obj.tier : o.getTier()));
+    return titleHint(obj, o.how?.(obj.course, obj.tier && o.getTier() === 'assist' ? obj.tier : o.getTier()), whole);
   };
 
   // --- the title card ----------------------------------------------------------------------------
@@ -66,14 +66,16 @@ export function createComeback(o) {
       m.querySelector('[data-vs-dismiss]').addEventListener('click', dismiss);
     } else {
       const obj = objectiveFor(now()), st = streakNow(loadStreak(), now());
-      // 0139: today's hint, a line of the streak's block (it steps aside with the streak when the card is tight).
+      // 0139: today's hint takes the streak words' place in their row (no new row: the title has no height to spare on a
+      // phone); the words stay for a screen reader. It steps aside with the row when the card is tight.
       const hint = shownHint = todayHint();
+      const streakWords = st.streak ? `${st.streak}-day streak` : 'Start a streak today';
       const pips = Array.from({ length: 7 }, (_, i) => `<i${i < Math.min(7, st.streak) ? ' class="on"' : ''}></i>`).join('');
       m.innerHTML = `<div class="xc xc-daily${st.doneToday ? ' done' : ''}" role="group" aria-label="Today’s daily jump">
         <div class="xc-text">
           <p class="xc-k"><span>Daily · ${utcLabel(now())}</span><span class="xc-dot" aria-hidden="true">·</span><span>${courseName(obj.course)}</span>${st.doneToday ? '<span class="xc-tick">✓ Done</span>' : ''}</p>
           <p class="xc-goal"><span class="xc-ck">${st.doneToday ? 'Daily ✓' : 'Daily'} · ${courseName(obj.course)}</span>${obj.goal()}</p>
-          <p class="xc-streak xc-sub"><span class="xc-pips" aria-hidden="true">${pips}</span><span>${st.streak ? `${st.streak}-day streak` : 'Start a streak today'}</span>${hint ? `<span class="xc-hint" data-daily-hint>${hint}</span>` : ''}</p>
+          <p class="xc-streak xc-sub"><span class="xc-pips" aria-hidden="true">${pips}</span>${hint ? `<span class="vh">${streakWords}</span><span class="xc-hint" data-daily-hint>${hint}</span>` : `<span>${streakWords}</span>`}</p>
         </div>
         <button type="button" class="btn xc-go" data-daily-play>${st.doneToday ? 'Play again' : 'Play today’s'}</button>
       </div>`;
@@ -81,7 +83,7 @@ export function createComeback(o) {
         obs.play('daily-start');   // 0136: the funnel's first step, tapped → finished (done | miss)
         o.selectCourse(obj.course);
         if (obj.tier && o.getTier() === 'assist') o.setTier(obj.tier);
-        const tip = todayHint();
+        const tip = todayHint(true);
         if (tip) o.tip?.(tip);   // and once more as the run counts down (the card may have stepped aside on a short screen)
         o.jump();
       });
