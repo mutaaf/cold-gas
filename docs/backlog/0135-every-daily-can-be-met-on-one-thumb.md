@@ -1,7 +1,7 @@
 ---
 id: 0135
 title: Every Daily objective can be met by a one-thumb phone player, and a gate keeps it so
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: engagement
@@ -52,3 +52,24 @@ Daily card on a changed objective.
 
 ## Out of scope
 The gas fix itself (0134), new objectives, streak rules, the sim.
+
+## Shipped (builder, 2026-11-03)
+`node scripts/daily-reach.mjs 150` (scripts/lib/daily-reach.mjs: the Show and the Wall on one thumb, careful; the Lineup on
+two thumbs, classic touch, Assist; Pro on the keys, human-show's Pro population; seed 12345):
+
+| objective | population | before | after | bar |
+|---|---|---|---|---|
+| mark-show | thumb | 17/150 (11 %) | 66/150 (44 %) | 3 m → 3.5 m |
+| gas-show | thumb | 34/150 (23 %) | 76/150 (51 %) | > 30 % → > 25 % |
+| soft-wall | thumb | 85/150 (57 %) | same | unchanged |
+| pro-show → pro-wall | pro | 14/150 (9 %) on the Show | 65/150 (43 %) on the Wall | 85+ unchanged, moved to the Wall |
+| skim-show · ninety-show · scratch-show | thumb | 78 % · 69 % · 100 % | same | unchanged |
+| roll-lineup | touch | 56/150 (37 %) | same | unchanged |
+| stick-wall | thumb | 150/150 (100 %) | same | unchanged |
+| mark-lineup | touch | 15/150 (10 %) | 46/150 (31 %) | 1.5 m → 7 m (the pad) |
+
+Notes: the Pro day moved because no Show bar was both a stretch and in reach for Pro (only 33 % of Pro Show flights clear
+the row and land clean at all). The 390×844 card: every changed goal wraps to two lines, as the old ones did ("Land within
+10 ft of the mark" was two lines too). Only "Stick it: score 84+" and "Score 90 or more" fit on one; the one-line criterion
+holds for no ten-word goal beside the Play today's button. Line counts are unchanged, so it stays as it was. `mark-lineup` sits
+at the floor (31 %).

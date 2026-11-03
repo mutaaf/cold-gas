@@ -56,9 +56,10 @@ describe('the daily objective', () => {
       expect(['show', 'wall', 'lineup']).toContain(o.course);
       expect(o.goal()).toMatch(/\S/);
     }
-    expect(byId('mark-show').goal()).toBe('Land within 10 ft of the mark');
+    expect(byId('mark-show').goal()).toBe('Land within 11.5 ft of the mark');
     setUnits('metric', { persist: false });
-    expect(byId('mark-show').goal()).toBe('Land within 3 m of the mark');
+    expect(byId('mark-show').goal()).toBe('Land within 3.5 m of the mark');
+    expect(byId('mark-lineup').goal()).toBe('Land within 7 m of the mark');
   });
   afterEach(() => setUnits('us', { persist: false }));
 });
@@ -79,6 +80,7 @@ describe('the daily, judged from real runs', () => {
 
   it('counts only on the objective’s course', () => {
     expect(evaluate(byId('mark-show'), cards.wall, 'wall')).toBeNull();
+    expect(evaluate(byId('pro-wall'), { ...cards.show, tier: 'pro' }, 'show')).toBeNull();
     expect(evaluate(byId('soft-wall'), cards.show, 'show')).toBeNull();
   });
 
@@ -96,7 +98,7 @@ describe('the daily, judged from real runs', () => {
 
   it('says why not, with the number', () => {
     // Pro or better: the reference is an Assist run.
-    expect(evaluate(byId('pro-show'), cards.show, 'show')).toEqual({ ok: false, miss: 'fly it on Pro or Advanced' });
+    expect(evaluate(byId('pro-wall'), cards.wall, 'wall')).toEqual({ ok: false, miss: 'fly it on Pro or Advanced' });
     // The roofs: the reference clears them by 5.1 m.
     expect(evaluate(byId('skim-show'), cards.show, 'show')).toEqual({ ok: false, miss: 'cleared by 16.7 ft' });
     // A run that never got there.
@@ -106,8 +108,16 @@ describe('the daily, judged from real runs', () => {
     const off = { ...cards.show, facts: { ...cards.show.facts, padMiss: 4.3 } };
     setUnits('metric', { persist: false });
     expect(evaluate(byId('mark-show'), off, 'show')).toEqual({ ok: false, miss: '4.3 m off the mark' });
-    expect(evaluate(byId('pro-show'), { ...cards.show, tier: 'pro', total: 79.4 }, 'show').miss).toBe('79.4, need 85');
-    expect(evaluate(byId('pro-show'), { ...cards.show, tier: 'advanced', total: 85 }, 'show').ok).toBe(true);
+    expect(evaluate(byId('pro-wall'), { ...cards.wall, tier: 'pro', total: 79.4 }, 'wall').miss).toBe('79.4, need 85');
+    expect(evaluate(byId('pro-wall'), { ...cards.wall, tier: 'advanced', total: 85 }, 'wall').ok).toBe(true);
+    // 0135's bars, at their edges: the mark at 3.5 m (Show) and 7 m (Lineup), gas over 25 %.
+    const withFacts = (card, f) => ({ ...card, facts: { ...card.facts, ...f } });
+    expect(evaluate(byId('mark-show'), withFacts(cards.show, { padMiss: 3.5 }), 'show').ok).toBe(true);
+    expect(evaluate(byId('mark-show'), withFacts(cards.show, { padMiss: 3.6 }), 'show')).toEqual({ ok: false, miss: '3.6 m off the mark' });
+    expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { padMiss: 7 }), 'lineup').ok).toBe(true);
+    expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { padMiss: 7.1 }), 'lineup').ok).toBe(false);
+    expect(evaluate(byId('gas-show'), withFacts(cards.show, { airPct: 26 }), 'show').ok).toBe(true);
+    expect(evaluate(byId('gas-show'), withFacts(cards.show, { airPct: 25 }), 'show')).toEqual({ ok: false, miss: '25 % gas left, need 26 %' });
   });
   afterEach(() => setUnits('us', { persist: false }));
 });
