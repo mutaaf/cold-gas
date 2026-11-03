@@ -1,12 +1,12 @@
 ---
 id: 0138
 title: A run's end in the players' funnel says how it was flown, so a real player's wrecks can be traced
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-03
-pr:
+pr: 223
 by: critic
 ---
 

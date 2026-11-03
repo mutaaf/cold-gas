@@ -67,7 +67,9 @@ mark, and air left in the tanks.
     signature/build/day, `obs_frames` histograms per device class/tier, `obs_evt` counters, `obs_ex`
     exemplar stacks; month-long retention). No IPs, user agents or headers stored. It also carries
     the players' funnel as counts (`obs.play`, PLAY_EVENTS in src/obs/signature.js: visits new and
-    returning, runs, landed/wrecked or quit (left before the card, once per run, 0130), how-to skips, retries, posts,
+    returning, runs, landed/wrecked or quit (left before the card, once per run, 0130), and on a decided card how it was
+    flown (`ctl-thumb|classic|keys|pad`, `fly-assist|pro|advanced`) and a wreck's cause (`wreck-*`, the coach's first finding;
+    src/obs/run-end.js, 0138), how-to skips, retries, posts,
     shares…), stored as `play:<event>` per day for
     people only; an automated browser (`navigator.webdriver`, i.e. our own agents and tests) is
     counted as `sessions:auto`, never as a player.

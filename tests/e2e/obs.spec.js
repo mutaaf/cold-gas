@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { wreckCause } from '../../src/obs/signature.js';
 
 // Observability and self-heal (src/obs/): errors are captured with stable signatures, a lost WebGL
 // context is restored and the stage rebuilt, a physics trap stops the run instead of freezing the
@@ -115,6 +116,9 @@ test('a physics trap mid-run stops the run with a toast instead of freezing the 
   await page.evaluate(() => window.__coldgas.toTitle());        // …left before its card
   b = await leave();
   expect(b.play).toMatchObject({ run: 2, 'run-landed': 1, 'run-quit': 1 });
+  expect(b.play['ctl-keys']).toBe(1);   // 0138: the landed card says how it was flown (keys, one tier), no cause
+  expect(Object.keys(b.play).filter((k) => k.startsWith('fly-'))).toHaveLength(1);
+  expect(Object.keys(b.play).filter((k) => k.startsWith('wreck-'))).toEqual([]);
   // The reference run left is never a player's quit; nor is a second Home from the title.
   await page.evaluate(() => { window.__coldgas.startRun('reveal'); window.__coldgas.skipCountdown(); window.__coldgas.toTitle(); window.__coldgas.toTitle(); });
   expect((await leave()).play).toEqual({});
@@ -127,4 +131,31 @@ test('a physics trap mid-run stops the run with a toast instead of freezing the 
   expect(b.play).toMatchObject({ howto: 1, 'howto-skip': 1, run: 1, 'run-quit': 1 });
   expect(b.play['run-landed'] ?? 0).toBe(0);
   expect((await leave()).play['run-quit'] ?? 0).toBe(0);   // once per run, however often the page hides
+  // 0138: the landed run above (R in the aftermath, keys) said how it was flown; a wreck says what wrecked it too.
+  // On Pro the reference flies it to the release, then hands the air to a player who does nothing (no autopilot on the
+  // card, so the results' own coach runs; no Assist auto-land): it names the cause, once, and the page going adds nothing.
+  await page.evaluate(() => {
+    const cg = window.__coldgas;
+    cg.setTier('pro');
+    cg.startRun('jump');
+    const ap = cg.createAutopilot(cg.stage.course);
+    cg.S.autopilot = function (run) {
+      const out = ap(run);
+      if (run.phase === 'air') { for (const k of cg.inputKeys) out[k] = 0; cg.S.autopilot = null; }
+      return out;
+    };
+    cg.skipCountdown(); cg.fastForward();
+  });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results' && !!window.__coldgas.S.coach, null, { timeout: 30_000 });
+  // The card's tier (from the log: the reference's own inputs) and the cause the results' coach names.
+  const { tier, coachCause } = await page.evaluate(() => ({ tier: window.__coldgas.S.card.tier, coachCause: window.__coldgas.S.coach.items }));
+  b = await leave();
+  await page.evaluate(() => window.__coldgas.setTier('assist'));
+  expect(b.play).toMatchObject({ run: 1, 'run-wrecked': 1, 'ctl-keys': 1, [`fly-${tier}`]: 1 });
+  const keys = (p) => Object.keys(p).filter((k) => /^(ctl|fly|wreck)-/.test(k)).map((k) => k.split('-')[0]).sort();
+  expect(keys(b.play)).toEqual(['ctl', 'fly', 'wreck']);
+  const cause = Object.keys(b.play).find((k) => k.startsWith('wreck-'));
+  expect(cause).toBe(wreckCause(coachCause));
+  expect(cause).not.toBe('wreck-other');
+  expect(keys((await leave()).play)).toEqual([]);
 });

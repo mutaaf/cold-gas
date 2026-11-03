@@ -57,6 +57,7 @@ import { openSettings, aiLabel } from './ai/settings.js';
 import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
 import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
+import { createRunEnd } from './obs/run-end.js';
 import { createAds } from './ads.js';
 import { createPacer } from './pace.js';
 import { pickDeviceTier, pickAA, deviceKind, readDevice, isIOS } from './gfx-tier.js';
@@ -347,17 +348,15 @@ function disposeRun() {
 // The players' funnel (0130): a Jump run counts `run` as it starts and exactly one of run-landed, run-wrecked
 // (its card) or run-quit (left before its card: every way out of a run passes disposeRun, or the page goes).
 // Once the run's card is decided (its end, before the aftermath's ≈1.4 s and the sheet) it is landed or wrecked:
-// a Retry, Home or a closed tab in the aftermath isn't a quit.
-let runOpen = null;
-function settleRun(left) {
-  if (runOpen && runOpen === S.run) {
-    if (S.card) obs.play(S.card.facts?.crashed ? 'run-wrecked' : 'run-landed');
-    else if (left) obs.play('run-quit');
-  }
-  runOpen = null;
+// a Retry, Home or a closed tab in the aftermath isn't a quit. 0138: the decided card also counts how the run was
+// flown (ctl-*, fly-*) and a wreck what wrecked it (wreck-*, the coach's first finding): src/obs/run-end.js.
+const runEnd = createRunEnd(obs.play, (run, card) => coach(run.inputLog, run.course, card).items);
+// How it was flown is taken as its card is decided (closeCard), before a Retry's key or a mouse on Home can change it.
+function settleRun(left, now = false) {
+  runEnd.settle(S.run, S.card, left, S.cardHow, now);
 }
 const quitRun = () => settleRun(true);
-obs.beforeLeave(quitRun);
+obs.beforeLeave(() => settleRun(true, true));   // the page going: the cause re-flown now, onto its last beacon
 
 // Back to the title from anywhere, Free Drive and the Sandbox included (heal's escalation calls it
 // too). Their exit() calls back into toTitle (onExit): the guard keeps that from recursing.
@@ -404,7 +403,7 @@ function startRunNow(kind = 'jump', quick = false) {
   S.run = armAftermath(takeRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.runKind = kind;   // the reference jump never counts toward Rookie mode's streak (0074)
-  if (kind === 'jump') { obs.play('run'); runOpen = S.run; }   // the players' funnel (src/obs: counts only)
+  if (kind === 'jump') { obs.play('run'); runEnd.start(S.run); }   // the players' funnel (src/obs: counts only)
   latchTier();
   S.adaptNow = null;
   // Live pointers on the cue line (0079): a new player's first runs, or while Adapt to me says they're struggling.
@@ -439,6 +438,7 @@ function startRunNow(kind = 'jump', quick = false) {
 // the car there too. Taken before the aftermath moves it (beginAftermath), shown after.
 function closeCard(run) {
   S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.flyTier === 'assist' });
+  S.cardHow = { device: lastDevice(), scheme: ui.touch.dataset.scheme, tier: S.flyTier };   // the funnel's ctl-*/fly-* (0138)
   S.drillSnap = S.drill ? { result: drillResult(S.drill, run, S.card), coach: drillCoach(S.drill, run) } : null;
 }
 function finishRun() {
@@ -463,6 +463,7 @@ function finishRun() {
       const own = S.drill && S.drillSnap?.coach;
       S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0, coachWords(pointerCtx(run.course, S.card?.tier || S.flyTier)));
       ui.coaching(S.coach.items);
+      if (!own) runEnd.coached(run, S.coach.items);   // a wreck's cause in the funnel, from this coach (0138)
       if (!own && S.runKind === 'jump') showPointer(run);
     } catch (err) { console.warn('coach', err); }
   }, 450);
@@ -1969,7 +1970,7 @@ function fastForward() {
 function skipCountdown() { if (S.mode === 'countdown') { setMode('live'); ui.countdown(0); } }
 const heal = installHeal({
   stage, canvas, ui, S, pause,
-  toTitle: () => { runOpen = null; toTitle(); },   // a trap or an escalation is the game's fault, never the player's quit (0130)
+  toTitle: () => { runEnd.drop(); toTitle(); },   // a trap or an escalation is the game's fault, never the player's quit (0130)
   closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
 window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
 Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
