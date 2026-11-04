@@ -1,0 +1,4 @@
+module CRapier {
+  header "coldgas_rapier.h"
+  export *
+}

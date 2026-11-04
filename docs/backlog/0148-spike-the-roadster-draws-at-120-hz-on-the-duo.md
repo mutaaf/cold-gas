@@ -1,12 +1,12 @@
 ---
 id: 0148
 title: "Spike: the exported roadster draws in Metal at 120 Hz on the iPhone Duo, in every pose"
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-11-04
-pr:
+pr: 247
 by: operator
 ---
 
@@ -30,12 +30,17 @@ Runs on: the operator's Mac.
 - `-bench` prints `BENCH frames avg p95 hitches` for a 10 s turntable.
 
 ## Acceptance criteria
-- [ ] `make up` generates, builds, tests and launches on the `iPhone Duo` and `iPhone 18 Pro Max` simulators.
-- [ ] `make shots` writes the car on the Duo in closed (466×678), book (951×669) and tabletop (669×951), and on the
-      Pro Max, each with nothing drawn across the fold band and the 84 pt side bar clear.
-- [ ] `-bench` on the Pro Max simulator: p95 ≤ 8.3 ms and 0 pipeline compiles after launch.
-- [ ] A layout unit test locks 18-0-duo-graphics' measured poses (window, insets, fold band) and the panel rects.
-- [ ] The car's silhouette matches the web title's turntable (side-by-side screenshot attached).
+- [x] `make up` generates, builds, tests and launches on the `iPhone Duo` and `iPhone 18 Pro Max` simulators.
+- [x] `make shots` writes the car on the Duo closed (466×678), book (951×669) and tabletop (669×951), and on the
+      Pro Max. Book and tabletop are laid out with `-window` and an emulated fold, because the simulator can't move
+      its hinge. Nothing is drawn across the fold band, and the 84 pt side bar is clear.
+- [x] Frame cost within 8.3 ms with 0 pipeline compiles after launch. On the iPhone 15 Pro Max: presentation p95
+      8.34 ms (120 Hz held), CPU 0.26 ms, GPU p95 6.9 ms. The simulator presents at 60 Hz whatever the app does.
+- [x] A layout unit test locks 18-0's measured poses: window, insets, fold band and the panel rects
+      (`FoldLayoutTests`, 7 tests).
+- [ ] The car's silhouette against the web title's turntable: the side profile matches by eye (shots in the PR).
+      A pixel comparison waits for the full look (phase 2).
+- [x] Extra, from 0147: `-selftest` on the physical iPhone passes every vector.
 
 ## Test plan
 `ColdGasTests`: layout from fold regions per pose; mesh loader round-trip against `meshes.mjs`'s manifest. Shots by

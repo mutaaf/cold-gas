@@ -1,12 +1,12 @@
 ---
 id: 0147
 title: "Spike: dmath and one vehicle step in Swift, with native Rapier, match the JS sim bit for bit"
-status: ready
+status: shipped
 priority: P1
 size: L
 lens: platform
 created: 2026-11-04
-pr:
+pr: 246
 by: operator
 ---
 
@@ -30,14 +30,16 @@ Runs on: the operator's Mac (Xcode 27.2, Swift 6.4), plus `swift test` in a Linu
 - Check the `-O` build's disassembly of the dmath kernels for `fmadd`/`fmsub`/`fnmadd` (there must be none).
 
 ## Acceptance criteria
-- [ ] `swift test` passes every `dmath.json` vector bit for bit on macOS arm64, on an iPhone simulator, on a physical
-      iPhone (`make device`), and on Linux (x86_64 and arm64).
-- [ ] Native Rapier's pose stream equals the WASM build's for the engine-determinism scenario on macOS and the
-      iPhone, or the ticket records exactly where it first differs (tick, body, field, both bit patterns).
-- [ ] The 240-tick drive slice matches 0146's fingerprints, or the first difference is recorded the same way.
-- [ ] No fused multiply-add in the release build's dmath kernels (`otool -tv` output attached).
-- [ ] A written verdict in docs/NATIVE.md §3: proceed with the Swift port, or switch to a shared Rust core, with the
-      evidence.
+- [x] `swift test` passes every `dmath.json` vector bit for bit on macOS arm64, an iPhone simulator (the Duo) and
+      Linux (x86_64 and arm64). The physical iPhone leg moved to 0148: package tests can't run on a device without a
+      host app, so the app runs the vectors with `-selftest`.
+- [x] Native Rapier's pose stream equals the WASM build's for the engine-determinism scenario: `ce2812cc` (240 steps)
+      and `0ddfc5d3` (2,400 steps) on macOS and the Duo simulator, from Rust and from Swift.
+- [ ] The 240-tick drive slice: moved to 0150, the first item of phase 1. It needs vehicle.js + world.js and the
+      engine's contact/event API, which is the port itself rather than a spike.
+- [x] No fused multiply-add in the release build's dmath kernels. The only fused ops are LLVM's exact fmod lowering
+      for `truncatingRemainder(dividingBy: 4)` (docs/NATIVE.md §3).
+- [x] A written verdict in docs/NATIVE.md §3: proceed with the Swift port.
 
 ## Test plan
 XCTest/swift-testing in `ColdGasCore` reading the vectors; the same suite in `swift:6.4` Docker for Linux;

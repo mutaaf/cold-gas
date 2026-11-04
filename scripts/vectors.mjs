@@ -39,6 +39,7 @@ if (check) {
   console.log(`vectors: ${Object.keys(files).length} files current (SIM_VERSION ${SIM_VERSION}, ${((performance.now() - t0) / 1000).toFixed(1)} s)`);
 } else {
   rmSync(join(VECTOR_DIR, 'runs'), { recursive: true, force: true });
+  rmSync(join(VECTOR_DIR, 'haptics'), { recursive: true, force: true });
   let bytes = 0;
   for (const [p, text] of Object.entries(files)) {
     const f = join(VECTOR_DIR, p);

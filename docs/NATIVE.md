@@ -89,6 +89,40 @@ kin ported its pure TypeScript core line for line to C# for its Unity client. It
   - The core uses only Foundation, so `swift test` also runs **on Linux**. The cloud agents, which have no Xcode,
     can therefore keep both sides in step.
 
+### Verdict of the spike (0147, 2026-11-04): proceed with the Swift port
+
+Measured, not assumed:
+- **Native Rapier is bit-exact with the WASM build.** The scripts/engine-spike.js scene matches the WASM
+  hashes exactly through the C API: `ce2812cc` at 240 steps and `0ddfc5d3` at 2,400 steps, with the same car
+  position. It matches from a Rust port of the spike and from the Swift one on macOS arm64 and the iPhone Duo
+  simulator.
+  - The engine is rapier3d 0.36.0, the crate inside @dimforge/rapier3d-deterministic 0.21.0, built with the
+    same features as the WASM build: `enhanced-determinism`, `fem`, `serde-serialize`, `debug-render` and
+    `profiler`.
+  - Cargo.lock pins glam 0.33.10 and smallvec 1.16.2, the versions compiled into the WASM.
+- **`DMath.swift` is bit-exact with `src/sim/dmath.js`.** It matches on all 11 sets of 5,000 vectors (special
+  values included) on four platforms: macOS arm64, the iPhone Duo simulator, Linux arm64 and Linux x86_64.
+- **The compiler doesn't contract our arithmetic.** The release build's dmath kernels are 118 `fmul`, 102 `fadd`
+  and no `fmadd`. The only fused instructions (4 `fmsub`) are LLVM's lowering of
+  `truncatingRemainder(dividingBy: 4)`: `x − trunc(x/4)·4`, with a power-of-two divisor, so the product is exact
+  and the result is the same.
+- **Still open:**
+  - The physical-iPhone leg. Package tests can't run on a device without a host app, so 0148's app runs the
+    same vectors with `-selftest`.
+  - The 240-tick `vehicle.step` slice. It needs `vehicle.js` and `world.js` (≈2,100 lines) plus the engine's
+    contact and event API, so it's the first item of phase 1 (0150).
+- **Why it matched.** Every value crosses into the engine as the bindings take it: a JS number is rounded to
+  f32, and the bindings' own defaults are used, not Rust's. For example, a rigid body always gets
+  `additional_mass_properties` unless `mass_only`, and the TS collision groups `0xffffffff` unpack to
+  `0xffff/0xffff`. ios/Vendor/Rapier/src/lib.rs mirrors the TS layer call for call. Keep it that way as the API
+  grows.
+
+### On a real iPhone (0148, 2026-11-04)
+
+The app's `-selftest` runs the same vectors on the phone. On an iPhone 15 Pro Max (iOS 27.0.1) it printed
+`SELFTEST ok dmath 55000/55000 engine 240:ce2812cc=ce2812cc 2400:0ddfc5d3=0ddfc5d3`, bit-exact on hardware.
+That closes 0147's last leg.
+
 ### Porting rules (each one is a bug waiting to happen)
 
 | JS | Swift |
@@ -223,7 +257,7 @@ Core Haptics turns those buzzes into **a continuous track driven by the sim**, s
 | Retro-burn | A rising hiss + a shudder at peak flow | Valves in the LAND phase |
 | **Touchdown** | **One transient per wheel, at the tick that wheel touched, scaled by its sink rate.** A synced landing is one clean thump; a sloppy one is felt as four | Per-wheel contact ticks |
 | Scrape / hit / crush | A transient scaled by impact speed and part, from `run.impacts`; a crash = a heavy hit + a decaying grind | `impacts.js` events |
-| Stuck it | A settle: two soft decaying taps as the suspension comes to rest | Phase → landed, low sink |
+| Stuck it | A settle: a soft tap when a clean landing decides the run (the scored run ends while the car still rolls) | Phase → done after four wheels down, no hit |
 | The judges' scores | A light tick as each judge's number lands; a medal is a rising triple | Results sheet |
 | UI | System selection / impact feedback (`UISelectionFeedbackGenerator`) on taps, toggles, the one-thumb pad | UIKit |
 | Duo hinge | A light tick at the open, tabletop and closed detents (effect only, never layout) | `UIHingeInteraction` |
@@ -323,6 +357,22 @@ ios/
   - The first `xcodebuild` after `xcodegen generate` sometimes fails; run it again.
   - Simulator names repeat across runtimes, so use UDIDs.
   - Open the simulator with `open -b com.apple.iphonesimulator`.
+- **Learned building the spike (0148):**
+  - `devicectl device process launch` reads the app's arguments as its own flags: put them after `--`.
+  - The simulator can't build an `MTLBinaryArchive` ("Target device architecture is nil"), so the archive is
+    device-only.
+  - The app's stdout is block-buffered into a pipe: `setvbuf(stdout, nil, _IOLBF, 0)` at launch, or the scripts
+    see nothing.
+  - Killing `simctl launch --console` also ends the app, so take screenshots from a plain launch.
+  - The Duo simulator's inner display (`--display=primary-1`) is black while it's closed. The shots script drops
+    a black inner shot.
+  - The engine is arm64 only, so `EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64`.
+- **Measured on the iPhone 15 Pro Max (-bench, the car on the stage):**
+  - 120 Hz held: 1,195 frames in 10 s, presentation p95 8.34 ms, 5 hitches.
+  - CPU 0.26 ms a frame.
+  - GPU 6.6 ms (p95 6.9) at the full 1290×2796 with 4× MSAA.
+  - The binary archive takes pipeline setup from 429 ms (first launch) to 22 ms, with 0 compiles after launch.
+  - The GPU number is the warning: the full stage needs MetalFX and the resolution governor (phase 2).
 - **Git:** one agent per checkout, and stage by path, never `git add -A`. It once swept four agent worktrees into a
   commit (fantasy-edge).
 

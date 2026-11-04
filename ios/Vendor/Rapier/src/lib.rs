@@ -1,0 +1,328 @@
+//! The native app's physics engine: Rapier 0.36.0 (the crate inside the web's
+//! @dimforge/rapier3d-deterministic 0.21.0) behind a C API the Swift sim calls (docs/NATIVE.md §3).
+//!
+//! Every function mirrors what the TypeScript bindings do for the same call, defaults included
+//! (bindings/typescript/src.ts and src/ at rapier v0.36.0): the descriptors below carry the TS
+//! ColliderDesc / RigidBodyDesc defaults, a rigid body always gets `additional_mass_properties`
+//! unless `mass_only`, rotations are taken with `from_xyzw` (no normalisation), handles pack
+//! (index | generation << 32) like the bindings' FlatHandle bits. A JS number reaches the engine
+//! as an f32 rounded to nearest; Swift's `Float(double)` rounds the same way.
+#![allow(clippy::missing_safety_doc)]
+
+use rapier3d::prelude::*;
+use std::slice;
+
+pub struct CgWorld {
+    gravity: Vector,
+    params: IntegrationParameters,
+    pipeline: PhysicsPipeline,
+    islands: IslandManager,
+    broad_phase: DefaultBroadPhase,
+    narrow_phase: NarrowPhase,
+    bodies: RigidBodySet,
+    colliders: ColliderSet,
+    soft_bodies: SoftBodySet,
+    impulse_joints: ImpulseJointSet,
+    multibody_joints: MultibodyJointSet,
+    ccd: CCDSolver,
+}
+
+pub struct CgShape(SharedShape);
+
+pub const CG_NONE: u64 = u64::MAX;
+
+#[inline]
+fn flat(i: rapier3d::data::Index) -> u64 {
+    let (i, g) = i.into_raw_parts();
+    i as u64 | ((g as u64) << 32)
+}
+#[inline]
+fn body_h(h: u64) -> RigidBodyHandle { RigidBodyHandle::from_raw_parts(h as u32, (h >> 32) as u32) }
+#[inline]
+fn col_h(h: u64) -> ColliderHandle { ColliderHandle::from_raw_parts(h as u32, (h >> 32) as u32) }
+#[inline]
+fn v3(x: f32, y: f32, z: f32) -> Vector { Vector::new(x, y, z) }
+
+// --- world -----------------------------------------------------------------------------------
+
+#[no_mangle]
+pub extern "C" fn cg_world_new(gx: f32, gy: f32, gz: f32) -> *mut CgWorld {
+    Box::into_raw(Box::new(CgWorld {
+        gravity: v3(gx, gy, gz),
+        params: IntegrationParameters::default(),
+        pipeline: PhysicsPipeline::new(),
+        islands: IslandManager::new(),
+        broad_phase: DefaultBroadPhase::new(),
+        narrow_phase: NarrowPhase::new(),
+        bodies: RigidBodySet::new(),
+        colliders: ColliderSet::new(),
+        soft_bodies: SoftBodySet::new(),
+        impulse_joints: ImpulseJointSet::new(),
+        multibody_joints: MultibodyJointSet::new(),
+        ccd: CCDSolver::new(),
+    }))
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_world_free(w: *mut CgWorld) { if !w.is_null() { drop(Box::from_raw(w)); } }
+#[no_mangle]
+pub unsafe extern "C" fn cg_world_set_timestep(w: *mut CgWorld, dt: f32) { (*w).params.dt = dt; }
+#[no_mangle]
+pub unsafe extern "C" fn cg_world_step(w: *mut CgWorld) {
+    let w = &mut *w;
+    w.pipeline.step(
+        w.gravity, &w.params, &mut w.islands, &mut w.broad_phase, &mut w.narrow_phase, &mut w.bodies,
+        &mut w.colliders, &mut w.impulse_joints, &mut w.multibody_joints, &mut w.soft_bodies, &mut w.ccd, &(), &(),
+    );
+}
+
+// --- shapes ----------------------------------------------------------------------------------
+
+#[no_mangle]
+pub extern "C" fn cg_shape_cuboid(hx: f32, hy: f32, hz: f32) -> *mut CgShape { Box::into_raw(Box::new(CgShape(SharedShape::cuboid(hx, hy, hz)))) }
+#[no_mangle]
+pub extern "C" fn cg_shape_ball(r: f32) -> *mut CgShape { Box::into_raw(Box::new(CgShape(SharedShape::ball(r)))) }
+#[no_mangle]
+pub extern "C" fn cg_shape_cylinder(half_height: f32, r: f32) -> *mut CgShape { Box::into_raw(Box::new(CgShape(SharedShape::cylinder(half_height, r)))) }
+/// `verts`: n_verts × 3 floats; `idx`: n_idx u32 (a multiple of 3). Null when the mesh is invalid.
+#[no_mangle]
+pub unsafe extern "C" fn cg_shape_trimesh(verts: *const f32, n_verts: usize, idx: *const u32, n_idx: usize, flags: u32) -> *mut CgShape {
+    let flags = TriMeshFlags::from_bits(flags as u16).unwrap_or_default();
+    let v: Vec<Vector> = slice::from_raw_parts(verts, n_verts * 3).chunks(3).map(Vector::from_slice).collect();
+    let i: Vec<[u32; 3]> = slice::from_raw_parts(idx, n_idx).chunks(3).map(|t| [t[0], t[1], t[2]]).collect();
+    match SharedShape::trimesh_with_flags(v, i, flags) { Ok(s) => Box::into_raw(Box::new(CgShape(s))), Err(_) => std::ptr::null_mut() }
+}
+/// `points`: n × 3 floats. Null when the hull fails (as ColliderDesc.convexHull returns null).
+#[no_mangle]
+pub unsafe extern "C" fn cg_shape_convex_hull(points: *const f32, n: usize) -> *mut CgShape {
+    let p: Vec<Vector> = slice::from_raw_parts(points, n * 3).chunks(3).map(Vector::from_slice).collect();
+    match SharedShape::convex_hull(&p) { Some(s) => Box::into_raw(Box::new(CgShape(s))), None => std::ptr::null_mut() }
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_shape_free(s: *mut CgShape) { if !s.is_null() { drop(Box::from_raw(s)); } }
+
+// --- colliders -------------------------------------------------------------------------------
+
+/// ColliderDesc as the TS bindings hold it. `cg_collider_desc_default` fills the TS defaults.
+#[repr(C)]
+pub struct CgColliderDesc {
+    pub enabled: bool,
+    pub translation: [f32; 3],
+    pub rotation: [f32; 4],          // x, y, z, w
+    pub mass_props_mode: u32,        // 0 Density, 1 Mass, 2 MassProps (TS MassPropsMode)
+    pub mass: f32,
+    pub center_of_mass: [f32; 3],
+    pub principal_inertia: [f32; 3],
+    pub inertia_frame: [f32; 4],
+    pub density: f32,
+    pub friction: f32,
+    pub restitution: f32,
+    pub friction_combine_rule: u32,  // 0 Average, 1 Min, 2 Multiply, 3 Max
+    pub restitution_combine_rule: u32,
+    pub is_sensor: bool,
+    pub collision_groups: u32,
+    pub solver_groups: u32,
+    pub active_collision_types: u16,
+    pub active_hooks: u32,
+    pub active_events: u32,
+    pub contact_force_event_threshold: f32,
+    pub contact_skin: f32,
+}
+#[no_mangle]
+pub extern "C" fn cg_collider_desc_default() -> CgColliderDesc {
+    CgColliderDesc {
+        enabled: true, translation: [0.0; 3], rotation: [0.0, 0.0, 0.0, 1.0], mass_props_mode: 0, mass: 0.0,
+        center_of_mass: [0.0; 3], principal_inertia: [0.0; 3], inertia_frame: [0.0, 0.0, 0.0, 1.0], density: 1.0,
+        friction: 0.5, restitution: 0.0, friction_combine_rule: 0, restitution_combine_rule: 0, is_sensor: false,
+        collision_groups: 0xffff_ffff, solver_groups: 0xffff_ffff, active_collision_types: ActiveCollisionTypes::default().bits(),
+        active_hooks: 0, active_events: 0, contact_force_event_threshold: 0.0, contact_skin: 0.0,
+    }
+}
+fn combine(r: u32) -> CoefficientCombineRule {
+    match r { 1 => CoefficientCombineRule::Min, 2 => CoefficientCombineRule::Multiply, 3 => CoefficientCombineRule::Max, _ => CoefficientCombineRule::Average }
+}
+fn groups(g: u32) -> InteractionGroups {
+    // The bindings' unpack_interaction_groups: membership in the high 16 bits, filter in the low 16.
+    InteractionGroups::new(Group::from_bits_retain(g >> 16), Group::from_bits_retain(g & 0x0000_ffff), InteractionTestMode::And)
+}
+/// `parent`: a body handle, or CG_NONE for a fixed collider.
+#[no_mangle]
+pub unsafe extern "C" fn cg_collider_create(w: *mut CgWorld, shape: *const CgShape, d: *const CgColliderDesc, parent: u64) -> u64 {
+    let w = &mut *w;
+    let d = &*d;
+    let pos = Pose::from_parts(Vector::from(d.translation), Rotation::from_xyzw(d.rotation[0], d.rotation[1], d.rotation[2], d.rotation[3]));
+    let mut b = ColliderBuilder::new((*shape).0.clone())
+        .enabled(d.enabled)
+        .position(pos)
+        .friction(d.friction)
+        .restitution(d.restitution)
+        .collision_groups(groups(d.collision_groups))
+        .solver_groups(groups(d.solver_groups))
+        .active_hooks(ActiveHooks::from_bits(d.active_hooks).unwrap_or(ActiveHooks::empty()))
+        .active_events(ActiveEvents::from_bits(d.active_events).unwrap_or(ActiveEvents::empty()))
+        .active_collision_types(ActiveCollisionTypes::from_bits(d.active_collision_types).unwrap_or(ActiveCollisionTypes::empty()))
+        .sensor(d.is_sensor)
+        .friction_combine_rule(combine(d.friction_combine_rule))
+        .restitution_combine_rule(combine(d.restitution_combine_rule))
+        .contact_force_event_threshold(d.contact_force_event_threshold)
+        .contact_skin(d.contact_skin);
+    b = match d.mass_props_mode {
+        2 => b.mass_properties(MassProperties::with_principal_inertia_frame(
+            Vector::from(d.center_of_mass), d.mass, Vector::from(d.principal_inertia),
+            Rotation::from_xyzw(d.inertia_frame[0], d.inertia_frame[1], d.inertia_frame[2], d.inertia_frame[3]))),
+        1 => b.mass(d.mass),
+        _ => b.density(d.density),
+    };
+    let c = b.build();
+    if parent == CG_NONE { flat(w.colliders.insert(c).0) } else { flat(w.colliders.insert_with_parent(c, body_h(parent), &mut w.bodies).0) }
+}
+/// The collider's parent body, or CG_NONE.
+#[no_mangle]
+pub unsafe extern "C" fn cg_collider_parent(w: *const CgWorld, c: u64) -> u64 {
+    (*w).colliders.get(col_h(c)).and_then(|c| c.parent()).map(|h| flat(h.0)).unwrap_or(CG_NONE)
+}
+
+// --- rigid bodies ----------------------------------------------------------------------------
+
+/// RigidBodyDesc as the TS bindings hold it. `cg_body_desc_default` fills the TS defaults.
+#[repr(C)]
+pub struct CgBodyDesc {
+    pub body_type: u32,              // 0 Dynamic, 1 Fixed, 2 KinematicPositionBased, 3 KinematicVelocityBased (TS RigidBodyType)
+    pub enabled: bool,
+    pub translation: [f32; 3],
+    pub rotation: [f32; 4],
+    pub gravity_scale: f32,
+    pub mass: f32,
+    pub mass_only: bool,
+    pub center_of_mass: [f32; 3],
+    pub linvel: [f32; 3],
+    pub angvel: [f32; 3],
+    pub principal_inertia: [f32; 3],
+    pub inertia_frame: [f32; 4],
+    pub translations_enabled: [bool; 3],
+    pub rotations_enabled: [bool; 3],
+    pub linear_damping: f32,
+    pub angular_damping: f32,
+    pub can_sleep: bool,
+    pub sleeping: bool,
+    pub soft_ccd_prediction: f32,
+    pub ccd_enabled: bool,
+    pub dominance_group: i8,
+    pub additional_solver_iterations: u32,
+    pub additional_pgs_iterations: u32,
+}
+#[no_mangle]
+pub extern "C" fn cg_body_desc_default(body_type: u32) -> CgBodyDesc {
+    CgBodyDesc {
+        body_type, enabled: true, translation: [0.0; 3], rotation: [0.0, 0.0, 0.0, 1.0], gravity_scale: 1.0, mass: 0.0,
+        mass_only: false, center_of_mass: [0.0; 3], linvel: [0.0; 3], angvel: [0.0; 3], principal_inertia: [0.0; 3],
+        inertia_frame: [0.0, 0.0, 0.0, 1.0], translations_enabled: [true; 3], rotations_enabled: [true; 3],
+        linear_damping: 0.0, angular_damping: 0.0, can_sleep: true, sleeping: false, soft_ccd_prediction: 0.0,
+        ccd_enabled: false, dominance_group: 0, additional_solver_iterations: 0, additional_pgs_iterations: 0,
+    }
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_create(w: *mut CgWorld, d: *const CgBodyDesc) -> u64 {
+    let w = &mut *w;
+    let d = &*d;
+    // The TS RigidBodyType enum order: Dynamic, Fixed, KinematicPositionBased, KinematicVelocityBased.
+    let t = match d.body_type { 1 => RigidBodyType::Fixed, 2 => RigidBodyType::KinematicPositionBased, 3 => RigidBodyType::KinematicVelocityBased, _ => RigidBodyType::Dynamic };
+    let pos = Pose::from_parts(Vector::from(d.translation), Rotation::from_xyzw(d.rotation[0], d.rotation[1], d.rotation[2], d.rotation[3]));
+    let mut b = RigidBodyBuilder::new(t)
+        .enabled(d.enabled)
+        .pose(pos)
+        .gravity_scale(d.gravity_scale)
+        .enabled_translations(d.translations_enabled[0], d.translations_enabled[1], d.translations_enabled[2])
+        .enabled_rotations(d.rotations_enabled[0], d.rotations_enabled[1], d.rotations_enabled[2])
+        .linvel(Vector::from(d.linvel))
+        .angvel(Vector::from(d.angvel))
+        .linear_damping(d.linear_damping)
+        .angular_damping(d.angular_damping)
+        .can_sleep(d.can_sleep)
+        .sleeping(d.sleeping)
+        .ccd_enabled(d.ccd_enabled)
+        .dominance_group(d.dominance_group)
+        .additional_solver_iterations(d.additional_solver_iterations as usize)
+        .additional_pgs_iterations(d.additional_pgs_iterations as usize)
+        .soft_ccd_prediction(d.soft_ccd_prediction);
+    b = if d.mass_only {
+        b.additional_mass(d.mass)
+    } else {
+        b.additional_mass_properties(MassProperties::with_principal_inertia_frame(
+            Vector::from(d.center_of_mass), d.mass, Vector::from(d.principal_inertia),
+            Rotation::from_xyzw(d.inertia_frame[0], d.inertia_frame[1], d.inertia_frame[2], d.inertia_frame[3])))
+    };
+    flat(w.bodies.insert(b.build()).0)
+}
+macro_rules! with_body {
+    ($w:expr, $h:expr, |$rb:ident| $body:expr) => {
+        if let Some($rb) = (*$w).bodies.get_mut(body_h($h)) { $body }
+    };
+}
+/// out: [x, y, z]
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_translation(w: *const CgWorld, h: u64, out: *mut f32) {
+    if let Some(rb) = (*w).bodies.get(body_h(h)) { let t = rb.translation(); *out = t.x; *out.add(1) = t.y; *out.add(2) = t.z; }
+}
+/// out: [x, y, z, w]
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_rotation(w: *const CgWorld, h: u64, out: *mut f32) {
+    if let Some(rb) = (*w).bodies.get(body_h(h)) { let q = rb.rotation(); *out = q.x; *out.add(1) = q.y; *out.add(2) = q.z; *out.add(3) = q.w; }
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_linvel(w: *const CgWorld, h: u64, out: *mut f32) {
+    if let Some(rb) = (*w).bodies.get(body_h(h)) { let v = rb.linvel(); *out = v.x; *out.add(1) = v.y; *out.add(2) = v.z; }
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_angvel(w: *const CgWorld, h: u64, out: *mut f32) {
+    if let Some(rb) = (*w).bodies.get(body_h(h)) { let v = rb.angvel(); *out = v.x; *out.add(1) = v.y; *out.add(2) = v.z; }
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_add_force(w: *mut CgWorld, h: u64, x: f32, y: f32, z: f32, wake: bool) { with_body!(w, h, |rb| rb.add_force(v3(x, y, z), wake)); }
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_add_torque(w: *mut CgWorld, h: u64, x: f32, y: f32, z: f32, wake: bool) { with_body!(w, h, |rb| rb.add_torque(v3(x, y, z), wake)); }
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_add_force_at_point(w: *mut CgWorld, h: u64, fx: f32, fy: f32, fz: f32, px: f32, py: f32, pz: f32, wake: bool) {
+    with_body!(w, h, |rb| rb.add_force_at_point(v3(fx, fy, fz), v3(px, py, pz).into(), wake));
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_reset_forces(w: *mut CgWorld, h: u64, wake: bool) { with_body!(w, h, |rb| rb.reset_forces(wake)); }
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_reset_torques(w: *mut CgWorld, h: u64, wake: bool) { with_body!(w, h, |rb| rb.reset_torques(wake)); }
+
+// --- queries ---------------------------------------------------------------------------------
+
+/// A ray hit: time of impact along `dir` (units of |dir|), the normal, the collider.
+#[repr(C)]
+pub struct CgRayHit {
+    pub toi: f32,
+    pub normal: [f32; 3],
+    pub collider: u64,
+}
+/// world.castRayAndGetNormal(ray, maxToi, solid, flags, groups, excludeCollider, excludeRigidBody), no predicate.
+/// `groups`, `exclude_collider`, `exclude_body`: CG_NONE when absent. Returns false on no hit.
+#[no_mangle]
+pub unsafe extern "C" fn cg_cast_ray_and_get_normal(
+    w: *const CgWorld, ox: f32, oy: f32, oz: f32, dx: f32, dy: f32, dz: f32, max_toi: f32, solid: bool,
+    filter_flags: u32, groups_bits: u64, exclude_collider: u64, exclude_body: u64, out: *mut CgRayHit,
+) -> bool {
+    let w = &*w;
+    let filter = QueryFilter {
+        flags: QueryFilterFlags::from_bits(filter_flags).unwrap_or(QueryFilterFlags::empty()),
+        groups: if groups_bits == CG_NONE { None } else { Some(groups(groups_bits as u32)) },
+        exclude_collider: if exclude_collider == CG_NONE { None } else { Some(col_h(exclude_collider)) },
+        exclude_rigid_body: if exclude_body == CG_NONE { None } else { Some(body_h(exclude_body)) },
+        predicate: None,
+    };
+    let qp = w.broad_phase.as_query_pipeline(w.narrow_phase.query_dispatcher(), &w.bodies, &w.colliders, filter);
+    let ray = Ray::new(v3(ox, oy, oz), v3(dx, dy, dz));
+    match qp.cast_ray_and_get_normal(&ray, max_toi, solid) {
+        Some((h, inter)) => {
+            let o = &mut *out;
+            o.toi = inter.time_of_impact;
+            o.normal = [inter.normal.x, inter.normal.y, inter.normal.z];
+            o.collider = flat(h.0);
+            true
+        }
+        None => false,
+    }
+}
