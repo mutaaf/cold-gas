@@ -848,6 +848,8 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 /* A run that ended in a crash (0072): the step you're on is the crash, in signal red, never TOUCHDOWN. */
 .h-timeline li[data-crash] span, .h-timeline li[data-crash] em { color: var(--warn); }
 .h-timeline li[data-crash] i { background: var(--warn); border-color: var(--warn); box-shadow: 0 0 0 3px rgba(255, 90, 98, 0.2); }
+.h-timeline li[data-end='stall'] span, .h-timeline li[data-end='stall'] em { color: var(--caution); }
+.h-timeline li[data-end='stall'] i { background: var(--caution); border-color: var(--caution); box-shadow: 0 0 0 3px rgba(255, 191, 90, 0.2); }
 /* Full, the label stands on the scene under its dot: red holds 4.5:1 only on dark glass (a lit deck
    behind a wreck measured 4.2). Compact, it is in the head's glass already. */
 :root[data-hud='full'] .h-timeline li[data-crash] span { padding: 3px 5px; border-radius: 3px; background: rgba(5, 7, 12, 0.78); }

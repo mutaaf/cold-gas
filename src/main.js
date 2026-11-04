@@ -842,8 +842,8 @@ function liveStep(dt) {
     S.acc -= DT;
   }
   // The aftermath (0062): the run is over and scored, the car isn't stopped. The same world steps on
-  // the post-crash input (brakes through ABS, no drive, no fan, valves shut: src/sim/run.js) until it
-  // is at rest, then frees it. Slow motion slows it with everything else.
+  // the post-crash input (brakes through ABS, no drive, no fan, valves shut; a stalled car keeps its fan, 0145:
+  // src/sim/run.js) until it is at rest, then frees it. Slow motion slows it with everything else.
   if (S.after && !run.after.done) {
     while (S.acc >= DT) {
       poseLerp.before(run.car);

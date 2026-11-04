@@ -27,6 +27,8 @@ export function crashStep(card) {
   if (f.endReason === 'contact' || f.contact) return 'Contact';
   if (f.damagePct >= WRECK_PCT) return 'Wrecked';
   if (f.fellOff) return 'Fell off';
+  // A car that sat still on the deck until the clock ran out never crashed (0145): it stalled.
+  if (f.endReason === 'stalled') return 'Stalled';
   return 'Crash';
 }
 // Tenths of a second → "T+00:12.4" (minus sign in the countdown).
@@ -280,6 +282,8 @@ export function createUI() {
         const cr = i === at ? crash : '';
         if ((li.dataset.crash || '') === cr) return;
         if (cr) li.dataset.crash = cr; else delete li.dataset.crash;
+        // A stall is a caution (amber), not a warning: the car is still on its wheels (0145).
+        if (cr === 'Stalled') li.dataset.end = 'stall'; else delete li.dataset.end;
         li.querySelector('span').lastChild.nodeValue = ` ${cr || ui.phaseLabels[li.dataset.ph]}`;
       });
       hudEl.dataset.phase = phaseKey;
