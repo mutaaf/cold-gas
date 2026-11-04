@@ -22,8 +22,8 @@ targets:
     platform: iOS
     sources:
       - path: ColdGas
-        excludes: ["Resources/Meshes/*.json", "Resources/Meshes/*.bin"]
-      - path: ColdGas/Resources/Meshes
+        excludes: ["Resources/Stages/**"]
+      - path: ColdGas/Resources/Stages
         type: folder
         buildPhase: resources
       - path: Packages/ColdGasCore/Tests/Vectors/dmath.json

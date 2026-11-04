@@ -155,6 +155,34 @@ What it took (keep it so as the C API grows):
   3. Compare engine outputs, not just the car's state: the engine's answer is only used while the hull touches
      something, so it can drift unseen before then.
 
+### Phase 2 so far (0153, in progress)
+
+The Show draws natively, from the web's own stage:
+- The Wall, its truss and LED edges, the searchlights, the parked row, the pad and its paint, the roadster: 20,554 +
+  50,498 triangles and 17 canvas textures, from `COURSE_BUILDERS`.
+- The run is flown by the Swift sim (`-replay ref-show`; 128 ms on the phone) and drawn between its ticks. The parked
+  bodies are posed from the sim.
+- The look:
+  - three.js's **AgX** tone mapping, line for line (it's what keeps the floodlit slab from blowing out under the
+    web's physically based light intensities, up to 10,000 cd);
+  - the course's spot and point lights;
+  - a key-light shadow map;
+  - the web's ShaderMaterial effects recomputed natively (the beams, the glow decals, the spill);
+  - alpha-mapped contact shadows.
+- MetalFX spatial upscaling, a resolution governor and a thermal cap.
+
+Not yet at budget. On the iPhone 15 Pro Max the full stage took **GPU ≈ 12 ms at render scale 0.5** against 8.3 ms:
+the governor floors and the frame still misses. So the cost isn't pixels. Later runs were taken at thermal state
+"serious" (back-to-back benches heated the phone), so they don't count.
+- `-bench` now prints the thermal state, and `-gpu-skip <pass,…>` / `-scale <s>` pin the frame for attribution.
+- Per-pass command buffers overlap on the queue, so their times aren't additive.
+- **Next:**
+  1. Measure a cool phone with Xcode's GPU frame capture, or `MTLCounterSampleBuffer` stage timestamps.
+  2. Cull the 1500 m floor and the beams to the view.
+  3. Cut the shadow map to the car's neighbourhood and redraw it only when something in it moves.
+  4. Bloom.
+  5. Port the director's rigs.
+
 ### Porting rules (each one is a bug waiting to happen)
 
 | JS | Swift |
@@ -192,8 +220,8 @@ What it took (keep it so as the C API grows):
   - Keep the `sliver()` minimum-width idea for strips under a pixel.
 - **MetalFX** upscaling at the resolution floor.
 - **Meshes from the JS, never redrawn by hand.**
-  - `npm run meshes` runs the procedural generators (`cars.js`, `parked/`, `wall.js`, `courses.surface()`) in
-    Node and writes one binary mesh file per object.
+  - `scripts/native-stage.mjs` runs the web's own builders (scene.js `COURSE_BUILDERS`, `roadster.js`) in headless Chromium (the real canvas draws the procedural textures) and writes the stage, the parked row, the car, the lights and the textures (0153). It replaced the spike's
+    `scripts/meshes.mjs` (the car alone, in Node, with the canvas stubbed out).
   - The JS stays the only source of the car and the row. A mesh changes when its generator changes.
 - **Shaders.**
   - Every pipeline is built **at launch, off the main thread, for the real pixel formats** (LESSONS 0046: compile

@@ -1,7 +1,7 @@
 ---
 id: 0153
 title: "Phase 2: the Show drawn in Metal (stage, row, plumes, director), with headroom at 120 Hz"
-status: ready
+status: in-progress
 priority: P1
 size: L
 lens: platform
@@ -18,8 +18,8 @@ in the same budget, so MetalFX and the resolution governor come with it, not aft
 
 ## What
 Runs on: the operator's Mac (Xcode, Metal). docs/NATIVE.md §4.
-- `scripts/meshes.mjs` exports the rest of the stage from the web's own generators: the Wall's deck and truss
-  (src/render/wall.js), the parked row (src/render/parked/), the complex, the pad's rings.
+- `scripts/native-stage.mjs` exports the stage from the web's own builders (scene.js `COURSE_BUILDERS`): the Wall's
+  deck and truss, the parked row, the pad's rings, the lights, the canvas textures (done).
 - Metal passes: cascaded shadows, the floor reflection, the plumes (shock diamonds) and mist as compute, the film look
   (bloom, tone, grain).
 - The director's rigs, from src/render/director.js, holding the horizontal lens.
@@ -28,12 +28,24 @@ Runs on: the operator's Mac (Xcode, Metal). docs/NATIVE.md §4.
   (src/obs/ledger.js's rules); thermal state and Low Power Mode feed it.
 
 ## Acceptance criteria
-- [ ] The reference Show replays on the Pro Max at 120 Hz with presentation p95 ≤ 8.34 ms and GPU p95 ≤ 6.5 ms
-      (`-bench -replay ref-show`).
-- [ ] 0 pipeline compiles after launch; the binary archive covers every pass.
-- [ ] Shots of the same moments as scripts/shots-look.mjs (title, release, landing) beside the web's, on the Pro Max
-      and the Duo poses.
-- [ ] `thermalState >= .serious` steps resolution down without dropping the frame rate.
+- [ ] The reference Show replays on the Pro Max at 120 Hz: presentation p95 ≤ 8.34 ms and GPU p95 ≤ 6.5 ms
+      (`-bench`). **Not yet:** GPU ≈ 12 ms at render scale 0.5 on a cool run. Later runs were thermally throttled
+      (thermal 2) and don't count.
+- [x] 0 pipeline compiles after launch; the binary archive covers every pass (87 ms of setup on a warm launch).
+- [ ] Shots of the same moments as scripts/shots-look.mjs, beside the web's. Native shots of the climb, the hang and
+      the landing exist; the side-by-side with the web doesn't yet.
+- [x] The thermal state and Low Power Mode cap the render scale (the governor steps pixels, not the frame rate).
+
+Done so far:
+- The stage exported from the web's builders, with the real canvas textures. One web change: `scene.js` exports
+  `COURSE_BUILDERS`.
+- The renderer: HDR, MSAA 4× memoryless, a shadow map, the course's lights, AgX, the effects, alpha maps, MetalFX,
+  the governor.
+- The Swift sim's replay drives the car and the row.
+- Attribution tools: `-gpu-skip`, `-scale`, the thermal state in the BENCH line.
+- Dedicated simulators (`make sims`: "ColdGas Duo", "ColdGas Pro Max"), because another project on this Mac drives the
+  stock "iPhone Duo". On that unfolded simulator the real `reservedRegions` API reported the fold at x 455.5, 40 wide,
+  exactly 18-0's measurement, and the layout split around it.
 
 ## Test plan
 `-bench` lines on the phone recorded in the PR; `make shots`; the layout and mesh tests stay green.

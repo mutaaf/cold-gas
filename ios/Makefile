@@ -7,15 +7,19 @@
 #   make bench    the 10 s turntable bench on the Pro Max simulator (prints BENCH …)
 #   make device   build, install and run -selftest on the paired iPhone (prints SELFTEST …)
 SHELL := /bin/bash
-DUO ?= iPhone Duo
-PROMAX ?= iPhone 18 Pro Max
+DUO ?= ColdGas Duo
+PROMAX ?= ColdGas Pro Max
 DD := build/dd
 APP := $(DD)/Build/Products/Debug-iphonesimulator/ColdGas.app
 BUNDLE := com.mutaafaziz.coldgas
 id = $(shell xcrun simctl list devices available | grep -F "    $(1) (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
 
-.PHONY: up engine gen test alloc build sim shots bench device
-up: engine gen test build sim
+.PHONY: up sims engine gen test alloc build sim shots bench device
+up: sims engine gen test build sim
+sims:
+	# Our own simulators: another project on this Mac shares the stock "iPhone Duo" (it unfolds it, launches its app).
+	@xcrun simctl list devices available | grep -q "    ColdGas Duo (" || xcrun simctl create "ColdGas Duo" com.apple.CoreSimulator.SimDeviceType.iPhone-Duo com.apple.CoreSimulator.SimRuntime.iOS-27-1
+	@xcrun simctl list devices available | grep -q "    ColdGas Pro Max (" || xcrun simctl create "ColdGas Pro Max" com.apple.CoreSimulator.SimDeviceType.iPhone-18-Pro-Max com.apple.CoreSimulator.SimRuntime.iOS-27-0
 engine:
 	@[ -d Packages/ColdGasCore/CRapier.xcframework ] || ./scripts/rapier.sh
 gen:

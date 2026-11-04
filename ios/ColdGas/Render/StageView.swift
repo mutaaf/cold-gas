@@ -20,19 +20,25 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         super.init(frame: frame)
         guard let device = MTLCreateSystemDefaultDevice() else { return }
         metal.device = device
-        metal.pixelFormat = Renderer.colorFormat
+        metal.pixelFormat = Renderer.drawableFormat
         metal.framebufferOnly = true
         metal.maximumDrawableCount = 3
         isOpaque = true
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let r = Renderer(device: device)
+            // The Show, flown by the Swift sim (bit-exact with the web), drawn on the web's own stage.
+            let which = Launch.value("-replay") ?? "ref-show"
+            let replay = Launch.args.contains("-idle") ? nil : Replay(runVector: which)
+            if let rp = replay { print(String(format: "REPLAY %@ flown by the Swift sim in %.0f ms: %.1f %@", which, rp.flownMs, rp.score, rp.verdict)) }
+            let r = Renderer(device: device, course: replay?.course ?? "show", replay: replay)
             DispatchQueue.main.async {
                 guard let self, let r else { print("RENDERER failed"); return }
                 self.renderer = r
-                print(String(format: "PIPELINES built at launch in %.1f ms (binary archive)", r.launchCompileMs))
+                print(String(format: "PIPELINES built at launch in %.1f ms (binary archive), %d lights", r.launchCompileMs, r.nLights))
                 self.startLink()
             }
         }
+        NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.renderer?.applyThermal() }
+        NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in self?.renderer?.applyThermal() }
     }
     required init?(coder: NSCoder) { nil }
 
@@ -64,11 +70,11 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         stats.add(interval: update.targetPresentationTimestamp, cpu: (now - cpu0) * 1000)
         if stats.firstFrame { Ready.mark("frame") }
         if stats.frames % 60 == 0 {
-            NotificationCenter.default.post(name: .frameStats, object: String(format: "%.0f fps · %.2f ms cpu\n%d×%d px · MSAA 4×", stats.fps, stats.cpuAvg, Int(metal.drawableSize.width), Int(metal.drawableSize.height)))
+            NotificationCenter.default.post(name: .frameStats, object: String(format: "%.0f fps · %.2f ms cpu\n%d×%d px · render %.0f%% · MSAA 4× · MetalFX", stats.fps, stats.cpuAvg, Int(metal.drawableSize.width), Int(metal.drawableSize.height), r.scale * 100))
         }
         if let b = bench {
             b.frame(target: update.targetPresentationTimestamp, cpu: (now - cpu0) * 1000)
-            if b.done { bench = nil; b.report(compiles: r.compilesAfterLaunch, launchMs: r.launchCompileMs, size: metal.drawableSize) }
+            if b.done { bench = nil; b.report(compiles: r.compilesAfterLaunch, launchMs: r.launchCompileMs, size: metal.drawableSize); print(String(format: "BENCH render-scale %.2f thermal %d lowpower %d · passes (ms) %@", r.scale, ProcessInfo.processInfo.thermalState.rawValue, ProcessInfo.processInfo.isLowPowerModeEnabled ? 1 : 0, r.passTimes.report())) }
         }
     }
 }

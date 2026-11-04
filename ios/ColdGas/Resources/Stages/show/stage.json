@@ -1,0 +1,5569 @@
+{
+ "course": "show",
+ "note": "scripts/native-stage.mjs from src/render (scene.js COURSE_BUILDERS, roadster.js). Never edit by hand.",
+ "look": {
+  "exposure": 1.18,
+  "bloom": {
+   "strength": 0.62,
+   "radius": 0.55,
+   "threshold": 0.82
+  },
+  "fog": {
+   "color": [
+    0.0006070539670588235,
+    0.0009105809505882353,
+    0.0015176349176470587
+   ]
+  },
+  "keyLight": {
+   "color": [
+    0.7379104087672317,
+    0.7912979403281551,
+    1
+   ],
+   "intensity": 1.7,
+   "offset": [
+    -18,
+    30,
+    -22
+   ]
+  },
+  "glows": [
+   {
+    "pos": [
+     -2.4,
+     0.35,
+     -5.3
+    ],
+    "color": [
+     0.12,
+     0.13,
+     0.15
+    ],
+    "radius": 1.5
+   },
+   {
+    "pos": [
+     2.4,
+     0.35,
+     -5.3
+    ],
+    "color": [
+     0.12,
+     0.13,
+     0.15
+    ],
+    "radius": 1.5
+   },
+   {
+    "pos": [
+     0,
+     0.5,
+     1
+    ],
+    "color": [
+     0.25,
+     0.012,
+     0.02
+    ],
+    "radius": 3.5
+   },
+   {
+    "pos": [
+     -9,
+     0.6,
+     15
+    ],
+    "color": [
+     0.1,
+     0.13,
+     0.17
+    ],
+    "radius": 1.6
+   },
+   {
+    "pos": [
+     -13,
+     0.6,
+     20
+    ],
+    "color": [
+     0.1,
+     0.13,
+     0.17
+    ],
+    "radius": 1.6
+   },
+   {
+    "pos": [
+     -18,
+     0.6,
+     25
+    ],
+    "color": [
+     0.1,
+     0.13,
+     0.17
+    ],
+    "radius": 1.6
+   },
+   {
+    "pos": [
+     -24,
+     0.6,
+     18
+    ],
+    "color": [
+     0.1,
+     0.13,
+     0.17
+    ],
+    "radius": 1.6
+   },
+   {
+    "pos": [
+     9,
+     0.6,
+     15
+    ],
+    "color": [
+     0.1,
+     0.13,
+     0.17
+    ],
+    "radius": 1.6
+   },
+   {
+    "pos": [
+     13,
+     0.6,
+     20
+    ],
+    "color": [
+     0.1,
+     0.13,
+     0.17
+    ],
+    "radius": 1.6
+   },
+   {
+    "pos": [
+     18,
+     0.6,
+     25
+    ],
+    "color": [
+     0.1,
+     0.13,
+     0.17
+    ],
+    "radius": 1.6
+   },
+   {
+    "pos": [
+     24,
+     0.6,
+     18
+    ],
+    "color": [
+     0.1,
+     0.13,
+     0.17
+    ],
+    "radius": 1.6
+   }
+  ]
+ },
+ "lights": [
+  {
+   "kind": "HemisphereLight",
+   "color": [
+    0.015996293361446288,
+    0.031896033067374104,
+    0.06847816983662762
+   ],
+   "intensity": 0.35,
+   "position": [
+    0,
+    1,
+    0
+   ],
+   "distance": 0,
+   "decay": 2
+  },
+  {
+   "kind": "SpotLight",
+   "color": [
+    1,
+    0.8713671191959567,
+    0.7454042095350284
+   ],
+   "intensity": 10214.050196220729,
+   "position": [
+    -15,
+    6,
+    -30
+   ],
+   "distance": 0,
+   "decay": 2,
+   "target": [
+    1,
+    16.818163419898745,
+    8
+   ],
+   "angle": 0.36,
+   "penumbra": 0.65
+  },
+  {
+   "kind": "SpotLight",
+   "color": [
+    0.7379104087672317,
+    0.8069522576650873,
+    1
+   ],
+   "intensity": 8249.80977387059,
+   "position": [
+    16,
+    4,
+    -26
+   ],
+   "distance": 0,
+   "decay": 2,
+   "target": [
+    0,
+    19.621190656548535,
+    9
+   ],
+   "angle": 0.32,
+   "penumbra": 0.7
+  },
+  {
+   "kind": "SpotLight",
+   "color": [
+    0.8148465722120952,
+    0.8796223968851662,
+    1
+   ],
+   "intensity": 2160.6644645851543,
+   "position": [
+    -2.4,
+    0.25,
+    -5.5
+   ],
+   "distance": 0,
+   "decay": 2,
+   "target": [
+    -0.5,
+    18.21967703822364,
+    10.5
+   ],
+   "angle": 0.42,
+   "penumbra": 0.55
+  },
+  {
+   "kind": "SpotLight",
+   "color": [
+    0.8148465722120952,
+    0.8796223968851662,
+    1
+   ],
+   "intensity": 2160.6644645851543,
+   "position": [
+    2.4,
+    0.25,
+    -5.5
+   ],
+   "distance": 0,
+   "decay": 2,
+   "target": [
+    0.5,
+    18.21967703822364,
+    10.5
+   ],
+   "angle": 0.42,
+   "penumbra": 0.55
+  },
+  {
+   "kind": "PointLight",
+   "color": [
+    1,
+    0.010329823026364548,
+    0.02121901037134225
+   ],
+   "intensity": 35,
+   "position": [
+    0,
+    1.2,
+    1.5
+   ],
+   "distance": 18,
+   "decay": 2
+  },
+  {
+   "kind": "SpotLight",
+   "color": [
+    0.8069522576650873,
+    0.85499260812105,
+    1
+   ],
+   "intensity": 420,
+   "position": [
+    -10,
+    14,
+    -30.312500000000004
+   ],
+   "distance": 0,
+   "decay": 2,
+   "target": [
+    0,
+    0.8,
+    -16.312500000000004
+   ],
+   "angle": 0.5,
+   "penumbra": 0.8
+  },
+  {
+   "kind": "SpotLight",
+   "color": [
+    0.8069522576650873,
+    0.85499260812105,
+    1
+   ],
+   "intensity": 420,
+   "position": [
+    4,
+    14,
+    -32.3125
+   ],
+   "distance": 0,
+   "decay": 2,
+   "target": [
+    0,
+    0.8,
+    -16.312500000000004
+   ],
+   "angle": 0.5,
+   "penumbra": 0.8
+  },
+  {
+   "kind": "PointLight",
+   "color": [
+    1,
+    0.010329823026364548,
+    0.02121901037134225
+   ],
+   "intensity": 10,
+   "position": [
+    0,
+    0.6,
+    -16.312500000000004
+   ],
+   "distance": 14,
+   "decay": 2
+  }
+ ],
+ "static": {
+  "vertexStride": 44,
+  "vertexCount": 17614,
+  "submeshes": [
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      0.0015176349176470587,
+      0.0018211619011764706,
+      0.0021246888847058823
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 0.45,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -4,
+    "vertexStart": 0,
+    "vertexCount": 98,
+    "indexStart": 0,
+    "indexCount": 288
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      0.7379104087672317,
+      0.7681511472425809,
+      0.8069522576650873
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 0.55,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 98,
+    "vertexCount": 1214,
+    "indexStart": 288,
+    "indexCount": 3540
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t1",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1312,
+    "vertexCount": 4,
+    "indexStart": 3828,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t2",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1316,
+    "vertexCount": 4,
+    "indexStart": 3834,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t3",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1320,
+    "vertexCount": 4,
+    "indexStart": 3840,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t4",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1324,
+    "vertexCount": 4,
+    "indexStart": 3846,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t5",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1328,
+    "vertexCount": 4,
+    "indexStart": 3852,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t6",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1332,
+    "vertexCount": 4,
+    "indexStart": 3858,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t7",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1336,
+    "vertexCount": 4,
+    "indexStart": 3864,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t8",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1340,
+    "vertexCount": 4,
+    "indexStart": 3870,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t9",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1344,
+    "vertexCount": 4,
+    "indexStart": 3876,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      0.7379104087672317,
+      0.7681511472425809,
+      0.8069522576650873
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 0.2,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1348,
+    "vertexCount": 172,
+    "indexStart": 3882,
+    "indexCount": 258
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t10",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -3,
+    "vertexStart": 1520,
+    "vertexCount": 4,
+    "indexStart": 4140,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "glow",
+      "color": [
+       0.2746773120495699,
+       0.46778379610254284,
+       1
+      ],
+      "power": 0.12
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": true,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -2,
+    "vertexStart": 1524,
+    "vertexCount": 4,
+    "indexStart": 4146,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "glow",
+      "color": [
+       1,
+       0.009134058699157796,
+       0.02121901037134225
+      ],
+      "power": 0.26
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": true,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -2,
+    "vertexStart": 1528,
+    "vertexCount": 4,
+    "indexStart": 4152,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "glow",
+      "color": [
+       0.2746773120495699,
+       0.46778379610254284,
+       1
+      ],
+      "power": 0.12
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": true,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -2,
+    "vertexStart": 1532,
+    "vertexCount": 4,
+    "indexStart": 4158,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      4.5,
+      0.2,
+      0.3
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -1,
+    "vertexStart": 1536,
+    "vertexCount": 16,
+    "indexStart": 4164,
+    "indexCount": 24
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      2.4,
+      2.6,
+      3
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -1,
+    "vertexStart": 1552,
+    "vertexCount": 4,
+    "indexStart": 4188,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      2.4,
+      2.6,
+      3
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -1,
+    "vertexStart": 1556,
+    "vertexCount": 4,
+    "indexStart": 4194,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      5.5,
+      0.26,
+      0.36
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": true,
+     "additive": false,
+     "polygonOffset": [
+      -4,
+      -4
+     ],
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": -1,
+    "vertexStart": 1560,
+    "vertexCount": 3048,
+    "indexStart": 4200,
+    "indexCount": 9120
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "beam",
+      "color": [
+       0.62,
+       0.78,
+       1
+      ],
+      "power": 0.16
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": true,
+     "additive": true,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 4608,
+    "vertexCount": 66,
+    "indexStart": 13320,
+    "indexCount": 192
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "beam",
+      "color": [
+       0.62,
+       0.78,
+       1
+      ],
+      "power": 0.16
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": true,
+     "additive": true,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 4674,
+    "vertexCount": 66,
+    "indexStart": 13512,
+    "indexCount": 192
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshStandardMaterial",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.007499032040460618,
+      0.008023192982520563,
+      0.010329823026364548
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.7,
+     "roughness": 0.4,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 4740,
+    "vertexCount": 336,
+    "indexStart": 13704,
+    "indexCount": 960
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshStandardMaterial",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.024157632443547246,
+      0.02732089163382382,
+      0.033104766565152086
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.85,
+     "roughness": 0.42,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 5076,
+    "vertexCount": 1232,
+    "indexStart": 14664,
+    "indexCount": 1848
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1.4,
+      0.05,
+      0.08
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 6308,
+    "vertexCount": 5348,
+    "indexStart": 16512,
+    "indexCount": 27432
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshStandardMaterial",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.26225065751888765,
+      0.2746773120495699,
+      0.29613827078752575
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.05,
+     "roughness": 0.5,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      2,
+      2
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t11",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 11656,
+    "vertexCount": 4,
+    "indexStart": 43944,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshStandardMaterial",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.005605391621829108,
+      0.006048833020386069,
+      0.007499032040460618
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.6,
+     "roughness": 0.4,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 11660,
+    "vertexCount": 4,
+    "indexStart": 43950,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "beam",
+      "color": [
+       0.62,
+       0.78,
+       1
+      ],
+      "power": 0.16
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": true,
+     "additive": true,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 11664,
+    "vertexCount": 66,
+    "indexStart": 43956,
+    "indexCount": 192
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "beam",
+      "color": [
+       0.62,
+       0.78,
+       1
+      ],
+      "power": 0.16
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": true,
+     "additive": true,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 11730,
+    "vertexCount": 66,
+    "indexStart": 44148,
+    "indexCount": 192
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshBasicMaterial",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      1.1,
+      1.3,
+      1.6
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 11796,
+    "vertexCount": 208,
+    "indexStart": 44340,
+    "indexCount": 576
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshStandardMaterial",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.005605391621829108,
+      0.006048833020386069,
+      0.007499032040460618
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.6,
+     "roughness": 0.4,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 12004,
+    "vertexCount": 4,
+    "indexStart": 44916,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "beam",
+      "color": [
+       0.62,
+       0.78,
+       1
+      ],
+      "power": 0.16
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": true,
+     "additive": true,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 12008,
+    "vertexCount": 66,
+    "indexStart": 44922,
+    "indexCount": 192
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "beam",
+      "color": [
+       0.62,
+       0.78,
+       1
+      ],
+      "power": 0.16
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": true,
+     "additive": true,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 12074,
+    "vertexCount": 66,
+    "indexStart": 45114,
+    "indexCount": 192
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "beam",
+      "color": [
+       0.62,
+       0.78,
+       1
+      ],
+      "power": 0.16
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": true,
+     "additive": true,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 12140,
+    "vertexCount": 66,
+    "indexStart": 45306,
+    "indexCount": 192
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "spill",
+      "color": [
+       1,
+       0.07,
+       0.1
+      ],
+      "power": 0.12
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": true,
+     "polygonOffset": [
+      -3,
+      -3
+     ],
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 12206,
+    "vertexCount": 1524,
+    "indexStart": 45498,
+    "indexCount": 4560
+   },
+   {
+    "material": {
+     "effect": {
+      "kind": "beam",
+      "color": [
+       0.62,
+       0.78,
+       1
+      ],
+      "power": 0.16
+     },
+     "alphaMap": null,
+     "name": "ShaderMaterial",
+     "kind": "ShaderMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": true,
+     "additive": true,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 13730,
+    "vertexCount": 66,
+    "indexStart": 50058,
+    "indexCount": 192
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshStandardMaterial",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.8148465722120952,
+      0.8148465722120952,
+      0.7912979403281551
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0,
+     "roughness": 0.55,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -2,
+      -2
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 13796,
+    "vertexCount": 762,
+    "indexStart": 50250,
+    "indexCount": 2280
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshStandardMaterial",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.2746773120495699,
+      0.28314874041918053,
+      0.3049873140591091
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": "t12",
+     "roughnessMap": "t13",
+     "bumpMap": "t14",
+     "bumpScale": 1.2,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 14558,
+    "vertexCount": 3052,
+    "indexStart": 52530,
+    "indexCount": 9126
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshStandardMaterial",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.3231432091022285,
+      0.33245153633549385,
+      0.3515325994898463
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0,
+     "roughness": 0.62,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": [
+      -1,
+      -1
+     ],
+     "vertexColors": false,
+     "fog": true,
+     "map": "t15",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 17610,
+    "vertexCount": 4,
+    "indexStart": 61656,
+    "indexCount": 6
+   }
+  ],
+  "file": "static.bin",
+  "indexOffsetBytes": 775016
+ },
+ "roadster": {
+  "vertexStride": 44,
+  "vertexCount": 33698,
+  "submeshes": [
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "MeshStandardMaterial",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      1,
+      1,
+      1
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0,
+     "roughness": 0.45,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": "t16",
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 0,
+    "vertexCount": 4,
+    "indexStart": 0,
+    "indexCount": 6
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-amber",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      0,
+      0,
+      0
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 4,
+    "vertexCount": 72,
+    "indexStart": 6,
+    "indexCount": 72
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-ambient",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      0,
+      0,
+      0
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 76,
+    "vertexCount": 144,
+    "indexStart": 78,
+    "indexCount": 144
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-black",
+     "kind": "MeshPhysicalMaterial",
+     "color": [
+      0.0036765073221525194,
+      0.004024717016506897,
+      0.004776953478513362
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.2,
+     "roughness": 0.4,
+     "clearcoat": 0.6,
+     "clearcoatRoughness": 0.25,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 220,
+    "vertexCount": 2662,
+    "indexStart": 222,
+    "indexCount": 2664
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-brass",
+     "kind": "MeshPhysicalMaterial",
+     "color": [
+      0.5332764040016892,
+      0.3231432091022285,
+      0.12213877222015301
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 1,
+     "roughness": 0.28,
+     "clearcoat": 0.4,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 2882,
+    "vertexCount": 7296,
+    "indexStart": 2886,
+    "indexCount": 7296
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-cabin",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.011612245176281512,
+      0.012286488353353374,
+      0.014443843592229466
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0,
+     "roughness": 0.8,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 10178,
+    "vertexCount": 252,
+    "indexStart": 10182,
+    "indexCount": 252
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-caliper",
+     "kind": "MeshPhysicalMaterial",
+     "color": [
+      0.024157632443547246,
+      0.026241221889696346,
+      0.030713443727452196
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.6,
+     "roughness": 0.35,
+     "clearcoat": 0.8,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 10430,
+    "vertexCount": 16,
+    "indexStart": 10434,
+    "indexCount": 24
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-carbon",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.008023192982520563,
+      0.008568125615105716,
+      0.010329823026364548
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.35,
+     "roughness": 0.5,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 10446,
+    "vertexCount": 3792,
+    "indexStart": 10458,
+    "indexCount": 3792
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-disc",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.775822218312646,
+      0.7912979403281551,
+      0.8069522576650873
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.1,
+     "roughness": 0.38,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": true,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 14238,
+    "vertexCount": 1296,
+    "indexStart": 14250,
+    "indexCount": 1296
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-fan",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.010960094003125918,
+      0.011612245176281512,
+      0.013702083043526807
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.5,
+     "roughness": 0.45,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 15534,
+    "vertexCount": 1632,
+    "indexStart": 15546,
+    "indexCount": 1632
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-marker",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      0,
+      0,
+      0
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 17166,
+    "vertexCount": 144,
+    "indexStart": 17178,
+    "indexCount": 144
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-nozzleIn",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      0.0015176349176470587,
+      0.0015176349176470587,
+      0.0015176349176470587
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 17310,
+    "vertexCount": 540,
+    "indexStart": 17322,
+    "indexCount": 540
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-paint",
+     "kind": "MeshPhysicalMaterial",
+     "color": [
+      0.7681511472425809,
+      0.775822218312646,
+      0.76052450467022
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.05,
+     "roughness": 0.42,
+     "clearcoat": 0.5,
+     "clearcoatRoughness": 0.2,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 17850,
+    "vertexCount": 3076,
+    "indexStart": 17862,
+    "indexCount": 3078
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-plateLamp",
+     "kind": "MeshBasicMaterial",
+     "color": [
+      0,
+      0,
+      0
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": true,
+     "metalness": 0,
+     "roughness": 1,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 20926,
+    "vertexCount": 72,
+    "indexStart": 20940,
+    "indexCount": 72
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-rotor",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.04231141061442144,
+      0.04373502925049377,
+      0.04817182422013895
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.3,
+     "roughness": 0.7,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 20998,
+    "vertexCount": 264,
+    "indexStart": 21012,
+    "indexCount": 768
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-seam",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.0015176349176470587,
+      0.0015176349176470587,
+      0.0018211619011764706
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0,
+     "roughness": 0.6,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 21262,
+    "vertexCount": 2520,
+    "indexStart": 21780,
+    "indexCount": 2520
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-spoke",
+     "kind": "MeshPhysicalMaterial",
+     "color": [
+      0.01764195448412081,
+      0.019382360952473074,
+      0.023153366173251363
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.7,
+     "roughness": 0.3,
+     "clearcoat": 0.6,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 23782,
+    "vertexCount": 7392,
+    "indexStart": 24300,
+    "indexCount": 7392
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-tyre",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.006048833020386069,
+      0.006512090790025684,
+      0.0069954101845983935
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0,
+     "roughness": 0.88,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 31174,
+    "vertexCount": 1960,
+    "indexStart": 31692,
+    "indexCount": 10368
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-under",
+     "kind": "MeshStandardMaterial",
+     "color": [
+      0.002428215868235294,
+      0.0027317428517647058,
+      0.0030352698352941175
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.1,
+     "roughness": 0.85,
+     "clearcoat": 0,
+     "clearcoatRoughness": 0,
+     "opacity": 1,
+     "transparent": false,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 0,
+    "vertexStart": 33134,
+    "vertexCount": 372,
+    "indexStart": 42060,
+    "indexCount": 372
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-glass",
+     "kind": "MeshPhysicalMaterial",
+     "color": [
+      0.059511238155621766,
+      0.02955683443236377,
+      0.011612245176281512
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.45,
+     "roughness": 0.04,
+     "clearcoat": 1,
+     "clearcoatRoughness": 0.015,
+     "opacity": 0.93,
+     "transparent": true,
+     "depthWrite": true,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 1,
+    "vertexStart": 33506,
+    "vertexCount": 192,
+    "indexStart": 42432,
+    "indexCount": 192
+   }
+  ],
+  "file": "roadster.bin",
+  "indexOffsetBytes": 1482712
+ },
+ "parked": [
+  {
+   "home": {
+    "x": 0,
+    "y": 0,
+    "z": -10.925
+   },
+   "vertexStride": 44,
+   "vertexCount": 8898,
+   "submeshes": [
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": "t0",
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       0,
+       0,
+       0
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 0.62,
+      "transparent": true,
+      "depthWrite": false,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": [
+       -2,
+       -4
+      ],
+      "vertexColors": false,
+      "fog": false,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": -2.5,
+     "vertexStart": 0,
+     "vertexCount": 4,
+     "indexStart": 0,
+     "indexCount": 6
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.010960094003125918,
+       0.011612245176281512,
+       0.013702083043526807
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.35,
+      "roughness": 0.42,
+      "clearcoat": 0.8,
+      "clearcoatRoughness": 0.2,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 4,
+     "vertexCount": 432,
+     "indexStart": 6,
+     "indexCount": 432
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.0030352698352941175,
+       0.004391442035325718,
+       0.0069954101845983935
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.3,
+      "roughness": 0.04,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.02,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 436,
+     "vertexCount": 1186,
+     "indexStart": 438,
+     "indexCount": 7104
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.15,
+       0.05,
+       0.07
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 1622,
+     "vertexCount": 100,
+     "indexStart": 7542,
+     "indexCount": 276
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.002428215868235294,
+       0.0027317428517647058,
+       0.0033465357620980074
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.3,
+      "roughness": 0.18,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.05,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 1722,
+     "vertexCount": 68,
+     "indexStart": 7818,
+     "indexCount": 192
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.023153366173251363,
+       0.025186859622305935,
+       0.02955683443236377
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.8,
+      "roughness": 0.34,
+      "clearcoat": 0.6,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 1790,
+     "vertexCount": 1104,
+     "indexStart": 8010,
+     "indexCount": 1104
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       0.42,
+       0.02,
+       0.03
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 2894,
+     "vertexCount": 68,
+     "indexStart": 9114,
+     "indexCount": 192
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.0033465357620980074,
+       0.0036765073221525194,
+       0.004391442035325718
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.15,
+      "roughness": 0.55,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 2962,
+     "vertexCount": 2300,
+     "indexStart": 9306,
+     "indexCount": 2484
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.25,
+       1.3,
+       1.38
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 5262,
+     "vertexCount": 68,
+     "indexStart": 11790,
+     "indexCount": 192
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.006048833020386069,
+       0.006512090790025684,
+       0.007499032040460618
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0,
+      "roughness": 0.88,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 5330,
+     "vertexCount": 1392,
+     "indexStart": 11982,
+     "indexCount": 7392
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.8069522576650873,
+       0.8069522576650873,
+       0.8227857543924378
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.5,
+      "roughness": 0.26,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.05,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 6722,
+     "vertexCount": 2176,
+     "indexStart": 19374,
+     "indexCount": 12624
+    }
+   ],
+   "file": "parked-0.bin",
+   "indexOffsetBytes": 391512
+  },
+  {
+   "home": {
+    "x": 0,
+    "y": 0,
+    "z": -13.43
+   },
+   "vertexStride": 44,
+   "vertexCount": 9002,
+   "submeshes": [
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": "t0",
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       0,
+       0,
+       0
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 0.62,
+      "transparent": true,
+      "depthWrite": false,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": [
+       -2,
+       -4
+      ],
+      "vertexColors": false,
+      "fog": false,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": -2.5,
+     "vertexStart": 0,
+     "vertexCount": 4,
+     "indexStart": 0,
+     "indexCount": 6
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.010960094003125918,
+       0.011612245176281512,
+       0.013702083043526807
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.35,
+      "roughness": 0.42,
+      "clearcoat": 0.8,
+      "clearcoatRoughness": 0.2,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 4,
+     "vertexCount": 432,
+     "indexStart": 6,
+     "indexCount": 432
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.0030352698352941175,
+       0.004391442035325718,
+       0.0069954101845983935
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.3,
+      "roughness": 0.04,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.02,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 436,
+     "vertexCount": 1186,
+     "indexStart": 438,
+     "indexCount": 7104
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.012286488353353374,
+       0.013702083043526807,
+       0.01764195448412081
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.5,
+      "roughness": 0.26,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.05,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 1622,
+     "vertexCount": 2176,
+     "indexStart": 7542,
+     "indexCount": 12624
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.15,
+       0.05,
+       0.07
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 3798,
+     "vertexCount": 138,
+     "indexStart": 20166,
+     "indexCount": 384
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.002428215868235294,
+       0.0027317428517647058,
+       0.0033465357620980074
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.3,
+      "roughness": 0.18,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.05,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 3936,
+     "vertexCount": 132,
+     "indexStart": 20550,
+     "indexCount": 372
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.023153366173251363,
+       0.025186859622305935,
+       0.02955683443236377
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.8,
+      "roughness": 0.34,
+      "clearcoat": 0.6,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 4068,
+     "vertexCount": 1104,
+     "indexStart": 20922,
+     "indexCount": 1104
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.0033465357620980074,
+       0.0036765073221525194,
+       0.004391442035325718
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.15,
+      "roughness": 0.55,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 5172,
+     "vertexCount": 2336,
+     "indexStart": 22026,
+     "indexCount": 2580
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.25,
+       1.3,
+       1.38
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 7508,
+     "vertexCount": 102,
+     "indexStart": 24606,
+     "indexCount": 288
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.006048833020386069,
+       0.006512090790025684,
+       0.007499032040460618
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0,
+      "roughness": 0.88,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 7610,
+     "vertexCount": 1392,
+     "indexStart": 24894,
+     "indexCount": 7392
+    }
+   ],
+   "file": "parked-1.bin",
+   "indexOffsetBytes": 396088
+  },
+  {
+   "home": {
+    "x": 0,
+    "y": 0,
+    "z": -16.305
+   },
+   "vertexStride": 44,
+   "vertexCount": 16993,
+   "submeshes": [
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": "t0",
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       0,
+       0,
+       0
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 0.62,
+      "transparent": true,
+      "depthWrite": false,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": [
+       -2,
+       -4
+      ],
+      "vertexColors": false,
+      "fog": false,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": -2.5,
+     "vertexStart": 0,
+     "vertexCount": 4,
+     "indexStart": 0,
+     "indexCount": 6
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.2,
+       0.5,
+       0.06
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 4,
+     "vertexCount": 30,
+     "indexStart": 6,
+     "indexCount": 60
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.0030352698352941175,
+       0.004391442035325718,
+       0.0069954101845983935
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.3,
+      "roughness": 0.04,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.02,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 34,
+     "vertexCount": 241,
+     "indexStart": 66,
+     "indexCount": 1152
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.15,
+       0.05,
+       0.07
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 275,
+     "vertexCount": 12,
+     "indexStart": 1218,
+     "indexCount": 24
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.9046611743890203,
+       0.9046611743890203,
+       0.8879231178794776
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.2,
+      "roughness": 0.3,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.05,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 287,
+     "vertexCount": 2642,
+     "indexStart": 1242,
+     "indexCount": 15408
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.002428215868235294,
+       0.0027317428517647058,
+       0.0033465357620980074
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.3,
+      "roughness": 0.18,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.05,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 2929,
+     "vertexCount": 62,
+     "indexStart": 16650,
+     "indexCount": 180
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.15,
+       0.05,
+       0.07
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 2991,
+     "vertexCount": 48,
+     "indexStart": 16830,
+     "indexCount": 72
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.0033465357620980074,
+       0.0036765073221525194,
+       0.004391442035325718
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.15,
+      "roughness": 0.55,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 3039,
+     "vertexCount": 5764,
+     "indexStart": 16902,
+     "indexCount": 6300
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.25,
+       1.3,
+       1.38
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 8803,
+     "vertexCount": 98,
+     "indexStart": 23202,
+     "indexCount": 276
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.38642943377667954,
+       0.41254261347374327,
+       0.4452011945063733
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 1,
+      "roughness": 0.26,
+      "clearcoat": 0.5,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 8901,
+     "vertexCount": 2952,
+     "indexStart": 23478,
+     "indexCount": 2952
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.006048833020386069,
+       0.006512090790025684,
+       0.007499032040460618
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0,
+      "roughness": 0.88,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 11853,
+     "vertexCount": 3480,
+     "indexStart": 26430,
+     "indexCount": 18480
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.008568125615105716,
+       0.009134058699157796,
+       0.010960094003125918
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.4,
+      "roughness": 0.6,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 15333,
+     "vertexCount": 388,
+     "indexStart": 44910,
+     "indexCount": 660
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.15292615198613213,
+       0.16513219449147767,
+       0.1844749944900301
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.9,
+      "roughness": 0.45,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 15721,
+     "vertexCount": 1272,
+     "indexStart": 45570,
+     "indexCount": 1332
+    }
+   ],
+   "file": "parked-2.bin",
+   "indexOffsetBytes": 747692
+  },
+  {
+   "home": {
+    "x": 0,
+    "y": 0,
+    "z": -19.236000000000004
+   },
+   "vertexStride": 44,
+   "vertexCount": 5012,
+   "submeshes": [
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": "t0",
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       0,
+       0,
+       0
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 0.62,
+      "transparent": true,
+      "depthWrite": false,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": [
+       -2,
+       -4
+      ],
+      "vertexColors": false,
+      "fog": false,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": -2.5,
+     "vertexStart": 0,
+     "vertexCount": 4,
+     "indexStart": 0,
+     "indexCount": 6
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.010960094003125918,
+       0.011612245176281512,
+       0.013702083043526807
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.35,
+      "roughness": 0.42,
+      "clearcoat": 0.8,
+      "clearcoatRoughness": 0.2,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 4,
+     "vertexCount": 288,
+     "indexStart": 6,
+     "indexCount": 288
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.0030352698352941175,
+       0.004391442035325718,
+       0.0069954101845983935
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.3,
+      "roughness": 0.04,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.02,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 292,
+     "vertexCount": 240,
+     "indexStart": 294,
+     "indexCount": 240
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.15,
+       0.05,
+       0.07
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 532,
+     "vertexCount": 62,
+     "indexStart": 534,
+     "indexCount": 180
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.023153366173251363,
+       0.025186859622305935,
+       0.02955683443236377
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.8,
+      "roughness": 0.34,
+      "clearcoat": 0.6,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 594,
+     "vertexCount": 864,
+     "indexStart": 714,
+     "indexCount": 864
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.0033465357620980074,
+       0.0036765073221525194,
+       0.004391442035325718
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.15,
+      "roughness": 0.55,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 1458,
+     "vertexCount": 804,
+     "indexStart": 1578,
+     "indexCount": 984
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.25,
+       1.3,
+       1.38
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 2262,
+     "vertexCount": 62,
+     "indexStart": 2562,
+     "indexCount": 180
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.006048833020386069,
+       0.006512090790025684,
+       0.007499032040460618
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0,
+      "roughness": 0.88,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 2324,
+     "vertexCount": 1392,
+     "indexStart": 2742,
+     "indexCount": 7392
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.45641102317066595,
+       0.48514994004665124,
+       0.5209955731953768
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 1,
+      "roughness": 0.5,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 3716,
+     "vertexCount": 1272,
+     "indexStart": 10134,
+     "indexCount": 1296
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.008568125615105716,
+       0.009134058699157796,
+       0.010960094003125918
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.4,
+      "roughness": 0.6,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 4988,
+     "vertexCount": 24,
+     "indexStart": 11430,
+     "indexCount": 36
+    }
+   ],
+   "file": "parked-3.bin",
+   "indexOffsetBytes": 220528
+  },
+  {
+   "home": {
+    "x": 0,
+    "y": 0,
+    "z": -21.748500000000003
+   },
+   "vertexStride": 44,
+   "vertexCount": 6976,
+   "submeshes": [
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": "t0",
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       0,
+       0,
+       0
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 0.62,
+      "transparent": true,
+      "depthWrite": false,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": [
+       -2,
+       -4
+      ],
+      "vertexColors": false,
+      "fog": false,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": -2.5,
+     "vertexStart": 0,
+     "vertexCount": 4,
+     "indexStart": 0,
+     "indexCount": 6
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.0030352698352941175,
+       0.004391442035325718,
+       0.0069954101845983935
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.3,
+      "roughness": 0.04,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.02,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 4,
+     "vertexCount": 1186,
+     "indexStart": 6,
+     "indexCount": 7104
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.15,
+       0.05,
+       0.07
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 1190,
+     "vertexCount": 34,
+     "indexStart": 7110,
+     "indexCount": 96
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.002428215868235294,
+       0.0027317428517647058,
+       0.0033465357620980074
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.3,
+      "roughness": 0.18,
+      "clearcoat": 1,
+      "clearcoatRoughness": 0.05,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 1224,
+     "vertexCount": 68,
+     "indexStart": 7206,
+     "indexCount": 192
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.023153366173251363,
+       0.025186859622305935,
+       0.02955683443236377
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.8,
+      "roughness": 0.34,
+      "clearcoat": 0.6,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 1292,
+     "vertexCount": 240,
+     "indexStart": 7398,
+     "indexCount": 240
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.0033465357620980074,
+       0.0036765073221525194,
+       0.004391442035325718
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.15,
+      "roughness": 0.55,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 1532,
+     "vertexCount": 1676,
+     "indexStart": 7638,
+     "indexCount": 1836
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshPhysicalMaterial",
+      "kind": "MeshPhysicalMaterial",
+      "color": [
+       0.6866853124288864,
+       0.4452011945063733,
+       0.10224173307914941
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0.65,
+      "roughness": 0.3,
+      "clearcoat": 0.6,
+      "clearcoatRoughness": 0.05,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 3208,
+     "vertexCount": 2342,
+     "indexStart": 9474,
+     "indexCount": 11880
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshBasicMaterial",
+      "kind": "MeshBasicMaterial",
+      "color": [
+       1.25,
+       1.3,
+       1.38
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": true,
+      "metalness": 0,
+      "roughness": 1,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": true,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 5550,
+     "vertexCount": 34,
+     "indexStart": 21354,
+     "indexCount": 96
+    },
+    {
+     "material": {
+      "effect": null,
+      "alphaMap": null,
+      "name": "MeshStandardMaterial",
+      "kind": "MeshStandardMaterial",
+      "color": [
+       0.006048833020386069,
+       0.006512090790025684,
+       0.007499032040460618
+      ],
+      "emissive": [
+       0,
+       0,
+       0
+      ],
+      "emissiveIntensity": 1,
+      "unlit": false,
+      "metalness": 0,
+      "roughness": 0.88,
+      "clearcoat": 0,
+      "clearcoatRoughness": 0,
+      "opacity": 1,
+      "transparent": false,
+      "depthWrite": true,
+      "doubleSided": false,
+      "additive": false,
+      "polygonOffset": null,
+      "vertexColors": false,
+      "fog": true,
+      "map": null,
+      "roughnessMap": null,
+      "bumpMap": null,
+      "bumpScale": 1,
+      "emissiveMap": null
+     },
+     "renderOrder": 0,
+     "vertexStart": 5584,
+     "vertexCount": 1392,
+     "indexStart": 21450,
+     "indexCount": 7392
+    }
+   ],
+   "file": "parked-4.bin",
+   "indexOffsetBytes": 306944
+  }
+ ],
+ "textures": [
+  {
+   "id": "t0",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": false,
+   "file": "t0.png"
+  },
+  {
+   "id": "t1",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t1.png"
+  },
+  {
+   "id": "t2",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t2.png"
+  },
+  {
+   "id": "t3",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t3.png"
+  },
+  {
+   "id": "t4",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t4.png"
+  },
+  {
+   "id": "t5",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t5.png"
+  },
+  {
+   "id": "t6",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t6.png"
+  },
+  {
+   "id": "t7",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t7.png"
+  },
+  {
+   "id": "t8",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t8.png"
+  },
+  {
+   "id": "t9",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t9.png"
+  },
+  {
+   "id": "t10",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t10.png"
+  },
+  {
+   "id": "t11",
+   "repeat": [
+    70,
+    70
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "repeat",
+   "srgb": true,
+   "file": "t11.png"
+  },
+  {
+   "id": "t12",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "repeat",
+   "srgb": true,
+   "file": "t12.png"
+  },
+  {
+   "id": "t13",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "repeat",
+   "srgb": false,
+   "file": "t13.png"
+  },
+  {
+   "id": "t14",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "repeat",
+   "srgb": false,
+   "file": "t14.png"
+  },
+  {
+   "id": "t15",
+   "repeat": [
+    2,
+    32.5
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "repeat",
+   "srgb": true,
+   "file": "t15.png"
+  },
+  {
+   "id": "t16",
+   "repeat": [
+    1,
+    1
+   ],
+   "offset": [
+    0,
+    0
+   ],
+   "wrap": "clamp",
+   "srgb": true,
+   "file": "t16.png"
+  }
+ ]
+}
