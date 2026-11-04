@@ -20,9 +20,11 @@ let package = Package(
     products: [
         .library(name: "ColdGasCore", targets: ["ColdGasCore"]),
         .library(name: "ColdGasPhysics", targets: ["ColdGasPhysics"]),
+        .library(name: "ColdGasLayout", targets: ["ColdGasLayout"]),
     ],
     targets: [
         .target(name: "ColdGasCore", swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(name: "ColdGasLayout", swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
             name: "ColdGasPhysics",
             dependencies: physicsDeps,
@@ -32,7 +34,7 @@ let package = Package(
             name: "ColdGasCoreTests",
             dependencies: ["ColdGasCore"],
             path: "Tests",
-            exclude: ["ColdGasPhysicsTests"],
+            exclude: ["ColdGasPhysicsTests", "ColdGasLayoutTests"],
             sources: ["ColdGasCoreTests"],
             resources: [.copy("Vectors")],
             swiftSettings: [.swiftLanguageMode(.v5)]
@@ -43,5 +45,6 @@ let package = Package(
             path: "Tests/ColdGasPhysicsTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .testTarget(name: "ColdGasLayoutTests", dependencies: ["ColdGasLayout"], path: "Tests/ColdGasLayoutTests", swiftSettings: [.swiftLanguageMode(.v5)]),
     ] + engine
 )

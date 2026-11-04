@@ -1,0 +1,54 @@
+# XcodeGen: edit this, never the project (ColdGas.xcodeproj is generated and gitignored). `make up` regenerates.
+# docs/NATIVE.md §8.
+name: ColdGas
+options:
+  bundleIdPrefix: com.mutaafaziz
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+packages:
+  ColdGasCore:
+    path: Packages/ColdGasCore
+settings:
+  base:
+    DEVELOPMENT_TEAM: Z73865R687
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ColdGas:
+    type: application
+    platform: iOS
+    sources:
+      - path: ColdGas
+        excludes: ["Resources/Meshes/*.json", "Resources/Meshes/*.bin"]
+      - path: ColdGas/Resources/Meshes
+        type: folder
+        buildPhase: resources
+      - path: Packages/ColdGasCore/Tests/Vectors/dmath.json
+        buildPhase: resources
+      - path: Packages/ColdGasCore/Tests/Vectors/engine-spike.json
+        buildPhase: resources
+    dependencies:
+      - package: ColdGasCore
+        product: ColdGasCore
+      - package: ColdGasCore
+        product: ColdGasPhysics
+      - package: ColdGasCore
+        product: ColdGasLayout
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mutaafaziz.coldgas
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ColdGas/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MTL_FAST_MATH: NO
+        # The engine's XCFramework is arm64 only (Apple-silicon simulators and devices).
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
