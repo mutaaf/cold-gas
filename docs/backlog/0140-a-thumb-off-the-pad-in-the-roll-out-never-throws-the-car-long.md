@@ -1,12 +1,12 @@
 ---
 id: 0140
 title: On one thumb, a thumb off the pad during the roll-out never throws the car 20 m past the mark
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-03
-pr:
+pr: 237
 by: critic
 ---
 

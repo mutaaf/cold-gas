@@ -90,7 +90,7 @@ export function thumbStage(run, released) {
 }
 
 export function createOneThumb() {
-  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, wasStage: 'idle', ax: 0, ay: 0, live: false };
+  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false };
   const aim = { x: 0, y: 0 };
   return {
     // Pointer events: `pressed` latches a tap shorter than a tick until the next sample reads it.
@@ -98,12 +98,14 @@ export function createOneThumb() {
     up() { st.held = false; st.ax = 0; st.ay = 0; },
     // The held thumb's slide from where it pressed, CSS px (+x right, +y up the glass).
     move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx; st.ay = dy / THUMB.aimPx; } },
-    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; },
+    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; },
     get held() { return st.held; },
     // 0129: the drive-off is under way (a tap on the ledge was taken; it lets go at the lip), and a press
     // the next tick hasn't read yet. The pad shows "Letting go" from either, on the frame of the tap.
     get driving() { return st.drive; },
     get pending() { return st.pressed; },
+    // 0140: LAND is on for this flight (the thumb held it once), whether or not the thumb is down now.
+    get landing() { return st.landing; },
     // The slide as the pad draws it: -1..1 each way, 0 inside the dead zone.
     get aim() { aim.x = shape(st.ax); aim.y = shape(st.ay); return aim; },
     // Whether the last tick could aim (held, in the air, roof up, high enough, the row allowing).
@@ -140,8 +142,14 @@ export function createOneThumb() {
           if (-c.vel.z >= THUMB.carry) st.carried = true;
           else out.thrust = 1;
         }
+        // 0140: once the thumb has held LAND in this flight, LAND stays on to the ground, thumb or no
+        // thumb: a flinch costs the slide, never the landing. Lifted mid-roll, the rate loop stopped the
+        // car on its side, the down-jets braking the roll pushed it sideways, and it landed up to 21 m
+        // off the mark; lifted in the set-down, the auto-land never armed (the fall was too short) and
+        // it dropped at 6–7 m/s. A press takes the aim back from where the car is.
+        if (st.held) st.landing = true;
+        if (st.landing) out.level = 1;
         if (st.held) {
-          out.level = 1;
           // AIM: only roof up (a roll command upside down would stop LAND's roll-out), faded out over
           // the set-down; on the Show along the run only once the row is well behind.
           up(c, uw);
