@@ -334,6 +334,7 @@ function closeOverlays() {
   const ai = document.querySelector('[data-ai-modal]');
   if (ai && !ai.hidden) ai.hidden = true;
   poster?.hideLeave();
+  poster?.cancelRank();   // the sheet is going: the rank it would get (0141) can't hold the network into a run
   S.paused = false;
   ui.clearCue();
   instruments.close();

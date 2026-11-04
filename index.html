@@ -375,10 +375,10 @@
         <button class="btn ghost" data-replay>Replay</button>
         <button class="btn ghost" data-share>Share</button>
         <!-- Post to the board, beside Retry (src/post.js): "Post · ABC" once initials are remembered, the three
-             letters right here the first time; the rank inline once it's on. A board-eligible jump only. -->
+             letters right here the first time; the rank it would get once the board has answered (0141), the rank inline once it's on. A board-eligible jump only. -->
         <form class="r-post" data-r-submit data-r-post hidden autocomplete="off">
           <label class="r-post-field" data-r-post-field><span class="vh">Initials</span><input id="initials" name="initials" maxlength="3" autocomplete="off" autocapitalize="characters" spellcheck="false" placeholder="AAA" enterkeyhint="send" /></label>
-          <button class="btn r-post-btn" type="submit" data-r-post-btn>Post<span class="r-post-ini" data-r-post-ini></span></button>
+          <button class="btn r-post-btn" type="submit" data-r-post-btn>Post<span class="r-post-ini" data-r-post-ini></span><span class="r-post-rank" data-r-post-rank></span></button>
           <button class="btn link r-post-edit" type="button" data-r-post-edit hidden aria-label="Change initials">Change</button>
           <span class="submit-msg r-post-msg" data-r-submit-msg role="status"></span>
         </form>

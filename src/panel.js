@@ -23,6 +23,31 @@ export async function postScore({ log, t, initials, course }) {
   } catch { return { ok: false, status: 0, timeout: ctl.signal.aborted }; } finally { clearTimeout(timer); }
 }
 
+// The rank this run would get on today's board for its course, asked before posting (0141): the Worker runs
+// every check of a real post with `dry: true` and stores nothing (src/worker/index.js). One try, a short
+// deadline, no retry: a slow or failed answer is null, and the button stays plain "Post".
+export const DRY_MS = 6000;
+// The deadline is our own cancel (an AbortError), not fetchWithDeadline's TimeoutError: a slow optional label
+// is not a board failure, and obs records only real post failures against /api/scores.
+export async function dryRank({ log, t, course }, { signal = null, ms = DRY_MS } = {}) {
+  const ctl = new AbortController();
+  const stop = () => ctl.abort();
+  const timer = setTimeout(stop, ms);
+  if (signal) { if (signal.aborted) stop(); else signal.addEventListener('abort', stop, { once: true }); }
+  try {
+    const res = await fetchWithDeadline(`${API}/scores`, {
+      ms: ms + 1000, signal: ctl.signal, method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ log, t, course, dry: true }),
+    });
+    if (!res.ok) return null;
+    const body = await res.json().catch(() => null);
+    const rank = body?.dry === true ? body.rank : null;
+    return Number.isInteger(rank) && rank >= 1 ? rank : null;
+  } catch { return null; } finally { clearTimeout(timer); signal?.removeEventListener('abort', stop); }
+}
+// The button's words for that rank: "would be #1 today", or nothing when there's no answer.
+export const rankLabel = (rank) => (Number.isInteger(rank) && rank >= 1 ? `would be #${rank} today` : '');
+
 // What the player reads after a post (`res` from postScore).
 export function postMessage(res) {
   if (res.ok) return `Posted · #${res.rank} today`;

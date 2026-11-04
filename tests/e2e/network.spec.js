@@ -158,12 +158,18 @@ test('board: a slow Today asked first never overwrites All time asked after it',
 });
 
 // Post sits beside Retry (audit 2026-10-30): the first time, three letters right there; a double click posts once,
-// the rank shows inline, and the body is the run's log and telemetry, never a score.
+// the rank shows inline, and the body is the run's log and telemetry, never a score. Before the post (0141), one dry
+// request per run names the rank it would get on the button; it isn't a post.
 test('double-click Post posts once, with the run\'s telemetry and no score', async ({ page }) => {
   test.setTimeout(150_000);   // a whole flight stepped in the page on software GL
-  let posts = 0, sent = null;
+  let posts = 0, sent = null, drys = 0, drySent = null;
   await page.route(/\/api\/scores$/, async (route) => {
     if (route.request().method() !== 'POST') return route.continue();
+    if (route.request().postDataJSON()?.dry === true) {
+      drys++;
+      drySent = route.request().postDataJSON();
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rank: 1, dry: true, card: { total: 94 }, course: 'show', tier: 'assist' }) });
+    }
     posts++;
     sent = route.request().postDataJSON();
     await new Promise((r) => setTimeout(r, 800));
@@ -184,12 +190,18 @@ test('double-click Post posts once, with the run\'s telemetry and no score', asy
   // (On a desktop the theatre plays beside the sheet; Post is reachable while it does.)
   const btn = page.locator('[data-r-post-btn]');
   await expect(btn).toBeVisible();
+  await expect(btn).toHaveText('Post · would be #1 today', { timeout: 10_000 });
+  expect(drySent).toMatchObject({ course: 'show', dry: true });
+  expect(drySent).not.toHaveProperty('total');
+  expect(drySent).not.toHaveProperty('initials');
   await page.locator('#initials').fill('abc');
   await btn.dblclick();
   await expect(page.locator('[data-r-submit-msg]')).toHaveText('Posted · #3 today', { timeout: 10_000 });
   await expect(btn).toBeHidden();
   expect(posts).toBe(1);
+  expect(drys).toBe(1);
   expect(sent).toMatchObject({ initials: 'ABC', course: 'show' });
+  expect(sent).not.toHaveProperty('dry');
   expect(sent.t.course).toBe('show');
   expect(Array.isArray(sent.log)).toBe(true);
   expect(sent).not.toHaveProperty('total');
