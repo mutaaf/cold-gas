@@ -145,7 +145,7 @@ export function createRun(courseId = DEFAULT_COURSE) {
     tick: 0,
     inputLog: [],              // [tick, ...ints] whenever the quantised input changes
     lastPacked: null,          // the last logged channels (Int16Array), compared in place every tick
-    flippedTicks: 0, airTicks: 0, offTicks: 0,
+    flippedTicks: 0, airTicks: 0, offTicks: 0, hang: false,
     frames: [],                // see recordFrame for the layout
     gWin: new Float64Array(G_WIN), gSum: 0,   // the last 0.5 s of specific force (g), for brakePeakG
     hWin: new Float64Array(G_WIN),            // and the height over it (the peak is placed mid-window)
@@ -331,7 +331,10 @@ function advance(run, input) {
   else run.flippedTicks = 0;
   if (run.flippedTicks > 120) t.flipped = true;
   run.offTicks = onDeck && speed < 0.5 ? run.offTicks + 1 : 0;
-  const hanging = run.offTicks > STALL_TICKS && c.grounded > 0 && c.fanForce > 0 && wallProgress(c.pos) >= HANG_AT;
+  // Latched for this stop: once a still car is seen hanging on the ledge (wheels down, fan pulling), a one-tick
+  // dropout in a contact or the seal doesn't cut the hang short; moving again (offTicks back to 0) clears it.
+  run.hang = run.offTicks > 0 && (run.hang || (c.grounded > 0 && c.fanForce > 0 && wallProgress(c.pos) >= HANG_AT));
+  const hanging = run.hang;
 
   let end = '';
   // A non-finite state would poison the replay, the scorecard and the HUD. The integrator is built

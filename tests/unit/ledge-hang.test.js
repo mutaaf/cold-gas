@@ -79,6 +79,8 @@ describe('a still hang under the ledge (0145)', () => {
     expect(run.t.endReason).toBe('stalled');
     expect(run.t.progress).toBeLessThan(0.92);
     expect(run.t.endTick - stopT).toBeLessThan(240 * 6 + 10);
+    expect(run.offTicks).toBeGreaterThan(240 * 6);   // and no sooner
+    expect(run.offTicks).toBeLessThanOrEqual(240 * 6 + 1);
     expect(crashStep(scoreRun(run.t))).toBe('Stalled');
   }, 120000);
 });
