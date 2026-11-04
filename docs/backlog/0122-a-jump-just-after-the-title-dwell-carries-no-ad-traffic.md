@@ -1,14 +1,37 @@
 ---
 id: 0122
 title: A Jump just after the title's ad dwell carries no ad traffic into the countdown or the run
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: performance
 created: 2026-10-31
-pr: 193
+pr: 193, NEWPR
 by: critic
 ---
+
+## Status (2026-11-03, shipped)
+**Shipped in #NEWPR (owner's decision on #194, Option 1).** The title's slot is Marquee's same-origin frame
+`/ads/v1/frame.html?app=coldgas&slot=title` (Marquee 2aba562, live). `src/ads.js` puts it in after the dwell and removes it the
+moment the title goes, filled or not; removing the frame tears down its document and everything AdSense started in it. The
+window.stop() cut from #193 is gone (nothing in the page's own document is AdSense's any more). Postrun and reroll stay in
+the page. AdSense's policy pages forbid IFRAMEs only to manipulate targeting (support.google.com/adsense/answer/1354736,
+/1354742); this frame is same-origin, framable only by our own pages (`frame-ancestors 'self'`), and refused to kids apps.
+
+Probe (production page, Marquee and AdSense in test mode, this build's files routed in; Chromium SwiftShader, `?gfx=low`;
+Jump is a DOM click on `[data-start]`, timed from the config request; third-party requests bucketed by `S.mode`):
+| Jump at config + | frame placed | 3rd-party on the title (390×844 / 1440×900) | in `countdown` | in `live` |
+|---|---|---|---|---|
+| 3, 4, 5 s | not yet (dwell) | 0 / 0 | 0 | 0 |
+| 6 s | yes | 3 req, 268 KB / 2 req, 76 KB | 0 | 0 |
+| 7 s | yes | 10 req, 294 KB / 10 req, 294 KB | 0 | 0 |
+| 8, 10, 14 s | yes | up to 16 req, 326 KB | 0 | 0 |
+
+0 requests *started* and 0 *finished* in `countdown` or `live` in all 16 runs, no frame left in the run, no page
+errors. AdSense runs in the frame on the title (the same ≈ 300 KB as before), so a player who stays still gets the
+banner. e2e (`ads.spec.js`): a stand-in frame whose ad script takes 3 s, Jump at frame + 0.5 s: the script never
+finishes and no stand-in request completes. Unit: placement after the dwell, removal on every way off the title, and
+the height report (0 px until filled, capped at 90 px, other windows ignored).
 
 ## Status (2026-11-01, builder)
 **Part one shipped in #193; the rest needs the operator.** If Jump comes while an ad network's script (AdSense's
@@ -59,13 +82,13 @@ of these and say why in the PR:
 `src/ads.js`, `src/main.js` (the Jump path) and `tests/e2e/ads.spec.js`. Postrun and reroll are unchanged.
 
 ## Acceptance criteria
-- [ ] On production, using the critic's in-page probe above at 390×844 touch and 1440×900, Jump at config + 3, 4, 5, 6
+- [x] On production, using the critic's in-page probe above at 390×844 touch and 1440×900, Jump at config + 3, 4, 5, 6
       and 8 s each gives **0** third-party requests finishing in `countdown` or `live`. Hold every case 0117 already
       passes (Jump at once, config + 2 s, `?play=jump`, Retry).
-- [ ] e2e, with a stand-in loader whose fake ad request takes 3 s: a Jump at dwell + 0.5 s leaves no stand-in request
+- [x] e2e, with a stand-in loader whose fake ad request takes 3 s: a Jump at dwell + 0.5 s leaves no stand-in request
       pending or completed after `S.mode` leaves `title`.
-- [ ] The title banner still fills when the player stays on the title, and `ads.spec.js` stays green.
-- [ ] No frame-time regression on the title (perf probe within budget). hud-audit and title-audit stay clean.
+- [x] The title banner still fills when the player stays on the title, and `ads.spec.js` stays green.
+- [x] No frame-time regression on the title (perf probe within budget). hud-audit and title-audit stay clean.
 
 ## Test plan
 Extend `tests/e2e/ads.spec.js` with the slow stand-in case. Add a unit test for the placement gate (dwell, idle, mode)

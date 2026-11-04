@@ -3,6 +3,18 @@ import { test, expect } from '@playwright/test';
 // Marquee (src/ads.js, AGENTS.md §3.3): ads only between runs, never in one. A stand-in loader where every
 // slot can fill records each call with the game's mode at that moment: nothing may fire in the countdown or
 // a live run, the first results are skipped, and the opt-in rewarded break re-asks the panel.
+// The stand-in for Marquee's frame page: it logs the game's mode when it loads, starts the slow ad script, and Jumps.
+const FRAME = `<!doctype html><html><body><script>
+  const top_ = parent, mode = () => top_.__coldgas?.S?.mode || 'boot';
+  const e = { start: mode() };
+  top_.__adPipe.push(e);
+  const s = document.createElement('script');
+  s.src = 'https://ads.stand-in.example/adsbygoogle.js?' + top_.__adPipe.length;   // another origin, as AdSense's is (routed)
+  s.onload = () => { e.done = mode(); };
+  document.head.appendChild(s);
+  if (top_.__adPipe.length === 1) top_.setTimeout(() => top_.__coldgas.startRun('jump'), 500);
+  top_.postMessage({ marqueeFrame: 'title', h: 0 }, location.origin);
+</script></body></html>`;
 const fake = () => {
   const calls = [];
   const mode = () => window.__coldgas?.S?.mode || 'boot';
@@ -14,23 +26,11 @@ const fake = () => {
     return new Promise((r) => setTimeout(() => { h.afterAd?.(); calls.at(-1).paused = paused; r(kind === 'rewarded' ? true : undefined); }, 50));
   };
   window.__adCalls = calls;
-  // 0122: like Marquee, a placed title slot starts AdSense's script download. Here a stand-in adsbygoogle.js that takes
-  // 3 s; it logs the mode it loads in, or that it was cut off. The first slot's Jump comes 0.5 s after it, from the page
-  // itself (a poll from the test could see the slot a second late on a slow runner and miss the window).
-  const pipe = (window.__adPipe = []);
-  new MutationObserver((muts) => {
-    for (const mu of muts) for (const n of mu.addedNodes) {
-      if (n.nodeType !== 1 || n.dataset?.marquee !== 'title') continue;
-      const e = { start: mode() };
-      pipe.push(e);
-      const s = document.createElement('script');
-      s.src = `https://ads.stand-in.example/adsbygoogle.js?${pipe.length}`;   // another origin, as AdSense's is (routed)
-      s.onload = () => { e.done = mode(); };
-      s.onerror = () => { e.cut = mode(); };
-      document.head.appendChild(s);
-      if (pipe.length === 1) setTimeout(() => window.__coldgas.startRun('jump'), 500);
-    }
-  }).observe(document, { childList: true, subtree: true });
+  // 0122: the title's slot is Marquee's frame (/ads/v1/frame.html, served below by a stand-in). Like Marquee's, the
+  // stand-in frame starts an ad script download the moment it loads: here a stand-in adsbygoogle.js on another origin
+  // that takes 3 s. The first frame's Jump comes 0.5 s after it, from the page itself (a poll from the test could see
+  // the frame a second late on a slow runner and miss the window). Removing the frame must cancel it.
+  window.__adPipe = [];
   window.marquee = { v: 1, ready: () => Promise.resolve(cfg), banner: () => {}, interstitial: brk('interstitial'), rewarded: brk('rewarded') };
 };
 async function toResults(page) {
@@ -48,15 +48,18 @@ test('no ad call fires during a run; postrun skips the first results; rewarded i
     await r.fulfill({ contentType: 'text/javascript', body: `/*${'x'.repeat(400_000)}*/` }).catch(() => { /* cut off: the page is gone from it */ });
   });
   page.on('requestfinished', (r) => { if (r.url().includes('ads.stand-in.example')) late.push(r.url()); });
+  await page.route('**/ads/v1/frame.html?*', (r) => r.fulfill({ contentType: 'text/html', body: FRAME }));
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   // (Armed once the backdrop and the judges' chunk have settled, then the 4 s dwell.)
   // Run 1 → Retry: the first session never gets an interstitial.
-  // 0122: the page itself Jumps at dwell + 0.5 s, with the slot's stand-in script still downloading. It is cut off.
+  // 0122: the page itself Jumps at dwell + 0.5 s, with the frame's stand-in script still downloading. The frame is
+  // removed with the title, and its download goes with it: it never finishes, in the countdown, the run or after.
   await page.waitForFunction(() => window.__adPipe.length === 1, null, { timeout: 45_000 });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live');
+  await expect(page.locator('iframe[data-marquee-frame]')).toHaveCount(0);
   await page.waitForTimeout(3500);   // past the moment the stand-in would have finished
-  expect(await page.evaluate(() => window.__adPipe)).toEqual([{ start: 'title', cut: 'countdown' }]);
+  expect(await page.evaluate(() => window.__adPipe)).toEqual([{ start: 'title' }]);
   expect(late).toEqual([]);
   await toResults(page);
   await expect(page.locator('[data-reroll]')).toBeVisible({ timeout: 45_000 });
@@ -106,20 +109,21 @@ const watchAds = () => {
       for (const n of m.addedNodes) {
         if (n.nodeType !== 1) continue;
         if (n.tagName === 'SCRIPT' && /\/ads\/v1\/ads\.js$/.test(n.src)) log.push({ what: 'loader', mode: mode() });
-        if (n.dataset?.marquee === 'title') log.push({ what: 'title+', mode: mode() });
+        if (n.dataset?.marqueeFrame === 'title') log.push({ what: 'title+', mode: mode() });
       }
-      for (const n of m.removedNodes) if (n.nodeType === 1 && n.dataset?.marquee === 'title') log.push({ what: 'title-', mode: mode() });
+      for (const n of m.removedNodes) if (n.nodeType === 1 && n.dataset?.marqueeFrame === 'title') log.push({ what: 'title-', mode: mode() });
     }
   }).observe(document, { childList: true, subtree: true });
   // And what is in the DOM in each mode the run passes through.
   setInterval(() => {
     const m = mode();
-    if (m === 'countdown' || m === 'live') { if (document.querySelector('[data-marquee="title"]')) log.push({ what: 'title-in-run', mode: m }); }
+    if (m === 'countdown' || m === 'live') { if (document.querySelector('[data-marquee-frame="title"]')) log.push({ what: 'title-in-run', mode: m }); }
   }, 50);
 };
 async function adPage(page, url) {
   await page.addInitScript(watchAds);
   await page.route('**/ads/v1/ads.js', (r) => r.fulfill({ contentType: 'text/javascript', body: LOADER }));
+  await page.route('**/ads/v1/frame.html?*', (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html>' }));
   await page.route('**/coldgas/api/judge/stream', (r) => r.abort());
   await page.goto(url);
 }
@@ -136,7 +140,7 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
   await toResults(page);
   await page.keyboard.press('KeyR');
   await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 15_000 });
-  await expect(page.locator('[data-marquee]')).toHaveCount(0);
+  await expect(page.locator('[data-marquee], [data-marquee-frame]')).toHaveCount(0);
   await expect(page.locator('[data-reroll]')).toBeHidden();
   expect(asked).toEqual([]);
   // Each 0117 flight gets a fresh context, as if it were its own test: no storage from this page, and no run left
@@ -154,7 +158,7 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     await p.evaluate(() => window.__coldgas.startRun('jump'));
     await p.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live');
     await p.waitForTimeout(2500);   // the config resolves in the run
-    await expect(p.locator('[data-marquee="title"]')).toHaveCount(0);
+    await expect(p.locator('[data-marquee-frame="title"]')).toHaveCount(0);
     // (The dwell before the title asks again, and the slot leaving with the title: tests/unit/ads.test.js.)
     const log = await p.evaluate(() => window.__adLog);
     expect(log.filter((e) => e.what === 'loader')).toEqual([{ what: 'loader', mode: 'title' }]);
@@ -172,7 +176,7 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     await toResults(p);
     await p.waitForFunction(() => window.__adLog.some((e) => e.what === 'loader'), null, { timeout: 15_000 });
     await p.waitForTimeout(2000);   // the config resolves on the results: the title's slot stays out
-    await expect(p.locator('[data-marquee="title"]')).toHaveCount(0);
+    await expect(p.locator('[data-marquee-frame="title"]')).toHaveCount(0);
     const log = await p.evaluate(() => window.__adLog);
     expect(log.filter((e) => e.what === 'loader').map((e) => e.mode)).toEqual(['results']);
     expect(log.filter((e) => e.what === 'title+')).toEqual([]);

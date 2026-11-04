@@ -1,5 +1,5 @@
 // Marquee ads (owner's decision, 2026-10-30; AGENTS.md §3.3). Ads live only between runs, never in one:
-// - `title`  banner on the title (menu),
+// - `title`  banner on the title (menu), in Marquee's removable frame (0122),
 // - `postrun` interstitial when the player leaves a results sheet (Retry / Home), after the judges have
 //   spoken: never the first run of the session, at most one per POSTRUN_GAP_MS (the loader caps it too),
 // - `reroll` rewarded, opt-in only: "Watch an ad · ask the panel again" re-runs the judges' words (the
@@ -23,24 +23,15 @@ export function wantLoader(loc) {
 export function mayStartAds(mode) {
   return mode === 'title' || mode === 'results';
 }
-/** Modes that are a run (0122): leaving the title for one cuts off a title slot still filling. Not Free Drive or
- *  the Sandbox: their own chunk and road are loading at that moment, and a cut would take those too. */
-export function isRun(mode) {
-  return mode === 'countdown' || mode === 'live';
-}
-/** Is an ad network's script (another origin's: AdSense's loader stub, then the ≈ 250 KB implementation it adds) in
- *  the page and still downloading? A finished load has a resource timing entry, cross-origin ones too. */
-export function adScriptLoading(win, doc) {
-  if (!win?.stop || !doc?.querySelectorAll) return false;
-  const own = win.location?.origin;
-  try {
-    for (const el of doc.querySelectorAll('script[src]')) {
-      const src = el.src || '';
-      if (!/^https?:/.test(src) || (own && src.startsWith(own + '/'))) continue;
-      if ((win.performance?.getEntriesByName?.(src) || []).length === 0) return true;
-    }
-  } catch { /* no timing: don't cut */ }
-  return false;
+/** The title's slot, as Marquee's removable same-origin frame (0122, owner's decision on #194): the frame holds the loader
+ *  and one [data-marquee] slot, so whatever AdSense starts for it lives in the frame's document, and removing the frame
+ *  on leaving the title stops all of it (requests, timers, scripts). Root-absolute: Marquee is its own Worker at /ads. */
+export const TITLE_FRAME_SRC = '/ads/v1/frame.html?app=coldgas&slot=title';
+/** The frame's height, from the frame's own report ({marqueeFrame, h}), held to the in-page slot's 90 px cap. */
+export function frameHeight(data, slot = 'title') {
+  if (!data || typeof data !== 'object' || data.marqueeFrame !== slot) return null;
+  const h = Math.round(Number(data.h));
+  return Number.isFinite(h) ? Math.max(0, Math.min(90, h)) : null;
 }
 /** A slot that can fill, read from a resolved config: config.slots[id].source is 'none' when nothing can. */
 export function canFill(cfg, id) {
@@ -53,7 +44,7 @@ export function postrunDue({ runs, lastAt, now, gap = POSTRUN_GAP_MS }) {
 }
 
 export function createAds({ win = globalThis.window, doc = globalThis.document, now = () => Date.now(), mode = () => 'title' } = {}) {
-  let cfg = null, runs = 0, lastAt = 0, busy = false, started = false, armed = false, titleParent = null, titleEl = null, cut = false;
+  let cfg = null, runs = 0, lastAt = 0, busy = false, started = false, armed = false, titleParent = null, titleEl = null;
   const api = () => (win?.marquee?.v ? win.marquee : null);   // the real loader, not the {q:[]} stub
   // Read from the boot URL: the title rewrites the address (?course=), which drops a ?marquee= asked for.
   const wanted = !!win && wantLoader(win.location || {});
@@ -77,20 +68,29 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
     s.dataset.slots = SLOTS;
     doc.head.appendChild(s);
   }
-  // The title's banner exists only while the title shows (0117). It is placed once the slot can fill (an empty
-  // slot changes no layout) and the title has stayed up TITLE_DWELL_MS, so a quick Jump never starts the AdSense
-  // pipeline. Leaving the title takes out a slot that hasn't finished filling (a pipeline still in flight then
-  // finds no slot to ask an ad for) and a fresh one is placed on the next title; a filled slot stays, hidden with
-  // the title, so coming back doesn't ask for another ad.
-  let dwell = 0;
-  const settled = (el) => !!(el.hidden || el.querySelector?.('ins[data-ad-status], img, video, iframe'));
+  // The title's banner exists only while the title shows (0117). Once the slot can fill (an empty slot changes no
+  // layout) and the title has stayed up TITLE_DWELL_MS, so a quick Jump asks for nothing, it goes in as Marquee's
+  // frame (TITLE_FRAME_SRC). The moment the title goes, the frame is removed, filled or not (0122): its document is
+  // torn down with every request AdSense has started, so nothing of the title's ad reaches the countdown or the run.
+  // The next title gets a fresh frame after its own dwell. The frame starts 0 px high and follows the height its slot
+  // reports, as the in-page slot did, so the title's layout moves exactly as before. Postrun and reroll stay in the page.
+  let dwell = 0, onFrameMsg = null;
   function place() {
     dwell = 0;
-    if (!titleParent || mode() !== 'title' || !canFill(cfg, 'title') || titleEl || titleParent.querySelector('[data-marquee]')) return;
-    const el = doc.createElement('div');
+    if (!titleParent || mode() !== 'title' || !canFill(cfg, 'title') || titleEl || titleParent.querySelector('[data-marquee-frame]')) return;
+    const el = doc.createElement('iframe');
     el.className = 'ad-banner';
-    el.dataset.marquee = 'title';
-    el.dataset.marqueeContext = 'menu';
+    el.dataset.marqueeFrame = 'title';
+    el.title = 'Advertisement';
+    el.setAttribute?.('scrolling', 'no');
+    if (el.style) el.style.height = '0px';
+    el.src = TITLE_FRAME_SRC;
+    onFrameMsg = (e) => {
+      if (!titleEl || e.source !== titleEl.contentWindow || (win.location?.origin && e.origin !== win.location.origin)) return;
+      const h = frameHeight(e.data);
+      if (h !== null && titleEl.style) titleEl.style.height = `${h}px`;
+    };
+    win.addEventListener?.('message', onFrameMsg);
     titleParent.appendChild(el);
     titleEl = el;
   }
@@ -101,16 +101,9 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
       return;
     }
     if (dwell) { clearTimeout(dwell); dwell = 0; }
-    if (titleEl && !settled(titleEl)) {
+    if (titleEl) {
       titleEl.remove(); titleEl = null;
-      // 0122: the slot's AdSense script (≈ 250–400 KB) may still be downloading, and taking the slot out can't call
-      // that back; it would finish, then run, in the countdown. window.stop() cancels the page's in-flight loads, as
-      // leaving the page would, so AdSense never runs. Only while that script is in flight (once it has run, its
-      // requests are new ones nothing here can stop) and once a session: stop() takes whatever else is in flight too.
-      // main.js arms the ads only after the backdrop and the judges' chunk settle, so on the usual path none of the
-      // game's own loads is in flight then (sendBeacon survives a stop). After a cut, Marquee's breaks this session
-      // fall back to its direct sponsors (its AdSense script never ran).
-      if (isRun(mode()) && !cut && adScriptLoading(win, doc)) { cut = true; try { win.stop(); } catch { /* nothing to stop */ } }
+      if (onFrameMsg) { win.removeEventListener?.('message', onFrameMsg); onFrameMsg = null; }
     }
   }
   /** The title's banner, wanted in this parent (placed and removed by the mode, see syncTitle). */
