@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildVectors, runVector, runList, flat, hex, unhex, xorshift, VECTOR_DIR, dmathVectors } from '../../scripts/vectors-lib.mjs';
+import { buildVectors, runVector, runList, flat, hex, unhex, xorshift, VECTOR_DIR, dmathVectors, HAPTIC_RUNS } from '../../scripts/vectors-lib.mjs';
 import { simulate, SIM_VERSION } from '../../src/sim/run.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { dsin } from '../../src/sim/dmath.js';
@@ -48,6 +48,6 @@ describe('native vectors (0146)', () => {
   it('the manifest names every file with its hash', () => {
     const m = JSON.parse(disk('manifest.json'));
     expect(m.simVersion).toBe(SIM_VERSION);
-    expect(m.files.length).toBe(runList().length + 2);
+    expect(m.files.length).toBe(runList().length + 2 + HAPTIC_RUNS.length);
   });
 });

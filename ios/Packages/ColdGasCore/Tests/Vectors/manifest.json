@@ -14,6 +14,31 @@
    "bytes": 148
   },
   {
+   "path": "haptics/crash-lineup-rolls2.json",
+   "sha256": "2647fdc3b94e3fcbd45ff13faac3461a56384f2d04632a96c5d2a0014246ed20",
+   "bytes": 97885
+  },
+  {
+   "path": "haptics/crash-show-carry5.json",
+   "sha256": "6c14dba4f56c141f52589aab51d71d55aa25343f74b3743ba669f4001011385f",
+   "bytes": 140690
+  },
+  {
+   "path": "haptics/ref-lineup.json",
+   "sha256": "054ce432f062ced3785a9a1f334e2db5c54520889aa3245004a562bb56ce8e8f",
+   "bytes": 119769
+  },
+  {
+   "path": "haptics/ref-show.json",
+   "sha256": "3367b412819ab25f5e52ca776ff904f2dc34fef846d838bf6ccd7e17f8114acb",
+   "bytes": 136000
+  },
+  {
+   "path": "haptics/ref-wall.json",
+   "sha256": "204a00aaa1785d18bb4e38962853c3d6becc40b32a54fd5b6becd465accafac4",
+   "bytes": 163786
+  },
+  {
    "path": "runs/crash-lineup-rolls2.json",
    "sha256": "afa690a7f5fbf16b4698f70052a752abf5097246f50cfdafaac4fb374d812329",
    "bytes": 29835

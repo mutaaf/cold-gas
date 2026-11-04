@@ -5,7 +5,8 @@
 // scripts/vectors.mjs writes or checks the files; tests/unit/vectors.test.js checks a sample.
 import { createRun, stepRun, simulate, wallProgress, SIM_VERSION } from '../src/sim/run.js';
 import { createAutopilot } from '../src/sim/autopilot.js';
-import { newInput } from '../src/sim/vehicle.js';
+import { newInput, CAR } from '../src/sim/vehicle.js';
+const AIR_MASS = CAR.airMass;
 import { scoreRun } from '../src/sim/judge.js';
 import { dsin, dcos, datan, datan2, dacos, dhypot, dexp, dlog } from '../src/sim/dmath.js';
 import { RAPIER } from '../src/sim/engine.js';
@@ -221,6 +222,29 @@ export function runList() {
   return list;
 }
 
+// What the hand should feel, per tick (0149, docs/NATIVE.md §6): the inputs HapticScore reads, from the JS sim,
+// until the Swift sim feeds the same struct. Not bit-exact data (haptics are felt, not scored): 4 decimals.
+//   [phase, speed m/s, vy m/s, onWall 0|1, wheel contact bits, load ratio, valve flow (Σ throttles), gas 0–1, lift 0|1,
+//    impacts this tick as [kind, speed]…]
+export const HAPTIC_RUNS = ['ref-show', 'ref-wall', 'ref-lineup', 'crash-show-carry5', 'crash-lineup-rolls2'];
+export function hapticFeed(name, course, log) {
+  const r4 = (x) => Math.round(x * 1e4) / 1e4, rows = [];
+  let seen = 0;
+  simulate(log, course, undefined, (run, inp) => {
+    const c = run.car, w = c.wheels, im = run.impacts;
+    let flow = 0;
+    for (let i = 0; i < c.throttles.length; i++) flow += c.throttles[i];
+    let contacts = 0, load = 0;
+    for (let i = 0; i < 4; i++) { if (w[i].contact) contacts |= 1 << i; load += w[i].load; }
+    const hits = [];
+    while (seen < im.count) { if (im.tick[seen] <= run.tick) { hits.push([im.kind[seen], r4(im.speed[seen])]); seen++; } else break; }
+    rows.push([PHASES.indexOf(run.phase), r4(dhypot(c.vel.x, c.vel.y, c.vel.z)), r4(c.vel.y), c.onWall ? 1 : 0, contacts,
+      r4(load / (4 * w[0].load || 1) || 0), r4(flow), r4(Math.max(0, c.air) / AIR_MASS), inp.lift > 0 ? 1 : 0, ...hits]);
+  });
+  return { format: VECTOR_FORMAT, simVersion: SIM_VERSION, name, course, hz: 240,
+    fields: ['phase', 'speed', 'vy', 'onWall', 'contacts', 'load', 'flow', 'gas', 'lift', '...impacts[kind,speed]'], ticks: rows };
+}
+
 // Every file, as { path (relative to VECTOR_DIR): text }. JSON with one case per line so a diff names it.
 export function buildVectors({ only } = {}) {
   const files = {};
@@ -231,7 +255,12 @@ export function buildVectors({ only } = {}) {
   files['engine-spike.json'] = JSON.stringify({ format: VECTOR_FORMAT, steps: [240, 2400].map((n) => ({ steps: n, ...engineSpike(RAPIER, n) })) }) + '\n';
   for (const r of runList()) {
     if (only && !only.includes(r.name)) continue;
-    files[`runs/${r.name}.json`] = stringifyRun(runVector(r.name, r.course, r.log()));
+    const log = r.log();
+    files[`runs/${r.name}.json`] = stringifyRun(runVector(r.name, r.course, log));
+    if (HAPTIC_RUNS.includes(r.name)) {
+      const h = hapticFeed(r.name, r.course, log), { ticks, ...head } = h;
+      files[`haptics/${r.name}.json`] = JSON.stringify(head).slice(0, -1) + ',"ticks":[\n' + ticks.map((t) => JSON.stringify(t)).join(',\n') + '\n]}\n';
+    }
   }
   return files;
 }

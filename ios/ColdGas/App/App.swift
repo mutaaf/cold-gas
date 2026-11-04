@@ -22,6 +22,8 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         w.makeKeyAndVisible()
         window = w
         if Launch.selftest { SelfTest.runInBackground() }
+        _ = HapticPlayer.shared          // the engine is started at launch, never on the first event
+        HapticDemo.startIfAsked()
     }
 }
 

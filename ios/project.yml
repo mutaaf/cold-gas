@@ -30,6 +30,10 @@ targets:
         buildPhase: resources
       - path: Packages/ColdGasCore/Tests/Vectors/engine-spike.json
         buildPhase: resources
+      # The JS sim's haptic feeds, for `-haptics demo` (0149).
+      - path: Packages/ColdGasCore/Tests/Vectors/haptics
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: ColdGasCore
         product: ColdGasCore
