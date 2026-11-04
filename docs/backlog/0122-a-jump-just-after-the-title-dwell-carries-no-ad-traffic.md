@@ -6,12 +6,12 @@ priority: P1
 size: M
 lens: performance
 created: 2026-10-31
-pr: 193, NEWPR
+pr: 235
 by: critic
 ---
 
 ## Status (2026-11-03, shipped)
-**Shipped in #NEWPR (owner's decision on #194, Option 1).** The title's slot is Marquee's same-origin frame
+**Shipped in #235 (owner's decision on #194, Option 1).** The title's slot is Marquee's same-origin frame
 `/ads/v1/frame.html?app=coldgas&slot=title` (Marquee 2aba562, live). `src/ads.js` puts it in after the dwell and removes it the
 moment the title goes, filled or not; removing the frame tears down its document and everything AdSense started in it. The
 window.stop() cut from #193 is gone (nothing in the page's own document is AdSense's any more). Postrun and reroll stay in
