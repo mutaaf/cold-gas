@@ -1,7 +1,7 @@
 ---
 id: 0141
 title: On a decided run, "Post" names the rank it would get today ("Post · #1 on an empty board")
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: engagement
