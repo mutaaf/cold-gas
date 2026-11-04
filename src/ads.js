@@ -38,14 +38,26 @@ export function frameHeight(data, slot = 'title') {
 }
 /** Does the frame's document hold a drawn ad (0142)? Marquee's banner() puts AdSense's <ins> in the slot, which Google marks
  *  data-ad-status="filled" | "unfilled" (unfilled falls back to a direct sponsor's <img>/<video>), so a reserved but empty
- *  unit reads as not filled. Same-origin, so the page can read it; any error (a cross-origin or torn-down document) is "no". */
-export const FILLED_SEL = '[data-marquee] ins.adsbygoogle[data-ad-status="filled"], [data-marquee] img, [data-marquee] video';
+ *  unit reads as not filled, and so does a sponsor image that hasn't loaded (or failed). Same-origin, so the page can read
+ *  it; any error (a cross-origin or torn-down document) is "no". */
 export function frameFilled(doc) {
-  try { return !!doc?.querySelector?.(FILLED_SEL); } catch { return false; }
+  try {
+    if (doc?.querySelector?.('[data-marquee] ins.adsbygoogle[data-ad-status="filled"]')) return true;
+    for (const e of doc?.querySelectorAll?.('[data-marquee] img, [data-marquee] video') || []) {
+      if (String(e.tagName).toUpperCase() === 'VIDEO' ? e.readyState >= 2 : e.complete && e.naturalWidth > 0) return true;
+    }
+    return false;
+  } catch { return false; }
 }
-/** The event the title's fit (src/comeback.js) sends on the title when a shown banner would cost the Daily its room: the ad
- *  is the first thing to step aside (0142). */
+/** 0142: the title's banner never costs the Daily its room. Before the frame is placed, and again when its ad is first
+ *  drawn, ads.js asks the title (a cancelable ROOM_EVENT on it, detail.h = the banner's height with its margin); the
+ *  title's fit (src/comeback.js) cancels it when the title can't take that height without packing. A slot with no room
+ *  is never asked for (this title), so no ad is requested or filled for nobody. NO_ROOM_EVENT is the fit's own way to
+ *  send a shown banner off later (a rotation, a resize): the frame goes for the rest of this title. */
+export const ROOM_EVENT = 'coldgas:ad-room';
 export const NO_ROOM_EVENT = 'coldgas:ad-no-room';
+export const BANNER_MARGIN = 18;   // styles.css .title .ad-banner margin-top
+export const BANNER_ROOM = 90 + BANNER_MARGIN;
 /** A slot that can fill, read from a resolved config: config.slots[id].source is 'none' when nothing can. */
 export function canFill(cfg, id) {
   const s = cfg && cfg.enabled ? cfg.slots?.[id] : null;
@@ -85,41 +97,57 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
   // layout) and the title has stayed up TITLE_DWELL_MS, so a quick Jump asks for nothing, it goes in as Marquee's
   // frame (TITLE_FRAME_SRC). The moment the title goes, the frame is removed, filled or not (0122): its document is
   // torn down with every request AdSense has started, so nothing of the title's ad reaches the countdown or the run.
-  // The next title gets a fresh frame after its own dwell. The frame starts 0 px high (see 0142 below for when it
-  // grows). Postrun and reroll stay in the page.
-  // 0142: the frame takes no room and paints nothing until its document holds a drawn ad: a reserved, unfilled or
-  // undrawn unit moves no title element, and the frame's own canvas (opaque white when the OS is light, as the frame
-  // page says `light dark`) is never seen. `data-filled` gates the margin and the visibility (styles.css); the height is
-  // the frame's last report while filled, else 0. Its document is watched for Google's verdict, which may change no size.
-  // And when the title's fit finds no room for a shown banner (NO_ROOM_EVENT), the frame goes for the rest of this title.
-  let dwell = 0, onFrameMsg = null, frameMo = null, reportedH = 0, noRoom = false;
+  // The next title gets a fresh frame after its own dwell. The frame starts 0 px high and, once
+  // drawn, takes the height it reports (0142 below: until then it is out of the flow and hidden). Postrun and reroll stay in the page.
+  // 0142: until its document holds a drawn ad the frame is out of the title's flow and hidden (styles.css
+  // :not([data-filled])): it keeps the height it reports, so the ad inside sees a real slot, but no title element moves
+  // and its own canvas (opaque white when the OS is light) is never seen. Its document is watched for Google's verdict
+  // and a sponsor's image loading, which may change no size. When it first fills, the title is asked for room once more.
+  let dwell = 0, onFrameMsg = null, frameMo = null, frameDocW = null, reportedH = 0, noRoom = false;
   const frameDoc = () => { try { return titleEl?.contentDocument || null; } catch { return null; } };
+  function hasRoom(h) {
+    const Ev = win.CustomEvent;
+    if (!titleParent?.dispatchEvent || typeof Ev !== 'function') return true;
+    return titleParent.dispatchEvent(new Ev(ROOM_EVENT, { cancelable: true, detail: { h } }));
+  }
+  function noRoomHere() {
+    noRoom = true;
+    if (titleParent?.dataset) titleParent.dataset.adRoom = 'none';   // (read by tests and For nerds; cleared off the title)
+    drop();
+  }
   function applyFill() {
     if (!titleEl) return;
-    const filled = frameFilled(frameDoc());
+    if (titleEl.style) titleEl.style.height = `${reportedH}px`;
+    const filled = frameFilled(frameDoc()) && reportedH > 1;
+    if (filled && !('filled' in titleEl.dataset) && !hasRoom(reportedH + BANNER_MARGIN)) { noRoomHere(); return; }
     if (filled) titleEl.dataset.filled = ''; else delete titleEl.dataset.filled;
-    if (titleEl.style) titleEl.style.height = `${filled ? reportedH : 0}px`;
+  }
+  function unwatch() {
+    frameMo?.disconnect(); frameMo = null;
+    if (frameDocW) { for (const t of ['load', 'loadeddata', 'error']) frameDocW.removeEventListener?.(t, applyFill, true); frameDocW = null; }
   }
   function watchFrame() {
-    frameMo?.disconnect(); frameMo = null;
+    unwatch();
     const d = frameDoc();
     if (d?.documentElement && typeof win.MutationObserver === 'function') {
       frameMo = new win.MutationObserver(applyFill);
       frameMo.observe(d.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-ad-status', 'hidden'] });
     }
+    if (d?.addEventListener) { frameDocW = d; for (const t of ['load', 'loadeddata', 'error']) d.addEventListener(t, applyFill, true); }   // a sponsor's image or video loading
     applyFill();
   }
   function drop() {
     if (titleEl) { titleEl.remove(); titleEl = null; }
-    frameMo?.disconnect(); frameMo = null;
+    unwatch();
     if (onFrameMsg) { win.removeEventListener?.('message', onFrameMsg); onFrameMsg = null; }
     reportedH = 0;
   }
-  const onNoRoom = () => { if (titleEl) { noRoom = true; drop(); } };
+  const onNoRoom = () => { if (titleEl) noRoomHere(); };
   function place() {
     dwell = 0;
     if (!titleParent || noRoom || mode() !== 'title' || !canFill(cfg, 'title') || titleEl || titleParent.querySelector('[data-marquee-frame]')) return;
     if (win.matchMedia?.(TITLE_SKIP_MQ)?.matches) return;   // short or narrow: no banner (the next title looks again)
+    if (!hasRoom(BANNER_ROOM)) { noRoomHere(); return; }    // 0142: the Daily would pack: ask for no ad at all
     const el = doc.createElement('iframe');
     el.className = 'ad-banner';
     el.dataset.marqueeFrame = 'title';
@@ -144,6 +172,7 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
       return;
     }
     noRoom = false;   // the next title looks again
+    if (titleParent.dataset) delete titleParent.dataset.adRoom;
     if (dwell) { clearTimeout(dwell); dwell = 0; }
     drop();
   }

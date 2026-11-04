@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { wantLoader, canFill, postrunDue, createAds, mayStartAds, frameHeight, frameFilled, SLOTS, TITLE_DWELL_MS, TITLE_FRAME_SRC, TITLE_SKIP_MQ, NO_ROOM_EVENT } from '../../src/ads.js';
+import { wantLoader, canFill, postrunDue, createAds, mayStartAds, frameHeight, frameFilled, SLOTS, TITLE_DWELL_MS, TITLE_FRAME_SRC, TITLE_SKIP_MQ, NO_ROOM_EVENT, ROOM_EVENT, BANNER_ROOM } from '../../src/ads.js';
 
 describe('ads (Marquee, between runs only)', () => {
   it('declares the three slots, all menu context', () => {
@@ -56,6 +56,7 @@ describe('ads (Marquee, between runs only)', () => {
       contentDocument: tag === 'iframe' ? { filled: false, querySelector() { return this.filled ? {} : null; } } : undefined,
       listeners: {}, addEventListener(t, f) { (this.listeners[t] ||= new Set()).add(f); }, removeEventListener(t, f) { this.listeners[t]?.delete(f); },
       dispatch(t) { for (const f of [...(this.listeners[t] || [])]) f({ type: t }); },
+      dispatchEvent(ev) { for (const f of [...(this.listeners[ev.type] || [])]) f(ev); return !ev.defaultPrevented; },
       setAttribute(k, v) { this.attrs[k] = v; },
       appendChild(c) { c.parent = this; this.children.push(c); return c; },
       remove() { if (this.parent) this.parent.children = this.parent.children.filter((x) => x !== this); this.parent = null; },
@@ -145,8 +146,7 @@ describe('ads (Marquee, between runs only)', () => {
       expect(f.style.height).toBe('0px');                 // an unfilled slot takes no room, as the in-page one did
       expect(f.attrs.scrolling).toBe('no');
       post(f.contentWindow, { marqueeFrame: 'title', h: 60 });
-      expect(f.style.height).toBe('0px');                // 0142: a reported height with no drawn ad takes no room
-      expect('filled' in f.dataset).toBe(false);
+      expect('filled' in f.dataset).toBe(false);         // 0142: no drawn ad: out of the flow and hidden (styles.css)
       f.contentDocument.filled = true; f.dispatch('load');
       expect(f.style.height).toBe('60px');               // filled: it grows exactly as the in-page slot would
       expect('filled' in f.dataset).toBe(true);
@@ -190,12 +190,12 @@ describe('ads (Marquee, between runs only)', () => {
       f.dispatch('load');
       post(f.contentWindow, { marqueeFrame: 'title', h: 90 });   // Google reserved the unit's height, drew nothing
       vi.advanceTimersByTime(15_000);
-      expect(f.style.height).toBe('0px');
-      expect('filled' in f.dataset).toBe(false);
+      expect('filled' in f.dataset).toBe(false);                 // out of the flow and hidden, whatever it reports
       f.contentDocument.filled = true; post(f.contentWindow, { marqueeFrame: 'title', h: 90 });
       expect(f.style.height).toBe('90px');
+      expect('filled' in f.dataset).toBe(true);
       f.contentDocument.filled = false; post(f.contentWindow, { marqueeFrame: 'title', h: 90 });   // the unit went unfilled
-      expect(f.style.height).toBe('0px');
+      expect('filled' in f.dataset).toBe(false);
       // The title's fit has no room for it: the frame goes, with its listener, and this title asks for no other.
       f.contentDocument.filled = true; post(f.contentWindow, { marqueeFrame: 'title', h: 90 });
       title.dispatch(NO_ROOM_EVENT);
@@ -213,13 +213,53 @@ describe('ads (Marquee, between runs only)', () => {
       expect(f.style.height).toBe('0px');
     } finally { vi.useRealTimers(); }
   });
-  it("0142: frameFilled reads Google's verdict or a direct creative, never a reserved unit", () => {
-    const d = (html) => ({ querySelector: (sel) => (html.some((h) => sel.split(', ').includes(h)) ? {} : null) });
-    expect(frameFilled(d(['[data-marquee] ins.adsbygoogle[data-ad-status="filled"]']))).toBe(true);
-    expect(frameFilled(d(['[data-marquee] img']))).toBe(true);
-    expect(frameFilled(d([]))).toBe(false);
+  it("0142: frameFilled reads Google's verdict or a loaded direct creative, never a reserved unit or a broken image", () => {
+    const d = (google, media = []) => ({ querySelector: () => (google ? {} : null), querySelectorAll: () => media });
+    expect(frameFilled(d(true))).toBe(true);
+    expect(frameFilled(d(false, [{ tagName: 'IMG', complete: true, naturalWidth: 300 }]))).toBe(true);
+    expect(frameFilled(d(false, [{ tagName: 'IMG', complete: false, naturalWidth: 0 }]))).toBe(false);   // still loading
+    expect(frameFilled(d(false, [{ tagName: 'IMG', complete: true, naturalWidth: 0 }]))).toBe(false);    // failed
+    expect(frameFilled(d(false, [{ tagName: 'VIDEO', readyState: 2 }]))).toBe(true);
+    expect(frameFilled(d(false, [{ tagName: 'VIDEO', readyState: 0 }]))).toBe(false);
+    expect(frameFilled(d(false))).toBe(false);
     expect(frameFilled(null)).toBe(false);
     expect(frameFilled({ querySelector() { throw new Error('torn down'); } })).toBe(false);
+  });
+  it("0142: with no room for the banner (the title would pack its Daily) no frame is placed, so no ad is asked for; a first draw with no room goes too", async () => {
+    vi.useFakeTimers();
+    try {
+      let mode = 'title', room = 0;
+      const cfg = { enabled: true, slots: { title: { source: 'network' } } };
+      const m = { v: 1, ready: () => Promise.resolve(cfg), interstitial: vi.fn(), rewarded: vi.fn() };
+      const doc = fakeDoc();
+      const title = doc.createElement('section');
+      const asked = [];
+      title.addEventListener(ROOM_EVENT, (e) => { asked.push(e.detail.h); if (e.detail.h > room) e.preventDefault(); });
+      const handlers = new Set();
+      const location = { origin: 'https://mutaafaziz.com' };
+      class CustomEvent { constructor(type, o) { this.type = type; this.detail = o.detail; this.defaultPrevented = false; } preventDefault() { this.defaultPrevented = true; } }
+      const win = { marquee: m, location, CustomEvent, addEventListener: (t, f) => t === 'message' && handlers.add(f), removeEventListener: (t, f) => t === 'message' && handlers.delete(f) };
+      const post = (source, data) => { for (const f of [...handlers]) f({ source, data, origin: location.origin }); };
+      const ads = createAds({ win, doc, mode: () => mode });
+      ads.arm(title);
+      await Promise.resolve(); await Promise.resolve();
+      vi.advanceTimersByTime(TITLE_DWELL_MS * 3);
+      expect(asked).toEqual([BANNER_ROOM]);              // asked once; no room: nothing placed, not asked again this title
+      expect(title.children).toHaveLength(0);
+      expect(title.dataset.adRoom).toBe('none');
+      mode = 'countdown'; ads.sync();
+      expect(title.dataset.adRoom).toBeUndefined();
+      room = BANNER_ROOM;                                 // the next title has room for the slot
+      mode = 'title'; ads.sync();
+      vi.advanceTimersByTime(TITLE_DWELL_MS);
+      const f = title.children[0];
+      expect(f?.tagName).toBe('iframe');
+      room = 50;                                          // but the drawn ad is taller than there is room for now
+      f.contentDocument.filled = true; post(f.contentWindow, { marqueeFrame: 'title', h: 90 });
+      expect(asked.at(-1)).toBe(90 + 18);
+      expect(title.children).toHaveLength(0);
+      expect(handlers.size).toBe(0);
+    } finally { vi.useRealTimers(); }
   });
   it("a short or narrow screen, where the title has no room for the banner, gets no frame at all: no ad work for an ad nobody sees (0122)", async () => {
     vi.useFakeTimers();

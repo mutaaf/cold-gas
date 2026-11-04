@@ -49,6 +49,9 @@ test('no ad call fires during a run; postrun skips the first results; rewarded i
   });
   page.on('requestfinished', (r) => { if (r.url().includes('ads.stand-in.example')) late.push(r.url()); });
   await page.route('**/ads/v1/frame.html?*', (r) => r.fulfill({ contentType: 'text/html', body: FRAME }));
+  // 0142: the title places its banner only where it has room beside a whole Daily card; a 1280×720 title has none (it
+  // packs without an ad), so the frame's cut is tested on a tall screen, where the banner shows.
+  await page.setViewportSize({ width: 1024, height: 1366 });
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   // (Armed once the backdrop and the judges' chunk have settled, then the 4 s dwell.)
@@ -131,6 +134,7 @@ async function adPage(page, url) {
 // One test, three pages (each in its own context): ads.spec keeps main's test count, so no e2e shard's cut moves (docs/LESSONS.md, 0117).
 test('no loader on a local preview; with ?marquee= (0117) the loader and the title slot stay out of the countdown and the run', async ({ page, browser, baseURL }) => {
   test.slow();
+  test.setTimeout(test.info().timeout + 150_000);   // 0142's two pages (a phone and the upright iPad, ≈ 15 s held on the title) on top
 
   const asked = [];
   page.on('request', (r) => { if (/\/ads\//.test(new URL(r.url()).pathname)) asked.push(r.url()); });
@@ -183,10 +187,13 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     await p.context().close();
   }
 
-  // 0142 · the title's frame never costs the Daily its room, and an undrawn frame moves and paints nothing. The stand-in frame
-  // reports 90 px from an empty, reserved unit (as Google's lazy unit does before it decides), then the test draws a direct
-  // creative into it (same origin) to fill it. In a fresh page from a fresh context, as above (the file keeps its test count).
-  for (const view of [{ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, { viewport: { width: 1440, height: 900 } }]) {
+  // 0142 · the title's banner never costs the Daily its room, and an undrawn frame moves and paints nothing. Where the title
+  // has no room for a banner (an upright phone) no frame is placed, so no ad is asked for. Where it has (the upright iPad), the
+  // stand-in frame reports 90 px from an empty, reserved unit (as Google's lazy unit does before it decides): it stays out of the
+  // flow and hidden; then the test draws a sponsor's image into it (same origin) and the banner shows, the Daily whole.
+  // Fresh pages from fresh contexts, as above (the file keeps its test count).
+  for (const view of [{ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, { viewport: { width: 1024, height: 1366 }, hasTouch: true, isMobile: true }]) {
+    const w = view.viewport.width;
     const ctx = await browser.newContext({ baseURL, ...view, colorScheme: 'light' });
     const p = await ctx.newPage();
     await p.clock.setFixedTime(new Date('2026-11-15T15:00:00Z'));   // a long goal: "Clear the row with more than 25 % gas left"
@@ -200,37 +207,43 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
       const t = document.querySelector('.title'), goal = t.querySelector('.xc-goal'), streak = t.querySelector('.xc-streak');
       return { fit: t.dataset.extraFit ?? '', cut: goal.scrollWidth > goal.clientWidth + 0.5, streak: !!streak && streak.offsetHeight > 0 };
     });
+    const whole = async (why) => expect(await card(), `${w}: ${why}`).toEqual({ fit: '', cut: false, streak: true });
     await p.waitForTimeout(2000);   // past the title's rise-in (the tops are read with transforms)
-    // The card as the title lays it out with no ad. On the phone that is the whole card. A 1440×900 desktop title already
-    // packs to level 2 with no ad (its own height, not the frame's): there the bar is "no worse than without the frame".
-    const base = await card();
-    if (view.isMobile) expect(base).toEqual({ fit: '', cut: false, streak: true });
-    const daily = async (why) => expect(await card(), `${view.viewport.width}: ${why}`).toEqual({ ...base, cut: false });
-    await daily('before the frame');
+    await whole('before the frame');
     const before = await tops();
-    await p.waitForFunction(() => window.__frameSaid90 === true, null, { timeout: 45_000 });   // placed after the dwell; it reported 90 px
     const frame = p.locator('iframe[data-marquee-frame="title"]');
+    if (w === 390) {
+      // No room: the slot is never placed (decided after the dwell), nothing is asked for, the card stays whole.
+      await p.waitForFunction(() => document.querySelector('.title').dataset.adRoom === 'none', null, { timeout: 45_000 });
+      await expect(frame).toHaveCount(0);
+      expect(await p.evaluate(() => window.__frameSaid90 ?? false)).toBe(false);
+      await whole('no room, no frame');
+      expect(await tops()).toEqual(before);
+      await ctx.close();
+      continue;
+    }
+    await p.waitForFunction(() => window.__frameSaid90 === true, null, { timeout: 45_000 });   // placed after the dwell; it reported 90 px
     for (const scheme of ['light', 'dark']) {
       await p.emulateMedia({ colorScheme: scheme });
-      await p.waitForTimeout(1000);
-      // Unfilled: 0 px, no margin, not painted (no opaque canvas under a light OS), and nothing on the title moved.
-      expect(await frame.evaluate((e) => { const c = getComputedStyle(e); return [e.offsetHeight, c.marginTop, c.visibility, c.colorScheme]; }))
-        .toEqual([0, '0px', 'hidden', 'light dark']);
-      expect(await tops()).toEqual(before);
-      await daily(`unfilled frame, ${scheme}`);
+      // Unfilled, for the 15 s after its report: out of the flow, not painted (no opaque canvas under a light OS), its
+      // reported size kept for the ad inside, and nothing on the title moved.
+      for (let i = 0; i < (scheme === 'light' ? 4 : 2); i++) {
+        await p.waitForTimeout(2500);
+        expect(await frame.evaluate((e) => { const c = getComputedStyle(e); return [e.offsetHeight, c.position, c.visibility, c.colorScheme, 'filled' in e.dataset]; }))
+          .toEqual([90, 'absolute', 'hidden', 'light dark', false]);
+        expect(await tops()).toEqual(before);
+        await whole(`unfilled frame, ${scheme}`);
+      }
     }
-    // Filled (a direct sponsor's image drawn in the frame): the banner shows only where the whole title fits beside it,
-    // else it steps aside (removed for this title) and the Daily stays whole.
+    // Drawn (a direct sponsor's image, loaded): the banner shows at its 90 px, and the Daily is still whole.
     await frame.evaluate((e) => {
       const d = e.contentDocument, img = d.createElement('img');
       img.style.cssText = 'display:block;width:100%;height:90px';
-      img.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACw=';
+      img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
       d.querySelector('[data-marquee]').appendChild(img);
     });
-    await p.waitForTimeout(1500);
-    await daily('filled frame');
-    const shown = await p.evaluate(() => document.querySelector('iframe[data-marquee-frame]')?.offsetHeight ?? -1);
-    expect([-1, 90], `${view.viewport.width}: the banner is gone or whole`).toContain(shown);
+    await expect.poll(() => frame.evaluate((e) => [e.offsetHeight, getComputedStyle(e).visibility, getComputedStyle(e).position])).toEqual([90, 'visible', 'static']);
+    await whole('filled frame');
     await ctx.close();
   }
 });
@@ -239,5 +252,5 @@ const RESERVED_FRAME = `<!doctype html><html><head><meta name="color-scheme" con
 <style>html,body{margin:0;background:transparent;overflow:hidden}body{display:flow-root}[data-marquee]{width:100%}</style></head>
 <body><div data-marquee="title"><ins class="adsbygoogle" style="display:block;width:100%;height:90px"></ins></div><script>
   const send = () => { parent.postMessage({ marqueeFrame: 'title', h: Math.ceil(document.body.getBoundingClientRect().height) }, location.origin); parent.__frameSaid90 = true; };
-  addEventListener('load', send);
+  new ResizeObserver(send).observe(document.body); addEventListener('load', send);   // as Marquee's frame reports
 </script></body></html>`;

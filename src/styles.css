@@ -2055,9 +2055,10 @@ body:has(> .pause:not([hidden])) :is(.hud, .top, .cue, .count, .drill-bar) { fil
 /* 0122: the title's slot is Marquee's frame. Block, no border, transparent. 0142: the frame's page says `light dark`, so
    the element says the same: its used scheme then matches the frame's under either OS appearance, and Chromium paints no
    opaque canvas behind it (with `dark` here, a light OS got a white slab). Until its document holds a drawn ad
-   (src/ads.js data-filled) it is 0 px, without its margin, and hidden: an unfilled frame moves and paints nothing. */
+   (src/ads.js data-filled) it is out of the flow and hidden: it keeps the size it reports, so the ad inside sees a real
+   slot, but an unfilled frame moves and paints nothing. */
 .title iframe.ad-banner { display: block; border: 0; padding: 0; height: 0; background: transparent; color-scheme: light dark; }
-.title iframe.ad-banner:not([data-filled]) { margin: 0; visibility: hidden; }
+.title iframe.ad-banner:not([data-filled]) { position: absolute; margin: 0; visibility: hidden; pointer-events: none; }
 /* (src/ads.js TITLE_SKIP_MQ places no frame here; this still hides one placed before a rotation. iframe.ad-banner
    above outranks .ad-banner, so it is named here too.) */
 @media (max-height: 620px), (max-width: 360px) { .title .ad-banner, .title iframe.ad-banner { display: none; } }
