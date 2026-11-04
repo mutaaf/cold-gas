@@ -4,6 +4,7 @@
 // The hinge angle drives effects only (here: the stage light warms as the phone opens), never layout.
 import UIKit
 import ColdGasLayout
+import ColdGasCore
 
 final class RootViewController: UIViewController {
     private let stage = StageView()
@@ -26,6 +27,8 @@ final class RootViewController: UIViewController {
         foldBand.isUserInteractionEnabled = false
         container.addSubview(foldBand)
         attachHinge()
+        controls.isUserInteractionEnabled = true
+        controls.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(cycleHaptics)))
     }
 
     override func viewDidLayoutSubviews() {
@@ -71,12 +74,26 @@ final class RootViewController: UIViewController {
         return view.safeAreaInsets
     }
 
+    private let selection = UISelectionFeedbackGenerator()
+    @objc private func cycleHaptics() {
+        HapticPlayer.shared.cycleLevel()
+        selection.selectionChanged()
+        controls.note("Haptics: \(HapticPlayer.shared.level.rawValue)")
+    }
+
     private func attachHinge() {
         if #available(iOS 27.1, *) {
+            var lastStatus: String?
             let i = UIHingeInteraction { [weak self] _, update in
                 // Effect only: 0 closed … 1 flat. Layout never reads this.
                 let open = update.hinge.map { min(1, max(0, $0.angle / .pi)) } ?? 1
                 self?.stage.renderer?.hingeOpen = Float(open)
+                // A light tick at each detent (closed, partly open, flat): an effect, never layout (§6).
+                let status = update.hinge.map { "\($0.status)" }
+                if let s = status, s != lastStatus, lastStatus != nil {
+                    HapticPlayer.shared.play(HapticEvent(kind: .detent, tick: 0, channel: 5, intensity: 0.3, sharpness: 0.6))
+                }
+                lastStatus = status
             }
             view.addInteraction(i)
             hingeInteraction = i
@@ -91,7 +108,6 @@ final class ControlsPanel: UIView {
     var spread: Spread = .single { didSet { setNeedsLayout() } }
     override init(frame: CGRect) {
         super.init(frame: frame)
-        isUserInteractionEnabled = false
         title.text = "COLD GAS"
         title.font = .systemFont(ofSize: 22, weight: .light)
         title.textColor = UIColor(white: 0.92, alpha: 1)
@@ -104,6 +120,7 @@ final class ControlsPanel: UIView {
         }
     }
     required init?(coder: NSCoder) { nil }
+    func note(_ s: String) { title.text = "COLD GAS · \(s)" }
     override func layoutSubviews() {
         super.layoutSubviews()
         let pad: CGFloat = 20

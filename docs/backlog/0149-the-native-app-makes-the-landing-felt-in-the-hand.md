@@ -1,7 +1,7 @@
 ---
 id: 0149
 title: The native app makes the run felt in the hand (Core Haptics, driven by the sim)
-status: proposed
+status: in-progress
 priority: P1
 size: L
 lens: player-feel
@@ -35,15 +35,26 @@ docs/NATIVE.md §6. Phase 3, after the core (phase 1) lands.
 - `-haptics log` prints the track (the simulator can't play haptics).
 
 ## Acceptance criteria
-- [ ] `HapticScore` unit tests against 0146's vectors: the reference Show emits release, warn and touchdown events on
-      the expected ticks; a synced landing emits its four wheel transients within 0.3 s of each other; a crash vector
-      emits an impact per `run.impacts` hit above 1 m/s.
-- [ ] 0 B allocated per tick by `HapticScore` and per event by `HapticPlayer` (the allocation bench).
-- [ ] Off produces no `CHHapticEngine` activity; Subtle has no continuous rumble and halves intensity.
-- [ ] Every haptic moment is also on the screen or in the sound (no information by haptics alone).
-- [ ] The engine recovers after an audio interruption (a call, Siri) and after backgrounding mid-run.
-- [ ] Hardware pass on a Pro Max and a Duo: the owner feels the release, the hiss blowing down, a clean vs a sloppy
-      touchdown, and a crash, and says yes in the PR.
+- [x] `HapticScore` unit tests against the JS sim's own flights (`Tests/Vectors/haptics/*.json`, written by
+      `npm run vectors`):
+      - the reference Show releases once and lands with four wheel transients within 0.3 s (54 ms measured);
+      - the hiss softens as the tanks blow down, and the air is silent under the tyres;
+      - a crash gets an impact transient for every hit ≥ 1 m/s, outside the 10 ms rate limit, and is never "stuck";
+      - the Lineup has no release.
+- [x] 0 allocations per tick in `HapticScore`, measured with malloc zone statistics over five crash replays.
+      `HapticPlayer` makes its players once (3 looping continuous players + a bank of 24 transients). Its dynamic
+      parameters are sent only when a channel moves.
+- [x] Off / Subtle / Full, stored in UserDefaults; a tap on the controls panel cycles it, with selection feedback.
+      [ ] A unit test with a mock engine.
+- [ ] Every haptic moment is also on the screen or in the sound. There's no HUD or audio yet (phase 3); the rule is
+      in §6.
+- [ ] Recovery after an audio interruption and after backgrounding mid-run: `stoppedHandler`/`resetHandler`
+      restart and the background stop are built, not yet exercised on hardware.
+- [ ] The hardware pass. The track plays on the iPhone 15 Pro Max (`-haptics demo show`: engine on, the same events
+      as the simulator's log). Still owed: the owner feels the release, the hiss blowing down, a clean vs a sloppy
+      touchdown, and a crash (`-haptics demo crash`), and says yes. The Duo when hardware exists.
+- [ ] The landing HUD's amber/red, the judges' numbers, medals and the one-thumb pad: they need the HUD and the
+      results (phases 3–4).
 
 ## Test plan
 swift-testing in `ColdGasCore` for `HapticScore`; an app test that drives `HapticPlayer` with a mock engine and

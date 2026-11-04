@@ -257,7 +257,7 @@ Core Haptics turns those buzzes into **a continuous track driven by the sim**, s
 | Retro-burn | A rising hiss + a shudder at peak flow | Valves in the LAND phase |
 | **Touchdown** | **One transient per wheel, at the tick that wheel touched, scaled by its sink rate.** A synced landing is one clean thump; a sloppy one is felt as four | Per-wheel contact ticks |
 | Scrape / hit / crush | A transient scaled by impact speed and part, from `run.impacts`; a crash = a heavy hit + a decaying grind | `impacts.js` events |
-| Stuck it | A settle: two soft decaying taps as the suspension comes to rest | Phase → landed, low sink |
+| Stuck it | A settle: a soft tap when a clean landing decides the run (the scored run ends while the car still rolls) | Phase → done after four wheels down, no hit |
 | The judges' scores | A light tick as each judge's number lands; a medal is a rising triple | Results sheet |
 | UI | System selection / impact feedback (`UISelectionFeedbackGenerator`) on taps, toggles, the one-thumb pad | UIKit |
 | Duo hinge | A light tick at the open, tabletop and closed detents (effect only, never layout) | `UIHingeInteraction` |
