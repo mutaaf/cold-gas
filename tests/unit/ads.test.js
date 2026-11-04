@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { wantLoader, canFill, postrunDue, createAds, mayStartAds, frameHeight, SLOTS, TITLE_DWELL_MS, TITLE_FRAME_SRC } from '../../src/ads.js';
+import { wantLoader, canFill, postrunDue, createAds, mayStartAds, frameHeight, SLOTS, TITLE_DWELL_MS, TITLE_FRAME_SRC, TITLE_SKIP_MQ } from '../../src/ads.js';
 
 describe('ads (Marquee, between runs only)', () => {
   it('declares the three slots, all menu context', () => {
@@ -160,6 +160,27 @@ describe('ads (Marquee, between runs only)', () => {
       expect(title.children).toHaveLength(1);
       mode = 'drive'; ads.sync();                         // any way off the title removes it
       expect(title.children).toHaveLength(0);
+    } finally { vi.useRealTimers(); }
+  });
+  it("a short or narrow screen, where the title has no room for the banner, gets no frame at all: no ad work for an ad nobody sees (0122)", async () => {
+    vi.useFakeTimers();
+    try {
+      const cfg = { enabled: true, slots: { title: { source: 'network' } } };
+      const m = { v: 1, ready: () => Promise.resolve(cfg), interstitial: vi.fn(), rewarded: vi.fn() };
+      for (const [short, n] of [[true, 0], [false, 1]]) {
+        const doc = fakeDoc();
+        const title = doc.createElement('section');
+        const asked = [];
+        const win = { marquee: m, location: { origin: 'https://mutaafaziz.com' }, addEventListener: () => {}, removeEventListener: () => {},
+          matchMedia: (q) => { asked.push(q); return { matches: short }; } };
+        const ads = createAds({ win, doc, mode: () => 'title' });
+        ads.arm(title);
+        await Promise.resolve(); await Promise.resolve();
+        vi.advanceTimersByTime(TITLE_DWELL_MS);
+        expect(title.children).toHaveLength(n);
+        expect(asked).toEqual([TITLE_SKIP_MQ]);
+      }
+      expect(TITLE_SKIP_MQ).toBe('(max-height: 620px), (max-width: 360px)');   // the same query styles.css hides the banner at
     } finally { vi.useRealTimers(); }
   });
   it('frameHeight reads only its own slot and caps at the in-page 90 px', () => {
