@@ -2052,9 +2052,12 @@ body:has(> .pause:not([hidden])) :is(.hud, .top, .cue, .count, .drill-bar) { fil
 /* --- Marquee (src/ads.js): between runs only ------------------------------------------------ */
 /* The title's banner exists only when the slot can fill; it never covers the CTA, and short screens skip it. */
 .title .ad-banner { margin: 18px 0 0; width: min(100%, 468px); max-height: 90px; overflow: hidden; border-radius: 8px; animation: none; }
-/* 0122: the title's slot is Marquee's frame. Block, no border, transparent (its page says light dark, so it takes our
-   scheme and stays see-through); the height follows the frame's report, from 0, as the in-page slot's did. */
-.title iframe.ad-banner { display: block; border: 0; padding: 0; height: 0; background: transparent; color-scheme: dark; }
+/* 0122: the title's slot is Marquee's frame. Block, no border, transparent. 0142: the frame's page says `light dark`, so
+   the element says the same: its used scheme then matches the frame's under either OS appearance, and Chromium paints no
+   opaque canvas behind it (with `dark` here, a light OS got a white slab). Until its document holds a drawn ad
+   (src/ads.js data-filled) it is 0 px, without its margin, and hidden: an unfilled frame moves and paints nothing. */
+.title iframe.ad-banner { display: block; border: 0; padding: 0; height: 0; background: transparent; color-scheme: light dark; }
+.title iframe.ad-banner:not([data-filled]) { margin: 0; visibility: hidden; }
 /* (src/ads.js TITLE_SKIP_MQ places no frame here; this still hides one placed before a rotation. iframe.ad-banner
    above outranks .ad-banner, so it is named here too.) */
 @media (max-height: 620px), (max-width: 360px) { .title .ad-banner, .title iframe.ad-banner { display: none; } }

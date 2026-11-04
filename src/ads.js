@@ -36,6 +36,16 @@ export function frameHeight(data, slot = 'title') {
   const h = Math.round(Number(data.h));
   return Number.isFinite(h) ? Math.max(0, Math.min(90, h)) : null;
 }
+/** Does the frame's document hold a drawn ad (0142)? Marquee's banner() puts AdSense's <ins> in the slot, which Google marks
+ *  data-ad-status="filled" | "unfilled" (unfilled falls back to a direct sponsor's <img>/<video>), so a reserved but empty
+ *  unit reads as not filled. Same-origin, so the page can read it; any error (a cross-origin or torn-down document) is "no". */
+export const FILLED_SEL = '[data-marquee] ins.adsbygoogle[data-ad-status="filled"], [data-marquee] img, [data-marquee] video';
+export function frameFilled(doc) {
+  try { return !!doc?.querySelector?.(FILLED_SEL); } catch { return false; }
+}
+/** The event the title's fit (src/comeback.js) sends on the title when a shown banner would cost the Daily its room: the ad
+ *  is the first thing to step aside (0142). */
+export const NO_ROOM_EVENT = 'coldgas:ad-no-room';
 /** A slot that can fill, read from a resolved config: config.slots[id].source is 'none' when nothing can. */
 export function canFill(cfg, id) {
   const s = cfg && cfg.enabled ? cfg.slots?.[id] : null;
@@ -75,12 +85,40 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
   // layout) and the title has stayed up TITLE_DWELL_MS, so a quick Jump asks for nothing, it goes in as Marquee's
   // frame (TITLE_FRAME_SRC). The moment the title goes, the frame is removed, filled or not (0122): its document is
   // torn down with every request AdSense has started, so nothing of the title's ad reaches the countdown or the run.
-  // The next title gets a fresh frame after its own dwell. The frame starts 0 px high and follows the height its slot
-  // reports, as the in-page slot did, so the title's layout moves exactly as before. Postrun and reroll stay in the page.
-  let dwell = 0, onFrameMsg = null;
+  // The next title gets a fresh frame after its own dwell. The frame starts 0 px high (see 0142 below for when it
+  // grows). Postrun and reroll stay in the page.
+  // 0142: the frame takes no room and paints nothing until its document holds a drawn ad: a reserved, unfilled or
+  // undrawn unit moves no title element, and the frame's own canvas (opaque white when the OS is light, as the frame
+  // page says `light dark`) is never seen. `data-filled` gates the margin and the visibility (styles.css); the height is
+  // the frame's last report while filled, else 0. Its document is watched for Google's verdict, which may change no size.
+  // And when the title's fit finds no room for a shown banner (NO_ROOM_EVENT), the frame goes for the rest of this title.
+  let dwell = 0, onFrameMsg = null, frameMo = null, reportedH = 0, noRoom = false;
+  const frameDoc = () => { try { return titleEl?.contentDocument || null; } catch { return null; } };
+  function applyFill() {
+    if (!titleEl) return;
+    const filled = frameFilled(frameDoc());
+    if (filled) titleEl.dataset.filled = ''; else delete titleEl.dataset.filled;
+    if (titleEl.style) titleEl.style.height = `${filled ? reportedH : 0}px`;
+  }
+  function watchFrame() {
+    frameMo?.disconnect(); frameMo = null;
+    const d = frameDoc();
+    if (d?.documentElement && typeof win.MutationObserver === 'function') {
+      frameMo = new win.MutationObserver(applyFill);
+      frameMo.observe(d.documentElement, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-ad-status', 'hidden'] });
+    }
+    applyFill();
+  }
+  function drop() {
+    if (titleEl) { titleEl.remove(); titleEl = null; }
+    frameMo?.disconnect(); frameMo = null;
+    if (onFrameMsg) { win.removeEventListener?.('message', onFrameMsg); onFrameMsg = null; }
+    reportedH = 0;
+  }
+  const onNoRoom = () => { if (titleEl) { noRoom = true; drop(); } };
   function place() {
     dwell = 0;
-    if (!titleParent || mode() !== 'title' || !canFill(cfg, 'title') || titleEl || titleParent.querySelector('[data-marquee-frame]')) return;
+    if (!titleParent || noRoom || mode() !== 'title' || !canFill(cfg, 'title') || titleEl || titleParent.querySelector('[data-marquee-frame]')) return;
     if (win.matchMedia?.(TITLE_SKIP_MQ)?.matches) return;   // short or narrow: no banner (the next title looks again)
     const el = doc.createElement('iframe');
     el.className = 'ad-banner';
@@ -92,26 +130,31 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
     onFrameMsg = (e) => {
       if (!titleEl || e.source !== titleEl.contentWindow || (win.location?.origin && e.origin !== win.location.origin)) return;
       const h = frameHeight(e.data);
-      if (h !== null && titleEl.style) titleEl.style.height = `${h}px`;
+      if (h !== null) { reportedH = h; applyFill(); }
     };
     win.addEventListener?.('message', onFrameMsg);
+    el.addEventListener?.('load', () => { if (el === titleEl) watchFrame(); });
     titleParent.appendChild(el);
     titleEl = el;
   }
   function syncTitle() {
     if (!titleParent) return;
     if (mode() === 'title') {
-      if (!titleEl && !dwell && canFill(cfg, 'title')) dwell = setTimeout(place, TITLE_DWELL_MS);
+      if (!titleEl && !dwell && !noRoom && canFill(cfg, 'title')) dwell = setTimeout(place, TITLE_DWELL_MS);
       return;
     }
+    noRoom = false;   // the next title looks again
     if (dwell) { clearTimeout(dwell); dwell = 0; }
-    if (titleEl) {
-      titleEl.remove(); titleEl = null;
-      if (onFrameMsg) { win.removeEventListener?.('message', onFrameMsg); onFrameMsg = null; }
-    }
+    drop();
   }
   /** The title's banner, wanted in this parent (placed and removed by the mode, see syncTitle). */
-  function titleBanner(parent) { titleParent = parent || null; syncTitle(); }
+  function titleBanner(parent) {
+    if (titleParent !== (parent || null)) {
+      titleParent?.removeEventListener?.(NO_ROOM_EVENT, onNoRoom);
+      parent?.addEventListener?.(NO_ROOM_EVENT, onNoRoom);
+    }
+    titleParent = parent || null; syncTitle();
+  }
   /** After boot: from now on every mode change may start the loader or move the banner. */
   function arm(parent) { armed = true; titleBanner(parent); sync(); }
   /** Call on every mode change. Before arm() it does nothing (the first load's critical path stays clear). */

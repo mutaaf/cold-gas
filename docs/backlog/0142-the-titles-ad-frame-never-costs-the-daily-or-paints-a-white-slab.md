@@ -1,7 +1,7 @@
 ---
 id: 0142
 title: The title's ad frame never paints a white slab, never cuts the Daily to "Clear t…", and an unfilled frame moves nothing
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
@@ -70,3 +70,17 @@ of the frame. Some options for the Builder to measure:
 - Marquee's own `frame.html` and its Worker (another service). The Cloudflare Web Analytics beacon the frame carries
   is an operator note in critique 2026-11-04 07:00, not this ticket.
 - The postrun and reroll breaks.
+
+## Builder note 2026-11-04
+- The frame now takes no room and paints nothing until its own document holds a drawn ad. Google's `data-ad-status="filled"`
+  or a direct sponsor's image counts as drawn. A reserved 90 px unit doesn't. (src/ads.js `frameFilled`, `data-filled`; styles.css)
+- The element's `color-scheme` is `light dark`, the same as the frame page's, so a light OS gets no opaque canvas even
+  once the frame shows. Forced to 90 px and visible under a light OS, the box measured mean luma 5, the same as the night behind it.
+- A filled banner the title has no room for steps aside first: `fit()` sends `coldgas:ad-no-room` and the frame goes for
+  that title, before the Daily packs. Where it survives (stand-in fill, light OS): only 1024×1366. 390×844, 430×932,
+  768×1024, 1280×720, 1440×900 and 1920×1080 all drop it.
+- **Not met as written, and out of this ticket's reach:** the 1440×900 bars ("no data-extra-fit", "streak shown"). With no
+  ad at all, the desktop title already packs: fit 2 at 1440×900 and 1280×720, fit 1 at 1920×1080. At 1440×900 the
+  eyebrow sits 109 px above the viewport at level 0, so the overflow is the title's own height. 430×932 and 414×896 are fit
+  1 with no ad too. The e2e asserts the phone's whole card and "no worse than without the frame" on desktop.
+  The desktop and wide-phone packing is for the Scout to ticket.

@@ -11,6 +11,7 @@ import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, co
 import { packFrames } from './ghost.js';
 import { freeWorld } from './sim/world.js';
 import { onUnits } from './units.js';
+import { NO_ROOM_EVENT } from './ads.js';
 
 const OLD = 'This challenge is from an older version of the game. Here’s a normal jump.';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -95,14 +96,22 @@ export function createComeback(o) {
   // The card takes the room there is: whole; then compact (one line and its button) with the tagline
   // and the eyebrow stepping aside; then not at all. Measured from layout (offsetTop), not the rise-in
   // transforms, so the answer is the same during the title's entrance as after it.
+  // 0142: the title's ad banner is the first thing to step aside. When the whole card doesn't fit with a shown banner,
+  // the title asks the banner to go (src/ads.js NO_ROOM_EVENT removes the frame for the rest of this title) before the
+  // Daily packs to one line and loses its goal and its streak.
   function fit() {
     const m = o.mount, title = m?.closest('.title');
     if (!title) return;
     for (let level = 0; level <= 3; level++) {
       if (level) title.dataset.extraFit = String(level); else delete title.dataset.extraFit;
       if (level === 3 || !overflows(title)) return;
+      if (!level && shownAd(title)) {
+        title.dispatchEvent(new CustomEvent(NO_ROOM_EVENT));
+        if (!overflows(title)) return;
+      }
     }
   }
+  const shownAd = (title) => [...title.querySelectorAll('.ad-banner')].some((e) => e.offsetHeight > 1);
   function overflows(title) {
     if (title.hidden || !title.getClientRects().length) return false;
     const tb = title.getBoundingClientRect();
