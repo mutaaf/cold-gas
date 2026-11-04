@@ -71,6 +71,17 @@ enum SelfTest {
                 return "\(n):\(r.hash)\(ok ? "=" : "≠")\(s["hash"] as? String ?? "?")"
             }.joined(separator: " ")
         }
-        return (misses == 0 && engineOK, "dmath \(cases - misses)/\(cases) engine \(engine)")
+        // The Swift sim itself (0152): every bundled run vector, flown and scored, against the JS's final state and card.
+        var runsOK = 0, runsAll = 0, firstBad = ""
+        if let dir = Bundle.main.url(forResource: "runs", withExtension: nil),
+           let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
+            for f in files.sorted(by: { $0.lastPathComponent < $1.lastPathComponent }) where f.pathExtension == "json" {
+                runsAll += 1
+                if let d = try? Data(contentsOf: f), let r = try? VectorTrace.check(d), r.ok { runsOK += 1 }
+                else if firstBad.isEmpty { firstBad = f.deletingPathExtension().lastPathComponent }
+            }
+        }
+        let runs = "runs \(runsOK)/\(runsAll)" + (firstBad.isEmpty ? "" : " (first miss: \(firstBad))")
+        return (misses == 0 && engineOK && runsOK == runsAll && runsAll > 0, "dmath \(cases - misses)/\(cases) engine \(engine) \(runs)")
     }
 }

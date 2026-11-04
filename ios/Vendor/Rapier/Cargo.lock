@@ -69,6 +69,8 @@ checksum = "4e7648175b45a9a48536d676f68d918270699102aa8dab5496df06904c914600"
 name = "coldgas_rapier"
 version = "0.1.0"
 dependencies = [
+ "glam 0.33.10",
+ "libm",
  "parry3d",
  "rapier3d",
 ]
@@ -696,8 +698,6 @@ dependencies = [
 [[package]]
 name = "wide"
 version = "1.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d920ac99c3c8edce110cb8d07dbb324d6d026011dce85b1e9355b70f0adacc4f"
 dependencies = [
  "bytemuck",
  "safe_arch",
