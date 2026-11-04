@@ -498,7 +498,13 @@ choosing work, and play one run as a first-time visitor on a phone (`coldgas_how
 automated browser otherwise counts as a returning player). Lens `engagement` covers reasons to retry,
 return and share, never dark patterns.
 
-The operator steers through `agents/control.json` (paused, focus, caps, frozen_paths). Branch
+The operator steers through `agents/control.json` (paused, focus, parallel_focus, caps, frozen_paths).
+
+**The native track (parallel focus, 2026-11-04).** A native Swift + Metal iPhone app (iPhone Duo and Pro Max,
+120 Hz, Core Haptics) is planned in `docs/NATIVE.md` and will live in `ios/`. It ports `src/sim` line for line and
+is held to the same bits by vectors that `npm run vectors` writes from the JS sim (0146). It never changes the web
+game, the Worker or a score. Cloud agents take only the native tickets that don't need Xcode; the rest say
+"Runs on: the operator's Mac" and are listed in `parallel_focus.operator_only`. Branch
 prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.
 
 ## 7 · Definition of done
