@@ -1,5 +1,5 @@
 ---
-id: 0150
+id: 0152
 title: On one thumb, the skim Daily names the choice that meets it, and the game never teaches the opposite
 status: ready
 priority: P1

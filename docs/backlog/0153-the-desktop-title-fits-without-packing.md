@@ -1,5 +1,5 @@
 ---
-id: 0151
+id: 0153
 title: On a laptop screen the title's wordmark never sits on the course pills, and the Daily keeps its streak
 status: ready
 priority: P1
