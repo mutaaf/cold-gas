@@ -50,6 +50,8 @@ const uw = { x: 0, y: 0, z: 0 }, fw = { x: 0, y: 0, z: 0 };
 // far edge by ROW_MARGIN, and either further on or still carrying away from it. Pitched back over the
 // last car it would set down on its roof.
 const ROW_MARGIN = 2.5;
+// Roof up enough that LAND's roll-out is done (its bang-bang roll ends at cos 20°, vehicle.js UPPER_ROLL).
+const UPRIGHT = 0.94;
 // Sideways m/s² for a full roll command (measured ≈ 5 m/s² under the brake's lift in scripts/human-phone.mjs
 // traces; 6 to err wide) and the flank check's look-ahead: does the car, carrying on as it is (falling at
 // least as fast as now: LAND only slows it, so this errs low) plus the slide's push, come in over a
@@ -90,7 +92,7 @@ export function thumbStage(run, released) {
 }
 
 export function createOneThumb() {
-  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, wasStage: 'idle', ax: 0, ay: 0, live: false };
+  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false };
   const aim = { x: 0, y: 0 };
   return {
     // Pointer events: `pressed` latches a tap shorter than a tick until the next sample reads it.
@@ -98,7 +100,7 @@ export function createOneThumb() {
     up() { st.held = false; st.ax = 0; st.ay = 0; },
     // The held thumb's slide from where it pressed, CSS px (+x right, +y up the glass).
     move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx; st.ay = dy / THUMB.aimPx; } },
-    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; },
+    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; },
     get held() { return st.held; },
     // 0129: the drive-off is under way (a tap on the ledge was taken; it lets go at the lip), and a press
     // the next tick hasn't read yet. The pad shows "Letting go" from either, on the frame of the tap.
@@ -140,11 +142,17 @@ export function createOneThumb() {
           if (-c.vel.z >= THUMB.carry) st.carried = true;
           else out.thrust = 1;
         }
+        // 0140: a roll-out the thumb started is finished, thumb or no thumb. Lifted mid-roll, the rate
+        // loop stopped the car on its side, the down-jets braking the roll pushed it sideways, and it
+        // landed up to 21 m off the mark. Once roof up, a lifted thumb leaves the fall to Assist's
+        // auto-land (the early lift's flight); a press takes LAND and the aim back from there.
+        up(c, uw);
+        if (st.held) st.landing = true;
+        else if (st.landing && uw.y > UPRIGHT) st.landing = false;
+        if (st.landing) out.level = 1;
         if (st.held) {
-          out.level = 1;
           // AIM: only roof up (a roll command upside down would stop LAND's roll-out), faded out over
           // the set-down; on the Show along the run only once the row is well behind.
-          up(c, uw);
           const h = c.pos.y - SPEC.comHeight;
           const k = Math.max(0, Math.min(1, (h - THUMB.aimFloor) / THUMB.aimFade));
           if (uw.y > 0.94 && k > 0) {
