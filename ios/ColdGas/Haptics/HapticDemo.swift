@@ -1,4 +1,4 @@
-// `-haptics demo [show|crash|wall|lineup]`: a reference flight's input log flown by the Swift sim (0150, bit-exact with
+// `-haptics demo [show|crash|wall|lineup]`: a reference flight's input log flown by the Swift sim (0152, bit-exact with
 // the web), its HapticScore track played through Core Haptics in real time, 240 ticks a second, looping with a pause:
 // the climb's rumble, the release, the hiss softening, the silent apex, four wheels touching, the crash.
 // Add `-haptics-log` to print the track (the simulator can't play haptics).

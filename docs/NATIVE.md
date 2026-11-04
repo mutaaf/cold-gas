@@ -110,7 +110,7 @@ Measured, not assumed:
   - The physical-iPhone leg. Package tests can't run on a device without a host app, so 0148's app runs the
     same vectors with `-selftest`.
   - The 240-tick `vehicle.step` slice. It needs `vehicle.js` and `world.js` (≈2,100 lines) plus the engine's
-    contact and event API, so it's the first item of phase 1 (0150).
+    contact and event API, so it's the first item of phase 1 (0152).
 - **Why it matched.** Every value crosses into the engine as the bindings take it: a JS number is rounded to
   f32, and the bindings' own defaults are used, not Rust's. For example, a rigid body always gets
   `additional_mass_properties` unless `mass_only`, and the TS collision groups `0xffffffff` unpack to
@@ -123,7 +123,7 @@ The app's `-selftest` runs the same vectors on the phone. On an iPhone 15 Pro Ma
 `SELFTEST ok dmath 55000/55000 engine 240:ce2812cc=ce2812cc 2400:0ddfc5d3=0ddfc5d3`, bit-exact on hardware.
 That closes 0147's last leg.
 
-### Phase 1: the Swift sim is the JS sim (0150, 2026-11-04)
+### Phase 1: the Swift sim is the JS sim (0152, 2026-11-04)
 
 `ColdGasPhysics` holds the sim and the scorer for the three scored courses: `World`, `Vehicle`, `Run` and `Judge`, plus
 the launch complex and the static fire. It replays **all 52 run vectors bit for bit**: every 24-tick state hash, every
@@ -430,7 +430,7 @@ ios/
 | # | Phase | Gate |
 |---|---|---|
 | 0 | **Spike** (0146 vectors, 0147 determinism, 0148 first frame) | `dmath` and one `vehicle.step` slice bit-identical on macOS, Linux and an iPhone; native Rapier matches the WASM build over the vectors; the exported roadster draws at 120 Hz on the Duo simulator |
-| 1 | **Core** ✅ (0150) | All of the sim plus the scorer in Swift; every vector bit-exact; 32 of 32 naive players land; 0 B/tick |
+| 1 | **Core** ✅ (0152) | All of the sim plus the scorer in Swift; every vector bit-exact; 32 of 32 naive players land; 0 B/tick |
 | 2 | **The Show drawn** | Course, car, plumes, mist, director; binary archive (no compile in a run); the governor; p95 ≤ 8.3 ms on the simulator bench |
 | 3 | **Playable + haptics** (0149) | Touch (one-thumb, classic), tilt, pad, keyboard; the HUD; audio; the full haptic track; a newcomer lands on Assist |
 | 4 | **Results** | Judges streaming, the theatre, the receipt, the board (post with telemetry), medals, the daily jump, challenge payloads, share |

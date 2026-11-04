@@ -1,5 +1,5 @@
 ---
-id: 0151
+id: 0153
 title: "Phase 2: the Show drawn in Metal (stage, row, plumes, director), with headroom at 120 Hz"
 status: ready
 priority: P1
@@ -11,7 +11,7 @@ by: operator
 ---
 
 ## Why
-Phase 1 (0150) made the native sim the web's, bit for bit, and the spike (0148) drew the car alone at 120 Hz. That
+Phase 1 (0152) made the native sim the web's, bit for bit, and the spike (0148) drew the car alone at 120 Hz. That
 measurement is the warning: the car alone took 6.6 ms of GPU at full resolution with 4× MSAA on an iPhone 15 Pro Max,
 of an 8.3 ms frame. The whole stage (the Wall, the row, the complex, the plumes and mist, the film look) has to fit
 in the same budget, so MetalFX and the resolution governor come with it, not after.

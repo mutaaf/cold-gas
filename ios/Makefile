@@ -25,7 +25,7 @@ gen:
 test: engine
 	cd Packages/ColdGasCore && swift test --no-parallel   # the sim is single-threaded, as the JS module is
 alloc: engine
-	# The 240 Hz tick's allocations, optimised as the app is built (0150).
+	# The 240 Hz tick's allocations, optimised as the app is built (0152).
 	cd Packages/ColdGasCore && swift test -c release -Xswiftc -enable-testing --no-parallel
 build: engine gen
 	# The first xcodebuild after xcodegen sometimes fails; rerun once (moon-club).

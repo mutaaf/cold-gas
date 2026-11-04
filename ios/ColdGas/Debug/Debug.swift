@@ -71,7 +71,7 @@ enum SelfTest {
                 return "\(n):\(r.hash)\(ok ? "=" : "≠")\(s["hash"] as? String ?? "?")"
             }.joined(separator: " ")
         }
-        // The Swift sim itself (0150): every bundled run vector, flown and scored, against the JS's final state and card.
+        // The Swift sim itself (0152): every bundled run vector, flown and scored, against the JS's final state and card.
         var runsOK = 0, runsAll = 0, firstBad = ""
         if let dir = Bundle.main.url(forResource: "runs", withExtension: nil),
            let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {

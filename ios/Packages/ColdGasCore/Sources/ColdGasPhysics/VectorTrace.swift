@@ -1,5 +1,5 @@
 // The run vectors' trace (scripts/vectors-lib.mjs), for the app's -selftest on a device, and HapticScore's feed from the
-// Swift sim (0149 + 0150: the haptics read the native physics, not a recording).
+// Swift sim (0149 + 0152: the haptics read the native physics, not a recording).
 #if canImport(CRapier)
 import Foundation
 import ColdGasCore

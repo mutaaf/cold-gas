@@ -1,4 +1,4 @@
-// 0150: the Swift sim replays every run vector (Tests/Vectors/runs/*.json, `npm run vectors` from src/sim) to the same
+// 0152: the Swift sim replays every run vector (Tests/Vectors/runs/*.json, `npm run vectors` from src/sim) to the same
 // bits: every 24-tick state hash, every full state, the final hash and the telemetry. On a miss it names the tick, the
 // field and both bit patterns.
 #if canImport(CRapier)

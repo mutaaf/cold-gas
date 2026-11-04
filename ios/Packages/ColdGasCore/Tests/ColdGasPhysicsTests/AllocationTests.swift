@@ -1,4 +1,4 @@
-// 0150: the 240 Hz tick allocates nothing on the Swift side (invariant 5 in docs/NATIVE.md §2). Measured with the malloc
+// 0152: the 240 Hz tick allocates nothing on the Swift side (invariant 5 in docs/NATIVE.md §2). Measured with the malloc
 // zone's live block count over 1,800 ticks of the reference Show (after its first 600: the world built, the caches warm).
 // The engine's own allocations are inside this count too (Rapier grows a contact cache when a new pair first touches).
 // Measured in an optimised build (`make alloc`: swift test -c release): a debug build boxes values the optimiser keeps

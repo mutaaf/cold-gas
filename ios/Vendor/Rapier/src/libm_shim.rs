@@ -3,7 +3,7 @@
 //! `enhanced-determinism` routes simba's and glam's math through the `libm` crate, but parry and rapier also call
 //! `f32::acos`, `.sin()`, `.powf()`… directly. On wasm32 Rust's std implements those with the same pure-Rust `libm`
 //! (a musl port); on macOS and iOS they call Apple's libm, which can differ by an ulp. A convex hull touching the floor
-//! took that path and the native engine's answer drifted from the browser's by a few ulps (0150, docs/NATIVE.md §3).
+//! took that path and the native engine's answer drifted from the browser's by a few ulps (0152, docs/NATIVE.md §3).
 //! Defining the symbols here, in the same static library, makes the linker resolve the engine's calls to `libm`
 //! instead of the system's: the native engine computes what the WASM engine computes.
 //! The list is what `nm -u` shows the engine importing; ios/scripts/rapier.sh checks no other libm call appears.
