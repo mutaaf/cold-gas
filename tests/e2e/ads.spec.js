@@ -49,10 +49,10 @@ test('no ad call fires during a run; postrun skips the first results; rewarded i
   });
   page.on('requestfinished', (r) => { if (r.url().includes('ads.stand-in.example')) late.push(r.url()); });
   await page.route('**/ads/v1/frame.html?*', (r) => r.fulfill({ contentType: 'text/html', body: FRAME }));
-  // 0142: the title places its banner only where it has room beside a whole Daily card; a 1280×720 title has none (it
-  // packs without an ad), so the frame's cut is tested on an upright iPad (820×1180), where the banner shows.
-  await page.setViewportSize({ width: 820, height: 1180 });
-  await page.clock.setFixedTime(new Date('2026-11-15T15:00:00Z'));   // the Daily's words (and so the title's room) fixed
+  // 0142: the title places its frame only where it has room beside a whole Daily card, and a 1280×720 title has none. This
+  // test is about the frame's cut and the breaks, not the room (tests/e2e/ads-room.spec.js), so it stands in a title with
+  // room: the room question (a cancelable event on the title) is answered yes before the title's own fit can say no.
+  await page.addInitScript(() => addEventListener('coldgas:ad-room', (e) => e.stopImmediatePropagation(), true));
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   // (Armed once the backdrop and the judges' chunk have settled, then the 4 s dwell.)
@@ -65,9 +65,6 @@ test('no ad call fires during a run; postrun skips the first results; rewarded i
   await page.waitForTimeout(3500);   // past the moment the stand-in would have finished
   expect(await page.evaluate(() => window.__adPipe)).toEqual([{ start: 'title' }]);
   expect(late).toEqual([]);
-  // The rest is the breaks between runs, which don't need the tall title: back to the project's 1280×720 (on CI's software
-  // GL an upright iPad's frames are slow enough that Retry → live ran past 15 s, LESSONS 2026-11-03).
-  await page.setViewportSize({ width: 1280, height: 720 });
   await toResults(page);
   await expect(page.locator('[data-reroll]')).toBeVisible({ timeout: 45_000 });
   await page.keyboard.press('KeyR');
@@ -138,7 +135,6 @@ async function adPage(page, url) {
 // One test, three pages (each in its own context): ads.spec keeps main's test count, so no e2e shard's cut moves (docs/LESSONS.md, 0117).
 test('no loader on a local preview; with ?marquee= (0117) the loader and the title slot stay out of the countdown and the run', async ({ page, browser, baseURL }) => {
   test.slow();
-  test.setTimeout(test.info().timeout + 150_000);   // 0142's two pages (a phone and the upright iPad, ≈ 15 s held on the title) on top
 
   const asked = [];
   page.on('request', (r) => { if (/\/ads\//.test(new URL(r.url()).pathname)) asked.push(r.url()); });
@@ -162,8 +158,7 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     await adPage(p, '/coldgas/?gfx=low&marquee=1');
     await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
     // The loader goes in on the title, at idle; Jump at once, before its config resolves.
-    // (Armed once the backdrop and the judges' chunk settle, which main.js caps at 20 s: a 15 s wait ran out on CI's e2e
-    // 1/4 twice, with the upright-iPad pages of other tests loading the runner.)
+    // (Armed once the backdrop and the judges' chunk settle, which main.js caps at 20 s: a 15 s wait sat under that cap.)
     await p.waitForFunction(() => window.__adLog.some((e) => e.what === 'loader'), null, { timeout: 45_000 });
     await p.evaluate(() => window.__coldgas.startRun('jump'));
     await p.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live');
@@ -184,8 +179,7 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
     await p.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
     await toResults(p);
-    // (Armed once the backdrop and the judges' chunk settle, which main.js caps at 20 s: a 15 s wait ran out on CI's e2e
-    // 1/4 twice, with the upright-iPad pages of other tests loading the runner.)
+    // (Armed once the backdrop and the judges' chunk settle, which main.js caps at 20 s: a 15 s wait sat under that cap.)
     await p.waitForFunction(() => window.__adLog.some((e) => e.what === 'loader'), null, { timeout: 45_000 });
     await p.waitForTimeout(2000);   // the config resolves on the results: the title's slot stays out
     await expect(p.locator('[data-marquee-frame="title"]')).toHaveCount(0);
@@ -194,73 +188,4 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     expect(log.filter((e) => e.what === 'title+')).toEqual([]);
     await p.context().close();
   }
-
-  // 0142 · the title's banner never costs the Daily its room, and an undrawn frame moves and paints nothing. Where the title
-  // has no room for a banner (an upright phone) no frame is placed, so no ad is asked for. Where it has (the upright iPad), the
-  // stand-in frame reports 90 px from an empty, reserved unit (as Google's lazy unit does before it decides): it stays out of the
-  // flow and hidden; then the test draws a sponsor's image into it (same origin) and the banner shows, the Daily whole.
-  // Fresh pages from fresh contexts, as above (the file keeps its test count).
-  for (const view of [{ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, { viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true }]) {
-    const w = view.viewport.width;
-    const ctx = await browser.newContext({ baseURL, ...view, colorScheme: 'light' });
-    const p = await ctx.newPage();
-    await p.clock.setFixedTime(new Date('2026-11-15T15:00:00Z'));   // a long goal: "Clear the row with more than 25 % gas left"
-    await p.route('**/ads/v1/ads.js', (r) => r.fulfill({ contentType: 'text/javascript', body: LOADER }));
-    await p.route('**/ads/v1/frame.html?*', (r) => r.fulfill({ contentType: 'text/html', body: RESERVED_FRAME }));
-    await p.route('**/coldgas/api/**', (r) => r.abort());
-    await p.goto('/coldgas/?gfx=low&marquee=1');
-    await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90_000 });
-    const tops = () => p.evaluate(() => ['[data-title-extra] .xc', '[data-start]'].map((q) => Math.round(document.querySelector(q).getBoundingClientRect().top)));
-    const card = () => p.evaluate(() => {
-      const t = document.querySelector('.title'), goal = t.querySelector('.xc-goal'), streak = t.querySelector('.xc-streak');
-      return { fit: t.dataset.extraFit ?? '', cut: goal.scrollWidth > goal.clientWidth + 0.5, streak: !!streak && streak.offsetHeight > 0 };
-    });
-    const whole = async (why) => expect(await card(), `${w}: ${why}`).toEqual({ fit: '', cut: false, streak: true });
-    await p.waitForTimeout(2000);   // past the title's rise-in (the tops are read with transforms)
-    await whole('before the frame');
-    const before = await tops();
-    const frame = p.locator('iframe[data-marquee-frame="title"]');
-    if (w === 390) {
-      // No room: the slot is never placed (decided after the dwell), nothing is asked for, the card stays whole.
-      await p.waitForFunction(() => document.querySelector('.title').dataset.adRoom === 'none', null, { timeout: 45_000 });
-      await expect(frame).toHaveCount(0);
-      expect(await p.evaluate(() => window.__frameSaid90 ?? false)).toBe(false);
-      await whole('no room, no frame');
-      expect(await tops()).toEqual(before);
-      await ctx.close();
-      continue;
-    }
-    await p.waitForFunction(() => window.__frameSaid90 === true, null, { timeout: 45_000 });   // placed after the dwell; it reported 90 px
-    for (const scheme of ['light', 'dark']) {
-      await p.emulateMedia({ colorScheme: scheme });
-      // Unfilled, for the 15 s after its report: out of the flow, not painted (no opaque canvas under a light OS), its
-      // reported size kept for the ad inside, and nothing on the title moved.
-      for (let i = 0; i < (scheme === 'light' ? 4 : 2); i++) {
-        await p.waitForTimeout(2500);
-        expect(await frame.evaluate((e) => { const c = getComputedStyle(e); return [e.offsetHeight, c.position, c.visibility, c.colorScheme, 'filled' in e.dataset]; }))
-          .toEqual([90, 'absolute', 'hidden', 'light dark', false]);
-        expect(await tops()).toEqual(before);
-        await whole(`unfilled frame, ${scheme}`);
-      }
-    }
-    // Drawn (a direct sponsor's image, loaded): the banner shows at its 90 px, and the Daily is still whole.
-    await frame.evaluate((e) => {
-      const d = e.contentDocument, img = d.createElement('img');
-      img.style.cssText = 'display:block;width:100%;height:90px';
-      img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
-      d.querySelector('[data-marquee]').appendChild(img);
-    });
-    // (The image's load and Chromium's mutation delivery under CI's load: 30 s, not expect.poll's 5 s.)
-    await expect.poll(() => frame.evaluate((e) => [e.offsetHeight, getComputedStyle(e).visibility, getComputedStyle(e).position]), { timeout: 30_000 })
-      .toEqual([90, 'visible', 'static']);
-    await whole('filled frame');
-    await ctx.close();
-  }
 });
-// 0142: Marquee's frame as Google's lazy unit leaves it before a verdict: an empty unit holding 90 px, reported as such.
-const RESERVED_FRAME = `<!doctype html><html><head><meta name="color-scheme" content="light dark">
-<style>html,body{margin:0;background:transparent;overflow:hidden}body{display:flow-root}[data-marquee]{width:100%}</style></head>
-<body><div data-marquee="title"><ins class="adsbygoogle" style="display:block;width:100%;height:90px"></ins></div><script>
-  const send = () => { parent.postMessage({ marqueeFrame: 'title', h: Math.ceil(document.body.getBoundingClientRect().height) }, location.origin); parent.__frameSaid90 = true; };
-  new ResizeObserver(send).observe(document.body); addEventListener('load', send);   // as Marquee's frame reports
-</script></body></html>`;
