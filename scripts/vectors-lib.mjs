@@ -16,7 +16,12 @@ export const FULL_EVERY = 240;     // the full state every 240 ticks (1 s), to n
 
 // --- bits ------------------------------------------------------------------------------------
 const dv = new DataView(new ArrayBuffer(8));
+// A NaN is written canonically: x86 computes a negative "default NaN" (fff8…) where ARM computes a positive one
+// (7ff8…), and DataView writes whichever the hardware made (dsin(±∞) differed between CI and a Mac). A NaN's
+// sign and payload aren't part of JS's semantics, and the Swift side treats any NaN as equal to any NaN.
+const NAN_HEX = '7ff8000000000000';
 export function hex(x) {
+  if (x !== x) return NAN_HEX;
   dv.setFloat64(0, x);
   return dv.getUint32(0).toString(16).padStart(8, '0') + dv.getUint32(4).toString(16).padStart(8, '0');
 }
@@ -95,7 +100,8 @@ export const STATE_FIELDS = ['pos.x', 'pos.y', 'pos.z', 'quat.x', 'quat.y', 'qua
 export function mixState(h, vals) {
   let a = h[0], b = h[1];
   for (const v of vals) {
-    dv.setFloat64(0, v);
+    dv.setFloat64(0, v !== v ? NaN : v);
+    if (v !== v) { dv.setUint32(0, 0x7ff80000); dv.setUint32(4, 0); }   // canonical NaN (see hex)
     for (const w of [dv.getUint32(0), dv.getUint32(4)]) {
       a = Math.imul(a ^ w, 16777619) >>> 0;
       b = Math.imul(b ^ w, 0x5bd1e995) >>> 0; b = (b ^ (b >>> 15)) >>> 0;
