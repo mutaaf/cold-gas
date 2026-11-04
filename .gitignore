@@ -8,3 +8,5 @@ tests/balance/out/
 .claude/
 scripts/roads/.cache/
 audit-shots/
+# Lobby renders: reproducible from store/lobby.json + raw captures (lobby build)
+store/lobby/out/
