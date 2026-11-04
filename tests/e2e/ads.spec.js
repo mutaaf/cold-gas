@@ -64,6 +64,9 @@ test('no ad call fires during a run; postrun skips the first results; rewarded i
   await page.waitForTimeout(3500);   // past the moment the stand-in would have finished
   expect(await page.evaluate(() => window.__adPipe)).toEqual([{ start: 'title' }]);
   expect(late).toEqual([]);
+  // The rest is the breaks between runs, which don't need the tall title: back to the project's 1280×720 (on CI's software
+  // GL an upright iPad's frames are slow enough that Retry → live ran past 15 s, LESSONS 2026-11-03).
+  await page.setViewportSize({ width: 1280, height: 720 });
   await toResults(page);
   await expect(page.locator('[data-reroll]')).toBeVisible({ timeout: 45_000 });
   await page.keyboard.press('KeyR');
