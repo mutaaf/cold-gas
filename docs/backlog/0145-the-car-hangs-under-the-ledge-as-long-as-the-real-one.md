@@ -1,7 +1,7 @@
 ---
 id: 0145
 title: The car hangs still under the ledge as long as the real one did, and a hang is never a crash or a 26 m fall
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: authenticity

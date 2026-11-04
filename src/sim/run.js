@@ -52,9 +52,19 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // v27: the Show's judging pays for what the pilot decides (0121): precision read off the pad's rings, gas
 // full from 45 %, a safe clearance marked down less, and the panel's weight moved off the climb, the hang
 // and the roll-out (which Assist flies to 9.7–10 for everyone) onto the mark. Scores only; no physics.
-export const SIM_VERSION = 27;
+// v28: a fan-held hang on the ledge may last 20 s before it is a stall (0145), and a stalled car keeps its
+// fan in the aftermath. Runs that never sit still on the deck for 6 s (every reference) replay to the same bits.
+export const SIM_VERSION = 28;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
+// A car stopped on the deck ends the run `stalled` after STALL_TICKS: a climb that gave up. On the ledge
+// (from HANG_AT, the one-thumb pad's "on the ledge", src/onethumb.js tapAt), on its wheels with the fan pulling,
+// it is doing the reveal's own move: the official telemetry shows the car hanging inverted and still under
+// the ledge for ≈ 10 s (docs/REVEAL_RESEARCH.md §2.1, rows 24–30: pitch 170°, 67–69 ft, TELEMETRY). It may
+// stay there HANG_STALL_TICKS, twice that, well inside MAX_TICKS.
+export const STALL_TICKS = 240 * 6;
+export const HANG_STALL_TICKS = 240 * 20;
+export const HANG_AT = 0.92;
 export const G_WIN = 120;               // 0.5 s of ticks: the braking peak's averaging window
 
 // The input log's channels. v11 appended `manual` and v0..v9 (one per nozzle, NOZZLE_SPEC order).
@@ -321,6 +331,7 @@ function advance(run, input) {
   else run.flippedTicks = 0;
   if (run.flippedTicks > 120) t.flipped = true;
   run.offTicks = onDeck && speed < 0.5 ? run.offTicks + 1 : 0;
+  const hanging = run.offTicks > STALL_TICKS && c.grounded > 0 && c.fanForce > 0 && wallProgress(c.pos) >= HANG_AT;
 
   let end = '';
   // A non-finite state would poison the replay, the scorecard and the HUD. The integrator is built
@@ -332,7 +343,7 @@ function advance(run, input) {
   // (It waits out the 0.3 s wheel-sync window first: LAND sets down at 0.8 m/s, already under 1.2.)
   else if (run.phase === 'landed' && ((speed < 1.2 && run.tick - t.touchTick > 72) || run.tick - t.touchTick > 240 * 5) && (upv.y >= 0.25 || run.tick - t.touchTick > 240 * 5)) end = 'settled';
   else if (c.pos.z > COURSES[run.course].runout.zMax || c.pos.z < COURSES[run.course].runout.zMin) end = 'runout';
-  else if (run.offTicks > 240 * 6) end = 'stalled';
+  else if (run.offTicks > (hanging ? HANG_STALL_TICKS : STALL_TICKS)) end = 'stalled';
   else if (run.tick >= MAX_TICKS) end = 'timeout';
   else if (!wall && run.phase === 'drive' && lz > course.lineupEnd + 4 && c.grounded > 0) end = 'no-jump';
   if (end) finish(run, end);
@@ -370,6 +381,10 @@ export const AFTER_SPEED = 0.3;       // m/s
 export const AFTER_SPIN = 0.3;        // rad/s
 const AFTER_INPUT = newInput();
 AFTER_INPUT.assist = 0; AFTER_INPUT.manual = 1; AFTER_INPUT.brake = 1;
+// A stalled car didn't crash (0145): no crash sensor fired, so the fan stays armed and holds it where it
+// stopped, brakes on, as a driver who has given up would sit.
+const STALL_INPUT = newInput();
+STALL_INPUT.assist = 0; STALL_INPUT.manual = 1; STALL_INPUT.brake = 1; STALL_INPUT.fan = 1;
 
 // Arm a run for its aftermath before it ends: finish() then keeps its world.
 export function armAftermath(run) {
@@ -386,7 +401,7 @@ export function aftermathStep(run) {
   const c = run.car;
   if (c.world.freed || run.t.endReason === 'sim-fault') return endAftermath(run);
   if (a.startTick < 0) a.startTick = run.tick;
-  step(c, AFTER_INPUT);
+  step(c, run.t.endReason === 'stalled' ? STALL_INPUT : AFTER_INPUT);
   run.tick++; a.ticks++;
   if (run.tick % FRAME_EVERY === 0) recordFrame(run);
   if (!Number.isFinite(c.pos.x + c.pos.y + c.pos.z + c.vel.x + c.vel.y + c.vel.z + c.angVel.x + c.angVel.y + c.angVel.z)) return endAftermath(run);
