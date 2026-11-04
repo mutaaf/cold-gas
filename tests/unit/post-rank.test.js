@@ -45,4 +45,19 @@ describe('dryRank (0141)', () => {
     await vi.advanceTimersByTimeAsync(1001);
     expect(await p).toBeNull();
   });
+
+  it('a slow board is a cancel (AbortError), not a timeout failure; the caller can cancel it too (leaving the sheet)', async () => {
+    vi.useFakeTimers();
+    let reason = null;
+    globalThis.fetch = vi.fn((url, { signal }) => new Promise((_, reject) => signal.addEventListener('abort', () => { reason = signal.reason; reject(signal.reason); })));
+    const p = dryRank(run, { ms: 1000 });
+    await vi.advanceTimersByTimeAsync(1001);
+    expect(await p).toBeNull();
+    expect(reason?.name).toBe('AbortError');
+    const ctl = new AbortController();
+    const q = dryRank(run, { signal: ctl.signal });
+    ctl.abort();
+    expect(await q).toBeNull();
+    expect(vi.getTimerCount()).toBe(0);   // nothing outlives the call
+  });
 });

@@ -114,5 +114,6 @@ export function createPost({ ctx, onLeaveOpen = () => {}, onLeavePost = () => {}
     if (stored()) post();
     else { editing = true; sync(); input.focus({ preventScroll: true }); }
   });
-  return { sync, reset, post, confirmLeave, hideLeave, leaveOpen: () => !leave.hidden, unposted };
+  const cancelRank = () => { dryAbort?.abort(); dryAbort = null; };
+  return { sync, reset, post, confirmLeave, hideLeave, cancelRank, leaveOpen: () => !leave.hidden, unposted };
 }

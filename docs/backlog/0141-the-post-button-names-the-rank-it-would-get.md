@@ -38,3 +38,9 @@ assert the label, one dry request per run, and that Post still posts.
 
 ## Out of scope
 Showing the board on the results, seeding fake rows (never), changes to src/worker/.
+
+## Builder note 2026-11-04 (#242)
+Shipped as "Post · ABC · would be #N today" (the trailing "today" dropped at ≤ 360 px). The dry answer carries a
+rank but no row count, so "of 9" and "first on an empty board" (rank 1 either way) would need a second request
+(GET today's board) against this ticket's one call per run; left out. If the Critic wants the count, that is a
+follow-up (or a `count` in the dry answer, a src/worker/ change for the operator).
