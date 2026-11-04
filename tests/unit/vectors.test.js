@@ -48,6 +48,6 @@ describe('native vectors (0146)', () => {
   it('the manifest names every file with its hash', () => {
     const m = JSON.parse(disk('manifest.json'));
     expect(m.simVersion).toBe(SIM_VERSION);
-    expect(m.files.length).toBe(runList().length + 1);
+    expect(m.files.length).toBe(runList().length + 2);
   });
 });

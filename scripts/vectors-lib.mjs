@@ -8,6 +8,8 @@ import { createAutopilot } from '../src/sim/autopilot.js';
 import { newInput } from '../src/sim/vehicle.js';
 import { scoreRun } from '../src/sim/judge.js';
 import { dsin, dcos, datan, datan2, dacos, dhypot, dexp, dlog } from '../src/sim/dmath.js';
+import { RAPIER } from '../src/sim/engine.js';
+import { engineSpike } from './engine-spike.js';
 
 export const VECTOR_FORMAT = 1;
 export const VECTOR_DIR = 'ios/Packages/ColdGasCore/Tests/Vectors';
@@ -219,6 +221,8 @@ export function buildVectors({ only } = {}) {
   const dm = dmathVectors();
   files['dmath.json'] = '{"format":' + dm.format + ',"simVersion":' + dm.simVersion + ',"functions":[\n' +
     dm.functions.map((f) => `{"name":${JSON.stringify(f.name)},"args":${f.args},"cases":[\n` + f.cases.map((c) => JSON.stringify(c)).join(',\n') + '\n]}').join(',\n') + '\n]}\n';
+  // The engine on its own (scripts/engine-spike.js): native Rapier must give the WASM build's hash.
+  files['engine-spike.json'] = JSON.stringify({ format: VECTOR_FORMAT, steps: [240, 2400].map((n) => ({ steps: n, ...engineSpike(RAPIER, n) })) }) + '\n';
   for (const r of runList()) {
     if (only && !only.includes(r.name)) continue;
     files[`runs/${r.name}.json`] = stringifyRun(runVector(r.name, r.course, r.log()));

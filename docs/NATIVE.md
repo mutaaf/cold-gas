@@ -89,6 +89,34 @@ kin ported its pure TypeScript core line for line to C# for its Unity client. It
   - The core uses only Foundation, so `swift test` also runs **on Linux**. The cloud agents, which have no Xcode,
     can therefore keep both sides in step.
 
+### Verdict of the spike (0147, 2026-11-04): proceed with the Swift port
+
+Measured, not assumed:
+- **Native Rapier is bit-exact with the WASM build.** The scripts/engine-spike.js scene matches the WASM
+  hashes exactly through the C API: `ce2812cc` at 240 steps and `0ddfc5d3` at 2,400 steps, with the same car
+  position. It matches from a Rust port of the spike and from the Swift one on macOS arm64 and the iPhone Duo
+  simulator.
+  - The engine is rapier3d 0.36.0, the crate inside @dimforge/rapier3d-deterministic 0.21.0, built with the
+    same features as the WASM build: `enhanced-determinism`, `fem`, `serde-serialize`, `debug-render` and
+    `profiler`.
+  - Cargo.lock pins glam 0.33.10 and smallvec 1.16.2, the versions compiled into the WASM.
+- **`DMath.swift` is bit-exact with `src/sim/dmath.js`.** It matches on all 11 sets of 5,000 vectors (special
+  values included) on four platforms: macOS arm64, the iPhone Duo simulator, Linux arm64 and Linux x86_64.
+- **The compiler doesn't contract our arithmetic.** The release build's dmath kernels are 118 `fmul`, 102 `fadd`
+  and no `fmadd`. The only fused instructions (4 `fmsub`) are LLVM's lowering of
+  `truncatingRemainder(dividingBy: 4)`: `x − trunc(x/4)·4`, with a power-of-two divisor, so the product is exact
+  and the result is the same.
+- **Still open:**
+  - The physical-iPhone leg. Package tests can't run on a device without a host app, so 0148's app runs the
+    same vectors with `-selftest`.
+  - The 240-tick `vehicle.step` slice. It needs `vehicle.js` and `world.js` (≈2,100 lines) plus the engine's
+    contact and event API, so it's the first item of phase 1 (0150).
+- **Why it matched.** Every value crosses into the engine as the bindings take it: a JS number is rounded to
+  f32, and the bindings' own defaults are used, not Rust's. For example, a rigid body always gets
+  `additional_mass_properties` unless `mass_only`, and the TS collision groups `0xffffffff` unpack to
+  `0xffff/0xffff`. ios/Vendor/Rapier/src/lib.rs mirrors the TS layer call for call. Keep it that way as the API
+  grows.
+
 ### Porting rules (each one is a bug waiting to happen)
 
 | JS | Swift |
