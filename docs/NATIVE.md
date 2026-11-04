@@ -117,6 +117,12 @@ Measured, not assumed:
   `0xffff/0xffff`. ios/Vendor/Rapier/src/lib.rs mirrors the TS layer call for call. Keep it that way as the API
   grows.
 
+### On a real iPhone (0148, 2026-11-04)
+
+The app's `-selftest` runs the same vectors on the phone. On an iPhone 15 Pro Max (iOS 27.0.1) it printed
+`SELFTEST ok dmath 55000/55000 engine 240:ce2812cc=ce2812cc 2400:0ddfc5d3=0ddfc5d3`, bit-exact on hardware.
+That closes 0147's last leg.
+
 ### Porting rules (each one is a bug waiting to happen)
 
 | JS | Swift |
@@ -351,6 +357,22 @@ ios/
   - The first `xcodebuild` after `xcodegen generate` sometimes fails; run it again.
   - Simulator names repeat across runtimes, so use UDIDs.
   - Open the simulator with `open -b com.apple.iphonesimulator`.
+- **Learned building the spike (0148):**
+  - `devicectl device process launch` reads the app's arguments as its own flags: put them after `--`.
+  - The simulator can't build an `MTLBinaryArchive` ("Target device architecture is nil"), so the archive is
+    device-only.
+  - The app's stdout is block-buffered into a pipe: `setvbuf(stdout, nil, _IOLBF, 0)` at launch, or the scripts
+    see nothing.
+  - Killing `simctl launch --console` also ends the app, so take screenshots from a plain launch.
+  - The Duo simulator's inner display (`--display=primary-1`) is black while it's closed. The shots script drops
+    a black inner shot.
+  - The engine is arm64 only, so `EXCLUDED_ARCHS[sdk=iphonesimulator*] = x86_64`.
+- **Measured on the iPhone 15 Pro Max (-bench, the car on the stage):**
+  - 120 Hz held: 1,195 frames in 10 s, presentation p95 8.34 ms, 5 hitches.
+  - CPU 0.26 ms a frame.
+  - GPU 6.6 ms (p95 6.9) at the full 1290×2796 with 4× MSAA.
+  - The binary archive takes pipeline setup from 429 ms (first launch) to 22 ms, with 0 compiles after launch.
+  - The GPU number is the warning: the full stage needs MetalFX and the resolution governor (phase 2).
 - **Git:** one agent per checkout, and stage by path, never `git add -A`. It once swept four agent worktrees into a
   commit (fantasy-edge).
 
