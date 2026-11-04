@@ -1,12 +1,12 @@
 ---
 id: 0146
 title: npm run vectors writes the sim's golden traces the native port must match bit for bit
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-11-04
-pr:
+pr: 245
 by: operator
 ---
 
