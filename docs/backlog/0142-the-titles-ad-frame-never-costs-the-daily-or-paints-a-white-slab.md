@@ -82,8 +82,9 @@ of the frame. Some options for the Builder to measure:
   keeps the size it reports, so the ad inside sees a real slot, but no title element moves.
 - **No white slab.** The element's `color-scheme` is `light dark`, the same as the frame page's, so a light OS gets no
   opaque canvas. Forced to 90 px and visible under a light OS, the box measured mean luma 5, the same as the night behind it.
-- **Where the banner still shows:** only the upright iPad, 1024×1366. 390×844, 430×932, 768×1024, 1280×720, 1440×900 and
-  1920×1080 get no frame. This is because the title already lacks room there, not because of the ad.
+- **Where the banner still shows:** upright tablets, measured at 820×1180, 1024×1366, 800×1280, 720×1280 and 600×1200.
+  390×844, 430×932, 768×1024, 1280×720, 1440×900 and 1920×1080 get no frame. This is because the title already lacks room
+  there, not because of the ad.
 - **Not met as written, and out of this ticket's reach:** the 1440×900 bars ("no data-extra-fit", "streak shown"). With no
   ad at all, the desktop title already packs: fit 2 at 1440×900 and 1280×720, fit 1 at 1920×1080. At 1440×900 the
   eyebrow sits 109 px above the viewport at level 0. 430×932 and 414×896 are fit 1 with no ad too. At those sizes the

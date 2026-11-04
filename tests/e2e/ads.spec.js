@@ -50,8 +50,9 @@ test('no ad call fires during a run; postrun skips the first results; rewarded i
   page.on('requestfinished', (r) => { if (r.url().includes('ads.stand-in.example')) late.push(r.url()); });
   await page.route('**/ads/v1/frame.html?*', (r) => r.fulfill({ contentType: 'text/html', body: FRAME }));
   // 0142: the title places its banner only where it has room beside a whole Daily card; a 1280×720 title has none (it
-  // packs without an ad), so the frame's cut is tested on a tall screen, where the banner shows.
-  await page.setViewportSize({ width: 1024, height: 1366 });
+  // packs without an ad), so the frame's cut is tested on an upright iPad (820×1180), where the banner shows.
+  await page.setViewportSize({ width: 820, height: 1180 });
+  await page.clock.setFixedTime(new Date('2026-11-15T15:00:00Z'));   // the Daily's words (and so the title's room) fixed
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   // (Armed once the backdrop and the judges' chunk have settled, then the 4 s dwell.)
@@ -161,7 +162,9 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     await adPage(p, '/coldgas/?gfx=low&marquee=1');
     await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
     // The loader goes in on the title, at idle; Jump at once, before its config resolves.
-    await p.waitForFunction(() => window.__adLog.some((e) => e.what === 'loader'), null, { timeout: 15_000 });
+    // (Armed once the backdrop and the judges' chunk settle, which main.js caps at 20 s: a 15 s wait ran out on CI's e2e
+    // 1/4 twice, with the upright-iPad pages of other tests loading the runner.)
+    await p.waitForFunction(() => window.__adLog.some((e) => e.what === 'loader'), null, { timeout: 45_000 });
     await p.evaluate(() => window.__coldgas.startRun('jump'));
     await p.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live');
     await p.waitForTimeout(2500);   // the config resolves in the run
@@ -181,7 +184,9 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
     await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
     await p.waitForFunction(() => window.__coldgas.S.mode === 'countdown' || window.__coldgas.S.mode === 'live', null, { timeout: 30_000 });
     await toResults(p);
-    await p.waitForFunction(() => window.__adLog.some((e) => e.what === 'loader'), null, { timeout: 15_000 });
+    // (Armed once the backdrop and the judges' chunk settle, which main.js caps at 20 s: a 15 s wait ran out on CI's e2e
+    // 1/4 twice, with the upright-iPad pages of other tests loading the runner.)
+    await p.waitForFunction(() => window.__adLog.some((e) => e.what === 'loader'), null, { timeout: 45_000 });
     await p.waitForTimeout(2000);   // the config resolves on the results: the title's slot stays out
     await expect(p.locator('[data-marquee-frame="title"]')).toHaveCount(0);
     const log = await p.evaluate(() => window.__adLog);
@@ -195,7 +200,7 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
   // stand-in frame reports 90 px from an empty, reserved unit (as Google's lazy unit does before it decides): it stays out of the
   // flow and hidden; then the test draws a sponsor's image into it (same origin) and the banner shows, the Daily whole.
   // Fresh pages from fresh contexts, as above (the file keeps its test count).
-  for (const view of [{ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, { viewport: { width: 1024, height: 1366 }, hasTouch: true, isMobile: true }]) {
+  for (const view of [{ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true }, { viewport: { width: 820, height: 1180 }, hasTouch: true, isMobile: true }]) {
     const w = view.viewport.width;
     const ctx = await browser.newContext({ baseURL, ...view, colorScheme: 'light' });
     const p = await ctx.newPage();
@@ -245,7 +250,9 @@ test('no loader on a local preview; with ?marquee= (0117) the loader and the tit
       img.src = 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7';
       d.querySelector('[data-marquee]').appendChild(img);
     });
-    await expect.poll(() => frame.evaluate((e) => [e.offsetHeight, getComputedStyle(e).visibility, getComputedStyle(e).position])).toEqual([90, 'visible', 'static']);
+    // (The image's load and Chromium's mutation delivery under CI's load: 30 s, not expect.poll's 5 s.)
+    await expect.poll(() => frame.evaluate((e) => [e.offsetHeight, getComputedStyle(e).visibility, getComputedStyle(e).position]), { timeout: 30_000 })
+      .toEqual([90, 'visible', 'static']);
     await whole('filled frame');
     await ctx.close();
   }
