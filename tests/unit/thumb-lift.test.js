@@ -1,8 +1,8 @@
 // 0140: on one thumb, a thumb off the pad during the roll-out never throws the car long. The thumb holds
 // from the tap (as 0139 tells it), then flinches off N ticks later. Before 0140, lifting it mid-roll left
 // LAND's roll-out half done: the rate loop stopped the car on its side, the down-jets braking the roll
-// pushed it sideways, and it landed up to 21 m off the mark, 17 m over the roofs. Now a roll-out the
-// thumb started is finished, and once roof up the fall is Assist's auto-land (an early lift's flight).
+// pushed it sideways, and it landed up to 21 m off the mark, 17 m over the roofs; lifted in the set-down,
+// the auto-land never armed and it dropped at 6–7 m/s. Now LAND, once held in a flight, stays on to the ground.
 import { describe, it, expect } from 'vitest';
 import { createRun, stepRun, simulate } from '../../src/sim/run.js';
 import { newInput } from '../../src/sim/vehicle.js';
@@ -30,27 +30,31 @@ function flyLift(lift, repress = -1) {
   }
   return run;
 }
-const sound = (f) => { expect(f.crashed).toBe(false); expect(f.contact).toBe(false); };
+// Soft and judged soft: the touchdown is LAND's (sink ≤ 1.5 m/s), never a "Rough landing".
+const sound = (s, at) => {
+  expect(s.facts.crashed, at).toBe(false); expect(s.facts.contact, at).toBe(false);
+  expect(s.facts.sink, at).toBeLessThanOrEqual(1.5); expect(s.verdict, at).not.toMatch(/rough/i);
+};
 
 describe('a thumb off the pad in the roll-out (0140)', () => {
-  it('lifted 24–720 ticks after the tap, never pressed again: every flight lands ≤ 8 m from the mark, ≤ 6 m over the roofs, and neighbours agree within 3 m', () => {
+  it('lifted 24 ticks after the tap up to the touchdown (≈ 1300), never pressed again: every flight lands soft, ≤ 8 m from the mark, ≤ 6 m over the roofs, and neighbours agree within 3 m', () => {
     let prev = null;
-    for (let lift = 24; lift <= 720; lift += 24) {
-      const f = scoreRun(flyLift(lift).t).facts;
-      sound(f);
+    for (let lift = 24; lift <= 1296; lift += 24) {
+      const s = scoreRun(flyLift(lift).t), f = s.facts;
+      sound(s, `lift at ${lift}`);
       expect(f.padMiss, `lift at ${lift}`).toBeLessThanOrEqual(8);
       expect(f.clearance, `lift at ${lift}`).toBeGreaterThan(0);
       expect(f.clearance, `lift at ${lift}`).toBeLessThanOrEqual(6);
       if (prev !== null) expect(Math.abs(f.padMiss - prev), `lift at ${lift}`).toBeLessThanOrEqual(3);
       prev = f.padMiss;
     }
-  }, 60000);
+  }, 120000);
 
   it('pressed again 0.25–2 s after the lift, LAND takes over from where the car is: every flight lands ≤ 8 m from the mark', () => {
-    for (const repress of [60, 120, 240, 480]) {
-      for (let lift = 24; lift <= 720; lift += 48) {
-        const f = scoreRun(flyLift(lift, repress).t).facts;
-        sound(f);
+    for (const repress of [60, 240, 480]) {
+      for (let lift = 24; lift <= 720; lift += 24) {
+        const s = scoreRun(flyLift(lift, repress).t), f = s.facts;
+        sound(s, `lift at ${lift}, back on ${repress} later`);
         expect(f.padMiss, `lift at ${lift}, back on ${repress} later`).toBeLessThanOrEqual(8);
       }
     }

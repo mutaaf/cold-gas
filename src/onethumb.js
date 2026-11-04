@@ -50,8 +50,6 @@ const uw = { x: 0, y: 0, z: 0 }, fw = { x: 0, y: 0, z: 0 };
 // far edge by ROW_MARGIN, and either further on or still carrying away from it. Pitched back over the
 // last car it would set down on its roof.
 const ROW_MARGIN = 2.5;
-// Roof up enough that LAND's roll-out is done (its bang-bang roll ends at cos 20°, vehicle.js UPPER_ROLL).
-const UPRIGHT = 0.94;
 // Sideways m/s² for a full roll command (measured ≈ 5 m/s² under the brake's lift in scripts/human-phone.mjs
 // traces; 6 to err wide) and the flank check's look-ahead: does the car, carrying on as it is (falling at
 // least as fast as now: LAND only slows it, so this errs low) plus the slide's push, come in over a
@@ -106,6 +104,8 @@ export function createOneThumb() {
     // the next tick hasn't read yet. The pad shows "Letting go" from either, on the frame of the tap.
     get driving() { return st.drive; },
     get pending() { return st.pressed; },
+    // 0140: LAND is on for this flight (the thumb held it once), whether or not the thumb is down now.
+    get landing() { return st.landing; },
     // The slide as the pad draws it: -1..1 each way, 0 inside the dead zone.
     get aim() { aim.x = shape(st.ax); aim.y = shape(st.ay); return aim; },
     // Whether the last tick could aim (held, in the air, roof up, high enough, the row allowing).
@@ -142,17 +142,17 @@ export function createOneThumb() {
           if (-c.vel.z >= THUMB.carry) st.carried = true;
           else out.thrust = 1;
         }
-        // 0140: a roll-out the thumb started is finished, thumb or no thumb. Lifted mid-roll, the rate
-        // loop stopped the car on its side, the down-jets braking the roll pushed it sideways, and it
-        // landed up to 21 m off the mark. Once roof up, a lifted thumb leaves the fall to Assist's
-        // auto-land (the early lift's flight); a press takes LAND and the aim back from there.
-        up(c, uw);
+        // 0140: once the thumb has held LAND in this flight, LAND stays on to the ground, thumb or no
+        // thumb: a flinch costs the slide, never the landing. Lifted mid-roll, the rate loop stopped the
+        // car on its side, the down-jets braking the roll pushed it sideways, and it landed up to 21 m
+        // off the mark; lifted in the set-down, the auto-land never armed (the fall was too short) and
+        // it dropped at 6–7 m/s. A press takes the aim back from where the car is.
         if (st.held) st.landing = true;
-        else if (st.landing && uw.y > UPRIGHT) st.landing = false;
         if (st.landing) out.level = 1;
         if (st.held) {
           // AIM: only roof up (a roll command upside down would stop LAND's roll-out), faded out over
           // the set-down; on the Show along the run only once the row is well behind.
+          up(c, uw);
           const h = c.pos.y - SPEC.comHeight;
           const k = Math.max(0, Math.min(1, (h - THUMB.aimFloor) / THUMB.aimFade));
           if (uw.y > 0.94 && k > 0) {

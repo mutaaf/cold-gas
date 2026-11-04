@@ -1063,7 +1063,8 @@ function syncThumb(run, c) {
     thumbLast.word = word;
   }
   // Not holding while the descent leaves green: the pad asks for the thumb (amber, a pulse).
-  const warn = stage_ === 'fly' && !held && landing.status() !== 'green';
+  // 0140: not once the thumb has held LAND this flight (LAND stays on to the ground; a press only aims).
+  const warn = stage_ === 'fly' && !held && !thumb.landing && landing.status() !== 'green';
   if (warn !== thumbLast.warn) { thumbPad.toggleAttribute('data-warn', warn); thumbLast.warn = warn; }
   // The ring: how far up the curl; in the air, how far down to the ground.
   const k = stage_ === 'climb' || stage_ === 'ledge' ? (run.phase === 'ramp' ? wallProgress(c.pos) : 0)
@@ -1222,7 +1223,7 @@ function thumbCues(run, c, v) {
   if (run.phase === 'ramp' && !S.released) return ui.cue_(run.t.progress >= 0.92 ? 'On the ledge · tap to let go' : 'Up the curl on suction', 600);
   if (run.phase === 'air' || S.released) {
     if (run.course === 'show' && !run.t.crossedRow && c.pos.z > COURSES.show.rowNear) return ui.cue_('Carrying you over the row', 500);
-    if (!held && c.autoLand) return ui.cue_('Auto-land · braking for you', 500);
+    if (!held && (c.autoLand || thumb.landing)) return ui.cue_('Auto-land · braking for you', 500);
     if (!held) return ui.cue_('Hold to land: it rolls you out and brakes', 500);
   }
 }
