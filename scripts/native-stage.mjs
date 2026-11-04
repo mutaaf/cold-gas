@@ -39,6 +39,8 @@ try {
     const manifest = {
       course: out.course, note: out.generated, look: out.look, lights: out.lights,
       static: bin('static', out.static), roadster: bin('roadster', out.roadster),
+      wheels: out.wheels.map((w) => ({ index: w.index, x: w.x, z: w.z, baseY: w.baseY, steers: w.steers,
+        steerPart: bin(`wheel-${w.index}-steer`, w.steerPart), spinPart: bin(`wheel-${w.index}-spin`, w.spinPart) })),
       parked: out.parked.map((p, i) => ({ home: p.home, ...bin(`parked-${i}`, p.mesh) })),
       textures: out.textures.map((t) => {
         if (t.url) writeFileSync(`${dir}/${t.id}.png`, Buffer.from(t.url.split(',')[1], 'base64'));
@@ -48,7 +50,7 @@ try {
     };
     writeFileSync(`${dir}/stage.json`, JSON.stringify(manifest, null, 1) + '\n');
     const tris = (m) => m.submeshes.reduce((a, s) => a + s.indexCount / 3, 0);
-    console.log(`native-stage: ${id}: static ${tris(manifest.static)} tris / ${manifest.static.submeshes.length} materials, ${manifest.parked.length} parked (${manifest.parked.map((p) => tris(p)).join(', ')} tris), roadster ${tris(manifest.roadster)}, ${manifest.lights.length} lights, ${manifest.textures.length} textures`);
+    console.log(`native-stage: ${id}: static ${tris(manifest.static)} tris / ${manifest.static.submeshes.length} materials, ${manifest.parked.length} parked (${manifest.parked.map((p) => tris(p)).join(', ')} tris), roadster ${tris(manifest.roadster)} + wheels ${manifest.wheels.map((w) => tris(w.steerPart) + tris(w.spinPart)).join('/')}, ${manifest.lights.length} lights, ${manifest.textures.length} textures`);
   }
 } finally {
   await browser.close();

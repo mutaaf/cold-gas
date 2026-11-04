@@ -14,8 +14,11 @@ final class Director {
         // Wider and higher while airborne (the arc over the row), closer on the ground.
         let air: Float = phase == 2 ? 1 : 0
         let side: Float = 15 + 7 * air + 0.35 * max(0, car.y - 2)
-        let wantEye = SIMD3<Float>(side, 2.2 + car.y * 0.55 + 2 * air, car.z - 3)
-        let wantLook = SIMD3<Float>(0, max(0.8, car.y * 0.85), car.z - 1.5)
+        var wantEye = SIMD3<Float>(side, 2.2 + car.y * 0.55 + 2 * air, car.z - 3)
+        var wantLook = SIMD3<Float>(0, max(0.8, car.y * 0.85), car.z - 1.5)
+        if Launch.value("-cam") == "close" {   // debug: 5 m beside the car at its height (wheels, suspension, contacts)
+            wantEye = car + SIMD3(5.5, 0.4, -1.2); wantLook = car + SIMD3(0, -0.1, 0)
+        }
         if last == t && ev == .zero && lv == .zero && eye.x == 18 { eye = wantEye; look = wantLook }
         spring(&eye, &ev, wantEye, 2.4, dt)
         spring(&look, &lv, wantLook, 3.2, dt)

@@ -18,6 +18,9 @@ struct StageMaterial {
 }
 struct StageSubmesh { let material: StageMaterial; let renderOrder: Int; let vertexStart, vertexCount, indexStart, indexCount: Int }
 struct StageMesh { let vertices: MTLBuffer; let indices: MTLBuffer; let submeshes: [StageSubmesh] }
+/// A roadster wheel (main.js syncCar): its pivot at (x, wheelCenterY(compression), z) in the car's ground frame, turned by
+/// the steer on the fronts; the spinning part also turned by the wheel's spin about its axle (x).
+struct StageWheel { let index: Int; let x, z: Float; let steers: Bool; let steerPart, spinPart: StageMesh }
 struct StageLight { let kind: String; let color: SIMD3<Float>; let intensity: Float; let position: SIMD3<Float>; let target: SIMD3<Float>?; let distance, decay, angle, penumbra: Float }
 struct StageTexture { let texture: MTLTexture?; let repeatUV: SIMD2<Float>; let offset: SIMD2<Float> }
 
@@ -25,6 +28,7 @@ final class Stage {
     let course: String
     let staticMesh: StageMesh, roadster: StageMesh
     let parked: [StageMesh]
+    let wheels: [StageWheel]
     let lights: [StageLight]
     let textures: [StageTexture]
     let exposure: Float
@@ -81,6 +85,11 @@ final class Stage {
         guard let st = j["static"] as? [String: Any], let s = mesh(st), let rd = j["roadster"] as? [String: Any], let r = mesh(rd) else { return nil }
         staticMesh = s; roadster = r
         parked = (j["parked"] as? [[String: Any]] ?? []).compactMap(mesh)
+        wheels = (j["wheels"] as? [[String: Any]] ?? []).compactMap { w in
+            guard let sp = w["steerPart"] as? [String: Any], let st = mesh(sp), let pp = w["spinPart"] as? [String: Any], let pm = mesh(pp) else { return nil }
+            return StageWheel(index: w["index"] as? Int ?? 0, x: (w["x"] as? NSNumber)?.floatValue ?? 0, z: (w["z"] as? NSNumber)?.floatValue ?? 0,
+                              steers: w["steers"] as? Bool ?? false, steerPart: st, spinPart: pm)
+        }
         lights = (j["lights"] as? [[String: Any]] ?? []).map { l in
             func v(_ k: String) -> SIMD3<Float>? { (l[k] as? [Double]).map { SIMD3(Float($0[0]), Float($0[1]), Float($0[2])) } }
             func f(_ k: String) -> Float { (l[k] as? NSNumber)?.floatValue ?? 0 }

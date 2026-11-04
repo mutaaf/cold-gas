@@ -15,6 +15,7 @@ import QuartzCore
 import UIKit
 import simd
 import ColdGasCore
+import ColdGasPhysics
 
 struct FrameU {
     var viewProj = matrix_identity_float4x4, lightViewProj = matrix_identity_float4x4
@@ -126,7 +127,7 @@ final class Renderer {
             u.effect = SIMD4(M.effectColor, M.effectPower); u.effectKind = SIMD4(M.effect, M.alphaMap != nil ? 1 : 0, 0, 0)
             return u
         } }
-        stageMats = [mats(st.staticMesh), mats(st.roadster)] + st.parked.map(mats)
+        stageMats = [mats(st.staticMesh), mats(st.roadster)] + st.parked.map(mats) + st.wheels.flatMap { [mats($0.steerPart), mats($0.spinPart)] }
         launchCompileMs = (CACurrentMediaTime() - t0) * 1000
         applyThermal()
     }
@@ -231,6 +232,7 @@ final class Renderer {
             drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: true, shadow: true)
             parkedDraw(e, t: t, shadow: true)
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true, shadow: true)
+            wheelsDraw(e, carM: carM, t: t, opaqueOnly: true, shadow: true)
             e.endEncoding()
         }
         cut("shadow")
@@ -248,6 +250,7 @@ final class Renderer {
             if !skip.contains("static") { drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: true) }
             if !skip.contains("parked") { parkedDraw(e, t: t, shadow: false) }
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true)
+            wheelsDraw(e, carM: carM, t: t, opaqueOnly: true, shadow: false)
             if !skip.contains("translucent") {
                 drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: false)
                 drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: false)
@@ -290,6 +293,23 @@ final class Renderer {
             g.signal()
         }
         cmd.commit()
+    }
+
+    /// The wheels, as main.js syncCar places them: pivot y = wheelCenterY(compression) (ANCHOR_Y − restLen + c), the fronts
+    /// turned by the steer, the spinning part turned about its axle by the wheel's spin.
+    private func wheelsDraw(_ e: MTLRenderCommandEncoder, carM: simd_float4x4, t: Double, opaqueOnly: Bool, shadow: Bool) {
+        let anchors = wheelAnchors()
+        for w in stage.wheels {
+            var comp: Float = Float(CAR.restLen - CAR.mountToCentre), spin: Float = 0, steer: Float = 0
+            if let r = replay { let ws = r.wheel(w.index, at: t.truncatingRemainder(dividingBy: r.seconds + 2)); comp = ws.comp; spin = ws.spin; steer = w.steers ? ws.steer : 0 }
+            let anchorY = Float(anchors[w.index].1 + SPEC.comHeight)
+            let y = anchorY - Float(CAR.restLen) + comp
+            let pivot = carM * translate(SIMD3(w.x, y, w.z)) * simd_float4x4(simd_quatf(angle: steer, axis: [0, 1, 0]))
+            let spinM = pivot * simd_float4x4(simd_quatf(angle: spin, axis: [1, 0, 0]))
+            let base = 2 + stage.parked.count + w.index * 2
+            drawMesh(e, w.steerPart, matsIndex: base, model: pivot, opaqueOnly: opaqueOnly, shadow: shadow)
+            drawMesh(e, w.spinPart, matsIndex: base + 1, model: spinM, opaqueOnly: opaqueOnly, shadow: shadow)
+        }
     }
 
     private func parkedDraw(_ e: MTLRenderCommandEncoder, t: Double, shadow: Bool) {

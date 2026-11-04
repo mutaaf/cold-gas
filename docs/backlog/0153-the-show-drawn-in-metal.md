@@ -36,6 +36,18 @@ Runs on: the operator's Mac (Xcode, Metal). docs/NATIVE.md §4.
       the landing exist; the side-by-side with the web doesn't yet.
 - [x] The thermal state and Low Power Mode cap the render scale (the governor steps pixels, not the frame rate).
 
+Every per-tick detail the web draws, from the sim's state (the owner, 2026-11-04: "all the little details like wheels
+spinning, physics and impact to environment need to be carefully addressed"). Each is checked in a shot or a recording:
+- [x] Wheels: spin from `wheels[i].spin`, the fronts' steer, suspension travel at `wheelCenterY(compression)`
+      (main.js syncCar). The roadster is exported as a body plus four wheels, each split into a steering part and a
+      spinning part.
+- [x] The parked row shoved, tipped or rolled as the sim moves it (posed per tick).
+- [ ] Impacts on the environment from `run.impacts`, as src/render/crash.js and debris.js draw them: sparks, chips,
+      dust, dents from each probe's crush, torn-off parts, lamps and hazards, shake, slow-mo, the crash cut.
+- [ ] The car's states as roadster.js shows them: brake lamps, wing and aero, skirts and fan, wake.
+- [ ] The plumes' shock diamonds and condensation mist (plumes.js); the first cut is a soft cone per firing nozzle.
+- [ ] The searchlights' sweep (wall.js update) and contact shadows under every body.
+
 Done so far:
 - The stage exported from the web's builders, with the real canvas textures. One web change: `scene.js` exports
   `COURSE_BUILDERS`.

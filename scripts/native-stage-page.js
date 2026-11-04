@@ -143,16 +143,29 @@ export async function exportCourse(id) {
     lights.push(L);
   });
   const stat = bake(group, textures, (o) => row && (o === row || row.children.some((c) => { let p = o; while (p) { if (p === c) return true; p = p.parent; } return false; })));
+  // The roadster: the body, and each wheel as two parts in its pivot's frame (main.js syncCar drives them: the pivot at
+  // wheelCenterY(compression), turned by the steer on the fronts; the `spin` group about its axle by the wheel's spin).
   const car = makeRoadster();
   const carRoot = car.root ?? car.group ?? car;
-  const roadster = bake(carRoot.isObject3D ? carRoot : car.object, textures);
+  const rootObj = carRoot.isObject3D ? carRoot : car.object;
+  const pivots = new Set(car.wheels.map((w) => w.pivot));
+  const underPivot = (o) => { for (let p = o; p; p = p.parent) if (pivots.has(p)) return true; return false; };
+  const roadster = bake(rootObj, textures, underPivot);
+  const wheels = car.wheels.map((w, i) => {
+    const pos = w.pivot.position.clone(), rot = w.pivot.rotation.clone(), parent = w.pivot.parent;
+    parent.remove(w.pivot); w.pivot.position.set(0, 0, 0); w.pivot.rotation.set(0, 0, 0); w.pivot.updateMatrixWorld(true);
+    const steerPart = bake(w.pivot, textures, (o) => { for (let p = o; p; p = p.parent) if (p === w.spin) return true; return false; });
+    const spinPart = bake(w.spin, textures);
+    w.pivot.position.copy(pos); w.pivot.rotation.copy(rot); parent.add(w.pivot);
+    return { index: i, x: pos.x, z: pos.z, baseY: w.baseY, steers: i < 2, steerPart, spinPart };
+  });
   const L = look.look || {};
   return {
     course: id, generated: 'scripts/native-stage.mjs from src/render (scene.js COURSE_BUILDERS, roadster.js). Never edit by hand.',
     look: { exposure: L.exposure ?? 1, bloom: L.bloom ?? null, fog: L.fog ? { color: L.fog.color.toArray(), near: L.fog.near, far: L.fog.far } : null,
       keyLight: look.keyLight ? { color: new THREE.Color(look.keyLight.color).toArray(), intensity: look.keyLight.intensity, offset: look.keyLight.offset.toArray() } : null,
       glows: (look.glows || []).map((g) => ({ pos: g.pos.toArray(), color: g.color.toArray(), radius: g.radius })) },
-    static: stat, parked, roadster, lights,
+    static: stat, parked, roadster, wheels, lights,
     textures: [...textures.values()],
   };
 }
