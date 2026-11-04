@@ -123,6 +123,38 @@ The app's `-selftest` runs the same vectors on the phone. On an iPhone 15 Pro Ma
 `SELFTEST ok dmath 55000/55000 engine 240:ce2812cc=ce2812cc 2400:0ddfc5d3=0ddfc5d3`, bit-exact on hardware.
 That closes 0147's last leg.
 
+### Phase 1: the Swift sim is the JS sim (0150, 2026-11-04)
+
+`ColdGasPhysics` holds the sim and the scorer for the three scored courses: `World`, `Vehicle`, `Run` and `Judge`, plus
+the launch complex and the static fire. It replays **all 52 run vectors bit for bit**: every 24-tick state hash, every
+full state, the final hash, the telemetry and `scoreRun`'s card.
+- **Where it runs:** macOS (debug and `-O`), the iPhone Duo simulator, and an iPhone 15 Pro Max with a Release build
+  (`-selftest`: `runs 52/52`).
+- **Speed:** on the phone the reference Show flies in 59 ms, about 17 µs a tick, roughly 0.4 % of one core at 240 Hz.
+- **Allocations:** an optimised build allocates nothing per tick (`make alloc`). Free flight shows 2 one-off blocks in
+  960 ticks.
+
+What it took (keep it so as the C API grows):
+- **The bindings' exact calls, not Rust's defaults.** The divergence that held five vectors back was
+  `rbSetRotation`: the TS bindings normalise every quaternion they're given (and ignore a zero one). Passing it raw
+  differed by an ulp in the gyroscopic step. Every call in ios/Vendor/Rapier/src/lib.rs mirrors its `raw*` twin in
+  bindings/typescript/src at rapier v0.36.0. Read the twin before adding a call.
+- **The WASM's arithmetic, not the platform's.** Three changes make native compute what the WASM computes. None of
+  the 52 vectors happened to need them; they close ways the two could part:
+  - `wide` is patched to its scalar fallback. On NEON, `mul_add` fuses; the WASM has no SIMD and doesn't
+    (Vendor/Rapier/patches/wide).
+  - glam runs with `scalar-math`.
+  - The engine's libm calls go to Rust's `libm`, as std's do on wasm32 (src/libm_shim.rs; rapier.sh fails if a new
+    one reaches the system's).
+- **One sim per process at a time.** The module's scratch (`roofBelow`, `hitN`…) is global, as the JS module's is.
+  The tests run `--no-parallel`; the app runs the sim on one thread.
+- **Allocation checks run optimised.** At `-Onone` Swift boxes values the optimiser keeps in registers.
+- **Hunting a divergence:**
+  1. `node scripts/native-engine-trace.mjs <run> a b`, then `CG_TRACE="<run> a b" swift test --filter TraceDebug`.
+  2. Diff the engine's inputs and outputs per tick.
+  3. Compare engine outputs, not just the car's state: the engine's answer is only used while the hull touches
+     something, so it can drift unseen before then.
+
 ### Porting rules (each one is a bug waiting to happen)
 
 | JS | Swift |
@@ -398,7 +430,7 @@ ios/
 | # | Phase | Gate |
 |---|---|---|
 | 0 | **Spike** (0146 vectors, 0147 determinism, 0148 first frame) | `dmath` and one `vehicle.step` slice bit-identical on macOS, Linux and an iPhone; native Rapier matches the WASM build over the vectors; the exported roadster draws at 120 Hz on the Duo simulator |
-| 1 | **Core** | All of the sim plus the scorer in Swift; every vector bit-exact; 32 of 32 naive players land; 0 B/tick |
+| 1 | **Core** ✅ (0150) | All of the sim plus the scorer in Swift; every vector bit-exact; 32 of 32 naive players land; 0 B/tick |
 | 2 | **The Show drawn** | Course, car, plumes, mist, director; binary archive (no compile in a run); the governor; p95 ≤ 8.3 ms on the simulator bench |
 | 3 | **Playable + haptics** (0149) | Touch (one-thumb, classic), tilt, pad, keyboard; the HUD; audio; the full haptic track; a newcomer lands on Assist |
 | 4 | **Results** | Judges streaming, the theatre, the receipt, the board (post with telemetry), medals, the daily jump, challenge payloads, share |

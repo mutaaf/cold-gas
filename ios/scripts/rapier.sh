@@ -10,6 +10,15 @@ export IPHONEOS_DEPLOYMENT_TARGET=18.0 MACOSX_DEPLOYMENT_TARGET=14.0
 for t in aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim; do
   cargo build --locked --release --target "$t" --lib
 done
+# No libm call may reach the system's libm: src/libm_shim.rs defines every one the engine makes (0150).
+LIBM='^_(a?sin|a?cos|a?tan|atan2|exp|log|pow|hypot|cbrt|sinh|cosh|tanh|fmod|exp2|log2|log10|expm1|log1p|__sincos)f?(_stret)?$'
+for t in aarch64-apple-darwin aarch64-apple-ios aarch64-apple-ios-sim; do
+  a="target/$t/release/libcoldgas_rapier.a"
+  defined=$( { nm -g "$a" 2>/dev/null || true; } | awk '$2 == "T" { print $3 }' | sort -u)
+  wanted=$( { nm -u "$a" 2>/dev/null || true; } | { grep -E "$LIBM" || true; } | sort -u)
+  stray=$(comm -23 <(echo "$wanted") <(echo "$defined") | { grep . || true; })
+  [ -z "$stray" ] || { echo "rapier.sh: $t calls the system's libm for: $stray (add it to src/libm_shim.rs)"; exit 1; }
+done
 out=../../Packages/ColdGasCore/CRapier.xcframework
 rm -rf "$out"
 xcodebuild -create-xcframework \

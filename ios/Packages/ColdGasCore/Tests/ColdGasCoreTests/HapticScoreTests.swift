@@ -78,6 +78,9 @@ struct HapticScoreTests {
     }
     #if canImport(Darwin)
     @Test func stepAllocatesNothing() {
+        #if DEBUG
+        return   // only meaningful optimised: -Onone boxes values the optimiser keeps in registers (`make alloc`)
+        #endif
         let f = feed("crash-show-carry5")
         var s = HapticScore(course: f.course)
         var n = 0

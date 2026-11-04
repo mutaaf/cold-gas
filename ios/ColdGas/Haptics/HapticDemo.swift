@@ -1,10 +1,11 @@
-// `-haptics demo [show|crash|wall|lineup]`: the JS sim's own flights (Tests/Vectors/haptics/*.json) played through
-// HapticScore and Core Haptics in real time, 240 ticks a second, looping with a pause. Feel the run on a phone before
-// the Swift sim lands (0149): the climb's rumble, the release, the hiss softening, the silent apex, four wheels
-// touching, the crash. Add `-haptics-log` to print the track (the simulator can't play haptics).
+// `-haptics demo [show|crash|wall|lineup]`: a reference flight's input log flown by the Swift sim (0150, bit-exact with
+// the web), its HapticScore track played through Core Haptics in real time, 240 ticks a second, looping with a pause:
+// the climb's rumble, the release, the hiss softening, the silent apex, four wheels touching, the crash.
+// Add `-haptics-log` to print the track (the simulator can't play haptics).
 import QuartzCore
 import UIKit
 import ColdGasCore
+import ColdGasPhysics
 
 final class HapticDemo {
     static var running: HapticDemo?
@@ -19,10 +20,14 @@ final class HapticDemo {
         guard let i = Launch.args.firstIndex(of: "-haptics"), i + 1 < Launch.args.count, Launch.args[i + 1] == "demo" else { return }
         let which = (i + 2 < Launch.args.count && !Launch.args[i + 2].hasPrefix("-")) ? Launch.args[i + 2] : "show"
         let file = ["show": "ref-show", "crash": "crash-show-carry5", "wall": "ref-wall", "lineup": "ref-lineup"][which] ?? "ref-show"
-        guard let url = Bundle.main.url(forResource: file, withExtension: "json", subdirectory: "haptics"),
-              let data = try? Data(contentsOf: url), let feed = HapticFeed.load(data) else { print("HAPTIC no feed \(file)"); return }
-        running = HapticDemo(course: feed.course, ticks: feed.ticks)
-        print("HAPTIC demo \(file): \(feed.ticks.count) ticks, engine \(HapticPlayer.shared.supported ? "on" : "unavailable (logging)") level \(HapticPlayer.shared.level.rawValue)")
+        guard let url = Bundle.main.url(forResource: file, withExtension: "json", subdirectory: "runs"),
+              let data = try? Data(contentsOf: url), let j = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let course = j["course"] as? String, let log = j["log"] as? [[NSNumber]] else { print("HAPTIC no run \(file)"); return }
+        let t0 = CACurrentMediaTime()
+        guard let flown = try? simulateWithFeed(log.map { $0.map(\.intValue) }, course) else { print("HAPTIC the sim stopped"); return }
+        running = HapticDemo(course: course, ticks: flown.feed)
+        print(String(format: "HAPTIC demo %@: %d ticks flown by the Swift sim in %.0f ms, score %.1f, engine %@ level %@", file, flown.feed.count,
+                     (CACurrentMediaTime() - t0) * 1000, scoreRun(flown.run.t).total, HapticPlayer.shared.supported ? "on" : "unavailable (logging)", HapticPlayer.shared.level.rawValue))
     }
 
     private init(course: String, ticks: [HapticFeed]) {

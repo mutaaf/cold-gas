@@ -30,8 +30,12 @@ targets:
         buildPhase: resources
       - path: Packages/ColdGasCore/Tests/Vectors/engine-spike.json
         buildPhase: resources
-      # The JS sim's haptic feeds, for `-haptics demo` (0149).
+      # The JS sim's haptic feeds (0149) and run vectors (0150): -selftest replays the runs through the Swift sim on the
+      # device; -haptics demo flies them through it and plays the track.
       - path: Packages/ColdGasCore/Tests/Vectors/haptics
+        type: folder
+        buildPhase: resources
+      - path: Packages/ColdGasCore/Tests/Vectors/runs
         type: folder
         buildPhase: resources
     dependencies:

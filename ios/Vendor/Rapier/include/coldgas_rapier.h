@@ -80,4 +80,24 @@ void cg_body_reset_torques(CgWorld *w, uint64_t h, bool wake);
 bool cg_cast_ray_and_get_normal(const CgWorld *w, float ox, float oy, float oz, float dx, float dy, float dz, float max_toi,
                                 bool solid, uint32_t filter_flags, uint64_t groups, uint64_t exclude_collider,
                                 uint64_t exclude_body, CgRayHit *out);
+
+// world.js / vehicle.js surface
+typedef struct { float impulse, dist; float p1[3], p2[3]; } CgContact;
+void cg_world_step_events(CgWorld *w);
+size_t cg_world_collision_events(const CgWorld *w, uint64_t *h1, uint64_t *h2, bool *started, size_t cap);
+void cg_world_remove_collider(CgWorld *w, uint64_t collider, bool wake);
+void cg_collider_set_collision_groups(CgWorld *w, uint64_t collider, uint32_t groups);
+bool cg_body_is_sleeping(const CgWorld *w, uint64_t h);
+void cg_body_velocity_at_point(const CgWorld *w, uint64_t h, float px, float py, float pz, float *out3);
+void cg_body_apply_impulse_at_point(CgWorld *w, uint64_t h, float ix, float iy, float iz, float px, float py, float pz, bool wake);
+void cg_body_set_additional_mass_properties(CgWorld *w, uint64_t h, float mass, float cx, float cy, float cz,
+                                            float ix, float iy, float iz, float fx, float fy, float fz, float fw, bool wake);
+void cg_body_set_translation(CgWorld *w, uint64_t h, float x, float y, float z, bool wake);
+void cg_body_set_rotation(CgWorld *w, uint64_t h, float x, float y, float z, float qw, bool wake);
+void cg_body_set_linvel(CgWorld *w, uint64_t h, float x, float y, float z, bool wake);
+void cg_body_set_angvel(CgWorld *w, uint64_t h, float x, float y, float z, bool wake);
+size_t cg_contact_pairs_with(const CgWorld *w, uint64_t collider, uint64_t *out, size_t cap);
+int32_t cg_contact_pair(const CgWorld *w, uint64_t c1, uint64_t c2, bool *flipped);
+int32_t cg_manifold(const CgWorld *w, uint64_t c1, uint64_t c2, size_t m, float *normal3);
+bool cg_manifold_contact(const CgWorld *w, uint64_t c1, uint64_t c2, size_t m, size_t k, CgContact *out);
 #endif

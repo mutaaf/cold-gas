@@ -9,6 +9,7 @@
 //! as an f32 rounded to nearest; Swift's `Float(double)` rounds the same way.
 #![allow(clippy::missing_safety_doc)]
 
+mod libm_shim;
 use rapier3d::prelude::*;
 use std::slice;
 
@@ -25,6 +26,23 @@ pub struct CgWorld {
     impulse_joints: ImpulseJointSet,
     multibody_joints: MultibodyJointSet,
     ccd: CCDSolver,
+    /// Collision events of the last stepped-with-events tick, in the order the engine emitted them
+    /// (what the bindings' ChannelEventCollector hands drainCollisionEvents).
+    events: Vec<(u64, u64, bool)>,
+}
+
+/// Collects collision events in emission order (the JS EventQueue's channel, without the channel).
+struct Collector<'a>(std::sync::Mutex<&'a mut Vec<(u64, u64, bool)>>);
+impl<'a> EventHandler for Collector<'a> {
+    fn handle_collision_event(&self, _b: &RigidBodySet, _c: &ColliderSet, event: CollisionEvent, _p: Option<&ContactPair>) {
+        let e = match event {
+            CollisionEvent::Started(a, b, _) => (flat(a.0), flat(b.0), true),
+            CollisionEvent::Stopped(a, b, _) => (flat(a.0), flat(b.0), false),
+        };
+        self.0.lock().unwrap().push(e);
+    }
+    fn handle_contact_force_event(&self, _dt: f32, _b: &RigidBodySet, _c: &ColliderSet, _p: &ContactPair, _f: f32) {}
+    fn handle_soft_body_tear_event(&self, _s: &SoftBodySet, _e: &SoftBodyTearEvent) {}
 }
 
 pub struct CgShape(SharedShape);
@@ -60,6 +78,7 @@ pub extern "C" fn cg_world_new(gx: f32, gy: f32, gz: f32) -> *mut CgWorld {
         impulse_joints: ImpulseJointSet::new(),
         multibody_joints: MultibodyJointSet::new(),
         ccd: CCDSolver::new(),
+        events: Vec::with_capacity(64),
     }))
 }
 #[no_mangle]
@@ -138,7 +157,7 @@ pub extern "C" fn cg_collider_desc_default() -> CgColliderDesc {
     }
 }
 fn combine(r: u32) -> CoefficientCombineRule {
-    match r { 1 => CoefficientCombineRule::Min, 2 => CoefficientCombineRule::Multiply, 3 => CoefficientCombineRule::Max, _ => CoefficientCombineRule::Average }
+    match r { 0 => CoefficientCombineRule::Average, 1 => CoefficientCombineRule::Min, 2 => CoefficientCombineRule::Multiply, _ => CoefficientCombineRule::Max }   // the bindings' combine_rule_from_u32
 }
 fn groups(g: u32) -> InteractionGroups {
     // The bindings' unpack_interaction_groups: membership in the high 16 bits, filter in the low 16.
@@ -321,6 +340,115 @@ pub unsafe extern "C" fn cg_cast_ray_and_get_normal(
             o.toi = inter.time_of_impact;
             o.normal = [inter.normal.x, inter.normal.y, inter.normal.z];
             o.collider = flat(h.0);
+            true
+        }
+        None => false,
+    }
+}
+
+// --- more of the TS surface the sim uses (world.js, vehicle.js) --------------------------------------
+
+/// world.step(eventQueue) with an auto-draining queue: clears the last tick's events, steps, records new ones.
+#[no_mangle]
+pub unsafe extern "C" fn cg_world_step_events(w: *mut CgWorld) {
+    let w = &mut *w;
+    w.events.clear();
+    let mut ev = std::mem::take(&mut w.events);
+    {
+        let c = Collector(std::sync::Mutex::new(&mut ev));
+        w.pipeline.step(
+            w.gravity, &w.params, &mut w.islands, &mut w.broad_phase, &mut w.narrow_phase, &mut w.bodies,
+            &mut w.colliders, &mut w.impulse_joints, &mut w.multibody_joints, &mut w.soft_bodies, &mut w.ccd, &(), &c,
+        );
+    }
+    w.events = ev;
+}
+/// The events of the last cg_world_step_events: up to `cap` (h1, h2, started) triples. Returns how many there were.
+#[no_mangle]
+pub unsafe extern "C" fn cg_world_collision_events(w: *const CgWorld, h1: *mut u64, h2: *mut u64, started: *mut bool, cap: usize) -> usize {
+    let w = &*w;
+    for (i, e) in w.events.iter().enumerate().take(cap) { *h1.add(i) = e.0; *h2.add(i) = e.1; *started.add(i) = e.2; }
+    w.events.len()
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_world_remove_collider(w: *mut CgWorld, c: u64, wake: bool) {
+    let w = &mut *w;
+    w.colliders.remove(col_h(c), &mut w.islands, &mut w.bodies, &mut w.soft_bodies, wake);
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_collider_set_collision_groups(w: *mut CgWorld, c: u64, g: u32) {
+    if let Some(col) = (*w).colliders.get_mut(col_h(c)) { col.set_collision_groups(groups(g)); }
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_is_sleeping(w: *const CgWorld, h: u64) -> bool { (*w).bodies.get(body_h(h)).map(|b| b.is_sleeping()).unwrap_or(true) }
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_velocity_at_point(w: *const CgWorld, h: u64, px: f32, py: f32, pz: f32, out: *mut f32) {
+    if let Some(rb) = (*w).bodies.get(body_h(h)) { let u = rb.velocity_at_point(v3(px, py, pz)); *out = u.x; *out.add(1) = u.y; *out.add(2) = u.z; }
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_apply_impulse_at_point(w: *mut CgWorld, h: u64, ix: f32, iy: f32, iz: f32, px: f32, py: f32, pz: f32, wake: bool) {
+    with_body!(w, h, |rb| rb.apply_impulse_at_point(v3(ix, iy, iz), v3(px, py, pz).into(), wake));
+}
+/// rb.setAdditionalMassProperties(mass, com, principalInertia, frame, wake)
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_set_additional_mass_properties(w: *mut CgWorld, h: u64, mass: f32, cx: f32, cy: f32, cz: f32,
+    ix: f32, iy: f32, iz: f32, fx: f32, fy: f32, fz: f32, fw: f32, wake: bool) {
+    with_body!(w, h, |rb| rb.set_additional_mass_properties(
+        MassProperties::with_principal_inertia_frame(v3(cx, cy, cz).into(), mass, v3(ix, iy, iz), Rotation::from_xyzw(fx, fy, fz, fw)), wake));
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_set_translation(w: *mut CgWorld, h: u64, x: f32, y: f32, z: f32, wake: bool) { with_body!(w, h, |rb| rb.set_translation(v3(x, y, z), wake)); }
+#[no_mangle]
+/// As the bindings' rbSetRotation: a zero quaternion is ignored, any other is normalised first.
+pub unsafe extern "C" fn cg_body_set_rotation(w: *mut CgWorld, h: u64, x: f32, y: f32, z: f32, qw: f32, wake: bool) {
+    let q = Rotation::from_xyzw(x, y, z, qw);
+    if q.length_squared() > 0.0 { let q = q.normalize(); with_body!(w, h, |rb| rb.set_rotation(q, wake)); }
+}
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_set_linvel(w: *mut CgWorld, h: u64, x: f32, y: f32, z: f32, wake: bool) { with_body!(w, h, |rb| rb.set_linvel(v3(x, y, z), wake)); }
+#[no_mangle]
+pub unsafe extern "C" fn cg_body_set_angvel(w: *mut CgWorld, h: u64, x: f32, y: f32, z: f32, wake: bool) { with_body!(w, h, |rb| rb.set_angvel(v3(x, y, z), wake)); }
+
+// Contacts: world.contactPairsWith(collider, f) and world.contactPair(c1, c2, f(manifold, flipped)).
+/// The colliders in a contact pair with `c` (the bindings' order). Writes up to `cap`; returns how many.
+#[no_mangle]
+pub unsafe extern "C" fn cg_contact_pairs_with(w: *const CgWorld, c: u64, out: *mut u64, cap: usize) -> usize {
+    let w = &*w;
+    let h1 = col_h(c);
+    let mut n = 0;
+    for pair in w.narrow_phase.contact_pairs_with(h1) {
+        let other = if pair.collider1 == h1 { pair.collider2 } else { pair.collider1 };
+        if n < cap { *out.add(n) = flat(other.0); }
+        n += 1;
+    }
+    n
+}
+/// The pair (c1, c2)'s manifold count, or -1 when there is no pair; `flipped`: the pair's collider1 isn't c1.
+#[no_mangle]
+pub unsafe extern "C" fn cg_contact_pair(w: *const CgWorld, c1: u64, c2: u64, flipped: *mut bool) -> i32 {
+    match (*w).narrow_phase.contact_pair(col_h(c1), col_h(c2)) {
+        Some(p) => { *flipped = p.collider1 != col_h(c1); p.manifolds().len() as i32 }
+        None => -1,
+    }
+}
+/// Manifold m of the pair: its normal (`data.normal`, as manifold.normal()) and its contact count.
+#[no_mangle]
+pub unsafe extern "C" fn cg_manifold(w: *const CgWorld, c1: u64, c2: u64, m: usize, normal: *mut f32) -> i32 {
+    match (*w).narrow_phase.contact_pair(col_h(c1), col_h(c2)).and_then(|p| p.manifolds().get(m)) {
+        Some(mf) => { let u = mf.data.normal; *normal = u.x; *normal.add(1) = u.y; *normal.add(2) = u.z; mf.points.len() as i32 }
+        None => -1,
+    }
+}
+/// Contact k of manifold m: impulse, dist, local_p1, local_p2 (as contactImpulse / contactDist / localContactPoint1/2).
+#[repr(C)]
+pub struct CgContact { pub impulse: f32, pub dist: f32, pub p1: [f32; 3], pub p2: [f32; 3] }
+#[no_mangle]
+pub unsafe extern "C" fn cg_manifold_contact(w: *const CgWorld, c1: u64, c2: u64, m: usize, k: usize, out: *mut CgContact) -> bool {
+    match (*w).narrow_phase.contact_pair(col_h(c1), col_h(c2)).and_then(|p| p.manifolds().get(m)).and_then(|mf| mf.points.get(k)) {
+        Some(c) => {
+            let o = &mut *out;
+            o.impulse = c.data.impulse; o.dist = c.dist;
+            o.p1 = [c.local_p1.x, c.local_p1.y, c.local_p1.z]; o.p2 = [c.local_p2.x, c.local_p2.y, c.local_p2.z];
             true
         }
         None => false,
