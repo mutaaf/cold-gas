@@ -15,13 +15,14 @@
     "e2e": "playwright test",
     "audit": "node scripts/serve-and-audit.mjs",
     "lint": "eslint .",
-    "check": "node scripts/check-backlog.mjs && npm run lint && npm test && npm run e2e",
-    "check:fast": "node scripts/check-backlog.mjs && npm run lint && npm test && npm run build",
+    "check": "node scripts/check-backlog.mjs && node scripts/vectors.mjs --check && npm run lint && npm test && npm run e2e",
+    "check:fast": "node scripts/check-backlog.mjs && node scripts/vectors.mjs --check && npm run lint && npm test && npm run build",
     "up": "npm install && npx playwright install chromium && npm run dev",
     "determinism": "node scripts/determinism.mjs",
     "heal": "node scripts/heal.mjs",
     "obs:bench": "node --expose-gc scripts/obs-bench.mjs",
-    "alloc:bench": "node scripts/alloc-bench.mjs"
+    "alloc:bench": "node scripts/alloc-bench.mjs",
+    "vectors": "node scripts/vectors.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

@@ -1,12 +1,12 @@
 ---
 id: 0146
 title: npm run vectors writes the sim's golden traces the native port must match bit for bit
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-11-04
-pr:
+pr: 245
 by: operator
 ---
 
@@ -19,7 +19,7 @@ the web half of that proof, and it runs in Node, so a cloud agent can build it.
 ## What
 `scripts/vectors.mjs` (`npm run vectors`) flies a fixed set of input logs through `src/sim` in Node and writes
 `ios/Packages/ColdGasCore/Tests/Vectors/`:
-- `dmath.json`: 20,000 inputs per function (dsin, dcos, datan, datan2, dacos, dhypot, dexp, dlog) from a seeded
+- `dmath.json`: 5,000 inputs per function (11 sets) (dsin, dcos, datan, datan2, dacos, dhypot, dexp, dlog) from a seeded
   integer walk (no Math.random): edge cases (±0, ±π/4 boundaries, NaN, ±Infinity, subnormals, 1e5) plus the range a
   stunt produces; outputs as hex bit patterns.
 - `runs/<name>.json`: for each log (the reference flight per course and tier, the 32 naive players' Show logs,

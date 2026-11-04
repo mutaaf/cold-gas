@@ -442,6 +442,9 @@ npm run audit [-- --shard=N/M] [--port=4655]   the HUD + title audits as a gate 
                    estimated cost (scripts/audit-plan.mjs, 0087); CI runs --shard=1/6 … 6/6 in parallel. Its frames are
                    deterministic: condition waits (CI=1 doubles them), the results stepped in the page, not the wall clock
 node scripts/fly.mjs '{"apex":7,"rolls":1}'   headless reference flight telemetry
+npm run vectors [-- --check]   the native port's golden traces (0146, docs/NATIVE.md §3): ios/Packages/ColdGasCore/Tests/
+                   Vectors/, generated, never hand-edited. A sim or scorer change regenerates them in the same PR
+                   (tests/unit/vectors.test.js fails on stale vectors)
 node scripts/board-probe.mjs [url]             flies the reference Show in Node and POSTs it to <url>api/scores with dry:true
                    (default https://mutaafaziz.com/coldgas/): exit 1 unless 200 with a card matching the local one. Nothing
                    is stored (it sends no initials, so a Worker from before `dry` answers 400 instead of storing it).
