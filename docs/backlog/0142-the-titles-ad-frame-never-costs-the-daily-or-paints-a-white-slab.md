@@ -1,12 +1,12 @@
 ---
 id: 0142
 title: The title's ad frame never paints a white slab, never cuts the Daily to "Clear t…", and an unfilled frame moves nothing
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-04
-pr:
+pr: 239
 by: critic
 ---
 
@@ -70,3 +70,23 @@ of the frame. Some options for the Builder to measure:
 - Marquee's own `frame.html` and its Worker (another service). The Cloudflare Web Analytics beacon the frame carries
   is an operator note in critique 2026-11-04 07:00, not this ticket.
 - The postrun and reroll breaks.
+
+## Builder note 2026-11-04
+- **Room first.** Before the frame is placed, `src/ads.js` asks the title for room with a cancelable `coldgas:ad-room`
+  (90 px plus its 18 px margin). It asks again, with the real height, when the ad first draws. The title (`src/comeback.js`)
+  says yes only if the card fits whole at level 0 and the title can rise that far under the top bar. With no room, no
+  frame is placed and nothing is requested for that title (`.title[data-ad-room="none"]`). `coldgas:ad-no-room` sends a
+  shown banner off later (a rotation, a resize).
+- **Undrawn frames are invisible.** Until its own document holds a drawn ad, the frame is out of the flow (absolute) and
+  hidden. Drawn means Google's `data-ad-status="filled"`, or a direct sponsor's image or video that has loaded. The frame
+  keeps the size it reports, so the ad inside sees a real slot, but no title element moves.
+- **No white slab.** The element's `color-scheme` is `light dark`, the same as the frame page's, so a light OS gets no
+  opaque canvas. Forced to 90 px and visible under a light OS, the box measured mean luma 5, the same as the night behind it.
+- **Where the banner still shows:** upright tablets, measured at 820×1180, 1024×1366, 800×1280, 720×1280 and 600×1200.
+  390×844, 430×932, 768×1024, 1280×720, 1440×900 and 1920×1080 get no frame. This is because the title already lacks room
+  there, not because of the ad.
+- **Not met as written, and out of this ticket's reach:** the 1440×900 bars ("no data-extra-fit", "streak shown"). With no
+  ad at all, the desktop title already packs: fit 2 at 1440×900 and 1280×720, fit 1 at 1920×1080. At 1440×900 the
+  eyebrow sits 109 px above the viewport at level 0. 430×932 and 414×896 are fit 1 with no ad too. At those sizes the
+  frame isn't placed, which meets the ticket's "or the frame isn't placed". The desktop and wide-phone packing is for the
+  Scout to ticket.

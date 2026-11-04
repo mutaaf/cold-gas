@@ -11,6 +11,7 @@ import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, co
 import { packFrames } from './ghost.js';
 import { freeWorld } from './sim/world.js';
 import { onUnits } from './units.js';
+import { NO_ROOM_EVENT, ROOM_EVENT } from './ads.js';
 
 const OLD = 'This challenge is from an older version of the game. Here’s a normal jump.';
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -95,25 +96,45 @@ export function createComeback(o) {
   // The card takes the room there is: whole; then compact (one line and its button) with the tagline
   // and the eyebrow stepping aside; then not at all. Measured from layout (offsetTop), not the rise-in
   // transforms, so the answer is the same during the title's entrance as after it.
+  // 0142: the title's ad banner is the first thing to step aside. Before a banner is placed (and when it first draws), ads.js
+  // asks for room (ROOM_EVENT): there is room only when the whole card fits as it is and the title can rise by the banner's
+  // height under the top bar. And when a shown banner later leaves the card no room (a rotation, a resize), the title sends
+  // it off (NO_ROOM_EVENT) before the Daily packs to one line and loses its goal and its streak.
   function fit() {
     const m = o.mount, title = m?.closest('.title');
     if (!title) return;
     for (let level = 0; level <= 3; level++) {
       if (level) title.dataset.extraFit = String(level); else delete title.dataset.extraFit;
       if (level === 3 || !overflows(title)) return;
+      if (!level && shownAd(title)) {
+        title.dispatchEvent(new CustomEvent(NO_ROOM_EVENT));
+        if (!overflows(title)) return;
+      }
     }
+  }
+  const shownAd = (title) => [...title.querySelectorAll('.ad-banner[data-filled]')].some((e) => e.offsetHeight > 1);
+  // The title's highest child (layout, not the rise-in transforms; an undrawn ad frame is out of the flow) and the top bar's foot.
+  function measure(title) {
+    const tb = title.getBoundingClientRect();
+    let top = Infinity;
+    for (const k of title.children) if (k.offsetHeight > 1 && !(k.classList.contains('ad-banner') && !('filled' in k.dataset))) top = Math.min(top, tb.top + k.offsetTop);
+    let bar = 0;
+    for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const r = e.getBoundingClientRect(); if (r.height > 1) bar = Math.max(bar, r.bottom); }
+    return { tb, top, bar };
   }
   function overflows(title) {
     if (title.hidden || !title.getClientRects().length) return false;
-    const tb = title.getBoundingClientRect();
-    let top = Infinity;
-    for (const k of title.children) if (k.offsetHeight > 1) top = Math.min(top, tb.top + k.offsetTop);
-    let bar = 0;
-    for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const r = e.getBoundingClientRect(); if (r.height > 1) bar = Math.max(bar, r.bottom); }
+    const { tb, top, bar } = measure(title);
     return top < bar + 4 || tb.bottom > innerHeight + 1 || o.mount.getBoundingClientRect().right > innerWidth + 1;
+  }
+  function roomFor(title, h) {
+    if (title.dataset.extraFit || overflows(title)) return false;
+    const { top, bar } = measure(title);
+    return top - h >= bar + 4;
   }
   if (o.mount) {
     const title = o.mount.closest('.title');
+    title?.addEventListener(ROOM_EVENT, (e) => { if (!roomFor(title, Number(e.detail?.h) || 0)) e.preventDefault(); });
     if (typeof ResizeObserver === 'function' && title) {
       let busy = false;
       new ResizeObserver(() => { if (busy) return; busy = true; requestAnimationFrame(() => { busy = false; fit(); }); }).observe(title);
