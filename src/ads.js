@@ -27,6 +27,9 @@ export function mayStartAds(mode) {
  *  and one [data-marquee] slot, so whatever AdSense starts for it lives in the frame's document, and removing the frame
  *  on leaving the title stops all of it (requests, timers, scripts). Root-absolute: Marquee is its own Worker at /ads. */
 export const TITLE_FRAME_SRC = '/ads/v1/frame.html?app=coldgas&slot=title';
+/** Screens with no room for the title's banner (styles.css hides .ad-banner at the same query): no frame is placed
+ *  there at all, so nothing asks for an ad nobody would see. */
+export const TITLE_SKIP_MQ = '(max-height: 620px), (max-width: 360px)';
 /** The frame's height, from the frame's own report ({marqueeFrame, h}), held to the in-page slot's 90 px cap. */
 export function frameHeight(data, slot = 'title') {
   if (!data || typeof data !== 'object' || data.marqueeFrame !== slot) return null;
@@ -78,6 +81,7 @@ export function createAds({ win = globalThis.window, doc = globalThis.document, 
   function place() {
     dwell = 0;
     if (!titleParent || mode() !== 'title' || !canFill(cfg, 'title') || titleEl || titleParent.querySelector('[data-marquee-frame]')) return;
+    if (win.matchMedia?.(TITLE_SKIP_MQ)?.matches) return;   // short or narrow: no banner (the next title looks again)
     const el = doc.createElement('iframe');
     el.className = 'ad-banner';
     el.dataset.marqueeFrame = 'title';

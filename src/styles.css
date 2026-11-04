@@ -2055,5 +2055,7 @@ body:has(> .pause:not([hidden])) :is(.hud, .top, .cue, .count, .drill-bar) { fil
 /* 0122: the title's slot is Marquee's frame. Block, no border, transparent (its page says light dark, so it takes our
    scheme and stays see-through); the height follows the frame's report, from 0, as the in-page slot's did. */
 .title iframe.ad-banner { display: block; border: 0; padding: 0; height: 0; background: transparent; color-scheme: dark; }
-@media (max-height: 620px), (max-width: 360px) { .title .ad-banner { display: none; } }
+/* (src/ads.js TITLE_SKIP_MQ places no frame here; this still hides one placed before a rotation. iframe.ad-banner
+   above outranks .ad-banner, so it is named here too.) */
+@media (max-height: 620px), (max-width: 360px) { .title .ad-banner, .title iframe.ad-banner { display: none; } }
 .reroll-btn { margin: 12px 0 0; min-height: 44px; }
