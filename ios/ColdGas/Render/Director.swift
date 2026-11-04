@@ -8,6 +8,10 @@ final class Director {
     private var eye = SIMD3<Float>(18, 3, -8), look = SIMD3<Float>(0, 1, -6), ev = SIMD3<Float>(), lv = SIMD3<Float>()
     private var last: Double = -1
     var hfov: Float = 1.05   // ≈ 60° across
+    var shakeHook: Bool? = nil
+    private var shakeAmp: Float = 0
+    /// A rattle of the camera (crash.js director.shake): decays over ≈0.4 s.
+    func shake(_ a: Float) { shakeAmp = max(shakeAmp, a) }
 
     func update(car: SIMD3<Float>, quat: simd_quatf, phase: UInt8, time t: Double, aspect: Float) -> (view: simd_float4x4, proj: simd_float4x4, eye: SIMD3<Float>) {
         let dt = Float(last < 0 ? 1.0 / 60 : min(0.1, max(0.0, t - last))); last = t
@@ -22,8 +26,14 @@ final class Director {
         if last == t && ev == .zero && lv == .zero && eye.x == 18 { eye = wantEye; look = wantLook }
         spring(&eye, &ev, wantEye, 2.4, dt)
         spring(&look, &lv, wantLook, 3.2, dt)
+        var shook = eye
+        if shakeAmp > 0.01 {
+            let tt = Float(t)
+            shook += SIMD3(sin(tt * 61) * sin(tt * 17), sin(tt * 53 + 1) * sin(tt * 23), sin(tt * 47 + 2) * sin(tt * 19)) * shakeAmp * 0.06
+            shakeAmp *= exp(-dt * 6)
+        }
         let vfov = 2 * atan(tan(hfov / 2) / max(aspect, 0.2))
-        return (lookAt(eye: eye, target: look, up: [0, 1, 0]), perspective(fovy: min(vfov, 2.2), aspect: aspect, near: 0.1, far: 1500), eye)
+        return (lookAt(eye: shook, target: look, up: [0, 1, 0]), perspective(fovy: min(vfov, 2.2), aspect: aspect, near: 0.1, far: 1500), shook)
     }
     // Critically damped spring toward `to` at angular frequency w (exact for a constant target over the step).
     private func spring(_ x: inout SIMD3<Float>, _ v: inout SIMD3<Float>, _ to: SIMD3<Float>, _ w: Float, _ dt: Float) {

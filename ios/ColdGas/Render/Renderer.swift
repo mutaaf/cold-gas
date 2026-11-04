@@ -35,6 +35,11 @@ final class Renderer {
     let stage: Stage
     var replay: Replay?
     private let opaque, opaqueCullNone, blend, additive, sky, film, present, shadowPipe, plume: MTLRenderPipelineState
+    private let sparkPipe, puffPipe, chipPipe, flashPipe: MTLRenderPipelineState
+    let crash = Crash()
+    private let sparkBufs: [MTLBuffer], puffBufs: [MTLBuffer], chipBufs: [MTLBuffer]
+    /// The replay's own clock: real time scaled by the crash's slow-motion beat (crash.js timeScale).
+    private var simClock = 0.0, lastT = -1.0
     private let dsWrite, dsRead, dsOff, dsShadow: MTLDepthStencilState
     private var stageMats: [[MaterialU]] = []
     private let lightsBuf: MTLBuffer
@@ -94,6 +99,14 @@ final class Renderer {
               let sh = pipe("cg_shadow_vertex", nil, color: nil, samples: 1),
               let pl = pipe("cg_plume_vertex", "cg_plume_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2) else { return nil }
         opaque = o; opaqueCullNone = on; blend = b; additive = a; sky = sk; film = fl; present = pr; shadowPipe = sh; plume = pl
+        guard let spk = pipe("cg_spark_vertex", "cg_spark_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2),
+              let puf = pipe("cg_puff_vertex", "cg_puff_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
+              let chp = pipe("cg_chip_vertex", "cg_chip_fragment", color: Renderer.hdrFormat, vertex: nil),
+              let fla = pipe("cg_puff_vertex", "cg_flash_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2) else { return nil }
+        sparkPipe = spk; puffPipe = puf; chipPipe = chp; flashPipe = fla
+        sparkBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<SparkGPU>.stride * Crash.NS, options: .storageModeShared)! }
+        puffBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<PuffGPU>.stride * (Crash.NM + 1), options: .storageModeShared)! }
+        chipBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<ChipGPU>.stride * Crash.NC, options: .storageModeShared)! }
         archive.save()
         func ds(_ w: Bool, _ c: MTLCompareFunction) -> MTLDepthStencilState { let d = MTLDepthStencilDescriptor(); d.isDepthWriteEnabled = w; d.depthCompareFunction = c; return device.makeDepthStencilState(descriptor: d)! }
         dsWrite = ds(true, .less); dsRead = ds(false, .lessEqual); dsOff = ds(false, .always); dsShadow = ds(true, .less)
@@ -183,11 +196,16 @@ final class Renderer {
         var carM = matrix_identity_float4x4, carPos = SIMD3<Float>(0, Float(SPEC.comHeight), -6), carQ = simd_quatf(angle: 0, axis: [0, 1, 0])
         var nPlumes = 0, tick = 0
         var phase: UInt8 = 0
+        let dtReal = lastT < 0 ? 0 : min(0.1, max(0, t - lastT)); lastT = t
+        crash.update(Float(dtReal))
+        simClock += dtReal * Double(crash.slowK)
+        let simT = simClock
         if let r = replay {
             let span = r.seconds + 2
-            let tt = t.truncatingRemainder(dividingBy: span)
+            let tt = simT.truncatingRemainder(dividingBy: span)
             let c = r.car(at: tt)
             carPos = c.pos; carQ = c.quat; tick = c.tick; phase = r.phase(at: c.tick)
+            crash.feed(r.impacts, tick: c.tick, vel: r.velocity(at: c.tick), carPos: c.pos, carQuat: c.quat)
             let p = pb.contents().bindMemory(to: PlumeU.self, capacity: 10)
             for k in 0..<10 {
                 let thr = r.nozzle(k, at: tick)
@@ -201,7 +219,17 @@ final class Renderer {
         carM = translate(carPos) * simd_float4x4(carQ) * translate(SIMD3(0, -Float(SPEC.comHeight), 0))
 
         let aspect = Float(out.width) / Float(max(1, out.height))
+        if cam.shakeHook == nil { cam.shakeHook = true; crash.shake = { [weak cam] a in cam?.shake(a) } }
         let view = cam.update(car: carPos, quat: carQ, phase: phase, time: t, aspect: aspect)
+        let fx = crash.write(sparks: sparkBufs[fi].contents().bindMemory(to: SparkGPU.self, capacity: Crash.NS),
+                             puffs: puffBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Crash.NM + 1),
+                             chips: chipBufs[fi].contents().bindMemory(to: ChipGPU.self, capacity: Crash.NC))
+        var nPuffs = fx.1
+        if let fl = crash.flash, nPuffs < Crash.NM + 1 {   // the flash rides at the end of the puff buffer
+            puffBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Crash.NM + 1)[nPuffs] = PuffGPU(pos: SIMD4(fl.pos, fl.size), color: SIMD4(1, 1, 1, fl.k)); nPuffs += 1
+        }
+        var camRight = SIMD4<Float>(view.view.columns.0.x, view.view.columns.1.x, view.view.columns.2.x, 0)
+        var camUp = SIMD4<Float>(view.view.columns.0.y, view.view.columns.1.y, view.view.columns.2.y, 0)
         var u = FrameU()
         u.viewProj = view.proj * view.view
         let keyPos = carPos + stage.keyOffset, keyDir = simd_normalize(stage.keyOffset)
@@ -230,9 +258,9 @@ final class Renderer {
             e.setRenderPipelineState(shadowPipe); e.setDepthStencilState(dsShadow); e.setDepthBias(1.5, slopeScale: 2.5, clamp: 0.01)
             e.setVertexBuffer(fb, offset: 0, index: 1)
             drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: true, shadow: true)
-            parkedDraw(e, t: t, shadow: true)
+            parkedDraw(e, t: simT, shadow: true)
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true, shadow: true)
-            wheelsDraw(e, carM: carM, t: t, opaqueOnly: true, shadow: true)
+            wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: true)
             e.endEncoding()
         }
         cut("shadow")
@@ -248,9 +276,9 @@ final class Renderer {
             e.setFragmentBuffer(lightsBuf, offset: 0, index: 3)
             e.setFragmentTexture(shadowMap, index: 3)
             if !skip.contains("static") { drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: true) }
-            if !skip.contains("parked") { parkedDraw(e, t: t, shadow: false) }
+            if !skip.contains("parked") { parkedDraw(e, t: simT, shadow: false) }
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true)
-            wheelsDraw(e, carM: carM, t: t, opaqueOnly: true, shadow: false)
+            wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: false)
             if !skip.contains("translucent") {
                 drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: false)
                 drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: false)
@@ -260,6 +288,19 @@ final class Renderer {
                 e.setVertexBuffer(pb, offset: 0, index: 2)
                 e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 12 * 3, instanceCount: nPlumes)
             }
+            // crash.js's effects: chips (lit-ish solids), dust and smoke (blended), sparks and the flash (additive).
+            if fx.2 > 0 { e.setRenderPipelineState(chipPipe); e.setDepthStencilState(dsWrite); e.setCullMode(.none); e.setVertexBuffer(chipBufs[fi], offset: 0, index: 2)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 36, instanceCount: fx.2) }
+            let hasFlash = crash.flash != nil
+            let nDust = hasFlash ? nPuffs - 1 : nPuffs
+            if nDust > 0 { e.setRenderPipelineState(puffPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(puffBufs[fi], offset: 0, index: 2)
+                e.setVertexBytes(&camRight, length: 16, index: 3); e.setVertexBytes(&camUp, length: 16, index: 4)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nDust) }
+            if fx.0 > 0 { e.setRenderPipelineState(sparkPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(sparkBufs[fi], offset: 0, index: 2)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: fx.0) }
+            if hasFlash { e.setRenderPipelineState(flashPipe); e.setDepthStencilState(dsOff); e.setVertexBuffer(puffBufs[fi], offset: MemoryLayout<PuffGPU>.stride * nDust, index: 2)
+                e.setVertexBytes(&camRight, length: 16, index: 3); e.setVertexBytes(&camUp, length: 16, index: 4)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: 1) }
             e.endEncoding()
         }
         cut("main")

@@ -42,10 +42,18 @@ spinning, physics and impact to environment need to be carefully addressed"). Ea
       (main.js syncCar). The roadster is exported as a body plus four wheels, each split into a steering part and a
       spinning part.
 - [x] The parked row shoved, tipped or rolled as the sim moves it (posed per tick).
-- [ ] Impacts on the environment from `run.impacts`, as src/render/crash.js and debris.js draw them: sparks, chips,
-      dust, dents from each probe's crush, torn-off parts, lamps and hazards, shake, slow-mo, the crash cut.
+- [x] Impacts from `run.impacts`, ported from crash.js with its per-event seeding (the same sparks as the web), checked
+      on `-replay crash-show-carry5 -crash-log`:
+      - sparks (ballistic, drag, one bounce, cooling white → red);
+      - glass, carbon and paint chips tumbling to rest;
+      - dust rings and scrape dust;
+      - the contact flash and the vented nitrogen line;
+      - the camera's shake and the slow-motion beat (the replay's clock slows).
+- [ ] Still from crash.js and debris.js: dents from each probe's crush (the hero's and the parked cars'), torn-off
+      parts as debris, lamps flickering out and hazards, the crash cut, chips in a struck parked car's paint.
 - [ ] The car's states as roadster.js shows them: brake lamps, wing and aero, skirts and fan, wake.
-- [ ] The plumes' shock diamonds and condensation mist (plumes.js); the first cut is a soft cone per firing nozzle.
+- [ ] The plumes' shock diamonds and condensation mist (plumes.js). For now there's a faint haze cone per firing
+      nozzle, thickest through its middle and fading along its length.
 - [ ] The searchlights' sweep (wall.js update) and contact shadows under every body.
 
 Done so far:

@@ -162,7 +162,7 @@ fragment float4 cg_sky_fragment(SOut in [[stage_in]], constant Frame& f [[buffer
 
 // Cold-gas plumes: a soft additive cone per firing nozzle (condensation white-blue), drawn procedurally.
 struct PlumeInst { float4 origin; float4 dir; };   // origin xyz + throttle, dir xyz + length
-struct POut { float4 clip [[position]]; float a; float along; };
+struct POut { float4 clip [[position]]; float a; float along; float rim; };
 vertex POut cg_plume_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], constant Frame& f [[buffer(1)]], constant PlumeInst* p [[buffer(2)]]) {
     const int SEG = 12;
     PlumeInst P = p[iid];
@@ -173,11 +173,14 @@ vertex POut cg_plume_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], co
     float t = (corner == 0) ? 0.0 : 1.0;
     float ang = 2.0 * M_PI_F * float(seg + (corner == 2 ? 1 : 0)) / float(SEG);
     float3 pos = P.origin.xyz + d * (t * len) + (a * cos(ang) + b * sin(ang)) * (t * r);
-    POut o; o.clip = f.viewProj * float4(pos, 1); o.a = P.origin.w; o.along = t; return o;
+    // How side-on the cone's surface is seen: the haze is thickest through its middle, nothing at its silhouette.
+    float3 nrm = normalize(a * cos(ang) + b * sin(ang)), V = normalize(f.eye.xyz - pos + 1e-6);
+    POut o; o.clip = f.viewProj * float4(pos, 1); o.a = P.origin.w; o.along = t; o.rim = abs(dot(nrm, V)); return o;
 }
 fragment float4 cg_plume_fragment(POut in [[stage_in]]) {
-    float k = in.a * (1.0 - in.along) * 0.55;
-    return float4(float3(0.75, 0.85, 1.0) * k, 0);
+    // Cold gas is a faint condensation haze, not a flame: dense at the nozzle, gone within its length.
+    float k = in.a * pow(1.0 - in.along, 2.2) * pow(clamp(in.rim, 0.0, 1.0), 1.5) * 0.12;
+    return float4(float3(0.78, 0.86, 1.0) * k, 0);
 }
 
 // The film pass: exposure, ACES-ish tone, a touch of grain and vignette, into the LDR target MetalFX reads.
@@ -213,4 +216,58 @@ fragment float4 cg_film_fragment(SOut in [[stage_in]], texture2d<float> hdr [[te
 fragment float4 cg_present_fragment(SOut in [[stage_in]], texture2d<float> src [[texture(0)]]) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
     return src.sample(s, in.uv);
+}
+
+// --- crash.js's effects (0153) ---------------------------------------------------------------------------
+struct SparkGPU { float4 pos; float4 vel; };     // pos.w life, vel.w heat
+struct PuffGPU { float4 pos; float4 color; };    // pos.w size
+struct ChipGPU { float4 pos; float4 rot; float4 scale; float4 color; };
+struct FxOut { float4 clip [[position]]; float2 uv; float life; float heat; float4 color; };
+// A spark: a streak from where it is back along its velocity, camera-facing, wider while hot (sparkVS).
+vertex FxOut cg_spark_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], constant Frame& f [[buffer(1)]], constant SparkGPU* sp [[buffer(2)]]) {
+    SparkGPU S = sp[iid];
+    const float2 corners[6] = { {0, -1}, {1, -1}, {1, 1}, {0, -1}, {1, 1}, {0, 1} };
+    float2 c = corners[vid];
+    float3 head = S.pos.xyz, tail = S.pos.xyz - S.vel.xyz * 0.022;   // uStreak
+    float4 h = f.viewProj * float4(head, 1), t = f.viewProj * float4(tail, 1);
+    float2 hs = h.xy / max(h.w, 1e-3), ts = t.xy / max(t.w, 1e-3), d = hs - ts;
+    float l = length(d); float2 dir = l > 1e-5 ? d / l : float2(1, 0);
+    float4 p = mix(h, t, c.x);
+    float w = 0.0045 * (0.45 + 0.55 * S.pos.w) * p.w;                 // uWidth, in clip space
+    p.xy += (float2(-dir.y, dir.x) * c.y * w + dir * w * (1.0 - c.x));
+    FxOut o; o.clip = p; o.uv = c; o.life = S.pos.w; o.heat = S.vel.w; o.color = 0; return o;
+}
+fragment float4 cg_spark_fragment(FxOut in [[stage_in]]) {
+    float a = 1.0 - in.uv.y * in.uv.y, k = in.life * in.heat;
+    float3 c = mix(float3(1.0, 0.18, 0.04), mix(float3(1.0, 0.55, 0.16), float3(1.0, 0.93, 0.78), smoothstep(0.55, 1.0, k)), smoothstep(0.0, 0.55, k));
+    float alpha = a * min(1.0, in.life * 4.0) * 0.85;
+    return float4(c * (0.75 + 1.1 * k) * alpha * 3.0, 0);   // additive, HDR: the bloom of a hot spark
+}
+// A puff of dust, smoke or condensation: a soft round billboard of its own colour.
+vertex FxOut cg_puff_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], constant Frame& f [[buffer(1)]], constant PuffGPU* pf [[buffer(2)]], constant float4& camRight [[buffer(3)]], constant float4& camUp [[buffer(4)]]) {
+    PuffGPU P = pf[iid];
+    const float2 corners[6] = { {-1, -1}, {1, -1}, {1, 1}, {-1, -1}, {1, 1}, {-1, 1} };
+    float2 c = corners[vid];
+    float3 w = P.pos.xyz + (camRight.xyz * c.x + camUp.xyz * c.y) * P.pos.w * 0.5;
+    FxOut o; o.clip = f.viewProj * float4(w, 1); o.uv = c; o.life = 0; o.heat = 0; o.color = P.color; return o;
+}
+fragment float4 cg_puff_fragment(FxOut in [[stage_in]]) {
+    float r = length(in.uv); if (r > 1.0) discard_fragment();
+    float a = in.color.a * pow(1.0 - r, 1.6);
+    return float4(in.color.rgb * 0.35 * a, a);   // dust is lit by the night: dim, alpha-blended
+}
+// A chip: a tiny box, tumbling (the instance's rotation, scale and colour).
+vertex FxOut cg_chip_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], constant Frame& f [[buffer(1)]], constant ChipGPU* ch [[buffer(2)]]) {
+    ChipGPU C = ch[iid];
+    const float3 corner[8] = { {-1,-1,-1}, {1,-1,-1}, {1,1,-1}, {-1,1,-1}, {-1,-1,1}, {1,-1,1}, {1,1,1}, {-1,1,1} };
+    const ushort idx[36] = { 0,2,1, 0,3,2, 4,5,6, 4,6,7, 0,1,5, 0,5,4, 3,7,6, 3,6,2, 0,4,7, 0,7,3, 1,2,6, 1,6,5 };
+    float3 v = corner[idx[vid]] * C.scale.xyz * 0.5;
+    float4 q = C.rot; float3 t = 2.0 * cross(q.xyz, v); v = v + q.w * t + cross(q.xyz, t);
+    FxOut o; o.clip = f.viewProj * float4(C.pos.xyz + v, 1); o.uv = 0; o.life = 0; o.heat = 0; o.color = C.color; return o;
+}
+fragment float4 cg_chip_fragment(FxOut in [[stage_in]]) { return float4(in.color.rgb * 0.6, 1); }
+// The contact's white-hot flash: an additive sprite for a few frames.
+fragment float4 cg_flash_fragment(FxOut in [[stage_in]]) {
+    float r = length(in.uv); if (r > 1.0) discard_fragment();
+    return float4(float3(1.0, 0.92, 0.8) * in.color.a * pow(1.0 - r, 2.0) * 6.0, 0);
 }
