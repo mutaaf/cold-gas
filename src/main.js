@@ -654,8 +654,8 @@ Promise.all([stage.ready, physicsLoad]).then(() => {
   if (typeof requestIdleCallback === 'function') requestIdleCallback(warmJudges, { timeout: 4000 }); else setTimeout(warmJudges, 500);
   // Marquee (src/ads.js): the loader after the title is up, at idle priority, and only on the title or the results
   // (0117: a quick Jump or ?play=jump waits for the next one); the title's banner only while the title shows.
-  // 0122: armed only once the game's own late loads (the backdrop's chunk, the judges' chunk) have settled, so the cut
-  // a Jump makes to a title slot still filling (window.stop, src/ads.js) never takes one of ours with it.
+  // Armed only once the game's own late loads (the backdrop's chunk, the judges' chunk) have settled, so the loader and
+  // the title's ad frame never compete with them. (0122: the frame is removed the moment the title goes, src/ads.js.)
   const startAds = () => {
     warmJudges();
     // (A load that hangs on a bad link must not keep the ads off for the session: 20 s at most.)

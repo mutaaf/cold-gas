@@ -113,6 +113,9 @@ mark, and air left in the tanks.
    - **No ads during a run.** Nothing in the countdown, a live run, a drill or Free Drive/the Sandbox: the
      banner is on the title, the interstitial fires only when a results sheet is left (Retry/Home) after the
      judges have spoken, never after the first run of a session and at most once per 3 minutes.
+   - **The title's slot is Marquee's same-origin frame** `/ads/v1/frame.html?app=coldgas&slot=title` (owner's
+     decision on #194, 0122), placed after the title's dwell and removed the moment the title goes, so no ad work
+     reaches the countdown or the run. The breaks (postrun, reroll) stay in the page.
    - **Google ads (via Marquee) appear only in menu contexts.** Every slot is declared `menu`; never declare
      a `gameplay` slot.
    - **Rewarded is opt-in only:** the player presses "Watch an ad · ask the panel again"; the reward is fresh
@@ -347,7 +350,7 @@ src/wake.js           the screen wake lock (0060): held through a run, the judgi
                         main.js syncLife() also suspends the audio when paused, hidden or idle on the title
 src/ads.js            Marquee ads between runs only (§3.3's exception): loader on production, title banner,
                         postrun interstitial, opt-in reroll rewarded; a no-op without window.marquee. The loader goes in
-                        only on the title or the results; the title's slot is placed after 4 s on the title, and dropped on leaving it unless filled (0117); a Jump while its AdSense script is still downloading cancels it (window.stop, armed only after the game's own late chunks settle, 0122)
+                        only on the title or the results; the title's slot is placed after 4 s on the title (0117) as Marquee's same-origin frame (/ads/v1/frame.html), removed the moment the title goes, filled or not, which stops everything AdSense started for it (0122)
 src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: errors, rejections, traps,
                         lost context, shaders, fetches, lazy imports, audio; frames; beacons) ·
                         signature.js (stable ids, shared with the Worker) · frames.js (ring +
