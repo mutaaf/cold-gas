@@ -41,7 +41,7 @@ struct SettingsView: View {
                     LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                     Link("Play on the web", destination: URL(string: "https://mutaafaziz.com/coldgas/")!)
                     Link("Privacy policy", destination: URL(string: "https://mutaafaziz.com/coldgas/privacy")!)
-                    NavigationLink("Fonts") { LicensesView() }
+                    NavigationLink("Licenses") { LicensesView() }
                 }
             }
             .scrollContentBackground(.hidden)
