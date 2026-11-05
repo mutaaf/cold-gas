@@ -302,7 +302,9 @@ final class Game: ObservableObject {
 }
 
 /// A finished run: what the results sheet, the board and the records read.
+@MainActor
 final class RunResult: Identifiable {
+    let post = PostModel(), judges = JudgesModel()
     let id = UUID()
     let course: String
     let card: Card

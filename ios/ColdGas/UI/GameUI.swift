@@ -30,10 +30,10 @@ struct RootUI: View {
             case .run: RunView(layout: layout)
             case .results:
                 if let r = game.result {
-                    ResultsView(result: r, open: { sheet = $0 })
-                        .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
-                        .opacity(game.replaying ? 0 : 1).allowsHitTesting(!game.replaying)   // kept alive: the post and the judges' words stay
-                    if game.replaying {
+                    if !game.replaying {   // the post and the judges' words live on the result, so they survive watching it back
+                        ResultsView(result: r, open: { sheet = $0 }, post: r.post, judges: r.judges)
+                            .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
+                    } else {
                         Button { game.stopWatching() } label: { Text("Back to the score") }
                             .buttonStyle(CGButton())
                             .frame(width: layout.controls.width, height: layout.controls.height, alignment: .bottom)
@@ -251,8 +251,8 @@ struct ResultsView: View {
     @ObservedObject var game = Game.shared
     let result: RunResult
     var open: (RootUI.Sheet) -> Void
-    @StateObject private var post = PostModel()
-    @StateObject private var judges = JudgesModel()
+    @ObservedObject var post: PostModel
+    @ObservedObject var judges: JudgesModel
     var body: some View {
         let card = result.card
         VStack {
