@@ -6,6 +6,7 @@ priority: P1
 size: S
 lens: platform
 created: 2026-11-05
+pr: 261
 by: operator
 ---
 
@@ -24,3 +25,6 @@ Runs on: the operator's Mac (Xcode). iPhone app only; the web's screens are unch
 - [x] Six touch tests pass on the Pro Max and open Duo simulators, including one-open-at-a-time and the opened numbers being on screen.
 - [x] Seen: a landing, a stall and a no-jump collision on the Pro Max simulator; a landing on the open Duo and on the `-pose tabletop` layout.
 - [ ] The same on a real iPhone, with the frame rate checked on the results sheet with the field moving.
+
+## Test plan
+`ios/ColdGasUITests/FlightUITests.swift` on both simulators: `testHowToFolds` (first screen, closed text hidden, one open at a time) and `testOneThumbFlightByTouch` (a judge tile, and the opened numbers on screen). Crash and stall states by eye, flown with `-script <vector> -script-end <tick>`.
