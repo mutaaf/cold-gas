@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Cold Gas · Privacy</title>
+<meta name="description" content="What Cold Gas, the web game and the iPhone app, sends and keeps.">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<style>
+  :root { --ink: #f5f6f8; --ink-2: rgba(245, 246, 248, 0.72); --ink-3: rgba(245, 246, 248, 0.46); --hair: rgba(245, 246, 248, 0.16); --bg: #05070c; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink-2); }
+  body { font: 16px/1.6 ui-sans-serif, -apple-system, "Segoe UI", sans-serif; padding: max(24px, env(safe-area-inset-top)) 16px 64px; }
+  main { max-width: 680px; margin: 0 auto; }
+  .brand { font: 500 12px/1 ui-sans-serif, sans-serif; letter-spacing: 0.46em; color: var(--ink-3); text-transform: uppercase; text-decoration: none; }
+  h1 { color: var(--ink); font-weight: 500; font-size: 30px; letter-spacing: -0.01em; margin: 28px 0 8px; }
+  h2 { color: var(--ink); font-weight: 500; font-size: 17px; margin: 32px 0 6px; }
+  p, li { margin: 0 0 12px; }
+  ul { padding-left: 20px; margin: 0; }
+  strong { color: var(--ink); font-weight: 500; }
+  a { color: var(--ink); }
+  .lead { font-size: 18px; color: var(--ink); border-bottom: 1px solid var(--hair); padding-bottom: 20px; }
+  .small { color: var(--ink-3); font-size: 14px; margin-top: 40px; border-top: 1px solid var(--hair); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <a class="brand" href="../">Cold Gas</a>
+  <h1>Privacy</h1>
+  <p class="lead">Cold Gas has no accounts, no ads and no tracking. The web game and the iPhone app talk to one server, ours, at mutaafaziz.com/coldgas. Nothing goes to an advertising network, an analytics company or a data broker.</p>
+
+  <h2>What we receive, and why</h2>
+  <ul>
+    <li><strong>Your run, when you ask for the judges or post to the board.</strong> The run is the inputs you flew and the flight's numbers (speed, height, rotation, touchdown and so on), with the course and the flight tier. We use it to score the jump and to write the judges' commentary.</li>
+    <li><strong>Three initials, when you post to the board.</strong> Three letters, A to Z. They are shown publicly next to the score, with the day it was flown. The board keeps them.</li>
+    <li><strong>A health report.</strong> Counts of errors (with a short message that has anything that looks like a key or a token removed), how smoothly frames were drawn, which features were used (for example "a run was flown", "the board was opened"), the build, and a rough device class such as "phone, high-end". It carries no identifier, so it can't be tied to you or to your device. We keep daily totals for 30 days and error examples for 14.</li>
+  </ul>
+
+  <h2>What we don't receive</h2>
+  <p>Your name, email, contacts, location, photos, an advertising identifier, or any id for you or your device. Your IP address is used only to stop abuse: it is turned into a hash that changes every day, counted for rate limits, and never stored as an address.</p>
+
+  <h2>Your own AI key (optional, on the web)</h2>
+  <p>If you enter an API key for another AI provider, it stays on your device. It is sent with your own judging requests only; our server passes it to that provider for that one call and never stores or logs it. That provider's own privacy policy then applies to the request.</p>
+
+  <h2>On your device</h2>
+  <p>Settings, medals, the daily streak and your initials are saved on your device only.</p>
+
+  <h2>Children</h2>
+  <p>Cold Gas is not directed at children and collects no personal information from anyone.</p>
+
+  <h2>Deleting</h2>
+  <p>There is no account to delete. To remove a board entry, write to the address on <a href="https://mutaafaziz.com/">mutaafaziz.com</a>.</p>
+
+  <h2>Changes</h2>
+  <p>If what we receive ever changes, this page changes first.</p>
+
+  <p class="small">Last updated 4 November 2026.</p>
+</main>
+</body>
+</html>
