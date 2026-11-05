@@ -85,7 +85,7 @@ function concreteTextures() {
 
 // An environment for reflections: the same sky plus a few long softboxes, like a keynote stage
 // outdoors. Baked once with PMREM.
-function bakeEnvironment(renderer) {
+export function bakeEnvironment(renderer) {
   const env = new THREE.Scene();
   const sky = new THREE.Mesh(new THREE.SphereGeometry(50, 32, 16), skyMaterial());
   env.add(sky);

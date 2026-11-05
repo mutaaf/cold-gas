@@ -39,7 +39,8 @@ final class NozzlePadView: UIView {
     }
     required init?(coder: NSCoder) { nil }
 
-    private var k: CGFloat { min(bounds.width / 300, bounds.height / 380) }
+    /// The web's `width: min(330px, 92vw)`: a bigger pad covers the car it steers.
+    private var k: CGFloat { min(330 / 300, min(bounds.width / 300, bounds.height / 380)) }
     private var origin: CGPoint { CGPoint(x: (bounds.width - 300 * k) / 2, y: bounds.height - 380 * k) }
     private func center(_ t: Target) -> CGPoint { CGPoint(x: origin.x + t.x * k, y: origin.y + t.y * k) }
     private func padAt(_ p: CGPoint) -> Int {

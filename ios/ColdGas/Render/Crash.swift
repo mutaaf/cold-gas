@@ -100,11 +100,14 @@ final class Crash {
     }
     // The lamps and the canopy (crash.js st).
     private var head: Float = 1, tail: Float = 1, headFail: Float = 0, tailFail: Float = 0, headDead = false, tailDead = false, hazardT: Float = -1, hazard = false, glass = false
+    /// The run's first big hit: where, and the car's velocity (crash.js cutTo; the director places the camera).
+    var cut: ((SIMD3<Float>, SIMD3<Float>) -> Void)?
+    private var cutDone = false
 
     var onReset: (() -> Void)?
     func reset() {
         onReset?()
-        cursor = 0; lastTick = -1; slowK = 1; slowT = 0; ventT = 0; grind = 0; bigT = -10; flashT = 0
+        cursor = 0; lastTick = -1; cutDone = false; slowK = 1; slowT = 0; ventT = 0; grind = 0; bigT = -10; flashT = 0
         head = 1; tail = 1; headFail = 0; tailFail = 0; headDead = false; tailDead = false; hazardT = -1; hazard = false; glass = false
         pieces.reset(); car.reset()
         for j in 0..<Crash.NS { sLife[j] = 0 }
@@ -225,7 +228,10 @@ final class Crash {
         if audible { Sound.shared.crunch(severity: Double(sev), glass: glassy && v > 5, seed: e.tick * 31 + Int(e.probe)) }
         if !reduced {
             shake?(min(2.6, 0.25 + v * 0.17))
-            if v > 6.5 && clock - bigT > 2.5 { bigT = clock; slowT = 0.75 + 0.5 * sev }
+            if v > 6.5 && clock - bigT > 2.5 {
+                bigT = clock; slowT = 0.75 + 0.5 * sev
+                if !cutDone { cutDone = true; cut?(p, carVel) }
+            }
         }
     }
 

@@ -120,7 +120,7 @@ class HazePass extends Pass {
 }
 
 // Per look: ground fog density and falloff, its colour, the sun's forward scatter, the glow scale.
-const LOOKS = {
+export const LOOKS = {
   night: { fogA: 0.0035, fogB: 0.16, fogCol: [0.011, 0.013, 0.021], sunCol: [0, 0, 0], sunDir: [0, 1, 0], glow: 1, vignette: 0.32 },
   lineup: { fogA: 0.0022, fogB: 0.05, fogCol: [0.11, 0.105, 0.115], sunCol: [0.32, 0.17, 0.08], sunDir: [-0.55, 0.06, 0.83], glow: 0.6, vignette: 0.22 },
 };

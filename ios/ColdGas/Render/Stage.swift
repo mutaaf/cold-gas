@@ -12,17 +12,21 @@ struct StageMaterial {
     var metalness: Float = 0, roughness: Float = 1, clearcoat: Float = 0, clearcoatRoughness: Float = 0
     var opacity: Float = 1
     var unlit = false, transparent = false, depthWrite = true, doubleSided = false, additive = false, vertexColors = false, fog = true
+    /// wall.js wetSlab: the puddles and the mirror.
+    var wet = false
     var polygonOffset: (Float, Float)? = nil
     var map: Int? = nil, roughnessMap: Int? = nil, emissiveMap: Int? = nil, alphaMap: Int? = nil
-    /// The web's ShaderMaterial effects (wall.js): 0 none, 1 beam, 2 glow decal, 3 spill, 9 skip.
+    /// The web's ShaderMaterial effects (wall.js, rocket.js): 0 none, 1 beam, 2 glow decal, 3 spill, 4 a flood bank's beam, 9 skip.
     var effect: UInt32 = 0, effectColor = SIMD3<Float>(1, 1, 1), effectPower: Float = 0
 }
-struct StageSubmesh { let material: StageMaterial; let renderOrder: Int; let vertexStart, vertexCount, indexStart, indexCount: Int }
+struct StageSubmesh { let material: StageMaterial; let renderOrder: Int; let vertexStart, vertexCount, indexStart, indexCount: Int
+    /// Its highest vertex: film.js's REFLECT layer is what stands over 12 cm off the slab.
+    let top: Float }
 struct StageMesh { let vertices: MTLBuffer; let indices: MTLBuffer; let submeshes: [StageSubmesh] }
 /// A roadster wheel (main.js syncCar): its pivot at (x, wheelCenterY(compression), z) in the car's ground frame, turned by
 /// the steer on the fronts; the spinning part also turned by the wheel's spin about its axle (x).
 struct StageWheel { let index: Int; let x, z: Float; let steers: Bool; let steerPart, spinPart: StageMesh }
-struct StageLight { let kind: String; let color: SIMD3<Float>; let intensity: Float; let position: SIMD3<Float>; let target: SIMD3<Float>?; let distance, decay, angle, penumbra: Float }
+struct StageLight { let kind: String; let color: SIMD3<Float>; let intensity: Float; let position: SIMD3<Float>; let target: SIMD3<Float>?; let distance, decay, angle, penumbra: Float; let ground: SIMD3<Float> }
 struct StageTexture { let texture: MTLTexture?; let repeatUV: SIMD2<Float>; let offset: SIMD2<Float> }
 
 /// What roadster.js moves or lights on its own and what crash.js throws off the car, in the order of `Stage.parts`. Each is
@@ -47,8 +51,29 @@ struct StageSweep {
     let beam, head, lens: StageMesh
 }
 
+/// rocket.js's launch complex, baked (scripts/native-stage-page.js bakeComplex): one mesh, and its lamps as soft glints.
+struct StageComplex {
+    struct Spots { let size, minPx: Float; let spots: [SIMD4<Float>]; let colors: [SIMD3<Float>] }
+    let mesh: StageMesh, center: SIMD3<Float>, radius: Float
+    let lamps, beacons: Spots
+}
+struct StageGlow { let pos: SIMD3<Float>, color: SIMD3<Float>, radius: Float }
+
 final class Stage {
     let course: String
+    let complex: StageComplex?
+    /// scene.environment: the PMREM read back as a cube, mip i at roughness i / (mips - 1) (exporter's exportEnv).
+    let env: MTLTexture?
+    let envIntensity: Float
+    let wetMask: MTLTexture?
+    let hemiSky: SIMD3<Float>, hemiGround: SIMD3<Float>
+    let fogDensity: Float
+    let glows: [StageGlow]
+    let bloomStrength, bloomRadius, bloomThreshold: Float
+    // film.js LOOKS, and the sky's own numbers.
+    let hazeA, hazeB, vignette, glowScale: Float
+    let hazeColor, sunColor, sunDir: SIMD3<Float>
+    let dusk: Bool, skyZenith, skyMid, skyHorizon, skySun: SIMD3<Float>
     let parts: [StageMesh]
     let layout: CarLayout
     let sweep: StageSweep?
@@ -93,19 +118,20 @@ final class Stage {
                 M.color = v3("color"); M.emissive = v3("emissive") * f("emissiveIntensity", 1)
                 M.metalness = f("metalness"); M.roughness = f("roughness", 1); M.clearcoat = f("clearcoat"); M.clearcoatRoughness = f("clearcoatRoughness")
                 M.opacity = f("opacity", 1); M.unlit = b("unlit"); M.transparent = b("transparent"); M.depthWrite = mt["depthWrite"] as? Bool ?? true
-                M.doubleSided = b("doubleSided"); M.additive = b("additive"); M.vertexColors = b("vertexColors"); M.fog = mt["fog"] as? Bool ?? true
+                M.wet = b("wet"); M.doubleSided = b("doubleSided"); M.additive = b("additive"); M.vertexColors = b("vertexColors"); M.fog = mt["fog"] as? Bool ?? true
                 if let po = mt["polygonOffset"] as? [Double] { M.polygonOffset = (Float(po[0]), Float(po[1])) }
                 M.map = (mt["map"] as? String).flatMap { texIndex[$0] }
                 M.roughnessMap = (mt["roughnessMap"] as? String).flatMap { texIndex[$0] }
                 M.emissiveMap = (mt["emissiveMap"] as? String).flatMap { texIndex[$0] }
                 M.alphaMap = (mt["alphaMap"] as? String).flatMap { texIndex[$0] }
                 if let fx = mt["effect"] as? [String: Any], let kind = fx["kind"] as? String {
-                    M.effect = ["beam": 1, "glow": 2, "spill": 3][kind] ?? 9
+                    M.effect = ["beam": 1, "glow": 2, "spill": 3, "floodBeam": 4][kind] ?? 9
                     if let c = fx["color"] as? [Double] { M.effectColor = SIMD3(Float(c[0]), Float(c[1]), Float(c[2])) }
                     M.effectPower = (fx["power"] as? NSNumber)?.floatValue ?? 0
                 }
                 return StageSubmesh(material: M, renderOrder: sm["renderOrder"] as? Int ?? 0, vertexStart: sm["vertexStart"] as? Int ?? 0,
-                                    vertexCount: sm["vertexCount"] as? Int ?? 0, indexStart: sm["indexStart"] as? Int ?? 0, indexCount: sm["indexCount"] as? Int ?? 0)
+                                    vertexCount: sm["vertexCount"] as? Int ?? 0, indexStart: sm["indexStart"] as? Int ?? 0, indexCount: sm["indexCount"] as? Int ?? 0,
+                                    top: (sm["top"] as? NSNumber)?.floatValue ?? 100)
             }
             guard let vb = bin.withUnsafeBytes({ device.makeBuffer(bytes: $0.baseAddress!, length: max(off, 4), options: .storageModeShared) }),
                   let ib = bin.withUnsafeBytes({ device.makeBuffer(bytes: $0.baseAddress! + off, length: max(bin.count - off, 4), options: .storageModeShared) }) else { return nil }
@@ -155,15 +181,59 @@ final class Stage {
             func v(_ k: String) -> SIMD3<Float>? { (l[k] as? [Double]).map { SIMD3(Float($0[0]), Float($0[1]), Float($0[2])) } }
             func f(_ k: String) -> Float { (l[k] as? NSNumber)?.floatValue ?? 0 }
             return StageLight(kind: l["kind"] as? String ?? "", color: v("color") ?? .one, intensity: f("intensity"), position: v("position") ?? .zero,
-                              target: v("target"), distance: f("distance"), decay: f("decay"), angle: f("angle"), penumbra: f("penumbra"))
+                              target: v("target"), distance: f("distance"), decay: f("decay"), angle: f("angle"), penumbra: f("penumbra"), ground: v("ground") ?? .zero)
         }
+        let hemi = lights.first { $0.kind == "HemisphereLight" }
+        hemiSky = (hemi?.color ?? .zero) * (hemi?.intensity ?? 0); hemiGround = (hemi?.ground ?? .zero) * (hemi?.intensity ?? 0)
+        func spots(_ a: Any?) -> StageComplex.Spots {
+            let d = a as? [String: Any] ?? [:]; let list = d["spots"] as? [[Double]] ?? []
+            return .init(size: num(d["size"]), minPx: num(d["minPx"]), spots: list.filter { $0.count == 6 }.map { SIMD4(Float($0[0]), Float($0[1]), Float($0[2]), 0) },
+                         colors: list.filter { $0.count == 6 }.map { SIMD3(Float($0[3]), Float($0[4]), Float($0[5])) })
+        }
+        if let c = j["complex"] as? [String: Any], let mj = c["mesh"] as? [String: Any], let cm = mesh(mj) {
+            complex = StageComplex(mesh: cm, center: vec(c["center"]), radius: num(c["radius"]), lamps: spots(c["lamps"]), beacons: spots(c["beacons"]))
+        } else { complex = nil }
+        env = Stage.loadEnv(device: device, dir: dir, j["env"] as? [String: Any])
+        if let w = j["wetMask"] as? String, let i = texIndex[w] { wetMask = textures[i].texture } else { wetMask = nil }
         let look = j["look"] as? [String: Any] ?? [:]
         exposure = (look["exposure"] as? NSNumber)?.floatValue ?? 1
+        envIntensity = (look["environmentIntensity"] as? NSNumber)?.floatValue ?? 1
+        fogDensity = ((look["fog"] as? [String: Any])?["density"] as? NSNumber)?.floatValue ?? 0
+        let bl = look["bloom"] as? [String: Any]
+        bloomStrength = num(bl?["strength"]); bloomRadius = num(bl?["radius"]); bloomThreshold = num(bl?["threshold"])
+        let fl = look["film"] as? [String: Any]
+        hazeA = num(fl?["fogA"]); hazeB = num(fl?["fogB"]); vignette = num(fl?["vignette"]); glowScale = (fl?["glow"] as? NSNumber)?.floatValue ?? 1
+        hazeColor = vec(fl?["fogCol"]); sunColor = vec(fl?["sunCol"]); sunDir = vec(fl?["sunDir"])
+        let sk = look["sky"] as? [String: Any]
+        dusk = (sk?["kind"] as? String) == "dusk"
+        skyZenith = vec(sk?["zenith"]); skyMid = vec(sk?["mid"]); skyHorizon = vec(sk?["horizon"]); skySun = vec(sk?["sunDir"])
+        glows = (look["glows"] as? [[String: Any]] ?? []).map { StageGlow(pos: vec($0["pos"]), color: vec($0["color"]), radius: num($0["radius"])) }
         if let fog = look["fog"] as? [String: Any], let c = fog["color"] as? [Double] {
             fogColor = SIMD3(Float(c[0]), Float(c[1]), Float(c[2])); fogNear = (fog["near"] as? NSNumber)?.floatValue ?? 120; fogFar = (fog["far"] as? NSNumber)?.floatValue ?? 900
         } else { fogColor = SIMD3(0.02, 0.025, 0.04); fogNear = 150; fogFar = 1200 }
         if let k = look["keyLight"] as? [String: Any], let c = k["color"] as? [Double], let o = k["offset"] as? [Double] {
             keyColor = SIMD3(Float(c[0]), Float(c[1]), Float(c[2])); keyIntensity = (k["intensity"] as? NSNumber)?.floatValue ?? 2; keyOffset = SIMD3(Float(o[0]), Float(o[1]), Float(o[2]))
         } else { keyColor = SIMD3(1, 0.86, 0.72); keyIntensity = 2.6; keyOffset = SIMD3(-30, 22, 46) }
+    }
+
+    /// env.bin: half floats, RGBA, per mip then per face.
+    private static func loadEnv(device: MTLDevice, dir: URL, _ j: [String: Any]?) -> MTLTexture? {
+        guard let j, let file = j["file"] as? String, let sizes = j["sizes"] as? [Int], let top = sizes.first,
+              let data = try? Data(contentsOf: dir.appendingPathComponent(file)) else { return nil }
+        let d = MTLTextureDescriptor.textureCubeDescriptor(pixelFormat: .rgba16Float, size: top, mipmapped: true)
+        d.mipmapLevelCount = sizes.count; d.usage = .shaderRead; d.storageMode = .shared
+        guard let t = device.makeTexture(descriptor: d) else { return nil }
+        data.withUnsafeBytes { raw in
+            guard let base = raw.baseAddress else { return }
+            var off = 0
+            for (mip, n) in sizes.enumerated() {
+                let row = n * 8
+                for face in 0..<6 where off + row * n <= raw.count {
+                    t.replace(region: MTLRegionMake2D(0, 0, n, n), mipmapLevel: mip, slice: face, withBytes: base + off, bytesPerRow: row, bytesPerImage: row * n)
+                    off += row * n
+                }
+            }
+        }
+        return t
     }
 }

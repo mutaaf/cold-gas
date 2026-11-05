@@ -10,6 +10,8 @@
 //   part-<name>.bin what the car moves or lights on its own, and the pieces a crash throws off it, each in its own frame
 //   sweep-<name>.bin the searchlights' drum, lens and beam, in a pivot's frame
 //   <texture>.png   every texture the materials use
+//   env.bin         the course's environment as a cube of half floats, per mip then per face (+x −x +y −y +z −z)
+//   complex.bin     the launch complex, its flood lighting baked into vertex colours
 // GENERATED: never hand-edit. Geometry is deterministic; canvas PNGs are as this Chromium draws them.
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { chromium } from '@playwright/test';
@@ -46,6 +48,9 @@ try {
       parked: out.parked.map((p, i) => ({ home: p.home, paint: p.paint, ...bin(`parked-${i}`, p.mesh) })),
       carParts: { ...out.carParts, meshes: Object.fromEntries(Object.entries(out.carParts.meshes).map(([k, m]) => [k, bin(`part-${k}`, m)])) },
       sweep: out.sweep && { pivots: out.sweep.pivots, beam: bin('sweep-beam', out.sweep.beam), head: bin('sweep-head', out.sweep.head), lens: bin('sweep-lens', out.sweep.lens) },
+      env: (() => { writeFileSync(`${dir}/env.bin`, Buffer.from(out.env.data, 'base64')); return { file: 'env.bin', sizes: out.env.sizes }; })(),
+      complex: { center: out.complex.center, radius: out.complex.radius, lamps: out.complex.lamps, beacons: out.complex.beacons, mesh: bin('complex', out.complex.mesh) },
+      wetMask: out.wetMask,
       textures: out.textures.map((t) => {
         if (t.url) writeFileSync(`${dir}/${t.id}.png`, Buffer.from(t.url.split(',')[1], 'base64'));
         const { url, ...rest } = t;
@@ -54,7 +59,7 @@ try {
     };
     writeFileSync(`${dir}/stage.json`, JSON.stringify(manifest, null, 1) + '\n');
     const tris = (m) => m.submeshes.reduce((a, s) => a + s.indexCount / 3, 0);
-    console.log(`native-stage: ${id}: static ${tris(manifest.static)} tris / ${manifest.static.submeshes.length} materials, ${manifest.parked.length} parked (${manifest.parked.map((p) => tris(p)).join(', ')} tris), roadster ${tris(manifest.roadster)} + wheels ${manifest.wheels.map((w) => tris(w.steerPart) + tris(w.spinPart)).join('/')}, ${Object.keys(manifest.carParts.meshes).length} car parts, ${manifest.sweep ? manifest.sweep.pivots.length : 0} searchlights, ${manifest.lights.length} lights, ${manifest.textures.length} textures`);
+    console.log(`native-stage: ${id}: static ${tris(manifest.static)} tris / ${manifest.static.submeshes.length} materials, ${manifest.parked.length} parked (${manifest.parked.map((p) => tris(p)).join(', ')} tris), roadster ${tris(manifest.roadster)} + wheels ${manifest.wheels.map((w) => tris(w.steerPart) + tris(w.spinPart)).join('/')}, ${Object.keys(manifest.carParts.meshes).length} car parts, ${manifest.sweep ? manifest.sweep.pivots.length : 0} searchlights, ${manifest.lights.length} lights, ${manifest.textures.length} textures, complex ${tris(manifest.complex.mesh)} tris (${manifest.complex.mesh.submeshes.map((m) => tris({ submeshes: [m] })).join('/')})`);
   }
 } finally {
   await browser.close();

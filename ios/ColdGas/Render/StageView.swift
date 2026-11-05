@@ -16,6 +16,15 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
     private var pendingSize: CGSize?
     private var bench: Bench?
     private var lastFrame: CFTimeInterval = 0
+    #if DEBUG
+    /// `-timescale ground,air` (Debug): the whole app on a slowed clock, so a screenshot's few seconds catch each camera shot.
+    private let timescales = Launch.value("-timescale")?.split(separator: ",").compactMap { Double($0) } ?? []
+    private var debugClock = 0.0
+    #endif
+    /// What the screens over the scene leave the camera: rebuilt when the layout or the control scheme changes.
+    private var cameraLayout: (rows: Bool, scene: CGRect, controls: CGRect, safeTop: CGFloat)?
+    private var framing = CameraFraming(), framingThumb: Bool?
+    func setCameraLayout(rows: Bool, scene: CGRect, controls: CGRect, safeTop: CGFloat) { cameraLayout = (rows, scene, controls, safeTop); framingThumb = nil }
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -98,13 +107,30 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
     func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
         guard let r = renderer else { return }
         let now0 = CACurrentMediaTime()
-        let dt = lastFrame == 0 ? 0 : now0 - lastFrame, k = r.slowK
-        MainActor.assumeIsolated { Game.shared.frame(dt: dt, slowK: k) }   // the link runs on the main run loop
+        var dt = lastFrame == 0 ? 0 : now0 - lastFrame
+        let k = r.slowK
+        #if DEBUG
+        if let g = timescales.first { dt *= MainActor.assumeIsolated { Game.shared.hud.phase >= 2 } ? (timescales.last ?? g) : g; debugClock += dt }
+        #endif
+
+        MainActor.assumeIsolated {   // the link runs on the main run loop
+            Game.shared.frame(dt: dt, slowK: k)
+            let thumb = Game.shared.oneThumb
+            if thumb != framingThumb, let l = cameraLayout {
+                framingThumb = thumb
+                framing = CameraFraming(rows: l.rows, scene: l.scene, controls: l.controls, safeTop: l.safeTop, oneThumb: thumb)
+            }
+        }
+        r.cam.framing = framing
         lastFrame = now0
         if let s = pendingSize, s.width > 0, s.height > 0 { metal.drawableSize = s; pendingSize = nil }
         let cpu0 = CACurrentMediaTime()
         let b = bench
-        r.draw(into: update.drawable, time: cpu0 - start) { gpu in b?.gpu(gpu) }
+        var drawT = cpu0 - start
+        #if DEBUG
+        if !timescales.isEmpty { drawT = debugClock }
+        #endif
+        r.draw(into: update.drawable, time: drawT) { gpu in b?.gpu(gpu) }
         let now = CACurrentMediaTime()
         stats.add(interval: update.targetPresentationTimestamp, cpu: (now - cpu0) * 1000)
         if stats.firstFrame { Ready.mark("frame") }

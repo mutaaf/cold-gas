@@ -44,8 +44,6 @@ final class FlightUITests: XCTestCase {
         shot("watching")
         a.buttons["Back to the score"].tap()
         XCTAssertTrue(a.buttons["Fly again"].waitForExistence(timeout: 5))
-        shot("before-home")
-        print("UIFRAMES home \(a.buttons["Home"].frame) again \(a.buttons["Fly again"].frame) count \(a.buttons.matching(identifier: "Home").count)")
         a.buttons["Home"].tap()
         let home = a.buttons["play"].waitForExistence(timeout: 10)
         shot("after-home")

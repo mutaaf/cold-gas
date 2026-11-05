@@ -237,6 +237,11 @@ throttled phone: benches back to back heat it, and the numbers mean nothing abov
   - In practice the plumes' mist and the crash's particles run on the CPU in fixed pools, seeded as the web's, and only their instances go
     to the GPU (`Plumes.swift`, `Crash.swift`, `Debris.swift`, 0159). Attribution: `-fx-log` (the mist's fragments per frame) and
     `-gpu-skip plumes,mist,beams`. Debug shots on a loaded Mac: `-holds <sim times>`, `-fx-cam rear|front|top`, `-replay <absolute path>`.
+- **The picture beside the web's (0163).** The environment is three's PMREM read back into a cube at export; the launch complex is baked
+  into vertex colours; the mirror is a quarter-size redraw of what stands on the stage; bloom a quarter-size chain added in one pass;
+  film.js's haze lives in each material and in billboards. Attribution: `-gpu-skip env,stars,haze,wet,mirror,complex,lattice,floodbeams,glints,glows,bloom`
+  and `-bench`'s `mirror` and `bloom` lines. `Renderer.shed`: at the resolution floor and over budget, or hot, or on Low Power Mode, the mirror
+  goes first, then the lit air and half the mist's budget (`LOOK shed` in the log).
 - **Anti-aliasing.** 4× MSAA in memoryless tile memory. It's cheap on Apple GPUs, and it fixes what SMAA couldn't:
   - The sub-pixel lamp strips that flicker through the bloom (LESSONS 0037, "Sub-pixel emissive geometry").
   - Keep the `sliver()` minimum-width idea for strips under a pixel.
@@ -255,9 +260,10 @@ throttled phone: benches back to back heat it, and the numbers mean nothing abov
   - One `.metal` namespace with no duplicate function names (moon-club).
   - Clamp everything that goes into `pow`, `sqrt` and `normalize` (LESSONS: "One NaN pixel is a flicker storm").
   - Generated meshes are wound outward (LESSONS: "Loft winding").
-- **Camera.** The director's rigs are ported. The lens keeps the **horizontal** field of view under an aspect
-  (LESSONS 0108, `lens()` in director.js). That's how the near-square inner screen and the portrait outer screen
-  frame the car the same.
+- **Camera.** The director's live rigs are ported (0158, `Render/Director.swift`), with what differs from the web listed
+  at its head. The lens is vertical, as three's is. The shots framed side-on to the car keep the **horizontal** field of
+  view under an aspect (LESSONS 0108, `lens()` in director.js), and the aspect comes from the scene's rect. The HUD's foot
+  and the touch controls reach the camera as `CameraFraming`, worked out from the layout.
 - **Thermal and power.**
   - `ProcessInfo.thermalState` and Low Power Mode feed the resolution governor, which works as `src/obs/ledger.js`
     does:
