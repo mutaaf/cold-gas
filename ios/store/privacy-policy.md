@@ -5,8 +5,14 @@ iPhone app and the web game, which send the same things to the same server.
 
 ---
 
-**Cold Gas has no accounts, no ads and no tracking.** It talks to one server, ours, at mutaafaziz.com/coldgas.
-Nothing goes to an advertising network, an analytics company or a data broker.
+**Cold Gas has no accounts. The iPhone app has no ads and no tracking:** it talks to one server, ours, at
+mutaafaziz.com/coldgas, and nothing from it goes to an advertising network, an analytics company or a data broker. The
+web game is the same, except for the ads and page analytics described below.
+
+**Ads and page analytics on the web game.** The web game shows ads from Google, through our own ad loader, on its menus
+and results, never during a run. A rewarded ad plays only when you ask for one. Those ads can use the ad network's own
+cookies and identifiers, under Google's privacy policy. The site's pages are also served through Cloudflare, whose Web
+Analytics counts page views. None of this is in the iPhone app.
 
 **What we receive, and why**
 

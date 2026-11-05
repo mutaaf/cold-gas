@@ -182,7 +182,7 @@ the governor floors and the frame still misses. So the cost isn't pixels. Later 
   3. Cut the shadow map to the car's neighbourhood and redraw it only when something in it moves.
   4. Bloom.
   5. Port the director's rigs.
-### Live play: the same log from the same touches (0155, 2026-11-04)
+### Live play: the same log from the same touches (0161, 2026-11-04)
 
 `LiveRun` (ColdGasPhysics/Live.swift; its header is the app's API) flies a run tick by tick: one-thumb or classic touch,
 the Wall's fan and the release, the input log, then the aftermath. `npm run vectors` writes `input/*.json`: 15 scripted
@@ -195,7 +195,7 @@ telemetry, the card, the sight (`predict` + `markOffset`) and the aftermath to r
 - **Not ported (unscored or display only):** replay frames (`recordFrame`, phase 2), `steadyStatus`, AI drive, Easy's road
   aids, the reverse, `applyGround`, the nozzle pad's chords and the keys' valve ramp (the app supplies valve values),
   `heightAboveSurface`. The keyboard and gamepad channels in `InputSampler` are ported but no vector drives them yet.
-- **Don't name a module-level constant what ColdGasCore already exports** (LESSONS, 0155).
+- **Don't name a module-level constant what ColdGasCore already exports** (LESSONS, 0161).
 
 ### On a cool phone (2026-11-04, Release, iPhone 15 Pro Max)
 The whole Show, 10 s: 1,193 frames, presentation p95 8.34 ms, 5 hitches, CPU avg 0.75 ms, GPU avg 6.08 ms, p95 6.54 ms, 0
@@ -495,7 +495,7 @@ ios/
 | 0 | **Spike** (0146 vectors, 0147 determinism, 0148 first frame) | `dmath` and one `vehicle.step` slice bit-identical on macOS, Linux and an iPhone; native Rapier matches the WASM build over the vectors; the exported roadster draws at 120 Hz on the Duo simulator |
 | 1 | **Core** ✅ (0152) | All of the sim plus the scorer in Swift; every vector bit-exact; 32 of 32 naive players land; 0 B/tick |
 | 2 | **The Show drawn** | Course, car, plumes, mist, director; binary archive (no compile in a run); the governor; p95 ≤ 8.3 ms on the simulator bench |
-| 3 | **Playable + haptics** (0149, 0155, 0156) ✅ first cut | Touch (one-thumb, classic), tilt, pad, keyboard; the HUD; audio; the full haptic track; a newcomer lands on Assist |
+| 3 | **Playable + haptics** (0149, 0161, 0162) ✅ first cut | Touch (one-thumb, classic), tilt, pad, keyboard; the HUD; audio; the full haptic track; a newcomer lands on Assist |
 | 4 | **Results** | Judges streaming, the theatre, the receipt, the board (post with telemetry), medals, the daily jump, challenge payloads, share |
 | 5 | **The Wall and the Lineup** | Both courses, drills, the coach, replays |
 | 6 | **Duo and Pro Max pass** | Layout tests in every pose; hardware pass (120 Hz held, haptics felt, fold mid-run) |

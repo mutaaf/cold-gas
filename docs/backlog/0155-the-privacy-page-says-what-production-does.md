@@ -33,10 +33,13 @@ false for the page that says it. A privacy page must be exactly true.
   The operator wrote the wording, so put the new sentences in the PR body for their eye. If the auto-merge would land
   wording they haven't seen, open it as `proposal/` instead.
 
+Operator, 2026-11-05: the words are fixed in #253 (the page now names the web game's ads and Cloudflare's analytics, and says
+the iPhone app has neither). What's left here is stopping the beacon, then dropping the Cloudflare sentence, and the e2e check.
+
 ## Acceptance criteria
 - [ ] Playwright at 390×844 on the preview: `/coldgas/privacy` makes **zero** requests to a host other than the
       page's own, and its response carries `no-transform`.
-- [ ] No sentence on the page is contradicted by `src/ads.js` or `/ads/api/config?app=coldgas`. It names the ads on
+- [x] No sentence on the page is contradicted by `src/ads.js` or `/ads/api/config?app=coldgas`. It names the ads on
       the web, where they appear (menus and results, never in a run) and who serves them, and says the iPhone app
       shows none.
 - [ ] An e2e or unit check fails if the page says "no ads" while `src/ads.js` still loads the loader on the web.
