@@ -14,6 +14,7 @@ if (typeof globalThis.document === 'undefined') {
   // elementFromPoint: here a finger's clientX is 1000 + the pad's index (−1: off every pad).
   const node = () => ({ setAttribute() {}, appendChild() {}, querySelector: () => node(), dataset: {}, classList: { toggle() {} }, innerHTML: '' });
   def('document', {
+    documentElement: { dataset: {}, classList: { add() {}, remove() {} }, offsetWidth: 0 },   // src/units.js stamps the units on it
     addEventListener() {}, querySelectorAll: () => [], activeElement: null, createElementNS: node,
     elementFromPoint: (x) => (x >= 1000 ? { closest: () => ({ dataset: { pad: String(x - 1000) } }) } : null),
   });

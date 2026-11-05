@@ -7,6 +7,7 @@ import { buildVectors, runVector, runList, inputList, flat, hex, unhex, xorshift
 import { simulate, SIM_VERSION } from '../../src/sim/run.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { dsin } from '../../src/sim/dmath.js';
+import { decodeChallenge, encodeChallenge } from '../../src/challenge.js';
 
 const disk = (p) => readFileSync(join(VECTOR_DIR, p), 'utf8');
 
@@ -63,9 +64,22 @@ describe('native vectors (0146)', () => {
     expect([...ends].sort()).toEqual(expect.arrayContaining(['contact', 'flipped', 'settled', 'stalled']));
     expect(JSON.parse(disk('input/thumb-show-aim.json')).sights.length).toBeGreaterThan(5);
   });
+  // 0154: challenge.json's accepts and rejects are the real decodeChallenge's, and deflate round-trips what it pins.
+  it('challenge.json says what decodeChallenge says', async () => {
+    const c = JSON.parse(disk('challenge.json'));
+    for (const x of c.cases) {
+      const d = await decodeChallenge(x.payload);
+      expect(d, x.name).not.toBeNull();
+      expect([d.simVersion, d.course, d.score, d.tier, d.initials]).toEqual([x.decoded.simVersion, x.decoded.course, x.decoded.score, x.decoded.tier, x.decoded.initials]);
+    }
+    for (const x of c.rejects) expect(await decodeChallenge(x.payload), x.name).toBeNull();
+    const a = c.cases[0], z = await encodeChallenge({ ...a, simVersion: a.simVersion }, { compress: true });
+    expect(z[0]).toBe('z');
+    expect((await decodeChallenge(z)).log).toEqual(a.log);
+  });
   it('the manifest names every file with its hash', () => {
     const m = JSON.parse(disk('manifest.json'));
     expect(m.simVersion).toBe(SIM_VERSION);
-    expect(m.files.length).toBe(runList().length + 2 + HAPTIC_RUNS.length + inputList().length);
+    expect(m.files.length).toBe(runList().length + 4 + HAPTIC_RUNS.length + inputList().length);
   });
 });

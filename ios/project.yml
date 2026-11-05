@@ -47,6 +47,8 @@ targets:
         product: ColdGasPhysics
       - package: ColdGasCore
         product: ColdGasLayout
+      - package: ColdGasCore
+        product: ColdGasClient
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mutaafaziz.coldgas

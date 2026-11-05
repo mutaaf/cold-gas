@@ -15,6 +15,11 @@ import { SPEC } from '../src/sim/spec.js';
 import { predict, newPrediction } from '../src/sim/predict.js';
 import { markOffset } from '../src/onethumb.js';
 import { input as IN, touchSettings, dom, STICK } from './vectors-dom.mjs';
+import { packBytes, unpackBytes, toB64url, fromB64url, vsFromHash, challengeUrl, compare, coarsen, COARSE_STEPS, CHANNELS, VS_MAX_CHARS } from '../src/challenge.js';
+import { localWords, boardRow, postMessage, rankLabel, LOCAL_WHY } from '../src/panel.js';
+import { OBJECTIVES, EPOCH, objectiveIndex, dayKey, dayNumber, evaluate, missLine, titleHint, readStreak, streakNow, complete } from '../src/daily.js';
+import { one, both, setUnits, getUnits, localize, toUS, fmtRoad, fmtSmall } from '../src/units.js';
+import { EDGE_DEFAULT } from '../src/ai/config.js';
 
 export const VECTOR_FORMAT = 1;
 export const VECTOR_DIR = 'ios/Packages/ColdGasCore/Tests/Vectors';
@@ -130,7 +135,7 @@ export function flat(v, path = '', out = []) {
 }
 
 // Replay a log the way the server and a challenge do (simulate), recording the trace.
-export function runVector(name, course, log) {
+export function runVector(name, course, log, keep = null) {
   const h = [0x811c9dc5, 0x9747b28c], checks = [], full = [];
   const run = simulate(log, course, undefined, (r) => {
     const s = stateOf(r);
@@ -138,6 +143,7 @@ export function runVector(name, course, log) {
     if (r.tick % CHECK_EVERY === 0) checks.push([r.tick, hashHex(h)]);
     if (r.tick % FULL_EVERY === 0) full.push([r.tick, s.map(hex)]);
   });
+  if (keep) keep.t = run.t;
   return {
     format: VECTOR_FORMAT, simVersion: SIM_VERSION, name, course, ticks: run.tick,
     log, checkEvery: CHECK_EVERY, fullEvery: FULL_EVERY, fields: STATE_FIELDS,
@@ -470,10 +476,12 @@ export function buildVectors({ only } = {}) {
     dm.functions.map((f) => `{"name":${JSON.stringify(f.name)},"args":${f.args},"cases":[\n` + f.cases.map((c) => JSON.stringify(c)).join(',\n') + '\n]}').join(',\n') + '\n]}\n';
   // The engine on its own (scripts/engine-spike.js): native Rapier must give the WASM build's hash.
   files['engine-spike.json'] = JSON.stringify({ format: VECTOR_FORMAT, steps: [240, 2400].map((n) => ({ steps: n, ...engineSpike(RAPIER, n) })) }) + '\n';
+  const flown = [];
   for (const r of runList()) {
     if (only && !only.includes(r.name)) continue;
-    const log = r.log();
-    files[`runs/${r.name}.json`] = stringifyRun(runVector(r.name, r.course, log));
+    const log = r.log(), keep = {};
+    files[`runs/${r.name}.json`] = stringifyRun(runVector(r.name, r.course, log, keep));
+    flown.push({ name: r.name, course: r.course, log, t: keep.t });
     if (HAPTIC_RUNS.includes(r.name)) {
       const h = hapticFeed(r.name, r.course, log), { ticks, ...head } = h;
       files[`haptics/${r.name}.json`] = JSON.stringify(head).slice(0, -1) + ',"ticks":[\n' + ticks.map((t) => JSON.stringify(t)).join(',\n') + '\n]}\n';
@@ -483,7 +491,16 @@ export function buildVectors({ only } = {}) {
     if (only && !only.includes(r.name)) continue;
     files[`input/${r.name}.json`] = stringifyInput(inputVector(r));
   }
+  // The app around the sim (0154): every run is needed, so a partial build (`only`) leaves these out.
+  if (!only) {
+    files['challenge.json'] = lines(challengeVectors(flown));
+    files['client.json'] = lines(clientVectors(flown));
+  }
   return files;
+}
+// A JSON object with one top-level key per line, and each array's items one per line, so a diff names the case.
+function lines(o) {
+  return '{' + Object.entries(o).map(([k, v]) => `\n${JSON.stringify(k)}:` + (Array.isArray(v) ? '[\n' + v.map((x) => JSON.stringify(x)).join(',\n') + '\n]' : JSON.stringify(v))).join(',') + '\n}\n';
 }
 function stringifyRun(v) {
   const { log, checks, full, telemetry, card, ...head } = v;
@@ -491,4 +508,204 @@ function stringifyRun(v) {
   return '{' + Object.entries(head).map(([k, x]) => `${JSON.stringify(k)}:${JSON.stringify(x)}`).join(',') +
     ',\n"log":' + rows(log) + ',\n"checks":' + rows(checks) + ',\n"full":' + rows(full) +
     ',\n"telemetry":' + rows(telemetry) + ',\n"card":' + rows(card) + '}\n';
+}
+
+// --- the app around the sim (0154, docs/NATIVE.md §7) ---------------------------------------------
+// challenge.json: src/challenge.js's `#vs=` payloads, byte for byte: the plain ('r') form of real runs, a legacy
+// 12-channel log, odd inputs, coarsened logs, payloads that must decode to null, the fragment parser, the URL and
+// compare(). The deflated ('z') form isn't pinned: deflate's bytes depend on the zlib build (Node's differs by CPU),
+// so the Swift side checks its own round trip, and tests/unit/vectors.test.js decodes every case with the real
+// decodeChallenge.
+const CH_RUNS = ['ref-show', 'ref-wall', 'ref-lineup', 'ref-show-advanced', 'crash-lineup-rolls2', 'pro-fuzz-0', 'pro-fuzz-1', 'naive-wall-floored-1-1.01'];
+const rPayload = (o) => `r${toB64url(packBytes(o))}`;
+// The 'r' half of decodeChallenge, synchronously: a reject below that this accepts is a bug in the golden.
+function decodeR(p) {
+  try {
+    if (typeof p !== 'string' || p.length < 2 || p.length > VS_MAX_CHARS || p[0] !== 'r') return null;
+    const b = fromB64url(p.slice(1));
+    return b && b.length ? unpackBytes(b) : null;
+  } catch { return null; }
+}
+export function challengeVectors(flown) {
+  const cases = [];
+  CH_RUNS.forEach((name, i) => {
+    const f = flown.find((x) => x.name === name);
+    if (!f) return;
+    const card = scoreRun(f.t), initials = i % 2 ? '' : ['ABC', 'XYZ', 'QQQ', 'MAZ'][i / 2];
+    cases.push({ name, course: f.course, score: card.total, tier: card.tier, initials, simVersion: SIM_VERSION, log: f.log,
+      payload: rPayload({ log: f.log, course: f.course, score: card.total, tier: card.tier, initials }) });
+  });
+  // An older client's 12-channel log: packed as today's 23 (the missing channels zero).
+  const lineup = flown.find((x) => x.name === 'ref-lineup');
+  if (lineup) {
+    const log = lineup.log.map((e) => e.slice(0, 13));
+    cases.push({ name: 'legacy-12', course: 'lineup', score: 91.25, tier: 'pro', initials: 'OLD', simVersion: SIM_VERSION, log,
+      payload: rPayload({ log, course: 'lineup', score: 91.25, tier: 'pro', initials: 'OLD' }) });
+  }
+  // Odd inputs packBytes tolerates: a score out of range, an unknown tier, bad initials, an older SIM_VERSION, values past ±100.
+  const zeros = (n) => new Array(n).fill(0);
+  const tiny = [[0, 100, ...zeros(CHANNELS - 1)], [7, 100, 0, -35, ...zeros(CHANNELS - 3)], [300, ...zeros(CHANNELS)]];
+  for (const [name, o] of [['score-high', { score: 140, tier: 'advanced', initials: 'TOP' }], ['score-neg', { score: -3, tier: 'nope', initials: 'abc' }],
+    ['score-half', { score: 87.25, tier: 'pro', initials: 'AB' }], ['old-sim', { score: 50.05, simVersion: 3 }],
+    ['clamped', { score: 12, log: [[0, 150, -250, ...zeros(CHANNELS - 2)]] }]]) {
+    const log = o.log || tiny;
+    cases.push({ name, course: 'wall', score: o.score, tier: o.tier ?? 'assist', initials: o.initials ?? '', simVersion: o.simVersion ?? SIM_VERSION, log,
+      payload: rPayload({ log, course: 'wall', score: o.score, tier: o.tier, initials: o.initials, simVersion: o.simVersion }) });
+  }
+  // Decoded, as decodeChallenge returns them (the score to one decimal, the log padded to 23, clamped to ±100).
+  for (const c of cases) {
+    const d = decodeR(c.payload);
+    if (!d) throw new Error(`challenge golden: ${c.name} does not decode`);
+    c.decoded = { simVersion: d.simVersion, course: d.course, score: d.score, tier: d.tier, initials: d.initials, log: c.name === 'clamped' || c.name === 'legacy-12' ? d.log : null };
+  }
+  // coarsen(): the shorter link's logs, packed.
+  const coarse = [];
+  for (const name of ['ref-show', 'pro-fuzz-0']) {
+    const f = flown.find((x) => x.name === name);
+    if (f) for (const step of COARSE_STEPS) { const log = coarsen(f.log, step); coarse.push({ name, step, entries: log.length, payload: rPayload({ log, course: f.course, score: 80, tier: 'assist' }) }); }
+  }
+  // Payloads that must decode to null: each breaks one bound.
+  const head = (o = {}) => [o.format ?? 1, o.sim ?? SIM_VERSION, o.course ?? 0, ...(o.score ?? [0x84, 0x07]), o.tier ?? 1, ...(o.ini ?? [65, 66, 67])];
+  const varint = (n) => { const out = []; while (n >= 0x80) { out.push((n & 0x7f) | 0x80); n = Math.floor(n / 128); } out.push(n); return out; };
+  const entry = (delta, chans) => [...varint(delta), ...chans];
+  const body2 = [2, ...entry(0, [0x80, ...varint(200)]), ...entry(10, [0x80, ...varint(199)])];   // throttle 100, then 0
+  const ok = [...head(), ...body2];
+  const bad = (name, bytes) => ({ name, payload: `r${toB64url(Uint8Array.from(bytes))}` });
+  const rejects = [
+    bad('trailing byte', [...ok, 0]),
+    bad('format 2', [2, ...ok.slice(1)]),
+    bad('course 3', [...head({ course: 3 }), ...body2]),
+    bad('score 1001', [...head({ score: varint(1001) }), ...body2]),
+    bad('tier 3', [...head({ tier: 3 }), ...body2]),
+    bad('initials half', [...head({ ini: [65, 66, 0] }), ...body2]),
+    bad('initials lower', [...head({ ini: [97, 98, 99] }), ...body2]),
+    bad('no entries', [...head(), 0]),
+    bad('entries past MAX_TICKS', [...head(), ...varint(21601)]),
+    bad('tick past MAX_TICKS', [...head(), 1, ...entry(21600, [0xff])]),
+    bad('tick delta 0', [...head(), 2, ...entry(0, [0x80, ...varint(200)]), ...entry(0, [0x80, ...varint(199)])]),
+    bad('channel 23', [...head(), 1, ...entry(0, [23 | 0x80, 2])]),
+    bad('channel twice', [...head(), 1, ...entry(0, [0, 2, 0x80, 2])]),
+    bad('value 101', [...head(), 1, ...entry(0, [0x80, ...varint(202)])]),
+    bad('value unchanged', [...head(), 1, ...entry(0, [0x80, 0])]),
+    bad('zigzag past 400', [...head(), 1, ...entry(0, [0x80, ...varint(401)])]),
+    bad('truncated', ok.slice(0, ok.length - 1)),
+    bad('varint too long', [1, 0xff, 0xff, 0xff, 0xff, 0xff, 0x01]),
+    { name: 'kind q', payload: `q${toB64url(Uint8Array.from(ok))}` },
+    { name: 'kind only', payload: 'r' },
+    { name: 'empty', payload: '' },
+    { name: 'bad base64', payload: 'rAB!C' },
+    { name: 'base64 length 4n+1', payload: 'rABCDE' },
+    { name: 'non-ascii', payload: 'rABéC' },
+    { name: 'too long', payload: `r${'A'.repeat(VS_MAX_CHARS)}` },
+  ];
+  for (const r of rejects) if (decodeR(r.payload)) throw new Error(`challenge golden: reject "${r.name}" decodes`);
+  const twin = `r${toB64url(Uint8Array.from(ok))}`, td = decodeR(twin);
+  if (!td) throw new Error('challenge golden: the rejects\' good twin does not decode');
+  const accept = [{ name: 'the rejects\' good twin', payload: twin, decoded: td }];
+  const hashes = ['#vs=rAbC_-9', '#x=1&vs=zQQ&y=2', '#vsx=1', '', '#vs=', '#play&vs=AB', 'vs=abc', '#vs=ab$cd', '#&vs=Q', '#avs=Q', `#vs=${'A'.repeat(VS_MAX_CHARS + 13)}`]
+    .map((h) => [h, vsFromHash(h)]);
+  const urls = [['https://mutaafaziz.com/coldgas/', 'show', 'rABC'], ['https://mutaafaziz.com/coldgas/', 'lineup', 'zQ-_'], ['/coldgas/', 'a b&c/é', 'r0']]
+    .map(([b, c, p]) => [b, c, p, challengeUrl(b, c, p)]);
+  const compares = [[90, 88.5, 'ABC'], [88.5, 90, ''], [90, 90, 'ABC'], [90.04, 90, ''], [90.06, 90, 'XYZ'], [0.3, 0.1 + 0.2, ''], [97.7, 12.3, 'Q'], [12.3, 97.7, 'MAZ'], [50.05, 50, '']]
+    .map(([a, b, i]) => [a, b, i, compare(a, b, i)]);
+  return { format: VECTOR_FORMAT, simVersion: SIM_VERSION, channels: CHANNELS, maxChars: VS_MAX_CHARS, cases, coarse, accept, rejects, hashes, urls, compares };
+}
+
+// client.json: the numbers and words the app shows or sends, from the web's own modules: JSON.stringify of each run's
+// telemetry (the board's and the judges' `t`) and of the request bodies, JS number → string (shortest, as String(x) and
+// JSON write it) and toFixed, src/units.js's readouts and prose, src/panel.js's local lines, boardRow, postMessage and
+// rankLabel, and src/daily.js's objectives, checks, hints and streak.
+const NUM_SPECIAL = [0, -0, 1, -1, 0.1, 0.5, 1 / 3, 2 / 3, 100, 1e21, 1e20, 123456789012345680000, 1.5e21, 1e-6, 1e-7, 1.5e-7, 0.000001234,
+  5e-324, -5e-324, 1.7976931348623157e308, 2.2250738585072014e-308, 4.35, 0.817, 27.4, 9007199254740993, 1e16, 12345678901234567, 9007199254740992,
+  0.30000000000000004, -1e-7, 1e100, 123e-20, 1e15 + 0.3, 999999999999999900000, 0.000001, 0.0000015, 297, -273.15, 2447 / 2150, Math.PI, Math.E,
+  Infinity, -Infinity, NaN];
+const FIXED_SPECIAL = [0.5, 1.5, 2.5, -2.5, -0.5, 0.125, 0.375, 1.005, 1.45, 8.345, 1234.5, 999.95, -0.4, -0, 0, 0.05, 1e-10, 123456.789, 0.045, 10.235,
+  1.0000000000000002, 99.99999999999999, 5e-324, 1e20, 4.35, 0.817, 27.35, -1234.5678];
+const UNIT_SI = [0, 0.5, 1, 3.5, 7, 12.345, 26.8224, 99.95, 1609.344, 1234.5, 98765.4, -3.2, 0.0254, 160, 161, 16093, 16094, 1e6];
+const PROSE = ['27.7 m up the wall', 'Touchdown at 0.8 m/s with 3.2° of tilt.', '1,234 kg of gas', '78 kN down-jets', '−3 m', '-2.5 m/s', 'at 12 km/h',
+  'a 9.81 m/s² pull', '4 metres', '250 bar', '120 kW', '3 cm and 45 mm', '10m', '5 m', 'x1.5 m', '1.5 m/s²', '20 mph', '3 ms', 'm2', '1.5 km',
+  '1,000,000 m', '0.25 m', '2,447 kgf', '0.05 bar', 'two meters', '12.5 meter', '+4 m', '1.2.3 m', '9 m/sx', '7 m²', '80 kN, 78 kN and 297 kg',
+  '0.2 mm', '12,5 m', '3 m_', 'é4 m', '1500 kg', '1500.5 kg', '33 m/s', '0.123 km'];
+const CTXS = [{ device: 'touch', scheme: 'thumb', tier: 'assist' }, { device: 'touch', scheme: 'classic', tier: 'assist' }, { device: 'touch', scheme: 'classic', tier: 'pro' },
+  { device: 'touch', scheme: 'classic', tier: 'advanced' }, { device: 'pad', scheme: 'classic', tier: 'assist' }, { device: 'key', scheme: 'classic', tier: 'pro' }];
+// Cards the runs don't reach, for the local lines' and the Daily's other branches: a real card with its facts bent.
+const BENDS = [['wrecked', { damagePct: 72 }], ['no-jump', { jumped: false, progressPct: 64 }], ['no-climb', { jumped: false, progressPct: 20 }],
+  ['contact', { contact: true }], ['flipped', { flipped: true }], ['crashed', { crashed: true }], ['fell-off', { fellOff: true }],
+  ['on-ramp', { landedOnRamp: true }], ['short', { crossedRow: false }], ['double', { rotations: 2, rollDeg: 731 }], ['zero-rot', { rotations: 0 }],
+  ['soft', { sink: 0.6, wheelSpreadMs: 12 }], ['hard', { sink: 2.4, wheelSpreadMs: 180, airPct: 12 }], ['long-inverted', { invertedS: 1.4 }],
+  ['near', { padMiss: 2.9, clearance: 1.2, airPct: 31, damagePct: 0 }], ['far', { padMiss: 9.6, clearance: 3.4, airPct: 22, damagePct: 4 }]];
+const cardOf = (c) => ({ total: c.total, verdict: c.verdict, tier: c.tier, facts: c.facts });
+export function clientVectors(flown) {
+  const r = xorshift(0x5eed0154), u = () => r() / U32;
+  const ten = (k) => Number(`1e${k}`);   // parsed, not Math.pow: engines differ in pow by an ulp, and these files must not
+  const nums = NUM_SPECIAL.slice();
+  for (let i = 0; i < 300; i++) nums.push(unhex(r().toString(16).padStart(8, '0') + r().toString(16).padStart(8, '0')));
+  for (let i = 0; i < 300; i++) { const m = ten((r() % 9) - 3); nums.push(Math.round((u() * 2 - 1) * 1e5 * m) / (1e5 / m)); }
+  for (let i = 0; i < 100; i++) nums.push((u() * 2 - 1) * ten((r() % 50) - 25));
+  const numbers = nums.map((x) => [hex(x), String(x), JSON.stringify(x)]);
+  const fixed = [];
+  for (const x of FIXED_SPECIAL) for (let d = 0; d <= 3; d++) fixed.push([hex(x), d, x.toFixed(d)]);
+  for (let i = 0; i < 400; i++) { const x = Math.round((u() * 2 - 1) * ten(r() % 7) * 1000) / 1000 + (r() & 1 ? 0.0005 : 0); const d = r() % 4; fixed.push([hex(x), d, x.toFixed(d)]); }
+  const telemetry = flown.map((f) => [f.name, JSON.stringify(f.t)]);
+  const lu = flown.find((f) => f.name === 'ref-lineup');
+  const bodies = lu ? [
+    ['post', JSON.stringify({ log: lu.log, t: lu.t, initials: 'ABC', course: lu.course })],
+    ['dry', JSON.stringify({ log: lu.log, t: lu.t, course: lu.course, dry: true })],
+    ['judges', JSON.stringify({ log: lu.log, t: lu.t, assist: true, course: lu.course, provider: EDGE_DEFAULT.provider, model: EDGE_DEFAULT.model })],
+  ] : [];
+  const units = [];
+  for (const q of ['speed', 'rate', 'len', 'mass', 'kgf', 'press', 'dist', 'force']) for (const si of UNIT_SI) for (const d of [0, 1, 2]) for (const s of ['us', 'metric']) units.push([q, hex(si), d, s, one(q, si, d, s)]);
+  const cards = [];
+  for (const f of flown) {
+    const card = scoreRun(f.t);
+    cards.push([f.name, f.course, card]);
+    if (['ref-show', 'ref-wall', 'ref-lineup'].includes(f.name)) for (const [bend, facts] of BENDS) cards.push([`${f.name}~${bend}`, f.course, { ...card, facts: { ...card.facts, ...facts } }]);
+  }
+  const words = cards.map(([name, course, card]) => [name, course, cardOf(card), localWords(card)]);
+  // Everything with a unit in it, with each system leading (setUnits is the module's own state: put back after).
+  const was = getUnits();
+  const prose = [], goals = [], daily = [], readouts = [];
+  for (const s of ['us', 'metric']) {
+    setUnits(s, { persist: false });
+    for (const m of UNIT_SI) readouts.push([s, hex(m), fmtRoad(m), fmtSmall(m), both('len', m, { us: 0, metric: 1 }), both('speed', m)]);
+    for (const t of [...PROSE, ...words.flatMap(([, , , w]) => [w.engineer, w.coordinator, w.designer])]) prose.push([s, t, toUS(t), localize(t)]);
+    for (const o of OBJECTIVES) goals.push([s, o.id, o.goal()]);
+    for (const o of OBJECTIVES) for (const [name, course, card] of cards) {
+      const res = evaluate(o, card, course);
+      if (res) daily.push([s, o.id, name, res.ok, res.miss, !!res.fix, ...(res.ok ? [] : CTXS.map((c) => missLine(o, res, { ...c, course })))]);
+    }
+  }
+  setUnits(was, { persist: false });
+  const titles = OBJECTIVES.flatMap((o) => CTXS.map((c) => [o.id, c, titleHint(o, c, false), titleHint(o, c, true)]));
+  const days = [];
+  for (let d = EPOCH - 40; d <= EPOCH + 1500; d++) days.push([d, objectiveIndex(d)]);
+  const dayKeys = [0, 1, 86_399_999, 86_400_000, Date.UTC(2026, 0, 1), Date.UTC(2026, 10, 4, 23, 59, 59), Date.UTC(2028, 1, 29, 12), -1, -86_400_001]
+    .map((ms) => [ms, dayNumber(ms), dayKey(ms)]);
+  const noon = (s) => Date.parse(`${s}T12:00:00Z`);
+  let st = readStreak(null);
+  const streak = [];
+  for (const day of ['2026-11-01', '2026-11-01', '2026-11-02', '2026-11-03', '2026-11-05', '2026-11-06', '2026-12-31', '2027-01-01', '2027-01-02']) {
+    const ms = noon(day), before = streakNow(st, ms);
+    st = complete(st, ms);
+    streak.push([day, ms, before, st, streakNow(st, ms), streakNow(st, ms + 86_400_000), streakNow(st, ms + 2 * 86_400_000)]);
+  }
+  const streakReads = [null, '', 'junk', '{}', '{"last":"2026-11-03","streak":4,"best":2}', '{"last":"2026-13-40","streak":4}', '{"last":"2026-11-03","streak":-1,"best":1.5}',
+    '{"last":"2026-11-03","streak":100000,"best":7}', '{"last":"2026-11-03"}', '[1]', '{"last":"2026-11-03","streak":"3","best":9}', '{"last":"2026-02-30","streak":2}']
+    .map((raw) => [raw, readStreak(raw)]);
+  const rows = [null, 5, 'row', {}, { total: '88.5' }, { total: null }, { total: 'abc' }, { total: true },
+    { total: 90, initials: 'ab1c', verdict: 'x'.repeat(50), facts: { rollDeg: '360', sink: null }, tier: 'pro', course: 'wall' },
+    { total: 70, initials: '', tier: 'bogus', course: 'moon', verdict: '' }, { total: 0, facts: [1, 2], initials: 123 },
+    { total: 100, initials: 'éAB', verdict: 12, facts: { rollDeg: 720.4, sink: 0.82 } },
+    { total: 64.2, initials: true, verdict: null, tier: 'advanced', course: 'lineup', facts: 'x' }, { total: ' 12 ', initials: { a: 1 }, facts: { sink: '' } },
+    { initials: 'ABC', total: 1e3, verdict: 'Stuck it', facts: { rollDeg: -5, sink: 'Infinity' }, tier: 'assist', course: 'show', day: '2026-11-04' },
+    { total: '0x1A', initials: 'zz' }, { total: '1e2', initials: 'a-b-c-d' }, { total: '', verdict: false }]
+    .map((x) => [x, boardRow(x)]);
+  const posts = [{ ok: true, rank: 3 }, { ok: false, status: 429 }, { ok: false, status: 0, timeout: true }, { ok: false, status: 0 }, { ok: false, status: 400, error: 'update' },
+    { ok: false, status: 400, error: 'no jump' }, { ok: false, status: 400, error: 'implausible', why: 'air' }, { ok: false, status: 400, error: 'bad run' },
+    { ok: false, status: 400, error: 'initials' }, { ok: false, status: 400, error: 'course' }, { ok: false, status: 503, error: 'no board' }, { ok: false, status: 500 },
+    { ok: false, status: 429, error: 'slow down' }]
+    .map((x) => [x, postMessage(x)]);
+  const ranks = [1, 7, 0, -2, 1.5, null, '3'].map((x) => [x, rankLabel(x)]);
+  return { format: VECTOR_FORMAT, simVersion: SIM_VERSION, numbers, fixed, telemetry, bodies, units, readouts, prose, words, localWhy: [LOCAL_WHY],
+    objectives: OBJECTIVES.map((o) => [o.id, o.course, o.tier ?? null]), epoch: EPOCH, days, dayKeys, goals, daily, titles, streak, streakReads, rows, posts, ranks };
 }
