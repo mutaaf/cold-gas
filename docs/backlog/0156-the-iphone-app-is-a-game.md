@@ -35,5 +35,5 @@ Runs on: the operator's Mac (Xcode, Metal).
 `make test`, `make rules`, `make bench`, and the shots above; on the phone, one flight of each course by hand.
 
 ## Not in 1.0
-Advanced (the ten valves by hand), keyboard and gamepad UI, drills, the coach, the replay theatre, Free Drive, the health
+Drills, the coach, the replay theatre, Free Drive, the health
 beacon, a BYOK key. Rendering details still open are in 0153.

@@ -3,9 +3,11 @@ One jump, made playable. A roadster climbs a curved wall on suction, lets go ups
 THE JUMP
 The physics is a deterministic rigid-body sim at 240 ticks a second: raycast suspension, tyre grip, ten nozzles that run their tank down, and a flight computer. The same inputs always fly the same jump, on the phone and on the web.
 
-TWO WAYS TO FLY
+THREE WAYS TO FLY
 - Assist: one thumb. Hold to climb, tap to let go, hold to land. The computer rolls you out and brakes, and a slide of your thumb aims the touchdown.
 - Pro: a stick and buttons. You fly the roll and the landing yourself.
+- Advanced: all ten valves by hand.
+A game controller or a keyboard works too.
 
 THREE COURSES
 The Show, the Wall and the Lineup.

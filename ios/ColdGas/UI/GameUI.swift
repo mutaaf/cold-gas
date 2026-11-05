@@ -32,6 +32,13 @@ struct RootUI: View {
                 if let r = game.result {
                     ResultsView(result: r, open: { sheet = $0 })
                         .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
+                        .opacity(game.replaying ? 0 : 1).allowsHitTesting(!game.replaying)   // kept alive: the post and the judges' words stay
+                    if game.replaying {
+                        Button { game.stopWatching() } label: { Text("Back to the score") }
+                            .buttonStyle(CGButton())
+                            .frame(width: layout.controls.width, height: layout.controls.height, alignment: .bottom)
+                            .offset(x: layout.controls.minX, y: layout.controls.minY - 16)
+                    }
                 }
             }
         }
@@ -111,12 +118,12 @@ struct TitleView: View {
                     }
                 }
                 HStack(spacing: 8) {
-                    ForEach([("assist", "Assist"), ("pro", "Pro")], id: \.0) { t in
+                    ForEach([("assist", "Assist"), ("pro", "Pro"), ("advanced", "Advanced")], id: \.0) { t in
                         Button { game.tier = t.0; UISelectionFeedbackGenerator().selectionChanged() } label: {
                             Text(t.1.uppercased()).font(Theme.text(12, .medium)).tracking(1.6)
                                 .foregroundStyle(game.tier == t.0 ? Theme.ink : Theme.ink3)
                                 .frame(maxWidth: .infinity, minHeight: 36)
-                                .overlay(Capsule().strokeBorder(game.tier == t.0 ? (t.0 == "pro" ? Theme.amber.opacity(0.7) : Theme.ink.opacity(0.6)) : Theme.hair, lineWidth: 1))
+                                .overlay(Capsule().strokeBorder(game.tier == t.0 ? (t.0 == "pro" ? Theme.amber.opacity(0.7) : t.0 == "advanced" ? Theme.signal : Theme.ink.opacity(0.6)) : Theme.hair, lineWidth: 1))
                                 .contentShape(Capsule())
                         }.buttonStyle(.plain)
                     }
@@ -124,7 +131,7 @@ struct TitleView: View {
                 let dailyObj = Daily.objectiveFor(SaveStore.nowMs), streak = SaveStore.shared.streakNow()
                 Text("Today: \(dailyObj.goal(SaveStore.shared.units)) · \(Daily.courseName(dailyObj.course))\(streak.doneToday ? " · done" : "")\(streak.streak > 1 ? " · \(streak.streak) day streak" : "")")
                     .font(Theme.text(12, .medium)).foregroundStyle(streak.doneToday ? Theme.ok : Theme.ink2).fixedSize(horizontal: false, vertical: true)
-                Text(game.tier == "assist" ? "Assist: the flight computer rolls you out and brakes. One thumb on the Show and the Wall." : "Pro: you fly the roll-out and the brake yourself. Scores ×1.08.")
+                Text(game.tier == "assist" ? "Assist: the flight computer rolls you out and brakes. One thumb on the Show and the Wall." : game.tier == "pro" ? "Pro: you fly the roll-out and the brake yourself. Scores ×1.08." : "Advanced: all ten valves by hand, off the Wall. Scores ×1.15.")
                     .font(Theme.text(12)).foregroundStyle(Theme.ink3).fixedSize(horizontal: false, vertical: true)
             }
     }
@@ -147,7 +154,7 @@ struct RunView: View {
                                width: layout.scene.width - layout.safe.leading - (rows ? 0 : layout.safe.trailing),
                                height: layout.scene.height - layout.safe.top - (rows ? 0 : layout.safe.bottom))
         ZStack(alignment: .topLeading) {
-            HUDView(compact: !rows && layout.controls.height < 520, cueLift: rows || layout.scene.width > layout.scene.height ? 0 : 196)
+            HUDView(compact: !rows && layout.controls.height < 520, cueLift: rows || layout.scene.width > layout.scene.height ? 0 : (game.tier == "advanced" && (game.hud.phase == 2 || game.hud.released) ? 400 : 196))
                 .frame(width: sceneSafe.width, height: sceneSafe.height).offset(x: sceneSafe.minX, y: sceneSafe.minY)
             ControllerView(panel: rows)
                 .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
@@ -287,6 +294,7 @@ struct ResultsView: View {
                     PostRow(result: result, post: post)
                     HStack(spacing: 10) {
                         Button("Fly again") { game.retry() }.buttonStyle(CGButton(primary: true))
+                        Button("Watch it") { game.watch() }.buttonStyle(CGButton())
                         Spacer(minLength: 0)
                         if let u = result.challengeURL {
                             ShareLink(item: u, message: Text(String(format: "%.1f on %@. Beat it.", card.total, COURSE_INFO.first { $0.id == result.course }?.name ?? "Cold Gas"))) {
@@ -323,7 +331,13 @@ struct ControllerView: View {
     @ObservedObject var game = Game.shared
     var panel: Bool   // the Duo's lower panel (tabletop): the whole panel is the controller
     var body: some View {
-        if game.oneThumb { ThumbPad(panel: panel) } else { ClassicPad(panel: panel) }
+        let air = game.hud.phase == 2 || (game.hud.phase == 1 && game.hud.released)
+        // A controller or a keyboard in use hides the touch controls, as on the web; a finger on the glass brings them back.
+        if game.hud.hardware {
+            Color.clear.contentShape(Rectangle()).onTapGesture { Hardware.shared.note(touch: true) }
+        } else if game.tier == "advanced" && air && game.hud.phase != 3 {
+            NozzlePad().padding(panel ? 8 : 4)
+        } else if game.oneThumb { ThumbPad(panel: panel) } else { ClassicPad(panel: panel) }
     }
 }
 

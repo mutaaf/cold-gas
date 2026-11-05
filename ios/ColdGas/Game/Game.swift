@@ -9,6 +9,7 @@
 import Foundation
 import QuartzCore
 import SwiftUI
+import simd
 import ColdGasClient
 import ColdGasCore
 import ColdGasPhysics
@@ -21,6 +22,8 @@ struct HudState: Equatable {
     var speed = 0.0, alt = 0.0, sink = 0.0, gas = 1.0, phase: UInt8 = 0
     var cue = "", stage = "climb", held = false, released = false, aimLive = false
     var sinkBand = 0   // 0 on profile, 1 fast but stoppable, 2 past stopping
+    var throttles = [Double](repeating: 0, count: 10)   // the live valves, for Advanced's pad
+    var hardware = false                                 // a controller or keyboard is flying: the touch controls hide
     var markX = 0.0, markY = 0.0, hasMark = false   // the pad's sight: the mark from the predicted touchdown
 }
 
@@ -36,6 +39,9 @@ final class Game: ObservableObject {
     @Published private(set) var countdown = 0
     @Published private(set) var result: RunResult?
     @Published var paused = false
+    /// The results are up and the flight is playing back behind them (the track the run recorded).
+    @Published private(set) var replaying = false
+    private var replayT = 0.0
 
     /// The stage view the game draws through (set by the root).
     weak var stage: StageView?
@@ -59,7 +65,7 @@ final class Game: ObservableObject {
     }
 
     func play() {
-        let l = LiveRun(course: course, tier: tier == "pro" ? .pro : .assist, oneThumb: control == .oneThumb)
+        let l = LiveRun(course: course, tier: tier == "pro" ? .pro : tier == "advanced" ? .advanced : .assist, oneThumb: control == .oneThumb)
         if Launch.args.contains("-autopilot") { l.script = Game.referenceLog(course) }
         if let v = Launch.value("-script") { l.script = Game.vectorLog(v) }   // a recorded run flown live (store captures, a crash)
         l.onRelease = { Sound.shared.release() }   // the haptic release is the HapticScore's (it reads the feed's lift)
@@ -71,6 +77,8 @@ final class Game: ObservableObject {
         track = tr
         stage?.load(course: course, track: tr)
         countdown = 3; countT = 0
+        replaying = false
+        Hardware.shared.startRun()
         screen = .run
         UISelectionFeedbackGenerator().selectionChanged()
     }
@@ -85,7 +93,8 @@ final class Game: ObservableObject {
     // --- The frame -----------------------------------------------------------------------------
     /// Once a display frame, before the draw: step the sim by the frame's time (scaled by the crash's slow motion).
     func frame(dt: Double, slowK: Double) {
-        stage?.renderer?.crash.audible = screen == .run
+        stage?.renderer?.crash.audible = screen == .run || replaying
+        if replaying, let tr = track { replayFrame(dt: dt, slowK: slowK, tr); return }
         guard screen == .run, let l = live, let tr = track, !paused else {
             Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: screen == .title ? .title : .quiet)
             if paused { HapticPlayer.shared.apply(HapticContinuous()) }
@@ -102,6 +111,7 @@ final class Game: ObservableObject {
         #if DEBUG
         thumbBot(l)
         #endif
+        if !paused && r.phase != .done { Hardware.shared.poll(l) { self.paused = true } }
         acc += min(dt, 0.1) * slowK
         var atRest = false
         do {
@@ -128,6 +138,26 @@ final class Game: ObservableObject {
         if r.phase == .done { doneFor += dt; if result != nil && (atRest || doneFor > 3.5) { screen = .results; UINotificationFeedbackGenerator().notificationOccurred(.success) } }
         lastHud += dt
         if lastHud > 1.0 / 15, !(r.after?.done ?? false) { lastHud = 0; refreshHud(l) }
+    }
+
+    // --- Watch it back -------------------------------------------------------------------------------
+    /// The flight again from the top, at the speed it flew, with its sound and its crash, from the track it recorded. The sim
+    /// isn't touched: the run is over.
+    func watch() {
+        guard track != nil else { return }
+        replayT = 0; replaying = true
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+    func stopWatching() { replaying = false; if let tr = track { stage?.renderer?.liveTime = Double(max(0, tr.ticks - 1)) / Replay.hz }; Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .quiet) }
+    private func replayFrame(dt: Double, slowK: Double, _ tr: Replay) {
+        replayT += min(dt, 0.1) * slowK
+        let end = Double(tr.ticks) / Replay.hz
+        if replayT >= end { stopWatching(); return }
+        stage?.renderer?.liveTime = replayT
+        let i = Int(replayT * Replay.hz), v = tr.velocity(at: i)
+        var th = Game.quiet
+        for k in 0..<10 { th[k] = Double(tr.nozzle(k, at: i)) }
+        Sound.shared.update(speed: Double(simd_length(v)), throttles: th, grounded: tr.phase(at: i) != 2, phase: .run)
     }
 
     /// Leaving the screen: pause the run, let go of everything (a finger lifted while we weren't listening must not stay held).
@@ -179,6 +209,8 @@ final class Game: ObservableObject {
         h.held = l.thumb.held
         h.stage = thumbStage(r, l.released).rawValue
         h.aimLive = l.thumb.aimLive
+        h.throttles = c.throttles
+        h.hardware = Hardware.shared.inUse
         if r.phase == .air && l.oneThumb {
             predict(c, h.alt, pr, land: l.thumb.landing)
             let m = markOffset(c, pr, r.course)

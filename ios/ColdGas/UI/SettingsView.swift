@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var haptics = HapticPlayer.shared.level
     @State private var sound = Sound.shared.isEnabled
     @State private var units = SaveStore.shared.units.system
+    @State private var tilt = SaveStore.shared.settings.tiltOn
     var body: some View {
         NavigationStack {
             Form {
@@ -26,6 +27,8 @@ struct SettingsView: View {
                         Text("One thumb").tag(Control.oneThumb)
                         Text("Classic").tag(Control.classic)
                     }
+                    Toggle("Tilt to steer", isOn: $tilt)
+                        .onChange(of: tilt) { _, v in var st = SaveStore.shared.settings; st.tilt = v; SaveStore.shared.settings = st }
                     Picker("Units", selection: $units) {
                         Text("US").tag(UnitSystem.us)
                         Text("Metric").tag(UnitSystem.metric)
