@@ -2,14 +2,15 @@ import { test, expect } from '@playwright/test';
 
 // 0155: the privacy page, as a phone opens it. It asks nothing of any other host (the zone's analytics
 // beacon is kept off by no-transform in dist/_headers, tests/unit/privacy.test.js; Cloudflare only injects
-// it on the real zone, so this guards everything the page itself loads), fits 390 px with no sideways
+// it on the real zone, so this guards everything the page itself loads; a same-origin `/cdn-cgi/`
+// script is the zone's too, and counts as foreign), fits 390 px with no sideways
 // scroll, and every line of its text holds 4.5:1 against the page.
 test('the privacy page loads only from its own origin, fits a phone and holds 4.5:1', async ({ browser, baseURL }) => {
   const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 1 });
   const page = await ctx.newPage();
   const own = new URL(baseURL).host;
   const foreign = [];
-  page.on('request', (r) => { const u = new URL(r.url()); if (/^https?:$/.test(u.protocol) && u.host !== own) foreign.push(r.url()); });
+  page.on('request', (r) => { const u = new URL(r.url()); if (/^https?:$/.test(u.protocol) && (u.host !== own || u.pathname.startsWith('/cdn-cgi/'))) foreign.push(r.url()); });
   const res = await page.goto('/coldgas/privacy/', { waitUntil: 'load' });
   expect(res.status()).toBe(200);
   await expect(page.getByRole('heading', { name: 'Privacy' })).toBeVisible();
