@@ -5,14 +5,14 @@ import Testing
 
 @Suite("Fold layout on the iPhone Duo's measured poses")
 struct FoldLayoutTests {
-    // Book: window 951×669, insets right 84 / bottom 34, fold band x 455.5, 40 wide.
+    // Book (open): window 951×669, insets right 84 / bottom 34, fold band x 455.5, 40 wide.
     @Test func book() {
         let l = Fold.layout(width: 951, height: 669, safe: LInsets(bottom: 34, right: 84), regions: [LRect(x: 455.5, y: 0, w: 40, h: 669)])
-        #expect(l.spread == .columns)
-        #expect(l.scene == LRect(x: 0, y: 0, w: 455.5, h: 669))
-        #expect(l.controls == LRect(x: 495.5, y: 0, w: 951 - 84 - 495.5, h: 669 - 34))
-        #expect(l.controls.maxX <= 951 - 84)                 // clear of the side bar
-        #expect(l.scene.maxX <= 455.5 && l.controls.x >= 495.5)   // nothing across the fold
+        // Open: edge to edge across the whole inner display; the controls over it, clear of the side bar.
+        #expect(l.spread == .full)
+        #expect(l.scene == LRect(x: 0, y: 0, w: 951, h: 669))
+        #expect(l.controls == LRect(x: 0, y: 0, w: 951 - 84, h: 669 - 34))
+        #expect(l.fold == LRect(x: 455.5, y: 0, w: 40, h: 669))
     }
     // Tabletop: 669×951, insets top 82 / bottom 34, horizontal band at y 455.5.
     @Test func tabletop() {
@@ -39,7 +39,7 @@ struct FoldLayoutTests {
     @Test func proMaxAndOrder() {
         #expect(Fold.layout(width: 440, height: 956, safe: LInsets(top: 62, bottom: 34), regions: []).spread == .single)
         let odd = [LRect(x: 10, y: 10, w: 20, h: 20), LRect(x: 455.5, y: 0, w: 40, h: 669)]
-        #expect(Fold.layout(width: 951, height: 669, safe: LInsets(bottom: 34, right: 84), regions: odd).spread == .columns)
+        #expect(Fold.layout(width: 951, height: 669, safe: LInsets(bottom: 34, right: 84), regions: odd).spread == .full)
     }
     // The mid-swing size no pose has (LESSONS 0075's 466×498) stays one panel, with no fold drawn.
     @Test func midSwing() {

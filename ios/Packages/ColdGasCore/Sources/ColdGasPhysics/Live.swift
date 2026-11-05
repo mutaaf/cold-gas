@@ -175,6 +175,9 @@ public final class LiveRun {
     public let input = Input()
     /// scoreRun's card, decided on the tick the run ends (main.js closeCard).
     public private(set) var card: Card?
+    /// A recorded input log to fly instead of the hand (the app's `-autopilot`, a demo): entries applied at their ticks.
+    public var script: [[Int]]?
+    private var scriptAt = 0
 
     public init(course: String, tier: FlyTier = .assist, oneThumb: Bool = true, level: DriveLevel = .standard) {
         run = armAftermath(createRun(course))
@@ -185,6 +188,13 @@ public final class LiveRun {
     /// One 240 Hz tick: a scored tick while the run is on, then the aftermath's, then nothing.
     @discardableResult public func tick() throws -> Tick {
         if run.phase != .done {
+            if let log = script {
+                while scriptAt < log.count && log[scriptAt][0] <= run.tick { unpack(log[scriptAt], input); scriptAt += 1 }
+                if noteRelease(input) { onRelease?() }
+                try stepRun(run, input)
+                if run.phase == .done && card == nil { card = scoreRun(run.t) }
+                return .flew
+            }
             if oneThumb { clearInput(input); thumb.sample(run, released, input, sampler.tilt) }
             else { sampler.sample(run.phase, tier, input, released, run.car) }
             wallAssist(input)

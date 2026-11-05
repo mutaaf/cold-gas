@@ -18,7 +18,11 @@ public struct LInsets: Equatable, Sendable {
     public init(top: Double = 0, left: Double = 0, bottom: Double = 0, right: Double = 0) { self.top = top; self.left = left; self.bottom = bottom; self.right = right }
 }
 
-public enum Spread: String, Sendable { case single, columns, rows }
+/// `single`: one panel (no fold). `full`: open (book/flat), the scene edge to edge across the whole inner display,
+/// the HUD and controls over it (the owner, 2026-11-04: "in open mode we need the edge to edge display used in full
+/// screen mode"). `rows`: folded tabletop, the screen above the fold and the controller below it ("have the bottom be
+/// a controller and top be a screen").
+public enum Spread: String, Sendable { case single, full, rows }
 
 public struct FoldLayout: Equatable, Sendable {
     public var spread: Spread
@@ -45,11 +49,9 @@ public enum Fold {
         }
         guard let f = fold else { return FoldLayout(spread: .single, scene: all, controls: safeRect, fold: nil) }
         if f.h >= height - 1 {
-            // Vertical fold (book): the scene leads, the controls trail.
-            let lead = LRect(x: 0, y: 0, w: f.x, h: height)
-            let trail = LRect(x: f.maxX, y: safe.top, w: width - safe.right - f.maxX, h: height - safe.top - safe.bottom)
-            guard lead.w - safe.left >= minPanel, trail.w >= minPanel else { return FoldLayout(spread: .single, scene: all, controls: safeRect, fold: f) }
-            return FoldLayout(spread: .columns, scene: lead, controls: trail, fold: f)
+            // Vertical fold (open, book or flat): the inner display is one continuous screen, so the scene runs edge
+            // to edge across it and the controls overlay the safe area. The crease is reported, never drawn.
+            return FoldLayout(spread: .full, scene: all, controls: safeRect, fold: f)
         }
         // Horizontal fold (tabletop): the scene above, the controls below.
         let top = LRect(x: 0, y: 0, w: width, h: f.y)

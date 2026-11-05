@@ -8,7 +8,9 @@ import ColdGasPhysics
 final class Replay {
     static let hz = 240.0
     let course: String
-    let ticks: Int
+    private(set) var ticks: Int
+    /// A live run (0154): ticks are appended as the sim flies them; the renderer draws the newest, never loops.
+    let live: Bool
     private var carPos: [SIMD3<Float>] = [], carQuat: [simd_quatf] = [], nozzles: [Float] = [], bodies: [Float] = [], phases: [UInt8] = []
     /// Per tick, per wheel: compression (m), spin (rad, accumulated), steer (rad).
     private var wheelState: [Float] = []
@@ -16,15 +18,45 @@ final class Replay {
     /// The run's impact events (src/sim/impacts.js), as the sim recorded them: what crash.js draws.
     struct Impact { let tick: Int; let kind, part, probe: UInt8; let body: Int8; let pos, normal: SIMD3<Float>; let speed, crush: Float }
     private(set) var impacts: [Impact] = []
-    let bodyCount: Int
-    let score: Double, verdict: String
+    private(set) var bodyCount: Int
+    private(set) var score: Double, verdict: String
     let flownMs: Double
+
+    /// An empty track for a live run, filled tick by tick with `append` (room reserved for a long run up front, so a
+    /// run allocates nothing while it flies).
+    init(live course: String) {
+        self.course = course; live = true; ticks = 0; bodyCount = 0; score = 0; verdict = ""; flownMs = 0
+        let n = 240 * 90
+        carPos.reserveCapacity(n); carQuat.reserveCapacity(n); carVel.reserveCapacity(n); phases.reserveCapacity(n)
+        nozzles.reserveCapacity(n * 10); wheelState.reserveCapacity(n * 12); bodies.reserveCapacity(n * 7 * 6)
+    }
+    /// One tick of a live run, after the sim stepped (the world may be freed once the run is done: then nothing is read).
+    func append(_ r: Run, phase: UInt8? = nil) {
+        let c = r.car
+        carPos.append(SIMD3(Float(c.pos.x), Float(c.pos.y), Float(c.pos.z)))
+        carQuat.append(simd_quatf(ix: Float(c.quat.x), iy: Float(c.quat.y), iz: Float(c.quat.z), r: Float(c.quat.w)))
+        carVel.append(SIMD3(Float(c.vel.x), Float(c.vel.y), Float(c.vel.z)))
+        for v in c.throttles { nozzles.append(Float(v)) }
+        bodyCount = c.world.bodies.count
+        for b in c.world.bodies { bodies += [Float(b.cx), Float(b.cy), Float(b.cz), Float(b.qx), Float(b.qy), Float(b.qz), Float(b.qw)] }
+        phases.append(phase ?? UInt8(r.phase.rawValue))
+        for w in c.wheels { wheelState += [Float(w.compression), Float(w.spin), Float(w.steer)] }
+        let im = c.impacts
+        while impacts.count < im.count {
+            let i = impacts.count
+            impacts.append(Impact(tick: Int(im.tick[i]), kind: im.kind[i], part: im.part[i], probe: im.probe[i], body: im.body[i],
+                pos: SIMD3(im.x[i], im.y[i], im.z[i]), normal: SIMD3(im.nx[i], im.ny[i], im.nz[i]), speed: im.speed[i], crush: im.crush[i]))
+        }
+        ticks += 1
+    }
+    func setScore(_ total: Double, _ v: String) { score = total; verdict = v }
 
     init?(runVector name: String) {
         guard let url = Bundle.main.url(forResource: name, withExtension: "json", subdirectory: "runs"),
               let d = try? Data(contentsOf: url), let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
               let course = j["course"] as? String, let log = j["log"] as? [[NSNumber]] else { return nil }
         self.course = course
+        live = false
         let t0 = Date()
         var bc = 0
         var cp: [SIMD3<Float>] = [], cq: [simd_quatf] = [], nz: [Float] = [], bd: [Float] = [], ph: [UInt8] = [], ws: [Float] = [], cv: [SIMD3<Float>] = []

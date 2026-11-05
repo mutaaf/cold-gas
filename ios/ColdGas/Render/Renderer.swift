@@ -54,6 +54,19 @@ final class Renderer {
     #endif
     private var renderSize = (0, 0), outSize = (0, 0)
     var hingeOpen: Float = 1
+    /// A live run's draw time (s of sim time), set by the game each frame (0154).
+    var liveTime = 0.0
+    /// The crash's slow-motion factor, for the game's clock (a live run slows with the effects, as crash.js timeScale).
+    var slowK: Double { Double(crash.slowK) }
+    /// A new track (a new run, or back to the title's loop): effects and clocks start over.
+    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset() }
+    private(set) lazy var dents = Dents(roadster: stage.roadster, parked: stage.parked)
+    private var lastCarQ = simd_quatf(angle: 0, axis: [0, 1, 0]), lastDrawT = 0.0
+    private func hookDents() {
+        crash.onReset = { [unowned self] in self.dents.restore() }   // a new run, or a recorded run looping
+        crash.dentHero = { [unowned self] probe, crush, n, salt in self.dents.hero(probe: probe, crush: crush, normal: n, carQ: self.lastCarQ, salt: salt) }
+        crash.dentParked = { [unowned self] i, p, n, depth, salt in self.dents.parked(i, at: p, normal: n, model: self.parkedModel(i, t: self.lastDrawT), depth: depth, salt: salt) }
+    }
     /// The governor's render scale (of the display's pixels).
     private(set) var scale: Float = Launch.value("-scale").flatMap(Float.init) ?? 0.8
     private var gpuEMA = 0.0, calm = 0
@@ -199,12 +212,16 @@ final class Renderer {
         let dtReal = lastT < 0 ? 0 : min(0.1, max(0, t - lastT)); lastT = t
         crash.update(Float(dtReal))
         simClock += dtReal * Double(crash.slowK)
-        let simT = simClock
-        if let r = replay {
-            let span = r.seconds + 2
-            let tt = simT.truncatingRemainder(dividingBy: span)
+        // A recorded run loops with a 2 s pause; a live one is drawn at the game's clock (one tick behind the sim, between
+        // its last two ticks), never looped.
+        var simT = simClock
+        if let r = replay { simT = r.live ? liveTime : simClock.truncatingRemainder(dividingBy: r.seconds + 2) }
+        if let r = replay, r.ticks > 0 {
+            let tt = simT
             let c = r.car(at: tt)
             carPos = c.pos; carQ = c.quat; tick = c.tick; phase = r.phase(at: c.tick)
+            lastCarQ = c.quat; lastDrawT = tt
+            if crash.dentHero == nil { hookDents() }
             crash.feed(r.impacts, tick: c.tick, vel: r.velocity(at: c.tick), carPos: c.pos, carQuat: c.quat)
             let p = pb.contents().bindMemory(to: PlumeU.self, capacity: 10)
             for k in 0..<10 {
@@ -342,7 +359,7 @@ final class Renderer {
         let anchors = wheelAnchors()
         for w in stage.wheels {
             var comp: Float = Float(CAR.restLen - CAR.mountToCentre), spin: Float = 0, steer: Float = 0
-            if let r = replay { let ws = r.wheel(w.index, at: t.truncatingRemainder(dividingBy: r.seconds + 2)); comp = ws.comp; spin = ws.spin; steer = w.steers ? ws.steer : 0 }
+            if let r = replay, r.ticks > 0 { let ws = r.wheel(w.index, at: t); comp = ws.comp; spin = ws.spin; steer = w.steers ? ws.steer : 0 }
             let anchorY = Float(anchors[w.index].1 + SPEC.comHeight)
             let y = anchorY - Float(CAR.restLen) + comp
             let pivot = carM * translate(SIMD3(w.x, y, w.z)) * simd_float4x4(simd_quatf(angle: steer, axis: [0, 1, 0]))
@@ -353,17 +370,19 @@ final class Renderer {
         }
     }
 
-    private func parkedDraw(_ e: MTLRenderCommandEncoder, t: Double, shadow: Bool) {
+    /// A parked vehicle's model matrix at t: its body's pose, the mesh turned a quarter (built along x, parked along z).
+    private func parkedModel(_ i: Int, t: Double) -> simd_float4x4 {
         let quarter = simd_float4x4(simd_quatf(angle: .pi / 2, axis: [0, 1, 0]))
+        if let r = replay, r.ticks > 0, i < r.bodyCount {
+            let b = r.body(i, at: t)
+            return translate(b.pos) * simd_float4x4(b.quat) * quarter
+        }
+        return translate(SIMD3(0, 0, Float(SHOW_BOXES[min(i, SHOW_BOXES.count - 1)].cz))) * quarter
+    }
+
+    private func parkedDraw(_ e: MTLRenderCommandEncoder, t: Double, shadow: Bool) {
         for (i, m) in stage.parked.enumerated() {
-            var model: simd_float4x4
-            if let r = replay, i < r.bodyCount {
-                let span = r.seconds + 2
-                let b = r.body(i, at: t.truncatingRemainder(dividingBy: span))
-                model = translate(b.pos) * simd_float4x4(b.quat) * quarter
-            } else {
-                model = translate(SIMD3(0, 0, Float(SHOW_BOXES[min(i, SHOW_BOXES.count - 1)].cz))) * quarter
-            }
+            let model = parkedModel(i, t: t)
             drawMesh(e, m, matsIndex: 2 + i, model: model, opaqueOnly: true, shadow: shadow)
             if !shadow { drawMesh(e, m, matsIndex: 2 + i, model: model, opaqueOnly: false) }
         }
@@ -408,7 +427,7 @@ final class PassTimes {
     func add(_ k: String, _ ms: Double) { lock.lock(); sum[k, default: 0] += ms; n[k, default: 0] += 1; lock.unlock() }
     func report() -> String {
         lock.lock(); defer { lock.unlock() }
-        return ["shadow", "main", "film", "metalfx", "present"].compactMap { k in n[k].map { String(format: "%@ %.2f", k, sum[k]! / Double($0)) } }.joined(separator: " · ")
+        return ["shadow", "main", "film", "metalfx", "present"].compactMap { k in n[k].map { String(format: "%@ %.2f", k, sum[k, default: 0] / Double($0)) } }.joined(separator: " · ")
     }
 }
 

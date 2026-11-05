@@ -15,6 +15,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
     private var stats = FrameStats()
     private var pendingSize: CGSize?
     private var bench: Bench?
+    private var lastFrame: CFTimeInterval = 0
 
     override init(frame: CGRect) {
         super.init(frame: frame)
@@ -24,23 +25,57 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         metal.framebufferOnly = true
         metal.maximumDrawableCount = 3
         isOpaque = true
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            // The Show, flown by the Swift sim (bit-exact with the web), drawn on the web's own stage.
-            let which = Launch.value("-replay") ?? "ref-show"
-            let replay = Launch.args.contains("-idle") ? nil : Replay(runVector: which)
-            if let rp = replay { print(String(format: "REPLAY %@ flown by the Swift sim in %.0f ms: %.1f %@", which, rp.flownMs, rp.score, rp.verdict)) }
-            let r = Renderer(device: device, course: replay?.course ?? "show", replay: replay)
-            DispatchQueue.main.async {
-                guard let self, let r else { print("RENDERER failed"); return }
-                self.renderer = r
-                print(String(format: "PIPELINES built at launch in %.1f ms (binary archive), %d lights", r.launchCompileMs, r.nLights))
-                self.startLink()
-            }
-        }
+        self.device = device
+        // `-replay <vector>`: a recorded run looping (the shots and the bench); otherwise the game sets the stage.
+        if let which = Launch.value("-replay") { load(course: nil, vector: which) }
+
+        // No GPU work off screen (iOS kills an app that encodes in the background); the run pauses as it loses the screen.
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in self?.link?.isPaused = true }
+        NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in self?.lastFrame = 0; self?.link?.isPaused = false }
+        NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in MainActor.assumeIsolated { Game.shared.resignActive() } }
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.renderer?.applyThermal() }
         NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in self?.renderer?.applyThermal() }
     }
     required init?(coder: NSCoder) { nil }
+    private var device: MTLDevice?
+    /// One renderer per course, built once off the main thread (the binary archive makes the pipelines ≈20 ms) and kept.
+    private var renderers: [String: Renderer] = [:]
+    private var loading: String?
+
+    /// Draw `course` with `track` (a live run, or a recorded run looping). The course's renderer is built on first use.
+    func load(course: String, track: Replay?) {
+        if let r = renderers[course] { renderer = r; r.setTrack(track); startLinkIfNeeded(); return }
+        build(course) { [weak self] r in
+            r.setTrack(track)
+            self?.renderer = r
+            self?.startLinkIfNeeded()
+        }
+    }
+    private func load(course: String?, vector: String) {
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let replay = Replay(runVector: vector)
+            if let rp = replay { print(String(format: "REPLAY %@ flown by the Swift sim in %.0f ms: %.1f %@", vector, rp.flownMs, rp.score, rp.verdict)) }
+            DispatchQueue.main.async { self?.load(course: replay?.course ?? course ?? "show", track: replay) }
+        }
+    }
+    private var pendingBuilds: [String: [(Renderer) -> Void]] = [:]
+    private func build(_ course: String, then: @escaping (Renderer) -> Void) {
+        if pendingBuilds[course] != nil { pendingBuilds[course, default: []].append(then); return }
+        pendingBuilds[course] = [then]
+        guard let device else { return }
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            let r = Renderer(device: device, course: course, replay: nil)
+            DispatchQueue.main.async {
+                guard let self else { return }
+                let waiting = self.pendingBuilds.removeValue(forKey: course) ?? []
+                guard let r else { print("RENDERER failed for \(course)"); return }
+                self.renderers[course] = r
+                print(String(format: "PIPELINES built for %@ in %.1f ms (binary archive), %d lights", course, r.launchCompileMs, r.nLights))
+                for w in waiting.suffix(1) { w(r) }   // only the latest ask for this course draws
+            }
+        }
+    }
+    private func startLinkIfNeeded() { if link == nil { startLink() } }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -62,6 +97,10 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
 
     func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
         guard let r = renderer else { return }
+        let now0 = CACurrentMediaTime()
+        let dt = lastFrame == 0 ? 0 : now0 - lastFrame, k = r.slowK
+        MainActor.assumeIsolated { Game.shared.frame(dt: dt, slowK: k) }   // the link runs on the main run loop
+        lastFrame = now0
         if let s = pendingSize, s.width > 0, s.height > 0 { metal.drawableSize = s; pendingSize = nil }
         let cpu0 = CACurrentMediaTime()
         let b = bench

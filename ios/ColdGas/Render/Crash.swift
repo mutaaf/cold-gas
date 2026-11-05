@@ -45,11 +45,19 @@ final class Crash {
     // State
     private var cursor = 0, lastTick = -1
     private(set) var slowK: Float = 1
-    private var slowT: Float = 0, clock: Float = 0, bigT: Float = -10, ventT: Float = 0, grind: Float = 0
+    private var slowT: Float = 0, clock: Float = 0, bigT: Float = -10, ventT: Float = 0
+    private(set) var grind: Float = 0
+    /// A live run is heard (crash.js's crunch / thud / setGrind); the title's looping reference run is not.
+    var audible = false
+    /// Dent hooks (the renderer owns the meshes): hero(probe, crush, normal, salt), parked(body, point, normal, depth, salt).
+    var dentHero: ((Int, Float, SIMD3<Float>, Float) -> Void)?
+    var dentParked: ((Int, SIMD3<Float>, SIMD3<Float>, Float, Float) -> Void)?
     private var carVel = SIMD3<Float>()
     var shake: ((Float) -> Void)?
 
+    var onReset: (() -> Void)?
     func reset() {
+        onReset?()
         cursor = 0; lastTick = -1; slowK = 1; slowT = 0; ventT = 0; grind = 0; bigT = -10; flashT = 0
         for j in 0..<Crash.NS { sLife[j] = 0 }
         for j in 0..<Crash.NC { cLife[j] = 0 }
@@ -117,10 +125,16 @@ final class Crash {
                 puff(SIMD3(p.x + cos(a) * 0.2, p.y + 0.12, p.z + sin(a) * 0.2), SIMD3(cos(a) * sp + carVel.x * 0.3, 0.3 + rnd() * 0.8, sin(a) * sp + carVel.z * 0.3), 0.5, 4 + sev * 3, 1.6 + rnd(), 0.3, SIMD3(0.8, 0.8, 0.82))
                 k += 1
             }
+            if audible && v > 5 { Sound.shared.impact(speed: Double(v), part: .wheel, seed: e.tick * 31 + Int(e.probe)) }   // a landing's own thud is the game's touchdown
             if !reduced { shake?(min(1.2, 0.2 + sev)) }
             return
         }
-        if kind == ImpactKind.CRUSH { return }   // dents: next (crash.js dentHero / dentParked)
+        if kind == ImpactKind.CRUSH {
+            // crash.js: folded far enough, the lamps in that end are gone; the skin dents at the probe, a struck car where it was hit.
+            dentHero?(Int(e.probe), e.crush, n, Float(e.tick) * 0.37)
+            if e.body >= 0 { dentParked?(Int(e.body), p, n, min(0.3, e.crush * 0.6), Float(e.tick) * 0.53) }
+            return
+        }
         // HIT
         if v < 1.6 { return }
         let sev = min(1, max(0, (v - 2) / 12))
@@ -149,6 +163,8 @@ final class Crash {
                  0.7, 5 + 6 * sev, 2.2 + rnd() * 1.8, onGround ? 0.2 + 0.12 * sev : 0.12, SIMD3(c, c * 0.97, c * 0.93))
         }
         if sev > 0.55 { ventT = max(ventT, 1.1 + sev) }
+        if e.body >= 0 { dentParked?(Int(e.body), p, n, min(0.14, 0.003 * v * v), Float(e.tick) * 0.29) }   // a dent and (next) a rock on its springs
+        if audible { Sound.shared.crunch(severity: Double(sev), glass: glassy && v > 5, seed: e.tick * 31 + Int(e.probe)) }
         if !reduced {
             shake?(min(2.6, 0.25 + v * 0.17))
             if v > 6.5 && clock - bigT > 2.5 { bigT = clock; slowT = 0.75 + 0.5 * sev }
