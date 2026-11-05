@@ -50,7 +50,9 @@ final class Game: ObservableObject {
     private(set) var live: LiveRun?
     private var track: Replay?
     private var acc = 0.0
-    private var doneFor = 0.0
+    private var doneFor = 0.0, momentFor = 0.0
+    private(set) var activeDrill: String?
+    private var titleTracks: [String: Replay] = [:]
     private var haptics = HapticScore(course: "show"), seen = 0
     private var countT = 0.0
     private var lastHud = 0.0
@@ -61,18 +63,27 @@ final class Game: ObservableObject {
     // --- Flow ----------------------------------------------------------------------------------
     func showTitleLoop() {
         guard screen == .title else { return }
-        stage?.load(course: course, track: Replay(runVector: "ref-\(course)"))
+        // Flown once per course and kept: Home must never wait on a whole flight (and the sim stays on this one thread).
+        let tr = titleTracks[course] ?? Replay(runVector: "ref-\(course)")
+        titleTracks[course] = tr
+        stage?.load(course: course, track: tr)
     }
 
-    func play() {
-        let l = LiveRun(course: course, tier: tier == "pro" ? .pro : tier == "advanced" ? .advanced : .assist, oneThumb: control == .oneThumb)
+    /// `drill`: practise one part of the flight, handed over mid-run (src/practice.js). A drill's id; nil is a whole run.
+    func play(drill: String? = nil) {
+        let t: FlyTier = tier == "pro" ? .pro : tier == "advanced" ? .advanced : .assist
+        var built: BuiltDrill?
+        if let drill, let d = drillById(drill) { built = try? buildDrill(d, course) }
+        activeDrill = built == nil ? nil : drill
+        let l = built.map { LiveRun(drill: $0, tier: t, oneThumb: control == .oneThumb) } ?? LiveRun(course: course, tier: t, oneThumb: control == .oneThumb)
         if Launch.args.contains("-autopilot") { l.script = Game.referenceLog(course) }
         if let v = Launch.value("-script") { l.script = Game.vectorLog(v) }   // a recorded run flown live (store captures, a crash)
         l.onRelease = { Sound.shared.release() }   // the haptic release is the HapticScore's (it reads the feed's lift)
         live = l; controls.live = l
-        acc = 0; seen = 0; doneFor = 0; result = nil; paused = false
+        acc = 0; seen = 0; doneFor = 0; momentFor = 0; result = nil; paused = false
         haptics = HapticScore(course: course)
         let tr = Replay(live: course)
+        tr.tickBase = l.run.tick
         tr.append(l.run)
         track = tr
         stage?.load(course: course, track: tr)
@@ -82,9 +93,9 @@ final class Game: ObservableObject {
         screen = .run
         UISelectionFeedbackGenerator().selectionChanged()
     }
-    func retry() { play() }
+    func retry() { play(drill: activeDrill) }
     func home() {
-        live = nil; controls.live = nil; track = nil; result = nil; paused = false
+        live = nil; controls.live = nil; track = nil; result = nil; paused = false; activeDrill = nil
         HapticPlayer.shared.apply(HapticContinuous())
         screen = .title
         showTitleLoop()
@@ -134,8 +145,10 @@ final class Game: ObservableObject {
         } else { Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .run) }
         // Drawn one tick behind the newest, between it and the one before (the fraction of a tick left in `acc`).
         stage?.renderer?.liveTime = (Double(max(0, tr.ticks - 2)) + min(1, acc / DT)) / Replay.hz
+        // A drill that ends before its run does (the carry, past the row): half a second more of flight, then its card.
+        if result == nil && l.drillMoment && r.phase != .done { momentFor += dt; if momentFor > 0.5 { l.endDrillMoment(); finished(l) } }
         // The results come up when the wreck is at rest, or after a few seconds of it rolling.
-        if r.phase == .done { doneFor += dt; if result != nil && (atRest || doneFor > 3.5) { screen = .results; UINotificationFeedbackGenerator().notificationOccurred(.success) } }
+        if result != nil { doneFor += dt; if atRest || doneFor > 3.5 { showResults(l) } }
         lastHud += dt
         if lastHud > 1.0 / 15, !(r.after?.done ?? false) { lastHud = 0; refreshHud(l) }
     }
@@ -186,13 +199,24 @@ final class Game: ObservableObject {
     }
     #endif
 
+    private func showResults(_ l: LiveRun) {
+        // The coach re-flies the log on the sim's shared scratch: here, with no tick in flight, and the run stepping no more.
+        let say = coachWords(pointerCtx(course: l.run.course, tier: l.card?.tier ?? "assist", touchScheme: l.oneThumb ? .thumb : .classic))
+        result?.coach = (try? l.coachResult(say: say))?.items ?? []
+        screen = .results
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
     private func finished(_ l: LiveRun) {
+        guard result == nil else { return }
         print(String(format: "RUN %@ %@ %.1f %@ end=%@ ticks=%d log=%d", l.run.course, l.tier == .pro ? "pro" : "assist", l.card?.total ?? -1, l.card?.verdict ?? "", l.run.t.endReason, l.run.tick, l.run.inputLog.count))
         guard let card = l.card else { return }
         track?.setScore(card.total, card.verdict)
         let res = RunResult(course: l.run.course, card: card, log: l.run.inputLog, telemetry: l.run.t, ticks: l.run.tick)
+        if let snap = l.drillSnap, let d = l.drill {
+            res.drill = (d.label, snap.result.pass, snap.result.headline, snap.result.stats.map(\.text))
+        } else { Records.shared.note(res) }
         result = res
-        Records.shared.note(res)
     }
 
     // --- The HUD ---------------------------------------------------------------------------------
@@ -289,7 +313,9 @@ final class RunResult: Identifiable {
         self.course = course; self.card = card; self.log = log; self.telemetry = telemetry; self.ticks = ticks
     }
     /// Eligible for the board: a scored run (the web's `eligible`).
-    var eligible: Bool { card.total > 0 }
+    var eligible: Bool { card.total > 0 && drill == nil }
+    var coach: [CoachItem] = []
+    var drill: (label: String, pass: Bool, headline: String, stats: [String])?
     var dailyOK = false, dailyLine: String?
     /// A link to the same jump on the web (src/challenge.js): opens the game with this run to beat.
     lazy var challengeURL: URL? = {

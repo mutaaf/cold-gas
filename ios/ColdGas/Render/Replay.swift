@@ -11,6 +11,8 @@ final class Replay {
     private(set) var ticks: Int
     /// A live run (0154): ticks are appended as the sim flies them; the renderer draws the newest, never loops.
     let live: Bool
+    /// The run's tick at the track's first frame: a drill starts mid-run, and the impacts carry the run's ticks.
+    var tickBase = 0
     private var carPos: [SIMD3<Float>] = [], carQuat: [simd_quatf] = [], nozzles: [Float] = [], bodies: [Float] = [], phases: [UInt8] = []
     /// Per tick, per wheel: compression (m), spin (rad, accumulated), steer (rad).
     private var wheelState: [Float] = []

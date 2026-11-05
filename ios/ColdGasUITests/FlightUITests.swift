@@ -82,6 +82,26 @@ final class FlightUITests: XCTestCase {
         }
     }
 
+    /// A drill from the Practice sheet, by touch: on the ledge, tap to let go, hold to land; its own card, and the coach.
+    func testPracticeDrillByTouch() {
+        let a = launch(["-course", "show", "-tier", "assist"])
+        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 20))
+        a.buttons["Practice"].tap()
+        let ledge = a.buttons.containing(NSPredicate(format: "label CONTAINS[c] %@", "ON THE LEDGE")).firstMatch
+        XCTAssertTrue(ledge.waitForExistence(timeout: 5))
+        shot("practice")
+        ledge.tap()
+        sleep(3)
+        let pad = at(a, 0.78, 0.86)
+        pad.press(forDuration: 0.1)
+        sleep(2)
+        pad.press(forDuration: 9)
+        XCTAssertTrue(a.buttons["Again"].waitForExistence(timeout: 30), "the drill's card never came up")
+        shot("drill-results")
+        a.buttons["Home"].tap()
+        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 10))
+    }
+
     /// Leaving mid-run pauses it, with nothing held.
     func testBackgroundPauses() {
         let a = launch(["-course", "show", "-tier", "assist"])

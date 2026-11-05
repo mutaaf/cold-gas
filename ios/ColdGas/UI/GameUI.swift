@@ -20,7 +20,7 @@ struct RootUI: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
     @State private var sheet: Sheet?
-    enum Sheet: String, Identifiable { case board, settings, howTo; var id: String { rawValue } }
+    enum Sheet: String, Identifiable { case board, settings, howTo, practice; var id: String { rawValue } }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -49,6 +49,7 @@ struct RootUI: View {
                 case .board: BoardView(course: game.course)
                 case .settings: SettingsView()
                 case .howTo: HowToView()
+                case .practice: PracticeView(start: { id in sheet = nil; game.play(drill: id) })
                 }
             }
             .presentationDetents([.large])
@@ -75,6 +76,7 @@ struct TitleView: View {
             HStack {
                 Text("COLD GAS").font(Theme.display(13)).tracking(6).foregroundStyle(Theme.ink2)
                 Spacer()
+                iconButton("scope", "Practice") { open(.practice) }
                 iconButton("list.number", "Board") { open(.board) }
                 iconButton("questionmark", "How to play") { open(.howTo) }
                 iconButton("gearshape", "Settings") { open(.settings) }
@@ -263,7 +265,7 @@ struct ResultsView: View {
             .frame(maxWidth: 480)
             .padding(.horizontal, 16).padding(.bottom, 16)
         }
-        .onAppear { judges.ask(result) }
+        .onAppear { if result.drill == nil { judges.ask(result) } }
     }
     private func sheet(_ card: Card) -> some View {
                 VStack(alignment: .leading, spacing: 14) {
@@ -289,11 +291,25 @@ struct ResultsView: View {
                         Text("\(medal.label) medal\(m.isNew ? " · new" : "")").font(Theme.text(13, .medium)).foregroundStyle(Theme.amber)
                     }
                     if let d = result.dailyLine { Text(d).font(Theme.text(13)).foregroundStyle(result.dailyOK ? Theme.ok : Theme.ink2).fixedSize(horizontal: false, vertical: true) }
+                    if let d = result.drill {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(d.label.uppercased()).font(Theme.text(9, .medium)).tracking(1.4).foregroundStyle(Theme.ink3)
+                            Text(d.headline).font(Theme.text(14, .medium)).foregroundStyle(d.pass ? Theme.ok : Theme.amber).fixedSize(horizontal: false, vertical: true)
+                            ForEach(d.stats, id: \.self) { Text($0).font(Theme.mono(11)).foregroundStyle(Theme.ink2) }
+                        }
+                    }
                     facts(result.telemetry)
-                    JudgesWordsView(result: result, model: judges)
+                    if let c = result.coach.first {
+                        VStack(alignment: .leading, spacing: 3) {
+                            Text("WHAT COST YOU").font(Theme.text(9, .medium)).tracking(1.4).foregroundStyle(Theme.ink3)
+                            Text(c.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                            Text(c.fix.isEmpty ? c.detail : c.fix).font(Theme.text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+                        }
+                    }
+                    if result.drill == nil { JudgesWordsView(result: result, model: judges) }
                     PostRow(result: result, post: post)
                     VStack(spacing: 10) {
-                        Button { game.retry() } label: { Text("Fly again").frame(maxWidth: .infinity) }.buttonStyle(CGButton(primary: true))
+                        Button { game.retry() } label: { Text(result.drill == nil ? "Fly again" : "Again").frame(maxWidth: .infinity) }.buttonStyle(CGButton(primary: true))
                         HStack(spacing: 8) {
                             Button { game.watch() } label: { Text("Watch it").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
                             if let u = result.challengeURL {

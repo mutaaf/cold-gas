@@ -10,7 +10,7 @@ THREE WAYS TO FLY
 A game controller or a keyboard works too.
 
 THREE COURSES
-The Show, the Wall and the Lineup.
+The Show, the Wall and the Lineup, with drills for each part of the flight and a coach that names what cost you points.
 
 SCORED, NOT GUESSED
 The judges' numbers come from a fixed scorer: height, rotation, clearance, sink rate at touchdown, wheel sync, distance from the mark and gas left in the tank. The commentary is written by an AI panel; the numbers never are.

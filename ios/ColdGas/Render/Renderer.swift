@@ -222,7 +222,7 @@ final class Renderer {
             carPos = c.pos; carQ = c.quat; tick = c.tick; phase = r.phase(at: c.tick)
             lastCarQ = c.quat; lastDrawT = tt
             if crash.dentHero == nil { hookDents() }
-            crash.feed(r.impacts, tick: c.tick, vel: r.velocity(at: c.tick), carPos: c.pos, carQuat: c.quat)
+            crash.feed(r.impacts, tick: c.tick + r.tickBase, vel: r.velocity(at: c.tick), carPos: c.pos, carQuat: c.quat)
             let p = pb.contents().bindMemory(to: PlumeU.self, capacity: 10)
             for k in 0..<10 {
                 let thr = r.nozzle(k, at: tick)

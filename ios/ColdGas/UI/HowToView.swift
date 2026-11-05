@@ -1,5 +1,38 @@
 // How to play: the web's how-to, for touch (index.html's how-to and src/onethumb.js's words).
 import SwiftUI
+import ColdGasClient
+import ColdGasPhysics
+
+/// The drills for the course on the title (src/practice.js): one part of the flight, handed over mid-run. Not on the board.
+struct PracticeView: View {
+    @Environment(\.dismiss) private var dismiss
+    @ObservedObject var game = Game.shared
+    let start: (String) -> Void
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(spacing: 10) {
+                    ForEach(drillsFor(game.course), id: \.id) { d in
+                        Button { start(d.id) } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(d.label.uppercased()).font(Theme.display(12)).tracking(2).foregroundStyle(Theme.ink)
+                                Text(SaveStore.shared.units.localize(d.blurb)).font(Theme.text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+                                Text(d.goal).font(Theme.text(12, .medium)).foregroundStyle(Theme.ice)
+                            }
+                            .frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hair)).contentShape(Rectangle())
+                        }.buttonStyle(.plain)
+                    }
+                    if drillsFor(game.course).isEmpty { Text("No drills on this course.").font(Theme.text(14)).foregroundStyle(Theme.ink3) }
+                    Text("Practice runs don't go on the board.").font(Theme.text(11)).foregroundStyle(Theme.ink3).padding(.top, 6)
+                }.padding(16)
+            }
+            .navigationTitle("Practice")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
+        }
+    }
+}
 
 struct HowToView: View {
     @Environment(\.dismiss) private var dismiss
