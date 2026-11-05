@@ -1,12 +1,12 @@
 ---
 id: 0155
 title: The privacy page says what production does: no analytics beacon on it, and the web game's ads named
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: platform
 created: 2026-11-05
-pr:
+pr: 263
 by: critic
 ---
 
@@ -37,13 +37,13 @@ Operator, 2026-11-05: the words are fixed in #253 (the page now names the web ga
 the iPhone app has neither). What's left here is stopping the beacon, then dropping the Cloudflare sentence, and the e2e check.
 
 ## Acceptance criteria
-- [ ] Playwright at 390×844 on the preview: `/coldgas/privacy` makes **zero** requests to a host other than the
+- [x] Playwright at 390×844 on the preview: `/coldgas/privacy` makes **zero** requests to a host other than the
       page's own, and its response carries `no-transform`.
 - [x] No sentence on the page is contradicted by `src/ads.js` or `/ads/api/config?app=coldgas`. It names the ads on
       the web, where they appear (menus and results, never in a run) and who serves them, and says the iPhone app
       shows none.
-- [ ] An e2e or unit check fails if the page says "no ads" while `src/ads.js` still loads the loader on the web.
-- [ ] The page still fits 390×844 with no horizontal scroll (`scrollWidth` 390) and keeps 4.5:1 text contrast.
+- [x] An e2e or unit check fails if the page says "no ads" while `src/ads.js` still loads the loader on the web.
+- [x] The page still fits 390×844 with no horizontal scroll (`scrollWidth` 390) and keeps 4.5:1 text contrast.
 
 ## Test plan
 - Add `tests/e2e/privacy.spec.js`: load `/coldgas/privacy`, collect hosts, assert own-origin only, and assert the
