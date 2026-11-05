@@ -33,6 +33,18 @@ final class FlightUITests: XCTestCase {
         shot("landing")
         XCTAssertTrue(a.buttons["Fly again"].waitForExistence(timeout: 30), "the results never came up")
         shot("results")
+        let engineer = a.buttons["Engineer"]
+        XCTAssertTrue(engineer.exists, "no judge tile")
+        engineer.tap()
+        shot("results-engineer")
+        engineer.tap()
+        a.buttons["The numbers"].tap()
+        let damage = a.staticTexts.containing(NSPredicate(format: "label BEGINSWITH %@", "Damage")).firstMatch
+        XCTAssertTrue(damage.waitForExistence(timeout: 3), "the numbers didn't open")
+        sleep(1)   // the scroll into view
+        shot("results-numbers")
+        XCTAssertTrue(damage.isHittable, "the numbers opened out of sight")
+        a.buttons["The numbers"].tap()
         XCTAssertTrue(a.buttons["Watch it"].exists)
         a.buttons["Watch it"].tap()
         XCTAssertTrue(a.buttons["Back to the score"].waitForExistence(timeout: 5))
@@ -79,6 +91,24 @@ final class FlightUITests: XCTestCase {
             a.buttons["Done"].tap()
             XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 5))
         }
+    }
+
+    /// How to play says the game on its first screen and folds the rest, one open at a time.
+    func testHowToFolds() {
+        let a = launch()
+        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 20))
+        a.buttons["How to play"].tap()
+        XCTAssertTrue(a.staticTexts["ONE THUMB, THE WHOLE FLIGHT"].waitForExistence(timeout: 5))
+        shot("howto")
+        let judges = a.buttons["The judges"], board = a.buttons["The board"]
+        XCTAssertFalse(a.staticTexts["The height and the rotation."].exists, "folded text is showing")
+        judges.tap()
+        XCTAssertTrue(a.staticTexts["The height and the rotation."].waitForExistence(timeout: 3))
+        shot("howto-judges")
+        board.tap()
+        XCTAssertTrue(a.staticTexts["A scored run, with three letters."].waitForExistence(timeout: 3))
+        XCTAssertFalse(a.staticTexts["The height and the rotation."].exists, "two folds open")
+        a.buttons["Done"].tap()
     }
 
     /// A drill from the Practice sheet, by touch: on the ledge, tap to let go, hold to land; its own card, and the coach.

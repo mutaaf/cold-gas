@@ -34,20 +34,65 @@ struct PracticeView: View {
     }
 }
 
+/// The whole game at a glance, then the rest folded: a person can start flying from the first screenful.
 struct HowToView: View {
     @Environment(\.dismiss) private var dismiss
+    @State private var open: String?
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
-                    section("The car", "A roadster with ten cold-gas jets: four down-jets that lift and roll it, four rear jets that push it forward, and two nose jets that turn it. A tank of nitrogen feeds them all. When it's empty, you fall.")
-                    section("One thumb (Assist, the Show and the Wall)", "Hold the pad to climb. A fan sucks the car onto the Wall, and the computer holds a crawl up the curl and stops you on the ledge, upside down.\nTap to let go. It drives out to the lip and pushes off.\nHold to land. Assist rolls you upright, carries you over the parked row on the Show, and brakes the fall with the down-jets. Slide your thumb while you hold to aim the touchdown: up is further, down is shorter.")
-                    section("Classic (Pro, or any course)", "On the ground the stick steers, and GO and BRAKE are the pedals. LIFT on the ledge is the release.\nIn the air the stick rolls and pitches (push up for nose up). LIFT fires the down-jets, LAND levels you and brakes for you on Assist, and BOOST fires the rear jets.")
-                    section("Advanced", "All ten valves by hand once you're off the Wall: a pad for each nozzle on a car outline, nose up, plus LIFT, BOOST and FRONTS. Slide a finger between pads. Scores ×1.15.")
-                    section("A controller or a keyboard", "Pair either one and it takes over: left stick or arrows to steer and roll, right trigger or Space to LIFT, left trigger or Shift to LAND, RB or F to BOOST. Tap the screen to get the touch controls back.")
-                    section("The judges", "Three judges score every run out of 100, each with their own priorities: the Engineer cares most about the landing (the sink rate, the tilt, four wheels down together), the Coordinator about the height and the rotation, and the Designer about the whole of it, gas left included. Pro scores ×1.08. Touch a parked car and the run is a crash.")
-                    section("The board", "Post a scored run to today's board with three letters. The server flies your inputs again in the same physics to check the score, so the board is honest.")
-                    section("iPhone Duo", "Opened flat, the game fills the whole screen. Fold it into tabletop, and the top half is the screen and the bottom half becomes the controller.")
+                    theGame
+                    theScore
+                    VStack(spacing: 0) {
+                        fold("One thumb", "Assist, on the Show and the Wall") {
+                            KeyLine("HOLD", "A fan sucks the car onto the Wall. The computer crawls up the curl and stops on the ledge, upside down.")
+                            KeyLine("TAP", "It drives out to the lip and pushes off.")
+                            KeyLine("HOLD", "Assist rolls you upright, carries you over the parked row on the Show, and brakes the fall.")
+                            KeyLine("SLIDE", "While you hold, aim the touchdown: up is further, down is shorter.")
+                        }
+                        fold("Classic", "Stick and pedals: Pro, or any course") {
+                            label("On the ground")
+                            KeyLine("STICK", "Steers.")
+                            KeyLine("GO, BRAKE", "The pedals.")
+                            KeyLine("LIFT", "On the ledge, the release.")
+                            label("In the air")
+                            KeyLine("STICK", "Rolls and pitches. Push up for nose up.")
+                            KeyLine("LIFT", "Fires the down-jets.")
+                            KeyLine("LAND", "Levels you, and brakes for you on Assist.")
+                            KeyLine("BOOST", "Fires the rear jets.")
+                        }
+                        fold("Advanced", "All ten valves by hand, scores ×1.15") {
+                            KeyLine("PADS", "One for each nozzle on a car outline, nose up, once you're off the Wall. Slide a finger between them.")
+                            KeyLine("ALSO", "LIFT, BOOST and FRONTS.")
+                        }
+                        fold("The car", "Ten cold-gas jets, one tank") {
+                            KeyLine("4 DOWN", "Lift it and roll it.")
+                            KeyLine("4 REAR", "Push it forward.")
+                            KeyLine("2 NOSE", "Turn it.")
+                            KeyLine("TANK", "Nitrogen feeds them all. When it's empty, you fall.")
+                        }
+                        fold("The judges", "Three scores, each out of 100") {
+                            KeyLine("ENGINEER", "The landing: sink rate, tilt, four wheels down together.")
+                            KeyLine("COORD.", "The height and the rotation.")
+                            KeyLine("DESIGNER", "The whole of it, gas left included.")
+                        }
+                        fold("The board", "Today's scores, checked by the server") {
+                            KeyLine("POST", "A scored run, with three letters.")
+                            KeyLine("CHECK", "The server flies your inputs again in the same physics, so the board is honest.")
+                        }
+                        fold("Controller or keyboard", "Pair one and it takes over") {
+                            KeyLine("STEER", "Left stick or arrows, to steer and roll.")
+                            KeyLine("LIFT", "Right trigger or Space.")
+                            KeyLine("LAND", "Left trigger or Shift.")
+                            KeyLine("BOOST", "RB or F.")
+                            KeyLine("TOUCH", "Tap the screen to get the touch controls back.")
+                        }
+                        fold("iPhone Duo", "Flat, or folded into tabletop") {
+                            KeyLine("FLAT", "The game fills the whole screen.")
+                            KeyLine("TABLETOP", "The top half is the screen, the bottom half the controller.")
+                        }
+                    }
                 }
                 .padding(20)
             }
@@ -56,10 +101,67 @@ struct HowToView: View {
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
-    private func section(_ title: String, _ body: String) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            Text(title.uppercased()).font(Theme.display(11)).tracking(2).foregroundStyle(Theme.ink)
-            Text(body).font(Theme.text(14)).foregroundStyle(Theme.ink2).lineSpacing(3).fixedSize(horizontal: false, vertical: true)
+
+    private var theGame: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            label("One thumb, the whole flight")
+            HStack(spacing: 8) {
+                step("HOLD", "to climb", phase: 0)
+                step("TAP", "to let go", phase: 190)
+                step("HOLD", "to land", phase: 375)
+            }
+            Text("Slide your thumb while you hold to aim the touchdown.").font(Theme.text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+        }
+    }
+    private func step(_ verb: String, _ what: String, phase: CGFloat) -> some View {
+        VStack(spacing: 3) {
+            Text(verb).font(Theme.display(16)).foregroundStyle(Theme.auroraInk).lineLimit(1).minimumScaleFactor(0.7)
+            Text(what).font(Theme.text(13, .medium)).foregroundStyle(Theme.auroraInk2).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 16)
+        .aurora(12, phase: phase)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var theScore: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            label("What scores")
+            HStack(spacing: 8) {
+                fact("Soft", "low sink")
+                fact("Level", "low tilt")
+                fact("Square", "four wheels")
+            }
+            HStack(spacing: 8) {
+                tag("Pro ×1.08", color: Theme.ink)
+                tag("Advanced ×1.15", color: Theme.ink)
+                tag("Parked car: crash", color: Theme.hot)
+            }
+        }
+    }
+    private func fact(_ big: String, _ small: String) -> some View {
+        VStack(spacing: 3) {
+            Text(big).font(Theme.text(16, .semibold)).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.8)
+            Text(small).font(Theme.text(12)).foregroundStyle(Theme.ink2).lineLimit(1).minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity).padding(.vertical, 12)
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).strokeBorder(Theme.hair))
+        .accessibilityElement(children: .combine)
+    }
+    private func tag(_ s: String, color: Color) -> some View {
+        Text(s).font(Theme.text(12, .medium)).foregroundStyle(color).lineLimit(1).minimumScaleFactor(0.7)
+            .frame(maxWidth: .infinity).padding(.vertical, 8)
+            .overlay(Capsule().strokeBorder(Theme.hair))
+    }
+    private func label(_ s: String) -> some View {
+        Text(s.uppercased()).font(Theme.text(10, .medium)).tracking(1.4).foregroundStyle(Theme.ink3).padding(.top, 2)
+    }
+    /// One open at a time, so the page stays short.
+    private func fold<C: View>(_ title: String, _ summary: String, @ViewBuilder _ body: @escaping () -> C) -> some View {
+        VStack(spacing: 0) {
+            Accordion(title: title, summary: summary, isOpen: Binding(get: { open == title }, set: { open = $0 ? title : nil })) {
+                VStack(alignment: .leading, spacing: 8) { body() }
+            }
+            Rectangle().fill(Theme.hair2).frame(height: 1)
         }
     }
 }

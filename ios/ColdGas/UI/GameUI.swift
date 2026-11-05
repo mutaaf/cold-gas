@@ -253,43 +253,54 @@ struct ResultsView: View {
     var open: (RootUI.Sheet) -> Void
     @ObservedObject var post: PostModel
     @ObservedObject var judges: JudgesModel
+    @State private var openJudge: String?
+    @State private var numbersOpen = false
     var body: some View {
         let card = result.card
-        VStack {
-            Spacer(minLength: 8)
-            // Post and the buttons stay on screen; on a short screen or a long verdict, the details scroll above them.
-            ViewThatFits(in: .vertical) {
-                VStack(alignment: .leading, spacing: 14) { sheet(card); actions(card) }.padding(18)
-                VStack(alignment: .leading, spacing: 12) { ScrollView { sheet(card).padding(.bottom, 4) }.scrollBounceBehavior(.basedOnSize); actions(card) }.padding(18)
+        GeometryReader { g in
+            // Under the height of a big phone the actions take one row, to leave the score and the judges the room.
+            // A very short space (a Duo in tabletop) shrinks the score as well, or the actions would cover it.
+            let oneRow = g.size.height < 720, short = g.size.height < 470
+            VStack {
+                Spacer(minLength: 8)
+                // Post and the buttons stay on screen; on a short screen or a long verdict, the details scroll above them.
+                ViewThatFits(in: .vertical) {
+                    VStack(alignment: .leading, spacing: 14) { sheet(card, short: short); actions(card, short: oneRow) }.padding(18)
+                    VStack(alignment: .leading, spacing: short ? 8 : 12) {
+                        ScrollViewReader { reader in
+                            ScrollView { sheet(card, short: short).padding(.bottom, 4) }
+                                .scrollBounceBehavior(.basedOnSize)
+                                // What you opened comes into view. On appear too: opening it may be what made the sheet need a
+                                // scroll view, and a new one never sees the change. After a beat, once the row has its height.
+                                .task(id: numbersOpen) {
+                                    guard numbersOpen else { return }
+                                    try? await Task.sleep(for: .milliseconds(60))
+                                    withAnimation(.snappy(duration: 0.24)) { reader.scrollTo("numbers", anchor: .bottom) }
+                                }
+                        }
+                        actions(card, short: oneRow)
+                    }.padding(short ? 12 : 18)
+                }
+                .glass(20)
+                .frame(maxWidth: 480)
+                .padding(.horizontal, 16).padding(.bottom, short ? 8 : 16)
             }
-            .glass(20)
-            .frame(maxWidth: 480)
-            .padding(.horizontal, 16).padding(.bottom, 16)
+            .frame(maxWidth: .infinity)
         }
         .onAppear { if result.drill == nil { judges.ask(result) } }
     }
-    private func sheet(_ card: Card) -> some View {
+    private func flag(_ card: Card, _ key: String) -> Bool? {
+        guard let v = card.flat.first(where: { $0.0 == "facts." + key })?.1, case let .b(b) = v else { return nil }
+        return b
+    }
+    /// src/ui.js's rule: a crash, a wreck or no jump at all is never celebrated. (`crashed` includes the wreck.)
+    private func celebrated(_ card: Card) -> Bool { flag(card, "crashed") != true && flag(card, "jumped") != false }
+
+    private func sheet(_ card: Card, short: Bool) -> some View {
                 VStack(alignment: .leading, spacing: 14) {
-                    HStack(alignment: .firstTextBaseline) {
-                        Text(String(format: "%.1f", card.total)).font(Theme.mono(46, bold: true)).foregroundStyle(Theme.ink).monospacedDigit()
-                        Text("/ 100").font(Theme.mono(14)).foregroundStyle(Theme.ink3)
-                        Spacer()
-                        Text(card.tier.uppercased()).font(Theme.text(11, .medium)).tracking(1.6).foregroundStyle(card.tier == "assist" ? Theme.ink2 : Theme.amber)
-                            .padding(.horizontal, 10).padding(.vertical, 5).overlay(Capsule().strokeBorder(Theme.hair))
-                    }
-                    Text(card.verdict).font(Theme.text(17, .medium)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-                    HStack(spacing: 8) {
-                        ForEach(Array(card.judges.enumerated()), id: \.offset) { _, j in
-                            VStack(spacing: 4) {
-                                Text(JUDGE_NAMES[j.id] ?? j.id).font(Theme.text(10, .medium)).tracking(0.8).foregroundStyle(Theme.ink3).lineLimit(1).minimumScaleFactor(0.7)
-                                Text(String(format: "%.1f", j.score)).font(Theme.mono(22)).foregroundStyle(Theme.ink)
-                            }
-                            .frame(maxWidth: .infinity).padding(.vertical, 10)
-                            .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(Theme.hair))
-                        }
-                    }
-                    if let m = Records.shared.lastRecord, let medal = m.earned {
-                        Text("\(medal.label) medal\(m.isNew ? " · new" : "")").font(Theme.text(13, .medium)).foregroundStyle(Theme.amber)
+                    scoreField(card, short: short)
+                    if result.drill == nil {
+                        JudgePanel(judges: card.judges, celebrate: celebrated(card), model: judges, open: $openJudge)
                     }
                     if let d = result.dailyLine { Text(d).font(Theme.text(13)).foregroundStyle(result.dailyOK ? Theme.ok : Theme.ink2).fixedSize(horizontal: false, vertical: true) }
                     if let d = result.drill {
@@ -299,34 +310,81 @@ struct ResultsView: View {
                             ForEach(d.stats, id: \.self) { Text($0).font(Theme.mono(11)).foregroundStyle(Theme.ink2) }
                         }
                     }
-                    facts(result.telemetry)
-                    if let c = result.coach.first {
-                        VStack(alignment: .leading, spacing: 3) {
-                            Text("WHAT COST YOU").font(Theme.text(9, .medium)).tracking(1.4).foregroundStyle(Theme.ink3)
-                            Text(c.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
-                            Text(c.fix.isEmpty ? c.detail : c.fix).font(Theme.text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+                    // The coach's "clean" is praise: not after a crash, where its only finding can still be that one.
+                    if let c = result.coach.first, c.id != "clean" || celebrated(card) {
+                        HStack(alignment: .top, spacing: 10) {
+                            RoundedRectangle(cornerRadius: 1.5).fill(c.id == "clean" ? Theme.aur1 : Theme.amber).frame(width: 3)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(c.id == "clean" ? "NEXT RUN" : "WHAT COST YOU").font(Theme.text(9, .medium)).tracking(1.4).foregroundStyle(Theme.ink3)
+                                Text(c.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                                Text(c.fix.isEmpty ? c.detail : c.fix).font(Theme.text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+                            }
                         }
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityElement(children: .combine)
                     }
-                    if result.drill == nil { JudgesWordsView(result: result, model: judges) }
+                    Accordion(title: "The numbers", summary: numbersLine(result.telemetry), isOpen: $numbersOpen) { facts(result.telemetry) }.id("numbers")
                 }
     }
-    private func actions(_ card: Card) -> some View {
-                VStack(alignment: .leading, spacing: 10) {
+    /// The score is the one thing the sheet has to say at a glance: bright for a landing, plain for a crash.
+    @ViewBuilder private func scoreField(_ card: Card, short: Bool) -> some View {
+        let lit = celebrated(card)
+        let ink = lit ? Theme.auroraInk : Theme.ink, ink2 = lit ? Theme.auroraInk2 : Theme.ink3
+        let field = VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(String(format: "%.1f", card.total)).font(Theme.mono(short ? 34 : 46, bold: true)).foregroundStyle(ink).monospacedDigit()
+                Text("/ 100").font(Theme.mono(14)).foregroundStyle(ink2)
+                Spacer()
+                Text(card.tier.uppercased()).font(Theme.text(11, .medium)).tracking(1.6).foregroundStyle(lit ? ink : card.tier == "assist" ? Theme.ink2 : Theme.amber)
+                    .padding(.horizontal, 10).padding(.vertical, 5).overlay(Capsule().strokeBorder(lit ? Theme.auroraInk.opacity(0.35) : Theme.hair))
+            }
+            Text(card.verdict).font(Theme.text(17, .semibold)).foregroundStyle(ink).fixedSize(horizontal: false, vertical: true)
+            if let m = Records.shared.lastRecord, let medal = m.earned {
+                Text("\(medal.label) medal\(m.isNew ? " · new" : "")").font(Theme.text(13, .semibold)).foregroundStyle(lit ? ink : Theme.amber)
+            }
+        }
+        .padding(short ? 10 : 14).frame(maxWidth: .infinity, alignment: .leading)
+        if lit { field.aurora(14) } else { field.overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hair)) }
+    }
+    private func numbersLine(_ t: Telemetry) -> String {
+        "Sink \(Fmt.rate(t.sink)) \(Fmt.rateUnit) · Tilt \(String(format: "%.0f°", t.tiltDeg))"
+    }
+    private func actions(_ card: Card, short: Bool) -> some View {
+                VStack(alignment: .leading, spacing: short ? 8 : 10) {
                     PostRow(result: result, post: post)
-                    VStack(spacing: 10) {
-                        Button { game.retry() } label: { Text(result.drill == nil ? "Fly again" : "Again").frame(maxWidth: .infinity) }.buttonStyle(CGButton(primary: true))
-                        HStack(spacing: 8) {
-                            Button { game.watch() } label: { Text("Watch it").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
-                            if let u = result.challengeURL {
-                                ShareLink(item: u, message: Text(String(format: "%.1f on %@. Beat it.", card.total, COURSE_INFO.first { $0.id == result.course }?.name ?? "Cold Gas"))) {
-                                    Image(systemName: "square.and.arrow.up").font(.system(size: 15)).frame(width: 24)
-                                }.buttonStyle(CGButton(compact: true)).accessibilityLabel("Challenge a friend")
+                    let again = Button { game.retry() } label: { Text(result.drill == nil ? "Fly again" : "Again").frame(maxWidth: .infinity) }
+                    if short {
+                        // One row, the secondary actions as icons, each still saying its name.
+                        HStack(spacing: 6) {
+                            again.buttonStyle(CGButton(primary: true, compact: true))
+                            iconAction("play.rectangle", "Watch it") { game.watch() }
+                            share(card)
+                            iconAction("list.number", "Board") { open(.board) }
+                            iconAction("house", "Home") { game.home() }
+                        }
+                    } else {
+                        VStack(spacing: 10) {
+                            again.buttonStyle(CGButton(primary: true))
+                            HStack(spacing: 8) {
+                                Button { game.watch() } label: { Text("Watch it").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
+                                share(card)
+                                Button { open(.board) } label: { Text("Board").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
+                                Button { game.home() } label: { Text("Home").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
                             }
-                            Button { open(.board) } label: { Text("Board").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
-                            Button { game.home() } label: { Text("Home").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
                         }
                     }
                 }
+    }
+    private func iconAction(_ icon: String, _ name: String, _ act: @escaping () -> Void) -> some View {
+        Button(action: act) { Image(systemName: icon).font(.system(size: 15)).frame(width: 24) }
+            .buttonStyle(CGButton(compact: true)).accessibilityLabel(name)
+    }
+    @ViewBuilder private func share(_ card: Card) -> some View {
+        if let u = result.challengeURL {
+            ShareLink(item: u, message: Text(String(format: "%.1f on %@. Beat it.", card.total, COURSE_INFO.first { $0.id == result.course }?.name ?? "Cold Gas"))) {
+                Image(systemName: "square.and.arrow.up").font(.system(size: 15)).frame(width: 24)
+            }.buttonStyle(CGButton(compact: true)).accessibilityLabel("Challenge a friend")
+        }
     }
     private func facts(_ t: Telemetry) -> some View {
         let rows: [(String, String)] = [
@@ -336,11 +394,18 @@ struct ResultsView: View {
             ("Apex", Fmt.length(max(0, t.apex - SPEC.comHeight)) + " " + Fmt.lengthUnit),
             ("Damage", String(format: "%.0f%%", t.damage?.pct ?? 0)),
         ]
-        return LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], alignment: .leading, spacing: 6) {
-            ForEach(rows, id: \.0) { r in
-                HStack { Text(r.0).font(Theme.text(12)).foregroundStyle(Theme.ink3); Spacer(); Text(r.1).font(Theme.mono(12)).foregroundStyle(Theme.ink2) }
+        return Grid(alignment: .leading, horizontalSpacing: 24, verticalSpacing: 6) {
+            ForEach(stride(from: 0, to: rows.count, by: 2).map { $0 }, id: \.self) { i in
+                GridRow {
+                    fact(rows[i])
+                    if i + 1 < rows.count { fact(rows[i + 1]) } else { Color.clear.gridCellUnsizedAxes([.horizontal, .vertical]) }
+                }
             }
         }
+    }
+    private func fact(_ r: (String, String)) -> some View {
+        HStack { Text(r.0).font(Theme.text(12)).foregroundStyle(Theme.ink2); Spacer(minLength: 8); Text(r.1).lineLimit(1).minimumScaleFactor(0.8).font(Theme.mono(12)).foregroundStyle(Theme.ink) }
+            .accessibilityElement(children: .combine)
     }
 }
 

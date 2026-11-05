@@ -41,7 +41,7 @@ struct SettingsView: View {
                     LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                     Link("Play on the web", destination: URL(string: "https://mutaafaziz.com/coldgas/")!)
                     Link("Privacy policy", destination: URL(string: "https://mutaafaziz.com/coldgas/privacy")!)
-                    NavigationLink("Fonts") { LicensesView() }
+                    NavigationLink("Licenses") { LicensesView() }
                 }
             }
             .scrollContentBackground(.hidden)
@@ -57,6 +57,7 @@ struct LicensesView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Michroma and Geist (Geist Mono) are used under the SIL Open Font License 1.1.").font(Theme.text(14)).foregroundStyle(Theme.ink2)
+                Text("The physics engine is Rapier by Dimforge, used under the Apache License 2.0.").font(Theme.text(14)).foregroundStyle(Theme.ink2)
                 ForEach(["OFL-Michroma", "OFL-Geist"], id: \.self) { f in
                     if let u = Bundle.main.url(forResource: f, withExtension: "txt") ?? Bundle.main.url(forResource: f, withExtension: "txt", subdirectory: "Fonts"),
                        let s = try? String(contentsOf: u, encoding: .utf8) {
@@ -65,6 +66,6 @@ struct LicensesView: View {
                 }
             }.padding(20)
         }
-        .navigationTitle("Fonts")
+        .navigationTitle("Licenses")
     }
 }
