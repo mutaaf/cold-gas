@@ -452,6 +452,16 @@ ios/
   with a 27.1+ SDK build earns the "Made for iPhone Duo" badge.
 - **TestFlight's `whatsNew` rejects emoji.**
 - **Submitting** to TestFlight's external group or to review happens **only on a fresh yes from the owner in chat.**
+- **The tooling (0154).** `ios/scripts/` has moon-club's `asc.mjs`, `testflight.sh`, `provision.sh` and
+  `check-rules.sh`, adapted. The key config is the owner's `ios/.env.testflight` (gitignored; a copy of moon-club's)
+  or `ASC_ENV=<file>`.
+  - `make rules`, `make archive` (Release archive + App Store export, no upload), `make validate`,
+    `make testflight` (uploads; internal group only) and `make store-check`.
+  - The distribution certificate is the team's one in `~/.appstoreconnect/signing`, shared with moon-club. The App
+    Store profile is "Cold Gas App Store".
+  - The listing lives in `ios/store/`: texts, `listing.json`, `age-rating.json`, `app-privacy.md` (set by hand),
+    `review-notes.txt`, `review-reply.md` (the 2.1 answers) and a draft privacy policy.
+  - `node scripts/asc.mjs status` reports what exists without changing anything.
 
 ## 10 · Phases (each ends at a gate; tickets in docs/backlog)
 

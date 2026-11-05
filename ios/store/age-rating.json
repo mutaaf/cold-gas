@@ -1,0 +1,37 @@
+{
+  "why": {
+    "violence": "No people or animals are ever shown. A missed landing dents the car and throws debris: vehicle damage only, no injury, no blood.",
+    "contests": "The board ranks landings; there are no prizes, entry fees or sweepstakes.",
+    "userGeneratedContent": "Yes, truthfully (18-0's lesson): three letters A to Z as initials, shown on the public board. No other text, profile, chat or messaging. Apple may ask how it is moderated (guideline 1.2): see store/review-reply.md.",
+    "unrestrictedWebAccess": "No in-app browser. A challenge link opens the web game in Safari.",
+    "advertising": "No ads in the app (docs/NATIVE.md §2.3: Marquee is a web loader only).",
+    "parentalControls": "None in the app.",
+    "ageAssurance": "None."
+  },
+  "answers": {
+    "alcoholTobaccoOrDrugUseOrReferences": "NONE",
+    "contests": "NONE",
+    "gamblingSimulated": "NONE",
+    "gunsOrOtherWeapons": "NONE",
+    "medicalOrTreatmentInformation": "NONE",
+    "profanityOrCrudeHumor": "NONE",
+    "sexualContentGraphicAndNudity": "NONE",
+    "sexualContentOrNudity": "NONE",
+    "horrorOrFearThemes": "NONE",
+    "matureOrSuggestiveThemes": "NONE",
+    "violenceCartoonOrFantasy": "NONE",
+    "violenceRealistic": "NONE",
+    "violenceRealisticProlongedGraphicOrSadistic": "NONE",
+    "gambling": false,
+    "lootBox": false,
+    "unrestrictedWebAccess": false,
+    "userGeneratedContent": true,
+    "messagingAndChat": false,
+    "advertising": false,
+    "healthOrWellnessTopics": false,
+    "ageAssurance": false,
+    "socialMedia": false,
+    "socialMediaAgeRestricted": false,
+    "parentalControls": false
+  }
+}

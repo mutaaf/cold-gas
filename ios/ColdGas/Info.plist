@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>CFBundleDevelopmentRegion</key><string>en</string>
-	<key>CFBundleDisplayName</key><string>COLD GAS</string>
+	<key>CFBundleDisplayName</key><string>Cold Gas</string>
 	<key>CFBundleExecutable</key><string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key><string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
 	<key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
@@ -12,6 +12,10 @@
 	<key>CFBundleShortVersionString</key><string>$(MARKETING_VERSION)</string>
 	<key>CFBundleVersion</key><string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key><true/>
+	<key>LSApplicationCategoryType</key><string>public.app-category.racing-games</string>
+	<!-- The engine is arm64 only and the stage is drawn in Metal (docs/NATIVE.md §9, ios/scripts/check-rules.sh). -->
+	<key>UIRequiredDeviceCapabilities</key>
+	<array><string>arm64</string><string>metal</string></array>
 	<!-- ProMotion: without this an iPhone caps the app at 60 Hz (moon-club, 18-0). -->
 	<key>CADisableMinimumFrameDurationOnPhone</key><true/>
 	<key>ITSAppUsesNonExemptEncryption</key><false/>
@@ -33,6 +37,8 @@
 			</dict></array>
 		</dict>
 	</dict>
+	<!-- Portrait and both landscapes: the Duo's outer screen and a Pro Max in either hand, and the near-square inner
+	     display unfolded. No upside-down portrait (no Face ID iPhone supports it). -->
 	<key>UISupportedInterfaceOrientations</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>

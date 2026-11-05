@@ -1,0 +1,26 @@
+No sign-in and no demo account: there are no accounts. Every course and tier plays at once, and the game plays offline. Only the board and the judges' commentary need a network connection.
+
+WHAT IT IS
+A single stunt jump, made into a skill game, for anyone who likes driving and physics games. A roadster climbs a kicker, fires ten cold-gas thrusters to clear a row of parked cars, rolls once in the air, retro-burns and lands on a pad. Three judges score the jump.
+
+HOW TO PLAY (about a minute)
+1. Launch the app and tap Jump. A new player starts on Assist with the One-thumb control.
+2. Hold anywhere on the thumb pad to climb the kicker. The car slows and stops on the ledge by itself.
+3. Tap once to let go. The car drives off the ledge and over the row.
+4. Hold again to land. The flight computer rolls the car out and brakes onto the pad. Sliding the held thumb moves the touchdown point.
+5. The results show the score card. Each category is explained there.
+Pro and Advanced (all ten valves by hand) are under the flight tier. A hardware keyboard or a game controller also works.
+
+THE BOARD
+After a run the player can post it to a public board of the day's and all-time best landings. The only thing the player types is three letters (A to Z) as initials. There is no other text, no profile, no chat and no messaging. The app never sends a score: it sends the run's input log and telemetry, and our server scores them with the same deterministic scorer the game uses.
+
+THE JUDGES
+The numbers come from a fixed scorer. The short commentary under them is written by an AI model on our own server (mutaafaziz.com). It receives the run's numbers, never anything about the player. A player may optionally enter their own API key for another AI provider in Settings; it is kept in the iOS Keychain and sent only with that player's own judging requests, which our server then passes to that provider for the one call and does not store.
+
+NETWORK AND DATA
+The app talks to one host, mutaafaziz.com/coldgas, and to no third-party SDK, analytics or advertising service. It sends: the run (input log, telemetry, course, flight tier) when judging or posting; the three initials when posting; and an anonymous health report (error signatures, frame-time counts and play-event counts, with no identifiers). No accounts, no advertising identifier, no tracking.
+
+CONTENT AND RIGHTS
+Everything in the app is original: the cars, courses, sounds and art are our own design, and the sounds are synthesised in code. No real brand, vehicle model, logo or person appears. The typefaces are Michroma and Geist, both under the SIL Open Font License 1.1. The physics engine is Rapier, under the Apache License 2.0.
+
+There are no in-app purchases, no ads, no gambling and no loot boxes, and the app is the same in every region.
