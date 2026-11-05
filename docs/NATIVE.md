@@ -237,6 +237,11 @@ throttled phone: benches back to back heat it, and the numbers mean nothing abov
   - In practice the plumes' mist and the crash's particles run on the CPU in fixed pools, seeded as the web's, and only their instances go
     to the GPU (`Plumes.swift`, `Crash.swift`, `Debris.swift`, 0159). Attribution: `-fx-log` (the mist's fragments per frame) and
     `-gpu-skip plumes,mist,beams`. Debug shots on a loaded Mac: `-holds <sim times>`, `-fx-cam rear|front|top`, `-replay <absolute path>`.
+- **The picture beside the web's (0163).** The environment is three's PMREM read back into a cube at export; the launch complex is baked
+  into vertex colours; the mirror is a quarter-size redraw of what stands on the stage; bloom a quarter-size chain added in one pass;
+  film.js's haze lives in each material and in billboards. Attribution: `-gpu-skip env,stars,haze,wet,mirror,complex,lattice,floodbeams,glints,glows,bloom`
+  and `-bench`'s `mirror` and `bloom` lines. `Renderer.shed`: at the resolution floor and over budget, or hot, or on Low Power Mode, the mirror
+  goes first, then the lit air and half the mist's budget (`LOOK shed` in the log).
 - **Anti-aliasing.** 4× MSAA in memoryless tile memory. It's cheap on Apple GPUs, and it fixes what SMAA couldn't:
   - The sub-pixel lamp strips that flicker through the bloom (LESSONS 0037, "Sub-pixel emissive geometry").
   - Keep the `sliver()` minimum-width idea for strips under a pixel.
