@@ -1,7 +1,7 @@
 ---
 id: 0086
 title: The title scene reads blue-hour, with one signal red, on every tier
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: player-feel
@@ -44,3 +44,5 @@ truss, sky and concrete, and the 390x844 run-up frame is a red wash. Promoted to
 between the shipped look and pillar 4 ("a single signal red"), and a lockdown polish item.
 
 Re-checked 2026-10-30 on `main` `c1dccf1`: the 390x844 title is still red across the sky, headline and footer copy.
+
+GROOMED 2026-11-05: back to proposed. The PLAYERS focus ranks the funnel (first run, first load, return) above scene polish, and the ready queue was over its cap of 10; the Builder takes this once the funnel work clears.

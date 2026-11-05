@@ -1,7 +1,7 @@
 ---
 id: 0051
 title: The wide shot and the Lineup row hold still: find and fix the 50–140‰ shimmer
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: player-feel
@@ -59,3 +59,5 @@ Attribution on CI's software GL (`--gl=swiftshader`, same build A/B against main
   (vehicle, buildings, tank, spheres) moving a fraction of a pixel a frame: coverage aliasing, the same open part as
   the car and the row. No per-material fix keeps the look; it needs composer AA (#136 option c).
 
+
+GROOMED 2026-11-05: back to proposed. The PLAYERS focus ranks the funnel (first run, first load, return) above scene polish, and the ready queue was over its cap of 10; the Builder takes this once the funnel work clears.
