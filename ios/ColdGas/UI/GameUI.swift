@@ -156,7 +156,7 @@ struct RunView: View {
                                width: layout.scene.width - layout.safe.leading - (rows ? 0 : layout.safe.trailing),
                                height: layout.scene.height - layout.safe.top - (rows ? 0 : layout.safe.bottom))
         ZStack(alignment: .topLeading) {
-            HUDView(compact: !rows && layout.controls.height < 520, cueLift: rows || layout.scene.width > layout.scene.height ? 0 : (game.tier == "advanced" && (game.hud.phase == 2 || game.hud.released) ? 400 : 196))
+            HUDView(compact: !rows && layout.controls.height < 520, cueLift: rows || layout.scene.width > layout.scene.height ? 0 : (game.tier == "advanced" && (game.hud.phase == 2 || game.hud.released) ? min(330, layout.controls.width) * 380 / 300 + 12 : 196))
                 .frame(width: sceneSafe.width, height: sceneSafe.height).offset(x: sceneSafe.minX, y: sceneSafe.minY)
             ControllerView(panel: rows)
                 .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)

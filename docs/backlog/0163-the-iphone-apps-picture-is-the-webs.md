@@ -1,12 +1,12 @@
 ---
 id: 0163
 title: "The iPhone app's picture is the web's: the night sky, the launch complex, the lit wet slab, the row's light, bloom, the mist"
-status: shipped
+status: in-progress
 priority: P1
 size: L
 lens: platform
 created: 2026-11-04
-pr:
+pr: 257
 by: operator
 ---
 
@@ -34,6 +34,8 @@ What's new:
 - `Shaders.metal`: the environment and hemisphere with three's split-sum indirect, the sky and stars by ray, the height fog and the
   sun's scatter in each material (`hazed`), glints and lit-air billboards, the wet slab, bloom, film.js's vignette.
 - `Renderer.swift`: the mirror, bloom's passes, and `shed`.
+
+Seen at store-capture size: the smear's five taps ghosted thin bright edges into blocks on the open Duo; now nine, at quarter size.
 
 On purpose unlike the web:
 - The mirror draws only what stands on the stage, the row, the car and the complex, at quarter size with no MSAA, smeared once; the

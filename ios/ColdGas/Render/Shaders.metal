@@ -316,8 +316,10 @@ fragment float4 cg_glow_fragment(GlowOut in [[stage_in]]) {
 // The mirror's image, smeared along the view as wet concrete does (film.js: taps down the image), into what the slab reads.
 fragment float4 cg_smear_fragment(SOut in [[stage_in]], texture2d<float> src [[texture(0)]]) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
-    const float2 d1 = float2(0.003, 0.009), d2 = float2(-0.005, 0.02);   // mostly along the view, a little across
-    float3 c = src.sample(s, in.uv).rgb * 0.3 + (src.sample(s, in.uv + d1).rgb + src.sample(s, in.uv - d1).rgb) * 0.22 + (src.sample(s, in.uv + d2).rgb + src.sample(s, in.uv - d2).rgb) * 0.13;
+    // Mostly along the view, a little across. Nine taps at quarter size: with five, thin bright edges ghosted into blocks on a big screen.
+    const float2 d0 = float2(0.0015, 0.0045), d1 = float2(0.003, 0.009), d3 = float2(-0.001, 0.0145), d2 = float2(-0.005, 0.02);
+    float3 c = src.sample(s, in.uv).rgb * 0.2 + (src.sample(s, in.uv + d0).rgb + src.sample(s, in.uv - d0).rgb) * 0.14 + (src.sample(s, in.uv + d1).rgb + src.sample(s, in.uv - d1).rgb) * 0.12
+             + (src.sample(s, in.uv + d3).rgb + src.sample(s, in.uv - d3).rgb) * 0.08 + (src.sample(s, in.uv + d2).rgb + src.sample(s, in.uv - d2).rgb) * 0.06;
     return float4(c, 1);
 }
 
