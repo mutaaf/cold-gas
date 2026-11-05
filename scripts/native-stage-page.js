@@ -5,10 +5,15 @@
 //             translate(c) · rotate(q_body) · rotateY(π/2), as scene.js lineup() setBodies does
 //   lights    spot, point and directional lights with their world positions and targets
 //   look      exposure, bloom, fog, the key light (the course's `look`)
+//   carParts  what roadster.js moves or lights on its own (the wing, the vanes, the skirts, the fans, the lamps, the
+//             nozzle states) and what crash.js throws off it, each in its own frame, with the poses it hangs from;
+//             the body keeps only the merged skin Dents.swift pushes in (crash.js's `skins`)
+//   sweep     the searchlights' pivots (wall.js update swings them) and the one drum, lens and beam they share
 //   textures  every texture a material uses, as a PNG data URL (canvas textures are drawn by the real canvas here)
 import * as THREE from 'three';
-import { COURSE_BUILDERS } from '../src/render/scene.js';
-import { makeRoadster } from '../src/render/roadster.js';
+import { COURSE_BUILDERS, blobMaterial } from '../src/render/scene.js';
+import { makeRoadster, ROADSTER_MATERIALS as RM } from '../src/render/roadster.js';
+import { LINEUP_SPEC } from '../src/sim/courses.js';
 
 const b64 = (typed) => {
   const u8 = new Uint8Array(typed.buffer, typed.byteOffset, typed.byteLength);
@@ -57,11 +62,13 @@ function materialOf(m, textures) {
     bumpScale: m.bumpScale ?? 1, emissiveMap: textureOf(m.emissiveMap, textures),
   };
 }
-// Bake an object's meshes (world matrices from `root`) into per-material groups.
-function bake(root, textures, skip = () => false) {
+const under = (o, pred) => { for (let p = o; p; p = p.parent) if (pred(p)) return true; return false; };
+// Bake an object's meshes (world matrices from `root`) into per-material groups; `frame`: in that object's own frame.
+function bake(root, textures, skip = () => false, frame = null) {
   root.updateMatrixWorld(true);
   const groups = new Map();
   const m4 = new THREE.Matrix4(), mi = new THREE.Matrix4(), n3 = new THREE.Matrix3(), v = new THREE.Vector3(), n = new THREE.Vector3(), c = new THREE.Color();
+  const frameInv = frame ? new THREE.Matrix4().copy(frame.matrixWorld).invert() : new THREE.Matrix4();
   root.traverse((o) => {
     if (skip(o) || !(o.isMesh || o.isInstancedMesh) || !o.visible) return;
     const mats = Array.isArray(o.material) ? o.material : [o.material];
@@ -69,11 +76,12 @@ function bake(root, textures, skip = () => false) {
     if (!g.attributes.normal) g.computeVertexNormals();
     const N = g.attributes.normal, UV = g.attributes.uv, COL = g.attributes.color;
     for (let inst = 0; inst < (o.isInstancedMesh ? o.count : 1); inst++) {
-      m4.copy(o.matrixWorld);
+      m4.multiplyMatrices(frameInv, o.matrixWorld);
       if (o.isInstancedMesh) { o.getMatrixAt(inst, mi); m4.multiply(mi); }
       n3.getNormalMatrix(m4);
       const flip = m4.determinant() < 0;
-      const ranges = g.groups.length ? g.groups : [{ start: 0, count: g.index ? g.index.count : P.count, materialIndex: 0 }];
+      // A geometry's groups count only with an array of materials, as in three (a box has six; one material draws them all).
+      const ranges = Array.isArray(o.material) && g.groups.length ? g.groups : [{ start: 0, count: g.index ? g.index.count : P.count, materialIndex: 0 }];
       for (const r of ranges) {
         const mat = mats[r.materialIndex ?? 0];
         if (!mat || mat.visible === false) continue;
@@ -112,6 +120,72 @@ function bake(root, textures, skip = () => false) {
   return { vertexStride: 44, vertexCount: verts, submeshes: subs, vertices: b64(new Float32Array(vb)), indices: b64(new Uint32Array(ib)) };
 }
 
+// A part's bounds in its own frame (crash.js `centred`: the clone at rest, its children keeping their local poses).
+function bounds(src) {
+  const c = src.clone();
+  c.position.set(0, 0, 0); c.rotation.set(0, 0, 0); c.scale.set(1, 1, 1);
+  c.updateMatrixWorld(true);
+  const box = new THREE.Box3().setFromObject(c);
+  return { center: box.getCenter(new THREE.Vector3()).toArray(), half: box.getSize(new THREE.Vector3()).multiplyScalar(0.5).toArray() };
+}
+// The roadster's moving and lit parts, each in its own frame (their poses are roadster.js applyWing, applySkirts,
+// applyLights, fanSpin, which the app recomputes); the body bakes what's left. Addressed by reaching into the model as
+// roadster.js builds it, so a change there fails here rather than exporting a wrong car.
+function carParts(car, textures) {
+  const P = car.parts, body = car.body;
+  const named = (mat) => body.children.find((c) => c.isMesh && c.material === mat && c !== P.barge);
+  const covers = body.children.find((c) => c.isMesh && c.material === RM.paint && c.geometry.attributes.position.count === 6);
+  const holders = body.children.filter((c) => c.isGroup && c.children[0]?.material === RM.fan);
+  const [pivot, wingLower] = P.wing.children;
+  const [blade, edge, wingPlates, wingStruts] = pivot.children;
+  const [drl, heads, tailBar, tailDim, brake] = [RM.drl, RM.head, RM.tail, RM.tailDim, RM.brake].map(named);
+  const inst = body.children.filter((c) => c.isInstancedMesh);
+  const core = inst.find((c) => c.material === RM.jetCore), frost = inst.find((c) => c.material === RM.frost);
+  if (![blade, edge, wingPlates, wingStruts, wingLower, drl, heads, covers, tailBar, tailDim, brake, core, frost].every(Boolean) || holders.length !== 4) throw new Error('roadster.js changed: carParts() needs its parts');
+  // crash.js's boxes (createCrash): at the car's rest pose, before anything moves.
+  const pieces = { wing: bounds(P.wing), vanes: bounds(P.vanes) };
+  car.update(0); car.update(5);   // awake: the lamps at their levels (the app sets them per frame, from applyLights)
+  for (const o of [pivot, blade, edge, wingPlates, wingStruts, wingLower, P.sideSkirts, P.endSkirts, P.vanes, P.barge, P.wing, drl, heads, covers, tailBar, tailDim, brake]) o.visible = true;
+  const own = (o, skip) => bake(o, textures, skip, o);
+  const box = (x, y, z, mat) => bake(new THREE.Mesh(new THREE.BoxGeometry(x, y, z), mat), textures);
+  const inner = (mesh) => bake(new THREE.Mesh(mesh.geometry, mesh.material), textures);
+  const plane = new THREE.Mesh(new THREE.PlaneGeometry(2.6, 5.6), blobMaterial(0.7));   // scene.js heroBlob
+  plane.rotation.x = -Math.PI / 2;
+  const meshes = {
+    wingBlade: bake(pivot, textures, (o) => o === wingPlates || o === wingStruts, pivot),
+    wingPlates: own(wingPlates), wingStruts: own(wingStruts), wingLower: own(wingLower),
+    vanes: own(P.vanes), barge: own(P.barge), sideSkirts: own(P.sideSkirts), endSkirts: own(P.endSkirts),
+    drl: own(drl), heads: own(heads), covers: own(covers), tailBar: own(tailBar), tailDim: own(tailDim), brake: own(brake),
+    rotor: bake(holders[0].children[0], textures, () => false, holders[0].children[0]),
+    jetCore: inner(core), frost: inner(frost), blob: bake(plane, textures),
+    // crash.js's torn skirts and barge boards: plain boxes (their parts on the car are merged pairs).
+    pieceSkirtSide: box(0.014, 0.12, 1.9, RM.rubber), pieceSkirtEnd: box(1.6, 0.12, 0.014, RM.rubber), pieceBarge: box(0.012, 0.16, 0.26, RM.carbon),
+  };
+  const moved = new Set([P.wing, P.vanes, P.barge, P.sideSkirts, P.endSkirts, drl, heads, covers, tailBar, tailDim, brake, core, frost, ...holders]);
+  const m = new THREE.Matrix4();
+  const frames = (im) => Array.from({ length: im.count }, (_, i) => { im.getMatrixAt(i, m); return Array.from(m.elements); });
+  return {
+    moved,
+    out: {
+      meshes, pieces,
+      wing: { position: P.wing.position.toArray(), rotationX: P.wing.rotation.x },
+      vanes: { position: P.vanes.position.toArray() }, brake: { position: brake.position.toArray() },
+      drl: { position: drl.position.toArray() },
+      fans: holders.map((h) => ({ position: h.position.toArray(), rotationX: h.rotation.x })),
+      nozzleCore: frames(core), nozzleFrost: frames(frost),
+    },
+  };
+}
+// The searchlights (wall.js searchlights: their numbers on each pivot's userData.sweep): one shared drum, lens and beam.
+function sweepRig(pivots, textures) {
+  if (!pivots.length) return null;
+  const [beam, head, lens] = pivots[0].children;
+  return { pivots: pivots.map((p) => ({ position: p.position.toArray(), ...p.userData.sweep })),
+    beam: bake(pivots[0], textures, (o) => o === head || o === lens, pivots[0]),
+    head: bake(pivots[0], textures, (o) => o === beam || o === lens, pivots[0]),
+    lens: bake(pivots[0], textures, (o) => o === beam || o === head, pivots[0]) };
+}
+
 export async function exportCourse(id) {
   const textures = new Map();
   const build = COURSE_BUILDERS[id]('high');
@@ -128,7 +202,8 @@ export async function exportCourse(id) {
     for (const car of [...row.children]) {
       const p = car.position.clone(), q = car.quaternion.clone();
       car.position.set(0, 0, 0); car.quaternion.identity(); row.updateMatrixWorld(true);
-      parked.push({ home: { x: p.x, y: p.y, z: p.z }, mesh: bake(car, textures) });
+      // crash.js parkedFor: a struck car's chips are in LINEUP_SPEC's paint, by its place in the row.
+      parked.push({ home: { x: p.x, y: p.y, z: p.z }, paint: (LINEUP_SPEC[parked.length] || LINEUP_SPEC[0]).paint, mesh: bake(car, textures) });
       car.position.copy(p); car.quaternion.copy(q); row.updateMatrixWorld(true);
     }
   }
@@ -142,15 +217,18 @@ export async function exportCourse(id) {
     if (o.isDirectionalLight) { o.target.updateMatrixWorld(true); L.target = new THREE.Vector3().setFromMatrixPosition(o.target.matrixWorld).toArray(); }
     lights.push(L);
   });
-  const stat = bake(group, textures, (o) => row && (o === row || row.children.some((c) => { let p = o; while (p) { if (p === c) return true; p = p.parent; } return false; })));
+  const pivots = [];
+  group.traverse((o) => { if (o.userData.sweep) pivots.push(o); });
+  const stat = bake(group, textures, (o) => under(o, (p) => (row && p === row) || p.userData.sweep));
+  const sweep = sweepRig(pivots, textures);
   // The roadster: the body, and each wheel as two parts in its pivot's frame (main.js syncCar drives them: the pivot at
   // wheelCenterY(compression), turned by the steer on the fronts; the `spin` group about its axle by the wheel's spin).
   const car = makeRoadster();
   const carRoot = car.root ?? car.group ?? car;
   const rootObj = carRoot.isObject3D ? carRoot : car.object;
-  const pivots = new Set(car.wheels.map((w) => w.pivot));
-  const underPivot = (o) => { for (let p = o; p; p = p.parent) if (pivots.has(p)) return true; return false; };
-  const roadster = bake(rootObj, textures, underPivot);
+  const parts = carParts(car, textures);
+  const wheelPivots = new Set(car.wheels.map((w) => w.pivot));
+  const roadster = bake(rootObj, textures, (o) => under(o, (p) => wheelPivots.has(p) || parts.moved.has(p)));
   const wheels = car.wheels.map((w, i) => {
     const pos = w.pivot.position.clone(), rot = w.pivot.rotation.clone(), parent = w.pivot.parent;
     parent.remove(w.pivot); w.pivot.position.set(0, 0, 0); w.pivot.rotation.set(0, 0, 0); w.pivot.updateMatrixWorld(true);
@@ -165,7 +243,7 @@ export async function exportCourse(id) {
     look: { exposure: L.exposure ?? 1, bloom: L.bloom ?? null, fog: L.fog ? { color: L.fog.color.toArray(), near: L.fog.near, far: L.fog.far } : null,
       keyLight: look.keyLight ? { color: new THREE.Color(look.keyLight.color).toArray(), intensity: look.keyLight.intensity, offset: look.keyLight.offset.toArray() } : null,
       glows: (look.glows || []).map((g) => ({ pos: g.pos.toArray(), color: g.color.toArray(), radius: g.radius })) },
-    static: stat, parked, roadster, wheels, lights,
+    static: stat, parked, roadster, wheels, lights, carParts: parts.out, sweep,
     textures: [...textures.values()],
   };
 }

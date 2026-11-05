@@ -4,7 +4,8 @@
 //           nitrogen line on a big hit, the camera's shake and a slow-motion beat
 //   SCRAPE  a stream of sparks, dust off a scraping body
 //   WHEEL   dust from a slammed tyre, a shake
-// (Next, in the same ticket: dents from each probe's crush and the torn-off parts of debris.js; lamps and hazards.)
+//   and on a HIT: parts torn off (Debris.swift), the canopy crazing, lamps flickering out, hazards (CarState draws them)
+// (A struck parked car's rock on its springs is the sim's, as on the web: Replay.body poses it. The crash cut is Director's.)
 // Pools are fixed (the web's high tier: 520 sparks, 220 chips, 320 puffs); nothing is allocated per frame.
 import Foundation
 import simd
@@ -52,13 +53,60 @@ final class Crash {
     /// Dent hooks (the renderer owns the meshes): hero(probe, crush, normal, salt), parked(body, point, normal, depth, salt).
     var dentHero: ((Int, Float, SIMD3<Float>, Float) -> Void)?
     var dentParked: ((Int, SIMD3<Float>, SIMD3<Float>, Float, Float) -> Void)?
-    private var carVel = SIMD3<Float>()
+    private var carVel = SIMD3<Float>(), carPos = SIMD3<Float>(), carQuat = simd_quatf(angle: 0, axis: [0, 1, 0])
     var shake: ((Float) -> Void)?
+    /// The car's own states and damage (roadster.js): lamps, parts, the canopy. Crash sets the damage, the renderer draws it.
+    let car = CarState()
+    /// The torn-off parts: free rigid boxes on the concrete.
+    let pieces = Debris()
+    /// crash.js parkedFor's paint per body (from the stage), as sRGB hex.
+    var paints: [UInt32] = []
+    private var layout = CarLayout()
+    // The breakables, as crash.js lists them (the order matters: each draws from the event's seeded rnd in turn).
+    struct Breakable { let group: CarState.Group; let source: CarState.Source; let center: SIMD3<Float>; let piece: Int; let hits: [UInt8]; let min: Float }
+    private(set) var breakable: [Breakable] = []
+    /// The stage's car: crash.js's `piece` calls.
+    func configure(layout l: CarLayout, paints p: [UInt32]) {
+        layout = l; paints = p
+        pieces.removeAll(); breakable.removeAll()
+        func add(_ g: CarState.Group, _ s: CarState.Source, _ c: SIMD3<Float>, _ half: SIMD3<Float>, _ hits: [UInt8], _ min: Float) {
+            breakable.append(Breakable(group: g, source: s, center: c, piece: pieces.add(half: half), hits: hits, min: min))
+        }
+        add(.wing, .wing, l.wingCenter, l.wingHalf, [PART.tail], 5.5)
+        add(.vanes, .vanes, l.vanesCenter, l.vanesHalf, [PART.nose], 5)
+        let skirtHits = [PART.floor, PART.side, PART.nose, PART.tail], skirtY = Float(SPEC.rideHeight) + 0.012 + 0.06, zF = Float(SPEC.wheelbase - SPEC.comFromFront)
+        for s: Float in [-1, 1] {
+            add(.skirts, .sideSkirts, SIMD3(s * 0.8, skirtY, 0), SIMD3(0.007, 0.06, 0.95), skirtHits, 6)
+            add(.skirts, .endSkirts, SIMD3(0, skirtY, s * 0.95), SIMD3(0.8, 0.06, 0.007), skirtHits, 6)
+            add(.barge, .barge, SIMD3(s * 0.93, 0.25, zF - 0.5), SIMD3(0.006, 0.08, 0.13), [PART.nose, PART.side], 7)
+        }
+    }
+    private var brokenNow = [Bool](repeating: false, count: CarState.Group.allCases.count)
+    private func tearOff(_ part: UInt8, _ v: Float, _ sev: Float, _ n: SIMD3<Float>) {
+        for i in brokenNow.indices { brokenNow[i] = false }
+        for b in breakable {
+            if pieces.isOn(b.piece) || v < b.min || !car.visible(b.source) { continue }
+            if !b.hits.contains(part) && !(v > 11 && rnd() < 0.5) { continue }
+            let (m, q) = car.world(b.source, layout: layout, carPos: carPos, carQuat: carQuat)
+            let c4 = m * SIMD4(b.center, 1)
+            let kick = 1.5 + 4 * sev
+            let bv = SIMD3(carVel.x * 0.85 + n.x * kick + sgn() * 1.2, carVel.y * 0.4 + abs(n.y) * kick * 0.6 + 1 + rnd() * 2, carVel.z * 0.85 + n.z * kick + sgn() * 1.2)
+            let bw = SIMD3(sgn() * 8, sgn() * 6, sgn() * 8)
+            pieces.spawn(b.piece, pos: SIMD3(c4.x, c4.y, c4.z), quat: q, v: bv, w: bw)
+            if b.source == .wing { car.keepTornWing() }   // crash.js syncPose: the wing flies in the pose it left in
+            brokenNow[b.group.rawValue] = true
+        }
+        for g in CarState.Group.allCases where brokenNow[g.rawValue] { car.broken[g.rawValue] = true }
+    }
+    // The lamps and the canopy (crash.js st).
+    private var head: Float = 1, tail: Float = 1, headFail: Float = 0, tailFail: Float = 0, headDead = false, tailDead = false, hazardT: Float = -1, hazard = false, glass = false
 
     var onReset: (() -> Void)?
     func reset() {
         onReset?()
         cursor = 0; lastTick = -1; slowK = 1; slowT = 0; ventT = 0; grind = 0; bigT = -10; flashT = 0
+        head = 1; tail = 1; headFail = 0; tailFail = 0; headDead = false; tailDead = false; hazardT = -1; hazard = false; glass = false
+        pieces.reset(); car.reset()
         for j in 0..<Crash.NS { sLife[j] = 0 }
         for j in 0..<Crash.NC { cLife[j] = 0 }
         for j in 0..<Crash.NM { mLife[j] = 0; mAlpha[j] = 0 }
@@ -87,7 +135,7 @@ final class Crash {
     func feed(_ imps: [Replay.Impact], tick: Int, vel: SIMD3<Float>, carPos: SIMD3<Float>, carQuat: simd_quatf) {
         if tick < lastTick { reset() }   // the replay looped
         lastTick = tick
-        carVel = vel
+        carVel = vel; self.carPos = carPos; self.carQuat = carQuat
         tailPos = carQuat.act(SIMD3(0, 0.1, -1.7)) + carPos; carUp = carQuat.act(SIMD3(0, 1, 0))
         while cursor < imps.count && imps[cursor].tick <= tick {
             let i = cursor; cursor += 1
@@ -131,6 +179,8 @@ final class Crash {
         }
         if kind == ImpactKind.CRUSH {
             // crash.js: folded far enough, the lamps in that end are gone; the skin dents at the probe, a struck car where it was hit.
+            if part == PART.nose && e.crush > 0.06 && !headDead { headDead = true; headFail = max(headFail, 0.5) }
+            if part == PART.tail && e.crush > 0.06 && !tailDead { tailDead = true; tailFail = max(tailFail, 0.5) }
             dentHero?(Int(e.probe), e.crush, n, Float(e.tick) * 0.37)
             if e.body >= 0 { dentParked?(Int(e.body), p, n, min(0.3, e.crush * 0.6), Float(e.tick) * 0.53) }
             return
@@ -149,11 +199,11 @@ final class Crash {
         for _ in 0..<nChip {
             let r = rnd()
             let hex: UInt32 = glassy && r < 0.55 ? (rnd() < 0.7 ? 0xf2ead8 : 0x8a6a44) : part == PART.nose || part == PART.tail ? (r < 0.5 ? 0x16171a : 0xe3e4e2) : r < 0.6 ? 0xe3e4e2 : 0x0c0d0f
-            if e.body >= 0 { _ = rnd() }   // the web picks the parked car's paint here 40 % of the time (its paints: next)
+            let pc = e.body >= 0 && rnd() < 0.4 ? (Int(e.body) < paints.count ? paints[Int(e.body)] : hex) : hex   // chips in the struck car's own colour
             let sp = 1 + rnd() * 3.5 * (0.4 + sev)
             chip(SIMD3(p.x + sgn() * 0.25, p.y + 0.05 + rnd() * 0.2, p.z + sgn() * 0.25),
                  SIMD3(carVel.x * 0.6 + n.x * sp + sgn() * 2, carVel.y * 0.2 + abs(n.y) * sp * 0.6 + 0.5 + rnd() * 2, carVel.z * 0.6 + n.z * sp + sgn() * 2),
-                 glassy && r < 0.55 ? 0.008 + rnd() * 0.018 : 0.012 + rnd() * 0.035, hex, glassy && r < 0.55)
+                 glassy && r < 0.55 ? 0.008 + rnd() * 0.018 : 0.012 + rnd() * 0.035, pc, glassy && r < 0.55)
         }
         let nPuff = Int(jsRound(Double((onGround ? 4 : 2) + (onGround ? 18 : 5) * sev)))
         for _ in 0..<nPuff {
@@ -162,8 +212,16 @@ final class Crash {
             puff(SIMD3(p.x + cos(a) * 0.3, p.y + 0.12, p.z + sin(a) * 0.3), SIMD3(cos(a) * sp + t.x * 0.25, 0.15 + rnd() * 0.8 * (0.4 + sev), sin(a) * sp + t.z * 0.25),
                  0.7, 5 + 6 * sev, 2.2 + rnd() * 1.8, onGround ? 0.2 + 0.12 * sev : 0.12, SIMD3(c, c * 0.97, c * 0.93))
         }
+        // Parts tear off: the hardest-hit end loses what hangs off it. The canopy crazes when the roof or a shoulder takes it hard.
+        tearOff(part, v, sev, n)
+        if glassy && v > 6 && !glass { glass = true; car.crazed = true }
+        // Lamps: the nose takes the headlamps with it, the tail the taillight; flicker, then out.
+        if part == PART.nose && v > 4 { headFail = 0.7 + 0.8 * sev; headDead = headDead || sev > 0.25 }
+        if part == PART.tail && v > 4 { tailFail = 0.6 + 0.6 * sev; tailDead = tailDead || sev > 0.35 }
+        if sev > 0.6 && part != PART.floor { headFail = max(headFail, 0.6) }
+        if sev > 0.2 && hazardT < 0 { hazardT = 0.9 }
         if sev > 0.55 { ventT = max(ventT, 1.1 + sev) }
-        if e.body >= 0 { dentParked?(Int(e.body), p, n, min(0.14, 0.003 * v * v), Float(e.tick) * 0.29) }   // a dent and (next) a rock on its springs
+        if e.body >= 0 { dentParked?(Int(e.body), p, n, min(0.14, 0.003 * v * v), Float(e.tick) * 0.29) }   // a dent; the sim rocks it on its springs
         if audible { Sound.shared.crunch(severity: Double(sev), glass: glassy && v > 5, seed: e.tick * 31 + Int(e.probe)) }
         if !reduced {
             shake?(min(2.6, 0.25 + v * 0.17))
@@ -217,6 +275,13 @@ final class Crash {
             mAlpha[j] = min(1, age * 9) * pow(max(0, mLife[j]), 1.3) * mAlpha0[j]
         }
         if flashT > 0 { flashT -= dtReal }
+        // Torn-off parts: rigid boxes on the concrete.
+        pieces.update(dt)
+        // Lamps: flicker while failing, then out (or dimmed); hazards after a crash.
+        if headFail > 0 { headFail -= dtReal; head = sin(clock * 61) * sin(clock * 23.3) > 0.1 ? 1 : 0.05; if headFail <= 0 { head = headDead ? 0 : 0.55 } }
+        if tailFail > 0 { tailFail -= dtReal; tail = sin(clock * 47) * sin(clock * 17.1) > 0 ? 1 : 0.1; if tailFail <= 0 { tail = tailDead ? 0.04 : 0.6 } }
+        if hazardT > 0 { hazardT -= dtReal; if hazardT <= 0 { hazard = true } }
+        car.setDamage(head: head, tail: tail, hazard: hazard)
         grind *= exp(-dtReal * 5)
     }
 

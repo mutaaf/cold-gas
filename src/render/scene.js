@@ -144,7 +144,7 @@ function ramp() {
 // the slab, which the key light's shadow map is too coarse and too directional to give). One
 // texture, drawn as a decal over the slab and its paint.
 let blobTex = null;
-function blobMaterial(opacity) {
+export function blobMaterial(opacity) {
   if (!blobTex) {
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);

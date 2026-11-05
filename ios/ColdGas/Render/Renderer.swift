@@ -24,7 +24,7 @@ struct FrameU {
 struct LightU { var posRange = SIMD4<Float>(), colorIntensity = SIMD4<Float>(), dirCos = SIMD4<Float>(), params = SIMD4<Float>() }
 struct MaterialU { var color = SIMD4<Float>(), emissive = SIMD4<Float>(), pbr = SIMD4<Float>(), uvTransform = SIMD4<Float>(1, 1, 0, 0), flags = SIMD4<UInt32>(), effect = SIMD4<Float>(), effectKind = SIMD4<UInt32>() }
 struct ObjectU { var model = matrix_identity_float4x4, normal = matrix_identity_float4x4 }
-struct PlumeU { var origin = SIMD4<Float>(), dir = SIMD4<Float>() }
+struct PlumeU { var origin = SIMD4<Float>(), dir = SIMD4<Float>(), extra = SIMD4<Float>() }
 
 final class Renderer {
     static let hdrFormat = MTLPixelFormat.rgba16Float, ldrFormat = MTLPixelFormat.bgra8Unorm, depthFormat = MTLPixelFormat.depth32Float
@@ -35,9 +35,23 @@ final class Renderer {
     let stage: Stage
     var replay: Replay?
     private let opaque, opaqueCullNone, blend, additive, sky, film, present, shadowPipe, plume: MTLRenderPipelineState
-    private let sparkPipe, puffPipe, chipPipe, flashPipe: MTLRenderPipelineState
+    private let sparkPipe, puffPipe, chipPipe, flashPipe, mistPipe: MTLRenderPipelineState
     let crash = Crash()
-    private let sparkBufs: [MTLBuffer], puffBufs: [MTLBuffer], chipBufs: [MTLBuffer]
+    let mist = Plumes()
+    private let sparkBufs: [MTLBuffer], puffBufs: [MTLBuffer], chipBufs: [MTLBuffer], mistBufs: [MTLBuffer]
+    /// The valves this frame, and whether this run's touchdown has shown yet (main.js touchdown).
+    private var thr = [Float](repeating: 0, count: 10), touched = false
+    private let anchors = wheelAnchors()
+    private let plumeLocal: [(pos: SIMD3<Float>, jet: SIMD3<Float>)] = NOZZLE_SPEC.map { n in
+        (SIMD3(Float(n.pos.0), Float(n.pos.1), Float(n.pos.2)), -SIMD3(Float(n.dir.0), Float(n.dir.1), Float(n.dir.2)))
+    }
+    // Where the car's own materials sit in stageMats (their colours change per frame: applyCarMaterials).
+    private let partBase, sweepBase, blobSplit: Int
+    private let subAmber, subMarker, subPlate, subAmbient, subGlass: Int
+    private let glassMat: MaterialU?, crazedMat: MaterialU?
+    private var sweepM: [simd_float4x4]
+    let fxLog = Launch.args.contains("-fx-log")
+    private var fxFrames = 0
     /// The replay's own clock: real time scaled by the crash's slow-motion beat (crash.js timeScale).
     private var simClock = 0.0, lastT = -1.0
     private let dsWrite, dsRead, dsOff, dsShadow: MTLDepthStencilState
@@ -59,11 +73,11 @@ final class Renderer {
     /// The crash's slow-motion factor, for the game's clock (a live run slows with the effects, as crash.js timeScale).
     var slowK: Double { Double(crash.slowK) }
     /// A new track (a new run, or back to the title's loop): effects and clocks start over.
-    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset() }
+    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed() }
     private(set) lazy var dents = Dents(roadster: stage.roadster, parked: stage.parked)
     private var lastCarQ = simd_quatf(angle: 0, axis: [0, 1, 0]), lastDrawT = 0.0
     private func hookDents() {
-        crash.onReset = { [unowned self] in self.dents.restore() }   // a new run, or a recorded run looping
+        crash.onReset = { [unowned self] in self.dents.restore(); self.mist.clear(); self.touched = false; self.crash.car.placed() }   // a new run, or a recorded run looping
         crash.dentHero = { [unowned self] probe, crush, n, salt in self.dents.hero(probe: probe, crush: crush, normal: n, carQ: self.lastCarQ, salt: salt) }
         crash.dentParked = { [unowned self] i, p, n, depth, salt in self.dents.parked(i, at: p, normal: n, model: self.parkedModel(i, t: self.lastDrawT), depth: depth, salt: salt) }
     }
@@ -76,7 +90,21 @@ final class Renderer {
     private let dummy: MTLTexture
     let cam = Director()
     let passTimes = PassTimes()
-    /// `-gpu-skip shadow,lights,translucent,metalfx,parked,static` (bench attribution only).
+    /// `-holds 12.1,12.5`: debug, for shots on a loaded machine: the replay's clock stops at each of these sim times, marks
+    /// `hold:<t>` in the ready file and waits for Caches/coldgas.go to appear (scratch tooling removes it and shoots).
+    private var holds: [Double] = (Launch.value("-holds") ?? "").split(separator: ",").compactMap { Double($0) }
+    private func holdFrozen() -> Bool {
+        guard let h = holds.first, simClock >= h else { return false }
+        let go = Ready.url.deletingLastPathComponent().appendingPathComponent("coldgas.go")
+        if !holdMarked { holdMarked = true; Ready.mark("hold:\(h)") }
+        if FileManager.default.fileExists(atPath: go.path) { try? FileManager.default.removeItem(at: go); holds.removeFirst(); holdMarked = false; return false }
+        return true
+    }
+    private var holdMarked = false
+    /// `-fx-cam rear|front|top`: debug, a camera fixed to the car, for what `-cam close` can't see (the tail bar, the DRL, the canopy).
+    private let fxCam = Launch.value("-fx-cam")
+    private var heroClock = 0.0
+    /// `-gpu-skip shadow,lights,translucent,metalfx,parked,static,plumes,mist,beams` (bench attribution only).
     let skip: Set<String> = Set((Launch.value("-gpu-skip") ?? "").split(separator: ",").map(String.init))
 
     init?(device: MTLDevice, course: String = "show", replay: Replay?) {
@@ -84,6 +112,7 @@ final class Renderer {
         self.device = device
         guard let q = device.makeCommandQueue(), let lib = device.makeDefaultLibrary(), let st = Stage(device: device, course: course) else { return nil }
         queue = q; stage = st; self.replay = replay
+        if Launch.args.contains("-crash-log") || Launch.args.contains("-fx-log") { setvbuf(stdout, nil, _IOLBF, 0) }
         let archive = PipelineArchive(device: device)
         let vd = MTLVertexDescriptor()
         for (i, (fmt, off)) in [(MTLVertexFormat.float3, 0), (.float3, 12), (.float2, 24), (.float3, 32)].enumerated() {
@@ -113,13 +142,15 @@ final class Renderer {
               let pl = pipe("cg_plume_vertex", "cg_plume_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2) else { return nil }
         opaque = o; opaqueCullNone = on; blend = b; additive = a; sky = sk; film = fl; present = pr; shadowPipe = sh; plume = pl
         guard let spk = pipe("cg_spark_vertex", "cg_spark_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2),
-              let puf = pipe("cg_puff_vertex", "cg_puff_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
+              let puf = pipe("cg_soft_vertex", "cg_puff_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
+              let mst = pipe("cg_soft_vertex", "cg_mist_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
               let chp = pipe("cg_chip_vertex", "cg_chip_fragment", color: Renderer.hdrFormat, vertex: nil),
               let fla = pipe("cg_puff_vertex", "cg_flash_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2) else { return nil }
-        sparkPipe = spk; puffPipe = puf; chipPipe = chp; flashPipe = fla
+        sparkPipe = spk; puffPipe = puf; chipPipe = chp; flashPipe = fla; mistPipe = mst
         sparkBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<SparkGPU>.stride * Crash.NS, options: .storageModeShared)! }
         puffBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<PuffGPU>.stride * (Crash.NM + 1), options: .storageModeShared)! }
         chipBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<ChipGPU>.stride * Crash.NC, options: .storageModeShared)! }
+        mistBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<PuffGPU>.stride * Plumes.maxMist, options: .storageModeShared)! }
         archive.save()
         func ds(_ w: Bool, _ c: MTLCompareFunction) -> MTLDepthStencilState { let d = MTLDepthStencilDescriptor(); d.isDepthWriteEnabled = w; d.depthCompareFunction = c; return device.makeDepthStencilState(descriptor: d)! }
         dsWrite = ds(true, .less); dsRead = ds(false, .lessEqual); dsOff = ds(false, .always); dsShadow = ds(true, .less)
@@ -154,7 +185,23 @@ final class Renderer {
             return u
         } }
         stageMats = [mats(st.staticMesh), mats(st.roadster)] + st.parked.map(mats) + st.wheels.flatMap { [mats($0.steerPart), mats($0.spinPart)] }
+        partBase = stageMats.count
+        stageMats += st.parts.map(mats)
+        sweepBase = stageMats.count
+        if let sw = st.sweep { stageMats += [mats(sw.beam), mats(sw.head), mats(sw.lens)] }
+        sweepM = [simd_float4x4](repeating: matrix_identity_float4x4, count: st.sweep?.pivots.count ?? 0)
+        // scene.js BLOB_ORDER: the hero's contact shadow over the paint (order -3), under the glows and LEDs (-2 and up).
+        blobSplit = st.staticMesh.submeshes.firstIndex { $0.renderOrder > -3 } ?? st.staticMesh.submeshes.count
+        func sub(_ name: String) -> Int { st.roadster.submeshes.firstIndex { $0.material.name == name } ?? -1 }
+        subAmber = sub("roadster-amber"); subMarker = sub("roadster-marker"); subPlate = sub("roadster-plateLamp"); subAmbient = sub("roadster-ambient"); subGlass = sub("roadster-glass")
+        if subGlass >= 0 {
+            glassMat = stageMats[1][subGlass]
+            var cz = stageMats[1][subGlass]   // crash.js `crazed`: the glass gone milky
+            cz.color = SIMD4(srgbHexToLinear(0x9a8a74), 0.9); cz.pbr = SIMD4(0.15, 0.55, 0, 0)
+            crazedMat = cz
+        } else { glassMat = nil; crazedMat = nil }
         launchCompileMs = (CACurrentMediaTime() - t0) * 1000
+        crash.configure(layout: st.layout, paints: st.paints)
         applyThermal()
     }
 
@@ -209,7 +256,9 @@ final class Renderer {
         var carM = matrix_identity_float4x4, carPos = SIMD3<Float>(0, Float(SPEC.comHeight), -6), carQ = simd_quatf(angle: 0, axis: [0, 1, 0])
         var nPlumes = 0, tick = 0
         var phase: UInt8 = 0
-        let dtReal = lastT < 0 ? 0 : min(0.1, max(0, t - lastT)); lastT = t
+        var dtReal = lastT < 0 ? 0 : min(0.1, max(0, t - lastT)); lastT = t
+        if !holds.isEmpty && holdFrozen() { dtReal = 0 }
+        heroClock += dtReal   // S.time: real seconds, each frame's capped at 0.1, as main.js adds them
         crash.update(Float(dtReal))
         simClock += dtReal * Double(crash.slowK)
         // A recorded run loops with a 2 s pause; a live one is drawn at the game's clock (one tick behind the sim, between
@@ -222,25 +271,37 @@ final class Renderer {
             carPos = c.pos; carQ = c.quat; tick = c.tick; phase = r.phase(at: c.tick)
             lastCarQ = c.quat; lastDrawT = tt
             if crash.dentHero == nil { hookDents() }
-            crash.feed(r.impacts, tick: c.tick + r.tickBase, vel: r.velocity(at: c.tick), carPos: c.pos, carQuat: c.quat)
+            let vel = r.velocity(at: c.tick)
+            for k in 0..<10 { thr[k] = r.nozzle(k, at: tick) }
+            var loaded = false
+            for w in 0..<4 where r.wheel(w, at: tt).comp > 0.002 { loaded = true }
+            if r.live { crash.car.setWing((simd_length(vel) - 20) / 20) }   // main.js liveStep
+            crash.car.update(time: heroClock, carPos: carPos, carQuat: carQ, groundedNow: loaded, fanLevel: r.fan(at: tick), throttle: thr)
+            crash.feed(r.impacts, tick: c.tick + r.tickBase, vel: vel, carPos: c.pos, carQuat: c.quat)
+            if r.touchTick >= 0 && tick >= r.touchTick && !touched { touched = true; touchdown(sink: r.sink, carPos: carPos, carQuat: carQ) }
+            mist.update(dt: Float(dtReal) * crash.slowK, thr: thr, carPos: carPos, carQuat: carQ, carVel: vel)
+            // plumes.js update: a cone from each nozzle over 2 % open, its length and width from the valve.
             let p = pb.contents().bindMemory(to: PlumeU.self, capacity: 10)
-            for k in 0..<10 {
-                let thr = r.nozzle(k, at: tick)
-                if thr < 0.04 { continue }
-                let n = NOZZLE_SPEC[k]
-                let o = carQ.act(SIMD3(Float(n.pos.0), Float(n.pos.1), Float(n.pos.2))) + carPos
-                let d = carQ.act(-SIMD3(Float(n.dir.0), Float(n.dir.1), Float(n.dir.2)))   // the jet leaves against its thrust
-                p[nPlumes] = PlumeU(origin: SIMD4(o, thr), dir: SIMD4(d, 0.6 + 2.2 * thr)); nPlumes += 1
+            for k in 0..<10 where thr[k] > 0.02 {
+                let o = carQ.act(plumeLocal[k].pos) + carPos, d = carQ.act(plumeLocal[k].jet), th = thr[k]
+                p[nPlumes] = PlumeU(origin: SIMD4(o, min(1, th * 1.3)), dir: SIMD4(d, 0.4 + th * 2.4), extra: SIMD4(0.6 + th * 0.7, Float(k) * 7.3, 0, 0)); nPlumes += 1
             }
         }
         carM = translate(carPos) * simd_float4x4(carQ) * translate(SIMD3(0, -Float(SPEC.comHeight), 0))
 
-        let aspect = Float(out.width) / Float(max(1, out.height))
+        applyCarMaterials()
+        updateSweep(Float(heroClock))
+        var aspect = Float(out.width) / Float(max(1, out.height))
         if cam.shakeHook == nil { cam.shakeHook = true; crash.shake = { [weak cam] a in cam?.shake(a) } }
-        let view = cam.update(car: carPos, quat: carQ, phase: phase, time: t, aspect: aspect)
+        var view = cam.update(car: carPos, quat: carQ, phase: phase, time: t, aspect: aspect)
+        if let fc = fxCam {
+            let off: SIMD3<Float> = fc == "rear" ? [0.8, 0.7, -5.5] : fc == "front" ? [0.8, 0.7, 6] : [3.5, 3.5, -1]
+            view.eye = carPos + carQ.act(off); view.view = lookAt(eye: view.eye, target: carPos, up: [0, 1, 0])
+        }
         let fx = crash.write(sparks: sparkBufs[fi].contents().bindMemory(to: SparkGPU.self, capacity: Crash.NS),
                              puffs: puffBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Crash.NM + 1),
                              chips: chipBufs[fi].contents().bindMemory(to: ChipGPU.self, capacity: Crash.NC))
+        let nMist = skip.contains("mist") ? 0 : mist.write(mistBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Plumes.maxMist))
         var nPuffs = fx.1
         if let fl = crash.flash, nPuffs < Crash.NM + 1 {   // the flash rides at the end of the puff buffer
             puffBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Crash.NM + 1)[nPuffs] = PuffGPU(pos: SIMD4(fl.pos, fl.size), color: SIMD4(1, 1, 1, fl.k)); nPuffs += 1
@@ -249,10 +310,12 @@ final class Renderer {
         var camUp = SIMD4<Float>(view.view.columns.0.y, view.view.columns.1.y, view.view.columns.2.y, 0)
         var u = FrameU()
         u.viewProj = view.proj * view.view
+        if fxLog { fxFrames += 1; if fxFrames % 120 == 0 { print(String(format: "FX mist %d live, %.2f M fragments at %d×%d · cones %d · sparks %d, puffs %d, chips %d", mist.live, mist.fragments(viewProj: u.viewProj, width: Float(renderSize.0)) / 1e6, renderSize.0, renderSize.1, nPlumes, fx.0, nPuffs, fx.2))
+            for (i, pc) in crash.pieces.list.enumerated() where pc.on { print(String(format: "PIECE %d at (%.2f, %.2f, %.2f) v %.2f w %.2f still %.2f", i, pc.pos.x, pc.pos.y, pc.pos.z, simd_length(pc.v), simd_length(pc.w), pc.still)) } } }
         let keyPos = carPos + stage.keyOffset, keyDir = simd_normalize(stage.keyOffset)
         let lv = lookAt(eye: keyPos, target: carPos, up: [0, 1, 0]), lp = ortho(-28, 28, -28, 28, 1, 140)
         u.lightViewProj = lp * lv
-        u.eye = SIMD4(view.eye, Float(t))
+        u.eye = SIMD4(view.eye, Float(heroClock))
         u.keyDir = SIMD4(keyDir, stage.keyIntensity)
         u.keyColor = SIMD4(stage.keyColor, skip.contains("lights") ? 0 : Float(nLights))
         u.fogColor = SIMD4(stage.fogColor, 1)
@@ -277,6 +340,7 @@ final class Renderer {
             drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: true, shadow: true)
             parkedDraw(e, t: simT, shadow: true)
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true, shadow: true)
+            carPartsDraw(e, carM: carM, shadow: true)
             wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: true)
             e.endEncoding()
         }
@@ -295,15 +359,26 @@ final class Renderer {
             if !skip.contains("static") { drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: true) }
             if !skip.contains("parked") { parkedDraw(e, t: simT, shadow: false) }
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true)
+            carPartsDraw(e, carM: carM, shadow: false)
             wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: false)
+            sweepDraw(e, opaqueOnly: true)
             if !skip.contains("translucent") {
-                drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: false)
+                drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: false, to: blobSplit)
+                blobDraw(e, carPos: carPos, carQuat: carQ)
+                drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: false, from: blobSplit)
+                if !skip.contains("beams") { sweepDraw(e, opaqueOnly: false) }
                 drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: false)
+                nozzleStatesDraw(e, carM: carM)
             }
-            if nPlumes > 0 {
+            if nPlumes > 0 && !skip.contains("plumes") {
                 e.setRenderPipelineState(plume); e.setDepthStencilState(dsRead); e.setCullMode(.none)
                 e.setVertexBuffer(pb, offset: 0, index: 2)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 12 * 3, instanceCount: nPlumes)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 24 * 3, instanceCount: nPlumes)
+            }
+            if nMist > 0 {   // condensation (plumes.js), behind the crash's effects
+                e.setRenderPipelineState(mistPipe); e.setDepthStencilState(dsRead); e.setCullMode(.none)
+                e.setVertexBuffer(mistBufs[fi], offset: 0, index: 2); e.setVertexBytes(&aspect, length: 4, index: 3)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nMist)
             }
             // crash.js's effects: chips (lit-ish solids), dust and smoke (blended), sparks and the flash (additive).
             if fx.2 > 0 { e.setRenderPipelineState(chipPipe); e.setDepthStencilState(dsWrite); e.setCullMode(.none); e.setVertexBuffer(chipBufs[fi], offset: 0, index: 2)
@@ -311,7 +386,7 @@ final class Renderer {
             let hasFlash = crash.flash != nil
             let nDust = hasFlash ? nPuffs - 1 : nPuffs
             if nDust > 0 { e.setRenderPipelineState(puffPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(puffBufs[fi], offset: 0, index: 2)
-                e.setVertexBytes(&camRight, length: 16, index: 3); e.setVertexBytes(&camUp, length: 16, index: 4)
+                e.setVertexBytes(&aspect, length: 4, index: 3)
                 e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nDust) }
             if fx.0 > 0 { e.setRenderPipelineState(sparkPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(sparkBufs[fi], offset: 0, index: 2)
                 e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: fx.0) }
@@ -353,10 +428,113 @@ final class Renderer {
         cmd.commit()
     }
 
+    // --- The car's own states (roadster.js), the searchlights (wall.js), the touchdown (main.js) ------------------------
+    /// main.js touchdown, keyed to the sim's touch tick: mist from each tyre and a shake, scaled by sink rate
+    /// (src/render/impact.js landingImpact). The camera's dip and punch-in are the director's.
+    private func touchdown(sink: Float, carPos: SIMD3<Float>, carQuat: simd_quatf) {
+        let r = max(0, sink) / 5, s = r >= 1 ? 1 : r * r
+        func contact(_ i: Int) -> SIMD3<Float> {
+            let a = anchors[i], w = carQuat.act(SIMD3(Float(a.0), Float(a.1), Float(a.2))) + carPos
+            return SIMD3(w.x, max(0, w.y - 0.24 - Float(SPEC.wheelRadius)), w.z)
+        }
+        mist.burst((contact(0), contact(1), contact(2), contact(3)), perPoint: Int((6 + 34 * s).rounded()), speed: 1.5 + 6.5 * s)
+        if !crash.reduced { crash.shake?(s) }
+    }
+    private func setLamp(_ p: CarPart, _ c: SIMD3<Float>) { stageMats[partBase + p.rawValue][0].color = SIMD4(c, 1) }
+    private func setBodyLamp(_ sub: Int, _ c: SIMD3<Float>) { if sub >= 0 { stageMats[1][sub].color = SIMD4(c, 1) } }
+    /// Each lamp's level this frame, and the canopy's glass or its crazing.
+    private func applyCarMaterials() {
+        let c = crash.car
+        setLamp(.drl, c.drl); setLamp(.heads, c.headC); setLamp(.tailBar, c.tail); setLamp(.tailDim, c.tailDim); setLamp(.brake, c.brakeC)
+        setBodyLamp(subAmber, c.amber); setBodyLamp(subMarker, c.marker); setBodyLamp(subPlate, c.plate); setBodyLamp(subAmbient, c.ambient)
+        if subGlass >= 0, let m = c.crazed ? crazedMat : glassMat { stageMats[1][subGlass] = m }
+    }
+    /// wall.js searchlights update: each pivot swings on its own slow sines.
+    private func updateSweep(_ t: Float) {
+        guard let sw = stage.sweep else { return }
+        for (i, b) in sw.pivots.enumerated() {
+            let rz = -b.tilt * 0.55 + sin(t * b.speed + b.phase) * 0.18, rx = b.lean + cos(t * b.speed * 0.8 + b.phase) * 0.12
+            sweepM[i] = translate(b.pos) * rotX(rx) * rotZ(rz)
+        }
+    }
+    private func sweepDraw(_ e: MTLRenderCommandEncoder, opaqueOnly: Bool) {
+        guard let sw = stage.sweep else { return }
+        for m in sweepM {
+            if opaqueOnly {
+                drawMesh(e, sw.head, matsIndex: sweepBase + 1, model: m, opaqueOnly: true)
+                drawMesh(e, sw.lens, matsIndex: sweepBase + 2, model: m, opaqueOnly: true)
+            } else { drawMesh(e, sw.beam, matsIndex: sweepBase, model: m, opaqueOnly: false) }
+        }
+    }
+    private func part(_ e: MTLRenderCommandEncoder, _ p: CarPart, _ model: simd_float4x4, shadow: Bool, opaqueOnly: Bool = true, tint: SIMD4<Float>? = nil) {
+        drawMesh(e, stage.parts[p.rawValue], matsIndex: partBase + p.rawValue, model: model, opaqueOnly: opaqueOnly, shadow: shadow, tint: tint)
+    }
+    /// The wing from its own frame (on the car, or flying in the pose it left in): applyWing.
+    private func wingDraw(_ e: MTLRenderCommandEncoder, base: simd_float4x4, k: Float, air: Float, shadow: Bool) {
+        let c = crash.car, r = c.rise(k, air), pv = base * c.wingPivot(k, air)
+        part(e, .wingBlade, pv, shadow: shadow)
+        if r > 0.003 {
+            part(e, .wingStruts, pv * scaleM(1, max(0.001, r), 1), shadow: shadow)
+            part(e, .wingPlates, pv * scaleM(1, max(0.001, r * 0.45), 1), shadow: shadow)
+        }
+        if r > 0.02 { part(e, .wingLower, base * translate(SIMD3(0, r * 0.45, 0)), shadow: shadow) }
+    }
+    /// Everything on the car that moves on its own or can tear off, then what has torn off.
+    private func carPartsDraw(_ e: MTLRenderCommandEncoder, carM: simd_float4x4, shadow: Bool) {
+        let c = crash.car, L = stage.layout
+        if !c.isBroken(.wing) { wingDraw(e, base: carM * translate(L.wingPos) * rotX(L.wingRotX), k: c.wing, air: c.airbrake, shadow: shadow) }
+        if !c.isBroken(.vanes) { part(e, .vanes, carM * translate(L.vanesPos) * rotX(c.vanesRotX), shadow: shadow) }
+        if !c.isBroken(.barge) { part(e, .barge, carM * scaleM(c.bargeX, 1, 1), shadow: shadow) }
+        if c.sideSkirtsShown { part(e, .sideSkirts, carM * translate(SIMD3(0, -0.11 * c.skirtSide, 0)), shadow: shadow) }
+        if c.endSkirtsShown { part(e, .endSkirts, carM * translate(SIMD3(0, -0.11 * c.skirtEnd, 0)), shadow: shadow) }
+        if !shadow {
+            // Lamps (applyLights): the DRL and tail bar sweep out from the centre on wake; the covers drop and the heads come up.
+            let sx = scaleM(max(0.001, c.sweep), 1, 1)
+            if c.sweep > 0.002 {
+                part(e, .drl, carM * translate(L.drlPos) * sx, shadow: false)
+                part(e, .tailBar, carM * sx, shadow: false)
+                part(e, .tailDim, carM * sx, shadow: false)
+            }
+            if c.lampsOn < 0.98 { part(e, .covers, carM * translate(SIMD3(0, -0.02 * c.lampsOn, -0.012 * c.lampsOn)), shadow: false) }
+            if c.lampsOn > 0.01 { part(e, .heads, carM, shadow: false) }
+            if c.brake > 0.02 && c.sweep > 0.5 { part(e, .brake, carM * translate(L.brakePos), shadow: false) }
+            for f in L.fans { part(e, .rotor, carM * translate(f.pos) * rotX(f.rotX) * rotZ(c.fanAngle), shadow: false) }
+        }
+        // Torn-off parts (debris.js): each at its rigid body's pose.
+        for b in crash.breakable {
+            let pc = crash.pieces.list[b.piece]
+            guard pc.on else { continue }
+            let m = translate(pc.pos) * simd_float4x4(pc.quat)
+            switch b.source {
+            case .wing: wingDraw(e, base: m * translate(-b.center), k: c.tornK, air: c.tornAir, shadow: shadow)
+            case .vanes: part(e, .vanes, m * translate(-b.center), shadow: shadow)
+            case .sideSkirts: part(e, .pieceSkirtSide, m, shadow: shadow)
+            case .endSkirts: part(e, .pieceSkirtEnd, m, shadow: shadow)
+            case .barge: part(e, .pieceBarge, m, shadow: shadow)
+            }
+        }
+    }
+    /// scene.js heroBlob: the contact shadow follows the car on the slab and fades as it leaves the ground.
+    private func blobDraw(_ e: MTLRenderCommandEncoder, carPos: SIMD3<Float>, carQuat: simd_quatf) {
+        let g = carPos + carQuat.act(SIMD3(0, -Float(SPEC.comHeight), 0)), k = min(1, max(0, (g.y - 0.15) / 2.05)), up = k * k * (3 - 2 * k)
+        if up >= 1 { return }
+        let fwd = carQuat.act(SIMD3(0, 0, 1)), s = 1 + up * 0.6, i = partBase + CarPart.blob.rawValue
+        stageMats[i][0].color.w = 0.7 * (1 - up)
+        part(e, .blob, translate(SIMD3(g.x, 0.012, g.z)) * rotY(atan2(fwd.x, fwd.z)) * scaleM(s, 1, s), shadow: false, opaqueOnly: false)
+    }
+    /// applyNozzles: a bright core in each open throat, rime on its lip; black is invisible, so they're skipped.
+    private func nozzleStatesDraw(_ e: MTLRenderCommandEncoder, carM: simd_float4x4) {
+        let c = crash.car, L = stage.layout
+        for i in 0..<min(10, L.nozzleCore.count, L.nozzleFrost.count) {
+            let p = c.core[i], f = c.frost[i]
+            if p > 0.01 { part(e, .jetCore, carM * L.nozzleCore[i], shadow: false, opaqueOnly: false, tint: SIMD4(0.7 * p * 0.55, 0.82 * p * 0.55, p * 0.55, 1)) }
+            if f > 0.01 { part(e, .frost, carM * L.nozzleFrost[i], shadow: false, opaqueOnly: false, tint: SIMD4(0.5 * f, 0.55 * f, 0.6 * f, 1)) }
+        }
+    }
+
     /// The wheels, as main.js syncCar places them: pivot y = wheelCenterY(compression) (ANCHOR_Y − restLen + c), the fronts
     /// turned by the steer, the spinning part turned about its axle by the wheel's spin.
     private func wheelsDraw(_ e: MTLRenderCommandEncoder, carM: simd_float4x4, t: Double, opaqueOnly: Bool, shadow: Bool) {
-        let anchors = wheelAnchors()
         for w in stage.wheels {
             var comp: Float = Float(CAR.restLen - CAR.mountToCentre), spin: Float = 0, steer: Float = 0
             if let r = replay, r.ticks > 0 { let ws = r.wheel(w.index, at: t); comp = ws.comp; spin = ws.spin; steer = w.steers ? ws.steer : 0 }
@@ -388,12 +566,12 @@ final class Renderer {
         }
     }
 
-    private func drawMesh(_ e: MTLRenderCommandEncoder, _ m: StageMesh, matsIndex: Int, model: simd_float4x4, opaqueOnly: Bool, shadow: Bool = false) {
+    private func drawMesh(_ e: MTLRenderCommandEncoder, _ m: StageMesh, matsIndex: Int, model: simd_float4x4, opaqueOnly: Bool, shadow: Bool = false, tint: SIMD4<Float>? = nil, from: Int = 0, to: Int = .max) {
         var o = ObjectU(model: model, normal: model.inverse.transpose)
         e.setVertexBytes(&o, length: MemoryLayout<ObjectU>.stride, index: 2)
         e.setVertexBuffer(m.vertices, offset: 0, index: 0)
         let mats = stageMats[matsIndex]
-        for (k, s) in m.submeshes.enumerated() {
+        for (k, s) in m.submeshes.enumerated() where k >= from && k < to {
             let M = s.material
             let translucent = M.transparent || M.additive
             if opaqueOnly == translucent { continue }
@@ -406,6 +584,7 @@ final class Renderer {
                 e.setFrontFacing(.counterClockwise)
                 if let po = M.polygonOffset { e.setDepthBias(po.1 * 1e-5, slopeScale: po.0, clamp: 0) } else { e.setDepthBias(0, slopeScale: 0, clamp: 0) }
                 var mu = mats[k]
+                if let tint { mu.color = tint }
                 e.setFragmentBytes(&mu, length: MemoryLayout<MaterialU>.stride, index: 2)
                 e.setFragmentTexture(M.map.flatMap { stage.textures[$0].texture } ?? dummy, index: 0)
                 e.setFragmentTexture(M.roughnessMap.flatMap { stage.textures[$0].texture } ?? dummy, index: 1)

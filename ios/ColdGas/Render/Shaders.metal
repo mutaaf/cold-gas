@@ -160,27 +160,46 @@ fragment float4 cg_sky_fragment(SOut in [[stage_in]], constant Frame& f [[buffer
     return float4(mix(horizon, zenith, pow(y, 0.7)), 1);
 }
 
-// Cold-gas plumes: a soft additive cone per firing nozzle (condensation white-blue), drawn procedurally.
-struct PlumeInst { float4 origin; float4 dir; };   // origin xyz + throttle, dir xyz + length
-struct POut { float4 clip [[position]]; float a; float along; float rim; };
+// Cold gas's shock diamonds (src/render/plumes.js coneVS / coneFS): an open cone of 24 facets from each firing nozzle, scaled
+// by its valve; additive, double-sided, unlit. `along` is the geometry's v as three builds a ConeGeometry: 1 at the apex (the
+// nozzle), 0 at the wide end, so the jet is near-invisible at the throat and brightest towards its tip, as on the web.
+struct PlumeInst { float4 origin; float4 dir; float4 extra; };   // origin xyz + power; dir xyz + length; extra: radial scale, seed
+struct POut { float4 clip [[position]]; float2 uv; float3 n; float3 v; float power; float seed; };
 vertex POut cg_plume_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], constant Frame& f [[buffer(1)]], constant PlumeInst* p [[buffer(2)]]) {
-    const int SEG = 12;
+    const int SEG = 24;
+    const float R = 0.16, SLOPE = 0.16;
     PlumeInst P = p[iid];
-    int tri = vid / 3, corner = vid % 3, seg = tri % SEG;
+    int tri = vid / 3, corner = vid % 3;
     float3 d = normalize(P.dir.xyz + 1e-6), up = abs(d.y) < 0.9 ? float3(0, 1, 0) : float3(1, 0, 0);
     float3 a = normalize(cross(d, up)), b = cross(d, a);
-    float len = P.dir.w, r = 0.06 + 0.35 * len;
-    float t = (corner == 0) ? 0.0 : 1.0;
-    float ang = 2.0 * M_PI_F * float(seg + (corner == 2 ? 1 : 0)) / float(SEG);
-    float3 pos = P.origin.xyz + d * (t * len) + (a * cos(ang) + b * sin(ang)) * (t * r);
-    // How side-on the cone's surface is seen: the haze is thickest through its middle, nothing at its silhouette.
-    float3 nrm = normalize(a * cos(ang) + b * sin(ang)), V = normalize(f.eye.xyz - pos + 1e-6);
-    POut o; o.clip = f.viewProj * float4(pos, 1); o.a = P.origin.w; o.along = t; o.rim = abs(dot(nrm, V)); return o;
+    float len = P.dir.w, sr = P.extra.x;
+    float t = corner == 0 ? 0.0 : 1.0;
+    float u = float(tri + (corner == 2 ? 1 : 0)) / float(SEG), ang = 2.0 * M_PI_F * u;
+    float3 radial = a * cos(ang) + b * sin(ang);
+    float3 pos = P.origin.xyz + d * (t * len) + radial * (t * R * sr);
+    POut o;
+    o.clip = f.viewProj * float4(pos, 1);
+    o.uv = float2(u, 1.0 - t);
+    o.n = normalize(radial / sr - d * (SLOPE / len));   // the cone's normal through its non-uniform scale
+    o.v = normalize(f.eye.xyz - pos + 1e-6);
+    o.power = P.origin.w; o.seed = P.extra.y;
+    return o;
 }
-fragment float4 cg_plume_fragment(POut in [[stage_in]]) {
-    // Cold gas is a faint condensation haze, not a flame: dense at the nozzle, gone within its length.
-    float k = in.a * pow(1.0 - in.along, 2.2) * pow(clamp(in.rim, 0.0, 1.0), 1.5) * 0.12;
-    return float4(float3(0.78, 0.86, 1.0) * k, 0);
+static float plumeHash(float n) { return fract(sin(n) * 43758.5453); }
+static float plumeNoise(float2 p) {
+    float2 i = floor(p), g = fract(p); g = g * g * (3.0 - 2.0 * g);
+    float a = plumeHash(i.x + i.y * 57.0), b = plumeHash(i.x + 1.0 + i.y * 57.0), c = plumeHash(i.x + (i.y + 1.0) * 57.0), d = plumeHash(i.x + 1.0 + (i.y + 1.0) * 57.0);
+    return mix(mix(a, b, g.x), mix(c, d, g.x), g.y);
+}
+fragment float4 cg_plume_fragment(POut in [[stage_in]], constant Frame& f [[buffer(1)]]) {
+    float along = clamp(in.uv.y, 0.0, 1.0), time = f.eye.w;
+    float rim = pow(clamp(1.0 - abs(dot(in.n, in.v)), 0.0, 1.0), 1.6), core = 1.0 - rim;   // clamped: a NaN pixel is a flicker storm
+    float diamonds = 0.55 + 0.45 * cos(along * 38.0 - time * 30.0 + in.seed);
+    float n = plumeNoise(float2(in.uv.x * 12.0 + in.seed, along * 6.0 - time * 14.0));
+    float fade = pow(1.0 - along, 1.4) * smoothstep(0.0, 0.04, along);
+    float a = (0.22 * core * diamonds + 0.55 * rim * n) * fade * in.power;
+    float3 col = mix(float3(0.82, 0.92, 1.0), float3(1.0), core * diamonds);
+    return float4(col * 1.6 * a, 0);
 }
 
 // The film pass: exposure, ACES-ish tone, a touch of grain and vignette, into the LDR target MetalFX reads.
@@ -255,6 +274,29 @@ fragment float4 cg_puff_fragment(FxOut in [[stage_in]]) {
     float r = length(in.uv); if (r > 1.0) discard_fragment();
     float a = in.color.a * pow(1.0 - r, 1.6);
     return float4(in.color.rgb * 0.35 * a, a);   // dust is lit by the night: dim, alpha-blended
+}
+// Mist and dust as the web's gl_Points at its usual lens and a landscape screen: there a particle's side is size · 0.6·h / depth
+// pixels, about 0.586·size metres. The native lens holds its horizontal field (≈60°), so the same metres are 0.5·size·width /
+// depth pixels at any aspect (the web's height-based rule would draw them 2.6× wider on an upright phone). Clamped to 35 % of the
+// width from the centre, so a particle at the lens can't cost the whole screen.
+vertex FxOut cg_soft_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], constant Frame& f [[buffer(1)]], constant PuffGPU* pf [[buffer(2)]], constant float& aspect [[buffer(3)]]) {
+    PuffGPU P = pf[iid];
+    const float2 corners[6] = { {-1, -1}, {1, -1}, {1, 1}, {-1, -1}, {1, 1}, {-1, 1} };
+    float2 c = corners[vid];
+    float4 clip = f.viewProj * float4(P.pos.xyz, 1);
+    // Depth from a point nearer the lens by the particle's world radius, so the slab doesn't cut its quad along a hard line (no depth read: cheap).
+    float3 toEye = f.eye.xyz - P.pos.xyz; float dist = max(length(toEye), 0.01);
+    float4 nearer = f.viewProj * float4(P.pos.xyz + toEye / dist * min(P.pos.w * 0.29, dist * 0.5), 1);
+    clip.z = nearer.z / max(nearer.w, 0.01) * clip.w;
+    float half_ = min(P.pos.w * 0.5, 0.35 * max(clip.w, 0.05));
+    clip.xy += c * half_ * float2(1.0, aspect);
+    FxOut o; o.clip = clip; o.uv = c; o.life = 0; o.heat = 0; o.color = P.color; return o;
+}
+// plumes.js mistTexture: its radial gradient, without a texture fetch. Straight alpha, no discard (it keeps the tiler's early work).
+fragment float4 cg_mist_fragment(FxOut in [[stage_in]]) {
+    float r = length(in.uv);
+    float t = r < 0.35 ? mix(0.55, 0.28, r / 0.35) : r < 0.7 ? mix(0.28, 0.08, (r - 0.35) / 0.35) : mix(0.08, 0.0, clamp((r - 0.7) / 0.3, 0.0, 1.0));
+    return float4(in.color.rgb, t * in.color.a);
 }
 // A chip: a tiny box, tumbling (the instance's rotation, scale and colour).
 vertex FxOut cg_chip_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], constant Frame& f [[buffer(1)]], constant ChipGPU* ch [[buffer(2)]]) {

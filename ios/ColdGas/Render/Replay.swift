@@ -17,6 +17,10 @@ final class Replay {
     /// Per tick, per wheel: compression (m), spin (rad, accumulated), steer (rad).
     private var wheelState: [Float] = []
     private var carVel: [SIMD3<Float>] = []
+    /// Per tick: the suction fan's level (roadster.js setFan: the skirts drop with it, the rotors spin at it).
+    private var fans: [Float] = []
+    /// The touchdown (run.t.touchTick, -1 until then; run.t.sink): main.js touchdown's mist from each tyre.
+    private(set) var touchTick = -1, sink: Float = 0
     /// The run's impact events (src/sim/impacts.js), as the sim recorded them: what crash.js draws.
     struct Impact { let tick: Int; let kind, part, probe: UInt8; let body: Int8; let pos, normal: SIMD3<Float>; let speed, crush: Float }
     private(set) var impacts: [Impact] = []
@@ -29,7 +33,7 @@ final class Replay {
     init(live course: String) {
         self.course = course; live = true; ticks = 0; bodyCount = 0; score = 0; verdict = ""; flownMs = 0
         let n = 240 * 90
-        carPos.reserveCapacity(n); carQuat.reserveCapacity(n); carVel.reserveCapacity(n); phases.reserveCapacity(n)
+        carPos.reserveCapacity(n); carQuat.reserveCapacity(n); carVel.reserveCapacity(n); phases.reserveCapacity(n); fans.reserveCapacity(n)
         nozzles.reserveCapacity(n * 10); wheelState.reserveCapacity(n * 12); bodies.reserveCapacity(n * 7 * 6)
     }
     /// One tick of a live run, after the sim stepped (the world may be freed once the run is done: then nothing is read).
@@ -38,6 +42,8 @@ final class Replay {
         carPos.append(SIMD3(Float(c.pos.x), Float(c.pos.y), Float(c.pos.z)))
         carQuat.append(simd_quatf(ix: Float(c.quat.x), iy: Float(c.quat.y), iz: Float(c.quat.z), r: Float(c.quat.w)))
         carVel.append(SIMD3(Float(c.vel.x), Float(c.vel.y), Float(c.vel.z)))
+        fans.append(Float(c.fan))
+        if touchTick < 0 && r.t.touchTick >= 0 { touchTick = Int(r.t.touchTick); sink = Float(r.t.sink) }
         for v in c.throttles { nozzles.append(Float(v)) }
         bodyCount = c.world.bodies.count
         for b in c.world.bodies { bodies += [Float(b.cx), Float(b.cy), Float(b.cz), Float(b.qx), Float(b.qy), Float(b.qz), Float(b.qw)] }
@@ -54,19 +60,21 @@ final class Replay {
     func setScore(_ total: Double, _ v: String) { score = total; verdict = v }
 
     init?(runVector name: String) {
-        guard let url = Bundle.main.url(forResource: name, withExtension: "json", subdirectory: "runs"),
+        // A vector by name, or (debug, from the Mac) a run file by its absolute path.
+        guard let url = name.hasPrefix("/") ? URL(fileURLWithPath: name) : Bundle.main.url(forResource: name, withExtension: "json", subdirectory: "runs"),
               let d = try? Data(contentsOf: url), let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
               let course = j["course"] as? String, let log = j["log"] as? [[NSNumber]] else { return nil }
         self.course = course
         live = false
         let t0 = Date()
         var bc = 0
-        var cp: [SIMD3<Float>] = [], cq: [simd_quatf] = [], nz: [Float] = [], bd: [Float] = [], ph: [UInt8] = [], ws: [Float] = [], cv: [SIMD3<Float>] = []
+        var cp: [SIMD3<Float>] = [], cq: [simd_quatf] = [], nz: [Float] = [], bd: [Float] = [], ph: [UInt8] = [], ws: [Float] = [], cv: [SIMD3<Float>] = [], fn: [Float] = []
         func record(_ r: Run) {
             let c = r.car
             cp.append(SIMD3(Float(c.pos.x), Float(c.pos.y), Float(c.pos.z)))
             cq.append(simd_quatf(ix: Float(c.quat.x), iy: Float(c.quat.y), iz: Float(c.quat.z), r: Float(c.quat.w)))
             cv.append(SIMD3(Float(c.vel.x), Float(c.vel.y), Float(c.vel.z)))
+            fn.append(Float(c.fan))
             for v in c.throttles { nz.append(Float(v)) }
             bc = c.world.bodies.count
             for b in c.world.bodies { bd += [Float(b.cx), Float(b.cy), Float(b.cz), Float(b.qx), Float(b.qy), Float(b.qz), Float(b.qw)] }
@@ -74,7 +82,8 @@ final class Replay {
             for w in c.wheels { ws += [Float(w.compression), Float(w.spin), Float(w.steer)] }
         }
         guard let run = try? simulate(log.map { $0.map(\.intValue) }, course, onTick: record) else { return nil }
-        carPos = cp; carQuat = cq; nozzles = nz; bodies = bd; phases = ph; wheelState = ws; carVel = cv; bodyCount = bc
+        carPos = cp; carQuat = cq; nozzles = nz; bodies = bd; phases = ph; wheelState = ws; carVel = cv; fans = fn; bodyCount = bc
+        touchTick = Int(run.t.touchTick); sink = Float(run.t.sink)
         let im = run.car.impacts
         impacts = (0..<im.count).map { i in Impact(tick: Int(im.tick[i]), kind: im.kind[i], part: im.part[i], probe: im.probe[i], body: im.body[i],
             pos: SIMD3(im.x[i], im.y[i], im.z[i]), normal: SIMD3(im.nx[i], im.ny[i], im.nz[i]), speed: im.speed[i], crush: im.crush[i]) }
@@ -98,6 +107,7 @@ final class Replay {
         return (mix(0), mix(1), mix(2))
     }
     func velocity(at tick: Int) -> SIMD3<Float> { carVel[max(0, min(ticks - 1, tick))] }
+    func fan(at tick: Int) -> Float { fans[max(0, min(ticks - 1, tick))] }
     func nozzle(_ k: Int, at tick: Int) -> Float { nozzles[min(ticks - 1, tick) * 10 + k] }
     func phase(at tick: Int) -> UInt8 { phases[min(ticks - 1, tick)] }
     /// Parked body b at time t: position and rotation.

@@ -50,12 +50,14 @@ spinning, physics and impact to environment need to be carefully addressed"). Ea
       - the contact flash and the vented nitrogen line;
       - the camera's shake and the slow-motion beat (the replay's clock slows).
 - [x] Dents from each probe's crush, the hero's and the parked cars' (Dents.swift).
-- [ ] Still from crash.js and debris.js: torn-off
-      parts as debris, lamps flickering out and hazards, the crash cut, chips in a struck parked car's paint.
-- [ ] The car's states as roadster.js shows them: brake lamps, wing and aero, skirts and fan, wake.
-- [ ] The plumes' shock diamonds and condensation mist (plumes.js). For now there's a faint haze cone per firing
-      nozzle, thickest through its middle and fading along its length.
-- [ ] The searchlights' sweep (wall.js update) and contact shadows under every body.
+- [x] From crash.js and debris.js (0159): torn-off parts as debris, lamps flickering out, hazards, the canopy crazing, chips in
+      a struck parked car's paint. A struck car's rock on its springs is the sim's, posed per tick, as on the web.
+- [ ] The crash cut (the director's; not in 0159).
+- [x] The car's states as roadster.js shows them (0159): brake lamps, wing and aero, vanes, barge boards, skirts, the wake sweep,
+      nozzle core and rime. The fan rotors spin but are too dark in the diffuser to see in any shot.
+- [x] The plumes' shock diamonds and condensation mist (plumes.js), and the touchdown's rings (0159). The mist's pool is 500, the
+      web's low tier's, drawn denser; the phone's cost isn't measured yet.
+- [x] The searchlights' sweep (wall.js update) and the hero's contact shadow (0159); the parked cars already had theirs.
 
 Done so far:
 - The stage exported from the web's builders, with the real canvas textures. One web change: `scene.js` exports

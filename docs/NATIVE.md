@@ -234,6 +234,9 @@ throttled phone: benches back to back heat it, and the numbers mean nothing abov
   - The film-look pass (bloom, tone mapping, grain) and the mist.
   - On the GPU as compute: the plumes (shock diamonds and condensation), and the crash (sparks, chips, dust,
     debris).
+  - In practice the plumes' mist and the crash's particles run on the CPU in fixed pools, seeded as the web's, and only their instances go
+    to the GPU (`Plumes.swift`, `Crash.swift`, `Debris.swift`, 0159). Attribution: `-fx-log` (the mist's fragments per frame) and
+    `-gpu-skip plumes,mist,beams`. Debug shots on a loaded Mac: `-holds <sim times>`, `-fx-cam rear|front|top`, `-replay <absolute path>`.
 - **Anti-aliasing.** 4× MSAA in memoryless tile memory. It's cheap on Apple GPUs, and it fixes what SMAA couldn't:
   - The sub-pixel lamp strips that flicker through the bloom (LESSONS 0037, "Sub-pixel emissive geometry").
   - Keep the `sliver()` minimum-width idea for strips under a pixel.
@@ -241,6 +244,8 @@ throttled phone: benches back to back heat it, and the numbers mean nothing abov
 - **Meshes from the JS, never redrawn by hand.**
   - `scripts/native-stage.mjs` runs the web's own builders (scene.js `COURSE_BUILDERS`, `roadster.js`) in headless Chromium (the real canvas draws the procedural textures) and writes the stage, the parked row, the car, the lights and the textures (0153). It replaced the spike's
     `scripts/meshes.mjs` (the car alone, in Node, with the canvas stubbed out).
+  - What the car moves or lights on its own, and what a crash throws off it, are separate parts in their own frames (`carParts`, 0159);
+    the body keeps the merged skin the dents push in. The app recomputes each part's pose and lamp level from roadster.js (`CarState.swift`).
   - The JS stays the only source of the car and the row. A mesh changes when its generator changes.
 - **Shaders.**
   - Every pipeline is built **at launch, off the main thread, for the real pixel formats** (LESSONS 0046: compile

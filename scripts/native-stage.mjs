@@ -6,7 +6,9 @@
 //   stage.json      materials, submeshes, lights, the look, the parked vehicles' home poses, texture list
 //   static.bin      the static stage: float32 pos(3) nrm(3) uv(2) col(3), then uint32 indices
 //   parked-<i>.bin  each parked vehicle, in its own frame (same layout)
-//   roadster.bin    the hero car (same layout)
+//   roadster.bin    the hero car's merged skin (same layout)
+//   part-<name>.bin what the car moves or lights on its own, and the pieces a crash throws off it, each in its own frame
+//   sweep-<name>.bin the searchlights' drum, lens and beam, in a pivot's frame
 //   <texture>.png   every texture the materials use
 // GENERATED: never hand-edit. Geometry is deterministic; canvas PNGs are as this Chromium draws them.
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
@@ -15,7 +17,7 @@ import { createServer } from 'vite';
 
 const ids = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const courses = ids.length ? ids : ['show'];
-const server = await createServer({ server: { port: 4399, strictPort: true }, logLevel: 'error' });
+const server = await createServer({ server: { port: 4399, strictPort: true, fs: { strict: false } }, logLevel: 'error' });
 await server.listen();
 const browser = await chromium.launch();
 try {
@@ -41,7 +43,9 @@ try {
       static: bin('static', out.static), roadster: bin('roadster', out.roadster),
       wheels: out.wheels.map((w) => ({ index: w.index, x: w.x, z: w.z, baseY: w.baseY, steers: w.steers,
         steerPart: bin(`wheel-${w.index}-steer`, w.steerPart), spinPart: bin(`wheel-${w.index}-spin`, w.spinPart) })),
-      parked: out.parked.map((p, i) => ({ home: p.home, ...bin(`parked-${i}`, p.mesh) })),
+      parked: out.parked.map((p, i) => ({ home: p.home, paint: p.paint, ...bin(`parked-${i}`, p.mesh) })),
+      carParts: { ...out.carParts, meshes: Object.fromEntries(Object.entries(out.carParts.meshes).map(([k, m]) => [k, bin(`part-${k}`, m)])) },
+      sweep: out.sweep && { pivots: out.sweep.pivots, beam: bin('sweep-beam', out.sweep.beam), head: bin('sweep-head', out.sweep.head), lens: bin('sweep-lens', out.sweep.lens) },
       textures: out.textures.map((t) => {
         if (t.url) writeFileSync(`${dir}/${t.id}.png`, Buffer.from(t.url.split(',')[1], 'base64'));
         const { url, ...rest } = t;
@@ -50,7 +54,7 @@ try {
     };
     writeFileSync(`${dir}/stage.json`, JSON.stringify(manifest, null, 1) + '\n');
     const tris = (m) => m.submeshes.reduce((a, s) => a + s.indexCount / 3, 0);
-    console.log(`native-stage: ${id}: static ${tris(manifest.static)} tris / ${manifest.static.submeshes.length} materials, ${manifest.parked.length} parked (${manifest.parked.map((p) => tris(p)).join(', ')} tris), roadster ${tris(manifest.roadster)} + wheels ${manifest.wheels.map((w) => tris(w.steerPart) + tris(w.spinPart)).join('/')}, ${manifest.lights.length} lights, ${manifest.textures.length} textures`);
+    console.log(`native-stage: ${id}: static ${tris(manifest.static)} tris / ${manifest.static.submeshes.length} materials, ${manifest.parked.length} parked (${manifest.parked.map((p) => tris(p)).join(', ')} tris), roadster ${tris(manifest.roadster)} + wheels ${manifest.wheels.map((w) => tris(w.steerPart) + tris(w.spinPart)).join('/')}, ${Object.keys(manifest.carParts.meshes).length} car parts, ${manifest.sweep ? manifest.sweep.pivots.length : 0} searchlights, ${manifest.lights.length} lights, ${manifest.textures.length} textures`);
   }
 } finally {
   await browser.close();
