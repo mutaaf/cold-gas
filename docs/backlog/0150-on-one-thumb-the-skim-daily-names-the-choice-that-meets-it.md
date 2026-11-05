@@ -70,3 +70,16 @@ never names that choice. Everything else it teaches leads the other way.
 ## Out of scope
 - Changing the skim bar (1.5 m), or the one-thumb flight's two clearances.
 - Other Dailies, except where the shared hint code needs it.
+
+## Critic sharpen 2026-11-05
+Today's Daily is **ninety-show** ("Score 90 or more", `src/daily.js:63`), and it shows the same defect
+(`docs/critique/2026-11-05-0354.md` §2).
+- **Without the slide, one thumb can't reach 90.** Node, `thumb-lift.test.js`'s harness: held from the tap after any
+  wait, 85.7–86.0 at 5.9–6.0 m from the mark. Lifted at any time, 80.7–85.7.
+- **Production, first visit, held:** 85.7, and the sheet said "Daily: 85.7, need 90 — try again".
+- **Production, the same flight with one 40 px slide:** 95.7, 2.4 m from the mark, Daily ✓.
+mark-show (within 3.5 m) has the same structure, and its miss reads "6 m off the mark". The `missLine` hint this ticket
+adds should cover them too:
+- [ ] `missLine` for ninety-show and mark-show on one thumb, for an 85.7 / 6.0 m card, names the slide onto the
+      amber dot (not "try again"). On keys and classic touch, each device names its own aim (`src/sim/aim-words.js`).
+- [ ] A unit test flies the hint literally on one thumb (hold, then slide toward the dot) and meets ninety-show.
