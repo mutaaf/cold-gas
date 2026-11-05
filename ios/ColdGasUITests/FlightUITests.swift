@@ -11,10 +11,6 @@ final class FlightUITests: XCTestCase {
         a.launch()
         return a
     }
-    /// A point on the screen in fractions of its size.
-    private func at(_ a: XCUIApplication, _ x: CGFloat, _ y: CGFloat) -> XCUICoordinate {
-        a.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y))
-    }
     private func shot(_ name: String) {
         let s = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); s.name = name; s.lifetime = .keepAlways; add(s)
     }
@@ -26,7 +22,7 @@ final class FlightUITests: XCTestCase {
         XCTAssertTrue(play.waitForExistence(timeout: 20))
         play.tap()
         sleep(3)   // the countdown
-        let pad = at(a, 0.78, 0.86)
+        let pad = a.staticTexts["Thrust pad"]
         pad.press(forDuration: 13)          // the run-up and the curl, onto the ledge
         shot("on-the-ledge")
         sleep(1)
@@ -95,7 +91,7 @@ final class FlightUITests: XCTestCase {
         shot("practice")
         ledge.tap()
         sleep(3)
-        let pad = at(a, 0.78, 0.86)
+        let pad = a.staticTexts["Thrust pad"]
         pad.press(forDuration: 0.1)
         sleep(2)
         pad.press(forDuration: 9)
@@ -111,7 +107,7 @@ final class FlightUITests: XCTestCase {
         XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 20))
         a.buttons["play"].tap()
         sleep(5)
-        XCUIDevice.shared.press(.home)
+        XCUIApplication(bundleIdentifier: "com.apple.Preferences").activate()   // an open Duo ignores the Home press
         sleep(2)
         a.activate()
         XCTAssertTrue(a.buttons["Resume"].waitForExistence(timeout: 5), "the run didn't pause")
