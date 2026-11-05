@@ -182,6 +182,20 @@ the governor floors and the frame still misses. So the cost isn't pixels. Later 
   3. Cut the shadow map to the car's neighbourhood and redraw it only when something in it moves.
   4. Bloom.
   5. Port the director's rigs.
+### Live play: the same log from the same touches (0154, 2026-11-04)
+
+`LiveRun` (ColdGasPhysics/Live.swift; its header is the app's API) flies a run tick by tick: one-thumb or classic touch,
+the Wall's fan and the release, the input log, then the aftermath. `npm run vectors` writes `input/*.json`: 15 scripted
+fingers pressing the page's own controls (src/input.js and src/onethumb.js through scripts/vectors-dom.mjs, the least
+DOM that binds them; wallAssist and noteRelease are copied into vectors-lib.mjs because main.js can't load in Node).
+`LiveInputTests` replays the same touches and must match the log entry for entry, a state hash every 24 ticks, the
+telemetry, the card, the sight (`predict` + `markOffset`) and the aftermath to rest.
+- **The one deliberate difference.** Easy's slide catch uses `DMath.datan2` where driving.js uses `Math.atan2`, which
+  isn't the same to the bit (0.12 % of inputs, an ulp, on Node 25 arm64). It's quantised to hundredths before it counts.
+- **Not ported (unscored or display only):** replay frames (`recordFrame`, phase 2), `steadyStatus`, AI drive, Easy's road
+  aids, the reverse, `applyGround`, the nozzle pad's chords and the keys' valve ramp (the app supplies valve values),
+  `heightAboveSurface`. The keyboard and gamepad channels in `InputSampler` are ported but no vector drives them yet.
+- **Don't name a module-level constant what ColdGasCore already exports** (LESSONS, 0154).
 
 ### Porting rules (each one is a bug waiting to happen)
 

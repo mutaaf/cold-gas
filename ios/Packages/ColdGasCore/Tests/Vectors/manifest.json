@@ -39,6 +39,81 @@
    "bytes": 163786
   },
   {
+   "path": "input/thumb-show-aim.json",
+   "sha256": "cd5531de069979c03e9f43e3f8252108295e99792e091cf207eb3974fd4228bc",
+   "bytes": 69107
+  },
+  {
+   "path": "input/thumb-show-hold.json",
+   "sha256": "c3a917b220146c4923bb1db71343646dadc335eb0ae0a7138b2b1fe1fcf047ce",
+   "bytes": 59316
+  },
+  {
+   "path": "input/thumb-show-lapse-tilt.json",
+   "sha256": "5d2b7376437a18d2858c1fb1a359eac1bfaba738b28190e5ae60684bd3bdf1a5",
+   "bytes": 70167
+  },
+  {
+   "path": "input/thumb-show-tap-hold.json",
+   "sha256": "27161c0e8fecb7ec7deaccf1ae963c3aa0798d95736e7fc6cfb9411b8b29e724",
+   "bytes": 59355
+  },
+  {
+   "path": "input/thumb-wall-aim.json",
+   "sha256": "db1583af924b4392b757c518f4d02130647c521e021720ecb4fdad1cffc689bc",
+   "bytes": 72629
+  },
+  {
+   "path": "input/thumb-wall-hold.json",
+   "sha256": "eddc1636906a9d3aab7ff7908f1248c44f4e84c1e11466a2bf7cdd275cc1c8f8",
+   "bytes": 57994
+  },
+  {
+   "path": "input/thumb-wall-stall.json",
+   "sha256": "12e1b3ea6554466a6f8622e47f690c588deeaf7b61fa6992a43e165cc15ff261",
+   "bytes": 35987
+  },
+  {
+   "path": "input/touch-lineup-easy-fast.json",
+   "sha256": "8ac394d495110ad3c59b008f50030e81a8997cc825ae9649a8d25c69ee7913e9",
+   "bytes": 28730
+  },
+  {
+   "path": "input/touch-lineup-pro.json",
+   "sha256": "8ebc8ea9ca56467ec310e3b0c1359ce486d8e4ad888558982c141f6f6c0f228c",
+   "bytes": 28911
+  },
+  {
+   "path": "input/touch-show-assist-easy.json",
+   "sha256": "40eae70130f5fe974df73aa06f5c571e9f8ce60f4b205a0449753a77b2d97a21",
+   "bytes": 141746
+  },
+  {
+   "path": "input/touch-show-assist.json",
+   "sha256": "fe2fa9db83e2d4362c26fbbfa4a87a3a320d29cf99ecad45ada7f548f83c60b2",
+   "bytes": 162779
+  },
+  {
+   "path": "input/touch-show-crash.json",
+   "sha256": "4f4dc71a80bf45a25cf9fffd69853b51163cdb61bbb803705202432b99a3dcab",
+   "bytes": 113061
+  },
+  {
+   "path": "input/touch-show-pro.json",
+   "sha256": "2d078eaf142a8d9b2117418835d17e9e78bf35fbe55bcc13826165eec2112578",
+   "bytes": 155879
+  },
+  {
+   "path": "input/touch-wall-advanced.json",
+   "sha256": "3feb9695e32412659738305a2b059c4de12a601bf0eaf07ac9a313ee21dd7dc4",
+   "bytes": 86187
+  },
+  {
+   "path": "input/touch-wall-pro.json",
+   "sha256": "0ed30ae1ccd3eb84ee8a35d610cab574368e74c704ecd07c7b5f2590f95b34af",
+   "bytes": 138426
+  },
+  {
    "path": "runs/crash-lineup-rolls2.json",
    "sha256": "afa690a7f5fbf16b4698f70052a752abf5097246f50cfdafaac4fb374d812329",
    "bytes": 29835

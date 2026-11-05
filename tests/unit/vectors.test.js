@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildVectors, runVector, runList, flat, hex, unhex, xorshift, VECTOR_DIR, dmathVectors, HAPTIC_RUNS } from '../../scripts/vectors-lib.mjs';
+import { buildVectors, runVector, runList, inputList, flat, hex, unhex, xorshift, VECTOR_DIR, dmathVectors, HAPTIC_RUNS } from '../../scripts/vectors-lib.mjs';
 import { simulate, SIM_VERSION } from '../../src/sim/run.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { dsin } from '../../src/sim/dmath.js';
@@ -45,9 +45,27 @@ describe('native vectors (0146)', () => {
       expect(v.final).toMatch(/^[0-9a-f]{16}$/);
     }
   });
+  // 0154: the live input layer's vectors (scripted touches on the page's own controls) say what the run said: the
+  // log they recorded replays on the server's path to the live run's telemetry, and the set covers what it claims.
+  it("an input vector's log replays to the live run's telemetry; the set has landings, crashes, a stall and the sight", () => {
+    const list = inputList(), ends = new Set();
+    for (const r of list.filter((x) => ['thumb-show-aim', 'touch-show-crash', 'thumb-wall-stall'].includes(x.name))) {
+      const v = JSON.parse(disk(`input/${r.name}.json`));
+      expect(v.simVersion).toBe(SIM_VERSION);
+      expect(flat(simulate(v.log, r.course).t)).toEqual(v.telemetry);
+      expect(v.after.endTick).toBeGreaterThan(v.ticks);
+    }
+    for (const r of list) {
+      const v = JSON.parse(disk(`input/${r.name}.json`));
+      ends.add(v.endReason);
+      expect(v.events.length).toBeGreaterThan(0);
+    }
+    expect([...ends].sort()).toEqual(expect.arrayContaining(['contact', 'flipped', 'settled', 'stalled']));
+    expect(JSON.parse(disk('input/thumb-show-aim.json')).sights.length).toBeGreaterThan(5);
+  });
   it('the manifest names every file with its hash', () => {
     const m = JSON.parse(disk('manifest.json'));
     expect(m.simVersion).toBe(SIM_VERSION);
-    expect(m.files.length).toBe(runList().length + 2 + HAPTIC_RUNS.length);
+    expect(m.files.length).toBe(runList().length + 2 + HAPTIC_RUNS.length + inputList().length);
   });
 });

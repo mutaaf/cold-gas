@@ -40,6 +40,7 @@ if (check) {
 } else {
   rmSync(join(VECTOR_DIR, 'runs'), { recursive: true, force: true });
   rmSync(join(VECTOR_DIR, 'haptics'), { recursive: true, force: true });
+  rmSync(join(VECTOR_DIR, 'input'), { recursive: true, force: true });
   let bytes = 0;
   for (const [p, text] of Object.entries(files)) {
     const f = join(VECTOR_DIR, p);

@@ -3,7 +3,7 @@
 // numbers are stored as their IEEE 754 bit patterns (16 hex digits, big-endian), never as decimals.
 // Pure and deterministic: same bytes on every machine and every run (no Math.random, no clock).
 // scripts/vectors.mjs writes or checks the files; tests/unit/vectors.test.js checks a sample.
-import { createRun, stepRun, simulate, wallProgress, SIM_VERSION } from '../src/sim/run.js';
+import { createRun, stepRun, simulate, wallProgress, armAftermath, aftermathStep, SIM_VERSION } from '../src/sim/run.js';
 import { createAutopilot } from '../src/sim/autopilot.js';
 import { newInput, CAR } from '../src/sim/vehicle.js';
 const AIR_MASS = CAR.airMass;
@@ -11,6 +11,10 @@ import { scoreRun } from '../src/sim/judge.js';
 import { dsin, dcos, datan, datan2, dacos, dhypot, dexp, dlog } from '../src/sim/dmath.js';
 import { RAPIER } from '../src/sim/engine.js';
 import { engineSpike } from './engine-spike.js';
+import { SPEC } from '../src/sim/spec.js';
+import { predict, newPrediction } from '../src/sim/predict.js';
+import { markOffset } from '../src/onethumb.js';
+import { input as IN, touchSettings, dom, STICK } from './vectors-dom.mjs';
 
 export const VECTOR_FORMAT = 1;
 export const VECTOR_DIR = 'ios/Packages/ColdGasCore/Tests/Vectors';
@@ -245,6 +249,219 @@ export function hapticFeed(name, course, log) {
     fields: ['phase', 'speed', 'vy', 'onWall', 'contacts', 'load', 'flow', 'gas', 'lift', '...impacts[kind,speed]'], ticks: rows };
 }
 
+// --- live play: the input layer (0154) -------------------------------------------------------
+// A live run as the page flies it (src/main.js liveStep): each 240 Hz tick the controls are sampled (one-thumb:
+// src/input.js sampleThumb → src/onethumb.js; classic touch: src/input.js sample → src/driving.js, src/hands.js),
+// main.js wallAssist adds the fan and notes the release, and stepRun quantises and logs it. The run is armed for its
+// aftermath (as main.js does), which then steps the crashed or stopped car to rest. A scripted finger presses the
+// page's own controls (scripts/vectors-dom.mjs); what it did is recorded per tick as events, so the Swift port
+// replays the same touches and must log the same input bit for bit (the Worker re-simulates that log).
+//   events  [tick, 'down'|'up'] (the one-thumb pad), [tick, 'move', dx, dy] (its slide, px, +y up the glass),
+//           [tick, 'stick', x, y, dx, dy] (the stick, −1…1 as input.js read it, from the finger's px off its centre),
+//           [tick, 'stickUp'], [tick, 'press', 'go'|'brk'|'lift'|'land', amount, fy] (amount: an Advanced pedal's, from
+//           where on the pad the finger is), [tick, 'release', name], [tick, 'valves', ...10] (the nozzle pad's, after a
+//           finger on it), [tick, 'tilt', steer, gamma] (touch-settings.js tiltSteer() after the reading, zeroed at 0°).
+//           Numbers as bits.
+//   sights  [tick, land, ...PRED_FIELDS bits, status, mark x, y, m]: predict() and markOffset() (the pad's sight),
+//           read before that tick's events are applied, as human-phone.mjs's careful thumb reads them.
+export const PRED_FIELDS = ['h', 'sink', 'upY', 'aNow', 'aEnd', 'aMax', 'aPlan', 'stopDist', 'brakeBy', 'margin', 'marginAhead',
+  'profileSink', 'tGround', 'tLand', 'landX', 'landZ', 'gas', 'gasNeed', 'rollOut', 'pitchOut', 'touchSink', 'brakeSink'];
+// src/main.js wallAssist and noteRelease (the page's, with S's two fields passed in: main.js can't load in Node).
+function noteRelease(run, S, input) {
+  if (S.released || run.course === 'lineup' || !((run.phase === 'ramp' && input.lift > 0) || run.phase === 'air')) return false;
+  S.released = true; S.releaseTick = run.tick;
+  return true;
+}
+function wallAssist(run, S, input) {
+  if (run.course === 'lineup') { input.fan = 0; return input; }
+  const c = run.car;
+  noteRelease(run, S, input);
+  input.fan = !S.released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
+  return input;
+}
+const liveInput = newInput();
+export function inputVector({ name, course, scheme, tier, level, script }) {
+  dom.fresh();
+  IN.setDriving({ level });
+  const run = armAftermath(createRun(course));
+  const S = { released: false, releaseTick: -1 };
+  const events = [], sights = [], pr = newPrediction(), off = { x: 0, y: 0, m: 0 };
+  const at = (...e) => events.push([run.tick, ...e]);
+  const ctl = {
+    down() { IN.thumb.down(); at('down'); },
+    up() { IN.thumb.up(); at('up'); },
+    move(dx, dy) { IN.thumb.move(dx, dy); at('move', hex(dx), hex(dy)); },
+    stick(dx, dy) { dom.stick(dx, dy); const h = IN.heldState(); at('stick', hex(h.x), hex(h.y), hex(STICK.cx + dx - STICK.cx), hex(STICK.cy + dy - STICK.cy)); },
+    stickUp() { dom.stickUp(); at('stickUp'); },
+    press(b, fy = 0.5) { dom.press(b, fy); at('press', b, hex(b === 'go' || b === 'brk' ? IN.pedalAmount(fy) : 1), hex(fy)); },
+    release(b) { dom.release(b); at('release', b); },
+    tilt(gamma) { dom.tilt(gamma); at('tilt', hex(touchSettings.tiltSteer()), hex(gamma)); },
+    nozzle(finger, pad) { dom.nozzle(finger, pad); at('valves', ...Array.from(IN.getNozzlePad().valves, hex)); },
+    // The sight as the pad draws it (src/thumb-aim.js): the touchdown predicted, then the mark from it, px.
+    sight(land = false) {
+      const c = run.car, h = Math.max(0, c.pos.y - SPEC.comHeight);
+      predict(c, h, pr, land);
+      markOffset(c, pr, course, off);
+      sights.push([run.tick, land ? 1 : 0, ...PRED_FIELDS.map((k) => hex(pr[k])), pr.status, hex(off.x), hex(off.y), hex(off.m)]);
+      return off;
+    },
+  };
+  ctl.tilt(0);   // every run starts level (the first reading is straight ahead)
+  const h = [0x811c9dc5, 0x9747b28c], checks = [], st = {};
+  while (run.phase !== 'done') {
+    script(run, S, ctl, st);
+    const inp = wallAssist(run, S, scheme === 'thumb' ? IN.sampleThumb(run, S.released, liveInput) : IN.sample(run.phase, tier, liveInput, S.released, run.car));
+    stepRun(run, inp);
+    mixState(h, stateOf(run));
+    if (run.tick % CHECK_EVERY === 0) checks.push([run.tick, hashHex(h)]);
+  }
+  const ticks = run.tick, final = hashHex(h), telemetry = flat(run.t), card = flat(scoreRun(run.t));
+  // The aftermath, as main.js steps it once the run is over: unscored, unlogged, to rest or the cap.
+  const ah = [0x811c9dc5, 0x9747b28c];
+  for (let done = false; !done;) {
+    const t0 = run.tick;
+    done = aftermathStep(run);
+    if (run.tick !== t0) mixState(ah, stateOf(run));
+  }
+  const a = run.after;
+  return {
+    format: VECTOR_FORMAT, simVersion: SIM_VERSION, name, course, scheme, tier, level, ticks, releaseTick: S.releaseTick, endReason: run.t.endReason, final,
+    after: { startTick: a.startTick, ticks: a.ticks, still: a.still, endTick: run.tick, final: hashHex(ah), state: stateOf(run).map(hex) },
+    events, sights, log: run.inputLog, checks, telemetry, card,
+  };
+}
+
+// The scripted fingers. Each reacts to the run as a player would (the ledge reached, the fall begun), so the
+// timeline is a real flight's; what it pressed, and when, is what the vector stores.
+const speed = (c) => dhypot(c.vel.x, c.vel.y, c.vel.z);
+const onLedge = (run) => run.phase === 'ramp' && run.t.progress >= 0.92 && speed(run.car) < 0.3;
+// One-thumb: hold to climb, lift on the ledge, press again after `wait` and hold to land (`landAt: 'again'`: a tap,
+// then pressed again `relandAfter` ticks later). `flinch`: the thumb lifted that many ticks in the fall (0140: LAND
+// stays on). `aim`: slide onto the sight every `aim` ticks, a reaction (48 ticks) late. `lapse`: lifted for 240 ticks
+// mid-curl. `liftAt`: lifted at that curl progress and never put back. `tilts`: [tick, gamma °].
+function thumbScript({ wait = 120, landAt = 'tap', relandAfter = 160, flinch = 0, aim = 0, lapse = false, tilts = [], neverTap = false, liftAt = -1 }) {
+  return (run, S, ctl, st) => {
+    const t = run.tick;
+    if (t === 0) ctl.down();
+    for (const [k, g] of tilts) if (t === k) ctl.tilt(g);
+    if (lapse && st.lapse === undefined && run.phase === 'ramp' && run.t.progress > 0.4) { st.lapse = t; ctl.up(); }
+    if (lapse && t === st.lapse + 240) ctl.down();
+    if (liftAt >= 0 && st.lifted === undefined && run.phase === 'ramp' && run.t.progress > liftAt) { st.lifted = t; ctl.up(); }
+    if (st.tapped === undefined && !neverTap && onLedge(run)) {
+      if (st.ledge === undefined) { st.ledge = t; ctl.up(); }
+      if (t === st.ledge + wait) { ctl.down(); st.tapped = t; }
+    }
+    if (st.tapped >= 0) {
+      if (landAt !== 'tap' && t === st.tapped + 20) ctl.up();
+      if (landAt !== 'tap' && t === st.tapped + relandAfter) ctl.down();
+      if (flinch && run.phase === 'air' && st.flinch === undefined && run.car.vel.y < -4) { st.flinch = t; ctl.up(); }
+      if (flinch && t === st.flinch + flinch) ctl.down();
+      if (aim && S.released && run.phase === 'air' && IN.thumb.held) {
+        if (st.aimNext === undefined || t >= st.aimNext) {
+          const o = ctl.sight(t % 2 === 0);
+          st.want = [o.x, -o.y]; st.aimAt = t + 48; st.aimNext = t + aim;
+        }
+        if (t === st.aimAt) ctl.move(st.want[0], st.want[1]);
+      }
+    }
+  };
+}
+// Classic touch: the stick holds the line on the ground (px from centre), GO to a crawl, BRAKE onto the ledge and
+// RELEASE (LIFT) after `wait`; in the air BOOST until the carry, a stick input `trick` ([from, ticks, dx, dy]), LAND
+// once falling past `landVy`, BRAKE once down. `releaseAt`: let go early, at that curl progress (a crash). `lineup`:
+// the Lineup's lift-off at z −8. `fy`: where on GO/BRAKE the finger sits (Advanced's analog pedals). `crawl`: the
+// run-up's speed. `shove`: LAND held on the run-up for those ticks (it boosts there). `sightEvery`: read the sight
+// that often in the air, whatever the flight (a crash reads amber and red).
+function touchScript({ climb = 4, wait = 100, carry = 7, trick = [0, 0, 0, 0], landVy = -3, releaseAt = 0, lineup = false, fy = 0.5, noLand = false, tilts = [], valves = false, liftBrake = false, crawl = 5.5, shove = [-1, -1], sightEvery = 0 }) {
+  return (run, S, ctl, st) => {
+    const t = run.tick, c = run.car, v = speed(c);
+    for (const [k, g] of tilts) if (t === k) ctl.tilt(g);
+    const set = (b, on) => { if (!!st[b] !== on) { st[b] = on; if (on) ctl.press(b, fy); else ctl.release(b); } };
+    if (t === 0) ctl.stick(0, 0);
+    if (t === shove[0]) set('land', true);
+    if (t === shove[1]) set('land', false);
+    if (sightEvery && run.phase === 'air' && t % sightEvery === 0) ctl.sight(t % (2 * sightEvery) === 0);
+    const ground = run.phase === 'drive' || (run.phase === 'ramp' && !S.released);
+    if (ground && st.let === undefined) {
+      if (t % 24 === 0) ctl.stick(Math.max(-56, Math.min(56, Math.round(c.pos.x * 30))), 0);
+      const want = run.phase === 'drive' ? crawl : climb;
+      if (releaseAt && run.phase === 'ramp' && run.t.progress >= releaseAt) {
+        set('go', false); set('lift', true); st.let = t;
+      } else if (lineup && c.pos.z > -8) {
+        set('go', false); set('lift', true); st.let = t;
+      } else if (!releaseAt && run.phase === 'ramp' && run.t.progress >= 0.95) {
+        set('go', false); set('brk', true);
+        if (st.top === undefined && v < 0.3) st.top = t;
+        if (st.top >= 0 && t >= st.top + wait) { set('brk', false); set('lift', true); st.let = t; }
+      } else { set('go', v < want); set('brk', v > want + 2); }
+    } else if (run.phase === 'landed') {
+      set('land', false); set('go', false); set('lift', false); set('brk', true);
+      if (!st.stickOff) { st.stickOff = true; ctl.stickUp(); }
+      if (st.chord >= 0 && st.chordOff === undefined) { st.chordOff = t; ctl.nozzle(0, null); }
+    } else if (st.let >= 0) {
+      if (t === st.let + (lineup ? 200 : 48)) set('lift', false);
+      set('brk', false);
+      set('go', -c.vel.z < carry && !run.t.crossedRow && t < st.let + 600);
+      const [from, len, dx, dy] = trick;
+      if (len && t === st.let + from) ctl.stick(dx, dy);
+      if (len && t === st.let + from + len) ctl.stick(0, 0);
+      if (!noLand && c.vel.y < landVy && run.phase === 'air') set('land', true);
+      // Pro has no brake governor: LIFT by hand, on through a fast fall, off once it's slowed.
+      if (liftBrake && t > st.let + 48) set('lift', c.vel.y < landVy || (!!st.lift && c.vel.y < -1));
+      if (valves) {
+        // Advanced: the nozzle pad. BOOST's chord off the ledge, a thumb rolled from one down-jet to the next,
+        // then LIFT's chord to brake the fall.
+        if (t === st.let + 30) ctl.nozzle(1, 11);
+        if (t === st.let + 150) ctl.nozzle(1, null);
+        if (t === st.let + 80) ctl.nozzle(2, 0);
+        if (t === st.let + 110) ctl.nozzle(2, 1);
+        if (t === st.let + 140) ctl.nozzle(2, -1);
+        if (t === st.let + 160) ctl.nozzle(2, null);
+        if (st.chord === undefined && c.vel.y < landVy - 2 && run.phase === 'air') { st.chord = t; ctl.nozzle(0, 10); }
+      }
+    }
+  };
+}
+
+export function inputList() {
+  return [
+    // One-thumb on the Show: hold, tap and hold; a tap, then held again later with a flinch in the fall; the slide
+    // onto the sight; a lapse mid-curl, the tilt on the run-up and a long wait on the ledge.
+    { name: 'thumb-show-hold', course: 'show', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({}) },
+    { name: 'thumb-show-tap-hold', course: 'show', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({ landAt: 'again', wait: 60, flinch: 30 }) },
+    { name: 'thumb-show-aim', course: 'show', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({ aim: 72 }) },
+    { name: 'thumb-show-lapse-tilt', course: 'show', scheme: 'thumb', tier: 'assist', level: 'standard',
+      script: thumbScript({ lapse: true, wait: 300, tilts: [[60, 5.5], [150, -4.5], [240, 0]], aim: 60 }) },
+    // One-thumb on the Wall: a tap and held again, the slide, and a thumb lifted mid-curl and never put back (a stall).
+    { name: 'thumb-wall-hold', course: 'wall', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({ landAt: 'again', relandAfter: 200 }) },
+    { name: 'thumb-wall-aim', course: 'wall', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({ aim: 50, wait: 200 }) },
+    { name: 'thumb-wall-stall', course: 'wall', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({ neverTap: true, liftAt: 0.6 }) },
+    // Classic touch, Pro: the stick and the pedals on the Show, the Wall and the Lineup.
+    { name: 'touch-show-pro', course: 'show', scheme: 'classic', tier: 'pro', level: 'standard', script: touchScript({ trick: [60, 40, 20, -18], liftBrake: true }) },
+    { name: 'touch-wall-pro', course: 'wall', scheme: 'classic', tier: 'pro', level: 'standard', script: touchScript({ climb: 5, carry: 0, trick: [30, 50, -25, 10], liftBrake: true, sightEvery: 40 }) },
+    { name: 'touch-lineup-pro', course: 'lineup', scheme: 'classic', tier: 'pro', level: 'standard', script: touchScript({ lineup: true, carry: 9, trick: [100, 60, 30, 0], landVy: -2, liftBrake: true }) },
+    // Classic touch, Assist: Standard driving with LAND; Easy with the tilt. And Advanced (driving and flight):
+    // analog pedals on the ground, the nozzle pad in the air.
+    { name: 'touch-show-assist', course: 'show', scheme: 'classic', tier: 'assist', level: 'standard', script: touchScript({ trick: [70, 30, 0, 25] }) },
+    { name: 'touch-show-assist-easy', course: 'show', scheme: 'classic', tier: 'assist', level: 'easy',
+      script: touchScript({ tilts: [[100, 6], [200, -5], [300, 0]], trick: [80, 30, -40, 0] }) },
+    // Easy, flat out down the Lineup's run-up with the phone tilted: its speed-sensitive steering and throttle ellipse
+    // past 15 m/s, and LAND held on the run-up (the rear boost).
+    { name: 'touch-lineup-easy-fast', course: 'lineup', scheme: 'classic', tier: 'assist', level: 'easy',
+      script: touchScript({ lineup: true, crawl: 40, carry: 0, shove: [300, 420], tilts: [[500, 7], [700, -7], [800, 0]], sightEvery: 30 }) },
+    { name: 'touch-wall-advanced', course: 'wall', scheme: 'classic', tier: 'advanced', level: 'advanced', script: touchScript({ fy: 0.3, climb: 6, valves: true }) },
+    // A crash: let go two thirds up the curl, no LAND. The aftermath brakes the wreck to rest.
+    { name: 'touch-show-crash', course: 'show', scheme: 'classic', tier: 'pro', level: 'standard', script: touchScript({ releaseAt: 0.66, noLand: true, carry: 0, sightEvery: 25 }) },
+  ];
+}
+function stringifyInput(v) {
+  const { events, sights, log, checks, telemetry, card, ...head } = v;
+  const rows = (a) => '[\n' + a.map((x) => JSON.stringify(x)).join(',\n') + '\n]';
+  return '{' + Object.entries(head).map(([k, x]) => `${JSON.stringify(k)}:${JSON.stringify(x)}`).join(',') +
+    ',\n"events":' + rows(events) + ',\n"sights":' + rows(sights) + ',\n"log":' + rows(log) + ',\n"checks":' + rows(checks) +
+    ',\n"telemetry":' + rows(telemetry) + ',\n"card":' + rows(card) + '}\n';
+}
+
 // Every file, as { path (relative to VECTOR_DIR): text }. JSON with one case per line so a diff names it.
 export function buildVectors({ only } = {}) {
   const files = {};
@@ -261,6 +478,10 @@ export function buildVectors({ only } = {}) {
       const h = hapticFeed(r.name, r.course, log), { ticks, ...head } = h;
       files[`haptics/${r.name}.json`] = JSON.stringify(head).slice(0, -1) + ',"ticks":[\n' + ticks.map((t) => JSON.stringify(t)).join(',\n') + '\n]}\n';
     }
+  }
+  for (const r of inputList()) {
+    if (only && !only.includes(r.name)) continue;
+    files[`input/${r.name}.json`] = stringifyInput(inputVector(r));
   }
   return files;
 }
