@@ -1,12 +1,12 @@
 ---
-id: 0154
+id: 0157
 title: The native app archives, signed for the App Store, and its listing is written
 status: in-progress
 priority: P2
 size: M
 lens: platform
 created: 2026-11-04
-pr:
+pr: 253
 by: operator
 ---
 
