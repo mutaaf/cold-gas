@@ -21,6 +21,9 @@ final class RootViewController: UIViewController {
 
     override var prefersStatusBarHidden: Bool { true }
     override var prefersHomeIndicatorAutoHidden: Bool { true }
+    /// The controls live in the bottom corners. Without this iOS holds every touch near an edge while it decides whether it's a
+    /// swipe for Home or Control Center, and a press arrives late. A swipe from the edge now takes two, as games do.
+    override var preferredScreenEdgesDeferringSystemGestures: UIRectEdge { .all }
 
     override func viewDidLoad() {
         super.viewDidLoad()
@@ -41,6 +44,7 @@ final class RootViewController: UIViewController {
             ui.safeAreaRegions = []   // the fold layout already placed every panel inside the safe area
             container.addSubview(ui.view)
             ui.didMove(toParent: self)
+            setNeedsUpdateOfScreenEdgesDeferringSystemGestures()
             Game.shared.stage = stage
             Game.shared.showTitleLoop()
             if Launch.args.contains("-play") { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { Game.shared.play() } }

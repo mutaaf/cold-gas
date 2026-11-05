@@ -428,10 +428,10 @@ struct ControllerView: View {
 }
 
 /// One-thumb (src/onethumb.js): the whole pad is the control. Hold to climb, tap to let go, hold to land, slide to aim.
+/// The touches themselves are ThumbSurfaceView's (Input/ControlSurface.swift).
 struct ThumbPad: View {
     @ObservedObject var game = Game.shared
     var panel: Bool
-    @State private var down = false
     /// Its diameter over the scene (the camera keeps the car clear of it: CameraFraming).
     static func size(_ width: CGFloat) -> CGFloat { min(170, width * 0.42) }
     var body: some View {
@@ -444,107 +444,18 @@ struct ThumbPad: View {
             default: return "Hold · Climb"
             }
         }()
-        GeometryReader { geo in
-            let size = panel ? min(geo.size.width, geo.size.height) * 0.78 : ThumbPad.size(geo.size.width)
-            ZStack {
-                Circle().fill(down ? Theme.ink.opacity(0.16) : Theme.glass)
-                    .overlay(Circle().strokeBorder(down ? Theme.ink.opacity(0.7) : Theme.hair, lineWidth: down ? 2 : 1))
-                    .background(.ultraThinMaterial.opacity(0.4), in: Circle())
-                if h.aimLive {
-                    Circle().strokeBorder(Theme.ice.opacity(0.4), lineWidth: 1).frame(width: size * 0.56, height: size * 0.56)
-                }
-                if h.hasMark {   // the sight (src/thumb-aim.js): where the mark is from the predicted touchdown; slide onto it
-                    Circle().fill(Theme.ice).frame(width: 8, height: 8).offset(x: h.markX, y: h.markY)
-                }
-                Text(word.uppercased()).font(Theme.text(panel ? 15 : 12, .medium)).tracking(1.6).foregroundStyle(Theme.ink)
-            }
-            .frame(width: size, height: size)
-            .contentShape(Circle())
-            .gesture(DragGesture(minimumDistance: 0, coordinateSpace: .local)
-                .onChanged { v in
-                    if !down { down = true; game.controls.thumbDown(); UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.5) }
-                    game.controls.thumbMove(dx: v.translation.width, dy: -v.translation.height)
-                }
-                .onEnded { _ in down = false; game.controls.thumbUp() })
-            .position(x: panel ? geo.size.width / 2 : geo.size.width - size / 2 - 8, y: panel ? geo.size.height / 2 : geo.size.height - size / 2 - 8)
-            .accessibilityLabel("Thrust pad")
-            .accessibilityHint(word)
-            .accessibilityAddTraits(.allowsDirectInteraction)
-        }
+        ThumbSurface(panel: panel, word: word, aimLive: h.aimLive, hasMark: h.hasMark, markX: h.markX, markY: h.markY)
     }
 }
 
 /// Classic touch (src/input.js): the stick on the left, the pedals (ground) or LIFT / LAND (air) on the right.
+/// The touches themselves are ClassicSurfaceView's.
 struct ClassicPad: View {
     @ObservedObject var game = Game.shared
     var panel: Bool
     // Over the scene (the camera keeps the car clear of them: CameraFraming): the stick's square, the buttons' 2×2 square.
     static let unit: CGFloat = 112, margin: CGFloat = 10, stickSize = unit * 0.5 * 2.4, buttonsSize = unit * 0.62 * 2 + 10
     var body: some View {
-        let air = game.hud.phase == 2 || (game.hud.phase == 1 && game.hud.released)
-        GeometryReader { geo in
-            let unit = panel ? min(geo.size.height * 0.42, 150.0) : ClassicPad.unit
-            HStack(alignment: .bottom) {
-                Stick(radius: unit * 0.5)
-                Spacer()
-                VStack(spacing: 10) {
-                    HStack(spacing: 10) {
-                        PadButton(label: "LIFT", key: .lift, size: unit * 0.62)
-                        PadButton(label: "LAND", key: .land, size: unit * 0.62)
-                    }
-                    HStack(spacing: 10) {
-                        PadButton(label: air ? "BRAKE" : "BRAKE", key: .brake, size: unit * 0.62)
-                        PadButton(label: air ? "BOOST" : "GO", key: .go, size: unit * 0.62)
-                    }
-                }
-            }
-            .padding(panel ? 20 : ClassicPad.margin)
-            .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
-        }
-    }
-}
-
-struct Stick: View {
-    @ObservedObject var game = Game.shared
-    let radius: CGFloat
-    @State private var knob = CGSize.zero
-    var body: some View {
-        ZStack {
-            Circle().fill(Theme.glass).overlay(Circle().strokeBorder(Theme.hair)).background(.ultraThinMaterial.opacity(0.4), in: Circle())
-            Circle().fill(Theme.ink.opacity(0.85)).frame(width: radius * 0.7, height: radius * 0.7).offset(knob)
-        }
-        .frame(width: radius * 2.4, height: radius * 2.4)
-        .contentShape(Circle())
-        .gesture(DragGesture(minimumDistance: 0)
-            .onChanged { v in
-                var dx = v.location.x - radius * 1.2, dy = v.location.y - radius * 1.2
-                let l = (dx * dx + dy * dy).squareRoot()
-                if l > radius { dx *= radius / l; dy *= radius / l }
-                knob = CGSize(width: dx, height: dy)
-                game.controls.stick(x: Double(dx / radius), y: Double(dy / radius))
-            }
-            .onEnded { _ in knob = .zero; game.controls.stick(x: 0, y: 0) })
-        .accessibilityLabel("Steering stick")
-        .accessibilityAddTraits(.allowsDirectInteraction)
-    }
-}
-
-struct PadButton: View {
-    @ObservedObject var game = Game.shared
-    let label: String
-    let key: Controls.Key
-    let size: CGFloat
-    @State private var on = false
-    var body: some View {
-        Text(label).font(Theme.text(12, .medium)).tracking(1.2).foregroundStyle(on ? Theme.bg : Theme.ink)
-            .frame(width: size, height: size)
-            .background(on ? Theme.ink : Theme.glass, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).strokeBorder(Theme.hair))
-            .contentShape(Rectangle())
-            .gesture(DragGesture(minimumDistance: 0)
-                .onChanged { _ in if !on { on = true; game.controls.press(key, true); UISelectionFeedbackGenerator().selectionChanged() } }
-                .onEnded { _ in on = false; game.controls.press(key, false) })
-            .accessibilityLabel(label)
-            .accessibilityAddTraits(.allowsDirectInteraction)
+        ClassicSurface(panel: panel, air: game.hud.phase == 2 || (game.hud.phase == 1 && game.hud.released))
     }
 }

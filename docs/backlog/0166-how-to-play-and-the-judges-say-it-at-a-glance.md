@@ -22,8 +22,9 @@ Runs on: the operator's Mac (Xcode). iPhone app only; the web's screens are unch
 - A crash, a wreck or no jump gets no aurora, as on the web. Whose words these are stays on screen (invariant 5½). The coach's "Clean" shows only on a run that earned the aurora.
 
 ## Acceptance criteria
-- [x] Six touch tests pass on the Pro Max and open Duo simulators, including one-open-at-a-time and the opened numbers being on screen.
-- [x] Seen: a landing, a stall and a no-jump collision on the Pro Max simulator; a landing on the open Duo and on the `-pose tabletop` layout.
+- [x] Six touch tests pass on the Pro Max and closed Duo simulators, including one-open-at-a-time and the opened numbers being on screen.
+- [x] Seen: a landing, a stall and a no-jump collision on the Pro Max simulator; a landing on the closed Duo's outer screen and on the `-pose tabletop` layout.
+- [ ] The Duo's real inner screen: the simulator boots closed and can't be unfolded from a script, so it hasn't been run.
 - [ ] The same on a real iPhone, with the frame rate checked on the results sheet with the field moving.
 
 ## Test plan
