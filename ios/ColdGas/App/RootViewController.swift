@@ -83,6 +83,7 @@ final class RootViewController: UIViewController {
             layoutModel.scene = l.scene.cg
             layoutModel.controls = l.controls.cg
             layoutModel.safe = EdgeInsets(top: safe.top, leading: safe.left, bottom: safe.bottom, trailing: safe.right)
+            stage.setCameraLayout(rows: l.spread == .rows, scene: l.scene.cg, controls: l.controls.cg, safeTop: safe.top)
             print("LAYOUT \(Int(size.width))x\(Int(size.height)) \(l.spread.rawValue) scene \(l.scene) controls \(l.controls) fold \(l.fold.map(\.description) ?? "-")")
         }
     }

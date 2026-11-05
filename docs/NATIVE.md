@@ -255,9 +255,10 @@ throttled phone: benches back to back heat it, and the numbers mean nothing abov
   - One `.metal` namespace with no duplicate function names (moon-club).
   - Clamp everything that goes into `pow`, `sqrt` and `normalize` (LESSONS: "One NaN pixel is a flicker storm").
   - Generated meshes are wound outward (LESSONS: "Loft winding").
-- **Camera.** The director's rigs are ported. The lens keeps the **horizontal** field of view under an aspect
-  (LESSONS 0108, `lens()` in director.js). That's how the near-square inner screen and the portrait outer screen
-  frame the car the same.
+- **Camera.** The director's live rigs are ported (0158, `Render/Director.swift`), with what differs from the web listed
+  at its head. The lens is vertical, as three's is. The shots framed side-on to the car keep the **horizontal** field of
+  view under an aspect (LESSONS 0108, `lens()` in director.js), and the aspect comes from the scene's rect. The HUD's foot
+  and the touch controls reach the camera as `CameraFraming`, worked out from the layout.
 - **Thermal and power.**
   - `ProcessInfo.thermalState` and Low Power Mode feed the resolution governor, which works as `src/obs/ledger.js`
     does:

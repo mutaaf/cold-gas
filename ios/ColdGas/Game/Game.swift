@@ -56,6 +56,7 @@ final class Game: ObservableObject {
     private var haptics = HapticScore(course: "show"), seen = 0
     private var countT = 0.0
     private var lastHud = 0.0
+    private var touched = false   // the touchdown has reached the camera (main.js: once per run, keyed on the touch tick)
 
     /// One-thumb flies only Assist on the Show and the Wall (src/onethumb.js); everything else is classic touch.
     var oneThumb: Bool { control == .oneThumb && tier == "assist" && course != "lineup" }
@@ -78,9 +79,12 @@ final class Game: ObservableObject {
         let l = built.map { LiveRun(drill: $0, tier: t, oneThumb: control == .oneThumb) } ?? LiveRun(course: course, tier: t, oneThumb: control == .oneThumb)
         if Launch.args.contains("-autopilot") { l.script = Game.referenceLog(course) }
         if let v = Launch.value("-script") { l.script = Game.vectorLog(v) }   // a recorded run flown live (store captures, a crash)
+        #if DEBUG
+        if let n = Launch.value("-script-end").flatMap(Int.init) { l.script = l.script?.filter { ($0.first ?? 0) < n } }   // hands off at that tick: a real crash
+        #endif
         l.onRelease = { Sound.shared.release() }   // the haptic release is the HapticScore's (it reads the feed's lift)
         live = l; controls.live = l
-        acc = 0; seen = 0; doneFor = 0; momentFor = 0; result = nil; paused = false
+        acc = 0; seen = 0; doneFor = 0; momentFor = 0; result = nil; paused = false; touched = false
         haptics = HapticScore(course: course)
         let tr = Replay(live: course)
         tr.tickBase = l.run.tick
@@ -134,6 +138,7 @@ final class Game: ObservableObject {
                 tr.append(r)
                 if wasFlying { haptics.step(HapticFeed(run: r, input: l.input, seen: &seen)) }
                 if !wasLanded && r.phase == .landed { Sound.shared.thud(sink: r.t.sink) }
+                if !touched && r.t.touchTick >= 0 { touched = true; stage?.renderer?.cam.touchdown(sink: r.t.sink) }
                 if wasFlying && r.phase == .done { finished(l) }
             }
         } catch { print("SIM stopped: \(error)"); if result == nil { home() }; return }

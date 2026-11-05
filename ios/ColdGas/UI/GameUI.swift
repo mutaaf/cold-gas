@@ -367,6 +367,8 @@ struct ThumbPad: View {
     @ObservedObject var game = Game.shared
     var panel: Bool
     @State private var down = false
+    /// Its diameter over the scene (the camera keeps the car clear of it: CameraFraming).
+    static func size(_ width: CGFloat) -> CGFloat { min(170, width * 0.42) }
     var body: some View {
         let h = game.hud
         let word: String = {
@@ -378,7 +380,7 @@ struct ThumbPad: View {
             }
         }()
         GeometryReader { geo in
-            let size = panel ? min(geo.size.width, geo.size.height) * 0.78 : min(170, geo.size.width * 0.42)
+            let size = panel ? min(geo.size.width, geo.size.height) * 0.78 : ThumbPad.size(geo.size.width)
             ZStack {
                 Circle().fill(down ? Theme.ink.opacity(0.16) : Theme.glass)
                     .overlay(Circle().strokeBorder(down ? Theme.ink.opacity(0.7) : Theme.hair, lineWidth: down ? 2 : 1))
@@ -411,10 +413,12 @@ struct ThumbPad: View {
 struct ClassicPad: View {
     @ObservedObject var game = Game.shared
     var panel: Bool
+    // Over the scene (the camera keeps the car clear of them: CameraFraming): the stick's square, the buttons' 2×2 square.
+    static let unit: CGFloat = 112, margin: CGFloat = 10, stickSize = unit * 0.5 * 2.4, buttonsSize = unit * 0.62 * 2 + 10
     var body: some View {
         let air = game.hud.phase == 2 || (game.hud.phase == 1 && game.hud.released)
         GeometryReader { geo in
-            let unit = panel ? min(geo.size.height * 0.42, 150.0) : 112.0
+            let unit = panel ? min(geo.size.height * 0.42, 150.0) : ClassicPad.unit
             HStack(alignment: .bottom) {
                 Stick(radius: unit * 0.5)
                 Spacer()
@@ -429,7 +433,7 @@ struct ClassicPad: View {
                     }
                 }
             }
-            .padding(panel ? 20 : 10)
+            .padding(panel ? 20 : ClassicPad.margin)
             .frame(width: geo.size.width, height: geo.size.height, alignment: .bottom)
         }
     }

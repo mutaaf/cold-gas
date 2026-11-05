@@ -73,7 +73,7 @@ final class Renderer {
     /// The crash's slow-motion factor, for the game's clock (a live run slows with the effects, as crash.js timeScale).
     var slowK: Double { Double(crash.slowK) }
     /// A new track (a new run, or back to the title's loop): effects and clocks start over.
-    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed() }
+    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart() }
     private(set) lazy var dents = Dents(roadster: stage.roadster, parked: stage.parked)
     private var lastCarQ = simd_quatf(angle: 0, axis: [0, 1, 0]), lastDrawT = 0.0
     private func hookDents() {
@@ -292,8 +292,12 @@ final class Renderer {
         applyCarMaterials()
         updateSweep(Float(heroClock))
         var aspect = Float(out.width) / Float(max(1, out.height))
-        if cam.shakeHook == nil { cam.shakeHook = true; crash.shake = { [weak cam] a in cam?.shake(a) } }
-        var view = cam.update(car: carPos, quat: carQ, phase: phase, time: t, aspect: aspect)
+        if cam.shakeHook == nil {
+            cam.shakeHook = true
+            crash.shake = { [weak cam] a in cam?.shake(a) }
+            crash.cut = { [weak cam] p, v in cam?.crashCut(at: p, vel: v) }
+        }
+        var view = cam.update(course: replay?.course ?? "show", car: carPos, vel: replay.map { $0.ticks > 0 ? $0.velocity(at: tick) : .zero } ?? .zero, phase: phase, tick: tick, time: t, aspect: aspect)
         if let fc = fxCam {
             let off: SIMD3<Float> = fc == "rear" ? [0.8, 0.7, -5.5] : fc == "front" ? [0.8, 0.7, 6] : [3.5, 3.5, -1]
             view.eye = carPos + carQ.act(off); view.view = lookAt(eye: view.eye, target: carPos, up: [0, 1, 0])
