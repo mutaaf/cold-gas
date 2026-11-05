@@ -338,7 +338,7 @@ struct ThumbPad: View {
             switch h.stage {
             case "ledge": return game.controls.thumbDriving ? "Letting go" : "Tap · Let go"
             case "fly": return "Hold · Land"
-            case "landed": return "Stuck it?"
+            case "landed": return "Stopping"
             default: return "Hold · Climb"
             }
         }()

@@ -61,6 +61,7 @@ final class Game: ObservableObject {
     func play() {
         let l = LiveRun(course: course, tier: tier == "pro" ? .pro : .assist, oneThumb: control == .oneThumb)
         if Launch.args.contains("-autopilot") { l.script = Game.referenceLog(course) }
+        if let v = Launch.value("-script") { l.script = Game.vectorLog(v) }   // a recorded run flown live (store captures, a crash)
         l.onRelease = { Sound.shared.release() }   // the haptic release is the HapticScore's (it reads the feed's lift)
         live = l; controls.live = l
         acc = 0; seen = 0; doneFor = 0; result = nil; paused = false
@@ -178,7 +179,7 @@ final class Game: ObservableObject {
         h.held = l.thumb.held
         h.stage = thumbStage(r, l.released).rawValue
         h.aimLive = l.thumb.aimLive
-        if r.phase == .air && l.oneThumb && l.script == nil && r.phase != .done {
+        if r.phase == .air && l.oneThumb {
             predict(c, h.alt, pr, land: l.thumb.landing)
             let m = markOffset(c, pr, r.course)
             h.markX = m.x; h.markY = m.y; h.hasMark = true
@@ -197,7 +198,7 @@ final class Game: ObservableObject {
         let r = l.run, released = l.released
         if r.phase == .done { return result?.card.verdict ?? "" }
         let c = r.car, v = h.speed
-        if l.oneThumb && l.script == nil {
+        if l.oneThumb {
             let held = h.held
             if r.phase == .drive { return held || v > 2 ? "Climbing · let go to stop" : "Hold the pad to climb" }
             if r.phase == .ramp && !released && r.t.progress >= 0.92 && l.thumb.driving { return "Letting go · out to the lip" }
@@ -235,8 +236,9 @@ final class Game: ObservableObject {
 
     static let quiet = [Double](repeating: 0, count: 10)
 
-    static func referenceLog(_ course: String) -> [[Int]]? {
-        guard let url = Bundle.main.url(forResource: "ref-\(course)", withExtension: "json", subdirectory: "runs"),
+    static func referenceLog(_ course: String) -> [[Int]]? { vectorLog("ref-\(course)") }
+    static func vectorLog(_ name: String) -> [[Int]]? {
+        guard let url = Bundle.main.url(forResource: name, withExtension: "json", subdirectory: "runs"),
               let d = try? Data(contentsOf: url), let j = try? JSONSerialization.jsonObject(with: d) as? [String: Any],
               let log = j["log"] as? [[NSNumber]] else { return nil }
         return log.map { $0.map(\.intValue) }
