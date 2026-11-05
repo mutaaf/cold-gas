@@ -197,6 +197,11 @@ telemetry, the card, the sight (`predict` + `markOffset`) and the aftermath to r
   `heightAboveSurface`. The keyboard and gamepad channels in `InputSampler` are ported but no vector drives them yet.
 - **Don't name a module-level constant what ColdGasCore already exports** (LESSONS, 0154).
 
+### On a cool phone (2026-11-04, Release, iPhone 15 Pro Max)
+The whole Show, 10 s: 1,193 frames, presentation p95 8.34 ms, 5 hitches, CPU avg 0.75 ms, GPU avg 6.08 ms, p95 6.54 ms, 0
+compiles after launch, thermal 0. The governor settles at render scale 0.50 with MetalFX. The earlier 12 ms readings were a
+throttled phone: benches back to back heat it, and the numbers mean nothing above thermal state 0. The bench prints it.
+
 ### Porting rules (each one is a bug waiting to happen)
 
 | JS | Swift |
@@ -283,8 +288,9 @@ too.
   - **The fold isn't in the middle of the safe area.** Halving the safe width puts the gutter 42 pt off the crease.
   - Pick the fold region by its shape; the array order isn't documented.
 - **Layouts:**
-  - **Book:** the scene fills the leading panel. The HUD instruments, landing tape and valve pad go on the
-    trailing panel. Nothing draws across the hinge.
+  - **Open (book or flat):** the scene runs edge to edge across the whole inner display, with the HUD and controls
+    over it inside the safe area (the owner, 2026-11-04: "in open mode we need the edge to edge display used in full
+    screen mode"). This replaces the first plan, a scene panel and a controls panel with nothing across the hinge.
   - **Tabletop:** the scene above the fold, the controls below, like a handheld console. It's the same split
     `src/fold.js` already makes for a horizontal fold.
   - **Closed:** the phone layout, with the one-thumb pad.
@@ -484,7 +490,7 @@ ios/
 | 0 | **Spike** (0146 vectors, 0147 determinism, 0148 first frame) | `dmath` and one `vehicle.step` slice bit-identical on macOS, Linux and an iPhone; native Rapier matches the WASM build over the vectors; the exported roadster draws at 120 Hz on the Duo simulator |
 | 1 | **Core** ✅ (0152) | All of the sim plus the scorer in Swift; every vector bit-exact; 32 of 32 naive players land; 0 B/tick |
 | 2 | **The Show drawn** | Course, car, plumes, mist, director; binary archive (no compile in a run); the governor; p95 ≤ 8.3 ms on the simulator bench |
-| 3 | **Playable + haptics** (0149) | Touch (one-thumb, classic), tilt, pad, keyboard; the HUD; audio; the full haptic track; a newcomer lands on Assist |
+| 3 | **Playable + haptics** (0149, 0155, 0156) ✅ first cut | Touch (one-thumb, classic), tilt, pad, keyboard; the HUD; audio; the full haptic track; a newcomer lands on Assist |
 | 4 | **Results** | Judges streaming, the theatre, the receipt, the board (post with telemetry), medals, the daily jump, challenge payloads, share |
 | 5 | **The Wall and the Lineup** | Both courses, drills, the coach, replays |
 | 6 | **Duo and Pro Max pass** | Layout tests in every pose; hardware pass (120 Hz held, haptics felt, fold mid-run) |

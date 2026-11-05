@@ -1,12 +1,12 @@
 ---
 id: 0155
 title: "Phase 3's input layer: live stepping, one-thumb, classic touch and the aftermath in Swift, logging the web's bits"
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-11-04
-pr:
+pr: 253
 by: operator
 ---
 

@@ -6,7 +6,7 @@ priority: P1
 size: L
 lens: platform
 created: 2026-11-04
-pr:
+pr: 253
 by: operator
 ---
 
@@ -28,7 +28,7 @@ Runs on: the operator's Mac (Xcode, Metal). docs/NATIVE.md §4.
   (src/obs/ledger.js's rules); thermal state and Low Power Mode feed it.
 
 ## Acceptance criteria
-- [ ] The reference Show replays on the Pro Max at 120 Hz: presentation p95 ≤ 8.34 ms and GPU p95 ≤ 6.5 ms
+- [ ] (2026-11-04, cool iPhone 15 Pro Max: presentation p95 8.34 ms met, GPU p95 6.54 ms at render scale 0.50, 0.04 ms over.) The reference Show replays on the Pro Max at 120 Hz: presentation p95 ≤ 8.34 ms and GPU p95 ≤ 6.5 ms
       (`-bench`). **Not yet:** GPU ≈ 12 ms at render scale 0.5 on a cool run. Later runs were thermally throttled
       (thermal 2) and don't count.
 - [x] 0 pipeline compiles after launch; the binary archive covers every pass (87 ms of setup on a warm launch).
@@ -49,7 +49,8 @@ spinning, physics and impact to environment need to be carefully addressed"). Ea
       - dust rings and scrape dust;
       - the contact flash and the vented nitrogen line;
       - the camera's shake and the slow-motion beat (the replay's clock slows).
-- [ ] Still from crash.js and debris.js: dents from each probe's crush (the hero's and the parked cars'), torn-off
+- [x] Dents from each probe's crush, the hero's and the parked cars' (Dents.swift).
+- [ ] Still from crash.js and debris.js: torn-off
       parts as debris, lamps flickering out and hazards, the crash cut, chips in a struck parked car's paint.
 - [ ] The car's states as roadster.js shows them: brake lamps, wing and aero, skirts and fan, wake.
 - [ ] The plumes' shock diamonds and condensation mist (plumes.js). For now there's a faint haze cone per firing
