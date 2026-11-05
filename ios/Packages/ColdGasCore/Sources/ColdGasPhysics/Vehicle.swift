@@ -44,7 +44,7 @@ public final class NozzleV { public let spec: Nozzle; public let pos: V3, dir: V
     init(_ n: Nozzle) { spec = n; pos = V3(n.pos.0, n.pos.1, n.pos.2); dir = V3(n.dir.0, n.dir.1, n.dir.2); torque = M3.cross(V3(), pos, dir) } }
 public let NOZZLES: [NozzleV] = NOZZLE_SPEC.map(NozzleV.init)
 public let WHEELS: [V3] = wheelAnchors().map { V3($0.0, $0.1, $0.2) }
-let TRIM: [Double] = {
+public let TRIM: [Double] = {
     let lift = NOZZLE_SPEC.filter { $0.group == "lift" }
     let f = lift.first { $0.pos.2 > 0 }!, b = lift.first { $0.pos.2 < 0 }!
     let mf = f.max * f.pos.2, mr = -b.max * b.pos.2

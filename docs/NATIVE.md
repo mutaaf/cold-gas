@@ -155,6 +155,53 @@ What it took (keep it so as the C API grows):
   3. Compare engine outputs, not just the car's state: the engine's answer is only used while the hull touches
      something, so it can drift unseen before then.
 
+### Phase 2 so far (0153, in progress)
+
+The Show draws natively, from the web's own stage:
+- The Wall, its truss and LED edges, the searchlights, the parked row, the pad and its paint, the roadster: 20,554 +
+  50,498 triangles and 17 canvas textures, from `COURSE_BUILDERS`.
+- The run is flown by the Swift sim (`-replay ref-show`; 128 ms on the phone) and drawn between its ticks. The parked
+  bodies are posed from the sim.
+- The look:
+  - three.js's **AgX** tone mapping, line for line (it's what keeps the floodlit slab from blowing out under the
+    web's physically based light intensities, up to 10,000 cd);
+  - the course's spot and point lights;
+  - a key-light shadow map;
+  - the web's ShaderMaterial effects recomputed natively (the beams, the glow decals, the spill);
+  - alpha-mapped contact shadows.
+- MetalFX spatial upscaling, a resolution governor and a thermal cap.
+
+Not yet at budget. On the iPhone 15 Pro Max the full stage took **GPU ≈ 12 ms at render scale 0.5** against 8.3 ms:
+the governor floors and the frame still misses. So the cost isn't pixels. Later runs were taken at thermal state
+"serious" (back-to-back benches heated the phone), so they don't count.
+- `-bench` now prints the thermal state, and `-gpu-skip <pass,…>` / `-scale <s>` pin the frame for attribution.
+- Per-pass command buffers overlap on the queue, so their times aren't additive.
+- **Next:**
+  1. Measure a cool phone with Xcode's GPU frame capture, or `MTLCounterSampleBuffer` stage timestamps.
+  2. Cull the 1500 m floor and the beams to the view.
+  3. Cut the shadow map to the car's neighbourhood and redraw it only when something in it moves.
+  4. Bloom.
+  5. Port the director's rigs.
+### Live play: the same log from the same touches (0161, 2026-11-04)
+
+`LiveRun` (ColdGasPhysics/Live.swift; its header is the app's API) flies a run tick by tick: one-thumb or classic touch,
+the Wall's fan and the release, the input log, then the aftermath. `npm run vectors` writes `input/*.json`: 15 scripted
+fingers pressing the page's own controls (src/input.js and src/onethumb.js through scripts/vectors-dom.mjs, the least
+DOM that binds them; wallAssist and noteRelease are copied into vectors-lib.mjs because main.js can't load in Node).
+`LiveInputTests` replays the same touches and must match the log entry for entry, a state hash every 24 ticks, the
+telemetry, the card, the sight (`predict` + `markOffset`) and the aftermath to rest.
+- **The one deliberate difference.** Easy's slide catch uses `DMath.datan2` where driving.js uses `Math.atan2`, which
+  isn't the same to the bit (0.12 % of inputs, an ulp, on Node 25 arm64). It's quantised to hundredths before it counts.
+- **Not ported (unscored or display only):** replay frames (`recordFrame`, phase 2), `steadyStatus`, AI drive, Easy's road
+  aids, the reverse, `applyGround`, the nozzle pad's chords and the keys' valve ramp (the app supplies valve values),
+  `heightAboveSurface`. The keyboard and gamepad channels in `InputSampler` are ported but no vector drives them yet.
+- **Don't name a module-level constant what ColdGasCore already exports** (LESSONS, 0161).
+
+### On a cool phone (2026-11-04, Release, iPhone 15 Pro Max)
+The whole Show, 10 s: 1,193 frames, presentation p95 8.34 ms, 5 hitches, CPU avg 0.75 ms, GPU avg 6.08 ms, p95 6.54 ms, 0
+compiles after launch, thermal 0. The governor settles at render scale 0.50 with MetalFX. The earlier 12 ms readings were a
+throttled phone: benches back to back heat it, and the numbers mean nothing above thermal state 0. The bench prints it.
+
 ### Porting rules (each one is a bug waiting to happen)
 
 | JS | Swift |
@@ -187,13 +234,18 @@ What it took (keep it so as the C API grows):
   - The film-look pass (bloom, tone mapping, grain) and the mist.
   - On the GPU as compute: the plumes (shock diamonds and condensation), and the crash (sparks, chips, dust,
     debris).
+  - In practice the plumes' mist and the crash's particles run on the CPU in fixed pools, seeded as the web's, and only their instances go
+    to the GPU (`Plumes.swift`, `Crash.swift`, `Debris.swift`, 0159). Attribution: `-fx-log` (the mist's fragments per frame) and
+    `-gpu-skip plumes,mist,beams`. Debug shots on a loaded Mac: `-holds <sim times>`, `-fx-cam rear|front|top`, `-replay <absolute path>`.
 - **Anti-aliasing.** 4× MSAA in memoryless tile memory. It's cheap on Apple GPUs, and it fixes what SMAA couldn't:
   - The sub-pixel lamp strips that flicker through the bloom (LESSONS 0037, "Sub-pixel emissive geometry").
   - Keep the `sliver()` minimum-width idea for strips under a pixel.
 - **MetalFX** upscaling at the resolution floor.
 - **Meshes from the JS, never redrawn by hand.**
-  - `npm run meshes` runs the procedural generators (`cars.js`, `parked/`, `wall.js`, `courses.surface()`) in
-    Node and writes one binary mesh file per object.
+  - `scripts/native-stage.mjs` runs the web's own builders (scene.js `COURSE_BUILDERS`, `roadster.js`) in headless Chromium (the real canvas draws the procedural textures) and writes the stage, the parked row, the car, the lights and the textures (0153). It replaced the spike's
+    `scripts/meshes.mjs` (the car alone, in Node, with the canvas stubbed out).
+  - What the car moves or lights on its own, and what a crash throws off it, are separate parts in their own frames (`carParts`, 0159);
+    the body keeps the merged skin the dents push in. The app recomputes each part's pose and lamp level from roadster.js (`CarState.swift`).
   - The JS stays the only source of the car and the row. A mesh changes when its generator changes.
 - **Shaders.**
   - Every pipeline is built **at launch, off the main thread, for the real pixel formats** (LESSONS 0046: compile
@@ -241,8 +293,9 @@ too.
   - **The fold isn't in the middle of the safe area.** Halving the safe width puts the gutter 42 pt off the crease.
   - Pick the fold region by its shape; the array order isn't documented.
 - **Layouts:**
-  - **Book:** the scene fills the leading panel. The HUD instruments, landing tape and valve pad go on the
-    trailing panel. Nothing draws across the hinge.
+  - **Open (book or flat):** the scene runs edge to edge across the whole inner display, with the HUD and controls
+    over it inside the safe area (the owner, 2026-11-04: "in open mode we need the edge to edge display used in full
+    screen mode"). This replaces the first plan, a scene panel and a controls panel with nothing across the hinge.
   - **Tabletop:** the scene above the fold, the controls below, like a handheld console. It's the same split
     `src/fold.js` already makes for a horizontal fold.
   - **Closed:** the phone layout, with the one-thumb pad.
@@ -424,6 +477,16 @@ ios/
   with a 27.1+ SDK build earns the "Made for iPhone Duo" badge.
 - **TestFlight's `whatsNew` rejects emoji.**
 - **Submitting** to TestFlight's external group or to review happens **only on a fresh yes from the owner in chat.**
+- **The tooling (0157).** `ios/scripts/` has moon-club's `asc.mjs`, `testflight.sh`, `provision.sh` and
+  `check-rules.sh`, adapted. The key config is the owner's `ios/.env.testflight` (gitignored; a copy of moon-club's)
+  or `ASC_ENV=<file>`.
+  - `make rules`, `make archive` (Release archive + App Store export, no upload), `make validate`,
+    `make testflight` (uploads; internal group only) and `make store-check`.
+  - The distribution certificate is the team's one in `~/.appstoreconnect/signing`, shared with moon-club. The App
+    Store profile is "Cold Gas App Store".
+  - The listing lives in `ios/store/`: texts, `listing.json`, `age-rating.json`, `app-privacy.md` (set by hand),
+    `review-notes.txt`, `review-reply.md` (the 2.1 answers) and a draft privacy policy.
+  - `node scripts/asc.mjs status` reports what exists without changing anything.
 
 ## 10 · Phases (each ends at a gate; tickets in docs/backlog)
 
@@ -432,7 +495,7 @@ ios/
 | 0 | **Spike** (0146 vectors, 0147 determinism, 0148 first frame) | `dmath` and one `vehicle.step` slice bit-identical on macOS, Linux and an iPhone; native Rapier matches the WASM build over the vectors; the exported roadster draws at 120 Hz on the Duo simulator |
 | 1 | **Core** ✅ (0152) | All of the sim plus the scorer in Swift; every vector bit-exact; 32 of 32 naive players land; 0 B/tick |
 | 2 | **The Show drawn** | Course, car, plumes, mist, director; binary archive (no compile in a run); the governor; p95 ≤ 8.3 ms on the simulator bench |
-| 3 | **Playable + haptics** (0149) | Touch (one-thumb, classic), tilt, pad, keyboard; the HUD; audio; the full haptic track; a newcomer lands on Assist |
+| 3 | **Playable + haptics** (0149, 0161, 0162) ✅ first cut | Touch (one-thumb, classic), tilt, pad, keyboard; the HUD; audio; the full haptic track; a newcomer lands on Assist |
 | 4 | **Results** | Judges streaming, the theatre, the receipt, the board (post with telemetry), medals, the daily jump, challenge payloads, share |
 | 5 | **The Wall and the Lineup** | Both courses, drills, the coach, replays |
 | 6 | **Duo and Pro Max pass** | Layout tests in every pose; hardware pass (120 Hz held, haptics felt, fold mid-run) |

@@ -22,7 +22,8 @@ shoot() { # <sim> <name> [args…]
   ready "$id" frame
   t 30 xcrun simctl io "$id" screenshot --display=primary "$OUT/$name.png" >/dev/null 2>&1
 }
-for DEV in "iPhone Duo" "iPhone 18 Pro Max"; do
+# Our own simulators (another project shares the stock "iPhone Duo"; `make sims` creates these).
+for DEV in "ColdGas Duo" "ColdGas Pro Max"; do
   ID=$(id_of "$DEV"); [ -n "$ID" ] || { echo "no simulator $DEV"; continue; }
   xcrun simctl boot "$ID" 2>/dev/null || true
   t 240 xcrun simctl bootstatus "$ID" -b >/dev/null
@@ -30,7 +31,7 @@ for DEV in "iPhone Duo" "iPhone 18 Pro Max"; do
   t 180 xcrun simctl install "$ID" "$APP"
   TAG=$(echo "$DEV" | tr ' ' '_')
   shoot "$ID" "$TAG"
-  if [ "$DEV" = "iPhone Duo" ]; then
+  if [ "$DEV" = "ColdGas Duo" ]; then
     shoot "$ID" "${TAG}-book" -window 951x669 -pose book
     shoot "$ID" "${TAG}-tabletop" -window 669x951 -pose tabletop
     t 20 xcrun simctl io "$ID" screenshot --display=primary-1 "$OUT/${TAG}-inner.png" >/dev/null 2>&1

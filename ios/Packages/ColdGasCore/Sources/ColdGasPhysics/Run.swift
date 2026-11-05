@@ -70,6 +70,11 @@ public final class Run {
     public var tick = 0
     public var flippedTicks = 0, airTicks = 0, offTicks = 0, hang = false
     public var gWin = [Double](repeating: 0, count: G_WIN), gSum = 0.0, hWin = [Double](repeating: 0, count: G_WIN)
+    /// [tick, 23 channels in hundredths] whenever the quantised input changes (stepRun; Live.swift). simulate() sets it to the log it replayed.
+    public internal(set) var inputLog: [[Int]] = []
+    var lastPacked = [Int](repeating: 0, count: 23), hasPacked = false
+    /// Armed (armAftermath) before the run ends, finish() keeps the world for the aftermath (Live.swift).
+    public internal(set) var after: Aftermath? = nil
     public let t: Telemetry
     init(_ courseId: String) {
         let c = COURSES[courseId] ?? COURSES[DEFAULT_COURSE]!
@@ -224,7 +229,9 @@ func advance(_ run: Run, _ input: Input) throws {
 func finish(_ run: Run, _ reason: String) {
     run.phase = .done
     closeBook(run, run.t, reason)
-    run.car.world.free()
+    // The engine's memory back, unless the run is armed for its aftermath (a live run): then the world steps on
+    // until the car is at rest (aftermathStep, Live.swift), and frees it then.
+    if run.after == nil { run.car.world.free() }
 }
 func closeBook(_ run: Run, _ t: Telemetry, _ reason: String) {
     let c = run.car
@@ -245,15 +252,20 @@ func closeBook(_ run: Run, _ t: Telemetry, _ reason: String) {
 /// `onTick(run)` sees every tick, as simulate's does in the JS (the vectors' trace reads it).
 @discardableResult
 public func simulate(_ inputLog: [[Int]], _ courseId: String = DEFAULT_COURSE, maxTicks: Int = MAX_TICKS, onTick: ((Run) -> Void)? = nil) throws -> Run {
+    try simulateReading(inputLog, courseId, maxTicks: maxTicks) { r, _ in onTick?(r) }
+}
+/// simulate, with the tick's input as well: the JS's `onTick(run, inp)` (the coach reads it, Coach.swift).
+func simulateReading(_ inputLog: [[Int]], _ courseId: String, maxTicks: Int = MAX_TICKS, onTick: (Run, Input) -> Void) throws -> Run {
     let run = createRun(courseId)
     let inp = Input()
     var li = 0
     while run.phase != .done && run.tick < maxTicks {
         while li < inputLog.count && inputLog[li][0] <= run.tick { unpack(inputLog[li], inp); li += 1 }
         try advance(run, inp)
-        onTick?(run)   // after the whole tick, the end decided (as the JS's simulate)
+        onTick(run, inp)   // after the whole tick, the end decided (as the JS's simulate)
     }
     if run.phase != .done { finish(run, "timeout") }
+    run.inputLog = inputLog
     return run
 }
 #endif

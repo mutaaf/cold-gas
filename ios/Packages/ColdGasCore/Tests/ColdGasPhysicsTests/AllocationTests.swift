@@ -26,5 +26,29 @@ import Testing
         }
         #expect(b - a <= w.2, "live blocks grew by \(b - a) over ticks \(w.0)–\(w.1) (\(Double(end.size_in_use) - Double(start.size_in_use)) bytes)")
     }
+
+    // 0154: a live tick (the controls sampled, the fan, the log) adds nothing either, past one array per input-log entry,
+    // which is the one thing it is meant to keep (as the JS's logEntry does).
+    @Test(arguments: ["thumb-show-aim", "touch-show-assist"])
+    func aLiveTickAllocatesNothing(_ name: String) throws {
+        #if DEBUG
+        return   // only meaningful optimised (see above)
+        #endif
+        let v = InputVector(name)
+        // The touches, parsed before the run so the measured window holds only what the app does per tick.
+        let events = Dictionary(grouping: v.events) { $0[0] as! Int }
+        let live = LiveRun(course: v.course, tier: FlyTier(rawValue: v.tier)!, oneThumb: v.scheme == "thumb", level: DriveLevel(rawValue: v.level)!)
+        var s = malloc_statistics_t(), e = malloc_statistics_t()
+        var a = 0, b = 0, logA = 0, logB = 0, evs = 0
+        while live.run.phase != .done && live.run.tick < 2400 {
+            let t = live.run.tick
+            if t == 600 { malloc_zone_statistics(nil, &s); a = Int(s.blocks_in_use); logA = live.run.inputLog.count }
+            if let es = events[t] { for x in es { apply(x, live); if t >= 600 { evs += 1 } } }
+            try live.tick()
+        }
+        malloc_zone_statistics(nil, &e); b = Int(e.blocks_in_use); logB = live.run.inputLog.count
+        let extra = b - a - (logB - logA)
+        #expect(extra <= 8 + evs, "\(name): live blocks grew by \(b - a) over 1,800 live ticks, \(logB - logA) of them log entries, \(evs) touches")
+    }
 }
 #endif

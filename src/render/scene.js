@@ -144,7 +144,7 @@ function ramp() {
 // the slab, which the key light's shadow map is too coarse and too directional to give). One
 // texture, drawn as a decal over the slab and its paint.
 let blobTex = null;
-function blobMaterial(opacity) {
+export function blobMaterial(opacity) {
   if (!blobTex) {
     const c = document.createElement('canvas'); c.width = c.height = 128;
     const x = c.getContext('2d'), g = x.createRadialGradient(64, 64, 0, 64, 64, 64);
@@ -343,6 +343,8 @@ function* buildShow(tier) {
 
 export const COURSE_IDS = ['show', 'wall', 'lineup'];
 const BUILDERS = { show: buildShow, wall: buildWall, lineup: function* (tier) { yield buildLineup(tier); } };
+// The same builders, for the native app's exporter (scripts/native-stage.mjs: one source for the stage, docs/NATIVE.md §4).
+export const COURSE_BUILDERS = BUILDERS;
 
 // Hand the main thread back (input, the title's CSS animation, a paint) between slices of work.
 const nextTask = () => (globalThis.scheduler?.yield ? globalThis.scheduler.yield() : new Promise((r) => setTimeout(r, 0)));

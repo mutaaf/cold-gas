@@ -14,7 +14,9 @@ settings:
     DEVELOPMENT_TEAM: Z73865R687
     CODE_SIGN_STYLE: Automatic
     SWIFT_VERSION: "5.0"
-    MARKETING_VERSION: "0.1.0"
+    # A new MARKETING_VERSION needs release-notes/<version>.md (make rules). The build number is a UTC timestamp,
+    # set by scripts/testflight.sh at archive time.
+    MARKETING_VERSION: "1.0.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
   ColdGas:
@@ -22,8 +24,8 @@ targets:
     platform: iOS
     sources:
       - path: ColdGas
-        excludes: ["Resources/Meshes/*.json", "Resources/Meshes/*.bin"]
-      - path: ColdGas/Resources/Meshes
+        excludes: ["Resources/Stages/**"]
+      - path: ColdGas/Resources/Stages
         type: folder
         buildPhase: resources
       - path: Packages/ColdGasCore/Tests/Vectors/dmath.json
@@ -45,6 +47,8 @@ targets:
         product: ColdGasPhysics
       - package: ColdGasCore
         product: ColdGasLayout
+      - package: ColdGasCore
+        product: ColdGasClient
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mutaafaziz.coldgas
@@ -60,3 +64,22 @@ targets:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
           SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+  ColdGasUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [ColdGasUITests]
+    dependencies:
+      - target: ColdGas
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mutaafaziz.coldgas.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+schemes:
+  ColdGas:
+    build:
+      targets:
+        ColdGas: all
+        ColdGasUITests: [test]
+    test:
+      targets: [ColdGasUITests]

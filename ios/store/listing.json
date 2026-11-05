@@ -1,0 +1,15 @@
+{
+  "name": "Cold Gas",
+  "supportUrl": "https://mutaafaziz.com/coldgas",
+  "marketingUrl": "https://mutaafaziz.com/coldgas",
+  "privacyPolicyUrl": "https://mutaafaziz.com/coldgas/privacy",
+  "copyrightHolder": "Mutaaf Aziz",
+  "categories": {
+    "primary": "GAMES",
+    "primarySubcategories": ["GAMES_RACING", "GAMES_SIMULATION"],
+    "secondary": null
+  },
+  "contentRights": "DOES_NOT_USE_THIRD_PARTY_CONTENT",
+  "price": "free",
+  "usesIdfa": false
+}

@@ -1,0 +1,29 @@
+No sign-in and no demo account: there are no accounts. Every course and tier plays at once, and the game plays offline. Only the board and the judges' commentary need a network connection.
+
+WHAT IT IS
+A single stunt jump, made into a skill game, for anyone who likes driving and physics games. A roadster climbs a curved wall on suction, lets go upside down, fires ten cold-gas thrusters to clear a row of parked cars, and lands on a mark. Three judges score the jump.
+
+HOW TO PLAY (about a minute)
+1. Launch the app and tap Fly The Show. A new player starts on Assist with the one-thumb control.
+2. After the countdown, hold the round pad to climb. The car slows and stops on the ledge by itself. Letting go brakes.
+3. On the ledge, tap the pad once to let go. The car drives out to the lip and pushes off.
+4. Hold the pad again to land. The flight computer rolls the car out and brakes onto the mark. Sliding the held thumb moves the touchdown point.
+5. The results show the score, the three judges and their commentary, with buttons to post, fly again or go home.
+Pro (you fly the roll and the brake with a stick and buttons) and Advanced (all ten valves by hand) are on the title screen. A paired game controller or a hardware keyboard also works. The results have a Watch it button that plays the flight back. Practice, the board, How to play and Settings are the icons at the top of the title screen.
+
+iPHONE DUO
+Opened flat the game fills the whole inner display. Half folded in tabletop, the top half is the screen and the bottom half is the controller. Closed, it plays on the outer screen.
+
+THE BOARD
+After a run the player can post it to a public board of the day's and all-time best landings. The only thing the player types is three letters (A to Z) as initials. There is no other text, no profile, no chat and no messaging. The app never sends a score: it sends the run's input log and telemetry, and our server scores them with the same deterministic scorer the game uses. Objectionable initials are filtered in the app; touching and holding a row hides it on the device or reports it by email.
+
+THE JUDGES
+The numbers come from a fixed scorer. The short commentary under them is written by an AI model on our own server (mutaafaziz.com). It receives the run's numbers, never anything about the player. If it can't answer, the app shows local lines and says so.
+
+NETWORK AND DATA
+The app talks to one host, mutaafaziz.com/coldgas, and to no third-party SDK, analytics or advertising service. It sends the run (input log, telemetry, course, flight tier) when judging or posting, and the three initials when posting. No accounts, no advertising identifier, no tracking.
+
+CONTENT AND RIGHTS
+Everything in the app is original: the cars, courses, sounds and art are our own design, and the sounds are synthesised in code. No real brand, vehicle model, logo or person appears. The typefaces are Michroma and Geist, both under the SIL Open Font License 1.1. The physics engine is Rapier, under the Apache License 2.0.
+
+There are no in-app purchases, no ads, no gambling and no loot boxes, and the app is the same in every region.

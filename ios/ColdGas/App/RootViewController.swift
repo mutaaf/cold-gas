@@ -3,6 +3,7 @@
 // FoldModule: "skipping it because nothing changed would stop the passes that tell us something did").
 // The hinge angle drives effects only (here: the stage light warms as the phone opens), never layout.
 import UIKit
+import SwiftUI
 import ColdGasLayout
 import ColdGasCore
 
@@ -10,6 +11,10 @@ final class RootViewController: UIViewController {
     private let stage = StageView()
     private let container = UIView()
     private let controls = ControlsPanel()
+    private let layoutModel = LayoutModel()
+    private lazy var ui = UIHostingController(rootView: RootUI(layout: layoutModel))
+    /// The bench, the shots of a recorded run and the haptics demo keep the spike's panel; everything else is the game.
+    private let tool = Launch.bench || Launch.value("-replay") != nil || Launch.args.contains("-haptics")
     private let foldBand = UIView()
     private var hingeInteraction: AnyObject?
     private(set) var layoutNow: FoldLayout?
@@ -29,6 +34,17 @@ final class RootViewController: UIViewController {
         attachHinge()
         controls.isUserInteractionEnabled = true
         controls.addGestureRecognizer(UITapGestureRecognizer(target: self, action: #selector(cycleHaptics)))
+        if !tool {
+            controls.isHidden = true
+            addChild(ui)
+            ui.view.backgroundColor = .clear
+            ui.safeAreaRegions = []   // the fold layout already placed every panel inside the safe area
+            container.addSubview(ui.view)
+            ui.didMove(toParent: self)
+            Game.shared.stage = stage
+            Game.shared.showTitleLoop()
+            if Launch.args.contains("-play") { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { Game.shared.play() } }
+        }
     }
 
     override func viewDidLayoutSubviews() {
@@ -61,7 +77,12 @@ final class RootViewController: UIViewController {
             controls.frame = l.controls.cg
             controls.spread = l.spread
             foldBand.frame = l.fold?.cg ?? .zero
-            foldBand.isHidden = l.fold == nil
+            foldBand.isHidden = l.spread != .rows   // open (full): the crease is screen; tabletop: the band between screen and controller
+            ui.view.frame = CGRect(origin: .zero, size: size)
+            layoutModel.spread = l.spread
+            layoutModel.scene = l.scene.cg
+            layoutModel.controls = l.controls.cg
+            layoutModel.safe = EdgeInsets(top: safe.top, leading: safe.left, bottom: safe.bottom, trailing: safe.right)
             print("LAYOUT \(Int(size.width))x\(Int(size.height)) \(l.spread.rawValue) scene \(l.scene) controls \(l.controls) fold \(l.fold.map(\.description) ?? "-")")
         }
     }

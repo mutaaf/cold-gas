@@ -3,7 +3,8 @@
 // picked from the same facts, so the game never waits on the network.
 import { postRetry, fetchWithDeadline } from './net.js';
 
-const API = `${import.meta.env.BASE_URL}api`;
+// `?.`: Node (scripts/vectors-lib.mjs, the native port's goldens) imports the local lines with no Vite env.
+const API = `${import.meta.env?.BASE_URL ?? '/coldgas/'}api`;
 // The server scores the run from its telemetry (no replay: a few ms), but a 503 is retried twice: give it
 // room, never leave "Posting…" up forever.
 const POST_MS = 15_000, BOARD_MS = 8000;

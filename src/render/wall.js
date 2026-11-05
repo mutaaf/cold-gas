@@ -416,6 +416,7 @@ function searchlights(tier) {
     pivot.add(lens);
     g.add(pivot);
     beams.push({ pivot, tilt, lean, phase: i * 1.7, speed: 0.11 + (i % 3) * 0.03 });
+    pivot.userData.sweep = { tilt, lean, phase: i * 1.7, speed: 0.11 + (i % 3) * 0.03 };   // scripts/native-stage-page.js
   });
   return {
     group: g,

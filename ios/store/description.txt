@@ -1,0 +1,26 @@
+One jump, made playable. A roadster climbs a curved wall on suction, lets go upside down, fires ten cold-gas thrusters to clear a row of parked cars and lands on the mark. Three judges score it.
+
+THE JUMP
+The physics is a deterministic rigid-body sim at 240 ticks a second: raycast suspension, tyre grip, ten nozzles that run their tank down, and a flight computer. The same inputs always fly the same jump, on the phone and on the web.
+
+THREE WAYS TO FLY
+- Assist: one thumb. Hold to climb, tap to let go, hold to land. The computer rolls you out and brakes, and a slide of your thumb aims the touchdown.
+- Pro: a stick and buttons. You fly the roll and the landing yourself.
+- Advanced: all ten valves by hand.
+A game controller or a keyboard works too.
+
+THREE COURSES
+The Show, the Wall and the Lineup, with drills for each part of the flight and a coach that names what cost you points.
+
+SCORED, NOT GUESSED
+The judges' numbers come from a fixed scorer: height, rotation, clearance, sink rate at touchdown, wheel sync, distance from the mark and gas left in the tank. The commentary is written by an AI panel; the numbers never are.
+
+COME BACK FOR
+- A new daily jump with its own target, and a streak.
+- Medals, and a board of the day's and all-time best landings, posted under three initials.
+- Challenge a friend with a link to the same jump.
+
+MADE FOR THE PHONE IN YOUR HAND
+Drawn in Metal, up to 120 Hz on ProMotion iPhones. On iPhone Duo it fills the whole screen when open; in tabletop the top half is the screen and the bottom half the controller. Landings you feel through Core Haptics. Sound and haptics can each be turned down or off.
+
+No accounts, no ads, no in-app purchases and no tracking. An independent game: every car, course and sound is our own design.

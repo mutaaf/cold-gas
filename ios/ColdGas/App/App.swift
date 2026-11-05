@@ -6,6 +6,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         setvbuf(stdout, nil, _IOLBF, 0)   // the scripts read stdout through a pipe: one line at a time
         Ready.clear()
+        Theme.registerFonts()
         return true
     }
     func application(_ application: UIApplication, configurationForConnecting connectingSceneSession: UISceneSession, options: UIScene.ConnectionOptions) -> UISceneConfiguration {
