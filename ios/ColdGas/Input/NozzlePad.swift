@@ -57,10 +57,11 @@ final class NozzlePadView: UIView {
         onValves?(v)
         setNeedsDisplay()
     }
-    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool { padAt(point) >= 0 || !touchesOn.isEmpty }
+    override func point(inside point: CGPoint, with event: UIEvent?) -> Bool { padAt(point) >= 0 }
     override func touchesBegan(_ ts: Set<UITouch>, with e: UIEvent?) {
+        InputLag.note(e)
         for t in ts { touchesOn[ObjectIdentifier(t)] = padAt(t.location(in: self)) }
-        UISelectionFeedbackGenerator().selectionChanged()
+        PressHaptics.slide()
         recompute()
     }
     override func touchesMoved(_ ts: Set<UITouch>, with e: UIEvent?) {

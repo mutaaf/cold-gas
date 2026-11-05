@@ -1,3 +1,9 @@
+CHANGED SINCE THE 5 NOVEMBER REJECTION (4.3, 4.2.6)
+Our answers to your nine questions are in the reply on that submission. This build also changes the app itself:
+- The flight controls are rebuilt so a press registers sooner, a finger can slide between buttons, and a thruster can't stick on.
+- How to play and the results sheet are redesigned: the essentials at a glance, the rest in accordions.
+- Cold Gas began as our own web game, public since October 2026 at mutaafaziz.com/coldgas, and the same physics runs in both.
+
 No sign-in and no demo account: there are no accounts. Every course and tier plays at once, and the game plays offline. Only the board and the judges' commentary need a network connection.
 
 WHAT IT IS

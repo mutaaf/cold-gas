@@ -96,7 +96,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
     private func startLink() {
         let l = CAMetalDisplayLink(metalLayer: metal)
         l.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
-        l.preferredFrameLatency = 2
+        l.preferredFrameLatency = Launch.value("-frame-latency").flatMap(Float.init) ?? 2
         l.delegate = self
         l.add(to: .main, forMode: .common)
         link = l
@@ -133,6 +133,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         r.draw(into: update.drawable, time: drawT) { gpu in b?.gpu(gpu) }
         let now = CACurrentMediaTime()
         stats.add(interval: update.targetPresentationTimestamp, cpu: (now - cpu0) * 1000)
+        InputLag.frame(target: update.targetPresentationTimestamp)
         if stats.firstFrame { Ready.mark("frame") }
         if stats.frames % 60 == 0 {
             NotificationCenter.default.post(name: .frameStats, object: String(format: "%.0f fps · %.2f ms cpu\n%d×%d px · render %.0f%% · MSAA 4× · MetalFX", stats.fps, stats.cpuAvg, Int(metal.drawableSize.width), Int(metal.drawableSize.height), r.scale * 100))
