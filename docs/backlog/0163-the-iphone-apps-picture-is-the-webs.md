@@ -51,8 +51,10 @@ Left out: the rocket's vapour vents, and a static fire's glow and steam.
 
 ## Acceptance criteria
 - [ ] Show, Wall and Lineup at 440×956 beside the web's frames at the same moments: a person calls them the same game.
-- [ ] On a cool iPhone 15 Pro Max at 120 Hz: presentation p95 ≤ 8.34 ms with GPU p95 under the frame at scale 0.5, shed 0. Nobody has run
-  this outside the simulator. `-bench -scale 0.5`, then each of `-gpu-skip env,stars,haze,wet,mirror,complex,lattice,floodbeams,glints,glows,bloom,mist`.
+- [x] On a cool iPhone 15 Pro Max at 120 Hz: presentation p95 ≤ 8.34 ms with GPU p95 under the frame at scale 0.5, shed 0. Measured 2026-11-05
+  on 179fc07, `-bench -replay ref-show -scale 0.5`, one 10 s run, thermal 0: 1194 frames, p95 8.34 ms, 4 hitches, GPU p95 7.41 ms, 0 compiles after
+  launch. A pinned scale switches the shed off, so this shows the budget holds, not the shed. Only the Show was run, and the `-gpu-skip`
+  attribution wasn't needed.
 - [ ] A hot phone or Low Power Mode drops the mirror (`LOOK shed` in the log), never the cadence.
 
 ## Test plan
