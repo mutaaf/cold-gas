@@ -257,9 +257,10 @@ struct ResultsView: View {
         let card = result.card
         VStack {
             Spacer(minLength: 8)
+            // Post and the buttons stay on screen; on a short screen or a long verdict, the details scroll above them.
             ViewThatFits(in: .vertical) {
-                sheet(card)
-                ScrollView { sheet(card) }.scrollBounceBehavior(.basedOnSize)
+                VStack(alignment: .leading, spacing: 14) { sheet(card); actions(card) }.padding(18)
+                VStack(alignment: .leading, spacing: 12) { ScrollView { sheet(card).padding(.bottom, 4) }.scrollBounceBehavior(.basedOnSize); actions(card) }.padding(18)
             }
             .glass(20)
             .frame(maxWidth: 480)
@@ -307,6 +308,10 @@ struct ResultsView: View {
                         }
                     }
                     if result.drill == nil { JudgesWordsView(result: result, model: judges) }
+                }
+    }
+    private func actions(_ card: Card) -> some View {
+                VStack(alignment: .leading, spacing: 10) {
                     PostRow(result: result, post: post)
                     VStack(spacing: 10) {
                         Button { game.retry() } label: { Text(result.drill == nil ? "Fly again" : "Again").frame(maxWidth: .infinity) }.buttonStyle(CGButton(primary: true))
@@ -322,7 +327,6 @@ struct ResultsView: View {
                         }
                     }
                 }
-                .padding(18)
     }
     private func facts(_ t: Telemetry) -> some View {
         let rows: [(String, String)] = [

@@ -45,7 +45,10 @@ final class FlightUITests: XCTestCase {
         a.buttons["Back to the score"].tap()
         XCTAssertTrue(a.buttons["Fly again"].waitForExistence(timeout: 5))
         a.buttons["Home"].tap()
-        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 10))
+        let home = a.buttons["play"].waitForExistence(timeout: 10)
+        shot("after-home")
+        if !home { print("UITREE " + a.debugDescription) }
+        XCTAssertTrue(home)
     }
 
     /// Classic on the Lineup: a pedal answers; pause, resume, restart, home.
