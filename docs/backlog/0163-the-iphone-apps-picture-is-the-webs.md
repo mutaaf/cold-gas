@@ -1,7 +1,7 @@
 ---
 id: 0163
 title: "The iPhone app's picture is the web's: the night sky, the launch complex, the lit wet slab, the row's light, bloom, the mist"
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: platform

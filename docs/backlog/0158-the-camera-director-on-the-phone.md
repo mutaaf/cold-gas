@@ -1,7 +1,7 @@
 ---
 id: 0158
 title: "The iPhone app's camera is the web's director: the rigs, the hard cuts, the lens rules, the crash cut"
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
