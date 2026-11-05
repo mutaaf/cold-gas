@@ -206,23 +206,63 @@ final class JudgesModel: ObservableObject {
     deinit { task?.cancel() }
 }
 
-struct JudgesWordsView: View {
-    let result: RunResult
+/// The judges at a glance: three scores, and a tap on one shows what that judge said. Until then, the panel's headline. Whose
+/// words these are stays on screen whichever is showing (invariant 5½). `open` lives on the sheet, which may be rebuilt as it grows.
+struct JudgePanel: View {
+    let judges: [(id: String, score: Double)]
+    let celebrate: Bool
     @ObservedObject var model: JudgesModel
+    @Binding var open: String?
+    @Environment(\.accessibilityReduceMotion) private var still
     var body: some View {
         let words = model.words
-        VStack(alignment: .leading, spacing: 8) {
-            if !words.headline.isEmpty { Text(words.headline).font(Theme.text(15, .medium)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true) }
-            line("ENGINEER", words.engineer); line("COORDINATOR", words.coordinator); line("DESIGNER", words.designer)
-            if !model.note.isEmpty { Text(model.note).font(Theme.text(11)).foregroundStyle(Theme.ink3).fixedSize(horizontal: false, vertical: true) }
-        }
-    }
-    @ViewBuilder private func line(_ who: String, _ s: String) -> some View {
-        if !s.isEmpty {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(who).font(Theme.text(9, .medium)).tracking(1.4).foregroundStyle(Theme.ink3)
-                Text(s).font(Theme.text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) { ForEach(Array(judges.enumerated()), id: \.offset) { i, j in tile(j.id, j.score, index: i) } }
+            let said = open.map { said(words, $0) } ?? words.headline
+            if !said.isEmpty {
+                Text(said).font(Theme.text(14, open == nil ? .medium : .regular)).foregroundStyle(open == nil ? Theme.ink : Theme.ink2).fixedSize(horizontal: false, vertical: true)
+            } else if open != nil {
+                Text("Still deciding.").font(Theme.text(14)).foregroundStyle(Theme.ink3)
+            }
+            if !model.note.isEmpty {
+                Text(open == nil ? "\(model.note) · Tap a judge for their call" : model.note).font(Theme.text(11)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
             }
         }
+    }
+    private func said(_ w: JudgeWords, _ id: String) -> String {
+        id == "engineer" ? w.engineer : id == "coordinator" ? w.coordinator : id == "designer" ? w.designer : ""
+    }
+    private func tile(_ id: String, _ score: Double, index: Int) -> some View {
+        let on = open == id
+        let name = JUDGE_NAMES[id] ?? id
+        return Button {
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(still ? nil : .snappy(duration: 0.2)) { open = on ? nil : id }
+        } label: {
+            VStack(spacing: 4) {
+                Text(name).font(Theme.text(10, .medium)).tracking(0.8).lineLimit(1).minimumScaleFactor(0.7)
+                    .foregroundStyle(on ? (celebrate ? Theme.auroraInk2 : Theme.bg.opacity(0.8)) : Theme.ink3)
+                Text(String(format: "%.1f", score)).font(Theme.mono(22))
+                    .foregroundStyle(on ? (celebrate ? Theme.auroraInk : Theme.bg) : Theme.ink)
+            }
+            .frame(maxWidth: .infinity, minHeight: 44).padding(.vertical, 8)
+            .background { if on && !celebrate { RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Theme.ink) } }
+            .modifier(TileField(on: on && celebrate, phase: CGFloat(index) * 190))
+            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).strokeBorder(on ? .clear : Theme.hair))
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(name.capitalized)
+        .accessibilityValue(String(format: "%.1f", score))
+        .accessibilityHint(on ? "Hide this judge's call" : "Show this judge's call")
+        .accessibilityAddTraits(on ? .isSelected : [])
+    }
+}
+
+private struct TileField: ViewModifier {
+    let on: Bool
+    let phase: CGFloat
+    func body(content: Content) -> some View {
+        if on { content.aurora(10, phase: phase) } else { content }
     }
 }

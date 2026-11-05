@@ -1,5 +1,6 @@
 # Changelog
 
+2026-11-05 · #0166 · Nothing changes on the web. In the iPhone app, How to play and the results now show the important things at a glance: Hold, Tap, Hold and your score sit in bright aurora fields, each judge's words open with a tap on their score, and the rest folds away. A crash stays plain.
 2026-11-05 · #0163 · Nothing changes on the web. The iPhone app's picture now matches the web's: the night sky and stars, the launch complex with its rocket and floodlights, the lit wet slab with its reflections, the glow, and the jets' mist. Before, it was a flat navy sky over a dark floor.
 2026-11-05 · #0158 · Nothing changes on the web. The iPhone app's camera now follows the same rules as the web's: the same shots, the same hard cuts at the same moments, and the cut to the wreck when you crash.
 2026-11-04 · #0162 · Nothing changes on the web. The iPhone app is now a game you can play: all three courses flown live on the same physics, one thumb or stick and buttons, the HUD, the sound, the haptics, the score and the judges' words, medals, the daily jump, the board and a challenge link. On an iPhone Duo it fills the whole screen when open; half folded, the top is the screen and the bottom the controller.
