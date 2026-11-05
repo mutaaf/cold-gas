@@ -1,0 +1,96 @@
+// Real touch events through the whole app (XCUITest): the path no scripted run takes, from the glass to the sim. Run on the
+// simulators and on a paired iPhone: `make uitest` (DEST=id=<udid> for a device). Nothing here posts to the public board.
+import XCTest
+
+final class FlightUITests: XCTestCase {
+    override func setUp() { continueAfterFailure = false }
+
+    private func launch(_ args: [String] = []) -> XCUIApplication {
+        let a = XCUIApplication()
+        a.launchArguments = args
+        a.launch()
+        return a
+    }
+    /// A point on the screen in fractions of its size.
+    private func at(_ a: XCUIApplication, _ x: CGFloat, _ y: CGFloat) -> XCUICoordinate {
+        a.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y))
+    }
+    private func shot(_ name: String) {
+        let s = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); s.name = name; s.lifetime = .keepAlways; add(s)
+    }
+
+    /// The Show on one thumb, by touch: hold to climb, a tap on the ledge, hold to land.
+    func testOneThumbFlightByTouch() {
+        let a = launch(["-course", "show", "-tier", "assist"])
+        let play = a.buttons["play"]
+        XCTAssertTrue(play.waitForExistence(timeout: 20))
+        play.tap()
+        sleep(3)   // the countdown
+        let pad = at(a, 0.78, 0.86)
+        pad.press(forDuration: 13)          // the run-up and the curl, onto the ledge
+        shot("on-the-ledge")
+        sleep(1)
+        pad.press(forDuration: 0.1)         // tap: let go
+        sleep(2)
+        shot("let-go")
+        pad.press(forDuration: 9)           // hold: land
+        shot("landing")
+        XCTAssertTrue(a.buttons["Fly again"].waitForExistence(timeout: 30), "the results never came up")
+        shot("results")
+        XCTAssertTrue(a.buttons["Watch it"].exists)
+        a.buttons["Watch it"].tap()
+        XCTAssertTrue(a.buttons["Back to the score"].waitForExistence(timeout: 5))
+        sleep(4)
+        shot("watching")
+        a.buttons["Back to the score"].tap()
+        XCTAssertTrue(a.buttons["Fly again"].waitForExistence(timeout: 5))
+        a.buttons["Home"].tap()
+        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 10))
+    }
+
+    /// Classic on the Lineup: a pedal answers; pause, resume, restart, home.
+    func testClassicControlsAndPause() {
+        let a = launch(["-course", "lineup", "-tier", "pro"])
+        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 20))
+        a.buttons["play"].tap()
+        sleep(3)
+        let go = a.staticTexts["GO"]
+        XCTAssertTrue(go.waitForExistence(timeout: 5), "no GO pedal")
+        go.press(forDuration: 3)
+        shot("driving")
+        a.buttons["Pause"].tap()
+        XCTAssertTrue(a.buttons["Resume"].waitForExistence(timeout: 3))
+        a.buttons["Resume"].tap()
+        a.buttons["Pause"].tap()
+        a.buttons["Restart"].tap()
+        sleep(1)
+        a.buttons["Pause"].tap()
+        a.buttons["Home"].tap()
+        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 10))
+    }
+
+    /// Every sheet opens and closes; the board loads or says it can't.
+    func testSheets() {
+        let a = launch()
+        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 20))
+        for (name, title) in [("Board", "The board"), ("How to play", "How to play"), ("Settings", "Settings")] {
+            a.buttons[name].tap()
+            XCTAssertTrue(a.staticTexts[title].waitForExistence(timeout: 5), title)
+            shot(title)
+            a.buttons["Done"].tap()
+            XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 5))
+        }
+    }
+
+    /// Leaving mid-run pauses it, with nothing held.
+    func testBackgroundPauses() {
+        let a = launch(["-course", "show", "-tier", "assist"])
+        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 20))
+        a.buttons["play"].tap()
+        sleep(5)
+        XCUIDevice.shared.press(.home)
+        sleep(2)
+        a.activate()
+        XCTAssertTrue(a.buttons["Resume"].waitForExistence(timeout: 5), "the run didn't pause")
+    }
+}

@@ -292,17 +292,18 @@ struct ResultsView: View {
                     facts(result.telemetry)
                     JudgesWordsView(result: result, model: judges)
                     PostRow(result: result, post: post)
-                    HStack(spacing: 10) {
-                        Button("Fly again") { game.retry() }.buttonStyle(CGButton(primary: true))
-                        Button("Watch it") { game.watch() }.buttonStyle(CGButton())
-                        Spacer(minLength: 0)
-                        if let u = result.challengeURL {
-                            ShareLink(item: u, message: Text(String(format: "%.1f on %@. Beat it.", card.total, COURSE_INFO.first { $0.id == result.course }?.name ?? "Cold Gas"))) {
-                                Image(systemName: "square.and.arrow.up").font(.system(size: 15))
-                            }.buttonStyle(CGButton()).accessibilityLabel("Challenge a friend")
+                    VStack(spacing: 10) {
+                        Button { game.retry() } label: { Text("Fly again").frame(maxWidth: .infinity) }.buttonStyle(CGButton(primary: true))
+                        HStack(spacing: 8) {
+                            Button { game.watch() } label: { Text("Watch it").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
+                            if let u = result.challengeURL {
+                                ShareLink(item: u, message: Text(String(format: "%.1f on %@. Beat it.", card.total, COURSE_INFO.first { $0.id == result.course }?.name ?? "Cold Gas"))) {
+                                    Image(systemName: "square.and.arrow.up").font(.system(size: 15)).frame(width: 24)
+                                }.buttonStyle(CGButton(compact: true)).accessibilityLabel("Challenge a friend")
+                            }
+                            Button { open(.board) } label: { Text("Board").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
+                            Button { game.home() } label: { Text("Home").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
                         }
-                        Button("Board") { open(.board) }.buttonStyle(CGButton())
-                        Button("Home") { game.home() }.buttonStyle(CGButton())
                     }
                 }
                 .padding(18)

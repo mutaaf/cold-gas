@@ -45,12 +45,14 @@ extension View { func glass(_ r: CGFloat = 14) -> some View { modifier(Glass(rad
 /// The web's buttons: a primary (ink on dark, inverted) and a hairline secondary. Each tap is a selection tick.
 struct CGButton: ButtonStyle {
     var primary = false
+    var compact = false
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(Theme.text(15, .medium))
             .tracking(0.3)
             .foregroundStyle(primary ? Color(red: 0.027, green: 0.035, blue: 0.051) : Theme.ink)
-            .padding(.horizontal, 20).frame(minHeight: 48)
+            .lineLimit(1).minimumScaleFactor(0.8)
+            .padding(.horizontal, compact ? 10 : 20).frame(minHeight: compact ? 44 : 48)
             .background(primary ? Theme.ink : Theme.glass, in: Capsule())
             .overlay(Capsule().strokeBorder(primary ? .clear : Theme.hair, lineWidth: 1))
             .opacity(configuration.isPressed ? 0.7 : 1)

@@ -64,3 +64,22 @@ targets:
         Debug:
           SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
           SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+  ColdGasUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [ColdGasUITests]
+    dependencies:
+      - target: ColdGas
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mutaafaziz.coldgas.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+schemes:
+  ColdGas:
+    build:
+      targets:
+        ColdGas: all
+        ColdGasUITests: [test]
+    test:
+      targets: [ColdGasUITests]
