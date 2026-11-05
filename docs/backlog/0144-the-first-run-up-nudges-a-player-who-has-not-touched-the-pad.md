@@ -1,8 +1,8 @@
 ---
 id: 0144
 title: A first run-up that has waited 4 s with no touch lets the pad breathe once
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: S
 lens: engagement
 created: 2026-11-04
@@ -37,3 +37,5 @@ is gone; second run asserts it never appears.
 
 ## Out of scope
 Sound, vibration, text changes, any pause or timer on the run.
+
+GROOMED 2026-11-05: promoted to ready, P1. Human funnel 2026-11-01..04: 6 visit-new, 9 run; 4 of 6 visits (11-01, 11-03, 11-04 x2) show no run. The first seconds of the first run are the funnel step it moves (run-landed / retry).
