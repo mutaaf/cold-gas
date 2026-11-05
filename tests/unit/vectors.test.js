@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { buildVectors, runVector, runList, inputList, flat, hex, unhex, xorshift, VECTOR_DIR, dmathVectors, HAPTIC_RUNS } from '../../scripts/vectors-lib.mjs';
+import { buildVectors, runVector, runList, inputList, flat, hex, unhex, xorshift, VECTOR_DIR, dmathVectors, HAPTIC_RUNS, schemeFor } from '../../scripts/vectors-lib.mjs';
 import { simulate, SIM_VERSION } from '../../src/sim/run.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { dsin } from '../../src/sim/dmath.js';
@@ -35,7 +35,7 @@ describe('native vectors (0146)', () => {
     const files = buildVectors();
     const stale = Object.keys(files).filter((p) => { try { return files[p] !== disk(p); } catch { return true; } });
     expect(stale, 'stale vectors: run `npm run vectors` and commit (docs/NATIVE.md §3)').toEqual([]);
-  }, 120000);
+  }, 300000);
   it("a run vector's card is scoreRun's card for the same log, and the live flight replays to the same end", () => {
     for (const name of ['ref-lineup', 'naive-wall-4-0.5-0.6', 'pro-fuzz-1']) {
       const r = runList().find((x) => x.name === name), log = r.log();
@@ -77,9 +77,23 @@ describe('native vectors (0146)', () => {
     expect(z[0]).toBe('z');
     expect((await decodeChallenge(z)).log).toEqual(a.log);
   });
+  // 0160: main.js can't load in Node, so coach.json's scheme is the mirror in vectors-lib: pinned to the line it mirrors.
+  it("coach.json's pointerCtx mirror says what main.js says, and the coach's findings are all exercised", () => {
+    const main = readFileSync('src/main.js', 'utf8');
+    expect(main).toContain("device === 'touch' && touchSet.scheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic'");
+    expect(schemeFor('touch', 'thumb', 'show', 'assist')).toBe('thumb');
+    const c = JSON.parse(disk('coach.json'));
+    expect(c.simVersion).toBe(SIM_VERSION);
+    expect(c.flights.length).toBe(runList().length + inputList().length);
+    expect(c.drills.length).toBe(33);
+    const ids = new Set([...c.rows.flatMap((r) => r[3]), ...c.drills.flatMap((d) => [...d.thumb, ...d.classic])].map((it) => it[0]));
+    // Every finding but two: 'fell-off' (off the deck with no air at all) and 'flipped' (on its roof with nothing else
+    // to say) took more search than their two fixed strings are worth. Coach.swift's were checked against coach.js's.
+    expect([...ids].sort()).toEqual(['clean', 'early-release', 'gas', 'late-brake', 'late-land', 'late-roll', 'mark', 'no-brake', 'no-release', 'no-roll', 'over-roll', 'ran-out', 'short', 'tilt']);
+  });
   it('the manifest names every file with its hash', () => {
     const m = JSON.parse(disk('manifest.json'));
     expect(m.simVersion).toBe(SIM_VERSION);
-    expect(m.files.length).toBe(runList().length + 4 + HAPTIC_RUNS.length + inputList().length);
+    expect(m.files.length).toBe(runList().length + 5 + HAPTIC_RUNS.length + inputList().length);
   });
 });

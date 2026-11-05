@@ -32,6 +32,7 @@
 //   }
 //   live.run.inputLog                   // POST this with the telemetry: the Worker re-simulates it (simulate())
 //   live.onRelease = { … }              // the release (LIFT on the deck, or the first tick in the air): buzz
+//   // a drill (Drills.swift): LiveRun(drill: try buildDrill(drill, course), tier:, oneThumb:, level:), then the same
 //   // the pad's sight, once a frame in the air (read-only on the car):
 //   //   predict(car, h, pr, land: live.thumb.landing); let mark = markOffset(car, pr, course)    // px on the pad
 //   //   h: the floor's height over what's below. The vectors (and scripts/human-phone.mjs) use jsMax(0, pos.y −
@@ -179,27 +180,65 @@ public final class LiveRun {
     public var script: [[Int]]?
     private var scriptAt = 0
 
+    /// The drill this run practises, nil on a whole run (Drills.swift).
+    public let drill: Drill?
+    /// The tick the drill handed over at (main.js run.drillStartTick), 0 on a whole run: the coach's `fromTick`.
+    public let drillStartTick: Int
+    /// A drill's own card and coaching, decided with the card and before the aftermath moves the car (main.js closeCard).
+    public private(set) var drillSnap: (result: DrillResult, coach: [CoachItem]?)?
+    private var drillEnded = false
+
     public init(course: String, tier: FlyTier = .assist, oneThumb: Bool = true, level: DriveLevel = .standard) {
         run = armAftermath(createRun(course))
         self.tier = tier; wantsThumb = oneThumb
         sampler = InputSampler(level: level)
+        drill = nil; drillStartTick = 0
+    }
+    /// A drill's run, handed over mid-flight (main.js startDrillNow and newFlight: the hand-over's released flag, and a
+    /// release that's already behind it).
+    public init(drill built: BuiltDrill, tier: FlyTier = .assist, oneThumb: Bool = true, level: DriveLevel = .standard) {
+        run = armAftermath(built.run)
+        self.tier = tier; wantsThumb = oneThumb
+        sampler = InputSampler(level: level)
+        drill = built.drill; drillStartTick = built.startTick
+        released = built.released; releaseTick = built.released ? built.startTick - 240 : -1
+    }
+
+    /// main.js closeCard.
+    private func closeCard() {
+        card = scoreRun(run.t)
+        if let drill { drillSnap = (drillResult(drill, run, card), drillCoach(drill, run)) }
+    }
+    /// A drill that ends before its run does has reached its end (the carry drill, past the row). main.js gives it half a
+    /// second more of flight, then calls endDrillMoment().
+    public var drillMoment: Bool { drill?.done?(run) ?? false }
+    /// main.js beginAftermath on a drill's moment: the card is decided here, and tick() goes on to the aftermath.
+    public func endDrillMoment() {
+        if card == nil { closeCard() }
+        drillEnded = true
+    }
+    /// What the results show (main.js finishRun): a drill's own coaching, or the coach over this run's log. Once tick()
+    /// says .rest: it flies the whole log again on the sim's scratch.
+    public func coachResult(say: CoachWords) throws -> CoachResult {
+        if let own = drillSnap?.coach { return CoachResult(items: own, flight: nil) }
+        return try coach(run.inputLog, run.course, card: card, fromTick: drillStartTick, say: say)
     }
 
     /// One 240 Hz tick: a scored tick while the run is on, then the aftermath's, then nothing.
     @discardableResult public func tick() throws -> Tick {
-        if run.phase != .done {
+        if run.phase != .done && !drillEnded {
             if let log = script {
                 while scriptAt < log.count && log[scriptAt][0] <= run.tick { unpack(log[scriptAt], input); scriptAt += 1 }
                 if noteRelease(input) { onRelease?() }
                 try stepRun(run, input)
-                if run.phase == .done && card == nil { card = scoreRun(run.t) }
+                if run.phase == .done && card == nil { closeCard() }
                 return .flew
             }
             if oneThumb { clearInput(input); thumb.sample(run, released, input, sampler.tilt) }
             else { sampler.sample(run.phase, tier, input, released, run.car) }
             wallAssist(input)
             try stepRun(run, input)
-            if run.phase == .done && card == nil { card = scoreRun(run.t) }
+            if run.phase == .done && card == nil { closeCard() }
             return .flew
         }
         if let a = run.after, !a.done { return try aftermathStep(run) ? .rest : .aftermath }

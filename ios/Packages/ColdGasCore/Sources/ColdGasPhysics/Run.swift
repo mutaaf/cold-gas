@@ -252,13 +252,17 @@ func closeBook(_ run: Run, _ t: Telemetry, _ reason: String) {
 /// `onTick(run)` sees every tick, as simulate's does in the JS (the vectors' trace reads it).
 @discardableResult
 public func simulate(_ inputLog: [[Int]], _ courseId: String = DEFAULT_COURSE, maxTicks: Int = MAX_TICKS, onTick: ((Run) -> Void)? = nil) throws -> Run {
+    try simulateReading(inputLog, courseId, maxTicks: maxTicks) { r, _ in onTick?(r) }
+}
+/// simulate, with the tick's input as well: the JS's `onTick(run, inp)` (the coach reads it, Coach.swift).
+func simulateReading(_ inputLog: [[Int]], _ courseId: String, maxTicks: Int = MAX_TICKS, onTick: (Run, Input) -> Void) throws -> Run {
     let run = createRun(courseId)
     let inp = Input()
     var li = 0
     while run.phase != .done && run.tick < maxTicks {
         while li < inputLog.count && inputLog[li][0] <= run.tick { unpack(inputLog[li], inp); li += 1 }
         try advance(run, inp)
-        onTick?(run)   // after the whole tick, the end decided (as the JS's simulate)
+        onTick(run, inp)   // after the whole tick, the end decided (as the JS's simulate)
     }
     if run.phase != .done { finish(run, "timeout") }
     run.inputLog = inputLog

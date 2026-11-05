@@ -20,6 +20,9 @@ import { localWords, boardRow, postMessage, rankLabel, LOCAL_WHY } from '../src/
 import { OBJECTIVES, EPOCH, objectiveIndex, dayKey, dayNumber, evaluate, missLine, titleHint, readStreak, streakNow, complete } from '../src/daily.js';
 import { one, both, setUnits, getUnits, localize, toUS, fmtRoad, fmtSmall } from '../src/units.js';
 import { EDGE_DEFAULT } from '../src/ai/config.js';
+import { coach, readFlight, markMiss, markCost, sinkCost, namesMark, namesBraking, KEY_WORDS } from '../src/sim/coach.js';
+import { coachWords } from '../src/pointer.js';
+import { DRILLS, drillById, buildDrill, drillResult, drillCoach } from '../src/practice.js';
 
 export const VECTOR_FORMAT = 1;
 export const VECTOR_DIR = 'ios/Packages/ColdGasCore/Tests/Vectors';
@@ -286,11 +289,13 @@ function wallAssist(run, S, input) {
   return input;
 }
 const liveInput = newInput();
-export function inputVector({ name, course, scheme, tier, level, script }) {
+export function inputVector({ name, course, scheme, tier, level, script, drill = null }) {
   dom.fresh();
   IN.setDriving({ level });
-  const run = armAftermath(createRun(course));
-  const S = { released: false, releaseTick: -1 };
+  // `drill`: flown from the drill's hand-over, as main.js startDrillNow and newFlight start one (0160).
+  const built = drill ? buildDrill(drillById(drill), course) : null;
+  const run = armAftermath(built ? built.run : createRun(course));
+  const S = { released: !!built?.released, releaseTick: built?.released ? run.tick - 240 : -1 };
   const events = [], sights = [], pr = newPrediction(), off = { x: 0, y: 0, m: 0 };
   const at = (...e) => events.push([run.tick, ...e]);
   const ctl = {
@@ -331,7 +336,7 @@ export function inputVector({ name, course, scheme, tier, level, script }) {
   }
   const a = run.after;
   return {
-    format: VECTOR_FORMAT, simVersion: SIM_VERSION, name, course, scheme, tier, level, ticks, releaseTick: S.releaseTick, endReason: run.t.endReason, final,
+    format: VECTOR_FORMAT, simVersion: SIM_VERSION, name, course, scheme, tier, level, ...(built ? { drill, drillStartTick: built.run.drillStartTick } : {}), ticks, releaseTick: S.releaseTick, endReason: run.t.endReason, final,
     after: { startTick: a.startTick, ticks: a.ticks, still: a.still, endTick: run.tick, final: hashHex(ah), state: stateOf(run).map(hex) },
     events, sights, log: run.inputLog, checks, telemetry, card,
   };
@@ -428,9 +433,39 @@ function touchScript({ climb = 4, wait = 100, carry = 7, trick = [0, 0, 0, 0], l
     }
   };
 }
+// A drill flown by hand (0160): the same fingers, from the hand-over. Counted from the tick the drill starts.
+// One thumb: a tap on the ledge if there's a ledge to tap (`tapAt`), then held from `holdAt` to the ground.
+function drillThumb({ tapAt = -1, holdAt = 40 }) {
+  return (run, S, ctl, st) => {
+    st.t0 ??= run.tick;
+    const k = run.tick - st.t0;
+    if (k === tapAt) ctl.down();
+    if (k === tapAt + 8) ctl.up();
+    if (k === holdAt) ctl.down();
+  };
+}
+// Classic: LAND from `landAt`, or Pro's LIFT by hand under `liftBelow` m; BRAKE once down. `releaseAt`: RELEASE on the ledge.
+function drillTouch({ landAt = -1, liftBelow = 0, releaseAt = -1 }) {
+  return (run, S, ctl, st) => {
+    st.t0 ??= run.tick;
+    const k = run.tick - st.t0, c = run.car;
+    const set = (b, on) => { if (!!st[b] !== on) { st[b] = on; if (on) ctl.press(b); else ctl.release(b); } };
+    if (k === 0) ctl.stick(0, 0);
+    if (run.phase === 'landed') { set('land', false); set('lift', false); set('brk', true); return; }
+    if (k === landAt) set('land', true);
+    if (releaseAt >= 0) set('lift', k >= releaseAt && k < releaseAt + 24);
+    if (liftBelow) set('lift', run.phase === 'air' && c.vel.y < -1 && c.pos.y - SPEC.comHeight < liftBelow);
+  };
+}
 
 export function inputList() {
   return [
+    // The drills, flown from their hand-over on the page's controls.
+    { name: 'drill-show-ledge-thumb', course: 'show', scheme: 'thumb', tier: 'assist', level: 'standard', drill: 'ledge', script: drillThumb({ tapAt: 30, holdAt: 300 }) },
+    { name: 'drill-wall-release-thumb', course: 'wall', scheme: 'thumb', tier: 'assist', level: 'standard', drill: 'release', script: drillThumb({ holdAt: 40 }) },
+    { name: 'drill-show-carry-thumb', course: 'show', scheme: 'thumb', tier: 'assist', level: 'standard', drill: 'carry', script: drillThumb({ holdAt: 60 }) },
+    { name: 'drill-show-land-classic', course: 'show', scheme: 'classic', tier: 'assist', level: 'standard', drill: 'land', script: drillTouch({ landAt: 12 }) },
+    { name: 'drill-wall-ledge-pro', course: 'wall', scheme: 'classic', tier: 'pro', level: 'standard', drill: 'ledge', script: drillTouch({ releaseAt: 30, liftBelow: 7 }) },
     // One-thumb on the Show: hold, tap and hold; a tap, then held again later with a flinch in the fall; the slide
     // onto the sight; a lapse mid-curl, the tilt on the run-up and a long wait on the ledge.
     { name: 'thumb-show-hold', course: 'show', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({}) },
@@ -487,14 +522,18 @@ export function buildVectors({ only } = {}) {
       files[`haptics/${r.name}.json`] = JSON.stringify(head).slice(0, -1) + ',"ticks":[\n' + ticks.map((t) => JSON.stringify(t)).join(',\n') + '\n]}\n';
     }
   }
+  const touched = [];
   for (const r of inputList()) {
     if (only && !only.includes(r.name)) continue;
-    files[`input/${r.name}.json`] = stringifyInput(inputVector(r));
+    const v = inputVector(r);
+    files[`input/${r.name}.json`] = stringifyInput(v);
+    touched.push({ name: r.name, course: r.course, log: v.log, fromTick: v.drillStartTick ?? 0 });
   }
   // The app around the sim (0154): every run is needed, so a partial build (`only`) leaves these out.
   if (!only) {
     files['challenge.json'] = lines(challengeVectors(flown));
     files['client.json'] = lines(clientVectors(flown));
+    files['coach.json'] = lines(coachVectors([...flown.map((f) => ({ ...f, fromTick: 0 })), ...touched]));
   }
   return files;
 }
@@ -708,4 +747,102 @@ export function clientVectors(flown) {
   const ranks = [1, 7, 0, -2, 1.5, null, '3'].map((x) => [x, rankLabel(x)]);
   return { format: VECTOR_FORMAT, simVersion: SIM_VERSION, numbers, fixed, telemetry, bodies, units, readouts, prose, words, localWhy: [LOCAL_WHY],
     objectives: OBJECTIVES.map((o) => [o.id, o.course, o.tier ?? null]), epoch: EPOCH, days, dayKeys, goals, daily, titles, streak, streakReads, rows, posts, ranks };
+}
+
+// --- the coach (0160) ------------------------------------------------------------------------------
+// coach.json: src/sim/coach.js, src/pointer.js coachWords and src/practice.js over the same logs the sim's vectors fly
+// (every run and input vector), with the words a phone gets. An item: [id, weight bits, title, detail, fix], in order.
+const itemRow = (it) => [it.id, it.weight === undefined ? null : hex(it.weight), it.title, it.detail, it.fix];
+const itemRows = (items) => items.map(itemRow);
+const COACH_DEVICES = ['touch', 'key', 'pad'], COACH_SCHEMES = ['thumb', 'classic'], COACH_TIERS = ['assist', 'pro', 'advanced'];
+// src/main.js pointerCtx and flownCtx's scheme, which can't load in Node (tests/unit/vectors.test.js pins the line it mirrors).
+export const schemeFor = (device, touchScheme, course, tier) => (device === 'touch' && touchScheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic');
+// What a drill's tail does after the hand-over, data the Swift test reads and flies the same way:
+// a push-off if it starts on the ledge, LAND from tick `level`, BOOST until tick `thrust`, assist 0 or 1, LIFT until tick
+// `liftHold` and below `liftBelow` m, a roll and a pitch input from `rollAt`/`pitchAt` for `rollLen`/`pitchLen` ticks.
+const TAIL = { level: -1, thrust: 0, assist: 1, liftBelow: 0, liftHold: 0, rollAt: -1, rollLen: 0, roll: 0, pitchAt: -1, pitchLen: 0, pitch: 0 };
+const DRILL_TAILS = [
+  { ...TAIL, name: 'idle' },
+  { ...TAIL, name: 'land', level: 0 },
+  { ...TAIL, name: 'boost-land', level: 90, thrust: 90 },
+  { ...TAIL, name: 'pro-late', thrust: 60, assist: 0, liftBelow: 5 },
+];
+// Flights the four above don't reach, found by search: each makes the coach say something nothing else makes it say.
+const DRILL_PROBES = [
+  ['ledge', 'show', { ...TAIL, name: 'late-roll', assist: 0, level: 150, liftBelow: 3, rollAt: 200, rollLen: 120, roll: 1, pitchAt: 200, pitchLen: 300, pitch: 1 }],
+  ['land', 'wall', { ...TAIL, name: 'over-roll', level: 200, thrust: 400, liftBelow: 8, rollAt: 120, rollLen: 500, roll: -1 }],
+  ['release', 'wall', { ...TAIL, name: 'late-land', level: 60, thrust: 400, liftBelow: 3, pitchAt: 200, pitchLen: 30, pitch: -1 }],
+  ['land', 'show', { ...TAIL, name: 'ran-out', assist: 0, liftHold: 200 }],
+  ['land', 'wall', { ...TAIL, name: 'gas', assist: 0, liftHold: 1400 }],
+];
+function tailInput(inp, run, drill, k, tail) {
+  const c = run.car;
+  Object.assign(inp, newInput());
+  inp.fan = 0; inp.assist = tail.assist;
+  if (run.phase === 'landed') { inp.brake = 1; return inp; }
+  if (!drill.released && k < 24) inp.lift = 1;
+  if (k < tail.thrust) inp.thrust = 1;
+  if (k < tail.liftHold) inp.lift = 1;
+  if (tail.rollAt >= 0 && k >= tail.rollAt && k < tail.rollAt + tail.rollLen) inp.roll = tail.roll;
+  if (tail.pitchAt >= 0 && k >= tail.pitchAt && k < tail.pitchAt + tail.pitchLen) inp.pitch = tail.pitch;
+  if (tail.level >= 0 && k >= tail.level && run.phase === 'air') inp.level = 1;
+  if (tail.liftBelow && run.phase === 'air' && c.vel.y < -1 && c.pos.y - SPEC.comHeight < tail.liftBelow) inp.lift = 1;
+  return inp;
+}
+const logHash = (log) => { const h = [0x811c9dc5, 0x9747b28c]; for (const e of log) mixState(h, e); return hashHex(h); };
+const DRILL_BEAT = 120;   // main.js: a drill's moment flies on for 0.5 s before its aftermath
+function drillVector(drill, course, tail, thumb, classic) {
+  const { run, released } = buildDrill(drill, course);
+  const startTick = run.drillStartTick, handover = stateOf(run).map(hex), prefix = { entries: run.inputLog.length, hash: logHash(run.inputLog) };
+  armAftermath(run);
+  const inp = newInput();
+  let beat = 0;
+  while (run.phase !== 'done' && beat < DRILL_BEAT) {
+    if (drill.done && drill.done(run)) beat++;
+    stepRun(run, tailInput(inp, run, drill, run.tick - startTick, tail));
+  }
+  const card = scoreRun(run.t), result = drillResult(drill, run, card), own = drillCoach(drill, run);
+  const flew = { ticks: run.tick, phase: run.phase, state: stateOf(run).map(hex), telemetry: flat(run.t), card: flat(card) };
+  const log = run.inputLog.map((e) => e.slice());
+  const after = { ticks: 0, state: null };
+  for (let done = false; !done;) done = aftermathStep(run);
+  after.ticks = run.after.ticks; after.state = stateOf(run).map(hex);
+  return {
+    drill: drill.id, course, tail, released, startTick, handover, prefix, ...flew, log: { entries: log.length, hash: logHash(log) }, after,
+    result: { pass: !!result.pass, headline: result.headline, stats: result.stats.map(([text, flag]) => [text, !!flag]) },
+    own: own && itemRows(own),
+    thumb: itemRows(coach(log, course, card, startTick, thumb).items),
+    classic: itemRows(coach(log, course, card, startTick, classic).items),
+  };
+}
+const MISS_GRID = [-30, -7.04, -0.51, -0.5, -0.49, -0.04, 0, 0.04, 0.49, 0.5, 3.25, 3.3, 12];
+export function coachVectors(logs) {
+  const words = [['KEY_WORDS', '', '', KEY_WORDS]];
+  for (const device of COACH_DEVICES) for (const scheme of COACH_SCHEMES) for (const tier of COACH_TIERS) words.push([device, scheme, tier, coachWords({ device, scheme, tier })]);
+  const ctxs = [];
+  for (const device of COACH_DEVICES) for (const scheme of COACH_SCHEMES) for (const course of ['show', 'wall', 'lineup']) for (const tier of COACH_TIERS) ctxs.push([device, scheme, course, tier, schemeFor(device, scheme, course, tier)]);
+  const misses = [['null', null, true, markMiss(null, true)]];
+  for (const along of MISS_GRID) for (const x of MISS_GRID) for (const show of [true, false]) misses.push([hex(along), hex(x), show, markMiss({ along, x }, show)]);
+  const names = [];
+  for (const padMiss of [0, 3, 7, 7.01]) for (const cost of [0, 2.9, 3]) for (const show of [true, false]) for (const drill of [true, false]) names.push(['mark', hex(padMiss), hex(cost), show, drill, namesMark(padMiss, cost, { show, drill })]);
+  for (const sink of [0.5, 1.5, 1.51, 2.9, 3, 4]) for (const cost of [0, 2.9, 3]) for (const show of [true, false]) for (const drill of [true, false]) names.push(['brake', hex(sink), hex(cost), show, drill, namesBraking(sink, cost, { show, drill })]);
+
+  const thumb = coachWords({ device: 'touch', scheme: 'thumb', tier: 'assist' });
+  const flights = [], rows = [];
+  for (const { name, course, log, fromTick } of logs) {
+    const { run, flight } = readFlight(log, course, fromTick);
+    const { t, ...read } = flight, card = scoreRun(run.t);
+    const classic = coachWords({ device: 'touch', scheme: 'classic', tier: card.tier });
+    flights.push([name, course, fromTick, hex(markCost(run.t)), hex(sinkCost(run.t)), flat(read)]);
+    const asClassic = coach(log, course, card, fromTick, classic).items;
+    rows.push([name, 'thumb', true, itemRows(coach(log, course, card, fromTick, thumb).items)]);
+    rows.push([name, 'classic', true, itemRows(asClassic)]);
+    // With no card only a clean run's words change; the keyboard's are the default.
+    if (asClassic[0].id === 'clean' || name.startsWith('ref-')) rows.push([name, 'key', false, itemRows(coach(log, course).items)]);
+  }
+  const drills = [];
+  const thumbWords = thumb, classicWords = coachWords({ device: 'touch', scheme: 'classic', tier: 'assist' });
+  for (const drill of DRILLS) for (const course of drill.courses) for (const tail of DRILL_TAILS) drills.push(drillVector(drill, course, tail, thumbWords, classicWords));
+  for (const [id, course, tail] of DRILL_PROBES) drills.push(drillVector(drillById(id), course, tail, thumbWords, classicWords));
+  return { format: VECTOR_FORMAT, simVersion: SIM_VERSION, words, ctxs, misses, names, flights, rows, drills };
 }

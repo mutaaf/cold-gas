@@ -14,6 +14,11 @@
    "bytes": 636450
   },
   {
+   "path": "coach.json",
+   "sha256": "ab9ace616b6e832048ac39a40ce2c77e67d9604dbfcd2f0266c0ee516f8ac35e",
+   "bytes": 443740
+  },
+  {
    "path": "dmath.json",
    "sha256": "e307348309742b7a84c61e54547d0826467a4272cab156119b0f80fb1e1b25db",
    "bytes": 2635471
@@ -47,6 +52,31 @@
    "path": "haptics/ref-wall.json",
    "sha256": "204a00aaa1785d18bb4e38962853c3d6becc40b32a54fd5b6becd465accafac4",
    "bytes": 163786
+  },
+  {
+   "path": "input/drill-show-carry-thumb.json",
+   "sha256": "b60167cd76070162ecae91d14d2f62ffd7a93fc2f13876da4995ed9ee5a4d428",
+   "bytes": 27478
+  },
+  {
+   "path": "input/drill-show-land-classic.json",
+   "sha256": "0e32f8cd63fcb4e5a127a513ee311580b033cc62ea9abe367dee72dfbc70bb2b",
+   "bytes": 33207
+  },
+  {
+   "path": "input/drill-show-ledge-thumb.json",
+   "sha256": "549b7e91a332198222a15b76188b4b49b0175cc5b4f1d020d3af42bf041bc42e",
+   "bytes": 27689
+  },
+  {
+   "path": "input/drill-wall-ledge-pro.json",
+   "sha256": "611b500f86bd02523837adf9ff148adc732f810a00b8fc4ea950027a16b6a3eb",
+   "bytes": 46718
+  },
+  {
+   "path": "input/drill-wall-release-thumb.json",
+   "sha256": "542be6aefb09b72450d1ac12c1f54e84734dacc4044329faf2002ddb24d88861",
+   "bytes": 40857
   },
   {
    "path": "input/thumb-show-aim.json",
