@@ -649,7 +649,8 @@ async function submit() {
   const a = await app();
   const { sv } = await storeVersion(a.id);
   if (!sv) throw new Error("No editable App Store version");
-  const open = (await api("GET", `/v1/reviewSubmissions?filter[app]=${a.id}&filter[platform]=IOS&filter[state]=READY_FOR_REVIEW&limit=5`)).data[0];
+  // A rejected version's submission stays open as UNRESOLVED_ISSUES and is the one to send again.
+  const open = (await api("GET", `/v1/reviewSubmissions?filter[app]=${a.id}&filter[platform]=IOS&filter[state]=READY_FOR_REVIEW,UNRESOLVED_ISSUES&limit=5`)).data[0];
   const subm = open ?? (await api("POST", "/v1/reviewSubmissions", { data: { type: "reviewSubmissions", attributes: { platform: "IOS" }, relationships: { app: { data: { type: "apps", id: a.id } } } } })).data;
   const items = (await api("GET", `/v1/reviewSubmissions/${subm.id}/items?include=appStoreVersion`)).data;
   if (!items.some((i) => i.relationships?.appStoreVersion?.data?.id === sv.id))
