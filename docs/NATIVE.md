@@ -182,7 +182,7 @@ the governor floors and the frame still misses. So the cost isn't pixels. Later 
   3. Cut the shadow map to the car's neighbourhood and redraw it only when something in it moves.
   4. Bloom.
   5. Port the director's rigs.
-### Live play: the same log from the same touches (0154, 2026-11-04)
+### Live play: the same log from the same touches (0155, 2026-11-04)
 
 `LiveRun` (ColdGasPhysics/Live.swift; its header is the app's API) flies a run tick by tick: one-thumb or classic touch,
 the Wall's fan and the release, the input log, then the aftermath. `npm run vectors` writes `input/*.json`: 15 scripted
@@ -195,7 +195,7 @@ telemetry, the card, the sight (`predict` + `markOffset`) and the aftermath to r
 - **Not ported (unscored or display only):** replay frames (`recordFrame`, phase 2), `steadyStatus`, AI drive, Easy's road
   aids, the reverse, `applyGround`, the nozzle pad's chords and the keys' valve ramp (the app supplies valve values),
   `heightAboveSurface`. The keyboard and gamepad channels in `InputSampler` are ported but no vector drives them yet.
-- **Don't name a module-level constant what ColdGasCore already exports** (LESSONS, 0154).
+- **Don't name a module-level constant what ColdGasCore already exports** (LESSONS, 0155).
 
 ### On a cool phone (2026-11-04, Release, iPhone 15 Pro Max)
 The whole Show, 10 s: 1,193 frames, presentation p95 8.34 ms, 5 hitches, CPU avg 0.75 ms, GPU avg 6.08 ms, p95 6.54 ms, 0
@@ -472,7 +472,7 @@ ios/
   with a 27.1+ SDK build earns the "Made for iPhone Duo" badge.
 - **TestFlight's `whatsNew` rejects emoji.**
 - **Submitting** to TestFlight's external group or to review happens **only on a fresh yes from the owner in chat.**
-- **The tooling (0154).** `ios/scripts/` has moon-club's `asc.mjs`, `testflight.sh`, `provision.sh` and
+- **The tooling (0157).** `ios/scripts/` has moon-club's `asc.mjs`, `testflight.sh`, `provision.sh` and
   `check-rules.sh`, adapted. The key config is the owner's `ios/.env.testflight` (gitignored; a copy of moon-club's)
   or `ASC_ENV=<file>`.
   - `make rules`, `make archive` (Release archive + App Store export, no upload), `make validate`,

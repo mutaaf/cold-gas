@@ -15,7 +15,7 @@ Nothing goes to an advertising network, an analytics company or a data broker.
   jump and to write the judges' commentary.
 - **Three initials, when you post to the board.** Three letters, A to Z. They are shown publicly next to the score,
   with the day it was flown. The board keeps them.
-- **A health report.** Counts of errors (with a short message that has anything that looks like a key or a token
+- **A health report, from the web game.** Counts of errors (with a short message that has anything that looks like a key or a token
   removed), how smoothly frames were drawn, which features were used (for example "a run was flown", "the board was
   opened"), the app's build, and a rough device class such as "phone, high-end". It carries no identifier, so it
   can't be tied to you or to your device. We keep daily totals for 30 days and error examples for 14.
