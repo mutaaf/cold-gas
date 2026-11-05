@@ -65,3 +65,10 @@ checks above by altitude. `setdown.test.js` and `fan.test.js` unchanged and gree
 
 ## Out of scope
 The lip height, touchdown bottoming (0017), the kickflip's own profile beyond keeping 0014's bars.
+
+## Critic note 2026-11-05
+Re-measured on production (`docs/critique/2026-11-05-0354.md` §4):
+- **Show reference (1440×900):** still `brakeG` 3.0 at `brakeH` **2.3 m**, with 12.5 m/s of sink at 6.6 m on the HUD.
+- **One-thumb Show:** peaks at **2.8 g at 8.7 m**, already inside the band this ticket asks for.
+The player's flight now looks more like the reveal than the reference does. The reference is what "Watch the
+reference" shows every new player.
