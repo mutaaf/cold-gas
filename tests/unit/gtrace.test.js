@@ -99,9 +99,10 @@ describe('brakePeakG on the results chip', () => {
 // onset and the touchdown (1.7 → 3.3 G at ≈6.5 m → 1.0 G → a 1.4 G flare). Past the row's last roof
 // LAND's altimeter used to drop 3–4 m in a tick, the ground's profile wanted twice the sink the car
 // had, and the jets went out for 0.2–0.3 s at ≈6 m on the one-thumb Show (and at the end of the
-// Lineup's row). Measured per tick (a 0.25 s mean hid it): from the brake's onset to touchdown,
-// where the onset is ≥ 1.5 g held 0.1 s while sinking > 5 m/s (the ticket's "first tick at 1.5 g"
-// would start at the roll-out's or a slide's kick, mid free fall), no span ≥ 0.08 s under 0.5 g while sinking > 2 m/s.
+// Lineup's row); a car LAND had stopped over the semi (ROOF_HOLD) fell off it with the jets out for
+// up to 0.46 s (the critic's first bounce: every "lifted, pressed again" thumb). Measured per tick (a
+// 0.25 s mean hid it), from the flight's peak sink to the wheels (LESSONS 2026-11-06: a boost off the
+// ledge reads ≥ 1.5 g mid free fall): no span ≥ 0.08 s under 0.5 g while sinking > 1 m/s.
 function burn(run, step, release) {
   const g = [], sink = [], h = [];
   while (run.phase !== 'done') {
@@ -111,22 +112,26 @@ function burn(run, step, release) {
     sink.push(-c.vel.y); h.push(c.pos.y - SPEC.comHeight);
   }
   const end = run.t.touchTick > 0 ? run.t.touchTick : run.tick, r0 = release();
-  let onset = -1;
-  for (let i = r0; i < end && onset < 0; i++) if (sink[i] > 5 && g.slice(i, i + 24).every((x) => x >= 1.5)) onset = i;
-  // The longest jets-off span while sinking > 2 m/s, and how far the sink rises again once the brake
-  // has slowed it below 9 m/s (above 1.2 m: below it the computer levels the car before the wheels).
-  let gap = 0, cur = 0, rise = 0, low = Infinity, slowed = false, held = false;
-  for (let i = Math.max(0, onset); onset >= 0 && i < end; i++) {
-    if (sink[i] < 1 && h[i] > 3) held = true;   // stopped over a roof (LAND's ROOF_HOLD)
-    cur = g[i] < 0.5 && sink[i] > 2 ? cur + 1 : 0;
+  let peak = Math.max(0, r0);
+  for (let i = peak; i < end; i++) if (sink[i] > sink[peak]) peak = i;
+  // The longest jets-off span, how far the sink rises again above its lowest since the peak (above
+  // 1.2 m: below it the computer levels the car before the wheels), whether LAND slowed the car under
+  // 4 m/s while it was still more than 4.5 m up (`slowed`: a brake toward a stop over the semi's 4.1 m roof,
+  // or a brake that finished high; either way the descent after it can only open up again), and the most
+  // it sinks from then on.
+  let gap = 0, cur = 0, rise = 0, low = Infinity, slowed = false, after = 0;
+  for (let i = peak; i < end; i++) {
+    if (sink[i] < 4 && h[i] > 4.5) slowed = true;
+    if (slowed) after = Math.max(after, sink[i]);
+    cur = g[i] < 0.5 && sink[i] > 1 ? cur + 1 : 0;
     gap = Math.max(gap, cur);
-    if (sink[i] < 9) slowed = true;
-    if (slowed && h[i] > 1.2) { low = Math.min(low, sink[i]); rise = Math.max(rise, sink[i] - low); }
+    if (h[i] > 1.2) { low = Math.min(low, sink[i]); rise = Math.max(rise, sink[i] - low); }
   }
-  return { onset, gap: gap / 240, rise, held, t: run.t, release: r0 };
+  return { peak, gap: gap / 240, rise, slowed, after, t: run.t, release: r0 };
 }
-// The one-thumb Show held from the tap (thumb-mastery.test.js's thumb), the pad slid `x` px sideways.
-function thumbBurn(x) {
+// The one-thumb Show (thumb-mastery.test.js's thumb): on the ledge 0.5 s, tap. Held from the tap, or
+// (`again` s) lifted within 0.1 s and pressed again that long after the tap; the pad slid `x` px sideways.
+function thumbBurn(x, again = -1) {
   const run = createRun('show'), th = createOneThumb();
   let released = false, ledgeT = -1, tapT = -1, release = -1;
   th.down();
@@ -135,6 +140,10 @@ function thumbBurn(x) {
     if (tapT < 0 && thumbStage(run, released) === 'ledge' && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3) {
       if (ledgeT < 0) { ledgeT = run.tick; th.up(); }
       if (run.tick === ledgeT + 120) { th.down(); tapT = run.tick; }
+    }
+    if (again >= 0 && tapT >= 0) {
+      if (run.tick === tapT + 20) th.up();
+      if (run.tick === tapT + Math.round(again * 240)) th.down();
     }
     if (x && released && run.phase === 'air' && th.held) th.move(x, 0);
     th.sample(run, released, inp);
@@ -152,35 +161,47 @@ function refBurn(course) {
     stepRun(run, inp);
   }, () => release);
 }
+// Every flight: the jets never out mid-brake, not on the row, not crashed, touchdown at or under `sinkMax`.
+// A flight LAND never slowed high: the sink only falls. One it did (typically it came over the 4.1 m roof
+// too low and too slow to pass it: from 12 m at 15 m/s with 7 m/s along the run, the stop reaches ROOF_HOLD
+// before the roof ends): it comes down on the jets (the same no-gap rule), the sink opening up to
+// LAND_CAP_MIN (4 m/s) and no more. (A sink held under 0.5 m/s from 5.3 m would take ≈8 s on the jets, and
+// the ≈75 kg left at the stop lasts ≈2 s of hover.)
+function oneBurn(b, label, sinkMax = 1.5) {
+  expect(b.peak, label).toBeGreaterThan(b.release);
+  expect(b.gap, label).toBeLessThan(0.08);
+  if (!b.slowed) expect(b.rise, label).toBeLessThanOrEqual(0.5);
+  else expect(b.after, label).toBeLessThanOrEqual(4.5);
+  expect(b.t.contact, label).toBe(false);
+  expect(b.t.sink, label).toBeLessThanOrEqual(sinkMax);
+  expect(scoreRun(b.t).facts.crashed, label).toBe(false);
+}
 
 describe('one burn from the onset to the wheels (0169)', () => {
   const SLIDES = [-24, -12, 0];
-  for (let x = 8; x <= 28; x += 4) SLIDES.push(x);
+  for (let x = 8; x <= 48; x += 4) SLIDES.push(x);
 
-  it('the one-thumb Show: the down-jets never go out mid-brake, and the sink only falls, at any held sideways slide', () => {
+  it('the one-thumb Show held from the tap: the down-jets never go out mid-brake, at any held sideways slide', () => {
     for (const x of SLIDES) {
       const b = thumbBurn(x);
-      expect(b.onset, `${x} px`).toBeGreaterThan(b.release);
-      expect(b.gap, `${x} px`).toBeLessThan(0.08);
-      expect(b.rise, `${x} px`).toBeLessThanOrEqual(0.5);
-      expect(b.held, `${x} px`).toBe(false);
-      expect(b.t.contact, `${x} px`).toBe(false);
-      expect(scoreRun(b.t).facts.crashed, `${x} px`).toBe(false);
+      // +44 and +48 px (15–20 m off the mark) pay for the lit descent off the semi in gas (25.8 → 23 %):
+      // 1.4 → 1.67 / 1.80 m/s at the wheels, 68 → 64.7 points at +48 (main had the jets out 0.10–0.16 s).
+      oneBurn(b, `${x} px`, x >= 44 ? 1.9 : 1.5);
+      // Up to +24 px the car passes the semi in one burn; from +28 it comes over the semi's roof slow and low.
+      if (x <= 24) expect(b.slowed, `${x} px`).toBe(false);
     }
-  }, 120000);
+  }, 180000);
 
-  it('a slide that carries the car over the semi too low to pass it: LAND stops it above the roof, then lands it clear', () => {
-    // From +32 px the car comes over the semi's 4.1 m roof lower than any brake to the ground could pass:
-    // LAND holds it ROOF_HOLD above the roof (as before 0169) and goes down again from there. Not on
-    // the row, never crashed.
-    for (let x = 32; x <= 48; x += 4) {
-      const b = thumbBurn(x);
-      expect(b.held, `${x} px`).toBe(true);
-      expect(b.t.contact, `${x} px`).toBe(false);
-      expect(b.t.sink, `${x} px`).toBeLessThanOrEqual(1.5);
-      expect(scoreRun(b.t).facts.crashed, `${x} px`).toBe(false);
-    }
-  }, 120000);
+  it('lifted after the tap and pressed again: the jets never go out, off the semi too', () => {
+    for (const again of [1, 1.5, 2, 2.5]) for (const x of [-24, 0, 24]) oneBurn(thumbBurn(x, again), `again ${again} s, ${x} px`);
+  }, 180000);
+
+  it('pressed again and slid far: still lit to the wheels, still clean', () => {
+    // A slide of ±36–48 px carries the car 15–20 m wide of the mark. Slid right it rides along the row's
+    // lower roofs held over each of them, on the jets now rather than dropping between them, and arrives
+    // with the tanks at ≈22 %: 2.1–2.8 m/s at the wheels (main: 1.7–2.1), under the 3 m/s hard-touchdown bar.
+    for (const again of [1, 1.5, 2.5]) for (const x of [-48, -36, 36, 48]) oneBurn(thumbBurn(x, again), `again ${again} s, ${x} px`, 3);
+  }, 180000);
 
   it('held from the tap, no slide: soft, on time, the gas as before', () => {
     const b = thumbBurn(0), s = scoreRun(b.t);
@@ -196,10 +217,8 @@ describe('one burn from the onset to the wheels (0169)', () => {
   it('the Show, Wall and Lineup references brake in one pulse, off no roof', () => {
     for (const course of ['show', 'wall', 'lineup']) {
       const b = refBurn(course);
-      expect(b.onset, course).toBeGreaterThan(0);
-      expect(b.gap, course).toBeLessThan(0.08);
-      expect(b.rise, course).toBeLessThanOrEqual(0.5);
-      expect(b.t.contact, course).toBe(false);
+      oneBurn(b, course);
+      expect(b.slowed, course).toBe(false);
       expect(b.t.sink, course).toBeLessThanOrEqual(1.5);
     }
   }, 60000);

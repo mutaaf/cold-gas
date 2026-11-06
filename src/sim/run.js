@@ -56,7 +56,9 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // fan in the aftermath. Runs that never sit still on the deck for 6 s (every reference) replay to the same bits.
 // v29: LAND brakes in one burn (0169): once it is braking, the sink it wants never grows again, so the jets
 // no longer go out for 0.2–0.3 s as the altimeter's floor drops off the row's last roof (Show, Lineup).
-export const SIM_VERSION = 29;
+// v30: a car LAND stopped over a roof keeps its one-burn cap (0169's bounce): off the roof's end it comes down
+// on the jets (≥ 0.5 g, the sink opening up at 4.8 m/s²) instead of falling 0.46 s with them out.
+export const SIM_VERSION = 30;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 // A car stopped on the deck ends the run `stalled` after STALL_TICKS: a climb that gave up. On the ledge

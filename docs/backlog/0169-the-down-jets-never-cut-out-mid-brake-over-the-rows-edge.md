@@ -1,12 +1,12 @@
 ---
 id: 0169
 title: The down-jets never cut out mid-brake as the car passes the row's last roof, on one thumb or in the Lineup
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: authenticity
 created: 2026-11-06
-pr: 268
+pr: 271
 by: critic
 ---
 
@@ -123,3 +123,53 @@ LESSONS 2026-11-06 (builder) says a long descent on the jets is gas-hungry. A sh
 - [ ] `human-phone.mjs 120 --scheme=thumb --skill=none|careful|sloppy` and `human-show.mjs 60 assist --cues=new`
       have 0 clean landings with such a gap. The PR prints the count per population (add it to the scripts' output).
 - [ ] Clean landings in those populations don't fall by more than 2 points, and none touch a roof.
+
+## Builder, second pass (2026-11-06, after the first bounce)
+SIM_VERSION 30. `src/sim/vehicle.js` governor (and the Swift port):
+- A car LAND has stopped over a roof **keeps its one-burn cap** (it used to let it go, and the lift law then sat out
+  until the ground's profile caught up: the 0.46 s at 0.00 g). Off the roof's end the sink opens up at 4.8 m/s² to
+  4 m/s with the down-jets held at ≥ 0.51 g once it sinks faster than 0.3 m/s (`LAND_CAP_FLOOR`; the floor now
+  holds whenever the cap is armed, not only while the cap binds).
+- After a stop over a roof the set-down follows the ≈5 m fall that is left (`ROOF_FALL`: from 1.3 m, not 2.5 m).
+  That pays back the gas the lit descent costs.
+
+Per tick, the critic's rule (< 0.5 g while sinking > 1 m/s, from the peak sink to the wheels, ≥ 0.08 s), the
+scripts now print it (`scripts/burn-gap.mjs`):
+
+| population | clean | gap, main `b84a8b3` | gap, this PR |
+|---|---|---|---|
+| `human-phone 120 --scheme=thumb --skill=none` | 120/120 (median 83.7 → 85.7) | 89/120 | **0/120** |
+| `… --skill=careful` | 120/120 (93 → 93) | 98/120 | **0/120** |
+| `… --skill=sloppy` | 120/120 (90.3 → 91.3) | 95/120 | **0/120** |
+| `human-show 60 assist --cues=new` | 55/60 (same) | 8/55 | **0/55** |
+| `human-show 300 assist --cues=new` | 289/300 (same) | 50/289 | **0/289** |
+
+- `gtrace.test.js`: the sweep now runs −24 … +48 px with the no-gap rule (sink > 1 m/s, from the peak sink), and
+  a new test flies the "lifted, pressed again" thumb (pressed at 1.0 / 1.5 / 2.0 / 2.5 s after the tap, 0 and ±24 px).
+  Both fail on main (+32 px 0.43 s; again 1 s, 0 px 0.47 s).
+- `naive-players` 32/32, `naive-show` 54/54 (52 over the row), `daily-reach 150` every objective ≥ 31 % (gas-show
+  51 → 54 %, mark-show 43 → 39 %), `human-show 300 pro` unchanged. Node and Chromium replays IDENTICAL.
+- The one-thumb Show held from the tap: sink 1.0 m/s, gas 32.5 → 32.5 %, release → touchdown unchanged. The
+  references: show 97.7 → 97.3, wall 96, lineup 91.7.
+
+**One criterion is not met, and can't be:** "a sink rise ≤ 0.5 m/s above 1.2 m" for a flight LAND stops over the semi
+(the lifted-and-pressed-again thumb, slides from +28 px). The car comes over the semi's 4.1 m roof at 12 m, 15 m/s
+down and 7 m/s along; the stop reaches ROOF_HOLD (5.3 m) before the roof ends whatever the brake does, so it leaves
+the roof at ≈0 m/s. From there a sink held under 0.5 m/s is ≈8 s on the jets, and the ≈75 kg left at the stop lasts
+≈2 s of hover. The PR takes the critic's other branch ("from a hold, come down on the jets: sink ramps up
+gradually, never a 0.0 g drop"): the sink opens to 4 m/s at 4.8 m/s² (the rise the scripts count: 89/98/95 of 120,
+as on main), lit all the way. The test asserts that bound (≤ 4.5 m/s after slowing over the semi).
+
+**What it costs (from the self-review, measured against main):**
+- The floor holds on every Assist brake that arms the cap, not only off a roof. The Show reference's least g
+  while sinking goes 0.39 → 0.59, and it scores 97.7 → 97.3. Holding the floor only while the cap binds
+  kept the references bit-identical, but it let 4/120 careful, 5/120 sloppy and 2/289 keyboard landings
+  drop for ≥ 0.08 s between the row's lower roofs. So it isn't in this PR.
+- Wide slides pay for the lit descent in gas:
+  - held from the tap at +44 / +48 px: 1.40 → 1.67 / 1.80 m/s, 68 → 64.7 at +48
+  - pressed again at +36 … +48 px: 1.7–2.1 → 2.1–2.8 m/s, still under the 3 m/s hard-touchdown bar; again
+    2.5 s at +48 px: 91.3 → 83
+  - these flights land 15–20 m off the mark
+  - the tests pin those bounds (`gtrace.test.js`: ≤ 1.9 and ≤ 3 m/s)
+- The floor's margin is thin: it aims at 0.51 g against the rule's 0.5 g, and the measured minimum while
+  sinking is 0.501–0.509 g. The rule counts spans of ≥ 0.08 s, so a single tick under 0.5 g doesn't count.
