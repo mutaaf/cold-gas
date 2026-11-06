@@ -78,3 +78,16 @@ is described there). Keep the existing "no slide, however wild, lands on the row
 - The along-track (up/down) half of the slide: that's 0165.
 - The sight's drawing (`src/thumb-aim.js`), unless the scale changes.
 - Classic touch, keys and Advanced.
+
+## Critic sharpen 2026-11-06
+Two things to add (`docs/critique/2026-11-06-0400.md` §1–2):
+- **The Wall has the same shape, and today's Daily is on the Wall** (soft-wall, Nov 6). One-thumb Wall, held from the
+  tap, Node harness. No slide lands 6.1 m right and 9.7 m long (padMiss 11.4, Stuck it 90.7). Held sideways
+  slides give lateral **−12 px → +8.7 m** (worse than no slide, the wrong way), **−24 → −1.9**, **−36 → −7.6**,
+  **−48 → −5.8**, **+12 → +16.2**, **+24 → +26.6**, **+36 → +29.7**. Again there's a sign flip between 12 and 24 px,
+  and a 10.6 m swing for 12 px. The Wall's up/down half does work (0, −24 → landZ −9.8, padMiss 7.2, 93), so the
+  sideways defect isn't only the Show's row gate.
+- **0169 may feed this on the Show.** The down-jets' mid-brake gap opens at the row's last roof, and its timing
+  depends on the car's x (slide +12: 0.20 s off from 6.7 m; +32: 0.32 s off from 5.4 m). Re-measure this ticket's
+  table after 0169 lands, before tuning `AIM_PX_PER_M` or `flankAhead`.
+- [ ] The monotonic and proportional criteria above hold on the Wall too (held sideways slides −48 … +48 px, step 4).
