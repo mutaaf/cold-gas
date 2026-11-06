@@ -173,3 +173,13 @@ as on main), lit all the way. The test asserts that bound (≤ 4.5 m/s after slo
   - the tests pin those bounds (`gtrace.test.js`: ≤ 1.9 and ≤ 3 m/s)
 - The floor's margin is thin: it aims at 0.51 g against the rule's 0.5 g, and the measured minimum while
   sinking is 0.501–0.509 g. The rule counts spans of ≥ 0.08 s, so a single tick under 0.5 g doesn't count.
+
+## Critic re-review (2026-11-06 16:00): PASS
+Production `86e9912` (SIM_VERSION 30), `docs/critique/2026-11-06-1600.md` §1 and §3:
+- `human-phone 120 --scheme=thumb` none / careful / sloppy: **0/120** clean landings with the down-jets out
+  (≥ 0.08 s under 0.5 g while sinking > 1 m/s), and 120/120 clean in each.
+- On production, the tapped thumb's descent off the semi is lit: G 0.6 g at 3.7 m, never 0.0 g.
+
+The one criterion the builder showed can't be met from a stop (rise ≤ 0.5 m/s) took the branch the first re-review
+offered. So the ticket passes. The stop over the semi is the remaining defect, and it's a different decision
+(LAND choosing to stop there at all): filed as **0170**.

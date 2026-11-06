@@ -1,7 +1,7 @@
 ---
 id: 0164
 title: On one thumb, a held sideways slide moves the touchdown the way it points, more for more, and never off the pad
-status: shipped
+status: ready
 priority: P1
 size: M
 lens: player-feel
@@ -152,3 +152,45 @@ slides there leave it at 6.1, because the hold's touchdown is already past the 6
   flown low, after the semi.
 - Not changed: the along-track half (0165). On the Show a held slide's landZ is still about −32…−34.
 - Funnel numbers to move: `run-landed` / `run` and `retry` / `run` among one-thumb runs, and `daily-done` on mark-show days.
+
+## Critic re-review (2026-11-06 16:00, first bounce)
+Production `86e9912` (`index-BBMrBjM1.js`, SIM_VERSION 30). The numbers are in `docs/critique/2026-11-06-1600.md` §2.
+
+**What passes.** The thumb this ticket's tests fly is held from the tap, and it's right now:
+- On the Show, −48 … +48 px is monotonic, capped at −5.9 / +1.2 m, with no contact.
+- The result is robust to when the slide starts (0 … 2.7 s after the release) and to a slide that arrives in 6 px
+  steps.
+- On production, two of three held +36 px runs gave Perfect 10 94.7, 1.8 m from the mark.
+- On the Wall, −48 … 0 px is monotonic.
+
+**Still fails: the thumb most phone players hold.** In `human-phone.mjs`, 89 of 120 thumbs tap on the ledge, lift,
+and press again (`scripts/human-phone.mjs:201`). The probe flies `gtrace.test.js`'s `thumbBurn(x, again)`: tap, lift
+at +20 ticks, press again `again` s after the tap, then slide `x` px and hold. Lateral at touchdown (m) / score:
+
+| pressed again | −24 | 0 | **+8** | **+16** | +24 | +36 | +48 |
+|---|---|---|---|---|---|---|---|
+| 1.0 s | −4.3 / 86.7 | −4.3 / 86.7 | **−8.1 / 74** | **−6.4 / 77** | −4.7 / 81.7 | −2.8 / 91.3 | −0.4 / 94 |
+| 1.5 s, 2.0 s | −5.6 / 83.7 | −5.6 / 83.7 | **−9.3 / 73.7** | **−7.6 / 76** | −5.8 / 80.7 | −4.0 / 91.3 | −1.7 / 94 |
+| 2.5 s | −6.1 / 80.3 | −5.6 / 83.7 | −4.8 / 88.3 | −3.3 / 93 | −1.7 / 94 | 0.7 / 93 | 2.2 / 92.3 |
+
+- **On the Show, a right slide of 8 px moves the touchdown 3.7 m left**, outside the 7 m ring, and costs 10
+  points. +16 and +24 px are still worse than no slide.
+- **On the Wall, pressed again at 1.5 s:** −12 px → **+11.1 m** against none at +7.3, so 3.8 m the wrong way.
+  −24 px → +7.8.
+- No contact; sink 0.80–1.37 m/s.
+
+The Show's +8 px line hovers 0.38 s over the semi. It's probably the same root as 0170 (the tapped thumb stops
+over the semi), so fix and measure that first, or together.
+
+**The bar is this ticket's own Why:** a skill input moves the touchdown in the direction of the slide, more for more.
+It applies to every thumb that holds and slides, not only one held from the tap.
+
+**Added acceptance:**
+- [ ] `thumb-mastery.test.js` (or `gtrace.test.js`) flies the tapped thumb: pressed again at 1.0, 1.5, 2.0 and
+      2.5 s after the tap, then a held sideways slide from −48 to +48 px in steps of 8, on the Show and the Wall.
+      Lateral at touchdown is non-decreasing in the slide within 0.3 m on each line, with no contact and no Rough
+      landing.
+- [ ] On those lines, +8 … +24 px on the Show moves the touchdown right of no slide by 0.5–1.5 × X/6 m. A slide
+      that can't move it, because of the clamp or a wait, leaves it where no slide does, never the other way.
+- [ ] `human-phone.mjs 120 --scheme=thumb --skill=careful`: the median among "lifted, pressed again · slid"
+      doesn't fall. Print it by choice, the way 0139's split does.

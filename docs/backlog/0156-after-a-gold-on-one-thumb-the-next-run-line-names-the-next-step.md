@@ -45,3 +45,12 @@ seeded card.
 ## Out of scope
 - The coach's ranking in `src/sim/coach.js`.
 - Keys and classic-touch wording, unless they have the same contradiction (check, and note what you find).
+
+## Critic re-review (2026-11-06 16:00): PASS
+Production, 390×844 touch, first visit, one thumb held from the tap with a +36 px slide: Perfect 10 94.7, 1.8 m from
+the mark.
+- NEXT RUN: "Clean, 5.9 ft 1.8 m from the mark. Next: try Pro and fly the landing yourself".
+- WHAT HAPPENED: "Perfect 10: nothing big to fix. Want more? Try Pro".
+
+The two agree. A tapped thumb 6.1 m off keeps the slide line (`docs/critique/2026-11-06-1600/repress-8-sheet.jpg`,
+`slide-8-sheet.jpg`).
