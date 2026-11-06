@@ -65,17 +65,19 @@ public func thumbStage(_ run: Run?, _ released: Bool) -> ThumbStage {
 let tUw = V3(), tFw = V3(), tBx = V3()
 public final class OneThumb {
     var held_ = false, pressed = false, push = 0, drive = false, carried = false, landing_ = false
-    var wasStage = ThumbStage.idle, ax = 0.0, ay = 0.0, live = false, ref_ = Double.nan, wait = false
+    var wasStage = ThumbStage.idle, ax = 0.0, ay = 0.0, live = false, ref_ = Double.nan, wait = false, slid = false
     let pr = Prediction()
     public init() {}
     /// Touch events: `pending` latches a tap shorter than a tick until the next sample reads it.
-    public func down() { held_ = true; pressed = true; ax = 0; ay = 0; ref_ = .nan }
-    public func up() { held_ = false; ax = 0; ay = 0; ref_ = .nan }
+    public func down() { held_ = true; pressed = true; ax = 0; ay = 0; ref_ = .nan; slid = false }
+    public func up() { held_ = false; ax = 0; ay = 0; ref_ = .nan; slid = false }
     /// The held thumb's slide from where it pressed, points (+x right, +y UP the glass).
     public func move(_ dx: Double, _ dy: Double) { if held_ { ax = dx / THUMB.aimPx; ay = dy / THUMB.aimPx } }
-    public func reset() { held_ = false; pressed = false; push = 0; drive = false; carried = false; landing_ = false; wasStage = .idle; ax = 0; ay = 0; live = false; ref_ = .nan }
+    public func reset() { held_ = false; pressed = false; push = 0; drive = false; carried = false; landing_ = false; wasStage = .idle; ax = 0; ay = 0; live = false; ref_ = .nan; slid = false }
     /// 0164: where the sideways slide is measured from (m, the car's right +), NaN before this hold could aim.
     public var ref: Double { ref_ }
+    /// The held thumb's sideways slide, points, as far as it counts (a full slide): where the pad draws the ink dot.
+    public var slidePx: Double { jsMax(-1, jsMin(1, ax)) * THUMB.aimPx }
     public var held: Bool { held_ }
     /// The drive-off is under way (0129), and a press the next tick hasn't read yet: the pad says "Letting go".
     public var driving: Bool { drive }
@@ -136,15 +138,16 @@ public final class OneThumb {
                     var roll = 0.0
                     wait = false
                     let sx = thumbShape(ax)
-                    if sx == 0 || ref_ != ref_ { ref_ = here + vb * bs * lead }
-                    if sx != 0 {
+                    if !slid || ref_ != ref_ { ref_ = here + vb * bs * lead }
+                    if sx != 0 { slid = true }
+                    if slid {
                         let pad = (COURSES[run.course] ?? SHOW).pad ?? SHOW.pad!, ps = sideOf(pad.x, pad.z, tFw)
-                        let off = (ax * THUMB.aimPx) / AIM_PX_PER_M
-                        let want = off > 0 ? jsMax(ref_, jsMin(ref_ + off, ps + AIM_RING)) : jsMin(ref_, jsMax(ref_ + off, ps - AIM_RING))
+                        let off = sx == 0 ? 0 : (jsMax(-1, jsMin(1, ax)) * THUMB.aimPx) / AIM_PX_PER_M
+                        let want = off >= 0 ? jsMax(ref_, jsMin(ref_ + off, ps + AIM_RING)) : jsMin(ref_, jsMax(ref_ + off, ps - AIM_RING))
                         let inward = (want - ref_) * sideOf(c.pos.x, 0, tFw) < 0
                         let w = run.course == "show" && inward && tallAhead(c)
                         if w { wait = true }
-                        if want != ref_ && !w {
+                        if (want != ref_ || sx == 0) && !w {
                             let vNeed = ((want - here) / lead) * bs
                             let bank = jsMax(-AIM_BANK, jsMin(AIM_BANK, HOLD_K * AIM_GAIN * (vb - vNeed)))
                             roll = k * HOLD_ROLL * bank
@@ -180,6 +183,6 @@ public func markOffset(_ c: Vehicle, _ pr: Prediction, _ course: String, _ ref: 
     var x = side * AIM_PX_PER_M, y = -along * AIM_PX_PER_M
     let d = DMath.dhypot(x, y, 0)
     if d > AIM_R { x *= AIM_R / d; y *= AIM_R / d }
-    return (x, y, DMath.dhypot(ez, ex, 0))
+    return (x, y, DMath.dhypot(side, along, 0))
 }
 #endif

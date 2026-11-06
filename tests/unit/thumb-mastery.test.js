@@ -163,6 +163,18 @@ describe('one thumb, a held sideways slide moves the touchdown the way it points
     }
   }, 240000);
 
+  it('a full slide let back to the middle 10 m or 5 m up comes back to the computer\'s touchdown, on the pad', () => {
+    // (Self-review: re-reading `ref` mid-drift and handing back to LAND's 0.2 rad hold put this 8.9 m wide, off the ring.)
+    const none = held('show', 0).run.t.lateral;
+    for (const px of [-48, 48]) for (const hc of [10, 5]) {
+      const run = flyThumb({ slide: (r, th) => th.move(r.car.pos.y - SPEC.comHeight > hc ? px : 0, 0) });
+      const card = scoreRun(run.t);
+      expect(Math.abs(run.t.lateral - none), `${px} px, centred at ${hc} m`).toBeLessThanOrEqual(1);
+      expect(card.facts.padMiss, `${px} px, centred at ${hc} m`).toBeLessThanOrEqual(7);
+      expect(card.facts.contact).toBe(false);
+    }
+  }, 120000);
+
   // The sight as the pad draws it (src/thumb-aim.js: markOffset from the thumb's own `ref`).
   const sightNow = (run, th, course, pr, off) => {
     predict(run.car, Math.max(0, run.car.pos.y - SPEC.comHeight), pr);

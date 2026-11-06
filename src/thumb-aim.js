@@ -3,11 +3,11 @@
 //  - Input: the held thumb's slide from where it pressed goes to thumb.move(dx, dy) (CSS px, +y up the
 //    glass). onethumb.js turns it into the ordinary pitch / roll channels (the input log replays and the
 //    Worker scores it like any run).
-//  - Display: in the air, the pad becomes a sight. Its centre is where you'll touch down (the landing
-//    predictor, src/sim/predict.js, the same point the HUD's touchdown ring marks); the amber dot is the
-//    mark, laid out from there in the car's own frame (up = further along its nose, right = its right),
-//    so it reads the same from any camera. Put your thumb on the dot and the touchdown walks onto the mark;
-//    the dot comes back to the centre as it does. The small ink dot is your slide.
+//  - Display: in the air, the pad becomes a sight. The amber dot is the mark, laid out in the car's own frame (up =
+//    further along its nose, right = its right), so it reads the same from any camera: along the run from the
+//    landing predictor (src/sim/predict.js), sideways (0164) from where the slide measures from (`thumb.ref`, where
+//    LAND would set the car down), at AIM_PX_PER_M px a metre. Put your thumb on the dot and hold it: the touchdown
+//    walks onto the mark and the dot stays put sideways. The small ink dot is your slide.
 // Writes the DOM only when a rounded pixel changes (no per-frame strings).
 import { up } from './sim/vehicle.js';
 import { markOffset, AIM_R } from './onethumb.js';
@@ -60,8 +60,10 @@ export function mountThumbAim(pad, thumb) {
         el.dataset.ex = mx; el.dataset.ey = my;   // what a script player reads (scripts/play-human.mjs)
         last.mx = mx; last.my = my;
       }
+      // 0164: the ink dot sideways is where the thumb is (the slide's px, as the control reads them), so ink on amber is
+      // the touchdown on the mark; along, the shaped command as before.
       const a = thumb.aim;
-      const yx = Math.round(a.x * R), yy = Math.round(-a.y * R);
+      const yx = Math.round(Math.max(-R, Math.min(R, thumb.slidePx))), yy = Math.round(-a.y * R);
       if (yx !== last.yx || yy !== last.yy) { you.style.transform = `translate(${yx}px, ${yy}px)`; last.yx = yx; last.yy = yy; }
       flag('near', last.near ? off.m < 2.5 : off.m < 2);   // 0126: a 0.5 m band so the dot's size doesn't jitter at the edge
       flag('wait', !thumb.aimLive);

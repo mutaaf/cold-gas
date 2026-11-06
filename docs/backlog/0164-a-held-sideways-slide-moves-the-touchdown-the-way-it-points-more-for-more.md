@@ -135,12 +135,20 @@ slides there leave it at 6.1, because the hold's touchdown is already past the 6
   monotonic, no contact. ±8…+24 px move 0.5–1.5 × X/6 (Show +8…+24 ≈ 1.2×; Wall −8 0.6×, −48 1.2×). First-frame dot
   held: Show 2.2 m, Wall 1.3 m. Re-reading thumb 0.2–0.3 s late: Show 1.8 m, Wall ≤ 2 m. All in
   `tests/unit/thumb-mastery.test.js`.
-- `naive-players` 32/32. `human-phone 150 --scheme=thumb`: careful 150/150 clean, median 93 → 94; sloppy median
-  91 → 92.3, min 78 → 83.7; none identical; jets-out gaps 0 in every group.
-- `daily-reach` (n 40, the test's sample): mark-show 17 → 21, gas-show 19 → 32, ninety 28 → 30, soft-wall 23 → 23,
+- `naive-players` 32/32. `human-phone 150 --scheme=thumb`: careful 150/150 clean, median 93 → 94 (p90 95.3 → 94.7, max 95.7 → 94.7: the top
+  end gives a little); sloppy median 91 → 93.3, min 78 → 83.7; none identical; jets-out gaps 0 in every group.
+- `daily-reach` (n 40, the test's sample): mark-show 17 → 21, gas-show 19 → 32, ninety 28 → 30, soft-wall 23 → 22,
   skim 31 → 28 (all over the 12 floor).
 - A held slide no longer costs braking (Show sink: none 1.05, ±24…±48 px 1.04–1.09; main +48 1.80). So the
   one-thumb ran-out words drop "keep the slide small: a big slide tilts the jets off the brake", and learn.test now
   pins the new fact.
+- From the self-review: a hold that has slid flies back to `ref` when the thumb comes back to the middle (re-reading `ref`
+  mid-drift handed a fast drift back to LAND's 0.2 rad hold: −48 px centred at 10 m landed 8.9 m wide, now 4.6). The
+  command saturates at a full slide. The sight's `m` ('near') is the miss as the dot shows it. The ink dot sideways is
+  drawn at the slide's px, so ink on amber is the touchdown on the mark.
+- Known, left: the sight falls back to the ballistic side for the instant the thumb is up (it jumps 4–18 px on a
+  lift). The 3D touchdown ring is still ballistic. A slide started late (under ~12 m) has less room, and a late right
+  slide on the Wall moves it 0.8 m left (the clamp works from the predicted `ref`). On the Show the inward move is
+  flown low, after the semi.
 - Not changed: the along-track half (0165). On the Show a held slide's landZ is still about −32…−34.
 - Funnel numbers to move: `run-landed` / `run` and `retry` / `run` among one-thumb runs, and `daily-done` on mark-show days.

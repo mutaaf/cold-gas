@@ -80,7 +80,7 @@
   },
   {
    "path": "input/thumb-show-aim.json",
-   "sha256": "9850f60245a03d6443b8b40a0972b6b293109ffd43cd0d0eb0628762e07d6228",
+   "sha256": "49cb93d56fc335923650d116fb63a25969c1e36b852ce54d390c63c91b2d68e6",
    "bytes": 71078
   },
   {
@@ -90,7 +90,7 @@
   },
   {
    "path": "input/thumb-show-lapse-tilt.json",
-   "sha256": "24570d02be6a9b4a90cbdddd09b59033559747c4953a364c99f009e7c081028a",
+   "sha256": "d170cd95c7ab8c06a9b203c3d24f006e3d1cb8dc7d06ba4f650bfaa90ee53b2f",
    "bytes": 72608
   },
   {
@@ -100,7 +100,7 @@
   },
   {
    "path": "input/thumb-wall-aim.json",
-   "sha256": "8a64c12ed32d70c5f317f2eff332ca5dc318cafdf641532ace5b67d389be436f",
+   "sha256": "15fdf9a95d77fba2ce7e0b8e69875de84c09b2f2ee8210ed59fa11f00f97909a",
    "bytes": 76466
   },
   {
@@ -115,7 +115,7 @@
   },
   {
    "path": "input/touch-lineup-easy-fast.json",
-   "sha256": "4ece464b20b60c4b002be97c3004745db871b9add9ede82bef5e2b36ada67d43",
+   "sha256": "ee4b7b8f42db6acd11ef47b9d501c778650aa0d7018d137f5c06d5f7b0e46594",
    "bytes": 28730
   },
   {
@@ -135,7 +135,7 @@
   },
   {
    "path": "input/touch-show-crash.json",
-   "sha256": "e193e51a7e74f188f625ca4876aff20f08cf1dcffbfe42dcc6577a83ccb957b2",
+   "sha256": "04968ebb9e77e17d4432f848c0d6714a6fb059fca0108df99e13739e82a846e6",
    "bytes": 113061
   },
   {
@@ -150,7 +150,7 @@
   },
   {
    "path": "input/touch-wall-pro.json",
-   "sha256": "71baee419fd337a8b87cc7f22b7cd42f495cf7a721913bda600fec5d33cbcc28",
+   "sha256": "0c043020601a41b487785ddb37c901e81fd6cbea92956cdb306c5cfb80b4d994",
    "bytes": 138426
   },
   {

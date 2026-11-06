@@ -117,19 +117,21 @@ export function thumbStage(run, released) {
 }
 
 export function createOneThumb() {
-  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, wait: false };
+  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, wait: false, slid: false };
   const pr = newPrediction();
   const aim = { x: 0, y: 0 };
   return {
     // Pointer events: `pressed` latches a tap shorter than a tick until the next sample reads it.
-    down() { st.held = true; st.pressed = true; st.ax = 0; st.ay = 0; st.ref = NaN; },
-    up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; },
+    down() { st.held = true; st.pressed = true; st.ax = 0; st.ay = 0; st.ref = NaN; st.slid = false; },
+    up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; st.slid = false; },
     // The held thumb's slide from where it pressed, CSS px (+x right, +y up the glass).
     move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx; st.ay = dy / THUMB.aimPx; } },
-    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; },
+    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.slid = false; },
     // 0164: where the sideways slide is measured from (m, the car's right +, along the car's own side axis), NaN
     // before this hold could aim.
     get ref() { return st.ref; },
+    // The held thumb's sideways slide, CSS px, as far as it counts (a full slide): where the pad draws the ink dot.
+    get slidePx() { return Math.max(-1, Math.min(1, st.ax)) * THUMB.aimPx; },
     get held() { return st.held; },
     // 0129: the drive-off is under way (a tap on the ledge was taken; it lets go at the lip), and a press
     // the next tick hasn't read yet. The pad shows "Letting go" from either, on the frame of the tap.
@@ -208,15 +210,18 @@ export function createOneThumb() {
             let roll = 0;
             st.wait = false;
             const sx = shape(st.ax);
-            if (sx === 0 || st.ref !== st.ref) st.ref = here + vb * bs * lead;
-            if (sx !== 0) {
+            // Read until this hold first slides; after that a thumb back in the middle asks for `ref` itself (the place
+            // the dot was laid out from), not for wherever the drift has got to.
+            if (!st.slid || st.ref !== st.ref) st.ref = here + vb * bs * lead;
+            if (sx !== 0) st.slid = true;
+            if (st.slid) {
               const pad = (COURSES[run.course] || COURSES.show).pad, ps = sideOf(pad.x, pad.z, fw);
-              const off = (st.ax * THUMB.aimPx) / AIM_PX_PER_M;
-              const want = off > 0 ? Math.max(st.ref, Math.min(st.ref + off, ps + AIM_RING)) : Math.min(st.ref, Math.max(st.ref + off, ps - AIM_RING));
+              const off = sx === 0 ? 0 : (Math.max(-1, Math.min(1, st.ax)) * THUMB.aimPx) / AIM_PX_PER_M;   // saturates at a full slide
+              const want = off >= 0 ? Math.max(st.ref, Math.min(st.ref + off, ps + AIM_RING)) : Math.min(st.ref, Math.max(st.ref + off, ps - AIM_RING));
               const inward = (want - st.ref) * sideOf(c.pos.x, 0, fw) < 0;   // toward the course's centre line
               const wait = run.course === 'show' && inward && tallAhead(c);
               if (wait) st.wait = true;
-              if (want !== st.ref && !wait) {
+              if ((want !== st.ref || sx === 0) && !wait) {
                 const vNeed = ((want - here) / lead) * bs;   // body-x m/s that carries it there
                 const bank = Math.max(-AIM_BANK, Math.min(AIM_BANK, HOLD_K * AIM_GAIN * (vb - vNeed)));
                 roll = k * HOLD_ROLL * bank;
@@ -256,6 +261,6 @@ export function markOffset(c, pr, course, out = { x: 0, y: 0, m: 0 }, ref = NaN)
   let x = side * AIM_PX_PER_M, y = -along * AIM_PX_PER_M;
   const d = dhypot(x, y, 0);
   if (d > AIM_R) { x *= AIM_R / d; y *= AIM_R / d; }
-  out.x = x; out.y = y; out.m = dhypot(ez, ex, 0);
+  out.x = x; out.y = y; out.m = dhypot(side, along, 0);   // 0164: the miss as the dot shows it
   return out;
 }
