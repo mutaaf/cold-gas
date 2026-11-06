@@ -1,12 +1,12 @@
 ---
 id: 0169
 title: The down-jets never cut out mid-brake as the car passes the row's last roof, on one thumb or in the Lineup
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: authenticity
 created: 2026-11-06
-pr:
+pr: 268
 by: critic
 ---
 
