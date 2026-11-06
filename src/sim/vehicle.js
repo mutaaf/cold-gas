@@ -477,8 +477,10 @@ function governor(s, inp, grounded, m, level) {
   if (s.carryUp && upW.y > 0.9 && behind < 0.5) eff.thrust = Math.max(eff.thrust, clamp((CARRY_ROW - vh) / 3, 0, 0.5));
   if (s.vel.y < liftVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((liftVy - s.vel.y) * 0.8 + 0.55, 0, 1));
   // While the cap is armed, the jets never drop below what lets the car speed up at LAND_CAP_ACC: the
-  // lift law alone switches off whenever the car is slower than the sink it lifts for (the cap's or,
-  // once that has opened past the profile, the profile's), and back on, tick by tick.
+  // lift law alone switches off whenever the car is slower than the sink it lifts for (the cap's or, once
+  // that has opened past the profile, the profile's: over the row's lower roofs a car only lifting at the
+  // cap still dropped 0.1 s at a time between them), and back on, tick by tick. Every Assist landing that
+  // brakes from more than LAND_CAP_ON m/s flies it (the Show reference's least g sinking: 0.39 → 0.59).
   if (s.landCap > 0 && s.vel.y < -LAND_CAP_FLOOR && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp(((G - LAND_CAP_ACC) * m) / (LIFT_MAX * Math.max(0.2, feedPressure(s))), 0, 1));
 }
 // The vertical speed LAND wants for the car as it stands (m/s, negative down). Plan the braking

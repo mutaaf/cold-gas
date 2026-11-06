@@ -164,8 +164,8 @@ for (let n = 0; n < N; n++) {
   byClass[cls] = byClass[cls] || [0, 0];
   byClass[cls][1]++;
   if (!why) { ok++; byClass[cls][0]++; if (s.facts.padMiss < 7) onPad++; totals.push(s.total); }
-  if (!why) { const b = gp.read(run); if (b.gap >= 0.08) gaps++; if (b.rise > 0.5) rises++; }
   else fails[why] = (fails[why] || 0) + 1;
+  if (!why) { const b = gp.read(run); if (b.gap >= 0.08) gaps++; if (b.rise > 0.5) rises++; }
   if (verbose) console.log(JSON.stringify(P), why || 'OK', s.total, 'sink', t.sink.toFixed(1), 'pad', s.facts.padMiss, 'gas', s.facts.airPct);
 }
 totals.sort((a, b) => a - b);

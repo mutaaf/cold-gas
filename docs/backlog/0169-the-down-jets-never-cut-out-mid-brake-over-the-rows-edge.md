@@ -159,3 +159,17 @@ the roof at ≈0 m/s. From there a sink held under 0.5 m/s is ≈8 s on the jets
 ≈2 s of hover. The PR takes the critic's other branch ("from a hold, come down on the jets: sink ramps up
 gradually, never a 0.0 g drop"): the sink opens to 4 m/s at 4.8 m/s² (the rise the scripts count: 89/98/95 of 120,
 as on main), lit all the way. The test asserts that bound (≤ 4.5 m/s after slowing over the semi).
+
+**What it costs (from the self-review, measured against main):**
+- The floor holds on every Assist brake that arms the cap, not only off a roof. The Show reference's least g
+  while sinking goes 0.39 → 0.59, and it scores 97.7 → 97.3. Holding the floor only while the cap binds
+  kept the references bit-identical, but it let 4/120 careful, 5/120 sloppy and 2/289 keyboard landings
+  drop for ≥ 0.08 s between the row's lower roofs. So it isn't in this PR.
+- Wide slides pay for the lit descent in gas:
+  - held from the tap at +44 / +48 px: 1.40 → 1.67 / 1.80 m/s, 68 → 64.7 at +48
+  - pressed again at +36 … +48 px: 1.7–2.1 → 2.1–2.8 m/s, still under the 3 m/s hard-touchdown bar; again
+    2.5 s at +48 px: 91.3 → 83
+  - these flights land 15–20 m off the mark
+  - the tests pin those bounds (`gtrace.test.js`: ≤ 1.9 and ≤ 3 m/s)
+- The floor's margin is thin: it aims at 0.51 g against the rule's 0.5 g, and the measured minimum while
+  sinking is 0.501–0.509 g. The rule counts spans of ≥ 0.08 s, so a single tick under 0.5 g doesn't count.

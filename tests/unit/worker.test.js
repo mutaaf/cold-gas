@@ -257,7 +257,7 @@ describe('POST /scores (telemetry, no replay)', () => {
     const j = await res.json();
     expect(res.status).toBe(200);
     expect(j).toMatchObject({ dry: true, rank: 1, course: 'show', tier: 'assist' });
-    expect(j.card.total).toBe(97.3);
+    expect(j.card.total).toBe(97.3);   // SIM_VERSION 30: the down-jets' floor on every Assist brake (0169)
     expect(j.card.facts.sink).toBe(0.8);
     expect(DB.raw.prepare('SELECT COUNT(*) AS n FROM scores').get().n).toBe(before);
   });

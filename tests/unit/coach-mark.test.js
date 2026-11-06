@@ -87,7 +87,7 @@ describe('the coach names the side the touchdown missed on (0132)', () => {
     expect(markMiss({ x: -1.5, along: 5 }).where).toBe(' (5 m short of it, 1.5 m left)');
     expect(markMiss({ x: 6, along: 0.3 }).where).toBe(' (6 m right of it)');
     expect(markMiss({ x: 6, along: -6 }, false)).toEqual({ title: 'Off the mark', where: '', side: null });
-    // Through coach() itself: the autopilot's Show at a 10 m/s carry lands ≈17.9 m past and ≈0.5 m across.
+    // Through coach() itself: the autopilot's Show at a 10 m/s carry lands ≈18 m past and ≈0.6 m across (SIM_VERSION 30).
     const run = createRun('show'), ap = createAutopilot('show', { carry: 10 });
     while (run.phase !== 'done') stepRun(run, ap(run));
     const along = run.t.landZ - PAD.z;
@@ -95,6 +95,6 @@ describe('the coach names the side the touchdown missed on (0132)', () => {
     expect(Math.abs(run.t.lateral)).toBeLessThan(Math.abs(along));
     const m = coach(run.inputLog, 'show', scoreRun(run.t)).items.find((i) => i.id === 'mark');
     expect(m.title).toBe('Long of the mark');
-    expect(m.detail).toMatch(/m from the mark \(\d+(\.\d)? m past it(, \d(\.\d)? m (left|right))?\)/);
+    expect(m.detail).toMatch(/m from the mark \(\d+(\.\d)? m past it, \d\.\d m (left|right)\)/);
   });
 });
