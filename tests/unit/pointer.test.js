@@ -77,6 +77,27 @@ describe('the pointer after a run', () => {
     const ids = ['fell-off', 'no-release', 'early-release', 'short', 'no-brake', 'late-land', 'late-brake', 'ran-out', 'late-roll', 'over-roll', 'no-roll', 'tilt', 'mark', 'gas', 'flipped', 'clean'];
     for (const ctx of [KEY, PAD, TOUCH, THUMB, PRO]) for (const id of ids) expect(pointerText(id, ctx), `${id} ${ctx.device}`).toBeTruthy();
   });
+  it('one thumb, clean: on the mark ring it names the next step the score shows, short of it the slide (0156)', () => {
+    const at = (padMiss) => ({ touch: { padMiss } });
+    const WALL = { ...THUMB, course: 'wall' };
+    // The Show: full precision inside 3.5 m (judge.js SHOW_PRECISION), so the next step is Pro.
+    const ring = pointerText('clean', THUMB, at(2.43));
+    expect(ring).not.toMatch(/slide onto the amber dot/);
+    expect(ring).toBe('Clean, 2.4 m from the mark. Next: try Pro and fly the landing yourself');
+    expect(pointerText('clean', THUMB, at(3.5))).toBe('Clean, 3.5 m from the mark. Next: try Pro and fly the landing yourself');
+    // The Wall: precision pays to 0.8 m, so the 2 m ring first.
+    expect(pointerText('clean', WALL, at(2.43))).toBe('Clean, 2.4 m from the mark. Next: inside the 2 m ring, then try Pro');
+    expect(pointerText('clean', WALL, at(1.6))).toBe('Clean, 1.6 m from the mark. Next: try Pro and fly the landing yourself');
+    // Read at the card's 0.1 m: 3.53 is the card's 3.5 (the mark Daily met), 2.03 is 2.0 (inside the 2 m ring).
+    expect(pointerText('clean', THUMB, at(3.53))).toMatch(/^Clean, 3\.5 m from the mark/);
+    expect(pointerText('clean', WALL, at(2.03))).toBe('Clean, 2.0 m from the mark. Next: try Pro and fly the landing yourself');
+    for (const far of [3.56, 6.0]) for (const ctx of [THUMB, WALL]) expect(pointerText('clean', ctx, at(far))).toMatch(/slide onto the amber dot/);
+    expect(pointerText('clean', THUMB)).toMatch(/slide onto the amber dot/);   // no flight read (a drill): as before
+    // Keys, pads and classic touch keep their lines whatever the miss.
+    expect(pointerText('clean', KEY, at(2.4))).toBe('Clean. Next: a softer touchdown, closer to the mark');
+    expect(pointerText('clean', TOUCH, at(2.4))).toBe('Clean. Next: a softer touchdown, closer to the mark');
+    expect(pointerText('clean', PRO, at(2.4))).toBe('Clean. Next: under 1 m/s and the 2 m ring');
+  });
   it('picks the costliest fix', () => {
     expect(pickPointer([item('late-land'), item('tilt')], KEY)).toMatchObject({ id: 'late-land', better: '' });
   });

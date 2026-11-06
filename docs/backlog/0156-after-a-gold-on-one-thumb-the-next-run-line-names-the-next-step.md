@@ -1,12 +1,12 @@
 ---
 id: 0156
 title: After a landing on the mark on one thumb, the NEXT RUN line names the next step, not the slide just flown
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-05
-pr:
+pr: 269
 by: critic
 ---
 
