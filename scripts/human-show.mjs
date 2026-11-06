@@ -27,6 +27,10 @@ const N = +(args.find((a) => /^\d+$/.test(a)) || 300);
 const assistMode = !args.includes('pro');
 const cues = args.includes('new') || args.includes('--cues=new') ? 'new' : 'old';
 const verbose = args.includes('-v');
+// --daily (0150): skim-show (src/daily.js) met, split by each choice the player made: what the keys' miss line can name.
+const DAILY = args.includes('--daily');
+const { OBJECTIVES, evaluate } = DAILY ? await import('../src/daily.js') : {};
+const skimBy = {};
 // The predictor drives the new cues and the HUD; the old population never sees it (and so this
 // script also runs against a pre-HUD sim, for before/after).
 const { predict, newPrediction } = cues === 'new' ? await import('../src/sim/predict.js') : { predict: () => {}, newPrediction: () => ({}) };
@@ -138,6 +142,14 @@ for (let n = 0; n < N; n++) {
   }
   const t = run.t, s = scoreRun(t);
   if (DUMP) dumped.push({ t: { ...t }, why: null });
+  if (DAILY) {
+    const skim = evaluate(OBJECTIVES.find((o) => o.id === 'skim-show'), s, 'show');
+    for (const k of ['boost', 'spaceHold', 'landAt', 'roll', 'landAt+boost']) {
+      const g = (skimBy[`${k} ${k.includes('+') ? k.split('+').map((x) => P[x]).join('+') : P[k]}`] ||= { n: 0, met: 0, clear: [] });
+      g.n++; if (skim.ok) g.met++;
+      if (s.facts.crossedRow && !s.facts.crashed) g.clear.push(s.facts.clearance);
+    }
+  }
   let why = '';
   if (t.airStartTick < 0) why = t.fellOff ? 'climb: fell off' : 'climb: stalled';
   else if (t.fellOff) why = 'climb: fell off';
@@ -159,3 +171,9 @@ console.log(`${assistMode ? 'Assist' : 'Pro'} · cues ${cues}: ${ok}/${N} landed
 console.log('  by when they braked:', Object.entries(byClass).map(([k, [a, b]]) => `${k} ${a}/${b}`).join(' · '));
 console.log('  failures:', JSON.stringify(fails));
 if (DUMP) { const { writeFileSync } = await import('node:fs'); writeFileSync(DUMP, JSON.stringify(dumped)); }
+if (DAILY) {
+  for (const [k, g] of Object.entries(skimBy).sort()) {
+    g.clear.sort((a, b) => a - b);
+    console.log(`  skim-show by ${k}: ${g.met}/${g.n} met (${Math.round((100 * g.met) / Math.max(1, g.n))}%) · over the roofs min ${g.clear[0] ?? '–'} · median ${g.clear[Math.floor(g.clear.length / 2)] ?? '–'} · max ${g.clear.at(-1) ?? '–'} m`);
+  }
+}

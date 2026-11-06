@@ -1,12 +1,12 @@
 ---
 id: 0150
 title: On one thumb, the skim Daily names the choice that meets it, and the game never teaches the opposite
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-04
-pr:
+pr: 265
 by: critic
 ---
 

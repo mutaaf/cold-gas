@@ -4,7 +4,13 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { setUnits } from '../../src/units.js';
 import { OBJECTIVES, objectiveIndex, objectiveFor, evaluate, dayNumber, dayKey, keyToDay, readStreak, streakNow, complete,
-  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint } from '../../src/daily.js';
+  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint, dailyCoach, dailyItems } from '../../src/daily.js';
+import { newInput } from '../../src/sim/vehicle.js';
+import { predict, newPrediction } from '../../src/sim/predict.js';
+import { SPEC } from '../../src/sim/spec.js';
+import { createOneThumb, thumbStage, markOffset } from '../../src/onethumb.js';
+import { coach } from '../../src/sim/coach.js';
+import { coachWords, pickPointer } from '../../src/pointer.js';
 
 // The daily jump (src/daily.js): one objective a UTC day for everyone, judged from scoreRun's card,
 // and a streak of consecutive UTC days.
@@ -100,20 +106,20 @@ describe('the daily, judged from real runs', () => {
     // Pro or better: the reference is an Assist run.
     expect(evaluate(byId('pro-wall'), cards.wall, 'wall')).toEqual({ ok: false, miss: 'fly it on Pro or Advanced' });
     // The roofs: the reference clears them by 5.1 m.
-    expect(evaluate(byId('skim-show'), cards.show, 'show')).toEqual({ ok: false, miss: 'cleared by 16.7 ft' });
+    expect(evaluate(byId('skim-show'), cards.show, 'show')).toEqual({ ok: false, miss: 'cleared by 16.7 ft', fix: true });
     // A run that never got there.
     expect(evaluate(byId('mark-show'), cards.idle, 'show')).toEqual({ ok: false, miss: 'no clean landing yet' });
     expect(evaluate(byId('ninety-show'), cards.idle, 'show').miss).toMatch(/^\d+\.\d, need 90$/);
     // A miss off the mark, in the player's units.
     const off = { ...cards.show, facts: { ...cards.show.facts, padMiss: 4.3 } };
     setUnits('metric', { persist: false });
-    expect(evaluate(byId('mark-show'), off, 'show')).toEqual({ ok: false, miss: '4.3 m off the mark' });
+    expect(evaluate(byId('mark-show'), off, 'show')).toEqual({ ok: false, miss: '4.3 m off the mark', fix: true });
     expect(evaluate(byId('pro-wall'), { ...cards.wall, tier: 'pro', total: 79.4 }, 'wall').miss).toBe('79.4, need 85');
     expect(evaluate(byId('pro-wall'), { ...cards.wall, tier: 'advanced', total: 85 }, 'wall').ok).toBe(true);
     // 0135's bars, at their edges: the mark at 3.5 m (Show) and 7 m (Lineup), gas over 25 %.
     const withFacts = (card, f) => ({ ...card, facts: { ...card.facts, ...f } });
     expect(evaluate(byId('mark-show'), withFacts(cards.show, { padMiss: 3.5 }), 'show').ok).toBe(true);
-    expect(evaluate(byId('mark-show'), withFacts(cards.show, { padMiss: 3.6 }), 'show')).toEqual({ ok: false, miss: '3.6 m off the mark' });
+    expect(evaluate(byId('mark-show'), withFacts(cards.show, { padMiss: 3.6 }), 'show')).toEqual({ ok: false, miss: '3.6 m off the mark', fix: true });
     expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { padMiss: 7 }), 'lineup').ok).toBe(true);
     expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { padMiss: 7.1 }), 'lineup').ok).toBe(false);
     expect(evaluate(byId('gas-show'), withFacts(cards.show, { airPct: 26 }), 'show').ok).toBe(true);
@@ -140,10 +146,10 @@ describe('what a miss can change (0139)', () => {
     expect(c).toContain('one late LAND'); expect(c).not.toContain('(');
     expect(pro).toContain('LIFT (Space)');
   });
-  it('a miss before the number ("land clean first") and the other objectives keep "try again"', () => {
+  it('a miss before the number ("land clean first") and the objectives with nothing to change keep "try again"', () => {
     expect(missLine(gas, gas.check({}, {}), thumb)).toBe('Daily: clear the row and land clean first — try again');
-    const mark = byId('mark-show');
-    expect(missLine(mark, mark.check({}, { jumped: true, padMiss: 5 }), thumb)).toMatch(/off the mark — try again$/);
+    const stick = byId('stick-wall');
+    expect(missLine(stick, stick.check({ total: 80 }, { jumped: true }), thumb)).toMatch(/need 84 — try again$/);
     expect(missLine(gas, short, undefined)).toMatch(/^Daily: 24 % gas left, need 26 % · shorter BOOST/);   // no ctx: no throw
   });
   it('the title card hints only on one thumb, only on the gas day', () => {
@@ -151,8 +157,139 @@ describe('what a miss can change (0139)', () => {
     expect(titleHint(gas, thumb, true)).toBe('Hold the pad from the tap to the ground');   // the countdown's tip
     expect(titleHint(gas, keys)).toBe('');
     expect(titleHint(gas, classic)).toBe('');
-    for (const o of OBJECTIVES.filter((x) => x !== gas)) expect(titleHint(o, thumb)).toBe('');
+    for (const o of OBJECTIVES.filter((x) => x !== gas && x.id !== 'skim-show')) expect(titleHint(o, thumb)).toBe('');
   });
+});
+
+// 0150: the skim day asks one thumb for the opposite of the gas day: let go right after the tap and stay off. Held from the
+// tap (the gas day's hint, and the sheet's "holding the pad in the air"), the computer carries the car 4.5 m over the roofs.
+// The mark and ninety days' misses name the aim (one thumb: the slide onto the amber dot; keys and classic: the lean).
+// Each hint is flown here literally, as a player would read it, with the page's own one-thumb code.
+describe('the skim, mark and ninety days name the choice that meets them (0150)', () => {
+  const thumb = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' };
+  const keys = { device: 'key', scheme: 'classic', tier: 'assist', course: 'show' };
+  const classic = { device: 'touch', scheme: 'classic', tier: 'assist', course: 'show' };
+  const skim = byId('skim-show'), ninety = byId('ninety-show'), mark = byId('mark-show');
+  // The Show on one thumb as main.js flies it (thumb-lift.test.js's harness): hold up the curl, stop on the ledge, tap and
+  // hold; `lift` ticks after the tap the thumb comes off (-1: never); `aim`: holding in the air, follow the sight's dot.
+  function flyThumb({ lift = -1, aim = false } = {}) {
+    const run = createRun('show'), th = createOneThumb(), pr = newPrediction(), off = { x: 0, y: 0, m: 0 };
+    let released = false, ledgeT = -1, tapT = -1, next = 0, want = null;
+    th.down();
+    while (run.phase !== 'done') {
+      const c = run.car, inp = newInput();
+      if (tapT < 0 && thumbStage(run, released) === 'ledge' && Math.hypot(c.vel.x, c.vel.y, c.vel.z) < 0.3) {
+        if (ledgeT < 0) { ledgeT = run.tick; th.up(); }
+        if (run.tick === ledgeT + 120) { th.down(); tapT = run.tick; }
+      }
+      if (tapT > 0 && lift >= 0 && run.tick === tapT + lift) th.up();
+      // "slide onto the amber dot, following it down": on the dot a reaction late, re-read every 0.3 s.
+      if (aim && released && run.phase === 'air' && th.held) {
+        if (run.tick >= next) {
+          predict(c, Math.max(0, c.pos.y - SPEC.comHeight), pr);
+          markOffset(c, pr, 'show', off);
+          want = { x: off.x, y: -off.y, at: run.tick + 60 };
+          next = run.tick + 72;
+        }
+        if (want && run.tick >= want.at) th.move(want.x, want.y);
+      }
+      th.sample(run, released, inp);
+      if ((run.phase === 'ramp' && inp.lift > 0) || run.phase === 'air') released = true;
+      inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
+      stepRun(run, inp);
+    }
+    return run;
+  }
+  let held, heldRun;
+  beforeAll(() => { heldRun = flyThumb(); held = scoreRun(heldRun.t); });
+
+  it('held from the tap (the gas day\'s way) misses the skim, and the miss names the thumb\'s choice, not "try again"', () => {
+    const r = evaluate(skim, held, 'show');
+    expect(r.ok).toBe(false);
+    expect(held.facts.clearance).toBeGreaterThan(4);
+    const line = missLine(skim, r, thumb);
+    expect(line).toMatch(/^Daily: cleared by 14\.\d ft · let go of the pad right after the tap and stay off it/);
+    expect(line).not.toMatch(/try again/);
+  });
+
+  it('flown as the hint says (let go 0.1–0.5 s after the tap, stay off), every flight meets the skim', () => {
+    for (let lift = 24; lift <= 120; lift += 12) {
+      const s = scoreRun(flyThumb({ lift }).t);
+      expect(evaluate(skim, s, 'show').ok, `lift ${lift} ticks after the tap: ${s.facts.clearance} m`).toBe(true);
+      expect(s.facts.sink, `lift ${lift}`).toBeLessThanOrEqual(1.5);
+    }
+    // The window "right after the tap" names: lifted at 0.7 s, the car is carried high again.
+    expect(evaluate(skim, scoreRun(flyThumb({ lift: 168 }).t), 'show').ok).toBe(false);
+  }, 120000);
+
+  it('keys and classic touch name their own controls (a short BOOST, a late LAND), never the pad', () => {
+    const r = skim.check({}, { jumped: true, crossedRow: true, clearance: 4.5 });
+    const k = missLine(skim, r, keys), c = missLine(skim, r, classic);
+    expect(k).toBe('Daily: cleared by 14.8 ft · one short BOOST (F) burst, not to the cue, and LAND (Shift) late, once you’re low over the pad');
+    expect(c).toBe('Daily: cleared by 14.8 ft · one short BOOST burst, not to the cue, and LAND late, once you’re low over the pad');
+    for (const line of [k, c]) expect(line).not.toMatch(/the pad from|let go of the pad|try again/);
+    // Off Assist, LAND isn't the brake: the hint names LIFT, as the gas day's does.
+    expect(missLine(skim, r, { ...keys, tier: 'pro' })).toMatch(/and LIFT \(Space\) late/);
+    expect(missLine(skim, r, { ...classic, tier: 'advanced' })).toMatch(/and the four down-jet pads late/);
+  });
+
+  it('on a missed skim, the sheet\'s NEXT RUN line never tells one thumb to hold the pad in the air', () => {
+    const r = evaluate(skim, held, 'show');
+    const items = coach(heldRun.inputLog, 'show', held, 0, coachWords(thumb)).items;
+    expect(pickPointer(items, thumb, { card: held }).text).toMatch(/hold/i);   // what it says without the Daily
+    const p = pickPointer(items, thumb, { card: held, daily: dailyCoach(skim, r, thumb) });
+    expect(p.text).toBe('For the Daily: let go of the pad right after the tap and stay off it');
+    expect(p.text).not.toMatch(/\bhold/i);
+    // And the "What happened" list under it: no item says to hold the pad either.
+    expect(items.some((it) => /hold the pad/i.test(it.fix))).toBe(true);   // what it says without the Daily
+    const shown = dailyItems(items, dailyCoach(skim, r, thumb));
+    for (const it of shown) expect(it.fix, it.id).not.toMatch(/\bhold(ing)? the pad/i);
+    expect(shown.map((it) => it.id)).toEqual(items.map((it) => it.id));
+    expect(dailyItems(items, '')).toBe(items);
+    // Met, or not a skim day, or not one thumb: the coach's own line.
+    expect(dailyCoach(skim, { ok: true, miss: '' }, thumb)).toBe('');
+    expect(dailyCoach(skim, r, keys)).toBe('');
+    expect(dailyCoach(byId('gas-show'), byId('gas-show').check({}, { jumped: true, crossedRow: true, airPct: 20 }), thumb)).toBe('');
+    expect(dailyCoach(skim, skim.check({}, {}), thumb)).toBe('');   // "land clean first": no fix to stand in for
+  });
+
+  it('the skim day\'s title hint is short on the card and whole in the countdown, on one thumb only', () => {
+    expect(titleHint(skim, thumb)).toBe('Let go right after the tap');
+    expect(titleHint(skim, thumb, true)).toBe('Let go right after the tap and stay off the pad');
+    expect(titleHint(skim, keys)).toBe('');
+    expect(titleHint(skim, classic)).toBe('');
+  });
+
+  it('mark and ninety: a clean landing 6 m off names the slide on one thumb and the lean on keys and classic touch', () => {
+    expect(held.facts.padMiss).toBeGreaterThan(5);
+    expect(held.total).toBeLessThan(90);
+    for (const o of [mark, ninety]) {
+      const r = evaluate(o, held, 'show');
+      expect(r.ok).toBe(false);
+      expect(missLine(o, r, thumb)).toMatch(/ · hold the pad in the air and slide onto the amber dot, following it down$/);
+      for (const ctx of [keys, classic]) {
+        const line = missLine(o, r, ctx);
+        expect(line).toContain(' · lean toward the pad (pitch or roll) above');
+        expect(line).not.toMatch(/amber dot|try again/);
+      }
+    }
+    // A crash, or a landing on the mark that scored under 90 for something else: nothing to aim, "try again".
+    expect(missLine(ninety, ninety.check({ total: 60 }, { jumped: true, crashed: true, padMiss: 9 }), thumb)).toBe('Daily: 60.0, need 90 — try again');
+    expect(missLine(ninety, ninety.check({ total: 84 }, { jumped: true, crossedRow: true, padMiss: 2 }), thumb)).toBe('Daily: 84.0, need 90 — try again');
+    // Off the mark but also scraped the row, or touched down hard: the aim isn't what cost it.
+    expect(missLine(ninety, ninety.check({ total: 70 }, { jumped: true, crossedRow: true, contact: true, padMiss: 6 }), thumb)).toBe('Daily: 70.0, need 90 — try again');
+    expect(missLine(ninety, ninety.check({ total: 72 }, { jumped: true, crossedRow: true, padMiss: 6, sink: 2.4 }), thumb)).toBe('Daily: 72.0, need 90 — try again');
+    expect(missLine(mark, mark.check({}, {}), thumb)).toBe('Daily: no clean landing yet — try again');
+  });
+
+  it('flown as the aim hint says (held, following the amber dot down), one thumb meets ninety and lands nearer the mark', () => {
+    const s = scoreRun(flyThumb({ aim: true }).t);
+    expect(s.facts.crashed).toBe(false);
+    expect(evaluate(ninety, s, 'show').ok, `${s.total} at ${s.facts.padMiss} m`).toBe(true);
+    // The mark day's 3.5 m is the slide's precision (a reaction-late thumb lands 2.0–4.5 m: 0164, 0165), not its direction.
+    expect(s.facts.padMiss).toBeLessThan(held.facts.padMiss - 1);
+  }, 60000);
+  afterEach(() => setUnits('us', { persist: false }));
 });
 
 describe('the streak (UTC days)', () => {
