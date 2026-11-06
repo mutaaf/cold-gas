@@ -1,3 +1,9 @@
+# If App Review rejects or asks again: a correction is owed
+
+Our 5 November reply (answer 3) said the server flies each posted run's inputs again to check its score. It doesn't. Include this in the next reply:
+
+> A correction to answer 3 of our 5 November reply: the server does not re-fly posted runs. It scores the run's telemetry with its own scorer after plausibility checks against the input log, so a client can't send a score directly, but the telemetry itself comes from the client. The build reviewed then also said this in How to play; later builds don't.
+
 # Ready for a guideline 2.1 "Information Needed"
 
 18-0's v1.0 was held under 2.1 with six questions, because the developer account has little review history. Expect the
