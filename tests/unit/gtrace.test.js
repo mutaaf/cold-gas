@@ -99,8 +99,9 @@ describe('brakePeakG on the results chip', () => {
 // onset and the touchdown (1.7 → 3.3 G at ≈6.5 m → 1.0 G → a 1.4 G flare). Past the row's last roof
 // LAND's altimeter used to drop 3–4 m in a tick, the ground's profile wanted twice the sink the car
 // had, and the jets went out for 0.2–0.3 s at ≈6 m on the one-thumb Show (and at the end of the
-// Lineup's row). Measured per tick (a 0.25 s mean hid it): from the brake's onset (≥ 1.5 g held
-// 0.1 s while sinking > 5 m/s) to touchdown, no span ≥ 0.08 s under 0.5 g while sinking > 2 m/s.
+// Lineup's row). Measured per tick (a 0.25 s mean hid it): from the brake's onset to touchdown,
+// where the onset is ≥ 1.5 g held 0.1 s while sinking > 5 m/s (the ticket's "first tick at 1.5 g"
+// would start at the roll-out's or a slide's kick, mid free fall), no span ≥ 0.08 s under 0.5 g while sinking > 2 m/s.
 function burn(run, step, release) {
   const g = [], sink = [], h = [];
   while (run.phase !== 'done') {
@@ -176,6 +177,7 @@ describe('one burn from the onset to the wheels (0169)', () => {
       const b = thumbBurn(x);
       expect(b.held, `${x} px`).toBe(true);
       expect(b.t.contact, `${x} px`).toBe(false);
+      expect(b.t.sink, `${x} px`).toBeLessThanOrEqual(1.5);
       expect(scoreRun(b.t).facts.crashed, `${x} px`).toBe(false);
     }
   }, 120000);
