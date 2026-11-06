@@ -136,6 +136,8 @@ public final class Vehicle {
     public var crushE: [Double], touchNow: [UInt8]
     public var engineMass = 0.0
     public var fallPeak = 0.0, autoLand = 0, carryUp = 0
+    // LAND's brake, once begun: the most sink it may still want (m/s, 0 = not braking; 0169).
+    public var landCap = 0.0
     public let crawl: Bool
     public var esc = 0.0, escBrake = [Double](repeating: 0, count: 4), escBeta = 0.0
     public var tcOff = false, tcSport = false, absOff = false, handbrake = 0.0
@@ -259,25 +261,35 @@ func profileVy(_ h: Double, _ aPlan: Double, _ top: Double = HOVER) -> Double {
 }
 let CARRY_ROW = 7.0, CARRY_LOW = 5.0
 var behind = 0.0
+// LAND's one burn (0169): see vehicle.js.
+let LAND_CAP_ON = 5.0, LAND_CAP_MIN = 4.0, LAND_CAP_ACC = 4.5
 func governor(_ s: Vehicle, _ inp: Input, _ grounded: Int, _ m: Double, _ level: Double) {
     effLift = inp.lift; effThrust = inp.thrust
     behind = 0
-    if !truthy(inp.assist) || grounded > 0 { return }
+    if !truthy(inp.assist) || grounded > 0 { s.landCap = 0; return }
     if effThrust > 0 {
         let vh = DMath.dhypot(s.vel.x, s.vel.z)
         effThrust *= M3.clamp((ASSIST_CARRY - vh) / 1.5, 0, 1)
     }
-    if !truthy(level) || s.air <= 0 { return }
+    if !truthy(level) || s.air <= 0 { s.landCap = 0; return }
     let h = landHeight(s)
     var wantVy = landWant(s, m)
-    if h < 1.2 && upW.y < 0.99 { wantVy = jsMax(wantVy, -0.25) }
+    // One burn from the onset to the wheels (0169): once LAND brakes, the sink it lifts for never grows
+    // again (but back up to LAND_CAP_MIN at LAND_CAP_ACC); a car stopped over a roof lets the cap go.
+    var liftVy = wantVy
+    if s.landCap > 0 && roofBelow > 0 && s.vel.y > -1 { s.landCap = 0 }
+    if s.landCap > 0 { liftVy = jsMax(wantVy, -s.landCap) }
+    else if wantVy > s.vel.y && s.vel.y < -LAND_CAP_ON { s.landCap = -wantVy }
+    if s.landCap > 0 { s.landCap = jsMax(-liftVy, jsMin(LAND_CAP_MIN, jsMax(0, -liftVy) + LAND_CAP_ACC * DT)) }
+    if h < 1.2 && upW.y < 0.99 { wantVy = jsMax(wantVy, -0.25); liftVy = jsMax(liftVy, -0.25) }
     behind = wantVy - s.vel.y
     if behind > 0 || h < 8 { effThrust = 0 }
     let vh = DMath.dhypot(s.vel.x, s.vel.z)
     if roofBelow <= 0 || vh >= CARRY_ROW { s.carryUp = 0 }
     else if vh < CARRY_LOW { s.carryUp = 1 }
     if s.carryUp != 0 && upW.y > 0.9 && behind < 0.5 { effThrust = jsMax(effThrust, M3.clamp((CARRY_ROW - vh) / 3, 0, 0.5)) }
-    if s.vel.y < wantVy && upW.y > 0.55 { effLift = jsMax(effLift, M3.clamp((wantVy - s.vel.y) * 0.8 + 0.55, 0, 1)) }
+    if s.vel.y < liftVy && upW.y > 0.55 { effLift = jsMax(effLift, M3.clamp((liftVy - s.vel.y) * 0.8 + 0.55, 0, 1)) }
+    if liftVy > wantVy && s.vel.y < 0 && upW.y > 0.55 { effLift = jsMax(effLift, M3.clamp(((G - LAND_CAP_ACC) * m) / (LIFT_MAX * jsMax(0.2, feedPressure(s))), 0, 1)) }
 }
 func landWant(_ s: Vehicle, _ m: Double) -> Double {
     let h = landHeight(s)

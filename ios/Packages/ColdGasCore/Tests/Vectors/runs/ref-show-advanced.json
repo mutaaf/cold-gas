@@ -1,4 +1,4 @@
-{"format":1,"simVersion":28,"name":"ref-show-advanced","course":"show","ticks":3502,"checkEvery":24,"fullEvery":240,"fields":["pos.x","pos.y","pos.z","quat.x","quat.y","quat.z","quat.w","vel.x","vel.y","vel.z","angVel.x","angVel.y","angVel.z","angMom.x","angMom.y","angMom.z","air","phase","wheel0","wheel1","wheel2","wheel3"],"final":"9cb14e1e65b39fc7",
+{"format":1,"simVersion":29,"name":"ref-show-advanced","course":"show","ticks":3502,"checkEvery":24,"fullEvery":240,"fields":["pos.x","pos.y","pos.z","quat.x","quat.y","quat.z","quat.w","vel.x","vel.y","vel.z","angVel.x","angVel.y","angVel.z","angMom.x","angMom.y","angMom.z","air","phase","wheel0","wheel1","wheel2","wheel3"],"final":"9cb14e1e65b39fc7",
 "log":[
 [0,100,0,0,0,0,0,0,0,0,0,100,0,100,0,0,0,0,0,0,0,0,0,0],
 [154,0,0,0,0,0,0,0,0,0,0,100,0,100,0,0,0,0,0,0,0,0,0,0],
