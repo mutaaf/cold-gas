@@ -11,6 +11,7 @@
 // --cues new: the 1.0 cues and the predictive HUD (release on the ledge; Assist: hold BOOST and
 //             LAND together from the release, or press LAND when the sink band leaves green; Pro:
 //             fly the band with LIFT and roll by the roll-out cue). A share still ignores the HUD.
+import { createGapProbe } from './burn-gap.mjs';
 import { createRun, stepRun, wallProgress } from '../src/sim/run.js';
 import { newInput, up, forward } from '../src/sim/vehicle.js';
 import { scoreRun } from '../src/sim/judge.js';
@@ -41,7 +42,7 @@ const pick = (a) => a[Math.floor(rnd() * a.length)];
 const CARRY_CUE = cues === 'new' ? 9.5 : 8.5;   // the BOOST cue hides at this speed along the run
 
 const fails = {}, byClass = {};
-let ok = 0, onPad = 0;
+let ok = 0, onPad = 0, gaps = 0, rises = 0;
 const totals = [];
 const u = { x: 0, y: 0, z: 0 }, fw = { x: 0, y: 0, z: 0 }, pr = newPrediction();
 for (let n = 0; n < N; n++) {
@@ -55,7 +56,7 @@ for (let n = 0; n < N; n++) {
     steer: cues === 'new' ? pick(['none', 'marker']) : 'none',
     landAt: cues === 'old' ? pick(['cue', 'cue', 15, 8, 4]) : assistMode ? pick(['with-boost', 'with-boost', 'hud', 'hud', 'hud', 8, 4]) : pick(['hud', 'hud', 'hud', 'hud', 8]),
   };
-  const run = createRun('show');
+  const run = createRun('show'), gp = createGapProbe();
   let released = false, relT = -1, ledgeT = -1, boostOn = false, cueOffT = -1, rollOn = false, rollDone = false, rollUprightT = -1;
   let burning = false, landing = false, landSeen = -1, keyAx = 0, wHeld = false, wChange = 0, liftHeld = false, liftChange = 0;
   const lagT = Math.round(P.lag * 240);
@@ -138,7 +139,7 @@ for (let n = 0; n < N; n++) {
     const rate = Math.abs(axTarget) > Math.abs(keyAx) && Math.sign(axTarget) !== -Math.sign(keyAx) ? 4 / 240 : 8 / 240;
     keyAx += Math.max(-rate, Math.min(rate, axTarget - keyAx));
     if (run.phase === 'air') inp.roll = keyAx;
-    stepRun(run, inp);
+    gp.before(run.car); stepRun(run, inp); gp.after(run.car);
   }
   const t = run.t, s = scoreRun(t);
   if (DUMP) dumped.push({ t: { ...t }, why: null });
@@ -163,6 +164,7 @@ for (let n = 0; n < N; n++) {
   byClass[cls] = byClass[cls] || [0, 0];
   byClass[cls][1]++;
   if (!why) { ok++; byClass[cls][0]++; if (s.facts.padMiss < 7) onPad++; totals.push(s.total); }
+  if (!why) { const b = gp.read(run); if (b.gap >= 0.08) gaps++; if (b.rise > 0.5) rises++; }
   else fails[why] = (fails[why] || 0) + 1;
   if (verbose) console.log(JSON.stringify(P), why || 'OK', s.total, 'sink', t.sink.toFixed(1), 'pad', s.facts.padMiss, 'gas', s.facts.airPct);
 }
@@ -170,6 +172,7 @@ totals.sort((a, b) => a - b);
 console.log(`${assistMode ? 'Assist' : 'Pro'} · cues ${cues}: ${ok}/${N} landed clean (${Math.round((100 * ok) / N)}%), ${onPad} inside the 7 m ring; median clean score ${totals[Math.floor(totals.length / 2)] ?? '–'}`);
 console.log('  by when they braked:', Object.entries(byClass).map(([k, [a, b]]) => `${k} ${a}/${b}`).join(' · '));
 console.log('  failures:', JSON.stringify(fails));
+console.log(`  one burn (0169), clean landings: ${gaps}/${ok} with the down-jets out ≥ 0.08 s mid-brake (< 0.5 g sinking > 1 m/s, from the peak sink) · ${rises}/${ok} with the sink rising > 0.5 m/s above 1.2 m`);
 if (DUMP) { const { writeFileSync } = await import('node:fs'); writeFileSync(DUMP, JSON.stringify(dumped)); }
 if (DAILY) {
   for (const [k, g] of Object.entries(skimBy).sort()) {

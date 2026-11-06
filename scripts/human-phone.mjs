@@ -31,6 +31,7 @@
 // On one thumb it also splits gas-show (0139) and skim-show (0150) by the thumb's choice: held from the tap or lifted and pressed again, slid or not.
 //
 //   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [--coach] [--daily] [-v]
+import { createGapProbe } from './burn-gap.mjs';
 import { readFileSync } from 'node:fs';
 import { createRun, stepRun, wallProgress } from '../src/sim/run.js';
 import { newInput, up, forward } from '../src/sim/vehicle.js';
@@ -104,7 +105,7 @@ const SEARCH = build === 'after' ? 0.06 : 0.12;   // the after layout hides what
 const WARN = build === 'after';   // the after build warns (a flash on the HUD, a buzz on Android) when the descent leaves green
 
 const fails = {};
-let ok = 0, onPad = 0, missed = 0, presses = 0;
+let ok = 0, onPad = 0, missed = 0, presses = 0, gaps = 0, rises = 0;
 const totals = [];
 const u = { x: 0, y: 0, z: 0 }, fw = { x: 0, y: 0, z: 0 }, pr = newPrediction();
 for (let n = 0; n < N; n++) {
@@ -121,7 +122,7 @@ for (let n = 0; n < N; n++) {
   };
   // The phone in their hands.
   const F = { twoFinger: rnd2() < 0.45, rest: rnd2() < 0.5, lapse: rnd2() < 0.2 };
-  const run = createRun('show');
+  const run = createRun('show'), gp = createGapProbe();
   const lagT = Math.round(P.lag * 240);
   // A press: arrives after reaction + move (+ a layout search); may miss and be retried.
   const pressDelay = (ctrl, hand, search = false) => {
@@ -194,7 +195,7 @@ for (let n = 0; n < N; n++) {
       if (run.phase === 'ramp' && inp.lift > 0) released = true;
       if (run.phase === 'air') released = true;
       inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
-      stepRun(run, inp);
+      gp.before(run.car); stepRun(run, inp); gp.after(run.car);
     }
     // 0150: a let-go thumb that never came back (the skim day's hint) is its own bucket.
     choice = `${P.landAt === 'with-boost' ? 'held from the tap' : holdFrom < 0 ? 'lifted, stayed off' : 'lifted, pressed again'} · ${slid ? 'slid' : 'no slide'}`;
@@ -269,7 +270,7 @@ for (let n = 0; n < N; n++) {
         if (Math.abs(ax) < DEADZONE) ax = 0;
         if (run.phase === 'air') inp.roll = Math.max(-1, Math.min(1, ax));
       } else inp.brake = 1;
-      stepRun(run, inp);
+      gp.before(run.car); stepRun(run, inp); gp.after(run.car);
     }
   }
   const t = run.t, s = scoreRun(t);
@@ -293,6 +294,7 @@ for (let n = 0; n < N; n++) {
   else if (t.sink > 3) why = `hard touchdown (${t.sink > 6 ? '>6' : '3–6'} m/s)`;
   else if (t.tiltDeg > 15) why = 'landed tilted';
   if (!why) { ok++; if (s.facts.padMiss < 7) onPad++; totals.push(s.total); } else fails[why] = (fails[why] || 0) + 1;
+  if (!why) { const b = gp.read(run); if (b.gap >= 0.08) gaps++; if (b.rise > 0.5) rises++; }
   if (COACH && !why) {
     const first = coach(run.inputLog, 'show', s, 0, coachWords({ device: 'touch', scheme, tier: s.tier, course: 'show' })).items[0], id = first.id;
     firsts[id] = (firsts[id] || 0) + 1;
@@ -309,6 +311,7 @@ const q = (f) => totals[Math.min(totals.length - 1, Math.floor(totals.length * f
 console.log(`Phone ${vp} · ${scheme}${scheme === 'thumb' ? ` · skill ${skill}` : ''} · ${build}: ${ok}/${N} landed clean (${Math.round((100 * ok) / N)}%), ${onPad} inside the 7 m ring; median clean score ${q(0.5)} · mis-taps ${missed}/${presses}`);
 console.log(`  clean scores: min ${totals[0] ?? '–'} · p10 ${q(0.1)} · median ${q(0.5)} · p90 ${q(0.9)} · max ${totals[totals.length - 1] ?? '–'}`);
 console.log('  failures:', JSON.stringify(fails));
+console.log(`  one burn (0169), clean landings: ${gaps}/${ok} with the down-jets out ≥ 0.08 s mid-brake (< 0.5 g sinking > 1 m/s, from the peak sink) · ${rises}/${ok} with the sink rising > 0.5 m/s above 1.2 m`);
 if (COACH) console.log(`  coach's first finding (landed runs): ${JSON.stringify(firsts)} · clean ${Math.round((100 * (firsts.clean || 0)) / Math.max(1, ok))}%`);
 if (COACH) console.log(`  the mark's title when it leads: ${JSON.stringify(markTitles)} · "Long" on a mostly-sideways miss: ${longButWide}`);
 if (DAILY) {

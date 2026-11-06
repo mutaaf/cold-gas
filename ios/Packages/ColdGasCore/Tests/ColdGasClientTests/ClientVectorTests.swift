@@ -51,9 +51,9 @@ func ints(_ v: JSValue?) -> [[Int]] { (v?.arrayValue ?? []).map { ($0.arrayValue
     @Test func rejectsAreNil() {
         #expect(arr(challenge, "rejects").count >= 20)
         for r in arr(challenge, "rejects") {
-            #expect(Challenge.decode(r["payload"]!.stringValue!, simVersion: 29) == nil, "\(r["name"]!.stringValue!) decoded")
+            #expect(Challenge.decode(r["payload"]!.stringValue!, simVersion: 30) == nil, "\(r["name"]!.stringValue!) decoded")
         }
-        for a in arr(challenge, "accept") { #expect(Challenge.decode(a["payload"]!.stringValue!, simVersion: 29) != nil) }
+        for a in arr(challenge, "accept") { #expect(Challenge.decode(a["payload"]!.stringValue!, simVersion: 30) != nil) }
     }
     @Test func fragmentsUrlsAndComparisons() {
         for h in arr(challenge, "hashes") {
