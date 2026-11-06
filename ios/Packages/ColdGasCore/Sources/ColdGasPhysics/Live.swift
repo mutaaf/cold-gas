@@ -34,7 +34,7 @@
 //   live.onRelease = { … }              // the release (LIFT on the deck, or the first tick in the air): buzz
 //   // a drill (Drills.swift): LiveRun(drill: try buildDrill(drill, course), tier:, oneThumb:, level:), then the same
 //   // the pad's sight, once a frame in the air (read-only on the car):
-//   //   predict(car, h, pr, land: live.thumb.landing); let mark = markOffset(car, pr, course)    // px on the pad
+//   //   predict(car, h, pr, land: live.thumb.landing); let mark = markOffset(car, pr, course, live.thumb.ref)    // px on the pad
 //   //   h: the floor's height over what's below. The vectors (and scripts/human-phone.mjs) use jsMax(0, pos.y −
 //   //   SPEC.comHeight); the page's HUD also subtracts a roof or the launch site (main.js heightAboveSurface, not ported).
 //

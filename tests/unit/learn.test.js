@@ -327,13 +327,16 @@ describe('the coach weighs the touchdown by what it cost (0125)', () => {
     for (const text of [thumb.ranOut, pointerText('ran-out', THUMB_SHOW)]) {
       expect(text).not.toMatch(/green band|stay on the brake/i);
       expect(text).toMatch(/holding the pad/);
-      expect(text).toMatch(/slide small/);
+      expect(text).not.toMatch(/slide/);   // 0164: the slide costs no braking, so the words don't ask for a small one
     }
     expect(KEY_WORDS.ranOut).toMatch(/green band/);
     expect(coachWords({ device: 'key', tier: 'assist', course: 'show' }).ranOut).toMatch(/green band/);
     expect(pointerText('ran-out', { device: 'key', tier: 'assist' })).toMatch(/Stay on the brake to the ground: keep holding Shift/);
   });
-  it('the slide the thumb words name does cost braking: a held sideways slide lands harder than none', () => {
+  // 0164: the words used to say "keep the slide small: a big slide tilts the jets off the brake", true while the slide
+  // was a roll held open (+40 px: 1.41 m/s against 1.05). The slide now flies LAND's own hold-the-line law, so a held
+  // slide either way brakes as well as none, and the words say only "keep holding the pad".
+  it('a held sideways slide brakes as well as none (0164), so the thumb\'s words drop "keep the slide small"', () => {
     const slide = (dx) => {
       const run = createRun('show'), th = createOneThumb();
       let released = false, ledgeT = -1, tapT = -1;
@@ -352,7 +355,8 @@ describe('the coach weighs the touchdown by what it cost (0125)', () => {
       }
       return run.t.sink;
     };
-    expect(slide(40)).toBeGreaterThan(slide(0) + 0.2);
+    const none = slide(0);
+    for (const dx of [-40, 40]) expect(Math.abs(slide(dx) - none), `${dx} px`).toBeLessThanOrEqual(0.15);
   });
 });
 

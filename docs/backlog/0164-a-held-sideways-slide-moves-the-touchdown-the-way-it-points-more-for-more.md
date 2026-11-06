@@ -1,7 +1,7 @@
 ---
 id: 0164
 title: On one thumb, a held sideways slide moves the touchdown the way it points, more for more, and never off the pad
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
@@ -91,3 +91,56 @@ Two things to add (`docs/critique/2026-11-06-0400.md` §1–2):
   depends on the car's x (slide +12: 0.20 s off from 6.7 m; +32: 0.32 s off from 5.4 m). Re-measure this ticket's
   table after 0169 lands, before tuning `AIM_PX_PER_M` or `flankAhead`.
 - [ ] The monotonic and proportional criteria above hold on the Wall too (held sideways slides −48 … +48 px, step 4).
+
+## Builder note 2026-11-06 (shipped)
+Diagnosis first, re-measured on main after 0169 (Node, the `thumb-mastery` harness). The cliff wasn't only `flankAhead`.
+A slide was a roll held open for ≈ 3 s, and any roll over 0.05 switches off LAND's hold-the-line, so the touchdown
+integrated the slide (−24 px: 29 m off) and was never measured from anything.
+
+What changed (`src/onethumb.js`, mirrored in `OneThumb.swift`):
+- **Sideways is a place.** `ref` is where LAND's own hold would set the car down sideways (here, plus the drift the
+  hold carries off, `lead` = t / (1 + t / 2τ), τ 1.8 s, fitted on the sweeps). It is read until the slide leaves the
+  dead zone. X px moves it X / 6 m, clamped 6 m inside the mark's side (never the other way). The roll flies the
+  hold's own law (0.07 rad per m/s, ×3, up to the old full roll) about the drift that ends there. With no slide the
+  flight is bit for bit as before.
+- **The sight uses the same frame.** `markOffset(…, ref)` lays the mark out sideways from `ref`. The page
+  (`thumb-aim.js`), human-phone, daily-reach, the vectors' sights and the Swift HUD all read it that way, so the
+  dot stays where to put the thumb.
+- **Inward on the Show waits for the semi.** The no-slide flight leaves the semi's end 0.16 m outside its roof
+  edge. Pulled in from over the row, the car crossed that edge low, and LAND stopped it at 5.3 m (0169's roof hold).
+  That cost 1.5 m along the run, and gtrace's "passes the semi in one burn" broke at +20 px. An inward slide now
+  waits until the car is past the semi (the sight dims, `aimLive` false), then the loop takes the whole move.
+  Outward slides never wait.
+
+Measured (main → this). The Show held from the tap, sideways:
+
+| slide | main lateral / padMiss | now |
+|---|---|---|
+| −24 | −28.7 / 29.4 | −6.2 / 6.4 (clamped at the ring) |
+| −12 | −17.7 / 18.3 | −6.2 / 6.4 |
+| −8 | −5.6 / 6.5 | −6.2 / 6.5 |
+| 0 | −5.1 / 6.0 | −5.1 / 6.0 (identical) |
+| +8 | −4.6 / 5.6 | −3.5 / 4.6 |
+| +12 | **−9.4 / 10.0** | −2.7 / 3.9 |
+| +16 | −5.0 / 5.8 | −1.9 / 3.3 |
+| +24 | −1.6 / 3.1 | −0.4 / 2.3 |
+| +32 | 5.8 / 6.8 | 0.3 / 1.9 |
+| +36 (the dot) | **17.7 / 17.8 Rough** | 0.4 / 1.8 |
+| +48 | 17.6 / 18.1 Rough | 0.5 / 1.9 |
+
+The Wall sideways: −48 → −3.6, −24 → 1.9, −8 → 5.3, 0 → 6.1 (main: −12 → 8.7, +12 → 16.2, +24 → 26.6). Positive
+slides there leave it at 6.1, because the hold's touchdown is already past the 6 m clamp on that side.
+
+- Acceptance: Show −48…+48 step 2 monotonic (within 0.3 m), ≤ 6.5 m, no Rough landing, no contact. Wall step 4
+  monotonic, no contact. ±8…+24 px move 0.5–1.5 × X/6 (Show +8…+24 ≈ 1.2×; Wall −8 0.6×, −48 1.2×). First-frame dot
+  held: Show 2.2 m, Wall 1.3 m. Re-reading thumb 0.2–0.3 s late: Show 1.8 m, Wall ≤ 2 m. All in
+  `tests/unit/thumb-mastery.test.js`.
+- `naive-players` 32/32. `human-phone 150 --scheme=thumb`: careful 150/150 clean, median 93 → 94; sloppy median
+  91 → 92.3, min 78 → 83.7; none identical; jets-out gaps 0 in every group.
+- `daily-reach` (n 40, the test's sample): mark-show 17 → 21, gas-show 19 → 32, ninety 28 → 30, soft-wall 23 → 23,
+  skim 31 → 28 (all over the 12 floor).
+- A held slide no longer costs braking (Show sink: none 1.05, ±24…±48 px 1.04–1.09; main +48 1.80). So the
+  one-thumb ran-out words drop "keep the slide small: a big slide tilts the jets off the brake", and learn.test now
+  pins the new fact.
+- Not changed: the along-track half (0165). On the Show a held slide's landZ is still about −32…−34.
+- Funnel numbers to move: `run-landed` / `run` and `retry` / `run` among one-thumb runs, and `daily-done` on mark-show days.

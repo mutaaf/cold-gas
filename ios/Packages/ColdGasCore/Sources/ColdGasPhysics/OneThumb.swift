@@ -32,6 +32,14 @@ public func flankAhead(_ c: Vehicle, _ ax: Double) -> Bool {
     }
     return false
 }
+// 0164: the sideways slide's loop (src/onethumb.js, the same numbers and the same order of operations).
+let HOLD_K = 0.07, HOLD_ROLL = (3.0 * 2.0) / (1.6 * 4.6), HOLD_TAU = 1.8
+let AIM_RING = 6.0, AIM_TGO = 0.6, AIM_GAIN = 3.0, AIM_BANK = 0.55
+/// A point's side in the car's frame: + = the car's right (the pad's sight's +x).
+@inline(__always) func sideOf(_ x: Double, _ z: Double, _ f: V3) -> Double { z * f.x - x * f.z }
+/// The tallest parked roof on the Show (the first of the tallest); an inward slide waits until it is behind (0164).
+let TALL: ParkedBox = { var t = SHOW.boxes[0]; for b in SHOW.boxes where b.maxY > t.maxY { t = b }; return t }()
+@inline(__always) func tallAhead(_ c: Vehicle) -> Bool { c.pos.z > TALL.minZ - CAR.halfL }
 @inline(__always) func rowBehind(_ run: Run, _ c: Vehicle) -> Bool {
     if run.course != "show" { return true }
     let far = SHOW.rowFar - ROW_MARGIN
@@ -54,17 +62,20 @@ public func thumbStage(_ run: Run?, _ released: Bool) -> ThumbStage {
     return .climb
 }
 
-let tUw = V3(), tFw = V3()
+let tUw = V3(), tFw = V3(), tBx = V3()
 public final class OneThumb {
     var held_ = false, pressed = false, push = 0, drive = false, carried = false, landing_ = false
-    var wasStage = ThumbStage.idle, ax = 0.0, ay = 0.0, live = false
+    var wasStage = ThumbStage.idle, ax = 0.0, ay = 0.0, live = false, ref_ = Double.nan, wait = false
+    let pr = Prediction()
     public init() {}
     /// Touch events: `pending` latches a tap shorter than a tick until the next sample reads it.
-    public func down() { held_ = true; pressed = true; ax = 0; ay = 0 }
-    public func up() { held_ = false; ax = 0; ay = 0 }
+    public func down() { held_ = true; pressed = true; ax = 0; ay = 0; ref_ = .nan }
+    public func up() { held_ = false; ax = 0; ay = 0; ref_ = .nan }
     /// The held thumb's slide from where it pressed, points (+x right, +y UP the glass).
     public func move(_ dx: Double, _ dy: Double) { if held_ { ax = dx / THUMB.aimPx; ay = dy / THUMB.aimPx } }
-    public func reset() { held_ = false; pressed = false; push = 0; drive = false; carried = false; landing_ = false; wasStage = .idle; ax = 0; ay = 0; live = false }
+    public func reset() { held_ = false; pressed = false; push = 0; drive = false; carried = false; landing_ = false; wasStage = .idle; ax = 0; ay = 0; live = false; ref_ = .nan }
+    /// 0164: where the sideways slide is measured from (m, the car's right +), NaN before this hold could aim.
+    public var ref: Double { ref_ }
     public var held: Bool { held_ }
     /// The drive-off is under way (0129), and a press the next tick hasn't read yet: the pad says "Letting go".
     public var driving: Bool { drive }
@@ -73,7 +84,8 @@ public final class OneThumb {
     public var landing: Bool { landing_ }
     /// The slide as the pad draws it: −1…1 each way, 0 inside the dead zone.
     public var aim: (x: Double, y: Double) { (thumbShape(ax), thumbShape(ay)) }
-    /// Whether the last tick could aim (held, in the air, roof up, high enough, the row allowing).
+    /// Whether the last tick could aim (held, in the air, roof up, high enough, the row allowing; 0164: not while an
+    /// inward slide waits for the semi to pass).
     public var aimLive: Bool { live }
 
     /// Fill `out` (cleared: clearInput) for this tick. `steer`: an extra steer (tilt), driver-relative.
@@ -113,12 +125,36 @@ public final class OneThumb {
                 if tUw.y > 0.94 && k > 0 {
                     let clear = rowBehind(run, c)
                     if clear { out.pitch = k * THUMB.aimPitch * thumbShape(ay) }
-                    var roll = k * THUMB.aimRoll * thumbShape(ax)
+                    // 0164: sideways is a place, flown by LAND's hold-the-line law (src/onethumb.js says why).
+                    M3.rotate(tFw, c.quat, M3.set(tFw, 0, 0, 1))
+                    predict(c, jsMax(0, h), pr, land: landing_)
+                    M3.rotate(tBx, c.quat, M3.set(tBx, 1, 0, 0))
+                    let bs = sideOf(tBx.x, tBx.z, tFw)
+                    let vb = c.vel.x * tBx.x + c.vel.y * tBx.y + c.vel.z * tBx.z
+                    let tGo = jsMax(AIM_TGO, pr.tLand), lead = tGo / (1 + tGo / (2 * HOLD_TAU))
+                    let here = sideOf(c.pos.x, c.pos.z, tFw)
+                    var roll = 0.0
+                    wait = false
+                    let sx = thumbShape(ax)
+                    if sx == 0 || ref_ != ref_ { ref_ = here + vb * bs * lead }
+                    if sx != 0 {
+                        let pad = (COURSES[run.course] ?? SHOW).pad ?? SHOW.pad!, ps = sideOf(pad.x, pad.z, tFw)
+                        let off = (ax * THUMB.aimPx) / AIM_PX_PER_M
+                        let want = off > 0 ? jsMax(ref_, jsMin(ref_ + off, ps + AIM_RING)) : jsMin(ref_, jsMax(ref_ + off, ps - AIM_RING))
+                        let inward = (want - ref_) * sideOf(c.pos.x, 0, tFw) < 0
+                        let w = run.course == "show" && inward && tallAhead(c)
+                        if w { wait = true }
+                        if want != ref_ && !w {
+                            let vNeed = ((want - here) / lead) * bs
+                            let bank = jsMax(-AIM_BANK, jsMin(AIM_BANK, HOLD_K * AIM_GAIN * (vb - vNeed)))
+                            roll = k * HOLD_ROLL * bank
+                            if abs(roll) < 0.05 { roll = 0 }
+                        }
+                    }
                     if roll != 0 && run.course == "show" && !clear {
-                        M3.rotate(tFw, c.quat, M3.set(tFw, 0, 0, 1))
                         if flankAhead(c, roll * -tFw.z * AIM_ACC + 9.81 * tUw.x) { roll = 0 }
                     }
-                    live = true
+                    live = !wait
                     out.roll = roll
                 }
             }
@@ -135,11 +171,12 @@ public final class OneThumb {
 /// AIM_PX_PER_M × the miss. `m`: the miss, metres.
 public let AIM_PX_PER_M = 6.0, AIM_R = 44.0
 let mFw = V3()
-public func markOffset(_ c: Vehicle, _ pr: Prediction, _ course: String) -> (x: Double, y: Double, m: Double) {
+/// 0164: `ref` (the thumb's `ref`, NaN for none): the mark laid out sideways from where the slide measures from.
+public func markOffset(_ c: Vehicle, _ pr: Prediction, _ course: String, _ ref: Double = .nan) -> (x: Double, y: Double, m: Double) {
     let pad = (COURSES[course] ?? SHOW).pad ?? SHOW.pad!
     M3.rotate(mFw, c.quat, M3.set(mFw, 0, 0, 1))
     let ez = pad.z - pr.landZ, ex = pad.x - pr.landX
-    let along = ez * mFw.z + ex * mFw.x, side = ez * mFw.x - ex * mFw.z
+    let along = ez * mFw.z + ex * mFw.x, side = ref == ref ? sideOf(pad.x, pad.z, mFw) - ref : ez * mFw.x - ex * mFw.z
     var x = side * AIM_PX_PER_M, y = -along * AIM_PX_PER_M
     let d = DMath.dhypot(x, y, 0)
     if d > AIM_R { x *= AIM_R / d; y *= AIM_R / d }

@@ -178,7 +178,7 @@ for (let n = 0; n < N; n++) {
         else if (t >= aimNext) {
           const h = Math.max(0, c.pos.y - SPEC.comHeight);
           predict(c, h, pr);
-          markOffset(c, pr, 'show', off);
+          markOffset(c, pr, 'show', off, th.ref);
           let x = off.x, y = -off.y;   // the dot's offset, +y up the glass
           if (sk === 'sloppy') {
             x *= A.over; y *= A.over;

@@ -312,7 +312,7 @@ export function inputVector({ name, course, scheme, tier, level, script, drill =
     sight(land = false) {
       const c = run.car, h = Math.max(0, c.pos.y - SPEC.comHeight);
       predict(c, h, pr, land);
-      markOffset(c, pr, course, off);
+      markOffset(c, pr, course, off, IN.thumb.ref);
       sights.push([run.tick, land ? 1 : 0, ...PRED_FIELDS.map((k) => hex(pr[k])), pr.status, hex(off.x), hex(off.y), hex(off.m)]);
       return off;
     },

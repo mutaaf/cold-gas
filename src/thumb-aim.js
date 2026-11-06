@@ -53,7 +53,7 @@ export function mountThumbAim(pad, thumb) {
       const on = stage === 'fly' && run.phase === 'air' && uw.y > 0.94;
       flag('on', on);
       if (!on) return;
-      markOffset(c, pr, run.course, off);
+      markOffset(c, pr, run.course, off, thumb.ref);
       const mx = Math.round(off.x), my = Math.round(off.y);
       if (mx !== last.mx || my !== last.my) {
         mark.style.transform = `translate(${mx}px, ${my}px)`;

@@ -15,8 +15,8 @@
   },
   {
    "path": "coach.json",
-   "sha256": "ad3464ec9f809a0d2a5ed92b45835721433c7f42728bae8615670a6e4782eee9",
-   "bytes": 443825
+   "sha256": "05c74049e85e80639230ccb50b650c18e9cf765d7b35615350acbf11c7e20487",
+   "bytes": 443680
   },
   {
    "path": "dmath.json",
@@ -80,8 +80,8 @@
   },
   {
    "path": "input/thumb-show-aim.json",
-   "sha256": "384912462642acb3c72e6ab4721b1420113afd2c6da94c60c2f95305019bb088",
-   "bytes": 69070
+   "sha256": "9850f60245a03d6443b8b40a0972b6b293109ffd43cd0d0eb0628762e07d6228",
+   "bytes": 71078
   },
   {
    "path": "input/thumb-show-hold.json",
@@ -90,8 +90,8 @@
   },
   {
    "path": "input/thumb-show-lapse-tilt.json",
-   "sha256": "fdffb9397e3f756d309daca1e8d444c3c8090ae8695ec74afd5a15aac38ddd2c",
-   "bytes": 70457
+   "sha256": "24570d02be6a9b4a90cbdddd09b59033559747c4953a364c99f009e7c081028a",
+   "bytes": 72608
   },
   {
    "path": "input/thumb-show-tap-hold.json",
@@ -100,8 +100,8 @@
   },
   {
    "path": "input/thumb-wall-aim.json",
-   "sha256": "24a44f8bd68b0e4bf0761f93ee0b2c884f3e1e20cbb4970e9a61006956b799ff",
-   "bytes": 72629
+   "sha256": "8a64c12ed32d70c5f317f2eff332ca5dc318cafdf641532ace5b67d389be436f",
+   "bytes": 76466
   },
   {
    "path": "input/thumb-wall-hold.json",
