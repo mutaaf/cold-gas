@@ -1,7 +1,7 @@
 ---
 id: 0170
 title: A tapped thumb carries the brake past the semi in one burn, like a held one, with no stop in the air over the truck
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity
@@ -94,3 +94,45 @@ slack").
 - The reference's peak height (0028).
 - The sideways slide's mapping (0164), apart from re-measuring its tapped-thumb table after this lands.
 - Classic touch and keys.
+
+## Builder note 2026-11-06 (not built: back to proposed, needs a decision)
+Diagnosed on main `8322c47` (SIM_VERSION 30) in Node, with gtrace's `thumbBurn` harness and per-tick governor prints.
+
+**Where the flights part.** It's the roll-out, not LAND's plan. Held, LAND is on from the release and the car is roof up
+(uy 0.86) by 0.8 s. Tapped, Assist's auto-land arms at 0.6 s and the car is still inverted at 1.0 s (uy −0.37) and roof up
+at ≈1.35 s. So it gets to the row at 15 m/s at 13 m, 1.5 m further right. Held, the car crosses the semi's end beside it
+(x −4.56, outside its 3.16 m + half a car), sinking 5.6 m/s. Tapped, at x −3.64 its footprint is 0.5 m over the semi's
+corner. LAND's roof hold (`landWantAt`, ROOF_HOLD 1.2 m) binds from 1.8 s and brakes it to a stop at 5.3 m.
+
+**It can't pass that corner at speed from where it is.** At 1.8 s (h 10.2, sink 12.7) the floor has 4.3 m to spare over
+the semi and the tail stays over it for another 0.76 s. Any brake that keeps ROOF_HOLD has to end at sink ≈ 0. At 1.4 s,
+the first tick roof up, a pass is just possible at ≤ 2 m/s.
+
+**What I measured (reverted, nothing shipped).** I tried option 2 of What, LAND passing a roof whose end is in sight: plan an
+even brake that crosses the end ROOF_HOLD over it at vEnd (≤ 3.5–8 m/s), and scan ≤ 8 m past the 0.6 s look-ahead
+for the end. It does take out the stop: sink 4.2 → 3.9 → 4.0 m/s past the semi, one burn, no contact. But the early
+brake costs the tapped thumb, at every vEnd and scan length tried (tapped, no slide):
+
+| | main | vEnd 3.5 | vEnd 5 | vEnd 8 |
+|---|---|---|---|---|
+| touchdown after release | 5.11 s | 5.13 | 4.84–4.98 | 4.92 |
+| padMiss / score | 6.2 / Clean 83.7 | 9.0 / 74.7 | 9.9–11.3 / 71.3–73.3 (Rough at scan 3+) | 9.0 / 74.7 |
+| clearance over the row | **1.3 m** | 3.4 | 3.9–4.0 | 4.9 |
+
+Held from the tap moves by ≤ 0.7 points either way.
+
+**The conflict.** The tapped thumb's stop over the semi *is* the skim. `skim-show` (0150) is met by exactly that flight:
+"let go right after the tap" gives 1.3 m, held gives 4.5 m. daily-reach's ≈ 70 % on one thumb is these flights. Any fix
+that keeps the car from reaching the semi's end low and slow lifts the tapped thumb to 3.4–4.9 m, past `skim-show`'s 1.5 m bar on every tapped line
+measured, so the Daily the sheet teaches would be out of reach on one thumb. (I didn't run `daily-reach` on the variant;
+the clearance alone misses the bar.) It also costs 9–13 points of precision. So this ticket's bar
+("no stop over the semi" with "medians don't fall" and daily-reach ≥ 30 %) can't be met by LAND's plan alone. Options
+for the operator or the Critic:
+- (a) Move the skim. Retire or re-word `skim-show` on one thumb (e.g. "under 2.5 m", or skim the Lineup), then fly option 1:
+  the tapped thumb's auto-land rolls out from the release as LAND does (`onethumb.js`: `st.landing` from the release).
+  That is the held flight, minus the slide.
+- (b) Keep the skim and accept a slow pass over the semi's corner (sink ≥ 1 m/s, a rise of ≈ 1 m/s), relaxing this
+  ticket's "no tick above 4.5 m under 1 m/s" and "rise ≤ 0.5".
+- (c) Keep both, and take the tapped car off the semi's corner sideways (its footprint is 0.5 m over it). That is a carry
+  or line-hold change, and it moves the touchdown (0164's frame).
+0164's tapped-thumb bounce (+8 px hovers 0.38 s over the semi) waits on the same decision.
