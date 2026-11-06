@@ -28,7 +28,7 @@
 //
 // --daily (0134): also check each landed-or-not run against every Show objective of the daily jump (src/daily.js
 // evaluate, on scoreRun's card) and print each one's completion, so a Daily bar is set on phones as well as keyboards.
-// On one thumb it also splits gas-show by the thumb's choice (0139): held from the tap or lifted and pressed again, slid or not.
+// On one thumb it also splits gas-show (0139) and skim-show (0150) by the thumb's choice: held from the tap or lifted and pressed again, slid or not.
 //
 //   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [--coach] [--daily] [-v]
 import { readFileSync } from 'node:fs';
@@ -277,8 +277,9 @@ for (let n = 0; n < N; n++) {
     for (const o of OBJECTIVES) if (o.course === 'show') dailyMet[o.id] = (dailyMet[o.id] || 0) + (evaluate(o, s, 'show').ok ? 1 : 0);
     if (s.facts.jumped && !s.facts.crashed) gasLeft.push(s.facts.airPct);
     if (choice) {
-      const g = (split[choice] ||= { n: 0, met: 0, gas: [] });
+      const g = (split[choice] ||= { n: 0, met: 0, skim: 0, gas: [] });
       g.n++; if (evaluate(OBJECTIVES.find((o) => o.id === 'gas-show'), s, 'show').ok) g.met++;
+      if (evaluate(OBJECTIVES.find((o) => o.id === 'skim-show'), s, 'show').ok) g.skim++;
       if (s.facts.jumped && !s.facts.crashed) g.gas.push(s.facts.airPct);
     }
   }
@@ -317,6 +318,7 @@ if (DAILY) {
   for (const [k, g] of Object.entries(split).sort()) {
     g.gas.sort((a, b) => a - b);
     console.log(`  gas-show by the thumb's choice: ${k}: ${g.met}/${g.n} met (${Math.round((100 * g.met) / Math.max(1, g.n))}%) · gas left min ${g.gas[0] ?? '–'} · median ${g.gas[Math.floor(g.gas.length / 2)] ?? '–'} · max ${g.gas.at(-1) ?? '–'} %`);
+    console.log(`  skim-show by the thumb's choice: ${k}: ${g.skim}/${g.n} met (${Math.round((100 * g.skim) / Math.max(1, g.n))}%)`);
   }
   console.log(`  gas left at touchdown, landed runs: min ${gasLeft[0] ?? '–'} · median ${g(0.5)} · max ${gasLeft[gasLeft.length - 1] ?? '–'} % · ${[25, 28, 30, 32, 35, 40].map(over).join(' · ')}`);
 }

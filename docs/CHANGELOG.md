@@ -1,5 +1,6 @@
 # Changelog
 
+2026-11-06 · #0150 · A missed Daily now says what to do differently instead of "try again". On the skim day, one thumb is told to let go right after the tap and stay off (holding carries you high over the roofs), on the title card and before the run too, and the coach's next-run line says the same instead of "hold the pad". The mark and 90-point days name the slide onto the amber dot (or the lean, on keys and two thumbs). No sim change.
 2026-11-05 · #0155 · The privacy page no longer carries the hosting's page-view counter: it, like the game, now asks nothing of any other site, and its small grey text is a little brighter so it reads easily. Its words say so (the web game's ads are still named). No game change.
 2026-11-05 · #0167 · Nothing changes on the web. The iPhone app's flight controls answer sooner: the system no longer holds touches near the screen edge, presses skip the slow path through the interface, a finger can slide between buttons, and a thruster can't stick on. Scores don't change.
 2026-11-05 · #0166 · Nothing changes on the web. In the iPhone app, How to play and the results now show the important things at a glance: Hold, Tap, Hold and your score sit in bright aurora fields, each judge's words open with a tap on their score, and the rest folds away. A crash stays plain.

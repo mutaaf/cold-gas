@@ -47,7 +47,8 @@ import { createUI, crashStep } from './ui.js';
 import { initFocusTrap } from './focus-trap.js';
 import { wireUnitToggles, unitText } from './units.js';
 import { drawShareCard, shareRun, toast } from './share-card.js';
-import { createComeback } from './comeback.js';   // [comeback] challenge links + the daily jump (src/comeback.js)
+import { createComeback } from './comeback.js';
+import { objectiveFor, evaluate as dailyEval, dailyCoach } from './daily.js';   // [comeback] challenge links + the daily jump (src/comeback.js)
 import { createInstruments } from './instruments.js';
 import { localWords, localMeta, fetchBoard } from './panel.js';
 import { createPost } from './post.js';
@@ -520,7 +521,10 @@ function flownCtx(how, course, tier) {
 }
 function showPointer(run) {
   // Worded for the tier the next run flies (an Adapt step down changes the controls that matter).
-  const p = pickPointer(S.coach.items, pointerCtx(run.course, S.tier), { history: S.pointerHist, card: S.card, flight: S.coach.flight, crashed: !!S.card?.facts?.crashed });
+  const ctx = pointerCtx(run.course, S.tier), obj = objectiveFor(Date.now());
+  // 0150: on a missed Daily whose fix the coach's line would contradict (skim on one thumb), the line is the Daily's.
+  const daily = S.drill ? '' : dailyCoach(obj, dailyEval(obj, S.card, run.course), ctx);
+  const p = pickPointer(S.coach.items, ctx, { history: S.pointerHist, card: S.card, flight: S.coach.flight, crashed: !!S.card?.facts?.crashed, daily });
   if (p.id) { S.pointerHist.push(p.id); if (S.pointerHist.length > 4) S.pointerHist.shift(); }
   const text = p.text || '';
   pointerBox.querySelector('[data-pointer-better]').textContent = '';

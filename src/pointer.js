@@ -153,11 +153,13 @@ const DRILL_LABEL = { ledge: 'On the ledge', release: 'Just let go', carry: 'Ove
 // The pointer after a run. `items`: the coach's fixes (most costly first), `history`: the pointer ids
 // shown after the previous runs (most recent last). Returns { id, text, better }: `better` names the
 // last pointer's fix, now fixed, with its number; `id` goes on the history.
-export function pickPointer(items, ctx, { history = [], card = null, flight = null, crashed = false } = {}) {
+// `daily` (0150): the missed Daily's own line (src/daily.js dailyCoach), which stands in for the coach's.
+export function pickPointer(items, ctx, { history = [], card = null, flight = null, crashed = false, daily = '' } = {}) {
   const list = (items || []).filter((it) => pointerText(it.id, ctx, flight));
   const last = history[history.length - 1], prev = history[history.length - 2];
   // Fixed: last time's pointer isn't among this run's fixes, and this run didn't crash.
   const better = last && BETTER[last] && !crashed && !list.some((it) => it.id === last) ? betterText(last, card) : '';
+  if (daily) return { id: 'daily', text: daily, better };
   let pick = list[0] || null;
   // Never the same pointer three times running: the next fix instead, or the drill for it.
   if (pick && pick.id === last && pick.id === prev) {
