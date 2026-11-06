@@ -4,9 +4,13 @@
 // jump is thrown away: Home on the results (the top bar, the sheet, the theatre's bar, H) asks once,
 // inline, "Leave without posting?" Leave / Post. No browser dialogs.
 //
+// Before posting (0141): one `dry: true` request per decided run asks the board what rank this run would get, and the
+// button names it ("Post · ABC · would be #1 today"). It never blocks the sheet; no answer leaves "Post · ABC".
+// A dry call isn't a post: the funnel's `post` counts only the real one.
+//
 // `ctx()` → { run, card, eligible } for the sheet on screen (src/main.js). The post sends the run's input
 // log and its telemetry (the same `t` the judges get); the Worker scores it (src/worker/index.js).
-import { postScore, postMessage } from './panel.js';
+import { postScore, postMessage, dryRank, rankLabel } from './panel.js';
 import { obs } from './obs/index.js';
 
 const KEY = 'coldgas_initials';
@@ -20,11 +24,14 @@ export function createPost({ ctx, onLeaveOpen = () => {}, onLeavePost = () => {}
   const field = form.querySelector('[data-r-post-field]');
   const btn = form.querySelector('[data-r-post-btn]');
   const iniEl = form.querySelector('[data-r-post-ini]');
+  const rankEl = form.querySelector('[data-r-post-rank]');
+  const dayEl = Object.assign(document.createElement('span'), { className: 'r-post-day', textContent: ' today' });
   const edit = form.querySelector('[data-r-post-edit]');
   const msg = form.querySelector('[data-r-submit-msg]');
   const leave = document.querySelector('[data-leave]');
   const leaveGo = leave.querySelector('[data-leave-go]'), leavePost = leave.querySelector('[data-leave-post]');
   let postingRun = null, postedRun = null, askedRun = null, editing = false, leaveThen = null;
+  let dryRun = null, dryAbort = null, dryFor = null, dryLabel = '';
   input.value = stored();
 
   const unposted = () => { const c = ctx(); return !!(c.eligible && c.run && postedRun !== c.run); };
@@ -38,12 +45,29 @@ export function createPost({ ctx, onLeaveOpen = () => {}, onLeavePost = () => {}
     btn.hidden = form.dataset.state === 'posted';
     btn.disabled = form.dataset.state === 'posting';
     iniEl.textContent = known ? ` · ${ini}` : '';
-    btn.setAttribute('aria-label', known ? `Post to today’s board as ${ini.split('').join(' ')}` : 'Post to today’s board');
+    const rank = dryFor === c.run ? dryLabel : '';
+    // "today" is dropped on a 320–360 px column (CSS), where the whole label would overflow the button.
+    rankEl.replaceChildren(...(rank ? [` · ${rank.replace(/ today$/, '')}`, dayEl] : []));
+    btn.setAttribute('aria-label', `${known ? `Post to today’s board as ${ini.split('').join(' ')}` : 'Post to today’s board'}${rank ? `: ${rank}` : ''}`);
     edit.hidden = form.dataset.state !== 'known';
     leavePost.textContent = ini ? `Post · ${ini}` : 'Post';
   }
   // A new sheet: fresh message, the field closed, the question not yet asked.
-  function reset() { msg.textContent = ''; editing = false; hideLeave(); sync(); }
+  function reset() { msg.textContent = ''; editing = false; hideLeave(); sync(); askRank(); }
+
+  // The rank it would get: asked once per run (a sheet redrawn, a replay and back, never asks again).
+  async function askRank() {
+    const c = ctx(), run = c.run;
+    if (!c.eligible || !run || dryRun === run || postedRun === run) return;
+    dryAbort?.abort();
+    dryRun = run;
+    const ctl = dryAbort = new AbortController();
+    const rank = await dryRank({ log: run.inputLog, t: run.t, course: run.course }, { signal: ctl.signal });
+    if (dryAbort === ctl) dryAbort = null;
+    if (ctl.signal.aborted || ctx().run !== run) return;   // a new run's sheet: this answer belongs to the last one
+    dryFor = run; dryLabel = rankLabel(rank);
+    sync();
+  }
 
   async function post() {
     const c = ctx();
@@ -90,5 +114,6 @@ export function createPost({ ctx, onLeaveOpen = () => {}, onLeavePost = () => {}
     if (stored()) post();
     else { editing = true; sync(); input.focus({ preventScroll: true }); }
   });
-  return { sync, reset, post, confirmLeave, hideLeave, leaveOpen: () => !leave.hidden, unposted };
+  const cancelRank = () => { dryAbort?.abort(); dryAbort = null; };
+  return { sync, reset, post, confirmLeave, hideLeave, cancelRank, leaveOpen: () => !leave.hidden, unposted };
 }

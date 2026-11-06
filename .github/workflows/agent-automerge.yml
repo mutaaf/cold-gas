@@ -6,6 +6,7 @@ name: Agent auto-merge
 # edit its own guard. It never checks out or executes PR code; it only reads metadata.
 # Never armed: proposal/ PRs, fork PRs, drafts, PRs touching control.json frozen_paths,
 # or anything while agents/control.json has "paused": true.
+# Also never armed after agents/control.json "expires" (see agent-expiry.yml).
 on:
   pull_request_target:
     types: [opened, reopened, synchronize, ready_for_review, converted_to_draft]
@@ -32,6 +33,7 @@ jobs:
         run: |
           control=$(gh api "repos/$REPO/contents/agents/control.json?ref=main" --jq '.content' | base64 -d)
           paused=$(echo "$control" | jq -r '.paused')
+          expires=$(echo "$control" | jq -r '.expires // empty')
           frozen=$(echo "$control" | jq -r '.frozen_paths[]')
           changed=$(gh api --paginate "repos/$REPO/pulls/$PR/files" --jq '.[].filename')
           hit=""
@@ -40,7 +42,8 @@ jobs:
               case "$f" in "$p"*) hit="$hit $f" ;; esac
             done
           done
-          if [ "$paused" = "true" ]; then echo "verdict=paused" >> "$GITHUB_OUTPUT"
+          if [ -n "$expires" ] && [ "$(date -u +%F)" \> "$expires" ]; then echo "verdict=expired" >> "$GITHUB_OUTPUT"
+          elif [ "$paused" = "true" ]; then echo "verdict=paused" >> "$GITHUB_OUTPUT"
           elif [ -n "$hit" ]; then echo "verdict=frozen" >> "$GITHUB_OUTPUT"; echo "hit=$hit" >> "$GITHUB_OUTPUT"
           elif [ "$DRAFT" = "true" ]; then echo "verdict=draft" >> "$GITHUB_OUTPUT"
           else echo "verdict=arm" >> "$GITHUB_OUTPUT"; fi
@@ -52,6 +55,6 @@ jobs:
         run: |
           gh pr merge "$PR" --repo "$REPO" --disable-auto || true
           gh pr comment "$PR" --repo "$REPO" --body "Auto-merge refused: this PR touches operator-only paths (${{ steps.gate.outputs.hit }}). It needs the operator. Agents must not merge it."
-      - name: Hold (paused or draft)
-        if: steps.gate.outputs.verdict == 'paused' || steps.gate.outputs.verdict == 'draft'
+      - name: Hold (expired, paused or draft)
+        if: steps.gate.outputs.verdict == 'expired' || steps.gate.outputs.verdict == 'paused' || steps.gate.outputs.verdict == 'draft'
         run: gh pr merge "$PR" --repo "$REPO" --disable-auto || true

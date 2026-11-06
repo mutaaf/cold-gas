@@ -1,8 +1,8 @@
 ---
 id: 0137
 title: Once today's Daily is met, the results say what tomorrow's Daily is, once, quietly
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: S
 lens: engagement
 created: 2026-11-03

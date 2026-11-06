@@ -48,6 +48,7 @@ import { initFocusTrap } from './focus-trap.js';
 import { wireUnitToggles, unitText } from './units.js';
 import { drawShareCard, shareRun, toast } from './share-card.js';
 import { createComeback } from './comeback.js';   // [comeback] challenge links + the daily jump (src/comeback.js)
+import { objectiveFor, evaluate as dailyEval, dailyCoach, dailyItems, loadStreak as loadDaily, streakNow } from './daily.js';
 import { createInstruments } from './instruments.js';
 import { localWords, localMeta, fetchBoard } from './panel.js';
 import { createPost } from './post.js';
@@ -334,6 +335,7 @@ function closeOverlays() {
   const ai = document.querySelector('[data-ai-modal]');
   if (ai && !ai.hidden) ai.hidden = true;
   poster?.hideLeave();
+  poster?.cancelRank();   // the sheet is going: the rank it would get (0141) can't hold the network into a run
   S.paused = false;
   ui.clearCue();
   instruments.close();
@@ -462,7 +464,7 @@ function finishRun() {
     try {
       const own = S.drill && S.drillSnap?.coach;
       S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0, coachWords(pointerCtx(run.course, S.card?.tier || S.flyTier)));
-      ui.coaching(S.coach.items);
+      ui.coaching(dailyItems(S.coach.items, own ? '' : dailyLine(run)));   // 0150: never "hold the pad" under a skim miss
       if (!own) runEnd.coached(run, S.coach.items);   // a wreck's cause in the funnel, from this coach (0138)
       if (!own && S.runKind === 'jump') showPointer(run);
     } catch (err) { console.warn('coach', err); }
@@ -517,9 +519,15 @@ function flownCtx(how, course, tier) {
   const device = deviceOf(how.device);
   return { device, scheme: device === 'touch' && how.scheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic', tier, course };
 }
+// 0150: on a missed Daily (not yet met today) whose fix the coach would contradict (skim on one thumb), the Daily's line.
+function dailyLine(run) {
+  if (S.drill || S.runKind !== 'jump' || streakNow(loadDaily(), Date.now()).doneToday) return '';
+  const obj = objectiveFor(Date.now());
+  return dailyCoach(obj, dailyEval(obj, S.card, run.course), pointerCtx(run.course, S.tier));
+}
 function showPointer(run) {
   // Worded for the tier the next run flies (an Adapt step down changes the controls that matter).
-  const p = pickPointer(S.coach.items, pointerCtx(run.course, S.tier), { history: S.pointerHist, card: S.card, flight: S.coach.flight, crashed: !!S.card?.facts?.crashed });
+  const p = pickPointer(S.coach.items, pointerCtx(run.course, S.tier), { history: S.pointerHist, card: S.card, flight: S.coach.flight, crashed: !!S.card?.facts?.crashed, daily: dailyLine(run) });
   if (p.id) { S.pointerHist.push(p.id); if (S.pointerHist.length > 4) S.pointerHist.shift(); }
   const text = p.text || '';
   pointerBox.querySelector('[data-pointer-better]').textContent = '';
@@ -654,8 +662,8 @@ Promise.all([stage.ready, physicsLoad]).then(() => {
   if (typeof requestIdleCallback === 'function') requestIdleCallback(warmJudges, { timeout: 4000 }); else setTimeout(warmJudges, 500);
   // Marquee (src/ads.js): the loader after the title is up, at idle priority, and only on the title or the results
   // (0117: a quick Jump or ?play=jump waits for the next one); the title's banner only while the title shows.
-  // 0122: armed only once the game's own late loads (the backdrop's chunk, the judges' chunk) have settled, so the cut
-  // a Jump makes to a title slot still filling (window.stop, src/ads.js) never takes one of ours with it.
+  // Armed only once the game's own late loads (the backdrop's chunk, the judges' chunk) have settled, so the loader and
+  // the title's ad frame never compete with them. (0122: the frame is removed the moment the title goes, src/ads.js.)
   const startAds = () => {
     warmJudges();
     // (A load that hangs on a bad link must not keep the ads off for the session: 20 s at most.)
@@ -841,8 +849,8 @@ function liveStep(dt) {
     S.acc -= DT;
   }
   // The aftermath (0062): the run is over and scored, the car isn't stopped. The same world steps on
-  // the post-crash input (brakes through ABS, no drive, no fan, valves shut: src/sim/run.js) until it
-  // is at rest, then frees it. Slow motion slows it with everything else.
+  // the post-crash input (brakes through ABS, no drive, no fan, valves shut; a stalled car keeps its fan, 0145:
+  // src/sim/run.js) until it is at rest, then frees it. Slow motion slows it with everything else.
   if (S.after && !run.after.done) {
     while (S.acc >= DT) {
       poseLerp.before(run.car);
@@ -1063,7 +1071,8 @@ function syncThumb(run, c) {
     thumbLast.word = word;
   }
   // Not holding while the descent leaves green: the pad asks for the thumb (amber, a pulse).
-  const warn = stage_ === 'fly' && !held && landing.status() !== 'green';
+  // 0140: not once the thumb has held LAND this flight (LAND stays on to the ground; a press only aims).
+  const warn = stage_ === 'fly' && !held && !thumb.landing && landing.status() !== 'green';
   if (warn !== thumbLast.warn) { thumbPad.toggleAttribute('data-warn', warn); thumbLast.warn = warn; }
   // The ring: how far up the curl; in the air, how far down to the ground.
   const k = stage_ === 'climb' || stage_ === 'ledge' ? (run.phase === 'ramp' ? wallProgress(c.pos) : 0)
@@ -1222,7 +1231,7 @@ function thumbCues(run, c, v) {
   if (run.phase === 'ramp' && !S.released) return ui.cue_(run.t.progress >= 0.92 ? 'On the ledge · tap to let go' : 'Up the curl on suction', 600);
   if (run.phase === 'air' || S.released) {
     if (run.course === 'show' && !run.t.crossedRow && c.pos.z > COURSES.show.rowNear) return ui.cue_('Carrying you over the row', 500);
-    if (!held && c.autoLand) return ui.cue_('Auto-land · braking for you', 500);
+    if (!held && (c.autoLand || thumb.landing)) return ui.cue_('Auto-land · braking for you', 500);
     if (!held) return ui.cue_('Hold to land: it rolls you out and brakes', 500);
   }
 }

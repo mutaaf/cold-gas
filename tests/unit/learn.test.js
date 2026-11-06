@@ -54,7 +54,7 @@ const flyDrill = (id, policy, course = 'show') => {
 };
 
 describe('SIM_VERSION 21: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down, the Wall from its foot, the curl gate, driving feel, the fans in a corner', () => {
-  it('is version 27 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock; 22: the fans answer a held corner, 0020; 23: tyre load sensitivity from a published fit, 0021; 24: the launch complex is solid and its static fire blows a car off the pad; 25: the pad is not the Wall; 26: Assist auto-land and the carry over the row, 0067; 27: the Show judged on what the pilot decides, 0121)', () => expect(SIM_VERSION).toBe(27));
+  it('is version 30 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock; 22: the fans answer a held corner, 0020; 23: tyre load sensitivity from a published fit, 0021; 24: the launch complex is solid and its static fire blows a car off the pad; 25: the pad is not the Wall; 26: Assist auto-land and the carry over the row, 0067; 27: the Show judged on what the pilot decides, 0121; 28: a fan-held hang on the ledge may last 20 s, 0145; 29: LAND brakes in one burn, 0169; 30: off a roof on the jets, 0169)', () => expect(SIM_VERSION).toBe(30));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
@@ -327,13 +327,16 @@ describe('the coach weighs the touchdown by what it cost (0125)', () => {
     for (const text of [thumb.ranOut, pointerText('ran-out', THUMB_SHOW)]) {
       expect(text).not.toMatch(/green band|stay on the brake/i);
       expect(text).toMatch(/holding the pad/);
-      expect(text).toMatch(/slide small/);
+      expect(text).not.toMatch(/slide/);   // 0164: the slide costs no braking, so the words don't ask for a small one
     }
     expect(KEY_WORDS.ranOut).toMatch(/green band/);
     expect(coachWords({ device: 'key', tier: 'assist', course: 'show' }).ranOut).toMatch(/green band/);
     expect(pointerText('ran-out', { device: 'key', tier: 'assist' })).toMatch(/Stay on the brake to the ground: keep holding Shift/);
   });
-  it('the slide the thumb words name does cost braking: a held sideways slide lands harder than none', () => {
+  // 0164: the words used to say "keep the slide small: a big slide tilts the jets off the brake", true while the slide
+  // was a roll held open (+40 px: 1.41 m/s against 1.05). The slide now flies LAND's own hold-the-line law, so a held
+  // slide either way brakes as well as none, and the words say only "keep holding the pad".
+  it('a held sideways slide brakes as well as none (0164), so the thumb\'s words drop "keep the slide small"', () => {
     const slide = (dx) => {
       const run = createRun('show'), th = createOneThumb();
       let released = false, ledgeT = -1, tapT = -1;
@@ -352,7 +355,8 @@ describe('the coach weighs the touchdown by what it cost (0125)', () => {
       }
       return run.t.sink;
     };
-    expect(slide(40)).toBeGreaterThan(slide(0) + 0.2);
+    const none = slide(0);
+    for (const dx of [-40, 40]) expect(Math.abs(slide(dx) - none), `${dx} px`).toBeLessThanOrEqual(0.15);
   });
 });
 

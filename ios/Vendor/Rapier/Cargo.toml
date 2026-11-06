@@ -1,0 +1,35 @@
+# The physics engine for the native app (docs/NATIVE.md §3, 0147): Rapier built from source with the SAME
+# crate version and features as the web's @dimforge/rapier3d-deterministic 0.21.0 (rapier3d 0.36.0,
+# enhanced-determinism, plus the features the WASM build enables), behind a small C API (include/coldgas_rapier.h).
+# Built by ios/scripts/rapier.sh. Cargo.lock is pinned to the versions the WASM build shipped (see rapier.sh).
+[package]
+name = "coldgas_rapier"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+publish = false
+
+[lib]
+crate-type = ["staticlib", "rlib"]
+
+[dependencies]
+rapier3d = { version = "=0.36.0", features = ["serde-serialize", "debug-render", "profiler", "fem", "enhanced-determinism"] }
+parry3d = { version = "=0.31.1", default-features = false, features = ["required-features"] }
+# The WASM build has no SIMD (no simd128), so glam runs its scalar code there; on arm64 it would use NEON, whose
+# reductions sum in another order (a few ulps). `scalar-math` makes native glam the same code as the WASM's.
+glam = { version = "=0.33.10", features = ["scalar-math"] }
+# The math the WASM build does in Rust: src/libm_shim.rs routes the engine's libm calls here (see there).
+libm = "=0.2.16"
+
+# wide's NEON paths aren't the WASM build's arithmetic (fused mul_add): take its scalar fallback, as wasm32 does.
+[patch.crates-io]
+wide = { path = "patches/wide" }
+
+[profile.release]
+debug = false
+codegen-units = 1
+strip = true
+panic = "abort"
+
+[profile.dev]
+panic = "abort"

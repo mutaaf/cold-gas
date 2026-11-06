@@ -1,0 +1,85 @@
+# XcodeGen: edit this, never the project (ColdGas.xcodeproj is generated and gitignored). `make up` regenerates.
+# docs/NATIVE.md §8.
+name: ColdGas
+options:
+  bundleIdPrefix: com.mutaafaziz
+  deploymentTarget:
+    iOS: "18.0"
+  createIntermediateGroups: true
+packages:
+  ColdGasCore:
+    path: Packages/ColdGasCore
+settings:
+  base:
+    DEVELOPMENT_TEAM: Z73865R687
+    CODE_SIGN_STYLE: Automatic
+    SWIFT_VERSION: "5.0"
+    # A new MARKETING_VERSION needs release-notes/<version>.md (make rules). The build number is a UTC timestamp,
+    # set by scripts/testflight.sh at archive time.
+    MARKETING_VERSION: "1.0.0"
+    CURRENT_PROJECT_VERSION: "1"
+targets:
+  ColdGas:
+    type: application
+    platform: iOS
+    sources:
+      - path: ColdGas
+        excludes: ["Resources/Stages/**"]
+      - path: ColdGas/Resources/Stages
+        type: folder
+        buildPhase: resources
+      - path: Packages/ColdGasCore/Tests/Vectors/dmath.json
+        buildPhase: resources
+      - path: Packages/ColdGasCore/Tests/Vectors/engine-spike.json
+        buildPhase: resources
+      # The JS sim's haptic feeds (0149) and run vectors (0152): -selftest replays the runs through the Swift sim on the
+      # device; -haptics demo flies them through it and plays the track.
+      - path: Packages/ColdGasCore/Tests/Vectors/haptics
+        type: folder
+        buildPhase: resources
+      - path: Packages/ColdGasCore/Tests/Vectors/runs
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: ColdGasCore
+        product: ColdGasCore
+      - package: ColdGasCore
+        product: ColdGasPhysics
+      - package: ColdGasCore
+        product: ColdGasLayout
+      - package: ColdGasCore
+        product: ColdGasClient
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mutaafaziz.coldgas
+        TARGETED_DEVICE_FAMILY: "1"
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: ColdGas/Info.plist
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+        MTL_FAST_MATH: NO
+        # The engine's XCFramework is arm64 only (Apple-silicon simulators and devices).
+        "EXCLUDED_ARCHS[sdk=iphonesimulator*]": x86_64
+        SWIFT_OPTIMIZATION_LEVEL: "-O"
+      configs:
+        Debug:
+          SWIFT_ACTIVE_COMPILATION_CONDITIONS: DEBUG
+          SWIFT_OPTIMIZATION_LEVEL: "-Onone"
+  ColdGasUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources: [ColdGasUITests]
+    dependencies:
+      - target: ColdGas
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.mutaafaziz.coldgas.uitests
+        GENERATE_INFOPLIST_FILE: YES
+        TARGETED_DEVICE_FAMILY: "1"
+schemes:
+  ColdGas:
+    build:
+      targets:
+        ColdGas: all
+        ColdGasUITests: [test]
+    test:
+      targets: [ColdGasUITests]

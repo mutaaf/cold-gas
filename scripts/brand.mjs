@@ -36,6 +36,7 @@ const ICONS = [
   ['public/icons/maskable-512.png', 'maskable', 512],
   ['public/icons/maskable-192.png', 'maskable', 192],
   ['public/apple-touch-icon.png', 'apple', 180],
+  ['ios/ColdGas/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png', 'apple', 1024],   // the native app (docs/NATIVE.md)
   ['public/favicon-32.png', 'any', 32],
   ['public/favicon-16.png', 'any', 16],
 ];

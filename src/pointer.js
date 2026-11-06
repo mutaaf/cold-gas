@@ -109,8 +109,8 @@ export function pointerText(id, ctx, flight = null) {
       const at = flight && flight.needH > 0 ? `, ${Math.ceil(flight.needH)} m up` : '';
       return `Brake sooner: ${ctl(ctx, b)} at the BRAKE line${at}`;
     }
-    // One thumb (0125): the pad is the brake and it was held; the slide is what tilts the jets off it.
-    case 'ran-out': if (thumbOn(ctx)) return 'Brake to the ground: keep holding the pad, and keep the slide small';
+    // One thumb (0125): the pad is the brake (0164: the slide no longer costs braking).
+    case 'ran-out': if (thumbOn(ctx)) return 'Brake to the ground: keep holding the pad all the way down';
       return assist ? `Stay on the brake to the ground: keep holding ${keyOf(ctx, 'land')}` : 'Brake once, hard, at the BRAKE line, and stay on it to the ground';
     case 'late-roll': return assist ? `Roll out sooner: ${ctl(ctx, 'land')} straight after you let go` : `Roll out sooner: ${ctl(ctx, rollAct(ctx))} straight after you let go`;
     case 'over-roll': return `Stop the roll early: let go of ${keyOf(ctx, rollAct(ctx))} about 40° before level`;
@@ -119,10 +119,25 @@ export function pointerText(id, ctx, flight = null) {
     case 'mark': return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
     case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
-    case 'clean': if (thumbOn(ctx)) return 'Clean. Next: hold in the air and slide onto the amber dot to land on the mark';
+    case 'clean': if (thumbOn(ctx)) return thumbClean(ctx, flight);
       return assist ? 'Clean. Next: a softer touchdown, closer to the mark' : 'Clean. Next: under 1 m/s and the 2 m ring';
     default: return '';
   }
+}
+
+// 0156: one thumb's clean line names the step after this flight. A touchdown inside the mark ring the slide is for
+// (3.5 m, the mark Daily's bar, src/daily.js) names its distance and the next step the score shows: on the Show the
+// mark is full marks inside 3.5 m (src/sim/judge.js SHOW_PRECISION), so Pro (one thumb is Assist only, and the coach's
+// own clean fix is "Try Pro"); on the Wall precision still pays to 0.8 m, so the 2 m ring first, then Pro. The miss is
+// read at the card's 0.1 m (judge.js r1), so the line and the Daily agree at the edges. Short of the ring, the slide.
+export const THUMB_MARK_RING = 3.5;
+function thumbClean(ctx, flight) {
+  const raw = flight?.touch?.padMiss;
+  const miss = Math.round(raw * 10) / 10;
+  if (!(miss <= THUMB_MARK_RING)) return 'Clean. Next: hold in the air and slide onto the amber dot to land on the mark';
+  const d = miss.toFixed(1);
+  return ctx.course === 'show' || miss <= 2 ? `Clean, ${d} m from the mark. Next: try Pro and fly the landing yourself`
+    : `Clean, ${d} m from the mark. Next: inside the 2 m ring, then try Pro`;
 }
 
 // What "fixed" reads as: the number that moved, from the card.
@@ -153,11 +168,13 @@ const DRILL_LABEL = { ledge: 'On the ledge', release: 'Just let go', carry: 'Ove
 // The pointer after a run. `items`: the coach's fixes (most costly first), `history`: the pointer ids
 // shown after the previous runs (most recent last). Returns { id, text, better }: `better` names the
 // last pointer's fix, now fixed, with its number; `id` goes on the history.
-export function pickPointer(items, ctx, { history = [], card = null, flight = null, crashed = false } = {}) {
+// `daily` (0150): the missed Daily's own line (src/daily.js dailyCoach), which stands in for the coach's.
+export function pickPointer(items, ctx, { history = [], card = null, flight = null, crashed = false, daily = '' } = {}) {
   const list = (items || []).filter((it) => pointerText(it.id, ctx, flight));
   const last = history[history.length - 1], prev = history[history.length - 2];
   // Fixed: last time's pointer isn't among this run's fixes, and this run didn't crash.
   const better = last && BETTER[last] && !crashed && !list.some((it) => it.id === last) ? betterText(last, card) : '';
+  if (daily) return { id: 'daily', text: daily, better };
   let pick = list[0] || null;
   // Never the same pointer three times running: the next fix instead, or the drill for it.
   if (pick && pick.id === last && pick.id === prev) {

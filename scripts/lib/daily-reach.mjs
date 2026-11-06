@@ -78,7 +78,7 @@ export function flyThumb(course, r) {
     if (released && run.phase === 'air' && th.held) {
       if (t >= aimNext) {
         predict(c, Math.max(0, c.pos.y - SPEC.comHeight), pr);
-        markOffset(c, pr, course, off);
+        markOffset(c, pr, course, off, th.ref);
         want = { x: off.x, y: -off.y }; aimAt = t + lagT; aimNext = t + P.every;
       }
       if (want && t >= aimAt) th.move(want.x, want.y);

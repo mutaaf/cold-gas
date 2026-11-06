@@ -1,6 +1,7 @@
 import { writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
+import { HEADERS } from './scripts/static-headers.mjs';
 
 const BASE = '/coldgas/';
 
@@ -15,20 +16,8 @@ if (!process.env.VITE_CG_BUILD) {
 // canonical in index.html as %VITE_CG_SITE%). Everything else stays relative to the base path.
 process.env.VITE_CG_SITE ||= 'https://mutaafaziz.com/coldgas/';
 
-// Response headers for the static assets (Workers Static Assets reads dist/_headers).
-// - HTML: Cloudflare Web Analytics auto-injects a beacon into HTML on the mutaafaziz.com zone; the
-//   game opts out with `Cache-Control: no-transform` (AGENTS.md §3.3: no analytics, no third
-//   parties). It revalidates on every load so a deploy shows up at once.
-// - Everything under assets/ has a content hash in its name, so it never changes: cache it for a
-//   year and never revalidate (a repeat visit costs one request, the HTML).
-// - The install files (0081) keep their names, so they revalidate: the manifest every time (an
-//   installed app re-reads it), the icons, screenshots and share card after a day.
-const HEADERS = ['/coldgas/', '/coldgas/index.html']
-  .map((path) => `${path}\n  Cache-Control: public, max-age=0, must-revalidate, no-transform\n`)
-  .join('') + '/coldgas/assets/*\n  Cache-Control: public, max-age=31536000, immutable\n'
-  + '/coldgas/manifest.webmanifest\n  Content-Type: application/manifest+json\n  Cache-Control: public, max-age=0, must-revalidate\n'
-  + ['/coldgas/icons/*', '/coldgas/screenshots/*', '/coldgas/og.png', '/coldgas/apple-touch-icon.png', '/coldgas/favicon*']
-    .map((path) => `${path}\n  Cache-Control: public, max-age=86400\n`).join('');
+// Response headers for the static assets (Workers Static Assets reads dist/_headers): the HTML pages
+// opt out of the zone's analytics beacon with no-transform. The rules live in scripts/static-headers.mjs.
 const staticHeaders = {
   name: 'static-headers',
   apply: 'build',
@@ -58,11 +47,12 @@ const inlineCss = {
         const font = Object.keys(bundle).find((f) => re.test(f));
         if (font) html = html.replace('</title>', `</title>\n  <link rel="preload" href="${BASE}${font}" as="font" type="font/woff2" crossorigin />`);
       }
-      // Start the physics engine's WASM (1.1 MB on the wire, the largest download) with the HTML, not
-      // after the 180 KB entry script has loaded and run: src/sim/engine-web.js fetch()es the same
-      // URL (cors, same-origin credentials = crossorigin), so the request is reused, not repeated.
-      const wasm = Object.keys(bundle).find((f) => /rapier_wasm3d_bg-[\w-]+\.wasm$/.test(f));
-      if (wasm) html = html.replace('</title>', `</title>\n  <link rel="preload" href="${BASE}${wasm}" as="fetch" type="application/wasm" crossorigin />`);
+      // No preload for the physics engine's WASM (1.17 MB gzip, the largest download), on purpose (0053). On a
+      // phone over cellular the link is the bottleneck: preloaded with the HTML it shared the link with the
+      // entry script (≈ 220 kB), which landed at 4.7 s instead of 3.4 s (Slow 4G), and the Jump was wired 1.3 s
+      // later. main.js asks for it first thing (src/sim/engine-web.js), once the entry is in. Its last byte
+      // arrives ≈ 0.7 s later, but the engine was ready no later in our runs: at 4× CPU its compile dominates.
+      // tests/e2e/layout.spec.js holds the order; scripts/serve-gz.mjs + scripts/perf.mjs measure it.
       return html;
     },
   },

@@ -8,3 +8,16 @@ tests/balance/out/
 .claude/
 scripts/roads/.cache/
 audit-shots/
+# The native app (docs/NATIVE.md §8): build products, never committed
+ios/**/.build/
+ios/**/.swiftpm/
+ios/Vendor/Rapier/target/
+ios/Packages/ColdGasCore/CRapier.xcframework
+ios/*.xcodeproj/
+ios/build/
+# App Store Connect key config (0154): the owner's, never committed (ios/scripts/asc.mjs reads it)
+ios/.env*
+*.p8
+*.p12
+*.mobileprovision
+store/lobby/out/

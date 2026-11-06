@@ -259,6 +259,8 @@ body[data-mode='title'] .brand::before { content: ''; position: absolute; inset:
 .top-actions-row .r-post-btn { border-color: rgba(150, 220, 255, 0.6); background: rgba(150, 220, 255, 0.1); color: var(--ink); font-weight: 600; white-space: nowrap; }
 .top-actions-row .r-post-btn:hover { background: rgba(150, 220, 255, 0.18); border-color: rgba(150, 220, 255, 0.9); }
 .r-post-ini { font: 500 13px/1 var(--mono); letter-spacing: 0.16em; }
+.r-post-rank { font-weight: 500; }
+@media (max-width: 360px) { .r-post-day { display: none; } }
 .top-actions-row .r-post-edit { height: 40px; padding: 0 6px; font-size: 12px; }
 .r-post-msg { font: 500 12px/1.3 var(--text); color: var(--ink-2); }
 .r-post-msg:empty { display: none; }
@@ -846,6 +848,8 @@ body:has([data-drill-bar]:not([hidden])) .hud { --top: calc(112px + var(--safe-t
 /* A run that ended in a crash (0072): the step you're on is the crash, in signal red, never TOUCHDOWN. */
 .h-timeline li[data-crash] span, .h-timeline li[data-crash] em { color: var(--warn); }
 .h-timeline li[data-crash] i { background: var(--warn); border-color: var(--warn); box-shadow: 0 0 0 3px rgba(255, 90, 98, 0.2); }
+.h-timeline li[data-end='stall'] span, .h-timeline li[data-end='stall'] em { color: var(--caution); }
+.h-timeline li[data-end='stall'] i { background: var(--caution); border-color: var(--caution); box-shadow: 0 0 0 3px rgba(255, 191, 90, 0.2); }
 /* Full, the label stands on the scene under its dot: red holds 4.5:1 only on dark glass (a lit deck
    behind a wreck measured 4.2). Compact, it is in the head's glass already. */
 :root[data-hud='full'] .h-timeline li[data-crash] span { padding: 3px 5px; border-radius: 3px; background: rgba(5, 7, 12, 0.78); }
@@ -2052,5 +2056,14 @@ body:has(> .pause:not([hidden])) :is(.hud, .top, .cue, .count, .drill-bar) { fil
 /* --- Marquee (src/ads.js): between runs only ------------------------------------------------ */
 /* The title's banner exists only when the slot can fill; it never covers the CTA, and short screens skip it. */
 .title .ad-banner { margin: 18px 0 0; width: min(100%, 468px); max-height: 90px; overflow: hidden; border-radius: 8px; animation: none; }
-@media (max-height: 620px), (max-width: 360px) { .title .ad-banner { display: none; } }
+/* 0122: the title's slot is Marquee's frame. Block, no border, transparent. 0142: the frame's page says `light dark`, so
+   the element says the same: its used scheme then matches the frame's under either OS appearance, and Chromium paints no
+   opaque canvas behind it (with `dark` here, a light OS got a white slab). Until its document holds a drawn ad
+   (src/ads.js data-filled) it is out of the flow and hidden: it keeps the size it reports, so the ad inside sees a real
+   slot, but an unfilled frame moves and paints nothing. */
+.title iframe.ad-banner { display: block; border: 0; padding: 0; height: 0; background: transparent; color-scheme: light dark; }
+.title iframe.ad-banner:not([data-filled]) { position: absolute; margin: 0; visibility: hidden; pointer-events: none; }
+/* (src/ads.js TITLE_SKIP_MQ places no frame here; this still hides one placed before a rotation. iframe.ad-banner
+   above outranks .ad-banner, so it is named here too.) */
+@media (max-height: 620px), (max-width: 360px) { .title .ad-banner, .title iframe.ad-banner { display: none; } }
 .reroll-btn { margin: 12px 0 0; min-height: 44px; }

@@ -248,6 +248,8 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     autoLand: 0,
     // LAND's carry over a parked row: 1 while it tops the carry up (see governor).
     carryUp: 0,
+    // LAND's brake, once begun: the most sink it may still want (m/s, 0 = not braking; see governor).
+    landCap: 0,
     // Assist's crawl limit belongs to the curl: only the courses with the Wall have one.
     crawl: course.id === 'wall' || course.id === 'show',
     // Stability control (Assist): how hard it is working (0–1, for the HUD and the sound), the
@@ -423,19 +425,44 @@ export function profileVy(h, aPlan, top = HOVER) {
 // over the row ≈2 s rather than hovering above the semi for 4 (≈35 kg/s near the hover). The rear jets
 // make 80 kN, so topping up 3–4 m/s is a ≈0.1 s burn and ≈10 kg (ESTIMATE, set by human-show).
 const CARRY_ROW = 7, CARRY_LOW = 5;
+// LAND's one burn (0169): a sink over LAND_CAP_ON m/s that LAND starts to brake arms it; from then on the
+// sink it lifts for may open up again only at LAND_CAP_ACC m/s² (the jets stay ≥ 0.51 g once it sinks faster
+// than LAND_CAP_FLOOR m/s) and only up to LAND_CAP_MIN m/s (ESTIMATES, set by the one-thumb slide sweep in
+// tests/unit/gtrace.test.js). Every 0.1 s on the jets at that floor costs ≈0.6 % of the tanks (measured).
+const LAND_CAP_ON = 5, LAND_CAP_MIN = 4, LAND_CAP_ACC = 4.8, LAND_CAP_FLOOR = 0.3;
+// Stopped over a roof, the fall LAND still has to brake is the ≈5 m from there, not the 15 m/s off the ledge:
+// the set-down that ends it starts no higher than a ROOF_FALL m/s fall's (1.3 m, halfway to HOVER; ESTIMATE:
+// the gas the descent on the jets costs comes back out of the hover, and a weak, low-gas car still sets
+// down under 2 m/s from a late LAND, tests/unit/learn.test.js).
+const ROOF_FALL = 11;
 let behind = 0;   // m/s the car is falling faster than the LAND profile wants (0 when not governed)
 function governor(s, inp, grounded, m, level) {
   eff.lift = inp.lift; eff.thrust = inp.thrust;
   behind = 0;
-  if (!inp.assist || grounded > 0) return;
+  if (!inp.assist || grounded > 0) { s.landCap = 0; return; }
   if (eff.thrust > 0) {
     const vh = dhypot(s.vel.x, s.vel.z);
     eff.thrust *= clamp((ASSIST_CARRY - vh) / 1.5, 0, 1);
   }
-  if (!level || s.air <= 0) return;
+  if (!level || s.air <= 0) { s.landCap = 0; return; }
   const h = landHeight(s);
   let wantVy = landWant(s, m);
-  if (h < 1.2 && upW.y < 0.99) wantVy = Math.max(wantVy, -0.25);   // level before the wheels touch
+  // One burn from the onset to the wheels, like the reveal's (docs/REVEAL_RESEARCH.md §2.1.4): once
+  // LAND is braking, the sink it lifts for never grows again. Past a parked roof the altimeter's floor
+  // drops 3–4 m in a tick, and the ground's profile would want twice the sink the car has: the jets
+  // went out for 0.2–0.3 s at ≈6 m and lit again for a second stop (0169). Held to the sink it had,
+  // the car carries on down at ≈1 g until the ground's profile meets it. The cap only sets the lift:
+  // what the pilot may still fly (the envelope) and the carry read the profile itself. A car LAND has
+  // stopped over a roof (ROOF_HOLD) keeps its cap too: off the roof's end it comes down on the jets, the
+  // sink opening up at LAND_CAP_ACC, never under 0.5 g (letting the cap go there fell 0.46 s with the jets
+  // out from 5.3 m over the semi: every "lifted, pressed again" thumb, 0169's bounce), and the set-down
+  // follows the short fall left (ROOF_FALL).
+  let liftVy = wantVy;
+  if (s.landCap > 0) liftVy = Math.max(wantVy, -s.landCap);
+  else if (wantVy > s.vel.y && s.vel.y < -LAND_CAP_ON) s.landCap = -wantVy;
+  if (s.landCap > 0) s.landCap = Math.max(-liftVy, Math.min(LAND_CAP_MIN, Math.max(0, -liftVy) + LAND_CAP_ACC * DT));
+  if (s.landCap > 0 && roofBelow > 0 && s.vel.y > -0.5) s.fallPeak = Math.min(s.fallPeak, ROOF_FALL);
+  if (h < 1.2 && upW.y < 0.99) { wantVy = Math.max(wantVy, -0.25); liftVy = Math.max(liftVy, -0.25); }   // level before the wheels touch
   behind = wantVy - s.vel.y;
   // The brake has priority: once LAND is braking (or below 8 m), a thumb left on BOOST no longer
   // drains the gas the stop needs.
@@ -448,7 +475,13 @@ function governor(s, inp, grounded, m, level) {
   if (roofBelow <= 0 || vh >= CARRY_ROW) s.carryUp = 0;
   else if (vh < CARRY_LOW) s.carryUp = 1;
   if (s.carryUp && upW.y > 0.9 && behind < 0.5) eff.thrust = Math.max(eff.thrust, clamp((CARRY_ROW - vh) / 3, 0, 0.5));
-  if (s.vel.y < wantVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((wantVy - s.vel.y) * 0.8 + 0.55, 0, 1));
+  if (s.vel.y < liftVy && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp((liftVy - s.vel.y) * 0.8 + 0.55, 0, 1));
+  // While the cap is armed, the jets never drop below what lets the car speed up at LAND_CAP_ACC: the
+  // lift law alone switches off whenever the car is slower than the sink it lifts for (the cap's or, once
+  // that has opened past the profile, the profile's: over the row's lower roofs a car only lifting at the
+  // cap still dropped 0.1 s at a time between them), and back on, tick by tick. Every Assist landing that
+  // brakes from more than LAND_CAP_ON m/s flies it (the Show reference's least g sinking: 0.39 → 0.59).
+  if (s.landCap > 0 && s.vel.y < -LAND_CAP_FLOOR && upW.y > 0.55) eff.lift = Math.max(eff.lift, clamp(((G - LAND_CAP_ACC) * m) / (LIFT_MAX * Math.max(0.2, feedPressure(s))), 0, 1));
 }
 // The vertical speed LAND wants for the car as it stands (m/s, negative down). Plan the braking
 // from the thrust the down-jets can actually make through the blowdown, brake late and hard like

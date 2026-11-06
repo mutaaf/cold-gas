@@ -113,6 +113,9 @@ mark, and air left in the tanks.
    - **No ads during a run.** Nothing in the countdown, a live run, a drill or Free Drive/the Sandbox: the
      banner is on the title, the interstitial fires only when a results sheet is left (Retry/Home) after the
      judges have spoken, never after the first run of a session and at most once per 3 minutes.
+   - **The title's slot is Marquee's same-origin frame** `/ads/v1/frame.html?app=coldgas&slot=title` (owner's
+     decision on #194, 0122), placed after the title's dwell and removed the moment the title goes, so no ad work
+     reaches the countdown or the run. The breaks (postrun, reroll) stay in the page.
    - **Google ads (via Marquee) appear only in menu contexts.** Every slot is declared `menu`; never declare
      a `gameplay` slot.
    - **Rewarded is opt-in only:** the player presses "Watch an ad · ask the panel again"; the reward is fresh
@@ -348,7 +351,7 @@ src/wake.js           the screen wake lock (0060): held through a run, the judgi
                         main.js syncLife() also suspends the audio when paused, hidden or idle on the title
 src/ads.js            Marquee ads between runs only (§3.3's exception): loader on production, title banner,
                         postrun interstitial, opt-in reroll rewarded; a no-op without window.marquee. The loader goes in
-                        only on the title or the results; the title's slot is placed after 4 s on the title, and dropped on leaving it unless filled (0117); a Jump while its AdSense script is still downloading cancels it (window.stop, armed only after the game's own late chunks settle, 0122)
+                        only on the title or the results; the title's slot is placed after 4 s on the title (0117) as Marquee's same-origin frame (/ads/v1/frame.html), removed the moment the title goes, filled or not, which stops everything AdSense started for it (0122)
 src/obs/              OBSERVABILITY + SELF-HEAL (client): index.js (capture: errors, rejections, traps,
                         lost context, shaders, fetches, lazy imports, audio; frames; beacons) ·
                         signature.js (stable ids, shared with the Worker) · frames.js (ring +
@@ -440,6 +443,9 @@ npm run audit [-- --shard=N/M] [--port=4655]   the HUD + title audits as a gate 
                    estimated cost (scripts/audit-plan.mjs, 0087); CI runs --shard=1/6 … 6/6 in parallel. Its frames are
                    deterministic: condition waits (CI=1 doubles them), the results stepped in the page, not the wall clock
 node scripts/fly.mjs '{"apex":7,"rolls":1}'   headless reference flight telemetry
+npm run vectors [-- --check]   the native port's golden traces (0146, docs/NATIVE.md §3): ios/Packages/ColdGasCore/Tests/
+                   Vectors/, generated, never hand-edited. A sim or scorer change regenerates them in the same PR
+                   (tests/unit/vectors.test.js fails on stale vectors)
 node scripts/board-probe.mjs [url]             flies the reference Show in Node and POSTs it to <url>api/scores with dry:true
                    (default https://mutaafaziz.com/coldgas/): exit 1 unless 200 with a card matching the local one. Nothing
                    is stored (it sends no initials, so a Worker from before `dry` answers 400 instead of storing it).
@@ -496,7 +502,13 @@ choosing work, and play one run as a first-time visitor on a phone (`coldgas_how
 automated browser otherwise counts as a returning player). Lens `engagement` covers reasons to retry,
 return and share, never dark patterns.
 
-The operator steers through `agents/control.json` (paused, focus, caps, frozen_paths). Branch
+The operator steers through `agents/control.json` (paused, focus, parallel_focus, caps, frozen_paths).
+
+**The native track (parallel focus, 2026-11-04).** A native Swift + Metal iPhone app (iPhone Duo and Pro Max,
+120 Hz, Core Haptics) is planned in `docs/NATIVE.md` and will live in `ios/`. It ports `src/sim` line for line and
+is held to the same bits by vectors that `npm run vectors` writes from the JS sim (0146). It never changes the web
+game, the Worker or a score. Cloud agents take only the native tickets that don't need Xcode; the rest say
+"Runs on: the operator's Mac" and are listed in `parallel_focus.operator_only`. Branch
 prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.
 
 ## 7 · Definition of done

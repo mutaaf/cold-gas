@@ -1,0 +1,152 @@
+{
+  "lobby": 1,
+  "slug": "cold-gas",
+  "name": "COLD GAS",
+  "category": "Thruster-jump stunt game",
+  "tagline": "Ten thrusters. One roll. Stick the landing.",
+  "audience": "general",
+  "stores": [
+    "appstore",
+    "web"
+  ],
+  "ipad": false,
+  "ios": {
+    "bundleId": "com.mutaafaziz.coldgas"
+  },
+  "icon": "ios/ColdGas/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
+  "brand": {
+    "mode": "dark",
+    "bg": "#0A0E16",
+    "bg2": "#1A2433",
+    "ink": "#F1F4F7",
+    "muted": "#C6CFD9",
+    "accent": "#BFE6FF",
+    "accent2": "#E6EBF1",
+    "highlight": "rgba(191,230,255,.28)",
+    "glow": [
+      "#2C4257",
+      "#16202E",
+      "#35404D"
+    ],
+    "shadow": "#030408",
+    "display": {
+      "family": "Michroma",
+      "weights": [
+        400
+      ]
+    },
+    "displayWeight": 400,
+    "tracking": "-.02em",
+    "lineHeight": 1.08,
+    "body": {
+      "family": "Geist",
+      "weights": [
+        400,
+        600
+      ]
+    },
+    "mono": {
+      "family": "Geist Mono",
+      "weights": [
+        400
+      ]
+    },
+    "texture": "scan",
+    "ribbon": false
+  },
+  "raw": {
+    "iphone": "store/lobby/raw/iphone",
+    "duo": "store/lobby/raw/duo"
+  },
+  "capture": {
+    "command": "",
+    "notes": "Real flights through the real UI, Debug build on a slowed clock: ios/scripts/store-capture.py (see its header). 6.9-inch simulator for raw/iphone; an open Duo simulator's inner screen (SHOT_DISPLAY=primary-1) for raw/duo. A person picks the frames."
+  },
+  "shots": [
+    {
+      "id": "flight",
+      "raw": "1-flight",
+      "layout": "cover",
+      "title": "Clear the row. *Stick it.*",
+      "sub": "Ten cold-gas thrusters. One roll. One mark to land on."
+    },
+    {
+      "id": "roll",
+      "raw": "2-roll",
+      "layout": "bleed",
+      "kicker": "One thumb",
+      "title": "Hold to fly. *Let go upside down.*",
+      "sub": "Assist flies the valves. You choose when to go."
+    },
+    {
+      "id": "panel",
+      "raw": "3-panel",
+      "layout": "hero",
+      "kicker": "The panel",
+      "title": "Three judges. *No excuses.*",
+      "sub": "A fixed scorer decides the numbers. The judges only supply the words."
+    },
+    {
+      "id": "touchdown",
+      "raw": "4-touchdown",
+      "layout": "tilt",
+      "kicker": "Haptics",
+      "title": "Feel *every wheel* land.",
+      "sub": "A synced landing is one clean thump. A sloppy one is four."
+    },
+    {
+      "id": "wall",
+      "raw": "5-wall",
+      "layout": "hero",
+      "kicker": "The Wall",
+      "title": "Climb it. *Hang there.*",
+      "sub": "Up the curl on suction and under the ledge, then let go."
+    },
+    {
+      "id": "valves",
+      "raw": "6-valves",
+      "layout": "spotlight",
+      "focus": [
+        0.5,
+        0.72,
+        0.75
+      ],
+      "kicker": "Advanced",
+      "title": "Fly *ten valves* by hand.",
+      "sub": "Assist, Pro, Advanced: take away the computer one tier at a time."
+    },
+    {
+      "id": "lineup",
+      "raw": "7-lineup",
+      "layout": "bleed",
+      "kicker": "The Lineup",
+      "title": "Roll it *over the line.*",
+      "sub": "Off the kicker at dusk, a barrel roll, wheels down."
+    },
+    {
+      "id": "book",
+      "raw": "7-book",
+      "layout": "bleed",
+      "kicker": "iPhone Duo",
+      "title": "Open it. *Fly it.*",
+      "sub": "Edge to edge when open. In tabletop, the top half is the screen and the bottom half the controller."
+    }
+  ],
+  "feature": {
+    "title": "Clear the row. *Stick it.*",
+    "sub": "Ten thrusters. One roll. Three judges."
+  },
+  "avoid": [
+    "Tesla",
+    "Elon",
+    "Musk",
+    "SpaceX",
+    "Cybertruck",
+    "Roadster",
+    "Model S",
+    "Model X",
+    "Model Y",
+    "Model 3",
+    "reveal"
+  ]
+}

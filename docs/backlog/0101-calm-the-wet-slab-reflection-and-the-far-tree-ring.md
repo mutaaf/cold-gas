@@ -1,7 +1,7 @@
 ---
 id: 0101
 title: The wet slab's reflection, Free Drive's far-tree ring and the burn's haze over the Wall hold still on every screen
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: performance
@@ -61,3 +61,5 @@ flicker.mjs both screens, main vs branch on the same machine; `--heat` for the t
 
 ## Out of scope
 Changing the tier contents (what 0097 made the same on every device).
+
+GROOMED 2026-11-05: back to proposed. The PLAYERS focus ranks the funnel (first run, first load, return) above scene polish, and the ready queue was over its cap of 10; the Builder takes this once the funnel work clears.

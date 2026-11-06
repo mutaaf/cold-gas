@@ -88,7 +88,7 @@ test('a challenge link that can’t be read says so gently and falls back to a n
 });
 
 test('the daily card: today’s objective, Play today’s picks its course, and a miss says what was missing', async ({ browser }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
   const { ctx, page, errors } = await phonePage(browser);
   await page.goto('/coldgas/?course=wall&gfx=low');
   await ready(page);
@@ -148,6 +148,32 @@ test('the daily card: today’s objective, Play today’s picks its course, and 
   const lb = await line.boundingBox();
   expect(lb.y).toBeGreaterThanOrEqual(0); expect(lb.y + lb.height).toBeLessThanOrEqual(844);   // in view as the sheet opens
   expect(await line.evaluate((e) => parseFloat(getComputedStyle(e).fontSize))).toBeGreaterThanOrEqual(11);
+
+  // 0150: a skim day (2026-11-16) asks one thumb for the opposite: let go right after the tap. The card says so whole, not
+  // packed; the reference (5.1 m over the roofs) misses it, the miss names the choice, and NEXT RUN never says to hold.
+  await page.close(); await p2.close();   // one live WebGL page at a time: a third booting beside two timed out locally
+  const p3 = await ctx.newPage();
+  await p3.clock.setFixedTime(new Date('2026-11-16T15:00:00Z'));
+  await p3.route('**/coldgas/api/**', (r) => r.abort());
+  p3.on('pageerror', (e) => errors.push(e.message));
+  await p3.goto('/coldgas/?gfx=low');
+  await ready(p3);
+  const skimCard = p3.locator('[data-title-extra] .xc-daily');
+  const goal = skimCard.locator('.xc-goal');
+  await expect(goal).toHaveText('Clear the roofs by under 4.9 ft and land clean', { useInnerText: true });
+  expect(await goal.evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5)).toBe(true);
+  const skimHint = skimCard.locator('[data-daily-hint]');
+  await expect(skimHint).toHaveText('Let go right after the tap');
+  expect(await skimHint.evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5)).toBe(true);
+  expect(await p3.evaluate(() => document.querySelector('.title').dataset.extraFit ?? '')).toBe('');
+  expect((await skimCard.boundingBox()).y + (await skimCard.boundingBox()).height).toBeLessThanOrEqual(844);
+  await p3.locator('[data-daily-play]').tap();
+  await expect(p3.locator('[data-cue]')).toContainText('Tip: Let go right after the tap and stay off the pad', { timeout: 15_000 });
+  await fly(p3, false);
+  await expect(p3.locator('[data-daily-line]')).toHaveText(/^Daily: cleared by 1\d\.\d ft · let go of the pad right after the tap and stay off it; held, it carries you high$/);
+  const next = p3.locator('[data-pointer-text]');
+  await expect(next).toHaveText('For the Daily: let go of the pad right after the tap and stay off it', { timeout: 10_000 });
+  expect(await p3.locator('[data-coach-items]').innerText()).not.toMatch(/\bhold(ing)? the pad/i);   // nor "What happened"
   expect(errors).toEqual([]);
   await ctx.close();
 });

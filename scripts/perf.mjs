@@ -1,7 +1,9 @@
 // First-load performance probe (cold cache), the numbers behind "time to first paint".
 //
 //   node scripts/perf.mjs <url> [label] [runs]
-//   node scripts/perf.mjs http://localhost:4173/coldgas/ local 3      (after build + preview)
+//   node scripts/serve-gz.mjs dist/coldgas 4701 & node scripts/perf.mjs http://localhost:4701/coldgas/ local 3
+//     (after a build; served gzipped like production: `vite preview` sends raw bytes, so the Slow 4G profile would
+//     time 731 kB of entry instead of ≈ 220 kB)
 //   node scripts/perf.mjs https://mutaafaziz.com/coldgas/ prod 3
 //
 // Two profiles: desktop (no throttling) and a phone (390×844, 4× CPU slowdown, DevTools

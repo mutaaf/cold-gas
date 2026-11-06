@@ -5,9 +5,12 @@ import { test, expect } from '@playwright/test';
 // and fields that don't make iOS zoom. scripts/hud-audit.mjs and scripts/title-audit.mjs measure
 // the whole matrix on screenshots; these are the cheap guards that run on every PR.
 const touch = (width, height) => ({ viewport: { width, height }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 });
+// Title frames render while the page boots, so a costly title frame slows the boot. Since 0131 the upright iPad's title
+// looks down on the lit floor (the car in the band above the panel): 667 ms a frame on software GL against 367 ms
+// before, and its boot ran past 60 s on CI twice (#232). 150 s per boot; each test's own timeout caps it first.
 const boot = async (page, q = '') => {
   await page.goto(`/coldgas/?gfx=low${q}`);
-  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 60_000 });
+  await page.waitForFunction(() => !!window.__coldgas?.stage, null, { timeout: 150_000 });
 };
 const rect = (page, sel) => page.evaluate((sel) => {
   const r = document.querySelector(sel).getBoundingClientRect();
@@ -134,4 +137,22 @@ test('first paint: the mono face is preloaded with the display and text faces', 
   const html = await res.text();
   expect(html).toMatch(/<link rel="preload" href="\/coldgas\/assets\/geist-mono-latin-400-normal-[\w-]+\.woff2" as="font"/);
   expect(html).toMatch(/michroma-latin-400-normal/);
+});
+
+// 0053: on a phone over cellular the link is the bottleneck. A WASM preload in the HTML put the engine's 1.15 MB on
+// the wire beside the entry script, which then landed at 4.7 s instead of 3.4 s (scripts/perf.mjs, Slow 4G) and held
+// the title's Jump back by over a second. The engine is asked for by main.js (src/sim/engine-web.js), once the entry is in.
+test('first load: the engine WASM is not on the wire until the entry script has landed', async ({ page }) => {
+  const res = await page.goto('/coldgas/?gfx=low');
+  const html = await res.text();
+  expect(html).not.toMatch(/<link\b[^>]*\.wasm/);   // no preload of any kind, in any attribute order
+  // The page's own Resource Timing: the entry (the module script index.html names) has its last byte before the
+  // WASM is asked for.
+  const entry = html.match(/<script type="module"[^>]*src="([^"]+)"/)[1];
+  const t = await page.waitForFunction((entry) => {
+    const all = performance.getEntriesByType('resource');
+    const e = all.find((r) => new URL(r.name).pathname === entry), w = all.find((r) => /\.wasm$/.test(r.name));
+    return e && w ? { entryEnd: e.responseEnd, wasmStart: w.startTime } : null;
+  }, entry, { timeout: 60_000 }).then((h) => h.jsonValue());
+  expect(t.wasmStart).toBeGreaterThanOrEqual(t.entryEnd);
 });

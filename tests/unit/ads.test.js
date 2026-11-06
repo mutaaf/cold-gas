@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { wantLoader, canFill, postrunDue, createAds, mayStartAds, SLOTS, TITLE_DWELL_MS } from '../../src/ads.js';
+import { wantLoader, canFill, postrunDue, createAds, mayStartAds, frameHeight, frameFilled, SLOTS, TITLE_DWELL_MS, TITLE_FRAME_SRC, TITLE_SKIP_MQ, NO_ROOM_EVENT, ROOM_EVENT, BANNER_ROOM } from '../../src/ads.js';
 
 describe('ads (Marquee, between runs only)', () => {
   it('declares the three slots, all menu context', () => {
@@ -51,10 +51,16 @@ describe('ads (Marquee, between runs only)', () => {
 
   // A tiny DOM: enough for a script tag in head and a banner in the title.
   const fakeDoc = () => {
-    const node = (tag) => ({ tagName: tag, dataset: {}, children: [], parent: null,
+    // An iframe carries a stand-in document: `filled` says whether it holds a drawn ad (frameFilled's selector).
+    const node = (tag) => ({ tagName: tag, dataset: {}, style: {}, attrs: {}, children: [], parent: null, contentWindow: tag === 'iframe' ? {} : undefined,
+      contentDocument: tag === 'iframe' ? { filled: false, querySelector() { return this.filled ? {} : null; } } : undefined,
+      listeners: {}, addEventListener(t, f) { (this.listeners[t] ||= new Set()).add(f); }, removeEventListener(t, f) { this.listeners[t]?.delete(f); },
+      dispatch(t) { for (const f of [...(this.listeners[t] || [])]) f({ type: t }); },
+      dispatchEvent(ev) { for (const f of [...(this.listeners[ev.type] || [])]) f(ev); return !ev.defaultPrevented; },
+      setAttribute(k, v) { this.attrs[k] = v; },
       appendChild(c) { c.parent = this; this.children.push(c); return c; },
       remove() { if (this.parent) this.parent.children = this.parent.children.filter((x) => x !== this); this.parent = null; },
-      querySelector(sel) { return sel === '[data-marquee]' ? this.children.find((c) => c.dataset.marquee) || null : null; } });
+      querySelector(sel) { return sel === '[data-marquee-frame]' ? this.children.find((c) => c.dataset.marqueeFrame) || null : null; } });
     const head = node('head');
     return { head, createElement: node, querySelectorAll: (sel) => (sel === 'script[src]' ? head.children.filter((c) => c.src) : []) };
   };
@@ -107,22 +113,18 @@ describe('ads (Marquee, between runs only)', () => {
       vi.advanceTimersByTime(TITLE_DWELL_MS);
       expect(title.children).toHaveLength(1);           // the player stayed: asked for
       const first = title.children[0];
-      expect(first.dataset.marquee).toBe('title');
+      expect(first.tagName).toBe('iframe');
+      expect(first.dataset.marqueeFrame).toBe('title');
+      expect(first.src).toBe(TITLE_FRAME_SRC);
       mode = 'countdown'; ads.sync();
-      expect(title.children).toHaveLength(0);           // not filled yet: taken out when the title goes
+      expect(title.children).toHaveLength(0);           // taken out when the title goes
       mode = 'title'; ads.sync();
       vi.advanceTimersByTime(TITLE_DWELL_MS);
       expect(title.children).toHaveLength(1);
-      const second = title.children[0];
-      expect(second).not.toBe(first);                    // a fresh slot: Marquee fills each element once
-      second.hidden = true;                              // Marquee settled it (here: nothing to show)
-      mode = 'live'; ads.sync();
-      mode = 'title'; ads.sync();
-      vi.advanceTimersByTime(TITLE_DWELL_MS);
-      expect(title.children).toEqual([second]);         // a settled slot stays: no new ad per visit
+      expect(title.children[0]).not.toBe(first);         // a fresh frame for the next title
     } finally { vi.useRealTimers(); }
   });
-  it("a Jump while the title's slot is still filling cuts its loads off; a filled slot, or no slot, stops nothing (0122)", async () => {
+  it("the title's slot is Marquee's frame: removed the moment the title goes, filled or not, and sized by its own report (0122)", async () => {
     vi.useFakeTimers();
     try {
       let mode = 'title';
@@ -130,66 +132,164 @@ describe('ads (Marquee, between runs only)', () => {
       const m = { v: 1, ready: () => Promise.resolve(cfg), interstitial: vi.fn(), rewarded: vi.fn() };
       const doc = fakeDoc();
       const title = doc.createElement('section');
-      const loaded = new Set();   // resource timing: a finished load has an entry
-      const performance = { getEntriesByName: (u) => (loaded.has(u) ? [{}] : []) };
-      const gs = doc.createElement('script');
-      gs.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=x';
-      const own = doc.createElement('script');
-      own.src = 'https://mutaafaziz.com/ads/v1/ads.js';    // our origin's: never a reason to cut
-      doc.head.appendChild(own);
+      const handlers = new Set();
       const location = { origin: 'https://mutaafaziz.com' };
-      const win = { marquee: m, location, stop: vi.fn(), performance };
+      const win = { marquee: m, location, stop: vi.fn(),
+        addEventListener: (t, f) => t === 'message' && handlers.add(f), removeEventListener: (t, f) => t === 'message' && handlers.delete(f) };
+      const post = (source, data, origin = location.origin) => { for (const f of [...handlers]) f({ source, data, origin }); };
       const ads = createAds({ win, doc, mode: () => mode });
       ads.arm(title);
       await Promise.resolve(); await Promise.resolve();
-      mode = 'countdown'; ads.sync();                     // a quick Jump: nothing was asked for, nothing to stop
-      expect(win.stop).not.toHaveBeenCalled();
-      mode = 'title'; ads.sync();
-      vi.advanceTimersByTime(TITLE_DWELL_MS + 500);
-      expect(title.children).toHaveLength(1);            // placed
-      mode = 'countdown'; ads.sync();                     // only our own loader in the page: nothing to cut
-      expect(win.stop).not.toHaveBeenCalled();
-      mode = 'title'; ads.sync();
       vi.advanceTimersByTime(TITLE_DWELL_MS);
-      doc.head.appendChild(gs);                           // Marquee's AdSense download is under way
-      mode = 'countdown'; ads.sync();                     // Jump at dwell + 0.5 s
+      const f = title.children[0];
+      expect(f.tagName).toBe('iframe');
+      expect(f.style.height).toBe('0px');                 // an unfilled slot takes no room, as the in-page one did
+      expect(f.attrs.scrolling).toBe('no');
+      post(f.contentWindow, { marqueeFrame: 'title', h: 60 });
+      expect('filled' in f.dataset).toBe(false);         // 0142: no drawn ad: out of the flow and hidden (styles.css)
+      f.contentDocument.filled = true; f.dispatch('load');
+      expect(f.style.height).toBe('60px');               // filled: it grows exactly as the in-page slot would
+      expect('filled' in f.dataset).toBe(true);
+      post(f.contentWindow, { marqueeFrame: 'title', h: 250 });
+      expect(f.style.height).toBe('90px');               // the slot's cap
+      post({}, { marqueeFrame: 'title', h: 10 });         // another window's message: ignored
+      post(f.contentWindow, { marqueeFrame: 'title', h: 10 }, 'https://evil.example');
+      expect(f.style.height).toBe('90px');
+      f.hidden = true;                                    // settled, filled: still removed (its document keeps working)
+      mode = 'countdown'; ads.sync();                     // Jump
       expect(title.children).toHaveLength(0);
-      expect(win.stop).toHaveBeenCalledTimes(1);          // the download and the ad request are cancelled, not left to land in the run
-      mode = 'live'; ads.sync();
-      expect(win.stop).toHaveBeenCalledTimes(1);          // once, at the Jump
+      expect(handlers.size).toBe(0);                      // the listener goes with it
+      expect(win.stop).not.toHaveBeenCalled();            // the frame's removal is the cut: nothing of the page's is stopped
+      mode = 'drive'; ads.sync();
       mode = 'title'; ads.sync();
-      vi.advanceTimersByTime(TITLE_DWELL_MS);
-      mode = 'countdown'; ads.sync();                     // a second cut this session: never (stop takes what else is in flight)
-      expect(win.stop).toHaveBeenCalledTimes(1);
-      mode = 'title'; ads.sync();
-      vi.advanceTimersByTime(TITLE_DWELL_MS);
-      title.children[0].hidden = true;                    // settled (filled or nothing to show): seen, so kept
-      mode = 'countdown'; ads.sync();
-      expect(win.stop).toHaveBeenCalledTimes(1);
-      // A script that has finished loading has run: stopping now cancels nothing of its, only our own loads.
-      const win3 = { marquee: m, location, stop: vi.fn(), performance };
-      const title3 = doc.createElement('section');
-      mode = 'title';
-      const ads3 = createAds({ win: win3, doc, mode: () => mode });
-      ads3.arm(title3);
-      await Promise.resolve(); await Promise.resolve();
-      vi.advanceTimersByTime(TITLE_DWELL_MS);
-      loaded.add(gs.src);
-      mode = 'countdown'; ads3.sync();
-      expect(title3.children).toHaveLength(0);
-      expect(win3.stop).not.toHaveBeenCalled();
-      // Free Drive's own chunk and road load as it opens: a cut there would take them too, so only a run cuts.
-      const win2 = { marquee: m, location, stop: vi.fn(), performance };
-      const title2 = doc.createElement('section');
-      mode = 'title';
-      const ads2 = createAds({ win: win2, doc, mode: () => mode });
-      ads2.arm(title2);
-      await Promise.resolve(); await Promise.resolve();
-      vi.advanceTimersByTime(TITLE_DWELL_MS);
-      mode = 'drive'; ads2.sync();
-      expect(title2.children).toHaveLength(0);
-      expect(win2.stop).not.toHaveBeenCalled();
+      vi.advanceTimersByTime(TITLE_DWELL_MS - 1);
+      expect(title.children).toHaveLength(0);             // each title waits out its own dwell
+      vi.advanceTimersByTime(1);
+      expect(title.children).toHaveLength(1);
+      mode = 'drive'; ads.sync();                         // any way off the title removes it
+      expect(title.children).toHaveLength(0);
     } finally { vi.useRealTimers(); }
+  });
+  it("0142: an unfilled frame takes no room whatever it reports; a filled one that costs the Daily its room goes, for this title only", async () => {
+    vi.useFakeTimers();
+    try {
+      let mode = 'title';
+      const cfg = { enabled: true, slots: { title: { source: 'network' } } };
+      const m = { v: 1, ready: () => Promise.resolve(cfg), interstitial: vi.fn(), rewarded: vi.fn() };
+      const doc = fakeDoc();
+      const title = doc.createElement('section');
+      const handlers = new Set();
+      const location = { origin: 'https://mutaafaziz.com' };
+      const win = { marquee: m, location, addEventListener: (t, f) => t === 'message' && handlers.add(f), removeEventListener: (t, f) => t === 'message' && handlers.delete(f) };
+      const post = (source, data) => { for (const f of [...handlers]) f({ source, data, origin: location.origin }); };
+      const ads = createAds({ win, doc, mode: () => mode });
+      ads.arm(title);
+      await Promise.resolve(); await Promise.resolve();
+      vi.advanceTimersByTime(TITLE_DWELL_MS);
+      let f = title.children[0];
+      f.dispatch('load');
+      post(f.contentWindow, { marqueeFrame: 'title', h: 90 });   // Google reserved the unit's height, drew nothing
+      vi.advanceTimersByTime(15_000);
+      expect('filled' in f.dataset).toBe(false);                 // out of the flow and hidden, whatever it reports
+      f.contentDocument.filled = true; post(f.contentWindow, { marqueeFrame: 'title', h: 90 });
+      expect(f.style.height).toBe('90px');
+      expect('filled' in f.dataset).toBe(true);
+      f.contentDocument.filled = false; post(f.contentWindow, { marqueeFrame: 'title', h: 90 });   // the unit went unfilled
+      expect('filled' in f.dataset).toBe(false);
+      // The title's fit has no room for it: the frame goes, with its listener, and this title asks for no other.
+      f.contentDocument.filled = true; post(f.contentWindow, { marqueeFrame: 'title', h: 90 });
+      title.dispatch(NO_ROOM_EVENT);
+      expect(title.children).toHaveLength(0);
+      expect(handlers.size).toBe(0);
+      vi.advanceTimersByTime(TITLE_DWELL_MS * 3); ads.sync();
+      expect(title.children).toHaveLength(0);
+      title.dispatch(NO_ROOM_EVENT);                             // nothing placed: a no-op
+      // The next title looks again.
+      mode = 'countdown'; ads.sync();
+      mode = 'title'; ads.sync();
+      vi.advanceTimersByTime(TITLE_DWELL_MS);
+      f = title.children[0];
+      expect(f?.tagName).toBe('iframe');
+      expect(f.style.height).toBe('0px');
+    } finally { vi.useRealTimers(); }
+  });
+  it("0142: frameFilled reads Google's verdict or a loaded direct creative, never a reserved unit or a broken image", () => {
+    const d = (google, media = []) => ({ querySelector: () => (google ? {} : null), querySelectorAll: () => media });
+    expect(frameFilled(d(true))).toBe(true);
+    expect(frameFilled(d(false, [{ tagName: 'IMG', complete: true, naturalWidth: 300 }]))).toBe(true);
+    expect(frameFilled(d(false, [{ tagName: 'IMG', complete: false, naturalWidth: 0 }]))).toBe(false);   // still loading
+    expect(frameFilled(d(false, [{ tagName: 'IMG', complete: true, naturalWidth: 0 }]))).toBe(false);    // failed
+    expect(frameFilled(d(false, [{ tagName: 'VIDEO', readyState: 2 }]))).toBe(true);
+    expect(frameFilled(d(false, [{ tagName: 'VIDEO', readyState: 0 }]))).toBe(false);
+    expect(frameFilled(d(false))).toBe(false);
+    expect(frameFilled(null)).toBe(false);
+    expect(frameFilled({ querySelector() { throw new Error('torn down'); } })).toBe(false);
+  });
+  it("0142: with no room for the banner (the title would pack its Daily) no frame is placed, so no ad is asked for; a first draw with no room goes too", async () => {
+    vi.useFakeTimers();
+    try {
+      let mode = 'title', room = 0;
+      const cfg = { enabled: true, slots: { title: { source: 'network' } } };
+      const m = { v: 1, ready: () => Promise.resolve(cfg), interstitial: vi.fn(), rewarded: vi.fn() };
+      const doc = fakeDoc();
+      const title = doc.createElement('section');
+      const asked = [];
+      title.addEventListener(ROOM_EVENT, (e) => { asked.push(e.detail.h); if (e.detail.h > room) e.preventDefault(); });
+      const handlers = new Set();
+      const location = { origin: 'https://mutaafaziz.com' };
+      class CustomEvent { constructor(type, o) { this.type = type; this.detail = o.detail; this.defaultPrevented = false; } preventDefault() { this.defaultPrevented = true; } }
+      const win = { marquee: m, location, CustomEvent, addEventListener: (t, f) => t === 'message' && handlers.add(f), removeEventListener: (t, f) => t === 'message' && handlers.delete(f) };
+      const post = (source, data) => { for (const f of [...handlers]) f({ source, data, origin: location.origin }); };
+      const ads = createAds({ win, doc, mode: () => mode });
+      ads.arm(title);
+      await Promise.resolve(); await Promise.resolve();
+      vi.advanceTimersByTime(TITLE_DWELL_MS * 3);
+      expect(asked).toEqual([BANNER_ROOM]);              // asked once; no room: nothing placed, not asked again this title
+      expect(title.children).toHaveLength(0);
+      expect(title.dataset.adRoom).toBe('none');
+      mode = 'countdown'; ads.sync();
+      expect(title.dataset.adRoom).toBeUndefined();
+      room = BANNER_ROOM;                                 // the next title has room for the slot
+      mode = 'title'; ads.sync();
+      vi.advanceTimersByTime(TITLE_DWELL_MS);
+      const f = title.children[0];
+      expect(f?.tagName).toBe('iframe');
+      room = 50;                                          // but the drawn ad is taller than there is room for now
+      f.contentDocument.filled = true; post(f.contentWindow, { marqueeFrame: 'title', h: 90 });
+      expect(asked.at(-1)).toBe(90 + 18);
+      expect(title.children).toHaveLength(0);
+      expect(handlers.size).toBe(0);
+    } finally { vi.useRealTimers(); }
+  });
+  it("a short or narrow screen, where the title has no room for the banner, gets no frame at all: no ad work for an ad nobody sees (0122)", async () => {
+    vi.useFakeTimers();
+    try {
+      const cfg = { enabled: true, slots: { title: { source: 'network' } } };
+      const m = { v: 1, ready: () => Promise.resolve(cfg), interstitial: vi.fn(), rewarded: vi.fn() };
+      for (const [short, n] of [[true, 0], [false, 1]]) {
+        const doc = fakeDoc();
+        const title = doc.createElement('section');
+        const asked = [];
+        const win = { marquee: m, location: { origin: 'https://mutaafaziz.com' }, addEventListener: () => {}, removeEventListener: () => {},
+          matchMedia: (q) => { asked.push(q); return { matches: short }; } };
+        const ads = createAds({ win, doc, mode: () => 'title' });
+        ads.arm(title);
+        await Promise.resolve(); await Promise.resolve();
+        vi.advanceTimersByTime(TITLE_DWELL_MS);
+        expect(title.children).toHaveLength(n);
+        expect(asked).toEqual([TITLE_SKIP_MQ]);
+      }
+      expect(TITLE_SKIP_MQ).toBe('(max-height: 620px), (max-width: 360px)');   // the same query styles.css hides the banner at
+    } finally { vi.useRealTimers(); }
+  });
+  it('frameHeight reads only its own slot and caps at the in-page 90 px', () => {
+    expect(frameHeight({ marqueeFrame: 'title', h: 50.4 })).toBe(50);
+    expect(frameHeight({ marqueeFrame: 'title', h: -3 })).toBe(0);
+    expect(frameHeight({ marqueeFrame: 'title', h: 400 })).toBe(90);
+    expect(frameHeight({ marqueeFrame: 'other', h: 50 })).toBe(null);
+    expect(frameHeight({ marqueeFrame: 'title', h: 'x' })).toBe(null);
+    expect(frameHeight('title')).toBe(null);
+    expect(frameHeight(null)).toBe(null);
   });
   it('the ?marquee= ask is read at boot: the title rewriting the address keeps it', () => {
     const doc = fakeDoc();
