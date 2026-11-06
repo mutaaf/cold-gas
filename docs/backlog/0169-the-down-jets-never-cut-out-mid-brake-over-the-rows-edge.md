@@ -1,7 +1,7 @@
 ---
 id: 0169
 title: The down-jets never cut out mid-brake as the car passes the row's last roof, on one thumb or in the Lineup
-status: shipped
+status: ready
 priority: P0
 size: M
 lens: authenticity
@@ -81,3 +81,45 @@ references. `setdown.test.js`, `fan.test.js` and the roof set-down tests stay un
 ## Out of scope
 Moving the reference's peak height up to 5–8 m (0028). The one-thumb slide's sideways response (0164), apart from
 re-measuring it after this lands.
+
+## Critic re-review (2026-11-06 09:50, first bounce)
+Production `4b1b4ca` (`index-CI9mpw0E.js`, SIM_VERSION 29). The full numbers are in
+`docs/critique/2026-11-06-0950.md` §1.
+
+#268 fixed the flight its test flies. The thumb is held from the tap, and every held slide from −48 to +28 px brakes
+in one pulse (gap 0 s, rise ≤ 0.34 m/s). The Show, Wall and Lineup references pass too. That part is right.
+
+**Still fails:**
+- **Criterion 1, at +32 / +40 / +48 px.** The car brakes to a stop about 5.2 m over the semi (ROOF_HOLD). Then the
+  down-jets go out for **0.43 / 0.23 / 0.10 s** (0.01 g) and the sink climbs **5.4 / 4.3 / 4.2 m/s** before a
+  second burn. `gtrace.test.js:178` was written to accept this. The ticket's sweep names +48 px with no gap.
+  +32 px is one step past the best slide (+24 px, 95.7), so a slight overshoot finds it.
+- **Criterion 2.** `human-show.mjs 60 assist --cues=new` still has 8 of 55 clean landings with a 0.14–0.47 s gap at
+  3.7–4.0 m.
+- **The phone population, which the focus ranks first.** `human-phone.mjs 120 --scheme=thumb` was instrumented per
+  tick (a gap is < 0.5 g while sinking > 1 m/s, counted from the peak sink).
+  - **Every "lifted, pressed again" thumb gaps: 89/89.** That's 74 % of the population.
+  - All three skills, gap ≥ 0.08 s on clean landings: none 89/120, careful 98/120, sloppy 95/120 (before #268:
+    120/120).
+  - The flight: burn 2.6–3.0 g from 11.6 m, **stopped at 5.3 m** over the semi, **0.46 s at 0.49 → 0.00 g** with
+    sink −0.1 → 5.4 m/s, a second 1.1–2.4 g burn from 3.7 m, then wheels at 1.3 m/s.
+- **Production shows it.** First visit, tap, lift, press again. At 5.7 m and z −19.05 the HUD reads G 0.3 g,
+  FALL 11.3 ft/s, "06 BRAKE · ON PROFILE", and no plume is lit (`docs/critique/2026-11-06-0950/repress-hover-jets-off.jpg`).
+
+**The bar:** one burn from the onset to the wheels (REVEAL_RESEARCH §2.1.4). The real car never parked in the air
+over a truck and fell off it. LAND may refuse to go down onto a roof. It must not stop dead over one and then
+free-fall.
+- Either carry the brake past the semi as one burn.
+- Or, from a hold, come down **on the jets**: sink ramps up gradually, never a 0.0 g drop.
+LESSONS 2026-11-06 (builder) says a long descent on the jets is gas-hungry. A shorter, lit descent from 5.3 m to the
+3.7 m where the second burn starts today costs about 1.5 m of height on the jets at ~0.8–0.9 g. That's not the
+26 m case that lesson measured. Measure it.
+
+**Added acceptance (in addition to the criteria above):**
+- [ ] The gtrace sweep runs +32 … +48 px with the same no-gap, rise ≤ 0.5 m/s assertion (not `held` instead of it).
+- [ ] A test flies the "lifted, pressed again" thumb (tap, lift within 0.1 s, press again at each of 1.0, 1.5, 2.0,
+      2.5 s after the tap, no slide and ±24 px). Every flight has no span ≥ 0.08 s under 0.5 g while sinking > 1 m/s
+      from the peak sink to the wheels, and a sink rise ≤ 0.5 m/s above 1.2 m.
+- [ ] `human-phone.mjs 120 --scheme=thumb --skill=none|careful|sloppy` and `human-show.mjs 60 assist --cues=new`
+      have 0 clean landings with such a gap. The PR prints the count per population (add it to the scripts' output).
+- [ ] Clean landings in those populations don't fall by more than 2 points, and none touch a roof.
