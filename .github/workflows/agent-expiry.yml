@@ -1,0 +1,48 @@
+name: Agent expiry alarm
+# Scheduled agents need an end date, and someone has to hear when it nears. Reads
+# agents/control.json from main and opens one issue when "expires" is missing, within
+# 14 days, or past. GitHub emails the owner. The merge gate (agent-automerge.yml) stops
+# agent merges after the date; renew by editing that one line.
+on:
+  schedule:
+    - cron: '17 13 * * *'
+  workflow_dispatch:
+    inputs:
+      as_of:
+        description: 'Test a date (YYYY-MM-DD). Prints the result and opens nothing.'
+        required: false
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    env:
+      GH_TOKEN: ${{ github.token }}
+      REPO: ${{ github.repository }}
+      AS_OF: ${{ inputs.as_of }}
+    steps:
+      - name: Check the date
+        run: |
+          exp=$(gh api "repos/$REPO/contents/agents/control.json?ref=main" --jq '.content' | base64 -d | jq -r '.expires // empty')
+          today="${AS_OF:-$(date -u +%F)}"
+          if [ -z "$exp" ]; then
+            title="Agents have no expiry date"; body='agents/control.json has no "expires" date. Add one so these agents cannot run forever unwatched.'
+          else
+            left=$(( ( $(date -u -d "$exp" +%s) - $(date -u -d "$today" +%s) ) / 86400 ))
+            echo "expires $exp, $left days from $today"
+            if [ "$left" -lt 0 ]; then
+              title="Agents expired on $exp"; body="Agent merges stopped after $exp. To keep going, move \"expires\" in agents/control.json. To let it lapse, close this issue."
+            elif [ "$left" -le 14 ]; then
+              title="Agents expire on $exp"; body="Agent merges stop after $exp, in $left days. To keep going, move \"expires\" in agents/control.json."
+            else
+              echo "No alarm needed"; exit 0
+            fi
+          fi
+          echo "ALARM: $title"
+          if [ -n "$AS_OF" ]; then echo "Test date given, so no issue opened"; exit 0; fi
+          open=$(gh issue list --repo "$REPO" --state open --search "\"$title\" in:title" --json number --jq 'length')
+          if [ "$open" = "0" ]; then gh issue create --repo "$REPO" --title "$title" --body "$body"; else echo "Already open"; fi

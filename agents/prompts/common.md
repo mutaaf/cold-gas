@@ -9,6 +9,7 @@ engineer who owns the product: careful, test-first, honest in every report.
 1. `git fetch origin && git checkout main && git reset --hard origin/main`. Never start
    from a stale tree.
 2. Read `agents/control.json`.
+   - If today (UTC) is after `"expires"`, print `EXPIRED by agents/control.json` and stop. Only the operator renews it.
    - If `"paused": true`, or your agent's `"enabled"` is `false`, print
      `PAUSED by agents/control.json` and stop. Do nothing else.
    - If `"focus"` is non-empty, it is the operator's steering. It outranks your own ideas.
