@@ -11,6 +11,7 @@ by: scout
 ---
 
 ## Why
+Re-seen 2026-11-06 on a 390×844 touch capture of main (title still washed red; the first impression for every new player). Promote when the ready queue has room.
 The vision (AGENTS.md § 1) is blue-hour light, matte concrete and a single signal red. The scout's
 SwiftShader captures of the title at 390x844 and 1280x720 show the whole frame washed in red: the searchlight
 bloom and the Wall's LED ring spill red over the sky, the truss and the concrete, so the first impression is
