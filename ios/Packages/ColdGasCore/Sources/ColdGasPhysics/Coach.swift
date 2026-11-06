@@ -16,7 +16,7 @@ import ColdGasClient
 public let COACH_AIM_LEAN = "lean toward the pad (pitch or roll) above 5 m to walk the touchdown marker onto the rings, then level"
 public let COACH_AIM_THUMB = "hold the pad in the air and slide onto the amber dot: the touchdown follows it onto the rings"
 public let COACH_RANOUT_LEAN = "Stay on the brake through the last 2 m: hold the sink in the green band to the ground."
-public let COACH_RANOUT_THUMB = "Keep holding the pad to the ground, and keep the slide small: a big slide tilts the jets off the brake."
+public let COACH_RANOUT_THUMB = "Keep holding the pad all the way to the ground: the held pad is the brake."
 
 // MARK: - pointer.js: the words
 

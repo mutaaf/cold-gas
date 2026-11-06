@@ -109,8 +109,8 @@ export function pointerText(id, ctx, flight = null) {
       const at = flight && flight.needH > 0 ? `, ${Math.ceil(flight.needH)} m up` : '';
       return `Brake sooner: ${ctl(ctx, b)} at the BRAKE line${at}`;
     }
-    // One thumb (0125): the pad is the brake and it was held; the slide is what tilts the jets off it.
-    case 'ran-out': if (thumbOn(ctx)) return 'Brake to the ground: keep holding the pad, and keep the slide small';
+    // One thumb (0125): the pad is the brake (0164: the slide no longer costs braking).
+    case 'ran-out': if (thumbOn(ctx)) return 'Brake to the ground: keep holding the pad all the way down';
       return assist ? `Stay on the brake to the ground: keep holding ${keyOf(ctx, 'land')}` : 'Brake once, hard, at the BRAKE line, and stay on it to the ground';
     case 'late-roll': return assist ? `Roll out sooner: ${ctl(ctx, 'land')} straight after you let go` : `Roll out sooner: ${ctl(ctx, rollAct(ctx))} straight after you let go`;
     case 'over-roll': return `Stop the roll early: let go of ${keyOf(ctx, rollAct(ctx))} about 40° before level`;

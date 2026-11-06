@@ -88,7 +88,7 @@ struct LiveInputTests {
             while si < v.sights.count && v.sights[si][0] as! Int == t {
                 let s = v.sights[si], c = live.run.car
                 predict(c, jsMax(0, c.pos.y - SPEC.comHeight), pr, land: s[1] as! Int == 1)
-                let o = markOffset(c, pr, v.course)
+                let o = markOffset(c, pr, v.course, live.thumb.ref)
                 for (k, x) in predValues(pr).enumerated() where hex64(x) != s[2 + k] as! String { sightBad.append("tick \(t) \(v.predFields[k]) JS \(s[2 + k]) Swift \(hex64(x))") }
                 let n = 2 + v.predFields.count
                 if pr.status != s[n] as! String { sightBad.append("tick \(t) status JS \(s[n]) Swift \(pr.status)") }

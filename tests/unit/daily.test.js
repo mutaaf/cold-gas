@@ -187,7 +187,7 @@ describe('the skim, mark and ninety days name the choice that meets them (0150)'
       if (aim && released && run.phase === 'air' && th.held) {
         if (run.tick >= next) {
           predict(c, Math.max(0, c.pos.y - SPEC.comHeight), pr);
-          markOffset(c, pr, 'show', off);
+          markOffset(c, pr, 'show', off, th.ref);
           want = { x: off.x, y: -off.y, at: run.tick + 60 };
           next = run.tick + 72;
         }
