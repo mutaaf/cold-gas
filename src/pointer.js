@@ -119,10 +119,22 @@ export function pointerText(id, ctx, flight = null) {
     case 'mark': return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
     case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
-    case 'clean': if (thumbOn(ctx)) return 'Clean. Next: hold in the air and slide onto the amber dot to land on the mark';
+    case 'clean': if (thumbOn(ctx)) return thumbClean(flight);
       return assist ? 'Clean. Next: a softer touchdown, closer to the mark' : 'Clean. Next: under 1 m/s and the 2 m ring';
     default: return '';
   }
+}
+
+// 0156: one thumb's clean line names the step after this flight. A touchdown inside the mark ring the slide is for
+// (3.5 m, the mark Daily's bar, src/daily.js) names its distance and the next step: the 2 m ring, then Pro (one thumb
+// is Assist only, so the coach's own clean fix is "Try Pro"). A clean run that never reached the ring keeps the slide.
+export const THUMB_MARK_RING = 3.5;
+function thumbClean(flight) {
+  const miss = flight?.touch?.padMiss;
+  if (!(miss <= THUMB_MARK_RING)) return 'Clean. Next: hold in the air and slide onto the amber dot to land on the mark';
+  const d = (Math.round(miss * 10) / 10).toFixed(1);
+  return miss <= 2 ? `Clean, ${d} m from the mark. Next: try Pro and fly the landing yourself`
+    : `Clean, ${d} m from the mark. Next: inside the 2 m ring, then try Pro`;
 }
 
 // What "fixed" reads as: the number that moved, from the card.

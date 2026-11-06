@@ -9,6 +9,8 @@ import { scoreRun } from '../../src/sim/judge.js';
 import { predict, newPrediction } from '../../src/sim/predict.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { createOneThumb, thumbStage, markOffset, THUMB } from '../../src/onethumb.js';
+import { coach } from '../../src/sim/coach.js';
+import { coachWords, pickPointer } from '../../src/pointer.js';
 import { MEDALS, MEDAL_KEY, thresholds, medalFor, nextMedal, nextTargetText, getMedals, recordRun, _resetMedalCache } from '../../src/medals.js';
 
 // The Show the way main.js flies it: hold up the curl, stop on the ledge, a short tap to let go
@@ -114,6 +116,26 @@ function fakeStorage({ throws = false } = {}) {
   const m = new Map();
   return { getItem: (k) => { if (throws) throw new Error('denied'); return m.has(k) ? m.get(k) : null; }, setItem: (k, v) => { if (throws) throw new Error('denied'); m.set(k, String(v)); }, removeItem: (k) => m.delete(k), _m: m };
 }
+
+// 0156: the critic's sheet (2026-11-05 §3): a thumb that slides onto the dot and holds lands ≤ 3.5 m, a Perfect 10
+// on run 1, and the sheet told it to slide onto the dot. NEXT RUN and the coach's first item now name one next step.
+describe('one thumb, a landing on the mark: the sheet names the next step (0156)', () => {
+  it('the held +24 px slide (Perfect 10, ≤ 3.5 m): NEXT RUN and What happened agree on Pro', () => {
+    const run = flyThumb({ slide: (r, th) => th.move(24, 0) });
+    const card = scoreRun(run.t);
+    expect(card.facts.crashed).toBe(false);
+    expect(card.facts.padMiss).toBeLessThanOrEqual(3.5);
+    const ctx = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' };
+    const c = coach(run.inputLog, 'show', card, 0, coachWords(ctx));
+    expect(c.items[0].id).toBe('clean');
+    const p = pickPointer(c.items, ctx, { card, flight: c.flight });
+    expect(p.id).toBe('clean');
+    expect(p.text).not.toMatch(/slide onto the amber dot/);
+    expect(p.text).toMatch(new RegExp(`^Clean, ${card.facts.padMiss.toFixed(1)} m from the mark`));
+    expect(c.items[0].fix).toMatch(/Try Pro/);
+    expect(p.text).toMatch(/try Pro/);
+  });
+});
 
 describe('medals (0121)', () => {
   beforeEach(() => { globalThis.localStorage = fakeStorage(); _resetMedalCache(); });
