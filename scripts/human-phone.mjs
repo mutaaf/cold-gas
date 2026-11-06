@@ -196,7 +196,8 @@ for (let n = 0; n < N; n++) {
       inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
       stepRun(run, inp);
     }
-    choice = `${P.landAt === 'with-boost' ? 'held from the tap' : 'lifted, pressed again'} · ${slid ? 'slid' : 'no slide'}`;
+    // 0150: a let-go thumb that never came back (the skim day's hint) is its own bucket.
+    choice = `${P.landAt === 'with-boost' ? 'held from the tap' : holdFrom < 0 ? 'lifted, stayed off' : 'lifted, pressed again'} · ${slid ? 'slid' : 'no slide'}`;
   } else {
     let released = false, relT = -1, ledgeT = -1, relPress = -1, boostOn = false, cueOffT = -1, rollOn = false, rollDone = false, rollUprightT = -1;
     let landing = false, landSeen = -1, landPress = -1, wHeld = false, wChange = 0, ax = 0, noise = 0, boostPress = -1;

@@ -72,14 +72,14 @@ public enum Daily {
                   checkFn: { _, f, u in !cleanOver(f) ? .missed("clear the row and land clean first") : f.n("clearance") < 1.5 ? .done : .missed("cleared by \(u.one(.len, f.n("clearance"), 1))", fix: true) },
                   // 0150: one thumb lets go right after the tap (held, the computer carries the car 4.5 m over the roofs).
                   hint: { p in p.thumbOn ? "let go of the pad right after the tap and stay off it; held, it carries you high"
-                      : "one short \(p.word("boost")) burst, not to the cue, and \(p.word("land")) late, once you\u{2019}re low over the pad" },
+                      : "one short \(p.word("boost")) burst, not to the cue, and \(p.tier == "assist" ? p.word("land") : p.word("lift")) late, once you\u{2019}re low over the pad" },
                   titleHintFn: { p, whole in !p.thumbOn ? "" : whole ? "Let go right after the tap and stay off the pad" : "Let go right after the tap" }),
         Objective(id: "roll-lineup", course: "lineup", tier: nil, goalText: { _ in "Roll a clean 360\u{B0} over the row" },
                   checkFn: { _, f, _ in landed(f) && f.n("rotations") >= 1 ? .done : !landed(f) ? .missed("no clean landing yet") : .missed("rolled \(f.s("rollDeg"))\u{B0}, need 360\u{B0}") }, hint: nil, titleHintFn: nil),
         Objective(id: "stick-wall", course: "wall", tier: nil, goalText: { _ in "Stick it: score 84+" },
                   checkFn: { c, f, _ in c.total >= 84 && landed(f) ? .done : .missed("\(r1(c.total)), need 84") }, hint: nil, titleHintFn: nil),
         Objective(id: "ninety-show", course: "show", tier: nil, goalText: { _ in "Score 90 or more" },
-                  checkFn: { c, f, _ in c.total >= 90 ? .done : .missed("\(r1(c.total)), need 90", fix: landed(f) && f.n("padMiss") > 3.5) }, hint: aimHint, titleHintFn: nil),
+                  checkFn: { c, f, _ in c.total >= 90 ? .done : .missed("\(r1(c.total)), need 90", fix: cleanOver(f) && f.n("padMiss") > 3.5 && !(f.n("sink") > 1.5) && !(f.n("tiltDeg") > 15)) }, hint: aimHint, titleHintFn: nil),
         Objective(id: "mark-lineup", course: "lineup", tier: nil, goalText: { "Land within \($0.one(.len, 7)) of the mark" },
                   checkFn: { _, f, u in !landed(f) ? .missed("no clean landing yet") : f.n("padMiss") <= 7 ? .done : .missed("\(u.one(.len, f.n("padMiss"), 1)) off the mark") }, hint: nil, titleHintFn: nil),
         Objective(id: "scratch-show", course: "show", tier: nil, goalText: { _ in "Clear the row without a scratch" },

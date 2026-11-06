@@ -4,7 +4,7 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { setUnits } from '../../src/units.js';
 import { OBJECTIVES, objectiveIndex, objectiveFor, evaluate, dayNumber, dayKey, keyToDay, readStreak, streakNow, complete,
-  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint, dailyCoach } from '../../src/daily.js';
+  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint, dailyCoach, dailyItems } from '../../src/daily.js';
 import { newInput } from '../../src/sim/vehicle.js';
 import { predict, newPrediction } from '../../src/sim/predict.js';
 import { SPEC } from '../../src/sim/spec.js';
@@ -218,6 +218,8 @@ describe('the skim, mark and ninety days name the choice that meets them (0150)'
       expect(evaluate(skim, s, 'show').ok, `lift ${lift} ticks after the tap: ${s.facts.clearance} m`).toBe(true);
       expect(s.facts.sink, `lift ${lift}`).toBeLessThanOrEqual(1.5);
     }
+    // The window "right after the tap" names: lifted at 0.7 s, the car is carried high again.
+    expect(evaluate(skim, scoreRun(flyThumb({ lift: 168 }).t), 'show').ok).toBe(false);
   }, 120000);
 
   it('keys and classic touch name their own controls (a short BOOST, a late LAND), never the pad', () => {
@@ -226,6 +228,9 @@ describe('the skim, mark and ninety days name the choice that meets them (0150)'
     expect(k).toBe('Daily: cleared by 14.8 ft · one short BOOST (F) burst, not to the cue, and LAND (Shift) late, once you’re low over the pad');
     expect(c).toBe('Daily: cleared by 14.8 ft · one short BOOST burst, not to the cue, and LAND late, once you’re low over the pad');
     for (const line of [k, c]) expect(line).not.toMatch(/the pad from|let go of the pad|try again/);
+    // Off Assist, LAND isn't the brake: the hint names LIFT, as the gas day's does.
+    expect(missLine(skim, r, { ...keys, tier: 'pro' })).toMatch(/and LIFT \(Space\) late/);
+    expect(missLine(skim, r, { ...classic, tier: 'advanced' })).toMatch(/and the four down-jet pads late/);
   });
 
   it('on a missed skim, the sheet\'s NEXT RUN line never tells one thumb to hold the pad in the air', () => {
@@ -235,6 +240,12 @@ describe('the skim, mark and ninety days name the choice that meets them (0150)'
     const p = pickPointer(items, thumb, { card: held, daily: dailyCoach(skim, r, thumb) });
     expect(p.text).toBe('For the Daily: let go of the pad right after the tap and stay off it');
     expect(p.text).not.toMatch(/\bhold/i);
+    // And the "What happened" list under it: no item says to hold the pad either.
+    expect(items.some((it) => /hold the pad/i.test(it.fix))).toBe(true);   // what it says without the Daily
+    const shown = dailyItems(items, dailyCoach(skim, r, thumb));
+    for (const it of shown) expect(it.fix, it.id).not.toMatch(/\bhold(ing)? the pad/i);
+    expect(shown.map((it) => it.id)).toEqual(items.map((it) => it.id));
+    expect(dailyItems(items, '')).toBe(items);
     // Met, or not a skim day, or not one thumb: the coach's own line.
     expect(dailyCoach(skim, { ok: true, miss: '' }, thumb)).toBe('');
     expect(dailyCoach(skim, r, keys)).toBe('');
@@ -264,7 +275,10 @@ describe('the skim, mark and ninety days name the choice that meets them (0150)'
     }
     // A crash, or a landing on the mark that scored under 90 for something else: nothing to aim, "try again".
     expect(missLine(ninety, ninety.check({ total: 60 }, { jumped: true, crashed: true, padMiss: 9 }), thumb)).toBe('Daily: 60.0, need 90 — try again');
-    expect(missLine(ninety, ninety.check({ total: 84 }, { jumped: true, padMiss: 2 }), thumb)).toBe('Daily: 84.0, need 90 — try again');
+    expect(missLine(ninety, ninety.check({ total: 84 }, { jumped: true, crossedRow: true, padMiss: 2 }), thumb)).toBe('Daily: 84.0, need 90 — try again');
+    // Off the mark but also scraped the row, or touched down hard: the aim isn't what cost it.
+    expect(missLine(ninety, ninety.check({ total: 70 }, { jumped: true, crossedRow: true, contact: true, padMiss: 6 }), thumb)).toBe('Daily: 70.0, need 90 — try again');
+    expect(missLine(ninety, ninety.check({ total: 72 }, { jumped: true, crossedRow: true, padMiss: 6, sink: 2.4 }), thumb)).toBe('Daily: 72.0, need 90 — try again');
     expect(missLine(mark, mark.check({}, {}), thumb)).toBe('Daily: no clean landing yet — try again');
   });
 

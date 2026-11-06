@@ -173,6 +173,7 @@ test('the daily card: today’s objective, Play today’s picks its course, and 
   await expect(p3.locator('[data-daily-line]')).toHaveText(/^Daily: cleared by 1\d\.\d ft · let go of the pad right after the tap and stay off it; held, it carries you high$/);
   const next = p3.locator('[data-pointer-text]');
   await expect(next).toHaveText('For the Daily: let go of the pad right after the tap and stay off it', { timeout: 10_000 });
+  expect(await p3.locator('[data-coach-items]').innerText()).not.toMatch(/\bhold(ing)? the pad/i);   // nor "What happened"
   expect(errors).toEqual([]);
   await ctx.close();
 });

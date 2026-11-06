@@ -63,7 +63,7 @@ export const OBJECTIVES = [
     // --cues=new --daily, seed as committed): BOOST held to its cue never meets it (0/60); a short burst with LAND from
     // 4 m meets it 11/14, everyone else 12/136.
     hint: (ctx) => (thumbOn(ctx) ? 'let go of the pad right after the tap and stay off it; held, it carries you high'
-      : `one short ${coachWords(ctx).boost} burst, not to the cue, and ${coachWords(ctx).land} late, once you’re low over the pad`),
+      : `one short ${coachWords(ctx).boost} burst, not to the cue, and ${ctx.tier === 'assist' ? coachWords(ctx).land : coachWords(ctx).lift} late, once you’re low over the pad`),
     titleHint: (ctx, whole) => (!thumbOn(ctx) ? '' : whole ? 'Let go right after the tap and stay off the pad' : 'Let go right after the tap'),
     // The sheet's NEXT RUN line would teach the hold (the 'mark' and 'clean' lines); on a missed skim it says this instead.
     coach: (ctx) => (thumbOn(ctx) ? 'For the Daily: let go of the pad right after the tap and stay off it' : '') },
@@ -72,9 +72,10 @@ export const OBJECTIVES = [
   { id: 'stick-wall', course: 'wall', goal: () => 'Stick it: score 84+',
     check: (c, f) => (c.total >= 84 && landed(f) ? done() : miss(`${r1(c.total)}, need 84`)) },
   { id: 'ninety-show', course: 'show', goal: () => 'Score 90 or more',
-    // 0150: a clean landing off the mark is what holds a careful flight under 90 (one thumb with no slide: 85.7–86.0 at
-    // 6 m; with the slide, 95.7 at 2.4 m), so that miss names the aim. A crash or a landing on the mark keeps "try again".
-    check: (c, f) => (c.total >= 90 ? done() : miss(`${r1(c.total)}, need 90`, landed(f) && f.padMiss > 3.5)),
+    // 0150: a clean flight off the mark is what holds a careful flight under 90 (one thumb with no slide: 85.7–86.0 at
+    // 6 m; with the slide, 95.7 at 2.4 m), so that miss names the aim. A crash, a scrape on the row, a hard or tilted
+    // touchdown, or a landing on the mark keeps "try again": the aim isn't what cost it.
+    check: (c, f) => (c.total >= 90 ? done() : miss(`${r1(c.total)}, need 90`, cleanOver(f) && f.padMiss > 3.5 && !(f.sink > 1.5) && !(f.tiltDeg > 15))),
     hint: aimHint },
   { id: 'mark-lineup', course: 'lineup', goal: () => `Land within ${len(7)} of the mark`,
     check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.padMiss <= 7 ? done() : miss(`${len(f.padMiss, 1)} off the mark`)) },
@@ -97,6 +98,8 @@ export function missLine(obj, r, ctx) {
 // The sheet's NEXT RUN line on a missed Daily whose fix the coach would contradict (0150: skim on one thumb), else ''.
 // ctx: the words of the run to come (src/main.js pointerCtx).
 export const dailyCoach = (obj, r, ctx) => (r && !r.ok && r.fix && obj?.coach ? obj.coach(ctx || {}) : '');
+// The sheet's "What happened" items under such a line: a fix that says to hold the pad says the Daily's line instead.
+export const dailyItems = (items, line) => (!line ? items : (items || []).map((it) => (/\bhold(ing)? (on to )?the pad\b/i.test(it.fix || '') ? { ...it, fix: `${line}.` } : it)));
 // The title card's hint for today's objective on this device ('' when there is none); `whole`: the countdown tip's wording.
 export const titleHint = (obj, ctx, whole = false) => (obj?.titleHint ? obj.titleHint(ctx || {}, whole) : '');
 
