@@ -79,7 +79,7 @@ struct HowToView: View {
                         }
                         fold("The board", "Today's scores, checked by the server") {
                             KeyLine("POST", "A scored run, with three letters.")
-                            KeyLine("CHECK", "The server flies your inputs again in the same physics, so the board is honest.")
+                            KeyLine("CHECK", "The server scores your run itself and checks it's plausible, so a score can't just be sent in.")
                         }
                         fold("Controller or keyboard", "Pair one and it takes over") {
                             KeyLine("STEER", "Left stick or arrows, to steer and roll.")

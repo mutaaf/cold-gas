@@ -67,6 +67,14 @@ private let LAND_AHEAD = SIMD2<Float>(6.5, -9), LAND_SIDE = SIMD2<Float>(12, 0),
 private let TOP: Float = 0.5, KNEE: Float = 0.06, SIDE_EDGE: Float = 0.94
 private let FIT_CAR: Float = 0.06, FIT_ROW: Float = 0.04, FIT_BACK: Float = 2.5
 private let SHOW_PAD_Z = Float(SHOW.pad?.z ?? -30)
+private let RECUT: Float = 0.64, RECUT_MAX = 2, RECUT_FLOOR: Float = 4, RECUT_GAP: Float = 0.3   // the carry's re-cuts (0118)
+private let FRONT_EDGE: Float = 0.94, NOSE_KEEP: Float = 0.55
+private struct FrontBox { let minX, maxX, maxY, minZ, maxZ: Float }
+/// The row's front body (nearest the Wall): the one a carry placed ahead along the flight can leave behind (0118).
+private let FRONT_BOX: FrontBox = {
+    guard let b = SHOW_BOXES.max(by: { $0.maxZ < $1.maxZ }) else { return FrontBox(minX: 0, maxX: 0, maxY: 0, minZ: 0, maxZ: 0) }
+    return FrontBox(minX: Float(b.minX), maxX: Float(b.maxX), maxY: Float(b.maxY), minZ: Float(b.minZ), maxZ: Float(b.maxZ))
+}()
 /// The Lineup's lamp poles (courses.js FIXTURES.poles), and how far either side of their line a lens keeps.
 private let POLE_X: Float = 13, POLE_CLEAR: Float = 2.5
 
@@ -98,6 +106,7 @@ final class Director {
     private var cutT: Float = 0, cutPos = SIMD3<Float>(), cutFov: Float = 40
     private var holdPos = SIMD3<Float>(), holdLook = SIMD3<Float>()
     private var carryT: Float = 0, placed = false, carryPos = SIMD3<Float>(), carryLook = SIMD3<Float>()
+    private var carryY: Float = 0, placeT: Float = 0, recuts = 0   // the car's height and the time at the placement; re-cuts so far (0118)
     private var ux: Float = 0, uz: Float = -1   // the shot's bearing, for elev()
 
     private func snap() { inited = false }
@@ -247,7 +256,47 @@ final class Director {
         want.z -= ahead; lookWant.z -= ahead
         if aspect < 1 { fitRowAcross(car, tanH) }
         fitCarry(car)
-        carryPos = want; carryLook = lookWant; placed = true
+        if aspect >= 1 { keepFront(car, tanH) }
+        carryPos = want; carryLook = lookWant; placed = true; carryY = car.y; placeT = stT
+    }
+    /// Each time the car has come down to RECUT of the height it was placed at, the carry cuts to a fresh placement, at most
+    /// twice, so the car grows as the span closes. Upright screens keep one placement across the row (0116, 0118).
+    private func recut(_ car: SIMD3<Float>) -> Bool {
+        aspect >= 1 && recuts < RECUT_MAX && car.y < carryY * RECUT && car.y > RECUT_FLOOR && stT - placeT >= RECUT_GAP
+    }
+    /// A placement low over the row's back half, trucked ahead along the flight, can lose the row's front body off the frame's
+    /// edge behind the car. Truck it back until that body is inside FRONT_EDGE, as far as the car's nose stays inside
+    /// NOSE_KEEP. Moves the camera and its aim together, so the fit holds. Two secant steps (0118, director.js keepFront).
+    private func keepFront(_ car: SIMD3<Float>, _ tanH: Float) {
+        var b = want - lookWant
+        if simd_length_squared(b) < 1e-8 { b = SIMD3(0, 0, 1) }
+        b = simd_normalize(b)
+        var r = simd_cross(SIMD3<Float>(0, 1, 0), b)
+        if simd_length_squared(r) < 1e-8 { return }
+        r = simd_normalize(r)
+        let at = want
+        func ndc(_ x: Float, _ y: Float, _ z: Float, _ dz: Float) -> Float {
+            let d = SIMD3(x, y, z - dz) - at
+            return simd_dot(d, r) / max(0.5, -simd_dot(d, b)) / tanH
+        }
+        func front(_ dz: Float) -> Float {
+            var m = Float.infinity
+            for i in 0..<8 {
+                m = min(m, ndc(i & 1 != 0 ? FRONT_BOX.maxX : FRONT_BOX.minX, i & 2 != 0 ? FRONT_BOX.maxY : 0, i & 4 != 0 ? FRONT_BOX.maxZ : FRONT_BOX.minZ, dz))
+            }
+            return m
+        }
+        func nose(_ dz: Float) -> Float { ndc(car.x, car.y, car.z - CAR_HALF, dz) }
+        let f0 = front(0)
+        if f0 >= -FRONT_EDGE { return }
+        let df = front(1) - f0, dn = nose(1) - nose(0)
+        if abs(df) < 1e-4 { return }
+        let noseMax = dn > 1e-4 ? max(0, (NOSE_KEEP - nose(0)) / dn) : Float.infinity
+        var dz = min((-FRONT_EDGE - f0) / df, noseMax)
+        let f1 = front(dz)
+        if f1 < -FRONT_EDGE && dz > 0 && f1 - f0 > 1e-4 { dz = min(dz * (-FRONT_EDGE - f0) / (f1 - f0), noseMax) }
+        dz = clamp(dz, 0, ROW_Z1 - ROW_Z0)   // never toward the pad, never further back than the row is long
+        want.z += dz; lookWant.z += dz
     }
     /// Upright, abeam of the row's middle, back far enough that the stretch from the car's tail at the cut to its nose at
     /// the row's back fits across the frame inside the edge carryOut cuts at (0116).
@@ -376,7 +425,7 @@ final class Director {
                 holdPos = SIMD3(car.x + HOLD_POS.x, HOLD_POS.y, car.z + HOLD_POS.z)
                 holdLook = SIMD3(car.x * 0.5, HOLD_LOOK.x, car.z + HOLD_LOOK.y)
             }
-            if shot == .hold && (car.z < ROW_FRONT || stT - launchT > HOLD_MAX) { shot = .carry; snap(); placed = false; carryT = stT }
+            if shot == .hold && (car.z < ROW_FRONT || stT - launchT > HOLD_MAX) { shot = .carry; snap(); placed = false; carryT = stT; recuts = 0 }
             if shot == .hold {
                 pos = holdPos
                 lookAt(holdLook)
@@ -388,6 +437,7 @@ final class Director {
             if shot == .carry && (car.z < ROW_Z0 || carryUnderPad(car)) { shot = .follow; snap() }
             if shot == .carry {
                 if !placed || carryOut(car) { placeCarry(car) }
+                else if recut(car) { recuts += 1; placeCarry(car) }
                 pos = carryPos
                 lookAt(carryLook)
                 // A car that comes down on the row: the landing rig eases in from here.
