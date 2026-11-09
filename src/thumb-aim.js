@@ -4,10 +4,11 @@
 //    glass). onethumb.js turns it into the ordinary pitch / roll channels (the input log replays and the
 //    Worker scores it like any run).
 //  - Display: in the air, the pad becomes a sight. The amber dot is the mark, laid out in the car's own frame (up =
-//    further along its nose, right = its right), so it reads the same from any camera: along the run from the
-//    landing predictor (src/sim/predict.js), sideways (0164) from where the slide measures from (`thumb.ref`, where
-//    LAND would set the car down), at AIM_PX_PER_M px a metre. Put your thumb on the dot and hold it: the touchdown
-//    walks onto the mark and the dot stays put sideways. The small ink dot is your slide.
+//    further along its nose, right = its right), so it reads the same from any camera: sideways (0164) from where the
+//    slide measures from (`thumb.ref`, where LAND would set the car down), along the run (0165) from `thumb.refA` (the
+//    landing predictor's touchdown, src/sim/predict.js) and only while the slide can act along the run (`thumb.canA`:
+//    on the Show once the brake has turned the fall, off the roofs), at AIM_PX_PER_M px a metre. Put your thumb on the
+//    dot and hold it: the touchdown walks onto the mark and the dot stays put. The small ink dot is your slide.
 // Writes the DOM only when a rounded pixel changes (no per-frame strings).
 import { up } from './sim/vehicle.js';
 import { markOffset, AIM_R } from './onethumb.js';
@@ -53,7 +54,7 @@ export function mountThumbAim(pad, thumb) {
       const on = stage === 'fly' && run.phase === 'air' && uw.y > 0.94;
       flag('on', on);
       if (!on) return;
-      markOffset(c, pr, run.course, off, thumb.ref);
+      markOffset(c, pr, run.course, off, thumb.ref, thumb.refA, thumb.canA);
       const mx = Math.round(off.x), my = Math.round(off.y);
       if (mx !== last.mx || my !== last.my) {
         mark.style.transform = `translate(${mx}px, ${my}px)`;

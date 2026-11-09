@@ -35,7 +35,7 @@ function flyThumb(tapAfter) {
     inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
     if (!sight && run.phase === 'air' && c.vel.y < 0 && c.pos.y - SPEC.comHeight < 3) {
       predict(c, Math.max(0, c.pos.y - SPEC.comHeight), pr);
-      sight = { ...markOffset(c, pr, 'show', off, th.ref) };
+      sight = { ...markOffset(c, pr, 'show', off, th.ref, th.refA, th.canA) };
     }
     stepRun(run, inp);
   }
