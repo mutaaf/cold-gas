@@ -1,5 +1,5 @@
 // 0173: a modelled thumb that re-reads the sight faster than it reacts still acts on every read, a reaction late,
-// exactly once (scripts/lib/read-react.mjs, used by scripts/human-phone.mjs and scripts/lib/daily-reach.mjs).
+// exactly once (scripts/lib/read-react.mjs, used by scripts/human-phone.mjs).
 import { describe, it, expect } from 'vitest';
 import { createReadReact } from '../../scripts/lib/read-react.mjs';
 

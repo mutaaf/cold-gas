@@ -30,7 +30,7 @@ short". Once every careful thumb slides, two Show Dailies are met by every one o
 
 `human-phone.mjs 150 --scheme=thumb --skill=careful`, after 0173: every thumb slides. Median miss is 2.1 m held from the
 tap and 1.5 m lifted and pressed again. Clean scores run from 93.3 to 95.3. Sloppy thumbs: mark-show 65 %, ninety-show
-75 %, gas-show 31 %. The old 69 % for both Dailies was the 41 thumbs that never slid (6 m, 85 points). A careful
+75 %, gas-show 31 %. The 31 % short of both Dailies before were the thumbs that never slid (41 of 150 in human-phone: 6 m, 85 points). A careful
 slide meets both Dailies every time, so neither is a stretch for the population the gate models.
 
 ## What

@@ -31,7 +31,7 @@
 // evaluate, on scoreRun's card) and print each one's completion, so a Daily bar is set on phones as well as keyboards.
 // On one thumb it also splits gas-show (0139) and skim-show (0150) by the thumb's choice: held from the tap or lifted and pressed again, slid or not.
 // With a --skill, every run also prints a line per what the thumb did (0173): n, median miss and score, clean inside the 7 m ring, jets-out
-// gaps, and for "no slide" how many had read a dot ≥ 2 px held in the air (a read never acted on: should be 0).
+// gaps, and for "no slide" how many had read a dot ≥ 2 px held in the air (normally a read never acted on, so 0; a last read due after touchdown or a lift could also count; sloppy reads carry ±14 px noise).
 //
 //   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [--coach] [--daily] [-v]
 import { createGapProbe } from './burn-gap.mjs';
