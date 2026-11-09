@@ -1,12 +1,12 @@
 ---
 id: 0164
 title: On one thumb, a held sideways slide moves the touchdown the way it points, more for more, and never off the pad
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-05
-pr: 272
+pr: 272, 282
 by: critic
 ---
 
@@ -205,3 +205,43 @@ Re-measured on main `875cd37` (production `index-B_UPU72-.js`, after 0165's alon
 
 Unchanged since the first bounce: +12 px still sends the touchdown 2.8 m further from the mark and costs 8.7 points.
 Held from the tap the same sweep is right (6.0 → 3.9 → 2.3 → 1.8 m). The added acceptance above stands.
+
+## Builder note 2026-11-09 (the tapped thumb, #282)
+Diagnosis (Node, the `thumb-mastery` harness, tapped, lifted at +20 ticks, pressed again 1.0–2.5 s after the tap). It wasn't
+0170's stop over the semi. `ref` (where the slide measures from) was read on the first roof-up tick of the hold. The
+tapped car is still rolling out then, banked, falling at 15 m/s, and the body-axis velocity reads the fall through the bank:
+−14.4 m on the Show and 13.3 m on the Wall, against the ≈ −9.8 / ≈ 9 the flight reaches. On the Show an inward slide also
+kept that stale place through its wait for the semi, so +8 px flew to a place 3 m left of where no slide lands. The held
+thumb's car has rolled out by then, so its read was right (and the hold law's own bank makes the body-axis read predictive,
+so the horizontal velocity alone made held slides worse: tried and dropped).
+
+What changed (`src/onethumb.js`, mirrored in `OneThumb.swift`; vectors regenerated; no sim change, no SIM_VERSION bump):
+- **The place is taken once it is steady.** `ref` is re-read until it has moved under 2 m/s over two 0.1 s windows in a row
+  (predict's time to go jitters tick to tick; a single tick read a stall as steady) and, on the Show, until an inward slide
+  stops waiting for the semi. The sight stays live meanwhile and the dot follows the place being read.
+- **A hold that has slid keeps aiming roof up past 0.8**, not 0.94 (LAND's own line hold starts at 0.8). At a full slide the
+  bank overshot 0.94, the aim dropped out, and the line hold banked it back. The web sight shows to the same threshold
+  (`aimUy`).
+- **The bank's cap tapers from 3.5 m to half at 2.5 m.** A full bank low steals lift: +48 px set down sooner, short of +36.
+
+Measured, lateral m / score, main → this (Show: the mark is at 0; the Wall's right side is past the ring's clamp):
+
+| | −24 | 0 | +8 | +16 | +24 | +36 |
+|---|---|---|---|---|---|---|
+| Show, again 1.0 s | −4.4 / 86.7 → −6.1 / 78 | −4.4 / 86.7 | **−8.1 / 74 → −3.1 / 91.3** | −6.6 / 77 → −1.5 / 93.7 | −4.9 / 81.7 → −0.1 / 94 | −3.0 / 91.3 → 1.8 / 93.7 |
+| Show, again 1.5 s | −5.7 → −6.2 | −5.7 / 83.7 | **−9.2 / 73.7 → −4.3 / 91** | −7.7 / 76 → −2.8 / 94 | −6.0 / 80.7 → −1.4 / 94 | −4.2 / 91.3 → 0.5 / 93.3 |
+| Show, held | −6.2 / 81 → −6.7 / 79 | −5.1 / 84.7 | −3.5 / 91.7 → −3.3 / 92.7 | −1.9 → −1.7 | −0.4 → −0.3 | 0.4 → 0.1 |
+
+The Wall, −48 / −24 / −12 / 0 px: again 1.0 s **2.5 / 6.4 / 9.4 / 6.1 → 2.5 / 2.5 / 3.5 / 6.1**; again 1.5 s **3.5 / 7.4 / 10.4 / 7.2
+→ 4.0 / 4.0 / 4.7 / 7.2**; held −3.6 / 1.9 / 4.5 / 6.1 → −5.1 / 0.6 / 3.4 / 6.1.
+
+- Acceptance: `thumb-mastery.test.js` flies the tapped thumb pressed again at 1.0, 1.5, 2.0 and 2.5 s, −48 … +48 px in 8 px steps,
+  on the Show and the Wall: non-decreasing within 0.3 m, never the wrong way of no slide, no contact, no Rough landing; Show +8 …
+  +24 px move 1.04–1.14 × X/6 m; Wall −24 px at least 1 m left. The wild-slide test now flies tapped thumbs too. Both new tests
+  fail on main. All existing sweeps pass (held monotonic and in proportion, the first-frame dot, the re-reading thumb).
+- `naive-players` 32/32. `human-phone 150 --scheme=thumb`: careful 150/150, median 93.3 (identical: the modelled careful thumb
+  never acts, 0173, so it can't measure this or the "lifted, pressed again · slid" median, which waits on 0173); sloppy 150/150,
+  median 92.3 → 92, inside the ring 139 → 140; none identical. Jets-out gaps 0 everywhere.
+- `daily-reach` 150: soft-wall 82 → 111, gas-show 98 → 86, the rest unchanged; every objective over the 30 % floor.
+- Known, left: a slide takes effect ≥ 0.2 s after the place is steady (held ≈ 0.4 s, tapped up to ≈ 0.9 s on the Wall); a tapped
+  slide out (left on the Show at 1.0 s) now moves 1.7 m where it did nothing; the Swift mirror is unverified here (no toolchain).
