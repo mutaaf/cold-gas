@@ -152,7 +152,7 @@ await page.evaluate(() => {
     else gl.readPixels(0, 0, W, H, gl.RGBA, gl.UNSIGNED_BYTE, buf);
     const I = idb[k % 3];
     for (let i = 0, j = 0; i < I.length; i++, j += 4) I[i] = Math.round(buf[j] / 40);
-    const shot = G.director.state.shot + ':' + G.director.state.mode;
+    const shot = G.director.state.shot + ':' + G.director.state.mode + ':' + (G.director.state.recuts || 0);   // a carry's re-cut (0118) is a hard cut inside one shot
     // staticOnly: a triple counts only if the camera didn't move (the replay's locked-off rigs).
     F.acc.shots[k % 3] = F.staticOnly ? shot + G.camera.matrixWorld.elements.join(',') : shot;
     k++;

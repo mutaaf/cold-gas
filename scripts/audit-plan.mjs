@@ -59,7 +59,7 @@ export const insetCss = (w, h, safe = 0) => {
   return i && `:root { --safe-t: ${i.t}px !important; --safe-l: ${i.l}px !important; --safe-r: ${i.r}px !important; --safe-b: ${i.b}px !important; }`;
 };
 
-export const TITLE_COST = 640;   // 460 s for 23 viewports on CI; 29 since 0103, 33 since 0104
+export const TITLE_COST = 680;   // 460 s for 23 viewports on CI; 29 since 0103, 33 since 0104, 35 since 0151
 export function cost(item) {
   if (item === 'title') return TITLE_COST;
   const [w, h, safe] = item;

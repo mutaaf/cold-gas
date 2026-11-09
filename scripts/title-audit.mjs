@@ -16,7 +16,8 @@ import { textContrast } from './contrast.mjs';
 const [url = 'http://localhost:4391/coldgas/', out = 'shots', label = 'title'] = process.argv.slice(2).filter((a) => !a.startsWith('--'));
 const SLOW = Number(process.env.AUDIT_SLOW || (process.env.CI ? 2 : 1));
 mkdirSync(out, { recursive: true });
-const VPS = [[1280, 720, 0], [1440, 900, 0], [1920, 1080, 0], [390, 844, 1], [430, 932, 1], [768, 1024, 1], [844, 390, 1], [1024, 768, 1],
+// 0151: the five commonest laptop and desktop sizes (1366×768 and 1536×864 with the three before).
+const VPS = [[1280, 720, 0], [1366, 768, 0], [1440, 900, 0], [1536, 864, 0], [1920, 1080, 0], [390, 844, 1], [430, 932, 1], [768, 1024, 1], [844, 390, 1], [1024, 768, 1],
   [320, 568, 1], [814, 380, 1], [393, 659, 1], [820, 1180, 1], [1180, 820, 1], [1024, 1366, 1], [1366, 1024, 1],
   [390, 844, 1, 1], [844, 390, 1, 1], [932, 430, 1, 1],
   // The folding phone (0103): every measured pose, in a tab and installed, and one of two Safari windows
@@ -66,6 +67,11 @@ async function lowContrast(page, file) {
   const c = await textContrast(page, shot, bare, texts);
   return c.filter((x) => x.ratio !== null && x.ratio < 4.5).map((x) => `contrast "${x.t}" ${x.ratio}`);
 }
+// 0151 · the Daily's room (no ad: the loader never comes in locally). On a laptop or desktop screen the title never packs
+// the Daily (no `data-extra-fit`), its streak shows, and the wordmark stands clear of the event pills (≥ 16 px). Where the
+// card already fitted (or packed) before 0151, it may pack no further: FIT_MAX is the most a size may step.
+const DESK_GAP = 16;
+const FIT_MAX = { '390x844': 0, '844x390': 1, '430x932': 1, '1024x1366': 0 };
 let bad = 0;
 const offenders = [];
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7).split(',');
@@ -109,6 +115,17 @@ for (const [w, h, touch, safe] of VPS) {
     return issues;
   });
   const name = `${w}x${h}${safe ? 's' : ''}`;
+  const room = await page.evaluate(() => {
+    const t = document.querySelector('.title'), wm = t.querySelector('.wordmark'), st = t.querySelector('.xc-streak');
+    const tb = t.getBoundingClientRect();   // layout boxes (offsetTop), not the rise-in transforms
+    return { fit: Number(t.dataset.extraFit || 0), streak: !!st && st.offsetHeight > 0,
+      gap: wm.offsetHeight > 1 ? Math.round(t.querySelector('.courses').offsetTop - (wm.offsetTop + wm.offsetHeight)) : null, top: Math.round(tb.top) };
+  });
+  if (!touch && !safe) {
+    if (room.fit) r.push(`Daily packed (fit ${room.fit})`);
+    if (!room.streak) r.push('streak hidden');
+    if (room.gap === null || room.gap < DESK_GAP) r.push(`wordmark ${room.gap ?? 'hidden'} px over the events (< ${DESK_GAP})`);
+  } else if (!safe && name in FIT_MAX && room.fit > FIT_MAX[name]) r.push(`Daily packed (fit ${room.fit} > ${FIT_MAX[name]})`);
   r.push(...await lowContrast(page, `${out}/${label}-${name}.png`));
   bad += r.length;
   if (r.length) offenders.push(`${name}: ${r.join('; ')}`);
