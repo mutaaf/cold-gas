@@ -18,7 +18,8 @@
 // --skill (thumb, 0121: the touchdown slide, src/thumb-aim.js's sight):
 //   none     never slides (the accessibility population; the default)
 //   careful  holding in the air, puts the thumb on the amber dot (the mark from the predicted
-//            touchdown), a reaction late, re-reading it every 0.25–0.5 s
+//            touchdown), a reaction late, re-reading it every 0.25–0.5 s; every read is acted on, in order, even
+//            when the thumb re-reads faster than it reacts (0173, scripts/lib/read-react.mjs)
 //   sloppy   slides, badly: overshoots ×2–3, half of them read the sight upside down for a beat, and
 //            some shove it up early (more carry) and leave it there
 //   mixed    a third of each
@@ -29,9 +30,12 @@
 // --daily (0134): also check each landed-or-not run against every Show objective of the daily jump (src/daily.js
 // evaluate, on scoreRun's card) and print each one's completion, so a Daily bar is set on phones as well as keyboards.
 // On one thumb it also splits gas-show (0139) and skim-show (0150) by the thumb's choice: held from the tap or lifted and pressed again, slid or not.
+// With a --skill, every run also prints a line per what the thumb did (0173): n, median miss and score, clean inside the 7 m ring, jets-out
+// gaps, and for "no slide" how many had read a dot ≥ 2 px held in the air (normally a read never acted on, so 0; a last read due after touchdown or a lift could also count; sloppy reads carry ±14 px noise).
 //
 //   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [--coach] [--daily] [-v]
 import { createGapProbe } from './burn-gap.mjs';
+import { createReadReact } from './lib/read-react.mjs';
 import { readFileSync } from 'node:fs';
 import { createRun, stepRun, wallProgress } from '../src/sim/run.js';
 import { newInput, up, forward } from '../src/sim/vehicle.js';
@@ -62,6 +66,9 @@ const dailyMet = {}, gasLeft = [];
 // 0139: gas-show split by what the thumb chose: held from the tap or lifted and pressed again, and slid onto the mark or not.
 const split = {};
 const firsts = {}, markTitles = {};
+// 0173: every slide population split by what the thumb did (not what it was told): n, misses, scores, ring, gaps, and
+// how many "no slide" thumbs had read a dot of 2 px or more while held in the air (a read never acted on).
+const byChoice = {};
 let longButWide = 0;
 const { createOneThumb, markOffset } = scheme === 'thumb' ? await import('../src/onethumb.js') : {};
 
@@ -132,14 +139,15 @@ for (let n = 0; n < N; n++) {
     for (let k = 0; k < 3 && rnd2() > p; k++) { missed++; t += P.lag + mt; }
     return Math.round(t * 240);
   };
-  let why = '', choice = '';
+  let why = '', choice = '', readBig = false;
   if (scheme === 'thumb') {
     const th = createOneThumb();
     let released = false, tapped = false, ledgeT = -1, tapAt = -1, holdFrom = -1, holding = false, lapseAt = -1, landSeen = -1;
     // The slide (0121), drawn from its own stream so the base population is the same with or without it.
     const sk = skill === 'mixed' ? ['none', 'careful', 'sloppy'][Math.floor(rnd3() * 3)] : skill;
     const A = { every: Math.round((0.25 + rnd3() * 0.25) * 240), over: 2 + rnd3(), flip: rnd3() < 0.5, shove: rnd3() < 0.4 ? 20 + rnd3() * 40 : 0, flipFor: Math.round((0.4 + rnd3() * 0.6) * 240) };
-    let aimNext = -1, aimAt = -1, want = null, flipUntil = -1, slid = false;
+    let aimNext = -1, flipUntil = -1, slid = false;
+    const rr = createReadReact(lagT);   // 0173: every read acted on, a reaction late
     const off = { x: 0, y: 0, m: 0 };
     // Lifting the thumb mid-climb (20 % do, once): a second, then back on.
     th.down();
@@ -186,9 +194,11 @@ for (let n = 0; n < N; n++) {
             if (t < flipUntil) y = -y;   // read the sight upside down
             x += 14 * gauss(); y += 14 * gauss();
           }
-          want = { x, y }; aimAt = t + lagT; aimNext = t + A.every;
+          if (Math.abs(x) + Math.abs(y) >= 2) readBig = true;
+          rr.read(t, x, y); aimNext = t + A.every;
         }
-        if (want && t >= aimAt) { th.move(want.x, want.y); if (Math.abs(want.x) + Math.abs(want.y) > 1) slid = true; }
+        const want = rr.due(t);
+        if (want) { th.move(want.x, want.y); if (Math.abs(want.x) + Math.abs(want.y) > 1) slid = true; }
       }
       th.sample(run, released, inp);
       // main.js wallAssist: a lift on the deck is the release; the fan holds the car until then.
@@ -294,7 +304,15 @@ for (let n = 0; n < N; n++) {
   else if (t.sink > 3) why = `hard touchdown (${t.sink > 6 ? '>6' : '3–6'} m/s)`;
   else if (t.tiltDeg > 15) why = 'landed tilted';
   if (!why) { ok++; if (s.facts.padMiss < 7) onPad++; totals.push(s.total); } else fails[why] = (fails[why] || 0) + 1;
-  if (!why) { const b = gp.read(run); if (b.gap >= 0.08) gaps++; if (b.rise > 0.5) rises++; }
+  let gapped = false;
+  if (!why) { const b = gp.read(run); if (b.gap >= 0.08) { gaps++; gapped = true; } if (b.rise > 0.5) rises++; }
+  if (choice && skill !== 'none') {
+    const b = (byChoice[choice] ||= { n: 0, miss: [], score: [], ring: 0, gaps: 0, read: 0 });
+    b.n++; b.miss.push(s.facts.padMiss); b.score.push(s.total);
+    if (!why && s.facts.padMiss < 7) b.ring++;
+    if (gapped) b.gaps++;
+    if (readBig) b.read++;
+  }
   if (COACH && !why) {
     const first = coach(run.inputLog, 'show', s, 0, coachWords({ device: 'touch', scheme, tier: s.tier, course: 'show' })).items[0], id = first.id;
     firsts[id] = (firsts[id] || 0) + 1;
@@ -312,6 +330,14 @@ console.log(`Phone ${vp} · ${scheme}${scheme === 'thumb' ? ` · skill ${skill}`
 console.log(`  clean scores: min ${totals[0] ?? '–'} · p10 ${q(0.1)} · median ${q(0.5)} · p90 ${q(0.9)} · max ${totals[totals.length - 1] ?? '–'}`);
 console.log('  failures:', JSON.stringify(fails));
 console.log(`  one burn (0169), clean landings: ${gaps}/${ok} with the down-jets out ≥ 0.08 s mid-brake (< 0.5 g sinking > 1 m/s, from the peak sink) · ${rises}/${ok} with the sink rising > 0.5 m/s above 1.2 m`);
+if (Object.keys(byChoice).length) {
+  const med = (a) => { a.sort((x, y) => x - y); return a.length ? a[Math.floor(a.length / 2)] : '–'; };
+  for (const [k, b] of Object.entries(byChoice).sort()) {
+    console.log(`  by what the thumb did (0173): ${k}: n ${b.n} · median miss ${med(b.miss)} m · median score ${med(b.score)} · ${b.ring} clean inside the 7 m ring · ${b.gaps} jets-out gaps${k.endsWith('no slide') ? ` · ${b.read} read a dot ≥ 2 px` : ''}`);
+  }
+  const ns = Object.entries(byChoice).filter(([k]) => k.endsWith('no slide')).reduce((a, [, b]) => a + b.read, 0);
+  console.log(`  ${skill} · no slide though a dot ≥ 2 px was read held in the air: ${ns}`);
+}
 if (COACH) console.log(`  coach's first finding (landed runs): ${JSON.stringify(firsts)} · clean ${Math.round((100 * (firsts.clean || 0)) / Math.max(1, ok))}%`);
 if (COACH) console.log(`  the mark's title when it leads: ${JSON.stringify(markTitles)} · "Long" on a mostly-sideways miss: ${longButWide}`);
 if (DAILY) {
