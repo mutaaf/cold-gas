@@ -103,8 +103,11 @@ describe('one-thumb touchdown slide (0121)', () => {
     // a pitch toward it, further (+), never past a full one.
     run.car.vel.y = -12; Object.assign(inp, newInput()); th.sample(run, true, inp);
     run.car.vel.y = -9;
+    // 0164: sideways the place is taken once it has held still for 0.2 s (two 0.1 s windows); before that, nothing.
     Object.assign(inp, newInput());
     th.sample(run, true, inp);
+    expect(inp.roll).toBe(0);
+    for (let i = 0; i < 48; i++) { Object.assign(inp, newInput()); th.sample(run, true, inp); }
     expect(inp.pitch).toBeGreaterThan(0); expect(inp.pitch).toBeLessThanOrEqual(THUMB.aimPitch + 1e-9);
     expect(inp.roll).toBeGreaterThan(0.05); expect(inp.roll).toBeLessThanOrEqual(THUMB.aimRoll + 1e-9);
     run.car.pos.y = SPEC.comHeight + THUMB.aimFloor - 0.1;   // the last metre: level
@@ -185,6 +188,39 @@ describe('one thumb, a held sideways slide moves the touchdown the way it points
       expect(card.facts.contact).toBe(false);
     }
   }, 120000);
+
+  // Critic re-review 2026-11-06 16:00 (bounce) and 2026-11-09 15:40: the tapped thumb (tap, lift at +20 ticks, press again
+  // 1.0–2.5 s after the tap; most phone thumbs) slid the wrong way: Show +8 px landed 3.7 m left of no slide, Wall −12 px
+  // 3.8 m right. `ref` was taken on the first roof-up tick, while the tapped car is still rolling out and drifting (13.3 m
+  // against the ≈9 it reaches), and on the Show an inward slide kept that stale place through its wait for the semi.
+  // Now the place is taken only once it has held still for 0.2 s and the slide can act on it.
+  const tapped = (course, px, again) => flyThumb({ course, again, slide: (r, th) => th.move(px, 0) }).t;
+  for (const course of ['show', 'wall']) {
+    it(`the tapped thumb on the ${course === 'show' ? 'Show' : 'Wall'}, pressed again 1.0–2.5 s after the tap, −48 … +48 px: monotonic, never the wrong way`, () => {
+      for (const again of [1, 1.5, 2, 2.5]) {
+        const rows = [];
+        for (let px = -48; px <= 48; px += 8) {
+          const t = tapped(course, px, again), card = scoreRun(t), label = `${course} again ${again} s, ${px} px`;
+          expect(card.facts.contact, label).toBe(false);
+          expect(card.verdict, label).not.toBe('Rough landing');
+          rows.push({ px, lat: t.lateral, label });
+        }
+        let top = -Infinity;
+        for (const { lat, label } of rows) { expect(lat, label).toBeGreaterThanOrEqual(top - 0.3); top = Math.max(top, lat); }
+        const none = rows.find((r) => r.px === 0).lat;
+        for (const { px, lat, label } of rows) {
+          // A slide that can't move it (the ring's clamp, a wait) leaves it where no slide does, never the other way.
+          if (px > 0) expect(lat, label).toBeGreaterThanOrEqual(none - 0.3);
+          if (px < 0) expect(lat, label).toBeLessThanOrEqual(none + 0.3);
+        }
+        if (course === 'show') for (const px of [8, 16, 24]) {
+          const moved = rows.find((r) => r.px === px).lat - none;
+          expect(moved / (px / AIM_PX_PER_M), `show again ${again} s, ${px} px`).toBeGreaterThan(0.5);
+          expect(moved / (px / AIM_PX_PER_M), `show again ${again} s, ${px} px`).toBeLessThan(1.5);
+        }
+      }
+    }, 300000);
+  }
 
   // The sight as the pad draws it (src/thumb-aim.js: markOffset from the thumb's own `ref`).
   const sightNow = (run, th, course, pr, off) => {

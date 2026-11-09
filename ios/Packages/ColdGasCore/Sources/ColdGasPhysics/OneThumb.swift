@@ -35,6 +35,9 @@ public func flankAhead(_ c: Vehicle, _ ax: Double) -> Bool {
 // 0164: the sideways slide's loop (src/onethumb.js, the same numbers and the same order of operations).
 let HOLD_K = 0.07, HOLD_ROLL = (3.0 * 2.0) / (1.6 * 4.6), HOLD_TAU = 1.8
 let AIM_RING = 6.0, AIM_TGO = 0.6, AIM_GAIN = 3.0, AIM_BANK = 0.55
+// 0164 (the tapped thumb): the place is taken once it holds still and the slide can act; aim past 0.8 roof up once slid;
+// the bank tapers near the floor (src/onethumb.js says why).
+let REF_STEADY = 2.0, REF_WIN = 24, REF_WINS = 2, AIM_UY_SLID = 0.8, AIM_LOW = 0.5, AIM_LOW_H = 2.0
 /// A point's side in the car's frame: + = the car's right (the pad's sight's +x).
 @inline(__always) func sideOf(_ x: Double, _ z: Double, _ f: V3) -> Double { z * f.x - x * f.z }
 /// The tallest parked roof on the Show (the first of the tallest); an inward slide waits until it is behind (0164).
@@ -89,15 +92,16 @@ let tUw = V3(), tFw = V3(), tBx = V3()
 public final class OneThumb {
     var held_ = false, pressed = false, push = 0, drive = false, carried = false, landing_ = false
     var wasStage = ThumbStage.idle, ax = 0.0, ay = 0.0, live = false, ref_ = Double.nan, wait = false, slid = false
+    var steady = 0, ref0 = Double.nan, win = 0
     var refA_ = Double.nan, slidA = false, pk = 0.0, braked = false, canA_ = false
     let pr = Prediction()
     public init() {}
     /// Touch events: `pending` latches a tap shorter than a tick until the next sample reads it.
-    public func down() { held_ = true; pressed = true; ax = 0; ay = 0; ref_ = .nan; slid = false; refA_ = .nan; slidA = false }
-    public func up() { held_ = false; ax = 0; ay = 0; ref_ = .nan; slid = false; refA_ = .nan; slidA = false }
+    public func down() { held_ = true; pressed = true; ax = 0; ay = 0; ref_ = .nan; steady = 0; ref0 = .nan; slid = false; refA_ = .nan; slidA = false }
+    public func up() { held_ = false; ax = 0; ay = 0; ref_ = .nan; steady = 0; ref0 = .nan; slid = false; refA_ = .nan; slidA = false }
     /// The held thumb's slide from where it pressed, points (+x right, +y UP the glass).
     public func move(_ dx: Double, _ dy: Double) { if held_ { ax = dx / THUMB.aimPx; ay = dy / THUMB.aimPx } }
-    public func reset() { held_ = false; pressed = false; push = 0; drive = false; carried = false; landing_ = false; wasStage = .idle; ax = 0; ay = 0; live = false; ref_ = .nan; slid = false; refA_ = .nan; slidA = false; pk = 0; braked = false; canA_ = false }
+    public func reset() { held_ = false; pressed = false; push = 0; drive = false; carried = false; landing_ = false; wasStage = .idle; ax = 0; ay = 0; live = false; ref_ = .nan; steady = 0; ref0 = .nan; slid = false; refA_ = .nan; slidA = false; pk = 0; braked = false; canA_ = false }
     /// 0164: where the sideways slide is measured from (m, the car's right +), NaN before this hold could aim.
     public var ref: Double { ref_ }
     /// 0165: where the up/down slide is measured from (m along the car's nose), NaN before this hold could aim.
@@ -156,7 +160,7 @@ public final class OneThumb {
                 M3.rotate(tUw, c.quat, M3.set(tUw, 0, 1, 0))
                 let h = c.pos.y - SPEC.comHeight
                 let k = jsMax(0, jsMin(1, (h - THUMB.aimFloor) / THUMB.aimFade))
-                if tUw.y > 0.94 && k > 0 {
+                if tUw.y > (slid ? AIM_UY_SLID : 0.94) && k > 0 {
                     let clear = rowBehind(run, c)
                     // 0164: sideways is a place, flown by LAND's hold-the-line law (src/onethumb.js says why).
                     M3.rotate(tFw, c.quat, M3.set(tFw, 0, 0, 1))
@@ -169,18 +173,28 @@ public final class OneThumb {
                     var roll = 0.0
                     wait = false
                     let sx = thumbShape(ax)
-                    if !slid || ref_ != ref_ { ref_ = here + vb * bs * lead }
-                    if sx != 0 { slid = true }
-                    if slid {
+                    if !slid || ref_ != ref_ {
+                        ref_ = here + vb * bs * lead
+                        if ref0 != ref0 { ref0 = ref_; win = 0 }
+                        else {
+                            win += 1
+                            if win >= REF_WIN {
+                                steady = abs(ref_ - ref0) * (240.0 / Double(REF_WIN)) < REF_STEADY ? steady + 1 : 0
+                                ref0 = ref_; win = 0
+                            }
+                        }
+                    }
+                    if sx != 0 || slid {
                         let pad = (COURSES[run.course] ?? SHOW).pad ?? SHOW.pad!, ps = sideOf(pad.x, pad.z, tFw)
                         let off = sx == 0 ? 0 : (jsMax(-1, jsMin(1, ax)) * THUMB.aimPx) / AIM_PX_PER_M
                         let want = off >= 0 ? jsMax(ref_, jsMin(ref_ + off, ps + AIM_RING)) : jsMin(ref_, jsMax(ref_ + off, ps - AIM_RING))
                         let inward = (want - ref_) * sideOf(c.pos.x, 0, tFw) < 0
-                        let w = run.course == "show" && inward && tallAhead(c)
-                        if w { wait = true }
-                        if (want != ref_ || sx == 0) && !w {
+                        let w = (run.course == "show" && inward && tallAhead(c)) || (!slid && steady < REF_WINS)
+                        if w { wait = true } else if sx != 0 { slid = true }
+                        if slid && (want != ref_ || sx == 0) && !w {
                             let vNeed = ((want - here) / lead) * bs
-                            let bank = jsMax(-AIM_BANK, jsMin(AIM_BANK, HOLD_K * AIM_GAIN * (vb - vNeed)))
+                            let bMax = AIM_BANK * jsMax(AIM_LOW, jsMin(1, (h - THUMB.aimFloor) / AIM_LOW_H))
+                            let bank = jsMax(-bMax, jsMin(bMax, HOLD_K * AIM_GAIN * (vb - vNeed)))
                             roll = k * HOLD_ROLL * bank
                             if abs(roll) < 0.05 { roll = 0 }
                         }
