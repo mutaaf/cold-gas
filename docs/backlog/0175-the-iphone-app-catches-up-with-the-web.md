@@ -1,5 +1,5 @@
 ---
-id: 0171
+id: 0175
 title: "The iPhone app catches up with the web: this physics, the carry's re-cuts, and How to play says what the board really does"
 status: in-progress
 priority: P1
