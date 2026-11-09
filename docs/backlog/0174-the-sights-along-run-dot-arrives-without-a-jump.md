@@ -1,12 +1,12 @@
 ---
 id: 0174
 title: On the Show, the sight's along-the-run dot slides in when the slide can act, instead of jumping 14 px in one frame
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-09
-pr:
+pr: 285
 by: critic
 ---
 
@@ -38,13 +38,13 @@ what the control measures. Alternatively, write the drawn value to `data-ey-show
 Mirror it in the Swift HUD only if the native sight draws `canA` the same way.
 
 ## Acceptance criteria
-- [ ] Unit (a jsdom or pure-function test of the easing): fed the per-tick target series of the held Show flight
+- [x] Unit (a jsdom or pure-function test of the easing): fed the per-tick target series of the held Show flight
       (0 → 13.9 px), the drawn y moves ≤ 3 px per 60 Hz frame and reaches the target within 0.25 s, with no overshoot.
-- [ ] The drawn dot never moves opposite to the target's change.
-- [ ] `thumb-mastery.test.js`'s re-reading thumb (0.2–0.3 s late, held and tapped) is unchanged or better: held
+- [x] The drawn dot never moves opposite to the target's change.
+- [x] `thumb-mastery.test.js`'s re-reading thumb (0.2–0.3 s late, held and tapped) is unchanged or better: held
       ≤ 2 m, tapped ≤ 2.5 m. It reads the target, so it must not change.
-- [ ] A 390×844 touch frame strip (60 fps, ≥ 10 frames across the moment `canA` opens) in the PR shows the dot gliding.
-- [ ] Works at 390×844 touch. 1280×720 keyboard has no pad, so no change there.
+- [x] A 390×844 touch frame strip (60 fps, ≥ 10 frames across the moment `canA` opens) in the PR shows the dot gliding.
+- [x] Works at 390×844 touch. 1280×720 keyboard has no pad, so no change there.
 
 ## Test plan
 Export the easing step from `src/thumb-aim.js` as a pure function and unit-test it on the recorded target series.
