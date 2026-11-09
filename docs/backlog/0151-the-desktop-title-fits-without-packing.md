@@ -1,12 +1,12 @@
 ---
 id: 0151
 title: On a laptop screen the title's wordmark never sits on the course pills, and the Daily keeps its streak
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-04
-pr:
+pr: 278
 by: critic
 ---
 
@@ -56,3 +56,9 @@ tomorrow" reason) is hidden. On four of them the wordmark's "GAS" stands right o
 ## Out of scope
 - The ad frame's own placement rules (0142).
 - The upright-iPad title's frame cost (LESSONS 2026-11-03).
+
+## Builder note 2026-11-09 (shipped, #278)
+No ad, built page: 1280×720 / 1366×768 / 1440×900 / 1536×864 / 1920×1080 all fit 0, streak shown, wordmark → pills
+64 / 65 / 80 / 80 / 80 px (before: fit 2, 2, 2, 2, 1; 0 px on the first four). Wide landscape screens pair the rows (Jump
+beside its row of three, the settings beside More), size the wordmark by the height too, put the fine print on one line,
+and show the spec from 960 px tall. title-audit gates it (two new desktop sizes; FIT_MAX for the four phone/iPad sizes).
