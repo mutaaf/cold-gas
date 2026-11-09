@@ -71,6 +71,17 @@ const AIM_ACC = 6, FLANK_T = 2, FLANK_PAD = 0.6, FLANK_TOP = 0.8;
 // is the least time to go it plans over.
 const HOLD_K = 0.07, HOLD_ROLL = (3 * 2) / (1.6 * 4.6), HOLD_TAU = 1.8;
 const AIM_RING = 6, AIM_TGO = 0.6, AIM_GAIN = 3, AIM_BANK = 0.55;
+// 0164 (the critic's bounce: the tapped thumb, pressed again after a lift, slid the wrong way). `ref` read on the first
+// roof-up tick of a car still rolling out reads the fall through the bank (13.3 m on the Wall against the ≈9 it reaches;
+// Show +8 px landed 3.7 m left of no slide). The place is taken only once it has moved under REF_STEADY m/s over
+// REF_WINS windows of REF_WIN ticks in a row (predict's time to go jitters tick to tick), and on the Show only once an inward
+// slide has stopped waiting for the semi. Until then the sight stays live and the dot follows the place being read; the
+// slide takes effect from there (≥ 0.2 s; the held thumb's ≈0.4 s, the tapped one's 0.8–0.9 s on the Wall).
+// A hold that has slid keeps aiming roof up past AIM_UY_SLID (LAND's own line hold starts at 0.8): at a full slide the
+// bank overshot 0.94, the aim dropped out and the line hold banked it back. And the bank's cap tapers from AIM_BANK at
+// aimFloor + AIM_LOW_H (3.5 m) to AIM_LOW of it at 2.5 m, then holds (k fades the rest): a full
+// bank low steals lift, and +48 px set down sooner, short of +36.
+const REF_STEADY = 2, REF_WIN = 24, REF_WINS = 2, AIM_UY_SLID = 0.8, AIM_LOW = 0.5, AIM_LOW_H = 2;
 const bx = { x: 0, y: 0, z: 0 }, X1 = { x: 1, y: 0, z: 0 };
 // 0165: along the run (the Show) the slide is a place too. `refA` is predict's touchdown along the car's nose (LAND holds
 // no line along the run, so the prediction is the place), read until the slide first leaves the dead zone up or down.
@@ -155,16 +166,16 @@ export function thumbStage(run, released) {
 }
 
 export function createOneThumb() {
-  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false };
+  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, steady: 0, ref0: NaN, win: 0, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false };
   const pr = newPrediction();
   const aim = { x: 0, y: 0 };
   return {
     // Pointer events: `pressed` latches a tap shorter than a tick until the next sample reads it.
-    down() { st.held = true; st.pressed = true; st.ax = 0; st.ay = 0; st.ref = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
-    up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
+    down() { st.held = true; st.pressed = true; st.ax = 0; st.ay = 0; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
+    up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
     // The held thumb's slide from where it pressed, CSS px (+x right, +y up the glass).
     move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx; st.ay = dy / THUMB.aimPx; } },
-    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; },
+    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; },
     // 0164: where the sideways slide is measured from (m, the car's right +, along the car's own side axis), NaN
     // before this hold could aim.
     get ref() { return st.ref; },
@@ -186,6 +197,8 @@ export function createOneThumb() {
     // Whether the last tick could aim (held, in the air, roof up, high enough, the row allowing; 0164: not while an
     // inward slide waits for the semi to pass).
     get aimLive() { return st.live; },
+    // 0164: how far roof up the sight shows (uw.y above this): a hold that has slid keeps aiming past 0.94.
+    get aimUy() { return st.slid ? AIM_UY_SLID : 0.94; },
     // Fill `out` (a newInput()) for this tick. `steer` is an extra steer (tilt), driver-relative.
     sample(run, released, out, steer = 0) {
       const c = run.car, stage = thumbStage(run, released);
@@ -239,7 +252,8 @@ export function createOneThumb() {
           up(c, uw);
           const h = c.pos.y - SPEC.comHeight;
           const k = Math.max(0, Math.min(1, (h - THUMB.aimFloor) / THUMB.aimFade));
-          if (uw.y > 0.94 && k > 0) {
+          if (!(uw.y > (st.slid ? AIM_UY_SLID : 0.94) && k > 0) && !st.slid) { st.ref0 = NaN; st.steady = 0; }   // a window is ticks in a row
+          else if (uw.y > (st.slid ? AIM_UY_SLID : 0.94) && k > 0) {
             const clear = rowBehind(run, c);
             // Sideways: anywhere, unless the slide would carry the car in against a parked flank on the
             // way down (the Show). LAND holds a floor over the roofs it is above, but low beside the row a
@@ -261,18 +275,28 @@ export function createOneThumb() {
             const sx = shape(st.ax);
             // Read until this hold first slides; after that a thumb back in the middle asks for `ref` itself (the place
             // the dot was laid out from), not for wherever the drift has got to.
-            if (!st.slid || st.ref !== st.ref) st.ref = here + vb * bs * lead;
-            if (sx !== 0) st.slid = true;
-            if (st.slid) {
+            if (!st.slid || st.ref !== st.ref) {
+              st.ref = here + vb * bs * lead;
+              // How fast the place itself is still moving, over REF_WIN ticks (REF_STEADY).
+              if (st.ref0 !== st.ref0) { st.ref0 = st.ref; st.win = 0; }
+              else if (++st.win >= REF_WIN) {
+                st.steady = Math.abs(st.ref - st.ref0) * (240 / REF_WIN) < REF_STEADY ? st.steady + 1 : 0;
+                st.ref0 = st.ref; st.win = 0;
+              }
+            }
+            if (sx !== 0 || st.slid) {
               const pad = (COURSES[run.course] || COURSES.show).pad, ps = sideOf(pad.x, pad.z, fw);
               const off = sx === 0 ? 0 : (Math.max(-1, Math.min(1, st.ax)) * THUMB.aimPx) / AIM_PX_PER_M;   // saturates at a full slide
               const want = off >= 0 ? Math.max(st.ref, Math.min(st.ref + off, ps + AIM_RING)) : Math.min(st.ref, Math.max(st.ref + off, ps - AIM_RING));
               const inward = (want - st.ref) * sideOf(c.pos.x, 0, fw) < 0;   // toward the course's centre line
               const wait = run.course === 'show' && inward && tallAhead(c);
-              if (wait) st.wait = true;
-              if ((want !== st.ref || sx === 0) && !wait) {
+              const settling = !st.slid && st.steady < REF_WINS;   // the sight stays live: the place is still being read
+              if (wait) st.wait = true;   // the sight dims (aimLive), and `ref` is still read
+              else if (sx !== 0 && !settling) st.slid = true;
+              if (st.slid && (want !== st.ref || sx === 0) && !wait && !settling) {
                 const vNeed = ((want - here) / lead) * bs;   // body-x m/s that carries it there
-                const bank = Math.max(-AIM_BANK, Math.min(AIM_BANK, HOLD_K * AIM_GAIN * (vb - vNeed)));
+                const bMax = AIM_BANK * Math.max(AIM_LOW, Math.min(1, (h - THUMB.aimFloor) / AIM_LOW_H));
+                const bank = Math.max(-bMax, Math.min(bMax, HOLD_K * AIM_GAIN * (vb - vNeed)));
                 roll = k * HOLD_ROLL * bank;
                 if (Math.abs(roll) < 0.05) roll = 0;   // under 0.05 LAND holds the line itself
               }
