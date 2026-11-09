@@ -8,7 +8,7 @@ import { newInput, up } from '../../src/sim/vehicle.js';
 import { predict, newPrediction } from '../../src/sim/predict.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { createOneThumb, thumbStage, markOffset } from '../../src/onethumb.js';
-import { glideStep, newGlide, GLIDE_JUMP } from '../../src/thumb-aim.js';
+import { glideStep, newGlide, GLIDE_JUMP, GLIDE_VMAX } from '../../src/thumb-aim.js';
 
 const FRAME = 1 / 60;
 
@@ -123,13 +123,18 @@ describe('the sight glides its along-the-run dot onto the target (0174)', () => 
     expect(shown.at(-1)).toBe(12);
   });
 
-  it('a long or stalled frame neither jumps past the bound nor freezes it', () => {
+  it('a long frame (back from a pause) draws the target; a stalled one holds; a NaN target never sticks', () => {
     const g = newGlide();
     glideStep(g, 0, FRAME);
-    const a = glideStep(g, 40, 0.5);   // a 0.5 s hitch: still a bounded step
+    const a = glideStep(g, 40, 0.1);   // the longest frame that still glides: one bounded step
     expect(a).toBeGreaterThan(0);
-    expect(a).toBeLessThanOrEqual(40);
-    const b = glideStep(g, 40, 0);   // no time passed: no move
-    expect(b).toBe(a);
+    expect(a).toBeLessThanOrEqual(GLIDE_VMAX * 0.1 + 1e-9);
+    expect(glideStep(g, 40, 0)).toBe(a);   // no time passed: no move
+    expect(glideStep(g, 40, 0.5)).toBe(40);   // a 0.5 s gap: the dot is where the target is
+    const n = newGlide();
+    glideStep(n, 0, FRAME); glideStep(n, 14, FRAME);
+    expect(glideStep(n, NaN, FRAME)).toBeNaN();
+    expect(glideStep(n, 14, FRAME)).toBe(14);   // the next good frame draws the target, not NaN for the rest of the flight
+    for (let i = 0; i < 20; i++) expect(Number.isFinite(glideStep(n, 14 + i, FRAME))).toBe(true);
   });
 });

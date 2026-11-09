@@ -23,19 +23,23 @@ const uw = { x: 0, y: 0, z: 0 };
 // 0174: the drawn dot's glide (pure). A target that moves ≤ GLIDE_JUMP px a frame is drawn where it is; a bigger move
 // starts a critically damped approach (ω = GLIDE_W: 90 % in ≈ 0.16 s, on the pixel within 0.25 s for a 14 px step),
 // no faster than GLIDE_VMAX (3 px a 60 Hz frame), every step toward the target and never past it. `g.on` false (the
-// sight hidden) draws the next target where it is: the dot appearing is not a jump.
+// sight hidden) draws the next target where it is: the dot appearing is not a jump. Allocation-free.
 export const GLIDE_JUMP = 3, GLIDE_W = 24, GLIDE_VMAX = GLIDE_JUMP * 60;
 export const newGlide = () => ({ on: false, y: 0, v: 0, t: 0, gliding: false });
 export function glideStep(g, target, dt) {
-  if (!g.on) { g.on = true; g.y = target; g.v = 0; g.t = target; g.gliding = false; return target; }
+  // Hidden, a target that isn't a number, or a frame over 0.1 s (back from a pause or the background): draw the
+  // target where it is, so one bad frame never leaves the dot stuck and a resume doesn't glide 18 px at once.
+  if (!(target === target) || Math.abs(target) === Infinity) { g.on = false; return target; }
+  if (!g.on || dt > 0.1) { g.on = true; g.y = target; g.v = 0; g.t = target; g.gliding = false; return target; }
   const moved = target - g.t;
   g.t = target;
   if (!g.gliding && Math.abs(moved) > GLIDE_JUMP) g.gliding = true;
   if (!g.gliding) { g.y = target; g.v = 0; return target; }
-  const h = Math.min(Math.max(dt, 0), 0.1);
+  const h = Math.max(dt, 0);
   if (h === 0) return g.y;
   // A small move of the target mid-glide carries the dot with it (as it would be drawn outside a glide), so the glide
-  // closes only the jump, with no lag behind a target that keeps creeping.
+  // closes only the jump. Carry and glide together stay under GLIDE_VMAX, so a target that creeps fast (over ≈ 1 px a
+  // frame) on after a jump is reached a little later than 0.25 s; the Show's creeps ≈ 0.6 px a frame.
   const y0 = Math.abs(moved) <= GLIDE_JUMP && (target - g.y) * moved > 0 ? g.y + moved : g.y;
   // The exact step of x'' = −2ωx' − ω²x over h (stable for any h), x = y − target.
   const x = y0 - target, e = Math.exp(-GLIDE_W * h), k = (g.v + GLIDE_W * x) * h;
