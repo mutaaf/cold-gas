@@ -1,12 +1,12 @@
 ---
 id: 0165
 title: On the Show, sliding up or down moves the touchdown along the run, as the sight draws it
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-05
-pr:
+pr: 276
 by: critic
 ---
 
