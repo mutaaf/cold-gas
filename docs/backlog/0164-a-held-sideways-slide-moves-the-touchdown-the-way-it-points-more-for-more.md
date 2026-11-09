@@ -6,7 +6,7 @@ priority: P1
 size: M
 lens: player-feel
 created: 2026-11-05
-pr: 272, 282
+pr: 282
 by: critic
 ---
 
