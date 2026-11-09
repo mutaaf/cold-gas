@@ -1,12 +1,12 @@
 ---
 id: 0173
 title: The modelled careful and sloppy thumbs act on what they read, even when they re-read faster than they react
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: tech-health
 created: 2026-11-09
-pr:
+pr: 283
 by: critic
 ---
 

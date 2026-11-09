@@ -1,5 +1,5 @@
 ---
-id: 0176
+id: 0177
 title: On the Wall, a tapped thumb's slide acts as early as a held one's, and a full slide reaches the mark
 status: ready
 priority: P1
