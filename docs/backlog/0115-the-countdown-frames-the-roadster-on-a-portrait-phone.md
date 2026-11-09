@@ -1,8 +1,8 @@
 ---
 id: 0115
 title: The run-up frames the whole roadster on a portrait phone
-status: proposed
-priority: P2
+status: ready
+priority: P1
 size: S
 lens: player-feel
 created: 2026-10-29
@@ -34,3 +34,9 @@ An e2e that projects `carRoot` through the camera at countdown end per viewport 
 
 ## Out of scope
 The touchdown framing (0108), the row through the carry (0113), the foldables (0107).
+
+## Re-seen 2026-11-09 (scout, promoted to ready)
+On a 390×844 touch capture of main with `coldgas_howto='new'`, the run-up's first frame (0.7 s and 3 s after the
+countdown) shows the roadster pushed to the right edge, partly cropped, beside the Wall's lit ring, with the HUD
+column covering the left third. A newcomer's first sight of their own car is a clipped silhouette. Funnel: the one
+human on 2026-11-06 started a run and quit before the card (`run-quit`), so the first seconds matter most.
