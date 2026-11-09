@@ -69,9 +69,10 @@ async function lowContrast(page, file) {
 }
 // 0151 · the Daily's room (no ad: the loader never comes in locally). On a laptop or desktop screen the title never packs
 // the Daily (no `data-extra-fit`), its streak shows, and the wordmark stands clear of the event pills (≥ 16 px). Where the
-// card already fitted (or packed) before 0151, it may pack no further: FIT_MAX is the most a size may step.
+// card already fitted (or packed) before 0151, it may pack no further: FIT_MAX is the most a size may step. The iPads
+// turned (1024×768, 1180×820, 1366×1024) take 0151's wide layout too and hold the Daily whole (they packed to 2, 2, 1).
 const DESK_GAP = 16;
-const FIT_MAX = { '390x844': 0, '844x390': 1, '430x932': 1, '1024x1366': 0 };
+const FIT_MAX = { '390x844': 0, '844x390': 1, '430x932': 1, '1024x1366': 0, '1024x768': 0, '1180x820': 0, '1366x1024': 0 };
 let bad = 0;
 const offenders = [];
 const only = process.argv.find((a) => a.startsWith('--only='))?.slice(7).split(',');
@@ -117,9 +118,9 @@ for (const [w, h, touch, safe] of VPS) {
   const name = `${w}x${h}${safe ? 's' : ''}`;
   const room = await page.evaluate(() => {
     const t = document.querySelector('.title'), wm = t.querySelector('.wordmark'), st = t.querySelector('.xc-streak');
-    const tb = t.getBoundingClientRect();   // layout boxes (offsetTop), not the rise-in transforms
+    // layout boxes (offsetTop, .title is their offsetParent), not the rise-in transforms
     return { fit: Number(t.dataset.extraFit || 0), streak: !!st && st.offsetHeight > 0,
-      gap: wm.offsetHeight > 1 ? Math.round(t.querySelector('.courses').offsetTop - (wm.offsetTop + wm.offsetHeight)) : null, top: Math.round(tb.top) };
+      gap: wm.offsetHeight > 1 ? Math.round(t.querySelector('.courses').offsetTop - (wm.offsetTop + wm.offsetHeight)) : null };
   });
   if (!touch && !safe) {
     if (room.fit) r.push(`Daily packed (fit ${room.fit})`);
