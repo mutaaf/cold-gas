@@ -513,6 +513,9 @@ async function handle(req, env, ctx) {
     if (!dry) {
       await db.prepare('INSERT INTO scores (day, initials, total, verdict, facts, created, course, tier) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
         .bind(day(), initials, card.total, card.verdict, JSON.stringify(card.facts), Date.now(), course, tier).run();
+      // Tell the portfolio's event backbone (github.com/mutaaf/cue). No initials or player data, and it
+      // can never fail or slow the post: it runs after the response, and every error is swallowed.
+      if (env.CUE && ctx) ctx.waitUntil(Promise.resolve().then(() => env.CUE.publish({ type: 'coldgas.run.scored', data: { course: String(course), total: card.total, ...(typeof tier === 'string' ? { tier } : {}) } })).catch(() => {}));
     }
     // The rank today on this course (a dry run: the rank it would get).
     const rank = await db.prepare('SELECT COUNT(*) AS r FROM scores WHERE day = ? AND course = ? AND total > ?').bind(day(), course, card.total).first();

@@ -16,5 +16,7 @@
   // The judges' default brain: an open model on Workers AI (free daily allowance). Players can
   // bring their own Anthropic / OpenAI / xAI / Gemini key instead (src/worker/ai/providers.js).
   "ai": { "binding": "AI" },
+  // The portfolio's event backbone. props.source is how Cue knows who's talking; a Worker can't claim another's name.
+  "services": [{ "binding": "CUE", "service": "cue", "props": { "source": "cold-gas" } }],
   "routes": [{ "pattern": "mutaafaziz.com/coldgas*", "zone_name": "mutaafaziz.com" }]
 }
