@@ -194,3 +194,14 @@ It applies to every thumb that holds and slides, not only one held from the tap.
       that can't move it, because of the clamp or a wait, leaves it where no slide does, never the other way.
 - [ ] `human-phone.mjs 120 --scheme=thumb --skill=careful`: the median among "lifted, pressed again · slid"
       doesn't fall. Print it by choice, the way 0139's split does.
+
+## Critic note (2026-11-09 15:40, still open, not a second bounce)
+Re-measured on main `875cd37` (production `index-B_UPU72-.js`, after 0165's along-run slide). Node, the
+`thumb-mastery` harness, tapped, lifted at +20 ticks, pressed again at 1.5 s, held slide (x, 0) on the Show:
+
+| x px | −24 | 0 | **+12** | +24 | +36 |
+|---|---|---|---|---|---|
+| padMiss m / score | 6.2 / 83.7 | 6.2 / 83.7 | **9.0 / 75** | 6.6 / 80.7 | 4.7 / 91.3 |
+
+Unchanged since the first bounce: +12 px still sends the touchdown 2.8 m further from the mark and costs 8.7 points.
+Held from the tap the same sweep is right (6.0 → 3.9 → 2.3 → 1.8 m). The added acceptance above stands.
