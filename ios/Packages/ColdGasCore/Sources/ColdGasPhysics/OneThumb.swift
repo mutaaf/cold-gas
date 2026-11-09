@@ -121,6 +121,8 @@ public final class OneThumb {
     /// Whether the last tick could aim (held, in the air, roof up, high enough, the row allowing; 0164: not while an
     /// inward slide waits for the semi to pass).
     public var aimLive: Bool { live }
+    /// 0164: how far roof up the sight shows (the up axis's y above this): a hold that has slid keeps aiming past 0.94.
+    public var aimUy: Double { slid ? AIM_UY_SLID : 0.94 }
 
     /// Fill `out` (cleared: clearInput) for this tick. `steer`: an extra steer (tilt), driver-relative.
     @discardableResult public func sample(_ run: Run, _ released: Bool, _ out: Input, _ steer: Double = 0) -> Input {
@@ -160,7 +162,8 @@ public final class OneThumb {
                 M3.rotate(tUw, c.quat, M3.set(tUw, 0, 1, 0))
                 let h = c.pos.y - SPEC.comHeight
                 let k = jsMax(0, jsMin(1, (h - THUMB.aimFloor) / THUMB.aimFade))
-                if tUw.y > (slid ? AIM_UY_SLID : 0.94) && k > 0 {
+                if !(tUw.y > (slid ? AIM_UY_SLID : 0.94) && k > 0) && !slid { ref0 = .nan; steady = 0 }
+                else if tUw.y > (slid ? AIM_UY_SLID : 0.94) && k > 0 {
                     let clear = rowBehind(run, c)
                     // 0164: sideways is a place, flown by LAND's hold-the-line law (src/onethumb.js says why).
                     M3.rotate(tFw, c.quat, M3.set(tFw, 0, 0, 1))
@@ -189,9 +192,10 @@ public final class OneThumb {
                         let off = sx == 0 ? 0 : (jsMax(-1, jsMin(1, ax)) * THUMB.aimPx) / AIM_PX_PER_M
                         let want = off >= 0 ? jsMax(ref_, jsMin(ref_ + off, ps + AIM_RING)) : jsMin(ref_, jsMax(ref_ + off, ps - AIM_RING))
                         let inward = (want - ref_) * sideOf(c.pos.x, 0, tFw) < 0
-                        let w = (run.course == "show" && inward && tallAhead(c)) || (!slid && steady < REF_WINS)
-                        if w { wait = true } else if sx != 0 { slid = true }
-                        if slid && (want != ref_ || sx == 0) && !w {
+                        let w = run.course == "show" && inward && tallAhead(c)
+                        let settling = !slid && steady < REF_WINS
+                        if w { wait = true } else if sx != 0 && !settling { slid = true }
+                        if slid && (want != ref_ || sx == 0) && !w && !settling {
                             let vNeed = ((want - here) / lead) * bs
                             let bMax = AIM_BANK * jsMax(AIM_LOW, jsMin(1, (h - THUMB.aimFloor) / AIM_LOW_H))
                             let bank = jsMax(-bMax, jsMin(bMax, HOLD_K * AIM_GAIN * (vb - vNeed)))

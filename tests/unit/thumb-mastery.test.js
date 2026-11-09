@@ -81,11 +81,11 @@ describe('one-thumb touchdown slide (0121)', () => {
 
   it('no held slide, however wild, lands on the row or rolls it', () => {
     for (const [x, y] of [[60, 0], [-60, 0], [0, 60], [0, -60], [60, 60], [-60, -60], [60, -60], [-60, 60]]) {
-      for (const holdAt of ['tap', 12]) {
-        const s = scoreRun(flyThumb({ holdAt, slide: (run, th) => th.move(x, y) }).t);
-        expect(s.facts.contact, `${x},${y} ${holdAt}`).toBe(false);
-        expect(s.facts.crashed, `${x},${y} ${holdAt}`).toBe(false);
-        expect(s.facts.clearance, `${x},${y} ${holdAt}`).toBeGreaterThan(0);   // 0165: shorter never brings it down on a roof
+      for (const [holdAt, again] of [['tap', -1], [12, -1], ['tap', 1], ['tap', 2]]) {   // 0164: and the tapped thumb
+        const s = scoreRun(flyThumb({ holdAt, again, slide: (run, th) => th.move(x, y) }).t);
+        expect(s.facts.contact, `${x},${y} ${holdAt} ${again}`).toBe(false);
+        expect(s.facts.crashed, `${x},${y} ${holdAt} ${again}`).toBe(false);
+        expect(s.facts.clearance, `${x},${y} ${holdAt} ${again}`).toBeGreaterThan(0);   // 0165: shorter never brings it down on a roof
       }
     }
   });
@@ -213,6 +213,8 @@ describe('one thumb, a held sideways slide moves the touchdown the way it points
           if (px > 0) expect(lat, label).toBeGreaterThanOrEqual(none - 0.3);
           if (px < 0) expect(lat, label).toBeLessThanOrEqual(none + 0.3);
         }
+        // The Wall's right side is already past the ring's clamp; left, a slide has to act (not merely not go wrong).
+        if (course === 'wall') expect(rows.find((r) => r.px === -24).lat, `wall again ${again} s, −24 px`).toBeLessThanOrEqual(none - 1);
         if (course === 'show') for (const px of [8, 16, 24]) {
           const moved = rows.find((r) => r.px === px).lat - none;
           expect(moved / (px / AIM_PX_PER_M), `show again ${again} s, ${px} px`).toBeGreaterThan(0.5);

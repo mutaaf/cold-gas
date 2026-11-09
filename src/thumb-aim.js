@@ -51,7 +51,7 @@ export function mountThumbAim(pad, thumb) {
     // Each frame from main.js syncThumb: the stage, the run and the landing HUD's prediction.
     sync(run, c, pr, stage) {
       up(c, uw);
-      const on = stage === 'fly' && run.phase === 'air' && uw.y > 0.94;
+      const on = stage === 'fly' && run.phase === 'air' && uw.y > thumb.aimUy;   // 0164: past 0.94 while a slide steers
       flag('on', on);
       if (!on) return;
       markOffset(c, pr, run.course, off, thumb.ref, thumb.refA, thumb.canA);
