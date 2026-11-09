@@ -256,6 +256,8 @@ describe('on the Show, sliding up or down moves the touchdown along the run, as 
       for (let y = -48; y <= 48; y += 8) {
         const { run, card } = fly(y, again), a = along(run), label = `again ${again} s, ${y} px`;
         safe(card, label);
+        // ≤ 8 m: the along clamp is 1-D like 0164's sideways one, and the tapped touchdown is already ≈6 m wide, so a full
+        // straight-up slide (+48) reaches 7.0–7.4 m. Kept: a 2-D clamp on predict's sideways miss blocked +24 outright.
         expect(card.facts.padMiss, label).toBeLessThanOrEqual(8);
         expect(a, label).toBeGreaterThanOrEqual(top - 0.3);
         top = Math.max(top, a);
@@ -307,17 +309,23 @@ describe('on the Show, sliding up or down moves the touchdown along the run, as 
     expect(markOffset(run.car, pr, 'show', off, NaN, 31, true).y).toBeCloseTo(6, 6);   // laid out from refA (m along the nose: 1 m past the mark), not pr
     // In flight, held and tapped: before the brake turns the fall, and over a roof, the sight draws nothing along (nothing
     // could act), and every pitch the thumb writes is on a tick the sight drew it.
-    for (const again of [-1, 1.5]) {
-      let seenOff = false, seenOn = false;
+    // Self-review: once open it stays open (an edge read each tick made the dot blink 10 px and back), and the thumb writes
+    // no pitch on a tick it couldn't act.
+    for (const again of [-1, 1, 1.5]) {
+      let seenOff = false, seenOn = false, wasOn = false, opened = Infinity;
       const run = flyThumb({ again, slide: (r, th) => {
         predict(r.car, Math.max(0, r.car.pos.y - SPEC.comHeight), pr);
         markOffset(r.car, pr, 'show', off, th.ref, th.refA, th.canA);
-        if (!th.canA) { seenOff = true; expect(off.y).toBe(0); } else seenOn = true;
+        if (!th.canA) { seenOff = true; expect(off.y).toBe(0); expect(wasOn, `again ${again}: closed again at ${r.tick}`).toBe(false); } else {
+          seenOn = true; wasOn = true; opened = Math.min(opened, r.tick - 1);   // the hook runs before this tick's sample
+        }
         th.move(0, -24);
       } });
       expect(seenOff, `again ${again}`).toBe(true);
       expect(seenOn, `again ${again}`).toBe(true);
       expect(scoreRun(run.t).facts.contact).toBe(false);
+      // No pitch before it opened ([tick, throttle, brake, steer, pitch, …]).
+      expect(run.inputLog.filter((e) => e[4] !== 0 && e[0] < opened), `again ${again}`).toEqual([]);
     }
   }, 60000);
 });

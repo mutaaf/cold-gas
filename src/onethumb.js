@@ -230,8 +230,9 @@ export function createOneThumb() {
         const sink = -c.vel.y;
         if (sink > st.pk) st.pk = sink;
         else if (st.pk > 4 && sink < st.pk - 0.5) st.braked = true;
-        // Whether the up/down slide can act now, held or not (the sight draws the mark along the run only then).
-        st.canA = run.course !== 'show' || (st.braked && (rowBehind(run, c) || (!overRoof(c) && shortRoom(c, c.pos.y - SPEC.comHeight))));
+        // Whether the up/down slide can act now, held or not (the sight draws the mark along the run only then). Once open
+        // it stays open for the flight: the roofs are behind by then, and an edge read each tick made the dot blink.
+        st.canA = run.course !== 'show' || st.canA || (st.braked && (rowBehind(run, c) || (!overRoof(c) && shortRoom(c, c.pos.y - SPEC.comHeight))));
         if (st.held) {
           // AIM: only roof up (a roll command upside down would stop LAND's roll-out), faded out over
           // the set-down; on the Show along the run only once the brake has turned the fall, off the roofs (0165).
@@ -291,7 +292,7 @@ export function createOneThumb() {
               const sy = shape(st.ay);
               if (sy !== 0) st.slidA = true;
               if (st.slidA) {
-                const pa = COURSES.show.pad.x * fw.x + COURSES.show.pad.z * fw.z;
+                const pad = COURSES.show.pad, pa = pad.x * fw.x + pad.z * fw.z;
                 const off = sy === 0 ? 0 : (Math.max(-1, Math.min(1, st.ay)) * THUMB.aimPx) / AIM_PX_PER_M;
                 let want = off >= 0 ? Math.max(st.refA, Math.min(st.refA + off, pa + AIM_RING)) : Math.min(st.refA, Math.max(st.refA + off, pa - AIM_RING));
                 want = Math.max(want, Math.min(st.refA, SHOW_END * fw.z));

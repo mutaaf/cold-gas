@@ -151,7 +151,7 @@ public final class OneThumb {
             // 0165: the brake has turned the fall (the sink 0.5 m/s past its peak).
             let sink = -c.vel.y
             if sink > pk { pk = sink } else if pk > 4 && sink < pk - 0.5 { braked = true }
-            canA_ = run.course != "show" || (braked && (rowBehind(run, c) || (!overRoof(c) && shortRoom(c, c.pos.y - SPEC.comHeight))))
+            canA_ = run.course != "show" || canA_ || (braked && (rowBehind(run, c) || (!overRoof(c) && shortRoom(c, c.pos.y - SPEC.comHeight))))
             if held_ {
                 M3.rotate(tUw, c.quat, M3.set(tUw, 0, 1, 0))
                 let h = c.pos.y - SPEC.comHeight
