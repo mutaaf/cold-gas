@@ -242,7 +242,7 @@ final class Game: ObservableObject {
         h.hardware = Hardware.shared.inUse
         if r.phase == .air && l.oneThumb {
             predict(c, h.alt, pr, land: l.thumb.landing)
-            let m = markOffset(c, pr, r.course, l.thumb.ref)
+            let m = markOffset(c, pr, r.course, l.thumb.ref, l.thumb.refA, l.thumb.canA)
             h.markX = m.x; h.markY = m.y; h.hasMark = true
         }
         h.sinkBand = r.phase == .air && c.vel.y < 0 ? landingBand(l, h) : 0

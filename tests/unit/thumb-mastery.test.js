@@ -15,7 +15,9 @@ import { MEDALS, MEDAL_KEY, thresholds, medalFor, nextMedal, nextTargetText, get
 
 // The Show the way main.js flies it: hold up the curl, stop on the ledge, a short tap to let go
 // (the drive-off and the push-off), then press and hold in the air; `slide(run, th)` moves the thumb.
-function flyThumb({ slide = null, holdAt = 'tap', course = 'show' } = {}) {
+// `again` (s, 0165; LESSONS 2026-11-06: the tapped thumb is most phone players): lifted 20 ticks after the tap and
+// pressed again that long after it (gtrace.test.js's thumbBurn).
+function flyThumb({ slide = null, holdAt = 'tap', course = 'show', again = -1 } = {}) {
   const run = createRun(course), th = createOneThumb();
   let released = false, ledgeT = -1, tapT = -1;
   th.down();
@@ -26,6 +28,10 @@ function flyThumb({ slide = null, holdAt = 'tap', course = 'show' } = {}) {
       if (run.tick === ledgeT + 120) { th.down(); tapT = run.tick; }
     }
     if (tapT > 0 && run.tick === tapT + 24 && holdAt !== 'tap') th.up();
+    if (again >= 0 && tapT > 0) {
+      if (run.tick === tapT + 20) th.up();
+      if (run.tick === tapT + Math.round(again * 240)) th.down();
+    }
     if (released && holdAt !== 'tap' && !th.held && c.vel.y < 0 && c.pos.y < holdAt) th.down();
     if (slide && released && run.phase === 'air' && th.held) slide(run, th);
     th.sample(run, released, inp);
@@ -42,7 +48,7 @@ function careful() {
   return (run, th) => {
     if (run.tick >= next) {
       predict(run.car, Math.max(0, run.car.pos.y - SPEC.comHeight), pr);
-      markOffset(run.car, pr, 'show', off, th.ref);
+      markOffset(run.car, pr, 'show', off, th.ref, th.refA, th.canA);
       want = { x: off.x, y: -off.y };
       next = run.tick + 72;
     }
@@ -79,6 +85,7 @@ describe('one-thumb touchdown slide (0121)', () => {
         const s = scoreRun(flyThumb({ holdAt, slide: (run, th) => th.move(x, y) }).t);
         expect(s.facts.contact, `${x},${y} ${holdAt}`).toBe(false);
         expect(s.facts.crashed, `${x},${y} ${holdAt}`).toBe(false);
+        expect(s.facts.clearance, `${x},${y} ${holdAt}`).toBeGreaterThan(0);   // 0165: shorter never brings it down on a roof
       }
     }
   });
@@ -91,10 +98,14 @@ describe('one-thumb touchdown slide (0121)', () => {
     run.car.quat.w = 0; run.car.quat.z = 1;   // inverted
     th.sample(run, true, inp);
     expect(inp.pitch).toBe(0); expect(inp.roll).toBe(0);
-    run.car.quat.w = 1; run.car.quat.z = 0;   // upright: full pitch; the roll (0164: a place, flown) toward it, never past a full one
+    run.car.quat.w = 1; run.car.quat.z = 0;   // upright: the roll (0164: a place, flown) toward it, never past a full one
+    // 0165: along the run the slide is a place once the brake has turned the fall (the sink 0.5 m/s past its peak):
+    // a pitch toward it, further (+), never past a full one.
+    run.car.vel.y = -12; Object.assign(inp, newInput()); th.sample(run, true, inp);
+    run.car.vel.y = -9;
     Object.assign(inp, newInput());
     th.sample(run, true, inp);
-    expect(inp.pitch).toBeCloseTo(THUMB.aimPitch, 6);
+    expect(inp.pitch).toBeGreaterThan(0); expect(inp.pitch).toBeLessThanOrEqual(THUMB.aimPitch + 1e-9);
     expect(inp.roll).toBeGreaterThan(0.05); expect(inp.roll).toBeLessThanOrEqual(THUMB.aimRoll + 1e-9);
     run.car.pos.y = SPEC.comHeight + THUMB.aimFloor - 0.1;   // the last metre: level
     Object.assign(inp, newInput());
@@ -178,7 +189,7 @@ describe('one thumb, a held sideways slide moves the touchdown the way it points
   // The sight as the pad draws it (src/thumb-aim.js: markOffset from the thumb's own `ref`).
   const sightNow = (run, th, course, pr, off) => {
     predict(run.car, Math.max(0, run.car.pos.y - SPEC.comHeight), pr);
-    return markOffset(run.car, pr, course, off, th.ref);
+    return markOffset(run.car, pr, course, off, th.ref, th.refA, th.canA);
   };
   it('a slide held where the sight puts the dot at its first frame lands ≤ 3.5 m from the mark (the mark Daily)', () => {
     for (const course of ['show', 'wall']) {
@@ -209,6 +220,106 @@ describe('one thumb, a held sideways slide moves the touchdown the way it points
       expect(card.facts.contact, `${course} ${late}`).toBe(false);
     }
   }, 180000);
+});
+
+// 0165 (critique 2026-11-05-1300 §2): on the Show the pitch was gated until the row was 2.5 m behind, a few ticks under
+// 2.5 m up, so a slide straight up or down did nothing (landZ −32.7 for none, ±12, ±24, +36 px) while the sight drew the
+// mark 2.7 m short. Now along the run the slide is a place too, from when the brake turns the fall: up = further,
+// down = shorter (never onto the row: shorter waits for room past the roofs it would cross), and the sight draws the
+// mark along the run only as far as the slide can act.
+describe('on the Show, sliding up or down moves the touchdown along the run, as the sight draws it (0165)', () => {
+  const PAD_Z = -30;
+  const along = (run) => PAD_Z - run.t.landZ;   // + = the touchdown is past the mark (further along the run)
+  const fly = (y, again = -1) => {
+    const run = flyThumb({ again, slide: (r, th) => th.move(0, y) });
+    return { run, card: scoreRun(run.t) };
+  };
+  const safe = (card, label) => {
+    expect(card.facts.contact, label).toBe(false);
+    expect(card.facts.crashed, label).toBe(false);
+    expect(card.facts.clearance, label).toBeGreaterThan(0);
+    expect(card.verdict, label).not.toBe('Rough landing');
+  };
+
+  it('held from the tap: ±24 px moves the touchdown ≥ 1.5 m the way slid, on the pad, clear of the row', () => {
+    const none = fly(0), short = fly(-24), long = fly(24);
+    for (const [r, l] of [[none, '0'], [short, '-24'], [long, '+24']]) safe(r.card, l);
+    expect(along(short.run), 'down = shorter').toBeLessThanOrEqual(along(none.run) - 1.5);
+    expect(along(long.run), 'up = further').toBeGreaterThanOrEqual(along(none.run) + 1.5);
+    expect(Math.abs(short.run.t.landZ - PAD_Z), 'shorter lands nearer the mark').toBeLessThan(Math.abs(none.run.t.landZ - PAD_Z));
+  }, 60000);
+
+  it('the tapped thumb, pressed again at 1.0 … 2.5 s: −48 … +48 px in steps of 8 are monotonic along the run, ±24 px move ≥ 1.5 m', () => {
+    for (const again of [1, 1.5, 2, 2.5]) {
+      let top = -Infinity, none = NaN;
+      const at = {};
+      for (let y = -48; y <= 48; y += 8) {
+        const { run, card } = fly(y, again), a = along(run), label = `again ${again} s, ${y} px`;
+        safe(card, label);
+        expect(card.facts.padMiss, label).toBeLessThanOrEqual(8);
+        expect(a, label).toBeGreaterThanOrEqual(top - 0.3);
+        top = Math.max(top, a);
+        at[y] = a;
+        if (y === 0) none = a;
+      }
+      expect(at[-24], `again ${again} s, −24 px`).toBeLessThanOrEqual(none - 1.5);
+      expect(at[24], `again ${again} s, +24 px`).toBeGreaterThanOrEqual(none + 1.5);
+    }
+  }, 300000);
+
+  it('a thumb that never slides up or down flies exactly as before (no pitch in the log)', () => {
+    for (const again of [-1, 1.5]) {
+      const run = flyThumb({ again, slide: (r, th) => th.move(24, 0) });
+      expect(run.inputLog.some((e) => e[4] !== 0), `again ${again}`).toBe(false);
+    }
+  }, 60000);
+
+  // Held from the tap (the ticket's thumb): ≤ 2 m (main: 2.0). Tapped and pressed again: ≤ 2.5 m (main: 2.0–3.1; the
+  // again-at-1 s line lands 2.1–2.4, its along-run window opening only once the car is off the semi).
+  it('a thumb that re-reads the dot 0.2–0.3 s late lands nearer the mark, held or tapped', () => {
+    for (const again of [-1, 1, 1.5, 2.5]) for (const late of [48, 60, 70]) {
+      const pr = newPrediction(), off = { x: 0, y: 0, m: 0 };
+      let next = 0, pend = null, at = 0, want = null;
+      const run = flyThumb({ again, slide: (r, th) => {
+        if (th.ref === th.ref && r.tick >= next) {
+          predict(r.car, Math.max(0, r.car.pos.y - SPEC.comHeight), pr);
+          markOffset(r.car, pr, 'show', off, th.ref, th.refA, th.canA);
+          pend = { x: off.x, y: -off.y }; at = r.tick + late; next = r.tick + 72;
+        }
+        if (pend && r.tick >= at) { want = pend; pend = null; }
+        if (want) th.move(want.x, want.y);
+      } });
+      const card = scoreRun(run.t), label = `again ${again} s, ${late} ticks late`;
+      safe(card, label);
+      expect(card.facts.padMiss, label).toBeLessThanOrEqual(again < 0 ? 2 : 2.5);
+    }
+  }, 300000);
+
+  it('the sight draws the mark along the run only where the slide can act on it', () => {
+    // markOffset itself: without canA it draws nothing along, and the miss is still the whole miss.
+    const run = createRun('show'), pr = newPrediction(), off = { x: 0, y: 0, m: 0 };
+    run.car.pos.z = -20; run.car.pos.y = 6;
+    run.car.quat.x = 0; run.car.quat.y = 1; run.car.quat.z = 0; run.car.quat.w = 0;   // nose along the run (−z), as in the air
+    pr.landX = 0; pr.landZ = -34;   // the touchdown 4 m past the mark: the mark is shorter (y > 0, down the glass)
+    expect(markOffset(run.car, pr, 'show', off, NaN, NaN, true).y).toBeCloseTo(24, 6);
+    expect(markOffset(run.car, pr, 'show', off, NaN, NaN, false).y).toBe(0);
+    expect(off.m).toBeCloseTo(4, 6);
+    expect(markOffset(run.car, pr, 'show', off, NaN, 31, true).y).toBeCloseTo(6, 6);   // laid out from refA (m along the nose: 1 m past the mark), not pr
+    // In flight, held and tapped: before the brake turns the fall, and over a roof, the sight draws nothing along (nothing
+    // could act), and every pitch the thumb writes is on a tick the sight drew it.
+    for (const again of [-1, 1.5]) {
+      let seenOff = false, seenOn = false;
+      const run = flyThumb({ again, slide: (r, th) => {
+        predict(r.car, Math.max(0, r.car.pos.y - SPEC.comHeight), pr);
+        markOffset(r.car, pr, 'show', off, th.ref, th.refA, th.canA);
+        if (!th.canA) { seenOff = true; expect(off.y).toBe(0); } else seenOn = true;
+        th.move(0, -24);
+      } });
+      expect(seenOff, `again ${again}`).toBe(true);
+      expect(seenOn, `again ${again}`).toBe(true);
+      expect(scoreRun(run.t).facts.contact).toBe(false);
+    }
+  }, 60000);
 });
 
 // A localStorage stand-in for Node.

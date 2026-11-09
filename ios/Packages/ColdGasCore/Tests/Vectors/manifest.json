@@ -15,7 +15,7 @@
   },
   {
    "path": "coach.json",
-   "sha256": "05c74049e85e80639230ccb50b650c18e9cf765d7b35615350acbf11c7e20487",
+   "sha256": "bb786ea422b884f47fa5adce9843d43859f46f24cf3ea93c9b3e8012abdce92d",
    "bytes": 443680
   },
   {
@@ -80,8 +80,8 @@
   },
   {
    "path": "input/thumb-show-aim.json",
-   "sha256": "49cb93d56fc335923650d116fb63a25969c1e36b852ce54d390c63c91b2d68e6",
-   "bytes": 71078
+   "sha256": "165bcbefe8cedc939227c32fa5237184921d6b3e9ef49bda5dd032c8248a4faf",
+   "bytes": 71328
   },
   {
    "path": "input/thumb-show-hold.json",
@@ -90,8 +90,8 @@
   },
   {
    "path": "input/thumb-show-lapse-tilt.json",
-   "sha256": "d170cd95c7ab8c06a9b203c3d24f006e3d1cb8dc7d06ba4f650bfaa90ee53b2f",
-   "bytes": 72608
+   "sha256": "05cd288f783f7a5813e3cb502808298a8fb4d7aa49c96fca887ea87168f2853c",
+   "bytes": 73359
   },
   {
    "path": "input/thumb-show-tap-hold.json",

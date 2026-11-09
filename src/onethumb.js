@@ -72,6 +72,44 @@ const AIM_ACC = 6, FLANK_T = 2, FLANK_PAD = 0.6, FLANK_TOP = 0.8;
 const HOLD_K = 0.07, HOLD_ROLL = (3 * 2) / (1.6 * 4.6), HOLD_TAU = 1.8;
 const AIM_RING = 6, AIM_TGO = 0.6, AIM_GAIN = 3, AIM_BANK = 0.55;
 const bx = { x: 0, y: 0, z: 0 }, X1 = { x: 1, y: 0, z: 0 };
+// 0165: along the run (the Show) the slide is a place too. `refA` is predict's touchdown along the car's nose (LAND holds
+// no line along the run, so the prediction is the place), read until the slide first leaves the dead zone up or down.
+// X px moves it X / AIM_PX_PER_M m (up = further), kept AIM_RING m either side of the mark and never shorter than the
+// row's far edge plus a car and ROW_MARGIN. The pitch closes the gap over the time to go (2·err / (tGo² · PITCH_ACC), a
+// gain fitted on tests/unit/thumb-mastery.test.js's sweeps and scripts/human-phone.mjs's careful and sloppy thumbs:
+// stiffer moved more but set careful thumbs down tilted), saturating at a full slide, and is out by PITCH_FLOOR m up
+// (a pitched set-down costs the wheels' sync and the tilt). It acts only once the brake has turned the fall (in free
+// fall predict reads the brake as starting now, ≈11 m short) and only while it can act both ways: off every roof (over
+// one LAND holds ROOF_HOLD and predict reads short), and shorter has room (`shortRoom`). A further it could take
+// earlier, with no way back, left sloppy thumbs 6 m long.
+const PITCH_ACC = 5.5, SHORT_TOP = 1, PITCH_FLOOR = 2.5;
+const SHOW_END = COURSES.show.rowFar - CAR.halfL - ROW_MARGIN;   // the nearest a shorter place may be (z)
+// The Show's roofs the car hasn't passed yet and is over, or will be over sideways when it passes them: is its floor still
+// clear of them (+ SHORT_TOP) when its back is past the last? (The no-slide flight passes beside the row's last two cars.)
+function shortRoom(c, h) {
+  const boxes = COURSES.show.boxes, hw = CAR.halfW + FLANK_PAD, hl = CAR.halfL + FLANK_PAD;
+  let roof = -Infinity, end = Infinity;
+  const tAll = Math.max(0, (c.pos.z - (COURSES.show.rowFar - hl)) / Math.max(0.5, -c.vel.z)), xEnd = c.pos.x + c.vel.x * tAll;
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i];
+    if (b.minZ - hl >= c.pos.z) continue;   // passed
+    if (Math.min(Math.abs(c.pos.x), Math.abs(xEnd)) >= b.maxX + hw && Math.sign(c.pos.x) === Math.sign(xEnd)) continue;   // beside it
+    roof = Math.max(roof, b.maxY); end = Math.min(end, b.minZ - hl);
+  }
+  if (roof === -Infinity) return true;
+  const tPass = (c.pos.z - end) / Math.max(0.5, -c.vel.z);
+  return h + Math.min(0, c.vel.y) * tPass > roof + SHORT_TOP;
+}
+// 0165: is the car's footprint over a parked roof now? (LAND holds it over one, ROOF_HOLD, so predict's touchdown, which
+// knows only the ground, reads short there.)
+function overRoof(c) {
+  const boxes = COURSES.show.boxes;
+  for (let i = 0; i < boxes.length; i++) {
+    const b = boxes[i];
+    if (Math.abs(c.pos.x) < b.maxX + CAR.halfW && c.pos.z > b.minZ - CAR.halfL && c.pos.z < b.maxZ + CAR.halfL) return true;
+  }
+  return false;
+}
 // A point's side in the car's frame: + = the car's right (the pad's sight's +x).
 function sideOf(x, z, f) { return z * f.x - x * f.z; }
 export function flankAhead(c, ax) {
@@ -117,19 +155,23 @@ export function thumbStage(run, released) {
 }
 
 export function createOneThumb() {
-  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, wait: false, slid: false };
+  const st = { held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false };
   const pr = newPrediction();
   const aim = { x: 0, y: 0 };
   return {
     // Pointer events: `pressed` latches a tap shorter than a tick until the next sample reads it.
-    down() { st.held = true; st.pressed = true; st.ax = 0; st.ay = 0; st.ref = NaN; st.slid = false; },
-    up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; st.slid = false; },
+    down() { st.held = true; st.pressed = true; st.ax = 0; st.ay = 0; st.ref = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
+    up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
     // The held thumb's slide from where it pressed, CSS px (+x right, +y up the glass).
     move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx; st.ay = dy / THUMB.aimPx; } },
-    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.slid = false; },
+    reset() { st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; },
     // 0164: where the sideways slide is measured from (m, the car's right +, along the car's own side axis), NaN
     // before this hold could aim.
     get ref() { return st.ref; },
+    // 0165: where the up/down slide is measured from (m along the car's nose), NaN before this hold could aim.
+    get refA() { return st.refA; },
+    // 0165: whether the up/down slide can act this tick (markOffset's `canA`).
+    get canA() { return st.canA; },
     // The held thumb's sideways slide, CSS px, as far as it counts (a full slide): where the pad draws the ink dot.
     get slidePx() { return Math.max(-1, Math.min(1, st.ax)) * THUMB.aimPx; },
     get held() { return st.held; },
@@ -183,15 +225,21 @@ export function createOneThumb() {
         // it dropped at 6–7 m/s. A press takes the aim back from where the car is.
         if (st.held) st.landing = true;
         if (st.landing) out.level = 1;
+        // 0165: the brake has turned the fall (the sink is 0.5 m/s past its peak): from here predict's touchdown is
+        // the flight's (in free fall it reads the brake as starting now, ≈11 m short on the Show).
+        const sink = -c.vel.y;
+        if (sink > st.pk) st.pk = sink;
+        else if (st.pk > 4 && sink < st.pk - 0.5) st.braked = true;
+        // Whether the up/down slide can act now, held or not (the sight draws the mark along the run only then).
+        st.canA = run.course !== 'show' || (st.braked && (rowBehind(run, c) || (!overRoof(c) && shortRoom(c, c.pos.y - SPEC.comHeight))));
         if (st.held) {
           // AIM: only roof up (a roll command upside down would stop LAND's roll-out), faded out over
-          // the set-down; on the Show along the run only once the row is well behind.
+          // the set-down; on the Show along the run only once the brake has turned the fall, off the roofs (0165).
           up(c, uw);
           const h = c.pos.y - SPEC.comHeight;
           const k = Math.max(0, Math.min(1, (h - THUMB.aimFloor) / THUMB.aimFade));
           if (uw.y > 0.94 && k > 0) {
             const clear = rowBehind(run, c);
-            if (clear) out.pitch = k * THUMB.aimPitch * shape(st.ay);
             // Sideways: anywhere, unless the slide would carry the car in against a parked flank on the
             // way down (the Show). LAND holds a floor over the roofs it is above, but low beside the row a
             // slide back in met the semi's corner (scripts/human-phone.mjs); flankAhead projects it.
@@ -232,6 +280,28 @@ export function createOneThumb() {
               // The push: the slide's, plus the bank the car already has (the lift leans with it).
               if (flankAhead(c, roll * -fw.z * AIM_ACC + 9.81 * uw.x)) roll = 0;
             }
+            // 0165: along the run, a place (see PITCH_ACC). It used to be a pitch held only once the row was 2.5 m
+            // behind: on the Show that was a few ticks under 2.5 m up, so the slide up or down did nothing at all.
+            let pitch = 0;
+            if (run.course !== 'show') {
+              if (clear) pitch = k * THUMB.aimPitch * shape(st.ay);   // the Wall: no row, the slide is the pitch (as 0121)
+            } else if (st.canA) {
+              const predA = pr.landX * fw.x + pr.landZ * fw.z;
+              if (!st.slidA || st.refA !== st.refA) st.refA = predA;
+              const sy = shape(st.ay);
+              if (sy !== 0) st.slidA = true;
+              if (st.slidA) {
+                const pa = COURSES.show.pad.x * fw.x + COURSES.show.pad.z * fw.z;
+                const off = sy === 0 ? 0 : (Math.max(-1, Math.min(1, st.ay)) * THUMB.aimPx) / AIM_PX_PER_M;
+                let want = off >= 0 ? Math.max(st.refA, Math.min(st.refA + off, pa + AIM_RING)) : Math.min(st.refA, Math.max(st.refA + off, pa - AIM_RING));
+                want = Math.max(want, Math.min(st.refA, SHOW_END * fw.z));
+                const err = want - predA, tGo = Math.max(AIM_TGO, pr.tLand);
+                pitch = Math.max(-THUMB.aimPitch, Math.min(THUMB.aimPitch, (2 * err) / (tGo * tGo * PITCH_ACC)));
+                pitch *= Math.max(0, Math.min(1, (h - PITCH_FLOOR) / THUMB.aimFade));
+                if (Math.abs(pitch) < 0.02) pitch = 0;
+              }
+            }
+            out.pitch = pitch;
             st.live = !st.wait;
             out.roll = roll;
           }
@@ -253,14 +323,17 @@ export const AIM_PX_PER_M = 6, AIM_R = 44;
 const mfw = { x: 0, y: 0, z: 0 };
 // 0164: `ref` (a thumb's `ref`, NaN for none) is where the slide measures sideways from, so the sight lays the mark out
 // sideways from the same place: a thumb held on the dot then lands on it, and the dot stays put while it gets there.
-export function markOffset(c, pr, course, out = { x: 0, y: 0, m: 0 }, ref = NaN) {
+// 0165: along the run the mark is laid out from `refA` (a thumb's `refA`, NaN for none: from `pr`), and drawn only as far
+// while the slide can act on it (`canA`, a thumb's `canA`), so the dot never asks for what the thumb can't do. `m` stays
+// the whole miss.
+export function markOffset(c, pr, course, out = { x: 0, y: 0, m: 0 }, ref = NaN, refA = NaN, canA = true) {
   const pad = (COURSES[course] || COURSES.show).pad;
   forward(c, mfw);
   const ez = pad.z - pr.landZ, ex = pad.x - pr.landX;
-  const along = ez * mfw.z + ex * mfw.x, side = ref === ref ? sideOf(pad.x, pad.z, mfw) - ref : ez * mfw.x - ex * mfw.z;
-  let x = side * AIM_PX_PER_M, y = -along * AIM_PX_PER_M;
+  const along = refA === refA ? pad.z * mfw.z + pad.x * mfw.x - refA : ez * mfw.z + ex * mfw.x, side = ref === ref ? sideOf(pad.x, pad.z, mfw) - ref : ez * mfw.x - ex * mfw.z;
+  let x = side * AIM_PX_PER_M, y = canA ? -along * AIM_PX_PER_M : 0;
   const d = dhypot(x, y, 0);
   if (d > AIM_R) { x *= AIM_R / d; y *= AIM_R / d; }
-  out.x = x; out.y = y; out.m = dhypot(side, along, 0);   // 0164: the miss as the dot shows it
+  out.x = x; out.y = y; out.m = dhypot(side, along, 0);   // 0164: the miss (0165: the whole of it along, drawn or not)
   return out;
 }
