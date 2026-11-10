@@ -1,7 +1,7 @@
 ---
 id: 0172
 title: The first-run card opens with the goal in one line, before the thumb controls
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: engagement
