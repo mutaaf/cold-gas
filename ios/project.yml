@@ -28,6 +28,10 @@ targets:
       - path: ColdGas/Resources/Stages
         type: folder
         buildPhase: resources
+      # The release notes (release-notes/README.md): the What's new modal reads <MARKETING_VERSION>.md.
+      - path: release-notes
+        type: folder
+        buildPhase: resources
       - path: Packages/ColdGasCore/Tests/Vectors/dmath.json
         buildPhase: resources
       - path: Packages/ColdGasCore/Tests/Vectors/engine-spike.json
