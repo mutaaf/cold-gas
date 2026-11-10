@@ -476,6 +476,8 @@ export function inputList() {
     // One-thumb on the Wall: a tap and held again, the slide, and a thumb lifted mid-curl and never put back (a stall).
     { name: 'thumb-wall-hold', course: 'wall', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({ landAt: 'again', relandAfter: 200 }) },
     { name: 'thumb-wall-aim', course: 'wall', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({ aim: 50, wait: 200 }) },
+    // 0177: pressed again in the air 1.25 s after the tap, then the slide onto the sight (the quick read and the hold's floor).
+    { name: 'thumb-wall-again-aim', course: 'wall', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({ landAt: 'again', relandAfter: 300, aim: 50 }) },
     { name: 'thumb-wall-stall', course: 'wall', scheme: 'thumb', tier: 'assist', level: 'standard', script: thumbScript({ neverTap: true, liftAt: 0.6 }) },
     // Classic touch, Pro: the stick and the pedals on the Show, the Wall and the Lineup.
     { name: 'touch-show-pro', course: 'show', scheme: 'classic', tier: 'pro', level: 'standard', script: touchScript({ trick: [60, 40, 20, -18], liftBrake: true }) },

@@ -90,7 +90,7 @@ const REF_STEADY = 2, REF_WIN = 24, REF_WINS = 2, AIM_UY_SLID = 0.8, AIM_LOW = 0
 // 0.4 too far on the 0.75 s line) and acts on its first roof-up tick. Its roll is never less, the way slid, than the bank
 // LAND's own hold would fly (a roll switches the hold off, and a weaker one let the drift carry on: −8 px went 0.5 m
 // right). The Show keeps the settle: its tapped thumb reaches, and its inward wait for the semi is tuned on it.
-const REF_LEAK = 0.2, HOLD_BANK = 0.2;
+const REF_LEAK = 0.2, HOLD_BANK = 0.2, QUICK_MIN = 0.5;
 const bx = { x: 0, y: 0, z: 0 }, X1 = { x: 1, y: 0, z: 0 };
 // 0165: along the run (the Show) the slide is a place too. `refA` is predict's touchdown along the car's nose (LAND holds
 // no line along the run, so the prediction is the place), read until the slide first leaves the dead zone up or down.
@@ -314,6 +314,10 @@ export function createOneThumb() {
                 }
                 roll = k * HOLD_ROLL * bank;
                 if (Math.abs(roll) < 0.05) roll = 0;   // under 0.05 LAND holds the line itself
+                // 0177 review: that hold's `ref` is an estimate (≈ 1 m either way), so it doesn't fly to it: a thumb back in
+                // the middle, or a slide the ring leaves under QUICK_MIN m to move, hands the line back to LAND's own hold
+                // (flown to `ref`, a 0.1 s twitch landed 1 m off, once 0.7 m the other way; the ring's edge, 0.26 m inward).
+                if (quick && (sx === 0 || Math.abs(want - st.ref) < QUICK_MIN)) roll = 0;
               }
             }
             if (roll !== 0 && run.course === 'show' && !clear) {

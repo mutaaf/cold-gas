@@ -297,8 +297,21 @@ describe('on the Wall, a tapped thumb\'s slide acts as early as a held one\'s, a
     for (const { px, lat } of rows) {
       expect(lat, `${px} px`).toBeGreaterThanOrEqual(top - 0.3);
       top = Math.max(top, lat);
-      if (px > 0) expect(lat, `${px} px`).toBeGreaterThanOrEqual(none - 0.3);
+      if (px > 0) expect(lat, `${px} px`).toBe(none);   // past the ring already: an outward slide leaves LAND's hold be (review: it pulled 0.26 m in)
       if (px < 0) expect(lat, `${px} px`).toBeLessThanOrEqual(none + 0.3);
+    }
+  }, 120000);
+
+  it('a slide let back to the middle keeps what it moved, the way slid, never the other way (review)', () => {
+    // Slid from its first aimable tick for 0.1–0.6 s, then centred: LAND's own hold from there, not a fly to the estimate.
+    for (const again of [0.75, 1, 1.5]) {
+      const none = fly(0, again).t.lateral;
+      for (const ticks of [24, 72, 144]) {
+        let live = -1;
+        const run = flyThumb({ course: 'wall', again, slide: (r, th) => { if (live < 0 && th.aimLive) live = r.tick; th.move(live >= 0 && r.tick - live < ticks ? -48 : 0, 0); } });
+        expect(run.t.lateral, `again ${again} s, ${ticks} ticks`).toBeLessThanOrEqual(none + 0.05);
+        expect(scoreRun(run.t).facts.contact).toBe(false);
+      }
     }
   }, 120000);
 

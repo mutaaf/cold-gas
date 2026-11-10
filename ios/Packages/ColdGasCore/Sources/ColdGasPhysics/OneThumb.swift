@@ -40,7 +40,7 @@ let AIM_RING = 6.0, AIM_TGO = 0.6, AIM_GAIN = 3.0, AIM_BANK = 0.55
 let REF_STEADY = 2.0, REF_WIN = 24, REF_WINS = 2, AIM_UY_SLID = 0.8, AIM_LOW = 0.5, AIM_LOW_H = 2.0
 // 0177: a hold pressed again in the air on the Wall reads the place with REF_LEAK of the fall through the bank, acts on
 // its first roof-up tick, and never rolls less than LAND's own hold the way slid (src/onethumb.js says why).
-let REF_LEAK = 0.2, HOLD_BANK = 0.2
+let REF_LEAK = 0.2, HOLD_BANK = 0.2, QUICK_MIN = 0.5
 /// A point's side in the car's frame: + = the car's right (the pad's sight's +x).
 @inline(__always) func sideOf(_ x: Double, _ z: Double, _ f: V3) -> Double { z * f.x - x * f.z }
 /// The tallest parked roof on the Show (the first of the tallest); an inward slide waits until it is behind (0164).
@@ -210,6 +210,7 @@ public final class OneThumb {
                             }
                             roll = k * HOLD_ROLL * bank
                             if abs(roll) < 0.05 { roll = 0 }
+                            if quick && (sx == 0 || abs(want - ref_) < QUICK_MIN) { roll = 0 }   // 0177 review: back to LAND's hold
                         }
                     }
                     if roll != 0 && run.course == "show" && !clear {
