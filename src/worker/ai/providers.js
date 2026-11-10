@@ -75,12 +75,16 @@ export async function listModels(provider, key) {
 async function* streamEdge({ env, model, messages, signal, maxTokens = 400 }) {
   const body = { messages, stream: true, max_tokens: maxTokens };
   if (/gemma-4|qwen3|glm/.test(model)) body.chat_template_kwargs = { enable_thinking: false };
-  const res = await env.AI.run(model, body, { signal });
+  // env.AI is Prompter (github.com/mutaaf/prompter), the shared AI gateway. An AbortSignal can't cross a
+  // service binding, so the timeout cancels the stream here instead.
+  const res = await env.AI.run(model, body);
   const reader = res.getReader();
+  signal?.addEventListener('abort', () => reader.cancel().catch(() => {}), { once: true });
   const dec = new TextDecoder();
   let buf = '', inTokens = 0, outTokens = 0, neurons = 0;
   for (;;) {
     const { done, value } = await reader.read();
+    if (signal?.aborted) throw Object.assign(new Error('timed out'), { name: 'AbortError' });
     if (done) break;
     buf += dec.decode(value, { stream: true });
     let nl;
@@ -96,7 +100,7 @@ async function* streamEdge({ env, model, messages, signal, maxTokens = 400 }) {
       if (d.reasoning_content) yield { type: 'reasoning', text: d.reasoning_content };
       const t = d.content ?? j.response;
       if (t) yield { type: 'text', text: t };
-      if (j.usage) { inTokens += j.usage.prompt_tokens || 0; outTokens += j.usage.completion_tokens || 0; neurons += j.usage.neurons || 0; }
+      if (j.usage) { inTokens = j.usage.prompt_tokens || inTokens; outTokens = j.usage.completion_tokens || outTokens; neurons = j.usage.neurons || neurons; } // cumulative: keep the last
     }
   }
   return { inTokens, outTokens, neurons };
@@ -158,6 +162,7 @@ export function streamJudge({ provider, env, key, model, system, user, signal, m
 // A short, key-free message for the player when a provider call fails.
 export function describeError(provider, err) {
   if (err?.userFacing) return err.message;
+  if (/^Prompter: .*used up/.test(String(err?.message))) return 'The free judges are resting until 00:00 UTC. Bring your own key to keep judging.';
   const label = PROVIDERS[provider]?.label || provider;
   const status = err?.status;
   if (status === 401 || status === 403) return `${label} rejected the key.`;
