@@ -21,8 +21,8 @@ export const MEDAL_LABEL = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 //    median 92.7 (silver) and p90 95.7 (gold); sloppy aiming median 90.3; the classic two-thumb scheme and
 //    the keyboard population median 73; the reference 97.7.
 //  - The Wall, Assist, SIM_VERSION 31 judging (0182: the mark counts): scripts/naive-players.mjs (32 naive strategies,
-//    60–74.3, 24 of them Clean) and a thumb that never finds the mark (≈ 78) earn the bronze, a clean landing (72, was 84
-//    on the old scale's 84–88); careful thumbs that slide onto the mark median 96.7; the reference 97.7.
+//    60–74.3: the 24 that land Clean earn the bronze, 8 Rough landings don't; all 32 did at the old 84–88) and a thumb
+//    that never finds the mark (≈ 78) earn the bronze, a clean landing (72, was 84); careful thumbs that slide onto the mark median 96.7; the reference 97.7.
 //  - The Lineup, Assist: the reference kickflip is 92; a clean 360 by hand is the bronze.
 //  - Pro and Advanced: the panel pays ×1.08 and ×1.15 (judge.js TIERS) for flying with less computer;
 //    the bars rise by less than that (ESTIMATE: the same flight is harder to fly, so not the full factor).

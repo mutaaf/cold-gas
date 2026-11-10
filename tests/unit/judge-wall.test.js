@@ -40,7 +40,7 @@ describe('on the Wall, the mark counts (0182)', () => {
   });
 
   it('the Wall reference loses nothing (96.0 before); the Show and the Lineup score exactly as before', () => {
-    expect(scoreRun(ref).total).toBeGreaterThanOrEqual(95.5);
+    expect(scoreRun(ref).total).toBe(97.7);   // the mark now pays: 96.0 → 97.7
     expect(scoreRun(fly('show').t).total).toBe(97.3);
     expect(scoreRun(fly('lineup').t).total).toBe(91.7);
   });

@@ -324,6 +324,10 @@ describe('on the Wall, a tapped thumb\'s slide acts as early as a held one\'s, a
       for (let px = -48; px < 0; px += 8) best = Math.max(best, scoreRun(fly(px, again).t).total);
       expect(best - none, `again ${again} s: none ${none}, best ${best}`).toBeGreaterThanOrEqual(5);
     }
+    // And the coach weighs a Wall miss inside 7 m by what it cost, as on the Show (it named only misses past 7 m).
+    const run = fly(-40, 2.25), card = scoreRun(run.t);
+    expect(card.facts.padMiss).toBeGreaterThan(4); expect(card.facts.padMiss).toBeLessThanOrEqual(7);
+    expect(coach(run.inputLog, 'wall', card).items.map((i) => i.id)).toContain('mark');
   }, 180000);
 
   it('the held thumb and the Show fly exactly as before (the change is the Wall\'s hold pressed in the air)', () => {

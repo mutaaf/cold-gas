@@ -307,8 +307,8 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
     }
     if let touch = f.touch, !t.contact {
         let aim = say.aim, Aim = aim.prefix(1).uppercased() + aim.dropFirst()
-        let cost = scored ? markCost(t) : 0
-        if namesMark(touch.padMiss, cost, show: show, drill: drill) {
+        let cost = wall && !drill ? markCost(t) : 0   // 0182: the Wall's miss is weighed as the Show's
+        if namesMark(touch.padMiss, cost, show: wall, drill: drill) {
             let (title, where_, _) = markMiss(touch, show: show)
             // On the Show the finding weighs what it cost: a 6–7 m miss (≈ 15–17 points) outranks a tilt or the gas,
             // never a crash-grade braking or carry fix (8–10).

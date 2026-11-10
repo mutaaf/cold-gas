@@ -138,7 +138,7 @@ export function pointerText(id, ctx, flight = null) {
 // 0156: one thumb's clean line names the step after this flight. A touchdown inside the mark ring the slide is for
 // (3.5 m, the mark Daily's bar, src/daily.js) names its distance and the next step the score shows: on the Show the
 // mark is full marks inside 3.5 m (src/sim/judge.js SHOW_PRECISION), so Pro (one thumb is Assist only, and the coach's
-// own clean fix is "Try Pro"); on the Wall precision still pays to 0.8 m, so the 2 m ring first, then Pro. The miss is
+// own clean fix is "Try Pro"); the Wall reads the same rings since 0182 (it paid to 0.8 m and named the 2 m ring first). The miss is
 // read at the card's 0.1 m (judge.js r1), so the line and the Daily agree at the edges. Short of the ring, the slide.
 export const THUMB_MARK_RING = 3.5;
 function thumbClean(ctx, flight) {
@@ -146,8 +146,7 @@ function thumbClean(ctx, flight) {
   const miss = Math.round(raw * 10) / 10;
   if (!(miss <= THUMB_MARK_RING)) return 'Clean. Next: hold in the air and slide onto the amber dot to land on the mark';
   const d = miss.toFixed(1);
-  return ctx.course === 'show' || miss <= 2 ? `Clean, ${d} m from the mark. Next: try Pro and fly the landing yourself`
-    : `Clean, ${d} m from the mark. Next: inside the 2 m ring, then try Pro`;
+  return `Clean, ${d} m from the mark. Next: try Pro and fly the landing yourself`;
 }
 
 // What "fixed" reads as: the number that moved, from the card.
