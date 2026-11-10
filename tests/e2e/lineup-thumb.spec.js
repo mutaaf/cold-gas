@@ -6,9 +6,14 @@ import { test, expect } from '@playwright/test';
 // drives, lifts at the line, rolls 360° and lands on its own (src/onethumb.js).
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 
+// The phone page is a fixture-free newPage: it is closed in afterEach, or its live game keeps rendering in the worker's
+// browser for the rest of the shard (on #292 that doubled e2e 3/4 and timed out obs.spec.js).
+let page;
+test.afterEach(async () => { await page?.close(); page = null; });
+
 test('the Lineup on a phone: the title, the how-to card and the run all fly one thumb, and a held thumb lands it', async ({ browser }) => {
   test.slow();
-  const page = await browser.newPage(PHONE);
+  page = await browser.newPage(PHONE);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/coldgas/?gfx=low');
