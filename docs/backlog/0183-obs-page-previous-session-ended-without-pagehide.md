@@ -1,12 +1,12 @@
 ---
 id: 0183
 title: New in 67823c7: page unclean "previous session ended without pagehide"
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: tech-health
 created: 2026-11-10
-pr:
+pr: 290
 by: operator
 obs: ca54b0d16a38@67823c7
 ---
