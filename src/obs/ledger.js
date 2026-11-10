@@ -30,6 +30,10 @@ const tierIdx = (t) => Math.max(0, TIER_IDS.indexOf(t));
 // 30 fps cap's p95 reads ≈48 ms with a little jitter, src/obs/frames.js isSlow; 0044). Sessions from before
 // `slow` was recorded are judged on p95 alone.
 const slowSession = (x) => (x.frames || 0) >= MIN_FRAMES && x.p95 > P95_BAD && !(typeof x.slow === 'number' && x.slow < SLOW_OK);
+// A session that never said goodbye (no pagehide) while it was on screen: a crashed renderer, an out-of-memory kill,
+// a hang. One that went hidden first left the normal way: a phone freezes a background tab and may drop it without
+// pagehide (iOS Safari, Chrome's tab discarding), and its last state was saved as it hid (0183).
+export const diedOnScreen = (x) => !!x && x.ended === false && !x.hidden && (x.frames || 0) > MIN_FRAMES;
 const fatal = (x) => !!x && ((x.ctxLost || 0) > 0 || (x.crashes?.physics || 0) > 0 || (x.crashes?.render || 0) + (x.crashes?.webgl || 0) + (x.crashes?.frame || 0) > 0);
 
 export function emptyLedger() { return { v: 1, sessions: [], breakers: {}, recoveries: [] }; }
@@ -69,7 +73,7 @@ export function chooseBoot({ sessions = [], deviceTier = 'high', forced = null }
   // One bad session is enough to step down.
   if (fatal(last)) return down(last.ctxLost ? 'the last session lost the GPU' : `the last session crashed in ${Object.keys(last.crashes || {}).filter((k) => last.crashes[k] > 0).join(', ') || 'render'}`);
   const recent = past.slice(-3);
-  if (recent.length >= 2 && recent.filter((x) => x.ended === false && (x.frames || 0) > MIN_FRAMES).length >= 2) return down('two of the last three sessions ended without closing (a killed tab)');
+  if (recent.length >= 2 && recent.filter(diedOnScreen).length >= 2) return down('two of the last three sessions ended on screen without closing (a killed tab)');
   // Too slow: the resolution steps down first and the look stays; a tier drop waits for the floor (0097).
   const floor = SCALES.length - 1;
   if (slowSession(last) && (last.scale ?? 0) >= floor) return down(`its p95 frame was ${last.p95} ms even at ${Math.round(SCALES[floor] * 100)} % resolution`);
