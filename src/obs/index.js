@@ -200,6 +200,8 @@ function createObs() {
     // Vite's own event for a failed dynamic import (a chunk gone after a deploy, a dropped network).
     on(globalThis, 'vite:preloadError', (e) => { o.lazyFailed(e.payload || new Error('preload failed')); });
     on(globalThis, 'pagehide', () => { leave(); if (o.session) { o.session.ended = true; saveSession(); } o.flush('pagehide'); });
+    // Back from the back-forward cache: the same session is live again, so it hasn't ended (0183).
+    on(globalThis, 'pageshow', (e) => { if (e?.persisted && o.session) { o.session.ended = false; o.session.hidden = false; saveSession(); } });
     // Hidden is how a phone tab leaves for good as often as not (frozen, then discarded with no pagehide): record it,
     // and clear it when the page is back on screen.
     on(document, 'visibilitychange', () => {
@@ -317,7 +319,7 @@ function createObs() {
     frames: summary(o.frames), hist: Array.from(o.frames.hist), nb: NB,
     breakers: Object.values(o.breakers).map((b) => ({ name: b.name, state: b.state, retryIn: b.retryIn(), trips: b.snapshot().trips, lastError: b.snapshot().lastError })),
     recoveries: o.recoveries.slice(), lastRecovery: o.recoveries[o.recoveries.length - 1] || null,
-    pastSessions: (o.ledger?.sessions || []).slice(0, -1).slice(-5).map((x) => ({ tier: x.tier, p95: x.p95, frames: x.frames, ended: x.ended, scale: x.scale })),
+    pastSessions: (o.ledger?.sessions || []).slice(0, -1).slice(-5).map((x) => ({ tier: x.tier, p95: x.p95, frames: x.frames, ended: x.ended, hidden: !!x.hidden, scale: x.scale })),
     beacons: o.beacons, sending: o.sendEnabled,
   });
 

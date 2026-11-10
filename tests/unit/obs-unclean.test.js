@@ -37,12 +37,14 @@ function fakePage(ledger) {
   vi.stubGlobal('addEventListener', target(handlers.win).addEventListener);
   vi.stubGlobal('removeEventListener', () => {});
   vi.stubGlobal('fetch', async () => ({ status: 200 }));
-  const fire = (where, type) => { for (const fn of handlers[where].get(type) || []) fn({ type }); };
+  const fire = (where, type, extra = {}) => { for (const fn of handlers[where].get(type) || []) fn({ type, ...extra }); };
   return {
     stored: () => JSON.parse(store.get(LEDGER_KEY)),
     hide: () => { doc.visibilityState = 'hidden'; fire('doc', 'visibilitychange'); },
     show: () => { doc.visibilityState = 'visible'; fire('doc', 'visibilitychange'); },
-    pagehide: () => fire('win', 'pagehide'),
+    pagehide: (persisted = false) => fire('win', 'pagehide', { persisted }),
+    pageshow: (persisted) => fire('win', 'pageshow', { persisted }),
+    ledger: () => JSON.parse(store.get(LEDGER_KEY)),
   };
 }
 async function boot(ledger) {
@@ -76,5 +78,27 @@ describe('0183: the page records how it left', () => {
     expect(last().hidden).toBe(false);
     page.pagehide();
     expect(last().ended).toBe(true);
+  });
+
+  it('end to end: a long session hidden and dropped is quiet at the next boot; one dropped on screen is reported', async () => {
+    const play = (obs) => { for (let i = 0; i < 700; i++) obs.frame(i * 16.7, 16.7, 2, 4, 6, 0); };
+    const { page, obs } = await boot(null);
+    play(obs); page.hide();                                     // backgrounded, then the phone drops the tab
+    const next = await boot(page.ledger());
+    expect(next.page.ledger().sessions.at(-2)).toMatchObject({ ended: false, hidden: true });
+    expect(next.page.ledger().sessions.at(-2).frames).toBeGreaterThan(600);
+    expect(next.unclean()).toBe(0);
+    play(next.obs); next.page.hide(); next.page.show();         // back on screen, then killed there
+    const after = await boot(next.page.ledger());
+    expect(after.unclean()).toBe(1);
+  });
+  it('a page back from the back-forward cache is live again, so a later death on screen still counts', async () => {
+    const { page, obs } = await boot(null);
+    for (let i = 0; i < 700; i++) obs.frame(i * 16.7, 16.7, 2, 4, 6, 0);
+    page.pagehide(true); page.hide();
+    expect(page.ledger().sessions.at(-1).ended).toBe(true);
+    page.show(); page.pageshow(true);
+    expect(page.ledger().sessions.at(-1)).toMatchObject({ ended: false, hidden: false });
+    expect((await boot(page.ledger())).unclean()).toBe(1);
   });
 });
