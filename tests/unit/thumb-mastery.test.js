@@ -39,6 +39,7 @@ function flyThumb({ slide = null, holdAt = 'tap', course = 'show', again = -1 } 
     inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
     stepRun(run, inp);
   }
+  run.tapT = tapT;   // 0177: when the ledge tap was
   return run;
 }
 // A careful thumb: on the sight's dot, re-read every 0.3 s (the pad's own markOffset).
@@ -258,6 +259,56 @@ describe('one thumb, a held sideways slide moves the touchdown the way it points
       expect(card.facts.contact, `${course} ${late}`).toBe(false);
     }
   }, 180000);
+});
+
+// 0177 (critique 2026-11-09-2150 §1): on the Wall the tapped thumb (pressed again in the air) came roof up 14 m up and
+// falling at 16 m/s, still banked, so its sideways place read the fall as drift and the settle waited until 4 m up: its
+// slide first acted 2.5–2.9 s after the tap (held: 1.9 s), and −24 and −48 px landed in the same place, 3.3–3.7 m from no
+// slide. Now that hold reads the place with the fall taken out and acts on its first roof-up tick.
+describe('on the Wall, a tapped thumb\'s slide acts as early as a held one\'s, and a full slide reaches (0177)', () => {
+  const firstRoll = (run) => {   // s after the tap: [tick, throttle, brake, steer, pitch, roll, …]
+    const e = run.inputLog.find((r) => r[0] > run.tapT && r[5] !== 0);
+    return e ? (e[0] - run.tapT) / 240 : Infinity;
+  };
+  const fly = (px, again) => flyThumb({ course: 'wall', again, slide: (r, th) => th.move(px, 0) });
+  it('pressed again at 0.75, 1.0, 1.5 and 2.0 s: the first roll ≤ 0.3 s after the held thumb\'s, and −48 px moves ≥ 1.6× −24 and ≥ 6 m, inside the 7 m ring', () => {
+    const held = firstRoll(fly(-48, -1));
+    expect(held).toBeLessThan(2);   // 1.90 s
+    for (const again of [0.75, 1, 1.5, 2]) {
+      const none = fly(0, again).t.lateral, half = fly(-24, again), full = fly(-48, again), label = `again ${again} s`;
+      expect(firstRoll(full), label).toBeLessThanOrEqual(held + 0.3);
+      const mHalf = none - half.t.lateral, mFull = none - full.t.lateral;
+      expect(mFull, label).toBeGreaterThanOrEqual(1.6 * mHalf);
+      expect(mFull, label).toBeGreaterThanOrEqual(0.75 * 8);
+      for (const r of [half, full]) {
+        expect(Math.abs(r.t.lateral), label).toBeLessThanOrEqual(7);   // the pad's outer ring (src/sim/courses.js)
+        const card = scoreRun(r.t);
+        expect(card.facts.contact, label).toBe(false);
+        expect(card.verdict, label).not.toBe('Rough landing');
+      }
+    }
+  }, 240000);
+
+  it('pressed again at 0.75 s (the line the 0164 sweep doesn\'t fly): −48 … +48 px in 8 px steps, monotonic and never the wrong way', () => {
+    const rows = [];
+    for (let px = -48; px <= 48; px += 8) rows.push({ px, lat: fly(px, 0.75).t.lateral });
+    const none = rows.find((r) => r.px === 0).lat;
+    let top = -Infinity;
+    for (const { px, lat } of rows) {
+      expect(lat, `${px} px`).toBeGreaterThanOrEqual(top - 0.3);
+      top = Math.max(top, lat);
+      if (px > 0) expect(lat, `${px} px`).toBeGreaterThanOrEqual(none - 0.3);
+      if (px < 0) expect(lat, `${px} px`).toBeLessThanOrEqual(none + 0.3);
+    }
+  }, 120000);
+
+  it('the held thumb and the Show fly exactly as before (the change is the Wall\'s hold pressed in the air)', () => {
+    // A slide held from the tap on the Wall, and a tapped thumb on the Show: the logs 0164 shipped (#282) still come out.
+    const wall = fly(-24, -1), show = flyThumb({ again: 1.5, slide: (r, th) => th.move(-24, 0) });
+    expect(firstRoll(wall)).toBeCloseTo(1.9, 1);
+    expect(wall.t.lateral).toBeCloseTo(0.6, 1);
+    expect(show.t.lateral).toBeCloseTo(-6.2, 1);
+  }, 60000);
 });
 
 // 0165 (critique 2026-11-05-1300 §2): on the Show the pitch was gated until the row was 2.5 m behind, a few ticks under
