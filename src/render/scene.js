@@ -470,7 +470,15 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
   const keyOffset = new THREE.Vector3(), snap = new THREE.Vector3(), ORIGIN = new THREE.Vector3();
   const lightRot = new THREE.Matrix4(), lightInv = new THREE.Matrix4();
   const texel = (sc.right - sc.left) / key.shadow.mapSize.x;
-  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, warm: null, warmGate: () => true, rocket: null, film: null, aa: null, aaKind: '', resize, reshape, render, setCourse, titlePose, setBodies, setLook, bloom, setPixelScale, restoreGL, onResize };
+  // The deck look (0187, src/render/deck-look.js): k = how much the car is on the Wall's deck, every frame before
+  // render. The bloom's threshold eases from the course's to the deck's and the look dims its strips. No-op on a
+  // course without a deck and under an outside look.
+  function setDeck(k) {
+    if (external || !current?.deck) return;
+    if (bloom) { const t0 = current.look.bloom.threshold; bloom.threshold = t0 + (current.deck.bloomThreshold - t0) * k; }
+    current.setDeck(k);
+  }
+  const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, warm: null, warmGate: () => true, rocket: null, film: null, aa: null, aaKind: '', resize, reshape, render, setCourse, titlePose, setBodies, setLook, setDeck, bloom, setPixelScale, restoreGL, onResize };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';
