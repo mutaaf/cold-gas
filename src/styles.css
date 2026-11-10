@@ -113,6 +113,7 @@ button { font: inherit; color: inherit; cursor: pointer; -webkit-tap-highlight-c
 .spec dt { font: 500 11px/1 var(--text); letter-spacing: 0.24em; text-transform: uppercase; color: var(--ink-3); }
 .spec dd { margin: 0; font: 400 15px/1 var(--mono); color: var(--ink); }
 .fineprint { margin: 22px 0 0; font-size: 11px; color: var(--ink-3); max-width: 46ch; }
+.fineprint a { color: var(--ink-2); text-underline-offset: 2px; }
 
 /* The title's backing (0069): its text sits on the live 3D scene (the plume, the ring, the car), so the block carries
    a feathered scrim of the page's own ground, under the text and over the canvas: every title label holds 4.5:1 on

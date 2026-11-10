@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COLD GAS Guide: How to Play, Controls and Tips</title>
+<meta name="description" content="How to play COLD GAS: fly a roadster up the Wall on suction, let go inverted, jet over five parked cars, stick the landing. Controls, scoring, tips.">
+<link rel="canonical" href="https://mutaafaziz.com/coldgas/guide/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<meta name="theme-color" content="#05070c">
+<style>
+  @font-face { font-family: 'Michroma'; src: url('fonts/michroma-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+  @font-face { font-family: 'Geist Variable'; src: url('fonts/geist-latin-wght-normal.woff2') format('woff2-variations'); font-weight: 100 900; font-display: swap; }
+  :root { --ink: #f5f6f8; --ink-2: rgba(245, 246, 248, 0.76); --ink-3: rgba(245, 246, 248, 0.56); --hair: rgba(245, 246, 248, 0.16);
+    --bg: #05070c; --signal: #e8323c; --amber: #ffbf5a; --display: 'Michroma', 'Geist Variable', sans-serif;
+    --text: 'Geist Variable', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif; color-scheme: dark; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--ink-2); }
+  body { font: 16px/1.65 var(--text); padding: max(24px, env(safe-area-inset-top)) 16px 64px;
+    background: radial-gradient(120% 60% at 50% -10%, #101a2c 0%, var(--bg) 60%) no-repeat, var(--bg); }
+  main { max-width: 42rem; margin: 0 auto; }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { font: 400 12px/1 var(--display); letter-spacing: 0.42em; color: var(--ink-3); text-transform: uppercase; text-decoration: none; }
+  .play { display: inline-block; font: 600 15px/1 var(--text); letter-spacing: 0.04em; color: #fff; background: var(--signal);
+    text-decoration: none; padding: 13px 22px; border-radius: 999px; }
+  .play:hover, .play:focus-visible { background: #c8222c; }
+  h1 { font: 400 clamp(26px, 6vw, 36px)/1.2 var(--display); color: var(--ink); letter-spacing: 0.02em; margin: 36px 0 10px; }
+  h2 { font: 400 15px/1.3 var(--display); color: var(--ink); letter-spacing: 0.08em; text-transform: uppercase; margin: 40px 0 10px;
+    padding-top: 18px; border-top: 1px solid var(--hair); }
+  h3 { color: var(--ink); font-weight: 600; font-size: 17px; margin: 24px 0 6px; }
+  p, li { margin: 0 0 12px; }
+  ul { padding-left: 20px; margin: 0 0 12px; }
+  strong { color: var(--ink); font-weight: 600; }
+  a { color: var(--ink); }
+  kbd { font: 500 13px/1 ui-monospace, monospace; color: var(--ink); border: 1px solid var(--hair); border-radius: 4px; padding: 2px 5px; white-space: nowrap; }
+  .lead { font-size: 18px; color: var(--ink); }
+  .table { overflow-x: auto; margin: 0 0 16px; border: 1px solid var(--hair); border-radius: 8px; }
+  table { border-collapse: collapse; width: 100%; min-width: 34rem; font-size: 14px; line-height: 1.5; }
+  th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--hair); }
+  th { color: var(--ink); font-weight: 600; }
+  tr:last-child td { border-bottom: 0; }
+  .end { margin-top: 40px; text-align: center; }
+  .small { color: var(--ink-3); font-size: 14px; margin-top: 32px; border-top: 1px solid var(--hair); padding-top: 16px; }
+</style>
+</head>
+<body>
+<main>
+  <div class="top"><a class="brand" href="../">Cold Gas</a><a class="play" href="../">Play COLD GAS</a></div>
+
+  <h1>COLD GAS Player Guide</h1>
+  <p class="lead">COLD GAS is a 3D stunt game in your browser: you drive a roadster up a curved wall on suction, let go upside down, fire cold-gas nitrogen thrusters to clear a row of parked vehicles, roll upright in the air and land on a target pad. Every run is simulated at 240 Hz and scored by a deterministic judge; a three-member AI panel then talks about what you did.</p>
+
+  <h2>What it is</h2>
+  <p>Inspired by the October 2026 roadster thruster-jump reveal, COLD GAS is an independent fan game built around one stunt. Your car weighs about 2,150 kg before its gas, with two rear motors making 1,000 kW (1,341 hp). Four fans in the rear diffuser and deployable skirts pull up to 46 kN (10,341 lbf) of suction, enough to hold the car on a vertical wall and under an inverted ledge. Its tanks hold 600 L of nitrogen, 297 kg (655 lb) at 690 bar (10,008 psi), feeding ten cold-gas nozzles: four downward lift jets behind the wheels, four rear thrust jets (80 kN together) and two yaw jets on the front fenders.</p>
+  <p>The title screen offers three scored events. <strong>The Show</strong> is one flight: climb the Wall, hang inverted, let go, boost over five parked vehicles, roll upright and land on the pad. <strong>The Wall</strong> is the climb on its own: a 170-degree curl whose lip sits 27.7 m up, an inverted ledge, a release, a roll-out and a landing on the pad below. <strong>The Lineup</strong> has no ramp at all: lift off flat ground on thrust, roll 360 degrees over five parked EVs and land on the pad 28 m down the course. Under <strong>More ways to play</strong> you will find <strong>Free Drive</strong>, with four roads modelled on Stelvio, Transfagarasan, Big Sur and the Atlantic Road plus a seeded <strong>Endless</strong> road, and the <strong>Sandbox</strong>, an arena where you build ramps and loops, collect power-ups and take on AI side quests. <strong>Practice</strong> drills sit beside the Jump button. None of these extra modes is scored.</p>
+
+  <h2>How to start</h2>
+  <p>Open <a href="../">COLD GAS</a>, pick <strong>The Show</strong>, <strong>The Wall</strong> or <strong>The Lineup</strong>, and press <strong>Jump</strong>. If you want to see a clean flight first, press <strong>Watch the reference</strong>: the autopilot flies the event through the same physics and you get its scorecard. On your first Jump, a <strong>How to fly</strong> card lists each phase of the flight and the control for it on the device you are using. You can reopen it any time from <strong>Learn</strong> on the title or from the pause menu.</p>
+  <p>After each run the results sheet shows your verdict, the judges' scores and a <strong>Next run</strong> pointer from the coach that names the single fix worth the most points. Press <strong>Retry</strong> (<kbd>R</kbd>) to jump again at once, or open <strong>Practice</strong> to rehearse one phase on its own.</p>
+
+  <h2>Controls</h2>
+  <p>COLD GAS plays with a keyboard, a touch screen or a gamepad, and switches to whichever you touched last.</p>
+  <div class="table">
+  <table>
+    <thead><tr><th>Phase</th><th>Keyboard</th><th>Touch (One-thumb)</th><th>Touch (Classic)</th><th>Gamepad</th></tr></thead>
+    <tbody>
+      <tr><td>Ground</td><td><kbd>Up</kbd> / <kbd>W</kbd> go, <kbd>Down</kbd> / <kbd>S</kbd> brake, <kbd>Left</kbd> / <kbd>Right</kbd> steer, <kbd>Shift</kbd> boost</td><td>Hold the pad to climb, let go to stop</td><td>Stick steers, <strong>GO</strong> and <strong>BRAKE</strong> pedals</td><td><strong>RT</strong> go, <strong>LT</strong> brake, left stick steers</td></tr>
+      <tr><td>Ledge</td><td><kbd>Space</kbd> releases (lifts on the Lineup)</td><td>Tap the pad to let go</td><td><strong>RELEASE</strong> (<strong>LIFT</strong> on the Lineup)</td><td><strong>A</strong></td></tr>
+      <tr><td>Air attitude</td><td><kbd>Left</kbd> / <kbd>Right</kbd> roll, <kbd>Up</kbd> / <kbd>Down</kbd> pitch, <kbd>Q</kbd> / <kbd>E</kbd> yaw</td><td>Hold the pad; the computer rolls you out. Slide onto the amber dot to aim</td><td>Stick rolls and pitches</td><td>Left stick rolls and pitches, right stick yaws</td></tr>
+      <tr><td>Air jets</td><td><kbd>F</kbd> boost, <kbd>Space</kbd> lift, <kbd>Shift</kbd> land</td><td>Hold the pad to carry, level and brake</td><td>Hold <strong>BOOST</strong>, <strong>LIFT</strong> or <strong>LAND</strong></td><td><strong>RB</strong> boost, <strong>RT</strong> or <strong>A</strong> lift, <strong>LT</strong> or <strong>B</strong> land</td></tr>
+      <tr><td>Shortcuts</td><td><kbd>P</kbd> pause, <kbd>R</kbd> retry, <kbd>H</kbd> home, <kbd>G</kbd> ghost, <kbd>L</kbd> view, <kbd>I</kbd> HUD, <kbd>U</kbd> units, <kbd>`</kbd> for nerds</td><td>Top bar and <strong>Menu</strong></td><td>Top bar and <strong>Menu</strong></td><td><strong>Start</strong> pauses; <strong>Y</strong> toggles AI drive in Free Drive</td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p>In the <strong>Advanced</strong> flight tier you work all ten valves by hand in the air, with keys laid out like the car: <kbd>Q</kbd>, <kbd>E</kbd>, <kbd>Z</kbd> and <kbd>C</kbd> open single down-jets, <kbd>W</kbd>, <kbd>S</kbd>, <kbd>A</kbd> and <kbd>D</kbd> open pairs, and <kbd>Space</kbd> opens all four; <kbd>V</kbd>, <kbd>B</kbd>, <kbd>N</kbd> and <kbd>M</kbd> open the rear nozzles one by one and <kbd>F</kbd> opens the whole row; <kbd>1</kbd> and <kbd>3</kbd> fire the fender yaw jets; holding <kbd>Shift</kbd> opens every key only halfway. On a touch screen, Advanced shows an outline of the car with a pad on every nozzle.</p>
+
+  <h2>How scoring and progress work</h2>
+  <p>Every jump is scored out of 100 by one deterministic function, the same code on your device and on the server. Three judges mark your telemetry from 0 to 10, each with different priorities: <strong>The Engineer</strong> cares most about the landing and hitting the mark, <strong>The Coordinator</strong> rewards the spectacle (the climb, the inverted hang, the rotation and the clearance over the roofs), and <strong>The Designer</strong> balances the landing and the mark against style and the gas you have left. Damage costs points, and a car 60% damaged or worse is <strong>Wrecked</strong> whatever else happened.</p>
+  <p>Your flight tier decides how much the flight computer helps and multiplies each judge's mark (capped at 10):</p>
+  <ul>
+    <li><strong>Assist (x1.00):</strong> the computer holds the rates, limits the crawl up the Wall and the carry over the row, and <strong>LAND</strong> rolls you out, levels the car and brakes the fall. If you are late, it lands for you.</li>
+    <li><strong>Pro (x1.08):</strong> rate control without LAND: you roll out by the attitude dial and brake at the BRAKE line yourself.</li>
+    <li><strong>Advanced (x1.15):</strong> no computer at all in the air; ten valves by hand, a key or a pad per nozzle.</li>
+  </ul>
+  <p>A clean landing earns one of five verdicts: <strong>Survived</strong> under 55, <strong>Rough landing</strong> from 55, <strong>Clean</strong> from 72, <strong>Stuck it</strong> from 84 and <strong>Perfect 10</strong> from 92. Crashes, falls and contact with the parked row get their own verdicts. Bronze, silver and gold medals are kept per event and per tier on your device. Each UTC day also brings one <strong>Daily</strong> objective, the same for everyone, with a streak counted on your device. To post to the leaderboard you enter three initials; the server re-scores the run from its telemetry and refuses anything that does not fit your input log or the car's physical limits.</p>
+
+  <h2>Tips and strategy</h2>
+  <ul>
+    <li><strong>Crawl up the Wall.</strong> On The Show and The Wall, climb at about 20 km/h with small steering corrections. The suction fans need about 1.5 seconds to spool to 90% of what is asked, and suction falls to half once the skirts lift 8 mm off the surface, so a fast or twitchy climb slides off the side.</li>
+    <li><strong>Wait for the ledge before you let go.</strong> Crawl all the way onto the straight, inverted 5.5 m ledge, then release. Let go before about 95% of the curl and the deck is still under you.</li>
+    <li><strong>Carry about 9.5 m/s over the row.</strong> On The Show, hold <strong>BOOST</strong> right after the release until the cue goes, about a third of a second. The far roofs, including a 4.11 m tall Semi cab, need roughly 9.5 m/s, and every extra m/s carries you about 4 m further past the mark.</li>
+    <li><strong>Be roof-up well above 12 m.</strong> Roll out straight after the release. The coach flags an upright below 12 m, because the roll-out has eaten the height the brake needed.</li>
+    <li><strong>Keep gas for the bottom.</strong> The regulator gives full thrust only while tank pressure stays above 55% of full, about two-thirds of the gas. After that the tanks blow down and every jet weakens; below about 40% left they struggle to stop a fast fall. Boost less, and brake once, hard.</li>
+    <li><strong>Brake at the BRAKE line.</strong> On Pro and Advanced, hold <strong>LIFT</strong> from the BRAKE line on the descent tape or higher. Full landing marks need a sink rate of 0.9 m/s or softer, under 1.5 degrees of tilt and all four wheels down within 20 ms.</li>
+    <li><strong>Aim with one thumb.</strong> On One-thumb Assist, keep holding the pad once the car is roof-up and slide onto the amber dot. On The Show, a touchdown inside 3.5 m of the mark earns full precision marks.</li>
+  </ul>
+
+  <h2>Settings and accessibility</h2>
+  <p>Ground handling has three levels. <strong>Easy</strong> softens the stick and throttle, catches slides, and on a road brakes for the bend ahead and nudges you back into your lane. <strong>Standard</strong> is speed-sensitive steering with stability and traction control. <strong>Advanced</strong> is direct steering with analog pedals, and in Free Drive it turns stability control off, lets you choose traction control and ABS, and adds an <kbd>H</kbd> handbrake. On a touch screen the <strong>Controls</strong> sheet also picks <strong>One-thumb</strong> or <strong>Classic</strong>, a <strong>Right</strong> or <strong>Left</strong> hand layout, <strong>Tilt to steer</strong> and <strong>Haptics</strong>. With <strong>Adapt to me</strong> on, three crashes in a row on Pro or Advanced step you down a tier for the next run (with an Undo), and clean landings offer a harder step. Three crashes in a row also bring an offer of <strong>Rookie mode</strong>: Easy driving with Assist.</p>
+  <p>Every control has a keyboard path, HUD text is never smaller than 11 px and holds 4.5:1 contrast, and colour on the HUD only ever means state (ink for nominal, amber for caution, red for warning). If your system asks for reduced motion, camera shakes and big transitions are switched off. Under <strong>Judges</strong> you can keep the free panel, an open model on Cloudflare's edge,, or paste an Anthropic, OpenAI, xAI or Gemini key; either way the <strong>judges' theatre</strong> shows the model call live, with its real model, tokens and cost.</p>
+
+  <h2>Privacy and ads</h2>
+  <p>COLD GAS has no accounts and no third-party trackers; its code and fonts are served from its own address. Medals, streaks, ghosts, settings and an optional AI key stay in your browser's storage. A key you paste is sent with your own judging requests only, used for that one call and never stored or logged on the server. A small anonymous health report counts errors, frame times and which features were used, with no identifier, IP address or user agent kept.</p>
+  <p>The web game shows ads on its menus and results, never during a countdown, a run, a drill, Free Drive or the Sandbox. The title's banner appears only after the title has been up for 4 seconds and is removed the moment you start; a between-runs ad never follows your first run and comes at most once every 3 minutes; and the rewarded ad plays only when you ask for one, buying fresh words from the panel, never a score. Read the <a href="../privacy/">COLD GAS privacy page</a> and the <a href="/ads/privacy/">ads policy</a> for details.</p>
+
+  <h2>Frequently asked questions</h2>
+  <h3>Does the AI panel decide my score?</h3>
+  <p>No. Your score and verdict come entirely from the deterministic scoring function reading your flight's telemetry. The AI panel only writes the commentary, from the scorecard that function produced.</p>
+  <h3>Why do my thrusters feel weaker near the ground?</h3>
+  <p>Because the tanks are emptying. The regulator holds full thrust until tank pressure drops to 55% of full; past that, pressure and thrust fall with every kilogram of gas you spend. Short boosts and one late, firm braking burn leave more push for the touchdown.</p>
+  <h3>How does the leaderboard check scores?</h3>
+  <p>When you post a run with your three initials, the server checks your input log, confirms that every number in the telemetry sits inside the car's physical envelope, reads your flight tier from the logged inputs rather than taking your word for it, and scores the run with the same function the game uses.</p>
+  <h3>Can I play without an AI key, or when the AI is busy?</h3>
+  <p>Yes. The free judges are on by default, and if no model answers, the panel speaks from built-in lines. The score never waits for the commentary.</p>
+
+  <p class="end"><a class="play" href="../">Play COLD GAS</a></p>
+  <p class="small">COLD GAS is an independent fan game, not affiliated with any automaker. All vehicles are our own designs.</p>
+</main>
+</body>
+</html>

@@ -2,7 +2,7 @@
 
 **Ten thrusters. One roll. Stick the landing.**
 
-Play: https://mutaafaziz.com/coldgas/
+Play: https://mutaafaziz.com/coldgas/ · How to play: [the player's guide](https://mutaafaziz.com/coldgas/guide/) ([source](public/guide/index.html))
 
 A keynote-minimal 3D stunt game inspired by the October 2026 roadster thruster-jump reveal. You
 drive a roadster up a kicker and fire ten cold-gas nozzles to clear a row of parked EVs. Then
