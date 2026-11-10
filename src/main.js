@@ -1067,7 +1067,7 @@ function syncThumb(run, c) {
   // 0129: the tap on the ledge was taken: the car drives itself out to the lip (≈ 0.9 s) and lets go there.
   const going = stage_ === 'ledge' && (thumb.driving || thumb.pending);
   const lineup = run.course === 'lineup';
-  const word = going ? 'going' : lineup && thumb.lifting && !thumb.rolled ? (stage_ === 'fly' && Math.abs(run.t.rollAccum) > 0.3 ? 'rolling' : 'lifting')
+  const word = going ? 'going' : lineup && thumb.lifting && !thumb.rolled && (run.phase === 'air' || run.phase === 'drive') ? (stage_ === 'fly' && Math.abs(run.t.rollAccum) > 0.3 ? 'rolling' : 'lifting')
     : stage_ === 'climb' && held ? 'climbing' : stage_ === 'fly' && held ? 'flying' : stage_;
   if (word !== thumbLast.word) {
     const [v, a] = (lineup && THUMB_WORDS_LINEUP[word]) || THUMB_WORDS[word] || ['', ''];
@@ -1077,7 +1077,7 @@ function syncThumb(run, c) {
   }
   // Not holding while the descent leaves green: the pad asks for the thumb (amber, a pulse).
   // 0140: not once the thumb has held LAND this flight (LAND stays on to the ground; a press only aims).
-  const warn = stage_ === 'fly' && !held && !thumb.landing && landing.status() !== 'green';
+  const warn = stage_ === 'fly' && !held && !thumb.landing && landing.status() !== 'green' && !(lineup && !thumb.rolled);   // 0181: not in the computer's roll
   if (warn !== thumbLast.warn) { thumbPad.toggleAttribute('data-warn', warn); thumbLast.warn = warn; }
   // The ring: how far up the curl; in the air, how far down to the ground.
   const k = lineup && stage_ === 'climb' ? Math.min(1, Math.max(0, (c.pos.z - COURSES.lineup.start.z) / (LINEUP_LINE - COURSES.lineup.start.z)))
@@ -1234,7 +1234,7 @@ function thumbCues(run, c, v) {
   if (!held && performance.now() < S.nudge.cueUntil && thumbStage(run, S.released) === 'climb') return ui.cue_('Hold the pad', 600);   // 0123
   if (run.course === 'lineup') {   // 0181
     if (run.phase === 'drive' && !thumb.lifting) return ui.cue_(held || v > 2 ? 'Driving · it lifts at the line' : 'Hold the pad to drive', 600);
-    if (!thumb.rolled) return ui.cue_(Math.abs(run.t.rollAccum) > 0.3 ? 'Rolling 360° · hold to land' : 'Lifting you over the row', 500);
+    if (!thumb.rolled && (run.phase === 'air' || run.phase === 'drive')) return ui.cue_(Math.abs(run.t.rollAccum) > 0.3 ? 'Rolling 360° · hold to land' : 'Lifting you over the row', 500);
   }
   if (run.phase === 'drive') return ui.cue_(held || v > 2 ? 'Climbing · let go to stop' : 'Hold the pad to climb', 600);
   if (run.phase === 'ramp' && !S.released && run.t.progress >= THUMB.tapAt && (thumb.driving || thumb.pending)) return ui.cue_('Letting go · out to the lip', 600);

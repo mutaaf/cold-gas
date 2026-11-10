@@ -105,15 +105,17 @@ export const deviceTitle = (ctx) => (thumbOn(ctx) ? 'Touch · one thumb' : ctx.d
 // ({ id, … }), `flight`: the coach's readFlight (for the numbers), `card`: the run's card.
 export function pointerText(id, ctx, flight = null) {
   const b = brakeAct(ctx), assist = ctx.tier === 'assist';
+  // 0181: the Lineup on one thumb has no let-go (and a thumb told to "let go" lifts it off the pad): LAND comes on as the roll ends.
+  const after = thumbOn(ctx) && ctx.course === 'lineup' ? 'as the roll ends' : 'right after you let go';
   switch (id) {
     case 'fell-off': return thumbOn(ctx) ? 'Stay on the Wall: hold the pad and let it crawl; let go to stop' : `Crawl up the Wall: ${ctl(ctx, 'drive')} gently, about 20 km/h, small steering`;
     case 'no-release': return `Let go on the ledge: ${ctl(ctx, 'release')} when you’re upside down`;
     case 'early-release': return `Wait for the ledge: ${ctl(ctx, 'release')} only once you’re upside down on it`;
     case 'short': return thumbOn(ctx) ? 'Over the row: hold the pad right after you let go' : `Boost over the row: ${ctl(ctx, 'boost')} right after you let go`;
-    case 'no-brake': return assist ? `Brake on the way down: ${ctl(ctx, 'land')} right after you let go` : `Brake on the way down: ${ctl(ctx, b)} at the BRAKE line`;
-    case 'late-land': return `Land sooner: ${ctl(ctx, 'land')} right after you let go`;
+    case 'no-brake': return assist ? `Brake on the way down: ${ctl(ctx, 'land')} ${after}` : `Brake on the way down: ${ctl(ctx, b)} at the BRAKE line`;
+    case 'late-land': return `Land sooner: ${ctl(ctx, 'land')} ${after}`;
     case 'late-brake': {
-      if (assist) return `Land sooner: ${ctl(ctx, 'land')} right after you let go`;
+      if (assist) return `Land sooner: ${ctl(ctx, 'land')} ${after}`;
       const at = flight && flight.needH > 0 ? `, ${Math.ceil(flight.needH)} m up` : '';
       return `Brake sooner: ${ctl(ctx, b)} at the BRAKE line${at}`;
     }

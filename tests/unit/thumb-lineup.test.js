@@ -10,6 +10,8 @@ import { scoreRun } from '../../src/sim/judge.js';
 import { createOneThumb, thumbStage } from '../../src/onethumb.js';
 import { flyThumbLineup, flyTouch, stream } from '../../scripts/lib/daily-reach.mjs';
 import { OBJECTIVES, evaluate } from '../../src/daily.js';
+import { howtoRows, pointerText } from '../../src/pointer.js';
+import { COURSES } from '../../src/sim/courses.js';
 
 const CLEAN = /Perfect 10|Stuck it|Clean|Rough landing/;
 const WRECK = /Wrecked|Rolled over|Crash/;
@@ -64,6 +66,21 @@ describe('the Lineup on one thumb (0181)', () => {
     expect(stop.car.pos.z).toBeLessThan(COURSES_LINE);
     const again = scoreRun(flyHeld(-20, true).t);
     expect(again.verdict).toMatch(/Stuck it|Perfect 10/);
+  });
+
+  it('a nervous thumb let go just short of the line, stopped and pressed again, drives up before it lifts and clears the row', () => {
+    for (const z of [-3, -2.8, -2.7, -2.6, -2.4, -2.1, -1.5]) {
+      const run = flyHeld(z, true), card = scoreRun(run.t);
+      expect(run.t.contact, `let go at ${z}`).toBe(false);
+      expect(card.verdict, `let go at ${z}`).toMatch(/Stuck it|Perfect 10|Clean/);
+      expect(run.t.landZ, `let go at ${z}`).toBeGreaterThan(COURSES.lineup.lineupEnd);   // past the row, not short of it
+    }
+  });
+
+  it('the how-to card and the pointer speak the Lineup on one thumb (no let-go)', () => {
+    const ctx = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'lineup' };
+    expect(howtoRows(ctx).map((r) => r.phase)).toEqual(['Drive', 'Lift & roll', 'Land', 'Aim & brake']);
+    for (const id of ['no-brake', 'late-land']) expect(pointerText(id, ctx)).not.toMatch(/let go/);
   });
 
   it('a thumb lifted at the line, or in the air and never pressed again, still lands (the lift commits; auto-LAND)', () => {

@@ -231,10 +231,13 @@ export function createOneThumb() {
       let lineupLevel = true;
       if (run.course === 'lineup' && stage !== 'landed') {
         const L = REVEAL.lineup, lc = COURSES.lineup;
-        if (stage === 'climb' && !st.lifting) {
+        // A hop on the run-up (a hard dead-man brake) is still the run-up: the kickflip starts only from the line.
+        if (!st.lifting) {
           const vh = dhypot(c.vel.x, 0, c.vel.z);
           out.steer = Math.max(-1, Math.min(1, c.pos.x * 0.25 + steer));
-          if (c.pos.z > lc.liftOffZ + LIFT_EARLY && (vh > LIFT_MIN_V || st.held)) st.lifting = true;   // never drive on into the row
+          // Past the line it commits once moving: a held thumb that stopped there drives up to LIFT_MIN_V first (a lift
+          // from a standstill came down short of the row, or on it: the review of 0181).
+          if (c.pos.z > lc.liftOffZ + LIFT_EARLY && vh > LIFT_MIN_V) st.lifting = true;
           else if (!st.held) { out.brake = 1; return out; }
           else {
             out.throttle = vh < L.speed ? 1 : 0;
@@ -295,7 +298,7 @@ export function createOneThumb() {
         else if (st.pk > 4 && sink < st.pk - 0.5) st.braked = true;
         // Whether the up/down slide can act now, held or not (the sight draws the mark along the run only then). Once open
         // it stays open for the flight: the roofs are behind by then, and an edge read each tick made the dot blink.
-        st.canA = run.course !== 'show' || st.canA || (st.braked && (rowBehind(run, c) || (!overRoof(c) && shortRoom(c, c.pos.y - SPEC.comHeight))));
+        st.canA = run.course === 'lineup' ? c.pos.z > COURSES.lineup.lineupEnd + 1 : run.course !== 'show' || st.canA || (st.braked && (rowBehind(run, c) || (!overRoof(c) && shortRoom(c, c.pos.y - SPEC.comHeight))));
         if (st.held) {
           // AIM: only roof up (a roll command upside down would stop LAND's roll-out), faded out over
           // the set-down; on the Show along the run only once the brake has turned the fall, off the roofs (0165).
