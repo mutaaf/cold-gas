@@ -98,7 +98,7 @@ final class FlightUITests: XCTestCase {
     func testWhatsNewCalloutsGoToTheFeature() {
         for (id, title) in [("whatsnew-go-howTo", "How to play"), ("whatsnew-go-settings", "Settings")] {
             let a = launch(["-whatsNew"])
-            XCTAssertTrue(a.otherElements["whatsnew"].waitForExistence(timeout: 20), "the modal")
+            XCTAssertTrue(a.buttons["whatsnew-dismiss"].waitForExistence(timeout: 20), "the modal")
             shot("whatsnew")
             let card = a.buttons[id]
             XCTAssertTrue(card.waitForExistence(timeout: 5), id)
@@ -107,14 +107,14 @@ final class FlightUITests: XCTestCase {
             shot("whatsnew-" + id)
             a.buttons["Done"].tap()
             XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 5))
-            XCTAssertFalse(a.otherElements["whatsnew"].exists, "the modal closed")
+            XCTAssertFalse(a.buttons["whatsnew-dismiss"].exists, "the modal closed")
             a.terminate()
         }
         let a = launch(["-whatsNew"])
         XCTAssertTrue(a.buttons["whatsnew-dismiss"].waitForExistence(timeout: 20))
         a.buttons["whatsnew-dismiss"].tap()
         XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 5))
-        XCTAssertFalse(a.otherElements["whatsnew"].exists)
+        XCTAssertFalse(a.buttons["whatsnew-dismiss"].exists)
     }
 
     /// How to play says the game on its first screen and folds the rest, one open at a time.
