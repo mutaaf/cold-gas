@@ -39,13 +39,17 @@ public enum Fold {
     public static let minPanel = 300.0
 
     /// `bounds`: the window's size at origin 0; `safe`: its safe-area insets; `regions`: the division regions
-    /// (active or not) in the same coordinates.
-    public static func layout(width: Double, height: Double, safe: LInsets, regions: [LRect]) -> FoldLayout {
+    /// (active or not) in the same coordinates. `folded`: a division region is ACTIVE (the phone is bent, not flat):
+    /// the Duo on device (2026-11-10) reports a flat inner screen held upright as an inactive horizontal region, and
+    /// that is the open phone, edge to edge, not tabletop. Only a bent horizontal fold makes the screen-and-controller.
+    public static func layout(width: Double, height: Double, safe: LInsets, regions: [LRect], folded: Bool = true) -> FoldLayout {
         let all = LRect(x: 0, y: 0, w: width, h: height)
         let safeRect = LRect(x: safe.left, y: safe.top, w: width - safe.left - safe.right, h: height - safe.top - safe.bottom)
-        // The fold: a region that crosses the window edge to edge one way.
+        // The fold: a region inside the window that crosses it edge to edge one way. Closed on its side (678×466) the
+        // Duo still reported the inner screen's band (669 tall, past the window's edge): that is no fold here.
         let fold = regions.first { r in
-            (r.h >= height - 1 && r.w < width / 2) || (r.w >= width - 1 && r.h < height / 2)
+            guard r.x >= -1, r.y >= -1, r.maxX <= width + 1, r.maxY <= height + 1 else { return false }
+            return (r.h >= height - 1 && r.w < width / 2) || (r.w >= width - 1 && r.h < height / 2)
         }
         guard let f = fold else { return FoldLayout(spread: .single, scene: all, controls: safeRect, fold: nil) }
         if f.h >= height - 1 {
@@ -53,7 +57,9 @@ public enum Fold {
             // to edge across it and the controls overlay the safe area. The crease is reported, never drawn.
             return FoldLayout(spread: .full, scene: all, controls: safeRect, fold: f)
         }
-        // Horizontal fold (tabletop): the scene above, the controls below.
+        // Horizontal fold, flat (the open phone held upright): one continuous screen, as above.
+        if !folded { return FoldLayout(spread: .full, scene: all, controls: safeRect, fold: f) }
+        // Horizontal fold, bent (tabletop): the scene above, the controls below.
         let top = LRect(x: 0, y: 0, w: width, h: f.y)
         let bottom = LRect(x: safe.left, y: f.maxY, w: width - safe.left - safe.right, h: height - safe.bottom - f.maxY)
         guard top.h - safe.top >= minPanel * 0.6, bottom.h >= minPanel * 0.6 else { return FoldLayout(spread: .single, scene: all, controls: safeRect, fold: f) }

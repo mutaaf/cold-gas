@@ -41,6 +41,22 @@ struct FoldLayoutTests {
         let odd = [LRect(x: 10, y: 10, w: 20, h: 20), LRect(x: 455.5, y: 0, w: 40, h: 669)]
         #expect(Fold.layout(width: 951, height: 669, safe: LInsets(bottom: 34, right: 84), regions: odd).spread == .full)
     }
+    // On the Duo (2026-11-10): open and held upright, flat, the band is horizontal but inactive. That's the open
+    // phone, edge to edge; only a bent fold (tabletop) splits it into a screen and a controller.
+    @Test func uprightFlatIsOpen() {
+        let band = [LRect(x: 0, y: 455.5, w: 669, h: 40)]
+        let flat = Fold.layout(width: 669, height: 951, safe: LInsets(bottom: 34), regions: band, folded: false)
+        #expect(flat.spread == .full)
+        #expect(flat.scene == LRect(x: 0, y: 0, w: 669, h: 951))
+        #expect(Fold.layout(width: 669, height: 951, safe: LInsets(bottom: 34), regions: band, folded: true).spread == .rows)
+    }
+    // On the Duo (2026-11-10): closed and on its side (678×466) it still reported the inner screen's band, 669 tall,
+    // running past the window. No fold lies outside the window.
+    @Test func closedOnItsSideIgnoresTheInnerBand() {
+        let l = Fold.layout(width: 678, height: 466, safe: LInsets(bottom: 34), regions: [LRect(x: 182.5, y: 0, w: 40, h: 669)], folded: false)
+        #expect(l.spread == .single)
+        #expect(l.fold == nil)
+    }
     // The mid-swing size no pose has (LESSONS 0075's 466×498) stays one panel, with no fold drawn.
     @Test func midSwing() {
         #expect(Fold.layout(width: 466, height: 498, safe: LInsets(), regions: []).spread == .single)

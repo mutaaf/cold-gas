@@ -64,17 +64,21 @@ final class RootViewController: UIViewController {
         }
         let safe = Launch.window != nil ? emulatedInsets(size) : view.safeAreaInsets
         var regions: [LRect] = []
+        var folded = false
         if #available(iOS 27.1, *) {
             for r in view.reservedRegions(kind: .division, options: .includeInactive) {
                 let f = view.convert(r.frame, to: view)
                 regions.append(LRect(x: f.minX, y: f.minY, w: f.width, h: f.height))
             }
+            // Active regions only: the phone is bent (tabletop, a half-open book), not lying or held flat.
+            folded = !view.reservedRegions(kind: .division).isEmpty
         }
         if regions.isEmpty, let pose = Launch.pose {
             regions = Fold.emulatedRegions(pose: pose, width: size.width, height: size.height)
+            folded = pose == "tabletop" || pose == "book"
         }
         let l = Fold.layout(width: size.width, height: size.height,
-                            safe: LInsets(top: safe.top, left: safe.left, bottom: safe.bottom, right: safe.right), regions: regions)
+                            safe: LInsets(top: safe.top, left: safe.left, bottom: safe.bottom, right: safe.right), regions: regions, folded: folded)
         if l != layoutNow {
             layoutNow = l
             stage.frame = l.scene.cg
@@ -88,7 +92,7 @@ final class RootViewController: UIViewController {
             layoutModel.controls = l.controls.cg
             layoutModel.safe = EdgeInsets(top: safe.top, leading: safe.left, bottom: safe.bottom, trailing: safe.right)
             stage.setCameraLayout(rows: l.spread == .rows, scene: l.scene.cg, controls: l.controls.cg, safeTop: safe.top)
-            print("LAYOUT \(Int(size.width))x\(Int(size.height)) \(l.spread.rawValue) scene \(l.scene) controls \(l.controls) fold \(l.fold.map(\.description) ?? "-")")
+            print("LAYOUT \(Int(size.width))x\(Int(size.height)) \(l.spread.rawValue)\(folded ? " bent" : " flat") regions \(regions.count) scene \(l.scene) controls \(l.controls) fold \(l.fold.map(\.description) ?? "-")")
         }
     }
 
