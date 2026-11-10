@@ -511,13 +511,13 @@ S.pointerHist = [];
 S.tip = '';
 function pointerCtx(course = S.run?.course || stage.course, tier = S.flyTier) {
   const device = deviceOf(lastDevice());
-  const scheme = device === 'touch' && touchSet.scheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic';
+  const scheme = device === 'touch' && touchSet.scheme === 'thumb' && tier === 'assist' ? 'thumb' : 'classic';
   return { device, scheme, tier, course };
 }
 // The words for the run on the sheet as it was flown (S.cardHow, taken when its card was decided; 0139).
 function flownCtx(how, course, tier) {
   const device = deviceOf(how.device);
-  return { device, scheme: device === 'touch' && how.scheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic', tier, course };
+  return { device, scheme: device === 'touch' && how.scheme === 'thumb' && tier === 'assist' ? 'thumb' : 'classic', tier, course };
 }
 // 0150: on a missed Daily (not yet met today) whose fix the coach would contradict (skim on one thumb), the Daily's line.
 function dailyLine(run) {
@@ -1047,7 +1047,7 @@ document.addEventListener('pointerdown', (e) => {
   if (!S.nudge.cued) { S.nudge.cued = true; S.nudge.cueUntil = now + NUDGE_CUE; }
 }, true);
 function syncScheme() {
-  const can = !!S.run && S.run.course !== 'lineup' && runTier() === 'assist';
+  const can = !!S.run && runTier() === 'assist';   // 0181: the Lineup flies one thumb too
   ui.touch.dataset.scheme = touchSet.scheme === 'thumb' && can ? 'thumb' : 'classic';
   ui.touch.dataset.hand = touchSet.hand;
   ui.touch.dataset.tier = runTier();
@@ -1057,15 +1057,20 @@ function syncScheme() {
 const THUMB_WORDS = {
   climb: ['Hold', 'Climb'], climbing: ['Holding', 'Climb'], ledge: ['Tap', 'Let go'], going: ['Letting', 'Go'], fly: ['Hold', 'Land'], flying: ['Holding', 'Land'], landed: ['', 'Stopping'],
 };
+// 0181: the Lineup's run-up is a drive to the line, and the lift-off and the roll are the computer's.
+const THUMB_WORDS_LINEUP = { climb: ['Hold', 'Drive'], climbing: ['Holding', 'Drive'], lifting: ['', 'Lifting'], rolling: ['', 'Rolling'] };
+const LINEUP_LINE = COURSES.lineup.lineupZ0 - 6.5;   // where it lifts (src/onethumb.js LIFT_EARLY)
 const thumbLast = { word: '', warn: null, arc: -1 };
 function syncThumb(run, c) {
   const stage_ = thumbStage(run, S.released);
   const held = thumb.held;
   // 0129: the tap on the ledge was taken: the car drives itself out to the lip (≈ 0.9 s) and lets go there.
   const going = stage_ === 'ledge' && (thumb.driving || thumb.pending);
-  const word = going ? 'going' : stage_ === 'climb' && held ? 'climbing' : stage_ === 'fly' && held ? 'flying' : stage_;
+  const lineup = run.course === 'lineup';
+  const word = going ? 'going' : lineup && thumb.lifting && !thumb.rolled ? (stage_ === 'fly' && Math.abs(run.t.rollAccum) > 0.3 ? 'rolling' : 'lifting')
+    : stage_ === 'climb' && held ? 'climbing' : stage_ === 'fly' && held ? 'flying' : stage_;
   if (word !== thumbLast.word) {
-    const [v, a] = THUMB_WORDS[word] || ['', ''];
+    const [v, a] = (lineup && THUMB_WORDS_LINEUP[word]) || THUMB_WORDS[word] || ['', ''];
     thumbVerb.textContent = v; thumbAct.textContent = a;
     thumbPad.dataset.stage = going ? 'going' : stage_;
     thumbLast.word = word;
@@ -1075,7 +1080,8 @@ function syncThumb(run, c) {
   const warn = stage_ === 'fly' && !held && !thumb.landing && landing.status() !== 'green';
   if (warn !== thumbLast.warn) { thumbPad.toggleAttribute('data-warn', warn); thumbLast.warn = warn; }
   // The ring: how far up the curl; in the air, how far down to the ground.
-  const k = stage_ === 'climb' || stage_ === 'ledge' ? (run.phase === 'ramp' ? wallProgress(c.pos) : 0)
+  const k = lineup && stage_ === 'climb' ? Math.min(1, Math.max(0, (c.pos.z - COURSES.lineup.start.z) / (LINEUP_LINE - COURSES.lineup.start.z)))
+    : stage_ === 'climb' || stage_ === 'ledge' ? (run.phase === 'ramp' ? wallProgress(c.pos) : 0)
     : stage_ === 'fly' ? 1 - Math.min(1, Math.max(0, c.pos.y - SPEC.comHeight) / 27) : 1;
   const q = Math.round(k * 100);
   if (q !== thumbLast.arc) { thumbArc.style.strokeDasharray = `${q} 100`; thumbLast.arc = q; }
@@ -1226,6 +1232,10 @@ function cues(run, c) {
 function thumbCues(run, c, v) {
   const held = thumb.held;
   if (!held && performance.now() < S.nudge.cueUntil && thumbStage(run, S.released) === 'climb') return ui.cue_('Hold the pad', 600);   // 0123
+  if (run.course === 'lineup') {   // 0181
+    if (run.phase === 'drive' && !thumb.lifting) return ui.cue_(held || v > 2 ? 'Driving · it lifts at the line' : 'Hold the pad to drive', 600);
+    if (!thumb.rolled) return ui.cue_(Math.abs(run.t.rollAccum) > 0.3 ? 'Rolling 360° · hold to land' : 'Lifting you over the row', 500);
+  }
   if (run.phase === 'drive') return ui.cue_(held || v > 2 ? 'Climbing · let go to stop' : 'Hold the pad to climb', 600);
   if (run.phase === 'ramp' && !S.released && run.t.progress >= THUMB.tapAt && (thumb.driving || thumb.pending)) return ui.cue_('Letting go · out to the lip', 600);
   if (run.phase === 'ramp' && !S.released) return ui.cue_(run.t.progress >= 0.92 ? 'On the ledge · tap to let go' : 'Up the curl on suction', 600);
@@ -1642,7 +1652,7 @@ function openHowto({ then = null, from = null } = {}) {
   howtoThen = then; howtoOpener = from || document.activeElement;
   const ctx = howtoCtx = pointerCtx(stage.course, S.tier);
   howtoScreen.querySelector('[data-howto-device]').textContent = deviceTitle(ctx);
-  drawHowto(ctx, !!then && ctx.device === 'touch' && ctx.scheme === 'thumb' && ctx.course !== 'lineup');
+  drawHowto(ctx, !!then && ctx.device === 'touch' && ctx.scheme === 'thumb');
   howtoScreen.querySelector('[data-howto-assist]').textContent = S.assist
     ? `Assist is on: it ${TIER_WORDS.assist.sub}. Change it any time with the Assist button.`
     : `Assist is off (${TIER_WORDS[S.tier].name}). Turn it on with the Assist button.`;

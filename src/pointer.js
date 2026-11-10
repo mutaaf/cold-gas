@@ -55,6 +55,14 @@ export function coachWords(ctx) {
 // { phase, ctl: the control as shown (a key cap), verb, what }.
 export function howtoRows(ctx) {
   const v = vocab(ctx), row = (phase, act, what) => ({ phase, verb: v[act][0], ctl: v[act][1], what });
+  if (ctx.course === 'lineup' && thumbOn(ctx)) {   // 0181: the Lineup on one thumb
+    return [
+      row('Drive', 'drive', 'Drives you down the runway; let go to stop.'),
+      { phase: 'Lift & roll', verb: 'keep holding', ctl: 'the pad', what: 'At the line it lifts you over the row and rolls 360°.' },
+      row('Land', 'land', 'Levels and brakes for you. Late? It lands for you.'),
+      { phase: 'Aim & brake', verb: 'hold, slide', ctl: 'the pad', what: 'Slide onto the amber dot to hit the mark.' },
+    ];
+  }
   if (ctx.course === 'lineup') {
     return [
       row('Drive', 'drive', `Down the runway; ${ctl(ctx, 'steer')} to steer.`),

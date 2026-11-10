@@ -9,7 +9,9 @@
 //          for every let-go thumb it comes 0.65 s after the tap, before any height trigger; as in human-phone.mjs, the
 //          'hud' / 8 m / 4 m habits collapse into that one), and, holding in the air, the thumb
 //          put on the sight's amber dot a reaction late, re-read every 0.25–0.5 s. 20 % lift the thumb once mid-climb.
-//   touch  The Lineup (no one-thumb scheme there: main.js flies it classic on touch, Assist): their own run-up speed,
+//          0181: the Lineup on one thumb too (flyThumbLineup: main.js flies it one-thumb on touch, Assist, since 0181).
+//   touch  The Lineup on two thumbs (classic touch, Assist; a phone player who picked Classic, and the population before
+//          0181, kept to compare): their own run-up speed,
 //          LIFT timed to the marker and held for their own press, the stick over until the roll-out cue says upright, then
 //          LAND; each decision a reaction late (flyTouch).
 //   pro    Pro objectives (no thumb: Pro is classic or keys): scripts/human-show.mjs's Pro population with the 1.0 cues
@@ -35,16 +37,18 @@ export function stream(seed) {
 
 export const POPULATION = {
   thumb: 'one thumb, Assist, careful (slides onto the amber dot)',
-  touch: 'two thumbs (classic touch), Assist: lift, roll by the cue, LAND, each a reaction late',
+  touch: 'two thumbs (classic touch), Assist: lift, roll by the cue, LAND, each a reaction late (not a Daily population since 0181)',
   pro: 'keys, Pro, 1.0 cues (scripts/human-show.mjs pro --cues=new), on the course the objective names',
 };
-// Which population flies an objective: Pro objectives the Pro players; the Lineup touch; the Show and the Wall one thumb.
-export const populationOf = (o) => (o.tier === 'pro' ? 'pro' : o.course === 'lineup' ? 'touch' : 'thumb');
+// Which population flies an objective: Pro objectives the Pro players; every course on Assist one thumb (0181: the Lineup
+// too, as a phone flies it).
+export const populationOf = (o) => (o.tier === 'pro' ? 'pro' : 'thumb');
 
 const pr = newPrediction(), off = { x: 0, y: 0, m: 0 }, u = { x: 0, y: 0, z: 0 }, fw = { x: 0, y: 0, z: 0 };
 
-// One one-thumb player on the Show or the Wall.
+// One one-thumb player on the Show or the Wall (the Lineup: flyThumbLineup).
 export function flyThumb(course, r) {
+  if (course === 'lineup') return flyThumbLineup(r);
   const P = { lag: 0.18 + r() * 0.25, hangWait: r.pick([0.2, 0.8, 2]), landAt: r.pick(['with-boost', 'with-boost', 'hud', 'hud', 'hud', 8, 4]),
     lapse: r() < 0.2, every: Math.round((0.25 + r() * 0.25) * 240) };
   const lagT = Math.round(P.lag * 240), press = Math.round((P.lag + 0.1) * 240);
@@ -86,6 +90,49 @@ export function flyThumb(course, r) {
     th.sample(run, released, inp);
     if ((run.phase === 'ramp' && inp.lift > 0) || run.phase === 'air') released = true;   // main.js: a lift on the deck lets go
     inp.fan = !released && (run.phase === 'ramp' || (run.phase === 'drive' && c.pos.z > -16)) ? 1 : 0;
+    stepRun(run, inp);
+  }
+  return run;
+}
+
+// 0181: one one-thumb player on the Lineup (src/onethumb.js: hold to drive, it lifts at the line and rolls one turn, the
+// thumb is LAND and the slide in the air). The thumb goes down a reaction after Go; 20 % lift it once on the run-up for
+// a second (a let-go brakes: the run-up is slower, the line commits whatever the thumb does). In the air: a third keep
+// holding through the flight, the rest let go as the car leaves the ground (a reaction after it lifts) and press again a
+// press late on the descent warning (the band leaving green) or their own habit (8 m, 4 m). Holding, the thumb goes onto
+// the sight's dot a reaction late, re-read every 0.25–0.5 s, as the Show's careful thumbs do.
+export function flyThumbLineup(r) {
+  const P = { lag: 0.18 + r() * 0.25, landAt: r.pick(['hold', 'hold', 'hud', 'hud', 'hud', 8, 4]), lapse: r() < 0.2, lapseAt: -40 + r() * 30,
+    every: Math.round((0.25 + r() * 0.25) * 240) };
+  const lagT = Math.round(P.lag * 240), press = Math.round((P.lag + 0.1) * 240);
+  const run = createRun('lineup'), th = createOneThumb();
+  let lapseT = -1, upAt = -1, landSeen = -1, holdFrom = -1, aimNext = -1, aimAt = -1, want = null;
+  while (run.phase !== 'done') {
+    const c = run.car, t = run.tick, inp = newInput();
+    if (t === lagT) th.down();
+    if (P.lapse && lapseT < 0 && t > lagT && c.pos.z > P.lapseAt) { lapseT = t; th.up(); }
+    if (lapseT >= 0 && t === lapseT + 240) th.down();
+    if (run.phase === 'air') {
+      const h = Math.max(0, c.pos.y - SPEC.comHeight);
+      predict(c, h, pr);
+      if (P.landAt !== 'hold' && upAt < 0) { upAt = t + lagT; }
+      if (upAt >= 0 && t === upAt && holdFrom < 0) th.up();
+      if (P.landAt !== 'hold' && upAt >= 0 && t > upAt && holdFrom < 0) {
+        let w = P.landAt === 'hud' ? pr.status !== 'green' : h < P.landAt && c.vel.y < 0;
+        if (pr.status !== 'green' && t > upAt + lagT) w = true;   // the descent warning (flash + buzz)
+        if (w && landSeen < 0) landSeen = t;
+        if (landSeen >= 0) holdFrom = landSeen + press;
+      }
+      if (holdFrom >= 0 && t === holdFrom && !th.held) th.down();
+      if (th.held) {
+        if (t >= aimNext) {
+          markOffset(c, pr, 'lineup', off, th.ref, th.refA, th.canA);
+          want = { x: off.x, y: -off.y }; aimAt = t + lagT; aimNext = t + P.every;
+        }
+        if (want && t >= aimAt) th.move(want.x, want.y);
+      }
+    }
+    th.sample(run, false, inp);
     stepRun(run, inp);
   }
   return run;

@@ -1,5 +1,5 @@
 // 0135: every Daily objective can be met by the players who fly its course the way they fly it (the Show and the Wall on
-// one thumb, the Lineup on two thumbs, Pro on the keys: scripts/lib/daily-reach.mjs). A small seeded sample of each
+// one thumb, the Lineup too since 0181, Pro on the keys: scripts/lib/daily-reach.mjs). A small seeded sample of each
 // population (n 40, seed 12345) flies every objective's course; each objective must be met by at least 30 % of it.
 // scripts/daily-reach.mjs prints the full table (n 150).
 import { describe, it, expect, beforeAll } from 'vitest';
@@ -16,7 +16,7 @@ describe('the Daily is in reach (0135)', () => {
     expect(rows.map((r) => r.id)).toEqual(OBJECTIVES.map((o) => o.id));
     for (const r of rows) expect(r.n).toBe(40);
     expect(populationOf(OBJECTIVES.find((o) => o.id === 'pro-wall'))).toBe('pro');
-    expect(populationOf(OBJECTIVES.find((o) => o.id === 'mark-lineup'))).toBe('touch');
+    expect(populationOf(OBJECTIVES.find((o) => o.id === 'mark-lineup'))).toBe('thumb');   // 0181
     expect(populationOf(OBJECTIVES.find((o) => o.id === 'gas-show'))).toBe('thumb');
   });
 

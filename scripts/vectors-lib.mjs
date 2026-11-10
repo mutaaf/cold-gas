@@ -758,7 +758,7 @@ const itemRow = (it) => [it.id, it.weight === undefined ? null : hex(it.weight),
 const itemRows = (items) => items.map(itemRow);
 const COACH_DEVICES = ['touch', 'key', 'pad'], COACH_SCHEMES = ['thumb', 'classic'], COACH_TIERS = ['assist', 'pro', 'advanced'];
 // src/main.js pointerCtx and flownCtx's scheme, which can't load in Node (tests/unit/vectors.test.js pins the line it mirrors).
-export const schemeFor = (device, touchScheme, course, tier) => (device === 'touch' && touchScheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic');
+export const schemeFor = (device, touchScheme, course, tier) => (device === 'touch' && touchScheme === 'thumb' && tier === 'assist' ? 'thumb' : 'classic');   // 0181: the Lineup too
 // What a drill's tail does after the hand-over, data the Swift test reads and flies the same way:
 // a push-off if it starts on the ledge, LAND from tick `level`, BOOST until tick `thrust`, assist 0 or 1, LIFT until tick
 // `liftHold` and below `liftBelow` m, a roll and a pitch input from `rollAt`/`pitchAt` for `rollLen`/`pitchLen` ticks.

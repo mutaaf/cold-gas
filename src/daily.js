@@ -22,8 +22,9 @@
 // back on the descent warning and land in two clusters, 24 % (64 of 109) and 26 % (40), split by nothing they choose, so
 // for them the day is partly luck. Holding from the tap is the sure way. A 1–2 % change in the flight's gas swings this
 // day's reach a lot: tests/unit/daily-reach.test.js will catch the downside.
-// The Lineup sits on the floor: at other seeds (n 80) mark-lineup measures 26–31 % and roll-lineup 29–44 %; the next
-// bar review should start there. The Pro day is measured on the keys; classic-touch Pro (a phone on Pro) is not modelled.
+// The Lineup sat on the floor on two thumbs (at other seeds, n 80, mark-lineup 26–31 %, roll-lineup 29–44 %). Since 0181
+// a phone flies it on one thumb, and the careful one-thumb population meets both (150/150 each, the bars unchanged): the
+// computer flies the kickflip, so these two days are now a phone's easy days, and Pro (keys) is where the Lineup is hard. The Pro day is measured on the keys; classic-touch Pro (a phone on Pro) is not modelled.
 // What a miss can change (0139, 0150): the gas, skim, mark and ninety days' misses name the choice that meets it, in the device's words. Measured on the
 // careful one-thumb population (human-phone.mjs 150 --scheme=thumb --skill=careful --daily, seed as committed):
 //   held from the tap · slid 27/29 met · no slide 10/10    lifted, pressed again · no slide 31/31 (all at 26 %) · slid 5/80
