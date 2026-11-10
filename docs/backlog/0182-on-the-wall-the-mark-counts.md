@@ -1,12 +1,12 @@
 ---
 id: 0182
 title: On the Wall, the mark counts. A touchdown outside the 4 m ring isn't a Perfect 10, and the slide that finds the mark shows in the score
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-11-10
-pr:
+pr: 295
 by: critic
 ---
 
@@ -47,17 +47,17 @@ things:
   board.
 
 ## Acceptance criteria
-- [ ] Unit (`tests/unit/judge*.test.js`): on the Wall, a landing 4.1 m or more from the mark is never verdict
+- [x] Unit (`tests/unit/judge*.test.js`): on the Wall, a landing 4.1 m or more from the mark is never verdict
       "Perfect 10".
-- [ ] Unit (the `thumb-mastery` Wall flight, tapped, pressed again at 1.25 and 2.25 s): the best slide in −48 … 0 px
+- [x] Unit (the `thumb-mastery` Wall flight, tapped, pressed again at 1.25 and 2.25 s): the best slide in −48 … 0 px
       scores ≥ 5 points more than no slide (today +2.0).
-- [ ] The Wall reference (`ref-hash`, 96 today) loses ≤ 0.5 points. Write its new total in
+- [x] The Wall reference (`ref-hash`, 96 today) loses ≤ 0.5 points. Write its new total in
       the PR.
-- [ ] `node scripts/daily-reach.mjs`: `stick-wall` (84+), `soft-wall` and `pro-wall` stay over the floor. If a bar
+- [x] `node scripts/daily-reach.mjs`: `stick-wall` (84+), `soft-wall` and `pro-wall` stay over the floor. If a bar
       needs re-setting, write it up with the before and after (LESSONS 2026-11-09: split the decision out, don't bend
       the gate).
-- [ ] `naive-players` 32/32 still land upright (the scores may move; write the range before and after).
-- [ ] The Show and the Lineup score exactly as before (`ref-hash` totals 97.3 and 91.7).
+- [x] `naive-players` 32/32 still land upright (the scores may move; write the range before and after).
+- [x] The Show and the Lineup score exactly as before (`ref-hash` totals 97.3 and 91.7).
 
 ## Test plan
 Add a Wall precision table to the judge's unit test (miss 0, 2, 4, 5, 7, 12 m → precision and verdict). Extend
