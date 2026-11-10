@@ -30,10 +30,12 @@ describe(`ios release notes ${version}`, () => {
     expect(callouts.length).toBeGreaterThanOrEqual(2);
     expect(callouts.length).toBeLessThanOrEqual(4);
     for (const c of callouts) {
-      const m = c.match(/^[-*] \*\*(.+?)\*\*\s*(.+?)\s*<!--\s*icon:\s*([A-Za-z0-9.]+)\s*-->\s*$/);
+      const m = c.match(/^[-*] \*\*(.+?)\*\*\s*(.+?)\s*<!--\s*icon:\s*([A-Za-z0-9.]+)\s*(?:,\s*go:\s*([A-Za-z]+)\s*)?-->\s*$/);
       expect(m, c).not.toBeNull();
       expect(m[1].split(' ').length, c).toBeLessThanOrEqual(5);
       expect(m[2].length, c).toBeLessThanOrEqual(90);
+      // go: the screen the card opens (ColdGasClient's WhatsNewDestination); optional.
+      if (m[4]) expect(['board', 'settings', 'howTo', 'practice'], c).toContain(m[4]);
     }
   });
 
