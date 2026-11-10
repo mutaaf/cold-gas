@@ -3,7 +3,7 @@
 #if canImport(CRapier)
 import ColdGasCore
 
-public let SIM_VERSION = 30
+public let SIM_VERSION = 31
 public let FRAME_EVERY = 4
 public let MAX_TICKS = 240 * 90
 public let STALL_TICKS = 240 * 6, HANG_STALL_TICKS = 240 * 20

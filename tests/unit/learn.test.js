@@ -54,7 +54,7 @@ const flyDrill = (id, policy, course = 'show') => {
 };
 
 describe('SIM_VERSION 21: the rigid-body engine, the reveal G trace, relaxed tyres, TC at the peak, the set-down, the Wall from its foot, the curl gate, driving feel, the fans in a corner', () => {
-  it('is version 30 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock; 22: the fans answer a held corner, 0020; 23: tyre load sensitivity from a published fit, 0021; 24: the launch complex is solid and its static fire blows a car off the pad; 25: the pad is not the Wall; 26: Assist auto-land and the carry over the row, 0067; 27: the Show judged on what the pilot decides, 0121; 28: a fan-held hang on the ledge may last 20 s, 0145; 29: LAND brakes in one burn, 0169; 30: off a roof on the jets, 0169)', () => expect(SIM_VERSION).toBe(30));
+  it('is version 30 (14: the rigid-body engine; 15: the reveal G trace, 0013; 16: tyre relaxation length, 0015; 17: traction control at the tyre peak; 18: the set-down follows the fall, 0014; 19: the Wall starts at the foot of the curl, 0019; 20: the hull meets the curl only when it can reach it; 21: driving feel: crawl limit on the curl only, TC keeps side force, Assist stability control, opposite lock; 22: the fans answer a held corner, 0020; 23: tyre load sensitivity from a published fit, 0021; 24: the launch complex is solid and its static fire blows a car off the pad; 25: the pad is not the Wall; 26: Assist auto-land and the carry over the row, 0067; 27: the Show judged on what the pilot decides, 0121; 28: a fan-held hang on the ledge may last 20 s, 0145; 29: LAND brakes in one burn, 0169; 30: off a roof on the jets, 0169; 31: the mark counts on the Wall, 0182)', () => expect(SIM_VERSION).toBe(31));
   // SIM_VERSION 13 (the scheduled fan, with the Integrity category): Show 90.7, Wall 92.3, Lineup 86.3. v14 moves every body and contact into the
   // engine and splits the fan's seal into eight patches: the references fly the same climb and
   // the same descent; off the Wall the hang ends with the whole sealed floor on the deck (v11's
@@ -75,7 +75,7 @@ describe('SIM_VERSION 21: the rigid-body engine, the reveal G trace, relaxed tyr
     const cards = Object.fromEntries(Object.entries(runs).map(([c, r]) => [c, scoreRun(r.t)]));
     // (+ the Integrity category, which a clean run scores ≈10: it lifts every reference a little)
     expect(cards.show.total).toBeGreaterThanOrEqual(97.7 - 0.5); expect(cards.show.total).toBeLessThanOrEqual(97.7 + 0.5);   // 94.0 before the v27 Show judging (0121)
-    expect(cards.wall.total).toBeGreaterThanOrEqual(92.3 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(96.0 + 0.5);
+    expect(cards.wall.total).toBeGreaterThanOrEqual(92.3 - 0.5); expect(cards.wall.total).toBeLessThanOrEqual(97.7 + 0.5);   // 96.0 before the v31 Wall judging (0182)
     expect(cards.wall.categories.efficiency).toBeGreaterThan(8.5);   // the late burn's saving (v13: 6.0)
     expect(cards.lineup.total).toBeGreaterThanOrEqual(86.3 - 1.05); expect(cards.lineup.total).toBeLessThanOrEqual(92.0 + 0.5);
     for (const c of ['show', 'wall', 'lineup']) expect(cards[c].facts.damagePct).toBeLessThanOrEqual(2);

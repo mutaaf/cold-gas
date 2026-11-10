@@ -1,4 +1,4 @@
-{"format":1,"simVersion":30,"name":"pro-fuzz-4","course":"show","ticks":2663,"checkEvery":24,"fullEvery":240,"fields":["pos.x","pos.y","pos.z","quat.x","quat.y","quat.z","quat.w","vel.x","vel.y","vel.z","angVel.x","angVel.y","angVel.z","angMom.x","angMom.y","angMom.z","air","phase","wheel0","wheel1","wheel2","wheel3"],"final":"e299b65363cac96c",
+{"format":1,"simVersion":31,"name":"pro-fuzz-4","course":"show","ticks":2663,"checkEvery":24,"fullEvery":240,"fields":["pos.x","pos.y","pos.z","quat.x","quat.y","quat.z","quat.w","vel.x","vel.y","vel.z","angVel.x","angVel.y","angVel.z","angMom.x","angMom.y","angMom.z","air","phase","wheel0","wheel1","wheel2","wheel3"],"final":"e299b65363cac96c",
 "log":[
 [0,98,0,0,0,0,0,0,0,0,0,100,0,0,0,0,0,0,0,0,0,0,0,0],
 [340,0,0,0,0,0,0,0,0,0,0,100,0,0,0,0,0,0,0,0,0,0,0,0],

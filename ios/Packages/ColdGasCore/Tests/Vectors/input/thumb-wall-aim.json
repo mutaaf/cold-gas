@@ -1,4 +1,4 @@
-{"format":1,"simVersion":30,"name":"thumb-wall-aim","course":"wall","scheme":"thumb","tier":"assist","level":"standard","ticks":4099,"releaseTick":2956,"endReason":"settled","final":"d9b90b5995ff524f","after":{"startTick":4099,"ticks":120,"still":120,"endTick":4219,"final":"c0582a11da6ebb93","state":["3ff327d5a07f93db","3fd9c9c448466fd7","c020702425de86d7","bea5d8951b01a197","bfeff12a346f1a88","3eac802cf6521aaa","3faecc96a62d4008","3ef09ce525b912d6","3f16b57619db4548","3ec44d919d709ec4","3ee5709f80b14350","3ddb4357857d6eb1","bf000c5f431efdca","3fa1bb085c609667","3e9d0e36d56d33c7","bf96c9a10d913d04","405dd1049041e81e","4010000000000000","3ff0000000000000","3ff0000000000000","3ff0000000000000","3ff0000000000000"]},
+{"format":1,"simVersion":31,"name":"thumb-wall-aim","course":"wall","scheme":"thumb","tier":"assist","level":"standard","ticks":4099,"releaseTick":2956,"endReason":"settled","final":"d9b90b5995ff524f","after":{"startTick":4099,"ticks":120,"still":120,"endTick":4219,"final":"c0582a11da6ebb93","state":["3ff327d5a07f93db","3fd9c9c448466fd7","c020702425de86d7","bea5d8951b01a197","bfeff12a346f1a88","3eac802cf6521aaa","3faecc96a62d4008","3ef09ce525b912d6","3f16b57619db4548","3ec44d919d709ec4","3ee5709f80b14350","3ddb4357857d6eb1","bf000c5f431efdca","3fa1bb085c609667","3e9d0e36d56d33c7","bf96c9a10d913d04","405dd1049041e81e","4010000000000000","3ff0000000000000","3ff0000000000000","3ff0000000000000","3ff0000000000000"]},
 "events":[
 [0,"tilt","0000000000000000","0000000000000000"],
 [0,"down"],
@@ -1187,7 +1187,7 @@
 ["categories.efficiency","n","4020000000000000"],
 ["categories.inversion","n","4024000000000000"],
 ["categories.landing","n","4023666666666666"],
-["categories.precision","n","4023666666666666"],
+["categories.precision","n","4024000000000000"],
 ["categories.rotation","n","4023666666666666"],
 ["course","s","wall"],
 ["facts.airPct","n","4044000000000000"],
@@ -1234,7 +1234,7 @@
 ["facts.zeroToSixty","z",null],
 ["judges[0].id","s","engineer"],
 ["judges[0].name","s","The Engineer"],
-["judges[0].score","n","4023333333333333"],
+["judges[0].score","n","4023666666666666"],
 ["judges[0].title","s","Chief Vehicle Engineer"],
 ["judges[1].id","s","coordinator"],
 ["judges[1].name","s","The Coordinator"],
@@ -1242,10 +1242,10 @@
 ["judges[1].title","s","Stunt Coordinator"],
 ["judges[2].id","s","designer"],
 ["judges[2].name","s","The Designer"],
-["judges[2].score","n","4023000000000000"],
+["judges[2].score","n","4023333333333333"],
 ["judges[2].title","s","Head of Design"],
 ["multiplier","n","3ff0000000000000"],
 ["tier","s","assist"],
-["total","n","4058000000000000"],
+["total","n","40582ccccccccccd"],
 ["verdict","s","Perfect 10"]
 ]}

@@ -20,9 +20,9 @@ let PANEL: [Judge] = [
           w: [("height", 0.12), ("rotation", 0.22), ("clearance", 0.12), ("landing", 0.24), ("precision", 0.12), ("efficiency", 0.18)]),
 ]
 let WALL_W: [String: [(String, Double)]] = [
-    "engineer": [("climb", 0.12), ("inversion", 0.12), ("rotation", 0.12), ("landing", 0.38), ("precision", 0.16), ("efficiency", 0.1)],
-    "coordinator": [("climb", 0.24), ("inversion", 0.24), ("rotation", 0.22), ("landing", 0.18), ("precision", 0.06), ("efficiency", 0.06)],
-    "designer": [("climb", 0.14), ("inversion", 0.16), ("rotation", 0.16), ("landing", 0.24), ("precision", 0.14), ("efficiency", 0.16)],
+    "engineer": [("climb", 0.08), ("inversion", 0.08), ("rotation", 0.10), ("landing", 0.34), ("precision", 0.30), ("efficiency", 0.10)],
+    "coordinator": [("climb", 0.16), ("inversion", 0.18), ("rotation", 0.20), ("landing", 0.18), ("precision", 0.20), ("efficiency", 0.08)],
+    "designer": [("climb", 0.08), ("inversion", 0.10), ("rotation", 0.12), ("landing", 0.24), ("precision", 0.30), ("efficiency", 0.16)],
 ]
 let SHOW_W: [String: [(String, Double)]] = [
     "engineer": [("climb", 0.04), ("inversion", 0.03), ("rotation", 0.05), ("clearance", 0.08), ("landing", 0.34), ("precision", 0.36), ("efficiency", 0.10)],
@@ -92,7 +92,7 @@ func scoreWall(_ t: Telemetry) -> Card {
     c["inversion"] = t.progress > 0.8 ? 10 * band(t.invertedTime, 0, 1.0) : 0
     c["rotation"] = 10 * clamp01(turned / 160) * (0.7 + 0.3 * rollShare)
     c["landing"] = landingScore(t)
-    c["precision"] = show ? 10 * curve(padMiss, SHOW_PRECISION) : 10 * band(padMiss, 20, 1)
+    c["precision"] = 10 * curve(padMiss, SHOW_PRECISION)   // 0182: the Wall reads its rings too
     c["efficiency"] = 10 * band(airPct, 0, show ? SHOW_GAS_FULL : 50) * clamp01(turned / 120)
     if show { c["clearance"] = t.crossedRow ? clearanceScore(t) : 0 }
     c["damage"] = 10 * (1 - damagePct(t) / 100)
@@ -117,7 +117,7 @@ func scoreWall(_ t: Telemetry) -> Card {
     else if t.flipped || !t.settledUpright { verdict = "Rolled over" }
     else if crashed { verdict = "Crash" }
     else if show && !t.crossedRow { verdict = "Short of the row" }
-    else if total >= 92 { verdict = "Perfect 10" }
+    else if total >= 92 && (show || padMiss <= course.pad!.rings[1]) { verdict = "Perfect 10" }   // 0182: outside the Wall's 4 m ring isn't perfect
     else if total >= 84 { verdict = "Stuck it" }
     else if total >= 72 { verdict = "Clean" }
     else if total >= 55 { verdict = "Rough landing" }

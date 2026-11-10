@@ -8,8 +8,8 @@
 // the Lineup on two thumbs (classic touch, Assist), Pro on the keys. Measured n 150, seed 12345:
 //   mark-show    within 3.5 m of the mark   44 %  (3 m was 11 %: the careful thumb's touchdowns sit at 3.0–3.7 m)
 //   gas-show     more than 25 % gas left    51 %  (see below)
-//   soft-wall    0.8 m/s or softer          57 %  · stick-wall 84+ 100 % · ninety-show 90+ 69 %
-//   pro-wall     85+ on Pro or Advanced     43 %  on the Wall; it was on the Show, where 9 % of Pro flights score
+//   soft-wall    0.8 m/s or softer          57 %  · stick-wall 84+ 69 % (100 % before 0182) · ninety-show 90+ 69 %
+//   pro-wall     72+ on Pro or Advanced     43 %  on the Wall (85+ before 0182 counted the Wall's mark); it was on the Show, where 9 % of Pro flights score
 //                85+ and only 33 % clear the row and land clean at all (the row is Pro's hardest part), so no bar there
 //                is both a stretch and in reach
 //   skim-show    roofs by under 1.5 m       78 %  · scratch-show 100 %
@@ -39,6 +39,9 @@ const rate = (mps) => one('rate', mps, 1);
 const landed = (f) => !!f.jumped && !f.crashed;
 const cleanOver = (f) => landed(f) && !!f.crossedRow && !f.contact;
 const r1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
+// The Pro Wall's bar (0182, SIM_VERSION 31): the Wall's mark now counts, and Pro on the keys lands a median 9.3 m off it,
+// so 85+ fell from 43 % to 15 % of Pro flights (23/150). 72+ is met by the same 43 % (65/150) on the new scale.
+const PRO_WALL = 72;
 
 // Each objective: the course it's flown on, the line the title shows, and `check(card)` → { ok, miss }
 // (`miss` is the results line's reason when it isn't done: specific, with the number).
@@ -54,8 +57,8 @@ export const OBJECTIVES = [
     titleHint: (ctx, whole) => (!thumbOn(ctx) ? '' : whole ? 'Hold the pad from the tap to the ground' : 'Hold the pad from the tap') },
   { id: 'soft-wall', course: 'wall', goal: () => `Touch down at ${rate(0.8)} or softer`,
     check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.sink <= 0.8 ? done() : miss(`touched down at ${rate(f.sink)}`)) },
-  { id: 'pro-wall', course: 'wall', tier: 'pro', goal: () => 'Score 85+ on Pro or Advanced',
-    check: (c) => (c.tier === 'assist' ? miss('fly it on Pro or Advanced') : c.total >= 85 ? done() : miss(`${r1(c.total)}, need 85`)) },
+  { id: 'pro-wall', course: 'wall', tier: 'pro', goal: () => `Score ${PRO_WALL}+ on Pro or Advanced`,
+    check: (c) => (c.tier === 'assist' ? miss('fly it on Pro or Advanced') : c.total >= PRO_WALL ? done() : miss(`${r1(c.total)}, need ${PRO_WALL}`)) },
   { id: 'skim-show', course: 'show', goal: () => `Clear the roofs by under ${len(1.5, 1)} and land clean`,
     check: (c, f) => (!cleanOver(f) ? miss('clear the row and land clean first') : f.clearance < 1.5 ? done() : miss(`cleared by ${len(f.clearance, 1)}`, true)),
     // 0150: the opposite thumb to the gas day's. Held from the tap, the computer carries the car 4.5 m over the roofs; let go

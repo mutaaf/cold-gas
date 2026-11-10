@@ -114,8 +114,8 @@ describe('the daily, judged from real runs', () => {
     const off = { ...cards.show, facts: { ...cards.show.facts, padMiss: 4.3 } };
     setUnits('metric', { persist: false });
     expect(evaluate(byId('mark-show'), off, 'show')).toEqual({ ok: false, miss: '4.3 m off the mark', fix: true });
-    expect(evaluate(byId('pro-wall'), { ...cards.wall, tier: 'pro', total: 79.4 }, 'wall').miss).toBe('79.4, need 85');
-    expect(evaluate(byId('pro-wall'), { ...cards.wall, tier: 'advanced', total: 85 }, 'wall').ok).toBe(true);
+    expect(evaluate(byId('pro-wall'), { ...cards.wall, tier: 'pro', total: 71.9 }, 'wall').miss).toBe('71.9, need 72');
+    expect(evaluate(byId('pro-wall'), { ...cards.wall, tier: 'advanced', total: 72 }, 'wall').ok).toBe(true);
     // 0135's bars, at their edges: the mark at 3.5 m (Show) and 7 m (Lineup), gas over 25 %.
     const withFacts = (card, f) => ({ ...card, facts: { ...card.facts, ...f } });
     expect(evaluate(byId('mark-show'), withFacts(cards.show, { padMiss: 3.5 }), 'show').ok).toBe(true);

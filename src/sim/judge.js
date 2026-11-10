@@ -72,10 +72,16 @@ export const SHOW_CATEGORIES = [
 
 export const categoriesFor = (course) => (course === 'wall' ? WALL_CATEGORIES : course === 'show' ? SHOW_CATEGORIES : CATEGORIES);
 
+// The Wall's weights (SIM_VERSION 31, ticket 0182). The Wall read its mark on a straight line from 1 to 20 m with
+// precision at 0.16 · 0.06 · 0.14, so a slide onto the mark earned 1.3–2 points and 8 m off read "Perfect 10". It now
+// reads the painted rings (SHOW_PRECISION) and the panel weighs the mark about as the Show does, less where Assist
+// flies the climb, hang and roll-out the same for everyone. Measured (scripts/daily-reach.mjs populations, n 150,
+// seed 12345): careful one-thumb median 95 → 96.7, p10 90.7 → 77.7 (the thumbs that land 11 m off); the tapped thumb's
+// best slide earns +5.3–5.7 (was +2.0); the reference 96 → 97.7; Pro on the keys median 81 → 70 (it lands 9.3 m off).
 const WALL_W = {
-  engineer: { climb: 0.12, inversion: 0.12, rotation: 0.12, landing: 0.38, precision: 0.16, efficiency: 0.1 },
-  coordinator: { climb: 0.24, inversion: 0.24, rotation: 0.22, landing: 0.18, precision: 0.06, efficiency: 0.06 },
-  designer: { climb: 0.14, inversion: 0.16, rotation: 0.16, landing: 0.24, precision: 0.14, efficiency: 0.16 },
+  engineer: { climb: 0.08, inversion: 0.08, rotation: 0.10, landing: 0.34, precision: 0.30, efficiency: 0.10 },
+  coordinator: { climb: 0.16, inversion: 0.18, rotation: 0.20, landing: 0.18, precision: 0.20, efficiency: 0.08 },
+  designer: { climb: 0.08, inversion: 0.10, rotation: 0.12, landing: 0.24, precision: 0.30, efficiency: 0.16 },
 };
 // The Show's weights (SIM_VERSION 27, ticket 0121). On Assist the computer flies the climb, the hang and the
 // roll-out to 9.7–10 for everyone, so weight there paid every run the same; it now sits on what the pilot
@@ -152,7 +158,7 @@ function scoreWall(t, opts) {
   // roll; a roll-dominant turn scores higher than a flip.
   c.rotation = 10 * clamp01(turned / 160) * (0.7 + 0.3 * rollShare);
   c.landing = landingScore(t);
-  c.precision = show ? 10 * curve(padMiss, SHOW_PRECISION) : 10 * band(padMiss, 20, 1);
+  c.precision = 10 * curve(padMiss, SHOW_PRECISION);
   c.efficiency = 10 * band(airPct, 0, show ? SHOW_GAS_FULL : 50) * clamp01(turned / 120);
   if (show) c.clearance = t.crossedRow ? clearanceScore(t) : 0;
   c.damage = 10 * (1 - damagePct(t) / 100);
@@ -179,7 +185,8 @@ function scoreWall(t, opts) {
   else if (t.flipped || !t.settledUpright) verdict = 'Rolled over';
   else if (crashed) verdict = 'Crash';
   else if (show && !t.crossedRow) verdict = 'Short of the row';
-  else if (total >= 92) verdict = 'Perfect 10';
+  // 0182: on the Wall a touchdown outside the 4 m ring isn't a perfect run, whatever the total.
+  else if (total >= 92 && (show || padMiss <= course.pad.rings[1])) verdict = 'Perfect 10';
   else if (total >= 84) verdict = 'Stuck it';
   else if (total >= 72) verdict = 'Clean';
   else if (total >= 55) verdict = 'Rough landing';

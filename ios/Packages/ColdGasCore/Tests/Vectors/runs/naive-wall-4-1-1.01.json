@@ -1,4 +1,4 @@
-{"format":1,"simVersion":30,"name":"naive-wall-4-1-1.01","course":"wall","ticks":3146,"checkEvery":24,"fullEvery":240,"fields":["pos.x","pos.y","pos.z","quat.x","quat.y","quat.z","quat.w","vel.x","vel.y","vel.z","angVel.x","angVel.y","angVel.z","angMom.x","angMom.y","angMom.z","air","phase","wheel0","wheel1","wheel2","wheel3"],"final":"be837ebcde780492",
+{"format":1,"simVersion":31,"name":"naive-wall-4-1-1.01","course":"wall","ticks":3146,"checkEvery":24,"fullEvery":240,"fields":["pos.x","pos.y","pos.z","quat.x","quat.y","quat.z","quat.w","vel.x","vel.y","vel.z","angVel.x","angVel.y","angVel.z","angMom.x","angMom.y","angMom.z","air","phase","wheel0","wheel1","wheel2","wheel3"],"final":"be837ebcde780492",
 "log":[
 [0,100,0,0,0,0,0,0,0,0,0,100,100,0,0,0,0,0,0,0,0,0,0,0],
 [130,0,0,0,0,0,0,0,0,0,0,100,100,0,0,0,0,0,0,0,0,0,0,0],
@@ -567,18 +567,18 @@
 ["facts.zeroToSixty","z",null],
 ["judges[0].id","s","engineer"],
 ["judges[0].name","s","The Engineer"],
-["judges[0].score","n","4020cccccccccccd"],
+["judges[0].score","n","401ccccccccccccd"],
 ["judges[0].title","s","Chief Vehicle Engineer"],
 ["judges[1].id","s","coordinator"],
 ["judges[1].name","s","The Coordinator"],
-["judges[1].score","n","4022666666666666"],
+["judges[1].score","n","401f99999999999a"],
 ["judges[1].title","s","Stunt Coordinator"],
 ["judges[2].id","s","designer"],
 ["judges[2].name","s","The Designer"],
-["judges[2].score","n","4020cccccccccccd"],
+["judges[2].score","n","401c000000000000"],
 ["judges[2].title","s","Head of Design"],
 ["multiplier","n","3ff0000000000000"],
 ["tier","s","assist"],
-["total","n","4055accccccccccd"],
-["verdict","s","Stuck it"]
+["total","n","40526ccccccccccd"],
+["verdict","s","Clean"]
 ]}

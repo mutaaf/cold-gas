@@ -66,8 +66,8 @@ public enum Daily {
                   titleHintFn: { p, whole in !p.thumbOn ? "" : whole ? "Hold the pad from the tap to the ground" : "Hold the pad from the tap" }),
         Objective(id: "soft-wall", course: "wall", tier: nil, goalText: { "Touch down at \($0.one(.rate, 0.8, 1)) or softer" },
                   checkFn: { _, f, u in !landed(f) ? .missed("no clean landing yet") : f.n("sink") <= 0.8 ? .done : .missed("touched down at \(u.one(.rate, f.n("sink"), 1))") }, hint: nil, titleHintFn: nil),
-        Objective(id: "pro-wall", course: "wall", tier: "pro", goalText: { _ in "Score 85+ on Pro or Advanced" },
-                  checkFn: { c, _, _ in c.tier == "assist" ? .missed("fly it on Pro or Advanced") : c.total >= 85 ? .done : .missed("\(r1(c.total)), need 85") }, hint: nil, titleHintFn: nil),
+        Objective(id: "pro-wall", course: "wall", tier: "pro", goalText: { _ in "Score 72+ on Pro or Advanced" },   // 0182
+                  checkFn: { c, _, _ in c.tier == "assist" ? .missed("fly it on Pro or Advanced") : c.total >= 72 ? .done : .missed("\(r1(c.total)), need 72") }, hint: nil, titleHintFn: nil),
         Objective(id: "skim-show", course: "show", tier: nil, goalText: { "Clear the roofs by under \($0.one(.len, 1.5, 1)) and land clean" },
                   checkFn: { _, f, u in !cleanOver(f) ? .missed("clear the row and land clean first") : f.n("clearance") < 1.5 ? .done : .missed("cleared by \(u.one(.len, f.n("clearance"), 1))", fix: true) },
                   // 0150: one thumb lets go right after the tap (held, the computer carries the car 4.5 m over the roofs).
