@@ -10,3 +10,35 @@ Every TestFlight build's "What to Test" (and, from the second App Store release,
 - 4000 characters at most (TestFlight's limit). Markdown is stripped before it is sent.
 - Bumping `MARKETING_VERSION` in `project.yml` means a new file. Builds within one version share the file, so edit it
   as features land.
+
+## The in-app "What's new" modal reads the same file
+
+The file is bundled into the app (project.yml), and after an update the app shows it once as a modal
+(ColdGas/UI/WhatsNewView.swift, parsed by ColdGasClient's `ReleaseNotes`). So every release adds notes in this shape:
+
+```
+# Cold Gas <version>
+
+The hero headline: one line, a playful nod.
+
+An optional lede: one short paragraph.
+
+## Highlights
+- **A few words.** One short line. <!-- icon: an.sf.symbol -->
+
+## What is in this build
+...the full notes, folded under the cards in the modal...
+```
+
+- **Highlights**: 2 to 4 bullets, each a callout card. The title is a few words; the line is one short sentence
+  (90 characters at most). The icon is an SF Symbol name in an HTML comment (comments never reach TestFlight or the store).
+- **The headline** may nod at pop culture and at light, evergreen news (seasons, sports seasons, launches, the weather),
+  as tropes only: no real characters, franchise or brand names, logos, quotes or real people. No politics or tragedy.
+  Family-friendly.
+- **Every claim is true** and comes from the git history since the last release (`git log` on `ios/` and the
+  CHANGELOG's iPhone entries).
+- It never shows on a fresh install (the first launch records the version as seen), once per version after an update,
+  and never when the app is launched with a tool or test flag (`-uitest`, `-bench`, `-cam-log`, `-course`…). In a
+  DEBUG build `-whatsNew` forces it (shots and review).
+- `make test` (WhatsNewTests) and `npm test` (tests/unit/ios-release-notes.test.js) fail when the current version's file
+  doesn't have this shape.

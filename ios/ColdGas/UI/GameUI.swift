@@ -20,6 +20,9 @@ struct RootUI: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
     @State private var sheet: Sheet?
+    /// What's new after an update (WhatsNewView.swift): read once per launch, shown over the title, never during a run.
+    @State private var whatsNew: ReleaseNotes? = RootUI.launchNotes
+    private static let launchNotes = WhatsNewStore.atLaunch()
     enum Sheet: String, Identifiable { case board, settings, howTo, practice; var id: String { rawValue } }
 
     var body: some View {
@@ -40,6 +43,11 @@ struct RootUI: View {
                             .offset(x: layout.controls.minX, y: layout.controls.minY - 16)
                     }
                 }
+            }
+            if game.screen == .title, let n = whatsNew {
+                WhatsNewView(notes: n) { withAnimation(.easeOut(duration: 0.2)) { whatsNew = nil } }
+                    .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
+                    .transition(.opacity)
             }
         }
         .ignoresSafeArea()
