@@ -71,6 +71,12 @@ struct CoachVectorTests {
     @Test func thumbOnlyWhereTheWebOffersIt() {
         for r in coachVectors["ctxs"] as! [[String]] {
             let ctx = pointerCtx(course: r[2], tier: r[3], device: .init(rawValue: r[0])!, touchScheme: .init(rawValue: r[1])!)
+            // The web flies the Lineup on one thumb since 0181; the app still flies it on two until 0186 ports it,
+            // and its coach must speak to the controls the app shows. A known gap, not a pass: it fails loudly once fixed.
+            if r[2] == "lineup" && r[4] == "thumb" {
+                withKnownIssue("0186: the iPhone app's Lineup is still two-thumb") { #expect(ctx.scheme.rawValue == r[4], "\(r)") }
+                continue
+            }
             #expect(ctx.scheme.rawValue == r[4], "\(r)")
         }
     }
