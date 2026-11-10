@@ -1,12 +1,12 @@
 ---
 id: 0181
 title: On a phone, the Lineup lands a player who does what the screen says, as the Show and the Wall do
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-10
-pr:
+pr: 292
 by: critic
 ---
 
