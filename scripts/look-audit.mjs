@@ -37,6 +37,10 @@ const MOMENTS = [
   ['release', 'r.phase === "air" && (G.__look.air ??= r.tick) && r.tick - G.__look.air >= 72'],   // 0.3 s after the release
 ];
 
+// Variants (attribution, sweeps): LOOK_VARIANTS='{"base":"…js…","t13":"…js…"}' re-renders each frozen moment once
+// per entry after running its page JS (set every knob absolutely: they run in order), so a sweep costs one flight.
+const VARIANTS = process.env.LOOK_VARIANTS ? Object.entries(JSON.parse(process.env.LOOK_VARIANTS)) : [['', null]];
+
 const GL = gl === 'gpu' ? ['--use-angle=metal', '--enable-gpu', '--ignore-gpu-blocklist'] : ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
 const browser = await chromium.launch({ args: GL });
 const rows = [];
@@ -106,19 +110,24 @@ for (const sc of SCREENS) {
       }
       return { x: x0, y: y0, w: x1 - x0, h: y1 - y0, size: [hi.x - lo.x, hi.y - lo.y, hi.z - lo.z].map((n) => +n.toFixed(2)) };
     });
-    const png = await page.screenshot(out ? { path: `${out}/${sc.name}-${name}.png` } : {});
-    const m = await page.evaluate(async ({ b64, box, red, pct }) => {
-      const redShare = new Function(`return (${red})`)(), lumaPercentile = new Function(`return (${pct})`)();
-      const img = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob());
-      const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
-      const x = c.getContext('2d'); x.drawImage(img, 0, 0);
-      const px = x.getImageData(0, 0, c.width, c.height).data;
-      const s = c.width / innerWidth, r = { x: box.x * s, y: box.y * s, w: box.w * s, h: box.h * s };
-      return { red: redShare(px, c.width, c.height), p10: lumaPercentile(px, c.width, c.height, r, 10), p50: lumaPercentile(px, c.width, c.height, r, 50) };
-    }, { b64: png.toString('base64'), box, red: redShare.toString(), pct: lumaPercentile.toString() });
-    const S = await page.evaluate(() => { const r = window.__coldgas.S.run; return { y: +r.car.pos.y.toFixed(1), inv: +r.t.invertedTime.toFixed(2), tick: r.tick }; });
-    rows.push({ screen: sc.name, moment: name, red: +(m.red * 100).toFixed(1), p10: m.p10, p50: m.p50, box: [Math.round(box.w), Math.round(box.h)], ...S });
-    console.log(JSON.stringify(rows.at(-1)));
+    for (const [vname, vjs] of VARIANTS) {
+      if (vjs !== null) await page.evaluate((js) => { const G = window.__coldgas; (0, eval)(js); G.stage.render(G.S.time, G.S.mode); }, vjs);
+      const tag = vname ? `-${vname}` : '';
+      const png = await page.screenshot(out ? { path: `${out}/${sc.name}-${name}${tag}.png` } : {});
+      const m = await page.evaluate(async ({ b64, box, red, pct }) => {
+        const redShare = new Function(`return (${red})`)(), lumaPercentile = new Function(`return (${pct})`)();
+        const img = await createImageBitmap(await (await fetch(`data:image/png;base64,${b64}`)).blob());
+        const c = document.createElement('canvas'); c.width = img.width; c.height = img.height;
+        const x = c.getContext('2d'); x.drawImage(img, 0, 0);
+        const px = x.getImageData(0, 0, c.width, c.height).data;
+        const s = c.width / innerWidth, r = { x: box.x * s, y: box.y * s, w: box.w * s, h: box.h * s };
+        return { red: redShare(px, c.width, c.height), p10: lumaPercentile(px, c.width, c.height, r, 10), p50: lumaPercentile(px, c.width, c.height, r, 50) };
+      }, { b64: png.toString('base64'), box, red: redShare.toString(), pct: lumaPercentile.toString() });
+      const S = await page.evaluate(() => { const r = window.__coldgas.S.run; return { y: +r.car.pos.y.toFixed(1), inv: +r.t.invertedTime.toFixed(2), tick: r.tick }; });
+      rows.push({ screen: sc.name, moment: name + tag, red: +(m.red * 100).toFixed(1), p10: m.p10, p50: m.p50, box: [Math.round(box.w), Math.round(box.h)], ...S });
+      console.log(JSON.stringify(rows.at(-1)));
+    }
+    if (VARIANTS.length > 1) await page.evaluate((js) => (0, eval)(js), VARIANTS[0][1] ?? '0');   // back to the first before flying on
   }
   if (errors.length) console.log(sc.name, 'page errors:', errors.slice(0, 3).join(' | '));
   await page.close();
