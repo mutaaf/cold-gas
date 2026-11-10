@@ -4,7 +4,8 @@
 //   pages opt out with `Cache-Control: no-transform` (AGENTS.md §3.3: no analytics, no third
 //   parties). They revalidate on every load so a deploy shows up at once. That is the game itself and
 //   the privacy page (0155): `/coldgas/privacy` and `/index.html` answer a 307 to `/coldgas/privacy/`,
-//   and all three spellings carry the rule so no answer is ever transformed.
+//   and all three spellings carry the rule so no answer is ever transformed. The player's guide
+//   (`/coldgas/guide/`, public/guide/) is served the same way.
 // - Everything under assets/ has a content hash in its name, so it never changes: cache it for a
 //   year and never revalidate (a repeat visit costs one request, the HTML).
 // - The install files (0081) keep their names, so they revalidate: the manifest every time (an
@@ -12,6 +13,7 @@
 export const HTML_PAGES = [
   '/coldgas/', '/coldgas/index.html',
   '/coldgas/privacy', '/coldgas/privacy/', '/coldgas/privacy/index.html',
+  '/coldgas/guide', '/coldgas/guide/', '/coldgas/guide/index.html',
 ];
 
 export const HEADERS = HTML_PAGES
