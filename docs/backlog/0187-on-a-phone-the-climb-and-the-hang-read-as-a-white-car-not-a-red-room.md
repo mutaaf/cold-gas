@@ -1,12 +1,12 @@
 ---
 id: 0187
 title: On a phone, the climb and the hang show a white car on a grey deck, not a red room with a white smear
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-10
-pr:
+pr: 303
 by: critic
 ---
 
