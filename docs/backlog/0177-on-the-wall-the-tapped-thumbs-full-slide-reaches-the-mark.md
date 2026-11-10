@@ -62,7 +62,7 @@ Keep 0164's guarantees: monotonic, never the wrong way, no contact, no Rough lan
       2.50–2.87 s).
 - [x] Unit: on those lines, −48 px moves the touchdown ≥ 1.6× as far as −24 px does, and ≥ 0.75 × 8 m (today
       1.0× and 3.3–3.7 m). The touchdown stays inside the 7 m ring (`src/sim/courses.js` Wall pad rings).
-- [ ] (moved to 0179, see Builder's notes) Unit: the careful thumb on the dot (re-read every 0.3 s, 60 ticks late) lands ≤ 3.5 m from the mark on the
+- [ ] (moved to 0180, see Builder's notes) Unit: the careful thumb on the dot (re-read every 0.3 s, 60 ticks late) lands ≤ 3.5 m from the mark on the
       Wall, pressed again at 1.0, 1.5 and 2.5 s (today 4.3 / 5.9 / 8.9 m).
 - [x] 0164's existing sweeps (Show and Wall, held and tapped) pass unchanged. `naive-players` 32/32. `ref-hash` per
       the usual rules.
@@ -104,4 +104,4 @@ fixed (−34, −34) px slide lands 1.8 m from the mark at 1.5 s. The follower m
 - Its 0.25 s reaction plus 0.3 s re-reads eat half of a ≈ 1 s aimable window.
 - At 2.5 s the press comes 7.9 m up, and even a full (−48, −48) lands 7.2 m off. No slide can reach 3.5 m from there.
 
-That is the sight and the bar, not this slide, so it is filed as 0179.
+That is the sight and the bar, not this slide, so it is filed as 0180.
