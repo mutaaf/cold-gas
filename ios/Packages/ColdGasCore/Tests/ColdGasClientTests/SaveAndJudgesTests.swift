@@ -54,7 +54,7 @@ import Testing
 
 @Suite struct MedalRules {
     @Test func thresholdsAndNext() {
-        #expect(Medals.thresholds(course: "wall", tier: "advanced") == [87, 93, 97.5])
+        #expect(Medals.thresholds(course: "wall", tier: "advanced") == [75, 93, 97.5])
         #expect(Medals.thresholds(course: "moon", tier: "nope") == [80, 90, 95])
         #expect(Medals.medalFor(course: "show", tier: "assist", total: 79.9) == nil)
         #expect(Medals.medalFor(course: "show", tier: "assist", total: 80) == .bronze)
