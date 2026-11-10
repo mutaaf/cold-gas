@@ -1,4 +1,4 @@
-// One-thumb Assist: the Show (and the Wall) on a single control, for a phone held in one hand.
+// One-thumb Assist: the Show (and the Wall, and the Lineup: 0181) on a single control, for a phone held in one hand.
 //
 //   run-up, curl   HOLD to climb. A crawl governor holds ≈5 m/s, eases to 2 m/s near the top and
 //                  brakes onto the ledge by itself. Let go and the car brakes (a dead-man pedal).
@@ -22,7 +22,8 @@
 // the DOM: scripts/human-phone.mjs flies it in Node with the same code the page runs.
 import { wallProgress } from './sim/run.js';
 import { dhypot } from './sim/dmath.js';
-import { up, forward, CAR } from './sim/vehicle.js';
+import { up, forward, CAR, bodyRates, G } from './sim/vehicle.js';
+import { REVEAL } from './sim/autopilot.js';
 import { SPEC } from './sim/spec.js';
 import { COURSES } from './sim/courses.js';
 import { predict, newPrediction } from './sim/predict.js';
@@ -91,6 +92,9 @@ const REF_STEADY = 2, REF_WIN = 24, REF_WINS = 2, AIM_UY_SLID = 0.8, AIM_LOW = 0
 // LAND's own hold would fly (a roll switches the hold off, and a weaker one let the drift carry on: −8 px went 0.5 m
 // right). The Show keeps the settle: its tapped thumb reaches, and its inward wait for the semi is tuned on it.
 const REF_LEAK = 0.2, HOLD_BANK = 0.2, QUICK_MIN = 0.5;
+// 0181: the Lineup's lift-off line (m before the marker, the reference's) and the least ground speed that commits to it.
+const LIFT_EARLY = COURSES.lineup.lineupZ0 - 6.5 - COURSES.lineup.liftOffZ, LIFT_MIN_V = 3;
+const lrates = { x: 0, y: 0, z: 0 };
 const bx = { x: 0, y: 0, z: 0 }, X1 = { x: 1, y: 0, z: 0 };
 // 0165: along the run (the Show) the slide is a place too. `refA` is predict's touchdown along the car's nose (LAND holds
 // no line along the run, so the prediction is the place), read until the slide first leaves the dead zone up or down.
@@ -170,12 +174,13 @@ export function thumbStage(run, released) {
   if (!run) return 'idle';
   if (run.phase === 'landed' || run.phase === 'done') return 'landed';
   if (run.phase === 'air' || released) return 'fly';
+  if (run.course === 'lineup') return 'climb';   // 0181: the run-up (no ledge on the Lineup)
   if (run.phase === 'ramp' && run.t.progress >= THUMB.tapAt) return 'ledge';
   return 'climb';
 }
 
 export function createOneThumb() {
-  const st = { airPress: false, held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, steady: 0, ref0: NaN, win: 0, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false };
+  const st = { airPress: false, held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, steady: 0, ref0: NaN, win: 0, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false, lifting: false, burnt: false, rolled: false };
   const pr = newPrediction();
   const aim = { x: 0, y: 0 };
   return {
@@ -184,7 +189,7 @@ export function createOneThumb() {
     up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
     // The held thumb's slide from where it pressed, CSS px (+x right, +y up the glass).
     move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx; st.ay = dy / THUMB.aimPx; } },
-    reset() { st.airPress = false; st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; },
+    reset() { st.airPress = false; st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; st.lifting = false; st.burnt = false; st.rolled = false; },
     // 0164: where the sideways slide is measured from (m, the car's right +, along the car's own side axis), NaN
     // before this hold could aim.
     get ref() { return st.ref; },
@@ -198,6 +203,9 @@ export function createOneThumb() {
     // 0129: the drive-off is under way (a tap on the ledge was taken; it lets go at the lip), and a press
     // the next tick hasn't read yet. The pad shows "Letting go" from either, on the frame of the tap.
     get driving() { return st.drive; },
+    // 0181: the Lineup's lift-off has begun (committed), and its one turn is done.
+    get lifting() { return st.lifting; },
+    get rolled() { return st.rolled; },
     get pending() { return st.pressed; },
     // 0140: LAND is on for this flight (the thumb held it once), whether or not the thumb is down now.
     get landing() { return st.landing; },
@@ -216,6 +224,41 @@ export function createOneThumb() {
       if (press) st.airPress = stage === 'fly';   // 0177: this hold was pressed in the air (a tapped thumb's second press)
       out.assist = 1; out.manual = 0;
       st.live = false;
+      // 0181: the Lineup's run-up and kickflip (the reference's, src/sim/autopilot.js lineupPilot). Held, it drives at
+      // the reference's speed; let go, it brakes. At the lift-off line it lifts (committed: a thumb lifted past the line
+      // can't stop short of the row), burns to the reference's apex and rolls one turn. In the air the thumb is LAND
+      // and the slide, as on the Show; LAND's level waits for the roll to finish (it would roll the car out of it).
+      let lineupLevel = true;
+      if (run.course === 'lineup' && stage !== 'landed') {
+        const L = REVEAL.lineup, lc = COURSES.lineup;
+        // A hop on the run-up (a hard dead-man brake) is still the run-up: the kickflip starts only from the line.
+        if (!st.lifting) {
+          const vh = dhypot(c.vel.x, 0, c.vel.z);
+          out.steer = Math.max(-1, Math.min(1, c.pos.x * 0.25 + steer));
+          // Past the line it commits once moving: a held thumb that stopped there drives up to LIFT_MIN_V first (a lift
+          // from a standstill came down short of the row, or on it: the review of 0181).
+          if (c.pos.z > lc.liftOffZ + LIFT_EARLY && vh > LIFT_MIN_V) st.lifting = true;
+          else if (!st.held) { out.brake = 1; return out; }
+          else {
+            out.throttle = vh < L.speed ? 1 : 0;
+            out.brake = vh > L.speed + 0.6 ? 0.4 : 0;
+            return out;
+          }
+        }
+        if (stage === 'climb') { out.steer = Math.max(-1, Math.min(1, c.pos.x * 0.25)); out.lift = 1; return out; }   // lifting off
+        bodyRates(c, lrates);
+        const vy = c.vel.y, projected = c.pos.y + (vy > 0 ? (vy * vy) / (2 * G) : 0);
+        if (!st.burnt) { if (projected < L.apex) out.lift = 1; else st.burnt = true; }
+        if (!st.rolled && st.burnt) {
+          const remaining = L.rolls * Math.PI * 2 - Math.abs(run.t.rollAccum), rate = Math.abs(lrates.z);
+          if (remaining <= (rate * rate) / (2 * L.rollBrake) + 0.02) st.rolled = true;
+          else { out.roll = -1; lineupLevel = false; }
+        }
+        if (!st.rolled) {
+          if (st.held) st.landing = true;   // pressed or held in the roll: LAND comes on as it ends
+          return out;
+        }
+      }
       if (stage === 'climb' || stage === 'ledge') {
         // Hold the line up the middle of the deck (the run-up is straight), plus any tilt.
         out.steer = Math.max(-1, Math.min(1, c.pos.x * 0.25 + steer));
@@ -247,7 +290,7 @@ export function createOneThumb() {
         // off the mark; lifted in the set-down, the auto-land never armed (the fall was too short) and
         // it dropped at 6–7 m/s. A press takes the aim back from where the car is.
         if (st.held) st.landing = true;
-        if (st.landing) out.level = 1;
+        if (st.landing && lineupLevel) out.level = 1;
         // 0165: the brake has turned the fall (the sink is 0.5 m/s past its peak): from here predict's touchdown is
         // the flight's (in free fall it reads the brake as starting now, ≈11 m short on the Show).
         const sink = -c.vel.y;
@@ -255,7 +298,7 @@ export function createOneThumb() {
         else if (st.pk > 4 && sink < st.pk - 0.5) st.braked = true;
         // Whether the up/down slide can act now, held or not (the sight draws the mark along the run only then). Once open
         // it stays open for the flight: the roofs are behind by then, and an edge read each tick made the dot blink.
-        st.canA = run.course !== 'show' || st.canA || (st.braked && (rowBehind(run, c) || (!overRoof(c) && shortRoom(c, c.pos.y - SPEC.comHeight))));
+        st.canA = run.course === 'lineup' ? c.pos.z > COURSES.lineup.lineupEnd + 1 : run.course !== 'show' || st.canA || (st.braked && (rowBehind(run, c) || (!overRoof(c) && shortRoom(c, c.pos.y - SPEC.comHeight))));
         if (st.held) {
           // AIM: only roof up (a roll command upside down would stop LAND's roll-out), faded out over
           // the set-down; on the Show along the run only once the brake has turned the fall, off the roofs (0165).
@@ -327,7 +370,11 @@ export function createOneThumb() {
             // 0165: along the run, a place (see PITCH_ACC). It used to be a pitch held only once the row was 2.5 m
             // behind: on the Show that was a few ticks under 2.5 m up, so the slide up or down did nothing at all.
             let pitch = 0;
-            if (run.course !== 'show') {
+            if (run.course === 'lineup') {
+              // 0181: along the run only once the row is behind (pitched back over it, the lift leaves the brake and
+              // hovers over the roofs: LESSONS 2026-10-21, 0014).
+              if (c.pos.z > COURSES.lineup.lineupEnd + 1) pitch = k * THUMB.aimPitch * shape(st.ay);
+            } else if (run.course !== 'show') {
               if (clear) pitch = k * THUMB.aimPitch * shape(st.ay);   // the Wall: no row, the slide is the pitch (as 0121)
             } else if (st.canA) {
               const predA = pr.landX * fw.x + pr.landZ * fw.z;

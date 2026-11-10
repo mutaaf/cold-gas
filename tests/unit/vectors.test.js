@@ -80,8 +80,9 @@ describe('native vectors (0146)', () => {
   // 0160: main.js can't load in Node, so coach.json's scheme is the mirror in vectors-lib: pinned to the line it mirrors.
   it("coach.json's pointerCtx mirror says what main.js says, and the coach's findings are all exercised", () => {
     const main = readFileSync('src/main.js', 'utf8');
-    expect(main).toContain("device === 'touch' && touchSet.scheme === 'thumb' && course !== 'lineup' && tier === 'assist' ? 'thumb' : 'classic'");
+    expect(main).toContain("device === 'touch' && touchSet.scheme === 'thumb' && tier === 'assist' ? 'thumb' : 'classic'");
     expect(schemeFor('touch', 'thumb', 'show', 'assist')).toBe('thumb');
+    expect(schemeFor('touch', 'thumb', 'lineup', 'assist')).toBe('thumb');   // 0181
     const c = JSON.parse(disk('coach.json'));
     expect(c.simVersion).toBe(SIM_VERSION);
     expect(c.flights.length).toBe(runList().length + inputList().length);
