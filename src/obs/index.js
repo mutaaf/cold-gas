@@ -20,7 +20,7 @@
 import { signature, moduleOf, redact, MODULE_IDS, KIND_IDS, PLAY_EVENTS } from './signature.js';
 import { createBreaker } from './breaker.js';
 import { createFrameStats, recordFrame, summary, NB } from './frames.js';
-import { loadLedger, saveLedger, chooseBoot, createGovernor, SCALES, TIER_IDS } from './ledger.js';
+import { loadLedger, saveLedger, chooseBoot, createGovernor, diedOnScreen, SCALES, TIER_IDS } from './ledger.js';
 
 export const BUILD = (import.meta.env?.VITE_CG_BUILD || 'dev').replace(/[^0-9a-z.-]/gi, '').slice(0, 24) || 'dev';
 const API = `${import.meta.env?.BASE_URL ?? '/coldgas/'}api/obs`;
@@ -157,9 +157,10 @@ function createObs() {
     o.ledger ??= loadLedger(storage);
     o.governor = createGovernor({ level: o.scale });
     o.session = { t: Date.now(), build: o.build, tier: o.tier, scale: o.scale, dc, frames: 0, p50: 0, p95: 0, p99: 0, hitches: 0, crashes: {}, errors: 0, ctxLost: 0, ended: false };
-    // The previous session never said goodbye: count it (a killed tab or a crashed renderer).
+    // The previous session never said goodbye while on screen: count it (a crashed renderer, an out-of-memory kill).
+    // A tab the phone dropped from the background never gets pagehide; it went hidden first, so it isn't one (0183).
     const prev = o.ledger.sessions[o.ledger.sessions.length - 1];
-    if (prev && prev.ended === false && (prev.frames || 0) > 600) o.error('page', Object.assign(new Error('previous session ended without pagehide'), { stack: '' }), 'unclean');
+    if (diedOnScreen(prev)) o.error('page', Object.assign(new Error('previous session ended without pagehide'), { stack: '' }), 'unclean');
     o.ledger.sessions.push(o.session);
     persist();
     // A visit: new on this device, or back on a later UTC day (one count a day, nothing else kept).
@@ -199,7 +200,14 @@ function createObs() {
     // Vite's own event for a failed dynamic import (a chunk gone after a deploy, a dropped network).
     on(globalThis, 'vite:preloadError', (e) => { o.lazyFailed(e.payload || new Error('preload failed')); });
     on(globalThis, 'pagehide', () => { leave(); if (o.session) { o.session.ended = true; saveSession(); } o.flush('pagehide'); });
-    on(document, 'visibilitychange', () => { if (document.visibilityState === 'hidden') { saveSession(); o.flush('hidden'); } });
+    // Hidden is how a phone tab leaves for good as often as not (frozen, then discarded with no pagehide): record it,
+    // and clear it when the page is back on screen.
+    on(document, 'visibilitychange', () => {
+      const hidden = document.visibilityState === 'hidden';
+      if (o.session) o.session.hidden = hidden;
+      saveSession();
+      if (hidden) o.flush('hidden');
+    });
     wrapFetch();
   }
   const isTrap = (err) => (typeof WebAssembly !== 'undefined' && err instanceof WebAssembly.RuntimeError) || /\bunreachable\b|memory access out of bounds|recursive use of an object|RuntimeError/i.test(`${err?.name} ${err?.message}`);
