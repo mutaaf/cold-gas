@@ -1,12 +1,12 @@
 ---
 id: 0177
 title: On the Wall, a tapped thumb's slide acts as early as a held one's, and a full slide reaches the mark
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-09
-pr:
+pr: 287
 by: critic
 ---
 
