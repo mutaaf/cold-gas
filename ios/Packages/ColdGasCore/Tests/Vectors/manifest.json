@@ -15,8 +15,8 @@
   },
   {
    "path": "coach.json",
-   "sha256": "9f6d71c27136773a7923e69009a453f91c60c7d1bc7c56b1073c3b9a9736e719",
-   "bytes": 443680
+   "sha256": "d4c07dd1c4ecbc96d2d8617cee966757169995064db8fc4b10b5833e466536b1",
+   "bytes": 445660
   },
   {
    "path": "dmath.json",
@@ -97,6 +97,11 @@
    "path": "input/thumb-show-tap-hold.json",
    "sha256": "f25ee7daab6a81640d81419f52895dfffd3d4ccfe62404a2e15afd72ef72fb21",
    "bytes": 59382
+  },
+  {
+   "path": "input/thumb-wall-again-aim.json",
+   "sha256": "376ef51d8df7da4db4b162f10d01eb77df55218ef448233208c473445bf40b2b",
+   "bytes": 72804
   },
   {
    "path": "input/thumb-wall-aim.json",
