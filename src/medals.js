@@ -20,13 +20,15 @@ export const MEDAL_LABEL = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 //    each: a thumb that never aims lands 81.7–86 (median 83.7: bronze); one that slides onto the sight's dot,
 //    median 92.7 (silver) and p90 95.7 (gold); sloppy aiming median 90.3; the classic two-thumb scheme and
 //    the keyboard population median 73; the reference 97.7.
-//  - The Wall, Assist: scripts/naive-players.mjs (32 naive strategies: 84–88) and the reference (96).
+//  - The Wall, Assist, SIM_VERSION 31 judging (0182: the mark counts): scripts/naive-players.mjs (32 naive strategies,
+//    60–74.3: the 24 that land Clean earn the bronze, 8 Rough landings don't; all 32 did at the old 84–88) and a thumb
+//    that never finds the mark (≈ 78) earn the bronze, a clean landing (72, was 84); careful thumbs that slide onto the mark median 96.7; the reference 97.7.
 //  - The Lineup, Assist: the reference kickflip is 92; a clean 360 by hand is the bronze.
 //  - Pro and Advanced: the panel pays ×1.08 and ×1.15 (judge.js TIERS) for flying with less computer;
 //    the bars rise by less than that (ESTIMATE: the same flight is harder to fly, so not the full factor).
 export const MEDALS = {
   show: { assist: [80, 90, 95], pro: [82, 92, 96.5], advanced: [83, 93, 97.5] },
-  wall: { assist: [84, 90, 94], pro: [86, 92, 96], advanced: [87, 93, 97.5] },
+  wall: { assist: [72, 90, 94], pro: [74, 92, 96], advanced: [75, 93, 97.5] },
   lineup: { assist: [72, 84, 90], pro: [75, 87, 93], advanced: [77, 89, 95] },
 };
 

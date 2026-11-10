@@ -12,7 +12,7 @@ public enum Medal: String, Codable, CaseIterable {
 public struct Medals: Equatable {
     public static let MEDALS: [String: [String: [Double]]] = [
         "show": ["assist": [80, 90, 95], "pro": [82, 92, 96.5], "advanced": [83, 93, 97.5]],
-        "wall": ["assist": [84, 90, 94], "pro": [86, 92, 96], "advanced": [87, 93, 97.5]],
+        "wall": ["assist": [72, 90, 94], "pro": [74, 92, 96], "advanced": [75, 93, 97.5]],   // 0182
         "lineup": ["assist": [72, 84, 90], "pro": [75, 87, 93], "advanced": [77, 89, 95]],
     ]
     /// [bronze, silver, gold], the Show's when the course is unknown, Assist's when the tier is.

@@ -115,7 +115,8 @@ export function namesBraking(sink, cost, { show = false, drill = false } = {}) {
 // The Show names the mark once a miss costs this many points of the total (≈ 4.4 m on Assist with the rings' curve);
 // under it a run with nothing else to fix is "Clean". Past 7 m it is always named: on Pro and Advanced a strong
 // run's judges sit at the 10 cap, so a 5–6 m miss can cost the total nothing. A drill (fromTick > 0) has no total
-// on its card, so it keeps the 7 m its stat line flags. The Wall and the Lineup keep their 7 m.
+// on its card, so it keeps the 7 m its stat line flags. The Wall does the same since 0182 (`show` here means a course
+// judged on the rings: the Show or the Wall); the Lineup keeps its 7 m.
 export const MARK_POINTS = 3;
 export function namesMark(padMiss, cost, { show = false, drill = false } = {}) {
   return padMiss > 7 || (show && !drill && cost >= MARK_POINTS);
@@ -219,8 +220,9 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
   }
   if (f.touch && !t.contact) {
     const aim = say.aim || AIM_LEAN, Aim = aim[0].toUpperCase() + aim.slice(1);
-    const cost = scored ? markCost(t) : 0;
-    if (namesMark(f.touch.padMiss, cost, { show, drill })) {
+    // 0182: the Wall reads its mark off the rings too (SIM_VERSION 31), so its miss is weighed by what it cost, as the Show's.
+    const cost = wall && !drill ? markCost(t) : 0;
+    if (namesMark(f.touch.padMiss, cost, { show: wall, drill })) {
       const { title, where } = markMiss(f.touch, show);
       // On the Show the finding weighs what it cost: a 6–7 m miss (≈ 15–17 points) outranks a tilt or the gas,
       // never a crash-grade braking or carry fix (8–10).

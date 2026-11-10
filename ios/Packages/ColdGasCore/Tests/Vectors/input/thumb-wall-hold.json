@@ -1,4 +1,4 @@
-{"format":1,"simVersion":30,"name":"thumb-wall-hold","course":"wall","scheme":"thumb","tier":"assist","level":"standard","ticks":4019,"releaseTick":2876,"endReason":"settled","final":"1e5aa707e5887536","after":{"startTick":4019,"ticks":120,"still":120,"endTick":4139,"final":"53362df0a3eeb018","state":["40175fa9fde84a41","3fd9cb70c08d27b9","c0335a36cac2f41b","3ea55f4eaf31684c","bfefe8e3c64e15c2","3ed30f1b2c2e58ca","3fb3373713da9d18","3ef6f5983bc33488","bf01ca5dedfe4519","3f1cc47850795e8e","3f30635bcb678c2f","bdec5c448356230f","bf0b206d12dbd3f9","3fe594c57a0c1a39","be97de02722313e2","bfbc5339d033c18a","405c28f22b22338d","4010000000000000","3ff0000000000000","3ff0000000000000","3ff0000000000000","3ff0000000000000"]},
+{"format":1,"simVersion":31,"name":"thumb-wall-hold","course":"wall","scheme":"thumb","tier":"assist","level":"standard","ticks":4019,"releaseTick":2876,"endReason":"settled","final":"1e5aa707e5887536","after":{"startTick":4019,"ticks":120,"still":120,"endTick":4139,"final":"53362df0a3eeb018","state":["40175fa9fde84a41","3fd9cb70c08d27b9","c0335a36cac2f41b","3ea55f4eaf31684c","bfefe8e3c64e15c2","3ed30f1b2c2e58ca","3fb3373713da9d18","3ef6f5983bc33488","bf01ca5dedfe4519","3f1cc47850795e8e","3f30635bcb678c2f","bdec5c448356230f","bf0b206d12dbd3f9","3fe594c57a0c1a39","be97de02722313e2","bfbc5339d033c18a","405c28f22b22338d","4010000000000000","3ff0000000000000","3ff0000000000000","3ff0000000000000","3ff0000000000000"]},
 "events":[
 [0,"tilt","0000000000000000","0000000000000000"],
 [0,"down"],
@@ -1067,7 +1067,7 @@
 ["categories.efficiency","n","401e666666666666"],
 ["categories.inversion","n","4024000000000000"],
 ["categories.landing","n","4023666666666666"],
-["categories.precision","n","4012000000000000"],
+["categories.precision","n","3ffccccccccccccd"],
 ["categories.rotation","n","4023666666666666"],
 ["course","s","wall"],
 ["facts.airPct","n","4043000000000000"],
@@ -1114,18 +1114,18 @@
 ["facts.zeroToSixty","z",null],
 ["judges[0].id","s","engineer"],
 ["judges[0].name","s","The Engineer"],
-["judges[0].score","n","4021cccccccccccd"],
+["judges[0].score","n","401e666666666666"],
 ["judges[0].title","s","Chief Vehicle Engineer"],
 ["judges[1].id","s","coordinator"],
 ["judges[1].name","s","The Coordinator"],
-["judges[1].score","n","4022cccccccccccd"],
+["judges[1].score","n","4020666666666666"],
 ["judges[1].title","s","Stunt Coordinator"],
 ["judges[2].id","s","designer"],
 ["judges[2].name","s","The Designer"],
-["judges[2].score","n","402199999999999a"],
+["judges[2].score","n","401d99999999999a"],
 ["judges[2].title","s","Head of Design"],
 ["multiplier","n","3ff0000000000000"],
 ["tier","s","assist"],
-["total","n","4056933333333333"],
-["verdict","s","Stuck it"]
+["total","n","4053533333333333"],
+["verdict","s","Clean"]
 ]}

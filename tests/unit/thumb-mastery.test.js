@@ -315,6 +315,21 @@ describe('on the Wall, a tapped thumb\'s slide acts as early as a held one\'s, a
     }
   }, 120000);
 
+  // 0182 (critique 2026-11-10-0950 §2): the slide that finds the Wall's mark earned +1.3–2.0 points (the Wall read its
+  // mark on a line from 1 to 20 m, at precision weights 0.16 · 0.06 · 0.14). It now shows in the score.
+  it('pressed again at 1.25 and 2.25 s: the best slide in −48 … 0 px scores ≥ 5 points more than no slide (0182)', () => {
+    for (const again of [1.25, 2.25]) {
+      const none = scoreRun(fly(0, again).t).total;
+      let best = -Infinity;
+      for (let px = -48; px < 0; px += 8) best = Math.max(best, scoreRun(fly(px, again).t).total);
+      expect(best - none, `again ${again} s: none ${none}, best ${best}`).toBeGreaterThanOrEqual(5);
+    }
+    // And the coach weighs a Wall miss inside 7 m by what it cost, as on the Show (it named only misses past 7 m).
+    const run = fly(-40, 2.25), card = scoreRun(run.t);
+    expect(card.facts.padMiss).toBeGreaterThan(4); expect(card.facts.padMiss).toBeLessThanOrEqual(7);
+    expect(coach(run.inputLog, 'wall', card).items.map((i) => i.id)).toContain('mark');
+  }, 180000);
+
   it('the held thumb and the Show fly exactly as before (the change is the Wall\'s hold pressed in the air)', () => {
     // A slide held from the tap on the Wall, and a tapped thumb on the Show: the logs 0164 shipped (#282) still come out.
     const wall = fly(-24, -1), show = flyThumb({ again: 1.5, slide: (r, th) => th.move(-24, 0) });

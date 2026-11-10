@@ -85,8 +85,8 @@ describe('the pointer after a run', () => {
     expect(ring).not.toMatch(/slide onto the amber dot/);
     expect(ring).toBe('Clean, 2.4 m from the mark. Next: try Pro and fly the landing yourself');
     expect(pointerText('clean', THUMB, at(3.5))).toBe('Clean, 3.5 m from the mark. Next: try Pro and fly the landing yourself');
-    // The Wall: precision pays to 0.8 m, so the 2 m ring first.
-    expect(pointerText('clean', WALL, at(2.43))).toBe('Clean, 2.4 m from the mark. Next: inside the 2 m ring, then try Pro');
+    // The Wall: the same rings since 0182 (it paid to 0.8 m and named the 2 m ring first), so Pro.
+    expect(pointerText('clean', WALL, at(2.43))).toBe('Clean, 2.4 m from the mark. Next: try Pro and fly the landing yourself');
     expect(pointerText('clean', WALL, at(1.6))).toBe('Clean, 1.6 m from the mark. Next: try Pro and fly the landing yourself');
     // Read at the card's 0.1 m: 3.53 is the card's 3.5 (the mark Daily met), 2.03 is 2.0 (inside the 2 m ring).
     expect(pointerText('clean', THUMB, at(3.53))).toMatch(/^Clean, 3\.5 m from the mark/);
