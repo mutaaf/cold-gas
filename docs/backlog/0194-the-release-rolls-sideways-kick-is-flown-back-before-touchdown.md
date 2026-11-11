@@ -80,3 +80,44 @@ asserts `|t.lateral| ≤ 1.5` and `|vx| ≤ 0.5` at the touchdown tick.
   table after.
 - The roll's own physics: one-sided down-jet torque is a modelling choice with a source.
 - The sight and the pad's words (0180, 0188).
+
+## Builder attempt 1 (2026-11-11, no fix shipped; docs only)
+A line hold that flies back to the release line meets every lateral bar, but costs the references their score and
+regresses `naive-show`. Status stays `ready`. Node, main `b3b45a1`, the critique's `flyThumb` loop (release = the ledge tap).
+
+**What was built (not merged; the law, so the next run starts from it):**
+- `s.lineX` = the car's x while any wheel is down, or while the pilot rolls roof up (the slide moves the line). `s.lineArm` = 1
+  once LAND's roll-out runs from upside down (`rollOut && uy < -0.2`: the ledge release only; the Lineup's kickflip never arms it,
+  so the Lineup stays bit-identical, hash `4fc4af6b`).
+- Armed, roof up, stick centred, above 0.5 m: want `vw = −sign(ex)·min(2, 1·|ex|, √(2·0.5·|ex|))` m/s toward the line
+  (`ex = x − lineX`), sideways accel `4·(vw − vx)`, bank = that accel ÷ max(g, the lift LAND has asked for, low-passed over 0.3 s),
+  ≤ 0.3 rad above HOVER + 1.5 m and ≤ 0.2·min(1, 4·low) below it, flown at 3.5 rad/s per rad (LEVEL_K's 2 is too slow: τ ≈ 0.5 s).
+  Unarmed, the old drift-kill law runs unchanged. The reference (`wallPilot`) stops steering sideways and lets the hold fly it.
+
+| flight (no slide) | main `t.lateral` / vx at touchdown | attempt | main total → attempt |
+|---|---|---|---|
+| Show reference | +1.04 m / −2.55 m/s | +0.13 / −0.23 | 97.3 → **95.0** |
+| Show thumb held · never pressed · again 0.5 / 1.0 / 2.0 s | −5.14…−5.72 m / ≤ 0.3 | −0.20…−0.07 / ≤ 0.19 | 83.7–86.7 → 91.3–93.3 |
+| Wall reference | +3.58 m / −0.55 | +0.08 / −0.08 | 97.7 → **96.0** |
+| Wall thumb, the same five | +6.06…+7.24 m / ≤ 1.74 | 0.01–0.09 / ≤ 0.29 | 77.3–78.0 → 78.3–81.7 (miss 7.6–10 m: the along-run part, 0190) |
+
+**Why it doesn't ship:**
+- **References lose on gas (efficiency Show 10 → 6.9, Wall 8.8 → 7.5).** Gas goes with flight time. The return isn't costly in
+  itself (a 0.2–0.3 rad bank loses ≈ 3 % of the lift); the extra 1.0–1.2 s is. Back on the line, the Show reference comes down
+  over the row's last roof at ≈ 3 m. LAND's altimeter reads the roof, the one-burn cap collapses to 0.02 m/s, the car bounces
+  (vy +0.6 at 2.7 m), carries 4 m past the pad (landZ −33.4 against −28.95), and the reference's pitch-back plus the bank trips
+  "level before the wheels touch" (`h < 1.2 && upW.y < 0.99` → sink held at 0.25 m/s) for ≈ 0.8 s. Drifting 4.4 m sideways on
+  main, it came down **beside** that roof.
+- **`naive-show` 54/54 → 51/54** (`climb 4, release 0.85/0.97, boost 0`: contact on the row, landZ −12 / 0). The same cause:
+  the line runs over the row.
+- **Show thumb sink:** never pressed again, 1.30 → 1.64 m/s (bar ≤ 1.3); release → touchdown + 0.1–0.3 s.
+- **Unit suite: 53 failing in 11 files** (vectors and worker's reference card expected; also thumb-mastery 18, learn 6, daily 6,
+  gtrace 5, coach-mark 3, thumb-lift 2, thumb-gas 2): tests pinned to today's no-slide touchdown, which has to be re-set with the law.
+- Tried and measured, no better: P-on-velocity (overshoots: the 3 g brake gives 3× the authority), PD with ω 1.2–1.6, a
+  time-to-go guidance law (refs 96–97 but touchdown vx 1.3–2.2), a lead term, roll-rate caps, LL 0.10–0.15 under 1.2 m.
+
+**For the next run:** the line on the Show has to stay off the row's roofs until the car is past `rowFar`. Either hold the
+drift (old law) until the car is beyond the row and only then fly back, or let the Show's `lineX` follow the pad only past the row.
+Re-measure `naive-show` first, then the references. The Wall has no row, so its version may ship alone (Wall reference 96.0
+here: its loss is efficiency 8.8 → 7.5 from the slower set-down). The sim change bumps `SIM_VERSION` and regenerates vectors, and
+`ios/Packages/ColdGasCore/Sources/ColdGasPhysics/Vehicle.swift:227` (the hold) needs the same law.
