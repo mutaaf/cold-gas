@@ -110,3 +110,26 @@ Critique `docs/critique/2026-11-11-0410.md` §1 has the full numbers.
 - Never raise the budget. A rebaseline is the operator's call alone (docs/flicker-budget.json `_readme`).
 - If the operator rebaselines on purpose, as with 0097, that decision closes this criterion, and the PR quotes it.
 - Draft #304's soft knee also raises `show-replay/car` (62.8 → 105.4 ‰ desktop), so it doesn't meet this either.
+
+## Builder pass 2 (2026-11-11, branch `build/0187-the-replay-car-holds-still`): one cause fixed, one needs the operator
+Desktop label, SwiftShader, same machine. A per-frame timeline (`FLK_PRE` wrapping `stage.render`) split `show-replay/car` by
+director shot and by deck look (k):
+
+| shot (the Show's replay) | car px | ppm | main ‰ | what moves it |
+|---|---|---|---|---|
+| 1 (the reference wide, locked off, 31 m), off the deck | 2,330 | 19–20 | 133 | — |
+| 1, on the deck (k > 0) | 2,130 | 17–19 | **206** (70 % of all car pops) | course bloom back: 143. Nothing else did (below) |
+| 2 (closer, on the deck) | 7,000 | 28–33 | 29.7 | shut lines hidden: 9.8; course bloom back: 0.0 |
+
+- **Fixed: the shut lines.** In shot 2 the 4.2 mm black seams are about 0.25 px on screen and popped on and off the paint.
+  They're now drawn at least 3 px wide and faded by the share they really cover (`sliverTube`, src/render/sliver.js), so they
+  put the same darkness on screen spread evenly. Shot 2 went 29.7 → 9.9 ‰, the same as no seams at all. The look audit is
+  unchanged (every bar still met), and close up a seam over 3 px draws exactly as before. The iPhone export keeps the opaque line.
+- **Not fixed: shot 1 on the deck.** Tried and measured, with no effect on shot 1's on-deck car (206 ‰ ± 4): seams hidden, the
+  car's specular (roughness 1, no clearcoat or sheen), the bloom's high-pass knee (smoothWidth 2 and 5), no self-shadow, no
+  searchlight beams. Stepping the probe at 1/120 s halves the off-deck frames (133 → 69 ‰, honest motion) but takes the on-deck
+  ones only to 146 ‰. The only lever that moves it is the course bloom on the car, which is what 0187 took off.
+  `show-replay-rigs` counts only shot 1, so it can't pass without that bloom: with it, ≈ 141 ‰ against 144.3.
+- **A size gate won't work either.** The look audit's 844×390 phone draws the hang at 10–11 px/m, smaller than shot 1's 17–19.
+- **Operator's call:** rebaseline `show-replay/car` and `show-replay-rigs/car` (desktop swiftshader) for the readable car, as
+  with 0097, or let the reference wide shot keep the course bloom. The critic ruled out the second.
