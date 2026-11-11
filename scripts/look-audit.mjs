@@ -60,8 +60,9 @@ for (const size of sizes) {
     // The replay as a player sees it: Replay pressed on the results, so on a phone the sheet folds to its peek (0068).
     if (name.startsWith('replay') && !peeked) {
       peeked = true;
-      await page.waitForFunction(() => window.__coldgas.S.mode === 'results' && !!document.querySelector('[data-replay]')?.offsetParent, null, { timeout: 240000 }).catch(() => {});
-      await page.evaluate(() => document.querySelector('[data-replay]')?.click());
+      await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 240000 }).catch(() => {});
+      await page.locator('[data-replay]').click({ timeout: 30000 }).catch((e) => console.error('look-audit: no Replay button', e.message));
+      await page.waitForFunction(() => window.__coldgas.S.replayT * 4 / 240 < 1, null, { timeout: 30000 }).catch(() => {});
     }
     // Freeze in the predicate itself, so the frame on the glass is the one that met it.
     const fn = `(() => { const S = window.__coldgas.S; if (S.run && (${pred})) { S.paused = true; return true; } return false; })()`;
