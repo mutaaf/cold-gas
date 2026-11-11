@@ -112,8 +112,8 @@ describe('the Lineup on one thumb: the thumb picks the trick (0191)', () => {
   });
 
   it('slid up on the run-up calls two turns: the 720 lands clean, and slid onto the mark it is Gold', () => {
-    // The call at three places on the run-up (early, half way, just short of the line), the thumb left up there.
-    for (const z of [-60, -30, -5]) {
+    // The call at places along the run-up (early, half way, the last place it's taken), the thumb left up there.
+    for (const z of [-60, -30, -10, -6.5]) {
       const c = card(flyHeld(Infinity, false, [[z, THUMB.aimPx]]));
       expect(c.facts.rotations, `called at ${z}`).toBe(2);
       expect(c.verdict, `called at ${z}`).toMatch(/Stuck it|Perfect 10/);
@@ -127,6 +127,32 @@ describe('the Lineup on one thumb: the thumb picks the trick (0191)', () => {
     expect(medalFor('lineup', 'assist', c.total)).toBe('gold');
     // The input log replays to the same card (the Worker scores the 720 this way too).
     expect(scoreRun(simulate(aimed.inputLog, 'lineup').t).total).toBe(c.total);
+  });
+
+  it('wherever it was called, the 720 lifts at its own speed: the same flight, and aimed it is Gold with a soft touchdown (the review)', () => {
+    // A call late on the run-up lifted at the 360's 7.5 m/s: 8–12 m long unaimed, and 2.7 m/s of sink aimed short.
+    const totals = new Set();
+    for (const z of [-60, -30, -20, -10, -6.5]) {
+      const c = card(flyHeld(Infinity, false, [[z, THUMB.aimPx], [COURSES.lineup.lineupEnd + 1, 0]]));
+      expect(c.facts.rotations, `called at ${z}`).toBe(2);
+      expect(c.facts.sink, `called at ${z}`).toBeLessThan(1.3);
+      expect(medalFor('lineup', 'assist', c.total), `called at ${z}`).toBe('gold');
+      totals.add(c.total);
+    }
+    expect(totals.size).toBe(1);
+  });
+
+  it('too near the line to slow down, a slide up is no call: the 360 flies as before, and the pad stops offering it', () => {
+    for (const z of [-5, -3, 0]) {
+      const c = card(flyHeld(Infinity, false, [[z, THUMB.aimPx]]));
+      expect(c.facts.rotations, `slid at ${z}`).toBe(1);
+      expect(c.verdict, `slid at ${z}`).toMatch(/Stuck it|Perfect 10/);
+    }
+    const run = createRun('lineup'), th = createOneThumb(), offer = [];
+    th.down();
+    while (run.phase === 'drive') { const inp = newInput(); th.sample(run, false, inp); offer.push([run.car.pos.z, th.offer]); stepRun(run, inp); }
+    expect(offer.filter(([z]) => z < -7).every(([, o]) => o)).toBe(true);
+    expect(offer.filter(([z]) => z > -5).every(([, o]) => !o)).toBe(true);
   });
 
   it('the call is latched on the run-up: slid back to the middle it holds, slid down it is taken back', () => {

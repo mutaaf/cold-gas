@@ -58,7 +58,7 @@ export function howtoRows(ctx) {
   if (ctx.course === 'lineup' && thumbOn(ctx)) {   // 0181: the Lineup on one thumb
     return [
       row('Drive', 'drive', 'Drives you down the runway; let go to stop.'),
-      { phase: 'Lift & roll', verb: 'keep holding', ctl: 'the pad', what: 'At the line it lifts you over the row and rolls 360°. Slide up on the way for 720°.' },
+      { phase: 'Lift & roll', verb: 'keep holding', ctl: 'the pad', what: 'At the line it lifts you over the row and rolls 360°. Slide up early on the way for 720°.' },
       row('Land', 'land', 'Levels and brakes for you. Late? It lands for you.'),
       { phase: 'Aim & brake', verb: 'hold, slide', ctl: 'the pad', what: 'Slide onto the amber dot to hit the mark.' },
     ];

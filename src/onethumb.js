@@ -101,7 +101,7 @@ const LIFT_EARLY = COURSES.lineup.lineupZ0 - 6.5 - COURSES.lineup.liftOffZ, LIFT
 // plateau where both turns finish and LAND still sets it down, 9.5–10.5 m all land Stuck it or better). Unaimed it lands
 // ≈ 4–5 m long: the slide onto the mark is what turns the 720 into the Lineup's best score, not the call alone.
 export const LINEUP_TWICE = { speed: 6, apex: 10.25, rolls: 2, rollBrake: REVEAL.lineup.rollBrake };
-const TWICE_AT = 0.5;
+const TWICE_AT = 0.5, CALL_ROOM = 6;
 const lrates = { x: 0, y: 0, z: 0 };
 const bx = { x: 0, y: 0, z: 0 }, X1 = { x: 1, y: 0, z: 0 };
 // 0165: along the run (the Show) the slide is a place too. `refA` is predict's touchdown along the car's nose (LAND holds
@@ -188,7 +188,7 @@ export function thumbStage(run, released) {
 }
 
 export function createOneThumb() {
-  const st = { airPress: false, held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, steady: 0, ref0: NaN, win: 0, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false, lifting: false, burnt: false, rolled: false, twice: false, ox: 0, oy: 0 };
+  const st = { airPress: false, held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, steady: 0, ref0: NaN, win: 0, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false, lifting: false, burnt: false, rolled: false, twice: false, offer: false, ox: 0, oy: 0 };
   const pr = newPrediction();
   const aim = { x: 0, y: 0 };
   return {
@@ -197,7 +197,7 @@ export function createOneThumb() {
     up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
     // The held thumb's slide from where it pressed, CSS px (+x right, +y up the glass).
     move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx - st.ox; st.ay = dy / THUMB.aimPx - st.oy; } },
-    reset() { st.airPress = false; st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; st.lifting = false; st.burnt = false; st.rolled = false; st.twice = false; st.ox = 0; st.oy = 0; },
+    reset() { st.airPress = false; st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; st.lifting = false; st.burnt = false; st.rolled = false; st.twice = false; st.offer = false; st.ox = 0; st.oy = 0; },
     // 0164: where the sideways slide is measured from (m, the car's right +, along the car's own side axis), NaN
     // before this hold could aim.
     get ref() { return st.ref; },
@@ -216,6 +216,8 @@ export function createOneThumb() {
     get rolled() { return st.rolled; },
     // 0191: the second turn is called (the run-up's up-slide), or was when the lift committed.
     get twice() { return st.twice; },
+    // 0191: the call can still be made (the Lineup's run-up, CALL_ROOM m or more short of the line).
+    get offer() { return st.offer; },
     get pending() { return st.pressed; },
     // 0140: LAND is on for this flight (the thumb held it once), whether or not the thumb is down now.
     get landing() { return st.landing; },
@@ -244,7 +246,10 @@ export function createOneThumb() {
         // A hop on the run-up (a hard dead-man brake) is still the run-up: the kickflip starts only from the line.
         if (!st.lifting) {
           // 0191: the call, read while the thumb is down on the run-up.
-          if (st.held) { const sy = shape(st.ay); if (sy >= TWICE_AT) st.twice = true; else if (sy <= -TWICE_AT) st.twice = false; }
+          // Taken only while there's room to slow to the 720's run-up speed before the line (CALL_ROOM m): a call that
+          // lifted at the 360's speed landed 8–12 m long, and aimed short it set down at 2.7 m/s (the review of 0191).
+          st.offer = c.pos.z < lc.liftOffZ + LIFT_EARLY - CALL_ROOM;
+          if (st.held && st.offer) { const sy = shape(st.ay); if (sy >= TWICE_AT) st.twice = true; else if (sy <= -TWICE_AT) st.twice = false; }
         }
         const L = st.twice ? LINEUP_TWICE : REVEAL.lineup;
         if (!st.lifting) {
@@ -253,14 +258,16 @@ export function createOneThumb() {
           // Past the line it commits once moving: a held thumb that stopped there drives up to LIFT_MIN_V first (a lift
           // from a standstill came down short of the row, or on it: the review of 0181).
           if (c.pos.z > lc.liftOffZ + LIFT_EARLY && vh > LIFT_MIN_V) {
-            st.lifting = true;
-            // 0191: the slide that called the trick isn't an aim: the air's slide is measured from here.
-            st.ox += st.ax; st.oy += st.ay; st.ax = 0; st.ay = 0;
+            st.lifting = true; st.offer = false;
+            // 0191: the slide that called the trick isn't an aim: the air's slide is measured from here (without a call,
+            // as before 0191).
+            if (st.twice) { st.ox += st.ax; st.oy += st.ay; st.ax = 0; st.ay = 0; }
           }
           else if (!st.held) { out.brake = 1; return out; }
           else {
             out.throttle = vh < L.speed ? 1 : 0;
-            out.brake = vh > L.speed + 0.6 ? 0.4 : 0;
+            // 0191: the 720's flight is tuned to its run-up speed, so the call slows the car to it (the 360's band is as before).
+            out.brake = st.twice ? (vh > L.speed + 0.05 ? 1 : 0) : vh > L.speed + 0.6 ? 0.4 : 0;
             return out;
           }
         }

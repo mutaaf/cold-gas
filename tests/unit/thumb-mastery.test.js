@@ -483,8 +483,11 @@ describe('medals (0121)', () => {
       expect(th.silver).toBeLessThan(th.gold);
       expect(th.gold).toBeLessThan(100);
     }
-    // Pro and Advanced ask more than Assist.
-    expect(thresholds('show', 'pro').gold).toBeGreaterThan(thresholds('show', 'assist').gold);
+    // Pro and Advanced ask more than Assist, on every event (0191 moved the Lineup's Assist gold: it stays under Pro's).
+    for (const c of Object.keys(MEDALS)) for (const k of ['bronze', 'silver', 'gold']) {
+      expect(thresholds(c, 'pro')[k], `${c} ${k}`).toBeGreaterThan(thresholds(c, 'assist')[k]);
+      expect(thresholds(c, 'advanced')[k], `${c} ${k}`).toBeGreaterThan(thresholds(c, 'pro')[k]);
+    }
   });
 
   it('a never-slide one-thumb run is bronze on the Show, and the reference flight is gold', () => {

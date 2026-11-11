@@ -1059,7 +1059,7 @@ function syncScheme() {
 }
 const LINEUP_LINE = COURSES.lineup.lineupZ0 - 6.5;   // where it lifts (src/onethumb.js LIFT_EARLY)
 const thumbLast = { word: '', warn: null, arc: -1 };
-const padIn = { stage: '', held: false, going: false, landing: false, autoLand: 0, lineup: false, lifting: false, rolled: false, airborne: false, rolling: false, green: true, twice: false };
+const padIn = { stage: '', held: false, going: false, landing: false, autoLand: 0, lineup: false, lifting: false, rolled: false, airborne: false, rolling: false, green: true, twice: false, offer: false };
 const padOut = { word: '', stage: '', warn: false };
 function syncThumb(run, c) {
   const stage_ = thumbStage(run, S.released);
@@ -1069,7 +1069,7 @@ function syncThumb(run, c) {
   // 0188: the words and the amber ask (src/thumb-words.js): once LAND flies (auto-land, or held once), the hold aims.
   const pi = padIn;   // reused every frame (§3.6)
   pi.stage = stage_; pi.held = held; pi.going = stage_ === 'ledge' && (thumb.driving || thumb.pending); pi.landing = thumb.landing;
-  pi.autoLand = c.autoLand; pi.lineup = lineup; pi.lifting = thumb.lifting; pi.rolled = thumb.rolled; pi.twice = thumb.twice;
+  pi.autoLand = c.autoLand; pi.lineup = lineup; pi.lifting = thumb.lifting; pi.rolled = thumb.rolled; pi.twice = thumb.twice; pi.offer = thumb.offer;
   pi.airborne = run.phase === 'air' || run.phase === 'drive'; pi.rolling = Math.abs(run.t.rollAccum) > 0.3; pi.green = landing.status() === 'green';
   const pad = padState(pi, padOut);
   const word = pad.word, warn = pad.warn;

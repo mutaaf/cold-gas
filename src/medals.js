@@ -26,14 +26,14 @@ export const MEDAL_LABEL = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 //  - The Lineup, Assist: a clean 360 by hand is the bronze. 0191: the one thumb flies the reference kickflip for you and
 //    lands it on the mark (held from Go 91.3; the careful population's 360s 90.3–91.7, the reference 91.7), so the 360
 //    is the silver and the gold is the 720 (the run-up's slide up, src/onethumb.js LINEUP_TWICE) flown onto the mark:
-//    93, which no 360 reaches. scripts/lib/daily-reach.mjs flyThumbLineup, seed 12345, n 150: 15 Gold (10 %).
+//    92.5, which no 360 reaches (an unaimed 720 is 92, aimed 92.7–93), under Pro's 93.
 //    Two thumbs and keys roll the second turn by hand.
 //  - Pro and Advanced: the panel pays ×1.08 and ×1.15 (judge.js TIERS) for flying with less computer;
 //    the bars rise by less than that (ESTIMATE: the same flight is harder to fly, so not the full factor).
 export const MEDALS = {
   show: { assist: [80, 90, 95], pro: [82, 92, 96.5], advanced: [83, 93, 97.5] },
   wall: { assist: [72, 90, 94], pro: [74, 92, 96], advanced: [75, 93, 97.5] },
-  lineup: { assist: [72, 84, 93], pro: [75, 87, 93], advanced: [77, 89, 95] },
+  lineup: { assist: [72, 84, 92.5], pro: [75, 87, 93], advanced: [77, 89, 95] },
 };
 
 export function thresholds(course, tier) {
