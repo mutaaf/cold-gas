@@ -512,7 +512,18 @@ The operator steers through `agents/control.json` (paused, focus, parallel_focus
 120 Hz, Core Haptics) is planned in `docs/NATIVE.md` and will live in `ios/`. It ports `src/sim` line for line and
 is held to the same bits by vectors that `npm run vectors` writes from the JS sim (0146). It never changes the web
 game, the Worker or a score. Cloud agents take only the native tickets that don't need Xcode; the rest say
-"Runs on: the operator's Mac" and are listed in `parallel_focus.operator_only`. Branch
+"Runs on: the operator's Mac" and are listed in `parallel_focus.operator_only`.
+
+**Every iPhone release adds notes, and the app's What's new modal reads them.** `ios/release-notes/<MARKETING_VERSION>.md`
+is the one source for TestFlight's What to Test, the App Store's What's New and the in-app modal (bundled by project.yml,
+parsed by ColdGasClient's `ReleaseNotes`, drawn by `ios/ColdGas/UI/WhatsNewView.swift`). It needs a hero headline and 2–4
+`## Highlights` cards (a few words, one short line, an SF Symbol icon in an HTML comment, and `go:` a screen when the
+feature has one: the card then opens it), then the full notes; the shape,
+the tone (playful nods as tropes only: no real characters, franchises, brands, quotes or people; no politics or tragedy;
+family-friendly; every claim true, from the git history since the last release) and the rules are in
+`ios/release-notes/README.md`. The modal shows once per version after an update, never on a fresh install and never
+under a test or tool flag (`WhatsNewGate`; DEBUG `-whatsNew` forces it). `npm test` (tests/unit/ios-release-notes.test.js)
+and `make test` fail when the current version's file lacks the shape. Branch
 prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.
 
 ## 7 · Definition of done

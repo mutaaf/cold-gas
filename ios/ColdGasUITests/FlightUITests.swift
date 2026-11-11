@@ -7,7 +7,7 @@ final class FlightUITests: XCTestCase {
 
     private func launch(_ args: [String] = []) -> XCUIApplication {
         let a = XCUIApplication()
-        a.launchArguments = args
+        a.launchArguments = ["-uitest"] + args   // -uitest: no What's new modal over the title (WhatsNewGate)
         a.launch()
         return a
     }
@@ -91,6 +91,30 @@ final class FlightUITests: XCTestCase {
             a.buttons["Done"].tap()
             XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 5))
         }
+    }
+
+    /// What's new, forced (DEBUG -whatsNew wins over -uitest): a callout card takes you to its feature, and the modal
+    /// is gone when you come back; Let's fly closes it.
+    func testWhatsNewCalloutsGoToTheFeature() {
+        for (id, title) in [("whatsnew-go-howTo", "How to play"), ("whatsnew-go-settings", "Settings")] {
+            let a = launch(["-whatsNew"])
+            XCTAssertTrue(a.buttons["whatsnew-dismiss"].waitForExistence(timeout: 20), "the modal")
+            shot("whatsnew")
+            let card = a.buttons[id]
+            XCTAssertTrue(card.waitForExistence(timeout: 5), id)
+            card.tap()
+            XCTAssertTrue(a.staticTexts[title].waitForExistence(timeout: 5), title)
+            shot("whatsnew-" + id)
+            a.buttons["Done"].tap()
+            XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 5))
+            XCTAssertFalse(a.buttons["whatsnew-dismiss"].exists, "the modal closed")
+            a.terminate()
+        }
+        let a = launch(["-whatsNew"])
+        XCTAssertTrue(a.buttons["whatsnew-dismiss"].waitForExistence(timeout: 20))
+        a.buttons["whatsnew-dismiss"].tap()
+        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 5))
+        XCTAssertFalse(a.buttons["whatsnew-dismiss"].exists)
     }
 
     /// How to play says the game on its first screen and folds the rest, one open at a time.

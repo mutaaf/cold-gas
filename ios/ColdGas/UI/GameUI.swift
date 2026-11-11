@@ -20,7 +20,21 @@ struct RootUI: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
     @State private var sheet: Sheet?
-    enum Sheet: String, Identifiable { case board, settings, howTo, practice; var id: String { rawValue } }
+    /// What's new after an update (WhatsNewView.swift): read once per launch, shown over the title, never during a run.
+    @State private var whatsNew: ReleaseNotes? = RootUI.launchNotes
+    private static let launchNotes = WhatsNewStore.atLaunch()
+    enum Sheet: String, Identifiable {
+        case board, settings, howTo, practice; var id: String { rawValue }
+        /// A What's new callout's destination (exhaustive: a new destination has to be routed here to build).
+        init(_ d: WhatsNewDestination) {
+            switch d {
+            case .board: self = .board
+            case .settings: self = .settings
+            case .howTo: self = .howTo
+            case .practice: self = .practice
+            }
+        }
+    }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -40,6 +54,15 @@ struct RootUI: View {
                             .offset(x: layout.controls.minX, y: layout.controls.minY - 16)
                     }
                 }
+            }
+            if game.screen == .title, let n = whatsNew {
+                WhatsNewView(notes: n, dismiss: { withAnimation(.easeOut(duration: 0.2)) { whatsNew = nil } }, go: { d in
+                    // A callout takes you to its feature: the modal closes and that sheet opens over the title.
+                    withAnimation(.easeOut(duration: 0.2)) { whatsNew = nil }
+                    sheet = Sheet(d)
+                })
+                    .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
+                    .transition(.opacity)
             }
         }
         .ignoresSafeArea()
