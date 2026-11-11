@@ -160,7 +160,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
     // 0189: a car that stopped short of the ledge (a thumb lifted on the climb) never got to the let-go: name the
     // climb, not the release. The ledge is HANG_AT (run.js), where the one-thumb pad says "on the ledge".
     else if (t.progress < HANG_AT) {
-      add('stopped-climb', 10, 'Stopped on the climb', t.rampTick < 0 ? 'You stopped before the Wall.' : `You stopped ${r1(t.maxRampHeight)} m up the curl, short of the ledge.`,
+      add('stopped-climb', 10, 'Stopped on the climb', t.rampTick < 0 ? 'You stopped before the Wall.' : t.maxRampHeight < 1 ? 'You stopped at the foot of the Wall.' : `You stopped ${r1(t.maxRampHeight)} m up the curl, short of the ledge.`,
         `Keep holding ${say.drive} until you're upside down on the ledge.`);
     } else add('no-release', 10, 'Never let go', `You hung ${r1(t.invertedTime)} s inverted but never released.`, `On the ledge, tap ${say.release} to let go.`);
     return finish(out, f);

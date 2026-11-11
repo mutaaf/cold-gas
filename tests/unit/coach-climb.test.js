@@ -6,7 +6,9 @@ import { createRun, stepRun } from '../../src/sim/run.js';
 import { newInput } from '../../src/sim/vehicle.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { scoreRun } from '../../src/sim/judge.js';
-import { createOneThumb, thumbStage } from '../../src/onethumb.js';
+import { createOneThumb, thumbStage, THUMB as PAD } from '../../src/onethumb.js';
+import { HANG_AT } from '../../src/sim/run.js';
+import { wreckCause } from '../../src/obs/signature.js';
 import { coach, KEY_WORDS } from '../../src/sim/coach.js';
 import { coachWords, pickPointer, pointerText } from '../../src/pointer.js';
 
@@ -63,7 +65,9 @@ describe('0189: stopped on the climb is not "never let go"', () => {
       const keys = coach(run.inputLog, course, card, 0, coachWords(KEYS(course))).items[0];
       expect(keys.fix).toBe('Keep holding ↑ until you\'re upside down on the ledge.');
       expect(coach(run.inputLog, course).items[0].fix).toBe(keys.fix);   // the default words are a keyboard's
-      expect(pointerText('stopped-climb', KEYS(course))).toMatch(/hold ↑ until you’re upside down/);
+      expect(pointerText('stopped-climb', KEYS(course))).toMatch(/hold ↑ until you’re upside down on it/);
+      const pad = coach(run.inputLog, course, card, 0, coachWords({ device: 'pad', scheme: 'classic', tier: 'assist', course })).items[0];
+      expect(pad.fix).toBe('Keep holding RT until you\'re upside down on the ledge.');
     });
 
     it(`${course}: a thumb that hangs on the ledge and never taps still reads "Never let go"`, () => {
@@ -83,6 +87,12 @@ describe('0189: stopped on the climb is not "never let go"', () => {
     const top = coach(run.inputLog, 'wall').items[0];
     expect(top.id).toBe('stopped-climb');
     expect(top.detail).toBe('You stopped before the Wall.');
+  });
+
+  it('the split is where the pad lets go, and the funnel counts it on its own', () => {
+    expect(PAD.tapAt).toBe(HANG_AT);   // "stopped short" is exactly where a tap could not have let go
+    expect(wreckCause([{ id: 'stopped-climb' }])).toBe('wreck-climb');
+    expect(wreckCause([{ id: 'no-release' }])).toBe('wreck-release');
   });
 
   it('the keyboard default words name the drive key', () => {

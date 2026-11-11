@@ -111,7 +111,7 @@ export function pointerText(id, ctx, flight = null) {
   switch (id) {
     case 'fell-off': return thumbOn(ctx) ? 'Stay on the Wall: hold the pad and let it crawl; let go to stop' : `Crawl up the Wall: ${ctl(ctx, 'drive')} gently, about 20 km/h, small steering`;
     // 0189: stopped on the curl before the ledge (a thumb lifted on the climb): the step before the let-go.
-    case 'stopped-climb': return thumbOn(ctx) ? 'Climb to the ledge: keep holding the pad until you’re upside down' : `Climb to the ledge: ${ctl(ctx, 'drive')} until you’re upside down`;
+    case 'stopped-climb': return thumbOn(ctx) ? 'Climb to the ledge: keep holding the pad until you’re upside down on it' : `Climb to the ledge: ${ctl(ctx, 'drive')} until you’re upside down on it`;
     case 'no-release': return `Let go on the ledge: ${ctl(ctx, 'release')} when you’re upside down`;
     case 'early-release': return `Wait for the ledge: ${ctl(ctx, 'release')} only once you’re upside down on it`;
     case 'short': return thumbOn(ctx) ? 'Over the row: hold the pad right after you let go' : `Boost over the row: ${ctl(ctx, 'boost')} right after you let go`;
@@ -174,7 +174,7 @@ export function betterText(id, card) {
 }
 
 // Which drill practises a fix, for the third time the same pointer would come up.
-const DRILL_FOR = { 'fell-off': 'ledge', 'stopped-climb': 'ledge', 'no-release': 'ledge', 'early-release': 'ledge', short: 'carry', 'no-brake': 'land', 'late-brake': 'land', 'late-land': 'land', 'ran-out': 'land', 'late-roll': 'release', 'no-roll': 'release', 'over-roll': 'release', tilt: 'land', flipped: 'land' };
+const DRILL_FOR = { 'fell-off': 'ledge', 'no-release': 'ledge', 'early-release': 'ledge', short: 'carry', 'no-brake': 'land', 'late-brake': 'land', 'late-land': 'land', 'ran-out': 'land', 'late-roll': 'release', 'no-roll': 'release', 'over-roll': 'release', tilt: 'land', flipped: 'land' };
 const DRILL_LABEL = { ledge: 'On the ledge', release: 'Just let go', carry: 'Over the row', land: '10 m up' };
 
 // The pointer after a run. `items`: the coach's fixes (most costly first), `history`: the pointer ids

@@ -248,7 +248,7 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
         // 0189: stopped short of the ledge (a thumb lifted on the climb) names the climb, not the release.
         if t.fellOff { add("fell-off", 10, "Slid off the deck", "The car left the side of the curl \(s(r1(t.maxRampHeight))) m up.", "Keep it on the centreline: small steering corrections, and crawl (≈20 km/h) so the fan holds you.") }
         else if t.progress < HANG_AT {
-            add("stopped-climb", 10, "Stopped on the climb", t.rampTick < 0 ? "You stopped before the Wall." : "You stopped \(s(r1(t.maxRampHeight))) m up the curl, short of the ledge.",
+            add("stopped-climb", 10, "Stopped on the climb", t.rampTick < 0 ? "You stopped before the Wall." : t.maxRampHeight < 1 ? "You stopped at the foot of the Wall." : "You stopped \(s(r1(t.maxRampHeight))) m up the curl, short of the ledge.",
                 "Keep holding \(say.drive) until you're upside down on the ledge.")
         }
         else { add("no-release", 10, "Never let go", "You hung \(s(r1(t.invertedTime))) s inverted but never released.", "On the ledge, tap \(say.release) to let go.") }
