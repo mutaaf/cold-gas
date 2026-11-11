@@ -70,7 +70,7 @@ const M = {
   cabin: new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.8, metalness: 0 }),
   // Shut lines (seam()): 4.2 mm tubes, faded by pixel coverage once they're under a pixel wide (0187: on the lit
   // deck in the replay, a black line under a pixel popped on and off the white paint).
-  seam: sliverTube(new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.6 }), { radius: SEAM_R }),
+  seam: sliverTube(new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.6 }), { radius: SEAM_R, minPx: 3, maxK: 16 }),
   brass: new THREE.MeshPhysicalMaterial({ color: 0xc19a62, metalness: 1, roughness: 0.28, clearcoat: 0.4 }),
   nozzleIn: new THREE.MeshBasicMaterial({ color: 0x050505 }),
   tyre: new THREE.MeshStandardMaterial({ color: 0x121314, roughness: 0.88, metalness: 0 }),
