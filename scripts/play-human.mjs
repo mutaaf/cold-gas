@@ -10,7 +10,7 @@
 //   sloppy    slides 2.5× too far, the first second the wrong way up, with a shaky thumb
 //
 // touch: the classic stick and pedals (the scheme is set to classic first). thumb: the one-thumb
-// Assist pad, read from its own words (Hold · Climb, Tap · Let go, Hold · Land), one finger.
+// Assist pad, read from its own words (Hold · Climb, Tap · Let go, Hold · Land, Hold/Slide · Aim once LAND flies), one finger.
 //
 // The player: crawl in at about 20 km/h, feather up the curl, let go when the cue says, then do
 // what the cues say (BOOST, roll, LAND) for as long as they say it, a reaction time late.

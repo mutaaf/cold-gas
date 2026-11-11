@@ -49,7 +49,8 @@ test('one-thumb: in the air the pad is a sight, a slide aims, and the results sh
   // A second press during the drive-off is no new tap: held from here on, it lands (the sight below).
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, id: 1 }] });
   await page.waitForFunction(() => window.__coldgas.S.released, null, { timeout: 30_000 });
-  await expect(page.locator('[data-thumb-act]')).toHaveText('Land');
+  // 0188: held in the air, LAND is on to the ground and the hold aims: the pad names the slide.
+  await expect(page.locator('[data-thumb-act]')).toHaveText('Aim');
   const frames = await page.evaluate(() => window.__tap.frames);
   expect(frames.filter(([rel, a]) => !rel && a === 'Let go')).toEqual([]);   // never "Let go" again after the tap
   // Held through the roll-out: the sight comes on once the car is roof up.

@@ -9,7 +9,7 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { predict, newPrediction, newBand, steadyStatus, SINK_SOFT } from '../../src/sim/predict.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { createOneThumb, thumbStage } from '../../src/onethumb.js';
-import { stateWord, THUMB_WORD } from '../../src/hud-landing.js';
+import { stateWord, THUMB_WORD, THUMB_LANDING } from '../../src/hud-landing.js';
 
 const hOf = (c) => Math.max(0, c.pos.y - SPEC.comHeight);
 
@@ -175,6 +175,10 @@ describe('the descent band on a soft landing (0133)', () => {
     for (const st of ['amber', 'red']) for (const up of [1, 0.2]) expect(stateWord(st, up, true)).toBe(THUMB_WORD);
     expect(stateWord('green', 1, true)).toBe('On profile');
     expect(THUMB_WORD).toBe('Hold · Land');
+    // 0188: once LAND flies (auto-land, or held once) a press changes only the aim: the box states it, asks nothing.
+    for (const st of ['amber', 'red']) expect(stateWord(st, 1, true, true)).toBe(THUMB_LANDING);
+    expect(stateWord('green', 1, true, true)).toBe('On profile');
+    expect(stateWord('amber', 1, false, true)).toBe('Brake');
   });
 
   it('a brake started below the BRAKE line lands firm, and reads amber or red from the brake to the ground', () => {
