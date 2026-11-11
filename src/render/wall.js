@@ -537,6 +537,8 @@ export function bakeNightEnvironment(renderer) {
 // later `yield` is a safe place to hand the main thread back.
 // The LED strips' colour: off the deck (HDR, so the bloom catches it) and with the car on it (0187).
 const LED_HOT = [5.5, 0.26, 0.36], LED_DECK = [1.5, 0.03, 0.05];
+// The red base light and its slab glow on the deck look (0193): this share of the course's level.
+const RED_BASE_DECK = 0.25;
 
 export function* buildWall(tier, pad = WALL.pad) {
   const group = new THREE.Group();
@@ -554,10 +556,15 @@ export function* buildWall(tier, pad = WALL.pad) {
     deck: { bloomThreshold: 3.5 },
     // Every red emitter the raised threshold would leave unbloomed (pink): the strips here, the Show's row outline.
     deckMats: [],   // { mat, hot: [r, g, b], deck: [r, g, b] }
+    // The red base at the curl's foot (0193): its point light and the glow it paints on the slab, dimmed by
+    // RED_BASE_DECK with the deck look, so the car parked or driving at the foot reads white, not red.
+    deckBase: [],   // { set(f) } with f the share of the course's level (1 → RED_BASE_DECK)
     setDeck(k) {
       if (k === deckK) return;
       deckK = k;
       for (const { mat, hot, deck } of look.deckMats) mat.color.setRGB(hot[0] + (deck[0] - hot[0]) * k, hot[1] + (deck[1] - hot[1]) * k, hot[2] + (deck[2] - hot[2]) * k);
+      const f = 1 + (RED_BASE_DECK - 1) * k;
+      for (const b of look.deckBase) b.set(f);
     },
     update(t) { beams?.update(t); },
   };
@@ -631,7 +638,10 @@ export function* buildWall(tier, pad = WALL.pad) {
   const ap = approach(pad, tier);
   group.add(ap);
   look.wet.push(ap.userData.wet);
-  group.add(glowDecal(0xff1828, 8, 0, 1.0, 0.26));
+  const baseGlow = glowDecal(0xff1828, 8, 0, 1.0, 0.26);
+  group.add(baseGlow);
+  look.deckBase.push({ set: (f) => { baseGlow.material.uniforms.uP.value = 0.26 * f; } });
+  look.deckBase.at(-1).set(1 + (RED_BASE_DECK - 1) * deckK);   // built after a setDeck: take the current look
   group.add(glowDecal(0x8fb6ff, 7, -2.5, -5, 0.12));
   group.add(glowDecal(0x8fb6ff, 7, 2.5, -5, 0.12));
 
@@ -662,6 +672,8 @@ export function* buildWall(tier, pad = WALL.pad) {
   const red = new THREE.PointLight(0xff1a28, 35, 18, 2);
   red.position.set(0, 1.2, 1.5);
   lights.add(red);
+  look.deckBase.push({ set: (f) => { red.intensity = 35 * f; } });
+  look.deckBase.at(-1).set(1 + (RED_BASE_DECK - 1) * deckK);
   look.glows.push({ pos: new THREE.Vector3(0, 0.5, 1.0), color: new THREE.Color(0.25, 0.012, 0.02), radius: 3.5 });
   group.add(lights);
   yield;
