@@ -36,6 +36,7 @@ import { deviceOf, howtoRows, pauseRows, deviceTitle, pickPointer, livePointer, 
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
 import { newReplayPose, sampleReplay, stepReplayClock, slowTarget } from './render/replay.js';
 import { thumbStage, THUMB } from './onethumb.js';
+import { padState, padWords } from './thumb-words.js';
 // 0121 thumb mastery (own modules): the one-thumb touchdown sight on the pad, and the medals row.
 import { mountThumbAim } from './thumb-aim.js';
 import { showMedals, hideMedals } from './medals.js';
@@ -1055,30 +1056,28 @@ function syncScheme() {
   ui.touch.dataset.course = S.run?.course || stage.course;
   document.querySelectorAll('[data-controls-label]').forEach((el) => { el.textContent = touchSet.scheme === 'thumb' ? 'One-thumb' : 'Classic'; });
 }
-const THUMB_WORDS = {
-  climb: ['Hold', 'Climb'], climbing: ['Holding', 'Climb'], ledge: ['Tap', 'Let go'], going: ['Letting', 'Go'], fly: ['Hold', 'Land'], flying: ['Holding', 'Land'], landed: ['', 'Stopping'],
-};
-// 0181: the Lineup's run-up is a drive to the line, and the lift-off and the roll are the computer's.
-const THUMB_WORDS_LINEUP = { climb: ['Hold', 'Drive'], climbing: ['Holding', 'Drive'], lifting: ['', 'Lifting'], rolling: ['', 'Rolling'] };
 const LINEUP_LINE = COURSES.lineup.lineupZ0 - 6.5;   // where it lifts (src/onethumb.js LIFT_EARLY)
 const thumbLast = { word: '', warn: null, arc: -1 };
+const padIn = { stage: '', held: false, going: false, landing: false, autoLand: 0, lineup: false, lifting: false, rolled: false, airborne: false, rolling: false, green: true };
+const padOut = { word: '', stage: '', warn: false };
 function syncThumb(run, c) {
   const stage_ = thumbStage(run, S.released);
   const held = thumb.held;
-  // 0129: the tap on the ledge was taken: the car drives itself out to the lip (≈ 0.9 s) and lets go there.
-  const going = stage_ === 'ledge' && (thumb.driving || thumb.pending);
   const lineup = run.course === 'lineup';
-  const word = going ? 'going' : lineup && thumb.lifting && !thumb.rolled && (run.phase === 'air' || run.phase === 'drive') ? (stage_ === 'fly' && Math.abs(run.t.rollAccum) > 0.3 ? 'rolling' : 'lifting')
-    : stage_ === 'climb' && held ? 'climbing' : stage_ === 'fly' && held ? 'flying' : stage_;
+  // 0129: the tap on the ledge was taken: the car drives itself out to the lip (≈ 0.9 s) and lets go there.
+  // 0188: the words and the amber ask (src/thumb-words.js): once LAND flies (auto-land, or held once), the hold aims.
+  const pi = padIn;   // reused every frame (§3.6)
+  pi.stage = stage_; pi.held = held; pi.going = stage_ === 'ledge' && (thumb.driving || thumb.pending); pi.landing = thumb.landing;
+  pi.autoLand = c.autoLand; pi.lineup = lineup; pi.lifting = thumb.lifting; pi.rolled = thumb.rolled;
+  pi.airborne = run.phase === 'air' || run.phase === 'drive'; pi.rolling = Math.abs(run.t.rollAccum) > 0.3; pi.green = landing.status() === 'green';
+  const pad = padState(pi, padOut);
+  const word = pad.word, warn = pad.warn;
   if (word !== thumbLast.word) {
-    const [v, a] = (lineup && THUMB_WORDS_LINEUP[word]) || THUMB_WORDS[word] || ['', ''];
+    const [v, a] = padWords(word, lineup);
     thumbVerb.textContent = v; thumbAct.textContent = a;
-    thumbPad.dataset.stage = going ? 'going' : stage_;
+    thumbPad.dataset.stage = pad.stage;
     thumbLast.word = word;
   }
-  // Not holding while the descent leaves green: the pad asks for the thumb (amber, a pulse).
-  // 0140: not once the thumb has held LAND this flight (LAND stays on to the ground; a press only aims).
-  const warn = stage_ === 'fly' && !held && !thumb.landing && landing.status() !== 'green' && !(lineup && !thumb.rolled);   // 0181: not in the computer's roll
   if (warn !== thumbLast.warn) { thumbPad.toggleAttribute('data-warn', warn); thumbLast.warn = warn; }
   // The ring: how far up the curl; in the air, how far down to the ground.
   const k = lineup && stage_ === 'climb' ? Math.min(1, Math.max(0, (c.pos.z - COURSES.lineup.start.z) / (LINEUP_LINE - COURSES.lineup.start.z)))

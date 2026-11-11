@@ -67,7 +67,7 @@ test('one-thumb: hold to climb, tap to let go on the ledge, hold to land', async
     window.__dWords = [];
     const look = () => {
       const { S } = window.__coldgas;
-      if (S.mode === 'live' && S.run?.phase === 'air' && !panel.hidden) window.__dWords.push({ w: el.textContent, on: pad.classList.contains('on') });
+      if (S.mode === 'live' && S.run?.phase === 'air' && !panel.hidden) window.__dWords.push({ w: el.textContent, on: pad.classList.contains('on'), l: S.run.car.autoLand > 0 || window.__coldgas.thumb.landing, warn: pad.hasAttribute('data-warn') });
       requestAnimationFrame(look);
     };
     requestAnimationFrame(look);
@@ -75,7 +75,7 @@ test('one-thumb: hold to climb, tap to let go on the ledge, hold to land', async
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ ...at, id: 2 }] });
   await page.waitForFunction(() => window.__coldgas.S.released, null, { timeout: 30_000 });
   // Keep holding: LAND (the level channel) goes into the input log, in Assist.
-  await expect(page.locator('[data-thumb-act]')).toHaveText('Land');
+  await expect(page.locator('[data-thumb-act]')).toHaveText('Aim');   // 0188: held, LAND is on and the hold aims
   const level = await ch(page, 'level');
   await page.waitForFunction((i) => window.__coldgas.S.run.inputLog.some((e) => e[i] === 100), level, { timeout: 30_000 });
   // Held through the roll-out off the ledge: the first air frames are the ones the bounce caught.
@@ -87,7 +87,9 @@ test('one-thumb: hold to climb, tap to let go on the ledge, hold to land', async
   await page.waitForFunction(() => { const { S } = window.__coldgas; return S.mode !== 'live' || S.run.phase !== 'air'; }, null, { timeout: 60_000 });
   const frames = await page.evaluate(() => window.__dWords);
   expect(frames.length).toBeGreaterThan(0);
-  for (const f of frames) expect(['On profile', 'Hold · Land']).toContain(f.w);
+  for (const f of frames) expect(['On profile', 'Hold · Land', 'Landing']).toContain(f.w);
+  // 0188: once LAND flies (held once, or auto-land), nothing asks for a press that changes nothing but the aim.
+  expect(frames.filter((f) => f.l && (f.warn || f.w === 'Hold · Land'))).toEqual([]);
   const onPad = frames.filter((f) => f.on);
   expect(onPad.length).toBeGreaterThan(0);
   expect(onPad.filter((f) => f.w !== 'On profile')).toEqual([]);

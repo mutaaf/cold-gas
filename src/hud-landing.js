@@ -21,7 +21,9 @@ const COLORS = { green: 0xf5f6f8, amber: 0xffbf5a, red: 0xff5a62 };
 // The tape's top, m: 30 m in metric, 100 ft (30.48 m) in US units, so its scale reads round.
 const tapeMax = () => (isMetric() ? 30 : 30.48);
 const ROLL_RATE = 4.6;          // rad/s, Assist/Pro full stick (src/sim/vehicle.js RATE.z)
-export const THUMB_WORD = 'Hold · Land';   // the one-thumb pad's own words in the air (main.js THUMB_WORDS.fly)
+export const THUMB_WORD = 'Hold · Land';   // the one-thumb pad's own words in the air (src/thumb-words.js THUMB_WORDS.fly)
+// 0188: once LAND flies (auto-land, or the thumb held it once) a press changes nothing but the aim: the box says so.
+export const THUMB_LANDING = 'Landing';
 
 export function createLandingHud({ scene, onStatus = null }) {
   const root = $('[data-descent]');
@@ -132,7 +134,7 @@ export function createLandingHud({ scene, onStatus = null }) {
     }
     // What the band asks of you: roof up first, then the brake. On one thumb there's no roll or brake to
     // press, only the pad, whose verb is Land: the band asks for that (0133).
-    const word = stateWord(status, pr.upY, thumb);
+    const word = stateWord(status, pr.upY, thumb, land);
     if (word !== last.word) { el.state.textContent = word; last.word = word; }
     const tg = Math.round(pr.profileSink * rateK() * 2);
     if (tg !== last.target) { el.target.textContent = (tg / 2).toFixed(1); last.target = tg; }
@@ -196,10 +198,10 @@ export function createLandingHud({ scene, onStatus = null }) {
 }
 
 // The state box's word: what the band asks of you, roof up first, then the brake (keyboard, pad, classic
-// touch, Advanced). On one thumb, whatever it asks is the pad's own action (0133).
-export function stateWord(status, upY, thumb = false) {
+// touch, Advanced). On one thumb, whatever it asks is the pad's own action (0133), until LAND flies (0188).
+export function stateWord(status, upY, thumb = false, land = false) {
   if (status === 'green') return 'On profile';
-  if (thumb) return THUMB_WORD;
+  if (thumb) return land ? THUMB_LANDING : THUMB_WORD;
   return upY < 0.85 ? 'Roll out · now' : status === 'amber' ? 'Brake' : 'Too fast';
 }
 

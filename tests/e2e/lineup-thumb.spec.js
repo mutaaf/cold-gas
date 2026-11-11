@@ -44,7 +44,7 @@ test('the Lineup on a phone: the title, the how-to card and the run all fly one 
   });
   expect(out.course).toBe('lineup');
   expect(out.scheme).toBe('thumb');
-  expect(out.words).toEqual(expect.arrayContaining(['Drive', 'Lifting', 'Rolling', 'Land']));
+  expect(out.words).toEqual(expect.arrayContaining(['Drive', 'Lifting', 'Rolling', 'Aim']));
   expect(out.verdict).toMatch(/Stuck it|Perfect 10/);
   expect(out.roll).toBeGreaterThanOrEqual(330);
   expect(out.miss).toBeLessThan(3.5);
