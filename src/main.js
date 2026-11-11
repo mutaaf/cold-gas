@@ -64,6 +64,7 @@ import { createPacer } from './pace.js';
 import { pickDeviceTier, pickAA, deviceKind, readDevice, isIOS } from './gfx-tier.js';
 import { readFold, drastic } from './fold.js';
 import { refitHudMode } from './hud-mode.js';
+import { deckLook } from './render/deck-look.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
@@ -1388,6 +1389,8 @@ function frameBody(now) {
       course: stage.course,   // [stage]
       subject: hero.group,    // the title's upright framing measures the car's own box (0131)
     });
+    // The car on the Wall's deck: the stage's deck look (0187), from where the car is drawn, live and in the replay.
+    stage.setDeck(S.mode === 'title' || stage.course === 'lineup' ? 0 : deckLook(carRoot.position.x, carRoot.position.y, carRoot.position.z));
     stage.render(S.time, S.mode);
   }
 }

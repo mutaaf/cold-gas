@@ -535,6 +535,9 @@ export function bakeNightEnvironment(renderer) {
 // A generator, so the first load can build it in slices between frames (src/render/scene.js
 // `lookFor`): the first value is the look itself (empty group, camera pose, lighting), every
 // later `yield` is a safe place to hand the main thread back.
+// The LED strips' colour: off the deck (HDR, so the bloom catches it) and with the car on it (0187).
+const LED_HOT = [5.5, 0.26, 0.36], LED_DECK = [1.5, 0.03, 0.05];
+
 export function* buildWall(tier, pad = WALL.pad) {
   const group = new THREE.Group();
   group.name = 'course:wall';
@@ -546,8 +549,19 @@ export function* buildWall(tier, pad = WALL.pad) {
     titlePose: { x: 0, z: -11, yaw: 0 },
     look: { exposure: 1.18, bloom: { strength: 0.62, radius: 0.55, threshold: 0.82 }, fog: new THREE.FogExp2(0x020305, 0.0032) },
     keyLight: { color: 0xdfe6ff, intensity: 1.7, offset: new THREE.Vector3(-18, 30, -22) },
+    // On the deck (0187, src/render/deck-look.js): the bloom catches only what is brighter than the white paint's
+    // floodlit highlights, and the strips drop to a red their own core keeps (an HDR 5.5 red tone-maps pink).
+    deck: { bloomThreshold: 3.5 },
+    // Every red emitter the raised threshold would leave unbloomed (pink): the strips here, the Show's row outline.
+    deckMats: [],   // { mat, hot: [r, g, b], deck: [r, g, b] }
+    setDeck(k) {
+      if (k === deckK) return;
+      deckK = k;
+      for (const { mat, hot, deck } of look.deckMats) mat.color.setRGB(hot[0] + (deck[0] - hot[0]) * k, hot[1] + (deck[1] - hot[1]) * k, hot[2] + (deck[2] - hot[2]) * k);
+    },
     update(t) { beams?.update(t); },
   };
+  let deckK = 0;
   yield look;
   const S = samples(tier === 'low' ? 200 : 380);
 
@@ -575,7 +589,8 @@ export function* buildWall(tier, pad = WALL.pad) {
   // (7 cm) to stay continuous at stadium distance.
   // Slivers (src/render/sliver.js): at range a strip stays a pixel and a half wide and dims to
   // match, instead of popping in and out of the bloom.
-  const led = sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(5.5, 0.26, 0.36), fog: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), { minPx: 1.5 });
+  const led = sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(...LED_HOT), fog: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), { minPx: 1.5 });
+  look.deckMats.push({ mat: led, hot: LED_HOT, deck: LED_DECK });
   const ledDim = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 0.05, 0.08), fog: false });
   for (const sx of [-1, 1]) {
     for (const geo of [ribbon(S, sx * (W / 2 - 0.1), sx * (W / 2 - 0.01), 0.008), sideBand(S, sx * (W / 2 + 0.006), 0.0, 0.07)]) {

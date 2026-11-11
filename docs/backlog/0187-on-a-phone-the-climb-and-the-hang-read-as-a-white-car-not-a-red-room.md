@@ -1,12 +1,12 @@
 ---
 id: 0187
 title: On a phone, the climb and the hang show a white car on a grey deck, not a red room with a white smear
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-10
-pr:
+pr: 303
 by: critic
 ---
 
@@ -52,17 +52,17 @@ Critique 2026-11-10 16:00 measured production (`index-D9Vr38JO.js`) on SwiftShad
   share of the frame and the car box's P10 luminance at the four moments above. Print it for phone and desktop.
 
 ## Acceptance criteria
-- [ ] At 390×844 touch, on the climb (car 6–8 m up) and at `invertedTime` 1.0 s and 1.9 s on the curl, the saturated red
+- [x] At 390×844 touch, on the climb (car 6–8 m up) and at `invertedTime` 1.0 s and 1.9 s on the curl, the saturated red
       share (definition above) is **≤ 12 %** of the frame. That's the bar 0086 sets for the title. The desktop's
       7 % is the reference.
-- [ ] The car box's P10 luminance at those moments is **≤ 60** on both 390×844 and 1440×900 (today 140–150). The
+- [x] The car box's P10 luminance at those moments is **≤ 60** on both 390×844 and 1440×900 (today 140–150). The
       tyres and glass show dark, as they do after the release (P10 10).
-- [ ] The same numbers at 430×932 and 844×390, so the fix isn't only for one aspect.
-- [ ] Before/after screenshots at each moment, phone and desktop, in the PR. Checked on a real GPU too (0086's
+- [x] The same numbers at 430×932 and 844×390, so the fix isn't only for one aspect.
+- [x] Before/after screenshots at each moment, phone and desktop, in the PR. Checked on a real GPU too (0086's
       note: bloom differs from SwiftShader), or the PR says it wasn't possible.
 - [ ] `flicker-budget` passes for both screens on the scenarios touched (`approach`, `wide`, `replay`), and
       `npm run audit` stays clean.
-- [ ] `ref-hash` unchanged (no sim change).
+- [x] `ref-hash` unchanged (no sim change).
 
 ## Test plan
 The report-only look measure above, with a unit test of the red-share and P10 functions on a synthetic image.
@@ -70,3 +70,10 @@ Run it on main and on the branch at the four moments, phone and desktop, and pas
 
 ## Out of scope
 The title's grade (0086). The lip height (27.7 m, the operator's call). The Wall's geometry. The car's model.
+
+## Shipped (#303)
+Measured with `scripts/look-audit.mjs` on SwiftShader (main 78d7c2b → branch), the climb / hang 1.0 s / hang 1.9 s:
+390×844 red 68.3 / 36.2 / 38.3 % → 8.8 / 5.2 / 6.7 %, car box P10 86 / 147 / 141 → 8 / 52 / 36; 1440×900 P10 71 / 146 / 141 →
+6 / 52 / 39; 430×932 and 844×390 in the PR. Screenshots: docs/shots/deck-look-0187/. ref-hash unchanged. Not checked on a
+real GPU (this sandbox has software GL only; the cause is a threshold on luma, not the bloom's resolution path). Flicker:
+see the PR (show-approach and show-wide never move the car onto the deck, so k = 0 there); `npm run audit` runs in CI.

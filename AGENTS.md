@@ -272,6 +272,9 @@ src/render/           three.js (r186):
   crash.js              everything a crash shows, keyed to run.impacts (live and replay): sparks,
                           chips, dust, dents, torn-off parts, lamps/hazards, shake, slow-mo, cut
   debris.js             torn-off parts as small rigid boxes on the concrete (cosmetic)
+  deck-look.js          the deck look (0187, pure): how much the car is on the Wall's deck (0–1, from its position, live
+                          and in the replay); scene.js setDeck eases the bloom's threshold up and wall.js dims the red
+                          strips to a red their core keeps, so the climb and hang read as a white car on a grey deck
   sliver.js             minimum on-screen width for thin lights/paint/struts (anti-flicker),
                           DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable; live on the Wall and the
@@ -398,6 +401,8 @@ scripts/shots-learn.mjs    screenshots of the HUD, drills, coach and nozzle pad
 scripts/shots-lineup.mjs   studio shots of each parked vehicle + the row, and the row's draw budget
 scripts/shots-look.mjs     the same moments (title, release, landing, results, a road) on desktop, phone and iPad,
                            before vs after side by side (0097: one look everywhere)
+scripts/look-audit.mjs     the Wall's climb and hang at phone and desktop sizes (0187, report-only): the frame's saturated-red
+                           share and the car box's P10 luma per moment (scripts/look-measure.mjs, unit-tested)
 scripts/flicker.mjs   Temporal flicker probe: per-region frame-to-frame jitter (+ --heat maps)
 scripts/flicker-budget.mjs  gates a flicker.mjs --json run against docs/flicker-budget.json (per label)
 scripts/roads/        build-time only: OSM + terrain → public/roads/*.bin.gz (docs/ROADS.md)
