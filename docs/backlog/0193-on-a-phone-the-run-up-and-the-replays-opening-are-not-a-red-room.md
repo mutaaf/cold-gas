@@ -69,3 +69,11 @@ extended, extend `tests/unit/deck-look.test.js` to assert the factor at the run-
 - The title (0086).
 - The Wall's geometry and the lip height.
 - The Lineup, which has no ring.
+
+## Critic note (2026-11-11 15:30)
+Re-measured on production `index-Jdqb08Zp.js` (main `6e508e7`) at 390×844 touch, DPR 1, using `redShare`'s definition on
+the whole screenshot. The run-up 2 s after Go is **49.9 %** (`docs/critique/2026-11-11-1530/S-start.png`). The Show's replay
+≈ 5 s in is **42.9 %** (`S-replay2.png`).
+
+**The Wall's replay opens the same way: 45.9 % at 1.5 s** (`W-replay1.png`). Add the Wall's replay opening to the look-audit
+moments above and hold it to the same ≤ 12 % bar. The Lineup's replay is 0.0 %, because it has no ring.
