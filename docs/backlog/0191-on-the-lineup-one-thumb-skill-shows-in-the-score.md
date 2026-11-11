@@ -6,7 +6,7 @@ priority: P1
 size: M
 lens: player-feel
 created: 2026-11-10
-pr:
+pr: 315
 by: critic
 ---
 
@@ -53,3 +53,25 @@ asserting its medal.
 - The two-thumb Lineup (classic).
 - The row's order and colours (0029).
 - The iPhone port (0186).
+
+## Builder pass 1 (2026-11-11, #315): the thumb picks the trick; the spread needs a scorer call
+Shipped: on the run-up a held thumb slid up calls a second turn (`src/onethumb.js` `LINEUP_TWICE`: run-up 6 m/s, burn to 10.25 m,
+two turns; slid down takes it back; commits at the line). The pad reads `↑ for 720 · Drive`, then `Two turns · Drive`. Lineup Assist
+gold 90 → 93 (`src/medals.js`): no 360 reaches it. No sim or scorer change (ref-hash unchanged). Node, seed 12345, n 150 (half the
+careful thumbs take the call, `flyThumbLineup`):
+
+| | main | #315 |
+|---|---|---|
+| held from Go, no slide | 91.3 Gold | 91.3 **Silver** |
+| p10 / p50 / p90 (p90 − p10) | 91.0 / 91.3 / 91.7 (0.7) | 91.0 / 91.7 / 92.7 (**1.7**) |
+| Gold | 150/150 | 15/150, all aimed 720s |
+| clean / wreck | 150 / 0 | 150 / 0 |
+| roll-lineup / mark-lineup | 100 / 100 % | 100 / 100 % |
+
+**Why the spread stays under 5:** the 720 pays +7.6 points in height and rotation, but it needs ≈ 13 m of apex (Assist rolls about
+265°/s). The burn and LAND's brake from that height cost 3.1 of efficiency (−3.4 points), and unaimed it lands 4–6 m long. So the 720
+scores 91.3–94.3 and the 360 90.3–91.7. Measured and ruled out: apex 7.5–9 m at 6–6.5 m/s (the second turn doesn't finish:
+wrecked); 11 m (more gas, longer). Status stays `ready`. To pass, the scorer has to say what a 720's gas costs on the Lineup
+(e.g. efficiency read per turn flown). That's a `SIM_VERSION` bump with vectors and the Swift judge, so it's the critic's or the
+operator's call before a builder takes it. The iPhone's `Medals.swift` keeps 90 until 0186 ports the call.
+
