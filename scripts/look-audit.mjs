@@ -5,7 +5,8 @@
 //   p10  the 10th-percentile luma in the roadster's projected 4.4 × 2.0 × 1.2 m box (bar ≤ 60: its tyres and
 //        glass show dark)
 // 0193 adds the run-up and the replay's opening, held to the same bars: the countdown (1 s in), the run-up (tick 264, the
-// car at the curl's foot), and the replay behind the results at 2 s and 4 s of the run (the replay's clock, not the wall's).
+// car at the curl's foot), and the replay at 2 s and 4 s of the run (the replay's clock, not the wall's) with Replay pressed,
+// as a player watches it (on a phone the sheet folds to its peek).
 // node scripts/look-audit.mjs <url> [outdir] [--sizes=390x844t,1440x900,...] [--gfx=low|mid|high] [--course=show|wall]
 //   [--only=count,runup,climb,hang1,hang2,release,replay2,replay4]
 //   a size ending in t is a touch phone (isMobile, hasTouch), drawn at deviceScaleFactor 1 (CSS pixels). Needs a served build
@@ -54,7 +55,14 @@ for (const size of sizes) {
   await page.evaluate(async () => { await window.__coldgas.physicsReady; });
   if (pre) await page.evaluate(`(() => { const g = window.__coldgas; ${pre} })()`);
   await page.evaluate(() => { window.__coldgas.startRun('reveal'); });   // the countdown plays: it is a moment (0193)
+  let peeked = false;
   for (const [name, pred] of MOMENTS.filter(([n]) => !only || only.split(',').includes(n))) {
+    // The replay as a player sees it: Replay pressed on the results, so on a phone the sheet folds to its peek (0068).
+    if (name.startsWith('replay') && !peeked) {
+      peeked = true;
+      await page.waitForFunction(() => window.__coldgas.S.mode === 'results' && !!document.querySelector('[data-replay]')?.offsetParent, null, { timeout: 240000 }).catch(() => {});
+      await page.evaluate(() => document.querySelector('[data-replay]')?.click());
+    }
     // Freeze in the predicate itself, so the frame on the glass is the one that met it.
     const fn = `(() => { const S = window.__coldgas.S; if (S.run && (${pred})) { S.paused = true; return true; } return false; })()`;
     const hit = await page.waitForFunction(fn, null, { timeout: 240000, polling: 'raf' }).then(() => true).catch(() => false);
