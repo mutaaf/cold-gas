@@ -537,6 +537,9 @@ export function bakeNightEnvironment(renderer) {
 // later `yield` is a safe place to hand the main thread back.
 // The LED strips' colour: off the deck (HDR, so the bloom catches it) and with the car on it (0187).
 const LED_HOT = [5.5, 0.26, 0.36], LED_DECK = [1.5, 0.03, 0.05];
+// The red that lights the curl's foot (its point light, the glow on the concrete, the air's glow): with the car on the
+// run-up or the deck it drops to this share (0193), so the foot reads as a red edge on grey, not a red room.
+const FOOT_DECK = 0.3, FOOT_LIGHT = 35, FOOT_GLOW = 0.26;
 
 export function* buildWall(tier, pad = WALL.pad) {
   const group = new THREE.Group();
@@ -558,10 +561,14 @@ export function* buildWall(tier, pad = WALL.pad) {
       if (k === deckK) return;
       deckK = k;
       for (const { mat, hot, deck } of look.deckMats) mat.color.setRGB(hot[0] + (deck[0] - hot[0]) * k, hot[1] + (deck[1] - hot[1]) * k, hot[2] + (deck[2] - hot[2]) * k);
+      const f = 1 + (FOOT_DECK - 1) * k;
+      if (foot.light) foot.light.intensity = FOOT_LIGHT * f;
+      if (foot.decal) foot.decal.material.uniforms.uP.value = FOOT_GLOW * f;
     },
     update(t) { beams?.update(t); },
   };
   let deckK = 0;
+  const foot = { light: null, decal: null };
   yield look;
   const S = samples(tier === 'low' ? 200 : 380);
 
@@ -631,7 +638,8 @@ export function* buildWall(tier, pad = WALL.pad) {
   const ap = approach(pad, tier);
   group.add(ap);
   look.wet.push(ap.userData.wet);
-  group.add(glowDecal(0xff1828, 8, 0, 1.0, 0.26));
+  foot.decal = glowDecal(0xff1828, 8, 0, 1.0, FOOT_GLOW * (1 + (FOOT_DECK - 1) * deckK));
+  group.add(foot.decal);
   group.add(glowDecal(0x8fb6ff, 7, -2.5, -5, 0.12));
   group.add(glowDecal(0x8fb6ff, 7, 2.5, -5, 0.12));
 
@@ -659,10 +667,11 @@ export function* buildWall(tier, pad = WALL.pad) {
     lens.position.set(sx * 2.4, 0.2, -5.44); lens.rotation.x = -0.5; lens.renderOrder = LAYER.light; group.add(lens);
     look.glows.push({ pos: new THREE.Vector3(sx * 2.4, 0.35, -5.3), color: new THREE.Color(0.12, 0.13, 0.15), radius: 1.5 });
   }
-  const red = new THREE.PointLight(0xff1a28, 35, 18, 2);
+  const red = new THREE.PointLight(0xff1a28, FOOT_LIGHT * (1 + (FOOT_DECK - 1) * deckK), 18, 2);
   red.position.set(0, 1.2, 1.5);
   lights.add(red);
-  look.glows.push({ pos: new THREE.Vector3(0, 0.5, 1.0), color: new THREE.Color(0.25, 0.012, 0.02), radius: 3.5 });
+  foot.light = red;
+  look.glows.push({ pos: new THREE.Vector3(0, 0.5, 1.0), color: new THREE.Color(0.25, 0.012, 0.02), radius: 3.5, deck: FOOT_DECK });
   group.add(lights);
   yield;
 

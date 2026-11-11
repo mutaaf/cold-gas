@@ -1,33 +1,62 @@
 // 0187: the Wall's climb and hang read as a white car on a grey deck. The deck look's factor (src/render/deck-look.js)
 // and the look audit's two measures (scripts/look-measure.mjs), on the reference flight and on synthetic images.
 import { describe, it, expect } from 'vitest';
-import { deckLook } from '../../src/render/deck-look.js';
+import { deckLook, runUp } from '../../src/render/deck-look.js';
 import { redShare, lumPercentile, isSaturatedRed } from '../../scripts/look-measure.mjs';
 import { createRun, stepRun } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { SHOW, WALL, wallProfile } from '../../src/sim/courses.js';
 
 describe('deckLook: on the deck from where the car is (0187)', () => {
-  it('is 0 parked at the start and on the approach, on both Wall courses', () => {
-    for (const c of [SHOW, WALL]) expect(deckLook(0, 0.4, c.start.z)).toBe(0);
-    expect(deckLook(0, 0.4, -2)).toBe(0);
-    expect(deckLook(0, 0.4, 0.3)).toBe(0);
+  it('0193: is 1 parked at the start and all up the run-up to the curl, on both Wall courses', () => {
+    for (const c of [SHOW, WALL]) expect(deckLook(0, 0.4, c.start.z)).toBe(1);
+    expect(deckLook(0, 0.4, -2)).toBe(1);
+    expect(deckLook(0, 0.4, -1.5)).toBe(1);   // the run-up's tick 264
+    expect(deckLook(0, 0.4, 0.3)).toBe(1);
   });
 
-  it('on the reference Show: full up the climb and the hang, off again after the release, and never jumps', () => {
+  it('0193: off the run-up it is off: the Show\'s pad, well out to the side, high above the approach', () => {
+    expect(deckLook(0, 0.4, SHOW.pad.z)).toBe(0);
+    expect(deckLook(12, 0.4, -3)).toBe(0);
+    expect(deckLook(0, 10, -5)).toBe(0);
+    expect(deckLook(0, 0.4, 20)).toBe(0);    // behind the ring (Free Drive, a crash): not the run-up
+    expect(deckLook(8, 0.4, -3)).toBe(0);
+  });
+
+  it('0193: on the reference Wall: full on the run-up, never jumps; the flight back over the approach adds no run-up look', () => {
+    const run = createRun('wall'), ap = createAutopilot('wall');
+    let maxStep = 0, prev = deckLook(run.car.pos.x, run.car.pos.y, run.car.pos.z), runup = [prev], highOff = [];
+    while (run.phase !== 'done' && run.tick < 240 * 30) {
+      stepRun(run, ap(run));
+      const k = deckLook(run.car.pos.x, run.car.pos.y, run.car.pos.z);
+      maxStep = Math.max(maxStep, Math.abs(k - prev)); prev = k;
+      if (run.phase === 'drive') runup.push(k);
+      if (run.phase === 'air' && run.car.pos.y > 8) highOff.push(runUp(run.car.pos.x, run.car.pos.y, run.car.pos.z));
+    }
+    expect(Math.min(...runup)).toBe(1);
+    expect(highOff.length).toBeGreaterThan(0);
+    expect(Math.max(...highOff)).toBe(0);
+    expect(maxStep).toBeLessThan(0.02);
+  });
+
+  it('on the reference Show: full on the run-up, up the climb and the hang, off again after the release, and never jumps', () => {
     const run = createRun('show'), ap = createAutopilot('show');
-    let maxStep = 0, prev = deckLook(run.car.pos.x, run.car.pos.y, run.car.pos.z), climbK = null, hang = [], afterRelease = null, releaseTick = null;
+    let maxStep = 0, prev = deckLook(run.car.pos.x, run.car.pos.y, run.car.pos.z), climbK = null, hang = [], runup = [prev], afterRelease = null, releaseTick = null;
     while (run.phase !== 'done' && run.tick < 240 * 30) {
       stepRun(run, ap(run));
       const k = deckLook(run.car.pos.x, run.car.pos.y, run.car.pos.z);
       expect(k).toBeGreaterThanOrEqual(0); expect(k).toBeLessThanOrEqual(1);
       maxStep = Math.max(maxStep, Math.abs(k - prev)); prev = k;
+      if (run.phase === 'drive') runup.push(k);
+      if (run.phase === 'air' && run.car.pos.y > 8) expect(runUp(run.car.pos.x, run.car.pos.y, run.car.pos.z)).toBe(0);   // the flight back over the run-up: no run-up look
       if (climbK === null && run.phase === 'ramp' && run.car.pos.y > 6.4) climbK = k;
       if (run.phase === 'ramp' && run.t.invertedTime > 0) hang.push(k);
       if (run.phase === 'air' && releaseTick === null) releaseTick = run.tick;
       if (releaseTick !== null && run.tick === releaseTick + 240 && afterRelease === null) afterRelease = k;
     }
     expect(climbK).toBe(1);                                // the climb's moment (car 6–8 m up)
+    expect(runup.length).toBeGreaterThan(240);
+    expect(Math.min(...runup)).toBe(1);                    // 0193: the whole run-up, from the first tick to the curl
     expect(hang.length).toBeGreaterThan(240);
     expect(Math.min(...hang)).toBe(1);                     // the whole hang
     expect(afterRelease).toBe(0);                          // 1 s after letting go, the course's own look

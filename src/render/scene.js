@@ -478,6 +478,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
     if (external || !current?.deck) return;
     if (bloom) { const t0 = current.look.bloom.threshold; bloom.threshold = t0 + (current.deck.bloomThreshold - t0) * k; }
     current.setDeck(k);
+    film?.setDeck(k);
   }
   const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, warm: null, warmGate: () => true, rocket: null, film: null, aa: null, aaKind: '', resize, reshape, render, setCourse, titlePose, setBodies, setLook, setDeck, bloom, setPixelScale, restoreGL, onResize };
 
