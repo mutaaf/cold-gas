@@ -45,5 +45,6 @@ export function kneeBloom(pass) {
 }
 
 // What a look's bloom means for the pass: knee off unless the look asks for it, so switching from a look
-// that has it (the Wall) to one that doesn't (the Lineup, a road) turns it off.
-export const bloomLook = (b) => ({ knee: 0, ...b });
+// that has it (the Wall) to one that doesn't (the Lineup, a road) turns it off. `native` (the iPhone app's export,
+// scripts/native-stage-page.js) is not the pass's.
+export const bloomLook = ({ native, ...b } = {}) => ({ knee: 0, ...b });

@@ -482,7 +482,8 @@ export async function exportCourse(id) {
   return {
     env: exportEnv(id), complex, wetMask: wet ? wetMaskTexture(textures) : null,
     course: id, generated: 'scripts/native-stage.mjs from src/render (scene.js COURSE_BUILDERS, roadster.js). Never edit by hand.',
-    look: { exposure: L.exposure ?? 1, bloom: L.bloom ?? null, fog: L.fog ? { color: L.fog.color.toArray(), near: L.fog.near, far: L.fog.far, density: L.fog.density ?? 0 } : null,
+    // A look with the bloom's knee (0187) gives the Metal pass its old luminance gate (`native`) until 0192 ports the knee.
+    look: { exposure: L.exposure ?? 1, bloom: L.bloom ? (L.bloom.native ?? L.bloom) : null, fog: L.fog ? { color: L.fog.color.toArray(), near: L.fog.near, far: L.fog.far, density: L.fog.density ?? 0 } : null,
       environmentIntensity: id === 'lineup' ? 0.9 : 1,   // scene.js setCourse
       film,                                              // film.js LOOKS: the height fog, the sun's scatter, the glow scale, the vignette
       sky: id === 'lineup' ? { kind: 'dusk', zenith: PALETTE.zenith.toArray(), mid: PALETTE.mid.toArray(), horizon: PALETTE.horizon.toArray(), sunDir: new THREE.Vector3(-0.55, 0.06, 0.83).normalize().toArray() } : { kind: 'night' },

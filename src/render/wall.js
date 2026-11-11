@@ -544,9 +544,11 @@ export function* buildWall(tier, pad = WALL.pad) {
     wet: [],     // the slab's wetSlab uniforms (src/render/film.js)
     glows: [],   // lamps that light the air around them: { pos, color } (src/render/film.js)
     titlePose: { x: 0, z: -11, yaw: 0 },
-    // Bloom with the soft knee (src/render/bloom-knee.js, 0187): only light past 5 in its brightest channel glows, so
-    // the lamps (6–9) bloom, the red LED strips (5.5) keep a thin halo and the white car under the washes (2–4) none.
-    look: { exposure: 1.18, bloom: { strength: 0.62, radius: 0.55, threshold: 5.0, knee: 1 }, fog: new THREE.FogExp2(0x020305, 0.0032) },
+    // Bloom with the soft knee (src/render/bloom-knee.js, 0187): only light past 5 in its brightest channel glows. The car's
+    // headlamps (6–10), brake light (9) and hazards keep their bloom and the red LED strips (5.5) a thin halo; the lit car
+    // (2–4 under the washes) and the smaller lights (lenses, beacons, plumes, the crash flash: ≤ 4.5) show as themselves,
+    // without a halo. `native` is the old gate for the iPhone app's export until its Metal pass has the knee (0192).
+    look: { exposure: 1.18, bloom: { strength: 0.62, radius: 0.55, threshold: 5.0, knee: 1, native: { strength: 0.62, radius: 0.55, threshold: 0.82 } }, fog: new THREE.FogExp2(0x020305, 0.0032) },
     keyLight: { color: 0xdfe6ff, intensity: 1.7, offset: new THREE.Vector3(-18, 30, -22) },
     update(t) { beams?.update(t); },
   };
