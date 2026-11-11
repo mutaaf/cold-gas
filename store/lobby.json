@@ -11,7 +11,8 @@
   ],
   "ipad": false,
   "ios": {
-    "bundleId": "com.mutaafaziz.coldgas"
+    "bundleId": "com.mutaafaziz.coldgas",
+    "ascAppId": "6830960344"
   },
   "icon": "ios/ColdGas/Resources/Assets.xcassets/AppIcon.appiconset/icon-1024.png",
   "brand": {
