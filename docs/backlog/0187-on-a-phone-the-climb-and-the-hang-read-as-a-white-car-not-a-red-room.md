@@ -111,6 +111,32 @@ Critique `docs/critique/2026-11-11-0410.md` §1 has the full numbers.
 - If the operator rebaselines on purpose, as with 0097, that decision closes this criterion, and the PR quotes it.
 - Draft #304's soft knee also raises `show-replay/car` (62.8 → 105.4 ‰ desktop), so it doesn't meet this either.
 
+## Builder attribution (2026-11-11, no fix yet)
+Same machine, SwiftShader desktop 1280×720, `flicker.mjs --only=show-replay` (temp copy with `executablePath`, a per-frame
+car-pops log and `FLK_PRE`), split by the replay's shot and by whether the deck look is on (bloom threshold > 1.5):
+
+| run | show-replay/car | shot 1, off the deck | shot 1, on the deck (≈ 340 frames, car ≈ 2 200 px) | shot 2, on the deck (≈ 7 000 px) |
+|---|---|---|---|---|
+| main (`ea322c9`) | **101.9 ‰** | 142.7 | **205.9** | 16.4 |
+| main, deck look forced to k = 0 | 62.7 ‰ | 136.2 | 110.7 | 0.0 |
+| paint clearcoat 0, roughness 0.75, no sheen (on the deck) | — | 144.5 | 209.2 | 16.1 |
+| deck bloom threshold 2.0 instead of 3.5 | — | 140.4 | 198.3 | 2.4 |
+
+(The last three rows ran 450 frames, which covers shot 1 and the start of shot 2.)
+
+- **The whole rise is shot 1:** the replay's wide shot up the curl, with the car about 50 m away and 70 × 40 px. The
+  car-only heat map (`--heat` with `F.heatReg = 3`) lies along the car's path up the curl. That's the silhouette, a
+  white car on the grey deck, stepping across pixels. Before #303 the car's own bloom (threshold 0.82) blurred
+  that edge.
+- **Not the paint's specular:** taking it off the paint changed nothing. **Not the threshold's exact value:** at 2.0
+  it's still 198 ‰. Only the bloom on the car itself hid the edge.
+- **SMAA is already on** (`stage.aaKind` 'smaa', pixel ratio 1). Spatial AA doesn't stop an edge's sub-pixel crawl.
+- **Gating the deck look on the car's size on screen won't pass.** The look audit's own car boxes are 40–50 px at
+  844×390 and about 100 px elsewhere, and the P10 ≤ 60 bar applies to those too.
+- **So the remaining criterion needs temporal AA** (a jittered projection plus reprojected history, from the depth
+  texture the high tier keeps). That's 0101's candidate, and it isn't built. Alternatively, supersample the hero.
+  Either is a size-L render change that every flicker budget sees. Don't retry the knobs above.
+
 ## Builder pass 2 (2026-11-11, #310): one cause fixed, one needs the operator
 Desktop label, SwiftShader, same machine. A per-frame timeline (`FLK_PRE` wrapping `stage.render`) split `show-replay/car` by
 director shot and by deck look (k):
