@@ -1,7 +1,7 @@
 ---
 id: 0190
 title: On the Wall, the thumb that does what the pad says lands inside the painted rings, not 11 m past them
-status: ready
+status: in-progress
 priority: P1
 size: M
 lens: authenticity

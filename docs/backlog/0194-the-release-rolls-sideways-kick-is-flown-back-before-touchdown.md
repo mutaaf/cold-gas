@@ -1,7 +1,7 @@
 ---
 id: 0194
 title: The release roll's sideways kick is flown back to the line before touchdown, not carried onto the pad
-status: ready
+status: in-progress
 priority: P1
 size: M
 lens: authenticity
