@@ -97,7 +97,11 @@ describe('the pad\'s word and warn as a pure decision (0188)', () => {
     const going = padState({ stage: 'ledge', going: true });
     expect(padWords(going.word)).toEqual(['Letting', 'Go']);
     expect(going.stage).toBe('going');
-    expect(padWords(padState({ stage: 'climb', held: true, lineup: true }).word, true)).toEqual(['Holding', 'Drive']);
+    // 0191: held on the run-up the pad offers the second turn, and names it once called; the act stays Drive.
+    expect(padWords(padState({ stage: 'climb', held: true, lineup: true }).word, true)).toEqual(['↑ for 720', 'Drive']);
+    expect(padWords(padState({ stage: 'climb', held: true, lineup: true, twice: true }).word, true)).toEqual(['Two turns', 'Drive']);
+    expect(padWords(padState({ stage: 'climb', lineup: true, twice: true }).word, true)).toEqual(['Hold', 'Drive']);
+    expect(padWords(padState({ stage: 'climb', held: true, twice: true }).word)).toEqual(['Holding', 'Climb']);   // the Show, the Wall
     expect(padWords(padState({ stage: 'climb', lineup: true, lifting: true, airborne: true }).word, true)).toEqual(['', 'Lifting']);
     const roll = padState({ stage: 'fly', lineup: true, lifting: true, airborne: true, rolling: true, green: false });
     expect(padWords(roll.word, true)).toEqual(['', 'Rolling']);

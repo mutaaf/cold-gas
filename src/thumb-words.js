@@ -10,20 +10,22 @@ export const THUMB_WORDS = {
   fly: ['Hold', 'Land'], aim: ['Hold', 'Aim'], aiming: ['Slide', 'Aim'], landed: ['', 'Stopping'],
 };
 // 0181: the Lineup's run-up is a drive to the line, and the lift-off and the roll are the computer's.
-export const THUMB_WORDS_LINEUP = { climb: ['Hold', 'Drive'], climbing: ['Holding', 'Drive'], lifting: ['', 'Lifting'], rolling: ['', 'Rolling'] };
+// 0191: held on the run-up, the pad offers the second turn (slide up) and, once called, says so; the act stays Drive.
+export const THUMB_WORDS_LINEUP = { climb: ['Hold', 'Drive'], climbing: ['↑ for 720', 'Drive'], twice: ['Two turns', 'Drive'], lifting: ['', 'Lifting'], rolling: ['', 'Rolling'] };
 
 // `stage`: thumbStage(); `held`: the thumb is down; `going`: the ledge tap was taken (driving off or pending);
 // `landing`: the thumb has held LAND this flight (thumb.landing); `autoLand`: c.autoLand; `lineup`, `lifting`,
 // `rolled`: the Lineup's kickflip (thumb.lifting, thumb.rolled); `airborne`: run.phase is air or drive;
-// `rolling`: the Lineup's roll has turned past 0.3 rad; `green`: the descent band reads green.
+// `rolling`: the Lineup's roll has turned past 0.3 rad; `green`: the descent band reads green; `twice`: the Lineup's second
+// turn is called (thumb.twice, 0191).
 // Returns the key into THUMB_WORDS(_LINEUP), the pad's stage attribute, and whether it pulses amber.
 // `out` is reused (main.js calls this every frame: no allocation).
-export function padState({ stage, held = false, going = false, landing = false, autoLand = 0, lineup = false, lifting = false, rolled = false, airborne = false, rolling = false, green = true }, out = { word: '', stage: '', warn: false }) {
+export function padState({ stage, held = false, going = false, landing = false, autoLand = 0, lineup = false, lifting = false, rolled = false, airborne = false, rolling = false, green = true, twice = false }, out = { word: '', stage: '', warn: false }) {
   const landOn = landing || autoLand > 0;
   let word;
   if (going) word = 'going';
   else if (lineup && lifting && !rolled && airborne) word = stage === 'fly' && rolling ? 'rolling' : 'lifting';
-  else if (stage === 'climb' && held) word = 'climbing';
+  else if (stage === 'climb' && held) word = lineup && twice ? 'twice' : 'climbing';
   else if (stage === 'fly') word = held ? 'aiming' : landOn ? 'aim' : 'fly';
   else word = stage;
   // Not holding while the descent leaves green, and a press would still change the flight: the pad asks.

@@ -24,7 +24,7 @@ import { scoreRun } from '../../src/sim/judge.js';
 import { SHOW, COURSES } from '../../src/sim/courses.js';
 import { SPEC } from '../../src/sim/spec.js';
 import { predict, newPrediction } from '../../src/sim/predict.js';
-import { createOneThumb, markOffset } from '../../src/onethumb.js';
+import { createOneThumb, markOffset, THUMB } from '../../src/onethumb.js';
 import { OBJECTIVES, evaluate } from '../../src/daily.js';
 
 // A seeded LCG stream (the scripts' own).
@@ -103,20 +103,24 @@ export function flyThumb(course, r) {
 // the sight's dot a reaction late, re-read every 0.25–0.5 s, as the Show's careful thumbs do.
 export function flyThumbLineup(r) {
   const P = { lag: 0.18 + r() * 0.25, landAt: r.pick(['hold', 'hold', 'hud', 'hud', 'hud', 8, 4]), lapse: r() < 0.2, lapseAt: -40 + r() * 30,
-    every: Math.round((0.25 + r() * 0.25) * 240) };
+    every: Math.round((0.25 + r() * 0.25) * 240), twice: r() < 0.5, callZ: -65 + r() * 60 };
   const lagT = Math.round(P.lag * 240), press = Math.round((P.lag + 0.1) * 240);
   const run = createRun('lineup'), th = createOneThumb();
+  let called = false, slidUp = false;   // 0191: the call was made; the thumb hasn't been lifted since
   let lapseT = -1, upAt = -1, landSeen = -1, holdFrom = -1, aimNext = -1, aimAt = -1, want = null;
   while (run.phase !== 'done') {
     const c = run.car, t = run.tick, inp = newInput();
     if (t === lagT) th.down();
-    if (P.lapse && lapseT < 0 && t > lagT && c.pos.z > P.lapseAt) { lapseT = t; th.up(); }
+    if (P.lapse && lapseT < 0 && t > lagT && c.pos.z > P.lapseAt) { lapseT = t; th.up(); slidUp = false; }
     if (lapseT >= 0 && t === lapseT + 240) th.down();
+    // 0191: half take the pad's offer of a second turn: the thumb slid up (a full slide) somewhere on the run-up, while
+    // it's down; a thumb lifted after the call keeps it (the call is latched), as the page does.
+    if (P.twice && !called && th.held && run.phase === 'drive' && c.pos.z > P.callZ) { th.move(0, THUMB.aimPx); called = slidUp = true; }
     if (run.phase === 'air') {
       const h = Math.max(0, c.pos.y - SPEC.comHeight);
       predict(c, h, pr);
       if (P.landAt !== 'hold' && upAt < 0) { upAt = t + lagT; }
-      if (upAt >= 0 && t === upAt && holdFrom < 0) th.up();
+      if (upAt >= 0 && t === upAt && holdFrom < 0) { th.up(); slidUp = false; }
       if (P.landAt !== 'hold' && upAt >= 0 && t > upAt && holdFrom < 0) {
         let w = P.landAt === 'hud' ? pr.status !== 'green' : h < P.landAt && c.vel.y < 0;
         if (pr.status !== 'green' && t > upAt + lagT) w = true;   // the descent warning (flash + buzz)
@@ -129,7 +133,8 @@ export function flyThumbLineup(r) {
           markOffset(c, pr, 'lineup', off, th.ref, th.refA, th.canA);
           want = { x: off.x, y: -off.y }; aimAt = t + lagT; aimNext = t + P.every;
         }
-        if (want && t >= aimAt) th.move(want.x, want.y);
+        // 0191: a thumb that called the second turn and stayed down is still up the glass where it slid: it aims from there.
+        if (want && t >= aimAt) th.move(want.x, want.y + (slidUp ? THUMB.aimPx : 0));
       }
     }
     th.sample(run, false, inp);
