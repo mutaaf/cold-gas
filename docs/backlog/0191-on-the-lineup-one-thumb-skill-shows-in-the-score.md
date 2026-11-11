@@ -78,3 +78,46 @@ operator's call before a builder takes it. The iPhone's `Medals.swift` keeps 90 
 vector with a run-up slide then). Note: the population draws two more numbers per Lineup player, so its later players differ
 from main's; the table compares the same seed, not the same players.
 
+
+## Critic call (2026-11-11 21:36, after #315): no per-turn efficiency; the card names the way to Gold
+Production `index-BfrEcyEr.js` (= main `fbad7ca`), 390×844 touch, CDP touches on the pad
+(`docs/critique/2026-11-11-2136/`):
+
+| thumb | pad words | apex | roll | miss | total | medal |
+|---|---|---|---|---|---|---|
+| held from Go, first visit (`L-held-results.png`) | Hold · Drive → **↑ for 720 · Drive** → Holding · Drive → Lifting → Rolling | 8.1 m | 360° | 1.3 m | 91.3 Stuck it | **Silver** · "Gold at 92.5 · 1.2 to go" |
+| slid up 48 px at 0.4 s, no aim (`L-up720-results.png`) | Hold · Drive → **Two turns · Drive** → Lifting → Rolling | **14.6 m** | 720° | 4.2 m | 92.0 Perfect 10 | Silver · "0.5 to go" |
+
+- **Criterion 1 passes on production.** The held thumb is Silver, not Gold.
+- **Gold ≤ 50 % passes** (the builder's 27/150, all 720s).
+- **The p90 − p10 ≥ 5 criterion: the builder's proposed fix is ruled out.** The 720 burns to 14.6 m (10.5 m over the
+  semi's roof). That's nearly twice the reveal's kickflip: one 360° roll at a peak of about 7–8 m (paultan telemetry 7 m,
+  NBC "27 ft"), with 2.5–3.5 s of airtime (REVEAL_RESEARCH §2.2, rows 46–47). No source shows the car rolling twice.
+  - The gas the 720 burns to get that height is real, and the scorer is right to charge it.
+  - Paying it back ("efficiency read per turn flown") would make the least reveal-like flight the most rewarded one.
+  - Raising the roll rate isn't the way either. The stick's 4.6 rad/s (`src/sim/vehicle.js:340`) is anchored on the
+    reveal's 180° in ≈1.1 s.
+  - So the 720 stays what #315 made it: an optional trick that a careful thumb can fly onto the mark for Gold.
+- **This criterion is replaced.** The medal ladder is the skill signal, and #315 meets it: held = Silver, an unaimed 720
+  = Silver, the 720 on the mark = Gold. The p90 − p10 spread box is struck, by the critic who wrote it.
+- **What still fails: a player can't find the way to Gold.**
+  - The only cue is the pad's "↑ for 720" during the run-up's first seconds. A held thumb sees it for less than the
+    sampling of one run.
+  - The results card says "Gold at 92.5 · 1.2 to go". Then NEXT RUN says "try Pro and fly the landing yourself", and
+    WHAT HAPPENED says "Want more? Try Pro" (`L-held-results.png`).
+  - Pro is the two-thumb game. The one thing that earns Gold on one thumb is named nowhere on the card. Skill that the
+    card never names doesn't show in the score.
+
+### Amended acceptance criteria (critic, 2026-11-11 21:36)
+- [x] One thumb on the Lineup, held from Go, no slide: Silver or below. Production 91.3 Silver.
+- [x] Gold for ≤ 50 % of the careful `flyThumbLineup` population (#315: 18 %).
+- [~] ~~p90 − p10 ≥ 5 points~~: struck by the critic. See above. Don't pay per-turn efficiency.
+- [ ] On one thumb, a landed **360** on the Lineup has a results card whose NEXT RUN line names the call in the pad's
+      words, e.g. "Next: slide up on the run-up for two turns, then aim for the mark". "Try Pro" can follow it but
+      can't replace it. Assert this in `tests/e2e/lineup-thumb.spec.js` at 390×844.
+- [ ] A landed, unaimed **720** has a card whose NEXT RUN names the aim ("hold in the air and slide onto the amber
+      dot"). Production already does this (`L-up720-results.png`), so keep it.
+- [ ] The title or the how-to card's Lineup rows say once that sliding up on the run-up calls two turns. One line,
+      and the how-to stays one step on a first visit.
+- [ ] The earlier boxes stand: clean ≥ 90 %, wrecks ≤ 5 %, `daily-reach` over the floor, `ref-hash` unchanged.
+- [ ] Funnel number to move: `retry` / `run` on the Lineup among touch runs.

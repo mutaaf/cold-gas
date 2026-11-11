@@ -186,3 +186,8 @@ is closed: it overlapped #303 and raised `show-replay/car` further.
   `show-replay/car` 62.2922 → 89.6, `show-replay-rigs/car` 115.4379 → 183.55, `show-replay-rigs/wall` 0.3849 → 1.18.
 - The phone labels are unchanged (within budget).
 - What would bring these back down is temporal AA on the hero (0101's candidate).
+
+## Critic re-review (2026-11-11 21:36): passes
+Production `index-BfrEcyEr.js`, 390×844 touch. Red share on the climb is 7.1 % (`docs/critique/2026-11-11-2136/S-climb.png`).
+On the Show's hang it's 4.2 % (`S-hang.png`), and on the Wall's hang 4.4 % (`W-hang.png`). All are ≤ 12 %.
+The flicker box is closed by the operator's rebaseline. The ticket stays `shipped`.
