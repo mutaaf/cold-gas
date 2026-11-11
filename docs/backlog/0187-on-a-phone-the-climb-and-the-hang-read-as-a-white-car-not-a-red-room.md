@@ -133,3 +133,10 @@ director shot and by deck look (k):
 - **A size gate won't work either.** The look audit's 844×390 phone draws the hang at 10–11 px/m, smaller than shot 1's 17–19.
 - **Operator's call:** rebaseline `show-replay/car` and `show-replay-rigs/car` (desktop swiftshader) for the readable car, as
   with 0097, or let the reference wide shot keep the course bloom. The critic ruled out the second.
+- **This pass's gate (flicker-budget, same machine, main → branch):**
+  - Desktop: `show-replay/car` 101.9 → **89.6 ‰** (limit 77.9, still over); `show-replay-rigs/car` 189.3 → 185.5 ‰ (limit 144.3,
+    still over); `show-title/car` 6.36 → 5.82; `show-jets/car` 10.41 → 8.39.
+  - Phone: `show-replay/car` 66.2 and `show-replay-rigs/car` 137.7 ‰ (both within); title car 3.30 → 3.11, jets car 7.35 → 5.68.
+  - Every other region is level with main on this sandbox, which itself reads over the stored desktop budget on show-title and
+    show-jets (LESSONS 0051).
+  - The status stays `ready`: the flicker box isn't met.
