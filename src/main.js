@@ -14,7 +14,7 @@ import { createDirector } from './render/director.js';
 import { landingImpact } from './render/impact.js';
 import { createCrash } from './render/crash.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
-import { createRun, stepRun, armAftermath, aftermathStep, FRAME_EVERY, BODY_FRAME, BODY_STRIDE } from './sim/run.js';
+import { createRun, stepRun, armAftermath, aftermathStep, aftermath, FRAME_EVERY, BODY_FRAME, BODY_STRIDE } from './sim/run.js';
 import { freeWorld } from './sim/world.js';
 import { physicsReady, physicsMemoryBytes } from './sim/engine.js';
 import { loadPhysics } from './sim/engine-web.js';
@@ -40,9 +40,10 @@ import { padState, padWords } from './thumb-words.js';
 // 0121 thumb mastery (own modules): the one-thumb touchdown sight on the pad, and the medals row.
 import { mountThumbAim } from './thumb-aim.js';
 import { showMedals, hideMedals } from './medals.js';
+import { createBeat, beatEligible } from './beat.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
-import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0, suspendAudio, resumeAudio, audioState } from './audio.js';
+import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0, settle as settle0, suspendAudio, resumeAudio, audioState } from './audio.js';
 import { syncWake, wakeHeld } from './wake.js';
 import { createUI, crashStep } from './ui.js';
 import { initFocusTrap } from './focus-trap.js';
@@ -81,7 +82,7 @@ const coarse = device.coarse;
 const tier = obs.boot({ forced: params.get('gfx'), deviceTier: pickDeviceTier(device).tier }).tier;
 obs.init({ deviceClass: deviceClass(navigator, coarse, deviceKind(device)) });
 // Audio is a breaker-guarded subsystem: if it throws, the game goes quiet instead of stopping.
-const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updateAudio0), thud = guard('audio', thud0), chime = guard('audio', chime0);
+const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updateAudio0), thud = guard('audio', thud0), chime = guard('audio', chime0), settle = guard('audio', settle0);
 // The audio graph is built on the first touch, click or key anywhere (a user gesture, so the
 // context may start), not inside the Jump tap: building it can take a long task of its own. Every
 // later gesture brings back a context that stopped (iOS 'interrupted' too), unless it should be quiet.
@@ -130,6 +131,11 @@ function whenPhysics(fn) {
   };
 }
 const ui = createUI();
+// The landing's beat (0199, src/beat.js): a landed run's verdict, its score counting up and the judges' cards going
+// up one by one, over the live scene, before the sheet. Its numbers are the card's (closeCard); a tap skips it.
+const beatRoot = document.querySelector('[data-beat]');
+const beat = createBeat(beatRoot, { chime, settle, buzz });
+let beatShown = false;   // this run's beat has played: its sheet opens on the final score, without a second count
 // The modal sheets hold focus while they're up and hand it back when they close (0054, src/focus-trap.js).
 initFocusTrap([ui.screens.pause, ui.screens.controls, ui.screens.howto, ui.screens.assist, ui.screens.board,
   document.querySelector('[data-drive-pause]'), document.querySelector('[data-ai-modal]')]);
@@ -190,7 +196,7 @@ const S = {
 const ads = createAds({ mode: () => S.mode });
 const rerollBtn = document.querySelector('[data-reroll]');
 let rerolled = null;
-const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); ads.sync(); };
+const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); if (m !== 'live') endBeat(); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); ads.sync(); };
 try {
   const saved = localStorage.getItem('coldgas_tier');
   S.tier = TIERS[saved] ? saved : localStorage.getItem('coldgas_assist') === '0' ? 'pro' : 'assist';
@@ -480,7 +486,8 @@ function finishRun() {
     replayFrom(Math.max(0, (run.drillStartTick || 0) / FRAME_EVERY - 30));
     return;
   }
-  ui.results(S.card);
+  ui.results(S.card, null, { settled: beatShown, calm: calmSheet(), byok: loadAI().provider !== 'edge' });
+  beatShown = false;
   // 0121: medals (src/medals.js) for your own runs, not the reference's.
   if (S.autopilot) hideMedals(); else showMedals(run.course, S.card.tier, S.card.total);
   pointerBox.hidden = true;
@@ -504,6 +511,46 @@ function finishRun() {
   // Replay plays behind the sheet.
   replayFrom(0);
 }
+
+// --- The landing's beat (0199) -----------------------------------------------------------------
+// From the first aftermath frame of a landed run (liveStep): the touch controls, the landing HUD and the cue line go,
+// the HUD fades under it (body[data-beat-on]), the top bar stays. Ends as the mode leaves 'live' or a new flight starts.
+function startBeat(run) {
+  beatShown = true;
+  ui.touch.hidden = true;
+  landing.show(false);
+  getNozzlePad().show(false);
+  ui.clearCue();
+  document.body.dataset.beatOn = '';
+  beat.show(S.card, { reduced: reducedMotion, course: COURSES[run.course]?.name || '' });
+}
+function endBeat() {
+  if (!beat.active) return;
+  beat.hide();
+  delete document.body.dataset.beatOn;
+}
+// A tap (after the guard: a thumb still on the pad as the car came down isn't a tap), Enter or Space: the sheet now.
+// The car's last moments are stepped at once so the replay still ends at rest.
+function skipBeat() {
+  if (!beat.canSkip() || S.mode !== 'live' || S.paused) return;
+  const run = S.run;
+  if (!run.after.done) aftermath(run);
+  finishRun();
+}
+beatRoot.addEventListener('click', skipBeat);
+addEventListener('keydown', (e) => {
+  if (!beat.active || e.repeat || (e.code !== 'Enter' && e.code !== 'Space') || !beat.canSkip() || S.paused || S.mode !== 'live') return;
+  if (e.target?.closest?.('input, select, textarea, button, a, [role="button"], [role="dialog"], [data-ai-modal]')) return;
+  e.preventDefault();
+  e.stopImmediatePropagation();   // the sheet's own Enter (Retry) must not read this press once it is up
+  skipBeat();
+});
+// The calm sheet (0199): a player's first runs on this device lead with the verdict, the score, the medal, the next
+// run's one line and Retry; the rest is under More. An automated browser counts as a returning player (as the how-to
+// card does) unless it asked for a first visit (coldgas_howto = 'new' at boot).
+const CALM_RUNS = 3;
+const calmable = (() => { try { return !navigator.webdriver || localStorage.getItem('coldgas_howto') === 'new'; } catch { return !navigator.webdriver; } })();
+const calmSheet = () => calmable && !S.autopilot && !S.drill && S.runKind === 'jump' && S.flown <= CALM_RUNS;
 
 // The coach's pointer (0079, src/pointer.js): the one fix that matters most, in this device's controls,
 // as one large line on the sheet and again as the next run counts down ("Tip: …"). "Better: …" once
@@ -903,9 +950,16 @@ function liveStep(dt) {
 
   // The end: a finished run (or a drill's moment) goes straight into its aftermath, and the results
   // come up once the car is at rest, and no sooner than the beat they always had (1.4 s, a drill 0.5 s).
+  // 0199: a landed run of the player's own gets its beat first (src/beat.js), on this clock: the sheet comes once the
+  // beat has run and the car is at rest (no extra 1.4 s: the beat is that wait). A wreck, a drill and the reference as before.
   if (S.after) {
     S.doneT += dt;
-    if (run.after.done && S.doneT > (S.drill ? 0.5 : 1.4)) finishRun();
+    if (S.beatFor !== run) {
+      S.beatFor = run;
+      if (beatEligible({ card: S.card, autopilot: S.autopilot, drill: S.drill, runKind: S.runKind })) startBeat(run);
+    }
+    if (beatShown) { if (beat.step(dt) && run.after.done) finishRun(); }
+    else if (run.after.done && S.doneT > (S.drill ? 0.5 : 1.4)) finishRun();
   } else if (run.phase === 'done' || (S.drill?.done && S.drill.done(run))) {
     S.doneT += dt;
     if (run.phase === 'done' || S.doneT > 0.5) beginAftermath(run);
@@ -971,6 +1025,7 @@ function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTi
 // --- The flight, as the HUD and the controls see it ---------------------------------------------
 // A new attempt (or drill): the one-thumb control, the HUD's glide and the timeline start over.
 function newFlight(startTick = 0) {
+  endBeat(); beatShown = false;
   // A restart lets go of everything, like pause (0099): every key, finger and pad held as the last run
   // ended (or as Retry was hit) counts again only on a fresh press; the one-thumb starts unheld.
   freshRun();
@@ -1376,7 +1431,7 @@ function frameBody(now) {
       if (S.countT >= L) { setMode('live'); ui.countdown(0); ui.cue_(S.autopilot ? 'The reference jump' : 'Go', 900, { hold: 700 }); }
       plumes.update(dt, S.time, S.idleThrottles.fill(0), zeroVel, 0);
       ui.setClock(S.countT - L);
-    } else if (S.mode === 'live') liveStep(dt * slow);
+    } else if (S.mode === 'live') { if (!S.holdLive) liveStep(dt * slow); }   // S.holdLive: e2e steps the live clock itself (0199)
     else if (S.mode === 'results' || S.mode === 'replay') replayStep(dt * slow);
     else if (S.mode === 'drive') fd().frame(dt * crash.timeScale(), S.time);   // Free Drive / the Sandbox run their own cameras
 
@@ -1440,7 +1495,7 @@ bindInput(document.body, { onPause: () => pause(), running: () => S.mode === 'li
 onDevice(() => {
   S.titleCard?.();   // 0139: the Daily card's hint is in the device's words
   if (S.mode !== 'live' && S.mode !== 'countdown') return;
-  ui.touch.hidden = !usingTouch() || !!S.autopilot;
+  ui.touch.hidden = !usingTouch() || !!S.autopilot || beat.active;
   syncScheme();
   S.ptrCtx = pointerCtx(S.run?.course || stage.course, S.flyTier);
   if (S.paused) drawPauseKeys();
@@ -1453,13 +1508,22 @@ on('[data-reveal]', () => startRun('reveal'));
 // Retry: straight back onto the mark with a one-beat READY (a drill restarts itself; the reference
 // jump hands over to you). Home: the title. Both from anywhere in a run: the HUD's quick buttons,
 // the results, the pause sheet, R / Enter and H.
+// 0199: a Retry or Home during the landing's beat settles the run first (its sheet's bookkeeping: the run count,
+// the best and its ghost, the medal), as the sheet would have; then goes on as from the sheet.
+function settleBeat() {
+  if (!beat.active || S.mode !== 'live') return;
+  if (!S.run.after.done) aftermath(S.run);
+  finishRun();
+}
 function retry() {
+  settleBeat();
   S.paused = false; ui.show('pause', false);
   obs.play('retry');
   if (S.drill) return retryDrill();
   afterResults(() => startRun('jump', true));
 }
 function goHome() {
+  settleBeat();
   // An unposted board jump on the sheet (or under the theatre): asked once, inline, before it's thrown away.
   if ((S.mode === 'results' || S.mode === 'replay') && poster?.confirmLeave(goHome)) return;
   S.paused = false; ui.show('pause', false); afterResults(toTitle);
@@ -1877,7 +1941,7 @@ more.addEventListener('focusout', (e) => { if (moreOpen() && e.relatedTarget && 
 // drill. The Worker scores it from the run's telemetry; the client never sends a score.
 poster = createPost({
   ctx: () => ({ run: S.run, card: S.card, eligible: (S.mode === 'results' || S.mode === 'replay') && S.runKind === 'jump' && !S.drill && !S.autopilot && !!S.card?.facts?.jumped && S.card.total > 0 }),
-  onLeaveOpen: () => { if (S.peek) peek(false); },
+  onLeaveOpen: () => { if (S.peek) peek(false); ui.openMore(false); },   // 0199: the calm sheet shows its Post with the question
   onLeavePost: () => theatreMod?.dockCall(),   // the sheet, to see the post land
 });
 

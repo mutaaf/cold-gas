@@ -165,6 +165,18 @@ export function chime(i = 0) {
   o.connect(g).connect(master); o.start(t); o.stop(t + 1.2);
 }
 
+// The landing's beat (0199): the score lands. One low struck tone with its octave, soft, and a long tail: a
+// bell in another room, not a fanfare. The judges' cards that follow use chime().
+export function settle() {
+  if (!ctx || muted) return;
+  const t = ctx.currentTime;
+  for (const [fr, peak] of [[392, 0.07], [784, 0.035]]) {
+    const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = fr;
+    const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(peak, t + 0.012); g.gain.exponentialRampToValueAtTime(0.0001, t + 1.8);
+    o.connect(g).connect(master); o.start(t); o.stop(t + 1.9);
+  }
+}
+
 export function tick() {
   if (!ctx || muted) return;
   const t = ctx.currentTime;

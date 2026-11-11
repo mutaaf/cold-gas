@@ -342,6 +342,24 @@
     </div>
   </section>
 
+  <!-- The landing's beat (0199, src/beat.js): over the live scene between a landed run's card and the sheet, the
+       verdict, the score counting up and the judges' cards going up one by one. A tap skips to the sheet. -->
+  <section class="beat" data-beat hidden>
+    <p class="vh" role="status" data-beat-say></p>
+    <div class="beat-in" aria-hidden="true">
+      <p class="beat-eyebrow" data-beat-eyebrow></p>
+      <h2 class="beat-verdict" data-beat-verdict></h2>
+      <p class="beat-total"><b data-beat-total>0.0</b><span>/ 100</span></p>
+      <i class="beat-rule" aria-hidden="true"></i>
+      <ol class="beat-judges">
+        <li data-beat-judge><span class="bj-who"></span><b class="bj-score"></b></li>
+        <li data-beat-judge><span class="bj-who"></span><b class="bj-score"></b></li>
+        <li data-beat-judge><span class="bj-who"></span><b class="bj-score"></b></li>
+      </ol>
+    </div>
+    <p class="beat-skip" aria-hidden="true"><span class="bs-tap">Tap for the panel</span><span class="bs-key">Click or press Enter for the panel</span></p>
+  </section>
+
   <!-- Results -->
   <section class="results" data-screen="results" hidden>
     <div class="sheet">
@@ -394,6 +412,9 @@
         <div class="adapt-up" data-adapt-up hidden><button type="button" class="btn rookie-btn adapt-btn" data-adapt-go aria-describedby="adapt-up-why"><b data-adapt-label>Ready for Pro? ×1.08</b><span data-adapt-sub></span></button>
           <p class="rookie-why" id="adapt-up-why" data-adapt-up-why></p></div>
       </div>
+      <!-- The calm sheet's one tap to the rest (0199): a player's first runs lead with the verdict, the score, the medal,
+           the next run's line and Retry; More shows what happened, the judges, the call, the facts and Post -->
+      <button type="button" class="r-more" data-r-more aria-expanded="false"><span class="r-more-k">More</span><span class="r-more-sub">What happened · the judges · post</span></button>
       <div class="coach" data-coach hidden>
         <p class="eyebrow">What happened</p>
         <ol class="coach-items" data-coach-items></ol>

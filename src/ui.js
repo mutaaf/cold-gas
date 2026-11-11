@@ -439,11 +439,18 @@ export function createUI() {
   };
 
   // `practice`: { drill, result } for a drill (not scored: no panel, no board).
-  ui.results = (card, practice = null) => {
+  // `settled` (0199): the landing's beat already counted the score up and sounded the judges, so the sheet opens on
+  // the final numbers, silent. `calm` (0199): a player's first runs lead with the verdict, the score, the medal, the
+  // next run's line and Retry; the rest waits under More (`byok`: a player's own AI key keeps its call strip in view).
+  ui.results = (card, practice = null, { settled = false, calm = false, byok = false } = {}) => {
     const sheet = ui.screens.results;
     lastCard = practice ? null : card;
     ui.liveCall(null);
     sheet.toggleAttribute('data-practice', !!practice);
+    sheet.toggleAttribute('data-calm', calm && !practice);
+    sheet.toggleAttribute('data-byok', byok);
+    sheet.removeAttribute('data-more');
+    moreBtn.setAttribute('aria-expanded', 'false');
     $('[data-drill-card]').hidden = !practice;
     $('[data-coach]').hidden = true;
     const tier = TIERS[card.tier] || TIERS.assist;
@@ -459,25 +466,28 @@ export function createUI() {
     $('[data-r-verdict]').textContent = practice ? practice.result.headline : card.verdict;
     if (!practice) $('[data-r-headline]').textContent = 'The panel';
     const total = $('[data-r-total]');
-    const t0 = performance.now();
-    const roll = (now) => {
-      const k = Math.min(1, (now - t0) / 1400);
-      total.textContent = (card.total * (1 - (1 - k) ** 3)).toFixed(1);
-      if (k < 1) requestAnimationFrame(roll);
-    };
-    requestAnimationFrame(roll);
+    if (settled) total.textContent = card.total.toFixed(1);
+    else {
+      const t0 = performance.now();
+      const roll = (now) => {
+        const k = Math.min(1, (now - t0) / 1400);
+        total.textContent = (card.total * (1 - (1 - k) ** 3)).toFixed(1);
+        if (k < 1) requestAnimationFrame(roll);
+      };
+      requestAnimationFrame(roll);
+    }
     const list = $('[data-r-judges]');
     list.innerHTML = '';
     card.judges.forEach((j, i) => {
       const li = document.createElement('li');
-      li.style.animationDelay = `${0.35 + i * 0.25}s`;
+      li.style.animationDelay = `${settled ? 0.2 : 0.35 + i * 0.25}s`;
       li.dataset.judge = j.id;
       li.innerHTML = `<span class="who"></span><span class="role"></span><span class="score"></span><p class="quote typing"></p>`;
       li.querySelector('.who').textContent = j.name;
       li.querySelector('.role').textContent = j.title;
       li.querySelector('.score').textContent = j.score.toFixed(1);
       list.appendChild(li);
-      setTimeout(() => chime(i), 450 + i * 250);
+      if (!settled) setTimeout(() => chime(i), 450 + i * 250);
     });
     const cats = $('[data-r-cats]');
     cats.innerHTML = '';
@@ -512,6 +522,21 @@ export function createUI() {
     $('[data-r-submit-msg]').textContent = '';
     $('[data-receipt]').hidden = true;
   };
+
+  // More (0199): the calm sheet's one tap to everything else. It opens the full sheet in place and moves focus to
+  // the first thing it showed, so a keyboard or a screen reader lands on it too.
+  const moreBtn = $('[data-r-more]');
+  // ui.openMore(false): the same, without moving focus (Home's "Leave without posting?" opens it, so Post is there).
+  ui.openMore = (focus = true) => {
+    const sheet = ui.screens.results;
+    if (!sheet.hasAttribute('data-calm') || sheet.hasAttribute('data-more')) return;
+    sheet.setAttribute('data-more', '');
+    moreBtn.setAttribute('aria-expanded', 'true');
+    if (!focus) return;
+    const first = [...sheet.querySelectorAll('[data-coach], [data-r-judges] > li')].find((el) => !el.closest('[hidden]'));
+    if (first) { first.tabIndex = -1; first.focus({ preventScroll: true }); first.scrollIntoView({ block: 'nearest', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); }
+  };
+  moreBtn.addEventListener('click', () => ui.openMore());
 
   // The coach (src/sim/coach.js): the fixes that matter, most costly first.
   ui.coaching = (items) => {

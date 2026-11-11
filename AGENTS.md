@@ -150,7 +150,8 @@ mark, and air left in the tanks.
    No AI call may block the results: a 35 s deadline falls back to local lines. The score never waits for the
    call: where the theatre would cover the sheet (a phone, a short landscape screen, a folding tablet) the call runs
    docked as a live strip on the sheet (model, where, tokens so far; then its receipt in a line) with "Watch the
-   call" for the full show.
+   call" for the full show. On a player's first three runs (the calm sheet, 0199, operator's call 2026-11-11) the strip
+   and the receipt sit one tap down, under the sheet's More, with the judges; a player's own AI key keeps the strip in view.
 6. **Frame budget.** 60 fps on a mid-range laptop and playable on a recent phone. No per-frame
    allocations in hot paths (reuse vectors and arrays). Graphics tiers: `?gfx=low|mid|high`. One look
    everywhere (0097): phones and tablets boot `high` like a desktop (same effects, shadows, film look,
@@ -311,6 +312,9 @@ src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on 
 src/thumb-aim.js      the one-thumb pad's sight in the air (the mark from the predicted touchdown) + the slide's pointers
 src/medals.js         bronze/silver/gold per event and tier, best per device (localStorage coldgas_medals), the
                         results row under the score; getMedals(course, tier) for other screens (0121)
+src/beat.js           the landing's beat (0199): a landed run's verdict, score counting up and the judges' cards going
+                        up, over the live scene before the sheet (≈2.4 s on the live clock, a tap skips; the card's numbers
+                        only). The sheet after it: a player's first three runs get the calm sheet (src/ui.js `calm`, More)
 src/touch-settings.js touch scheme (one-thumb | classic), hand, tilt steering (DeviceOrientation, iOS
                         permission, calibrate, 5 % steps), haptics (navigator.vibrate)
 src/valves.js         Advanced: keyboard layout like the car, chords, key ramp, gamepad, the touch
