@@ -56,14 +56,18 @@ function effectOf(m) {
   if (u.uC) return { kind: 'spill', color: col(u.uC), power: 0.12 };
   return { kind: 'skip' };   // (the sky dome: the native renderer draws its own)
 }
+// The roadster's shut lines (src/render/sliver.js sliverTube, 0187) are faded by coverage in the web's vertex shader, which has no
+// port here: the app keeps drawing them as the opaque dark lines they were (in the mirror and the shadow pass too).
+const isTube = (m) => String(m.customProgramCacheKey?.() ?? '').startsWith('sliverTube');
 function materialOf(m, textures) {
+  const tube = isTube(m);
   return {
     effect: effectOf(m), alphaMap: textureOf(m.alphaMap, textures),
     name: m.name || m.type, kind: m.type, color: m.color ? m.color.toArray() : [1, 1, 1],   // linear (three keeps colours linear)
     emissive: m.emissive ? m.emissive.toArray() : [0, 0, 0], emissiveIntensity: m.emissiveIntensity ?? 1,
     unlit: m.type === 'MeshBasicMaterial' || m.type === 'ShaderMaterial',
     metalness: m.metalness ?? 0, roughness: m.roughness ?? 1, clearcoat: m.clearcoat ?? 0, clearcoatRoughness: m.clearcoatRoughness ?? 0,
-    opacity: m.opacity ?? 1, transparent: !!m.transparent, depthWrite: m.depthWrite !== false, doubleSided: m.side === THREE.DoubleSide,
+    opacity: m.opacity ?? 1, transparent: !!m.transparent && !tube, depthWrite: tube || m.depthWrite !== false, doubleSided: m.side === THREE.DoubleSide,
     additive: m.blending === THREE.AdditiveBlending, polygonOffset: m.polygonOffset ? [m.polygonOffsetFactor, m.polygonOffsetUnits] : null,
     vertexColors: !!m.vertexColors, fog: m.fog !== false,
     wet: !!(m.customProgramCacheKey && String(m.customProgramCacheKey()).startsWith('wetSlab')),
@@ -97,8 +101,9 @@ function bake(root, textures, skip = () => false, frame = null) {
       for (const r of ranges) {
         const mat = mats[r.materialIndex ?? 0];
         if (!mat || mat.visible === false) continue;
-        const key = mat.uuid + (o.renderOrder ? '@' + o.renderOrder : '');
-        if (!groups.has(key)) groups.set(key, { mat, order: o.renderOrder || 0, top: -Infinity, pos: [], nrm: [], uv: [], col: [], idx: [] });
+        const order = isTube(mat) ? 0 : o.renderOrder || 0;
+        const key = mat.uuid + (order ? '@' + order : '');
+        if (!groups.has(key)) groups.set(key, { mat, order, top: -Infinity, pos: [], nrm: [], uv: [], col: [], idx: [] });
         const gr = groups.get(key), base = gr.pos.length / 3, remap = new Map();
         const at = (k) => (g.index ? g.index.getX(k) : k);
         for (let k = r.start; k < r.start + r.count; k += 3) {

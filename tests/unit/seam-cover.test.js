@@ -3,7 +3,7 @@
 // shot: car pops 29.7 → 9.9 ‰, the same as with no shut lines at all). Close up it draws exactly as modelled.
 import { describe, it, expect } from 'vitest';
 import * as THREE from 'three';
-import { tubeCover, sliverTube } from '../../src/render/sliver.js';
+import { tubeCover, sliverTube, sliverView } from '../../src/render/sliver.js';
 
 const compile = (mat) => {
   const lib = THREE.ShaderLib.standard;
@@ -47,6 +47,8 @@ describe('sliverTube', () => {
     const m = sliverTube(new THREE.MeshStandardMaterial(), { radius: 0.0042, minPx: 3, maxK: 16 });
     const sh = compile(m);
     expect(m.transparent).toBe(true);
+    expect(m.depthWrite).toBe(false);
+    expect(sh.uniforms.uHalfView).toBe(sliverView);   // the stage keeps it at half the drawing buffer (resize, pixel scale, mirror)
     expect(sh.uniforms.uTubeR.value).toBe(0.0042);
     expect(sh.uniforms.uMinPx.value).toBe(3);
     expect(sh.vertexShader).toMatch(/vec3 tSpread = normal \* uTubeR;/);
@@ -57,5 +59,12 @@ describe('sliverTube', () => {
     const src = (await import('node:fs')).readFileSync(new URL('../../src/render/roadster.js', import.meta.url), 'utf8');
     expect(src).toMatch(/seam: sliverTube\(new THREE\.MeshStandardMaterial\(\{ color: 0x050506, roughness: 0\.6 \}\), \{ radius: SEAM_R, minPx: 3, maxK: 16 \}\)/);
     expect(src).toMatch(/function seam\(points, radius = SEAM_R, mat = M\.seam\)/);
+  });
+  it('draws in the paint layer, and the iPhone export keeps the opaque line it had (no port of the fade)', async () => {
+    const fs = await import('node:fs');
+    expect(fs.readFileSync(new URL('../../src/render/roadster.js', import.meta.url), 'utf8')).toMatch(/if \(mat === M\.seam\) m\.renderOrder = LAYER\.paint;/);
+    const page = fs.readFileSync(new URL('../../scripts/native-stage-page.js', import.meta.url), 'utf8');
+    expect(page).toMatch(/transparent: !!m\.transparent && !tube, depthWrite: tube \|\| m\.depthWrite !== false/);
+    expect(page).toMatch(/const order = isTube\(mat\) \? 0 : o\.renderOrder \|\| 0;/);
   });
 });
