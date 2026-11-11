@@ -181,3 +181,43 @@ export const DECAL = { polygonOffset: true, polygonOffsetFactor: -2, polygonOffs
 // (mist, plumes, beams, crash smoke: renderOrder ≥ 0), so the camera or car moving never flips
 // their order against those (that popped), and in a fixed order among themselves.
 export const LAYER = { pad: -4, paint: -3, glow: -2, light: -1 };
+
+// A thin tube drawn ON a surface (the roadster's shut lines, 0187): a 4 mm radius line is a fraction of a pixel
+// at replay distance, so the pixel centres hit it on one frame and miss it the next, and a black line on white
+// paint pops wherever it crosses the frame. Under `minPx` on screen it is drawn `minPx` wide and faded by the
+// share of that width the tube really covers (an analytic coverage line, like the paint slivers above): the
+// same darkness on screen, spread evenly instead of sampled. Wider (close up) it draws exactly as modelled.
+// The spread is the tube's own normal × radius (TubeGeometry's normals are radial), so it needs no attribute.
+// Pure mirror of the shader's arithmetic: on-screen width (px) of a tube of `radius` m at view depth `depth` m,
+// for a projection's [1][1] and half the drawing buffer's height; k = how much it is widened, cov = the alpha.
+export function tubeCover(radius, p11, halfH, depth, minPx = 1, maxK = 8) {
+  const px = Math.max((2 * radius * p11 * halfH) / Math.max(depth, 1e-3), 1e-5);
+  const k = Math.min(Math.max(minPx / px, 1), maxK);
+  return { px, k, cov: 1 / k };
+}
+export function sliverTube(material, { radius, minPx = 1, maxK = 8 }) {
+  material.transparent = true;
+  material.depthWrite = false;   // a line lying on the body: nothing behind it to hide, and no self-occlusion
+  material.onBeforeCompile = (sh) => {
+    sh.uniforms.uHalfView = sliverView;
+    sh.uniforms.uTubeR = { value: radius };
+    sh.uniforms.uMinPx = { value: minPx };
+    sh.uniforms.uMaxK = { value: maxK };
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <common>', '#include <common>\nuniform vec2 uHalfView;\nuniform float uTubeR;\nuniform float uMinPx;\nuniform float uMaxK;\nvarying float vCover;')
+      .replace('#include <begin_vertex>', `vec3 transformed = vec3( position );
+{
+  vec3 tSpread = normal * uTubeR;
+  vec4 tSpine = modelViewMatrix * vec4( position - tSpread, 1.0 );
+  float tPx = max( 2.0 * uTubeR * projectionMatrix[ 1 ][ 1 ] * uHalfView.y / max( -tSpine.z, 1e-3 ), 1e-5 );
+  float tK = clamp( uMinPx / tPx, 1.0, uMaxK );
+  vCover = 1.0 / tK;
+  transformed = position + tSpread * ( tK - 1.0 );
+}`);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\nvarying float vCover;')
+      .replace('#include <color_fragment>', '#include <color_fragment>\ndiffuseColor.a *= vCover;');
+  };
+  material.customProgramCacheKey = () => `sliverTube:${radius}:${minPx}:${maxK}`;
+  return material;
+}
