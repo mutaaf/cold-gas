@@ -8,11 +8,38 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { SHOW, WALL, wallProfile } from '../../src/sim/courses.js';
 
 describe('deckLook: on the deck from where the car is (0187)', () => {
-  it('is 0 parked at the start and on the approach, on both Wall courses', () => {
-    for (const c of [SHOW, WALL]) expect(deckLook(0, 0.4, c.start.z)).toBe(0);
-    expect(deckLook(0, 0.4, -2)).toBe(0);
-    expect(deckLook(0, 0.4, 0.3)).toBe(0);
+  it('is 1 parked at the start and on the run-up, on both Wall courses (0193: the run-up is not a red room)', () => {
+    for (const c of [SHOW, WALL]) expect(deckLook(0, 0.4, c.start.z)).toBe(1);
+    expect(deckLook(0, 0.4, -2)).toBe(1);
+    expect(deckLook(0, 0.4, 0.3)).toBe(1);
+    expect(deckLook(3, 0.4, -7)).toBe(1);                  // beside the line on the run-up too
   });
+
+  it('once flown it is 0187\'s look: 0 on both pads (the Wall\'s is on the run-up) and over the run-up (0193)', () => {
+    for (const c of [SHOW, WALL]) for (const dz of [-7, -4, -2, 0, 2, 4, 7]) expect(deckLook(0, 0.4, c.pad.z + dz, true)).toBe(0);
+    expect(deckLook(0, 0.4, -3, true)).toBe(0);
+    expect(deckLook(0, 4, -3)).toBe(0);                    // 4 m up over the run-up, even before a launch
+    expect(deckLook(0, 0.4, -14)).toBe(0);                 // behind the start
+  });
+
+  for (const c of [SHOW, WALL]) {
+    it(`on the reference ${c.id}: 1 from the first tick through the run-up and the climb, 0 at touchdown, never a cut (0193)`, () => {
+      const run = createRun(c.id), ap = createAutopilot(c.id);
+      const look = () => deckLook(run.car.pos.x, run.car.pos.y, run.car.pos.z, run.t.launchTick >= 0);
+      let maxStep = 0, prev = look(), minRunUp = 1, landK = null;
+      expect(prev).toBe(1);
+      while (run.phase !== 'done' && run.tick < 240 * 30) {
+        stepRun(run, ap(run));
+        const k = look();
+        maxStep = Math.max(maxStep, Math.abs(k - prev)); prev = k;
+        if (run.phase === 'drive' || (run.phase === 'ramp' && run.t.invertedTime === 0 && run.car.pos.y < 6.4)) minRunUp = Math.min(minRunUp, k);
+        if (run.phase === 'landed' && landK === null) landK = k;
+      }
+      expect(minRunUp).toBe(1);
+      expect(landK).toBe(0);
+      expect(maxStep).toBeLessThan(0.02);
+    });
+  }
 
   it('on the reference Show: full up the climb and the hang, off again after the release, and never jumps', () => {
     const run = createRun('show'), ap = createAutopilot('show');

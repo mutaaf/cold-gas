@@ -1323,6 +1323,14 @@ function replayStep(dt) {
   updateAudio({ speed: fvel.length() * slow, grounded: p.pos.y < 0.7, throttles: p.thr });
 }
 
+// Has the run on screen launched yet (0193, the deck look's run-up)? Live: the run's launch tick is set. In the results
+// and the replay: the replay's clock has reached it.
+function flownOnScreen() {
+  const lt = S.run?.t?.launchTick ?? -1;
+  if (lt < 0) return false;
+  return S.mode === 'results' || S.mode === 'replay' ? S.replayT * FRAME_EVERY >= lt : true;
+}
+
 // --- Title idle: an occasional breath from the lift jets --------------------------------------
 function titleStep(dt) {
   stage.setBodies(null);
@@ -1390,7 +1398,8 @@ function frameBody(now) {
       subject: hero.group,    // the title's upright framing measures the car's own box (0131)
     });
     // The car on the Wall's deck: the stage's deck look (0187), from where the car is drawn, live and in the replay.
-    stage.setDeck(S.mode === 'title' || stage.course === 'lineup' ? 0 : deckLook(carRoot.position.x, carRoot.position.y, carRoot.position.z));
+    // The run-up shares it until the car has flown (0193): live from the run's launch tick, in the replay from its clock.
+    stage.setDeck(S.mode === 'title' || stage.course === 'lineup' ? 0 : deckLook(carRoot.position.x, carRoot.position.y, carRoot.position.z, flownOnScreen()));
     stage.render(S.time, S.mode);
   }
 }

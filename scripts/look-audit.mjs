@@ -4,7 +4,10 @@
 //   red  the frame's saturated-red share (scripts/look-measure.mjs; bar ≤ 12 % on the climb and the hang)
 //   p10  the 10th-percentile luma in the roadster's projected 4.4 × 2.0 × 1.2 m box (bar ≤ 60: its tyres and
 //        glass show dark)
-// node scripts/look-audit.mjs <url> [outdir] [--sizes=390x844t,1440x900,...] [--gfx=low|mid|high]
+// 0193 adds the run-up and the replay's opening, held to the same bars: the countdown (1 s in), the run-up (tick 264, the
+// car at the curl's foot), and the replay behind the results at 2 s and 4 s of the run (the replay's clock, not the wall's).
+// node scripts/look-audit.mjs <url> [outdir] [--sizes=390x844t,1440x900,...] [--gfx=low|mid|high] [--course=show|wall]
+//   [--only=count,runup,climb,hang1,hang2,release,replay2,replay4]
 //   a size ending in t is a touch phone (isMobile, hasTouch), drawn at deviceScaleFactor 1 (CSS pixels). Needs a served build
 //   (`npx vite preview --port 4655 --strictPort`).
 import { chromium } from 'playwright';
@@ -20,14 +23,19 @@ const sizes = flag('sizes', '390x844t,1440x900,430x932t,844x390t').split(',');
 const gfx = flag('gfx', '');
 const pre = flag('pre', '');   // experiments: JS run in the page before the run (window.__coldgas as g)
 const only = flag('only', '');
+const course = flag('course', 'show');   // the reference flight on this course (the Wall's replay opens red too, 0193)
 if (out) mkdirSync(out, { recursive: true });
 
 // The moments, as predicates on the live run (the car's centre is its CoM, 0.40 m above its floor).
 const MOMENTS = [
+  ['count', 'S.mode === "countdown" && S.countT >= 1'],
+  ['runup', 'S.mode === "live" && S.run.tick >= 264'],
   ['climb', 'S.run.phase === "ramp" && S.run.car.pos.y > 6.4 && S.run.t.invertedTime === 0'],
   ['hang1', 'S.run.phase === "ramp" && S.run.t.invertedTime >= 1.0'],
   ['hang2', 'S.run.phase === "ramp" && S.run.t.invertedTime >= 1.9'],
   ['release', 'S.run.phase === "air" && S.run.car.pos.y < 18'],
+  ['replay2', '(S.mode === "results" || S.mode === "replay") && S.replayT * 4 / 240 >= 2'],
+  ['replay4', '(S.mode === "results" || S.mode === "replay") && S.replayT * 4 / 240 >= 4'],
 ];
 
 const browser = await chromium.launch({ args: ['--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'], ...(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}) });
@@ -40,11 +48,12 @@ for (const size of sizes) {
     : { viewport: { width: w, height: h }, deviceScaleFactor: 1 });
   await ctx.addInitScript(() => { try { localStorage.setItem('coldgas_howto', 'seen'); } catch {} });
   const page = await ctx.newPage();
-  await page.goto(url + (gfx ? `?gfx=${gfx}` : ''));
+  const q = [gfx && `gfx=${gfx}`, course !== 'show' && `course=${course}`].filter(Boolean).join('&');
+  await page.goto(url + (q ? `?${q}` : ''));
   await page.waitForFunction(() => window.__coldgas?.physicsReady && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
   await page.evaluate(async () => { await window.__coldgas.physicsReady; });
   if (pre) await page.evaluate(`(() => { const g = window.__coldgas; ${pre} })()`);
-  await page.evaluate(() => { const g = window.__coldgas; g.startRun('reveal'); g.skipCountdown(); });
+  await page.evaluate(() => { window.__coldgas.startRun('reveal'); });   // the countdown plays: it is a moment (0193)
   for (const [name, pred] of MOMENTS.filter(([n]) => !only || only.split(',').includes(n))) {
     // Freeze in the predicate itself, so the frame on the glass is the one that met it.
     const fn = `(() => { const S = window.__coldgas.S; if (S.run && (${pred})) { S.paused = true; return true; } return false; })()`;
