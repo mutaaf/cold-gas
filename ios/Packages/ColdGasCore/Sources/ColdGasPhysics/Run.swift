@@ -3,7 +3,7 @@
 #if canImport(CRapier)
 import ColdGasCore
 
-public let SIM_VERSION = 31
+public let SIM_VERSION = 32   // 0190: LAND's line hold to 1.5 m, auto-land to two wheels
 public let FRAME_EVERY = 4
 public let MAX_TICKS = 240 * 90
 public let STALL_TICKS = 240 * 6, HANG_STALL_TICKS = 240 * 20

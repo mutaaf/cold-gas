@@ -1,12 +1,12 @@
 ---
 id: 0190
 title: On the Wall, the thumb that does what the pad says lands inside the painted rings, not 11 m past them
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-10
-pr:
+pr: TBD
 by: critic
 ---
 
@@ -71,7 +71,7 @@ back. That cause is the same on the Show, and it's filed as **0194**. Take 0194 
 the table above after. The along-run brake alone can't reach ≤ 7 m while 6–7 m of the miss is sideways. Production
 today: the Wall, one thumb, first visit, **15.5 m off, 75.0** (`docs/critique/2026-11-11-0410/W-results.png`).
 
-## Builder attempt 1 (2026-11-11, no fix shipped; docs only)
+## Builder attempt 1 (2026-11-11; superseded by the ship below)
 Every 0190 number can be met, but only by moving the Wall's no-slide flight off the line the slide tests are tuned to:
 eight `thumb-mastery` tests and one `thumb-land` test fail. Status back to `ready`. Node, main `9a79e44`, the critique's
 `flyThumb` loop (release → touchdown from `t.airStartTick`; the patch is reproduced below in words).
@@ -123,3 +123,14 @@ own bank) models LAND's hold as it is today, off below 4 m. Any change to that h
 same PR. Either keep the hold and get the late-LAND thumb's lateral down another way, or change the hold and re-fit `ref`
 (fit HOLD_TAU against the held sweep first, then the 0177 tapped lines). And see 0194's note: on the Wall a no-slide
 touchdown within 1.5 m sideways can't leave a sideways slide 5 points to win.
+
+## Shipped (2026-11-11, operator decision: "the first run is magic")
+Attempt 3 above ships, with the one-thumb slide's sideways model refitted to the new hold and the auto-land fix for 0188.
+- `onethumb.js`: HOLD_TAU 1.8 → 1.3 s (the held slide's place); the quick hold (0177) keeps its own QUICK_TAU = 1.6 s;
+  QUICK_MIN 0.5 → 1.5 m (a quick slide under 1.5 m of move flew weaker than LAND's own hold through the brake's envelope and
+  went the wrong way; under it LAND flies the line).
+- `vehicle.js`: the auto-land stays on until two wheels are down (it dropped on the first wheel's tick, so a held LAND flew
+  the level law one tick more and 0188's bit-identity broke by µm).
+- Re-pinned bars (old → new, why, numbers) are in the PR body. Loosened where the refit couldn't reach: the let-back
+  (≤ 1 → ≤ 1.5 m; 1.32 m), the Show's late re-read (held ≤ 2 → ≤ 2.2 m; 2.1 m), the Wall's "−24 px acts ≥ 1 m" no longer
+  asked of a press at 2.5 s (0.27 m; never the wrong way still holds).

@@ -136,6 +136,8 @@ public final class Vehicle {
     public var crushE: [Double], touchNow: [UInt8]
     public var engineMass = 0.0
     public var fallPeak = 0.0, autoLand = 0, carryUp = 0
+    // LAND's line hold through the set-down (0190): 1 once LAND's roll-out has run from upside down this flight.
+    public var lineArm = 0
     // LAND's brake, once begun: the most sink it may still want (m/s, 0 = not braking; 0169).
     public var landCap = 0.0
     public let crawl: Bool
@@ -215,6 +217,9 @@ var effLift = 0.0, effThrust = 0.0
 let RATE = V3(2.4, 1.4, 4.6)
 let LEVEL_K = 2.0, LEVEL_DAMP = 1.4
 let UPPER_ROLL = 0.94, ROLL_ACC = 12.0
+// 0190: armed by the roll-out from inverted, the line hold keeps taking the drift off down to HOLD_LOW_H m at ≤ HOLD_LOW_BANK
+// rad (src/sim/vehicle.js says why).
+let HOLD_LOW_H = 1.5, HOLD_LOW_BANK = 0.12
 let ROLL_TAU: Double = NOZZLE_SPEC.reduce(0) { $0 + ($1.group == "lift" && $1.pos.0 > 0 ? 2 * $1.pos.0 * $1.pos.0 * $1.max : 0) }
 @discardableResult func flightComputer(_ s: Vehicle, _ inp: Input, _ out: V3, _ envelope: Double, _ level: Double) -> V3 {
     M3.rotateInv(wb, s.quat, s.angVel)
@@ -224,9 +229,11 @@ let ROLL_TAU: Double = NOZZLE_SPEC.reduce(0) { $0 + ($1.group == "lift" && $1.po
         M3.rotateInv(worldUpB, s.quat, M3.set(tmp, 0, 1, 0))
         let ux = worldUpB.x, uy = worldUpB.y, uz = worldUpB.z
         var wantX = LEVEL_K * uz, wantZ = -LEVEL_K * ux
-        if uy > 0.8 && abs(inp.roll) < 0.05 && s.pos.y - SPEC.comHeight > HOVER + 1.5 {
+        let hh = s.pos.y - SPEC.comHeight
+        let holdCap = hh > HOVER + 1.5 ? 0.2 : s.lineArm != 0 && hh > HOLD_LOW_H ? HOLD_LOW_BANK : 0
+        if uy > 0.8 && abs(inp.roll) < 0.05 && holdCap > 0 {
             M3.rotateInv(tmp, s.quat, s.vel)
-            wantZ = -LEVEL_K * (ux - M3.clamp(0.07 * tmp.x, -0.2, 0.2))
+            wantZ = -LEVEL_K * (ux - M3.clamp(0.07 * tmp.x, -holdCap, holdCap))
         }
         var rollOut = false
         if (uy < -0.2 && abs(uz) < 0.7) || (uy < UPPER_ROLL && abs(ux) > abs(uz) && abs(inp.roll) < 0.05) {
@@ -234,6 +241,7 @@ let ROLL_TAU: Double = NOZZLE_SPEC.reduce(0) { $0 + ($1.group == "lift" && $1.po
             if uy < -0.2 { wantX = 0 }
             wantZ = (ux >= 0 ? -1 : 1) * jsMin(RATE.z, jsSqrt(1.6 * ROLL_ACC * bank))
             rollOut = abs(inp.roll) < 0.05
+            if rollOut && uy < -0.2 { s.lineArm = 1 }
         }
         out.x += (kp + LEVEL_DAMP) * wantX - LEVEL_DAMP * wb.x
         out.z += (kp + LEVEL_DAMP) * wantZ - LEVEL_DAMP * wb.z
@@ -351,7 +359,8 @@ func stopFull(_ air0: Double, _ m0: Double, _ v0: Double, _ vEnd: Double = 0) ->
 }
 let AUTO_LEAD = 0.4, AUTO_SINK = 7.0
 func autoLand(_ s: Vehicle, _ inp: Input, _ grounded: Int, _ m: Double) {
-    if !truthy(inp.assist) || grounded > 0 { s.autoLand = 0; return }
+    if !truthy(inp.assist) || grounded >= 2 { s.autoLand = 0; return }
+    if grounded > 0 { return }   // 0190: …but it never starts with a wheel down
     if s.autoLand != 0 || truthy(inp.level) || s.air <= 0.5 || s.vel.y >= 0 { return }
     let h = landHeight(s), vy = s.vel.y
     if vy * vy + 2 * G * h <= AUTO_SINK * AUTO_SINK { return }
@@ -363,6 +372,7 @@ func autoLand(_ s: Vehicle, _ inp: Input, _ grounded: Int, _ m: Double) {
     if hF <= 0 || vyF < wF { s.autoLand = 1 }
 }
 func computerTargets(_ s: Vehicle, _ inp: Input, _ grounded: Int, _ m: Double, _ out: inout [Double]) {
+    if grounded > 0 { s.lineArm = 0 }
     let level: Double = truthy(inp.level) || (truthy(inp.assist) && s.autoLand != 0) ? 1 : 0
     governor(s, inp, grounded, m, level)
     let envelope = truthy(inp.assist) && truthy(level) && grounded == 0 ? M3.clamp(1 - (behind - 0.5) / 2, 0.25, 1) : 1

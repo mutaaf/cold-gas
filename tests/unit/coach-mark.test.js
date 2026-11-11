@@ -51,7 +51,7 @@ describe('the coach names the side the touchdown missed on (0132)', () => {
     const sides = [];
     for (const { d, run } of flights) {
       const t = run.t, along = t.landZ - PAD.z;
-      expect(Math.abs(t.lateral), `tap +${d}`).toBeGreaterThan(5);
+      expect(Math.abs(t.lateral), `tap +${d}`).toBeGreaterThan(4);   // 0190: 4.4 m (LAND's hold now flies to 1.5 m; > 5 before)
       expect(Math.abs(t.lateral)).toBeGreaterThan(Math.abs(along));
       expect(along).toBeLessThan(0);   // past it, a little
       const card = scoreRun(t);

@@ -184,7 +184,10 @@ describe('one thumb, a held sideways slide moves the touchdown the way it points
     for (const px of [-48, 48]) for (const hc of [10, 5]) {
       const run = flyThumb({ slide: (r, th) => th.move(r.car.pos.y - SPEC.comHeight > hc ? px : 0, 0) });
       const card = scoreRun(run.t);
-      expect(Math.abs(run.t.lateral - none), `${px} px, centred at ${hc} m`).toBeLessThanOrEqual(1);
+      // 0190: ≤ 1 → ≤ 1.5 m. LAND's hold now keeps flying down to 1.5 m, and a full slide let back at 10 m hands it a car still
+      // carrying the slide's drift: −48 px centred at 10 m lands 1.32 m from no slide (the refit τ that met 1 m there, 1.5 s,
+      // put the 5 m line 1.33 m off). Still inside the 2 m ring of no slide.
+      expect(Math.abs(run.t.lateral - none), `${px} px, centred at ${hc} m`).toBeLessThanOrEqual(1.5);
       expect(card.facts.padMiss, `${px} px, centred at ${hc} m`).toBeLessThanOrEqual(7);
       expect(card.facts.contact).toBe(false);
     }
@@ -215,7 +218,9 @@ describe('one thumb, a held sideways slide moves the touchdown the way it points
           if (px < 0) expect(lat, label).toBeLessThanOrEqual(none + 0.3);
         }
         // The Wall's right side is already past the ring's clamp; left, a slide has to act (not merely not go wrong).
-        if (course === 'wall') expect(rows.find((r) => r.px === -24).lat, `wall again ${again} s, −24 px`).toBeLessThanOrEqual(none - 1);
+        // 0190: from 1.0 to 2.0 s. Pressed again 2.5 s after the tap the car is ≈ 7.7 m up with LAND's brake on and its hold now
+        // taking the drift off itself: −24 px moves it 0.27 m (−48 px 0.48 m); the bar above (never the wrong way) still holds.
+        if (course === 'wall' && again <= 2) expect(rows.find((r) => r.px === -24).lat, `wall again ${again} s, −24 px`).toBeLessThanOrEqual(none - 1);
         if (course === 'show') for (const px of [8, 16, 24]) {
           const moved = rows.find((r) => r.px === px).lat - none;
           expect(moved / (px / AIM_PX_PER_M), `show again ${again} s, ${px} px`).toBeGreaterThan(0.5);
@@ -325,17 +330,40 @@ describe('on the Wall, a tapped thumb\'s slide acts as early as a held one\'s, a
       expect(best - none, `again ${again} s: none ${none}, best ${best}`).toBeGreaterThanOrEqual(5);
     }
     // And the coach weighs a Wall miss inside 7 m by what it cost, as on the Show (it named only misses past 7 m).
-    const run = fly(-40, 2.25), card = scoreRun(run.t);
+    const run = fly(-16, 2.25), card = scoreRun(run.t);   // 0190: −16 px (6.2 m); −40 px now lands 2.9 m, inside the 4 m ring
     expect(card.facts.padMiss).toBeGreaterThan(4); expect(card.facts.padMiss).toBeLessThanOrEqual(7);
     expect(coach(run.inputLog, 'wall', card).items.map((i) => i.id)).toContain('mark');
   }, 180000);
 
-  it('the held thumb and the Show fly exactly as before (the change is the Wall\'s hold pressed in the air)', () => {
+  it('the held Wall thumb and the tapped Show thumb fly the logs pinned here (0177; re-pinned for 0190)', () => {
     // A slide held from the tap on the Wall, and a tapped thumb on the Show: the logs 0164 shipped (#282) still come out.
     const wall = fly(-24, -1), show = flyThumb({ again: 1.5, slide: (r, th) => th.move(-24, 0) });
-    expect(firstRoll(wall)).toBeCloseTo(1.9, 1);
-    expect(wall.t.lateral).toBeCloseTo(0.6, 1);
-    expect(show.t.lateral).toBeCloseTo(-6.2, 1);
+    // 0190 re-pinned: the Wall's computer now aims along the run (its pitch from the brake) and LAND's hold flies on to
+    // 1.5 m, so these logs changed on purpose (1.9 s, +0.6 m and −6.2 m before). They pin today's flights.
+    expect(firstRoll(wall)).toBeCloseTo(1.8, 1);
+    expect(wall.t.lateral).toBeCloseTo(2.1, 1);
+    expect(show.t.lateral).toBeCloseTo(-6.6, 1);
+  }, 60000);
+});
+
+// 0190 (critique 2026-11-10-2130 §3): on the Wall the thumb that did what the pad says set down 11.0–11.4 m off the mark,
+// 4 m outside the outer ring (landZ −17 to −19 against the pad's −9; `t.lateral` +6.1 to +7.2). The one-thumb's computer
+// now flies its along-run touchdown onto the mark as the reference does, and LAND's line hold, once it has rolled the car
+// out of the release, keeps taking the roll's sideways drift off through the set-down (no longer off below 4 m).
+describe('on the Wall, the thumb that does what the pad says lands inside the painted rings (0190)', () => {
+  const PATTERNS = [['held from the tap', {}], ['tapped, never pressed again', { holdAt: -99 }], ['pressed again 0.5 s', { again: 0.5 }], ['pressed again 1.0 s', { again: 1 }], ['pressed again 2.0 s', { again: 2 }]];
+  it('every no-slide flight: ≤ 7 m from the mark, Clean or better, set down on the reveal\'s numbers', () => {
+    for (const [label, o] of PATTERNS) {
+      const run = flyThumb({ course: 'wall', ...o }), card = scoreRun(run.t), t = run.t;
+      expect(card.facts.padMiss, label).toBeLessThanOrEqual(7);
+      expect(['Perfect 10', 'Stuck it', 'Clean'], label).toContain(card.verdict);
+      expect(card.facts.crashed, label).toBe(false);
+      expect(card.facts.damagePct, label).toBe(0);
+      expect(t.sink, label).toBeLessThanOrEqual(1.3);
+      const air = (t.touchTick - t.airStartTick) / 240;   // off the ledge → wheels down (the reveal: ≈ 4.5 s)
+      expect(air, label).toBeGreaterThanOrEqual(4.1);
+      expect(air, label).toBeLessThanOrEqual(4.95);
+    }
   }, 60000);
 });
 
@@ -410,7 +438,8 @@ describe('on the Show, sliding up or down moves the touchdown along the run, as 
       } });
       const card = scoreRun(run.t), label = `again ${again} s, ${late} ticks late`;
       safe(card, label);
-      expect(card.facts.padMiss, label).toBeLessThanOrEqual(again < 0 ? 2 : 2.5);
+      // 0190: held ≤ 2 → ≤ 2.2 m (2.1 at 48–60 ticks late; every τ from 1.3 to 1.5 s read 2.0–2.1). Still a full precision mark.
+      expect(card.facts.padMiss, label).toBeLessThanOrEqual(again < 0 ? 2.2 : 2.5);
     }
   }, 300000);
 

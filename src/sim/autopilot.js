@@ -134,12 +134,13 @@ function wallPilot(plan, courseId) {
     // LAND from the moment it lets go: the computer rolls it out of the inversion (a barrel roll, as
     // at the reveal), levels it and governs the descent.
     out.level = run.car.grounded === 0 ? 1 : 0;
-    // Off the Wall the roll-out leaves the car banked and drifting: give it 4 m to level. The Show
+    // Off the Wall the roll-out leaves the car banked and drifting: give it 3.5 m to level (0190: LAND's line hold now
+    // takes the last of the drift off below that; from 4 m it set the reference down 3.8 m off the mark). The Show
     // carries forward speed onto the pad and levels in the last metre.
     // Steer for the pad once the roll-out is done and the down-jets are braking: tilting in free
     // fall moves nothing, and it would start the brake with its thrust aimed off the vertical.
     if (upv.y > 0.94) st.rolledOut = true;
-    if (st.rolledOut && (c.vel.y < landProfile(c) + 0.5 || c.vel.y > -3)) steerToPad(c, pad, out, Math.max(0, c.pos.y - SPEC.comHeight), plan.carry ? 1 : 4);
+    if (st.rolledOut && (c.vel.y < landProfile(c) + 0.5 || c.vel.y > -3)) steerToPad(c, pad, out, Math.max(0, c.pos.y - SPEC.comHeight), plan.carry ? 1 : 3.5);
     return out;
   };
 }
