@@ -25,7 +25,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SPEC, NOZZLE_SPEC, wheelAnchors, AXLE_F, AXLE_R } from '../sim/spec.js';
 import { CAR } from '../sim/vehicle.js';
-import { sliverTube } from './sliver.js';
+import { sliverTube, LAYER } from './sliver.js';
 
 // --- Suspension contract ------------------------------------------------------------------------
 // Visual wheel-centre height in the ground frame for a suspension compression (m).
@@ -644,6 +644,7 @@ export function makeRoadster() {
     const glow = mat instanceof THREE.MeshBasicMaterial;
     const m = mergedMesh(mat, geos, !glow && mat !== M.glass);
     if (mat === M.glass) m.renderOrder = 1;
+    if (mat === M.seam) m.renderOrder = LAYER.paint;   // a faded line on the body: before every free-floating effect (src/render/sliver.js)
     body.add(m);
     merged[mat.uuid] = m;
   }
