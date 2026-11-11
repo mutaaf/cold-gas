@@ -1,7 +1,7 @@
 ---
 id: 0187
 title: On a phone, the climb and the hang show a white car on a grey deck, not a red room with a white smear
-status: shipped
+status: ready
 priority: P1
 size: M
 lens: authenticity
@@ -77,3 +77,36 @@ Measured with `scripts/look-audit.mjs` on SwiftShader (main 78d7c2b → branch),
 6 / 52 / 39; 430×932 and 844×390 in the PR. Screenshots: docs/shots/deck-look-0187/. ref-hash unchanged. Not checked on a
 real GPU (this sandbox has software GL only; the cause is a threshold on luma, not the bloom's resolution path). Flicker:
 see the PR (show-approach and show-wide never move the car onto the deck, so k = 0 there); `npm run audit` runs in CI.
+
+## Critic re-review (2026-11-11, bounce 1 of 2)
+**The look passes. The flicker criterion fails on production, so the ticket goes back to ready.** `pr: 303` is kept.
+Critique `docs/critique/2026-11-11-0410.md` §1 has the full numbers.
+
+- **The look: pass.** `look-audit` on production `index-D7OCgFGt.js` matches #303's table to the decimal:
+  - At 390×844, red is 8.8 / 5.2 / 6.7 % and P10 is 8 / 52 / 35 (climb / hang 1.0 s / hang 1.9 s).
+  - 1440×900, 430×932 and 844×390 also meet both bars.
+  - In a first-visit one-thumb run, the climb and the hang read 6.2–6.4 % red.
+  - Keep all of this.
+- **Flicker: fail.** `flicker.mjs --gl=swiftshader --only=show-replay,show-replay-rigs` on production, checked with
+  `flicker-budget.mjs`, gives 9 ok and **3 over**:
+
+  | region (chromium-swiftshader desktop) | production | limit |
+  |---|---|---|
+  | `show-replay/car` | **93.54 ‰** | 77.87 ‰ |
+  | `show-replay-rigs/car` | **191.50 ‰** | 144.30 ‰ |
+  | `show-replay-rigs/wall` | **1.26 ‰** | 0.88 ‰ |
+
+  These match the builder's own A/B on the PR (101.9 / 189.3 / 1.18 ‰ against main's 54.6 / 116.8 / 0.41 ‰). Main
+  passed all 12 regions before #303.
+- **The criterion was never met.** The box "`flicker-budget` passes for both screens on the scenarios touched" was
+  unticked at merge. The builder disarmed auto-merge at 01:07 UTC to wait for the operator. The PR merged at 01:32
+  UTC by `github-actions[bot]`, with no operator decision on record.
+
+**To pass:**
+- Keep the look bars above.
+- Bring those three regions back under their limits. The cause the builder named is that the car's newly visible
+  tyres and shut lines alias as they cross the frame. The fix is antialiasing on the car's edges in the replay
+  (sliver/AA work, the way 0101 calmed the regions 0097 raised), not a return of the bloom.
+- Never raise the budget. A rebaseline is the operator's call alone (docs/flicker-budget.json `_readme`).
+- If the operator rebaselines on purpose, as with 0097, that decision closes this criterion, and the PR quotes it.
+- Draft #304's soft knee also raises `show-replay/car` (62.8 → 105.4 ‰ desktop), so it doesn't meet this either.

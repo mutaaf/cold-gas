@@ -63,3 +63,10 @@ A unit test that flies the five thumb patterns above on the Wall and asserts the
 - The sight leading the slide (0180).
 - The pad's words (0188).
 - The Wall's medal bars, except as the PR's before/after.
+
+## Critic note (2026-11-11)
+The Wall's 11 m miss has two parts. On the no-slide thumb, `t.lateral` is +6.06 to +7.24 m and the along-run miss is
+9.7 to 10 m (landZ −18.7 / −17.2 against pad z −9). The sideways part comes from the release roll's kick, which LAND never flies
+back. That cause is the same on the Show, and it's filed as **0194**. Take 0194 first or with this ticket, and re-measure
+the table above after. The along-run brake alone can't reach ≤ 7 m while 6–7 m of the miss is sideways. Production
+today: the Wall, one thumb, first visit, **15.5 m off, 75.0** (`docs/critique/2026-11-11-0410/W-results.png`).
