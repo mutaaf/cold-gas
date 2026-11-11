@@ -9,6 +9,7 @@ import { isSoftwareRenderer, probeRenderer } from '../gfx-tier.js';
 import { EffectComposer } from 'three/examples/jsm/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/examples/jsm/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPass.js';
+import { kneeBloom, bloomLook } from './bloom-knee.js';
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RAMP, LINEUP, SHOW, FIXTURES } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
@@ -443,7 +444,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
     const rt = new THREE.WebGLRenderTarget(1, 1, { type: THREE.HalfFloatType, depthTexture: tier === 'high' ? new THREE.DepthTexture(1, 1) : null });
     composer = new EffectComposer(renderer, rt);
     composer.addPass(new RenderPass(scene, camera));
-    bloom = new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 0.92);
+    bloom = kneeBloom(new UnrealBloomPass(new THREE.Vector2(1, 1), 0.3, 0.5, 0.92));   // a look may ask for the soft knee (0187)
     composer.addPass(bloom);
     composer.addPass(new OutputPass());
     // Edges, after the OutputPass: `aa` (src/gfx-tier.js pickAA), by default SMAA on 'high' (~45 kB of
@@ -486,7 +487,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
     scene.environmentIntensity = isNight(id) ? 1.0 : 0.9;
     scene.fog = current.look.fog;
     renderer.toneMappingExposure = current.look.exposure;
-    if (bloom) Object.assign(bloom, current.look.bloom);
+    if (bloom) Object.assign(bloom, bloomLook(current.look.bloom));
     stage.rocket?.setLook(id);
     filmLook();
     key.color.set(current.keyLight.color);
@@ -524,7 +525,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
     scene.environment = look.env; scene.environmentIntensity = look.envIntensity ?? 1;
     scene.fog = look.fog;
     renderer.toneMappingExposure = look.exposure;
-    if (bloom) Object.assign(bloom, look.bloom);
+    if (bloom) Object.assign(bloom, bloomLook(look.bloom));
     key.color.set(look.keyLight.color);
     key.intensity = look.keyLight.intensity;
     keyOffset.copy(look.keyLight.offset);
