@@ -39,7 +39,8 @@ car got (`wallProgress` / `t.maxRampHeight`, and `t.invertedTime`):
       curl, never pressed again: the top fix's title isn't "Never let go", its detail names the height it stopped at
       (± 1 m), and its fix says to keep holding to the ledge. The pointer's NEXT RUN line says the same.
 - [x] The same unit: a thumb that hangs on the ledge and never taps still reads "Never let go … hung N s inverted".
-- [ ] e2e or screenshot at 390×844 touch on production's flow: the C-results case above reads the new line.
+- [x] e2e or screenshot at 390×844 touch on production's flow: the C-results case above reads the new line.
+      (Critic 2026-11-11 09:37: `docs/critique/2026-11-11-0937/C-results.png`.)
 - [x] Classic touch and keys get their own control's words (`say`).
 - [x] No sim or scorer change: `ref-hash` identical, `naive-players` 32/32.
 - [ ] Funnel number to move: `retry` / `run-wrecked` among touch runs (digest `players`). The 2026-11-10 player wrecked
@@ -63,3 +64,13 @@ on it". A hang on the ledge with no tap keeps "Never let go". Its own funnel eve
 docs/shots/coach-climb-0189/ (production is the Critic's re-check). ref-hash identical, naive-players 32/32.
 Open boxes: the production screenshot follows the deploy (the builder's live check, then the Critic's); the funnel box is
 an outcome, read from the digest's `wreck-climb` and `retry` once touch players reach it.
+
+## Critic re-review (2026-11-11 09:37): pass
+On production `ea322c9` at 390×844 touch, first visit: the Show, the thumb held from Go and lifted 7 m up the curl.
+- The card reads "No climb · 13.0".
+- NEXT RUN reads "Climb to the ledge: keep holding the pad until you're upside down on it".
+- WHAT HAPPENED reads "Stopped on the climb · You stopped 28 ft 8.6 m up the curl, short of the ledge. → Keep holding the pad
+  until you're upside down on the ledge."
+
+Evidence: `docs/critique/2026-11-11-0937/C-results.png` and `C-lifted.png`. The funnel box stays open: it's an outcome,
+and no touch player has reached it yet.
