@@ -2090,3 +2090,73 @@ body:has(> .pause:not([hidden])) :is(.hud, .top, .cue, .count, .drill-bar) { fil
    above outranks .ad-banner, so it is named here too.) */
 @media (max-height: 620px), (max-width: 360px) { .title .ad-banner, .title iframe.ad-banner { display: none; } }
 .reroll-btn { margin: 12px 0 0; min-height: 44px; }
+
+/* --- The landing's beat (0199, src/beat.js) --------------------------------------------------
+   Over the live scene, a lower third: the course, the verdict in the display face, the score in Geist's lightest
+   weight counting up, one hairline whose signal-red tick draws as the score lands, then the judges' three cards
+   going up one by one (a flip up from the hairline, like scorecards raised). The HUD and the touch controls step
+   out of the way; the top bar stays. A tap anywhere skips to the sheet. */
+.beat { position: fixed; inset: 0; z-index: 4; display: flex; flex-direction: column; justify-content: flex-end; pointer-events: auto; cursor: pointer;
+  padding: 0 calc(28px + var(--safe-r)) calc(30px + var(--safe-b)) calc(28px + var(--safe-l));
+  background: linear-gradient(180deg, rgba(5, 7, 12, 0) 38%, rgba(5, 7, 12, 0.5) 66%, rgba(5, 7, 12, 0.82) 100%);
+  animation: beat-in 0.35s var(--ease) both; -webkit-tap-highlight-color: transparent;
+  --lift: 0 1px 1px rgba(0, 0, 0, 0.85), 0 0 18px rgba(2, 3, 6, 0.7); }
+.beat[hidden] { display: none; }
+@keyframes beat-in { from { opacity: 0; } to { opacity: 1; } }
+.beat-in { width: min(100%, 560px); text-shadow: var(--lift); }
+.beat-eyebrow { margin: 0 0 12px; font: 500 11px/1 var(--text); letter-spacing: 0.32em; text-transform: uppercase; color: rgba(245, 246, 248, 0.78);
+  animation: rise 0.6s var(--ease) 0.05s both; }
+.beat-eyebrow:empty { display: none; }
+.beat-verdict { margin: 0; font: 400 clamp(26px, 6.4vw, 44px)/1.1 var(--display); letter-spacing: 0.04em; color: var(--ink);
+  animation: beat-word 0.7s var(--ease) both; }
+@keyframes beat-word { from { opacity: 0; transform: translateY(10px); filter: blur(8px); letter-spacing: 0.12em; } to { opacity: 1; transform: none; filter: none; } }
+.beat-total { margin: 6px 0 0; display: flex; align-items: baseline; gap: 10px; white-space: nowrap; }
+.beat-total b { font: 200 clamp(92px, 27vw, 176px)/0.86 var(--text); letter-spacing: -0.045em; font-variant-numeric: tabular-nums; color: var(--ink); }
+.beat-total span { font: 400 13px/1 var(--mono); color: rgba(245, 246, 248, 0.78); }
+/* The hairline under the number; its red tick (the one signal red) draws as the score lands. */
+.beat-rule { position: relative; display: block; height: 1px; margin: 18px 0 0; background: rgba(245, 246, 248, 0.3); transform-origin: left; animation: beat-rule 0.9s var(--ease) 0.1s both; }
+.beat-rule::after { content: ''; position: absolute; left: 0; top: -1px; width: 44px; height: 3px; background: var(--signal); transform: scaleX(0); transform-origin: left; transition: transform 0.5s var(--ease); }
+.beat.landed .beat-rule::after { transform: scaleX(1); }
+@keyframes beat-rule { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+.beat-judges { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0 18px; perspective: 600px; }
+.beat-judges li { display: grid; gap: 8px; padding: 14px 0 0; transform-origin: 50% 0; opacity: 0; transform: rotateX(-80deg);
+  transition: opacity 0.35s var(--ease), transform 0.55s cubic-bezier(0.2, 1.3, 0.35, 1); }
+.beat-judges li.in { opacity: 1; transform: none; }
+.bj-who { font: 500 11px/1 var(--text); letter-spacing: 0.2em; text-transform: uppercase; color: rgba(245, 246, 248, 0.78); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bj-score { font: 300 clamp(30px, 8vw, 40px)/1 var(--text); font-variant-numeric: tabular-nums; color: var(--ink); }
+.beat-skip { margin: 26px 0 0; font: 500 11px/1 var(--text); letter-spacing: 0.24em; text-transform: uppercase; color: rgba(245, 246, 248, 0.6); text-shadow: var(--lift);
+  animation: rise 0.6s var(--ease) 1.2s both; }
+.beat-skip .bs-key { display: none; }
+@media (hover: hover) and (pointer: fine) { .beat-skip .bs-tap { display: none; } .beat-skip .bs-key { display: inline; } }
+/* The HUD steps back under the beat (it comes back with the next run). */
+/* A filter, not opacity (the HUD's `rise` fill holds its opacity at 1; its filter transition is the pause's, above). */
+body[data-beat-on] .hud { filter: opacity(0); pointer-events: none; }
+@media (min-width: 900px) { .beat { padding-left: calc(64px + var(--safe-l)); padding-bottom: calc(56px + var(--safe-b)); } }
+@media (max-height: 500px) and (orientation: landscape) {
+  .beat-total b { font-size: clamp(64px, 22vh, 120px); }
+  .beat-rule { margin-top: 10px; }
+  .beat-skip { margin-top: 12px; }
+}
+/* Reduced motion: no count, no flips, no blur: the final numbers at once (src/beat.js), held a moment. */
+.beat[data-quiet] .beat-judges li { transition: none; }
+
+/* --- The calm sheet (0199): a player's first runs ------------------------------------------------
+   Verdict, score, medal, the next run's one line and Retry; under More, everything else, whole. Nothing is removed:
+   More opens the full sheet in place. A player's own AI key keeps the call strip in view. */
+.r-more { display: none; }
+.results[data-calm]:not([data-more]) .r-more { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 52px; margin: 16px 0 0; padding: 0 2px;
+  border: 0; border-top: 1px solid var(--hair-2); border-bottom: 1px solid var(--hair-2); background: none; color: var(--ink); cursor: pointer; text-align: left; }
+.r-more-k { font: 500 11px/1 var(--text); letter-spacing: 0.24em; text-transform: uppercase; }
+.r-more-sub { flex: 1 1 auto; min-width: 0; font: 400 13px/1.3 var(--text); color: var(--ink-2); }
+.r-more::after { content: ''; flex: none; width: 7px; height: 7px; margin-right: 6px; border-right: 1.5px solid var(--ink-2); border-bottom: 1.5px solid var(--ink-2); transform: rotate(45deg) translateY(-3px); }
+.r-more:hover .r-more-sub, .r-more:focus-visible .r-more-sub { color: var(--ink); }
+.results[data-calm]:not([data-more]) :is(.tier-line, .runline, .r-assist, .coach, .reroll-btn, .judges, .receipt, .cats, .facts, .top-actions-row .r-post) { display: none !important; }
+.results[data-calm]:not([data-more]):not([data-byok]) .call-strip { display: none !important; }
+.results[data-calm] .pointer { margin-top: 18px; }
+/* On a phone the calm sheet sits at the foot of the screen, Retry under the thumb, and the replay of the landing plays
+   above it through a fade (the full sheet, and More, cover the screen as before). */
+@media (max-width: 720px) {
+  .results[data-calm]:not([data-more]) .sheet { background: linear-gradient(180deg, rgba(5, 7, 12, 0) 0%, rgba(5, 7, 12, 0.35) 28%, rgba(5, 7, 12, 0.92) 48%, rgba(5, 7, 12, 0.96) 100%);
+    backdrop-filter: none; }
+  .results[data-calm]:not([data-more]) .sheet > :first-child { margin-top: auto; }
+}
