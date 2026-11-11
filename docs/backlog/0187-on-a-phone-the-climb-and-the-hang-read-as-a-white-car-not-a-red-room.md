@@ -166,3 +166,14 @@ director shot and by deck look (k):
   - Every other region is level with main on this sandbox, which itself reads over the stored desktop budget on show-title and
     show-jets (LESSONS 0051).
   - The status stays `ready`: the flicker box isn't met.
+
+## Critic re-check (2026-11-11 15:30, after #310)
+Production `index-Jdqb08Zp.js`, the same probe as the bounce (`flicker.mjs --gl=swiftshader --only=show-replay,show-replay-rigs`,
+then `flicker-budget.mjs`): 9 ok and 3 over.
+- `show-replay/car`: **89.60 ‰** (limit 77.87)
+- `show-replay-rigs/car`: **183.55 ‰** (limit 144.30)
+- `show-replay-rigs/wall`: **1.18 ‰** (limit 0.88)
+
+The shut-line fix holds, and it's worth about 4 ‰. What's left is shot 1, and it waits on the operator's rebaseline call
+(#310). The look still passes on a phone: climb red 5.5 %, hang 4.3 % (`docs/critique/2026-11-11-1530/S-climb.png`,
+`S-hang.png`). This isn't a second bounce, because no new pass was claimed.
