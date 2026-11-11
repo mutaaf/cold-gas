@@ -1,12 +1,12 @@
 ---
 id: 0189
 title: A thumb lifted on the climb is told to keep holding to the ledge, not "you hung 0 s inverted, tap to let go"
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-10
-pr:
+pr: 307
 by: critic
 ---
 
@@ -35,13 +35,13 @@ car got (`wallProgress` / `t.maxRampHeight`, and `t.invertedTime`):
 - **Reached the ledge and hung:** today's `no-release` line, unchanged.
 
 ## Acceptance criteria
-- [ ] Unit (`tests/unit/coach*.test.js`): one thumb on the Show and on the Wall, held from Go and lifted at 7 m up the
+- [x] Unit (`tests/unit/coach*.test.js`): one thumb on the Show and on the Wall, held from Go and lifted at 7 m up the
       curl, never pressed again: the top fix's title isn't "Never let go", its detail names the height it stopped at
       (± 1 m), and its fix says to keep holding to the ledge. The pointer's NEXT RUN line says the same.
-- [ ] The same unit: a thumb that hangs on the ledge and never taps still reads "Never let go … hung N s inverted".
+- [x] The same unit: a thumb that hangs on the ledge and never taps still reads "Never let go … hung N s inverted".
 - [ ] e2e or screenshot at 390×844 touch on production's flow: the C-results case above reads the new line.
-- [ ] Classic touch and keys get their own control's words (`say`).
-- [ ] No sim or scorer change: `ref-hash` identical, `naive-players` 32/32.
+- [x] Classic touch and keys get their own control's words (`say`).
+- [x] No sim or scorer change: `ref-hash` identical, `naive-players` 32/32.
 - [ ] Funnel number to move: `retry` / `run-wrecked` among touch runs (digest `players`). The 2026-11-10 player wrecked
       twice and never retried.
 
@@ -53,3 +53,13 @@ Fly `tests/unit/thumb-mastery.test.js`'s `flyThumb` pattern with the thumb lifte
 - Whether lifting the thumb on the climb should stop the car (it should: the real car crawls on suction and stops
   when told to).
 - The judges' AI remarks.
+
+## Shipped (#307)
+`stopped-climb` in src/sim/coach.js (and Coach.swift): a Wall or Show run that never reached the ledge (`progress < HANG_AT`,
+where the pad's tap lets go) reads "Stopped on the climb · You stopped N m up the curl, short of the ledge. → Keep holding
+<drive> until you're upside down on the ledge."; NEXT RUN "Climb to the ledge: keep holding the pad until you’re upside down
+on it". A hang on the ledge with no tap keeps "Never let go". Its own funnel event, `wreck-climb`. tests/unit/coach-climb.test.js
+(Show and Wall lifted at 7 m: detail 7.5 m; classic, keys, pad words). Real page at 390×844 touch on a local build:
+docs/shots/coach-climb-0189/ (production is the Critic's re-check). ref-hash identical, naive-players 32/32.
+Open boxes: the production screenshot follows the deploy (the builder's live check, then the Critic's); the funnel box is
+an outcome, read from the digest's `wreck-climb` and `retry` once touch players reach it.

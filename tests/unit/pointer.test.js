@@ -74,7 +74,7 @@ describe('the pointer after a run', () => {
     expect(pointerText('late-brake', KEY)).toMatch(/Land sooner: hold Shift/);   // Assist: LAND paces the fall
   });
   it('every coach fix has words on every device', () => {
-    const ids = ['fell-off', 'no-release', 'early-release', 'short', 'no-brake', 'late-land', 'late-brake', 'ran-out', 'late-roll', 'over-roll', 'no-roll', 'tilt', 'mark', 'gas', 'flipped', 'clean'];
+    const ids = ['fell-off', 'stopped-climb', 'no-release', 'early-release', 'short', 'no-brake', 'late-land', 'late-brake', 'ran-out', 'late-roll', 'over-roll', 'no-roll', 'tilt', 'mark', 'gas', 'flipped', 'clean'];
     for (const ctx of [KEY, PAD, TOUCH, THUMB, PRO]) for (const id of ids) expect(pointerText(id, ctx), `${id} ${ctx.device}`).toBeTruthy();
   });
   it('one thumb, clean: on the mark ring it names the next step the score shows, short of it the slide (0156)', () => {

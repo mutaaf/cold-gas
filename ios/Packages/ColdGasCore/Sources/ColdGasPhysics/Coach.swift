@@ -22,25 +22,26 @@ public let COACH_RANOUT_THUMB = "Keep holding the pad all the way to the ground:
 
 /// The controls a fix names, in the device's words.
 public struct CoachWords: Equatable {
-    public var land, lift, release, boost, roll, aim, ranOut: String
-    public init(land: String, lift: String, release: String, boost: String, roll: String, aim: String, ranOut: String) {
-        self.land = land; self.lift = lift; self.release = release; self.boost = boost; self.roll = roll; self.aim = aim; self.ranOut = ranOut
+    public var drive, land, lift, release, boost, roll, aim, ranOut: String
+    /// `drive` (0189): the drive-and-climb control, which "Stopped on the climb" names.
+    public init(drive: String, land: String, lift: String, release: String, boost: String, roll: String, aim: String, ranOut: String) {
+        self.drive = drive; self.land = land; self.lift = lift; self.release = release; self.boost = boost; self.roll = roll; self.aim = aim; self.ranOut = ranOut
     }
 }
 /// coach.js KEY_WORDS: a keyboard's, the coach's default.
-public let COACH_KEY_WORDS = CoachWords(land: "LAND (Shift)", lift: "LIFT (Space)", release: "RELEASE (Space)", boost: "BOOST (F)", roll: "← →", aim: COACH_AIM_LEAN, ranOut: COACH_RANOUT_LEAN)
+public let COACH_KEY_WORDS = CoachWords(drive: "↑", land: "LAND (Shift)", lift: "LIFT (Space)", release: "RELEASE (Space)", boost: "BOOST (F)", roll: "← →", aim: COACH_AIM_LEAN, ranOut: COACH_RANOUT_LEAN)
 
 /// src/pointer.js coachWords. `ctx.scheme` only counts on touch, as there.
 public func coachWords(_ ctx: Daily.Pilot) -> CoachWords {
     let adv = ctx.tier == "advanced"
     switch ctx.device {
     case .touch:
-        if ctx.scheme == .thumb { return CoachWords(land: "the pad", lift: "the pad", release: "the pad", boost: "the pad", roll: "the pad", aim: COACH_AIM_THUMB, ranOut: COACH_RANOUT_THUMB) }
-        return CoachWords(land: "LAND", lift: adv ? "the four down-jet pads" : "LIFT", release: "RELEASE", boost: "BOOST", roll: adv ? "the side pads" : "the stick", aim: COACH_AIM_LEAN, ranOut: COACH_RANOUT_LEAN)
+        if ctx.scheme == .thumb { return CoachWords(drive: "the pad", land: "the pad", lift: "the pad", release: "the pad", boost: "the pad", roll: "the pad", aim: COACH_AIM_THUMB, ranOut: COACH_RANOUT_THUMB) }
+        return CoachWords(drive: "GO", land: "LAND", lift: adv ? "the four down-jet pads" : "LIFT", release: "RELEASE", boost: "BOOST", roll: adv ? "the side pads" : "the stick", aim: COACH_AIM_LEAN, ranOut: COACH_RANOUT_LEAN)
     case .pad:
-        return CoachWords(land: "LAND (B)", lift: "LIFT (A)", release: "RELEASE (A)", boost: "BOOST (RB)", roll: adv ? "LB or RB" : "the left stick", aim: COACH_AIM_LEAN, ranOut: COACH_RANOUT_LEAN)
+        return CoachWords(drive: "RT", land: "LAND (B)", lift: "LIFT (A)", release: "RELEASE (A)", boost: "BOOST (RB)", roll: adv ? "LB or RB" : "the left stick", aim: COACH_AIM_LEAN, ranOut: COACH_RANOUT_LEAN)
     case .key:
-        return CoachWords(land: "LAND (Shift)", lift: "LIFT (Space)", release: "RELEASE (Space)", boost: "BOOST (F)", roll: adv ? "Q+Z or E+C" : "← →", aim: COACH_AIM_LEAN, ranOut: COACH_RANOUT_LEAN)
+        return CoachWords(drive: "↑", land: "LAND (Shift)", lift: "LIFT (Space)", release: "RELEASE (Space)", boost: "BOOST (F)", roll: adv ? "Q+Z or E+C" : "← →", aim: COACH_AIM_LEAN, ranOut: COACH_RANOUT_LEAN)
     }
 }
 
@@ -244,7 +245,12 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
     let drill = fromTick > 0, scored = show && !drill
 
     if wall && t.airStartTick < 0 {
+        // 0189: stopped short of the ledge (a thumb lifted on the climb) names the climb, not the release.
         if t.fellOff { add("fell-off", 10, "Slid off the deck", "The car left the side of the curl \(s(r1(t.maxRampHeight))) m up.", "Keep it on the centreline: small steering corrections, and crawl (≈20 km/h) so the fan holds you.") }
+        else if t.progress < HANG_AT {
+            add("stopped-climb", 10, "Stopped on the climb", t.rampTick < 0 ? "You stopped before the Wall." : t.maxRampHeight < 1 ? "You stopped at the foot of the Wall." : "You stopped \(s(r1(t.maxRampHeight))) m up the curl, short of the ledge.",
+                "Keep holding \(say.drive) until you're upside down on the ledge.")
+        }
         else { add("no-release", 10, "Never let go", "You hung \(s(r1(t.invertedTime))) s inverted but never released.", "On the ledge, tap \(say.release) to let go.") }
         return coachFinish(out, f, nil)
     }

@@ -90,7 +90,7 @@ describe('native vectors (0146)', () => {
     const ids = new Set([...c.rows.flatMap((r) => r[3]), ...c.drills.flatMap((d) => [...d.thumb, ...d.classic])].map((it) => it[0]));
     // Every finding but two: 'fell-off' (off the deck with no air at all) and 'flipped' (on its roof with nothing else
     // to say) took more search than their two fixed strings are worth. Coach.swift's were checked against coach.js's.
-    expect([...ids].sort()).toEqual(['clean', 'early-release', 'gas', 'late-brake', 'late-land', 'late-roll', 'mark', 'no-brake', 'no-release', 'no-roll', 'over-roll', 'ran-out', 'short', 'tilt']);
+    expect([...ids].sort()).toEqual(['clean', 'early-release', 'gas', 'late-brake', 'late-land', 'late-roll', 'mark', 'no-brake', 'no-release', 'no-roll', 'over-roll', 'ran-out', 'short', 'stopped-climb', 'tilt']);
   });
   it('the manifest names every file with its hash', () => {
     const m = JSON.parse(disk('manifest.json'));

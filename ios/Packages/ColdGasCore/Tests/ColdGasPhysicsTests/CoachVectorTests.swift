@@ -32,7 +32,7 @@ func itemsDiffer(_ got: [CoachItem], _ want: [[Any]], _ what: String) -> [String
     }
     return bad
 }
-func wordsOf(_ d: [String: String]) -> CoachWords { CoachWords(land: d["land"]!, lift: d["lift"]!, release: d["release"]!, boost: d["boost"]!, roll: d["roll"]!, aim: d["aim"]!, ranOut: d["ranOut"]!) }
+func wordsOf(_ d: [String: String]) -> CoachWords { CoachWords(drive: d["drive"]!, land: d["land"]!, lift: d["lift"]!, release: d["release"]!, boost: d["boost"]!, roll: d["roll"]!, aim: d["aim"]!, ranOut: d["ranOut"]!) }
 func logHash(_ log: [[Int]]) -> String {
     var h: (UInt32, UInt32) = (0x811c9dc5, 0x9747b28c)
     for e in log { mixState(&h, e.map(Double.init)) }

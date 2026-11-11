@@ -114,7 +114,7 @@ export const MODULE_IDS = ['app', 'render', 'webgl', 'shader', 'physics', 'audio
 // Daily too, as the streak does), so read done / (done + miss) as the met rate, and start as the taps. daily-run is the old name for a miss, still counted beside daily-miss for one release (src/comeback.js).
 export const CTL_EVENTS = ['ctl-thumb', 'ctl-classic', 'ctl-keys', 'ctl-pad'];
 export const FLY_EVENTS = ['fly-assist', 'fly-pro', 'fly-advanced'];
-export const WRECK_EVENTS = ['wreck-short', 'wreck-brake', 'wreck-ran-out', 'wreck-roll', 'wreck-flipped', 'wreck-fell-off', 'wreck-release', 'wreck-other'];
+export const WRECK_EVENTS = ['wreck-short', 'wreck-brake', 'wreck-ran-out', 'wreck-roll', 'wreck-flipped', 'wreck-fell-off', 'wreck-climb', 'wreck-release', 'wreck-other'];
 export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 'run', 'run-quit', 'run-landed', 'run-wrecked', 'retry',
   'post', 'post-fail', 'share', 'board-open', 'challenge-open', 'challenge-run', 'daily-start', 'daily-miss', 'daily-run', 'daily-done', 'drive', 'sandbox',
   ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS];
@@ -124,7 +124,7 @@ export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 
 const WRECK_OF = {
   short: 'short', 'no-brake': 'brake', 'late-brake': 'brake', 'late-land': 'brake', 'ran-out': 'ran-out',
   'late-roll': 'roll', 'no-roll': 'roll', 'over-roll': 'roll', tilt: 'roll', flipped: 'flipped', 'fell-off': 'fell-off',
-  'no-release': 'release', 'early-release': 'release',
+  'no-release': 'release', 'early-release': 'release', 'stopped-climb': 'climb',
 };
 export const wreckCause = (items) => `wreck-${WRECK_OF[items?.[0]?.id] || 'other'}`;
 // How a run was flown: the device in use (src/input.js lastDevice) and, on touch, the scheme on screen.

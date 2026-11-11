@@ -45,10 +45,10 @@ const thumbOn = (ctx) => ctx.device === 'touch' && ctx.scheme === 'thumb';
 // `aim` (0124): how this device walks the touchdown onto the mark, as the pointer's 'mark' line says it.
 export function coachWords(ctx) {
   const v = vocab(ctx), adv = ctx.tier === 'advanced';
-  if (thumbOn(ctx)) return { land: 'the pad', lift: 'the pad', release: 'the pad', boost: 'the pad', roll: 'the pad', aim: AIM_THUMB, ranOut: RANOUT_THUMB };
-  if (ctx.device === 'touch') return { land: 'LAND', lift: adv ? v.brakeAdv[1] : 'LIFT', release: 'RELEASE', boost: 'BOOST', roll: adv ? v.rollAdv[1] : v.roll[1], aim: AIM_LEAN, ranOut: RANOUT_LEAN };
+  if (thumbOn(ctx)) return { drive: 'the pad', land: 'the pad', lift: 'the pad', release: 'the pad', boost: 'the pad', roll: 'the pad', aim: AIM_THUMB, ranOut: RANOUT_THUMB };
+  if (ctx.device === 'touch') return { drive: v.drive[1], land: 'LAND', lift: adv ? v.brakeAdv[1] : 'LIFT', release: 'RELEASE', boost: 'BOOST', roll: adv ? v.rollAdv[1] : v.roll[1], aim: AIM_LEAN, ranOut: RANOUT_LEAN };
   const named = (name, act) => `${name} (${v[act][1]})`;
-  return { land: named('LAND', 'land'), lift: named('LIFT', 'lift'), release: named('RELEASE', 'release'), boost: named('BOOST', 'boost'), roll: adv ? v.rollAdv[1] : v.roll[1], aim: AIM_LEAN, ranOut: RANOUT_LEAN };
+  return { drive: v.drive[1], land: named('LAND', 'land'), lift: named('LIFT', 'lift'), release: named('RELEASE', 'release'), boost: named('BOOST', 'boost'), roll: adv ? v.rollAdv[1] : v.roll[1], aim: AIM_LEAN, ranOut: RANOUT_LEAN };
 }
 
 // The "how to fly" card: the inputs that matter, per phase, on this device. Each row:
@@ -110,6 +110,8 @@ export function pointerText(id, ctx, flight = null) {
   const after = thumbOn(ctx) && ctx.course === 'lineup' ? 'as the roll ends' : 'right after you let go';
   switch (id) {
     case 'fell-off': return thumbOn(ctx) ? 'Stay on the Wall: hold the pad and let it crawl; let go to stop' : `Crawl up the Wall: ${ctl(ctx, 'drive')} gently, about 20 km/h, small steering`;
+    // 0189: stopped on the curl before the ledge (a thumb lifted on the climb): the step before the let-go.
+    case 'stopped-climb': return thumbOn(ctx) ? 'Climb to the ledge: keep holding the pad until you’re upside down on it' : `Climb to the ledge: ${ctl(ctx, 'drive')} until you’re upside down on it`;
     case 'no-release': return `Let go on the ledge: ${ctl(ctx, 'release')} when you’re upside down`;
     case 'early-release': return `Wait for the ledge: ${ctl(ctx, 'release')} only once you’re upside down on it`;
     case 'short': return thumbOn(ctx) ? 'Over the row: hold the pad right after you let go' : `Boost over the row: ${ctl(ctx, 'boost')} right after you let go`;
@@ -154,7 +156,7 @@ function thumbClean(ctx, flight) {
 const BETTER = {
   'no-brake': 'sink', 'late-brake': 'sink', 'late-land': 'sink', 'ran-out': 'sink', flipped: 'sink', tilt: 'tilt',
   short: 'clear', 'no-release': 'release', 'early-release': 'release', 'late-roll': 'roll', 'no-roll': 'roll', 'over-roll': 'roll',
-  mark: 'mark', gas: 'gas', 'fell-off': 'height',
+  mark: 'mark', gas: 'gas', 'fell-off': 'height', 'stopped-climb': 'height',
 };
 export function betterText(id, card) {
   const f = card?.facts || {};
