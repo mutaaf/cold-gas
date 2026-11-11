@@ -956,7 +956,8 @@ function syncHud(run, c, clock = ((run.after?.startTick >= 0 ? run.after.startTi
   // LAND flies it (Assist, held or auto-land) the way the sim's governor reads it (0133).
   const land = liveInput.assist > 0 && (liveInput.level > 0 || c.autoLand > 0);
   const thumbOn = !ui.touch.hidden && ui.touch.dataset.scheme === 'thumb' && !S.autopilot;   // (thumbActive(), declared below)
-  landing.update(c, alt, !S.autopilot && air ? 'air' : run.phase === 'air' ? '' : run.phase, run.tick / 240, land, thumbOn);
+  // 0188: on one thumb LAND is also on once the thumb held it (latched through the Lineup's roll, before `level` is sent).
+  landing.update(c, alt, !S.autopilot && air ? 'air' : run.phase === 'air' ? '' : run.phase, run.tick / 240, land || (thumbOn && thumb.landing), thumbOn);
   ui.hud({
     speed, air: (c.air / CAR.airMass) * 100, gasKg: c.air, tankBar: tankBar(c.air), gasState: gasState(c.air), rollDeg: Math.abs(run.t.rollAccum) * 180 / Math.PI, bankDeg: Math.abs(landing.prediction.rollOut) * 180 / Math.PI,
     alt, airborne: air,

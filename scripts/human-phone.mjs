@@ -33,7 +33,7 @@
 // With a --skill, every run also prints a line per what the thumb did (0173): n, median miss and score, clean inside the 7 m ring, jets-out
 // gaps, and for "no slide" how many had read a dot ≥ 2 px held in the air (normally a read never acted on, so 0; a last read due after touchdown or a lift could also count; sloppy reads carry ±14 px noise).
 //
-//   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [--coach] [--daily] [-v]
+//   node scripts/human-phone.mjs [n=300] [--scheme=classic|thumb] [--skill=none|careful|sloppy|mixed] [--build=before|after] [--geom=file.json] [--vp=390x844] [--coach] [--daily] [--pad=pre0188] [-v]
 import { createGapProbe } from './burn-gap.mjs';
 import { createReadReact } from './lib/read-react.mjs';
 import { readFileSync } from 'node:fs';
@@ -110,6 +110,7 @@ const CARRY_CUE = 9.5;
 const DEADZONE = build === 'after' ? 0.15 : 0;
 const SEARCH = build === 'after' ? 0.06 : 0.12;   // the after layout hides what the phase doesn't use
 const WARN = build === 'after';   // the after build warns (a flash on the HUD, a buzz on Android) when the descent leaves green
+const PAD_CALM = !process.argv.includes('--pad=pre0188');   // 0188: compare with the pad that pulsed through auto-land
 
 const fails = {};
 let ok = 0, onPad = 0, missed = 0, presses = 0, gaps = 0, rises = 0;
@@ -174,7 +175,8 @@ for (let n = 0; n < N; n++) {
           let want = false;
           if (P.landAt === 'hud') want = pr.status !== 'green';
           else if (typeof P.landAt === 'number') want = h < P.landAt;
-          if (WARN && pr.status !== 'green' && t > tapAt + lagT) want = true;   // the descent warning (flash + buzz)
+          // 0188: the pad pulses only while a press can still change the flight (not once auto-land or a held LAND flies).
+          if (WARN && pr.status !== 'green' && t > tapAt + lagT && !(PAD_CALM && (c.autoLand || th.landing))) want = true;   // the descent warning (flash + buzz)
           if (want && landSeen < 0) landSeen = t;
           if (landSeen >= 0 && holdFrom < 0) holdFrom = landSeen + pressDelay('thumb', 'R');
           if (holdFrom >= 0 && t >= holdFrom && !th.held) { holding = true; th.down(); }

@@ -1,12 +1,12 @@
 ---
 id: 0188
 title: On one thumb, the pad never asks for a LAND hold that changes nothing
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-10
-pr:
+pr: 305
 by: critic
 ---
 
@@ -69,20 +69,20 @@ The first is the small, honest change. The second is a design call: if the build
 back to `proposed` with the numbers.
 
 ## Acceptance criteria
-- [ ] A unit test pins the table above: on the Show and the Wall, no slide, pressed again at every 0.1 s from 1.2
+- [x] A unit test pins the table above: on the Show and the Wall, no slide, pressed again at every 0.1 s from 1.2
       to 2.5 s after the tap, the end state is bit-identical to never pressing again. With option 2, it asserts
       instead that the press changes the flight and the score, in the direction the words promise.
-- [ ] Option 1: once `c.autoLand` is 1 (or LAND is otherwise flying), `data-warn` is never set on the pad (a test
+- [x] Option 1: once `c.autoLand` is 1 (or LAND is otherwise flying), `data-warn` is never set on the pad (a test
       of `syncThumb`'s decision as a pure function, both courses, thumb pressed and not). Before then it behaves as
       today.
-- [ ] Option 1: in the air, the pad's verb and action never read "Land" while the hold's only effect is the slide.
+- [x] Option 1: in the air, the pad's verb and action never read "Land" while the hold's only effect is the slide.
       The first-run how-to (`pointer.js`) and the pad agree on the word. Screenshot at 390×844: tap, the air with
       the sight, touchdown.
-- [ ] `node scripts/naive-players.mjs` 32/32, `naive-show` 54/54, `human-phone.mjs 150 --scheme=thumb` for each
+- [x] `node scripts/naive-players.mjs` 32/32, `naive-show` 54/54, `human-phone.mjs 150 --scheme=thumb` for each
       skill: clean share and median score not lower than main.
-- [ ] The PR says which funnel number it should move (`run-landed`, `retry`) and states the one-thumb population's
+- [x] The PR says which funnel number it should move (`run-landed`, `retry`) and states the one-thumb population's
       slide share before and after. The bar is that the share of thumbs that slide does not fall.
-- [ ] Works at 390×844 touch, and 1280×720 keyboard/mouse is unchanged.
+- [x] Works at 390×844 touch, and 1280×720 keyboard/mouse is unchanged.
 
 ## Test plan
 `tests/unit/thumb-mastery.test.js` (or a new `thumb-land.test.js`): the press-again sweep against hands-off on both

@@ -133,7 +133,7 @@ export function createLandingHud({ scene, onStatus = null }) {
       last.status = status;
     }
     // What the band asks of you: roof up first, then the brake. On one thumb there's no roll or brake to
-    // press, only the pad, whose verb is Land: the band asks for that (0133).
+    // press, only the pad: the band asks for it (0133) until LAND flies, then says so (0188).
     const word = stateWord(status, pr.upY, thumb, land);
     if (word !== last.word) { el.state.textContent = word; last.word = word; }
     const tg = Math.round(pr.profileSink * rateK() * 2);

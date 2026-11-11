@@ -82,8 +82,8 @@ test('one-thumb: hold to climb, tap to let go on the ledge, hold to land', async
   await page.waitForFunction(() => window.__dWords.filter((f) => f.on).length >= 6 || window.__coldgas.S.run.phase === 'done', null, { timeout: 60_000 });
   await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
   expect(await page.evaluate(() => window.__coldgas.S.run.inputLog.every((e) => e[window.__coldgas.inputKeys.indexOf('assist') + 1] === 100))).toBe(true);
-  // Lifted, the fall leaves green until auto-land takes it: the box asks for the pad, never for a roll or a
-  // brake this scheme hasn't got (0133).
+  // Lifted after holding, LAND stays on: the box reads Landing, never a roll or a brake this scheme hasn't got
+  // (0133), and never Hold · Land (0188).
   await page.waitForFunction(() => { const { S } = window.__coldgas; return S.mode !== 'live' || S.run.phase !== 'air'; }, null, { timeout: 60_000 });
   const frames = await page.evaluate(() => window.__dWords);
   expect(frames.length).toBeGreaterThan(0);
@@ -93,6 +93,25 @@ test('one-thumb: hold to climb, tap to let go on the ledge, hold to land', async
   const onPad = frames.filter((f) => f.on);
   expect(onPad.length).toBeGreaterThan(0);
   expect(onPad.filter((f) => f.w !== 'On profile')).toEqual([]);
+  // 0188: the tapped thumb (most phone players): a tap on the ledge, lifted, never pressed again. Once auto-land
+  // flies, the pad is calm (no data-warn) and names the aim, never Land. Stepped in the page: no frame waits.
+  const tapped = await page.evaluate(() => {
+    const g = window.__coldgas, S = g.S, pad = document.querySelector('[data-onethumb]'), act = document.querySelector('[data-thumb-act]');
+    g.startDrill('ledge');
+    S.freezeT = 0;
+    const seen = [];
+    g.thumb.down();
+    for (let i = 0; i < 20; i++) g.liveStep(1 / 240);
+    g.thumb.up();
+    for (let i = 0; i < 2400 && S.mode === 'live' && S.run.phase !== 'done'; i++) {
+      g.liveStep(1 / 240);
+      if (S.run.phase === 'air') seen.push({ auto: S.run.car.autoLand > 0, warn: pad.hasAttribute('data-warn'), a: act.textContent });
+    }
+    return seen;
+  });
+  const auto = tapped.filter((f) => f.auto);
+  expect(auto.length).toBeGreaterThan(60);
+  expect(auto.filter((f) => f.warn || f.a !== 'Aim')).toEqual([]);
   expect(errors).toEqual([]);
   await page.close();
 });
