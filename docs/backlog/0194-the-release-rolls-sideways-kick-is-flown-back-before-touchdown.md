@@ -1,7 +1,7 @@
 ---
 id: 0194
 title: The release roll's sideways kick is flown back to the line before touchdown, not carried onto the pad
-status: in-progress
+status: ready
 priority: P1
 size: M
 lens: authenticity
@@ -121,3 +121,34 @@ drift (old law) until the car is beyond the row and only then fly back, or let t
 Re-measure `naive-show` first, then the references. The Wall has no row, so its version may ship alone (Wall reference 96.0
 here: its loss is efficiency 8.8 → 7.5 from the slower set-down). The sim change bumps `SIM_VERSION` and regenerates vectors, and
 `ios/Packages/ColdGasCore/Sources/ColdGasPhysics/Vehicle.swift:227` (the hold) needs the same law.
+
+## Builder attempt 2 (2026-11-11, no fix shipped; docs only)
+Status back to `ready`. Node, main `9a79e44`. Two findings for whoever picks this up (and for the critic):
+
+**1. On the Wall, this ticket's lateral bar and its own "0182 as written" bar can't both hold.** 0182 (thumb-mastery) asks
+that the best slide in **−48 … 0 px, sideways only**, beat no slide by ≥ 5 points (again 1.25 and 2.25 s). A total point is
+worth 1 / 2.67 of a precision point on the Wall (weights 0.30 · 0.20 · 0.30), so no slide must score precision ≤ 8.13: a miss
+≥ 5.4 m (`SHOW_PRECISION`: 0.85 at 5 m, 0.45 at 7 m). With `|t.lateral|` ≤ 1.5 m, that miss is ≥ 5.2 m along the run, which a
+sideways slide can't take back. So the Wall's no-slide lateral bar needs 0182 re-specified first (e.g. the best slide in
+either axis, or the bar moved to the along-run slide), by the critic or the operator. The Show has no such test.
+
+**2. The low line hold.** Keeping LAND's existing drift-kill on below 4 m (armed by the roll-out from inverted, ≤ 0.12 rad
+down to 1.5 m; Lineup bit-identical) takes the sideways speed at touchdown down on both courses without a fly-back:
+
+| no slide | main lat / vx at touchdown | low hold (with 0190's along-run aim on the Wall) |
+|---|---|---|
+| Show reference | +1.04 / −2.56 (97.3) | +1.07 / −2.53 (97.3; the reference rolls, so LAND's hold is off) |
+| Show held · never · again 0.5 / 1.0 / 2.0 | −5.14 / −5.72 / −5.14 / −4.45 / −5.72 m; vx ≤ 0.30 | −4.37 / −5.17 / −4.37 / −4.06 / −5.17; vx ≤ 0.57 |
+| Wall reference | +3.58 / −0.57 (97.7) | +3.44 / −0.59 (97.7, cutoff 4 → 3.5 m) |
+| Wall held · never · again 0.5 / 1.0 / 2.0 | +6.06 / +7.24 / +6.06 / +6.09 / +7.24; vx up to 1.75 | +6.28 / +6.31 / +6.28 / +5.73 / +6.31; vx ≤ 1.17 |
+
+It moves the lateral 0.5–1 m, not to 1.5 m, and it breaks the slide's model (eight `thumb-mastery` tests and `thumb-land`
+0188; the list is in 0190's Builder attempt 1). The Show reference's −2.5 m/s slide-in is `autopilot.js`'s `steerToPad`
+(the roll is a time-to-go velocity with no stop at the end), not LAND: it needs a lateral law that arrives at zero speed,
+and a Show-only `level` change re-runs the Show's ref-hash.
+
+**For the next run:** settle point 1 with the critic before building the Wall half. For the Show, Builder attempt 1's
+advice stands (fly back only past `rowFar`); measured here, the held thumb passes `rowFar` at ≈ 3.75 s, 2.9 m up, 5.1 m
+off the line, 1.8 s before touchdown: a 3.6 m fly-back in that time asks ≈ 4.4 m/s² sideways (≈ 0.45 rad of bank at 1 g)
+below 3 m, where "level before the wheels touch" (`upW.y < 0.99` under 1.2 m) holds the sink. So the Show's line hold has to
+start beside the row (outside `|x| < maxX + halfW` of each box still ahead), not after it.
