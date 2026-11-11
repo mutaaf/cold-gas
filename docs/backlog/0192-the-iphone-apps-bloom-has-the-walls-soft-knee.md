@@ -30,5 +30,9 @@ Runs on: the operator's Mac (Xcode). iPhone app only.
       saturated red ≤ 12 % of the frame, the car box's P10 ≤ 60 (`scripts/look-audit.mjs`'s measures on a capture).
 - [ ] The Lineup's bloom is unchanged (no knee there).
 
+## Test plan
+A Metal unit test of `highPass` on the knee's three cases (an LED at 5.5, white paint at 3.2, a brake light at 9),
+against `tests/unit/bloom-knee.test.js`'s numbers; a capture of the Show's hang on both phones.
+
 ## Out of scope
 The web (0187 shipped it).
