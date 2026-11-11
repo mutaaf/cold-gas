@@ -111,7 +111,7 @@ Critique `docs/critique/2026-11-11-0410.md` §1 has the full numbers.
 - If the operator rebaselines on purpose, as with 0097, that decision closes this criterion, and the PR quotes it.
 - Draft #304's soft knee also raises `show-replay/car` (62.8 → 105.4 ‰ desktop), so it doesn't meet this either.
 
-## Builder pass 2 (2026-11-11, branch `build/0187-the-replay-car-holds-still`): one cause fixed, one needs the operator
+## Builder pass 2 (2026-11-11, #310): one cause fixed, one needs the operator
 Desktop label, SwiftShader, same machine. A per-frame timeline (`FLK_PRE` wrapping `stage.render`) split `show-replay/car` by
 director shot and by deck look (k):
 
