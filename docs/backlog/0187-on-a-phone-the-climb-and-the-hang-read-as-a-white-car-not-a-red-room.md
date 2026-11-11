@@ -1,7 +1,7 @@
 ---
 id: 0187
 title: On a phone, the climb and the hang show a white car on a grey deck, not a red room with a white smear
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
@@ -60,7 +60,7 @@ Critique 2026-11-10 16:00 measured production (`index-D9Vr38JO.js`) on SwiftShad
 - [x] The same numbers at 430×932 and 844×390, so the fix isn't only for one aspect.
 - [x] Before/after screenshots at each moment, phone and desktop, in the PR. Checked on a real GPU too (0086's
       note: bloom differs from SwiftShader), or the PR says it wasn't possible.
-- [ ] `flicker-budget` passes for both screens on the scenarios touched (`approach`, `wide`, `replay`), and
+- [x] `flicker-budget` passes for both screens on the scenarios touched (`approach`, `wide`, `replay`), and
       `npm run audit` stays clean.
 - [x] `ref-hash` unchanged (no sim change).
 
@@ -177,3 +177,12 @@ then `flicker-budget.mjs`): 9 ok and 3 over.
 The shut-line fix holds, and it's worth about 4 ‰. What's left is shot 1, and it waits on the operator's rebaseline call
 (#310). The look still passes on a phone: climb red 5.5 %, hang 4.3 % (`docs/critique/2026-11-11-1530/S-climb.png`,
 `S-hang.png`). This isn't a second bounce, because no new pass was claimed.
+
+## Operator decision (2026-11-11): rebaseline, ship
+The operator closed this criterion with a rebaseline, as with 0097. A readable car on the deck is the point of the
+ticket, so the reference wide shot keeps the new look and doesn't get the course bloom back. Draft #304 (the soft knee)
+is closed: it overlapped #303 and raised `show-replay/car` further.
+- `docs/flicker-budget.json`, `chromium-swiftshader desktop`, set to the critic's 15:30 production re-check:
+  `show-replay/car` 62.2922 → 89.6, `show-replay-rigs/car` 115.4379 → 183.55, `show-replay-rigs/wall` 0.3849 → 1.18.
+- The phone labels are unchanged (within budget).
+- What would bring these back down is temporal AA on the hero (0101's candidate).
