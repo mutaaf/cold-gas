@@ -2,7 +2,7 @@
 // input log through the same sim (simulate's onTick) and reads the flight tick by tick: the
 // release, the carry over the row, the roll-out, the braking, the touchdown. Every number it
 // quotes comes from that replay and the predictor (src/sim/predict.js), never from a guess.
-import { simulate } from './run.js';
+import { simulate, HANG_AT } from './run.js';
 import { up, CAR, NOZZLES, forward } from './vehicle.js';
 import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
@@ -86,7 +86,7 @@ export function readFlight(inputLog, courseId, fromTick = 0) {
 // One instruction per device and tier: on Assist the brake is LAND, on Pro and Advanced it's LIFT by the
 // BRAKE line (Pro has no LAND governor), as the how-to card, the cue line and the pointer say it.
 // `aim`: how this device walks the touchdown onto the mark (one-thumb: the pad's slide, 0121; else lean with the stick).
-export const KEY_WORDS = { land: 'LAND (Shift)', lift: 'LIFT (Space)', release: 'RELEASE (Space)', boost: 'BOOST (F)', roll: '← →', aim: AIM_LEAN, ranOut: RANOUT_LEAN };
+export const KEY_WORDS = { drive: '↑', land: 'LAND (Shift)', lift: 'LIFT (Space)', release: 'RELEASE (Space)', boost: 'BOOST (F)', roll: '← →', aim: AIM_LEAN, ranOut: RANOUT_LEAN };
 
 // What the mark cost the total: the run re-scored as if it had touched down on the mark, everything else the
 // same (the judges' own weights and the tier, from scoreRun, so it can't drift from judge.js). 0124.
@@ -157,7 +157,12 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
 
   if (wall && t.airStartTick < 0) {
     if (t.fellOff) add('fell-off', 10, 'Slid off the deck', `The car left the side of the curl ${r1(t.maxRampHeight)} m up.`, 'Keep it on the centreline: small steering corrections, and crawl (≈20 km/h) so the fan holds you.');
-    else add('no-release', 10, 'Never let go', `You hung ${r1(t.invertedTime)} s inverted but never released.`, `On the ledge, tap ${say.release} to let go.`);
+    // 0189: a car that stopped short of the ledge (a thumb lifted on the climb) never got to the let-go: name the
+    // climb, not the release. The ledge is HANG_AT (run.js), where the one-thumb pad says "on the ledge".
+    else if (t.progress < HANG_AT) {
+      add('stopped-climb', 10, 'Stopped on the climb', t.rampTick < 0 ? 'You stopped before the Wall.' : `You stopped ${r1(t.maxRampHeight)} m up the curl, short of the ledge.`,
+        `Keep holding ${say.drive} until you're upside down on the ledge.`);
+    } else add('no-release', 10, 'Never let go', `You hung ${r1(t.invertedTime)} s inverted but never released.`, `On the ledge, tap ${say.release} to let go.`);
     return finish(out, f);
   }
   if (wall && f.releaseProgress < 0.95 && f.releaseTick >= 0) {

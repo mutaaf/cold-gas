@@ -124,7 +124,7 @@ export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 
 const WRECK_OF = {
   short: 'short', 'no-brake': 'brake', 'late-brake': 'brake', 'late-land': 'brake', 'ran-out': 'ran-out',
   'late-roll': 'roll', 'no-roll': 'roll', 'over-roll': 'roll', tilt: 'roll', flipped: 'flipped', 'fell-off': 'fell-off',
-  'no-release': 'release', 'early-release': 'release',
+  'no-release': 'release', 'early-release': 'release', 'stopped-climb': 'release',
 };
 export const wreckCause = (items) => `wreck-${WRECK_OF[items?.[0]?.id] || 'other'}`;
 // How a run was flown: the device in use (src/input.js lastDevice) and, on touch, the scheme on screen.
