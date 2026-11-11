@@ -319,6 +319,7 @@ function* buildShow(tier) {
 
   const g = new THREE.Group();
   const red = sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(4.5, 0.2, 0.3), fog: false, ...DECAL }), { minPx: 1.5 });
+  look.deckMats.push({ mat: red, hot: [4.5, 0.2, 0.3], deck: [1.25, 0.025, 0.04] });   // on the deck (0187): red, not pink
   const flat = (geo, mat, x, z, y = 0.004) => { const m = new THREE.Mesh(spreadThin(geo), mat); m.rotation.x = -Math.PI / 2; m.position.set(x, y, z); m.renderOrder = LAYER.light; g.add(m); return m; };
   const boxes = SHOW.boxes;
   const minX = Math.min(...boxes.map((b) => b.minX)) - 0.6, maxX = Math.max(...boxes.map((b) => b.maxX)) + 0.6;

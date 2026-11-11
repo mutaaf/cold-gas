@@ -1390,7 +1390,7 @@ function frameBody(now) {
       subject: hero.group,    // the title's upright framing measures the car's own box (0131)
     });
     // The car on the Wall's deck: the stage's deck look (0187), from where the car is drawn, live and in the replay.
-    stage.setDeck(S.mode === 'title' || stage.course === 'lineup' ? 0 : deckLook(carRoot.position.y, carRoot.position.z));
+    stage.setDeck(S.mode === 'title' || stage.course === 'lineup' ? 0 : deckLook(carRoot.position.x, carRoot.position.y, carRoot.position.z));
     stage.render(S.time, S.mode);
   }
 }

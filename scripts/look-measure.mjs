@@ -6,10 +6,8 @@
 // rgba: Uint8(Clamped)Array, 4 bytes a pixel, row-major; rect: { x, y, w, h } in pixels (clipped to the image).
 
 export function isSaturatedRed(r, g, b) {
-  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
-  if (mx !== r || mx <= 40) return false;
-  if (r === g && g === b) return false;   // grey: no hue, the largest channel is a tie
-  return (mx - mn) / mx > 0.5;
+  if (r <= g || r <= b || r <= 40) return false;   // red strictly the largest (a tie is yellow, magenta or grey)
+  return (r - Math.min(g, b)) / r > 0.5;
 }
 
 function clip(rect, w, h) {

@@ -552,14 +552,16 @@ export function* buildWall(tier, pad = WALL.pad) {
     // On the deck (0187, src/render/deck-look.js): the bloom catches only what is brighter than the white paint's
     // floodlit highlights, and the strips drop to a red their own core keeps (an HDR 5.5 red tone-maps pink).
     deck: { bloomThreshold: 3.5 },
+    // Every red emitter the raised threshold would leave unbloomed (pink): the strips here, the Show's row outline.
+    deckMats: [],   // { mat, hot: [r, g, b], deck: [r, g, b] }
     setDeck(k) {
-      if (!led || k === deckK) return;
+      if (k === deckK) return;
       deckK = k;
-      led.color.setRGB(LED_HOT[0] + (LED_DECK[0] - LED_HOT[0]) * k, LED_HOT[1] + (LED_DECK[1] - LED_HOT[1]) * k, LED_HOT[2] + (LED_DECK[2] - LED_HOT[2]) * k);
+      for (const { mat, hot, deck } of look.deckMats) mat.color.setRGB(hot[0] + (deck[0] - hot[0]) * k, hot[1] + (deck[1] - hot[1]) * k, hot[2] + (deck[2] - hot[2]) * k);
     },
     update(t) { beams?.update(t); },
   };
-  let led = null, deckK = 0;
+  let deckK = 0;
   yield look;
   const S = samples(tier === 'low' ? 200 : 380);
 
@@ -587,7 +589,8 @@ export function* buildWall(tier, pad = WALL.pad) {
   // (7 cm) to stay continuous at stadium distance.
   // Slivers (src/render/sliver.js): at range a strip stays a pixel and a half wide and dims to
   // match, instead of popping in and out of the bloom.
-  led = sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(...LED_HOT), fog: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), { minPx: 1.5 });
+  const led = sliver(new THREE.MeshBasicMaterial({ color: new THREE.Color(...LED_HOT), fog: false, side: THREE.DoubleSide, polygonOffset: true, polygonOffsetFactor: -4, polygonOffsetUnits: -4 }), { minPx: 1.5 });
+  look.deckMats.push({ mat: led, hot: LED_HOT, deck: LED_DECK });
   const ledDim = new THREE.MeshBasicMaterial({ color: new THREE.Color(1.4, 0.05, 0.08), fog: false });
   for (const sx of [-1, 1]) {
     for (const geo of [ribbon(S, sx * (W / 2 - 0.1), sx * (W / 2 - 0.01), 0.008), sideBand(S, sx * (W / 2 + 0.006), 0.0, 0.07)]) {

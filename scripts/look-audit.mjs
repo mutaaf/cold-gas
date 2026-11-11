@@ -5,7 +5,7 @@
 //   p10  the 10th-percentile luma in the roadster's projected 4.4 × 2.0 × 1.2 m box (bar ≤ 60: its tyres and
 //        glass show dark)
 // node scripts/look-audit.mjs <url> [outdir] [--sizes=390x844t,1440x900,...] [--gfx=low|mid|high]
-//   a size ending in t is a touch phone (isMobile, hasTouch, dpr 3 → measured at 1×). Needs a served build
+//   a size ending in t is a touch phone (isMobile, hasTouch), drawn at deviceScaleFactor 1 (CSS pixels). Needs a served build
 //   (`npx vite preview --port 4655 --strictPort`).
 import { chromium } from 'playwright';
 import { mkdirSync, writeFileSync } from 'node:fs';
@@ -16,7 +16,7 @@ const flag = (k, d) => { const a = args.find((s) => s.startsWith(`--${k}=`)); re
 const pos = args.filter((s) => !s.startsWith('--'));
 const url = pos[0] || 'http://localhost:4655/coldgas/';
 const out = pos[1] || null;
-const sizes = flag('sizes', '390x844t,1440x900').split(',');
+const sizes = flag('sizes', '390x844t,1440x900,430x932t,844x390t').split(',');
 const gfx = flag('gfx', '');
 const pre = flag('pre', '');   // experiments: JS run in the page before the run (window.__coldgas as g)
 const only = flag('only', '');
@@ -63,6 +63,7 @@ for (const size of sizes) {
       let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
       for (const bx of [-1, 1]) for (const by of [-cy, 1.2 - cy]) for (const bz of [-2.2, 2.2]) {
         const wp = mul(e, bx, by, bz, 1), vp = mul(V, ...wp), cp = mul(P, ...vp);
+        if (cp[3] <= 0.05) return null;   // a corner behind the camera: no honest box
         const sx = (cp[0] / cp[3] * 0.5 + 0.5) * innerWidth, sy = (0.5 - cp[1] / cp[3] * 0.5) * innerHeight;
         x0 = Math.min(x0, sx); y0 = Math.min(y0, sy); x1 = Math.max(x1, sx); y1 = Math.max(y1, sy);
       }
@@ -73,6 +74,7 @@ for (const size of sizes) {
       let s = ''; for (let i = 0; i < d.length; i += 0x8000) s += String.fromCharCode.apply(null, d.subarray(i, i + 0x8000));
       return { w: cv.width, h: cv.height, px: btoa(s), box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, y: g.S.run.car.pos.y, inv: g.S.run.t.invertedTime, tier: g.stage.tier ?? null };
     }, shot.toString('base64'));
+    if (!m) { rows.push({ size, moment: name, red: null, p10: null }); await page.evaluate(() => { window.__coldgas.S.paused = false; }); continue; }
     const rgba = Buffer.from(m.px, 'base64');
     rows.push({
       size, moment: name,
