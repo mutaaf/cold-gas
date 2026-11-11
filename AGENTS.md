@@ -518,7 +518,8 @@ game, the Worker or a score. Cloud agents take only the native tickets that don'
 **Every iPhone release adds notes, and the app's What's new modal reads them.** `ios/release-notes/<MARKETING_VERSION>.md`
 is the one source for TestFlight's What to Test, the App Store's What's New and the in-app modal (bundled by project.yml,
 parsed by ColdGasClient's `ReleaseNotes`, drawn by `ios/ColdGas/UI/WhatsNewView.swift`). It needs a hero headline and 2–4
-`## Highlights` cards (a few words, one short line, an SF Symbol icon in an HTML comment), then the full notes; the shape,
+`## Highlights` cards (a few words, one short line, an SF Symbol icon in an HTML comment, and `go:` a screen when the
+feature has one: the card then opens it), then the full notes; the shape,
 the tone (playful nods as tropes only: no real characters, franchises, brands, quotes or people; no politics or tragedy;
 family-friendly; every claim true, from the git history since the last release) and the rules are in
 `ios/release-notes/README.md`. The modal shows once per version after an update, never on a fresh install and never

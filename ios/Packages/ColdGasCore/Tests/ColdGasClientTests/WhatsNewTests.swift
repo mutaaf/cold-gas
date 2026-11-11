@@ -25,6 +25,16 @@ import Testing
         #expect(launch("1.1.0"))       // the next update: once again
         #expect(!launch("1.1.0"))
     }
+    @Test func forcedShowsWithoutRecording() {
+        // DEBUG -whatsNew: shows every launch, records nothing, so a real update still shows once afterwards.
+        for seen in [nil, "", "1.0.0", "1.0.1"] as [String?] {
+            #expect(WhatsNewGate.decide(current: "1.0.1", seen: seen, quiet: false, hasNotes: true, forced: true) == .init(show: true, record: nil))
+        }
+        #expect(WhatsNewGate.decide(current: "1.0.1", seen: "1.0.0", quiet: true, hasNotes: true, forced: true).show, "forced wins over a tool flag")
+        #expect(WhatsNewGate.decide(current: "1.0.1", seen: "1.0.0", quiet: false, hasNotes: false, forced: true) == .init(show: false, record: nil))
+        #expect(WhatsNewGate.decide(current: "1.0.1", seen: "1.0.0", quiet: false, hasNotes: true).show, "not forced: the real gate")
+        #expect(WhatsNewGate.forceFlag == "-whatsNew")
+    }
     @Test func theSameVersionShowsNothing() {
         #expect(WhatsNewGate.decide(current: "1.0.0", seen: "1.0.0", quiet: false, hasNotes: true) == .init(show: false, record: nil))
     }
@@ -81,6 +91,24 @@ import Testing
         }
         #expect(!n.sections.isEmpty, "the full notes")
         #expect(!n.sections.contains { $0.title.lowercased() == "highlights" })
+        // Every go: names a real screen (an unknown one would quietly be a plain card).
+        for l in md.components(separatedBy: .newlines) where l.contains("go:") {
+            let co = try #require(ReleaseNotes.callout(String(l.dropFirst(2))), "\(l)")
+            #expect(co.go != nil, "\(l): go: must be one of \(WhatsNewDestination.allCases.map(\.rawValue))")
+        }
+        #expect(n.callouts.contains { $0.go != nil }, "at least one card takes you to its feature")
+    }
+
+    @Test func calloutsCarryTheirDestination() {
+        #expect(ReleaseNotes.callout("**Board.** See it. <!-- icon: list.number, go: board -->")
+                == .init(icon: "list.number", title: "Board", line: "See it.", go: .board))
+        #expect(ReleaseNotes.callout("**Drills.** Try one. <!-- icon: scope,go:practice -->")?.go == .practice)
+        #expect(ReleaseNotes.callout("**Help.** Read it. <!-- icon: questionmark, go: howTo -->")?.go == .howTo)
+        #expect(ReleaseNotes.callout("**Feel.** Turn it. <!-- go: settings -->") == .init(icon: "sparkles", title: "Feel", line: "Turn it.", go: .settings))
+        #expect(ReleaseNotes.callout("**Sky.** Look up. <!-- icon: sparkles -->")?.go == nil, "no go: a plain card")
+        #expect(ReleaseNotes.callout("**Sky.** Look up. <!-- icon: sparkles, go: nowhere -->")?.go == nil, "unknown: a plain card")
+        #expect(ReleaseNotes.callout("**Sky.** Look up. <!-- icon: sparkles, go: board -->")?.icon == "sparkles")
+        #expect(WhatsNewDestination.allCases.map(\.rawValue) == ["board", "settings", "howTo", "practice"])
     }
 
     @Test func theParserReadsTheShape() throws {
