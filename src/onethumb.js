@@ -94,6 +94,14 @@ const REF_STEADY = 2, REF_WIN = 24, REF_WINS = 2, AIM_UY_SLID = 0.8, AIM_LOW = 0
 const REF_LEAK = 0.2, HOLD_BANK = 0.2, QUICK_MIN = 0.5;
 // 0181: the Lineup's lift-off line (m before the marker, the reference's) and the least ground speed that commits to it.
 const LIFT_EARLY = COURSES.lineup.lineupZ0 - 6.5 - COURSES.lineup.liftOffZ, LIFT_MIN_V = 3;
+// 0191: the thumb picks the Lineup's trick. Held and slid up on the run-up (TWICE_AT of a full slide), it calls a second
+// turn: the 720 the judges pay more for (judge.js scoreLineup). Slid down, it takes the call back; the call commits at the
+// lift-off line. Two turns need more air than one (≈ 265°/s of roll under LAND's computer): it runs up slower and burns
+// higher (the 720's flight, measured over the run-up speed and the burn's apex: 6 m/s and 10.25 m is the middle of the
+// plateau where both turns finish and LAND still sets it down, 9.5–10.5 m all land Stuck it or better). Unaimed it lands
+// ≈ 4–5 m long: the slide onto the mark is what turns the 720 into the Lineup's best score, not the call alone.
+export const LINEUP_TWICE = { speed: 6, apex: 10.25, rolls: 2, rollBrake: REVEAL.lineup.rollBrake };
+const TWICE_AT = 0.5, CALL_ROOM = 6;
 const lrates = { x: 0, y: 0, z: 0 };
 const bx = { x: 0, y: 0, z: 0 }, X1 = { x: 1, y: 0, z: 0 };
 // 0165: along the run (the Show) the slide is a place too. `refA` is predict's touchdown along the car's nose (LAND holds
@@ -180,16 +188,16 @@ export function thumbStage(run, released) {
 }
 
 export function createOneThumb() {
-  const st = { airPress: false, held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, steady: 0, ref0: NaN, win: 0, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false, lifting: false, burnt: false, rolled: false };
+  const st = { airPress: false, held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, steady: 0, ref0: NaN, win: 0, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false, lifting: false, burnt: false, rolled: false, twice: false, offer: false, ox: 0, oy: 0 };
   const pr = newPrediction();
   const aim = { x: 0, y: 0 };
   return {
     // Pointer events: `pressed` latches a tap shorter than a tick until the next sample reads it.
-    down() { st.held = true; st.pressed = true; st.ax = 0; st.ay = 0; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
+    down() { st.held = true; st.pressed = true; st.ox = 0; st.oy = 0; st.ax = 0; st.ay = 0; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
     up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
     // The held thumb's slide from where it pressed, CSS px (+x right, +y up the glass).
-    move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx; st.ay = dy / THUMB.aimPx; } },
-    reset() { st.airPress = false; st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; st.lifting = false; st.burnt = false; st.rolled = false; },
+    move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx - st.ox; st.ay = dy / THUMB.aimPx - st.oy; } },
+    reset() { st.airPress = false; st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; st.lifting = false; st.burnt = false; st.rolled = false; st.twice = false; st.offer = false; st.ox = 0; st.oy = 0; },
     // 0164: where the sideways slide is measured from (m, the car's right +, along the car's own side axis), NaN
     // before this hold could aim.
     get ref() { return st.ref; },
@@ -206,6 +214,10 @@ export function createOneThumb() {
     // 0181: the Lineup's lift-off has begun (committed), and its one turn is done.
     get lifting() { return st.lifting; },
     get rolled() { return st.rolled; },
+    // 0191: the second turn is called (the run-up's up-slide), or was when the lift committed.
+    get twice() { return st.twice; },
+    // 0191: the call can still be made (the Lineup's run-up, CALL_ROOM m or more short of the line).
+    get offer() { return st.offer; },
     get pending() { return st.pressed; },
     // 0140: LAND is on for this flight (the thumb held it once), whether or not the thumb is down now.
     get landing() { return st.landing; },
@@ -230,18 +242,32 @@ export function createOneThumb() {
       // and the slide, as on the Show; LAND's level waits for the roll to finish (it would roll the car out of it).
       let lineupLevel = true;
       if (run.course === 'lineup' && stage !== 'landed') {
-        const L = REVEAL.lineup, lc = COURSES.lineup;
+        const lc = COURSES.lineup;
         // A hop on the run-up (a hard dead-man brake) is still the run-up: the kickflip starts only from the line.
+        if (!st.lifting) {
+          // 0191: the call, read while the thumb is down on the run-up.
+          // Taken only while there's room to slow to the 720's run-up speed before the line (CALL_ROOM m): a call that
+          // lifted at the 360's speed landed 8–12 m long, and aimed short it set down at 2.7 m/s (the review of 0191).
+          st.offer = c.pos.z < lc.liftOffZ + LIFT_EARLY - CALL_ROOM;
+          if (st.held && st.offer) { const sy = shape(st.ay); if (sy >= TWICE_AT) st.twice = true; else if (sy <= -TWICE_AT) st.twice = false; }
+        }
+        const L = st.twice ? LINEUP_TWICE : REVEAL.lineup;
         if (!st.lifting) {
           const vh = dhypot(c.vel.x, 0, c.vel.z);
           out.steer = Math.max(-1, Math.min(1, c.pos.x * 0.25 + steer));
           // Past the line it commits once moving: a held thumb that stopped there drives up to LIFT_MIN_V first (a lift
           // from a standstill came down short of the row, or on it: the review of 0181).
-          if (c.pos.z > lc.liftOffZ + LIFT_EARLY && vh > LIFT_MIN_V) st.lifting = true;
+          if (c.pos.z > lc.liftOffZ + LIFT_EARLY && vh > LIFT_MIN_V) {
+            st.lifting = true; st.offer = false;
+            // 0191: the slide that called the trick isn't an aim: the air's slide is measured from here (without a call,
+            // as before 0191).
+            if (st.twice) { st.ox += st.ax; st.oy += st.ay; st.ax = 0; st.ay = 0; }
+          }
           else if (!st.held) { out.brake = 1; return out; }
           else {
             out.throttle = vh < L.speed ? 1 : 0;
-            out.brake = vh > L.speed + 0.6 ? 0.4 : 0;
+            // 0191: the 720's flight is tuned to its run-up speed, so the call slows the car to it (the 360's band is as before).
+            out.brake = st.twice ? (vh > L.speed + 0.05 ? 1 : 0) : vh > L.speed + 0.6 ? 0.4 : 0;
             return out;
           }
         }

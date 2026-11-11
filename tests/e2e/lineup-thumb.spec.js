@@ -50,3 +50,33 @@ test('the Lineup on a phone: the title, the how-to card and the run all fly one 
   expect(out.miss).toBeLessThan(3.5);
   expect(errors).toEqual([]);
 });
+
+// 0191: the thumb picks the trick. Held and slid up on the run-up, the pad names the call ("Two turns · Drive"; before it,
+// "↑ for 720") and the car flies two turns; the results card reads the 720.
+test('the Lineup on a phone: slid up on the run-up, the pad calls two turns and the car rolls 720°', async ({ browser }) => {
+  test.slow();
+  page = await browser.newPage(PHONE);
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/coldgas/?gfx=low');
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
+  await page.evaluate(() => { window.__coldgas.stage.render = () => {}; window.__coldgas.setTier('assist'); });
+  await page.locator('.courses [data-course="lineup"]').tap();
+  await expect(page.locator('.courses [data-course="lineup"]')).toHaveAttribute('aria-checked', 'true');
+  const out = await page.evaluate(() => {
+    const g = window.__coldgas, S = g.S;
+    g.startRun('jump'); g.skipCountdown();
+    const verbs = new Set();
+    const read = () => verbs.add(`${document.querySelector('[data-thumb-verb]').textContent} · ${document.querySelector('[data-thumb-act]').textContent}`);
+    g.thumb.down();
+    g.liveStep(0.05); read();
+    g.thumb.move(0, 48);   // a full slide up the glass
+    for (let i = 0; i < 4000 && S.mode === 'live' && !S.card; i++) { g.liveStep(0.05); read(); }
+    return { course: S.run?.course, verdict: S.card?.verdict, roll: S.card?.facts?.rollDeg, verbs: [...verbs] };
+  });
+  expect(out.course).toBe('lineup');
+  expect(out.verbs).toEqual(expect.arrayContaining(['↑ for 720 · Drive', 'Two turns · Drive']));
+  expect(out.verdict).toMatch(/Stuck it|Perfect 10/);
+  expect(out.roll).toBeGreaterThanOrEqual(700);
+  expect(errors).toEqual([]);
+});
