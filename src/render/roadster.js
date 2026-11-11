@@ -25,6 +25,7 @@ import * as THREE from 'three';
 import { mergeGeometries } from 'three/addons/utils/BufferGeometryUtils.js';
 import { SPEC, NOZZLE_SPEC, wheelAnchors, AXLE_F, AXLE_R } from '../sim/spec.js';
 import { CAR } from '../sim/vehicle.js';
+import { sliverTube } from './sliver.js';
 
 // --- Suspension contract ------------------------------------------------------------------------
 // Visual wheel-centre height in the ground frame for a suspension compression (m).
@@ -49,6 +50,7 @@ export const NOZZLE_VISUAL = NOZZLE_SPEC.map((n) => n.pos.slice());   // drawn w
 // --- Materials ---------------------------------------------------------------------------------
 // HDR colours on the lamps (MeshBasic, values > 1) so the bloom pass picks them up; the low tier
 // has no bloom and they simply clip to white / red.
+const SEAM_R = 0.0042;   // a shut line's radius (m)
 const lamp = (hex) => new THREE.MeshBasicMaterial({ color: hex });
 const M = {
   // "Ano White": a satin, aerospace-coating white (OFFICIAL name; "matte white", REPORTED).
@@ -66,7 +68,9 @@ const M = {
     envMapIntensity: 2.0, transparent: true, opacity: 0.93,
   }),
   cabin: new THREE.MeshStandardMaterial({ color: 0x1c1d20, roughness: 0.8, metalness: 0 }),
-  seam: new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.6 }),
+  // Shut lines (seam()): 4.2 mm tubes, faded by pixel coverage once they're under a pixel wide (0187: on the lit
+  // deck in the replay, a black line under a pixel popped on and off the white paint).
+  seam: sliverTube(new THREE.MeshStandardMaterial({ color: 0x050506, roughness: 0.6 }), { radius: SEAM_R }),
   brass: new THREE.MeshPhysicalMaterial({ color: 0xc19a62, metalness: 1, roughness: 0.28, clearcoat: 0.4 }),
   nozzleIn: new THREE.MeshBasicMaterial({ color: 0x050505 }),
   tyre: new THREE.MeshStandardMaterial({ color: 0x121314, roughness: 0.88, metalness: 0 }),
@@ -308,7 +312,7 @@ function buildShell() {
 }
 
 // A thin dark line on the body: a tube through surface points.
-function seam(points, radius = 0.0042, mat = M.seam) {
+function seam(points, radius = SEAM_R, mat = M.seam) {
   const curve = new THREE.CatmullRomCurve3(points.map((p) => new THREE.Vector3(p[0], p[1], p[2])), false, 'centripetal');
   put(mat, new THREE.TubeGeometry(curve, Math.max(6, points.length * 3), radius, 4, false));
 }
