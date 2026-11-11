@@ -272,6 +272,8 @@ src/render/           three.js (r186):
   crash.js              everything a crash shows, keyed to run.impacts (live and replay): sparks,
                           chips, dust, dents, torn-off parts, lamps/hazards, shake, slow-mo, cut
   debris.js             torn-off parts as small rigid boxes on the concrete (cosmetic)
+  bloom-knee.js         the bloom's bright pass with an opt-in soft knee (0187): only light past the threshold in
+                          its brightest channel glows (the Wall: lamps yes, LED strips a thin halo, the lit car none)
   sliver.js             minimum on-screen width for thin lights/paint/struts (anti-flicker),
                           DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable; live on the Wall and the
@@ -387,6 +389,8 @@ scripts/thumb-reach.mjs    touch control geometry per phone viewport + reach hea
 scripts/hud-audit.mjs      flies the Show at every viewport: overlaps, text < 11 px, WCAG contrast on screenshots;
                            the judges' theatre and the pause sheet too (44 px targets; Resume and Home on the glass,
                            0092); a touch frame's HUD cover under audit-plan.mjs coverCeiling (0112); a gate (exit 1), --shard=N/M
+scripts/look-audit.mjs     the Show's climb, hang and release on four screens: saturated-red share of the frame and the car
+                           box's P10 luma (0187; report-only; LOOK_VARIANTS re-renders each frozen moment per variant)
 scripts/hud-cover.mjs      how much of the scene the HUD covers, per size and touch scheme (the Show's run-up and air, Free
                            Drive): cover / solid / shade %, the car's and the road ahead's box under chrome; `p` = installed (0112)
 scripts/title-audit.mjs    the title at every viewport: no overlaps, CTA in view; a gate (exit 1)
