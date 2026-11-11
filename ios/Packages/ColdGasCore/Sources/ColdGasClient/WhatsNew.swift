@@ -10,6 +10,7 @@
 //
 //   ## Highlights
 //   - **A few words.** One short line. <!-- icon: sf.symbol.name -->     (2 to 4 of these: the callout cards)
+//   - **A few words.** One short line. <!-- icon: gearshape, go: settings -->   (go: the screen the card opens)
 //
 //   ## Any other heading
 //   Paragraphs and bullets: the full notes, folded under the cards.
@@ -17,11 +18,22 @@
 // HTML comments never reach TestFlight or the store (scripts/asc.mjs strips them), so the icons live there.
 import Foundation
 
+/// Where a callout card takes you: a screen the title opens (RootUI.Sheet in the app maps each case, exhaustively).
+/// A card about something with no screen of its own (the cameras, the sky) has none and stays plain.
+public enum WhatsNewDestination: String, CaseIterable, Equatable, Sendable {
+    case board, settings, howTo, practice
+}
+
 public struct ReleaseNotes: Equatable, Sendable {
     public struct Callout: Equatable, Sendable {
         public let icon: String
         public let title: String
         public let line: String
+        /// `go:` in the card's comment: the screen it opens, or nil (an unknown name is nil too: a plain card).
+        public let go: WhatsNewDestination?
+        public init(icon: String, title: String, line: String, go: WhatsNewDestination? = nil) {
+            self.icon = icon; self.title = title; self.line = line; self.go = go
+        }
     }
     public struct Section: Equatable, Sendable {
         public let title: String
@@ -79,10 +91,14 @@ public struct ReleaseNotes: Equatable, Sendable {
                             callouts: Array(callouts.prefix(4)), sections: sections)
     }
 
-    /// `**Title.** Line <!-- icon: name -->` → a card.
+    /// `**Title.** Line <!-- icon: name, go: screen -->` → a card.
     static func callout(_ item: String) -> Callout? {
-        var icon = defaultIcon
-        if let r = item.range(of: #"<!--\s*icon:\s*([A-Za-z0-9.]+)\s*-->"#, options: .regularExpression) {
+        var icon = defaultIcon, go: WhatsNewDestination? = nil
+        if let r = item.range(of: #"<!--[^>]*\bgo:\s*[A-Za-z]+[^>]*-->"#, options: .regularExpression),
+           let n = item[r].range(of: #"go:\s*[A-Za-z]+"#, options: .regularExpression) {
+            go = WhatsNewDestination(rawValue: item[r][n].dropFirst(3).trimmingCharacters(in: .whitespaces))
+        }
+        if let r = item.range(of: #"<!--\s*icon:\s*[A-Za-z0-9.]+[^>]*-->"#, options: .regularExpression) {
             let tag = String(item[r])
             if let n = tag.range(of: #"icon:\s*[A-Za-z0-9.]+"#, options: .regularExpression) {
                 icon = tag[n].replacingOccurrences(of: "icon:", with: "").trimmingCharacters(in: .whitespaces)
@@ -94,7 +110,7 @@ public struct ReleaseNotes: Equatable, Sendable {
         if t.hasSuffix(".") { t.removeLast() }
         let line = clean(String(text[close.upperBound...]))
         guard !t.isEmpty, !line.isEmpty else { return nil }
-        return Callout(icon: icon, title: t, line: line)
+        return Callout(icon: icon, title: t, line: line, go: go)
     }
 
     static func stripComments(_ s: String) -> String {
@@ -119,7 +135,10 @@ public enum WhatsNewGate {
         public let record: String?
     }
 
-    public static func decide(current: String, seen: String?, quiet: Bool, hasNotes: Bool) -> Decision {
+    /// `forced` (DEBUG `-whatsNew`: shots, review, a look on a phone) shows the notes and records nothing, so the real
+    /// once-per-version gate is untouched for the next ordinary launch.
+    public static func decide(current: String, seen: String?, quiet: Bool, hasNotes: Bool, forced: Bool = false) -> Decision {
+        if forced { return Decision(show: hasNotes, record: nil) }
         if quiet { return Decision(show: false, record: nil) }                   // a test or a tool: touch nothing
         guard let seen, !seen.isEmpty else { return Decision(show: false, record: current) }   // a fresh install
         if seen == current { return Decision(show: false, record: nil) }
