@@ -6,7 +6,7 @@ priority: P1
 size: M
 lens: authenticity
 created: 2026-11-10
-pr: TBD
+pr: 321
 by: critic
 ---
 
