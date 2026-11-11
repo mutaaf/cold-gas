@@ -560,15 +560,18 @@ export function* buildWall(tier, pad = WALL.pad) {
     // RED_BASE_DECK with the deck look, so the car parked or driving at the foot reads white, not red.
     deckBase: [],   // { set(f) } with f the share of the course's level (1 → RED_BASE_DECK)
     setDeck(k) {
-      if (k === deckK) return;
-      deckK = k;
+      // A look built in slices can add an emitter after the last change of k (the run-up holds k at exactly 1 from the
+      // countdown's first frame, 0193): repaint whenever there are more of them than were last painted.
+      const n = look.deckMats.length + look.deckBase.length;
+      if (k === deckK && n === deckN) return;
+      deckK = k; deckN = n;
       for (const { mat, hot, deck } of look.deckMats) mat.color.setRGB(hot[0] + (deck[0] - hot[0]) * k, hot[1] + (deck[1] - hot[1]) * k, hot[2] + (deck[2] - hot[2]) * k);
       const f = 1 + (RED_BASE_DECK - 1) * k;
       for (const b of look.deckBase) b.set(f);
     },
     update(t) { beams?.update(t); },
   };
-  let deckK = 0;
+  let deckK = 0, deckN = 0;
   yield look;
   const S = samples(tier === 'low' ? 200 : 380);
 
@@ -641,7 +644,6 @@ export function* buildWall(tier, pad = WALL.pad) {
   const baseGlow = glowDecal(0xff1828, 8, 0, 1.0, 0.26);
   group.add(baseGlow);
   look.deckBase.push({ set: (f) => { baseGlow.material.uniforms.uP.value = 0.26 * f; } });
-  look.deckBase.at(-1).set(1 + (RED_BASE_DECK - 1) * deckK);   // built after a setDeck: take the current look
   group.add(glowDecal(0x8fb6ff, 7, -2.5, -5, 0.12));
   group.add(glowDecal(0x8fb6ff, 7, 2.5, -5, 0.12));
 
@@ -673,7 +675,6 @@ export function* buildWall(tier, pad = WALL.pad) {
   red.position.set(0, 1.2, 1.5);
   lights.add(red);
   look.deckBase.push({ set: (f) => { red.intensity = 35 * f; } });
-  look.deckBase.at(-1).set(1 + (RED_BASE_DECK - 1) * deckK);
   look.glows.push({ pos: new THREE.Vector3(0, 0.5, 1.0), color: new THREE.Color(0.25, 0.012, 0.02), radius: 3.5 });
   group.add(lights);
   yield;

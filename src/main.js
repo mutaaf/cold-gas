@@ -65,7 +65,7 @@ import { createPacer } from './pace.js';
 import { pickDeviceTier, pickAA, deviceKind, readDevice, isIOS } from './gfx-tier.js';
 import { readFold, drastic } from './fold.js';
 import { refitHudMode } from './hud-mode.js';
-import { deckLook } from './render/deck-look.js';
+import { deckLook, flownFor } from './render/deck-look.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
@@ -1323,12 +1323,12 @@ function replayStep(dt) {
   updateAudio({ speed: fvel.length() * slow, grounded: p.pos.y < 0.7, throttles: p.thr });
 }
 
-// Has the run on screen launched yet (0193, the deck look's run-up)? Live: the run's launch tick is set. In the results
-// and the replay: the replay's clock has reached it.
+// How far past its launch the run on screen is (0193, the deck look's run-up fades over a second of sim time after it):
+// live from the run's own tick, in the results and the replay from the replay's clock.
 function flownOnScreen() {
-  const lt = S.run?.t?.launchTick ?? -1;
-  if (lt < 0) return false;
-  return S.mode === 'results' || S.mode === 'replay' ? S.replayT * FRAME_EVERY >= lt : true;
+  const r = S.run;
+  if (!r) return 0;
+  return flownFor(S.mode === 'results' || S.mode === 'replay' ? S.replayT * FRAME_EVERY : r.tick, r.t?.launchTick ?? -1);
 }
 
 // --- Title idle: an occasional breath from the lift jets --------------------------------------

@@ -1,7 +1,8 @@
 // 0187: the Wall's climb and hang read as a white car on a grey deck. The deck look's factor (src/render/deck-look.js)
 // and the look audit's two measures (scripts/look-measure.mjs), on the reference flight and on synthetic images.
 import { describe, it, expect } from 'vitest';
-import { deckLook } from '../../src/render/deck-look.js';
+import { deckLook, flownFor, FLOWN_TICKS } from '../../src/render/deck-look.js';
+import { FRAME_EVERY } from '../../src/sim/run.js';
 import { redShare, lumPercentile, isSaturatedRed } from '../../scripts/look-measure.mjs';
 import { createRun, stepRun } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
@@ -25,7 +26,7 @@ describe('deckLook: on the deck from where the car is (0187)', () => {
   for (const c of [SHOW, WALL]) {
     it(`on the reference ${c.id}: 1 from the first tick through the run-up and the climb, 0 at touchdown, never a cut (0193)`, () => {
       const run = createRun(c.id), ap = createAutopilot(c.id);
-      const look = () => deckLook(run.car.pos.x, run.car.pos.y, run.car.pos.z, run.t.launchTick >= 0);
+      const look = () => deckLook(run.car.pos.x, run.car.pos.y, run.car.pos.z, flownFor(run.tick, run.t.launchTick));
       let maxStep = 0, prev = look(), minRunUp = 1, landK = null;
       expect(prev).toBe(1);
       while (run.phase !== 'done' && run.tick < 240 * 30) {
@@ -38,8 +39,38 @@ describe('deckLook: on the deck from where the car is (0187)', () => {
       expect(minRunUp).toBe(1);
       expect(landK).toBe(0);
       expect(maxStep).toBeLessThan(0.02);
+      // The replay reads the same look from its own clock: frame i is tick i·FRAME_EVERY, and the run's launch tick.
+      const fr = run.frames, lt = run.t.launchTick;
+      let rMax = 0, rPrev = null;
+      for (let i = 0; i < fr.length; i++) {
+        const k = deckLook(fr[i][0], fr[i][1], fr[i][2], flownFor(i * FRAME_EVERY, lt));
+        if (i === 0) expect(k).toBe(1);
+        if (rPrev !== null) rMax = Math.max(rMax, Math.abs(k - rPrev));
+        rPrev = k;
+      }
+      expect(rPrev).toBe(0);                                 // the replay ends on the pad in the course's own look
+      expect(rMax).toBeLessThan(0.05);
     });
   }
+
+  it('flownFor: 0 before the launch (or with none), 1 a second after it, a ramp between', () => {
+    expect(flownFor(500, -1)).toBe(0);
+    expect(flownFor(99, 100)).toBe(0);
+    expect(flownFor(100, 100)).toBe(0);
+    expect(flownFor(100 + FLOWN_TICKS / 2, 100)).toBeCloseTo(0.5, 9);
+    expect(flownFor(100 + FLOWN_TICKS, 100)).toBe(1);
+    expect(flownFor(1e6, 100)).toBe(1);
+  });
+
+  it('a car that leaves the curl low fades out of the run-up look over a second, never in one frame', () => {
+    // Launched at the curl's foot (0187's own term is 0 there): the run-up term fades with flown.
+    const at = (f) => deckLook(0, 1.0, 0.5, f);
+    expect(at(0)).toBe(1);
+    let prev = at(0), maxStep = 0;
+    for (let t = 1; t <= FLOWN_TICKS; t++) { const k = at(flownFor(t, 0)); maxStep = Math.max(maxStep, Math.abs(k - prev)); prev = k; }
+    expect(prev).toBe(0);
+    expect(maxStep).toBeLessThan(0.01);
+  });
 
   it('on the reference Show: full up the climb and the hang, off again after the release, and never jumps', () => {
     const run = createRun('show'), ap = createAutopilot('show');
