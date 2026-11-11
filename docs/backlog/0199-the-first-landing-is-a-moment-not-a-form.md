@@ -1,12 +1,12 @@
 ---
 id: 0199
 title: The first landing is a moment, not a form
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-11
-pr:
+pr: 320
 by: operator
 ---
 
