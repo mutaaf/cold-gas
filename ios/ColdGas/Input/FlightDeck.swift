@@ -115,7 +115,8 @@ final class FlightDeckView: ControlSurface {
                 slots[i].disc.path = circle(c, g.r)
                 slots[i].ghost.path = circle(.zero, g.r + 7); slots[i].ghost.position = c
                 slots[i].tank.path = UIBezierPath(arcCenter: c, radius: g.r + 4, startAngle: .pi * 0.75, endAngle: .pi * 2.25, clockwise: true).cgPath
-                slots[i].text.fontSize = i == 0 ? (deck.form == .phone ? 14 : 16) : (deck.form == .phone ? 12 : 13)
+                // The label's size is paint's alone (it steps a long word down). Setting it here too made every pass
+                // change it twice, and a CATextLayer's fontSize change asks for layout: RELEASE hung the app at the ledge.
             }
         }
         paint(animated: false)
@@ -129,7 +130,7 @@ final class FlightDeckView: ControlSurface {
         stickGhost.path = chevrons(c, st.ring)
         stickOrigin = c
         let fs: CGFloat = deck.form == .phone ? 10 : 11
-        stickText.fontSize = fs
+        if stickText.fontSize != fs { stickText.fontSize = fs }
         stickText.frame = CGRect(x: c.x - st.ring, y: c.y + st.ring + 6, width: st.ring * 2, height: fs * 1.4)
     }
     /// The stick's ghost: ‹ › just outside the ring (the cue asks for a sideways stick).
@@ -171,7 +172,8 @@ final class FlightDeckView: ControlSurface {
                 s.disc.lineWidth = i == 0 ? 1.5 : 1
                 if let b {
                     // A long word (RELEASE) in a small slot steps down to fit inside the ring.
-                    s.text.fontSize = min(i == 0 ? (deck.form == .phone ? 14 : 16) : (deck.form == .phone ? 12 : 13), s.geo.d * 1.25 / CGFloat(max(4, b.label.count)))
+                    let fs = min(i == 0 ? (deck.form == .phone ? 14 : 16) : (deck.form == .phone ? 12 : 13), s.geo.d * 1.25 / CGFloat(max(4, b.label.count)))
+                    if s.text.fontSize != fs { s.text.fontSize = fs }   // only on a change: it invalidates layout
                     let font = UIFont(name: "Geist-Medium", size: s.text.fontSize) ?? UIFont(name: "Geist", size: s.text.fontSize) ?? .systemFont(ofSize: s.text.fontSize, weight: .medium)
                     let color: UIColor = on ? ControlSurface.bg : b.amber ? FlightDeckView.amber : ink
                     s.text.string = NSAttributedString(string: b.label, attributes: [.font: font, .foregroundColor: color, .kern: 1.4])
