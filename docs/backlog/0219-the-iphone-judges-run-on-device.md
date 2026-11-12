@@ -1,12 +1,12 @@
 ---
 id: 0219
 title: On the iPhone, the judges' words come from Apple's on-device model when it is there (no network, $0)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-11-12
-pr:
+pr: 337
 by: operator
 ---
 
@@ -30,12 +30,12 @@ Runs on: the operator's Mac (Xcode 27.2: the FoundationModels SDK and the simula
 - What's new 1.1.0 (release-notes/1.1.0.md) and the next version's store copy.
 
 ## Acceptance criteria
-- [ ] With Apple Intelligence available, the words come from the on-device model and the receipt says so: on this
+- [x] With Apple Intelligence available, the words come from the on-device model and the receipt says so: on this
       device, tokens (reported, or an estimate labelled as one), $0, no data left the device.
-- [ ] Unavailable (old OS, ineligible device, turned off, model not ready) or failed (guardrail, context window, assets,
+- [x] Unavailable (old OS, ineligible device, turned off, model not ready) or failed (guardrail, context window, assets,
       language, deadline): the edge model, then the local lines; the results never wait past JUDGE_MS.
-- [ ] Local lines are never labelled as the model's.
-- [ ] `cd ios && make test` green (vectors bit-exact); the app builds for the simulator.
+- [x] Local lines are never labelled as the model's.
+- [x] `cd ios && make test` green (vectors bit-exact); the app builds for the simulator.
 
 ## Test plan
 `OnDeviceJudgeTests` (ColdGasClient): route selection, success with no cloud call, each failure falling back to the

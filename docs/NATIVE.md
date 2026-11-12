@@ -411,6 +411,9 @@ Core Haptics turns those buzzes into **a continuous track driven by the sim**, s
   works the same way).
   - Deadlines and retries as `src/net.js`.
   - The judges' theatre and receipt are the same, and the panel's fallback lines are local.
+  - **On-device judges (0219):** where the device has Apple Intelligence (iOS 26+), Apple's on-device model writes the
+    words first (`Net/OnDeviceJudge.swift`; the route, deadline, fallback and receipt in ColdGasClient `OnDeviceJudge.swift`),
+    then the edge model, then the local lines. Settings → Judges can send it to the edge model.
   - A BYOK key lives in the **Keychain** and is sent per call as `x-cg-key`.
   - The health beacon (`/obs`) sends only fields `cleanObs` accepts today; the Worker is frozen.
 - **Saves.** Medals, the daily streak, initials and settings live in UserDefaults. Every new field is optional or

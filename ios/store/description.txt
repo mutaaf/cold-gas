@@ -15,6 +15,9 @@ The Show, the Wall and the Lineup, with drills for each part of the flight and a
 SCORED, NOT GUESSED
 The judges' numbers come from a fixed scorer: height, rotation, clearance, sink rate at touchdown, wheel sync, distance from the mark and gas left in the tank. The commentary is written by an AI panel; the numbers never are.
 
+JUDGED ON YOUR DEVICE
+On iPhone and iPad with Apple Intelligence, the judges' commentary is written on the device by Apple's on-device model: no network, no cost, and nothing about your run is sent for it. The results say so, with the tokens it used. Without Apple Intelligence, an AI model on our own server writes it instead. Either way, the numbers come from the scorer, never the model.
+
 COME BACK FOR
 - A new daily jump with its own target, and a streak.
 - Medals, and a board of the day's and all-time best landings, posted under three initials.

@@ -2,18 +2,21 @@
 // same file TestFlight and the store get. CI has no Xcode, so this guards the current version's notes here too
 // (the Swift side: ios/Packages/ColdGasCore/Tests/ColdGasClientTests/WhatsNewTests.swift).
 import { describe, it, expect } from 'vitest';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 
 const IOS = join(import.meta.dirname, '../../ios');
 const version = readFileSync(join(IOS, 'project.yml'), 'utf8').match(/MARKETING_VERSION:\s*"([^"]+)"/)[1];
-const file = join(IOS, 'release-notes', `${version}.md`);
 
-describe(`ios release notes ${version}`, () => {
-  it('exist for the current version', () => {
-    expect(existsSync(file)).toBe(true);
-  });
+it(`ios release notes exist for the current version ${version}`, () => {
+  expect(existsSync(join(IOS, 'release-notes', `${version}.md`))).toBe(true);
+});
 
+// Every version's notes: the current one's and any written ahead of the bump (0219: 1.1.0 before MARKETING_VERSION moves).
+const versions = readdirSync(join(IOS, 'release-notes')).filter((f) => f.endsWith('.md') && f !== 'README.md').map((f) => f.slice(0, -3));
+
+describe.each(versions)('ios release notes %s', (version) => {
+  const file = join(IOS, 'release-notes', `${version}.md`);
   const md = existsSync(file) ? readFileSync(file, 'utf8') : '';
   const sections = md.split(/^## /m);
   const intro = sections[0].split('\n').filter((l) => l.trim() && !l.startsWith('# '));

@@ -77,8 +77,17 @@ import Testing
         return String(yml[r]).components(separatedBy: "\"")[1]
     }
 
-    @Test func theCurrentVersionHasNotesInTheModalsShape() throws {
+    @Test func theCurrentVersionHasNotes() throws {
         let v = try Self.marketingVersion()
+        #expect(FileManager.default.fileExists(atPath: Self.ios.appendingPathComponent("release-notes/\(v).md").path))
+    }
+    /// Every version's notes, the current one's and any written ahead of the bump (0219: 1.1.0 before MARKETING_VERSION moves).
+    static var versions: [String] {
+        let dir = ios.appendingPathComponent("release-notes")
+        return ((try? FileManager.default.contentsOfDirectory(atPath: dir.path)) ?? [])
+            .filter { $0.hasSuffix(".md") && $0 != "README.md" }.map { String($0.dropLast(3)) }.sorted()
+    }
+    @Test(arguments: WhatsNewNotes.versions) func everyVersionsNotesHaveTheModalsShape(_ v: String) throws {
         let md = try String(contentsOf: Self.ios.appendingPathComponent("release-notes/\(v).md"), encoding: .utf8)
         let n = try #require(ReleaseNotes.parse(md), "release-notes/\(v).md needs a headline and 2–4 Highlights (release-notes/README.md)")
         #expect(n.title.contains(v))

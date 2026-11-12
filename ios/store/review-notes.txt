@@ -1,10 +1,10 @@
-CHANGED SINCE THE 5 NOVEMBER REJECTION (4.3, 4.2.6)
-Our answers to your nine questions are in the reply on that submission. This build also changes the app itself:
-- The flight controls are rebuilt so a press registers sooner, a finger can slide between buttons, and a thruster can't stick on.
-- How to play and the results sheet are redesigned: the essentials at a glance, the rest in accordions.
-- Cold Gas began as our own web game, public since October 2026 at mutaafaziz.com/coldgas, and the same physics runs in both.
+NEW IN 1.1.0
+- The judges use Apple Intelligence: on a supported device their commentary is written on the device by Apple's on-device model (see THE JUDGES).
+- Free Drive: an unscored drive from the title screen.
+- Pro and Advanced controls laid out for each screen.
+Cold Gas began as our own web game, public since October 2026 at mutaafaziz.com/coldgas, and the same physics runs in both.
 
-No sign-in and no demo account: there are no accounts. Every course and tier plays at once, and the game plays offline. Only the board and the judges' commentary need a network connection.
+No sign-in and no demo account: there are no accounts. Every course and tier plays at once, and the game plays offline. Only the board needs a network connection, and the judges' commentary on a device without Apple Intelligence.
 
 WHAT IT IS
 A single stunt jump, made into a skill game, for anyone who likes driving and physics games. A roadster climbs a curved wall on suction, lets go upside down, fires ten cold-gas thrusters to clear a row of parked cars, and lands on a mark. Three judges score the jump.
@@ -18,16 +18,19 @@ HOW TO PLAY (about a minute)
 Pro (you fly the roll and the brake with a stick and buttons) and Advanced (all ten valves by hand) are on the title screen. A paired game controller or a hardware keyboard also works. The results have a Watch it button that plays the flight back. Practice, the board, How to play and Settings are the icons at the top of the title screen.
 
 iPHONE DUO
-Opened flat the game fills the whole inner display. Half folded in tabletop, the top half is the screen and the bottom half is the controller. Closed, it plays on the outer screen.
+Open: the whole inner display. Tabletop: the top half is the screen, the bottom half the controller.
 
 THE BOARD
 After a run the player can post it to a public board of the day's and all-time best landings. The only thing the player types is three letters (A to Z) as initials. There is no other text, no profile, no chat and no messaging. The app never sends a score: it sends the run's input log and telemetry, and our server scores them with the same deterministic scorer the game uses. Objectionable initials are filtered in the app; touching and holding a row hides it on the device or reports it by email.
 
 THE JUDGES
-The numbers come from a fixed scorer. The short commentary under them is written by an AI model on our own server (mutaafaziz.com). It receives the run's numbers, never anything about the player. If it can't answer, the app shows local lines and says so.
+The numbers come from a fixed scorer. A model only writes the short commentary under them, from the run's numbers, never anything about the player.
+- On-device first: on a device with Apple Intelligence turned on (iOS 26 or later), Apple's on-device model writes it through the Foundation Models framework. Nothing is sent for it. The results show "Judged on device" and a receipt: the tokens, $0, no data left the device. Settings > Judges shows which model judges and can turn this off.
+- Otherwise, or if it can't answer, an AI model on our own server (mutaafaziz.com) writes it, as in 1.0.
+- If neither answers, the app shows its own lines and says so.
 
 NETWORK AND DATA
-The app talks to one host, mutaafaziz.com/coldgas, and to no third-party SDK, analytics or advertising service. It sends the run (input log, telemetry, course, flight tier) when judging or posting, and the three initials when posting. No accounts, no advertising identifier, no tracking.
+The app talks to one host, mutaafaziz.com/coldgas, and to no third-party SDK, analytics or advertising service. It sends the run (input log, telemetry, course, flight tier) when posting, and when judging on a device without on-device judging, and the three initials when posting. No accounts, no advertising identifier, no tracking.
 
 CONTENT AND RIGHTS
 Everything in the app is original: the cars, courses, sounds and art are our own design, and the sounds are synthesised in code. No real brand, vehicle model, logo or person appears. The typefaces are Michroma and Geist, both under the SIL Open Font License 1.1. The physics engine is Rapier, under the Apache License 2.0.
