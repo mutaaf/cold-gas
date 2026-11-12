@@ -24,7 +24,7 @@ THE BOARD
 Posting is optional. The only thing typed is three letters (A to Z) as initials: no other text, profile or chat. Objectionable initials are filtered in the app; touch and hold a row to hide it on the device or report it by email.
 
 iPAD AND iPHONE DUO
-Universal. On iPad the controls sit at the side grips, either orientation. On iPhone Duo, open fills the whole inner display (nothing sits on the crease); tabletop puts the screen on top and the controller below.
+Universal. On iPad the controls sit at the side grips, either orientation. On iPhone Duo, open fills the whole inner display; tabletop puts the screen on top and the controller below.
 
 NETWORK AND DATA
 One host, mutaafaziz.com/coldgas. No third-party SDKs, analytics, ads or tracking, no advertising identifier. Sent only when posting (run, course, tier, initials) and for server judging (the run).
