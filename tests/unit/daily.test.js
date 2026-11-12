@@ -4,7 +4,7 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { setUnits } from '../../src/units.js';
 import { OBJECTIVES, objectiveIndex, objectiveFor, evaluate, dayNumber, dayKey, keyToDay, readStreak, streakNow, complete,
-  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint, dailyCoach, dailyItems } from '../../src/daily.js';
+  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint, dailyCoach, dailyItems, dailySwapsHold } from '../../src/daily.js';
 import { newInput } from '../../src/sim/vehicle.js';
 import { predict, newPrediction } from '../../src/sim/predict.js';
 import { SPEC } from '../../src/sim/spec.js';
@@ -394,6 +394,10 @@ describe('the Lineup’s Daily on one thumb (0198)', () => {
     expect(r).toEqual({ ok: false, miss: `${called.facts.padMiss} m off the mark`, fix: true });
     expect(missLine(mark, r, thumb)).toBe(`Daily: ${called.facts.padMiss} m off the mark · hold the pad in the air and slide onto the amber dot, following it down`);
     expect(dailyCoach(mark, r, thumb)).toBe('');   // the coach's own aim line stays
+    // The sheet's "hold the pad … amber dot" items stay on the Lineup (holding is the call and the aim); skim swaps them.
+    expect(dailySwapsHold(mark)).toBe(false);
+    expect(dailySwapsHold(roll)).toBe(false);
+    expect(dailySwapsHold(byId('skim-show'))).toBe(true);
   });
 
   it('two turns slid onto the mark meet both', () => {

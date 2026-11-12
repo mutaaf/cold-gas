@@ -50,7 +50,7 @@ import { initFocusTrap } from './focus-trap.js';
 import { wireUnitToggles, unitText } from './units.js';
 import { drawShareCard, shareRun, toast } from './share-card.js';
 import { createComeback } from './comeback.js';   // [comeback] challenge links + the daily jump (src/comeback.js)
-import { objectiveFor, evaluate as dailyEval, dailyCoach, dailyItems, loadStreak as loadDaily, streakNow } from './daily.js';
+import { objectiveFor, evaluate as dailyEval, dailyCoach, dailyItems, dailySwapsHold, loadStreak as loadDaily, streakNow } from './daily.js';
 import { createInstruments } from './instruments.js';
 import { localWords, localMeta, fetchBoard } from './panel.js';
 import { createPost } from './post.js';
@@ -472,7 +472,7 @@ function finishRun() {
     try {
       const own = S.drill && S.drillSnap?.coach;
       S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0, coachWords(pointerCtx(run.course, S.card?.tier || S.flyTier)));
-      ui.coaching(dailyItems(S.coach.items, own ? '' : dailyLine(run)));   // 0150: never "hold the pad" under a skim miss
+      ui.coaching(dailyItems(S.coach.items, own ? '' : dailyLine(run, true)));   // 0150: never "hold the pad" under a skim miss
       if (!own) runEnd.coached(run, S.coach.items);   // a wreck's cause in the funnel, from this coach (0138)
       if (!own && S.runKind === 'jump') showPointer(run);
     } catch (err) { console.warn('coach', err); }
@@ -569,9 +569,11 @@ function flownCtx(how, course, tier) {
   return { device, scheme: device === 'touch' && how.scheme === 'thumb' && tier === 'assist' ? 'thumb' : 'classic', tier, course };
 }
 // 0150: on a missed Daily (not yet met today) whose fix the coach would contradict (skim on one thumb), the Daily's line.
-function dailyLine(run) {
+// `items`: for the "What happened" swap, only where the day's fix contradicts holding the pad (0198: not the Lineup's call).
+function dailyLine(run, items = false) {
   if (S.drill || S.runKind !== 'jump' || streakNow(loadDaily(), Date.now()).doneToday) return '';
   const obj = objectiveFor(Date.now());
+  if (items && !dailySwapsHold(obj)) return '';
   return dailyCoach(obj, dailyEval(obj, S.card, run.course), pointerCtx(run.course, S.tier));
 }
 function showPointer(run) {

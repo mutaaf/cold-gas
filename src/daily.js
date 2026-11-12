@@ -81,7 +81,9 @@ export const OBJECTIVES = [
       : `one short ${coachWords(ctx).boost} burst, not to the cue, and ${ctx.tier === 'assist' ? coachWords(ctx).land : coachWords(ctx).lift} late, once you’re low over the pad`),
     titleHint: (ctx, whole) => (!thumbOn(ctx) ? '' : whole ? 'Let go right after the tap and stay off the pad' : 'Let go right after the tap'),
     // The sheet's NEXT RUN line would teach the hold (the 'mark' and 'clean' lines); on a missed skim it says this instead.
-    coach: (ctx) => (thumbOn(ctx) ? 'For the Daily: let go of the pad right after the tap and stay off it' : '') },
+    coach: (ctx) => (thumbOn(ctx) ? 'For the Daily: let go of the pad right after the tap and stay off it' : ''),
+    // Its fix contradicts holding the pad, so the sheet's "hold the pad" items say the Daily's line instead (dailyItems).
+    swapHold: true },
   // 0198: the Lineup's two days ask for the choice the one thumb has there (0191): the second turn, called on the run-up.
   // Held from Go and never moved, the computer flies a clean 360 1.3 m off the mark, and that met both old bars (a clean
   // 360; within 7 m) 150/150: the streak counted a run nobody flew. Measured below (n 150, seed 12345).
@@ -100,7 +102,7 @@ export const OBJECTIVES = [
   // aimed one beats 1.2 m 8 times in 150. Called and never aimed, the 720 sets down 4.3 m off (wherever it was called);
   // aimed, it comes in (1.5 m onto the dot, Gold: tests/unit/thumb-lineup.test.js), so the bar sits just inside that.
   { id: 'mark-lineup', course: 'lineup', goal: () => `Roll two turns and land within ${len(LINEUP_MARK)} of the mark`,
-    check: (c, f) => (!cleanLineup(f) ? miss('no clean landing yet') : f.rotations < 2 ? turnsMiss(f)
+    check: (c, f) => (!cleanLineup(f) ? miss('no clean landing yet') : !(f.rotations >= 2) ? turnsMiss(f)
       : f.padMiss <= LINEUP_MARK ? done() : miss(`${len(f.padMiss, 1)} off the mark`, true)),
     hint: (ctx, r) => (r?.turns ? twiceHint(ctx) : aimHint(ctx)),
     titleHint: (ctx, whole) => (!thumbOn(ctx) ? '' : whole ? 'Slide up on the run-up, then onto the amber dot' : 'Slide up on the run-up'),
@@ -132,6 +134,9 @@ export function missLine(obj, r, ctx) {
 // The sheet's NEXT RUN line on a missed Daily whose fix the coach would contradict (0150: skim on one thumb), else ''.
 // ctx: the words of the run to come (src/main.js pointerCtx).
 export const dailyCoach = (obj, r, ctx) => (r && !r.ok && r.fix && obj?.coach ? obj.coach(ctx || {}, r) : '');
+// Whether that line also replaces the sheet's "hold the pad" items: only where the day's fix contradicts holding (skim).
+// On the Lineup (0198) the call and the aim are both held, so the coach's aim stays.
+export const dailySwapsHold = (obj) => !!obj?.swapHold;
 // The sheet's "What happened" items under such a line: a fix that says to hold the pad says the Daily's line instead.
 export const dailyItems = (items, line) => (!line ? items : (items || []).map((it) => (/\bhold(ing)? (on to )?the pad\b/i.test(it.fix || '') ? { ...it, fix: `${line}.` } : it)));
 // The title card's hint for today's objective on this device ('' when there is none); `whole`: the countdown tip's wording.

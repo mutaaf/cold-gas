@@ -94,7 +94,7 @@ public enum Daily {
         Objective(id: "ninety-show", course: "show", tier: nil, goalText: { _ in "Score 90 or more" },
                   checkFn: { c, f, _ in c.total >= 90 ? .done : .missed("\(r1(c.total)), need 90", fix: cleanOver(f) && f.n("padMiss") > 3.5 && !(f.n("sink") > 1.5) && !(f.n("tiltDeg") > 15)) }, hint: aimHint, titleHintFn: nil),
         Objective(id: "mark-lineup", course: "lineup", tier: nil, goalText: { "Roll two turns and land within \($0.one(.len, LINEUP_MARK)) of the mark" },
-                  checkFn: { _, f, u in !cleanLineup(f) ? .missed("no clean landing yet") : f.n("rotations") < 2 ? turnsMiss(f)
+                  checkFn: { _, f, u in !cleanLineup(f) ? .missed("no clean landing yet") : !(f.n("rotations") >= 2) ? turnsMiss(f)
                       : f.n("padMiss") <= LINEUP_MARK ? .done : .missed("\(u.one(.len, f.n("padMiss"), 1)) off the mark", fix: true) },
                   hint: aimHint, titleHintFn: { p, whole in !p.thumbOn ? "" : whole ? "Slide up on the run-up, then onto the amber dot" : "Slide up on the run-up" },
                   turnsHint: twiceHint),

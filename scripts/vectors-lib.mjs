@@ -674,7 +674,8 @@ const BENDS = [['wrecked', { damagePct: 72 }], ['no-jump', { jumped: false, prog
   ['contact', { contact: true }], ['flipped', { flipped: true }], ['crashed', { crashed: true }], ['fell-off', { fellOff: true }],
   ['on-ramp', { landedOnRamp: true }], ['short', { crossedRow: false }], ['double', { rotations: 2, rollDeg: 731 }], ['zero-rot', { rotations: 0 }],
   ['soft', { sink: 0.6, wheelSpreadMs: 12 }], ['hard', { sink: 2.4, wheelSpreadMs: 180, airPct: 12 }], ['long-inverted', { invertedS: 1.4 }],
-  ['near', { padMiss: 2.9, clearance: 1.2, airPct: 31, damagePct: 0 }], ['far', { padMiss: 9.6, clearance: 3.4, airPct: 22, damagePct: 4 }]];
+  ['near', { padMiss: 2.9, clearance: 1.2, airPct: 31, damagePct: 0 }], ['far', { padMiss: 9.6, clearance: 3.4, airPct: 22, damagePct: 4 }],
+  ['double-far', { rotations: 2, rollDeg: 731, padMiss: 9.6 }]];   // 0198: the Lineup's 720 off the mark
 const cardOf = (c) => ({ total: c.total, verdict: c.verdict, tier: c.tier, facts: c.facts });
 export function clientVectors(flown) {
   const r = xorshift(0x5eed0154), u = () => r() / U32;
