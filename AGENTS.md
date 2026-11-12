@@ -273,10 +273,11 @@ src/render/           three.js (r186):
   crash.js              everything a crash shows, keyed to run.impacts (live and replay): sparks,
                           chips, dust, dents, torn-off parts, lamps/hazards, shake, slow-mo, cut
   debris.js             torn-off parts as small rigid boxes on the concrete (cosmetic)
-  deck-look.js          the deck look (0187, pure): how much the car is on the Wall's deck or its run-up (0193) (0–1, from
-                          its position, live and in the replay); scene.js setDeck eases the bloom's threshold up, wall.js
-                          dims the red strips to a red their core keeps and the foot's red light, glow and air (film.js)
-                          to 30 %, so the run-up, climb and hang read as a white car on a grey deck with one red edge
+  deck-look.js          the deck look (0187, pure): how much the car is on the Wall's deck (deckOn) or its run-up (runUp,
+                          0193) (0–1, from its position, live and in the replay); on the deck scene.js setDeck eases the
+                          bloom's threshold up; on both wall.js dims the red strips to a red their core keeps and the foot's
+                          red light, glow and air (film.js) to 30 %, so the run-up, climb and hang read as a white car on a
+                          grey deck with one red edge
   sliver.js             minimum on-screen width for thin lights/paint/struts (anti-flicker),
                           DECAL polygon-offset layering for anything painted on the ground
   director.js           chase / broadcast air cam / replay rigs / title turntable; live on the Wall and the

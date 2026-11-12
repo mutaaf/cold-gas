@@ -7,7 +7,10 @@
 // curl and out as the car falls clear of it, never a cut. Renderer only: nothing here touches the sim.
 // The run-up too (0193): from the start line to the curl's foot the camera is just as close to the ring's near arc, and
 // on a phone its glow and the foot's red light filled half the frame (49–62 %) before the car reached the deck. So the
-// look is on along the approach as well, from the start (6 m back) to the foot, while the car is on the ground there.
+// red is dimmed along the approach as well (the strips, and the foot's light and glow), from the start (6 m back) to the
+// foot, while the car is on the ground there. The bloom's threshold stays the course's there (deckOn, not runUp, moves it):
+// with the red dimmed the car already reads (run-up box P10 33–38 at 1440×900), and taking the bloom off the white car
+// that early only adds edge crawl to the replay (flicker show-replay/car 108.6 → 116.4 ‰, SwiftShader desktop).
 import { wallArcLength, wallProfile, WALL } from '../sim/courses.js';
 
 // Up the curl: from 1.5 m of arc (the foot's lip) to 6 m (about 1.9 m up, before the climb's first shot).
@@ -32,15 +35,19 @@ const smooth = (x, a, b) => { const t = Math.min(1, Math.max(0, (x - a) / (b - a
 const HALF_W = WALL.width / 2;
 
 // x, y, z: the car's centre (its CoM) in the course frame. Only the Wall and the Show have a deck.
+// deckLook: the red's dimming (on the deck or the run-up); deckOn: the car on the deck itself (the bloom's threshold).
 export function deckLook(x, y, z) {
   const r = runUp(x, y, z);
-  if (r >= 1) return 1;
+  return r >= 1 ? 1 : Math.max(r, deckOn(x, y, z));
+}
+
+export function deckOn(x, y, z) {
   const s = wallArcLength(z, y);
-  if (s <= DECK_IN[0]) return r;
+  if (s <= DECK_IN[0]) return 0;
   wallProfile(s, P);
   const dz = z - P.z, dy = y - P.y, dx = Math.max(0, Math.abs(x) - HALF_W);
   const d = Math.sqrt(dz * dz + dy * dy + dx * dx);
-  return Math.max(r, smooth(s, DECK_IN[0], DECK_IN[1]) * (1 - smooth(d, DECK_OFF[0], DECK_OFF[1])));
+  return smooth(s, DECK_IN[0], DECK_IN[1]) * (1 - smooth(d, DECK_OFF[0], DECK_OFF[1]));
 }
 
 // On the approach in front of the curl, low (0193).

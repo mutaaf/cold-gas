@@ -474,9 +474,10 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
   // The deck look (0187, src/render/deck-look.js): k = how much the car is on the Wall's deck, every frame before
   // render. The bloom's threshold eases from the course's to the deck's and the look dims its strips. No-op on a
   // course without a deck and under an outside look.
-  function setDeck(k) {
+  // kOn (0193): the car on the deck itself, for the bloom; k also covers the run-up, where only the red dims.
+  function setDeck(k, kOn = k) {
     if (external || !current?.deck) return;
-    if (bloom) { const t0 = current.look.bloom.threshold; bloom.threshold = t0 + (current.deck.bloomThreshold - t0) * k; }
+    if (bloom) { const t0 = current.look.bloom.threshold; bloom.threshold = t0 + (current.deck.bloomThreshold - t0) * kOn; }
     current.setDeck(k);
     film?.setDeck(k);
   }

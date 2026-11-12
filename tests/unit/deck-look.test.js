@@ -1,7 +1,7 @@
 // 0187: the Wall's climb and hang read as a white car on a grey deck. The deck look's factor (src/render/deck-look.js)
 // and the look audit's two measures (scripts/look-measure.mjs), on the reference flight and on synthetic images.
 import { describe, it, expect } from 'vitest';
-import { deckLook, runUp } from '../../src/render/deck-look.js';
+import { deckLook, deckOn, runUp } from '../../src/render/deck-look.js';
 import { redShare, lumPercentile, isSaturatedRed } from '../../scripts/look-measure.mjs';
 import { createRun, stepRun } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
@@ -13,6 +13,13 @@ describe('deckLook: on the deck from where the car is (0187)', () => {
     expect(deckLook(0, 0.4, -2)).toBe(1);
     expect(deckLook(0, 0.4, -1.5)).toBe(1);   // the run-up's tick 264
     expect(deckLook(0, 0.4, 0.3)).toBe(1);
+  });
+
+  it('0193: the bloom (deckOn) is the deck\'s alone: the course\'s on the run-up, full up the curl', () => {
+    for (const c of [SHOW, WALL]) expect(deckOn(0, 0.4, c.start.z)).toBe(0);
+    expect(deckOn(0, 0.4, -1.5)).toBe(0);
+    const p = wallProfile(25);
+    expect(deckOn(0, p.y + p.ny * 0.45, p.z + p.nz * 0.45)).toBe(1);
   });
 
   it('0193: off the run-up it is off: the Show\'s pad, well out to the side, high above the approach', () => {
