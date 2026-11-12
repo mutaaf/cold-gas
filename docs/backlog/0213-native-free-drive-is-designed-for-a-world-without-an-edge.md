@@ -1,12 +1,12 @@
 ---
 id: 0213
 title: Native Free Drive is designed for a world without an edge (research and design doc)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-11-11
-pr:
+pr: 328
 by: operator
 ---
 
