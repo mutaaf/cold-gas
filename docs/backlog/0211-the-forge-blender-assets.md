@@ -1,12 +1,12 @@
 ---
 id: 0211
 title: The forge — real Blender assets, built headless from a seed or a brief, gated, reviewable
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: authenticity
 created: 2026-11-12
-pr:
+pr: 330
 by: operator
 ---
 
