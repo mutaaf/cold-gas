@@ -29,38 +29,68 @@ final class FreeDrive: DriveScene {
     let camera = DriveCamera()
     private(set) var view: WorldView?
     private(set) var origin = SIMD3<Double>(0, 0, 0)
-    /// The car (a Show car: the same machine). In a cruise it's posed, not stepped.
+    /// The car: the scored machine on DRIVE_COURSE (the Show's stage at the centre), its world streamed round it.
     private(set) var car: Vehicle
+    let streamer: DriveStreamer
     let track = Replay(live: "drive")
-    /// A cruise: carried along the roads at this speed (m/s).
+    /// The controls (Controls routes the touches here while the drive is up): src/input.js sample, the Standard hands.
+    let sampler = InputSampler(level: .standard)
+    private let input = Input()
+    /// A cruise (the shots): carried along the roads at this speed (m/s), not stepped.
     var cruise: Double?
+    /// The autopilot (the bench): a road-following driver at this speed (m/s), as src/drive/pilot.js.
+    var pilot: Double?
+    /// The suction fan, armed or not (the web's X).
+    var fan = false
     private var walker: RoadWalker?
-    private var time = 0.0
-    private(set) var dist = 0.0
+    private var time = 0.0, acc = 0.0, airT = 0.0, flipT = 0.0, stuckT = 0.0, reverseHeld = 0.0
+    private(set) var dist = 0.0, resets = 0
     private var lampK = Launch.args.contains("-fd-nolamp") ? 0.0 : 1.0
+    /// A reset's cue for the HUD ("Back on the road"), and when it was given.
+    private(set) var cue = "", cueT = -10.0
 
     init(seed: String = FreeDrive.seedDefault) {
         world = FreeWorld(seed: seed)
-        car = createVehicle("show")
-        place(x: 0, z: -40, yaw: .pi)
+        streamer = DriveStreamer(world: world)
+        car = createVehicle(course: DRIVE_COURSE)
+        car.world.streamer = streamer
+        place(x: DRIVE_COURSE.startX, z: DRIVE_COURSE.startZ, yaw: .pi)
     }
 
-    /// The car at (x, z) on the ground, facing `yaw` (0 = +z), at rest.
+    /// The car at (x, z) on the ground, facing `yaw` (0 = +z), at rest, everything let go (input.js freshRun).
     func place(x: Double, z: Double, yaw: Double) {
         let g = world.ground(x, z)
         car.pos.x = x; car.pos.y = g.y + SPEC.comHeight + 0.04; car.pos.z = z
         M3.quatFromYaw(car.quat, yaw)
-        car.vel.x = 0; car.vel.y = 0; car.vel.z = 0
+        for v in [car.vel, car.angVel, car.angMom] { v.x = 0; v.y = 0; v.z = 0 }
+        car.engineHeld = false
+        sampler.freshRun()
+        airT = 0; flipT = 0; stuckT = 0; reverseHeld = 0
         camera.snap()
         rebase(force: true)
+        walker = nil
     }
-    /// Onto the road nearest (x, z), heading away from the centre.
-    func placeOnRoad(nearX x: Double, z: Double) {
+    /// Onto the road nearest (x, z) (in the right-hand lane), heading `away` from the centre or along (hx, hz).
+    func placeOnRoad(nearX x: Double, z: Double, heading: (Double, Double)? = nil) {
         let l = max(1e-9, (x * x + z * z).squareRoot())
-        guard let w = RoadWalker(world: world, nearX: x, z: z, headingX: x / l, z: z / l) else { return }
-        walker = w
+        let h = heading ?? (x / l, z / l)
+        guard let w = RoadWalker(world: world, nearX: x, z: z, headingX: h.0, z: h.1) else { return }
         let p = w.pose(lane: 1.8)
         place(x: p.x, z: p.z, yaw: atan2(p.hx, p.hz))
+        walker = w
+    }
+    /// Back on the nearest road, facing the way the car was going (src/drive/index.js respawn).
+    func reset() {
+        let f = forward
+        let moving = abs(car.vel.x) + abs(car.vel.z) > 2
+        placeOnRoad(nearX: car.pos.x, z: car.pos.z, heading: moving ? (car.vel.x, car.vel.z) : (f.0, f.1))
+        resets += 1
+        say("Back on the road")
+    }
+    private func say(_ s: String) { cue = s; cueT = time }
+    private var forward: (Double, Double) {
+        let q = car.quat
+        return (2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y))
     }
 
     /// The renderer attached (its device): the world's view is built once.
@@ -73,25 +103,96 @@ final class FreeDrive: DriveScene {
 
     func frame(dt: Double) {
         time += dt
-        if let v = cruise {
-            if walker == nil { walker = RoadWalker(world: world, nearX: car.pos.x, z: car.pos.z, headingX: 0, z: 1) }
-            if let w = walker {
-                w.advance(v * dt)
-                let p = w.pose(lane: 1.8)
-                car.pos.x = p.x; car.pos.y = p.y + SPEC.comHeight; car.pos.z = p.z
-                M3.quatFromYaw(car.quat, atan2(p.hx, p.hz))
-                car.vel.x = p.hx * v; car.vel.y = 0; car.vel.z = p.hz * v
-            }
+        if let v = cruise { cruiseFrame(v, dt) }
+        else {
+            acc += min(dt, 0.1)
+            do {
+                while acc >= DT {
+                    let air = car.grounded == 0 && !car.hullContact
+                    airT = air ? airT + DT : 0
+                    let phase: Phase = airT > 0.25 ? .air : .drive
+                    sampler.sample(phase, .assist, input, false, car)
+                    if let v = pilot { drivePilot(v, input) }
+                    input.fan = fan ? 1 : 0
+                    if phase == .drive { reverse(input) }
+                    try step(car, input)
+                    track.append(car: car, origin: origin)
+                    acc -= DT
+                    rebase()
+                }
+            } catch { print("DRIVE sim stopped: \(error)"); reset() }
+            watchdog(dt)
         }
-        rebase()
-        track.append(car: car, origin: origin)
-        track.trim(keep: 8)
+        track.trim(keep: 16)
         dist = (car.pos.x * car.pos.x + car.pos.z * car.pos.z).squareRoot()
     }
-    /// The renderer's clock for the track: its newest tick.
-    var liveTime: Double { Double(max(0, track.ticks - 1)) / Replay.hz }
+    /// The renderer's clock for the track: one tick behind the newest, between it and the one before (main.js liveStep).
+    var liveTime: Double {
+        if cruise != nil { return Double(max(0, track.ticks - 1)) / Replay.hz }
+        return (Double(max(0, track.ticks - 2)) + min(1, acc / DT)) / Replay.hz
+    }
 
-    /// The floating origin: 0 near the centre, else the car's position snapped to a kilometre, moved when it's a kilometre off.
+    private func cruiseFrame(_ v: Double, _ dt: Double) {
+        if walker == nil { let f = forward; walker = RoadWalker(world: world, nearX: car.pos.x, z: car.pos.z, headingX: f.0, z: f.1) }
+        guard let w = walker else { return }
+        w.advance(v * dt)
+        let p = w.pose(lane: 1.8)
+        car.pos.x = p.x; car.pos.y = p.y + SPEC.comHeight; car.pos.z = p.z
+        M3.quatFromYaw(car.quat, atan2(p.hx, p.hz))
+        car.vel.x = p.hx * v; car.vel.y = 0; car.vel.z = p.hz * v
+        rebase()
+        track.append(car: car, origin: origin)
+    }
+
+    /// src/hands.js createReverse: the brake held at a standstill backs the car up (after 0.35 s still).
+    private func reverse(_ i: Input) {
+        let f = forward, vf = car.vel.x * f.0 + car.vel.z * f.1
+        if i.brake > 0 && i.throttle == 0 && vf < 0.8 {
+            if vf < -0.3 || reverseHeld >= 0.35 { i.throttle = -0.35 * i.brake; i.brake = 0 } else { reverseHeld += DT }
+        } else { reverseHeld = 0 }
+    }
+    /// The autopilot: pure pursuit on a point ahead along the road, the speed held under `v` and eased for the bend.
+    private func drivePilot(_ v: Double, _ i: Input) {
+        if walker == nil { let f = forward; walker = RoadWalker(world: world, nearX: car.pos.x, z: car.pos.z, headingX: f.0, z: f.1) }
+        guard let w = walker else { return }
+        // Keep the walker abreast of the car.
+        for _ in 0..<4 {
+            let p = w.pose(lane: 1.8), dx = car.pos.x - p.x, dz = car.pos.z - p.z
+            let along = dx * p.hx + dz * p.hz
+            if along > 0.5 { w.advance(min(along, 20)) } else { break }
+        }
+        let speed = (car.vel.x * car.vel.x + car.vel.z * car.vel.z).squareRoot()
+        let look = 10 + speed * 0.7
+        // A copy looks ahead; the walker itself stays abreast of the car.
+        let probe = w.copy()
+        probe.advance(look); let ahead = probe.pose(lane: 1.8); probe.advance(look); let far = probe.pose(lane: 1.8)
+        let f = forward
+        let tx = ahead.x - car.pos.x, tz = ahead.z - car.pos.z
+        let cross = f.0 * tz - f.1 * tx, dot = f.0 * tx + f.1 * tz
+        let ang = atan2(cross, dot)
+        // How sharp the road turns between here and the far point: slow for it.
+        let turn = abs(atan2(ahead.hx * far.hz - ahead.hz * far.hx, ahead.hx * far.hx + ahead.hz * far.hz))
+        let want = min(v, max(9, v * (1 - turn * 1.6)))
+        i.steer = max(-1, min(1, ang * 2.2))   // + = right (src/drive/pilot.js)
+        i.throttle = speed < want ? min(1, (want - speed) * 0.35 + 0.15) : 0
+        i.brake = speed > want + 2 ? min(1, (speed - want) * 0.15) : 0
+    }
+
+    /// Upside down, fallen, in the sea or stuck: back on the road (src/drive/index.js watchdog).
+    private func watchdog(_ dt: Double) {
+        let q = car.quat, upY = 1 - 2 * (q.x * q.x + q.z * q.z)
+        let speed = (car.vel.x * car.vel.x + car.vel.y * car.vel.y + car.vel.z * car.vel.z).squareRoot()
+        flipT = upY < 0.25 && speed < 4 && (car.grounded > 0 || car.hullContact) ? flipT + dt : 0
+        if flipT > 2 { reset(); return }
+        let g = world.ground(car.pos.x, car.pos.z)
+        if car.pos.y < g.y - 30 || car.pos.y < SEA - 1 { reset(); return }
+        let jets = car.throttles[0] + car.throttles[1] + car.throttles[2] + car.throttles[3]
+        stuckT = speed < 0.6 && car.grounded == 0 && jets < 0.4 ? stuckT + dt : 0
+        if stuckT > 3 { reset() }
+    }
+
+    /// The floating origin of the drawing: 0 near the centre, else the car's position snapped to a kilometre, moved when
+    /// it's a kilometre off. (The engine's is the streamer's, in 16 m steps: World.ox/oz.)
     private func rebase(force: Bool = false) {
         let p = SIMD3(car.pos.x, 0, car.pos.z)
         let want: SIMD3<Double>
@@ -109,7 +210,13 @@ final class FreeDrive: DriveScene {
     // MARK: - DriveScene
 
     func frameCamera(aspect: Float, dt: Double) -> (view: simd_float4x4, proj: simd_float4x4, eye: SIMD3<Float>) {
-        let p = SIMD3(car.pos.x, car.pos.y, car.pos.z), q = simd_quatd(ix: car.quat.x, iy: car.quat.y, iz: car.quat.z, r: car.quat.w)
+        // The camera follows the car as it's drawn (one tick behind, between ticks), not the newest tick.
+        var p = SIMD3(car.pos.x, car.pos.y, car.pos.z), q = simd_quatd(ix: car.quat.x, iy: car.quat.y, iz: car.quat.z, r: car.quat.w)
+        if track.ticks > 1 {
+            let c = track.car(at: liveTime)
+            p = SIMD3<Double>(c.pos) + origin
+            q = simd_quatd(ix: Double(c.quat.imag.x), iy: Double(c.quat.imag.y), iz: Double(c.quat.imag.z), r: Double(c.quat.real))
+        }
         let v = SIMD3(car.vel.x, car.vel.y, car.vel.z)
         let w = world
         camera.update(dt: dt, carPos: p, carQuat: q, vel: v, aspect: Double(aspect)) { x, z in w.ground(x, z).y }

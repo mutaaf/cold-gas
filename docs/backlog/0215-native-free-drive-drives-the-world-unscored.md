@@ -1,12 +1,12 @@
 ---
 id: 0215
 title: Native Free Drive drives the world, unscored, from the title
-status: ready
+status: shipped
 priority: P1
 size: L
 lens: platform
 created: 2026-11-11
-pr:
+pr: 332
 by: operator
 ---
 

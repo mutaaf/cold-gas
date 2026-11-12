@@ -22,6 +22,9 @@ public final class RoadWalker {
         self.init(world: world, link: l, dir: d, s: l.s[hit.k] + l.len[hit.k] * hit.u)
     }
 
+    /// Another walker at the same place (to look ahead without moving this one).
+    public func copy() -> RoadWalker { RoadWalker(world: world, link: link, dir: dir, s: s) }
+
     /// Where it is: position (the road's centre, or `lane` m to the right of travel), height, heading (unit), grade.
     public func pose(lane: Double = 0) -> (x: Double, y: Double, z: Double, hx: Double, hz: Double) {
         let l = link, p = world.roads.profile(l)

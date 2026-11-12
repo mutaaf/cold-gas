@@ -123,6 +123,11 @@ public let SHOW = Course(id: "show", name: "The Show", startZ: -6, startX: 0, pa
                          runout: (-140, 40), rowNear: SHOW_ROW_NEAR, rowFar: SHOW_BOXES[SHOW_BOXES.count - 1].minZ,
                          tallest: SHOW_BOXES.map { $0.spec.h }.reduce(-.infinity, jsMax))
 public let COURSES: [String: Course] = ["show": SHOW, "wall": WALL_COURSE, "lineup": LINEUP]
+/// Free Drive (docs/NATIVE-FREEDRIVE.md): the Show's stage at the centre of a world with no edge. Never scored, never in
+/// COURSES (nothing that looks a course up by id can reach it); `createVehicle(course:)` takes it.
+public let DRIVE_COURSE = Course(id: "drive", name: "Free Drive", startZ: -40, startX: 0, pad: SHOW.pad, boxes: SHOW_BOXES, ramp: false, runout: (-1e12, 1e12))
+/// The course whose stage a course stands on (the drive stands on the Show's).
+public func stageOf(_ courseId: String) -> String { courseId == "drive" ? "show" : courseId }
 public let DEFAULT_COURSE = "show"
 
 // The stage's fixtures
@@ -151,6 +156,14 @@ public enum MATERIALS {
     public static let paint = Material(id: "paint", grip: 0.55, slide: 0.35, bounce: 0.15, loose: false, roll: 0)
     public static let steel = Material(id: "steel", grip: 0.6, slide: 0.4, bounce: 0.2, loose: false, roll: 0)
     public static let body = Material(id: "body", grip: 0.55, slide: 0.5, bounce: 0.12, loose: false, roll: 0)
+    // Free Drive's ground (src/sim/courses.js, the same numbers and their sources there).
+    public static let asphalt = Material(id: "asphalt", grip: 1, slide: 0.55, bounce: 0.1, loose: false, roll: 0)
+    public static let gravel = Material(id: "gravel", grip: 0.62, slide: 0.6, bounce: 0.05, loose: true, roll: 0.01)
+    public static let grass = Material(id: "grass", grip: 0.45, slide: 0.45, bounce: 0.05, loose: true, roll: 0.025)
+    public static let dirt = Material(id: "dirt", grip: 0.55, slide: 0.55, bounce: 0.05, loose: true, roll: 0.04)
+    public static let rock = Material(id: "rock", grip: 0.7, slide: 0.55, bounce: 0.15, loose: true, roll: 0.005)
+    public static let sand = Material(id: "sand", grip: 0.5, slide: 0.5, bounce: 0.05, loose: true, roll: 0.1)
+    public static let wood = Material(id: "wood", grip: 0.6, slide: 0.45, bounce: 0.15, loose: false, roll: 0)
 }
 
 // The parked vehicles as physical objects

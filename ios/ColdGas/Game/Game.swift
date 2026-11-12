@@ -21,6 +21,7 @@ enum Control: String, CaseIterable, Codable { case oneThumb, classic }
 struct DriveHud: Equatable {
     var speed = 0.0, km = 0.0, heading = 0.0
     var ready = false, line = ""
+    var air = false, fan = false, cam = "chase", cue = ""
 }
 
 /// What the HUD shows, refreshed a few times a second (SwiftUI never sees the 240 Hz state).
@@ -54,7 +55,7 @@ final class Game: ObservableObject {
     /// Free Drive (docs/NATIVE-FREEDRIVE.md), while it's up: unscored, its own world.
     private(set) var freeDrive: FreeDrive?
     @Published private(set) var driveHud = DriveHud()
-    private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0
+    private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0, driveClock = 0.0
     let controls = Controls()
 
     private(set) var live: LiveRun?
@@ -128,6 +129,8 @@ final class Game: ObservableObject {
         // `-fd-at x,z,yaw°`: the car there, facing that way (shots).
         if let a = Launch.value("-fd-at")?.split(separator: ",").compactMap({ Double($0) }), a.count == 3 { fd.place(x: a[0], z: a[1], yaw: a[2] * .pi / 180) }
         if let v = Launch.value("-fd-cruise").flatMap(Double.init) { fd.cruise = v }
+        if let v = Launch.value("-fd-pilot").flatMap(Double.init) { fd.pilot = v }
+        controls.drive = fd.sampler
         if Launch.value("-fd-cam") == "bumper" { fd.camera.mode = .bumper }
         freeDrive = fd; driveSettled = false
         stage?.load(course: "drive", track: fd.track)
@@ -136,6 +139,8 @@ final class Game: ObservableObject {
     }
     func endDrive() {
         if let r = stage?.renderer, r.courseKey == "drive" { r.drive = nil }
+        controls.drive = nil
+        freeDrive?.car.world.free()
         freeDrive = nil
         screen = .title
         showTitleLoop()
@@ -144,7 +149,7 @@ final class Game: ObservableObject {
         guard let fd = freeDrive else { return }
         // The drive's renderer is built off the main thread on first use: hook it up once it's the one drawing.
         if let r = stage?.renderer, r.courseKey == "drive", r.drive !== fd { r.drive = fd; fd.attach(device: r.device) }
-        if !paused { fd.frame(dt: min(dt, 0.1)) }
+        if !paused { fd.frame(dt: min(dt, 0.1)); driveClock += dt }
         stage?.renderer?.liveTime = fd.liveTime
         Sound.shared.update(speed: DMath.dhypot(fd.car.vel.x, fd.car.vel.y, fd.car.vel.z), throttles: fd.car.throttles, grounded: fd.car.grounded > 0, phase: .run)
         if !driveSettled, fd.view?.settled == true, (fd.view?.stats.tiles ?? 0) > 0 {
@@ -170,7 +175,12 @@ final class Game: ObservableObject {
             let fx = 2 * (q.x * q.z + q.w * q.y), fz = 1 - 2 * (q.x * q.x + q.y * q.y)
             h.heading = (atan2(fx, fz) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
             h.ready = driveSettled
+            h.air = fd.car.grounded == 0 && !fd.car.hullContact
+            h.fan = fd.fan
+            h.cam = fd.camera.mode.rawValue
+            h.cue = fd.cue.isEmpty || driveClock - fd.cueT > 1.6 ? "" : fd.cue
             h.line = fd.statsLine
+            if h.cue.isEmpty && fd.dist < 400 && driveClock < 6 { h.cue = "Roads leave the apron in every direction" }
             if h != driveHud { driveHud = h }
         }
     }
