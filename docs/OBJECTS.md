@@ -11,7 +11,7 @@ solid where it is drawn, from the same numbers. Audited 2026-10-21 (branch `worl
 | Mode | Object | Was | Now | Where the numbers live |
 |---|---|---|---|---|
 | All | The roadster | body (6-DOF, tyres, fan, ten nozzles; rigid hull) | unchanged | src/sim/spec.js, vehicle.js |
-| Show, Lineup | The parked row (Sedan, Crossover, Semi, Pickup, Cab) | body: own mass, CoM, inertia, four (six) suspended parked tyres | unchanged; drawn **between ticks** now (interpolated, live and replay) | courses.js LINEUP_SPEC, docs/VEHICLES.md |
+| Show, Lineup | The parked row (Sedan, Crossover, Semi, Pickup, Cab) | body: own mass, CoM, inertia, four (six) suspended parked tyres | unchanged; drawn **between ticks** now (interpolated, live and replay); drawn from the forge's Blender models (0212) built to these same boxes and axles, the gate refusing one that isn't | courses.js LINEUP_SPEC, docs/VEHICLES.md, tools/forge |
 | Show, Wall | The Wall's deck (the curl) | static trimesh | unchanged | courses.js wallProfile |
 | Show, Wall | The truss tower's chords, the posts under the curl | static boxes | unchanged | world.js wallSteel |
 | Show, Wall | The two uplights at the foot of the curl | pixels | **static boxes** (each in the engine while the car is within 3 m of it) | courses.js FIXTURES |

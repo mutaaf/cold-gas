@@ -265,6 +265,10 @@ src/render/           three.js (r186):
   roadster.js           the hero car, matched to the reveal (research §10): faceted body, lamps,
                           wake / brake / aero / skirt / nozzle states from what the renderer sees
   cars.js               the ghost, `wheelCenterY` contract, makeParked → parked/
+  forged.js             the forge's models in the game (0212, a lazy chunk): GLTFLoader + meshopt from three's own
+                          node_modules, the manifest (forge-manifest.json, GENERATED), the game's materials by palette name;
+                          forge-registry.js (the flag `?forge=1|0`, FORGE_DEFAULT_ON, and what's loaded) is all the main
+                          bundle carries. The pixels only: every collider stays the sim's
   parked/               the lineup, one procedural model per LINEUP_SPEC entry at its researched
                           size (docs/VEHICLES.md): kit.js (curves, swept and faceted bodies, lamp
                           strips and panels raycast onto a body, instanced wheels, per-material
@@ -388,7 +392,8 @@ scripts/engine-*.mjs  the engine: determinism spike across browsers and the Work
 tools/forge/          THE FORGE (0211, the operator's Mac: Blender): forgekit.py (the only modelling API), finish.py (UVs,
                         weighted normals, baked occlusion, LODs, validation, glTF), turntable.py, archetypes/ (one per slot,
                         seeded), lib/ (slots from the sim's boxes, the gate, meshopt packing, the brief's prompt), brief.mjs
-                        (Claude writes a kit script from a trope or an era; screened, sandboxed, gated)
+                        (Claude writes a kit script from a trope or an era; screened, sandboxed, gated), shots.mjs
+public/forge/         the forged .glb files (`npm run forge -- <slot> --promote`); docs/forge/ their turntables
 scripts/shots.mjs     Screenshots of key moments against a running preview
 scripts/human-show.mjs     human-like players on the Show (reaction time, keys, cues): the
                            learnability gate. --cues old|new, assist|pro
@@ -464,6 +469,7 @@ npm run forge -- <slot>|--all [--seed N] [--promote]   the forge (0211, needs Bl
                    --promote puts it in public/forge/ + the manifest. Slots: sedan suv semi pickup cab cone barrier
 npm run forge:brief -- "<trope or era>" [--slot cab] [--promote]   Claude writes the build script (ANTHROPIC_API_KEY;
                    tropes and eras only, never a brand, a model or a film vehicle); --script <file.py> runs one without a call
+node scripts/native-stage.mjs show lineup [--forge=0|1]   the native stages, the forged row in them as the web's default
 npm run vectors [-- --check]   the native port's golden traces (0146, docs/NATIVE.md §3): ios/Packages/ColdGasCore/Tests/
                    Vectors/, generated, never hand-edited. A sim or scorer change regenerates them in the same PR
                    (tests/unit/vectors.test.js fails on stale vectors)
