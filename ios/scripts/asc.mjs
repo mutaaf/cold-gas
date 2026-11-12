@@ -24,8 +24,10 @@
 //   node scripts/asc.mjs store-meta        version, the listing from store/, categories, content rights, usesIdfa,
 //                                          review contact + notes, free in all territories, attach the newest build
 //   node scripts/asc.mjs store-rating      the age rating questionnaire from store/age-rating.json
-//   node scripts/asc.mjs store-shots [dir] upload build/store-shots/{iphone-69,iphone-duo}/*.png
+//   node scripts/asc.mjs store-shots [dir] upload build/store-shots/{iphone-69,ipad-13,iphone-duo}/*.png
 //   node scripts/asc.mjs submit --yes      send the version to App Review: only on a fresh yes from the owner (§9)
+//   node scripts/asc.mjs cancel --yes      withdraw the submission waiting for review (the version goes back to editable,
+//                                          DEVELOPER_REJECTED): also only on the owner's yes
 //
 // Testers: internal group "Cold Gas Crew" (access to all builds). BETA_EXTERNAL=1 also adds the build to the external
 // group "Cold Gas Beta" and submits it for Beta App Review: also only on a fresh yes from the owner (§9).
@@ -317,9 +319,11 @@ async function call(method, path, body) { console.log(JSON.stringify(await api(m
 
 /** Required screenshot sets: display type → [width, height] (portrait) and the folder they come from.
  *  There is no APP_IPHONE_69: 6.9" (1320×2868) goes in APP_IPHONE_67. APP_IPHONE_DUO earns the "Made for iPhone Duo"
- *  badge with a 27.1+ SDK build (moon-club). iPhone only (TARGETED_DEVICE_FAMILY 1), so no iPad set. */
+ *  badge with a 27.1+ SDK build (moon-club). The app is universal since 1.1.0 (TARGETED_DEVICE_FAMILY 1,2: 0210), so the
+ *  13" iPad set is required too: APP_IPAD_PRO_3GEN_129 takes 2064×2752 (the M4/M5 13") or 2048×2732, either way up. */
 const SHOT_SETS = [
   { types: ["APP_IPHONE_67"], sizes: [[1320, 2868], [2868, 1320]], dir: "iphone-69", label: '6.9" iPhone', required: true },
+  { types: ["APP_IPAD_PRO_3GEN_129"], sizes: [[2064, 2752], [2752, 2064], [2048, 2732], [2732, 2048]], dir: "ipad-13", label: '13" iPad', required: true },
   { types: ["APP_IPHONE_DUO"], sizes: [[1398, 2034], [2007, 2853]], dir: "iphone-duo", label: "iPhone Duo (outer/inner)", required: false },
 ];
 const EDITABLE = new Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED", "INVALID_BINARY"]);
@@ -665,9 +669,34 @@ async function submit() {
   console.log(`✓ Cold Gas ${sv.attributes.versionString} submitted for App Review (submission ${subm.id}). It waits for a manual release once approved.`);
 }
 
+/** Withdraw the submission that is waiting for (or in) review, so the version can be edited and sent again. Needs --yes:
+ *  it changes what Apple is reviewing, so only on the owner's yes (§9). Waits until Apple has let the version go. */
+async function cancel() {
+  if (!process.argv.includes("--yes")) {
+    console.log("This withdraws Cold Gas from App Review. On the owner's yes: node scripts/asc.mjs cancel --yes");
+    process.exitCode = 2; return;
+  }
+  const a = await app();
+  const live = (await api("GET", `/v1/reviewSubmissions?filter[app]=${a.id}&filter[platform]=IOS&filter[state]=WAITING_FOR_REVIEW,IN_REVIEW,UNRESOLVED_ISSUES,READY_FOR_REVIEW&limit=5`)).data;
+  if (!live.length) { console.log("• no submission waiting for review"); return; }
+  for (const x of live) {
+    await api("PATCH", `/v1/reviewSubmissions/${x.id}`, { data: { type: "reviewSubmissions", id: x.id, attributes: { canceled: true } } });
+    console.log(`✓ submission ${x.id} (${x.attributes.state}) cancelled`);
+  }
+  for (let i = 0; i < 40; i++) { // Apple takes a moment to move the version back to editable
+    const vs = (await api("GET", `/v1/apps/${a.id}/appStoreVersions?filter[platform]=IOS&limit=5`)).data;
+    if (!vs.some((v) => ["WAITING_FOR_REVIEW", "IN_REVIEW"].includes(v.attributes.appStoreState))) {
+      for (const v of vs) console.log(`  App Store version ${v.attributes.versionString} ${v.attributes.appStoreState}`);
+      return;
+    }
+    await sleep(3000);
+  }
+  console.log("• Apple is still releasing the version; check: node scripts/asc.mjs status");
+}
+
 const [cmd, arg] = process.argv.slice(2);
 const run = { whoami, status, bundle, signing, crew, call: () => call(arg, process.argv[4], process.argv[5]),
   "store-lint": storeLint, "store-check": storeCheck, "store-meta": storeMeta, "store-rating": storeRating, "store-shots": () => storeShots(arg),
-  submit, ship: () => ship(arg), notes: () => console.log(notesFor(arg)) }[cmd];
-if (!run) { console.log("usage: asc.mjs whoami | status | bundle | signing | ship <build> | notes [version] | store-lint | store-check | store-meta | store-rating | store-shots [dir] | submit --yes"); process.exit(2); }
+  submit, cancel, ship: () => ship(arg), notes: () => console.log(notesFor(arg)) }[cmd];
+if (!run) { console.log("usage: asc.mjs whoami | status | bundle | signing | ship <build> | notes [version] | store-lint | store-check | store-meta | store-rating | store-shots [dir] | submit --yes | cancel --yes"); process.exit(2); }
 Promise.resolve().then(run).catch((e) => { console.error("✗ " + e.message); process.exit(1); });

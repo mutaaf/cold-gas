@@ -100,6 +100,7 @@ final class RootViewController: UIViewController {
             layoutModel.spread = l.spread
             layoutModel.scene = l.scene.cg
             layoutModel.controls = l.controls.cg
+            layoutModel.fold = l.fold?.cg
             layoutModel.safe = EdgeInsets(top: safe.top, leading: safe.left, bottom: safe.bottom, trailing: safe.right)
             // The flight deck's shape (0210): set before the camera's framing reads it.
             DeckGeometry.spread = l.spread

@@ -16,7 +16,7 @@ settings:
     SWIFT_VERSION: "5.0"
     # A new MARKETING_VERSION needs release-notes/<version>.md (make rules). The build number is a UTC timestamp,
     # set by scripts/testflight.sh at archive time.
-    MARKETING_VERSION: "1.0.0"
+    MARKETING_VERSION: "1.1.0"
     CURRENT_PROJECT_VERSION: "1"
 targets:
   ColdGas:
