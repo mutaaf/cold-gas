@@ -1,12 +1,12 @@
 ---
 id: 0216
 title: Native Free Drive is benched at 120 Hz (simulator, and the device command for the owner)
-status: in-progress
+status: shipped
 priority: P1
 size: S
 lens: performance
 created: 2026-11-11
-pr:
+pr: 334
 by: operator
 ---
 
