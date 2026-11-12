@@ -733,12 +733,12 @@ Promise.all([stage.ready, physicsLoad]).then(() => {
     Promise.race([Promise.allSettled([stage.backdrop, judgesChunk]), new Promise((r) => setTimeout(r, 20_000))]).then(() => { ads.onConfig(() => syncReroll()); ads.arm(document.querySelector('[data-screen="title"]')); });
   };
   if (typeof requestIdleCallback === 'function') requestIdleCallback(startAds, { timeout: 6000 }); else setTimeout(startAds, 1500);
-  // The forge's assets (0211, src/render/forged.js): a lazy chunk and a few hundred kB of meshes from our own origin,
+  // The forge's assets (0212, src/render/forged.js): a lazy chunk and ≈ 1.2 MB of meshes from our own origin,
   // after the title is up and idle, never on a data-saver connection. Until they land (or if they fail) the procedural
   // models stay; nothing waits on them.
   const startForge = () => {
     if (!forgeOn || navigator.connection?.saveData) return;
-    import('./render/forged.js').then((m) => m.loadForged()).then(() => { forgedPending = true; if (forgeAsked) swapForged(); }, () => {
+    import('./render/forged.js').then((m) => m.loadForged()).then((reg) => stage.warmForged?.(reg.ids)).then(() => { forgedPending = true; if (forgeAsked) swapForged(); }, () => {
       // Cosmetic: a failed fetch keeps the procedural models and is not a lazy-chunk failure (no heal, no reload, 0057).
     });
   };

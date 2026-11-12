@@ -24,7 +24,8 @@ const cache = new Map();
 function gameMaterial(src, slot) {
   const name = String(src.name || '').replace(/\.\d+$/, '');
   const paintHex = LINEUP_SPEC.find((s) => s.id === slot)?.paint;
-  const key = `${name}:${name === 'paint' ? paintHex : ''}`;
+  // (the props' own colours are per slot: two props may share a palette name with different glTF values)
+  const key = `${name}:${name === 'paint' ? paintHex : ''}:${slot}`;
   if (cache.has(key)) return cache.get(key);
   let m;
   switch (name) {
@@ -45,7 +46,7 @@ function gameMaterial(src, slot) {
     case 'lamp_red': m = lampMat(1.15, 0.05, 0.07); break;
     case 'lamp_red_dim': m = lampMat(0.42, 0.02, 0.03); break;
     case 'lamp_amber': m = lampMat(1.2, 0.5, 0.06); break;
-    default: m = src;   // the props' own PBR colours (orange, reflective, plastic…), straight from the glTF
+    default: m = src.clone();   // the props' own PBR colours (orange, reflective, plastic…), straight from the glTF
   }
   if (m !== src) m.name = name;
   m.vertexColors = !m.isMeshBasicMaterial;
@@ -57,7 +58,7 @@ function gameMaterial(src, slot) {
 // offset dequantizing them). The game works in metres on float arrays (crash.js dents a struck car's positions in place,
 // the Sandbox merges and scales its props, the native exporter bakes them), so each geometry comes in as floats with its
 // node's transform baked in, once, at load.
-function floatGeometry(src, matrix) {
+export function floatGeometry(src, matrix) {
   const g = new THREE.BufferGeometry();
   for (const name of ['position', 'normal', 'color']) {
     const a = src.getAttribute(name);
@@ -153,6 +154,7 @@ export function loadForged({ base = import.meta.env.BASE_URL, lods = true } = {}
       return geos.get(key);
     };
     forgeRegistry.slots = templates.size;
+    forgeRegistry.ids = [...templates.keys()];
     return forgeRegistry;
   });
   loading.set(key, p);

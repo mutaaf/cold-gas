@@ -183,9 +183,9 @@ function forgedInto(car, id) {
   return true;
 }
 // Swap every row on stage (and every row built from now on) to the forged models. Between runs only (main.js).
-export function useForged() {
+export function useForged(each = () => {}) {
   let n = 0;
-  for (const row of rows) for (const car of row.children) if (!car.userData.forged && forgedInto(car, car.userData.forgeId)) n++;
+  for (const row of rows) for (const car of row.children) if (!car.userData.forged && forgedInto(car, car.userData.forgeId)) { n++; each(car); }
   return n;
 }
 
@@ -511,7 +511,26 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
   }
   const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, warm: null, warmGate: () => true, rocket: null, film: null, aa: null, aaKind: '', resize, reshape, render, setCourse, titlePose, setBodies, setLook, setDeck, bloom, setPixelScale, restoreGL, onResize };
   // The forge's models in (0211): swap the rows, then redraw the shadow map (the title redraws it only when the hero moves).
-  stage.useForged = () => { const n = useForged(); if (n) shadowAge = Infinity; return n; };
+  // A swapped car joins the wet slab's mirror like everything built after the film arrived (tag).
+  stage.useForged = () => {
+    const n = useForged((car) => { if (film) { car.updateMatrixWorld(true); tag(car); } });
+    if (n) shadowAge = Infinity;
+    return n;
+  };
+  // Their programs compiled before they're shown (0046: never on the frame of a cut): one of each, every LOD level, off
+  // screen, through the same compileAsync the boot uses. At most 4 s.
+  stage.warmForged = (ids) => {
+    const g = new THREE.Group();
+    for (const id of ids) {
+      const m = forgeRegistry.model?.(id);
+      if (!m) continue;
+      m.traverse((o) => { o.visible = true; });
+      g.add(m);
+    }
+    if (film) tag(g);
+    scene.add(g);
+    return Promise.race([compileFor(g), new Promise((r) => setTimeout(r, 4000))]).catch(() => {}).finally(() => scene.remove(g));
+  };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';

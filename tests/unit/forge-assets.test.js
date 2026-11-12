@@ -8,6 +8,21 @@ import { forgeWanted, FORGE_DEFAULT_ON } from '../../src/render/forge-registry.j
 import MANIFEST from '../../src/render/forge-manifest.json';
 import { LINEUP_SPEC } from '../../src/sim/courses.js';
 
+describe('quantized geometry comes in as metres', () => {
+  it('dequantizes int16 positions through the node matrix into floats past ±1 m (crash.js dents, the Sandbox merges)', async () => {
+    const THREE = await import('three');
+    const { floatGeometry } = await import('../../src/render/forged.js');
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(new Int16Array([32767, 0, -32767, -32767, 16384, 32767, 0, 32767, 0]), 3, true));
+    g.setIndex([0, 1, 2]);
+    const p = floatGeometry(g, new THREE.Matrix4().makeScale(2.4, 2.4, 2.4)).getAttribute('position');
+    expect(p.array).toBeInstanceOf(Float32Array);
+    expect(p.normalized).toBe(false);
+    expect(p.getX(0)).toBeCloseTo(2.4, 3);
+    expect(p.getZ(1)).toBeCloseTo(2.4, 3);
+  });
+});
+
 describe('the forged assets in the game (0212)', () => {
   const assets = Object.entries(MANIFEST.assets);
   it('fill slots the sim has, within each slot\'s budgets', () => {
