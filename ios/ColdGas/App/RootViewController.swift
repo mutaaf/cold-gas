@@ -51,6 +51,15 @@ final class RootViewController: UIViewController {
         }
     }
 
+    #if DEBUG
+    /// `-orient landscape|portrait`: turn the simulator's screen for a shot (simctl can't rotate a device).
+    override func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        guard let o = Launch.value("-orient"), let scene = view.window?.windowScene else { return }
+        scene.requestGeometryUpdate(.iOS(interfaceOrientations: o == "landscape" ? .landscapeRight : .portrait)) { print("ORIENT failed: \($0)") }
+    }
+    #endif
+
     override func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
         // `-window WxH`: lay the app out at that size and scale it to fit the screen (a pose shot on any device).
@@ -91,6 +100,9 @@ final class RootViewController: UIViewController {
             layoutModel.scene = l.scene.cg
             layoutModel.controls = l.controls.cg
             layoutModel.safe = EdgeInsets(top: safe.top, leading: safe.left, bottom: safe.bottom, trailing: safe.right)
+            // The flight deck's shape (0210): set before the camera's framing reads it.
+            DeckGeometry.spread = l.spread
+            DeckGeometry.fold = l.fold.map { LRect(x: $0.x - l.controls.x, y: $0.y - l.controls.y, w: $0.w, h: $0.h) }
             stage.setCameraLayout(rows: l.spread == .rows, scene: l.scene.cg, controls: l.controls.cg, safeTop: safe.top)
             print("LAYOUT \(Int(size.width))x\(Int(size.height)) \(l.spread.rawValue)\(folded ? " bent" : " flat") regions \(regions.count) scene \(l.scene) controls \(l.controls) fold \(l.fold.map(\.description) ?? "-")")
         }

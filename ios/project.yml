@@ -56,7 +56,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mutaafaziz.coldgas
-        TARGETED_DEVICE_FAMILY: "1"
+        # iPhone and iPad (0210). iPad adds the 13" screenshot set to the next App Store version.
+        TARGETED_DEVICE_FAMILY: "1,2"
         GENERATE_INFOPLIST_FILE: NO
         INFOPLIST_FILE: ColdGas/Info.plist
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon

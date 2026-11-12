@@ -305,6 +305,20 @@ too.
   - **Tabletop:** the scene above the fold, the controls below, like a handheld console. It's the same split
     `src/fold.js` already makes for a horizontal fold.
   - **Closed:** the phone layout, with the one-thumb pad.
+- **The flight deck (0210).** The classic controls (Pro, Advanced on the ground, Assist when classic is chosen) and
+  Advanced's valve deck are placed per shape by `ColdGasLayout/Deck.swift` (pure, `DeckTests`), from the spread and the
+  controls rect, never the model:
+  - **The phone, upright:** both clusters low in the corners.
+  - **The phone sideways, and the Duo open:** they climb the side edges. On the Duo open they're bigger, and off the
+    crease.
+  - **The Duo in tabletop:** a console, with two wells either side of a DRIVE · CLIMB · HANG · AIR · LAND strip.
+  - **An iPad:** at the side grips, at mid height.
+  - The right thumb gets a fan of three slots on its reach arc, and it shows only what the moment uses (the web's
+    `syncTouchPhase` rule, `Deck.buttons`). A ghost ring breathes round what the cue names.
+  - The valve deck is the car whole on an upright phone. Everywhere else it's split down the spine, the car's left
+    valves under the left thumb, and the HUD steps into the top middle.
+- **iPad** (0210): `TARGETED_DEVICE_FAMILY` 1,2, full screen, every orientation. It's a `tablet` deck. The next App
+  Store version needs the 13" iPad screenshot set.
 - **A fold mid-run doesn't pause the run.** The sim doesn't know about views. A fold is a resize that passes through
   sizes no pose has (LESSONS 0075):
   - Re-fit the camera on every layout pass.
@@ -428,6 +442,8 @@ ios/
   - `-demo -course show|wall|lineup -tier assist|pro|advanced -play`.
   - `-autopilot` flies the reference run; `-results` jumps to the results sheet.
   - `-pose` and `-window` as in §5, plus `-bench` and `-haptics log`.
+  - DEBUG `-freeze <tick>` stops a run at that tick with its controls up (marks `frozen`), and `-orient landscape`
+    turns the simulator. `scripts/deck-shots.sh` shoots the flight deck on every shape with them (0210).
 - **`make bench`** flies the reference Show and prints `BENCH frames avg p95 hitches alloc/tick`. Read it with
   `simctl launch --console`; `--console-pty` printed nothing (moon-club).
 - **Definition of done for native work:**

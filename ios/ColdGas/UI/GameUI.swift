@@ -173,15 +173,34 @@ struct TitleView: View {
 struct RunView: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
+    /// The cue line sits above whatever the deck puts across the bottom middle of the scene.
+    private var cueLift: CGFloat {
+        let c = layout.controls
+        if game.oneThumb && !game.hud.hardware { return layout.scene.width > layout.scene.height ? 0 : 196 }
+        let d = DeckGeometry.layout(c.size)
+        let valves = game.tier == "advanced" && game.hud.touchPhase == .air
+        // Only what crosses the middle third of the screen pushes the cue up (side clusters leave it be).
+        let mid = CGRect(x: c.width / 3, y: 0, width: c.width / 3, height: c.height)
+        var top = c.height
+        for r in (valves ? d.valveCovers : d.covers) + (d.strip.map { [$0] } ?? []) where r.cgRect.intersects(mid) { top = min(top, CGFloat(r.y)) }
+        return max(0, c.height - top + 4)
+    }
+    /// Advanced's valve deck split to the screen's sides (a phone sideways, the Duo open): its halves own both top corners,
+    /// so the HUD steps into the free middle.
+    private var hudCentred: Bool {
+        guard layout.spread != .rows, game.tier == "advanced", game.hud.touchPhase == .air, !game.hud.hardware else { return false }
+        let d = DeckGeometry.layout(layout.controls.size)
+        return d.valves.count == 2 && d.form != .tablet
+    }
     var body: some View {
         let rows = layout.spread == .rows
         let sceneSafe = CGRect(x: layout.scene.minX + layout.safe.leading, y: layout.scene.minY + layout.safe.top,
                                width: layout.scene.width - layout.safe.leading - (rows ? 0 : layout.safe.trailing),
                                height: layout.scene.height - layout.safe.top - (rows ? 0 : layout.safe.bottom))
         ZStack(alignment: .topLeading) {
-            HUDView(compact: !rows && layout.controls.height < 520, cueLift: rows || layout.scene.width > layout.scene.height ? 0 : (game.tier == "advanced" && (game.hud.phase == 2 || game.hud.released) ? min(330, layout.controls.width) * 380 / 300 + 12 : 196))
+            HUDView(compact: !rows && layout.controls.height < 520, cueLift: rows ? 0 : cueLift, centred: hudCentred)
                 .frame(width: sceneSafe.width, height: sceneSafe.height).offset(x: sceneSafe.minX, y: sceneSafe.minY)
-            ControllerView(panel: rows)
+            ControllerView(panel: rows, layoutKey: "\(layout.spread.rawValue) \(Int(layout.controls.width))x\(Int(layout.controls.height))")
                 .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
             if game.countdown > 0 {
                 Text("\(game.countdown)").font(Theme.display(64)).foregroundStyle(Theme.ink)
@@ -197,24 +216,28 @@ struct HUDView: View {
     @ObservedObject var game = Game.shared
     var compact: Bool
     var cueLift: CGFloat = 0   // above the pads when they're over the scene
+    var centred = false        // the pause and the readouts in the top middle (Advanced's split valve deck has the corners)
     var body: some View {
         let h = game.hud
         VStack(spacing: 0) {
             HStack(alignment: .top) {
+                if centred { Spacer() }
                 Button { game.paused = true; UISelectionFeedbackGenerator().selectionChanged() } label: {
                     Image(systemName: "pause.fill").font(.system(size: 13)).foregroundStyle(Theme.ink2).frame(width: 40, height: 40).glass(20)
                 }.buttonStyle(.plain).accessibilityLabel("Pause")
-                Spacer()
+                if centred { Spacer().frame(width: 10) } else { Spacer() }
                 HStack(spacing: 16) {
                     readout("SPEED", Fmt.speed(h.speed), Fmt.speedUnit)
                     readout("ALT", Fmt.length(h.alt), Fmt.lengthUnit)
                     if h.phase == 2 { readout("SINK", Fmt.rate(h.sink), Fmt.rateUnit, color: [Theme.ink, Theme.amber, Theme.hot][h.sinkBand]) }
                 }
                 .padding(.horizontal, 14).padding(.vertical, 8).glass(12)
+                if centred { Spacer() }
             }
             HStack {
                 Spacer()
                 gasBar(h.gas).frame(width: compact ? 120 : 160)
+                if centred { Spacer() }
             }.padding(.top, 8)
             Spacer()
             if !h.cue.isEmpty {
@@ -439,14 +462,17 @@ let JUDGE_NAMES = ["engineer": "ENGINEER", "coordinator": "COORDINATOR", "design
 struct ControllerView: View {
     @ObservedObject var game = Game.shared
     var panel: Bool   // the Duo's lower panel (tabletop): the whole panel is the controller
+    /// The fold layout's shape, so the deck re-lays itself out when it changes (DeckGeometry holds the numbers).
+    var layoutKey: String
     var body: some View {
-        let air = game.hud.phase == 2 || (game.hud.phase == 1 && game.hud.released)
+        let h = game.hud
         // A controller or a keyboard in use hides the touch controls, as on the web; a finger on the glass brings them back.
-        if game.hud.hardware {
+        if h.hardware {
             Color.clear.contentShape(Rectangle()).onTapGesture { Hardware.shared.note(touch: true) }
-        } else if game.tier == "advanced" && air && game.hud.phase != 3 {
-            NozzlePad().padding(panel ? 8 : 4)
-        } else if game.oneThumb { ThumbPad(panel: panel) } else { ClassicPad(panel: panel) }
+        } else if game.tier == "advanced" && h.touchPhase == .air {
+            // main.js: off the Wall (or flying) on Advanced, the valve deck replaces the stick and the buttons.
+            NozzlePad(layoutKey: layoutKey)
+        } else if game.oneThumb { ThumbPad(panel: panel) } else { ClassicPad(layoutKey: layoutKey) }
     }
 }
 
@@ -471,14 +497,18 @@ struct ThumbPad: View {
     }
 }
 
-/// Classic touch (src/input.js): the stick on the left, the pedals (ground) or LIFT / LAND (air) on the right.
-/// The touches themselves are ClassicSurfaceView's.
+/// Classic touch (src/input.js), as the flight deck (Input/FlightDeck.swift): the stick under the left thumb, the fan
+/// of what this moment uses under the right.
 struct ClassicPad: View {
     @ObservedObject var game = Game.shared
-    var panel: Bool
-    // Over the scene (the camera keeps the car clear of them: CameraFraming): the stick's square, the buttons' 2×2 square.
-    static let unit: CGFloat = 112, margin: CGFloat = 10, stickSize = unit * 0.5 * 2.4, buttonsSize = unit * 0.62 * 2 + 10
+    var layoutKey: String
     var body: some View {
-        ClassicSurface(panel: panel, air: game.hud.phase == 2 || (game.hud.phase == 1 && game.hud.released))
+        let h = game.hud
+        let course = game.live?.run.course ?? game.course
+        let show = DeckShow(
+            buttons: Deck.buttons(h.touchPhase, assist: game.tier == "assist", course: course, ledge: h.ledge, rowDone: h.rowDone),
+            stickLabel: Deck.stickLabel(h.touchPhase), hint: h.hint, gas: (h.gas * 50).rounded() / 50,
+            strip: Deck.stripIndex(h.touchPhase, course: course, ledge: h.ledge), stripNames: Deck.stripNames(course: course))
+        FlightDeck(show: show, layoutKey: layoutKey)
     }
 }
