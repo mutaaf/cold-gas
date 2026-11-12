@@ -1,12 +1,12 @@
 ---
 id: 0210
 title: The iPhone app's Pro and Advanced controls are shaped for the screen they're on (phone, Duo, iPad)
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: player-feel
 created: 2026-11-11
-pr:
+pr: 333
 by: operator
 ---
 
