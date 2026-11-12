@@ -35,6 +35,8 @@ public enum Daily {
 
     public struct Result: Equatable {
         public var ok: Bool, miss: String, fix: Bool
+        /// 0198: one turn where the day asks two: the hint names the call (`turnsHint`), not the objective's own fix.
+        public var turns = false
         static let done = Result(ok: true, miss: "", fix: false)
         static func missed(_ why: String, fix: Bool = false) -> Result { Result(ok: false, miss: why, fix: fix) }
     }
@@ -44,12 +46,22 @@ public enum Daily {
         let checkFn: (ScoreCard, Facts, Units) -> Result
         let hint: ((Pilot) -> String)?
         let titleHintFn: ((Pilot, Bool) -> String)?
+        /// 0198: the hint for a `turns` miss (nil: `hint`).
+        var turnsHint: ((Pilot) -> String)? = nil
         /// The line the title shows.
         public func goal(_ units: Units) -> String { goalText(units) }
     }
 
     private static func landed(_ f: Facts) -> Bool { f.b("jumped") && !f.b("crashed") }
     private static func cleanOver(_ f: Facts) -> Bool { landed(f) && f.b("crossedRow") && !f.b("contact") }
+    /// src/daily.js cleanLineup (0198): the Lineup's facts carry no crossedRow; landed, no contact, not on its roof.
+    private static func cleanLineup(_ f: Facts) -> Bool { landed(f) && !f.b("contact") && !f.b("flipped") }
+    /// src/daily.js LINEUP_MARK (0198): the Lineup's mark day, two turns within this of the mark (m).
+    static let LINEUP_MARK = 4.0
+    /// src/daily.js turnsMiss / twiceHint / twiceTitle (0198).
+    private static func turnsMiss(_ f: Facts) -> Result { Result(ok: false, miss: "rolled \(f.s("rollDeg"))\u{B0}, need 720\u{B0}", fix: true, turns: true) }
+    static func twiceHint(_ p: Pilot) -> String { p.thumbOn ? "slide up on the run-up for two turns" : "" }
+    static func twiceTitle(_ p: Pilot, _ whole: Bool) -> String { !p.thumbOn ? "" : whole ? "Slide up on the run-up for two turns" : "Slide up on the run-up" }
     private static func r1(_ x: Double) -> String { jsToFixed(jsRound(x * 10) / 10, 1) }
     /// src/sim/aim-words.js AIM_LEAN (coachWords' `aim` off one thumb; ColdGasPhysics' COACH_AIM_LEAN, kept here so this module needn't import it).
     static let AIM_LEAN = "lean toward the pad (pitch or roll) above 5 m to walk the touchdown marker onto the rings, then level"
@@ -74,14 +86,18 @@ public enum Daily {
                   hint: { p in p.thumbOn ? "let go of the pad right after the tap and stay off it; held, it carries you high"
                       : "one short \(p.word("boost")) burst, not to the cue, and \(p.tier == "assist" ? p.word("land") : p.word("lift")) late, once you\u{2019}re low over the pad" },
                   titleHintFn: { p, whole in !p.thumbOn ? "" : whole ? "Let go right after the tap and stay off the pad" : "Let go right after the tap" }),
-        Objective(id: "roll-lineup", course: "lineup", tier: nil, goalText: { _ in "Roll a clean 360\u{B0} over the row" },
-                  checkFn: { _, f, _ in landed(f) && f.n("rotations") >= 1 ? .done : !landed(f) ? .missed("no clean landing yet") : .missed("rolled \(f.s("rollDeg"))\u{B0}, need 360\u{B0}") }, hint: nil, titleHintFn: nil),
+        Objective(id: "roll-lineup", course: "lineup", tier: nil, goalText: { _ in "Roll two turns over the row and land clean" },
+                  checkFn: { _, f, _ in !cleanLineup(f) ? .missed("no clean landing yet") : f.n("rotations") >= 2 ? .done : turnsMiss(f) },
+                  hint: twiceHint, titleHintFn: twiceTitle, turnsHint: twiceHint),
         Objective(id: "stick-wall", course: "wall", tier: nil, goalText: { _ in "Stick it: score 84+" },
                   checkFn: { c, f, _ in c.total >= 84 && landed(f) ? .done : .missed("\(r1(c.total)), need 84") }, hint: nil, titleHintFn: nil),
         Objective(id: "ninety-show", course: "show", tier: nil, goalText: { _ in "Score 90 or more" },
                   checkFn: { c, f, _ in c.total >= 90 ? .done : .missed("\(r1(c.total)), need 90", fix: cleanOver(f) && f.n("padMiss") > 3.5 && !(f.n("sink") > 1.5) && !(f.n("tiltDeg") > 15)) }, hint: aimHint, titleHintFn: nil),
-        Objective(id: "mark-lineup", course: "lineup", tier: nil, goalText: { "Land within \($0.one(.len, 7)) of the mark" },
-                  checkFn: { _, f, u in !landed(f) ? .missed("no clean landing yet") : f.n("padMiss") <= 7 ? .done : .missed("\(u.one(.len, f.n("padMiss"), 1)) off the mark") }, hint: nil, titleHintFn: nil),
+        Objective(id: "mark-lineup", course: "lineup", tier: nil, goalText: { "Roll two turns and land within \($0.one(.len, LINEUP_MARK)) of the mark" },
+                  checkFn: { _, f, u in !cleanLineup(f) ? .missed("no clean landing yet") : f.n("rotations") < 2 ? turnsMiss(f)
+                      : f.n("padMiss") <= LINEUP_MARK ? .done : .missed("\(u.one(.len, f.n("padMiss"), 1)) off the mark", fix: true) },
+                  hint: aimHint, titleHintFn: { p, whole in !p.thumbOn ? "" : whole ? "Slide up on the run-up, then onto the amber dot" : "Slide up on the run-up" },
+                  turnsHint: twiceHint),
         Objective(id: "scratch-show", course: "show", tier: nil, goalText: { _ in "Clear the row without a scratch" },
                   checkFn: { _, f, _ in
                       // (f.damagePct ?? 0) === 0
@@ -93,7 +109,7 @@ public enum Daily {
 
     /// missLine: the results' line for a missed Daily: the reason with its number, then what to change in this device's words.
     public static func missLine(_ obj: Objective, _ r: Result, _ pilot: Pilot) -> String {
-        if r.fix, let h = obj.hint?(pilot), !h.isEmpty { return "Daily: \(r.miss) \u{B7} \(h)" }
+        if r.fix, let h = (r.turns ? obj.turnsHint ?? obj.hint : obj.hint)?(pilot), !h.isEmpty { return "Daily: \(r.miss) \u{B7} \(h)" }
         return "Daily: \(r.miss) \u{2014} try again"
     }
     /// titleHint: the title card's hint for today's objective on this device ("" when there is none).

@@ -174,6 +174,29 @@ test('the daily card: today’s objective, Play today’s picks its course, and 
   const next = p3.locator('[data-pointer-text]');
   await expect(next).toHaveText('For the Daily: let go of the pad right after the tap and stay off it', { timeout: 10_000 });
   expect(await p3.locator('[data-coach-items]').innerText()).not.toMatch(/\bhold(ing)? the pad/i);   // nor "What happened"
+
+  // 0198: a Lineup mark day (2026-11-28) asks the one thumb for its choice: the second turn, slid up for on the run-up.
+  // The card says so; the reference's 360 (the flight a thumb held from Go gets) misses it, and the miss names the call.
+  await p3.close();
+  const p4 = await ctx.newPage();
+  await p4.clock.setFixedTime(new Date('2026-11-28T15:00:00Z'));
+  await p4.route('**/coldgas/api/**', (r) => r.abort());
+  p4.on('pageerror', (e) => errors.push(e.message));
+  await p4.goto('/coldgas/?gfx=low');
+  await ready(p4);
+  const lineCard = p4.locator('[data-title-extra] .xc-daily');
+  const lineGoal = lineCard.locator('.xc-goal');
+  await expect(lineGoal).toHaveText('Roll two turns and land within 13 ft of the mark', { useInnerText: true });
+  expect(await lineGoal.evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5)).toBe(true);
+  const lineHint = lineCard.locator('[data-daily-hint]');
+  await expect(lineHint).toHaveText('Slide up on the run-up');
+  expect(await lineHint.evaluate((e) => e.scrollWidth <= e.clientWidth + 0.5)).toBe(true);
+  expect((await lineCard.boundingBox()).y + (await lineCard.boundingBox()).height).toBeLessThanOrEqual(844);
+  await p4.locator('[data-daily-play]').tap();
+  await expect(p4.locator('[data-cue]')).toContainText('Tip: Slide up on the run-up, then onto the amber dot', { timeout: 15_000 });
+  expect((await fly(p4, false)).course).toBe('lineup');
+  await expect(p4.locator('[data-daily-line]')).toHaveText(/^Daily: rolled \d+°, need 720° · slide up on the run-up for two turns$/);
+  await expect(p4.locator('[data-pointer-text]')).toHaveText('For the Daily: slide up on the run-up for two turns', { timeout: 10_000 });
   expect(errors).toEqual([]);
   await ctx.close();
 });

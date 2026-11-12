@@ -13,8 +13,8 @@
 //                85+ and only 33 % clear the row and land clean at all (the row is Pro's hardest part), so no bar there
 //                is both a stretch and in reach
 //   skim-show    roofs by under 1.5 m       78 %  · scratch-show 100 %
-//   roll-lineup  a clean 360°               37 %
-//   mark-lineup  within 7 m (the pad)       31 %  (1.5 m was 10 %: 40 % of Lineup flights land at all)
+//   roll-lineup  two turns, clean           51 %  (0198; a clean 360 was 150/150 on one thumb)
+//   mark-lineup  two turns within 4 m       35 %  (0198; within 7 m was 150/150; within 1.2 m of any landing, 5 %)
 // The gas bar (0134, then 0135): on one thumb the computer flies the push-off and the carry; what a thumb chooses is when
 // to hold the pad. Kept down from the tap through the let-go it lands with 33–37 %; picked up after the fall has begun,
 // at any height, 23–27 %. 0134 set the bar in that gap (> 30 %), which only 19–23 % of careful thumbs met. > 25 % is met
@@ -24,7 +24,14 @@
 // day's reach a lot: tests/unit/daily-reach.test.js will catch the downside.
 // The Lineup sat on the floor on two thumbs (at other seeds, n 80, mark-lineup 26–31 %, roll-lineup 29–44 %). Since 0181
 // a phone flies it on one thumb, and the careful one-thumb population meets both (150/150 each, the bars unchanged): the
-// computer flies the kickflip, so these two days are now a phone's easy days, and Pro (keys) is where the Lineup is hard. The Pro day is measured on the keys; classic-touch Pro (a phone on Pro) is not modelled.
+// computer flies the kickflip, so these two days were a phone's easy days, and Pro (keys) is where the Lineup is hard. The Pro day is measured on the keys; classic-touch Pro (a phone on Pro) is not modelled.
+// 0198: the Lineup's days now ask for the one thumb's choice (0191): the second turn, slid up for on the run-up. The careful
+// population takes the call half the time (flyThumbLineup P.twice; daily-reach.mjs prints it: 76/150). Called, 76/76 land
+// two clean turns; onto the mark, 53 of them are within 4 m (the never-aimed 720 is at 4.3 m, the held-from-Go 360 meets
+// neither day). Phone-first: on keys or two thumbs the roll is flown by hand, and no modelled player of theirs lands a 720
+// (flyTouch: 0/150 land two turns; with the roll held through a second turn, 0/60; a keys Assist/Pro sweep of run-up speed, LIFT
+// hold and roll: 4 of 48 rolled two turns, none landed). So a Lineup day on keys is one to fly on a phone,
+// and its miss line says "try again" there rather than name a way that isn't modelled.
 // What a miss can change (0139, 0150): the gas, skim, mark and ninety days' misses name the choice that meets it, in the device's words. Measured on the
 // careful one-thumb population (human-phone.mjs 150 --scheme=thumb --skill=careful --daily, seed as committed):
 //   held from the tap · slid 27/29 met · no slide 10/10    lifted, pressed again · no slide 31/31 (all at 26 %) · slid 5/80
@@ -42,6 +49,10 @@ const r1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
 // The Pro Wall's bar (0182, SIM_VERSION 31): the Wall's mark now counts, and Pro on the keys lands a median 9.3 m off it,
 // so 85+ fell from 43 % to 15 % of Pro flights (23/150). 72+ is met by the same 43 % (65/150) on the new scale.
 const PRO_WALL = 72;
+// The Lineup's mark day (0198): two turns within this of the mark (m).
+const LINEUP_MARK = 4;
+// The Lineup's facts carry no crossedRow: clean there is landed, no contact with the row, and not on its roof.
+const cleanLineup = (f) => landed(f) && !f.contact && !f.flipped;
 
 // Each objective: the course it's flown on, the line the title shows, and `check(card)` → { ok, miss }
 // (`miss` is the results line's reason when it isn't done: specific, with the number).
@@ -71,8 +82,12 @@ export const OBJECTIVES = [
     titleHint: (ctx, whole) => (!thumbOn(ctx) ? '' : whole ? 'Let go right after the tap and stay off the pad' : 'Let go right after the tap'),
     // The sheet's NEXT RUN line would teach the hold (the 'mark' and 'clean' lines); on a missed skim it says this instead.
     coach: (ctx) => (thumbOn(ctx) ? 'For the Daily: let go of the pad right after the tap and stay off it' : '') },
-  { id: 'roll-lineup', course: 'lineup', goal: () => 'Roll a clean 360° over the row',
-    check: (c, f) => (landed(f) && f.rotations >= 1 ? done() : !landed(f) ? miss('no clean landing yet') : miss(`rolled ${f.rollDeg}°, need 360°`)) },
+  // 0198: the Lineup's two days ask for the choice the one thumb has there (0191): the second turn, called on the run-up.
+  // Held from Go and never moved, the computer flies a clean 360 1.3 m off the mark, and that met both old bars (a clean
+  // 360; within 7 m) 150/150: the streak counted a run nobody flew. Measured below (n 150, seed 12345).
+  { id: 'roll-lineup', course: 'lineup', goal: () => 'Roll two turns over the row and land clean',
+    check: (c, f) => (!cleanLineup(f) ? miss('no clean landing yet') : f.rotations >= 2 ? done() : turnsMiss(f)),
+    hint: twiceHint, titleHint: twiceTitle, coach: twiceCoach },
   { id: 'stick-wall', course: 'wall', goal: () => 'Stick it: score 84+',
     check: (c, f) => (c.total >= 84 && landed(f) ? done() : miss(`${r1(c.total)}, need 84`)) },
   { id: 'ninety-show', course: 'show', goal: () => 'Score 90 or more',
@@ -81,8 +96,15 @@ export const OBJECTIVES = [
     // touchdown, or a landing on the mark keeps "try again": the aim isn't what cost it.
     check: (c, f) => (c.total >= 90 ? done() : miss(`${r1(c.total)}, need 90`, cleanOver(f) && f.padMiss > 3.5 && !(f.sink > 1.5) && !(f.tiltDeg > 15))),
     hint: aimHint },
-  { id: 'mark-lineup', course: 'lineup', goal: () => `Land within ${len(7)} of the mark`,
-    check: (c, f) => (!landed(f) ? miss('no clean landing yet') : f.padMiss <= 7 ? done() : miss(`${len(f.padMiss, 1)} off the mark`)) },
+  // 0198: two turns onto the mark. A 360 can't carry the mark day: the held-from-Go thumb's is already 1.3 m off, and an
+  // aimed one beats 1.2 m 8 times in 150. Called and never aimed, the 720 sets down 4.3 m off (wherever it was called);
+  // aimed, it comes in (1.5 m onto the dot, Gold: tests/unit/thumb-lineup.test.js), so the bar sits just inside that.
+  { id: 'mark-lineup', course: 'lineup', goal: () => `Roll two turns and land within ${len(LINEUP_MARK)} of the mark`,
+    check: (c, f) => (!cleanLineup(f) ? miss('no clean landing yet') : f.rotations < 2 ? turnsMiss(f)
+      : f.padMiss <= LINEUP_MARK ? done() : miss(`${len(f.padMiss, 1)} off the mark`, true)),
+    hint: (ctx, r) => (r?.turns ? twiceHint(ctx) : aimHint(ctx)),
+    titleHint: (ctx, whole) => (!thumbOn(ctx) ? '' : whole ? 'Slide up on the run-up, then onto the amber dot' : 'Slide up on the run-up'),
+    coach: twiceCoach },
   { id: 'scratch-show', course: 'show', goal: () => 'Clear the row without a scratch',
     check: (c, f) => (cleanOver(f) && (f.damagePct ?? 0) === 0 ? done() : !cleanOver(f) ? miss('clear the row and land clean first') : miss(`${f.damagePct} % damage`)) },
 ];
@@ -92,16 +114,24 @@ function miss(why, fix = false) { return fix ? { ok: false, miss: why, fix } : {
 const thumbOn = (ctx) => ctx?.device === 'touch' && ctx.scheme === 'thumb';
 // Onto the mark, in the device's words (0150: mark-show and ninety-show): one thumb slides onto the amber dot, the rest lean.
 function aimHint(ctx) { return thumbOn(ctx) ? 'hold the pad in the air and slide onto the amber dot, following it down' : coachWords(ctx).aim; }
+// 0198: one turn where the day asks two. `turns`: the hint names the call, not the aim. On one thumb the call is a slide up
+// on the run-up; keys and two thumbs fly the roll by hand, and no modelled player of theirs lands a 720 (see the header),
+// so there the miss says "try again" rather than promise a way.
+const turnsMiss = (f) => ({ ok: false, miss: `rolled ${f.rollDeg}°, need 720°`, fix: true, turns: true });
+function twiceHint(ctx) { return thumbOn(ctx) ? 'slide up on the run-up for two turns' : ''; }
+function twiceTitle(ctx, whole) { return !thumbOn(ctx) ? '' : whole ? 'Slide up on the run-up for two turns' : 'Slide up on the run-up'; }
+// The sheet's NEXT RUN line on a one-turn Lineup day: the coach would teach the mark, the day wants the call.
+function twiceCoach(ctx, r) { return thumbOn(ctx) && r?.turns ? 'For the Daily: slide up on the run-up for two turns' : ''; }
 
 // The results' line for a missed Daily (0139): the reason with its number, then what to change in this device's words
 // (ctx as src/pointer.js: { device, scheme, tier, course }) when the objective has one, else "try again".
 export function missLine(obj, r, ctx) {
-  const hint = r?.fix && obj?.hint ? obj.hint(ctx || {}) : '';
+  const hint = r?.fix && obj?.hint ? obj.hint(ctx || {}, r) : '';
   return hint ? `Daily: ${r.miss} · ${hint}` : `Daily: ${r.miss} — try again`;
 }
 // The sheet's NEXT RUN line on a missed Daily whose fix the coach would contradict (0150: skim on one thumb), else ''.
 // ctx: the words of the run to come (src/main.js pointerCtx).
-export const dailyCoach = (obj, r, ctx) => (r && !r.ok && r.fix && obj?.coach ? obj.coach(ctx || {}) : '');
+export const dailyCoach = (obj, r, ctx) => (r && !r.ok && r.fix && obj?.coach ? obj.coach(ctx || {}, r) : '');
 // The sheet's "What happened" items under such a line: a fix that says to hold the pad says the Daily's line instead.
 export const dailyItems = (items, line) => (!line ? items : (items || []).map((it) => (/\bhold(ing)? (on to )?the pad\b/i.test(it.fix || '') ? { ...it, fix: `${line}.` } : it)));
 // The title card's hint for today's objective on this device ('' when there is none); `whole`: the countdown tip's wording.

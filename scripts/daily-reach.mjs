@@ -17,7 +17,8 @@ let low = 0;
 for (const r of reach({ n, seed })) {
   const goal = OBJECTIVES.find((o) => o.id === r.id).goal();
   if (r.share < FLOOR) low++;
-  console.log(`${r.share < FLOOR ? '✗' : '✓'} ${r.id.padEnd(13)} ${r.course.padEnd(7)} ${r.population.padEnd(6)} ${String(r.met).padStart(4)}/${r.n} ${String(Math.round(r.share * 100)).padStart(3)} %  ${goal}`);
+  const call = r.called === undefined ? '' : `  (slid up on the run-up for two turns: ${r.called}/${r.n})`;
+  console.log(`${r.share < FLOOR ? '✗' : '✓'} ${r.id.padEnd(13)} ${r.course.padEnd(7)} ${r.population.padEnd(6)} ${String(r.met).padStart(4)}/${r.n} ${String(Math.round(r.share * 100)).padStart(3)} %  ${goal}${call}`);
 }
 console.log(low ? `${low} objective(s) under the floor` : 'every objective at or over the floor');
 process.exitCode = low ? 1 : 0;

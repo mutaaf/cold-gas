@@ -53,12 +53,13 @@ describe('the Lineup on one thumb (0181)', () => {
     expect(two.clean).toBeLessThan(one.clean);
   }, 120_000);
 
-  it('a held thumb flies the kickflip: lifts at the line, rolls 360°, lands on the mark, and meets both Lineup Dailies', () => {
+  it('a held thumb flies the kickflip: lifts at the line, rolls 360°, lands on the mark, and meets neither Lineup Daily (0198)', () => {
     const run = flyHeld(), card = scoreRun(run.t);
     expect(card.verdict).toMatch(/Stuck it|Perfect 10/);
     expect(card.facts.rollDeg).toBeGreaterThanOrEqual(330);
     expect(card.facts.padMiss).toBeLessThan(3.5);
-    for (const id of ['roll-lineup', 'mark-lineup']) expect(evaluate(OBJECTIVES.find((o) => o.id === id), card, 'lineup').ok).toBe(true);
+    // 0198: the Lineup's Dailies ask for the thumb's choice (the second turn), not a thumb that only held the pad.
+    for (const id of ['roll-lineup', 'mark-lineup']) expect(evaluate(OBJECTIVES.find((o) => o.id === id), card, 'lineup').ok).toBe(false);
     // The input log replays to the same card (the Worker scores it this way).
     expect(scoreRun(simulate(run.inputLog, 'lineup').t).total).toBe(card.total);
   });
@@ -125,6 +126,8 @@ describe('the Lineup on one thumb: the thumb picks the trick (0191)', () => {
     expect(c.facts.rotations).toBe(2);
     expect(c.facts.padMiss).toBeLessThan(1.5);
     expect(medalFor('lineup', 'assist', c.total)).toBe('gold');
+    // 0198: the 720 onto the mark meets both Lineup Dailies.
+    for (const id of ['roll-lineup', 'mark-lineup']) expect(evaluate(OBJECTIVES.find((o) => o.id === id), c, 'lineup').ok).toBe(true);
     // The input log replays to the same card (the Worker scores the 720 this way too).
     expect(scoreRun(simulate(aimed.inputLog, 'lineup').t).total).toBe(c.total);
   });
