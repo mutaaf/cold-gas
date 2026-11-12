@@ -104,7 +104,7 @@ final class DrillPilot {
         }
         out.level = c.grounded == 0 ? 1 : 0
         if drillUp.y > 0.94 { rolledOut = true }
-        if rolledOut && (c.vel.y < landWant(c, massOf(c)) + 0.5 || c.vel.y > -3) { steerToPad(c, jsMax(0, c.pos.y - SPEC.comHeight), plan.carry != 0 ? 1 : 4) }
+        if rolledOut && (c.vel.y < landWant(c, massOf(c)) + 0.5 || c.vel.y > -3) { steerToPad(c, jsMax(0, c.pos.y - SPEC.comHeight), plan.carry != 0 ? 1 : 3.5) }   // 0190: 3.5 m (was 4)
         return out
     }
 }

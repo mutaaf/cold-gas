@@ -246,6 +246,8 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     fallPeak: 0,
     // Assist's auto-land: 1 once the computer has started LAND itself this flight (see autoLand).
     autoLand: 0,
+    // LAND's line hold through the set-down (0190): 1 once LAND's roll-out has run from upside down this flight.
+    lineArm: 0,
     // LAND's carry over a parked row: 1 while it tops the carry up (see governor).
     carryUp: 0,
     // LAND's brake, once begun: the most sink it may still want (m/s, 0 = not braking; see governor).
@@ -346,6 +348,12 @@ const LEVEL_K = 2, LEVEL_DAMP = 1.4;
 // 12 rad/s² on Iroll 615 kg·m² is ≈9.8 kN on one side's down-jets, 0.4 G, and the car falls nearly
 // free (TELEMETRY: 0.2–0.4 G for the first second off the lip). ESTIMATE, set by the reveal's timing.
 const UPPER_ROLL = 0.94, ROLL_ACC = 12;
+// 0190: once LAND has rolled the car out of the ledge's inversion (`lineArm`), its line hold keeps taking the roll's
+// sideways drift off below HOVER + 1.5 m too, down to HOLD_LOW_H m, at no more than HOLD_LOW_BANK rad of bank (cos 0.12 =
+// 0.993: still "level" to the set-down's check below 1.2 m). It used to let go at 4 m, and a car LAND began braking late
+// (a thumb never pressed again) set down still sliding sideways at 1.75 m/s, 7.2 m off the Wall's line. The Lineup's
+// kickflip never arms it (the pilot rolls it there), so that flight is as before.
+const HOLD_LOW_H = 1.5, HOLD_LOW_BANK = 0.12;
 // Roll torque per unit of roll command in the mixer's linear range (one side's down-jets, N·m).
 const ROLL_TAU = NOZZLE_SPEC.reduce((a, n) => a + (n.group === 'lift' && n.pos[0] > 0 ? 2 * n.pos[0] * n.pos[0] * n.max : 0), 0);
 function flightComputer(s, inp, out, envelope = 1, level = inp.level) {
@@ -357,13 +365,18 @@ function flightComputer(s, inp, out, envelope = 1, level = inp.level) {
     const ux = worldUpB.x, uy = worldUpB.y, uz = worldUpB.z;
     // Pitch correction is +u.z, roll correction is −u.x (LESSONS: level-controller signs).
     let wantX = LEVEL_K * uz, wantZ = -LEVEL_K * ux;
-    // Hold the line: roof up, above the set-down, with the stick centred, LAND banks up to 0.2 rad
+    // Hold the line: roof up, with the stick centred, LAND banks up to 0.2 rad above the set-down (and, once it has rolled
+    // the car out of the ledge's inversion, up to HOLD_LOW_BANK on down to HOLD_LOW_H m, 0190)
     // (≈11°) against sideways drift. Rolling out from inverted on one side's down-jets kicks the car
     // sideways several m/s, and a player can't see it until they've landed 30 m off the mark. The
     // carry along the run (the row, the mark) stays the pilot's to manage.
-    if (uy > 0.8 && Math.abs(inp.roll) < 0.05 && s.pos.y - SPEC.comHeight > HOVER + 1.5) {
+    const hh = s.pos.y - SPEC.comHeight;
+    // (Below HOVER + 1.5 m only with the stick at exactly 0: a pilot steering a little, as the Show's reference does onto
+    // the pad, flies its own line there, and that flight is as it was.)
+    const holdCap = hh > HOVER + 1.5 ? 0.2 : s.lineArm && hh > HOLD_LOW_H && inp.roll === 0 ? HOLD_LOW_BANK : 0;
+    if (uy > 0.8 && Math.abs(inp.roll) < 0.05 && holdCap > 0) {
       rotateInv(tmp, s.quat, s.vel);
-      wantZ = -LEVEL_K * (ux - clamp(0.07 * tmp.x, -0.2, 0.2));
+      wantZ = -LEVEL_K * (ux - clamp(0.07 * tmp.x, -holdCap, holdCap));
     }
     let rollOut = false;
     if ((uy < -0.2 && Math.abs(uz) < 0.7) || (uy < UPPER_ROLL && Math.abs(ux) > Math.abs(uz) && Math.abs(inp.roll) < 0.05)) {
@@ -375,6 +388,7 @@ function flightComputer(s, inp, out, envelope = 1, level = inp.level) {
       if (uy < -0.2) wantX = 0;
       wantZ = (ux >= 0 ? -1 : 1) * Math.min(RATE.z, Math.sqrt(1.6 * ROLL_ACC * bank));
       rollOut = Math.abs(inp.roll) < 0.05;
+      if (rollOut && uy < -0.2) s.lineArm = 1;
     }
     out.x += (kp + LEVEL_DAMP) * wantX - LEVEL_DAMP * wb.x;
     out.z += (kp + LEVEL_DAMP) * wantZ - LEVEL_DAMP * wb.z;
@@ -591,7 +605,10 @@ export { LIFT_MAX, TRIM };
 const AUTO_LEAD = 0.4;   // s: a margin for the roll-out's lag and the valves' opening (ESTIMATE)
 const AUTO_SINK = 7;      // m/s at the floor: above this a fall hurts (the judges' landing band zeroes at 6)
 function autoLand(s, inp, grounded, m) {
-  if (!inp.assist || grounded > 0) { s.autoLand = 0; return; }
+  // (0190: on until two wheels are down, as a held LAND is: the first wheel's tick flew the level law for a held LAND only,
+  // so a press after the auto-land came out a few µm off never pressing's.)
+  if (!inp.assist || grounded >= 2) { s.autoLand = 0; return; }
+  if (grounded > 0) return;   // …but it never starts with a wheel down
   if (s.autoLand || inp.level || s.air <= 0.5 || s.vel.y >= 0) return;
   const h = landHeight(s), vy = s.vel.y;
   if (vy * vy + 2 * G * h <= AUTO_SINK * AUTO_SINK) return;
@@ -606,6 +623,7 @@ function autoLand(s, inp, grounded, m) {
 // The flight computer end to end: the pilot's commands → governors → rate loop → mixer → valve
 // targets. `step` runs it every tick in Assist and Pro.
 function computerTargets(s, inp, grounded, m, out) {
+  if (grounded > 0) s.lineArm = 0;
   const level = inp.level || (inp.assist && s.autoLand) ? 1 : 0;
   governor(s, inp, grounded, m, level);
   // Envelope protection (Assist, LAND): falling faster than the profile, the stick can't tilt

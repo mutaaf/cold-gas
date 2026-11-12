@@ -22,7 +22,7 @@
 // the DOM: scripts/human-phone.mjs flies it in Node with the same code the page runs.
 import { wallProgress } from './sim/run.js';
 import { dhypot } from './sim/dmath.js';
-import { up, forward, CAR, bodyRates, G } from './sim/vehicle.js';
+import { up, forward, CAR, bodyRates, G, landProfile } from './sim/vehicle.js';
 import { REVEAL } from './sim/autopilot.js';
 import { SPEC } from './sim/spec.js';
 import { COURSES } from './sim/courses.js';
@@ -59,18 +59,23 @@ const ROW_MARGIN = 2.5;
 // traces; 6 to err wide) and the flank check's look-ahead: does the car, carrying on as it is (falling at
 // least as fast as now: LAND only slows it, so this errs low) plus the slide's push, come in over a
 // parked vehicle's side, below its roof + FLANK_TOP, within FLANK_T s? Only boxes it isn't already over.
+// 0190: on the Wall (no row, no up/down place) the computer flies the touchdown along the run onto the mark the way the
+// reference pilot does (src/sim/autopilot.js steerToPad's pitch: the velocity that reaches the pad in the time to go, while
+// the brake turns the fall), WALL_AIM_GAIN per m/s, up to the slide's full pitch, out by WALL_AIM_FLOOR m (+ 2 m at half).
+// Gain and floor fitted on the five no-slide thumbs (tests/unit/thumb-mastery.test.js 0190): 0.2 from 4 m left them 4–5 m long.
+const WALL_AIM_FLOOR = 1.5, WALL_AIM_GAIN = 0.4;
 const AIM_ACC = 6, FLANK_T = 2, FLANK_PAD = 0.6, FLANK_TOP = 0.8;
 // 0164: the sideways slide's loop (sample's AIM). LAND's hold-the-line (vehicle.js flightComputer) banks HOLD_K rad
 // per m/s of the body's sideways velocity, up to 0.2 rad, with the stick centred; a roll command r on LAND's level
 // law holds a bank of r · kp · RATE.z / ((kp + LEVEL_DAMP) · LEVEL_K), so a bank b is r = HOLD_ROLL · b. The hold
 // takes a drift v off in about 1 / (g · HOLD_K) = 1.46 s, and the car carries ≈ v · τ · (1 − e^(−t/τ)) further in t s
-// (`lead`, Padé: t / (1 + t / 2τ), no exp: the input log must come out bit-exact in Swift too). τ = HOLD_TAU = 1.8 s
-// matches where the hold really sets the car down (measured over the held-slide sweeps, tests/unit/thumb-mastery
+// (`lead`, Padé: t / (1 + t / 2τ), no exp: the input log must come out bit-exact in Swift too). τ = HOLD_TAU = 1.8 s (0190: now 1.3 s, below)
+// matched where the hold really set the car down (0190: refitted to 1.3 s, below) (measured over the held-slide sweeps, tests/unit/thumb-mastery
 // .test.js: at 1.46 the Show's no-slide touchdown read 1 m right of where it lands, at 2.2+ the Wall's read past it).
 // The slide flies the same law, AIM_GAIN times as stiff and up to AIM_BANK rad (the old full roll, 0.45), about the
 // drift that ends at its place. The place stays AIM_RING m inside the mark's side (the outer ring is 7 m); AIM_TGO s
 // is the least time to go it plans over.
-const HOLD_K = 0.07, HOLD_ROLL = (3 * 2) / (1.6 * 4.6), HOLD_TAU = 1.8;
+const HOLD_K = 0.07, HOLD_ROLL = (3 * 2) / (1.6 * 4.6), HOLD_TAU = 1.3;
 const AIM_RING = 6, AIM_TGO = 0.6, AIM_GAIN = 3, AIM_BANK = 0.55;
 // 0164 (the critic's bounce: the tapped thumb, pressed again after a lift, slid the wrong way). `ref` read on the first
 // roof-up tick of a car still rolling out reads the fall through the bank (13.3 m on the Wall against the ≈9 it reaches;
@@ -91,7 +96,11 @@ const REF_STEADY = 2, REF_WIN = 24, REF_WINS = 2, AIM_UY_SLID = 0.8, AIM_LOW = 0
 // 0.4 too far on the 0.75 s line) and acts on its first roof-up tick. Its roll is never less, the way slid, than the bank
 // LAND's own hold would fly (a roll switches the hold off, and a weaker one let the drift carry on: −8 px went 0.5 m
 // right). The Show keeps the settle: its tapped thumb reaches, and its inward wait for the semi is tuned on it.
-const REF_LEAK = 0.2, HOLD_BANK = 0.2, QUICK_MIN = 0.5;
+const QUICK_TAU = 1.6;
+// 0190: QUICK_MIN 0.5 → 1.5 m. A quick slide's roll goes through LAND's envelope twice during the brake (the rate demand
+// and the torque) where LAND's own hold goes once, so a slide that moved the place under ≈ 1.5 m flew weaker than no slide:
+// pressed again 1.0 / 2.5 s after the tap, −8 px set down 0.3 / 1.6 m the wrong way. Under 1.5 m LAND's hold flies it.
+const REF_LEAK = 0.2, HOLD_BANK = 0.2, QUICK_MIN = 1.5;
 // 0181: the Lineup's lift-off line (m before the marker, the reference's) and the least ground speed that commits to it.
 const LIFT_EARLY = COURSES.lineup.lineupZ0 - 6.5 - COURSES.lineup.liftOffZ, LIFT_MIN_V = 3;
 // 0191: the thumb picks the Lineup's trick. Held and slid up on the run-up (TWICE_AT of a full slide), it calls a second
@@ -317,6 +326,21 @@ export function createOneThumb() {
         // it dropped at 6–7 m/s. A press takes the aim back from where the car is.
         if (st.held) st.landing = true;
         if (st.landing && lineupLevel) out.level = 1;
+        // 0190: on the Wall the computer flies its touchdown along the run onto the mark (WALL_AIM_GAIN), held or not: LAND is
+        // on (the thumb held it, or the auto-land took it). A slide up or down replaces it (the Wall's pitch, as 0121).
+        let wallPitch = 0;
+        if (run.course === 'wall' && (st.landing || c.autoLand)) {
+          up(c, uw);
+          if (uw.y > 0.94 && (c.vel.y < landProfile(c) + 0.5 || c.vel.y > -3)) {
+            forward(c, fw);
+            const hh = Math.max(0, c.pos.y - SPEC.comHeight), pad = COURSES.wall.pad;
+            const tGo = Math.max(1.5, hh / 2.5 + 1.5);
+            const along = ((pad.z - c.pos.z) / tGo - c.vel.z) * fw.z + ((pad.x - c.pos.x) / tGo - c.vel.x) * fw.x;
+            const kk = hh < WALL_AIM_FLOOR ? 0 : hh < WALL_AIM_FLOOR + 2 ? 0.5 : 1;
+            wallPitch = kk * Math.max(-0.55, Math.min(0.55, along * WALL_AIM_GAIN));
+          }
+          out.pitch = wallPitch;
+        }
         // 0165: the brake has turned the fall (the sink is 0.5 m/s past its peak): from here predict's touchdown is
         // the flight's (in free fall it reads the brake as starting now, ≈11 m short on the Show).
         const sink = -c.vel.y;
@@ -347,12 +371,12 @@ export function createOneThumb() {
             rotate(bx, c.quat, X1);
             const bs = sideOf(bx.x, bx.z, fw);   // the body's x axis is the car's left (−1) or right (+1)
             const vb = c.vel.x * bx.x + c.vel.y * bx.y + c.vel.z * bx.z;
-            const tGo = Math.max(AIM_TGO, pr.tLand), lead = tGo / (1 + tGo / (2 * HOLD_TAU));
+            const quick = st.airPress && run.course === 'wall';   // 0177
+            const tGo = Math.max(AIM_TGO, pr.tLand), lead = tGo / (1 + tGo / (2 * (quick ? QUICK_TAU : HOLD_TAU)));
             const here = sideOf(c.pos.x, c.pos.z, fw);
             let roll = 0;
             st.wait = false;
             const sx = shape(st.ax);
-            const quick = st.airPress && run.course === 'wall';   // 0177
             // Read until this hold first slides; after that a thumb back in the middle asks for `ref` itself (the place
             // the dot was laid out from), not for wherever the drift has got to.
             if (!st.slid || st.ref !== st.ref) {
@@ -401,7 +425,7 @@ export function createOneThumb() {
               // hovers over the roofs: LESSONS 2026-10-21, 0014).
               if (c.pos.z > COURSES.lineup.lineupEnd + 1) pitch = k * THUMB.aimPitch * shape(st.ay);
             } else if (run.course !== 'show') {
-              if (clear) pitch = k * THUMB.aimPitch * shape(st.ay);   // the Wall: no row, the slide is the pitch (as 0121)
+              if (clear) pitch = shape(st.ay) !== 0 ? k * THUMB.aimPitch * shape(st.ay) : wallPitch;   // the Wall: no row, the slide is the pitch (as 0121)
             } else if (st.canA) {
               const predA = pr.landX * fw.x + pr.landZ * fw.z;
               if (!st.slidA || st.refA !== st.refA) st.refA = predA;

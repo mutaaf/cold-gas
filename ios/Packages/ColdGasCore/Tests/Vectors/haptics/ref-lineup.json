@@ -1,4 +1,4 @@
-{"format":1,"simVersion":31,"name":"ref-lineup","course":"lineup","hz":240,"fields":["phase","speed","vy","onWall","contacts","load","flow","gas","lift","...impacts[kind,speed]"],"ticks":[
+{"format":1,"simVersion":32,"name":"ref-lineup","course":"lineup","hz":240,"fields":["phase","speed","vy","onWall","contacts","load","flow","gas","lift","...impacts[kind,speed]"],"ticks":[
 [0,0.0224,0,0,15,1.1722,0,1,0],
 [0,0.0487,0,0,15,1.1989,0,1,0],
 [0,0.077,0,0,15,1.2301,0,1,0],

@@ -15,6 +15,8 @@ public enum THUMB {
 }
 let ROW_MARGIN = 2.5
 let AIM_ACC = 6.0, FLANK_T = 2.0, FLANK_PAD = 0.6, FLANK_TOP = 0.8
+// 0190: on the Wall the computer flies the touchdown along the run onto the mark, as the reference does (src/onethumb.js).
+let WALL_AIM_FLOOR = 1.5, WALL_AIM_GAIN = 0.4
 
 /// Would the car, carrying on as it is plus a sideways push `ax` (m/s²), come in over a parked flank on the Show
 /// below its roof within FLANK_T s?
@@ -33,14 +35,16 @@ public func flankAhead(_ c: Vehicle, _ ax: Double) -> Bool {
     return false
 }
 // 0164: the sideways slide's loop (src/onethumb.js, the same numbers and the same order of operations).
-let HOLD_K = 0.07, HOLD_ROLL = (3.0 * 2.0) / (1.6 * 4.6), HOLD_TAU = 1.8
+let HOLD_K = 0.07, HOLD_ROLL = (3.0 * 2.0) / (1.6 * 4.6), HOLD_TAU = 1.3   // 0190: refit to the hold kept on below 4 m
 let AIM_RING = 6.0, AIM_TGO = 0.6, AIM_GAIN = 3.0, AIM_BANK = 0.55
 // 0164 (the tapped thumb): the place is taken once it holds still and the slide can act; aim past 0.8 roof up once slid;
 // the bank tapers near the floor (src/onethumb.js says why).
 let REF_STEADY = 2.0, REF_WIN = 24, REF_WINS = 2, AIM_UY_SLID = 0.8, AIM_LOW = 0.5, AIM_LOW_H = 2.0
 // 0177: a hold pressed again in the air on the Wall reads the place with REF_LEAK of the fall through the bank, acts on
 // its first roof-up tick, and never rolls less than LAND's own hold the way slid (src/onethumb.js says why).
-let REF_LEAK = 0.2, HOLD_BANK = 0.2, QUICK_MIN = 0.5
+let REF_LEAK = 0.2, HOLD_BANK = 0.2, QUICK_MIN = 1.5   // 0190: 0.5 → 1.5
+// 0190: the quick hold's `ref` leads the drift over QUICK_TAU (src/onethumb.js says why).
+let QUICK_TAU = 1.6
 /// A point's side in the car's frame: + = the car's right (the pad's sight's +x).
 @inline(__always) func sideOf(_ x: Double, _ z: Double, _ f: V3) -> Double { z * f.x - x * f.z }
 /// The tallest parked roof on the Show (the first of the tallest); an inward slide waits until it is behind (0164).
@@ -158,6 +162,20 @@ public final class OneThumb {
             }
             if held_ { landing_ = true }
             if landing_ { out.level = 1 }
+            // 0190: the Wall's along-run aim (src/onethumb.js): held or not, once LAND is on.
+            var wallPitch = 0.0
+            if run.course == "wall" && (landing_ || c.autoLand != 0) {
+                M3.rotate(tUw, c.quat, M3.set(tUw, 0, 1, 0))
+                if tUw.y > 0.94 && (c.vel.y < landWant(c, massOf(c)) + 0.5 || c.vel.y > -3) {
+                    M3.rotate(tFw, c.quat, M3.set(tFw, 0, 0, 1))
+                    let hh = jsMax(0, c.pos.y - SPEC.comHeight), wpad = WALL_COURSE.pad!
+                    let tGo = jsMax(1.5, hh / 2.5 + 1.5)
+                    let along = ((wpad.z - c.pos.z) / tGo - c.vel.z) * tFw.z + ((wpad.x - c.pos.x) / tGo - c.vel.x) * tFw.x
+                    let kk = hh < WALL_AIM_FLOOR ? 0.0 : hh < WALL_AIM_FLOOR + 2 ? 0.5 : 1.0
+                    wallPitch = kk * jsMax(-0.55, jsMin(0.55, along * WALL_AIM_GAIN))
+                }
+                out.pitch = wallPitch
+            }
             // 0165: the brake has turned the fall (the sink 0.5 m/s past its peak).
             let sink = -c.vel.y
             if sink > pk { pk = sink } else if pk > 4 && sink < pk - 0.5 { braked = true }
@@ -175,12 +193,12 @@ public final class OneThumb {
                     M3.rotate(tBx, c.quat, M3.set(tBx, 1, 0, 0))
                     let bs = sideOf(tBx.x, tBx.z, tFw)
                     let vb = c.vel.x * tBx.x + c.vel.y * tBx.y + c.vel.z * tBx.z
-                    let tGo = jsMax(AIM_TGO, pr.tLand), lead = tGo / (1 + tGo / (2 * HOLD_TAU))
+                    let quick = airPress && run.course == "wall"   // 0177
+                    let tGo = jsMax(AIM_TGO, pr.tLand), lead = tGo / (1 + tGo / (2 * (quick ? QUICK_TAU : HOLD_TAU)))
                     let here = sideOf(c.pos.x, c.pos.z, tFw)
                     var roll = 0.0
                     wait = false
                     let sx = thumbShape(ax)
-                    let quick = airPress && run.course == "wall"   // 0177
                     if !slid || ref_ != ref_ {
                         ref_ = here + (quick ? vb - (1 - REF_LEAK) * c.vel.y * tBx.y : vb) * bs * lead
                         if ref0 != ref0 { ref0 = ref_; win = 0 }
@@ -219,7 +237,7 @@ public final class OneThumb {
                     // 0165: along the run, a place on the Show (the Wall: the slide is the pitch, as 0121).
                     var pitch = 0.0
                     if run.course != "show" {
-                        if clear { pitch = k * THUMB.aimPitch * thumbShape(ay) }
+                        if clear { pitch = thumbShape(ay) != 0 ? k * THUMB.aimPitch * thumbShape(ay) : wallPitch }
                     } else if canA_ {
                         let predA = pr.landX * tFw.x + pr.landZ * tFw.z
                         if !slidA || refA_ != refA_ { refA_ = predA }

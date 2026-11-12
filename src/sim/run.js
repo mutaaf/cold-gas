@@ -60,7 +60,10 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // on the jets (≥ 0.5 g, the sink opening up at 4.8 m/s²) instead of falling 0.46 s with them out.
 // v31: the Wall reads its mark off the pad's painted rings as the Show does, and the panel weighs it (0182): a slide
 // that finds the mark shows in the score, and a touchdown outside the 4 m ring is never "Perfect 10". Scores only.
-export const SIM_VERSION = 31;
+// v32: LAND's line hold, once it has rolled the car out of the ledge's inversion, keeps taking the sideways drift off
+// down to 1.5 m (≤ 0.12 rad) instead of letting go at 4 m, and Assist's auto-land stays on until two wheels are down (0190).
+// Off the Wall and the Show; the Lineup's reference is as before.
+export const SIM_VERSION = 32;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 // A car stopped on the deck ends the run `stalled` after STALL_TICKS: a climb that gave up. On the ledge

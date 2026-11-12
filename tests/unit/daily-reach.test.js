@@ -25,7 +25,11 @@ describe('the Daily is in reach (0135)', () => {
     expect(low).toEqual([]);
   });
 
-  it('the one-thumb mark, gas, skim and 90+ days still leave some short: a better flight is still worth more', () => {
-    for (const id of ['mark-show', 'gas-show', 'skim-show', 'ninety-show']) expect(rows.find((r) => r.id === id).share).toBeLessThan(1);
+  it('the one-thumb mark, skim and 90+ days still leave some short: a better flight is still worth more (gas: 0200)', () => {
+    // 0190: gas-show left out. LAND's hold now takes the drift off through the set-down, so a careful thumb's slide flies less
+    // and the Show keeps more gas: "more than 25 % gas left" went 31/60 → 58/60 (n 60) and 40/40 here. The bar wants raising
+    // (0200), not this flight made thirstier.
+    for (const id of ['mark-show', 'skim-show', 'ninety-show']) expect(rows.find((r) => r.id === id).share).toBeLessThan(1);
+    expect(rows.find((r) => r.id === 'gas-show').share).toBeGreaterThan(0.9);
   });
 });
