@@ -12,6 +12,7 @@ import SwiftUI
 import simd
 import ColdGasClient
 import ColdGasCore
+import ColdGasLayout
 import ColdGasPhysics
 
 enum Screen: Equatable { case title, run, results, drive }
@@ -32,6 +33,9 @@ struct HudState: Equatable {
     var throttles = [Double](repeating: 0, count: 10)   // the live valves, for Advanced's pad
     var hardware = false                                 // a controller or keyboard is flying: the touch controls hide
     var markX = 0.0, markY = 0.0, hasMark = false   // the pad's sight: the mark from the predicted touchdown
+    // The classic deck (0210, main.js syncTouchPhase): where the run is, the Wall's ledge, the Show's row behind the car,
+    // and the control the cue names (the ghost ring).
+    var touchPhase = TouchPhase.ground, ledge = false, rowDone = false, hint: String?
 }
 
 @MainActor
@@ -206,6 +210,11 @@ final class Game: ObservableObject {
         }
         #if DEBUG
         thumbBot(l)
+        // `-freeze <tick>`: the run stops there with its controls up (shots of the deck at a moment; no pause sheet).
+        if let n = Game.freezeAt, r.tick >= n {
+            if !frozen { frozen = true; refreshHud(l); Ready.mark("frozen") }
+            return
+        }
         #endif
         if !paused && r.phase != .done { Hardware.shared.poll(l) { self.paused = true } }
         acc += min(dt, 0.1) * slowK
@@ -268,6 +277,8 @@ final class Game: ObservableObject {
     }
 
     #if DEBUG
+    private static let freezeAt = Launch.value("-freeze").flatMap(Int.init)
+    private var frozen = false
     /// `-thumbbot`: a thumb on the one-thumb pad: hold to the ledge, a tap, hold to land (the path a touch takes, minus the glass).
     private var botWait = 0
     private func thumbBot(_ l: LiveRun) {
@@ -327,7 +338,13 @@ final class Game: ObservableObject {
             h.markX = m.x; h.markY = m.y; h.hasMark = true
         }
         h.sinkBand = r.phase == .air && c.vel.y < 0 ? landingBand(l, h) : 0
+        // main.js flying(): a hop off the ground swaps nothing until it has lasted AIR_HOLD (60 ticks); off the Wall at once.
+        let flying = r.phase == .air && (l.released || Double(r.tick) - r.t.airStartTick >= 60)
+        h.touchPhase = r.phase == .landed || r.phase == .done ? .landed : flying || (r.phase == .ramp && l.released) ? .air : r.phase == .ramp ? .ramp : .ground
+        h.ledge = r.phase == .ramp && !l.released && r.t.progress >= 0.8
+        h.rowDone = r.course == "show" && (r.t.crossedRow || r.t.contact)
         h.cue = cue(l, h)
+        h.hint = Deck.hint(cue: h.cue)
         if h != hud { hud = h }
     }
     private func landingBand(_ l: LiveRun, _ h: HudState) -> Int {

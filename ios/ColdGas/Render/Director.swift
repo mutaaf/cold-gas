@@ -24,6 +24,7 @@
 import UIKit
 import simd
 import ColdGasCore
+import ColdGasLayout
 
 /// What the screens over the scene leave the camera (0113, 0128): worked out when the layout or the scheme changes.
 struct CameraFraming {
@@ -49,9 +50,8 @@ struct CameraFraming {
             let s = ThumbPad.size(controls.width)
             add(CGRect(x: controls.maxX - s - 8, y: controls.maxY - s - 8, width: s, height: s))
         } else {
-            let m = ClassicPad.margin, stick = ClassicPad.stickSize, b = ClassicPad.buttonsSize
-            add(CGRect(x: controls.minX + m, y: controls.maxY - m - stick, width: stick, height: stick))
-            add(CGRect(x: controls.maxX - m - b, y: controls.maxY - m - b, width: b, height: b))
+            // The classic deck's stick and fan where this shape puts them (0210, Input/FlightDeck.swift).
+            for r in DeckGeometry.layout(controls.size).covers { add(r.cgRect.offsetBy(dx: controls.minX, dy: controls.minY)) }
         }
     }
 }
