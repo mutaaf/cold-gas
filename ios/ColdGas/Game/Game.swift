@@ -14,8 +14,14 @@ import ColdGasClient
 import ColdGasCore
 import ColdGasPhysics
 
-enum Screen: Equatable { case title, run, results }
+enum Screen: Equatable { case title, run, results, drive }
 enum Control: String, CaseIterable, Codable { case oneThumb, classic }
+
+/// Free Drive's HUD: speed, how far from the apron, the heading.
+struct DriveHud: Equatable {
+    var speed = 0.0, km = 0.0, heading = 0.0
+    var ready = false, line = ""
+}
 
 /// What the HUD shows, refreshed a few times a second (SwiftUI never sees the 240 Hz state).
 struct HudState: Equatable {
@@ -45,6 +51,10 @@ final class Game: ObservableObject {
 
     /// The stage view the game draws through (set by the root).
     weak var stage: StageView?
+    /// Free Drive (docs/NATIVE-FREEDRIVE.md), while it's up: unscored, its own world.
+    private(set) var freeDrive: FreeDrive?
+    @Published private(set) var driveHud = DriveHud()
+    private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0
     let controls = Controls()
 
     private(set) var live: LiveRun?
@@ -105,10 +115,71 @@ final class Game: ObservableObject {
         showTitleLoop()
     }
 
+    // --- Free Drive ------------------------------------------------------------------------------
+    /// Into Free Drive from the title (or `-freedrive`). `-fd-km <km>` starts on a road that far out, `-fd-cruise <m/s>`
+    /// carries the car along the roads (the bench, the shots), `-fd-seed <text>` picks the world.
+    func startDrive() {
+        live = nil; controls.live = nil; track = nil; result = nil; paused = false
+        let fd = FreeDrive(seed: Launch.value("-fd-seed") ?? FreeDrive.seedDefault)
+        if let km = Launch.value("-fd-km").flatMap(Double.init), km > 0 {
+            let a = 0.6   // a bearing out from the centre (radians from +z)
+            fd.placeOnRoad(nearX: sin(a) * km * 1000, z: cos(a) * km * 1000)
+        }
+        // `-fd-at x,z,yaw°`: the car there, facing that way (shots).
+        if let a = Launch.value("-fd-at")?.split(separator: ",").compactMap({ Double($0) }), a.count == 3 { fd.place(x: a[0], z: a[1], yaw: a[2] * .pi / 180) }
+        if let v = Launch.value("-fd-cruise").flatMap(Double.init) { fd.cruise = v }
+        if Launch.value("-fd-cam") == "bumper" { fd.camera.mode = .bumper }
+        freeDrive = fd; driveSettled = false
+        stage?.load(course: "drive", track: fd.track)
+        screen = .drive
+        HapticPlayer.shared.apply(HapticContinuous())
+    }
+    func endDrive() {
+        if let r = stage?.renderer, r.courseKey == "drive" { r.drive = nil }
+        freeDrive = nil
+        screen = .title
+        showTitleLoop()
+    }
+    private func driveFrame(dt: Double) {
+        guard let fd = freeDrive else { return }
+        // The drive's renderer is built off the main thread on first use: hook it up once it's the one drawing.
+        if let r = stage?.renderer, r.courseKey == "drive", r.drive !== fd { r.drive = fd; fd.attach(device: r.device) }
+        if !paused { fd.frame(dt: min(dt, 0.1)) }
+        stage?.renderer?.liveTime = fd.liveTime
+        Sound.shared.update(speed: DMath.dhypot(fd.car.vel.x, fd.car.vel.y, fd.car.vel.z), throttles: fd.car.throttles, grounded: fd.car.grounded > 0, phase: .run)
+        if !driveSettled, fd.view?.settled == true, (fd.view?.stats.tiles ?? 0) > 0 {
+            driveSettled = true
+            Ready.mark("drive")
+            print("DRIVE settled · \(fd.statsLine)")
+            if Launch.bench { stage?.startBench(seconds: 10) }
+        }
+        #if DEBUG
+        driveLogT += dt
+        if driveSettled && driveLogT > 2 && Launch.args.contains("-fd-stats") { driveLogT = 0; print("DRIVE \(fd.statsLine) · levels \(fd.view?.levels ?? []) · \(fd.groundLine)") }
+        #else
+        driveLogT += dt
+        if driveSettled && driveLogT > 2 && Launch.args.contains("-fd-stats") { driveLogT = 0; print("DRIVE \(fd.statsLine) · levels \(fd.view?.levels ?? [])") }
+        #endif
+        driveHudT += dt
+        if driveHudT > 1.0 / 10 {
+            driveHudT = 0
+            var h = DriveHud()
+            h.speed = DMath.dhypot(fd.car.vel.x, fd.car.vel.y, fd.car.vel.z)
+            h.km = fd.dist / 1000
+            let q = fd.car.quat
+            let fx = 2 * (q.x * q.z + q.w * q.y), fz = 1 - 2 * (q.x * q.x + q.y * q.y)
+            h.heading = (atan2(fx, fz) * 180 / .pi + 360).truncatingRemainder(dividingBy: 360)
+            h.ready = driveSettled
+            h.line = fd.statsLine
+            if h != driveHud { driveHud = h }
+        }
+    }
+
     // --- The frame -----------------------------------------------------------------------------
     /// Once a display frame, before the draw: step the sim by the frame's time (scaled by the crash's slow motion).
     func frame(dt: Double, slowK: Double) {
-        stage?.renderer?.crash.audible = screen == .run || replaying
+        stage?.renderer?.crash.audible = screen == .run || replaying || screen == .drive
+        if screen == .drive { driveFrame(dt: dt); return }
         if replaying, let tr = track { replayFrame(dt: dt, slowK: slowK, tr); return }
         guard screen == .run, let l = live, let tr = track, !paused else {
             Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: screen == .title ? .title : .quiet)

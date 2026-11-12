@@ -59,6 +59,43 @@ final class Replay {
     }
     func setScore(_ total: Double, _ v: String) { score = total; verdict = v }
 
+    // --- Free Drive (docs/NATIVE-FREEDRIVE.md): a drive with no end, drawn relative to a floating origin -------------------
+    /// One tick of a car with no run around it (Free Drive): its pose relative to `origin`, so the track stays as precise
+    /// 40 km out as at the centre. The parked bodies likewise.
+    func append(car c: Vehicle, origin o: SIMD3<Double>) {
+        carPos.append(SIMD3(Float(c.pos.x - o.x), Float(c.pos.y - o.y), Float(c.pos.z - o.z)))
+        carQuat.append(simd_quatf(ix: Float(c.quat.x), iy: Float(c.quat.y), iz: Float(c.quat.z), r: Float(c.quat.w)))
+        carVel.append(SIMD3(Float(c.vel.x), Float(c.vel.y), Float(c.vel.z)))
+        fans.append(Float(c.fan))
+        for v in c.throttles { nozzles.append(Float(v)) }
+        bodyCount = c.world.bodies.count
+        for b in c.world.bodies { bodies += [Float(b.cx - o.x), Float(b.cy - o.y), Float(b.cz - o.z), Float(b.qx), Float(b.qy), Float(b.qz), Float(b.qw)] }
+        phases.append(c.grounded > 0 ? 0 : 2)
+        for w in c.wheels { wheelState += [Float(w.compression), Float(w.spin), Float(w.steer)] }
+        let im = c.impacts
+        while impacts.count < im.count {
+            let i = impacts.count
+            impacts.append(Impact(tick: Int(im.tick[i]), kind: im.kind[i], part: im.part[i], probe: im.probe[i], body: im.body[i],
+                pos: SIMD3(im.x[i] - Float(o.x), im.y[i] - Float(o.y), im.z[i] - Float(o.z)), normal: SIMD3(im.nx[i], im.ny[i], im.nz[i]), speed: im.speed[i], crush: im.crush[i]))
+        }
+        ticks += 1
+    }
+    /// Keep only the newest `keep` ticks (a drive never ends; the renderer only reads the last two).
+    func trim(keep: Int) {
+        let drop = ticks - keep
+        guard drop > 0 else { return }
+        carPos.removeFirst(drop); carQuat.removeFirst(drop); carVel.removeFirst(drop); fans.removeFirst(drop); phases.removeFirst(drop)
+        nozzles.removeFirst(drop * 10); wheelState.removeFirst(drop * 12); bodies.removeFirst(min(bodies.count, drop * bodyCount * 7))
+        ticks -= drop; tickBase += drop
+    }
+    /// The origin moved by `d`: every kept position follows.
+    func shift(by d: SIMD3<Double>) {
+        let f = SIMD3<Float>(d)
+        for i in carPos.indices { carPos[i] -= f }
+        var k = 0
+        while k + 2 < bodies.count { bodies[k] -= f.x; bodies[k + 1] -= f.y; bodies[k + 2] -= f.z; k += 7 }
+    }
+
     init?(runVector name: String) {
         // A vector by name, or (debug, from the Mac) a run file by its absolute path.
         guard let url = name.hasPrefix("/") ? URL(fileURLWithPath: name) : Bundle.main.url(forResource: name, withExtension: "json", subdirectory: "runs"),

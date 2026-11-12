@@ -103,7 +103,9 @@ world with no edge. Native Free Drive uses **lattice roads**:
 ### 4.3 Streaming and LOD (the app's `WorldView`)
 
 - **CDLOD quadtree** over the plane: roots of 16,384 m, eight levels down to 128 m leaves (33×33 vertices, 4 m), split
-  where the camera is within 2.4 tile sizes. Leaves are drawn; each tile has 2 m skirts (its level's) against cracks.
+  where the camera is within 2.2 tile sizes. Leaves are drawn; each tile has skirts (1.5 of its steps) against cracks.
+  - The split has to be at least twice the node, or neighbours can be two levels apart and the skirts show. The first
+    cut used 1.6, and from 5 km a pale sheet stood over a summit.
 - **Geomorph:** each vertex carries its own height and the height its parent level would give it there (the coarse
   grid's bilinear value); the vertex shader slides between them over the last 30 % of the tile's range.
 - **Tiles** are generated on a background queue, cached in an LRU (by bytes), uploaded into pooled slabs.
@@ -164,4 +166,15 @@ Meshlets (meshoptimizer) later extend `PropMesh`, not the interface.
 
 ## 8 · Measured
 
-(Filled in by 0216.)
+### The world (0214, simulator, Release)
+
+`-freedrive -fd-stats` (shots: `-fd-at x,z,yaw°` near the complex; `-fd-km 5 -fd-cruise 25` out on a road):
+
+| Where | Tiles drawn | Triangles | Road ribbons | Props drawn | Tile memory |
+|---|---|---|---|---|---|
+| The apron, by the complex | 91 | 233 k | 47 | 33 | 29 MB |
+| 4.8 km out, a mountain road | 96 | 246 k | 47 | 11,526 | 30 MB |
+
+`-fd-lod` colours each tile by its level, and `-fd-nocull` / `-fd-skip terrain,roads,props` help attribute a draw.
+
+Frame times: 0216.

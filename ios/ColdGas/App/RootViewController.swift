@@ -14,7 +14,7 @@ final class RootViewController: UIViewController {
     private let layoutModel = LayoutModel()
     private lazy var ui = UIHostingController(rootView: RootUI(layout: layoutModel))
     /// The bench, the shots of a recorded run and the haptics demo keep the spike's panel; everything else is the game.
-    private let tool = Launch.bench || Launch.value("-replay") != nil || Launch.args.contains("-haptics")
+    private let tool = (Launch.bench && !Launch.freedrive) || Launch.value("-replay") != nil || Launch.args.contains("-haptics")
     private let foldBand = UIView()
     private var hingeInteraction: AnyObject?
     private(set) var layoutNow: FoldLayout?
@@ -48,6 +48,7 @@ final class RootViewController: UIViewController {
             Game.shared.stage = stage
             Game.shared.showTitleLoop()
             if Launch.args.contains("-play") { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { Game.shared.play() } }
+            if Launch.freedrive { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Game.shared.startDrive() } }
         }
     }
 
