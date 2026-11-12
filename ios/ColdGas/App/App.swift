@@ -40,6 +40,8 @@ enum Launch {
         return p.count == 2 ? CGSize(width: p[0], height: p[1]) : nil
     }
     static let bench = args.contains("-bench")
+    /// `-freedrive`: straight into Free Drive (docs/NATIVE-FREEDRIVE.md); with `-bench`, the drive's bench.
+    static let freedrive = args.contains("-freedrive")
     static let selftest = args.contains("-selftest")
 }
 

@@ -46,11 +46,15 @@ final class Renderer {
 
     let device: MTLDevice, queue: MTLCommandQueue
     let stage: Stage
+    /// The course this renderer was built for ("drive" for Free Drive, on the Show's stage).
+    let courseKey: String
     var replay: Replay?
     private let opaque, opaqueCullNone, blend, additive, sky, film, present, shadowPipe, plume: MTLRenderPipelineState
     private let sparkPipe, puffPipe, chipPipe, flashPipe, mistPipe: MTLRenderPipelineState
     private let glintPipe, glowPipe, mirrorPipe, mirrorGlintPipe, smearPipe, bloomBright, bloomDown, bloomCompose: MTLRenderPipelineState
-    private var lookU = LookU()
+    private var lookU = LookU(), stageLook = LookU()
+    /// Free Drive (docs/NATIVE-FREEDRIVE.md): the lens, the floating origin, the look and the world's draw come from the drive.
+    var drive: DriveScene?
     private let lampBuf, beaconBuf, glowBuf: MTLBuffer
     private let nLamps, nBeacons, nGlows: Int
     private let dsMirror: MTLDepthStencilState
@@ -135,8 +139,9 @@ final class Renderer {
     init?(device: MTLDevice, course: String = "show", replay: Replay?) {
         let t0 = CACurrentMediaTime()
         self.device = device
-        guard let q = device.makeCommandQueue(), let lib = device.makeDefaultLibrary(), let st = Stage(device: device, course: course) else { return nil }
-        queue = q; stage = st; self.replay = replay
+        // Free Drive ("drive") stands on the Show's stage: the Wall, the row, the pad and the complex at the world's centre.
+        guard let q = device.makeCommandQueue(), let lib = device.makeDefaultLibrary(), let st = Stage(device: device, course: course == "drive" ? "show" : course) else { return nil }
+        queue = q; stage = st; self.replay = replay; courseKey = course
         if Launch.args.contains("-crash-log") || Launch.args.contains("-fx-log") { setvbuf(stdout, nil, _IOLBF, 0) }
         let archive = PipelineArchive(device: device)
         let vd = MTLVertexDescriptor()
@@ -251,7 +256,7 @@ final class Renderer {
         // UnrealBloomPass composite: strength × lerp(factor, 1.2 − factor, radius) per mip.
         func factor(_ f: Float) -> Float { st.bloomStrength * (f + (1.2 - f - f) * st.bloomRadius) }
         lk.bloom = SIMD4(st.bloomThreshold, factor(0.9), factor(0.5), factor(0.2))
-        lookU = lk
+        lookU = lk; stageLook = lk
         func glintBuf(_ s: StageComplex.Spots?) -> (MTLBuffer, Int) {
             let list = s.map { sp in zip(sp.spots, sp.colors).map { GlintGPU(pos: $0, color: SIMD4($1, 0)) } } ?? []
             return (device.makeBuffer(bytes: list.isEmpty ? [GlintGPU()] : list, length: MemoryLayout<GlintGPU>.stride * max(1, list.count), options: .storageModeShared)!, list.count)
@@ -369,12 +374,18 @@ final class Renderer {
         applyCarMaterials()
         updateSweep(Float(heroClock))
         var aspect = Float(out.width) / Float(max(1, out.height))
+        // Free Drive: positions are relative to the drive's origin (0 near the centre); away from it the stage's own lights,
+        // glints, beams and mirror are kilometres off and aren't drawn.
+        let dv = drive, O = dv?.origin ?? .zero, away = O != .zero
+        let stageM = translate(SIMD3<Float>(-O))
+        lookU = dv?.look(over: stageLook) ?? stageLook
         if cam.shakeHook == nil {
             cam.shakeHook = true
             crash.shake = { [weak cam] a in cam?.shake(a) }
             crash.cut = { [weak cam] p, v in cam?.crashCut(at: p, vel: v) }
         }
-        var view = cam.update(course: replay?.course ?? "show", car: carPos, vel: replay.map { $0.ticks > 0 ? $0.velocity(at: tick) : .zero } ?? .zero, phase: phase, tick: tick, time: t, aspect: aspect)
+        var view = dv?.frameCamera(aspect: aspect, dt: dtReal)
+            ?? cam.update(course: replay?.course ?? "show", car: carPos, vel: replay.map { $0.ticks > 0 ? $0.velocity(at: tick) : .zero } ?? .zero, phase: phase, tick: tick, time: t, aspect: aspect)
         if let fc = fxCam {
             let off: SIMD3<Float> = fc == "rear" ? [0.8, 0.7, -5.5] : fc == "front" ? [0.8, 0.7, 6] : [3.5, 3.5, -1]
             view.eye = carPos + carQ.act(off); view.view = lookAt(eye: view.eye, target: carPos, up: [0, 1, 0])
@@ -407,10 +418,10 @@ final class Renderer {
         u.lightViewProj = lp * lv
         u.eye = SIMD4(view.eye, Float(heroClock))
         u.keyDir = SIMD4(keyDir, stage.keyIntensity)
-        u.keyColor = SIMD4(stage.keyColor, skip.contains("lights") ? 0 : Float(nLights))
-        u.fogColor = SIMD4(stage.fogColor, 1)
+        u.keyColor = SIMD4(stage.keyColor, skip.contains("lights") || away ? 0 : Float(nLights))
+        u.fogColor = SIMD4(stage.fogColor, dv == nil ? 1 : 0)
         u.fogRange = SIMD4(stage.fogNear, stage.fogFar, stage.exposure, 1 / Float(Renderer.shadowSize))
-        let wantMirror = stage.wetMask != nil && !skip.contains("mirror") && !skip.contains("wet") && shed < 1 && view.eye.y > 0.05
+        let wantMirror = stage.wetMask != nil && !skip.contains("mirror") && !skip.contains("wet") && shed < 1 && view.eye.y > 0.05 && !away && lookU.fogExp.y > 0
         u.misc = SIMD4(0, wantMirror ? 1 : 0, 1 / Float(renderSize.0), 1 / Float(renderSize.1))
         fb.contents().storeBytes(of: u, as: FrameU.self)
         // The mirror's frame: the same lens looking at the world flipped in y. Its fragments keep their real world position and
@@ -421,7 +432,7 @@ final class Renderer {
         mu.eye.y = -u.eye.y
         mu.misc.x = 1; mu.misc.y = 0
         mirrorFrames[fi].contents().storeBytes(of: mu, as: FrameU.self)
-        let complexOn = stage.complex != nil && !skip.contains("complex") && sphereVisible(stage.complex?.center ?? .zero, stage.complex?.radius ?? 1, u.viewProj)
+        let complexOn = stage.complex != nil && !skip.contains("complex") && sphereVisible((stage.complex?.center ?? .zero) - SIMD3<Float>(O), stage.complex?.radius ?? 1, u.viewProj)
         let beaconT = sin(Float(heroClock) * 3.1), beaconK = 2.4 * smoothstepF(-0.35, 0.75, beaconT)   // rocket.js update
 
         // -bench: each pass in its own command buffer, timed (passTimes), so one run attributes the GPU's frame.
@@ -439,7 +450,7 @@ final class Renderer {
         if !skip.contains("shadow"), let e = cmd.makeRenderCommandEncoder(descriptor: sp) {
             e.setRenderPipelineState(shadowPipe); e.setDepthStencilState(dsShadow); e.setDepthBias(1.5, slopeScale: 2.5, clamp: 0.01)
             e.setVertexBuffer(fb, offset: 0, index: 1)
-            drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: true, shadow: true)
+            drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true, shadow: true)
             parkedDraw(e, t: simT, shadow: true)
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true, shadow: true)
             carPartsDraw(e, carM: carM, shadow: true)
@@ -459,7 +470,7 @@ final class Renderer {
                 e.setFragmentTexture(shadowMap, index: 3); e.setFragmentTexture(stage.wetMask ?? dummy, index: 5); e.setFragmentTexture(dummy, index: 6)
                 setEnv(e)
                 mirrorDraw = true; frontFace = .clockwise
-                drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: true, standingOnly: true)
+                drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true, standingOnly: true)
                 if !skip.contains("parked") { parkedDraw(e, t: simT, shadow: false, cull: mu.viewProj) }
                 if sphereVisible(carPos, 5, mu.viewProj) {
                     drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true)
@@ -492,13 +503,14 @@ final class Renderer {
             e.setVertexBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
             e.setFragmentTexture(shadowMap, index: 3); e.setFragmentTexture(stage.wetMask ?? dummy, index: 5); e.setFragmentTexture(wantMirror ? (mirrorTex ?? dummy) : dummy, index: 6)
             setEnv(e)
-            if !skip.contains("static") { drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: true) }
+            if !skip.contains("static") { drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true) }
             if !skip.contains("parked") { parkedDraw(e, t: simT, shadow: false, cull: u.viewProj) }
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true)
             carPartsDraw(e, carM: carM, shadow: false)
             wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: false)
-            sweepDraw(e, opaqueOnly: true)
-            if complexOn, let c = stage.complex { drawMesh(e, c.mesh, matsIndex: complexMats, model: matrix_identity_float4x4, opaqueOnly: true) }
+            if !away { sweepDraw(e, opaqueOnly: true) }
+            if complexOn, let c = stage.complex { drawMesh(e, c.mesh, matsIndex: complexMats, model: stageM, opaqueOnly: true) }
+            if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, viewProj: u.viewProj) }
             // The sky where nothing opaque stands (far plane, depth read).
             e.setCullMode(.none); e.setDepthStencilState(dsRead); e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setRenderPipelineState(sky)
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
@@ -506,20 +518,21 @@ final class Renderer {
                 // rocket.js's draw order: the lattice, the beams, then the lamps over them.
                 for (k, s) in c.mesh.submeshes.enumerated() where s.material.transparent {
                     if s.material.effect == 4 ? skip.contains("floodbeams") : skip.contains("lattice") { continue }
-                    drawMesh(e, c.mesh, matsIndex: complexMats, model: matrix_identity_float4x4, opaqueOnly: false, from: k, to: k + 1)
+                    drawMesh(e, c.mesh, matsIndex: complexMats, model: stageM, opaqueOnly: false, from: k, to: k + 1)
                 }
-                if !skip.contains("glints") { glintsDraw(e, c, beaconK: beaconK, pipe: glintPipe) }
+                if !skip.contains("glints") && !away { glintsDraw(e, c, beaconK: beaconK, pipe: glintPipe) }
             }
-            if nGlows > 0 && shed < 2 && !skip.contains("glows") {   // film.js's lit air round the lamps
+            if nGlows > 0 && shed < 2 && !skip.contains("glows") && !away {   // film.js's lit air round the lamps
                 e.setRenderPipelineState(glowPipe); e.setDepthStencilState(dsRead); e.setCullMode(.none)
                 e.setVertexBuffer(glowBuf, offset: 0, index: 2)
                 e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nGlows)
             }
             if !skip.contains("translucent") {
-                drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: false, to: blobSplit)
-                blobDraw(e, carPos: carPos, carQuat: carQ)
-                drawMesh(e, stage.staticMesh, matsIndex: 0, model: matrix_identity_float4x4, opaqueOnly: false, from: blobSplit)
-                if !skip.contains("beams") { sweepDraw(e, opaqueOnly: false) }
+                drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: false, to: blobSplit)
+                // The contact shadow lies on the slab: in Free Drive only while the car is on it.
+                if dv == nil || (!away && abs(carPos.x) < Float(700) && abs(carPos.z) < Float(700) && carPos.y < 3) { blobDraw(e, carPos: carPos, carQuat: carQ) }
+                drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: false, from: blobSplit)
+                if !skip.contains("beams") && !away { sweepDraw(e, opaqueOnly: false) }
                 drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: false)
                 nozzleStatesDraw(e, carM: carM)
             }

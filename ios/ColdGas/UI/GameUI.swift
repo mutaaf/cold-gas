@@ -42,6 +42,7 @@ struct RootUI: View {
             switch game.screen {
             case .title: TitleView(open: { sheet = $0 }).frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
             case .run: RunView(layout: layout)
+            case .drive: DriveView(layout: layout)
             case .results:
                 if let r = game.result {
                     if !game.replaying {   // the post and the judges' words live on the result, so they survive watching it back
