@@ -10,6 +10,15 @@ struct SettingsView: View {
     @State private var sound = Sound.shared.isEnabled
     @State private var units = SaveStore.shared.units.system
     @State private var tilt = SaveStore.shared.settings.tiltOn
+    @State private var judgeOnDevice = SaveStore.shared.settings.judgeOnDeviceOn
+    @State private var judgeStatus = OnDeviceJudges.status
+    private var judgeFooter: String {
+        let scores = " The scores are always the game\u{2019}s own; the model writes the words."
+        if judgeStatus != .available { return "\(judgeStatus.line) The free edge model writes the judges\u{2019} words over the network.\(scores)" }
+        return judgeOnDevice
+            ? "The judges use Apple Intelligence: their words are written on this device, with no network call and no cost: the judging sends nothing off this device.\(scores)"
+            : "The judges\u{2019} words come from the free edge model, over the network.\(scores)"
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -36,6 +45,15 @@ struct SettingsView: View {
                     .onChange(of: units) { _, v in var st = SaveStore.shared.settings; st.units = v; SaveStore.shared.settings = st }
                 } header: { Text("Play") } footer: {
                     Text("One thumb flies Assist on the Show and the Wall: hold to climb, tap to let go, hold to land. Classic is the stick and the pedals, on every course and tier.")
+                }
+                // 0219: who writes the judges' words on this device. The scores are always the game's own.
+                Section {
+                    Toggle("Judge on this device", isOn: $judgeOnDevice)
+                        .disabled(judgeStatus != .available)
+                        .onChange(of: judgeOnDevice) { _, v in var st = SaveStore.shared.settings; st.judgeOnDevice = v; SaveStore.shared.settings = st }
+                    LabeledContent("The judges\u{2019} words", value: judgeStatus == .available && judgeOnDevice ? "Apple Intelligence" : "Edge model")
+                } header: { Text("Judges") } footer: {
+                    Text(judgeFooter)
                 }
                 Section("About") {
                     LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")

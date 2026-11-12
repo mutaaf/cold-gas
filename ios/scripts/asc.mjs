@@ -355,6 +355,12 @@ async function storeBuild(appId, v = version()) {
 async function storeMeta() {
   const e = env();
   const STORE = storeListing();
+  // The store/ texts describe one version (listing.json forVersion). Never push one version's copy onto another: the
+  // 1.1.0 copy promotes on-device judging, which a 1.0.0 build doesn't have (0219). For a 1.0.x resubmission, check out
+  // store/ from before 0219 instead.
+  if (STORE.forVersion && STORE.forVersion !== version()) {
+    throw new Error(`store/ is written for ${STORE.forVersion}, MARKETING_VERSION is ${version()}: bump the version, or use the store/ copy for ${version()} from git.`);
+  }
   const a = await app();
   const { sv, shipped } = await storeVersion(a.id, true);
   const v = version();

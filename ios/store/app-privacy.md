@@ -14,7 +14,13 @@ What leaves the phone, all to one host, `mutaafaziz.com/coldgas/api/*` (the froz
 | Request | What it carries | Kept |
 |---|---|---|
 | `POST /scores` (posting to the board) | the run's input log and telemetry, the course, the tier, and **three letters A to Z** as initials | the initials, the score card and the day, on the public board |
-| `POST /judge/stream` (the judges' commentary) | the run's input log and telemetry, the tier | nothing |
+| `POST /judge/stream` (the judges' commentary, **from 1.1.0 only when the device can't judge on-device**) | the run's input log and telemetry, the tier | nothing |
+
+**On-device judging (1.1.0, 0219).** On a device with Apple Intelligence (iOS 26+) and Settings > Judges left on, the
+judges' commentary is written on the device by Apple's on-device model (Foundation Models): **no request is made for
+it and nothing leaves the device.** `/judge/stream` is called only when the on-device model is unavailable, turned off
+or fails. The label below doesn't change: the board still collects Gameplay Content, and so does the fallback; but the
+answer to "what does judging send" is now "nothing, where Apple Intelligence is available".
 
 No account, no device identifier, no install id, no advertising identifier. The IP address is only ever a daily
 salted hash in a rate-limit bucket (`ipHash` in `src/worker/index.js`).

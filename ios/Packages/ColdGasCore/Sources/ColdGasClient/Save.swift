@@ -16,8 +16,10 @@ public enum Hand: String, Codable, CaseIterable { case right, left }
 
 public struct Settings: Codable, Equatable {
     public var haptics: Bool?, sound: Bool?, scheme: ControlScheme?, hand: Hand?, tilt: Bool?, units: UnitSystem?
+    /// 0219: false sends the judges' call to the edge model even where Apple's on-device model could write it.
+    public var judgeOnDevice: Bool?
     public init() {}
-    enum CodingKeys: String, CodingKey { case haptics, sound, scheme, hand, tilt, units }
+    enum CodingKeys: String, CodingKey { case haptics, sound, scheme, hand, tilt, units, judgeOnDevice }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         haptics = try? c.decodeIfPresent(Bool.self, forKey: .haptics)
@@ -26,14 +28,18 @@ public struct Settings: Codable, Equatable {
         hand = try? c.decodeIfPresent(Hand.self, forKey: .hand)
         tilt = try? c.decodeIfPresent(Bool.self, forKey: .tilt)
         units = try? c.decodeIfPresent(UnitSystem.self, forKey: .units)
+        judgeOnDevice = try? c.decodeIfPresent(Bool.self, forKey: .judgeOnDevice)
     }
-    // The defaults, as the web's: haptics and sound on, one thumb, the right hand, no tilt, US units leading.
+    // The defaults, as the web's: haptics and sound on, one thumb, the right hand, no tilt, US units leading; judging on the
+    // device where it can.
     public var hapticsOn: Bool { haptics ?? true }
     public var soundOn: Bool { sound ?? true }
     public var controlScheme: ControlScheme { scheme ?? .thumb }
     public var handedness: Hand { hand ?? .right }
     public var tiltOn: Bool { tilt ?? false }
     public var unitSystem: UnitSystem { units ?? .us }
+    /// On by default: where the device has Apple Intelligence, the judges write there (0219).
+    public var judgeOnDeviceOn: Bool { judgeOnDevice ?? true }
 }
 
 public struct SaveData: Codable, Equatable {
