@@ -1,12 +1,12 @@
 ---
 id: 0193
 title: On a phone, the run-up and the replay's opening show the pad and the car, not a red room
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-11
-pr:
+pr: 322
 by: critic
 ---
 
@@ -77,3 +77,14 @@ the whole screenshot. The run-up 2 s after Go is **49.9 %** (`docs/critique/2026
 
 **The Wall's replay opens the same way: 45.9 % at 1.5 s** (`W-replay1.png`). Add the Wall's replay opening to the look-audit
 moments above and hold it to the same ≤ 12 % bar. The Lineup's replay is 0.0 %, because it has no ring.
+
+## Builder pass 1 (2026-11-12, #322)
+0187's deck look now holds from the start line until the run has launched, then fades back over 1 s of sim time
+(`src/render/deck-look.js` `flownFor`: the Wall's pad is on its own run-up, so position alone can't separate the two). The red
+base light and its slab glow at the curl's foot dim with it, to 25 %. Same machine, SwiftShader, main → branch, saturated red:
+- Countdown: 49.6–50.9 % → 3.2–3.3 %.
+- Run-up: 50.1–56.9 % → 3.3–5.1 %.
+- Replay at 2 s, Replay tapped: Show 17.1–17.5 % → 8.9–9.1 %, Wall 46–50 % → 8.7–8.8 %.
+
+At 1440×900 the run-up's car P10 goes 62 → 42. Flicker: no region past its limit; `show-replay-rigs/car` +5 %. The full tables
+are in the PR. The film's red air halo at the foot is not dimmed.
