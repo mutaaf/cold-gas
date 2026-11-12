@@ -5,17 +5,17 @@
  "files": [
   {
    "path": "challenge.json",
-   "sha256": "67514692e130847aa9f210cc15f5f993249acaf1af7380b379b879b37272ac77",
-   "bytes": 264041
+   "sha256": "f51a652f8278d255ed4850db964f184cc4159636d7861d4903fc88141d3c994a",
+   "bytes": 264435
   },
   {
    "path": "client.json",
-   "sha256": "f780b5828b8133991cd07892e07851f93aa33d1938e05e59aa07d904f108b332",
-   "bytes": 674428
+   "sha256": "986d15d814364df4f5a8db28d25f13961a2bb2332427a337ac4ec839ac77d23a",
+   "bytes": 674467
   },
   {
    "path": "coach.json",
-   "sha256": "5357a12c6af82dc0740cd51358efef8d0959bc89079ad92f301ba8fbea4669df",
+   "sha256": "07dd1d5a37cf02656201f2894407a0dcca084ffd46babad9b10b95a6ea9b19cb",
    "bytes": 447226
   },
   {
@@ -45,8 +45,8 @@
   },
   {
    "path": "haptics/ref-show.json",
-   "sha256": "4387f6ff6287da810211d8777402936a3db3dce81e6ce2385a661c89d6ad6a0b",
-   "bytes": 135904
+   "sha256": "8a12d083359a08e4bddd5f3e5eee05e7be9f921b39b6a80694e98af5fb6cc008",
+   "bytes": 135954
   },
   {
    "path": "haptics/ref-wall.json",
@@ -400,12 +400,12 @@
   },
   {
    "path": "runs/ref-show-advanced.json",
-   "sha256": "79eb792777ecd013b1557fb036825ac899030f241b26fcba23d4f3a651edda3b",
-   "bytes": 81338
+   "sha256": "cef2958bd8036bf80c00ce33bba00acd8cd3c910e67e8b40f2bda7a21eee3dd5",
+   "bytes": 81656
   },
   {
    "path": "runs/ref-show.json",
-   "sha256": "0b4002be6bc54a6dfe2e954f613684f9974daca4d5def5dd1a0994622c6d6b41",
+   "sha256": "768d7b38ea302d4fa92134ee92796ba1f24b441c5e04bef1f6bf214f9b321718",
    "bytes": 41913
   },
   {

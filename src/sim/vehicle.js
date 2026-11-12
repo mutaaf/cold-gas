@@ -371,7 +371,9 @@ function flightComputer(s, inp, out, envelope = 1, level = inp.level) {
     // sideways several m/s, and a player can't see it until they've landed 30 m off the mark. The
     // carry along the run (the row, the mark) stays the pilot's to manage.
     const hh = s.pos.y - SPEC.comHeight;
-    const holdCap = hh > HOVER + 1.5 ? 0.2 : s.lineArm && hh > HOLD_LOW_H ? HOLD_LOW_BANK : 0;
+    // (Below HOVER + 1.5 m only with the stick at exactly 0: a pilot steering a little, as the Show's reference does onto
+    // the pad, flies its own line there, and that flight is as it was.)
+    const holdCap = hh > HOVER + 1.5 ? 0.2 : s.lineArm && hh > HOLD_LOW_H && inp.roll === 0 ? HOLD_LOW_BANK : 0;
     if (uy > 0.8 && Math.abs(inp.roll) < 0.05 && holdCap > 0) {
       rotateInv(tmp, s.quat, s.vel);
       wantZ = -LEVEL_K * (ux - clamp(0.07 * tmp.x, -holdCap, holdCap));

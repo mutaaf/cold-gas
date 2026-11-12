@@ -230,7 +230,7 @@ let ROLL_TAU: Double = NOZZLE_SPEC.reduce(0) { $0 + ($1.group == "lift" && $1.po
         let ux = worldUpB.x, uy = worldUpB.y, uz = worldUpB.z
         var wantX = LEVEL_K * uz, wantZ = -LEVEL_K * ux
         let hh = s.pos.y - SPEC.comHeight
-        let holdCap = hh > HOVER + 1.5 ? 0.2 : s.lineArm != 0 && hh > HOLD_LOW_H ? HOLD_LOW_BANK : 0
+        let holdCap = hh > HOVER + 1.5 ? 0.2 : s.lineArm != 0 && hh > HOLD_LOW_H && inp.roll == 0 ? HOLD_LOW_BANK : 0
         if uy > 0.8 && abs(inp.roll) < 0.05 && holdCap > 0 {
             M3.rotateInv(tmp, s.quat, s.vel)
             wantZ = -LEVEL_K * (ux - M3.clamp(0.07 * tmp.x, -holdCap, holdCap))
