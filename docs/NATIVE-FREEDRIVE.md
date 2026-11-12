@@ -199,4 +199,37 @@ Meshlets (meshoptimizer) later extend `PropMesh`, not the interface.
 
 `-fd-lod` colours each tile by its level, and `-fd-nocull` / `-fd-skip terrain,roads,props` help attribute a draw.
 
-Frame times: 0216.
+### The bench (0216)
+
+`make bench-freedrive` builds Release, launches `-freedrive -bench -fd-km 3 -fd-pilot 25` on the Pro Max simulator, and
+prints `BENCH` once the world near the car is built. That's 10 s of the autopilot on a road 3 km out, with the world's
+counters. `SIM_ID=<udid>` picks another simulator.
+
+Measured on the simulator (iPhone 18 Pro Max, iOS 27.0, Release, Xcode 27.2, on the operator's Mac), with the Show's own
+bench (`-replay ref-show -bench`) on the same simulator and build for scale:
+
+| | Frames in 10 s | Interval avg / p95 | CPU ms avg / p95 | What was drawn |
+|---|---|---|---|---|
+| The Show (the stage bench) | 421 | 23.8 / 33.3 ms | 0.85 / 2.29 | the stage, render scale 0.85 |
+| Free Drive, 3 km out | 410 | 24.5 / 33.3 ms | 1.21 / 3.38 | 94 tiles, 241 k triangles, 43 ribbons, 10.4 k props, 31 MB of tiles, render scale 0.95 |
+
+What it says, and what it doesn't:
+- **CPU.** The world adds about 0.36 ms a frame on the main thread: the quadtree, the uploads, the sim's two ticks with
+  the streamed cells, and the HUD. That's inside §3's 1 ms.
+- **GPU.** The simulator's frame rate is its emulated GPU's, the same for the Show and Free Drive (≈ 41 fps). Its GPU
+  timestamps are not meaningful, so §3's GPU budget can only be checked on a phone.
+- **Memory.** The tiles' slabs hold about 30 MB. The LRU starts evicting past 900 tiles.
+
+**On a phone (the owner runs this; an agent never runs it on the owner's phone):**
+
+```
+cd ios && make device-bench-freedrive
+```
+
+It builds Release for the paired iPhone, installs it and prints the same two `BENCH` lines (`DEVICE_ID=<udid>` picks the
+phone). The bar is NATIVE.md's: a presentation p95 of 8.34 ms at 120 Hz, at thermal state 0. The bench prints the state,
+and back-to-back runs heat a phone. If the frame misses at the resolution floor, these are the levers, in order:
+1. Draw fewer props: lower `WorldView.propR`.
+2. Make the quadtree split less: lower `WorldView.split` toward 2.0.
+3. Take the shadow off the terrain.
+4. Use MetalFX frame interpolation in Free Drive (§2).
