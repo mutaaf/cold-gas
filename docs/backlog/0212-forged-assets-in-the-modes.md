@@ -1,12 +1,12 @@
 ---
 id: 0212
 title: The forge's assets in the same modes — the parked row, the Sandbox's props, and the iPhone's stage
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-12
-pr:
+pr: 331
 by: operator
 ---
 
