@@ -4,8 +4,9 @@ App Privacy (the "nutrition label") has **no API**: every documented path 404s (
 Connect → the app → App Privacy, then **Publish**. `node scripts/asc.mjs store-check` prints a reminder every time
 because it can't see it.
 
-These answers are for the 1.0 build: the board and the judges ship; **the health beacon (`/obs`) does not**, so nothing
-in Diagnostics or Usage Data is collected. When a build adds the beacon, add those rows to the label and the manifest together.
+These answers hold for 1.1.0 (checked 2026-11-12, re-read for on-device judging and Free Drive, which sends nothing):
+the board and the judges ship; **the health beacon (`/obs`) does not**, so nothing in Diagnostics or Usage Data is
+collected. When a build adds the beacon, add those rows to the label and the manifest together.
 
 ## Does the app collect data? Yes.
 
@@ -46,7 +47,8 @@ beacon or the board, every row above becomes "Linked to the user".
 `ColdGas/Resources/PrivacyInfo.xcprivacy` declares `NSPrivacyCollectedDataTypeGameplayContent` for
 `NSPrivacyCollectedDataTypePurposeAppFunctionality`, not linked, not tracking. `NSPrivacyTracking` stays false.
 
-Required-reason APIs the app calls today (`make rules` checks each one is declared): UserDefaults (CA92.1, the haptics
+FoundationModels (on-device judging) is not a required-reason API and sends nothing, so it adds no row. Required-reason
+APIs the app calls today (`make rules` checks each one is declared): UserDefaults (CA92.1, the haptics
 level and later the saves), `CACurrentMediaTime` (35F9.1, frame timing). C617.1 (file timestamps, inside the app's
 container) is declared for the pipeline cache in Caches; nothing reads a timestamp yet, and declaring it is harmless.
 

@@ -14,6 +14,14 @@ final class LayoutModel: ObservableObject {
     @Published var scene: CGRect = .zero
     @Published var controls: CGRect = .zero
     @Published var safe: EdgeInsets = EdgeInsets()
+    /// The fold's band (the Duo), in the same coordinates; nil on a screen that doesn't fold.
+    @Published var fold: CGRect?
+    /// A vertical fold (the Duo open) across `rect`, as an x range in that rect's own coordinates: what sits centred over
+    /// it moves off the crease.
+    func crease(in rect: CGRect) -> ClosedRange<CGFloat>? {
+        guard spread != .rows, let f = fold, f.height > f.width, f.minX > rect.minX, f.maxX < rect.maxX else { return nil }
+        return (f.minX - rect.minX)...(f.maxX - rect.minX)
+    }
 }
 
 struct RootUI: View {
@@ -200,13 +208,21 @@ struct RunView: View {
         let d = DeckGeometry.layout(layout.controls.size)
         return d.valves.count == 2 && d.form != .tablet
     }
+    /// Advanced in the air on an upright phone: the valve deck (the whole car) fills the bottom and the camera holds the car
+    /// just above it, so a cue lifted over the deck would sit on the car. It goes under the gas bar instead.
+    private var cueTop: Bool {
+        guard layout.spread != .rows, game.tier == "advanced", game.hud.touchPhase == .air, !game.hud.hardware else { return false }
+        let d = DeckGeometry.layout(layout.controls.size)
+        return d.valves.count == 1 && layout.controls.height > layout.controls.width
+    }
     var body: some View {
         let rows = layout.spread == .rows
         let sceneSafe = CGRect(x: layout.scene.minX + layout.safe.leading, y: layout.scene.minY + layout.safe.top,
                                width: layout.scene.width - layout.safe.leading - (rows ? 0 : layout.safe.trailing),
                                height: layout.scene.height - layout.safe.top - (rows ? 0 : layout.safe.bottom))
         ZStack(alignment: .topLeading) {
-            HUDView(compact: !rows && layout.controls.height < 520, cueLift: rows ? 0 : cueLift, centred: hudCentred)
+            HUDView(compact: !rows && layout.controls.height < 520, cueLift: rows ? 0 : cueLift, centred: hudCentred,
+                    crease: layout.crease(in: sceneSafe), cueTop: cueTop)
                 .frame(width: sceneSafe.width, height: sceneSafe.height).offset(x: sceneSafe.minX, y: sceneSafe.minY)
             ControllerView(panel: rows, layoutKey: "\(layout.spread.rawValue) \(Int(layout.controls.width))x\(Int(layout.controls.height))")
                 .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
@@ -225,21 +241,28 @@ struct HUDView: View {
     var compact: Bool
     var cueLift: CGFloat = 0   // above the pads when they're over the scene
     var centred = false        // the pause and the readouts in the top middle (Advanced's split valve deck has the corners)
+    var crease: ClosedRange<CGFloat>? = nil   // a vertical fold across the HUD (x in its frame): nothing centred sits on it
+    var cueTop = false         // the cue under the gas bar, not above the controls
     var body: some View {
         let h = game.hud
         VStack(spacing: 0) {
+            if centred, let c = crease {
+                // The Duo open: the pause just left of the crease, the readouts and the gas just right of it.
+                HStack(alignment: .top, spacing: 0) {
+                    pause.frame(width: max(40, c.lowerBound - 12 - 10), alignment: .trailing)
+                    Spacer().frame(width: c.upperBound - c.lowerBound + 20)
+                    VStack(alignment: .leading, spacing: 8) {
+                        readouts(h)
+                        gasBar(h.gas).frame(width: compact ? 120 : 160)
+                    }
+                    Spacer(minLength: 0)
+                }
+            } else {
             HStack(alignment: .top) {
                 if centred { Spacer() }
-                Button { game.paused = true; UISelectionFeedbackGenerator().selectionChanged() } label: {
-                    Image(systemName: "pause.fill").font(.system(size: 13)).foregroundStyle(Theme.ink2).frame(width: 40, height: 40).glass(20)
-                }.buttonStyle(.plain).accessibilityLabel("Pause")
+                pause
                 if centred { Spacer().frame(width: 10) } else { Spacer() }
-                HStack(spacing: 16) {
-                    readout("SPEED", Fmt.speed(h.speed), Fmt.speedUnit)
-                    readout("ALT", Fmt.length(h.alt), Fmt.lengthUnit)
-                    if h.phase == 2 { readout("SINK", Fmt.rate(h.sink), Fmt.rateUnit, color: [Theme.ink, Theme.amber, Theme.hot][h.sinkBand]) }
-                }
-                .padding(.horizontal, 14).padding(.vertical, 8).glass(12)
+                readouts(h)
                 if centred { Spacer() }
             }
             HStack {
@@ -247,17 +270,38 @@ struct HUDView: View {
                 gasBar(h.gas).frame(width: compact ? 120 : 160)
                 if centred { Spacer() }
             }.padding(.top, 8)
-            Spacer()
-            if !h.cue.isEmpty {
-                Text(h.cue).font(Theme.text(compact ? 13 : 15, .medium)).foregroundStyle(Theme.ink)
-                    .padding(.horizontal, 14).padding(.vertical, 8).glass(18)
-                    .transition(.opacity).id(h.cue)
-                    .accessibilityAddTraits(.updatesFrequently)
-                    .padding(.bottom, 8 + cueLift)
+            }
+            if cueTop {
+                cue(h.cue).padding(.top, 10)
+                Spacer()
+            } else {
+                Spacer()
+                cue(h.cue).padding(.bottom, 8 + cueLift)
             }
         }
         .padding(12)
         .animation(.easeOut(duration: 0.25), value: h.cue)
+    }
+    private var pause: some View {
+        Button { game.paused = true; UISelectionFeedbackGenerator().selectionChanged() } label: {
+            Image(systemName: "pause.fill").font(.system(size: 13)).foregroundStyle(Theme.ink2).frame(width: 40, height: 40).glass(20)
+        }.buttonStyle(.plain).accessibilityLabel("Pause")
+    }
+    private func readouts(_ h: HudState) -> some View {
+        HStack(spacing: 16) {
+            readout("SPEED", Fmt.speed(h.speed), Fmt.speedUnit)
+            readout("ALT", Fmt.length(h.alt), Fmt.lengthUnit)
+            if h.phase == 2 { readout("SINK", Fmt.rate(h.sink), Fmt.rateUnit, color: [Theme.ink, Theme.amber, Theme.hot][h.sinkBand]) }
+        }
+        .padding(.horizontal, 14).padding(.vertical, 8).glass(12)
+    }
+    @ViewBuilder private func cue(_ s: String) -> some View {
+        if !s.isEmpty {
+            Text(s).font(Theme.text(compact ? 13 : 15, .medium)).foregroundStyle(Theme.ink)
+                .padding(.horizontal, 14).padding(.vertical, 8).glass(18)
+                .transition(.opacity).id(s)
+                .accessibilityAddTraits(.updatesFrequently)
+        }
     }
     private func readout(_ label: String, _ v: String, _ unit: String, color: Color = Theme.ink) -> some View {
         VStack(alignment: .trailing, spacing: 2) {

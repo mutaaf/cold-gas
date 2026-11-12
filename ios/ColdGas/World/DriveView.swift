@@ -7,7 +7,12 @@ import ColdGasClient
 struct DriveView: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
+    /// The world's numbers on screen (`-fd-stats`): a Debug tool, never in a Release build.
+    #if DEBUG
     private let stats = Launch.args.contains("-fd-stats")
+    #else
+    private let stats = false
+    #endif
     var body: some View {
         let h = game.driveHud
         let rows = layout.spread == .rows

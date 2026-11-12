@@ -1,38 +1,33 @@
-NEW IN 1.1.0
-- The judges use Apple Intelligence: on a supported device their commentary is written on the device by Apple's on-device model (see THE JUDGES).
-- Free Drive: an unscored drive from the title screen.
-- Pro and Advanced controls laid out for each screen.
-Cold Gas began as our own web game, public since October 2026 at mutaafaziz.com/coldgas, and the same physics runs in both.
+Thank you for reviewing Cold Gas. This 1.1.0 replaces the 1.0.0 we withdrew before review. No sign-in and no demo account: there are no accounts. Everything is unlocked and the game plays offline.
 
-No sign-in and no demo account: there are no accounts. Every course and tier plays at once, and the game plays offline. Only the board needs a network connection, and the judges' commentary on a device without Apple Intelligence.
+A CORRECTION TO OUR 5 NOVEMBER REPLY (answer 3): our server does not fly posted runs again. When a run is posted, the server scores the run's telemetry (the flight's numbers the app recorded) with the same fixed scorer the game uses, after plausibility checks against the run's input log: the course, the timing, and every number inside the car's physical limits. The flight tier is read from the log itself. The app never sends a score, but the telemetry does come from the app. 1.1.0's text no longer says otherwise.
 
-WHAT IT IS
-A single stunt jump, made into a skill game, for anyone who likes driving and physics games. A roadster climbs a curved wall on suction, lets go upside down, fires ten cold-gas thrusters to clear a row of parked cars, and lands on a mark. Three judges score the jump.
+WHAT IT IS (4.3, 4.2.6)
+An original physics skill game, written for iPhone and iPad in Swift and Metal (no template or app builder). A deterministic rigid-body sim at 240 ticks a second (tyres, suspension, ten cold-gas nozzles with a draining tank) flies a stunt car up a curved wall, over a row of parked cars and onto a mark. Depth: three courses (the Show, the Wall, the Lineup); three control tiers (Assist with one thumb, Pro with a stick, Advanced with all ten valves by hand); drills for each part of the flight; a coach that names what cost you points; a daily target with a streak; medals; Free Drive, an endless unscored world; three judges whose numbers come from the scorer and whose words come from Apple's on-device model where available. The same sim also runs our web game, mutaafaziz.com/coldgas (public since October 2026).
 
 HOW TO PLAY (about a minute)
-1. Launch the app and tap Fly The Show. A new player starts on Assist with the one-thumb control.
-2. After the countdown, hold the round pad to climb. The car slows and stops on the ledge by itself. Letting go brakes.
-3. On the ledge, tap the pad once to let go. The car drives out to the lip and pushes off.
-4. Hold the pad again to land. The flight computer rolls the car out and brakes onto the mark. Sliding the held thumb moves the touchdown point.
-5. The results show the score, the three judges and their commentary, with buttons to post, fly again or go home.
-Pro (you fly the roll and the brake with a stick and buttons) and Advanced (all ten valves by hand) are on the title screen. A paired game controller or a hardware keyboard also works. The results have a Watch it button that plays the flight back. Practice, the board, How to play and Settings are the icons at the top of the title screen.
+1. Tap Fly The Show. A new player starts on Assist with one thumb.
+2. Hold the round pad to climb; the car stops on the ledge. Tap once to let go.
+3. Hold again to land: the computer rolls out and brakes onto the mark. Sliding the thumb moves the touchdown.
+4. The results: score, the three judges and their words, Post, Fly again, Watch it (a replay), Share (a challenge link), Board, Home.
+Title screen: the three courses, the Assist / Pro / Advanced tiers, Free Drive, and the icons top right: Practice (drills), Board, How to play, Settings. A game controller or a keyboard also works.
 
-iPHONE DUO
-Open: the whole inner display. Tabletop: the top half is the screen, the bottom half the controller.
-
-THE BOARD
-After a run the player can post it to a public board of the day's and all-time best landings. The only thing the player types is three letters (A to Z) as initials. There is no other text, no profile, no chat and no messaging. The app never sends a score: it sends the run's input log and telemetry, and our server scores them with the same deterministic scorer the game uses. Objectionable initials are filtered in the app; touching and holding a row hides it on the device or reports it by email.
+FREE DRIVE: tap Free Drive on the title. Stick to steer, GO and BRAKE, LIFT in the air; the top-right buttons switch the camera, arm the fan and put the car back on the road. Back returns to the title. Nothing is scored.
 
 THE JUDGES
-The numbers come from a fixed scorer. A model only writes the short commentary under them, from the run's numbers, never anything about the player.
-- On-device first: on a device with Apple Intelligence turned on (iOS 26 or later), Apple's on-device model writes it through the Foundation Models framework. Nothing is sent for it. The results show "Judged on device" and a receipt: the tokens, $0, no data left the device. Settings > Judges shows which model judges and can turn this off.
-- Otherwise, or if it can't answer, an AI model on our own server (mutaafaziz.com) writes it, as in 1.0.
+The numbers always come from the fixed scorer. A model writes only the short commentary, from the run's numbers, never anything about the player.
+- On a device with Apple Intelligence on (iOS 26+), Apple's on-device model writes it (Foundation Models). Nothing is sent. The results show "Judged on device" and a receipt: tokens, time, $0, no data left the device. Settings > Judges shows the model and can turn it off.
+- Otherwise, or if it can't answer, a model on our own server (mutaafaziz.com) writes it from the run's numbers.
 - If neither answers, the app shows its own lines and says so.
 
+THE BOARD
+Posting is optional. The only thing typed is three letters (A to Z) as initials: no other text, profile or chat. Objectionable initials are filtered in the app; touch and hold a row to hide it on the device or report it by email.
+
+iPAD AND iPHONE DUO
+Universal. On iPad the controls sit at the side grips, either orientation. On iPhone Duo, open fills the whole inner display (nothing sits on the crease); tabletop puts the screen on top and the controller below.
+
 NETWORK AND DATA
-The app talks to one host, mutaafaziz.com/coldgas, and to no third-party SDK, analytics or advertising service. It sends the run (input log, telemetry, course, flight tier) when posting, and when judging on a device without on-device judging, and the three initials when posting. No accounts, no advertising identifier, no tracking.
+One host, mutaafaziz.com/coldgas. No third-party SDKs, analytics, ads or tracking, no advertising identifier. Sent only when posting (run, course, tier, initials) and for server judging (the run).
 
-CONTENT AND RIGHTS
-Everything in the app is original: the cars, courses, sounds and art are our own design, and the sounds are synthesised in code. No real brand, vehicle model, logo or person appears. The typefaces are Michroma and Geist, both under the SIL Open Font License 1.1. The physics engine is Rapier, under the Apache License 2.0.
-
-There are no in-app purchases, no ads, no gambling and no loot boxes, and the app is the same in every region.
+RIGHTS
+Everything is original: cars, courses, art, and sounds synthesised in code. No real brand, vehicle, logo or person. Fonts: Michroma and Geist (SIL OFL 1.1). Physics: Rapier (Apache 2.0). No purchases, ads, gambling or loot boxes; the same in every region.
