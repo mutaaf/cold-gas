@@ -11,6 +11,9 @@ page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await page.goto(url);
 await page.waitForTimeout(3000);
+// ?forge=1 (0211): wait for the forged models to land in the row before shooting.
+// (The game swaps them in at its next cut; a shot swaps them as soon as they're loaded.)
+if (/[?&]forge=1/.test(url)) await page.waitForFunction(() => { let f = window.__coldgas.stage.useForged(); window.__coldgas.stage.scene.traverse((o) => { if (o.userData?.forged) f++; }); return f > 0; }, null, { timeout: 45000, polling: 500 });
 await page.evaluate(async (course) => {
   const g = window.__coldgas;
   g.director.update = () => {};

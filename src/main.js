@@ -62,6 +62,7 @@ import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
 import { createRunEnd } from './obs/run-end.js';
 import { createAds } from './ads.js';
+import { forgeWanted } from './render/forge-registry.js';
 import { createPacer } from './pace.js';
 import { pickDeviceTier, pickAA, deviceKind, readDevice, isIOS } from './gfx-tier.js';
 import { readFold, drastic } from './fold.js';
@@ -196,7 +197,18 @@ const S = {
 const ads = createAds({ mode: () => S.mode });
 const rerollBtn = document.querySelector('[data-reroll]');
 let rerolled = null;
-const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); if (m !== 'live') endBeat(); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); ads.sync(); };
+const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); if (m !== 'live') endBeat(); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); ads.sync(); swapForged(); };
+// The forge's models (0211): fetched after the title is up (below), swapped into the parked rows at the next change to the
+// title or to a countdown (a cut the player already sees), never under a still title, in a run, its results (a dent would be
+// lost) or its replay. A course built after they land is built with them (src/render/scene.js lineup).
+let forgedPending = false;
+const forgeOn = forgeWanted();   // read at boot: the title cleans the address bar (toTitle)
+const forgeAsked = /[?&]forge=1/.test(location.search);   // asked for by name (review, audits): swap as soon as they land
+function swapForged() {
+  if (!forgedPending || (S.mode !== 'title' && S.mode !== 'countdown')) return;   // (setMode calls this on every change)
+  forgedPending = false;
+  stage.useForged?.();
+}
 try {
   const saved = localStorage.getItem('coldgas_tier');
   S.tier = TIERS[saved] ? saved : localStorage.getItem('coldgas_assist') === '0' ? 'pro' : 'assist';
@@ -721,6 +733,16 @@ Promise.all([stage.ready, physicsLoad]).then(() => {
     Promise.race([Promise.allSettled([stage.backdrop, judgesChunk]), new Promise((r) => setTimeout(r, 20_000))]).then(() => { ads.onConfig(() => syncReroll()); ads.arm(document.querySelector('[data-screen="title"]')); });
   };
   if (typeof requestIdleCallback === 'function') requestIdleCallback(startAds, { timeout: 6000 }); else setTimeout(startAds, 1500);
+  // The forge's assets (0211, src/render/forged.js): a lazy chunk and a few hundred kB of meshes from our own origin,
+  // after the title is up and idle, never on a data-saver connection. Until they land (or if they fail) the procedural
+  // models stay; nothing waits on them.
+  const startForge = () => {
+    if (!forgeOn || navigator.connection?.saveData) return;
+    import('./render/forged.js').then((m) => m.loadForged()).then(() => { forgedPending = true; if (forgeAsked) swapForged(); }, () => {
+      // Cosmetic: a failed fetch keeps the procedural models and is not a lazy-chunk failure (no heal, no reload, 0057).
+    });
+  };
+  if (typeof requestIdleCallback === 'function') requestIdleCallback(startForge, { timeout: 5000 }); else setTimeout(startForge, 1200);
 }).catch(() => { /* the boot's own failure path reports it */ });
 
 // Ads between runs only (AGENTS.md §3.3, the owner's 2026-10-30 decision): never in a run, the countdown or Free Drive.

@@ -12,6 +12,7 @@ import { UnrealBloomPass } from 'three/examples/jsm/postprocessing/UnrealBloomPa
 import { OutputPass } from 'three/examples/jsm/postprocessing/OutputPass.js';
 import { RAMP, LINEUP, SHOW, FIXTURES } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
+import { forgeRegistry } from './forge-registry.js';
 import { buildWall, nightSkyMaterial, bakeNightEnvironment, STARS } from './wall.js';
 import { sliver, sliverView, spreadAxes, spreadThin, spreadRing, DECAL, LAYER } from './sliver.js';
 
@@ -163,11 +164,38 @@ function contactShadow(car) {
   car.add(m);
 }
 
+// The forge's models (0211, src/render/forged.js) take a vehicle's place in the row once they're loaded: the same group
+// (its pose, its name, crash.js's dents), its contents swapped. Rows made after the load are built with them.
+const rows = new Set();
+function forgedInto(car, id) {
+  const model = forgeRegistry.model?.(id);
+  if (!model) return false;
+  const p = car.position.clone(), q = car.quaternion.clone();
+  car.position.set(0, 0, 0); car.quaternion.identity();
+  for (const ch of [...car.children]) car.remove(ch);
+  car.add(model);
+  car.updateMatrixWorld(true);
+  contactShadow(car);
+  car.position.copy(p); car.quaternion.copy(q);
+  car.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  car.userData.forged = true;
+  car.userData.gen = (car.userData.gen || 0) + 1;   // crash.js re-reads a car's dentable meshes
+  return true;
+}
+// Swap every row on stage (and every row built from now on) to the forged models. Between runs only (main.js).
+export function useForged() {
+  let n = 0;
+  for (const row of rows) for (const car of row.children) if (!car.userData.forged && forgedInto(car, car.userData.forgeId)) n++;
+  return n;
+}
+
 function lineup(boxes) {
   const g = new THREE.Group();
+  rows.add(g);
   const cars = boxes.map((b) => {
     const car = makeParked(b.id, b.paint);
-    contactShadow(car);
+    car.userData.forgeId = b.id;
+    if (!forgedInto(car, b.id)) contactShadow(car);
     // Parked crosswise, nose to +x.
     car.rotation.y = Math.PI / 2;
     car.position.set((b.minX + b.maxX) / 2, 0, b.cz);
@@ -482,6 +510,8 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
     film?.setDeck(k);
   }
   const stage = { renderer, scene, camera, hero, key, course: null, ready: null, backdrop: null, warm: null, warmGate: () => true, rocket: null, film: null, aa: null, aaKind: '', resize, reshape, render, setCourse, titlePose, setBodies, setLook, setDeck, bloom, setPixelScale, restoreGL, onResize };
+  // The forge's models in (0211): swap the rows, then redraw the shadow map (the title redraws it only when the hero moves).
+  stage.useForged = () => { const n = useForged(); if (n) shadowAge = Infinity; return n; };
 
   function setCourse(id, { sliced = false } = {}) {
     if (!COURSE_IDS.includes(id)) id = 'show';

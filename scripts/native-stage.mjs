@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // The native app's stages, from the web's own builders (docs/NATIVE.md §4, 0153): one source for the look.
-//   node scripts/native-stage.mjs [show|wall|lineup …]   (default: show)
+//   node scripts/native-stage.mjs [show|wall|lineup …] [--forge=0|1]   (default: show; --forge as the web's default, 0211)
 // Builds each course in headless Chromium through Vite (scripts/native-stage-page.js: the real canvas draws the
 // procedural textures), then writes ios/ColdGas/Resources/Stages/<course>/:
 //   stage.json      materials, submeshes, lights, the look, the parked vehicles' home poses, texture list
@@ -16,21 +16,26 @@
 import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { chromium } from '@playwright/test';
 import { createServer } from 'vite';
+import { FORGE_DEFAULT_ON } from '../src/render/forge-registry.js';
 
 const ids = process.argv.slice(2).filter((a) => !a.startsWith('-'));
 const courses = ids.length ? ids : ['show'];
+// The forge's models in the parked row (0211): as the web's default unless --forge=0|1 says otherwise.
+const forgeArg = process.argv.find((a) => a.startsWith('--forge='));
+const forge = forgeArg ? forgeArg.endsWith('=1') : FORGE_DEFAULT_ON;
 const server = await createServer({ server: { port: 4399, strictPort: true, fs: { strict: false } }, logLevel: 'error' });
 await server.listen();
 const browser = await chromium.launch();
 try {
   const page = await browser.newPage();
   page.on('pageerror', (e) => console.error('page:', e.message));
-  await page.goto('http://localhost:4399/coldgas/?gfx=low');
+  // (forge=0: the page's own lazy load stays out of the way; the exporter loads the forged set itself, LOD0 only)
+  await page.goto('http://localhost:4399/coldgas/?gfx=low&forge=0');
   for (const id of courses) {
-    const out = await page.evaluate(async (id) => {
+    const out = await page.evaluate(async ([id, forge]) => {
       const { exportCourse } = await import('/coldgas/scripts/native-stage-page.js');
-      return exportCourse(id);
-    }, id);
+      return exportCourse(id, { forge });
+    }, [id, forge]);
     const dir = `ios/ColdGas/Resources/Stages/${id}`;
     rmSync(dir, { recursive: true, force: true });
     mkdirSync(dir, { recursive: true });
@@ -41,7 +46,7 @@ try {
       return { ...rest, file: `${name}.bin`, indexOffsetBytes: vb.length };
     };
     const manifest = {
-      course: out.course, note: out.generated, look: out.look, lights: out.lights,
+      course: out.course, note: out.generated, forged: forge, look: out.look, lights: out.lights,
       static: bin('static', out.static), roadster: bin('roadster', out.roadster),
       wheels: out.wheels.map((w) => ({ index: w.index, x: w.x, z: w.z, baseY: w.baseY, steers: w.steers,
         steerPart: bin(`wheel-${w.index}-steer`, w.steerPart), spinPart: bin(`wheel-${w.index}-spin`, w.spinPart) })),

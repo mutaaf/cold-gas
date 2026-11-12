@@ -428,8 +428,14 @@ function bakeComplex(id, textures) {
     glows: R.glows.map((g2) => ({ pos: g2.pos.toArray(), color: g2.color.toArray(), radius: g2.radius })) };
 }
 
-export async function exportCourse(id) {
+export async function exportCourse(id, { forge = false } = {}) {
   const textures = new Map();
+  // The forge's models (0211): loaded before the course is built, so the row is made of them (src/render/scene.js lineup),
+  // LOD0 only (the stage carries one mesh per vehicle). The same .glb files the web loads, the same materials.
+  if (forge) {
+    const { loadForged } = await import('../src/render/forged.js');
+    await loadForged({ lods: false });
+  }
   const build = COURSE_BUILDERS[id]('high');
   let first = build.next().value;
   const look = first;
