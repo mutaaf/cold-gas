@@ -373,6 +373,8 @@ final class DeckChrome {
     private var words: [CATextLayer] = []
     private var stripRect: CGRect?
     private var names: [String] = [], at = -1
+    /// What the deck last asked the strip to show: [] means no strip (Free Drive has no phases), nil never told.
+    private var wanted: [String]?
 
     func install(in root: CALayer) {
         plate.colors = [UIColor(red: 0.047, green: 0.063, blue: 0.098, alpha: 1).cgColor, UIColor(red: 0.020, green: 0.027, blue: 0.047, alpha: 1).cgColor]
@@ -413,12 +415,13 @@ final class DeckChrome {
         stripRect = d.strip?.cgRect
         let n = names, a = at
         names = []; at = -1
-        strip(names: n.isEmpty ? Deck.stripNames(course: "show") : n, at: max(0, a))
+        strip(names: wanted ?? (n.isEmpty ? Deck.stripNames(course: "show") : n), at: max(0, a))
     }
 
     /// DRIVE · CLIMB · HANG · AIR · LAND, the moment lit and a red dot under it.
     func strip(names n: [String], at i: Int) {
-        guard let r = stripRect, !n.isEmpty else { for w in words { w.isHidden = true }; stripLine.isHidden = true; stripDot.isHidden = true; return }
+        wanted = n
+        guard let r = stripRect, !n.isEmpty else { for w in words { w.isHidden = true }; stripLine.isHidden = true; stripDot.isHidden = true; names = []; at = -1; return }
         guard n != names || i != at else { return }
         names = n; at = i
         CATransaction.begin(); CATransaction.setDisableActions(true)
