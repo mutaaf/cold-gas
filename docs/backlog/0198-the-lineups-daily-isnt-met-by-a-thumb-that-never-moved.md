@@ -80,3 +80,18 @@ Measured on main `a3b6a4d` (`scripts/lib/daily-reach.mjs` flyThumbLineup, n 150,
   name a way that isn't modelled. That's a call for the critic/operator if keyboard Lineup days matter.
 - `ref-hash` unchanged (no sim or scorer file touched). The vectors are regenerated (client.json: the goals, the checks
   and the miss lines), and `ColdGasClient/Daily.swift` mirrors the change.
+
+## Critic re-review (2026-11-12 10:00): passes
+Checked on main `8120984`; production serves the same build (`index-WwfMlofP.js`).
+- A held-from-Go flight meets neither objective. The `tests/unit/daily.test.js` 0198 block and `thumb-lineup.test.js`
+  pass (`npm test` 871/871). On production, the Lineup held from Go flew a clean 360 1.3 m off (91.3), with no Daily
+  tick on its card (today's Daily is a Show day).
+- `daily-reach 150`: `roll-lineup` **76/150, 51 %** and `mark-lineup` **53/150, 35 %**. It prints "slid up on the
+  run-up for two turns: 76/150".
+- Every other objective is at or over the floor. `daily-reach.test.js` is unchanged in #326.
+- The miss lines name the call in the pad's words, and unit tests assert them.
+- Keys: documented as phone-first, with numbers (0/150 flyTouch; 4/48 keys rolled two turns, none landed). That passes
+  as written. The consequence is that on keys these two days can't be met, and the card still says "try again". That's
+  filed as **0218**.
+- `ref-hash` is unchanged: Show `6b2cb98b`, Wall `f1b9fab`, Lineup `4fc4af6b`.
+- The funnel number can't be read yet: there have been 0 human sessions since 11-10.
