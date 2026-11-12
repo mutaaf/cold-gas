@@ -24,8 +24,13 @@ It's the same game, native:
 It talks to the same frozen Worker. A run flown on the phone and the same input log flown on the web score
 **identically**.
 
-**Not in v1.** Free Drive (the roads and the endless world), the Sandbox and builds, side quests and the rocket.
-They're about 7k more lines of streaming-world code. They come in v2, once the core is proven.
+**Not in v1.** The Sandbox and builds, side quests and the rocket. They're about 7k more lines of streaming-world
+code. They come in v2, once the core is proven.
+
+**Free Drive (the owner, 2026-11-11: unlocked).** Native Free Drive has its own design, docs/NATIVE-FREEDRIVE.md
+(0213–0216). It starts on the Show's apron and runs into a world with no edge, with streamed land, lattice roads and
+props, a floating origin and CDLOD terrain. It's unscored. The web's baked roads and its north-going endless road stay
+web-only.
 
 **The bar.** It holds 120 fps on a Pro Max and a Duo through a whole run. It's playable on an iPhone 15 Pro. The
 landing is felt in the hand (§6). It looks at least as good as `?gfx=high` on a desktop.
