@@ -140,6 +140,7 @@ export function flyThumbLineup(r) {
     th.sample(run, false, inp);
     stepRun(run, inp);
   }
+  run.called = th.twice;   // 0198: the second turn was called (the thumb's latch), for the reach table's call share
   return run;
 }
 
@@ -268,12 +269,17 @@ const FLY = { thumb: flyThumb, touch: flyTouch, pro: flyPro };
 // scoreRun's cards for `n` players of a population on a course (each population and course starts from `seed`).
 export function cards(pop, course, n = 150, seed = 12345) {
   const r = stream(seed), list = [];
-  for (let i = 0; i < n; i++) list.push(scoreRun(FLY[pop](course, r).t));
+  for (let i = 0; i < n; i++) {
+    const run = FLY[pop](course, r), card = scoreRun(run.t);
+    if (run.called !== undefined) card.called = run.called;   // 0198: the Lineup's thumb took the second turn
+    list.push(card);
+  }
   return list;
 }
 
 // Fly `n` players of each needed (population, course) once, and judge every objective on its own population's cards.
-// → [{ id, course, population, n, met, share }]
+// → [{ id, course, population, n, met, share, called? }] (`called`: how many of a one-thumb Lineup population slid up on the
+// run-up for two turns, 0198; flyThumbLineup's half, P.twice)
 export function reach({ n = 150, seed = 12345, objectives = OBJECTIVES } = {}) {
   const memo = new Map();
   const cardsFor = (pop, course) => {
@@ -284,6 +290,8 @@ export function reach({ n = 150, seed = 12345, objectives = OBJECTIVES } = {}) {
   return objectives.map((o) => {
     const population = populationOf(o), list = cardsFor(population, o.course);
     const met = list.filter((s) => evaluate(o, s, o.course)?.ok).length;
-    return { id: o.id, course: o.course, population, n: list.length, met, share: met / list.length };
+    const row = { id: o.id, course: o.course, population, n: list.length, met, share: met / list.length };
+    if (list.some((s) => 'called' in s)) row.called = list.filter((s) => s.called).length;
+    return row;
   });
 }

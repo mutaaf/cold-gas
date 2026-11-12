@@ -1,14 +1,15 @@
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, beforeEach, afterEach } from 'vitest';
 import { createRun, stepRun } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { setUnits } from '../../src/units.js';
 import { OBJECTIVES, objectiveIndex, objectiveFor, evaluate, dayNumber, dayKey, keyToDay, readStreak, streakNow, complete,
-  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint, dailyCoach, dailyItems } from '../../src/daily.js';
+  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint, dailyCoach, dailyItems, dailySwapsHold } from '../../src/daily.js';
 import { newInput } from '../../src/sim/vehicle.js';
 import { predict, newPrediction } from '../../src/sim/predict.js';
 import { SPEC } from '../../src/sim/spec.js';
-import { createOneThumb, thumbStage, markOffset } from '../../src/onethumb.js';
+import { createOneThumb, thumbStage, markOffset, THUMB } from '../../src/onethumb.js';
+import { COURSES } from '../../src/sim/courses.js';
 import { coach } from '../../src/sim/coach.js';
 import { coachWords, pickPointer } from '../../src/pointer.js';
 
@@ -65,7 +66,7 @@ describe('the daily objective', () => {
     expect(byId('mark-show').goal()).toBe('Land within 11.5 ft of the mark');
     setUnits('metric', { persist: false });
     expect(byId('mark-show').goal()).toBe('Land within 3.5 m of the mark');
-    expect(byId('mark-lineup').goal()).toBe('Land within 7 m of the mark');
+    expect(byId('mark-lineup').goal()).toBe('Roll two turns and land within 4 m of the mark');
   });
   afterEach(() => setUnits('us', { persist: false }));
 });
@@ -98,8 +99,10 @@ describe('the daily, judged from real runs', () => {
     expect(evaluate(byId('scratch-show'), cards.show, 'show').ok).toBe(true);
     expect(evaluate(byId('soft-wall'), cards.wall, 'wall').ok).toBe(true);
     expect(evaluate(byId('stick-wall'), cards.wall, 'wall').ok).toBe(true);
-    expect(evaluate(byId('roll-lineup'), cards.lineup, 'lineup').ok).toBe(true);
-    expect(evaluate(byId('mark-lineup'), cards.lineup, 'lineup').ok).toBe(true);
+    // 0198: the Lineup's days ask for two turns; its reference flies the reveal's one.
+    expect(cards.lineup.facts.rotations).toBe(1);
+    expect(evaluate(byId('roll-lineup'), cards.lineup, 'lineup')).toEqual({ ok: false, miss: `rolled ${cards.lineup.facts.rollDeg}°, need 720°`, fix: true, turns: true });
+    expect(evaluate(byId('mark-lineup'), cards.lineup, 'lineup').ok).toBe(false);
   });
 
   it('says why not, with the number', () => {
@@ -120,8 +123,10 @@ describe('the daily, judged from real runs', () => {
     const withFacts = (card, f) => ({ ...card, facts: { ...card.facts, ...f } });
     expect(evaluate(byId('mark-show'), withFacts(cards.show, { padMiss: 3.5 }), 'show').ok).toBe(true);
     expect(evaluate(byId('mark-show'), withFacts(cards.show, { padMiss: 3.6 }), 'show')).toEqual({ ok: false, miss: '3.6 m off the mark', fix: true });
-    expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { padMiss: 7 }), 'lineup').ok).toBe(true);
-    expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { padMiss: 7.1 }), 'lineup').ok).toBe(false);
+    // 0198: the Lineup's mark day at its edge: two turns within 4 m.
+    expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { rotations: 2, padMiss: 4 }), 'lineup').ok).toBe(true);
+    expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { rotations: 2, padMiss: 4.1 }), 'lineup')).toEqual({ ok: false, miss: '4.1 m off the mark', fix: true });
+    expect(evaluate(byId('mark-lineup'), withFacts(cards.lineup, { rotations: 2, padMiss: 1, contact: true }), 'lineup').miss).toBe('no clean landing yet');
     expect(evaluate(byId('gas-show'), withFacts(cards.show, { airPct: 26 }), 'show').ok).toBe(true);
     expect(evaluate(byId('gas-show'), withFacts(cards.show, { airPct: 25 }), 'show')).toEqual({ ok: false, miss: '25 % gas left, need 26 %', fix: true });
   });
@@ -152,12 +157,12 @@ describe('what a miss can change (0139)', () => {
     expect(missLine(stick, stick.check({ total: 80 }, { jumped: true }), thumb)).toMatch(/need 84 — try again$/);
     expect(missLine(gas, short, undefined)).toMatch(/^Daily: 24 % gas left, need 26 % · shorter BOOST/);   // no ctx: no throw
   });
-  it('the title card hints only on one thumb, only on the gas day', () => {
+  it('the title card hints only on one thumb, only on the days that name a choice (gas, skim; the Lineup’s call, 0198)', () => {
     expect(titleHint(gas, thumb)).toBe('Hold the pad from the tap');
     expect(titleHint(gas, thumb, true)).toBe('Hold the pad from the tap to the ground');   // the countdown's tip
     expect(titleHint(gas, keys)).toBe('');
     expect(titleHint(gas, classic)).toBe('');
-    for (const o of OBJECTIVES.filter((x) => x !== gas && x.id !== 'skim-show')) expect(titleHint(o, thumb)).toBe('');
+    for (const o of OBJECTIVES.filter((x) => x !== gas && !['skim-show', 'roll-lineup', 'mark-lineup'].includes(x.id))) expect(titleHint(o, thumb)).toBe('');
   });
 });
 
@@ -336,5 +341,78 @@ describe('the streak (UTC days)', () => {
     saveStreak({ last: '2026-10-30', streak: 2, best: 5 }, store);
     expect(mem.has('coldgas_daily')).toBe(true);
     expect(loadStreak(store)).toEqual({ last: '2026-10-30', streak: 2, best: 5 });
+  });
+});
+
+// 0198: on a phone the Lineup's Daily asks for the one thumb's choice (0191), not a thumb that only held the pad. Held from
+// Go and never moved, the computer flies a clean 360 1.3 m off the mark: it met both old days. Now it meets neither; slid
+// up on the run-up for two turns and brought onto the mark, it meets both. Each miss says what to do in the pad's words.
+describe('the Lineup’s Daily on one thumb (0198)', () => {
+  const thumb = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'lineup' };
+  const keys = { device: 'key', scheme: 'classic', tier: 'assist', course: 'lineup' };
+  const roll = byId('roll-lineup'), mark = byId('mark-lineup');
+  // One thumb down a reaction after Go; `slides`: [z, dy px] — at each z the held thumb is moved to dy px up the glass.
+  const fly = (slides = []) => {
+    const run = createRun('lineup'), th = createOneThumb();
+    let next = 0;
+    while (run.phase !== 'done') {
+      const inp = newInput();
+      if (run.tick === 60) th.down();
+      while (th.held && next < slides.length && run.car.pos.z > slides[next][0]) th.move(0, slides[next++][1]);
+      th.sample(run, false, inp);
+      stepRun(run, inp);
+    }
+    return scoreRun(run.t);
+  };
+  let held, called, aimed;
+  beforeEach(() => setUnits('metric', { persist: false }));
+  afterEach(() => setUnits('us', { persist: false }));
+  beforeAll(() => {
+    held = fly();
+    called = fly([[-60, THUMB.aimPx]]);
+    aimed = fly([[-60, THUMB.aimPx], [COURSES.lineup.lineupEnd + 1, 0]]);
+  }, 60_000);
+
+  it('held from Go and never moved: a clean 360 near the mark, and neither Lineup objective', () => {
+    expect(held.facts.rotations).toBe(1);
+    expect(held.facts.contact).toBe(false);
+    expect(held.facts.padMiss).toBeLessThan(2);
+    for (const o of [roll, mark]) {
+      const r = evaluate(o, held, 'lineup');
+      expect(r.ok, o.id).toBe(false);
+      expect(r.miss, o.id).toBe(`rolled ${held.facts.rollDeg}°, need 720°`);
+      expect(missLine(o, r, thumb), o.id).toBe(`Daily: rolled ${held.facts.rollDeg}°, need 720° · slide up on the run-up for two turns`);
+      expect(dailyCoach(o, r, thumb), o.id).toBe('For the Daily: slide up on the run-up for two turns');
+    }
+  });
+
+  it('slid up on the run-up: two turns meet the roll day; never aimed, the 720 is off the mark and the miss names the dot', () => {
+    expect(called.facts.rotations).toBe(2);
+    expect(evaluate(roll, called, 'lineup').ok).toBe(true);
+    const r = evaluate(mark, called, 'lineup');
+    expect(called.facts.padMiss).toBeGreaterThan(4);
+    expect(r).toEqual({ ok: false, miss: `${called.facts.padMiss} m off the mark`, fix: true });
+    expect(missLine(mark, r, thumb)).toBe(`Daily: ${called.facts.padMiss} m off the mark · hold the pad in the air and slide onto the amber dot, following it down`);
+    expect(dailyCoach(mark, r, thumb)).toBe('');   // the coach's own aim line stays
+    // The sheet's "hold the pad … amber dot" items stay on the Lineup (holding is the call and the aim); skim swaps them.
+    expect(dailySwapsHold(mark)).toBe(false);
+    expect(dailySwapsHold(roll)).toBe(false);
+    expect(dailySwapsHold(byId('skim-show'))).toBe(true);
+  });
+
+  it('two turns slid onto the mark meet both', () => {
+    expect(aimed.facts.rotations).toBe(2);
+    expect(aimed.facts.padMiss).toBeLessThanOrEqual(4);
+    for (const o of [roll, mark]) expect(evaluate(o, aimed, 'lineup'), o.id).toEqual({ ok: true, miss: '' });
+  });
+
+  it('the title says the call on one thumb; keys and two thumbs get no way that isn’t modelled (phone-first)', () => {
+    expect(titleHint(roll, thumb)).toBe('Slide up on the run-up');
+    expect(titleHint(roll, thumb, true)).toBe('Slide up on the run-up for two turns');
+    expect(titleHint(mark, thumb, true)).toBe('Slide up on the run-up, then onto the amber dot');
+    const r = evaluate(roll, held, 'lineup');
+    expect(missLine(roll, r, keys)).toBe(`Daily: rolled ${held.facts.rollDeg}°, need 720° — try again`);
+    expect(titleHint(roll, keys)).toBe('');
+    expect(dailyCoach(roll, r, keys)).toBe('');
   });
 });

@@ -1,12 +1,12 @@
 ---
 id: 0198
 title: The Lineup's Daily isn't met by a thumb that only held the pad
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-11
-pr:
+pr: 326
 by: critic
 ---
 
@@ -64,3 +64,19 @@ on the run-up for two turns".
 - The Lineup's medals (0191).
 - The judges' panel headline (0195, operator).
 - The Show's and the Wall's objectives.
+
+## Shipped (builder, 2026-11-12)
+Measured on main `a3b6a4d` (`scripts/lib/daily-reach.mjs` flyThumbLineup, n 150, seed 12345; the held flight is
+`tests/unit/daily.test.js` 0198's):
+- Held from Go and never moved: a clean 360 1.3 m off the mark. The same thumb slid up on the run-up and never aimed:
+  a 720 4.3 m off (wherever it was called). Slid back onto the mark in the air: a 720 under 1.5 m (Gold).
+- The population: 76/150 slid up for two turns (the model's half, `P.twice`), and 76/76 of them land two clean turns.
+  Their 720s land 1.5–4.3 m off. Of all 150 landings, only 8 come within 1.2 m of the mark, so a 360-only mark bar under the held thumb's 1.3 m
+  can't be in the band (5 %). The mark day asks for two turns onto the mark instead.
+- `roll-lineup` → "Roll two turns over the row and land clean": **76/150, 51 %**. `mark-lineup` → "Roll two turns and
+  land within 13 ft (4 m) of the mark": **53/150, 35 %**. n 40: 48 % / 35 %. Every other objective is as before.
+- Keys / two thumbs: phone-first. flyTouch: 0/150 land two turns. With the roll held through a second turn: 0/60. A keys
+  Assist/Pro sweep of run-up speed, LIFT hold and roll: 4 of 48 rolled two turns, and none of them landed. The miss line there says "try again" rather than
+  name a way that isn't modelled. That's a call for the critic/operator if keyboard Lineup days matter.
+- `ref-hash` unchanged (no sim or scorer file touched). The vectors are regenerated (client.json: the goals, the checks
+  and the miss lines), and `ColdGasClient/Daily.swift` mirrors the change.
