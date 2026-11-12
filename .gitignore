@@ -21,3 +21,9 @@ ios/.env*
 *.p12
 *.mobileprovision
 store/lobby/out/
+# The forge (0211): build output and a brief's intermediate files stay local; review folders keep script, turntable, report
+tools/forge/out/
+tools/forge/briefs/**/raw.glb
+tools/forge/briefs/**/job.json
+tools/forge/briefs/**/build-*.py
+tools/forge/briefs/**/draft-*.py

@@ -1,0 +1,65 @@
+{
+ "id": "cab-brief-an-80s-rally-hatch-with-light-pods",
+ "seed": 0,
+ "source": "build-1.py",
+ "ok": true,
+ "ao": 0.5743941838438837,
+ "lod0": {
+  "tris": 14816,
+  "verts": 7578,
+  "edges": 22224,
+  "nonManifoldEdges": 0,
+  "boundaryEdges": 0,
+  "islands": 89,
+  "glyphClusters": [],
+  "glyphClusterCount": 0,
+  "bounds": {
+   "min": [
+    -0.8781174421310425,
+    -2.2295002937316895,
+    0
+   ],
+   "max": [
+    0.8781174421310425,
+    2.234499931335449,
+    1.409000039100647
+   ]
+  },
+  "materials": [
+   "paint",
+   "chassis",
+   "trim",
+   "glass",
+   "lamp_white",
+   "lamp_red",
+   "paint_alt",
+   "rubber",
+   "rim_silver",
+   "steel"
+  ],
+  "trisByMaterial": {
+   "paint": 3876,
+   "rubber": 2352,
+   "trim": 1976,
+   "steel": 1744,
+   "rim_silver": 1600,
+   "chassis": 1428,
+   "glass": 872,
+   "paint_alt": 552,
+   "lamp_white": 360,
+   "lamp_red": 56
+  },
+  "objectTypes": [
+   "MESH"
+  ],
+  "fonts": 0,
+  "curves": 0,
+  "images": 0
+ },
+ "outlineFlags": [],
+ "lod1": {
+  "tris": 5184,
+  "budget": 5200
+ },
+ "seconds": 5.53
+}
