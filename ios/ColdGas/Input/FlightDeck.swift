@@ -418,7 +418,7 @@ final class DeckChrome {
 
     /// DRIVE · CLIMB · HANG · AIR · LAND, the moment lit and a red dot under it.
     func strip(names n: [String], at i: Int) {
-        guard let r = stripRect else { for w in words { w.isHidden = true }; stripLine.isHidden = true; stripDot.isHidden = true; return }
+        guard let r = stripRect, !n.isEmpty else { for w in words { w.isHidden = true }; stripLine.isHidden = true; stripDot.isHidden = true; return }
         guard n != names || i != at else { return }
         names = n; at = i
         CATransaction.begin(); CATransaction.setDisableActions(true)
@@ -474,6 +474,18 @@ struct DeckBackdrop: UIViewRepresentable {
     func updateUIView(_ v: DeckChromeView, context: Context) {
         if v.accessibilityIdentifier != layoutKey { v.accessibilityIdentifier = layoutKey; v.setNeedsLayout() }
         v.show(names: names, at: at)
+    }
+}
+
+/// Free Drive's controls (World/DriveView.swift): the same deck, by the web's rule for `course == 'drive'` (GO, BRAKE and
+/// LIFT on the ground; LAND, LIFT and BOOST in the air). Its presses reach Free Drive's sampler through `Controls`.
+struct ClassicSurface: View {
+    let panel: Bool, air: Bool
+    var body: some View {
+        let tp: TouchPhase = air ? .air : .ground
+        FlightDeck(show: DeckShow(buttons: Deck.buttons(tp, assist: true, course: "drive", ledge: false, rowDone: false),
+                                  stickLabel: Deck.stickLabel(tp), hint: nil, gas: 1, strip: 0, stripNames: []),
+                   layoutKey: "drive \(panel)")
     }
 }
 
