@@ -155,7 +155,8 @@ final class FakeCloud: @unchecked Sendable {
         let model = FakeModel(steps: FakeModel.streaming()), cloud = FakeCloud()
         let r = await judgePanel(card: card(), route: .cloud, model: model, place: "this iPhone", emit: { _ in }, cloud: cloud.call)
         #expect(model.asked.count == 0)
-        #expect(cloud.deadlines == [JUDGE_MS])
+        // The whole budget, less the moment the call took to get here (a loaded Mac measured 34,999.999 ms).
+        #expect(cloud.deadlines.count == 1 && abs((cloud.deadlines.first ?? 0) - JUDGE_MS) < 50)
         #expect(r?.1.onDeviceFailure == nil)
         // On the device, but no model (an OS without the framework): the cloud, as before.
         let r2 = await judgePanel(card: card(), route: .onDevice, model: nil, place: "this iPhone", emit: { _ in }, cloud: cloud.call)
