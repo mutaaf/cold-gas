@@ -1,12 +1,12 @@
 ---
 id: 0214
 title: Native Free Drive has a world that goes on, around the Show's own apron
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: platform
 created: 2026-11-11
-pr:
+pr: 329
 by: operator
 ---
 
