@@ -193,15 +193,22 @@ export function createFilm({ renderer, scene, camera, composer, tier }) {
   if (haze) composer.insertPass(haze, 1);
   const mirror = high ? createMirror(renderer) : null;
   let reflecting = false, slabs = [], born = -1, fade = 0;
+  let lookGlows = [], lookL = LOOKS.night, deckK = 0;
+  // One glow's colour into the pass, scaled toward its `deck` level (0193) by the deck look's k.
+  function glowCol(i) {
+    const g = lookGlows[i], c = g.color, s = (1 + ((g.deck ?? 1) - 1) * deckK) * lookL.glow;
+    haze.uniforms.uGlowCol.value[i].set(c.r * s, c.g * s, c.b * s, g.radius ?? 3);
+  }
 
   function setLook(id, glows = [], wet = []) {
     if (haze) {
       const L = id === 'lineup' ? LOOKS.lineup : LOOKS.night, u = haze.uniforms;
+      lookGlows = glows; lookL = L;
       u.uFogA.value = L.fogA; u.uFogB.value = L.fogB; u.uFogCol.value.setRGB(...L.fogCol);
       u.uSunCol.value.setRGB(...L.sunCol); u.uSunDir.value.set(...L.sunDir).normalize();
       u.uVignette.value = L.vignette;
       const n = Math.min(MAX_GLOWS, glows.length);
-      for (let i = 0; i < n; i++) { const g = glows[i], c = g.color; u.uGlowPos.value[i].copy(g.pos); u.uGlowCol.value[i].set(c.r * L.glow, c.g * L.glow, c.b * L.glow, g.radius ?? 3); }
+      for (let i = 0; i < n; i++) { u.uGlowPos.value[i].copy(glows[i].pos); glowCol(i); }
       u.uGlows.value = n;
     }
     slabs = wet;
@@ -226,5 +233,14 @@ export function createFilm({ renderer, scene, camera, composer, tier }) {
     for (const s of slabs) { s.uReflMat.value.copy(mirror.matrix); s.uReflK.value = fade; }
   }
 
-  return { setLook, render, haze, mirror };
+  // The deck look (0187, 0193; src/render/deck-look.js): a glow with a `deck` level (the red one at the curl's foot)
+  // eases to it as k goes to 1, so on the run-up the air there isn't lit red. Only on a change of k.
+  function setDeck(k) {
+    if (!haze || k === deckK) return;
+    deckK = k;
+    const n = Math.min(MAX_GLOWS, lookGlows.length);
+    for (let i = 0; i < n; i++) if (lookGlows[i].deck != null) glowCol(i);
+  }
+
+  return { setLook, setDeck, render, haze, mirror };
 }
