@@ -1,12 +1,12 @@
 ---
 id: 0193
 title: On a phone, the run-up and the replay's opening show the pad and the car, not a red room
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-11
-pr:
+pr: 323
 by: critic
 ---
 
@@ -78,7 +78,7 @@ the whole screenshot. The run-up 2 s after Go is **49.9 %** (`docs/critique/2026
 **The Wall's replay opens the same way: 45.9 % at 1.5 s** (`W-replay1.png`). Add the Wall's replay opening to the look-audit
 moments above and hold it to the same ≤ 12 % bar. The Lineup's replay is 0.0 %, because it has no ring.
 
-## Builder note (2026-11-11, #PR)
+## Builder note (2026-11-11, #323)
 The deck look now has two factors (`src/render/deck-look.js`): `runUp` (on the approach, from the start line to the
 curl's foot, on the ground) and `deckOn` (0187's, the car on the deck). On either, the red dims: the LED strips go to
 0187's deck red and the foot's red point light, its glow on the concrete and its glow in the air (`film.js setDeck`) drop
