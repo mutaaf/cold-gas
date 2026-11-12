@@ -10,6 +10,7 @@ import { DECAL } from '../render/sliver.js';
 import { CONE, BARRIER } from '../sim/props.js';
 import { propPose } from '../sim/world.js';
 import { createBodiesLerp } from '../render/interp.js';
+import { forgeRegistry } from '../render/forge-registry.js';
 
 const ICE = 0xbfe6ff, SIGNAL = 0xd7262e;
 
@@ -89,6 +90,23 @@ function barrierGeo() {
   return mergeColoured([coloured(body, [0.9, 0.9, 0.88]), coloured(band, [0.78, 0.12, 0.14])]);
 }
 
+// The forge's model of a prop (0211, src/render/forged.js), once loaded: one merged geometry with its colours and baked
+// occlusion in the vertex colours, fitted to the same body the sim simulates. The barrier is forged along its length
+// (z) and lies along x here; the parked car is scaled into its piece's box (paint white: the instance colour paints it).
+function forgedProp(slot, box) {
+  const src = forgeRegistry.geometry?.(slot, { white: slot === 'sedan' });
+  if (!src) return null;
+  const g = src.clone();
+  if (slot === 'barrier') g.rotateY(Math.PI / 2);
+  if (box) {
+    g.computeBoundingBox();
+    const s = g.boundingBox.getSize(new THREE.Vector3());
+    g.scale(box.w / s.x, box.h / s.y, box.d / s.z);
+  }
+  g.computeBoundingSphere();
+  return g;
+}
+
 function canvasTex(w, h, draw) {
   const c = document.createElement('canvas');
   c.width = w; c.height = h;
@@ -151,9 +169,9 @@ export function createBuildRender(parent, { tier = 'high' } = {}) {
     else if (type === 'pickup') { g = new THREE.OctahedronGeometry(0.62, 0); }
     else if (type === 'padmark') { g = new THREE.PlaneGeometry(9.4, 9.4); g.rotateX(-Math.PI / 2); g.translate(0, PIECES.pad.shape.h + 0.004, 0); }
     else if (type === 'lip') g = null;
-    else if (type === 'car') g = parkedCarGeo(def.shape);
-    else if (type === 'cone') g = coneGeo();
-    else if (type === 'barrier') g = barrierGeo();
+    else if (type === 'car') g = forgedProp('sedan', def.shape) || parkedCarGeo(def.shape);
+    else if (type === 'cone') g = forgedProp('cone') || coneGeo();
+    else if (type === 'barrier') g = forgedProp('barrier') || barrierGeo();
     else {
       const m = shapeMesh(def.shape);
       g = new THREE.BufferGeometry();

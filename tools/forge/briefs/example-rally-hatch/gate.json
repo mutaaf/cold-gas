@@ -1,0 +1,28 @@
+{
+ "ok": true,
+ "failures": [],
+ "facts": {
+  "size": {
+   "w": 1.756234884262085,
+   "l": 4.464000225067139,
+   "h": 1.409000039100647
+  },
+  "tris": [
+   14816,
+   5184
+  ],
+  "bytes": 229696,
+  "materials": [
+   "paint",
+   "chassis",
+   "trim",
+   "glass",
+   "lamp_white",
+   "lamp_red",
+   "paint_alt",
+   "rubber",
+   "rim_silver",
+   "steel"
+  ]
+ }
+}

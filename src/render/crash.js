@@ -328,7 +328,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
     const car = row.children[i];
     if (!car) return null;
     let p = parked[i];
-    if (!p || p.car !== car) {
+    if (!p || p.car !== car || p.gen !== car.userData.gen) {
       const meshes = [];
       car.traverse((o) => {
         if (!o.isMesh || !o.geometry?.attributes?.position || o.geometry.attributes.position.count < 60) return;
@@ -338,7 +338,7 @@ export function createCrash({ scene, hero, carRoot, director, tier = 'high', cou
         meshes.push(dentable(o));
       });
       const spec = LINEUP_SPEC[i] || LINEUP_SPEC[0];
-      p = parked[i] = { car, meshes, ax: 0, az: 0, sy: 0, vax: 0, vaz: 0, vsy: 0, k: 1 / Math.max(1, spec.w * spec.l * spec.h / 12), paint: spec.paint };
+      p = parked[i] = { car, gen: car.userData.gen, meshes, ax: 0, az: 0, sy: 0, vax: 0, vaz: 0, vsy: 0, k: 1 / Math.max(1, spec.w * spec.l * spec.h / 12), paint: spec.paint };
     }
     return p;
   }

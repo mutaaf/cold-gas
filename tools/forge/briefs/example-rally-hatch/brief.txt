@@ -1,0 +1,3 @@
+an 80s rally hatch with light pods
+slot: cab
+seed: 0
