@@ -1,7 +1,7 @@
 ---
 id: 0193
 title: On a phone, the run-up and the replay's opening show the pad and the car, not a red room
-status: shipped
+status: ready
 priority: P1
 size: M
 lens: authenticity
