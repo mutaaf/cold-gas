@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # The flight deck on every shape (0210): a scripted run frozen at a moment (`-freeze <tick>`, DEBUG) with its controls up,
 # shot on a phone upright and sideways, the Duo closed / book / tabletop (-window + -pose), and an iPad both ways.
+# The poses are laid out by -window/-pose, so any simulator can stand in for the Duo (DUO=<a phone> WINDOWED_DUO=1).
 #   scripts/deck-shots.sh [outdir]      (after `make build`; PHONE / DUO / IPAD name the simulators to use, empty skips one;
 #                                       ONLY="pro-air adv-air" shoots just those moments)
 # The simulators are the caller's own (another project on this Mac shares the stock ones).
@@ -44,11 +45,12 @@ each() { # <sim id> <prefix> [args…]
   done
 }
 if [ -n "$PHONE" ] && P=$(up "$PHONE"); then
-  each "$P" phone
+  each "$P" phone -orient portrait
   each "$P" phone-wide -orient landscape
 fi
 if [ -n "$DUO" ] && D=$(up "$DUO"); then
-  each "$D" duo-closed
+  # The outer screen: native on a Duo; WINDOWED_DUO=1 lays it out at its measured 466×678 on another simulator.
+  each "$D" duo-closed ${WINDOWED_DUO:+-window 466x678}
   each "$D" duo-book -window 951x669 -pose book
   each "$D" duo-tabletop -window 669x951 -pose tabletop
 fi

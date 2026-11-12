@@ -58,17 +58,21 @@ Runs on: the operator's Mac (Xcode, the simulators). iPhone app only; the web, t
   the deck.
 
 ## Acceptance criteria
-- [ ] The sim inputs are unchanged: `make test` green (the 52 run vectors, the live input vectors, the
+- [x] The sim inputs are unchanged: `make test` green (the 52 run vectors, the live input vectors, the
       withKnownIssue 0186 rows as they were). The surfaces only call `TouchControls.press/release/stick` and set
       `nozzleValves`, as before.
-- [ ] `DeckTests`: in every form, every control sits inside the controls rect, is at least 44 pt (slot A at least
+- [x] `DeckTests`: in every form, every control sits inside the controls rect, is at least 44 pt (slot A at least
       84 pt), overlaps nothing, and stays off the Duo's fold band. The fan lies on one arc around its pivot. Tabletop
       uses the lower panel's full height.
-- [ ] Simulator screenshots for Pro on the ground and in the air, and Advanced in the air, on: an iPhone upright and
+- [x] Simulator screenshots for Pro on the ground and in the air, and Advanced in the air, on: an iPhone upright and
       sideways, the Duo closed, book and tabletop (`-window` + `-pose`), and an iPad upright and sideways. Each one
       looked at.
-- [ ] The app builds for iPhone and iPad (`TARGETED_DEVICE_FAMILY 1,2`) and launches on an iPad simulator.
-- [ ] `make rules` passes.
+- [x] The app builds for iPhone and iPad (`TARGETED_DEVICE_FAMILY 1,2`) and launches on an iPad simulator.
+- [x] `make rules` passes.
+
+Shots (docs/shots/deck-0210/, from `ios/scripts/deck-shots.sh`): the phone upright (ground, climb with the ghost on GO, air,
+Advanced) and sideways (ledge, Advanced), the Duo closed, book and tabletop (laid out with `-window`/`-pose`), and an iPad
+upright and sideways. Not yet: a hardware pass on a Duo, a Pro Max and an iPad (feel, reach, haptics in the hand).
 
 ## Test plan
 `ios/Packages/ColdGasCore/Tests/ColdGasLayoutTests/DeckTests.swift` holds the geometry to the criteria above for

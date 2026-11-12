@@ -190,7 +190,8 @@ public enum Deck {
         var strip: LRect?
         if f == .tabletop {
             let x0 = stick.frame.maxX + 12, x1 = (slots.map { $0.c.x - $0.r }.min() ?? w) - 12
-            if x1 - x0 >= 120 { strip = LRect(x: x0, y: h / 2 - 60, w: x1 - x0, h: 120) }
+            // Narrow and tall between the wells: the strip stands upright there (DeckChrome stacks the words).
+            if x1 - x0 >= 72 { strip = LRect(x: x0, y: h / 2 - 95, w: x1 - x0, h: 190) }
         } else if f == .tablet {
             let sw = min(520, w * 0.44)
             strip = LRect(x: (w - sw) / 2, y: h - 40 - margin, w: sw, h: 40)

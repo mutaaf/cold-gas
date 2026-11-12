@@ -471,7 +471,11 @@ struct ControllerView: View {
             Color.clear.contentShape(Rectangle()).onTapGesture { Hardware.shared.note(touch: true) }
         } else if game.tier == "advanced" && h.touchPhase == .air {
             // main.js: off the Wall (or flying) on Advanced, the valve deck replaces the stick and the buttons.
-            NozzlePad(layoutKey: layoutKey)
+            let course = game.live?.run.course ?? game.course
+            ZStack {
+                DeckBackdrop(names: Deck.stripNames(course: course), at: Deck.stripIndex(.air, course: course, ledge: false), layoutKey: layoutKey)
+                NozzlePad(layoutKey: layoutKey)
+            }
         } else if game.oneThumb { ThumbPad(panel: panel) } else { ClassicPad(layoutKey: layoutKey) }
     }
 }

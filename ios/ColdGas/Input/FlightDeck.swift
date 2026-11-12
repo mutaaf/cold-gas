@@ -170,6 +170,8 @@ final class FlightDeckView: ControlSurface {
                 s.disc.strokeColor = on ? UIColor.clear.cgColor : edge.cgColor
                 s.disc.lineWidth = i == 0 ? 1.5 : 1
                 if let b {
+                    // A long word (RELEASE) in a small slot steps down to fit inside the ring.
+                    s.text.fontSize = min(i == 0 ? (deck.form == .phone ? 14 : 16) : (deck.form == .phone ? 12 : 13), s.geo.d * 1.25 / CGFloat(max(4, b.label.count)))
                     let font = UIFont(name: "Geist-Medium", size: s.text.fontSize) ?? UIFont(name: "Geist", size: s.text.fontSize) ?? .systemFont(ofSize: s.text.fontSize, weight: .medium)
                     let color: UIColor = on ? ControlSurface.bg : b.amber ? FlightDeckView.amber : ink
                     s.text.string = NSAttributedString(string: b.label, attributes: [.font: font, .foregroundColor: color, .kern: 1.4])
@@ -388,9 +390,10 @@ final class DeckChrome {
         }
     }
 
-    func layout(_ d: DeckLayout, bounds: CGRect) {
+    /// `wells`: the stick's and the fan's wells (not behind the valve deck, whose halves sit there).
+    func layout(_ d: DeckLayout, bounds: CGRect, wells showWells: Bool = true) {
         let console = d.form == .tabletop
-        plate.isHidden = !console; plateEdge.isHidden = !console; wells.isHidden = !console; vents.isHidden = !console
+        plate.isHidden = !console; plateEdge.isHidden = !console; wells.isHidden = !console || !showWells; vents.isHidden = !console
         if console {
             let r = bounds.insetBy(dx: 4, dy: 4)
             plate.frame = r
@@ -420,19 +423,57 @@ final class DeckChrome {
         names = n; at = i
         CATransaction.begin(); CATransaction.setDisableActions(true)
         stripLine.isHidden = false; stripDot.isHidden = false
-        let y = r.midY
-        stripLine.path = UIBezierPath(rect: CGRect(x: r.minX, y: y + 12, width: r.width, height: 0.5)).cgPath
-        let step = r.width / CGFloat(max(1, n.count))
+        // Across when each word has room (an iPad's bottom edge), else upright: a column with its rail on the left.
+        let across = r.width / CGFloat(max(1, n.count)) >= 64
+        let fs: CGFloat = across ? 10 : 9
+        if across {
+            let y = r.midY, step = r.width / CGFloat(max(1, n.count))
+            stripLine.path = UIBezierPath(rect: CGRect(x: r.minX, y: y + 12, width: r.width, height: 0.5)).cgPath
+            for (k, w) in words.enumerated() where k < n.count {
+                w.frame = CGRect(x: r.minX + CGFloat(k) * step, y: y - fs * 0.9, width: step, height: fs * 1.6)
+                w.alignmentMode = .center
+                if k == i { stripDot.path = UIBezierPath(ovalIn: CGRect(x: r.minX + (CGFloat(k) + 0.5) * step - 2.5, y: y + 9.5, width: 5, height: 5)).cgPath }
+            }
+        } else {
+            let step = r.height / CGFloat(max(1, n.count)), x = r.midX - 34
+            stripLine.path = UIBezierPath(rect: CGRect(x: x, y: r.minY + step * 0.25, width: 0.5, height: r.height - step * 0.5)).cgPath
+            for (k, w) in words.enumerated() where k < n.count {
+                let cy = r.minY + (CGFloat(k) + 0.5) * step
+                w.frame = CGRect(x: x + 12, y: cy - fs * 0.8, width: r.maxX - x - 12, height: fs * 1.6)
+                w.alignmentMode = .left
+                if k == i { stripDot.path = UIBezierPath(ovalIn: CGRect(x: x - 2.25, y: cy - 2.5, width: 5, height: 5)).cgPath }
+            }
+        }
         for (k, w) in words.enumerated() {
             w.isHidden = k >= n.count
             guard k < n.count else { continue }
-            let on = k == i
-            let fs: CGFloat = r.width / CGFloat(n.count) > 90 ? 10 : 8.5
-            w.string = NSAttributedString(string: n[k], attributes: [.font: UIFont(name: "Michroma-Regular", size: fs) ?? .systemFont(ofSize: fs), .foregroundColor: ControlSurface.ink.withAlphaComponent(on ? 0.95 : 0.34), .kern: 1.8])
-            w.frame = CGRect(x: r.minX + CGFloat(k) * step, y: y - fs * 0.9, width: step, height: fs * 1.6)
-            if on { stripDot.path = UIBezierPath(ovalIn: CGRect(x: r.minX + (CGFloat(k) + 0.5) * step - 2.5, y: y + 9.5, width: 5, height: 5)).cgPath }
+            w.string = NSAttributedString(string: n[k], attributes: [.font: UIFont(name: "Michroma-Regular", size: fs) ?? .systemFont(ofSize: fs), .foregroundColor: ControlSurface.ink.withAlphaComponent(k == i ? 0.95 : 0.34), .kern: 1.8])
         }
         CATransaction.commit()
+    }
+}
+
+/// The deck's surroundings on their own, behind Advanced's valve deck (which draws its pads into its own layer).
+final class DeckChromeView: UIView {
+    private let chrome = DeckChrome()
+    private var names: [String] = [], at = 0
+    override init(frame: CGRect) { super.init(frame: frame); isUserInteractionEnabled = false; backgroundColor = .clear; chrome.install(in: layer) }
+    required init?(coder: NSCoder) { nil }
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        guard bounds.width > 10 else { return }
+        chrome.layout(DeckGeometry.layout(bounds.size), bounds: bounds, wells: false)
+        chrome.strip(names: names, at: at)
+    }
+    func show(names n: [String], at i: Int) { names = n; at = i; chrome.strip(names: n, at: i) }
+}
+
+struct DeckBackdrop: UIViewRepresentable {
+    let names: [String], at: Int, layoutKey: String
+    func makeUIView(context: Context) -> DeckChromeView { DeckChromeView() }
+    func updateUIView(_ v: DeckChromeView, context: Context) {
+        if v.accessibilityIdentifier != layoutKey { v.accessibilityIdentifier = layoutKey; v.setNeedsLayout() }
+        v.show(names: names, at: at)
     }
 }
 
