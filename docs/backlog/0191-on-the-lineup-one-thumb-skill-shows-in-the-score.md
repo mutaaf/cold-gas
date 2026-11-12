@@ -1,7 +1,7 @@
 ---
 id: 0191
 title: On the Lineup, a thumb held from Go doesn't take Gold on its first run; skill shows in the score
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
