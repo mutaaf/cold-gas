@@ -115,9 +115,16 @@ struct TitleView: View {
         }
     }
     private var fly: some View {
-        Button { game.play() } label: { Text("Fly \(COURSE_INFO.first { $0.id == game.course }?.name ?? "")").frame(maxWidth: .infinity) }
-            .buttonStyle(CGButton(primary: true))
-            .accessibilityIdentifier("play")
+        HStack(spacing: 10) {
+            Button { game.play() } label: { Text("Fly \(COURSE_INFO.first { $0.id == game.course }?.name ?? "")").frame(maxWidth: .infinity) }
+                .buttonStyle(CGButton(primary: true))
+                .accessibilityIdentifier("play")
+            // Free Drive (docs/NATIVE-FREEDRIVE.md): the apron, then a world with no edge. Unscored.
+            Button { game.startDrive(); UISelectionFeedbackGenerator().selectionChanged() } label: { Text("Free Drive") }
+                .buttonStyle(CGButton())
+                .accessibilityIdentifier("freedrive")
+                .accessibilityHint("Drive off the apron into a world with no edge. Not scored.")
+        }
     }
     private var choices: some View {
             VStack(alignment: .leading, spacing: 14) {

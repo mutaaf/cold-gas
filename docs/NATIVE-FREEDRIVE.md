@@ -146,7 +146,29 @@ Meshlets (meshoptimizer) later extend `PropMesh`, not the interface.
 - **Camera:** the web's drive camera (src/drive/camera.js): chase (trailing the heading, longer with speed, clear of the
   ground) and bumper.
 - **Reset:** back on the nearest road; upside down for 2 s or fallen through, the same.
-- **Entry:** the title's Free Drive card. `-freedrive` opens it straight away (shots, bench).
+- **Entry:** a Free Drive button beside Fly on the title. `-freedrive` opens it straight away (shots, bench).
+
+### As built (0215)
+
+- `DriveStreamer` (ColdGasPhysics/Drive.swift) is the world's `WorldStreamer`, called first in `preStep`. It's nil on
+  every scored course, and the run vectors prove that path is unchanged. It streams:
+  - 16 m ground cells on 2 m posts, as up to three trimeshes (asphalt, the gravel shoulder, the land's material by
+    biome and slope);
+  - the 3 × 3 cells round the car at once, the rest of the ±3 window from a background queue, two a tick;
+  - trunks (cylinders, wood) and boulders (balls, rock) from the 128 m prop cells round the car.
+- **The engine's origin** is 0 within 2.2 km of the centre, where the floor, the Wall, the steel and the launch site
+  sit at their own coordinates. Further out it's the car's position snapped to 16 m, and it moves when the car gets
+  512 m off it. A move:
+  - takes the stage's colliders out (they're rebuilt when the origin comes back);
+  - shifts the parked bodies and the car;
+  - rebuilds the cells round the car.
+  `FreeDriveTests` drives 30 s across rebases, and no tick moves the car further than its speed allows.
+- **`FreeDrive`** (the app) steps the car at 240 Hz from the classic controls. `Controls.drive` routes the run's own
+  touch pad to the drive's `InputSampler`, and the rest of it works as the web's does:
+  - the web's reverse (hold the brake at a standstill);
+  - the fan switch, and camera cycling;
+  - reset to the nearest road (and the watchdog's reset when upside down, fallen or stuck);
+  - `-fd-pilot <m/s>`, a pure-pursuit driver for the bench.
 
 ## 6 · What it must not change
 
