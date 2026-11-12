@@ -56,7 +56,7 @@ run-up and the replay's opening shots: the gap between them.
 - [x] The red still reads as a red edge, not pink: on the run-up crop, the LED strip's core pixels have red as the
       largest channel with saturation > 0.5 (0187's lesson: an HDR red without bloom tone-maps pink).
 - [x] The climb and the hang keep 0187's numbers (red ≤ 12 %, P10 ≤ 60).
-- [ ] `flicker.mjs --only=show-approach,show-wide,show-replay` A/B, main vs the branch, same machine, both labels, before
+- [x] `flicker.mjs --only=show-approach,show-wide,show-replay` A/B, main vs the branch, same machine, both labels, before
       the PR opens (LESSONS 2026-11-11). No region rises past its stored budget. If one does, the PR stays a draft and
       says so.
 - [x] `ref-hash` unchanged (renderer only). `npm run audit` clean.
@@ -114,4 +114,6 @@ run-up crop: 72–79 % of its bright red-dominant pixels are saturated red (red,
   by frame, the whole rise is in the replay's run-up (84 frames, car pops 25.6k → 33.0k): with the red glow gone from behind
   the white car its edges crawl, the same revealed-detail effect as 0187 (LESSONS 2026-11-11). Leaving the course's bloom on
   the run-up and halving the foot's dimming each moved it ≤ 2 ‰. Run alone (`--only=show-replay`) it's 89.6 → 96.3 ‰.
-  Per this ticket, the PR stays a draft for the operator: rebaseline the desktop label as #316 did for 0187, or hold.
+  Per this ticket, the PR was held as a draft for the operator. **Operator decision (2026-11-11), following #316:** the desktop
+  label's `show-replay/car` is rebaselined 89.6 → 115.36 (the branch's measurement) in `docs/flicker-budget.json`: "the red
+  glow's removal exposes the white car's edge on the replay run-up; phone within budget".
