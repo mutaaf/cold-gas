@@ -61,5 +61,10 @@ export function scriptFrom(text) {
 
 /** What to tell the model when its script failed. */
 export function repairPrompt(failures, trace) {
-  return `The script was run and failed the forge's gate:\n- ${failures.join('\n- ')}${trace ? `\n\nBlender said:\n${String(trace).slice(-1500)}` : ''}\n\nFix it and answer with the whole corrected script in one \`\`\`python block.`;
+  return `The script was run and failed the forge's gate:\n- ${failures.map(scrub).join('\n- ')}${trace ? `\n\nBlender said:\n${scrub(String(trace)).slice(-1500)}` : ''}\n\nFix it and answer with the whole corrected script in one \`\`\`python block.`;
+}
+
+// Nothing about the operator leaves the Mac: a traceback's absolute paths (home folder, user name) become file names.
+export function scrub(text) {
+  return String(text).replace(/(?:[A-Za-z]:)?[\/\\](?:[^\s"'\/\\:]+[\/\\])+([^\s"'\/\\:]+)/g, '$1');
 }

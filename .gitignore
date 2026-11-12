@@ -27,3 +27,4 @@ tools/forge/briefs/**/raw.glb
 tools/forge/briefs/**/job.json
 tools/forge/briefs/**/build-*.py
 tools/forge/briefs/**/draft-*.py
+tools/forge/**/__pycache__/

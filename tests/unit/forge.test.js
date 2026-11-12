@@ -103,6 +103,13 @@ describe('the brief prompt', () => {
     expect(scriptFrom('no code here')).toBe(null);
     expect(repairPrompt(['width 2 m is 110 %'], 'Traceback')).toMatch(/width 2 m[\s\S]*Traceback/);
   });
+  it('sends no absolute path (home folder, user name) back to the model in a traceback', async () => {
+    const { scrub } = await import('../../tools/forge/lib/prompt.mjs');
+    const t = scrub('File "/Users/someone/Desktop/projects/x/tools/forge/blender/forgekit.py", line 3, in body');
+    expect(t).not.toMatch(/someone|Users|Desktop/);
+    expect(t).toMatch(/forgekit\.py/);
+    expect(repairPrompt(['x'], 'File "/home/someone/a/run.py"')).not.toMatch(/someone/);
+  });
   it('ships the example script with no imports but math and no real names', () => {
     const ex = readFileSync('tools/forge/briefs/example-rally-hatch/build.py', 'utf8');
     expect(ex).toMatch(/def build\(kit, spec, rng\):/);

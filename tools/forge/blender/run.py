@@ -28,7 +28,8 @@ SAFE_BUILTINS = {k: __builtins__[k] if isinstance(__builtins__, dict) else getat
     'sum', 'sorted', 'reversed', 'print', 'ValueError', 'isinstance', 'bool', 'map', 'any', 'all', 'pow', 'divmod')}
 FORBIDDEN_NAMES = {'open', 'exec', 'eval', 'compile', 'getattr', 'setattr', 'delattr', 'globals', 'locals', 'vars',
                    'input', 'breakpoint', '__import__', 'bpy', 'os', 'sys', 'subprocess', 'bmesh', 'mathutils', 'type',
-                   'object', 'super', 'memoryview', 'bytearray', 'bytes', 'help', 'dir', 'id', 'hash', 'iter', 'next'}
+                   'object', 'super', 'memoryview', 'bytearray', 'bytes', 'help', 'dir', 'id', 'hash', 'iter', 'next',
+                   '__builtins__', '__import__', '__loader__', '__spec__'}
 
 
 # Every attribute a script may touch, by name: the kit's public methods, a part's name, the seeded rng's draws, math, and

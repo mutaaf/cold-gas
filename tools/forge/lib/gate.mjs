@@ -1,6 +1,6 @@
 // The forge's gate (0211): what a built asset must pass before it may reach the game. Pure: a report (from
 // tools/forge/blender/finish.py validate) and the glb's bytes in, a list of failures out. Unit-tested
-// (tests/unit/forge-gate.test.js).
+// (tests/unit/forge.test.js).
 
 // The glTF JSON chunk of a .glb.
 export function glbJson(buf) {

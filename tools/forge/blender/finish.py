@@ -209,11 +209,11 @@ def validate(obj, spec, kind):
 
     def in_wheel(c):
         return any(abs(c[1] - z['y']) < z['r'] + 0.05 and abs(c[2] - z['z']) < z['r'] + 0.05 for z in wheels)
-    glyphs = [i for i in islands if i['size'][2] < 0.15 and i['size'][0] < 0.02 and not in_wheel(i['center'])]
+    glyphs = [i for i in islands if i['size'][2] < 0.22 and i['size'][0] < 0.03 and not in_wheel(i['center'])]
     clusters = []
     for g in glyphs:
-        near = [h for h in glyphs if (Vector(h['center']) - Vector(g['center'])).length < 0.45]
-        if len(near) >= 6:
+        near = [h for h in glyphs if (Vector(h['center']) - Vector(g['center'])).length < 0.5]
+        if len(near) >= 5:
             clusters.append({'center': g['center'], 'count': len(near)})
     return {
         'tris': tris(obj), 'verts': len(me.vertices), 'edges': edges,

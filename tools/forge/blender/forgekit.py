@@ -543,6 +543,12 @@ class Kit:
             left.append((u + nu, v + nv))
             right.append((u - nu, v - nv))
         outline = right + list(reversed(left))
+        # a stroke can spell too: one that turns a lot within a small span is flagged like any intricate outline
+        us, vs = [p[0] for p in pts], [p[1] for p in pts]
+        span = max(max(us) - min(us), max(vs) - min(vs))
+        turns = sum(1 for i in range(1, len(pts) - 1) if abs(_turn(pts[i - 1], pts[i], pts[i + 1])) > 0.6)
+        if span < 0.4 and turns > 2:
+            self.flags.append({'part': name, 'span': round(span, 3), 'turns': turns})
         if _area(outline) < 0:
             outline = list(reversed(outline))
         p = self.project(target, outline, plane=plane, mat=mat, offset=offset, thickness=thickness, mirror=mirror and plane == 'side', density=max(0.05, width * 2.0), name=name)
@@ -762,6 +768,12 @@ def _area(pts):
         x1, y1 = pts[(i + 1) % len(pts)]
         a += x0 * y1 - x1 * y0
     return a / 2
+
+
+def _turn(a, b, c):
+    a1 = math.atan2(b[1] - a[1], b[0] - a[0])
+    a2 = math.atan2(c[1] - b[1], c[0] - b[0])
+    return (a2 - a1 + math.pi) % (2 * math.pi) - math.pi
 
 
 def _inside(p, poly):
