@@ -85,6 +85,8 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         }
     }
     private func startLinkIfNeeded() { if link == nil { startLink() } }
+    /// Free Drive's bench starts once the world near the car is built (Game.startDrive's `-bench`).
+    func startBench(seconds: Double) { if bench == nil { bench = Bench(seconds: seconds) } }
 
     override func layoutSubviews() {
         super.layoutSubviews()
@@ -101,7 +103,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         l.add(to: .main, forMode: .common)
         link = l
         start = CACurrentMediaTime()
-        if Launch.bench { bench = Bench(seconds: 10) }
+        if Launch.bench && !Launch.freedrive { bench = Bench(seconds: 10) }
     }
 
     func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
@@ -140,7 +142,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         }
         if let b = bench {
             b.frame(target: update.targetPresentationTimestamp, cpu: (now - cpu0) * 1000)
-            if b.done { bench = nil; b.report(compiles: r.compilesAfterLaunch, launchMs: r.launchCompileMs, size: metal.drawableSize); print(String(format: "BENCH render-scale %.2f thermal %d lowpower %d · passes (ms) %@", r.scale, ProcessInfo.processInfo.thermalState.rawValue, ProcessInfo.processInfo.isLowPowerModeEnabled ? 1 : 0, r.passTimes.report())) }
+            if b.done { bench = nil; b.report(compiles: r.compilesAfterLaunch, launchMs: r.launchCompileMs, size: metal.drawableSize); if let fd = MainActor.assumeIsolated({ Game.shared.freeDrive }) { print("BENCH freedrive \(fd.statsLine)") }; print(String(format: "BENCH render-scale %.2f thermal %d lowpower %d · passes (ms) %@", r.scale, ProcessInfo.processInfo.thermalState.rawValue, ProcessInfo.processInfo.isLowPowerModeEnabled ? 1 : 0, r.passTimes.report())) }
         }
     }
 }

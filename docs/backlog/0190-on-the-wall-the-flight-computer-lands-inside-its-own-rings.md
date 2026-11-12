@@ -1,7 +1,7 @@
 ---
 id: 0190
 title: On the Wall, the thumb that does what the pad says lands inside the painted rings, not 11 m past them
-status: shipped
+status: ready
 priority: P1
 size: M
 lens: authenticity
@@ -134,3 +134,34 @@ Attempt 3 above ships, with the one-thumb slide's sideways model refitted to the
 - Re-pinned bars (old → new, why, numbers) are in the PR body. Loosened where the refit couldn't reach: the let-back
   (≤ 1 → ≤ 1.5 m; 1.32 m), the Show's late re-read (held ≤ 2 → ≤ 2.2 m; 2.1 m), the Wall's "−24 px acts ≥ 1 m" no longer
   asked of a press at 2.5 s (0.27 m; never the wrong way still holds).
+
+## Critic re-review (2026-11-12 04:07): bounces (1st)
+Production `index-DxnlFBnX.js` (main `a3b6a4d`), 390×844 touch, first visit. The thumb does what the pad says (holds on
+Hold, a 0.12 s tap on "Tap · Let go", holds again on "Hold · Land"). Result: **81.7 Clean, 8.1 m off**, lateral −5.4 m,
+sink 0.8 m/s (`docs/critique/2026-11-12-0407/W-follow-results.png`). 21:36 measured 12.2 m, so #321 moved it, but it's
+still over ≤ 7 m.
+
+**Why the five patterns pass and the player doesn't.** Every pattern in the criteria taps after the car has *stopped*
+on the ledge (speed < 0.3 m/s, then 0.5 s). The pad says "Tap · Let go" **0.41–0.83 s before the car stops**
+(`thumbStage` 'ledge' first true → speed < 0.3). A thumb that obeys the word taps while the car is still creeping.
+Main, Node, the `flyThumb` loop, tapped `d` s after the word, pressed again 0.3 s after "Hold · Land":
+
+| tap after the word | Wall | Show |
+|---|---|---|
+| 0.25 s | 80.0 Clean, **9.3 m** | 85.7, 5.9 m |
+| 0.5 s | 82.7 Clean, **7.4 m** | 86.7, 5.7 m |
+| 0.75 s | 87.3, 6.2 m | 88.3, 5.3 m |
+| ≥ 1.0 s (stopped) | 87.7, 6.1 m | 88.3, 5.3 m |
+
+Release to touchdown (4.1 s Wall, 4.9 s Show), peak brake 2.8–2.9 g and sink stay inside the reveal's numbers. The
+reveal's car released from a stationary hang (REVEAL_RESEARCH §2.1.2). Either the pad says Tap only once the car is at
+rest, or a tap while it creeps flies the same release as one at rest. The criteria name no fix, only the result.
+
+### Added acceptance criteria (critic, 2026-11-12)
+- [ ] On the Wall, one thumb, no slide, tapped 0.25 s and 0.5 s after the pad first says "Tap · Let go" (lift 0.2 s,
+      tap 0.12 s, pressed again 0.3 s after "Hold · Land"): each lands ≤ 7 m from the mark, Stuck it or better. Today
+      9.3 and 7.4 m. Add both to `tests/unit/thumb-mastery.test.js`'s 0190 table.
+- [ ] The same thumb on the Show scores within 2 points whether it taps 0.25 s after the word or after the car stops
+      (today 85.7 vs 88.3).
+- [ ] Production, 390×844 touch, first visit, the follow thumb above: the Wall ≤ 7 m.
+- [ ] The earlier boxes stand (the five patterns, the slide pays ≥ 5, the reveal's timings, `naive-players` 32/32).

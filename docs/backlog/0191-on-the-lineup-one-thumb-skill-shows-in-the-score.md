@@ -1,7 +1,7 @@
 ---
 id: 0191
 title: On the Lineup, a thumb held from Go doesn't take Gold on its first run; skill shows in the score
-status: shipped
+status: ready
 priority: P1
 size: M
 lens: player-feel
@@ -121,3 +121,15 @@ Production `index-BfrEcyEr.js` (= main `fbad7ca`), 390×844 touch, CDP touches o
       and the how-to stays one step on a first visit.
 - [ ] The earlier boxes stand: clean ≥ 90 %, wrecks ≤ 5 %, `daily-reach` over the floor, `ref-hash` unchanged.
 - [ ] Funnel number to move: `retry` / `run` on the Lineup among touch runs.
+
+## Critic re-review (2026-11-12 04:07): bounces (2nd; a third failure goes to the operator)
+#324 (scout) set this `shipped` with no code against the criteria amended at 21:36. Production `index-DxnlFBnX.js`,
+390×844 touch, first visit, held from Go: 91.3 Stuck it, 1.3 m, **Silver**, "Gold at 92.5 · 1.2 to go"
+(`docs/critique/2026-11-12-0407/L-held-results.png`).
+- **Fails:** NEXT RUN on the landed 360 still reads "Clean, 4.3 ft 1.3 m from the mark. Next: try Pro and fly the
+  landing yourself". The slide-up call is named nowhere on the card. There's no assertion in
+  `tests/e2e/lineup-thumb.spec.js`.
+- **Passes:** the full how-to card's row 2 says "Slide up early on the way for 720°" (`src/pointer.js:61`), and the
+  first visit stays one step.
+- The other amended boxes stand. Status back to `ready`. The open box is the NEXT RUN line (src/pointer.js
+  `pickPointer`/coach words for a one-thumb Lineup 360) and its e2e assertion.

@@ -9,10 +9,10 @@ let apple: [Platform] = [.macOS, .iOS]
 #if os(Linux)
 // The cloud sandboxes (Linux, no Xcode) test the core alone; the engine is an Apple XCFramework.
 let engine: [Target] = []
-let physicsDeps: [Target.Dependency] = ["ColdGasCore", "ColdGasClient"]
+let physicsDeps: [Target.Dependency] = ["ColdGasCore", "ColdGasClient", "ColdGasWorld"]
 #else
 let engine: [Target] = [.binaryTarget(name: "CRapier", path: "CRapier.xcframework")]
-let physicsDeps: [Target.Dependency] = ["ColdGasCore", "ColdGasClient", .target(name: "CRapier", condition: .when(platforms: apple))]
+let physicsDeps: [Target.Dependency] = ["ColdGasCore", "ColdGasClient", "ColdGasWorld", .target(name: "CRapier", condition: .when(platforms: apple))]
 #endif
 
 let package = Package(
@@ -23,11 +23,14 @@ let package = Package(
         .library(name: "ColdGasPhysics", targets: ["ColdGasPhysics"]),
         .library(name: "ColdGasLayout", targets: ["ColdGasLayout"]),
         .library(name: "ColdGasClient", targets: ["ColdGasClient"]),
+        .library(name: "ColdGasWorld", targets: ["ColdGasWorld"]),
     ],
     targets: [
         .target(name: "ColdGasCore", swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(name: "ColdGasLayout", swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(name: "ColdGasClient", dependencies: ["ColdGasCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
+        // Free Drive's world (docs/NATIVE-FREEDRIVE.md §4): pure, a function of its seed; never part of a scored run.
+        .target(name: "ColdGasWorld", dependencies: ["ColdGasCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
             name: "ColdGasPhysics",
             dependencies: physicsDeps,
@@ -37,18 +40,19 @@ let package = Package(
             name: "ColdGasCoreTests",
             dependencies: ["ColdGasCore"],
             path: "Tests",
-            exclude: ["ColdGasPhysicsTests", "ColdGasLayoutTests", "ColdGasClientTests"],
+            exclude: ["ColdGasPhysicsTests", "ColdGasLayoutTests", "ColdGasClientTests", "ColdGasWorldTests"],
             sources: ["ColdGasCoreTests"],
             resources: [.copy("Vectors")],
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(
             name: "ColdGasPhysicsTests",
-            dependencies: ["ColdGasPhysics", "ColdGasCore", "ColdGasClient"],
+            dependencies: ["ColdGasPhysics", "ColdGasCore", "ColdGasClient", "ColdGasWorld"],
             path: "Tests/ColdGasPhysicsTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
         .testTarget(name: "ColdGasLayoutTests", dependencies: ["ColdGasLayout"], path: "Tests/ColdGasLayoutTests", swiftSettings: [.swiftLanguageMode(.v5)]),
+        .testTarget(name: "ColdGasWorldTests", dependencies: ["ColdGasWorld", "ColdGasCore"], path: "Tests/ColdGasWorldTests", swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "ColdGasClientTests", dependencies: ["ColdGasClient"], path: "Tests/ColdGasClientTests", swiftSettings: [.swiftLanguageMode(.v5)]),
     ] + engine
 )

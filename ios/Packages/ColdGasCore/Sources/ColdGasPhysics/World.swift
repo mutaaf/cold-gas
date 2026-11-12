@@ -27,7 +27,13 @@ public final class World {
     let rw: OpaquePointer
     var info: [UInt64: ColInfo] = [:]
     public var bodies: [ParkedBody] = []
-    let ox = 0.0, oy = 0.0, oz = 0.0
+    /// The engine's origin (src/sim/world.js w.ox/oy/oz): 0 on every scored course; Free Drive moves it with the car
+    /// (Drive.swift), so the engine's single-precision floats stay near zero tens of kilometres out.
+    public internal(set) var ox = 0.0, oy = 0.0, oz = 0.0
+    /// What Free Drive streams in near the car each tick (nil on a scored course).
+    public var streamer: WorldStreamer?
+    /// Free Drive: the stage's own static colliders (the floor, the Wall's deck, its steel), dropped away from the centre.
+    var centre: [UInt64] = [], centreSolids: [Solid] = []
     public var carRb: UInt64 = CG_NONE, carCol: UInt64 = CG_NONE
     public let carF = V3(), carT = V3()
     public var carPos: V3?, carVel: V3?, carQuat: Q4?
@@ -185,24 +191,35 @@ let FIX_REACH = 3.0, FIX_DROP = 2.0
 
 public func createWorld(_ course: Course) -> World {
     let w = World(course)
-    let floor = colliderFor(w, .cuboid(1500, 1, 1500), DescOpts(t: (0, -1, 0)), MATERIALS.concrete, GROUP.staticG)
-    if let pad = course.pad { w.info[floor]?.pad = pad }
-    if course.id == "wall" || course.id == "show" {
-        colliderFor(w, .trimesh(WALL_MESH.v, WALL_MESH.idx), DescOpts(), MATERIALS.deck, GROUP.curl)
-        w.solids = [Solid(meshBox(WALL_MESH.v))]
-        w.curl = true
-        wallSteel(w)
-    }
-    // (no course in this port has a kicker: the Lineup's reveal used none)
-    w.fixtures = fixturesOf(course.id).map { f in
+    buildCentre(w)
+    w.fixtures = fixturesOf(stageOf(course.id)).map { f in
         let hx = f.box ? f.hx : f.r, hz = f.box ? f.hz : f.r, hy = f.box ? f.hy : f.hh
         return FixtureSlot(f: f, box: Solid((f.x - hx, f.y - hy, f.z - hz, f.x + hx, f.y + hy, f.z + hz)), reach: jsSqrt(hx * hx + hy * hy + hz * hz) + FIX_REACH)
     }
-    w.siteAt = siteOf(course.id)
+    w.siteAt = siteOf(stageOf(course.id))
     for (i, b) in course.boxes.enumerated() { w.bodies.append(addParked(w, b, i)) }
     refreshBounds(w.bounds, w.bodies)
     cg_world_set_timestep(w.rw, 0); cg_world_step(w.rw); cg_world_set_timestep(w.rw, Float(WORLD_DT))
     return w
+}
+/// The floor, and on the Wall's stage its deck and steel (in this order: the engine's handles follow creation order).
+func buildCentre(_ w: World) {
+    let course = w.course
+    let before = Set(w.info.keys), solids0 = w.solids.count
+    let floor = colliderFor(w, .cuboid(1500, 1, 1500), DescOpts(t: (0 - w.ox, -1 - w.oy, 0 - w.oz)), MATERIALS.concrete, GROUP.staticG)
+    if let pad = course.pad { w.info[floor]?.pad = pad }
+    let sid = stageOf(course.id)
+    if sid == "wall" || sid == "show" {
+        colliderFor(w, .trimesh(WALL_MESH.v, WALL_MESH.idx), DescOpts(), MATERIALS.deck, GROUP.curl)
+        w.solids.append(Solid(meshBox(WALL_MESH.v)))
+        w.curl = true
+        wallSteel(w)
+    }
+    // (no course in this port has a kicker: the Lineup's reveal used none)
+    if course.id == "drive" {
+        w.centre = w.info.keys.filter { !before.contains($0) }
+        w.centreSolids = Array(w.solids[solids0...])
+    }
 }
 
 /// The roadster's rigid hull (attachCar).
@@ -281,6 +298,7 @@ var f3 = [Float](repeating: 0, count: 4)
 
 public func preStep(_ w: World) throws {
     w.carF.x = 0; w.carF.y = 0; w.carF.z = 0; w.carT.x = 0; w.carT.y = 0; w.carT.z = 0
+    if let s = w.streamer { s.tick(w) }
     for b in w.bodies { parkedForces(w, b) }
     fixtureTick(w)
     if w.siteAt != nil { try siteTick(w) }

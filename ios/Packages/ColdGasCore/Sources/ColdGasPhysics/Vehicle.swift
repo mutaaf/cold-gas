@@ -159,6 +159,8 @@ public final class Vehicle {
     }
 }
 public func createVehicle(_ courseId: String = DEFAULT_COURSE) -> Vehicle { Vehicle(COURSES[courseId] ?? COURSES[DEFAULT_COURSE]!) }
+/// A car on a course that isn't in COURSES (Free Drive's DRIVE_COURSE).
+public func createVehicle(course: Course) -> Vehicle { Vehicle(course) }
 
 @inline(__always) public func massOf(_ s: Vehicle) -> Double { CAR.dryMass + jsMax(0, s.air) }
 @inline(__always) func feedPressure(_ s: Vehicle) -> Double { pressureOf(s.air) }
