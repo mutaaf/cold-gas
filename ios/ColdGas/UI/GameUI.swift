@@ -271,7 +271,16 @@ struct HUDView: View {
                 if centred { Spacer() }
             }.padding(.top, 8)
             }
-            if cueTop {
+            if let c = crease {
+                // The Duo open: a line of text can't be read across the crease, and the bottom belongs to the controls.
+                // The cue sits under the readouts, starting just right of the crease.
+                HStack(spacing: 0) {
+                    Spacer().frame(width: max(0, c.upperBound + 10 - 12))
+                    cue(h.cue)
+                    Spacer(minLength: 0)
+                }.padding(.top, 10)
+                Spacer()
+            } else if cueTop {
                 cue(h.cue).padding(.top, 10)
                 Spacer()
             } else {

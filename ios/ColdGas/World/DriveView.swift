@@ -45,9 +45,16 @@ struct DriveView: View {
                     }
                 }
                 if !h.cue.isEmpty {
-                    Text(h.cue).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink)
-                        .padding(.horizontal, 14).padding(.vertical, 8).glass(18).padding(.top, 10)
-                        .transition(.opacity).id(h.cue)
+                    // Centred, except on the open Duo: there it starts just right of the crease.
+                    let crease = layout.crease(in: safe)
+                    HStack(spacing: 0) {
+                        if let c = crease { Spacer().frame(width: max(0, c.upperBound + 10 - 12)) } else { Spacer() }
+                        Text(h.cue).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink)
+                            .padding(.horizontal, 14).padding(.vertical, 8).glass(18)
+                        Spacer()
+                    }
+                    .padding(.top, 10)
+                    .transition(.opacity).id(h.cue)
                 }
                 Spacer()
                 if stats { Text(h.line).font(Theme.mono(11)).foregroundStyle(Theme.ink2).padding(8).glass(10).padding(.bottom, 200) }

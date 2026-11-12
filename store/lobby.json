@@ -89,12 +89,12 @@
       "sub": "Apple Intelligence writes their words with no network. A fixed scorer sets every number."
     },
     {
-      "id": "touchdown",
-      "raw": "4-touchdown",
-      "layout": "tilt",
-      "kicker": "Haptics",
-      "title": "Feel *every wheel* land.",
-      "sub": "A synced landing is one clean thump. A sloppy one is four."
+      "id": "valves",
+      "raw": "8-valves",
+      "layout": "hero",
+      "kicker": "Advanced",
+      "title": "Fly *ten valves* by hand.",
+      "sub": "Assist, Pro, Advanced: take the computer away one tier at a time."
     },
     {
       "id": "drive",
@@ -103,6 +103,14 @@
       "kicker": "Free Drive",
       "title": "Then just *drive.*",
       "sub": "Off the apron into a world that goes on. No timer, no score."
+    },
+    {
+      "id": "touchdown",
+      "raw": "4-touchdown",
+      "layout": "tilt",
+      "kicker": "Haptics",
+      "title": "Feel *every wheel* land.",
+      "sub": "A synced landing is one clean thump. A sloppy one is four."
     },
     {
       "id": "row",
