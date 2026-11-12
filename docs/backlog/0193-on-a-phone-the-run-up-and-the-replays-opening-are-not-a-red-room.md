@@ -1,12 +1,12 @@
 ---
 id: 0193
 title: On a phone, the run-up and the replay's opening show the pad and the car, not a red room
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-11
-pr:
+pr: 323
 by: critic
 ---
 
@@ -49,17 +49,17 @@ run-up and the replay's opening shots: the gap between them.
 - Add the countdown, the run-up (tick 264) and the replay at 2 s and 4 s to `scripts/look-audit.mjs` as moments.
 
 ## Acceptance criteria
-- [ ] At 390×844 and 430×932 touch, the saturated red share is **≤ 12 %** at the countdown, at the run-up (tick 264) and in
+- [x] At 390×844 and 430×932 touch, the saturated red share is **≤ 12 %** at the countdown, at the run-up (tick 264) and in
       the replay at 2 s and 4 s. Today it's 49–62 %. 12 % is 0086's and 0187's bar.
-- [ ] At 1440×900, at the run-up, the car box's P10 luma is **≤ 60**: its tyres and glass show dark. Measure it with
+- [x] At 1440×900, at the run-up, the car box's P10 luma is **≤ 60**: its tyres and glass show dark. Measure it with
       `look-audit`'s projected box, as 0187 did.
-- [ ] The red still reads as a red edge, not pink: on the run-up crop, the LED strip's core pixels have red as the
+- [x] The red still reads as a red edge, not pink: on the run-up crop, the LED strip's core pixels have red as the
       largest channel with saturation > 0.5 (0187's lesson: an HDR red without bloom tone-maps pink).
-- [ ] The climb and the hang keep 0187's numbers (red ≤ 12 %, P10 ≤ 60).
-- [ ] `flicker.mjs --only=show-approach,show-wide,show-replay` A/B, main vs the branch, same machine, both labels, before
+- [x] The climb and the hang keep 0187's numbers (red ≤ 12 %, P10 ≤ 60).
+- [x] `flicker.mjs --only=show-approach,show-wide,show-replay` A/B, main vs the branch, same machine, both labels, before
       the PR opens (LESSONS 2026-11-11). No region rises past its stored budget. If one does, the PR stays a draft and
       says so.
-- [ ] `ref-hash` unchanged (renderer only). `npm run audit` clean.
+- [x] `ref-hash` unchanged (renderer only). `npm run audit` clean.
 
 ## Test plan
 Add the moments to `scripts/look-audit.mjs`. Paste main and branch tables in the PR. If the deck factor is
@@ -77,3 +77,43 @@ the whole screenshot. The run-up 2 s after Go is **49.9 %** (`docs/critique/2026
 
 **The Wall's replay opens the same way: 45.9 % at 1.5 s** (`W-replay1.png`). Add the Wall's replay opening to the look-audit
 moments above and hold it to the same ≤ 12 % bar. The Lineup's replay is 0.0 %, because it has no ring.
+
+## Builder note (2026-11-11, #323)
+The deck look now has two factors (`src/render/deck-look.js`): `runUp` (on the approach, from the start line to the
+curl's foot, on the ground) and `deckOn` (0187's, the car on the deck). On either, the red dims: the LED strips go to
+0187's deck red and the foot's red point light, its glow on the concrete and its glow in the air (`film.js setDeck`) drop
+to 30 %. Only `deckOn` raises the bloom's threshold: on the run-up the course's bloom stays, because with the red dimmed the
+car already reads and taking the bloom off it only added edge crawl. Position-only, so the replay is the same as the run.
+
+`scripts/look-audit.mjs` now has the countdown (1.5 s in), the run-up (tick 264), the touchdown and the replay at 1.5, 2
+and 4 s (pressed from the sheet, as a player does), on `--courses=show,wall`. SwiftShader, DPR 1, main `fbad7ca` vs the
+branch, same machine:
+
+| 390×844 touch, red % | Show main → branch | Wall main → branch |
+|---|---|---|
+| countdown | 49.5 → **3.4** | 59.7 → **3.4** |
+| run-up (tick 264) | 56.6 → **5.3** | 49.7 → **3.6** |
+| replay 1.5 s | 47.2 → **5.9** | 52.9 → **5.7** |
+| replay 2 s | 14.7 → **5.8** | 46.6 → **5.8** |
+| replay 4 s | 9.4 → **5.6** | 9.7 → **5.7** |
+| climb / hang 1 / hang 2 | 8.7 / 5.1 / 6.5 → 5.7 / 2.2 / 2.7 | 8.8 / 5.0 / 6.5 → 5.8 / 2.0 / 2.7 |
+| touchdown | 0.1 → 0.0 | 4.7 → 1.2 |
+| release (not in the bar) | 0.5 → 0.5 | 19.0 → 19.1 |
+
+430×932 touch: countdown, run-up, replay 1.5 / 2 / 4 s are 51.1 / 56.6 / 50.4 / 14.5 / 9.3 → 3.5 / 5.2 / 5.7 / 5.7 / 5.5 %
+on the Show, 50.6 / 50.7 / 53.9 / 50.4 / 9.7 → 3.6 / 3.6 / 5.7 / 5.7 / 5.7 % on the Wall.
+
+1440×900, the run-up: red 14.3 → 1.0 % (Show), 13.8 → 0.7 % (Wall); car box P10 **62 → 36** (Show), 42 → 38 (Wall).
+Climb P10 6–7 → 6; hang 1 / hang 2 P10 53 / 36 (Show) and 56 / 41 → 55 / 40 (Wall), unchanged. The strip's core on the
+run-up crop: 72–79 % of its bright red-dominant pixels are saturated red (red, not pink).
+
+**Flicker, A/B on the same machine, `--gl=swiftshader --only=show-approach,show-wide,show-replay`:**
+- Phone: every region ok against its budget; `show-replay/car` 67.3 → 72.8 ‰ (budget 82.6). show-approach and show-wide
+  are title shots (deck look off): identical on both, and both over on 4 regions on this machine (main too).
+- **Desktop: `show-replay/car` 108.6 → 115.4 ‰, past its limit (budget 89.6 + 25 % = 112.0).** Main is inside it. Split
+  by frame, the whole rise is in the replay's run-up (84 frames, car pops 25.6k → 33.0k): with the red glow gone from behind
+  the white car its edges crawl, the same revealed-detail effect as 0187 (LESSONS 2026-11-11). Leaving the course's bloom on
+  the run-up and halving the foot's dimming each moved it ≤ 2 ‰. Run alone (`--only=show-replay`) it's 89.6 → 96.3 ‰.
+  Per this ticket, the PR was held as a draft for the operator. **Operator decision (2026-11-11), following #316:** the desktop
+  label's `show-replay/car` is rebaselined 89.6 → 115.36 (the branch's measurement) in `docs/flicker-budget.json`: "the red
+  glow's removal exposes the white car's edge on the replay run-up; phone within budget".
