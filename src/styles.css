@@ -1294,6 +1294,8 @@ body:is(:not([data-mode]), [data-mode='title']) .beta-chip { display: inline-fle
   body:is(:not([data-mode]), [data-mode='title']) .top { justify-content: flex-end; }
 }
 @media (max-height: 500px) and (max-width: 720px) { .beta-chip .bc-dev { display: none; } }
+/* A 320 px column: a few pixels back for the bar (it measured 0.2 px over on CI's fonts). */
+@media (max-width: 360px) { .beta-chip { gap: 5px; padding: 0 7px; } }
 .course-btn span { font-size: 11px; color: rgba(245, 246, 248, 0.7); }
 .title .spec { margin-top: 28px; }
 @media (max-height: 860px) { .title .spec { display: none; } .tagline { margin: 16px 0 20px; } }
