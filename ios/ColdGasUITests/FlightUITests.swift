@@ -122,7 +122,7 @@ final class FlightUITests: XCTestCase {
         let a = launch()
         XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 20))
         a.buttons["How to play"].tap()
-        XCTAssertTrue(a.staticTexts["ONE THUMB, THE WHOLE FLIGHT"].waitForExistence(timeout: 5))
+        XCTAssertTrue(a.descendants(matching: .any)["howto-steps"].waitForExistence(timeout: 5))
         shot("howto")
         let judges = a.buttons["The judges"], board = a.buttons["The board"]
         XCTAssertFalse(a.staticTexts["The height and the rotation."].exists, "folded text is showing")

@@ -28,7 +28,15 @@ struct RootUI: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
     @ObservedObject var hud = HudStore.shared
-    @State private var sheet: Sheet?
+    @State private var sheet: Sheet? = RootUI.launchSheet
+    /// DEBUG `-sheet board|settings|howTo|practice`: that sheet open at launch (the shots).
+    private static var launchSheet: Sheet? {
+        #if DEBUG
+        return Launch.value("-sheet").flatMap(Sheet.init(rawValue:))
+        #else
+        return nil
+        #endif
+    }
     /// What's new after an update (WhatsNewView.swift): read once per launch, shown over the title, never during a run.
     @State private var whatsNew: ReleaseNotes? = RootUI.launchNotes
     private static let launchNotes = WhatsNewStore.atLaunch()
@@ -49,7 +57,7 @@ struct RootUI: View {
         ZStack(alignment: .topLeading) {
             Color.clear
             switch game.screen {
-            case .title: TitleView(open: { sheet = $0 }).frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
+            case .title: TitleView(crease: layout.crease(in: layout.controls), open: { sheet = $0 }).frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
             case .run: RunView(layout: layout)
             case .drive: DriveView(layout: layout)
             case .results:
@@ -58,7 +66,7 @@ struct RootUI: View {
                         ResultsView(result: r, open: { sheet = $0 }, post: r.post, judges: r.judges)
                             .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
                     } else {
-                        Button { game.stopWatching() } label: { Text("Back to the score") }
+                        Button { game.stopWatching() } label: { Label("Back to the score", systemImage: "chevron.down") }
                             .buttonStyle(CGButton())
                             .frame(width: layout.controls.width, height: layout.controls.height, alignment: .bottom)
                             .offset(x: layout.controls.minX, y: layout.controls.minY - 16)
@@ -106,96 +114,232 @@ let COURSE_INFO: [(id: String, name: String, line: String)] = [
     ("wall", "The Wall", "Climb the curl on suction, let go upside down, land it"),
     ("lineup", "The Lineup", "Off the kicker, a barrel roll over the line, wheels down"),
 ]
+let TIER_INFO: [(id: String, name: String, mult: String, line: String)] = [
+    ("assist", "Assist", "", "The flight computer rolls you out and brakes. One thumb on the Show and the Wall."),
+    ("pro", "Pro", "×1.08", "You fly the roll-out and the brake yourself. Scores ×1.08."),
+    ("advanced", "Advanced", "×1.15", "All ten valves by hand, off the Wall. Scores ×1.15."),
+]
 
+/// The title (0230): a playbill over the night stage. The event is the headline, set big; the other two sit small beside
+/// it in the list, a tap away. Then the tier, today's objective, and one button: Fly. Roam and Free Drive are words under
+/// it; the drills, the board, how to play and the settings are four glyphs in the corner. One entrance, top to bottom.
 struct TitleView: View {
     @ObservedObject var game = Game.shared
+    /// A vertical fold across the panel (the Duo open), in its own x: the two columns sit either side of it.
+    var crease: ClosedRange<CGFloat>? = nil
     var open: (RootUI.Sheet) -> Void
+    @State private var shown = false
+    @Environment(\.accessibilityReduceMotion) private var still
+
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Text("COLD GAS").font(Theme.display(13)).tracking(6).foregroundStyle(Theme.ink2)
-                Spacer()
-                iconButton("scope", "Practice") { open(.practice) }
-                iconButton("list.number", "Board") { open(.board) }
-                iconButton("questionmark", "How to play") { open(.howTo) }
-                iconButton("gearshape", "Settings") { open(.settings) }
-            }
-            .padding(.horizontal, 20).padding(.top, 14)
-            Spacer(minLength: 12)
-            // A short panel (tabletop, a phone on its side): the choices scroll, Fly stays on screen.
-            ViewThatFits(in: .vertical) {
-                VStack(spacing: 14) { choices; fly }.padding(18).glass(20).frame(maxWidth: 440).padding(.horizontal, 16).padding(.bottom, 16)
-                VStack(spacing: 10) { ScrollView { choices }.scrollBounceBehavior(.basedOnSize); fly }.padding(14).glass(20).frame(maxWidth: 440).padding(.horizontal, 16).padding(.bottom, 12)
+        GeometryReader { g in
+            let wide = g.size.width > g.size.height * 1.15 && g.size.width >= 560
+            let short = g.size.height < 460
+            ZStack(alignment: .topTrailing) {
+                // The scene stays the picture: a scrim only where the words are.
+                LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: Theme.bg.opacity(0.6), location: 0.3),
+                                       .init(color: Theme.bg.opacity(0.9), location: 1)], startPoint: .top, endPoint: .bottom)
+                    .frame(height: g.size.height * (wide ? 0.75 : 0.62)).frame(maxHeight: .infinity, alignment: .bottom)
+                    .padding(.horizontal, -400).padding(.bottom, -120)   // past the panel's edges: a scrim, never a box
+                    .allowsHitTesting(false).accessibilityHidden(true)
+                if wide { wideBody(g.size, short: short) } else { tallBody(short: short) }
+                utilities.padding(.top, 8).padding(.trailing, 10).enter(shown, still, 0)
             }
         }
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
+        .onAppear { shown = false; DispatchQueue.main.async { shown = true } }
     }
-    private var fly: some View {
-        HStack(spacing: 10) {
-            Button { game.play() } label: { Text("Fly \(COURSE_INFO.first { $0.id == game.course }?.name ?? "")").frame(maxWidth: .infinity) }
-                .buttonStyle(CGButton(primary: true))
-                .accessibilityIdentifier("play")
-            // Roam (0220): the chosen course's set to drive round, its row, its pad, the jets, and the world beyond. Unscored.
-            Button { game.startDrive(roam: game.course); UISelectionFeedbackGenerator().selectionChanged() } label: { Text("Roam") }
-                .buttonStyle(CGButton())
-                .accessibilityIdentifier("roam")
-                .accessibilityLabel("Roam \(COURSE_INFO.first { $0.id == game.course }?.name ?? "")")
-                .accessibilityHint("Drive round this course's set and on into the world. Not scored.")
-            // Free Drive (docs/NATIVE-FREEDRIVE.md): the apron, then a world with no edge. Unscored.
-            Button { game.startDrive(); UISelectionFeedbackGenerator().selectionChanged() } label: { Image(systemName: "globe.americas").font(.system(size: 15)) }
-                .buttonStyle(CGButton())
-                .accessibilityIdentifier("freedrive")
-                .accessibilityLabel("Free Drive")
-                .accessibilityHint("Drive off the apron into a world with no edge. Not scored.")
+
+    // An upright phone, the Duo closed: one column at the bottom, the thumb's end of the screen.
+    private func tallBody(short: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 56)
+            wordmark.enter(shown, still, 0.05)
+            courses(big: short ? 28 : 34).padding(.top, 8).enter(shown, still, 0.12)
+            tiers.padding(.top, 12).enter(shown, still, 0.2)
+            daily.padding(.top, 6).enter(shown, still, 0.24)
+            fly.padding(.top, 18).enter(shown, still, 0.3)
+            more.padding(.top, 4).enter(shown, still, 0.36)
         }
+        .frame(maxWidth: 460, alignment: .leading)
+        .padding(.horizontal, 20).padding(.bottom, short ? 8 : 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
-    private var choices: some View {
-            VStack(alignment: .leading, spacing: 14) {
-                Text("A nitrogen-jet stunt car. Ten cold-gas thrusters, one landing, three judges.")
-                    .font(Theme.text(14)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
-                VStack(spacing: 8) {
-                    ForEach(COURSE_INFO, id: \.id) { c in
-                        Button { game.course = c.id; UISelectionFeedbackGenerator().selectionChanged() } label: {
-                            HStack(alignment: .firstTextBaseline) {
-                                VStack(alignment: .leading, spacing: 3) {
-                                    Text(c.name.uppercased()).font(Theme.display(13)).tracking(2.4).foregroundStyle(Theme.ink)
-                                    Text(c.line).font(Theme.text(12)).foregroundStyle(Theme.ink3).lineLimit(2)
-                                }
-                                Spacer()
-                                if let best = Records.shared.best(c.id) { Text(String(format: "%.1f", best)).font(Theme.mono(14)).foregroundStyle(Theme.ink2) }
+
+    // On its side, tabletop's lower panel, the Duo open: the events on the left, the run's choices and Fly on the right
+    // (either side of the crease when there is one).
+    private func wideBody(_ size: CGSize, short: Bool) -> some View {
+        let gap: CGFloat = crease.map { $0.upperBound - $0.lowerBound + 40 } ?? 32
+        let left = crease.map { $0.lowerBound - 20 - 24 } ?? (size.width - 48 - gap) * 0.5
+        return HStack(alignment: .bottom, spacing: gap) {
+            VStack(alignment: .leading, spacing: 0) {
+                wordmark.enter(shown, still, 0.05)
+                courses(big: short ? 26 : 32).padding(.top, 6).enter(shown, still, 0.12)
+            }
+            .frame(width: max(220, left), alignment: .leading)
+            VStack(alignment: .leading, spacing: 0) {
+                tiers.enter(shown, still, 0.2)
+                daily.padding(.top, 4).enter(shown, still, 0.24)
+                fly.padding(.top, short ? 10 : 16).enter(shown, still, 0.3)
+                more.padding(.top, 2).enter(shown, still, 0.36)
+            }
+            .frame(maxWidth: 380, alignment: .leading)
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 24).padding(.bottom, short ? 6 : 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+    }
+
+    private var wordmark: some View {
+        Text("COLD GAS").font(Theme.marquee(11, .footnote)).tracking(7).foregroundStyle(Theme.ink2)
+            .accessibilityAddTraits(.isHeader)
+    }
+
+    /// The three events, the chosen one as the headline. A tap on another makes it the headline.
+    private func courses(big: CGFloat) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ForEach(COURSE_INFO, id: \.id) { c in
+                let on = game.course == c.id
+                Button {
+                    guard !on else { return }
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(still ? nil : .snappy(duration: 0.32)) { game.course = c.id }
+                } label: {
+                    HStack(alignment: .center, spacing: 10) {
+                        Tick(on: on, length: big * 0.8)
+                        Text(c.name.uppercased())
+                            .font(Theme.marquee(big)).tracking(on ? 1 : 3)
+                            .foregroundStyle(on ? Theme.ink : Theme.ink2)
+                            .lineLimit(1).minimumScaleFactor(0.6)
+                            .scaleEffect(on ? 1 : 0.5, anchor: .leading)
+                            .frame(height: on ? big * 1.35 : 40, alignment: .leading)
+                        Spacer(minLength: 8)
+                        if on, let best = Records.shared.best(c.id) {
+                            VStack(alignment: .trailing, spacing: 1) {
+                                Text(String(format: "%.1f", best)).font(Theme.mono(18)).foregroundStyle(Theme.ink).monospacedDigit()
+                                Text("BEST").font(Theme.text(9, .medium)).tracking(1.6).foregroundStyle(Theme.ink3)
                             }
-                            .padding(.horizontal, 14).padding(.vertical, 11)
-                            .background(game.course == c.id ? Theme.ink.opacity(0.1) : .clear, in: RoundedRectangle(cornerRadius: 12))
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(game.course == c.id ? Theme.ink.opacity(0.55) : Theme.hair, lineWidth: 1))
-                            .contentShape(Rectangle())
+                            .transition(.opacity)
+                            .accessibilityElement(children: .combine).accessibilityLabel(String(format: "Your best %.1f", best))
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityAddTraits(game.course == c.id ? .isSelected : [])
                     }
+                    .frame(minHeight: 44)
+                    .contentShape(Rectangle())
                 }
-                HStack(spacing: 8) {
-                    ForEach([("assist", "Assist"), ("pro", "Pro"), ("advanced", "Advanced")], id: \.0) { t in
-                        Button { game.tier = t.0; UISelectionFeedbackGenerator().selectionChanged() } label: {
-                            Text(t.1.uppercased()).font(Theme.text(12, .medium)).tracking(1.6)
-                                .foregroundStyle(game.tier == t.0 ? Theme.ink : Theme.ink3)
-                                .frame(maxWidth: .infinity, minHeight: 36)
-                                .overlay(Capsule().strokeBorder(game.tier == t.0 ? (t.0 == "pro" ? Theme.amber.opacity(0.7) : t.0 == "advanced" ? Theme.signal : Theme.ink.opacity(0.6)) : Theme.hair, lineWidth: 1))
-                                .contentShape(Capsule())
-                        }.buttonStyle(.plain)
-                    }
-                }
-                let dailyObj = Daily.objectiveFor(SaveStore.nowMs), streak = SaveStore.shared.streakNow()
-                Text("Today: \(dailyObj.goal(SaveStore.shared.units)) · \(Daily.courseName(dailyObj.course))\(streak.doneToday ? " · done" : "")\(streak.streak > 1 ? " · \(streak.streak) day streak" : "")")
-                    .font(Theme.text(12, .medium)).foregroundStyle(streak.doneToday ? Theme.ok : Theme.ink2).fixedSize(horizontal: false, vertical: true)
-                Text(game.tier == "assist" ? "Assist: the flight computer rolls you out and brakes. One thumb on the Show and the Wall." : game.tier == "pro" ? "Pro: you fly the roll-out and the brake yourself. Scores ×1.08." : "Advanced: all ten valves by hand, off the Wall. Scores ×1.15.")
-                    .font(Theme.text(12)).foregroundStyle(Theme.ink3).fixedSize(horizontal: false, vertical: true)
+                .buttonStyle(.plain)
+                .padding(.leading, -12)
+                .accessibilityLabel(c.name)
+                .accessibilityHint(c.line)
+                .accessibilityAddTraits(on ? .isSelected : [])
             }
+        }
     }
-    private func iconButton(_ name: String, _ label: String, _ act: @escaping () -> Void) -> some View {
+
+    /// Assist, Pro, Advanced: words, the chosen one lit and underlined in its colour. Where the row can't hold the
+    /// multipliers (a narrow column), the names alone; a name never breaks.
+    private var tiers: some View {
+        ViewThatFits(in: .horizontal) { tierRow(mult: true); tierRow(mult: false) }
+    }
+    private func tierRow(mult: Bool) -> some View {
+        HStack(spacing: 4) {
+            ForEach(TIER_INFO, id: \.id) { t in
+                let on = game.tier == t.id
+                let mark = t.id == "pro" ? Theme.amber : t.id == "advanced" ? Theme.signal : Theme.ink
+                Button {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    withAnimation(still ? nil : .easeOut(duration: 0.2)) { game.tier = t.id }
+                } label: {
+                    HStack(alignment: .firstTextBaseline, spacing: 4) {
+                        Text(t.name.uppercased()).font(Theme.text(12, .semibold)).tracking(1.6).lineLimit(1).fixedSize()
+                        if mult && !t.mult.isEmpty { Text(t.mult).font(Theme.mono(10)).opacity(0.8).fixedSize() }
+                    }
+                    .foregroundStyle(on ? Theme.ink : Theme.ink3)
+                    .padding(.horizontal, 8).frame(minHeight: 44)
+                    .overlay(alignment: .bottom) { Capsule().fill(mark).frame(height: 2).padding(.horizontal, 8).padding(.bottom, 8).opacity(on ? 1 : 0) }
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(t.name)
+                .accessibilityHint(t.line)
+                .accessibilityAddTraits(on ? .isSelected : [])
+            }
+        }
+        .padding(.leading, -8)
+    }
+
+    /// Today's objective in a line (and the streak), green once it's done.
+    private var daily: some View {
+        let o = Daily.objectiveFor(SaveStore.nowMs), streak = SaveStore.shared.streakNow()
+        let goal = o.goal(SaveStore.shared.units), course = Daily.courseName(o.course)
+        return HStack(alignment: .firstTextBaseline, spacing: 6) {
+            Image(systemName: streak.doneToday ? "checkmark" : "calendar").font(.system(size: 10, weight: .semibold))
+            Text("\(goal) · \(course)\(streak.streak > 1 ? " · \(streak.streak) days" : "")")
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .font(Theme.text(12, .medium)).foregroundStyle(streak.doneToday ? Theme.ok : Theme.ink2)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Today\u{2019}s jump: \(goal) on \(course)\(streak.doneToday ? ", done" : "")\(streak.streak > 1 ? ", \(streak.streak) day streak" : "")")
+    }
+
+    private var fly: some View {
+        Button { game.play() } label: { Text("Fly") }
+            .buttonStyle(MarqueeButton())
+            .accessibilityIdentifier("play")
+            .accessibilityLabel("Fly \(COURSE_INFO.first { $0.id == game.course }?.name ?? "")")
+    }
+
+    /// The unscored ways to drive: Roam (0220) this course's set and the world past it; Free Drive from the apron.
+    private var more: some View {
+        HStack(spacing: 6) {
+            Button { game.startDrive(roam: game.course); UISelectionFeedbackGenerator().selectionChanged() } label: {
+                Label("Roam", systemImage: "car.side").labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(QuietButton())
+            .accessibilityIdentifier("roam")
+            .accessibilityLabel("Roam \(COURSE_INFO.first { $0.id == game.course }?.name ?? "")")
+            .accessibilityHint("Drive round this course's set and on into the world. Not scored.")
+            Button { game.startDrive(); UISelectionFeedbackGenerator().selectionChanged() } label: {
+                Label("Free Drive", systemImage: "globe.americas").labelStyle(.titleAndIcon)
+            }
+            .buttonStyle(QuietButton())
+            .accessibilityIdentifier("freedrive")
+            .accessibilityHint("Drive off the apron into a world with no edge. Not scored.")
+        }
+        .padding(.leading, -10)
+    }
+
+    /// Practice, the board, how to play, settings: four glyphs in one hairline capsule.
+    private var utilities: some View {
+        HStack(spacing: 0) {
+            glyph("scope", "Practice") { open(.practice) }
+            glyph("list.number", "Board") { open(.board) }
+            glyph("questionmark", "How to play") { open(.howTo) }
+            glyph("gearshape", "Settings") { open(.settings) }
+        }
+        .padding(.horizontal, 2)
+        .background(Theme.glass, in: Capsule())
+        .overlay(Capsule().strokeBorder(Theme.hair2, lineWidth: 1))
+    }
+    private func glyph(_ name: String, _ label: String, _ act: @escaping () -> Void) -> some View {
         Button(action: act) {
             Image(systemName: name).font(.system(size: 15, weight: .regular)).foregroundStyle(Theme.ink2)
-                .frame(width: 40, height: 40).glass(20)
+                .frame(width: 44, height: 44).contentShape(Rectangle())
         }.buttonStyle(.plain).accessibilityLabel(label)
     }
+}
+
+/// The title's entrance: each part rises into place a beat after the one above it. Reduce Motion: a plain fade.
+private struct Enter: ViewModifier {
+    let shown: Bool, still: Bool, delay: Double
+    func body(content: Content) -> some View {
+        content
+            .opacity(shown ? 1 : 0)
+            .offset(y: shown || still ? 0 : 14)
+            .animation(still ? .easeOut(duration: 0.2) : .spring(duration: 0.55, bounce: 0.12).delay(delay), value: shown)
+    }
+}
+extension View {
+    fileprivate func enter(_ shown: Bool, _ still: Bool, _ delay: Double) -> some View { modifier(Enter(shown: shown, still: still, delay: delay)) }
 }
 
 // MARK: - The run
@@ -351,20 +495,29 @@ struct HUDView: View {
     }
 }
 
+/// The pause (0230): the run dims and holds; Resume is the one big thing, the rest are words under it. No heading: the held
+/// frame says paused.
 struct PauseView: View {
     @ObservedObject var game = Game.shared
     var body: some View {
         ZStack {
-            Color.black.opacity(0.45)
-            VStack(spacing: 12) {
-                Text("PAUSED").font(Theme.display(16)).tracking(5).foregroundStyle(Theme.ink)
-                Button("Resume") { game.paused = false }.buttonStyle(CGButton(primary: true))
-                Button("Restart") { game.retry() }.buttonStyle(CGButton())
-                Button("Edit controls") { HudStore.shared.editing = DeckGeometry.tier }.buttonStyle(CGButton())
-                    .accessibilityHint("Move, size and fade the touch controls")
-                Button("Home") { game.home() }.buttonStyle(CGButton())
+            Color.black.opacity(0.78).accessibilityHidden(true)
+            VStack(spacing: 14) {
+                Button("Resume") { game.paused = false }.buttonStyle(MarqueeButton()).frame(maxWidth: 280)
+                    .accessibilityLabel("Resume")
+                HStack(spacing: 4) {
+                    Button { game.retry() } label: { Label("Restart", systemImage: "arrow.counterclockwise") }.accessibilityLabel("Restart")
+                    Button { HudStore.shared.editing = DeckGeometry.tier } label: { Label("Edit controls", systemImage: "rectangle.and.hand.point.up.left") }
+                        .accessibilityLabel("Edit controls").accessibilityHint("Move, size and fade the touch controls")
+                    Button { game.home() } label: { Label("Home", systemImage: "house") }.accessibilityLabel("Home")
+                }
+                .buttonStyle(QuietButton(color: Theme.ink))
+                .labelStyle(.titleOnly)
             }
-            .padding(24).glass(20)
+            .padding(20)
+            .accessibilityElement(children: .contain)
+            .accessibilityAddTraits(.isModal)
+            .accessibilityLabel("Paused")
         }
     }
 }
@@ -411,7 +564,7 @@ struct ResultsView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .onAppear { if result.drill == nil { judges.ask(result) } }
+        .onAppear { if result.drill == nil { judges.ask(result) }; Ready.mark("results") }
     }
     private func flag(_ card: Card, _ key: String) -> Bool? {
         guard let v = card.flat.first(where: { $0.0 == "facts." + key })?.1, case let .b(b) = v else { return nil }
@@ -439,15 +592,15 @@ struct ResultsView: View {
                         HStack(alignment: .top, spacing: 10) {
                             RoundedRectangle(cornerRadius: 1.5).fill(c.id == "clean" ? Theme.aur1 : Theme.amber).frame(width: 3)
                             VStack(alignment: .leading, spacing: 3) {
-                                Text(c.id == "clean" ? "NEXT RUN" : "WHAT COST YOU").font(Theme.text(9, .medium)).tracking(1.4).foregroundStyle(Theme.ink3)
                                 Text(c.title).font(Theme.text(14, .medium)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
                                 Text(c.fix.isEmpty ? c.detail : c.fix).font(Theme.text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
                             }
                         }
                         .fixedSize(horizontal: false, vertical: true)
                         .accessibilityElement(children: .combine)
+                        .accessibilityLabel("\(c.id == "clean" ? "Next run" : "What cost you"): \(c.title). \(c.fix.isEmpty ? c.detail : c.fix)")
                     }
-                    Accordion(title: "The numbers", summary: numbersLine(result.telemetry), isOpen: $numbersOpen) { facts(result.telemetry) }.id("numbers")
+                    Accordion(title: "The numbers", summary: numbersLine(result.telemetry), isOpen: $numbersOpen, show: .summary) { facts(result.telemetry) }.id("numbers")
                 }
     }
     /// The score is the one thing the sheet has to say at a glance: bright for a landing, plain for a crash.
@@ -462,7 +615,8 @@ struct ResultsView: View {
                 Text(card.tier.uppercased()).font(Theme.text(11, .medium)).tracking(1.6).foregroundStyle(lit ? ink : card.tier == "assist" ? Theme.ink2 : Theme.amber)
                     .padding(.horizontal, 10).padding(.vertical, 5).overlay(Capsule().strokeBorder(lit ? Theme.auroraInk.opacity(0.35) : Theme.hair))
             }
-            Text(card.verdict).font(Theme.text(17, .semibold)).foregroundStyle(ink).fixedSize(horizontal: false, vertical: true)
+            Text(card.verdict.uppercased()).font(Theme.marquee(15, .headline)).tracking(1.2).foregroundStyle(ink).fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel(card.verdict)
             if let m = Records.shared.lastRecord, let medal = m.earned {
                 Text("\(medal.label) medal\(m.isNew ? " · new" : "")").font(Theme.text(13, .semibold)).foregroundStyle(lit ? ink : Theme.amber)
             }
@@ -473,50 +627,46 @@ struct ResultsView: View {
     private func numbersLine(_ t: Telemetry) -> String {
         "Sink \(Fmt.rate(t.sink)) \(Fmt.rateUnit) · Tilt \(String(format: "%.0f°", t.tiltDeg))"
     }
+    /// Fly again is the next thing to do; Roam beside it; the rest are quiet words under a hairline.
     private func actions(_ card: Card, short: Bool) -> some View {
-                VStack(alignment: .leading, spacing: short ? 8 : 10) {
-                    PostRow(result: result, post: post)
-                    let again = Button { game.retry() } label: { Text(result.drill == nil ? "Fly again" : "Again").frame(maxWidth: .infinity) }
-                    if short {
-                        // One row, the secondary actions as icons, each still saying its name.
-                        HStack(spacing: 6) {
-                            again.buttonStyle(CGButton(primary: true, compact: true))
-                            iconAction("play.rectangle", "Watch it") { game.watch() }
-                            if result.drill == nil { iconAction("car.side", "Roam this course") { game.startDrive(roam: result.course) } }
-                            share(card)
-                            iconAction("list.number", "Board") { open(.board) }
-                            iconAction("house", "Home") { game.home() }
-                        }
-                    } else {
-                        VStack(spacing: 10) {
-                            HStack(spacing: 8) {
-                                again.buttonStyle(CGButton(primary: true))
-                                // Roam (0220): off the card and onto the set, unscored.
-                                if result.drill == nil {
-                                    Button { game.startDrive(roam: result.course) } label: { Text("Roam") }
-                                        .buttonStyle(CGButton()).accessibilityIdentifier("roam-results")
-                                        .accessibilityLabel("Roam this course").accessibilityHint("Drive round the set, unscored.")
-                                }
-                            }
-                            HStack(spacing: 8) {
-                                Button { game.watch() } label: { Text("Watch it").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
-                                share(card)
-                                Button { open(.board) } label: { Text("Board").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
-                                Button { game.home() } label: { Text("Home").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
-                            }
-                        }
-                    }
+        VStack(alignment: .leading, spacing: short ? 6 : 10) {
+            PostRow(result: result, post: post)
+            HStack(spacing: 8) {
+                Button { game.retry() } label: { Text(result.drill == nil ? "Fly again" : "Again") }
+                    .buttonStyle(MarqueeButton(height: short ? 48 : 54))
+                    .accessibilityLabel(result.drill == nil ? "Fly again" : "Again")
+                // Roam (0220): off the card and onto the set, unscored.
+                if result.drill == nil {
+                    Button { game.startDrive(roam: result.course) } label: { Label("Roam", systemImage: "car.side") }
+                        .buttonStyle(MarqueeButton(height: short ? 48 : 54, hollow: true)).accessibilityIdentifier("roam-results")
+                        .accessibilityLabel("Roam this course").accessibilityHint("Drive round the set, unscored.")
                 }
+            }
+            HStack(spacing: 0) {
+                quiet("play.rectangle", "Watch it", short) { game.watch() }
+                Spacer(minLength: 0)
+                share(card, short)
+                Spacer(minLength: 0)
+                quiet("list.number", "Board", short) { open(.board) }
+                Spacer(minLength: 0)
+                quiet("house", "Home", short) { game.home() }
+            }
+            .overlay(alignment: .top) { Rectangle().fill(Theme.hair2).frame(height: 1) }
+        }
     }
-    private func iconAction(_ icon: String, _ name: String, _ act: @escaping () -> Void) -> some View {
-        Button(action: act) { Image(systemName: icon).font(.system(size: 15)).frame(width: 24) }
-            .buttonStyle(CGButton(compact: true)).accessibilityLabel(name)
+    /// A secondary action: its icon and its name (only the icon on a short screen, the name still read out).
+    private func quiet(_ icon: String, _ name: String, _ short: Bool, _ act: @escaping () -> Void) -> some View {
+        Button(action: act) {
+            if short { Image(systemName: icon).font(.system(size: 15)) } else { Label(name, systemImage: icon).font(Theme.text(13, .medium)) }
+        }
+        .buttonStyle(QuietButton()).accessibilityLabel(name)
     }
-    @ViewBuilder private func share(_ card: Card) -> some View {
+    @ViewBuilder private func share(_ card: Card, _ short: Bool) -> some View {
         if let u = result.challengeURL {
             ShareLink(item: u, message: Text(String(format: "%.1f on %@. Beat it.", card.total, COURSE_INFO.first { $0.id == result.course }?.name ?? "Cold Gas"))) {
-                Image(systemName: "square.and.arrow.up").font(.system(size: 15)).frame(width: 24)
-            }.buttonStyle(CGButton(compact: true)).accessibilityLabel("Challenge a friend")
+                if short { Image(systemName: "square.and.arrow.up").font(.system(size: 15)) }
+                else { Label("Share", systemImage: "square.and.arrow.up").font(Theme.text(13, .medium)) }
+            }.buttonStyle(QuietButton()).accessibilityLabel("Challenge a friend")
         }
     }
     private func facts(_ t: Telemetry) -> some View {
