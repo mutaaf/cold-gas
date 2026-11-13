@@ -152,6 +152,14 @@ mark, and air left in the tanks.
    docked as a live strip on the sheet (model, where, tokens so far; then its receipt in a line) with "Watch the
    call" for the full show. On a player's first three runs (the calm sheet, 0199, operator's call 2026-11-11) the strip
    and the receipt sit one tap down, under the sheet's More, with the judges; a player's own AI key keeps the strip in view.
+   **On the iPhone app, Apple's on-device model judges first (operator's call 2026-11-12, 0219):** where the device has
+   Apple Intelligence (iOS 26+) and Settings → Judges is on, the words are written on the device (FoundationModels,
+   `SystemLanguageModel.default`, guided generation from the Worker's brief: the run's numbers only), within its own
+   20 s share of the 35 s; otherwise or on any failure, the edge model with the time left, then local lines. Its receipt
+   says Apple's on-device model, on this iPhone/iPad, the tokens (as the framework reports them on iOS 27+, else
+   ≈4 chars a token labelled "estimated"), the time, $0 and "no data left the device", with a "Judged on device" mark.
+   Naming the platform feature ("uses Apple Intelligence", "Apple's on-device model") factually in the app and store copy
+   is not a brand in the game's world (7 and §1 cover cars, courses and assets); no Apple logo, badge or glyph.
 6. **Frame budget.** 60 fps on a mid-range laptop and playable on a recent phone. No per-frame
    allocations in hot paths (reuse vectors and arrays). Graphics tiers: `?gfx=low|mid|high`. One look
    everywhere (0097): phones and tablets boot `high` like a desktop (same effects, shadows, film look,

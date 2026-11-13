@@ -7,7 +7,7 @@ import ColdGasCore
 public let COURSE_IDS = ["show", "wall", "lineup"]
 
 /// What the panel said. `source`: "ai" (the model's) or "local" (the game's own lines).
-public struct JudgeWords: Codable, Equatable {
+public struct JudgeWords: Codable, Equatable, Sendable {
     public var headline: String, engineer: String, coordinator: String, designer: String
     public var source: String?
     public init(headline: String = "", engineer: String = "", coordinator: String = "", designer: String = "", source: String? = nil) {
