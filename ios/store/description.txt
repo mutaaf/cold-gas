@@ -15,12 +15,18 @@ The Show, the Wall and the Lineup, with drills for each part of the flight and a
 SCORED, NOT GUESSED
 The judges' numbers come from a fixed scorer: height, rotation, clearance, sink rate at touchdown, wheel sync, distance from the mark and gas left in the tank. The commentary is written by an AI panel; the numbers never are.
 
+JUDGED ON YOUR DEVICE
+On iPhone and iPad with Apple Intelligence, the judges' commentary is written on the device by Apple's on-device model: no network, no cost, and nothing about your run is sent for it. The results say so, with the tokens it used. Without Apple Intelligence, an AI model on our own server writes it instead. Either way, the numbers come from the scorer, never the model.
+
+FREE DRIVE
+Drive off the Show's apron into a world that goes on: roads through forest and hills, built as you go. No timer, no score, just the car.
+
 COME BACK FOR
 - A new daily jump with its own target, and a streak.
 - Medals, and a board of the day's and all-time best landings, posted under three initials.
 - Challenge a friend with a link to the same jump.
 
-MADE FOR THE PHONE IN YOUR HAND
-Drawn in Metal, up to 120 Hz on ProMotion iPhones. On iPhone Duo it fills the whole screen when open; in tabletop the top half is the screen and the bottom half the controller. Landings you feel through Core Haptics. Sound and haptics can each be turned down or off.
+MADE FOR THE SCREEN IN YOUR HANDS
+Drawn in Metal, up to 120 Hz on ProMotion displays. The Pro and Advanced controls are shaped for each screen: a phone either way up, iPad at the side grips, iPhone Duo open across the whole display, or in tabletop with the screen on top and the controller below. Landings you feel through Core Haptics. Sound and haptics can each be turned down or off.
 
 No accounts, no ads, no in-app purchases and no tracking. An independent game: every car, course and sound is our own design.

@@ -61,8 +61,10 @@ static float3 world_light(float3 albedo, float3 n, float3 p, float4 lightClip, f
         float3 d = dr.lampPos.xyz - p;
         float dist = max(length(d), 0.5);
         float3 ld = d / dist;
-        float cone = smoothstep(dr.lampDir.w, dr.lampDir.w + 0.08, dot(-ld, dr.lampDir.xyz));
-        float att = cone * dr.lampPos.w / (dist * dist) * clamp(1.0 - pow(dist / 140.0, 4.0), 0.0, 1.0);
+        // A wide, soft edge (squared) so the beam has no hard wedge on the verges, and a near-field floor so a bank
+        // right at the nose isn't blown white.
+        float cone = smoothstep(dr.lampDir.w - 0.05, dr.lampDir.w + 0.06, dot(-ld, dr.lampDir.xyz)); cone *= cone;
+        float att = cone * dr.lampPos.w / (dist * dist + 25.0) * clamp(1.0 - pow(dist / 140.0, 4.0), 0.0, 1.0);
         c += albedo * clamp(dot(n, ld), 0.0, 1.0) * att * float3(1.0, 0.95, 0.86);
     }
     return c;
@@ -134,7 +136,7 @@ fragment float4 cg_world_road_fragment(WRoadOut in [[stage_in]], constant WFrame
     // Painted lines are retroreflective: the headlamps come back off them.
     if (dr.lampPos.w > 0 && mk > 0) {
         float3 d = dr.lampPos.xyz - in.world; float dist = max(length(d), 1.0);
-        float cone = smoothstep(dr.lampDir.w, dr.lampDir.w + 0.08, dot(-d / dist, dr.lampDir.xyz));
+        float cone = smoothstep(dr.lampDir.w - 0.05, dr.lampDir.w + 0.06, dot(-d / dist, dr.lampDir.xyz)); cone *= cone;
         c += paint * mk * cone * dr.lampPos.w * 0.02 / dist * (1.0 - smoothstep(60.0, 160.0, dist));
     }
     return float4(world_air(c, in.world, f, k), 1);

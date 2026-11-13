@@ -1,0 +1,191 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>COLD GAS for iPhone and iPad: Public Beta</title>
+<meta name="description" content="Fly COLD GAS natively on iPhone and iPad: drawn in Metal at up to 120 Hz, landings you feel, and judges written on your device. Join the public beta on TestFlight.">
+<link rel="canonical" href="https://mutaafaziz.com/coldgas/beta/">
+<link rel="icon" href="../favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="../apple-touch-icon.png">
+<meta name="theme-color" content="#05070c">
+<meta property="og:title" content="COLD GAS for iPhone and iPad: public beta">
+<meta property="og:description" content="Ten thrusters. One roll. Stick the landing, natively. Join on TestFlight.">
+<meta property="og:image" content="https://mutaafaziz.com/coldgas/og.png">
+<meta property="og:url" content="https://mutaafaziz.com/coldgas/beta/">
+<style>
+  @font-face { font-family: 'Michroma'; src: url('../guide/fonts/michroma-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-display: swap; }
+  @font-face { font-family: 'Geist Variable'; src: url('../guide/fonts/geist-latin-wght-normal.woff2') format('woff2-variations'); font-weight: 100 900; font-display: swap; }
+  :root {
+    --ink: #f5f6f8; --ink-2: rgba(245, 246, 248, 0.74); --ink-3: rgba(245, 246, 248, 0.5);
+    --hair: rgba(245, 246, 248, 0.14); --hair-2: rgba(245, 246, 248, 0.07);
+    --bg: #05070c; --ice: #bfe6ff; --ok: #6ff0b5; --signal: #e8323c;
+    --display: 'Michroma', 'Geist Variable', sans-serif;
+    --text: 'Geist Variable', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
+    --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--bg); }
+  body {
+    margin: 0; color: var(--ink-2); font: 16px/1.6 var(--text); -webkit-font-smoothing: antialiased; overflow-x: hidden;
+    background:
+      radial-gradient(90% 55% at 78% 8%, rgba(76, 128, 196, 0.22) 0%, transparent 60%),
+      radial-gradient(70% 50% at 10% 0%, #0f1a2e 0%, transparent 70%),
+      linear-gradient(180deg, #08101e 0%, var(--bg) 46%) no-repeat, var(--bg);
+    min-height: 100vh;
+  }
+  /* the horizon: a hairline and a faint concrete floor, the game's blue hour */
+  body::before { content: ''; position: fixed; inset: auto 0 0 0; height: 38vh; pointer-events: none; z-index: -1;
+    background: linear-gradient(180deg, transparent, rgba(191, 230, 255, 0.035)); border-top: 1px solid var(--hair-2); }
+  a { color: var(--ink); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 72px max(16px, env(safe-area-inset-left)); }
+  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { font: 400 12px/1 var(--display); letter-spacing: 0.42em; color: var(--ink-3); text-transform: uppercase; text-decoration: none; }
+  .web { font: 500 13px/1 var(--text); letter-spacing: 0.04em; color: var(--ink-2); text-decoration: none; border: 1px solid var(--hair); border-radius: 999px; padding: 10px 16px; }
+  .web:hover, .web:focus-visible { color: var(--ink); border-color: rgba(245, 246, 248, 0.32); }
+
+  .hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(28px, 6vw, 72px); align-items: center; margin-top: clamp(28px, 7vh, 72px); }
+  .eyebrow { display: inline-flex; align-items: center; gap: 10px; font: 500 11px/1 var(--text); letter-spacing: 0.26em; text-transform: uppercase; color: var(--ice); margin: 0; }
+  .eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 rgba(111, 240, 181, 0.6); animation: live 2.4s var(--ease) infinite; }
+  @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(111, 240, 181, 0.55); } 70%, 100% { box-shadow: 0 0 0 10px rgba(111, 240, 181, 0); } }
+  h1 { font: 400 clamp(40px, 8.4vw, 92px)/0.98 var(--display); color: var(--ink); letter-spacing: 0.01em; margin: 22px 0 0; }
+  h1 em { font-style: normal; color: transparent; -webkit-text-stroke: 1px rgba(245, 246, 248, 0.7); }
+  .lede { font-size: clamp(17px, 2.2vw, 20px); line-height: 1.5; color: var(--ink-2); max-width: 30em; margin: 22px 0 0; }
+  .lede b { color: var(--ink); font-weight: 600; }
+
+  .join { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 22px; margin-top: 34px; }
+  .cta { position: relative; display: inline-flex; align-items: center; gap: 12px; font: 600 17px/1 var(--text); letter-spacing: 0.01em; color: #05070c;
+    background: var(--ink); text-decoration: none; padding: 18px 26px 18px 22px; border-radius: 999px; overflow: hidden;
+    box-shadow: 0 10px 40px -12px rgba(191, 230, 255, 0.55), inset 0 -1px 0 rgba(0, 0, 0, 0.12); transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease); }
+  .cta::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(191, 230, 255, 0.55) 50%, transparent 65%);
+    transform: translateX(-120%); animation: sheen 4.8s var(--ease) 1.2s infinite; }
+  @keyframes sheen { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
+  .cta:hover, .cta:focus-visible { transform: translateY(-2px); box-shadow: 0 16px 48px -12px rgba(191, 230, 255, 0.7); }
+  .cta svg { width: 22px; height: 22px; flex: none; }
+  .cta .arr { transition: transform 0.25s var(--ease); }
+  .cta:hover .arr { transform: translateX(3px); }
+  .seats { font-size: 13px; color: var(--ink-3); line-height: 1.45; }
+  .seats b { color: var(--ink-2); font-weight: 500; }
+
+  .qr { display: none; align-items: center; gap: 16px; margin-top: 28px; padding: 14px 18px 14px 14px; border: 1px solid var(--hair); border-radius: 18px;
+    background: rgba(10, 13, 20, 0.5); width: fit-content; }
+  .qr img { width: 104px; height: 104px; border-radius: 10px; display: block; }
+  .qr p { margin: 0; font-size: 14px; line-height: 1.45; max-width: 15em; }
+  .qr p b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
+  @media (hover: hover) and (pointer: fine) { .qr { display: flex; } }
+
+  /* the phone: our own outline, no device marks */
+  .stage { position: relative; display: grid; place-items: center; }
+  .stage::before { content: ''; position: absolute; width: 78%; aspect-ratio: 1; border-radius: 50%; top: 18%;
+    background: radial-gradient(circle, rgba(111, 240, 181, 0.14), rgba(76, 128, 196, 0.12) 45%, transparent 70%); filter: blur(10px); }
+  .phone { position: relative; width: min(330px, 74vw); aspect-ratio: 660 / 1434; border-radius: 52px; padding: 11px;
+    background: linear-gradient(145deg, #2a2f39, #0c0f15 40%, #1d222b); box-shadow: 0 50px 90px -30px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(245, 246, 248, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+    transform: perspective(1400px) rotateY(-9deg) rotateX(3deg); animation: rise 1.2s var(--ease) both; }
+  @keyframes rise { from { opacity: 0; transform: perspective(1400px) rotateY(-9deg) rotateX(3deg) translateY(28px); } }
+  .phone img { width: 100%; height: 100%; object-fit: cover; border-radius: 42px; display: block; }
+  .phone::after { content: ''; position: absolute; top: 22px; left: 50%; width: 30%; height: 26px; transform: translateX(-50%); border-radius: 20px; background: #000; }
+  .tag { position: absolute; display: flex; align-items: center; gap: 8px; font: 500 12px/1.2 var(--text); color: var(--ink); padding: 10px 14px;
+    border: 1px solid var(--hair); border-radius: 14px; background: rgba(8, 11, 18, 0.78); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.9); animation: rise 1.2s var(--ease) both; }
+  .tag small { display: block; color: var(--ink-3); font-size: 11px; }
+  .tag svg { width: 18px; height: 18px; flex: none; color: var(--ok); }
+  .t1 { left: -4%; top: 47%; animation-delay: 0.35s; }
+  .t2 { right: -2%; top: 14%; animation-delay: 0.55s; }
+  .t2 svg { color: var(--ice); }
+
+  h2 { font: 400 13px/1.3 var(--display); color: var(--ink-3); letter-spacing: 0.28em; text-transform: uppercase; margin: clamp(64px, 10vh, 110px) 0 22px; }
+  .feats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--hair-2); border: 1px solid var(--hair-2); border-radius: 22px; overflow: hidden; }
+  .feat { background: linear-gradient(180deg, rgba(14, 19, 30, 0.96), rgba(7, 10, 16, 0.96)); padding: 24px 22px 26px; }
+  .feat .n { font: 400 11px/1 var(--display); letter-spacing: 0.2em; color: var(--ice); }
+  .feat h3 { font: 600 18px/1.25 var(--text); color: var(--ink); margin: 16px 0 8px; letter-spacing: -0.005em; }
+  .feat p { margin: 0; font-size: 14.5px; line-height: 1.55; }
+  .feat.hl { background: radial-gradient(120% 90% at 0% 0%, rgba(111, 240, 181, 0.12), transparent 60%), linear-gradient(180deg, rgba(14, 19, 30, 0.96), rgba(7, 10, 16, 0.96)); }
+  .feat.hl .n { color: var(--ok); }
+
+  .steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+  .steps li { counter-increment: s; border-top: 1px solid var(--hair); padding-top: 16px; font-size: 15px; }
+  .steps li::before { content: '0' counter(s); display: block; font: 400 12px/1 var(--display); letter-spacing: 0.2em; color: var(--ink-3); margin-bottom: 12px; }
+  .steps b { color: var(--ink); font-weight: 600; }
+
+  .end { margin-top: clamp(56px, 9vh, 96px); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px;
+    padding: 28px; border: 1px solid var(--hair); border-radius: 24px; background: radial-gradient(80% 140% at 100% 0%, rgba(76, 128, 196, 0.16), transparent 60%), rgba(10, 13, 20, 0.5); }
+  .end p { margin: 0; font: 400 clamp(18px, 3vw, 24px)/1.25 var(--display); color: var(--ink); letter-spacing: 0.01em; }
+  .fine { margin-top: 36px; font-size: 13px; line-height: 1.6; color: var(--ink-3); max-width: 62em; }
+  .fine a { color: var(--ink-2); text-underline-offset: 2px; }
+
+  @media (max-width: 860px) {
+    .hero { grid-template-columns: 1fr; }
+    .stage { order: -1; margin: 6px 0 4px; }
+    .phone { width: min(260px, 62vw); border-radius: 42px; padding: 9px; transform: none; }
+    .phone img { border-radius: 34px; }
+    .phone::after { top: 17px; height: 20px; }
+    @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
+    .t1 { left: 0; top: 54%; } .t2 { right: 0; top: 10%; }
+    .feats { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 560px) {
+    h1 { margin-top: 18px; }
+    .join { margin-top: 26px; }
+    .cta { width: 100%; justify-content: center; }
+    .feats, .steps { grid-template-columns: 1fr; }
+    .tag { font-size: 11px; padding: 8px 11px; }
+    .t1 { left: -2px; } .t2 { right: -2px; }
+    .end { padding: 22px; }
+    .end .cta { width: 100%; }
+  }
+  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top"><a class="brand" href="../">Cold Gas</a><a class="web" href="../">Play in the browser</a></div>
+
+  <section class="hero">
+    <div>
+      <p class="eyebrow"><i aria-hidden="true"></i>Public beta · iPhone and iPad</p>
+      <h1>COLD GAS,<br><em>native.</em></h1>
+      <p class="lede">The jump you know from the browser, rebuilt for the phone in your hand. <b>Drawn in Metal at up to 120&nbsp;Hz</b>, landings you feel through the haptics, and judges that write their verdict <b>on your device</b>.</p>
+      <div class="join">
+        <a class="cta" href="https://testflight.apple.com/join/yMb3sJPg" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9"/><path d="M8.5 8.5 12 12l3.5-3.5"/><path d="M5 14.5c0 3.6 3.1 6.5 7 6.5s7-2.9 7-6.5"/><path d="M9 21h6"/></svg>
+          Join the beta on TestFlight <span class="arr" aria-hidden="true">→</span>
+        </a>
+        <span class="seats"><b>Free.</b> No account, no ads.<br>iOS 18 or later.</span>
+      </div>
+      <div class="qr">
+        <img src="qr.svg" alt="QR code that opens the Cold Gas TestFlight invitation" width="104" height="104">
+        <p><b>On a computer?</b>Point your iPhone's camera here to join.</p>
+      </div>
+    </div>
+    <div class="stage" aria-hidden="true">
+      <div class="phone"><img src="judged.jpg" alt="" width="660" height="1434"></div>
+      <div class="tag t1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>Judged on device<small>No data leaves the phone</small></span></div>
+      <div class="tag t2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17l3-7 4 4 5-9"/></svg><span>97.3 · Perfect 10<small>Gold medal on the Show</small></span></div>
+    </div>
+  </section>
+
+  <h2>What's in the beta</h2>
+  <div class="feats">
+    <div class="feat hl"><span class="n">01 · Judges</span><h3>A panel that thinks on your phone</h3><p>On devices with Apple Intelligence, the judges' words are written on device: no network, no key, no data sent. The numbers still come from the fixed scorer.</p></div>
+    <div class="feat"><span class="n">02 · Free Drive</span><h3>A road that keeps going</h3><p>Leave the course and drive on, through a world that streams in around the car. Unscored, just you and the jets.</p></div>
+    <div class="feat"><span class="n">03 · Controls</span><h3>Shaped for your screen</h3><p>One thumb on Assist, a stick and buttons on Pro, all ten valves on Advanced. Laid out for the phone, iPad and folding iPhone, with Pencil pressure on iPad.</p></div>
+    <div class="feat"><span class="n">04 · Feel</span><h3>Every wheel, in your hand</h3><p>A synced landing is one clean thump through the haptics; a sloppy one is four. The same deterministic physics as the web, tick for tick.</p></div>
+  </div>
+
+  <h2>How to join</h2>
+  <ol class="steps">
+    <li><b>Get TestFlight</b>, Apple's free beta app, from the App Store.</li>
+    <li><b>Open the invite</b> above on your iPhone or iPad and tap Accept.</li>
+    <li><b>Install and fly.</b> Send feedback from TestFlight: take a screenshot in the game and tap Share Beta Feedback.</li>
+  </ol>
+
+  <div class="end">
+    <p>Ten thrusters. One roll.<br>Stick the landing.</p>
+    <a class="cta" href="https://testflight.apple.com/join/yMb3sJPg" rel="noopener">Join the beta <span class="arr" aria-hidden="true">→</span></a>
+  </div>
+
+  <p class="fine">Beta builds can have rough edges and expire after 90 days; TestFlight will offer each new one. On-device judging needs a device and region where Apple Intelligence is available; elsewhere the judges write from our server, or the game uses its own lines and says so. Apple, iPhone, iPad, Apple Intelligence and TestFlight are trademarks of Apple Inc. COLD GAS is an independent game: every car, course and sound is our own design. <a href="../privacy/">Privacy</a> · <a href="../guide/">How to play</a></p>
+</div>
+</body>
+</html>

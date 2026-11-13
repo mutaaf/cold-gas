@@ -322,8 +322,8 @@ too.
     `syncTouchPhase` rule, `Deck.buttons`). A ghost ring breathes round what the cue names.
   - The valve deck is the car whole on an upright phone. Everywhere else it's split down the spine, the car's left
     valves under the left thumb, and the HUD steps into the top middle.
-- **iPad** (0210): `TARGETED_DEVICE_FAMILY` 1,2, full screen, every orientation. It's a `tablet` deck. The next App
-  Store version needs the 13" iPad screenshot set.
+- **iPad** (0210): `TARGETED_DEVICE_FAMILY` 1,2, full screen, every orientation. It's a `tablet` deck. From 1.1.0 the App
+  Store listing carries the 13" iPad set (`ipad-13`, APP_IPAD_PRO_3GEN_129; `asc.mjs store-shots` requires it).
 - **A fold mid-run doesn't pause the run.** The sim doesn't know about views. A fold is a resize that passes through
   sizes no pose has (LESSONS 0075):
   - Re-fit the camera on every layout pass.
@@ -411,6 +411,9 @@ Core Haptics turns those buzzes into **a continuous track driven by the sim**, s
   works the same way).
   - Deadlines and retries as `src/net.js`.
   - The judges' theatre and receipt are the same, and the panel's fallback lines are local.
+  - **On-device judges (0219):** where the device has Apple Intelligence (iOS 26+), Apple's on-device model writes the
+    words first (`Net/OnDeviceJudge.swift`; the route, deadline, fallback and receipt in ColdGasClient `OnDeviceJudge.swift`),
+    then the edge model, then the local lines. Settings → Judges can send it to the edge model.
   - A BYOK key lives in the **Keychain** and is sent per call as `x-cg-key`.
   - The health beacon (`/obs`) sends only fields `cleanObs` accepts today; the Worker is frozen.
 - **Saves.** Medals, the daily streak, initials and settings live in UserDefaults. Every new field is optional or

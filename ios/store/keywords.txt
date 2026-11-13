@@ -1,1 +1,1 @@
-stunt,jump,car,roadster,thruster,landing,physics,driving,precision,daily,leaderboard,one thumb
+stunt,jump,car,roadster,thruster,landing,physics,precision,daily,leaderboard,one thumb,ai judges

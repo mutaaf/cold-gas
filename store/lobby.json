@@ -9,7 +9,7 @@
     "appstore",
     "web"
   ],
-  "ipad": false,
+  "ipad": true,
   "ios": {
     "bundleId": "com.mutaafaziz.coldgas",
     "ascAppId": "6830960344"
@@ -57,11 +57,12 @@
   },
   "raw": {
     "iphone": "store/lobby/raw/iphone",
+    "ipad": "store/lobby/raw/ipad",
     "duo": "store/lobby/raw/duo"
   },
   "capture": {
     "command": "",
-    "notes": "Real flights through the real UI, Debug build on a slowed clock: ios/scripts/store-capture.py (see its header). 6.9-inch simulator for raw/iphone; an open Duo simulator's inner screen (SHOT_DISPLAY=primary-1) for raw/duo. A person picks the frames."
+    "notes": "Real frames from a Debug build (1.1.0): the reference runs flown live and frozen at a tick with their controls up (-play -autopilot -freeze <tick>), Free Drive cruising 3 km out (-freedrive -fd-km 3 -fd-cruise 25), and the results after a whole run (the judges written on the device by Apple's on-device model). 6.9-inch simulator for raw/iphone, 13-inch iPad for raw/ipad. raw/duo is from 1.0.0 (an open Duo's inner screen). A person picks the frames."
   },
   "shots": [
     {
@@ -69,23 +70,39 @@
       "raw": "1-flight",
       "layout": "cover",
       "title": "Clear the row. *Stick it.*",
-      "sub": "Ten cold-gas thrusters. One roll. One mark to land on."
+      "sub": "Ten cold-gas thrusters. One mark to land on."
     },
     {
-      "id": "roll",
-      "raw": "2-roll",
+      "id": "hang",
+      "raw": "2-hang",
       "layout": "bleed",
       "kicker": "One thumb",
-      "title": "Hold to fly. *Let go upside down.*",
-      "sub": "Assist flies the valves. You choose when to go."
+      "title": "Hang upside down. *Let go.*",
+      "sub": "Hold to climb, tap to release, hold to land."
     },
     {
       "id": "panel",
       "raw": "3-panel",
       "layout": "hero",
-      "kicker": "The panel",
-      "title": "Three judges. *No excuses.*",
-      "sub": "A fixed scorer decides the numbers. The judges only supply the words."
+      "kicker": "Judged on device",
+      "title": "Three judges. *On your device.*",
+      "sub": "Apple Intelligence writes their words with no network. A fixed scorer sets every number."
+    },
+    {
+      "id": "valves",
+      "raw": "8-valves",
+      "layout": "hero",
+      "kicker": "Advanced",
+      "title": "Fly *ten valves* by hand.",
+      "sub": "Assist, Pro, Advanced: take the computer away one tier at a time."
+    },
+    {
+      "id": "drive",
+      "raw": "5-drive",
+      "layout": "bleed",
+      "kicker": "Free Drive",
+      "title": "Then just *drive.*",
+      "sub": "Off the apron into a world that goes on. No timer, no score."
     },
     {
       "id": "touchdown",
@@ -96,33 +113,20 @@
       "sub": "A synced landing is one clean thump. A sloppy one is four."
     },
     {
-      "id": "wall",
-      "raw": "5-wall",
+      "id": "row",
+      "raw": "7-row",
       "layout": "hero",
-      "kicker": "The Wall",
-      "title": "Climb it. *Hang there.*",
-      "sub": "Up the curl on suction and under the ledge, then let go."
-    },
-    {
-      "id": "valves",
-      "raw": "6-valves",
-      "layout": "spotlight",
-      "focus": [
-        0.5,
-        0.72,
-        0.75
-      ],
-      "kicker": "Advanced",
-      "title": "Fly *ten valves* by hand.",
-      "sub": "Assist, Pro, Advanced: take away the computer one tier at a time."
+      "kicker": "The Show",
+      "title": "Over the row, *onto the mark.*",
+      "sub": "The sink rate turns amber. Brake on the jets before it's red."
     },
     {
       "id": "lineup",
-      "raw": "7-lineup",
-      "layout": "bleed",
+      "raw": "6-lineup",
+      "layout": "tilt",
       "kicker": "The Lineup",
       "title": "Roll it *over the line.*",
-      "sub": "Off the kicker at dusk, a barrel roll, wheels down."
+      "sub": "Off the kicker, a barrel roll over five parked cars, wheels down."
     },
     {
       "id": "book",
@@ -130,7 +134,7 @@
       "layout": "bleed",
       "kicker": "iPhone Duo",
       "title": "Open it. *Fly it.*",
-      "sub": "Edge to edge when open. In tabletop, the top half is the screen and the bottom half the controller."
+      "sub": "Edge to edge when open. In tabletop, the screen on top and the controller below."
     }
   ],
   "feature": {

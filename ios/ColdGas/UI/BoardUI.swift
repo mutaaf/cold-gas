@@ -177,27 +177,45 @@ struct PostRow: View {
     }
 }
 
-/// The judges' words: the free edge model streaming, the local lines if it can't (labelled, never passed off as the model's).
-/// Asked once per run, here rather than in the view: the sheet may be rebuilt as it grows, and the call is rate limited.
+/// The judges' words: Apple's on-device model where the device has it (0219), else the free edge model streaming, the
+/// local lines if neither can (labelled, never passed off as a model's). Asked once per run, here rather than in the view:
+/// the sheet may be rebuilt as it grows, and the call is rate limited.
 @MainActor
 final class JudgesModel: ObservableObject {
     @Published var words = JudgeWords()
     @Published var note = ""
+    /// The words on screen were written on this device (the sheet's marker).
+    @Published var onDevice = false
     private var asked: UUID?
     private var task: Task<Void, Never>?
     func ask(_ r: RunResult) {
         guard asked != r.id, let sc = r.card.scoreCard else { return }
         asked = r.id
         task?.cancel()
+        let route = judgeRoute(status: OnDeviceJudges.status, preferOnDevice: SaveStore.shared.settings.judgeOnDeviceOn)
+        let place = OnDeviceJudges.place
         task = Task { [weak self] in
-            let stream = JudgesClient().judges(run: JudgedRun(course: r.course, assist: r.card.tier == "assist"), log: r.log, t: r.telemetry.json, card: sc)
+            let stream = JudgesClient().judges(run: JudgedRun(course: r.course, assist: r.card.tier == "assist"), log: r.log, t: r.telemetry.json, card: sc,
+                                               route: route, onDevice: route == .onDevice ? OnDeviceJudges.model() : nil, place: place)
             for await e in stream {
                 guard let self else { return }
                 switch e {
+                case let .prompt(p) where p.provider == ON_DEVICE_PROVIDER:
+                    self.onDevice = true
+                    self.note = "Apple\u{2019}s on-device model is judging, on \(place). Nothing leaves the device."
+                case let .note(n) where n.model == ON_DEVICE_MODEL:
+                    // The device couldn't: what it wrote so far goes, and the edge model starts over.
+                    self.onDevice = false
+                    self.words = JudgeWords()
+                    self.note = n.message ?? ""
                 case let .token(_, w): self.words = w
                 case let .finished(w, meta):
                     self.words = w
-                    self.note = meta.ok ? "Words by the edge model" : (meta.error ?? "The judges’ local lines")
+                    self.onDevice = meta.ok && meta.provider == ON_DEVICE_PROVIDER
+                    self.note = judgeReceipt(meta)
+                    #if DEBUG
+                    print("JUDGES \(meta.provider ?? "local") · \(w.headline) · \(self.note)")   // the operator's check on a simulator
+                    #endif
                 default: break
                 }
             }
@@ -223,6 +241,13 @@ struct JudgePanel: View {
                 Text(said).font(Theme.text(14, open == nil ? .medium : .regular)).foregroundStyle(open == nil ? Theme.ink : Theme.ink2).fixedSize(horizontal: false, vertical: true)
             } else if open != nil {
                 Text("Still deciding.").font(Theme.text(14)).foregroundStyle(Theme.ink3)
+            }
+            if model.onDevice {
+                // 0219: a quiet marker, words only (no logo or badge): the panel judged on this device.
+                Label("Judged on device", systemImage: "cpu")
+                    .font(Theme.text(10, .medium)).tracking(1.2).textCase(.uppercase).foregroundStyle(Theme.ink2)
+                    .padding(.horizontal, 8).padding(.vertical, 4).overlay(Capsule().strokeBorder(Theme.hair))
+                    .accessibilityLabel("Judged on this device by Apple Intelligence")
             }
             if !model.note.isEmpty {
                 Text(open == nil ? "\(model.note) · Tap a judge for their call" : model.note).font(Theme.text(11)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)

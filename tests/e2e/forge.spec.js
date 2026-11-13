@@ -23,10 +23,16 @@ test('the forged row comes from our origin after the title, and lands at the nex
     expect(new URL(a.url).hostname).toMatch(/^(localhost|127\.0\.0\.1)$/);
     expect(a.url).toMatch(/\/coldgas\/forge\/[a-z]+\.glb$/);
   }
-  // Still procedural on a still title; the next cut (back to the title) swaps the row.
+  // Still procedural on a still title, however long it stands: the models land only at a cut.
   await page.waitForTimeout(1500);
-  await page.evaluate(() => window.__coldgas.toTitle());
-  await expect.poll(async () => (await forged(page)).n, { timeout: 20_000 }).toBeGreaterThan(0);
+  expect((await forged(page)).n).toBe(0);
+  // The next cut (back to the title) after they've loaded swaps the row. Loading, parsing and warming their programs
+  // (up to 4 s) can outlast any fixed wait on a slow runner, and a cut before they're ready swaps nothing, so cut on
+  // every poll until one lands after them.
+  await expect.poll(async () => {
+    await page.evaluate(() => window.__coldgas.toTitle());
+    return (await forged(page)).n;
+  }, { timeout: 30_000, intervals: [1000] }).toBeGreaterThan(0);
   const { n, all } = await forged(page);
   expect(n).toBe(all);
   // A run over the forged row plays and judges as before (the sim is untouched: its colliders are the sim's own).

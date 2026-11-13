@@ -34,6 +34,10 @@ public struct JudgeDone: Codable, Equatable {
     public var words: JudgeWords
     public var provider: String?, model: String?, colo: String?, billedTo: String?, raw: String?
     public var ttftMs: Double?, totalMs: Double?, verifyMs: Double?, inTokens: Double?, outTokens: Double?, neurons: Double?, tokensPerSec: Double?, costUsd: Double?
+    /// The app's own (0219), never sent by the Worker: where the token counts came from ("reported" or "estimate"), and
+    /// whether the words were written on this device.
+    public var tokens: String?, onDevice: Bool?
+    public init(words: JudgeWords) { self.words = words }
 }
 public struct JudgeFailure: Codable, Equatable {
     public var message: String, fallback: Bool?, offline: Bool?
@@ -45,6 +49,8 @@ public struct JudgeMeta: Equatable {
     public var local: LocalReason?, error: String?
     public var provider: String?, model: String?, `where`: String?
     public var done: JudgeDone?, verify: JudgeVerify?
+    /// Why Apple's on-device model didn't write these words when it was asked first (0219), for the receipt.
+    public var onDeviceFailure: String?
     public init(ok: Bool, local: LocalReason? = nil, error: String? = nil, provider: String? = nil, model: String? = nil, where w: String? = nil, done: JudgeDone? = nil, verify: JudgeVerify? = nil) {
         self.ok = ok; self.local = local; self.error = error; self.provider = provider; self.model = model; self.where = w; self.done = done; self.verify = verify
     }

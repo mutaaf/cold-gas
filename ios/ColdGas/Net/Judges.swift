@@ -1,11 +1,14 @@
-// The judges' call (src/ai/stream.js, and the deadline and breaker of src/main.js + src/ai/theatre.js). POST /judge/stream
-// needs no key on the free edge model: it scores the run's telemetry itself, then streams the panel's words.
+// The judges' call (src/ai/stream.js, and the deadline and breaker of src/main.js + src/ai/theatre.js). Where the device
+// has Apple's on-device model and the player hasn't turned it off, the words are written there first (0219,
+// OnDeviceJudge.swift: no network, no key, $0). Otherwise, or if it fails, POST /judge/stream, which needs no key on the
+// free edge model: it scores the run's telemetry itself, then streams the panel's words.
 //
-//   for await e in client.judges(run: …, log: …, t: …, card: …) { … }
+//   for await e in client.judges(run: …, log: …, t: …, card: …, route: …, onDevice: …) { … }
 //
-// The stream always ends with exactly one `.finished(words:meta:)` within JUDGE_MS: the model's words, or the local lines
-// with the reason on the receipt (invariant 5½: the panel never blocks the results, and local lines are never passed off
-// as the AI's). Stop reading (or cancel the task) and the call is cancelled, and no `.finished` comes.
+// The stream always ends with exactly one `.finished(words:meta:)` within JUDGE_MS (the on-device try included): a
+// model's words, or the local lines with the reason on the receipt (invariant 5½: the panel never blocks the results, and
+// local lines are never passed off as the AI's). Stop reading (or cancel the task) and the call is cancelled, and no
+// `.finished` comes.
 import Foundation
 import ColdGasClient
 
@@ -22,10 +25,14 @@ final class JudgesClient: @unchecked Sendable {
 
     init(api: ColdGasAPI = .production, save: SaveStore = .shared) { self.api = api; self.save = save }
 
-    func judges(run: JudgedRun, log: [[Int]], t: JSValue, card: ScoreCard, ai: JudgeAI = .edge) -> AsyncStream<JudgeEvent> {
+    func judges(run: JudgedRun, log: [[Int]], t: JSValue, card: ScoreCard, ai: JudgeAI = .edge,
+                route: JudgeRoute = .cloud, onDevice: OnDeviceJudgeModel? = nil, place: String = "this device") -> AsyncStream<JudgeEvent> {
         AsyncStream { out in
             let task = Task { [self] in
-                await call(run: run, log: log, t: t, card: card, ai: ai, deadlineMs: JUDGE_MS, out: out)
+                let said = await judgePanel(card: card, route: route, model: onDevice, place: place, emit: { _ = out.yield($0) }) { ms in
+                    await self.call(run: run, log: log, t: t, card: card, ai: ai, deadlineMs: ms, out: out)
+                }
+                if let said, !Task.isCancelled { out.yield(.finished(words: said.0, meta: said.1)) }
                 out.finish()
             }
             out.onTermination = { _ in task.cancel() }
@@ -76,15 +83,13 @@ final class JudgesClient: @unchecked Sendable {
         }
     }
 
-    func call(run: JudgedRun, log: [[Int]], t: JSValue, card: ScoreCard, ai: JudgeAI, deadlineMs: Double, out: AsyncStream<JudgeEvent>.Continuation) async {
+    /// The edge model's call: its words, or the local lines and why. Its events go to `out` as they arrive.
+    func call(run: JudgedRun, log: [[Int]], t: JSValue, card: ScoreCard, ai: JudgeAI, deadlineMs: Double, out: AsyncStream<JudgeEvent>.Continuation) async -> (JudgeWords, JudgeMeta) {
         // [the breaker] After repeated overruns the panel speaks local lines for a while, then tries again.
         var breaker = Breaker(save.data.judgeBreaker ?? BreakerState())
         let allowed = breaker.allow(now: now())
         save.update { $0.judgeBreaker = breaker.s }
-        guard allowed else {
-            out.yield(.finished(words: localWords(card), meta: .localMeta(.breaker)))
-            return
-        }
+        guard allowed else { return (localWords(card), .localMeta(.breaker)) }
         let state = Call(out)
         let api = self.api
         let body = RequestBody.judges(log: log, t: t, assist: run.assist, course: run.course, ai: ai).jsonData
@@ -100,7 +105,7 @@ final class JudgesClient: @unchecked Sendable {
         } onCancel: { once.fire(false) }
         stream.cancel(); timer.cancel()
         let got = state.close()
-        if Task.isCancelled { return }   // the player moved on: nothing to say
+        if Task.isCancelled { return (localWords(card), .localMeta(.chunk)) }   // the player moved on: never shown
         var meta = JudgeMeta(ok: got.done != nil, error: got.failure, provider: got.prompt?.provider ?? ai.provider, model: got.done?.model ?? got.prompt?.model ?? ai.model,
                              where: got.prompt?.where, done: got.done, verify: got.verify)
         let words: JudgeWords
@@ -115,7 +120,7 @@ final class JudgesClient: @unchecked Sendable {
             // Only a deadline the provider had most of counts against the breaker (0057).
             if judgesOverran(meta.error, providerMs: deadlineMs) { let e = meta.error ?? ""; update { $0.failure(e, now: self.now()) } }
         }
-        out.yield(.finished(words: words, meta: meta))
+        return (words, meta)
     }
 
     private func update(_ f: (inout Breaker) -> Void) {
