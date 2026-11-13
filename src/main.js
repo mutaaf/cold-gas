@@ -70,6 +70,7 @@ import { refitHudMode } from './hud-mode.js';
 import { deckOn, runUp } from './render/deck-look.js';
 import { track } from './insights.js';
 import { ON_PORTAL } from './portal/flag.js';
+import { createWedge, WEDGE_IDLE } from './wedge.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
@@ -437,6 +438,7 @@ function startRunNow(kind = 'jump', quick = false) {
   ghostLoaded(stage.course);   // the reference ghost is flown on the title (precomputeRefGhosts)
   setMode('countdown'); S.countT = 0; S.countLen = quick ? 1 : 3; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
   S.impacts = 0; S.impact = null;
+  wedge.reset(); S.wedgeGo = null; S.wedgeDemand = 0;
   newFlight();
   ui.only('hud');
   drillBar.hidden = true;
@@ -907,6 +909,7 @@ function touchdown(run) {
 
 // --- Live step -----------------------------------------------------------------------------
 const liveInput = newInput();
+const wedge = createWedge({ idle: WEDGE_IDLE });   // a run-up stopped dead against a fixture (0229, src/wedge.js)
 const poseLerp = createPoseLerp();   // the car drawn between 240 Hz ticks (src/render/interp.js)
 const bodyLerp = createBodiesLerp(); // and the parked bodies with it
 function liveStep(dt) {
@@ -939,6 +942,17 @@ function liveStep(dt) {
       if (aftermathStep(run)) { S.acc = 0; break; }
     }
   }
+  // Wedged (0229): nose into a lamp post or a set light's drum on the run-up, stopped dead. The sim has no end for
+  // that (it would sit until the 90 s cap, the HUD frozen), and a scored run can't back up: say so, then go again
+  // from the mark. App-side only: the run, its log and its score are untouched. Backing off (or a parked car's
+  // contact, which ends the run itself) cancels it.
+  if (!S.after && run.phase === 'drive' && !S.autopilot && !run.t.contact && S.freezeT <= 0) {
+    if (input) S.wedgeDemand = input.throttle;
+    if (wedge.update(dt, run.car, S.wedgeDemand)) {
+      if (S.wedgeGo == null) { S.wedgeGo = 1.5; ui.cue_('Stuck · again from the mark', 1500); }
+      else if ((S.wedgeGo -= dt) <= 0) { S.wedgeGo = null; wedge.reset(); retry(); return; }
+    } else S.wedgeGo = null;
+  } else if (S.wedgeGo != null) { S.wedgeGo = null; wedge.reset(); }
   // The card is decided on the frame the run ends, before the HUD reads it: a crash ends the
   // timeline as a crash on that frame, not one frame of TOUCHDOWN first (0072).
   if (run.phase === 'done' && !S.card) closeCard(run);

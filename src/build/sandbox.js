@@ -15,6 +15,7 @@ import { createArenaWorld } from './arena-render.js';
 import { createBuildLayer } from './layer.js';
 import { createPoseLerp } from '../render/interp.js';
 import { createReverse } from '../hands.js';
+import { createWedge, carFinite } from '../wedge.js';
 import { hudToggleHtml } from '../hud-mode.js';
 
 const D2R = Math.PI / 180;
@@ -48,13 +49,24 @@ export function createSandbox(ctx) {
     },
   };
 
+  // An engine that already failed may throw freeing a world: that must not stop the fresh car (0229).
+  function freeCar(car) { try { freeWorld(car.world); } catch (err) { console.warn('sandbox: free world', err); } }
+  // The last place the car was whole: a car the engine handed back broken goes back there (0229).
+  const lastGood = { x: START.x, z: START.z, yaw: START.yaw };
+  const wedge = createWedge();
+  function recover(why) {
+    console.warn('sandbox: recovered from', why);
+    place(lastGood.x, lastGood.z, lastGood.yaw);   // throws on if the engine can't build a world: heal's guard has it
+    ui.cue_('Back on your wheels', 1200);
+  }
+
   function place(x, z, yaw = 0) {
     input.freshRun?.();   // a fresh car lets go of everything (0099, 0109)
-    if (st.car) freeWorld(st.car.world);
+    if (st.car) freeCar(st.car);
     const car = createVehicle(st.course);
     car.pos.x = x; car.pos.y = SPEC.comHeight + 0.04; car.pos.z = z;
     quatFromYaw(car.quat, yaw);
-    st.car = car; st.airT = 0; st.flipT = 0;
+    st.car = car; st.airT = 0; st.flipT = 0; wedge.reset();
     st.layer?.reset();
     crash.reset(); plumes.clear();
     comps.fill(car.wheels[0].compression); spins.fill(0);
@@ -160,7 +172,7 @@ export function createSandbox(ctx) {
     hud(false);
     camera.up.set(0, 1, 0); camera.updateProjectionMatrix();   // near/far: stage.setLook(null)
     document.body.classList.remove('driving');
-    if (st.car) freeWorld(st.car.world);
+    if (st.car) freeCar(st.car);
     st.active = false; st.car = null;
     crash.reset(); plumes.clear();
     ctx.onExit();
@@ -173,6 +185,7 @@ export function createSandbox(ctx) {
     if (!st.paused && !layer.editing) {
       st.acc += Math.min(dt, 0.1) * layer.timeScale;
       let c = st.car;
+      if (!carFinite(c)) { recover('a non-finite car'); c = st.car; }
       while (st.acc >= DT) {
         const air = c.grounded === 0 && !c.hullContact;
         st.airT = air ? st.airT + DT : 0;
@@ -183,10 +196,16 @@ export function createSandbox(ctx) {
         if (phase === 'drive') reverse(c, inp);
         layer.preStep(c, inp);
         poseLerp.before(c);
-        step(c, inp);
+        try { step(c, inp); } catch (err) { recover(err); c = st.car; st.acc = 0; break; }
+        if (!carFinite(c)) { recover('the engine returned a non-finite car'); c = st.car; st.acc = 0; break; }
         layer.postStep(c);
         st.acc -= DT;
+        // Wedged against a piece or a prop, the pedal down and going nowhere (0229): back on its wheels, here.
+        if (!st.pilot && wedge.update(DT, c, Math.max(Math.abs(inp.throttle || 0), inp.brake || 0))) {
+          place(c.pos.x - 3 * Math.sin(yawOf(c)), c.pos.z - 3 * Math.cos(yawOf(c)), yawOf(c)); ui.cue_('Unstuck', 1000); c = st.car; st.acc = 0; break;
+        }
       }
+      if (carFinite(c)) { lastGood.x = c.pos.x; lastGood.z = c.pos.z; lastGood.yaw = yawOf(c); }
       c = st.car;
       for (let i = 0; i < 4; i++) { comps[i] = c.wheels[i].compression; spins[i] = c.wheels[i].spin; }
       const drawn = poseLerp.pose(c, st.acc / DT);
