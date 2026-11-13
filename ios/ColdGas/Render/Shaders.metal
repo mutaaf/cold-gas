@@ -6,6 +6,7 @@
 // input to pow/sqrt/normalize is clamped (LESSONS: one NaN pixel is a flicker storm).
 #include <metal_stdlib>
 using namespace metal;
+#include "Sky.h"
 
 struct Frame {
     float4x4 viewProj, lightViewProj;
@@ -28,6 +29,8 @@ struct LookU {
     float4 fogExp;              // x: FogExp2's density (0: linear, fogRange); y: 1 with the wet slab on; z: 1 with the stars on; w: bloom on
     float4 skyZenith, skyMid, skyHorizon, skySun;
     float4 bloom;               // threshold, and UnrealBloomPass's strength × each level's factor (three levels' worth; see compose)
+    float4 atmo;                // Free Drive's physical sky (0228, Sky.h): x on, y the haze's thickness, z the eye's height (km), w night (0…1)
+    float4 sunE;                // the sun's illuminance at the ground (rgb); w: time (s), for the clouds
 };
 struct Light { float4 posRange; float4 colorIntensity; float4 dirCos; float4 params; };   // params: decay, cosOuter, kind (0 point, 1 spot), penumbra
 struct Material {
@@ -122,7 +125,8 @@ static float3 duskEnv(float3 d, float rough, constant LookU& k) {
 fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facing]], constant Frame& f [[buffer(1)]], constant Material& m [[buffer(2)]],
                                   constant Light* lights [[buffer(3)]], texture2d<float> map [[texture(0)]], texture2d<float> roughMap [[texture(1)]],
                                   texture2d<float> emiMap [[texture(2)]], depth2d<float> shadow [[texture(3)]], texture2d<float> alphaMap [[texture(4)]],
-                                  constant LookU& look [[buffer(4)]], texture2d<float> wetMask [[texture(5)]], texture2d<float> mirror [[texture(6)]], texturecube<float> env [[texture(7)]]) {
+                                  constant LookU& look [[buffer(4)]], texture2d<float> wetMask [[texture(5)]], texture2d<float> mirror [[texture(6)]], texturecube<float> env [[texture(7)]],
+                                  texture2d<float> skyView [[texture(8)]]) {
     constexpr sampler s(coord::normalized, filter::linear, mip_filter::linear, address::repeat, max_anisotropy(4));   // (8 on the web: on a slab at a grazing angle that's 8 taps a pixel at 120 Hz)
     float3 V0 = normalize(f.eye.xyz - in.world + 1e-6);
     // The web's ShaderMaterials (src/render/wall.js), their falloffs as written there; additive.
@@ -196,14 +200,19 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         }
         // Indirect, as three's RE_IndirectDiffuse/Specular_Physical: the hemisphere (irradiance / π) and the environment (its
         // roughest mip is irradiance / π already), the specular through the split-sum DFG with its multiple-scattering term.
-        float3 cosIrr = mix(look.hemiGround.rgb, look.hemiSky.rgb, clamp(n.y * 0.5 + 0.5, 0.0, 1.0)) * M_1_PI_F;
+        bool atmo = look.atmo.x > 0.5;   // Free Drive's physical sky (0228): the sky-view lights and is reflected
+        float3 cosIrr = atmo ? sky_ambient(skyView, n, look.skySun.xyz, look.sunE.rgb, look.atmo.z)
+                             : mix(look.hemiGround.rgb, look.hemiSky.rgb, clamp(n.y * 0.5 + 0.5, 0.0, 1.0)) * M_1_PI_F;
         float nv = clamp(dot(n, V), 0.0, 1.0), r1 = clamp(rough, 0.0, 1.0);
         float4 rr = r1 * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
         float a004 = min(rr.x * rr.x, exp2(-9.28 * nv)) * rr.x + rr.y;
         float2 fab = float2(-1.04, 1.04) * a004 + rr.zw;
         float3 radiance = 0;
         bool sky = look.skySun.w > 0.5;   // Free Drive out in the world: the dusk is the environment (duskEnv)
-        if (sky) {
+        if (atmo) {
+            float3 refl = normalize(mix(reflect(-V, n), n, r1 * r1 * r1 * r1));
+            radiance = sky_reflect(skyView, refl, r1, look.skySun.xyz, look.sunE.rgb, look.atmo.z);
+        } else if (sky) {
             float3 refl = normalize(mix(reflect(-V, n), n, r1 * r1 * r1 * r1));
             radiance = duskEnv(refl, r1, look);
         } else if (look.hemiSky.w > 0) {
@@ -220,7 +229,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         color += base.rgb * (1.0 - metal) * (1.0 - (diel + dielMs)) * cosIrr + radiance * Fss + Fms * Ems * cosIrr;
         if (m.pbr.z > 0) {   // the clear coat over it all
             float cr = max(clamp(m.pbr.w, 0.0, 1.0), 0.03);
-            float3 cc = sky ? duskEnv(reflect(-V, n), cr, look) : look.hemiSky.w > 0 ? env.sample(envSampler, reflect(-V, n), level(cr * 5.0)).rgb * look.hemiSky.w : float3(0);
+            float3 cc = atmo ? sky_reflect(skyView, reflect(-V, n), cr, look.skySun.xyz, look.sunE.rgb, look.atmo.z) : sky ? duskEnv(reflect(-V, n), cr, look) : look.hemiSky.w > 0 ? env.sample(envSampler, reflect(-V, n), level(cr * 5.0)).rgb * look.hemiSky.w : float3(0);
             float4 rc = cr * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
             float ac = min(rc.x * rc.x, exp2(-9.28 * nv)) * rc.x + rc.y;
             float2 fc = float2(-1.04, 1.04) * ac + rc.zw;
@@ -244,7 +253,8 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             float k = look.fogExp.x > 0 ? 1.0 - exp(-look.fogExp.x * look.fogExp.x * dist * dist) : clamp((dist - f.fogRange.x) / max(f.fogRange.y - f.fogRange.x, 1.0), 0.0, 1.0);
             color = mix(color, f.fogColor.rgb, k);
         }
-        color = hazed(max(color, 0.0), toP / dist, dist, f.eye.xyz, look);
+        color = look.atmo.x > 0.5 ? sky_aerial(skyView, max(color, 0.0), toP / dist, dist, f.eye.y + look.atmo.z * 0.0, look.skySun.xyz, look.atmo.z, look.atmo.y)
+                                  : hazed(max(color, 0.0), toP / dist, dist, f.eye.xyz, look);
     }
     return float4(max(color, 0.0), base.a);
 }
@@ -274,10 +284,61 @@ static float3 starField(float3 dir, float cells, float keep, float h0, bool vary
     float disc = 1.0 - smoothstep(0.32 - aa * 0.5, 0.32 + aa * 0.5, d);
     return float3(on * disc * 1.6) * (vary ? 0.35 + 0.65 * starHash(sp + 3.1) : 1.0);
 }
-fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]]) {
+// A deck of clouds (0228): fair-weather cumulus and a high veil of cirrus on a plane over the drive, fbm with a domain warp,
+// lit by the sun through them (a silver lining toward the sun, warm undersides at a low sun) and dimmed into the haze at the
+// horizon. Drawn only where the sky shows.
+static float cloudHash(float2 p) { p = fract(p * float2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
+static float cloudNoise(float2 p) {
+    float2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(cloudHash(i), cloudHash(i + float2(1, 0)), u.x), mix(cloudHash(i + float2(0, 1)), cloudHash(i + float2(1, 1)), u.x), u.y);
+}
+static float cloudFbm(float2 p, int n) {
+    float a = 0.5, s = 0;
+    for (int i = 0; i < n; i++) { s += a * cloudNoise(p); p = float2(p.x * 1.6 - p.y * 1.2, p.x * 1.2 + p.y * 1.6) + 7.3; a *= 0.5; }
+    return s;
+}
+static float4 cloudDeck(float3 d, float3 sun, float3 sunE, float3 skyUp, float t, float night) {
+    if (d.y < 0.012) return 0;
+    // Where the ray meets a plane 2 km up (the cumulus) and 8 km up (the cirrus), in km across the ground.
+    float2 p = d.xz / d.y * 2.0 + float2(t * 0.004, t * 0.0015);
+    float2 q = float2(cloudFbm(p * 0.35, 3), cloudFbm(p * 0.35 + 5.2, 3));
+    float base = cloudFbm(p * 0.55 + q * 1.6, 5);
+    float cov = smoothstep(0.50, 0.78, base);
+    float2 pc = d.xz / d.y * 8.0 + float2(t * 0.01, 0.0);
+    float cir = smoothstep(0.52, 0.9, cloudFbm(float2(pc.x * 0.12, pc.y * 0.5), 4)) * 0.45;
+    // The light through the cloud: thicker centres darker, the sun's side lit, a forward-scattered rim toward the sun.
+    float mu = dot(d, sun), lowSun = 1.0 - smoothstep(0.0, 0.35, sun.y);
+    float thick = smoothstep(0.55, 0.95, base);
+    float3 lit = sunE * (0.10 + 0.55 * pow(max(mu, 0.0), 8.0) * (1.0 - thick) + 0.06 * lowSun) * (1.0 - 0.6 * thick);
+    float3 c = lit + skyUp * (1.6 - thick * 0.8);
+    float3 ci = sunE * (0.06 + 0.4 * pow(max(mu, 0.0), 12.0)) + skyUp * 1.2;
+    float fade = smoothstep(0.012, 0.14, d.y);
+    float a = cov * 0.92 * fade, ac = cir * fade * (1.0 - a);
+    float3 col = (c * a + ci * ac) * (1.0 - 0.85 * night);
+    return float4(col, a + ac);
+}
+fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]], texture2d<float> skyView [[texture(8)]]) {
     float3 d = normalize(in.dir + 1e-6);
     float h = clamp(d.y, -1.0, 1.0);
     float3 c;
+    if (k.atmo.x > 0.5) {   // Free Drive's physical sky (0228): the sky-view LUT, the sun's disc, clouds, the stars after dusk
+        float3 sun = k.skySun.xyz;
+        c = sky_view(skyView, d, sun, k.atmo.z, 0.0);
+        float mu = dot(d, sun);
+        // The disc (a little larger than the real 0.53°, so a phone's screen shows it), limb-darkened, through the air.
+        float disc = smoothstep(0.99994, 0.99997, mu);
+        float limb = sqrt(max(1.0 - (1.0 - mu) / 3e-5, 0.0));
+        c += k.sunE.rgb * disc * (0.4 + 0.6 * limb) * 900.0 * smoothstep(-0.01, 0.01, d.y);
+        float3 skyUp = sky_view(skyView, float3(0, 1, 0), sun, k.atmo.z, 5.0);
+        float4 cl = cloudDeck(d, sun, k.sunE.rgb, skyUp, k.sunE.w, k.atmo.w);
+        c = c * (1.0 - cl.a) + cl.rgb;
+        if (k.atmo.w > 0.01) {   // the stars, and the night's own glow (airglow, the towns over the horizon) so it isn't black
+            c += starField(d, 520.0, 0.9982, 0.04, true) * 0.6 * k.atmo.w * (1.0 - cl.a);
+            c += float3(0.0018, 0.0024, 0.0045) * k.atmo.w * (0.4 + 0.6 * exp(-max(h, 0.0) * 6.0));
+        }
+        if (h < 0.0) c = mix(c, c * 0.5, smoothstep(0.0, -0.1, h));
+        return float4(max(c, 0.0), 1);
+    }
     if (k.hemiGround.w > 0.5) {   // scene.js skyMaterial, the dusk
         float3 sun = k.skySun.xyz;
         c = mix(k.skyMid.rgb, k.skyZenith.rgb, smoothstep(0.02, 0.55, h));

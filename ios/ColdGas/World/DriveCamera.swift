@@ -18,7 +18,7 @@ final class DriveCamera {
     private(set) var eye = SIMD3<Double>(), target = SIMD3<Double>(), up = SIMD3<Double>(0, 1, 0)
     func snap() { inited = false }
     /// An impact felt in the lens (0223): the amplitude the crash asks for, decaying at 3 a second, as the Director's.
-    private var shakeAmp: Float = 0, shakeT = 0.0
+    private var shakeAmp: Float = 0, shakeT = 0.0, roadT = 0.0
     let reduced = UIAccessibility.isReduceMotionEnabled
     func shake(_ a: Float) { if !reduced { shakeAmp = max(shakeAmp, a) } }
     func cycle() { mode = mode == .chase ? .cinema : mode == .cinema ? .bumper : .chase; inited = false; spot = nil }
@@ -74,6 +74,14 @@ final class DriveCamera {
             shakeAmp = max(0, shakeAmp - Float(dt) * 3); shakeT += dt
             let a = Double(shakeAmp) * 0.08
             eye += SIMD3(sin(shakeT * 91) * a, sin(shakeT * 77 + 1) * a, sin(shakeT * 63 + 2) * a * 0.5)
+        }
+        // The road through the lens (0228): a faint, fast tremor that grows with speed (a camera car's mount), never under
+        // Reduce Motion.
+        if !reduced && speed > 3 {
+            roadT += dt
+            let a = min(1, (speed - 3) / 45) * 0.012
+            eye += SIMD3(0, (sin(roadT * 37) * 0.6 + sin(roadT * 59 + 1.3) * 0.4) * a, 0)
+            target += SIMD3(sin(roadT * 23 + 0.7) * a * 0.5, sin(roadT * 41) * a * 0.4, 0)
         }
         let fw = DriveCamera.fovFor(56, aspect) + min(20, speed * 0.13) * (aspect < 1 ? 0.4 : 1)
         fov += (fw - fov) * (1 - exp(-dt * 2.5))

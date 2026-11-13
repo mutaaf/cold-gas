@@ -143,8 +143,10 @@ extension FreeWorld {
             } else {
                 c = vergeTint(c, road: g.road)
             }
-            var flag: UInt32 = 0
-            if H(i, j) < SEA && !(abs(x) < Site.slab && abs(z) < Site.slab) { c = Palette.water; flag = 1 }
+            // The colour's fourth byte (0228): 255 water, else the distance to the road's centreline in eighths of a metre (to
+            // 31.75 m), which the app's shaders read for the verge and where grass may grow.
+            var flag = UInt32(jsMin(254, jsMax(0, (g.road * 8).rounded(.down))))
+            if H(i, j) < SEA && !(abs(x) < Site.slab && abs(z) < Site.slab) { c = Palette.water; flag = 255 }
             let o = (j * W + i) * TileSpec.stride
             v[o] = Float(Double(i) * step); v[o + 1] = Float(y); v[o + 2] = Float(Double(j) * step); v[o + 3] = Float(my)
             v[o + 4] = Float(nx); v[o + 5] = Float(ny); v[o + 6] = Float(nz); v[o + 7] = pack(c.r, c.g, c.b, flag)
@@ -211,19 +213,25 @@ extension FreeWorld {
                     for lat in lats {
                         let x = l.x[k] + lx * lat, z = l.z[k] + lz * lat
                         if abs(lat) > hw + sh + 0.01 {
-                            // A verge vertex: the carved ground here, its normal from the ground round it, the land's colour.
+                            // A verge vertex: the carved ground here (3 cm under it since 0228, so where two roads meet one's
+                            // verge never lies over the other's shoulder: those were dark shards by a junction), its normal from
+                            // the ground round it, the land's colour.
                             let g = ground(x, z, q), e = 1.0
                             let gx = (ground(x + e, z, q).y - ground(x - e, z, q).y) / (2 * e), gz = (ground(x, z + e, q).y - ground(x, z - e, q).y) / (2 * e)
                             let nl = (gx * gx + 1 + gz * gz).squareRoot()
                             let c = vergeTint(landColor(g, x, z, ny: 1 / nl), road: g.road)
-                            v += [Float(x - ox), Float(jsMax(SEA, g.y) + 0.01), Float(z - oz), Float(lat), Float(l.s[k]), Float(-gx / nl), Float(1 / nl), Float(-gz / nl), pack(c.r, c.g, c.b)]
+                            v += [Float(x - ox), Float(jsMax(SEA, g.y) - 0.03), Float(z - oz), Float(lat), Float(l.s[k]), Float(-gx / nl), Float(1 / nl), Float(-gz / nl), pack(c.r, c.g, c.b)]
                             a = jsMin(a, x); b = jsMax(b, x); c0 = jsMin(c0, z); d = jsMax(d, z)
                             continue
                         }
                         let inside = abs(lat) <= hw ? lat : (lat > 0 ? hw : -hw)
                         var y = p.y[k] + p.bank[k] * inside + 0.025
                         if abs(lat) > hw { y -= 0.04 }
-                        v += [Float(x - ox), Float(y), Float(z - oz), Float(lat), Float(l.s[k]), Float(-p.bank[k] * lx), 1, Float(-p.bank[k] * lz), pack(0, 0, 0)]
+                        // The shoulder's outer edge carries the land's colour too (0228): the verge between it and the outer
+                        // edge used to fade up from black, which read as dark shards where a bend folds the strip.
+                        var col = pack(0, 0, 0)
+                        if abs(lat) > hw { let g = ground(x, z, q); let c = vergeTint(landColor(g, x, z, ny: 1), road: g.road); col = pack(c.r, c.g, c.b) }
+                        v += [Float(x - ox), Float(y), Float(z - oz), Float(lat), Float(l.s[k]), Float(-p.bank[k] * lx), 1, Float(-p.bank[k] * lz), col]
                         a = jsMin(a, x); b = jsMax(b, x); c0 = jsMin(c0, z); d = jsMax(d, z)
                     }
                     row += 1; prev = k

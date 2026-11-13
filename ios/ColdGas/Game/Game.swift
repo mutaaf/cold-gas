@@ -23,6 +23,8 @@ struct DriveHud: Equatable {
     var speed = 0.0, km = 0.0, heading = 0.0
     var ready = false, line = ""
     var air = false, fan = false, cam = "chase", cue = ""
+    /// The time of day's preset (0228, DriveSky.Preset).
+    var sky = "golden"
 }
 
 /// What the HUD shows, refreshed a few times a second (SwiftUI never sees the 240 Hz state).
@@ -223,6 +225,7 @@ final class Game: ObservableObject {
             h.air = fd.car.grounded == 0 && !fd.car.hullContact
             h.fan = fd.fan
             h.cam = fd.camera.mode.rawValue
+            h.sky = fd.sky.preset.rawValue
             h.cue = fd.cue.isEmpty || driveClock - fd.cueT > 1.6 ? "" : fd.cue
             h.line = fd.statsLine
             if h.cue.isEmpty && fd.dist < 400 && driveClock < 6 { h.cue = roamedFrom == nil ? "Roads leave the apron in every direction" : "Unscored · the set is yours, the roads go on" }
