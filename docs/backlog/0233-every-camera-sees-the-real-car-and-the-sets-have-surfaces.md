@@ -33,5 +33,9 @@ Runs on: the operator's Mac (Xcode).
 - [x] Before and after shots in docs/shots/0233/: the title, the Show's opening, the Wall's climb, the Lineup's opening,
       the Show's set on a roam.
 
+## Test plan
+`cd ios && make test && make rules`; simulator shots of the title (`frame`), `-play -course show|lineup -freeze 30`,
+`-play -course show|wall -autopilot -freeze 900|1500`, `-roam show`; `-roadster`, `-web-bloom`, `-flat-sets` for the before.
+
 ## Out of scope
 Collision and physics (another agent's), the SwiftUI screens (another agent's).
