@@ -1,12 +1,12 @@
 ---
 id: 0251
 title: A friend's challenge plays in one tap on the same stunt, and beating it sends it straight back
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: engagement
 created: 2026-11-13
-pr:
+pr: 376
 by: operator
 ---
 
@@ -35,12 +35,14 @@ Depends on: 0247 (a first run starts without the card), 0260 (the stunt name and
 - Events: `challenge_open`, `challenge_play` (0245), plus the existing obs `challenge-open`, `challenge-run`.
 
 ## Acceptance criteria
-- [ ] e2e (fresh context): opening a challenge link shows the card; one tap starts the countdown on the sender's course and
+- [x] e2e (fresh context): opening a challenge link shows the card; one tap starts the countdown on the sender's course and
       tier; the result line compares against the sender and shows the recipient's best; Send it back produces a `#vs=`
       link that decodes to the recipient's run.
-- [ ] e2e: a returning player's challenge flow is the same minus the guide; a stale link shows "from an older version".
-- [ ] Unit: the comparison is like for like (same course and tier) and never compares across tiers silently.
+- [x] e2e: a returning player's challenge flow is the same minus the guide; a stale link shows "from an older version".
+- [x] Unit: the comparison is like for like (same course and tier) and never compares across tiers silently.
 - [ ] Works at 390×844 touch and 1280×720 keyboard; the title audit passes with the card.
+      (390×844 and 1280×720: the e2e checks Take is ≥ 44 px and inside the phone's screen. Open: scripts/title-audit.mjs
+      doesn't load a challenge link yet, so the audit has not been run with the card up.)
 
 ## Test plan
 `tests/e2e/challenge.spec.js` (or the existing comeback e2e) extended; unit tests in `tests/unit/comeback.test.js`.

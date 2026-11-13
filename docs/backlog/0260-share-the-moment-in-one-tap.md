@@ -1,12 +1,12 @@
 ---
 id: 0260
 title: Share sends the moment in one tap, a card that names the stunt and the score, and a link to the very same challenge
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: engagement
 created: 2026-11-13
-pr:
+pr: 376
 by: operator
 ---
 
@@ -30,12 +30,14 @@ Depends on: 0245 (`share_tap`, `share_done`).
 - Share is one tap from the calm sheet and from the first-landing moment (after Next jump and Beat this score, 0257).
 
 ## Acceptance criteria
-- [ ] Unit: the stunt name for every vector run and a wreck; names never contain a brand or a real model (a word list
+- [x] Unit: the stunt name for every vector run and a wreck; names never contain a brand or a real model (a word list
       check); `src/stunt-name.js` is pure.
-- [ ] e2e: Share on a landed and a wrecked run calls `navigator.share` with a PNG and a `#vs=` URL; without `share`, the
+- [x] e2e: Share on a landed and a wrecked run calls `navigator.share` with a PNG and a `#vs=` URL; without `share`, the
       link is copied and the toast shows; the card's headline is the stunt name.
-- [ ] The card renders in under 300 ms on a 4× CPU-throttled phone profile, after the beat, never during a run.
-- [ ] Works at 390×844 touch and 1280×720 keyboard.
+      (Shipped as a JPEG, not a PNG: the two criteria disagreed. Encoding the 1080×1350 card as a PNG alone took 475 ms
+      at 4× CPU against the 300 ms bar below; a JPEG at 0.92 takes ≈ 46 ms and is a fifth of the bytes.)
+- [x] The card renders in under 300 ms on a 4× CPU-throttled phone profile, after the beat, never during a run.
+- [x] Works at 390×844 touch and 1280×720 keyboard.
 
 ## Test plan
 `tests/unit/stunt-name.test.js`; the existing share e2e extended; a card screenshot per course in `docs/shots/0260/`.
