@@ -252,6 +252,18 @@ What it says, and what it doesn't:
   timestamps are not meaningful, so §3's GPU budget can only be checked on a phone.
 - **Memory.** The tiles' slabs hold about 30 MB. The LRU starts evicting past 900 tiles.
 
+After 0220/0221 (roam, loose things, rubber, puffs, shake), the same bench run back to back on the same simulator on
+2026-11-12, with `main` (d80db6c) first and then the branch. The Mac was heavily loaded by other work, so compare the two
+rows with each other, not with the table above:
+
+| | Frames in 10 s | Interval avg / p95 | CPU ms avg / p95 | What was drawn |
+|---|---|---|---|---|
+| Before (main) | 408 | 24.57 / 33.33 ms | 1.12 / 3.39 | 97 tiles, 248 k triangles, 21.4 k props |
+| After (0221) | 408 | 24.57 / 33.33 ms | 1.23 / 3.33 | the same, plus 23 loose things and 116 rubber quads |
+
+The drive's new work (reading the loose bodies, the tyres' effects, the marks' buffer) costs about 0.1 ms of main-thread
+CPU a frame. The simulator's GPU is not a phone's, so the GPU side waits for `make device-bench-freedrive`.
+
 **On a phone (the owner runs this; an agent never runs it on the owner's phone):**
 
 ```

@@ -1,11 +1,12 @@
 ---
 id: 0221
 title: In Free Drive and Roam the world takes the hits (cones, barriers and signs that fly, rubber, smoke and dust, felt in the lens and the hands)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: delight
 created: 2026-11-12
+pr: 347
 by: operator
 ---
 
