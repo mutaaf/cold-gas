@@ -186,6 +186,30 @@ is Free Drive on a scored course's own set:
 - **Out:** "Fly <course>" under Back goes straight into a scored run from the mark.
 - `-fd-hold throttle,steer[,after s]` (Debug) holds the controls, for shots.
 
+### The world takes the hits (0223)
+
+- **Loose things** (ColdGasPhysics `Loose.swift`): cones, barriers and A-frame signs are free rigid bodies with their
+  real masses, their centres of mass lowered. Each set's layout comes from `looseSet(stage)`. The wheels' rays leave
+  them out (`World.rayFilter`; `RAY_ALL` on every scored course), the engine's origin carries them when it moves, and
+  their poses are read after each step (`readLoose`). The app draws them instanced with a full pose (`LooseView`).
+  Impacts within 0.7 m of one aren't drawn or felt as the car's crash (plastic doesn't spark); the thing itself
+  knocks.
+- **Rubber** (`SkidMarks`): a ring of 4,096 quads in world metres, rewritten relative to the origin when it moves. A
+  wheel marks paving when its slip ratio passes 0.08 or its slip angle 0.05 rad. On the stage's black slab the marks
+  read by a faint sky sheen.
+- **Smoke, dust, spray** go through the crash's puff pool (`Crash.kick`), by what's underfoot.
+- **Felt:** the crash's shake goes to `DriveCamera`, each impact is a haptic transient scaled by its speed, and rough
+  ground and a slide are a rumble under them. `Crash.repair` (Back on the road) undoes the damage without replaying the
+  drive's earlier impacts.
+
+### Lane keeping and downforce (0224)
+
+- The autopilot adds a Stanley term to its pure pursuit: the sideways offset from its lane's centre, abreast of the
+  car, steers it back (`atan(1.4·e / v)`), with a shorter look-ahead (7 m + 0.45 s). It no longer cuts bends across the
+  centre line.
+- `DriveStreamer` adds aero downforce, ½ρ·ClA·v² along the car's down (ClA 0.35 m², ESTIMATE), through `World.carF`.
+  Only a drive has a streamer, so scored runs never feel it.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
@@ -235,6 +259,18 @@ What it says, and what it doesn't:
 - **GPU.** The simulator's frame rate is its emulated GPU's, the same for the Show and Free Drive (≈ 41 fps). Its GPU
   timestamps are not meaningful, so §3's GPU budget can only be checked on a phone.
 - **Memory.** The tiles' slabs hold about 30 MB. The LRU starts evicting past 900 tiles.
+
+After 0220/0223 (roam, loose things, rubber, puffs, shake), the same bench run back to back on the same simulator on
+2026-11-12, with `main` (d80db6c) first and then the branch. The Mac was heavily loaded by other work, so compare the two
+rows with each other, not with the table above:
+
+| | Frames in 10 s | Interval avg / p95 | CPU ms avg / p95 | What was drawn |
+|---|---|---|---|---|
+| Before (main) | 408 | 24.57 / 33.33 ms | 1.12 / 3.39 | 97 tiles, 248 k triangles, 21.4 k props |
+| After (0223) | 408 | 24.57 / 33.33 ms | 1.23 / 3.33 | the same, plus 23 loose things and 116 rubber quads |
+
+The drive's new work (reading the loose bodies, the tyres' effects, the marks' buffer) costs about 0.1 ms of main-thread
+CPU a frame. The simulator's GPU is not a phone's, so the GPU side waits for `make device-bench-freedrive`.
 
 **On a phone (the owner runs this; an agent never runs it on the owner's phone):**
 

@@ -10,6 +10,7 @@ import simd
 import ColdGasCore
 import ColdGasPhysics
 import ColdGasWorld
+import ColdGasClient
 
 /// What the renderer asks of a drive (Renderer.drive): the lens, the origin, the look, and the world's draw.
 protocol DriveScene: AnyObject {
@@ -21,6 +22,12 @@ protocol DriveScene: AnyObject {
     func look(over base: LookU) -> LookU
     /// The world, in the main pass, after the stage's opaque draws.
     func drawWorld(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, look: inout LookU, shadow: MTLTexture, viewProj: simd_float4x4)
+    /// The tyres on the ground and the loose things, once a frame before the effects update (0223).
+    func effects(_ crash: Crash, dt: Double)
+    /// An impact felt in the lens.
+    func shake(_ a: Float)
+    /// Bumped each time the car is made whole.
+    var repairs: Int { get }
 }
 
 final class FreeDrive: DriveScene {
@@ -53,6 +60,7 @@ final class FreeDrive: DriveScene {
     /// The suction fan, armed or not (the web's X).
     var fan = false
     private var walker: RoadWalker?
+    private var holdT = 0.0
     private var time = 0.0, acc = 0.0, airT = 0.0, flipT = 0.0, stuckT = 0.0, reverseHeld = 0.0
     private(set) var dist = 0.0, resets = 0
     private var lampK = Launch.args.contains("-fd-nolamp") ? 0.0 : 1.0
@@ -68,6 +76,9 @@ final class FreeDrive: DriveScene {
         track = Replay(live: course.id)
         car = createVehicle(course: course)
         car.world.streamer = streamer
+        looseSpots = looseSet(stageOf(course.id))
+        for s in looseSpots { addLoose(car.world, s.kind, x: s.x, y: 0, z: s.z, yaw: s.yaw) }
+        looseSpeed = Array(repeating: 0, count: looseSpots.count)
         if onMark, let c = COURSES[stageOf(course.id)] { place(x: c.startX, z: c.startZ, yaw: 0) }
         else { place(x: course.startX, z: course.startZ, yaw: course.id == "drive-lineup" ? 0 : .pi) }
     }
@@ -100,6 +111,7 @@ final class FreeDrive: DriveScene {
         let moving = abs(car.vel.x) + abs(car.vel.z) > 2
         placeOnRoad(nearX: car.pos.x, z: car.pos.z, heading: moving ? (car.vel.x, car.vel.z) : (f.0, f.1))
         resets += 1
+        repairs += 1
         say("Back on the road")
     }
     private func say(_ s: String) { cue = s; cueT = time }
@@ -107,6 +119,17 @@ final class FreeDrive: DriveScene {
         let q = car.quat
         return (2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y))
     }
+
+    /// The set's loose things (0223): where each was put, for a fresh start.
+    private(set) var looseSpots: [LooseSpot] = []
+    private var looseSpeed: [Double] = []
+    /// How many times the car's been made whole (the renderer repairs its damage when this changes).
+    private(set) var repairs = 0
+    private var smokeAcc = [Double](repeating: 0, count: 4), dustAcc = [Double](repeating: 0, count: 4)
+    private var groundAt: [(x: Double, z: Double, y: Double, s: Surface)] = Array(repeating: (.nan, .nan, 0, .grass), count: 4)
+    /// The tyres' work this frame, for the haptics (0…1): sliding, and rough ground.
+    private(set) var slideK = 0.0, roughK = 0.0
+    private var fxSeed: UInt32 = 0x9e3779b9
 
     /// The renderer attached (its device): the world's view is built once.
     func attach(device: MTLDevice) {
@@ -129,12 +152,17 @@ final class FreeDrive: DriveScene {
                     sampler.sample(phase, .assist, input, false, car)
                     if let v = pilot { drivePilot(v, input) }
                     #if DEBUG
-                    // `-fd-hold throttle,steer[,after s]`: a held throttle and steer (shots: a run into the row, a slide).
-                    if let h = FreeDrive.hold, time >= h.2 { input.throttle = h.0; input.steer = h.1; input.brake = 0 }
+                    // `-fd-hold throttle,steer[,after s]`: a held throttle and steer, `after` seconds once the world near the car is built
+                    // (shots: a run into the row, a slide).
+                    if let h = FreeDrive.hold, view?.settled == true, (view?.stats.tiles ?? 0) > 0 {
+                        holdT += DT
+                        if holdT >= h.2 { input.throttle = h.0; input.steer = h.1; input.brake = 0 }
+                    }
                     #endif
                     input.fan = fan ? 1 : 0
                     if phase == .drive { reverse(input) }
                     try step(car, input)
+                    readLoose(car.world)
                     // Unscored, so the tanks top up on the ground (a full charge in 8 s): the jets always work on a roam.
                     if car.grounded > 0 { car.air = min(CAR.airMass, car.air + CAR.airMass * DT / 8) }
                     track.append(car: car, origin: origin)
@@ -143,6 +171,7 @@ final class FreeDrive: DriveScene {
                 }
             } catch { print("DRIVE sim stopped: \(error)"); reset() }
             watchdog(dt)
+            looseHits()
         }
         track.trim(keep: 16)
         dist = (car.pos.x * car.pos.x + car.pos.z * car.pos.z).squareRoot()
@@ -183,7 +212,10 @@ final class FreeDrive: DriveScene {
             if along > 0.5 { w.advance(min(along, 20)) } else { break }
         }
         let speed = (car.vel.x * car.vel.x + car.vel.z * car.vel.z).squareRoot()
-        let look = 10 + speed * 0.7
+        // Lane keeping (0224): how far the car sits right of its lane's centre, abreast of it (+ = right of the lane).
+        let here = w.pose(lane: 1.8)
+        let laneErr = (car.pos.x - here.x) * -here.hz + (car.pos.z - here.z) * here.hx
+        let look = 7 + speed * 0.45
         // A copy looks ahead; the walker itself stays abreast of the car.
         let probe = w.copy()
         probe.advance(look); let ahead = probe.pose(lane: 1.8); probe.advance(look); let far = probe.pose(lane: 1.8)
@@ -194,7 +226,10 @@ final class FreeDrive: DriveScene {
         // How sharp the road turns between here and the far point: slow for it.
         let turn = abs(atan2(ahead.hx * far.hz - ahead.hz * far.hx, ahead.hx * far.hx + ahead.hz * far.hz))
         let want = min(v, max(9, v * (1 - turn * 1.6)))
-        i.steer = max(-1, min(1, ang * 2.2))   // + = right (src/drive/pilot.js)
+        // Pure pursuit for the bend, plus a Stanley term that pulls the car back onto its lane line (it used to cut
+        // bends across the centre line).
+        let hold = -atan(1.4 * laneErr / max(speed, 6))
+        i.steer = max(-1, min(1, (ang + hold) * 2.2))   // + = right (src/drive/pilot.js)
         i.throttle = speed < want ? min(1, (want - speed) * 0.35 + 0.15) : 0
         i.brake = speed > want + 2 ? min(1, (speed - want) * 0.15) : 0
     }
@@ -210,6 +245,91 @@ final class FreeDrive: DriveScene {
         let jets = car.throttles[0] + car.throttles[1] + car.throttles[2] + car.throttles[3]
         stuckT = speed < 0.6 && car.grounded == 0 && jets < 0.4 ? stuckT + dt : 0
         if stuckT > 3 { reset() }
+    }
+
+    /// A loose thing struck (its speed jumping): a knock in the sound and the hands, scaled by how hard (0223).
+    private func looseHits() {
+        for (i, b) in car.world.loose.enumerated() where i < looseSpeed.count {
+            let v = b.speed, was = looseSpeed[i]
+            looseSpeed[i] = v
+            if v - was > 1.5 {
+                let k = min(1, (v - was) / 10)
+                Sound.shared.thud(hz: b.kind == .cone ? 240 : 150, gain: 0.12 + 0.3 * k, decay: 0.18, crunch: b.kind == .cone ? 0 : 0.3 * k)
+                HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: Float(0.25 + 0.6 * k), sharpness: b.kind == .cone ? 0.85 : 0.5))
+            }
+        }
+    }
+    /// The set's loose things back where they stood.
+    func resetSet() {
+        let spots = looseSpots
+        resetLoose(car.world) { i in let s = spots[i]; return (s.x, 0, s.z, s.yaw) }
+        for i in looseSpeed.indices { looseSpeed[i] = 0 }
+        view?.marks?.clear()
+    }
+
+    private func rnd() -> Float { fxSeed ^= fxSeed << 13; fxSeed ^= fxSeed >> 17; fxSeed ^= fxSeed << 5; return Float(fxSeed) / Float(UInt32.max) }
+    /// Once a frame (the renderer, before its effects update): what the tyres do to the ground (0223). Rubber laid down
+    /// by a slide or a spin, smoke off a hard one on paving, dust and grit thrown up off the loose ground, spray from water.
+    func effects(_ crash: Crash, dt: Double) {
+        guard cruise == nil, dt > 0 else { return }
+        let q = simd_quatd(ix: car.quat.x, iy: car.quat.y, iz: car.quat.z, r: car.quat.w)
+        let p = SIMD3(car.pos.x, car.pos.y, car.pos.z), v = SIMD3(car.vel.x, car.vel.y, car.vel.z)
+        let right = q.act(SIMD3(1, 0, 0)), fwd = q.act(SIMD3(0, 0, 1))
+        let speed = simd_length(v)
+        var slide = 0.0, rough = 0.0
+        for (i, w) in car.wheels.enumerated() {
+            let a = WHEELS[i], anchor = p + q.act(SIMD3(a.x, a.y, a.z))
+            guard w.contact, w.ny > 0.85 else { view?.marks?.mark(i, at: anchor, side: right, width: 0.25, strength: 0, origin: origin); continue }
+            // What's underfoot, asked again only once the wheel has moved half a metre.
+            var g = groundAt[i]
+            if !(abs(g.x - anchor.x) < 0.5 && abs(g.z - anchor.z) < 0.5) {
+                let gp = world.ground(anchor.x, anchor.z)
+                let floor = gp.floor || (abs(anchor.x) < ColdGasWorld.Site.half && abs(anchor.z) < ColdGasWorld.Site.half)
+                g = (anchor.x, anchor.z, floor ? 0 : gp.y, floor ? .concrete : gp.surface)
+                groundAt[i] = g
+            }
+            // On a roof, a deck or a ramp the ground below isn't what it's touching: no mark there.
+            if anchor.y - g.y > 1.0 { view?.marks?.mark(i, at: anchor, side: right, width: 0.25, strength: 0, origin: origin); continue }
+            let ground = SIMD3(anchor.x, g.y, anchor.z)
+            let longS = max(0, (abs(w.slip) - 0.08) / 0.2), latS = max(0, (abs(w.slipAngle) - 0.05) / 0.12)
+            let s = min(1, max(longS, latS)) * (speed > 1.2 || abs(w.omega) > 6 ? 1 : 0)
+            slide = max(slide, s)
+            let paved = g.s == .concrete || g.s == .asphalt
+            let loose = !paved && g.s != .water
+            if loose { rough = max(rough, min(1, speed / 25)) }
+            // Rubber: paving only (on gravel or grass a slide ploughs, it doesn't mark).
+            let side = simd_normalize(SIMD3(right.x, 0, right.z))
+            view?.marks?.mark(i, at: ground, side: side, width: 0.25, strength: paved ? Float(s) : Float(0), origin: origin)
+            let rp = SIMD3<Float>(ground - origin)
+            if paved && s > 0.4 {
+                smokeAcc[i] += dt * 22 * s
+                while smokeAcc[i] >= 1 {
+                    smokeAcc[i] -= 1
+                    let pv = SIMD3<Float>(v * 0.18) + SIMD3(rnd() - 0.5, 0.5 + rnd() * 0.5, rnd() - 0.5)
+                    crash.kick(rp + SIMD3(0, 0.15, 0), pv, size: 0.35 + rnd() * 0.2, grow: 1.6, life: 2.2 + Float(s), alpha: 0.10 + 0.12 * Float(s), color: SIMD3(0.42, 0.42, 0.45))
+                }
+            } else if (loose || g.s == .water) && speed > 3 {
+                // Grit off the tread: thrown back and up, more with speed and with a slide.
+                dustAcc[i] += dt * min(28, speed * 1.1) * (0.35 + s)
+                let col: SIMD3<Float>
+                switch g.s {
+                case .sand: col = SIMD3(0.42, 0.36, 0.25)
+                case .dirt: col = SIMD3(0.30, 0.23, 0.16)
+                case .grass: col = SIMD3(0.26, 0.24, 0.18)   // the soil under it, thrown up, not the green
+                case .snow, .water: col = SIMD3(0.6, 0.63, 0.68)
+                default: col = SIMD3(0.32, 0.30, 0.26)
+                }
+                while dustAcc[i] >= 1 {
+                    dustAcc[i] -= 1
+                    let back = SIMD3<Float>(-fwd * min(speed, 30) * 0.12)
+                    let pv = SIMD3<Float>(v * 0.35) + back + SIMD3((rnd() - 0.5) * 1.6, 1.2 + rnd() * 1.8, (rnd() - 0.5) * 1.6)
+                    let wet = g.s == .water
+                    crash.kick(rp + SIMD3(0, 0.1, 0), pv, size: wet ? 0.3 : 0.3 + rnd() * 0.3, grow: wet ? 2.2 : 1.6, life: wet ? 0.9 : 1.8, alpha: wet ? 0.3 : 0.24, color: col)
+                }
+            }
+        }
+        slideK = slide; roughK = rough
+        view?.loose?.update(car.world.loose, origin: origin)
     }
 
     /// The floating origin of the drawing: 0 near the centre, else the car's position snapped to a kilometre, moved when
@@ -229,6 +349,8 @@ final class FreeDrive: DriveScene {
     }
 
     // MARK: - DriveScene
+
+    func shake(_ a: Float) { camera.shake(a) }
 
     func frameCamera(aspect: Float, dt: Double) -> (view: simd_float4x4, proj: simd_float4x4, eye: SIMD3<Float>) {
         // The camera follows the car as it's drawn (one tick behind, between ticks), not the newest tick.
@@ -284,7 +406,7 @@ final class FreeDrive: DriveScene {
     /// One line for the debug HUD and the bench.
     var statsLine: String {
         guard let s = view?.stats else { return "" }
-        return String(format: "tiles %d · %.0fk tris · roads %d · props %d · %.0f MB · missing %d · %.1f km out · origin (%.0f, %.0f)",
-                      s.tiles, Double(s.tris) / 1000, s.roads, s.instances, s.mb, s.missing, dist / 1000, origin.x, origin.z)
+        return String(format: "tiles %d · %.0fk tris · roads %d · props %d · %.0f MB · missing %d · %.1f km out · origin (%.0f, %.0f) · marks %d · loose %d",
+                      s.tiles, Double(s.tris) / 1000, s.roads, s.instances, s.mb, s.missing, dist / 1000, origin.x, origin.z, view?.marks?.count ?? 0, view?.loose?.drawn ?? 0)
     }
 }

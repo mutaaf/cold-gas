@@ -55,6 +55,7 @@ final class Renderer {
     private var lookU = LookU(), stageLook = LookU()
     /// Free Drive (docs/NATIVE-FREEDRIVE.md): the lens, the floating origin, the look and the world's draw come from the drive.
     var drive: DriveScene?
+    private var driveRepairs = 0
     private let lampBuf, beaconBuf, glowBuf: MTLBuffer
     private let nLamps, nBeacons, nGlows: Int
     private let dsMirror: MTLDepthStencilState
@@ -341,6 +342,10 @@ final class Renderer {
         var dtReal = lastT < 0 ? 0 : min(0.1, max(0, t - lastT)); lastT = t
         if !holds.isEmpty && holdFrozen() { dtReal = 0 }
         heroClock += dtReal   // S.time: real seconds, each frame's capped at 0.1, as main.js adds them
+        if let d = drive {
+            if d.repairs != driveRepairs { driveRepairs = d.repairs; crash.repair() }
+            d.effects(crash, dt: dtReal)
+        }
         crash.update(Float(dtReal))
         simClock += dtReal * Double(crash.slowK)
         // A recorded run loops with a 2 s pause; a live one is drawn at the game's clock (one tick behind the sim, between
@@ -381,7 +386,7 @@ final class Renderer {
         lookU = dv?.look(over: stageLook) ?? stageLook
         if cam.shakeHook == nil {
             cam.shakeHook = true
-            crash.shake = { [weak cam] a in cam?.shake(a) }
+            crash.shake = { [weak self, weak cam] a in if let d = self?.drive { d.shake(a) } else { cam?.shake(a) } }
             crash.cut = { [weak cam] p, v in cam?.crashCut(at: p, vel: v) }
         }
         var view = dv?.frameCamera(aspect: aspect, dt: dtReal)

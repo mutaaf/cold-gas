@@ -4,6 +4,7 @@
 //   bumper  on the nose, the horizon locked to the car.
 // Worked in world metres (Double): the renderer gets it relative to the floating origin.
 import simd
+import UIKit
 
 final class DriveCamera {
     enum Mode: String, CaseIterable { case chase, bumper }
@@ -14,6 +15,10 @@ final class DriveCamera {
     private(set) var fov: Double = 58
     private(set) var eye = SIMD3<Double>(), target = SIMD3<Double>(), up = SIMD3<Double>(0, 1, 0)
     func snap() { inited = false }
+    /// An impact felt in the lens (0223): the amplitude the crash asks for, decaying at 3 a second, as the Director's.
+    private var shakeAmp: Float = 0, shakeT = 0.0
+    let reduced = UIAccessibility.isReduceMotionEnabled
+    func shake(_ a: Float) { if !reduced { shakeAmp = max(shakeAmp, a) } }
     func cycle() { mode = mode == .chase ? .bumper : .chase; inited = false }
 
     /// A phone held upright sees a sliver of the world: widen to at least 46° across (up to 80° tall).
@@ -60,6 +65,11 @@ final class DriveCamera {
         pos.y = max(pos.y, ground(pos.x, pos.z) + 0.6)
         look += (lookW - look) * (1 - exp(-dt * 14))
         eye = pos; target = look; up = SIMD3(0, 1, 0)
+        if shakeAmp > 0 {
+            shakeAmp = max(0, shakeAmp - Float(dt) * 3); shakeT += dt
+            let a = Double(shakeAmp) * 0.08
+            eye += SIMD3(sin(shakeT * 91) * a, sin(shakeT * 77 + 1) * a, sin(shakeT * 63 + 2) * a * 0.5)
+        }
         let fw = DriveCamera.fovFor(56, aspect) + min(20, speed * 0.13) * (aspect < 1 ? 0.4 : 1)
         fov += (fw - fov) * (1 - exp(-dt * 2.5))
     }

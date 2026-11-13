@@ -174,3 +174,29 @@ fragment float4 cg_world_prop_fragment(WPropOut in [[stage_in]], bool front [[fr
     }
     return float4(world_air(c, in.world, f, k), 1);
 }
+
+// --- Loose things (0223: cones, barriers, signs; a full pose each, they tip and roll) --------------------------------------
+struct WLooseInst { float4x4 m; float4 tint; };
+vertex WPropOut cg_world_loose_vertex(WPropIn in [[stage_in]], uint iid [[instance_id]], constant WFrame& f [[buffer(1)]],
+                                      constant WLooseInst* inst [[buffer(3)]]) {
+    WLooseInst I = inst[iid];
+    float3 p = (I.m * float4(in.pos, 1)).xyz;
+    WPropOut o; o.world = p; o.n = (I.m * float4(in.nrm, 0)).xyz; o.col = in.col * I.tint.rgb; o.glow = in.uv.x;
+    o.clip = f.viewProj * float4(p, 1); o.lightClip = f.lightViewProj * float4(p, 1);
+    return o;
+}
+
+// --- Skid marks (0223): rubber on the ground, blended over it, hazed with distance ----------------------------------------
+struct WMarkIn { float4 pa [[attribute(0)]]; };
+struct WMarkOut { float4 clip [[position]]; float3 world; float a; };
+vertex WMarkOut cg_world_mark_vertex(WMarkIn in [[stage_in]], constant WFrame& f [[buffer(1)]]) {
+    WMarkOut o; o.world = in.pa.xyz; o.a = in.pa.w; o.clip = f.viewProj * float4(in.pa.xyz, 1);
+    return o;
+}
+fragment float4 cg_world_mark_fragment(WMarkOut in [[stage_in]], constant WFrame& f [[buffer(1)]], constant WLook& k [[buffer(4)]]) {
+    // Rubber is near black and polished smooth by the slide: darker than asphalt, and on the stage's black floor it reads
+    // by the sky's faint sheen along it.
+    float3 c = world_air(float3(0.004, 0.004, 0.005) + k.skyHorizon.rgb * 0.08, in.world, f, k);
+    float fade = 1.0 - smoothstep(120.0, 260.0, distance(in.world, f.eye.xyz));
+    return float4(c, clamp(0.25 + in.a, 0.0, 1.0) * 0.8 * fade);
+}
