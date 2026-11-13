@@ -1,7 +1,7 @@
 ---
 id: 0172
 title: The first-run card opens with the goal in one line, before the thumb controls
-status: ready
+status: dropped
 priority: P1
 size: S
 lens: engagement
@@ -9,6 +9,8 @@ created: 2026-11-09
 pr:
 by: scout
 ---
+
+**Dropped 2026-11-13: superseded by 0248.** 0248 (Phase 2, 2026-11-13) takes the how-to card out of a first run: the jump is taught inside the run, one hint at a time.
 
 ## Why
 On a 390×844 capture with `coldgas_howto='new'`, a newcomer's Jump opens "One thing to know · 01 Drive & climb ·

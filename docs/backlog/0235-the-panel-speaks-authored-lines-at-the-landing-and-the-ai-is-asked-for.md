@@ -21,7 +21,8 @@ marginal inference cost, no paid AI.
 - A pure, deterministic commentary engine grown from `localWords` (src/panel.js), e.g. `src/commentary.js` + its lines as
   data (`src/commentary/lines.json` or similar) that the iPhone bundles as is, so new lines never need a Swift change.
   - Inputs: the `scoreRun` card, the coach's first finding (src/sim/coach.js), the damage zones, the player's previous run
-    on this course (from the device), and milestones (first landing, first 720, first clear of the row).
+    on this course (from the device), and milestones (first landing, first 720, first clear of the row; a license passed once 0254/0255 land, read from
+    0254's progress store, and 0248's first-landing beat uses the first-landing line).
   - Conditions on combinations (a high apex but a hard touchdown), a callback to the last run ("0.4 m/s softer than last
     time"), seeded variety from the run (no `Math.random`), so a retry doesn't repeat itself.
   - At least 40 authored lines per judge to start (headline + Engineer + Coordinator + Designer), covering landed, wrecked,

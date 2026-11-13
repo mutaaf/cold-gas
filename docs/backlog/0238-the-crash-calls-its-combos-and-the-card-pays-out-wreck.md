@@ -22,7 +22,9 @@ Depends on: 0237.
   A wreck no longer ends on "write-off" alone.
 - A Fly | Wreck choice for the scored courses (the same sim and courses, the parked row as targets): it decides which score
   the medals, the beat's headline and the copy lead with. Both scores are always computed.
-- Medals (src/medals.js) per event, tier and score kind; bests kept on the device.
+- Medals (src/medals.js) per event, tier and score kind; bests kept on the device. (2026-11-13, Phase 2: licenses, 0254,
+  read only the Style card; the Wreck side of progress is 0242's ranks. Both in 0254's store once it lands; if this ships
+  first, 0254 migrates its Wreck bests.)
 - Box Office `game_over` and the funnel get the Wreck total as a number only (§3.3 rules), if no `src/worker/` change is
   needed.
 
