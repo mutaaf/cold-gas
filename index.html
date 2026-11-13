@@ -551,5 +551,8 @@
     })();
   </script>
   <script type="module" src="/src/main.js"></script>
+  <!-- Box Office usage analytics (AGENTS.md §3.3, owner's decision 2026-11-12): same-origin, production only (a local
+       preview has no /boxoffice and the smoke test talks to nobody). Events: src/insights.js. -->
+  <script>if (!/^(localhost|127\.0\.0\.1|)$/.test(location.hostname)) { var bo = document.createElement('script'); bo.async = true; bo.src = '/boxoffice/v1/insights.js'; document.body.appendChild(bo); }</script>
 </body>
 </html>

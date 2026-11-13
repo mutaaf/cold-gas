@@ -125,6 +125,14 @@ mark, and air left in the tanks.
    - The loader is fetched only off localhost (or with `?marquee=`), so the smoke test's own-origin rule still
      holds locally; `tests/e2e/ads.spec.js` proves no ad call fires during a run.
    No other third party, analytics or tracker is allowed by this.
+   **A second exception: usage analytics through Box Office (the owner's decision, 2026-11-12, "analytics across all
+   apps").** `index.html` injects Box Office's same-origin loader `/boxoffice/v1/insights.js` (the Box Office Worker on
+   mutaafaziz.com, root-absolute like `/ads/`) off localhost only, so the smoke test's own-origin rule still holds; the
+   static pages (beta, guide, privacy) carry the plain `<script async>` tag last in `<body>`. It relays to the owner's
+   PostHog (IPs truncated, cookies stripped, GPC/DNT honoured, inputs masked in replays; mutaaf/box-office AGENTS.md).
+   Custom events go through `src/insights.js` `track()` only: `game_start` {course, tier}, `game_over` {score,
+   duration_s, course, tier, landed} on a Jump's results, `share` {course, score}. Props are numbers and enums: never
+   initials, free text or ids. The privacy page names it (tests/unit/privacy.test.js). Never in the iPhone app.
 4. **Determinism and realism.** `src/sim/*` is pure. Its rigid-body engine is Rapier's
    cross-platform-deterministic WASM build (docs/PHYSICS_ENGINE.md: bit-identical in Node,
    Chromium, WebKit and workerd; re-run `scripts/engine-determinism.mjs` and
@@ -370,6 +378,7 @@ src/net.js            every network call: fetchWithDeadline (deadline + cancel),
                         (a failed lazy chunk is asked for again, 0057), judgesOverran (the judge breaker counts their own overrun)
 src/wake.js           the screen wake lock (0060): held through a run, the judging and the replay, asked again on return;
                         main.js syncLife() also suspends the audio when paused, hidden or idle on the title
+src/insights.js       Box Office analytics events (§3.3's second exception): track(name, props), queue-safe, never throws
 src/ads.js            Marquee ads between runs only (§3.3's exception): loader on production, title banner,
                         postrun interstitial, opt-in reroll rewarded; a no-op without window.marquee. The loader goes in
                         only on the title or the results; the title's slot is placed after 4 s on the title (0117) as Marquee's same-origin frame (/ads/v1/frame.html), removed the moment the title goes, filled or not, which stops everything AdSense started for it (0122)
@@ -562,7 +571,7 @@ prefixes `scout/`, `build/`, `fix/` and `keep/` get auto-merge when CI is green.
 - Acceptance criteria met, and tests added or updated (unit for sim/scoring, e2e for flows).
 - `npm run check` is green locally or in CI.
 - Works at 390×844 touch and 1280×720 keyboard.
-- No new runtime hosts (Marquee's same-origin `/ads/` is the one allowed, §3.3), no brand names, no per-frame allocations.
+- No new runtime hosts (Marquee's same-origin `/ads/` and Box Office's `/boxoffice/` are the ones allowed, §3.3), no brand names, no per-frame allocations.
 - Rendering, camera or effects changed → `flicker-budget` passes for both screens of your label
   (`--gl=swiftshader` in a sandbox, about an hour a screen; `--only=` the scenarios you touched when short).
 - Sim or scoring outcome changed → `SIM_VERSION` bumped and noted in the CHANGELOG.

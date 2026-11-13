@@ -68,6 +68,7 @@ import { pickDeviceTier, pickAA, deviceKind, readDevice, isIOS } from './gfx-tie
 import { readFold, drastic } from './fold.js';
 import { refitHudMode } from './hud-mode.js';
 import { deckOn, runUp } from './render/deck-look.js';
+import { track } from './insights.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
@@ -425,7 +426,7 @@ function startRunNow(kind = 'jump', quick = false) {
   S.run = armAftermath(takeRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.runKind = kind;   // the reference jump never counts toward Rookie mode's streak (0074)
-  if (kind === 'jump') { obs.play('run'); runEnd.start(S.run); }   // the players' funnel (src/obs: counts only)
+  if (kind === 'jump') { obs.play('run'); runEnd.start(S.run); track('game_start', { course: stage.course, tier: S.tier }); }   // the players' funnel (src/obs: counts only; Box Office: src/insights.js)
   latchTier();
   S.adaptNow = null;
   // Live pointers on the cue line (0079): a new player's first runs, or while Adapt to me says they're struggling.
@@ -476,6 +477,7 @@ function finishRun() {
   ui.clearCue();
   countRun(run);
   settleRun(false);   // a Jump run's card: run-landed or run-wrecked, once (0130)
+  if (S.runKind === 'jump' && S.card) track('game_over', { score: S.card.total, duration_s: Math.round(run.tick / 24) / 10, course: stage.course, tier: S.card.tier, landed: !S.card.facts?.crashed });
   poster?.reset();   // Post · ABC beside Retry when this is a board jump (src/post.js)
   comeback.results(run, S.card, { autopilot: !!S.autopilot, drill: !!S.drill });   // [comeback] "You beat ABC by 2.1", the daily's line
   // The coach re-flies the log (≈30–60 ms) a beat after the sheet slides in.
@@ -1581,7 +1583,7 @@ const startCard = () => {
 const shareUrl = () => `${location.origin}${import.meta.env.BASE_URL}`;
 document.querySelectorAll('[data-share]').forEach((b) => b.addEventListener('pointerdown', startCard));
 // [comeback] the link carries the run (#vs=, src/challenge.js): a shared run is a rematch
-on('[data-share]', () => { if (S.card) obs.play('share'); if (S.card) shareRun({ card: S.card, url: comeback.linkFor(S.card), cardPromise: startCard() }); });
+on('[data-share]', () => { if (S.card) { obs.play('share'); track('share', { course: stage.course, score: S.card.total }); } if (S.card) shareRun({ card: S.card, url: comeback.linkFor(S.card), cardPromise: startCard() }); });
 
 // Event picker on the title (also ?course=wall|lineup; the Show is the default).
 const courseBtns = document.querySelectorAll('.courses [data-course]');
