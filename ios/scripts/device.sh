@@ -13,4 +13,4 @@ xcodebuild -project ColdGas.xcodeproj -scheme ColdGas -configuration "$CONFIG" -
   -allowProvisioningUpdates -allowProvisioningDeviceRegistration -quiet build || { echo "device.sh: build/signing failed (team Z73865R687, Automatic)."; exit 1; }
 APP=$DD/Build/Products/$CONFIG-iphoneos/ColdGas.app
 xcrun devicectl device install app --device "$UDID" "$APP" >/dev/null || { echo "device.sh: install failed. On the phone: Settings → General → VPN & Device Management → trust the developer."; exit 1; }
-xcrun devicectl device process launch --console --terminate-existing --device "$UDID" com.mutaafaziz.coldgas ${LAUNCH:--selftest} "$@" 2>&1 | grep -m ${LINES_MAX:-3} -E "^(SELFTEST|BENCH|PIPELINES|DRIVE)" 
+xcrun devicectl device process launch --console --terminate-existing --device "$UDID" com.mutaafaziz.coldgas -- ${LAUNCH:--selftest} "$@" 2>&1 | grep -m ${LINES_MAX:-3} -E "^(SELFTEST|BENCH|PIPELINES|DRIVE)" 
