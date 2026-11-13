@@ -1,12 +1,12 @@
 ---
 id: 0247
 title: A first-time visitor is flying within about three seconds, and the reference demo is a second choice
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: engagement
 created: 2026-11-13
-pr:
+pr: 372
 by: operator
 ---
 
@@ -34,12 +34,12 @@ Depends on: 0245 (`first_input`, to prove it).
   the moment it is, never a dead tap.
 
 ## Acceptance criteria
-- [ ] e2e (fresh context, 390×844 touch): from load, one tap on the CTA starts a run, and the car answers a touch within 3 s
+- [x] e2e (fresh context, 390×844 touch): from load, one tap on the CTA starts a run, and the car answers a touch within 3 s
       of the title being wired on a production build (`first_input`'s `ms_since_load` in the stub); no how-to card.
-- [ ] e2e: `?play=reveal` on a fresh context hands control to the player after the release; with a landed jump stored it is
+- [x] e2e: `?play=reveal` on a fresh context hands control to the player after the release; with a landed jump stored it is
       today's full reference run.
-- [ ] e2e: with a landed jump stored, the title and the CTA are exactly today's.
-- [ ] `npm run audit` (title + HUD) passes in both states; works at 390×844 touch and 1280×720 keyboard.
+- [x] e2e: with a landed jump stored, the title and the CTA are exactly today's.
+- [x] `npm run audit` (title + HUD) passes in both states; works at 390×844 touch and 1280×720 keyboard.
 
 ## Test plan
 `tests/e2e/first-run.spec.js` (fresh vs returning contexts, `?play=reveal` both ways); the title audit on both states.
