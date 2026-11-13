@@ -297,6 +297,47 @@ dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look d
   shake, scaled by the speed. When the car leaves the cell behind, the pieces are put away (collider off, the body parked
   for the next break; the engine has no body removal) and the items stand again.
 
+### The light (0228)
+
+- **A physical sky.** `Render/Sky.h` (shared by Shaders.metal and World.metal) and `SkyLUT.metal` follow Hillaire 2020 over
+  Bruneton 2008: Rayleigh, Mie and ozone over a spherical earth. Three LUTs (`SkyLUT.swift`):
+  - transmittance, 256 × 64, drawn once;
+  - multiple scattering, 32 × 32 (the isotropic term), drawn once;
+  - the sky-view, 192 × 108, drawn when the sun or the eye's height moves (30 steps a texel), then mipmapped.
+  The sky pass adds the sun's disc, a deck of clouds (fbm cumulus and a cirrus veil, lit by the sun through them) and the
+  stars after dusk.
+- **One sky lights everything.** The key light is the sun's illuminance through the same air (`SkyCPU.transmittance` on
+  the CPU), with the shadow box pushed 160 m toward the sun. The ambient is the sky-view read down its mips, plus a ground
+  bounce. The paint's and the water's reflections are the sky-view at the roughness's mip. The haze is the aerial
+  perspective: per-channel extinction through Rayleigh's 8 km and the haze's 1.2 km, and the sky-view's own radiance
+  scattered in, so the ranges go warm toward the sun and blue away from it.
+- **The time of day** (`World/DriveSky.swift`). The sun runs a real path at latitude 46°, declination +10°. Golden hour
+  (18:12, sun ≈ 5° up) is the default; the presets are sunset, blue hour, night (the moon as the key), morning and midday,
+  plus a running day (a game hour every 30 s). The drive's sun button cycles them and the choice is remembered. The
+  exposure follows the light. The headlamps come on from blue hour. `-fd-tod <preset|hour>` sets it for shots; `classic`
+  is 0226's painted dusk.
+- **Shadows from the world.** The near pool's props (at their coarser LOD) draw into the key light's map, so trees and the
+  roadside lay long shadows across the road and the car. The map fades out toward its edge.
+- **Surfaces** (World.metal), all procedural and world-anchored, each detail faded by the metres a pixel covers:
+  - asphalt with aggregate, binder patches, relaid repairs, sealed cracks, the centre joint, polished wheel tracks, an oil
+    line, dust toward the edges, and paint worn through where the tyres cross it;
+  - a GGX highlight, so the road glints toward a low sun;
+  - land with grass patches, soil, rock with strata and fractures on the steep, and snow;
+  - foliage lit softly through, and from behind by a low sun, each tree its own hue, crowns swaying.
+- **Grass.** Instanced five-blade clumps on a jittered 0.6 m grid over the finest terrain tiles within 36 m of the eye. Each
+  clump stands on the tile's own vertices (height, normal, colour). The tile colour's fourth byte now carries the road's
+  distance in eighths of a metre (255: water), so none grows on the road, the shoulder, rock, sand or snow.
+- **The ground under the car.** The world's shaders darken an analytic, soft rectangle under the car's footprint (ambient
+  occlusion; `WDrive.carPos`/`carFwd`).
+- **Junctions.** A verge now lies 3 cm under the carved ground, and the shoulder's edge carries the land's colour. Before,
+  one road's verge lay over the other's shoulder where two roads met, and the strip faded up from black: dark shards beside
+  the road.
+- **Tiers.** `Renderer.quality` = 2 − the shed (heat, Low Power Mode, a frame over budget at the resolution floor), or
+  `-fd-quality <n>`. At 2 everything is on. At 1 the grass's radius drops to two thirds and the road loses its stones and
+  cracks. At 0 there's no grass and no prop shadows. `-fd-skip grass` drops the grass for attribution.
+- **The bench's pass times** are now charged from the later of a buffer's start and the previous buffer's end. On the Duo the
+  old per-buffer spans summed to ≈ 20 ms in an 8.3 ms frame, because they overlapped.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
