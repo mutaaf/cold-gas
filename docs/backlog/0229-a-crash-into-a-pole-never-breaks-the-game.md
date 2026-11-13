@@ -6,7 +6,7 @@ priority: P0
 size: M
 lens: tech-health
 created: 2026-11-13
-pr: 366, 367
+pr: 367
 by: operator
 ---
 
@@ -26,7 +26,7 @@ off). Found and fixed while there: a drive recorded its impacts into the scored 
 it, so after ≈ 25 s of scraping in a session the drive's crashes stopped making sparks, dents, sound or haptics.
 
 ## What
-Runs on: the operator's Mac (Xcode) for the app; the web's half is #367 (src/wedge.js, src/main.js, src/drive/index.js, src/build/sandbox.js).
+Runs on: the operator's Mac (Xcode) for the app (#366); the web's half is #367 (src/wedge.js, src/main.js, src/drive/index.js, src/build/sandbox.js).
 - `ColdGasPhysics/Sanity.swift`: `carFinite`, `deepestPenetration`, and `WedgeWatch` (stopped with the hull touching and going nowhere, within 0.6 m:
   a cue after 1 s, act after 2 s; a state that isn't a number acts at once).
 - `Game.swift`: a live scored run in its drive phase that is wedged gets the cue "Stuck · again from the mark", then starts again
