@@ -39,7 +39,7 @@ export const WORLD_SLOTS = {
   broadleaf: world('broadleaf', 'tree.broadleaf', { l: 6.6, w: 6.6, h: 9.8 }, [640, 200], [150, 320]),
   shrub: world('shrub', 'shrub', { l: 2.0, w: 2.0, h: 1.1 }, [340, 60], [100, 300]),
   rock: world('rock', 'rock', { l: 2.6, w: 2.1, h: 1.3 }, [280, 160], [130, 400]),
-  fence: world('fence', 'fence', { l: 3.0, w: 0.14, h: 1.15 }, [60, 60], [130, 450], { w: [0.7, 1.3] }),
+  fence: world('fence', 'fence', { l: 4.0, w: 0.14, h: 1.15 }, [60, 60], [130, 450], { w: [0.7, 1.3] }),
   signpost: world('signpost', 'signpost', { l: 0.9, w: 0.12, h: 2.3 }, [160, 100], [130, 450], { w: [0.6, 1.4] }),
   guardrail: world('guardrail', 'guardrail', { l: 4.0, w: 0.36, h: 0.8 }, [220, 100], [130, 450]),
 };

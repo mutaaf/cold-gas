@@ -182,6 +182,7 @@ final class FreeDrive: DriveScene {
                     if phase == .drive { reverse(input) }
                     if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
                     pedal = input.brake
+                    streamer.breakCheck(car.world, car: car)
                     readLoose(car.world)
                     // Unscored, so the tanks top up on the ground (a full charge in 8 s): the jets always work on a roam.
                     if car.grounded > 0 { car.air = min(CAR.airMass, car.air + CAR.airMass * DT / 8) }
@@ -192,6 +193,7 @@ final class FreeDrive: DriveScene {
             } catch { print("DRIVE sim stopped: \(error)"); reset() }
             watchdog(dt)
             looseHits()
+            roadside()
         }
         track.trim(keep: 16)
         dist = (car.pos.x * car.pos.x + car.pos.z * car.pos.z).squareRoot()
@@ -279,10 +281,27 @@ final class FreeDrive: DriveScene {
             }
         }
     }
+    /// The roadside's breaks and restorations (0227): the drawn instance hidden or shown, and a break felt and heard by
+    /// what it was (timber cracks, steel bangs), scaled by the car's speed into it.
+    private func roadside() {
+        for c in streamer.drainChanges() {
+            view?.setBroken(cx: c.cx, cz: c.cz, item: c.item, c.broken)
+            #if DEBUG
+            if Launch.args.contains("-fd-stats") { print(String(format: "ROADSIDE %@ %@ at (%.1f, %.1f) %.1f m/s", c.broken ? "broke" : "stands", "\(c.kind)", c.x, c.z, c.speed)) }
+            #endif
+            guard c.broken else { continue }
+            let k = Float(min(1, c.speed / 25))
+            let steel = c.kind == .rail || c.kind == .sign
+            Sound.shared.thud(hz: steel ? 110 : 180, gain: 0.2 + 0.4 * Double(k), decay: steel ? 0.35 : 0.22, crunch: steel ? 0.6 : 0.45)
+            HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: 0.4 + 0.6 * k, sharpness: steel ? 0.8 : 0.55))
+            camera.shake(0.25 + 0.5 * k)
+        }
+    }
     /// The set's loose things back where they stood.
     func resetSet() {
-        let spots = looseSpots
-        resetLoose(car.world) { i in let s = spots[i]; return (s.x, 0, s.z, s.yaw) }
+        let spots = looseSpots, loose = car.world.loose
+        // (the roadside's broken pieces past the set's own stay where they lie: theirs is the streamer's to restore)
+        resetLoose(car.world) { i in if i < spots.count { let s = spots[i]; return (s.x, 0, s.z, s.yaw) }; let b = loose[i]; return (b.x, b.y - b.kind.half.1, b.z, 2 * atan2(b.qy, b.qw)) }
         for i in looseSpeed.indices { looseSpeed[i] = 0 }
         view?.marks?.clear()
     }
@@ -438,7 +457,7 @@ final class FreeDrive: DriveScene {
     /// One line for the debug HUD and the bench.
     var statsLine: String {
         guard let s = view?.stats else { return "" }
-        return String(format: "tiles %d · %.0fk tris · roads %d · props %d (near %d) · %.0f MB · missing %d · %.1f km out · origin (%.0f, %.0f) · marks %d · loose %d",
-                      s.tiles, Double(s.tris) / 1000, s.roads, s.instances, view?.nearDrawn ?? 0, s.mb, s.missing, dist / 1000, origin.x, origin.z, view?.marks?.count ?? 0, view?.loose?.drawn ?? 0)
+        return String(format: "tiles %d · %.0fk tris · roads %d · props %d (near %d) · %.0f MB · missing %d · %.1f km out · origin (%.0f, %.0f) · marks %d · loose %d · roadside %d standing %d broken",
+                      s.tiles, Double(s.tris) / 1000, s.roads, s.instances, view?.nearDrawn ?? 0, s.mb, s.missing, dist / 1000, origin.x, origin.z, view?.marks?.count ?? 0, view?.loose?.drawn ?? 0, streamer.standingCount, streamer.brokenCount)
     }
 }

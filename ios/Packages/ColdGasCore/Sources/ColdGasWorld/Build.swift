@@ -239,21 +239,38 @@ extension FreeWorld {
 // MARK: - Props
 
 public enum PropKind: Int, CaseIterable, Sendable {
-    case spruce, broadleaf, shrub, rock, post
+    case spruce, broadleaf, shrub, rock, post, fence, signpost, guardrail
     /// The kind's name in a prop source (the forge's assets are looked up by it).
-    public var id: String { ["tree.spruce", "tree.broadleaf", "shrub", "rock", "post"][rawValue] }
+    public var id: String { ["tree.spruce", "tree.broadleaf", "shrub", "rock", "post", "fence", "signpost", "guardrail"][rawValue] }
 }
 public struct PropInstance: Sendable {
     public var kind: PropKind
     /// Relative to the cell's corner (x, 0, z).
     public var x: Float, y: Float, z: Float
     public var yaw: Float, scale: Float, tint: Float
+    /// A roadside item that can break (0227): its index among the cell's solids, else −1.
+    public var item: Int32 = -1
 }
-/// What the physics makes solid of a prop: a trunk (a vertical cylinder) or a boulder (a ball), world coordinates.
+/// What the physics makes solid of a prop: a trunk (a vertical cylinder), a boulder (a ball), or a roadside item that can
+/// break (0227: a fence bay, a sign, a guard rail section: a box `half` × 2 turned by `yaw`, standing on y), world
+/// coordinates.
 public struct PropSolid: Sendable {
-    public enum Kind: Sendable { case trunk, boulder }
+    public enum Kind: Sendable { case trunk, boulder, fence, sign, rail }
     public let kind: Kind
     public let x, y, z, r, h: Double
+    public var yaw = 0.0, half = (0.0, 0.0, 0.0)
+    public init(kind: Kind, x: Double, y: Double, z: Double, r: Double, h: Double) { self.kind = kind; self.x = x; self.y = y; self.z = z; self.r = r; self.h = h }
+    public init(kind: Kind, x: Double, y: Double, z: Double, yaw: Double, half: (Double, Double, Double)) {
+        self.kind = kind; self.x = x; self.y = y; self.z = z; r = 0; h = half.1 * 2; self.yaw = yaw; self.half = half
+    }
+    public var breakable: Bool { kind == .fence || kind == .sign || kind == .rail }
+}
+/// The roadside's sizes (m, the forge's boxes, tools/forge/lib/slots.mjs): half extents across, up, along.
+public enum Roadside {
+    public static let fence = (0.07, 0.575, 2.0), sign = (0.06, 1.15, 0.45), rail = (0.18, 0.4, 2.0)
+    /// How far out from the centreline each stands (m).
+    public static let railLat = RoadSpec.hw + RoadSpec.shoulder + 0.35, signLat = RoadSpec.hw + RoadSpec.shoulder + 1.1
+    public static let fenceLat = RoadSpec.hw + RoadSpec.shoulder + 5.6
 }
 public struct PropCell: Sendable {
     public let cx: Int, cz: Int
@@ -272,9 +289,9 @@ extension FreeWorld {
         let q = roads.query(minX: x0, minZ: z0, maxX: x0 + C, maxZ: z0 + C)
         struct Grid { let kind: PropKind; let spacing: Double; let salt: UInt32; let dens: (Double, Double, Double, Double); let clear: Double }
         let grids = [
-            Grid(kind: .spruce, spacing: 9, salt: 0x7ee, dens: (0.3, 0.12, 0.012, 0.55), clear: RoadSpec.hw + 6),
+            Grid(kind: .spruce, spacing: 9, salt: 0x7ee, dens: (0.3, 0.12, 0.012, 0.55), clear: Roadside.fenceLat + 2),
             Grid(kind: .shrub, spacing: 6.5, salt: 0x5b, dens: (0.07, 0.16, 0.1, 0.2), clear: RoadSpec.hw + 3),
-            Grid(kind: .rock, spacing: 22, salt: 0x70c, dens: (0.35, 0.12, 0.22, 0.05), clear: RoadSpec.hw + 4),
+            Grid(kind: .rock, spacing: 22, salt: 0x70c, dens: (0.35, 0.12, 0.22, 0.05), clear: Roadside.fenceLat + 1.5),
         ]
         for G in grids {
             let i0 = Int((x0 / G.spacing).rounded(.down)), i1 = Int(((x0 + C) / G.spacing).rounded(.up))
@@ -309,7 +326,7 @@ extension FreeWorld {
                 case .broadleaf: sc = 0.7 + 0.6 * WNoise.hash2(s ^ 0x5c, i, j)
                 case .shrub: sc = 0.6 + 0.8 * WNoise.hash2(s ^ 0x5c, i, j)
                 case .rock: sc = 0.5 + 1.8 * WNoise.hash2(s ^ 0x5c, i, j) * WNoise.hash2(s ^ 0x5d, i, j) + 0.4 * slope
-                case .post: sc = 1
+                case .post, .fence, .signpost, .guardrail: sc = 1
                 }
                 let tint = Float(0.8 + 0.4 * WNoise.hash2(s ^ 0x71, i, j))
                 cell.instances.append(PropInstance(kind: kind, x: Float(x - x0), y: Float(g.y - 0.05), z: Float(z - z0), yaw: yaw, scale: Float(sc), tint: tint))
@@ -337,6 +354,68 @@ extension FreeWorld {
                 k += 12
             }
         }
+        roadside(&cell, q, x0, z0, C)
         return cell
+    }
+
+    /// The roadside (0227), along each road in the cell, one per 4 m sample where it applies:
+    ///   guard rails  where the road runs on a fill (the ground 3 m past the shoulder ≥ 0.8 m below the road), and along
+    ///                the outside of a bend (≥ 0.045 rad over ±24 m: the world's lattice roads are gentle, that's their sharpest few per cent);
+    ///   bend signs   on the outside of the sharpest (≥ 0.06 rad), every 24 m (behind the rail);
+    ///   fences       runs of post-and-rail on a third of the 128 m stretches, both sides, anywhere but the desert.
+    /// Each is an instance to draw and a solid that breaks (its `item` is its index in `cell.solids`).
+    func roadside(_ cell: inout PropCell, _ q: RoadQuery, _ x0: Double, _ z0: Double, _ C: Double) {
+        for l in q.links {
+            let p = roads.profile(l)
+            let salt = seed ^ UInt32(truncatingIfNeeded: (l.i &* 73856093) ^ (l.j &* 19349663) ^ (l.north ? 0x9e37 : 0x51f1))
+            let reach = Roadside.fenceLat + 2
+            for k in 0..<l.n {
+                // Only the samples whose roadside can fall in this cell.
+                if l.x[k] < x0 - reach || l.x[k] >= x0 + C + reach || l.z[k] < z0 - reach || l.z[k] >= z0 + C + reach { continue }
+                let hx = l.dx[k], hz = l.dz[k], yaw = DMath.datan2(hx, hz)
+                func put(_ kind: PropKind, _ sk: PropSolid.Kind, _ side: Double, _ lat: Double, _ half: (Double, Double, Double), _ y: Double? = nil, turn: Double = 0) {
+                    let x = l.x[k] + hz * side * lat, z = l.z[k] - hx * side * lat
+                    if x < x0 || x >= x0 + C || z < z0 || z >= z0 + C { return }
+                    if Site.onFloor(x, z, margin: 10) { return }
+                    let g = ground(x, z, q)
+                    // Not on a road (another one, at a junction), and not in the sea.
+                    if g.road < RoadSpec.hw + RoadSpec.shoulder + 0.2 { return }
+                    let gy = y ?? g.y
+                    if gy < SEA + 0.3 { return }
+                    let item = Int32(cell.solids.count)
+                    cell.solids.append(PropSolid(kind: sk, x: x, y: gy, z: z, yaw: yaw + turn, half: half))
+                    cell.instances.append(PropInstance(kind: kind, x: Float(x - x0), y: Float(gy), z: Float(z - z0), yaw: Float(yaw + turn), scale: 1, tint: 1, item: item))
+                }
+                let roadY = p.y[k]
+                var railed = [false, false]
+                // How the road turns over ±24 m (+ = to the left): its outside is the other side.
+                var turn = 0.0
+                if k >= 6 && k < l.n - 6 {
+                    turn = DMath.datan2(l.dx[k + 6], l.dz[k + 6]) - DMath.datan2(l.dx[k - 6], l.dz[k - 6])
+                    while turn > DMath.PI { turn -= 2 * DMath.PI }
+                    while turn < -DMath.PI { turn += 2 * DMath.PI }
+                }
+                let outside = turn > 0 ? -1.0 : 1.0
+                for (si, side) in [1.0, -1.0].enumerated() {
+                    let ox = l.x[k] + hz * side * (Roadside.railLat + 3), oz = l.z[k] - hx * side * (Roadside.railLat + 3)
+                    if roadY - ground(ox, oz, q).y >= 0.8 || (abs(turn) >= 0.045 && side == outside) {
+                        // the rail's top 0.8 m over the road's edge (its foot on the shoulder's level)
+                        put(.guardrail, .rail, side, Roadside.railLat, Roadside.rail, roadY - 0.02, turn: side > 0 ? 0 : DMath.PI)
+                        railed[si] = true
+                    }
+                }
+                if k % 6 == 0 && abs(turn) >= 0.06 {   // behind the rail if there is one
+                    put(.signpost, .sign, outside, Roadside.signLat, Roadside.sign, turn: outside > 0 ? 0 : DMath.PI)
+                }
+                // Fences: a third of the 128 m stretches in grass and forest country, on gentle ground.
+                let run = k / 32
+                if WNoise.hash2(salt, run, 7) < 0.34 {
+                    let land = self.land.weights(l.x[k], l.z[k])
+                    if land.2 < 0.5 {
+                        for (si, side) in [1.0, -1.0].enumerated() where !railed[si] { put(.fence, .fence, side, Roadside.fenceLat, Roadside.fence) }
+                    }
+                }
+            }
+        }
     }
 }

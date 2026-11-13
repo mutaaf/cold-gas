@@ -1,4 +1,4 @@
-# Free Drive's roadside fence (0226): one 3 m bay of a post-and-rail field fence, sawn timber, two rails let into two
+# Free Drive's roadside fence (0226): one 4 m bay of a post-and-rail field fence, sawn timber, two rails let into two
 # posts (the next bay shares nothing: each bay is its own body when the car knocks it, 0227).
 def build(kit, spec, rng):
     L, W, H = spec['l'], spec['w'], spec['h']

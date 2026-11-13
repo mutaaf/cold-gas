@@ -186,7 +186,8 @@ vertex WPropOut cg_world_prop_vertex(WPropIn in [[stage_in]], uint iid [[instanc
     float d = length(base.xz - f.eye.xz);
     // Grown in from nothing over the last 15 % of the range (no pop), and gone past it.
     float far = dr.params.x;
-    float s = I.scaleTint.x * (1.0 - smoothstep(far * 0.85, far, d));
+    // (a negative scale: a roadside item broken loose, drawn by the loose view instead, 0227)
+    float s = max(I.scaleTint.x, 0.0) * (1.0 - smoothstep(far * 0.85, far, d));
     // The near pool (0226): a block's draw leaves out what the pool draws (mode 1), the pool what's past its radius (2).
     if ((t.morph.x == 1.0 && d < dr.anchor.z) || (t.morph.x == 2.0 && d >= dr.anchor.z)) s = 0.0;
     float c = cos(I.posYaw.w), sn = sin(I.posYaw.w);

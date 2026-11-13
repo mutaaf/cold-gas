@@ -272,6 +272,31 @@ dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look d
   choice is a HUD preference (`HudPrefs.driveMap`, kept by HudStore with the layouts). Placing the map with the HUD editor
   is not in this ticket.
 
+### The roadside breaks (0227)
+
+- **Placed with the land** (ColdGasWorld `roadside`, pure, per 128 m prop cell, one per 4 m road sample where it applies):
+  - guard rails 0.35 m past the shoulder, where the road runs on a fill (the ground 3 m out ≥ 0.8 m below the road) and
+    along the outside of a bend;
+  - bend chevrons on the outside of the sharpest bends, every 24 m. The lattice roads are gentle: the 97th percentile turns
+    0.048 rad over 48 m, so "sharp" here means ≥ 0.06;
+  - post-and-rail fences in runs 10.3 m out, on a third of the 128 m stretches anywhere but the desert. Trees and rocks now
+    stand clear of the fence line.
+
+  Each item is a forged instance (`PropInstance.item` points at its solid; the block's instance floats carry it) and a
+  `PropSolid` box.
+- **Fixed until hit hard** (ColdGasPhysics `Drive.swift`). Near the car each item is a fixed cuboid in the loose group, so
+  the wheels' rays leave it out. After every tick, `breakCheck` sums the contact impulse the car put into each one. Past
+  its strength the item breaks loose:
+  - the strengths (ESTIMATE): a fence bay 6,000 N·s (≈ 2.5 m/s of this car head-on), a chevron on its breakaway post
+    2,500, a W-beam rail 24,000 (it holds a glancing car and gives only to ≈ 10 m/s straight in);
+  - the item becomes a free rigid body with its real mass (`LooseKind` fence 45 kg, signpost 14 kg, rail 110 kg), thrown on
+    at the car's speed;
+  - the car gets back the impulse past the item's strength, so it ploughs through, losing what breaking the item cost.
+- **Seen and felt.** The app hides the item's instance (its scale negated in the block's buffer) and the loose view draws
+  the broken piece with the same forged mesh, at its engine pose. A timber crack or a steel bang, a haptic hit and a camera
+  shake, scaled by the speed. When the car leaves the cell behind, the pieces are put away (collider off, the body parked
+  for the next break; the engine has no body removal) and the items stand again.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
@@ -350,6 +375,7 @@ After 0226 (forged props with the near pool, verges, the land's grain, the minim
 | | Frames in 10 s | Interval avg / p95 | CPU ms avg / p95 | What was drawn |
 |---|---|---|---|---|
 | After (0226) | 412 | 24.33 / 33.33 ms | 1.08 / 2.83 | 97 tiles, 248 k triangles, 22.1 k props, 669 of them in the near pool |
+| After (0227) | 414 | 24.21 / 33.33 ms | 1.11 / 2.41 | the same, plus the roadside: 22.6 k props, 194 roadside colliders round the car |
 
 The near pool's gather (every 10 m, about twice a second at 25 m/s) lifts the CPU's p95 by ≈ 0.5 ms, while its average holds.
 On the GPU, the pool adds ≈ 250 k triangles of forged trees within 140 m, and the land's grain adds a few noise taps per

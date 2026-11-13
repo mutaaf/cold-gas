@@ -12,6 +12,7 @@ import Foundation
 import Metal
 import simd
 import ColdGasWorld
+import ColdGasPhysics
 
 final class WorldView {
     /// CDLOD keeps neighbours within one level of each other only with a split distance of at least twice the node.
@@ -21,7 +22,7 @@ final class WorldView {
     private let terrainPipe, roadPipe, propPipe, loosePipe, markPipe: MTLRenderPipelineState
     private let dsWrite, dsTest: MTLDepthStencilState
     /// Free Drive's loose things and the rubber its tyres lay down (0223).
-    let loose: LooseView?
+    private(set) var loose: LooseView?
     let marks: SkidMarks?
     private let tileIndex: MTLBuffer
     private let tileIndexCount: Int
@@ -56,6 +57,8 @@ final class WorldView {
     private var blocks: [Int64: Block] = [:]
     private var blockDone: [(Int64, Int, Int, [[Float]])] = []
     private var blockAsked = Set<Int64>()
+    /// Roadside items broken loose (0227): their drawn instance hidden (its scale negated) until they stand again.
+    private var hidden = Set<SIMD3<Int32>>()
     // The near pool (0226): within NEAR_R of the camera each instance is drawn with its kind's finest LOD (a forged tree up
     // close), gathered from the blocks every few metres into per-kind buffers (triple-buffered, preallocated); the blocks'
     // own draws leave those instances out in the vertex shader, so each instance is drawn exactly once a frame.
@@ -118,7 +121,7 @@ final class WorldView {
         let dt = MTLDepthStencilDescriptor(); dt.isDepthWriteEnabled = false; dt.depthCompareFunction = .lessEqual
         guard let ds = device.makeDepthStencilState(descriptor: dd), let dts = device.makeDepthStencilState(descriptor: dt) else { return nil }
         dsWrite = ds; dsTest = dts
-        loose = LooseView(device: device); marks = SkidMarks(device: device)
+        marks = SkidMarks(device: device)
         for _ in PropKind.allCases {
             var ring: [MTLBuffer] = []
             for _ in 0..<Renderer.inFlight { if let b = device.makeBuffer(length: WorldView.nearCap * 32, options: .storageModeShared) { ring.append(b) } }
@@ -140,6 +143,10 @@ final class WorldView {
                 return (vb, ib, g.indices.count, g.end)
             }))
         }
+        // The loose things, with the roadside's forged meshes for its broken pieces (0227).
+        var forged: [LooseKind: (MTLBuffer, MTLBuffer, Int)] = [:]
+        for (lk, pk) in [(LooseKind.fence, PropKind.fence), (.signpost, .signpost), (.rail, .guardrail)] { if let g = geometry(pk) { forged[lk] = (g.vb, g.ib, g.count) } }
+        loose = LooseView(device: device, forged: forged)
     }
 
     // MARK: - Per frame (main thread, before the draw)
@@ -189,8 +196,10 @@ final class WorldView {
         }
         if !b.isEmpty { nearDirty = true }
         for (key, bx, bz, per) in b {
-            blocks[key] = Block(bx: bx, bz: bz, inst: per.map { a in a.isEmpty ? nil : device.makeBuffer(bytes: a, length: a.count * 4, options: .storageModeShared) },
-                                counts: per.map { $0.count / 8 })
+            let blk = Block(bx: bx, bz: bz, inst: per.map { a in a.isEmpty ? nil : device.makeBuffer(bytes: a, length: a.count * 4, options: .storageModeShared) },
+                            counts: per.map { $0.count / 8 })
+            blocks[key] = blk
+            for h in hidden where WorldView.blockOf(h) == (bx, bz) { mark(blk, h, hide: true) }
         }
     }
 
@@ -334,6 +343,36 @@ final class WorldView {
             }
         }
     }
+    /// A roadside item broken loose (hide) or standing again (show): prop cell (cx, cz), its index there.
+    func setBroken(cx: Int, cz: Int, item: Int, _ broken: Bool) {
+        let h = SIMD3(Int32(truncatingIfNeeded: cx), Int32(truncatingIfNeeded: cz), Int32(truncatingIfNeeded: item))
+        if broken { hidden.insert(h) } else { hidden.remove(h) }
+        let (bx, bz) = WorldView.blockOf(h)
+        if let blk = blocks[WorldView.bkey(bx, bz)] { mark(blk, h, hide: broken) }
+        nearDirty = true
+    }
+    private static func blockOf(_ h: SIMD3<Int32>) -> (Int, Int) {
+        let n = Int(WorldView.block / PropSpec.cell)
+        return (Int((Double(h.x) / Double(n)).rounded(.down)), Int((Double(h.y) / Double(n)).rounded(.down)))
+    }
+    /// The item's instance in its block: its scale's sign is whether it's drawn.
+    private func mark(_ blk: Block, _ h: SIMD3<Int32>, hide: Bool) {
+        let n = Int(WorldView.block / PropSpec.cell)
+        let local = Float((Int(h.x) - blk.bx * n) + (Int(h.y) - blk.bz * n) * n), tag = Float(h.z + 1)
+        for k in [PropKind.fence, .signpost, .guardrail] {
+            guard let buf = blk.inst[k.rawValue], blk.counts[k.rawValue] > 0 else { continue }
+            let f = buf.contents().bindMemory(to: Float.self, capacity: blk.counts[k.rawValue] * 8)
+            for i in 0..<blk.counts[k.rawValue] where f[i * 8 + 6] == tag && f[i * 8 + 7] == local {
+                f[i * 8 + 4] = hide ? -abs(f[i * 8 + 4]) : abs(f[i * 8 + 4])
+            }
+        }
+    }
+    /// A kind's finest geometry (the loose view draws a broken roadside piece with it).
+    func geometry(_ k: PropKind) -> (vb: MTLBuffer, ib: MTLBuffer, count: Int)? {
+        guard k.rawValue < kinds.count, let l = kinds[k.rawValue].lods.first else { return nil }
+        return (l.vb, l.ib, l.count)
+    }
+
     /// Instances drawn from the near pool this frame (the bench's line).
     var nearDrawn: Int { nearCounts.reduce(0, +) }
 
@@ -345,7 +384,8 @@ final class WorldView {
             let cx = bi * n + ci, cz = bj * n + cj
             let cell = w.props(cx, cz)
             let ox = Float(Double(ci) * PropSpec.cell), oz = Float(Double(cj) * PropSpec.cell)
-            for p in cell.instances { per[p.kind.rawValue] += [p.x + ox, p.y, p.z + oz, p.yaw, p.scale, p.tint, 0, 0] }
+            // slots 6 and 7: a roadside item's index + 1 in its cell (0: none), and the cell within the block (0227)
+            for p in cell.instances { per[p.kind.rawValue] += [p.x + ox, p.y, p.z + oz, p.yaw, p.scale, p.tint, Float(p.item + 1), Float(ci + cj * n)] }
         } }
         return per
     }

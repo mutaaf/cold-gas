@@ -35,6 +35,16 @@ public final class DriveStreamer: WorldStreamer {
     private let queue = DispatchQueue(label: "coldgas.drive.cells", qos: .userInitiated, attributes: .concurrent)
     private var at = (Int.min, Int.min)
     public private(set) var rebases = 0
+    /// The roadside near the car (0227): each breakable item's fixed collider, by the collider's handle.
+    struct Item { let cell: Int64; let index: Int; let solid: PropSolid }
+    private var items: [UInt64: Item] = [:]
+    /// What's been broken loose, by cell and index, and the body it became; bodies put away for the next break.
+    private var broken: [Int64: [Int: LooseBody]] = [:]
+    private var spare: [LooseKind: [LooseBody]] = [:]
+    /// Breaks and restorations since the app last asked (it hides and shows the drawn instances).
+    public struct Change: Sendable { public let cx: Int, cz: Int, item: Int, broken: Bool, kind: PropSolid.Kind, x: Double, y: Double, z: Double, speed: Double }
+    private var changes: [Change] = []
+    public func drainChanges() -> [Change] { defer { changes.removeAll(keepingCapacity: true) }; return changes }
     public init(world: FreeWorld) { self.world = world }
 
     @inline(__always) static func key(_ i: Int, _ j: Int) -> Int64 { (Int64(Int32(truncatingIfNeeded: i)) << 32) | Int64(UInt32(bitPattern: Int32(truncatingIfNeeded: j))) }
@@ -92,12 +102,13 @@ public final class DriveStreamer: WorldStreamer {
         } } }
         // Trunks and boulders in the prop cells round the car.
         let P = PropSpec.cell, pi = Int((p.x / P).rounded(.down)), pj = Int((p.z / P).rounded(.down))
-        for (k, c) in props where cheb(k, pi, pj) > 2 { drop(w, c); props[k] = nil }
+        for (k, c) in props where cheb(k, pi, pj) > 2 { drop(w, c); props[k] = nil; restore(w, k) }
+        for b in spare.values.joined() { park(w, b) }
         for k in propData.keys where cheb(k, pi, pj) > 4 { propData[k] = nil; propAsked.remove(k) }
         for j in (pj - 1)...(pj + 1) { for i in (pi - 1)...(pi + 1) {
             let k = DriveStreamer.key(i, j)
             if props[k] != nil { continue }
-            if let s = propData[k] { props[k] = addProps(w, s); continue }
+            if let s = propData[k] { props[k] = addProps(w, s, cell: k); continue }
             if propAsked.contains(k) { continue }
             propAsked.insert(k)
             let wd = world
@@ -179,12 +190,22 @@ public final class DriveStreamer: WorldStreamer {
         w.solids.append(s)
         return Built(cols: cols, solid: s)
     }
-    private func addProps(_ w: World, _ list: [PropSolid]) -> Built {
+    private func addProps(_ w: World, _ list: [PropSolid], cell: Int64) -> Built {
         var cols: [UInt64] = []
         var b = (Double.infinity, Double.infinity, Double.infinity, -Double.infinity, -Double.infinity, -Double.infinity)
-        for s in list {
+        for (idx, s) in list.enumerated() {
             let c: UInt64
             switch s.kind {
+            case .fence, .sign, .rail:
+                if broken[cell]?[idx] != nil { continue }
+                // Fixed until something hits it harder than it holds (breakCheck); the wheels' rays leave it out.
+                let (hx, hy, hz) = s.half, h = s.yaw / 2
+                c = colliderFor(w, .cuboid(hx, hy, hz), DescOpts(t: (s.x - w.ox, s.y + hy - w.oy, s.z - w.oz), q: (0, DMath.dsin(h), 0, DMath.dcos(h))),
+                                s.kind == .fence ? MATERIALS.wood : MATERIALS.steel, GROUP.loose)
+                if c != CG_NONE { items[c] = Item(cell: cell, index: idx, solid: s) }
+                if w.rayFilter == RAY_ALL { w.rayFilter = groupsOf(0xffff, 0xffff & ~GROUP.loose) }
+                let r = (hx * hx + hz * hz).squareRoot()
+                b = (min(b.0, s.x - r), min(b.1, s.y), min(b.2, s.z - r), max(b.3, s.x + r), max(b.4, s.y + 2 * hy), max(b.5, s.z + r))
             case .trunk:
                 c = colliderFor(w, .cylinder(s.h / 2, s.r), DescOpts(t: (s.x - w.ox, s.y + s.h / 2 - w.oy, s.z - w.oz)), MATERIALS.wood, GROUP.staticG)
                 b = (min(b.0, s.x - s.r), min(b.1, s.y), min(b.2, s.z - s.r), max(b.3, s.x + s.r), max(b.4, s.y + s.h), max(b.5, s.z + s.r))
@@ -199,7 +220,7 @@ public final class DriveStreamer: WorldStreamer {
         return Built(cols: cols, solid: s)
     }
     private func drop(_ w: World, _ b: Built) {
-        for c in b.cols { w.info[c] = nil; cg_world_remove_collider(w.rw, c, false) }
+        for c in b.cols { w.info[c] = nil; items[c] = nil; cg_world_remove_collider(w.rw, c, false) }
         if let i = w.solids.firstIndex(where: { $0 === b.solid }) { w.solids.remove(at: i) }
     }
 
@@ -242,5 +263,109 @@ public final class DriveStreamer: WorldStreamer {
         } else if w.centre.isEmpty { buildCentre(w) }
         at = (Int.min, Int.min)
     }
+}
+
+// MARK: - The roadside breaks (0227)
+
+extension DriveStreamer {
+    /// What each roadside item holds before it breaks loose: the impulse (N·s) the car may put into it in one tick. ESTIMATE:
+    /// a timber bay snaps at ≈ 2.5 m/s of this car's speed into it head-on (a walking-pace nudge leaves it); a bend marker
+    /// stands on a breakaway post (≈ 1 m/s); a W-beam rail is built to hold a car glancing off it and gives way only to
+    /// ≈ 10 m/s straight in.
+    public static func strength(_ k: PropSolid.Kind) -> Double { k == .rail ? 24_000 : k == .sign ? 2_500 : 6_000 }
+    static func looseKind(_ k: PropSolid.Kind) -> LooseKind { k == .rail ? .rail : k == .sign ? .signpost : .fence }
+
+    /// After a step: every roadside collider the car pressed on this tick. One pressed past its strength breaks loose, a
+    /// free body with its real mass going on at the car's speed; the car gets back what the fixed collider took past that
+    /// strength (it ploughs through, losing what breaking it cost). Returns how many broke.
+    @discardableResult
+    public func breakCheck(_ w: World, car s: Vehicle) -> Int {
+        guard !items.isEmpty, w.carCol != CG_NONE else { return 0 }
+        var pairs = [UInt64](repeating: 0, count: 16)
+        let n = min(pairs.count, cg_contact_pairs_with(w.rw, w.carCol, &pairs, pairs.count))
+        var nBroke = 0
+        var normal = [Float](repeating: 0, count: 3)
+        var ct = CgContact()
+        for j in 0..<n {
+            let other = pairs[j]
+            guard let it = items[other] else { continue }
+            var flipped = false
+            let mc = cg_contact_pair(w.rw, w.carCol, other, &flipped)
+            if mc <= 0 { continue }
+            var J = 0.0, nx = 0.0, ny = 0.0, nz = 0.0
+            for m in 0..<Int(mc) {
+                let k = cg_manifold(w.rw, w.carCol, other, m, &normal)
+                if k <= 0 { continue }
+                let sg: Double = flipped ? 1 : -1
+                for c in 0..<Int(k) where cg_manifold_contact(w.rw, w.carCol, other, m, c, &ct) {
+                    let jc = Double(ct.impulse)
+                    J += jc; nx += Double(normal[0]) * sg * jc; ny += Double(normal[1]) * sg * jc; nz += Double(normal[2]) * sg * jc
+                }
+            }
+            let Jb = DriveStreamer.strength(it.solid.kind)
+            guard J > Jb else { continue }
+            let l = max(1e-9, (nx * nx + ny * ny + nz * nz).squareRoot())
+            nx /= l; ny /= l; nz /= l
+            // The car keeps what went past the item's strength (the impulse pushed it along n, out of the item).
+            let m = massOf(s), back = (J - Jb) / m
+            s.vel.x -= nx * back; s.vel.y -= max(0, ny) * back * 0.2; s.vel.z -= nz * back
+            breakLoose(w, other, it, carVel: (s.vel.x, s.vel.y, s.vel.z))
+            nBroke += 1
+        }
+        return nBroke
+    }
+
+    private func breakLoose(_ w: World, _ col: UInt64, _ it: Item, carVel v: (Double, Double, Double)) {
+        w.info[col] = nil; items[col] = nil
+        cg_world_remove_collider(w.rw, col, true)
+        let s = it.solid, kind = DriveStreamer.looseKind(s.kind)
+        let body: LooseBody
+        if var pool = spare[kind], let b = pool.popLast() {
+            spare[kind] = pool
+            body = b
+            body.parked = false
+            let (hx, hy, hz) = kind.half, h = s.yaw / 2
+            cg_body_set_translation(w.rw, b.rb, Float(s.x - w.ox), Float(s.y + hy - w.oy), Float(s.z - w.oz), true)
+            cg_body_set_rotation(w.rw, b.rb, 0, Float(DMath.dsin(h)), 0, Float(DMath.dcos(h)), true)
+            b.col = colliderFor(w, kind == .fence || kind == .rail || kind == .signpost ? .cuboid(hx, hy, hz) : .cuboid(hx, hy, hz), DescOpts(density: 0), kind.material, GROUP.loose, extra: b.rb)
+            b.x = s.x; b.y = s.y + hy; b.z = s.z; b.qx = 0; b.qy = DMath.dsin(h); b.qz = 0; b.qw = DMath.dcos(h)
+        } else {
+            body = addLoose(w, kind, x: s.x, y: s.y, z: s.z, yaw: s.yaw)
+        }
+        // Thrown on at most the car's speed, with a little lift off the ground and a tumble.
+        let sp = (v.0 * v.0 + v.2 * v.2).squareRoot()
+        cg_body_set_linvel(w.rw, body.rb, Float(v.0 * 0.85), Float(min(3, 0.6 + sp * 0.06)), Float(v.2 * 0.85), true)
+        cg_body_set_angvel(w.rw, body.rb, Float(-v.2 * 0.08), 0, Float(v.0 * 0.08), true)
+        body.asleep = false
+        var cellBroken = broken[it.cell] ?? [:]
+        cellBroken[it.index] = body
+        broken[it.cell] = cellBroken
+        let ci = Int(Int32(truncatingIfNeeded: it.cell >> 32)), cj = Int(Int32(truncatingIfNeeded: it.cell))
+        changes.append(Change(cx: ci, cz: cj, item: it.index, broken: true, kind: s.kind, x: s.x, y: s.y, z: s.z, speed: sp))
+    }
+
+    /// A prop cell left behind: what broke there is put away and stands again (the app shows its instance).
+    private func restore(_ w: World, _ cell: Int64) {
+        guard let list = broken[cell] else { return }
+        broken[cell] = nil
+        let ci = Int(Int32(truncatingIfNeeded: cell >> 32)), cj = Int(Int32(truncatingIfNeeded: cell))
+        for (idx, b) in list {
+            if b.col != CG_NONE { w.info[b.col] = nil; cg_world_remove_collider(w.rw, b.col, false); b.col = CG_NONE }
+            b.parked = true
+            park(w, b)
+            spare[b.kind, default: []].append(b)
+            changes.append(Change(cx: ci, cz: cj, item: idx, broken: false, kind: .fence, x: b.x, y: b.y, z: b.z, speed: 0))
+        }
+    }
+    /// A put-away body, held still well under the ground near the engine's origin (it has no collider).
+    func park(_ w: World, _ b: LooseBody) {
+        cg_body_set_translation(w.rw, b.rb, 0, -500, 0, false)
+        cg_body_set_linvel(w.rw, b.rb, 0, 0, 0, false)
+        b.y = -500 + w.oy
+    }
+    /// Broken items standing loose now (tests).
+    public var brokenCount: Int { broken.values.reduce(0) { $0 + $1.count } }
+    /// Fixed roadside colliders near the car now (tests).
+    public var standingCount: Int { items.count }
 }
 #endif

@@ -96,7 +96,8 @@ struct WorldTests {
         for cz in 24...27 { for cx in -2...1 {
             let cell = w.props(cx, cz)
             let q = w.roads.query(minX: Double(cx) * 128, minZ: Double(cz) * 128, maxX: Double(cx + 1) * 128, maxZ: Double(cz + 1) * 128)
-            for p in cell.instances where p.kind != .post {
+            // (the roadside, 0227, stands beside the shoulder like the posts: RoadsideTests keeps it off the road)
+            for p in cell.instances where p.kind != .post && p.item < 0 {
                 let x = Double(cx) * 128 + Double(p.x), z = Double(cz) * 128 + Double(p.z)
                 #expect(q.nearest(x, z).d >= RoadSpec.hw + 3 - 1e-6)
                 #expect(!Site.onFloor(x, z, margin: 30))
