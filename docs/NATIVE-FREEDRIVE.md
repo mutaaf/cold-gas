@@ -329,6 +329,12 @@ dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look d
   distance in eighths of a metre (255: water), so none grows on the road, the shoulder, rock, sand or snow.
 - **The ground under the car.** The world's shaders darken an analytic, soft rectangle under the car's footprint (ambient
   occlusion; `WDrive.carPos`/`carFwd`).
+- **The verge, wider and sampled at the carve's breaks.** At a low sun the land's 4 m grid poked through the verge strip as
+  hard dark wedges beside the road. The strip ran straight from the shoulder to 6 m out over ground that bends (the 1:4
+  apron, the steeper slope from 7 m), and the tile's triangles chose their own chord. Now the verge reaches 10 m past the
+  shoulder (`RoadSpec.vergeOut` 14.7 m), sampled at 1.5, 3.5, 5.5, 7 and 10 m (`vergeAt`). The grid lies 40 cm under it
+  (`vergeDip`), fading back to the land over its last 3 m. The verge's normals come from its own samples and the road's
+  grade, one ground query a vertex, so a ribbon builds as fast as before (50 links in 0.36 s on a Mac).
 - **Junctions.** A verge now lies 3 cm under the carved ground, and the shoulder's edge carries the land's colour. Before,
   one road's verge lay over the other's shoulder where two roads met, and the strip faded up from black: dark shards beside
   the road.

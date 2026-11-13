@@ -504,7 +504,7 @@ vertex WGrassOut cg_world_grass_vertex(uint vid [[vertex_id]], uint iid [[instan
     float green = clamp((col.g - max(col.r, col.b)) * 30.0, 0.0, 1.0);
     if (col.r > col.g * 1.3 || dot(col, float3(0.33)) > 0.3) return o;  // sand, desert, snow, concrete
     // The verge's ribbon lies on the exact ground over a dip in the tile (0226): stand on the ribbon, not in the dip.
-    y += 0.22 * (1.0 - smoothstep(10.7 - 2.0, 10.7, road));
+    y += 0.4 * (1.0 - smoothstep(14.7 - 3.0, 14.7, road));   // (RoadSpec.vergeDip, vergeOut)
     // A patchy meadow: tall tufts here, short turf there.
     float2 wp = cellW;
     float patch = world_noise(wp / 7.0) * 0.7 + world_noise(wp / 1.7) * 0.3;
