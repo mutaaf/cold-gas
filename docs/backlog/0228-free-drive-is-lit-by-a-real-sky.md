@@ -1,11 +1,12 @@
 ---
 id: 0228
 title: Free Drive is lit by a real sky (golden hour, a physical atmosphere, surfaces with detail, grass, the ground under the car)
-status: in-progress
+status: shipped
 priority: P0
 size: L
 lens: player-feel
 created: 2026-11-13
+pr: 361
 by: operator
 ---
 
@@ -31,11 +32,11 @@ Runs on: the operator's Mac (Xcode).
   floor) and `-fd-quality`. The bench's per-pass times charged without the buffers' overlap.
 
 ## Acceptance criteria
-- [ ] `make test` + `make rules` green, the 52 run vectors bit-exact (nothing in the sim changes).
-- [ ] Before and after shots at the same poses (mountain road, forest road, coast road, the Show's set on a roam, the car
+- [x] `make test` + `make rules` green, the 52 run vectors bit-exact (nothing in the sim changes).
+- [x] Before and after shots at the same poses (mountain road, forest road, coast road, the Show's set on a roam, the car
       in the cinema camera) in docs/shots/0228/, the after dramatically better.
-- [ ] Bench before and after (docs/NATIVE-FREEDRIVE.md §8), per-pass times.
-- [ ] The 1.2.0 notes and What's-new card say so.
+- [x] Bench before and after (simulator; the phone's is the owner's) (docs/NATIVE-FREEDRIVE.md §8), per-pass times.
+- [x] The 1.2.0 notes and What's-new card say so.
 
 ## Test plan
 `cd ios && make test && make rules && make bench-freedrive`; simulator shots with `-fd-km <n> -fd-cruise 0`.
