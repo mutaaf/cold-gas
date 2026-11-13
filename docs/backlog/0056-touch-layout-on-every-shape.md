@@ -1,7 +1,7 @@
 ---
 id: 0056
 title: Touch controls fit every screen shape, and moved slots are re-measured for reach
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: player-feel

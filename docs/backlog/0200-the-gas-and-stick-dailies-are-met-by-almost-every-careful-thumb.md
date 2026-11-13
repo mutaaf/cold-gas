@@ -1,7 +1,7 @@
 ---
 id: 0200
 title: The Show's gas Daily and the Wall's stick Daily are met by almost every careful thumb since 0190
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: engagement

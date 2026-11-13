@@ -1,8 +1,8 @@
 ---
 id: 0184
 title: In a first-ever session the rookie offer comes after the second wreck, not the third
-status: proposed
-priority: P1
+status: ready
+priority: P0
 size: S
 lens: engagement
 created: 2026-11-10

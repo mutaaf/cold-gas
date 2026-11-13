@@ -1,7 +1,7 @@
 ---
 id: 0222
 title: Box Office's session recorder stays off the wire in the countdown and the run, and loads after Jump is ready
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: performance

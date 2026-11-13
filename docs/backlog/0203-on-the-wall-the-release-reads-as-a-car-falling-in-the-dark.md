@@ -1,7 +1,7 @@
 ---
 id: 0203
 title: On the Wall, a phone's release frame shows a car falling in the dark, not a glowing white blob in a red haze
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity

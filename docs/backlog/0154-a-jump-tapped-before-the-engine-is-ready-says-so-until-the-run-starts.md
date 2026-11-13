@@ -1,7 +1,7 @@
 ---
 id: 0154
 title: A Jump tapped before the engine is ready keeps saying "Starting…" until the run begins
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: engagement
