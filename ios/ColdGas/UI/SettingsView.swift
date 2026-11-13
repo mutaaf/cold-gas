@@ -14,11 +14,11 @@ struct SettingsView: View {
     @State private var judgeOnDevice = SaveStore.shared.settings.judgeOnDeviceOn
     @State private var judgeStatus = OnDeviceJudges.status
     private var judgeFooter: String {
-        let scores = " The scores are always the game\u{2019}s own; the model writes the words."
-        if judgeStatus != .available { return "\(judgeStatus.line) The free edge model writes the judges\u{2019} words over the network.\(scores)" }
+        let scores = " Scores are the game\u{2019}s own; the model only writes the words."
+        if judgeStatus != .available { return "\(judgeStatus.line) The free edge model writes them, over the network.\(scores)" }
         return judgeOnDevice
-            ? "The judges use Apple Intelligence: their words are written on this device, with no network call and no cost: the judging sends nothing off this device.\(scores)"
-            : "The judges\u{2019} words come from the free edge model, over the network.\(scores)"
+            ? "Apple Intelligence writes the judges\u{2019} words on this device: nothing is sent.\(scores)"
+            : "The free edge model writes the judges\u{2019} words, over the network.\(scores)"
     }
     var body: some View {
         NavigationStack {
@@ -45,7 +45,7 @@ struct SettingsView: View {
                     }
                     .onChange(of: units) { _, v in var st = SaveStore.shared.settings; st.units = v; SaveStore.shared.settings = st }
                 } header: { Text("Play") } footer: {
-                    Text("One thumb flies Assist on the Show and the Wall: hold to climb, tap to let go, hold to land. Classic is the stick and the pedals, on every course and tier.")
+                    Text("One thumb flies Assist on the Show and the Wall. Classic flies everything.")
                 }
                 ControlsSection(close: { dismiss() })
                 // 0219: who writes the judges' words on this device. The scores are always the game's own.
@@ -65,6 +65,8 @@ struct SettingsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
+            .font(Theme.text(15))
+            .tint(Theme.ink)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -122,7 +124,7 @@ struct ControlsSection: View {
             slider("Free Drive look", bind({ $0.lookSens }, { $0.lookSensitivity = $1 }), HudPrefs.lookSensitivities, "%.2f×", 1)
             Toggle("Invert the look", isOn: bind({ $0.lookInvert }, { $0.lookInvertY = $1 }))
         } header: { Text("Controls") } footer: {
-            Text("Layouts are kept for each tier and for each way you hold the screen. The stick that follows the thumb comes to it anywhere on its side. In Free Drive, swipe anywhere off the controls to look round. A controller and a keyboard still fly as before.")
+            Text("A layout is kept for each tier and each way you hold the screen. In Free Drive, swipe off the controls to look round.")
         }
     }
     private func slider(_ name: String, _ v: Binding<Double>, _ r: ClosedRange<Double>, _ fmt: String, _ k: Double) -> some View {

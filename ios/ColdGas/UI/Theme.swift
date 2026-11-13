@@ -30,6 +30,91 @@ enum Theme {
     }
 }
 
+/// The show's marquee (0230): Michroma set big and wide for the one thing a screen is about (the event, the score's verdict),
+/// a red tick for "on the mark" (the selected thing), and the two buttons every screen needs: one that is obviously the
+/// next thing to do, and quiet words for everything else.
+extension Theme {
+    /// Michroma that follows Dynamic Type from `style` (callers cap the size range where a layout can't grow).
+    static func marquee(_ size: CGFloat, _ style: Font.TextStyle = .title2) -> Font { .custom("Michroma-Regular", size: size, relativeTo: style) }
+}
+
+/// The signal-red mark beside what's chosen: the stage's mark, where the car comes down.
+struct Tick: View {
+    var on = true
+    var length: CGFloat = 14
+    var vertical = true
+    var body: some View {
+        Capsule().fill(Theme.signal)
+            .frame(width: vertical ? 2 : length, height: vertical ? length : 2)
+            .opacity(on ? 1 : 0)
+            .accessibilityHidden(true)
+    }
+}
+
+/// THE button of a screen: ink on the night, Michroma, tall. Fly, Fly again, Resume, Let's fly.
+struct MarqueeButton: ButtonStyle {
+    var height: CGFloat = 56
+    /// The same block, hollow: a second choice that sits beside the first at its height (Roam beside Fly again).
+    var hollow = false
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(hollow ? Theme.text(15, .medium) : Theme.marquee(15, .headline)).tracking(hollow ? 0.3 : 4)
+            .textCase(hollow ? nil : .uppercase)
+            .foregroundStyle(hollow ? Theme.ink : Theme.auroraInk)
+            .lineLimit(1).minimumScaleFactor(0.7)
+            .padding(.horizontal, hollow ? 16 : 22).frame(maxWidth: hollow ? nil : .infinity, minHeight: height)
+            .background(hollow ? Theme.glass : Theme.ink, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(hollow ? Theme.hair : .clear, lineWidth: 1))
+            .overlay(alignment: .bottom) {
+                // The press lands on the mark: a red hairline under the button.
+                Capsule().fill(Theme.signal).frame(height: 2).padding(.horizontal, 18).offset(y: 6)
+                    .opacity(configuration.isPressed ? 1 : 0)
+            }
+            .scaleEffect(configuration.isPressed ? 0.98 : 1)
+            .animation(.easeOut(duration: 0.12), value: configuration.isPressed)
+            .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+}
+
+/// Everything that isn't the next thing to do: words (and an icon), no box, a 44 pt target.
+struct QuietButton: ButtonStyle {
+    var color: Color = Theme.ink2
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .font(Theme.text(14, .medium)).foregroundStyle(color)
+            .lineLimit(1).minimumScaleFactor(0.75)
+            .padding(.horizontal, 10).frame(minWidth: 44, minHeight: 44)
+            .contentShape(Rectangle())
+            .opacity(configuration.isPressed ? 0.5 : 1)
+            .animation(.easeOut(duration: 0.1), value: configuration.isPressed)
+    }
+}
+
+/// A sheet's top edge: the close button, and (quietly, centred) what the sheet is. No large title, no subtitle.
+struct SheetBar<Leading: View>: View {
+    let name: String
+    let close: () -> Void
+    @ViewBuilder var leading: () -> Leading
+    var body: some View {
+        ZStack {
+            Text(name.uppercased()).font(Theme.marquee(11, .footnote)).tracking(3).foregroundStyle(Theme.ink3)
+                .lineLimit(1).accessibilityAddTraits(.isHeader).accessibilityLabel(name)
+            HStack {
+                leading()
+                Spacer()
+                Button(action: close) {
+                    Image(systemName: "xmark").font(.system(size: 14, weight: .semibold)).foregroundStyle(Theme.ink2)
+                        .frame(width: 44, height: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain).accessibilityLabel("Done")
+            }
+        }
+        .padding(.horizontal, 8).padding(.top, 6)
+    }
+}
+extension SheetBar where Leading == EmptyView {
+    init(name: String, close: @escaping () -> Void) { self.init(name: name, close: close) { EmptyView() } }
+}
+
 /// The web's glass panel: a hairline, a blur, a rounded rect.
 struct Glass: ViewModifier {
     var radius: CGFloat = 14

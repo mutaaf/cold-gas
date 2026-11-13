@@ -9,27 +9,37 @@ struct PracticeView: View {
     @ObservedObject var game = Game.shared
     let start: (String) -> Void
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            SheetBar(name: "Practice", close: { dismiss() })
             ScrollView {
-                VStack(spacing: 10) {
-                    ForEach(drillsFor(game.course), id: \.id) { d in
+                VStack(alignment: .leading, spacing: 0) {
+                    let drills = drillsFor(game.course)
+                    // A running order: the number, the moment, and what it asks of you. The situation is read out too.
+                    ForEach(drills, id: \.id) { d in
                         Button { start(d.id) } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(d.label.uppercased()).font(Theme.display(12)).tracking(2).foregroundStyle(Theme.ink)
-                                Text(SaveStore.shared.units.localize(d.blurb)).font(Theme.text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
-                                Text(d.goal).font(Theme.text(12, .medium)).foregroundStyle(Theme.ice)
+                            HStack(alignment: .firstTextBaseline, spacing: 14) {
+                                Text(d.n).font(Theme.mono(13)).foregroundStyle(Theme.ink3)
+                                VStack(alignment: .leading, spacing: 5) {
+                                    Text(SaveStore.shared.units.localize(d.label).uppercased()).font(Theme.marquee(15, .headline)).tracking(1.2).foregroundStyle(Theme.ink)
+                                        .fixedSize(horizontal: false, vertical: true)
+                                    Text(SaveStore.shared.units.localize(d.goal)).font(Theme.text(13, .medium)).foregroundStyle(Theme.ice)
+                                }
+                                Spacer(minLength: 8)
+                                Image(systemName: "play.fill").font(.system(size: 11)).foregroundStyle(Theme.ink3)
                             }
-                            .frame(maxWidth: .infinity, alignment: .leading).padding(14)
-                            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(Theme.hair)).contentShape(Rectangle())
-                        }.buttonStyle(.plain)
+                            .padding(.vertical, 16).frame(maxWidth: .infinity, alignment: .leading)
+                            .overlay(alignment: .bottom) { Rectangle().fill(Theme.hair2).frame(height: 1) }
+                            .contentShape(Rectangle())
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("\(SaveStore.shared.units.localize(d.label)). \(SaveStore.shared.units.localize(d.goal))")
+                        .accessibilityHint(SaveStore.shared.units.localize(d.blurb))
                     }
-                    if drillsFor(game.course).isEmpty { Text("No drills on this course.").font(Theme.text(14)).foregroundStyle(Theme.ink3) }
-                    Text("Practice runs don't go on the board.").font(Theme.text(11)).foregroundStyle(Theme.ink3).padding(.top, 6)
-                }.padding(16)
+                    if drills.isEmpty { Text("No drills on this course.").font(Theme.text(14)).foregroundStyle(Theme.ink3).padding(.vertical, 16) }
+                    Text("Drills stay off the board.").font(Theme.text(11)).foregroundStyle(Theme.ink3).padding(.top, 14)
+                }
+                .padding(.horizontal, 20)
             }
-            .navigationTitle("Practice")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
 }
@@ -39,9 +49,10 @@ struct HowToView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var open: String?
     var body: some View {
-        NavigationStack {
+        VStack(spacing: 0) {
+            SheetBar(name: "How to play", close: { dismiss() })
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
+                VStack(alignment: .leading, spacing: 22) {
                     theGame
                     theScore
                     VStack(spacing: 0) {
@@ -94,17 +105,13 @@ struct HowToView: View {
                         }
                     }
                 }
-                .padding(20)
+                .padding(.horizontal, 20).padding(.bottom, 20).padding(.top, 4)
             }
-            .navigationTitle("How to play")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
         }
     }
 
     private var theGame: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            label("One thumb, the whole flight")
+        VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 step("HOLD", "to climb", phase: 0)
                 step("TAP", "to let go", phase: 190)
@@ -112,6 +119,9 @@ struct HowToView: View {
             }
             Text("Slide your thumb while you hold to aim the touchdown.").font(Theme.text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
         }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("One thumb, the whole flight")
+        .accessibilityIdentifier("howto-steps")
     }
     private func step(_ verb: String, _ what: String, phase: CGFloat) -> some View {
         VStack(spacing: 3) {
@@ -125,7 +135,6 @@ struct HowToView: View {
 
     private var theScore: some View {
         VStack(alignment: .leading, spacing: 8) {
-            label("What scores")
             HStack(spacing: 8) {
                 fact("Soft", "low sink")
                 fact("Level", "low tilt")
