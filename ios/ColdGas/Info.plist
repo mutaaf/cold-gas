@@ -53,6 +53,12 @@
 		<string>UIInterfaceOrientationLandscapeLeft</string>
 		<string>UIInterfaceOrientationLandscapeRight</string>
 	</array>
+	<!-- 0253: coldgas://… carries a challenge link's query and fragment, the fallback to universal links. -->
+	<key>CFBundleURLTypes</key>
+	<array><dict>
+		<key>CFBundleURLName</key><string>com.mutaafaziz.coldgas</string>
+		<key>CFBundleURLSchemes</key><array><string>coldgas</string></array>
+	</dict></array>
 	<key>GCSupportsControllerUserInteraction</key>
 	<true/>
 	<key>GCSupportedGameControllers</key>

@@ -57,7 +57,8 @@ struct RootUI: View {
         ZStack(alignment: .topLeading) {
             Color.clear
             switch game.screen {
-            case .title: TitleView(crease: layout.crease(in: layout.controls), open: { sheet = $0 }).frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
+            // A challenge link's card stands alone over the scene (0253): the title waits under it, unseen.
+            case .title: if game.incoming == nil { TitleView(crease: layout.crease(in: layout.controls), open: { sheet = $0 }).frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY) }
             case .run: RunView(layout: layout)
             case .drive: DriveView(layout: layout)
             case .results:
@@ -73,7 +74,12 @@ struct RootUI: View {
                     }
                 }
             }
-            if game.screen == .title, let n = whatsNew {
+            // 0253: a challenge link's card over the title (above What's new: the link is why the app opened).
+            if game.screen == .title, let inc = game.incoming {
+                ChallengeCard(incoming: inc)
+                    .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
+                    .transition(.opacity)
+            } else if game.screen == .title, let n = whatsNew {
                 WhatsNewView(notes: n, dismiss: { withAnimation(.easeOut(duration: 0.2)) { whatsNew = nil } }, go: { d in
                     // A callout takes you to its feature: the modal closes and that sheet opens over the title.
                     withAnimation(.easeOut(duration: 0.2)) { whatsNew = nil }
@@ -415,7 +421,13 @@ struct RunView: View {
             ControllerView(panel: rows, layoutKey: "\(layout.spread.rawValue) \(Int(layout.controls.width))x\(Int(layout.controls.height)) \(hud.revision)")
                 .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
             if game.countdown > 0 {
-                Text("\(game.countdown)").font(Theme.display(64)).foregroundStyle(Theme.ink)
+                VStack(spacing: 10) {
+                    Text("\(game.countdown)").font(Theme.display(64)).foregroundStyle(Theme.ink)
+                    if let r = game.rival {
+                        Text(String(format: "%@ \u{00B7} %.1f to beat", r.initials.isEmpty ? "Your challenger" : r.initials, r.score))
+                            .font(Theme.text(15, .semibold)).foregroundStyle(Theme.ink).padding(.horizontal, 14).padding(.vertical, 8).glass(16)
+                    }
+                }
                     .frame(width: sceneSafe.width, height: sceneSafe.height).offset(x: sceneSafe.minX, y: sceneSafe.minY)
                     .transition(.opacity).id(game.countdown)
             }
@@ -683,6 +695,11 @@ struct ResultsView: View {
                     if result.drill == nil {
                         JudgePanel(judges: card.judges, celebrate: celebrated(card), model: judges, open: $openJudge)
                     }
+                    if let r = game.rival, result.drill == nil {
+                        let st = Challenge.compare(mine: card.total, theirs: r.score, initials: r.initials)
+                        Text(st.text).font(Theme.text(15, .semibold)).foregroundStyle(st.won ? Theme.ok : Theme.ink)
+                            .accessibilityIdentifier("standing")
+                    }
                     if let d = result.dailyLine { Text(d).font(Theme.text(13)).foregroundStyle(result.dailyOK ? Theme.ok : Theme.ink2).fixedSize(horizontal: false, vertical: true) }
                     if let d = result.drill {
                         VStack(alignment: .leading, spacing: 4) {
@@ -785,7 +802,7 @@ struct ResultsView: View {
     /// Share (0252): a picture of the moment, one line and the challenge link. Every flown run, a wreck too.
     @ViewBuilder private func share(_ card: Card, _ height: CGFloat) -> some View {
         if result.drill == nil {
-            Button { Sharer.share(result) } label: { Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity) }
+            Button { Sharer.share(result) } label: { Label(game.rival != nil ? "Send it back" : "Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity) }
                 .buttonStyle(MarqueeButton(height: height, hollow: true))
                 .accessibilityIdentifier("share").accessibilityLabel("Share").accessibilityHint("A picture of this jump and a link to beat it")
         }
@@ -948,5 +965,52 @@ struct FirstLandingView: View {
             }
             shownScore = total
         }
+    }
+}
+
+// MARK: - A challenge link (0253)
+
+/// The card a challenge link opens on: who sent it, what they scored, on what; one Take the challenge. A link from another
+/// version (or one that can't be read) says so and offers a plain Fly on its course. Never a wall in front of the game.
+struct ChallengeCard: View {
+    @ObservedObject var game = Game.shared
+    let incoming: Game.Incoming
+    var body: some View {
+        let course = COURSE_INFO.first { $0.id == (incoming.run?.course ?? incoming.course ?? game.course) }?.name ?? "The Show"
+        ZStack(alignment: .bottom) {
+            LinearGradient(colors: [.clear, Theme.bg.opacity(0.85)], startPoint: .top, endPoint: .bottom)
+                .padding(-200).accessibilityHidden(true)
+                .onTapGesture { withAnimation(.easeOut(duration: 0.2)) { game.incoming = nil } }
+            VStack(alignment: .leading, spacing: 0) {
+                Text("A CHALLENGE").font(Theme.marquee(11, .footnote)).tracking(5).foregroundStyle(Theme.ink2)
+                if let r = incoming.run {
+                    HStack(alignment: .firstTextBaseline, spacing: 12) {
+                        Text(r.initials.isEmpty ? "A FRIEND" : r.initials).font(Theme.marquee(30)).foregroundStyle(Theme.ink)
+                        Spacer()
+                        Text(String(format: "%.1f", r.score)).font(Theme.mono(40, bold: true)).foregroundStyle(Theme.ink).monospacedDigit()
+                    }.padding(.top, 10)
+                    HStack(spacing: 8) {
+                        Capsule().fill(Theme.signal).frame(width: 22, height: 2)
+                        Text("\(course) \u{00B7} \(r.tier.capitalized)").font(Theme.text(14, .medium)).foregroundStyle(Theme.ink2)
+                    }.padding(.top, 6)
+                    Button { game.takeChallenge() } label: { Text("Take the challenge") }
+                        .buttonStyle(MarqueeButton(height: 54)).padding(.top, 20).accessibilityIdentifier("take-challenge")
+                } else {
+                    Text("This challenge is from an older version of the game.").font(Theme.text(16, .semibold)).foregroundStyle(Theme.ink)
+                        .fixedSize(horizontal: false, vertical: true).padding(.top, 10).accessibilityIdentifier("challenge-stale")
+                    Button { game.flyIncomingCourse() } label: { Text("Fly \(course)") }
+                        .buttonStyle(MarqueeButton(height: 54)).padding(.top, 18).accessibilityIdentifier("fly-incoming")
+                }
+                Button { withAnimation(.easeOut(duration: 0.2)) { game.incoming = nil } } label: { Text("Not now") }
+                    .buttonStyle(QuietButton()).padding(.top, 4)
+            }
+            .padding(20)
+            .background(Theme.bg.opacity(0.94), in: RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(RoundedRectangle(cornerRadius: 20, style: .continuous).strokeBorder(Theme.hair, lineWidth: 1))
+            .frame(maxWidth: 440)
+            .padding(.horizontal, 16).padding(.bottom, 20)
+            .accessibilityElement(children: .contain).accessibilityAddTraits(.isModal)
+        }
+        .onAppear { Ready.mark("challenge") }
     }
 }
