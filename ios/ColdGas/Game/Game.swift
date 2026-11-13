@@ -369,6 +369,13 @@ final class Game: ObservableObject {
         if lastHud > 1.0 / 15, !(r.after?.done ?? false) { lastHud = 0; refreshHud(l) }
     }
 
+    /// The finished run's flight, side on (along the course, up), for the share card (0252): read from the track, never the sim.
+    func flightPath() -> [CGPoint] {
+        guard let tr = track, tr.ticks > 1 else { return [] }
+        let end = Double(tr.ticks - 1) / Replay.hz
+        return stride(from: 0.0, through: end, by: 1.0 / 30).map { t in let p = tr.car(at: t).pos; return CGPoint(x: Double(p.z), y: Double(p.y)) }
+    }
+
     // --- Watch it back -------------------------------------------------------------------------------
     /// The flight again from the top, at the speed it flew, with its sound and its crash, from the track it recorded. The sim
     /// isn't touched: the run is over.
@@ -595,9 +602,4 @@ final class RunResult: Identifiable {
     var dailyOK = false, dailyLine: String?
     /// This device's first landing (0249): the results open on its moment. `firstRun`: the run was flown on the first run.
     var firstLanding = false, firstRun = false
-    /// A link to the same jump on the web (src/challenge.js): opens the game with this run to beat.
-    lazy var challengeURL: URL? = {
-        guard eligible, let p = try? Challenge.encode(log: log, course: course, score: card.total, tier: card.tier, initials: SaveStore.shared.initials, simVersion: SIM_VERSION) else { return nil }
-        return URL(string: Challenge.url(base: "https://mutaafaziz.com/coldgas/", course: course, payload: p))
-    }()
 }
