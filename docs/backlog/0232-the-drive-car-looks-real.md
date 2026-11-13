@@ -1,5 +1,5 @@
 ---
-id: 0229
+id: 0232
 title: The drive's car reads as a real car (a forged body with panel gaps, glass and an interior, real tyres and rims, flaked paint, grime)
 status: in-progress
 priority: P0
@@ -30,9 +30,9 @@ Runs on: the operator's Mac (Xcode, Blender).
 
 ## Acceptance criteria
 - [ ] `make test` + `make rules` green, the 52 run vectors bit-exact.
-- [ ] `python3 tools/forge/car/check.py` passes; the forge's turntables in docs/shots/0229/.
+- [ ] `python3 tools/forge/car/check.py` passes; the forge's turntables in docs/shots/0232/.
 - [ ] Before and after shots at the same poses (front, rear, above, the cinema camera, the chase on a road) in
-      docs/shots/0229/.
+      docs/shots/0232/.
 - [ ] Bench before and after.
 
 ## Test plan

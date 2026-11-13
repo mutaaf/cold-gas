@@ -75,7 +75,7 @@ final class DriveCamera {
             let a = Double(shakeAmp) * 0.08
             eye += SIMD3(sin(shakeT * 91) * a, sin(shakeT * 77 + 1) * a, sin(shakeT * 63 + 2) * a * 0.5)
         }
-        // The road through the lens (0228): a faint, fast tremor that grows with speed (a camera car's mount), never under
+        // The road through the lens (0231): a faint, fast tremor that grows with speed (a camera car's mount), never under
         // Reduce Motion.
         if !reduced && speed > 3 {
             roadT += dt

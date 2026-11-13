@@ -1,4 +1,4 @@
-# Preview renders of the Free Drive car (docs/shots/0229/blender-*.png): a studio floor, a sky, a key and two
+# Preview renders of the Free Drive car (docs/shots/0232/blender-*.png): a studio floor, a sky, a key and two
 # strips. The car is built in the game frame (y up); a root empty turns it +90 deg about X so Blender sees it Z-up.
 import math
 

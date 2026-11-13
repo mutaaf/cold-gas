@@ -29,7 +29,7 @@ struct FrameU {
 struct LookU {
     var hemiSky = SIMD4<Float>(), hemiGround = SIMD4<Float>(), hazeCol = SIMD4<Float>(), sunCol = SIMD4<Float>(), sunDir = SIMD4<Float>(), fogExp = SIMD4<Float>()
     var skyZenith = SIMD4<Float>(), skyMid = SIMD4<Float>(), skyHorizon = SIMD4<Float>(), skySun = SIMD4<Float>(), bloom = SIMD4<Float>()
-    /// Free Drive's physical sky (0228): x on, y haze, z the eye's height (km), w night; the sun's illuminance (rgb) and the time.
+    /// Free Drive's physical sky (0231): x on, y haze, z the eye's height (km), w night; the sun's illuminance (rgb) and the time.
     var atmo = SIMD4<Float>(), sunE = SIMD4<Float>()
 }
 struct GlintGPU { var pos = SIMD4<Float>(), color = SIMD4<Float>() }
@@ -67,7 +67,7 @@ final class Renderer {
     /// What's been shed to hold the frame once the resolution has nothing left to give (0 nothing; 1 the mirror; 2 and the lit air, half the
     /// mist's budget). Thermal state and Low Power Mode hold it up too; a debug line says so, Settings' cadence never moves. Pixels first, effects last.
     private(set) var shed = 0
-    /// The drive's extras' quality (0228: the grass; the props' shadows): 2 full, 1 cut back, 0 off. Tied to the shed (heat,
+    /// The drive's extras' quality (0231: the grass; the props' shadows): 2 full, 1 cut back, 0 off. Tied to the shed (heat,
     /// Low Power Mode, a frame still over budget at the resolution floor) and `-fd-quality <n>`.
     var quality: Int { min(Launch.value("-fd-quality").flatMap(Int.init) ?? 2, 2 - shed) }
     private var shedThermal = 0, overFrames = 0, underFrames = 0
@@ -114,7 +114,7 @@ final class Renderer {
     /// A new track (a new run, or back to the title's loop): effects and clocks start over.
     func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart() }
     private(set) lazy var dents = Dents(roadster: driveCar?.body ?? stage.roadster, parked: stage.parked)
-    /// The drive's own car (0229, DriveCarModel): its body and wheels in place of the stage roadster's, in Free Drive and the
+    /// The drive's own car (0232, DriveCarModel): its body and wheels in place of the stage roadster's, in Free Drive and the
     /// roams; its materials' places in stageMats, and each submesh the lamps and the crash drive by name.
     private var driveCar: DriveCarModel?
     private var carMats = 1, carFarMats = 1, driveWheelBase = -1
@@ -137,7 +137,7 @@ final class Renderer {
     private let dummy: MTLTexture
     let cam = Director()
     let passTimes = PassTimes()
-    /// Free Drive's physical sky (0228): its LUTs, drawn on first use.
+    /// Free Drive's physical sky (0231): its LUTs, drawn on first use.
     private var skyLUT: SkyLUT?
     private let library: MTLLibrary
     /// `-holds 12.1,12.5`: debug, for shots on a loaded machine: the replay's clock stops at each of these sim times, marks
@@ -270,7 +270,7 @@ final class Renderer {
         if let sw = st.sweep { stageMats += [mats(sw.beam), mats(sw.head), mats(sw.lens)] }
         complexMats = stageMats.count
         if let c = st.complex { stageMats.append(mats(c.mesh)) }
-        // The sets' surfaces get their own procedural detail (0230, Shaders.metal effect 13): concrete's aggregate, stains and
+        // The sets' surfaces get their own procedural detail (0233, Shaders.metal effect 13): concrete's aggregate, stains and
         // tyre marks, metal's brushing and scratches, roughness that varies. Only lit, opaque, plain materials (the slab's
         // wet look, the beams, glows and lamps keep theirs). `-flat-sets` turns it off for comparison.
         if !Launch.args.contains("-flat-sets") {
@@ -305,7 +305,7 @@ final class Renderer {
         lk.skyZenith = SIMD4(st.skyZenith, 0); lk.skyMid = SIMD4(st.skyMid, 0); lk.skyHorizon = SIMD4(st.skyHorizon, 0); lk.skySun = SIMD4(st.skySun, 0)
         // UnrealBloomPass composite: strength × lerp(factor, 1.2 − factor, radius) per mip.
         func factor(_ f: Float) -> Float { st.bloomStrength * (f + (1.2 - f - f) * st.bloomRadius) }
-        // The bloom's threshold (0230): the web's 0.82 let a white car under the set's searchlights bloom into a glowing blob on
+        // The bloom's threshold (0233): the web's 0.82 let a white car under the set's searchlights bloom into a glowing blob on
         // the title and a run's opening. 1.6 keeps the LEDs, lamps, beams and jets blooming (all well over 2) and the paint
         // crisp.
         lk.bloom = SIMD4(max(st.bloomThreshold, Launch.args.contains("-web-bloom") ? 0 : 1.6), factor(0.9), factor(0.5), factor(0.2))
@@ -330,10 +330,10 @@ final class Renderer {
             openSpin = st.wheels.map { Renderer.openFace(device: device, $0.spinPart) }
             rotorSub = st.wheels.first?.steerPart.submeshes.firstIndex { $0.material.name == "roadster-rotor" } ?? -1
         }
-        // The forged car (0229) on every course since 0230: the scored runs' cameras see the same body (pixels only; the sim
+        // The forged car (0232) on every course since 0233: the scored runs' cameras see the same body (pixels only; the sim
         // never sees a mesh). `-roadster` (or a drive's `-fd-roadster`) draws the stage roadster instead.
         if !Launch.args.contains("-roadster") && !(roam && Launch.args.contains("-fd-roadster")), let dc = DriveCarModel(device: device) {
-            // The forged car (0229): its materials after the stage's. Paint (11) gets the flakes and the grime, the rest of
+            // The forged car (0232): its materials after the stage's. Paint (11) gets the flakes and the grime, the rest of
             // the outside (12) the grime only (Shaders.metal).
             func carMatsOf(_ m: StageMesh) -> [MaterialU] {
                 var list = mats(m)
@@ -548,7 +548,7 @@ final class Renderer {
         }
         if fxLog { fxFrames += 1; if fxFrames % 120 == 0 { print(String(format: "FX mist %d live, k %.2f, %.2f M fragments at %d×%d · cones %d · sparks %d, puffs %d, chips %d", mist.live, mist.budgetScale, mist.fragments(viewProj: u.viewProj, height: Float(renderSize.1)) * mist.budgetScale * mist.budgetScale / 1e6, renderSize.0, renderSize.1, nPlumes, fx.0, nPuffs, fx.2))
             for (i, pc) in crash.pieces.list.enumerated() where pc.on { print(String(format: "PIECE %d at (%.2f, %.2f, %.2f) v %.2f w %.2f still %.2f", i, pc.pos.x, pc.pos.y, pc.pos.z, simd_length(pc.v), simd_length(pc.w), pc.still)) } } }
-        // The key light: the stage's, or in Free Drive the sun (or the moon) of the hour (0228). Its shadow box follows the car;
+        // The key light: the stage's, or in Free Drive the sun (or the moon) of the hour (0231). Its shadow box follows the car;
         // under a drive's sun it reaches 160 m back toward the light, so a tree that far off still lays its shadow across the road.
         let dk = dv?.key
         let keyDir = dk.map { simd_normalize($0.dir) } ?? simd_normalize(stage.keyOffset)
@@ -584,7 +584,7 @@ final class Renderer {
             cmd.addCompletedHandler { cb in pt.add(name, start: cb.gpuStartTime, end: cb.gpuEndTime) }
             cmd.commit(); cmd = next
         }
-        // 0. the sky's LUTs (Free Drive's physical sky, 0228)
+        // 0. the sky's LUTs (Free Drive's physical sky, 0231)
         if lookU.atmo.x > 0.5 {
             if skyLUT == nil { skyLUT = SkyLUT(device: device, library: library) }
             if let sl = skyLUT { sl.update(cmd, sun: SIMD3(lookU.skySun.x, lookU.skySun.y, lookU.skySun.z), eyeKm: lookU.atmo.z, sunE: SIMD3(lookU.sunE.x, lookU.sunE.y, lookU.sunE.z), time: lookU.sunE.w, night: lookU.atmo.w) } else { lookU.atmo.x = 0 }
@@ -803,7 +803,7 @@ final class Renderer {
     /// Each lamp's level this frame, and the canopy's glass or its crazing.
     private func applyCarMaterials() {
         let c = crash.car
-        // Under Free Drive's daylight (0229) a lamp is a bright mark, not a blaze: its HDR colour scaled down until dusk.
+        // Under Free Drive's daylight (0232) a lamp is a bright mark, not a blaze: its HDR colour scaled down until dusk.
         let lk: Float = lookU.atmo.x > 0.5 ? 0.25 + 0.75 * lookU.atmo.w : 1
         setLamp(.drl, c.drl * lk); setLamp(.heads, c.headC * lk); setLamp(.tailBar, c.tail * lk); setLamp(.tailDim, c.tailDim * lk); setLamp(.brake, c.brakeC * max(lk, 0.6))
         setBodyLamp(subAmber, c.amber * lk); setBodyLamp(subMarker, c.marker * lk); setBodyLamp(subPlate, c.plate * lk); setBodyLamp(subAmbient, c.ambient * lk)
@@ -922,7 +922,7 @@ final class Renderer {
             let pivot = carM * translate(SIMD3(w.x, y, w.z)) * simd_float4x4(simd_quatf(angle: steer, axis: [0, 1, 0]))
             let spinM = pivot * simd_float4x4(simd_quatf(angle: spin, axis: [1, 0, 0]))
             if let dc = driveCar {
-                // The forged wheels (0229): built for one side, mirrored (and their winding with them) for the other.
+                // The forged wheels (0232): built for one side, mirrored (and their winding with them) for the other.
                 let mirrored = (w.x > 0) == (dc.builtForX < 0)
                 let flip = mirrored ? scaleM(-1, 1, 1) : matrix_identity_float4x4
                 let saved = frontFace
@@ -1001,7 +1001,7 @@ final class Renderer {
 /// Per-pass GPU milliseconds over a bench (thread-safe: completion handlers run off the main thread). Each pass is its own
 /// command buffer, and the GPU starts the next before the last has ended, so a buffer's start-to-end time counts the overlap
 /// (on the phone the passes summed to ≈ 20 ms in an 8 ms frame). A pass is charged only from the later of its start and the
-/// previous buffer's end (0228): the time it added to the frame.
+/// previous buffer's end (0231): the time it added to the frame.
 final class PassTimes {
     private var sum: [String: Double] = [:], n: [String: Int] = [:]
     private var lastEnd: CFTimeInterval = 0

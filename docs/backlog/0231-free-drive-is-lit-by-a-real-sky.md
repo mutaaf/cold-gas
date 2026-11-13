@@ -1,5 +1,5 @@
 ---
-id: 0228
+id: 0231
 title: Free Drive is lit by a real sky (golden hour, a physical atmosphere, surfaces with detail, grass, the ground under the car)
 status: shipped
 priority: P0
@@ -34,7 +34,7 @@ Runs on: the operator's Mac (Xcode).
 ## Acceptance criteria
 - [x] `make test` + `make rules` green, the 52 run vectors bit-exact (nothing in the sim changes).
 - [x] Before and after shots at the same poses (mountain road, forest road, coast road, the Show's set on a roam, the car
-      in the cinema camera) in docs/shots/0228/, the after dramatically better.
+      in the cinema camera) in docs/shots/0231/, the after dramatically better.
 - [x] Bench before and after (simulator; the phone's is the owner's) (docs/NATIVE-FREEDRIVE.md §8), per-pass times.
 - [x] The 1.2.0 notes and What's-new card say so.
 
@@ -42,4 +42,4 @@ Runs on: the operator's Mac (Xcode).
 `cd ios && make test && make rules && make bench-freedrive`; simulator shots with `-fd-km <n> -fd-cruise 0`.
 
 ## Out of scope
-The car's own model (0229).
+The car's own model (0232).

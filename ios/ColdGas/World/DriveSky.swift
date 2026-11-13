@@ -1,4 +1,4 @@
-// Free Drive's time of day (0228): where the sun is, and what that does to the light. The sun runs a real path over a
+// Free Drive's time of day (0231): where the sun is, and what that does to the light. The sun runs a real path over a
 // latitude of 46° (an alpine pass) a few weeks either side of an equinox (declination +10°); north is +z, east +x. The key
 // light is the sun's illuminance through the air (SkyCPU.transmittance, the same air the sky is drawn with), the exposure is
 // set from it so a frame reads at any hour, and the stars and the headlamps come on as the sun goes down.

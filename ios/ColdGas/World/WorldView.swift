@@ -20,9 +20,9 @@ final class WorldView {
     let world: FreeWorld
     private let device: MTLDevice
     private let terrainPipe, roadPipe, propPipe, loosePipe, markPipe: MTLRenderPipelineState
-    /// The props into the key light's shadow map (0228).
+    /// The props into the key light's shadow map (0231).
     private let propShadowPipe: MTLRenderPipelineState?
-    /// The grass near the eye (0228): its radius (m) and the clumps' spacing; `quality` (the renderer's, by its shed) scales it.
+    /// The grass near the eye (0231): its radius (m) and the clumps' spacing; `quality` (the renderer's, by its shed) scales it.
     private let grassPipe: MTLRenderPipelineState?
     static let grassR = 36.0, grassSp = 0.6
     var quality = 2
@@ -426,7 +426,7 @@ final class WorldView {
             e.setVertexBuffer(t.buf, offset: 0, index: 0)
             e.drawIndexedPrimitives(type: .triangle, indexCount: tileIndexCount, indexType: .uint16, indexBuffer: tileIndex, indexBufferOffset: 0)
         }
-        // Grass on the finest tiles round the eye (0228): quality 2 the full radius, 1 two thirds of it, 0 none.
+        // Grass on the finest tiles round the eye (0231): quality 2 the full radius, 1 two thirds of it, 0 none.
         grassClumps = 0
         if let gp = grassPipe, quality > 0, !WorldView.skip.contains("grass") {
             e.setRenderPipelineState(gp); e.setCullMode(.none)
@@ -505,7 +505,7 @@ final class WorldView {
             e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setDepthStencilState(dsWrite)
         }
     }
-    /// The props near `center` (render space) into the key light's shadow map (0228): the near pool's instances at their
+    /// The props near `center` (render space) into the key light's shadow map (0231): the near pool's instances at their
     /// coarser LOD (a shadow doesn't need the finest crown), the blocks' within the box at theirs. In the shadow pass, after
     /// the stage's casters; `frame` carries the light's view-projection.
     func drawShadow(_ e: MTLRenderCommandEncoder, frame fb: MTLBuffer, drive: inout WDriveU, center: SIMD3<Float>, radius: Double) {
@@ -545,6 +545,6 @@ struct WTileU { var offset = SIMD4<Float>(), morph = SIMD4<Float>() }
 struct WGrassU { var offset = SIMD4<Float>(), cells = SIMD4<Int32>(), params = SIMD4<Float>() }
 /// `anchor`: the floating origin modulo 4,096 m (x, z), so world-anchored detail (the land's grain) doesn't jump when the
 /// origin moves; zw spare.
-/// `carPos` / `carFwd` (0228): the car on the ground (render space; w 1 on its wheels) and its heading, half length, half
+/// `carPos` / `carFwd` (0231): the car on the ground (render space; w 1 on its wheels) and its heading, half length, half
 /// width, for the ground's ambient occlusion under it.
 struct WDriveU { var lampPos = SIMD4<Float>(), lampDir = SIMD4<Float>(), params = SIMD4<Float>(), anchor = SIMD4<Float>(), carPos = SIMD4<Float>(), carFwd = SIMD4<Float>() }

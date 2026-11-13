@@ -29,7 +29,7 @@ struct LookU {
     float4 fogExp;              // x: FogExp2's density (0: linear, fogRange); y: 1 with the wet slab on; z: 1 with the stars on; w: bloom on
     float4 skyZenith, skyMid, skyHorizon, skySun;
     float4 bloom;               // threshold, and UnrealBloomPass's strength × each level's factor (three levels' worth; see compose)
-    float4 atmo;                // Free Drive's physical sky (0228, Sky.h): x on, y the haze's thickness, z the eye's height (km), w night (0…1)
+    float4 atmo;                // Free Drive's physical sky (0231, Sky.h): x on, y the haze's thickness, z the eye's height (km), w night (0…1)
     float4 sunE;                // the sun's illuminance at the ground (rgb); w: time (s), for the clouds
 };
 struct Light { float4 posRange; float4 colorIntensity; float4 dirCos; float4 params; };   // params: decay, cosOuter, kind (0 point, 1 spot), penumbra
@@ -122,7 +122,7 @@ static float3 duskEnv(float3 d, float rough, constant LookU& k) {
     return mix(c, avg, clamp(rough * rough, 0.0, 1.0));
 }
 
-// The sets' procedural detail (0230): hashed value noise and a few octaves of it, in world metres.
+// The sets' procedural detail (0233): hashed value noise and a few octaves of it, in world metres.
 static float setHash(float2 p) { p = fract(p * float2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
 static float setNoise(float2 p) {
     float2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
@@ -176,10 +176,10 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float rough = m.pbr.y;
         if (m.flags.y) rough *= roughMap.sample(s, uv).g;
         float metal = m.pbr.x, wet = 0, ccK = m.pbr.z;
-        // The drive car's outside (0229): road grime where the forge's mask puts it (uv.x: sills, behind the wheels, the
+        // The drive car's outside (0232): road grime where the forge's mask puts it (uv.x: sills, behind the wheels, the
         // tail), as the miles add up (effect.w); it dulls the paint and takes the clear coat with it.
         float grime = 0;
-        if (m.effectKind.x == 13) {   // a set's surface (0230): procedural detail in world space, no texture memory
+        if (m.effectKind.x == 13) {   // a set's surface (0233): procedural detail in world space, no texture memory
             float3 wp = in.world, an = abs(normalize(in.nrm + 1e-6));
             // Triplanar value noise: the two axes across the surface's facing.
             float2 q = an.y > max(an.x, an.z) ? wp.xz : (an.x > an.z ? wp.zy : wp.xy);
@@ -245,7 +245,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         }
         // Indirect, as three's RE_IndirectDiffuse/Specular_Physical: the hemisphere (irradiance / π) and the environment (its
         // roughest mip is irradiance / π already), the specular through the split-sum DFG with its multiple-scattering term.
-        bool atmo = look.atmo.x > 0.5;   // Free Drive's physical sky (0228): the sky-view lights and is reflected
+        bool atmo = look.atmo.x > 0.5;   // Free Drive's physical sky (0231): the sky-view lights and is reflected
         float3 cosIrr = atmo ? sky_ambient(skyView, n, look.skySun.xyz, look.sunE.rgb, look.atmo.z)
                              : mix(look.hemiGround.rgb, look.hemiSky.rgb, clamp(n.y * 0.5 + 0.5, 0.0, 1.0)) * M_1_PI_F;
         float nv = clamp(dot(n, V), 0.0, 1.0), r1 = clamp(rough, 0.0, 1.0);
@@ -272,7 +272,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float3 Fms = Fss * Favg / max(1.0 - Ems * Favg, 1e-3);
         float diel = 0.04 * fab.x + fab.y; float dielMs = (0.04 * fab.x + fab.y) * (0.04 + 0.96 * 0.047619) / max(1.0 - Ems * (0.04 + 0.96 * 0.047619), 1e-3) * Ems;
         color += base.rgb * (1.0 - metal) * (1.0 - (diel + dielMs)) * cosIrr + radiance * Fss + Fms * Ems * cosIrr;
-        if (m.effectKind.x == 11) {   // metallic flakes under the coat (0229): a few catch the key light, a glint each
+        if (m.effectKind.x == 11) {   // metallic flakes under the coat (0232): a few catch the key light, a glint each
             float3 r = reflect(-V, n);
             float3 q = floor(r * 220.0 + in.world * 31.0);
             float h = fract(sin(dot(q, float3(12.9898, 78.233, 37.719))) * 43758.5453);
@@ -343,7 +343,7 @@ fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buff
     float3 d = normalize(in.dir + 1e-6);
     float h = clamp(d.y, -1.0, 1.0);
     float3 c;
-    if (k.atmo.x > 0.5) {   // Free Drive's physical sky (0228): the sky-view LUT, the sun's disc, clouds, the stars after dusk
+    if (k.atmo.x > 0.5) {   // Free Drive's physical sky (0231): the sky-view LUT, the sun's disc, clouds, the stars after dusk
         float3 sun = k.skySun.xyz;
         c = sky_view(skyView, d, sun, k.atmo.z, 0.0);
         float mu = dot(d, sun);

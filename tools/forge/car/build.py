@@ -5,7 +5,7 @@
 #
 # Run from the repo root (deterministic: same script, same bytes):
 #   /Applications/Blender.app/Contents/MacOS/Blender -b --factory-startup --python tools/forge/car/build.py
-# Add `-- --shots` to also render the previews to docs/shots/0229/blender-*.png (Cycles, small, slow-ish).
+# Add `-- --shots` to also render the previews to docs/shots/0232/blender-*.png (Cycles, small, slow-ish).
 # Then: python3 tools/forge/car/check.py
 #
 # Frame: game metres, y up, nose toward +z, ground at y = 0. Per vertex: position, normal, uv = (grime 0..1, 0),
@@ -32,7 +32,7 @@ import wheels     # noqa: E402
 ROOT = os.path.normpath(os.path.join(HERE, '..', '..', '..'))
 SHOW = os.path.join(ROOT, 'ios', 'ColdGas', 'Resources', 'Stages', 'show')
 OUT = os.path.join(ROOT, 'ios', 'ColdGas', 'Resources', 'Car')
-SHOTS = os.path.join(ROOT, 'docs', 'shots', '0229')
+SHOTS = os.path.join(ROOT, 'docs', 'shots', '0232')
 ARGS = sys.argv[sys.argv.index('--') + 1:] if '--' in sys.argv else []
 V = Vector
 

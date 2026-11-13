@@ -1,4 +1,4 @@
-// The drive's own car, forged (0229): a detailed body (≈ 50 k triangles, a 10 k one for distance) and open spoked wheels on
+// The drive's own car, forged (0232): a detailed body (≈ 50 k triangles, a 10 k one for distance) and open spoked wheels on
 // real tyres, built in Blender by tools/forge/car/build.py over the stage roadster's own skin, so every animated part of
 // the roadster (the DRL bar, the lamps, the wing, the vanes, the skirts, the fans, the nozzles) still sits where it did.
 // Free Drive and the roams draw it; the scored runs keep the stage's roadster. Pixels only: the physics never sees it.

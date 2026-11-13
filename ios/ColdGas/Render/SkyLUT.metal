@@ -1,4 +1,4 @@
-// Free Drive's atmosphere LUTs (0228, Sky.h): full-screen passes into small float targets.
+// Free Drive's atmosphere LUTs (0231, Sky.h): full-screen passes into small float targets.
 //   transmittance   256 × 64, once: the air's transmittance from a height along a zenith cosine to the top
 //   multi-scatter   32 × 32, once: the isotropic multiple-scattering term (Hillaire §5.5), per sun cosine and height
 //   sky-view        192 × 108, each frame (≈ 20 k pixels × 30 steps): what the eye sees in every direction, single
@@ -115,7 +115,7 @@ fragment float4 cg_skylut_view_fragment(SkyLutOut in [[stage_in]], texture2d<flo
     return float4(L * SKY_SUN_E, 1);
 }
 
-// The clouds over the sky's upper half (0228), redrawn every other frame as they drift: the sky pass reads this map instead of
+// The clouds over the sky's upper half (0231), redrawn every other frame as they drift: the sky pass reads this map instead of
 // running the fbm per pixel (≈ 70 k texels instead of the sky's share of the screen).
 fragment float4 cg_skylut_cloud_fragment(SkyLutOut in [[stage_in]], texture2d<float> V [[texture(0)]], constant SkyParams& p [[buffer(0)]]) {
     float3 d = sky_cloudDir(in.uv);

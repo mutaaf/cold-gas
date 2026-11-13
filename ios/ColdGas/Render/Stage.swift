@@ -187,7 +187,7 @@ final class Stage {
         } else { keyColor = SIMD3(1, 0.86, 0.72); keyIntensity = 2.6; keyOffset = SIMD3(-30, 22, 46) }
     }
 
-    /// A mesh entry of stage.json (or the drive car's car.json, 0229): its .bin in `dir`, its submeshes and materials.
+    /// A mesh entry of stage.json (or the drive car's car.json, 0232): its .bin in `dir`, its submeshes and materials.
     static func parseMesh(_ m: [String: Any], dir: URL, device: MTLDevice, texIndex: [String: Int]) -> StageMesh? {
         guard let file = m["file"] as? String, let bin = try? Data(contentsOf: dir.appendingPathComponent(file)),
               let off = m["indexOffsetBytes"] as? Int, let subs = m["submeshes"] as? [[String: Any]] else { return nil }

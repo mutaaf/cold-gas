@@ -1,4 +1,4 @@
-// Free Drive's sky (0228): a physically based atmosphere, Hillaire 2020 ("A Scalable and Production Ready Sky and Atmosphere
+// Free Drive's sky (0231): a physically based atmosphere, Hillaire 2020 ("A Scalable and Production Ready Sky and Atmosphere
 // Rendering Technique") after Bruneton 2008: Rayleigh, Mie and ozone over a spherical earth, single scattering raymarched and
 // multiple scattering from its isotropic LUT. Three small LUTs (SkyLUT.swift): transmittance (256 × 64) and multiple
 // scattering (32 × 32) once, the sky-view (192 × 108, mipmapped) each frame. The sky pass, the paint's reflections, the land's
@@ -102,7 +102,7 @@ static inline float3 sky_aerial(texture2d<float> V, float3 c, float3 d, float L,
     return c * T + in * (1.0 - T);
 }
 
-// A deck of clouds (0228): fair-weather cumulus and a high veil of cirrus on a plane over the drive, fbm with a domain warp,
+// A deck of clouds (0231): fair-weather cumulus and a high veil of cirrus on a plane over the drive, fbm with a domain warp,
 // lit by the sun through them (a silver lining toward the sun, warm undersides at a low sun) and dimmed into the haze at the
 // horizon. Drawn only where the sky shows.
 static inline float sky_cloudHash(float2 p) { p = fract(p * float2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }

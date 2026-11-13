@@ -1,5 +1,5 @@
 ---
-id: 0230
+id: 0233
 title: Every camera sees the real car, the first screens aren't blown out, and the sets have surfaces (iPhone)
 status: in-progress
 priority: P0
@@ -17,7 +17,7 @@ A playtester, through the owner, 2026-11-13:
 
 ## What
 Runs on: the operator's Mac (Xcode).
-- The forged car (0229) drawn on every course: the title, the Show, the Wall and the Lineup. It's pixels only (the sim never
+- The forged car (0232) drawn on every course: the title, the Show, the Wall and the Lineup. It's pixels only (the sim never
   sees a mesh), and `-roadster` brings back the old one.
 - The bloom's threshold is 1.6, not the web's 0.82. A white car under the set's searchlights no longer blooms into a glowing
   blob on the title and a run's opening, while the LEDs, lamps, beams and jets keep their glow (`-web-bloom` for
@@ -29,7 +29,7 @@ Runs on: the operator's Mac (Xcode).
 
 ## Acceptance criteria
 - [ ] `make test` (the 52 run vectors bit-exact) and `make rules` green.
-- [ ] Before and after shots in docs/shots/0230/: the title, the Show's opening, the Wall's climb, the Lineup's opening,
+- [ ] Before and after shots in docs/shots/0233/: the title, the Show's opening, the Wall's climb, the Lineup's opening,
       the Show's set on a roam.
 
 ## Out of scope

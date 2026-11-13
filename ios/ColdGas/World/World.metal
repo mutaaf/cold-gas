@@ -1,8 +1,8 @@
 // Free Drive's world in Metal (docs/NATIVE-FREEDRIVE.md §4.3): the CDLOD terrain with its geomorph, the road ribbons and
 // the instanced props, all drawn camera-relative (positions arrive as `piece − origin`, so a tile 40 km out is as precise
-// as one at the centre). Lit like the stage (the key light and its shadow, then either 0226's painted dusk or, since 0228,
+// as one at the centre). Lit like the stage (the key light and its shadow, then either 0226's painted dusk or, since 0231,
 // the physical sky of Sky.h: its ambient, its reflections and its aerial perspective), plus the car's headlamps.
-// Surfaces are procedural (0228): no textures, every detail a function of the world position, anchored so it doesn't swim
+// Surfaces are procedural (0231): no textures, every detail a function of the world position, anchored so it doesn't swim
 // when the floating origin moves, and faded by its own screen-space footprint so it never shimmers.
 #include <metal_stdlib>
 using namespace metal;
@@ -18,9 +18,9 @@ struct WFrame {
 struct WLook {
     float4 hemiSky, hemiGround, hazeCol, sunCol, sunDir, fogExp;
     float4 skyZenith, skyMid, skyHorizon, skySun, bloom;
-    float4 atmo, sunE;   // the physical sky (0228, Sky.h)
+    float4 atmo, sunE;   // the physical sky (0231, Sky.h)
 };
-// What the world adds a frame: the headlamps (position, direction, intensity), the props' fade, and the car (0228: its
+// What the world adds a frame: the headlamps (position, direction, intensity), the props' fade, and the car (0231: its
 // footprint darkens the ground under it, the ambient occlusion a body that low makes).
 struct WDrive {
     float4 lampPos;      // xyz; w intensity (0 off)
@@ -78,7 +78,7 @@ static float world_shadow(float4 lc, depth2d<float> sm, float texel) {
 }
 static float world_ggx(float nh, float a) { float a2 = max(a * a, 1e-4), d = nh * nh * (a2 - 1.0) + 1.0; return a2 / max(M_PI_F * d * d, 1e-6); }
 
-// The car's occlusion of the ground round it (0228): its footprint as a soft rectangle, darkest under the middle, ≈ 0.7 m of
+// The car's occlusion of the ground round it (0231): its footprint as a soft rectangle, darkest under the middle, ≈ 0.7 m of
 // falloff past its sides; nothing once it's off the ground.
 static float world_carAO(float3 p, constant WDrive& dr) {
     if (dr.carPos.w <= 0) return 1.0;
@@ -168,7 +168,7 @@ vertex WTerrainOut cg_world_terrain_vertex(WTerrainIn in [[stage_in]], constant 
     return o;
 }
 
-// The land's materials (0228) from the tile's albedo and the slope: grass in clumps and dry patches, bare soil, rock with
+// The land's materials (0231) from the tile's albedo and the slope: grass in clumps and dry patches, bare soil, rock with
 // its strata and fractures on the steep, and the snow the albedo already carries; each with its own bump.
 static WSurf world_land(float3 col, float3 n0, float3 wp, float2 w, float dist, float pxM) {
     WSurf s = world_surf(col, n0);
@@ -238,7 +238,7 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
         return float4(lc[int(clamp(in.level, 0.0, 7.0))] * 0.05 + in.col.rgb * 0.3, 1);
     }
     float3 n = normalize(in.n + 1e-6);
-    bool water = in.col.a > 0.998;   // (the byte's 255; below it, the road's distance: 0228)
+    bool water = in.col.a > 0.998;   // (the byte's 255; below it, the road's distance: 0231)
     float dist = distance(in.world, f.eye.xyz);
     float2 w = in.world.xz + dr.anchor.xy;
     float pxM = dist * 2.0 / max(f.proj.y * f.proj.w, 1.0);   // metres one pixel spans at this distance
@@ -274,7 +274,7 @@ vertex WRoadOut cg_world_road_vertex(WRoadIn in [[stage_in]], constant WFrame& f
     o.clip = f.viewProj * float4(p, 1); o.lightClip = f.lightViewProj * float4(p, 1);
     return o;
 }
-// The road (0228): a used two-lane asphalt. Its aggregate (stones a few centimetres across, some pale), the binder's tone in
+// The road (0231): a used two-lane asphalt. Its aggregate (stones a few centimetres across, some pale), the binder's tone in
 // patches and repairs, sealed cracks and the centre joint as glossy tar lines, the two wheel tracks in each lane polished
 // darker and smoother (they glint toward a low sun), an oil line down each lane's middle, dust toward the edges, and the
 // paint worn through where the tyres cross it. Then the gravel shoulder and the verge in the land's colour.
@@ -286,7 +286,7 @@ fragment float4 cg_world_road_fragment(WRoadOut in [[stage_in]], constant WFrame
     float pxM = dist * 2.0 / max(f.proj.y * f.proj.w, 1.0);
     float2 w = in.world.xz + dr.anchor.xy;
     float2 ra = float2(lat, along);
-    // (quality < 2, anchor.w: the drive's extras cut back, 0228: no stones, no cracks)
+    // (quality < 2, anchor.w: the drive's extras cut back, 0231: no stones, no cracks)
     float hiQ = dr.anchor.w >= 2.0 ? 1.0 : 0.0;
     float fine = (1.0 - smoothstep(0.004, 0.02, pxM)) * hiQ, mid = 1.0 - smoothstep(0.03, 0.12, pxM);
     float3 n = normalize(in.n + 1e-6);
@@ -380,7 +380,7 @@ static float3 world_propPos(WPropIn in, WInst I, constant WFrame& f, constant WT
     if ((t.morph.x == 1.0 && d < dr.anchor.z) || (t.morph.x == 2.0 && d >= dr.anchor.z)) s = 0.0;
     float c = cos(I.posYaw.w), sn = sin(I.posYaw.w);
     float3 lp = in.pos * s;
-    // The wind (0228): crowns sway, more toward the top, each tree on its own phase; trunks, rocks and posts stay put.
+    // The wind (0231): crowns sway, more toward the top, each tree on its own phase; trunks, rocks and posts stay put.
     float green = clamp((in.col.g - max(in.col.r, in.col.b)) * 40.0, 0.0, 1.0);
     float sway = dr.params.w * green * max(lp.y - 1.0, 0.0) * 0.012;
     float ph = I.posYaw.x * 0.37 + I.posYaw.z * 0.23, tm = dr.params.y;
@@ -398,7 +398,7 @@ vertex WPropOut cg_world_prop_vertex(WPropIn in [[stage_in]], uint iid [[instanc
     o.clip = f.viewProj * float4(p, 1); o.lightClip = f.lightViewProj * float4(p, 1);
     return o;
 }
-// The props into the key light's shadow map (0228): trees, rocks and the roadside cast on the road, the land and the car.
+// The props into the key light's shadow map (0231): trees, rocks and the roadside cast on the road, the land and the car.
 vertex float4 cg_world_prop_shadow_vertex(WPropIn in [[stage_in]], uint iid [[instance_id]], constant WFrame& f [[buffer(1)]], constant WTile& t [[buffer(2)]],
                                           constant WInst* inst [[buffer(3)]], constant WDrive& dr [[buffer(5)]]) {
     WInst I = inst[iid];
@@ -464,7 +464,7 @@ fragment float4 cg_world_mark_fragment(WMarkOut in [[stage_in]], constant WFrame
     return float4(c, clamp(0.25 + in.a, 0.0, 1.0) * 0.8 * fade);
 }
 
-// --- Grass (0228): blades on the ground near the eye ------------------------------------------------------------------------
+// --- Grass (0231): blades on the ground near the eye ------------------------------------------------------------------------
 // Each instance a clump of five blades (one tapered triangle each) on a jittered grid over a finest-level terrain tile. The
 // ground's height, normal, colour and the road's distance come from the tile's own vertices (its 4 m grid, the split the
 // tile's triangles use), so a clump stands exactly on the land drawn. None on the road, its shoulder and gravel, on water,

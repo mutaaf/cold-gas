@@ -23,7 +23,7 @@ struct DriveHud: Equatable {
     var speed = 0.0, km = 0.0, heading = 0.0
     var ready = false, line = ""
     var air = false, fan = false, cam = "chase", cue = ""
-    /// The time of day's preset (0228, DriveSky.Preset).
+    /// The time of day's preset (0231, DriveSky.Preset).
     var sky = "golden"
 }
 

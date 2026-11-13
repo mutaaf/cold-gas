@@ -1,4 +1,4 @@
-// Free Drive's atmosphere (0228, Sky.h, SkyLUT.metal): the LUTs and their passes. The transmittance and multiple-scattering
+// Free Drive's atmosphere (0231, Sky.h, SkyLUT.metal): the LUTs and their passes. The transmittance and multiple-scattering
 // LUTs are drawn once; the sky-view each frame the sky is on (it follows the sun and the eye's height), then mipmapped so
 // rougher reflections and the ambient read blurrier levels. Nothing is allocated per frame.
 import Metal

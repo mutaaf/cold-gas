@@ -32,7 +32,7 @@ targets:
       - path: ColdGas/Resources/Props
         type: folder
         buildPhase: resources
-      # Free Drive's own car (0229: tools/forge/car/build.py writes it; DriveCarModel.swift reads it).
+      # Free Drive's own car (0232: tools/forge/car/build.py writes it; DriveCarModel.swift reads it).
       - path: ColdGas/Resources/Car
         type: folder
         buildPhase: resources

@@ -20,11 +20,11 @@ protocol DriveScene: AnyObject {
     func frameCamera(aspect: Float, dt: Double) -> (view: simd_float4x4, proj: simd_float4x4, eye: SIMD3<Float>)
     /// The drive's sky and air over the stage's.
     func look(over base: LookU) -> LookU
-    /// The world, in the main pass, after the stage's opaque draws (`sky`: the physical sky's view LUT, 0228).
+    /// The world, in the main pass, after the stage's opaque draws (`sky`: the physical sky's view LUT, 0231).
     func drawWorld(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, look: inout LookU, shadow: MTLTexture, sky: MTLTexture, viewProj: simd_float4x4, quality: Int)
-    /// The world's casters into the key light's shadow map, round `center` (render space), 0228.
+    /// The world's casters into the key light's shadow map, round `center` (render space), 0231.
     func drawShadow(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, center: SIMD3<Float>)
-    /// The key light (0228): the sun (or the moon) as the time of day has it, and the exposure; nil keeps the stage's.
+    /// The key light (0231): the sun (or the moon) as the time of day has it, and the exposure; nil keeps the stage's.
     var key: DriveKey? { get }
     /// The tyres on the ground and the loose things, once a frame before the effects update (0223).
     func effects(_ crash: Crash, dt: Double)
@@ -43,7 +43,7 @@ struct DriveCarLook {
     var glow = SIMD4<Float>(repeating: 0)
     /// The brake pedal (0…1); the brake lamps follow it.
     var pedal: Float = 0
-    /// Road grime on the body (0 clean … 1), 0229.
+    /// Road grime on the body (0 clean … 1), 0232.
     var grime: Float = 0
 }
 
@@ -58,7 +58,7 @@ final class FreeDrive: DriveScene {
     #endif
     let world: FreeWorld
     let camera = DriveCamera()
-    /// The time of day (0228): the sun, the sky, the key light.
+    /// The time of day (0231): the sun, the sky, the key light.
     let sky = DriveSky()
     private(set) var view: WorldView?
     private(set) var origin = SIMD3<Double>(0, 0, 0)
@@ -145,14 +145,14 @@ final class FreeDrive: DriveScene {
         say("Back on the road")
     }
     private func say(_ s: String) { cue = s; cueT = time }
-    /// The sun button (0228): the next time of day, named on the screen.
+    /// The sun button (0231): the next time of day, named on the screen.
     func cycleSky() { sky.cycle(); say(sky.preset.label) }
     private var forward: (Double, Double) {
         let q = car.quat
         return (2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y))
     }
 
-    /// Metres driven since the last wash, weighted by the ground (0229); `-fd-grime 0…1` sets the look for shots.
+    /// Metres driven since the last wash, weighted by the ground (0232); `-fd-grime 0…1` sets the look for shots.
     private var dirt = 0.0
     private let grimeOverride = Launch.value("-fd-grime").flatMap(Float.init)
     var grime: Float { grimeOverride ?? Float(1 - exp(-dirt / 17_000)) }
@@ -386,7 +386,7 @@ final class FreeDrive: DriveScene {
             }
         }
         slideK = slide; roughK = rough
-        // Grime (0229): a film builds with the kilometres (half dirty by ≈ 12 km of road), faster off it; a reset washes it.
+        // Grime (0232): a film builds with the kilometres (half dirty by ≈ 12 km of road), faster off it; a reset washes it.
         let road = speed * dt * (1 + rough * 6)
         dirt += road
         view?.loose?.update(car.world.loose, origin: origin)
@@ -454,14 +454,14 @@ final class FreeDrive: DriveScene {
         k.skySun.w = nearSlab ? 0 : 1
         k.fogExp = SIMD4(0, nearSlab ? base.fogExp.y : 0, 1, base.fogExp.w)
         guard sky.physical else { return k }
-        // The physical sky (0228): the sun where the hour puts it, its light through the air, the haze a little thicker
+        // The physical sky (0231): the sun where the hour puts it, its light through the air, the haze a little thicker
         // than a clear day's so the ranges stack, the stars once it's dark. On the set too: one sky over everything.
         k.skySun = SIMD4(sky.sun, 1); k.sunDir = SIMD4(sky.sun, base.sunDir.w * 0.6)
         k.atmo = SIMD4(1, 5.0, Float(max(0.0, camera.eye.y) / 1000), sky.night)
         k.sunE = SIMD4(sky.keyColor * sky.keyIntensity, Float(time))
         k.fogExp.z = sky.night > 0.05 ? 1 : 0
         k.hazeCol.w = 0
-        // The bloom's threshold in the frame as exposed (0229): by day only the sun, its glints and the lamps bloom (a
+        // The bloom's threshold in the frame as exposed (0232): by day only the sun, its glints and the lamps bloom (a
         // sunlit white car read as fog through the stage's night threshold); toward night the stage's own.
         k.bloom.x = (2.6 + (0.97 - 2.6) * sky.night) / max(0.2, sky.exposure)
         return k
@@ -487,7 +487,7 @@ final class FreeDrive: DriveScene {
         let moonI = Float(0.09) * sky.night
         return DriveKey(dir: dir, color: sunUp > 0.5 ? sky.keyColor : SIMD3(0.62, 0.72, 1.0), intensity: sunUp > 0.5 ? sky.keyIntensity * sunUp : moonI, exposure: sky.exposure)
     }
-    /// The renderer's quality for the drive's extras (0228), as drawWorld last had it.
+    /// The renderer's quality for the drive's extras (0231), as drawWorld last had it.
     private var quality = 2
     /// The world's uniform this frame: the headlamps, the props' range and the wind, the car on the ground.
     private func driveU() -> WDriveU {
@@ -495,7 +495,7 @@ final class FreeDrive: DriveScene {
         let q = simd_quatd(ix: car.quat.x, iy: car.quat.y, iz: car.quat.z, r: car.quat.w)
         let f = q.act(SIMD3(0, -0.08, 1))
         let lp = SIMD3(car.pos.x, car.pos.y, car.pos.z) + q.act(SIMD3(0, 0.15, 2.0)) - origin
-        // The lamps come on as the light goes (0228): full from blue hour, off in daylight.
+        // The lamps come on as the light goes (0231): full from blue hour, off in daylight.
         let lampOn = sky.physical ? Double(smoothstepF(0.1, 0.55, sky.night)) : 1
         var d = WDriveU(lampPos: SIMD4(SIMD3<Float>(lp), Float(280 * lampK * lampOn)), lampDir: SIMD4(SIMD3<Float>(simd_normalize(f)), cos(0.42)),
                         params: SIMD4(Float(WorldView.propR), Float(time), Launch.args.contains("-fd-lod") ? 1 : 0, 0.6))
