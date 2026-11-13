@@ -1,12 +1,12 @@
 ---
 id: 0257
 title: After a landing the sheet offers the next jump first, then beat this score, then share, and stays light
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-13
-pr:
+pr: 373
 by: operator
 ---
 
@@ -28,10 +28,10 @@ order, or the medal above the one just won.
 - No new screens, no extra beats: the sheet appears as fast as today (after the 0199 beat).
 
 ## Acceptance criteria
-- [ ] e2e: a landed run's sheet has Next jump, Beat <score>, Share in that order, Next focused; a wrecked run's has Retry
+- [x] e2e: a landed run's sheet has Next jump, Beat <score>, Share in that order, Next focused; a wrecked run's has Retry
       first; R still retries.
-- [ ] Next starts the right run (the next license test, or the next course) with one tap.
-- [ ] `npm run audit` passes on the sheet at every viewport; 390×844 touch and 1280×720 keyboard.
+- [x] Next starts the right run (the next license test, or the next course) with one tap.
+- [x] `npm run audit` passes on the sheet at every viewport; 390×844 touch and 1280×720 keyboard.
 
 ## Test plan
 The results e2e extended for the order and the keys; the HUD audit's results frames.
