@@ -426,6 +426,8 @@ function toTitle() {
   setMode('title'); S.run = null; S.drill = null;
   ui.only('title');
   S.titleSync?.();   // the event's line and your best on it (set once the title is wired, below)
+  S.taste = false;
+  syncFirstTitle();
   drillBar.hidden = true;
   landing.show(false);
   getNozzlePad().show(false);
@@ -448,6 +450,8 @@ function startRunNow(kind = 'jump', quick = false) {
   S.run = armAftermath(takeRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.runKind = kind;   // the reference jump never counts toward Rookie mode's streak (0074)
+  S.tasteT = 0;
+  if (kind !== 'reveal') S.taste = false;   // a Retry or a Jump from inside the taste is the player's own run
   S.jumpN = null;
   if (kind === 'jump') { obs.play('run'); runEnd.start(S.run); track('game_start', { course: stage.course, tier: S.tier }); S.jumpN = funnel.jumpStart(stage.course, S.tier); }   // the players' funnel (src/obs: counts only; Box Office: src/insights.js)
   latchTier();
@@ -456,7 +460,9 @@ function startRunNow(kind = 'jump', quick = false) {
   S.coachLive = kind === 'jump' && coachLive(S.perf, S.flown, S.adapt);
   S.released = false; S.drill = null; S.freezeT = 0; S.coach = null;
   ghostLoaded(stage.course);   // the reference ghost is flown on the title (precomputeRefGhosts)
-  setMode('countdown'); S.countT = 0; S.countLen = quick ? 1 : 3; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
+  // 0247: a newcomer's Jump (no landed Jump on this device yet) counts down one short beat, GO, not READY · 3 · 2 · 1.
+  const fresh = kind === 'jump' && firstRun();
+  setMode('countdown'); S.countT = 0; S.countLen = fresh ? FIRST_COUNT : quick ? 1 : 3; S.countWord = fresh ? 'Go' : 'Ready'; S.acc = 0; S.card = null; S.words = null; S.prevPhase = '';
   S.impacts = 0; S.impact = null;
   wedge.reset(); S.wedgeGo = null; S.wedgeDemand = 0;
   newFlight();
@@ -476,7 +482,8 @@ function startRunNow(kind = 'jump', quick = false) {
   syncCar(c.pos, c.quat, [sag, sag, sag, sag], [0, 0, 0, 0], 0);
   director.restart(); hero.placed();
   syncHud(S.run, c, -S.countLen);   // READY shows this run's start, not the last run's end
-  if (S.autopilot) ui.cue_({ show: 'The reference run: the Wall, then the lineup', wall: 'The reference run: up the Wall' }[stage.course] || 'The reference jump', 2400);
+  if (S.autopilot && S.taste) ui.cue_('Watch the start · then your turn', 2400);
+  else if (S.autopilot) ui.cue_({ show: 'The reference run: the Wall, then the lineup', wall: 'The reference run: up the Wall' }[stage.course] || 'The reference jump', 2400);
   // The last run's pointer, once more, as this one counts down (≈2.5 s: "Go" waits behind it on a retry).
   else if (S.tip) { ui.cue_(`Tip: ${S.tip}`, 2800, { hold: 2300 }); S.tip = ''; }
 }
@@ -595,6 +602,28 @@ addEventListener('keydown', (e) => {
 const CALM_RUNS = 3;
 const calmable = (() => { try { return !navigator.webdriver || localStorage.getItem('coldgas_howto') === 'new'; } catch { return !navigator.webdriver; } })();
 const calmSheet = () => calmable && !S.autopilot && !S.drill && S.runKind === 'jump' && S.flown <= CALM_RUNS;
+// 0247: a first run is one before this device has landed a Jump (src/metrics/funnel.js; a medal on record from before
+// counts). An automated browser is a returning player unless it asked for a first visit, as above.
+function firstRun() { return calmable && !funnel.landedEver; }
+const FIRST_COUNT = 0.6;   // s: a newcomer's countdown, one beat of GO
+const TASTE_HOLD = 0.9;    // s of the reference's flight after its release before the run is handed over
+// The title on a first run leads with one thing, Jump: Watch the reference, Practice, Board and the settings strip wait
+// under "More ways to play" (the same buttons, moved, so every wiring holds). From the first landing on, as before.
+const titleEl = document.querySelector('[data-screen="title"]'), playMore = titleEl.querySelector('[data-play-more]');
+const ctaRow = titleEl.querySelector('.cta-row'), ctaSet = titleEl.querySelector('.cta-set');
+function syncFirstTitle() {
+  const first = firstRun();
+  if (titleEl.hasAttribute('data-first') === first && ctaRow.parentElement === (first ? playMore : playMore.parentElement)) return;
+  titleEl.toggleAttribute('data-first', first);
+  if (first) playMore.querySelector('summary').after(ctaRow, ctaSet);
+  else playMore.before(ctaRow, ctaSet);
+}
+// The taste's hand-over: the player's own first Jump from the mark, the controls up.
+function yourTurn() {
+  S.taste = false;
+  startRunNow('jump');
+  ui.cue_('Your turn', 1800, { hold: 1200 });
+}
 
 // The coach's pointer (0079, src/pointer.js): the one fix that matters most, in this device's controls,
 // as one large line on the sheet and again as the next run counts down ("Tip: …"). "Better: …" once
@@ -979,6 +1008,12 @@ function liveStep(dt) {
       else if ((S.wedgeGo -= dt) <= 0) { S.wedgeGo = null; wedge.reset(); retry(); return; }
     } else S.wedgeGo = null;
   } else if (S.wedgeGo != null) { S.wedgeGo = null; wedge.reset(); }
+  // 0247: a newcomer's ?play=reveal is a taste: the reference flies up to its release (the Lineup: its lift-off), a
+  // beat more, then the run is theirs from the mark.
+  if (S.taste && S.autopilot && (S.released || run.phase === 'air')) {
+    S.tasteT += dt;
+    if (S.tasteT >= TASTE_HOLD) { yourTurn(); return; }
+  }
   // The card is decided on the frame the run ends, before the HUD reads it: a crash ends the
   // timeline as a crash on that frame, not one frame of TOUCHDOWN first (0072).
   if (run.phase === 'done' && !S.card) closeCard(run);
@@ -1489,7 +1524,7 @@ function frameBody(now) {
       const L = S.countLen;
       if (L < 3) {
         // A retry: one beat of READY, then go. The car is already on its mark.
-        if (S.countT === 0) ui.countdown('Ready');
+        if (S.countT === 0) ui.countdown(S.countWord || 'Ready');
         S.countT += dt;
       } else {
         const before = Math.ceil(L - S.countT);
@@ -1498,7 +1533,7 @@ function frameBody(now) {
         if (S.countT < 0.02 || after !== before) ui.countdown(after > 0 ? after : 0);
       }
       // "Go" holds for its moment (0.7 s) before the first live cue may replace it.
-      if (S.countT >= L) { setMode('live'); ui.countdown(0); ui.cue_(S.autopilot ? 'The reference jump' : 'Go', 900, { hold: 700 }); }
+      if (S.countT >= L) { setMode('live'); ui.countdown(0); if (S.countWord !== 'Go') ui.cue_(S.autopilot ? 'The reference jump' : 'Go', 900, { hold: 700 }); }
       plumes.update(dt, S.time, S.idleThrottles.fill(0), zeroVel, 0);
       ui.setClock(S.countT - L);
     } else if (S.mode === 'live') { if (!S.holdLive) liveStep(dt * slow); }   // S.holdLive: e2e steps the live clock itself (0199)
@@ -1574,7 +1609,8 @@ onDevice(() => {
 });
 const on = (sel, fn) => document.querySelectorAll(sel).forEach((el) => el.addEventListener('click', fn));
 // The first Jump on this device shows how to fly first (skippable, remembered); a deep link never waits.
-const jump = (from = null) => (howtoSeen() ? startRun('jump') : openHowto({ then: () => startRun('jump'), from }));
+// 0247: a newcomer's Jump flies at once: the first jump is taught inside the run (0248), and How to fly stays on the title.
+const jump = (from = null) => (howtoSeen() || firstRun() ? startRun('jump') : openHowto({ then: () => startRun('jump'), from }));
 on('[data-start]', (e) => jump(e.currentTarget));
 on('[data-reveal]', () => startRun('reveal'));
 // Retry: straight back onto the mark with a one-beat READY (a drill restarts itself; the reference
@@ -2136,7 +2172,7 @@ if (params.get('drive') !== null) {
   else loadDrive().then((d) => d.start(params.get('drive') || 'stelvio', { tod: params.get('tod') || undefined, seed: params.get('seed') || undefined, idb: params.get('idb') !== '0' }));
 } else if ((play === 'jump' || (!play && !params.get('board'))) && comeback.boot(bootHash, () => { if (play === 'jump') startRun('jump'); })) {
   // [comeback] a challenge link (#vs=): the title holds for its card; a bad or stale one falls back to the jump
-} else if (play === 'jump' || play === 'reveal') startRun(play);
+} else if (play === 'jump' || play === 'reveal') { S.taste = play === 'reveal' && firstRun(); startRun(play); }
 else if (params.get('board')) openBoard(params.get('board') === 'all' ? 'all' : 'today');
 
 // e2e hooks. fastForward() runs the sim to the end without waiting on the wall clock, so slow

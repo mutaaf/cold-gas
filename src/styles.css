@@ -2177,3 +2177,10 @@ body[data-beat-on] .hud { filter: opacity(0); pointer-events: none; }
 }
 /* a short landscape window has no line to spare for it: the beta row under "More ways to play" stays */
 @media (max-height: 500px) { .fp-beta { display: none; } }
+
+/* --- A first run's title (0247): one thing, Jump. The reference, Practice, the board and the settings strip wait under
+   "More ways to play" (moved there by src/main.js syncFirstTitle; back in place from the first landing on). */
+.play-more > :is(.cta-row, .cta-set) { margin: 10px 0 0; }
+.play-more:not([open]) > :is(.cta-row, .cta-set) { display: none; }
+/* Opened on a first run it holds the whole menu: the wordmark steps aside for it, as the tagline does. */
+.title[data-first]:has(.play-more[open]) > .wordmark { display: none; }
