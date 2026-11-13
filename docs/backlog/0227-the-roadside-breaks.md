@@ -1,12 +1,12 @@
 ---
 id: 0227
 title: Out in Free Drive's world the roadside breaks (fences and signs knocked down, rails that give)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-13
-pr:
+pr: 352
 by: operator
 ---
 
