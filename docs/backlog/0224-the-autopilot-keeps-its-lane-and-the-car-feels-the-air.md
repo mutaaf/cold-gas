@@ -4,7 +4,7 @@ title: Free Drive's autopilot keeps to its lane, and the drive's car feels downf
 status: shipped
 priority: P2
 size: S
-lens: delight
+lens: player-feel
 created: 2026-11-12
 pr: 348
 by: operator
