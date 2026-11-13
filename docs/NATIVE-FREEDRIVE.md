@@ -238,6 +238,40 @@ moves to the next spot on the other side.
 **Roam's reds.** On a drive course the Show's and the Wall's red lights and red air are at 30 %, and the LED strips are
 dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look does on the run-up.
 
+### The world, made (0226)
+
+- **Forged props.** The forge (tools/forge, Blender, seeded, gated, no lettering or brands) has seven world slots: spruce,
+  broadleaf, shrub, rock, fence, signpost and guardrail. `npm run forge -- <slot> --native` writes each one's two LODs into
+  `ios/ColdGas/Resources/Props/<kind>/lod<i>.bin` + `props.json` (tools/forge/lib/native.mjs). The vertices are the
+  stage's 44 bytes, coloured by the palette and the baked occlusion. `ForgeProps` reads them. Past a forged chain's last
+  LOD, the procedural kit's farthest shape takes over to the horizon (a few triangles a tree).
+
+  | Kind | LOD0 / LOD1 triangles | Drawn to |
+  |---|---|---|
+  | tree.spruce | 368 / 136 | the near pool (140 m) / 320 m, then the kit's to 1.2 km |
+  | tree.broadleaf | 564 / 196 | the near pool / 320 m, then the kit's |
+  | shrub | 320 / 60 | the near pool / 300 m, then the kit's |
+  | rock | 268 / 160 | the near pool / 400 m, then the kit's |
+  | fence, signpost, guardrail | 48, 116, 96 | (0227 places them) |
+
+- **The near pool.** A 512 m block draws its instances at one LOD, chosen by the block's nearest point, so a forged LOD0
+  there would draw thousands of 400-triangle trees. Instead, within 140 m of the camera each instance is drawn with its
+  kind's finest LOD from a per-kind pool. The pool is gathered from the blocks every 10 m the camera moves, into
+  preallocated, triple-buffered buffers. The blocks' own draws skip those instances in the vertex shader (WTile.morph.x:
+  1 skips near, 2 skips far), so each instance is drawn exactly once a frame. At 5 km out on a mountain road, ≈ 530
+  instances are in the pool.
+- **Smooth road cuttings.** Near tiles (levels < 3) no longer paint the road into the land's colour; on a 4–16 m grid it
+  was a grey sawtooth beside the ribbon. Each ribbon now carries a verge each side out to 6 m past the shoulder. The verge
+  lies on the exact carved ground, sampled every 4 m along the road, in the land's own colour (`landColor`, shared with the
+  tiles). Under the corridor the land dips 22 cm, so the ribbon is what's seen.
+- **The land's grain.** The terrain's fragment shader adds world-anchored detail: 4 m and 8 m within 300 m, 48 m relief and
+  128 / 512 m tone out to ≈ 9 km. It breaks up flat triangles near and far. `WDrive.anchor` carries the origin mod 4,096 m
+  so the pattern doesn't jump when the origin moves.
+- **Blue hour.** The sky's fill is a little fuller and the ground's bounce warmer, so the trees keep their greens.
+- **The minimap.** Heading-up, the roads within 520 m and the set's slab, under Back. The map button shows or hides it; the
+  choice is a HUD preference (`HudPrefs.driveMap`, kept by HudStore with the layouts). Placing the map with the HUD editor
+  is not in this ticket.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
@@ -310,6 +344,17 @@ on one simulator (iPhone 18 Pro Max, iOS 27.0, Release) on 2026-11-13, `main` (8
 
 The chassis costs nothing measurable on the main thread (two ticks a frame; it replaces the scored chassis rather than
 adding to it). The duskEnv reflection is a few ALU ops on the car's pixels; the GPU side waits for the phone.
+
+After 0226 (forged props with the near pool, verges, the land's grain, the minimap), the same bench and simulator:
+
+| | Frames in 10 s | Interval avg / p95 | CPU ms avg / p95 | What was drawn |
+|---|---|---|---|---|
+| After (0226) | 412 | 24.33 / 33.33 ms | 1.08 / 2.83 | 97 tiles, 248 k triangles, 22.1 k props, 669 of them in the near pool |
+
+The near pool's gather (every 10 m, about twice a second at 25 m/s) lifts the CPU's p95 by ≈ 0.5 ms, while its average holds.
+On the GPU, the pool adds ≈ 250 k triangles of forged trees within 140 m, and the land's grain adds a few noise taps per
+terrain pixel. Neither can be judged on the simulator. If the phone misses, the first lever is `WorldView.nearR` (140 → 90 m
+halves the pool), then the grain's distance.
 
 **On a phone (the owner runs this; an agent never runs it on the owner's phone):**
 

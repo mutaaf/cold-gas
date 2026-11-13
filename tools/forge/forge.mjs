@@ -3,11 +3,13 @@
 // the game's modes. Runs on the operator's Mac (needs Blender).
 //   npm run forge -- <slot> [--seed N] [--archetype name] [--promote] [--no-turntable]
 //   npm run forge -- --all [--promote]
-// Slots: sedan suv semi pickup cab (the parked row) · cone barrier (Free Drive / the Sandbox's props).
+// Slots: sedan suv semi pickup cab (the parked row) · cone barrier (Free Drive / the Sandbox's props) · spruce broadleaf shrub
+// rock fence signpost guardrail (the iPhone's Free Drive world, 0226: --native writes them into ios/ColdGas/Resources/Props).
 // Output: tools/forge/out/<slot>-<seed>/ {model.glb, turntable.png, report.json, gate.json}.
 import { join } from 'node:path';
 import { SLOTS } from './lib/slots.mjs';
 import { forgeJob, printVerdict, promote, ROOT } from './lib/run.mjs';
+import { exportNative } from './lib/native.mjs';
 
 const argv = process.argv.slice(2);
 const flag = (k) => argv.includes(`--${k}`);
@@ -27,5 +29,6 @@ for (const id of ids) {
   printVerdict(res, `${id} seed ${seed}`);
   if (!res.verdict.ok) { failed++; continue; }
   if (flag('promote')) console.log(`  → promoted: ${promote(res, slot)}`);
+  if (flag('native')) console.log(`  → the app: ${(await exportNative(join(res.out, 'model.glb'), slot)).map((l) => `${l.file} ${l.triangles} tris to ${l.end} m`).join(' · ')}`);
 }
 process.exit(failed ? 1 : 0);

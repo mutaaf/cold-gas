@@ -25,7 +25,27 @@ const vehicle = (s, budgets) => ({
   aoReach: s.id === 'semi' ? 1.1 : 0.7,
 });
 
+// Free Drive's world (0226): the land's trees, shrubs and rocks and the roadside's fences, signs and rails. Their boxes are
+// the world's own sizes (ColdGasWorld's prop scatter scales each instance; the colliders are the world's trunks and
+// boulders, ColdGasPhysics Drive.swift), `native` the kind the app draws them as (ios/ColdGas/Resources/Props/<kind>/), and
+// `ends` how far each LOD is drawn (m). Geometry and palette only: no lettering on a sign, no brand on anything.
+const world = (id, native, spec, budgets, ends, fit = {}) => ({
+  id, kind: 'prop', archetype: id, paint: 0x808080, budgets, aoReach: Math.max(0.3, Math.min(2.5, spec.h * 0.2)), native, ends,
+  spec: { id, ...spec, wheelZones: [] },
+  fit: { l: [0.8, 1.15], w: [0.8, 1.15], h: [0.96, 1.04], ...fit },
+});
+export const WORLD_SLOTS = {
+  spruce: world('spruce', 'tree.spruce', { l: 5.2, w: 5.2, h: 12.4 }, [460, 140], [150, 320]),
+  broadleaf: world('broadleaf', 'tree.broadleaf', { l: 6.6, w: 6.6, h: 9.8 }, [640, 200], [150, 320]),
+  shrub: world('shrub', 'shrub', { l: 2.0, w: 2.0, h: 1.1 }, [340, 60], [100, 300]),
+  rock: world('rock', 'rock', { l: 2.6, w: 2.1, h: 1.3 }, [280, 160], [130, 400]),
+  fence: world('fence', 'fence', { l: 3.0, w: 0.14, h: 1.15 }, [60, 60], [130, 450], { w: [0.7, 1.3] }),
+  signpost: world('signpost', 'signpost', { l: 0.9, w: 0.12, h: 2.3 }, [160, 100], [130, 450], { w: [0.6, 1.4] }),
+  guardrail: world('guardrail', 'guardrail', { l: 4.0, w: 0.36, h: 0.8 }, [220, 100], [130, 450]),
+};
+
 export const SLOTS = {
+  ...WORLD_SLOTS,
   sedan: vehicle(LINEUP_SPEC[0], [16000, 5200]),
   suv: vehicle(LINEUP_SPEC[1], [16000, 5200]),
   semi: vehicle(LINEUP_SPEC[2], [22000, 7000]),

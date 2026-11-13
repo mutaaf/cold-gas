@@ -56,6 +56,12 @@ final class WorldView {
     private var blocks: [Int64: Block] = [:]
     private var blockDone: [(Int64, Int, Int, [[Float]])] = []
     private var blockAsked = Set<Int64>()
+    // The near pool (0226): within NEAR_R of the camera each instance is drawn with its kind's finest LOD (a forged tree up
+    // close), gathered from the blocks every few metres into per-kind buffers (triple-buffered, preallocated); the blocks'
+    // own draws leave those instances out in the vertex shader, so each instance is drawn exactly once a frame.
+    static let nearR = 140.0, nearCap = 3072
+    private var nearBufs: [[MTLBuffer]] = []
+    private var nearCounts: [Int] = [], nearSlot = 0, nearAt = SIMD3<Double>(.infinity, 0, .infinity), nearCorner = SIMD2<Double>(0, 0), nearDirty = true
 
     // --- Counters (the bench, the debug line) ---------------------------------------------------------------------
     /// `-fd-nocull`: debug, every selected tile drawn (frustum culling off).
@@ -93,7 +99,8 @@ final class WorldView {
         rv.attributes[0].format = .float3; rv.attributes[0].offset = 0
         rv.attributes[1].format = .float2; rv.attributes[1].offset = 12
         rv.attributes[2].format = .float3; rv.attributes[2].offset = 20
-        for i in 0..<3 { rv.attributes[i].bufferIndex = 0 }
+        rv.attributes[3].format = .uchar4Normalized; rv.attributes[3].offset = 32
+        for i in 0..<4 { rv.attributes[i].bufferIndex = 0 }
         rv.layouts[0].stride = RoadPiece.stride * 4
         let pv = MTLVertexDescriptor()
         for (i, (fmt, off)) in [(MTLVertexFormat.float3, 0), (.float3, 12), (.float2, 24), (.float3, 32)].enumerated() {
@@ -112,11 +119,20 @@ final class WorldView {
         guard let ds = device.makeDepthStencilState(descriptor: dd), let dts = device.makeDepthStencilState(descriptor: dt) else { return nil }
         dsWrite = ds; dsTest = dts
         loose = LooseView(device: device); marks = SkidMarks(device: device)
+        for _ in PropKind.allCases {
+            var ring: [MTLBuffer] = []
+            for _ in 0..<Renderer.inFlight { if let b = device.makeBuffer(length: WorldView.nearCap * 32, options: .storageModeShared) { ring.append(b) } }
+            nearBufs.append(ring)
+        }
+        nearCounts = Array(repeating: 0, count: PropKind.allCases.count)
         let idx = TileSpec.indices
         guard let ib = device.makeBuffer(bytes: idx, length: idx.count * 2, options: .storageModeShared) else { return nil }
         tileIndex = ib; tileIndexCount = idx.count
         for k in PropKind.allCases {
-            let geo = props.lazy.compactMap { $0.lods(for: k.id) }.first ?? []
+            // The first source that has the kind; a forged chain hands over, past its last LOD, to the procedural kit's
+            // farthest (a few triangles a tree, out to the horizon).
+            var geo = props.lazy.compactMap { $0.lods(for: k.id) }.first ?? []
+            if let far = props.last?.lods(for: k.id)?.last, let mine = geo.last, far.end > mine.end, far.indices.count < mine.indices.count { geo.append(far) }
             kinds.append(Kind(lods: geo.compactMap { g in
                 guard !g.vertices.isEmpty, !g.indices.isEmpty,
                       let vb = device.makeBuffer(bytes: g.vertices, length: g.vertices.count * 4, options: .storageModeShared),
@@ -137,6 +153,7 @@ final class WorldView {
         requestTiles()
         scanRoads(eye)
         if frame % 8 == 0 { scanProps(eye) }
+        gatherNear(eye)
         // Slabs drawn last more than three frames ago, and over the budget: back to the free list.
         if tiles.count > 900 {
             let old = tiles.filter { frame - $0.value.used > 120 }.sorted { $0.value.used < $1.value.used }.prefix(tiles.count - 760)
@@ -170,6 +187,7 @@ final class WorldView {
                 return Road(vb: vb, ib: ib, count: p.indices.count, ox: p.ox, oz: p.oz, box: (p.minX, p.maxX, p.minZ, p.maxZ))
             }
         }
+        if !b.isEmpty { nearDirty = true }
         for (key, bx, bz, per) in b {
             blocks[key] = Block(bx: bx, bz: bz, inst: per.map { a in a.isEmpty ? nil : device.makeBuffer(bytes: a, length: a.count * 4, options: .storageModeShared) },
                                 counts: per.map { $0.count / 8 })
@@ -283,6 +301,42 @@ final class WorldView {
             }
         }
     }
+    /// The near pool: every 10 m the camera moves (or when blocks arrive), the instances within NEAR_R + 25 m of it, per kind
+    /// that has more than one LOD, relative to a corner near the camera.
+    private func gatherNear(_ eye: SIMD3<Double>) {
+        let moved = (eye.x - nearAt.x) * (eye.x - nearAt.x) + (eye.z - nearAt.z) * (eye.z - nearAt.z)
+        guard nearDirty || moved > 100 else { return }
+        nearDirty = false; nearAt = eye
+        nearSlot = (nearSlot + 1) % Renderer.inFlight
+        let R = WorldView.nearR + 25, B = WorldView.block
+        let corner = SIMD2((eye.x / 64).rounded(.down) * 64, (eye.z / 64).rounded(.down) * 64)
+        nearCorner = corner
+        for k in nearCounts.indices { nearCounts[k] = 0 }
+        for b in blocks.values {
+            let x0 = Double(b.bx) * B, z0 = Double(b.bz) * B
+            let dx = max(0, max(x0 - eye.x, eye.x - (x0 + B))), dz = max(0, max(z0 - eye.z, eye.z - (z0 + B)))
+            if dx * dx + dz * dz > R * R { continue }
+            let ox = Float(x0 - corner.x), oz = Float(z0 - corner.y)
+            let ex = Float(eye.x - x0), ez = Float(eye.z - z0), RR = Float(R * R)
+            for k in kinds.indices where kinds[k].lods.count > 1 && nearBufs[k].count == Renderer.inFlight {
+                guard let src = b.inst[k], b.counts[k] > 0 else { continue }
+                let f = src.contents().bindMemory(to: Float.self, capacity: b.counts[k] * 8)
+                let out = nearBufs[k][nearSlot].contents().bindMemory(to: Float.self, capacity: WorldView.nearCap * 8)
+                for i in 0..<b.counts[k] {
+                    let x = f[i * 8], z = f[i * 8 + 2]
+                    if (x - ex) * (x - ex) + (z - ez) * (z - ez) > RR { continue }
+                    let n = nearCounts[k]
+                    if n >= WorldView.nearCap { break }
+                    for j in 0..<8 { out[n * 8 + j] = f[i * 8 + j] }
+                    out[n * 8] = x + ox; out[n * 8 + 2] = z + oz
+                    nearCounts[k] = n + 1
+                }
+            }
+        }
+    }
+    /// Instances drawn from the near pool this frame (the bench's line).
+    var nearDrawn: Int { nearCounts.reduce(0, +) }
+
     /// A 512 m block's props, per kind, as instance floats relative to the block's corner: x y z yaw, scale tint 0 0.
     private static func buildBlock(_ w: FreeWorld, _ bi: Int, _ bj: Int) -> [[Float]] {
         var per = [[Float]](repeating: [], count: PropKind.allCases.count)
@@ -342,12 +396,27 @@ final class WorldView {
             var u = WTileU(offset: SIMD4(Float(x0 - origin.x), Float(-origin.y), Float(z0 - origin.z), 0), morph: .zero)
             e.setVertexBytes(&u, length: MemoryLayout<WTileU>.stride, index: 2)
             for (ki, kind) in kinds.enumerated() where !WorldView.skip.contains("props") {
-                guard let ib = b.inst[ki], b.counts[ki] > 0, let lod = kind.lods.first(where: { $0.end > d }) ?? kind.lods.last, d < (kind.lods.last?.end ?? 0) else { continue }
+                // A kind with a near pool: its finest LOD is the pool's, the blocks draw the rest (and skip what the pool has).
+                let pooled = kind.lods.count > 1
+                let chain = pooled ? kind.lods.dropFirst() : kind.lods[...]
+                guard let ib = b.inst[ki], b.counts[ki] > 0, let lod = chain.first(where: { $0.end > d }) ?? chain.last, d < (kind.lods.last?.end ?? 0) else { continue }
+                u.morph.x = pooled ? 1 : 0
+                e.setVertexBytes(&u, length: MemoryLayout<WTileU>.stride, index: 2)
                 e.setVertexBuffer(ib, offset: 0, index: 3)
                 e.setVertexBuffer(lod.vb, offset: 0, index: 0)
                 e.drawIndexedPrimitives(type: .triangle, indexCount: lod.count, indexType: .uint32, indexBuffer: lod.ib, indexBufferOffset: 0, instanceCount: b.counts[ki])
                 ni += b.counts[ki]
             }
+        }
+        // The near pool: each pooled kind's finest LOD, every instance within NEAR_R.
+        var nu = WTileU(offset: SIMD4(Float(nearCorner.x - origin.x), Float(-origin.y), Float(nearCorner.y - origin.z), 0), morph: SIMD4(2, 0, 0, 0))
+        e.setVertexBytes(&nu, length: MemoryLayout<WTileU>.stride, index: 2)
+        for (ki, kind) in kinds.enumerated() where nearCounts[ki] > 0 && !WorldView.skip.contains("props") {
+            guard let lod = kind.lods.first, nearBufs[ki].count == Renderer.inFlight else { continue }
+            e.setVertexBuffer(nearBufs[ki][nearSlot], offset: 0, index: 3)
+            e.setVertexBuffer(lod.vb, offset: 0, index: 0)
+            e.drawIndexedPrimitives(type: .triangle, indexCount: lod.count, indexType: .uint32, indexBuffer: lod.ib, indexBufferOffset: 0, instanceCount: nearCounts[ki])
+            ni += nearCounts[ki]
         }
         stats.instances = ni
         // The loose things (posed by the engine), then the rubber on the ground over everything opaque.
@@ -379,4 +448,6 @@ final class WorldView {
 
 /// World.metal's WTile and WDrive.
 struct WTileU { var offset = SIMD4<Float>(), morph = SIMD4<Float>() }
-struct WDriveU { var lampPos = SIMD4<Float>(), lampDir = SIMD4<Float>(), params = SIMD4<Float>() }
+/// `anchor`: the floating origin modulo 4,096 m (x, z), so world-anchored detail (the land's grain) doesn't jump when the
+/// origin moves; zw spare.
+struct WDriveU { var lampPos = SIMD4<Float>(), lampDir = SIMD4<Float>(), params = SIMD4<Float>(), anchor = SIMD4<Float>() }

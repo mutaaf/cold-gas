@@ -186,9 +186,11 @@ public struct HudPrefs: Codable, Equatable, Sendable {
     public var brakeToggle: Bool?, boostToggle: Bool?
     /// RELEASE lets go of the Wall when the finger lifts, not when it lands (rest a finger on it, lift on the moment).
     public var releaseOnLift: Bool?
+    /// Free Drive's minimap shown (0226; the map button on the drive's HUD).
+    public var driveMap: Bool?
     public init() {}
 
-    enum CodingKeys: String, CodingKey { case v, layouts, stickMode, deadZone, sensitivity, lookSensitivity, lookInvertY, brakeToggle, boostToggle, releaseOnLift }
+    enum CodingKeys: String, CodingKey { case v, layouts, stickMode, deadZone, sensitivity, lookSensitivity, lookInvertY, brakeToggle, boostToggle, releaseOnLift, driveMap }
     public init(from decoder: Decoder) throws {
         guard let c = try? decoder.container(keyedBy: CodingKeys.self) else { return }
         func num(_ k: CodingKeys) -> Double? { (try? c.decodeIfPresent(Double.self, forKey: k)).flatMap { $0 }.flatMap { $0.isFinite ? $0 : nil } }
@@ -202,6 +204,7 @@ public struct HudPrefs: Codable, Equatable, Sendable {
         stickMode = (try? c.decodeIfPresent(String.self, forKey: .stickMode)).flatMap { $0 }.flatMap(StickMode.init(rawValue:))
         deadZone = num(.deadZone); sensitivity = num(.sensitivity); lookSensitivity = num(.lookSensitivity)
         lookInvertY = flag(.lookInvertY); brakeToggle = flag(.brakeToggle); boostToggle = flag(.boostToggle); releaseOnLift = flag(.releaseOnLift)
+        driveMap = flag(.driveMap)
     }
 
     public static func key(_ t: HudTier, _ s: HudShape) -> String { "\(t.rawValue)/\(s.rawValue)" }
@@ -221,6 +224,7 @@ public struct HudPrefs: Codable, Equatable, Sendable {
     public var brakeToggles: Bool { brakeToggle ?? false }
     public var boostToggles: Bool { boostToggle ?? false }
     public var releasesOnLift: Bool { releaseOnLift ?? false }
+    public var mapShown: Bool { driveMap ?? true }
 
     /// The layout for this tier on this shape. `leftHanded`: the save's older hand setting, which (with nothing saved for
     /// the shape) starts the mirror, so a left-handed player's choice carries over.

@@ -21,7 +21,16 @@ struct WDrive {
     float4 lampPos;      // xyz; w intensity (0 off)
     float4 lampDir;      // xyz; w cos of the cone's edge
     float4 params;       // x: props' far distance (m), y: time
+    float4 anchor;       // xy: the floating origin mod 4,096 m (world-anchored detail)
 };
+
+// Value noise on a hashed lattice (world metres, anchored: render-space + anchor). Every scale divides 4,096, so the pattern
+// is continuous when the origin moves (0226).
+static float world_hash(float2 p) { p = fract(p * float2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
+static float world_noise(float2 p) {
+    float2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(world_hash(i), world_hash(i + float2(1, 0)), u.x), mix(world_hash(i + float2(0, 1)), world_hash(i + float2(1, 1)), u.x), u.y);
+}
 
 static float3 world_hazed(float3 c, float3 d, float L, float3 eye, constant WLook& k) {
     float a = k.hazeCol.w;
@@ -100,6 +109,28 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
     float3 n = normalize(in.n + 1e-6);
     bool water = in.col.a > 0.5;
     float3 albedo = in.col.rgb;
+    float dist = distance(in.world, f.eye.xyz);
+    if (!water && dist < 900.0) {
+        // The land's grain (0226): a 64 m and an 8 m octave of colour, and a 4 m bump in the normal, faded out with distance,
+        // so a 4–16 m triangle doesn't read as a flat facet. Rock (steep) takes more of it than grass.
+        float2 w = in.world.xz + dr.anchor.xy;
+        float near = 1.0 - smoothstep(250.0, 900.0, dist), steep = clamp((1.0 - n.y) * 3.0, 0.0, 1.0);
+        float macro = world_noise(w / 64.0), fine = world_noise(w / 8.0);
+        albedo *= mix(1.0, 0.78 + 0.28 * macro + 0.16 * (fine - 0.5) * (1.0 + steep), near);
+        float e = 0.35, b = world_noise(w / 4.0), bx = world_noise((w + float2(e, 0)) / 4.0), bz = world_noise((w + float2(0, e)) / 4.0);
+        float amp = (0.35 + 0.9 * steep) * (1.0 - smoothstep(60.0, 300.0, dist));
+        n = normalize(n + float3(-(bx - b), 0.0, -(bz - b)) * (amp / e * 4.0) * 0.25);
+    }
+    if (!water && dist >= 300.0) {
+        // Far off (0226): a mountainside is drawn with 32–512 m triangles. A 48 m relief in the normal and a 128 / 512 m
+        // tone break their flat planes into ridges and gullies, fading into the haze.
+        float2 w = in.world.xz + dr.anchor.xy;
+        float far = smoothstep(300.0, 700.0, dist) * (1.0 - smoothstep(5000.0, 9000.0, dist));
+        float steep = clamp((1.0 - n.y) * 2.5, 0.0, 1.0);
+        albedo *= mix(1.0, 0.8 + 0.25 * world_noise(w / 128.0) + 0.15 * world_noise(w / 512.0), far);
+        float e = 4.0, b = world_noise(w / 48.0), bx = world_noise((w + float2(e, 0)) / 48.0), bz = world_noise((w + float2(0, e)) / 48.0);
+        n = normalize(n + float3(-(bx - b), 0.0, -(bz - b)) / e * 48.0 * (0.15 + 0.35 * steep) * far);
+    }
     if (water) {
         float t = dr.params.y;
         n = normalize(float3(sin(in.world.x * 0.21 + t * 0.6) * 0.03, 1.0, cos(in.world.z * 0.17 + t * 0.5) * 0.03));
@@ -109,11 +140,11 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
 }
 
 // --- Roads -------------------------------------------------------------------------------------------------------------
-struct WRoadIn { float3 pos [[attribute(0)]]; float2 la [[attribute(1)]]; float3 n [[attribute(2)]]; };
-struct WRoadOut { float4 clip [[position]]; float3 world; float2 la; float3 n; float4 lightClip; };
+struct WRoadIn { float3 pos [[attribute(0)]]; float2 la [[attribute(1)]]; float3 n [[attribute(2)]]; float4 col [[attribute(3)]]; };
+struct WRoadOut { float4 clip [[position]]; float3 world; float2 la; float3 n; float3 col; float4 lightClip; };
 vertex WRoadOut cg_world_road_vertex(WRoadIn in [[stage_in]], constant WFrame& f [[buffer(1)]], constant WTile& t [[buffer(2)]]) {
     float3 p = in.pos + t.offset.xyz;
-    WRoadOut o; o.world = p; o.la = in.la; o.n = in.n;
+    WRoadOut o; o.world = p; o.la = in.la; o.n = in.n; o.col = in.col.rgb;
     o.clip = f.viewProj * float4(p, 1); o.lightClip = f.lightViewProj * float4(p, 1);
     return o;
 }
@@ -123,6 +154,8 @@ fragment float4 cg_world_road_fragment(WRoadOut in [[stage_in]], constant WFrame
     const float hw = 3.5;
     float3 asphalt = float3(0.034, 0.035, 0.039), gravel = float3(0.19, 0.18, 0.16), paint = float3(0.62, 0.62, 0.6);
     float3 albedo = al > hw ? gravel : asphalt;
+    // The verge (0226): the land's colour, from the shoulder's gravel out to the land (the shoulder's edge is 4.7 m).
+    if (al > hw + 1.2) albedo = mix(gravel, in.col, smoothstep(hw + 1.2, hw + 2.4, al));
     // The markings (the web's endless road: EU): solid edge lines, a dashed centre line (3 m on, 9 m off). Antialiased by
     // their own screen-space width, faded out with distance where they'd shimmer.
     float w = max(fwidth(lat), 1e-3), wa = max(fwidth(along), 1e-3);
@@ -154,6 +187,8 @@ vertex WPropOut cg_world_prop_vertex(WPropIn in [[stage_in]], uint iid [[instanc
     // Grown in from nothing over the last 15 % of the range (no pop), and gone past it.
     float far = dr.params.x;
     float s = I.scaleTint.x * (1.0 - smoothstep(far * 0.85, far, d));
+    // The near pool (0226): a block's draw leaves out what the pool draws (mode 1), the pool what's past its radius (2).
+    if ((t.morph.x == 1.0 && d < dr.anchor.z) || (t.morph.x == 2.0 && d >= dr.anchor.z)) s = 0.0;
     float c = cos(I.posYaw.w), sn = sin(I.posYaw.w);
     float3 lp = in.pos * s;
     float3 p = float3(lp.x * c + lp.z * sn, lp.y, -lp.x * sn + lp.z * c) + base;

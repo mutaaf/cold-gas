@@ -400,8 +400,10 @@ final class FreeDrive: DriveScene {
     func look(over base: LookU) -> LookU {
         var k = base
         let sun = simd_normalize(SIMD3<Float>(-0.72, -0.05, -0.69))
-        k.hemiSky = SIMD4(SIMD3<Float>(0.05, 0.068, 0.12), base.hemiSky.w)
-        k.hemiGround = SIMD4(SIMD3<Float>(0.016, 0.018, 0.026), 1)
+        // The sky's fill a little fuller than the stage's (0226): at blue hour the land and the trees still hold their greens
+        // under a bright sky; the ground's bounce warmer for the last of the sun.
+        k.hemiSky = SIMD4(SIMD3<Float>(0.068, 0.088, 0.15), base.hemiSky.w)
+        k.hemiGround = SIMD4(SIMD3<Float>(0.024, 0.022, 0.026), 1)
         k.skyZenith = SIMD4(0.010, 0.018, 0.050, 0); k.skyMid = SIMD4(0.040, 0.062, 0.140, 0); k.skyHorizon = SIMD4(0.26, 0.16, 0.17, 0)
         k.skySun = SIMD4(sun, 0)
         k.hazeCol = SIMD4(0.045, 0.06, 0.105, 1.0 / 9000)
@@ -423,6 +425,8 @@ final class FreeDrive: DriveScene {
         var d = WDriveU(lampPos: SIMD4(SIMD3<Float>(lp), Float(280 * lampK)), lampDir: SIMD4(SIMD3<Float>(simd_normalize(f)), cos(0.42)),
                         params: SIMD4(Float(WorldView.propR), Float(time), Launch.args.contains("-fd-lod") ? 1 : 0, 0))
         _ = u
+        let m = 4096.0
+        d.anchor = SIMD4(Float(origin.x - (origin.x / m).rounded(.down) * m), Float(origin.z - (origin.z / m).rounded(.down) * m), Float(WorldView.nearR), 0)
         v.draw(e, frame: frame, look: &look, drive: &d, shadow: shadow, viewProj: viewProj, eye: camera.eye)
     }
 
@@ -434,7 +438,7 @@ final class FreeDrive: DriveScene {
     /// One line for the debug HUD and the bench.
     var statsLine: String {
         guard let s = view?.stats else { return "" }
-        return String(format: "tiles %d · %.0fk tris · roads %d · props %d · %.0f MB · missing %d · %.1f km out · origin (%.0f, %.0f) · marks %d · loose %d",
-                      s.tiles, Double(s.tris) / 1000, s.roads, s.instances, s.mb, s.missing, dist / 1000, origin.x, origin.z, view?.marks?.count ?? 0, view?.loose?.drawn ?? 0)
+        return String(format: "tiles %d · %.0fk tris · roads %d · props %d (near %d) · %.0f MB · missing %d · %.1f km out · origin (%.0f, %.0f) · marks %d · loose %d",
+                      s.tiles, Double(s.tris) / 1000, s.roads, s.instances, view?.nearDrawn ?? 0, s.mb, s.missing, dist / 1000, origin.x, origin.z, view?.marks?.count ?? 0, view?.loose?.drawn ?? 0)
     }
 }

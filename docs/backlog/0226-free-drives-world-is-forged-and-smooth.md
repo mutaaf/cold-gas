@@ -24,9 +24,9 @@ Runs on: the operator's Mac (Xcode, Blender).
 - A minimap on the drive's HUD, through the HUD layout editor's API.
 
 ## Acceptance criteria
-- [ ] `make test` + `make rules` green, the run vectors bit-exact.
-- [ ] Shots in docs/shots/0226/ clearly better than docs/shots/0220 and 0223.
-- [ ] Bench before and after.
+- [x] `make test` + `make rules` green, the run vectors bit-exact; tests/unit/forge-native.test.js and a HudPrefs test added.
+- [x] Shots in docs/shots/0226/ (with a before), clearly better than docs/shots/0220, 0223 and 0224.
+- [x] Bench before and after (docs/NATIVE-FREEDRIVE.md §8).
 
 ## Test plan
 `cd ios && make test && make rules && make bench-freedrive`; `npm run forge -- <slot>` for each new slot; simulator shots out in the world.
