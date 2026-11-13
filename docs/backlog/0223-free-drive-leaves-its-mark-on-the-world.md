@@ -4,7 +4,7 @@ title: In Free Drive and Roam the world takes the hits (cones, barriers and sign
 status: shipped
 priority: P1
 size: M
-lens: delight
+lens: player-feel
 created: 2026-11-12
 pr: 347
 by: operator
