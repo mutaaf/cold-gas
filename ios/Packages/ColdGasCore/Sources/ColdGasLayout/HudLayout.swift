@@ -274,7 +274,7 @@ public enum HudLayout {
         l.stickMode = stickMode
         guard let custom else { return dynamicZone(l, stickMode) }
         let expanded = effective(custom, base: base)
-        guard !expanded.isEmpty else { return dynamicZone(l, stickMode) }
+        guard !expanded.isEmpty, base.width >= 1, base.height >= 1 else { return dynamicZone(l, stickMode) }
         l.custom = true
         let w = base.width, h = base.height
         func centre(_ p: HudPlacement) -> LPoint { LPoint(x: p.x * w, y: p.y * h) }
@@ -369,6 +369,8 @@ public enum HudLayout {
     /// A preset's placements on this base.
     public static func preset(_ p: HudPreset, _ base: DeckLayout) -> [HudControl: HudPlacement] {
         let w = base.width, h = base.height
+        // A rect with no size yet (a view before its first layout) has no fractions: the factory, never NaN.
+        guard w >= 1, h >= 1 else { return [:] }
         func at(_ c: LPoint, _ s: Double = 1, _ a: Double = 1) -> HudPlacement { HudPlacement(x: c.x / w, y: c.y / h, scale: s, alpha: a) }
         func centre(_ r: LRect) -> LPoint { LPoint(x: r.x + r.w / 2, y: r.y + r.h / 2) }
         switch p {

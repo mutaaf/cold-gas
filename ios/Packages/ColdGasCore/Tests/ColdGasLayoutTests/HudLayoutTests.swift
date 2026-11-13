@@ -146,6 +146,16 @@ struct HudLayoutTests {
         #expect(j.layouts?.count == 1)
     }
 
+    @Test func aRectWithNoSizeYetIsNeverNaN() {
+        // A view before its first layout: the editor crashed turning a preset's NaN into an Int.
+        let z = Deck.layout(form: .phone, width: 0, height: 0)
+        for p in HudPreset.allCases {
+            #expect(HudLayout.preset(p, z).values.allSatisfy { $0.x.isFinite && $0.y.isFinite })
+            let l = HudLayout.apply(z, HudCustom(preset: p))
+            #expect(l.stick.home.x.isFinite && l.slots.allSatisfy { $0.c.x.isFinite && $0.c.y.isFinite })
+        }
+    }
+
     @Test func theShapesAreTold() {
         #expect(HudShape.of(spread: .single, width: 440, height: 860, foldable: false, bent: false) == .phone)
         #expect(HudShape.of(spread: .single, width: 900, height: 400, foldable: false, bent: false) == .phoneWide)

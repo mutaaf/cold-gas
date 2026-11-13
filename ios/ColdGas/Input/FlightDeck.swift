@@ -502,7 +502,7 @@ final class DeckChrome {
     /// `wells`: the stick's and the fan's wells (not behind the valve deck, whose halves sit there).
     func layout(_ d: DeckLayout, bounds: CGRect, wells showWells: Bool = true) {
         let console = d.form == .tabletop
-        plate.isHidden = !console; plateEdge.isHidden = !console; wells.isHidden = !console || !showWells; vents.isHidden = !console
+        plate.isHidden = !console; plateEdge.isHidden = !console; wells.isHidden = !console || !showWells || d.custom; vents.isHidden = !console
         if console {
             let r = bounds.insetBy(dx: 4, dy: 4)
             plate.frame = r

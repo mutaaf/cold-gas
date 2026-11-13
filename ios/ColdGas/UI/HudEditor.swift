@@ -148,7 +148,7 @@ final class HudCanvasView: UIView {
     private static let ink = ControlSurface.ink
 
     override func draw(_ rect: CGRect) {
-        guard let m = model, let g = UIGraphicsGetCurrentContext() else { return }
+        guard let m = model, m.size.width >= 10, m.size.height >= 10, let g = UIGraphicsGetCurrentContext() else { return }
         let l = m.layout
         // The safe area: the canvas's own edge, a dashed hairline.
         g.setStrokeColor(Self.ink.withAlphaComponent(0.25).cgColor); g.setLineWidth(1); g.setLineDash(phase: 0, lengths: [3, 5])
@@ -294,7 +294,7 @@ final class HudCanvasView: UIView {
 
     // --- VoiceOver: every control a named element, moved and sized by its actions ---------------------------------
     func refreshAccessibility() {
-        guard let m = model else { accessibilityElements = []; return }
+        guard let m = model, m.size.width >= 10, m.size.height >= 10 else { accessibilityElements = []; return }
         let l = m.layout
         accessibilityElements = m.controls.compactMap { c -> UIAccessibilityElement? in
             guard let f = l.frame(c) else { return nil }
@@ -351,7 +351,7 @@ struct HudEditorView: View {
         // The panels sit over the scene's middle (tabletop: the screen half), clear of where thumbs rest.
         let scene = rows ? layout.scene : c
         ZStack(alignment: .topLeading) {
-            Color.black.opacity(0.62).ignoresSafeArea().accessibilityHidden(true)
+            Color.black.opacity(0.84).ignoresSafeArea().accessibilityHidden(true)
             HudCanvas(model: m)
                 .frame(width: c.width, height: c.height).offset(x: c.minX, y: c.minY)
                 .accessibilityIdentifier("hud-canvas")

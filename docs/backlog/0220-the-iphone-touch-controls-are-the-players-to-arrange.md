@@ -55,17 +55,27 @@ Runs on: the operator's Mac (Xcode, the simulators). iPhone app only; the web, t
 - Game controllers and keyboards are untouched (Hardware.swift).
 
 ## Acceptance criteria
-- [ ] The sim inputs and their meaning are unchanged: `make test` green (the run vectors, the live input vectors).
-- [ ] `HudLayoutTests`: the factory is Deck's, exactly; every preset on every measured shape keeps every control in the
+- [x] The sim inputs and their meaning are unchanged: `make test` green (the run vectors, the live input vectors).
+- [x] `HudLayoutTests`: the factory is Deck's, exactly; every preset on every measured shape keeps every control in the
       rect, off the fold, at least 44 pt, without overlaps; left-handed mirrors (and mirrors back); a drop on the Duo's
       crease lands beside it; snapping; overlaps only among controls shown together; sizes and opacity in range; the stick
       modes' zones; the stick's shaping is the identity at the factory settings; prefs round-trip and shrug off junk.
-- [ ] `HudSaves`: a save from before the editor decodes with the factory controls; layouts round-trip; a damaged HUD
+- [x] `HudSaves`: a save from before the editor decodes with the factory controls; layouts round-trip; a damaged HUD
       field costs only itself.
-- [ ] On one simulator: drag, resize, save, relaunch keeps it; preset switching; left-handed mirror; a full Pro and an
+- [x] On one simulator: drag, resize, save, relaunch keeps it; preset switching; left-handed mirror; a full Pro and an
       Advanced run on the Wall with a custom layout, past the ledge (0210's old hang spot) to the results.
-- [ ] Screenshots of the editor and of two custom layouts on a phone sideways, the Duo tabletop and an iPad, looked at.
-- [ ] `make rules` passes; the app builds; the 1.2.0 notes carry a What's new card for it.
+- [x] Screenshots of the editor and of two custom layouts on a phone sideways, the Duo tabletop and an iPad, looked at.
+- [x] `make rules` passes; the app builds; the 1.2.0 notes carry a What's new card for it.
+
+Verified on one simulator (an iPhone Pro Max, iOS 27.0; the Duo and the iPad laid out by `-window`/`-pose`):
+`HudEditorUITests` passed by touch (drag, the Size and Opacity sliders, a pinch, Save, relaunch kept it, the Left-handed
+preset, Mirror, Undo), then a whole Pro run on the Wall (left-handed) and a whole Advanced run on the Wall (Claw), both
+past the ledge to the results. A launch with a preset and the editor open crashed on a NaN before the first layout
+(a preset worked out on a zero-size rect); fixed and tested (`aRectWithNoSizeYetIsNeverNaN`).
+Shots (docs/shots/hud-0220/, from `ios/scripts/hud-shots.sh`): the editor, Claw on the ledge (RELEASE up), Left-handed in
+the air, Minimal on Advanced's valve deck, each on a phone sideways, the Duo tabletop and an iPad. All looked at.
+Not yet: a hardware pass (a Duo's real fold and closed screen, a Pro Max, an iPad in the hand); VoiceOver driven by a
+person; Free Drive's swipe-to-look on the simulator (the drive is being rebuilt in parallel).
 
 ## Test plan
 `ios/Packages/ColdGasCore/Tests/ColdGasLayoutTests/HudLayoutTests.swift` and `Tests/ColdGasClientTests/HudSaveTests.swift`.
