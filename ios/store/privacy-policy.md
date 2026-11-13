@@ -7,23 +7,23 @@ iPhone and iPad app and the web game. Keep the two word for word: change both in
 
 # Privacy
 
-**Cold Gas has no accounts. The iPhone app has no ads and no tracking:** it talks to one server, ours, at
-mutaafaziz.com/coldgas, and nothing from it goes to an advertising network, an analytics company or a data broker. The
-web game is the same, except for the ads described below.
+Cold Gas has no accounts. The iPhone app has no ads and no tracking: it talks only to our own server at mutaafaziz.com,
+and nothing from it goes to an advertising network or a data broker. Its private usage counts reach our analytics
+provider only through our own relay, and one switch turns them off. The web game is the same, except for the ads and the
+fuller usage analytics described below.
 
 ## What we receive, and why
 
-- **Your run, when you post to the board, and when our server writes the judges' commentary.** The run is the inputs
-  you flew and the flight's numbers (speed, height, rotation, touchdown and so on), with the course and the flight
-  tier. We use it to score the jump and to write the judges' commentary. On an iPhone or iPad where the judges write on
-  the device (below), nothing is sent for the commentary.
-- **Three initials, when you post to the board.** Three letters, A to Z. They are shown publicly next to the score,
-  with the day it was flown. The board keeps them.
-- **A health report, from the web game.** Counts of errors (with a short message that has anything that looks like a
-  key or a token removed), how smoothly frames were drawn, which features were used (for example "a run was flown",
-  "the board was opened"), the build, and a rough device class such as "phone, high-end". It carries no identifier, so
-  it can't be tied to you or to your device. We keep daily totals for 30 days and error examples for 14.
-
+- **Your run, when you post to the board, and when our server writes the judges' commentary.** The run is the inputs you
+  flew and the flight's numbers (speed, height, rotation, touchdown and so on), with the course and the flight tier. We
+  use it to score the jump and to write the judges' commentary. On an iPhone or iPad where the judges write on the
+  device (below), nothing is sent for the commentary.
+- **Three initials, when you post to the board.** Three letters, A to Z. They are shown publicly next to the score, with
+  the day it was flown. The board keeps them.
+- **A health report, from the web game.** Counts of errors (with a short message that has anything that looks like a key
+  or a token removed), how smoothly frames were drawn, which features were used (for example "a run was flown", "the
+  board was opened"), the build, and a rough device class such as "phone, high-end". It carries no identifier, so it
+  can't be tied to you or to your device. We keep daily totals for 30 days and error examples for 14.
 ## Judges on your iPhone or iPad
 
 Where Apple Intelligence is available and turned on (iOS 26 or later), the app's judges write their commentary on the
@@ -32,17 +32,40 @@ anyone else for it. Where Apple Intelligence isn't available, where you turn thi
 model can't answer, the run's numbers go to our server for the commentary, as described above. The score itself never
 comes from a model.
 
+## Usage analytics on the web
+
+The web game and these pages send anonymous usage analytics to PostHog, through our own relay at mutaafaziz.com: which
+pages are opened, clicks and taps (for heatmaps), a few game events (a run started or finished, with its score, course,
+tier and length, and a share), the device type and browser, page load times, and an approximate, city-level location.
+Our relay cuts the last part off your IP address before anything is forwarded, so PostHog never sees the full address.
+Session replays may be recorded to see where the game is hard to use; every text field is masked in them. A random id,
+kept in your browser's storage, links one visit to the next; it is not tied to your name, your initials or anything else
+about you. If your browser sends Global Privacy Control or Do Not Track, none of this loads. The iPhone app sends far
+less (below).
+
+## Usage counts from the iPhone app
+
+The iPhone and iPad app sends a few private usage counts to the same PostHog project, through the same relay: a session
+started, the first tap, a jump started and finished (with its course, flight tier, score and whether it landed), the
+first landing, a share, and a challenge link opened or played, with the app's version. They carry a random id made on
+your device the first time, which links one session to the next; it is not tied to your name, your initials, your Apple
+account or anything else about you, and deleting the app resets it. There are no session replays, heatmaps or taps
+recorded in the app, no advertising identifier and no location: our relay cuts the last part off your IP address, and
+the app asks PostHog not to work out a location from it. They are sent in small batches between runs, never during one.
+Settings, Privacy, Share usage stats turns them off: nothing more is sent, and the waiting counts and the random id are
+deleted from your device.
+
 ## What we don't receive
 
-Your name, email, contacts, location, photos, an advertising identifier, or any id for you or your device. Your IP
-address is used only to stop abuse: it is turned into a hash that changes every day, counted for rate limits, and
-never stored as an address.
+Your name, email, contacts, precise location, photos, an advertising identifier, or any id for you beyond the random
+analytics ids above. On our own server your IP address is used only to stop abuse: it is turned into a hash that changes
+every day, counted for rate limits, and never stored as an address.
 
 ## Ads on the web game
 
-The web game shows ads from Google, through our own ad loader, on its menus and results, never during a run. A
-rewarded ad plays only when you ask for one. Those ads can use the ad network's own cookies and identifiers, under
-Google's privacy policy. None of this is in the iPhone app.
+The web game shows ads from Google, through our own ad loader, on its menus and results, never during a run. A rewarded
+ad plays only when you ask for one. Those ads can use the ad network's own cookies and identifiers, under Google's
+privacy policy. None of this is in the iPhone app.
 
 ## Your own AI key (optional, on the web)
 
@@ -66,4 +89,4 @@ There is no account to delete. To remove a board entry, write to the address on 
 
 If what we receive ever changes, this page changes first.
 
-Last updated 12 November 2026.
+Last updated 13 November 2026.

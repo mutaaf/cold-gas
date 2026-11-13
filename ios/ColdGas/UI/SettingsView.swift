@@ -13,6 +13,7 @@ struct SettingsView: View {
     @State private var tilt = SaveStore.shared.settings.tiltOn
     @State private var judgeOnDevice = SaveStore.shared.settings.judgeOnDeviceOn
     @State private var judgeStatus = OnDeviceJudges.status
+    @State private var usage = SaveStore.shared.settings.usageOn
     private var judgeFooter: String {
         let scores = " Scores are the game\u{2019}s own; the model only writes the words."
         if judgeStatus != .available { return "\(judgeStatus.line) The free edge model writes them, over the network.\(scores)" }
@@ -57,10 +58,18 @@ struct SettingsView: View {
                 } header: { Text("Judges") } footer: {
                     Text(judgeFooter)
                 }
+                // 0246: the usage counts the game sends, and the one switch that stops them.
+                Section {
+                    Toggle("Share usage stats", isOn: $usage)
+                        .onChange(of: usage) { _, v in Usage.shared.setOn(v) }
+                        .accessibilityIdentifier("usage")
+                    Link("Privacy policy", destination: URL(string: "https://mutaafaziz.com/coldgas/privacy")!)
+                } header: { Text("Privacy") } footer: {
+                    Text("Counts like a jump started, landed or shared, with the course, tier and score, and a random id made on this iPhone. No name, initials, location or advertising id. Off sends nothing and deletes the id.")
+                }
                 Section("About") {
                     LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                     Link("Play on the web", destination: URL(string: "https://mutaafaziz.com/coldgas/")!)
-                    Link("Privacy policy", destination: URL(string: "https://mutaafaziz.com/coldgas/privacy")!)
                     NavigationLink("Licenses") { LicensesView() }
                 }
             }

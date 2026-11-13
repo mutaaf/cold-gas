@@ -141,7 +141,17 @@ left in the tanks; on a wreck, combos that come from the physics.
    PostHog (IPs truncated, cookies stripped, GPC/DNT honoured, inputs masked in replays; mutaaf/box-office AGENTS.md).
    Custom events go through `src/insights.js` `track()` only: `game_start` {course, tier}, `game_over` {score,
    duration_s, course, tier, landed} on a Jump's results, `share` {course, score}. Props are numbers and enums: never
-   initials, free text or ids. The privacy page names it (tests/unit/privacy.test.js). Never in the iPhone app.
+   initials, free text or ids. The privacy page names it (tests/unit/privacy.test.js).
+   **The iPhone app sends the same vocabulary too (the owner's call, 2026-11-13, "iPhone app metrics too"; 0246).** No SDK and no
+   loader: `ColdGasClient/Insights.swift` (the vocabulary, numbers and enums only; the queue; the gates) and
+   `ios/ColdGas/Net/Usage.swift` (the sender) POST PostHog's `/batch/` shape to Box Office's relay
+   `https://mutaafaziz.com/boxoffice/e/batch/` with `Referer: https://mutaafaziz.com/coldgas/` (the relay admits a
+   general-audience Cast List page), `platform: ios`, `$geoip_disable`. One id: a random install id in UserDefaults (a
+   reinstall resets it). No IDFA, no ATT prompt, no fingerprinting, no replays or autocapture. Queued on disk, capped, sent in a
+   batch on the title, the results and going to the background; nothing joins the queue or leaves during a countdown, a run or a
+   replay. Settings → Privacy → Share usage stats (on by default) turns it off and deletes the queue and the id. The App Privacy
+   label: Usage Data → Product Interaction and Identifiers → Device ID, Analytics, linked, not tracking (ios/store/app-privacy.md;
+   the operator sets it in App Store Connect in the same submission). The privacy page and ios/store/privacy-policy.md say so.
    **A third exception, for the portal builds only (0228, owner's request 2026-11-13).** `npm run build:crazygames` and
    `build:gamedistribution` load that portal's SDK from the portal's own host (sdk.crazygames.com, html5.api.gamedistribution.com)
    and nothing else: no Marquee, no Box Office, no /coldgas/api. The production build never loads either SDK (src/portal/, `ON_PORTAL`).
