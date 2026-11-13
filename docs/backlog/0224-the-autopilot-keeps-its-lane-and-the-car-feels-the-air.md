@@ -1,11 +1,12 @@
 ---
 id: 0224
 title: Free Drive's autopilot keeps to its lane, and the drive's car feels downforce at speed
-status: in-progress
+status: shipped
 priority: P2
 size: S
 lens: delight
 created: 2026-11-12
+pr: 348
 by: operator
 ---
 
