@@ -1,0 +1,219 @@
+[
+ {
+  "t": 1.134,
+  "mode": "title",
+  "method": "GET",
+  "up": 0,
+  "path": "/boxoffice/v1/insights.js"
+ },
+ {
+  "t": 5.78,
+  "mode": "title",
+  "method": "GET",
+  "up": 0,
+  "path": "/boxoffice/e/static/array.js"
+ },
+ {
+  "t": 10.37,
+  "mode": "title",
+  "method": "GET",
+  "up": 0,
+  "path": "/boxoffice/e/static/1.448.0/web-vitals-with-attribution.js"
+ },
+ {
+  "t": 10.37,
+  "mode": "title",
+  "method": "GET",
+  "up": 0,
+  "path": "/boxoffice/e/static/1.448.0/dead-clicks-autocapture.js"
+ },
+ {
+  "t": 10.373,
+  "mode": "title",
+  "method": "GET",
+  "up": 0,
+  "path": "/boxoffice/e/array/<key>/config.js"
+ },
+ {
+  "t": 10.383,
+  "mode": "title",
+  "method": "POST",
+  "up": 1175,
+  "path": "/boxoffice/e/e/"
+ },
+ {
+  "t": 10.503,
+  "mode": "title",
+  "method": "GET",
+  "up": 0,
+  "path": "/boxoffice/e/static/1.448.0/surveys.js"
+ },
+ {
+  "t": 10.503,
+  "mode": "title",
+  "method": "GET",
+  "up": 0,
+  "path": "/boxoffice/e/static/1.448.0/posthog-recorder.js"
+ },
+ {
+  "t": 10.503,
+  "mode": "title",
+  "method": "GET",
+  "up": 0,
+  "path": "/boxoffice/e/static/1.448.0/exception-autocapture.js"
+ },
+ {
+  "t": 18.625,
+  "mode": "countdown",
+  "method": "POST",
+  "up": 1948,
+  "path": "/boxoffice/e/i/v0/e/"
+ },
+ {
+  "t": 18.638,
+  "mode": "countdown",
+  "method": "POST",
+  "up": 70168,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 22.604,
+  "mode": "countdown",
+  "method": "POST",
+  "up": 3379,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 22.605,
+  "mode": "countdown",
+  "method": "POST",
+  "up": 1168,
+  "path": "/boxoffice/e/i/v0/e/"
+ },
+ {
+  "t": 26.918,
+  "mode": "countdown",
+  "method": "POST",
+  "up": 1433,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 31.289,
+  "mode": "live",
+  "method": "POST",
+  "up": 4183,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 35.525,
+  "mode": "live",
+  "method": "POST",
+  "up": 5022,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 39.904,
+  "mode": "live",
+  "method": "POST",
+  "up": 4497,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 44.092,
+  "mode": "live",
+  "method": "POST",
+  "up": 4159,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 48.393,
+  "mode": "live",
+  "method": "POST",
+  "up": 4013,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 52.739,
+  "mode": "live",
+  "method": "POST",
+  "up": 4647,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 56.895,
+  "mode": "live",
+  "method": "POST",
+  "up": 6507,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 61.295,
+  "mode": "live",
+  "method": "POST",
+  "up": 4844,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 61.298,
+  "mode": "live",
+  "method": "POST",
+  "up": 1659,
+  "path": "/boxoffice/e/i/v0/e/"
+ },
+ {
+  "t": 65.748,
+  "mode": "live",
+  "method": "POST",
+  "up": 13228,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 65.749,
+  "mode": "live",
+  "method": "POST",
+  "up": 1136,
+  "path": "/boxoffice/e/i/v0/e/"
+ },
+ {
+  "t": 70.761,
+  "mode": "live",
+  "method": "POST",
+  "up": 15675,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 75.085,
+  "mode": "live",
+  "method": "POST",
+  "up": 10869,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 79.757,
+  "mode": "live",
+  "method": "POST",
+  "up": 10186,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 84.09,
+  "mode": "live",
+  "method": "POST",
+  "up": 4352,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 88.113,
+  "mode": "results",
+  "method": "POST",
+  "up": 1152,
+  "path": "/boxoffice/e/s/"
+ },
+ {
+  "t": 92.803,
+  "mode": "results",
+  "method": "POST",
+  "up": 29259,
+  "path": "/boxoffice/e/s/"
+ }
+]
