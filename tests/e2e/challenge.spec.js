@@ -87,8 +87,11 @@ test('a challenge link that can’t be read says so gently and falls back to a n
   await ctx.close();
 });
 
-test('the daily card: today’s objective, Play today’s picks its course, and a miss says what was missing', async ({ browser }) => {
-  test.setTimeout(180_000);
+test('@heavy the daily card: today’s objective, Play today’s picks its course, and a miss says what was missing', async ({ browser }) => {
+  // Four days, four fresh WebGL pages booted and flown one after another (0139, 0150, 0198 each added one): ≈3 min on a
+  // quick CI runner, so 180 s ran out on a slower one (main red on ca82030, both tries). Budget it like the other
+  // multi-boot specs; @heavy: the flake guard runs it 2×.
+  test.setTimeout(300_000);
   const { ctx, page, errors } = await phonePage(browser);
   await page.goto('/coldgas/?course=wall&gfx=low');
   await ready(page);
