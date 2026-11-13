@@ -9,6 +9,11 @@ import ColdGasWorld
 
 @Suite("The roadside breaks", .serialized)
 struct RoadsideTests {
+    /// The unit vector from the item toward its road (across the road, its local ±x).
+    func toRoad(_ world: FreeWorld, _ s: PropSolid) -> (Double, Double) {
+        let nx = DMath.dcos(s.yaw), nz = -DMath.dsin(s.yaw)
+        return world.ground(s.x + nx * 6, s.z + nz * 6).road < world.ground(s.x - nx * 6, s.z - nz * 6).road ? (nx, nz) : (-nx, -nz)
+    }
     /// The first roadside item of `kind` near the roads round (x, z), and its cell.
     func find(_ world: FreeWorld, _ kind: PropSolid.Kind, near x: Double, _ z: Double) -> PropSolid? {
         let C = PropSpec.cell
@@ -17,18 +22,18 @@ struct RoadsideTests {
             // A level spot (a car on a slope drives into it at an angle).
             if let s = cell.solids.first(where: { s in
                 guard s.kind == kind else { return false }
-                let h = s.yaw, nx = DMath.dcos(h), nz = -DMath.dsin(h)
-                return abs(world.ground(s.x - nx * 10, s.z - nz * 10).y - s.y) < 0.6
+                let (rx, rz) = toRoad(world, s)
+                return abs(world.ground(s.x + rx * 10, s.z + rz * 10).y - s.y) < 0.6
             }) { return s }
         } } }
         return nil
     }
-    /// A car `back` metres off the item's face, facing it, on a drive course with its streamer.
+    /// A car `back` metres off the item toward its road, facing it, on a drive course with its streamer.
     func car(_ world: FreeWorld, facing s: PropSolid, back: Double) -> (Vehicle, DriveStreamer, DriveModel) {
         let st = DriveStreamer(world: world), c = createVehicle(course: DRIVE_COURSE)
         c.world.streamer = st
-        // The item's face is its local x (across the road): approach along it.
-        let nx = DMath.dcos(s.yaw), nz = -DMath.dsin(s.yaw)
+        // From the road's side, across it (the way a car leaving the road meets it).
+        let (rx, rz) = toRoad(world, s), nx = -rx, nz = -rz
         let px = s.x - nx * back, pz = s.z - nz * back
         c.pos.x = px; c.pos.y = world.ground(px, pz).y + SPEC.comHeight + 0.05; c.pos.z = pz
         M3.quatFromYaw(c.quat, DMath.datan2(nx, nz))

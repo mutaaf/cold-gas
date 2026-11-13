@@ -400,7 +400,8 @@ extension FreeWorld {
                     let ox = l.x[k] + hz * side * (Roadside.railLat + 3), oz = l.z[k] - hx * side * (Roadside.railLat + 3)
                     if roadY - ground(ox, oz, q).y >= 0.8 || (abs(turn) >= 0.045 && side == outside) {
                         // the rail's top 0.8 m over the road's edge (its foot on the shoulder's level)
-                        put(.guardrail, .rail, side, Roadside.railLat, Roadside.rail, roadY - 0.02, turn: side > 0 ? 0 : DMath.PI)
+                        // the forged rail's beam is on its local +x (the forge's −x, turned into the game's frame): toward the road
+                        put(.guardrail, .rail, side, Roadside.railLat, Roadside.rail, roadY - 0.02, turn: side > 0 ? DMath.PI : 0)
                         railed[si] = true
                     }
                 }
