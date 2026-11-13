@@ -3,190 +3,753 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>COLD GAS for iPhone and iPad: Public Beta</title>
-<meta name="description" content="Fly COLD GAS natively on iPhone and iPad: drawn in Metal at up to 120 Hz, landings you feel, and judges written on your device. Join the public beta on TestFlight.">
+<title>COLD GAS for iPhone, iPhone Duo and iPad: Public Beta</title>
+<meta name="description" content="Fly COLD GAS natively on iPhone, iPhone Duo and iPad: drawn in Metal at up to 120 Hz, a layout for every fold, judges written on device. Join on TestFlight.">
 <link rel="canonical" href="https://mutaafaziz.com/coldgas/beta/">
 <link rel="icon" href="../favicon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="../apple-touch-icon.png">
 <meta name="theme-color" content="#05070c">
 <meta property="og:title" content="COLD GAS for iPhone and iPad: public beta">
-<meta property="og:description" content="Ten thrusters. One roll. Stick the landing, natively. Join on TestFlight.">
+<meta property="og:description" content="Ten thrusters. One roll. Stick the landing, natively, on iPhone, iPhone Duo and iPad. Join on TestFlight.">
 <meta property="og:image" content="https://mutaafaziz.com/coldgas/og.png">
 <meta property="og:url" content="https://mutaafaziz.com/coldgas/beta/">
+<link rel="preload" href="../guide/fonts/michroma-latin-400-normal.woff2" as="font" type="font/woff2" crossorigin>
+<!-- Motion: scroll-driven animations where the browser has them (.sd), else a small rAF driver below (.sdjs) that
+     scrubs the same CSS animations by scroll. Reduced motion (or no script) gets neither: a static, readable page.
+     ?sd=0 forces the fallback (for testing). -->
+<script>(function (d) { if (matchMedia('(prefers-reduced-motion: reduce)').matches) return; var sd = !!(window.CSS && CSS.supports && CSS.supports('animation-timeline: view()')) && !/[?&]sd=0/.test(location.search); d.classList.add('fx', sd ? 'sd' : 'sdjs'); })(document.documentElement);</script>
 <style>
   @font-face { font-family: 'Michroma'; src: url('../guide/fonts/michroma-latin-400-normal.woff2') format('woff2'); font-weight: 400; font-display: swap; }
   @font-face { font-family: 'Geist Variable'; src: url('../guide/fonts/geist-latin-wght-normal.woff2') format('woff2-variations'); font-weight: 100 900; font-display: swap; }
   :root {
-    --ink: #f5f6f8; --ink-2: rgba(245, 246, 248, 0.74); --ink-3: rgba(245, 246, 248, 0.5);
+    --ink: #f5f6f8; --ink-2: rgba(245, 246, 248, 0.76); --ink-3: rgba(245, 246, 248, 0.54);
     --hair: rgba(245, 246, 248, 0.14); --hair-2: rgba(245, 246, 248, 0.07);
     --bg: #05070c; --ice: #bfe6ff; --ok: #6ff0b5; --signal: #e8323c;
     --display: 'Michroma', 'Geist Variable', sans-serif;
     --text: 'Geist Variable', ui-sans-serif, -apple-system, 'Segoe UI', sans-serif;
     --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+    --gut: max(16px, env(safe-area-inset-left));
+    --bar: 56px;
     color-scheme: dark;
   }
   * { box-sizing: border-box; }
   html { background: var(--bg); }
-  body {
-    margin: 0; color: var(--ink-2); font: 16px/1.6 var(--text); -webkit-font-smoothing: antialiased; overflow-x: hidden;
-    background:
-      radial-gradient(90% 55% at 78% 8%, rgba(76, 128, 196, 0.22) 0%, transparent 60%),
-      radial-gradient(70% 50% at 10% 0%, #0f1a2e 0%, transparent 70%),
-      linear-gradient(180deg, #08101e 0%, var(--bg) 46%) no-repeat, var(--bg);
-    min-height: 100vh;
-  }
-  /* the horizon: a hairline and a faint concrete floor, the game's blue hour */
-  body::before { content: ''; position: fixed; inset: auto 0 0 0; height: 38vh; pointer-events: none; z-index: -1;
-    background: linear-gradient(180deg, transparent, rgba(191, 230, 255, 0.035)); border-top: 1px solid var(--hair-2); }
+  body { margin: 0; color: var(--ink-2); font: 16px/1.6 var(--text); -webkit-font-smoothing: antialiased; overflow-x: clip; background: var(--bg); }
   a { color: var(--ink); }
-  .wrap { max-width: 1080px; margin: 0 auto; padding: max(20px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 72px max(16px, env(safe-area-inset-left)); }
-  .top { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-  .brand { font: 400 12px/1 var(--display); letter-spacing: 0.42em; color: var(--ink-3); text-transform: uppercase; text-decoration: none; }
-  .web { font: 500 13px/1 var(--text); letter-spacing: 0.04em; color: var(--ink-2); text-decoration: none; border: 1px solid var(--hair); border-radius: 999px; padding: 10px 16px; }
-  .web:hover, .web:focus-visible { color: var(--ink); border-color: rgba(245, 246, 248, 0.32); }
+  img { display: block; max-width: 100%; }
+  .wrap { width: 100%; max-width: 1160px; margin: 0 auto; padding-left: var(--gut); padding-right: max(16px, env(safe-area-inset-right)); }
+  .vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 
-  .hero { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(28px, 6vw, 72px); align-items: center; margin-top: clamp(28px, 7vh, 72px); }
+  /* ---------- the sky: fixed behind everything, blue hour deepening to night as you scroll ---------- */
+  .sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden;
+    background: radial-gradient(120% 70% at 50% 108%, rgba(76, 128, 196, 0.34) 0%, rgba(30, 56, 104, 0.18) 38%, transparent 70%),
+      linear-gradient(180deg, #050912 0%, #0a1426 52%, #0f1d36 100%); }
+  .sky i { position: absolute; left: 0; right: 0; top: 0; height: 170%; display: block; }
+  .stars-far { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cg fill='%23dfeeff'%3E%3Ccircle cx='12' cy='30' r='.6' opacity='.7'/%3E%3Ccircle cx='70' cy='12' r='.5' opacity='.5'/%3E%3Ccircle cx='132' cy='54' r='.7' opacity='.8'/%3E%3Ccircle cx='200' cy='22' r='.5' opacity='.45'/%3E%3Ccircle cx='38' cy='118' r='.5' opacity='.55'/%3E%3Ccircle cx='170' cy='140' r='.6' opacity='.6'/%3E%3Ccircle cx='98' cy='196' r='.5' opacity='.5'/%3E%3Ccircle cx='226' cy='210' r='.7' opacity='.7'/%3E%3Ccircle cx='8' cy='222' r='.4' opacity='.4'/%3E%3C/g%3E%3C/svg%3E"); opacity: 0.8; }
+  .stars-near { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='420' height='420'%3E%3Cg fill='%23ffffff'%3E%3Ccircle cx='60' cy='80' r='1.1' opacity='.9'/%3E%3Ccircle cx='300' cy='40' r='.9' opacity='.75'/%3E%3Ccircle cx='220' cy='260' r='1.2' opacity='.85'/%3E%3Ccircle cx='390' cy='330' r='.9' opacity='.6'/%3E%3Ccircle cx='120' cy='370' r='1' opacity='.7'/%3E%3C/g%3E%3C/svg%3E");
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, #000 40%, transparent 75%); mask-image: linear-gradient(180deg, #000 0%, #000 40%, transparent 75%); }
+  .sky .night { height: 100%; background: linear-gradient(180deg, #03050a, #05070c); opacity: 0; }
+  main, .top, footer { position: relative; z-index: 1; }
+
+  /* ---------- top bar ---------- */
+  .top { position: sticky; top: 0; z-index: 20; height: calc(var(--bar) + env(safe-area-inset-top)); padding-top: env(safe-area-inset-top);
+    background: linear-gradient(180deg, rgba(5, 7, 12, 0.86), rgba(5, 7, 12, 0.6)); -webkit-backdrop-filter: blur(16px) saturate(1.2); backdrop-filter: blur(16px) saturate(1.2);
+    border-bottom: 1px solid var(--hair-2); }
+  .top .wrap { height: var(--bar); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+  .brand { font: 400 12px/1 var(--display); letter-spacing: 0.42em; color: var(--ink-2); text-transform: uppercase; text-decoration: none; white-space: nowrap; }
+  .top nav { display: flex; align-items: center; gap: 8px; }
+  .pill { display: inline-flex; align-items: center; height: 36px; padding: 0 15px; border-radius: 999px; font: 500 13px/1 var(--text); letter-spacing: 0.02em; text-decoration: none; white-space: nowrap;
+    color: var(--ink-2); border: 1px solid var(--hair); transition: color 0.25s var(--ease), border-color 0.25s var(--ease), background 0.25s var(--ease); }
+  .pill:hover, .pill:focus-visible { color: var(--ink); border-color: rgba(245, 246, 248, 0.34); }
+  .pill.solid { color: #05070c; background: var(--ink); border-color: transparent; font-weight: 600; }
+  .pill.solid:hover, .pill.solid:focus-visible { background: #fff; }
+  a:focus-visible { outline: 2px solid var(--ice); outline-offset: 3px; }
+
+  /* ---------- devices: our own outlines, no marks ---------- */
+  .ph { --pw: 200px; width: var(--pw); padding: calc(var(--pw) * 0.034); border-radius: calc(var(--pw) * 0.16);
+    background: linear-gradient(150deg, #353b47 0%, #0d1016 32%, #151a22 70%, #2b313c 100%);
+    box-shadow: 0 calc(var(--pw) * 0.2) calc(var(--pw) * 0.36) calc(var(--pw) * -0.12) rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(245, 246, 248, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+  .ph img { width: 100%; height: auto; aspect-ratio: 506 / 1100; object-fit: cover; border-radius: calc(var(--pw) * 0.128); background: #070a10; }
+  .pad { --iw: 420px; width: var(--iw); padding: calc(var(--iw) * 0.034); border-radius: calc(var(--iw) * 0.07);
+    background: linear-gradient(150deg, #353b47 0%, #0d1016 30%, #151a22 70%, #2b313c 100%);
+    box-shadow: 0 50px 90px -40px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(245, 246, 248, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+  .pad img { width: 100%; height: auto; aspect-ratio: 1050 / 1400; object-fit: cover; border-radius: calc(var(--iw) * 0.04); background: #070a10; }
+  /* the Duo, open and flat: one display across both halves, a hairline crease */
+  .flat { --fw: 520px; position: relative; width: var(--fw); padding: calc(var(--fw) * 0.022); border-radius: calc(var(--fw) * 0.06);
+    background: linear-gradient(150deg, #353b47 0%, #0d1016 30%, #151a22 70%, #2b313c 100%);
+    box-shadow: 0 40px 80px -36px rgba(0, 0, 0, 0.95), 0 0 0 1px rgba(245, 246, 248, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.07); }
+  .flat img { width: 100%; height: auto; aspect-ratio: 1600 / 1125; object-fit: cover; border-radius: calc(var(--fw) * 0.04); }
+  .flat::after { content: ''; position: absolute; top: 0; bottom: 0; left: 50%; width: 2px; transform: translateX(-50%);
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(0, 0, 0, 0.35) 50%, rgba(255, 255, 255, 0.1)); }
+
+  .tag { position: absolute; display: flex; align-items: center; gap: 9px; font: 500 12px/1.25 var(--text); color: var(--ink); padding: 10px 14px; white-space: nowrap;
+    border: 1px solid var(--hair); border-radius: 14px; background: rgba(9, 13, 21, 0.9); box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.95); }
+  .tag small { display: block; color: var(--ink-3); font-size: 11px; }
+  .tag svg { width: 18px; height: 18px; flex: none; color: var(--ok); }
+  .tag.ice svg { color: var(--ice); }
+  .tag.mono { font: 400 10px/1 var(--display); letter-spacing: 0.22em; color: var(--ink-2); }
+  .tag.mono b { color: var(--signal); font-weight: 400; }
+
+  /* ---------- type ---------- */
   .eyebrow { display: inline-flex; align-items: center; gap: 10px; font: 500 11px/1 var(--text); letter-spacing: 0.26em; text-transform: uppercase; color: var(--ice); margin: 0; }
-  .eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 0 0 rgba(111, 240, 181, 0.6); animation: live 2.4s var(--ease) infinite; }
+  .eyebrow i { width: 7px; height: 7px; border-radius: 50%; background: var(--ok); }
+  .fx .eyebrow i { animation: live 2.4s var(--ease) infinite; }
   @keyframes live { 0% { box-shadow: 0 0 0 0 rgba(111, 240, 181, 0.55); } 70%, 100% { box-shadow: 0 0 0 10px rgba(111, 240, 181, 0); } }
-  h1 { font: 400 clamp(40px, 8.4vw, 92px)/0.98 var(--display); color: var(--ink); letter-spacing: 0.01em; margin: 22px 0 0; }
-  h1 em { font-style: normal; color: transparent; -webkit-text-stroke: 1px rgba(245, 246, 248, 0.7); }
-  .lede { font-size: clamp(17px, 2.2vw, 20px); line-height: 1.5; color: var(--ink-2); max-width: 30em; margin: 22px 0 0; }
+  h1 { font: 400 clamp(40px, 7.6vw, 96px)/0.98 var(--display); color: var(--ink); letter-spacing: 0.01em; margin: 22px 0 0; }
+  h1 em, h2 em { font-style: normal; color: transparent; -webkit-text-stroke: 1px rgba(245, 246, 248, 0.72); }
+  h2 { font: 400 clamp(28px, 4.6vw, 56px)/1.04 var(--display); color: var(--ink); letter-spacing: 0.005em; margin: 18px 0 0; text-wrap: balance; }
+  h3 { font: 600 19px/1.25 var(--text); color: var(--ink); margin: 0; letter-spacing: -0.005em; }
+  .lede { font-size: clamp(17px, 1.9vw, 20px); line-height: 1.5; color: var(--ink-2); max-width: 32em; margin: 20px 0 0; }
   .lede b { color: var(--ink); font-weight: 600; }
+  .k { display: block; font: 400 11px/1 var(--display); letter-spacing: 0.24em; text-transform: uppercase; color: var(--ice); margin-bottom: 12px; }
 
-  .join { display: flex; flex-wrap: wrap; align-items: center; gap: 18px 22px; margin-top: 34px; }
+  /* ---------- CTA ---------- */
+  .join { display: flex; flex-wrap: wrap; align-items: center; gap: 16px 22px; margin-top: 32px; }
   .cta { position: relative; display: inline-flex; align-items: center; gap: 12px; font: 600 17px/1 var(--text); letter-spacing: 0.01em; color: #05070c;
     background: var(--ink); text-decoration: none; padding: 18px 26px 18px 22px; border-radius: 999px; overflow: hidden;
     box-shadow: 0 10px 40px -12px rgba(191, 230, 255, 0.55), inset 0 -1px 0 rgba(0, 0, 0, 0.12); transition: transform 0.25s var(--ease), box-shadow 0.25s var(--ease); }
-  .cta::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(191, 230, 255, 0.55) 50%, transparent 65%);
+  .fx .cta::after { content: ''; position: absolute; inset: 0; background: linear-gradient(105deg, transparent 35%, rgba(191, 230, 255, 0.55) 50%, transparent 65%);
     transform: translateX(-120%); animation: sheen 4.8s var(--ease) 1.2s infinite; }
   @keyframes sheen { 0%, 70% { transform: translateX(-120%); } 100% { transform: translateX(120%); } }
   .cta:hover, .cta:focus-visible { transform: translateY(-2px); box-shadow: 0 16px 48px -12px rgba(191, 230, 255, 0.7); }
   .cta svg { width: 22px; height: 22px; flex: none; }
-  .cta .arr { transition: transform 0.25s var(--ease); }
-  .cta:hover .arr { transform: translateX(3px); }
   .seats { font-size: 13px; color: var(--ink-3); line-height: 1.45; }
   .seats b { color: var(--ink-2); font-weight: 500; }
-
-  .qr { display: none; align-items: center; gap: 16px; margin-top: 28px; padding: 14px 18px 14px 14px; border: 1px solid var(--hair); border-radius: 18px;
-    background: rgba(10, 13, 20, 0.5); width: fit-content; }
-  .qr img { width: 104px; height: 104px; border-radius: 10px; display: block; }
+  .qr { display: none; align-items: center; gap: 16px; margin-top: 26px; padding: 14px 18px 14px 14px; border: 1px solid var(--hair); border-radius: 18px;
+    background: rgba(10, 13, 20, 0.72); width: fit-content; }
+  .qr img { width: 104px; height: 104px; border-radius: 10px; }
   .qr p { margin: 0; font-size: 14px; line-height: 1.45; max-width: 15em; }
   .qr p b { display: block; color: var(--ink); font-weight: 600; margin-bottom: 2px; }
   @media (hover: hover) and (pointer: fine) { .qr { display: flex; } }
 
-  /* the phone: our own outline, no device marks */
-  .stage { position: relative; display: grid; place-items: center; }
-  .stage::before { content: ''; position: absolute; width: 78%; aspect-ratio: 1; border-radius: 50%; top: 18%;
-    background: radial-gradient(circle, rgba(111, 240, 181, 0.14), rgba(76, 128, 196, 0.12) 45%, transparent 70%); filter: blur(10px); }
-  .phone { position: relative; width: min(330px, 74vw); aspect-ratio: 660 / 1434; border-radius: 52px; padding: 11px;
-    background: linear-gradient(145deg, #2a2f39, #0c0f15 40%, #1d222b); box-shadow: 0 50px 90px -30px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(245, 246, 248, 0.1), inset 0 0 0 1px rgba(255, 255, 255, 0.06);
-    transform: perspective(1400px) rotateY(-9deg) rotateX(3deg); animation: rise 1.2s var(--ease) both; }
-  @keyframes rise { from { opacity: 0; transform: perspective(1400px) rotateY(-9deg) rotateX(3deg) translateY(28px); } }
-  .phone img { width: 100%; height: 100%; object-fit: cover; border-radius: 42px; display: block; }
-  .phone::after { content: ''; position: absolute; top: 22px; left: 50%; width: 30%; height: 26px; transform: translateX(-50%); border-radius: 20px; background: #000; }
-  .tag { position: absolute; display: flex; align-items: center; gap: 8px; font: 500 12px/1.2 var(--text); color: var(--ink); padding: 10px 14px;
-    border: 1px solid var(--hair); border-radius: 14px; background: rgba(8, 11, 18, 0.78); backdrop-filter: blur(14px); -webkit-backdrop-filter: blur(14px);
-    box-shadow: 0 18px 40px -18px rgba(0, 0, 0, 0.9); animation: rise 1.2s var(--ease) both; }
-  .tag small { display: block; color: var(--ink-3); font-size: 11px; }
-  .tag svg { width: 18px; height: 18px; flex: none; color: var(--ok); }
-  .t1 { left: -4%; top: 47%; animation-delay: 0.35s; }
-  .t2 { right: -2%; top: 14%; animation-delay: 0.55s; }
-  .t2 svg { color: var(--ice); }
+  /* ---------- hero: sky, horizon, concrete, devices, tags: each its own depth ---------- */
+  .hero { position: relative; min-height: calc(100svh - var(--bar)); display: grid; overflow: clip; --floor: 30%; }
+  .hero > .wrap { position: relative; z-index: 3; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); gap: clamp(20px, 4vw, 56px); align-items: center;
+    padding-top: clamp(28px, 6vh, 72px); padding-bottom: clamp(40px, 8vh, 96px); }
+  .h-far, .h-floor { position: absolute; left: 0; right: 0; pointer-events: none; }
+  .h-far { bottom: var(--floor); height: min(42vh, 380px); z-index: 1; }
+  .h-far svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .h-floor { top: calc(100% - var(--floor)); height: 60%; z-index: 2;
+    background: radial-gradient(60% 50% at 66% 8%, rgba(191, 230, 255, 0.1), transparent 70%), linear-gradient(180deg, #121a28 0%, #0a0f18 30%, #05070c 90%);
+    border-top: 1px solid rgba(191, 230, 255, 0.22); box-shadow: 0 -1px 24px rgba(120, 170, 230, 0.25); }
+  .h-floor svg { position: absolute; left: 0; top: 0; width: 100%; height: 70%; }
+  .h-devs { position: relative; width: min(640px, 100%); aspect-ratio: 1.18; justify-self: end; }
+  .h-duo { position: absolute; left: 0; top: 6%; width: 84%; perspective: 1600px; }
+  .h-duo .flat { --fw: min(538px, 38vw); transform: rotateY(-20deg) rotateX(7deg) rotateZ(-1deg); transform-origin: 60% 50%; }
+  .h-ph { position: absolute; right: 2%; bottom: 0; perspective: 1400px; }
+  .h-ph .ph { --pw: min(206px, 14.6vw); transform: rotateY(-14deg) rotateX(4deg); }
+  .h-devs .tag.t1 { left: -2%; bottom: 14%; }
+  .h-devs .tag.t2 { right: 0; top: -2%; }
+  .h-devs .tag.t3 { left: 30%; top: -8%; }
+  .fx .h-devs .dv { animation: rise 1.3s var(--ease) both; }
+  .fx .h-devs .h-ph .dv { animation-delay: 0.18s; }
+  @keyframes rise { from { opacity: 0; translate: 0 30px; } }
+  .scroll-cue { position: absolute; left: 50%; bottom: 18px; z-index: 3; translate: -50% 0; font: 500 10px/1 var(--text); letter-spacing: 0.3em; text-transform: uppercase; color: var(--ink-3); display: flex; flex-direction: column; align-items: center; gap: 10px; }
+  .scroll-cue i { width: 1px; height: 34px; background: linear-gradient(180deg, transparent, var(--ink-2)); }
+  .fx .scroll-cue i { animation: drip 2.2s var(--ease) infinite; transform-origin: top; }
+  @keyframes drip { 0% { transform: scaleY(0); opacity: 1; } 60% { transform: scaleY(1); opacity: 1; } 100% { transform: scaleY(1); opacity: 0; } }
 
-  h2 { font: 400 13px/1.3 var(--display); color: var(--ink-3); letter-spacing: 0.28em; text-transform: uppercase; margin: clamp(64px, 10vh, 110px) 0 22px; }
-  .feats { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1px; background: var(--hair-2); border: 1px solid var(--hair-2); border-radius: 22px; overflow: hidden; }
-  .feat { background: linear-gradient(180deg, rgba(14, 19, 30, 0.96), rgba(7, 10, 16, 0.96)); padding: 24px 22px 26px; }
-  .feat .n { font: 400 11px/1 var(--display); letter-spacing: 0.2em; color: var(--ice); }
-  .feat h3 { font: 600 18px/1.25 var(--text); color: var(--ink); margin: 16px 0 8px; letter-spacing: -0.005em; }
-  .feat p { margin: 0; font-size: 14.5px; line-height: 1.55; }
-  .feat.hl { background: radial-gradient(120% 90% at 0% 0%, rgba(111, 240, 181, 0.12), transparent 60%), linear-gradient(180deg, rgba(14, 19, 30, 0.96), rgba(7, 10, 16, 0.96)); }
-  .feat.hl .n { color: var(--ok); }
+  section { position: relative; }
+  .sec { padding: clamp(72px, 12vh, 140px) 0; }
 
-  .steps { list-style: none; counter-reset: s; padding: 0; margin: 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-  .steps li { counter-increment: s; border-top: 1px solid var(--hair); padding-top: 16px; font-size: 15px; }
+  /* ---------- the Duo ---------- */
+  .duo-intro { padding-top: clamp(80px, 14vh, 160px); }
+  .duo-intro .lede { max-width: 36em; }
+  .duo-stage { position: relative; max-width: 1160px; margin: 0 auto; padding: 0 max(16px, env(safe-area-inset-right)) 0 var(--gut); }
+  .duo-scene, .duo-words, .duo-rail, .duo-tags, .duo-floor { display: none; }
+  /* static (reduced motion, no script): the four poses as cards */
+  .duo-steps { list-style: none; margin: 48px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+  .step { border: 1px solid var(--hair-2); border-radius: 22px; padding: 18px; background: linear-gradient(180deg, rgba(14, 19, 30, 0.92), rgba(7, 10, 16, 0.92)); }
+  .step .still { width: 100%; height: auto; border-radius: 14px; margin-bottom: 18px; background: #070a10; }
+  .step .still.tall { width: auto; max-height: 360px; margin-left: auto; margin-right: auto; }
+  .step p { margin: 8px 0 0; font-size: 15px; line-height: 1.55; }
+  .step .strip { font: 400 10px/1.6 var(--display); letter-spacing: 0.16em; color: var(--ink); white-space: nowrap; }
+
+  .fx .duo-track { height: 560svh; }
+  .fx .duo-stage { position: sticky; top: calc(var(--bar) + env(safe-area-inset-top)); height: calc(100svh - var(--bar) - env(safe-area-inset-top)); overflow: clip;
+    display: grid; grid-template-columns: minmax(0, 1fr) minmax(280px, 380px); grid-template-rows: minmax(0, 1fr) auto; column-gap: clamp(24px, 4vw, 64px);
+    padding: 0 max(24px, env(safe-area-inset-right)) 28px max(24px, env(safe-area-inset-left)); max-width: 1320px; margin: 0 auto; }
+  .fx .duo-words { display: flex; position: absolute; left: 0; top: 50%; width: 400%; translate: 0 -58%; pointer-events: none; z-index: 0; }
+  .fx .duo-words span { flex: 0 0 25%; text-align: center; font: 400 clamp(64px, 15vw, 230px)/1 var(--display); letter-spacing: 0.02em; text-transform: uppercase;
+    color: transparent; -webkit-text-stroke: 1px rgba(191, 230, 255, 0.11); white-space: nowrap; }
+  .fx .duo-floor { display: block; position: absolute; left: 50%; bottom: 4%; width: min(1100px, 130vw); height: 46%; translate: -50% 0; z-index: 0; pointer-events: none;
+    background: radial-gradient(50% 40% at 50% 40%, rgba(120, 170, 230, 0.2), transparent 72%), radial-gradient(30% 22% at 50% 44%, rgba(111, 240, 181, 0.08), transparent 70%); }
+  .fx .duo-floor svg { width: 100%; height: 100%; }
+  .fx .duo-scene { display: grid; place-items: center; grid-row: 1 / 3; grid-column: 1; position: relative; z-index: 1; perspective: 2400px; perspective-origin: 50% 40%; }
+  .fx .duo-steps { grid-row: 1; grid-column: 2; align-self: center; display: grid; grid-template-columns: 1fr; margin: 0; gap: 0; position: relative; z-index: 2; }
+  .fx .step { grid-area: 1 / 1; border: 0; background: none; padding: 0; }
+  .fx .step .still { display: none; }
+  .fx .step h3 { font: 400 clamp(22px, 2.4vw, 32px)/1.15 var(--display); letter-spacing: 0.005em; }
+  .fx .step p { font-size: 16px; margin-top: 14px; color: var(--ink-2); }
+  .fx .duo-rail { display: flex; grid-row: 2; grid-column: 2; gap: 14px; align-items: center; position: relative; z-index: 2; padding-top: 20px; }
+  .duo-rail .bar { position: relative; flex: 1; height: 2px; background: var(--hair); border-radius: 2px; overflow: hidden; }
+  .duo-rail .bar i { position: absolute; inset: 0; background: linear-gradient(90deg, var(--ice), var(--ok)); transform-origin: left; transform: scaleX(0); }
+  .duo-rail .lbls { display: flex; gap: 12px; font: 500 10px/1 var(--text); letter-spacing: 0.18em; text-transform: uppercase; }
+  .duo-rail .lbls span { color: var(--ink); opacity: 0.35; }
+  .fx .duo-tags { display: block; position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+  .duo-tags .tag { opacity: 0; }
+  .dt1 { left: 14%; top: 18%; } .dt2 { left: 8%; top: 14%; } .dt3 { left: 46%; bottom: 14%; } .dt4 { left: 22%; bottom: 9%; } .dt5 { left: 44%; top: 10%; } .dt6 { left: 40%; bottom: 6%; }
+
+  /* the device: two halves on a hinge (left half fixed, right half swings), each a screen with its layers */
+  .duo-dev { --W: min(54vw, 780px, calc((100svh - var(--bar) - 150px) * 1.22)); --ts: 0.8;
+    --b: calc(var(--W) * 0.022); --SW: calc(var(--W) - 2 * var(--b)); --SH: calc(var(--SW) * 0.7035);
+    position: relative; width: var(--W); height: calc(var(--SH) + 2 * var(--b)); transform-style: preserve-3d; will-change: transform; }
+  .half { position: absolute; top: 0; width: 50%; height: 100%; transform-style: preserve-3d; will-change: transform; }
+  .half.l { left: 0; transform-origin: 100% 50%; }
+  .half.r { left: 50%; transform-origin: 0 50%; }
+  .face, .half.l { --R: calc(var(--W) * 0.06); background: linear-gradient(160deg, #343a46 0%, #0d1016 34%, #141920 68%, #2a303b 100%); }
+  .half.l { border-radius: var(--R) 0 0 var(--R); box-shadow: inset 1px 0 0 rgba(255, 255, 255, 0.08), 0 40px 80px -40px rgba(0, 0, 0, 0.9); }
+  .face { position: absolute; inset: 0; -webkit-backface-visibility: hidden; backface-visibility: hidden; border-radius: 0 var(--R) var(--R) 0; box-shadow: inset -1px 0 0 rgba(255, 255, 255, 0.08), 0 40px 80px -40px rgba(0, 0, 0, 0.9); }
+  .face.back { transform: rotateY(180deg); border-radius: var(--R) calc(var(--R) * 0.4) calc(var(--R) * 0.4) var(--R); }
+  .scr { position: absolute; overflow: hidden; background: #020306; }
+  .half.l > .scr { inset: var(--b) 0 var(--b) var(--b); border-radius: calc(var(--R) * 0.66) 0 0 calc(var(--R) * 0.66); }
+  .face.front > .scr { inset: var(--b) var(--b) var(--b) 0; border-radius: 0 calc(var(--R) * 0.66) calc(var(--R) * 0.66) 0; }
+  .face.back > .scr { inset: var(--b); border-radius: calc(var(--R) * 0.66) calc(var(--R) * 0.3) calc(var(--R) * 0.3) calc(var(--R) * 0.66); }
+  .half.l > .scr::after { content: ''; position: absolute; top: 0; bottom: 0; right: 0; width: 2px; z-index: 5; background: linear-gradient(180deg, rgba(255, 255, 255, 0.1), rgba(0, 0, 0, 0.4) 50%, rgba(255, 255, 255, 0.08)); }
+  .lay { position: absolute; }
+  img.lay { top: 0; height: 100%; width: 200%; max-width: none; object-fit: cover; }
+  .half.l img.lay { left: 0; } .face img.lay { left: -100%; }
+  .face.back img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .lay.tt { left: 50%; top: 50%; width: var(--SH); height: calc(var(--SW) / 2); transform: translate(-50%, -50%) rotate(-90deg); overflow: hidden; }
+  .lay.tt img { position: absolute; left: 0; width: 100%; height: 200%; max-width: none; object-fit: cover; }
+  .half.l .lay.tt img { top: 0; } .face .lay.tt img { top: -100%; }
+  .glass { position: absolute; inset: 0; z-index: 4; background: radial-gradient(120% 90% at 30% 20%, #0b0f17, #020306); }
+
+  /* ---------- iPhone ---------- */
+  .phones { position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: clamp(14px, 3vw, 44px); margin-top: clamp(48px, 8vh, 88px); align-items: start; }
+  .phones figure { margin: 0; display: grid; justify-items: center; gap: 22px; }
+  .phones .ph { --pw: min(250px, 26vw); }
+  .phones figure:nth-child(2) { margin-top: clamp(40px, 9vh, 120px); }
+  .phones figcaption { max-width: 300px; text-align: left; justify-self: stretch; }
+  .phones figcaption p { margin: 8px 0 0; font-size: 15px; }
+
+  /* ---------- iPad ---------- */
+  .ipad { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
+  .ipad-stage { position: relative; perspective: 1600px; justify-self: center; }
+  .ipad-stage .pad { --iw: min(460px, 40vw); }
+  .ipad-stage .tag.t1 { left: -14%; top: 22%; }
+  .ipad-stage .tag.t2 { right: -10%; bottom: 16%; }
+  .facts { list-style: none; padding: 0; margin: 28px 0 0; display: grid; gap: 0; border-top: 1px solid var(--hair-2); }
+  .facts li { padding: 14px 0; border-bottom: 1px solid var(--hair-2); font-size: 15px; display: grid; grid-template-columns: 9.5em 1fr; gap: 16px; }
+  .facts b { font: 400 10px/1.9 var(--display); letter-spacing: 0.2em; text-transform: uppercase; color: var(--ice); font-weight: 400; }
+
+  /* ---------- the panel ---------- */
+  .panel { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr); gap: clamp(28px, 5vw, 72px); align-items: center; }
+  .panel-stage { position: relative; justify-self: center; perspective: 1400px; }
+  .panel-stage .ph { --pw: min(290px, 26vw); transform: rotateY(12deg) rotateX(3deg); }
+  .panel-stage::before { content: ''; position: absolute; width: 150%; aspect-ratio: 1; left: -25%; top: 4%; border-radius: 50%;
+    background: radial-gradient(circle, rgba(111, 240, 181, 0.16), rgba(76, 128, 196, 0.12) 45%, transparent 68%); }
+  .panel-stage .tag.t1 { right: -30%; top: 30%; }
+  .panel-stage .tag.t2 { left: -34%; top: 12%; }
+  .panel-stage .tag.t3 { left: -26%; bottom: 14%; }
+
+  /* ---------- feel: three numbers drifting at three speeds ---------- */
+  .feel { overflow: clip; }
+  .nums { display: grid; gap: clamp(28px, 6vh, 64px); margin-top: clamp(40px, 7vh, 80px); }
+  .num { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: end; gap: clamp(16px, 4vw, 48px); border-bottom: 1px solid var(--hair-2); padding-bottom: clamp(20px, 3vh, 32px); }
+  .num b { font: 400 clamp(58px, 12vw, 168px)/0.9 var(--display); color: var(--ink); letter-spacing: -0.01em; font-weight: 400; white-space: nowrap; }
+  .num b small { font-size: 0.26em; letter-spacing: 0.16em; color: var(--ice); margin-left: 0.3em; vertical-align: 0.4em; }
+  .num:nth-child(2) b { color: transparent; -webkit-text-stroke: 1px rgba(245, 246, 248, 0.7); }
+  .num p { margin: 0 0 0.6em; font-size: 16px; max-width: 26em; }
+  .num p strong { display: block; color: var(--ink); font-weight: 600; }
+
+  /* ---------- join ---------- */
+  .steps { list-style: none; counter-reset: s; padding: 0; margin: 36px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+  .steps li { counter-increment: s; border-top: 1px solid var(--hair); padding-top: 18px; font-size: 15.5px; }
   .steps li::before { content: '0' counter(s); display: block; font: 400 12px/1 var(--display); letter-spacing: 0.2em; color: var(--ink-3); margin-bottom: 12px; }
   .steps b { color: var(--ink); font-weight: 600; }
-
-  .end { margin-top: clamp(56px, 9vh, 96px); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 20px;
-    padding: 28px; border: 1px solid var(--hair); border-radius: 24px; background: radial-gradient(80% 140% at 100% 0%, rgba(76, 128, 196, 0.16), transparent 60%), rgba(10, 13, 20, 0.5); }
-  .end p { margin: 0; font: 400 clamp(18px, 3vw, 24px)/1.25 var(--display); color: var(--ink); letter-spacing: 0.01em; }
-  .fine { margin-top: 36px; font-size: 13px; line-height: 1.6; color: var(--ink-3); max-width: 62em; }
+  .end { margin-top: clamp(56px, 9vh, 96px); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 24px;
+    padding: clamp(24px, 4vw, 44px); border: 1px solid var(--hair); border-radius: 28px;
+    background: radial-gradient(80% 140% at 100% 0%, rgba(76, 128, 196, 0.2), transparent 60%), rgba(8, 11, 18, 0.86); }
+  .end > p { margin: 0; font: 400 clamp(20px, 3vw, 30px)/1.25 var(--display); color: var(--ink); }
+  .end .qr { margin-top: 0; }
+  .end-cta { display: flex; flex-wrap: wrap; gap: 18px; align-items: center; }
+  footer { padding: 36px 0 calc(56px + env(safe-area-inset-bottom)); }
+  .fine { margin: 0; font-size: 13px; line-height: 1.6; color: var(--ink-3); max-width: 64em; }
   .fine a { color: var(--ink-2); text-underline-offset: 2px; }
 
-  @media (max-width: 860px) {
-    .hero { grid-template-columns: 1fr; }
-    .stage { order: -1; margin: 6px 0 4px; }
-    .phone { width: min(260px, 62vw); border-radius: 42px; padding: 9px; transform: none; }
-    .phone img { border-radius: 34px; }
-    .phone::after { top: 17px; height: 20px; }
-    @keyframes rise { from { opacity: 0; transform: translateY(24px); } }
-    .t1 { left: 0; top: 54%; } .t2 { right: 0; top: 10%; }
-    .feats { grid-template-columns: 1fr 1fr; }
+  /* ---------- tablets and phones ---------- */
+  @media (max-width: 900px) {
+    .hero { --floor: 120px; }
+    .scroll-cue { display: none; }
+    .hero > .wrap { grid-template-columns: 1fr; align-content: start; gap: 8px; padding-bottom: 72px; }
+    .h-far { height: min(30vh, 260px); }
+    .h-devs { justify-self: center; width: min(560px, 100%); aspect-ratio: 1.3; margin-top: 18px; }
+    .h-duo .flat { --fw: min(470px, 74vw); }
+    .h-ph .ph { --pw: min(180px, 26vw); }
+    .h-devs .tag.t3 { display: none; }
+    .fx .duo-track { height: 520svh; }
+    .fx .duo-stage { grid-template-columns: 1fr; grid-template-rows: minmax(0, 1fr) auto auto; padding: 0 var(--gut) calc(18px + env(safe-area-inset-bottom)); }
+    .fx .duo-scene { grid-row: 1; grid-column: 1; }
+    .fx .duo-steps { grid-row: 2; grid-column: 1; align-self: end; }
+    .fx .duo-rail { grid-row: 3; grid-column: 1; padding-top: 14px; }
+    .duo-dev { --W: min(90vw, 620px, calc((100svh - var(--bar) - 320px) * 1.25)); --ts: 1.12; }
+    .fx .step h3 { font-size: clamp(19px, 4.6vw, 26px); }
+    .fx .step p { font-size: 14.5px; margin-top: 8px; line-height: 1.5; }
+    .duo-steps { grid-template-columns: 1fr; }
+    .duo-tags .tag { top: 2%; bottom: auto; left: 0; right: auto; }
+    .duo-tags :is(.dt3, .dt5, .dt6) { left: auto; right: 0; }
+    .duo-tags :is(.dt3, .dt5) { display: none; }
+    .fx .duo-floor { bottom: 34%; height: 34%; }
+    .ipad, .panel { grid-template-columns: 1fr; }
+    .ipad-stage { order: 2; margin-top: 12px; }
+    .ipad-stage .pad { --iw: min(420px, 76vw); }
+    .panel-stage { margin-top: 24px; }
+    .panel-stage .ph { --pw: min(250px, 56vw); }
+    .panel-stage .tag.t1 { right: -18%; } .panel-stage .tag.t2 { left: -22%; } .panel-stage .tag.t3 { left: -18%; }
   }
   @media (max-width: 560px) {
-    h1 { margin-top: 18px; }
-    .join { margin-top: 26px; }
-    .cta { width: 100%; justify-content: center; }
-    .feats, .steps { grid-template-columns: 1fr; }
-    .tag { font-size: 11px; padding: 8px 11px; }
-    .t1 { left: -2px; } .t2 { right: -2px; }
-    .end { padding: 22px; }
-    .end .cta { width: 100%; }
+    .top .web { display: none; }
+    h1 { margin-top: 16px; }
+    .join { margin-top: 24px; }
+    .hero .cta { width: 100%; justify-content: center; }
+    .h-devs { aspect-ratio: 1.22; }
+    .h-duo { width: 88%; }
+    .h-devs .tag { font-size: 11px; padding: 8px 11px; }
+    .h-devs .tag.t1 { left: 0; bottom: 4%; } .h-devs .tag.t2 { right: 0; top: -4%; }
+    .phones { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+    .phones .ph { --pw: min(150px, 29vw); }
+    .phones figcaption { display: none; }
+    .phone-caps { display: grid !important; }
+    .duo-tags .tag { font-size: 11px; padding: 7px 10px; }
+    .duo-tags .tag small { display: none; }
+    .facts li { grid-template-columns: 1fr; gap: 4px; }
+    .panel-stage .tag { font-size: 11px; padding: 8px 10px; }
+    .panel-stage .tag.t3 { display: none; }
+    .panel-stage .tag.t2 { left: -8%; top: -5%; }
+    .panel-stage .tag.t1 { right: -8%; top: auto; bottom: -3%; }
+    .ipad-stage .tag.t1 { left: -6%; } .ipad-stage .tag.t2 { right: -6%; }
+    .num { grid-template-columns: 1fr; gap: 10px; }
+    .steps { grid-template-columns: 1fr; }
+    .end .cta { width: 100%; justify-content: center; }
   }
-  @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
+  @media (max-width: 360px) {
+    .brand { letter-spacing: 0.3em; }
+    .fx .step p { font-size: 13.5px; }
+    .h-devs .tag.t2 { display: none; }
+    .cta { font-size: 15px; padding: 16px 18px; gap: 9px; }
+    .eyebrow { letter-spacing: 0.18em; }
+  }
+  .phone-caps { display: none; list-style: none; padding: 0; margin: 28px 0 0; gap: 18px; }
+  .phone-caps p { margin: 6px 0 0; font-size: 15px; }
+  /* short phones in landscape: the sequence needs height; it stands its captions beside the device */
+  @media (max-height: 520px) and (min-width: 600px) {
+    .fx .duo-stage { grid-template-columns: minmax(0, 1fr) minmax(220px, 300px); grid-template-rows: minmax(0, 1fr) auto; padding-bottom: 10px; }
+    .fx .duo-scene { grid-row: 1 / 3; grid-column: 1; }
+    .fx .duo-steps { grid-row: 1; grid-column: 2; align-self: center; }
+    .fx .duo-rail { grid-row: 2; grid-column: 2; }
+    .duo-dev { --W: min(52vw, calc((100svh - var(--bar) - 40px) * 1.2)); --ts: 0.78; }
+    .fx .step p { font-size: 13px; }
+  }
+
+  /* ---------- motion: scroll-scrubbed keyframes (transform and opacity only) ----------
+     .t-root: the page's scroll; .t-sec: the section crossing the viewport (cover); .t-duo: the Duo's sticky track (contain). */
+  .fx :is(.t-root, .t-sec, .t-duo) { animation-duration: 1ms; animation-timing-function: linear; animation-fill-mode: both; }
+  /* will-change: transform only (opacity would flatten the Duo's 3D hinge) */
+  .fx :is(.t-root, .t-sec, .duo-words, .h-duo, .h-ph) { will-change: transform; }
+  .sd :is(.t-root, .t-sec, .t-duo) { animation-duration: auto; }
+  .sd .t-root { animation-timeline: scroll(root block); }
+  .sd [data-tl] { view-timeline: --sec block; }
+  .sd .t-sec { animation-timeline: --sec; animation-range: cover 0% cover 100%; }
+  .sd .duo-track { view-timeline: --duo block; }
+  .sd .t-duo { animation-timeline: --duo; animation-range: contain 0% contain 100%; }
+  .sdjs :is(.t-root, .t-sec, .t-duo) { animation-duration: 1000ms; animation-play-state: paused; }
+
+  .fx .stars-far { animation-name: x-stars-far; }
+  .fx .stars-near { animation-name: x-stars-near; }
+  .fx .sky .night { animation-name: x-night; }
+  @keyframes x-stars-far { to { transform: translate3d(0, -14vh, 0); } }
+  @keyframes x-stars-near { to { transform: translate3d(0, -42vh, 0); } }
+  @keyframes x-night { 0%, 8% { opacity: 0; } 100% { opacity: 0.75; } }
+
+  /* hero: still at rest while it fills the screen, then each layer leaves at its own speed */
+  .fx .h-far { animation-name: x-h-far; }
+  .fx .h-floor { animation-name: x-h-floor; }
+  .fx .h-copy { animation-name: x-h-copy; }
+  .fx .h-duo { animation-name: x-h-duo; }
+  .fx .h-ph { animation-name: x-h-ph; }
+  .fx .h-devs .t1 { animation-name: x-h-tag1; }
+  .fx .h-devs .t2 { animation-name: x-h-tag2; }
+  .fx .h-devs .t3 { animation-name: x-h-tag3; }
+  .fx .scroll-cue { animation-name: x-fade-out; }
+  @keyframes x-h-far { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, 16vh, 0); } }
+  @keyframes x-h-floor { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, 7vh, 0); } }
+  @keyframes x-h-copy { 0%, 50% { transform: translate3d(0, 0, 0); opacity: 1; } 100% { transform: translate3d(0, -6vh, 0); opacity: 0.15; } }
+  @keyframes x-h-duo { 0%, 50% { transform: translate3d(0, 0, 0) rotate(0deg); } 100% { transform: translate3d(-2vw, -12vh, 0) rotate(-2deg); } }
+  @keyframes x-h-ph { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, -26vh, 0); } }
+  @keyframes x-h-tag1 { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, -40vh, 0); } }
+  @keyframes x-h-tag2 { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, -52vh, 0); } }
+  @keyframes x-h-tag3 { 0%, 50% { transform: translate3d(0, 0, 0); } 100% { transform: translate3d(0, -34vh, 0); } }
+  @keyframes x-fade-out { 0%, 50% { opacity: 1; } 56%, 100% { opacity: 0; } }
+
+  /* the Duo: closed → open flat → tabletop → book. Percent of the sticky track. */
+  .fx .duo-dev { animation-name: x-duo-dev; }
+  .fx .half.l { animation-name: x-duo-l; }
+  .fx .half.r { animation-name: x-duo-r; }
+  .fx .lay.open { animation-name: x-lay-open; }
+  .fx .lay.tt { animation-name: x-lay-tt; }
+  .fx .lay.book { animation-name: x-lay-book; }
+  .fx .glass { animation-name: x-glass; }
+  /* which face of the swinging half shows, switched where it passes edge-on (WebKit doesn't always honour
+     backface-visibility inside the nested 3D context, so this doesn't lean on it) */
+  .fx .face.front { animation-name: x-face-front; }
+  .fx .face.back { animation-name: x-face-back; }
+  @keyframes x-face-front { 0%, 16.4% { opacity: 0; } 16.6%, 100% { opacity: 1; } }
+  @keyframes x-face-back { 0%, 16.4% { opacity: 1; } 16.6%, 100% { opacity: 0; } }
+  .fx .duo-words { animation-name: x-words; }
+  .fx .duo-floor { animation-name: x-floor; }
+  .fx .step.s1 { animation-name: x-s1; } .fx .step.s2 { animation-name: x-s2; } .fx .step.s3 { animation-name: x-s3; } .fx .step.s4 { animation-name: x-s4; }
+  .fx .duo-rail .bar i { animation-name: x-bar; }
+  .fx .lbls .l1 { animation-name: x-l1; } .fx .lbls .l2 { animation-name: x-l2; } .fx .lbls .l3 { animation-name: x-l3; } .fx .lbls .l4 { animation-name: x-l4; }
+  .fx .dt1 { animation-name: x-tagA; } .fx .dt2, .fx .dt3 { animation-name: x-tagB; } .fx .dt4, .fx .dt5 { animation-name: x-tagC; } .fx .dt6 { animation-name: x-tagD; }
+  .fx .dt3 { animation-name: x-tagB2; } .fx .dt5 { animation-name: x-tagC2; }
+  @keyframes x-duo-dev {
+    0%, 7% { transform: translate3d(31%, 0, 0) scale(1.24) rotateX(4deg) rotateY(-20deg) rotateZ(0deg); }
+    26%, 40% { transform: translate3d(0, 0, 0) scale(1) rotateX(18deg) rotateY(0deg) rotateZ(0deg); }
+    50% { transform: translate3d(0, 0, 0) scale(var(--ts)) rotateX(6deg) rotateY(0deg) rotateZ(90deg); }
+    60%, 70% { transform: translate3d(0, -4%, 0) scale(var(--ts)) rotateX(10deg) rotateY(0deg) rotateZ(90deg); }
+    79% { transform: translate3d(0, 0, 0) scale(1) rotateX(4deg) rotateY(0deg) rotateZ(0deg); }
+    88%, 100% { transform: translate3d(0, 0, 0) scale(0.96) rotateX(6deg) rotateY(0deg) rotateZ(0deg); }
+  }
+  @keyframes x-duo-l { 0%, 79% { transform: rotateY(0deg); } 88%, 100% { transform: rotateY(32deg); } }
+  @keyframes x-duo-r {
+    0%, 7% { transform: rotateY(-179.4deg); }
+    26%, 51% { transform: rotateY(0deg); }
+    59%, 70% { transform: rotateY(-56deg); }
+    78% { transform: rotateY(0deg); }
+    88%, 100% { transform: rotateY(-32deg); }
+  }
+  @keyframes x-lay-open { 0%, 50% { opacity: 1; } 54%, 100% { opacity: 0; } }
+  @keyframes x-lay-tt { 0%, 50% { opacity: 0; } 54%, 78% { opacity: 1; } 82%, 100% { opacity: 0; } }
+  @keyframes x-lay-book { 0%, 78% { opacity: 0; } 82%, 100% { opacity: 1; } }
+  @keyframes x-glass { 0%, 10% { opacity: 1; } 24%, 100% { opacity: 0; } }
+  @keyframes x-words {
+    0% { transform: translate3d(2%, 0, 0); } 12% { transform: translate3d(-2%, 0, 0); }
+    22% { transform: translate3d(-23%, 0, 0); } 44% { transform: translate3d(-27%, 0, 0); }
+    54% { transform: translate3d(-48%, 0, 0); } 72% { transform: translate3d(-52%, 0, 0); }
+    82% { transform: translate3d(-73%, 0, 0); } 100% { transform: translate3d(-77%, 0, 0); }
+  }
+  @keyframes x-floor { 0% { transform: scale(0.7); opacity: 0.6; } 26% { transform: scale(1.08); opacity: 1; } 55%, 70% { transform: scale(0.9); opacity: 1; } 88%, 100% { transform: scale(1); opacity: 1; } }
+  @keyframes x-s1 { 0%, 12% { opacity: 1; transform: translate3d(0, 0, 0); } 17%, 100% { opacity: 0; transform: translate3d(0, -28px, 0); } }
+  @keyframes x-s2 { 0%, 17% { opacity: 0; transform: translate3d(0, 28px, 0); } 22%, 42% { opacity: 1; transform: translate3d(0, 0, 0); } 47%, 100% { opacity: 0; transform: translate3d(0, -28px, 0); } }
+  @keyframes x-s3 { 0%, 47% { opacity: 0; transform: translate3d(0, 28px, 0); } 54%, 72% { opacity: 1; transform: translate3d(0, 0, 0); } 77%, 100% { opacity: 0; transform: translate3d(0, -28px, 0); } }
+  @keyframes x-s4 { 0%, 77% { opacity: 0; transform: translate3d(0, 28px, 0); } 83%, 100% { opacity: 1; transform: translate3d(0, 0, 0); } }
+  @keyframes x-bar { from { transform: scaleX(0.02); } to { transform: scaleX(1); } }
+  @keyframes x-l1 { 0%, 14% { opacity: 1; } 18%, 100% { opacity: 0.35; } }
+  @keyframes x-l2 { 0%, 16% { opacity: 0.35; } 20%, 44% { opacity: 1; } 48%, 100% { opacity: 0.35; } }
+  @keyframes x-l3 { 0%, 46% { opacity: 0.35; } 52%, 74% { opacity: 1; } 78%, 100% { opacity: 0.35; } }
+  @keyframes x-l4 { 0%, 76% { opacity: 0.35; } 82%, 100% { opacity: 1; } }
+  @keyframes x-tagA { 0% { opacity: 1; transform: translate3d(0, 30px, 0); } 10% { opacity: 1; } 15%, 100% { opacity: 0; transform: translate3d(0, -60px, 0); } }
+  @keyframes x-tagB { 0%, 20% { opacity: 0; transform: translate3d(0, 80px, 0); } 25%, 40% { opacity: 1; } 46%, 100% { opacity: 0; transform: translate3d(0, -80px, 0); } }
+  @keyframes x-tagB2 { 0%, 23% { opacity: 0; transform: translate3d(0, 120px, 0); } 28%, 40% { opacity: 1; } 46%, 100% { opacity: 0; transform: translate3d(0, -110px, 0); } }
+  @keyframes x-tagC { 0%, 52% { opacity: 0; transform: translate3d(0, 80px, 0); } 57%, 71% { opacity: 1; } 76%, 100% { opacity: 0; transform: translate3d(0, -80px, 0); } }
+  @keyframes x-tagC2 { 0%, 55% { opacity: 0; transform: translate3d(0, 120px, 0); } 60%, 71% { opacity: 1; } 76%, 100% { opacity: 0; transform: translate3d(0, -110px, 0); } }
+  @keyframes x-tagD { 0%, 83% { opacity: 0; transform: translate3d(0, 80px, 0); } 88%, 100% { opacity: 1; } 100% { transform: translate3d(0, -40px, 0); } }
+
+  /* sections: each layer drifts through at its own rate as the section crosses the screen */
+  .fx .drift-1 { animation-name: x-drift-1; } .fx .drift-2 { animation-name: x-drift-2; } .fx .drift-3 { animation-name: x-drift-3; } .fx .drift-4 { animation-name: x-drift-4; }
+  @keyframes x-drift-1 { from { transform: translate3d(0, 5vh, 0); } to { transform: translate3d(0, -5vh, 0); } }
+  @keyframes x-drift-2 { from { transform: translate3d(0, 12vh, 0); } to { transform: translate3d(0, -12vh, 0); } }
+  @keyframes x-drift-3 { from { transform: translate3d(0, 22vh, 0); } to { transform: translate3d(0, -22vh, 0); } }
+  @keyframes x-drift-4 { from { transform: translate3d(0, 34vh, 0); } to { transform: translate3d(0, -34vh, 0); } }
+  .fx .ipad-tilt { animation-name: x-ipad; }
+  @keyframes x-ipad { 0% { transform: rotateX(34deg) rotateZ(-4deg) scale(0.9); } 45%, 55% { transform: rotateX(0deg) rotateZ(0deg) scale(1); } 100% { transform: rotateX(-10deg) rotateZ(1deg) scale(0.98); } }
+  .fx .num-a { animation-name: x-num-a; } .fx .num-b { animation-name: x-num-b; } .fx .num-c { animation-name: x-num-c; }
+  @keyframes x-num-a { from { transform: translate3d(-6vw, 0, 0); } to { transform: translate3d(6vw, 0, 0); } }
+  @keyframes x-num-b { from { transform: translate3d(8vw, 0, 0); } to { transform: translate3d(-8vw, 0, 0); } }
+  @keyframes x-num-c { from { transform: translate3d(-10vw, 0, 0); } to { transform: translate3d(4vw, 0, 0); } }
+  @media (max-width: 560px) {
+    @keyframes x-drift-3 { from { transform: translate3d(0, 10vh, 0); } to { transform: translate3d(0, -10vh, 0); } }
+    @keyframes x-drift-4 { from { transform: translate3d(0, 16vh, 0); } to { transform: translate3d(0, -16vh, 0); } }
+    @keyframes x-num-a { from { transform: translate3d(-4vw, 0, 0); } to { transform: translate3d(4vw, 0, 0); } }
+    @keyframes x-num-b { from { transform: translate3d(5vw, 0, 0); } to { transform: translate3d(-5vw, 0, 0); } }
+    @keyframes x-num-c { from { transform: translate3d(-6vw, 0, 0); } to { transform: translate3d(2vw, 0, 0); } }
+  }
 </style>
 </head>
 <body>
-<div class="wrap">
-  <div class="top"><a class="brand" href="../">Cold Gas</a><a class="web" href="../">Play in the browser</a></div>
+<div class="sky" aria-hidden="true"><i class="stars-far t-root"></i><i class="stars-near t-root"></i><i class="night t-root"></i></div>
 
-  <section class="hero">
-    <div>
-      <p class="eyebrow"><i aria-hidden="true"></i>Public beta · iPhone and iPad</p>
-      <h1>COLD GAS,<br><em>native.</em></h1>
-      <p class="lede">The jump you know from the browser, rebuilt for the phone in your hand. <b>Drawn in Metal at up to 120&nbsp;Hz</b>, landings you feel through the haptics, and judges that write their verdict <b>on your device</b>.</p>
-      <div class="join">
-        <a class="cta" href="https://testflight.apple.com/join/yMb3sJPg" rel="noopener">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9"/><path d="M8.5 8.5 12 12l3.5-3.5"/><path d="M5 14.5c0 3.6 3.1 6.5 7 6.5s7-2.9 7-6.5"/><path d="M9 21h6"/></svg>
-          Join the beta on TestFlight <span class="arr" aria-hidden="true">→</span>
-        </a>
-        <span class="seats"><b>Free.</b> No account, no ads.<br>iOS 18 or later.</span>
+<header class="top">
+  <div class="wrap"><a class="brand" href="../">Cold Gas</a>
+    <nav aria-label="Cold Gas"><a class="pill web" href="../">Play in the browser</a><a class="pill solid" href="https://testflight.apple.com/join/yMb3sJPg" rel="noopener">Join the beta</a></nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero" data-tl aria-labelledby="h1">
+    <div class="h-far t-sec" aria-hidden="true">
+      <svg viewBox="0 0 1600 380" preserveAspectRatio="xMidYMax slice">
+        <defs>
+          <linearGradient id="beam" x1="0" y1="1" x2="0" y2="0"><stop offset="0" stop-color="#dcecff" stop-opacity=".2"/><stop offset="1" stop-color="#dcecff" stop-opacity="0"/></linearGradient>
+          <radialGradient id="lamp"><stop offset="0" stop-color="#fff6dc"/><stop offset=".25" stop-color="#fff6dc" stop-opacity=".5"/><stop offset="1" stop-color="#fff6dc" stop-opacity="0"/></radialGradient>
+          <linearGradient id="curl" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#e8323c" stop-opacity=".95"/><stop offset="1" stop-color="#e8323c" stop-opacity=".25"/></linearGradient>
+        </defs>
+        <g opacity=".9">
+          <polygon points="1052,380 1066,380 980,0 900,0" fill="url(#beam)"/>
+          <polygon points="958,380 966,380 880,0 820,0" fill="url(#beam)" opacity=".5"/>
+          <polygon points="1470,380 1480,380 1560,0 1500,0" fill="url(#beam)" opacity=".6"/>
+        </g>
+        <g fill="#04070d">
+          <!-- the wall: a steel curl, lit along its edge -->
+          <g transform="translate(1180 0)"><path d="M190 380 L190 250 C190 160 250 96 352 92 L352 112 C266 118 214 172 214 250 L214 380 Z"/>
+          <path d="M150 380 V120 H164 V380 Z M150 140 H352 V146 H150 Z M150 200 H260 V205 H150 Z"/></g>
+          <!-- a gantry -->
+          <path d="M1116 380 V96 H1150 V380 Z"/><path d="M1124 96 V60 H1142 V96 Z"/>
+          <!-- a water tower -->
+          <g transform="translate(560 0)"><path d="M680 380 L690 300 H694 L686 380 Z M724 380 L716 300 H720 L730 380 Z"/><ellipse cx="705" cy="290" rx="22" ry="16"/><rect x="683" y="276" width="44" height="18"/></g>
+          <!-- light masts -->
+          <rect x="1040" y="70" width="3" height="310"/><rect x="960" y="120" width="3" height="260"/><rect x="820" y="150" width="2.5" height="230"/><rect x="880" y="190" width="2" height="190"/>
+          <!-- low buildings on the far shore -->
+          <path d="M0 380 V352 H90 V340 H140 V360 H470 V350 H560 V364 H940 V356 H1010 V366 H1380 V348 H1460 V360 H1600 V380 Z"/>
+        </g>
+        <path d="M1380 380 L1380 250 C1380 166 1436 104 1532 100" fill="none" stroke="url(#curl)" stroke-width="2.5"/>
+        <g stroke="#04070d" stroke-width="1.4" opacity=".9"><path d="M1118 120 L1148 160 M1148 120 L1118 160 M1118 170 L1148 210 M1148 170 L1118 210 M1118 220 L1148 260 M1148 220 L1118 260 M1118 270 L1148 310 M1148 270 L1118 310"/></g>
+        <g><circle cx="1041" cy="70" r="16" fill="url(#lamp)"/><circle cx="961" cy="120" r="13" fill="url(#lamp)"/><circle cx="821" cy="150" r="12" fill="url(#lamp)"/><circle cx="881" cy="190" r="10" fill="url(#lamp)"/>
+          <circle cx="1133" cy="60" r="5" fill="#e8323c" opacity=".9"/><circle cx="1337" cy="120" r="4" fill="#e8323c" opacity=".8"/></g>
+      </svg>
+    </div>
+    <div class="h-floor t-sec" aria-hidden="true">
+      <svg viewBox="0 0 1600 400" preserveAspectRatio="xMidYMin slice">
+        <g fill="none" stroke="#f5f6f8">
+          <ellipse cx="1060" cy="70" rx="380" ry="46" stroke-opacity=".16"/><ellipse cx="1060" cy="70" rx="250" ry="30" stroke-opacity=".2"/><ellipse cx="1060" cy="70" rx="120" ry="14" stroke-opacity=".26"/>
+          <path d="M0 140 H1600 M0 250 H1600" stroke-opacity=".04"/>
+          <path d="M800 0 L-400 400 M800 0 L2000 400 M800 0 L400 400 M800 0 L1200 400" stroke-opacity=".035"/>
+        </g>
+        <rect x="610" y="44" width="300" height="60" fill="none" stroke="#e8323c" stroke-opacity=".5" transform="skewX(-30)"/>
+      </svg>
+    </div>
+
+    <div class="wrap">
+      <div class="h-copy t-sec">
+        <p class="eyebrow"><i aria-hidden="true"></i>Public beta · iPhone, iPhone Duo, iPad</p>
+        <h1 id="h1">COLD GAS,<br><em>native.</em></h1>
+        <p class="lede">The jump you know from the browser, rebuilt for the phone in your hand and the one that folds. <b>Drawn in Metal at up to 120&nbsp;Hz</b>, landings you feel through the haptics, and judges that write their verdict <b>on your device</b>.</p>
+        <div class="join">
+          <a class="cta" href="https://testflight.apple.com/join/yMb3sJPg" rel="noopener">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v9"/><path d="M8.5 8.5 12 12l3.5-3.5"/><path d="M5 14.5c0 3.6 3.1 6.5 7 6.5s7-2.9 7-6.5"/><path d="M9 21h6"/></svg>
+            Join the beta on TestFlight <span aria-hidden="true">→</span>
+          </a>
+          <span class="seats"><b>Free.</b> No account, no ads.<br>iOS 18 or later.</span>
+        </div>
+        <div class="qr">
+          <img src="qr.svg" alt="QR code that opens the Cold Gas TestFlight invitation" width="104" height="104">
+          <p><b>On a computer?</b>Point your iPhone's camera here to join.</p>
+        </div>
       </div>
-      <div class="qr">
-        <img src="qr.svg" alt="QR code that opens the Cold Gas TestFlight invitation" width="104" height="104">
-        <p><b>On a computer?</b>Point your iPhone's camera here to join.</p>
+      <div class="h-devs" aria-hidden="true">
+        <div class="h-duo t-sec"><div class="dv"><div class="flat"><img src="duo-open.jpg" alt="" width="1600" height="1125" fetchpriority="high"></div></div></div>
+        <div class="h-ph t-sec"><div class="dv"><div class="ph"><img src="judged.jpg" alt="" width="660" height="1434"></div></div></div>
+        <div class="tag t1 t-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>Judged on device<small>No data leaves the phone</small></span></div>
+        <div class="tag t2 ice t-sec"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17l3-7 4 4 5-9"/></svg><span>Up to 120 Hz<small>Drawn in Metal</small></span></div>
+        <div class="tag t3 mono t-sec">Open · edge to edge</div>
       </div>
     </div>
-    <div class="stage" aria-hidden="true">
-      <div class="phone"><img src="judged.jpg" alt="" width="660" height="1434"></div>
-      <div class="tag t1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>Judged on device<small>No data leaves the phone</small></span></div>
-      <div class="tag t2"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17l3-7 4 4 5-9"/></svg><span>97.3 · Perfect 10<small>Gold medal on the Show</small></span></div>
+    <div class="scroll-cue t-sec" aria-hidden="true">Scroll<i></i></div>
+  </section>
+
+  <section class="duo" id="duo" aria-labelledby="duo-h">
+    <div class="wrap duo-intro">
+      <span class="k">01 · iPhone Duo</span>
+      <h2 id="duo-h">Fold it mid-run.<br><em>It keeps flying.</em></h2>
+      <p class="lede">The Duo is the screen the native game was built for first. It lays itself out from the fold, never the hinge angle, so closing it, opening it or standing it up reshapes the screen without pausing the run. A light haptic tick marks each detent, and the stage light warms as you open it.</p>
+    </div>
+    <div class="duo-track">
+      <div class="duo-stage">
+        <div class="duo-words t-duo" aria-hidden="true"><span>Closed</span><span>Open</span><span>Tabletop</span><span>Book</span></div>
+        <div class="duo-floor t-duo" aria-hidden="true">
+          <svg viewBox="0 0 1000 400" preserveAspectRatio="none"><g fill="none" stroke="#f5f6f8"><ellipse cx="500" cy="230" rx="420" ry="70" stroke-opacity=".08"/><ellipse cx="500" cy="230" rx="300" ry="50" stroke-opacity=".11"/><ellipse cx="500" cy="230" rx="180" ry="30" stroke-opacity=".14"/></g></svg>
+        </div>
+        <div class="duo-scene" aria-hidden="true">
+          <div class="duo-dev t-duo">
+            <div class="half l t-duo">
+              <div class="scr">
+                <img class="lay open t-duo" src="duo-open.jpg" alt="" width="1600" height="1125" decoding="async" fetchpriority="low">
+                <div class="lay tt t-duo"><img src="duo-tabletop.jpg" alt="" width="703" height="1000" decoding="async" fetchpriority="low"></div>
+                <img class="lay book t-duo" src="duo-book.jpg" alt="" width="1000" height="703" decoding="async" fetchpriority="low">
+                <i class="glass t-duo"></i>
+              </div>
+            </div>
+            <div class="half r t-duo">
+              <div class="face front t-duo">
+                <div class="scr">
+                  <img class="lay open t-duo" src="duo-open.jpg" alt="" width="1600" height="1125" decoding="async" fetchpriority="low">
+                  <div class="lay tt t-duo"><img src="duo-tabletop.jpg" alt="" width="703" height="1000" decoding="async" fetchpriority="low"></div>
+                  <img class="lay book t-duo" src="duo-book.jpg" alt="" width="1000" height="703" decoding="async" fetchpriority="low">
+                  <i class="glass t-duo"></i>
+                </div>
+              </div>
+              <div class="face back t-duo"><div class="scr"><img src="duo-closed.jpg" alt="" width="687" height="1000" decoding="async" fetchpriority="low"></div></div>
+            </div>
+          </div>
+        </div>
+        <div class="duo-tags" aria-hidden="true">
+          <div class="tag dt1 t-duo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/></svg><span>One hand<small>The phone's layout</small></span></div>
+          <div class="tag dt2 ice t-duo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18v12H3z"/><path d="M12 6v12" stroke-dasharray="2 2"/></svg><span>Across the crease<small>Full screen, edge to edge</small></span></div>
+          <div class="tag dt3 mono t-duo">Metal · up to 120 Hz</div>
+          <div class="tag dt4 mono t-duo">Drive · Climb · Hang · <b>Air</b> · Land</div>
+          <div class="tag dt5 t-duo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12h3l2-5 3 10 2-5h6"/></svg><span>A tick at each detent<small>Haptics, never layout</small></span></div>
+          <div class="tag dt6 ice t-duo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 4v16"/><circle cx="6" cy="9" r="2"/><circle cx="18" cy="9" r="2"/><circle cx="6" cy="16" r="2"/><circle cx="18" cy="16" r="2"/></svg><span>Valves split down the spine<small>Left valves, left thumb</small></span></div>
+        </div>
+        <ol class="duo-steps">
+          <li class="step s1 t-duo">
+            <img class="still tall" src="duo-closed.jpg" alt="The game on the closed Duo's outer screen: the phone layout, a stick and the LIFT and BOOST buttons" width="687" height="1000" loading="lazy" decoding="async">
+            <span class="k">Closed</span><h3>A phone in one hand.</h3>
+            <p>The outer screen gets the phone's layout: Assist's one-thumb pad, or Pro's stick and buttons low in the corners.</p>
+          </li>
+          <li class="step s2 t-duo">
+            <img class="still" src="duo-open.jpg" alt="The open Duo: the car climbing the lit curl, the scene full screen across both halves" width="1600" height="1125" loading="lazy" decoding="async">
+            <span class="k">Open</span><h3>Edge to edge, across the crease.</h3>
+            <p>Open it flat and the scene runs across the whole inner display, full screen. The HUD and the controls float over it, inside the safe area.</p>
+          </li>
+          <li class="step s3 t-duo">
+            <img class="still tall" src="duo-tabletop.jpg" alt="The Duo in tabletop: the scene on the top screen, the controller on the bottom with two wells and the phase strip" width="703" height="1000" loading="lazy" decoding="async">
+            <span class="k">Tabletop</span><h3>A handheld console.</h3>
+            <p>Stand it half open: the scene on the top screen, the controller on the bottom. Two wells, one per thumb, either side of the <span class="strip">DRIVE · CLIMB · HANG · AIR · LAND</span> strip.</p>
+          </li>
+          <li class="step s4 t-duo">
+            <img class="still" src="duo-book.jpg" alt="The Duo held like a book: the scene edge to edge, the valves split either side of the crease" width="1000" height="703" loading="lazy" decoding="async">
+            <span class="k">Book</span><h3>Held like a book.</h3>
+            <p>Still edge to edge. The controls climb the side edges, bigger than on a phone and clear of the crease; on Advanced the valves split down the spine, the car's left valves under your left thumb.</p>
+          </li>
+        </ol>
+        <div class="duo-rail" aria-hidden="true"><div class="lbls"><span class="l1 t-duo">Closed</span><span class="l2 t-duo">Open</span><span class="l3 t-duo">Tabletop</span><span class="l4 t-duo">Book</span></div><div class="bar"><i class="t-duo"></i></div></div>
+      </div>
     </div>
   </section>
 
-  <h2>What's in the beta</h2>
-  <div class="feats">
-    <div class="feat hl"><span class="n">01 · Judges</span><h3>A panel that thinks on your phone</h3><p>On devices with Apple Intelligence, the judges' words are written on device: no network, no key, no data sent. The numbers still come from the fixed scorer.</p></div>
-    <div class="feat"><span class="n">02 · Free Drive</span><h3>A road that keeps going</h3><p>Leave the course and drive on, through a world that streams in around the car. Unscored, just you and the jets.</p></div>
-    <div class="feat"><span class="n">03 · Controls</span><h3>Shaped for your screen</h3><p>One thumb on Assist, a stick and buttons on Pro, all ten valves on Advanced. Laid out for the phone, iPad and folding iPhone, with Pencil pressure on iPad.</p></div>
-    <div class="feat"><span class="n">04 · Feel</span><h3>Every wheel, in your hand</h3><p>A synced landing is one clean thump through the haptics; a sloppy one is four. The same deterministic physics as the web, tick for tick.</p></div>
+  <section class="sec iphone" data-tl aria-labelledby="ph-h">
+    <div class="wrap">
+      <span class="k drift-1 t-sec">02 · iPhone</span>
+      <h2 id="ph-h" class="drift-1 t-sec">Shaped for the phone<br><em>in your hand.</em></h2>
+      <p class="lede drift-1 t-sec">One thumb on Assist, a stick and buttons on Pro, all ten valves on Advanced. The same deterministic physics as the web, tick for tick.</p>
+      <div class="phones">
+        <figure class="drift-2 t-sec"><div class="ph"><img src="iphone-assist.jpg" alt="Assist on iPhone: one thumb pad reading HOLD · LAND, the car over the lit pad" width="506" height="1100" loading="lazy" decoding="async"></div>
+          <figcaption><span class="k">Assist</span><h3>One thumb flies it.</h3><p>Hold to land: it rolls you out and brakes.</p></figcaption></figure>
+        <figure class="drift-4 t-sec"><div class="ph"><img src="iphone-drive.jpg" alt="Free Drive on iPhone: the roadster on a mountain road at dusk" width="506" height="1100" loading="lazy" decoding="async"></div>
+          <figcaption><span class="k">Free Drive</span><h3>A road that keeps going.</h3><p>Leave the Show's apron and drive on, through a world built as you go. Nothing is scored.</p></figcaption></figure>
+        <figure class="drift-3 t-sec"><div class="ph"><img src="iphone-valves.jpg" alt="Advanced on iPhone: all ten valves laid out as the car under the thumbs" width="506" height="1100" loading="lazy" decoding="async"></div>
+          <figcaption><span class="k">Advanced</span><h3>All ten valves.</h3><p>The valve deck is the car, whole, under your thumbs on an upright phone.</p></figcaption></figure>
+      </div>
+      <ul class="phone-caps">
+        <li><span class="k">Assist</span><h3>One thumb flies it.</h3><p>Hold to land: it rolls you out and brakes.</p></li>
+        <li><span class="k">Free Drive</span><h3>A road that keeps going.</h3><p>Leave the Show's apron and drive on, through a world built as you go. Nothing is scored.</p></li>
+        <li><span class="k">Advanced</span><h3>All ten valves.</h3><p>The valve deck is the car, whole, under your thumbs on an upright phone.</p></li>
+      </ul>
+    </div>
+  </section>
+
+  <section class="sec" data-tl aria-labelledby="pad-h">
+    <div class="wrap ipad">
+      <div class="drift-1 t-sec">
+        <span class="k">03 · iPad</span>
+        <h2 id="pad-h">Room for<br><em>both hands.</em></h2>
+        <p class="lede">Full screen, any way up. On iPad the controls sit at the side grips, at mid height, with the scene between your hands.</p>
+        <ul class="facts">
+          <li><b>Pencil</b><span>Apple Pencil pressure scales a valve, as the web's pen does.</span></li>
+          <li><b>Every way up</b><span>Portrait or landscape, the deck re-forms for the shape.</span></li>
+          <li><b>Same run</b><span>The same course, the same scorer, the same physics as the phone.</span></li>
+        </ul>
+      </div>
+      <div class="ipad-stage">
+        <div class="drift-2 t-sec"><div class="ipad-tilt t-sec"><div class="pad"><img src="ipad-valves.jpg" alt="Advanced on iPad: the valves at the side grips either side of the car in flight" width="1050" height="1400" loading="lazy" decoding="async"></div></div></div>
+        <div class="tag t1 drift-4 t-sec" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 20l4-1L19 8l-3-3L5 16z"/><path d="M14 7l3 3"/></svg><span>Pencil pressure<small>Scales a valve</small></span></div>
+        <div class="tag t2 ice drift-3 t-sec" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M6 12h2M16 12h2"/></svg><span>Side grips<small>At mid height</small></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" data-tl aria-labelledby="pn-h">
+    <div class="wrap panel">
+      <div class="drift-1 t-sec">
+        <span class="k">04 · The panel</span>
+        <h2 id="pn-h">Judged on<br><em>your device.</em></h2>
+        <p class="lede">On an iPhone or iPad with Apple Intelligence, the three judges write their words with Apple's on-device model: <b>no network, no key, $0</b>, and nothing about the run sent anywhere. The scores stay the game's own, from the fixed scorer; the model only writes the words.</p>
+      </div>
+      <div class="panel-stage">
+        <div class="drift-2 t-sec"><div class="ph"><img src="judged.jpg" alt="The results on iPhone: 97.3, a Perfect 10 and a gold medal, the judges' scores and a Judged on device mark" width="660" height="1434" loading="lazy" decoding="async"></div></div>
+        <div class="tag t1 drift-4 t-sec" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></svg><span>On-device model<small>Works in Airplane Mode</small></span></div>
+        <div class="tag t2 ice drift-3 t-sec" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 17h18"/><path d="M6 17l3-7 4 4 5-9"/></svg><span>97.3 · Perfect 10<small>Gold medal on the Show</small></span></div>
+        <div class="tag t3 mono drift-4 t-sec" aria-hidden="true">$0 · no data sent</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec feel" data-tl aria-labelledby="fl-h">
+    <div class="wrap">
+      <span class="k">05 · Feel</span>
+      <h2 id="fl-h">Every wheel,<br><em>in your hand.</em></h2>
+      <div class="nums">
+        <div class="num"><b class="num-a t-sec">120<small>Hz</small></b><p><strong>Drawn in Metal.</strong>Up to 120 frames a second on a ProMotion screen.</p></div>
+        <div class="num"><b class="num-b t-sec">1<small>thump</small></b><p><strong>A synced landing.</strong>One clean thump through the haptics, each wheel at the tick it touched. A sloppy one is felt as four.</p></div>
+        <div class="num"><b class="num-c t-sec">240<small>Hz</small></b><p><strong>The physics.</strong>The web's deterministic sim, stepped 240 times a second, tick for tick.</p></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="join" data-tl aria-labelledby="jn-h">
+    <div class="wrap">
+      <span class="k">06 · Join</span>
+      <h2 id="jn-h">Three taps<br><em>to the stand.</em></h2>
+      <ol class="steps">
+        <li><b>Get TestFlight</b>, Apple's free beta app, from the App Store.</li>
+        <li><b>Open the invite</b> on your iPhone or iPad and tap Accept.</li>
+        <li><b>Install and fly.</b> Send feedback from TestFlight: take a screenshot in the game and tap Share Beta Feedback.</li>
+      </ol>
+      <div class="end">
+        <p>Ten thrusters. One roll.<br>Stick the landing.</p>
+        <div class="end-cta">
+          <div class="qr"><img src="qr.svg" alt="QR code that opens the Cold Gas TestFlight invitation" width="104" height="104" loading="lazy"><p><b>On a computer?</b>Point your iPhone's camera here.</p></div>
+          <a class="cta" href="https://testflight.apple.com/join/yMb3sJPg" rel="noopener">Join the beta <span aria-hidden="true">→</span></a>
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="fine">Beta builds can have rough edges and expire after 90 days; TestFlight will offer each new one. On-device judging needs iOS 26 or later on a device and in a region where Apple Intelligence is available; elsewhere the judges write from our server, or the game uses its own lines and says so. Screens are from the app; the device outlines are our own drawings. Apple, iPhone, iPhone Duo, iPad, Apple Pencil, Apple Intelligence, Metal, ProMotion and TestFlight are trademarks of Apple Inc. COLD GAS is an independent game: every car, course and sound is our own design. <a href="../">Play in the browser</a> · <a href="../privacy/">Privacy</a> · <a href="../guide/">How to play</a></p>
   </div>
+</footer>
 
-  <h2>How to join</h2>
-  <ol class="steps">
-    <li><b>Get TestFlight</b>, Apple's free beta app, from the App Store.</li>
-    <li><b>Open the invite</b> above on your iPhone or iPad and tap Accept.</li>
-    <li><b>Install and fly.</b> Send feedback from TestFlight: take a screenshot in the game and tap Share Beta Feedback.</li>
-  </ol>
-
-  <div class="end">
-    <p>Ten thrusters. One roll.<br>Stick the landing.</p>
-    <a class="cta" href="https://testflight.apple.com/join/yMb3sJPg" rel="noopener">Join the beta <span class="arr" aria-hidden="true">→</span></a>
-  </div>
-
-  <p class="fine">Beta builds can have rough edges and expire after 90 days; TestFlight will offer each new one. On-device judging needs a device and region where Apple Intelligence is available; elsewhere the judges write from our server, or the game uses its own lines and says so. Apple, iPhone, iPad, Apple Intelligence and TestFlight are trademarks of Apple Inc. COLD GAS is an independent game: every car, course and sound is our own design. <a href="../privacy/">Privacy</a> · <a href="../guide/">How to play</a></p>
-</div>
+<script>
+// The fallback driver (no scroll-driven animations): scrub the same CSS animations by scroll. Section offsets are
+// measured once (and on resize/load), so a frame only reads scrollY and sets currentTime: no layout reads per frame.
+(function () {
+  var d = document.documentElement;
+  if (!d.classList.contains('sdjs')) return;
+  var items = [], vh = 0, max = 1, raf = 0;
+  function measure() {
+    var y = window.scrollY; vh = window.innerHeight; max = Math.max(1, d.scrollHeight - vh); items = [];
+    var els = document.querySelectorAll('.t-root, .t-sec, .t-duo');
+    for (var i = 0; i < els.length; i++) {
+      var el = els[i], anims = el.getAnimations ? el.getAnimations().filter(function (a) { return a.animationName && a.animationName.indexOf('x-') === 0; }) : [];
+      if (!anims.length) continue;
+      var kind = el.classList.contains('t-root') ? 0 : el.classList.contains('t-duo') ? 2 : 1, top = 0, h = 0;
+      if (kind) { var s = el.closest(kind === 2 ? '.duo-track' : '[data-tl]'); if (!s) continue; var r = s.getBoundingClientRect(); top = r.top + y; h = r.height; }
+      items.push({ a: anims, k: kind, t: top, h: h });
+    }
+    frame();
+  }
+  function frame() {
+    raf = 0; var y = window.scrollY;
+    for (var i = 0; i < items.length; i++) {
+      var it = items[i], p = it.k === 0 ? y / max : it.k === 1 ? (y + vh - it.t) / (vh + it.h) : (y - it.t) / Math.max(1, it.h - vh);
+      p = p < 0 ? 0 : p > 1 ? 1 : p;
+      for (var j = 0; j < it.a.length; j++) it.a[j].currentTime = p * 999;
+    }
+  }
+  function onScroll() { if (!raf) raf = requestAnimationFrame(frame); }
+  var rt = 0;
+  function onResize() { clearTimeout(rt); rt = setTimeout(measure, 120); }
+  addEventListener('scroll', onScroll, { passive: true });
+  addEventListener('resize', onResize);
+  addEventListener('load', measure);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(measure);
+  measure();
+})();
+</script>
 <script async src="/boxoffice/v1/insights.js"></script>
 </body>
 </html>
