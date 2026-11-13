@@ -35,7 +35,7 @@ const flyTo = (page, { crash = false, marks = [], tap = false } = {}) => page.ev
   S.autopilot = null;
   const b = document.querySelector('[data-beat]');
   const read = () => ({
-    mode: S.mode, shown: !b.hidden, total: b.querySelector('[data-beat-total]').textContent, verdict: b.querySelector('[data-beat-verdict]').textContent,
+    mode: S.mode, shown: !b.hidden, total: b.querySelector('[data-beat-total]').textContent, verdict: b.querySelector('[data-beat-verdict]').textContent, eyebrow: b.querySelector('[data-beat-eyebrow]').textContent,
     up: [...b.querySelectorAll('[data-beat-judge].in .bj-score')].map((e) => e.textContent), say: b.querySelector('[data-beat-say]').textContent,
     pad: [...document.querySelectorAll('[data-onethumb]')].some((el) => el.getClientRects().length > 0),
   });
@@ -57,7 +57,9 @@ test('phone, first visit: a landing gets its beat with the card’s numbers, a t
   const [early, landed, one, all] = card.at;
   expect(early.mode).toBe('live');   // the beat plays before the sheet
   expect(early.shown).toBe(true);
-  expect(early.verdict).toBe(card.verdict);
+  // 0248: a newcomer's first landing is the headline; the verdict steps into the line over it.
+  expect(early.verdict).toBe('First landing');
+  expect(early.eyebrow).toContain(card.verdict);
   expect(Number(early.total)).toBeLessThan(card.total);   // still counting
   expect(early.up).toEqual([]);
   expect(early.pad).toBe(false);   // the controls step out of the way

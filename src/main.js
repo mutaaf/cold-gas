@@ -41,9 +41,10 @@ import { padState, padWords } from './thumb-words.js';
 import { mountThumbAim } from './thumb-aim.js';
 import { showMedals, hideMedals, getMedals } from './medals.js';
 import { createBeat, beatEligible } from './beat.js';
+import { newGuide, guideStep, guideWords, guideMode, resumeFrom, wreckLine } from './guide.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
-import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0, settle as settle0, suspendAudio, resumeAudio, audioState } from './audio.js';
+import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0, settle as settle0, crowd as crowd0, suspendAudio, resumeAudio, audioState } from './audio.js';
 import { syncWake, wakeHeld } from './wake.js';
 import { createUI, crashStep } from './ui.js';
 import { initFocusTrap } from './focus-trap.js';
@@ -87,7 +88,7 @@ const coarse = device.coarse;
 const tier = obs.boot({ forced: params.get('gfx'), deviceTier: pickDeviceTier(device).tier }).tier;
 obs.init({ deviceClass: deviceClass(navigator, coarse, deviceKind(device)) });
 // Audio is a breaker-guarded subsystem: if it throws, the game goes quiet instead of stopping.
-const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updateAudio0), thud = guard('audio', thud0), chime = guard('audio', chime0), settle = guard('audio', settle0);
+const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updateAudio0), thud = guard('audio', thud0), chime = guard('audio', chime0), settle = guard('audio', settle0), crowd = guard('audio', crowd0);
 // The audio graph is built on the first touch, click or key anywhere (a user gesture, so the
 // context may start), not inside the Jump tap: building it can take a long task of its own. Every
 // later gesture brings back a context that stopped (iOS 'interrupted' too), unless it should be quiet.
@@ -140,7 +141,7 @@ const ui = createUI();
 // The landing's beat (0199, src/beat.js): a landed run's verdict, its score counting up and the judges' cards going
 // up one by one, over the live scene, before the sheet. Its numbers are the card's (closeCard); a tap skips it.
 const beatRoot = document.querySelector('[data-beat]');
-const beat = createBeat(beatRoot, { chime, settle, buzz });
+const beat = createBeat(beatRoot, { chime, settle, crowd, buzz });
 let beatShown = false;   // this run's beat has played: its sheet opens on the final score, without a second count
 // The modal sheets hold focus while they're up and hand it back when they close (0054, src/focus-trap.js).
 initFocusTrap([ui.screens.pause, ui.screens.controls, ui.screens.howto, ui.screens.assist, ui.screens.board,
@@ -458,6 +459,10 @@ function startRunNow(kind = 'jump', quick = false) {
   S.adaptNow = null;
   // Live pointers on the cue line (0079): a new player's first runs, or while Adapt to me says they're struggling.
   S.coachLive = kind === 'jump' && coachLive(S.perf, S.flown, S.adapt);
+  // 0248: a newcomer's Jump is taught as it's flown (src/guide.js), from the step the last attempt missed on this event.
+  if (S.guideCourse !== stage.course) { S.guideFrom = 0; S.guideCourse = stage.course; }
+  S.guide = kind === 'jump' && firstRun() && !guideSkipped() ? newGuide(stage.course, S.guideFrom) : null;
+  S.guideWreck = '';
   S.released = false; S.drill = null; S.freezeT = 0; S.coach = null;
   ghostLoaded(stage.course);   // the reference ghost is flown on the title (precomputeRefGhosts)
   // 0247: a newcomer's Jump (no landed Jump on this device yet) counts down one short beat, GO, not READY · 3 · 2 · 1.
@@ -514,6 +519,7 @@ function finishRun() {
   ui.clearCue();
   countRun(run);
   settleRun(false);   // a Jump run's card: run-landed or run-wrecked, once (0130)
+  resultsEl.removeAttribute('data-first-wreck');   // 0248: set again below for a guided first jump's wreck only
   if (S.runKind === 'jump' && S.card) track('game_over', { score: S.card.total, duration_s: Math.round(run.tick / 24) / 10, course: stage.course, tier: S.card.tier, landed: !S.card.facts?.crashed });
   poster?.reset();   // Post · ABC beside Retry when this is a board jump (src/post.js)
   comeback.results(run, S.card, { autopilot: !!S.autopilot, drill: !!S.drill });   // [comeback] "You beat ABC by 2.1", the daily's line
@@ -540,6 +546,12 @@ function finishRun() {
   }
   ui.results(S.card, null, { settled: beatShown, calm: calmSheet(), byok: loadAI().provider !== 'edge' });
   beatShown = false;
+  // 0248: a guided first jump that didn't land: one line (what to do sooner) and Retry; the next attempt's guide picks up
+  // at the step this one missed.
+  if (S.guide && S.runKind === 'jump' && !S.autopilot && !landedCard(S.card)) {
+    S.guideFrom = resumeFrom(S.guide); S.guideCourse = run.course; S.guideWreck = wreckLine(S.guide);
+  }
+  resultsEl.toggleAttribute('data-first-wreck', !!S.guideWreck && calmSheet());
   syncNext(run, S.card);
   // 0121: medals (src/medals.js) for your own runs, not the reference's.
   if (S.autopilot) hideMedals(); else showMedals(run.course, S.card.tier, S.card.total);
@@ -575,7 +587,7 @@ function startBeat(run) {
   getNozzlePad().show(false);
   ui.clearCue();
   document.body.dataset.beatOn = '';
-  beat.show(S.card, { reduced: reducedMotion, course: COURSES[run.course]?.name || '' });
+  beat.show(S.card, { reduced: reducedMotion, course: COURSES[run.course]?.name || '', first: !!S.firstLanding && calmable });
 }
 function endBeat() {
   if (!beat.active) return;
@@ -652,6 +664,13 @@ function dailyLine(run, items = false) {
   return dailyCoach(obj, dailyEval(obj, S.card, run.course), pointerCtx(run.course, S.tier));
 }
 function showPointer(run) {
+  if (S.guideWreck) {
+    pointerBox.querySelector('[data-pointer-better]').hidden = true;
+    pointerBox.querySelector('[data-pointer-text]').textContent = S.guideWreck;
+    pointerBox.dataset.fix = 'guide'; pointerBox.removeAttribute('data-clean'); pointerBox.hidden = false;
+    S.tip = '';
+    return;
+  }
   // Worded for the tier the next run flies (an Adapt step down changes the controls that matter).
   const p = pickPointer(S.coach.items, pointerCtx(run.course, S.tier), { history: S.pointerHist, card: S.card, flight: S.coach.flight, crashed: !!S.card?.facts?.crashed, daily: dailyLine(run) });
   if (p.id) { S.pointerHist.push(p.id); if (S.pointerHist.length > 4) S.pointerHist.shift(); }
@@ -1143,6 +1162,7 @@ function newFlight(startTick = 0) {
   cueHys.slow = false; cueHys.tilted = false;
   S.ptr.release = 0; S.ptr.land = 0; S.ptr.brake = 0;
   if (S.nudge) { S.nudge.cued = false; S.nudge.cueUntil = 0; clearTimeout(S.nudge.timer); thumbPad?.removeAttribute('data-nudge'); }
+  thumbPad?.removeAttribute('data-guide');
   S.ptrCtx = pointerCtx(S.run?.course || stage.course, S.flyTier);
   S.releaseTick = S.released ? startTick - 240 : -1;
 }
@@ -1349,6 +1369,7 @@ const kbdWrap = (k) => `<kbd>${k}</kbd>`;
 function cues(run, c) {
   const v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
   const tier = S.flyTier, adv = tier === 'advanced';
+  if (S.guide && guideCue(run, c)) return;
   if (thumbActive()) return thumbCues(run, c, v);
   if (run.phase === 'drive' && v < 2) return ui.cue_(`Hold ${kbd('GO', '↑')} to drive`, 600);
   if (run.course !== 'lineup') {
@@ -1390,6 +1411,46 @@ function cues(run, c) {
   if (run.phase === 'air' && Math.abs(run.t.rollAccum) < 0.3 && c.vel.y < 4) return ui.cue_(`${kbd('stick sideways', '← →')} to roll`, 500);
   if (run.phase === 'air' && Math.abs(run.t.rollAccum) > 5.6 && c.vel.y < 0) return ui.cue_(`Hold ${kbd('LAND', 'Shift')}`, 500);
 }
+
+// --- The first jump's guide (0248, src/guide.js) ------------------------------------------------------------------
+// On a newcomer's Jump (one thumb, keys or a pad), the cue line says the one thing due now, in five words or fewer, and
+// nothing else: the hint goes the moment it's done. On one thumb the pad breathes while "Hold to go" is up. A Skip chip
+// rides the first hint of a first attempt and ends the guide for good (coldgas_guide). Read every live frame into one
+// reused object; the words are written to the cue only when they change (ui.cue_).
+const GUIDE_KEY = 'coldgas_guide';
+const goSkip = {};   // "Hold to go" with its Skip chip, made once per device's words (no string per frame)
+function guideSkipped() { try { return localStorage.getItem(GUIDE_KEY) === 'skip'; } catch { return false; } }
+const gs = { phase: '', held: false, released: false, ledge: false, nearLine: false, rising: false, tilted: false, rolled: false, rolledOut: false, landOn: false, computerRolls: false };
+function guideCue(run, c) {
+  const mode = guideMode(S.ptrCtx || pointerCtx());
+  if (!mode) return false;
+  const thumbOn = mode === 'thumb' && thumbActive(), lineup = run.course === 'lineup';
+  gs.phase = run.phase;
+  gs.held = thumbOn ? thumb.held : liveInput.throttle > 0;
+  gs.released = lineup ? run.phase === 'air' || (thumbOn && thumb.lifting) : S.released || (thumbOn && (thumb.driving || thumb.pending));
+  gs.ledge = !lineup && (thumbOn ? thumbStage(run, S.released) === 'ledge' : run.phase === 'ramp' && run.t.progress >= 0.92);
+  gs.nearLine = lineup && c.pos.z > -14;
+  gs.rising = c.vel.y > 0;
+  gs.tilted = !lineup && 1 - 2 * (c.quat.x * c.quat.x + c.quat.z * c.quat.z) < 0.85;   // the car's up vector's y
+  gs.rolled = Math.abs(run.t.rollAccum) > 0.3; gs.rolledOut = Math.abs(run.t.rollAccum) > 5.6;
+  gs.landOn = liveInput.level > 0 || c.autoLand > 0 || (thumbOn && thumb.landing);
+  gs.computerRolls = lineup && thumbOn;
+  const step = guideStep(S.guide, gs);
+  const breathe = thumbOn && step === 'go';
+  if (thumbPad.hasAttribute('data-guide') !== breathe) thumbPad.toggleAttribute('data-guide', breathe);
+  if (!step) return true;
+  const words = guideWords(step, thumbOn ? 'thumb' : mode === 'thumb' ? '' : mode, run.course);
+  if (!words) return true;
+  ui.cue_(step === 'go' && S.guideFrom === 0 ? (goSkip[words] ??= `${words}<button type="button" class="guide-skip" data-guide-skip>Skip</button>`) : words, 600);
+  return true;
+}
+document.addEventListener('click', (e) => {
+  if (!e.target.closest?.('[data-guide-skip]')) return;
+  try { localStorage.setItem(GUIDE_KEY, 'skip'); } catch { /* this run only */ }
+  S.guide = null; S.guideWreck = '';
+  thumbPad.removeAttribute('data-guide');
+  ui.clearCue();
+});
 
 // One-thumb: the pad itself says hold / tap; the cue line names the moment.
 function thumbCues(run, c, v) {
@@ -1971,6 +2032,7 @@ function startDrillNow(id) {
   S.autopilot = null; S.released = released; S.drill = drill; S.coach = null; S.runKind = 'drill';
   latchTier();
   S.adaptNow = null; S.coachLive = false;
+  S.guide = null; S.guideWreck = '';   // 0248: a drill is never the first jump's lesson
   setMode('live'); S.paused = false; S.freezeT = 0.8; S.acc = 0; S.card = null; S.words = null; S.prevPhase = run.phase; S.doneT = 0;
   S.impacts = 0; S.impact = null;
   newFlight(run.tick);
