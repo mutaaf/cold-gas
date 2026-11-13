@@ -174,7 +174,7 @@ final class Game: ObservableObject {
         if !paused { fd.frame(dt: min(dt, 0.1)); driveClock += dt }
         stage?.renderer?.liveTime = fd.liveTime
         Sound.shared.update(speed: DMath.dhypot(fd.car.vel.x, fd.car.vel.y, fd.car.vel.z), throttles: fd.car.throttles, grounded: fd.car.grounded > 0, phase: .run)
-        // The hands (0221): each impact the sim records, scaled by its speed; under them, rough ground and a sliding tyre.
+        // The hands (0223): each impact the sim records, scaled by its speed; under them, rough ground and a sliding tyre.
         let imps = fd.track.impacts
         if driveImpacts > imps.count { driveImpacts = 0 }
         while driveImpacts < imps.count {

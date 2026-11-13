@@ -22,7 +22,7 @@ protocol DriveScene: AnyObject {
     func look(over base: LookU) -> LookU
     /// The world, in the main pass, after the stage's opaque draws.
     func drawWorld(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, look: inout LookU, shadow: MTLTexture, viewProj: simd_float4x4)
-    /// The tyres on the ground and the loose things, once a frame before the effects update (0221).
+    /// The tyres on the ground and the loose things, once a frame before the effects update (0223).
     func effects(_ crash: Crash, dt: Double)
     /// An impact felt in the lens.
     func shake(_ a: Float)
@@ -120,7 +120,7 @@ final class FreeDrive: DriveScene {
         return (2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y))
     }
 
-    /// The set's loose things (0221): where each was put, for a fresh start.
+    /// The set's loose things (0223): where each was put, for a fresh start.
     private(set) var looseSpots: [LooseSpot] = []
     private var looseSpeed: [Double] = []
     /// How many times the car's been made whole (the renderer repairs its damage when this changes).
@@ -241,7 +241,7 @@ final class FreeDrive: DriveScene {
         if stuckT > 3 { reset() }
     }
 
-    /// A loose thing struck (its speed jumping): a knock in the sound and the hands, scaled by how hard (0221).
+    /// A loose thing struck (its speed jumping): a knock in the sound and the hands, scaled by how hard (0223).
     private func looseHits() {
         for (i, b) in car.world.loose.enumerated() where i < looseSpeed.count {
             let v = b.speed, was = looseSpeed[i]
@@ -262,7 +262,7 @@ final class FreeDrive: DriveScene {
     }
 
     private func rnd() -> Float { fxSeed ^= fxSeed << 13; fxSeed ^= fxSeed >> 17; fxSeed ^= fxSeed << 5; return Float(fxSeed) / Float(UInt32.max) }
-    /// Once a frame (the renderer, before its effects update): what the tyres do to the ground (0221). Rubber laid down
+    /// Once a frame (the renderer, before its effects update): what the tyres do to the ground (0223). Rubber laid down
     /// by a slide or a spin, smoke off a hard one on paving, dust and grit thrown up off the loose ground, spray from water.
     func effects(_ crash: Crash, dt: Double) {
         guard cruise == nil, dt > 0 else { return }

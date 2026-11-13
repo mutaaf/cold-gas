@@ -20,7 +20,7 @@ final class WorldView {
     private let device: MTLDevice
     private let terrainPipe, roadPipe, propPipe, loosePipe, markPipe: MTLRenderPipelineState
     private let dsWrite, dsTest: MTLDepthStencilState
-    /// Free Drive's loose things and the rubber its tyres lay down (0221).
+    /// Free Drive's loose things and the rubber its tyres lay down (0223).
     let loose: LooseView?
     let marks: SkidMarks?
     private let tileIndex: MTLBuffer

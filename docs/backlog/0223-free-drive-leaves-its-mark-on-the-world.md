@@ -1,5 +1,5 @@
 ---
-id: 0221
+id: 0223
 title: In Free Drive and Roam the world takes the hits (cones, barriers and signs that fly, rubber, smoke and dust, felt in the lens and the hands)
 status: shipped
 priority: P1
@@ -35,7 +35,7 @@ Runs on: the operator's Mac (Xcode).
 ## Acceptance criteria
 - [ ] `make test` green, with the run vectors bit-exact. New tests: the loose things are mass-correct and come to rest
       standing; a car at 15 m/s sends a cone flying and barely slows; the scored courses have none.
-- [ ] Simulator: a crash into the parked row, skid marks and smoke, dust off the road, in docs/shots/0221/.
+- [ ] Simulator: a crash into the parked row, skid marks and smoke, dust off the road, in docs/shots/0223/.
 - [ ] Bench before and after (`make bench-freedrive`).
 
 ## Test plan

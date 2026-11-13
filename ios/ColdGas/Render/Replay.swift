@@ -78,7 +78,7 @@ final class Replay {
         while seenImpacts < im.count {
             let i = seenImpacts
             seenImpacts += 1
-            // A cone or a barrier under the bumper (0221) is plastic: no sparks, chips or dents for it, and no knock (the
+            // A cone or a barrier under the bumper (0223) is plastic: no sparks, chips or dents for it, and no knock (the
             // drive knocks for the loose thing itself).
             var plastic = false
             for b in c.world.loose { let dx = Double(im.x[i]) - b.x, dz = Double(im.z[i]) - b.z; if dx * dx + dz * dz < 0.7 * 0.7 { plastic = true; break } }

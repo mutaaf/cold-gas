@@ -175,7 +175,7 @@ fragment float4 cg_world_prop_fragment(WPropOut in [[stage_in]], bool front [[fr
     return float4(world_air(c, in.world, f, k), 1);
 }
 
-// --- Loose things (0221: cones, barriers, signs; a full pose each, they tip and roll) --------------------------------------
+// --- Loose things (0223: cones, barriers, signs; a full pose each, they tip and roll) --------------------------------------
 struct WLooseInst { float4x4 m; float4 tint; };
 vertex WPropOut cg_world_loose_vertex(WPropIn in [[stage_in]], uint iid [[instance_id]], constant WFrame& f [[buffer(1)]],
                                       constant WLooseInst* inst [[buffer(3)]]) {
@@ -186,7 +186,7 @@ vertex WPropOut cg_world_loose_vertex(WPropIn in [[stage_in]], uint iid [[instan
     return o;
 }
 
-// --- Skid marks (0221): rubber on the ground, blended over it, hazed with distance ----------------------------------------
+// --- Skid marks (0223): rubber on the ground, blended over it, hazed with distance ----------------------------------------
 struct WMarkIn { float4 pa [[attribute(0)]]; };
 struct WMarkOut { float4 clip [[position]]; float3 world; float a; };
 vertex WMarkOut cg_world_mark_vertex(WMarkIn in [[stage_in]], constant WFrame& f [[buffer(1)]]) {

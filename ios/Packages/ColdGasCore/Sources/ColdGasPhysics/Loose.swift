@@ -1,4 +1,4 @@
-// Loose things for Free Drive and Roam (0221): cones, plastic barriers and A-frame signs as free rigid bodies with their
+// Loose things for Free Drive and Roam (0223): cones, plastic barriers and A-frame signs as free rigid bodies with their
 // real masses, so the car shoves, tips and rolls them with impulses the engine works out from the masses. Unscored:
 // only a drive course ever adds one (World.loose is empty on the Show, the Wall and the Lineup, whose vectors prove it).
 // The car's wheels never ride on them (World.rayFilter leaves their group out), and the hull hits them as it hits

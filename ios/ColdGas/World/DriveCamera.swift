@@ -15,7 +15,7 @@ final class DriveCamera {
     private(set) var fov: Double = 58
     private(set) var eye = SIMD3<Double>(), target = SIMD3<Double>(), up = SIMD3<Double>(0, 1, 0)
     func snap() { inited = false }
-    /// An impact felt in the lens (0221): the amplitude the crash asks for, decaying at 3 a second, as the Director's.
+    /// An impact felt in the lens (0223): the amplitude the crash asks for, decaying at 3 a second, as the Director's.
     private var shakeAmp: Float = 0, shakeT = 0.0
     let reduced = UIAccessibility.isReduceMotionEnabled
     func shake(_ a: Float) { if !reduced { shakeAmp = max(shakeAmp, a) } }

@@ -32,7 +32,7 @@ public final class World {
     public internal(set) var ox = 0.0, oy = 0.0, oz = 0.0
     /// What Free Drive streams in near the car each tick (nil on a scored course).
     public var streamer: WorldStreamer?
-    /// Free Drive's loose things (Loose.swift, 0221): cones, barriers, signs. Empty on every scored course.
+    /// Free Drive's loose things (Loose.swift, 0223): cones, barriers, signs. Empty on every scored course.
     public internal(set) var loose: [LooseBody] = []
     /// What the wheels' rays see: everything, but for Free Drive's loose things (RAY_ALL on every scored course).
     var rayFilter = RAY_ALL

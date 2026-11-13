@@ -1,4 +1,4 @@
-// Free Drive's marks on the ground (0221): rubber laid down by a sliding or spinning tyre. The strips persist, a ring of
+// Free Drive's marks on the ground (0223): rubber laid down by a sliding or spinning tyre. The strips persist, a ring of
 // 4,096 quads that only drops the oldest, and stay where they were laid as the origin floats (they're kept in world
 // metres and rewritten relative to the origin when it moves). A strip follows each wheel while it marks, and a gap
 // starts a new one. Nothing is allocated per frame: the vertices go straight into one shared buffer.

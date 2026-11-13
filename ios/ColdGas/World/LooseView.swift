@@ -1,4 +1,4 @@
-// Free Drive's loose things drawn (0221): the cones, barriers and A-frame signs the engine moves (ColdGasPhysics
+// Free Drive's loose things drawn (0223): the cones, barriers and A-frame signs the engine moves (ColdGasPhysics
 // Loose.swift), each a full pose (they tip and roll), instanced per kind with the props' 44-byte vertex and lit as the
 // props are. Matte, in the stage's palette: off-white plastic with the one signal red, and retroreflective bands that
 // catch the headlamps. The instances go into a triple-buffered ring: nothing is allocated per frame.

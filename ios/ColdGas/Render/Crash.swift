@@ -134,7 +134,7 @@ final class Crash {
         mPos[j] = p; mVel[j] = v; mLife[j] = 1; mDecay[j] = 1 / life; mSize0[j] = size; mGrow[j] = grow; mAlpha0[j] = alpha; mCol[j] = c
     }
 
-    /// A puff from outside a crash (Free Drive's tyre smoke, dust and spray, 0221): the same pool, the same draw.
+    /// A puff from outside a crash (Free Drive's tyre smoke, dust and spray, 0223): the same pool, the same draw.
     func kick(_ p: SIMD3<Float>, _ v: SIMD3<Float>, size: Float, grow: Float, life: Float, alpha: Float, color: SIMD3<Float>) {
         puff(p, v, size, grow, life, alpha, color)
     }
