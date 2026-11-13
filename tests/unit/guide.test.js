@@ -20,10 +20,11 @@ describe('the player\'s guide', () => {
     expect(page).toContain('<meta name="viewport"');
   });
 
-  it('is readable without JavaScript: 900+ words, no scripts, nothing from another host', () => {
+  it('is readable without JavaScript: 900+ words, no scripts but Box Office, nothing from another host', () => {
     expect(page).toContain('<h1>COLD GAS Player Guide</h1>');
     expect(body.split(' ').filter(Boolean).length).toBeGreaterThan(900);
-    expect(page).not.toMatch(/<script/i);
+    // The one script is Box Office's same-origin analytics loader (AGENTS.md §3.3), async, after the content.
+    expect(page.replace('<script async src="/boxoffice/v1/insights.js"></script>', '')).not.toMatch(/<script/i);
     expect(page.replace(/<link rel="canonical"[^>]*>/, '')).not.toMatch(/<(link|img|iframe|script)[^>]+(src|href)="(https?:)?\/\//i);
     expect(page).not.toMatch(/—|&mdash;/);
   });

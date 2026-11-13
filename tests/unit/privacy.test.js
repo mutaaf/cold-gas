@@ -53,6 +53,17 @@ describe('the privacy page (0155)', () => {
     for (const s of sentences.filter((x) => /\bno ads\b/i.test(x))) expect(s, s).toMatch(/iPhone app/);
   });
 
+  it('names the web\'s usage analytics while the pages load Box Office, and keeps the iPhone app out of it', () => {
+    const game = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
+    expect(game).toContain("'/boxoffice/v1/insights.js'");   // the condition this check stands on
+    expect(page).toContain('<script async src="/boxoffice/v1/insights.js"></script>');
+    expect(text).toMatch(/anonymous usage analytics to PostHog, through our own relay at mutaafaziz\.com/);
+    expect(text).toMatch(/approximate, city-level location/);
+    expect(text).toMatch(/Session replays/);
+    expect(text).toMatch(/Global Privacy Control or Do Not Track, none of this loads/);
+    expect(text).toMatch(/None of it is in the iPhone app/);
+  });
+
   it('no longer names a page-analytics service, now that none runs on our pages', () => {
     expect(text).not.toMatch(/Web Analytics|page analytics|analytics counts/i);
     expect(text).toMatch(/nothing from it goes to an advertising network, an analytics company or a data broker/);

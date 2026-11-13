@@ -27,7 +27,7 @@
 <main>
   <a class="brand" href="../">Cold Gas</a>
   <h1>Privacy</h1>
-  <p class="lead">Cold Gas has no accounts. The iPhone app has no ads and no tracking: it talks to one server, ours, at mutaafaziz.com/coldgas, and nothing from it goes to an advertising network, an analytics company or a data broker. The web game is the same, except for the ads described below.</p>
+  <p class="lead">Cold Gas has no accounts. The iPhone app has no ads and no tracking: it talks to one server, ours, at mutaafaziz.com/coldgas, and nothing from it goes to an advertising network, an analytics company or a data broker. The web game is the same, except for the ads and the anonymous usage analytics described below.</p>
 
   <h2>What we receive, and why</h2>
   <ul>
@@ -39,8 +39,11 @@
   <h2>Judges on your iPhone or iPad</h2>
   <p>Where Apple Intelligence is available and turned on (iOS 26 or later), the app's judges write their commentary on the device itself, with Apple's on-device model. The model sees only the run's numbers, and nothing is sent to us or to anyone else for it. Where Apple Intelligence isn't available, where you turn this off in Settings, or if the on-device model can't answer, the run's numbers go to our server for the commentary, as described above. The score itself never comes from a model.</p>
 
+  <h2>Usage analytics on the web</h2>
+  <p>The web game and these pages send anonymous usage analytics to PostHog, through our own relay at mutaafaziz.com: which pages are opened, clicks and taps (for heatmaps), a few game events (a run started or finished, with its score, course, tier and length, and a share), the device type and browser, page load times, and an approximate, city-level location. Our relay cuts the last part off your IP address before anything is forwarded, so PostHog never sees the full address. Session replays may be recorded to see where the game is hard to use; every text field is masked in them. A random id, kept in your browser's storage, links one visit to the next; it is not tied to your name, your initials or anything else about you. If your browser sends Global Privacy Control or Do Not Track, none of this loads. None of it is in the iPhone app.</p>
+
   <h2>What we don't receive</h2>
-  <p>Your name, email, contacts, location, photos, an advertising identifier, or any id for you or your device. Your IP address is used only to stop abuse: it is turned into a hash that changes every day, counted for rate limits, and never stored as an address.</p>
+  <p>Your name, email, contacts, precise location, photos, an advertising identifier, or any id for you beyond the random analytics id above. On our own server your IP address is used only to stop abuse: it is turned into a hash that changes every day, counted for rate limits, and never stored as an address.</p>
 
   <h2>Ads on the web game</h2>
   <p>The web game shows ads from Google, through our own ad loader, on its menus and results, never during a run. A rewarded ad plays only when you ask for one. Those ads can use the ad network's own cookies and identifiers, under Google's privacy policy. None of this is in the iPhone app.</p>
@@ -62,5 +65,6 @@
 
   <p class="small">Last updated 12 November 2026.</p>
 </main>
+<script async src="/boxoffice/v1/insights.js"></script>
 </body>
 </html>
