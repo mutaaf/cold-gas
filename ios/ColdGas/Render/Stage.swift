@@ -99,6 +99,8 @@ final class Stage {
             if let f = t["file"] as? String {
                 tex = try? loader.newTexture(URL: dir.appendingPathComponent(f), options: [
                     .SRGB: NSNumber(value: (t["srgb"] as? Bool) ?? false), .generateMipmaps: NSNumber(value: true),
+                    // three's flipY (a canvas texture): the PNG's top row is v = 1 there; Metal's v = 0 is the top row.
+                    .origin: (t["flipY"] as? Bool) == true ? MTKTextureLoader.Origin.flippedVertically : MTKTextureLoader.Origin.topLeft,
                     .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue), .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)])
             }
             let rp = t["repeat"] as? [Double] ?? [1, 1], of = t["offset"] as? [Double] ?? [0, 0]

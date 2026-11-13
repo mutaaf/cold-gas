@@ -47,7 +47,8 @@ struct DriveView: View {
                         }
                         .padding(.horizontal, 14).padding(.vertical, 8).glass(12)
                         HStack(spacing: 8) {
-                            toggle(h.cam == "chase" ? "video" : "car.side", h.cam == "chase" ? "Chase camera" : "Bumper camera", on: false) { game.freeDrive?.camera.cycle() }
+                            toggle(h.cam == "chase" ? "video" : h.cam == "cinema" ? "film" : "car.side",
+                                   h.cam == "chase" ? "Chase camera" : h.cam == "cinema" ? "Cinema camera" : "Bumper camera", on: h.cam == "cinema") { game.freeDrive?.camera.cycle() }
                             toggle("fanblades", h.fan ? "Fan armed" : "Fan off", on: h.fan) { game.freeDrive?.fan.toggle() }
                             toggle("arrow.uturn.backward", "Back on the road", on: false) { game.freeDrive?.reset() }
                         }

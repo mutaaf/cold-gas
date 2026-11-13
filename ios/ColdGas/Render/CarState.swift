@@ -46,6 +46,8 @@ final class CarState {
     func reset() { for i in broken.indices { broken[i] = false }; crazed = false; dmgHead = 1; dmgTail = 1; hazard = false; for i in frost.indices { frost[i] = 0 } }
     /// main.js: live only, `setWing((speed - 20) / 20)`; it counts for 0.3 s.
     func setWing(_ t: Float) { wingExt = min(1, max(0, t)); wingExtT = last }
+    /// Free Drive (0225): the brake pedal itself (−1: none; the lamps then follow the car's deceleration, as on the web).
+    var pedal: Float = -1
 
     private func smooth(_ a: Float, _ b: Float, _ t: Float) -> Float { let k = min(1, max(0, (t - a) / (b - a))); return k * k * (3 - 2 * k) }
     private func ease(_ cur: Float, _ target: Float, _ dt: Float, _ tau: Float) -> Float { cur + (target - cur) * (1 - exp(-dt / tau)) }
@@ -70,7 +72,8 @@ final class CarState {
             grounded = groundedNow
             // Braking: decelerating hard on the wheels beyond what the slope explains, held briefly after the car stops.
             decel = acc + 9.81 * fwd.y
-            if grounded && vf > 0.3 && decel < -2.5 { brakeHold = 0.6 }
+            if grounded && vf > 0.3 && decel < -2.5 && pedal < 0 { brakeHold = 0.6 }
+            if pedal > 0.05 { brakeHold = max(brakeHold, 0.15) }
             else if grounded && abs(vf) < 0.3 && brakeHold > 0 { brakeHold = max(brakeHold, 0.3) }
             brakeHold = max(0, brakeHold - dt)
         }

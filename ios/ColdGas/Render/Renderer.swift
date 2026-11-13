@@ -80,6 +80,10 @@ final class Renderer {
     private let subAmber, subMarker, subPlate, subAmbient, subGlass: Int
     private let glassMat: MaterialU?, crazedMat: MaterialU?
     private var sweepM: [simd_float4x4]
+    /// A drive's wheels (0225): each spinning part with the aero disc's flat face cut out (the barrel kept), so the rotor and
+    /// caliper show between the spokes; the rotor's submesh in each steer part, for its glow.
+    private var openSpin: [StageMesh] = []
+    private var rotorSub = -1
     let fxLog = Launch.args.contains("-fx-log")
     private var fxFrames = 0
     /// The replay's own clock: real time scaled by the crash's slow-motion beat (crash.js timeScale).
@@ -212,6 +216,11 @@ final class Renderer {
             u.params = SIMD4(l.decay, cos(l.angle), l.kind == "SpotLight" ? 1 : l.kind == "DirectionalLight" ? 2 : 0, l.penumbra)
             L.append(u)
         }
+        // A roam (0225): the Show's and the Wall's red is a run's signal; on a drive round the set it washed the frame (the
+        // floor read red end to end). As the web's deck look (0187, 0193) does on the run-up: the red lights and the red
+        // air at 30 %, the LED strips dimmed to a red their core keeps (Renderer.toneRoam below, for the materials).
+        let roam = isDrive(course)
+        if roam { for i in L.indices where L[i].colorIntensity.x > 0.9 && L[i].colorIntensity.y < 0.1 { L[i].colorIntensity.w *= 0.3 } }
         nLights = L.count
         lightsBuf = device.makeBuffer(bytes: L.isEmpty ? [LightU()] : L, length: MemoryLayout<LightU>.stride * max(1, L.count), options: .storageModeShared)!
         frames = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<FrameU>.stride, options: .storageModeShared)! }
@@ -227,7 +236,18 @@ final class Renderer {
             u.effect = SIMD4(M.effectColor, M.effectPower); u.effectKind = SIMD4(M.effect, M.alphaMap != nil ? 1 : 0, M.wet ? 1 : 0, M.additive ? 1 : 0)
             return u
         } }
-        stageMats = [mats(st.staticMesh), mats(st.roadster)] + st.parked.map(mats) + st.wheels.flatMap { [mats($0.steerPart), mats($0.spinPart)] }
+        func toneRoam(_ list: [MaterialU]) -> [MaterialU] {
+            guard roam else { return list }
+            return list.map { u in
+                var u = u
+                let c = u.color, red = c.x > 0.8 && c.y < c.x * 0.2 && c.z < c.x * 0.3
+                if u.emissive.w > 0.5 && red { u.color = SIMD4(SIMD3(c.x, c.y, c.z) * 0.35, c.w) }
+                let e = u.effect, redFx = e.x > 0.8 && e.y < 0.2
+                if (u.effectKind.x == 2 || u.effectKind.x == 3) && redFx { u.effect.w *= 0.3 }
+                return u
+            }
+        }
+        stageMats = [toneRoam(mats(st.staticMesh)), mats(st.roadster)] + st.parked.map(mats) + st.wheels.flatMap { [mats($0.steerPart), mats($0.spinPart)] }
         partBase = stageMats.count
         stageMats += st.parts.map(mats)
         sweepBase = stageMats.count
@@ -269,7 +289,38 @@ final class Renderer {
         nGlows = gl2.count
         launchCompileMs = (CACurrentMediaTime() - t0) * 1000
         crash.configure(layout: st.layout, paints: st.paints)
+        if isDrive(course) {
+            // A drive's car (0225): a full, glossy clear coat over the paint (the scored runs keep the web's satin), so the dusk
+            // and the set's lights lie across its panels.
+            if let i = st.roadster.submeshes.firstIndex(where: { $0.material.name == "roadster-paint" }) {
+                stageMats[1][i].pbr = SIMD4(0.08, 0.3, 1.0, 0.05)
+            }
+            openSpin = st.wheels.map { Renderer.openFace(device: device, $0.spinPart) }
+            rotorSub = st.wheels.first?.steerPart.submeshes.firstIndex { $0.material.name == "roadster-rotor" } ?? -1
+        }
         applyThermal()
+    }
+    /// The spinning part with the aero disc's flat face (normals along the axle, x) taken out of the disc's submesh.
+    private static func openFace(device: MTLDevice, _ m: StageMesh) -> StageMesh {
+        guard let di = m.submeshes.firstIndex(where: { $0.material.name == "roadster-disc" }) else { return m }
+        let vf = m.vertices.contents().bindMemory(to: Float.self, capacity: m.vertices.length / 4)
+        let ix = m.indices.contents().bindMemory(to: UInt32.self, capacity: m.indices.length / 4)
+        var out: [UInt32] = [], subs: [StageSubmesh] = []
+        for (k, s) in m.submeshes.enumerated() {
+            let start = out.count
+            for t in stride(from: 0, to: s.indexCount, by: 3) {
+                let a = Int(ix[s.indexStart + t]), b = Int(ix[s.indexStart + t + 1]), c = Int(ix[s.indexStart + t + 2])
+                if k == di {
+                    let nx = abs(vf[(s.vertexStart + a) * 11 + 3]) + abs(vf[(s.vertexStart + b) * 11 + 3]) + abs(vf[(s.vertexStart + c) * 11 + 3])
+                    if nx > 2.4 { continue }   // all three facing along the axle: the flat face
+                }
+                out += [UInt32(a), UInt32(b), UInt32(c)]
+            }
+            subs.append(StageSubmesh(material: s.material, renderOrder: s.renderOrder, vertexStart: s.vertexStart, vertexCount: s.vertexCount,
+                                     indexStart: start, indexCount: out.count - start, top: s.top))
+        }
+        guard let ib = device.makeBuffer(bytes: out, length: max(4, out.count * 4), options: .storageModeShared) else { return m }
+        return StageMesh(vertices: m.vertices, indices: ib, submeshes: subs)
     }
 
     // --- The governor ------------------------------------------------------------------------------
@@ -345,6 +396,15 @@ final class Renderer {
         if let d = drive {
             if d.repairs != driveRepairs { driveRepairs = d.repairs; crash.repair() }
             d.effects(crash, dt: dtReal)
+            let cl = d.carLook
+            crash.car.pedal = cl.pedal
+            if rotorSub >= 0 {
+                for w in stage.wheels {
+                    // Iron glowing: a deep red, toward orange as it heats; bright enough to bloom.
+                    let g = cl.glow[w.index], hot = SIMD3<Float>(1, 0.06 + 0.22 * g, 0.01 + 0.03 * g) * (g * 3.2)
+                    stageMats[2 + stage.parked.count + w.index * 2][rotorSub].emissive = SIMD4(hot, 0)
+                }
+            }
         }
         crash.update(Float(dtReal))
         simClock += dtReal * Double(crash.slowK)
@@ -757,7 +817,7 @@ final class Renderer {
             let spinM = pivot * simd_float4x4(simd_quatf(angle: spin, axis: [1, 0, 0]))
             let base = 2 + stage.parked.count + w.index * 2
             drawMesh(e, w.steerPart, matsIndex: base, model: pivot, opaqueOnly: opaqueOnly, shadow: shadow)
-            drawMesh(e, w.spinPart, matsIndex: base + 1, model: spinM, opaqueOnly: opaqueOnly, shadow: shadow)
+            drawMesh(e, w.index < openSpin.count ? openSpin[w.index] : w.spinPart, matsIndex: base + 1, model: spinM, opaqueOnly: opaqueOnly, shadow: shadow)
         }
     }
 

@@ -210,6 +210,34 @@ is Free Drive on a scored course's own set:
 - `DriveStreamer` adds aero downforce, ½ρ·ClA·v² along the car's down (ClA 0.35 m², ESTIMATE), through `World.carF`.
   Only a drive has a streamer, so scored runs never feel it.
 
+### The drive's own car (0225)
+
+Free Drive and Roam step the car with `driveStep` (ColdGasPhysics `DriveCar.swift`), never `step`. The scored step isn't
+touched, so the run vectors keep proving the scored car. `driveStep` keeps the engine body and hull, the contacts and
+impacts, the fan, the jets and the flight computer, and replaces the chassis under them. `DriveSpec` holds every number,
+each with an ESTIMATE note:
+
+| | What | Measured (DriveCarTests) |
+|---|---|---|
+| Springs | 52 / 60 kN/m at the wheel (≈ 1.6 / 1.5 Hz), dampers ζ 0.3 bump, 0.48 rebound, anti-roll bars 30 / 18 kN/m, progressive bump stops 6.5 cm past static. Free lengths put the car at the scored ride height | ≈ 1.8° of roll per g; ≈ 10 cm of static sag, drawn |
+| Tyres | One Magic-Formula-shaped curve over the slip vector normalised by its peaks (κ 0.11; α 6° front, 5.2° rear), so braking or driving takes grip from cornering. μ 1.30 / 1.38 at the nominal load, −12 % per load added, the slip angle's peak growing as load^0.35, relaxation length, a flatter, later peak on loose ground | The lateral force at its peak falls to < 75 % with as much longitudinal slip |
+| Motors | Each rear wheel its own. Torque vectoring moves up to 35 % across the axle toward the yaw rate the steering asks for. Traction control (Sport: more slip; Off: the motors couple as a limited-slip differential). Lift-off regen 0.08 g | The vectored car's yaw rate tracks the reference closer |
+| Brakes | 60/40. Caliper pressure builds in ≈ 0.1 s. ABS dumps past 0.13 slip, holds just under it and builds below. Disc temperature from the brake's work, cooled by the air (≈ 1 min at 30 m/s) | 100–0 km/h in 36 m, the nose down 2°; 3 stops from 144 km/h: fronts ≈ 255 °C |
+| Aero | Drag as the scored car's. 0224's downforce, at the axles (42 % front) | |
+
+The renderer shows it. In a drive the aero disc's flat face is cut out of each wheel (`Renderer.openFace`), so the rotor
+and caliper show between the spokes, and a rotor glows from ≈ 380 °C (`DriveScene.carLook`). The brake lamps follow the
+pedal. The paint gets a full clear coat, which reflects the dusk off the set (`duskEnv`) and the set's own cube on it.
+ABS buzzes in the hand. `-fd-classic` (Debug) drives the scored model for comparison. `-fd-discs <°C>` presets the discs
+for shots.
+
+**The cinema camera.** The camera button cycles chase → cinema → bumper. Cinema picks a spot ahead of the car, off to one
+side at head height. It holds that spot as the car passes, on a lens that keeps ≈ 7 m of road across the screen, then
+moves to the next spot on the other side.
+
+**Roam's reds.** On a drive course the Show's and the Wall's red lights and red air are at 30 %, and the LED strips are
+dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look does on the run-up.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
@@ -271,6 +299,17 @@ rows with each other, not with the table above:
 
 The drive's new work (reading the loose bodies, the tyres' effects, the marks' buffer) costs about 0.1 ms of main-thread
 CPU a frame. The simulator's GPU is not a phone's, so the GPU side waits for `make device-bench-freedrive`.
+
+After 0225 (the drive's own chassis, open wheels, glowing discs, the paint's dusk reflection), the same bench back to back
+on one simulator (iPhone 18 Pro Max, iOS 27.0, Release) on 2026-11-13, `main` (8d90885) first:
+
+| | Frames in 10 s | Interval avg / p95 | CPU ms avg / p95 | What was drawn |
+|---|---|---|---|---|
+| Before (main) | 413 | 24.27 / 33.33 ms | 1.08 / 2.31 | 97 tiles, 248 k triangles, 21.4 k props |
+| After (0225) | 413 | 24.27 / 33.33 ms | 1.00 / 2.29 | the same |
+
+The chassis costs nothing measurable on the main thread (two ticks a frame; it replaces the scored chassis rather than
+adding to it). The duskEnv reflection is a few ALU ops on the car's pixels; the GPU side waits for the phone.
 
 **On a phone (the owner runs this; an agent never runs it on the owner's phone):**
 
