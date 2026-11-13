@@ -139,8 +139,8 @@ final class Renderer {
     init?(device: MTLDevice, course: String = "show", replay: Replay?) {
         let t0 = CACurrentMediaTime()
         self.device = device
-        // Free Drive ("drive") stands on the Show's stage: the Wall, the row, the pad and the complex at the world's centre.
-        guard let q = device.makeCommandQueue(), let lib = device.makeDefaultLibrary(), let st = Stage(device: device, course: course == "drive" ? "show" : course) else { return nil }
+        // Free Drive ("drive") stands on the Show's stage, a roam ("drive-wall", "drive-lineup") on its course's, at the centre.
+        guard let q = device.makeCommandQueue(), let lib = device.makeDefaultLibrary(), let st = Stage(device: device, course: stageOf(course)) else { return nil }
         queue = q; stage = st; self.replay = replay; courseKey = course
         if Launch.args.contains("-crash-log") || Launch.args.contains("-fx-log") { setvbuf(stdout, nil, _IOLBF, 0) }
         let archive = PipelineArchive(device: device)

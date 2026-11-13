@@ -16,7 +16,7 @@ extension Deck {
     ///   air            A LAND on Assist, LIFT on Pro and Advanced; B LIFT on Assist's Lineup; C BOOST until the row is behind;
     ///   landed         A BRAKE.
     public static func buttons(_ tp: TouchPhase, assist: Bool, course: String, ledge: Bool, rowDone: Bool) -> [DeckButton?] {
-        let free = course == "lineup" || course == "drive"
+        let free = course == "lineup" || course == "drive" || course.hasPrefix("drive-")
         switch tp {
         case .ground:
             return [DeckButton(.go, "GO"), DeckButton(.brake, "BRAKE"), free ? DeckButton(.lift, "LIFT") : nil]

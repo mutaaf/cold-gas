@@ -25,14 +25,24 @@ protocol DriveScene: AnyObject {
 
 final class FreeDrive: DriveScene {
     static let seedDefault = "cold gas"
+    #if DEBUG
+    static let hold: (Double, Double, Double)? = {
+        guard let a = Launch.value("-fd-hold")?.split(separator: ",").compactMap({ Double($0) }), a.count >= 2 else { return nil }
+        return (a[0], a[1], a.count > 2 ? a[2] : 0)
+    }()
+    #endif
     let world: FreeWorld
     let camera = DriveCamera()
     private(set) var view: WorldView?
     private(set) var origin = SIMD3<Double>(0, 0, 0)
-    /// The car: the scored machine on DRIVE_COURSE (the Show's stage at the centre), its world streamed round it.
+    /// The car: the scored machine on DRIVE_COURSE (the Show's stage at the centre) or a roam's course (0220: the Wall's
+    /// or the Lineup's set there instead), its world streamed round it.
     private(set) var car: Vehicle
+    /// The course the drive stands on ("drive", "drive-wall", "drive-lineup") and the scored course whose set that is.
+    let course: Course
+    var stage: String { stageOf(course.id) }
     let streamer: DriveStreamer
-    let track = Replay(live: "drive")
+    let track: Replay
     /// The controls (Controls routes the touches here while the drive is up): src/input.js sample, the Standard hands.
     let sampler = InputSampler(level: .standard)
     private let input = Input()
@@ -49,12 +59,17 @@ final class FreeDrive: DriveScene {
     /// A reset's cue for the HUD ("Back on the road"), and when it was given.
     private(set) var cue = "", cueT = -10.0
 
-    init(seed: String = FreeDrive.seedDefault) {
+    /// `onMark`: on the scored course's own mark, facing down its run (Roam, 0220); otherwise Free Drive's start on the
+    /// apron, facing out.
+    init(seed: String = FreeDrive.seedDefault, course: Course = DRIVE_COURSE, onMark: Bool = false) {
         world = FreeWorld(seed: seed)
         streamer = DriveStreamer(world: world)
-        car = createVehicle(course: DRIVE_COURSE)
+        self.course = course
+        track = Replay(live: course.id)
+        car = createVehicle(course: course)
         car.world.streamer = streamer
-        place(x: DRIVE_COURSE.startX, z: DRIVE_COURSE.startZ, yaw: .pi)
+        if onMark, let c = COURSES[stageOf(course.id)] { place(x: c.startX, z: c.startZ, yaw: 0) }
+        else { place(x: course.startX, z: course.startZ, yaw: course.id == "drive-lineup" ? 0 : .pi) }
     }
 
     /// The car at (x, z) on the ground, facing `yaw` (0 = +z), at rest, everything let go (input.js freshRun).
@@ -113,9 +128,15 @@ final class FreeDrive: DriveScene {
                     let phase: Phase = airT > 0.25 ? .air : .drive
                     sampler.sample(phase, .assist, input, false, car)
                     if let v = pilot { drivePilot(v, input) }
+                    #if DEBUG
+                    // `-fd-hold throttle,steer[,after s]`: a held throttle and steer (shots: a run into the row, a slide).
+                    if let h = FreeDrive.hold, time >= h.2 { input.throttle = h.0; input.steer = h.1; input.brake = 0 }
+                    #endif
                     input.fan = fan ? 1 : 0
                     if phase == .drive { reverse(input) }
                     try step(car, input)
+                    // Unscored, so the tanks top up on the ground (a full charge in 8 s): the jets always work on a roam.
+                    if car.grounded > 0 { car.air = min(CAR.airMass, car.air + CAR.airMass * DT / 8) }
                     track.append(car: car, origin: origin)
                     acc -= DT
                     rebase()
@@ -218,8 +239,9 @@ final class FreeDrive: DriveScene {
             q = simd_quatd(ix: Double(c.quat.imag.x), iy: Double(c.quat.imag.y), iz: Double(c.quat.imag.z), r: Double(c.quat.real))
         }
         let v = SIMD3(car.vel.x, car.vel.y, car.vel.z)
-        let w = world
-        camera.update(dt: dt, carPos: p, carQuat: q, vel: v, aspect: Double(aspect)) { x, z in w.ground(x, z).y }
+        let w = world, bodies = car.world.bodies
+        // The parked row's roofs count as ground for the lens (0220): on the Show's mark the row is right behind the car.
+        camera.update(dt: dt, carPos: p, carQuat: q, vel: v, aspect: Double(aspect)) { x, z in max(w.ground(x, z).y, roofUnder(bodies, x, z) + 0.6) }
         let m = camera.matrices(origin: origin, aspect: aspect)
         view?.update(eye: camera.eye, viewProj: m.proj * m.view)
         return m

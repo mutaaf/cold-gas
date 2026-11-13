@@ -79,4 +79,66 @@ struct FreeDriveTests {
         }
         #expect(COURSES["drive"] == nil)
     }
+
+    // 0220: Roam, a scored course's set at the centre of the open world.
+    @Test func eachRoamStandsOnItsCoursesSetAndIsNeverACourse() {
+        #expect(stageOf("drive") == "show" && stageOf("drive-wall") == "wall" && stageOf("drive-lineup") == "lineup")
+        #expect(stageOf("show") == "show" && stageOf("lineup") == "lineup")
+        for id in ["show", "wall", "lineup"] {
+            let c = driveCourse(on: id)
+            #expect(isDrive(c.id) && !isDrive(id))
+            #expect(COURSES[c.id] == nil)
+            #expect(stageOf(c.id) == id)
+            #expect(c.boxes.count == (COURSES[id]?.boxes.count ?? -1))
+        }
+    }
+
+    /// The Lineup's set: its five parked bodies at their own places, its poles, and the open world's ground past the
+    /// apron; the origin goes away and comes back and the set's floor with it.
+    @Test func theLineupsSetIsSolidAndComesBackAfterARebase() throws {
+        let world = FreeWorld(seed: "roam")
+        let c = createVehicle(course: DRIVE_LINEUP)
+        defer { c.world.free() }
+        let s = DriveStreamer(world: world)
+        c.world.streamer = s
+        #expect(c.world.bodies.map(\.id) == LINEUP_BOXES.map(\.spec.id))
+        for (b, box) in zip(c.world.bodies, LINEUP_BOXES) { #expect(abs(b.cz - box.cz) < 1e-9) }
+        let centre = c.world.centre.count
+        #expect(centre >= 1)
+        // At rest on the apron by the mark.
+        c.pos.x = 0; c.pos.y = SPEC.comHeight + 0.04; c.pos.z = LINEUP.startZ
+        let inp = Input()
+        for _ in 0..<240 { try step(c, inp) }
+        #expect(c.grounded == 4 && abs(c.pos.y - SPEC.comHeight) < 0.2)
+        // Far out and back: the set's own colliders go and return.
+        s.move(c.world, 4096, 4096)
+        #expect(c.world.centre.isEmpty)
+        s.move(c.world, 0, 0)
+        #expect(c.world.centre.count == centre)
+    }
+
+    /// Into the Lineup's parked row at 12 m/s: the car stops or slows hard, and the row moves (mass-correct bodies,
+    /// shoved, never welded).
+    @Test func aRoamersCarShovesTheParkedRow() throws {
+        let c = createVehicle(course: DRIVE_LINEUP)
+        defer { c.world.free() }
+        c.world.streamer = DriveStreamer(world: FreeWorld(seed: "roam"))
+        let first = try #require(c.world.bodies.first)
+        let z0 = first.cz
+        c.pos.x = 0; c.pos.y = SPEC.comHeight + 0.04; c.pos.z = LINEUP.lineupZ0 - 14
+        c.vel.z = 12
+        let inp = Input()
+        inp.throttle = 0.4
+        for _ in 0..<(240 * 3) { try step(c, inp) }
+        let moved = c.world.bodies.contains { abs($0.cz - z0) > 0.05 || abs($0.cx) > 0.05 || $0.moved }
+        #expect(moved)
+        #expect(c.pos.z < LINEUP_BOXES[LINEUP_BOXES.count - 1].maxZ + 2)   // it didn't pass through the row
+    }
+
+    @Test func theWallsRoamHasTheCurl() {
+        let c = createVehicle(course: DRIVE_WALL)
+        defer { c.world.free() }
+        #expect(c.world.curl)
+        #expect(c.world.bodies.isEmpty)
+    }
 }

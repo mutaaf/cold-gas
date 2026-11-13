@@ -26,10 +26,19 @@ struct DriveView: View {
             }
             VStack(spacing: 0) {
                 HStack(alignment: .top) {
-                    Button { game.endDrive(); UISelectionFeedbackGenerator().selectionChanged() } label: {
-                        Image(systemName: "chevron.left").font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink2).frame(width: 44, height: 44).glass(22)
-                    }.buttonStyle(.plain).accessibilityLabel("Back to the title")
-                    Spacer()
+                    VStack(alignment: .leading, spacing: 8) {
+                        Button { game.endDrive(); UISelectionFeedbackGenerator().selectionChanged() } label: {
+                            Image(systemName: "chevron.left").font(.system(size: 14, weight: .medium)).foregroundStyle(Theme.ink2).frame(width: 44, height: 44).glass(22)
+                        }.buttonStyle(.plain).accessibilityLabel("Back to the title")
+                        // On a roam: straight into a scored run on this course (0220). Under Back, so the readouts keep their row.
+                        if let c = game.roamedFrom, h.ready {
+                            Button { game.flyFromRoam(); UISelectionFeedbackGenerator().selectionChanged() } label: {
+                                Text("Fly \(COURSE_INFO.first { $0.id == c }?.name ?? "it")").font(Theme.text(13, .medium)).foregroundStyle(Theme.ink)
+                                    .lineLimit(1).fixedSize().padding(.horizontal, 16).frame(height: 44).glass(22)
+                            }.buttonStyle(.plain).accessibilityIdentifier("roam-fly").accessibilityHint("A scored run from the mark.")
+                        }
+                    }
+                    Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 8) {
                         HStack(spacing: 16) {
                             readout("SPEED", Fmt.speed(h.speed), Fmt.speedUnit)

@@ -58,6 +58,8 @@ final class Game: ObservableObject {
     weak var stage: StageView?
     /// Free Drive (docs/NATIVE-FREEDRIVE.md), while it's up: unscored, its own world.
     private(set) var freeDrive: FreeDrive?
+    /// The scored course a roam is on (nil in plain Free Drive): its HUD offers a scored run there.
+    @Published private(set) var roamedFrom: String?
     @Published private(set) var driveHud = DriveHud()
     private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0, driveClock = 0.0
     let controls = Controls()
@@ -123,9 +125,13 @@ final class Game: ObservableObject {
     // --- Free Drive ------------------------------------------------------------------------------
     /// Into Free Drive from the title (or `-freedrive`). `-fd-km <km>` starts on a road that far out, `-fd-cruise <m/s>`
     /// carries the car along the roads (the bench, the shots), `-fd-seed <text>` picks the world.
-    func startDrive() {
-        live = nil; controls.live = nil; track = nil; result = nil; paused = false
-        let fd = FreeDrive(seed: Launch.value("-fd-seed") ?? FreeDrive.seedDefault)
+    /// `roam`: a scored course's id ("show", "wall", "lineup"): its set at the centre, the car on its mark (Roam, 0220).
+    /// `-roam <course>` opens one straight away.
+    func startDrive(roam: String? = nil) {
+        live = nil; controls.live = nil; track = nil; result = nil; paused = false; replaying = false
+        let c = roam.map { driveCourse(on: $0) } ?? DRIVE_COURSE
+        let fd = FreeDrive(seed: Launch.value("-fd-seed") ?? FreeDrive.seedDefault, course: c, onMark: roam != nil)
+        roamedFrom = roam
         if let km = Launch.value("-fd-km").flatMap(Double.init), km > 0 {
             let a = 0.6   // a bearing out from the centre (radians from +z)
             fd.placeOnRoad(nearX: sin(a) * km * 1000, z: cos(a) * km * 1000)
@@ -137,22 +143,34 @@ final class Game: ObservableObject {
         controls.drive = fd.sampler
         if Launch.value("-fd-cam") == "bumper" { fd.camera.mode = .bumper }
         freeDrive = fd; driveSettled = false
-        stage?.load(course: "drive", track: fd.track)
+        stage?.load(course: c.id, track: fd.track)
         screen = .drive
         HapticPlayer.shared.apply(HapticContinuous())
     }
     func endDrive() {
-        if let r = stage?.renderer, r.courseKey == "drive" { r.drive = nil }
+        if let r = stage?.renderer, isDrive(r.courseKey) { r.drive = nil }
         controls.drive = nil
         freeDrive?.car.world.free()
         freeDrive = nil
+        roamedFrom = nil
         screen = .title
         showTitleLoop()
+    }
+    /// From a roam straight into a scored run on that course (the countdown, from the mark, as Fly does).
+    func flyFromRoam() {
+        let c = freeDrive.map { stageOf($0.course.id) } ?? course
+        if let r = stage?.renderer, isDrive(r.courseKey) { r.drive = nil }
+        controls.drive = nil
+        freeDrive?.car.world.free()
+        freeDrive = nil
+        roamedFrom = nil
+        if COURSES[c] != nil && course != c { screen = .title; course = c }
+        play()
     }
     private func driveFrame(dt: Double) {
         guard let fd = freeDrive else { return }
         // The drive's renderer is built off the main thread on first use: hook it up once it's the one drawing.
-        if let r = stage?.renderer, r.courseKey == "drive", r.drive !== fd { r.drive = fd; fd.attach(device: r.device) }
+        if let r = stage?.renderer, r.courseKey == fd.course.id, r.drive !== fd { r.drive = fd; fd.attach(device: r.device) }
         if !paused { fd.frame(dt: min(dt, 0.1)); driveClock += dt }
         stage?.renderer?.liveTime = fd.liveTime
         Sound.shared.update(speed: DMath.dhypot(fd.car.vel.x, fd.car.vel.y, fd.car.vel.z), throttles: fd.car.throttles, grounded: fd.car.grounded > 0, phase: .run)
@@ -184,7 +202,7 @@ final class Game: ObservableObject {
             h.cam = fd.camera.mode.rawValue
             h.cue = fd.cue.isEmpty || driveClock - fd.cueT > 1.6 ? "" : fd.cue
             h.line = fd.statsLine
-            if h.cue.isEmpty && fd.dist < 400 && driveClock < 6 { h.cue = "Roads leave the apron in every direction" }
+            if h.cue.isEmpty && fd.dist < 400 && driveClock < 6 { h.cue = roamedFrom == nil ? "Roads leave the apron in every direction" : "Unscored · the set is yours, the roads go on" }
             if h != driveHud { driveHud = h }
         }
     }

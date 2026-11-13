@@ -170,6 +170,22 @@ Meshlets (meshoptimizer) later extend `PropMesh`, not the interface.
   - reset to the nearest road (and the watchdog's reset when upside down, fallen or stuck);
   - `-fd-pilot <m/s>`, a pure-pursuit driver for the bench.
 
+### Roam (0220)
+
+The owner, 2026-11-12: "ensure free drive works within the game play so i can go drive around the stunt modes". A roam
+is Free Drive on a scored course's own set:
+- **Courses.** `drive` is the Show's set, which has the Wall's curl too. `drive-wall` and `drive-lineup` put the Wall's
+  or the Lineup's set at the centre instead: its parked row (the same mass-correct bodies), its pad, its fixtures and its
+  complex. `stageOf` maps each to its stage, `driveCourse(on:)` picks one, and `isDrive` is what the drive-only code
+  checks. None of them is in `COURSES`.
+- **Start.** The car starts on the course's own mark, facing down its run. The jets fly as in Free Drive (LIFT/LAND),
+  the tanks refill on the ground (a full charge in 8 s, unscored), and the fan switch is the Wall's suction (the curl is
+  solid).
+- **In:** Roam beside Fly on the title (Free Drive moves to the globe button), Roam on the results sheet, or
+  `-roam <course>`.
+- **Out:** "Fly <course>" under Back goes straight into a scored run from the mark.
+- `-fd-hold throttle,steer[,after s]` (Debug) holds the controls, for shots.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
