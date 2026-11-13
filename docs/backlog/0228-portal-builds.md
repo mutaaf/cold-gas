@@ -1,11 +1,12 @@
 ---
 id: 0228
 title: Portal builds for CrazyGames and GameDistribution (their SDKs, no server, store art, a submit checklist)
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: platform
 created: 2026-11-13
+pr: 359
 by: operator
 ---
 
