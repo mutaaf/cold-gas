@@ -4,11 +4,12 @@
 import Metal
 import simd
 
-struct SkyParamsU { var sun = SIMD4<Float>(), eye = SIMD4<Float>() }
+struct SkyParamsU { var sun = SIMD4<Float>(), eye = SIMD4<Float>(), light = SIMD4<Float>() }
 
 final class SkyLUT {
-    let trans: MTLTexture, ms: MTLTexture, view: MTLTexture
-    private let transPipe, msPipe, viewPipe: MTLRenderPipelineState
+    let trans: MTLTexture, ms: MTLTexture, view: MTLTexture, clouds: MTLTexture
+    private let transPipe, msPipe, viewPipe, cloudPipe: MTLRenderPipelineState
+    private var frame = 0
     private var baked = false
     private var last = SIMD4<Float>(repeating: -9)
 
@@ -24,17 +25,23 @@ final class SkyLUT {
             d.colorAttachments[0].pixelFormat = .rgba16Float
             return try? device.makeRenderPipelineState(descriptor: d)
         }
-        guard let t = tex(256, 64, mips: false), let m = tex(32, 32, mips: false), let v = tex(192, 108, mips: true),
-              let tp = pipe("cg_skylut_trans_fragment"), let mp = pipe("cg_skylut_ms_fragment"), let vp = pipe("cg_skylut_view_fragment") else { return nil }
-        trans = t; ms = m; view = v; transPipe = tp; msPipe = mp; viewPipe = vp
+        guard let t = tex(256, 64, mips: false), let m = tex(32, 32, mips: false), let v = tex(192, 108, mips: true), let c = tex(384, 192, mips: false),
+              let tp = pipe("cg_skylut_trans_fragment"), let mp = pipe("cg_skylut_ms_fragment"), let vp = pipe("cg_skylut_view_fragment"),
+              let cp = pipe("cg_skylut_cloud_fragment") else { return nil }
+        trans = t; ms = m; view = v; clouds = c; transPipe = tp; msPipe = mp; viewPipe = vp; cloudPipe = cp
     }
 
-    /// Encode this frame's LUT work: the first time, all three; afterwards the sky-view only when the sun or the eye has moved.
-    func update(_ cmd: MTLCommandBuffer, sun: SIMD3<Float>, eyeKm: Float) {
+    /// Encode this frame's LUT work: the first time, all of it; afterwards the sky-view only when the sun or the eye has moved,
+    /// and the clouds every other frame (they drift).
+    func update(_ cmd: MTLCommandBuffer, sun: SIMD3<Float>, eyeKm: Float, sunE: SIMD3<Float>, time: Float, night: Float) {
         let key = SIMD4(sun, eyeKm)
-        let moved = simd_length(SIMD3(key.x, key.y, key.z) - SIMD3(last.x, last.y, last.z)) > 0.0005 || abs(key.w - last.w) > 0.01
-        if baked && !moved { return }
-        var p = SkyParamsU(sun: SIMD4(sun, 0), eye: SIMD4(eyeKm, 0.3, 0, 0))
+        let moved = simd_length(SIMD3(key.x, key.y, key.z) - SIMD3(last.x, last.y, last.z)) > 0.0005 || abs(key.w - last.w) > 0.05
+        frame += 1
+        var p = SkyParamsU(sun: SIMD4(sun, 0), eye: SIMD4(eyeKm, 0.3, night, 0), light: SIMD4(sunE, time))
+        if baked && !moved {
+            if frame % 2 == 0 { cloudPass(cmd, &p) }
+            return
+        }
         func pass(_ target: MTLTexture, _ pipe: MTLRenderPipelineState, _ set: (MTLRenderCommandEncoder) -> Void) {
             let rp = MTLRenderPassDescriptor()
             rp.colorAttachments[0].texture = target; rp.colorAttachments[0].loadAction = .dontCare; rp.colorAttachments[0].storeAction = .store
@@ -50,7 +57,16 @@ final class SkyLUT {
         }
         pass(view, viewPipe) { $0.setFragmentTexture(self.trans, index: 0); $0.setFragmentTexture(self.ms, index: 1) }
         if let b = cmd.makeBlitCommandEncoder() { b.generateMipmaps(for: view); b.endEncoding() }
+        cloudPass(cmd, &p)
         last = key
+    }
+    private func cloudPass(_ cmd: MTLCommandBuffer, _ p: inout SkyParamsU) {
+        let rp = MTLRenderPassDescriptor()
+        rp.colorAttachments[0].texture = clouds; rp.colorAttachments[0].loadAction = .dontCare; rp.colorAttachments[0].storeAction = .store
+        guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return }
+        e.setRenderPipelineState(cloudPipe); e.setFragmentTexture(view, index: 0)
+        e.setFragmentBytes(&p, length: MemoryLayout<SkyParamsU>.stride, index: 0)
+        e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3); e.endEncoding()
     }
 }
 

@@ -10,7 +10,7 @@ vertex SkyLutOut cg_skylut_vertex(uint vid [[vertex_id]]) {
     float2 p = float2((vid << 1) & 2, vid & 2);
     SkyLutOut o; o.clip = float4(p * 2.0 - 1.0, 0.0, 1.0); o.uv = float2(p.x, 1.0 - p.y); return o;
 }
-struct SkyParams { float4 sun; float4 eye; };   // sun: direction xyz; eye: x altitude km, y ground albedo
+struct SkyParams { float4 sun; float4 eye; float4 light; };   // sun: direction xyz; eye: x altitude km, y ground albedo, z night; light: the sun's illuminance, time
 
 fragment float4 cg_skylut_trans_fragment(SkyLutOut in [[stage_in]]) {
     float2 rm = sky_transParams(in.uv);
@@ -113,4 +113,13 @@ fragment float4 cg_skylut_view_fragment(SkyLutOut in [[stage_in]], texture2d<flo
         tr *= stepT;
     }
     return float4(L * SKY_SUN_E, 1);
+}
+
+// The clouds over the sky's upper half (0228), redrawn every other frame as they drift: the sky pass reads this map instead of
+// running the fbm per pixel (≈ 70 k texels instead of the sky's share of the screen).
+fragment float4 cg_skylut_cloud_fragment(SkyLutOut in [[stage_in]], texture2d<float> V [[texture(0)]], constant SkyParams& p [[buffer(0)]]) {
+    float3 d = sky_cloudDir(in.uv);
+    float3 sun = normalize(p.sun.xyz + 1e-6);
+    float3 skyUp = sky_view(V, float3(0, 1, 0), sun, p.eye.x, 5.0);
+    return sky_cloudDeck(d, sun, p.light.rgb, skyUp, p.light.w, p.eye.z);
 }

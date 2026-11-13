@@ -167,7 +167,17 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         if (!front) n = -n;
         float rough = m.pbr.y;
         if (m.flags.y) rough *= roughMap.sample(s, uv).g;
-        float metal = m.pbr.x, wet = 0;
+        float metal = m.pbr.x, wet = 0, ccK = m.pbr.z;
+        // The drive car's outside (0229): road grime where the forge's mask puts it (uv.x: sills, behind the wheels, the
+        // tail), as the miles add up (effect.w); it dulls the paint and takes the clear coat with it.
+        float grime = 0;
+        if (m.effectKind.x >= 11) {
+            float gn = fract(sin(dot(floor(in.world.xz * 9.0 + in.world.y * 7.0), float2(12.9898, 78.233))) * 43758.5453);
+            grime = clamp(in.uv.x * m.effect.w * (1.4 + 0.6 * gn) - 0.05, 0.0, 1.0);
+            base.rgb = mix(base.rgb, float3(0.11, 0.092, 0.07), grime * 0.85);
+            rough = mix(rough, 0.92, grime);
+            ccK *= 1.0 - grime;
+        }
         if (m.effectKind.z != 0 && look.fogExp.y > 0) {   // wall.js wetSlab: damp everywhere, standing water in places
             constexpr sampler ws(coord::normalized, filter::linear, mip_filter::linear, address::repeat);
             wet = 0.6 + 0.4 * wetMask.sample(ws, in.world.xz / 200.0).r;
@@ -175,12 +185,12 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             rough = mix(rough, max(rough * 0.55, 0.2), wet);
         }
         float sh = shadowAt(in.lightClip, shadow, f.fogRange.w);
-        color = brdf(n, V, normalize(f.keyDir.xyz), base.rgb, metal, rough, f.keyColor.rgb * f.keyDir.w * sh, m.pbr.z, m.pbr.w);
+        color = brdf(n, V, normalize(f.keyDir.xyz), base.rgb, metal, rough, f.keyColor.rgb * f.keyDir.w * sh, ccK, m.pbr.w);
         int nl = int(f.keyColor.w);
         for (int i = 0; i < nl; i++) {
             Light L = lights[i];
             if (L.params.z > 1.5) {   // a directional light beyond the key (the Lineup's rim): no shadow, no falloff
-                color += brdf(n, V, L.dirCos.xyz, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w, m.pbr.z, m.pbr.w);
+                color += brdf(n, V, L.dirCos.xyz, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w, ccK, m.pbr.w);
                 continue;
             }
             float3 d = L.posRange.xyz - in.world;
@@ -196,7 +206,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             }
             float att = cone / max(dist * dist, 1e-2);   // three: intensity / max(d^decay, 0.01) (decay 2 on every stage light)
             if (L.posRange.w > 0) { float q = clamp(1.0 - pow(dist / L.posRange.w, 4.0), 0.0, 1.0); att *= q * q; }
-            color += brdf(n, V, l, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w * att, m.pbr.z, m.pbr.w);
+            color += brdf(n, V, l, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w * att, ccK, m.pbr.w);
         }
         // Indirect, as three's RE_IndirectDiffuse/Specular_Physical: the hemisphere (irradiance / π) and the environment (its
         // roughest mip is irradiance / π already), the specular through the split-sum DFG with its multiple-scattering term.
@@ -227,14 +237,21 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float3 Fms = Fss * Favg / max(1.0 - Ems * Favg, 1e-3);
         float diel = 0.04 * fab.x + fab.y; float dielMs = (0.04 * fab.x + fab.y) * (0.04 + 0.96 * 0.047619) / max(1.0 - Ems * (0.04 + 0.96 * 0.047619), 1e-3) * Ems;
         color += base.rgb * (1.0 - metal) * (1.0 - (diel + dielMs)) * cosIrr + radiance * Fss + Fms * Ems * cosIrr;
-        if (m.pbr.z > 0) {   // the clear coat over it all
+        if (m.effectKind.x == 11) {   // metallic flakes under the coat (0229): a few catch the key light, a glint each
+            float3 r = reflect(-V, n);
+            float3 q = floor(r * 220.0 + in.world * 31.0);
+            float h = fract(sin(dot(q, float3(12.9898, 78.233, 37.719))) * 43758.5453);
+            float glint = step(0.985, h) * pow(max(dot(r, normalize(f.keyDir.xyz)), 0.0), 6.0);
+            color += f.keyColor.rgb * f.keyDir.w * sh * glint * 0.35 * (1.0 - grime);
+        }
+        if (ccK > 0) {   // the clear coat over it all
             float cr = max(clamp(m.pbr.w, 0.0, 1.0), 0.03);
             float3 cc = atmo ? sky_reflect(skyView, reflect(-V, n), cr, look.skySun.xyz, look.sunE.rgb, look.atmo.z) : sky ? duskEnv(reflect(-V, n), cr, look) : look.hemiSky.w > 0 ? env.sample(envSampler, reflect(-V, n), level(cr * 5.0)).rgb * look.hemiSky.w : float3(0);
             float4 rc = cr * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
             float ac = min(rc.x * rc.x, exp2(-9.28 * nv)) * rc.x + rc.y;
             float2 fc = float2(-1.04, 1.04) * ac + rc.zw;
             float Fcc = 0.04 + 0.96 * pow(1.0 - nv, 5.0);
-            color = color * (1.0 - m.pbr.z * Fcc) + cc * (0.04 * fc.x + fc.y) * m.pbr.z;
+            color = color * (1.0 - ccK * Fcc) + cc * (0.04 * fc.x + fc.y) * ccK;
         }
         color += emissive;
         if (wet > 0 && f.misc.y > 0) {   // film.js's reflection: Fresnel on the mirror's image, which is drawn at this pixel's place
@@ -284,40 +301,8 @@ static float3 starField(float3 dir, float cells, float keep, float h0, bool vary
     float disc = 1.0 - smoothstep(0.32 - aa * 0.5, 0.32 + aa * 0.5, d);
     return float3(on * disc * 1.6) * (vary ? 0.35 + 0.65 * starHash(sp + 3.1) : 1.0);
 }
-// A deck of clouds (0228): fair-weather cumulus and a high veil of cirrus on a plane over the drive, fbm with a domain warp,
-// lit by the sun through them (a silver lining toward the sun, warm undersides at a low sun) and dimmed into the haze at the
-// horizon. Drawn only where the sky shows.
-static float cloudHash(float2 p) { p = fract(p * float2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
-static float cloudNoise(float2 p) {
-    float2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(cloudHash(i), cloudHash(i + float2(1, 0)), u.x), mix(cloudHash(i + float2(0, 1)), cloudHash(i + float2(1, 1)), u.x), u.y);
-}
-static float cloudFbm(float2 p, int n) {
-    float a = 0.5, s = 0;
-    for (int i = 0; i < n; i++) { s += a * cloudNoise(p); p = float2(p.x * 1.6 - p.y * 1.2, p.x * 1.2 + p.y * 1.6) + 7.3; a *= 0.5; }
-    return s;
-}
-static float4 cloudDeck(float3 d, float3 sun, float3 sunE, float3 skyUp, float t, float night) {
-    if (d.y < 0.012) return 0;
-    // Where the ray meets a plane 2 km up (the cumulus) and 8 km up (the cirrus), in km across the ground.
-    float2 p = d.xz / d.y * 2.0 + float2(t * 0.004, t * 0.0015);
-    float2 q = float2(cloudFbm(p * 0.35, 3), cloudFbm(p * 0.35 + 5.2, 3));
-    float base = cloudFbm(p * 0.55 + q * 1.6, 5);
-    float cov = smoothstep(0.50, 0.78, base);
-    float2 pc = d.xz / d.y * 8.0 + float2(t * 0.01, 0.0);
-    float cir = smoothstep(0.52, 0.9, cloudFbm(float2(pc.x * 0.12, pc.y * 0.5), 4)) * 0.45;
-    // The light through the cloud: thicker centres darker, the sun's side lit, a forward-scattered rim toward the sun.
-    float mu = dot(d, sun), lowSun = 1.0 - smoothstep(0.0, 0.35, sun.y);
-    float thick = smoothstep(0.55, 0.95, base);
-    float3 lit = sunE * (0.10 + 0.55 * pow(max(mu, 0.0), 8.0) * (1.0 - thick) + 0.06 * lowSun) * (1.0 - 0.6 * thick);
-    float3 c = lit + skyUp * (1.6 - thick * 0.8);
-    float3 ci = sunE * (0.06 + 0.4 * pow(max(mu, 0.0), 12.0)) + skyUp * 1.2;
-    float fade = smoothstep(0.012, 0.14, d.y);
-    float a = cov * 0.92 * fade, ac = cir * fade * (1.0 - a);
-    float3 col = (c * a + ci * ac) * (1.0 - 0.85 * night);
-    return float4(col, a + ac);
-}
-fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]], texture2d<float> skyView [[texture(8)]]) {
+fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]], texture2d<float> skyView [[texture(8)]],
+                                texture2d<float> clouds [[texture(9)]]) {
     float3 d = normalize(in.dir + 1e-6);
     float h = clamp(d.y, -1.0, 1.0);
     float3 c;
@@ -329,8 +314,7 @@ fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buff
         float disc = smoothstep(0.99994, 0.99997, mu);
         float limb = sqrt(max(1.0 - (1.0 - mu) / 3e-5, 0.0));
         c += k.sunE.rgb * disc * (0.4 + 0.6 * limb) * 900.0 * smoothstep(-0.01, 0.01, d.y);
-        float3 skyUp = sky_view(skyView, float3(0, 1, 0), sun, k.atmo.z, 5.0);
-        float4 cl = cloudDeck(d, sun, k.sunE.rgb, skyUp, k.sunE.w, k.atmo.w);
+        float4 cl = sky_clouds(clouds, d);
         c = c * (1.0 - cl.a) + cl.rgb;
         if (k.atmo.w > 0.01) {   // the stars, and the night's own glow (airglow, the towns over the horizon) so it isn't black
             c += starField(d, 520.0, 0.9982, 0.04, true) * 0.6 * k.atmo.w * (1.0 - cl.a);
