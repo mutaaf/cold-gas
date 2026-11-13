@@ -20,6 +20,7 @@
 import { signature, moduleOf, redact, MODULE_IDS, KIND_IDS, PLAY_EVENTS } from './signature.js';
 import { createBreaker } from './breaker.js';
 import { createFrameStats, recordFrame, summary, NB } from './frames.js';
+import { ON_PORTAL } from '../portal/flag.js';
 import { loadLedger, saveLedger, chooseBoot, createGovernor, diedOnScreen, SCALES, TIER_IDS } from './ledger.js';
 
 export const BUILD = (import.meta.env?.VITE_CG_BUILD || 'dev').replace(/[^0-9a-z.-]/gi, '').slice(0, 24) || 'dev';
@@ -170,7 +171,7 @@ function createObs() {
     } catch { /* storage blocked: no visit count */ }
     // Beacons go to production only (or with ?obs=1): a dev server or a test runner has no Worker.
     const host = globalThis.location?.hostname || '';
-    o.sendEnabled = send ?? (!['localhost', '127.0.0.1', ''].includes(host) || /[?&]obs=1\b/.test(globalThis.location?.search || ''));
+    o.sendEnabled = ON_PORTAL ? false : send ?? (!['localhost', '127.0.0.1', ''].includes(host) || /[?&]obs=1\b/.test(globalThis.location?.search || ''));
     install();
     return o;
   };

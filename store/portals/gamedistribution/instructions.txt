@@ -1,0 +1,7 @@
+Press Jump. Drive up the curved wall, let go near the top, use the thrusters to carry the car over the parked row, roll it and land level on the pad. Three judges score the run out of 100.
+
+Keyboard: Up arrow throttle, Down arrow brake, Left and Right arrows steer (and roll in the air), Space lift and let go, Shift boost on the ground and land in the air, F boost in the air, Q and E yaw. P pause, R retry, H home.
+
+Touch: hold the pad to climb, tap to let go, hold to land (Assist). Or choose Classic controls for a stick and pedals.
+
+Gamepad supported.

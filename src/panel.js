@@ -2,6 +2,12 @@
 // shown in the theatre). Offline, or when a provider fails, the panel speaks from local lines
 // picked from the same facts, so the game never waits on the network.
 import { postRetry, fetchWithDeadline } from './net.js';
+import { ON_PORTAL } from './portal/flag.js';
+import { postLocal, readRows, boardRows, rankOf } from './portal/board.js';
+
+// A portal build has no server (src/portal/offline.js): the board is this device's (src/portal/board.js), scored from
+// the run's own card. Off the portals none of this runs.
+const portalLs = () => { try { return globalThis.localStorage; } catch { return null; } };
 
 // `?.`: Node (scripts/vectors-lib.mjs, the native port's goldens) imports the local lines with no Vite env.
 const API = `${import.meta.env?.BASE_URL ?? '/coldgas/'}api`;
@@ -12,7 +18,8 @@ export const COURSE_IDS = ['show', 'wall', 'lineup'];
 
 // A board entry: the input log, the run's telemetry `t` (the same object the judges get) and the course.
 // Never a score: the Worker scores `t` with scoreRun after its plausibility checks (src/worker/index.js).
-export async function postScore({ log, t, initials, course }) {
+export async function postScore({ log, t, initials, course, card = null }) {
+  if (ON_PORTAL) return portalLs() ? postLocal(portalLs(), { card, initials, course }) : { ok: false, status: 0 };
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), POST_MS);
   try {
@@ -30,7 +37,8 @@ export async function postScore({ log, t, initials, course }) {
 export const DRY_MS = 6000;
 // The deadline is our own cancel (an AbortError), not fetchWithDeadline's TimeoutError: a slow optional label
 // is not a board failure, and obs records only real post failures against /api/scores.
-export async function dryRank({ log, t, course }, { signal = null, ms = DRY_MS } = {}) {
+export async function dryRank({ log, t, course, card = null }, { signal = null, ms = DRY_MS } = {}) {
+  if (ON_PORTAL) return card && portalLs() ? rankOf(readRows(portalLs()), card, { course }) : null;
   const ctl = new AbortController();
   const stop = () => ctl.abort();
   const timer = setTimeout(stop, ms);
@@ -51,6 +59,7 @@ export const rankLabel = (rank) => (Number.isInteger(rank) && rank >= 1 ? `would
 
 // What the player reads after a post (`res` from postScore).
 export function postMessage(res) {
+  if (res.ok && res.local) return `Saved on this device · #${res.rank} today`;
   if (res.ok) return `Posted · #${res.rank} today`;
   if (res.status === 429) return 'Slow down a little.';
   if (res.timeout || res.status === 0) return 'The board didn’t answer. Try again.';
@@ -86,6 +95,7 @@ export function boardRow(r) {
 // The board's rows (null: offline), for one course (every course without one). `signal` cancels it (a
 // newer request has taken over).
 export async function fetchBoard(board = 'today', { signal, course = null } = {}) {
+  if (ON_PORTAL) return portalLs() ? boardRows(readRows(portalLs()), { kind: board, course: COURSE_IDS.includes(course) ? course : null }).map(boardRow).filter(Boolean) : null;
   try {
     const q = `board=${board === 'all' ? 'all' : 'today'}${COURSE_IDS.includes(course) ? `&course=${course}` : ''}`;
     const res = await fetchWithDeadline(`${API}/scores?${q}`, { ms: BOARD_MS, signal });
@@ -102,8 +112,10 @@ export const LOCAL_WHY = {
   chunk: 'The judges’ chunk didn’t load',
   breaker: 'The judges are resting',
 };
+// A portal build (src/portal/): no server, so never an AI call. Not in LOCAL_WHY, which the native port's vectors carry.
+export const PORTAL_WHY = 'The AI panel is not in this version';
 export function localMeta(reason) {
-  return { ok: false, local: reason, error: LOCAL_WHY[reason] || LOCAL_WHY.chunk, model: '', where: '' };
+  return { ok: false, local: reason, error: LOCAL_WHY[reason] || (reason === 'portal' ? PORTAL_WHY : LOCAL_WHY.chunk), model: '', where: '' };
 }
 
 const pick = (arr, seed) => arr[Math.abs(Math.round(seed * 997)) % arr.length];

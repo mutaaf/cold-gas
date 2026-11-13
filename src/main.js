@@ -69,6 +69,7 @@ import { readFold, drastic } from './fold.js';
 import { refitHudMode } from './hud-mode.js';
 import { deckOn, runUp } from './render/deck-look.js';
 import { track } from './insights.js';
+import { ON_PORTAL } from './portal/flag.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
@@ -89,7 +90,8 @@ const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updat
 // context may start), not inside the Jump tap: building it can take a long task of its own. Every
 // later gesture brings back a context that stopped (iOS 'interrupted' too), unless it should be quiet.
 let lastGesture = performance.now();
-for (const ev of ['pointerdown', 'keydown']) {
+// On a portal also touchend and click: iOS lets an AudioContext resume only in one of those (CrazyGames' requirements).
+for (const ev of ON_PORTAL ? ['pointerdown', 'keydown', 'touchend', 'click'] : ['pointerdown', 'keydown']) {
   addEventListener(ev, (e) => {
     if (e.repeat) return;
     lastGesture = performance.now();
@@ -788,6 +790,8 @@ async function runPanel(run, replay = null) {
   if (!replay) { panelAbort?.abort(); panelAbort = new AbortController(); }
   const signal = panelAbort?.signal;
   let mod;
+  // A portal build has no server (src/portal/offline.js): the panel speaks local lines at once, and the receipt says so.
+  if (ON_PORTAL) { if (!replay) { S.words = localWords(card); ui.words(S.words); localReceipt('portal'); } return; }
   // [obs] The judges are a breaker-guarded subsystem: after repeated failures the panel speaks local
   // lines for a while (a cooldown that doubles), then tries the call again.
   if (!replay && !obs.breaker('judge').allow()) { S.words = localWords(card); ui.words(S.words); localReceipt('breaker'); ui.cue_('The judges are resting: local lines for now', 1800); return; }

@@ -2,8 +2,15 @@ import { writeFileSync } from 'node:fs';
 import { execSync } from 'node:child_process';
 import { defineConfig } from 'vite';
 import { HEADERS } from './scripts/static-headers.mjs';
+import { PORTALS, portalPlugin } from './scripts/portal-html.mjs';
 
-const BASE = '/coldgas/';
+// A portal build (CrazyGames, GameDistribution: scripts/portal-build.mjs, `npm run build:<portal>`) is a separate
+// target: relative paths, its own outDir under dist-portals/, the portal's SDK in place of Marquee and Box Office,
+// no server, no outbound links (src/portal/, scripts/portal-html.mjs). Without CG_PORTAL nothing here changes.
+const PORTAL = process.env.CG_PORTAL || '';
+if (PORTAL && !PORTALS.includes(PORTAL)) throw new Error(`CG_PORTAL must be one of ${PORTALS.join(', ')}`);
+process.env.VITE_CG_PORTAL = PORTAL || 'none';
+const BASE = PORTAL ? './' : '/coldgas/';
 
 // The build id every error signature carries (src/obs/): Workers Builds' commit, else git's, else 'dev'.
 if (!process.env.VITE_CG_BUILD) {
@@ -38,8 +45,12 @@ const inlineCss = {
         if (asset.type !== 'asset' || !file.endsWith('.css')) continue;
         const link = new RegExp(`<link rel="stylesheet"[^>]*href="[^"]*${file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"[^>]*>`);
         if (!link.test(html)) continue;
-        html = html.replace(link, () => `<style>${String(asset.source).trim()}</style>`);
-        delete bundle[file];
+        // A portal build's paths are relative: url(./x.woff2) in assets/x.css means assets/x.woff2 from index.html.
+        const css = PORTAL ? String(asset.source).replace(/url\(\.\//g, 'url(./assets/') : String(asset.source);
+        html = html.replace(link, () => `<style>${css.trim()}</style>`);
+        // A portal build keeps the file: its stylesheet belongs to a chunk the game's dynamic import also lists
+        // (src/portal/entry.js), and that import fetches it; deleted, it would 404 there.
+        if (!PORTAL) delete bundle[file];
       }
       // Preload the three faces the title paints with: the wordmark, the text face and the mono
       // (the spec's numbers; without it they paint in a fallback and swap when it lands).
@@ -61,8 +72,8 @@ const inlineCss = {
 // Served at https://mutaafaziz.com/coldgas/ — the base path is an invariant (AGENTS.md §3.2).
 export default defineConfig({
   base: BASE,
-  plugins: [staticHeaders, inlineCss],
-  build: { outDir: 'dist/coldgas', emptyOutDir: true, chunkSizeWarningLimit: 900 },
+  plugins: PORTAL ? [portalPlugin(PORTAL), inlineCss] : [staticHeaders, inlineCss],
+  build: { outDir: PORTAL ? `dist-portals/${PORTAL}/game` : 'dist/coldgas', emptyOutDir: true, chunkSizeWarningLimit: 900 },
   test: { include: ['tests/unit/**/*.test.js'], environment: 'node', setupFiles: ['tests/unit/setup.js'],
     // Whole flights through the engine: a fuzz of 40 Pro runs takes ≈5 s on a laptop, more on CI. Hooks too: the four
     // Free Drive roads build in one beforeAll (tests/unit/roads.test.js), ≈ 10 s beside the whole suite.
