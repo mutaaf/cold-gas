@@ -48,7 +48,8 @@ final class RootViewController: UIViewController {
             Game.shared.stage = stage
             Game.shared.showTitleLoop()
             if Launch.args.contains("-play") { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { Game.shared.play() } }
-            if Launch.freedrive { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Game.shared.startDrive() } }
+            if Launch.freedrive { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Game.shared.startDrive(roam: Launch.value("-roam")) } }
+            else if let c = Launch.value("-roam") { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Game.shared.startDrive(roam: c) } }
         }
     }
 

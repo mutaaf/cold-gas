@@ -126,8 +126,20 @@ public let COURSES: [String: Course] = ["show": SHOW, "wall": WALL_COURSE, "line
 /// Free Drive (docs/NATIVE-FREEDRIVE.md): the Show's stage at the centre of a world with no edge. Never scored, never in
 /// COURSES (nothing that looks a course up by id can reach it); `createVehicle(course:)` takes it.
 public let DRIVE_COURSE = Course(id: "drive", name: "Free Drive", startZ: -40, startX: 0, pad: SHOW.pad, boxes: SHOW_BOXES, ramp: false, runout: (-1e12, 1e12))
-/// The course whose stage a course stands on (the drive stands on the Show's).
-public func stageOf(_ courseId: String) -> String { courseId == "drive" ? "show" : courseId }
+/// Roam (0220): Free Drive with a scored course's own set at the world's centre (its parked row, its pad, its fixtures,
+/// its launch complex), then the same open world round it. "drive" is the Show's (the Wall's curl stands on it too).
+public let DRIVE_WALL = Course(id: "drive-wall", name: "Roam the Wall", startZ: -40, startX: 0, pad: WALL_COURSE.pad, boxes: [], ramp: false, runout: (-1e12, 1e12))
+public let DRIVE_LINEUP = Course(id: "drive-lineup", name: "Roam the Lineup", startZ: -90, startX: 0, pad: LINEUP.pad, boxes: LINEUP_BOXES, ramp: false, runout: (-1e12, 1e12))
+/// The roam course on a scored course's set ("show", "wall", "lineup"; anything else is the Show's).
+public func driveCourse(on stage: String) -> Course { stage == "wall" ? DRIVE_WALL : stage == "lineup" ? DRIVE_LINEUP : DRIVE_COURSE }
+/// Free Drive or a roam: never scored, never in COURSES.
+@inline(__always) public func isDrive(_ courseId: String) -> Bool { courseId == "drive" || courseId.hasPrefix("drive-") }
+/// The course whose stage a course stands on (the drive stands on the Show's, a roam on its own course's).
+public func stageOf(_ courseId: String) -> String {
+    if courseId == "drive" { return "show" }
+    if courseId.hasPrefix("drive-") { return String(courseId.dropFirst(6)) }
+    return courseId
+}
 public let DEFAULT_COURSE = "show"
 
 // The stage's fixtures

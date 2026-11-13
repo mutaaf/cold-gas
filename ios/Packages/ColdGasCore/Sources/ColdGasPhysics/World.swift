@@ -216,7 +216,7 @@ func buildCentre(_ w: World) {
         wallSteel(w)
     }
     // (no course in this port has a kicker: the Lineup's reveal used none)
-    if course.id == "drive" {
+    if isDrive(course.id) {
         w.centre = w.info.keys.filter { !before.contains($0) }
         w.centreSolids = Array(w.solids[solids0...])
     }

@@ -134,10 +134,17 @@ struct TitleView: View {
             Button { game.play() } label: { Text("Fly \(COURSE_INFO.first { $0.id == game.course }?.name ?? "")").frame(maxWidth: .infinity) }
                 .buttonStyle(CGButton(primary: true))
                 .accessibilityIdentifier("play")
+            // Roam (0220): the chosen course's set to drive round, its row, its pad, the jets, and the world beyond. Unscored.
+            Button { game.startDrive(roam: game.course); UISelectionFeedbackGenerator().selectionChanged() } label: { Text("Roam") }
+                .buttonStyle(CGButton())
+                .accessibilityIdentifier("roam")
+                .accessibilityLabel("Roam \(COURSE_INFO.first { $0.id == game.course }?.name ?? "")")
+                .accessibilityHint("Drive round this course's set and on into the world. Not scored.")
             // Free Drive (docs/NATIVE-FREEDRIVE.md): the apron, then a world with no edge. Unscored.
-            Button { game.startDrive(); UISelectionFeedbackGenerator().selectionChanged() } label: { Text("Free Drive") }
+            Button { game.startDrive(); UISelectionFeedbackGenerator().selectionChanged() } label: { Image(systemName: "globe.americas").font(.system(size: 15)) }
                 .buttonStyle(CGButton())
                 .accessibilityIdentifier("freedrive")
+                .accessibilityLabel("Free Drive")
                 .accessibilityHint("Drive off the apron into a world with no edge. Not scored.")
         }
     }
@@ -475,13 +482,22 @@ struct ResultsView: View {
                         HStack(spacing: 6) {
                             again.buttonStyle(CGButton(primary: true, compact: true))
                             iconAction("play.rectangle", "Watch it") { game.watch() }
+                            if result.drill == nil { iconAction("car.side", "Roam this course") { game.startDrive(roam: result.course) } }
                             share(card)
                             iconAction("list.number", "Board") { open(.board) }
                             iconAction("house", "Home") { game.home() }
                         }
                     } else {
                         VStack(spacing: 10) {
-                            again.buttonStyle(CGButton(primary: true))
+                            HStack(spacing: 8) {
+                                again.buttonStyle(CGButton(primary: true))
+                                // Roam (0220): off the card and onto the set, unscored.
+                                if result.drill == nil {
+                                    Button { game.startDrive(roam: result.course) } label: { Text("Roam") }
+                                        .buttonStyle(CGButton()).accessibilityIdentifier("roam-results")
+                                        .accessibilityLabel("Roam this course").accessibilityHint("Drive round the set, unscored.")
+                                }
+                            }
                             HStack(spacing: 8) {
                                 Button { game.watch() } label: { Text("Watch it").frame(maxWidth: .infinity) }.buttonStyle(CGButton(compact: true))
                                 share(card)
