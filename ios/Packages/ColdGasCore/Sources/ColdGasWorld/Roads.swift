@@ -16,8 +16,14 @@ public enum RoadSpec {
     /// How far a road shapes the land: the relief grows from LOW to full between these distances (m).
     public static let valley0 = 60.0, valley1 = 380.0
     public static let reach = 420.0
-    /// How far out from the centreline a ribbon's verge reaches (m): the shoulder's edge plus 6 m (0226).
-    public static let vergeOut = hw + shoulder + 6
+    /// How far out from the centreline a ribbon's verge reaches (m): the shoulder's edge plus 6 m (0226), plus 10 m since
+    /// 0231, sampled across at the carve's own breaks (`vergeAt`), so the land's 4 m grid, dipped under it, never pokes
+    /// through (it did as dark wedges beside the road at a low sun).
+    public static let vergeOut = hw + shoulder + 10
+    /// The verge's samples across, past the shoulder's edge (m): the 1:4 apron, its break to the steeper slope at 7 m, the edge.
+    public static let vergeAt: [Double] = [1.5, 3.5, 5.5, 7, 10]
+    /// How deep the land's grid lies under the ribbon and its verges (m), full to `vergeOut − 3`, gone at `vergeOut`.
+    public static let vergeDip = 0.4
 }
 
 /// One link's plan: samples every `spacing` metres from its west/south junction to its east/north one.

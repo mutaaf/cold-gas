@@ -29,6 +29,8 @@ struct FrameU {
 struct LookU {
     var hemiSky = SIMD4<Float>(), hemiGround = SIMD4<Float>(), hazeCol = SIMD4<Float>(), sunCol = SIMD4<Float>(), sunDir = SIMD4<Float>(), fogExp = SIMD4<Float>()
     var skyZenith = SIMD4<Float>(), skyMid = SIMD4<Float>(), skyHorizon = SIMD4<Float>(), skySun = SIMD4<Float>(), bloom = SIMD4<Float>()
+    /// Free Drive's physical sky (0231): x on, y haze, z the eye's height (km), w night; the sun's illuminance (rgb) and the time.
+    var atmo = SIMD4<Float>(), sunE = SIMD4<Float>()
 }
 struct GlintGPU { var pos = SIMD4<Float>(), color = SIMD4<Float>() }
 struct GlintGroup { var size: Float = 0, minPx: Float = 0, tint: Float = 1, pad: Float = 0 }
@@ -65,6 +67,9 @@ final class Renderer {
     /// What's been shed to hold the frame once the resolution has nothing left to give (0 nothing; 1 the mirror; 2 and the lit air, half the
     /// mist's budget). Thermal state and Low Power Mode hold it up too; a debug line says so, Settings' cadence never moves. Pixels first, effects last.
     private(set) var shed = 0
+    /// The drive's extras' quality (0231: the grass; the props' shadows): 2 full, 1 cut back, 0 off. Tied to the shed (heat,
+    /// Low Power Mode, a frame still over budget at the resolution floor) and `-fd-quality <n>`.
+    var quality: Int { min(Launch.value("-fd-quality").flatMap(Int.init) ?? 2, 2 - shed) }
     private var shedThermal = 0, overFrames = 0, underFrames = 0
     let crash = Crash()
     let mist = Plumes()
@@ -108,7 +113,15 @@ final class Renderer {
     var slowK: Double { Double(crash.slowK) }
     /// A new track (a new run, or back to the title's loop): effects and clocks start over.
     func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart() }
-    private(set) lazy var dents = Dents(roadster: stage.roadster, parked: stage.parked)
+    private(set) lazy var dents = Dents(roadster: driveCar?.body ?? stage.roadster, parked: stage.parked)
+    /// The drive's own car (0232, DriveCarModel): its body and wheels in place of the stage roadster's, in Free Drive and the
+    /// roams; its materials' places in stageMats, and each submesh the lamps and the crash drive by name.
+    private var driveCar: DriveCarModel?
+    private var carMats = 1, carFarMats = 1, driveWheelBase = -1
+    private var dGlass = -1, dGlassFar = -1, dLamps: [(sub: Int, far: Int, kind: Int)] = []
+    private var dGlassMat: MaterialU?, dCrazedMat: MaterialU?, dGlassFarMat: MaterialU?
+    /// Road grime on the drive car (0 clean … 1), the drive's odometer since its last wash.
+    var grime: Float = 0
     private var lastCarQ = simd_quatf(angle: 0, axis: [0, 1, 0]), lastDrawT = 0.0
     private func hookDents() {
         crash.onReset = { [unowned self] in self.dents.restore(); self.mist.clear(); self.touched = false; self.crash.car.placed() }   // a new run, or a recorded run looping
@@ -124,6 +137,9 @@ final class Renderer {
     private let dummy: MTLTexture
     let cam = Director()
     let passTimes = PassTimes()
+    /// Free Drive's physical sky (0231): its LUTs, drawn on first use.
+    private var skyLUT: SkyLUT?
+    private let library: MTLLibrary
     /// `-holds 12.1,12.5`: debug, for shots on a loaded machine: the replay's clock stops at each of these sim times, marks
     /// `hold:<t>` in the ready file and waits for Caches/coldgas.go to appear (scratch tooling removes it and shoots).
     private var holds: [Double] = (Launch.value("-holds") ?? "").split(separator: ",").compactMap { Double($0) }
@@ -146,7 +162,7 @@ final class Renderer {
         self.device = device
         // Free Drive ("drive") stands on the Show's stage, a roam ("drive-wall", "drive-lineup") on its course's, at the centre.
         guard let q = device.makeCommandQueue(), let lib = device.makeDefaultLibrary(), let st = Stage(device: device, course: stageOf(course)) else { return nil }
-        queue = q; stage = st; self.replay = replay; courseKey = course
+        queue = q; stage = st; self.replay = replay; courseKey = course; library = lib
         if Launch.args.contains("-crash-log") || Launch.args.contains("-fx-log") { setvbuf(stdout, nil, _IOLBF, 0) }
         let archive = PipelineArchive(device: device)
         let vd = MTLVertexDescriptor()
@@ -254,6 +270,19 @@ final class Renderer {
         if let sw = st.sweep { stageMats += [mats(sw.beam), mats(sw.head), mats(sw.lens)] }
         complexMats = stageMats.count
         if let c = st.complex { stageMats.append(mats(c.mesh)) }
+        // The sets' surfaces get their own procedural detail (0233, Shaders.metal effect 13): concrete's aggregate, stains and
+        // tyre marks, metal's brushing and scratches, roughness that varies. Only lit, opaque, plain materials (the slab's
+        // wet look, the beams, glows and lamps keep theirs). `-flat-sets` turns it off for comparison.
+        if !Launch.args.contains("-flat-sets") {
+            for i in [0, complexMats] where i < stageMats.count {
+                let mesh = i == 0 ? st.staticMesh : st.complex?.mesh
+                for (k, sm) in (mesh?.submeshes ?? []).enumerated() where k < stageMats[i].count {
+                    let M = sm.material
+                    if M.unlit || M.transparent || M.additive || M.effect != 0 || M.roughness < 0.2 { continue }
+                    stageMats[i][k].effectKind.x = 13
+                }
+            }
+        }
         sweepM = [simd_float4x4](repeating: matrix_identity_float4x4, count: st.sweep?.pivots.count ?? 0)
         // scene.js BLOB_ORDER: the hero's contact shadow over the paint (order -3), under the glows and LEDs (-2 and up).
         blobSplit = st.staticMesh.submeshes.firstIndex { $0.renderOrder > -3 } ?? st.staticMesh.submeshes.count
@@ -276,7 +305,10 @@ final class Renderer {
         lk.skyZenith = SIMD4(st.skyZenith, 0); lk.skyMid = SIMD4(st.skyMid, 0); lk.skyHorizon = SIMD4(st.skyHorizon, 0); lk.skySun = SIMD4(st.skySun, 0)
         // UnrealBloomPass composite: strength × lerp(factor, 1.2 − factor, radius) per mip.
         func factor(_ f: Float) -> Float { st.bloomStrength * (f + (1.2 - f - f) * st.bloomRadius) }
-        lk.bloom = SIMD4(st.bloomThreshold, factor(0.9), factor(0.5), factor(0.2))
+        // The bloom's threshold (0233): the web's 0.82 let a white car under the set's searchlights bloom into a glowing blob on
+        // the title and a run's opening. 1.6 keeps the LEDs, lamps, beams and jets blooming (all well over 2) and the paint
+        // crisp.
+        lk.bloom = SIMD4(max(st.bloomThreshold, Launch.args.contains("-web-bloom") ? 0 : 1.6), factor(0.9), factor(0.5), factor(0.2))
         lookU = lk; stageLook = lk
         func glintBuf(_ s: StageComplex.Spots?) -> (MTLBuffer, Int) {
             let list = s.map { sp in zip(sp.spots, sp.colors).map { GlintGPU(pos: $0, color: SIMD4($1, 0)) } } ?? []
@@ -297,6 +329,43 @@ final class Renderer {
             }
             openSpin = st.wheels.map { Renderer.openFace(device: device, $0.spinPart) }
             rotorSub = st.wheels.first?.steerPart.submeshes.firstIndex { $0.material.name == "roadster-rotor" } ?? -1
+        }
+        // The forged car (0232) on every course since 0233: the scored runs' cameras see the same body (pixels only; the sim
+        // never sees a mesh). `-roadster` (or a drive's `-fd-roadster`) draws the stage roadster instead.
+        if !Launch.args.contains("-roadster") && !(roam && Launch.args.contains("-fd-roadster")), let dc = DriveCarModel(device: device) {
+            // The forged car (0232): its materials after the stage's. Paint (11) gets the flakes and the grime, the rest of
+            // the outside (12) the grime only (Shaders.metal).
+            func carMatsOf(_ m: StageMesh) -> [MaterialU] {
+                var list = mats(m)
+                for (k, sm) in m.submeshes.enumerated() {
+                    let n = sm.material.name
+                    if n == "drive-paint" {
+                        list[k].effectKind.x = 11
+                        // A real white's albedo (≈ 0.6), not paper's: the car holds its shape under the set's lights and the sun.
+                        list[k].color = SIMD4(SIMD3(list[k].color.x, list[k].color.y, list[k].color.z) * 0.8, list[k].color.w)
+                    }
+                    else if ["drive-trim", "drive-under", "drive-gloss-black", "drive-carbon", "drive-tyre", "drive-rim", "drive-rim-barrel", "drive-satin", "drive-plate", "drive-rubber-seal"].contains(n) { list[k].effectKind.x = 12 }
+                }
+                return list
+            }
+            carMats = stageMats.count; stageMats.append(carMatsOf(dc.body))
+            carFarMats = stageMats.count; stageMats.append(carMatsOf(dc.bodyFar))
+            driveWheelBase = stageMats.count
+            for w in st.wheels { stageMats.append(carMatsOf(w.steers ? dc.frontSteer : dc.rearSteer)); stageMats.append(carMatsOf(w.steers ? dc.frontSpin : dc.rearSpin)) }
+            rotorSub = dc.frontSteer.submeshes.firstIndex { $0.material.name == "roadster-rotor" } ?? -1
+            func idx(_ m: StageMesh, _ name: String) -> Int { m.submeshes.firstIndex { $0.material.name == name } ?? -1 }
+            dGlass = idx(dc.body, "drive-glass"); dGlassFar = idx(dc.bodyFar, "drive-glass")
+            if dGlass >= 0 {
+                dGlassMat = stageMats[carMats][dGlass]
+                var cz = stageMats[carMats][dGlass]; cz.color = SIMD4(srgbHexToLinear(0x9a8a74), 0.9); cz.pbr = SIMD4(0.15, 0.55, 0, 0)
+                dCrazedMat = cz
+            }
+            if dGlassFar >= 0 { dGlassFarMat = stageMats[carFarMats][dGlassFar] }
+            // Lamps by name: 0 amber, 1 marker, 2 plate lamp, 3 ambient, 4 DRL, 5 tail.
+            for (kind, name) in ["drive-amber", "drive-marker", "drive-plateLamp", "drive-ambient", "drive-drl", "drive-tail"].enumerated() {
+                dLamps.append((idx(dc.body, name), idx(dc.bodyFar, name), kind))
+            }
+            driveCar = dc
         }
         applyThermal()
     }
@@ -398,11 +467,12 @@ final class Renderer {
             d.effects(crash, dt: dtReal)
             let cl = d.carLook
             crash.car.pedal = cl.pedal
+            grime = cl.grime
             if rotorSub >= 0 {
                 for w in stage.wheels {
                     // Iron glowing: a deep red, toward orange as it heats; bright enough to bloom.
                     let g = cl.glow[w.index], hot = SIMD3<Float>(1, 0.06 + 0.22 * g, 0.01 + 0.03 * g) * (g * 3.2)
-                    stageMats[2 + stage.parked.count + w.index * 2][rotorSub].emissive = SIMD4(hot, 0)
+                    stageMats[(driveWheelBase >= 0 ? driveWheelBase : 2 + stage.parked.count) + w.index * 2][rotorSub].emissive = SIMD4(hot, 0)
                 }
             }
         }
@@ -478,14 +548,19 @@ final class Renderer {
         }
         if fxLog { fxFrames += 1; if fxFrames % 120 == 0 { print(String(format: "FX mist %d live, k %.2f, %.2f M fragments at %d×%d · cones %d · sparks %d, puffs %d, chips %d", mist.live, mist.budgetScale, mist.fragments(viewProj: u.viewProj, height: Float(renderSize.1)) * mist.budgetScale * mist.budgetScale / 1e6, renderSize.0, renderSize.1, nPlumes, fx.0, nPuffs, fx.2))
             for (i, pc) in crash.pieces.list.enumerated() where pc.on { print(String(format: "PIECE %d at (%.2f, %.2f, %.2f) v %.2f w %.2f still %.2f", i, pc.pos.x, pc.pos.y, pc.pos.z, simd_length(pc.v), simd_length(pc.w), pc.still)) } } }
-        let keyPos = carPos + stage.keyOffset, keyDir = simd_normalize(stage.keyOffset)
-        let lv = lookAt(eye: keyPos, target: carPos, up: [0, 1, 0]), lp = ortho(-28, 28, -28, 28, 1, 140)
+        // The key light: the stage's, or in Free Drive the sun (or the moon) of the hour (0231). Its shadow box follows the car;
+        // under a drive's sun it reaches 160 m back toward the light, so a tree that far off still lays its shadow across the road.
+        let dk = dv?.key
+        let keyDir = dk.map { simd_normalize($0.dir) } ?? simd_normalize(stage.keyOffset)
+        let keyPos = dk != nil ? carPos + keyDir * 160 : carPos + stage.keyOffset
+        let lv = lookAt(eye: keyPos, target: carPos, up: abs(keyDir.y) > 0.98 ? [0, 0, 1] : [0, 1, 0])
+        let lp = dk != nil ? ortho(-34, 34, -34, 34, 1, 220) : ortho(-28, 28, -28, 28, 1, 140)
         u.lightViewProj = lp * lv
         u.eye = SIMD4(view.eye, Float(heroClock))
-        u.keyDir = SIMD4(keyDir, stage.keyIntensity)
-        u.keyColor = SIMD4(stage.keyColor, skip.contains("lights") || away ? 0 : Float(nLights))
+        u.keyDir = SIMD4(keyDir, dk?.intensity ?? stage.keyIntensity)
+        u.keyColor = SIMD4(dk?.color ?? stage.keyColor, skip.contains("lights") || away ? 0 : Float(nLights))
         u.fogColor = SIMD4(stage.fogColor, dv == nil ? 1 : 0)
-        u.fogRange = SIMD4(stage.fogNear, stage.fogFar, stage.exposure, 1 / Float(Renderer.shadowSize))
+        u.fogRange = SIMD4(stage.fogNear, stage.fogFar, dk?.exposure ?? stage.exposure, 1 / Float(Renderer.shadowSize))
         let wantMirror = stage.wetMask != nil && !skip.contains("mirror") && !skip.contains("wet") && shed < 1 && view.eye.y > 0.05 && !away && lookU.fogExp.y > 0
         u.misc = SIMD4(0, wantMirror ? 1 : 0, 1 / Float(renderSize.0), 1 / Float(renderSize.1))
         fb.contents().storeBytes(of: u, as: FrameU.self)
@@ -506,9 +581,16 @@ final class Renderer {
         func cut(_ name: String) {
             guard split, let next = queue.makeCommandBuffer() else { return }
             let pt = passTimes
-            cmd.addCompletedHandler { cb in pt.add(name, (cb.gpuEndTime - cb.gpuStartTime) * 1000) }
+            cmd.addCompletedHandler { cb in pt.add(name, start: cb.gpuStartTime, end: cb.gpuEndTime) }
             cmd.commit(); cmd = next
         }
+        // 0. the sky's LUTs (Free Drive's physical sky, 0231)
+        if lookU.atmo.x > 0.5 {
+            if skyLUT == nil { skyLUT = SkyLUT(device: device, library: library) }
+            if let sl = skyLUT { sl.update(cmd, sun: SIMD3(lookU.skySun.x, lookU.skySun.y, lookU.skySun.z), eyeKm: lookU.atmo.z, sunE: SIMD3(lookU.sunE.x, lookU.sunE.y, lookU.sunE.z), time: lookU.sunE.w, night: lookU.atmo.w) } else { lookU.atmo.x = 0 }
+        }
+        skyTex = lookU.atmo.x > 0.5 ? skyLUT?.view : nil
+        cut("sky")
         // 1. shadow
         let sp = MTLRenderPassDescriptor()
         sp.depthAttachment.texture = shadowMap; sp.depthAttachment.loadAction = .clear; sp.depthAttachment.clearDepth = 1; sp.depthAttachment.storeAction = .store
@@ -517,9 +599,10 @@ final class Renderer {
             e.setVertexBuffer(fb, offset: 0, index: 1)
             drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true, shadow: true)
             parkedDraw(e, t: simT, shadow: true)
-            drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true, shadow: true)
+            bodyDraw(e, carM: carM, eye: view.eye, opaqueOnly: true, shadow: true)
             carPartsDraw(e, carM: carM, shadow: true)
             wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: true)
+            if let dv, dk != nil, quality > 0 { dv.drawShadow(e, frame: fb, center: carPos) }
             e.endEncoding()
         }
         cut("shadow")
@@ -538,7 +621,7 @@ final class Renderer {
                 drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true, standingOnly: true)
                 if !skip.contains("parked") { parkedDraw(e, t: simT, shadow: false, cull: mu.viewProj) }
                 if sphereVisible(carPos, 5, mu.viewProj) {
-                    drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true)
+                    bodyDraw(e, carM: carM, eye: view.eye, opaqueOnly: true)
                     carPartsDraw(e, carM: carM, shadow: false)
                     wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: false)
                 }
@@ -570,14 +653,15 @@ final class Renderer {
             setEnv(e)
             if !skip.contains("static") { drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true) }
             if !skip.contains("parked") { parkedDraw(e, t: simT, shadow: false, cull: u.viewProj) }
-            drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true)
+            bodyDraw(e, carM: carM, eye: view.eye, opaqueOnly: true)
             carPartsDraw(e, carM: carM, shadow: false)
             wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: false)
             if !away { sweepDraw(e, opaqueOnly: true) }
             if complexOn, let c = stage.complex { drawMesh(e, c.mesh, matsIndex: complexMats, model: stageM, opaqueOnly: true) }
-            if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, viewProj: u.viewProj) }
+            if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, sky: skyTex ?? dummy, viewProj: u.viewProj, quality: quality) }
             // The sky where nothing opaque stands (far plane, depth read).
             e.setCullMode(.none); e.setDepthStencilState(dsRead); e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setRenderPipelineState(sky)
+            e.setFragmentTexture(skyTex ?? dummy, index: 8); e.setFragmentTexture(skyTex != nil ? (skyLUT?.clouds ?? dummy) : dummy, index: 9)
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
             if complexOn, let c = stage.complex, !skip.contains("translucent") {
                 // rocket.js's draw order: the lattice, the beams, then the lamps over them.
@@ -598,7 +682,7 @@ final class Renderer {
                 if dv == nil || (!away && abs(carPos.x) < Float(700) && abs(carPos.z) < Float(700) && carPos.y < 3) { blobDraw(e, carPos: carPos, carQuat: carQ) }
                 drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: false, from: blobSplit)
                 if !skip.contains("beams") && !away { sweepDraw(e, opaqueOnly: false) }
-                drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: false)
+                bodyDraw(e, carM: carM, eye: view.eye, opaqueOnly: false)
                 nozzleStatesDraw(e, carM: carM)
             }
             if nPlumes > 0 && !skip.contains("plumes") {
@@ -664,7 +748,7 @@ final class Renderer {
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3); e.endEncoding()
         }
         cmd.present(drawable)
-        if split { let pt = passTimes; cmd.addCompletedHandler { cb in pt.add("present", (cb.gpuEndTime - cb.gpuStartTime) * 1000) } }
+        if split { let pt = passTimes; cmd.addCompletedHandler { cb in pt.add("present", start: cb.gpuStartTime, end: cb.gpuEndTime) } }
         let g = gate
         cmd.addCompletedHandler { [weak self] cb in
             let ms = (cb.gpuEndTime - cb.gpuStartTime) * 1000
@@ -675,7 +759,8 @@ final class Renderer {
         cmd.commit()
     }
 
-    private func setEnv(_ e: MTLRenderCommandEncoder) { e.setFragmentTexture(stage.env, index: 7) }
+    private var skyTex: MTLTexture?
+    private func setEnv(_ e: MTLRenderCommandEncoder) { e.setFragmentTexture(stage.env, index: 7); e.setFragmentTexture(skyTex ?? dummy, index: 8) }
     /// rocket.js's lamps and beacons (they pulse together, eased).
     private func glintsDraw(_ e: MTLRenderCommandEncoder, _ c: StageComplex, beaconK: Float, pipe: MTLRenderPipelineState) {
         e.setRenderPipelineState(pipe); e.setDepthStencilState(dsRead); e.setCullMode(.none); e.setDepthBias(0, slopeScale: 0, clamp: 0)
@@ -718,9 +803,30 @@ final class Renderer {
     /// Each lamp's level this frame, and the canopy's glass or its crazing.
     private func applyCarMaterials() {
         let c = crash.car
-        setLamp(.drl, c.drl); setLamp(.heads, c.headC); setLamp(.tailBar, c.tail); setLamp(.tailDim, c.tailDim); setLamp(.brake, c.brakeC)
-        setBodyLamp(subAmber, c.amber); setBodyLamp(subMarker, c.marker); setBodyLamp(subPlate, c.plate); setBodyLamp(subAmbient, c.ambient)
+        // Under Free Drive's daylight (0232) a lamp is a bright mark, not a blaze: its HDR colour scaled down until dusk.
+        let lk: Float = lookU.atmo.x > 0.5 ? 0.25 + 0.75 * lookU.atmo.w : 1
+        setLamp(.drl, c.drl * lk); setLamp(.heads, c.headC * lk); setLamp(.tailBar, c.tail * lk); setLamp(.tailDim, c.tailDim * lk); setLamp(.brake, c.brakeC * max(lk, 0.6))
+        setBodyLamp(subAmber, c.amber * lk); setBodyLamp(subMarker, c.marker * lk); setBodyLamp(subPlate, c.plate * lk); setBodyLamp(subAmbient, c.ambient * lk)
         if subGlass >= 0, let m = c.crazed ? crazedMat : glassMat { stageMats[1][subGlass] = m }
+        guard driveCar != nil else { return }
+        // The forged car's lamps follow the same states; its glass crazes the same; the grime builds with the miles.
+        for l in dLamps {
+            let col: SIMD3<Float> = [c.amber, c.marker, c.plate, c.ambient, c.drl * 1.2, c.tail][l.kind] * lk
+            if l.sub >= 0 { stageMats[carMats][l.sub].color = SIMD4(col, 1) }
+            if l.far >= 0 { stageMats[carFarMats][l.far].color = SIMD4(col, 1) }
+        }
+        if dGlass >= 0, let m = c.crazed ? dCrazedMat : dGlassMat { stageMats[carMats][dGlass] = m }
+        if dGlassFar >= 0, let m = c.crazed ? dCrazedMat : dGlassFarMat { stageMats[carFarMats][dGlassFar] = m }
+        let g = grime
+        for i in [carMats, carFarMats] + (driveWheelBase >= 0 ? Array(driveWheelBase..<driveWheelBase + stage.wheels.count * 2) : []) {
+            for k in stageMats[i].indices where stageMats[i][k].effectKind.x >= 11 { stageMats[i][k].effect.w = g }
+        }
+    }
+    /// The car's body: the stage roadster's, or the drive's forged one (LOD by its distance from the eye).
+    private func bodyDraw(_ e: MTLRenderCommandEncoder, carM: simd_float4x4, eye: SIMD3<Float>, opaqueOnly: Bool, shadow: Bool = false) {
+        guard let dc = driveCar else { drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: opaqueOnly, shadow: shadow); return }
+        let p = carM.columns.3, far = simd_distance(SIMD3(p.x, p.y, p.z), eye) > DriveCarModel.farAt
+        drawMesh(e, far || shadow ? dc.bodyFar : dc.body, matsIndex: far || shadow ? carFarMats : carMats, model: carM, opaqueOnly: opaqueOnly, shadow: shadow)
     }
     /// wall.js searchlights update: each pivot swings on its own slow sines.
     private func updateSweep(_ t: Float) {
@@ -815,6 +921,18 @@ final class Renderer {
             let y = anchorY - Float(CAR.restLen) + comp
             let pivot = carM * translate(SIMD3(w.x, y, w.z)) * simd_float4x4(simd_quatf(angle: steer, axis: [0, 1, 0]))
             let spinM = pivot * simd_float4x4(simd_quatf(angle: spin, axis: [1, 0, 0]))
+            if let dc = driveCar {
+                // The forged wheels (0232): built for one side, mirrored (and their winding with them) for the other.
+                let mirrored = (w.x > 0) == (dc.builtForX < 0)
+                let flip = mirrored ? scaleM(-1, 1, 1) : matrix_identity_float4x4
+                let saved = frontFace
+                if mirrored { frontFace = saved == .counterClockwise ? .clockwise : .counterClockwise }
+                let base = driveWheelBase + w.index * 2
+                drawMesh(e, w.steers ? dc.frontSteer : dc.rearSteer, matsIndex: base, model: pivot * flip, opaqueOnly: opaqueOnly, shadow: shadow)
+                drawMesh(e, w.steers ? dc.frontSpin : dc.rearSpin, matsIndex: base + 1, model: spinM * flip, opaqueOnly: opaqueOnly, shadow: shadow)
+                frontFace = saved
+                continue
+            }
             let base = 2 + stage.parked.count + w.index * 2
             drawMesh(e, w.steerPart, matsIndex: base, model: pivot, opaqueOnly: opaqueOnly, shadow: shadow)
             drawMesh(e, w.index < openSpin.count ? openSpin[w.index] : w.spinPart, matsIndex: base + 1, model: spinM, opaqueOnly: opaqueOnly, shadow: shadow)
@@ -880,14 +998,24 @@ final class Renderer {
     }
 }
 
-/// Per-pass GPU milliseconds over a bench (thread-safe: completion handlers run off the main thread).
+/// Per-pass GPU milliseconds over a bench (thread-safe: completion handlers run off the main thread). Each pass is its own
+/// command buffer, and the GPU starts the next before the last has ended, so a buffer's start-to-end time counts the overlap
+/// (on the phone the passes summed to ≈ 20 ms in an 8 ms frame). A pass is charged only from the later of its start and the
+/// previous buffer's end (0231): the time it added to the frame.
 final class PassTimes {
     private var sum: [String: Double] = [:], n: [String: Int] = [:]
+    private var lastEnd: CFTimeInterval = 0
     private let lock = NSLock()
-    func add(_ k: String, _ ms: Double) { lock.lock(); sum[k, default: 0] += ms; n[k, default: 0] += 1; lock.unlock() }
+    func add(_ k: String, start: CFTimeInterval, end: CFTimeInterval) {
+        lock.lock()
+        let ms = max(0, end - max(start, lastEnd)) * 1000
+        lastEnd = max(lastEnd, end)
+        sum[k, default: 0] += ms; n[k, default: 0] += 1
+        lock.unlock()
+    }
     func report() -> String {
         lock.lock(); defer { lock.unlock() }
-        return ["shadow", "mirror", "main", "bloom", "film", "metalfx", "present"].compactMap { k in n[k].map { String(format: "%@ %.2f", k, sum[k, default: 0] / Double($0)) } }.joined(separator: " · ")
+        return ["sky", "shadow", "mirror", "main", "bloom", "film", "metalfx", "present"].compactMap { k in n[k].map { String(format: "%@ %.2f", k, sum[k, default: 0] / Double($0)) } }.joined(separator: " · ")
     }
 }
 

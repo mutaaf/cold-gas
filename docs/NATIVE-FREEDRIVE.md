@@ -297,6 +297,89 @@ dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look d
   shake, scaled by the speed. When the car leaves the cell behind, the pieces are put away (collider off, the body parked
   for the next break; the engine has no body removal) and the items stand again.
 
+### The light (0231)
+
+- **A physical sky.** `Render/Sky.h` (shared by Shaders.metal and World.metal) and `SkyLUT.metal` follow Hillaire 2020 over
+  Bruneton 2008: Rayleigh, Mie and ozone over a spherical earth. Three LUTs (`SkyLUT.swift`):
+  - transmittance, 256 × 64, drawn once;
+  - multiple scattering, 32 × 32 (the isotropic term), drawn once;
+  - the sky-view, 192 × 108, drawn when the sun or the eye's height moves (30 steps a texel), then mipmapped.
+  The sky pass adds the sun's disc, a deck of clouds (fbm cumulus and a cirrus veil, lit by the sun through them) and the
+  stars after dusk.
+- **One sky lights everything.** The key light is the sun's illuminance through the same air (`SkyCPU.transmittance` on
+  the CPU), with the shadow box pushed 160 m toward the sun. The ambient is the sky-view read down its mips, plus a ground
+  bounce. The paint's and the water's reflections are the sky-view at the roughness's mip. The haze is the aerial
+  perspective: per-channel extinction through Rayleigh's 8 km and the haze's 1.2 km, and the sky-view's own radiance
+  scattered in, so the ranges go warm toward the sun and blue away from it.
+- **The time of day** (`World/DriveSky.swift`). The sun runs a real path at latitude 46°, declination +10°. Golden hour
+  (18:12, sun ≈ 5° up) is the default; the presets are sunset, blue hour, night (the moon as the key), morning and midday,
+  plus a running day (a game hour every 30 s). The drive's sun button cycles them and the choice is remembered. The
+  exposure follows the light. The headlamps come on from blue hour. `-fd-tod <preset|hour>` sets it for shots; `classic`
+  is 0226's painted dusk.
+- **Shadows from the world.** The near pool's props (at their coarser LOD) draw into the key light's map, so trees and the
+  roadside lay long shadows across the road and the car. The map fades out toward its edge.
+- **Surfaces** (World.metal), all procedural and world-anchored, each detail faded by the metres a pixel covers:
+  - asphalt with aggregate, binder patches, relaid repairs, sealed cracks, the centre joint, polished wheel tracks, an oil
+    line, dust toward the edges, and paint worn through where the tyres cross it;
+  - a GGX highlight, so the road glints toward a low sun;
+  - land with grass patches, soil, rock with strata and fractures on the steep, and snow;
+  - foliage lit softly through, and from behind by a low sun, each tree its own hue, crowns swaying.
+- **Grass.** Instanced five-blade clumps on a jittered 0.6 m grid over the finest terrain tiles within 36 m of the eye. Each
+  clump stands on the tile's own vertices (height, normal, colour). The tile colour's fourth byte now carries the road's
+  distance in eighths of a metre (255: water), so none grows on the road, the shoulder, rock, sand or snow.
+- **The ground under the car.** The world's shaders darken an analytic, soft rectangle under the car's footprint (ambient
+  occlusion; `WDrive.carPos`/`carFwd`).
+- **The verge, wider and sampled at the carve's breaks.** At a low sun the land's 4 m grid poked through the verge strip as
+  hard dark wedges beside the road. The strip ran straight from the shoulder to 6 m out over ground that bends (the 1:4
+  apron, the steeper slope from 7 m), and the tile's triangles chose their own chord. Now the verge reaches 10 m past the
+  shoulder (`RoadSpec.vergeOut` 14.7 m), sampled at 1.5, 3.5, 5.5, 7 and 10 m (`vergeAt`). The grid lies 40 cm under it
+  (`vergeDip`), fading back to the land over its last 3 m. The verge's normals come from its own samples and the road's
+  grade, one ground query a vertex, so a ribbon builds as fast as before (50 links in 0.36 s on a Mac).
+- **Junctions.** A verge now lies 3 cm under the carved ground, and the shoulder's edge carries the land's colour. Before,
+  one road's verge lay over the other's shoulder where two roads met, and the strip faded up from black: dark shards beside
+  the road.
+- **Tiers.** `Renderer.quality` = 2 − the shed (heat, Low Power Mode, a frame over budget at the resolution floor), or
+  `-fd-quality <n>`. At 2 everything is on. At 1 the grass's radius drops to two thirds and the road loses its stones and
+  cracks. At 0 there's no grass and no prop shadows. `-fd-skip grass` drops the grass for attribution.
+- **The bench's pass times** are now charged from the later of a buffer's start and the previous buffer's end. On the Duo the
+  old per-buffer spans summed to ≈ 20 ms in an 8.3 ms frame, because they overlapped.
+
+### The car, forged (0232)
+
+- **The body** (`tools/forge/car/build.py`, Blender, deterministic, about 15 s): it's rebuilt over the stage roadster's own
+  skin, so every animated part of the roadster still fits. It has bevelled panels with weighted normals and cut panel gaps
+  and shut lines, flush handles, mirrors, wipers, a slatted intake, a straked diffuser, arch liners and an underbody. Tinted
+  glass sits over two seats, a wheel and a dash. The lamp units have reflector bowls behind clear lenses, and there are
+  emissive DRL and tail strips. Baked occlusion is in the vertex colour and a grime mask in uv.x. It's 49.8 k triangles,
+  with a 10.7 k LOD drawn past 32 m and in the shadow map. `check.py` checks the format, the budgets, the bounds against the
+  roadster's (only the mirrors stand out, by 12.5 cm) and the material names.
+- **The wheels**: open spoked rims (20″ front, 21″ rear) with a barrel, a blank cap and five lug nuts. The tyres have a
+  rounded sidewall and tread blocks and grooves. Under them, ventilated rotors (still `roadster-rotor`, so they glow) and
+  calipers. They're built for the right side (x < 0) and drawn mirrored on the left, winding flipped.
+- **In the app** (`Render/DriveCarModel.swift`, Resources/Car/car.json in stage.json's mesh format):
+  - Free Drive and the roams draw this car; the scored runs keep the roadster, and `-fd-roadster` brings it back in a drive.
+  - The lamps (amber, markers, plate, ambient, DRL, tail) follow the car's states by name. The crash dents the body and
+    crazes its glass as it did the roadster's.
+- **Paint and grime** (Shaders.metal, `effectKind` 11 and 12): metallic flakes glint under the clear coat. Road grime
+  collects where the mask puts it, dulling the paint and taking the coat with it. It builds with the kilometres (half
+  dirty by ≈ 12 km, faster off the road) and a reset washes it off. `-fd-grime 0…1` sets it for shots.
+- **The clouds** moved into a 384 × 192 map over the sky's upper half, redrawn every other frame (`SkyLUT`). Before, the sky
+  pass ran their fbm for every sky pixel.
+
+### Every camera, and the sets (0233)
+
+- **One car everywhere.** The forged car (0232) is drawn on every course, the title's turntable and the scored runs
+  included. It's pixels only: the sim never sees a mesh, and the 52 run vectors stay bit-exact. `-roadster` draws the old
+  one.
+- **The first screens.** The bloom's threshold is 1.6 (the web's is 0.82). Under the set's searchlights a white car bloomed
+  into a glowing blob on the title and a run's opening. The LEDs, lamps, beams and jets are all well over 2 and still glow.
+  The paint's albedo is a real white's (≈ 0.6). `-web-bloom` compares.
+- **The sets' surfaces** (Shaders.metal effect 13: lit, opaque, plain materials of the stage and the complex). Detail is
+  triplanar value noise in world metres, with no texture memory:
+  - concrete: big stains, a mottled mid tone, aggregate up close, and on the level tyre marks and oil, darker and smoother;
+  - metal: brushed along its long axis, scratches, a varying finish.
+  `-flat-sets` compares.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
@@ -381,6 +464,21 @@ The near pool's gather (every 10 m, about twice a second at 25 m/s) lifts the CP
 On the GPU, the pool adds ≈ 250 k triangles of forged trees within 140 m, and the land's grain adds a few noise taps per
 terrain pixel. Neither can be judged on the simulator. If the phone misses, the first lever is `WorldView.nearR` (140 → 90 m
 halves the pool), then the grain's distance.
+
+After 0231–0233 (the physical sky, the surfaces, the grass, the forged car), the same bench back to back on one simulator on
+2026-11-13 with `-scale 0.85` pinned. The Mac's load average was ≈ 700, so compare within the table only:
+
+| | Frames in 10 s | Interval avg / p95 | CPU ms avg / p95 |
+|---|---|---|---|
+| Before (main, ca82030) | 414 | 24.21 / 33.33 ms | 1.05 / 2.33 |
+| 0231 alone (clouds per sky pixel) | 237 | 42.51 / 83.33 ms | 1.06 / 2.01 |
+| 0231 + 0232 (clouds in a map) | 271 | 37.04 / 66.67 ms | 1.26 / 2.32 |
+| Everything new off (`-fd-skip terrain,roads,props,grass -fd-quality 0 -fd-tod classic`) | 405 | 24.75 / 33.33 ms | 1.04 / 2.45 |
+
+No single skip (terrain, roads and props, grass, the quality tier, the physical sky, bloom) moved the frame rate; only all
+of them together did. The emulated GPU is slower with the new shading spread across the frame. On the Duo (before:
+GPU 3.62 ms avg, 6.56 ms p95, a locked 120 Hz) the governor drops resolution first and then the quality tier. Run
+`make device-bench-freedrive` to see where it lands.
 
 **On a phone (the owner runs this; an agent never runs it on the owner's phone):**
 

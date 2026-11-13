@@ -116,7 +116,7 @@ extension FreeWorld {
             if abs(x) < Site.slab && abs(z) < Site.slab { return y - 0.35 }
             // Under a road's ribbon and its verges (the levels the ribbons are drawn over), a few centimetres down: the
             // ribbon, laid on the exact ground every 4 m along the road, is what's seen there, not a 4 m grid's facets.
-            if dip { let r = rd[(j + 1) * B + (i + 1)]; if r < RoadSpec.vergeOut { return jsMax(SEA, y - 0.22 * (1 - WNoise.smooth(RoadSpec.vergeOut - 2, RoadSpec.vergeOut, r))) } }
+            if dip { let r = rd[(j + 1) * B + (i + 1)]; if r < RoadSpec.vergeOut { return jsMax(SEA, y - RoadSpec.vergeDip * (1 - WNoise.smooth(RoadSpec.vergeOut - 3, RoadSpec.vergeOut, r))) } }
             return jsMax(SEA, y)
         }
         var v = [Float](repeating: 0, count: TileSpec.verts * TileSpec.stride)
@@ -143,8 +143,10 @@ extension FreeWorld {
             } else {
                 c = vergeTint(c, road: g.road)
             }
-            var flag: UInt32 = 0
-            if H(i, j) < SEA && !(abs(x) < Site.slab && abs(z) < Site.slab) { c = Palette.water; flag = 1 }
+            // The colour's fourth byte (0231): 255 water, else the distance to the road's centreline in eighths of a metre (to
+            // 31.75 m), which the app's shaders read for the verge and where grass may grow.
+            var flag = UInt32(jsMin(254, jsMax(0, (g.road * 8).rounded(.down))))
+            if H(i, j) < SEA && !(abs(x) < Site.slab && abs(z) < Site.slab) { c = Palette.water; flag = 255 }
             let o = (j * W + i) * TileSpec.stride
             v[o] = Float(Double(i) * step); v[o + 1] = Float(y); v[o + 2] = Float(Double(j) * step); v[o + 3] = Float(my)
             v[o + 4] = Float(nx); v[o + 5] = Float(ny); v[o + 6] = Float(nz); v[o + 7] = pack(c.r, c.g, c.b, flag)
@@ -171,7 +173,7 @@ public struct RoadPiece: Sendable {
     public let ox: Double, oz: Double
     /// Floats a vertex: position (3, relative to (ox, 0, oz)), lateral offset (m, + left), distance along the link (m), normal (3),
     /// colour (RGBA8 as a float's bits: the verge's land colour; unused on the paving).
-    public static let stride = 9, across = 7
+    public static let stride = 9, across = 5 + 2 * RoadSpec.vergeAt.count
     public var vertices: [Float]
     public var indices: [UInt32]
     public let minX, maxX, minZ, maxZ: Double
@@ -183,7 +185,8 @@ extension FreeWorld {
         let p = roads.profile(l)
         let hw = RoadSpec.hw, sh = RoadSpec.shoulder
         let vo = RoadSpec.vergeOut
-        let lats = [vo, hw + sh, hw, 0, -hw, -(hw + sh), -vo]
+        let out_ = RoadSpec.vergeAt.reversed().map { hw + sh + $0 }
+        let lats = out_ + [hw + sh, hw, 0, -hw, -(hw + sh)] + out_.reversed().map { -$0 }
         var out: [RoadPiece] = []
         var k0 = 0
         while k0 < l.n - 1 {
@@ -208,22 +211,40 @@ extension FreeWorld {
                             idx += [A, C, Bv, Bv, C, D]
                         }
                     }
-                    for lat in lats {
+                    // One ground sample a vertex past the paving (0231: the verge has ten now; four more samples each for the
+                    // normal made a ribbon five times slower to build), the road's own height on it.
+                    var gp: [GroundPoint?] = Array(repeating: nil, count: lats.count), gy = [Double](repeating: 0, count: lats.count)
+                    for (li, lat) in lats.enumerated() {
+                        let inside = abs(lat) <= hw ? lat : (lat > 0 ? hw : -hw)
+                        gy[li] = p.y[k] + p.bank[k] * inside
+                        if abs(lat) > hw { let g = ground(l.x[k] + lx * lat, l.z[k] + lz * lat, q); gp[li] = g; if abs(lat) > hw + sh + 0.01 { gy[li] = jsMax(SEA, g.y) } }
+                    }
+                    // The grade along the road, for the verge's normals.
+                    let k1 = Swift.min(l.n - 1, k + 1), k0 = Swift.max(0, k - 1)
+                    let grade = (p.y[k1] - p.y[k0]) / Swift.max(1e-3, l.s[k1] - l.s[k0])
+                    for (li, lat) in lats.enumerated() {
                         let x = l.x[k] + lx * lat, z = l.z[k] + lz * lat
-                        if abs(lat) > hw + sh + 0.01 {
-                            // A verge vertex: the carved ground here, its normal from the ground round it, the land's colour.
-                            let g = ground(x, z, q), e = 1.0
-                            let gx = (ground(x + e, z, q).y - ground(x - e, z, q).y) / (2 * e), gz = (ground(x, z + e, q).y - ground(x, z - e, q).y) / (2 * e)
+                        if abs(lat) > hw + sh + 0.01, let g = gp[li] {
+                            // A verge vertex: the carved ground here (3 cm under it since 0231, so where two roads meet one's
+                            // verge never lies over the other's shoulder: those were dark shards by a junction), its normal from
+                            // its neighbours across and the road's grade along, the land's colour.
+                            let la = li > 0 ? li - 1 : li, lb = li < lats.count - 1 ? li + 1 : li
+                            let across = (gy[la] - gy[lb]) / Swift.max(1e-3, lats[la] - lats[lb])   // dy per metre to the left
+                            let gx = lx * across + l.dx[Swift.min(k, l.n - 2)] * grade, gz = lz * across + l.dz[Swift.min(k, l.n - 2)] * grade
                             let nl = (gx * gx + 1 + gz * gz).squareRoot()
                             let c = vergeTint(landColor(g, x, z, ny: 1 / nl), road: g.road)
-                            v += [Float(x - ox), Float(jsMax(SEA, g.y) + 0.01), Float(z - oz), Float(lat), Float(l.s[k]), Float(-gx / nl), Float(1 / nl), Float(-gz / nl), pack(c.r, c.g, c.b)]
+                            v += [Float(x - ox), Float(gy[li] - 0.03), Float(z - oz), Float(lat), Float(l.s[k]), Float(-gx / nl), Float(1 / nl), Float(-gz / nl), pack(c.r, c.g, c.b)]
                             a = jsMin(a, x); b = jsMax(b, x); c0 = jsMin(c0, z); d = jsMax(d, z)
                             continue
                         }
                         let inside = abs(lat) <= hw ? lat : (lat > 0 ? hw : -hw)
                         var y = p.y[k] + p.bank[k] * inside + 0.025
                         if abs(lat) > hw { y -= 0.04 }
-                        v += [Float(x - ox), Float(y), Float(z - oz), Float(lat), Float(l.s[k]), Float(-p.bank[k] * lx), 1, Float(-p.bank[k] * lz), pack(0, 0, 0)]
+                        // The shoulder's outer edge carries the land's colour too (0231): the verge between it and the outer
+                        // edge used to fade up from black, which read as dark shards where a bend folds the strip.
+                        var col = pack(0, 0, 0)
+                        if abs(lat) > hw, let g = gp[li] { let c = vergeTint(landColor(g, x, z, ny: 1), road: g.road); col = pack(c.r, c.g, c.b) }
+                        v += [Float(x - ox), Float(y), Float(z - oz), Float(lat), Float(l.s[k]), Float(-p.bank[k] * lx), 1, Float(-p.bank[k] * lz), col]
                         a = jsMin(a, x); b = jsMax(b, x); c0 = jsMin(c0, z); d = jsMax(d, z)
                     }
                     row += 1; prev = k

@@ -20,6 +20,13 @@ final class WorldView {
     let world: FreeWorld
     private let device: MTLDevice
     private let terrainPipe, roadPipe, propPipe, loosePipe, markPipe: MTLRenderPipelineState
+    /// The props into the key light's shadow map (0231).
+    private let propShadowPipe: MTLRenderPipelineState?
+    /// The grass near the eye (0231): its radius (m) and the clumps' spacing; `quality` (the renderer's, by its shed) scales it.
+    private let grassPipe: MTLRenderPipelineState?
+    static let grassR = 36.0, grassSp = 0.6
+    var quality = 2
+    private(set) var grassClumps = 0
     private let dsWrite, dsTest: MTLDepthStencilState
     /// Free Drive's loose things and the rubber its tyres lay down (0223).
     private(set) var loose: LooseView?
@@ -117,6 +124,14 @@ final class WorldView {
               let p = pipe("cg_world_prop_vertex", "cg_world_prop_fragment", pv), let lp = pipe("cg_world_loose_vertex", "cg_world_prop_fragment", pv),
               let mp = pipe("cg_world_mark_vertex", "cg_world_mark_fragment", mv, blend: true) else { return nil }
         terrainPipe = t; roadPipe = r; propPipe = p; loosePipe = lp; markPipe = mp
+        let sd = MTLRenderPipelineDescriptor()
+        sd.vertexFunction = lib.makeFunction(name: "cg_world_prop_shadow_vertex"); sd.vertexDescriptor = pv
+        sd.depthAttachmentPixelFormat = Renderer.depthFormat; sd.rasterSampleCount = 1
+        propShadowPipe = try? device.makeRenderPipelineState(descriptor: sd)
+        let gd = MTLRenderPipelineDescriptor()
+        gd.vertexFunction = lib.makeFunction(name: "cg_world_grass_vertex"); gd.fragmentFunction = lib.makeFunction(name: "cg_world_grass_fragment")
+        gd.colorAttachments[0].pixelFormat = Renderer.hdrFormat; gd.depthAttachmentPixelFormat = Renderer.depthFormat; gd.rasterSampleCount = Renderer.samples
+        grassPipe = try? device.makeRenderPipelineState(descriptor: gd)
         let dd = MTLDepthStencilDescriptor(); dd.isDepthWriteEnabled = true; dd.depthCompareFunction = .less
         let dt = MTLDepthStencilDescriptor(); dt.isDepthWriteEnabled = false; dt.depthCompareFunction = .lessEqual
         guard let ds = device.makeDepthStencilState(descriptor: dd), let dts = device.makeDepthStencilState(descriptor: dt) else { return nil }
@@ -393,8 +408,9 @@ final class WorldView {
     // MARK: - The draw (inside the main pass, after the stage's opaque draws)
 
     /// `frame` (buffer 1) and `look` are the renderer's; `drive` is the world's own uniform (lamps, the props' range).
-    func draw(_ e: MTLRenderCommandEncoder, frame fb: MTLBuffer, look: inout LookU, drive: inout WDriveU, shadow: MTLTexture, viewProj: simd_float4x4, eye: SIMD3<Double>) {
+    func draw(_ e: MTLRenderCommandEncoder, frame fb: MTLBuffer, look: inout LookU, drive: inout WDriveU, shadow: MTLTexture, sky: MTLTexture, viewProj: simd_float4x4, eye: SIMD3<Double>) {
         e.setVertexBuffer(fb, offset: 0, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1)
+        e.setFragmentTexture(sky, index: 8)
         e.setFragmentBytes(&look, length: MemoryLayout<LookU>.stride, index: 4)
         e.setFragmentBytes(&drive, length: MemoryLayout<WDriveU>.stride, index: 5)
         e.setVertexBytes(&drive, length: MemoryLayout<WDriveU>.stride, index: 5)
@@ -409,6 +425,26 @@ final class WorldView {
             e.setVertexBytes(&u, length: MemoryLayout<WTileU>.stride, index: 2)
             e.setVertexBuffer(t.buf, offset: 0, index: 0)
             e.drawIndexedPrimitives(type: .triangle, indexCount: tileIndexCount, indexType: .uint16, indexBuffer: tileIndex, indexBufferOffset: 0)
+        }
+        // Grass on the finest tiles round the eye (0231): quality 2 the full radius, 1 two thirds of it, 0 none.
+        grassClumps = 0
+        if let gp = grassPipe, quality > 0, !WorldView.skip.contains("grass") {
+            e.setRenderPipelineState(gp); e.setCullMode(.none)
+            let R = WorldView.grassR * (quality >= 2 ? 1 : 0.66), sp = WorldView.grassSp
+            for (k, t) in draws where k.level == 0 {
+                let x0 = k.x0, z0 = k.z0
+                let lx0 = max(0, eye.x - R - x0), lx1 = min(TileSpec.leaf, eye.x + R - x0)
+                let lz0 = max(0, eye.z - R - z0), lz1 = min(TileSpec.leaf, eye.z + R - z0)
+                if lx1 <= lx0 || lz1 <= lz0 { continue }
+                let i0 = Int((lx0 / sp).rounded(.down)), i1 = Int((lx1 / sp).rounded(.up)), j0 = Int((lz0 / sp).rounded(.down)), j1 = Int((lz1 / sp).rounded(.up))
+                var u = WGrassU(offset: SIMD4(Float(x0 - origin.x), Float(-origin.y), Float(z0 - origin.z), 0), cells: SIMD4(Int32(i0), Int32(j0), Int32(i1 - i0), 0),
+                                params: SIMD4(Float(sp), Float(R), 1, 0))
+                e.setVertexBytes(&u, length: MemoryLayout<WGrassU>.stride, index: 2)
+                e.setVertexBuffer(t.buf, offset: 0, index: 0)
+                let n = (i1 - i0) * (j1 - j0)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 15, instanceCount: n)
+                grassClumps += n
+            }
         }
         // Roads: a few depth steps toward the camera, so the ribbon always wins over the land it's carved into.
         e.setRenderPipelineState(roadPipe); e.setCullMode(.none); e.setDepthBias(-8, slopeScale: -2, clamp: 0)
@@ -469,6 +505,23 @@ final class WorldView {
             e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setDepthStencilState(dsWrite)
         }
     }
+    /// The props near `center` (render space) into the key light's shadow map (0231): the near pool's instances at their
+    /// coarser LOD (a shadow doesn't need the finest crown), the blocks' within the box at theirs. In the shadow pass, after
+    /// the stage's casters; `frame` carries the light's view-projection.
+    func drawShadow(_ e: MTLRenderCommandEncoder, frame fb: MTLBuffer, drive: inout WDriveU, center: SIMD3<Float>, radius: Double) {
+        guard let pipe = propShadowPipe, !WorldView.skip.contains("props") else { return }
+        e.setRenderPipelineState(pipe); e.setCullMode(.none)
+        e.setVertexBuffer(fb, offset: 0, index: 1)
+        e.setVertexBytes(&drive, length: MemoryLayout<WDriveU>.stride, index: 5)
+        var nu = WTileU(offset: SIMD4(Float(nearCorner.x - origin.x), Float(-origin.y), Float(nearCorner.y - origin.z), 0), morph: SIMD4(2, 0, 0, 0))
+        e.setVertexBytes(&nu, length: MemoryLayout<WTileU>.stride, index: 2)
+        for (ki, kind) in kinds.enumerated() where nearCounts[ki] > 0 {
+            guard let lod = kind.lods.dropFirst().first ?? kind.lods.first, nearBufs[ki].count == Renderer.inFlight else { continue }
+            e.setVertexBuffer(nearBufs[ki][nearSlot], offset: 0, index: 3)
+            e.setVertexBuffer(lod.vb, offset: 0, index: 0)
+            e.drawIndexedPrimitives(type: .triangle, indexCount: lod.count, indexType: .uint32, indexBuffer: lod.ib, indexBufferOffset: 0, instanceCount: nearCounts[ki])
+        }
+    }
     private func boxVisible(_ x0: Double, _ z0: Double, _ S: Double, _ vp: simd_float4x4) -> Bool {
         let a = Float(x0 - origin.x), c = Float(z0 - origin.z), s = Float(S)
         return WorldView.inFrustum(a, a + s, -100 - Float(origin.y), 1600 - Float(origin.y), c, c + s, vp)
@@ -488,6 +541,10 @@ final class WorldView {
 
 /// World.metal's WTile and WDrive.
 struct WTileU { var offset = SIMD4<Float>(), morph = SIMD4<Float>() }
+/// World.metal's WGrass: the tile's corner − origin; the first cell, the columns; the spacing, the radius, the density.
+struct WGrassU { var offset = SIMD4<Float>(), cells = SIMD4<Int32>(), params = SIMD4<Float>() }
 /// `anchor`: the floating origin modulo 4,096 m (x, z), so world-anchored detail (the land's grain) doesn't jump when the
 /// origin moves; zw spare.
-struct WDriveU { var lampPos = SIMD4<Float>(), lampDir = SIMD4<Float>(), params = SIMD4<Float>(), anchor = SIMD4<Float>() }
+/// `carPos` / `carFwd` (0231): the car on the ground (render space; w 1 on its wheels) and its heading, half length, half
+/// width, for the ground's ambient occlusion under it.
+struct WDriveU { var lampPos = SIMD4<Float>(), lampDir = SIMD4<Float>(), params = SIMD4<Float>(), anchor = SIMD4<Float>(), carPos = SIMD4<Float>(), carFwd = SIMD4<Float>() }

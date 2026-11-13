@@ -24,12 +24,16 @@ targets:
     platform: iOS
     sources:
       - path: ColdGas
-        excludes: ["Resources/Stages/**", "Resources/Props/**"]
+        excludes: ["Resources/Stages/**", "Resources/Props/**", "Resources/Car/**"]
       - path: ColdGas/Resources/Stages
         type: folder
         buildPhase: resources
       # Free Drive's forged props (0226: tools/forge --native writes them; PropLibrary.swift's ForgeProps reads them).
       - path: ColdGas/Resources/Props
+        type: folder
+        buildPhase: resources
+      # Free Drive's own car (0232: tools/forge/car/build.py writes it; DriveCarModel.swift reads it).
+      - path: ColdGas/Resources/Car
         type: folder
         buildPhase: resources
       # The release notes (release-notes/README.md): the What's new modal reads <MARKETING_VERSION>.md.

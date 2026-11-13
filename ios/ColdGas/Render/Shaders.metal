@@ -6,6 +6,7 @@
 // input to pow/sqrt/normalize is clamped (LESSONS: one NaN pixel is a flicker storm).
 #include <metal_stdlib>
 using namespace metal;
+#include "Sky.h"
 
 struct Frame {
     float4x4 viewProj, lightViewProj;
@@ -28,6 +29,8 @@ struct LookU {
     float4 fogExp;              // x: FogExp2's density (0: linear, fogRange); y: 1 with the wet slab on; z: 1 with the stars on; w: bloom on
     float4 skyZenith, skyMid, skyHorizon, skySun;
     float4 bloom;               // threshold, and UnrealBloomPass's strength × each level's factor (three levels' worth; see compose)
+    float4 atmo;                // Free Drive's physical sky (0231, Sky.h): x on, y the haze's thickness, z the eye's height (km), w night (0…1)
+    float4 sunE;                // the sun's illuminance at the ground (rgb); w: time (s), for the clouds
 };
 struct Light { float4 posRange; float4 colorIntensity; float4 dirCos; float4 params; };   // params: decay, cosOuter, kind (0 point, 1 spot), penumbra
 struct Material {
@@ -119,10 +122,19 @@ static float3 duskEnv(float3 d, float rough, constant LookU& k) {
     return mix(c, avg, clamp(rough * rough, 0.0, 1.0));
 }
 
+// The sets' procedural detail (0233): hashed value noise and a few octaves of it, in world metres.
+static float setHash(float2 p) { p = fract(p * float2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
+static float setNoise(float2 p) {
+    float2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(setHash(i), setHash(i + float2(1, 0)), u.x), mix(setHash(i + float2(0, 1)), setHash(i + float2(1, 1)), u.x), u.y);
+}
+static float setFbm(float2 p) { return setNoise(p) * 0.5 + setNoise(p * 2.03 + 3.1) * 0.3 + setNoise(p * 4.1 + 7.7) * 0.2; }
+
 fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facing]], constant Frame& f [[buffer(1)]], constant Material& m [[buffer(2)]],
                                   constant Light* lights [[buffer(3)]], texture2d<float> map [[texture(0)]], texture2d<float> roughMap [[texture(1)]],
                                   texture2d<float> emiMap [[texture(2)]], depth2d<float> shadow [[texture(3)]], texture2d<float> alphaMap [[texture(4)]],
-                                  constant LookU& look [[buffer(4)]], texture2d<float> wetMask [[texture(5)]], texture2d<float> mirror [[texture(6)]], texturecube<float> env [[texture(7)]]) {
+                                  constant LookU& look [[buffer(4)]], texture2d<float> wetMask [[texture(5)]], texture2d<float> mirror [[texture(6)]], texturecube<float> env [[texture(7)]],
+                                  texture2d<float> skyView [[texture(8)]]) {
     constexpr sampler s(coord::normalized, filter::linear, mip_filter::linear, address::repeat, max_anisotropy(4));   // (8 on the web: on a slab at a grazing angle that's 8 taps a pixel at 120 Hz)
     float3 V0 = normalize(f.eye.xyz - in.world + 1e-6);
     // The web's ShaderMaterials (src/render/wall.js), their falloffs as written there; additive.
@@ -163,7 +175,44 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         if (!front) n = -n;
         float rough = m.pbr.y;
         if (m.flags.y) rough *= roughMap.sample(s, uv).g;
-        float metal = m.pbr.x, wet = 0;
+        float metal = m.pbr.x, wet = 0, ccK = m.pbr.z;
+        // The drive car's outside (0232): road grime where the forge's mask puts it (uv.x: sills, behind the wheels, the
+        // tail), as the miles add up (effect.w); it dulls the paint and takes the clear coat with it.
+        float grime = 0;
+        if (m.effectKind.x == 13) {   // a set's surface (0233): procedural detail in world space, no texture memory
+            float3 wp = in.world, an = abs(normalize(in.nrm + 1e-6));
+            // Triplanar value noise: the two axes across the surface's facing.
+            float2 q = an.y > max(an.x, an.z) ? wp.xz : (an.x > an.z ? wp.zy : wp.xy);
+            float big = setFbm(q / 3.1), mid = setNoise(q / 0.45), fine = setNoise(q / 0.06);
+            float px = length(fwidth(wp)) + 1e-4, fineK = 1.0 - smoothstep(0.01, 0.05, px), midK = 1.0 - smoothstep(0.08, 0.5, px);
+            if (metal > 0.5) {
+                // Metal: brushed along its long axis, a few scratches, the finish dulled in places.
+                float2 b = an.y > 0.7 ? wp.xz : float2(wp.y, wp.x + wp.z);
+                float brush = setNoise(float2(b.x * 0.6, b.y * 90.0));
+                float scratch = step(0.985, setNoise(float2(b.x * 4.0 + b.y * 9.0, b.y * 2.0))) * fineK;
+                base.rgb *= 0.9 + 0.12 * brush * midK + 0.25 * scratch;
+                rough = clamp(rough * (0.75 + 0.5 * big) + 0.08 * brush * midK, 0.05, 1.0);
+            } else {
+                // Concrete and paint on it: big stains, a mottled mid tone, aggregate up close; on the level, tyre marks
+                // and oil, darker and smoother.
+                float stain = smoothstep(0.45, 0.8, big);
+                base.rgb *= (0.86 + 0.24 * big) * (1.0 - 0.18 * stain) * mix(1.0, 0.9 + 0.2 * mid, midK) * mix(1.0, 0.92 + 0.16 * fine, fineK);
+                rough = clamp(rough * (0.85 + 0.3 * mid) - 0.12 * stain, 0.08, 1.0);
+                if (an.y > 0.9) {
+                    float lane = setNoise(float2(wp.x * 0.35, wp.z * 0.02)) * setNoise(float2(wp.x * 2.2, wp.z * 0.15));
+                    float mark = smoothstep(0.32, 0.55, lane) * midK;
+                    base.rgb *= 1.0 - 0.35 * mark;
+                    rough = mix(rough, rough * 0.7, mark);
+                }
+            }
+        }
+        if (m.effectKind.x >= 11 && m.effectKind.x <= 12) {
+            float gn = fract(sin(dot(floor(in.world.xz * 9.0 + in.world.y * 7.0), float2(12.9898, 78.233))) * 43758.5453);
+            grime = clamp(in.uv.x * m.effect.w * (1.4 + 0.6 * gn) - 0.05, 0.0, 1.0);
+            base.rgb = mix(base.rgb, float3(0.11, 0.092, 0.07), grime * 0.85);
+            rough = mix(rough, 0.92, grime);
+            ccK *= 1.0 - grime;
+        }
         if (m.effectKind.z != 0 && look.fogExp.y > 0) {   // wall.js wetSlab: damp everywhere, standing water in places
             constexpr sampler ws(coord::normalized, filter::linear, mip_filter::linear, address::repeat);
             wet = 0.6 + 0.4 * wetMask.sample(ws, in.world.xz / 200.0).r;
@@ -171,12 +220,12 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             rough = mix(rough, max(rough * 0.55, 0.2), wet);
         }
         float sh = shadowAt(in.lightClip, shadow, f.fogRange.w);
-        color = brdf(n, V, normalize(f.keyDir.xyz), base.rgb, metal, rough, f.keyColor.rgb * f.keyDir.w * sh, m.pbr.z, m.pbr.w);
+        color = brdf(n, V, normalize(f.keyDir.xyz), base.rgb, metal, rough, f.keyColor.rgb * f.keyDir.w * sh, ccK, m.pbr.w);
         int nl = int(f.keyColor.w);
         for (int i = 0; i < nl; i++) {
             Light L = lights[i];
             if (L.params.z > 1.5) {   // a directional light beyond the key (the Lineup's rim): no shadow, no falloff
-                color += brdf(n, V, L.dirCos.xyz, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w, m.pbr.z, m.pbr.w);
+                color += brdf(n, V, L.dirCos.xyz, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w, ccK, m.pbr.w);
                 continue;
             }
             float3 d = L.posRange.xyz - in.world;
@@ -192,18 +241,23 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             }
             float att = cone / max(dist * dist, 1e-2);   // three: intensity / max(d^decay, 0.01) (decay 2 on every stage light)
             if (L.posRange.w > 0) { float q = clamp(1.0 - pow(dist / L.posRange.w, 4.0), 0.0, 1.0); att *= q * q; }
-            color += brdf(n, V, l, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w * att, m.pbr.z, m.pbr.w);
+            color += brdf(n, V, l, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w * att, ccK, m.pbr.w);
         }
         // Indirect, as three's RE_IndirectDiffuse/Specular_Physical: the hemisphere (irradiance / π) and the environment (its
         // roughest mip is irradiance / π already), the specular through the split-sum DFG with its multiple-scattering term.
-        float3 cosIrr = mix(look.hemiGround.rgb, look.hemiSky.rgb, clamp(n.y * 0.5 + 0.5, 0.0, 1.0)) * M_1_PI_F;
+        bool atmo = look.atmo.x > 0.5;   // Free Drive's physical sky (0231): the sky-view lights and is reflected
+        float3 cosIrr = atmo ? sky_ambient(skyView, n, look.skySun.xyz, look.sunE.rgb, look.atmo.z)
+                             : mix(look.hemiGround.rgb, look.hemiSky.rgb, clamp(n.y * 0.5 + 0.5, 0.0, 1.0)) * M_1_PI_F;
         float nv = clamp(dot(n, V), 0.0, 1.0), r1 = clamp(rough, 0.0, 1.0);
         float4 rr = r1 * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
         float a004 = min(rr.x * rr.x, exp2(-9.28 * nv)) * rr.x + rr.y;
         float2 fab = float2(-1.04, 1.04) * a004 + rr.zw;
         float3 radiance = 0;
         bool sky = look.skySun.w > 0.5;   // Free Drive out in the world: the dusk is the environment (duskEnv)
-        if (sky) {
+        if (atmo) {
+            float3 refl = normalize(mix(reflect(-V, n), n, r1 * r1 * r1 * r1));
+            radiance = sky_reflect(skyView, refl, r1, look.skySun.xyz, look.sunE.rgb, look.atmo.z);
+        } else if (sky) {
             float3 refl = normalize(mix(reflect(-V, n), n, r1 * r1 * r1 * r1));
             radiance = duskEnv(refl, r1, look);
         } else if (look.hemiSky.w > 0) {
@@ -218,14 +272,23 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float3 Fms = Fss * Favg / max(1.0 - Ems * Favg, 1e-3);
         float diel = 0.04 * fab.x + fab.y; float dielMs = (0.04 * fab.x + fab.y) * (0.04 + 0.96 * 0.047619) / max(1.0 - Ems * (0.04 + 0.96 * 0.047619), 1e-3) * Ems;
         color += base.rgb * (1.0 - metal) * (1.0 - (diel + dielMs)) * cosIrr + radiance * Fss + Fms * Ems * cosIrr;
-        if (m.pbr.z > 0) {   // the clear coat over it all
+        if (m.effectKind.x == 11) {   // metallic flakes under the coat (0232): a few catch the key light, a glint each
+            float3 r = reflect(-V, n);
+            float3 q = floor(r * 220.0 + in.world * 31.0);
+            float h = fract(sin(dot(q, float3(12.9898, 78.233, 37.719))) * 43758.5453);
+            // Only up close (a flake a pixel or more): further off they read as noise on the paint, not sparkle.
+            float nearF = 1.0 - smoothstep(0.004, 0.012, length(fwidth(in.world)));
+            float glint = step(0.993, h) * pow(max(dot(r, normalize(f.keyDir.xyz)), 0.0), 8.0) * nearF;
+            color += f.keyColor.rgb * f.keyDir.w * sh * glint * 0.2 * (1.0 - grime);
+        }
+        if (ccK > 0) {   // the clear coat over it all
             float cr = max(clamp(m.pbr.w, 0.0, 1.0), 0.03);
-            float3 cc = sky ? duskEnv(reflect(-V, n), cr, look) : look.hemiSky.w > 0 ? env.sample(envSampler, reflect(-V, n), level(cr * 5.0)).rgb * look.hemiSky.w : float3(0);
+            float3 cc = atmo ? sky_reflect(skyView, reflect(-V, n), cr, look.skySun.xyz, look.sunE.rgb, look.atmo.z) : sky ? duskEnv(reflect(-V, n), cr, look) : look.hemiSky.w > 0 ? env.sample(envSampler, reflect(-V, n), level(cr * 5.0)).rgb * look.hemiSky.w : float3(0);
             float4 rc = cr * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
             float ac = min(rc.x * rc.x, exp2(-9.28 * nv)) * rc.x + rc.y;
             float2 fc = float2(-1.04, 1.04) * ac + rc.zw;
             float Fcc = 0.04 + 0.96 * pow(1.0 - nv, 5.0);
-            color = color * (1.0 - m.pbr.z * Fcc) + cc * (0.04 * fc.x + fc.y) * m.pbr.z;
+            color = color * (1.0 - ccK * Fcc) + cc * (0.04 * fc.x + fc.y) * ccK;
         }
         color += emissive;
         if (wet > 0 && f.misc.y > 0) {   // film.js's reflection: Fresnel on the mirror's image, which is drawn at this pixel's place
@@ -244,7 +307,8 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             float k = look.fogExp.x > 0 ? 1.0 - exp(-look.fogExp.x * look.fogExp.x * dist * dist) : clamp((dist - f.fogRange.x) / max(f.fogRange.y - f.fogRange.x, 1.0), 0.0, 1.0);
             color = mix(color, f.fogColor.rgb, k);
         }
-        color = hazed(max(color, 0.0), toP / dist, dist, f.eye.xyz, look);
+        color = look.atmo.x > 0.5 ? sky_aerial(skyView, max(color, 0.0), toP / dist, dist, f.eye.y + look.atmo.z * 0.0, look.skySun.xyz, look.atmo.z, look.atmo.y)
+                                  : hazed(max(color, 0.0), toP / dist, dist, f.eye.xyz, look);
     }
     return float4(max(color, 0.0), base.a);
 }
@@ -274,10 +338,28 @@ static float3 starField(float3 dir, float cells, float keep, float h0, bool vary
     float disc = 1.0 - smoothstep(0.32 - aa * 0.5, 0.32 + aa * 0.5, d);
     return float3(on * disc * 1.6) * (vary ? 0.35 + 0.65 * starHash(sp + 3.1) : 1.0);
 }
-fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]]) {
+fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]], texture2d<float> skyView [[texture(8)]],
+                                texture2d<float> clouds [[texture(9)]]) {
     float3 d = normalize(in.dir + 1e-6);
     float h = clamp(d.y, -1.0, 1.0);
     float3 c;
+    if (k.atmo.x > 0.5) {   // Free Drive's physical sky (0231): the sky-view LUT, the sun's disc, clouds, the stars after dusk
+        float3 sun = k.skySun.xyz;
+        c = sky_view(skyView, d, sun, k.atmo.z, 0.0);
+        float mu = dot(d, sun);
+        // The disc (a little larger than the real 0.53°, so a phone's screen shows it), limb-darkened, through the air.
+        float disc = smoothstep(0.99994, 0.99997, mu);
+        float limb = sqrt(max(1.0 - (1.0 - mu) / 3e-5, 0.0));
+        c += k.sunE.rgb * disc * (0.4 + 0.6 * limb) * 900.0 * smoothstep(-0.01, 0.01, d.y);
+        float4 cl = sky_clouds(clouds, d);
+        c = c * (1.0 - cl.a) + cl.rgb;
+        if (k.atmo.w > 0.01) {   // the stars, and the night's own glow (airglow, the towns over the horizon) so it isn't black
+            c += starField(d, 520.0, 0.9982, 0.04, true) * 0.6 * k.atmo.w * (1.0 - cl.a);
+            c += float3(0.0018, 0.0024, 0.0045) * k.atmo.w * (0.4 + 0.6 * exp(-max(h, 0.0) * 6.0));
+        }
+        if (h < 0.0) c = mix(c, c * 0.5, smoothstep(0.0, -0.1, h));
+        return float4(max(c, 0.0), 1);
+    }
     if (k.hemiGround.w > 0.5) {   // scene.js skyMaterial, the dusk
         float3 sun = k.skySun.xyz;
         c = mix(k.skyMid.rgb, k.skyZenith.rgb, smoothstep(0.02, 0.55, h));
