@@ -1,7 +1,7 @@
 ---
 id: 0230
 title: The menus read as designed, not generated (one headline, one button, no grey subtitles)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
@@ -47,7 +47,7 @@ Web (lighter): the title's "Test stand · Night" eyebrow is gone, and the Assist
 wide screens.
 
 ## Acceptance criteria
-- [x] Before and after shots of every screen: docs/shots/0230/ (iPhone upright and sideways, the Duo open and tabletop).
+- [x] Before and after shots of every changed screen: docs/shots/0230/ (iPhone upright and sideways, the Duo open and tabletop; Free Drive and Roam unchanged, not committed).
 - [x] Every function is still there (each course, tier, Fly, Roam, Free Drive, Practice, Board, How to play, Settings,
       Post, Watch it, Challenge, Home, Restart, Edit controls), each a 44 pt target with a VoiceOver label.
 - [x] `make test` unchanged (no sim, scorer or haptics change); the UI tests' identifiers and labels kept (How to play's
