@@ -47,8 +47,8 @@ struct CameraFraming {
                               Float(2 * (r.minX - scene.minX) / scene.width - 1), Float(2 * (r.maxX - scene.minX) / scene.width - 1)))
         }
         if oneThumb {
-            let s = ThumbPad.size(controls.width)
-            add(CGRect(x: controls.maxX - s - 8, y: controls.maxY - s - 8, width: s, height: s))
+            // Where the deck's layout puts the pad (the player's place for it, 0220).
+            add(DeckGeometry.layout(controls.size).thumb.frame.cgRect.offsetBy(dx: controls.minX, dy: controls.minY))
         } else {
             // The classic deck's stick and fan where this shape puts them (0210, Input/FlightDeck.swift).
             for r in DeckGeometry.layout(controls.size).covers { add(r.cgRect.offsetBy(dx: controls.minX, dy: controls.minY)) }

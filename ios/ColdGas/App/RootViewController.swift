@@ -87,6 +87,12 @@ final class RootViewController: UIViewController {
             regions = Fold.emulatedRegions(pose: pose, width: size.width, height: size.height)
             folded = pose == "tabletop" || pose == "book"
         }
+        // The HUD editor's shape (0220): a device that has ever reported a fold (or a debug pose, or the Duo simulator) is a
+        // Duo, closed or open; the bend tells a book from a flat screen. Set before the layout below is compared.
+        if !regions.isEmpty || Launch.pose != nil || (ProcessInfo.processInfo.environment["SIMULATOR_DEVICE_NAME"]?.contains("Duo") ?? false) {
+            DeckGeometry.foldable = true
+        }
+        if DeckGeometry.bent != folded { DeckGeometry.bent = folded; layoutModel.objectWillChange.send() }
         let l = Fold.layout(width: size.width, height: size.height,
                             safe: LInsets(top: safe.top, left: safe.left, bottom: safe.bottom, right: safe.right), regions: regions, folded: folded)
         if l != layoutNow {

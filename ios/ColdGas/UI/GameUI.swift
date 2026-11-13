@@ -27,6 +27,7 @@ final class LayoutModel: ObservableObject {
 struct RootUI: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
+    @ObservedObject var hud = HudStore.shared
     @State private var sheet: Sheet?
     /// What's new after an update (WhatsNewView.swift): read once per launch, shown over the title, never during a run.
     @State private var whatsNew: ReleaseNotes? = RootUI.launchNotes
@@ -71,6 +72,12 @@ struct RootUI: View {
                     sheet = Sheet(d)
                 })
                     .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
+                    .transition(.opacity)
+            }
+            // The HUD layout editor (0220), from Settings → Controls or the pause sheet: over everything, the run under it paused.
+            if let t = hud.editing {
+                HudEditorView(layout: layout, tier: t) { withAnimation(.easeOut(duration: 0.2)) { hud.editing = nil } }
+                    .id("\(t.rawValue)")
                     .transition(.opacity)
             }
         }
@@ -189,6 +196,7 @@ struct TitleView: View {
 struct RunView: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
+    @ObservedObject var hud = HudStore.shared
     /// The cue line sits above whatever the deck puts across the bottom middle of the scene.
     private var cueLift: CGFloat {
         let c = layout.controls
@@ -224,7 +232,7 @@ struct RunView: View {
             HUDView(compact: !rows && layout.controls.height < 520, cueLift: rows ? 0 : cueLift, centred: hudCentred,
                     crease: layout.crease(in: sceneSafe), cueTop: cueTop)
                 .frame(width: sceneSafe.width, height: sceneSafe.height).offset(x: sceneSafe.minX, y: sceneSafe.minY)
-            ControllerView(panel: rows, layoutKey: "\(layout.spread.rawValue) \(Int(layout.controls.width))x\(Int(layout.controls.height))")
+            ControllerView(panel: rows, layoutKey: "\(layout.spread.rawValue) \(Int(layout.controls.width))x\(Int(layout.controls.height)) \(hud.revision)")
                 .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
             if game.countdown > 0 {
                 Text("\(game.countdown)").font(Theme.display(64)).foregroundStyle(Theme.ink)
@@ -345,6 +353,8 @@ struct PauseView: View {
                 Text("PAUSED").font(Theme.display(16)).tracking(5).foregroundStyle(Theme.ink)
                 Button("Resume") { game.paused = false }.buttonStyle(CGButton(primary: true))
                 Button("Restart") { game.retry() }.buttonStyle(CGButton())
+                Button("Edit controls") { HudStore.shared.editing = DeckGeometry.tier }.buttonStyle(CGButton())
+                    .accessibilityHint("Move, size and fade the touch controls")
                 Button("Home") { game.home() }.buttonStyle(CGButton())
             }
             .padding(24).glass(20)

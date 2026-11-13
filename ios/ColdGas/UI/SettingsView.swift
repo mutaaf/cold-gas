@@ -2,6 +2,7 @@
 // licences. Every choice is kept on this device (UserDefaults).
 import SwiftUI
 import ColdGasClient
+import ColdGasLayout
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -46,6 +47,7 @@ struct SettingsView: View {
                 } header: { Text("Play") } footer: {
                     Text("One thumb flies Assist on the Show and the Wall: hold to climb, tap to let go, hold to land. Classic is the stick and the pedals, on every course and tier.")
                 }
+                ControlsSection(close: { dismiss() })
                 // 0219: who writes the judges' words on this device. The scores are always the game's own.
                 Section {
                     Toggle("Judge on this device", isOn: $judgeOnDevice)
@@ -85,5 +87,48 @@ struct LicensesView: View {
             }.padding(20)
         }
         .navigationTitle("Licenses")
+    }
+}
+
+/// Settings → Controls (0220): the HUD layout editor, the stick, the buttons, Free Drive's look. Each change is saved as it's
+/// made and reaches the controls at once.
+struct ControlsSection: View {
+    let close: () -> Void
+    @ObservedObject var hud = HudStore.shared
+    private func bind<T>(_ get: @escaping (HudPrefs) -> T, _ set: @escaping (inout HudPrefs, T) -> Void) -> Binding<T> {
+        Binding(get: { get(hud.prefs) }, set: { v in hud.update { set(&$0, v) } })
+    }
+    var body: some View {
+        Section {
+            Button {
+                // The sheet goes first, then the editor opens over the title on the tier that's chosen there.
+                close()
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) { HudStore.shared.editing = DeckGeometry.tier }
+            } label: {
+                LabeledContent { Image(systemName: "chevron.right").foregroundStyle(Theme.ink3) } label: {
+                    Label("Edit the layout", systemImage: "rectangle.and.hand.point.up.left")
+                }
+            }
+            .accessibilityIdentifier("edit-layout")
+            .accessibilityHint("Move, size and fade every touch control, for each tier and each way you hold the screen")
+            Picker("Stick", selection: bind({ $0.stick }, { $0.stickMode = $1 })) {
+                ForEach(StickMode.allCases, id: \.self) { Text($0.title).tag($0) }
+            }
+            slider("Dead zone", bind({ $0.dead }, { $0.deadZone = $1 }), HudPrefs.deadZones, "%.0f%%", 100)
+            slider("Stick sensitivity", bind({ $0.sens }, { $0.sensitivity = $1 }), HudPrefs.sensitivities, "%.2f×", 1)
+            Toggle("Tap BRAKE to hold it", isOn: bind({ $0.brakeToggles }, { $0.brakeToggle = $1 }))
+            Toggle("Tap BOOST to hold it", isOn: bind({ $0.boostToggles }, { $0.boostToggle = $1 }))
+            Toggle("RELEASE when the finger lifts", isOn: bind({ $0.releasesOnLift }, { $0.releaseOnLift = $1 }))
+            slider("Free Drive look", bind({ $0.lookSens }, { $0.lookSensitivity = $1 }), HudPrefs.lookSensitivities, "%.2f×", 1)
+            Toggle("Invert the look", isOn: bind({ $0.lookInvert }, { $0.lookInvertY = $1 }))
+        } header: { Text("Controls") } footer: {
+            Text("Layouts are kept for each tier and for each way you hold the screen. The stick that follows the thumb comes to it anywhere on its side. In Free Drive, swipe anywhere off the controls to look round. A controller and a keyboard still fly as before.")
+        }
+    }
+    private func slider(_ name: String, _ v: Binding<Double>, _ r: ClosedRange<Double>, _ fmt: String, _ k: Double) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack { Text(name); Spacer(); Text(String(format: fmt, v.wrappedValue * k)).font(Theme.mono(12)).foregroundStyle(Theme.ink2) }
+            Slider(value: v, in: r).accessibilityLabel(name)
+        }
     }
 }

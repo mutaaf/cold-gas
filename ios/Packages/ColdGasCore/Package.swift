@@ -28,7 +28,7 @@ let package = Package(
     targets: [
         .target(name: "ColdGasCore", swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(name: "ColdGasLayout", swiftSettings: [.swiftLanguageMode(.v5)]),
-        .target(name: "ColdGasClient", dependencies: ["ColdGasCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
+        .target(name: "ColdGasClient", dependencies: ["ColdGasCore", "ColdGasLayout"], swiftSettings: [.swiftLanguageMode(.v5)]),
         // Free Drive's world (docs/NATIVE-FREEDRIVE.md §4): pure, a function of its seed; never part of a scored run.
         .target(name: "ColdGasWorld", dependencies: ["ColdGasCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
         .target(
@@ -53,6 +53,6 @@ let package = Package(
         ),
         .testTarget(name: "ColdGasLayoutTests", dependencies: ["ColdGasLayout"], path: "Tests/ColdGasLayoutTests", swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "ColdGasWorldTests", dependencies: ["ColdGasWorld", "ColdGasCore"], path: "Tests/ColdGasWorldTests", swiftSettings: [.swiftLanguageMode(.v5)]),
-        .testTarget(name: "ColdGasClientTests", dependencies: ["ColdGasClient"], path: "Tests/ColdGasClientTests", swiftSettings: [.swiftLanguageMode(.v5)]),
+        .testTarget(name: "ColdGasClientTests", dependencies: ["ColdGasClient", "ColdGasLayout"], path: "Tests/ColdGasClientTests", swiftSettings: [.swiftLanguageMode(.v5)]),
     ] + engine
 )

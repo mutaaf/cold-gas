@@ -5,6 +5,7 @@
 import UIKit
 import QuartzCore
 import Metal
+import ColdGasLayout
 
 final class StageView: UIView, CAMetalDisplayLinkDelegate {
     override class var layerClass: AnyClass { CAMetalLayer.self }
@@ -23,7 +24,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
     #endif
     /// What the screens over the scene leave the camera: rebuilt when the layout or the control scheme changes.
     private var cameraLayout: (rows: Bool, scene: CGRect, controls: CGRect, safeTop: CGFloat)?
-    private var framing = CameraFraming(), framingThumb: Bool?
+    private var framing = CameraFraming(), framingThumb: Bool?, framingRev = -1
     func setCameraLayout(rows: Bool, scene: CGRect, controls: CGRect, safeTop: CGFloat) { cameraLayout = (rows, scene, controls, safeTop); framingThumb = nil }
 
     override init(frame: CGRect) {
@@ -118,8 +119,9 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         MainActor.assumeIsolated {   // the link runs on the main run loop
             Game.shared.frame(dt: dt, slowK: k)
             let thumb = Game.shared.oneThumb
-            if thumb != framingThumb, let l = cameraLayout {
-                framingThumb = thumb
+            let rev = HudStore.shared.revision * 4 + (HudTier.allCases.firstIndex(of: HudTier(tier: Game.shared.tier)) ?? 0)
+            if thumb != framingThumb || rev != framingRev, let l = cameraLayout {
+                framingThumb = thumb; framingRev = rev
                 framing = CameraFraming(rows: l.rows, scene: l.scene, controls: l.controls, safeTop: l.safeTop, oneThumb: thumb)
             }
         }

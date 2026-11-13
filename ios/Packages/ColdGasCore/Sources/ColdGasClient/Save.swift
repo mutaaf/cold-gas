@@ -4,6 +4,7 @@
 // uses a synthesised decoder: each field is read with `try?`, and a value it can't read is the default.
 import Foundation
 import ColdGasCore
+import ColdGasLayout
 
 /// src/post.js clean: upper-case, letters A–Z only, at most three.
 public func cleanInitials(_ v: String?) -> String {
@@ -48,8 +49,11 @@ public struct SaveData: Codable, Equatable {
     public var daily: Daily.Streak?
     public var settings: Settings?
     public var judgeBreaker: BreakerState?
+    /// The touch controls the player has shaped (0220): layouts per tier and shape, the stick, the buttons, the look. A save
+    /// from before it has none and gets the factory controls; a damaged one costs only what can't be read (HudPrefs).
+    public var hud: HudPrefs?
     public init() {}
-    enum CodingKeys: String, CodingKey { case initials, medals, daily, settings, judgeBreaker }
+    enum CodingKeys: String, CodingKey { case initials, medals, daily, settings, judgeBreaker, hud }
     public init(from decoder: Decoder) throws {
         guard let c = try? decoder.container(keyedBy: CodingKeys.self) else { return }   // not even an object: a fresh save
         initials = (try? c.decodeIfPresent(String.self, forKey: .initials)).flatMap { $0 }.map { cleanInitials($0) }
@@ -60,6 +64,7 @@ public struct SaveData: Codable, Equatable {
         daily = (try? c.decodeIfPresent(Daily.Streak.self, forKey: .daily)).flatMap { $0 }
         settings = (try? c.decodeIfPresent(Settings.self, forKey: .settings)).flatMap { $0 }
         judgeBreaker = (try? c.decodeIfPresent(BreakerState.self, forKey: .judgeBreaker)).flatMap { $0 }
+        hud = (try? c.decodeIfPresent(HudPrefs.self, forKey: .hud)).flatMap { $0 }
     }
     /// A save from stored bytes: anything unreadable is a fresh save, never a crash.
     public static func decode(_ data: Data?) -> SaveData {
@@ -75,4 +80,5 @@ public struct SaveData: Codable, Equatable {
     public var medalBook: Medals { Medals(medals ?? [:]) }
     public var streak: Daily.Streak { daily ?? Daily.Streak() }
     public var resolvedSettings: Settings { settings ?? Settings() }
+    public var hudPrefs: HudPrefs { hud ?? HudPrefs() }
 }

@@ -61,12 +61,13 @@ final class NozzlePadView: UIView {
         guard bounds.width > 10 else { return }
         deck = DeckGeometry.layout(bounds.size)
         frames = []; placed = []
-        let k = CGFloat(deck.valveK)
+        // Each frame at its own scale (the player's layout, 0220; the factory's are one k).
+        func k(_ i: Int) -> CGFloat { CGFloat(i < deck.valveKs.count ? deck.valveKs[i] : deck.valveK) }
         if deck.valves.count == 1, let r = deck.valves.first {
-            frames.append((r.cgRect, 0, k))
+            frames.append((r.cgRect, 0, k(0)))
         } else if deck.valves.count == 2 {
-            frames.append((deck.valves[0].cgRect, 0, k))                                  // the car's left: x 0…190
-            frames.append((deck.valves[1].cgRect, CGFloat(Deck.padW - Deck.halfW), k))     // its right: x 110…300
+            frames.append((deck.valves[0].cgRect, 0, k(0)))                                  // the car's left: x 0…190
+            frames.append((deck.valves[1].cgRect, CGFloat(Deck.padW - Deck.halfW), k(1)))     // its right: x 110…300
         }
         for (fi, f) in frames.enumerated() {
             for (ti, t) in targets.enumerated() {
@@ -136,6 +137,7 @@ final class NozzlePadView: UIView {
         let held = Set(touchesOn.values.compactMap { $0.pad >= 0 ? placed[$0.pad].target : nil })
         for (fi, f) in frames.enumerated() {
             g.saveGState()
+            g.setAlpha(CGFloat(deck.alpha(fi == 0 ? .valves0 : .valves1)))
             // The half's own car: clipped at the spine, which is drawn as the cut (a dashed hairline).
             if frames.count == 2 {
                 let spine = point(150, 0, in: fi).x
@@ -210,6 +212,7 @@ final class NozzlePadView: UIView {
 
 struct NozzlePad: UIViewRepresentable {
     @ObservedObject var game = Game.shared
+    @ObservedObject var hud = HudStore.shared
     let layoutKey: String
     func makeUIView(context: Context) -> NozzlePadView {
         let v = NozzlePadView()
@@ -217,7 +220,8 @@ struct NozzlePad: UIViewRepresentable {
         return v
     }
     func updateUIView(_ v: NozzlePadView, context: Context) {
-        if v.accessibilityIdentifier != layoutKey { v.accessibilityIdentifier = layoutKey; v.setNeedsLayout() }
+        let key = "\(layoutKey) \(hud.revision)"
+        if v.accessibilityIdentifier != key { v.accessibilityIdentifier = key; v.setNeedsLayout() }
         v.throttles = game.hud.throttles
     }
     static func dismantleUIView(_ v: NozzlePadView, coordinator: ()) { v.letGo(); v.onValves?([Double](repeating: 0, count: 10)) }
