@@ -54,13 +54,22 @@ public struct DeckLayout: Equatable, Sendable {
     public var valves: [LRect], valveK: Double
     /// The phase strip (DRIVE · CLIMB · HANG · AIR · LAND), where the form has room for one.
     public var strip: LRect?
+    /// Assist's one-thumb pad, over the scene (a tabletop's pad is its whole panel).
+    public var thumb = DeckSlot(c: LPoint(x: 0, y: 0), d: 0)
+    /// The player's layout (0221, HudLayout): each control's opacity (1 when not set), each valve frame's own scale, the
+    /// stick's mode, and whether anything moved from the factory (the fan's arc is drawn only on the factory layout).
+    public var alphas: [HudControl: Double] = [:]
+    public var valveKs: [Double] = []
+    public var stickMode: StickMode = .floating
+    public var custom = false
     /// What the classic deck puts over the scene (the camera's carry check, the cue's lift).
     public var covers: [LRect] { form == .tabletop ? [] : [stick.frame, slots.dropFirst().reduce(slots[0].frame) { $0.union($1.frame) }] }
     public var valveCovers: [LRect] { form == .tabletop ? [] : valves }
     public static func == (a: DeckLayout, b: DeckLayout) -> Bool {
         a.form == b.form && a.width == b.width && a.height == b.height && a.stick == b.stick && a.slots == b.slots
             && a.pivot == b.pivot && a.reach == b.reach && a.arc.from == b.arc.from && a.arc.to == b.arc.to && a.valves == b.valves
-            && a.valveK == b.valveK && a.strip == b.strip
+            && a.valveK == b.valveK && a.strip == b.strip && a.thumb == b.thumb && a.alphas == b.alphas && a.valveKs == b.valveKs
+            && a.stickMode == b.stickMode && a.custom == b.custom
     }
 }
 
@@ -70,6 +79,7 @@ extension DeckLayout {
         func m(_ r: LRect) -> LRect { LRect(x: r.x, y: r.y + dy, w: r.w, h: r.h) }
         stick.home = m(stick.home); stick.zone = m(stick.zone)
         for i in slots.indices { slots[i].c = m(slots[i].c) }
+        thumb.c = m(thumb.c)
         pivot = m(pivot); valves = valves.map(m); strip = strip.map(m); height = h
     }
 }
@@ -196,7 +206,10 @@ public enum Deck {
             let sw = min(520, w * 0.44)
             strip = LRect(x: (w - sw) / 2, y: h - 40 - margin, w: sw, h: 40)
         }
+        // The one-thumb pad: bottom right, as ThumbPad has always put it (min(170, 42 % of the width), 8 pt in).
+        let ts = min(170, w * 0.42)
+        let thumb = DeckSlot(c: LPoint(x: w - ts / 2 - 8, y: h - ts / 2 - 8), d: ts)
         return DeckLayout(form: f, width: w, height: h, stick: stick, slots: slots, pivot: pivot, reach: p.reach,
-                          arc: arc, valves: valves, valveK: vk, strip: strip)
+                          arc: arc, valves: valves, valveK: vk, strip: strip, thumb: thumb, valveKs: valves.map { _ in vk })
     }
 }

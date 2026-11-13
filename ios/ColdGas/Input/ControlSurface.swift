@@ -7,6 +7,7 @@ import UIKit
 import SwiftUI
 import QuartzCore
 import ColdGasCore
+import ColdGasLayout
 import ColdGasPhysics
 
 /// The press's feel on the glass, one per control (0210): GO soft, BRAKE rigid, LIFT and LAND heavier, RELEASE the heaviest,
@@ -112,10 +113,10 @@ final class ThumbSurfaceView: ControlSurface {
     var panel = false { didSet { if panel != oldValue { setNeedsLayout() } } }
     private let disc = CAShapeLayer(), aim = CAShapeLayer(), mark = CAShapeLayer(), label: CATextLayer
     private var thumb: UITouch?, start = CGPoint.zero, word = ""
-    private var size: CGFloat { panel ? min(bounds.width, bounds.height) * 0.78 : ThumbPad.size(bounds.width) }
-    private var center0: CGPoint {
-        panel ? CGPoint(x: bounds.midX, y: bounds.midY) : CGPoint(x: bounds.width - size / 2 - 8, y: bounds.height - size / 2 - 8)
-    }
+    /// Where the deck's layout puts the pad (Deck's bottom right, or the player's place for it: HudLayout).
+    private var spot = DeckSlot(c: LPoint(x: 0, y: 0), d: 0)
+    private var size: CGFloat { panel ? min(bounds.width, bounds.height) * 0.78 : spot.d }
+    private var center0: CGPoint { panel ? CGPoint(x: bounds.midX, y: bounds.midY) : spot.c.cg }
     override init(frame: CGRect) {
         label = CATextLayer()
         super.init(frame: frame)
@@ -133,7 +134,11 @@ final class ThumbSurfaceView: ControlSurface {
 
     override func layoutSubviews() {
         super.layoutSubviews()
+        let l = DeckGeometry.layout(bounds.size)
+        spot = l.thumb
+        let alpha = panel ? 1 : Float(l.alpha(.thumb))
         instantly {
+            for x in [disc, aim, mark, label] as [CALayer] { x.opacity = alpha }
             let s = size, c = center0
             disc.path = UIBezierPath(ovalIn: CGRect(x: c.x - s / 2, y: c.y - s / 2, width: s, height: s)).cgPath
             let a = s * 0.56
@@ -195,8 +200,10 @@ final class ThumbSurfaceView: ControlSurface {
 
 struct ThumbSurface: UIViewRepresentable {
     let panel: Bool, word: String, aimLive: Bool, hasMark: Bool, markX: Double, markY: Double
+    @ObservedObject var hud = HudStore.shared
     func makeUIView(context: Context) -> ThumbSurfaceView { ThumbSurfaceView() }
     func updateUIView(_ v: ThumbSurfaceView, context: Context) {
+        if v.tag != hud.revision { v.tag = hud.revision; v.setNeedsLayout() }
         v.panel = panel
         v.update(word: word, aimLive: aimLive, hasMark: hasMark, markX: markX, markY: markY)
     }

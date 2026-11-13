@@ -20,9 +20,25 @@ enum DeckGeometry {
     static var spread: Spread = .single
     /// The fold band in the controls rect's coordinates.
     static var fold: LRect?
-    static func layout(_ size: CGSize) -> DeckLayout {
+    /// The device folds (it has reported a fold, or a debug pose says so), and the fold is bent now: which of the HUD
+    /// editor's shapes this is (a Duo closed is not a phone; its layout is its own).
+    static var foldable = false, bent = false
+    /// The tier whose layout the surfaces use: Free Drive on the drive screen, else the run's tier. Main thread only.
+    static var tier: HudTier {
+        MainActor.assumeIsolated { Game.shared.screen == .drive ? .drive : HudTier(tier: Game.shared.tier) }
+    }
+    static func shape(_ size: CGSize) -> HudShape {
+        HudShape.of(spread: spread, width: Double(size.width), height: Double(size.height), foldable: foldable, bent: bent)
+    }
+    /// Deck's factory layout for this shape (0210).
+    static func factory(_ size: CGSize) -> DeckLayout {
         let f = Deck.form(spread: spread, width: Double(size.width), height: Double(size.height))
         return Deck.layout(form: f, width: Double(size.width), height: Double(size.height), fold: fold)
+    }
+    /// Where everything is: the factory with the player's layout for this tier and shape over it (0221).
+    static func layout(_ size: CGSize, tier t: HudTier? = nil, custom: HudCustom?? = nil) -> DeckLayout {
+        let t = t ?? tier, store = HudStore.shared
+        return HudLayout.apply(factory(size), custom ?? store.custom(t, shape(size)), fold: fold, stickMode: store.prefs.stick)
     }
 }
 
@@ -43,7 +59,7 @@ final class FlightDeckView: ControlSurface {
         var button: DeckButton?
         var geo = DeckSlot(c: LPoint(x: 0, y: 0), d: 0)
     }
-    private enum Hold: Equatable { case stick, key(DeckKey) }
+    private enum Hold: Equatable { case stick, key(DeckKey), armed(DeckKey), look, latch }
 
     private var deck = Deck.layout(form: .phone, width: 1, height: 1)
     private var show = DeckShow()
@@ -58,6 +74,12 @@ final class FlightDeckView: ControlSurface {
     private var stickOrigin = CGPoint.zero
     private var stickWas = (out: false, rim: false)
     private let reduced = UIAccessibility.isReduceMotionEnabled
+    /// The player's button options (0221): BRAKE or BOOST latched by a tap (their labels), RELEASE pulsed on the finger's lift.
+    private var latched = Set<String>(), pulsed = Set<DeckKey>()
+    /// Free Drive: a finger on empty glass looks round (DriveLook).
+    var look = false
+    private var lookAt = CGPoint.zero
+    private var prefs: HudPrefs { HudStore.shared.prefs }
 
     override init(frame: CGRect) {
         stickText = CATextLayer()
@@ -101,6 +123,8 @@ final class FlightDeckView: ControlSurface {
             chrome.layout(deck, bounds: bounds)
             let rad = CGFloat.pi / 180
             fanArc.path = UIBezierPath(arcCenter: deck.pivot.cg, radius: deck.reach, startAngle: -CGFloat(deck.arc.to) * rad, endAngle: -CGFloat(deck.arc.from) * rad, clockwise: true).cgPath
+            // The arc is the factory fan's: a layout the player moved has no arc to draw.
+            fanArc.isHidden = deck.custom
             let st = deck.stick
             ring.lineWidth = deck.form == .phone ? 1 : 1.25
             if stickTouch == nil { placeRing(at: st.home.cg) }
@@ -120,7 +144,20 @@ final class FlightDeckView: ControlSurface {
             }
         }
         paint(animated: false)
+        fade()
         accessibility()
+    }
+    private static let slotControls: [HudControl] = [.slotA, .slotB, .slotC]
+    /// Each control at the player's opacity (0221), the moment the layout changes (a slot's arrival eases to it).
+    private func fade() {
+        instantly {
+            for (i, s) in slots.enumerated() where s.button != nil {
+                let a = Float(deck.alpha(Self.slotControls[i]))
+                for l in [s.disc, s.text, s.tank] as [CALayer] { l.opacity = a }
+            }
+            let a = Float(show.stickLabel != nil ? deck.alpha(.stick) : 0)
+            for l in [ring, dead, knob, stickText] as [CALayer] { l.opacity = a }
+        }
     }
     private func circle(_ c: CGPoint, _ r: CGFloat) -> CGPath { UIBezierPath(ovalIn: CGRect(x: c.x - r, y: c.y - r, width: r * 2, height: r * 2)).cgPath }
     private func placeRing(at c: CGPoint) {
@@ -148,6 +185,9 @@ final class FlightDeckView: ControlSurface {
         guard s != show else { return }
         let old = show
         show = s
+        // A latched BRAKE or BOOST lets go when its button leaves (the row behind, the car down).
+        let labels = Set(s.buttons.compactMap { $0?.label })
+        if !latched.isSubset(of: labels) { latched.formIntersection(labels); sync() }
         chrome.strip(names: s.stripNames, at: s.strip)
         paint(animated: old.buttons != s.buttons || old.stickLabel != s.stickLabel)
         if old.hint != s.hint || old.buttons != s.buttons { ghost() }
@@ -162,7 +202,7 @@ final class FlightDeckView: ControlSurface {
             let changed = b != was
             slots[i].button = b
             let s = slots[i]
-            let on = b.map { down.contains($0.key) } ?? false
+            let on = b.map { down.contains($0.key) || armedKeys.contains($0.key) } ?? false
             let vis = b != nil
             instantly {
                 let ink = ControlSurface.ink
@@ -186,7 +226,7 @@ final class FlightDeckView: ControlSurface {
                 s.tank.strokeColor = (show.gas < 0.15 ? UIColor(red: 1, green: 0.353, blue: 0.384, alpha: 1) : FlightDeckView.ice.withAlphaComponent(0.85)).cgColor
             }
             if changed {
-                appear(s, visible: vis, animated: animated)
+                appear(s, visible: vis, animated: animated, alpha: Float(deck.alpha(Self.slotControls[i])))
             }
         }
         let stickOn = show.stickLabel != nil
@@ -198,21 +238,23 @@ final class FlightDeckView: ControlSurface {
             }
         }
         let stickLayers: [CALayer] = [ring, dead, knob, stickText]
-        if stickLayers[0].opacity != (stickOn ? 1 : 0) {
+        let stickA: Float = stickOn ? Float(deck.alpha(.stick)) : 0
+        if stickLayers[0].opacity != stickA {
             CATransaction.begin(); CATransaction.setAnimationDuration(animated ? 0.18 : 0)
-            for l in stickLayers { l.opacity = stickOn ? 1 : 0 }
+            for l in stickLayers { l.opacity = stickA }
             CATransaction.commit()
         }
     }
-    private func appear(_ s: Slot, visible: Bool, animated: Bool) {
+    private func appear(_ s: Slot, visible: Bool, animated: Bool, alpha: Float = 1) {
         let layers: [CALayer] = [s.disc, s.text, s.tank]
+        let to: Float = visible ? alpha : 0
         if !animated {
-            instantly { for l in layers { l.opacity = visible ? 1 : 0; l.transform = CATransform3DIdentity } }
+            instantly { for l in layers { l.opacity = to; l.transform = CATransform3DIdentity } }
             return
         }
         for l in layers {
             let fade = CABasicAnimation(keyPath: "opacity")
-            fade.fromValue = l.opacity; fade.toValue = visible ? 1 : 0
+            fade.fromValue = l.opacity; fade.toValue = to
             fade.duration = visible ? 0.18 : 0.12
             fade.timingFunction = CAMediaTimingFunction(name: .easeOut)
             l.add(fade, forKey: "appear")
@@ -226,7 +268,7 @@ final class FlightDeckView: ControlSurface {
                 l.add(k, forKey: "grow")
             }
         }
-        instantly { for l in layers { l.opacity = visible ? 1 : 0 } }
+        instantly { for l in layers { l.opacity = to } }
     }
 
     /// The ghost: a slow hairline ring breathing round the control the cue names, until a finger is on it.
@@ -273,24 +315,51 @@ final class FlightDeckView: ControlSurface {
         return best
     }
     private var stickUp: Bool { show.stickLabel != nil }
-    private func inZone(_ p: CGPoint) -> Bool { stickUp && deck.stick.zone.cgRect.contains(p) }
-    override func point(inside p: CGPoint, with e: UIEvent?) -> Bool { slotAt(p) != nil || inZone(p) }
+    private func inZone(_ p: CGPoint) -> Bool {
+        guard stickUp else { return false }
+        // A fixed stick takes a thumb on its ring (and its 16 pt of slop), nowhere else.
+        if deck.stickMode == .fixed { return hypot(p.x - deck.stick.home.x, p.y - deck.stick.home.y) <= deck.stick.ring + 16 }
+        return deck.stick.zone.cgRect.contains(p)
+    }
+    override func point(inside p: CGPoint, with e: UIEvent?) -> Bool { slotAt(p) != nil || inZone(p) || (look && bounds.contains(p)) }
+    /// The keys a latch holds (BRAKE or BOOST tapped on), by the label still on the glass.
+    private var latchedKeys: Set<DeckKey> {
+        var k = Set<DeckKey>()
+        for l in latched { if let b = show.buttons.compactMap({ $0 }).first(where: { $0.label == l }) { k.insert(b.key) } }
+        return k
+    }
+    /// What's lit besides a held key: armed for a release on lift, latched, or the moment of a pulse.
+    private var armedKeys: Set<DeckKey> {
+        var k = pulsed.union(latchedKeys)
+        for h in holds.values { if case let .armed(x) = h { k.insert(x) } }
+        return k
+    }
 
     private func moveStick(_ t: UITouch) {
         let p = t.location(in: self), st = deck.stick
-        let v = TouchControls.stickXY(dx: Double(p.x - stickOrigin.x), dy: Double(p.y - stickOrigin.y), radius: st.travel)
+        // The stick that follows the thumb drags its ring along once the thumb runs past the rim.
+        if deck.stickMode == .dynamic {
+            let dx = p.x - stickOrigin.x, dy = p.y - stickOrigin.y, l = hypot(dx, dy)
+            if l > st.travel {
+                let k = (l - st.travel) / l
+                instantly { placeRing(at: CGPoint(x: stickOrigin.x + dx * k, y: stickOrigin.y + dy * k)); homeGhost.isHidden = false }
+            }
+        }
+        let raw = TouchControls.stickXY(dx: Double(p.x - stickOrigin.x), dy: Double(p.y - stickOrigin.y), radius: st.travel)
+        // The player's dead zone and sensitivity (the identity at the factory 0 and 1); the sim's own shaping follows, as before.
+        let v = StickShape.apply(x: raw.x, y: raw.y, dead: prefs.dead, sensitivity: prefs.sens)
         Game.shared.controls.stick(x: v.x, y: v.y)
         let out = abs(v.x) > 0.15 || abs(v.y) > 0.15, rim = v.x * v.x + v.y * v.y > 0.96
         if out && !stickWas.out { PressHaptics.feel(.stickEdge) }
         if rim && !stickWas.rim { PressHaptics.feel(.stickRim) }
         stickWas = (out, rim)
-        instantly { knob.position = CGPoint(x: stickOrigin.x + CGFloat(v.x) * st.travel, y: stickOrigin.y + CGFloat(v.y) * st.travel) }
+        instantly { knob.position = CGPoint(x: stickOrigin.x + CGFloat(raw.x) * st.travel, y: stickOrigin.y + CGFloat(raw.y) * st.travel) }
     }
     /// Presses and releases what changed. Two fingers on one control hold it until both have left.
     private func sync(slid: Bool = false) {
-        var now = Set<DeckKey>()
+        var now = pulsed.union(latchedKeys)
         for h in holds.values { if case let .key(k) = h { now.insert(k) } }
-        guard now != down else { return }
+        guard now != down else { paint(animated: false); return }
         let pressed = now.subtracting(down)
         for k in pressed { Game.shared.controls.press(k.control, true) }
         for k in down.subtracting(now) { Game.shared.controls.press(k.control, false) }
@@ -310,20 +379,34 @@ final class FlightDeckView: ControlSurface {
         case .land: return .land
         }
     }
+    /// BRAKE and BOOST latch on a tap when the player asks for it (Settings → Controls).
+    private func toggles(_ b: DeckButton) -> Bool {
+        (b.key == .brake && prefs.brakeToggles) || (b.label == "BOOST" && prefs.boostToggles)
+    }
     override func touchesBegan(_ ts: Set<UITouch>, with e: UIEvent?) {
         InputLag.note(e)
         for t in ts {
             let p = t.location(in: self)
-            if let i = slotAt(p), let b = slots[i].button { holds[ObjectIdentifier(t)] = .key(b.key) }
-            else if inZone(p), stickTouch == nil {
+            if let i = slotAt(p), let b = slots[i].button {
+                if toggles(b) {
+                    holds[ObjectIdentifier(t)] = .latch
+                    if latched.remove(b.label) == nil { latched.insert(b.label) } else { PressHaptics.slide() }
+                } else if b.amber && prefs.releasesOnLift {
+                    holds[ObjectIdentifier(t)] = .armed(b.key)
+                    PressHaptics.slide()
+                } else { holds[ObjectIdentifier(t)] = .key(b.key) }
+            } else if inZone(p), stickTouch == nil {
                 holds[ObjectIdentifier(t)] = .stick; stickTouch = t
                 let st = deck.stick
-                // Inside the ring: the web's fixed stick, the offset from its centre. Outside it: the ring comes to the thumb.
-                if hypot(p.x - st.home.x, p.y - st.home.y) > st.ring + 16 {
+                // Inside the ring: the web's fixed stick, the offset from its centre. Outside it (or always, for the stick that
+                // follows the thumb): the ring comes to the thumb.
+                if deck.stickMode == .dynamic || hypot(p.x - st.home.x, p.y - st.home.y) > st.ring + 16 {
                     instantly { placeRing(at: p); homeGhost.isHidden = false; knob.position = p }
                 } else if stickOrigin != st.home.cg { instantly { placeRing(at: st.home.cg) } }
                 moveStick(t)
                 paint(animated: false); ghost()
+            } else if look, !holds.values.contains(.look) {
+                holds[ObjectIdentifier(t)] = .look; lookAt = p
             }
         }
         sync()
@@ -334,8 +417,14 @@ final class FlightDeckView: ControlSurface {
             switch holds[ObjectIdentifier(t)] {
             case .stick: moveStick(t)
             case .key(let k):
-                // Only clearly onto another control: a drifting thumb keeps what it holds.
-                if let j = slotAt(t.location(in: self), strict: true), let b = slots[j].button, b.key != k { holds[ObjectIdentifier(t)] = .key(b.key); slid = true }
+                // Only clearly onto another control: a drifting thumb keeps what it holds (never onto a latch or an armed RELEASE).
+                if let j = slotAt(t.location(in: self), strict: true), let b = slots[j].button, b.key != k, !toggles(b), !(b.amber && prefs.releasesOnLift) {
+                    holds[ObjectIdentifier(t)] = .key(b.key); slid = true
+                }
+            case .look:
+                let p = t.location(in: self)
+                DriveLook.shared.drag(dx: Double(p.x - lookAt.x), dy: Double(p.y - lookAt.y))
+                lookAt = p
             default: break
             }
         }
@@ -343,11 +432,26 @@ final class FlightDeckView: ControlSurface {
     }
     override func touchesEnded(_ ts: Set<UITouch>, with e: UIEvent?) {
         for t in ts {
-            if holds.removeValue(forKey: ObjectIdentifier(t)) == .stick { centreStick() }
+            switch holds.removeValue(forKey: ObjectIdentifier(t)) {
+            case .stick: centreStick()
+            case .look: DriveLook.shared.release()
+            case .armed(let k):
+                // The release on lift: LIFT for a moment (a tap's length), from the lift of the finger (not a cancel).
+                if t.phase == .ended { pulse(k) }
+            default: break
+            }
         }
         sync()
     }
     override func touchesCancelled(_ ts: Set<UITouch>, with e: UIEvent?) { touchesEnded(ts, with: e) }
+    private func pulse(_ k: DeckKey) {
+        pulsed.insert(k)
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.12) { [weak self] in
+            guard let self else { return }
+            self.pulsed.remove(k)
+            self.sync()
+        }
+    }
     private func centreStick() {
         stickTouch = nil; stickWas = (false, false)
         Game.shared.controls.stick(x: 0, y: 0)
@@ -357,7 +461,8 @@ final class FlightDeckView: ControlSurface {
     }
     func letGo() {
         if stickTouch != nil { centreStick() }
-        holds.removeAll()
+        if holds.values.contains(.look) { DriveLook.shared.release() }
+        holds.removeAll(); latched.removeAll(); pulsed.removeAll()
         sync()
     }
 }
@@ -397,7 +502,7 @@ final class DeckChrome {
     /// `wells`: the stick's and the fan's wells (not behind the valve deck, whose halves sit there).
     func layout(_ d: DeckLayout, bounds: CGRect, wells showWells: Bool = true) {
         let console = d.form == .tabletop
-        plate.isHidden = !console; plateEdge.isHidden = !console; wells.isHidden = !console || !showWells; vents.isHidden = !console
+        plate.isHidden = !console; plateEdge.isHidden = !console; wells.isHidden = !console || !showWells || d.custom; vents.isHidden = !console
         if console {
             let r = bounds.insetBy(dx: 4, dy: 4)
             plate.frame = r
@@ -486,20 +591,24 @@ struct DeckBackdrop: UIViewRepresentable {
 /// LIFT on the ground; LAND, LIFT and BOOST in the air). Its presses reach Free Drive's sampler through `Controls`.
 struct ClassicSurface: View {
     let panel: Bool, air: Bool
+    @ObservedObject var hud = HudStore.shared
     var body: some View {
         let tp: TouchPhase = air ? .air : .ground
         FlightDeck(show: DeckShow(buttons: Deck.buttons(tp, assist: true, course: "drive", ledge: false, rowDone: false),
                                   stickLabel: Deck.stickLabel(tp), hint: nil, gas: 1, strip: 0, stripNames: []),
-                   layoutKey: "drive \(panel)")
+                   layoutKey: "drive \(panel) \(hud.revision)", look: true)
     }
 }
 
 struct FlightDeck: UIViewRepresentable {
     let show: DeckShow
-    /// Changes when the fold layout does, so the deck re-lays itself out.
+    /// Changes when the fold layout does (or the player's layout: HudStore's revision), so the deck re-lays itself out.
     let layoutKey: String
+    /// Free Drive: a finger on empty glass looks round.
+    var look = false
     func makeUIView(context: Context) -> FlightDeckView { FlightDeckView() }
     func updateUIView(_ v: FlightDeckView, context: Context) {
+        v.look = look
         if v.accessibilityIdentifier != layoutKey { v.accessibilityIdentifier = layoutKey; v.setNeedsLayout() }
         v.update(show)
     }

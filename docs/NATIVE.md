@@ -322,6 +322,17 @@ too.
     `syncTouchPhase` rule, `Deck.buttons`). A ghost ring breathes round what the cue names.
   - The valve deck is the car whole on an upright phone. Everywhere else it's split down the spine, the car's left
     valves under the left thumb, and the HUD steps into the top middle.
+- **The player's layout (0221).** That deck is the factory. `ColdGasLayout/HudLayout.swift` (pure, `HudLayoutTests`)
+  lays the player's changes over it, per tier (assist, pro, advanced, drive) and per shape (phone, phoneWide, duoClosed,
+  duoBook, duoFlat, duoTabletop, tablet). Each change is a control's centre as a fraction of the controls rect, a size and
+  an opacity, kept legal: inside the rect and never across the fold. Presets (Thumbs, Claw, Left-handed, Minimal) are
+  recipes worked out on each shape. The editor is `UI/HudEditor.swift`, opened from Settings → Controls and the pause
+  sheet. The save is `SaveData.hud`. Every surface reads `DeckGeometry.layout(size)`, and so does the camera's framing.
+  - The stick's mode, its dead zone and sensitivity, and BRAKE/BOOST latches and RELEASE on lift only change when and
+    where presses land. At the factory settings they're the identity.
+  - Free Drive's controls are the same `FlightDeck` with `look: true`: swipe-to-look reaches the chase camera through
+    `DriveLook.shared.step(dt)`.
+  - DEBUG `-hudEdit <tier>`, `-hudPreset <name>`, `-hudReset` and `-hudStick <mode>`; `scripts/hud-shots.sh`.
 - **iPad** (0210): `TARGETED_DEVICE_FAMILY` 1,2, full screen, every orientation. It's a `tablet` deck. From 1.1.0 the App
   Store listing carries the 13" iPad set (`ipad-13`, APP_IPAD_PRO_3GEN_129; `asc.mjs store-shots` requires it).
 - **A fold mid-run doesn't pause the run.** The sim doesn't know about views. A fold is a resize that passes through

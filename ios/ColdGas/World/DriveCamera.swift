@@ -47,10 +47,13 @@ final class DriveCamera {
         let hl = max(1e-9, (hx * hx + hz * hz).squareRoot()); hx /= hl; hz /= hl
         let tall = aspect < 1
         let back = min(9.5, 6.3 + speed * 0.04) * (tall ? 1.3 : 1), upH = (1.85 + min(1.2, speed * 0.008)) * (tall ? 1.45 : 1)
-        var want = SIMD3(p.x - hx * back, p.y + upH, p.z - hz * back)
+        // The player's look (a swipe on empty glass): the heading turned round the car, the eye raised or lowered.
+        let lk = DriveLook.shared.step(dt), lc = cos(lk.yaw), ls = sin(lk.yaw)
+        let rx = hx * lc - hz * ls, rz = hx * ls + hz * lc
+        var want = SIMD3(p.x - rx * back, p.y + upH + back * lk.pitch, p.z - rz * back)
         want.y = max(want.y, ground(want.x, want.z) + 1.1)
         let ahead = tall ? 9.0 : 4.0
-        let lookW = SIMD3(p.x + hx * ahead, p.y + 0.85, p.z + hz * ahead)
+        let lookW = SIMD3(p.x + rx * ahead, p.y + 0.85, p.z + rz * ahead)
         if !inited { pos = want; look = lookW; inited = true }
         let kp = 1 - exp(-dt * 12), ky = 1 - exp(-dt * 7)
         pos.x += (want.x - pos.x) * kp; pos.z += (want.z - pos.z) * kp; pos.y += (want.y - pos.y) * ky
