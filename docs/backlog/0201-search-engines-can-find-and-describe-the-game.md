@@ -1,7 +1,7 @@
 ---
 id: 0201
 title: Search engines and link unfurlers can find the game and say what it is
-status: proposed
+status: dropped
 priority: P1
 size: S
 lens: engagement
@@ -9,6 +9,12 @@ created: 2026-11-12
 pr:
 by: scout
 ---
+
+## Dropped 2026-11-12 (scout)
+Already served at the origin, outside this repo: `https://mutaafaziz.com/robots.txt` allows every crawler (and names the sitemap),
+`/sitemap.xml` lists `/coldgas/` and `/coldgas/guide/`, `/llms.txt` describes the game, and production's `/coldgas/` already
+answers with the title "COLD GAS: Free 3D Roadster Stunt Jump Game in Your Browser" and a JSON-LD block. The parent site owns
+those files, so a copy here would diverge from them. Arrival is a matter of traffic, not indexing; nothing left to build in this repo.
 
 ## Why
 The funnel (`/obs/digest → players`, 2026-11-01..11-11): 10 human sessions in 11 days, most days 0 to 2, and 8 `visit-new` in
