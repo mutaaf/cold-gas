@@ -43,6 +43,8 @@ struct DriveCarLook {
     var glow = SIMD4<Float>(repeating: 0)
     /// The brake pedal (0…1); the brake lamps follow it.
     var pedal: Float = 0
+    /// Road grime on the body (0 clean … 1), 0229.
+    var grime: Float = 0
 }
 
 final class FreeDrive: DriveScene {
@@ -139,6 +141,7 @@ final class FreeDrive: DriveScene {
         placeOnRoad(nearX: car.pos.x, z: car.pos.z, heading: moving ? (car.vel.x, car.vel.z) : (f.0, f.1))
         resets += 1
         repairs += 1
+        dirt = 0
         say("Back on the road")
     }
     private func say(_ s: String) { cue = s; cueT = time }
@@ -149,6 +152,10 @@ final class FreeDrive: DriveScene {
         return (2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y))
     }
 
+    /// Metres driven since the last wash, weighted by the ground (0229); `-fd-grime 0…1` sets the look for shots.
+    private var dirt = 0.0
+    private let grimeOverride = Launch.value("-fd-grime").flatMap(Float.init)
+    var grime: Float { grimeOverride ?? Float(1 - exp(-dirt / 17_000)) }
     /// The set's loose things (0223): where each was put, for a fresh start.
     private(set) var looseSpots: [LooseSpot] = []
     private var looseSpeed: [Double] = []
@@ -379,6 +386,9 @@ final class FreeDrive: DriveScene {
             }
         }
         slideK = slide; roughK = rough
+        // Grime (0229): a film builds with the kilometres (half dirty by ≈ 12 km of road), faster off it; a reset washes it.
+        let road = speed * dt * (1 + rough * 6)
+        dirt += road
         view?.loose?.update(car.world.loose, origin: origin)
     }
 
@@ -405,7 +415,7 @@ final class FreeDrive: DriveScene {
         // Iron starts to show a dull red in the dark at ≈ 400 °C and is orange by ≈ 750 °C.
         func g(_ t: Double) -> Float { let k = Float(max(0, min(1, (t - 380) / 420))); return k * k }
         let d = chassis.discT
-        return DriveCarLook(glow: ownCar ? SIMD4(g(d[0]), g(d[1]), g(d[2]), g(d[3])) : .zero, pedal: Float(pedal))
+        return DriveCarLook(glow: ownCar ? SIMD4(g(d[0]), g(d[1]), g(d[2]), g(d[3])) : .zero, pedal: Float(pedal), grime: grime)
     }
 
     func frameCamera(aspect: Float, dt: Double) -> (view: simd_float4x4, proj: simd_float4x4, eye: SIMD3<Float>) {
@@ -451,6 +461,9 @@ final class FreeDrive: DriveScene {
         k.sunE = SIMD4(sky.keyColor * sky.keyIntensity, Float(time))
         k.fogExp.z = sky.night > 0.05 ? 1 : 0
         k.hazeCol.w = 0
+        // The bloom's threshold in the frame as exposed (0229): by day only the sun, its glints and the lamps bloom (a
+        // sunlit white car read as fog through the stage's night threshold); toward night the stage's own.
+        k.bloom.x = (2.6 + (0.97 - 2.6) * sky.night) / max(0.2, sky.exposure)
         return k
     }
 
