@@ -1,12 +1,12 @@
 ---
 id: 0229
 title: A crash into a pole never breaks the game (a wedged car starts again, the drive's safety nets)
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: tech-health
 created: 2026-11-13
-pr:
+pr: 366
 by: operator
 ---
 
