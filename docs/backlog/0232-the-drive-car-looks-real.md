@@ -1,11 +1,12 @@
 ---
 id: 0232
 title: The drive's car reads as a real car (a forged body with panel gaps, glass and an interior, real tyres and rims, flaked paint, grime)
-status: in-progress
+status: shipped
 priority: P0
 size: L
 lens: player-feel
 created: 2026-11-13
+pr: 365
 by: operator
 ---
 
@@ -29,11 +30,11 @@ Runs on: the operator's Mac (Xcode, Blender).
 - Nothing in the physics changes. The scored runs keep the stage roadster, and `-fd-roadster` brings it back in a drive.
 
 ## Acceptance criteria
-- [ ] `make test` + `make rules` green, the 52 run vectors bit-exact.
-- [ ] `python3 tools/forge/car/check.py` passes; the forge's turntables in docs/shots/0232/.
-- [ ] Before and after shots at the same poses (front, rear, above, the cinema camera, the chase on a road) in
+- [x] `make test` + `make rules` green, the 52 run vectors bit-exact.
+- [x] `python3 tools/forge/car/check.py` passes; the forge's turntables in docs/shots/0232/.
+- [x] Before and after shots at the same poses (front, rear, above, the cinema camera, the chase on a road) in
       docs/shots/0232/.
-- [ ] Bench before and after.
+- [x] Bench before and after.
 
 ## Test plan
 `cd ios && make test && make rules && make bench-freedrive`; simulator shots with `-fx-cam front|rear|top`.

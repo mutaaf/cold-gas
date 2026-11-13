@@ -1,11 +1,12 @@
 ---
 id: 0233
 title: Every camera sees the real car, the first screens aren't blown out, and the sets have surfaces (iPhone)
-status: in-progress
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-11-13
+pr: 365
 by: operator
 ---
 
@@ -28,8 +29,8 @@ Runs on: the operator's Mac (Xcode).
 - The paint's flakes show only up close (further off they read as noise).
 
 ## Acceptance criteria
-- [ ] `make test` (the 52 run vectors bit-exact) and `make rules` green.
-- [ ] Before and after shots in docs/shots/0233/: the title, the Show's opening, the Wall's climb, the Lineup's opening,
+- [x] `make test` (the 52 run vectors bit-exact) and `make rules` green.
+- [x] Before and after shots in docs/shots/0233/: the title, the Show's opening, the Wall's climb, the Lineup's opening,
       the Show's set on a roam.
 
 ## Out of scope
