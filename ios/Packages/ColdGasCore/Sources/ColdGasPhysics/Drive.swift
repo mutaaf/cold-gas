@@ -39,9 +39,23 @@ public final class DriveStreamer: WorldStreamer {
 
     @inline(__always) static func key(_ i: Int, _ j: Int) -> Int64 { (Int64(Int32(truncatingIfNeeded: i)) << 32) | Int64(UInt32(bitPattern: Int32(truncatingIfNeeded: j))) }
 
+    /// Aero downforce for the drive's car (0224): ½ρ·ClA·v² along the car's own down. ClA 0.35 m² is an ESTIMATE for a
+    /// low two-seat roadster with a rear wing (road sports cars measure ≈ 0.1–0.6 m²; race cars several m²): about 340 N
+    /// at 40 m/s, 2 % of its weight, enough to steady a fast sweeper and no more. Drive only: scored courses have no
+    /// streamer, so their forces are untouched (the run vectors prove it).
+    public static let clA = 0.35, rho = 1.225
+    public var aero = true
+    @inline(__always) public static func downforce(_ v: Double) -> Double { 0.5 * rho * clA * v * v }
+
     public func tick(_ w: World) {
         guard let p = w.carPos else { return }
         origin(w, p.x, p.z)
+        if aero, let v = w.carVel, let q = w.carQuat {
+            let f = DriveStreamer.downforce((v.x * v.x + v.y * v.y + v.z * v.z).squareRoot())
+            // The car's up, from its rotation: −f along it.
+            let ux = 2 * (q.x * q.y - q.w * q.z), uy = 1 - 2 * (q.x * q.x + q.z * q.z), uz = 2 * (q.y * q.z + q.w * q.x)
+            w.carF.x -= f * ux; w.carF.y -= f * uy; w.carF.z -= f * uz
+        }
         let C = DriveStreamer.cell, ix = Int((p.x / C).rounded(.down)), iz = Int((p.z / C).rounded(.down))
         lock.lock(); let fresh = done; done.removeAll(); let freshProps = propDone; propDone.removeAll(); lock.unlock()
         for d in fresh { data[DriveStreamer.key(d.ix, d.iz)] = d }

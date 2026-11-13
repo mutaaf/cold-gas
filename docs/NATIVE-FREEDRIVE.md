@@ -202,6 +202,14 @@ is Free Drive on a scored course's own set:
   ground and a slide are a rumble under them. `Crash.repair` (Back on the road) undoes the damage without replaying the
   drive's earlier impacts.
 
+### Lane keeping and downforce (0224)
+
+- The autopilot adds a Stanley term to its pure pursuit: the sideways offset from its lane's centre, abreast of the
+  car, steers it back (`atan(1.4·e / v)`), with a shorter look-ahead (7 m + 0.45 s). It no longer cuts bends across the
+  centre line.
+- `DriveStreamer` adds aero downforce, ½ρ·ClA·v² along the car's down (ClA 0.35 m², ESTIMATE), through `World.carF`.
+  Only a drive has a streamer, so scored runs never feel it.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the

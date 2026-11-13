@@ -212,7 +212,10 @@ final class FreeDrive: DriveScene {
             if along > 0.5 { w.advance(min(along, 20)) } else { break }
         }
         let speed = (car.vel.x * car.vel.x + car.vel.z * car.vel.z).squareRoot()
-        let look = 10 + speed * 0.7
+        // Lane keeping (0224): how far the car sits right of its lane's centre, abreast of it (+ = right of the lane).
+        let here = w.pose(lane: 1.8)
+        let laneErr = (car.pos.x - here.x) * -here.hz + (car.pos.z - here.z) * here.hx
+        let look = 7 + speed * 0.45
         // A copy looks ahead; the walker itself stays abreast of the car.
         let probe = w.copy()
         probe.advance(look); let ahead = probe.pose(lane: 1.8); probe.advance(look); let far = probe.pose(lane: 1.8)
@@ -223,7 +226,10 @@ final class FreeDrive: DriveScene {
         // How sharp the road turns between here and the far point: slow for it.
         let turn = abs(atan2(ahead.hx * far.hz - ahead.hz * far.hx, ahead.hx * far.hx + ahead.hz * far.hz))
         let want = min(v, max(9, v * (1 - turn * 1.6)))
-        i.steer = max(-1, min(1, ang * 2.2))   // + = right (src/drive/pilot.js)
+        // Pure pursuit for the bend, plus a Stanley term that pulls the car back onto its lane line (it used to cut
+        // bends across the centre line).
+        let hold = -atan(1.4 * laneErr / max(speed, 6))
+        i.steer = max(-1, min(1, (ang + hold) * 2.2))   // + = right (src/drive/pilot.js)
         i.throttle = speed < want ? min(1, (want - speed) * 0.35 + 0.15) : 0
         i.brake = speed > want + 2 ? min(1, (speed - want) * 0.15) : 0
     }

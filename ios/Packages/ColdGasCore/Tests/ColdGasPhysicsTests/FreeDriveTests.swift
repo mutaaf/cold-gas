@@ -135,6 +135,29 @@ struct FreeDriveTests {
         #expect(c.pos.z < LINEUP_BOXES[LINEUP_BOXES.count - 1].maxZ + 2)   // it didn't pass through the row
     }
 
+    // 0224: downforce in the drive only, by the square of the speed.
+    @Test func theDrivesCarFeelsDownforceByTheSquareOfItsSpeed() throws {
+        #expect(abs(DriveStreamer.downforce(40) - 343) < 1)
+        #expect(abs(DriveStreamer.downforce(20) * 4 - DriveStreamer.downforce(40)) < 1e-9)
+        let world = FreeWorld(seed: "aero")
+        var load = [Double]()
+        for aero in [false, true] {
+            let (c, s, _) = try car(world, near: 6_000, 9_000)
+            s.aero = aero
+            let inp = Input()
+            for _ in 0..<240 { try step(c, inp) }   // settle
+            c.vel.x = 0; c.vel.z = 0
+            let f = (2 * (c.quat.x * c.quat.z + c.quat.w * c.quat.y), 1 - 2 * (c.quat.x * c.quat.x + c.quat.y * c.quat.y))
+            c.vel.x = f.0 * 40; c.vel.z = f.1 * 40
+            var sum = 0.0
+            // The springs take a few tenths of a second to answer: average the second half of 0.75 s.
+            for t in 0..<180 { try step(c, inp); if t >= 90 { sum += c.wheels.reduce(0) { $0 + $1.compression } } }
+            load.append(sum / 90)
+            c.world.free()
+        }
+        #expect(load[1] > load[0] + 0.001, "compression \(load)")   // the springs take the ≈ 340 N
+    }
+
     @Test func theWallsRoamHasTheCurl() {
         let c = createVehicle(course: DRIVE_WALL)
         defer { c.world.free() }
