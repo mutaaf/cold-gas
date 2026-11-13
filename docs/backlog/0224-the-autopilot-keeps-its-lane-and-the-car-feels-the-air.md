@@ -32,6 +32,9 @@ raycast suspension, and drag. Those are shared with the scored runs and stay bit
       carry it.
 - [ ] Simulator: the autopilot 3 km out stays in its lane (docs/shots/0224/).
 
+## Test plan
+`cd ios && make test && make rules`; on the simulator `-freedrive -fd-km 3 -fd-pilot 25` and watch it take bends in its lane.
+
 ## Out of scope
 Torque vectoring between the rear motors and a drive-only tyre model. They'd mean drive-only branches in the scored
 car's step, which is a bigger change than this ticket.
