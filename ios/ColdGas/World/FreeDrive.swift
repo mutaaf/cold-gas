@@ -461,6 +461,9 @@ final class FreeDrive: DriveScene {
         k.sunE = SIMD4(sky.keyColor * sky.keyIntensity, Float(time))
         k.fogExp.z = sky.night > 0.05 ? 1 : 0
         k.hazeCol.w = 0
+        // The bloom's threshold in the frame as exposed (0229): by day only the sun, its glints and the lamps bloom (a
+        // sunlit white car read as fog through the stage's night threshold); toward night the stage's own.
+        k.bloom.x = (2.6 + (0.97 - 2.6) * sky.night) / max(0.2, sky.exposure)
         return k
     }
 

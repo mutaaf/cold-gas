@@ -191,12 +191,12 @@ static WSurf world_land(float3 col, float3 n0, float3 wp, float2 w, float dist, 
     if (!snow) {
         // Grass: dry, sun-bleached patches and lush hollows, then clumps at 0.6 m.
         float dry = smoothstep(0.45, 0.75, world_fbm(w / 23.0 + 11.0, 3));
-        float3 dryC = float3(0.15, 0.14, 0.065), lush = float3(0.045, 0.085, 0.03);
+        float3 dryC = float3(0.12, 0.12, 0.055), lush = float3(0.045, 0.085, 0.03);
         float3 g = mix(a, mix(lush * (0.8 + 0.6 * macro), dryC * (0.7 + 0.5 * macro), dry * 0.7), 0.6 * green);
         float clump = world_noise(w / 0.6);
         g *= mix(1.0, 0.75 + 0.5 * clump, midK * green);
         // Bare soil showing through on the slopes and in patches.
-        float soil = smoothstep(0.62, 0.8, world_fbm(w / 9.0 + 3.0, 3) + steep * 0.35) * (1.0 - steep * 0.5);
+        float soil = smoothstep(0.7, 0.85, world_fbm(w / 9.0 + 3.0, 3) + steep * 0.35) * (1.0 - steep * 0.5);
         g = mix(g, float3(0.13, 0.095, 0.065) * (0.8 + 0.4 * clump), soil * 0.8 * green);
         a = g;
         // Rock on the steep: grey-brown, banded along its strata, fractured.
@@ -314,7 +314,7 @@ fragment float4 cg_world_road_fragment(WRoadOut in [[stage_in]], constant WFrame
     if (fine > 0) { float2 st = world_cells(w / 0.018); stone = smoothstep(0.38, 0.16, st.x); }
     float pale = step(0.9, world_hash(floor(w / 0.018)));
     float grain = world_noise(w / 0.006);
-    asphalt *= mix(1.0, 0.9 + 0.14 * stone + 0.55 * pale * stone + 0.12 * (grain - 0.5), fine);
+    asphalt *= mix(1.0, 0.96 + 0.06 * stone + 0.35 * pale * stone + 0.08 * (grain - 0.5), fine);
     asphalt *= mix(1.0, 0.9 + 0.2 * world_noise(w / 0.22), mid);
     // Cracks, sealed with tar: thin, meandering, glossy black; and the centre joint.
     float crack = 0;
@@ -350,18 +350,11 @@ fragment float4 cg_world_road_fragment(WRoadOut in [[stage_in]], constant WFrame
     float mk = max(edge, dash) * fade * keep;
     float3 paint = float3(0.66, 0.66, 0.63);
     albedo = mix(albedo, paint * (0.85 + 0.15 * grain), mk);
-    // The bump: the stones near, from the stone mask's own screen derivatives (no extra taps).
-    if (fine > 0 && shoulder < 0.5) {
-        float3 dpx = dfdx(in.world), dpy = dfdy(in.world);
-        float2 g2 = float2(dfdx(stone), dfdy(stone));
-        float3 grad = (cross(dpy, n) * g2.x + cross(n, dpx) * g2.y) / max(abs(dot(dpx, cross(dpy, n))), 1e-8);
-        n = normalize(n - grad * 0.004 * (1.0 - mk) * fine);
-    }
     s.albedo = albedo; s.n = n;
     // Roughness: open asphalt is rough, the tracks and the tar smoother, the paint a little smoother still.
     s.rough = mix(mix(0.82 - 0.14 * track, 0.42, tar), 0.6, mk);
     s.rough = mix(s.rough, 1.0, shoulder);
-    s.ao = (1.0 - 0.15 * stone * fine * (1.0 - mk)) * world_carAO(in.world, dr);
+    s.ao = (1.0 - 0.06 * stone * fine * (1.0 - mk)) * world_carAO(in.world, dr);
     float3 c = world_light(s, in.world, in.lightClip, f, k, dr, shadow, skyView);
     // Painted lines are retroreflective: the headlamps come back off them.
     if (dr.lampPos.w > 0 && mk > 0) {

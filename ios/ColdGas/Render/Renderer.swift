@@ -781,13 +781,15 @@ final class Renderer {
     /// Each lamp's level this frame, and the canopy's glass or its crazing.
     private func applyCarMaterials() {
         let c = crash.car
-        setLamp(.drl, c.drl); setLamp(.heads, c.headC); setLamp(.tailBar, c.tail); setLamp(.tailDim, c.tailDim); setLamp(.brake, c.brakeC)
-        setBodyLamp(subAmber, c.amber); setBodyLamp(subMarker, c.marker); setBodyLamp(subPlate, c.plate); setBodyLamp(subAmbient, c.ambient)
+        // Under Free Drive's daylight (0229) a lamp is a bright mark, not a blaze: its HDR colour scaled down until dusk.
+        let lk: Float = lookU.atmo.x > 0.5 ? 0.25 + 0.75 * lookU.atmo.w : 1
+        setLamp(.drl, c.drl * lk); setLamp(.heads, c.headC * lk); setLamp(.tailBar, c.tail * lk); setLamp(.tailDim, c.tailDim * lk); setLamp(.brake, c.brakeC * max(lk, 0.6))
+        setBodyLamp(subAmber, c.amber * lk); setBodyLamp(subMarker, c.marker * lk); setBodyLamp(subPlate, c.plate * lk); setBodyLamp(subAmbient, c.ambient * lk)
         if subGlass >= 0, let m = c.crazed ? crazedMat : glassMat { stageMats[1][subGlass] = m }
         guard driveCar != nil else { return }
         // The forged car's lamps follow the same states; its glass crazes the same; the grime builds with the miles.
         for l in dLamps {
-            let col: SIMD3<Float> = [c.amber, c.marker, c.plate, c.ambient, c.drl * 1.2, c.tail][l.kind]
+            let col: SIMD3<Float> = [c.amber, c.marker, c.plate, c.ambient, c.drl * 1.2, c.tail][l.kind] * lk
             if l.sub >= 0 { stageMats[carMats][l.sub].color = SIMD4(col, 1) }
             if l.far >= 0 { stageMats[carFarMats][l.far].color = SIMD4(col, 1) }
         }
