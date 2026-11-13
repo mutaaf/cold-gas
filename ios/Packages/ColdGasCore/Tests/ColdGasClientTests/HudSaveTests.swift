@@ -1,4 +1,4 @@
-// 0220: the HUD layouts live in the save beside everything else. A save from before them decodes with the factory
+// 0221: the HUD layouts live in the save beside everything else. A save from before them decodes with the factory
 // controls; one with them keeps them through an encode; a damaged HUD field costs only itself, never the medals.
 import Foundation
 import Testing

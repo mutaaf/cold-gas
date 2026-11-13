@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# The HUD layout editor and two custom layouts (0220) on a phone held sideways, the Duo in tabletop and an iPad, all on ONE
+# The HUD layout editor and two custom layouts (0221) on a phone held sideways, the Duo in tabletop and an iPad, all on ONE
 # simulator: the Duo and the iPad are laid out by -window (+ -pose), as deck-shots.sh does. Each shot waits for a readiness
 # token (the editor's "hud-editor", a frozen run's "frozen"), never a fixed sleep.
 #   scripts/hud-shots.sh [outdir]      (after `make build`; SIM names the simulator, ONLY="wide-editor ..." picks shots)

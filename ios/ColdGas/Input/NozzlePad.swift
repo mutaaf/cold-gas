@@ -61,7 +61,7 @@ final class NozzlePadView: UIView {
         guard bounds.width > 10 else { return }
         deck = DeckGeometry.layout(bounds.size)
         frames = []; placed = []
-        // Each frame at its own scale (the player's layout, 0220; the factory's are one k).
+        // Each frame at its own scale (the player's layout, 0221; the factory's are one k).
         func k(_ i: Int) -> CGFloat { CGFloat(i < deck.valveKs.count ? deck.valveKs[i] : deck.valveK) }
         if deck.valves.count == 1, let r = deck.valves.first {
             frames.append((r.cgRect, 0, k(0)))

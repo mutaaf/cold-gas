@@ -90,7 +90,7 @@ struct LicensesView: View {
     }
 }
 
-/// Settings → Controls (0220): the HUD layout editor, the stick, the buttons, Free Drive's look. Each change is saved as it's
+/// Settings → Controls (0221): the HUD layout editor, the stick, the buttons, Free Drive's look. Each change is saved as it's
 /// made and reaches the controls at once.
 struct ControlsSection: View {
     let close: () -> Void

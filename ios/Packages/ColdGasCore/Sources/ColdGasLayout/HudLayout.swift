@@ -1,4 +1,4 @@
-// The player's own HUD layout (0220): every on-screen control can be moved, sized and faded, per control tier and per shape
+// The player's own HUD layout (0221): every on-screen control can be moved, sized and faded, per control tier and per shape
 // of screen, with a few presets, a left-handed mirror, snap guides and the fold kept clear. Pure: no UIKit, tested by
 // HudLayoutTests. It changes only where the controls are drawn and where a touch lands; what a press sends the sim is
 // FlightDeck's, unchanged.

@@ -1,5 +1,5 @@
 ---
-id: 0220
+id: 0221
 title: The iPhone app's touch controls are the player's to arrange (a HUD layout editor, per tier and per screen shape)
 status: in-progress
 priority: P1
@@ -72,7 +72,7 @@ Verified on one simulator (an iPhone Pro Max, iOS 27.0; the Duo and the iPad lai
 preset, Mirror, Undo), then a whole Pro run on the Wall (left-handed) and a whole Advanced run on the Wall (Claw), both
 past the ledge to the results. A launch with a preset and the editor open crashed on a NaN before the first layout
 (a preset worked out on a zero-size rect); fixed and tested (`aRectWithNoSizeYetIsNeverNaN`).
-Shots (docs/shots/hud-0220/, from `ios/scripts/hud-shots.sh`): the editor, Claw on the ledge (RELEASE up), Left-handed in
+Shots (docs/shots/hud-0221/, from `ios/scripts/hud-shots.sh`): the editor, Claw on the ledge (RELEASE up), Left-handed in
 the air, Minimal on Advanced's valve deck, each on a phone sideways, the Duo tabletop and an iPad. All looked at.
 Not yet: a hardware pass (a Duo's real fold and closed screen, a Pro Max, an iPad in the hand); VoiceOver driven by a
 person; Free Drive's swipe-to-look on the simulator (the drive is being rebuilt in parallel).

@@ -322,7 +322,7 @@ too.
     `syncTouchPhase` rule, `Deck.buttons`). A ghost ring breathes round what the cue names.
   - The valve deck is the car whole on an upright phone. Everywhere else it's split down the spine, the car's left
     valves under the left thumb, and the HUD steps into the top middle.
-- **The player's layout (0220).** That deck is the factory. `ColdGasLayout/HudLayout.swift` (pure, `HudLayoutTests`)
+- **The player's layout (0221).** That deck is the factory. `ColdGasLayout/HudLayout.swift` (pure, `HudLayoutTests`)
   lays the player's changes over it, per tier (assist, pro, advanced, drive) and per shape (phone, phoneWide, duoClosed,
   duoBook, duoFlat, duoTabletop, tablet). Each change is a control's centre as a fraction of the controls rect, a size and
   an opacity, kept legal: inside the rect and never across the fold. Presets (Thumbs, Claw, Left-handed, Minimal) are

@@ -35,7 +35,7 @@ enum DeckGeometry {
         let f = Deck.form(spread: spread, width: Double(size.width), height: Double(size.height))
         return Deck.layout(form: f, width: Double(size.width), height: Double(size.height), fold: fold)
     }
-    /// Where everything is: the factory with the player's layout for this tier and shape over it (0220).
+    /// Where everything is: the factory with the player's layout for this tier and shape over it (0221).
     static func layout(_ size: CGSize, tier t: HudTier? = nil, custom: HudCustom?? = nil) -> DeckLayout {
         let t = t ?? tier, store = HudStore.shared
         return HudLayout.apply(factory(size), custom ?? store.custom(t, shape(size)), fold: fold, stickMode: store.prefs.stick)
@@ -74,7 +74,7 @@ final class FlightDeckView: ControlSurface {
     private var stickOrigin = CGPoint.zero
     private var stickWas = (out: false, rim: false)
     private let reduced = UIAccessibility.isReduceMotionEnabled
-    /// The player's button options (0220): BRAKE or BOOST latched by a tap (their labels), RELEASE pulsed on the finger's lift.
+    /// The player's button options (0221): BRAKE or BOOST latched by a tap (their labels), RELEASE pulsed on the finger's lift.
     private var latched = Set<String>(), pulsed = Set<DeckKey>()
     /// Free Drive: a finger on empty glass looks round (DriveLook).
     var look = false
@@ -148,7 +148,7 @@ final class FlightDeckView: ControlSurface {
         accessibility()
     }
     private static let slotControls: [HudControl] = [.slotA, .slotB, .slotC]
-    /// Each control at the player's opacity (0220), the moment the layout changes (a slot's arrival eases to it).
+    /// Each control at the player's opacity (0221), the moment the layout changes (a slot's arrival eases to it).
     private func fade() {
         instantly {
             for (i, s) in slots.enumerated() where s.button != nil {

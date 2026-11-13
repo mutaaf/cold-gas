@@ -74,7 +74,7 @@ struct RootUI: View {
                     .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
                     .transition(.opacity)
             }
-            // The HUD layout editor (0220), from Settings → Controls or the pause sheet: over everything, the run under it paused.
+            // The HUD layout editor (0221), from Settings → Controls or the pause sheet: over everything, the run under it paused.
             if let t = hud.editing {
                 HudEditorView(layout: layout, tier: t) { withAnimation(.easeOut(duration: 0.2)) { hud.editing = nil } }
                     .id("\(t.rawValue)")

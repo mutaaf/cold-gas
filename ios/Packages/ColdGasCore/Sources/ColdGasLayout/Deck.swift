@@ -56,7 +56,7 @@ public struct DeckLayout: Equatable, Sendable {
     public var strip: LRect?
     /// Assist's one-thumb pad, over the scene (a tabletop's pad is its whole panel).
     public var thumb = DeckSlot(c: LPoint(x: 0, y: 0), d: 0)
-    /// The player's layout (0220, HudLayout): each control's opacity (1 when not set), each valve frame's own scale, the
+    /// The player's layout (0221, HudLayout): each control's opacity (1 when not set), each valve frame's own scale, the
     /// stick's mode, and whether anything moved from the factory (the fan's arc is drawn only on the factory layout).
     public var alphas: [HudControl: Double] = [:]
     public var valveKs: [Double] = []

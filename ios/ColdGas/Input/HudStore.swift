@@ -1,4 +1,4 @@
-// The player's touch controls (0220): the layouts the HUD editor saves (per tier, per shape), the stick, the buttons and Free
+// The player's touch controls (0221): the layouts the HUD editor saves (per tier, per shape), the stick, the buttons and Free
 // Drive's look, read by every surface through DeckGeometry. Kept in the save (SaveData.hud) and nowhere else. `revision`
 // moves on every change, so the surfaces and the camera's framing lay themselves out again.
 //
@@ -62,7 +62,7 @@ final class HudStore: ObservableObject {
     #endif
 }
 
-/// Free Drive's swipe-to-look (0220): a finger on empty glass turns the chase camera round the car. It drifts back behind the
+/// Free Drive's swipe-to-look (0221): a finger on empty glass turns the chase camera round the car. It drifts back behind the
 /// car a moment after the finger lifts. Sensitivity and invert are the player's (Settings → Controls).
 final class DriveLook {
     static let shared = DriveLook()

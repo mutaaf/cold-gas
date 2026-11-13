@@ -49,7 +49,7 @@ public struct SaveData: Codable, Equatable {
     public var daily: Daily.Streak?
     public var settings: Settings?
     public var judgeBreaker: BreakerState?
-    /// The touch controls the player has shaped (0220): layouts per tier and shape, the stick, the buttons, the look. A save
+    /// The touch controls the player has shaped (0221): layouts per tier and shape, the stick, the buttons, the look. A save
     /// from before it has none and gets the factory controls; a damaged one costs only what can't be read (HudPrefs).
     public var hud: HudPrefs?
     public init() {}

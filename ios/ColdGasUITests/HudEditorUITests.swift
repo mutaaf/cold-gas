@@ -1,4 +1,4 @@
-// 0220: the HUD layout editor by touch, through the whole app: drag a control, size it, pinch another, save, relaunch and
+// 0221: the HUD layout editor by touch, through the whole app: drag a control, size it, pinch another, save, relaunch and
 // find it kept; a preset, the mirror, undo; then a whole Pro and Advanced run on the Wall with a custom layout, past the
 // ledge (0210's RELEASE hang) to the results. `make uitest` or xcodebuild test -only-testing:ColdGasUITests/HudEditorUITests.
 import XCTest

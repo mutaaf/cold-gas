@@ -1,4 +1,4 @@
-// The HUD layout editor (0220): every on-screen control dragged anywhere, pinched (or slid) to size, faded to taste, for each
+// The HUD layout editor (0221): every on-screen control dragged anywhere, pinched (or slid) to size, faded to taste, for each
 // control tier on the shape of screen in the hand. Snap guides to the middle, the margins and the other controls (a haptic
 // tick on each), the safe area as the canvas's edge, the Duo's fold kept clear (a control dropped on it lands beside it),
 // overlaps flagged, undo, presets, a left-handed mirror, reset. Opened from Settings → Controls and from the pause sheet.

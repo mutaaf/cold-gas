@@ -1,4 +1,4 @@
-// 0220: the player's own HUD layout on every shape DeckTests measures. The factory is Deck's, untouched; every preset and
+// 0221: the player's own HUD layout on every shape DeckTests measures. The factory is Deck's, untouched; every preset and
 // every drag stays inside the controls rect, off the Duo's fold, at least 44 pt; the stick's shaping is the identity until
 // the player changes it.
 import Testing
