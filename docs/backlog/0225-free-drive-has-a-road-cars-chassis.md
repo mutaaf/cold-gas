@@ -1,12 +1,12 @@
 ---
 id: 0225
 title: Free Drive and Roam drive a road car's chassis of their own (springs you can see, a friction-circle tyre, vectored rear motors, ABS, hot brakes), with real lamps, glossy paint and a plate that reads
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: player-feel
 created: 2026-11-13
-pr:
+pr: 350
 by: operator
 ---
 
