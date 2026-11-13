@@ -32,6 +32,10 @@ public final class World {
     public internal(set) var ox = 0.0, oy = 0.0, oz = 0.0
     /// What Free Drive streams in near the car each tick (nil on a scored course).
     public var streamer: WorldStreamer?
+    /// Free Drive's loose things (Loose.swift, 0221): cones, barriers, signs. Empty on every scored course.
+    public internal(set) var loose: [LooseBody] = []
+    /// What the wheels' rays see: everything, but for Free Drive's loose things (RAY_ALL on every scored course).
+    var rayFilter = RAY_ALL
     /// Free Drive: the stage's own static colliders (the floor, the Wall's deck, its steel), dropped away from the centre.
     var centre: [UInt64] = [], centreSolids: [Solid] = []
     public var carRb: UInt64 = CG_NONE, carCol: UInt64 = CG_NONE
@@ -252,7 +256,7 @@ public func raycast(_ w: World, _ ox: Double, _ oy: Double, _ oz: Double, _ dx: 
     if excludeRb == w.carRb && clear(w, ox, oy, oz, dx, dy, dz, maxT) { h.t = -1; return -1 }
     var t = -1.0
     if cg_cast_ray_and_get_normal(w.rw, Float(ox - w.ox), Float(oy - w.oy), Float(oz - w.oz), Float(dx), Float(dy), Float(dz), Float(maxT), true,
-                                  0, UInt64(RAY_ALL), CG_NONE, excludeRb, &rayHit) {
+                                  0, UInt64(w.rayFilter), CG_NONE, excludeRb, &rayHit) {
         t = Double(rayHit.toi)
         let info = w.info[rayHit.collider]
         var nx = Double(rayHit.normal.0), ny = Double(rayHit.normal.1), nz = Double(rayHit.normal.2)

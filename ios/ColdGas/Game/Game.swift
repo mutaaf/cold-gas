@@ -61,7 +61,7 @@ final class Game: ObservableObject {
     /// The scored course a roam is on (nil in plain Free Drive): its HUD offers a scored run there.
     @Published private(set) var roamedFrom: String?
     @Published private(set) var driveHud = DriveHud()
-    private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0, driveClock = 0.0
+    private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0, driveClock = 0.0, driveImpacts = 0
     let controls = Controls()
 
     private(set) var live: LiveRun?
@@ -142,7 +142,7 @@ final class Game: ObservableObject {
         if let v = Launch.value("-fd-pilot").flatMap(Double.init) { fd.pilot = v }
         controls.drive = fd.sampler
         if Launch.value("-fd-cam") == "bumper" { fd.camera.mode = .bumper }
-        freeDrive = fd; driveSettled = false
+        freeDrive = fd; driveSettled = false; driveImpacts = 0
         stage?.load(course: c.id, track: fd.track)
         screen = .drive
         HapticPlayer.shared.apply(HapticContinuous())
@@ -174,6 +174,19 @@ final class Game: ObservableObject {
         if !paused { fd.frame(dt: min(dt, 0.1)); driveClock += dt }
         stage?.renderer?.liveTime = fd.liveTime
         Sound.shared.update(speed: DMath.dhypot(fd.car.vel.x, fd.car.vel.y, fd.car.vel.z), throttles: fd.car.throttles, grounded: fd.car.grounded > 0, phase: .run)
+        // The hands (0221): each impact the sim records, scaled by its speed; under them, rough ground and a sliding tyre.
+        let imps = fd.track.impacts
+        if driveImpacts > imps.count { driveImpacts = 0 }
+        while driveImpacts < imps.count {
+            let e = imps[driveImpacts]; driveImpacts += 1
+            if e.kind == ImpactKind.SCRAPE && e.speed < 3 { continue }
+            let k = min(1, max(0, (e.speed - 1) / 14))
+            HapticPlayer.shared.play(HapticEvent(kind: e.kind == ImpactKind.CRUSH ? .crush : e.kind == ImpactKind.WHEEL ? .wheel : .hit, tick: 0, channel: 4,
+                                                 intensity: 0.2 + 0.8 * k, sharpness: e.kind == ImpactKind.WHEEL ? 0.35 : 0.7))
+        }
+        let jets = fd.car.throttles.reduce(0, +)
+        HapticPlayer.shared.apply(HapticContinuous(rumble: Float(min(0.5, fd.roughK * 0.4 + fd.slideK * 0.2)), rumbleSharp: 0.3,
+                                                   hiss: Float(min(0.6, jets * 0.12)), hissSharp: 0.6, grind: Float(min(0.5, fd.slideK * 0.35))))
         if !driveSettled, fd.view?.settled == true, (fd.view?.stats.tiles ?? 0) > 0 {
             driveSettled = true
             Ready.mark("drive")

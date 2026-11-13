@@ -134,6 +134,18 @@ final class Crash {
         mPos[j] = p; mVel[j] = v; mLife[j] = 1; mDecay[j] = 1 / life; mSize0[j] = size; mGrow[j] = grow; mAlpha0[j] = alpha; mCol[j] = c
     }
 
+    /// A puff from outside a crash (Free Drive's tyre smoke, dust and spray, 0221): the same pool, the same draw.
+    func kick(_ p: SIMD3<Float>, _ v: SIMD3<Float>, size: Float, grow: Float, life: Float, alpha: Float, color: SIMD3<Float>) {
+        puff(p, v, size, grow, life, alpha, color)
+    }
+    /// The car made whole again (Free Drive's reset): dents out, lamps back, parts back on. The events already drawn
+    /// stay drawn (unlike reset, which would replay them).
+    func repair() {
+        onReset?()
+        head = 1; tail = 1; headFail = 0; tailFail = 0; headDead = false; tailDead = false; hazardT = -1; hazard = false; glass = false
+        pieces.reset(); car.reset(); grind = 0; slowK = 1; slowT = 0
+    }
+
     /// Feed events up to `tick` (the replay's frame).
     func feed(_ imps: [Replay.Impact], tick: Int, vel: SIMD3<Float>, carPos: SIMD3<Float>, carQuat: simd_quatf) {
         if tick < lastTick { reset() }   // the replay looped

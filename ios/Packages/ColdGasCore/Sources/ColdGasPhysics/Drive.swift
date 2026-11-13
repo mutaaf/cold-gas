@@ -215,6 +215,10 @@ public final class DriveStreamer: WorldStreamer {
             cg_body_translation(w.rw, b.rb, &t)
             cg_body_set_translation(w.rw, b.rb, t[0] - Float(dx), t[1], t[2] - Float(dz), false)
         }
+        for b in w.loose where b.rb != CG_NONE {
+            cg_body_translation(w.rw, b.rb, &t)
+            cg_body_set_translation(w.rw, b.rb, t[0] - Float(dx), t[1], t[2] - Float(dz), false)
+        }
         if w.carRb != CG_NONE, let p = w.carPos { cg_body_set_translation(w.rw, w.carRb, Float(p.x - x), Float(p.y - w.oy), Float(p.z - z), false) }
         // The stage's own colliders live at the centre: out when the origin leaves it, back when it returns.
         if x != 0 || z != 0 {

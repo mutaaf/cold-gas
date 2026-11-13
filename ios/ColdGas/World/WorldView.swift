@@ -18,8 +18,11 @@ final class WorldView {
     static let split = 2.2, farR = 40_000.0, roadR = 2_600.0, propR = 1_250.0, block = 512.0
     let world: FreeWorld
     private let device: MTLDevice
-    private let terrainPipe, roadPipe, propPipe: MTLRenderPipelineState
-    private let dsWrite: MTLDepthStencilState
+    private let terrainPipe, roadPipe, propPipe, loosePipe, markPipe: MTLRenderPipelineState
+    private let dsWrite, dsTest: MTLDepthStencilState
+    /// Free Drive's loose things and the rubber its tyres lay down (0221).
+    let loose: LooseView?
+    let marks: SkidMarks?
     private let tileIndex: MTLBuffer
     private let tileIndexCount: Int
     private let gen = DispatchQueue(label: "coldgas.world", qos: .utility, attributes: .concurrent)
@@ -66,11 +69,17 @@ final class WorldView {
     init?(device: MTLDevice, world: FreeWorld, props: [PropSource] = [ForgeProps(), ProceduralProps()]) {
         self.device = device; self.world = world
         guard let lib = device.makeDefaultLibrary() else { return nil }
-        func pipe(_ v: String, _ f: String, _ vd: MTLVertexDescriptor) -> MTLRenderPipelineState? {
+        func pipe(_ v: String, _ f: String, _ vd: MTLVertexDescriptor, blend: Bool = false) -> MTLRenderPipelineState? {
             let d = MTLRenderPipelineDescriptor()
             d.vertexFunction = lib.makeFunction(name: v); d.fragmentFunction = lib.makeFunction(name: f)
             d.vertexDescriptor = vd
             d.colorAttachments[0].pixelFormat = Renderer.hdrFormat
+            if blend {
+                let c = d.colorAttachments[0]!
+                c.isBlendingEnabled = true
+                c.sourceRGBBlendFactor = .sourceAlpha; c.destinationRGBBlendFactor = .oneMinusSourceAlpha
+                c.sourceAlphaBlendFactor = .zero; c.destinationAlphaBlendFactor = .one
+            }
             d.depthAttachmentPixelFormat = Renderer.depthFormat
             d.rasterSampleCount = Renderer.samples
             return try? device.makeRenderPipelineState(descriptor: d)
@@ -92,12 +101,18 @@ final class WorldView {
             pv.attributes[i].format = fmt; pv.attributes[i].offset = off; pv.attributes[i].bufferIndex = 0
         }
         pv.layouts[0].stride = 44
+        let mv = MTLVertexDescriptor()
+        mv.attributes[0].format = .float4; mv.attributes[0].offset = 0; mv.attributes[0].bufferIndex = 0
+        mv.layouts[0].stride = 16
         guard let t = pipe("cg_world_terrain_vertex", "cg_world_terrain_fragment", tv), let r = pipe("cg_world_road_vertex", "cg_world_road_fragment", rv),
-              let p = pipe("cg_world_prop_vertex", "cg_world_prop_fragment", pv) else { return nil }
-        terrainPipe = t; roadPipe = r; propPipe = p
+              let p = pipe("cg_world_prop_vertex", "cg_world_prop_fragment", pv), let lp = pipe("cg_world_loose_vertex", "cg_world_prop_fragment", pv),
+              let mp = pipe("cg_world_mark_vertex", "cg_world_mark_fragment", mv, blend: true) else { return nil }
+        terrainPipe = t; roadPipe = r; propPipe = p; loosePipe = lp; markPipe = mp
         let dd = MTLDepthStencilDescriptor(); dd.isDepthWriteEnabled = true; dd.depthCompareFunction = .less
-        guard let ds = device.makeDepthStencilState(descriptor: dd) else { return nil }
-        dsWrite = ds
+        let dt = MTLDepthStencilDescriptor(); dt.isDepthWriteEnabled = false; dt.depthCompareFunction = .lessEqual
+        guard let ds = device.makeDepthStencilState(descriptor: dd), let dts = device.makeDepthStencilState(descriptor: dt) else { return nil }
+        dsWrite = ds; dsTest = dts
+        loose = LooseView(device: device); marks = SkidMarks(device: device)
         let idx = TileSpec.indices
         guard let ib = device.makeBuffer(bytes: idx, length: idx.count * 2, options: .storageModeShared) else { return nil }
         tileIndex = ib; tileIndexCount = idx.count
@@ -336,6 +351,15 @@ final class WorldView {
             }
         }
         stats.instances = ni
+        // The loose things (posed by the engine), then the rubber on the ground over everything opaque.
+        if let l = loose, l.drawn > 0 { e.setRenderPipelineState(loosePipe); e.setCullMode(.back); l.draw(e) }
+        if let m = marks, m.count > 0, !WorldView.skip.contains("marks") {
+            m.prepare(origin: origin)
+            e.setRenderPipelineState(markPipe); e.setCullMode(.none); e.setDepthStencilState(dsTest); e.setDepthBias(-24, slopeScale: -3, clamp: 0)
+            e.setVertexBuffer(m.buf, offset: 0, index: 0)
+            e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: m.count * 6)
+            e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setDepthStencilState(dsWrite)
+        }
     }
     private func boxVisible(_ x0: Double, _ z0: Double, _ S: Double, _ vp: simd_float4x4) -> Bool {
         let a = Float(x0 - origin.x), c = Float(z0 - origin.z), s = Float(S)

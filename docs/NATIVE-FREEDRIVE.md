@@ -186,6 +186,22 @@ is Free Drive on a scored course's own set:
 - **Out:** "Fly <course>" under Back goes straight into a scored run from the mark.
 - `-fd-hold throttle,steer[,after s]` (Debug) holds the controls, for shots.
 
+### The world takes the hits (0221)
+
+- **Loose things** (ColdGasPhysics `Loose.swift`): cones, barriers and A-frame signs are free rigid bodies with their
+  real masses, their centres of mass lowered. Each set's layout comes from `looseSet(stage)`. The wheels' rays leave
+  them out (`World.rayFilter`; `RAY_ALL` on every scored course), the engine's origin carries them when it moves, and
+  their poses are read after each step (`readLoose`). The app draws them instanced with a full pose (`LooseView`).
+  Impacts within 0.7 m of one aren't drawn or felt as the car's crash (plastic doesn't spark); the thing itself
+  knocks.
+- **Rubber** (`SkidMarks`): a ring of 4,096 quads in world metres, rewritten relative to the origin when it moves. A
+  wheel marks paving when its slip ratio passes 0.08 or its slip angle 0.05 rad. On the stage's black slab the marks
+  read by a faint sky sheen.
+- **Smoke, dust, spray** go through the crash's puff pool (`Crash.kick`), by what's underfoot.
+- **Felt:** the crash's shake goes to `DriveCamera`, each impact is a haptic transient scaled by its speed, and rough
+  ground and a slide are a rumble under them. `Crash.repair` (Back on the road) undoes the damage without replaying the
+  drive's earlier impacts.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the

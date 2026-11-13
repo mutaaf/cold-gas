@@ -24,6 +24,8 @@ final class Replay {
     /// The run's impact events (src/sim/impacts.js), as the sim recorded them: what crash.js draws.
     struct Impact { let tick: Int; let kind, part, probe: UInt8; let body: Int8; let pos, normal: SIMD3<Float>; let speed, crush: Float }
     private(set) var impacts: [Impact] = []
+    /// Free Drive: how many of the car's impacts have been looked at (some are left out, so it isn't impacts.count).
+    private var seenImpacts = 0
     private(set) var bodyCount: Int
     private(set) var score: Double, verdict: String
     let flownMs: Double
@@ -73,8 +75,14 @@ final class Replay {
         phases.append(c.grounded > 0 ? 0 : 2)
         for w in c.wheels { wheelState += [Float(w.compression), Float(w.spin), Float(w.steer)] }
         let im = c.impacts
-        while impacts.count < im.count {
-            let i = impacts.count
+        while seenImpacts < im.count {
+            let i = seenImpacts
+            seenImpacts += 1
+            // A cone or a barrier under the bumper (0221) is plastic: no sparks, chips or dents for it, and no knock (the
+            // drive knocks for the loose thing itself).
+            var plastic = false
+            for b in c.world.loose { let dx = Double(im.x[i]) - b.x, dz = Double(im.z[i]) - b.z; if dx * dx + dz * dz < 0.7 * 0.7 { plastic = true; break } }
+            if plastic { continue }
             impacts.append(Impact(tick: Int(im.tick[i]), kind: im.kind[i], part: im.part[i], probe: im.probe[i], body: im.body[i],
                 pos: SIMD3(im.x[i] - Float(o.x), im.y[i] - Float(o.y), im.z[i] - Float(o.z)), normal: SIMD3(im.nx[i], im.ny[i], im.nz[i]), speed: im.speed[i], crush: im.crush[i]))
         }
