@@ -208,10 +208,13 @@ export function bindInput(root, { onPause, running = () => false } = {}) {
 // on every call, each axis and button value read from a pad is a new number, and a frame runs up to eight
 // 240 Hz ticks. So the pads are copied once a frame into reused objects of the same shape (every axis and
 // button there, as plain numbers). Before the first poll (tests, benches) a sample copies them itself.
-let startWas = false, yWas = false;
+let startWas = false, yWas = false, aWas = false;
 // A gamepad's Y, pressed (the edge, once a frame): Free Drive toggles AI drive with it on the ground (0109).
 const padYFns = new Set();
 export const onPadY = (fn) => { padYFns.add(fn); return () => padYFns.delete(fn); };
+// A gamepad's A, pressed (the edge): the results sheet's primary action (0257). In a run A is LIFT, read by sample().
+const padAFns = new Set();
+export const onPadA = (fn) => { padAFns.add(fn); return () => padAFns.delete(fn); };
 const NO_PADS = [], PAD_BUTTONS = 18;
 const newPadCopy = () => ({ axes: new Float64Array(4), buttons: Array.from({ length: PAD_BUTTONS }, () => ({ pressed: false, value: 0 })) });
 const padCopies = [newPadCopy(), newPadCopy(), newPadCopy(), newPadCopy()];   // more if a browser lists more slots
@@ -245,19 +248,22 @@ export function pollPads() {
   const pads = copyPads();
   padsNow = padsFrame;
   if (!pads) return;
-  let start = false, intent = false, y = false;
+  let start = false, intent = false, y = false, a = false;
   for (let i = 0; i < pads.length; i++) {
     const p = pads[i];
     if (!p) continue;
     if (p.buttons[9]?.pressed) start = true;
     else if (!intent && padIntent(p)) intent = true;
     if (padsFrame[i] && padsFrame[i].buttons[3].pressed) y = true;   // a pad held off by a reset doesn't count
+    if (padsFrame[i] && padsFrame[i].buttons[0].pressed) a = true;
   }
   if (intent || start) device.note('pad');
   if (start && !startWas) onPauseCb?.();
   startWas = start;
   if (y && !yWas) for (const fn of padYFns) fn();
   yWas = y;
+  if (a && !aWas) for (const fn of padAFns) fn();
+  aWas = a;
   return intent || start;   // a pad in use: the title isn't idle (src/main.js syncLife)
 }
 

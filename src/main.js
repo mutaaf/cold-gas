@@ -28,7 +28,7 @@ import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
-import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, freshRun, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState, onPadY } from './input.js';
+import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, freshRun, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState, onPadY, onPadA } from './input.js';
 import { LEVEL_INFO } from './driving.js';
 import { isCrash, nextStreak, offerRookie, loadStreak, saveStreak } from './rookie.js';
 import { loadPerf, savePerf, record, decide, outcomeOf, afterChange, coachLive, loadFlown, saveFlown, loadAdapt, saveAdapt, TIER_WORDS, factorText, stepDownBanner, offerWords } from './adapt.js';
@@ -39,7 +39,7 @@ import { thumbStage, THUMB } from './onethumb.js';
 import { padState, padWords } from './thumb-words.js';
 // 0121 thumb mastery (own modules): the one-thumb touchdown sight on the pad, and the medals row.
 import { mountThumbAim } from './thumb-aim.js';
-import { showMedals, hideMedals } from './medals.js';
+import { showMedals, hideMedals, getMedals } from './medals.js';
 import { createBeat, beatEligible } from './beat.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
@@ -528,6 +528,7 @@ function finishRun() {
       if (!own && S.runKind === 'jump') showPointer(run);
     } catch (err) { console.warn('coach', err); }
   }, 450);
+  if (S.drill || S.autopilot) syncNext(null, null);
   if (S.drill) {
     // Practice: the drill's own card and the coach. No panel, no board, no ghost.
     ui.results(S.card, { drill: S.drill, result: S.drillSnap.result });
@@ -539,6 +540,7 @@ function finishRun() {
   }
   ui.results(S.card, null, { settled: beatShown, calm: calmSheet(), byok: loadAI().provider !== 'edge' });
   beatShown = false;
+  syncNext(run, S.card);
   // 0121: medals (src/medals.js) for your own runs, not the reference's.
   if (S.autopilot) hideMedals(); else showMedals(run.course, S.card.tier, S.card.total);
   pointerBox.hidden = true;
@@ -1642,6 +1644,42 @@ document.addEventListener('click', (e) => {
   if (!b) return;
   if (b.hasAttribute('data-rookie-go')) goRookie(); else if (b.hasAttribute('data-again')) retry(); else goHome();
 });
+// 0257: after a landing the sheet leads with the next jump (the next event in the Show → Wall → Lineup order), then
+// "Beat <score>" (Retry, with the score to beat: this run or the best before it, whichever is higher), then Share; a
+// wreck leads with Retry and has no Next. The calm sheet keeps the same order. Next flies at once on its event.
+const nextBtn = document.querySelector('[data-next]'), againLabel = document.querySelector('[data-again-label]');
+const retryBtn = document.querySelector('.top-actions-row [data-again]');
+const NEXT_COURSE = { show: 'wall', wall: 'lineup', lineup: 'show' };
+const landedCard = (card) => !!card?.facts?.jumped && !isCrash(card);
+function syncNext(run, card) {
+  const own = !!run && !!card && S.runKind === 'jump' && !S.drill && !S.autopilot;
+  const landed = own && landedCard(card);
+  S.next = landed ? NEXT_COURSE[run.course] || 'show' : null;
+  nextBtn.hidden = !S.next;
+  retryBtn.classList.toggle('second', !!S.next);
+  if (S.next) {
+    nextBtn.querySelector('[data-next-event]').textContent = COURSES[S.next]?.name || '';
+    const best = getMedals(run.course, card.tier).best;   // this event on this tier (the medals' store), not another tier's
+    const toBeat = Math.max(card.total, best ?? 0);
+    againLabel.textContent = `Beat ${toBeat.toFixed(1)}`;
+    retryBtn.setAttribute('aria-label', `Retry: beat ${toBeat.toFixed(1)}`);
+    // Focused for a keyboard or a pad (Enter, A); a finger gets no focus ring.
+    if (lastDevice() !== 'touch') nextBtn.focus({ preventScroll: true });
+  } else {
+    againLabel.textContent = 'Retry';
+    retryBtn.removeAttribute('aria-label');
+  }
+}
+function goNext() {
+  const next = S.next;
+  if (!next || (S.mode !== 'results' && S.mode !== 'replay')) return;
+  afterResults(() => { toTitle(); selectCourse(next); startRun('jump'); });
+}
+nextBtn.addEventListener('click', goNext);
+// (Never under a sheet or a question on top of the results: the tier picker, how to fly, the board, the controls, the AI
+// settings, "Leave without posting?". A won race's Send it back opens the share sheet, which wants a tap: A retries there.)
+const sheetOnTop = () => !!document.querySelector('[data-screen="assist"]:not([hidden]), [data-screen="howto"]:not([hidden]), [data-screen="board"]:not([hidden]), [data-screen="controls"]:not([hidden]), [data-ai-modal]:not([hidden])') || !!poster?.leaveOpen();
+onPadA(() => { if ((S.mode === 'results' || S.mode === 'replay') && !S.peek && !S.paused && !sheetOnTop()) { if (S.next) goNext(); else if (!S.drill) retry(); } });
 on('[data-replay]', () => { peek(true); replayFrom(0); director.restart(); hero.placed(); });
 // The top bar's Pause (0098): a run, or Free Drive. A mouse click gives up focus before the sheet takes it, so
 // closing the sheet hands focus back to nothing (a focused Pause would take Space or Enter on the road).
@@ -1973,6 +2011,8 @@ addEventListener('keydown', (e) => {
   const inRun = S.mode === 'live' || S.mode === 'countdown' || S.mode === 'results' || S.mode === 'replay';
   // Enter on a focused button is that button's click (Retry included): don't start a second run.
   const enterOnButton = e.code === 'Enter' && !!e.target?.closest?.('button, a, [role="button"]');
+  // 0257: Enter on the results is the sheet's primary (Next jump after a landing, else Retry); N is Next.
+  if (S.mode === 'results' && !S.drill && !S.peek && (e.code === 'KeyN' || (e.code === 'Enter' && !enterOnButton)) && S.next) { e.preventDefault(); goNext(); return; }
   if (inRun && !S.drill && (e.code === 'KeyR' || (e.code === 'Enter' && S.mode === 'results' && !enterOnButton))) { e.preventDefault(); retry(); return; }
   if (e.code === 'Escape' && S.peek) { e.preventDefault(); peek(false); return; }   // Esc on the peek: back to the scores (0068)
   // Escape on the results never leaves them (audit 2026-10-30): it closes what's open on top (the leave question,

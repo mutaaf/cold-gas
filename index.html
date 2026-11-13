@@ -390,10 +390,12 @@
       <div class="pointer" data-pointer hidden><span class="pt-better" data-pointer-better></span><span class="pt-k">Next run</span><b class="pt-text" data-pointer-text></b></div>
       <div class="r-assist"><button type="button" class="assist-ctl" data-assist-open aria-haspopup="dialog"><span class="ac-top"><span class="ac-k">Assist</span><b class="ac-state" data-assist-state>On</b></span><span class="ac-sub" data-assist-sub>rolls you out, levels and brakes</span></button></div>
       <div class="actions top-actions-row">
-        <button class="btn primary retry-btn" data-again><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.05-4.95" /><path d="M19 4.5V8h-3.5" /></svg>Retry<kbd>R</kbd></button>
-        <button class="btn ghost" data-home>Home<kbd>H</kbd></button>
-        <button class="btn ghost" data-replay>Replay</button>
+        <!-- 0257: after a landing, the next jump first, then beat this score, then share; a wreck leads with Retry, no Next -->
+        <button class="btn primary next-btn" data-next hidden><span class="nx-v">Next jump</span><span class="nx-e" data-next-event>The Wall</span><kbd>N</kbd></button>
+        <button class="btn primary retry-btn" data-again><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19 12a7 7 0 1 1-2.05-4.95" /><path d="M19 4.5V8h-3.5" /></svg><span data-again-label>Retry</span><kbd>R</kbd></button>
         <button class="btn ghost" data-share>Share</button>
+        <button class="btn ghost" data-replay>Replay</button>
+        <button class="btn ghost" data-home>Home<kbd>H</kbd></button>
         <!-- Post to the board, beside Retry (src/post.js): "Post · ABC" once initials are remembered, the three
              letters right here the first time; the rank it would get once the board has answered (0141), the rank inline once it's on. A board-eligible jump only. -->
         <form class="r-post" data-r-submit data-r-post hidden autocomplete="off">

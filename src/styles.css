@@ -2184,3 +2184,20 @@ body[data-beat-on] .hud { filter: opacity(0); pointer-events: none; }
 .play-more:not([open]) > :is(.cta-row, .cta-set) { display: none; }
 /* Opened on a first run it holds the whole menu: the wordmark steps aside for it, as the tagline does. */
 .title[data-first]:has(.play-more[open]) > .wordmark { display: none; }
+
+/* --- After a landing (0257): Next jump leads, then Beat <score> (Retry, a step down), then Share. A wreck: Retry leads.
+   Next carries the pulse Retry has when it leads; Retry steps down to an outlined button with the score to beat. */
+.top-actions-row .next-btn { height: 48px; padding: 0 22px; gap: 10px; font-size: 15px; font-weight: 600; letter-spacing: 0.02em;
+  box-shadow: 0 0 0 0 rgba(150, 220, 255, 0.5); animation: retry-pulse 2.4s var(--ease) 1.2s infinite; }
+.next-btn .nx-e { font-weight: 400; opacity: 0.72; }
+.next-btn .nx-e::before { content: '·'; margin-right: 8px; opacity: 0.6; }
+.top-actions-row .retry-btn.second { height: 48px; animation: none; background: rgba(150, 220, 255, 0.08); border: 1px solid rgba(150, 220, 255, 0.55); color: var(--ink); }
+.top-actions-row .retry-btn.second:hover { background: rgba(150, 220, 255, 0.16); }
+.results[data-practice] .top-actions-row [data-next] { display: none; }
+@media (max-width: 720px) {
+  /* Next and Beat share the bar's first line under the thumb, Next first; Share, Replay and Home the second. */
+  .results .top-actions-row .btn.next-btn { flex: 1 1 0; justify-content: center; padding: 0 14px; font-size: 15px; white-space: nowrap; }
+  .results .top-actions-row .btn.next-btn:not([hidden]) ~ .retry-btn { flex: 1 1 0; padding: 0 14px; }
+}
+@media (max-width: 370px) { .next-btn .nx-e { display: none; } }
+@media (prefers-reduced-motion: reduce) { .top-actions-row .next-btn { animation: none; } }
