@@ -147,7 +147,7 @@ struct TitleView: View {
             }
         }
         .dynamicTypeSize(...DynamicTypeSize.accessibility1)
-        .onAppear { shown = false; DispatchQueue.main.async { shown = true } }
+        .onAppear { shown = false; DispatchQueue.main.async { shown = true }; Usage.shared.flush() }
     }
 
     // An upright phone, the Duo closed: one column at the bottom, the thumb's end of the screen.
@@ -564,7 +564,12 @@ struct ResultsView: View {
             }
             .frame(maxWidth: .infinity)
         }
-        .onAppear { if result.drill == nil { judges.ask(result) }; Ready.mark("results") }
+        .onAppear {
+            if result.drill == nil { judges.ask(result) }
+            Ready.mark("results")
+            // The funnel's batch goes once the sheet has settled (0246), never while the judges' words are arriving at once.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 2) { Usage.shared.flush() }
+        }
     }
     private func flag(_ card: Card, _ key: String) -> Bool? {
         guard let v = card.flat.first(where: { $0.0 == "facts." + key })?.1, case let .b(b) = v else { return nil }
@@ -667,6 +672,7 @@ struct ResultsView: View {
                 if short { Image(systemName: "square.and.arrow.up").font(.system(size: 15)) }
                 else { Label("Share", systemImage: "square.and.arrow.up").font(Theme.text(13, .medium)) }
             }.buttonStyle(QuietButton()).accessibilityLabel("Challenge a friend")
+            .simultaneousGesture(TapGesture().onEnded { Usage.shared.track("share_tap", ["course": .text(result.course)]) })
         }
     }
     private func facts(_ t: Telemetry) -> some View {

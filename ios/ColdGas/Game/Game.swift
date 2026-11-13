@@ -93,6 +93,13 @@ final class Game: ObservableObject {
 
     /// `drill`: practise one part of the flight, handed over mid-run (src/practice.js). A drill's id; nil is a whole run.
     func play(drill: String? = nil) {
+        // The funnel (0246), before the countdown starts: this launch's first input, and a scored jump's number.
+        Usage.shared.firstInput()
+        if drill == nil {
+            var n = 0
+            SaveStore.shared.update { s in var p = s.counters; n = p.startJump(); s.progress = p }
+            Usage.shared.track("jump_start", ["n": .num(Insights.nBucket(n)), "course": .text(course), "tier": .text(tier)])
+        }
         let t: FlyTier = tier == "pro" ? .pro : tier == "advanced" ? .advanced : .assist
         var built: BuiltDrill?
         if let drill, let d = drillById(drill) { built = try? buildDrill(d, course) }
@@ -121,6 +128,7 @@ final class Game: ObservableObject {
     }
     func retry() { play(drill: activeDrill) }
     func home() {
+        if screen == .run { Usage.shared.runOver() }
         live = nil; controls.live = nil; track = nil; result = nil; paused = false; activeDrill = nil
         HapticPlayer.shared.apply(HapticContinuous())
         screen = .title
@@ -358,6 +366,19 @@ final class Game: ObservableObject {
         result?.coach = (try? l.coachResult(say: say))?.items ?? []
         screen = .results
         UINotificationFeedbackGenerator().notificationOccurred(.success)
+        if let r = result { DispatchQueue.main.async { self.counted(r) } }   // off the frame loop
+    }
+
+    /// A scored run's end, counted on this device and named to the funnel (0246). Drills aren't jumps.
+    private func counted(_ r: RunResult) {
+        Usage.shared.runOver()
+        guard r.drill == nil else { return }
+        let now = Date().timeIntervalSince1970 * 1000
+        var first = false, n = 0
+        SaveStore.shared.update { s in var p = s.counters; first = p.endJump(landed: r.landed, at: now); n = p.jumpCount; s.progress = p }
+        Usage.shared.track("jump_end", ["n": .num(Insights.nBucket(n)), "course": .text(r.course), "tier": .text(r.card.tier),
+                                        "landed": .num(r.landed ? 1 : 0), "score": .num((r.card.total * 10).rounded() / 10)])
+        if first { Usage.shared.track("first_landing", ["n": .num(Double(n))]) }
     }
 
     private func finished(_ l: LiveRun) {
@@ -474,6 +495,12 @@ final class RunResult: Identifiable {
     init(course: String, card: Card, log: [[Int]], telemetry: Telemetry, ticks: Int) {
         self.course = course; self.card = card; self.log = log; self.telemetry = telemetry; self.ticks = ticks
     }
+    private func flag(_ key: String) -> Bool? {
+        guard let v = card.flat.first(where: { $0.0 == "facts." + key })?.1, case let .b(b) = v else { return nil }
+        return b
+    }
+    /// Landed, as src/ui.js celebrates it: not a crash or a wreck, and a real jump.
+    var landed: Bool { flag("crashed") != true && flag("jumped") != false }
     /// Eligible for the board: a scored run (the web's `eligible`).
     var eligible: Bool { card.total > 0 && drill == nil }
     var coach: [CoachItem] = []

@@ -19,8 +19,10 @@ public struct Settings: Codable, Equatable {
     public var haptics: Bool?, sound: Bool?, scheme: ControlScheme?, hand: Hand?, tilt: Bool?, units: UnitSystem?
     /// 0219: false sends the judges' call to the edge model even where Apple's on-device model could write it.
     public var judgeOnDevice: Bool?
+    /// 0246: Settings → Privacy → Share usage stats. Off sends nothing and clears the queue and the install id.
+    public var usage: Bool?
     public init() {}
-    enum CodingKeys: String, CodingKey { case haptics, sound, scheme, hand, tilt, units, judgeOnDevice }
+    enum CodingKeys: String, CodingKey { case haptics, sound, scheme, hand, tilt, units, judgeOnDevice, usage }
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         haptics = try? c.decodeIfPresent(Bool.self, forKey: .haptics)
@@ -30,6 +32,7 @@ public struct Settings: Codable, Equatable {
         tilt = try? c.decodeIfPresent(Bool.self, forKey: .tilt)
         units = try? c.decodeIfPresent(UnitSystem.self, forKey: .units)
         judgeOnDevice = try? c.decodeIfPresent(Bool.self, forKey: .judgeOnDevice)
+        usage = try? c.decodeIfPresent(Bool.self, forKey: .usage)
     }
     // The defaults, as the web's: haptics and sound on, one thumb, the right hand, no tilt, US units leading; judging on the
     // device where it can.
@@ -41,6 +44,8 @@ public struct Settings: Codable, Equatable {
     public var unitSystem: UnitSystem { units ?? .us }
     /// On by default: where the device has Apple Intelligence, the judges write there (0219).
     public var judgeOnDeviceOn: Bool { judgeOnDevice ?? true }
+    /// On by default (0246), as the web's analytics are; one switch turns it off.
+    public var usageOn: Bool { usage ?? true }
 }
 
 public struct SaveData: Codable, Equatable {
@@ -52,8 +57,10 @@ public struct SaveData: Codable, Equatable {
     /// The touch controls the player has shaped (0221): layouts per tier and shape, the stick, the buttons, the look. A save
     /// from before it has none and gets the factory controls; a damaged one costs only what can't be read (HudPrefs).
     public var hud: HudPrefs?
+    /// The counters on this device (0246, 0249): jumps, landings, sessions, the first landing.
+    public var progress: Progress?
     public init() {}
-    enum CodingKeys: String, CodingKey { case initials, medals, daily, settings, judgeBreaker, hud }
+    enum CodingKeys: String, CodingKey { case initials, medals, daily, settings, judgeBreaker, hud, progress }
     public init(from decoder: Decoder) throws {
         guard let c = try? decoder.container(keyedBy: CodingKeys.self) else { return }   // not even an object: a fresh save
         initials = (try? c.decodeIfPresent(String.self, forKey: .initials)).flatMap { $0 }.map { cleanInitials($0) }
@@ -65,6 +72,7 @@ public struct SaveData: Codable, Equatable {
         settings = (try? c.decodeIfPresent(Settings.self, forKey: .settings)).flatMap { $0 }
         judgeBreaker = (try? c.decodeIfPresent(BreakerState.self, forKey: .judgeBreaker)).flatMap { $0 }
         hud = (try? c.decodeIfPresent(HudPrefs.self, forKey: .hud)).flatMap { $0 }
+        progress = (try? c.decodeIfPresent(Progress.self, forKey: .progress)).flatMap { $0 }
     }
     /// A save from stored bytes: anything unreadable is a fresh save, never a crash.
     public static func decode(_ data: Data?) -> SaveData {
@@ -81,4 +89,5 @@ public struct SaveData: Codable, Equatable {
     public var streak: Daily.Streak { daily ?? Daily.Streak() }
     public var resolvedSettings: Settings { settings ?? Settings() }
     public var hudPrefs: HudPrefs { hud ?? HudPrefs() }
+    public var counters: Progress { progress ?? Progress() }
 }

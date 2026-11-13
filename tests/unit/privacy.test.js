@@ -53,7 +53,7 @@ describe('the privacy page (0155)', () => {
     for (const s of sentences.filter((x) => /\bno ads\b/i.test(x))) expect(s, s).toMatch(/iPhone app/);
   });
 
-  it('names the web\'s usage analytics while the pages load Box Office, and keeps the iPhone app out of it', () => {
+  it('names the web\'s usage analytics while the pages load Box Office', () => {
     const game = readFileSync(new URL('../../index.html', import.meta.url), 'utf8');
     expect(game).toContain("'/boxoffice/v1/insights.js'");   // the condition this check stands on
     expect(page).toContain('<script async src="/boxoffice/v1/insights.js"></script>');
@@ -61,11 +61,27 @@ describe('the privacy page (0155)', () => {
     expect(text).toMatch(/approximate, city-level location/);
     expect(text).toMatch(/Session replays/);
     expect(text).toMatch(/Global Privacy Control or Do Not Track, none of this loads/);
-    expect(text).toMatch(/None of it is in the iPhone app/);
+  });
+
+  it('names the iPhone app\'s usage counts while the app sends them (0246), with the switch and the reset', () => {
+    const app = readFileSync(new URL('../../ios/Packages/ColdGasCore/Sources/ColdGasClient/Insights.swift', import.meta.url), 'utf8');
+    expect(app).toContain('"https://mutaafaziz.com/boxoffice/e/batch/"');   // the condition this check stands on
+    expect(text).toMatch(/iPhone and iPad app sends a few private usage counts to the same PostHog project, through the same relay/);
+    expect(text).toMatch(/random id made on your device/);
+    expect(text).toMatch(/deleting the app resets it/);
+    expect(text).toMatch(/no advertising identifier and no location/);
+    expect(text).toMatch(/never during one/);
+    expect(text).toMatch(/Settings, Privacy, Share usage stats turns them off/);
+    // The store's copy of the policy says the same, word for word.
+    const md = readFileSync(new URL('../../ios/store/privacy-policy.md', import.meta.url), 'utf8').split('---\n')[1]
+      .replace(/\*\*/g, '').replace(/^#+ /gm, '').replace(/^- /gm, '').replace(/\s+/g, ' ').trim();
+    const pageText = page.slice(page.indexOf('<h1>Privacy</h1>'), page.indexOf('</main>'))
+      .replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').replace(/ ([.,;:])/g, '$1').trim();
+    expect(md).toBe(pageText);
   });
 
   it('no longer names a page-analytics service, now that none runs on our pages', () => {
     expect(text).not.toMatch(/Web Analytics|page analytics|analytics counts/i);
-    expect(text).toMatch(/nothing from it goes to an advertising network, an analytics company or a data broker/);
+    expect(text).toMatch(/nothing from it goes to an advertising network or a data broker/);
   });
 });

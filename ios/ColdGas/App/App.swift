@@ -6,6 +6,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         setvbuf(stdout, nil, _IOLBF, 0)   // the scripts read stdout through a pipe: one line at a time
         Ready.clear()
+        Usage.launchedAt = Date()   // first_input's clock (0246)
         Theme.registerFonts()
         return true
     }
@@ -25,7 +26,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if Launch.selftest { SelfTest.runInBackground() }
         _ = HapticPlayer.shared          // the engine is started at launch, never on the first event
         HapticDemo.startIfAsked()
+        Usage.shared.sessionStart()      // 0246: queued now, sent from the title
     }
+    func sceneDidEnterBackground(_ scene: UIScene) { Usage.shared.didEnterBackground() }
+    func sceneWillEnterForeground(_ scene: UIScene) { Usage.shared.willEnterForeground() }
 }
 
 /// Launch arguments (debug tools for the simulator, the shots and the bench; docs/NATIVE.md §8).
