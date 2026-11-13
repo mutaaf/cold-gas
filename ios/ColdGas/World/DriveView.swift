@@ -7,6 +7,7 @@ import ColdGasClient
 struct DriveView: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
+    @ObservedObject private var hud = HudStore.shared
     /// The world's numbers on screen (`-fd-stats`): a Debug tool, never in a Release build.
     #if DEBUG
     private let stats = Launch.args.contains("-fd-stats")
@@ -37,6 +38,8 @@ struct DriveView: View {
                                     .lineLimit(1).fixedSize().padding(.horizontal, 16).frame(height: 44).glass(22)
                             }.buttonStyle(.plain).accessibilityIdentifier("roam-fly").accessibilityHint("A scored run from the mark.")
                         }
+                        // The minimap (0226), under Back, clear of the controls.
+                        if h.ready && hud.prefs.mapShown { DriveMapView().transition(.opacity) }
                     }
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 8) {
@@ -51,6 +54,10 @@ struct DriveView: View {
                                    h.cam == "chase" ? "Chase camera" : h.cam == "cinema" ? "Cinema camera" : "Bumper camera", on: h.cam == "cinema") { game.freeDrive?.camera.cycle() }
                             toggle("fanblades", h.fan ? "Fan armed" : "Fan off", on: h.fan) { game.freeDrive?.fan.toggle() }
                             toggle("arrow.uturn.backward", "Back on the road", on: false) { game.freeDrive?.reset() }
+                            toggle("map", hud.prefs.mapShown ? "Hide the map" : "Show the map", on: hud.prefs.mapShown) {
+                                let shown = hud.prefs.mapShown
+                                hud.update { $0.driveMap = !shown }
+                            }
                         }
                     }
                 }

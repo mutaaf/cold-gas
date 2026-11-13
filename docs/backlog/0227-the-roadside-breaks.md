@@ -1,12 +1,12 @@
 ---
 id: 0227
 title: Out in Free Drive's world the roadside breaks (fences and signs knocked down, rails that give)
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-13
-pr:
+pr: 352
 by: operator
 ---
 
@@ -20,8 +20,9 @@ Runs on: the operator's Mac (Xcode).
   breaks with real masses and strengths, and that come back when the car has gone.
 
 ## Acceptance criteria
-- [ ] `make test` green, the run vectors bit-exact; tests that a post breaks over its strength and holds under it.
-- [ ] Shots in docs/shots/0227/.
+- [x] `make test` green, the run vectors bit-exact; RoadsideTests: placement is deterministic and off the road, a fence bay breaks loose and the car keeps most of its speed, a guard rail holds a nudge and gives way to a hard hit, the scored courses have none.
+- [x] Shots in docs/shots/0227/: into a fence, the bay breaking loose, guard rails and a fence run along a road.
+- [x] Bench before and after (docs/NATIVE-FREEDRIVE.md §8).
 
 ## Test plan
 `cd ios && make test` (new tests for the posts and rails); `-freedrive -fd-hold` into a fence on the simulator.

@@ -165,4 +165,15 @@ struct HudLayoutTests {
         #expect(HudShape.of(spread: .rows, width: 669, height: 461, foldable: true, bent: true) == .duoTabletop)
         #expect(HudShape.of(spread: .single, width: 1032, height: 1332, foldable: false, bent: false) == .tablet)
     }
+
+    @Test func theDrivesMapIsShownUntilThePlayerHidesItAndRemembers() throws {
+        var p = HudPrefs()
+        #expect(p.mapShown)
+        p.driveMap = false
+        let back = try JSONDecoder().decode(HudPrefs.self, from: try JSONEncoder().encode(p))
+        #expect(!back.mapShown)
+        // An old save (no field) and a junk value both show it.
+        #expect(try JSONDecoder().decode(HudPrefs.self, from: Data("{}".utf8)).mapShown)
+        #expect(try JSONDecoder().decode(HudPrefs.self, from: Data(#"{"driveMap":"x"}"#.utf8)).mapShown)
+    }
 }

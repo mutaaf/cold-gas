@@ -16,6 +16,8 @@ public enum RoadSpec {
     /// How far a road shapes the land: the relief grows from LOW to full between these distances (m).
     public static let valley0 = 60.0, valley1 = 380.0
     public static let reach = 420.0
+    /// How far out from the centreline a ribbon's verge reaches (m): the shoulder's edge plus 6 m (0226).
+    public static let vergeOut = hw + shoulder + 6
 }
 
 /// One link's plan: samples every `spacing` metres from its west/south junction to its east/north one.

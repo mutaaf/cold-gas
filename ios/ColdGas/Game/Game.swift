@@ -188,6 +188,10 @@ final class Game: ObservableObject {
             HapticPlayer.shared.play(HapticEvent(kind: e.kind == ImpactKind.CRUSH ? .crush : e.kind == ImpactKind.WHEEL ? .wheel : .hit, tick: 0, channel: 4,
                                                  intensity: 0.2 + 0.8 * k, sharpness: e.kind == ImpactKind.WHEEL ? 0.35 : 0.7))
         }
+        if HudStore.shared.prefs.mapShown {
+            let q = fd.car.quat
+            DriveMap.shared.update(world: fd.world, x: fd.car.pos.x, z: fd.car.pos.z, fx: 2 * (q.x * q.z + q.w * q.y), fz: 1 - 2 * (q.x * q.x + q.y * q.y), dt: dt)
+        }
         let jets = fd.car.throttles.reduce(0, +)
         // ABS cycling (0225) is a sharp buzz through the pedal: here, through the phone.
         let absK = fd.ownCar && fd.chassis.absActive ? 1.0 : 0.0

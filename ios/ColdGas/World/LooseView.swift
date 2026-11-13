@@ -8,7 +8,7 @@ import ColdGasPhysics
 
 final class LooseView {
     static let maxPerKind = 96
-    private struct Mesh { let vb: MTLBuffer; let ib: MTLBuffer; let count: Int }
+    private struct Mesh { let vb: MTLBuffer; let ib: MTLBuffer; let count: Int; var lift: Float = 0 }
     private var meshes: [Mesh] = []
     private let inst: [MTLBuffer]
     private var slot = 0
@@ -16,12 +16,15 @@ final class LooseView {
     /// One instance: the model (relative to the origin) and a tint.
     struct Inst { var m: simd_float4x4; var tint: SIMD4<Float> }
 
-    init?(device: MTLDevice) {
+    /// `forged`: a kind's mesh from the world's props (the roadside's, 0227), built standing on y = 0; drawn lowered by its
+    /// half height so it sits on the collider's middle as the engine's pose does.
+    init?(device: MTLDevice, forged: [LooseKind: (MTLBuffer, MTLBuffer, Int)] = [:]) {
         let per = LooseView.maxPerKind * LooseKind.allCases.count * MemoryLayout<Inst>.stride
         var bufs: [MTLBuffer] = []
         for _ in 0..<Renderer.inFlight { guard let b = device.makeBuffer(length: per, options: .storageModeShared) else { return nil }; bufs.append(b) }
         inst = bufs
         for k in LooseKind.allCases {
+            if let f = forged[k] { meshes.append(Mesh(vb: f.0, ib: f.1, count: f.2, lift: -Float(k.half.1))); continue }
             let g = LooseView.mesh(k)
             guard let vb = device.makeBuffer(bytes: g.v, length: g.v.count * 4, options: .storageModeShared),
                   let ib = device.makeBuffer(bytes: g.i, length: g.i.count * 4, options: .storageModeShared) else { return nil }
@@ -34,12 +37,13 @@ final class LooseView {
         slot = (slot + 1) % inst.count
         for k in counts.indices { counts[k] = 0 }
         let base = inst[slot].contents().bindMemory(to: Inst.self, capacity: LooseView.maxPerKind * counts.count)
-        for b in bodies {
+        for b in bodies where !b.parked {
             let k = Int(b.kind.rawValue)
             guard counts[k] < LooseView.maxPerKind else { continue }
             let q = simd_quatf(ix: Float(b.qx), iy: Float(b.qy), iz: Float(b.qz), r: Float(b.qw))
             var m = simd_float4x4(q)
             m.columns.3 = SIMD4(Float(b.x - origin.x), Float(b.y - origin.y), Float(b.z - origin.z), 1)
+            if k < meshes.count, meshes[k].lift != 0 { m = m * translate(SIMD3(0, meshes[k].lift, 0)) }
             base[k * LooseView.maxPerKind + counts[k]] = Inst(m: m, tint: SIMD4(1, 1, 1, 0))
             counts[k] += 1
         }
@@ -113,6 +117,9 @@ final class LooseView {
             s.box(SIMD3(0, H - 0.1, 0), SIMD3(X * 0.98, 0.1, Z * 0.6), red)
             s.box(SIMD3(0, 0.12, Z * 0.865), SIMD3(X * 0.7, 0.05, 0.004), white, glow: 1)
             s.box(SIMD3(0, 0.12, -Z * 0.865), SIMD3(X * 0.7, 0.05, 0.004), white, glow: 1)
+        case .fence, .signpost, .rail:
+            // (the world's forged meshes draw these; a plain box if a build has none)
+            s.box(.zero, SIMD3(X, H, Z), k == .fence ? SIMD3(0.17, 0.13, 0.095) : SIMD3(0.42, 0.44, 0.45))
         case .sign:
             // An A-frame board: two leaning panels, a red chevron face, a black hinge rail.
             let lean: Float = 0.24

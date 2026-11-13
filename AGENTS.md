@@ -483,7 +483,9 @@ npm run audit [-- --shard=N/M] [--port=4655]   the HUD + title audits as a gate 
 node scripts/fly.mjs '{"apex":7,"rolls":1}'   headless reference flight telemetry
 npm run forge -- <slot>|--all [--seed N] [--promote]   the forge (0211, needs Blender): build a slot's asset headless, gate it
                    (budget, the sim's box, closed solids, no lettering/emblems), turntable in tools/forge/out/<slot>-<seed>/;
-                   --promote puts it in public/forge/ + the manifest. Slots: sedan suv semi pickup cab cone barrier
+                   --promote puts it in public/forge/ + the manifest. Slots: sedan suv semi pickup cab cone barrier, and the
+                   iPhone's Free Drive world (0226): spruce broadleaf shrub rock fence signpost guardrail, which --native writes
+                   into ios/ColdGas/Resources/Props (tools/forge/lib/native.mjs; tests/unit/forge-native.test.js checks them)
 npm run forge:brief -- "<trope or era>" [--slot cab] [--promote]   Claude writes the build script (ANTHROPIC_API_KEY;
                    tropes and eras only, never a brand, a model or a film vehicle); --script <file.py> runs one without a call
 node scripts/native-stage.mjs show lineup [--forge=0|1]   the native stages, the forged row in them as the web's default

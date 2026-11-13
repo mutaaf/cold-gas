@@ -9,15 +9,24 @@ import ColdGasCore
 
 public enum LooseKind: UInt8, CaseIterable, Sendable {
     case cone, barrier, sign
+    /// The roadside's pieces once broken loose (0227): a fence bay, a bend sign on its post, a guard rail section.
+    case fence, signpost, rail
     /// Half extents (m) of the collider, its mass (kg) and how far its centre of mass sits below the box's middle.
     /// Sources (ESTIMATE where marked): a 750 mm road cone (EN 13422 class) with its rubber base weighs 3.5–4.5 kg, most
     /// of it in the base, and we take 4.2 kg. An empty 1 m polyethylene water-fill barrier is 13–18 kg (ESTIMATE 15). A
     /// folding A-frame pavement sign is 6–9 kg (ESTIMATE 7.5).
     public var half: (Double, Double, Double) {
-        switch self { case .cone: return (0.17, 0.375, 0.17); case .barrier: return (0.5, 0.4, 0.22); case .sign: return (0.3, 0.45, 0.25) }
+        switch self {
+        case .cone: return (0.17, 0.375, 0.17); case .barrier: return (0.5, 0.4, 0.22); case .sign: return (0.3, 0.45, 0.25)
+        case .fence: return (0.07, 0.575, 2.0); case .signpost: return (0.06, 1.15, 0.45); case .rail: return (0.18, 0.4, 2.0)
+        }
     }
-    public var mass: Double { switch self { case .cone: return 4.2; case .barrier: return 15; case .sign: return 7.5 } }
-    public var comDrop: Double { switch self { case .cone: return 0.22; case .barrier: return 0.08; case .sign: return 0.05 } }
+    /// The roadside's (ESTIMATE): a 4 m bay of sawn post-and-rail, two 100 mm posts and two rails, ≈ 45 kg; a bend marker,
+    /// a 2.3 m galvanised post with its aluminium board, ≈ 14 kg; 4 m of W-beam (≈ 13 kg/m) on two posts with spacers, ≈ 110 kg.
+    public var mass: Double { switch self { case .cone: return 4.2; case .barrier: return 15; case .sign: return 7.5; case .fence: return 45; case .signpost: return 14; case .rail: return 110 } }
+    /// The sign's board sits up top (its centre of mass above the middle: a negative drop).
+    public var comDrop: Double { switch self { case .cone: return 0.22; case .barrier: return 0.08; case .sign: return 0.05; case .fence: return 0.05; case .signpost: return -0.4; case .rail: return 0.0 } }
+    var material: Material { switch self { case .fence: return MATERIALS.wood; case .signpost, .rail: return MATERIALS.steel; default: return MATERIALS.paint } }
 }
 
 public final class LooseBody {
@@ -27,6 +36,8 @@ public final class LooseBody {
     public var x = 0.0, y = 0.0, z = 0.0, qx = 0.0, qy = 0.0, qz = 0.0, qw = 1.0
     public var speed = 0.0
     public var asleep = true
+    /// A roadside piece put away (0227): no collider, held still out of sight until a break reuses it.
+    public internal(set) var parked = false
     init(kind: LooseKind) { self.kind = kind }
 }
 
@@ -50,8 +61,8 @@ public func addLoose(_ w: World, _ kind: LooseKind, x: Double, y: Double, z: Dou
     cg_body_set_additional_mass_properties(w.rw, rb, Float(m), 0, Float(-kind.comDrop), 0, Float(ix), Float(iy), Float(iz), 0, 0, 0, 1, false)
     b.rb = rb
     let shape: ShapeDesc = kind == .cone ? .cylinder(hy, hx) : .cuboid(hx, hy, hz)
-    let mat = MATERIALS.paint   // painted plastic: slides on concrete as the parked bodies' paint does
-    b.col = colliderFor(w, shape, DescOpts(density: 0), mat, GROUP.loose, extra: rb)
+    // painted plastic slides on concrete as the parked bodies' paint does; the roadside's timber and steel as theirs
+    b.col = colliderFor(w, shape, DescOpts(density: 0), kind.material, GROUP.loose, extra: rb)
     b.x = x; b.y = y + hy; b.z = z
     b.qy = DMath.dsin(h); b.qw = DMath.dcos(h)
     w.loose.append(b)
@@ -62,7 +73,7 @@ public func addLoose(_ w: World, _ kind: LooseKind, x: Double, y: Double, z: Dou
 /// Each loose thing's pose after a step (asleep ones keep theirs).
 public func readLoose(_ w: World) {
     var f = [Float](repeating: 0, count: 4)
-    for b in w.loose where b.rb != CG_NONE {
+    for b in w.loose where b.rb != CG_NONE && !b.parked {
         if cg_body_is_sleeping(w.rw, b.rb) { b.asleep = true; b.speed = 0; continue }
         b.asleep = false
         cg_body_translation(w.rw, b.rb, &f); b.x = Double(f[0]) + w.ox; b.y = Double(f[1]) + w.oy; b.z = Double(f[2]) + w.oz

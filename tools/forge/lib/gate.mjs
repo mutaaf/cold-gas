@@ -70,7 +70,7 @@ export function gate(report, slot, glb) {
     const names = (j.nodes || []).map((n) => n.name);
     for (let i = 0; i < slot.budgets.length; i++) if (!names.includes(`LOD${i}`)) f.push(`the glb has no LOD${i} node`);
     if (!(j.extensionsUsed || []).includes('EXT_meshopt_compression')) f.push('the glb is not meshopt-compressed');
-    const unknown = (j.materials || []).map((m) => m.name).filter((n) => !/^(paint|paint_alt|glass|trim|gloss|rubber|rim_dark|rim_silver|cover|stainless|steel|chassis|lamp_white|lamp_red|lamp_red_dim|lamp_amber|lens|orange|reflective|plastic_white|plastic_red|concrete)(\.\d+)?$/.test(n));
+    const unknown = (j.materials || []).map((m) => m.name).filter((n) => !/^(paint|paint_alt|glass|trim|gloss|rubber|rim_dark|rim_silver|cover|stainless|steel|chassis|lamp_white|lamp_red|lamp_red_dim|lamp_amber|lens|orange|reflective|plastic_white|plastic_red|concrete|bark|needles|needles_tip|leaves|leaves_dark|stone|stone_dark|lichen|timber|galvanised)(\.\d+)?$/.test(n));
     if (unknown.length) f.push(`materials outside the palette: ${unknown.join(', ')}`);
     const cap = slot.kind === 'vehicle' ? 420_000 : 60_000;
     if (glb.byteLength > cap) f.push(`${(glb.byteLength / 1024).toFixed(0)} kB over the ${cap / 1000} kB download budget`);

@@ -24,6 +24,9 @@ public enum TileSpec {
     public static var verts: Int { gridVerts + 4 * (n + 1) }
     /// Levels up to this one carve the roadside into the land (their vertices are ≤ 64 m apart).
     public static let carveLevels = 4
+    /// Levels from this one paint the road into the land's colour (the ribbons are drawn within ≈ 2.6 km, which the
+    /// levels under it never reach past: a level-2 tile is drawn out to 2.2 × 1,024 m).
+    public static let roadPaintLevel = 3
     /// The shared index list: the grid (each quad split from its (0,0) corner to its (1,1) corner, the split the geomorph
     /// assumes) and a skirt down from each edge.
     public static let indices: [UInt16] = {
@@ -63,22 +66,46 @@ enum Palette {
     static let alpine = RGB(0.085, 0.095, 0.06), coastGrass = RGB(0.09, 0.11, 0.065), desert = RGB(0.30, 0.19, 0.12), forest = RGB(0.05, 0.07, 0.04)
     static let rock = RGB(0.15, 0.145, 0.14), scree = RGB(0.2, 0.19, 0.175), sand = RGB(0.34, 0.29, 0.21), snow = RGB(0.72, 0.75, 0.8)
     static let concrete = RGB(0.2, 0.205, 0.215), asphalt = RGB(0.035, 0.036, 0.04), gravel = RGB(0.2, 0.19, 0.17), water = RGB(0.012, 0.022, 0.034)
+    static let verge = RGB(0.07, 0.068, 0.055)
 }
 
 extension FreeWorld {
+    /// The land's colour at a ground point (normal's y `ny`): its biomes, the slope's scree and rock, the snow line, the
+    /// shore, the apron's concrete. Shared by the tiles and the roads' verges (0226), so they meet without a seam.
+    func landColor(_ g: GroundPoint, _ x: Double, _ z: Double, ny: Double) -> RGB {
+        let w = g.land.w
+        var c = Palette.alpine * w.0
+        c = RGB(c.r + Palette.coastGrass.r * w.1 + Palette.desert.r * w.2 + Palette.forest.r * w.3,
+                c.g + Palette.coastGrass.g * w.1 + Palette.desert.g * w.2 + Palette.forest.g * w.3,
+                c.b + Palette.coastGrass.b * w.1 + Palette.desert.b * w.2 + Palette.forest.b * w.3)
+        let slope = 1 - ny
+        c = c.mix(Palette.scree, WNoise.smooth(0.22, 0.34, slope) * (w.0 + w.2 * 0.6))
+        c = c.mix(Palette.rock, WNoise.smooth(0.32, 0.5, slope))
+        c = c.mix(Palette.snow, w.0 * WNoise.smooth(820, 1000, g.y) * (1 - WNoise.smooth(0.45, 0.65, slope)))
+        c = c.mix(Palette.sand, (1 - WNoise.smooth(SEA + 1, SEA + 4, g.y)) * (1 - w.0))
+        c = c * (0.85 + 0.3 * (0.5 + 0.5 * WNoise.fbm(seed ^ 0x70e, x, z, 140, 2)))
+        let edge = jsMax(abs(x), abs(z))
+        if edge < Site.half + 60 { c = Palette.concrete.mix(c, WNoise.smooth(Site.half - 220, Site.half + 60, edge)) }
+        return c
+    }
+    /// The trodden verge beside a shoulder: the land a shade drier and darker, fading over a few metres.
+    func vergeTint(_ c: RGB, road: Double) -> RGB {
+        c.mix(Palette.verge, 0.55 * (1 - WNoise.smooth(RoadSpec.hw + RoadSpec.shoulder, RoadSpec.hw + RoadSpec.shoulder + 7, road)))
+    }
+
     /// One terrain tile: (n + 1)² grid vertices, then the skirts.
     public func tile(_ key: TileKey) -> TileData {
         let N = TileSpec.n, W = N + 1, S = key.size, step = S / Double(N), x0 = key.x0, z0 = key.z0
-        let carve = key.level <= TileSpec.carveLevels
+        let carve = key.level <= TileSpec.carveLevels, dip = key.level < TileSpec.roadPaintLevel
         let q = roads.query(minX: x0, minZ: z0, maxX: x0 + S, maxZ: z0 + S, margin: RoadSpec.reach, stride: Swift.max(1, Swift.min(16, Int(step / 8))))
         // Heights on a grid one wider all round (for the normals).
         let B = N + 3
-        var h = [Double](repeating: 0, count: B * B)
+        var h = [Double](repeating: 0, count: B * B), rd = [Double](repeating: .infinity, count: B * B)
         var gp = [GroundPoint](repeating: GroundPoint(), count: W * W)
         for j in 0..<B { for i in 0..<B {
             let x = x0 + Double(i - 1) * step, z = z0 + Double(j - 1) * step
             let g = ground(x, z, q, carve: carve)
-            h[j * B + i] = g.y
+            h[j * B + i] = g.y; rd[j * B + i] = g.road
             if i >= 1 && i <= W && j >= 1 && j <= W { gp[(j - 1) * W + (i - 1)] = g }
         } }
         @inline(__always) func H(_ i: Int, _ j: Int) -> Double { h[(j + 1) * B + (i + 1)] }
@@ -87,11 +114,13 @@ extension FreeWorld {
             let y = H(i, j)
             let x = x0 + Double(i) * step, z = z0 + Double(j) * step
             if abs(x) < Site.slab && abs(z) < Site.slab { return y - 0.35 }
+            // Under a road's ribbon and its verges (the levels the ribbons are drawn over), a few centimetres down: the
+            // ribbon, laid on the exact ground every 4 m along the road, is what's seen there, not a 4 m grid's facets.
+            if dip { let r = rd[(j + 1) * B + (i + 1)]; if r < RoadSpec.vergeOut { return jsMax(SEA, y - 0.22 * (1 - WNoise.smooth(RoadSpec.vergeOut - 2, RoadSpec.vergeOut, r))) } }
             return jsMax(SEA, y)
         }
         var v = [Float](repeating: 0, count: TileSpec.verts * TileSpec.stride)
         var lo = Double.infinity, hi = -Double.infinity
-        let tone = seed ^ 0x70e
         for j in 0..<W { for i in 0..<W {
             let y = drawnY(i, j)
             // The parent level's surface here: an odd vertex lies on its parent's edge (or diagonal) between two even ones.
@@ -105,23 +134,15 @@ extension FreeWorld {
             let nl = (gx * gx + 1 + gz * gz).squareRoot(), nx = -gx / nl, ny = 1 / nl, nz = -gz / nl
             let g = gp[j * W + i]
             let x = x0 + Double(i) * step, z = z0 + Double(j) * step
-            // The colour: the land's own, the slope's rock, the snow line, the shore, the road.
-            let w = g.land.w
-            var c = Palette.alpine * w.0
-            c = RGB(c.r + Palette.coastGrass.r * w.1 + Palette.desert.r * w.2 + Palette.forest.r * w.3,
-                    c.g + Palette.coastGrass.g * w.1 + Palette.desert.g * w.2 + Palette.forest.g * w.3,
-                    c.b + Palette.coastGrass.b * w.1 + Palette.desert.b * w.2 + Palette.forest.b * w.3)
-            let slope = 1 - ny
-            c = c.mix(Palette.scree, WNoise.smooth(0.22, 0.34, slope) * (w.0 + w.2 * 0.6))
-            c = c.mix(Palette.rock, WNoise.smooth(0.32, 0.5, slope))
-            c = c.mix(Palette.snow, w.0 * WNoise.smooth(820, 1000, g.y) * (1 - WNoise.smooth(0.45, 0.65, slope)))
-            c = c.mix(Palette.sand, (1 - WNoise.smooth(SEA + 1, SEA + 4, g.y)) * (1 - w.0))
-            c = c * (0.85 + 0.3 * (0.5 + 0.5 * WNoise.fbm(tone, x, z, 140, 2)))
-            // The apron round the slab: concrete, giving way to the land at the floor's edge.
-            let edge = jsMax(abs(x), abs(z))
-            if edge < Site.half + 60 { c = Palette.concrete.mix(c, WNoise.smooth(Site.half - 220, Site.half + 60, edge)) }
-            // A road reads from far away as a dark thread (the ribbons draw it close up).
-            c = c.mix(g.road <= RoadSpec.hw ? Palette.asphalt : Palette.gravel, 1 - WNoise.smooth(RoadSpec.hw, RoadSpec.hw + RoadSpec.shoulder + step * 0.6, g.road))
+            // The colour: the land's own, then the road (far off) or the verge (near).
+            var c = landColor(g, x, z, ny: ny)
+            // A road reads from far away as a dark thread. Close up the ribbons draw it, so the near levels leave it out:
+            // painted onto a 4–16 m grid it was a grey sawtooth either side of the ribbon (0226).
+            if key.level >= TileSpec.roadPaintLevel {
+                c = c.mix(g.road <= RoadSpec.hw ? Palette.asphalt : Palette.gravel, 1 - WNoise.smooth(RoadSpec.hw, RoadSpec.hw + RoadSpec.shoulder + step * 0.6, g.road))
+            } else {
+                c = vergeTint(c, road: g.road)
+            }
             var flag: UInt32 = 0
             if H(i, j) < SEA && !(abs(x) < Site.slab && abs(z) < Site.slab) { c = Palette.water; flag = 1 }
             let o = (j * W + i) * TileSpec.stride
@@ -143,11 +164,14 @@ extension FreeWorld {
 
 // MARK: - Road ribbons
 
-/// A run of a link's ribbon: five lines along it (the outer shoulder, the edge, the centre, the edge, the shoulder).
+/// A run of a link's ribbon: seven lines along it (the verge's outer edge, the shoulder, the edge, the centre, the edge,
+/// the shoulder, the verge). The verges (0226) lie on the exact carved ground, sampled every 4 m along the road, in the
+/// land's own colour: the road's cutting is drawn at the road's resolution, not the land grid's.
 public struct RoadPiece: Sendable {
     public let ox: Double, oz: Double
-    /// Floats a vertex: position (3, relative to (ox, 0, oz)), lateral offset (m, + left), distance along the link (m), normal (3).
-    public static let stride = 8, across = 5
+    /// Floats a vertex: position (3, relative to (ox, 0, oz)), lateral offset (m, + left), distance along the link (m), normal (3),
+    /// colour (RGBA8 as a float's bits: the verge's land colour; unused on the paving).
+    public static let stride = 9, across = 7
     public var vertices: [Float]
     public var indices: [UInt32]
     public let minX, maxX, minZ, maxZ: Double
@@ -158,7 +182,8 @@ extension FreeWorld {
     public func ribbon(_ l: RoadLink, run: Int = 32) -> [RoadPiece] {
         let p = roads.profile(l)
         let hw = RoadSpec.hw, sh = RoadSpec.shoulder
-        let lats = [hw + sh, hw, 0, -hw, -(hw + sh)]
+        let vo = RoadSpec.vergeOut
+        let lats = [vo, hw + sh, hw, 0, -hw, -(hw + sh), -vo]
         var out: [RoadPiece] = []
         var k0 = 0
         while k0 < l.n - 1 {
@@ -168,8 +193,11 @@ extension FreeWorld {
             for k in k0...k1 where !(abs(l.x[k]) < Site.slab - 2 && abs(l.z[k]) < Site.slab - 2) { ks.append(k) }
             if ks.count >= 2 {
                 let ox = l.x[ks[0]], oz = l.z[ks[0]]
+                var bx0 = Double.infinity, bx1 = -Double.infinity, bz0 = Double.infinity, bz1 = -Double.infinity
+                for k in ks { bx0 = jsMin(bx0, l.x[k]); bx1 = jsMax(bx1, l.x[k]); bz0 = jsMin(bz0, l.z[k]); bz1 = jsMax(bz1, l.z[k]) }
+                let q = roads.query(minX: bx0 - vo - 4, minZ: bz0 - vo - 4, maxX: bx1 + vo + 4, maxZ: bz1 + vo + 4)
                 var v: [Float] = [], idx: [UInt32] = []
-                var a = Double.infinity, b = -Double.infinity, c = Double.infinity, d = -Double.infinity
+                var a = Double.infinity, b = -Double.infinity, c0 = Double.infinity, d = -Double.infinity
                 var row = 0
                 var prev = -2
                 for k in ks {
@@ -182,15 +210,25 @@ extension FreeWorld {
                     }
                     for lat in lats {
                         let x = l.x[k] + lx * lat, z = l.z[k] + lz * lat
+                        if abs(lat) > hw + sh + 0.01 {
+                            // A verge vertex: the carved ground here, its normal from the ground round it, the land's colour.
+                            let g = ground(x, z, q), e = 1.0
+                            let gx = (ground(x + e, z, q).y - ground(x - e, z, q).y) / (2 * e), gz = (ground(x, z + e, q).y - ground(x, z - e, q).y) / (2 * e)
+                            let nl = (gx * gx + 1 + gz * gz).squareRoot()
+                            let c = vergeTint(landColor(g, x, z, ny: 1 / nl), road: g.road)
+                            v += [Float(x - ox), Float(jsMax(SEA, g.y) + 0.01), Float(z - oz), Float(lat), Float(l.s[k]), Float(-gx / nl), Float(1 / nl), Float(-gz / nl), pack(c.r, c.g, c.b)]
+                            a = jsMin(a, x); b = jsMax(b, x); c0 = jsMin(c0, z); d = jsMax(d, z)
+                            continue
+                        }
                         let inside = abs(lat) <= hw ? lat : (lat > 0 ? hw : -hw)
                         var y = p.y[k] + p.bank[k] * inside + 0.025
                         if abs(lat) > hw { y -= 0.04 }
-                        v += [Float(x - ox), Float(y), Float(z - oz), Float(lat), Float(l.s[k]), Float(-p.bank[k] * lx), 1, Float(-p.bank[k] * lz)]
-                        a = jsMin(a, x); b = jsMax(b, x); c = jsMin(c, z); d = jsMax(d, z)
+                        v += [Float(x - ox), Float(y), Float(z - oz), Float(lat), Float(l.s[k]), Float(-p.bank[k] * lx), 1, Float(-p.bank[k] * lz), pack(0, 0, 0)]
+                        a = jsMin(a, x); b = jsMax(b, x); c0 = jsMin(c0, z); d = jsMax(d, z)
                     }
                     row += 1; prev = k
                 }
-                if !idx.isEmpty { out.append(RoadPiece(ox: ox, oz: oz, vertices: v, indices: idx, minX: a, maxX: b, minZ: c, maxZ: d)) }
+                if !idx.isEmpty { out.append(RoadPiece(ox: ox, oz: oz, vertices: v, indices: idx, minX: a, maxX: b, minZ: c0, maxZ: d)) }
             }
             k0 = k1
         }
@@ -201,21 +239,38 @@ extension FreeWorld {
 // MARK: - Props
 
 public enum PropKind: Int, CaseIterable, Sendable {
-    case spruce, broadleaf, shrub, rock, post
+    case spruce, broadleaf, shrub, rock, post, fence, signpost, guardrail
     /// The kind's name in a prop source (the forge's assets are looked up by it).
-    public var id: String { ["tree.spruce", "tree.broadleaf", "shrub", "rock", "post"][rawValue] }
+    public var id: String { ["tree.spruce", "tree.broadleaf", "shrub", "rock", "post", "fence", "signpost", "guardrail"][rawValue] }
 }
 public struct PropInstance: Sendable {
     public var kind: PropKind
     /// Relative to the cell's corner (x, 0, z).
     public var x: Float, y: Float, z: Float
     public var yaw: Float, scale: Float, tint: Float
+    /// A roadside item that can break (0227): its index among the cell's solids, else −1.
+    public var item: Int32 = -1
 }
-/// What the physics makes solid of a prop: a trunk (a vertical cylinder) or a boulder (a ball), world coordinates.
+/// What the physics makes solid of a prop: a trunk (a vertical cylinder), a boulder (a ball), or a roadside item that can
+/// break (0227: a fence bay, a sign, a guard rail section: a box `half` × 2 turned by `yaw`, standing on y), world
+/// coordinates.
 public struct PropSolid: Sendable {
-    public enum Kind: Sendable { case trunk, boulder }
+    public enum Kind: Sendable { case trunk, boulder, fence, sign, rail }
     public let kind: Kind
     public let x, y, z, r, h: Double
+    public var yaw = 0.0, half = (0.0, 0.0, 0.0)
+    public init(kind: Kind, x: Double, y: Double, z: Double, r: Double, h: Double) { self.kind = kind; self.x = x; self.y = y; self.z = z; self.r = r; self.h = h }
+    public init(kind: Kind, x: Double, y: Double, z: Double, yaw: Double, half: (Double, Double, Double)) {
+        self.kind = kind; self.x = x; self.y = y; self.z = z; r = 0; h = half.1 * 2; self.yaw = yaw; self.half = half
+    }
+    public var breakable: Bool { kind == .fence || kind == .sign || kind == .rail }
+}
+/// The roadside's sizes (m, the forge's boxes, tools/forge/lib/slots.mjs): half extents across, up, along.
+public enum Roadside {
+    public static let fence = (0.07, 0.575, 2.0), sign = (0.06, 1.15, 0.45), rail = (0.18, 0.4, 2.0)
+    /// How far out from the centreline each stands (m).
+    public static let railLat = RoadSpec.hw + RoadSpec.shoulder + 0.35, signLat = RoadSpec.hw + RoadSpec.shoulder + 1.1
+    public static let fenceLat = RoadSpec.hw + RoadSpec.shoulder + 5.6
 }
 public struct PropCell: Sendable {
     public let cx: Int, cz: Int
@@ -234,9 +289,9 @@ extension FreeWorld {
         let q = roads.query(minX: x0, minZ: z0, maxX: x0 + C, maxZ: z0 + C)
         struct Grid { let kind: PropKind; let spacing: Double; let salt: UInt32; let dens: (Double, Double, Double, Double); let clear: Double }
         let grids = [
-            Grid(kind: .spruce, spacing: 9, salt: 0x7ee, dens: (0.3, 0.12, 0.012, 0.55), clear: RoadSpec.hw + 6),
+            Grid(kind: .spruce, spacing: 9, salt: 0x7ee, dens: (0.3, 0.12, 0.012, 0.55), clear: Roadside.fenceLat + 2),
             Grid(kind: .shrub, spacing: 6.5, salt: 0x5b, dens: (0.07, 0.16, 0.1, 0.2), clear: RoadSpec.hw + 3),
-            Grid(kind: .rock, spacing: 22, salt: 0x70c, dens: (0.35, 0.12, 0.22, 0.05), clear: RoadSpec.hw + 4),
+            Grid(kind: .rock, spacing: 22, salt: 0x70c, dens: (0.35, 0.12, 0.22, 0.05), clear: Roadside.fenceLat + 1.5),
         ]
         for G in grids {
             let i0 = Int((x0 / G.spacing).rounded(.down)), i1 = Int(((x0 + C) / G.spacing).rounded(.up))
@@ -271,7 +326,7 @@ extension FreeWorld {
                 case .broadleaf: sc = 0.7 + 0.6 * WNoise.hash2(s ^ 0x5c, i, j)
                 case .shrub: sc = 0.6 + 0.8 * WNoise.hash2(s ^ 0x5c, i, j)
                 case .rock: sc = 0.5 + 1.8 * WNoise.hash2(s ^ 0x5c, i, j) * WNoise.hash2(s ^ 0x5d, i, j) + 0.4 * slope
-                case .post: sc = 1
+                case .post, .fence, .signpost, .guardrail: sc = 1
                 }
                 let tint = Float(0.8 + 0.4 * WNoise.hash2(s ^ 0x71, i, j))
                 cell.instances.append(PropInstance(kind: kind, x: Float(x - x0), y: Float(g.y - 0.05), z: Float(z - z0), yaw: yaw, scale: Float(sc), tint: tint))
@@ -299,6 +354,69 @@ extension FreeWorld {
                 k += 12
             }
         }
+        roadside(&cell, q, x0, z0, C)
         return cell
+    }
+
+    /// The roadside (0227), along each road in the cell, one per 4 m sample where it applies:
+    ///   guard rails  where the road runs on a fill (the ground 3 m past the shoulder ≥ 0.8 m below the road), and along
+    ///                the outside of a bend (≥ 0.045 rad over ±24 m: the world's lattice roads are gentle, that's their sharpest few per cent);
+    ///   bend signs   on the outside of the sharpest (≥ 0.06 rad), every 24 m (behind the rail);
+    ///   fences       runs of post-and-rail on a third of the 128 m stretches, both sides, anywhere but the desert.
+    /// Each is an instance to draw and a solid that breaks (its `item` is its index in `cell.solids`).
+    func roadside(_ cell: inout PropCell, _ q: RoadQuery, _ x0: Double, _ z0: Double, _ C: Double) {
+        for l in q.links {
+            let p = roads.profile(l)
+            let salt = seed ^ UInt32(truncatingIfNeeded: (l.i &* 73856093) ^ (l.j &* 19349663) ^ (l.north ? 0x9e37 : 0x51f1))
+            let reach = Roadside.fenceLat + 2
+            for k in 0..<l.n {
+                // Only the samples whose roadside can fall in this cell.
+                if l.x[k] < x0 - reach || l.x[k] >= x0 + C + reach || l.z[k] < z0 - reach || l.z[k] >= z0 + C + reach { continue }
+                let hx = l.dx[k], hz = l.dz[k], yaw = DMath.datan2(hx, hz)
+                func put(_ kind: PropKind, _ sk: PropSolid.Kind, _ side: Double, _ lat: Double, _ half: (Double, Double, Double), _ y: Double? = nil, turn: Double = 0) {
+                    let x = l.x[k] + hz * side * lat, z = l.z[k] - hx * side * lat
+                    if x < x0 || x >= x0 + C || z < z0 || z >= z0 + C { return }
+                    if Site.onFloor(x, z, margin: 10) { return }
+                    let g = ground(x, z, q)
+                    // Not on a road (another one, at a junction), and not in the sea.
+                    if g.road < RoadSpec.hw + RoadSpec.shoulder + 0.2 { return }
+                    let gy = y ?? g.y
+                    if gy < SEA + 0.3 { return }
+                    let item = Int32(cell.solids.count)
+                    cell.solids.append(PropSolid(kind: sk, x: x, y: gy, z: z, yaw: yaw + turn, half: half))
+                    cell.instances.append(PropInstance(kind: kind, x: Float(x - x0), y: Float(gy), z: Float(z - z0), yaw: Float(yaw + turn), scale: 1, tint: 1, item: item))
+                }
+                let roadY = p.y[k]
+                var railed = [false, false]
+                // How the road turns over ±24 m (+ = to the left): its outside is the other side.
+                var turn = 0.0
+                if k >= 6 && k < l.n - 6 {
+                    turn = DMath.datan2(l.dx[k + 6], l.dz[k + 6]) - DMath.datan2(l.dx[k - 6], l.dz[k - 6])
+                    while turn > DMath.PI { turn -= 2 * DMath.PI }
+                    while turn < -DMath.PI { turn += 2 * DMath.PI }
+                }
+                let outside = turn > 0 ? -1.0 : 1.0
+                for (si, side) in [1.0, -1.0].enumerated() {
+                    let ox = l.x[k] + hz * side * (Roadside.railLat + 3), oz = l.z[k] - hx * side * (Roadside.railLat + 3)
+                    if roadY - ground(ox, oz, q).y >= 0.8 || (abs(turn) >= 0.045 && side == outside) {
+                        // the rail's top 0.8 m over the road's edge (its foot on the shoulder's level)
+                        // the forged rail's beam is on its local +x (the forge's −x, turned into the game's frame): toward the road
+                        put(.guardrail, .rail, side, Roadside.railLat, Roadside.rail, roadY - 0.02, turn: side > 0 ? DMath.PI : 0)
+                        railed[si] = true
+                    }
+                }
+                if k % 6 == 0 && abs(turn) >= 0.06 {   // behind the rail if there is one
+                    put(.signpost, .sign, outside, Roadside.signLat, Roadside.sign, turn: outside > 0 ? 0 : DMath.PI)
+                }
+                // Fences: a third of the 128 m stretches in grass and forest country, on gentle ground.
+                let run = k / 32
+                if WNoise.hash2(salt, run, 7) < 0.34 {
+                    let land = self.land.weights(l.x[k], l.z[k])
+                    if land.2 < 0.5 {
+                        for (si, side) in [1.0, -1.0].enumerated() where !railed[si] { put(.fence, .fence, side, Roadside.fenceLat, Roadside.fence) }
+                    }
+                }
+            }
+        }
     }
 }
