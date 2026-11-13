@@ -1,12 +1,12 @@
 ---
 id: 0221
 title: The iPhone app's touch controls are the player's to arrange (a HUD layout editor, per tier and per screen shape)
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: player-feel
 created: 2026-11-12
-pr:
+pr: 345
 by: operator
 ---
 
