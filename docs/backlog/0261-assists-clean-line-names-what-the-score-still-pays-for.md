@@ -1,5 +1,5 @@
 ---
-id: 0245
+id: 0261
 title: On keys and two thumbs, Assist's clean line names what the score still pays for
 status: ready
 priority: P1
