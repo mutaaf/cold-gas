@@ -1,11 +1,12 @@
 ---
 id: 0220
 title: Roam, on the iPhone, drives round the Show's, the Wall's and the Lineup's sets and on into Free Drive's world
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: engagement
 created: 2026-11-12
+pr: 344
 by: operator
 ---
 
