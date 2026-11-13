@@ -1,7 +1,7 @@
 ---
 id: 0086
 title: The title scene reads blue-hour, with one signal red, on every tier
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: player-feel

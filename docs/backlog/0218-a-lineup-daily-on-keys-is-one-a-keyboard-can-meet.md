@@ -1,7 +1,7 @@
 ---
 id: 0218
 title: A Lineup Daily on keys is one a keyboard player can meet, or it says it can't
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: engagement
