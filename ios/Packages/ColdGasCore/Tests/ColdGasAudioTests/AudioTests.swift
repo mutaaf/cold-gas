@@ -1,4 +1,4 @@
-// The sound's synthesis (0240) rendered by hand on the Mac: it stays finite and inside full scale whatever it's asked,
+// The sound's synthesis (0250) rendered by hand on the Mac: it stays finite and inside full scale whatever it's asked,
 // every layer and one-shot actually makes sound, the side-chain key ducks the bed, and the callbacks stay cheap.
 import XCTest
 import Darwin

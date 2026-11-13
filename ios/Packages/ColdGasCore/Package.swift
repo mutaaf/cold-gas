@@ -32,7 +32,7 @@ let package = Package(
         .target(name: "ColdGasClient", dependencies: ["ColdGasCore", "ColdGasLayout"], swiftSettings: [.swiftLanguageMode(.v5)]),
         // Free Drive's world (docs/NATIVE-FREEDRIVE.md §4): pure, a function of its seed; never part of a scored run.
         .target(name: "ColdGasWorld", dependencies: ["ColdGasCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
-        // The app's sound synthesis (0240): the render callbacks' DSP, trivial state in plain memory. Optimised even in a Debug
+        // The app's sound synthesis (0250): the render callbacks' DSP, trivial state in plain memory. Optimised even in a Debug
         // build: unoptimised, a DSP loop costs several cores and the sound breaks up. It never touches the sim.
         .target(name: "ColdGasAudio", swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-O"], .when(configuration: .debug))]),
         .target(

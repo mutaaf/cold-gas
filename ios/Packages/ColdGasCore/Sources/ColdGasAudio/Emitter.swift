@@ -1,4 +1,4 @@
-// The spatial emitters (0240): mono sources the environment node places in the world (HRTF on headphones, panned on a
+// The spatial emitters (0250): mono sources the environment node places in the world (HRTF on headphones, panned on a
 // speaker, attenuated by distance, sent to the zone's reverb). Each one plays the positioned one-shots it's handed
 // (material-aware impacts with their debris, pass-bys with their Doppler fall, birdsong) and the first one also carries
 // the stunt set's crowd and PA hum, which follow the listener's motion in pitch.

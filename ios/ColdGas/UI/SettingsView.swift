@@ -23,7 +23,7 @@ struct SettingsView: View {
             ? "Apple Intelligence writes the judges\u{2019} words on this device: nothing is sent.\(scores)"
             : "The free edge model writes the judges\u{2019} words, over the network.\(scores)"
     }
-    /// A sound level slider (0240): the car, the world and the hits ("Effects"), or the title's music.
+    /// A sound level slider (0250): the car, the world and the hits ("Effects"), or the title's music.
     private func level(_ name: String, _ v: Binding<Double>, _ apply: @escaping (Double) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             HStack { Text(name); Spacer(); Text(String(format: "%.0f%%", v.wrappedValue * 100)).font(Theme.mono(12)).foregroundStyle(Theme.ink2) }

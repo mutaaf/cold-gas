@@ -1,7 +1,7 @@
 ---
-id: 0240
+id: 0250
 title: The iPhone app's sound is a real car's, a real world's and a real crash's
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: player-feel
@@ -35,10 +35,10 @@ Runs on: the operator's Mac (Xcode, the simulator).
 - Nothing reads back into the sim; every input is state the sim or the renderer already keeps.
 
 ## Acceptance criteria
-- [ ] `make test` green: the 52 run vectors bit-exact (no sim file changes).
-- [ ] Render callbacks allocation- and lock-free; their CPU measured (`-sound bench`, `-sound-cpu`).
-- [ ] Before/after captures from the simulator in docs/audio/0240/: a Free Drive, a stunt run, a crash.
-- [ ] 1.2.0 release notes and What's-new card.
+- [x] `make test` green: the 52 run vectors bit-exact (no sim file changes).
+- [x] Render callbacks allocation- and lock-free; their CPU measured (`-sound bench`, `-sound-cpu`).
+- [x] Before/after captures from the simulator in docs/audio/0250/: a Free Drive, a stunt run, a crash.
+- [x] 1.2.0 release notes and What's-new card.
 
 ## Test plan
 `cd ios && make test`; on the simulator `-sound bench`, `-freedrive -fd-pilot 30 -sound-capture drive -sound-cpu`,

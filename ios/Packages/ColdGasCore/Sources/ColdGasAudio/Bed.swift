@@ -1,4 +1,4 @@
-// The bed (0240): everything that rides with the camera and the car, in stereo. The drivetrain's voice (two motors'
+// The bed (0250): everything that rides with the camera and the car, in stereo. The drivetrain's voice (two motors'
 // orders, the reduction gears, the inverter, regen), the tyres by surface, the squeal, the wind, the suspension, ABS,
 // the cold-gas jets, the ambience round the listener, the title's music and the UI. One render callback; the
 // spatial things (impacts, pass-bys, birds, the set's crowd) are the emitters' (Emitter.swift).
@@ -293,7 +293,7 @@ public struct BedCore {
                     for j in 0..<orderCount {
                         let o = orders[j]
                         let f = o.0 * hz
-                        if f < 35 || f > 13000 { ph[j] += f * isr; ph[j + 8] += f * split * isr; continue }
+                        if f < 35 || f > 13000 { ph[j] += f * isr; ph[j] -= floor(ph[j]); ph[j + 8] += f * split * isr; ph[j + 8] -= floor(ph[j + 8]); continue }
                         // Above 7 kHz the orders fade (a phone squeals there; real cabins damp it).
                         let hf = f > 7000 ? 1 - (f - 7000) / 6000 : 1
                         let lfade = f < 120 ? (f - 35) / 85 : 1
@@ -513,6 +513,7 @@ public struct BedCore {
         roarF.clear(); gravA.clear(); gravB.clear(); grassHi.clear(); sprayF.clear(); sqF.clear(); windLo.clear(); whistle.clear()
         invHiss.clear(); liftF.clear(); sideF.clear(); grindHi.clear(); grindLo.clear(); whooshF.clear()
         deckA.clear(); deckB.clear(); leafL.clear(); leafR.clear(); padBq.clear(); duck = 0
+        rumbleLo.y = 0; gravLo.y = 0; grassLo.y = 0; roarJet.y = 0; breezeLo.y = 0; roarLo.y = 0
         pool.silence()
     }
 }

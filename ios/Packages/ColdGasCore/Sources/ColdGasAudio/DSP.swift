@@ -1,4 +1,4 @@
-// The sound's building blocks (0240): filters, noise, oscillators, envelopes and the one-shot voice. Every type here is
+// The sound's building blocks (0250): filters, noise, oscillators, envelopes and the one-shot voice. Every type here is
 // trivial (no references, no arrays), so the render callbacks can hold them in plain allocated memory and touch them
 // without ARC, locks or allocation. Nothing here reads the sim.
 import Foundation
@@ -240,17 +240,17 @@ struct VoicePool {
         var slot = -1, quiet = Double.infinity, qi = 0
         for i in 0..<count {
             if !voices[i].on { slot = i; break }
-            let l = abs(voices[i].g * voices[i].out)
+            let w = voices[i].n < voices[i].delayN ? voices[i].peak : voices[i].g; let l = abs(w * voices[i].out)
             if l < quiet { quiet = l; qi = i }
         }
         if slot < 0 { slot = qi }
         var v = Voice()
         v.on = true; v.wave = p.wave; v.freq = p.f0
-        v.glideN = Int(p.glide * sr); v.fMul = v.glideN > 0 && p.f0 > 0 && p.f1 > 0 ? pow(p.f1 / p.f0, 1 / Double(v.glideN)) : 1
-        v.rng = Lcg(s: max(1, abs(p.seed) % 2147483647)); v.rate = p.rate; v.density = p.density
+        let gN = Int(p.glide * sr); v.fMul = gN > 0 && p.f0 > 0 && p.f1 > 0 ? pow(p.f1 / p.f0, 1 / Double(gN)) : 1
+        v.rng = Lcg(s: max(1, (p.seed & 0x7fffffff) % 2147483647)); v.rate = p.rate; v.density = p.density
         v.ratio2 = p.ratio2; v.amp2 = p.amp2; v.key = p.key; v.pan = p.pan
         if let k = p.filter { v.filtered = true; v.bq.set(k, p.ff, p.fq, sr) }
-        v.delayN = Int(p.delay * sr); v.atkEndN = v.delayN + Int(p.atk * sr); v.decEndN = max(v.atkEndN + 1, Int(p.decEnd * sr) + v.delayN)
+        v.delayN = Int(p.delay * sr); v.glideN = v.delayN + gN; v.atkEndN = v.delayN + Int(p.atk * sr); v.decEndN = max(v.atkEndN + 1, Int(p.decEnd * sr) + v.delayN)
         v.stopN = Int(p.stop * sr) + v.delayN
         let g0 = max(p.g0, 1e-5), pk = max(p.peak, 1e-5), ge = max(p.gEnd, 1e-5)
         v.g0 = g0; v.peak = pk; v.gEnd = ge; v.g = g0; v.out = p.out

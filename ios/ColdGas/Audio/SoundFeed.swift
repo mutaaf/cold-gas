@@ -1,4 +1,4 @@
-// What the sound hears (0240), read from state that already exists: the car's wheels (spin, slip, compression), the
+// What the sound hears (0250), read from state that already exists: the car's wheels (spin, slip, compression), the
 // drive's chassis (motor torque, ABS), the jets' valves, the ground under the car, the world's props beside the road,
 // the land's biome. It never writes the sim: a scored run's bits can't depend on anything here.
 //
@@ -34,12 +34,17 @@ final class SoundFeed {
     private var nearT = 0.0
     private let queue = DispatchQueue(label: "coldgas.sound.props", qos: .utility)
     private weak var world: FreeWorld?
+    /// Bumped when the world changes: a late answer from the old one is dropped.
+    private var worldGen = 0
+    /// False until the first frame after a reset has read the springs (no knock from a standing start).
+    private var primed = false
 
     /// A fresh run or drive: nothing carries over.
     func reset() {
         for i in 0..<4 { prevComp[i] = 0; thumpT[i] = -1 }
-        bank = [0, 0]; airT = 0; wasAir = false; airVy = 0; surfT = 0; ambT = 0; nearT = 0; near.removeAll(keepingCapacity: true)
-        prevPos = .zero
+        bank[0] = 0; bank[1] = 0; airT = 0; wasAir = false; airVy = 0; surfT = 0; ambT = 0; nearT = 0; near.removeAll(keepingCapacity: true)
+        prevPos = .zero; primed = false; landT = -10
+        lastOrigin = .zero; onDeck = false
     }
 
     // MARK: - Free Drive and the roams
@@ -97,7 +102,7 @@ final class SoundFeed {
             let crowd = d < 900 ? 0.8 : max(0, 0.8 - (d - 900) / 900)
             Sound.shared.ambience(trees: trees, crickets: 0.55 * (1 - 0.5 * w.2), breeze: 0.4 + 0.4 * coast + 0.3 * w.0, crowd: crowd)
             Sound.shared.zone(zoneAt(fd, car, trees: trees, onSet: onSet && d < 450))
-            world = fd.world
+            if world !== fd.world { world = fd.world; worldGen += 1; cells.removeAll(); asked.removeAll() }
             streamProps(car.pos.x, car.pos.z)
         }
         let o = fd.origin
@@ -136,6 +141,7 @@ final class SoundFeed {
 
     /// A replay from its track (no wheels to read): speed, jets, on the ground or not.
     func plain(speed: Double, throttles: [Double], grounded: Bool, phase: Sound.Phase = .run) {
+        lastOrigin = .zero; onDeck = false; near.removeAll(keepingCapacity: true)
         var lift = 0.0, side = 0.0
         for i in 0..<throttles.count { if i < 4 { lift += throttles[i] } else { side += throttles[i] } }
         burstEdges(lift: lift, side: side)
@@ -147,7 +153,7 @@ final class SoundFeed {
     func quiet(title: Bool) {
         Sound.shared.update(speed: 0, lift: 0, side: 0, grounded: true, phase: title ? .title : .quiet)
         Sound.shared.ambience(trees: 0, crickets: title ? 0.25 : 0, breeze: title ? 0.25 : 0, crowd: 0)
-        bank = [0, 0]
+        bank[0] = 0; bank[1] = 0
     }
 
     // MARK: - The car
@@ -202,21 +208,22 @@ final class SoundFeed {
     }
     /// A bank opening from shut is a burst; shutting is the valve seating.
     private func burstEdges(lift: Double, side: Double) {
-        let lv = [lift, side], full = [2.5, 3.0]
         for b in 0..<2 {
-            if lv[b] > 0.25 && bank[b] < 0.08 && clock - bankT[b] > 0.12 {
+            let lvb = b == 0 ? lift : side, full = b == 0 ? 2.5 : 3.0
+            if lvb > 0.25 && bank[b] < 0.08 && clock - bankT[b] > 0.12 {
                 bankT[b] = clock
-                Sound.shared.burst(bank: b, k: min(1, lv[b] / full[b]), seed: nextSeed())
-            } else if lv[b] < 0.05 && bank[b] > 0.3 {
-                Sound.shared.valveClose(bank: b, k: min(1, bank[b] / full[b]), seed: nextSeed())
+                Sound.shared.burst(bank: b, k: min(1, lvb / full), seed: nextSeed())
+            } else if lvb < 0.05 && bank[b] > 0.3 {
+                Sound.shared.valveClose(bank: b, k: min(1, bank[b] / full), seed: nextSeed())
             }
-            bank[b] = lv[b]
+            bank[b] = lvb
         }
     }
 
     /// A corner whose spring is struck fast (a bump, a kerb, a rut): a knock on that side.
     private func suspension(_ car: Vehicle, dt: Double) {
         guard dt > 0 else { return }
+        if !primed { primed = true; for i in 0..<4 { prevComp[i] = car.wheels[i].compression }; return }
         for i in 0..<4 {
             let w = car.wheels[i]
             let rate = (w.compression - prevComp[i]) / dt
@@ -278,6 +285,7 @@ final class SoundFeed {
     /// The props of the 3×3 prop cells round the car, asked of the world off the main thread, kept while near.
     private func streamProps(_ x: Double, _ z: Double) {
         guard let w = world else { return }
+        let gen = worldGen
         let C = PropSpec.cell, ci = Int((x / C).rounded(.down)), cj = Int((z / C).rounded(.down))
         var keep = Set<Int64>()
         for j in (cj - 1)...(cj + 1) { for i in (ci - 1)...(ci + 1) {
@@ -287,7 +295,7 @@ final class SoundFeed {
                 asked.insert(k)
                 queue.async { [weak self] in
                     let solids = w.props(i, j).solids
-                    DispatchQueue.main.async { self?.cells[k] = solids; self?.asked.remove(k) }
+                    DispatchQueue.main.async { guard let s = self, s.worldGen == gen else { return }; s.cells[k] = solids; s.asked.remove(k) }
                 }
             }
         } }
