@@ -632,26 +632,43 @@ struct ResultsView: View {
     private func numbersLine(_ t: Telemetry) -> String {
         "Sink \(Fmt.rate(t.sink)) \(Fmt.rateUnit) · Tilt \(String(format: "%.0f°", t.tiltDeg))"
     }
-    /// Fly again is the next thing to do; Roam beside it; the rest are quiet words under a hairline.
+    /// After a landing (0258, the web's 0257): Next jump is the tall button, then Beat <score> and Share side by side, then
+    /// Post, then the quiet words under a hairline. After a wreck: Fly again, then Share. A drill: Again.
     private func actions(_ card: Card, short: Bool) -> some View {
-        VStack(alignment: .leading, spacing: short ? 6 : 10) {
-            PostRow(result: result, post: post)
-            HStack(spacing: 8) {
-                Button { game.retry() } label: { Text(result.drill == nil ? "Fly again" : "Again") }
-                    .buttonStyle(MarqueeButton(height: short ? 48 : 54))
-                    .accessibilityLabel(result.drill == nil ? "Fly again" : "Again")
-                // Roam (0220): off the card and onto the set, unscored.
-                if result.drill == nil {
-                    Button { game.startDrive(roam: result.course) } label: { Label("Roam", systemImage: "car.side") }
-                        .buttonStyle(MarqueeButton(height: short ? 48 : 54, hollow: true)).accessibilityIdentifier("roam-results")
-                        .accessibilityLabel("Roam this course").accessibilityHint("Drive round the set, unscored.")
+        let h: CGFloat = short ? 48 : 54
+        let landed = result.drill == nil && celebrated(card)
+        return VStack(alignment: .leading, spacing: short ? 6 : 10) {
+            if landed {
+                let next = COURSE_INFO.first { $0.id == Game.nextCourse(after: result.course) }?.name ?? ""
+                Button { game.next() } label: { Text("Next \u{00B7} \(next)") }
+                    .buttonStyle(MarqueeButton(height: h))
+                    .accessibilityIdentifier("next")
+                    .accessibilityLabel("Next jump: \(next)")
+                HStack(spacing: 8) {
+                    Button { game.retry() } label: { Text(String(format: "Beat %.1f", card.total)).frame(maxWidth: .infinity) }
+                        .buttonStyle(MarqueeButton(height: h, hollow: true))
+                        .accessibilityIdentifier("beat")
+                        .accessibilityLabel(String(format: "Fly again: beat %.1f", card.total))
+                    share(card, h)
                 }
+            } else {
+                Button { game.retry() } label: { Text(result.drill == nil ? "Fly again" : "Again") }
+                    .buttonStyle(MarqueeButton(height: h))
+                    .accessibilityIdentifier("again")
+                    .accessibilityLabel(result.drill == nil ? "Fly again" : "Again")
+                if result.drill == nil { share(card, h) }
             }
+            // Post (0258): below the next thing to do, never above it.
+            PostRow(result: result, post: post)
             HStack(spacing: 0) {
                 quiet("play.rectangle", "Watch it", short) { game.watch() }
                 Spacer(minLength: 0)
-                share(card, short)
-                Spacer(minLength: 0)
+                // Roam (0220): off the card and onto the set, unscored.
+                if result.drill == nil {
+                    quiet("car.side", "Roam", short) { game.startDrive(roam: result.course) }
+                        .accessibilityIdentifier("roam-results").accessibilityHint("Drive round the set, unscored.")
+                    Spacer(minLength: 0)
+                }
                 quiet("list.number", "Board", short) { open(.board) }
                 Spacer(minLength: 0)
                 quiet("house", "Home", short) { game.home() }
@@ -666,12 +683,13 @@ struct ResultsView: View {
         }
         .buttonStyle(QuietButton()).accessibilityLabel(name)
     }
-    @ViewBuilder private func share(_ card: Card, _ short: Bool) -> some View {
+    @ViewBuilder private func share(_ card: Card, _ height: CGFloat) -> some View {
         if let u = result.challengeURL {
             ShareLink(item: u, message: Text(String(format: "%.1f on %@. Beat it.", card.total, COURSE_INFO.first { $0.id == result.course }?.name ?? "Cold Gas"))) {
-                if short { Image(systemName: "square.and.arrow.up").font(.system(size: 15)) }
-                else { Label("Share", systemImage: "square.and.arrow.up").font(Theme.text(13, .medium)) }
-            }.buttonStyle(QuietButton()).accessibilityLabel("Challenge a friend")
+                Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
+            }
+            .buttonStyle(MarqueeButton(height: height, hollow: true))
+            .accessibilityIdentifier("share").accessibilityLabel("Share").accessibilityHint("Send a friend this jump to beat")
             .simultaneousGesture(TapGesture().onEnded { Usage.shared.track("share_tap", ["course": .text(result.course)]) })
         }
     }

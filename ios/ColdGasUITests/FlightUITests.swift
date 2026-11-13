@@ -31,7 +31,7 @@ final class FlightUITests: XCTestCase {
         shot("let-go")
         pad.press(forDuration: 9)           // hold: land
         shot("landing")
-        XCTAssertTrue(a.buttons["Fly again"].waitForExistence(timeout: 30), "the results never came up")
+        XCTAssertTrue(a.buttons.matching(NSPredicate(format: "identifier IN %@", ["again", "beat"])).firstMatch.waitForExistence(timeout: 30), "the results never came up")
         shot("results")
         let engineer = a.buttons["Engineer"]
         XCTAssertTrue(engineer.exists, "no judge tile")
@@ -51,7 +51,7 @@ final class FlightUITests: XCTestCase {
         sleep(4)
         shot("watching")
         a.buttons["Back to the score"].tap()
-        XCTAssertTrue(a.buttons["Fly again"].waitForExistence(timeout: 5))
+        XCTAssertTrue(a.buttons.matching(NSPredicate(format: "identifier IN %@", ["again", "beat"])).firstMatch.waitForExistence(timeout: 5))
         a.buttons["Home"].tap()
         let home = a.buttons["play"].waitForExistence(timeout: 10)
         shot("after-home")

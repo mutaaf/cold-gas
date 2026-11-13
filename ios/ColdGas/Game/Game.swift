@@ -127,6 +127,16 @@ final class Game: ObservableObject {
         UISelectionFeedbackGenerator().selectionChanged()
     }
     func retry() { play(drill: activeDrill) }
+    /// The next jump after a landing (0258): the next event in the playbill's order, Show, Wall, Lineup, Show.
+    static func nextCourse(after c: String) -> String {
+        let order = ["show", "wall", "lineup"]
+        return order[((order.firstIndex(of: c) ?? -1) + 1) % order.count]
+    }
+    func next() {
+        let n = Game.nextCourse(after: result?.course ?? course)
+        if course != n { course = n }
+        play()
+    }
     func home() {
         if screen == .run { Usage.shared.runOver() }
         live = nil; controls.live = nil; track = nil; result = nil; paused = false; activeDrill = nil
