@@ -4,8 +4,10 @@
 // Owns two mounts and nothing else: [data-title-extra] (under the title's primary actions) and
 // [data-daily-result] (on the results sheet, under the score). src/main.js wires it with a few calls.
 import './comeback.css';
-import { decodeChallenge, encodeChallenge, vsFromHash, challengeUrl, compare, createReplay, replayAsync, coarsen,
+import { decodeChallenge, encodeChallenge, vsFromHash, challengeUrl, compare, raceLine, createReplay, replayAsync, coarsen,
   COARSE_STEPS, VS_TARGET_CHARS, VS_MAX_CHARS } from './challenge.js';
+import { stuntName, dareText, landedCard } from './stunt-name.js';
+import { getMedals } from './medals.js';
 import { obs } from './obs/index.js';
 import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, courseName, dayNumber, DAY_MS, missLine, titleHint } from './daily.js';
 import { packFrames } from './ghost.js';
@@ -27,6 +29,7 @@ const TIER = { assist: 'Assist', pro: 'Pro', advanced: 'Advanced' };
  * @param {() => string} o.getTier
  * @param {(t: string) => void} o.setTier
  * @param {() => void} o.jump               a Jump, as the title's own button does it
+ * @param {() => void} [o.play]             0251: a Jump at once (Take the challenge: no card in front of it)
  * @param {() => Promise<unknown>} o.ready  physics (and the stage) up
  * @param {(blobOrText: object) => void} o.share   share-card's shareRun, bound to this run's card
  * @param {(msg: string, ms?: number) => void} o.toast
@@ -59,9 +62,11 @@ export function createComeback(o) {
     shownDay = dayNumber(now());
     if (ch && ch.state !== 'bad') {
       const d = ch.dec, who = d.initials || 'Someone';
+      // 0251: the very stunt and tier to beat: "ABC · 82.4 · The Show · 360 · Pro" (the trick once the run is re-flown here).
+      const stunt = ch.name || courseName(d.course);
       m.innerHTML = `<div class="xc xc-vs" role="group" aria-label="Challenge">
-        <p class="xc-k"><span>Challenge</span>${d.tier !== 'assist' ? `<span class="xc-dot" aria-hidden="true">·</span><span>${TIER[d.tier]}</span>` : ''}</p>
-        <p class="xc-goal"><b class="xc-who">${who}</b> scored <b class="xc-num">${d.score.toFixed(1)}</b> on ${courseName(d.course)}<span class="xc-sub"> — ${ch.mine == null ? 'beat it' : `${compare(ch.mine, ch.total, d.initials).text.replace(/^You/, 'you')} (your best)`}</span></p>
+        <p class="xc-k"><span>Challenge</span></p>
+        <p class="xc-goal" data-vs-goal><b class="xc-who">${who}</b> · <b class="xc-num">${d.score.toFixed(1)}</b> · ${stunt} · ${TIER[d.tier] || 'Assist'}<span class="xc-sub"> — ${ch.mine == null ? 'beat it' : `${compare(ch.mine, ch.total, d.initials).text.replace(/^You/, 'you')} (your best)`}</span></p>
         <div class="xc-row"><button type="button" class="btn xc-go xc-take" data-vs-take>${ch.mine == null ? 'Take the challenge' : 'Race again'}</button><button type="button" class="btn link xc-x" data-vs-dismiss>${ch.mine == null ? 'Not now' : 'Done'}</button></div>
       </div>`;
       m.querySelector('[data-vs-take]').setAttribute('aria-description', `${d.initials || 'Their'} run rides beside you as the ghost`);
@@ -196,6 +201,8 @@ export function createComeback(o) {
     }
     ch.ghost = packFrames(rp.run.frames, card.total, false, dec.course);
     ch.total = card.total;
+    ch.card = card;
+    ch.name = stuntName(card, { short: true });
     ch.state = 'ready';
     ch.rp = null;
     return true;
@@ -216,9 +223,12 @@ export function createComeback(o) {
     armed = true;
     o.metric?.('challenge_play', { course: ch.dec.course, stale: 0 });
     o.selectCourse(ch.dec.course);
-    o.jump();
+    // 0251: the same stunt: the sender's tier for the race (every tier is open), the player's own back on Not now / Done.
+    if (o.getTier() !== ch.dec.tier) { ch.prevTier ??= o.getTier(); o.setTier(ch.dec.tier, { auto: true, persist: false }); }
+    (o.play || o.jump)();
   }
   function dismiss() {
+    if (ch?.prevTier && o.getTier() === ch.dec.tier) o.setTier(ch.prevTier, { auto: true });
     ch = null; armed = false;
     render();
     o.mount?.querySelector('[data-daily-play]')?.focus();
@@ -239,16 +249,19 @@ export function createComeback(o) {
     const m = o.resultMount;
     last = null;
     if (m) m.replaceChildren();
-    if (autopilot || drill || !run || !card) return;
+    if (autopilot || drill || !run || !card) return null;
     last = { run, card, link: prepare(run, card) };
     last.link.catch(() => {});
     const lines = [];
     let vs = null;
     if (ghost(run.course)) {
       obs.play('challenge-run');
-      vs = compare(card.total, ch.total, ch.dec.initials);
-      ch.mine = Math.max(ch.mine ?? -Infinity, card.total);   // the title's card shows where you stand
-      lines.push(`<div class="xr xr-vs" data-state="${vs.won ? 'won' : vs.tie ? 'tie' : 'behind'}"><p class="xr-line" data-vs-line>${vs.text}</p><button type="button" class="btn ghost xr-send" data-vs-send>Send it back</button></div>`);
+      // 0251: like for like (the same event and tier) or no verdict; the recipient's own best on that event and tier beside it.
+      vs = raceLine({ course: run.course, tier: card.tier, total: card.total }, { course: ch.dec.course, tier: ch.dec.tier, total: ch.total, initials: ch.dec.initials });
+      if (vs.comparable) ch.mine = Math.max(ch.mine ?? -Infinity, card.total);   // the title's card shows where you stand
+      const prior = getMedals(run.course, card.tier).best, best = Math.max(prior ?? -Infinity, card.total);
+      const state = !vs.comparable ? 'other' : vs.won ? 'won' : vs.tie ? 'tie' : 'behind';
+      lines.push(`<div class="xr xr-vs" data-state="${state}"><p class="xr-line"><span data-vs-line>${vs.text}</span><span class="xr-best" data-vs-best>Your best ${best.toFixed(1)}</span></p><button type="button" class="btn ${vs.won ? 'primary' : 'ghost'} xr-send" data-vs-send>Send it back</button></div>`);
     }
     const obj = objectiveFor(now());
     const r = evaluate(obj, card, run.course);
@@ -266,16 +279,14 @@ export function createComeback(o) {
       lines.push(`<p class="xr xr-daily${r.ok ? ' ok' : ''}" data-daily-line>${text}</p>`);
     }
     render();   // the title's card under the sheet: where the challenge stands, the daily done, the streak
-    if (!m || !lines.length) return;
+    if (!m || !lines.length) return vs;
     m.innerHTML = lines.join('');
     m.querySelector('[data-vs-send]')?.addEventListener('click', () => {
-      const ini = ch?.dec.initials || 'you';
-      const on = courseName(run.course), mine = card.total.toFixed(1), theirs = ch.total.toFixed(1);
-      const text = vs.won ? `I beat ${ini}’s ${theirs} with ${mine} on ${on}. Your move:`
-        : vs.tie ? `Dead level with ${ini} at ${mine} on ${on}. Break the tie:`
-          : `${ini}, your ${theirs} still stands. I got ${mine} on ${on}. Race my run:`;
+      // 0251: the recipient's run as the new challenge, with the dare: "Beat 84.5 on The Show · 360".
+      const text = landedCard(card) ? `Beat ${card.total.toFixed(1)} on ${stuntName(card, { short: true })}` : dareText(card);
       o.share({ card, url: last?.card === card ? last.link : Promise.resolve(o.base), text });
     });
+    return vs;
   }
 
   // The challenge link for a finished run (Share and Send it back carry it). Lossless when it fits the
@@ -306,6 +317,7 @@ export function createComeback(o) {
     boot, ghost, results, linkFor, render, refresh,
     get active() { return armed; },
     // e2e
-    get state() { return ch ? { state: ch.state, armed, initials: ch.dec.initials, score: ch.dec.score, course: ch.dec.course } : null; },
+    get state() { return ch ? { state: ch.state, armed, initials: ch.dec.initials, score: ch.dec.score, course: ch.dec.course, tier: ch.dec.tier, name: ch.name || '' } : null; },
+    decode: (url) => decodeChallenge(vsFromHash(String(url).replace(/^[^#]*/, ''))),
   };
 }

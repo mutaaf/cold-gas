@@ -84,3 +84,7 @@
   .xc-pips i.on:nth-child(6) { animation-delay: 0.25s; } .xc-pips i.on:nth-child(7) { animation-delay: 0.3s; }
 }
 @keyframes xc-pip { from { transform: scaleX(0); transform-origin: left; } to { transform: none; } }
+/* 0251: the recipient's own best on the event and tier rides the result line, after a dot, in the same ink. */
+.xr-best { font-weight: 400; white-space: nowrap; }
+.xr-best::before { content: ' · '; }
+.xr-vs[data-state='other'] .xr-line { color: var(--ink); }
