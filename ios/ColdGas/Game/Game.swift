@@ -29,6 +29,8 @@ struct DriveHud: Equatable {
 struct HudState: Equatable {
     var speed = 0.0, alt = 0.0, sink = 0.0, gas = 1.0, phase: UInt8 = 0
     var cue = "", stage = "climb", held = false, released = false, aimLive = false
+    /// The guided first jump's hint for this moment (0249), nil when nothing needs saying.
+    var guide: String?
     var sinkBand = 0   // 0 on profile, 1 fast but stoppable, 2 past stopping
     var throttles = [Double](repeating: 0, count: 10)   // the live valves, for Advanced's pad
     var hardware = false                                 // a controller or keyboard is flying: the touch controls hide
@@ -79,12 +81,54 @@ final class Game: ObservableObject {
     /// then the attempt starts again from the mark. The frame clock's, not the sim's: nothing scored or logged changes.
     private var wedge = WedgeWatch(), wedged = false
 
+    // --- The first run (0249) -----------------------------------------------------------------------
+    /// Until the first landed jump: the title holds the car still on the mark (no reference loop to watch), one Fly on the
+    /// Show, and a tap anywhere starts it. A tool or a test sees the normal title unless it asks with `-firstrun`.
+    @Published private(set) var firstRun: Bool = Game.firstRunAtLaunch
+    @Published private(set) var hintsSkipped = SaveStore.shared.data.counters.hintsSkipped ?? false
+    static let firstRunAtLaunch: Bool = {
+        #if DEBUG
+        if Launch.args.contains("-firstrun") {
+            SaveStore.shared.update { $0.progress = Progress() }   // a fresh install's counters (DEBUG, the shots and tests)
+            return true
+        }
+        #endif
+        let tool = WhatsNewGate.isQuiet(arguments: Launch.args, environment: ProcessInfo.processInfo.environment)
+        return !tool && SaveStore.shared.data.counters.firstRun
+    }()
+    /// The guided first jump: the first run, on one thumb on the Show, and the hints not skipped.
+    var guided: Bool { firstRun && !hintsSkipped && oneThumb && course == "show" && activeDrill == nil }
+    /// "I've got it": the hints end, for good.
+    func skipHints() {
+        hintsSkipped = true
+        SaveStore.shared.update { s in var p = s.counters; p.hintsSkipped = true; s.progress = p }
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+    private var rollTicks = 0
+    private var still: Replay?
+
+    init() {
+        if firstRun { course = "show"; tier = "assist" }   // the first jump: the Show, Assist, one thumb
+    }
+
     /// One-thumb flies only Assist on the Show and the Wall (src/onethumb.js); everything else is classic touch.
     var oneThumb: Bool { control == .oneThumb && tier == "assist" && course != "lineup" }
 
     // --- Flow ----------------------------------------------------------------------------------
     func showTitleLoop() {
         guard screen == .title else { return }
+        // The first run: the car waits on the mark, nothing to watch, so nothing holds a newcomer on the title (0249).
+        if firstRun {
+            if still == nil {
+                let l = LiveRun(course: course, tier: .assist, oneThumb: true)
+                let tr = Replay(live: course)
+                tr.tickBase = l.run.tick
+                tr.append(l.run)
+                still = tr
+            }
+            if let tr = still { stage?.load(course: course, track: tr); stage?.renderer?.liveTime = 0 }
+            return
+        }
         // Flown once per course and kept: Home must never wait on a whole flight (and the sim stays on this one thread).
         let tr = titleTracks[course] ?? Replay(runVector: "ref-\(course)")
         titleTracks[course] = tr
@@ -120,7 +164,8 @@ final class Game: ObservableObject {
         tr.append(l.run)
         track = tr
         stage?.load(course: course, track: tr)
-        countdown = 3; countT = 0
+        // The guided first jump counts down one beat, not three (0249).
+        countdown = guided ? 1 : 3; countT = 0; rollTicks = 0
         replaying = false
         Hardware.shared.startRun()
         screen = .run
@@ -139,6 +184,8 @@ final class Game: ObservableObject {
     }
     func home() {
         if screen == .run { Usage.shared.runOver() }
+        // After the first landing the title is the normal one, with the reference loop behind it.
+        if firstRun && !SaveStore.shared.data.counters.firstRun { firstRun = false; still = nil }
         live = nil; controls.live = nil; track = nil; result = nil; paused = false; activeDrill = nil
         HapticPlayer.shared.apply(HapticContinuous())
         screen = .title
@@ -374,9 +421,17 @@ final class Game: ObservableObject {
         // The coach re-flies the log on the sim's shared scratch: here, with no tick in flight, and the run stepping no more.
         let say = coachWords(pointerCtx(course: l.run.course, tier: l.card?.tier ?? "assist", touchScheme: l.oneThumb ? .thumb : .classic))
         result?.coach = (try? l.coachResult(say: say))?.items ?? []
+        if let r = result {
+            r.firstLanding = firstRun && r.drill == nil && r.landed && SaveStore.shared.data.counters.firstRun
+            r.firstRun = firstRun && r.drill == nil
+        }
         screen = .results
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
-        if let r = result { DispatchQueue.main.async { self.counted(r) } }   // off the frame loop
+        // A landing and a crash feel different (0249); the first landing has its own swell into the settle.
+        if let r = result {
+            HapticPlayer.shared.moment(r.firstLanding ? .firstLanding : r.landed ? .landed : .wrecked)
+            if r.firstLanding { for (i, d) in [0.0, 0.18, 0.36].enumerated() { DispatchQueue.main.asyncAfter(deadline: .now() + d) { Sound.shared.chime(i) } } }
+            DispatchQueue.main.async { self.counted(r) }   // off the frame loop
+        }
     }
 
     /// A scored run's end, counted on this device and named to the funnel (0246). Drills aren't jumps.
@@ -432,11 +487,33 @@ final class Game: ObservableObject {
         h.rowDone = r.course == "show" && (r.t.crossedRow || r.t.contact)
         h.cue = cue(l, h)
         h.hint = Deck.hint(cue: h.cue)
+        if guided { h.guide = guide(l, h) }
         if h != hud { hud = h }
     }
     private func landingBand(_ l: LiveRun, _ h: HudState) -> Int {
         predict(l.run.car, h.alt, pr, land: l.thumb.landing)
         return pr.status == "green" ? 0 : pr.status == "amber" ? 1 : 2
+    }
+
+    /// The guided first jump (0249): one short hint at the beat that needs it, gone the moment it's done. On Assist the
+    /// computer rolls the car; the hint says to let it, and a tick at each half turn says it's happening.
+    private func guide(_ l: LiveRun, _ h: HudState) -> String? {
+        let r = l.run
+        if wedged || r.phase == .done { return nil }
+        let roll = abs(r.t.rollAccum)
+        while rollTicks < 2 && roll >= Double.pi * Double(rollTicks + 1) {
+            rollTicks += 1
+            HapticPlayer.shared.play(HapticEvent(kind: .detent, tick: 0, channel: 5, intensity: rollTicks == 2 ? 0.7 : 0.45, sharpness: 0.85))
+        }
+        switch h.stage {
+        case "climb", "idle": return h.held || h.speed > 2 ? nil : "Hold the pad to climb"
+        case "ledge": return l.thumb.driving ? nil : "On the ledge. Tap once to let go"
+        case "fly":
+            if roll > 0.3 && roll < 2 * Double.pi - 0.3 && !h.held { return "Let it roll" }
+            if r.course == "show" && !r.t.crossedRow && r.car.pos.z > SHOW.rowNear { return nil }   // it carries you over the row
+            return h.held ? nil : "Hold the pad to land"
+        default: return nil
+        }
     }
 
     /// The cue line (src/main.js thumbCues / cues), in the app's words.
@@ -516,6 +593,8 @@ final class RunResult: Identifiable {
     var coach: [CoachItem] = []
     var drill: (label: String, pass: Bool, headline: String, stats: [String])?
     var dailyOK = false, dailyLine: String?
+    /// This device's first landing (0249): the results open on its moment. `firstRun`: the run was flown on the first run.
+    var firstLanding = false, firstRun = false
     /// A link to the same jump on the web (src/challenge.js): opens the game with this run to beat.
     lazy var challengeURL: URL? = {
         guard eligible, let p = try? Challenge.encode(log: log, course: course, score: card.total, tier: card.tier, initials: SaveStore.shared.initials, simVersion: SIM_VERSION) else { return nil }
