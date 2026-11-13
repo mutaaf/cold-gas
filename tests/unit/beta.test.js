@@ -1,5 +1,5 @@
 // The native app's beta page (public/beta/, served at /coldgas/beta/): its own title, description and canonical, the
-// public TestFlight invite, nothing from another host but that invite, served no-transform like the other pages (no
+// public TestFlight invite, nothing from another host but that invite (and Box Office's same-origin loader), served no-transform like the other pages (no
 // analytics beacon), every image it names shipped beside it with its size set, and linked from the title.
 import { describe, it, expect } from 'vitest';
 import { readFileSync, existsSync } from 'node:fs';
@@ -24,7 +24,9 @@ describe('the beta page', () => {
     const offsite = [...page.matchAll(/(?:href|src)="(https?:)?\/\/([^"]+)"/g)].map((m) => m[0])
       .filter((a) => !a.includes(INVITE) && !a.includes('mutaafaziz.com/coldgas/'));
     expect(offsite).toEqual([]);
-    expect(page).not.toMatch(/<script[^>]+src=/i);
+    // the one script by URL is Box Office's same-origin loader (AGENTS.md §3.3), last in <body> like the guide's
+    expect(page).toContain('<script async src="/boxoffice/v1/insights.js"></script>\n</body>');
+    expect(page.replace('<script async src="/boxoffice/v1/insights.js"></script>', '')).not.toMatch(/<script[^>]+src=/i);
     expect(page).not.toMatch(/—|&mdash;/);
   });
 
