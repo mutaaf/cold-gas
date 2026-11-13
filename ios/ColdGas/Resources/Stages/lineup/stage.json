@@ -6876,7 +6876,8 @@
    ],
    "wrap": "clamp",
    "srgb": true,
-   "file": "t2.png"
+   "file": "t2.png",
+   "flipY": true
   },
   {
    "id": "t3",

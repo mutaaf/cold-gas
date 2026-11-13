@@ -28,14 +28,24 @@ protocol DriveScene: AnyObject {
     func shake(_ a: Float)
     /// Bumped each time the car is made whole.
     var repairs: Int { get }
+    /// The drive's car as the renderer shows it (0225): each brake disc's glow, the pedal for the brake lamps.
+    var carLook: DriveCarLook { get }
+}
+/// What a drive tells the renderer about its car beyond the track.
+struct DriveCarLook {
+    /// Each disc's glow (0 dark … ≈ 1 orange-hot), from its temperature.
+    var glow = SIMD4<Float>(repeating: 0)
+    /// The brake pedal (0…1); the brake lamps follow it.
+    var pedal: Float = 0
 }
 
 final class FreeDrive: DriveScene {
     static let seedDefault = "cold gas"
     #if DEBUG
-    static let hold: (Double, Double, Double)? = {
+    /// `-fd-hold throttle,steer[,after s[,brake]]`.
+    static let hold: (Double, Double, Double, Double)? = {
         guard let a = Launch.value("-fd-hold")?.split(separator: ",").compactMap({ Double($0) }), a.count >= 2 else { return nil }
-        return (a[0], a[1], a.count > 2 ? a[2] : 0)
+        return (a[0], a[1], a.count > 2 ? a[2] : 0, a.count > 3 ? a[3] : 0)
     }()
     #endif
     let world: FreeWorld
@@ -49,6 +59,10 @@ final class FreeDrive: DriveScene {
     let course: Course
     var stage: String { stageOf(course.id) }
     let streamer: DriveStreamer
+    /// The drive's own chassis (0225, DriveCar.swift): soft springs, combined-slip tyres, the rear motors' vectoring, ABS,
+    /// hot brakes. `-fd-classic` (Debug) drives the scored car's model instead, for comparison.
+    let chassis = DriveModel()
+    let ownCar = !Launch.args.contains("-fd-classic")
     let track: Replay
     /// The controls (Controls routes the touches here while the drive is up): src/input.js sample, the Standard hands.
     let sampler = InputSampler(level: .standard)
@@ -59,6 +73,8 @@ final class FreeDrive: DriveScene {
     var pilot: Double?
     /// The suction fan, armed or not (the web's X).
     var fan = false
+    /// The brake pedal this tick (the brake lamps follow the pedal, not a guess from the car's deceleration).
+    private(set) var pedal = 0.0
     private var walker: RoadWalker?
     private var holdT = 0.0
     private var time = 0.0, acc = 0.0, airT = 0.0, flipT = 0.0, stuckT = 0.0, reverseHeld = 0.0
@@ -76,6 +92,8 @@ final class FreeDrive: DriveScene {
         track = Replay(live: course.id)
         car = createVehicle(course: course)
         car.world.streamer = streamer
+        // The chassis puts its downforce at the axles; the streamer's (through the centre) is for the scored model.
+        streamer.aero = !ownCar
         looseSpots = looseSet(stageOf(course.id))
         for s in looseSpots { addLoose(car.world, s.kind, x: s.x, y: 0, z: s.z, yaw: s.yaw) }
         looseSpeed = Array(repeating: 0, count: looseSpots.count)
@@ -90,6 +108,7 @@ final class FreeDrive: DriveScene {
         M3.quatFromYaw(car.quat, yaw)
         for v in [car.vel, car.angVel, car.angMom] { v.x = 0; v.y = 0; v.z = 0 }
         car.engineHeld = false
+        chassis.settle()
         sampler.freshRun()
         airT = 0; flipT = 0; stuckT = 0; reverseHeld = 0
         camera.snap()
@@ -156,12 +175,13 @@ final class FreeDrive: DriveScene {
                     // (shots: a run into the row, a slide).
                     if let h = FreeDrive.hold, view?.settled == true, (view?.stats.tiles ?? 0) > 0 {
                         holdT += DT
-                        if holdT >= h.2 { input.throttle = h.0; input.steer = h.1; input.brake = 0 }
+                        if holdT >= h.2 { input.throttle = h.0; input.steer = h.1; input.brake = h.3 }
                     }
                     #endif
                     input.fan = fan ? 1 : 0
                     if phase == .drive { reverse(input) }
-                    try step(car, input)
+                    if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
+                    pedal = input.brake
                     readLoose(car.world)
                     // Unscored, so the tanks top up on the ground (a full charge in 8 s): the jets always work on a roam.
                     if car.grounded > 0 { car.air = min(CAR.airMass, car.air + CAR.airMass * DT / 8) }
@@ -351,6 +371,12 @@ final class FreeDrive: DriveScene {
     // MARK: - DriveScene
 
     func shake(_ a: Float) { camera.shake(a) }
+    var carLook: DriveCarLook {
+        // Iron starts to show a dull red in the dark at ≈ 400 °C and is orange by ≈ 750 °C.
+        func g(_ t: Double) -> Float { let k = Float(max(0, min(1, (t - 380) / 420))); return k * k }
+        let d = chassis.discT
+        return DriveCarLook(glow: ownCar ? SIMD4(g(d[0]), g(d[1]), g(d[2]), g(d[3])) : .zero, pedal: Float(pedal))
+    }
 
     func frameCamera(aspect: Float, dt: Double) -> (view: simd_float4x4, proj: simd_float4x4, eye: SIMD3<Float>) {
         // The camera follows the car as it's drawn (one tick behind, between ticks), not the newest tick.
@@ -382,6 +408,8 @@ final class FreeDrive: DriveScene {
         k.sunCol = SIMD4(0.09, 0.05, 0.045, 1.0 / 1400)
         k.sunDir = SIMD4(sun, base.sunDir.w)
         let nearSlab = origin == .zero && abs(car.pos.x) < 700 && abs(car.pos.z) < 700
+        // Off the set the paint reflects the dusk itself, not the stage's cube (0225: Shaders.metal duskEnv).
+        k.skySun.w = nearSlab ? 0 : 1
         k.fogExp = SIMD4(0, nearSlab ? base.fogExp.y : 0, 1, base.fogExp.w)
         return k
     }

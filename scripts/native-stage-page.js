@@ -43,7 +43,10 @@ function textureOf(tex, textures) {
       x.putImageData(d, 0, 0); url = c.toDataURL('image/png');
     }
     textures.set(tex.uuid, { id: `t${textures.size}`, url, repeat: [tex.repeat.x, tex.repeat.y], offset: [tex.offset.x, tex.offset.y],
-      wrap: tex.wrapS === THREE.RepeatWrapping ? 'repeat' : 'clamp', srgb: tex.colorSpace === THREE.SRGBColorSpace });
+      wrap: tex.wrapS === THREE.RepeatWrapping ? 'repeat' : 'clamp', srgb: tex.colorSpace === THREE.SRGBColorSpace,
+      // A canvas texture is uploaded flipped (three's flipY): its PNG's top row is the GL texture's v = 1. A DataTexture's
+      // rows go up from v = 0 as written. The native loader flips the first kind (0225: the plate read upside down).
+      flipY: !!(img && img.toDataURL) && tex.flipY !== false });
   }
   return textures.get(tex.uuid).id;
 }

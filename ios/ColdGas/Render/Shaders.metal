@@ -100,6 +100,25 @@ static float shadowAt(float4 lc, depth2d<float> sm, float texel) {
     return s * 0.25;
 }
 
+// The dusk sky as the sky pass draws it (scene.js skyMaterial), and below the horizon the land going dark: Free Drive's
+// environment out in the world (0225), where the stage's own cube (its lamps and walls) isn't what's round the car.
+// `rough` widens the horizon's edge and pulls toward the sky's average, a prefiltered lobe's look without the cube.
+static float3 duskEnv(float3 d, float rough, constant LookU& k) {
+    float h = clamp(d.y, -1.0, 1.0);
+    float3 sun = k.skySun.xyz;
+    float3 c = mix(k.skyMid.rgb, k.skyZenith.rgb, smoothstep(0.02, 0.55, h));
+    float band = exp(-max(h, 0.0) * mix(14.0, 4.0, rough));
+    float3 flat = normalize(float3(d.x, 0.0, d.z) + float3(1e-5, 0.0, 0.0)), sunFlat = normalize(float3(sun.x, 0.0, sun.z) + float3(1e-5, 0.0, 0.0));
+    float sunSide = pow(max(dot(flat, sunFlat), 0.0), 3.0);
+    c = mix(c, k.skyHorizon.rgb, band * (0.35 + 0.65 * sunSide));
+    c += k.skyHorizon.rgb * pow(max(dot(d, sun), 0.0), mix(220.0, 6.0, rough)) * mix(1.4, 0.2, rough);
+    float3 land = mix(k.skyHorizon.rgb * 0.12 + k.skyMid.rgb * 0.15, k.hemiGround.rgb * 0.6, smoothstep(0.0, -0.3, h));
+    float edge = 0.01 + rough * 0.35;
+    c = mix(land, c, smoothstep(-edge, edge, h));
+    float3 avg = k.skyMid.rgb * 0.45 + k.skyHorizon.rgb * 0.25 + k.hemiGround.rgb * 0.3;
+    return mix(c, avg, clamp(rough * rough, 0.0, 1.0));
+}
+
 fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facing]], constant Frame& f [[buffer(1)]], constant Material& m [[buffer(2)]],
                                   constant Light* lights [[buffer(3)]], texture2d<float> map [[texture(0)]], texture2d<float> roughMap [[texture(1)]],
                                   texture2d<float> emiMap [[texture(2)]], depth2d<float> shadow [[texture(3)]], texture2d<float> alphaMap [[texture(4)]],
@@ -183,7 +202,11 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float a004 = min(rr.x * rr.x, exp2(-9.28 * nv)) * rr.x + rr.y;
         float2 fab = float2(-1.04, 1.04) * a004 + rr.zw;
         float3 radiance = 0;
-        if (look.hemiSky.w > 0) {
+        bool sky = look.skySun.w > 0.5;   // Free Drive out in the world: the dusk is the environment (duskEnv)
+        if (sky) {
+            float3 refl = normalize(mix(reflect(-V, n), n, r1 * r1 * r1 * r1));
+            radiance = duskEnv(refl, r1, look);
+        } else if (look.hemiSky.w > 0) {
             cosIrr += env.sample(envSampler, n, level(5.0)).rgb * look.hemiSky.w;
             float3 refl = normalize(mix(reflect(-V, n), n, r1 * r1 * r1 * r1));
             radiance = env.sample(envSampler, refl, level(r1 * 5.0)).rgb * look.hemiSky.w;
@@ -197,7 +220,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         color += base.rgb * (1.0 - metal) * (1.0 - (diel + dielMs)) * cosIrr + radiance * Fss + Fms * Ems * cosIrr;
         if (m.pbr.z > 0) {   // the clear coat over it all
             float cr = max(clamp(m.pbr.w, 0.0, 1.0), 0.03);
-            float3 cc = look.hemiSky.w > 0 ? env.sample(envSampler, reflect(-V, n), level(cr * 5.0)).rgb * look.hemiSky.w : float3(0);
+            float3 cc = sky ? duskEnv(reflect(-V, n), cr, look) : look.hemiSky.w > 0 ? env.sample(envSampler, reflect(-V, n), level(cr * 5.0)).rgb * look.hemiSky.w : float3(0);
             float4 rc = cr * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
             float ac = min(rc.x * rc.x, exp2(-9.28 * nv)) * rc.x + rc.y;
             float2 fc = float2(-1.04, 1.04) * ac + rc.zw;

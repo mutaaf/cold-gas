@@ -2,12 +2,14 @@
 //   chase   behind and above, trailing the car's heading (leaning toward where it's going in a slide), longer with
 //           speed, kept clear of the ground; upright, wider, further back and higher (the web's H_MIN rule).
 //   bumper  on the nose, the horizon locked to the car.
+//   cinema  (0225) a trackside lens: a spot picked ahead of the car and off to one side at head height, held while the car
+//           drives past it on a long lens, then the next spot further on, the other side (a broadcast replay's look).
 // Worked in world metres (Double): the renderer gets it relative to the floating origin.
 import simd
 import UIKit
 
 final class DriveCamera {
-    enum Mode: String, CaseIterable { case chase, bumper }
+    enum Mode: String, CaseIterable { case chase, cinema, bumper }
     var mode: Mode = .chase
     private var inited = false
     private var hx = 0.0, hz = 1.0
@@ -19,7 +21,9 @@ final class DriveCamera {
     private var shakeAmp: Float = 0, shakeT = 0.0
     let reduced = UIAccessibility.isReduceMotionEnabled
     func shake(_ a: Float) { if !reduced { shakeAmp = max(shakeAmp, a) } }
-    func cycle() { mode = mode == .chase ? .bumper : .chase; inited = false }
+    func cycle() { mode = mode == .chase ? .cinema : mode == .cinema ? .bumper : .chase; inited = false; spot = nil }
+    // The cinema's spot (world metres), which side the last one was on, and its eased aim.
+    private var spot: SIMD3<Double>?, spotSide = 1.0, aim = SIMD3<Double>()
 
     /// A phone held upright sees a sliver of the world: widen to at least 46° across (up to 80° tall).
     static func fovFor(_ base: Double, _ aspect: Double) -> Double {
@@ -40,6 +44,7 @@ final class DriveCamera {
             inited = false
             return
         }
+        if mode == .cinema { cinema(dt: dt, p: p, q: q, v: v, speed: speed, aspect: aspect, ground: ground); return }
         let f = q.act(SIMD3(0, 0, 1))
         var fx = f.x, fz = f.z
         let fl = max(1e-9, (fx * fx + fz * fz).squareRoot()); fx /= fl; fz /= fl
@@ -72,6 +77,36 @@ final class DriveCamera {
         }
         let fw = DriveCamera.fovFor(56, aspect) + min(20, speed * 0.13) * (aspect < 1 ? 0.4 : 1)
         fov += (fw - fov) * (1 - exp(-dt * 2.5))
+    }
+
+    private func cinema(dt: Double, p: SIMD3<Double>, q: simd_quatd, v: SIMD3<Double>, speed: Double, aspect: Double, ground: (Double, Double) -> Double) {
+        let f = q.act(SIMD3(0, 0, 1))
+        var d = speed > 3 ? SIMD3(v.x, 0, v.z) : SIMD3(f.x, 0, f.z)
+        d /= max(1e-6, simd_length(d))
+        let side = SIMD3(d.z, 0, -d.x)
+        // A new spot when there's none, the car's well past this one, or it's got too far away (a turn off the line).
+        if let s = spot {
+            let rel = s - p, along = simd_dot(SIMD3(rel.x, 0, rel.z), d), dist = simd_length(rel)
+            if along < -max(12, speed * 0.7) || dist > 70 { spot = nil }
+        }
+        if spot == nil {
+            spotSide = -spotSide
+            let ahead = 14 + speed * 0.9, off = 4 + min(4, speed * 0.1)
+            var s = p + d * ahead + side * (off * spotSide)
+            s.y = max(ground(s.x, s.z), p.y - 1.5) + 1.15 + min(1.2, speed * 0.02)
+            spot = s; aim = p
+        }
+        guard let s = spot else { return }
+        // The aim leads the car a little and eases (a camera operator's pan); the lens tightens with distance so ≈ 7 m of road
+        // spans the screen's narrower side (on an upright phone, its width).
+        let lead = p + SIMD3(v.x, 0, v.z) * 0.12 + SIMD3(0, 0.35, 0)
+        aim += (lead - aim) * (inited ? 1 - exp(-dt * 9) : 1)
+        inited = true
+        eye = s; target = aim; up = SIMD3(0, 1, 0)
+        let dist = max(3, simd_length(aim - s))
+        let want = 2 * atan(3.6 / (dist * min(1, aspect))) * 180 / .pi
+        fov = min(70, max(8, want))
+        if shakeAmp > 0 { shakeAmp = max(0, shakeAmp - Float(dt) * 3) }
     }
 
     /// The view (render space: relative to `origin`) and the lens. The far plane reaches the horizon; the near plane is as

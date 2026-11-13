@@ -139,9 +139,13 @@ final class Game: ObservableObject {
         // `-fd-at x,z,yaw°`: the car there, facing that way (shots).
         if let a = Launch.value("-fd-at")?.split(separator: ",").compactMap({ Double($0) }), a.count == 3 { fd.place(x: a[0], z: a[1], yaw: a[2] * .pi / 180) }
         if let v = Launch.value("-fd-cruise").flatMap(Double.init) { fd.cruise = v }
+        #if DEBUG
+        // `-fd-discs <°C>`: the brake discs at that temperature (shots of the glow; a hard stop from top speed gets there).
+        if let t = Launch.value("-fd-discs").flatMap(Double.init) { for i in 0..<4 { fd.chassis.discT[i] = i < 2 ? t : t * 0.85 } }
+        #endif
         if let v = Launch.value("-fd-pilot").flatMap(Double.init) { fd.pilot = v }
         controls.drive = fd.sampler
-        if Launch.value("-fd-cam") == "bumper" { fd.camera.mode = .bumper }
+        if let c = Launch.value("-fd-cam"), let m = DriveCamera.Mode(rawValue: c) { fd.camera.mode = m }
         freeDrive = fd; driveSettled = false; driveImpacts = 0
         stage?.load(course: c.id, track: fd.track)
         screen = .drive
@@ -185,7 +189,9 @@ final class Game: ObservableObject {
                                                  intensity: 0.2 + 0.8 * k, sharpness: e.kind == ImpactKind.WHEEL ? 0.35 : 0.7))
         }
         let jets = fd.car.throttles.reduce(0, +)
-        HapticPlayer.shared.apply(HapticContinuous(rumble: Float(min(0.5, fd.roughK * 0.4 + fd.slideK * 0.2)), rumbleSharp: 0.3,
+        // ABS cycling (0225) is a sharp buzz through the pedal: here, through the phone.
+        let absK = fd.ownCar && fd.chassis.absActive ? 1.0 : 0.0
+        HapticPlayer.shared.apply(HapticContinuous(rumble: Float(min(0.6, fd.roughK * 0.4 + fd.slideK * 0.2 + absK * 0.3)), rumbleSharp: Float(0.3 + 0.45 * absK),
                                                    hiss: Float(min(0.6, jets * 0.12)), hissSharp: 0.6, grind: Float(min(0.5, fd.slideK * 0.35))))
         if !driveSettled, fd.view?.settled == true, (fd.view?.stats.tiles ?? 0) > 0 {
             driveSettled = true
