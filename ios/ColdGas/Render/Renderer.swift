@@ -455,6 +455,7 @@ final class Renderer {
             let off: SIMD3<Float> = fc == "rear" ? [0.8, 0.7, -5.5] : fc == "front" ? [0.8, 0.7, 6] : [3.5, 3.5, -1]
             view.eye = carPos + carQ.act(off); view.view = lookAt(eye: view.eye, target: carPos, up: [0, 1, 0])
         }
+        Sound.shared.listen(eye: view.eye, view: view.view, dt: dtReal)   // the ears are the camera's (0240)
         let fx = crash.write(sparks: sparkBufs[fi].contents().bindMemory(to: SparkGPU.self, capacity: Crash.NS),
                              puffs: puffBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Crash.NM + 1),
                              chips: chipBufs[fi].contents().bindMemory(to: ChipGPU.self, capacity: Crash.NC))

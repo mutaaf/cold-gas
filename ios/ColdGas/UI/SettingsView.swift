@@ -9,6 +9,8 @@ struct SettingsView: View {
     @ObservedObject var game = Game.shared
     @State private var haptics = HapticPlayer.shared.level
     @State private var sound = Sound.shared.isEnabled
+    @State private var music = Sound.shared.music
+    @State private var effects = Sound.shared.effects
     @State private var units = SaveStore.shared.units.system
     @State private var tilt = SaveStore.shared.settings.tiltOn
     @State private var judgeOnDevice = SaveStore.shared.settings.judgeOnDeviceOn
@@ -21,6 +23,15 @@ struct SettingsView: View {
             ? "Apple Intelligence writes the judges\u{2019} words on this device: nothing is sent.\(scores)"
             : "The free edge model writes the judges\u{2019} words, over the network.\(scores)"
     }
+    /// A sound level slider (0240): the car, the world and the hits ("Effects"), or the title's music.
+    private func level(_ name: String, _ v: Binding<Double>, _ apply: @escaping (Double) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack { Text(name); Spacer(); Text(String(format: "%.0f%%", v.wrappedValue * 100)).font(Theme.mono(12)).foregroundStyle(Theme.ink2) }
+            Slider(value: v, in: 0...1).accessibilityLabel(name).onChange(of: v.wrappedValue) { _, x in apply(x) }
+        }
+        .disabled(!sound)
+        .opacity(sound ? 1 : 0.45)
+    }
     var body: some View {
         NavigationStack {
             Form {
@@ -32,6 +43,8 @@ struct SettingsView: View {
                     }
                     .onChange(of: haptics) { _, v in HapticPlayer.shared.setLevel(v); UISelectionFeedbackGenerator().selectionChanged() }
                     Toggle("Sound", isOn: $sound).onChange(of: sound) { _, v in Sound.shared.setEnabled(v) }
+                    level("Effects", $effects) { Sound.shared.effects = $0 }
+                    level("Music", $music) { Sound.shared.music = $0 }
                 }
                 Section {
                     Picker("Controls", selection: $game.control) {

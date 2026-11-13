@@ -27,6 +27,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if Launch.selftest { SelfTest.runInBackground() }
         _ = HapticPlayer.shared          // the engine is started at launch, never on the first event
         HapticDemo.startIfAsked()
+        SoundLab.startIfAsked()
         Usage.shared.sessionStart()      // 0246: queued now, sent from the title
         // 0253: a link that launched the app (a universal link's activity, or coldgas://), once the game is up.
         let urls = connectionOptions.urlContexts.map(\.url) + connectionOptions.userActivities.compactMap(\.webpageURL)

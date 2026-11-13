@@ -59,6 +59,8 @@ targets:
         product: ColdGasClient
       - package: ColdGasCore
         product: ColdGasWorld
+      - package: ColdGasCore
+        product: ColdGasAudio
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.mutaafaziz.coldgas

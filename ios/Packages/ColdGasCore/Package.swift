@@ -17,13 +17,14 @@ let physicsDeps: [Target.Dependency] = ["ColdGasCore", "ColdGasClient", "ColdGas
 
 let package = Package(
     name: "ColdGasCore",
-    platforms: [.macOS(.v14), .iOS(.v18)],
+    platforms: [.macOS(.v15), .iOS(.v18)],
     products: [
         .library(name: "ColdGasCore", targets: ["ColdGasCore"]),
         .library(name: "ColdGasPhysics", targets: ["ColdGasPhysics"]),
         .library(name: "ColdGasLayout", targets: ["ColdGasLayout"]),
         .library(name: "ColdGasClient", targets: ["ColdGasClient"]),
         .library(name: "ColdGasWorld", targets: ["ColdGasWorld"]),
+        .library(name: "ColdGasAudio", targets: ["ColdGasAudio"]),
     ],
     targets: [
         .target(name: "ColdGasCore", swiftSettings: [.swiftLanguageMode(.v5)]),
@@ -31,6 +32,9 @@ let package = Package(
         .target(name: "ColdGasClient", dependencies: ["ColdGasCore", "ColdGasLayout"], swiftSettings: [.swiftLanguageMode(.v5)]),
         // Free Drive's world (docs/NATIVE-FREEDRIVE.md §4): pure, a function of its seed; never part of a scored run.
         .target(name: "ColdGasWorld", dependencies: ["ColdGasCore"], swiftSettings: [.swiftLanguageMode(.v5)]),
+        // The app's sound synthesis (0240): the render callbacks' DSP, trivial state in plain memory. Optimised even in a Debug
+        // build: unoptimised, a DSP loop costs several cores and the sound breaks up. It never touches the sim.
+        .target(name: "ColdGasAudio", swiftSettings: [.swiftLanguageMode(.v5), .unsafeFlags(["-O"], .when(configuration: .debug))]),
         .target(
             name: "ColdGasPhysics",
             dependencies: physicsDeps,
@@ -40,7 +44,7 @@ let package = Package(
             name: "ColdGasCoreTests",
             dependencies: ["ColdGasCore"],
             path: "Tests",
-            exclude: ["ColdGasPhysicsTests", "ColdGasLayoutTests", "ColdGasClientTests", "ColdGasWorldTests"],
+            exclude: ["ColdGasAudioTests", "ColdGasPhysicsTests", "ColdGasLayoutTests", "ColdGasClientTests", "ColdGasWorldTests"],
             sources: ["ColdGasCoreTests"],
             resources: [.copy("Vectors")],
             swiftSettings: [.swiftLanguageMode(.v5)]
@@ -51,6 +55,7 @@ let package = Package(
             path: "Tests/ColdGasPhysicsTests",
             swiftSettings: [.swiftLanguageMode(.v5)]
         ),
+        .testTarget(name: "ColdGasAudioTests", dependencies: ["ColdGasAudio"], path: "Tests/ColdGasAudioTests", swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "ColdGasLayoutTests", dependencies: ["ColdGasLayout"], path: "Tests/ColdGasLayoutTests", swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "ColdGasWorldTests", dependencies: ["ColdGasWorld", "ColdGasCore"], path: "Tests/ColdGasWorldTests", swiftSettings: [.swiftLanguageMode(.v5)]),
         .testTarget(name: "ColdGasClientTests", dependencies: ["ColdGasClient", "ColdGasLayout"], path: "Tests/ColdGasClientTests", swiftSettings: [.swiftLanguageMode(.v5)]),

@@ -5,6 +5,7 @@
 // hands the renderer what it draws through `DriveScene`. The car is the scored Swift car; in a cruise (`-fd-cruise`, the
 // bench, the shots) it's carried along the roads at a set speed rather than stepped.
 import Foundation
+import ColdGasAudio
 import Metal
 import simd
 import ColdGasCore
@@ -309,7 +310,7 @@ final class FreeDrive: DriveScene {
             looseSpeed[i] = v
             if v - was > 1.5 {
                 let k = min(1, (v - was) / 10)
-                Sound.shared.thud(hz: b.kind == .cone ? 240 : 150, gain: 0.12 + 0.3 * k, decay: 0.18, crunch: b.kind == .cone ? 0 : 0.3 * k)
+                Sound.shared.hit(b.kind == .cone || b.kind == .barrier ? .plastic : b.kind == .fence ? .wood : b.kind == .rail ? .rail : .sign, k: k, at: SIMD3<Float>(Float(b.x - origin.x), Float(b.y - origin.y), Float(b.z - origin.z)), seed: i &* 7919 &+ Int(v * 100))
                 HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: Float(0.25 + 0.6 * k), sharpness: b.kind == .cone ? 0.85 : 0.5))
             }
         }
@@ -325,7 +326,7 @@ final class FreeDrive: DriveScene {
             guard c.broken else { continue }
             let k = Float(min(1, c.speed / 25))
             let steel = c.kind == .rail || c.kind == .sign
-            Sound.shared.thud(hz: steel ? 110 : 180, gain: 0.2 + 0.4 * Double(k), decay: steel ? 0.35 : 0.22, crunch: steel ? 0.6 : 0.45)
+            Sound.shared.hit(c.kind == .rail ? .rail : c.kind == .sign ? .sign : .wood, k: Double(k), at: SIMD3<Float>(Float(c.x - origin.x), Float(c.y - origin.y), Float(c.z - origin.z)), seed: c.item &* 31 &+ c.cx)
             HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: 0.4 + 0.6 * k, sharpness: steel ? 0.8 : 0.55))
             camera.shake(0.25 + 0.5 * k)
         }
