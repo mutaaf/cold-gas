@@ -270,6 +270,19 @@ final class Renderer {
         if let sw = st.sweep { stageMats += [mats(sw.beam), mats(sw.head), mats(sw.lens)] }
         complexMats = stageMats.count
         if let c = st.complex { stageMats.append(mats(c.mesh)) }
+        // The sets' surfaces get their own procedural detail (0230, Shaders.metal effect 13): concrete's aggregate, stains and
+        // tyre marks, metal's brushing and scratches, roughness that varies. Only lit, opaque, plain materials (the slab's
+        // wet look, the beams, glows and lamps keep theirs). `-flat-sets` turns it off for comparison.
+        if !Launch.args.contains("-flat-sets") {
+            for i in [0, complexMats] where i < stageMats.count {
+                let mesh = i == 0 ? st.staticMesh : st.complex?.mesh
+                for (k, sm) in (mesh?.submeshes ?? []).enumerated() where k < stageMats[i].count {
+                    let M = sm.material
+                    if M.unlit || M.transparent || M.additive || M.effect != 0 || M.roughness < 0.2 { continue }
+                    stageMats[i][k].effectKind.x = 13
+                }
+            }
+        }
         sweepM = [simd_float4x4](repeating: matrix_identity_float4x4, count: st.sweep?.pivots.count ?? 0)
         // scene.js BLOB_ORDER: the hero's contact shadow over the paint (order -3), under the glows and LEDs (-2 and up).
         blobSplit = st.staticMesh.submeshes.firstIndex { $0.renderOrder > -3 } ?? st.staticMesh.submeshes.count
@@ -292,7 +305,10 @@ final class Renderer {
         lk.skyZenith = SIMD4(st.skyZenith, 0); lk.skyMid = SIMD4(st.skyMid, 0); lk.skyHorizon = SIMD4(st.skyHorizon, 0); lk.skySun = SIMD4(st.skySun, 0)
         // UnrealBloomPass composite: strength × lerp(factor, 1.2 − factor, radius) per mip.
         func factor(_ f: Float) -> Float { st.bloomStrength * (f + (1.2 - f - f) * st.bloomRadius) }
-        lk.bloom = SIMD4(st.bloomThreshold, factor(0.9), factor(0.5), factor(0.2))
+        // The bloom's threshold (0230): the web's 0.82 let a white car under the set's searchlights bloom into a glowing blob on
+        // the title and a run's opening. 1.6 keeps the LEDs, lamps, beams and jets blooming (all well over 2) and the paint
+        // crisp.
+        lk.bloom = SIMD4(max(st.bloomThreshold, Launch.args.contains("-web-bloom") ? 0 : 1.6), factor(0.9), factor(0.5), factor(0.2))
         lookU = lk; stageLook = lk
         func glintBuf(_ s: StageComplex.Spots?) -> (MTLBuffer, Int) {
             let list = s.map { sp in zip(sp.spots, sp.colors).map { GlintGPU(pos: $0, color: SIMD4($1, 0)) } } ?? []
@@ -313,37 +329,43 @@ final class Renderer {
             }
             openSpin = st.wheels.map { Renderer.openFace(device: device, $0.spinPart) }
             rotorSub = st.wheels.first?.steerPart.submeshes.firstIndex { $0.material.name == "roadster-rotor" } ?? -1
-            if !Launch.args.contains("-fd-roadster"), let dc = DriveCarModel(device: device) {
-                // The forged car (0229): its materials after the stage's. Paint (11) gets the flakes and the grime, the rest of
-                // the outside (12) the grime only (Shaders.metal).
-                func carMatsOf(_ m: StageMesh) -> [MaterialU] {
-                    var list = mats(m)
-                    for (k, sm) in m.submeshes.enumerated() {
-                        let n = sm.material.name
-                        if n == "drive-paint" { list[k].effectKind.x = 11 }
-                        else if ["drive-trim", "drive-under", "drive-gloss-black", "drive-carbon", "drive-tyre", "drive-rim", "drive-rim-barrel", "drive-satin", "drive-plate", "drive-rubber-seal"].contains(n) { list[k].effectKind.x = 12 }
+        }
+        // The forged car (0229) on every course since 0230: the scored runs' cameras see the same body (pixels only; the sim
+        // never sees a mesh). `-roadster` (or a drive's `-fd-roadster`) draws the stage roadster instead.
+        if !Launch.args.contains("-roadster") && !(roam && Launch.args.contains("-fd-roadster")), let dc = DriveCarModel(device: device) {
+            // The forged car (0229): its materials after the stage's. Paint (11) gets the flakes and the grime, the rest of
+            // the outside (12) the grime only (Shaders.metal).
+            func carMatsOf(_ m: StageMesh) -> [MaterialU] {
+                var list = mats(m)
+                for (k, sm) in m.submeshes.enumerated() {
+                    let n = sm.material.name
+                    if n == "drive-paint" {
+                        list[k].effectKind.x = 11
+                        // A real white's albedo (≈ 0.6), not paper's: the car holds its shape under the set's lights and the sun.
+                        list[k].color = SIMD4(SIMD3(list[k].color.x, list[k].color.y, list[k].color.z) * 0.8, list[k].color.w)
                     }
-                    return list
+                    else if ["drive-trim", "drive-under", "drive-gloss-black", "drive-carbon", "drive-tyre", "drive-rim", "drive-rim-barrel", "drive-satin", "drive-plate", "drive-rubber-seal"].contains(n) { list[k].effectKind.x = 12 }
                 }
-                carMats = stageMats.count; stageMats.append(carMatsOf(dc.body))
-                carFarMats = stageMats.count; stageMats.append(carMatsOf(dc.bodyFar))
-                driveWheelBase = stageMats.count
-                for w in st.wheels { stageMats.append(carMatsOf(w.steers ? dc.frontSteer : dc.rearSteer)); stageMats.append(carMatsOf(w.steers ? dc.frontSpin : dc.rearSpin)) }
-                rotorSub = dc.frontSteer.submeshes.firstIndex { $0.material.name == "roadster-rotor" } ?? -1
-                func idx(_ m: StageMesh, _ name: String) -> Int { m.submeshes.firstIndex { $0.material.name == name } ?? -1 }
-                dGlass = idx(dc.body, "drive-glass"); dGlassFar = idx(dc.bodyFar, "drive-glass")
-                if dGlass >= 0 {
-                    dGlassMat = stageMats[carMats][dGlass]
-                    var cz = stageMats[carMats][dGlass]; cz.color = SIMD4(srgbHexToLinear(0x9a8a74), 0.9); cz.pbr = SIMD4(0.15, 0.55, 0, 0)
-                    dCrazedMat = cz
-                }
-                if dGlassFar >= 0 { dGlassFarMat = stageMats[carFarMats][dGlassFar] }
-                // Lamps by name: 0 amber, 1 marker, 2 plate lamp, 3 ambient, 4 DRL, 5 tail.
-                for (kind, name) in ["drive-amber", "drive-marker", "drive-plateLamp", "drive-ambient", "drive-drl", "drive-tail"].enumerated() {
-                    dLamps.append((idx(dc.body, name), idx(dc.bodyFar, name), kind))
-                }
-                driveCar = dc
+                return list
             }
+            carMats = stageMats.count; stageMats.append(carMatsOf(dc.body))
+            carFarMats = stageMats.count; stageMats.append(carMatsOf(dc.bodyFar))
+            driveWheelBase = stageMats.count
+            for w in st.wheels { stageMats.append(carMatsOf(w.steers ? dc.frontSteer : dc.rearSteer)); stageMats.append(carMatsOf(w.steers ? dc.frontSpin : dc.rearSpin)) }
+            rotorSub = dc.frontSteer.submeshes.firstIndex { $0.material.name == "roadster-rotor" } ?? -1
+            func idx(_ m: StageMesh, _ name: String) -> Int { m.submeshes.firstIndex { $0.material.name == name } ?? -1 }
+            dGlass = idx(dc.body, "drive-glass"); dGlassFar = idx(dc.bodyFar, "drive-glass")
+            if dGlass >= 0 {
+                dGlassMat = stageMats[carMats][dGlass]
+                var cz = stageMats[carMats][dGlass]; cz.color = SIMD4(srgbHexToLinear(0x9a8a74), 0.9); cz.pbr = SIMD4(0.15, 0.55, 0, 0)
+                dCrazedMat = cz
+            }
+            if dGlassFar >= 0 { dGlassFarMat = stageMats[carFarMats][dGlassFar] }
+            // Lamps by name: 0 amber, 1 marker, 2 plate lamp, 3 ambient, 4 DRL, 5 tail.
+            for (kind, name) in ["drive-amber", "drive-marker", "drive-plateLamp", "drive-ambient", "drive-drl", "drive-tail"].enumerated() {
+                dLamps.append((idx(dc.body, name), idx(dc.bodyFar, name), kind))
+            }
+            driveCar = dc
         }
         applyThermal()
     }
