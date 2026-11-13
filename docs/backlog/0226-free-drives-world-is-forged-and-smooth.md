@@ -1,12 +1,12 @@
 ---
 id: 0226
 title: Free Drive's world looks made, not placeholder (smooth land and road cuttings, forged trees, rocks and roadside, a better blue hour, a minimap)
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: player-feel
 created: 2026-11-13
-pr:
+pr: 351
 by: operator
 ---
 
