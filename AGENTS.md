@@ -7,15 +7,20 @@ anything. `CLAUDE.md` points here.
 
 COLD GAS is one perfect moment, made playable: a roadster runs up a kicker, fires ten cold-gas
 thrusters to clear a row of parked EVs, rolls 360° in the air, retro-burns and sticks the
-landing on a pad, and a three-judge panel scores it. It is inspired by the October 2026
-roadster thruster-jump reveal, and its whole aesthetic is **keynote restraint**: blue-hour
-light, matte concrete, clear-coat paint, hairline type, near-silence and the hiss of the jets.
-Every object is our own design. No brand names, logos, badges or real model names, ever
-(invariant 3.7).
+landing on a pad, or comes apart trying, and our own invented stunt crew scores it twice:
+**Style** and **Wreck**. This is **Wreck Club** (operator's call 2026-11-13,
+docs/proposals/creative-direction.md, Direction 2): the stunt is the setup and the crash is the
+punchline. Its aesthetic is **restraint on a working backlot**: blue-hour light, matte concrete,
+clear-coat paint, hairline type, near-silence and the hiss of the jets, with dust, tyre marks and
+a crowd line. Every object is our own design. No brand names, logos, badges or real model names,
+ever (invariant 3.7).
 
-The game is the jump. There's no campaign and no garage sprawl. Depth comes from mastery:
-amplitude, rotation (360 → 720), clearance, touchdown sink rate, wheel sync, precision on the
-mark, and air left in the tanks.
+The game is the stunt and the crash. There's no campaign and no garage sprawl: ranks and cosmetic
+unlocks are earned only by play, never with a dark pattern. The Daily alternates stunt days and
+wreck days, the Sandbox is the stunt editor, Roam is the backlot and Free Drive is the open road.
+The physics and the scored sim don't change for any of it. Depth comes from mastery: amplitude,
+rotation (360 → 720), clearance, touchdown sink rate, wheel sync, precision on the mark, and air
+left in the tanks; on a wreck, combos that come from the physics.
 
 ### The 10x pillars (north star — the Scout steers here, in this order)
 
@@ -26,8 +31,12 @@ mark, and air left in the tanks.
    run's telemetry with the same `scoreRun`, after plausibility checks against the input log), legible judging (every category explained), three flight tiers (Assist,
    Pro, Advanced: ten valves by hand), a skill ladder (drills, the landing HUD, the coach), and an
    honest leaderboard.
-3. **The panel.** The AI judges' voices (src/worker → Claude) must be specific, short and in
-   character, never generic. The numbers come from `src/sim/judge.js` and nowhere else.
+3. **The panel.** The crew's voices are authored and driven by the run's stats: specific, short
+   and in character, never generic; free, instant, offline, and shown at the landing moment. A
+   model writes them only on the device (the iPhone's on-device model, $0) or when a web player
+   asks ("Ask the AI panel"): zero marginal inference cost, no paid AI (operator's call
+   2026-11-13, docs/proposals/ai-judge-audit.md, Option B). The numbers come from
+   `src/sim/judge.js` (and the Wreck score beside it) and nowhere else.
 4. **Craft.** Every pixel intentional: Michroma/Geist type, hairlines, a single signal red,
    motion with an ease and a reason, `prefers-reduced-motion` honored. The procedural vehicles
    (src/render/cars.js) should keep getting more beautiful.
@@ -155,7 +164,14 @@ mark, and air left in the tanks.
 5. **Scores are decided by `scoreRun`.** The AI writes words only. The client never sends a
    score: board entries (and the judges' card) are scored from the client's telemetry by `scoreRun` on the
    server, after plausibility checks against the input log (`boardCheck`); the tier comes from the log.
-5½. **AI usage is always visible and honest.** Every model call goes through the theatre and
+   The Wreck score (Wreck Club, operator's call 2026-11-13) is a pure scorer beside `scoreRun` in `src/sim/`, reading
+   only what the sim already records; Style and Wreck are never blended. Its bests stay on the device until the
+   operator opens `src/worker/` for a Wreck board.
+5½. **AI usage is always visible and honest.** **The default voice is authored, not a model (operator's call
+   2026-11-13, Option B; 0235, 0236):** lines written by the game from the run's numbers, shown at the landing beat,
+   labelled as the game's own ("written by the game, not a model"), with no call made. On the web a model is called
+   only when the player asks: "Ask the AI panel", the rewarded "ask the panel again", or a player's own key. Where a
+   model is called, every call goes through the theatre and
    the receipt. Real model ids, token counts and costs are shown, with an estimate only where
    the provider doesn't report them. Keys are never logged, persisted server-side or echoed.
    No AI call may block the results: a 35 s deadline falls back to local lines. The score never waits for the
@@ -166,7 +182,7 @@ mark, and air left in the tanks.
    **On the iPhone app, Apple's on-device model judges first (operator's call 2026-11-12, 0219):** where the device has
    Apple Intelligence (iOS 26+) and Settings → Judges is on, the words are written on the device (FoundationModels,
    `SystemLanguageModel.default`, guided generation from the Worker's brief: the run's numbers only), within its own
-   20 s share of the 35 s; otherwise or on any failure, the edge model with the time left, then local lines. Its receipt
+   20 s share of the 35 s; otherwise or on any failure, the authored lines stand, with no automatic cloud call (0236). Its receipt
    says Apple's on-device model, on this iPhone/iPad, the tokens (as the framework reports them on iOS 27+, else
    ≈4 chars a token labelled "estimated"), the time, $0 and "no data left the device", with a "Judged on device" mark.
    Naming the platform feature ("uses Apple Intelligence", "Apple's on-device model") factually in the app and store copy
