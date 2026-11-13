@@ -74,6 +74,10 @@ final class Game: ObservableObject {
     private var countT = 0.0
     private var lastHud = 0.0
     private var touched = false   // the touchdown has reached the camera (main.js: once per run, keyed on the touch tick)
+    /// A car wedged before the jump (0229: steered hard into a set light, a lamp post or the Wall's steel, it stops dead on
+    /// its wheels and no end of the run matches it, so it would sit there until the 90 s timeout): a cue after a second,
+    /// then the attempt starts again from the mark. The frame clock's, not the sim's: nothing scored or logged changes.
+    private var wedge = WedgeWatch(), wedged = false
 
     /// One-thumb flies only Assist on the Show and the Wall (src/onethumb.js); everything else is classic touch.
     var oneThumb: Bool { control == .oneThumb && tier == "assist" && course != "lineup" }
@@ -102,6 +106,7 @@ final class Game: ObservableObject {
         l.onRelease = { Sound.shared.release() }   // the haptic release is the HapticScore's (it reads the feed's lift)
         live = l; controls.live = l
         acc = 0; seen = 0; doneFor = 0; momentFor = 0; result = nil; paused = false; touched = false
+        wedge.reset(); wedged = false
         haptics = HapticScore(course: course)
         let tr = Replay(live: course)
         tr.tickBase = l.run.tick
@@ -275,6 +280,16 @@ final class Game: ObservableObject {
         } catch { print("SIM stopped: \(error)"); if result == nil { home() }; return }
         haptics.drain { HapticPlayer.shared.play($0) }
         HapticPlayer.shared.apply(r.phase == .done ? HapticContinuous() : haptics.continuous)
+        if !atRest && r.phase != .done && result == nil && l.script == nil {
+            let state = wedge.step(r.car, dt: dt, eligible: r.phase == .drive)
+            wedged = state != .clear
+            if state == .act {
+                print("RUN wedged at tick \(r.tick): again from the mark")
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                retry()
+                return
+            }
+        }
         if !atRest && !(r.after?.done ?? false) {
             let c = r.car, g = Double(stage?.renderer?.crash.grind ?? 0) * slowK
             Sound.shared.update(speed: DMath.dhypot(c.vel.x, c.vel.y, c.vel.z), throttles: r.phase == .done ? Game.quiet : c.throttles, grounded: c.grounded > 0, grind: g, phase: .run)
@@ -397,6 +412,7 @@ final class Game: ObservableObject {
     private func cue(_ l: LiveRun, _ h: HudState) -> String {
         let r = l.run, released = l.released
         if r.phase == .done { return result?.card.verdict ?? "" }
+        if wedged { return "Stuck · again from the mark" }
         let c = r.car, v = h.speed
         if l.oneThumb {
             let held = h.held
