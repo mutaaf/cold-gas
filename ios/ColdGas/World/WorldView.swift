@@ -74,8 +74,7 @@ final class WorldView {
             d.vertexFunction = lib.makeFunction(name: v); d.fragmentFunction = lib.makeFunction(name: f)
             d.vertexDescriptor = vd
             d.colorAttachments[0].pixelFormat = Renderer.hdrFormat
-            if blend {
-                let c = d.colorAttachments[0]!
+            if blend, let c = d.colorAttachments[0] {
                 c.isBlendingEnabled = true
                 c.sourceRGBBlendFactor = .sourceAlpha; c.destinationRGBBlendFactor = .oneMinusSourceAlpha
                 c.sourceAlphaBlendFactor = .zero; c.destinationAlphaBlendFactor = .one
