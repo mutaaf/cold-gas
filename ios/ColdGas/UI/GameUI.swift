@@ -235,8 +235,12 @@ struct TitleView: View {
         }
     }
 
-    /// Assist, Pro, Advanced: words, the chosen one lit and underlined in its colour.
+    /// Assist, Pro, Advanced: words, the chosen one lit and underlined in its colour. Where the row can't hold the
+    /// multipliers (a narrow column), the names alone; a name never breaks.
     private var tiers: some View {
+        ViewThatFits(in: .horizontal) { tierRow(mult: true); tierRow(mult: false) }
+    }
+    private func tierRow(mult: Bool) -> some View {
         HStack(spacing: 4) {
             ForEach(TIER_INFO, id: \.id) { t in
                 let on = game.tier == t.id
@@ -246,8 +250,8 @@ struct TitleView: View {
                     withAnimation(still ? nil : .easeOut(duration: 0.2)) { game.tier = t.id }
                 } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(t.name.uppercased()).font(Theme.text(12, .semibold)).tracking(1.6)
-                        if !t.mult.isEmpty { Text(t.mult).font(Theme.mono(10)).opacity(0.8) }
+                        Text(t.name.uppercased()).font(Theme.text(12, .semibold)).tracking(1.6).lineLimit(1).fixedSize()
+                        if mult && !t.mult.isEmpty { Text(t.mult).font(Theme.mono(10)).opacity(0.8).fixedSize() }
                     }
                     .foregroundStyle(on ? Theme.ink : Theme.ink3)
                     .padding(.horizontal, 8).frame(minHeight: 44)
@@ -497,7 +501,7 @@ struct PauseView: View {
     @ObservedObject var game = Game.shared
     var body: some View {
         ZStack {
-            Color.black.opacity(0.55).accessibilityHidden(true)
+            Color.black.opacity(0.78).accessibilityHidden(true)
             VStack(spacing: 14) {
                 Button("Resume") { game.paused = false }.buttonStyle(MarqueeButton()).frame(maxWidth: 280)
                     .accessibilityLabel("Resume")

@@ -47,36 +47,24 @@ struct WhatsNewView: View {
     private func text(_ s: CGFloat, _ w: Font.Weight = .regular) -> Font { .custom("Geist", size: s, relativeTo: .body).weight(w) }
 
     var body: some View {
+        GeometryReader { g in
+        // Wide and short (a phone on its side, the Duo open): the hero beside the news, so the news isn't a scroll away.
+        let wide = g.size.width > 700 && g.size.height < 560
         ZStack {
             Color.black.opacity(0.6).ignoresSafeArea().accessibilityHidden(true)
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        hero
-                        // The callouts as a running order (0230): numbered acts, not a grid of identical cards.
-                        VStack(spacing: 0) {
-                            ForEach(Array(notes.callouts.enumerated()), id: \.offset) { i, c in card(c, i) }
-                        }
-                        if !notes.sections.isEmpty {
-                            Accordion(title: "The full notes", summary: notes.sections.map(\.title).joined(separator: " · "), isOpen: $fullOpen, show: .title) {
-                                VStack(alignment: .leading, spacing: 14) {
-                                    ForEach(Array(notes.sections.enumerated()), id: \.offset) { _, s in
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            Text(s.title.uppercased()).font(Theme.display(10)).tracking(1.6).foregroundStyle(Theme.aur1)
-                                                .accessibilityAddTraits(.isHeader)
-                                            ForEach(Array(s.lines.enumerated()), id: \.offset) { _, l in
-                                                Text(l).font(text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 2)
-                        }
+                if wide {
+                    HStack(alignment: .top, spacing: 16) {
+                        ScrollView { hero }.scrollBounceBehavior(.basedOnSize).frame(width: 330)
+                        ScrollView { news }.scrollBounceBehavior(.basedOnSize)
                     }
                     .padding(16)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) { hero; news }.padding(16)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .scrollBounceBehavior(.basedOnSize)
                 Button(action: dismiss) { Text("Let's fly") }
                     .buttonStyle(MarqueeButton(height: 52))
                     .accessibilityLabel("Let's fly")
@@ -87,7 +75,7 @@ struct WhatsNewView: View {
             // Opaque enough that the title under it never reads through the cards.
             .background(Theme.bg.opacity(0.94), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.hair, lineWidth: 1))
-            .frame(maxWidth: 480)
+            .frame(maxWidth: wide ? 820 : 480)
             .padding(.horizontal, 14).padding(.vertical, 18)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .opacity(shown ? 1 : 0)
@@ -96,8 +84,35 @@ struct WhatsNewView: View {
             .accessibilityAddTraits(.isModal)
             .accessibilityIdentifier("whatsnew")
         }
+        .frame(width: g.size.width, height: g.size.height)
+        }
         .onAppear { withAnimation(still ? .easeOut(duration: 0.15) : .spring(duration: 0.5, bounce: 0.18)) { shown = true } }
         .accessibilityAction(.escape, dismiss)
+    }
+
+    /// The callouts as a running order (0230): numbered acts, not a grid of identical cards; then the full notes, folded.
+    private var news: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(spacing: 0) {
+                ForEach(Array(notes.callouts.enumerated()), id: \.offset) { i, c in card(c, i) }
+            }
+            if !notes.sections.isEmpty {
+                Accordion(title: "The full notes", summary: notes.sections.map(\.title).joined(separator: " · "), isOpen: $fullOpen, show: .title) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(Array(notes.sections.enumerated()), id: \.offset) { _, s in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(s.title.uppercased()).font(Theme.display(10)).tracking(1.6).foregroundStyle(Theme.aur1)
+                                    .accessibilityAddTraits(.isHeader)
+                                ForEach(Array(s.lines.enumerated()), id: \.offset) { _, l in
+                                    Text(l).font(text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
     }
 
     private var hero: some View {
