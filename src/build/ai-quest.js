@@ -7,6 +7,7 @@
 import { loadAI } from '../ai/config.js';
 import { validateQuest } from './quest-schema.js';
 import { generateQuest, templateForWish } from './quest-gen.js';
+import { ON_PORTAL } from '../portal/flag.js';
 
 // → { quest, source: 'ai' | 'local', meta }
 export async function generateWithAI({ wish = '', arena = 'sandbox', theatreRoot, reduced = false, signal } = {}) {
@@ -14,6 +15,8 @@ export async function generateWithAI({ wish = '', arena = 'sandbox', theatreRoot
   const seed = `${Date.now() % 1e9}`;
   const clean = String(wish).replace(/[\u0000-\u001f<>]/g, ' ').trim().slice(0, 140);
   let out = { quest: null, meta: { provider: ai.provider, model: ai.model } };
+  // A portal build has no server (src/portal/offline.js): the local generator, with no theatre for a call never made.
+  if (ON_PORTAL) return { quest: generateQuest(seed, { arena, template: templateForWish(clean) || undefined }), source: 'local', meta: { ...out.meta, error: 'No AI in this version' } };
   try {
     const mod = await import('../ai/theatre.js');
     out = await mod.runQuestTheatre(theatreRoot, { ai, wish: clean, arena, seed, reduced, abort: signal });

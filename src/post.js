@@ -62,7 +62,7 @@ export function createPost({ ctx, onLeaveOpen = () => {}, onLeavePost = () => {}
     dryAbort?.abort();
     dryRun = run;
     const ctl = dryAbort = new AbortController();
-    const rank = await dryRank({ log: run.inputLog, t: run.t, course: run.course }, { signal: ctl.signal });
+    const rank = await dryRank({ log: run.inputLog, t: run.t, course: run.course, card: c.card }, { signal: ctl.signal });
     if (dryAbort === ctl) dryAbort = null;
     if (ctl.signal.aborted || ctx().run !== run) return;   // a new run's sheet: this answer belongs to the last one
     dryFor = run; dryLabel = rankLabel(rank);
@@ -82,7 +82,7 @@ export function createPost({ ctx, onLeaveOpen = () => {}, onLeavePost = () => {}
     msg.textContent = 'Posting…';
     sync();
     let res;
-    try { res = await postScore({ log: run.inputLog, t: run.t, initials, course: run.course }); } finally { postingRun = null; }
+    try { res = await postScore({ log: run.inputLog, t: run.t, initials, course: run.course, card: c.card }); } finally { postingRun = null; }
     obs.play(res.ok ? 'post' : 'post-fail');
     if (res.ok) postedRun = run;
     if (ctx().run !== run) return;   // a new run's sheet: this answer belongs to the last one

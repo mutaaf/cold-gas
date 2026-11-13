@@ -10,6 +10,9 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:crazygames": "node scripts/portal-build.mjs crazygames",
+    "build:gamedistribution": "node scripts/portal-build.mjs gamedistribution",
+    "build:portals": "node scripts/portal-build.mjs crazygames && node scripts/portal-build.mjs gamedistribution",
     "preview": "vite preview",
     "test": "vitest run",
     "e2e": "playwright test",

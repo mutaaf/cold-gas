@@ -29,7 +29,7 @@ export function initAudio() {
   if (!AC) return;
   ctx = new AC();
   master = ctx.createGain();
-  master.gain.value = muted ? 0 : 0.8;
+  master.gain.value = muted || forcedMute ? 0 : 0.8;
   const comp = ctx.createDynamicsCompressor();
   comp.threshold.value = -16; comp.ratio.value = 4;
   master.connect(comp).connect(ctx.destination);
@@ -188,9 +188,16 @@ export function tick() {
 export function setMuted(m) {
   muted = m;
   try { localStorage.setItem('coldgas_muted', m ? '1' : '0'); } catch { /* storage blocked */ }
-  if (master) master.gain.value = m ? 0 : 0.8;
+  if (master) master.gain.value = m || forcedMute ? 0 : 0.8;
 }
 export const isMuted = () => muted;
+// A portal's own mute (CrazyGames' settings.muteAudio, src/portal/ads.js) takes priority over the game's toggle and is
+// never saved as the player's choice. Off the portals it is never set.
+let forcedMute = false;
+export function setForcedMute(m) {
+  forcedMute = !!m;
+  if (master) master.gain.value = muted || forcedMute ? 0 : 0.8;
+}
 
 // Pause, a hidden tab and a long-idle title go quiet for real (0060): the context stops, so the last gains
 // a frozen frame left behind (the motor, the hiss, the title drone) don't keep playing.

@@ -133,6 +133,9 @@ mark, and air left in the tanks.
    Custom events go through `src/insights.js` `track()` only: `game_start` {course, tier}, `game_over` {score,
    duration_s, course, tier, landed} on a Jump's results, `share` {course, score}. Props are numbers and enums: never
    initials, free text or ids. The privacy page names it (tests/unit/privacy.test.js). Never in the iPhone app.
+   **A third exception, for the portal builds only (0228, owner's request 2026-11-13).** `npm run build:crazygames` and
+   `build:gamedistribution` load that portal's SDK from the portal's own host (sdk.crazygames.com, html5.api.gamedistribution.com)
+   and nothing else: no Marquee, no Box Office, no /coldgas/api. The production build never loads either SDK (src/portal/, `ON_PORTAL`).
 4. **Determinism and realism.** `src/sim/*` is pure. Its rigid-body engine is Rapier's
    cross-platform-deterministic WASM build (docs/PHYSICS_ENGINE.md: bit-identical in Node,
    Chromium, WebKit and workerd; re-run `scripts/engine-determinism.mjs` and
@@ -193,6 +196,11 @@ mark, and air left in the tanks.
 
 ```
 index.html            Markup: canvas, top bar, title, HUD, touch, results, board, pause
+src/portal/           THE PORTAL BUILDS only (0228; `ON_PORTAL` in flag.js is false in production, so none of it runs there):
+                        entry.js + boot.js (the SDK before the game, saves from CrazyGames' data module), sdk.js (one adapter
+                        over CrazyGames v3 and GameDistribution), ads.js (src/ads.js's object over the SDK, swapped in by
+                        scripts/portal-html.mjs), offline.js (no server), board.js (this device's board), storage.js, config.js
+                        (GameDistribution's game id)
 src/main.js           Entry: state machine (title → countdown → live → results ⇄ replay),
                         fixed-step clock, sim → scene sync, deep links, wiring
 src/sim/              PURE, shared with the Worker:
@@ -475,6 +483,11 @@ npm test           unit tests (fast, pure)
 npm run e2e        Playwright against a production build
 npm run check      backlog + lint + unit + e2e (what CI runs)
 npm run check:fast backlog + lint + unit + build (cloud sandboxes)
+npm run build:crazygames | build:gamedistribution   a portal build (0228): relative paths, the portal's SDK in place of
+                   Marquee and Box Office, no server (local lines, a board on this device), no outbound links; gated and zipped
+                   into dist-portals/ (gitignored). The production build is untouched. store/portals/SUBMIT.md is the owner's
+                   checklist; node scripts/portal-playtest.mjs <portal> [--blocked|--phone] plays it in a sandboxed iframe on
+                   another origin; node scripts/portal-art.mjs renders the covers and videos from the game
 npm run audit [-- --shard=N/M] [--port=4655]   the HUD + title audits as a gate on dist/ (build first): serves it, runs
                    one HUD shard (+ the title audit with the shard the plan gives it), exits 1 on any overlap, offscreen box,
                    text < 11 px, label < 4.5:1, theatre target < 44 px or missed frame (0082); shards are balanced by

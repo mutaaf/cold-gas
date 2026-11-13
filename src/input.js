@@ -23,6 +23,7 @@ import { createKeyRamp, padValves, bindNozzlePad, VALVES } from './valves.js';
 import { createOneThumb } from './onethumb.js';
 import { tiltSteer, buzz, armTiltGrant } from './touch-settings.js';
 import { createDriver, shapeStick, applyGround, loadDriving, saveDriving, validLevel, TC_MODES } from './driving.js';
+import { portalDevice } from './portal/flag.js';
 
 const keys = new Set();
 const touch = { active: false, x: 0, y: 0, lift: false, land: false, go: false, brk: false, goAmt: 1, brkAmt: 1 };
@@ -63,7 +64,9 @@ export function padIntent(p) {
   for (let i = 0; i < Math.min(4, p.axes.length); i++) if (Math.abs(p.axes[i] || 0) > 0.5) return true;
   return false;
 }
-const primaryCoarse = typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
+// On a portal its SDK names the device (CrazyGames asks games not to guess from touch support); the first press of a
+// key, a finger or a pad still switches the controls as everywhere (createDevice).
+const primaryCoarse = portalDevice() ? portalDevice() !== 'desktop' : typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches;
 export const device = createDevice(primaryCoarse ? 'touch' : 'none');
 export const lastDevice = () => device.last;
 export const onDevice = (fn) => device.on(fn);
