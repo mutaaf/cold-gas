@@ -338,6 +338,28 @@ dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look d
 - **The bench's pass times** are now charged from the later of a buffer's start and the previous buffer's end. On the Duo the
   old per-buffer spans summed to ≈ 20 ms in an 8.3 ms frame, because they overlapped.
 
+### The car, forged (0229)
+
+- **The body** (`tools/forge/car/build.py`, Blender, deterministic, about 15 s): it's rebuilt over the stage roadster's own
+  skin, so every animated part of the roadster still fits. It has bevelled panels with weighted normals and cut panel gaps
+  and shut lines, flush handles, mirrors, wipers, a slatted intake, a straked diffuser, arch liners and an underbody. Tinted
+  glass sits over two seats, a wheel and a dash. The lamp units have reflector bowls behind clear lenses, and there are
+  emissive DRL and tail strips. Baked occlusion is in the vertex colour and a grime mask in uv.x. It's 49.8 k triangles,
+  with a 10.7 k LOD drawn past 32 m and in the shadow map. `check.py` checks the format, the budgets, the bounds against the
+  roadster's (only the mirrors stand out, by 12.5 cm) and the material names.
+- **The wheels**: open spoked rims (20″ front, 21″ rear) with a barrel, a blank cap and five lug nuts. The tyres have a
+  rounded sidewall and tread blocks and grooves. Under them, ventilated rotors (still `roadster-rotor`, so they glow) and
+  calipers. They're built for the right side (x < 0) and drawn mirrored on the left, winding flipped.
+- **In the app** (`Render/DriveCarModel.swift`, Resources/Car/car.json in stage.json's mesh format):
+  - Free Drive and the roams draw this car; the scored runs keep the roadster, and `-fd-roadster` brings it back in a drive.
+  - The lamps (amber, markers, plate, ambient, DRL, tail) follow the car's states by name. The crash dents the body and
+    crazes its glass as it did the roadster's.
+- **Paint and grime** (Shaders.metal, `effectKind` 11 and 12): metallic flakes glint under the clear coat. Road grime
+  collects where the mask puts it, dulling the paint and taking the coat with it. It builds with the kilometres (half
+  dirty by ≈ 12 km, faster off the road) and a reset washes it off. `-fd-grime 0…1` sets it for shots.
+- **The clouds** moved into a 384 × 192 map over the sky's upper half, redrawn every other frame (`SkyLUT`). Before, the sky
+  pass ran their fbm for every sky pixel.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the

@@ -101,3 +101,51 @@ static inline float3 sky_aerial(texture2d<float> V, float3 c, float3 d, float L,
     float3 in = sky_view(V, normalize(float3(d.x, max(d.y, 0.012), d.z)), sun, eyeKm, 0.5);
     return c * T + in * (1.0 - T);
 }
+
+// A deck of clouds (0228): fair-weather cumulus and a high veil of cirrus on a plane over the drive, fbm with a domain warp,
+// lit by the sun through them (a silver lining toward the sun, warm undersides at a low sun) and dimmed into the haze at the
+// horizon. Drawn only where the sky shows.
+static inline float sky_cloudHash(float2 p) { p = fract(p * float2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
+static inline float sky_cloudNoise(float2 p) {
+    float2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
+    return mix(mix(sky_cloudHash(i), sky_cloudHash(i + float2(1, 0)), u.x), mix(sky_cloudHash(i + float2(0, 1)), sky_cloudHash(i + float2(1, 1)), u.x), u.y);
+}
+static inline float sky_cloudFbm(float2 p, int n) {
+    float a = 0.5, s = 0;
+    for (int i = 0; i < n; i++) { s += a * sky_cloudNoise(p); p = float2(p.x * 1.6 - p.y * 1.2, p.x * 1.2 + p.y * 1.6) + 7.3; a *= 0.5; }
+    return s;
+}
+static inline float4 sky_cloudDeck(float3 d, float3 sun, float3 sunE, float3 skyUp, float t, float night) {
+    if (d.y < 0.012) return 0;
+    // Where the ray meets a plane 2 km up (the cumulus) and 8 km up (the cirrus), in km across the ground.
+    float2 p = d.xz / d.y * 2.0 + float2(t * 0.004, t * 0.0015);
+    float2 q = float2(sky_cloudFbm(p * 0.35, 3), sky_cloudFbm(p * 0.35 + 5.2, 3));
+    float base = sky_cloudFbm(p * 0.55 + q * 1.6, 5);
+    float cov = smoothstep(0.50, 0.78, base);
+    float2 pc = d.xz / d.y * 8.0 + float2(t * 0.01, 0.0);
+    float cir = smoothstep(0.52, 0.9, sky_cloudFbm(float2(pc.x * 0.12, pc.y * 0.5), 4)) * 0.45;
+    // The light through the cloud: thicker centres darker, the sun's side lit, a forward-scattered rim toward the sun.
+    float mu = dot(d, sun), lowSun = 1.0 - smoothstep(0.0, 0.35, sun.y);
+    float thick = smoothstep(0.55, 0.95, base);
+    float3 lit = sunE * (0.10 + 0.55 * pow(max(mu, 0.0), 8.0) * (1.0 - thick) + 0.06 * lowSun) * (1.0 - 0.6 * thick);
+    float3 c = lit + skyUp * (1.6 - thick * 0.8);
+    float3 ci = sunE * (0.06 + 0.4 * pow(max(mu, 0.0), 12.0)) + skyUp * 1.2;
+    float fade = smoothstep(0.012, 0.14, d.y);
+    float a = cov * 0.92 * fade, ac = cir * fade * (1.0 - a);
+    float3 col = (c * a + ci * ac) * (1.0 - 0.85 * night);
+    return float4(col, a + ac);
+}
+// The cloud map's mapping: azimuth round the whole sky across, elevation up (packed toward the horizon, where clouds crowd).
+static inline float2 sky_cloudUV(float3 d) {
+    float az = atan2(d.x, d.z) / (2.0 * M_PI_F) + 0.5, el = asin(clamp(d.y, 0.0, 1.0)) / (0.5 * M_PI_F);
+    return float2(az, sqrt(el));
+}
+static inline float3 sky_cloudDir(float2 uv) {
+    float az = (uv.x - 0.5) * 2.0 * M_PI_F, el = uv.y * uv.y * 0.5 * M_PI_F;
+    return float3(sin(az) * cos(el), sin(el), cos(az) * cos(el));
+}
+static inline float4 sky_clouds(texture2d<float> C, float3 d) {
+    if (d.y < 0.0) return 0;
+    constexpr sampler s(filter::linear, s_address::repeat, t_address::clamp_to_edge);
+    return C.sample(s, sky_cloudUV(d));
+}
