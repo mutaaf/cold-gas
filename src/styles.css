@@ -1279,6 +1279,21 @@ body .touch .thumb[data-stage='going']:not(.on) { background-color: rgba(58, 42,
 /* the native app's public beta (public/beta/): one full-width row, a solid green hairline, not a dashed mode */
 .beta-btn { grid-column: 1 / -1; color: inherit; text-decoration: none; border-style: solid; border-color: rgba(111, 240, 181, 0.32); }
 .beta-btn b::after { color: var(--ok); }
+/* The beta in the top bar: a quiet chip with a green dot, on the title only (any run, countdown, results, drive or
+   build hides it), so it never stands between a newcomer and the Jump. */
+.beta-chip { display: none; align-items: center; gap: 7px; color: var(--ink); text-decoration: none; white-space: nowrap; border-color: rgba(111, 240, 181, 0.4); }
+.beta-chip i { width: 6px; height: 6px; border-radius: 50%; background: var(--ok); box-shadow: 0 0 8px rgba(111, 240, 181, 0.7); flex: none; }
+.beta-chip:hover { border-color: rgba(111, 240, 181, 0.75); }
+body:is(:not([data-mode]), [data-mode='title']) .beta-chip { display: inline-flex; }
+.beta-chip .bc-dev { display: inline; }
+/* A phone upright: the title's wordmark is right below, so the bar's small brand steps aside for the chip (as it
+   already does on a 320 px column). A short landscape window keeps its brand (the wordmark is hidden there) and
+   the chip says just "Beta". */
+@media (max-width: 480px) {
+  body:is(:not([data-mode]), [data-mode='title']) .top .brand { display: none; }
+  body:is(:not([data-mode]), [data-mode='title']) .top { justify-content: flex-end; }
+}
+@media (max-height: 500px) and (max-width: 720px) { .beta-chip .bc-dev { display: none; } }
 .course-btn span { font-size: 11px; color: rgba(245, 246, 248, 0.7); }
 .title .spec { margin-top: 28px; }
 @media (max-height: 860px) { .title .spec { display: none; } .tagline { margin: 16px 0 20px; } }
