@@ -61,3 +61,10 @@ fade-out time. Don't change the sim, the camera or the director.
 - The jets' cones and shock diamonds.
 - The cloud's colour under the red set lights.
 - The mist pool size per tier (0045).
+
+## Critic re-measure (2026-11-14)
+Still unbuilt; render unchanged since filing. On production `index-BtiHHqbj.js`, 390×844 touch DPR 2, Show reference run,
+I diffed the touchdown frame (`S.run.phase === 'landed'`) against the same view 450 ms later, after the mist had
+cleared (luma, threshold 12). From x 60 to x 760 (device px, 90 % of the width), the mist's lowest row sits at
+**y 1251–1259**: a level line about **350 CSS px long, flat within 4 CSS px**. That's longer than the 187 px measured
+at filing. Frame: `docs/critique/2026-11-14-0423/phone-show-touchdown.png`. The 40 px acceptance bar stands.
