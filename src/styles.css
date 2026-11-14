@@ -2201,3 +2201,27 @@ body[data-beat-on] .hud { filter: opacity(0); pointer-events: none; }
 }
 @media (max-width: 370px) { .next-btn .nx-e { display: none; } }
 @media (prefers-reduced-motion: reduce) { .top-actions-row .next-btn { animation: none; } }
+
+/* --- The first landing (0248, src/beat.js `first`): the same lower third, one size up, and no prompt over it. "First
+   landing" is the headline, the event and the verdict step into the line over it, and as the score lands the hairline's
+   red draws the whole width (the crowd line, heard in src/audio.js crowd). A tap still goes to the sheet. */
+.beat[data-first] .beat-verdict { font-size: clamp(30px, 8.4vw, 56px); }
+.beat[data-first] .beat-rule::after { transition-duration: 0.9s; }
+.beat[data-first].landed .beat-rule::after { width: 100%; }
+.beat[data-first] .beat-skip { visibility: hidden; }
+
+/* --- The first jump's guide (0248, src/guide.js): its one line is the cue line's; on its first hint a Skip chip rides
+   in the line (ends the guide for good). The cue itself takes no pointer; the chip does, with a 44 px reach. */
+.cue .guide-skip { position: relative; margin: -4px -8px -4px 12px; padding: 4px 10px; border: 1px solid rgba(245, 246, 248, 0.32); border-radius: 999px;
+  background: none; color: rgba(245, 246, 248, 0.86); font: 500 11px/1.2 var(--text); letter-spacing: 0.16em; text-transform: uppercase; cursor: pointer;
+  pointer-events: auto; vertical-align: middle; }
+.cue .guide-skip::before { content: ''; position: absolute; inset: -12px -8px; }
+.cue:not(.on) .guide-skip { visibility: hidden; }
+.cue .guide-skip:focus-visible { outline: 2px solid var(--ice); outline-offset: 2px; }
+
+/* --- A first jump's wreck (0248): one line (the guide's) and Retry, the one button; everything else under More. */
+.results[data-first-wreck]:not([data-more]) .top-actions-row > .btn:not(.retry-btn) { display: none; }
+/* On the mark, a newcomer's one-thumb pad breathes while "Hold to go" is up (0248, absorbs 0144's nudge). */
+@keyframes guide-breathe { 0%, 100% { box-shadow: 0 0 0 0 rgba(245, 246, 248, 0.32); border-color: rgba(245, 246, 248, 0.55); } 50% { box-shadow: 0 0 0 12px rgba(245, 246, 248, 0); border-color: var(--ink); } }
+.thumb[data-guide] { animation: guide-breathe 1.8s var(--ease) infinite; }
+@media (prefers-reduced-motion: reduce) { .thumb[data-guide] { animation: none; border-color: var(--ink); box-shadow: 0 0 0 4px rgba(245, 246, 248, 0.45); } }

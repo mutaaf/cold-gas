@@ -177,6 +177,22 @@ export function settle() {
   }
 }
 
+// The crowd line, once, for a player's first landing (0248): a swell of filtered noise (many hands and voices far off
+// across the lot, not a stadium), with the settle's fifth under it. Made once, at the moment it's heard.
+export function crowd() {
+  if (!ctx || muted) return;
+  const t = ctx.currentTime;
+  const n = ctx.createBufferSource(); n.buffer = nodes.burst; n.loop = true; n.playbackRate.value = 0.85;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = 1300; bp.Q.value = 0.6;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.setValueAtTime(1800, t); lp.frequency.linearRampToValueAtTime(3800, t + 0.5);
+  const g = ctx.createGain(); g.gain.setValueAtTime(0.0001, t); g.gain.exponentialRampToValueAtTime(0.11, t + 0.35);
+  g.gain.setValueAtTime(0.11, t + 0.9); g.gain.exponentialRampToValueAtTime(0.0001, t + 2.4);
+  n.connect(bp).connect(lp).connect(g).connect(master); n.start(t); n.stop(t + 2.5);
+  const o = ctx.createOscillator(); o.type = 'sine'; o.frequency.value = 587.33;
+  const og = ctx.createGain(); og.gain.setValueAtTime(0.0001, t + 0.05); og.gain.exponentialRampToValueAtTime(0.04, t + 0.08); og.gain.exponentialRampToValueAtTime(0.0001, t + 1.6);
+  o.connect(og).connect(master); o.start(t + 0.05); o.stop(t + 1.7);
+}
+
 export function tick() {
   if (!ctx || muted) return;
   const t = ctx.currentTime;
