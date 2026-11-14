@@ -1,7 +1,7 @@
 ---
 id: 0115
 title: The run-up frames the whole roadster on a portrait phone
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: player-feel

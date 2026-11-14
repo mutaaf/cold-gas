@@ -1,7 +1,7 @@
 ---
 id: 0255
 title: On the web, licenses replace the Assist/Pro/Advanced selector as the way forward, and free play keeps every tier open
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: engagement

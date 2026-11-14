@@ -1,7 +1,7 @@
 ---
 id: 0242
 title: Wreck Club ranks, earned by crash feats, unlock cosmetics by play alone
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: engagement
