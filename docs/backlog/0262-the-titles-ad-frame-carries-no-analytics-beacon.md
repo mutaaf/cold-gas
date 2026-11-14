@@ -43,6 +43,14 @@ and was still counted. Every first-visit phone player who reads the title for a 
 from the same frame came at 57.5 s while that page was flying runs. That's most likely the beacon's unload report as
 `src/ads.js` removed the frame for the run (unverified). The probe in What 2 should time it against `S.mode`.
 
+**Critic, 2026-11-14 15:35: the second report is the unload, at the Jump, not in the run.** Production `index-Cu4812XR.js`
+(main `5de2137`), 390×844 touch, first visit. The frame placed at 31.8 s, then beacon 33.1 s, then `/cdn-cgi/rum` 36.6 s,
+all on the title. The Jump was clicked at 45.99 s (page clock). A second `/cdn-cgi/rum` started at 46.05 s, and the
+frame was gone with `S.mode` at `countdown` by 46.06 s. Then nothing left the page for 15 s through countdown and live
+(`docs/critique/2026-11-14-1535/phone-jump-requests.jsonl`). The last acceptance criterion holds today. The probe in
+What 2 should allow a request that *started* within the title→countdown transition from the `/ads/` frame being
+removed, or it will flag this unload on every run. After the beacon fix there is nothing to flag.
+
 ## What
 1. **The fix lives in Marquee or the zone, not here** (`src/worker/` and the Marquee Worker are both outside a cloud
    agent's reach). Marquee should serve `/ads/v1/frame.html` with `cache-control: …, no-transform` (the same fix that
