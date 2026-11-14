@@ -1,7 +1,7 @@
 ---
 id: 0257
 title: After a landing the sheet offers the next jump first, then beat this score, then share, and stays light
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: engagement

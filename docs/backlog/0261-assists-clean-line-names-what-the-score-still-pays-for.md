@@ -1,7 +1,7 @@
 ---
 id: 0261
 title: On keys and two thumbs, Assist's clean line names what the score still pays for
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: player-feel

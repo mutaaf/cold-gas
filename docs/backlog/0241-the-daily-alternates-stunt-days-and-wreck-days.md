@@ -1,7 +1,7 @@
 ---
 id: 0241
 title: The Daily alternates stunt days and wreck days
-status: ready
+status: proposed
 priority: P2
 size: S
 lens: engagement

@@ -1,7 +1,7 @@
 ---
 id: 0247
 title: A first-time visitor is flying within about three seconds, and the reference demo is a second choice
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: engagement

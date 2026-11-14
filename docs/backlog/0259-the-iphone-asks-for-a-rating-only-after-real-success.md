@@ -1,7 +1,7 @@
 ---
 id: 0259
 title: The iPhone asks for a rating only after real success, never mid-run and never over the first landing
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: platform
