@@ -1,12 +1,12 @@
 ---
 id: 0245
 title: The Phase 2 funnel is measured from day one, one event vocabulary for the web and the iPhone
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: engagement
 created: 2026-11-13
-pr:
+pr: 371
 by: operator
 ---
 
@@ -41,14 +41,16 @@ ships first so every later Phase 2 ticket moves a number we can already see.
 - A PostHog insight per metric is the operator's to pin; the PR lists the event → metric map from the proposal §6.
 
 ## Acceptance criteria
-- [ ] Unit: `events.js` validates every call (unknown names or non-enum props are dropped in dev with a warning, never
+- [x] Unit: `events.js` validates every call (unknown names or non-enum props are dropped in dev with a warning, never
       thrown); `track()` never runs in the portal builds or on localhost.
-- [ ] e2e (production build, a stub `window.boxoffice`): a fresh visitor's load → first input → jump → landing → retry
+- [x] e2e (production build, a stub `window.boxoffice`): a fresh visitor's load → first input → jump → landing → retry
       produces `session_start`, `first_input`, `jump_start`/`jump_end` (n 1, 2) and `first_landing`, in that order, with
       only numbers and enums.
-- [ ] No event is sent from the frame loop (queued, flushed on the title/results or `pagehide`); no per-frame allocation
+- [x] No event is sent from the frame loop (queued, flushed on the title/results or `pagehide`); no per-frame allocation
       (`npm run alloc:bench` unchanged).
 - [ ] `npm run vectors -- --check` passes with the events file.
+      (Not in the web PR: the vectors live under ios/ and scripts/, the native track's; `src/metrics/events.js` exports
+      `vocabulary()` as plain data for a generator.)
 
 ## Test plan
 `tests/unit/metrics-events.test.js` for the vocabulary; an e2e in `tests/e2e/` with a stubbed `window.boxoffice` that

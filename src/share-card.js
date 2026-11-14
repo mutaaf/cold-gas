@@ -159,11 +159,13 @@ export async function shareRun({ card, url: urlIn, cardPromise, text: said = '' 
     const file = new File([blob], `coldgas-${card.total.toFixed(1)}.png`, { type: 'image/png' });
     if (navigator.canShare?.({ files: [file] })) data.files = [file];
   } catch { /* no card: share the words */ }
+  // What it resolves to says how it left (0245 share_done's via): 'file' (the sheet, with the picture), 'link' (the
+  // sheet, words and link only), 'copy' (the clipboard); or 'cancelled', or 'shown' (the address in a toast).
   if (navigator.share) {
-    try { await navigator.share(data); return 'shared'; } catch (e) {
+    try { await navigator.share(data); return data.files ? 'file' : 'link'; } catch (e) {
       if (e?.name === 'AbortError') return 'cancelled';
-      if (data.files) { delete data.files; try { await navigator.share(data); return 'shared'; } catch (e2) { if (e2?.name === 'AbortError') return 'cancelled'; } }
+      if (data.files) { delete data.files; try { await navigator.share(data); return 'link'; } catch (e2) { if (e2?.name === 'AbortError') return 'cancelled'; } }
     }
   }
-  try { await navigator.clipboard.writeText(`${text} ${url}`); toast(isChallengeUrl(url) ? 'Challenge link copied' : 'Link copied'); return 'copied'; } catch { toast(isChallengeUrl(url) ? 'Copy failed: share from a phone or try again' : url, 4000); return 'shown'; }
+  try { await navigator.clipboard.writeText(`${text} ${url}`); toast(isChallengeUrl(url) ? 'Challenge link copied' : 'Link copied'); return 'copy'; } catch { toast(isChallengeUrl(url) ? 'Copy failed: share from a phone or try again' : url, 4000); return 'shown'; }
 }

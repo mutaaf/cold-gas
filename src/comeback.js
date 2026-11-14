@@ -34,6 +34,8 @@ const TIER = { assist: 'Assist', pro: 'Pro', advanced: 'Advanced' };
  *                                          course; `flown`: as the run on the sheet was flown (its card's device and scheme)
  * @param {(text: string) => void} [o.tip]  the next countdown's tip (0139: today's hint on a Play today's)
  * @param {() => number} [o.now]
+ * @param {(name: string, props: object) => void} [o.metric]   0245: the funnel's challenge_open / challenge_play
+ * @param {() => string} [o.course]          the course on the stage (a link that can't be read names none)
  */
 export function createComeback(o) {
   const now = o.now || (() => Date.now());
@@ -153,11 +155,16 @@ export function createComeback(o) {
   function boot(hash, fallback) {
     const payload = vsFromHash(hash);
     if (!payload) return false;
-    const bad = () => { ch = null; armed = false; render(); o.toast(OLD, 4200); fallback(); };
+    let opened = false;
+    const bad = (dec = null) => {
+      if (!opened) { opened = true; o.metric?.('challenge_open', { course: dec?.course || o.course?.() || 'show', stale: 1 }); }
+      ch = null; armed = false; render(); o.toast(OLD, 4200); fallback();
+    };
     decodeChallenge(payload).then(async (dec) => {
-      if (!dec || dec.stale) return bad();
+      if (!dec || dec.stale) return bad(dec);
       ch = { dec, state: 'checking', rp: null, ghost: null };
       obs.play('challenge-open');
+      opened = true; o.metric?.('challenge_open', { course: dec.course, stale: 0 });
       o.selectCourse(dec.course);
       render();
       await o.ready();
@@ -174,7 +181,7 @@ export function createComeback(o) {
         await new Promise((r) => setTimeout(r, 0));
       }
       if (ch?.dec === dec && ch.state === 'checking') { if (settle()) render(); else bad(); }
-    }).catch(bad);
+    }).catch(() => bad());
     return true;
   }
   // The replay is done: believe the payload only if the run scores what it says it scored here.
@@ -204,9 +211,10 @@ export function createComeback(o) {
         if (!ch || ch.state !== 'checking') return take();
         ch.rp ??= createReplay(ch.dec.log, ch.dec.course);
       }
-      if (!settle()) { render(); o.toast(OLD, 4200); o.jump(); return; }
+      if (!settle()) { render(); o.toast(OLD, 4200); o.metric?.('challenge_play', { course: ch?.dec.course || o.course?.() || 'show', stale: 1 }); o.jump(); return; }
     }
     armed = true;
+    o.metric?.('challenge_play', { course: ch.dec.course, stale: 0 });
     o.selectCourse(ch.dec.course);
     o.jump();
   }

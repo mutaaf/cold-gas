@@ -80,6 +80,11 @@ describe('the privacy page (0155)', () => {
     expect(md).toBe(pageText);
   });
 
+  it('names the funnel\'s events (0245): a visit, the first tap, runs, the first landing, shares and challenges', () => {
+    for (const re of [/a visit, new or returning/, /how long the first tap took/, /whether it landed/, /the first landing/,
+      /a picture, a link or a copy/, /a challenge link opened and played/, /kept in your browser's storage/]) expect(text).toMatch(re);
+  });
+
   it('no longer names a page-analytics service, now that none runs on our pages', () => {
     expect(text).not.toMatch(/Web Analytics|page analytics|analytics counts/i);
     expect(text).toMatch(/nothing from it goes to an advertising network or a data broker/);

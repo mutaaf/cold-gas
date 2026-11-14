@@ -35,8 +35,11 @@ comes from a model.
 ## Usage analytics on the web
 
 The web game and these pages send anonymous usage analytics to PostHog, through our own relay at mutaafaziz.com: which
-pages are opened, clicks and taps (for heatmaps), a few game events (a run started or finished, with its score, course,
-tier and length, and a share), the device type and browser, page load times, and an approximate, city-level location.
+pages are opened, clicks and taps (for heatmaps), a few game events (a visit, new or returning and how
+many days since the last; how long the first tap took; a run started or finished, with its score, course, tier and
+length, whether it landed and whether it was this browser's first, second or a later run; the first landing; a share,
+and whether it went as a picture, a link or a copy; a challenge link opened and played), counted from a few numbers kept
+in your browser's storage (the day you last played, how many runs you've started and landed), the device type and browser, page load times, and an approximate, city-level location.
 Our relay cuts the last part off your IP address before anything is forwarded, so PostHog never sees the full address.
 Session replays may be recorded to see where the game is hard to use; every text field is masked in them. A random id,
 kept in your browser's storage, links one visit to the next; it is not tied to your name, your initials or anything else

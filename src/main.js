@@ -69,6 +69,7 @@ import { readFold, drastic } from './fold.js';
 import { refitHudMode } from './hud-mode.js';
 import { deckOn, runUp } from './render/deck-look.js';
 import { track } from './insights.js';
+import { createFunnel } from './metrics/funnel.js';
 import { ON_PORTAL } from './portal/flag.js';
 import { createWedge, WEDGE_IDLE } from './wedge.js';
 
@@ -199,9 +200,27 @@ const S = {
 // The page knows the mode, so the quick Retry / Home buttons show only where they belong.
 // Marquee (src/ads.js): declared before anything can change the mode (setMode syncs the rewarded button).
 const ads = createAds({ mode: () => S.mode });
+// The Phase 2 funnel (0245, src/metrics/): this device's counters and Box Office's events, queued and sent only on the
+// title, the results or the page going (setMode, below; pagehide), never from a frame.
+const funnel = createFunnel({ send: track });
+funnel.session();
+addEventListener('pagehide', () => funnel.flush());
+document.addEventListener('visibilitychange', () => { if (document.hidden) funnel.flush(); });
+// first_input: the page's first touch, key or pad press that reaches the car (a live run of the player's own) or the
+// title's primary action (Jump, Take the challenge, Play today's). Capture: before anything else can swallow it.
+const PRIMARY = '[data-start], [data-vs-take], [data-daily-play]';
+const firstInput = (e) => {
+  if (e.repeat) return;
+  const live = S.mode === 'live' && !S.paused && !S.autopilot;
+  if (!live && !e.target?.closest?.(PRIMARY)) return;
+  funnel.input(performance.now());
+  removeEventListener('pointerdown', firstInput, true); removeEventListener('keydown', firstInput, true);
+};
+addEventListener('pointerdown', firstInput, true);
+addEventListener('keydown', firstInput, true);
 const rerollBtn = document.querySelector('[data-reroll]');
 let rerolled = null;
-const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); if (m !== 'live') endBeat(); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); ads.sync(); swapForged(); };
+const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); if (m !== 'live') endBeat(); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); ads.sync(); swapForged(); if (m === 'title' || m === 'results') funnel.flush(); };
 // The forge's models (0211): fetched after the title is up (below), swapped into the parked rows at the next change to the
 // title or to a countdown (a cut the player already sees), never under a still title, in a run, its results (a dent would be
 // lost) or its replay. A course built after they land is built with them (src/render/scene.js lineup).
@@ -429,7 +448,8 @@ function startRunNow(kind = 'jump', quick = false) {
   S.run = armAftermath(takeRun(stage.course)); S.after = false; S.drillSnap = null;
   S.autopilot = kind === 'reveal' ? createAutopilot(stage.course) : null;
   S.runKind = kind;   // the reference jump never counts toward Rookie mode's streak (0074)
-  if (kind === 'jump') { obs.play('run'); runEnd.start(S.run); track('game_start', { course: stage.course, tier: S.tier }); }   // the players' funnel (src/obs: counts only; Box Office: src/insights.js)
+  S.jumpN = null;
+  if (kind === 'jump') { obs.play('run'); runEnd.start(S.run); track('game_start', { course: stage.course, tier: S.tier }); S.jumpN = funnel.jumpStart(stage.course, S.tier); }   // the players' funnel (src/obs: counts only; Box Office: src/insights.js)
   latchTier();
   S.adaptNow = null;
   // Live pointers on the cue line (0079): a new player's first runs, or while Adapt to me says they're struggling.
@@ -467,6 +487,12 @@ function closeCard(run) {
   S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.flyTier === 'assist' });
   S.cardHow = { device: lastDevice(), scheme: ui.touch.dataset.scheme, tier: S.flyTier };   // the funnel's ctl-*/fly-* (0138)
   S.drillSnap = S.drill ? { result: drillResult(S.drill, run, S.card), coach: drillCoach(S.drill, run) } : null;
+  // 0245: the Jump's end, and the first landing on this device (queued: this is a live frame; sent with the sheet).
+  S.firstLanding = false;
+  if (S.jumpN && S.runKind === 'jump' && !S.drill) {
+    S.firstLanding = funnel.jumpEnd(S.jumpN, { course: run.course, tier: S.card.tier, landed: !!S.card.facts?.jumped && !isCrash(S.card), score: S.card.total });
+    S.jumpN = null;
+  }
 }
 function finishRun() {
   const run = S.run;
@@ -1452,7 +1478,7 @@ function frame(now) {
 function frameBody(now) {
   const dt = Math.min(0.1, (now - lastT) / 1000);
   lastT = now;
-  if (pollPads()) lastGesture = now;   // a pad in use becomes the device; Start pauses (and resumes)
+  if (pollPads()) { lastGesture = now; if (S.mode === 'live' && !S.autopilot) funnel.input(now); }   // a pad in use becomes the device; Start pauses (and resumes); 0245 first_input
   if (!S.paused && !S.adBreak) {
     // A crash's slow-motion beat scales the game clock (live and replay); the effects run on it too.
     const slow = S.mode === 'live' || S.mode === 'results' || S.mode === 'replay' ? crash.timeScale() : 1;
@@ -1601,7 +1627,16 @@ const startCard = () => {
 const shareUrl = () => `${location.origin}${import.meta.env.BASE_URL}`;
 document.querySelectorAll('[data-share]').forEach((b) => b.addEventListener('pointerdown', startCard));
 // [comeback] the link carries the run (#vs=, src/challenge.js): a shared run is a rematch
-on('[data-share]', () => { if (S.card) { obs.play('share'); track('share', { course: stage.course, score: S.card.total }); } if (S.card) shareRun({ card: S.card, url: comeback.linkFor(S.card), cardPromise: startCard() }); });
+// 0245: share_tap as it's pressed, share_done once it has left the device (the sheet with the picture or the link, or the
+// clipboard), flushed at once: the results are up, and the player may close the tab from the share sheet.
+const shareVia = (course) => (via) => { if (via === 'file' || via === 'link' || via === 'copy') { funnel.emit('share_done', { course, via }); funnel.flush(); } };
+on('[data-share]', () => {
+  if (!S.card) return;
+  const course = S.run?.course || stage.course;
+  obs.play('share'); track('share', { course: stage.course, score: S.card.total });
+  funnel.emit('share_tap', { course }); funnel.flush();
+  shareRun({ card: S.card, url: comeback.linkFor(S.card), cardPromise: startCard() }).then(shareVia(course), () => {});
+});
 
 // Event picker on the title (also ?course=wall|lineup; the Show is the default).
 const courseBtns = document.querySelectorAll('.courses [data-course]');
@@ -1638,7 +1673,8 @@ const comeback = createComeback({
   mount: document.querySelector('[data-title-extra]'), resultMount: document.querySelector('[data-daily-result]'),
   base: shareUrl(), selectCourse, getTier: () => S.tier, setTier: (t) => setTier(t), jump: () => jump(),
   ready: () => Promise.all([stage.ready, physicsLoad]), toast,
-  share: ({ card, url, text }) => shareRun({ card, url, text, cardPromise: startCard() }),
+  share: ({ card, url, text }) => { const course = S.run?.course || stage.course; funnel.emit('share_tap', { course }); funnel.flush(); return shareRun({ card, url, text, cardPromise: startCard() }).then(shareVia(course), () => {}); },
+  metric: (name, props) => { funnel.emit(name, props); if (S.mode === 'title' || S.mode === 'results') funnel.flush(); }, course: () => stage.course,
   how: (course, tier, flown) => (flown && S.cardHow ? flownCtx(S.cardHow, course, tier) : pointerCtx(course, tier)), tip: (text) => { S.tip = text; },
 });
 S.titleCard = () => comeback.refresh();
