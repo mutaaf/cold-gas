@@ -1,0 +1,33 @@
+import { chromium, devices } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const OUT = process.argv[2]; const URL = 'https://mutaafaziz.com/coldgas/';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium/chrome-linux/chrome', args: ['--use-gl=swiftshader','--enable-unsafe-swiftshader'] }).catch(async () => chromium.launch({ executablePath: '/opt/pw-browsers/chromium', args: ['--use-gl=swiftshader'] }));
+async function run(name, ctxOpts, sheet) {
+  const ctx = await browser.newContext(ctxOpts);
+  if (!sheet) await ctx.grantPermissions(['clipboard-read','clipboard-write'], { origin: 'https://mutaafaziz.com' });
+  await ctx.addInitScript((sheet) => {
+    if (sheet) { navigator.canShare = (d) => !!d; navigator.share = async (d) => { window.__shared = { t: performance.now(), act: navigator.userActivation?.isActive, files: (d.files||[]).length, text: d.text, url: d.url }; }; }
+    else { delete Navigator.prototype.share; delete Navigator.prototype.canShare; }
+    addEventListener('click', (e) => { if (e.target.closest?.('[data-share]')) window.__click = performance.now(); }, true); addEventListener('pointerdown', (e) => { if (e.target.closest?.('[data-share]')) window.__down = performance.now(); }, true);
+  }, sheet);
+  const page = await ctx.newPage();
+  await page.goto(URL, { waitUntil: 'domcontentloaded', timeout: 90000 });
+  await page.waitForFunction(() => window.__coldgas?.stage, null, { timeout: 90000 });
+  await page.waitForTimeout(3000);
+  await page.evaluate(() => window.__coldgas.startRun('jump'));
+  await page.waitForTimeout(500);
+  await page.evaluate(() => window.__coldgas.fastForward());
+  await page.waitForSelector('[data-screen="results"] [data-share]', { state: 'visible', timeout: 120000 });
+  await page.waitForTimeout(1500);
+  await page.screenshot({ path: `${OUT}/${name}-results.png` });
+  const btn = page.locator('[data-screen="results"] [data-share]');
+  if (ctxOpts.hasTouch) await btn.tap(); else await btn.click();
+  let r;
+  if (sheet) { await page.waitForFunction(() => window.__shared, null, { timeout: 15000 }); r = await page.evaluate(() => ({ ms: window.__shared.t - window.__down, clickAfterDown: window.__click - window.__down, ...window.__shared, cardMs: window.__coldgas.shareCardMs(), total: window.__coldgas.S.card?.total })); }
+  else { await page.waitForSelector('[data-toast].on', { timeout: 15000 }); r = await page.evaluate(() => ({ ms: performance.now() - window.__down, clickAfterDown: window.__click - window.__down, toast: document.querySelector('[data-toast]').textContent, total: window.__coldgas.S.card?.total })); }
+  await page.screenshot({ path: `${OUT}/${name}-after-share.png` });
+  console.log(name, JSON.stringify(r));
+  await ctx.close();
+}
+await run('phone-sheet', { ...devices['iPhone 13'] }, true);
+await run('desktop-copy', { viewport: { width: 1440, height: 900 } }, false);
+await browser.close();
