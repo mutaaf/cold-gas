@@ -45,4 +45,19 @@ final class ResultsUITests: XCTestCase {
         let share = a.buttons["share"]
         if share.exists { XCTAssertGreaterThan(share.frame.minY, again.frame.maxY - 1, "Share after Fly again") }
     }
+
+    /// 0252: Share opens the system sheet with the card and the link, after a landing and after a wreck.
+    func testShareOpensTheSheetOnALandingAndAWreck() {
+        for args in [["-play", "-autopilot"], ["-play", "-script", "crash-show-carry5"]] {
+            let a = launch(["-course", "show", "-tier", "assist"] + args)
+            let share = a.buttons["share"]
+            XCTAssertTrue(share.waitForExistence(timeout: 150), "no Share on the results")
+            share.tap()
+            let sheet = a.otherElements["ActivityListView"]
+            let copy = a.buttons["Copy"]
+            XCTAssertTrue(sheet.waitForExistence(timeout: 15) || copy.exists, "the share sheet didn't open")
+            shot("share-sheet")
+            a.terminate()
+        }
+    }
 }

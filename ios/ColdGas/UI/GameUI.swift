@@ -659,6 +659,12 @@ struct ResultsView: View {
         }
         .onAppear {
             if result.drill == nil { judges.ask(result) }
+            #if DEBUG
+            // `-share-card`: the share card written to Caches/sharecard.png (the shots of 0252).
+            if Launch.args.contains("-share-card"), let png = Sharer.image(result)?.pngData() {
+                try? png.write(to: Ready.url.deletingLastPathComponent().appendingPathComponent("sharecard.png")); Ready.mark("share-card")
+            }
+            #endif
             Ready.mark("results")
             // The funnel's batch goes once the sheet has settled (0246), never while the judges' words are arriving at once.
             DispatchQueue.main.asyncAfter(deadline: .now() + 2) { Usage.shared.flush() }
@@ -776,14 +782,12 @@ struct ResultsView: View {
         }
         .buttonStyle(QuietButton()).accessibilityLabel(name)
     }
+    /// Share (0252): a picture of the moment, one line and the challenge link. Every flown run, a wreck too.
     @ViewBuilder private func share(_ card: Card, _ height: CGFloat) -> some View {
-        if let u = result.challengeURL {
-            ShareLink(item: u, message: Text(String(format: "%.1f on %@. Beat it.", card.total, COURSE_INFO.first { $0.id == result.course }?.name ?? "Cold Gas"))) {
-                Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity)
-            }
-            .buttonStyle(MarqueeButton(height: height, hollow: true))
-            .accessibilityIdentifier("share").accessibilityLabel("Share").accessibilityHint("Send a friend this jump to beat")
-            .simultaneousGesture(TapGesture().onEnded { Usage.shared.track("share_tap", ["course": .text(result.course)]) })
+        if result.drill == nil {
+            Button { Sharer.share(result) } label: { Label("Share", systemImage: "square.and.arrow.up").frame(maxWidth: .infinity) }
+                .buttonStyle(MarqueeButton(height: height, hollow: true))
+                .accessibilityIdentifier("share").accessibilityLabel("Share").accessibilityHint("A picture of this jump and a link to beat it")
         }
     }
     private func facts(_ t: Telemetry) -> some View {
