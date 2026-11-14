@@ -1,0 +1,13 @@
+{"note":"production index-d0nuuZHe.js (main 97215bc), 390x844 touch, first visit (coldgas_howto=new), no input; s = seconds after goto; physicsReady at 10.2 s. Ad/edge requests only (own-origin game assets omitted)."}
+{"s":12.9,"u":"mutaafaziz.com/ads/v1/ads.js","frame":"main"}
+{"s":12.9,"u":"mutaafaziz.com/ads/api/config","frame":"main"}
+{"s":17.6,"u":"mutaafaziz.com/ads/v1/frame.html","frame":"main (iframe slot=title, 0 px tall: no fill)"}
+{"s":17.7,"u":"static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d8730179","frame":"/ads/v1/frame.html?app=coldgas&slot=title"}
+{"s":18.0,"u":"pagead2.googlesyndication.com/pagead/js/adsbygoogle.js","frame":"/ads/v1/frame.html?app=coldgas&slot=title"}
+{"s":18.4,"u":"mutaafaziz.com/cdn-cgi/challenge-platform/scripts/jsd/main.js","frame":"about:blank"}
+{"s":18.7,"u":"googleads.g.doubleclick.net/pagead/ads","frame":"(ad iframe)"}
+{"s":19.1,"u":"ep1.adtrafficquality.google/getconfig/sodar","frame":"/ads/v1/frame.html?app=coldgas&slot=title"}
+{"s":19.1,"u":"mutaafaziz.com/cdn-cgi/rum","frame":"/ads/v1/frame.html?app=coldgas&slot=title"}
+{"s":19.8,"u":"www.google.com/recaptcha/api2/aframe","frame":"(ad iframe)"}
+{"s":23.5,"u":"ep1.adtrafficquality.google/pagead/sodar","frame":"/ads/v1/frame.html?app=coldgas&slot=title"}
+{"s":57.5,"u":"mutaafaziz.com/cdn-cgi/rum","frame":"/ads/v1/frame.html?app=coldgas&slot=title","note":"a second beacon report, from the title's frame still mounted while my sweep flew runs in the same page (render off, S.mode live). Not a player's path; see critique §2.2."}
