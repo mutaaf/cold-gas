@@ -1,7 +1,7 @@
 ---
 id: 0254
 title: One progress store on the device, and the licenses (Rookie to Legend) as pure rules read from the score card
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: engagement

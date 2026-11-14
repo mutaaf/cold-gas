@@ -1,7 +1,7 @@
 ---
 id: 0238
 title: On the web the crash calls its combos as they happen, and the card pays out Style and Wreck side by side
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: player-feel

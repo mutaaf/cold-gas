@@ -1,7 +1,7 @@
 ---
 id: 0239
 title: On the iPhone the Wreck score and its combos are shown and felt, and Roam's backlot offers Wreck beside Fly
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: platform

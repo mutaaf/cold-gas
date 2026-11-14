@@ -1,7 +1,7 @@
 ---
 id: 0240
 title: The panel becomes our own invented stunt crew, who talk about the stunt and the wreck
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity
