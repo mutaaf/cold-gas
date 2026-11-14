@@ -207,6 +207,7 @@ final class Game: ObservableObject {
         acc = 0; seen = 0; doneFor = 0; momentFor = 0; result = nil; paused = false; touched = false
         wedge.reset(); wedged = false
         haptics = HapticScore(course: course)
+        SoundFeed.shared.reset()
         let tr = Replay(live: course)
         tr.tickBase = l.run.tick
         tr.append(l.run)
@@ -267,6 +268,7 @@ final class Game: ObservableObject {
         controls.drive = fd.sampler
         if let c = Launch.value("-fd-cam"), let m = DriveCamera.Mode(rawValue: c) { fd.camera.mode = m }
         freeDrive = fd; driveSettled = false; driveImpacts = 0
+        SoundFeed.shared.reset()
         stage?.load(course: c.id, track: fd.track)
         screen = .drive
         HapticPlayer.shared.apply(HapticContinuous())
@@ -297,7 +299,7 @@ final class Game: ObservableObject {
         if let r = stage?.renderer, r.courseKey == fd.course.id, r.drive !== fd { r.drive = fd; fd.attach(device: r.device) }
         if !paused { fd.frame(dt: min(dt, 0.1)); driveClock += dt }
         stage?.renderer?.liveTime = fd.liveTime
-        Sound.shared.update(speed: DMath.dhypot(fd.car.vel.x, fd.car.vel.y, fd.car.vel.z), throttles: fd.car.throttles, grounded: fd.car.grounded > 0, phase: .run)
+        if paused { SoundFeed.shared.quiet(title: false) } else { SoundFeed.shared.drive(fd, dt: dt, grind: Double(stage?.renderer?.crash.grind ?? 0)) }
         // The hands (0223): each impact the sim records, scaled by its speed; under them, rough ground and a sliding tyre.
         let imps = fd.track.impacts
         if driveImpacts > imps.count { driveImpacts = 0 }
@@ -357,7 +359,7 @@ final class Game: ObservableObject {
         if screen == .drive { driveFrame(dt: dt); return }
         if replaying, let tr = track { replayFrame(dt: dt, slowK: slowK, tr); return }
         guard screen == .run, let l = live, let tr = track, !paused else {
-            Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: screen == .title ? .title : .quiet)
+            SoundFeed.shared.quiet(title: screen == .title)
             if paused { HapticPlayer.shared.apply(HapticContinuous()) }
             return
         }
@@ -388,7 +390,7 @@ final class Game: ObservableObject {
                 if ticked == .rest { atRest = true; break }   // the world is freed: nothing to read
                 tr.append(r)
                 if wasFlying { haptics.step(HapticFeed(run: r, input: l.input, seen: &seen)) }
-                if !wasLanded && r.phase == .landed { Sound.shared.thud(sink: r.t.sink) }
+                if !wasLanded && r.phase == .landed { Sound.shared.land(sink: r.t.sink, paved: 1, seed: r.tick); Sound.shared.cheer(r.t.sink < 4 ? 0.7 : 0.35) }
                 if !touched && r.t.touchTick >= 0 { touched = true; stage?.renderer?.cam.touchdown(sink: r.t.sink) }
                 if wasFlying && r.phase == .done { finished(l) }
             }
@@ -406,8 +408,8 @@ final class Game: ObservableObject {
             }
         }
         if !atRest && !(r.after?.done ?? false) {
-            let c = r.car, g = Double(stage?.renderer?.crash.grind ?? 0) * slowK
-            Sound.shared.update(speed: DMath.dhypot(c.vel.x, c.vel.y, c.vel.z), throttles: r.phase == .done ? Game.quiet : c.throttles, grounded: c.grounded > 0, grind: g, phase: .run)
+            let g = Double(stage?.renderer?.crash.grind ?? 0) * slowK
+            SoundFeed.shared.run(l, course: course, dt: dt * slowK, grind: g, done: r.phase == .done)
         } else { Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .run) }
         // Drawn one tick behind the newest, between it and the one before (the fraction of a tick left in `acc`).
         stage?.renderer?.liveTime = (Double(max(0, tr.ticks - 2)) + min(1, acc / DT)) / Replay.hz
@@ -443,7 +445,7 @@ final class Game: ObservableObject {
         let i = Int(replayT * Replay.hz), v = tr.velocity(at: i)
         var th = Game.quiet
         for k in 0..<10 { th[k] = Double(tr.nozzle(k, at: i)) }
-        Sound.shared.update(speed: Double(simd_length(v)), throttles: th, grounded: tr.phase(at: i) != 2, phase: .run)
+        SoundFeed.shared.plain(speed: Double(simd_length(v)), throttles: th, grounded: tr.phase(at: i) != 2)
     }
 
     /// Leaving the screen: pause the run, let go of everything (a finger lifted while we weren't listening must not stay held).

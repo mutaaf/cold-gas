@@ -1,407 +1,47 @@
-// The web's procedural sound (src/audio.js), ported to AVAudioEngine (docs/NATIVE.md §7, 0154).
-// Near-silence, on purpose: an electric whine that climbs with speed, tyre roar, wind, the hiss of each nozzle bank,
-// bodywork grinding, the touchdown thud, the crash, and one soft pad under the title. All procedural, no files.
+// The game's sound (0154 ported src/audio.js; 0250 made it a car's). All synthesised on the device, no sample files.
 //
-// API (main thread only), and the web call each one replaces:
-//   Sound.shared.update(speed:throttles:grounded:grind:phase:)   once per display frame
-//       ← updateAudio({ speed, grounded, throttles, title }) + setGrind(level) + suspendAudio()/resumeAudio().
-//         speed m/s (whine, tyres, wind saturate at 45), throttles the ten valves 0…1 ([0..3] lift bank, [4..9] side
-//         bank), grounded (tyre roar), grind 0…1 (bodywork sliding: crash.js's st.grind · slowK), phase .title (the
-//         pad, no whine) / .run / .quiet (pause, results-over-ad, a hidden app: the engine stops, as 0060's suspend).
-//   thud(sink:)                ← main.js touchdown(): thud(landingImpact(sink)). Soft is a light high tap; hard is a deep,
-//                                long thump with the suspension crunch on top (render/impact.js's mapping, mirrored).
-//   impact(speed:part:seed:)   ← render/crash.js's per-contact audio: a wheel strike > 5 m/s is thud() at its defaults;
-//                                a body HIT ≥ 1.6 m/s is crunch((v − 2)/12, glass: roof|side && v > 5, seed).
-//   crunch(severity:glass:seed:) ← crunch(severity, { glass, seed }) directly (same seeded partials as the replay).
-//   release()                  ← no web sound (the web only buzz('release')s). A 160 ms valve crack on the lift-hiss
-//                                band, so the haptic's transient has a sound under it (§6: haptics never alone).
-//   uiTap()                    ← tick() (ui.js's pad/menu click: 1.8 kHz, 40 ms).
-//   chime(_ i:)                ← chime(i) (results reveal, quest steps: E5 G5 B5 E6).
-//   setEnabled(_:) / isEnabled ← setMuted(!on) / !isMuted() (persisted, "coldgas.muted"). Off also stops the engine.
-//   volume                     ← (new) 0…1 on top of the web's master 0.8.
-//   Sound.demoIfRequested()    `-sound demo`: plays the 13 s scripted demo (title, a run, jets, a landing, a crash).
+// The graph (AVAudioEngine):
+//   bed (stereo AVAudioSourceNode: Bed.swift)  ── reverb (the zone's, on the car too) ─┐
+//   emitters ×8 (mono AVAudioSourceNodes: Emitter.swift) → environment (HRTF/pan,     ├→ submix → EQ (a phone speaker's
+//                                                 distance, the zone's reverb)       ─┘   voicing) → peak limiter → out
+// The bed carries what rides with the car and the camera: the drivetrain (motor and gear orders, inverter, regen), the
+// tyres by surface, the squeal, wind, suspension, ABS, the jets, the ambience bed, the title's music and the UI. The
+// emitters are placed in the world: impacts by material at their contact point, pass-bys with their Doppler fall,
+// birdsong round the listener, and the stunt set's crowd and PA hum (Doppler-shifted by the listener's motion).
+// Impacts and the UI duck the beds (a side-chain key the emitters publish); a peak limiter holds the master.
 //
-// Not in the web, so not here: a fan, the tank pressure (the web's sound reads neither). Spatial jets (§7) are later.
+// API (main thread only):
+//   drive(_ CarAudio)                 once a display frame in a run, a replay or a drive (SoundFeed builds it)
+//   update(speed:throttles:grounded:grind:phase:)   the old one-line form (the title, a pause, a plain replay)
+//   thud(sink:) · land(sink:paved:)   a touchdown · impact(speed:part:seed:at:) a contact from the crash's events
+//   hit(_ HitMaterial, k:, at:, seed:)   a struck world object · crunch(severity:glass:seed:) · release() · uiTap() · chime()
+//   listen(eye:view:)                 the camera, once a frame (the renderer)
+//   zone(_ Zone) · ambience(...)      reverb zones and the ambient bed (SoundFeed)
+//   setEnabled / music / effects      Settings (persisted); `isEnabled`, `volume`
+//   cpu                               the render callbacks' cost (`-sound-cpu` prints it every 5 s)
 //
-// Audio chain (as initAudio): every voice → master (0.8 · volume, 0 when off) → compressor (−16 dB, 4:1, 30 dB knee,
-// 3 ms / 250 ms, Chrome's makeup) → a soft safety ceiling at −0.4 dBFS → output. Filters are the WebAudio spec's
-// biquads (lowpass/highpass Q in dB, bandpass Q linear); ramps are setTargetAtTime one-poles and true exponential
-// ramps; oscillators are PolyBLEP saw/square, naive triangle, sine; noise is the web's LCG (16807 mod 2³¹−1).
-//
-// Real time: the render block touches only an UnsafeMutablePointer<SynthCore> (trivial types, no ARC, no arrays),
-// reads parameters from Atomic<UInt32> float bit patterns the main thread writes, and drains one-shots from a
-// single-producer/single-consumer ring (acquire/release indices). Nothing is allocated or locked in it.
-//
-// Session: .ambient (the silent switch silences it; other apps' audio keeps playing). Interruptions (a call, Siri)
-// and media-server resets restart the engine when they end; a route or hardware-rate change reconnects at the new
-// rate; the background stops the engine, the foreground brings it back if a phase wants it.
+// Session: .ambient (the silent switch silences it; other apps' audio keeps playing, and while another app is playing
+// our music steps aside: the secondary-audio hint). Interruptions, media-server resets, route and rate changes are
+// handled; the background stops the engine.
 import AVFoundation
+import ColdGasAudio
 import Synchronization
 import QuartzCore
+import simd
 #if canImport(UIKit)
 import UIKit
 #endif
 
-// MARK: - DSP (render thread)
-
-struct Biquad {
-    enum Kind: UInt8 { case lowpass, highpass, bandpass }
-    var b0 = 1.0, b1 = 0.0, b2 = 0.0, a1 = 0.0, a2 = 0.0, z1 = 0.0, z2 = 0.0
-
-    /// The WebAudio spec's coefficients (Audio EQ Cookbook; lowpass/highpass take Q in dB, bandpass linear).
-    mutating func set(_ k: Kind, _ freq: Double, _ q: Double, _ sr: Double) {
-        let f = min(max(freq, 10), sr * 0.49)
-        let w = 2 * Double.pi * f / sr, c = cos(w), s = sin(w)
-        let alpha: Double, n0: Double, n1: Double, n2: Double
-        switch k {
-        case .lowpass: alpha = s / (2 * pow(10, q / 20)); n0 = (1 - c) / 2; n1 = 1 - c; n2 = n0
-        case .highpass: alpha = s / (2 * pow(10, q / 20)); n0 = (1 + c) / 2; n1 = -(1 + c); n2 = n0
-        case .bandpass: alpha = s / (2 * max(q, 1e-4)); n0 = alpha; n1 = 0; n2 = -alpha
-        }
-        let a0 = 1 + alpha
-        b0 = n0 / a0; b1 = n1 / a0; b2 = n2 / a0; a1 = -2 * c / a0; a2 = (1 - alpha) / a0
-    }
-    @inline(__always) mutating func run(_ x: Double) -> Double {
-        let y = b0 * x + z1
-        z1 = b1 * x - a1 * y + z2
-        z2 = b2 * x - a2 * y
-        return y
-    }
+/// One frame of the car as the sound hears it (main thread → Sound.drive). Everything is read from existing state.
+struct CarAudio {
+    var speed = 0.0, motorHz = 0.0, load = 0.0, spinHz = 0.0, split = 1.0
+    var grounded = 1.0, slip = 0.0, slipLong = 0.0, rough = 0.0, abs = 0.0
+    var paved = 1.0, gravel = 0.0, grass = 0.0, wet = 0.0, concrete = 0.0, deck = 0.0
+    var lift = 0.0, side = 0.0, grind = 0.0, air = 0.0
 }
 
-/// noiseBuffer()'s generator: s = s·16807 mod (2³¹ − 1), mapped to −1…1.
-struct Lcg {
-    var s: Int64
-    @inline(__always) mutating func next() -> Double { s = (s &* 16807) % 2147483647; return Double(s) / 2147483647 * 2 - 1 }
-    @inline(__always) mutating func unit() -> Double { s = (s &* 16807) % 2147483647; return Double(s) / 2147483647 }
-}
-
-/// setTargetAtTime: v → target with time constant tau, per sample.
-struct Smooth {
-    var v: Double, target: Double, k: Double
-    init(_ v: Double, tau: Double, sr: Double) { self.v = v; target = v; k = 1 - exp(-1 / (tau * sr)) }
-    @inline(__always) mutating func step() -> Double { v += (target - v) * k; return v }
-    var silent: Bool { target == 0 && v < 1e-6 }
-}
-
-@inline(__always) private func blep(_ t: Double, _ dt: Double) -> Double {
-    if t < dt { let x = t / dt; return x + x - x * x - 1 }
-    if t > 1 - dt { let x = (t - 1) / dt; return x * x + x + x + 1 }
-    return 0
-}
-enum Wave: UInt8 { case sine, triangle, square, sawtooth, noise }
-@inline(__always) private func osc(_ w: Wave, _ p: Double, _ dt: Double) -> Double {
-    switch w {
-    case .sine: return sin(2 * Double.pi * p)
-    case .triangle: return 1 - 4 * abs(p - 0.5)
-    case .sawtooth: return 2 * p - 1 - blep(p, dt)
-    case .square:
-        var q = p + 0.5; if q >= 1 { q -= 1 }
-        return (p < 0.5 ? 1 : -1) + blep(p, dt) - blep(q, dt)
-    case .noise: return 0
-    }
-}
-
-/// One of loopNoise()'s chains: looping noise → biquad → gain.
-struct NoiseLoop {
-    var rng: Lcg, bq = Biquad(), kind: Biquad.Kind, q: Double, f: Smooth, g: Smooth, fSet = -1.0
-    init(seed: Int64, _ kind: Biquad.Kind, freq: Double, q: Double, tauG: Double, tauF: Double, sr: Double) {
-        rng = Lcg(s: seed); self.kind = kind; self.q = q
-        f = Smooth(freq, tau: tauF, sr: sr); g = Smooth(0, tau: tauG, sr: sr)
-        bq.set(kind, freq, q, sr); fSet = freq
-    }
-    @inline(__always) mutating func sample(_ sr: Double, _ retune: Bool) -> Double {
-        let gv = g.step(), fv = f.step()
-        if retune && abs(fv - fSet) > 0.5 { bq.set(kind, fv, q, sr); fSet = fv }
-        return bq.run(rng.next()) * gv
-    }
-}
-
-/// A one-shot: an oscillator or noise, an exponential glide, an optional fixed biquad, and the web's gain automation
-/// (hold g0 until `delay`, exponential to `peak` over `atk`, exponential to `gEnd` by `decEnd`, stop at `stop`).
-struct Voice {
-    var on = false, wave = Wave.sine
-    var phase = 0.0, freq = 0.0, fMul = 1.0, glideN = 0
-    var rng = Lcg(s: 1), rate = 1.0, nA = 0.0, nB = 0.0, nFrac = 0.0
-    var filtered = false, bq = Biquad()
-    var n = 0, delayN = 0, atkEndN = 0, decEndN = 0, stopN = 0
-    var g = 0.0, g0 = 0.0, peak = 0.0, gEnd = 0.0, mulA = 1.0, mulD = 1.0, out = 1.0
-
-    @inline(__always) mutating func sample(_ sr: Double) -> Double {
-        if n >= stopN { on = false; return 0 }
-        if n < delayN { g = g0 }
-        else if n < atkEndN { if n == delayN { g = g0 }; g *= mulA }
-        else if n == atkEndN { g = peak }
-        else if n < decEndN { g *= mulD }
-        else { g = gEnd }
-        if n < glideN { freq *= fMul }
-        var s: Double
-        if wave == .noise {
-            nFrac += rate
-            while nFrac >= 1 { nFrac -= 1; nA = nB; nB = rng.next() }
-            s = nA + (nB - nA) * nFrac
-        } else {
-            let dt = freq / sr
-            s = osc(wave, phase, dt)
-            phase += dt; if phase >= 1 { phase -= 1 }
-        }
-        if filtered { s = bq.run(s) }
-        n += 1
-        return s * g * out
-    }
-}
-
-/// A one-shot request from the main thread (trivial, so the ring is plain memory).
-struct SoundEvent {
-    enum Kind: UInt8 { case thud, crunch, chime, tick, release }
-    var kind = Kind.tick, a = 0.0, b = 0.0, c = 0.0, d = 0.0, seed: Int64 = 1
-}
-
-/// Parameter slots: Float bit patterns in Atomic<UInt32>s.
-enum P: Int, CaseIterable { case speed, grounded, lift, side, grind, title, master }
-
-/// Everything the render block touches. Trivial types only; lives in one UnsafeMutablePointer.
-struct SynthCore {
-    static let voiceCount = 128, ringSize = 64
-    var sr: Double
-    let params: UnsafeMutablePointer<Atomic<UInt32>>
-    let ring: UnsafeMutablePointer<SoundEvent>
-    let cursors: UnsafeMutablePointer<Atomic<Int>>      // [0] head (main writes), [1] tail (render writes)
-    let voices: UnsafeMutablePointer<Voice>
-
-    // initAudio()'s continuous graph.
-    var mPh1 = 0.0, mPh2 = 0.0, mF1: Smooth, mF2: Smooth, mBq = Biquad(), mg: Smooth
-    var padPh = (0.0, 0.0, 0.0, 0.0), padF = (55.0, 82.4, 110.0, 164.8), padBq = Biquad(), pad: Smooth
-    var tyres: NoiseLoop, wind: NoiseLoop, hissLift: NoiseLoop, hissSide: NoiseLoop, grind: NoiseLoop, grindLo: NoiseLoop
-    var master: Smooth
-    // DynamicsCompressor (threshold −16, ratio 4, knee 30, attack 3 ms, release 250 ms).
-    var compEnv = 0.0, compAtt = 0.0, compRel = 0.0, makeup = 1.0
-    var block = 0
-
-    init(sr: Double, params: UnsafeMutablePointer<Atomic<UInt32>>, ring: UnsafeMutablePointer<SoundEvent>,
-         cursors: UnsafeMutablePointer<Atomic<Int>>, voices: UnsafeMutablePointer<Voice>) {
-        self.sr = sr; self.params = params; self.ring = ring; self.cursors = cursors; self.voices = voices
-        mF1 = Smooth(60, tau: 0.06, sr: sr); mF2 = Smooth(120, tau: 0.06, sr: sr); mg = Smooth(0, tau: 0.06, sr: sr)
-        pad = Smooth(0, tau: 0.8, sr: sr)
-        tyres = NoiseLoop(seed: 1, .lowpass, freq: 300, q: 0.7, tauG: 0.03, tauF: 0.06, sr: sr)
-        wind = NoiseLoop(seed: 7919, .bandpass, freq: 900, q: 0.5, tauG: 0.06, tauF: 0.06, sr: sr)
-        hissLift = NoiseLoop(seed: 104729, .bandpass, freq: 3800, q: 0.9, tauG: 0.02, tauF: 0.06, sr: sr)
-        hissSide = NoiseLoop(seed: 1299709, .bandpass, freq: 5600, q: 1.4, tauG: 0.02, tauF: 0.06, sr: sr)
-        grind = NoiseLoop(seed: 15485863, .bandpass, freq: 2300, q: 3.5, tauG: 0.03, tauF: 0.05, sr: sr)
-        grindLo = NoiseLoop(seed: 32452843, .bandpass, freq: 520, q: 1.2, tauG: 0.03, tauF: 0.06, sr: sr)
-        master = Smooth(0, tau: 0.01, sr: sr)
-        // The pad's detune: ±4 cents, fixed per launch as Math.random() is.
-        var r = Lcg(s: 4242)
-        padF = (55 * pow(2, r.next() * 4 / 1200), 82.4 * pow(2, r.next() * 4 / 1200),
-                110 * pow(2, r.next() * 4 / 1200), 164.8 * pow(2, r.next() * 4 / 1200))
-        reconfigure(sr: sr)
-    }
-
-    /// The sample rate changed (a route change): filters and time constants follow. Called while the engine is stopped.
-    mutating func reconfigure(sr: Double) {
-        self.sr = sr
-        mBq.set(.lowpass, 900, 3, sr); padBq.set(.lowpass, 700, 1, sr)
-        mF1 = Smooth(mF1.v, tau: 0.06, sr: sr); mF2 = Smooth(mF2.v, tau: 0.06, sr: sr); mg = Smooth(mg.v, tau: 0.06, sr: sr)
-        pad = Smooth(pad.v, tau: 0.8, sr: sr); master = Smooth(master.v, tau: 0.01, sr: sr)
-        func re(_ l: inout NoiseLoop, _ tg: Double, _ tf: Double) {
-            l.g = Smooth(l.g.v, tau: tg, sr: sr); l.f = Smooth(l.f.v, tau: tf, sr: sr); l.bq.set(l.kind, l.f.v, l.q, sr); l.fSet = l.f.v
-        }
-        re(&tyres, 0.03, 0.06); re(&wind, 0.06, 0.06); re(&hissLift, 0.02, 0.06); re(&hissSide, 0.02, 0.06)
-        re(&grind, 0.03, 0.05); re(&grindLo, 0.03, 0.06)
-        compAtt = 1 - exp(-1 / (0.003 * sr)); compRel = 1 - exp(-1 / (0.25 * sr))
-        // Chrome's makeup gain: (1 / gain at 0 dBFS)^0.6.
-        makeup = pow(1 / pow(10, SynthCore.reduction(0) / 20), 0.6)
-        for i in 0..<SynthCore.voiceCount { voices[i].on = false }
-    }
-
-    /// The compressor's static curve: gain change in dB for an input level in dB (knee from threshold to +30 dB).
-    @inline(__always) static func reduction(_ x: Double) -> Double {
-        let t = -16.0, w = 30.0, r = 4.0
-        if x <= t { return 0 }
-        if x < t + w { let d = x - t; return (1 / r - 1) * d * d / (2 * w) }
-        return (1 / r - 1) * w / 2 + (x - t - w) * (1 / r - 1)
-    }
-
-    @inline(__always) func param(_ p: P) -> Double { Double(Float(bitPattern: params[p.rawValue].load(ordering: .relaxed))) }
-
-    mutating func pullParams() {
-        let s = min(1, max(0, param(.speed) / 45))
-        let title = param(.title) > 0.5, grounded = param(.grounded) > 0.5
-        mF1.target = 60 + s * 520; mF2.target = 120 + s * 1040
-        mg.target = title ? 0 : 0.03 + s * 0.08
-        tyres.g.target = grounded ? s * 0.22 : 0
-        wind.g.target = s * s * 0.18; wind.f.target = 500 + s * 1400
-        hissLift.g.target = min(0.55, param(.lift) * 0.15)
-        hissSide.g.target = min(0.35, param(.side) * 0.12)
-        pad.target = title ? 0.05 : 0
-        let k = min(1, max(0, param(.grind)))
-        grind.g.target = k * 0.32; grind.f.target = 1600 + k * 2200; grindLo.g.target = k * 0.28
-        master.target = param(.master)
-    }
-
-    mutating func drainEvents() {
-        var t = cursors[1].load(ordering: .relaxed)
-        let h = cursors[0].load(ordering: .acquiring)
-        while t < h {
-            let e = ring[t & (SynthCore.ringSize - 1)]
-            switch e.kind {
-            case .thud: startThud(hz: e.a, gain: e.b, decay: e.c, crunch: e.d)
-            case .crunch: startCrunch(e.a, glass: e.b > 0.5, seed: e.seed)
-            case .chime: startChime(Int(e.a))
-            case .tick: startTick()
-            case .release: startRelease()
-            }
-            t += 1
-        }
-        cursors[1].store(t, ordering: .releasing)
-    }
-
-    // MARK: one-shots (each mirrors its audio.js function)
-
-    mutating func spawn(_ wave: Wave, f0: Double = 0, f1: Double = 0, glide: Double = 0,
-                        filter: Biquad.Kind? = nil, ff: Double = 0, fq: Double = 1,
-                        delay: Double = 0, g0: Double, atk: Double = 0, peak: Double, decEnd: Double, gEnd: Double,
-                        stop: Double, out: Double = 1, rate: Double = 1, seed: Int64 = 1) {
-        var slot = -1
-        for i in 0..<SynthCore.voiceCount where !voices[i].on { slot = i; break }
-        if slot < 0 { return }
-        var v = Voice()
-        v.on = true; v.wave = wave; v.freq = f0
-        v.glideN = Int(glide * sr); v.fMul = v.glideN > 0 && f0 > 0 ? pow(f1 / f0, 1 / Double(v.glideN)) : 1
-        v.rng = Lcg(s: max(1, seed % 2147483647)); v.rate = rate
-        if let k = filter { v.filtered = true; v.bq.set(k, ff, fq, sr) }
-        v.delayN = Int(delay * sr); v.atkEndN = v.delayN + Int(atk * sr); v.decEndN = max(v.atkEndN + 1, Int(decEnd * sr))
-        v.stopN = Int(stop * sr)
-        v.g0 = g0; v.peak = peak; v.gEnd = gEnd; v.g = g0; v.out = out
-        let aN = v.atkEndN - v.delayN, dN = v.decEndN - v.atkEndN
-        v.mulA = aN > 0 ? pow(peak / g0, 1 / Double(aN)) : 1
-        v.mulD = dN > 0 ? pow(gEnd / peak, 1 / Double(dN)) : 1
-        voices[slot] = v
-    }
-
-    /// thud({ thudHz, thudGain, thudDecay, crunch }).
-    mutating func startThud(hz: Double, gain: Double, decay: Double, crunch: Double) {
-        spawn(.sine, f0: hz, f1: max(30, hz * 0.33), glide: decay * 0.6,
-              g0: min(1, gain), peak: min(1, gain), decEnd: decay, gEnd: 0.001, stop: decay + 0.05)
-        if crunch > 0 {
-            spawn(.noise, filter: .bandpass, ff: 420, fq: 0.8, g0: 0.5 * crunch, peak: 0.5 * crunch, decEnd: 0.2, gEnd: 0.001,
-                  stop: 0.25, seed: 1)
-        }
-    }
-
-    /// crunch(severity, { glass, seed }): thump, crack, folding metal, and when glass goes, the pings.
-    mutating func startCrunch(_ severity: Double, glass: Bool, seed: Int64) {
-        let k = min(1, max(0, severity))
-        var r = Lcg(s: (seed &* 16807) % 2147483647); if r.s <= 0 { r.s = 1 }
-        let out = 0.35 + 0.65 * k
-        // Thump: the mass of the car stopping.
-        spawn(.sine, f0: 95 + 40 * k, f1: 32, glide: 0.3, g0: 0.9, peak: 0.9, decEnd: 0.45 + 0.3 * k, gEnd: 0.001, stop: 0.8, out: out)
-        // Crack: noise, low-passed less the harder the hit, at 0.7–1.2× playback.
-        let rate = 0.7 + r.unit() * 0.5
-        let skip = Int64(r.unit() * 0.5 * 48000) + 1
-        spawn(.noise, filter: .lowpass, ff: 900 + 5200 * k, fq: 0.8, g0: 0.75, peak: 0.75, decEnd: 0.18 + 0.35 * k, gEnd: 0.001,
-              stop: 0.7, out: out, rate: rate, seed: skip)
-        // Metal folding: inharmonic partials, each its own short decay.
-        let parts = 3 + Int((3 * k).rounded())
-        for i in 0..<parts {
-            let f = 140 + r.unit() * 900 * (0.6 + k)
-            let f1 = f * (0.55 + r.unit() * 0.3)
-            let d = 0.06 + r.unit() * 0.3 * (0.4 + k)
-            let atk = 0.004 + r.unit() * 0.03
-            spawn(i % 2 == 1 ? .triangle : .square, f0: f, f1: f1, glide: 0.4, filter: .bandpass, ff: f * 1.5, fq: 6,
-                  g0: 0.0001, atk: atk, peak: 0.5, decEnd: d + 0.05, gEnd: 0.0001, stop: d + 0.1, out: out)
-        }
-        if glass {
-            spawn(.noise, filter: .highpass, ff: 3500, fq: 1, g0: 0.6, peak: 0.6, decEnd: 0.12, gEnd: 0.001, stop: 0.15, out: out,
-                  seed: Int64(r.unit() * 0.5 * 48000) + 1)
-            let pings = Int((10 + 8 * k).rounded(.up))
-            for _ in 0..<pings {
-                let f = 2800 + r.unit() * 5200
-                let at = 0.03 + r.unit() * (0.35 + 0.4 * k)
-                let pk = 0.07 + r.unit() * 0.08
-                let len = 0.05 + r.unit() * 0.12
-                spawn(.sine, f0: f, f1: f, delay: at, g0: 0.0001, atk: 0.003, peak: pk, decEnd: at + len, gEnd: 0.0001,
-                      stop: at + 0.2, out: out)
-            }
-        }
-    }
-
-    mutating func startChime(_ i: Int) {
-        let notes = (659.25, 783.99, 987.77, 1318.5)
-        let j = ((i % 4) + 4) % 4
-        let f = j == 0 ? notes.0 : j == 1 ? notes.1 : j == 2 ? notes.2 : notes.3
-        spawn(.sine, f0: f, f1: f, g0: 0.0001, atk: 0.01, peak: 0.12, decEnd: 1.1, gEnd: 0.0001, stop: 1.2)
-    }
-    mutating func startTick() {
-        spawn(.sine, f0: 1800, f1: 1800, g0: 0.05, peak: 0.05, decEnd: 0.04, gEnd: 0.0001, stop: 0.05)
-    }
-    /// Native only: the valves cracking open (the hiss band, a fast attack, 160 ms), and a low puff under it.
-    mutating func startRelease() {
-        spawn(.noise, filter: .bandpass, ff: 3800, fq: 0.9, g0: 0.0001, atk: 0.004, peak: 0.35, decEnd: 0.16, gEnd: 0.0001, stop: 0.18, seed: 99991)
-        spawn(.noise, filter: .bandpass, ff: 1100, fq: 0.7, g0: 0.0001, atk: 0.006, peak: 0.18, decEnd: 0.11, gEnd: 0.0001, stop: 0.13, seed: 7)
-    }
-
-    // MARK: render
-
-    mutating func render(_ out: UnsafeMutablePointer<Float>, _ frames: Int) {
-        pullParams()
-        drainEvents()
-        let sr = self.sr
-        let motorOn = !(mg.silent), padOn = !(pad.silent)
-        for i in 0..<frames {
-            let retune = (block & 31) == 0
-            block &+= 1
-            var y = 0.0
-            if motorOn {
-                let f1 = mF1.step(), f2 = mF2.step(), g = mg.step()
-                let d1 = f1 / sr, d2 = f2 / sr
-                let x = osc(.sawtooth, mPh1, d1) + osc(.sine, mPh2, d2)
-                mPh1 += d1; if mPh1 >= 1 { mPh1 -= 1 }
-                mPh2 += d2; if mPh2 >= 1 { mPh2 -= 1 }
-                y += mBq.run(x) * g
-            } else { _ = mF1.step(); _ = mF2.step(); _ = mg.step() }
-            if padOn {
-                let g = pad.step()
-                let x = osc(.triangle, padPh.0, 0) + osc(.triangle, padPh.1, 0) + osc(.triangle, padPh.2, 0) + osc(.triangle, padPh.3, 0)
-                padPh.0 += padF.0 / sr; if padPh.0 >= 1 { padPh.0 -= 1 }
-                padPh.1 += padF.1 / sr; if padPh.1 >= 1 { padPh.1 -= 1 }
-                padPh.2 += padF.2 / sr; if padPh.2 >= 1 { padPh.2 -= 1 }
-                padPh.3 += padF.3 / sr; if padPh.3 >= 1 { padPh.3 -= 1 }
-                y += padBq.run(x) * g
-            } else { _ = pad.step() }
-            if !tyres.g.silent { y += tyres.sample(sr, retune) } else { _ = tyres.f.step() }
-            if !wind.g.silent { y += wind.sample(sr, retune) } else { _ = wind.f.step() }
-            if !hissLift.g.silent { y += hissLift.sample(sr, retune) }
-            if !hissSide.g.silent { y += hissSide.sample(sr, retune) }
-            if !grind.g.silent { y += grind.sample(sr, retune) } else { _ = grind.f.step() }
-            if !grindLo.g.silent { y += grindLo.sample(sr, retune) }
-            for v in 0..<SynthCore.voiceCount where voices[v].on { y += voices[v].sample(sr) }
-
-            y *= master.step()
-            // Compressor: peak detector on the gain change, then Chrome's makeup.
-            let lvl = 20 * log10(abs(y) + 1e-9)
-            let want = SynthCore.reduction(lvl)
-            compEnv += (want - compEnv) * (want < compEnv ? compAtt : compRel)
-            y *= pow(10, compEnv / 20) * makeup
-            // Safety ceiling at 0.955 (−0.4 dBFS): soft above 0.9, never past it.
-            let a = abs(y)
-            if a > 0.9 { y = (y < 0 ? -1 : 1) * (0.9 + 0.055 * tanh((a - 0.9) / 0.055)) }
-            if !y.isFinite { y = 0; resetFilters() }
-            out[i] = Float(y)
-        }
-    }
-
-    mutating func resetFilters() {
-        mBq.z1 = 0; mBq.z2 = 0; padBq.z1 = 0; padBq.z2 = 0
-        tyres.bq.z1 = 0; tyres.bq.z2 = 0; wind.bq.z1 = 0; wind.bq.z2 = 0
-        hissLift.bq.z1 = 0; hissLift.bq.z2 = 0; hissSide.bq.z1 = 0; hissSide.bq.z2 = 0
-        grind.bq.z1 = 0; grind.bq.z2 = 0; grindLo.bq.z1 = 0; grindLo.bq.z2 = 0
-        compEnv = 0
-        for v in 0..<SynthCore.voiceCount { voices[v].on = false }
-    }
-}
-
-// MARK: - The player (main thread)
+/// Where the listener is, for the reverb.
+enum Zone: Int { case open, forest, canyon, set, under }
 
 final class Sound {
     enum Phase { case title, run, quiet }
@@ -409,199 +49,392 @@ final class Sound {
     enum Part { case wheel, nose, tail, roof, side, floor }
 
     static let shared = Sound()
+    static let emitterCount = 8
 
     private(set) var isEnabled: Bool
-    var volume: Double = 1 { didSet { volume = min(1, max(0, volume)); pushMaster() } }
+    var volume: Double = 1 { didSet { volume = min(1, max(0, volume)); pushGains() } }
+    /// Settings' sliders (0…1, persisted).
+    var music: Double { didSet { music = min(1, max(0, music)); if !offline { UserDefaults.standard.set(music, forKey: "coldgas.music") }; pushGains() } }
+    var effects: Double { didSet { effects = min(1, max(0, effects)); if !offline { UserDefaults.standard.set(effects, forKey: "coldgas.effects") }; pushGains() } }
     private(set) var phase: Phase = .quiet
+    private(set) var zone: Zone = .open
     var log = false
 
     private var engine = AVAudioEngine()
-    private var source: AVAudioSourceNode?
-    private let core: UnsafeMutablePointer<SynthCore>
-    private let params: UnsafeMutablePointer<Atomic<UInt32>>
-    private let ring: UnsafeMutablePointer<SoundEvent>
-    private let cursors: UnsafeMutablePointer<Atomic<Int>>
-    private let voices: UnsafeMutablePointer<Voice>
+    private var bedNode: AVAudioSourceNode?
+    private var emitNodes: [AVAudioSourceNode] = []
+    private var env = AVAudioEnvironmentNode()
+    private var bedVerb = AVAudioUnitReverb()
+    private var submix = AVAudioMixerNode()
+    private var eq = AVAudioUnitEQ(numberOfBands: 3)
+    private var limiter: AVAudioUnitEffect
+    private let bed: UnsafeMutablePointer<BedCore>
+    private let emitters: UnsafeMutablePointer<EmitterCore>
+    private let bedParams = ParamBlock(count: BP.allCases.count)
+    private let bedRing = EventRing()
+    private let emitParams: [ParamBlock]
+    private let emitRings: [EventRing]
+    private let keys = ParamBlock(count: Sound.emitterCount)
+    let meter = RenderMeter()
     private let offline: Bool
-    private var foreground = true, interrupted = false
+    private var foreground = true, interrupted = false, otherAudio = false, speaker = false
     private var observers: [NSObjectProtocol] = []
+    private var emitUsed = [Double](repeating: 0, count: Sound.emitterCount)
+    private var lastLand = -10.0
+    private var listener = SIMD3<Float>(0, 0, 0), listenerVel = SIMD3<Float>(0, 0, 0)
 
-    /// The app's player. `offlineRate` (tests, the harness) renders by hand instead: no session, no hardware.
+    /// The app's player. `offlineRate` (the bench, the harness) renders by hand: no session, no hardware.
     init(offlineRate: Double? = nil) {
         offline = offlineRate != nil
-        isEnabled = offline ? true : !UserDefaults.standard.bool(forKey: "coldgas.muted")
-        params = .allocate(capacity: P.allCases.count)
-        for i in 0..<P.allCases.count { (params + i).initialize(to: Atomic<UInt32>(0)) }
-        ring = .allocate(capacity: SynthCore.ringSize); ring.initialize(repeating: SoundEvent(), count: SynthCore.ringSize)
-        cursors = .allocate(capacity: 2)
-        cursors.initialize(to: Atomic<Int>(0)); (cursors + 1).initialize(to: Atomic<Int>(0))
-        voices = .allocate(capacity: SynthCore.voiceCount); voices.initialize(repeating: Voice(), count: SynthCore.voiceCount)
+        let d = UserDefaults.standard
+        isEnabled = offline ? true : !d.bool(forKey: "coldgas.muted")
+        music = offline ? 1 : (d.object(forKey: "coldgas.music") as? Double ?? 1)
+        effects = offline ? 1 : (d.object(forKey: "coldgas.effects") as? Double ?? 1)
+        emitParams = (0..<Sound.emitterCount).map { _ in ParamBlock(count: EP.allCases.count) }
+        emitRings = (0..<Sound.emitterCount).map { _ in EventRing() }
+        limiter = Sound.makeLimiter()
         #if os(iOS)
         if !offline { Sound.configureSession() }
         #endif
         let rate = offlineRate ?? Sound.hardwareRate(engine)
-        core = .allocate(capacity: 1)
-        core.initialize(to: SynthCore(sr: rate, params: params, ring: ring, cursors: cursors, voices: voices))
-        pushMaster()
+        bed = .allocate(capacity: 1)
+        bed.initialize(to: BedCore(sr: rate, params: bedParams, ring: bedRing, keys: keys, meter: meter))
+        emitters = .allocate(capacity: Sound.emitterCount)
+        for i in 0..<Sound.emitterCount {
+            (emitters + i).initialize(to: EmitterCore(sr: rate, params: emitParams[i], ring: emitRings[i], keys: keys, keySlot: i, meter: meter))
+            emitParams[i].set(EP.doppler.rawValue, 1)
+        }
+        bedParams.set(BP.split.rawValue, 1); bedParams.set(BP.paved.rawValue, 1); bedParams.set(BP.grounded.rawValue, 1)
+        pushGains()
+        #if os(iOS)
+        if !offline { otherAudio = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint; pushGains() }
+        #endif
         if let r = offlineRate {
-            connect(rate: r)
-            let fmt = AVAudioFormat(standardFormatWithSampleRate: r, channels: 1)!
+            let fmt = AVAudioFormat(standardFormatWithSampleRate: r, channels: 2)!
             try? engine.enableManualRenderingMode(.offline, format: fmt, maximumFrameCount: 4096)
+            connect(rate: r)
             try? engine.start()
         } else {
             connect(rate: rate)
             observe()
+            routeChanged()
         }
     }
     deinit {
         observers.forEach { NotificationCenter.default.removeObserver($0) }
         engine.stop()
-        core.deinitialize(count: 1); core.deallocate()
-        params.deinitialize(count: P.allCases.count); params.deallocate()
-        cursors.deinitialize(count: 2); cursors.deallocate()
-        ring.deallocate(); voices.deallocate()
+        bed.pointee.free(); bed.deinitialize(count: 1); bed.deallocate()
+        for i in 0..<Sound.emitterCount { emitters[i].free() }
+        emitters.deinitialize(count: Sound.emitterCount); emitters.deallocate()
+        bedParams.free(); bedRing.free(); keys.free(); meter.free()
+        emitParams.forEach { $0.free() }; emitRings.forEach { $0.free() }
     }
 
-    // MARK: API
+    // MARK: - API: continuous
 
-    /// Once per display frame. `throttles` is the ten valves (0…1): [0..3] the lift bank, [4..9] the side bank.
+    /// The car this frame (a run, a replay, a drive).
+    func drive(_ c: CarAudio, phase: Phase = .run) {
+        let p = bedParams
+        p.set(BP.speed.rawValue, c.speed); p.set(BP.motorHz.rawValue, c.motorHz); p.set(BP.load.rawValue, c.load)
+        p.set(BP.spinHz.rawValue, c.spinHz); p.set(BP.split.rawValue, c.split); p.set(BP.grounded.rawValue, c.grounded)
+        p.set(BP.slip.rawValue, c.slip); p.set(BP.slipLong.rawValue, c.slipLong); p.set(BP.rough.rawValue, c.rough)
+        p.set(BP.abs.rawValue, c.abs); p.set(BP.paved.rawValue, c.paved); p.set(BP.gravel.rawValue, c.gravel)
+        p.set(BP.grass.rawValue, c.grass); p.set(BP.wet.rawValue, c.wet); p.set(BP.concrete.rawValue, c.concrete)
+        p.set(BP.deck.rawValue, c.deck); p.set(BP.lift.rawValue, c.lift); p.set(BP.side.rawValue, c.side)
+        p.set(BP.grind.rawValue, c.grind); p.set(BP.air.rawValue, c.air)
+        p.set(BP.title.rawValue, phase == .title ? 1 : 0)
+        setPhase(phase)
+    }
+
+    /// The old form: speed alone stands for the drivetrain (the title, a pause, a plain replay). `throttles` is the ten
+    /// valves (0…1): [0..3] the lift bank, [4..9] the side bank.
     func update(speed: Double, throttles: [Double], grounded: Bool, grind: Double = 0, phase: Phase = .run) {
         var lift = 0.0, side = 0.0
-        let n = throttles.count
-        var i = 0
-        while i < n { if i < 4 { lift += throttles[i] } else { side += throttles[i] }; i += 1 }
+        for i in 0..<throttles.count { if i < 4 { lift += throttles[i] } else { side += throttles[i] } }
         update(speed: speed, lift: lift, side: side, grounded: grounded, grind: grind, phase: phase)
     }
-    /// The same with the banks already summed (lift 0…4, side 0…6).
     func update(speed: Double, lift: Double, side: Double, grounded: Bool, grind: Double = 0, phase: Phase = .run) {
-        set(.speed, speed); set(.lift, lift); set(.side, side); set(.grind, grind)
-        set(.grounded, grounded ? 1 : 0); set(.title, phase == .title ? 1 : 0)
-        if phase != self.phase { self.phase = phase; applyRunning() }
+        var c = CarAudio()
+        c.speed = speed; c.lift = lift; c.side = side; c.grind = grind; c.grounded = grounded ? 1 : 0
+        c.spinHz = speed / (2 * .pi * 0.36)
+        c.motorHz = c.spinHz * 9
+        c.load = speed > 0.5 ? 0.25 : 0
+        c.concrete = 0
+        drive(c, phase: phase)
     }
 
-    /// A touchdown at `sink` m/s: render/impact.js's landingImpact() sound, then thud().
-    func thud(sink: Double) {
-        let v = sink > 0 ? sink : 0, r = v / 5, s = r >= 1 ? 1 : r * r
-        thud(hz: 150 - 95 * s, gain: 0.12 + 0.78 * s, decay: 0.18 + 0.42 * s, crunch: s > 0.3 ? (s - 0.3) / 0.7 : 0)
+    /// The ambient bed: wind in the trees (0…1), crickets (0…1), a breeze (0…1); and the set's crowd (0…1, on emitter 0).
+    func ambience(trees: Double, crickets: Double, breeze: Double, crowd: Double) {
+        bedParams.set(BP.trees.rawValue, trees); bedParams.set(BP.crickets.rawValue, crickets); bedParams.set(BP.breeze.rawValue, breeze)
+        emitParams[0].set(EP.crowd.rawValue, crowd)
+    }
+    /// The set's crowd stands at `at` (render space).
+    func placeCrowd(at p: SIMD3<Float>) {
+        guard emitNodes.count > 0 else { return }
+        emitNodes[0].position = AVAudio3DPoint(x: p.x, y: p.y, z: p.z)
+        // Doppler: the listener's speed toward it raises the pitch.
+        let d = p - listener, l = simd_length(d)
+        let vr = l > 1 ? simd_dot(listenerVel, d / l) : 0
+        emitParams[0].set(EP.doppler.rawValue, Double(343 / max(200, 343 - vr)))
+    }
+
+    /// The camera (render space), once a frame: the listener, and the source of the listener's motion.
+    func listen(eye: SIMD3<Float>, view: simd_float4x4, dt: Double = 1.0 / 60) {
+        guard !offline || emitNodes.count > 0 else { return }
+        let fwd = SIMD3<Float>(-view.columns.0.z, -view.columns.1.z, -view.columns.2.z)
+        let up = SIMD3<Float>(view.columns.0.y, view.columns.1.y, view.columns.2.y)
+        if dt > 0 {
+            let v = (eye - listener) / Float(dt)
+            // A camera cut (or the drive's origin moving) isn't motion.
+            listenerVel = simd_length(v) < 120 ? listenerVel + (v - listenerVel) * 0.2 : listenerVel
+        }
+        listener = eye
+        env.listenerPosition = AVAudio3DPoint(x: eye.x, y: eye.y, z: eye.z)
+        env.listenerVectorOrientation = AVAudio3DVectorOrientation(forward: AVAudio3DVector(x: fwd.x, y: fwd.y, z: fwd.z), up: AVAudio3DVector(x: up.x, y: up.y, z: up.z))
+    }
+    var listenerPos: SIMD3<Float> { listener }
+
+    /// A reverb zone: open air, among trees, a canyon's walls, the stunt set, under a deck or a bridge.
+    func zone(_ z: Zone) {
+        guard z != zone || emitNodes.isEmpty else { return }
+        zone = z
+        let preset: AVAudioUnitReverbPreset, blend: Float, wet: Float, level: Float
+        switch z {
+        case .open: preset = .mediumHall; blend = 0.06; wet = 0; level = -14
+        case .forest: preset = .mediumRoom; blend = 0.18; wet = 6; level = -8
+        case .canyon: preset = .largeHall2; blend = 0.38; wet = 16; level = -3
+        case .set: preset = .largeHall; blend = 0.22; wet = 8; level = -6
+        case .under: preset = .largeChamber; blend = 0.5; wet = 22; level = -2
+        }
+        env.reverbParameters.enable = true
+        env.reverbParameters.loadFactoryReverbPreset(preset)
+        env.reverbParameters.level = level
+        for (i, n) in emitNodes.enumerated() where i > 0 { n.reverbBlend = blend }
+        if !emitNodes.isEmpty { emitNodes[0].reverbBlend = max(0.25, blend) }
+        bedVerb.loadFactoryPreset(z == .under ? .mediumChamber : z == .canyon ? .largeHall : .mediumRoom)
+        bedVerb.wetDryMix = wet
+        bedVerb.bypass = wet == 0
+        if log { print("SOUND zone \(z)") }
+    }
+
+    // MARK: - API: one-shots
+
+    /// A touchdown at `sink` m/s (render/impact.js's landingImpact()).
+    func thud(sink: Double) { land(sink: sink, paved: 1) }
+    /// A touchdown at `sink` m/s on paving (`paved` 1) or not: the body, the suspension, a tyre's bark, a rattle.
+    func land(sink: Double, paved: Double, seed: Int = 1) {
+        lastLand = CACurrentMediaTime()
+        postBed(SoundEvent(kind: BedEvent.land.rawValue, a: sink, b: paved, seed: Int64(seed)))
     }
     /// thud({ thudHz, thudGain, thudDecay, crunch }) as the web takes it (defaults as audio.js's).
     func thud(hz: Double = 110, gain: Double = 0.45, decay: Double = 0.4, crunch: Double = 0) {
-        post(SoundEvent(kind: .thud, a: hz, b: gain, c: decay, d: crunch))
+        postBed(SoundEvent(kind: BedEvent.thud.rawValue, a: hz, b: gain, c: decay, d: crunch))
     }
-    /// One contact at `speed` m/s, as render/crash.js sounds it. `seed` makes a replayed impact sound the same.
-    func impact(speed v: Double, part: Part, seed: Int = 1) {
-        if part == .wheel { if v > 5 { thud() }; return }
+    /// One contact at `speed` m/s, as render/crash.js sounds it. `seed` makes a replayed impact sound the same. `at`
+    /// (render space) places a body hit in the world; `struck` says it hit another car rather than the ground.
+    func impact(speed v: Double, part: Part, seed: Int = 1, at: SIMD3<Float>? = nil, struck: Bool = false) {
+        if part == .wheel {
+            // A landing already said it.
+            if v > 5 && CACurrentMediaTime() - lastLand > 0.2 { thud() }
+            return
+        }
         if v < 1.6 { return }
-        crunch(severity: min(1, max(0, (v - 2) / 12)), glass: (part == .roof || part == .side) && v > 5, seed: seed)
+        let sev = min(1, max(0, (v - 2) / 12)), glass = (part == .roof || part == .side) && v > 5
+        guard let p = at else { crunch(severity: sev, glass: glass, seed: seed); return }
+        // The car's own crunch rides with it; what it struck answers from where it was struck.
+        crunch(severity: sev * 0.75, glass: glass, seed: seed)
+        hit(struck ? .body : .stone, k: sev, at: p, seed: seed &+ 7)
+    }
+    /// The car's body striking something at `at` (render space), from the crash's HIT events: the car's own crunch, and
+    /// what it struck answering in its material (another car's shell, or the world's thing there: a trunk, a rail…).
+    func bodyHit(severity: Double, glass: Bool, seed: Int, at p: SIMD3<Float>, struck: Bool) {
+        crunch(severity: severity * 0.8, glass: glass, seed: seed)
+        let m: HitMaterial = struck ? .body : SoundFeed.shared.material(at: p)
+        hit(m, k: severity, at: p, seed: seed &+ 7)
     }
     func crunch(severity: Double, glass: Bool = false, seed: Int = 1) {
-        post(SoundEvent(kind: .crunch, a: severity, b: glass ? 1 : 0, seed: Int64(truncatingIfNeeded: seed)))
+        postBed(SoundEvent(kind: BedEvent.crunch.rawValue, a: severity, b: glass ? 1 : 0, seed: Int64(truncatingIfNeeded: seed)))
     }
-    func release() { post(SoundEvent(kind: .release)) }
-    func uiTap() { post(SoundEvent(kind: .tick)) }
-    func chime(_ i: Int = 0) { post(SoundEvent(kind: .chime, a: Double(i))) }
+    /// A world object struck at `at` (render space), `k` 0…1 by impulse.
+    func hit(_ m: HitMaterial, k: Double, at: SIMD3<Float>, seed: Int = 1, glass: Bool = false) {
+        postEmitter(at: at, SoundEvent(kind: EmitterEvent.impact.rawValue, a: Double(m.rawValue), b: k, c: glass ? 1 : 0, seed: Int64(truncatingIfNeeded: seed)), hold: 1.2)
+    }
+    /// Passing a thing at `speed` m/s, `dist` m from it (kind: 0 trunk, 1 post/sign, 2 rail, 3 a parked car).
+    func passby(kind: Int, at: SIMD3<Float>, speed: Double, dist: Double, seed: Int) {
+        postEmitter(at: at, SoundEvent(kind: EmitterEvent.passby.rawValue, a: Double(kind), b: speed, c: dist, seed: Int64(seed)), hold: 0.6)
+    }
+    /// A bird calls from `at` (kind: 0 songbird, 1 gull, 2 a dusk chip).
+    func bird(kind: Int, at: SIMD3<Float>, seed: Int) {
+        postEmitter(at: at, SoundEvent(kind: EmitterEvent.bird.rawValue, a: Double(kind), seed: Int64(seed)), hold: 1.0)
+    }
+    /// The set's crowd answers a landing (0…1).
+    func cheer(_ k: Double) { postEmitterIndex(0, SoundEvent(kind: EmitterEvent.cheer.rawValue, a: k)) }
+
+    func release() { postBed(SoundEvent(kind: BedEvent.release.rawValue)) }
+    /// A jet bank opening (bank 0 lift, 1 side) with strength `k` 0…1.
+    func burst(bank: Int, k: Double, seed: Int) { postBed(SoundEvent(kind: BedEvent.burst.rawValue, a: Double(bank), b: k, seed: Int64(seed))) }
+    func valveClose(bank: Int, k: Double, seed: Int) { postBed(SoundEvent(kind: BedEvent.close.rawValue, a: Double(bank), b: k, seed: Int64(seed))) }
+    func airborne(speed: Double) { postBed(SoundEvent(kind: BedEvent.airStart.rawValue, a: speed)) }
+    /// A corner's suspension over a bump (k 0…1; pan −1 left … +1 right).
+    func thump(_ k: Double, pan: Double, seed: Int) { postBed(SoundEvent(kind: BedEvent.thump.rawValue, a: k, b: pan, seed: Int64(seed))) }
+    func chirp(_ k: Double) { postBed(SoundEvent(kind: BedEvent.chirp.rawValue, a: k)) }
+    func splash(_ k: Double, seed: Int) { postBed(SoundEvent(kind: BedEvent.splash.rawValue, a: k, seed: Int64(seed))) }
+    func uiTap() { postBed(SoundEvent(kind: BedEvent.tick.rawValue)) }
+    func chime(_ i: Int = 0) { postBed(SoundEvent(kind: BedEvent.chime.rawValue, a: Double(i))) }
 
     func setEnabled(_ on: Bool) {
         isEnabled = on
         if !offline { UserDefaults.standard.set(!on, forKey: "coldgas.muted") }
-        pushMaster(); applyRunning()
+        pushGains(); applyRunning()
     }
 
-    // MARK: offline rendering (the harness, tests)
+    // MARK: - CPU
 
-    /// Renders `frames` mono samples (manual rendering mode only).
+    /// The render callbacks' cost: the share of one core they took over the audio rendered since the last call, and the
+    /// worst block in µs. (Apple's environment node, reverb and limiter run outside these callbacks.)
+    func cpu(reset: Bool = true) -> (percent: Double, worstUs: Double, blocks: UInt64) {
+        let m = meter.read()
+        var tb = mach_timebase_info_data_t(); mach_timebase_info(&tb)
+        let ns = Double(m.busy) * Double(tb.numer) / Double(tb.denom)
+        let audioNs = Double(m.frames) / max(1, bed.pointee.sr) * 1e9
+        let worst = Double(m.worst) * Double(tb.numer) / Double(tb.denom) / 1000
+        if reset { meter.reset() }
+        return (audioNs > 0 ? ns / audioNs * 100 : 0, worst, m.calls)
+    }
+
+    // MARK: - Offline rendering (the bench, the harness)
+
+    /// Renders `frames` stereo frames, interleaved L R (manual rendering mode only).
     func renderOffline(frames: Int) -> [Float] {
         precondition(offline)
         let fmt = engine.manualRenderingFormat
-        guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: AVAudioFrameCount(frames)) else { return [] }
-        var out: [Float] = []; out.reserveCapacity(frames)
+        guard let buf = AVAudioPCMBuffer(pcmFormat: fmt, frameCapacity: 4096) else { return [] }
+        var out: [Float] = []; out.reserveCapacity(frames * 2)
         var left = frames
         while left > 0 {
-            let n = min(left, Int(engine.manualRenderingMaximumFrameCount))
+            let n = min(left, 4096)
             guard (try? engine.renderOffline(AVAudioFrameCount(n), to: buf)) == .success, let d = buf.floatChannelData else { break }
-            out.append(contentsOf: UnsafeBufferPointer(start: d[0], count: Int(buf.frameLength)))
+            let ch = Int(fmt.channelCount)
+            for i in 0..<Int(buf.frameLength) { out.append(d[0][i]); out.append(d[ch > 1 ? 1 : 0][i]) }
             left -= n
         }
         return out
     }
 
-    // MARK: demo (`-sound demo`; the app calls Sound.demoIfRequested() once it wants it)
-
-    static func demoIfRequested() {
-        let a = ProcessInfo.processInfo.arguments
-        guard let i = a.firstIndex(of: "-sound"), i + 1 < a.count, a[i + 1] == "demo" else { return }
-        let s = Sound.shared, t0 = CACurrentMediaTime()
-        var fired = Set<Int>()
-        Timer.scheduledTimer(withTimeInterval: 1.0 / 60, repeats: true) { timer in
-            let t = CACurrentMediaTime() - t0
-            if !Sound.demoFrame(s, t: t, fired: &fired) { timer.invalidate(); s.update(speed: 0, lift: 0, side: 0, grounded: true, phase: .quiet) }
-        }
-        print("SOUND demo (\(Int(Sound.demoLength)) s)")
-    }
-    static let demoLength = 13.0
-    /// One frame of the scripted demo at `t` seconds; false when it's over. The harness renders the same script.
-    @discardableResult
-    static func demoFrame(_ s: Sound, t: Double, fired: inout Set<Int>) -> Bool {
-        func once(_ id: Int, at: Double, _ f: () -> Void) { if t >= at && !fired.contains(id) { fired.insert(id); f() } }
-        switch t {
-        case ..<2.5: s.update(speed: 0, lift: 0.4, side: 0, grounded: true, phase: .title)       // the title: pad, idle hiss
-        case ..<5.5: s.update(speed: (t - 2.5) / 3 * 40, lift: 0, side: 0, grounded: true)      // the run-up
-        case ..<8.0:                                                                           // airborne, jets
-            once(1, at: 5.5) { s.release() }
-            let k = min(1, (t - 5.5) / 0.4)
-            s.update(speed: 40 - (t - 5.5) * 4, lift: 3.6 * k, side: t > 6.5 && t < 7.3 ? 4 : 0, grounded: false)
-        case ..<10.5:
-            once(2, at: 8.0) { s.thud(sink: 3.2) }
-            s.update(speed: max(0, 30 - (t - 8) * 12), lift: 0, side: 0, grounded: true, grind: t > 9 && t < 10 ? 0.8 : 0)
-            once(3, at: 9.0) { s.impact(speed: 9, part: .nose, seed: 77) }
-            once(4, at: 9.6) { s.impact(speed: 13, part: .roof, seed: 191) }
-        case ..<demoLength:
-            s.update(speed: 0, lift: 0, side: 0, grounded: true)
-            for i in 0..<4 { once(10 + i, at: 10.8 + Double(i) * 0.25) { s.chime(i) } }
-            once(20, at: 12.3) { s.uiTap() }; once(21, at: 12.5) { s.uiTap() }
-        default: return false
-        }
-        return true
+    /// The master after the limiter, handed to `block` (SoundLab's capture). `mute` silences the output itself.
+    func tapMaster(mute: Bool, _ block: @escaping (AVAudioPCMBuffer) -> Void) {
+        limiter.removeTap(onBus: 0)
+        limiter.installTap(onBus: 0, bufferSize: 4096, format: limiter.outputFormat(forBus: 0)) { buf, _ in block(buf) }
+        if mute { engine.mainMixerNode.outputVolume = 0 }
     }
 
-    // MARK: plumbing
+    // MARK: - Plumbing
 
-    private func set(_ p: P, _ v: Double) {
-        let f = v.isFinite ? Float(v) : 0
-        params[p.rawValue].store(f.bitPattern, ordering: .relaxed)
+    private func pushGains() {
+        let on = isEnabled ? 1.0 : 0
+        bedParams.set(BP.master.rawValue, 0.8 * volume * on)
+        bedParams.set(BP.fx.rawValue, effects)
+        bedParams.set(BP.music.rawValue, otherAudio ? 0 : music)
+        for p in emitParams { p.set(EP.fx.rawValue, effects * 0.8 * volume * on) }
     }
-    private func pushMaster() { set(.master, isEnabled ? 0.8 * volume : 0) }
+    private func setPhase(_ p: Phase) { if p != phase { phase = p; applyRunning() } }
 
+    private var audible: Bool { isEnabled && (offline || engine.isRunning) }
     /// Single producer (main thread). A one-shot with nothing to hear it (off, paused, backgrounded) is dropped, as the
     /// web's are when muted, so nothing stale fires on resume.
-    private func post(_ e: SoundEvent) {
-        guard isEnabled, offline || engine.isRunning else { return }
-        let h = cursors[0].load(ordering: .relaxed), t = cursors[1].load(ordering: .acquiring)
-        if h - t >= SynthCore.ringSize { return }
-        ring[h & (SynthCore.ringSize - 1)] = e
-        cursors[0].store(h + 1, ordering: .releasing)
+    private func postBed(_ e: SoundEvent) { if audible { bedRing.push(e) } }
+    private func postEmitterIndex(_ i: Int, _ e: SoundEvent) { if audible { emitRings[i].push(e) } }
+    /// Places the oldest free emitter (1…) at `at` and hands it the event.
+    private func postEmitter(at: SIMD3<Float>, _ e: SoundEvent, hold: Double) {
+        guard audible, emitNodes.count == Sound.emitterCount else { return }
+        let now = CACurrentMediaTime()
+        var best = 1, bestT = Double.infinity
+        for i in 1..<Sound.emitterCount where emitUsed[i] < bestT { bestT = emitUsed[i]; best = i }
+        emitUsed[best] = now + hold
+        emitNodes[best].position = AVAudio3DPoint(x: at.x, y: at.y, z: at.z)
+        emitRings[best].push(e)
+    }
+
+    private static func makeLimiter() -> AVAudioUnitEffect {
+        let d = AudioComponentDescription(componentType: kAudioUnitType_Effect, componentSubType: kAudioUnitSubType_PeakLimiter,
+                                          componentManufacturer: kAudioUnitManufacturer_Apple, componentFlags: 0, componentFlagsMask: 0)
+        return AVAudioUnitEffect(audioComponentDescription: d)
     }
 
     private func connect(rate: Double) {
-        if let s = source { engine.disconnectNodeOutput(s); engine.detach(s) }
-        core.pointee.reconfigure(sr: rate)
-        // Drop any one-shots queued for the old graph.
-        cursors[1].store(cursors[0].load(ordering: .acquiring), ordering: .releasing)
-        let c = core
-        let node = AVAudioSourceNode { _, _, frameCount, abl -> OSStatus in
+        let wasOffline = offline
+        for n in [bedNode].compactMap({ $0 }) + emitNodes { engine.disconnectNodeOutput(n); engine.detach(n) }
+        emitNodes = []; bedNode = nil
+        for n in [env, bedVerb, submix, eq, limiter] as [AVAudioNode] where n.engine != nil { engine.disconnectNodeOutput(n); engine.detach(n) }
+        bed.pointee.reconfigure(sr: rate)
+        for i in 0..<Sound.emitterCount { emitters[i].reconfigure(sr: rate) }
+        bedRing.flush(); emitRings.forEach { $0.flush() }
+
+        let stereo = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 2)!
+        let mono = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
+        let b = bed
+        let bn = AVAudioSourceNode(format: stereo) { _, _, frameCount, abl -> OSStatus in
             let list = UnsafeMutableAudioBufferListPointer(abl)
-            guard list.count > 0, let first = list[0].mData else { return noErr }
-            let out = first.assumingMemoryBound(to: Float.self), n = Int(frameCount)
-            c.pointee.render(out, n)
-            if list.count > 1 {
-                for b in 1..<list.count { if let d = list[b].mData { d.copyMemory(from: first, byteCount: n * 4) } }
-            }
+            guard list.count > 0, let l = list[0].mData else { return noErr }
+            let n = Int(frameCount)
+            let L = l.assumingMemoryBound(to: Float.self)
+            let R = list.count > 1 ? (list[1].mData?.assumingMemoryBound(to: Float.self) ?? L) : L
+            b.pointee.render(L, R, n)
             return noErr
         }
-        let fmt = AVAudioFormat(standardFormatWithSampleRate: rate, channels: 1)!
-        engine.attach(node)
-        engine.connect(node, to: engine.mainMixerNode, format: fmt)
-        source = node
+        for n in [bn as AVAudioNode, env, bedVerb, submix, eq, limiter] { engine.attach(n) }
+        engine.connect(bn, to: bedVerb, format: stereo)
+        engine.connect(bedVerb, to: submix, format: stereo)
+        for i in 0..<Sound.emitterCount {
+            let e = emitters + i
+            let node = AVAudioSourceNode(format: mono) { _, _, frameCount, abl -> OSStatus in
+                let list = UnsafeMutableAudioBufferListPointer(abl)
+                guard list.count > 0, let d = list[0].mData else { return noErr }
+                e.pointee.render(d.assumingMemoryBound(to: Float.self), Int(frameCount))
+                return noErr
+            }
+            engine.attach(node)
+            engine.connect(node, to: env, format: mono)
+            node.renderingAlgorithm = .auto
+            node.sourceMode = .pointSource
+            node.reverbBlend = 0.06
+            emitNodes.append(node)
+        }
+        engine.connect(env, to: submix, format: stereo)
+        engine.connect(submix, to: eq, format: stereo)
+        engine.connect(eq, to: limiter, format: stereo)
+        engine.connect(limiter, to: engine.mainMixerNode, format: stereo)
+        bedNode = bn
+        env.outputType = .auto
+        env.distanceAttenuationParameters.distanceAttenuationModel = .inverse
+        env.distanceAttenuationParameters.referenceDistance = 3
+        env.distanceAttenuationParameters.maximumDistance = 500
+        env.distanceAttenuationParameters.rolloffFactor = 0.9
+        // The limiter: fast enough for a crash, a little make-up for a phone's small speaker.
+        let au = limiter.audioUnit
+        AudioUnitSetParameter(au, kLimiterParam_AttackTime, kAudioUnitScope_Global, 0, 0.004, 0)
+        AudioUnitSetParameter(au, kLimiterParam_DecayTime, kAudioUnitScope_Global, 0, 0.08, 0)
+        AudioUnitSetParameter(au, kLimiterParam_PreGain, kAudioUnitScope_Global, 0, 0, 0)
+        voice(speaker: speaker)
+        let z = zone; zone = z == .open ? .set : .open; self.zone(z)   // reapply the zone to the new nodes
+        _ = wasOffline
+    }
+
+    /// A phone's own speaker can't move air below ~150 Hz: cut it (the headroom goes to what it can play) and lift the
+    /// presence band a little. Headphones and AirPods get it flat.
+    private func voice(speaker on: Bool) {
+        speaker = on
+        let b = eq.bands
+        b[0].filterType = .highPass; b[0].frequency = 130; b[0].bandwidth = 0.7; b[0].bypass = !on
+        b[1].filterType = .parametric; b[1].frequency = 2800; b[1].bandwidth = 1.2; b[1].gain = 2.5; b[1].bypass = !on
+        b[2].filterType = .parametric; b[2].frequency = 220; b[2].bandwidth = 1.0; b[2].gain = -2; b[2].bypass = !on
+        bedParams.set(BP.speaker.rawValue, on ? 1 : 0)
+    }
+    private func routeChanged() {
+        #if os(iOS)
+        let outs = AVAudioSession.sharedInstance().currentRoute.outputs
+        voice(speaker: outs.contains { $0.portType == .builtInSpeaker || $0.portType == .builtInReceiver })
+        #endif
     }
 
     private static func hardwareRate(_ e: AVAudioEngine) -> Double {
@@ -639,13 +472,10 @@ final class Sound {
         func on(_ name: Notification.Name, _ object: Any? = nil, _ f: @escaping (Notification) -> Void) {
             observers.append(nc.addObserver(forName: name, object: object, queue: .main, using: f))
         }
-        // A route or hardware-rate change stops the engine: reconnect at the new rate, then start again if wanted.
         on(.AVAudioEngineConfigurationChange, engine) { [weak self] _ in
             guard let self else { return }
             let r = Sound.hardwareRate(self.engine)
-            if r != self.core.pointee.sr || !self.engine.isRunning {
-                self.engine.stop(); self.connect(rate: r)
-            }
+            if r != self.bed.pointee.sr || !self.engine.isRunning { self.engine.stop(); self.connect(rate: r) }
             self.applyRunning()
         }
         #if os(iOS)
@@ -656,11 +486,18 @@ final class Sound {
             if type == .began { self.interrupted = true; self.engine.pause() }
             else { self.interrupted = false; self.applyRunning() }   // .ambient: restart whether or not .shouldResume
         }
-        on(AVAudioSession.routeChangeNotification, session) { [weak self] _ in self?.applyRunning() }
+        on(AVAudioSession.routeChangeNotification, session) { [weak self] _ in self?.routeChanged(); self?.applyRunning() }
+        on(AVAudioSession.silenceSecondaryAudioHintNotification, session) { [weak self] n in
+            guard let self, let raw = n.userInfo?[AVAudioSessionSilenceSecondaryAudioHintTypeKey] as? UInt else { return }
+            self.otherAudio = raw == AVAudioSession.SilenceSecondaryAudioHintType.begin.rawValue
+            self.pushGains()
+        }
         on(AVAudioSession.mediaServicesWereResetNotification, session) { [weak self] _ in
             guard let self else { return }
             Sound.configureSession()
-            self.engine = AVAudioEngine(); self.source = nil
+            self.engine = AVAudioEngine(); self.env = AVAudioEnvironmentNode(); self.bedVerb = AVAudioUnitReverb()
+            self.submix = AVAudioMixerNode(); self.eq = AVAudioUnitEQ(numberOfBands: 3); self.limiter = Sound.makeLimiter()
+            self.bedNode = nil; self.emitNodes = []
             self.connect(rate: Sound.hardwareRate(self.engine))
             self.observers.forEach { nc.removeObserver($0) }; self.observers = []; self.observe()
             self.applyRunning()
