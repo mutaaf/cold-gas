@@ -34,6 +34,15 @@ privacy page doesn't name. Our tests can't see it: the loader only runs off loca
 own-origin rule never meets the frame. The 2026-11-13 21:55 critique reported "only mutaafaziz.com" because its runs
 left the title before the dwell. Phones didn't place the frame in 50 s on the title, so this is desktop and tablet.
 
+**Critic, 2026-11-14 09:55: phones too, and sooner.** On production `index-d0nuuZHe.js` (main `97215bc`), at 390×844 touch
+as a first visit with no input, the title placed the frame **7.4 s** after the game was ready (17.6 s after `goto`), and
+the frame loaded `static.cloudflareinsights.com/beacon.min.js` at 17.7 s and reported to `/cdn-cgi/rum` at 19.1 s
+(`docs/critique/2026-11-14-0955/phone-title-requests.jsonl`). The slot was 0 px tall (no fill), so the player saw no ad
+and was still counted. Every first-visit phone player who reads the title for a few seconds before tapping Jump is beaconed.
+`curl -sSI` of the frame still shows `cache-control: public, max-age=60` with no `no-transform`. A second `/cdn-cgi/rum`
+from the same frame came at 57.5 s while that page was flying runs. That's most likely the beacon's unload report as
+`src/ads.js` removed the frame for the run (unverified). The probe in What 2 should time it against `S.mode`.
+
 ## What
 1. **The fix lives in Marquee or the zone, not here** (`src/worker/` and the Marquee Worker are both outside a cloud
    agent's reach). Marquee should serve `/ads/v1/frame.html` with `cache-control: …, no-transform` (the same fix that
