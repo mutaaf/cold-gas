@@ -4,6 +4,7 @@
 # One simulator at a time, shut down after its shots (the Mac is shared).
 #   scripts/look-shots.sh <outdir> <prefix> [phone|duo|all] [screen…]
 # Screens: title run pause results whatsnew board settings howto practice editor drive roam
+#   and the first run (0249): firstrun guide firstlanding firstwreck; a wreck's results (0258): wreck
 # Simulators: $LOOK_PHONE (default "ColdGas Look", an iPhone 18 Pro) and $LOOK_DUO (default "ColdGas Look Duo").
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -36,6 +37,11 @@ args_for() { # <screen> → token settle args…
     editor) echo "hud-editor 2 -hudEdit assist" ;;
     drive) echo "drive 4 -freedrive" ;;
     roam) echo "drive 4 -roam show" ;;
+    firstrun) echo "frame 3 -firstrun" ;;
+    guide) echo "frozen 1 -firstrun -play -freeze 400" ;;
+    firstlanding) echo "first-landing 3 -firstrun -play -autopilot" ;;
+    firstwreck) echo "results 4 -firstrun -play -script crash-show-carry5" ;;
+    wreck) echo "results 6 -play -script crash-show-carry5" ;;
   esac
 }
 run_on() { # <sim name> <pose…>

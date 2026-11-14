@@ -142,7 +142,12 @@ struct TitleView: View {
                     .frame(height: g.size.height * (wide ? 0.75 : 0.62)).frame(maxHeight: .infinity, alignment: .bottom)
                     .padding(.horizontal, -400).padding(.bottom, -120)   // past the panel's edges: a scrim, never a box
                     .allowsHitTesting(false).accessibilityHidden(true)
-                if wide { wideBody(g.size, short: short) } else { tallBody(short: short) }
+                if game.firstRun {
+                    // 0249: a tap anywhere on the title flies the first jump; the words and buttons sit over it.
+                    Color.clear.contentShape(Rectangle()).onTapGesture { game.play() }
+                        .accessibilityHidden(true)
+                    firstBody(short: short)
+                } else if wide { wideBody(g.size, short: short) } else { tallBody(short: short) }
                 utilities.padding(.top, 8).padding(.trailing, 10).enter(shown, still, 0)
             }
         }
@@ -163,6 +168,30 @@ struct TitleView: View {
         }
         .frame(maxWidth: 460, alignment: .leading)
         .padding(.horizontal, 20).padding(.bottom, short ? 8 : 14)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+    }
+
+    // The first run (0249): the Show, one line, one Fly. The rest are there but quiet, and the car waits on the mark.
+    private func firstBody(short: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 56)
+            wordmark.enter(shown, still, 0.05)
+            HStack(alignment: .center, spacing: 10) {
+                Tick(on: true, length: (short ? 28 : 34) * 0.8)
+                Text("THE SHOW").font(Theme.marquee(short ? 28 : 34)).tracking(1).foregroundStyle(Theme.ink)
+                    .lineLimit(1).minimumScaleFactor(0.6)
+            }
+            .padding(.leading, -12).padding(.top, 8).enter(shown, still, 0.12)
+            .accessibilityElement(children: .combine).accessibilityLabel("The Show")
+            Text("Your first jump. Tap anywhere to fly.")
+                .font(Theme.text(14, .medium)).foregroundStyle(Theme.ink2)
+                .padding(.top, 6).enter(shown, still, 0.2)
+                .accessibilityIdentifier("first-run")
+            fly.padding(.top, 18).enter(shown, still, 0.26)
+            more.padding(.top, 4).opacity(0.7).enter(shown, still, 0.32)
+        }
+        .frame(maxWidth: 460, alignment: .leading)
+        .padding(.horizontal, 24).padding(.bottom, short ? 8 : 14)
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
     }
 
@@ -449,6 +478,7 @@ struct HUDView: View {
         }
         .padding(12)
         .animation(.easeOut(duration: 0.25), value: h.cue)
+        .animation(.easeOut(duration: 0.25), value: h.guide)
     }
     private var pause: some View {
         Button { game.paused = true; UISelectionFeedbackGenerator().selectionChanged() } label: {
@@ -464,7 +494,9 @@ struct HUDView: View {
         .padding(.horizontal, 14).padding(.vertical, 8).glass(12)
     }
     @ViewBuilder private func cue(_ s: String) -> some View {
-        if !s.isEmpty {
+        if game.guided {
+            if let g = game.hud.guide { GuideHint(text: g, skip: { game.skipHints() }) }
+        } else if !s.isEmpty {
             Text(s).font(Theme.text(compact ? 13 : 15, .medium)).foregroundStyle(Theme.ink)
                 .padding(.horizontal, 14).padding(.vertical, 8).glass(18)
                 .transition(.opacity).id(s)
@@ -492,6 +524,36 @@ struct HUDView: View {
         }
         .padding(.horizontal, 12).padding(.vertical, 8).glass(12)
         .accessibilityElement(children: .combine).accessibilityLabel("Nitrogen \(Int(g * 100)) percent")
+    }
+}
+
+/// The guided first jump's hint (0249): one line, set bigger than the cue, and a quiet way out. It goes the moment the
+/// thing it asks for is done.
+struct GuideHint: View {
+    let text: String
+    let skip: () -> Void
+    @Environment(\.accessibilityReduceMotion) private var still
+    @State private var breathe = false
+    var body: some View {
+        HStack(spacing: 12) {
+            Circle().fill(Theme.signal).frame(width: 7, height: 7)
+                .scaleEffect(breathe && !still ? 1.35 : 1).opacity(breathe && !still ? 0.55 : 1)
+                .animation(still ? nil : .easeInOut(duration: 0.8).repeatForever(autoreverses: true), value: breathe)
+                .accessibilityHidden(true)
+            Text(text).font(Theme.text(17, .semibold)).foregroundStyle(Theme.ink)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("guide")
+            Rectangle().fill(Theme.hair2).frame(width: 1, height: 22).accessibilityHidden(true)
+            Button("I\u{2019}ve got it", action: skip)
+                .font(Theme.text(12, .medium)).foregroundStyle(Theme.ink2)
+                .frame(minHeight: 44).contentShape(Rectangle())
+                .accessibilityIdentifier("skip-hints")
+                .accessibilityHint("No more hints")
+        }
+        .padding(.leading, 16).padding(.trailing, 12).padding(.vertical, 4).glass(18)
+        .transition(.opacity).id(text)
+        .onAppear { breathe = true }
+        .accessibilityElement(children: .contain)
     }
 }
 
@@ -533,8 +595,39 @@ struct ResultsView: View {
     @State private var openJudge: String?
     @State private var numbersOpen = false
     var body: some View {
+        if result.firstLanding && !moreShown {
+            FirstLandingView(result: result, more: { withAnimation(.easeOut(duration: 0.2)) { moreShown = true } }, share: AnyView(share(result.card, 54)))
+                .onAppear { Ready.mark("first-landing"); DispatchQueue.main.asyncAfter(deadline: .now() + 2) { Usage.shared.flush() } }
+        } else if result.firstRun && !celebrated(result.card) && result.drill == nil && !moreShown {
+            firstWreck
+        } else { sheetBody }
+    }
+    @State private var moreShown = false
+    /// A wreck on the first run is not a failure screen (0249): one line of what to do, and Fly again.
+    private var firstWreck: some View {
+        let c = result.coach.first
+        let line = c.map { $0.fix.isEmpty ? $0.title : $0.fix } ?? "Hold the pad sooner to land"
+        return VStack(alignment: .leading, spacing: 14) {
+            Text("NOT THIS TIME").font(Theme.marquee(13, .headline)).tracking(2).foregroundStyle(Theme.ink2)
+            Text(line).font(Theme.text(18, .semibold)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                .accessibilityIdentifier("first-wreck")
+            Button { game.retry() } label: { Text("Fly again") }
+                .buttonStyle(MarqueeButton(height: 54)).accessibilityIdentifier("again").accessibilityLabel("Fly again")
+            HStack {
+                Button { withAnimation(.easeOut(duration: 0.2)) { moreShown = true } } label: { Text("The score") }
+                Spacer()
+                Button { game.home() } label: { Text("Home") }
+            }
+            .buttonStyle(QuietButton())
+        }
+        .padding(20).glass(20).frame(maxWidth: 480)
+        .padding(.horizontal, 16).padding(.bottom, 16)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+        .onAppear { Ready.mark("results") }
+    }
+    private var sheetBody: some View {
         let card = result.card
-        GeometryReader { g in
+        return GeometryReader { g in
             // Under the height of a big phone the actions take one row, to leave the score and the judges the room.
             // A very short space (a Duo in tabletop) shrinks the score as well, or the actions would cover it.
             let oneRow = g.size.height < 720, short = g.size.height < 470
@@ -775,5 +868,81 @@ struct ClassicPad: View {
             stickLabel: Deck.stickLabel(h.touchPhase), hint: h.hint, gas: (h.gas * 50).rounded() / 50,
             strip: Deck.stripIndex(h.touchPhase, course: course, ledge: h.ledge), stripNames: Deck.stripNames(course: course))
         FlightDeck(show: show, layoutKey: layoutKey)
+    }
+}
+
+// MARK: - The first landing (0249)
+
+/// The payoff for a newcomer: the verdict set big, the score counting up, a haptic swell of its own (HapticPlayer's
+/// `.firstLanding`) and a three-note sting; then Next and Beat right there. No post form, no prompt, no ad, nothing over it.
+/// The judges and the numbers are one tap down.
+struct FirstLandingView: View {
+    @ObservedObject var game = Game.shared
+    let result: RunResult
+    var more: () -> Void
+    var share: AnyView
+    @State private var shownScore = 0.0
+    @State private var up = false
+    @Environment(\.accessibilityReduceMotion) private var still
+    var body: some View {
+        let card = result.card
+        let next = COURSE_INFO.first { $0.id == Game.nextCourse(after: result.course) }?.name ?? ""
+        VStack(alignment: .leading, spacing: 0) {
+            Spacer(minLength: 24)
+            Text("YOUR FIRST LANDING").font(Theme.marquee(11, .footnote)).tracking(5).foregroundStyle(Theme.ink2)
+                .opacity(up ? 1 : 0).offset(y: up || still ? 0 : 10)
+                .animation(still ? .easeOut(duration: 0.2) : .spring(duration: 0.5, bounce: 0.1), value: up)
+            Text(card.verdict.uppercased()).font(Theme.marquee(30, .largeTitle)).tracking(1).foregroundStyle(Theme.ink)
+                .lineLimit(2).minimumScaleFactor(0.6).padding(.top, 8)
+                .opacity(up ? 1 : 0).offset(y: up || still ? 0 : 14)
+                .animation(still ? .easeOut(duration: 0.2) : .spring(duration: 0.55, bounce: 0.12).delay(0.08), value: up)
+                .accessibilityIdentifier("first-landing")
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(String(format: "%.1f", shownScore)).font(Theme.mono(56, bold: true)).foregroundStyle(Theme.ink).monospacedDigit()
+                    .contentTransition(.numericText(value: shownScore))
+                Text("/ 100").font(Theme.mono(15)).foregroundStyle(Theme.ink3)
+            }
+            .padding(.top, 2)
+            .overlay(alignment: .bottomLeading) { Capsule().fill(Theme.signal).frame(width: up ? 56 : 0, height: 2).offset(y: 6)
+                .animation(still ? nil : .easeOut(duration: 0.9).delay(0.2), value: up) }
+            .accessibilityElement(children: .ignore).accessibilityLabel(String(format: "%.1f out of 100", card.total))
+            VStack(alignment: .leading, spacing: 10) {
+                Button { game.next() } label: { Text("Next \u{00B7} \(next)") }
+                    .buttonStyle(MarqueeButton(height: 54)).accessibilityIdentifier("next").accessibilityLabel("Next jump: \(next)")
+                HStack(spacing: 8) {
+                    Button { game.retry() } label: { Text(String(format: "Beat %.1f", card.total)).frame(maxWidth: .infinity) }
+                        .buttonStyle(MarqueeButton(height: 54, hollow: true)).accessibilityIdentifier("beat")
+                        .accessibilityLabel(String(format: "Fly again: beat %.1f", card.total))
+                    share
+                }
+                Button(action: more) { Label("The judges and the numbers", systemImage: "chevron.up").font(Theme.text(13, .medium)) }
+                    .buttonStyle(QuietButton()).accessibilityIdentifier("first-more")
+            }
+            .padding(.top, 26)
+            .opacity(up ? 1 : 0)
+            .animation(still ? .easeOut(duration: 0.2) : .easeOut(duration: 0.4).delay(0.9), value: up)
+        }
+        .frame(maxWidth: 460, alignment: .leading)
+        .padding(.horizontal, 24).padding(.bottom, 18)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+        .background(alignment: .bottom) {
+            // The words own the bottom of the screen: a deep scrim under them, the scene still the picture above.
+            LinearGradient(stops: [.init(color: .clear, location: 0), .init(color: Theme.bg.opacity(0.8), location: 0.28),
+                                   .init(color: Theme.bg.opacity(0.94), location: 0.5), .init(color: Theme.bg.opacity(0.97), location: 1)],
+                           startPoint: .top, endPoint: .bottom)
+                .frame(height: 760).padding(.horizontal, -200).padding(.bottom, -60).allowsHitTesting(false).accessibilityHidden(true)
+        }
+        .task {
+            up = true
+            let total = card.total
+            if still { shownScore = total; return }
+            let steps = 36
+            for i in 1...steps {
+                try? await Task.sleep(for: .milliseconds(28))
+                let k = Double(i) / Double(steps)
+                withAnimation(.linear(duration: 0.03)) { shownScore = (total * (1 - pow(1 - k, 3)) * 10).rounded() / 10 }
+            }
+            shownScore = total
+        }
     }
 }

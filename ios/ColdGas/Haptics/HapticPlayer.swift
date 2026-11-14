@@ -23,6 +23,9 @@ final class HapticPlayer {
     private var bank: [[CHHapticPatternPlayer]] = []          // [intensity step][sharpness step]
     private static let iSteps: [Float] = [0.15, 0.25, 0.35, 0.45, 0.6, 0.72, 0.86, 1.0], sSteps: [Float] = [0.15, 0.5, 0.85]
     private var sent = HapticContinuous(rumble: -1, rumbleSharp: -1, hiss: -1, hissSharp: -1, grind: -1)
+    /// The results' moments (0249): a landing, the first landing and a wreck each feel different. Made once.
+    enum Moment { case landed, firstLanding, wrecked }
+    private var moments: [Moment: CHHapticPatternPlayer] = [:]
 
     private init() {
         level = Level(rawValue: UserDefaults.standard.string(forKey: "coldgas.haptics") ?? "") ?? .full
@@ -72,6 +75,29 @@ final class HapticPlayer {
             return p
         }
         rumble = loop(sharp: 0.25); hiss = loop(sharp: 0.6); grind = loop(sharp: 0.9)
+        func tap(_ t: Double, _ i: Float, _ s: Float) -> CHHapticEvent {
+            CHHapticEvent(eventType: .hapticTransient, parameters: [CHHapticEventParameter(parameterID: .hapticIntensity, value: i),
+                                                                    CHHapticEventParameter(parameterID: .hapticSharpness, value: s)], relativeTime: t)
+        }
+        func hum(_ t: Double, _ d: Double, _ i: Float, _ s: Float) -> CHHapticEvent {
+            CHHapticEvent(eventType: .hapticContinuous, parameters: [CHHapticEventParameter(parameterID: .hapticIntensity, value: i),
+                                                                     CHHapticEventParameter(parameterID: .hapticSharpness, value: s)], relativeTime: t, duration: d)
+        }
+        func curve(_ pts: [(Double, Float)]) -> CHHapticParameterCurve {
+            CHHapticParameterCurve(parameterID: .hapticIntensityControl, controlPoints: pts.map { .init(relativeTime: $0.0, value: $0.1) }, relativeTime: 0)
+        }
+        // A landing: two crisp beats, the car settling on its springs.
+        let landed = try? CHHapticPattern(events: [tap(0, 0.85, 0.55), tap(0.11, 0.55, 0.9)], parameters: [])
+        // The first landing: a rising swell into the settle, then the two beats.
+        let first = try? CHHapticPattern(events: [hum(0, 0.7, 1, 0.35), tap(0.72, 1, 0.6), tap(0.86, 0.6, 0.95), tap(1.02, 0.35, 0.95)],
+                                          parameterCurves: [curve([(0, 0.05), (0.55, 0.8), (0.7, 0)])])
+        // A wreck: one heavy dull blow and a rumble that dies away.
+        let wreck = try? CHHapticPattern(events: [tap(0, 1, 0.1), hum(0.02, 0.55, 0.8, 0.2)],
+                                          parameterCurves: [curve([(0, 0.9), (0.55, 0)])])
+        moments = [:]
+        for (m, p) in [(Moment.landed, landed), (.firstLanding, first), (.wrecked, wreck)] {
+            if let p, let pl = try? e.makePlayer(with: p) { moments[m] = pl }
+        }
         bank = HapticPlayer.iSteps.map { i in HapticPlayer.sSteps.compactMap { s in
             let ev = CHHapticEvent(eventType: .hapticTransient, parameters: [
                 CHHapticEventParameter(parameterID: .hapticIntensity, value: i),
@@ -107,6 +133,14 @@ final class HapticPlayer {
         // Intensity control multiplies the pattern's 1.0; sharpness control adds to the pattern's base.
         try? p.sendParameters([CHHapticDynamicParameter(parameterID: .hapticIntensityControl, value: i, relativeTime: 0),
                                CHHapticDynamicParameter(parameterID: .hapticSharpnessControl, value: s - 0.5, relativeTime: 0)], atTime: CHHapticTimeImmediate)
+    }
+
+    /// A results moment (0249). Where Core Haptics can't play (no engine, the simulator), the system's own feedback.
+    func moment(_ m: Moment) {
+        if log { print("HAPTIC moment \(m)") }
+        guard level != .off else { return }
+        if let p = moments[m] { try? p.start(atTime: CHHapticTimeImmediate); return }
+        UINotificationFeedbackGenerator().notificationOccurred(m == .wrecked ? .error : .success)
     }
 
     /// One transient.
