@@ -4,7 +4,7 @@
 # One simulator at a time, shut down after its shots (the Mac is shared).
 #   scripts/look-shots.sh <outdir> <prefix> [phone|duo|all] [screen…]
 # Screens: title run pause results whatsnew board settings howto practice editor drive roam
-#   and the first run (0249): firstrun guide firstlanding firstwreck; a wreck's results (0258): wreck
+#   and the first run (0249): firstrun guide firstlanding firstwreck; a wreck's results (0258): wreck; a challenge link (0253): challenge
 # Simulators: $LOOK_PHONE (default "ColdGas Look", an iPhone 18 Pro) and $LOOK_DUO (default "ColdGas Look Duo").
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -42,6 +42,7 @@ args_for() { # <screen> → token settle args…
     firstlanding) echo "first-landing 3 -firstrun -play -autopilot" ;;
     firstwreck) echo "results 4 -firstrun -play -script crash-show-carry5" ;;
     wreck) echo "results 6 -play -script crash-show-carry5" ;;
+    challenge) echo "challenge 2 -open https://mutaafaziz.com/coldgas/?play=jump&course=show#vs=rASAAoAEBTUFaBgAAxgGKyAHUAoDFAY4BhsgBPAO2AQRnhYYBc4bHAcoGA7UBBGiFhQE" ;;
   esac
 }
 run_on() { # <sim name> <pose…>

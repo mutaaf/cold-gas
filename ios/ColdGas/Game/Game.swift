@@ -81,6 +81,54 @@ final class Game: ObservableObject {
     /// then the attempt starts again from the mark. The frame clock's, not the sim's: nothing scored or logged changes.
     private var wedge = WedgeWatch(), wedged = false
 
+    // --- Challenge links (0253) ---------------------------------------------------------------------
+    /// A link that opened the app: its card over the title (the sender's run, or "from an older version").
+    struct Incoming: Equatable { var run: Challenge.Run?; var course: String?; var stale: Bool }
+    @Published var incoming: Incoming?
+    /// The run being raced, from Take the challenge until Home: its score to beat on the results.
+    @Published private(set) var rival: Challenge.Run?
+    private var pendingLink: ChallengeLink.Route?
+
+    /// A universal link or a coldgas:// link. Mid-run it waits until the run is over.
+    func open(url: URL) {
+        let r = ChallengeLink.route(url, simVersion: SIM_VERSION)
+        guard r != .none else { return }
+        if screen == .run && result == nil { pendingLink = r; return }
+        apply(r)
+    }
+    private func apply(_ r: ChallengeLink.Route) {
+        pendingLink = nil
+        switch r {
+        case let .challenge(run):
+            incoming = Incoming(run: run, course: run.course, stale: false)
+            Usage.shared.track("challenge_open", ["course": .text(run.course), "stale": .num(0)])
+        case let .stale(c):
+            incoming = Incoming(run: nil, course: c, stale: true)
+            Usage.shared.track("challenge_open", ["course": .text(c), "stale": .num(1)])
+        case let .bad(c): incoming = Incoming(run: nil, course: c, stale: true)
+        case let .play(c): if let c, screen == .title, course != c { course = c }; return
+        case .none: return
+        }
+        if screen != .title { home() }
+    }
+    /// Take the challenge: the sender's course and tier, their score to beat.
+    func takeChallenge() {
+        guard let run = incoming?.run else { return }
+        incoming = nil
+        if course != run.course { course = run.course }
+        tier = run.tier
+        rival = run
+        Usage.shared.track("challenge_play", ["course": .text(run.course), "stale": .num(0)])
+        play()
+    }
+    /// An older version's link, or one that can't be read: fly its course, no rival.
+    func flyIncomingCourse() {
+        let c = incoming?.course
+        incoming = nil
+        if let c, course != c { course = c }
+        play()
+    }
+
     // --- The first run (0249) -----------------------------------------------------------------------
     /// Until the first landed jump: the title holds the car still on the mark (no reference loop to watch), one Fly on the
     /// Show, and a tap anywhere starts it. A tool or a test sees the normal title unless it asks with `-firstrun`.
@@ -184,12 +232,14 @@ final class Game: ObservableObject {
     }
     func home() {
         if screen == .run { Usage.shared.runOver() }
+        rival = nil
         // After the first landing the title is the normal one, with the reference loop behind it.
         if firstRun && !SaveStore.shared.data.counters.firstRun { firstRun = false; still = nil }
         live = nil; controls.live = nil; track = nil; result = nil; paused = false; activeDrill = nil
         HapticPlayer.shared.apply(HapticContinuous())
         screen = .title
         showTitleLoop()
+        if let r = pendingLink { apply(r) }
     }
 
     // --- Free Drive ------------------------------------------------------------------------------
@@ -437,7 +487,7 @@ final class Game: ObservableObject {
         if let r = result {
             HapticPlayer.shared.moment(r.firstLanding ? .firstLanding : r.landed ? .landed : .wrecked)
             if r.firstLanding { for (i, d) in [0.0, 0.18, 0.36].enumerated() { DispatchQueue.main.asyncAfter(deadline: .now() + d) { Sound.shared.chime(i) } } }
-            DispatchQueue.main.async { self.counted(r) }   // off the frame loop
+            DispatchQueue.main.async { self.counted(r); if let p = self.pendingLink { self.apply(p) } }   // off the frame loop
         }
     }
 
