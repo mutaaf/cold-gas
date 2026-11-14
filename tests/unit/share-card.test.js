@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { shareFacts, shareText, inviteText } from '../../src/share-card.js';
+import { shareFacts, shareText, inviteText, printedAddress } from '../../src/share-card.js';
 import { setUnits } from '../../src/units.js';
 
 // The share card's words (0081): three numbers per event, in the player's primary units, and a
@@ -33,9 +33,16 @@ describe('share card', () => {
     expect(shareText(show)).toBe('COLD GAS 94.0: Perfect 10 on The Show. Up the wall 88 ft · Over the roofs 17 ft · Touchdown 2.6 ft/s.');
   });
 
-  it('a link that carries the run (#vs=) invites a rematch; the plain address does not', () => {
-    expect(inviteText(show, 'https://mutaafaziz.com/coldgas/?play=jump&course=show#vs=zAbC')).toBe(`${shareText(show)} Beat my run:`);
+  it('a link that carries the run (#vs=) is a dare with the stunt (0260); the plain address keeps the summary', () => {
+    expect(inviteText(show, 'https://mutaafaziz.com/coldgas/?play=jump&course=show#vs=zAbC')).toBe('Beat my 94.0 on The Show · over the row');
+    const wreck = { ...show, total: 12, verdict: 'Contact', facts: { ...show.facts, crashed: true } };
+    expect(inviteText(wreck, 'https://mutaafaziz.com/coldgas/?play=jump&course=show#vs=zAbC')).toBe('The Show · into the row, 12.0. Can you land it?');
     expect(inviteText(show, 'https://mutaafaziz.com/coldgas/')).toBe(shareText(show));
+  });
+
+  it('prints the challenge itself at the card\'s foot, short (0260)', () => {
+    expect(printedAddress('https://mutaafaziz.com/coldgas/?play=jump&course=show#vs=zAbCdEfGhIjKlMnOp')).toBe('mutaafaziz.com/coldgas/#vs=zAbCdEfGhI…');
+    expect(printedAddress('https://mutaafaziz.com/coldgas/')).toBe('mutaafaziz.com/coldgas');
   });
 });
 

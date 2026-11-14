@@ -522,7 +522,7 @@ function finishRun() {
   resultsEl.removeAttribute('data-first-wreck');   // 0248: set again below for a guided first jump's wreck only
   if (S.runKind === 'jump' && S.card) track('game_over', { score: S.card.total, duration_s: Math.round(run.tick / 24) / 10, course: stage.course, tier: S.card.tier, landed: !S.card.facts?.crashed });
   poster?.reset();   // Post · ABC beside Retry when this is a board jump (src/post.js)
-  comeback.results(run, S.card, { autopilot: !!S.autopilot, drill: !!S.drill });   // [comeback] "You beat ABC by 2.1", the daily's line
+  S.vs = comeback.results(run, S.card, { autopilot: !!S.autopilot, drill: !!S.drill });   // [comeback] "You beat ABC by 2.1", the daily's line
   // The coach re-flies the log (≈30–60 ms) a beat after the sheet slides in.
   const coachRun = () => setTimeout(() => {
     if (S.run !== run) return;
@@ -553,6 +553,8 @@ function finishRun() {
   }
   resultsEl.toggleAttribute('data-first-wreck', !!S.guideWreck && calmSheet());
   syncNext(run, S.card);
+  // 0260: a personal best on this event and tier (the medal store's best before this run), for the share card.
+  if (!S.autopilot) { const prior = getMedals(run.course, S.card.tier).best; S.pb = landedCard(S.card) && (prior == null || S.card.total > prior); } else S.pb = false;
   // 0121: medals (src/medals.js) for your own runs, not the reference's.
   if (S.autopilot) hideMedals(); else showMedals(run.course, S.card.tier, S.card.total);
   pointerBox.hidden = true;
@@ -1715,9 +1717,12 @@ const landedCard = (card) => !!card?.facts?.jumped && !isCrash(card);
 function syncNext(run, card) {
   const own = !!run && !!card && S.runKind === 'jump' && !S.drill && !S.autopilot;
   const landed = own && landedCard(card);
-  S.next = landed ? NEXT_COURSE[run.course] || 'show' : null;
+  // 0251: a challenge's race leads with its own move: Send it back when won (Retry steps down), else Retry; no Next.
+  const race = own ? S.vs : null;
+  S.next = landed && !race ? NEXT_COURSE[run.course] || 'show' : null;
   nextBtn.hidden = !S.next;
-  retryBtn.classList.toggle('second', !!S.next);
+  retryBtn.classList.toggle('second', !!S.next || !!race?.won);
+  if (race?.won && lastDevice() !== 'touch') document.querySelector('.results [data-vs-send]')?.focus({ preventScroll: true });
   if (S.next) {
     nextBtn.querySelector('[data-next-event]').textContent = COURSES[S.next]?.name || '';
     const best = getMedals(run.course, card.tier).best;   // this event on this tier (the medals' store), not another tier's
@@ -1754,8 +1759,11 @@ let shareCard = null;
 const startCard = () => {
   if (!S.card) return null;
   if (shareCard?.card !== S.card) {
-    shareCard = { card: S.card, promise: drawShareCard({ frame: canvas, render: () => stage.render(S.time, S.mode), card: S.card, url: shareUrl(), mark: `${import.meta.env.BASE_URL}favicon.svg` }) };
+    // 0260: the card prints the run's challenge link (packed as the sheet opened) and says when it's a personal best.
+    shareCard = { card: S.card, promise: drawShareCard({ frame: canvas, render: () => stage.render(S.time, S.mode), card: S.card, url: comeback.linkFor(S.card), pb: !!S.pb, mark: `${import.meta.env.BASE_URL}favicon.svg` }) };
     shareCard.promise.catch(() => {});
+    const t0 = performance.now(), mine = shareCard;
+    mine.promise.then(() => { mine.ms = performance.now() - t0; }, () => {});   // 0260: the card's own time (e2e: under 300 ms at 4× CPU)
   }
   return shareCard.promise;
 };
@@ -1806,7 +1814,7 @@ S.titleSync = syncCourseBtns;
 // [comeback] the title's challenge / daily card and the results' lines (src/comeback.js; mounts in index.html)
 const comeback = createComeback({
   mount: document.querySelector('[data-title-extra]'), resultMount: document.querySelector('[data-daily-result]'),
-  base: shareUrl(), selectCourse, getTier: () => S.tier, setTier: (t) => setTier(t), jump: () => jump(),
+  base: shareUrl(), selectCourse, getTier: () => S.tier, setTier: (t, opts) => setTier(t, opts), jump: () => jump(), play: () => startRun('jump'),
   ready: () => Promise.all([stage.ready, physicsLoad]), toast,
   share: ({ card, url, text }) => { const course = S.run?.course || stage.course; funnel.emit('share_tap', { course }); funnel.flush(); return shareRun({ card, url, text, cardPromise: startCard() }).then(shareVia(course), () => {}); },
   metric: (name, props) => { funnel.emit(name, props); if (S.mode === 'title' || S.mode === 'results') funnel.flush(); }, course: () => stage.course,
@@ -1822,7 +1830,7 @@ S.titleCard = () => comeback.refresh();
 const tierBtn = document.querySelector('[data-tier]');
 const assistCtls = document.querySelectorAll('[data-assist-open]');
 // `auto`: Adapt to me stepped it (the model's counts, not Rookie's streak: the player didn't choose).
-function setTier(tier, { auto = false } = {}) {
+function setTier(tier, { auto = false, persist = true } = {}) {
   const was = S.tier;
   S.tier = TIERS[tier] ? tier : 'assist';
   if (S.tier !== was) {
@@ -1837,7 +1845,8 @@ function setTier(tier, { auto = false } = {}) {
   const short = { assist: 'Assist', pro: 'Pro', advanced: 'Adv' }[S.tier];
   tierBtn.innerHTML = `<span class="tl">${t.label}</span><span class="ts">${short}</span>${t.factor > 1 ? ` <i>×${t.factor.toFixed(2)}</i>` : ''}`;
   tierBtn.setAttribute('aria-label', `Assist: ${S.assist ? 'on' : `off, ${t.label} ×${t.factor.toFixed(2)}`}. Choose the flight tier`);
-  try { localStorage.setItem('coldgas_tier', S.tier); localStorage.setItem('coldgas_assist', S.assist ? '1' : '0'); } catch { /* storage blocked */ }
+  // 0251: a challenge's tier is for its race only: never saved as the player's own (Not now / Done, or the next load, gives it back).
+  if (persist) { try { localStorage.setItem('coldgas_tier', S.tier); localStorage.setItem('coldgas_assist', S.assist ? '1' : '0'); } catch { /* storage blocked */ } }
   syncAssist();
   syncScheme();
   S.titleCard?.();   // 0139: the Daily card's hint depends on the tier (one-thumb flies Assist only)
@@ -2074,6 +2083,7 @@ addEventListener('keydown', (e) => {
   // Enter on a focused button is that button's click (Retry included): don't start a second run.
   const enterOnButton = e.code === 'Enter' && !!e.target?.closest?.('button, a, [role="button"]');
   // 0257: Enter on the results is the sheet's primary (Next jump after a landing, else Retry); N is Next.
+  if (S.mode === 'results' && !S.drill && !S.peek && e.code === 'Enter' && !enterOnButton && S.vs?.won) { e.preventDefault(); document.querySelector('.results [data-vs-send]')?.click(); return; }
   if (S.mode === 'results' && !S.drill && !S.peek && (e.code === 'KeyN' || (e.code === 'Enter' && !enterOnButton)) && S.next) { e.preventDefault(); goNext(); return; }
   if (inRun && !S.drill && (e.code === 'KeyR' || (e.code === 'Enter' && S.mode === 'results' && !enterOnButton))) { e.preventDefault(); retry(); return; }
   if (e.code === 'Escape' && S.peek) { e.preventDefault(); peek(false); return; }   // Esc on the peek: back to the scores (0068)
@@ -2289,6 +2299,6 @@ const heal = installHeal({
   stage, canvas, ui, S, pause,
   toTitle: () => { runEnd.drop(); toTitle(); },   // a trap or an escalation is the game's fault, never the player's quit (0130)
   closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
+window.__coldgas = { shareCardMs: () => shareCard?.ms ?? null, redrawCard: () => { shareCard = null; return startCard()?.then(() => shareCard?.ms ?? null); }, S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
 Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

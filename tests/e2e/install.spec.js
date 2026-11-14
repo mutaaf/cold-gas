@@ -5,6 +5,17 @@ import { test, expect } from '@playwright/test';
 // circle), link-preview tags with an absolute image URL, and a Share that hands the share sheet a
 // PNG card.
 const pngSize = (buf) => ({ w: buf.readUInt32BE(16), h: buf.readUInt32BE(20), png: buf.subarray(1, 4).toString() === 'PNG' });
+// A JPEG's size from its frame header (SOF0/SOF2), walking the segments.
+function jpegSize(buf) {
+  if (buf[0] !== 0xff || buf[1] !== 0xd8) return { jpeg: false };
+  for (let i = 2; i + 9 < buf.length;) {
+    if (buf[i] !== 0xff) return { jpeg: false };
+    const m = buf[i + 1], len = buf.readUInt16BE(i + 2);
+    if (m === 0xc0 || m === 0xc2) return { w: buf.readUInt16BE(i + 7), h: buf.readUInt16BE(i + 5), jpeg: true };
+    i += 2 + len;
+  }
+  return { jpeg: false };
+}
 
 test('the manifest parses, Chromium finds it installable, and every icon is what it says', async ({ page, request }) => {
   // The install surface is the HTML and static files: no need to wait for the 3D stage.
@@ -89,7 +100,7 @@ test('the head carries the install and link-preview tags', async ({ page }) => {
   expect(await page.evaluate(() => getComputedStyle(document.documentElement).backgroundColor)).toBe('rgb(5, 7, 12)');
 });
 
-test('Share hands the share sheet a 1080 × 1350 PNG card of the run', async ({ page }) => {
+test('Share hands the share sheet a 1080 × 1350 card of the run (a JPEG since 0260)', async ({ page }) => {
   test.slow();   // boots the stage and flies the reference run on software GL
   await page.addInitScript(() => {
     navigator.canShare = (d) => !!d;
@@ -106,9 +117,9 @@ test('Share hands the share sheet a 1080 × 1350 PNG card of the run', async ({ 
   await page.locator('[data-screen="results"] [data-share]').click();
   await page.waitForFunction(() => window.__shared, null, { timeout: 10_000 });
   const s = await page.evaluate(() => window.__shared);
-  expect(s.type).toBe('image/png');
-  expect(s.name).toMatch(/^coldgas-\d+\.\d\.png$/);
-  expect(pngSize(Buffer.from(s.bytes))).toEqual({ w: 1080, h: 1350, png: true });
+  expect(s.type).toBe('image/jpeg');
+  expect(s.name).toMatch(/^coldgas-\d+\.\d\.jpg$/);
+  expect(jpegSize(Buffer.from(s.bytes))).toEqual({ w: 1080, h: 1350, jpeg: true });
   expect(s.text).toMatch(/^COLD GAS \d+\.\d: .+ on The Show\./);
   expect(s.url).toMatch(/\/coldgas\/$/);
 });

@@ -5,6 +5,7 @@
 // and to copying the link with a toast.
 import { one } from './units.js';
 import { TIERS } from './sim/judge.js';
+import { stuntName, dareText } from './stunt-name.js';
 
 export const CARD_W = 1080, CARD_H = 1350;   // 4:5, what a phone's share targets show uncropped
 const BG = '#05070c', INK = '#f5f6f8', ICE = '#bfe6ff', SIGNAL = '#e8323c';
@@ -41,8 +42,11 @@ const fontsReady = () => Promise.race([
 
 // Draws the card. `frame` is the 3D canvas, copied synchronously before anything awaits (a WebGL
 // canvas's buffer is only valid until the browser composites); `render` redraws it first so the
-// copy is never a cleared buffer. Resolves to a PNG Blob.
-export function drawShareCard({ frame, render, card, url, mark }) {
+// copy is never a cleared buffer. Resolves to a JPEG Blob (0260).
+// 0260: the stunt's name is the headline (src/stunt-name.js), "Personal best" rides the verdict's line when it is one
+// (`pb`), and the address printed at the foot is the run's challenge link (`url` may be a promise: the link is packed as
+// the sheet opens; if it isn't ready within a beat, the plain address is printed instead).
+export function drawShareCard({ frame, render, card, url, mark, pb = false }) {
   const c = document.createElement('canvas');
   c.width = CARD_W; c.height = CARD_H;
   const g = c.getContext('2d');
@@ -62,13 +66,25 @@ export function drawShareCard({ frame, render, card, url, mark }) {
     }
   } catch { /* no frame: the card still reads */ } finally { g.restore(); }
   return (async () => {
-    const [img] = await Promise.all([mark ? loadImage(mark) : null, fontsReady()]);
-    paint(g, card, url, img, FH);
-    return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('toBlob'))), 'image/png'));
+    const [img, , link] = await Promise.all([mark ? loadImage(mark) : null, fontsReady(),
+      Promise.race([Promise.resolve(url).catch(() => ''), new Promise((r) => setTimeout(() => r(''), 250))])]);
+    paint(g, card, link || BASE(), img, FH, pb);
+    // 0260: a JPEG. The card is a photograph of the replay under its type, and on a 4×-throttled CPU a PNG of it took 475 ms to
+    // encode against the share's 300 ms bar (a JPEG at 0.92: ≈ 46 ms, and a fifth of the bytes on a phone's uplink).
+    return new Promise((res, rej) => c.toBlob((b) => (b ? res(b) : rej(new Error('toBlob'))), 'image/jpeg', 0.92));
   })();
 }
 
-function paint(g, card, url, mark, FH) {
+const BASE = () => `${globalThis.location?.origin || ''}${import.meta.env?.BASE_URL || '/coldgas/'}`;
+// The address as print: host and path, and for a challenge its first characters (a screenshot still says where it goes).
+export function printedAddress(url) {
+  const u = String(url || '').replace(/^https?:\/\//, '');
+  const [head, vs] = u.split('#vs=');
+  const path = head.replace(/\?.*$/, '').replace(/\/$/, '');
+  return vs ? `${path}/#vs=${vs.slice(0, 10)}…` : path;
+}
+
+function paint(g, card, url, mark, FH, pb = false) {
   const W = CARD_W, H = CARD_H, M = 72;
   g.fillStyle = 'rgba(5,7,12,0.14)'; g.fillRect(0, 0, W, FH);   // the replay's bloom, held down a stop
   let grd = g.createLinearGradient(0, 0, 0, 240);
@@ -94,32 +110,36 @@ function paint(g, card, url, mark, FH) {
   const f = card.facts || {};
   text((COURSE[f.course] || '').toUpperCase(), W - M, 97, '400 20px "Geist Mono"', 'rgba(245,246,248,0.78)', { align: 'right', spacing: 5 });
 
-  // the verdict and the score
-  text(String(card.verdict).toUpperCase(), M, 896, '400 24px "Geist Mono"', verdictColor(card.verdict), { spacing: 7 });
+  // 0260: the stunt as the headline (shrunk to the width), then the verdict (and a personal best), then the score
+  const name = stuntName(card);
+  g.font = '400 44px Michroma';
+  const nsize = Math.min(44, Math.floor(44 * (W - 2 * M) / Math.max(1, g.measureText(name).width)));
+  text(name, M, 902, `400 ${nsize}px Michroma`, INK);
+  text(`${String(card.verdict).toUpperCase()}${pb ? '  ·  PERSONAL BEST' : ''}`, M, 952, '400 22px "Geist Mono"', verdictColor(card.verdict), { spacing: 6 });
   const score = card.total.toFixed(1);
-  g.font = '400 210px Michroma';
-  // 94.0 sets at 210 px; a wider number (100.0) shrinks to the same width so the row never collides
-  const size = Math.min(210, Math.floor(210 * 640 / g.measureText(score).width));
+  g.font = '400 170px Michroma';
+  // 94.0 sets at 170 px; a wider number (100.0) shrinks to the same width so the row never collides
+  const size = Math.min(170, Math.floor(170 * 520 / g.measureText(score).width));
   g.font = `400 ${size}px Michroma`;
   const sw = g.measureText(score).width;
-  const chrome = g.createLinearGradient(0, 905, 0, 1085);
+  const chrome = g.createLinearGradient(0, 960, 0, 1105);
   chrome.addColorStop(0, '#ffffff'); chrome.addColorStop(0.45, '#e6ebf1'); chrome.addColorStop(0.52, '#98a2af');
   chrome.addColorStop(0.58, '#d9dfe6'); chrome.addColorStop(1, '#f4f6f8');
-  text(score, M - 6, 1085, `400 ${size}px Michroma`, chrome);
-  text('/ 100', M + sw + 18, 1085, '400 32px "Geist Variable"', 'rgba(245,246,248,0.6)');
+  text(score, M - 6, 1105, `400 ${size}px Michroma`, chrome);
+  text('/ 100', M + sw + 18, 1105, '400 32px "Geist Variable"', 'rgba(245,246,248,0.6)');
   const tier = TIERS[card.tier] || TIERS.assist;
-  text(`${tier.label.toUpperCase()}${tier.factor > 1 ? ` ×${tier.factor.toFixed(2)}` : ''}`, W - M, 1085, '400 20px "Geist Mono"', 'rgba(245,246,248,0.7)', { align: 'right', spacing: 4 });
+  text(`${tier.label.toUpperCase()}${tier.factor > 1 ? ` ×${tier.factor.toFixed(2)}` : ''}`, W - M, 1105, '400 20px "Geist Mono"', 'rgba(245,246,248,0.7)', { align: 'right', spacing: 4 });
 
   // a hairline, then three numbers
-  g.fillStyle = 'rgba(245,246,248,0.18)'; g.fillRect(M, 1132, W - 2 * M, 1);
+  g.fillStyle = 'rgba(245,246,248,0.18)'; g.fillRect(M, 1140, W - 2 * M, 1);
   const facts = shareFacts(card), col = (W - 2 * M) / 3;
   facts.forEach(([k, v], i) => {
-    text(k.toUpperCase(), M + i * col, 1186, '400 18px "Geist Mono"', 'rgba(245,246,248,0.6)', { spacing: 3.5 });
-    text(v, M + i * col, 1236, '500 40px "Geist Variable"', INK);
+    text(k.toUpperCase(), M + i * col, 1190, '400 18px "Geist Mono"', 'rgba(245,246,248,0.6)', { spacing: 3.5 });
+    text(v, M + i * col, 1238, '500 40px "Geist Variable"', INK);
   });
 
-  // the address
-  text(url.replace(/^https?:\/\//, '').replace(/\/$/, '').toUpperCase(), M, H - 52, '400 18px "Geist Mono"', 'rgba(245,246,248,0.55)', { spacing: 3.5 });
+  // the address: the challenge itself where the run carries one (0260)
+  text(printedAddress(url), M, H - 52, '400 18px "Geist Mono"', 'rgba(245,246,248,0.55)', { spacing: 2 });
   text('Stick the landing.', W - M, H - 52, '400 20px "Geist Variable"', 'rgba(245,246,248,0.55)', { align: 'right' });
 }
 
@@ -137,10 +157,11 @@ export function toast(msg, ms = 1800) {
   el._t = setTimeout(() => el.classList.remove('on'), ms);
 }
 
-// A link that carries the run (`#vs=`, src/challenge.js) is a rematch: the words say so.
+// A link that carries the run (`#vs=`, src/challenge.js) is a rematch: the words are the dare (0260: "Beat my 82.4 on
+// The Show · 360"; a wreck asks for a landing); a plain address (the reference's run) keeps the summary.
 export const isChallengeUrl = (url) => /#vs=/.test(String(url || ''));
 export function inviteText(card, url) {
-  return isChallengeUrl(url) ? `${shareText(card)} Beat my run:` : shareText(card);
+  return isChallengeUrl(url) ? dareText(card) : shareText(card);
 }
 
 // Share a run: the card as a file where the platform takes files (phones, desktop Safari), else
@@ -156,7 +177,7 @@ export async function shareRun({ card, url: urlIn, cardPromise, text: said = '' 
   const data = { title: 'COLD GAS', text, url };
   try {
     const blob = await cardPromise;
-    const file = new File([blob], `coldgas-${card.total.toFixed(1)}.png`, { type: 'image/png' });
+    const file = new File([blob], `coldgas-${card.total.toFixed(1)}.jpg`, { type: blob.type || 'image/jpeg' });
     if (navigator.canShare?.({ files: [file] })) data.files = [file];
   } catch { /* no card: share the words */ }
   // What it resolves to says how it left (0245 share_done's via): 'file' (the sheet, with the picture), 'link' (the
