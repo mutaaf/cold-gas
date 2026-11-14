@@ -1,7 +1,7 @@
 ---
 id: 0253
 title: A challenge link opens in the iPhone app when it is installed, straight into that challenge with the sender's ghost
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: platform

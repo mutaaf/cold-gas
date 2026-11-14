@@ -1,7 +1,7 @@
 ---
 id: 0256
 title: On the iPhone, licenses lead the title and Free play keeps every tier open, held to the web's rules by the vectors
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: platform

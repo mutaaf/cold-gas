@@ -1,7 +1,7 @@
 ---
 id: 0251
 title: A friend's challenge plays in one tap on the same stunt, and beating it sends it straight back
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: engagement

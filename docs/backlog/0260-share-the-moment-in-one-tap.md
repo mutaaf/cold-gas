@@ -1,7 +1,7 @@
 ---
 id: 0260
 title: Share sends the moment in one tap, a card that names the stunt and the score, and a link to the very same challenge
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: engagement

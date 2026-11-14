@@ -1,7 +1,7 @@
 ---
 id: 0248
 title: The first jump is taught by playing it, one hint at a time, and the first landing is celebrated with nothing in its way
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: engagement

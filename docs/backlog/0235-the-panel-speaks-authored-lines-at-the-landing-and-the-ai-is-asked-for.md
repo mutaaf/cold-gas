@@ -1,7 +1,7 @@
 ---
 id: 0235
 title: The panel speaks authored lines at the landing, free and instant, and on the web the AI panel is something you ask for
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: engagement

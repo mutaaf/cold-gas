@@ -1,7 +1,7 @@
 ---
 id: 0245
 title: The Phase 2 funnel is measured from day one, one event vocabulary for the web and the iPhone
-status: ready
+status: in-progress
 priority: P0
 size: M
 lens: engagement

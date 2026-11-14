@@ -1,7 +1,7 @@
 ---
 id: 0243
 title: The Sandbox is the stunt editor and Free Drive is the open road, with wrecks reported there
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: content
