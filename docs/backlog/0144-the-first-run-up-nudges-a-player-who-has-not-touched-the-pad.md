@@ -1,7 +1,7 @@
 ---
 id: 0144
 title: A first run-up that has waited 4 s with no touch lets the pad breathe once
-status: ready
+status: dropped
 priority: P1
 size: S
 lens: engagement
@@ -9,6 +9,8 @@ created: 2026-11-04
 pr:
 by: scout
 ---
+
+**Dropped 2026-11-13: superseded by 0248.** 0248 (Phase 2, 2026-11-13) makes the pad's breath on the mark the guided first jump's first hint.
 
 ## Why
 Played as a first-time visitor on a 390×844 touch phone (`coldgas_howto='new'`, Show): after "Got it · Jump"

@@ -1,7 +1,7 @@
 ---
 id: 0196
 title: A first-ever visit's title offers Jump first and keeps the other choices one tap away
-status: proposed
+status: dropped
 priority: P1
 size: S
 lens: engagement
@@ -9,6 +9,8 @@ created: 2026-11-11
 pr:
 by: scout
 ---
+
+**Dropped 2026-11-13: superseded by 0247.** 0247 (Phase 2, 2026-11-13) folds the title the same way for a first run and also starts the run in one tap.
 
 ## Why
 The funnel (`/obs/digest → players`, 2026-11-01..11-11): 10 human sessions in 11 days, 8 `visit-new`, 12 `run` in all, and

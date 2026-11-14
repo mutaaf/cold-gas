@@ -1,7 +1,7 @@
 ---
 id: 0197
 title: The first-run how-to card closes its dead gap and Skip says what it skips
-status: proposed
+status: dropped
 priority: P2
 size: S
 lens: player-feel
@@ -9,6 +9,8 @@ created: 2026-11-11
 pr:
 by: scout
 ---
+
+**Dropped 2026-11-13: superseded by 0248.** 0248 (Phase 2, 2026-11-13) takes the how-to card out of a first run, so its gap and its Skip no longer gate anyone.
 
 ## Why
 Played at 390×844 touch with `coldgas_howto='new'`, the card after tapping Jump ("One thing to know") shows one step
