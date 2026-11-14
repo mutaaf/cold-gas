@@ -175,14 +175,16 @@ export async function shareRun({ card, url: urlIn, cardPromise, text: said = '' 
   url ||= `${location.origin}${import.meta.env.BASE_URL}`;
   const text = said || inviteText(card, url);
   const data = { title: 'COLD GAS', text, url };
-  try {
-    const blob = await cardPromise;
-    const file = new File([blob], `coldgas-${card.total.toFixed(1)}.jpg`, { type: blob.type || 'image/jpeg' });
-    if (navigator.canShare?.({ files: [file] })) data.files = [file];
-  } catch { /* no card: share the words */ }
   // What it resolves to says how it left (0245 share_done's via): 'file' (the sheet, with the picture), 'link' (the
   // sheet, words and link only), 'copy' (the clipboard); or 'cancelled', or 'shown' (the address in a toast).
   if (navigator.share) {
+    // The card is awaited only for a sheet: the copy below never uses it, so it never waits on the render, the mark or
+    // the encode (a slow phone would spend the tap's activation the clipboard asks for; CI's software GL took > 5 s).
+    try {
+      const blob = await cardPromise;
+      const file = new File([blob], `coldgas-${card.total.toFixed(1)}.jpg`, { type: blob.type || 'image/jpeg' });
+      if (navigator.canShare?.({ files: [file] })) data.files = [file];
+    } catch { /* no card: share the words */ }
     try { await navigator.share(data); return data.files ? 'file' : 'link'; } catch (e) {
       if (e?.name === 'AbortError') return 'cancelled';
       if (data.files) { delete data.files; try { await navigator.share(data); return 'link'; } catch (e2) { if (e2?.name === 'AbortError') return 'cancelled'; } }

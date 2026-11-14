@@ -1,6 +1,6 @@
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { shareFacts, shareText, inviteText, printedAddress } from '../../src/share-card.js';
+import { shareFacts, shareText, inviteText, printedAddress, shareRun } from '../../src/share-card.js';
 import { setUnits } from '../../src/units.js';
 
 // The share card's words (0081): three numbers per event, in the player's primary units, and a
@@ -70,5 +70,49 @@ describe('install files', () => {
     expect(html).toContain('<link rel="apple-touch-icon" href="./apple-touch-icon.png" />');
     expect(html).toContain('content="%VITE_CG_SITE%og.png"');
     expect(html).toMatch(/<html lang="en" style="background:#05070c">/);
+  });
+});
+
+// Without a share sheet the link is copied at once: the copy never uses the card, so it must not wait for one (a slow
+// phone's render, a stalled favicon, the JPEG encode) and spend the tap's activation that the clipboard asks for.
+// Main went red on 2026-11-14 when the card outlasted install.spec's 5 s on a slow software-GL runner.
+describe('shareRun without a share sheet', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  function stubPage({ share } = {}) {
+    const copied = [], toasts = [];
+    const el = { setAttribute() {}, classList: { add() {}, remove() {} }, set textContent(v) { toasts.push(v); } };
+    let made = null;
+    vi.stubGlobal('document', { querySelector: () => made, createElement: () => (made = el), body: { appendChild() {} } });
+    vi.stubGlobal('location', { origin: 'https://example.test' });
+    vi.stubGlobal('navigator', { ...(share ? { share } : {}), clipboard: { writeText: async (t) => { copied.push(t); } } });
+    return { copied, toasts };
+  }
+
+  it('copies the link and says so while the card is still drawing', async () => {
+    const { copied, toasts } = stubPage();
+    const never = new Promise(() => {});
+    const via = await Promise.race([shareRun({ card: show, url: 'https://example.test/coldgas/', cardPromise: never }),
+      new Promise((r) => setTimeout(() => r('waited for the card'), 200))]);
+    expect(via).toBe('copy');
+    expect(toasts).toEqual(['Link copied']);
+    expect(copied).toEqual([`${shareText(show)} https://example.test/coldgas/`]);
+  });
+
+  it('a challenge link still copies as a challenge', async () => {
+    const { toasts } = stubPage();
+    const via = await Promise.race([shareRun({ card: show, url: Promise.resolve('https://example.test/coldgas/#vs=abc'), cardPromise: new Promise(() => {}) }),
+      new Promise((r) => setTimeout(() => r('waited for the card'), 200))]);
+    expect(via).toBe('copy');
+    expect(toasts).toEqual(['Challenge link copied']);
+  });
+
+  it('with a share sheet the card is still awaited and sent as a file', async () => {
+    const sent = [];
+    stubPage({ share: async (d) => { sent.push(d); } });
+    vi.stubGlobal('navigator', { ...navigator, canShare: () => true });
+    const blob = new Blob(['x'], { type: 'image/jpeg' });
+    expect(await shareRun({ card: show, url: 'https://example.test/coldgas/', cardPromise: Promise.resolve(blob) })).toBe('file');
+    expect(sent[0].files?.[0]?.type).toBe('image/jpeg');
   });
 });
