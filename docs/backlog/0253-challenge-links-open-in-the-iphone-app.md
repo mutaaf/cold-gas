@@ -1,12 +1,12 @@
 ---
 id: 0253
 title: A challenge link opens in the iPhone app when it is installed, straight into that challenge with the sender's ghost
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: platform
 created: 2026-11-13
-pr:
+pr: 381
 by: operator
 ---
 

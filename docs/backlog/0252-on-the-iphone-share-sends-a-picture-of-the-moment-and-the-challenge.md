@@ -1,12 +1,12 @@
 ---
 id: 0252
 title: On the iPhone, Share sends a picture of the moment with the stunt, the score and a link to the same challenge
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: engagement
 created: 2026-11-13
-pr:
+pr: 380
 by: operator
 ---
 
