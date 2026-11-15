@@ -63,6 +63,9 @@ const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the m
 const TITLE_COVER = 0.4;   // the share of the car's box the title's panel may cover before the lens moves it (0131)
 const TITLE_FILL = 0.85;   // the most of that band's height the car's box may take; past it the lens widens (0131)
 const TITLE_FOV_MAX = 70;  // deg: how wide the title's lens may go for that
+// s of title time between fits even with no resize: a fit taken from a stale state (the car not drawn yet, a reflow that
+// moved the panel without resizing it) heals by itself. One traversal of the car's meshes, never per frame (main red on 758da53).
+const TITLE_REFIT = 2;
 
 export function createDirector(camera) {
   const st = {
@@ -573,11 +576,11 @@ export function createDirector(camera) {
   // its sway are unchanged) so the car's box sits in the taller clear band, under the panel or over it, when the
   // panel covers more than TITLE_COVER of it. Measured once per change (a resize, the title's own reflow, a course
   // or mode change), never per frame. The panel's scrim feathers less on that side (styles.css, data-car-band).
-  let titleDirty = true;
+  let titleDirty = true, titleAge = 0;
   const titleEl = typeof document !== 'undefined' ? document.querySelector('[data-screen="title"]') : null;
   if (titleEl && typeof ResizeObserver === 'function') new ResizeObserver(() => { titleDirty = true; }).observe(titleEl);
   function titleFit(subject, carPos) {
-    titleDirty = false; st.titleFov = 0; st.titleSide = '';
+    titleDirty = false; titleAge = 0; st.titleFov = 0; st.titleSide = '';
     const w = innerWidth, h = viewH || innerHeight;
     let dy = 0, side = '';
     if (titleEl && camera.aspect < 1 && titleEl.getClientRects().length) {
@@ -691,6 +694,7 @@ export function createDirector(camera) {
     } else if (mode === 'title') titleLineup(time);
     else if (mode === 'replay') replay(carPos);
     else chase(carPos, carVel, phase, dt);
+    if (mode === 'title' && (titleAge += dt) >= TITLE_REFIT) titleDirty = true;
     if (mode === 'title' && titleDirty && st.cutT <= 0 && innerWidth / innerHeight <= 1.15) titleFit(subject, carPos);
     if (mode === 'title' && st.titleFov) st.fov = st.titleFov;
     if (st.shake > 0) {
