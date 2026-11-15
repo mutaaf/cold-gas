@@ -50,8 +50,8 @@ describe('mist ground fade (0217)', () => {
       if (y <= 0) { atGround ??= f; expect(f).toBe(0); }
     }
     expect(atGround).toBe(0);
-    // Not a cliff just above it either: halfway up the band the alpha is still in between.
-    expect(mistGroundFade(p, aSize, c, 0.5, 0.5)).toBeGreaterThan(0.2);
+    // The cloud's density on the ground holds: a grounded puff's centre keeps its full alpha.
+    expect(mistGroundFade(p, aSize, c, 0.5, 0.5)).toBe(1);
   });
 
   it('leaves the cloud above the ground as it was', () => {
@@ -61,10 +61,30 @@ describe('mist ground fade (0217)', () => {
     expect(mistGroundFade({ x: 0, y: 0.15, z: 0 }, 0.35, c, 0.5, 0.5)).toBeGreaterThan(0.95);
   });
 
+  // The shaders' own expressions, run as JS (GLSL's float literals and these matrix reads are valid JS once mapped), so a
+  // sign flip or swapped axis in the GLSL fails here, not just in the mirror.
+  it('the shaders\' own arithmetic puts each fragment where the GPU does', () => {
+    const glsl = (src, name) => new RegExp(`${name} = ([^;]+);`).exec(src)[1].replace(/(\d)\.(?!\d)/g, '$1.0');
+    const hsX = glsl(MIST_VS, 'float hs'), vRY = glsl(MIST_VS, 'vRY'), vUY = glsl(MIST_VS, 'vUY'), yX = glsl(MIST_FS, 'float y');
+    for (const c of [cam(), cam({ roll: 0.3 }), cam({ pos: [-3, 6, 4] })]) {
+      const V = c.matrixWorldInverse.elements, P = c.projectionMatrix.elements;
+      const viewMatrix = [[V[0], V[1], V[2], V[3]], [V[4], V[5], V[6], V[7]], [V[8], V[9], V[10], V[11]], [V[12], V[13], V[14], V[15]]];
+      const projectionMatrix = [[P[0], P[1], P[2], P[3]], [P[4], P[5], P[6], P[7]], [P[8], P[9], P[10], P[11]], [P[12], P[13], P[14], P[15]]];
+      const p = { x: 0.4, y: 0.15, z: -0.2 }, aSize = 2.5;
+      const hs = new Function('aSize', 'projectionMatrix', `return ${hsX};`)(aSize, projectionMatrix);
+      const ry = new Function('viewMatrix', 'hs', `return ${vRY};`)(viewMatrix, hs);
+      const uy = new Function('viewMatrix', 'hs', `return ${vUY};`)(viewMatrix, hs);
+      for (const [px, py] of [[0.5, 1], [0, 0.9], [1, 0.7], [0.3, 0.2]]) {
+        const y = new Function('vY', 'vRY', 'vUY', 'gl_PointCoord', `return ${yX};`)(p.y, ry, uy, { x: px, y: py });
+        expect(y).toBeCloseTo(fragmentWorld(c, p, aSize, px, py).y, 4);
+      }
+    }
+  });
+
   it('the shaders carry the fade, and the material tracks the ground height', () => {
     expect(MIST_VS).toMatch(/viewMatrix\[1\]\[0\]/);
     expect(MIST_VS).toMatch(/viewMatrix\[1\]\[1\]/);
-    expect(MIST_VS).not.toMatch(/\bhalf\b/);   // reserved in GLSL ES
+    expect(MIST_VS + MIST_FS).not.toMatch(/\bhalf\b/);   // reserved in GLSL ES
     expect(MIST_FS).toMatch(/smoothstep\(uGround, uGround \+ vBand, y\)/);
     expect(MIST_FS).toMatch(/t\.a \* vA \* lie/);
     const scene = new THREE.Scene(), hero = new THREE.Group();

@@ -36,10 +36,13 @@ const coneFS = `
 // the same height made one long straight base. Each fragment's world height on its square is rebuilt here (the
 // square's half-size in metres is aSize · SPRITE_K / P[1][1], since gl_PointSize = aSize · scale / depth and scale =
 // SPRITE_K · the buffer's height), and its alpha fades to 0 by the ground plane, over a band that grows with the
-// sprite (a young, small puff barely changes; a grown one feathers out). If the GPU clamps gl_PointSize the real
-// square is smaller than the one rebuilt, so the fade only ends a little higher: never a hard edge.
+// sprite up to 0.15 m (a young, small puff barely changes; a grown one feathers out). 0.15 m is where a grounded puff's
+// centre is clamped, so the cloud lying on the ground keeps its density: only the part of each sprite below its centre
+// thins out. If the GPU clamps gl_PointSize the real square is smaller than the one rebuilt, so the fade only ends a
+// little higher: never a hard edge. Free Drive passes the ground under the car: mist drifting over lower terrain fades at
+// that height, as it was already clamped to it.
 export const SPRITE_K = 0.6;
-export const MIST_FADE = { k: 0.35, min: 0.06, max: 0.6 };   // band = clamp(k · half-size, min, max) metres
+export const MIST_FADE = { k: 0.35, min: 0.06, max: 0.15 };   // band = clamp(k · half-size, min, max) metres
 export const MIST_VS = `attribute float aSize; attribute float aAlpha; varying float vA; uniform float scale;
       varying float vY; varying float vRY; varying float vUY; varying float vBand;
       void main(){ vA = aAlpha;

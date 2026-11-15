@@ -12,7 +12,8 @@
 //   [--dpr=2]   a size ending in t is a touch phone, drawn at deviceScaleFactor --dpr (default 2, as a phone is; the
 //   desktop sizes at 1). Needs a served build (`npx vite preview --port 4655 --strictPort`).
 import { chromium } from 'playwright';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, realpathSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
 
 const args = process.argv.slice(2);
 const flag = (k, d) => { const a = args.find((s) => s.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : d; };
@@ -24,13 +25,14 @@ const courses = flag('courses', 'show,wall,lineup').split(',');
 const gfx = flag('gfx', '');
 const phoneDpr = Number(flag('dpr', '2'));
 const BAR = 40;
+const MIN_COLUMNS = 100;   // CSS px of mist: a frame with no cloud passes nothing
 if (out) mkdirSync(out, { recursive: true });
 
 const luma = (d, i) => 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
 
-// The longest straight, sharp run along the mask's lower boundary (device px), the boundary's row there, and the edge's
-// median width (device px).
-export function straightBase(a, b, w, h) {
+// The longest straight, sharp run along the mask's lower boundary (device px; neighbours within `tol` px, one CSS px),
+// the boundary's row there, and the edge's median width (device px).
+export function straightBase(a, b, w, h, tol = 1) {
   const diff = new Float32Array(w * h);
   for (let i = 0; i < w * h; i++) diff[i] = Math.abs(luma(a, i * 4) - luma(b, i * 4));
   let best = 0, run = 0, prev = -9, bestY = -1, px = 0;
@@ -53,7 +55,7 @@ export function straightBase(a, b, w, h) {
       let y5 = yb; while (y5 < h - 1 && diff[y5 * w + x] >= 5) y5++;
       widths.push(y5 - yh);
     }
-    if (sharp && run > 0 && Math.abs(yb - prev) <= 1) run++;
+    if (sharp && run > 0 && Math.abs(yb - prev) <= tol) run++;
     else run = sharp ? 1 : 0;
     prev = sharp ? yb : -9;
     if (run > best) { best = run; bestY = yb; }
@@ -75,7 +77,7 @@ async function rgba(page, png) {
   return { width: m.w, height: m.h, data: Buffer.from(m.px, 'base64') };
 }
 
-const isMain = import.meta.url === `file://${process.argv[1]}`;
+const isMain = !!process.argv[1] && import.meta.url === pathToFileURL(realpathSync(process.argv[1])).href;
 if (isMain) {
   const browser = await chromium.launch({ args: ['--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'], ...(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}) });
   const rows = [];
@@ -97,30 +99,34 @@ if (isMain) {
     if (!hit) { rows.push({ course, size, run: null }); await ctx.close(); continue; }
     await page.waitForTimeout(300);
     const dpr = touch ? phoneDpr : 1;
-    // Full resolution, applied by the next render (scene.js setPixelScale: a refit never lands between a draw and its
-    // presentation).
-    await page.evaluate(() => { const g = window.__coldgas; g.stage.setPixelScale(1); g.stage.render(g.S.time, g.S.mode); });
+    // Full resolution, re-pinned in each shot and applied by its render (scene.js setPixelScale: a refit never lands
+    // between a draw and its presentation). The governor can step the scale between the two shots (each evaluated render
+    // is a long frame), so both shots report their pixel ratio, and a mismatch is a failed frame.
     const shoot = async (on) => {
-      await page.evaluate((v) => { const g = window.__coldgas; const was = g.plumes.points.visible; g.plumes.points.visible = v && was; g.stage.render(g.S.time, g.S.mode); g.plumes.points.visible = was; }, on);
-      return page.screenshot();
+      const pr = await page.evaluate((v) => {
+        const g = window.__coldgas; const was = g.plumes.points.visible;
+        g.stage.setPixelScale(1); g.stage.render(g.S.time, g.S.mode);   // refit first
+        g.plumes.points.visible = v && was; g.stage.render(g.S.time, g.S.mode); g.plumes.points.visible = was;
+        return g.stage.renderer.getPixelRatio();
+      }, on);
+      return { png: await page.screenshot(), pr };
     };
-    // The canvas keeps its last frame (preserveDrawingBuffer or not, the screenshot composites what was presented), so
-    // render, shoot, and render again for the other.
-    const withMist = await shoot(true), without = await shoot(false);
+    const on = await shoot(true), off = await shoot(false);
+    const withMist = on.png, without = off.png;
     const A = await rgba(page, withMist), B = await rgba(page, without);
-    const raw = straightBase(A.data, B.data, A.width, A.height);
+    const raw = straightBase(A.data, B.data, A.width, A.height, dpr);
     const css = (v) => (v == null ? null : Math.round(v / dpr));
-    const r = { run: css(raw.run), y: css(raw.y), columns: css(raw.columns), width: raw.width == null ? null : Math.round(raw.width / dpr * 10) / 10, dpr };
+    const r = { run: css(raw.run), y: css(raw.y), columns: css(raw.columns), width: raw.width == null ? null : Math.round(raw.width / dpr * 10) / 10, dpr, pr: on.pr, prOk: on.pr === off.pr };
     if (out) { writeFileSync(`${out}/${course}-${size}-mist.png`, withMist); writeFileSync(`${out}/${course}-${size}-nomist.png`, without); }
     rows.push({ course, size, ...r });
-    console.error(`  ${course} ${size}: straight base ${r.run} px at y ${r.y}, edge width ${r.width} px (${r.columns} columns of mist)`);
+    console.error(`  ${course} ${size}: straight base ${r.run} px at y ${r.y}, edge width ${r.width} px (${r.columns} columns of mist, pixel ratio ${on.pr}${r.prOk ? '' : ` then ${off.pr}`})`);
     await ctx.close();
   }
   await browser.close();
   console.log('course size        straight base px   at y   edge width px   mist columns   (CSS px)');
   for (const r of rows) console.log(`${r.course.padEnd(6)} ${r.size.padEnd(11)} ${String(r.run ?? 'miss').padStart(16)}   ${String(r.y ?? '').padStart(4)}   ${String(r.width ?? '').padStart(13)}   ${r.columns ?? ''}`);
   if (out) writeFileSync(`${out}/mist-edge.json`, JSON.stringify(rows, null, 1));
-  const bad = rows.filter((r) => r.run == null || r.run > BAR);
-  if (bad.length) { console.log(`FAIL: ${bad.length} frame(s) over the ${BAR} px bar (or missed)`); process.exit(1); }
+  const bad = rows.filter((r) => r.run == null || r.run > BAR || !r.prOk || r.columns < MIN_COLUMNS);
+  if (bad.length) { console.log(`FAIL: ${bad.length} frame(s) over the ${BAR} px bar, missed, with too little mist or with the pixel ratio changed between shots`); process.exit(1); }
   console.log(`ok: every straight base ≤ ${BAR} px`);
 }
