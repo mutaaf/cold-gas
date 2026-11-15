@@ -1,0 +1,35 @@
+[
+ {
+  "course": "show",
+  "size": "390x844t",
+  "run": 0,
+  "y": 0,
+  "columns": 315,
+  "width": 5.5,
+  "dpr": 2,
+  "pr": 2,
+  "prOk": true
+ },
+ {
+  "course": "wall",
+  "size": "390x844t",
+  "run": 1,
+  "y": 514,
+  "columns": 340,
+  "width": 5.5,
+  "dpr": 2,
+  "pr": 2,
+  "prOk": true
+ },
+ {
+  "course": "lineup",
+  "size": "390x844t",
+  "run": 2,
+  "y": 464,
+  "columns": 275,
+  "width": 4.5,
+  "dpr": 2,
+  "pr": 2,
+  "prOk": true
+ }
+]
