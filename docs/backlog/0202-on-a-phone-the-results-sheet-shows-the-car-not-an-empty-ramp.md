@@ -1,12 +1,12 @@
 ---
 id: 0202
 title: On a phone, the results sheet's backdrop shows the car that just landed, not an empty ramp
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-12
-pr:
+pr: 397
 by: critic
 ---
 
