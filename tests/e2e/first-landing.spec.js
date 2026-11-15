@@ -11,12 +11,12 @@ test.slow();
 
 const phone = (browser, opts = {}) => browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, ...opts });
 
-async function boot(page, { firstVisit = false } = {}) {
+async function boot(page, { firstVisit = false, course = '' } = {}) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   // An automated browser counts as a returning player; this one is new (once: a reload keeps what it set).
   if (firstVisit) await page.addInitScript(() => { if (!localStorage.getItem('coldgas_howto')) localStorage.setItem('coldgas_howto', 'new'); });
-  await page.goto('/coldgas/?gfx=low');
+  await page.goto(`/coldgas/?gfx=low${course ? `&course=${course}` : ''}`);
   await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
   return errors;
@@ -101,6 +101,44 @@ test('phone, first visit: a landing gets its beat with the card’s numbers, a t
   expect(errors).toEqual([]);
   await page.close();
 });
+
+// 0202: the calm sheet sits at the foot of a phone over a fade and the replay plays above it, so the car is framed in the
+// band over the sheet's first line: its projected centre on screen and ≥ 40 px above the verdict, at 0.5 s and 5 s into
+// the sheet and on nearly every frame between (on main the wide shot left it under the verdict for the first 10 s).
+for (const course of ['show', 'wall', 'lineup']) {
+  test(`phone, first visit, ${course}: the calm sheet's replay shows the car above the verdict`, async ({ browser }) => {
+    const page = await phone(browser);
+    const errors = await boot(page, { firstVisit: true, course });
+    const card = await flyTo(page);
+    expect(card.crashed).toBe(false);
+    expect(await toSheet(page)).toBe('results');
+    await expect(page.locator('[data-screen="results"]')).toHaveAttribute('data-calm', '');
+    const r = await page.evaluate(async () => {
+      const g = window.__coldgas, S = g.S, v = g.carRoot.position.clone(), t0 = performance.now(), marks = [];
+      let frames = 0, above = 0;
+      const read = () => {
+        g.camera.updateMatrixWorld();
+        v.copy(g.carRoot.position).project(g.camera);
+        const x = (v.x + 1) / 2 * innerWidth, y = (1 - v.y) / 2 * innerHeight, top = document.querySelector('[data-r-verdict]').getBoundingClientRect().top;
+        return { x: Math.round(x), y: Math.round(y), top: Math.round(top), ok: v.z < 1 && x >= 0 && x <= innerWidth && y >= 0 && y <= top - 40 };
+      };
+      for (const m of [0.5, 5]) {
+        while ((performance.now() - t0) / 1000 < m && S.mode === 'results') {
+          await new Promise(requestAnimationFrame);
+          frames++; if (read().ok) above++;
+        }
+        marks.push({ m, ...read() });
+      }
+      return { marks, frames, above, mode: S.mode };
+    });
+    expect(r.mode).toBe('results');
+    for (const m of r.marks) expect(m.ok, JSON.stringify(r)).toBe(true);
+    // A cut can leave the car outside for the frame it lands on; nothing more.
+    expect(r.above / r.frames, JSON.stringify(r)).toBeGreaterThanOrEqual(0.95);
+    expect(errors).toEqual([]);
+    await page.close();
+  });
+}
 
 test('phone: a returning player gets the beat and the full sheet; the sheet comes by itself once the beat has run', async ({ browser }) => {
   const page = await phone(browser);

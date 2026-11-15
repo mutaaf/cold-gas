@@ -1514,13 +1514,34 @@ function peek(on) {
   if (hadFocus) (on ? peekEl.querySelector('[data-peek-back]') : sheetEl.querySelector('[data-replay]'))?.focus({ preventScroll: true });
   frameReplay();
 }
-// The region the replay is framed in: above the peek, left of a sheet beside it, or the whole screen.
+// The region the replay is framed in: above the peek, left of a sheet beside it, above the calm sheet's first line, or the
+// whole screen.
 function frameReplay() {
-  const w = innerWidth, h = innerHeight;
+  const w = innerWidth, h = innerHeight, band = calmBand();
   if (S.peek) director.setRegion(0, 0, w, h - peekEl.offsetHeight);
   else if (!resultsEl.hidden && sheetEl.offsetLeft >= w * 0.25) director.setRegion(0, 0, sheetEl.offsetLeft, h);
+  else if (band) director.setRegion(0, 0, w, band, true);
   else director.setRegion();
 }
+// 0202: on a phone the calm sheet (a player's first runs) sits at the foot of the screen over a fade, and the replay
+// plays above it. The car is framed in the band over the sheet's first line, not under the verdict. The line's place in
+// the layout (offsetTop: a line's own rise or the sheet's slide-in don't move it); 0 where there's no such band (the
+// full sheet, More, a sheet beside the replay).
+function calmBand() {
+  if (resultsEl.hidden || !resultsEl.hasAttribute('data-calm') || resultsEl.hasAttribute('data-more') || sheetEl.offsetLeft >= innerWidth * 0.25) return 0;
+  let first = null;
+  for (const el of sheetEl.children) if (el.getClientRects().length) { first = el; break; }
+  if (!first) return 0;
+  let top = -sheetEl.scrollTop;
+  for (let e = first; e && e !== document.body; e = e.offsetParent) top += e.offsetTop;
+  return top >= innerHeight * 0.2 ? top : 0;
+}
+// The band moves when the sheet's lines do (NEXT RUN arrives a beat after the sheet, the calm sheet opens to More), not
+// with the frame: observed, never measured per frame.
+const bandWatch = typeof ResizeObserver === 'function' ? new ResizeObserver(() => { if (!resultsEl.hidden) frameReplay(); }) : null;
+for (const el of sheetEl.children) bandWatch?.observe(el);
+new MutationObserver(() => frameReplay()).observe(resultsEl, { attributes: true, attributeFilter: ['hidden', 'data-calm', 'data-more'] });
+sheetEl.addEventListener('scroll', () => { if (resultsEl.hasAttribute('data-calm')) frameReplay(); }, { passive: true });
 peekEl.addEventListener('click', (e) => { if (!e.target.closest('button') || e.target.closest('[data-peek-back]')) peek(false); });
 function replayStep(dt) {
   const frames = S.run?.frames;

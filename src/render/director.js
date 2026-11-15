@@ -68,6 +68,7 @@ const TITLE_FOV_MAX = 70;  // deg: how wide the title's lens may go for that
 // without resizing, which no ResizeObserver reports; the car not drawn yet) is taken again; one that stands is never
 // re-placed, whatever the sway does, so the lens doesn't move. A few rects and, after a fallback fit, one traversal.
 const TITLE_CHECK = 2;
+const BAND_LEAD = 0.3;   // how far from the car toward the curl the wide rig aims over the calm sheet's band (0202)
 const TITLE_MOVED = 2;   // px an edge may move before the fit is stale
 
 export function createDirector(camera) {
@@ -83,7 +84,7 @@ export function createDirector(camera) {
     // The replay's own region of the screen (0068): what the results leave uncovered, in CSS px. The
     // replay's lens is shifted to its centre, and the wide locked-off rig aims toward the car's path by
     // `aim` (0 = the reference framing, 1 = on the path) as the region narrows.
-    rl: 0, rt: 0, rr: 0, rb: 0, aim: 0,
+    rl: 0, rt: 0, rr: 0, rb: 0, aim: 0, band: false, ox: 0, oy: 0,   // ox, oy: the lens shift the region asks for (px)
     bandT: 1, bandB: -1,                                 // the carry's band (0113, NDC): under the top HUD, over the bottom one
     bandL: 1,                                            // under the HUD standing at the top of the left edge (0116, NDC)
     railR: -1, railF: 1,                                 // the upright left rail's right edge and its foot (0128, NDC; −1/1 when none)
@@ -532,10 +533,14 @@ export function createDirector(camera) {
           camera.lookAt(st.lookS); camera.updateMatrixWorld();
           tmp.copy(carPos).project(camera);
           const px = (tmp.x + 1) / 2 * innerWidth, mx = (st.rr - st.rl) * 0.1;
-          if (px < st.rl + mx || px > st.rr - mx) st.init = false;
+          const py = (1 - tmp.y) / 2 * innerHeight, my = (st.rb - st.rt) * 0.1;
+          if (px < st.rl + mx || px > st.rr - mx || (st.band && (py < st.rt + my || py > st.rb - my))) st.init = false;
         }
         if (!st.init) {
-          st.lookS.set(carPos.x / 2, (carPos.y + 8 * K) / 2, (carPos.z + 9.3 * K) / 2);
+          // Over a band (0202), a third of the way from the car: an upright phone's band is too narrow for the midpoint
+          // to keep the car in it, so the car leads and the shot re-cuts as it nears the band's edge.
+          const q = st.band ? BAND_LEAD : 0.5;
+          st.lookS.set(carPos.x * (1 - q), carPos.y + (8 * K - carPos.y) * q, carPos.z + (9.3 * K - carPos.z) * q);
           st.lookS.set(0.5 + (st.lookS.x - 0.5) * a, 11.5 * K + (st.lookS.y - 11.5 * K) * a, 5.5 * K + (st.lookS.z - 5.5 * K) * a);
           st.init = true;
         }
@@ -672,7 +677,7 @@ export function createDirector(camera) {
   // The title's lens sits right of the panel on a wide screen. The replay's sits at the centre of the
   // region the results leave uncovered (0068): left of the sheet on a wide screen, above the peek on a
   // phone. A full-screen region is no shift at all.
-  function frameOffset(mode) {
+  function frameOffset(mode, ease = false) {
     const w = innerWidth, h = innerHeight;
     if (mode === 'title' && w / h > 1.15) {
       // Turned or widened from upright: the upright fit lets go (its offset, lens and scrim side).
@@ -680,21 +685,39 @@ export function createDirector(camera) {
       return camera.setViewOffset(w, h, -w * 0.2, h * 0.04, w, h);
     }
     if (mode === 'title') { titleDirty = true; return; }   // upright: titleFit places it on the next title frame
+    st.ox = st.oy = 0;
     if (mode === 'replay' && st.rr > 0) {
       const dx = w / 2 - (st.rl + st.rr) / 2, dy = h / 2 - (st.rt + st.rb) / 2;
+      st.ox = dx; st.oy = dy;
+      // A region that moves while the replay plays (the calm sheet's band as its lines arrive, 0202) eases there in
+      // update(); a new replay, a resize or a region from nothing is placed at once.
+      if (ease && camera.view?.enabled && camera.view.fullWidth === w && camera.view.fullHeight === h) return;
       if (Math.abs(dx) >= 1 || Math.abs(dy) >= 1) return camera.setViewOffset(w, h, dx, dy, w, h);
     }
     if (camera.view?.enabled) camera.clearViewOffset();
   }
+  // The replay's lens toward its region's centre, ≈ 0.3 s (no per-frame work once it's there).
+  function easeOffset(dt) {
+    const v = camera.view;
+    if (!v?.enabled) return;
+    const ex = st.ox - v.offsetX, ey = st.oy - v.offsetY;
+    if (Math.abs(ex) < 0.25 && Math.abs(ey) < 0.25) return;
+    const k = 1 - Math.exp(-dt * 10), x = v.offsetX + ex * k, y = v.offsetY + ey * k;
+    if (Math.abs(st.ox) < 1 && Math.abs(st.oy) < 1 && Math.abs(x) < 1 && Math.abs(y) < 1) camera.clearViewOffset();
+    else camera.setViewOffset(v.fullWidth, v.fullHeight, x, y, v.width, v.height);
+  }
   // Where the replay can be seen (CSS px); nothing given, or nothing left, is the whole screen.
-  function setRegion(l = 0, t = 0, r = innerWidth, b = innerHeight) {
-    if (r - l < 40 || b - t < 40) { l = 0; t = 0; r = innerWidth; b = innerHeight; }
-    st.rl = l; st.rt = t; st.rr = r; st.rb = b;
+  // `band`: the region is a band over a sheet at the foot of the screen (0202): the wide rig aims on the car's path
+  // whatever the band's shape, and re-cuts when the car nears its top or bottom too.
+  function setRegion(l = 0, t = 0, r = innerWidth, b = innerHeight, band = false) {
+    if (r - l < 40 || b - t < 40) { l = 0; t = 0; r = innerWidth; b = innerHeight; band = false; }
+    if (st.mode === 'replay' && (st.rl !== l || st.rt !== t || st.rr !== r || st.rb !== b || st.band !== band)) st.shot = -1;   // re-place the shot in the new region
+    st.rl = l; st.rt = t; st.rr = r; st.rb = b; st.band = band;
     // As wide as tall or wider: the reference framing. A portrait strip: on the car. The whole screen (no
     // results beside or under the replay) keeps the reference framing whatever its shape.
     const full = l === 0 && t === 0 && r === innerWidth && b === innerHeight;
-    st.aim = full ? 0 : clamp((1 - (r - l) / (b - t)) / 0.4, 0, 1);
-    if (st.mode === 'replay') frameOffset('replay');
+    st.aim = full ? 0 : band ? 1 : clamp((1 - (r - l) / (b - t)) / 0.4, 0, 1);
+    if (st.mode === 'replay') frameOffset('replay', true);
   }
 
   // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup' })
@@ -736,6 +759,7 @@ export function createDirector(camera) {
     const fov = st.fov - st.punch;
     if (Math.abs(camera.fov - fov) > 0.01) { camera.fov = fov; camera.updateProjectionMatrix(); }
     if (mode === 'title' && st.titleSide) titleHold(carPos);
+    if (mode === 'replay') easeOffset(dt);
   }
 
   // Hold a locked-off camera at `pos` for `seconds` (crash cuts); a mode change cancels it.
