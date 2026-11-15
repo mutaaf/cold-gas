@@ -1,12 +1,12 @@
 ---
 id: 0184
 title: In a first-ever session the rookie offer comes after the second wreck, not the third
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: engagement
 created: 2026-11-10
-pr:
+pr: 394
 by: scout
 ---
 
@@ -25,10 +25,10 @@ the offer is one dismissible button, not a nag, and nothing about a score change
 the one-tap action are unchanged. Pure change in rookie.js; main.js passes the "never landed" bit it already knows.
 
 ## Acceptance criteria
-- [ ] Never-landed device: the offer shows on the second crash in a row; a clean run resets it.
-- [ ] A device with any stored medal or landed run still needs three crashes.
-- [ ] No offer on a run already on Easy + Assist; no sim, scoring or SIM_VERSION change.
-- [ ] Works at 390x844 touch and 1280x720 keyboard; the sheet still fits without overlap (`npm run audit`).
+- [x] Never-landed device: the offer shows on the second crash in a row; a clean run resets it.
+- [x] A device with any stored medal or landed run still needs three crashes.
+- [x] No offer on a run already on Easy + Assist; no sim, scoring or SIM_VERSION change.
+- [x] Works at 390x844 touch and 1280x720 keyboard; the sheet still fits without overlap (`npm run audit`).
 - [ ] Moves: `retry` after `run-wrecked` in the players funnel.
 
 ## Test plan
