@@ -691,7 +691,7 @@ function showPointer(run) {
 // that has never landed a Jump, 0184) the results offer
 // one button: Easy driving + Assist flight (auto-land), saved, and straight into the retry. Any clean run
 // ends the streak, and so does a change of driving level or flight tier (the player chose; the offer
-// waits for three new crashes).
+// waits for three new crashes, two before a first landing).
 // The theatre (full screen on a phone, over the sheet) carries the same button in its action bar (0076):
 // one offer, drawn twice, both from syncRookie, both clicks through goRookie (delegated, below).
 // Adapt to me (0079, src/adapt.js) is the same model, grown: per session it also counts crashes on this

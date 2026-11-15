@@ -208,6 +208,30 @@ test('phone, first visit: the second crash in a row offers Rookie mode and says 
   await page.close();
 });
 
+test('desktop, first visit: the second crash offers it, keyboard reachable from Retry, text ≥ 11 px', async ({ page }) => {
+  const errors = await bootNew(page);
+  expect((await fly(page, true)).offered).toBe(false);
+  const r2 = await fly(page, true);
+  expect(r2, JSON.stringify(r2)).toMatchObject({ crashed: true, streak: 2, offered: true });
+  const go = page.locator('[data-rookie] [data-rookie-go]');
+  const m = await go.evaluate((el) => {
+    const b = el.getBoundingClientRect(), sheet = el.closest('.sheet').getBoundingClientRect();
+    const sizes = [el, ...el.querySelectorAll('*'), document.querySelector('[data-rookie-why]')].map((e) => parseFloat(getComputedStyle(e).fontSize));
+    return { h: b.height, minFont: Math.min(...sizes), inside: b.left >= sheet.left - 1 && b.right <= sheet.right + 1 };
+  });
+  expect(m.h).toBeGreaterThanOrEqual(44);
+  expect(m.minFont).toBeGreaterThanOrEqual(11);
+  expect(m.inside).toBe(true);
+  await page.locator('.results [data-again]').first().focus();
+  let reached = false;
+  for (let i = 0; i < 8 && !reached; i++) { await page.keyboard.press('Tab'); reached = await go.evaluate((el) => el === document.activeElement); }
+  expect(reached).toBe(true);
+  await page.keyboard.press('Enter');
+  expect(await page.evaluate(() => ({ level: window.__coldgas.driving.settings.level, tier: window.__coldgas.S.tier, streak: window.__coldgas.S.crashStreak })))
+    .toMatchObject({ level: 'easy', tier: 'assist', streak: 0 });
+  expect(errors).toEqual([]);
+});
+
 test('desktop, first visit with a medal on record: two crashes offer nothing, the third does', async ({ page }) => {
   const errors = await bootNew(page, { medal: true });
   for (let k = 1; k <= 2; k++) {

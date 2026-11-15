@@ -75,6 +75,7 @@ describe('the streak', () => {
     expect(rookieWhy(2)).toMatch(/^Two crashes in a row\. /);
     expect(rookieWhy(3)).toMatch(/^Three crashes in a row\. /);
     expect(rookieWhy(12)).toMatch(/^12 crashes in a row\. /);
+    expect(rookieWhy(1)).toMatch(/^One crash\. /);
     expect(rookieWhy(3)).toContain('switch back in Controls');
   });
   it('keeps for the session; blocked or junk storage is a fresh start, never a throw', () => {

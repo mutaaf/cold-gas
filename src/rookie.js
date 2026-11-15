@@ -19,7 +19,7 @@ export const offerRookie = (n, level, tier, neverLanded = false) =>
 // The offer's one line says the streak it answers (0184: the second crash says two, not three).
 const COUNT = ['', 'One', 'Two', 'Three', 'Four', 'Five', 'Six', 'Seven', 'Eight', 'Nine'];
 export const rookieWhy = (n) =>
-  `${COUNT[n | 0] || (n | 0)} crashes in a row. Easy driving and Assist flying land it for you; switch back in Controls.`;
+  `${COUNT[n | 0] || (n | 0)} ${(n | 0) === 1 ? 'crash' : 'crashes in a row'}. Easy driving and Assist flying land it for you; switch back in Controls.`;
 
 // The streak lives for this tab's session (a reload keeps it, a new visit starts clean).
 const KEY = 'coldgas_crash_streak';
