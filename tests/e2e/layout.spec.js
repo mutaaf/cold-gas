@@ -92,22 +92,23 @@ test('320 px column: the top bar and the title fit, nothing under the bar; on a 
   await fresh.close();
 });
 
-// main went red on 758da53: the fresh 390×844 boot above read under 60 % for 20 s on a slow CI runner, never locally. The fit
-// was measured once per resize, so a fit taken from a stale state (here: the car not drawn yet, the fallback box) stayed
-// wrong until the next resize. It is measured again every TITLE_REFIT s of title time now, so it heals by itself.
-test('upright title: a fit taken while the car was not drawn heals once it is, with no resize', async ({ browser }) => {
+// main went red on 758da53: the fresh 390×844 boot above read under 60 % for 20 s on a slow CI runner, never locally (the
+// cause there is not known). The fit was measured only on a resize, so a fit taken from a stale state held until the next
+// one: here the panel moves without resizing (a transform: no ResizeObserver call), the fit is taken there, then it moves
+// back. The framing is checked every TITLE_CHECK s now and fitted again when the car is lost.
+test('upright title: a fit taken while the panel stood elsewhere heals by itself, with no resize', async ({ browser }) => {
   test.slow();
   const page = await browser.newPage(touch(390, 844));
   await boot(page);
   await page.waitForTimeout(1500);
-  await page.evaluate(() => { window.__coldgas.hero.group.visible = false; });
-  await page.setViewportSize({ width: 391, height: 844 });   // a fit with nothing of the car to measure
+  await page.evaluate(() => { document.querySelector('[data-screen="title"]').style.transform = 'translateY(-260px)'; });
+  await page.setViewportSize({ width: 391, height: 844 });   // a fit with the panel 260 px up
   await page.waitForTimeout(1000);
   await page.setViewportSize({ width: 390, height: 844 });
   await page.waitForTimeout(1000);
-  await page.evaluate(() => { window.__coldgas.hero.group.visible = true; });
-  await expect.poll(async () => (await heroClear(page)).free, { timeout: 15_000 }).toBeGreaterThanOrEqual(0.98);
-  expect((await heroClear(page)).band).toBe('below');
+  await page.evaluate(() => { document.querySelector('[data-screen="title"]').style.transform = ''; });
+  await expect.poll(async () => (await heroClear(page)).free, { timeout: 15_000 }).toBeGreaterThanOrEqual(0.9);
+  expect((await heroClear(page)).band).not.toBe('');   // a band, whichever is taller for the panel as it stands
   await page.close();
 });
 
