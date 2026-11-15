@@ -129,7 +129,7 @@ export function pointerText(id, ctx, flight = null) {
     case 'over-roll': return `Stop the roll early: let go of ${keyOf(ctx, rollAct(ctx))} about 40° before level`;
     case 'no-roll': return assist ? `Roll upright: ${ctl(ctx, 'land')} after you let go` : `Roll upright: ${ctl(ctx, rollAct(ctx))} after you let go`;
     case 'tilt': return assist ? `Level it for the last 2 m: ${ctl(ctx, 'land')} and stop steering` : 'Level it by the dial before the last 2 m';
-    case 'mark': if (thumbOn(ctx) && oneTurnLineup(ctx, flight)) return `Next: ${LINEUP_CALL}, then hold in the air and slide onto the amber dot`;
+    case 'mark': if (thumbOn(ctx) && oneTurnLineup(ctx, flight)) return `For Gold: ${LINEUP_CALL}, then hold in the air and slide onto the amber dot`;
       return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
     case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';

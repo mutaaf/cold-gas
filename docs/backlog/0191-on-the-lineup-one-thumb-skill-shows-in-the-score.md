@@ -138,7 +138,7 @@ Production `index-BfrEcyEr.js` (= main `fbad7ca`), 390×844 touch, CDP touches o
 `src/pointer.js`: on one thumb on the Lineup, a flight that turned under 540° (the coach's `rollDeg`) gets the call in the pad's
 words before the aim or Pro: inside the 3.5 m ring "Clean, 1.3 m from the mark. Next: slide up on the run-up for two turns, then
 aim for the mark"; outside it "Clean. Next: slide up on the run-up for two turns, then slide onto the amber dot"; a `mark` fix
-"Next: slide up on the run-up for two turns, then hold in the air and slide onto the amber dot". A 720 keeps its lines (the aim,
+"For Gold: slide up on the run-up for two turns, then hold in the air and slide onto the amber dot". A 720 keeps its lines (the aim,
 then Pro). WHAT HAPPENED's "Try Pro" still follows. No sim or scorer change (ref-hash, vectors untouched).
 - `tests/e2e/lineup-thumb.spec.js` (390×844 touch): the held-from-Go 360's `[data-pointer-text]` names the call and not Pro
   (fails on main with "Clean, 4.3 ft 1.3 m from the mark. Next: try Pro and fly the landing yourself"); the slid-up 720's names

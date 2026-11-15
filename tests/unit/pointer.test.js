@@ -106,7 +106,7 @@ describe('the pointer after a run', () => {
     expect(held).toBe('Clean, 1.3 m from the mark. Next: slide up on the run-up for two turns, then aim for the mark');
     expect(held).not.toMatch(/Pro/);
     expect(pointerText('clean', LINEUP, fl(4.2, 358))).toBe('Clean. Next: slide up on the run-up for two turns, then slide onto the amber dot');
-    expect(pointerText('mark', LINEUP, fl(6, 360))).toMatch(/^Next: slide up on the run-up for two turns, then .*amber dot/);
+    expect(pointerText('mark', LINEUP, fl(6, 360))).toBe('For Gold: slide up on the run-up for two turns, then hold in the air and slide onto the amber dot');
     // Two turns: unaimed names the aim, on the mark names Pro (as before).
     expect(pointerText('clean', LINEUP, fl(4.2, 721))).toBe('Clean. Next: hold in the air and slide onto the amber dot to land on the mark');
     expect(pointerText('clean', LINEUP, fl(1.0, 720))).toBe('Clean, 1.0 m from the mark. Next: try Pro and fly the landing yourself');
@@ -114,6 +114,10 @@ describe('the pointer after a run', () => {
     // The call is the thumb's: two thumbs, keys and Pro on the Lineup never hear it; the Show's 360 keeps Pro.
     for (const ctx of [{ ...TOUCH, course: 'lineup' }, { ...KEY, course: 'lineup' }, { ...PRO, course: 'lineup' }]) expect(pointerText('clean', ctx, fl(1.3, 360))).not.toMatch(/two turns/);
     expect(pointerText('clean', THUMB, fl(1.3, 360))).toMatch(/try Pro/);
+    // The cut is the card's turn count (judge.js: Math.round(rollDeg / 360)): 539° is one turn, 540° two; an unread roll is as before.
+    expect(pointerText('clean', LINEUP, fl(1.3, 539))).toMatch(/two turns/);
+    expect(pointerText('clean', LINEUP, fl(1.3, 540))).toMatch(/try Pro/);
+    expect(pointerText('clean', LINEUP, fl(1.3, NaN))).toMatch(/try Pro/);
     // No flight read: as before.
     expect(pointerText('clean', LINEUP)).toMatch(/slide onto the amber dot to land on the mark/);
   });
