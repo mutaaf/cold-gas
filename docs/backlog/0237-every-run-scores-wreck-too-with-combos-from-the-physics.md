@@ -1,7 +1,7 @@
 ---
 id: 0237
 title: Every scored run gets a Wreck score too, with destruction combos that come from the physics
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: player-feel
