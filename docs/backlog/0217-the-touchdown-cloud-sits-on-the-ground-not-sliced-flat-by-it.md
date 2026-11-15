@@ -1,7 +1,7 @@
 ---
 id: 0217
 title: The touchdown cloud sits on the ground instead of being sliced flat by it
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: authenticity
