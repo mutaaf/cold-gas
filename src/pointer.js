@@ -129,7 +129,8 @@ export function pointerText(id, ctx, flight = null) {
     case 'over-roll': return `Stop the roll early: let go of ${keyOf(ctx, rollAct(ctx))} about 40° before level`;
     case 'no-roll': return assist ? `Roll upright: ${ctl(ctx, 'land')} after you let go` : `Roll upright: ${ctl(ctx, rollAct(ctx))} after you let go`;
     case 'tilt': return assist ? `Level it for the last 2 m: ${ctl(ctx, 'land')} and stop steering` : 'Level it by the dial before the last 2 m';
-    case 'mark': return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
+    case 'mark': if (thumbOn(ctx) && oneTurnLineup(ctx, flight)) return `Next: ${LINEUP_CALL}, then hold in the air and slide onto the amber dot`;
+      return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
     case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
     case 'clean': if (thumbOn(ctx)) return thumbClean(ctx, flight);
@@ -144,11 +145,21 @@ export function pointerText(id, ctx, flight = null) {
 // own clean fix is "Try Pro"); the Wall reads the same rings since 0182 (it paid to 0.8 m and named the 2 m ring first). The miss is
 // read at the card's 0.1 m (judge.js r1), so the line and the Daily agree at the edges. Short of the ring, the slide.
 export const THUMB_MARK_RING = 3.5;
+// 0191: on the Lineup one thumb flies one turn unless it calls two (src/onethumb.js LINEUP_TWICE: slid up on the run-up),
+// and no 360 reaches its Gold (src/medals.js: 92.5, a 360 tops out at 91.7). So a one-turn flight's next step is the call,
+// in the pad's words ("↑ for 720"), before the aim or Pro: the one thing that earns Gold on one thumb. A 720 keeps the
+// lines below (the aim, then Pro). Two turns read ≥ 540° on the flight (rollDeg); no flight read: as before.
+export const LINEUP_CALL = 'slide up on the run-up for two turns';
+function oneTurnLineup(ctx, flight) {
+  return ctx.course === 'lineup' && flight != null && Number.isFinite(flight.rollDeg) && flight.rollDeg < 540;
+}
 function thumbClean(ctx, flight) {
   const raw = flight?.touch?.padMiss;
   const miss = Math.round(raw * 10) / 10;
-  if (!(miss <= THUMB_MARK_RING)) return 'Clean. Next: hold in the air and slide onto the amber dot to land on the mark';
+  const call = oneTurnLineup(ctx, flight);
+  if (!(miss <= THUMB_MARK_RING)) return call ? `Clean. Next: ${LINEUP_CALL}, then slide onto the amber dot` : 'Clean. Next: hold in the air and slide onto the amber dot to land on the mark';
   const d = miss.toFixed(1);
+  if (call) return `Clean, ${d} m from the mark. Next: ${LINEUP_CALL}, then aim for the mark`;
   return `Clean, ${d} m from the mark. Next: try Pro and fly the landing yourself`;
 }
 

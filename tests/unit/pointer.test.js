@@ -98,6 +98,25 @@ describe('the pointer after a run', () => {
     expect(pointerText('clean', TOUCH, at(2.4))).toBe('Clean. Next: a softer touchdown, closer to the mark');
     expect(pointerText('clean', PRO, at(2.4))).toBe('Clean. Next: under 1 m/s and the 2 m ring');
   });
+  it('one thumb on the Lineup: a 360 names the call for two turns before the aim or Pro; a 720 keeps the aim, then Pro (0191)', () => {
+    const LINEUP = { ...THUMB, course: 'lineup' };
+    const fl = (padMiss, rollDeg) => ({ touch: { padMiss }, rollDeg });
+    // Held from Go: one turn, 1.3 m off (production's Silver). The card names the call, not Pro.
+    const held = pointerText('clean', LINEUP, fl(1.3, 361));
+    expect(held).toBe('Clean, 1.3 m from the mark. Next: slide up on the run-up for two turns, then aim for the mark');
+    expect(held).not.toMatch(/Pro/);
+    expect(pointerText('clean', LINEUP, fl(4.2, 358))).toBe('Clean. Next: slide up on the run-up for two turns, then slide onto the amber dot');
+    expect(pointerText('mark', LINEUP, fl(6, 360))).toMatch(/^Next: slide up on the run-up for two turns, then .*amber dot/);
+    // Two turns: unaimed names the aim, on the mark names Pro (as before).
+    expect(pointerText('clean', LINEUP, fl(4.2, 721))).toBe('Clean. Next: hold in the air and slide onto the amber dot to land on the mark');
+    expect(pointerText('clean', LINEUP, fl(1.0, 720))).toBe('Clean, 1.0 m from the mark. Next: try Pro and fly the landing yourself');
+    expect(pointerText('mark', LINEUP, fl(6, 720))).toBe('Aim for the rings: holding the pad in the air, slide onto the amber dot');
+    // The call is the thumb's: two thumbs, keys and Pro on the Lineup never hear it; the Show's 360 keeps Pro.
+    for (const ctx of [{ ...TOUCH, course: 'lineup' }, { ...KEY, course: 'lineup' }, { ...PRO, course: 'lineup' }]) expect(pointerText('clean', ctx, fl(1.3, 360))).not.toMatch(/two turns/);
+    expect(pointerText('clean', THUMB, fl(1.3, 360))).toMatch(/try Pro/);
+    // No flight read: as before.
+    expect(pointerText('clean', LINEUP)).toMatch(/slide onto the amber dot to land on the mark/);
+  });
   it('picks the costliest fix', () => {
     expect(pickPointer([item('late-land'), item('tilt')], KEY)).toMatchObject({ id: 'late-land', better: '' });
   });

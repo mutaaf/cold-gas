@@ -48,6 +48,11 @@ test('the Lineup on a phone: the title, the how-to card and the run all fly one 
   expect(out.verdict).toMatch(/Stuck it|Perfect 10/);
   expect(out.roll).toBeGreaterThanOrEqual(330);
   expect(out.miss).toBeLessThan(3.5);
+  // 0191: no 360 reaches the Lineup's one-thumb Gold, so the card's NEXT RUN names the call in the pad's words, not Pro.
+  const next = page.locator('[data-pointer-text]');
+  await expect(next).toHaveText(/Next: slide up on the run-up for two turns, then aim for the mark/, { timeout: 10_000 });
+  await expect(next).not.toHaveText(/Pro/);
+  await expect(page.locator('[data-pointer]')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -78,5 +83,9 @@ test('the Lineup on a phone: slid up on the run-up, the pad calls two turns and 
   expect(out.verbs).toEqual(expect.arrayContaining(['↑ for 720 · Drive', 'Two turns · Drive']));
   expect(out.verdict).toMatch(/Stuck it|Perfect 10/);
   expect(out.roll).toBeGreaterThanOrEqual(700);
+  // Two turns flown: the card's next step is the aim (or, on the mark, Pro), never the call again (0191).
+  const next = page.locator('[data-pointer-text]');
+  await expect(next).toHaveText(/slide onto the amber dot|try Pro/, { timeout: 10_000 });
+  await expect(next).not.toHaveText(/two turns/);
   expect(errors).toEqual([]);
 });
