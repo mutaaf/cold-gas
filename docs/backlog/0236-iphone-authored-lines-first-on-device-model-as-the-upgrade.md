@@ -1,7 +1,7 @@
 ---
 id: 0236
 title: On the iPhone, the authored lines speak first and Apple's on-device model is the free upgrade, with no automatic cloud call
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: platform
