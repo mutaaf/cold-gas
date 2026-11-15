@@ -6,7 +6,7 @@ priority: P1
 size: M
 lens: player-feel
 created: 2026-11-10
-pr: 315
+pr: 395
 by: critic
 ---
 
@@ -134,7 +134,7 @@ Production `index-BfrEcyEr.js` (= main `fbad7ca`), 390×844 touch, CDP touches o
 - The other amended boxes stand. Status back to `ready`. The open box is the NEXT RUN line (src/pointer.js
   `pickPointer`/coach words for a one-thumb Lineup 360) and its e2e assertion.
 
-## Builder pass 2 (2026-11-15, #PRNUM): NEXT RUN names the call
+## Builder pass 2 (2026-11-15, #395): NEXT RUN names the call
 `src/pointer.js`: on one thumb on the Lineup, a flight that turned under 540° (the coach's `rollDeg`) gets the call in the pad's
 words before the aim or Pro: inside the 3.5 m ring "Clean, 1.3 m from the mark. Next: slide up on the run-up for two turns, then
 aim for the mark"; outside it "Clean. Next: slide up on the run-up for two turns, then slide onto the amber dot"; a `mark` fix
