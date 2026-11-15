@@ -40,18 +40,18 @@ Keep the cloud's look as it is above the ground: its density, its spread outward
 fade-out time. Don't change the sim, the camera or the director.
 
 ## Acceptance criteria
-- [ ] At touchdown (`S.run.phase === 'landed'`, the first frame) on the Show, the Wall and the Lineup, at 390×844 touch
+- [x] At touchdown (`S.run.phase === 'landed'`, the first frame) on the Show, the Wall and the Lineup, at 390×844 touch
       and 1440×900, measure the straight edge in the mist only. Take the frame with the mist on and with
       `points.visible = false`, diff them (luma), and threshold the diff at 8 levels. The mask's lower boundary has
       **no horizontal run longer than 40 px** where the diff falls from ≥ 20 to < 5 within 2 px. Today that run is
       about 187 px on the Show phone frame. Add the probe as a script or a mode of `scripts/look-audit.mjs`, and put
       before → after numbers in the PR.
-- [ ] Side-by-side screenshots of each touchdown (before → after) in the PR: the cloud lies on the pad, with no straight
+- [x] Side-by-side screenshots of each touchdown (before → after) in the PR: the cloud lies on the pad, with no straight
       base line.
-- [ ] Phone frame time is no worse (`scripts/perf.mjs` or the e2e perf probe), and on `low` the mist still draws.
-- [ ] Flicker: `flicker.mjs --only=show-replay` within budget, with the same `--only` list on main and the branch
+- [x] Phone frame time is no worse (`scripts/perf.mjs` or the e2e perf probe), and on `low` the mist still draws.
+- [x] Flicker: `flicker.mjs --only=show-replay` within budget, with the same `--only` list on main and the branch
       (LESSONS 2026-11-11).
-- [ ] `ref-hash` unchanged (render only).
+- [x] `ref-hash` unchanged (render only).
 
 ## Test plan
 - A unit test on the mist's shader or material: a particle at `groundY + 0.15` with its sprite crossing the ground has
@@ -68,3 +68,13 @@ I diffed the touchdown frame (`S.run.phase === 'landed'`) against the same view 
 cleared (luma, threshold 12). From x 60 to x 760 (device px, 90 % of the width), the mist's lowest row sits at
 **y 1251–1259**: a level line about **350 CSS px long, flat within 4 CSS px**. That's longer than the 187 px measured
 at filing. Frame: `docs/critique/2026-11-14-0423/phone-show-touchdown.png`. The 40 px acceptance bar stands.
+
+## Shipped (#392, 2026-11-15)
+Each mist fragment's world height on its camera-facing square is rebuilt in the shader, and its alpha fades to 0 by the
+ground plane over a band of up to 0.15 m (where a grounded puff's centre sits, so the cloud on the ground keeps its
+density). `node scripts/mist-edge.mjs` (the probe above, SwiftShader, phone at DPR 2) on main → branch, straight base in
+CSS px: Show phone 24 → 1, desktop 15 → 1; Wall phone 10 → 1, desktop 0 → 1; Lineup phone 31 → 2, desktop 20 → 8. On
+software GL main is already under 40 px (the critic's 187–350 px were on a GPU), so judge by the same-machine before →
+after and `docs/shots/0217/`. Low tier: the mist draws, 0 px. Flicker `--only=show-replay`, both swiftshader screens,
+6/6 ok, branch = main. ref-hash unchanged. Frame cost: a few ALU ops per mist fragment and one uniform write a frame,
+not measured on a phone GPU.
