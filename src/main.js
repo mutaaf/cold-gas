@@ -30,7 +30,7 @@ import { siteFloor } from './sim/complex.js';
 import { SPEC } from './sim/spec.js';
 import { bindInput, sample, sampleThumb, thumb, usingTouch, getNozzlePad, onDevice, lastDevice, resetInput, freshRun, pollPads, heldState, driving as drivingSettings, setDriving, onDriving, drivingState, onPadY, onPadA } from './input.js';
 import { LEVEL_INFO } from './driving.js';
-import { isCrash, nextStreak, offerRookie, loadStreak, saveStreak } from './rookie.js';
+import { isCrash, nextStreak, offerRookie, rookieWhy, loadStreak, saveStreak } from './rookie.js';
 import { loadPerf, savePerf, record, decide, outcomeOf, afterChange, coachLive, loadFlown, saveFlown, loadAdapt, saveAdapt, TIER_WORDS, factorText, stepDownBanner, offerWords } from './adapt.js';
 import { deviceOf, howtoRows, pauseRows, deviceTitle, pickPointer, livePointer, coachWords } from './pointer.js';
 import { createPoseLerp, createBodiesLerp } from './render/interp.js';
@@ -687,7 +687,8 @@ function showPointer(run) {
   S.tip = p.id === 'clean' ? '' : text;
 }
 
-// Rookie mode (0074, src/rookie.js): crashed runs in a row, this session. From the third the results offer
+// Rookie mode (0074, src/rookie.js): crashed runs in a row, this session. From the third (the second on a device
+// that has never landed a Jump, 0184) the results offer
 // one button: Easy driving + Assist flight (auto-land), saved, and straight into the retry. Any clean run
 // ends the streak, and so does a change of driving level or flight tier (the player chose; the offer
 // waits for three new crashes).
@@ -696,7 +697,7 @@ function showPointer(run) {
 // Adapt to me (0079, src/adapt.js) is the same model, grown: per session it also counts crashes on this
 // tier and good runs in a row. Between runs only, it steps the tier down after crashes (Adapt to me on,
 // with Undo on the sheet) and offers a harder step after clean landings (never forced).
-const rookieBox = document.querySelector('[data-rookie]'), rookieTheatre = document.querySelector('[data-theatre]');
+const rookieBox = document.querySelector('[data-rookie]'), rookieWhyEl = rookieBox.querySelector('[data-rookie-why]'), rookieTheatre = document.querySelector('[data-theatre]');
 S.perf = loadPerf();
 S.crashStreak = loadStreak();
 S.perf.crashes = S.crashStreak;   // one streak: Rookie's (0074) is the model's crash count
@@ -727,8 +728,11 @@ onDriving((d) => { if (d.level !== streakLevel) { streakLevel = d.level; S.perf 
 const adaptBox = document.querySelector('[data-adapt-box]'), adaptDown = document.querySelector('[data-adapt-down]'), adaptUp = document.querySelector('[data-adapt-up]');
 function syncRookie() {
   const results = S.mode === 'results';
-  const offer = results && !S.adaptNow?.stepDown && offerRookie(S.crashStreak, drivingSettings.level, S.tier);
+  // 0184: a device that has never landed a Jump (firstRun: an automated browser only when it asked for a first visit)
+  // is offered it from the second crash in a row.
+  const offer = results && !S.adaptNow?.stepDown && offerRookie(S.crashStreak, drivingSettings.level, S.tier, firstRun());
   rookieBox.hidden = !offer;
+  if (offer) rookieWhyEl.textContent = rookieWhy(S.crashStreak);
   rookieTheatre.classList.toggle('th-rookie', offer);
   // Adapt to me: the step it took (and Undo), or the harder step it offers. Rookie's offer wins the sheet.
   const a = results ? S.adaptNow : null;

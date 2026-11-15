@@ -167,3 +167,54 @@ test('phone: the theatre\'s bar offers Rookie mode while the show plays; a tap s
   expect(errors).toEqual([]);
   await page.close();
 });
+
+// Ticket 0184: a first-ever visit (coldgas_howto = 'new', nothing landed on this device) is offered Rookie mode on
+// the second crash in a row, and the line says two; a device with a medal on record still waits for the third.
+async function bootNew(page, { medal = false } = {}) {
+  await page.addInitScript((medal) => {
+    if (sessionStorage.getItem('__seeded')) return;   // once per test, so the page's own writes survive a reload
+    sessionStorage.setItem('__seeded', '1');
+    localStorage.setItem('coldgas_howto', 'new');
+    if (medal) localStorage.setItem('coldgas_medals', JSON.stringify({ 'show:assist': 84 }));
+  }, medal);
+  return boot(page);
+}
+const rookieLine = (page) => page.evaluate(() => document.querySelector('[data-rookie-why]').textContent);
+
+test('phone, first visit: the second crash in a row offers Rookie mode and says two; a clean landing resets it', async ({ browser }) => {
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  const errors = await bootNew(page);
+  const r1 = await fly(page, true);
+  expect(r1, JSON.stringify(r1)).toMatchObject({ mode: 'results', crashed: true, streak: 1, offered: false });
+  const r2 = await fly(page, true);
+  expect(r2, JSON.stringify(r2)).toMatchObject({ mode: 'results', crashed: true, streak: 2, offered: true });
+  expect(await rookieLine(page)).toMatch(/^Two crashes in a row\./);
+  await page.waitForTimeout(1200);   // the sheet's slide-in and the button's rise
+  const lay = await page.evaluate(() => {
+    const r = (el) => el.getBoundingClientRect();
+    const go = r(document.querySelector('[data-rookie] [data-rookie-go]')), bar = r(document.querySelector('.results .top-actions-row'));
+    return { top: go.top, bottom: go.bottom, h: go.height, barTop: bar.top };
+  });
+  expect(lay.h).toBeGreaterThanOrEqual(44);
+  expect(lay.top).toBeGreaterThanOrEqual(0);
+  expect(lay.bottom).toBeLessThanOrEqual(lay.barTop + 1);
+  // A clean landing ends the streak (and this device has now landed: from here on, three).
+  const clean = await fly(page, false);
+  expect(clean, JSON.stringify(clean)).toMatchObject({ mode: 'results', crashed: false, streak: 0, offered: false });
+  for (let k = 1; k <= 2; k++) expect((await fly(page, true)).offered).toBe(false);
+  expect((await fly(page, true)).offered).toBe(true);
+  expect(await rookieLine(page)).toMatch(/^Three crashes in a row\./);
+  expect(errors).toEqual([]);
+  await page.close();
+});
+
+test('desktop, first visit with a medal on record: two crashes offer nothing, the third does', async ({ page }) => {
+  const errors = await bootNew(page, { medal: true });
+  for (let k = 1; k <= 2; k++) {
+    const r = await fly(page, true);
+    expect(r, JSON.stringify(r)).toMatchObject({ mode: 'results', crashed: true, streak: k, offered: false });
+  }
+  const r3 = await fly(page, true);
+  expect(r3, JSON.stringify(r3)).toMatchObject({ crashed: true, streak: 3, offered: true });
+  expect(errors).toEqual([]);
+});
