@@ -31,6 +31,42 @@ const coneFS = `
     gl_FragColor = vec4(col * 1.6, a);
   }`;
 
+// The touchdown cloud lies on the ground (0217). A mist point is a camera-facing square drawn at its centre's depth, so
+// the ground's depth test cuts it exactly where that square passes below the ground plane: hundreds of them clamped at
+// the same height made one long straight base. Each fragment's world height on its square is rebuilt here (the
+// square's half-size in metres is aSize · SPRITE_K / P[1][1], since gl_PointSize = aSize · scale / depth and scale =
+// SPRITE_K · the buffer's height), and its alpha fades to 0 by the ground plane, over a band that grows with the
+// sprite (a young, small puff barely changes; a grown one feathers out). If the GPU clamps gl_PointSize the real
+// square is smaller than the one rebuilt, so the fade only ends a little higher: never a hard edge.
+export const SPRITE_K = 0.6;
+export const MIST_FADE = { k: 0.35, min: 0.06, max: 0.6 };   // band = clamp(k · half-size, min, max) metres
+export const MIST_VS = `attribute float aSize; attribute float aAlpha; varying float vA; uniform float scale;
+      varying float vY; varying float vRY; varying float vUY; varying float vBand;
+      void main(){ vA = aAlpha;
+        if (aAlpha <= 0.) { gl_PointSize = 0.; gl_Position = vec4(2., 2., 2., 1.); return; }
+        vec4 mv = modelViewMatrix * vec4(position,1.); gl_PointSize = aSize * scale / max(-mv.z, 0.05); gl_Position = projectionMatrix * mv;
+        float hs = aSize * ${SPRITE_K.toFixed(3)} / projectionMatrix[1][1];
+        vY = (modelMatrix * vec4(position, 1.)).y;
+        vRY = viewMatrix[1][0] * hs; vUY = viewMatrix[1][1] * hs;
+        vBand = clamp(${MIST_FADE.k.toFixed(3)} * hs, ${MIST_FADE.min.toFixed(3)}, ${MIST_FADE.max.toFixed(3)}); }`;
+export const MIST_FS = `uniform sampler2D map; uniform float uGround; varying float vA;
+      varying float vY; varying float vRY; varying float vUY; varying float vBand;
+      void main(){ vec4 t = texture2D(map, gl_PointCoord);
+        float y = vY + (gl_PointCoord.x * 2. - 1.) * vRY + (1. - gl_PointCoord.y * 2.) * vUY;
+        float lie = smoothstep(uGround, uGround + vBand, y);
+        gl_FragColor = vec4(vec3(0.86,0.9,0.95), t.a * vA * lie); }`;
+
+// The same arithmetic in JS, for the unit test: the alpha factor of the fragment at point coordinate (px, py) of a mist
+// point at world `p` with size `aSize`, seen through `camera` (its matrixWorldInverse and projectionMatrix current).
+export function mistGroundFade(p, aSize, camera, px, py, groundY = 0) {
+  const V = camera.matrixWorldInverse.elements, P = camera.projectionMatrix.elements;
+  const half = aSize * SPRITE_K / P[5];
+  const y = p.y + (px * 2 - 1) * V[4] * half + (1 - py * 2) * V[5] * half;
+  const band = Math.min(MIST_FADE.max, Math.max(MIST_FADE.min, MIST_FADE.k * half));
+  const t = Math.min(1, Math.max(0, (y - groundY) / band));
+  return t * t * (3 - 2 * t);
+}
+
 function mistTexture() {
   if (typeof document === 'undefined') return new THREE.Texture();   // Node (unit tests)
   const c = document.createElement('canvas'); c.width = c.height = 64;
@@ -76,15 +112,12 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
   pgeo.setAttribute('aAlpha', new THREE.BufferAttribute(alpha, 1).setUsage(THREE.DynamicDrawUsage));
   const pmat = new THREE.ShaderMaterial({
     transparent: true, depthWrite: false,
-    uniforms: { map: { value: mistTexture() }, scale: { value: 600 } },
+    uniforms: { map: { value: mistTexture() }, scale: { value: 600 }, uGround: { value: 0 } },
     // A dead particle (alpha 0) is clipped with no size: it used to keep its last size (metres,
     // hundreds of pixels up close) and be shaded at alpha 0. `scale` is in drawing-buffer pixels
     // (setScale), as gl_PointSize is, so the mist is the same apparent size at any DPR.
-    vertexShader: `attribute float aSize; attribute float aAlpha; varying float vA; uniform float scale;
-      void main(){ vA = aAlpha;
-        if (aAlpha <= 0.) { gl_PointSize = 0.; gl_Position = vec4(2., 2., 2., 1.); return; }
-        vec4 mv = modelViewMatrix * vec4(position,1.); gl_PointSize = aSize * scale / max(-mv.z, 0.05); gl_Position = projectionMatrix * mv; }`,
-    fragmentShader: `uniform sampler2D map; varying float vA; void main(){ vec4 t = texture2D(map, gl_PointCoord); gl_FragColor = vec4(vec3(0.86,0.9,0.95), t.a * vA); }`,
+    vertexShader: MIST_VS,
+    fragmentShader: MIST_FS,
   });
   const points = new THREE.Points(pgeo, pmat);
   points.frustumCulled = false;
@@ -159,6 +192,7 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
     }
     live = n0;
     points.visible = live > 0;
+    pmat.uniforms.uGround.value = groundY;
     if (dirty) {
       uploads++;
       pgeo.attributes.position.needsUpdate = true;
@@ -188,7 +222,7 @@ export function createPlumes(scene, hero, { maxMist = 900 } = {}) {
 
   function clear() { life.fill(0); alpha.fill(0); live = 0; points.visible = false; pgeo.attributes.aAlpha.needsUpdate = true; }
   // h = the drawing buffer's height in pixels (stage.onResize), not CSS pixels.
-  function setScale(h) { pmat.uniforms.scale.value = h * 0.6; }
+  function setScale(h) { pmat.uniforms.scale.value = h * SPRITE_K; }
 
   return { update, clear, setScale, burst, bursts: () => bursts, live: () => live, uploads: () => uploads, points };
 }
