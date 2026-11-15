@@ -73,7 +73,7 @@ at filing. Frame: `docs/critique/2026-11-14-0423/phone-show-touchdown.png`. The 
 Each mist fragment's world height on its camera-facing square is rebuilt in the shader, and its alpha fades to 0 by the
 ground plane over a band of up to 0.15 m (where a grounded puff's centre sits, so the cloud on the ground keeps its
 density). `node scripts/mist-edge.mjs` (the probe above, SwiftShader, phone at DPR 2) on main → branch, straight base in
-CSS px: Show phone 24 → 1, desktop 15 → 1; Wall phone 10 → 1, desktop 0 → 1; Lineup phone 31 → 2, desktop 20 → 8. On
+CSS px: Show phone 24 → 0, desktop 15 → 4; Wall phone 10 → 1, desktop 0 → 1; Lineup phone 31 → 2, desktop 20 → 8. On
 software GL main is already under 40 px (the critic's 187–350 px were on a GPU), so judge by the same-machine before →
 after and `docs/shots/0217/`. Low tier: the mist draws, 0 px. Flicker `--only=show-replay`, both swiftshader screens,
 6/6 ok, branch = main. ref-hash unchanged. Frame cost: a few ALU ops per mist fragment and one uniform write a frame,
