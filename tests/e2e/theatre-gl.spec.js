@@ -41,14 +41,25 @@ function watch(page) {
   return seen;
 }
 
+// A phone runs the call docked and a docked call ends the moment it answers, taking "Watch the call" with it.
+// So on a phone the judges' answer is held until the test has put the theatre up: a gate, not a fixed hold
+// (a 6 s hold lost the race on a slow CI runner, the button went with the answer, and the click waited out
+// the test's 7 minutes). Each run opens its own gate; the route waits on the gate of the run that asked.
+function gated() {
+  let open;
+  const promise = new Promise((r) => { open = r; });
+  return { promise, open };
+}
+
 // A reference run straight to its results, the theatre up with its field.
-async function toTheatre(page) {
+async function toTheatre(page, gates) {
+  if (gates) gates.now = gated();
   await page.evaluate(() => { const g = window.__coldgas; g.startRun('reveal'); g.skipCountdown(); g.fastForward(); });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 60_000 });
   // A phone runs the call docked on the sheet (the score first): "Watch the call" puts the theatre up.
-  const watch = page.locator('[data-call-watch]');
-  if (page.viewportSize().width < 720) await watch.waitFor({ state: 'visible', timeout: 15_000 }).then(() => watch.click(), () => {});
+  if (gates) await page.locator('[data-call-watch]').click({ timeout: 60_000 });
   await page.waitForFunction(() => { const t = document.querySelector('[data-theatre]'); return t && !t.hidden && t.querySelector('.th-canvas') && t.dataset.stage; }, null, { timeout: 60_000 });
+  gates?.now.open();
 }
 const stageIs = (page, s) => page.waitForFunction((s) => document.querySelector('[data-theatre]')?.dataset.stage === s, s, { timeout: 90_000 });
 const theatreGone = (page) => expect(page.locator('[data-theatre]')).toBeHidden({ timeout: 90_000 });
@@ -65,11 +76,12 @@ for (const vp of VIEWPORTS) {
     const page = await browser.newPage(opts);
     await page.addInitScript(trackContexts);
     const seen = watch(page);
-    // A phone runs the call docked and a docked call ends the moment it answers: the answer is held a few
-    // seconds there, so "Watch the call" has a live show to put up (Skip and Retry mid-stream, as on a desktop).
-    const hold = opts.hasTouch ? 6000 : 0;
+    // A phone: the answer waits for the theatre to be up (gated(), above), so "Watch the call" has a live
+    // show to put up (Skip and Retry mid-stream, as on a desktop). A gate left shut lets go after 2 minutes.
+    const gates = opts.hasTouch ? { now: null } : null;
     await page.route('**/coldgas/api/judge/stream', async (route) => {
-      if (hold) await new Promise((r) => setTimeout(r, hold));
+      const gate = gates?.now;
+      if (gate) await Promise.race([gate.promise, new Promise((r) => setTimeout(r, 120_000))]);
       await route.fulfill({ status: 200, contentType: 'text/event-stream', body: judgeBody }).catch(() => {});
     });
     await page.goto('/coldgas/?gfx=low');
@@ -77,21 +89,21 @@ for (const vp of VIEWPORTS) {
 
     // 1 · Skip mid-stream, during the figures: the answer is already in (so Skip ends the show at once),
     // and COMPUTE is still queued behind the figure on screen.
-    await toTheatre(page);
+    await toTheatre(page, gates);
     await stageIs(page, 'text');
     await page.locator('.th-skip').click();
     await theatreGone(page);
     await page.waitForTimeout(2500);   // past the figure's own beat, when the queued stage step comes due
 
     // 2 · Retry mid-stream (the figures playing, COMPUTE queued): the show is torn down at once.
-    await toTheatre(page);
+    await toTheatre(page, gates);
     await stageIs(page, 'text');
     await page.evaluate(() => document.querySelector('[data-theatre] [data-again]').click());
     await expect(page.locator('[data-theatre]')).toBeHidden();
     await page.waitForTimeout(2500);
 
     // 3 · Retry while the theatre is still fading out (tapped in the page the moment the fade starts).
-    await toTheatre(page);
+    await toTheatre(page, gates);
     await page.evaluate(() => new Promise((resolve) => {
       const root = document.querySelector('[data-theatre]');
       const go = () => { if (!root.classList.contains('out')) return setTimeout(go, 8); root.querySelector('[data-again]').click(); resolve(); };
@@ -101,7 +113,7 @@ for (const vp of VIEWPORTS) {
     await page.waitForTimeout(1500);   // past the fade's own teardown
 
     // 4 · The whole show, to the verdict and out.
-    await toTheatre(page);
+    await toTheatre(page, gates);
     await theatreGone(page);
     await page.waitForTimeout(1500);
 
