@@ -69,7 +69,7 @@ static float3 hazed(float3 c, float3 d, float L, float3 eye, constant LookU& k) 
     float sun = pow(max(dot(d, k.sunDir.xyz), 0.0), 6.0);
     return mix(c, k.hazeCol.rgb + k.sunCol.rgb * sun, fog);
 }
-// The most one set lamp lights the car with (0269): ≈ 1.8× the Show's key (1.7), so white paint under two of them stays under
+// The most one set lamp lights the car with (0270): ≈ 1.8× the Show's key (1.7), so white paint under two of them stays under
 // the tone curve's shoulder (AgX) and the car keeps its shape.
 constant float HERO_LUX = 3.0;
 static float ggx(float nh, float a) { float a2 = max(a * a, 1e-4), d = nh * nh * (a2 - 1.0) + 1.0; return a2 / max(M_PI_F * d * d, 1e-6); }
@@ -194,7 +194,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
                 cone = smoothstep(co, max(L.dirCos.w, co + 1e-4), cd);
             }
             float att = cone / max(dist * dist, 1e-2);   // three: intensity / max(d^decay, 0.01) (decay 2 on every stage light)
-            // The car (flags.w & 4, 0269): a set lamp lights its paint to at most HERO_LUX. The base uplights stand 1–3 m off the
+            // The car (flags.w & 4, 0270): a set lamp lights its paint to at most HERO_LUX. The base uplights stand 1–3 m off the
             // car at the curl's foot, and inverse-square put hundreds of times the key on it: a white blown-out car at every
             // run's opening. The lamps still light the set at full strength; on the car they read as a bright rake, never a blaze.
             if (m.flags.w & 4u) att = min(att, HERO_LUX / max(L.colorIntensity.w, 1e-3));
@@ -356,7 +356,7 @@ fragment float4 cg_smear_fragment(SOut in [[stage_in]], texture2d<float> src [[t
 // --- Bloom (three's UnrealBloomPass's numbers, far fewer pixels) -----------------------------------------------------------
 // Its luminosity high pass in the HDR frame before exposure, per tap so a thin lamp keeps its energy (its average over a quarter-res
 // texel would fall under the threshold and flicker), into a quarter-res chain halved five times; one pass then adds the levels.
-// A soft knee (0269): only what's over the threshold blooms, eased in over half the threshold below it. The hard step it
+// A soft knee (0270): only what's over the threshold blooms, eased in over half the threshold below it. The hard step it
 // replaces put a pixel's whole colour into the chain the moment it crossed: a lit white car just over 0.82 became a frame-wide
 // haze. Lamps, beams and jets (2–10) keep most of their glow. Inputs capped at 16: a glint cannot wash the frame either.
 static float3 highPass(float3 c, float threshold) {

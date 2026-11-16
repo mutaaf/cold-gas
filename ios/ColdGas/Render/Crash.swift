@@ -315,7 +315,7 @@ final class Crash {
         }
         return (ns, nm, nc)
     }
-    /// The hit's white flash; none with Reduce Motion or Dim Flashing Lights (0269: a crash's hits can come faster than 3 a second).
+    /// The hit's white flash; none with Reduce Motion or Dim Flashing Lights (0270: a crash's hits can come faster than 3 a second).
     var flash: (pos: SIMD3<Float>, size: Float, k: Float)? { flashT > 0 && !Flashing.reduced ? (flashPos, flashS * (1.3 - 0.3 * min(1, flashT / 0.1)), pow(min(1, flashT / 0.1), 2)) : nil }
 }
 

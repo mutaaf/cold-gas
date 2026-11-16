@@ -1,4 +1,4 @@
-// `-luma <tag>` (Debug, 0269): the glare probe. Every `-luma-every` frames (default 2) the LDR frame (after exposure and tone,
+// `-luma <tag>` (Debug, 0270): the glare probe. Every `-luma-every` frames (default 2) the LDR frame (after exposure and tone,
 // before MetalFX) is read back and measured, and one line is printed:
 //   LUMA <tag>#<track> t <s since the track started> car <% of the car's pixels clipped> hot <% near white> carMean sd carPeak carPx
 //        frame <% clipped> hot <% near white> washed <% with luma ≥ 160> peak mean

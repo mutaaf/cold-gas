@@ -232,7 +232,7 @@ final class Renderer {
             u.emissive = SIMD4(M.emissive, M.unlit ? 1 : 0)
             u.pbr = SIMD4(M.metalness, M.roughness, M.clearcoat, M.clearcoatRoughness)
             if let t = M.map { let tx = st.textures[t]; u.uvTransform = SIMD4(tx.repeatUV.x, tx.repeatUV.y, tx.offset.x, tx.offset.y) }
-            // 4: the car's own materials (the roadster's, and the forged car's), whose light from each set lamp is capped (0269, Shaders.metal HERO_LUX).
+            // 4: the car's own materials (the roadster's, and the forged car's), whose light from each set lamp is capped (0270, Shaders.metal HERO_LUX).
             let hero = M.name.hasPrefix("roadster-") || M.name.hasPrefix("drive-")
             u.flags = SIMD4(M.map != nil ? 1 : 0, M.roughnessMap != nil ? 1 : 0, M.emissiveMap != nil ? 1 : 0, (M.vertexColors ? 1 : 0) | (M.fog ? 2 : 0) | (hero ? 4 : 0))
             u.effect = SIMD4(M.effectColor, M.effectPower); u.effectKind = SIMD4(M.effect, M.alphaMap != nil ? 1 : 0, M.wet ? 1 : 0, M.additive ? 1 : 0)
@@ -654,7 +654,7 @@ final class Renderer {
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3); e.endEncoding()
         }
         #if DEBUG
-        LumaProbe.shared?.capture(cmd, ldr: ldr, t: simClock, car: stage.roadster, carM: carM, viewProj: u.viewProj)   // `-luma` (0269)
+        LumaProbe.shared?.capture(cmd, ldr: ldr, t: simClock, car: stage.roadster, carM: carM, viewProj: u.viewProj)   // `-luma` (0270)
         #endif
         cut("film")
         // 6. MetalFX, then present

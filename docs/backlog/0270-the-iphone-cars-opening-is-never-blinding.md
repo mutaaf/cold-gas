@@ -1,5 +1,5 @@
 ---
-id: 0269
+id: 0270
 title: On the iPhone the car is never blinding at a run's opening (the Show, the Wall, the title)
 status: shipped
 priority: P0
@@ -27,7 +27,7 @@ Render-only, iOS (`ios/ColdGas/Render/`), kept small so #365 merges on top:
 
 ## Acceptance criteria
 - [ ] The first seconds of the Show, Wall and Lineup runs and of the title loop: no car pixels clipped to white beyond
-  specular glints, no frame-wide bloom wash (before/after frames and numbers in docs/shots/0269/).
+  specular glints, no frame-wide bloom wash (before/after frames and numbers in docs/shots/0270/).
 - [ ] The set lamps still light the curl and the set as before; the car under them reads as a lit white car.
 - [ ] Reduce Motion or Dim Flashing Lights: no flare, no flash. No full-frame flash above 3 a second (WCAG 2.3.1).
 - [ ] `make test` (52 run vectors) passes: pixels only.
@@ -53,7 +53,7 @@ Simulator only (muted, `-mute`), one at a time: `-play -course show|wall|lineup 
 | Wall | 0.03 / 0.84 % → 0.00 / 0.02 % | 0.20 → 0.00 % | 40.6 → 41.9 | 255 → 254 | 37.4 → 34.0 |
 | Lineup | 0 / 0 % → 0 / 0 % | 0 → 0 % | 51.6 → 51.6 | 255 → 255 | 59.9 → 59.9 |
 
-No frame's mean rose by more than 25/255 between samples, before or after (no full-frame flash). Shots: docs/shots/0269/.
+No frame's mean rose by more than 25/255 between samples, before or after (no full-frame flash). Shots: docs/shots/0270/.
 
 ## Out of scope
 The web game (the same lamps there are a separate ticket if it shows), Free Drive's sky (#365).

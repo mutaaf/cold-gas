@@ -18,7 +18,7 @@ func rotY(_ a: Float) -> simd_float4x4 { let c = cos(a), s = sin(a); return simd
 func rotZ(_ a: Float) -> simd_float4x4 { let c = cos(a), s = sin(a); return simd_float4x4(columns: (SIMD4(c, s, 0, 0), SIMD4(-s, c, 0, 0), SIMD4(0, 0, 1, 0), SIMD4(0, 0, 0, 1))) }
 func scaleM(_ x: Float, _ y: Float, _ z: Float) -> simd_float4x4 { simd_float4x4(diagonal: SIMD4(x, y, z, 1)) }
 
-/// Reduce Motion or Dim Flashing Lights (the Accessibility settings): no flare and no flash, anywhere (0269).
+/// Reduce Motion or Dim Flashing Lights (the Accessibility settings): no flare and no flash, anywhere (0270).
 enum Flashing {
     static var reduced: Bool { UIAccessibility.isReduceMotionEnabled || MADimFlashingLightsEnabled() }
 }
@@ -99,7 +99,7 @@ final class CarState {
         // Lights.
         let t = wake
         sweep = smooth(0.15, 0.85, t); lampsOn = smooth(0.85, 1.15, t)
-        // The headlamps' wake-up blip (roadster.js), once per placement; none with Reduce Motion or Dim Flashing Lights (0269).
+        // The headlamps' wake-up blip (roadster.js), once per placement; none with Reduce Motion or Dim Flashing Lights (0270).
         let flare = flareOK ? 1 + 0.7 * max(0, 1 - abs(t - 1.25) / 0.25) : 1
         // After a crash: hazards blink at 1.5 Hz (amber repeaters, and the red bar, as rear signals do).
         let blink: Int = hazard ? (time * 1.5).truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0 : -1
