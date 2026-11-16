@@ -525,6 +525,19 @@ fragment float4 cg_film_fragment(SOut in [[stage_in]], texture2d<float> hdr [[te
     float3 x2 = c * c, x4 = x2 * x2;
     c = 15.5 * x4 * x2 - 40.14 * x4 * c + 31.96 * x4 - 6.868 * x2 * c + 0.4298 * x2 + 0.1191 * c - 0.00232;
     c = outset * c;
+    if (look.atmo.x > 0.5) {
+        // Free Drive's sky (0231): the same AgX, finished in its own display encoding. Linearising (pow 2.2), the gamut matrix and
+        // re-encoding to sRGB (pow 1/2.4) nearly cancel; a six-transcendental round trip a pixel at 5.7 M pixels was the film
+        // pass's ALU on the open Duo. The gamut matrix is applied to the encoded values (close: it's near the identity in
+        // the mid-tones). The scored runs and the sets keep the exact path below.
+        c = clamp(fromRec2020 * max(c, 0.0), 0.0, 1.0);
+        float2 q = (in.uv - 0.5) * float2(f.proj.z / max(f.proj.w, 1.0), 1.0);
+        c *= 1.0 - 0.45 * look.sunDir.w * smoothstep(0.35, 1.05, dot(q, q) * 1.6);
+        uint2 px = uint2(in.clip.xy);
+        uint h = px.x * 1973u + px.y * 9277u; h = (h ^ (h >> 13)) * 1274126177u;
+        float n = float(h & 1023u) / 1023.0;
+        return float4(c + (n - 0.5) / 255.0, 1);
+    }
     c = pow(max(c, 0.0), 2.2);
     c = clamp(fromRec2020 * c, 0.0, 1.0);
     float2 q = (in.uv - 0.5) * float2(f.proj.z / max(f.proj.w, 1.0), 1.0);

@@ -42,7 +42,14 @@ struct PlumeU { var origin = SIMD4<Float>(), dir = SIMD4<Float>(), extra = SIMD4
 final class Renderer {
     static let hdrFormat = MTLPixelFormat.rgba16Float, ldrFormat = MTLPixelFormat.bgra8Unorm, depthFormat = MTLPixelFormat.depth32Float
     static let drawableFormat = MTLPixelFormat.bgra8Unorm
-    static let samples = 4, inFlight = 3, shadowSize = 2048
+    static let inFlight = 3, shadowSize = 2048
+    /// MSAA's samples (0231): 4, or 2 on a screen past 4.5 M pixels (the open Duo, 5.7 M), where 4× at a usable render scale
+    /// cost more than the frame had. Set once by the stage view from the screen before any pipeline is built (every MSAA
+    /// pipeline and target is made at this count); `-msaa <n>` pins it.
+    static private(set) var samples = 4
+    static func configureSamples(screenPixels: Int) {
+        samples = Launch.value("-msaa").flatMap(Int.init).map { $0 >= 4 ? 4 : $0 >= 2 ? 2 : 1 } ?? (screenPixels > 4_500_000 ? 2 : 4)
+    }
     /// The mist's fragments a frame (Plumes.updateBudget), in screens of overdraw: 2.8 M at the floor's 660×1434.
     static let mistScreens: Float = 3
 
@@ -134,7 +141,7 @@ final class Renderer {
     }
     /// The governor's render scale (of the display's pixels).
     private(set) var scale: Float = Launch.value("-scale").flatMap(Float.init) ?? 0.8
-    private var gpuEMA = 0.0, calm = 0
+    private var gpuEMA = 0.0, calm = 0, over = 0, sinceDrop = 10_000
     let launchCompileMs: Double
     private(set) var compilesAfterLaunch = 0
     let nLights: Int
@@ -416,16 +423,49 @@ final class Renderer {
         if overFrames > 240 && shed < 2 { shed += 1; overFrames = 0; print("LOOK shed \(shed): GPU \(String(format: "%.2f", gpuEMA)) ms at the resolution floor") }
         if underFrames > 1800 && shed > shedThermal { shed -= 1; underFrames = 0; print("LOOK shed \(shed): headroom again") }
         #endif
-        if gpuEMA > budgetMs * 0.85 && scale > 0.5 { scale = max(0.5, scale - 0.05); calm = 0; gpuEMA = 0 }
-        else if gpuEMA < budgetMs * 0.55 { calm += 1; if calm > 240 && scale < thermalCap { scale = min(thermalCap, scale + 0.05); calm = 0 } }
+        // Hysteresis (0231): a step down only after a quarter second over (one heavy frame isn't a trend), a step up only after
+        // 3 s well under and never within 6 s of a step down. On the open Duo the scale stepped every second or two, and each
+        // step was a hitch (new targets and a new MetalFX scaler); now a size is built once (`targetCache`) and steps are rare.
+        sinceDrop += 1
+        if gpuEMA > budgetMs * 0.85 { over += 1 } else { over = 0 }
+        if over > 30 && scale > 0.5 { scale = max(0.5, scale - 0.05); calm = 0; over = 0; sinceDrop = 0; gpuEMA = 0 }
+        else if gpuEMA < budgetMs * 0.6 && sinceDrop > 720 { calm += 1; if calm > 360 && scale < thermalCap { scale = min(thermalCap, scale + 0.05); calm = 0 } }
         else { calm = 0 }
     }
 
+    /// A render size's targets and its MetalFX scaler (0231): kept for the last two sizes, so a scale stepping back and forth
+    /// swaps them instead of reallocating (each new set, and above all a new scaler, was a hitch on the phone).
+    private final class Targets {
+        var msaa, depth, hdr, ldr, mirrorDepth, mirrorRaw, mirrorTex, bloomOut: MTLTexture?
+        var bloomChain: [MTLTexture] = []
+        #if canImport(MetalFX) && !targetEnvironment(simulator)
+        var scaler: MTLFXSpatialScaler?
+        #endif
+        var used = 0
+    }
+    private var targetCache: [String: Targets] = [:], targetClock = 0
     private func ensureTargets(outW: Int, outH: Int) {
         let rw = max(64, Int(Float(outW) * scale)), rh = max(64, Int(Float(outH) * scale))
         if renderSize == (rw, rh) && outSize == (outW, outH) { return }
+        if outSize != (outW, outH) {
+            targetCache.removeAll()
+            let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Renderer.ldrFormat, width: outW, height: outH, mipmapped: false)
+            d.usage = [.renderTarget, .shaderRead, .shaderWrite]; d.storageMode = .private
+            upscaled = device.makeTexture(descriptor: d)
+        }
         renderSize = (rw, rh); outSize = (outW, outH)
         sizeQuality = outW * outH > 4_500_000 ? 1 : 2
+        targetClock += 1
+        let key = "\(rw)x\(rh)"
+        if let t = targetCache[key] {
+            t.used = targetClock
+            msaa = t.msaa; depth = t.depth; hdr = t.hdr; ldr = t.ldr; mirrorDepth = t.mirrorDepth; mirrorRaw = t.mirrorRaw; mirrorTex = t.mirrorTex
+            bloomChain = t.bloomChain; bloomOut = t.bloomOut
+            #if canImport(MetalFX) && !targetEnvironment(simulator)
+            scaler = t.scaler
+            #endif
+            return
+        }
         func tex(_ f: MTLPixelFormat, _ w: Int, _ h: Int, ms: Bool, usage: MTLTextureUsage, memoryless: Bool) -> MTLTexture? {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: f, width: w, height: h, mipmapped: false)
             if ms { d.textureType = .type2DMultisample; d.sampleCount = Renderer.samples }
@@ -436,7 +476,6 @@ final class Renderer {
         depth = tex(Renderer.depthFormat, rw, rh, ms: true, usage: .renderTarget, memoryless: true)
         hdr = tex(Renderer.hdrFormat, rw, rh, ms: false, usage: [.renderTarget, .shaderRead], memoryless: false)
         ldr = tex(Renderer.ldrFormat, rw, rh, ms: false, usage: [.renderTarget, .shaderRead], memoryless: false)
-        upscaled = tex(Renderer.ldrFormat, outW, outH, ms: false, usage: [.renderTarget, .shaderRead, .shaderWrite], memoryless: false)
         // Quarter size: the mirror, and bloom's chain from there down, halved five times.
         let qw = max(16, rw / 4), qh = max(16, rh / 4), low = MTLPixelFormat.rg11b10Float
         mirrorDepth = tex(Renderer.depthFormat, qw, qh, ms: false, usage: .renderTarget, memoryless: true)
@@ -450,6 +489,14 @@ final class Renderer {
         sd.colorTextureFormat = Renderer.ldrFormat; sd.outputTextureFormat = Renderer.ldrFormat; sd.colorProcessingMode = .perceptual
         scaler = sd.makeSpatialScaler(device: device)
         #endif
+        let t = Targets()
+        t.msaa = msaa; t.depth = depth; t.hdr = hdr; t.ldr = ldr; t.mirrorDepth = mirrorDepth; t.mirrorRaw = mirrorRaw; t.mirrorTex = mirrorTex
+        t.bloomChain = bloomChain; t.bloomOut = bloomOut; t.used = targetClock
+        #if canImport(MetalFX) && !targetEnvironment(simulator)
+        t.scaler = scaler
+        #endif
+        if targetCache.count >= 2, let old = targetCache.min(by: { $0.value.used < $1.value.used }) { targetCache[old.key] = nil }
+        targetCache[key] = t
     }
 
     /// One frame at time t (s) into `drawable`.

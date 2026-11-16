@@ -31,6 +31,8 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         super.init(frame: frame)
         guard let device = MTLCreateSystemDefaultDevice() else { return }
         metal.device = device
+        // MSAA's samples by the screen (0231), before any renderer builds its pipelines.
+        Renderer.configureSamples(screenPixels: Int(UIScreen.main.nativeBounds.width * UIScreen.main.nativeBounds.height))
         metal.pixelFormat = Renderer.drawableFormat
         metal.framebufferOnly = true
         metal.maximumDrawableCount = 3

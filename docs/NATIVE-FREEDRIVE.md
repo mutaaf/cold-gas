@@ -509,6 +509,26 @@ That's ≈ 7.5–9.5 ms, still over 7 ms at 0.75. At 0.65 it's ≈ 6–7.5 ms. T
 2. MSAA 2× for drawables past 4.5 M pixels (every pipeline is built at 4×; it needs a second set).
 3. Merging bloom's compose into the film pass.
 
+**The open Duo again, 2026-11-16** (4b4404d): 1054 frames in 10 s, interval 9.50 / 16.67 ms, **148 hitches**, GPU
+4.46 / 7.22 ms, the render scale settled at 0.55. Passes (ms): main 4.60, film 1.15, metalfx 1.66, present 0.23, shadow 0.12,
+sky 0.11, bloom 0.10. Main went from 16.66 to 4.60 ms. What changed next (0231):
+- **The hitches were the scaler, not the GPU.** Every render-scale step reallocated every target and built a new MetalFX
+  scaler. The governor stepped down on one heavy frame and up again after 2 s calm, so on the Duo it stepped every second
+  or two.
+  - Now a size's targets and scaler are kept for the last two sizes (`Renderer.Targets`), so stepping back and forth swaps
+    them.
+  - The governor steps down only after a quarter second over budget, and up only after 3 s under 60 % of it, never within
+    6 s of a step down.
+  - The output-size texture is made only when the drawable's size changes.
+- **MSAA 2× past 4.5 M pixels.** `Renderer.samples` is set once from the screen before any pipeline is built (the open Duo
+  is 5.7 M pixels); `-msaa <n>` pins it.
+- **A cheaper film for the drive.** Under the physical sky the film pass finishes AgX in its own display encoding and skips
+  the linearise and sRGB-encode round trip (six transcendentals a pixel), with an integer-hash dither instead of `sin`. The
+  scored runs and the sets keep the exact film (they don't use the physical sky).
+- **Bloom's compose stays its own pass.** It runs at a quarter of the render size (≈ 0.1 ms with the whole chain). Folding
+  it into the film would make every full-size pixel take the compose's ≈ 27 taps instead of one.
+- `-mute` silences the app from launch, for simulator runs on a shared Mac.
+
 **On a phone (the owner runs this; an agent never runs it on the owner's phone):**
 
 ```

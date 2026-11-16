@@ -87,7 +87,8 @@ final class Sound {
     init(offlineRate: Double? = nil) {
         offline = offlineRate != nil
         let d = UserDefaults.standard
-        isEnabled = offline ? true : !d.bool(forKey: "coldgas.muted")
+        // `-mute`: silent from launch (simulator runs on a shared Mac), without touching the player's saved choice.
+        isEnabled = offline ? true : !(d.bool(forKey: "coldgas.muted") || Launch.args.contains("-mute"))
         music = offline ? 1 : (d.object(forKey: "coldgas.music") as? Double ?? 1)
         effects = offline ? 1 : (d.object(forKey: "coldgas.effects") as? Double ?? 1)
         emitParams = (0..<Sound.emitterCount).map { _ in ParamBlock(count: EP.allCases.count) }
