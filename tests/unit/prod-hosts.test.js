@@ -2,7 +2,7 @@
 // (docs/critique/2026-11-14-0955/phone-title-requests.jsonl and 2026-11-14-1535/phone-jump-requests.jsonl),
 // reshaped into the probe's entries: each request's frame chain, innermost first, up to the game's page.
 import { describe, it, expect } from 'vitest';
-import { verdict, judge, isGoogleAd, isAds, modeAt, line, sawRun, pickInitiators, UNLOAD_GRACE_MS } from '../../scripts/lib/prod-hosts.mjs';
+import { verdict, judge, isGoogleAd, isAds, modeAt, line, sawRun, framePlaced, pickInitiators, UNLOAD_GRACE_MS } from '../../scripts/lib/prod-hosts.mjs';
 
 const PAGE = 'https://mutaafaziz.com/coldgas/';
 const ADS = 'https://mutaafaziz.com/ads/v1/frame.html?app=coldgas&slot=title';
@@ -99,6 +99,14 @@ describe('scripts/lib/prod-hosts.mjs (0262)', () => {
     expect(pickInitiators(seen, 'about:blank')).toEqual([]);                 // no document of its own: only what all agree on
     expect(pickInitiators([seen[0], seen[0]], '')).toEqual(['https://mutaafaziz.com/ads/v1/ads.js']);
     expect(pickInitiators(undefined, PAGE)).toEqual([]);
+  });
+
+  it("calls a title that never placed Marquee's slot frame inconclusive, not clean", () => {
+    expect(framePlaced(phoneTitle())).toBe(true);
+    const slow = phoneTitle().filter((e) => !e.frames.includes(ADS) && e.url !== ADS);
+    expect(verdict(slow).ok).toBe(true);
+    expect(framePlaced(slow)).toBe(false);
+    expect(framePlaced([{ ...phoneTitle()[2], mode: 'countdown' }])).toBe(false);   // placed only once the run began: no
   });
 
   it('reads a new frame in its line, and takes /recaptcha only as a path', () => {

@@ -74,6 +74,11 @@ export function sawRun(timeline) {
   return i === want.length;
 }
 
+// Did the title place Marquee's slot frame? Without it the title's check saw nothing Marquee does (a slow loader
+// can miss a 60 s title on a phone), so the probe calls the screen inconclusive (exit 2), not clean.
+export const framePlaced = (entries, own = OWN_HOSTS) =>
+  entries.some((e) => e.mode === 'title' && isAds(e.url, own) && parse(e.url).pathname.endsWith('/frame.html'));
+
 // One entry's verdict: null when allowed, else the reason.
 export function judge(e, { own = OWN_HOSTS, timeline = null } = {}) {
   if (isLocal(e.url) || isOwn(e.url, own)) return null;

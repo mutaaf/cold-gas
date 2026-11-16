@@ -539,7 +539,7 @@ node scripts/prod-hosts.mjs [url] [--phone|--desktop] [--title=60] [--json=log.j
                    production page makes (0262): a first visit at 1440×900 and 390×844 touch, 60 s on the title (past the ad
                    slot's dwell), then a reference Jump to its sheet; one line per request (t, host, frame, mode). Exit 1 on a
                    host outside §3.3 (own origin; Google's ad hosts only from Marquee's /ads/ frame or loader) or any third
-                   party in countdown/live (the /ads/ frame's unload at the Jump excepted); exit 2 if it missed the run. Google's ad
+                   party in countdown/live (the /ads/ frame's unload at the Jump excepted); exit 2 if it missed the run or the title never placed the slot frame. Google's ad
                    requests are recorded then aborted (no real ad served to a probe; --let-ads loads them, sparingly). Not a CI
                    gate (CI never loads the ad loader): the Critic and the Keeper run it against production
 node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title wired, first 3D frame, long tasks, bytes

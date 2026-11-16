@@ -8,7 +8,7 @@
 // then taps Jump in the page and flies the course's reference to its sheet. Every request (and WebSocket) is printed:
 // t, host, the request's frame, the page's S.mode when it started, and its verdict. Exit 1 on a host outside
 // AGENTS.md §3.3's allowance or any third party during countdown/live (scripts/lib/prod-hosts.mjs has the rules),
-// exit 2 when the page couldn't be flown or the recording missed the run. Not a CI gate: CI never loads the ad loader
+// exit 2 when the page couldn't be flown, the recording missed the run, or the title never placed Marquee's slot frame. Not a CI gate: CI never loads the ad loader
 // (it runs off localhost only). The Critic and the Keeper run it against production.
 //
 // The URL's own host counts as our origin (and its /ads/ as Marquee's), so a preview URL works too.
@@ -18,7 +18,7 @@
 // 2026-11-13): it doesn't move the players' funnel. It posts nothing: no initials, no score.
 import { chromium } from '@playwright/test';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { verdict, line, modeAt, sawRun, pickInitiators, isGoogleAd, OWN_HOSTS, isLocal } from './lib/prod-hosts.mjs';
+import { verdict, line, modeAt, sawRun, framePlaced, pickInitiators, isGoogleAd, OWN_HOSTS, isLocal } from './lib/prod-hosts.mjs';
 
 const args = process.argv.slice(2);
 const opt = (k, d) => { const a = args.find((x) => x.startsWith(`--${k}=`)); return a ? a.slice(k.length + 3) : d; };
@@ -48,6 +48,7 @@ if (logIn) {
     const timeline = rows.find((r) => r.screen === name && r.timeline)?.timeline || [];
     ok = report(name, rows.filter((r) => r.screen === name && r.url), timeline) && ok;
     if (!sawRun(timeline)) { runs = false; console.error(`${name}: the log has no countdown → live → results`); }
+    if (!framePlaced(rows.filter((r) => r.screen === name && r.url), own)) { runs = false; console.error(`${name}: the title never placed Marquee's slot frame`); }
   }
   process.exit(!ok ? 1 : runs ? 0 : 2);
 }
@@ -163,6 +164,7 @@ for (const name of screens) {
   rows.push({ screen: name, timeline }, ...entries);
   console.log(`   ${name} modes: ${timeline.map(([t, m]) => `${(t / 1000).toFixed(2)} ${m}`).join(' → ')}${note}`);
   if (!flown) console.error(`   ${name}: no whole run recorded (countdown → live → results): exit 2`);
+  if (!framePlaced(entries, own)) { flownAll = false; console.error(`   ${name}: the title never placed Marquee's slot frame, so its check is inconclusive: exit 2 (try a longer --title)`); }
 }
 await browser.close();
 if (!letAds) console.log('Google ad requests were recorded, then aborted (--let-ads loads them).');
