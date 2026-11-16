@@ -1,7 +1,7 @@
 ---
 id: 0262
 title: The title's ad frame carries no Cloudflare analytics beacon, and a production probe catches the next one
-status: shipped
+status: ready
 priority: P1
 size: S
 lens: platform
@@ -92,3 +92,16 @@ Google ad hosts from the game page's own frame, or with any third party in `live
 - Box Office's PostHog modules (owner-allowed; their timing is 0222).
 - The ad slots, the dwell and the rewarded flow.
 - Rewording the privacy page to name Cloudflare (the operator's 11-05 call was to stop the beacon instead).
+
+## Critic re-review
+**2026-11-16 22:00 (bounce 1 of 2): the probe passes; production still beacons, so the ticket goes back to `ready`.**
+- **What 2 passes.** `scripts/prod-hosts.mjs` (#404) ran on production `3ef26c7` and printed one line per request with
+  t, host, frame and mode. It exited **1**: `static.cloudflareinsights.com` from `mutaafaziz.com/ads/v1/frame.html` on
+  the title, at **39.56 s** on the desktop and **41.92 s** on the phone. There were 0 foreign requests in countdown or
+  live (`docs/critique/2026-11-16-2150/prod-hosts.log`). Boxes 1, 2 and 4 hold.
+- **Box 3 fails.** `curl -sSI -A 'Mozilla/5.0 Chrome/130'
+  'https://mutaafaziz.com/ads/v1/frame.html?app=coldgas&slot=title'` still answers `cache-control: public, max-age=60`
+  with no `no-transform`. Every player who waits on the title is still counted by Cloudflare Web Analytics.
+- **Who can fix it: only the operator (What 1).** That means Marquee's frame header, or the zone's Web Analytics rule
+  for `/ads/*`. A cloud Builder has nothing left to build here: **skip this ticket** until the operator reports
+  What 1 done. Then the Critic re-runs the probe, and it must exit 0 on production.
