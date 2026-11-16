@@ -78,7 +78,7 @@ export const categoriesFor = (course) => (course === 'wall' ? WALL_CATEGORIES : 
 // flies the climb, hang and roll-out the same for everyone. Measured (scripts/daily-reach.mjs populations, n 150,
 // seed 12345): careful one-thumb median 95 → 96.7, p10 90.7 → 77.7 (the thumbs that land 11 m off); the tapped thumb's
 // best slide earns +5.3–5.7 (was +2.0); the reference 96 → 97.7; Pro on the keys median 81 → 70 (it lands 9.3 m off).
-const WALL_W = {
+export const WALL_W = {
   engineer: { climb: 0.08, inversion: 0.08, rotation: 0.10, landing: 0.34, precision: 0.30, efficiency: 0.10 },
   coordinator: { climb: 0.16, inversion: 0.18, rotation: 0.20, landing: 0.18, precision: 0.20, efficiency: 0.08 },
   designer: { climb: 0.08, inversion: 0.10, rotation: 0.12, landing: 0.24, precision: 0.30, efficiency: 0.16 },
@@ -88,7 +88,7 @@ const WALL_W = {
 // decides: the mark, the touchdown and the gas. Measured on 300-player populations (docs/backlog/0121):
 // a one-thumb player who never aims 90.3 → 83.7 median, one who aims onto the mark 91 → 92.7 (p90 95.7),
 // the reference 94 → 97.7, still above every thumb.
-const SHOW_W = {
+export const SHOW_W = {
   engineer: { climb: 0.04, inversion: 0.03, rotation: 0.05, clearance: 0.08, landing: 0.34, precision: 0.36, efficiency: 0.10 },
   coordinator: { climb: 0.08, inversion: 0.10, rotation: 0.14, clearance: 0.16, landing: 0.16, precision: 0.28, efficiency: 0.08 },
   designer: { climb: 0.04, inversion: 0.06, rotation: 0.08, clearance: 0.10, landing: 0.24, precision: 0.34, efficiency: 0.14 },
@@ -104,33 +104,39 @@ function curve(x, pts) {
 // The Show's mark, read off the pad's painted rings (2 · 4 · 7 m, courses.js): full marks inside 3.5 m,
 // 0.85 at 5 m, under half at the outer ring's 7 m, a sliver at 12 m and nothing from 20. (Was a straight
 // line from 1 m to 20 m, which kept 74 % of the marks for a 6 m miss outside the 4 m ring.)
-const SHOW_PRECISION = [[3.5, 1], [5, 0.85], [7, 0.45], [12, 0.15], [20, 0]];
+export const SHOW_PRECISION = [[3.5, 1], [5, 0.85], [7, 0.45], [12, 0.15], [20, 0]];
 // Gas left on the Show: full marks from 45 % (the reference keeps 48 %).
-const SHOW_GAS_FULL = 45;
+export const SHOW_GAS_FULL = 45;
+// Gas left on the Wall: full marks from 50 %.
+export const WALL_GAS_FULL = 50;
 
 // Damage (src/sim/damage.js): every judge marks the car's integrity, each with their own weight
 // (the Engineer cares most: they have to fix it). 60 % or worse is a wreck, whatever else happened.
-const DAMAGE_W = { engineer: 0.15, coordinator: 0.08, designer: 0.12 };
+export const DAMAGE_W = { engineer: 0.15, coordinator: 0.08, designer: 0.12 };
 export const WRECK_PCT = 60;
 const damagePct = (t) => (t.damage ? t.damage.pct : 0);
 const withDamage = (s, j, c) => s * (1 - DAMAGE_W[j.id]) + DAMAGE_W[j.id] * c.damage;
 const damageFactsOf = (t) => ({ damagePct: damagePct(t), integrity: 100 - damagePct(t), damageZones: t.damage ? t.damage.zones : null });
 
 // Landing quality, shared: sink rate, attitude, heading, wheel sync, suspension.
+// Each part of the touchdown: [zero at, full marks at, weight] (0261: exported so the coach's words quote the scorer's own
+// thresholds, never a literal of their own). The Wall and the Show fold a heading past 90° (landed backwards).
+export const LANDING = { sink: [6, 0.9, 0.38], tiltDeg: [25, 1.5, 0.26], headingDeg: [30, 2, 0.14], wheelSpreadMs: [250, 20, 0.22] };
+const L = LANDING;
 function landingScore(t) {
-  const sinkS = band(t.sink, 6, 0.9);
-  const tiltS = band(t.tiltDeg, 25, 1.5);
-  const headS = band(Math.abs(t.headingDeg) > 90 ? 180 - Math.abs(t.headingDeg) : Math.abs(t.headingDeg), 30, 2);
-  const syncS = band(t.wheelSpreadMs, 250, 20);
+  const sinkS = band(t.sink, L.sink[0], L.sink[1]);
+  const tiltS = band(t.tiltDeg, L.tiltDeg[0], L.tiltDeg[1]);
+  const headS = band(Math.abs(t.headingDeg) > 90 ? 180 - Math.abs(t.headingDeg) : Math.abs(t.headingDeg), L.headingDeg[0], L.headingDeg[1]);
+  const syncS = band(t.wheelSpreadMs, L.wheelSpreadMs[0], L.wheelSpreadMs[1]);
   const suspS = t.bottomOut ? 0.55 : 1;
-  return 10 * (0.38 * sinkS + 0.26 * tiltS + 0.14 * headS + 0.22 * syncS) * suspS * (t.bodyStrike ? 0.6 : 1);
+  return 10 * (L.sink[2] * sinkS + L.tiltDeg[2] * tiltS + L.headingDeg[2] * headS + L.wheelSpreadMs[2] * syncS) * suspS * (t.bodyStrike ? 0.6 : 1);
 }
 
 // Clearance over the parked row: contact is a zero; close-but-clean is the art (≈0.8 m is
 // perfect, 3 m+ is safe).
 // (SIM_VERSION 27: a margin up to 2 m is as good as a skim, and a high, safe crossing costs less: 0.85 at
 // 6 m, 0.75 from 12 m. It was 0.72 from 4.8 m, which marked down the reference's 5 m for being safe.)
-const CLEARANCE = [[0, 0.82], [0.8, 1], [2, 1], [6, 0.85], [12, 0.75]];
+export const CLEARANCE = [[0, 0.82], [0.8, 1], [2, 1], [6, 0.85], [12, 0.75]];
 function clearanceScore(t) {
   const clearance = Number.isFinite(t.minClearance) ? t.minClearance : 0;
   return t.contact ? 0 : clearance <= 0 ? 0 : 10 * curve(clearance, CLEARANCE);
@@ -159,7 +165,7 @@ function scoreWall(t, opts) {
   c.rotation = 10 * clamp01(turned / 160) * (0.7 + 0.3 * rollShare);
   c.landing = landingScore(t);
   c.precision = 10 * curve(padMiss, SHOW_PRECISION);
-  c.efficiency = 10 * band(airPct, 0, show ? SHOW_GAS_FULL : 50) * clamp01(turned / 120);
+  c.efficiency = 10 * band(airPct, 0, show ? SHOW_GAS_FULL : WALL_GAS_FULL) * clamp01(turned / 120);
   if (show) c.clearance = t.crossedRow ? clearanceScore(t) : 0;
   c.damage = 10 * (1 - damagePct(t) / 100);
   if (!jumped) { c.rotation = 0; c.landing = 0; c.precision = 0; c.efficiency = 0; c.clearance = 0; }
@@ -214,6 +220,10 @@ export function scoreRun(t, opts = {}) {
   return scoreLineup(t, opts);
 }
 
+// The Lineup's full marks (0261: exported for the coach's words): an apex of 9.5 m, a skim at 0.8 m (its clearance peaks
+// there), the mark inside 0.8 m, 65 % air left.
+export const LINEUP_FULL = { apex: 9.5, clearance: 0.8, padMiss: 0.8, airPct: 65 };
+
 function scoreLineup(t, opts = {}) {
   const PAD = LINEUP.pad, TALLEST = LINEUP.tallest;
   const wrecked = damagePct(t) >= WRECK_PCT;
@@ -229,7 +239,7 @@ function scoreLineup(t, opts = {}) {
 
   // Raw category scores, 0..10.
   const c = {};
-  c.height = 10 * band(t.apex, 3.5, 9.5);
+  c.height = 10 * band(t.apex, 3.5, LINEUP_FULL.apex);
   // Rotation: a full 360 is worth 8.2 base, 720 is worth 10. Purity (no pitch/yaw wobble)
   // and finishing exactly on the rotation lift it; partial rolls score low.
   const purity = clamp01(1 - t.offAxis / 1.4);
@@ -237,17 +247,17 @@ function scoreLineup(t, opts = {}) {
   if (rotations === 0) c.rotation = 3 * clamp01(rollDeg / 300);
   else c.rotation = Math.min(10, (rotations === 1 ? 7.2 : 8.8) + 1.2 * purity * finish) * lerp(0.55, 1, finish);
   // Clearance: contact is a zero. Close-but-clean is the art: ~0.8 m is perfect, 3 m+ is safe.
-  c.clearance = t.contact ? 0 : clearance <= 0 ? 0 : 10 * (clearance < 0.8 ? lerp(0.82, 1, clearance / 0.8) : lerp(1, 0.72, clamp01((clearance - 0.8) / 4)));
+  c.clearance = t.contact ? 0 : clearance <= 0 ? 0 : 10 * (clearance < LINEUP_FULL.clearance ? lerp(0.82, 1, clearance / LINEUP_FULL.clearance) : lerp(1, 0.72, clamp01((clearance - LINEUP_FULL.clearance) / 4)));
   // Landing: sink rate, attitude, heading, wheel sync, suspension.
-  const sinkS = band(t.sink, 6, 0.9);
-  const tiltS = band(t.tiltDeg, 25, 1.5);
-  const headS = band(Math.abs(t.headingDeg), 30, 2);
-  const syncS = band(t.wheelSpreadMs, 250, 20);
+  const sinkS = band(t.sink, L.sink[0], L.sink[1]);
+  const tiltS = band(t.tiltDeg, L.tiltDeg[0], L.tiltDeg[1]);
+  const headS = band(Math.abs(t.headingDeg), L.headingDeg[0], L.headingDeg[1]);
+  const syncS = band(t.wheelSpreadMs, L.wheelSpreadMs[0], L.wheelSpreadMs[1]);
   const suspS = t.bottomOut ? 0.55 : 1;
-  c.landing = 10 * (0.38 * sinkS + 0.26 * tiltS + 0.14 * headS + 0.22 * syncS) * suspS * (t.bodyStrike ? 0.6 : 1);
-  c.precision = 10 * band(padMiss, 16, 0.8);
+  c.landing = 10 * (L.sink[2] * sinkS + L.tiltDeg[2] * tiltS + L.headingDeg[2] * headS + L.wheelSpreadMs[2] * syncS) * suspS * (t.bodyStrike ? 0.6 : 1);
+  c.precision = 10 * band(padMiss, 16, LINEUP_FULL.padMiss);
   // Saving air only counts if you spent some on a trick.
-  c.efficiency = 10 * band(airPct, 0, 65) * clamp01(rollDeg / 330);
+  c.efficiency = 10 * band(airPct, 0, LINEUP_FULL.airPct) * clamp01(rollDeg / 330);
 
   if (!jumped) for (const k of Object.keys(c)) c[k] = 0;
   if (crashed) { c.landing = 0; c.precision *= 0.3; }
@@ -291,3 +301,4 @@ function verdictOf(total, crashed, jumped, t) {
   if (total >= 55) return 'Rough landing';
   return 'Survived';
 }
+

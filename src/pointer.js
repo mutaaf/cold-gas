@@ -8,6 +8,7 @@
 // The device a player is on, from src/input.js's lastDevice ('touch' | 'key' | 'pad' | 'mouse' | 'none'):
 // a mouse or nothing yet is a desktop, so its keyboard.
 import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB } from './sim/aim-words.js';
+import { LANDING, SHOW_PRECISION, CLEARANCE, SHOW_GAS_FULL, WALL_GAS_FULL, LINEUP_FULL, TIERS, PANEL, SHOW_W, WALL_W, DAMAGE_W } from './sim/judge.js';
 
 export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ? 'pad' : 'key');
 
@@ -104,7 +105,7 @@ export const deviceTitle = (ctx) => (thumbOn(ctx) ? 'Touch · one thumb' : ctx.d
 // --- The pointer after a run --------------------------------------------------------------------
 // One line, the fix that matters most, with this device's control in it. `item`: a coach fix
 // ({ id, … }), `flight`: the coach's readFlight (for the numbers), `card`: the run's card.
-export function pointerText(id, ctx, flight = null) {
+export function pointerText(id, ctx, flight = null, card = null) {
   const b = brakeAct(ctx), assist = ctx.tier === 'assist';
   // 0181: the Lineup on one thumb has no let-go (and a thumb told to "let go" lifts it off the pad): LAND comes on as the roll ends.
   const after = thumbOn(ctx) && ctx.course === 'lineup' ? 'as the roll ends' : 'right after you let go';
@@ -134,7 +135,7 @@ export function pointerText(id, ctx, flight = null) {
     case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
     case 'clean': if (thumbOn(ctx)) return thumbClean(ctx, flight);
-      return assist ? 'Clean. Next: a softer touchdown, closer to the mark' : 'Clean. Next: under 1 m/s and the 2 m ring';
+      return cleanLine(ctx, card);
     default: return '';
   }
 }
@@ -161,6 +162,126 @@ function thumbClean(ctx, flight) {
   const d = miss.toFixed(1);
   if (call) return `Clean, ${d} m from the mark. Next: ${LINEUP_CALL}, then aim for the mark`;
   return `Clean, ${d} m from the mark. Next: try Pro and fly the landing yourself`;
+}
+
+// 0261: keys, a pad and two thumbs. The clean line names the category with the most points left on this run's card
+// (judge.js pointsLeft), with the scorer's own full-marks threshold and this run's number, and never one already at 10.
+// With under 0.1 point anywhere a player steers, it says what What happened says (src/sim/coach.js's clean fix: on Assist,
+// try Pro). No card (a drill): the scorer's thresholds for the touchdown and the mark.
+export const CLEAN_MIN_POINTS = 0.1;
+// The categories a player steers on each course (Assist's computer flies the climb, the hang and the roll-out the same
+// for everyone; the Lineup's height and roll are the pilot's).
+const STEERED = { show: ['clearance', 'landing', 'precision', 'efficiency'], wall: ['landing', 'precision', 'efficiency'], lineup: ['height', 'rotation', 'clearance', 'landing', 'precision', 'efficiency'] };
+// The full-marks ring around the mark, per course: the rings' curve on the Show and the Wall, the Lineup's band.
+export const markRing = (course) => (course === 'lineup' ? LINEUP_FULL.padMiss : SHOW_PRECISION[0][0]);
+// The Show's clearance pays full marks between its curve's first and last 1.
+const CLEAR_FULL = CLEARANCE.filter(([, v]) => v === 1).map(([x]) => x);
+const n1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
+// The touchdown's parts a pilot steers: on Assist LAND levels the car (src/sim/vehicle.js flightComputer: pitch and roll
+// to level, so the tilt and the wheels' spread are the computer's), while the sink (when LAND goes on) and the heading
+// (the yaw keys; the computer only damps the yaw rate) are the pilot's.
+const LANDING_STEERED = { assist: ['sink', 'headingDeg'] };
+
+// What each category could still add to this card's total, had it scored 10 with everything else as flown: the judges'
+// own weights, damage share, tier factor and 10 cap (src/sim/judge.js), from the card's categories (read at the card's
+// 0.1, so a few hundredths off the exact). A crashed or capped card (crash, no jump, short of the row, the Lineup with
+// no full turn) has no headroom to name. Returns { [category]: points of the total }.
+export function pointsLeft(card) {
+  const c = card?.categories, f = card?.facts;
+  if (!c || !f || f.crashed || !f.jumped || f.crossedRow === false) return {};
+  const course = card.course || f.course || 'lineup';
+  if (course === 'lineup' && f.rotations === 0) return {};
+  const W = course === 'show' ? SHOW_W : course === 'wall' ? WALL_W : null;
+  const factor = TIERS[card.tier]?.factor || 1;
+  const judgeOf = (j, cc) => {
+    const w = W ? W[j.id] : j.w;
+    let s = 0;
+    for (const k of Object.keys(w)) s += w[k] * (cc[k] || 0);
+    s = s * (1 - DAMAGE_W[j.id]) + DAMAGE_W[j.id] * (cc.damage ?? 10);
+    return Math.min(10, s * factor);
+  };
+  const base = PANEL.reduce((a, j) => a + judgeOf(j, c), 0);
+  const out = {};
+  for (const k of Object.keys(W ? W.engineer : PANEL[0].w)) {
+    if (!(c[k] < 10)) { out[k] = 0; continue; }
+    const up = PANEL.reduce((a, j) => a + judgeOf(j, { ...c, [k]: 10 }), 0);
+    out[k] = Math.max(0, ((up - base) * 10) / 3);
+  }
+  return out;
+}
+const headingOf = (f, course) => { const h = Math.abs(f.headingDeg || 0); return course !== 'lineup' && h > 90 ? 180 - h : h; };
+// Each landing part's share of the landing's 10 lost on this card: { part: lost weight }.
+function landingLoss(f, course) {
+  const v = { sink: f.sink, tiltDeg: f.tiltDeg, headingDeg: headingOf(f, course), wheelSpreadMs: f.wheelSpreadMs }, out = {};
+  for (const k of Object.keys(LANDING)) {
+    const [bad, good, w] = LANDING[k], x = v[k];
+    out[k] = Number.isFinite(x) ? w * (1 - Math.min(1, Math.max(0, (x - bad) / (good - bad)))) : 0;
+  }
+  return out;
+}
+function landingPhrase(f, course, tier) {
+  const heading = headingOf(f, course), loss = landingLoss(f, course), parts = LANDING_STEERED[tier] || Object.keys(LANDING);
+  let best = null, lost = 0;
+  for (const k of parts) if (loss[k] > lost) { lost = loss[k]; best = k; }
+  // A bottomed-out suspension costs 45 % of the landing and a body strike 40 %: more than any one part.
+  if (f.bottomOut) return 'a touchdown that doesn’t bottom out the suspension';
+  if (f.bodyStrike) return 'a touchdown on the wheels, not the body';
+  const g = best && LANDING[best][1];
+  switch (best) {
+    case 'sink': return `a touchdown under ${g} m/s (this one ${n1(f.sink)} m/s)`;
+    case 'tiltDeg': return `touch down level, within ${g}° (this one ${n1(f.tiltDeg)}°)`;
+    case 'headingDeg': return `touch down straight, within ${g}° of the line (this one ${n1(heading)}°)`;
+    case 'wheelSpreadMs': return `all four wheels down within ${g} ms (this one ${Math.round(f.wheelSpreadMs)} ms)`;
+    default: return 'a cleaner touchdown';
+  }
+}
+function cleanPhrase(id, f, course, tier) {
+  switch (id) {
+    case 'clearance': {
+      if (course === 'lineup') return `skim the roofs at ${LINEUP_FULL.clearance} m (this one ${n1(f.clearance)} m)`;
+      const [lo, hi] = CLEAR_FULL;
+      return f.clearance < lo ? `clear the roofs by at least ${lo} m (this one ${n1(f.clearance)} m)` : `cross the roofs within ${hi} m (this one ${n1(f.clearance)} m)`;
+    }
+    case 'landing': return landingPhrase(f, course, tier);
+    case 'precision': return `land within ${markRing(course)} m of the mark (this one ${n1(f.padMiss)} m)`;
+    case 'efficiency': return `keep ${course === 'show' ? SHOW_GAS_FULL : course === 'wall' ? WALL_GAS_FULL : LINEUP_FULL.airPct} % of the gas (this one ${Math.round(f.airPct)} %)`;
+    case 'height': return `an apex of ${LINEUP_FULL.apex} m (this one ${n1(f.apex)} m)`;
+    case 'rotation': return (f.rotations || 0) < 2 ? 'two full turns: a 720' : 'finish the roll exactly on the turn';
+    default: return '';
+  }
+}
+// The category this card would gain most from, among those a player steers, or null under CLEAN_MIN_POINTS.
+// The landing counts only the share of its points lost in the parts this tier steers (a bottom-out or a body strike is
+// always the pilot's: it comes from the sink).
+export function cleanTarget(card, course, tier = card?.tier) {
+  const left = { ...pointsLeft(card) }, list = STEERED[course] || STEERED.show, f = card.facts;
+  const parts = LANDING_STEERED[tier];
+  if (parts && left.landing > 0 && !f.bottomOut && !f.bodyStrike) {
+    const loss = landingLoss(f, course), all = Object.values(loss).reduce((a, b) => a + b, 0);
+    const mine = parts.reduce((a, k) => a + loss[k], 0);
+    left.landing = all > 0 ? (left.landing * mine) / all : 0;
+  }
+  // No number to quote (the Show's clearance unread), or gas the turn scaled down (efficiency × the turn, judge.js):
+  // the threshold wouldn't be the whole story, so it isn't named.
+  if (!Number.isFinite(f.clearance)) left.clearance = 0;
+  const turned = Math.max(f.rollDeg || 0, f.pitchDeg || 0);
+  if (course === 'lineup' ? (f.rollDeg || 0) < 330 : turned < 120) left.efficiency = 0;
+  let best = null;
+  for (const k of list) if ((left[k] || 0) >= CLEAN_MIN_POINTS && (card.categories[k] ?? 10) < 10 && (!best || left[k] > left[best])) best = k;
+  return best;
+}
+function cleanLine(ctx, card) {
+  // The card's own tier (what was flown; an Adapt step or the picker may already have moved S.tier), as What happened reads it.
+  const course = ctx.course || card?.course || 'show', tier = card?.tier || ctx.tier;
+  if (!card || !card.categories || !card.facts) {
+    return tier === 'assist' ? `Clean. Next: a touchdown under ${LANDING.sink[1]} m/s, within ${markRing(course)} m of the mark`
+      : `Clean. Next: under ${LANDING.sink[1]} m/s and inside the ${markRing(course)} m ring`;
+  }
+  const k = cleanTarget(card, course, tier);
+  if (k) return `Clean. Next: ${cleanPhrase(k, card.facts, course, tier)}`;
+  if (tier === 'assist') return `Clean. Next: try Pro and fly the landing yourself (×${TIERS.pro.factor})`;
+  if (tier === 'pro') return `Clean. Next: try Advanced, ten valves by hand (×${TIERS.advanced.factor})`;
+  return 'Clean. Nothing left on this card the score pays for';
 }
 
 // What "fixed" reads as: the number that moved, from the card.
@@ -193,7 +314,7 @@ const DRILL_LABEL = { ledge: 'On the ledge', release: 'Just let go', carry: 'Ove
 // last pointer's fix, now fixed, with its number; `id` goes on the history.
 // `daily` (0150): the missed Daily's own line (src/daily.js dailyCoach), which stands in for the coach's.
 export function pickPointer(items, ctx, { history = [], card = null, flight = null, crashed = false, daily = '' } = {}) {
-  const list = (items || []).filter((it) => pointerText(it.id, ctx, flight));
+  const list = (items || []).filter((it) => pointerText(it.id, ctx, flight, card));
   const last = history[history.length - 1], prev = history[history.length - 2];
   // Fixed: last time's pointer isn't among this run's fixes, and this run didn't crash.
   const better = last && BETTER[last] && !crashed && !list.some((it) => it.id === last) ? betterText(last, card) : '';
@@ -209,7 +330,7 @@ export function pickPointer(items, ctx, { history = [], card = null, flight = nu
     }
   }
   if (!pick) return { id: better ? 'better' : '', text: '', better };
-  return { id: pick.id, text: pointerText(pick.id, ctx, flight), better };
+  return { id: pick.id, text: pointerText(pick.id, ctx, flight, card), better };
 }
 
 // The live pointer on the cue line, just before the mistake (src/main.js decides the moment from the
