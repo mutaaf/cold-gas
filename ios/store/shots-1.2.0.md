@@ -1,4 +1,4 @@
-# 1.2.0 screenshots: the plan (0265)
+# 1.2.0 screenshots: the plan (0268)
 
 Captured **on main as it is** (the current look, which holds 120 Hz). #365 (the visuals leap: real sky, forged car) failed
 the Duo device bench on 2026-11-16 (about 46 fps open, GPU 17.9 ms) and went back for optimisation, so 1.2.0 ships without

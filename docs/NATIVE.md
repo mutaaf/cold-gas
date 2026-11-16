@@ -528,7 +528,7 @@ ios/
   - The listing lives in `ios/store/`: texts, `listing.json`, `age-rating.json`, `app-privacy.md` (set by hand),
     `review-notes.txt`, `review-reply.md` (the 2.1 answers) and a draft privacy policy.
   - `node scripts/asc.mjs status` reports what exists without changing anything.
-  - **The next version beside one in review (0265):** `node scripts/asc.mjs store-prep [--shots <dir>]` is a dry run (GETs
+  - **The next version beside one in review (0268):** `node scripts/asc.mjs store-prep [--shots <dir>]` is a dry run (GETs
     only) of what it would do to the MARKETING_VERSION version; `--yes` creates it if absent and uploads the copy, review
     notes, What's New (`store/whats-new.txt`, once a version is live) and screenshots. It addresses that version by its
     versionString, checks it before any write, never submits and never touches another version, pricing or the app info

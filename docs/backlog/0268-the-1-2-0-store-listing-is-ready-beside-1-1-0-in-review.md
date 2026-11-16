@@ -1,5 +1,5 @@
 ---
-id: 0265
+id: 0268
 title: The 1.2.0 App Store listing is ready beside 1.1.0 in review (copy, review notes, a dry-run store-prep, a shot plan)
 status: in-progress
 priority: P1

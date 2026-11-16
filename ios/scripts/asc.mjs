@@ -29,7 +29,7 @@
 //   node scripts/asc.mjs store-shots [dir] upload build/store-shots/{iphone-69,ipad-13,iphone-duo}/*.png to the editable
 //                                          MARKETING_VERSION version (never another version; store-prep creates it)
 //   node scripts/asc.mjs store-prep [--shots <dir>] [--version <v>] [--yes]
-//                                          the next version, side by side with one in review (0265): a DRY RUN by default
+//                                          the next version, side by side with one in review (0268): a DRY RUN by default
 //                                          (GETs only, prints every change it would make); --yes creates the version if
 //                                          absent and uploads the copy, review notes, What's New and screenshots to it.
 //                                          Touches only the version whose versionString is <v>; never submits, never
@@ -381,7 +381,7 @@ async function storeMeta() {
   const { sv, shipped } = await storeVersion(a.id, true);
   const v = version();
   if (sv.attributes.versionString !== v) {
-    // 0265: renaming is how 1.0.0 became 1.1.0; done silently it would turn a rejected 1.1.0 into 1.2.0 and swap its copy.
+    // 0268: renaming is how 1.0.0 became 1.1.0; done silently it would turn a rejected 1.1.0 into 1.2.0 and swap its copy.
     // Only on purpose. For a new version beside one in flight, store-prep is the path.
     if (!process.argv.includes("--rename")) throw new Error(`The editable App Store version is ${sv.attributes.versionString} (${sv.attributes.appStoreState}), MARKETING_VERSION is ${v}. Renaming it is the owner's call: node scripts/asc.mjs store-meta --rename. For a new ${v} version, use store-prep.`);
     await api("PATCH", `/v1/appStoreVersions/${sv.id}`, { data: { type: "appStoreVersions", id: sv.id, attributes: { versionString: v } } });
@@ -521,7 +521,7 @@ async function storeShots(dir = join(ROOT, "build", "store-shots")) {
   const { createHash } = await import("node:crypto");
   const { readdirSync } = await import("node:fs");
   const a = await app();
-  // 0265: only the MARKETING_VERSION version, and only if it exists and is editable (this used to create one, or upload to
+  // 0268: only the MARKETING_VERSION version, and only if it exists and is editable (this used to create one, or upload to
   // whichever version happened to be editable).
   const { sv } = await storeVersion(a.id);
   if (!sv || sv.attributes.versionString !== version()) throw new Error(`No editable App Store version ${version()}${sv ? ` (the editable one is ${sv.attributes.versionString})` : ""}: node scripts/asc.mjs store-prep (dry run first)`);
@@ -723,7 +723,7 @@ async function applinks() {
   console.log(`✓ Associated Domains turned on for ${BUNDLE}; run \`node scripts/asc.mjs signing\` before the next archive`);
 }
 
-// ── store-prep: the next version beside one in review (0265) ─────────────────────────────────────────────
+// ── store-prep: the next version beside one in review (0268) ─────────────────────────────────────────────
 // 1.1.0 waits for review with a manual release; 1.2.0 is prepared beside it and submitted only on the owner's fresh yes.
 // Everything here addresses the version by its versionString, never "whichever is editable", and every write is checked
 // against that version first. A dry run (the default) makes GET requests only.

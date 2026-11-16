@@ -1,4 +1,4 @@
-// 0265: `asc.mjs store-prep` prepares the next App Store version beside one in review. A dry run reads only; --yes writes
+// 0268: `asc.mjs store-prep` prepares the next App Store version beside one in review. A dry run reads only; --yes writes
 // only to the version named by its versionString, never to the one in review, and never submits. The store/ copy it sends
 // stays inside Apple's limits and keeps the standing correction owed to App Review (ios/store/review-reply.md).
 import { describe, it, expect, beforeAll } from 'vitest';
