@@ -97,8 +97,13 @@ test('one-thumb: in the air the pad is a sight, a slide aims, and the results sh
   await page.close();
 });
 
+// A skim-show Daily (src/daily.js `swapHold`) puts its own line in What happened's fix; pin a Wall Daily so the coach's
+// line is read (as lineup-thumb.spec.js does, LESSONS 2026-11-15).
+const NOT_A_SHOW_DAILY = new Date('2026-11-18T12:00:00Z');   // stick-wall (src/daily.js objectiveFor)
+
 test('the results sheet shows the medal row under the score, and it is kept on this device', async ({ browser }) => {
   const page = await browser.newPage(PHONE);
+  await page.clock.setFixedTime(NOT_A_SHOW_DAILY);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/coldgas/?gfx=low');
