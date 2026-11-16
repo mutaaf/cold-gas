@@ -76,10 +76,10 @@ struct DriveCarTests {
     }
 
     @Test func theTyresShareTheirGripBetweenBrakingAndCornering() {
-        // The combined curve: at the lateral peak, adding longitudinal slip takes lateral force away (the friction circle).
-        let C = DriveSpec.shapePaved
-        func lat(_ sx: Double, _ sy: Double) -> Double { let s = (sx * sx + sy * sy).squareRoot(); return driveCurve(s, C) * sy / s }
-        #expect(abs(driveCurve(1, C) - 1) < 1e-9)
+        // The combined curve: at the lateral peak, adding longitudinal slip takes lateral force away (the friction ellipse).
+        let f = DriveSpec.lat
+        func lat(_ sx: Double, _ sy: Double) -> Double { let s = (sx * sx + sy * sy).squareRoot(); return f(s) * sy / s }
+        #expect(abs(f(1) - 1) < 1e-9)
         #expect(lat(0.0001, 1) > 0.99)
         #expect(lat(1, 1) < 0.75)
         #expect(lat(2, 1) < 0.5)

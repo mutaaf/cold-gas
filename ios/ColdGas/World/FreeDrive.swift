@@ -42,6 +42,10 @@ struct DriveCarLook {
 
 final class FreeDrive: DriveScene {
     static let seedDefault = "cold gas"
+    /// Stability control in Free Drive and Roam (0269; Settings → Driving): on, sport or off, kept on this device.
+    static var stability: DriveModel.ESC = DriveModel.ESC(rawValue: UserDefaults.standard.integer(forKey: "coldgas.stability")) ?? .on {
+        didSet { UserDefaults.standard.set(stability.rawValue, forKey: "coldgas.stability") }
+    }
     #if DEBUG
     /// `-fd-hold throttle,steer[,after s[,brake]]`.
     static let hold: (Double, Double, Double, Double)? = {
@@ -102,6 +106,7 @@ final class FreeDrive: DriveScene {
         looseSpots = looseSet(stageOf(course.id))
         for s in looseSpots { addLoose(car.world, s.kind, x: s.x, y: 0, z: s.z, yaw: s.yaw) }
         looseSpeed = Array(repeating: 0, count: looseSpots.count)
+        chassis.stability(FreeDrive.stability)
         if onMark, let c = COURSES[stageOf(course.id)] { place(x: c.startX, z: c.startZ, yaw: 0) }
         else { place(x: course.startX, z: course.startZ, yaw: course.id == "drive-lineup" ? 0 : .pi) }
     }
@@ -197,6 +202,9 @@ final class FreeDrive: DriveScene {
                     #endif
                     input.fan = fan ? 1 : 0
                     if phase == .drive { reverse(input) }
+                    // The player's stability setting, and on touch (a slider or a tilt) a light countersteer (0269).
+                    if chassis.esc != FreeDrive.stability { chassis.stability(FreeDrive.stability) }
+                    chassis.counterAssist = pilot == nil && (sampler.touch.active || sampler.tilt != 0) ? DriveSpec.counterAssistTouch : 0
                     if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
                     // A state that isn't a number never reaches the engine again (0229): back on the road at once.
                     if !carFinite(car) { print("DRIVE car state not finite: reset"); reset(); acc = 0; break }
@@ -303,13 +311,13 @@ final class FreeDrive: DriveScene {
         if sunkT > 1 { reset() }
     }
 
-    /// A loose thing struck (its speed jumping): a knock in the sound and the hands, scaled by how hard (0223).
+    /// A loose thing struck (its speed jumping): a knock in the sound and the hands, scaled by the impulse it took (0269:
+    /// its mass × its change of speed, so a 4 kg cone flicked away is a tick and a water-filled barrier shoved is a thud).
     private func looseHits() {
         for (i, b) in car.world.loose.enumerated() where i < looseSpeed.count {
             let v = b.speed, was = looseSpeed[i]
             looseSpeed[i] = v
-            if v - was > 1.5 {
-                let k = min(1, (v - was) / 10)
+            if let k = LooseKind.knock(b.kind, dv: v - was) {
                 Sound.shared.hit(b.kind == .cone || b.kind == .barrier ? .plastic : b.kind == .fence ? .wood : b.kind == .rail ? .rail : .sign, k: k, at: SIMD3<Float>(Float(b.x - origin.x), Float(b.y - origin.y), Float(b.z - origin.z)), seed: i &* 7919 &+ Int(v * 100))
                 HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: Float(0.25 + 0.6 * k), sharpness: b.kind == .cone ? 0.85 : 0.5))
             }
