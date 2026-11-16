@@ -1,12 +1,12 @@
 ---
 id: 0269
 title: On the iPhone the car is never blinding at a run's opening (the Show, the Wall, the title)
-status: in-progress
+status: shipped
 priority: P0
 size: S
 lens: player-feel
 created: 2026-11-16
-pr:
+pr: 406
 by: operator
 ---
 
