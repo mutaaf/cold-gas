@@ -1,11 +1,12 @@
 ---
 id: 0269
 title: Free Drive and Roam slide and hit like the real thing (a Magic-Formula tyre, the car's own yaw inertia, real props), with a stability setting (iPhone)
-status: in-progress
+status: shipped
 priority: P0
 size: L
 lens: player-feel
 created: 2026-11-16
+pr: 405
 by: operator
 ---
 
