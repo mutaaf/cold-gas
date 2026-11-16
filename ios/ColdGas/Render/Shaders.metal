@@ -122,19 +122,11 @@ static float3 duskEnv(float3 d, float rough, constant LookU& k) {
     return mix(c, avg, clamp(rough * rough, 0.0, 1.0));
 }
 
-// The sets' procedural detail (0233): hashed value noise and a few octaves of it, in world metres.
-static float setHash(float2 p) { p = fract(p * float2(0.1031, 0.1030)); p += dot(p, p.yx + 33.33); return fract((p.x + p.y) * p.x); }
-static float setNoise(float2 p) {
-    float2 i = floor(p), f = fract(p), u = f * f * (3.0 - 2.0 * f);
-    return mix(mix(setHash(i), setHash(i + float2(1, 0)), u.x), mix(setHash(i + float2(0, 1)), setHash(i + float2(1, 1)), u.x), u.y);
-}
-static float setFbm(float2 p) { return setNoise(p) * 0.5 + setNoise(p * 2.03 + 3.1) * 0.3 + setNoise(p * 4.1 + 7.7) * 0.2; }
-
 fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facing]], constant Frame& f [[buffer(1)]], constant Material& m [[buffer(2)]],
                                   constant Light* lights [[buffer(3)]], texture2d<float> map [[texture(0)]], texture2d<float> roughMap [[texture(1)]],
                                   texture2d<float> emiMap [[texture(2)]], depth2d<float> shadow [[texture(3)]], texture2d<float> alphaMap [[texture(4)]],
                                   constant LookU& look [[buffer(4)]], texture2d<float> wetMask [[texture(5)]], texture2d<float> mirror [[texture(6)]], texturecube<float> env [[texture(7)]],
-                                  texture2d<float> skyView [[texture(8)]]) {
+                                  texture2d<float> skyView [[texture(8)]], texture2d<float> det [[texture(10)]]) {
     constexpr sampler s(coord::normalized, filter::linear, mip_filter::linear, address::repeat, max_anisotropy(4));   // (8 on the web: on a slab at a grazing angle that's 8 taps a pixel at 120 Hz)
     float3 V0 = normalize(f.eye.xyz - in.world + 1e-6);
     // The web's ShaderMaterials (src/render/wall.js), their falloffs as written there; additive.
@@ -179,28 +171,25 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         // The drive car's outside (0232): road grime where the forge's mask puts it (uv.x: sills, behind the wheels, the
         // tail), as the miles add up (effect.w); it dulls the paint and takes the clear coat with it.
         float grime = 0;
-        if (m.effectKind.x == 13) {   // a set's surface (0233): procedural detail in world space, no texture memory
+        if (m.effectKind.x == 13) {   // a set's surface (0233): the baked detail (DetailTexture) in world space, three taps
+            constexpr sampler ds(coord::normalized, filter::linear, mip_filter::linear, address::repeat, max_anisotropy(2));
             float3 wp = in.world, an = abs(normalize(in.nrm + 1e-6));
-            // Triplanar value noise: the two axes across the surface's facing.
             float2 q = an.y > max(an.x, an.z) ? wp.xz : (an.x > an.z ? wp.zy : wp.xy);
-            float big = setFbm(q / 3.1), mid = setNoise(q / 0.45), fine = setNoise(q / 0.06);
-            float px = length(fwidth(wp)) + 1e-4, fineK = 1.0 - smoothstep(0.01, 0.05, px), midK = 1.0 - smoothstep(0.08, 0.5, px);
+            float4 B = det.sample(ds, q / 9.0), Mi = det.sample(ds, q / 1.4);
             if (metal > 0.5) {
-                // Metal: brushed along its long axis, a few scratches, the finish dulled in places.
+                // Metal: brushed along its long axis, a few scratches (the fine cells' edges), the finish dulled in places.
                 float2 b = an.y > 0.7 ? wp.xz : float2(wp.y, wp.x + wp.z);
-                float brush = setNoise(float2(b.x * 0.6, b.y * 90.0));
-                float scratch = step(0.985, setNoise(float2(b.x * 4.0 + b.y * 9.0, b.y * 2.0))) * fineK;
-                base.rgb *= 0.9 + 0.12 * brush * midK + 0.25 * scratch;
-                rough = clamp(rough * (0.75 + 0.5 * big) + 0.08 * brush * midK, 0.05, 1.0);
+                float4 Br = det.sample(ds, float2(b.x * 0.05, b.y * 6.0));
+                float scratch = 1.0 - smoothstep(0.0, 0.04, Mi.a);
+                base.rgb *= 0.9 + 0.12 * Br.b + 0.2 * scratch;
+                rough = clamp(rough * (0.75 + 0.5 * B.r) + 0.08 * Br.b, 0.05, 1.0);
             } else {
-                // Concrete and paint on it: big stains, a mottled mid tone, aggregate up close; on the level, tyre marks
-                // and oil, darker and smoother.
-                float stain = smoothstep(0.45, 0.8, big);
-                base.rgb *= (0.86 + 0.24 * big) * (1.0 - 0.18 * stain) * mix(1.0, 0.9 + 0.2 * mid, midK) * mix(1.0, 0.92 + 0.16 * fine, fineK);
-                rough = clamp(rough * (0.85 + 0.3 * mid) - 0.12 * stain, 0.08, 1.0);
+                // Concrete and the paint on it: big stains, a mottled mid tone, aggregate; on the level, tyre marks and oil.
+                float stain = smoothstep(0.45, 0.8, B.r);
+                base.rgb *= (0.86 + 0.24 * B.r) * (1.0 - 0.18 * stain) * (0.9 + 0.2 * Mi.g) * (0.94 + 0.12 * Mi.b);
+                rough = clamp(rough * (0.85 + 0.3 * Mi.g) - 0.12 * stain, 0.08, 1.0);
                 if (an.y > 0.9) {
-                    float lane = setNoise(float2(wp.x * 0.35, wp.z * 0.02)) * setNoise(float2(wp.x * 2.2, wp.z * 0.15));
-                    float mark = smoothstep(0.32, 0.55, lane) * midK;
+                    float mark = smoothstep(0.55, 0.8, det.sample(ds, float2(wp.x * 0.12, wp.z * 0.01)).g * (0.6 + 0.6 * B.g));
                     base.rgb *= 1.0 - 0.35 * mark;
                     rough = mix(rough, rough * 0.7, mark);
                 }

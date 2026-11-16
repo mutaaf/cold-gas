@@ -69,7 +69,11 @@ final class Renderer {
     private(set) var shed = 0
     /// The drive's extras' quality (0231: the grass; the props' shadows): 2 full, 1 cut back, 0 off. Tied to the shed (heat,
     /// Low Power Mode, a frame still over budget at the resolution floor) and `-fd-quality <n>`.
-    var quality: Int { min(Launch.value("-fd-quality").flatMap(Int.init) ?? 2, 2 - shed) }
+    var quality: Int { min(Launch.value("-fd-quality").flatMap(Int.init) ?? sizeQuality, 2 - shed) }
+    /// The quality a drawable this size starts at (0231, measured on the Duo, 2026-11-16): open, 2853 × 2007 (5.7 M pixels),
+    /// the main pass at full quality cost ≈ 17 ms at half resolution; folded (2.8 M) or a Pro Max (3.8 M) held 120 Hz. Past
+    /// 4.5 M pixels the drive's extras start cut back (quality 1); the governor and the shed take it from there.
+    private(set) var sizeQuality = 2
     private var shedThermal = 0, overFrames = 0, underFrames = 0
     let crash = Crash()
     let mist = Plumes()
@@ -421,6 +425,7 @@ final class Renderer {
         let rw = max(64, Int(Float(outW) * scale)), rh = max(64, Int(Float(outH) * scale))
         if renderSize == (rw, rh) && outSize == (outW, outH) { return }
         renderSize = (rw, rh); outSize = (outW, outH)
+        sizeQuality = outW * outH > 4_500_000 ? 1 : 2
         func tex(_ f: MTLPixelFormat, _ w: Int, _ h: Int, ms: Bool, usage: MTLTextureUsage, memoryless: Bool) -> MTLTexture? {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: f, width: w, height: h, mipmapped: false)
             if ms { d.textureType = .type2DMultisample; d.sampleCount = Renderer.samples }
@@ -760,7 +765,9 @@ final class Renderer {
     }
 
     private var skyTex: MTLTexture?
-    private func setEnv(_ e: MTLRenderCommandEncoder) { e.setFragmentTexture(stage.env, index: 7); e.setFragmentTexture(skyTex ?? dummy, index: 8) }
+    /// The surfaces' baked detail (0231, DetailTexture): the sets' concrete and metal read it.
+    private lazy var detail: MTLTexture = DetailTexture.shared(device) ?? dummy
+    private func setEnv(_ e: MTLRenderCommandEncoder) { e.setFragmentTexture(stage.env, index: 7); e.setFragmentTexture(skyTex ?? dummy, index: 8); e.setFragmentTexture(detail, index: 10) }
     /// rocket.js's lamps and beacons (they pulse together, eased).
     private func glintsDraw(_ e: MTLRenderCommandEncoder, _ c: StageComplex, beaconK: Float, pipe: MTLRenderPipelineState) {
         e.setRenderPipelineState(pipe); e.setDepthStencilState(dsRead); e.setCullMode(.none); e.setDepthBias(0, slopeScale: 0, clamp: 0)

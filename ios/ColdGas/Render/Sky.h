@@ -92,6 +92,16 @@ static inline float3 sky_reflect(texture2d<float> V, float3 d, float rough, floa
 // Aerial perspective (the haze between the eye and a point L metres off along unit d): the air's extinction per channel through
 // an exponential atmosphere between the two heights (Rayleigh's 8 km and the haze's 1.2 km, the haze thickened by `haze`), and
 // the light scattered in, taken as the sky-view's radiance along the ray (the sky toward the sun warm, away from it blue).
+// The same split in two (0231, for a vertex shader): what survives of the surface's light (T) and what the air adds (In),
+// so the world's fragments do c · T + In with no taps of their own.
+static inline void sky_aerialTI(texture2d<float> V, float3 d, float L, float eyeY, float3 sun, float eyeKm, float haze, thread float3& T, thread float3& In) {
+    float Lk = L * 1e-3, h0 = max(eyeY, 0.0) * 1e-3, h1 = max(eyeY + d.y * L, 0.0) * 1e-3;
+    float dh = h1 - h0;
+    float odR = abs(dh) > 1e-4 ? Lk * (exp(-h0 / 8.0) - exp(-h1 / 8.0)) / (dh / 8.0) : Lk * exp(-h0 / 8.0);
+    float odM = abs(dh) > 1e-4 ? Lk * (exp(-h0 / 1.2) - exp(-h1 / 1.2)) / (dh / 1.2) : Lk * exp(-h0 / 1.2);
+    T = exp(-clamp(SKY_RAY * odR * 1.6 + SKY_MIE_E * haze * odM, 0.0, 40.0));
+    In = sky_view(V, normalize(float3(d.x, max(d.y, 0.012), d.z)), sun, eyeKm, 0.5) * (1.0 - T);
+}
 static inline float3 sky_aerial(texture2d<float> V, float3 c, float3 d, float L, float eyeY, float3 sun, float eyeKm, float haze) {
     float Lk = L * 1e-3, h0 = max(eyeY, 0.0) * 1e-3, h1 = max(eyeY + d.y * L, 0.0) * 1e-3;
     float dh = h1 - h0;

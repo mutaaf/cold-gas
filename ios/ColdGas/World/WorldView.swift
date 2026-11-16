@@ -24,7 +24,9 @@ final class WorldView {
     private let propShadowPipe: MTLRenderPipelineState?
     /// The grass near the eye (0231): its radius (m) and the clumps' spacing; `quality` (the renderer's, by its shed) scales it.
     private let grassPipe: MTLRenderPipelineState?
-    static let grassR = 36.0, grassSp = 0.6
+    static let grassR = 30.0, grassSp = 0.7
+    /// The surfaces' baked detail (0231, DetailTexture).
+    private lazy var detail: MTLTexture? = DetailTexture.shared(device)
     var quality = 2
     private(set) var grassClumps = 0
     private let dsWrite, dsTest: MTLDepthStencilState
@@ -69,7 +71,7 @@ final class WorldView {
     // The near pool (0226): within NEAR_R of the camera each instance is drawn with its kind's finest LOD (a forged tree up
     // close), gathered from the blocks every few metres into per-kind buffers (triple-buffered, preallocated); the blocks'
     // own draws leave those instances out in the vertex shader, so each instance is drawn exactly once a frame.
-    static let nearR = 140.0, nearCap = 3072
+    static let nearR = 110.0, nearCap = 3072
     private var nearBufs: [[MTLBuffer]] = []
     private var nearCounts: [Int] = [], nearSlot = 0, nearAt = SIMD3<Double>(.infinity, 0, .infinity), nearCorner = SIMD2<Double>(0, 0), nearDirty = true
 
@@ -410,7 +412,10 @@ final class WorldView {
     /// `frame` (buffer 1) and `look` are the renderer's; `drive` is the world's own uniform (lamps, the props' range).
     func draw(_ e: MTLRenderCommandEncoder, frame fb: MTLBuffer, look: inout LookU, drive: inout WDriveU, shadow: MTLTexture, sky: MTLTexture, viewProj: simd_float4x4, eye: SIMD3<Double>) {
         e.setVertexBuffer(fb, offset: 0, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1)
-        e.setFragmentTexture(sky, index: 8)
+        // The sky's LUT and the look in the vertex stage too (0231: the ambient and the air are per vertex), the baked detail.
+        e.setFragmentTexture(sky, index: 8); e.setVertexTexture(sky, index: 8)
+        e.setVertexBytes(&look, length: MemoryLayout<LookU>.stride, index: 4)
+        if let det = detail { e.setFragmentTexture(det, index: 10); e.setVertexTexture(det, index: 10) }
         e.setFragmentBytes(&look, length: MemoryLayout<LookU>.stride, index: 4)
         e.setFragmentBytes(&drive, length: MemoryLayout<WDriveU>.stride, index: 5)
         e.setVertexBytes(&drive, length: MemoryLayout<WDriveU>.stride, index: 5)
@@ -430,7 +435,8 @@ final class WorldView {
         grassClumps = 0
         if let gp = grassPipe, quality > 0, !WorldView.skip.contains("grass") {
             e.setRenderPipelineState(gp); e.setCullMode(.none)
-            let R = WorldView.grassR * (quality >= 2 ? 1 : 0.66), sp = WorldView.grassSp
+            // Quality 2: 30 m, clumps of four blades; 1: 18 m, three.
+            let R = WorldView.grassR * (quality >= 2 ? 1 : 0.6), sp = WorldView.grassSp, blades = quality >= 2 ? 4 : 3
             for (k, t) in draws where k.level == 0 {
                 let x0 = k.x0, z0 = k.z0
                 let lx0 = max(0, eye.x - R - x0), lx1 = min(TileSpec.leaf, eye.x + R - x0)
@@ -438,11 +444,11 @@ final class WorldView {
                 if lx1 <= lx0 || lz1 <= lz0 { continue }
                 let i0 = Int((lx0 / sp).rounded(.down)), i1 = Int((lx1 / sp).rounded(.up)), j0 = Int((lz0 / sp).rounded(.down)), j1 = Int((lz1 / sp).rounded(.up))
                 var u = WGrassU(offset: SIMD4(Float(x0 - origin.x), Float(-origin.y), Float(z0 - origin.z), 0), cells: SIMD4(Int32(i0), Int32(j0), Int32(i1 - i0), 0),
-                                params: SIMD4(Float(sp), Float(R), 1, 0))
+                                params: SIMD4(Float(sp), Float(R), 1, Float(blades)))
                 e.setVertexBytes(&u, length: MemoryLayout<WGrassU>.stride, index: 2)
                 e.setVertexBuffer(t.buf, offset: 0, index: 0)
                 let n = (i1 - i0) * (j1 - j0)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 15, instanceCount: n)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: blades * 3, instanceCount: n)
                 grassClumps += n
             }
         }
