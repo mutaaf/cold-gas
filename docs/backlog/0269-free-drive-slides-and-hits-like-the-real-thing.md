@@ -49,10 +49,33 @@ Runs on: the operator's Mac (Xcode).
   bit-exact.
 
 ## Acceptance criteria
-- [ ] `make test` green, the 52 run vectors bit-exact.
-- [ ] The harness's manoeuvres within real tolerances (DriveDynamicsTests), the props' (PropPhysicsTests).
-- [ ] `make rules` green; the app builds.
-- [ ] `make bench-freedrive`: the drive's physics step within +0.3 ms.
+- [x] `make test` green, the 52 run vectors bit-exact.
+- [x] The harness's manoeuvres within real tolerances (DriveDynamicsTests, 14 tests), the props' (PropPhysicsTests, 7).
+- [x] `make rules` green; the app builds (Release, simulator).
+- [x] The drive's physics step within +0.3 ms: timed per tick in Release, before and after, inside the noise (≈ ±3 µs a
+      tick; docs/NATIVE-FREEDRIVE.md §8). `make bench-freedrive` itself couldn't run: the Mac's simulator service was
+      wedged by other work (every `simctl` call hung). Worth a run when it's free, and `make device-bench-freedrive` on the
+      owner's phone.
+
+## After (the harness's numbers)
+- The lateral curve: 0.98 of its peak at 10°, 0.93 at 20°, 0.89 at 45° (was 0.90 / 0.75 / 0.63).
+- A free-rolling wheel: |κ| under 0.005, its force steady to 2 N a tick (was ±0.1 and ±7 kN, every tick).
+- Skidpad 1.13 g; the loaded front tyre's μ 1.26 against the unloaded one's 1.42 (load sensitivity).
+- Step steer at 20 m/s: the yaw rate at 90 % 0.11 s after the wheels are half way there, 1 % overshoot.
+- Weight transfer across the car at 1 g: 6,680 N against m·ay·h/t's 6,491.
+- Handbrake turn at 16 m/s: 49° of slip, 131° turned, caught by the countersteer (was a spin: 87°, 219°).
+- Power oversteer at 12 m/s, 40 % throttle (400 kW): Off spins (a 1 MW rear-drive car does), Sport 6.8°, On 2.9°.
+- Lift-off at 1.2 g: yaw rate +13 % (26.7 → 30.1°/s), slip under 2°.
+- Braking into a bend: 10.1° of slip; a flick first: 10.8° (dry tarmac: a road-tuned car shrugs most of a flick off).
+- A held drift at 13–16 % throttle: 14–18° of mean slip for 3 s, never past 28°, the yaw rate the path's within 27 %;
+  more throttle, more angle (4.9° → 14.0° → 18.0°). It used to spin in 3 of 4 tries.
+- The touch countersteer assist: a 200 kW slide the thumb lets go of swaps ends without it (179°), is caught with it
+  (14°, 102°).
+- Props: a cone stands back up from a 0.8 N·s push at its tip, goes over from 5 N·s; flicked away at 17.8 m/s by a car
+  at 15 m/s that loses 0.014 m/s. A barrier shoved at ≈ the car's speed, lifted 7 cm, sliding to a stop at 3.48 m/s²
+  (μg 3.43); the car's momentum beyond coasting 1,211 N·s against the barrier's 1,044. Six barriers in a row, two
+  stacked and a cone: asleep, nothing moved in 4 s. A parked 1,705 kg car shoved at 5.4 m/s (the bound 6.8), 1.1 m/s up,
+  9° of tilt.
 
 ## Test plan
 `cd ios/Packages/ColdGasCore && DRIVE_LOG=1 swift test --filter DriveDynamics` prints each manoeuvre's trace;
