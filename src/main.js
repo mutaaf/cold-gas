@@ -54,7 +54,7 @@ import { createComeback } from './comeback.js';   // [comeback] challenge links 
 import { objectiveFor, evaluate as dailyEval, dailyCoach, dailyItems, dailySwapsHold, loadStreak as loadDaily, streakNow } from './daily.js';
 import { createInstruments } from './instruments.js';
 import { localWords, localMeta, fetchBoard } from './panel.js';
-import { createPost } from './post.js';
+import { createPost, postEligible } from './post.js';
 import { withDeadline, lazyOnce, reimport, judgesOverran } from './net.js';
 import { loadAI } from './ai/config.js';
 import { openSettings, aiLabel } from './ai/settings.js';
@@ -2192,10 +2192,10 @@ addEventListener('keydown', (e) => {
 document.addEventListener('pointerdown', (e) => { if (moreOpen() && !more.contains(e.target)) setMore(false); }, true);
 more.addEventListener('focusout', (e) => { if (moreOpen() && e.relatedTarget && !more.contains(e.relatedTarget)) setMore(false); });
 
-// Post to the board from the sheet (src/post.js): eligible for the player's own landed jump, not the reference or a
-// drill. The Worker scores it from the run's telemetry; the client never sends a score.
+// Post to the board from the sheet (src/post.js): eligible for the player's own landed jump, not a wreck (0204), the
+// reference or a drill. The Worker scores it from the run's telemetry; the client never sends a score.
 poster = createPost({
-  ctx: () => ({ run: S.run, card: S.card, eligible: (S.mode === 'results' || S.mode === 'replay') && S.runKind === 'jump' && !S.drill && !S.autopilot && !!S.card?.facts?.jumped && S.card.total > 0 }),
+  ctx: () => ({ run: S.run, card: S.card, eligible: postEligible(S) }),
   onLeaveOpen: () => { if (S.peek) peek(false); ui.openMore(false); },   // 0199: the calm sheet shows its Post with the question
   onLeavePost: () => theatreMod?.dockCall(),   // the sheet, to see the post land
 });

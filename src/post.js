@@ -12,6 +12,16 @@
 // log and its telemetry (the same `t` the judges get); the Worker scores it (src/worker/index.js).
 import { postScore, postMessage, dryRank, rankLabel } from './panel.js';
 import { obs } from './obs/index.js';
+import { isCrash } from './rookie.js';
+
+// Whether the sheet on screen offers Post (and asks its rank): the player's own decided board jump, not the reference,
+// a drill or an autopilot. A run that ends in a crash (0204: rookie.js's isCrash, the card's `facts.crashed` or the
+// Wrecked verdict, the same rule the timeline and Rookie mode use) is a lesson, not a placing: no Post, no "would be #N", no "Leave without posting?". The Worker is frozen and
+// would still take the row; this is the client's offer only.
+export function postEligible({ mode, runKind, drill, autopilot, card }) {
+  return (mode === 'results' || mode === 'replay') && runKind === 'jump' && !drill && !autopilot
+    && !!card?.facts?.jumped && !isCrash(card) && card.total > 0;
+}
 
 const KEY = 'coldgas_initials';
 const clean = (v) => String(v || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
