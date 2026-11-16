@@ -58,7 +58,9 @@ public final class DriveStreamer: WorldStreamer {
     @inline(__always) public static func downforce(_ v: Double) -> Double { 0.5 * rho * clA * v * v }
 
     public func tick(_ w: World) {
-        guard let p = w.carPos else { return }
+        // A position that isn't a number (or is past any world) would trap converting to a cell index (0229): the
+        // drive's safety net (FreeDrive) puts the car back; the streamer leaves the world as it is meanwhile.
+        guard let p = w.carPos, p.x.isFinite, p.z.isFinite, abs(p.x) < 1e9, abs(p.z) < 1e9 else { return }
         origin(w, p.x, p.z)
         if aero, let v = w.carVel, let q = w.carQuat {
             let f = DriveStreamer.downforce((v.x * v.x + v.y * v.y + v.z * v.z).squareRoot())
@@ -303,11 +305,13 @@ extension DriveStreamer {
                 }
             }
             let Jb = DriveStreamer.strength(it.solid.kind)
-            guard J > Jb else { continue }
-            let l = max(1e-9, (nx * nx + ny * ny + nz * nz).squareRoot())
-            nx /= l; ny /= l; nz /= l
-            // The car keeps what went past the item's strength (the impulse pushed it along n, out of the item).
-            let m = massOf(s), back = (J - Jb) / m
+            guard J > Jb, J.isFinite else { continue }
+            let l = (nx * nx + ny * ny + nz * nz).squareRoot()
+            // A degenerate contact (its normals cancelling, or not numbers) breaks the item but hands nothing back.
+            if l > 1e-6 && l.isFinite { nx /= l; ny /= l; nz /= l } else { nx = 0; ny = 0; nz = 0 }
+            // The car keeps what went past the item's strength (the impulse pushed it along n, out of the item); bounded,
+            // so a wild contact can't fling it.
+            let m = massOf(s), back = min((J - Jb) / m, 60)
             s.vel.x -= nx * back; s.vel.y -= max(0, ny) * back * 0.2; s.vel.z -= nz * back
             breakLoose(w, other, it, carVel: (s.vel.x, s.vel.y, s.vel.z))
             nBroke += 1

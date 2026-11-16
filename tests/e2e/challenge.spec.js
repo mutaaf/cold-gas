@@ -12,15 +12,15 @@ const ready = (page) => page.waitForFunction(() => window.__coldgas?.physicsRead
 // One run (already started) to its sheet. crash: full throttle into the Wall, never let go; else the
 // reference flight. The autopilot hands over before the sheet, so the run counts as the player's (as
 // tests/e2e/coach-onboarding.spec.js flies them).
-const fly = (page, crash) => page.evaluate((crash) => {
+const fly = (page, crash, { throttle = 1, assist = 1 } = {}) => page.evaluate(({ crash, throttle, assist }) => {
   const g = window.__coldgas, S = g.S;
-  S.autopilot = crash ? () => ({ throttle: 1, assist: 1 }) : g.createAutopilot(g.stage.course);
+  S.autopilot = crash ? () => ({ throttle, assist }) : g.createAutopilot(g.stage.course);
   g.skipCountdown();
   for (let i = 0; i < 4000 && !S.card; i++) g.liveStep(0.1);
   S.autopilot = null;
   for (let i = 0; i < 4000 && S.mode !== 'results'; i++) g.liveStep(0.1);
-  return { mode: S.mode, total: S.card?.total, course: S.run?.course };
-}, crash);
+  return { mode: S.mode, total: S.card?.total, course: S.run?.course, tier: S.card?.tier };
+}, { crash, throttle, assist });
 
 async function phonePage(browser, { initials = '' } = {}) {
   const ctx = await browser.newContext(phone);
@@ -52,7 +52,7 @@ test('a shared run is a rematch: the card, the challenger as the ghost, and the 
   await ready(b.page);
   const card = b.page.locator('[data-title-extra] .xc-vs');
   await expect(card).toBeVisible();
-  await expect(card.locator('.xc-goal')).toContainText(`ABC scored ${abc.total.toFixed(1)} on The Show`);
+  await expect(card.locator('.xc-goal')).toContainText(`ABC · ${abc.total.toFixed(1)} · The Show`);   // 0251: the stunt and the tier
   await b.page.waitForFunction(() => window.__coldgas.comeback.state?.state === 'ready', null, { timeout: 120_000 });
   expect(await b.page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
   const take = b.page.locator('[data-vs-take]');
@@ -75,6 +75,64 @@ test('a shared run is a rematch: the card, the challenger as the ghost, and the 
   await expect(b.page.locator('[data-daily-line]')).toHaveText('Daily ✓ complete · streak 1');
   expect([...a.errors, ...b.errors]).toEqual([]);
   await a.ctx.close(); await b.ctx.close();
+});
+
+// 0251: the flywheel in one tap. ABC wrecks on Pro and shares; a first-timer opens the link: the card names the stunt and
+// the tier, one tap on Take starts the countdown on the Show on Pro (no how-to card), the result compares like for like
+// with "Your best" beside it, and Send it back hands the share sheet the dare and a #vs= link that decodes to their run.
+test('a first-timer takes a Pro challenge in one tap, flies it on Pro, and sends their own run straight back', async ({ browser }) => {
+  test.setTimeout(240_000);
+  const a = await phonePage(browser, { initials: 'ABC' });
+  await a.page.goto('/coldgas/?gfx=low');
+  await ready(a.page);
+  await a.page.evaluate(() => { const g = window.__coldgas; g.setTier('pro'); g.startRun('jump', true); });
+  const abc = await fly(a.page, true, { assist: 0 });
+  expect(abc.tier).toBe('pro');
+  const link = await a.page.evaluate(() => window.__coldgas.comeback.linkFor(window.__coldgas.S.card));
+  await a.ctx.close();
+
+  const b = await phonePage(browser);
+  await b.page.addInitScript(() => {
+    if (!localStorage.getItem('coldgas_howto')) localStorage.setItem('coldgas_howto', 'new');   // a first visit
+    navigator.canShare = (d) => !!d;
+    navigator.share = async (d) => { window.__shared = { text: d.text, url: d.url }; };
+  });
+  await b.page.goto(link.replace(/^https?:\/\/[^/]+/, '').replace('#', '&gfx=low#'));
+  await ready(b.page);
+  await b.page.waitForFunction(() => window.__coldgas.comeback.state?.state === 'ready', null, { timeout: 120_000 });
+  const goal = b.page.locator('[data-vs-goal]');
+  await expect(goal).toContainText(`ABC · ${abc.total.toFixed(1)} · The Show · `);
+  await expect(goal).toContainText('· Pro');
+  expect(await b.page.evaluate(() => window.__coldgas.S.tier)).toBe('assist');
+  await b.page.locator('[data-vs-take]').tap();
+  await b.page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 15_000 });
+  await expect(b.page.locator('[data-screen="howto"]')).toBeHidden();
+  expect(await b.page.evaluate(() => ({ course: window.__coldgas.S.run.course, tier: window.__coldgas.S.flyTier }))).toEqual({ course: 'show', tier: 'pro' });
+  expect(await b.page.evaluate(() => localStorage.getItem('coldgas_tier'))).not.toBe('pro');   // the race's tier, never saved as theirs
+  const mine = await fly(b.page, true, { throttle: 0.92, assist: 0 });
+  expect(mine.tier).toBe('pro');
+  const box = b.page.locator('.xr-vs');
+  await expect(box).not.toHaveAttribute('data-state', 'other');
+  await expect(b.page.locator('[data-vs-line]')).toHaveText(/^(You beat ABC by|ABC still leads by|Dead level with ABC)/);
+  await expect(b.page.locator('[data-vs-best]')).toHaveText(/^Your best \d+\.\d$/);
+  await expect(b.page.locator('.results [data-next]')).toBeHidden();   // a race leads with its own move, not the next event
+  const won = (await box.getAttribute('data-state')) === 'won';
+  await expect(b.page.locator('[data-vs-send]')).toHaveClass(won ? /primary/ : /ghost/);
+  await b.page.waitForFunction(() => window.__coldgas.comeback.linkFor(window.__coldgas.S.card).then((u) => /#vs=/.test(u)), null, { timeout: 30_000 });
+  await b.page.locator('[data-vs-send]').tap();
+  await b.page.waitForFunction(() => window.__shared, null, { timeout: 15_000 });
+  const sent = await b.page.evaluate(() => window.__shared);
+  expect(sent.url).toMatch(/\?play=jump&course=show#vs=/);
+  expect(sent.text).toMatch(/^(Beat [\d.]+ on The Show|The Show · .+ Can you land it\?$)/);
+  const dec = await b.page.evaluate((u) => window.__coldgas.comeback.decode(u), sent.url);
+  expect(dec).toMatchObject({ course: 'show', tier: 'pro' });
+  expect(dec.score).toBeCloseTo(mine.total, 1);
+  // Done puts the player's own tier back.
+  await b.page.evaluate(() => window.__coldgas.toTitle());
+  await b.page.locator('[data-vs-dismiss]').tap();
+  expect(await b.page.evaluate(() => window.__coldgas.S.tier)).toBe('assist');
+  expect(b.errors).toEqual([]);
+  await b.ctx.close();
 });
 
 test('a challenge link that can’t be read says so gently and falls back to a normal jump', async ({ browser }) => {

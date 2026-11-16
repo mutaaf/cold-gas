@@ -15,6 +15,8 @@
 //   node scripts/asc.mjs store-check       readiness report: every blocker and how to fix it (exit 1 if blocked)
 // Developer portal (idempotent):
 //   node scripts/asc.mjs bundle            register com.mutaafaziz.coldgas
+//   node scripts/asc.mjs applinks          turn on Associated Domains for the App ID (0253: universal links); then
+//                                          `signing` re-creates the App Store profile so it carries the capability
 //   node scripts/asc.mjs signing           the Apple Distribution cert (shared with moon-club: ~/.appstoreconnect/signing)
 //                                          + the "Cold Gas App Store" profile, installed locally. No cloud signing:
 //                                          App Manager keys can't use it (moon-club).
@@ -694,9 +696,20 @@ async function cancel() {
   console.log("• Apple is still releasing the version; check: node scripts/asc.mjs status");
 }
 
+/** Associated Domains on the App ID (0253): the entitlement applinks:mutaafaziz.com needs it. Idempotent. */
+async function applinks() {
+  const b = (await api("GET", `/v1/bundleIds?filter[identifier]=${BUNDLE}`)).data.find((x) => x.attributes.identifier === BUNDLE);
+  if (!b) throw new Error(`${BUNDLE} isn't registered: node scripts/asc.mjs bundle`);
+  const caps = (await api("GET", `/v1/bundleIds/${b.id}/bundleIdCapabilities`)).data.map((c) => c.attributes.capabilityType);
+  if (caps.includes("ASSOCIATED_DOMAINS")) { console.log(`✓ Associated Domains already on for ${BUNDLE}`); return; }
+  await api("POST", "/v1/bundleIdCapabilities", { data: { type: "bundleIdCapabilities", attributes: { capabilityType: "ASSOCIATED_DOMAINS" },
+    relationships: { bundleId: { data: { type: "bundleIds", id: b.id } } } } });
+  console.log(`✓ Associated Domains turned on for ${BUNDLE}; run \`node scripts/asc.mjs signing\` before the next archive`);
+}
+
 const [cmd, arg] = process.argv.slice(2);
-const run = { whoami, status, bundle, signing, crew, call: () => call(arg, process.argv[4], process.argv[5]),
+const run = { whoami, status, bundle, applinks, signing, crew, call: () => call(arg, process.argv[4], process.argv[5]),
   "store-lint": storeLint, "store-check": storeCheck, "store-meta": storeMeta, "store-rating": storeRating, "store-shots": () => storeShots(arg),
   submit, cancel, ship: () => ship(arg), notes: () => console.log(notesFor(arg)) }[cmd];
-if (!run) { console.log("usage: asc.mjs whoami | status | bundle | signing | ship <build> | notes [version] | store-lint | store-check | store-meta | store-rating | store-shots [dir] | submit --yes | cancel --yes"); process.exit(2); }
+if (!run) { console.log("usage: asc.mjs whoami | status | bundle | applinks | signing | ship <build> | notes [version] | store-lint | store-check | store-meta | store-rating | store-shots [dir] | submit --yes | cancel --yes"); process.exit(2); }
 Promise.resolve().then(run).catch((e) => { console.error("✗ " + e.message); process.exit(1); });

@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { createRun, stepRun, simulate, SIM_VERSION, MAX_TICKS } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
-import { packBytes, unpackBytes, encodeChallenge, decodeChallenge, toB64url, fromB64url, vsFromHash, challengeUrl, compare,
+import { packBytes, unpackBytes, encodeChallenge, decodeChallenge, toB64url, fromB64url, vsFromHash, challengeUrl, compare, raceLine,
   createReplay, replayAsync, coarsen, VS_TARGET_CHARS, VS_MAX_CHARS, CHANNELS } from '../../src/challenge.js';
 
 // Challenge links (src/challenge.js): a run in the URL fragment, small, bounded, and a rematch that
@@ -153,5 +153,23 @@ describe('the challenger’s run, replayed', () => {
     const log = [entry(0, { 0: 100, 11: 100 }), entry(5, { 0: 100, 2: 3, 11: 100 }), entry(9, { 0: 100, 2: 37, 11: 100 }), entry(12, { 0: 100, 2: -38, 11: 100 })];
     const c = coarsen(log, 10);
     expect(c.map((e) => [e[0], e[1], e[3], e[12]])).toEqual([[0, 100, 0, 100], [9, 100, 40, 100], [12, 100, -40, 100]]);
+  });
+});
+
+// 0251: a race is like for like: the same event on the same tier, or no win, loss or tie is claimed.
+describe('the race line (0251)', () => {
+  const abc = { course: 'show', tier: 'pro', total: 82.4, initials: 'ABC' };
+  it('compares the same event and tier, to the tenth', () => {
+    expect(raceLine({ course: 'show', tier: 'pro', total: 84.5 }, abc)).toMatchObject({ comparable: true, won: true, text: 'You beat ABC by 2.1' });
+    expect(raceLine({ course: 'show', tier: 'pro', total: 81.6 }, abc)).toMatchObject({ comparable: true, won: false, tie: false, text: 'ABC still leads by 0.8' });
+    expect(raceLine({ course: 'show', tier: 'pro', total: 82.4 }, abc)).toMatchObject({ comparable: true, tie: true });
+  });
+  it('never compares across tiers or events silently', () => {
+    const t = raceLine({ course: 'show', tier: 'assist', total: 99 }, abc);
+    expect(t).toMatchObject({ comparable: false, won: false, tie: false });
+    expect(t.text).toBe('ABC flew Pro: race again on Pro to compare');
+    const e = raceLine({ course: 'wall', tier: 'pro', total: 99 }, abc);
+    expect(e).toMatchObject({ comparable: false, won: false });
+    expect(e.text).toMatch(/another event/);
   });
 });

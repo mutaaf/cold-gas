@@ -9,16 +9,28 @@ struct SettingsView: View {
     @ObservedObject var game = Game.shared
     @State private var haptics = HapticPlayer.shared.level
     @State private var sound = Sound.shared.isEnabled
+    @State private var music = Sound.shared.music
+    @State private var effects = Sound.shared.effects
     @State private var units = SaveStore.shared.units.system
     @State private var tilt = SaveStore.shared.settings.tiltOn
     @State private var judgeOnDevice = SaveStore.shared.settings.judgeOnDeviceOn
     @State private var judgeStatus = OnDeviceJudges.status
+    @State private var usage = SaveStore.shared.settings.usageOn
     private var judgeFooter: String {
-        let scores = " The scores are always the game\u{2019}s own; the model writes the words."
-        if judgeStatus != .available { return "\(judgeStatus.line) The free edge model writes the judges\u{2019} words over the network.\(scores)" }
+        let scores = " Scores are the game\u{2019}s own; the model only writes the words."
+        if judgeStatus != .available { return "\(judgeStatus.line) The free edge model writes them, over the network.\(scores)" }
         return judgeOnDevice
-            ? "The judges use Apple Intelligence: their words are written on this device, with no network call and no cost: the judging sends nothing off this device.\(scores)"
-            : "The judges\u{2019} words come from the free edge model, over the network.\(scores)"
+            ? "Apple Intelligence writes the judges\u{2019} words on this device: nothing is sent.\(scores)"
+            : "The free edge model writes the judges\u{2019} words, over the network.\(scores)"
+    }
+    /// A sound level slider (0250): the car, the world and the hits ("Effects"), or the title's music.
+    private func level(_ name: String, _ v: Binding<Double>, _ apply: @escaping (Double) -> Void) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            HStack { Text(name); Spacer(); Text(String(format: "%.0f%%", v.wrappedValue * 100)).font(Theme.mono(12)).foregroundStyle(Theme.ink2) }
+            Slider(value: v, in: 0...1).accessibilityLabel(name).onChange(of: v.wrappedValue) { _, x in apply(x) }
+        }
+        .disabled(!sound)
+        .opacity(sound ? 1 : 0.45)
     }
     var body: some View {
         NavigationStack {
@@ -31,6 +43,8 @@ struct SettingsView: View {
                     }
                     .onChange(of: haptics) { _, v in HapticPlayer.shared.setLevel(v); UISelectionFeedbackGenerator().selectionChanged() }
                     Toggle("Sound", isOn: $sound).onChange(of: sound) { _, v in Sound.shared.setEnabled(v) }
+                    level("Effects", $effects) { Sound.shared.effects = $0 }
+                    level("Music", $music) { Sound.shared.music = $0 }
                 }
                 Section {
                     Picker("Controls", selection: $game.control) {
@@ -45,7 +59,7 @@ struct SettingsView: View {
                     }
                     .onChange(of: units) { _, v in var st = SaveStore.shared.settings; st.units = v; SaveStore.shared.settings = st }
                 } header: { Text("Play") } footer: {
-                    Text("One thumb flies Assist on the Show and the Wall: hold to climb, tap to let go, hold to land. Classic is the stick and the pedals, on every course and tier.")
+                    Text("One thumb flies Assist on the Show and the Wall. Classic flies everything.")
                 }
                 ControlsSection(close: { dismiss() })
                 // 0219: who writes the judges' words on this device. The scores are always the game's own.
@@ -57,14 +71,24 @@ struct SettingsView: View {
                 } header: { Text("Judges") } footer: {
                     Text(judgeFooter)
                 }
+                // 0246: the usage counts the game sends, and the one switch that stops them.
+                Section {
+                    Toggle("Share usage stats", isOn: $usage)
+                        .onChange(of: usage) { _, v in Usage.shared.setOn(v) }
+                        .accessibilityIdentifier("usage")
+                    Link("Privacy policy", destination: URL(string: "https://mutaafaziz.com/coldgas/privacy")!)
+                } header: { Text("Privacy") } footer: {
+                    Text("Counts like a jump started, landed or shared, with the course, tier and score, and a random id made on this iPhone. No name, initials, location or advertising id. Off sends nothing and deletes the id.")
+                }
                 Section("About") {
                     LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
                     Link("Play on the web", destination: URL(string: "https://mutaafaziz.com/coldgas/")!)
-                    Link("Privacy policy", destination: URL(string: "https://mutaafaziz.com/coldgas/privacy")!)
                     NavigationLink("Licenses") { LicensesView() }
                 }
             }
             .scrollContentBackground(.hidden)
+            .font(Theme.text(15))
+            .tint(Theme.ink)
             .navigationTitle("Settings")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
@@ -122,7 +146,7 @@ struct ControlsSection: View {
             slider("Free Drive look", bind({ $0.lookSens }, { $0.lookSensitivity = $1 }), HudPrefs.lookSensitivities, "%.2f×", 1)
             Toggle("Invert the look", isOn: bind({ $0.lookInvert }, { $0.lookInvertY = $1 }))
         } header: { Text("Controls") } footer: {
-            Text("Layouts are kept for each tier and for each way you hold the screen. The stick that follows the thumb comes to it anywhere on its side. In Free Drive, swipe anywhere off the controls to look round. A controller and a keyboard still fly as before.")
+            Text("A layout is kept for each tier and each way you hold the screen. In Free Drive, swipe off the controls to look round.")
         }
     }
     private func slider(_ name: String, _ v: Binding<Double>, _ r: ClosedRange<Double>, _ fmt: String, _ k: Double) -> some View {

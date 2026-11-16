@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- 0253: a challenge link (https://mutaafaziz.com/coldgas/?play=jump&course=…#vs=…) opens the app when it's installed.
+	     The site's apple-app-site-association matches only /coldgas/ links with a #vs= fragment. -->
+	<key>com.apple.developer.associated-domains</key>
+	<array><string>applinks:mutaafaziz.com</string></array>
+</dict>
+</plist>

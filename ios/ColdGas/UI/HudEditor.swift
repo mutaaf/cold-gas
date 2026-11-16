@@ -377,10 +377,9 @@ struct HudEditorView: View {
     private var panel: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("CONTROLS").font(Theme.display(12)).tracking(3).foregroundStyle(Theme.ink)
-                    Text(m.shapeNow.title).font(Theme.text(11)).foregroundStyle(Theme.ink3).accessibilityIdentifier("hud-shape")
-                }
+                // Which layout this is (the shape in the hand): the panel's only label.
+                Text(m.shapeNow.title).font(Theme.text(13, .medium)).foregroundStyle(Theme.ink2).lineLimit(1).minimumScaleFactor(0.8)
+                    .accessibilityIdentifier("hud-shape").accessibilityLabel("Controls layout, \(m.shapeNow.title)")
                 Spacer()
                 Button { withAnimation(.easeOut(duration: 0.18)) { panelOpen.toggle() } } label: {
                     Image(systemName: panelOpen ? "chevron.up" : "chevron.down").font(.system(size: 13, weight: .medium)).frame(width: 44, height: 44)
@@ -411,12 +410,15 @@ struct HudEditorView: View {
                     Button { m.resetAll() } label: { chip("arrow.counterclockwise", "Reset") }.accessibilityIdentifier("hud-reset")
                 }
                 .buttonStyle(.plain)
+                // The how-to until the first change; after that, only a warning when two controls overlap.
                 let o = m.overlaps
-                Text(o.isEmpty ? "Drag a control. Two fingers resize it. Lines show where it snaps."
-                     : "Overlapping: \(o.map { "\($0.0.tag) and \($0.1.tag)" }.joined(separator: ", ")). A touch goes to the nearer one.")
-                    .font(Theme.text(12)).foregroundStyle(o.isEmpty ? Theme.ink2 : Theme.amber)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .accessibilityIdentifier("hud-hint")
+                if !o.isEmpty || !m.dirty {
+                    Text(o.isEmpty ? "Drag to move. Pinch to resize."
+                         : "Overlapping: \(o.map { "\($0.0.tag) and \($0.1.tag)" }.joined(separator: ", ")). A touch goes to the nearer one.")
+                        .font(Theme.text(12)).foregroundStyle(o.isEmpty ? Theme.ink3 : Theme.amber)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .accessibilityIdentifier("hud-hint")
+                }
             }
         }
         .padding(14).glass(18)

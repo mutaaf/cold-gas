@@ -237,7 +237,7 @@ final class Crash {
         if sev > 0.2 && hazardT < 0 { hazardT = 0.9 }
         if sev > 0.55 { ventT = max(ventT, 1.1 + sev) }
         if e.body >= 0 { dentParked?(Int(e.body), p, n, min(0.14, 0.003 * v * v), Float(e.tick) * 0.29) }   // a dent; the sim rocks it on its springs
-        if audible { Sound.shared.crunch(severity: Double(sev), glass: glassy && v > 5, seed: e.tick * 31 + Int(e.probe)) }
+        if audible { Sound.shared.bodyHit(severity: Double(sev), glass: glassy && v > 5, seed: e.tick * 31 + Int(e.probe), at: p, struck: e.body >= 0) }
         if !reduced {
             shake?(min(2.6, 0.25 + v * 0.17))
             if v > 6.5 && clock - bigT > 2.5 {

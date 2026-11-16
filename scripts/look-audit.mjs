@@ -5,6 +5,9 @@
 //   red  the frame's saturated-red share (scripts/look-measure.mjs; bar ≤ 12 % on every moment but the release)
 //   p10  the 10th-percentile luma in the roadster's projected 4.4 × 2.0 × 1.2 m box (bar ≤ 60: its tyres and
 //        glass show dark)
+// The `sheet` moments (0202: --only=sheet0.5,sheet2,sheet5,sheet10) are a first visit's own landed run instead: the
+// reference flies it and hands it back as the card comes (the calm sheet is a player's, not the reference's), then the
+// frame t s after the sheet opens, with the car's centre against the verdict's top (`above`: px clear, bar ≥ 40).
 // node scripts/look-audit.mjs <url> [outdir] [--sizes=390x844t,1440x900,...] [--courses=show,wall] [--only=count,runup,...]
 //   [--gfx=low|mid|high]
 //   a size ending in t is a touch phone (isMobile, hasTouch), drawn at deviceScaleFactor 1 (CSS pixels). Needs a served build
@@ -38,6 +41,8 @@ const MOMENTS = [
   ['replay1', '(S.mode === "results" || S.mode === "replay") && S.peekPressed && S.replayT * 4 / 240 >= 1.5'],
   ['replay2', '(S.mode === "results" || S.mode === "replay") && S.peekPressed && S.replayT * 4 / 240 >= 2'],
   ['replay4', '(S.mode === "results" || S.mode === "replay") && S.peekPressed && S.replayT * 4 / 240 >= 4'],
+  // The calm sheet's backdrop (0202), t s of wall clock after the sheet opened.
+  ...[0.5, 2, 5, 10].map((t) => [`sheet${t}`, `S.mode === "results" && window.__sheetAt > 0 && performance.now() - window.__sheetAt >= ${t * 1000}`]),
 ];
 
 const browser = await chromium.launch({ args: ['--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'], ...(process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}) });
@@ -48,14 +53,29 @@ for (const course of courses) for (const size of sizes) {
   const ctx = await browser.newContext(touch
     ? { viewport: { width: w, height: h }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }
     : { viewport: { width: w, height: h }, deviceScaleFactor: 1 });
-  await ctx.addInitScript(() => { try { localStorage.setItem('coldgas_howto', 'seen'); } catch {} });
+  const sheet = MOMENTS.some(([n]) => n.startsWith('sheet') && (!only || only.split(',').includes(n)));
+  await ctx.addInitScript((v) => { try { localStorage.setItem('coldgas_howto', v); } catch {} }, sheet ? 'new' : 'seen');
   const page = await ctx.newPage();
   const q = [course !== 'show' ? `course=${course}` : '', gfx ? `gfx=${gfx}` : ''].filter(Boolean).join('&');
   await page.goto(url + (q ? `?${q}` : ''));
   await page.waitForFunction(() => window.__coldgas?.physicsReady && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
   await page.evaluate(async () => { await window.__coldgas.physicsReady; });
   if (pre) await page.evaluate(`(() => { const g = window.__coldgas; ${pre} })()`);
-  await page.evaluate(() => { window.__coldgas.startRun('reveal'); });
+  if (sheet) {
+    // A player's own run: the reference flies it, the player has it from the card; the sheet's clock starts as it opens.
+    await page.evaluate(() => {
+      const g = window.__coldgas, S = g.S;
+      g.startRun('jump', true);
+      S.autopilot = g.createAutopilot(g.stage.course);
+      window.__sheetAt = 0;
+      const watch = () => {
+        if (S.card && S.autopilot) S.autopilot = null;
+        if (S.mode === 'results' && !document.querySelector('[data-screen="results"]').hidden) { window.__sheetAt = performance.now(); return; }
+        requestAnimationFrame(watch);
+      };
+      requestAnimationFrame(watch);
+    });
+  } else await page.evaluate(() => { window.__coldgas.startRun('reveal'); });
   const want = MOMENTS.filter(([n]) => (!only || only.split(',').includes(n)));
   if (!want.some(([n]) => n === 'count')) await page.evaluate(() => window.__coldgas.skipCountdown());
   if (want.some(([n]) => n.startsWith('replay'))) {
@@ -90,7 +110,9 @@ for (const course of courses) for (const size of sizes) {
       cx.drawImage(img, 0, 0);
       const d = cx.getImageData(0, 0, cv.width, cv.height).data;
       let s = ''; for (let i = 0; i < d.length; i += 0x8000) s += String.fromCharCode.apply(null, d.subarray(i, i + 0x8000));
-      return { w: cv.width, h: cv.height, px: btoa(s), box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, y: root.position.y, inv: g.S.run.t.invertedTime, tier: g.stage.tier ?? null };
+      const c = mul(P, ...mul(V, e[12], e[13], e[14], 1)), vt = document.querySelector('[data-r-verdict]');
+      const above = g.S.mode === 'results' && vt?.getClientRects().length ? Math.round(vt.getBoundingClientRect().top - (0.5 - c[1] / c[3] * 0.5) * innerHeight) : null;
+      return { w: cv.width, h: cv.height, px: btoa(s), box: { x: x0, y: y0, w: x1 - x0, h: y1 - y0 }, y: root.position.y, inv: g.S.run.t.invertedTime, tier: g.stage.tier ?? null, above };
     }, shot.toString('base64'));
     if (!m) { rows.push({ course, size, moment: name, red: null, p10: null }); await page.evaluate(() => { window.__coldgas.S.paused = false; }); continue; }
     const rgba = Buffer.from(m.px, 'base64');
@@ -98,7 +120,7 @@ for (const course of courses) for (const size of sizes) {
       course, size, moment: name,
       red: Math.round(redShare(rgba, m.w, m.h) * 1000) / 10,
       p10: lumPercentile(rgba, m.w, m.h, m.box, 10), p50: lumPercentile(rgba, m.w, m.h, m.box, 50),
-      boxPx: `${Math.round(m.box.w)}×${Math.round(m.box.h)}`, carY: Math.round(m.y * 10) / 10, inv: Math.round(m.inv * 100) / 100,
+      boxPx: `${Math.round(m.box.w)}×${Math.round(m.box.h)}`, carY: Math.round(m.y * 10) / 10, inv: Math.round(m.inv * 100) / 100, above: m.above,
     });
     const r = rows[rows.length - 1];
     console.error(`  ${course} ${size} ${name}: red ${r.red} %, P10 ${r.p10}`);   // progress (stderr), the table follows
@@ -107,8 +129,8 @@ for (const course of courses) for (const size of sizes) {
   await ctx.close();
 }
 await browser.close();
-console.log('course size        moment   red %   box P10 / P50   box px    car y   inverted s');
+console.log('course size        moment   red %   box P10 / P50   box px    car y   inverted s   above verdict px');
 for (const r of rows) {
-  console.log(`${r.course.padEnd(6)} ${r.size.padEnd(11)} ${r.moment.padEnd(8)} ${String(r.red ?? 'miss').padStart(5)}   ${String(r.p10 ?? '-').padStart(4)} / ${String(r.p50 ?? '-').padEnd(5)}   ${(r.boxPx || '').padEnd(9)} ${String(r.carY ?? '').padStart(5)}   ${r.inv ?? ''}`);
+  console.log(`${r.course.padEnd(6)} ${r.size.padEnd(11)} ${r.moment.padEnd(8)} ${String(r.red ?? 'miss').padStart(5)}   ${String(r.p10 ?? '-').padStart(4)} / ${String(r.p50 ?? '-').padEnd(5)}   ${(r.boxPx || '').padEnd(9)} ${String(r.carY ?? '').padStart(5)}   ${String(r.inv ?? '').padEnd(10)}   ${r.above ?? ''}`);
 }
 if (out) writeFileSync(`${out}/look.json`, JSON.stringify(rows, null, 1));

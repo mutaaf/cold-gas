@@ -5,6 +5,7 @@
 // hands the renderer what it draws through `DriveScene`. The car is the scored Swift car; in a cruise (`-fd-cruise`, the
 // bench, the shots) it's carried along the roads at a set speed rather than stepped.
 import Foundation
+import ColdGasAudio
 import Metal
 import simd
 import ColdGasCore
@@ -92,6 +93,10 @@ final class FreeDrive: DriveScene {
     private var lampK = Launch.args.contains("-fd-nolamp") ? 0.0 : 1.0
     /// A reset's cue for the HUD ("Back on the road"), and when it was given.
     private(set) var cue = "", cueT = -10.0
+    /// The safety nets (0229): wedged against something with a pedal pressed, sunk into something solid, or a state that
+    /// isn't a number: back on the road. The last pose that was a number, for a reset that can't trust the car's.
+    private var wedge = WedgeWatch(warnAfter: 1.0, actAfter: 1.5), sunkT = 0.0
+    private var lastGood = (x: 0.0, z: 0.0, hx: 0.0, hz: 1.0)
 
     /// `onMark`: on the scored course's own mark, facing down its run (Roam, 0220); otherwise Free Drive's start on the
     /// apron, facing out.
@@ -126,19 +131,31 @@ final class FreeDrive: DriveScene {
         walker = nil
     }
     /// Onto the road nearest (x, z) (in the right-hand lane), heading `away` from the centre or along (hx, hz).
-    func placeOnRoad(nearX x: Double, z: Double, heading: (Double, Double)? = nil) {
+    @discardableResult
+    func placeOnRoad(nearX x: Double, z: Double, heading: (Double, Double)? = nil) -> Bool {
+        guard x.isFinite, z.isFinite else { return false }
         let l = max(1e-9, (x * x + z * z).squareRoot())
-        let h = heading ?? (x / l, z / l)
-        guard let w = RoadWalker(world: world, nearX: x, z: z, headingX: h.0, z: h.1) else { return }
+        var h = heading ?? (x / l, z / l)
+        if !(h.0.isFinite && h.1.isFinite) || h.0 * h.0 + h.1 * h.1 < 1e-12 { h = (x / l, z / l) }
+        guard let w = RoadWalker(world: world, nearX: x, z: z, headingX: h.0, z: h.1) else { return false }
         let p = w.pose(lane: 1.8)
         place(x: p.x, z: p.z, yaw: atan2(p.hx, p.hz))
         walker = w
+        return true
     }
     /// Back on the nearest road, facing the way the car was going (src/drive/index.js respawn).
     func reset() {
+        // A car that isn't a number (0229) is put back from the last pose that was.
+        let sane = carFinite(car)
+        if !sane { for v in [car.vel, car.angVel, car.angMom] { v.x = 0; v.y = 0; v.z = 0 } }
         let f = forward
-        let moving = abs(car.vel.x) + abs(car.vel.z) > 2
-        placeOnRoad(nearX: car.pos.x, z: car.pos.z, heading: moving ? (car.vel.x, car.vel.z) : (f.0, f.1))
+        let moving = sane && abs(car.vel.x) + abs(car.vel.z) > 2
+        let x = sane ? car.pos.x : lastGood.x, z = sane ? car.pos.z : lastGood.z
+        if !placeOnRoad(nearX: x, z: z, heading: moving ? (car.vel.x, car.vel.z) : sane ? (f.0, f.1) : (lastGood.hx, lastGood.hz)) {
+            // No road near (or none found): back on the set's own mark.
+            place(x: course.startX, z: course.startZ, yaw: course.id == "drive-lineup" ? 0 : .pi)
+        }
+        wedge.reset(); sunkT = 0
         resets += 1
         repairs += 1
         dirt = 0
@@ -199,17 +216,26 @@ final class FreeDrive: DriveScene {
                     input.fan = fan ? 1 : 0
                     if phase == .drive { reverse(input) }
                     if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
+                    // A state that isn't a number never reaches the engine again (0229): back on the road at once.
+                    if !carFinite(car) { print("DRIVE car state not finite: reset"); reset(); acc = 0; break }
                     pedal = input.brake
                     streamer.breakCheck(car.world, car: car)
                     readLoose(car.world)
                     // Unscored, so the tanks top up on the ground (a full charge in 8 s): the jets always work on a roam.
                     if car.grounded > 0 { car.air = min(CAR.airMass, car.air + CAR.airMass * DT / 8) }
                     track.append(car: car, origin: origin)
+                    // The impact buffer is the scored run's fixed one (the first 768 are a run's crash): a drive never ends,
+                    // so it's emptied before it fills, or the crashes would stop being felt and seen (0229).
+                    if car.impacts.count >= car.impacts.cap - 64 { car.impacts.count = 0; track.rewindImpacts() }
                     acc -= DT
                     rebase()
                 }
             } catch { print("DRIVE sim stopped: \(error)"); reset() }
             watchdog(dt)
+            if carFinite(car) {
+                let f = forward
+                lastGood = (car.pos.x, car.pos.z, f.0, f.1)
+            }
             looseHits()
             roadside()
         }
@@ -276,6 +302,7 @@ final class FreeDrive: DriveScene {
 
     /// Upside down, fallen, in the sea or stuck: back on the road (src/drive/index.js watchdog).
     private func watchdog(_ dt: Double) {
+        if !carFinite(car) { reset(); return }
         let q = car.quat, upY = 1 - 2 * (q.x * q.x + q.z * q.z)
         let speed = (car.vel.x * car.vel.x + car.vel.y * car.vel.y + car.vel.z * car.vel.z).squareRoot()
         flipT = upY < 0.25 && speed < 4 && (car.grounded > 0 || car.hullContact) ? flipT + dt : 0
@@ -284,7 +311,14 @@ final class FreeDrive: DriveScene {
         if car.pos.y < g.y - 30 || car.pos.y < SEA - 1 { reset(); return }
         let jets = car.throttles[0] + car.throttles[1] + car.throttles[2] + car.throttles[3]
         stuckT = speed < 0.6 && car.grounded == 0 && jets < 0.4 ? stuckT + dt : 0
-        if stuckT > 3 { reset() }
+        if stuckT > 3 { reset(); return }
+        // Wedged (0229): against a trunk, a post or a wall, still, with a pedal pressed and going nowhere for 1.5 s (a
+        // car resting against something with the pedals up is left alone; reversing out moves it, which clears this).
+        let pressing = abs(input.throttle) > 0.2
+        if wedge.step(car, dt: dt, eligible: pressing && cruise == nil && pilot == nil) == .act { reset(); return }
+        // Sunk into something solid (the hull ≥ 30 cm inside it) for a second: the engine isn't pushing it out.
+        sunkT = deepestPenetration(car.world) < -0.3 ? sunkT + dt : 0
+        if sunkT > 1 { reset() }
     }
 
     /// A loose thing struck (its speed jumping): a knock in the sound and the hands, scaled by how hard (0223).
@@ -294,7 +328,7 @@ final class FreeDrive: DriveScene {
             looseSpeed[i] = v
             if v - was > 1.5 {
                 let k = min(1, (v - was) / 10)
-                Sound.shared.thud(hz: b.kind == .cone ? 240 : 150, gain: 0.12 + 0.3 * k, decay: 0.18, crunch: b.kind == .cone ? 0 : 0.3 * k)
+                Sound.shared.hit(b.kind == .cone || b.kind == .barrier ? .plastic : b.kind == .fence ? .wood : b.kind == .rail ? .rail : .sign, k: k, at: SIMD3<Float>(Float(b.x - origin.x), Float(b.y - origin.y), Float(b.z - origin.z)), seed: i &* 7919 &+ Int(v * 100))
                 HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: Float(0.25 + 0.6 * k), sharpness: b.kind == .cone ? 0.85 : 0.5))
             }
         }
@@ -310,7 +344,7 @@ final class FreeDrive: DriveScene {
             guard c.broken else { continue }
             let k = Float(min(1, c.speed / 25))
             let steel = c.kind == .rail || c.kind == .sign
-            Sound.shared.thud(hz: steel ? 110 : 180, gain: 0.2 + 0.4 * Double(k), decay: steel ? 0.35 : 0.22, crunch: steel ? 0.6 : 0.45)
+            Sound.shared.hit(c.kind == .rail ? .rail : c.kind == .sign ? .sign : .wood, k: Double(k), at: SIMD3<Float>(Float(c.x - origin.x), Float(c.y - origin.y), Float(c.z - origin.z)), seed: c.item &* 31 &+ c.cx)
             HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: 0.4 + 0.6 * k, sharpness: steel ? 0.8 : 0.55))
             camera.shake(0.25 + 0.5 * k)
         }

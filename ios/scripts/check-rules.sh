@@ -2,8 +2,10 @@
 # The native app's rules that are easiest to enforce on the source (`make rules`; testflight.sh runs it first).
 # After moon-club's scripts/check-rules.sh, with COLD GAS's invariants (docs/NATIVE.md §2, §7, §9):
 #  1. No third-party SDKs or remote Swift packages: the only packages are our own, by path.
-#  2. Own origin only: every web address in the app's Swift is mutaafaziz.com/coldgas.
-#  3. No ads, analytics or attribution SDKs in the app (Marquee is a web loader; native has no ads).
+#  2. Own origin only: every web address in the app's Swift is mutaafaziz.com/coldgas, or Box Office's first-party relay
+#     mutaafaziz.com/boxoffice/e/ (0246, the operator's call 2026-11-13: usage events, ColdGasClient/Insights.swift).
+#  3. No ads, analytics or attribution SDKs in the app (Marquee is a web loader; native has no ads; the usage events are our
+#     own few lines over URLSession, never an SDK).
 #  4. Never force-unwrap state or content lookups in views: moon-club 0.8.0 crashed on TestFlight from exactly that
 #     (a save or a server row naming something this build lacks). Use `if let` / `guard let` / a default.
 #  5. Never branch on the device model; gate on capabilities (§2.8).
@@ -23,10 +25,10 @@ pk=$(grep -nE '^\s*[A-Za-z]+:\s*\{?\s*(url|github|from):' project.yml || true)
 pk="$pk$(grep -nE '\.package\(\s*(name:[^,]*,\s*)?url:' Packages/*/Package.swift || true)"
 [ -z "$pk" ] || { echo "✗ remote package dependencies are not allowed (own code only):"; echo "$pk"; fail=1; }
 # 2
-urls=$(grep -rnoE '"https?://[^"]*' $SRC --include='*.swift' | grep -vE '"https://mutaafaziz\.com/coldgas(/|")' || true)
-[ -z "$urls" ] || { echo "✗ the app talks only to mutaafaziz.com/coldgas:"; echo "$urls"; fail=1; }
+urls=$(grep -rnoE '"https?://[^"]*' $SRC --include='*.swift' | grep -vE '"https://mutaafaziz\.com/(coldgas(/|")|boxoffice/e/)' || true)
+[ -z "$urls" ] || { echo "✗ the app talks only to mutaafaziz.com/coldgas (and Box Office's relay, /boxoffice/e/):"; echo "$urls"; fail=1; }
 # 3
-sdk=$(grep -rnE '^\s*import (Firebase|FirebaseAnalytics|Amplitude|Mixpanel|Segment|GoogleMobileAds|FBSDKCoreKit|FacebookCore|AppsFlyerLib|Adjust|Branch|Kochava|Singular|Sentry|Bugsnag|AppTrackingTransparency|AdSupport|AdServices)\b' $SRC --include='*.swift' || true)
+sdk=$(grep -rnE '^\s*import (Firebase|FirebaseAnalytics|Amplitude|Mixpanel|Segment|PostHog|GoogleMobileAds|FBSDKCoreKit|FacebookCore|AppsFlyerLib|Adjust|Branch|Kochava|Singular|Sentry|Bugsnag|AppTrackingTransparency|AdSupport|AdServices)\b' $SRC --include='*.swift' || true)
 [ -z "$sdk" ] || { echo "✗ no ads, analytics, tracking or attribution SDKs:"; echo "$sdk"; fail=1; }
 # 4 (Debug/ is the -selftest harness, never a view)
 fu=$(grep -rnE '(\[[^]]*\]!|state\.[A-Za-z]+!|\.last!|\.first!|\.randomElement\(\)!)' ColdGas --include='*.swift' | grep -v '^ColdGas/Debug/' || true)

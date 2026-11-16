@@ -47,39 +47,27 @@ struct WhatsNewView: View {
     private func text(_ s: CGFloat, _ w: Font.Weight = .regular) -> Font { .custom("Geist", size: s, relativeTo: .body).weight(w) }
 
     var body: some View {
+        GeometryReader { g in
+        // Wide and short (a phone on its side, the Duo open): the hero beside the news, so the news isn't a scroll away.
+        let wide = g.size.width > 700 && g.size.height < 560
         ZStack {
             Color.black.opacity(0.6).ignoresSafeArea().accessibilityHidden(true)
             VStack(spacing: 0) {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        hero
-                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
-                            ForEach(Array(notes.callouts.enumerated()), id: \.offset) { i, c in card(c, i) }
-                        }
-                        if !notes.sections.isEmpty {
-                            Accordion(title: "The full notes", summary: notes.sections.map(\.title).joined(separator: " · "), isOpen: $fullOpen) {
-                                VStack(alignment: .leading, spacing: 14) {
-                                    ForEach(Array(notes.sections.enumerated()), id: \.offset) { _, s in
-                                        VStack(alignment: .leading, spacing: 6) {
-                                            Text(s.title.uppercased()).font(Theme.display(10)).tracking(1.6).foregroundStyle(Theme.aur1)
-                                                .accessibilityAddTraits(.isHeader)
-                                            ForEach(Array(s.lines.enumerated()), id: \.offset) { _, l in
-                                                Text(l).font(text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
-                                            }
-                                        }
-                                    }
-                                }
-                            }
-                            .padding(.horizontal, 14)
-                            .background(Theme.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hair, lineWidth: 1))
-                        }
+                if wide {
+                    HStack(alignment: .top, spacing: 16) {
+                        ScrollView { hero }.scrollBounceBehavior(.basedOnSize).frame(width: 330)
+                        ScrollView { news }.scrollBounceBehavior(.basedOnSize)
                     }
                     .padding(16)
+                } else {
+                    ScrollView {
+                        VStack(alignment: .leading, spacing: 14) { hero; news }.padding(16)
+                    }
+                    .scrollBounceBehavior(.basedOnSize)
                 }
-                .scrollBounceBehavior(.basedOnSize)
-                Button(action: dismiss) { Text("Let's fly").frame(maxWidth: .infinity) }
-                    .buttonStyle(CGButton(primary: true))
+                Button(action: dismiss) { Text("Let's fly") }
+                    .buttonStyle(MarqueeButton(height: 52))
+                    .accessibilityLabel("Let's fly")
                     .accessibilityIdentifier("whatsnew-dismiss")
                     .accessibilityHint("Closes what's new")
                     .padding(.horizontal, 16).padding(.bottom, 16).padding(.top, 4)
@@ -87,7 +75,7 @@ struct WhatsNewView: View {
             // Opaque enough that the title under it never reads through the cards.
             .background(Theme.bg.opacity(0.94), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
             .overlay(RoundedRectangle(cornerRadius: 22, style: .continuous).strokeBorder(Theme.hair, lineWidth: 1))
-            .frame(maxWidth: 480)
+            .frame(maxWidth: wide ? 820 : 480)
             .padding(.horizontal, 14).padding(.vertical, 18)
             .dynamicTypeSize(...DynamicTypeSize.accessibility2)
             .opacity(shown ? 1 : 0)
@@ -96,21 +84,50 @@ struct WhatsNewView: View {
             .accessibilityAddTraits(.isModal)
             .accessibilityIdentifier("whatsnew")
         }
+        .frame(width: g.size.width, height: g.size.height)
+        }
         .onAppear { withAnimation(still ? .easeOut(duration: 0.15) : .spring(duration: 0.5, bounce: 0.18)) { shown = true } }
         .accessibilityAction(.escape, dismiss)
     }
 
+    /// The callouts as a running order (0230): numbered acts, not a grid of identical cards; then the full notes, folded.
+    private var news: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(spacing: 0) {
+                ForEach(Array(notes.callouts.enumerated()), id: \.offset) { i, c in card(c, i) }
+            }
+            if !notes.sections.isEmpty {
+                Accordion(title: "The full notes", summary: notes.sections.map(\.title).joined(separator: " · "), isOpen: $fullOpen, show: .title) {
+                    VStack(alignment: .leading, spacing: 14) {
+                        ForEach(Array(notes.sections.enumerated()), id: \.offset) { _, s in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(s.title.uppercased()).font(Theme.display(10)).tracking(1.6).foregroundStyle(Theme.aur1)
+                                    .accessibilityAddTraits(.isHeader)
+                                ForEach(Array(s.lines.enumerated()), id: \.offset) { _, l in
+                                    Text(l).font(text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+                                }
+                            }
+                        }
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+
     private var hero: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("WHAT'S NEW · \(notes.title.replacingOccurrences(of: "Cold Gas ", with: "V").uppercased())")
-                .font(Theme.mono(11, bold: true)).tracking(1.4).foregroundStyle(Theme.auroraInk2)
-            Text(notes.headline).font(display(21)).foregroundStyle(Theme.auroraInk)
+        VStack(alignment: .leading, spacing: 10) {
+            Text(notes.headline).font(display(22)).foregroundStyle(Theme.auroraInk)
                 .fixedSize(horizontal: false, vertical: true).accessibilityAddTraits(.isHeader)
             if !notes.lede.isEmpty {
                 Text(notes.lede).font(text(14, .medium)).foregroundStyle(Theme.auroraInk2).fixedSize(horizontal: false, vertical: true)
             }
         }
-        .padding(18).frame(maxWidth: .infinity, alignment: .leading)
+        .padding(18).padding(.top, 10).frame(maxWidth: .infinity, alignment: .leading)
+        .overlay(alignment: .topTrailing) {
+            Text(notes.title.replacingOccurrences(of: "Cold Gas ", with: "")).font(Theme.mono(11, bold: true)).foregroundStyle(Theme.auroraInk2)
+                .padding(.top, 12).padding(.trailing, 14)
+        }
         .aurora(18)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("What's new. \(notes.headline). \(notes.lede)")
@@ -140,31 +157,26 @@ struct WhatsNewView: View {
         }
     }
 
+    /// One act: its number, its glyph, the title run into its line, and an arrow when it goes somewhere.
     private func cardBody(_ c: ReleaseNotes.Callout, _ i: Int, go d: WhatsNewDestination?) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Image(systemName: c.icon).font(.system(size: 17, weight: .semibold)).foregroundStyle(Theme.auroraInk)
-                .frame(width: 36, height: 36).aurora(10, phase: CGFloat(i) * 190).accessibilityHidden(true)
-            Text(c.title.uppercased()).font(Theme.display(11)).tracking(1.2).foregroundStyle(Theme.ink)
-                .fixedSize(horizontal: false, vertical: true)
-            Text(c.line).font(text(13)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
-            Spacer(minLength: 0)
-            if let d {
-                HStack(spacing: 5) {
-                    Text(Self.label(d))
-                    Image(systemName: "arrow.right").font(.system(size: 11, weight: .bold))
-                }
-                .font(text(12, .semibold)).foregroundStyle(Theme.auroraInk)
-                .padding(.horizontal, 11).frame(minHeight: 30)
-                .aurora(15, phase: CGFloat(i) * 190)
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(String(format: "%02d", i + 1)).font(Theme.mono(12)).foregroundStyle(Theme.ink3)
+            Image(systemName: c.icon).font(.system(size: 15, weight: .semibold)).foregroundStyle(Theme.aur1).frame(width: 20)
                 .accessibilityHidden(true)
+            (Text(c.title + (c.title.last.map { ".!?".contains($0) } == true ? " " : ". ")).font(text(15, .semibold)).foregroundStyle(Theme.ink)
+             + Text(c.line).font(text(14)).foregroundStyle(Theme.ink2))
+                .fixedSize(horizontal: false, vertical: true)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            if d != nil {
+                Image(systemName: "arrow.right").font(.system(size: 12, weight: .bold)).foregroundStyle(Theme.aur1).accessibilityHidden(true)
             }
         }
-        .padding(14).frame(maxWidth: .infinity, minHeight: 150, alignment: .topLeading)
-        .background(Theme.ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hair, lineWidth: 1))
+        .padding(.vertical, 14)
+        .overlay(alignment: .bottom) { Rectangle().fill(Theme.hair2).frame(height: 1) }
         .opacity(shown ? 1 : 0)
-        .animation(still ? nil : .easeOut(duration: 0.4).delay(0.12 + Double(i) * 0.07), value: shown)
-        .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .offset(x: shown || still ? 0 : 10)
+        .animation(still ? nil : .easeOut(duration: 0.4).delay(0.15 + Double(i) * 0.08), value: shown)
+        .contentShape(Rectangle())
     }
 }
 

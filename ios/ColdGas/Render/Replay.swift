@@ -88,6 +88,8 @@ final class Replay {
         }
         ticks += 1
     }
+    /// The car's impact buffer was emptied (a drive recycles it, 0229): read it again from its start.
+    func rewindImpacts() { seenImpacts = 0 }
     /// Keep only the newest `keep` ticks (a drive never ends; the renderer only reads the last two).
     func trim(keep: Int) {
         let drop = ticks - keep

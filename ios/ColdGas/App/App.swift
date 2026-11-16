@@ -1,11 +1,13 @@
 // The app's entry (UIScene: required on the iOS 27 SDK). docs/NATIVE.md §7.
 import UIKit
+import ColdGasClient
 
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         setvbuf(stdout, nil, _IOLBF, 0)   // the scripts read stdout through a pipe: one line at a time
         Ready.clear()
+        Usage.launchedAt = Date()   // first_input's clock (0246)
         Theme.registerFonts()
         return true
     }
@@ -25,7 +27,27 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if Launch.selftest { SelfTest.runInBackground() }
         _ = HapticPlayer.shared          // the engine is started at launch, never on the first event
         HapticDemo.startIfAsked()
+        SoundLab.startIfAsked()
+        Usage.shared.sessionStart()      // 0246: queued now, sent from the title
+        // 0253: a link that launched the app (a universal link's activity, or coldgas://), once the game is up.
+        let urls = connectionOptions.urlContexts.map(\.url) + connectionOptions.userActivities.compactMap(\.webpageURL)
+        #if DEBUG
+        let forced = Launch.value("-open").flatMap(URL.init(string:)).map { [$0] } ?? []   // the UI tests and the shots
+        #else
+        let forced: [URL] = []
+        #endif
+        if let u = (urls + forced).first { DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) { Game.shared.open(url: u) } }
     }
+    /// A universal link while the app is running.
+    func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        if userActivity.activityType == NSUserActivityTypeBrowsingWeb, let u = userActivity.webpageURL { Game.shared.open(url: u) }
+    }
+    /// coldgas:// while the app is running.
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        if let u = URLContexts.first?.url { Game.shared.open(url: u) }
+    }
+    func sceneDidEnterBackground(_ scene: UIScene) { Usage.shared.didEnterBackground() }
+    func sceneWillEnterForeground(_ scene: UIScene) { Usage.shared.willEnterForeground() }
 }
 
 /// Launch arguments (debug tools for the simulator, the shots and the bench; docs/NATIVE.md §8).

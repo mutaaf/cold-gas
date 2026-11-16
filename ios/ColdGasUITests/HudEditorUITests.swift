@@ -82,13 +82,13 @@ final class HudEditorUITests: XCTestCase {
 
         // A whole Pro run on the Wall with the left-handed layout: past the ledge, to the card.
         a = launch(["-course", "wall", "-tier", "pro", "-play", "-autopilot"])
-        XCTAssertTrue(a.buttons["Fly again"].waitForExistence(timeout: 150), "the Pro run never reached the results")
+        XCTAssertTrue(a.buttons.matching(NSPredicate(format: "identifier IN %@", ["again", "beat"])).firstMatch.waitForExistence(timeout: 150), "the Pro run never reached the results")
         shot("pro-results")
         a.terminate()
 
         // And Advanced, with the Claw preset over every shape.
         a = launch(["-course", "wall", "-tier", "advanced", "-play", "-autopilot", "-hudPreset", "claw"])
-        XCTAssertTrue(a.buttons["Fly again"].waitForExistence(timeout: 150), "the Advanced run never reached the results")
+        XCTAssertTrue(a.buttons.matching(NSPredicate(format: "identifier IN %@", ["again", "beat"])).firstMatch.waitForExistence(timeout: 150), "the Advanced run never reached the results")
         shot("advanced-results")
     }
 }

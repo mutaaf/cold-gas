@@ -36,27 +36,32 @@ export function beatAt(t, total, reduced = false, out = {}) {
   return out;
 }
 const SETTLE_BUZZ = [18, 70, 12];
+const FIRST_BUZZ = [24, 60, 24, 60, 40];   // 0248: the first landing, felt a little longer
 
-// The overlay. `cues`: { chime(i), settle(), buzz(kind, ms) } (src/audio.js, src/touch-settings.js).
+// The overlay. `cues`: { chime(i), settle(), crowd(), buzz(kind, ms) } (src/audio.js, src/touch-settings.js).
+// 0248: `first` (a player's first landing on this device): "First landing" is the headline, the verdict and the event
+// step up into the line over it, and as the score lands the crowd line answers once. Restraint: no confetti, no card,
+// nothing to tap through; the same length, so the sheet comes as it always does.
 export function createBeat(root, cues) {
   const verdictEl = root.querySelector('[data-beat-verdict]');
   const totalEl = root.querySelector('[data-beat-total]');
   const eyebrow = root.querySelector('[data-beat-eyebrow]');
   const judgeEls = [...root.querySelectorAll('[data-beat-judge]')];
   const say = root.querySelector('[data-beat-say]');   // read out once, whole (the counting digits are aria-hidden)
-  const st = { on: false, t: 0, total: 0, reduced: false, tenths: -1, judges: 0, landed: false, done: false };
+  const st = { on: false, t: 0, total: 0, reduced: false, tenths: -1, judges: 0, landed: false, done: false, first: false };
   const now = { tenths: 0, judges: 0, landed: false, done: false };
   let sayT = 0;
 
-  function show(card, { reduced = false, course = '' } = {}) {
-    st.on = true; st.t = 0; st.total = card.total; st.reduced = reduced; st.tenths = -1; st.judges = 0; st.landed = false; st.done = false;
-    verdictEl.textContent = card.verdict;
-    eyebrow.textContent = course;
+  function show(card, { reduced = false, course = '', first = false } = {}) {
+    st.on = true; st.t = 0; st.total = card.total; st.reduced = reduced; st.tenths = -1; st.judges = 0; st.landed = false; st.done = false; st.first = first;
+    verdictEl.textContent = first ? 'First landing' : card.verdict;
+    eyebrow.textContent = first ? [course, card.verdict].filter(Boolean).join(' · ') : course;
+    root.toggleAttribute('data-first', first);
     // Set a moment after the region is shown: a live region that appears with its text already in is often not read.
     if (say) {
       say.textContent = '';
       clearTimeout(sayT);
-      const line = `${card.verdict}. ${card.total.toFixed(1)} out of 100.`;
+      const line = `${first ? 'First landing. ' : ''}${card.verdict}. ${card.total.toFixed(1)} out of 100.`;
       sayT = setTimeout(() => { if (st.on) say.textContent = line; }, 120);
     }
     card.judges.forEach((j, i) => {
@@ -84,7 +89,8 @@ export function createBeat(root, cues) {
       st.landed = true;
       root.classList.add('landed');
       cues.settle?.();
-      cues.buzz?.(null, SETTLE_BUZZ);
+      if (st.first) cues.crowd?.();
+      cues.buzz?.(null, st.first ? FIRST_BUZZ : SETTLE_BUZZ);
     }
     while (st.judges < now.judges) {
       const i = st.judges++;

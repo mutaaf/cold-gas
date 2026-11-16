@@ -233,6 +233,18 @@ export function compare(mine, theirs, initials = '') {
   return { won: false, tie: false, diff: -d, text: `${who} still leads by ${(-d).toFixed(1)}` };
 }
 
+// 0251: a race is like for like: the same event on the same tier, or no verdict at all (a Pro run beats an Assist
+// one by ×1.08 before anyone flies). `mine`, `theirs`: { course, tier, total }; theirs also { initials }.
+const TIER_NAME = { assist: 'Assist', pro: 'Pro', advanced: 'Advanced' };
+export function raceLine(mine, theirs) {
+  if (mine.course !== theirs.course || mine.tier !== theirs.tier) {
+    const who = theirs.initials || 'Your challenger';
+    return { comparable: false, won: false, tie: false, diff: 0,
+      text: mine.course !== theirs.course ? `${who}’s run was on another event` : `${who} flew ${TIER_NAME[theirs.tier] || theirs.tier}: race again on ${TIER_NAME[theirs.tier] || theirs.tier} to compare` };
+  }
+  return { comparable: true, ...compare(mine.total, theirs.total, theirs.initials) };
+}
+
 // --- replaying a log in slices --------------------------------------------------------------------
 // The challenger's run, re-flown here from its log: frames for the ghost, and the score it really
 // scores on this build (a payload's claimed score is only believed when the replay agrees). The same

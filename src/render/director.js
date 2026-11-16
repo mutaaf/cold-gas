@@ -63,6 +63,14 @@ const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the m
 const TITLE_COVER = 0.4;   // the share of the car's box the title's panel may cover before the lens moves it (0131)
 const TITLE_FILL = 0.85;   // the most of that band's height the car's box may take; past it the lens widens (0131)
 const TITLE_FOV_MAX = 70;  // deg: how wide the title's lens may go for that
+// s (wall clock) between checks that the upright fit's inputs still stand (main red on 758da53): the panel's and the top
+// bar's edges, and whether the car's meshes were drawn when it was measured. A fit taken from a stale state (a panel moved
+// without resizing, which no ResizeObserver reports; the car not drawn yet) is taken again; one that stands is never
+// re-placed, whatever the sway does, so the lens doesn't move. A few rects and, after a fallback fit, one traversal.
+const TITLE_CHECK = 2;
+const BAND_LEAD = 0.3;   // how far from the car toward the curl the wide rig aims over the calm sheet's band (0202)
+const BAND_SLACK = 8;    // px (or a tenth of the band) the band may move before the shot is re-placed
+const TITLE_MOVED = 2;   // px an edge may move before the fit is stale
 
 export function createDirector(camera) {
   const st = {
@@ -77,7 +85,7 @@ export function createDirector(camera) {
     // The replay's own region of the screen (0068): what the results leave uncovered, in CSS px. The
     // replay's lens is shifted to its centre, and the wide locked-off rig aims toward the car's path by
     // `aim` (0 = the reference framing, 1 = on the path) as the region narrows.
-    rl: 0, rt: 0, rr: 0, rb: 0, aim: 0,
+    rl: 0, rt: 0, rr: 0, rb: 0, aim: 0, band: false,
     bandT: 1, bandB: -1,                                 // the carry's band (0113, NDC): under the top HUD, over the bottom one
     bandL: 1,                                            // under the HUD standing at the top of the left edge (0116, NDC)
     railR: -1, railF: 1,                                 // the upright left rail's right edge and its foot (0128, NDC; −1/1 when none)
@@ -526,10 +534,14 @@ export function createDirector(camera) {
           camera.lookAt(st.lookS); camera.updateMatrixWorld();
           tmp.copy(carPos).project(camera);
           const px = (tmp.x + 1) / 2 * innerWidth, mx = (st.rr - st.rl) * 0.1;
-          if (px < st.rl + mx || px > st.rr - mx) st.init = false;
+          const py = (1 - tmp.y) / 2 * innerHeight, my = (st.rb - st.rt) * 0.1;
+          if (px < st.rl + mx || px > st.rr - mx || (st.band && (py < st.rt + my || py > st.rb - my))) st.init = false;
         }
         if (!st.init) {
-          st.lookS.set(carPos.x / 2, (carPos.y + 8 * K) / 2, (carPos.z + 9.3 * K) / 2);
+          // Over a band (0202), a third of the way from the car: an upright phone's band is too narrow for the midpoint
+          // to keep the car in it, so the car leads and the shot re-cuts as it nears the band's edge.
+          const q = st.band ? BAND_LEAD : 0.5;
+          st.lookS.set(carPos.x * (1 - q), carPos.y + (8 * K - carPos.y) * q, carPos.z + (9.3 * K - carPos.z) * q);
           st.lookS.set(0.5 + (st.lookS.x - 0.5) * a, 11.5 * K + (st.lookS.y - 11.5 * K) * a, 5.5 * K + (st.lookS.z - 5.5 * K) * a);
           st.init = true;
         }
@@ -573,7 +585,43 @@ export function createDirector(camera) {
   // its sway are unchanged) so the car's box sits in the taller clear band, under the panel or over it, when the
   // panel covers more than TITLE_COVER of it. Measured once per change (a resize, the title's own reflow, a course
   // or mode change), never per frame. The panel's scrim feathers less on that side (styles.css, data-car-band).
-  let titleDirty = true;
+  let titleDirty = true, titleNext = 0, fitTop = NaN, fitBottom = NaN, fitBar = NaN, fitFallback = false, meshSeen = false;
+  let bx0 = 0, by0 = 0, bx1 = 0, by1 = 0, bw = 0, bh = 0;
+  const corner = (x, y, z) => {
+    tmp.set(x, y, z).project(camera);
+    const px = (tmp.x + 1) / 2 * bw, py = (1 - tmp.y) / 2 * bh;
+    if (px < bx0) bx0 = px; if (px > bx1) bx1 = px; if (py < by0) by0 = py; if (py > by1) by1 = py;
+  };
+  const meshCorners = (o) => {
+    const g = o.isMesh && !o.isInstancedMesh && o.geometry;
+    if (!g) return;
+    meshSeen = true;
+    const bb = g.boundingBox || (g.computeBoundingBox(), g.boundingBox);
+    for (let i = 0; i < 8; i++) { want.set(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z).applyMatrix4(o.matrixWorld); corner(want.x, want.y, want.z); }
+  };
+  // The car's box on the canvas through the camera as it is (w × h CSS px): bx0..by1.
+  function carBox(subject, carPos, w, h) {
+    bx0 = by0 = Infinity; bx1 = by1 = -Infinity; bw = w; bh = h; meshSeen = false;
+    if (subject) { subject.updateMatrixWorld(true); subject.traverseVisible(meshCorners); }
+    if (!(bx1 > bx0)) for (let i = 0; i < 8; i++) corner(carPos.x + (i & 1 ? 2.3 : -2.3), carPos.y + (i & 2 ? 1.3 : 0), carPos.z + (i & 4 ? 2.3 : -2.3));
+  }
+  // The top bar's bottom edge in the canvas's coordinates (the band above the panel starts there).
+  function topBar(st0) {
+    let bar = 0;
+    for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const b = e.getBoundingClientRect(); if (b.height > 1) bar = Math.max(bar, b.bottom - st0); }
+    return bar;
+  }
+  function titleCheck(subject, carPos, now) {
+    if (now < titleNext) return;
+    titleNext = now + TITLE_CHECK;
+    if (!titleEl || camera.aspect >= 1 || !titleEl.getClientRects().length) return;
+    const h = viewH || innerHeight, st0 = document.getElementById('stage')?.getBoundingClientRect().top || 0, rr = titleEl.getBoundingClientRect();
+    const moved = !(Math.abs(rr.top - st0 - fitTop) <= TITLE_MOVED && Math.abs(Math.min(h, rr.bottom - st0) - fitBottom) <= TITLE_MOVED
+      && Math.abs(topBar(st0) - fitBar) <= TITLE_MOVED);
+    let drawn = false;
+    if (!moved && fitFallback && subject) { meshSeen = false; subject.traverseVisible((o) => { if (o.isMesh && !o.isInstancedMesh && o.geometry) meshSeen = true; }); drawn = meshSeen; }
+    if (moved || drawn) titleDirty = true;
+  }
   const titleEl = typeof document !== 'undefined' ? document.querySelector('[data-screen="title"]') : null;
   if (titleEl && typeof ResizeObserver === 'function') new ResizeObserver(() => { titleDirty = true; }).observe(titleEl);
   function titleFit(subject, carPos) {
@@ -583,29 +631,16 @@ export function createDirector(camera) {
     if (titleEl && camera.aspect < 1 && titleEl.getClientRects().length) {
       if (camera.view?.enabled) camera.clearViewOffset();
       camera.fov = st.fov; camera.updateProjectionMatrix(); camera.updateMatrixWorld();
-      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
-      const corner = (x, y, z) => {
-        tmp.set(x, y, z).project(camera);
-        const px = (tmp.x + 1) / 2 * w, py = (1 - tmp.y) / 2 * h;
-        if (px < x0) x0 = px; if (px > x1) x1 = px; if (py < y0) y0 = py; if (py > y1) y1 = py;
-      };
-      if (subject) {
-        subject.updateMatrixWorld(true);
-        subject.traverseVisible((o) => {
-          const g = o.isMesh && !o.isInstancedMesh && o.geometry;
-          if (!g) return;
-          const bb = g.boundingBox || (g.computeBoundingBox(), g.boundingBox);
-          for (let i = 0; i < 8; i++) { want.set(i & 1 ? bb.max.x : bb.min.x, i & 2 ? bb.max.y : bb.min.y, i & 4 ? bb.max.z : bb.min.z).applyMatrix4(o.matrixWorld); corner(want.x, want.y, want.z); }
-        });
-      }
-      if (!(x1 > x0)) for (let i = 0; i < 8; i++) corner(carPos.x + (i & 1 ? 2.3 : -2.3), carPos.y + (i & 2 ? 1.3 : 0), carPos.z + (i & 4 ? 2.3 : -2.3));
+      carBox(subject, carPos, w, h);
+      const x0 = bx0, y0 = by0, x1 = bx1, y1 = by1;
+      fitFallback = !meshSeen;
       // In the canvas's own coordinates (a fold's top segment starts below nothing, but say so).
       const st0 = document.getElementById('stage')?.getBoundingClientRect().top || 0, rr = titleEl.getBoundingClientRect();
       const r = { left: rr.left, right: rr.right, top: rr.top - st0, bottom: Math.min(h, rr.bottom - st0) }, area = Math.max(1, (x1 - x0) * (y1 - y0));
       const cover = Math.max(0, Math.min(x1, r.right) - Math.max(x0, r.left)) * Math.max(0, Math.min(y1, r.bottom) - Math.max(y0, r.top)) / area;
+      const bar = topBar(st0);
+      fitTop = r.top; fitBottom = r.bottom; fitBar = bar;
       if (cover > TITLE_COVER) {
-        let bar = 0;
-        for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const b = e.getBoundingClientRect(); if (b.height > 1) bar = Math.max(bar, b.bottom - st0); }
         const above = r.top - bar, below = h - r.bottom;
         side = above > below ? 'above' : 'below';
         // A car taller than the band (the Lineup's close orbit) is drawn smaller with a wider lens: the screen scales
@@ -658,13 +693,19 @@ export function createDirector(camera) {
     if (camera.view?.enabled) camera.clearViewOffset();
   }
   // Where the replay can be seen (CSS px); nothing given, or nothing left, is the whole screen.
-  function setRegion(l = 0, t = 0, r = innerWidth, b = innerHeight) {
-    if (r - l < 40 || b - t < 40) { l = 0; t = 0; r = innerWidth; b = innerHeight; }
-    st.rl = l; st.rt = t; st.rr = r; st.rb = b;
+  // `band`: the region is a band over a sheet at the foot of the screen (0202): the wide rig aims on the car's path
+  // whatever the band's shape, and re-cuts when the car nears its top or bottom too.
+  function setRegion(l = 0, t = 0, r = innerWidth, b = innerHeight, band = false) {
+    if (r - l < 40 || b - t < 40) { l = 0; t = 0; r = innerWidth; b = innerHeight; band = false; }
+    if (band && st.band && l === st.rl && r === st.rr && Math.max(Math.abs(t - st.rt), Math.abs(b - st.rb)) < Math.max(BAND_SLACK, (b - t) * 0.1)) return;
+    // Over a band (0202), a new region re-places the shot: a cut, with the lens moved on the same frame (never a slide
+    // over the lit truss). A band that moves a few px (the sheet scrolled, a line grew) keeps the shot it has.
+    if (st.mode === 'replay' && (band || st.band) && (st.rl !== l || st.rt !== t || st.rr !== r || st.rb !== b || st.band !== band)) st.shot = -1;
+    st.rl = l; st.rt = t; st.rr = r; st.rb = b; st.band = band;
     // As wide as tall or wider: the reference framing. A portrait strip: on the car. The whole screen (no
     // results beside or under the replay) keeps the reference framing whatever its shape.
     const full = l === 0 && t === 0 && r === innerWidth && b === innerHeight;
-    st.aim = full ? 0 : clamp((1 - (r - l) / (b - t)) / 0.4, 0, 1);
+    st.aim = full ? 0 : band ? 1 : clamp((1 - (r - l) / (b - t)) / 0.4, 0, 1);
     if (st.mode === 'replay') frameOffset('replay');
   }
 
@@ -691,6 +732,7 @@ export function createDirector(camera) {
     } else if (mode === 'title') titleLineup(time);
     else if (mode === 'replay') replay(carPos);
     else chase(carPos, carVel, phase, dt);
+    if (mode === 'title' && !titleDirty && st.cutT <= 0 && innerWidth / innerHeight <= 1.15) titleCheck(subject, carPos, typeof performance !== 'undefined' ? performance.now() / 1000 : time);
     if (mode === 'title' && titleDirty && st.cutT <= 0 && innerWidth / innerHeight <= 1.15) titleFit(subject, carPos);
     if (mode === 'title' && st.titleFov) st.fov = st.titleFov;
     if (st.shake > 0) {

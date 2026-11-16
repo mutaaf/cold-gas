@@ -1,0 +1,26 @@
+{"note":"production index-Cu4812XR.js (main 5de2137, docs-only over 97215bc), 390x844 touch (iPhone 13 profile), first visit (coldgas_howto=new), no input until Jump. s = seconds after goto. Requests from requestfinished/requestfailed (startTime), own-origin game and /boxoffice/ omitted. frames/mode sampled every rAF in the page. Jump = the title button [data-start] clicked in the page at s=45.99 (page clock)."}
+{"s":0.66,"ev":"frames=0 mode=undefined"}
+{"s":1.09,"ev":"frames=0 mode=title"}
+{"s":20.82,"req":"mutaafaziz.com/ads/v1/ads.js"}
+{"s":23.26,"req":"mutaafaziz.com/ads/api/config"}
+{"s":31.83,"req":"mutaafaziz.com/ads/v1/frame.html"}
+{"s":31.84,"ev":"frames=1 mode=title"}
+{"s":33.08,"req":"mutaafaziz.com/ads/v1/ads.js"}
+{"s":33.08,"req":"static.cloudflareinsights.com/beacon.min.js/vce701823e78c4301a35b7e07294d8730179"}
+{"s":35.3,"req":"mutaafaziz.com/ads/api/config"}
+{"s":35.31,"req":"mutaafaziz.com/cdn-cgi/challenge-platform/scripts/jsd/main.js"}
+{"s":36.59,"req":"mutaafaziz.com/cdn-cgi/rum"}
+{"s":36.59,"req":"mutaafaziz.com/cdn-cgi/challenge-platform/h/b/scripts/jsd/f8df4d4a0cd6/main.js"}
+{"s":39.02,"req":"pagead2.googlesyndication.com/pagead/js/adsbygoogle.js"}
+{"s":39.1,"req":"mutaafaziz.com/cdn-cgi/challenge-platform/h/b/jsd/oneshot/f8df4d4a0cd6/0.1292543"}
+{"s":41.53,"req":"pagead2.googlesyndication.com/pagead/managed/js/adsense/m202611100101/show_ads_i"}
+{"s":43.77,"req":"pagead2.googlesyndication.com/pagead/gen_204"}
+{"s":43.78,"req":"pagead2.googlesyndication.com/pagead/gen_204"}
+{"s":43.78,"req":"pagead2.googlesyndication.com/pagead/gen_204"}
+{"s":43.79,"req":"ep1.adtrafficquality.google/getconfig/sodar"}
+{"s":44.87,"req":"pagead2.googlesyndication.com/pagead/gen_204"}
+{"s":44.89,"req":"ep2.adtrafficquality.google/sodar/sodar2.js"}
+{"s":45.88,"ev":"TAP Jump (node clock)"}
+{"s":46.05,"req":"FAILED mutaafaziz.com/cdn-cgi/rum"}
+{"s":46.06,"ev":"frames=0 mode=countdown"}
+{"s":51.8,"ev":"frames=0 mode=live"}

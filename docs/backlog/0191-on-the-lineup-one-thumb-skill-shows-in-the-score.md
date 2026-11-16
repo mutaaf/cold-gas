@@ -1,12 +1,12 @@
 ---
 id: 0191
 title: On the Lineup, a thumb held from Go doesn't take Gold on its first run; skill shows in the score
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-10
-pr: 315
+pr: 395
 by: critic
 ---
 
@@ -133,3 +133,21 @@ Production `index-BfrEcyEr.js` (= main `fbad7ca`), 390×844 touch, CDP touches o
   first visit stays one step.
 - The other amended boxes stand. Status back to `ready`. The open box is the NEXT RUN line (src/pointer.js
   `pickPointer`/coach words for a one-thumb Lineup 360) and its e2e assertion.
+
+## Builder pass 2 (2026-11-15, #395): NEXT RUN names the call
+`src/pointer.js`: on one thumb on the Lineup, a flight that turned under 540° (the coach's `rollDeg`) gets the call in the pad's
+words before the aim or Pro: inside the 3.5 m ring "Clean, 1.3 m from the mark. Next: slide up on the run-up for two turns, then
+aim for the mark"; outside it "Clean. Next: slide up on the run-up for two turns, then slide onto the amber dot"; a `mark` fix
+"For Gold: slide up on the run-up for two turns, then hold in the air and slide onto the amber dot". A 720 keeps its lines (the aim,
+then Pro). WHAT HAPPENED's "Try Pro" still follows. No sim or scorer change (ref-hash, vectors untouched).
+- `tests/e2e/lineup-thumb.spec.js` (390×844 touch): the held-from-Go 360's `[data-pointer-text]` names the call and not Pro
+  (fails on main with "Clean, 4.3 ft 1.3 m from the mark. Next: try Pro and fly the landing yourself"); the slid-up 720's names
+  the aim or Pro, never the call.
+- `tests/unit/pointer.test.js`: the Lineup 360/720 lines, and two thumbs, keys, Pro and the Show never hear the call.
+
+### Amended acceptance (pass 2)
+- [x] A landed 360 on one thumb: NEXT RUN names the call ("slide up on the run-up for two turns, then aim for the mark"), asserted at 390×844.
+- [x] A landed unaimed 720: NEXT RUN names the aim (kept; asserted not to name the call).
+- [x] The how-to's Lineup row 2 says "Slide up early on the way for 720°" (critic 2026-11-12: passes).
+- [x] Clean ≥ 90 %, wrecks ≤ 5 %, `daily-reach`, `ref-hash`: no sim, scorer or flight change in this pass.
+- [ ] Funnel number to move: `retry` / `run` on the Lineup among touch runs (read after release).

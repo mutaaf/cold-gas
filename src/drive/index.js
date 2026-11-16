@@ -23,6 +23,7 @@ import { createBuildLayer } from '../build/layer.js';
 import { roadHost } from '../build/road-host.js';
 import { createPoseLerp } from '../render/interp.js';
 import { createReverse } from '../hands.js';
+import { createWedge, carFinite } from '../wedge.js';
 
 export { ROADS };
 export const DEFAULT_ROAD = 'stelvio';
@@ -53,7 +54,9 @@ export function createDrive(ctx) {
     crashes: [], offered: false, offAi: null, offPad: null,
   };
   const comps = [0, 0, 0, 0], spins = [0, 0, 0, 0];
-  const poseLerp = createPoseLerp(), reverse = createReverse();
+  const poseLerp = createPoseLerp(), reverse = createReverse(), wedge = createWedge();
+  // The last place the car was whole (0229): a respawn from a car the engine handed back broken starts there.
+  const lastGood = { x: NaN, z: NaN, fx: 0, fz: 1 };
   const driveCtx = { free: true, road: null };   // an unscored ground: the driving level owns ESC, TC, ABS and the handbrake
   let picker = null;
 
@@ -229,7 +232,7 @@ export function createDrive(ctx) {
     stage.setLook(null);
     if (st.bias) { stage.key.shadow.bias = st.bias[0]; stage.key.shadow.normalBias = st.bias[1]; st.bias = null; }
     st.world?.dispose();
-    if (st.car) freeWorld(st.car.world);
+    if (st.car) freeCar(st.car);
     st.world = null; st.road = null; st.course = null; st.car = null;
     camera.up.set(0, 1, 0); camera.updateProjectionMatrix();   // near/far: stage.setLook(null)
     st.hud?.dispose?.(); st.hud = null;
@@ -248,6 +251,10 @@ export function createDrive(ctx) {
   }
 
   // --- The car ---------------------------------------------------------------------------------
+  // The old car's world goes back to the engine; an engine that already failed may throw doing it, and that
+  // must not stop the fresh car (0229).
+  function freeCar(car) { try { freeWorld(car.world); } catch (err) { console.warn('drive: free world', err); } }
+
   // Put a fresh car on the road at distance s (m), facing dir (+1 up the road, −1 back down).
   // A fresh car lets go of everything (0099's rule, 0109): a key or a pedal held through R, Reset, From
   // the start or the road's start counts again only on a fresh press, and the wheel starts centred (it
@@ -256,12 +263,13 @@ export function createDrive(ctx) {
     const road = st.road;
     const p = poseAt(road, s, dir);
     input.freshRun?.();
-    if (st.car) freeWorld(st.car.world);
+    if (st.car) freeCar(st.car);
     const car = createVehicle(st.course);
     car.pos.x = p.x; car.pos.y = p.y + SPEC.comHeight + 0.04; car.pos.z = p.z;
     quatFromYaw(car.quat, p.yaw);
     st.car = car; st.hint = p.i;
-    st.airT = 0; st.flipT = 0; st.stuckT = 0;
+    st.airT = 0; st.flipT = 0; st.stuckT = 0; wedge.reset();
+    lastGood.x = car.pos.x; lastGood.z = car.pos.z; lastGood.fx = Math.sin(p.yaw); lastGood.fz = Math.cos(p.yaw);
     if (resetTimer) { st.timer = null; st.finished = false; st.penalty = 0; }
     st.layer?.reset();
     crash.reset(); plumes.clear();
@@ -274,12 +282,13 @@ export function createDrive(ctx) {
   // A fresh car at a pose (a quest's start): { x, y, z, yaw }.
   function placePose(p) {
     input.freshRun?.();
-    if (st.car) freeWorld(st.car.world);
+    if (st.car) freeCar(st.car);
     const car = createVehicle(st.course);
     car.pos.x = p.x; car.pos.y = p.y + SPEC.comHeight + 0.04; car.pos.z = p.z;
     quatFromYaw(car.quat, p.yaw);
-    st.car = car; st.hint = nearestSample(st.road, p.x, p.z);
-    st.airT = 0; st.flipT = 0; st.stuckT = 0;
+    st.car = car; st.hint = Math.max(0, nearestSample(st.road, p.x, p.z));
+    st.airT = 0; st.flipT = 0; st.stuckT = 0; wedge.reset();
+    lastGood.x = car.pos.x; lastGood.z = car.pos.z; lastGood.fx = Math.sin(p.yaw); lastGood.fz = Math.cos(p.yaw);
     st.layer?.reset();
     crash.reset(); plumes.clear();
     comps.fill(car.wheels[0].compression); spins.fill(0);
@@ -288,13 +297,19 @@ export function createDrive(ctx) {
   }
 
   // Back on the road at the nearest point, facing the way the car was going.
+  // A car the engine handed back broken (a NaN anywhere) is read from where it last was whole, never from
+  // its own numbers: nearestSample(NaN) finds nothing and the old code sent it to the road's start (0229).
   function respawn() {
-    if (!st.car) return;
-    const road = st.road, c = st.car;
-    const i = road.endless ? nearestSample(road, c.pos.x, c.pos.z, st.hint, 2000) : nearestSample(road, c.pos.x, c.pos.z);
-    const fx = 2 * (c.quat.x * c.quat.z + c.quat.w * c.quat.y), fz = 1 - 2 * (c.quat.x * c.quat.x + c.quat.y * c.quat.y);
-    const m = Math.min(i, road.m - 1);
-    const dir = road.dx[m] * (Math.abs(c.vel.x) + Math.abs(c.vel.z) > 2 ? c.vel.x : fx) + road.dz[m] * (Math.abs(c.vel.x) + Math.abs(c.vel.z) > 2 ? c.vel.z : fz) >= 0 ? 1 : -1;
+    if (!st.car || !st.road) return;
+    const road = st.road, c = st.car, ok = carFinite(c);
+    const x = ok ? c.pos.x : lastGood.x, z = ok ? c.pos.z : lastGood.z;
+    const hint = Math.max(0, Math.min(road.n - 1, st.hint | 0));
+    let i = Number.isFinite(x + z) ? (road.endless ? nearestSample(road, x, z, hint, 2000) : nearestSample(road, x, z)) : -1;
+    if (i < 0) i = hint;
+    const fx = ok ? 2 * (c.quat.x * c.quat.z + c.quat.w * c.quat.y) : lastGood.fx, fz = ok ? 1 - 2 * (c.quat.x * c.quat.x + c.quat.y * c.quat.y) : lastGood.fz;
+    const vx = ok ? c.vel.x : 0, vz = ok ? c.vel.z : 0;
+    const m = Math.max(0, Math.min(i, road.m - 1));
+    const dir = road.dx[m] * (Math.abs(vx) + Math.abs(vz) > 2 ? vx : fx) + road.dz[m] * (Math.abs(vx) + Math.abs(vz) > 2 ? vz : fz) >= 0 ? 1 : -1;
     const s = Math.max(6, Math.min(road.length - 6, i * road.meta.spacing));
     placeAt(s, dir, false);
     if (offerAi()) return;
@@ -397,6 +412,8 @@ export function createDrive(ctx) {
         st.acc = 0;
         poseLerp.before(c);   // carried, not stepped: drawn where it is
       }
+      // A broken car never reaches the engine (0229): a NaN fed to it can panic its WASM for the whole page.
+      if (!carFinite(c)) { recover('a non-finite car'); c = st.car; }
       while (st.acc >= DT) {
         const air = c.grounded === 0 && !c.hullContact;
         st.airT = air ? st.airT + DT : 0;
@@ -408,10 +425,17 @@ export function createDrive(ctx) {
         if (phase === 'drive') reverse(c, inp);
         layer?.preStep(c, inp);
         poseLerp.before(c);
-        step(c, inp);
+        // The engine's tick, guarded: an exception from it (a WASM trap) puts a fresh car in a fresh world back
+        // on the road instead of failing every frame from here on; a car it handed back broken does the same.
+        try { step(c, inp); } catch (err) { recover(err); c = st.car; st.acc = 0; break; }
+        if (!carFinite(c)) { recover('the engine returned a non-finite car'); c = st.car; st.acc = 0; break; }
         layer?.postStep(c);
         st.acc -= DT;
+        // Wedged (0229): nose into a trunk, a pier or a rail, the pedal down and going nowhere (or left there).
+        const push = Math.max(Math.abs(inp.throttle || 0), inp.brake || 0);   // reverse is a negative throttle
+        if (!st.pilot && wedge.update(DT, c, push)) { respawn(); c = st.car; st.acc = 0; break; }
       }
+      if (carFinite(c)) { lastGood.x = c.pos.x; lastGood.z = c.pos.z; lastGood.fx = 2 * (c.quat.x * c.quat.z + c.quat.w * c.quat.y); lastGood.fz = 1 - 2 * (c.quat.x * c.quat.x + c.quat.y * c.quat.y); }
       c = st.car;
       for (let i = 0; i < 4; i++) { comps[i] = c.wheels[i].compression; spins[i] = c.wheels[i].spin; }
       const drawn = poseLerp.pose(c, st.acc / DT);
@@ -458,6 +482,14 @@ export function createDrive(ctx) {
     // A rough FPS meter for the perf probe (window.__coldgas.drive.stats()).
     st.frames++; st.fpsT += dt;
     if (st.fpsT > 1) { st.fps = st.frames / st.fpsT; st.frames = 0; st.fpsT = 0; }
+  }
+
+  // The engine threw, or handed back a broken car (0229): record it, and a fresh car in a fresh world goes back on
+  // the road where the old one was last whole. If the engine can't even build that (its WASM is gone), rethrow:
+  // the frame loop's guard (src/obs/heal.js) takes it from there.
+  function recover(why) {
+    console.warn('drive: recovered from', why);
+    respawn();   // throws on if the engine can't build a world: heal's guard has it
   }
 
   // Upside down, lost in the sea, or fallen off the mountain: back on the road.

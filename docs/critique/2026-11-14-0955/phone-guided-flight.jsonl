@@ -1,0 +1,19 @@
+{"t":0,"guide":"","cue":"","phase":"drive","verb":"Hold","beat":"","down":false,"card":false}
+{"t":0.02,"guide":"go","cue":"Hold to go","phase":"drive","verb":"Hold","beat":"","down":false,"card":false}
+{"t":0.32,"act":"down"}
+{"t":0.33,"guide":"keep","cue":"Hold to go","phase":"drive","verb":"Holding","beat":"","down":true,"card":false}
+{"t":0.63,"act":"down"}
+{"t":2.53,"guide":"keep","cue":"Keep holding","phase":"ramp","verb":"Holding","beat":"","down":true,"card":false}
+{"t":2.85,"act":"down"}
+{"t":10.28,"guide":"tap","cue":"Keep holding","phase":"ramp","verb":"Tap","beat":"","down":true,"card":false}
+{"t":10.58,"act":"tap"}
+{"t":10.72,"act":"tapdown"}
+{"t":10.73,"guide":"","cue":"","phase":"ramp","verb":"Letting","beat":"","down":true,"card":false}
+{"t":10.82,"note":"tapped"}
+{"t":10.82,"act":"tapup"}
+{"t":11.62,"guide":"roll","cue":"Let it roll","phase":"air","verb":"Hold","beat":"","down":false,"card":false}
+{"t":11.92,"act":"up"}
+{"t":11.97,"guide":"","cue":"","phase":"air","verb":"Hold","beat":"","down":false,"card":false}
+{"t":16.55,"guide":"","cue":"","phase":"landed","verb":"","beat":"","down":false,"card":false}
+{"t":16.98,"guide":"","cue":"","phase":"done","verb":"","beat":"","down":false,"card":true}
+{"t":17,"guide":"","cue":"","phase":"done","verb":"","beat":"THE SHOW · STUCK IT First landing 0.0 / 100 ENGINEER 8.6 COORDINATOR 8.9 DESIGNER 8.5","down":false,"card":true}

@@ -38,8 +38,12 @@ struct Accordion<Content: View>: View {
     let title: String
     let summary: String
     @Binding var isOpen: Bool
+    /// What the closed row shows (0230): the title (a fold in a list), or only the summary (the numbers themselves); the
+    /// other is still read by VoiceOver.
+    var show: Show = .title
     @ViewBuilder var content: () -> Content
     @Environment(\.accessibilityReduceMotion) private var still
+    enum Show { case title, summary, both }
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             Button {
@@ -48,8 +52,12 @@ struct Accordion<Content: View>: View {
             } label: {
                 HStack(spacing: 12) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text(title.uppercased()).font(Theme.display(11)).tracking(1.6).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
-                        Text(summary).font(Theme.text(13)).foregroundStyle(Theme.ink2).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                        if show != .summary {
+                            Text(title.uppercased()).font(Theme.display(11)).tracking(1.6).foregroundStyle(Theme.ink).lineLimit(1).minimumScaleFactor(0.7)
+                        }
+                        if show != .title {
+                            Text(summary).font(show == .summary ? Theme.mono(13) : Theme.text(13)).foregroundStyle(Theme.ink2).lineLimit(2).fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.down").font(.system(size: 12, weight: .semibold)).foregroundStyle(isOpen ? Theme.aur1 : Theme.ink3)

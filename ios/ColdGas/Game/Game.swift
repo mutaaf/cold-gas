@@ -31,6 +31,8 @@ struct DriveHud: Equatable {
 struct HudState: Equatable {
     var speed = 0.0, alt = 0.0, sink = 0.0, gas = 1.0, phase: UInt8 = 0
     var cue = "", stage = "climb", held = false, released = false, aimLive = false
+    /// The guided first jump's hint for this moment (0249), nil when nothing needs saying.
+    var guide: String?
     var sinkBand = 0   // 0 on profile, 1 fast but stoppable, 2 past stopping
     var throttles = [Double](repeating: 0, count: 10)   // the live valves, for Advanced's pad
     var hardware = false                                 // a controller or keyboard is flying: the touch controls hide
@@ -76,6 +78,88 @@ final class Game: ObservableObject {
     private var countT = 0.0
     private var lastHud = 0.0
     private var touched = false   // the touchdown has reached the camera (main.js: once per run, keyed on the touch tick)
+    /// A car wedged before the jump (0229: steered hard into a set light, a lamp post or the Wall's steel, it stops dead on
+    /// its wheels and no end of the run matches it, so it would sit there until the 90 s timeout): a cue after a second,
+    /// then the attempt starts again from the mark. The frame clock's, not the sim's: nothing scored or logged changes.
+    private var wedge = WedgeWatch(), wedged = false
+
+    // --- Challenge links (0253) ---------------------------------------------------------------------
+    /// A link that opened the app: its card over the title (the sender's run, or "from an older version").
+    struct Incoming: Equatable { var run: Challenge.Run?; var course: String?; var stale: Bool }
+    @Published var incoming: Incoming?
+    /// The run being raced, from Take the challenge until Home: its score to beat on the results.
+    @Published private(set) var rival: Challenge.Run?
+    private var pendingLink: ChallengeLink.Route?
+
+    /// A universal link or a coldgas:// link. Mid-run it waits until the run is over.
+    func open(url: URL) {
+        let r = ChallengeLink.route(url, simVersion: SIM_VERSION)
+        guard r != .none else { return }
+        if screen == .run && result == nil { pendingLink = r; return }
+        apply(r)
+    }
+    private func apply(_ r: ChallengeLink.Route) {
+        pendingLink = nil
+        switch r {
+        case let .challenge(run):
+            incoming = Incoming(run: run, course: run.course, stale: false)
+            Usage.shared.track("challenge_open", ["course": .text(run.course), "stale": .num(0)])
+        case let .stale(c):
+            incoming = Incoming(run: nil, course: c, stale: true)
+            Usage.shared.track("challenge_open", ["course": .text(c), "stale": .num(1)])
+        case let .bad(c): incoming = Incoming(run: nil, course: c, stale: true)
+        case let .play(c): if let c, screen == .title, course != c { course = c }; return
+        case .none: return
+        }
+        if screen != .title { home() }
+    }
+    /// Take the challenge: the sender's course and tier, their score to beat.
+    func takeChallenge() {
+        guard let run = incoming?.run else { return }
+        incoming = nil
+        if course != run.course { course = run.course }
+        tier = run.tier
+        rival = run
+        Usage.shared.track("challenge_play", ["course": .text(run.course), "stale": .num(0)])
+        play()
+    }
+    /// An older version's link, or one that can't be read: fly its course, no rival.
+    func flyIncomingCourse() {
+        let c = incoming?.course
+        incoming = nil
+        if let c, course != c { course = c }
+        play()
+    }
+
+    // --- The first run (0249) -----------------------------------------------------------------------
+    /// Until the first landed jump: the title holds the car still on the mark (no reference loop to watch), one Fly on the
+    /// Show, and a tap anywhere starts it. A tool or a test sees the normal title unless it asks with `-firstrun`.
+    @Published private(set) var firstRun: Bool = Game.firstRunAtLaunch
+    @Published private(set) var hintsSkipped = SaveStore.shared.data.counters.hintsSkipped ?? false
+    static let firstRunAtLaunch: Bool = {
+        #if DEBUG
+        if Launch.args.contains("-firstrun") {
+            SaveStore.shared.update { $0.progress = Progress() }   // a fresh install's counters (DEBUG, the shots and tests)
+            return true
+        }
+        #endif
+        let tool = WhatsNewGate.isQuiet(arguments: Launch.args, environment: ProcessInfo.processInfo.environment)
+        return !tool && SaveStore.shared.data.counters.firstRun
+    }()
+    /// The guided first jump: the first run, on one thumb on the Show, and the hints not skipped.
+    var guided: Bool { firstRun && !hintsSkipped && oneThumb && course == "show" && activeDrill == nil }
+    /// "I've got it": the hints end, for good.
+    func skipHints() {
+        hintsSkipped = true
+        SaveStore.shared.update { s in var p = s.counters; p.hintsSkipped = true; s.progress = p }
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
+    private var rollTicks = 0
+    private var still: Replay?
+
+    init() {
+        if firstRun { course = "show"; tier = "assist" }   // the first jump: the Show, Assist, one thumb
+    }
 
     /// One-thumb flies only Assist on the Show and the Wall (src/onethumb.js); everything else is classic touch.
     var oneThumb: Bool { control == .oneThumb && tier == "assist" && course != "lineup" }
@@ -83,6 +167,18 @@ final class Game: ObservableObject {
     // --- Flow ----------------------------------------------------------------------------------
     func showTitleLoop() {
         guard screen == .title else { return }
+        // The first run: the car waits on the mark, nothing to watch, so nothing holds a newcomer on the title (0249).
+        if firstRun {
+            if still == nil {
+                let l = LiveRun(course: course, tier: .assist, oneThumb: true)
+                let tr = Replay(live: course)
+                tr.tickBase = l.run.tick
+                tr.append(l.run)
+                still = tr
+            }
+            if let tr = still { stage?.load(course: course, track: tr); stage?.renderer?.liveTime = 0 }
+            return
+        }
         // Flown once per course and kept: Home must never wait on a whole flight (and the sim stays on this one thread).
         let tr = titleTracks[course] ?? Replay(runVector: "ref-\(course)")
         titleTracks[course] = tr
@@ -91,6 +187,13 @@ final class Game: ObservableObject {
 
     /// `drill`: practise one part of the flight, handed over mid-run (src/practice.js). A drill's id; nil is a whole run.
     func play(drill: String? = nil) {
+        // The funnel (0246), before the countdown starts: this launch's first input, and a scored jump's number.
+        Usage.shared.firstInput()
+        if drill == nil {
+            var n = 0
+            SaveStore.shared.update { s in var p = s.counters; n = p.startJump(); s.progress = p }
+            Usage.shared.track("jump_start", ["n": .num(Insights.nBucket(n)), "course": .text(course), "tier": .text(tier)])
+        }
         let t: FlyTier = tier == "pro" ? .pro : tier == "advanced" ? .advanced : .assist
         var built: BuiltDrill?
         if let drill, let d = drillById(drill) { built = try? buildDrill(d, course) }
@@ -104,24 +207,42 @@ final class Game: ObservableObject {
         l.onRelease = { Sound.shared.release() }   // the haptic release is the HapticScore's (it reads the feed's lift)
         live = l; controls.live = l
         acc = 0; seen = 0; doneFor = 0; momentFor = 0; result = nil; paused = false; touched = false
+        wedge.reset(); wedged = false
         haptics = HapticScore(course: course)
+        SoundFeed.shared.reset()
         let tr = Replay(live: course)
         tr.tickBase = l.run.tick
         tr.append(l.run)
         track = tr
         stage?.load(course: course, track: tr)
-        countdown = 3; countT = 0
+        // The guided first jump counts down one beat, not three (0249).
+        countdown = guided ? 1 : 3; countT = 0; rollTicks = 0
         replaying = false
         Hardware.shared.startRun()
         screen = .run
         UISelectionFeedbackGenerator().selectionChanged()
     }
     func retry() { play(drill: activeDrill) }
+    /// The next jump after a landing (0258): the next event in the playbill's order, Show, Wall, Lineup, Show.
+    static func nextCourse(after c: String) -> String {
+        let order = ["show", "wall", "lineup"]
+        return order[((order.firstIndex(of: c) ?? -1) + 1) % order.count]
+    }
+    func next() {
+        let n = Game.nextCourse(after: result?.course ?? course)
+        if course != n { course = n }
+        play()
+    }
     func home() {
+        if screen == .run { Usage.shared.runOver() }
+        rival = nil
+        // After the first landing the title is the normal one, with the reference loop behind it.
+        if firstRun && !SaveStore.shared.data.counters.firstRun { firstRun = false; still = nil }
         live = nil; controls.live = nil; track = nil; result = nil; paused = false; activeDrill = nil
         HapticPlayer.shared.apply(HapticContinuous())
         screen = .title
         showTitleLoop()
+        if let r = pendingLink { apply(r) }
     }
 
     // --- Free Drive ------------------------------------------------------------------------------
@@ -149,6 +270,7 @@ final class Game: ObservableObject {
         controls.drive = fd.sampler
         if let c = Launch.value("-fd-cam"), let m = DriveCamera.Mode(rawValue: c) { fd.camera.mode = m }
         freeDrive = fd; driveSettled = false; driveImpacts = 0
+        SoundFeed.shared.reset()
         stage?.load(course: c.id, track: fd.track)
         screen = .drive
         HapticPlayer.shared.apply(HapticContinuous())
@@ -179,7 +301,7 @@ final class Game: ObservableObject {
         if let r = stage?.renderer, r.courseKey == fd.course.id, r.drive !== fd { r.drive = fd; fd.attach(device: r.device) }
         if !paused { fd.frame(dt: min(dt, 0.1)); driveClock += dt }
         stage?.renderer?.liveTime = fd.liveTime
-        Sound.shared.update(speed: DMath.dhypot(fd.car.vel.x, fd.car.vel.y, fd.car.vel.z), throttles: fd.car.throttles, grounded: fd.car.grounded > 0, phase: .run)
+        if paused { SoundFeed.shared.quiet(title: false) } else { SoundFeed.shared.drive(fd, dt: dt, grind: Double(stage?.renderer?.crash.grind ?? 0)) }
         // The hands (0223): each impact the sim records, scaled by its speed; under them, rough ground and a sliding tyre.
         let imps = fd.track.impacts
         if driveImpacts > imps.count { driveImpacts = 0 }
@@ -240,7 +362,7 @@ final class Game: ObservableObject {
         if screen == .drive { driveFrame(dt: dt); return }
         if replaying, let tr = track { replayFrame(dt: dt, slowK: slowK, tr); return }
         guard screen == .run, let l = live, let tr = track, !paused else {
-            Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: screen == .title ? .title : .quiet)
+            SoundFeed.shared.quiet(title: screen == .title)
             if paused { HapticPlayer.shared.apply(HapticContinuous()) }
             return
         }
@@ -271,16 +393,26 @@ final class Game: ObservableObject {
                 if ticked == .rest { atRest = true; break }   // the world is freed: nothing to read
                 tr.append(r)
                 if wasFlying { haptics.step(HapticFeed(run: r, input: l.input, seen: &seen)) }
-                if !wasLanded && r.phase == .landed { Sound.shared.thud(sink: r.t.sink) }
+                if !wasLanded && r.phase == .landed { Sound.shared.land(sink: r.t.sink, paved: 1, seed: r.tick); Sound.shared.cheer(r.t.sink < 4 ? 0.7 : 0.35) }
                 if !touched && r.t.touchTick >= 0 { touched = true; stage?.renderer?.cam.touchdown(sink: r.t.sink) }
                 if wasFlying && r.phase == .done { finished(l) }
             }
         } catch { print("SIM stopped: \(error)"); if result == nil { home() }; return }
         haptics.drain { HapticPlayer.shared.play($0) }
         HapticPlayer.shared.apply(r.phase == .done ? HapticContinuous() : haptics.continuous)
+        if !atRest && r.phase != .done && result == nil && l.script == nil {
+            let state = wedge.step(r.car, dt: dt, eligible: r.phase == .drive)
+            wedged = state != .clear
+            if state == .act {
+                print("RUN wedged at tick \(r.tick): again from the mark")
+                UINotificationFeedbackGenerator().notificationOccurred(.warning)
+                retry()
+                return
+            }
+        }
         if !atRest && !(r.after?.done ?? false) {
-            let c = r.car, g = Double(stage?.renderer?.crash.grind ?? 0) * slowK
-            Sound.shared.update(speed: DMath.dhypot(c.vel.x, c.vel.y, c.vel.z), throttles: r.phase == .done ? Game.quiet : c.throttles, grounded: c.grounded > 0, grind: g, phase: .run)
+            let g = Double(stage?.renderer?.crash.grind ?? 0) * slowK
+            SoundFeed.shared.run(l, course: course, dt: dt * slowK, grind: g, done: r.phase == .done)
         } else { Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .run) }
         // Drawn one tick behind the newest, between it and the one before (the fraction of a tick left in `acc`).
         stage?.renderer?.liveTime = (Double(max(0, tr.ticks - 2)) + min(1, acc / DT)) / Replay.hz
@@ -290,6 +422,13 @@ final class Game: ObservableObject {
         if result != nil { doneFor += dt; if atRest || doneFor > 3.5 { showResults(l) } }
         lastHud += dt
         if lastHud > 1.0 / 15, !(r.after?.done ?? false) { lastHud = 0; refreshHud(l) }
+    }
+
+    /// The finished run's flight, side on (along the course, up), for the share card (0252): read from the track, never the sim.
+    func flightPath() -> [CGPoint] {
+        guard let tr = track, tr.ticks > 1 else { return [] }
+        let end = Double(tr.ticks - 1) / Replay.hz
+        return stride(from: 0.0, through: end, by: 1.0 / 30).map { t in let p = tr.car(at: t).pos; return CGPoint(x: Double(p.z), y: Double(p.y)) }
     }
 
     // --- Watch it back -------------------------------------------------------------------------------
@@ -309,7 +448,7 @@ final class Game: ObservableObject {
         let i = Int(replayT * Replay.hz), v = tr.velocity(at: i)
         var th = Game.quiet
         for k in 0..<10 { th[k] = Double(tr.nozzle(k, at: i)) }
-        Sound.shared.update(speed: Double(simd_length(v)), throttles: th, grounded: tr.phase(at: i) != 2, phase: .run)
+        SoundFeed.shared.plain(speed: Double(simd_length(v)), throttles: th, grounded: tr.phase(at: i) != 2)
     }
 
     /// Leaving the screen: pause the run, let go of everything (a finger lifted while we weren't listening must not stay held).
@@ -344,8 +483,29 @@ final class Game: ObservableObject {
         // The coach re-flies the log on the sim's shared scratch: here, with no tick in flight, and the run stepping no more.
         let say = coachWords(pointerCtx(course: l.run.course, tier: l.card?.tier ?? "assist", touchScheme: l.oneThumb ? .thumb : .classic))
         result?.coach = (try? l.coachResult(say: say))?.items ?? []
+        if let r = result {
+            r.firstLanding = firstRun && r.drill == nil && r.landed && SaveStore.shared.data.counters.firstRun
+            r.firstRun = firstRun && r.drill == nil
+        }
         screen = .results
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        // A landing and a crash feel different (0249); the first landing has its own swell into the settle.
+        if let r = result {
+            HapticPlayer.shared.moment(r.firstLanding ? .firstLanding : r.landed ? .landed : .wrecked)
+            if r.firstLanding { for (i, d) in [0.0, 0.18, 0.36].enumerated() { DispatchQueue.main.asyncAfter(deadline: .now() + d) { Sound.shared.chime(i) } } }
+            DispatchQueue.main.async { self.counted(r); if let p = self.pendingLink { self.apply(p) } }   // off the frame loop
+        }
+    }
+
+    /// A scored run's end, counted on this device and named to the funnel (0246). Drills aren't jumps.
+    private func counted(_ r: RunResult) {
+        Usage.shared.runOver()
+        guard r.drill == nil else { return }
+        let now = Date().timeIntervalSince1970 * 1000
+        var first = false, n = 0
+        SaveStore.shared.update { s in var p = s.counters; first = p.endJump(landed: r.landed, at: now); n = p.jumpCount; s.progress = p }
+        Usage.shared.track("jump_end", ["n": .num(Insights.nBucket(n)), "course": .text(r.course), "tier": .text(r.card.tier),
+                                        "landed": .num(r.landed ? 1 : 0), "score": .num((r.card.total * 10).rounded() / 10)])
+        if first { Usage.shared.track("first_landing", ["n": .num(Double(n))]) }
     }
 
     private func finished(_ l: LiveRun) {
@@ -389,6 +549,7 @@ final class Game: ObservableObject {
         h.rowDone = r.course == "show" && (r.t.crossedRow || r.t.contact)
         h.cue = cue(l, h)
         h.hint = Deck.hint(cue: h.cue)
+        if guided { h.guide = guide(l, h) }
         if h != hud { hud = h }
     }
     private func landingBand(_ l: LiveRun, _ h: HudState) -> Int {
@@ -396,10 +557,32 @@ final class Game: ObservableObject {
         return pr.status == "green" ? 0 : pr.status == "amber" ? 1 : 2
     }
 
+    /// The guided first jump (0249): one short hint at the beat that needs it, gone the moment it's done. On Assist the
+    /// computer rolls the car; the hint says to let it, and a tick at each half turn says it's happening.
+    private func guide(_ l: LiveRun, _ h: HudState) -> String? {
+        let r = l.run
+        if wedged || r.phase == .done { return nil }
+        let roll = abs(r.t.rollAccum)
+        while rollTicks < 2 && roll >= Double.pi * Double(rollTicks + 1) {
+            rollTicks += 1
+            HapticPlayer.shared.play(HapticEvent(kind: .detent, tick: 0, channel: 5, intensity: rollTicks == 2 ? 0.7 : 0.45, sharpness: 0.85))
+        }
+        switch h.stage {
+        case "climb", "idle": return h.held || h.speed > 2 ? nil : "Hold the pad to climb"
+        case "ledge": return l.thumb.driving ? nil : "On the ledge. Tap once to let go"
+        case "fly":
+            if roll > 0.3 && roll < 2 * Double.pi - 0.3 && !h.held { return "Let it roll" }
+            if r.course == "show" && !r.t.crossedRow && r.car.pos.z > SHOW.rowNear { return nil }   // it carries you over the row
+            return h.held ? nil : "Hold the pad to land"
+        default: return nil
+        }
+    }
+
     /// The cue line (src/main.js thumbCues / cues), in the app's words.
     private func cue(_ l: LiveRun, _ h: HudState) -> String {
         let r = l.run, released = l.released
         if r.phase == .done { return result?.card.verdict ?? "" }
+        if wedged { return "Stuck · again from the mark" }
         let c = r.car, v = h.speed
         if l.oneThumb {
             let held = h.held
@@ -461,14 +644,17 @@ final class RunResult: Identifiable {
     init(course: String, card: Card, log: [[Int]], telemetry: Telemetry, ticks: Int) {
         self.course = course; self.card = card; self.log = log; self.telemetry = telemetry; self.ticks = ticks
     }
+    private func flag(_ key: String) -> Bool? {
+        guard let v = card.flat.first(where: { $0.0 == "facts." + key })?.1, case let .b(b) = v else { return nil }
+        return b
+    }
+    /// Landed, as src/ui.js celebrates it: not a crash or a wreck, and a real jump.
+    var landed: Bool { flag("crashed") != true && flag("jumped") != false }
     /// Eligible for the board: a scored run (the web's `eligible`).
     var eligible: Bool { card.total > 0 && drill == nil }
     var coach: [CoachItem] = []
     var drill: (label: String, pass: Bool, headline: String, stats: [String])?
     var dailyOK = false, dailyLine: String?
-    /// A link to the same jump on the web (src/challenge.js): opens the game with this run to beat.
-    lazy var challengeURL: URL? = {
-        guard eligible, let p = try? Challenge.encode(log: log, course: course, score: card.total, tier: card.tier, initials: SaveStore.shared.initials, simVersion: SIM_VERSION) else { return nil }
-        return URL(string: Challenge.url(base: "https://mutaafaziz.com/coldgas/", course: course, payload: p))
-    }()
+    /// This device's first landing (0249): the results open on its moment. `firstRun`: the run was flown on the first run.
+    var firstLanding = false, firstRun = false
 }

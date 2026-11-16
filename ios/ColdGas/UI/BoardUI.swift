@@ -64,44 +64,68 @@ struct BoardView: View {
     @State private var loading = true
     @State private var hidden = Moderation.hidden
     var body: some View {
-        NavigationStack {
-            VStack(spacing: 10) {
-                Picker("Course", selection: $course) { ForEach(COURSE_INFO, id: \.id) { Text($0.name.replacingOccurrences(of: "The ", with: "")).tag($0.id) } }.pickerStyle(.segmented)
-                Picker("Board", selection: $board) { Text("Today").tag(ColdGasAPI.Board.today); Text("All time").tag(ColdGasAPI.Board.all) }.pickerStyle(.segmented)
-                Group {
-                    if loading { ProgressView().frame(maxHeight: .infinity) }
-                    else if let rows {
-                        let shown = rows.filter { !hidden.contains($0.initials) }
-                        if shown.isEmpty { empty("Nobody on this board yet. Be first.") }
-                        else {
-                            ScrollView {
-                                LazyVStack(spacing: 0) {
-                                    ForEach(Array(shown.enumerated()), id: \.offset) { i, r in row(i, r).contextMenu {
-                                        Button("Hide on this device", systemImage: "eye.slash") { hidden.insert(r.initials); Moderation.hidden = hidden }
-                                        Button("Report", systemImage: "flag") { if let u = Moderation.reportURL(r, board: board.rawValue) { openURL(u) } }
-                                    } }
-                                }
-                                Text("Touch and hold a row to hide or report it.").font(Theme.text(11)).foregroundStyle(Theme.ink3).padding(.top, 12)
-                            }
-                        }
-                    } else { empty("The board didn’t answer. Check your connection.") }
+        VStack(spacing: 0) {
+            SheetBar(name: "The board", close: { dismiss() })
+            // The events as the sheet's own header: the chosen one lit with the red mark; today or all time beside them.
+            HStack(alignment: .center, spacing: 0) {
+                ForEach(COURSE_INFO, id: \.id) { c in
+                    let on = course == c.id
+                    Button { UISelectionFeedbackGenerator().selectionChanged(); course = c.id } label: {
+                        Text(c.name.replacingOccurrences(of: "The ", with: "").uppercased())
+                            .font(Theme.marquee(on ? 14 : 12, .subheadline)).tracking(1.4)
+                            .foregroundStyle(on ? Theme.ink : Theme.ink3).lineLimit(1).minimumScaleFactor(0.7)
+                            .padding(.horizontal, 10).frame(minHeight: 44)
+                            .overlay(alignment: .bottom) { Tick(on: on, length: 18, vertical: false).padding(.bottom, 6) }
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain).accessibilityLabel(c.name).accessibilityAddTraits(on ? .isSelected : [])
                 }
+                Spacer(minLength: 8)
+                Button {
+                    UISelectionFeedbackGenerator().selectionChanged()
+                    board = board == .today ? .all : .today
+                } label: {
+                    Text(board == .today ? "Today" : "All time").font(Theme.text(12, .semibold)).foregroundStyle(Theme.ink)
+                        .padding(.horizontal, 12).frame(minHeight: 32)
+                        .overlay(Capsule().strokeBorder(Theme.hair, lineWidth: 1))
+                        .frame(minHeight: 44).contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Board").accessibilityValue(board == .today ? "Today" : "All time")
+                .accessibilityHint("Switches between today and all time")
             }
-            .padding(.horizontal, 16).padding(.top, 8)
-            .navigationTitle("The board")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { dismiss() } } }
-            .task(id: "\(course)-\(board.rawValue)") {
-                loading = true
-                let r = await ColdGasAPI.production.fetchBoard(board, course: course)
-                if !Task.isCancelled { rows = r; loading = false }
+            .padding(.leading, 6).padding(.trailing, 16)
+            Group {
+                if loading { ProgressView().frame(maxHeight: .infinity) }
+                else if let rows {
+                    let shown = rows.filter { !hidden.contains($0.initials) }
+                    if shown.isEmpty { empty("Nobody on this board yet. Be first.") }
+                    else {
+                        ScrollView {
+                            LazyVStack(spacing: 0) {
+                                ForEach(Array(shown.enumerated()), id: \.offset) { i, r in row(i, r).contextMenu {
+                                    Button("Hide on this device", systemImage: "eye.slash") { hidden.insert(r.initials); Moderation.hidden = hidden }
+                                    Button("Report", systemImage: "flag") { if let u = Moderation.reportURL(r, board: board.rawValue) { openURL(u) } }
+                                } }
+                            }
+                            Text("Touch and hold a row to hide or report it.").font(Theme.text(11)).foregroundStyle(Theme.ink3).padding(.top, 14)
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                } else { empty("The board didn\u{2019}t answer. Check your connection.") }
             }
+            .padding(.top, 6)
+        }
+        .task(id: "\(course)-\(board.rawValue)") {
+            loading = true
+            let r = await ColdGasAPI.production.fetchBoard(board, course: course)
+            if !Task.isCancelled { rows = r; loading = false }
         }
     }
     private func empty(_ s: String) -> some View { Text(s).font(Theme.text(14)).foregroundStyle(Theme.ink3).frame(maxHeight: .infinity) }
     private func row(_ i: Int, _ r: BoardRow) -> some View {
         HStack(spacing: 12) {
-            Text("\(i + 1)").font(Theme.mono(13)).foregroundStyle(Theme.ink3).frame(width: 24, alignment: .trailing)
+            Text("\(i + 1)").font(Theme.mono(13)).foregroundStyle(i < 3 ? Theme.ink : Theme.ink3).frame(width: 24, alignment: .trailing)
             Text(Moderation.blocked(r.initials) ? "···" : r.initials).font(Theme.mono(16, bold: true)).foregroundStyle(Theme.ink)
             Text(r.verdict).font(Theme.text(13)).foregroundStyle(Theme.ink2).lineLimit(1)
             Spacer()
@@ -250,7 +274,7 @@ struct JudgePanel: View {
                     .accessibilityLabel("Judged on this device by Apple Intelligence")
             }
             if !model.note.isEmpty {
-                Text(open == nil ? "\(model.note) · Tap a judge for their call" : model.note).font(Theme.text(11)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
+                Text(model.note).font(Theme.text(11)).foregroundStyle(Theme.ink2).fixedSize(horizontal: false, vertical: true)
             }
         }
     }

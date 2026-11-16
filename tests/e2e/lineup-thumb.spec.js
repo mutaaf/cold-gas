@@ -8,12 +8,15 @@ const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile:
 
 // The phone page is a fixture-free newPage: it is closed in afterEach, or its live game keeps rendering in the worker's
 // browser for the rest of the shard (on #292 that doubled e2e 3/4 and timed out obs.spec.js).
+// 0191: a Lineup Daily (roll-lineup, mark-lineup) puts its own line in NEXT RUN; pin a Wall Daily so the coach's line is read.
+const NOT_A_LINEUP_DAY = new Date('2026-11-18T12:00:00Z');   // stick-wall (src/daily.js objectiveFor)
 let page;
 test.afterEach(async () => { await page?.close(); page = null; });
 
 test('the Lineup on a phone: the title, the how-to card and the run all fly one thumb, and a held thumb lands it', async ({ browser }) => {
   test.slow();
   page = await browser.newPage(PHONE);
+  await page.clock.setFixedTime(NOT_A_LINEUP_DAY);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/coldgas/?gfx=low');
@@ -48,6 +51,11 @@ test('the Lineup on a phone: the title, the how-to card and the run all fly one 
   expect(out.verdict).toMatch(/Stuck it|Perfect 10/);
   expect(out.roll).toBeGreaterThanOrEqual(330);
   expect(out.miss).toBeLessThan(3.5);
+  // 0191: no 360 reaches the Lineup's one-thumb Gold, so the card's NEXT RUN names the call in the pad's words, not Pro.
+  const next = page.locator('[data-pointer-text]');
+  await expect(next).toHaveText(/Next: slide up on the run-up for two turns, then aim for the mark/, { timeout: 10_000 });
+  await expect(next).not.toHaveText(/Pro/);
+  await expect(page.locator('[data-pointer]')).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -56,6 +64,7 @@ test('the Lineup on a phone: the title, the how-to card and the run all fly one 
 test('the Lineup on a phone: slid up on the run-up, the pad calls two turns and the car rolls 720°', async ({ browser }) => {
   test.slow();
   page = await browser.newPage(PHONE);
+  await page.clock.setFixedTime(NOT_A_LINEUP_DAY);
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   await page.goto('/coldgas/?gfx=low');
@@ -72,11 +81,15 @@ test('the Lineup on a phone: slid up on the run-up, the pad calls two turns and 
     g.liveStep(0.05); read();
     g.thumb.move(0, 48);   // a full slide up the glass
     for (let i = 0; i < 4000 && S.mode === 'live' && !S.card; i++) { g.liveStep(0.05); read(); }
-    return { course: S.run?.course, verdict: S.card?.verdict, roll: S.card?.facts?.rollDeg, verbs: [...verbs] };
+    return { course: S.run?.course, verdict: S.card?.verdict, roll: S.card?.facts?.rollDeg, miss: S.card?.facts?.padMiss, verbs: [...verbs] };
   });
   expect(out.course).toBe('lineup');
   expect(out.verbs).toEqual(expect.arrayContaining(['↑ for 720 · Drive', 'Two turns · Drive']));
   expect(out.verdict).toMatch(/Stuck it|Perfect 10/);
   expect(out.roll).toBeGreaterThanOrEqual(700);
+  // Two turns flown: the card's next step is the aim (or, on the mark, Pro), never the call again (0191).
+  const next = page.locator('[data-pointer-text]');
+  await expect(next).toHaveText(out.miss > 3.5 ? /Next: hold in the air and slide onto the amber dot/ : /Next: try Pro/, { timeout: 10_000 });
+  await expect(next).not.toHaveText(/two turns/);
   expect(errors).toEqual([]);
 });

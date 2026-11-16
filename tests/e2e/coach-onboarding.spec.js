@@ -17,7 +17,9 @@ async function boot(page, { firstVisit = false, stub = true } = {}) {
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
   // A browser under automation counts as a returning player; this one is new (once: a reload keeps what it set).
-  if (firstVisit) await page.addInitScript(() => { if (!localStorage.getItem('coldgas_howto')) localStorage.setItem('coldgas_howto', 'new'); });
+  // 0247: one who has landed a Jump but never saw how to fly (a player from before 0247): a first run (no landing yet)
+  // flies without the card, and tests/e2e/first-run.spec.js covers it.
+  if (firstVisit) await page.addInitScript(() => { if (!localStorage.getItem('coldgas_howto')) { localStorage.setItem('coldgas_howto', 'new'); localStorage.setItem('coldgas_landings', '1'); } });
   await page.goto('/coldgas/?gfx=low');
   await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
   if (stub) await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
