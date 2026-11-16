@@ -1,12 +1,12 @@
 ---
 id: 0261
 title: On keys and two thumbs, Assist's clean line names what the score still pays for
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-13
-pr:
+pr: 402
 by: critic
 ---
 
@@ -41,16 +41,16 @@ No sim or scorer change (`ref-hash` unchanged; vectors unchanged unless the nati
 strings, in which case `npm run vectors` in the same PR).
 
 ## Acceptance criteria
-- [ ] Show reference in Assist on keys (score 97.3, sink 0.81 m/s, miss 1.5 m, clearance 5.1 m): the line does
+- [x] Show reference in Assist on keys (score 97.3, sink 0.81 m/s, miss 1.5 m, clearance 5.1 m): the line does
       **not** say "softer" or "closer to the mark", and names the row clearance with the 2 m (6.6 ft) figure.
-- [ ] For any clean card where `categories.precision === 10`, no clean line names the mark; where the sink is
+- [x] For any clean card where `categories.precision === 10`, no clean line names the mark; where the sink is
       ≤ 0.9 m/s, none names a softer touchdown (unit test over the three references and a table of synthetic cards).
-- [ ] The Pro clean line quotes the scorer's thresholds (0.9 m/s; the course's full-marks ring), checked in a test
+- [x] The Pro clean line quotes the scorer's thresholds (0.9 m/s; the course's full-marks ring), checked in a test
       against `judge.js` exports.
-- [ ] On the desktop results sheet the NEXT RUN line and the What-happened box never give conflicting advice for the
+- [x] On the desktop results sheet the NEXT RUN line and the What-happened box never give conflicting advice for the
       same run (e2e: a reference Show in Assist on keys at 1280×720).
-- [ ] Phone one-thumb lines (0156) unchanged: existing `pointer.test.js` cases still pass verbatim.
-- [ ] Works at 390×844 touch (two thumbs) and 1280×720 keyboard.
+- [x] Phone one-thumb lines (0156) unchanged: existing `pointer.test.js` cases still pass verbatim.
+- [x] Works at 390×844 touch (two thumbs) and 1280×720 keyboard.
 
 ## Test plan
 `tests/unit/pointer.test.js`: new cases for `pointerText('clean', KEY, flight)` and the two-thumb context fed the

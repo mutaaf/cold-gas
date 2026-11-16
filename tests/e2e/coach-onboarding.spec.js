@@ -393,3 +393,34 @@ test('a new player\'s cue line says "Let go now" with the key, on the ledge', as
   expect(r.text).toMatch(/^Let go now: press Space$/);
   expect(errors).toEqual([]);
 });
+
+// 0261: after a clean reference Show in Assist on keys (97.3, sink 0.81 m/s, 1.5 m off the mark, the row at 5.1 m),
+// NEXT RUN names what the score still pays for (the row's clearance at 2 m), never a softer touchdown or the mark,
+// and never contradicts What happened (which says nothing big is left, try Pro). A Wall Daily is pinned, so no Show
+// Daily's line stands in for the coach's (LESSONS 2026-11-16).
+test('desktop 1280×720: a clean Assist Show\'s NEXT RUN names the clearance, and What happened agrees', async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.clock.setFixedTime(new Date('2026-11-18T12:00:00Z'));   // stick-wall (src/daily.js objectiveFor)
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/coldgas/?gfx=low&course=show');
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
+  await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
+  expect(await page.evaluate(() => window.__coldgas.stage.course)).toBe('show');
+  const r = await fly(page, false, { tier: 'assist' });
+  expect(r, JSON.stringify(r)).toMatchObject({ mode: 'results', crashed: false, cardTier: 'assist' });
+  const ptr = page.locator('[data-pointer]');
+  await expect(ptr).toBeVisible({ timeout: 10_000 });
+  await expect(ptr).toHaveAttribute('data-fix', 'clean');
+  const text = (await page.locator('[data-pointer-text]').textContent()).trim();
+  expect(text).toMatch(/cross the roofs within (2 m|6\.6 ft)/);
+  expect(text).not.toMatch(/softer|mark/);
+  const card = await page.evaluate(() => ({ prec: window.__coldgas.S.card.categories.precision, sink: window.__coldgas.S.card.facts.sink }));
+  expect(card.prec).toBe(10);
+  expect(card.sink).toBeLessThanOrEqual(0.9);
+  // What happened: nothing big left, try Pro; the pointer asks for nothing it calls done (no mark, no softer touchdown).
+  const what = (await page.locator('[data-coach-items]').textContent()).trim();
+  expect(what).toMatch(/nothing big to fix/);
+  expect(what).toMatch(/Try Pro/);
+  expect(errors).toEqual([]);
+});
