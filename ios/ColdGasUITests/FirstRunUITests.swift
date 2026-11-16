@@ -8,7 +8,7 @@ final class FirstRunUITests: XCTestCase {
 
     private func launch(_ args: [String]) -> XCUIApplication {
         let a = XCUIApplication()
-        a.launchArguments = ["-uitest", "-firstrun"] + args
+        a.launchArguments = ["-mute", "-uitest", "-firstrun"] + args
         a.launch()
         return a
     }

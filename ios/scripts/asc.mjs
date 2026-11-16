@@ -26,16 +26,23 @@
 //   node scripts/asc.mjs store-meta        version, the listing from store/, categories, content rights, usesIdfa,
 //                                          review contact + notes, free in all territories, attach the newest build
 //   node scripts/asc.mjs store-rating      the age rating questionnaire from store/age-rating.json
-//   node scripts/asc.mjs store-shots [dir] upload build/store-shots/{iphone-69,ipad-13,iphone-duo}/*.png
+//   node scripts/asc.mjs store-shots [dir] upload build/store-shots/{iphone-69,ipad-13,iphone-duo}/*.png to the editable
+//                                          MARKETING_VERSION version (never another version; store-prep creates it)
+//   node scripts/asc.mjs store-prep [--shots <dir>] [--version <v>] [--yes]
+//                                          the next version, side by side with one in review (0268): a DRY RUN by default
+//                                          (GETs only, prints every change it would make); --yes creates the version if
+//                                          absent and uploads the copy, review notes, What's New and screenshots to it.
+//                                          Touches only the version whose versionString is <v>; never submits, never
+//                                          touches pricing, availability, categories, age rating or another version
 //   node scripts/asc.mjs submit --yes      send the version to App Review: only on a fresh yes from the owner (§9)
 //   node scripts/asc.mjs cancel --yes      withdraw the submission waiting for review (the version goes back to editable,
 //                                          DEVELOPER_REJECTED): also only on the owner's yes
 //
 // Testers: internal group "Cold Gas Crew" (access to all builds). BETA_EXTERNAL=1 also adds the build to the external
 // group "Cold Gas Beta" and submits it for Beta App Review: also only on a fresh yes from the owner (§9).
-import { createSign, createPrivateKey } from "node:crypto";
-import { readFileSync, existsSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { createSign, createPrivateKey, createHash } from "node:crypto";
+import { readFileSync, existsSync, readdirSync } from "node:fs";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), ".."); // ios/
@@ -138,6 +145,8 @@ export function storeListing() {
     promotionalText: txt("promotional-text.txt"),
     description: txt("description.txt"),
     reviewNotes: txt("review-notes.txt"),
+    // The App Store's What's New: shorter than release-notes/<v>.md (TestFlight's and the in-app modal's), same facts.
+    whatsNew: existsSync(join(STORE_DIR, "whats-new.txt")) ? txt("whats-new.txt") : null,
     copyright: `${new Date().getUTCFullYear()} ${l.copyrightHolder}`,
   };
 }
@@ -149,13 +158,14 @@ async function storeLint() {
     if (!s[k]) bad.push(`${k} is empty`);
     else if (s[k].length > max) bad.push(`${k} is ${s[k].length} characters (max ${max})`);
   }
-  for (const k of ["name", "subtitle", "keywords", "promotionalText", "description", "reviewNotes"]) if (EMOJI.test(s[k] ?? "")) bad.push(`${k} has an emoji`);
+  if (s.whatsNew != null && s.whatsNew.length > 4000) bad.push(`whatsNew is ${s.whatsNew.length} characters (max 4000)`);
+  for (const k of ["name", "subtitle", "keywords", "promotionalText", "description", "reviewNotes", "whatsNew"]) if (EMOJI.test(s[k] ?? "")) bad.push(`${k} has an emoji`);
   if (/,\s/.test(s.keywords)) bad.push("keywords: no spaces after commas (they count against the 100)");
   for (const k of ["supportUrl", "privacyPolicyUrl"]) if (!/^https:\/\//.test(s[k] ?? "")) bad.push(`${k} must be an https URL`);
   const r = json("age-rating.json");
   if (!r.answers || typeof r.answers !== "object") bad.push("age-rating.json has no answers");
   if (bad.length) { for (const b of bad) console.log(`✗ store/: ${b}`); process.exitCode = 1; return; }
-  console.log(`✓ store/ listing within Apple's limits (subtitle ${s.subtitle.length}/30, keywords ${s.keywords.length}/100, promo ${s.promotionalText.length}/170, description ${s.description.length}/4000)`);
+  console.log(`✓ store/ listing within Apple's limits (subtitle ${s.subtitle.length}/30, keywords ${s.keywords.length}/100, promo ${s.promotionalText.length}/170, description ${s.description.length}/4000, review notes ${s.reviewNotes.length}/4000${s.whatsNew != null ? `, What's New ${s.whatsNew.length}/4000` : ""})`);
 }
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -371,6 +381,9 @@ async function storeMeta() {
   const { sv, shipped } = await storeVersion(a.id, true);
   const v = version();
   if (sv.attributes.versionString !== v) {
+    // 0268: renaming is how 1.0.0 became 1.1.0; done silently it would turn a rejected 1.1.0 into 1.2.0 and swap its copy.
+    // Only on purpose. For a new version beside one in flight, store-prep is the path.
+    if (!process.argv.includes("--rename")) throw new Error(`The editable App Store version is ${sv.attributes.versionString} (${sv.attributes.appStoreState}), MARKETING_VERSION is ${v}. Renaming it is the owner's call: node scripts/asc.mjs store-meta --rename. For a new ${v} version, use store-prep.`);
     await api("PATCH", `/v1/appStoreVersions/${sv.id}`, { data: { type: "appStoreVersions", id: sv.id, attributes: { versionString: v } } });
     console.log(`✓ App Store version ${sv.attributes.versionString} → ${v} (matches MARKETING_VERSION)`);
   }
@@ -383,7 +396,7 @@ async function storeMeta() {
 
   // Version localization (description, keywords, URLs; What's New only exists after the first release, 18-0).
   const loc = { description: STORE.description, keywords: STORE.keywords, promotionalText: STORE.promotionalText, supportUrl: STORE.supportUrl, marketingUrl: STORE.marketingUrl };
-  if (shipped) loc.whatsNew = notesFor(v);
+  if (shipped) loc.whatsNew = STORE.whatsNew ?? notesFor(v);
   await upsert(`/v1/appStoreVersions/${sv.id}/appStoreVersionLocalizations`, "appStoreVersionLocalizations",
     { appStoreVersion: { data: { type: "appStoreVersions", id: sv.id } } }, (l) => l.attributes.locale === "en-US", { locale: "en-US", ...loc });
   console.log(`✓ en-US listing: description, keywords, promotional text, support + marketing URLs${shipped ? ", What's New" : " (What's New starts with the 2nd release)"}`);
@@ -508,7 +521,10 @@ async function storeShots(dir = join(ROOT, "build", "store-shots")) {
   const { createHash } = await import("node:crypto");
   const { readdirSync } = await import("node:fs");
   const a = await app();
-  const { sv } = await storeVersion(a.id, true);
+  // 0268: only the MARKETING_VERSION version, and only if it exists and is editable (this used to create one, or upload to
+  // whichever version happened to be editable).
+  const { sv } = await storeVersion(a.id);
+  if (!sv || sv.attributes.versionString !== version()) throw new Error(`No editable App Store version ${version()}${sv ? ` (the editable one is ${sv.attributes.versionString})` : ""}: node scripts/asc.mjs store-prep (dry run first)`);
   const loc = (await api("GET", `/v1/appStoreVersions/${sv.id}/appStoreVersionLocalizations`)).data.find((l) => l.attributes.locale === "en-US");
   if (!loc) throw new Error("No en-US listing yet: run node scripts/asc.mjs store-meta first");
   const sets = (await api("GET", `/v1/appStoreVersionLocalizations/${loc.id}/appScreenshotSets?limit=50`)).data;
@@ -707,9 +723,227 @@ async function applinks() {
   console.log(`✓ Associated Domains turned on for ${BUNDLE}; run \`node scripts/asc.mjs signing\` before the next archive`);
 }
 
-const [cmd, arg] = process.argv.slice(2);
-const run = { whoami, status, bundle, applinks, signing, crew, call: () => call(arg, process.argv[4], process.argv[5]),
-  "store-lint": storeLint, "store-check": storeCheck, "store-meta": storeMeta, "store-rating": storeRating, "store-shots": () => storeShots(arg),
+// ── store-prep: the next version beside one in review (0268) ─────────────────────────────────────────────
+// 1.1.0 waits for review with a manual release; 1.2.0 is prepared beside it and submitted only on the owner's fresh yes.
+// Everything here addresses the version by its versionString, never "whichever is editable", and every write is checked
+// against that version first. A dry run (the default) makes GET requests only.
+
+/** A version in one of these states is done with; any other state (in review, pending release, editable…) is in flight. */
+const SETTLED = new Set(["READY_FOR_SALE", "READY_FOR_DISTRIBUTION", "REPLACED_WITH_NEW_VERSION", "REMOVED_FROM_SALE", "DEVELOPER_REMOVED_FROM_SALE"]);
+/** On the store: What's New exists from the second release on (18-0). */
+const LIVE = new Set(["READY_FOR_SALE", "READY_FOR_DISTRIBUTION"]);
+const INFO_EDITABLE = new Set(["PREPARE_FOR_SUBMISSION", "DEVELOPER_REJECTED", "REJECTED", "METADATA_REJECTED"]);
+const NEVER = "submitting for review, pricing, availability, categories, age rating, content rights, App Privacy, or any other version";
+const state = (x) => x.attributes.appStoreState ?? x.attributes.state;
+const infoState = (i) => i.attributes.state ?? i.attributes.appStoreState;
+const pick = (o, ks) => Object.fromEntries(ks.map((k) => [k, o[k]]));
+const differs = (want, have) => Object.keys(want).filter((k) => want[k] != null && (have?.[k] ?? null) !== want[k]);
+/** Apple fills sourceFileChecksum only after processing, so a just-uploaded shot matches on name + size until then. */
+const sameShot = (r, l) => r.attributes.fileName === l.f && r.attributes.fileSize === l.buf.length && r.attributes.assetDeliveryState?.state !== "FAILED"
+  && (r.attributes.sourceFileChecksum == null || r.attributes.sourceFileChecksum === l.md5);
+
+/** The screenshots on disk, per set (SHOT_SETS), checked against Apple's sizes and the 10-a-set limit. */
+export function localShots(dir) {
+  return SHOT_SETS.map((set) => {
+    const folder = join(dir, set.dir);
+    const files = existsSync(folder) ? readdirSync(folder).filter((f) => f.endsWith(".png")).sort() : [];
+    const errors = files.length > 10 ? [`${set.label}: ${files.length} screenshots (max 10)`] : [];
+    const shots = files.map((f) => {
+      const buf = readFileSync(join(folder, f));
+      const w = buf.readUInt32BE(16), h = buf.readUInt32BE(20);
+      if (!set.sizes.some(([sw, sh]) => sw === w && sh === h)) errors.push(`${set.dir}/${f} is ${w}×${h}; ${set.label} needs ${set.sizes.map((x) => x.join("×")).join(" or ")}`);
+      return { f, buf, md5: createHash("md5").update(buf).digest("hex") };
+    });
+    return { set, folder, shots, errors };
+  });
+}
+
+/** What App Store Connect holds for version <v>, read with GETs only. */
+export async function prepRemote(call, v) {
+  const en = (l) => l.attributes.locale === "en-US";
+  const a = (await call("GET", `/v1/apps?filter[bundleId]=${BUNDLE}&limit=1`)).data[0];
+  if (!a) throw new Error(`No App Store Connect app for ${BUNDLE}`);
+  const versions = (await call("GET", `/v1/apps/${a.id}/appStoreVersions?filter[platform]=IOS&limit=50`)).data;
+  const sv = versions.find((x) => x.attributes.versionString === v) ?? null;
+  const r = { app: a, versions, sv, loc: null, review: null, attached: null, build: null, sets: {}, infos: [] };
+  if (sv) {
+    r.loc = (await call("GET", `/v1/appStoreVersions/${sv.id}/appStoreVersionLocalizations`)).data.find(en) ?? null;
+    r.review = (await call("GET", `/v1/appStoreVersions/${sv.id}/appStoreReviewDetail`).catch((e) => (e.status === 404 ? { data: null } : Promise.reject(e)))).data;
+    r.attached = (await call("GET", `/v1/appStoreVersions/${sv.id}/build`).catch(() => ({ data: null }))).data;
+    if (r.loc) {
+      const sets = (await call("GET", `/v1/appStoreVersionLocalizations/${r.loc.id}/appScreenshotSets?limit=50`)).data;
+      for (const s of SHOT_SETS) {
+        const set = sets.find((x) => s.types.includes(x.attributes.screenshotDisplayType));
+        r.sets[s.dir] = set ? (await call("GET", `/v1/appScreenshotSets/${set.id}/appScreenshots?limit=10`)).data : [];
+      }
+    }
+  }
+  const pre = (await call("GET", `/v1/preReleaseVersions?filter[app]=${a.id}&filter[version]=${v}&filter[platform]=IOS`)).data[0];
+  if (pre) r.build = (await call("GET", `/v1/builds?filter[preReleaseVersion]=${pre.id}&filter[processingState]=VALID&sort=-uploadedDate&limit=50`)).data.filter((b) => !b.attributes.expired)[0] ?? null;
+  r.infos = (await call("GET", `/v1/apps/${a.id}/appInfos`)).data;
+  for (const i of r.infos) i.en = (await call("GET", `/v1/appInfos/${i.id}/appInfoLocalizations`)).data.find(en) ?? null;
+  return r;
+}
+
+/** Pure: what store-prep would change for version <v>, from the local listing and (when the key is there) the remote state.
+ *  { refuse, blocks, notes, ops }: `refuse` stops everything; `blocks` stop --yes; each op names what it changes. */
+export function prepPlan({ v, local, remote }) {
+  const notes = [], ops = [], blocks = [];
+  const versions = remote?.versions ?? [];
+  const others = versions.filter((x) => x.attributes.versionString !== v && !SETTLED.has(state(x)));
+  for (const o of others) notes.push(`untouched: ${o.attributes.versionString} ${state(o)} (its build, copy, notes and screenshots)`);
+  const sv = remote?.sv ?? null;
+  if (sv && !EDITABLE.has(state(sv))) return { refuse: `${v} is ${state(sv)}: not editable, nothing to prepare`, blocks, notes, ops };
+  if (local.forVersion && local.forVersion !== v) blocks.push(`store/ is written for ${local.forVersion}, not ${v} (listing.json forVersion)`);
+  if (remote && !sv) {
+    ops.push({ kind: "create", what: `create App Store version ${v} (iOS, manual release)` });
+    if (others.length) notes.push(`Apple may refuse a second version while ${others.map((o) => `${o.attributes.versionString} is ${state(o)}`).join(", ")} (a 409): then ${v} waits until that one is released or (the owner's call) rejected; run this again then`);
+  }
+  if (!remote) notes.push("App Store Connect not read (no key config): the plan below is the local side only");
+
+  const want = { copyright: local.copyright, releaseType: "MANUAL", usesIdfa: false };
+  const vd = differs(want, sv?.attributes);
+  if (vd.length) ops.push({ kind: "version", attrs: pick(want, vd), what: `version ${v}: ${vd.map((k) => `${k} = ${JSON.stringify(want[k])}`).join(", ")}` });
+
+  const shipped = remote ? versions.some((x) => LIVE.has(state(x))) : null;
+  const loc = { description: local.description, keywords: local.keywords, promotionalText: local.promotionalText, supportUrl: local.supportUrl, marketingUrl: local.marketingUrl };
+  if (shipped && local.whatsNew) loc.whatsNew = local.whatsNew;
+  else if (local.whatsNew) notes.push(shipped == null ? "What's New: sent only once a version is live" : "What's New: held back; no version is live yet and Apple takes What's New only from the second release (once 1.1.0 is released, run again)");
+  const ld = differs(loc, remote?.loc?.attributes);
+  if (ld.length) ops.push({ kind: "localization", attrs: pick(loc, ld), what: `en-US listing: ${ld.join(", ")}` });
+
+  const rev = { ...(local.contact ?? {}), demoAccountRequired: false, notes: local.reviewNotes };
+  const rd = differs(rev, remote?.review?.attributes);
+  if (rd.length) ops.push({ kind: "review", attrs: pick(rev, rd), what: `App Review: ${[...new Set(rd.map((k) => (k.startsWith("contact") ? "contact" : k)))].join(", ")}` });
+  if (!local.contact?.contactEmail) notes.push("App Review contact: BETA_CONTACT_* not loaded (needed for --yes)");
+
+  if (remote) {
+    const info = remote.infos.find((i) => INFO_EDITABLE.has(infoState(i)));
+    const ref = info ?? remote.infos[0];
+    const wantInfo = { name: local.name, subtitle: local.subtitle, privacyPolicyUrl: local.privacyPolicyUrl };
+    const id = differs(wantInfo, ref?.en?.attributes);
+    const otherEditable = others.some((o) => EDITABLE.has(state(o)));
+    if (!id.length) notes.push("app info (name, subtitle, privacy URL): unchanged");
+    else if (info && !otherEditable) ops.push({ kind: "info", infoId: info.id, locId: info.en?.id ?? null, attrs: pick(wantInfo, id), what: `app info: ${id.join(", ")}` });
+    else notes.push(`app info (${id.join(", ")}) differs but is ${ref ? infoState(ref) : "missing"}: Apple opens it with the new version; run again then`);
+
+    if (!remote.build) notes.push(`no processed ${v} build yet: make testflight first`);
+    else if (remote.attached?.id !== remote.build.id) ops.push({ kind: "build", buildId: remote.build.id, what: `attach build ${remote.build.attributes.version} (the newest processed ${v} build)` });
+    else notes.push(`build ${remote.build.attributes.version} already attached`);
+  }
+
+  for (const l of local.shots ?? []) {
+    blocks.push(...l.errors);
+    if (!l.shots.length) { notes.push(`${l.set.label}: no PNGs in ${l.folder}${l.set.required ? " (required before submitting)" : ""}; left as it is`); continue; }
+    const have = remote?.sets?.[l.set.dir] ?? [];
+    if (have.length === l.shots.length && have.every((r, i) => sameShot(r, l.shots[i]))) notes.push(`${l.set.label}: ${l.shots.length} screenshots already up to date`);
+    else ops.push({ kind: "shots", dir: l.set.dir, what: `${l.set.label}: ${have.length ? `replace ${have.length} with` : "upload"} ${l.shots.length} (${l.shots.map((x) => x.f).join(", ")})` });
+  }
+  return { refuse: null, blocks, notes, ops };
+}
+
+/** Replace one screenshot set on a localization with the local shots (store-shots' loop, for one set). */
+async function putShots(call, put, locId, l) {
+  const s = l.set;
+  const sets = (await call("GET", `/v1/appStoreVersionLocalizations/${locId}/appScreenshotSets?limit=50`)).data;
+  let set = sets.find((x) => s.types.includes(x.attributes.screenshotDisplayType));
+  if (!set) set = (await call("POST", "/v1/appScreenshotSets", { data: { type: "appScreenshotSets", attributes: { screenshotDisplayType: s.types[0] },
+    relationships: { appStoreVersionLocalization: { data: { type: "appStoreVersionLocalizations", id: locId } } } } })).data;
+  const remote = (await call("GET", `/v1/appScreenshotSets/${set.id}/appScreenshots?limit=10`)).data;
+  if (remote.length === l.shots.length && remote.every((r, i) => sameShot(r, l.shots[i]))) return 0;
+  for (const r of remote) await call("DELETE", `/v1/appScreenshots/${r.id}`);
+  const ids = [];
+  for (const x of l.shots) {
+    const shot = (await call("POST", "/v1/appScreenshots", { data: { type: "appScreenshots", attributes: { fileName: x.f, fileSize: x.buf.length },
+      relationships: { appScreenshotSet: { data: { type: "appScreenshotSets", id: set.id } } } } })).data;
+    for (const op of shot.attributes.uploadOperations ?? []) {
+      const r = await put(op.url, { method: op.method, headers: Object.fromEntries(op.requestHeaders.map((h) => [h.name, h.value])), body: x.buf.subarray(op.offset, op.offset + op.length) });
+      if (!r.ok) throw new Error(`upload ${x.f} part @${op.offset} → ${r.status}`);
+    }
+    await call("PATCH", `/v1/appScreenshots/${shot.id}`, { data: { type: "appScreenshots", id: shot.id, attributes: { uploaded: true, sourceFileChecksum: x.md5 } } });
+    ids.push(shot.id);
+  }
+  await call("PATCH", `/v1/appScreenshotSets/${set.id}/relationships/appScreenshots`, { data: ids.map((id) => ({ type: "appScreenshots", id })) });
+  return ids.length;
+}
+
+/** Plan, print, and (only with yes) apply. Returns { plan, remote }. `call` and `put` are injectable for the tests;
+ *  `remote: null` plans offline (no key). */
+export async function storePrep({ call = api, put = fetch, v, local, yes = false, remote: given, log = console.log }) {
+  const remote = given === undefined ? await prepRemote(call, v) : given;
+  const plan = prepPlan({ v, local, remote });
+  log(`store-prep ${v}: ${yes ? "APPLYING" : "DRY RUN (GET requests only; nothing changes)"}`);
+  for (const n of plan.notes) log(`  • ${n}`);
+  if (plan.refuse) { log(`✗ ${plan.refuse}`); return { plan, remote }; }
+  for (const b of plan.blocks) log(`  ✗ ${b}`);
+  log(plan.ops.length ? `${yes ? "Changes" : "Would change"}:` : "Nothing to change.");
+  for (const o of plan.ops) log(`  ${o.kind === "create" ? "+" : "~"} ${o.what}`);
+  log(`Never: ${NEVER}.`);
+  if (!yes) { log("Dry run: nothing was changed. On the owner's go-ahead, --yes makes these changes (it never submits)."); return { plan, remote }; }
+  if (!remote) throw new Error("--yes needs the App Store Connect key (ios/.env.testflight or ASC_ENV)");
+  if (plan.blocks.length) throw new Error(`${plan.blocks.length} problem(s) above: nothing was changed`);
+  if (plan.ops.some((o) => o.kind === "review") && !local.contact?.contactEmail) throw new Error("App Review contact missing (BETA_CONTACT_* in .env.testflight): nothing was changed");
+
+  let svId = remote.sv?.id ?? null;
+  const ops = [...plan.ops];
+  if (ops[0]?.kind === "create") {
+    ops.shift();
+    svId = (await call("POST", "/v1/appStoreVersions", { data: { type: "appStoreVersions", attributes: { platform: "IOS", versionString: v, releaseType: "MANUAL" },
+      relationships: { app: { data: { type: "apps", id: remote.app.id } } } } })).data.id;
+    log(`✓ created App Store version ${v}`);
+  }
+  // The guard every write below passes: the version is <v> and editable. No other version is ever addressed by id.
+  const target = (await call("GET", `/v1/appStoreVersions/${svId}`)).data;
+  if (target.attributes.versionString !== v || !EDITABLE.has(state(target))) throw new Error(`refusing: version ${svId} is ${target.attributes.versionString} ${state(target)}`);
+  const enLoc = async () => (await call("GET", `/v1/appStoreVersions/${svId}/appStoreVersionLocalizations`)).data.find((l) => l.attributes.locale === "en-US");
+  for (const o of ops) {
+    if (o.kind === "version") await call("PATCH", `/v1/appStoreVersions/${svId}`, { data: { type: "appStoreVersions", id: svId, attributes: o.attrs } });
+    else if (o.kind === "localization") {
+      // A new version starts with a copy of the last one's listing, so this is usually a PATCH.
+      const l = await enLoc();
+      if (l) await call("PATCH", `/v1/appStoreVersionLocalizations/${l.id}`, { data: { type: "appStoreVersionLocalizations", id: l.id, attributes: o.attrs } });
+      else await call("POST", "/v1/appStoreVersionLocalizations", { data: { type: "appStoreVersionLocalizations", attributes: { locale: "en-US", ...o.attrs },
+        relationships: { appStoreVersion: { data: { type: "appStoreVersions", id: svId } } } } });
+    } else if (o.kind === "review") {
+      const rd = (await call("GET", `/v1/appStoreVersions/${svId}/appStoreReviewDetail`).catch((e) => (e.status === 404 ? { data: null } : Promise.reject(e)))).data;
+      const attributes = { ...local.contact, demoAccountRequired: false, notes: local.reviewNotes };
+      if (rd) await call("PATCH", `/v1/appStoreReviewDetails/${rd.id}`, { data: { type: "appStoreReviewDetails", id: rd.id, attributes } });
+      else await call("POST", "/v1/appStoreReviewDetails", { data: { type: "appStoreReviewDetails", attributes, relationships: { appStoreVersion: { data: { type: "appStoreVersions", id: svId } } } } });
+    } else if (o.kind === "info") {
+      if (o.locId) await call("PATCH", `/v1/appInfoLocalizations/${o.locId}`, { data: { type: "appInfoLocalizations", id: o.locId, attributes: o.attrs } });
+      else await call("POST", "/v1/appInfoLocalizations", { data: { type: "appInfoLocalizations", attributes: { locale: "en-US", ...o.attrs }, relationships: { appInfo: { data: { type: "appInfos", id: o.infoId } } } } });
+    } else if (o.kind === "build") await call("PATCH", `/v1/appStoreVersions/${svId}/relationships/build`, { data: { type: "builds", id: o.buildId } });
+    else if (o.kind === "shots") {
+      const l = await enLoc();
+      if (!l) throw new Error("no en-US listing on the version for the screenshots");
+      await putShots(call, put, l.id, local.shots.find((x) => x.set.dir === o.dir));
+    }
+    log(`✓ ${o.what}`);
+  }
+  log(`Done: ${v} is prepared and NOT submitted. Check: node scripts/asc.mjs store-check`);
+  return { plan, remote };
+}
+
+async function storePrepCli() {
+  const argv = process.argv.slice(3);
+  const opt = (k) => { const i = argv.indexOf(k); return i >= 0 ? argv[i + 1] : undefined; };
+  const yes = argv.includes("--yes");
+  const v = opt("--version") ?? version();
+  const local = { ...storeListing(), shots: localShots(resolve(opt("--shots") ?? join(ROOT, "build", "store-shots"))), contact: {} };
+  const keyed = Boolean(envFile() || process.env.ASC_KEY_ID);
+  if (keyed) {
+    const e = env();
+    if (e.BETA_CONTACT_EMAIL) local.contact = { contactFirstName: e.BETA_CONTACT_FIRST, contactLastName: e.BETA_CONTACT_LAST, contactEmail: e.BETA_CONTACT_EMAIL, contactPhone: e.BETA_CONTACT_PHONE };
+  }
+  const { plan } = await storePrep({ v, local, yes, remote: keyed ? undefined : null });
+  if (plan.refuse || (yes && plan.blocks.length)) process.exitCode = 1;
+}
+
+// The CLI, only when run as a script (tests import the planner).
+const isMain = Boolean(process.argv[1]) && resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+const [cmd, arg] = isMain ? process.argv.slice(2) : [];
+const run = isMain && { whoami, status, bundle, applinks, signing, crew, call: () => call(arg, process.argv[4], process.argv[5]),
+  "store-lint": storeLint, "store-check": storeCheck, "store-meta": storeMeta, "store-rating": storeRating, "store-shots": () => storeShots(arg), "store-prep": storePrepCli,
   submit, cancel, ship: () => ship(arg), notes: () => console.log(notesFor(arg)) }[cmd];
-if (!run) { console.log("usage: asc.mjs whoami | status | bundle | applinks | signing | ship <build> | notes [version] | store-lint | store-check | store-meta | store-rating | store-shots [dir] | submit --yes | cancel --yes"); process.exit(2); }
-Promise.resolve().then(run).catch((e) => { console.error("✗ " + e.message); process.exit(1); });
+if (isMain && !run) { console.log("usage: asc.mjs whoami | status | bundle | applinks | signing | ship <build> | notes [version] | store-lint | store-check | store-meta [--rename] | store-rating | store-shots [dir] | store-prep [--shots <dir>] [--version <v>] [--yes] | submit --yes | cancel --yes"); process.exit(2); }
+if (run) Promise.resolve().then(run).catch((e) => { console.error("✗ " + e.message); process.exit(1); });

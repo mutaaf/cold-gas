@@ -56,85 +56,93 @@
     "ribbon": false
   },
   "raw": {
-    "iphone": "store/lobby/raw/iphone",
-    "ipad": "store/lobby/raw/ipad",
-    "duo": "store/lobby/raw/duo"
+    "iphone": "store/lobby/raw-1.2.0/iphone",
+    "ipad": "store/lobby/raw-1.2.0/ipad",
+    "duo": "store/lobby/raw-1.2.0/duo"
   },
   "capture": {
     "command": "",
-    "notes": "Real frames from a Debug build (1.1.0): the reference runs flown live and frozen at a tick with their controls up (-play -autopilot -freeze <tick>), Free Drive cruising 3 km out (-freedrive -fd-km 3 -fd-cruise 25), and the results after a whole run (the judges written on the device by Apple's on-device model). 6.9-inch simulator for raw/iphone, 13-inch iPad for raw/ipad. raw/duo is from 1.0.0 (an open Duo's inner screen). A person picks the frames."
+    "notes": "Real frames from a Debug build of main on 2026-11-16 (1.2.0, the current look; #365's visuals leap was not merged), shot with -mute on dedicated simulators, one at a time (ios/store/shots-1.2.0.md): the reference Show on Assist and the scripted carry-5 wreck frozen at a tick (-play -autopilot|-script crash-show-carry5 -freeze <tick>), the results after a whole run, the guided first jump (-firstrun), Free Drive 3 km out (-freedrive -fd-km 3 -fd-cruise 25), a challenge link opened in the app (-open), Advanced's valve deck and the layout editor. The simulator has no Apple Intelligence, so the results' receipt names the edge model: no caption on that frame mentions Apple Intelligence. 6.9-inch for raw-1.2.0/iphone, 13-inch iPad for raw-1.2.0/ipad, the Duo for raw-1.2.0/duo. raw/ keeps 1.1.0's frames."
   },
   "shots": [
     {
       "id": "flight",
-      "raw": "1-flight",
+      "raw": "01-flight",
       "layout": "cover",
       "title": "Clear the row. *Stick it.*",
       "sub": "Ten cold-gas thrusters. One mark to land on."
     },
     {
-      "id": "hang",
-      "raw": "2-hang",
+      "id": "wreck",
+      "raw": "02-wreck",
       "layout": "bleed",
-      "kicker": "One thumb",
-      "title": "Hang upside down. *Let go.*",
-      "sub": "Hold to climb, tap to release, hold to land."
+      "kicker": "The physics",
+      "title": "Or *wreck it.*",
+      "sub": "Miss the mark and the physics decides how it comes down."
     },
     {
-      "id": "panel",
-      "raw": "3-panel",
+      "id": "judges",
+      "raw": "03-judges",
       "layout": "hero",
-      "kicker": "Judged on device",
-      "title": "Three judges. *On your device.*",
-      "sub": "Apple Intelligence writes their words with no network. A fixed scorer sets every number."
+      "kicker": "Three judges",
+      "title": "Every number, *explained.*",
+      "sub": "A fixed scorer sets the score. The judges say why, and what to fly next."
+    },
+    {
+      "id": "firstjump",
+      "raw": "04-firstjump",
+      "layout": "bleed",
+      "kicker": "One thumb",
+      "title": "Your first jump *teaches itself.*",
+      "sub": "One tap to fly. One hint at each beat."
+    },
+    {
+      "id": "drive",
+      "raw": "05-drive",
+      "layout": "bleed",
+      "kicker": "Free Drive",
+      "title": "Then just *drive.*",
+      "sub": "Off the apron into a world built as you go. No timer, no score."
+    },
+    {
+      "id": "challenge",
+      "raw": "06-challenge",
+      "layout": "hero",
+      "kicker": "Challenge links",
+      "title": "Beat *their* score.",
+      "sub": "A friend's link opens the app on their jump."
+    },
+    {
+      "id": "touchdown",
+      "raw": "07-touchdown",
+      "layout": "tilt",
+      "kicker": "Haptics",
+      "title": "Feel *every wheel* land.",
+      "sub": "A synced landing is one thump. A sloppy one is four."
     },
     {
       "id": "valves",
-      "raw": "8-valves",
+      "raw": "08-valves",
       "layout": "hero",
       "kicker": "Advanced",
       "title": "Fly *ten valves* by hand.",
       "sub": "Assist, Pro, Advanced: take the computer away one tier at a time."
     },
     {
-      "id": "drive",
-      "raw": "5-drive",
-      "layout": "bleed",
-      "kicker": "Free Drive",
-      "title": "Then just *drive.*",
-      "sub": "Off the apron into a world that goes on. No timer, no score."
-    },
-    {
-      "id": "touchdown",
-      "raw": "4-touchdown",
-      "layout": "tilt",
-      "kicker": "Haptics",
-      "title": "Feel *every wheel* land.",
-      "sub": "A synced landing is one clean thump. A sloppy one is four."
-    },
-    {
-      "id": "row",
-      "raw": "7-row",
+      "id": "editor",
+      "raw": "09-editor",
       "layout": "hero",
-      "kicker": "The Show",
-      "title": "Over the row, *onto the mark.*",
-      "sub": "The sink rate turns amber. Brake on the jets before it's red."
+      "kicker": "Your layout",
+      "title": "Every control *where your thumbs are.*",
+      "sub": "Drag, resize and fade each one, for each way you hold the screen."
     },
     {
-      "id": "lineup",
-      "raw": "6-lineup",
-      "layout": "tilt",
-      "kicker": "The Lineup",
-      "title": "Roll it *over the line.*",
-      "sub": "Off the kicker, a barrel roll over five parked cars, wheels down."
-    },
-    {
-      "id": "book",
-      "raw": "7-book",
+      "id": "tabletop",
+      "raw": "10-tabletop",
       "layout": "bleed",
       "kicker": "iPhone Duo",
-      "title": "Open it. *Fly it.*",
-      "sub": "Edge to edge when open. In tabletop, the screen on top and the controller below."
+      "title": "A console *in tabletop.*",
+      "sub": "Half open: the scene on the top screen, the controller on the bottom."
     }
   ],
   "feature": {

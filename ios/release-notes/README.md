@@ -48,7 +48,7 @@ An optional lede: one short paragraph.
   DEBUG build `-whatsNew` forces it (shots and review) and records nothing, so the real gate is untouched.
 - **To see it on a simulator or a phone** (DEBUG build): launch with `-whatsNew`, e.g. from `ios/`:
   `make build && xcrun simctl install "ColdGas Pro Max" build/dd/Build/Products/Debug-iphonesimulator/ColdGas.app &&
-  xcrun simctl launch "ColdGas Pro Max" com.mutaafaziz.coldgas -whatsNew`, or in Xcode add `-whatsNew` under the
+  xcrun simctl launch "ColdGas Pro Max" com.mutaafaziz.coldgas -mute -whatsNew`, or in Xcode add `-whatsNew` under the
   scheme's Run > Arguments. A Release build ignores it.
 - `make test` (WhatsNewTests) and `npm test` (tests/unit/ios-release-notes.test.js) fail when the current version's file
   doesn't have this shape.

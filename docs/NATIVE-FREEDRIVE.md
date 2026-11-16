@@ -529,6 +529,21 @@ sky 0.11, bloom 0.10. Main went from 16.66 to 4.60 ms. What changed next (0231):
   it into the film would make every full-size pixel take the compose's ≈ 27 taps instead of one.
 - `-mute` silences the app from launch, for simulator runs on a shared Mac.
 
+After 0269 (the Magic-Formula tyre, the wheel's spin solved with its tyre by a few Newton steps, the props' hulls and
+masses), the simulator service on the operator's Mac was wedged by other work (every `simctl` call hung), so the physics
+tick was timed on its own instead: `driveStep` with the Show's loose things, weaving at 20–25 m/s for 20 s, Release
+(`swift test -c release`), five runs each, back to back on 2026-11-16 (a busy Mac: compare the rows with each other):
+
+| | µs per 240 Hz tick, best / median |
+|---|---|
+| Before (main, 0225's chassis) | 24.95 / 25.77 |
+| After (0269), run 1 | 20.94 / 29.04 |
+| After (0269), run 2 | 22.24 / 26.70 |
+
+The difference is inside the noise (≈ ±3 µs a tick): at two to four ticks a frame, under 0.02 ms of the frame's CPU, well
+inside the +0.3 ms the change was allowed. The Newton solve usually converges in two or three steps; the old linearised
+step's buzzing wheel (a tyre force reversing every tick) is gone.
+
 **On a phone (the owner runs this; an agent never runs it on the owner's phone):**
 
 ```

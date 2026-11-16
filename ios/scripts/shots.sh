@@ -18,7 +18,7 @@ shoot() { # <sim> <name> [args…]
   local id=$1 name=$2; shift 2
   xcrun simctl terminate "$id" $BID 2>/dev/null || true
   local d; d=$(xcrun simctl get_app_container "$id" $BID data 2>/dev/null) && rm -f "$d/Library/Caches/coldgas.ready"
-  t 30 xcrun simctl launch "$id" $BID "$@" >/dev/null
+  t 30 xcrun simctl launch "$id" $BID -mute "$@" >/dev/null
   ready "$id" frame
   t 30 xcrun simctl io "$id" screenshot --display=primary "$OUT/$name.png" >/dev/null 2>&1
 }
