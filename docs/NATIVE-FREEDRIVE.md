@@ -480,6 +480,35 @@ of them together did. The emulated GPU is slower with the new shading spread acr
 GPU 3.62 ms avg, 6.56 ms p95, a locked 120 Hz) the governor drops resolution first and then the quality tier. Run
 `make device-bench-freedrive` to see where it lands.
 
+**The open Duo, 2026-11-16** (#365 at 068a07b, Release, drawable 2853 × 2007): 464 frames in 10 s, interval 21.6 / 41.7 ms,
+GPU 17.85 / 24.81 ms, render scale already down to 0.50. The passes (ms) were sky 0.09, shadow 0.11, **main 16.66**, bloom
+0.10, film 0.88, metalfx 1.21 and present 0.15. The main pass was the world's fragments: value noise, fbm and Worley cells
+evaluated per pixel (≈ 30 noise taps a terrain pixel, two Worley searches a road pixel) and the sky's LUT read three times a
+pixel with its acos and exp. The fix (0231):
+- **Baked detail.** `Render/DetailTexture.swift` bakes one 256² RGBA8 tile of our own noise at launch (fbm, value noise
+  at two scales, Worley cell edges; every lattice wraps). The terrain reads it 4 times a pixel, the road 4 to 5 times, a
+  prop once, the sets' concrete and metal 3 times. Its mips do the distance fade.
+- **The sky per vertex.** The sky's ambient and the aerial perspective (`world_vsky`, Sky.h `sky_aerialTI`) are worked
+  out per vertex and interpolated. Per pixel, the sky is read only for water and the sheen on tar and paint.
+- **Fewer near things.** Grass reaches 30 m in clumps of four at quality 2, and 18 m in clumps of three at 1. The near
+  pool's full-detail trees reach 110 m (was 140).
+- **A quality by drawable size.** Past 4.5 M pixels (the open Duo's 5.7 M) a drive starts at quality 1. The shed takes it
+  from there.
+
+An estimate, not a measurement: the simulator's GPU timings mean nothing, and the Mac's load average was 600–900 all day.
+At render scale 0.75 on the open Duo (3.2 M pixels):
+- main ≈ 3.5–5.5 ms (the old main's cost per pixel plus ≈ 0.5 ns for the detail taps and the interpolants);
+- film ≈ 2.0 ms (0.88 ms at 1.43 M, scaled by pixels);
+- MetalFX ≈ 1.2 ms (it scales with the output, not the render size);
+- bloom ≈ 0.2, shadow 0.1–0.2, sky 0.1, present 0.15 ms.
+
+That's ≈ 7.5–9.5 ms, still over 7 ms at 0.75. At 0.65 it's ≈ 6–7.5 ms. The next levers, in order:
+1. The film pass. It linearises (pow 2.2) and re-encodes sRGB (pow 1/2.4) per pixel, and a `sin` dither. Folding those
+   into AgX's output and the dither into a hash saves its transcendentals. It changes the look slightly everywhere, so it
+   isn't in this change.
+2. MSAA 2× for drawables past 4.5 M pixels (every pipeline is built at 4×; it needs a second set).
+3. Merging bloom's compose into the film pass.
+
 **On a phone (the owner runs this; an agent never runs it on the owner's phone):**
 
 ```
