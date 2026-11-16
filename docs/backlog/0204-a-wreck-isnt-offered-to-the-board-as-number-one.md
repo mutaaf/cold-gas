@@ -28,11 +28,11 @@ On a run whose card says `facts.crashed` (or the verdict Wrecked), the sheet doe
 the client's offer only. If the operator wants the Worker to refuse crashed rows too, that's a `proposal/`.
 
 ## Acceptance criteria
-- [ ] A crashed run (Show Pro, released and never braked, as above; and `crash-probe`'s Show `carry3`) shows no Post
+- [x] A crashed run (Show Pro, released and never braked, as above; and `crash-probe`'s Show `carry3`) shows no Post
       button and no "would be #N" on the sheet, at 390×844 touch and 1280×720.
-- [ ] A landed run still shows Post with its rank (0141 unchanged). Covered by the existing e2e.
-- [ ] "Leave without posting?" (src/post.js) is never asked after a wreck.
-- [ ] Funnel: `post` among `run-landed` unchanged. Wrecked posts go to 0.
+- [x] A landed run still shows Post with its rank (0141 unchanged). Covered by the existing e2e.
+- [x] "Leave without posting?" (src/post.js) is never asked after a wreck.
+- [ ] Funnel: `post` among `run-landed` unchanged. Wrecked posts go to 0. (Measured on production after merge, not in the PR.)
 
 ## Test plan
 An e2e in `tests/e2e/wreck-hud.spec.js` (or a new `wreck-post.spec.js`): fly the crash (full throttle, release, no

@@ -3,7 +3,7 @@ import { test, expect } from '@playwright/test';
 // Ticket 0204: a wreck isn't offered to the board. The critic's sheet read 35.0 "Wrecked" with "Post · would be #1
 // today" beside the initials. Now a run whose card says it crashed shows no Post, asks the board no rank (no dry
 // request), and Home never asks "Leave without posting?". A landed run keeps Post and its rank (0141:
-// network.spec.js 'double-click Post…', first-landing.spec.js). The crash is the Show reference as a jump of the
+// network.spec.js 'double-click Post…', and the landed case here at both sizes). The crash is the Show reference as a jump of the
 // player's own, every input zeroed from the release + 0.125 s (wreck-hud.spec.js's: it ends flipped, Wrecked); the
 // sim is stepped from the test (liveStep), so the canvas isn't drawn.
 test.describe.configure({ mode: 'parallel' });
@@ -43,6 +43,7 @@ for (const [w, h, touch] of [[390, 844, true], [1280, 720, false]]) {
     const txt = JSON.stringify(card);
     expect(card.kind, txt).toBe('jump');
     expect(card.crashed, txt).toBe(true);
+    expect(card.verdict, txt).toBe('Wrecked');
     expect(card.jumped, txt).toBe(true);
     expect(card.total, txt).toBeGreaterThan(0);   // a score the old sheet would have offered the board
     await page.waitForFunction(() => ['results', 'replay'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
@@ -54,9 +55,40 @@ for (const [w, h, touch] of [[390, 844, true], [1280, 720, false]]) {
     expect(drys).toBe(0);
     // Home goes straight to the title: nothing unposted to ask about.
     await page.keyboard.press('KeyH');
+    await expect.poll(() => page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
     await expect(page.locator('[data-leave]')).toBeHidden();
-    expect(await page.evaluate(() => window.__coldgas.S.mode)).toBe('title');
     expect(posts).toBe(0);
+    expect(errors).toEqual([]);
+    await page.close();
+  });
+}
+
+// The other side (0141 unchanged): the same reference flown clean as the player's own jump keeps Post and its rank.
+for (const [w, h, touch] of [[390, 844, true], [1280, 720, false]]) {
+  test(`${w}×${h}: a landed jump's sheet still offers Post with its rank`, async ({ browser }) => {
+    const page = await browser.newPage({ viewport: { width: w, height: h }, ...(touch ? { hasTouch: true, isMobile: true } : {}) });
+    const errors = [];
+    page.on('pageerror', (e) => errors.push(e.message));
+    await page.route(/\/api\/scores$/, (route) => {
+      if (route.request().method() !== 'POST') return route.continue();
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rank: 1, dry: true, card: { total: 90 }, course: 'show', tier: 'assist' }) });
+    });
+    await page.route(/\/api\/judge\/stream$/, (route) => route.abort());
+    await page.goto('/coldgas/?gfx=low&course=show');
+    await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
+    const crashed = await page.evaluate(() => {
+      const g = window.__coldgas, S = g.S;
+      g.stage.render = () => {};
+      g.startRun('jump'); S.autopilot = g.createAutopilot(g.stage.course); g.skipCountdown();
+      for (let i = 0; i < 4000 && S.run.phase !== 'done'; i++) g.liveStep(0.05);
+      S.autopilot = null;
+      g.fastForward();
+      return !!S.card?.facts?.crashed;
+    });
+    expect(crashed).toBe(false);
+    await page.waitForFunction(() => ['results', 'replay'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+    await expect(page.locator('[data-r-post-btn]')).toBeVisible();
+    await expect(page.locator('[data-r-post-rank]')).toContainText('would be #1', { timeout: 10_000 });
     expect(errors).toEqual([]);
     await page.close();
   });
