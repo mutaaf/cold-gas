@@ -5,7 +5,7 @@
 //                                    writes Documents/sound-bench.caf
 //   -sound-capture <name> [-sound-capture-s 20] [-sound-capture-mute]
 //                                    records the master (after the limiter) to Documents/<name>.caf once the engine runs;
-//                                    -mute keeps the Mac's speakers quiet while it records
+//                                    -sound-capture-mute (or the app's -mute) keeps the Mac's speakers quiet while it records
 //   -sound-cpu                       the render callbacks' cost every 5 s (SoundFeed)
 import AVFoundation
 import ColdGasAudio
@@ -14,6 +14,8 @@ import Synchronization
 import simd
 
 enum SoundLab {
+    /// A `-sound-capture` is asked for: under `-mute` the engine still runs for the tap, at a master of 0.
+    static let capturing = Launch.value("-sound-capture") != nil
     static func startIfAsked() {
         let a = Launch.args
         if let i = a.firstIndex(of: "-sound"), i + 1 < a.count {
@@ -23,7 +25,7 @@ enum SoundLab {
             default: break
             }
         }
-        if let name = Launch.value("-sound-capture") { capture(name, seconds: Launch.value("-sound-capture-s").flatMap(Double.init) ?? 20, mute: a.contains("-sound-capture-mute")) }
+        if let name = Launch.value("-sound-capture") { capture(name, seconds: Launch.value("-sound-capture-s").flatMap(Double.init) ?? 20, mute: a.contains("-sound-capture-mute") || Launch.mute) }
     }
 
     // MARK: demo

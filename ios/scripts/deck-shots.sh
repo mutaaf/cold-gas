@@ -22,7 +22,7 @@ shoot() { # <sim> <name> <course> <tier> <tick> [args…]
   local id=$1 name=$2 course=$3 tier=$4 tick=$5; shift 5
   t 20 xcrun simctl terminate "$id" $BID 2>/dev/null || true
   readyfiles "$id" | while read -r f; do rm -f "$f"; done
-  t 30 xcrun simctl launch "$id" $BID -course "$course" -tier "$tier" -play -autopilot -freeze "$tick" "$@" >/dev/null
+  t 30 xcrun simctl launch "$id" $BID -mute -course "$course" -tier "$tier" -play -autopilot -freeze "$tick" "$@" >/dev/null
   ready "$id" frozen
   t 30 xcrun simctl io "$id" screenshot --display=primary "$OUT/$name.png" >/dev/null 2>&1 && echo "$OUT/$name.png"
 }

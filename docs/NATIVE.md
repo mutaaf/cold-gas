@@ -463,6 +463,11 @@ ios/
   - `-pose` and `-window` as in §5, plus `-bench` and `-haptics log`.
   - DEBUG `-freeze <tick>` stops a run at that tick with its controls up (marks `frozen`), and `-orient landscape`
     turns the simulator. `scripts/deck-shots.sh` shoots the flight deck on every shape with them (0210).
+  - `-mute`: **a simulator never makes a sound on the Mac** (the owner's rule, 2026-11-16, 0268). The audio engine is never
+    started (the log says `SOUND muted (-mute): the engine stays off` and never `SOUND engine started`); a `-sound-capture`
+    still records through its tap with the master at 0. Honoured in Debug and in any simulator build, ignored by a device's
+    Release build. Every launcher passes it: `sim.sh`, `shots.sh`, `look-shots.sh`, `hud-shots.sh`, `deck-shots.sh`,
+    `store-capture.py` and the UI tests. A hand-typed `simctl launch` passes it too. Never mute the Mac itself.
 - **`make bench`** flies the reference Show and prints `BENCH frames avg p95 hitches alloc/tick`. Read it with
   `simctl launch --console`; `--console-pty` printed nothing (moon-club).
 - **Definition of done for native work:**
@@ -528,6 +533,12 @@ ios/
   - The listing lives in `ios/store/`: texts, `listing.json`, `age-rating.json`, `app-privacy.md` (set by hand),
     `review-notes.txt`, `review-reply.md` (the 2.1 answers) and a draft privacy policy.
   - `node scripts/asc.mjs status` reports what exists without changing anything.
+  - **The next version beside one in review (0268):** `node scripts/asc.mjs store-prep [--shots <dir>]` is a dry run (GETs
+    only) of what it would do to the MARKETING_VERSION version; `--yes` creates it if absent and uploads the copy, review
+    notes, What's New (`store/whats-new.txt`, once a version is live) and screenshots. It addresses that version by its
+    versionString, checks it before any write, never submits and never touches another version, pricing or the app info
+    while it's locked. `store-meta` renames an editable version only with `--rename`; `store-shots` targets only
+    MARKETING_VERSION. Apple may refuse a second version while another is in review or pending release (a 409).
 
 ## 10 · Phases (each ends at a gate; tickets in docs/backlog)
 

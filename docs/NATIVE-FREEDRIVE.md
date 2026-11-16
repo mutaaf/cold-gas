@@ -382,6 +382,21 @@ On the GPU, the pool adds ≈ 250 k triangles of forged trees within 140 m, and 
 terrain pixel. Neither can be judged on the simulator. If the phone misses, the first lever is `WorldView.nearR` (140 → 90 m
 halves the pool), then the grain's distance.
 
+After 0269 (the Magic-Formula tyre, the wheel's spin solved with its tyre by a few Newton steps, the props' hulls and
+masses), the simulator service on the operator's Mac was wedged by other work (every `simctl` call hung), so the physics
+tick was timed on its own instead: `driveStep` with the Show's loose things, weaving at 20–25 m/s for 20 s, Release
+(`swift test -c release`), five runs each, back to back on 2026-11-16 (a busy Mac: compare the rows with each other):
+
+| | µs per 240 Hz tick, best / median |
+|---|---|
+| Before (main, 0225's chassis) | 24.95 / 25.77 |
+| After (0269), run 1 | 20.94 / 29.04 |
+| After (0269), run 2 | 22.24 / 26.70 |
+
+The difference is inside the noise (≈ ±3 µs a tick): at two to four ticks a frame, under 0.02 ms of the frame's CPU, well
+inside the +0.3 ms the change was allowed. The Newton solve usually converges in two or three steps; the old linearised
+step's buzzing wheel (a tyre force reversing every tick) is gone.
+
 **On a phone (the owner runs this; an agent never runs it on the owner's phone):**
 
 ```

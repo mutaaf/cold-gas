@@ -3,6 +3,7 @@
 import SwiftUI
 import ColdGasClient
 import ColdGasLayout
+import ColdGasPhysics
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -16,6 +17,7 @@ struct SettingsView: View {
     @State private var judgeOnDevice = SaveStore.shared.settings.judgeOnDeviceOn
     @State private var judgeStatus = OnDeviceJudges.status
     @State private var usage = SaveStore.shared.settings.usageOn
+    @State private var stability = FreeDrive.stability
     private var judgeFooter: String {
         let scores = " Scores are the game\u{2019}s own; the model only writes the words."
         if judgeStatus != .available { return "\(judgeStatus.line) The free edge model writes them, over the network.\(scores)" }
@@ -62,6 +64,18 @@ struct SettingsView: View {
                     Text("One thumb flies Assist on the Show and the Wall. Classic flies everything.")
                 }
                 ControlsSection(close: { dismiss() })
+                // 0269: Free Drive and Roam's stability control.
+                Section {
+                    Picker("Stability control", selection: $stability) {
+                        Text("On").tag(DriveModel.ESC.on)
+                        Text("Sport").tag(DriveModel.ESC.sport)
+                        Text("Off").tag(DriveModel.ESC.off)
+                    }
+                    .onChange(of: stability) { _, v in FreeDrive.stability = v }
+                    .accessibilityIdentifier("stability")
+                } header: { Text("Driving") } footer: {
+                    Text("Free Drive and Roam. On catches a slide early; Sport lets the car move before it steps in; Off leaves the car to you. On touch the wheels lean into a slide a little, to help you catch it.")
+                }
                 // 0219: who writes the judges' words on this device. The scores are always the game's own.
                 Section {
                     Toggle("Judge on this device", isOn: $judgeOnDevice)

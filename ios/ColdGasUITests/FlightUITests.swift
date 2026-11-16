@@ -7,7 +7,7 @@ final class FlightUITests: XCTestCase {
 
     private func launch(_ args: [String] = []) -> XCUIApplication {
         let a = XCUIApplication()
-        a.launchArguments = ["-uitest"] + args   // -uitest: no What's new modal over the title (WhatsNewGate)
+        a.launchArguments = ["-mute", "-uitest"] + args   // -uitest: no What's new modal over the title (WhatsNewGate)
         a.launch()
         return a
     }

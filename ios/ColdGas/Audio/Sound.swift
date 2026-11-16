@@ -109,6 +109,7 @@ final class Sound {
         #if os(iOS)
         if !offline { otherAudio = AVAudioSession.sharedInstance().secondaryAudioShouldBeSilencedHint; pushGains() }
         #endif
+        if muted && !offline { engine.mainMixerNode.outputVolume = 0; print("SOUND muted (-mute): the engine stays off") }
         if let r = offlineRate {
             let fmt = AVAudioFormat(standardFormatWithSampleRate: r, channels: 2)!
             try? engine.enableManualRenderingMode(.offline, format: fmt, maximumFrameCount: 4096)
@@ -442,7 +443,13 @@ final class Sound {
         return r > 0 ? r : 48000
     }
 
-    private var wantsRunning: Bool { isEnabled && phase != .quiet && foreground && !interrupted }
+    /// `-mute` (Launch.mute): a simulator stays silent. The engine never starts, except for `-sound-capture`, which needs it
+    /// rendering for its tap; then the master is held at 0 so nothing reaches the speakers.
+    private let muted = Launch.mute
+    private var wantsRunning: Bool {
+        if muted && !SoundLab.capturing { return false }
+        return isEnabled && phase != .quiet && foreground && !interrupted
+    }
 
     private func applyRunning() {
         if offline { return }
@@ -451,8 +458,9 @@ final class Sound {
             #if os(iOS)
             try? AVAudioSession.sharedInstance().setActive(true)
             #endif
+            if muted { engine.mainMixerNode.outputVolume = 0 }
             engine.prepare()
-            do { try engine.start(); if log { print("SOUND engine started") } } catch { print("SOUND engine failed: \(error)") }
+            do { try engine.start(); if log || muted { print("SOUND engine started\(muted ? " (muted, for a capture)" : "")") } } catch { print("SOUND engine failed: \(error)") }
         } else if engine.isRunning {
             engine.pause()
             if log { print("SOUND engine paused") }
