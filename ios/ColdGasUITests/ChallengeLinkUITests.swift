@@ -10,7 +10,7 @@ final class ChallengeLinkUITests: XCTestCase {
     }
     private func launch(_ url: String, _ more: [String] = []) -> XCUIApplication {
         let a = XCUIApplication()
-        a.launchArguments = ["-uitest", "-open", url] + more
+        a.launchArguments = ["-mute", "-uitest", "-open", url] + more
         a.launch()
         return a
     }

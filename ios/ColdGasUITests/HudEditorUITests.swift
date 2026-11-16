@@ -8,7 +8,7 @@ final class HudEditorUITests: XCTestCase {
 
     private func launch(_ args: [String]) -> XCUIApplication {
         let a = XCUIApplication()
-        a.launchArguments = ["-uitest"] + args
+        a.launchArguments = ["-mute", "-uitest"] + args
         a.launch()
         return a
     }
