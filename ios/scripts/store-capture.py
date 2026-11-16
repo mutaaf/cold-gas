@@ -10,7 +10,7 @@ d = os.path.join(out, name); os.makedirs(d, exist_ok=True)
 subprocess.run(['xcrun', 'simctl', 'terminate', udid, BID], capture_output=True)
 subprocess.run(['xcrun', 'simctl', 'status_bar', udid, 'override', '--time', '9:41', '--batteryState', 'charged', '--batteryLevel', '100'], capture_output=True)
 lp = os.path.join(out, name + '.log'); log = open(lp, 'w')
-p = subprocess.Popen(['xcrun', 'simctl', 'launch', '--console-pty', udid, BID, '-cam-log', '-timescale', ts] + args, stdout=log, stderr=log)
+p = subprocess.Popen(['xcrun', 'simctl', 'launch', '--console-pty', udid, BID, '-mute', '-cam-log', '-timescale', ts] + args, stdout=log, stderr=log)
 t0, i, after = time.time(), 0, 0
 index = open(os.path.join(out, name + '.txt'), 'w')
 AFTER = int(os.environ.get('AFTER', '6'))

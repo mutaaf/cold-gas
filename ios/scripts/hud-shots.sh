@@ -20,7 +20,7 @@ shoot() { # <sim> <name> <token> [launch args…]
   [ -z "${ONLY:-}" ] || [[ " $ONLY " == *" $name "* ]] || return 0
   t 20 xcrun simctl terminate "$id" $BID 2>/dev/null || true
   readyfiles "$id" | while read -r f; do rm -f "$f"; done
-  t 30 xcrun simctl launch "$id" $BID -uitest "$@" >/dev/null
+  t 30 xcrun simctl launch "$id" $BID -mute -uitest "$@" >/dev/null
   ready "$id" "$token" && sleep "${SETTLE:-2}"
   t 30 xcrun simctl io "$id" screenshot --display=primary "$OUT/$name.png" >/dev/null 2>&1 && echo "$OUT/$name.png"
 }
