@@ -8,6 +8,8 @@
 //   nozzles  a bright core in each open throat, rime building on the lip with use
 //   damage   crash.js's hooks: torn-off parts hidden, lamps flickering or dead, hazards, the crazed canopy
 import simd
+import UIKit
+import MediaAccessibility
 import ColdGasCore
 import ColdGasPhysics
 
@@ -16,11 +18,17 @@ func rotY(_ a: Float) -> simd_float4x4 { let c = cos(a), s = sin(a); return simd
 func rotZ(_ a: Float) -> simd_float4x4 { let c = cos(a), s = sin(a); return simd_float4x4(columns: (SIMD4(c, s, 0, 0), SIMD4(-s, c, 0, 0), SIMD4(0, 0, 1, 0), SIMD4(0, 0, 0, 1))) }
 func scaleM(_ x: Float, _ y: Float, _ z: Float) -> simd_float4x4 { simd_float4x4(diagonal: SIMD4(x, y, z, 1)) }
 
+/// Reduce Motion or Dim Flashing Lights (the Accessibility settings): no flare and no flash, anywhere (0269).
+enum Flashing {
+    static var reduced: Bool { UIAccessibility.isReduceMotionEnabled || MADimFlashingLightsEnabled() }
+}
+
 final class CarState {
     enum Group: Int, CaseIterable { case wing, skirts, vanes, barge }        // roadster.js st.broken
     enum Source { case wing, vanes, barge, sideSkirts, endSkirts }           // crash.js's `src`: what a piece leaves from
 
     private var last = -1.0, wakeT0 = 0.0, has = false
+    private var flareOK = !Flashing.reduced
     private var pos = SIMD3<Float>(), prev = SIMD3<Float>()
     private var vf: Float = 0, acc: Float = 0, decel: Float = 0, speed: Float = 0, grounded = true, brakeHold: Float = 0
     private var wingExt: Float = 0, wingExtT = -1.0
@@ -59,6 +67,7 @@ final class CarState {
         pos = carPos + q.act(SIMD3(0, -Float(SPEC.comHeight), 0))
         fan = min(1, max(0, fanLevel))
         if !has || simd_distance(pos, prev) > 3 {
+            flareOK = !Flashing.reduced
             wakeT0 = time; vf = 0; acc = 0; brakeHold = 0
             prev = pos; has = true
         }
@@ -90,7 +99,8 @@ final class CarState {
         // Lights.
         let t = wake
         sweep = smooth(0.15, 0.85, t); lampsOn = smooth(0.85, 1.15, t)
-        let flare = 1 + 0.7 * max(0, 1 - abs(t - 1.25) / 0.25)
+        // The headlamps' wake-up blip (roadster.js), once per placement; none with Reduce Motion or Dim Flashing Lights (0269).
+        let flare = flareOK ? 1 + 0.7 * max(0, 1 - abs(t - 1.25) / 0.25) : 1
         // After a crash: hazards blink at 1.5 Hz (amber repeaters, and the red bar, as rear signals do).
         let blink: Int = hazard ? (time * 1.5).truncatingRemainder(dividingBy: 1) < 0.5 ? 1 : 0 : -1
         let tailK = dmgTail * (blink < 0 ? 1 : blink == 1 ? 1.5 : 0.25)
