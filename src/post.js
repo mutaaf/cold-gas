@@ -13,6 +13,15 @@
 import { postScore, postMessage, dryRank, rankLabel } from './panel.js';
 import { obs } from './obs/index.js';
 
+// Whether the sheet on screen offers Post (and asks its rank): the player's own decided board jump, not the reference,
+// a drill or an autopilot. A run that ends in a crash (0204: the card's `facts.crashed`, which every Wrecked verdict also
+// sets) is a lesson, not a placing: no Post, no "would be #N", no "Leave without posting?". The Worker is frozen and
+// would still take the row; this is the client's offer only.
+export function postEligible({ mode, runKind, drill, autopilot, card }) {
+  return (mode === 'results' || mode === 'replay') && runKind === 'jump' && !drill && !autopilot
+    && !!card?.facts?.jumped && !card.facts.crashed && card.verdict !== 'Wrecked' && card.total > 0;
+}
+
 const KEY = 'coldgas_initials';
 const clean = (v) => String(v || '').toUpperCase().replace(/[^A-Z]/g, '').slice(0, 3);
 function stored() { try { return clean(localStorage.getItem(KEY)); } catch { return ''; } }
