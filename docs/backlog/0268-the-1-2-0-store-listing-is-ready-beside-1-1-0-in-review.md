@@ -30,13 +30,17 @@ Runs on: the operator's Mac (the screenshots; the copy and tooling are plain fil
 - Closes two hazards: `store-meta` no longer renames whatever version is editable without `--rename`, and `store-shots` no
   longer creates a version or uploads to one that isn't MARKETING_VERSION.
 - A shot plan (`ios/store/shots-1.2.0.md`) for the 6.9" iPhone, 13" iPad and Duo sets.
+- **Simulators are silent (the owner's rule, 2026-11-16).** A Debug/simulator-only `-mute` launch flag: the audio engine never
+  starts (the log says `SOUND muted (-mute): the engine stays off`); every capture script and UI test passes it.
 
 ## Acceptance criteria
 - [x] `asc.mjs store-lint` passes with the 1.2.0 copy; every claim checked against the code on main.
 - [x] Unit tests: a dry run makes no writes; `--yes` writes only to 1.2.0, never to 1.1.0, never submits; the copy fits
       Apple's limits and keeps the correction.
 - [x] `store-prep` dry run against App Store Connect: plans 1.2.0 beside 1.1.0 WAITING_FOR_REVIEW, changes nothing.
-- [ ] Screenshots captured on simulators (one at a time), reviewed and committed; uploaded only on the owner's word.
+- [x] `-mute` proved on a simulator: one `SOUND muted` line, no `SOUND engine started`, a whole run to the results.
+- [x] Screenshots captured on simulators (one at a time, `-mute`), reviewed and committed.
+- [ ] Uploaded to the 1.2.0 version, only on the owner's word.
 
 ## Test plan
 `tests/unit/asc-store-prep.test.js` (a fake App Store Connect: 1.1.0 in review, no 1.2.0); `node scripts/asc.mjs store-lint`;

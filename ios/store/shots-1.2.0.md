@@ -83,3 +83,30 @@ the air, the receipt readable), nothing clipped by a notch, the island or the cr
 true for this build. Then commit the raw frames under `store/lobby/raw/` and the new shot list in `store/lobby.json`, frame
 them with Lobby into `ios/build/store-shots/{iphone-69,ipad-13,iphone-duo}/`, and run
 `node scripts/asc.mjs store-prep --shots build/store-shots` (dry run) to see the upload it would make.
+
+## As shot (2026-11-16, main, `-mute`)
+
+Raw frames: `store/lobby/raw-1.2.0/{iphone,ipad,duo}` (JPEG, for Lobby; `store/lobby.json` lists the shots and captions). The
+upload set, full-size PNGs in this order, goes in the gitignored `ios/build/store-shots/` and is made again from the same
+launches. Each set was shot on its own fresh simulator (iPhone 18 Pro Max, iPad Pro 13" M5, iPhone Duo), deleted afterwards.
+
+- **6.9" iPhone (9):** flight (Show, Assist, `-freeze 2700`), wreck (`crash-show-carry5`, `-freeze 3550`), judges, first
+  jump (`-firstrun -freeze 1300`: "Hold the pad to climb"), Free Drive (3.8 km out), challenge, touchdown (`-freeze 3400`),
+  valves (Advanced, `-freeze 2700`), layout editor.
+- **13" iPad (8):** the same, without the editor.
+- **iPhone Duo (6):** tabletop (scene on top, console below) first, then the closed screen's wreck, judges, first jump, Free
+  Drive and flight.
+
+What differs from the plan, and why:
+- **Frame 3 shows the edge model, not Apple Intelligence.** The simulator on this Mac has no Apple Intelligence, so the receipt
+  reads "Words by the edge model (@cf/google/gemma-…)". Its caption is "Every number, *explained.*", with no claim about the
+  device. A frame with "Judged on device" needs a Mac whose simulator has Apple Intelligence, or the owner's go-ahead for a
+  device capture.
+- **On Assist the autopilot doesn't fire the lift jets over the row,** so frame 1 shows the car in the air over the row
+  without plumes, and its caption says nothing about the jets being lit.
+- **The scripted wreck is mild:** the car comes down on the end of the row and tumbles off it; there's little debris in
+  frame. A bigger recorded crash would make a stronger second frame.
+- **No Duo frame is open (edge to edge).** `-window 951x669 -pose flat` letterboxes the layout inside the outer screen;
+  the inner display needs the Duo unfolded in Device Hub, which can't be scripted. 1.0's open frame (`raw/duo/7-book`) is
+  the only one so far.
+- Roam's frame was dropped: the world was still loading ("Raising the land") at the capture.
