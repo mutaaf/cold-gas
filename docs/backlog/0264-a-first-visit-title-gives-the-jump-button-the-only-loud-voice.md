@@ -1,7 +1,7 @@
 ---
 id: 0264
 title: A first-ever visit's title gives Jump the only loud voice, not the iPhone chip or the daily card
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: engagement
