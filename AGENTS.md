@@ -535,6 +535,13 @@ node scripts/board-probe.mjs [url]             flies the reference Show in Node 
                    (default https://mutaafaziz.com/coldgas/): exit 1 unless 200 with a card matching the local one. Nothing
                    is stored (it sends no initials, so a Worker from before `dry` answers 400 instead of storing it).
                    Never post a non-dry entry to production from a script
+node scripts/prod-hosts.mjs [url] [--phone|--desktop] [--title=60] [--json=log.jsonl] | --log=log.jsonl   every request a
+                   production page makes (0262): a first visit at 1440×900 and 390×844 touch, 60 s on the title (past the ad
+                   slot's dwell), then a reference Jump to its sheet; one line per request (t, host, frame, mode). Exit 1 on a
+                   host outside §3.3 (own origin; Google's ad hosts only from Marquee's /ads/ frame or loader) or any third
+                   party in countdown/live (the /ads/ frame's unload at the Jump excepted); exit 2 if it missed the run or the title never placed the slot frame. Google's ad
+                   requests are recorded then aborted (no real ad served to a probe; --let-ads loads them, sparingly). Not a CI
+                   gate (CI never loads the ad loader): the Critic and the Keeper run it against production
 node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title wired, first 3D frame, long tasks, bytes
 node scripts/roads/build.mjs [road]             rebuild Free Drive roads from OSM + terrain (network; cached)
 node scripts/perf-drive.mjs <url> [phone|desktop] [roads] [secs]   Free Drive frame times (phone = 4× CPU throttle)

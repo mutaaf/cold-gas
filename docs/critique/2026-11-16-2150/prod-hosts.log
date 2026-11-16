@@ -1,0 +1,127 @@
+desktop: ready at 17.7 s; on the title for 60 s
+
+== desktop: 58 requests
+   0.03s  mutaafaziz.com                   blank                                        -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.78s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.78s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.78s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.78s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   1.24s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+   1.24s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+   1.25s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+   1.94s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  16.88s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  16.89s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  16.89s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  17.72s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  17.72s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  17.72s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  19.24s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  19.24s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  19.25s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  21.74s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  21.75s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  21.75s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  21.76s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  21.76s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  21.76s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  21.76s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  21.76s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  24.09s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  27.39s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  29.46s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  38.43s  mutaafaziz.com                   (new frame)                                  title     ok
+  39.56s  static.cloudflareinsights.com    mutaafaziz.com/ads/v1/frame.html             title     FAIL host static.cloudflareinsights.com is not allowed (§3.3)
+  39.57s  mutaafaziz.com                   mutaafaziz.com/ads/v1/frame.html             title     ok
+  41.86s  mutaafaziz.com                   mutaafaziz.com/ads/v1/frame.html             title     ok
+  41.86s  mutaafaziz.com                   blank                                        title     ok
+  43.04s  mutaafaziz.com                   mutaafaziz.com/ads/v1/frame.html             title     ok
+  43.05s  mutaafaziz.com                   blank                                        title     ok
+  45.35s  pagead2.googlesyndication.com    mutaafaziz.com/ads/v1/frame.html             title     ok
+  45.46s  mutaafaziz.com                   blank                                        title     ok
+  78.31s  mutaafaziz.com                   mutaafaziz.com/ads/v1/frame.html             countdown ok
+  81.71s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      countdown ok
+ 125.20s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      results   ok
+ 125.21s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      results   ok
+== desktop: FAIL 1: host static.cloudflareinsights.com is not allowed (§3.3)
+   desktop modes: 1.23 title → 78.28 countdown → 85.72 live → 125.11 results (the run was finished in one step after 45 s live: later live requests are not covered)
+phone: ready at 16.8 s; on the title for 60 s
+
+== phone: 58 requests
+   0.01s  mutaafaziz.com                   blank                                        -         ok
+   0.78s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   0.79s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      -         ok
+   1.17s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+   1.17s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+   1.17s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+   1.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  16.85s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  16.85s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  16.86s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  17.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  17.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  17.77s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  19.47s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  19.47s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  19.47s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  22.23s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  22.23s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  22.23s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  22.24s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  22.24s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  22.24s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  22.24s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  22.24s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  24.55s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  27.48s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  31.00s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      title     ok
+  40.46s  mutaafaziz.com                   (new frame)                                  title     ok
+  41.92s  static.cloudflareinsights.com    mutaafaziz.com/ads/v1/frame.html             title     FAIL host static.cloudflareinsights.com is not allowed (§3.3)
+  41.92s  mutaafaziz.com                   mutaafaziz.com/ads/v1/frame.html             title     ok
+  44.72s  mutaafaziz.com                   mutaafaziz.com/ads/v1/frame.html             title     ok
+  44.73s  mutaafaziz.com                   blank                                        title     ok
+  46.21s  mutaafaziz.com                   mutaafaziz.com/ads/v1/frame.html             title     ok
+  46.21s  mutaafaziz.com                   blank                                        title     ok
+  49.15s  pagead2.googlesyndication.com    mutaafaziz.com/ads/v1/frame.html             title     ok
+  49.24s  mutaafaziz.com                   blank                                        title     ok
+  77.77s  mutaafaziz.com                   mutaafaziz.com/ads/v1/frame.html             countdown ok
+  80.74s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      countdown ok
+ 125.13s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      results   ok
+ 125.13s  mutaafaziz.com                   mutaafaziz.com/coldgas/                      results   ok
+== phone: FAIL 1: host static.cloudflareinsights.com is not allowed (§3.3)
+   phone modes: 1.16 title → 77.72 countdown → 84.14 live → 125.09 results (the run was finished in one step after 45 s live: later live requests are not covered)
+Google ad requests were recorded, then aborted (--let-ads loads them).
