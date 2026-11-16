@@ -1,7 +1,7 @@
 ---
 id: 0262
 title: The title's ad frame carries no Cloudflare analytics beacon, and a production probe catches the next one
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: platform
@@ -68,16 +68,21 @@ removed, or it will flag this unload on every run. After the beacon fix there is
 3. Don't change `src/ads.js`'s placement or the ads themselves (the owner's decision, 2026-10-30, and 0122).
 
 ## Acceptance criteria
-- [ ] `node scripts/prod-hosts.mjs https://mutaafaziz.com/coldgas/` runs and prints one line per request
+- [x] `node scripts/prod-hosts.mjs https://mutaafaziz.com/coldgas/` runs and prints one line per request
       (t, host, frame, mode). It exits 1 today and names `static.cloudflareinsights.com` from
       `/ads/v1/frame.html` (paste the output in the PR).
-- [ ] It exits 0 on a page whose only third parties are Google's ad hosts from the `/ads/` frame (shown on today's
+- [x] It exits 0 on a page whose only third parties are Google's ad hosts from the `/ads/` frame (shown on today's
       phone title, or on a recorded fixture of today's log with the beacon line removed).
 - [ ] After the operator or Marquee change: the same probe exits 0 on production, and
       `curl -sSI -A 'Mozilla/5.0 Chrome/130' 'https://mutaafaziz.com/ads/v1/frame.html?app=coldgas&slot=title'` shows
       `no-transform`. The Critic re-checks this live.
-- [ ] No request to a host other than `mutaafaziz.com` while `S.mode` is `countdown` or `live` (already true today:
+- [x] No request to a host other than `mutaafaziz.com` while `S.mode` is `countdown` or `live` (already true today:
       0 of 0 in the log above; the probe keeps it so).
+
+**Builder, 2026-11-16:** the probe shipped (What 2). On production `cdde184` it exits 1 on both screens, naming
+`static.cloudflareinsights.com` from `mutaafaziz.com/ads/v1/frame.html` (desktop 72.5 s, phone 36.6 s, both on the
+title); the same log with that line removed exits 0 (`--log=`); 0 foreign requests in countdown or live. The third box
+waits on What 1 (the operator or Marquee): the frame still answers `cache-control: public, max-age=60`.
 
 ## Test plan
 A unit test for the probe's verdict function: an allowed log passes; logs fail with the beacon in the frame, with
