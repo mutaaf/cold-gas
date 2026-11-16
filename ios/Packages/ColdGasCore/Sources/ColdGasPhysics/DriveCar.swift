@@ -5,15 +5,20 @@
 // computer) and replaces what's under it:
 //   suspension  per-corner springs soft enough to see (≈1.5 Hz ride), asymmetric dampers, anti-roll bars, bump stops:
 //               the body rolls, pitches and dives on its own wheels, and each wheel's travel is drawn.
-//   tyres       one combined-slip curve (a Magic-Formula shape over the slip vector normalised by its peaks), so braking
-//               or driving while cornering takes grip from the cornering (the friction circle); load sensitivity (a
-//               tyre's grip per newton falls as it's pressed harder, and its cornering stiffness grows more slowly than
-//               its load); relaxation length; looser surfaces peak later and flatter.
+//   tyres       a simplified Magic Formula per wheel (0269): its own curve across and along (sin(C·atan(Bs − E(Bs −
+//               atan Bs))), each peaking at its slip, the lateral one holding ≈ 0.85 of its peak far past it as a real
+//               tyre does, the longitudinal one falling to ≈ 0.75 locked or spinning), combined over the slip vector
+//               normalised by the peaks (the friction ellipse: braking or driving while cornering takes grip from the
+//               cornering); load sensitivity (a tyre's grip per newton falls as it's pressed harder, and its peak slip
+//               grows with load); relaxation length; looser surfaces peak later and flatter.
 //   motors      the two rear motors, each on its own wheel: torque vectoring toward the yaw rate the steering asks for,
 //               per-wheel traction control (or, off, a coupling that acts as a limited-slip differential), lift-off regen.
 //   brakes      60/40, ABS cycling each wheel round its peak slip, and each disc's temperature (heat in from its torque ×
 //               speed, out to the air faster at speed): the renderer makes a hot disc glow.
 //   aero        drag as the scored car; downforce at each axle (so it trims the car at speed), not through the centre.
+//   yaw         the car's own yaw inertia (DriveSpec.inertiaYaw) and no damping but the tyres' and the air's (0269).
+//   assists     stability control on, sport or off (DriveModel.esc); a light countersteer on touch (counterAssist).
+// The tuning is DriveSpec, all in one place.
 // Every number below is an ESTIMATE for a low two-seat EV of the car's size and mass (SPEC: 2.45 t loaded, 2.83 m
 // wheelbase, 0.40 m centre of mass), with what it was taken from. Foundation's sin/atan are fine here: nothing is scored.
 #if canImport(CRapier)
@@ -34,10 +39,31 @@ public enum DriveSpec {
     public static let bumpTravel = 0.065, bumpK = 600_000.0
     /// The tyres: peak friction longitudinal and lateral at the nominal load (ESTIMATE: a performance summer tyre on dry
     /// asphalt, 1.2–1.45), load sensitivity (μ falls ≈ 12 % per nominal load added), the slips where each peaks (κ 0.11;
-    /// α 6° front, 5.2° rear: the rears are wider), the curve's shape (C 1.65 paved; 1.3 loose, a flatter, later peak).
+    /// α 6.3° front, 6° rear at the nominal load, growing with it: 5–8° is a performance radial's, measured on rigs).
     public static let muX = 1.30, muY = 1.38, loadSens = 0.12
-    public static let kappaPeak = 0.11, alphaPeak: [Double] = [0.105, 0.105, 0.09, 0.09]
-    public static let shapePaved = 1.65, shapeLoose = 1.3
+    public static let kappaPeak = 0.11, alphaPeak: [Double] = [0.11, 0.11, 0.105, 0.105]
+    /// The Magic Formula's shapes (0269), each scaled so it peaks at its slip (B solved from C and E). C sets what's left
+    /// far past the peak, sin(C·π/2), and E how slowly it falls to it. ESTIMATE, from published Pacejka fits of road
+    /// tyres (C ≈ 1.3–1.4 lateral, 1.5–1.65 longitudinal; E 0–0.5): across, ≈ 0.95 of the peak at twice its slip angle and
+    /// ≈ 0.85 far past it (a sliding tyre keeps most of its grip: what lets a car be held in a drift); along, ≈ 0.75 locked
+    /// or spinning (a locked wheel stops in ≈ 1.3× the distance of ABS). Loose ground: a flatter, later peak.
+    public static let lat = MagicFormula(C: 1.35, E: 0.20), lon = MagicFormula(C: 1.50, E: 0.20)
+    public static let latLoose = MagicFormula(C: 1.15, E: 0.50), lonLoose = MagicFormula(C: 1.30, E: 0.50)
+    /// The car's yaw inertia in a drive (kg·m², 0269). ESTIMATE: SPEC's 3,080 (the scored car's, held to the web's bits)
+    /// is a dynamic index Iz / (m·a·b) of 0.65 at 2.45 t; mid- and rear-engined sports cars measure 0.8–0.9, road cars
+    /// up to 1.1 (a yaw radius of gyration ≈ 0.29 of the length). 3,800 is 0.80 (k = 1.25 m on a 4.33 m car).
+    public static let inertiaYaw = 3800.0
+    /// Stability control (the road car's, as the scored car's Assist): the slip angle it allows before it brakes a wheel,
+    /// and the yaw rate past the grip's, on and in sport (ESTIMATE: road ESC intervenes at ≈ 4–5° of body slip; sport
+    /// modes allow ≈ 2–3× that).
+    public static let escSlip = SPEC.escSlip, escSlipSport = SPEC.escSlip * 2.2, escYawSport = 1.25
+    /// The countersteer assist on touch (0269): the share of the rear's slide angle the rack adds toward it, so a thumb on
+    /// a slider can hold a slide it couldn't catch in time (a hand on a wheel does this by feel). 0 with keys or a pad.
+    public static let counterAssistTouch = 0.35
+    /// How far the rack's speed-sensitive lock reaches past the grip's, by stability setting (on, sport, off): on, to the
+    /// grip (the scored car's); off, 1.8× it (a driver can turn a real car's wheel past what the tyres can give, and needs
+    /// to for a flick or a big countersteer).
+    public static let rackReach: [Double] = [1.0, 1.3, 1.8]
     /// Brake balance (front share 0.6, ESTIMATE: a mid/rear-heavy EV's) over SPEC.brakeTorque's per-wheel figure.
     public static let brakeFront = 1.2, brakeRear = 0.8
     /// ABS: the slip it holds each wheel under, and how fast it releases and reapplies (≈ 12 Hz cycling).
@@ -68,11 +94,43 @@ public enum DriveSpec {
     public static func freeLength(_ i: Int) -> Double { MOUNT_TO_CENTRE + staticLoad(i) / k[i] }
 }
 
+/// A Magic-Formula curve over a normalised slip s (1 at the peak): sin(C·atan(B·s − E·(B·s − atan(B·s)))), B solved so
+/// it peaks at s = 1. Pacejka's tyre model with D = 1 (the peak force is the caller's) and the slip pre-scaled by its peak.
+public struct MagicFormula: Sendable {
+    public let C: Double, E: Double, B: Double
+    public init(C: Double, E: Double) {
+        self.C = C; self.E = E
+        // The peak is where C·atan(·) = π/2: B − E·(B − atan B) = tan(π/(2C)). Newton from B = that target.
+        let want = tan(Double.pi / (2 * C))
+        var b = want
+        for _ in 0..<30 { let g = b - E * (b - atan(b)) - want, dg = 1 - E * (1 - 1 / (1 + b * b)); b -= g / dg }
+        B = b
+    }
+    @inline(__always) public func callAsFunction(_ s: Double) -> Double { let x = B * s; return sin(C * atan(x - E * (x - atan(x)))) }
+    /// The slope at s (per unit s).
+    @inline(__always) public func slope(_ s: Double) -> Double {
+        let x = B * s, u = x - E * (x - atan(x)), du = B * (1 - E * (1 - 1 / (1 + x * x)))
+        return C * cos(C * atan(u)) / (1 + u * u) * du
+    }
+    /// What's left far past the peak (s → ∞).
+    public var tail: Double { sin(C * Double.pi / 2) }
+}
+
 /// The drive's chassis state, beside the Vehicle (one per drive).
 public final class DriveModel {
     /// Traction control: on (Standard), sport (a slide allowed), off (the motors' coupling only).
     public enum TC: Int, Sendable { case on, sport, off }
     public var tc: TC = .on
+    /// Stability control (0269): on (a road car's: it brakes a wheel against a slide past ≈ 4°), sport (a slide allowed,
+    /// caught past ≈ 9°), off. Torque vectoring works with it on only (it chases the steering's yaw rate, as a drift
+    /// mode wouldn't).
+    public enum ESC: Int, Sendable, CaseIterable { case on, sport, off }
+    public var esc: ESC = .on
+    /// The countersteer assist (share of the rear's slide angle; DriveSpec.counterAssistTouch on touch, else 0).
+    public var counterAssist = 0.0
+    /// The setting a player picks (Settings → Stability): stability control, traction control and vectoring together.
+    public func stability(_ e: ESC) { esc = e; tc = e == .on ? .on : e == .sport ? .sport : .off; vectoring = e == .on }
+    fileprivate var massSet = false
     public var abs = true
     /// Torque vectoring on.
     public var vectoring = true
@@ -106,8 +164,6 @@ public final class DriveModel {
 }
 
 @inline(__always) private func sgn(_ x: Double) -> Double { x > 0 ? 1 : x < 0 ? -1 : 0 }
-/// The combined-slip curve: sin(C·atan(B·s)), its peak at s = 1.
-@inline(__always) func driveCurve(_ s: Double, _ C: Double) -> Double { let B = tan(Double.pi / (2 * C)); return sin(C * atan(B * s)) }
 
 /// One 240 Hz tick of the drive's car. The same order as `step`: the world's streamer, steering, stability control, the
 /// fan, the wheels (here: the drive's chassis), the hull, the jets, drag, then the engine's tick and the contacts.
@@ -127,7 +183,10 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
     let speed = DMath.dhypot(s.vel.x, s.vel.y, s.vel.z)
     let vSq = jsMax(1, s.vel.x * s.vel.x + s.vel.z * s.vel.z)
     let aGrip = DriveSpec.muY * (G + jsMin(s.fanForce, s.fanLat * SPEC.fanMaxForce) / m)
-    let lock = rackLock(vSq, aGrip)
+    // The rack's speed-sensitive lock (the scored car's: as far as the grip asks, so a thumb can't scrub the fronts) opens
+    // with the stability setting: Off leaves the wheel to the driver, as a real car's (0269: a flick needs more lock than
+    // the grip asks for).
+    let lock = rackLock(vSq, aGrip * DriveSpec.rackReach[dm.esc.rawValue])
     M3.rotateInv(vb, s.quat, s.vel)
     M3.rotateInv(wb, s.quat, s.angVel)
     let vFwd = vb.z
@@ -138,6 +197,11 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
     }
     var steerTarget = -inp.steer * lock
     if steerTarget * slideR > 0 { steerTarget = -inp.steer * jsMin(SPEC.steerLock, lock + abs(slideR)) }
+    // The countersteer assist (touch): the wheels turned a share of the slide's angle toward it, inside the rack's reach.
+    if dm.counterAssist > 0 && slideR != 0 {
+        let reach = jsMin(SPEC.steerLock, lock + abs(slideR))
+        steerTarget = M3.clamp(steerTarget + dm.counterAssist * slideR, -reach, reach)
+    }
     let rackRate = jsMin(SPEC.steerRate, (lock + abs(slideR)) / (RACK_T0 + RACK_TV * abs(vFwd)))
     s.steer += M3.clamp(steerTarget - s.steer, -rackRate * dt, rackRate * dt)
 
@@ -149,9 +213,10 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         let beta = vFwd > 0.5 ? DMath.datan2(vb.x + wb.y * AXLE_R, vFwd) : 0
         let dBeta = (beta - s.escBeta) / dt
         s.escBeta = beta
-        if truthy(inp.assist) && !truthy(inp.manual) && s.grounded >= 3 && vFwd > 5 && dm.tc != .off {
-            let rr = wb.y, rMax = (SPEC.escYaw * aGrip) / vFwd
-            let slip = dm.tc == .sport ? SPEC.escSlip * 2.2 : SPEC.escSlip
+        if dm.esc != .off && truthy(inp.assist) && !truthy(inp.manual) && s.grounded >= 3 && vFwd > 5 {
+            let sport = dm.esc == .sport
+            let rr = wb.y, rMax = (SPEC.escYaw * (sport ? DriveSpec.escYawSport : 1) * aGrip) / vFwd
+            let slip = sport ? DriveSpec.escSlipSport : DriveSpec.escSlip
             let bx = beta > slip ? beta - slip : beta < -slip ? beta + slip : 0
             var e = rr - M3.clamp(rr, -rMax, rMax) - ESC_KB * bx
             if bx != 0 && dBeta * bx > 0 { e -= ESC_KBD * dBeta }
@@ -235,7 +300,7 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         let lim = aGrip / jsMax(vFwd, 1)
         want = M3.clamp(want, -lim, lim)
         dm.yawRef = want
-        if dm.vectoring && inp.throttle > 0.05 { tvDelta = DriveSpec.tvGain * (want - wb.y) }
+        if dm.vectoring && dm.esc == .on && inp.throttle > 0.05 { tvDelta = DriveSpec.tvGain * (want - wb.y) }
     }
     dm.tvShift = 0
     var regen = 0.0
@@ -299,7 +364,7 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         let Fz0 = DriveSpec.staticLoad(i), xL = jsMax(0.05, Fz / Fz0)
         let lsK = jsMax(0.55, 1 - DriveSpec.loadSens * (xL - 1))
         let Dx = DriveSpec.muX * hm.grip * lsK * Fz, Dy = DriveSpec.muY * hm.grip * lsK * Fz
-        let C = hm.loose ? DriveSpec.shapeLoose : DriveSpec.shapePaved
+        let fLat = hm.loose ? DriveSpec.latLoose : DriveSpec.lat, fLon = hm.loose ? DriveSpec.lonLoose : DriveSpec.lon
         let kp = DriveSpec.kappaPeak * (hm.loose ? 1.8 : 1)
         let ap = DriveSpec.alphaPeak[i] * pow(xL, 0.35) * (hm.loose ? 1.5 : 1)
         let alphaKin = DMath.datan2(vLat, jsMax(abs(vLong), 1.5))
@@ -325,8 +390,9 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
                 let target = (dm.tc == .sport ? DriveSpec.tcSlipSport : DriveSpec.tcSlip) * (hm.loose ? 1.6 : 1)
                 if kd > target { T *= M3.clamp(1 - (kd - target) * 8, 0.1, 1); tcAny = true }
                 // And no more torque than the grip left beside the cornering force can carry.
-                let syN = alpha / ap
-                let room = jsSqrt(jsMax(0.05, 1 - jsMin(1, syN * syN)))
+                // (Sport lets the rears slide further before it trims the torque: what a sport mode is for.)
+                let syN = alpha / (ap * (dm.tc == .sport ? 2.5 : 1))
+                let room = jsSqrt(jsMax(dm.tc == .sport ? 0.3 : 0.05, 1 - jsMin(1, syN * syN)))
                 let cap = 1.1 * R * Dx * room
                 if abs(T) > cap { T = sgn(T) * cap; tcAny = true }
             } else {
@@ -336,20 +402,34 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
             }
         }
         dm.driveT[i] = T
-        // The combined slip: each slip over its peak; one curve along the vector (the friction circle).
+        // The combined slip: each slip over its peak, the vector's length on each direction's own curve, shared out
+        // along the vector (the friction ellipse).
         var kappa = (wh.omega * R - vLong) / den
+        // Returns Fx, Fy and ∂Fx/∂κ (for the wheel's implicit spin).
         func forces(_ kap: Double) -> (Double, Double, Double) {
             let sx = kap / kp, sy = alpha / ap, sN = (sx * sx + sy * sy).squareRoot()
-            if sN < 1e-6 { let B = tan(Double.pi / (2 * C)); return (Dx * B * C * sx, -Dy * B * C * sy, 1) }
-            let f = driveCurve(sN, C)
-            // The curve's slope there, for the wheel's implicit spin (a tyre stiff in κ, solved with the wheel).
-            let B = tan(Double.pi / (2 * C)), q = B * sN
-            let slope = jsMax(0.05, C * B * cos(C * atan(q)) / (1 + q * q))
-            return (Dx * f * sx / sN, -Dy * f * sy / sN, slope)
+            if sN < 1e-6 { return (Dx * fLon.B * fLon.C * sx, -Dy * fLat.B * fLat.C * sy, Dx * fLon.B * fLon.C / kp) }
+            let f = fLon(sN), u = sx / sN
+            return (Dx * f * u, -Dy * fLat(sN) * sy / sN, Dx / kp * (fLon.slope(sN) * u * u + f / sN * (1 - u * u)))
         }
-        var (Fx, Fy, slope) = forces(kappa)
-        let kEff = jsMax(Dx * slope / kp, Dx * 2) / den
-        var omega = wh.omega + ((dt / WHEEL_I) * (T - R * Fx)) / (1 + (dt / WHEEL_I) * R * R * kEff)
+        // The wheel's spin, implicit in its tyre (0269): the κ at the end of the tick that the tick's torque and that κ's
+        // own force agree on, κ' + a·Fx(κ') = c, by Newton's method kept inside the bracket the force's bounds give. (The
+        // linearised step this replaced took the curve's slope where the wheel was, ≈ 0 at the peak, and overshot to the
+        // other side every tick: a free wheel buzzed between ±κ_peak and ±7 kN on the car, for ever.)
+        let aK = dt * R * R / (WHEEL_I * den), c0 = kappa + dt * R * T / (WHEEL_I * den)
+        var lo = c0 - aK * Dx * 1.001, hi = c0 + aK * Dx * 1.001, k1 = M3.clamp(kappa, lo, hi)
+        for _ in 0..<8 {
+            let (fx, _, dfx) = forces(k1)
+            let g = k1 + aK * fx - c0
+            if abs(g) < 1e-7 { break }
+            if g > 0 { hi = k1 } else { lo = k1 }
+            let dg = 1 + aK * dfx
+            var next = dg > 1e-6 ? k1 - g / dg : 0.5 * (lo + hi)
+            if !(next > lo && next < hi) { next = 0.5 * (lo + hi) }
+            k1 = next
+        }
+        var omega = (k1 * den + vLong) / R
+        var Fx = 0.0, Fy = 0.0
         // Brakes: the pedal × balance, ABS's pressure, ESC's; the handbrake on the rears.
         // The caliper's pressure (share of full) builds over ≈ 0.1 s and falls fast; ABS cycles it in three phases round
         // the tyre's peak: dump past the slip threshold, hold just under it, build again below.
@@ -375,8 +455,7 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         dm.discT[i] += (applied * abs(omega) - cool) * dt / (DriveSpec.discMass[i] * DriveSpec.discC)
         wh.omega = omega
         kappa = (wh.omega * R - vLong) / den
-        (Fx, Fy, slope) = forces(kappa)
-        _ = slope
+        (Fx, Fy, _) = forces(kappa)
         // Held still on a slope at a standstill (the scored car's stiction).
         let mEff = m * 0.25
         if abs(vLong) < 0.5 && wh.omega == 0 && T == 0 { Fx = M3.clamp(-mEff * (vLong / dt * 0.5 - G * wf.y), -Dx, Dx) }
@@ -386,7 +465,8 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         }
         // Rolling resistance and the surface's drag (sand, grass).
         Fx -= M3.clamp(vLong * 2, -1, 1) * (DriveSpec.crr * Fz + (truthy(hm.roll) ? hm.roll * Fz : 0))
-        Fx -= vLong * 6
+        // (At a crawl only: a little viscous drag settles a car coming to rest; none at speed, where rolling resistance is all.)
+        if abs(vLong) < 1 { Fx -= vLong * 6 }
         wh.slip = kappa; wh.slipAngle = lag; wh.slipAngleKin = alphaKin; wh.relax = sigma
         dm.fx[i] = Fx; dm.fy[i] = Fy
         M3.scale(force, hitN, Fz)
@@ -470,22 +550,24 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
     let vmag = DMath.dhypot(s.vel.x, s.vel.y, s.vel.z)
     M3.addScaled(fTot, fTot, s.vel, -0.5 * RHO * SPEC.cdA * vmag)
     M3.addScaled(s.vel, s.vel, fTot, dt / m)
-    let Ix = SPEC.inertiaPitch, Iy = SPEC.inertiaYaw, Iz = SPEC.inertiaRoll
+    let Ix = SPEC.inertiaPitch, Iy = DriveSpec.inertiaYaw, Iz = SPEC.inertiaRoll
     M3.rotateInv(wb, s.quat, s.angVel)
     M3.addScaled(s.angMom, s.angMom, tTot, dt)
     M3.rotateInv(Lb, s.quat, s.angMom)
     Lb.x -= M3.clamp(ROT_DRAG.x * wb.x * abs(wb.x) * dt, -abs(Lb.x), abs(Lb.x))
     Lb.y -= M3.clamp(ROT_DRAG.y * wb.y * abs(wb.y) * dt, -abs(Lb.y), abs(Lb.y))
     Lb.z -= M3.clamp(ROT_DRAG.z * wb.z * abs(wb.z) * dt, -abs(Lb.z), abs(Lb.z))
-    let ad = grounded != 0 && !s.hullContact ? 0.9985 : 0.9996
-    Lb.x *= ad; Lb.y *= ad; Lb.z *= ad
+    // On its wheels the car's yaw is the tyres' and the air's alone (0269: the scored car's 0.9985 a tick took ≈ 30 % of
+    // any yaw rate a second, holding every slide back). Roll and pitch keep the air's touch; their damping is the springs'.
+    Lb.x *= 0.9996; Lb.z *= 0.9996
+    if grounded == 0 || s.hullContact { Lb.y *= 0.9996 }
     M3.rotate(s.angMom, s.quat, Lb)
     M3.set(wb, Lb.x / Ix, Lb.y / Iy, Lb.z / Iz)
     M3.rotate(s.angVel, s.quat, wb)
     let rb = w.carRb
-    if abs(m - s.engineMass) > 1 {
-        s.engineMass = m
-        cg_body_set_additional_mass_properties(w.rw, rb, Float(m), 0, 0, 0, Float(SPEC.inertiaPitch), Float(SPEC.inertiaYaw), Float(SPEC.inertiaRoll), 0, 0, 0, 1, false)
+    if abs(m - s.engineMass) > 1 || !dm.massSet {
+        s.engineMass = m; dm.massSet = true
+        cg_body_set_additional_mass_properties(w.rw, rb, Float(m), 0, 0, 0, Float(SPEC.inertiaPitch), Float(DriveSpec.inertiaYaw), Float(SPEC.inertiaRoll), 0, 0, 0, 1, false)
     }
     if !s.engineHeld {
         cg_body_set_translation(w.rw, rb, Float(s.pos.x - w.ox), Float(s.pos.y - w.oy), Float(s.pos.z - w.oz), false)
@@ -505,7 +587,9 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         cg_body_rotation(w.rw, rb, &ePt); s.quat.x = Double(ePt[0]); s.quat.y = Double(ePt[1]); s.quat.z = Double(ePt[2]); s.quat.w = Double(ePt[3])
         cg_body_linvel(w.rw, rb, &ePt); M3.set(s.vel, Double(ePt[0]), Double(ePt[1]), Double(ePt[2]))
         cg_body_angvel(w.rw, rb, &ePt); M3.set(s.angVel, Double(ePt[0]), Double(ePt[1]), Double(ePt[2]))
-        inertiaTimes(s.angMom, qOld, s.angVel)
+        M3.rotateInv(s.angMom, qOld, s.angVel)
+        s.angMom.x *= SPEC.inertiaPitch; s.angMom.y *= DriveSpec.inertiaYaw; s.angMom.z *= SPEC.inertiaRoll
+        M3.rotate(s.angMom, qOld, s.angMom)
     } else {
         M3.addScaled(s.pos, s.pos, s.vel, dt)
         M3.integrateQuat(s.quat, s.angVel, dt)
