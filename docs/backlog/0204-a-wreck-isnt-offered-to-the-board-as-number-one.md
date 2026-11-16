@@ -1,12 +1,12 @@
 ---
 id: 0204
 title: A wreck isn't offered to the board as "#1 today"
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-12
-pr:
+pr: 400
 by: critic
 ---
 
