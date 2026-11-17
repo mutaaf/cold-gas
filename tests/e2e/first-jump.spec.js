@@ -31,24 +31,36 @@ const toFirstHint = (page) => page.evaluate(() => {
   return { shown: S.guide?.shown, cue: cue.textContent, skip: cue.classList.contains('on') && !!cue.querySelector('[data-guide-skip]'), breathing: document.querySelector('[data-onethumb]').hasAttribute('data-guide') };
 });
 // Then the thumb: held up the curl, a tap on the ledge (or never, `tap: false`), hands off in the air; the hints seen.
-const flyThumb = (page, { tap = true } = {}) => page.evaluate(({ tap }) => {
+// 0263 `obey`: at the aim hint the thumb presses and slides onto the sight's amber dot as the pad draws it
+// ([data-thumb-aim] data-ex / data-ey, px down the glass), re-read every 0.3 s.
+const flyThumb = (page, { tap = true, obey = false } = {}) => page.evaluate(({ tap, obey }) => {
   const g = window.__coldgas, S = g.S, th = g.thumb;
-  const seen = [];
-  const note = () => { const s = S.guide?.shown || ''; if (s && seen.at(-1) !== s) seen.push(s); };
+  const seen = [], cue = document.querySelector('[data-cue]'), sight = document.querySelector('[data-thumb-aim]');
+  let aimCue = '', aiming = false, every = 0, waited = 0;
+  const note = () => {
+    const s = S.guide?.shown || '';
+    if (s && seen.at(-1) !== s) seen.push(s);
+    // The cue line holds what it shows for 400 ms of wall clock (src/ui.js) and this loop steps the sim faster than
+    // that: let the hold pass once when the aim hint is first due, then read the line on the next frame.
+    if (s === 'aim' && waited === 1 && !aimCue) aimCue = cue.textContent;
+    if (s === 'aim' && !waited) { waited = 1; const t = performance.now() + 450; while (performance.now() < t) { /* the cue's hold */ } }
+    if (obey && s === 'aim' && !aiming) { aiming = true; if (!th.held) th.down(); }
+    if (aiming && S.run.phase === 'air' && every++ % 6 === 0 && sight.hasAttribute('data-on')) th.move(+sight.dataset.ex || 0, -(+sight.dataset.ey || 0));
+  };
   const step = (n = 1) => { for (let i = 0; i < n && S.mode === 'live'; i++) { g.liveStep(0.05); note(); } };
   th.down(); step();
   for (let i = 0; i < 2000 && S.mode === 'live' && !(S.run.phase === 'ramp' && S.run.t.progress >= 0.92); i++) step();
   step(8);
   if (tap) { th.up(); step(); th.down(); step(); th.up(); }
   for (let i = 0; i < 4000 && S.mode === 'live' && !S.card; i++) step();
-  if (!tap) th.up();
+  if (!tap || aiming) th.up();
   const beatEl = document.querySelector('[data-beat]');
   step(6);   // the aftermath's first frames: the beat is up
   const beat = { shown: !beatEl.hidden, first: beatEl.hasAttribute('data-first'), verdict: beatEl.querySelector('[data-beat-verdict]').textContent, eyebrow: beatEl.querySelector('[data-beat-eyebrow]').textContent };
   for (let i = 0; i < 4000 && S.mode !== 'results'; i++) g.liveStep(0.1);
   S.holdLive = false;
-  return { seen, beat, landed: !!S.card.facts.jumped && !S.card.facts.crashed, verdict: S.card.verdict, guideDone: S.guide?.done ?? null };
-}, { tap });
+  return { seen, beat, aimCue, landed: !!S.card.facts.jumped && !S.card.facts.crashed, verdict: S.card.verdict, total: S.card.total, miss: S.card.facts.padMiss, guideDone: S.guide?.done ?? null };
+}, { tap, obey });
 const shown = (page, sel) => page.evaluate((sel) => [...document.querySelectorAll(sel)].some((el) => el.getClientRects().length > 0 && getComputedStyle(el).display !== 'none' && getComputedStyle(el).visibility !== 'hidden'), sel);
 
 test('phone, one thumb: each hint at its beat and gone once done, then the first landing’s beat and the calm sheet', async ({ browser }) => {
@@ -58,8 +70,11 @@ test('phone, one thumb: each hint at its beat and gone once done, then the first
   expect(first).toEqual({ shown: 'go', cue: 'Hold to goSkip', skip: true, breathing: true });
   const run = await flyThumb(page);
   expect(run.seen.slice(0, 3)).toEqual(['keep', 'tap', 'roll']);
-  expect(run.seen.every((s) => ['keep', 'tap', 'roll', 'land'].includes(s))).toBe(true);
+  expect(run.seen.every((s) => ['keep', 'tap', 'roll', 'land', 'aim'].includes(s))).toBe(true);
   expect(new Set(run.seen).size).toBe(run.seen.length);   // each once, in order
+  // 0263: after the roll-out, the one thing a thumb does in the air (auto-land has LAND): aim the touchdown.
+  expect(run.seen.at(-1)).toBe('aim');
+  expect(run.aimCue).toBe('Hold, slide to the dot');
   expect(run.landed).toBe(true);
   expect(run.beat).toMatchObject({ shown: true, first: true, verdict: 'First landing' });
   expect(run.beat.eyebrow).toContain(run.verdict);
@@ -137,4 +152,21 @@ test('Skip ends the guide for good; keys get it in their own words', async ({ br
   expect(errors).toEqual([]);
   expect(e2).toEqual([]);
   await desk.close();
+});
+
+test('phone, one thumb: a newcomer who slides onto the dot as the aim hint says lands nearer the mark, for no less', async ({ browser }) => {
+  const runs = {};
+  for (const obey of [false, true]) {
+    const page = await browser.newPage(PHONE);
+    const errors = await boot(page);
+    await toFirstHint(page);
+    runs[obey] = await flyThumb(page, { obey });
+    expect(runs[obey].seen.at(-1)).toBe('aim');
+    expect(runs[obey].landed).toBe(true);
+    expect(errors).toEqual([]);
+    await page.close();
+  }
+  expect(runs[true].miss).toBeLessThan(runs[false].miss - 2);   // Node: 0.7–1.7 m against 5.6–5.9 m
+  expect(runs[true].miss).toBeLessThanOrEqual(2.5);
+  expect(runs[true].total).toBeGreaterThanOrEqual(runs[false].total);
 });

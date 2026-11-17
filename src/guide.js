@@ -9,16 +9,19 @@
 // Nothing here flies anything: the Assist flight computer's own help (auto-land, LAND's roll-out, the line hold, the
 // carry over the row) is what makes the landing achievable. No sim or scorer change.
 
-// The steps, in flight order. The Show and the Wall: go → keep → tap → roll → land. The Lineup: go → line → roll → land
-// (one thumb has no line to call: the computer lifts there).
-export const STEPS = { show: ['go', 'keep', 'tap', 'roll', 'land'], lineup: ['go', 'line', 'roll', 'land'] };
+// The steps, in flight order. The Show and the Wall: go → keep → tap → roll → land → aim. The Lineup: go → line → roll →
+// land (one thumb has no line to call: the computer lifts there, and lands it: 0181).
+// 0263: `aim` is the one thumb's only input that moves the score in the air. Assist's auto-land takes LAND before the
+// roll-out ends, so on one thumb "Hold to land" is never due; from then on a hold changes one thing, the touchdown slide
+// (the pad's HOLD · AIM, src/thumb-words.js), and the guide teaches that while the sight is up and the slide can still act.
+export const STEPS = { show: ['go', 'keep', 'tap', 'roll', 'land', 'aim'], lineup: ['go', 'line', 'roll', 'land'] };
 export const stepsFor = (course) => (course === 'lineup' ? STEPS.lineup : STEPS.show);
 
 // The words per device. ≤ 5 words each, the device's own controls (src/pointer.js names them the same way).
 const WORDS = {
-  thumb: { go: 'Hold to go', keep: 'Keep holding', tap: 'Tap to let go', roll: 'Let it roll', land: 'Hold to land', line: '' },
-  key: { go: 'Hold ↑ to go', keep: 'Keep holding ↑', tap: 'Space to let go', roll: 'Let it roll', land: 'Hold Shift to land', line: 'Space at the line' },
-  pad: { go: 'Hold RT to go', keep: 'Keep holding RT', tap: 'A to let go', roll: 'Let it roll', land: 'Hold B to land', line: 'A at the line' },
+  thumb: { go: 'Hold to go', keep: 'Keep holding', tap: 'Tap to let go', roll: 'Let it roll', land: 'Hold to land', line: '', aim: 'Hold, slide to the dot' },
+  key: { go: 'Hold ↑ to go', keep: 'Keep holding ↑', tap: 'Space to let go', roll: 'Let it roll', land: 'Hold Shift to land', line: 'Space at the line', aim: '' },
+  pad: { go: 'Hold RT to go', keep: 'Keep holding RT', tap: 'A to let go', roll: 'Let it roll', land: 'Hold B to land', line: 'A at the line', aim: '' },
 };
 // The Lineup's roll is the player's on keys and a pad.
 const LINEUP_ROLL = { key: '← → to roll', pad: 'Stick to roll' };
@@ -55,7 +58,17 @@ export function newGuide(course, from = 0) {
 //   rolled     the Lineup: the roll has started (|rollAccum| > 0.3 rad)
 //   rolledOut  the Lineup: the roll is nearly round (|rollAccum| > 5.6 rad)
 //   landOn     LAND is flying (held, the thumb's hold, or auto-land)
+//   landHeld   the player flew LAND (held it, or the thumb's hold): auto-land alone doesn't teach the landing (0263)
 //   computerRolls  the Lineup on one thumb: the computer lifts and rolls
+//   aimable    0263: the one thumb (the only way of flying with a sight); keys and a pad have no aim step
+//   sight      the pad's AIM sight is up (src/thumb-aim.js: the fly stage, in the air, roof up past thumb.aimUy)
+//   aimRoom    the slide can still move the touchdown: above THUMB.aimFloor + THUMB.aimFade (src/onethumb.js)
+//   slid       the thumb is down and slid out of the dead zone (thumb.aim)
+// 0263: where the aim step is taught: where a slide onto the dot pays. On the Show the slide is a place both ways (0164,
+// 0165) and a guided thumb that follows the dot lands 0.7–1.7 m from the mark against 5.6–5.9 m hands off. On the Wall
+// the slide up or down is a raw pitch over the computer's own approach (0190), and the same thumb landed no nearer
+// (6.5–12.6 m against 6.5–10.5 m): no hint there until that law is a place too. Keys and a pad have no sight.
+const AIM_COURSES = { show: true };
 const DUE = {
   go: (s) => s.phase === 'drive' && !s.held && !s.released,
   keep: (s) => (s.phase === 'drive' || s.phase === 'ramp') && s.held && !s.ledge && !s.released,
@@ -63,6 +76,7 @@ const DUE = {
   line: (s) => !s.computerRolls && s.phase === 'drive' && s.nearLine && !s.released,
   roll: (s, course) => s.phase === 'air' && (course === 'lineup' ? !s.rolled || s.computerRolls : s.tilted) && !s.landOn,
   land: (s, course) => s.phase === 'air' && !s.rising && !s.landOn && (course === 'lineup' ? s.rolledOut || s.computerRolls : !s.tilted),
+  aim: (s, course) => AIM_COURSES[course] && s.aimable && s.phase === 'air' && s.sight && s.aimRoom && !s.slid,
 };
 const DONE = {
   go: (s) => s.held || s.released || s.phase !== 'drive',
@@ -70,7 +84,8 @@ const DONE = {
   tap: (s) => s.released || s.phase === 'air',
   line: (s) => s.released || s.phase === 'air' || !!s.computerRolls,
   roll: (s, course) => s.landOn || (course === 'lineup' ? s.rolledOut || (!s.computerRolls && s.rolled) : s.phase === 'air' && !s.tilted),
-  land: (s) => s.landOn || s.phase === 'landed' || s.phase === 'done',
+  land: (s) => !!s.landHeld,
+  aim: (s, course) => !AIM_COURSES[course] || !s.aimable || !!s.slid,
 };
 
 /**
@@ -94,11 +109,11 @@ export function guideStep(g, s) {
 // down hard all the same), the landing.
 export function resumeFrom(g) {
   for (let i = 0; i < g.steps.length; i++) if (!(g.done & (1 << i))) return i;
-  return g.steps.length - 1;
+  return g.steps.indexOf('land');
 }
 
 // The one line on a first jump's wreck (≤ 5 words): what to do sooner, from the step it missed.
 export function wreckLine(g) {
   const step = g.steps[resumeFrom(g)];
-  return { go: 'Hold to go', keep: 'Hold all the way up', tap: 'Tap on the ledge', line: 'Lift at the line', roll: 'Let it roll', land: 'Hold sooner to land' }[step] || 'Hold sooner to land';
+  return { go: 'Hold to go', keep: 'Hold all the way up', tap: 'Tap on the ledge', line: 'Lift at the line', roll: 'Let it roll', land: 'Hold sooner to land', aim: 'Hold sooner to land' }[step] || 'Hold sooner to land';
 }
