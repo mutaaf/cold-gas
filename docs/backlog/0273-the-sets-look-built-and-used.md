@@ -1,5 +1,5 @@
 ---
-id: 0271
+id: 0273
 title: The sets look built and used: concrete, steel, joints, rubber, crew paint and dressing on the Show, the Wall and the Lineup (iPhone)
 status: shipped
 priority: P0
@@ -30,7 +30,7 @@ Runs on: the operator's Mac (Xcode). Pixels only: no collider, mass or tick in a
 - **Dressing** (ColdGasPhysics `dressingSet`, the shapes in `LooseView.mesh`): tyre stacks, 200 L drums, flight cases, a run
   of precast safety barrier and a towable generator, our own designs in the set's palette, placed ≥ 6 m off every run's
   line and ≥ 8 m from the pad. A scored run draws them as one static mesh (`Render/SetDressing.swift`); a roam stands them up
-  as loose bodies (0272).
+  as loose bodies (0274).
 - **Crew paint** on the slab: STAGE 1 · THE SHOW, STAGE 2 · THE WALL, STAGE 3 · THE LINEUP, KEEP CLEAR hatching by the
   curl's foot and the row, CREW and UNIT B bays, NO JETS ON THE APRON, run chevrons. Michroma with stencil bridges, worn
   by noise, in one 2048 × 1024 atlas made at launch; lit, translucent decals.

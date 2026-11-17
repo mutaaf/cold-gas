@@ -1,4 +1,4 @@
-// The sets' surfaces (0271): which of the static stage's materials are concrete and which are steel, the baked detail they
+// The sets' surfaces (0273): which of the static stage's materials are concrete and which are steel, the baked detail they
 // read (Resources/Stages/set-detail.png, scripts/bake-set-detail.swift), and where each course's run line lays its rubber.
 // The shader side is SetSurface.h. Pixels only: no collider, no mass, no tick reads any of this.
 import Metal

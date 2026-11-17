@@ -122,9 +122,9 @@ final class Renderer {
     private(set) var compilesAfterLaunch = 0
     let nLights: Int
     private let dummy: MTLTexture
-    /// The sets' baked surface detail (0271, SetSurface.swift).
+    /// The sets' baked surface detail (0273, SetSurface.swift).
     private let setDetail: MTLTexture?
-    /// The sets' dressing and floor paint (0271, SetDressing.swift); the dressing's static mesh only off a roam (a roam's are loose).
+    /// The sets' dressing and floor paint (0273, SetDressing.swift); the dressing's static mesh only off a roam (a roam's are loose).
     private let dressing: SetDressing
     private let dressMats, paintMats: Int, dressStatic: Bool
     let cam = Director()

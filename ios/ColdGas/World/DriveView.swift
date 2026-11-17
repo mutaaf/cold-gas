@@ -8,7 +8,7 @@ struct DriveView: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
     @ObservedObject private var hud = HudStore.shared
-    /// On a roam the left column shows the set's challenges (0272); the map button swaps them for the map and back.
+    /// On a roam the left column shows the set's challenges (0274); the map button swaps them for the map and back.
     @State private var setList = true
     /// The world's numbers on screen (`-fd-stats`): a Debug tool, never in a Release build.
     #if DEBUG
@@ -38,10 +38,10 @@ struct DriveView: View {
                             Button { game.flyFromRoam(); UISelectionFeedbackGenerator().selectionChanged() } label: {
                                 Text("Fly \(COURSE_INFO.first { $0.id == c }?.name ?? "it")").font(Theme.text(13, .medium)).foregroundStyle(Theme.ink)
                                     .lineLimit(1).fixedSize().padding(.horizontal, 16).frame(height: 44).glass(22)
-                                    // Once something's been done on the set, the way back to a scored run says so (0272).
+                                    // Once something's been done on the set, the way back to a scored run says so (0274).
                                     .overlay(Capsule().strokeBorder(h.flyLit ? Theme.ink.opacity(0.7) : .clear, lineWidth: 1))
                             }.buttonStyle(.plain).accessibilityIdentifier("roam-fly").accessibilityHint("A scored run from the mark.")
-                            // The set's small challenges (0272), under Fly; the map takes their place when it's shown.
+                            // The set's small challenges (0274), under Fly; the map takes their place when it's shown.
                             if !h.challenges.isEmpty && setList {
                                 RoamChallengesView(rows: h.challenges) { game.freeDrive?.resetSet() }.transition(.opacity)
                             }

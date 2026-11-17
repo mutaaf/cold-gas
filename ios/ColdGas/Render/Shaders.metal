@@ -169,7 +169,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float rough = m.pbr.y;
         if (m.flags.y) rough *= roughMap.sample(s, uv).g;
         float metal = m.pbr.x, wet = 0, setWet = 1;
-        if (m.flags.w & 24u) {   // the sets' concrete and steel (0271, SetSurface.h)
+        if (m.flags.w & 24u) {   // the sets' concrete and steel (0273, SetSurface.h)
             SetSurfaceOut so = setSurface(base.rgb, rough, in.world, n, m.flags.w & 24u, m.effect, detail, length(fwidth(in.world)));
             base.rgb = so.base; rough = so.rough; setWet = so.wetK;
         }

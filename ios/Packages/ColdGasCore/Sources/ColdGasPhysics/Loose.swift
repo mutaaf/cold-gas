@@ -12,7 +12,7 @@ public enum LooseKind: UInt8, CaseIterable, Sendable {
     case cone, barrier, sign
     /// The roadside's pieces once broken loose (0227): a fence bay, a bend sign on its post, a guard rail section.
     case fence, signpost, rail
-    /// The sets' dressing (0271): what a working backlot leaves standing round a stunt. Scored runs draw it where it stands
+    /// The sets' dressing (0273): what a working backlot leaves standing round a stunt. Scored runs draw it where it stands
     /// (pixels only, nothing in the scored world); a roam makes each a free body at its real mass.
     case tyre, drum, roadCase, kRail, generator
     /// Half extents (m) of the collider's box, its mass (kg) and how far its centre of mass sits below the box's middle.
@@ -207,7 +207,7 @@ public func looseSet(_ stage: String) -> [LooseSpot] {
     return out
 }
 
-/// The set's dressing (0271): tyre stacks, drums, flight cases, a run of safety barrier and the generator, placed clear
+/// The set's dressing (0273): tyre stacks, drums, flight cases, a run of safety barrier and the generator, placed clear
 /// of every scored run's line, the parked row, the pad and the uplights. The same spots draw it in a scored run (pixels
 /// only: SetDressing) and stand it up as loose bodies on a roam.
 public func dressingSet(_ stage: String) -> [LooseSpot] {

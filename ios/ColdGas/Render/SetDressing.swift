@@ -1,4 +1,4 @@
-// The sets dressed (0271): what a working backlot leaves round a stunt, and the crew's paint on the slab.
+// The sets dressed (0273): what a working backlot leaves round a stunt, and the crew's paint on the slab.
 //   - The dressing (ColdGasPhysics dressingSet: tyre stacks, drums, flight cases, safety barrier, the generator) drawn where
 //     it stands in a scored run, as one static mesh with LooseView's own shapes. Pixels only: it isn't in the scored world,
 //     so it sits clear of every run's line. On a roam the same things are loose bodies (FreeDrive) and LooseView draws them,

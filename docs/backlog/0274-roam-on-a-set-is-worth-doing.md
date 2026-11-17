@@ -1,5 +1,5 @@
 ---
-id: 0272
+id: 0274
 title: Roam on a set is worth doing: things to topple at their real masses, small unscored challenges, Fly one tap away (iPhone)
 status: shipped
 priority: P0
@@ -16,7 +16,7 @@ cones: nothing to aim at and no reason to stay, and nothing pointing back at a s
 
 ## What
 Runs on: the operator's Mac (Xcode). Unscored: nothing here reaches a score, a log, the board or a medal.
-- **The dressing comes loose** (0271's `dressingSet`, ColdGasPhysics `Loose.swift`): on a roam every tyre, drum, flight case,
+- **The dressing comes loose** (0273's `dressingSet`, ColdGasPhysics `Loose.swift`): on a roam every tyre, drum, flight case,
   barrier section and the generator is a free rigid body at its real mass (ESTIMATE notes in `LooseKind.mass`: a bare tyre
   9.5 kg, an empty 200 L drum 18 kg, a case 90 kg, 2 m of precast barrier 950 kg, the generator 1,600 kg), tyres and drums as
   cylinders with their own inertia (a ring, a thin shell). Stacks are tyre on tyre, so they topple. Each sounds as it is

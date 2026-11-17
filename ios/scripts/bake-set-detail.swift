@@ -1,4 +1,4 @@
-// Bakes the sets' surface detail (0271): one tileable 512² RGBA texture, linear, that the stage shader samples twice in world
+// Bakes the sets' surface detail (0273): one tileable 512² RGBA texture, linear, that the stage shader samples twice in world
 // space (SetSurface.h): near (a 4 m tile) for the grain and the brushing, far (a 37 m tile) for the wear and the stains.
 //   R  concrete grain: trowel cloud, aggregate specks, pores
 //   G  wear: broad blotches where the slab is polished or dusty

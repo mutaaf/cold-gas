@@ -103,12 +103,12 @@ final class FreeDrive: DriveScene {
         car.world.streamer = streamer
         // The chassis puts its downforce at the axles; the streamer's (through the centre) is for the scored model.
         streamer.aero = !ownCar
-        // The set's loose things and its dressing (0271: tyre stacks, drums, cases, barrier, the generator), at their masses.
+        // The set's loose things and its dressing (0273: tyre stacks, drums, cases, barrier, the generator), at their masses.
         looseSpots = looseSet(stageOf(course.id)) + dressingSet(stageOf(course.id))
         for s in looseSpots { addLoose(car.world, s.kind, x: s.x, y: s.y, z: s.z, yaw: s.yaw) }
         looseSpeed = Array(repeating: 0, count: looseSpots.count)
         chassis.stability(FreeDrive.stability)
-        // A roam's small challenges (0272), kept on this device per set.
+        // A roam's small challenges (0274), kept on this device per set.
         if onMark {
             let st = stageOf(course.id)
             challenges = SetChallenges(stage: st, saved: FreeDrive.savedChallenges(st))
@@ -334,11 +334,14 @@ final class FreeDrive: DriveScene {
             }
         }
     }
-    // MARK: - Roam's challenges (0272)
+    // MARK: - Roam's challenges (0274)
 
     /// The set's challenges (a roam only; nil in Free Drive).
     private(set) var challenges: SetChallenges?
     private var tyreIdx: [Int] = [], laneIdx: [Int] = []
+    /// How long each tyre has been off its stack: one counts once it's stayed off half a second (a tyre read mid-wobble, or
+    /// in the world's first frames, isn't down).
+    private var tyreDownT: [Double] = []
     /// What's happened since the game last asked (it says it, buzzes and saves).
     private var challengeEvents: [SetChallengeEvent] = []
     func drainChallenges() -> [SetChallengeEvent] { defer { challengeEvents.removeAll(keepingCapacity: true) }; return challengeEvents }
@@ -346,11 +349,14 @@ final class FreeDrive: DriveScene {
         guard let ch = challenges, cruise == nil, pilot == nil else { return }
         let loose = car.world.loose
         var down = 0
-        for i in tyreIdx where i < loose.count {
+        if tyreDownT.count != tyreIdx.count { tyreDownT = Array(repeating: 0, count: tyreIdx.count) }
+        for (j, i) in tyreIdx.enumerated() where i < loose.count {
             let b = loose[i], s = looseSpots[i]
             let up = 1 - 2 * (b.qx * b.qx + b.qz * b.qz)
             let moved = ((b.x - s.x) * (b.x - s.x) + (b.z - s.z) * (b.z - s.z)).squareRoot()
-            if b.y < s.y + b.kind.half.1 - 0.08 || moved > 1.0 || up < 0.7 {
+            let off = b.y < s.y + b.kind.half.1 - 0.08 || moved > 1.0 || up < 0.7
+            tyreDownT[j] = off ? tyreDownT[j] + dt : 0
+            if off && tyreDownT[j] >= 0.5 {
                 down += 1
                 #if DEBUG
                 if Launch.args.contains("-roam-log") && Int(time * 2) != Int((time - dt) * 2) { FreeDrive.roamLog(String(format: "ROAM %.2f tyre %d down: y %.3f (stood %.3f) moved %.2f up %.2f asleep %d car (%.1f, %.1f)", time, i, b.y, s.y + b.kind.half.1, moved, up, b.asleep ? 1 : 0, car.pos.x, car.pos.z)) }

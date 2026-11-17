@@ -1,4 +1,4 @@
-// The sets' surfaces (0271): concrete and steel that look built and used, from one baked 512² texture (set-detail.png,
+// The sets' surfaces (0273): concrete and steel that look built and used, from one baked 512² texture (set-detail.png,
 // scripts/bake-set-detail.swift) sampled twice in world space, plus the slab's saw-cut joints and the run line's rubber,
 // worked out here. Two fetches and a few dozen ALU ops on a set pixel; the car, the parked row and the effects never
 // come here (Material.flags.w bits 8 and 16, set by SetSurface.swift on the static stage only).

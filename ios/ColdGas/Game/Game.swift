@@ -23,7 +23,7 @@ struct DriveHud: Equatable {
     var speed = 0.0, km = 0.0, heading = 0.0
     var ready = false, line = ""
     var air = false, fan = false, cam = "chase", cue = ""
-    /// A roam's challenges (0272), in the set's order: what to try, done or not, the best so far.
+    /// A roam's challenges (0274), in the set's order: what to try, done or not, the best so far.
     var challenges: [RoamChallengeRow] = []
     /// A challenge has been done this roam: Fly gets the eye.
     var flyLit = false
@@ -67,7 +67,7 @@ final class Game: ObservableObject {
     private(set) var freeDrive: FreeDrive?
     /// The scored course a roam is on (nil in plain Free Drive): its HUD offers a scored run there.
     @Published private(set) var roamedFrom: String?
-    /// A challenge done (or bettered) on this roam (0272).
+    /// A challenge done (or bettered) on this roam (0274).
     private var roamDidSomething = false
     @Published private(set) var driveHud = DriveHud()
     private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0, driveClock = 0.0, driveImpacts = 0
@@ -318,7 +318,7 @@ final class Game: ObservableObject {
             HapticPlayer.shared.play(HapticEvent(kind: e.kind == ImpactKind.CRUSH ? .crush : e.kind == ImpactKind.WHEEL ? .wheel : .hit, tick: 0, channel: 4,
                                                  intensity: 0.2 + 0.8 * k, sharpness: e.kind == ImpactKind.WHEEL ? 0.35 : 0.7))
         }
-        // A roam's challenges (0272): each one done (or bettered) is said, felt once, and lights Fly.
+        // A roam's challenges (0274): each one done (or bettered) is said, felt once, and lights Fly.
         for e in fd.drainChallenges() {
             roamDidSomething = true
             fd.announce(RoamText.cue(e))
