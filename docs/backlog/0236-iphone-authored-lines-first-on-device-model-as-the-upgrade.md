@@ -1,7 +1,7 @@
 ---
 id: 0236
 title: On the iPhone, the authored lines speak first and Apple's on-device model is the free upgrade, with no automatic cloud call
-status: proposed
+status: in-progress
 priority: P1
 size: M
 lens: platform
@@ -41,3 +41,9 @@ ColdGasClient tests for the route (on-device, else authored; never the edge with
 ## Out of scope
 An "Ask the AI panel" button on the iPhone (a follow-up if the owner wants it). The crew's voices (0240 ships them as data).
 Building before the in-flight UI, rendering and collision work in `ios/ColdGas/UI/` has landed.
+
+## Notes
+2026-11-17 (builder): shipped ahead of 0235 with the crew's lines written natively (ColdGasClient `Crew.swift`, tested in
+`CrewTests.swift`), not yet read from the web's data file. `judgePanel` takes the authored words and never a cloud call;
+`Net/Judges.swift` has no network code left. The receipt never shows a model id (invariant 3.7). Shots: not taken in this PR
+(the shared simulator was busy); see the PR.

@@ -1,5 +1,5 @@
 // 0219: the judges on the device. The route, the on-device call against a fake model (words as they land, every way it can
-// fail, a hang cut at its deadline), the fallback to the cloud with the time that's left, the receipt (invariant 5½) and
+// fail, a hang cut at its deadline), the fallback to the crew's authored lines (0236: never a cloud call), the receipt (invariant 5½) and
 // the brief (the run's numbers only, as src/worker/ai/prompt.js writes them).
 import Foundation
 import Testing
@@ -59,23 +59,14 @@ private func card(_ course: String = "show", tier: String = "assist", facts: [(S
                      judges: [JudgeScore(id: "engineer", name: "ENGINEER", score: 8.8), JudgeScore(id: "coordinator", name: "COORDINATOR", score: 9.1), JudgeScore(id: "designer", name: "DESIGNER", score: 8.6)],
                      categories: ["landing": 8.5, "air": 9], facts: .object(base + facts))
 }
-private let localMeta = JudgeMeta(ok: false, error: "The judges are offline.", provider: "edge")
-
-/// The cloud's side, recorded: when it was asked, with what deadline; it answers like the edge model.
-final class FakeCloud: @unchecked Sendable {
-    private let lock = NSLock()
-    private(set) var deadlines: [Double] = []
-    var answer: (JudgeWords, JudgeMeta) = (JudgeWords(headline: "From the edge", engineer: "e", coordinator: "c", designer: "d", source: "ai"),
-                                           JudgeMeta(ok: true, provider: "edge", model: "@cf/google/gemma-4-26b-a4b-it"))
-    func call(_ ms: Double) async -> (JudgeWords, JudgeMeta) { lock.withLock { deadlines.append(ms) }; return answer }
-}
+private let AUTHORED = crewWords(card())
 
 @Suite struct OnDeviceRoute {
-    @Test func onTheDeviceOnlyWhenAvailableAndWanted() {
+    @Test func onTheDeviceOnlyWhenAvailableAndWantedElseTheCrew() {
         #expect(judgeRoute(status: .available, preferOnDevice: true) == .onDevice)
-        #expect(judgeRoute(status: .available, preferOnDevice: false) == .cloud)
+        #expect(judgeRoute(status: .available, preferOnDevice: false) == .authored)
         for s in OnDeviceStatus.allCases where s != .available {
-            #expect(judgeRoute(status: s, preferOnDevice: true) == .cloud, "\(s)")
+            #expect(judgeRoute(status: s, preferOnDevice: true) == .authored, "\(s)")
             #expect(!s.line.isEmpty)
         }
     }
@@ -91,14 +82,13 @@ final class FakeCloud: @unchecked Sendable {
 }
 
 @Suite struct OnDeviceCall {
-    @Test func theDeviceSpeaksAndTheCloudIsNeverAsked() async throws {
-        let model = FakeModel(steps: FakeModel.streaming()), cloud = FakeCloud(), events = Events()
-        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", emit: { events.add($0) }, cloud: cloud.call)
+    @Test func theDeviceSpeaks() async throws {
+        let model = FakeModel(steps: FakeModel.streaming()), events = Events()
+        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", authored: AUTHORED, emit: { events.add($0) })
         let (words, meta) = try #require(r)
-        #expect(cloud.deadlines.isEmpty)
         #expect(model.asked.count == 1)
         #expect(words.headline == FULL.headline && words.designer == FULL.designer && words.source == "ai")
-        #expect(meta.ok && meta.provider == ON_DEVICE_PROVIDER && meta.model == ON_DEVICE_MODEL && meta.where == "this iPhone")
+        #expect(meta.ok && meta.provider == ON_DEVICE_PROVIDER && meta.model == ON_DEVICE_MODEL && meta.where == "this iPhone" && !meta.authored)
         let d = try #require(meta.done)
         #expect(d.costUsd == 0 && d.onDevice == true && d.tokens == "estimate")
         #expect((d.inTokens ?? 0) > 100 && (d.outTokens ?? 0) > 10)
@@ -113,59 +103,56 @@ final class FakeCloud: @unchecked Sendable {
     }
     @Test func reportedUsageIsShownAsReported() async throws {
         let model = FakeModel(steps: FakeModel.streaming(usage: OnDeviceUsage(inTokens: 612, outTokens: 88, source: .reported)))
-        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPad", emit: { _ in }, cloud: FakeCloud().call)
+        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPad", authored: AUTHORED, emit: { _ in })
         let d = try #require(r?.1.done)
         #expect(d.inTokens == 612 && d.outTokens == 88 && d.tokens == "reported")
         let line = judgeReceipt(try #require(r?.1))
         #expect(line.contains("612 in + 88 out tokens") && !line.contains("estimated") && line.contains("this iPad"))
     }
-    @Test func everyFailureFallsBackToTheCloudWithTheTimeLeft() async throws {
+    /// 0236: on any on-device failure the crew's lines stand, and nothing else is asked.
+    @Test func everyFailureLeavesTheCrewsLines() async throws {
         let failures: [FakeModel.End] = [.fail(OnDeviceJudgeError("a guardrail stopped it")), .fail(OnDeviceJudgeError("the brief was too long for it")),
                                          .fail(OnDeviceJudgeError("its model isn\u{2019}t ready yet")), .fail(CocoaError(.featureUnsupported))]
         for end in failures {
-            let model = FakeModel(steps: Array(FakeModel.streaming().prefix(1)), end: end), cloud = FakeCloud(), events = Events()
-            let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", emit: { events.add($0) }, cloud: cloud.call)
+            let model = FakeModel(steps: Array(FakeModel.streaming().prefix(1)), end: end), events = Events()
+            let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", authored: AUTHORED, emit: { events.add($0) })
             let (words, meta) = try #require(r)
-            #expect(cloud.deadlines.count == 1)
-            #expect(cloud.deadlines[0] > JUDGE_MS - 2_000 && cloud.deadlines[0] <= JUDGE_MS)
-            #expect(words.headline == "From the edge" && meta.provider == "edge")
-            #expect(meta.onDeviceFailure != nil)
+            #expect(words == AUTHORED && words.source == Crew.source)
+            #expect(meta.authored && !meta.ok && meta.onDeviceFailure != nil)
             #expect(events.all.contains { if case .note = $0 { return true }; return false })
-            // Nothing from the device after the call gave up on it.
             #expect(!events.all.contains { if case .done = $0 { return true }; return false })
+            #expect(judgeReceipt(meta).hasPrefix("Written by the game"))
         }
     }
-    @Test func aHangIsCutAtItsDeadlineAndTheCloudGetsTheRest() async throws {
-        let model = FakeModel(steps: Array(FakeModel.streaming().prefix(2)), end: .hang), cloud = FakeCloud()
+    @Test func aHangIsCutAtItsDeadline() async throws {
+        let model = FakeModel(steps: Array(FakeModel.streaming().prefix(2)), end: .hang)
         let start = Date()
-        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", totalMs: 1_200, onDeviceMs: 300, emit: { _ in }, cloud: cloud.call)
+        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", authored: AUTHORED, onDeviceMs: 300, emit: { _ in })
         let took = Date().timeIntervalSince(start) * 1000
         #expect(took < 1_100, "took \(took) ms")
         #expect(r?.1.onDeviceFailure == "it took too long")
-        #expect(cloud.deadlines.count == 1)
-        #expect(cloud.deadlines[0] >= 1_000)   // what's left, and never less than a second
+        #expect(r?.0 == AUTHORED)
     }
     @Test func aJudgeLeftWithoutAWordIsAFailureNotTheirWords() async throws {
-        let model = FakeModel(steps: Array(FakeModel.streaming().prefix(3))), cloud = FakeCloud()
-        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", emit: { _ in }, cloud: cloud.call)
+        let model = FakeModel(steps: Array(FakeModel.streaming().prefix(3)))
+        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", authored: AUTHORED, emit: { _ in })
         #expect(r?.1.onDeviceFailure == "it left a judge without a word")
-        #expect(cloud.deadlines.count == 1)
+        #expect(r?.0 == AUTHORED)
     }
-    @Test func theCloudRouteNeverAsksTheDevice() async throws {
-        let model = FakeModel(steps: FakeModel.streaming()), cloud = FakeCloud()
-        let r = await judgePanel(card: card(), route: .cloud, model: model, place: "this iPhone", emit: { _ in }, cloud: cloud.call)
+    @Test func theAuthoredRouteNeverAsksTheDeviceAndIsInstant() async throws {
+        let model = FakeModel(steps: FakeModel.streaming()), events = Events()
+        let r = await judgePanel(card: card(), route: .authored, model: model, place: "this iPhone", authored: AUTHORED, emit: { events.add($0) })
         #expect(model.asked.count == 0)
-        // The whole budget, less the moment the call took to get here (a loaded Mac measured 34,999.999 ms).
-        #expect(cloud.deadlines.count == 1 && abs((cloud.deadlines.first ?? 0) - JUDGE_MS) < 50)
-        #expect(r?.1.onDeviceFailure == nil)
-        // On the device, but no model (an OS without the framework): the cloud, as before.
-        let r2 = await judgePanel(card: card(), route: .onDevice, model: nil, place: "this iPhone", emit: { _ in }, cloud: cloud.call)
-        #expect(r2?.0.headline == "From the edge")
+        #expect(events.all.isEmpty)
+        #expect(r?.0 == AUTHORED && r?.1.authored == true && r?.1.onDeviceFailure == nil)
+        // On the device, but no model (an OS without the framework): the crew.
+        let r2 = await judgePanel(card: card(), route: .onDevice, model: nil, place: "this iPhone", authored: AUTHORED, emit: { _ in })
+        #expect(r2?.0 == AUTHORED)
     }
     @Test func overlongWordsAreCappedAsTheCloudsAre() async throws {
         let long = JudgeWords(headline: String(repeating: "h", count: 90), engineer: "  " + String(repeating: "e", count: 300), coordinator: "c", designer: "d")
         let model = FakeModel(steps: [OnDeviceSnapshot(words: long)])
-        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", emit: { _ in }, cloud: FakeCloud().call)
+        let r = await judgePanel(card: card(), route: .onDevice, model: model, place: "this iPhone", authored: AUTHORED, emit: { _ in })
         #expect(r?.0.headline.count == 60 && r?.0.engineer.count == 200)
     }
 }
@@ -176,23 +163,32 @@ final class FakeCloud: @unchecked Sendable {
         d.inTokens = 640; d.outTokens = 92; d.totalMs = 2_340; d.costUsd = 0; d.tokens = "estimate"; d.onDevice = true
         let line = judgeReceipt(JudgeMeta(ok: true, provider: ON_DEVICE_PROVIDER, model: ON_DEVICE_MODEL, where: "this iPhone", done: d))
         #expect(line == "Words by Apple\u{2019}s on-device model, on this iPhone \u{B7} 640 in + 92 out tokens (estimated) \u{B7} 2.3 s \u{B7} $0 \u{B7} no data left the device")
+        #expect(!line.contains(ON_DEVICE_MODEL))
     }
-    @Test func theEdgeModelsReceiptNamesTheModel() {
+    /// Invariant 3.7: a model's id never reaches a player, whoever wrote the words.
+    @Test func noModelIdIsEverShown() {
         var d = JudgeDone(words: FULL)
-        d.inTokens = 700; d.outTokens = 80; d.costUsd = 0; d.model = "@cf/google/gemma-4-26b-a4b-it"
-        let line = judgeReceipt(JudgeMeta(ok: true, provider: "edge", model: "@cf/google/gemma-4-26b-a4b-it", done: d))
-        #expect(line == "Words by the edge model (@cf/google/gemma-4-26b-a4b-it) \u{B7} 700 in + 80 out tokens \u{B7} $0")
+        d.inTokens = 700; d.outTokens = 80; d.costUsd = 0; d.model = "@cf/vendor/some-model-7b"
+        let line = judgeReceipt(JudgeMeta(ok: true, provider: "edge", model: "@cf/vendor/some-model-7b", done: d))
+        #expect(line == "Words by a model \u{B7} 700 in + 80 out tokens \u{B7} $0")
+        #expect(!line.contains("@cf") && !line.contains("vendor"))
+        #expect(!JudgeAI.edge.model.map { judgeReceipt(JudgeMeta(ok: true, provider: "edge", model: $0, done: d)).contains($0) }!)
+    }
+    @Test func theCrewsLinesSayTheyAreTheGamesOwn() {
+        #expect(judgeReceipt(.authoredMeta) == "Written by the game from this run\u{2019}s numbers, not a model.")
+        var m = JudgeMeta.authoredMeta
+        m.onDeviceFailure = "a guardrail stopped it"
+        #expect(judgeReceipt(m).contains("a guardrail stopped it"))
+        #expect(!judgeReceipt(m).contains("Words by"))
     }
     @Test func localLinesAreNeverPassedOffAsAModels() {
-        var m = localMeta
-        m.onDeviceFailure = "a guardrail stopped it"
-        let line = judgeReceipt(m)
+        let line = judgeReceipt(JudgeMeta(ok: false, error: "The judges are offline.", provider: "edge"))
         #expect(line.hasPrefix("The game\u{2019}s own lines, not a model\u{2019}s"))
-        #expect(line.contains("The judges are offline.") && line.contains("a guardrail stopped it"))
         #expect(!line.contains("Words by"))
         #expect(judgeReceipt(.localMeta(.breaker)).contains("resting"))
     }
 }
+
 
 @Suite struct OnDeviceBrief {
     @Test func theShowsBriefIsTheWorkersFacts() {
@@ -219,7 +215,7 @@ final class FakeCloud: @unchecked Sendable {
         #expect(!p.contains("Event:"))
     }
     @Test func theBriefCarriesTheVoicesAndNoBrand() {
-        for v in ["ENGINEER (Chief Vehicle Engineer)", "COORDINATOR (Stunt Coordinator)", "DESIGNER (Head of Design)", "Never change them"] {
+        for v in ["ENGINEER (Hollis", "COORDINATOR (Mags", "DESIGNER (Vee", "Never change them"] {
             #expect(ON_DEVICE_INSTRUCTIONS.contains(v))
         }
         #expect(estimateTokens("abcd") == 1 && estimateTokens("") == 1 && estimateTokens(String(repeating: "x", count: 400)) == 100)

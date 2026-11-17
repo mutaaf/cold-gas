@@ -1,7 +1,7 @@
 ---
 id: 0240
 title: The panel becomes our own invented stunt crew, who talk about the stunt and the wreck
-status: proposed
+status: in-progress
 priority: P1
 size: M
 lens: authenticity
@@ -40,3 +40,10 @@ Depends on: 0235 (the engine), 0237 (the Wreck card).
 ## Out of scope
 The model's prompt in `src/worker/ai/prompt.js` (frozen; the operator decides). A hero-car redesign (an open question for the
 owner).
+
+## Notes
+2026-11-17 (builder, iPhone half): the crew is Hollis (the engineer, keeps the repair bill), Mags (the stunt coordinator,
+cheers the wreck) and Vee (the designer, loves a clean landing). Their lines are written natively in
+`ios/Packages/ColdGasCore/Sources/ColdGasClient/Crew.swift` from the card (and the Wreck card), ahead of 0235's shared data
+file: when the web engine lands, the iPhone should read its lines from the vectors. The on-device brief names the crew. The
+web (src/ui.js, index.html fine print) is still to do.
