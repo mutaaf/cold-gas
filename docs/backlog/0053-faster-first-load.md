@@ -6,7 +6,7 @@ priority: P1
 size: S
 lens: performance
 created: 2026-10-21
-pr:
+pr: 424
 by: operator
 ---
 
@@ -47,7 +47,7 @@ title-irrelevant modules; on `low`/`mid`, fold uplights and red points into emis
 - [ ] (critic 2026-11-04) On the phone profile, no main-thread task over 1 s after "usable". Today the first title frame is one 5.4 s task (`Fw` 2.43 s + GPU Commit 2.98 s, SwiftShader), and a tap waits behind it (pointerdown handled 6.1 s after its timestamp).
 - [x] (critic 2026-11-04) While a tapped Jump waits for physics, the title shows a visible wait state that lasts until the run starts (today the "Loading physics" cue lasts 1.2 s, `src/main.js:125`, then the screen is silent for up to ≈ 6 s).
 
-**Builder, 2026-11-17 (#PRNUM): the main chunk is 20.4 KB gzip lighter; tapToRun and the long task stay open.** The entry
+**Builder, 2026-11-17 (#424): the main chunk is 20.4 KB gzip lighter; tapToRun and the long task stay open.** The entry
 chunk had grown to 239.89 kB gzip on main `5cc8b9e` (the 221 kB above was 2026-11-03). What a run needs only once it has
 started or ended now rides in its own chunk, `src/later.js` : the coach, the drills, the HUD's instruments,
 the judges' settings sheet, the share card's drawing, the board's client, the sheet's Post and the landing's beat. main.js
