@@ -49,11 +49,11 @@ title-irrelevant modules; on `low`/`mid`, fold uplights and red points into emis
 
 **Builder, 2026-11-17 (#PRNUM): the main chunk is 20.4 KB gzip lighter; tapToRun and the long task stay open.** The entry
 chunk had grown to 239.89 kB gzip on main `5cc8b9e` (the 221 kB above was 2026-11-03). What a run needs only once it has
-started or ended now rides in its own chunk, `src/later.js` (15.9 kB gzip): the coach, the drills, the HUD's instruments,
+started or ended now rides in its own chunk, `src/later.js` : the coach, the drills, the HUD's instruments,
 the judges' settings sheet, the share card's drawing, the board's client, the sheet's Post and the landing's beat. main.js
-asks for it beside the physics WASM, and every start already waits on the engine (`whenPhysics`, `physicsLoad`), so it
-waits on both; `toast` (src/toast.js) and `aiLabel` (src/ai/config.js) stay in the entry for the title. Entry 239.89 →
-219.45 kB gzip (`npm run build`). `tests/unit/entry-lean.test.js` fails if any of those modules is imported statically
+asks for it beside the physics WASM, and every start waits on both (`whenPhysics`, the challenge's `ready`), asking again
+after a failure; `toast` (src/toast.js) and `aiLabel` (src/ai/config.js) stay in the entry for the title. Entry 239.89 →
+219.49 kB gzip, later 18.44 kB (`npm run build`). `tests/unit/entry-lean.test.js` fails if any of those modules is imported statically
 from the entry's graph again. The wait state shipped in 0154 (#411, "Starting…" until the run begins). Open for the next
 Builder: tapToRun in perf.mjs, and the first title frame's long task (box 5, a render/GPU cost, not bytes).
 

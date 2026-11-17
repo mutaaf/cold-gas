@@ -74,8 +74,10 @@ import { createWedge, WEDGE_IDLE } from './wedge.js';
 // the board's client, the sheet's Post, the landing's beat) are their own chunk, asked for beside it, so the title's
 // entry chunk is smaller (0053). A run waits on both (whenPhysics, gameReady).
 let late = null;
-const loadLate = lazyOnce((failed) => lazyChunk(failed, () => import('./later.js')).then((m) => { if (!late) { late = m; lateIn(m); } return m; }));
-const physicsLoad = Promise.all([loadPhysics(), loadLate()]).then(([engine]) => engine);
+// (`late` is set once lateIn has wired it, so a throw there leaves the chunk asked for again, never half-wired.)
+const loadLate = lazyOnce((failed) => lazyChunk(failed, () => import('./later.js')).then((m) => { if (!late) { lateIn(m); late = m; } return m; }));
+loadLate().catch(() => {});   // asked for now, beside the WASM; a start asks again after a failure (physics())
+const physicsLoad = loadPhysics();   // the stage's, the ghosts' and the ads' wait: a failed run chunk never holds them
 physicsLoad.catch(() => {});
 const params = new URLSearchParams(location.search);
 const device = readDevice();
@@ -993,9 +995,13 @@ const aiChip = document.querySelector('[data-ai-open]');
 // Who writes the judges' words (the free edge model, or your own key): "Judges · Free". Not "AI": the flight
 // computer is Assist, and one word for two things was one too many (audit 2026-10-30).
 const syncAiChip = () => { aiChip.textContent = aiLabel().replace(/^AI · /, 'Judges · '); };
+// Before the run's chunk is in (a tap in a cold load's first seconds), it opens when the chunk lands, unless the
+// screen has moved on (a Jump in between): never over a run.
 function openAI() {
-  loadLate().then((m) => m.openSettings(document.querySelector('[data-ai-modal]'), { onChange: syncAiChip }),
-    () => ui.cue_('Couldn’t open the judges’ settings: try again', 2000));
+  const open = (m) => m.openSettings(document.querySelector('[data-ai-modal]'), { onChange: syncAiChip });
+  if (late) { open(late); return; }
+  const mode = S.mode;
+  loadLate().then((m) => { if (S.mode === mode) open(m); }, () => ui.cue_('Couldn’t open the judges’ settings: try again', 2000));
 }
 aiChip.addEventListener('click', openAI);
 syncAiChip();
@@ -1906,10 +1912,10 @@ S.titleSync = syncCourseBtns;
 const comeback = createComeback({
   mount: document.querySelector('[data-title-extra]'), resultMount: document.querySelector('[data-daily-result]'),
   base: shareUrl(), selectCourse, getTier: () => S.tier, setTier: (t, opts) => setTier(t, opts), jump: () => jump(), play: () => startRun('jump'),
-  ready: () => Promise.all([stage.ready, physicsLoad]), toast,
+  ready: () => Promise.all([stage.ready, physicsLoad, loadLate()]), toast,   // a run waits on its chunk too (0053)
   // A Take tapped before the engine is up waits for it here, outside whenPhysics: the same "Starting…" (0154).
   pending: (on) => { cancelPendingStart(); if (on) setPendingStart(true); },
-  share: ({ card, url, text }) => { const course = S.run?.course || stage.course; funnel.emit('share_tap', { course }); funnel.flush(); return loadLate().then((m) => m.shareRun({ card, url, text, cardPromise: startCard() })).then(shareVia(course), () => {}); },
+  share: ({ card, url, text }) => { const course = S.run?.course || stage.course; funnel.emit('share_tap', { course }); funnel.flush(); return (late ? late.shareRun({ card, url, text, cardPromise: startCard() }) : Promise.resolve('cancelled')).then(shareVia(course), () => {}); },   // inside the tap (the results: always loaded)
   metric: (name, props) => { funnel.emit(name, props); if (S.mode === 'title' || S.mode === 'results') funnel.flush(); }, course: () => stage.course,
   how: (course, tier, flown) => (flown && S.cardHow ? flownCtx(S.cardHow, course, tier) : pointerCtx(course, tier)), tip: (text) => { S.tip = text; },
 });
@@ -2105,7 +2111,7 @@ document.querySelectorAll('[data-slow]').forEach((b) => b.addEventListener('clic
 slowBtn.addEventListener('click', () => setSlow(SLOWS[(SLOWS.indexOf(S.slowmo) + 1) % SLOWS.length]));
 
 function openPractice() {
-  if (!late) { loadLate().then(openPractice, () => ui.cue_('Couldn’t load the drills: try again', 2000)); return; }
+  if (!late) { loadLate().then(() => { if (S.mode === 'title') openPractice(); }, () => ui.cue_('Couldn’t load the drills: try again', 2000)); return; }
   const list = document.querySelector('[data-drills]');
   list.innerHTML = '';
   const drills = late.drillsFor(stage.course);
@@ -2276,7 +2282,8 @@ async function openBoard(kind = boardKind, course = boardCourse || stage.course)
   const seq = ++boardSeq;
   boardAbort?.abort();
   boardAbort = new AbortController();
-  const rows = await loadLate().then((m) => m.fetchBoard(kind, { signal: boardAbort.signal, course: boardCourse }), () => null);   // null: offline
+  const signal = boardAbort.signal, asked = boardCourse;   // this request's, before any wait for the board's chunk
+  const rows = await loadLate().then((m) => m.fetchBoard(kind, { signal, course: asked }), () => null);   // null: offline
   if (seq !== boardSeq) return;
   boardAbort = null;
   const empty = `No jumps on ${BOARD_COURSE[boardCourse]} ${kind === 'all' ? 'yet' : 'yet today'}. Be the first.`;
