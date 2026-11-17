@@ -451,6 +451,7 @@ final class Renderer {
         if cam.shakeHook == nil {
             cam.shakeHook = true
             crash.shake = { [weak self, weak cam] a in if let d = self?.drive { d.shake(a) } else { cam?.shake(a) } }
+            crash.kick = { [weak self, weak cam] n, a in if self?.drive == nil { cam?.kick(n, a) } }
             crash.cut = { [weak cam] p, v in cam?.crashCut(at: p, vel: v) }
         }
         cam.clockK = crash.directed ?? 1

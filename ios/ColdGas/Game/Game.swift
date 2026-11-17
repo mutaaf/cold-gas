@@ -528,6 +528,7 @@ final class Game: ObservableObject {
             let touch = tr.touchTick - tr.tickBase
             if tr.touchTick >= 0 && touch > i0 && touch <= i1 {
                 Sound.shared.land(sink: Double(tr.sink), paved: 1, seed: tr.touchTick)
+                stage?.renderer?.cam.touchdown(sink: Double(tr.sink))   // the dip and the punch, as it was live
                 HapticPlayer.shared.play(HapticEvent(kind: .wheel, tick: 0, channel: 3, intensity: min(1, 0.5 + tr.sink / 6), sharpness: 0.5))
                 encoreBuzzT = 0.08
             }

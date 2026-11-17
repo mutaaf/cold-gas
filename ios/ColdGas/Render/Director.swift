@@ -128,6 +128,16 @@ final class Director {
 
     /// A rattle of the camera (crash.js director.shake).
     func shake(_ a: Float) { shakeAmp = max(shakeAmp, a) }
+    /// A hit's jolt (0271): the frame knocked along the impulse's normal `n`, 8 cm to ~0.4 m with `a` (0…1), then settled.
+    /// It rides on the shake, which says how hard; this says which way. None with Reduce Motion.
+    func kick(_ n: SIMD3<Float>, _ a: Float) {
+        if reduced { return }
+        jolt += n * (0.08 + 0.32 * a)
+        let l = simd_length(jolt)
+        if l > 0.5 { jolt *= 0.5 / l }
+        punch = max(punch, 2.5 * a)   // and the lens punches in a few degrees
+    }
+    private var jolt = SIMD3<Float>()
     /// The touchdown, felt in the camera: main.js touchdown() with render/impact.js landingImpact().
     func touchdown(sink: Double) {
         if reduced { return }
@@ -177,8 +187,10 @@ final class Director {
             pos += SIMD3(sin(tt * 91), sin(tt * 77 + 1), 0) * shakeAmp * 0.08
             if shakeAmp > 0.5 { rotateZ(sin(tt * 53) * (shakeAmp - 0.5) * 0.02) }   // a crash rattles the frame too
         }
+        // A hit's jolt: the frame knocked along the impulse, settling on a stiff spring (on the presentation clock).
+        if simd_length_squared(jolt) > 1e-6 { pos += jolt; jolt *= exp(-dt * clockK * 11) } else { jolt = .zero }
         // Touchdown: the camera rides the car's suspension down and back, and punches in, over ≈0.4 s.
-        let k = exp(-dt * 7)
+        let k = exp(-dt * clockK * 7)
         if dip > 0.001 { pos.y -= dip; dip *= k } else { dip = 0 }
         if punch > 0.01 { punch *= k } else { punch = 0 }
 
@@ -506,6 +518,13 @@ final class Director {
     }
     func endEncore() { encoreOn = false; encoreAimed = false }
     private func encoreShot(_ car: SIMD3<Float>, _ vel: SIMD3<Float>, _ dt: Float) {
+        // A wreck keeps sliding after its hit, sometimes at the lens: the operator trucks back to hold its distance (7 m upright, 11 m wide).
+        let off = SIMD2(encorePos.x - car.x, encorePos.z - car.z), d = simd_length(off), keep: Float = aspect < 1 ? 7 : 11
+        if d < keep && d > 0.01 {
+            var x = car.x + off.x / d * keep
+            if course == "lineup" { x = clearOfPoles(x, car) }
+            encorePos.x = x; encorePos.z = car.z + off.y / d * keep
+        }
         pos = encorePos
         let tgt = SIMD3(car.x, car.y + 0.15, car.z) + SIMD3(vel.x, 0, vel.z) * 0.1   // a little room ahead of it
         if !encoreAimed { encoreAim = tgt; encoreAimed = true }
