@@ -6,6 +6,7 @@
 // input to pow/sqrt/normalize is clamped (LESSONS: one NaN pixel is a flicker storm).
 #include <metal_stdlib>
 using namespace metal;
+#include "SetSurface.h"
 
 struct Frame {
     float4x4 viewProj, lightViewProj;
@@ -125,7 +126,8 @@ static float3 duskEnv(float3 d, float rough, constant LookU& k) {
 fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facing]], constant Frame& f [[buffer(1)]], constant Material& m [[buffer(2)]],
                                   constant Light* lights [[buffer(3)]], texture2d<float> map [[texture(0)]], texture2d<float> roughMap [[texture(1)]],
                                   texture2d<float> emiMap [[texture(2)]], depth2d<float> shadow [[texture(3)]], texture2d<float> alphaMap [[texture(4)]],
-                                  constant LookU& look [[buffer(4)]], texture2d<float> wetMask [[texture(5)]], texture2d<float> mirror [[texture(6)]], texturecube<float> env [[texture(7)]]) {
+                                  constant LookU& look [[buffer(4)]], texture2d<float> wetMask [[texture(5)]], texture2d<float> mirror [[texture(6)]], texturecube<float> env [[texture(7)]],
+                                  texture2d<float> detail [[texture(8)]]) {
     constexpr sampler s(coord::normalized, filter::linear, mip_filter::linear, address::repeat, max_anisotropy(4));   // (8 on the web: on a slab at a grazing angle that's 8 taps a pixel at 120 Hz)
     float3 V0 = normalize(f.eye.xyz - in.world + 1e-6);
     // The web's ShaderMaterials (src/render/wall.js), their falloffs as written there; additive.
@@ -166,10 +168,14 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         if (!front) n = -n;
         float rough = m.pbr.y;
         if (m.flags.y) rough *= roughMap.sample(s, uv).g;
-        float metal = m.pbr.x, wet = 0;
+        float metal = m.pbr.x, wet = 0, setWet = 1;
+        if (m.flags.w & 24u) {   // the sets' concrete and steel (0271, SetSurface.h)
+            SetSurfaceOut so = setSurface(base.rgb, rough, in.world, n, m.flags.w & 24u, m.effect, detail, length(fwidth(in.world)));
+            base.rgb = so.base; rough = so.rough; setWet = so.wetK;
+        }
         if (m.effectKind.z != 0 && look.fogExp.y > 0) {   // wall.js wetSlab: damp everywhere, standing water in places
             constexpr sampler ws(coord::normalized, filter::linear, mip_filter::linear, address::repeat);
-            wet = 0.6 + 0.4 * wetMask.sample(ws, in.world.xz / 200.0).r;
+            wet = (0.6 + 0.4 * wetMask.sample(ws, in.world.xz / 200.0).r) * setWet;
             base.rgb *= 1.0 - 0.12 * wet;
             rough = mix(rough, max(rough * 0.55, 0.2), wet);
         }

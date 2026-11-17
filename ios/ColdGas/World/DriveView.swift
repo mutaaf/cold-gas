@@ -8,6 +8,8 @@ struct DriveView: View {
     @ObservedObject var game = Game.shared
     @ObservedObject var layout: LayoutModel
     @ObservedObject private var hud = HudStore.shared
+    /// On a roam the left column shows the set's challenges (0272); the map button swaps them for the map and back.
+    @State private var setList = true
     /// The world's numbers on screen (`-fd-stats`): a Debug tool, never in a Release build.
     #if DEBUG
     private let stats = Launch.args.contains("-fd-stats")
@@ -36,10 +38,16 @@ struct DriveView: View {
                             Button { game.flyFromRoam(); UISelectionFeedbackGenerator().selectionChanged() } label: {
                                 Text("Fly \(COURSE_INFO.first { $0.id == c }?.name ?? "it")").font(Theme.text(13, .medium)).foregroundStyle(Theme.ink)
                                     .lineLimit(1).fixedSize().padding(.horizontal, 16).frame(height: 44).glass(22)
+                                    // Once something's been done on the set, the way back to a scored run says so (0272).
+                                    .overlay(Capsule().strokeBorder(h.flyLit ? Theme.ink.opacity(0.7) : .clear, lineWidth: 1))
                             }.buttonStyle(.plain).accessibilityIdentifier("roam-fly").accessibilityHint("A scored run from the mark.")
+                            // The set's small challenges (0272), under Fly; the map takes their place when it's shown.
+                            if !h.challenges.isEmpty && setList {
+                                RoamChallengesView(rows: h.challenges) { game.freeDrive?.resetSet() }.transition(.opacity)
+                            }
                         }
                         // The minimap (0226), under Back, clear of the controls.
-                        if h.ready && hud.prefs.mapShown { DriveMapView().transition(.opacity) }
+                        if h.ready && (h.challenges.isEmpty ? hud.prefs.mapShown : !setList) { DriveMapView().transition(.opacity) }
                     }
                     Spacer(minLength: 8)
                     VStack(alignment: .trailing, spacing: 8) {
@@ -54,9 +62,13 @@ struct DriveView: View {
                                    h.cam == "chase" ? "Chase camera" : h.cam == "cinema" ? "Cinema camera" : "Bumper camera", on: h.cam == "cinema") { game.freeDrive?.camera.cycle() }
                             toggle("fanblades", h.fan ? "Fan armed" : "Fan off", on: h.fan) { game.freeDrive?.fan.toggle() }
                             toggle("arrow.uturn.backward", "Back on the road", on: false) { game.freeDrive?.reset() }
-                            toggle("map", hud.prefs.mapShown ? "Hide the map" : "Show the map", on: hud.prefs.mapShown) {
-                                let shown = hud.prefs.mapShown
-                                hud.update { $0.driveMap = !shown }
+                            if h.challenges.isEmpty {
+                                toggle("map", hud.prefs.mapShown ? "Hide the map" : "Show the map", on: hud.prefs.mapShown) {
+                                    let shown = hud.prefs.mapShown
+                                    hud.update { $0.driveMap = !shown }
+                                }
+                            } else {
+                                toggle(setList ? "map" : "checklist", setList ? "Show the map" : "Show the set's challenges", on: !setList) { setList.toggle() }
                             }
                         }
                     }
