@@ -108,6 +108,16 @@ final class Director {
     private var carryT: Float = 0, placed = false, carryPos = SIMD3<Float>(), carryLook = SIMD3<Float>()
     private var carryY: Float = 0, placeT: Float = 0, recuts = 0   // the car's height and the time at the placement; re-cuts so far (0118)
     private var ux: Float = 0, uz: Float = -1   // the shot's bearing, for elev()
+    // The encore (0271): a locked-off long lens, low beside the moment, its aim riding the car through it.
+    private(set) var encoreOn = false
+    private var encorePos = SIMD3<Float>(), encoreAim = SIMD3<Float>(), encoreAimed = false
+    private static let ENCORE_FOV: Float = 30
+    /// Behind the results (0271): a slow low orbit round the car where it came to rest. Reduce Motion: it holds still.
+    var orbit = false { didSet { if !orbit { orbiting = false } } }
+    private var orbiting = false, orbitA: Float = 0
+    /// The presentation clock's rate (the encore's slow motion): the shake rattles and dies away on it.
+    var clockK: Float = 1
+    private var shakeClock: Float = 0
 
     private func snap() { inited = false }
     /// A new run, a recorded run from the top or its loop: forget the last stunt.
@@ -139,7 +149,11 @@ final class Director {
         stT += dt
         if phase != lastPhase { if phase == 2 && !reduced { shake(0.15) }; lastPhase = phase }
 
-        if closeUp {   // debug: 5 m beside the car at its height (wheels, suspension, contacts)
+        if encoreOn {
+            encoreShot(car, vel, dt)
+        } else if orbit {
+            orbitShot(car, dt)
+        } else if closeUp {   // debug: 5 m beside the car at its height (wheels, suspension, contacts)
             want = car + SIMD3(5.5, 0.4, -1.2); lookWant = car + SIMD3(0, -0.1, 0); ease(dt, 2.4, 3.2); fov = 40
         } else if cutT > 0 {
             // A crash cut: a locked-off camera near the impact, watching the car, then a hard cut back.
@@ -156,9 +170,10 @@ final class Director {
             chase(car, vel, phase, dt)
         }
 
+        shakeClock += dt * clockK
         if shakeAmp > 0 {
-            shakeAmp = max(0, shakeAmp - dt * 3)
-            let tt = Float(t)
+            shakeAmp = max(0, shakeAmp - dt * 3 * clockK)
+            let tt = shakeClock
             pos += SIMD3(sin(tt * 91), sin(tt * 77 + 1), 0) * shakeAmp * 0.08
             if shakeAmp > 0.5 { rotateZ(sin(tt * 53) * (shakeAmp - 0.5) * 0.02) }   // a crash rattles the frame too
         }
@@ -464,6 +479,59 @@ final class Director {
             ease(dt, 3, 8)
             fovTo(lens(40), dt)
         }
+    }
+
+    // --- The encore and the orbit (0271) ------------------------------------------------------------------------------------
+    /// The moment again: a camera low beside where it happens (`p`, the car going `vel`), a little ahead so the car comes toward
+    /// it, with a clear line of sight: low on the open side first, then higher, then the other side.
+    func encore(at p: SIMD3<Float>, vel: SIMD3<Float>) {
+        let sp = hypot(vel.x, vel.z)
+        let hx = sp > 0.5 ? vel.x / sp : 0, hz = sp > 0.5 ? vel.z / sp : -1
+        var sx = hz, sz = -hx
+        if sx < 0 { sx = -sx; sz = -sz }
+        let target = SIMD3(p.x, max(0.5, p.y) + 0.2, p.z)
+        encoreOn = true; encoreAimed = false
+        for side: Float in [1, -1] {
+            // Upright, a car side-on is a thin strip across a tall frame: stand ahead of it, three-quarters on, so it comes at
+            // the lens and fills it; wider screens take the broadside.
+            let spots: [(Float, Float, Float)] = aspect < 1 ? [(6, 9, 1.1), (6, 9, 2.6), (8, 6, 4.6), (12, 2, 7.5)]
+                                                            : [(12, 5, 0.95), (12, 5, 2.4), (13, 2, 4.6), (14, 0, 7.5)]
+            for (d, ahead, h) in spots {
+                var at = SIMD3(p.x + side * sx * d + hx * ahead, h, p.z + side * sz * d + hz * ahead)
+                if course == "lineup" { at.x = clearOfPoles(at.x, p) }   // never on the lamp poles' line
+                if sightClear(at, target) { encorePos = at; if log { print("CAM encore at \(at) for \(p)") }; return }
+            }
+        }
+        encorePos = SIMD3(p.x + sx * 15, 8, p.z + sz * 15)
+    }
+    func endEncore() { encoreOn = false; encoreAimed = false }
+    private func encoreShot(_ car: SIMD3<Float>, _ vel: SIMD3<Float>, _ dt: Float) {
+        pos = encorePos
+        let tgt = SIMD3(car.x, car.y + 0.15, car.z) + SIMD3(vel.x, 0, vel.z) * 0.1   // a little room ahead of it
+        if !encoreAimed { encoreAim = tgt; encoreAimed = true }
+        // A camera operator's pan: close behind the car, never ahead of it (dt is real time; in slow motion it holds tighter).
+        encoreAim += (tgt - encoreAim) * (1 - exp(-dt * 14))
+        lookAt(encoreAim)
+        fov = aspect < 1 ? 50 : lens(Director.ENCORE_FOV)
+        snap()
+    }
+    private func orbitShot(_ car: SIMD3<Float>, _ dt: Float) {
+        let tgt = SIMD3(car.x, max(0.4, car.y) + 0.25, car.z)
+        if !orbiting {
+            orbiting = true
+            orbitA = atan2(pos.x - car.x, pos.z - car.z)
+            smooth = pos; lookS = tgt; inited = true
+        }
+        orbitA += dt * (reduced || aspect < 1 ? 0 : 0.09)   // upright the card covers the scene: the shot holds still behind it
+        var w = SIMD3(car.x + sin(orbitA) * 9.5, 2.1, car.z + cos(orbitA) * 9.5)
+        if course == "lineup" { w.x = clearOfPoles(w.x, car) }
+        for h: Float in [2.1, 4.6, 8] { w.y = h; if sightClear(w, tgt) { break } }
+        want = w; lookWant = tgt
+        if reduced { inited = false }   // Reduce Motion: a cut to the framing, then still
+        ease(dt, 0.8, 2.2)
+        if reduced { fov = lens(36) } else { fovTo(lens(36), dt, 1) }
+        // The car stands in the upper part of the frame, over the card.
+        rotateX(-atan((aspect < 1 ? 0.42 : 0.28) * tan(fov * .pi / 360)))
     }
 
     // --- A crash cut (crash.js cutTo) -----------------------------------------------------------------------------------------
