@@ -99,6 +99,9 @@ for (const [name, ctx] of [['390x844 touch', PHONE], ['1280x720', DESKTOP], ['32
     expect(overlaps(m.out)).toEqual([]);
     expect(m.titleTop).toBeGreaterThanOrEqual(m.barBottom - 1);   // the title never rises under the top bar
 
+    // One WebGL page at a time: a second boot beside a live 1280x720 title missed its physics wait on a CI runner (#413).
+    expect(errors).toEqual([]);
+    await page.close();
     const back = await browser.newPage(ctx);
     const errors2 = await boot(back, { landed: true });
     const r = await measure(back);
@@ -111,9 +114,7 @@ for (const [name, ctx] of [['390x844 touch', PHONE], ['1280x720', DESKTOP], ['32
       expect(q.box.h, sel).toBe(full.box.h);   // the same touch target
       expect(q.box.w, sel).toBeLessThanOrEqual(full.box.w + 0.5);
     }
-    expect(errors).toEqual([]);
     expect(errors2).toEqual([]);
-    await page.close();
     await back.close();
   });
 }
