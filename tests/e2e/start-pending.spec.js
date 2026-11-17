@@ -8,11 +8,22 @@ test.use(PHONE);
 
 const G = (page, fn, arg) => page.evaluate(fn, arg);
 const JUMP = '[data-start]';
+// The box: Jump's size, and where its neighbours (Watch the reference beside or under it, the daily card) sit relative to
+// it, so a shift of the whole title as it settles during the load (seen on CI: Jump 14 px up, its row with it) isn't a
+// change of the button's, and a button that grew or a row that moved still is.
 const state = (page) => G(page, (sel) => {
   const b = document.querySelector(sel), r = b.getBoundingClientRect();
+  const rel = (q) => { const e = document.querySelector(q)?.getBoundingClientRect(); return e ? [Math.round(e.x - r.x), Math.round(e.y - r.y)] : null; };
   return { pending: b.hasAttribute('data-pending'), busy: b.getAttribute('aria-busy'), label: getComputedStyle(b, '::before').content,
-    say: document.querySelector('[data-start-say]')?.textContent ?? null, w: Math.round(r.width), h: Math.round(r.height), x: Math.round(r.x), y: Math.round(r.y) };
+    say: document.querySelector('[data-start-say]')?.textContent ?? null,
+    box: [Math.round(r.width), Math.round(r.height), rel('[data-reveal]'), rel('[data-title-extra]')] };
 }, JUMP);
+// The title holds still for 600 ms (fonts, the daily card and the title's fit settle during the load).
+const settled = (page) => page.waitForFunction(() => {
+  const r = document.querySelector('[data-start]').getBoundingClientRect(), k = `${r.x},${r.y},${r.width},${r.height}`, now = performance.now();
+  if (window.__k !== k) { window.__k = k; window.__kt = now; }
+  return now - window.__kt > 600;
+}, null, { timeout: 30_000, polling: 100 });
 
 async function boot(page, { hold = true, fail = false } = {}) {
   await page.addInitScript(() => { try { localStorage.setItem('coldgas_howto', 'seen'); } catch {} });   // a returning player: Jump starts at once
@@ -30,6 +41,7 @@ async function boot(page, { hold = true, fail = false } = {}) {
 test('a Jump tapped while the engine loads says Starting… until the run begins, without moving', async ({ page }) => {
   const release = await boot(page);
   expect(await G(page, () => window.__coldgas.physicsReady())).toBe(false);
+  await settled(page);
   const before = await state(page);
   expect(before.pending).toBe(false);
   await G(page, () => { window.__starts = 0; new MutationObserver(() => { if (document.body.dataset.mode === 'countdown') window.__starts++; }).observe(document.body, { attributes: true, attributeFilter: ['data-mode'] }); });
@@ -39,7 +51,7 @@ test('a Jump tapped while the engine loads says Starting… until the run begins
   expect(at.busy).toBe('true');
   expect(at.label).toContain('Starting');
   expect(at.say).toContain('Starting');
-  expect([at.w, at.h, at.x, at.y]).toEqual([before.w, before.h, before.x, before.y]);   // no width change, nothing shifts
+  expect(at.box).toEqual(before.box);   // no size change, nothing beside it shifts
   await page.waitForTimeout(5000);
   const later = await state(page);
   expect(later.pending).toBe(true);
@@ -162,13 +174,14 @@ test.describe('1280×720, keyboard', () => {
   test.use({ viewport: { width: 1280, height: 720 }, hasTouch: false, isMobile: false });
   test('Enter on Jump while the engine loads says Starting… and moves nothing', async ({ page }) => {
     const release = await boot(page);
+    await settled(page);
     const before = await state(page);
     await page.locator(JUMP).focus();
     await page.keyboard.press('Enter');
     const at = await state(page);
     expect(at.pending).toBe(true);
     expect(at.label).toContain('Starting');
-    expect([at.w, at.h, at.x, at.y]).toEqual([before.w, before.h, before.x, before.y]);
+    expect(at.box).toEqual(before.box);
     release();
     await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown', null, { timeout: 60_000 });
     expect((await state(page)).pending).toBe(false);
