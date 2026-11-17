@@ -1,12 +1,12 @@
 ---
 id: 0236
 title: On the iPhone, the authored lines speak first and Apple's on-device model is the free upgrade, with no automatic cloud call
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: platform
 created: 2026-11-13
-pr:
+pr: 415
 by: operator
 ---
 
