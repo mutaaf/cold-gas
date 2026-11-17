@@ -427,6 +427,9 @@ Core Haptics turns those buzzes into **a continuous track driven by the sim**, s
     Where the device has Apple Intelligence (iOS 26+), Apple's on-device model writes the words instead
     (`Net/OnDeviceJudge.swift`; the route, deadline, fallback and receipt in ColdGasClient `OnDeviceJudge.swift`); on any
     failure the crew's lines stand. The app makes no automatic cloud judge call, and no model id is ever shown (§3.7).
+  - **Wreck and Wreck Club (0239, 0242):** ColdGasPhysics `WreckTracker` reads each tick (live and in the aftermath, up to
+    2.5 s after the end; never writes the sim) and ColdGasClient `Wreck.swift` scores it: a second score with combos, called
+    on the HUD and played as haptic patterns. `WreckClub.swift` keeps feats, ranks and paints in the save (`club`).
   - A BYOK key lives in the **Keychain** and is sent per call as `x-cg-key`.
   - The health beacon (`/obs`) sends only fields `cleanObs` accepts today; the Worker is frozen.
 - **Saves.** Medals, the daily streak, initials and settings live in UserDefaults. Every new field is optional or
