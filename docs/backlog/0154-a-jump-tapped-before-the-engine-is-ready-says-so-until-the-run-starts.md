@@ -1,12 +1,12 @@
 ---
 id: 0154
 title: A Jump tapped before the engine is ready keeps saying "Starting…" until the run begins
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-05
-pr:
+pr: 411
 by: scout
 ---
 
@@ -28,11 +28,11 @@ existing "couldn't load" cue stays, and the button returns to "Jump"). The 1.2 s
 a static "Starting…" label, no moving bar. No new network call, host, id or storage key.
 
 ## Acceptance criteria
-- [ ] With the engine held back (e2e route delay on the WASM), tapping Jump shows "Starting…" on the button within 100 ms and it is still there 5 s later
-- [ ] The run starts by itself once the engine arrives and the button is back to "Jump" for the next visit to the title
-- [ ] Cancelling (Menu, another mode, Back) clears it; a failed load restores "Jump" and shows the existing error cue
-- [ ] Several taps still start one run; with a ready engine nothing changes (no flash of "Starting…")
-- [ ] 390×844 touch and 1280×720 keyboard: the button does not change width or shift the Daily card; hud-audit has 0 overlaps
+- [x] With the engine held back (e2e route delay on the WASM), tapping Jump shows "Starting…" on the button within 100 ms and it is still there 5 s later
+- [x] The run starts by itself once the engine arrives and the button is back to "Jump" for the next visit to the title
+- [x] Cancelling (Menu, another mode, Back) clears it; a failed load restores "Jump" and shows the existing error cue
+- [x] Several taps still start one run; with a ready engine nothing changes (no flash of "Starting…")
+- [x] 390×844 touch and 1280×720 keyboard: the button does not change width or shift the Daily card; hud-audit has 0 overlaps
 
 ## Test plan
 e2e (touch 390×844): delay the Rapier WASM by 6 s, tap Jump, assert the pending state at +0.2 s and +5 s, then the
@@ -40,3 +40,13 @@ run starting and the state cleared; a second case taps Menu while pending and as
 
 ## Out of scope
 Making the engine load faster (0053), a progress percentage, any copy beyond one word, sound.
+
+**Builder, 2026-11-17:** shipped. `whenPhysics` (src/main.js) marks the pressed primary button (Jump, Play today's or Take
+the challenge; Jump if a deep link or the how-to card started it) `data-pending` + `aria-busy`, and a `role=status` line
+says "Starting…"; CSS draws "Starting…" over the button's own label, which keeps its room, so the button can't change size
+and nothing shifts (asserted in px at 390×844 touch and 1280×720 keyboard). It clears when the run starts, on any retired
+start (a mode change, Free Drive, the Sandbox, the title, the Menu), and on a failed load (the error cue stays). Reduced
+motion: the label without the moving bar. The pressed button gets it, whichever start it is (Jump, Play today's, Watch the
+reference, a drill; Jump for a deep link or the how-to card), and Take the challenge, which waits for the engine in
+src/comeback.js outside `whenPhysics`, says it through a `pending` hook. tests/e2e/start-pending.spec.js; the lifecycle spec's one-run-for-three-taps
+case is unchanged. Moves: `run` per `visit-new` (a tapped Jump that used to look dead now says it's coming).

@@ -1334,6 +1334,19 @@ body:is(:not([data-mode]), [data-mode='title']) .beta-chip { display: inline-fle
 .jb-e { display: inline-flex; align-items: center; gap: 10px; min-width: 0; font: 400 11px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: rgba(7, 9, 13, 0.66); white-space: nowrap; }
 .jb-e::after { content: '→'; font: 500 18px/1 var(--text); letter-spacing: 0; color: #07090d; transition: transform 0.25s var(--ease); }
 .jump-btn:hover .jb-e::after { transform: translateX(3px); }
+/* A start waiting on the engine (0154): "Starting…" over the pressed button's own label, which keeps its room (hidden,
+   not removed; no colour fade, so the two never show at once), so nothing changes size or moves; a short bar slides
+   along its foot (transform only: no repaint a frame); still under reduced motion, no bar. */
+.btn[data-pending] { position: relative; color: transparent; cursor: progress; transition: none; }
+.btn[data-pending] > * { visibility: hidden; }
+.btn[data-pending]::before { content: 'Starting…'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: var(--ink); font: inherit; white-space: nowrap; pointer-events: none; }
+.btn.primary[data-pending]::before { color: #07090d; }
+.btn[data-pending]::after { content: ''; position: absolute; left: 22%; width: 18%; bottom: 7px; height: 2px; border-radius: 1px; pointer-events: none;
+  background: rgba(245, 246, 248, 0.6); animation: start-wait 0.9s ease-in-out infinite alternate; }
+.btn.primary[data-pending]::after { background: rgba(7, 9, 13, 0.55); }
+@keyframes start-wait { from { transform: translateX(0); } to { transform: translateX(211%); } }
+@media (prefers-reduced-motion: reduce) { .btn[data-pending]::after { display: none; } }
 .cta-row { display: flex; gap: 8px; min-width: 0; }
 .cta-row .btn { flex: 1 1 auto; height: 44px; padding: 0 14px; font-size: 14px; white-space: nowrap; min-width: 0; }
 [data-title-extra]:empty { display: none; }
