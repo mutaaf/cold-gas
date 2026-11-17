@@ -1,0 +1,50 @@
+import { chromium, devices } from '@playwright/test';
+const out = process.argv[2], url = process.argv[3] || 'https://mutaafaziz.com/coldgas/';
+const course = process.argv[4] || 'jump';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome' });
+async function one(react, obey, shot) {
+  const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+  await ctx.route(/\/boxoffice\/e\//, (r) => r.fulfill({ status: 200, body: '{}' }));
+  await ctx.addInitScript(() => { localStorage.setItem('coldgas_howto', 'new'); });
+  const page = await ctx.newPage(); const errs = []; page.on('pageerror', (e) => errs.push(e.message));
+  await page.goto(url + '?gfx=low', { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90000 });
+  if (!shot) await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
+  await page.evaluate((c) => { const g = window.__coldgas; g.S.holdLive = true; g.startRun(c); g.skipCountdown(); }, course);
+  const fly = (args) => page.evaluate(({ react, obey, stopAtAim }) => {
+    const g = window.__coldgas, S = g.S, th = g.thumb; const W = window.__sw ||= { t: 0, seen: [], first: {}, aimT: 0, aimFirst: null, td: null, aiming: false, k: 0, stage: 'go', tapAt: null };
+    const cue = document.querySelector('[data-cue]'), sight = document.querySelector('[data-thumb-aim]');
+    const note = () => { const s = S.guide?.shown || ''; if (s && W.seen.at(-1) !== s) { W.seen.push(s); W.first[s] ??= W.t; }
+      if (s === 'aim') { W.aimT += 0.05; W.aimFirst ??= W.t; W.cue = cue.textContent; }
+      if (W.td == null && S.run && (S.run.phase === 'landed' || S.run.phase === 'done' || S.card)) W.td = W.t; };
+    const step = () => { g.liveStep(0.05); W.t += 0.05; note(); };
+    for (let i = 0; i < 6000 && S.mode === 'live' && !S.card; i++) {
+      const due = (h) => W.first[h] != null && W.t >= W.first[h] + react;
+      if (W.stage === 'go' && due('go')) { th.down(); W.stage = 'climb'; }
+      if (W.stage === 'climb' && due('tap')) { th.up(); step(); th.down(); step(); th.up(); W.stage = 'air'; }
+      if (W.stage === 'air' && obey && due('aim') && !W.aiming) { W.aiming = true; th.down(); }
+      if (W.aiming && S.run.phase === 'air' && W.k++ % 6 === 0 && sight.hasAttribute('data-on')) th.move(+sight.dataset.ex || 0, -(+sight.dataset.ey || 0));
+      if (stopAtAim && S.guide?.shown === 'aim' && W.aimT > 0.6 && !W.paused) return W.paused = 1,  { paused: true, cue: cue.textContent };
+      step();
+    }
+    if (W.aiming) th.up();
+    for (let i = 0; i < 4000 && S.mode !== 'results'; i++) g.liveStep(0.1);
+    const c = S.card;
+    return { react, obey, seen: W.seen, cue: W.cue, aimOnS: +W.aimT.toFixed(2), aimLeadS: W.aimFirst != null && W.td != null ? +(W.td - W.aimFirst).toFixed(2) : null, verdict: c?.verdict, total: c?.total, miss: c?.facts?.padMiss != null ? +c.facts.padMiss.toFixed(2) : null, landed: !!c?.facts?.jumped && !c?.facts?.crashed };
+  }, args);
+  let r;
+  if (shot) {
+    const p = await fly({ react, obey, stopAtAim: true });
+    await page.evaluate(() => window.__coldgas.stage.render?.());
+    await page.waitForTimeout(800);
+    await page.screenshot({ path: `${out}/phone-first-${course}-aim-hint.png` });
+    r = await fly({ react, obey, stopAtAim: false }); r.pausedCue = p.cue;
+    await page.waitForTimeout(6000);
+    await page.screenshot({ path: `${out}/phone-first-${course}-results.png` });
+  } else r = await fly({ react, obey, stopAtAim: false });
+  r.errors = errs.slice(0, 3); await ctx.close(); return r;
+}
+const shot = process.argv[5] === 'shot';
+if (shot) console.log(JSON.stringify(await one(0.3, false, true)));
+else for (const react of [0.15, 0.3, 0.5, 0.8, 1.2]) for (const obey of [false, true]) console.log(JSON.stringify(await one(react, obey, false)));
+await browser.close();

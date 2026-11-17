@@ -1,0 +1,32 @@
+import { chromium, devices } from '@playwright/test';
+const out = process.argv[2], url = process.argv[3];
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome' });
+const ctx = await browser.newContext({ ...devices['iPhone 13'] });
+await ctx.route(/\/boxoffice\/e\//, (r) => r.fulfill({ status: 200, body: '{}' }));
+await ctx.addInitScript(() => { localStorage.setItem('coldgas_howto', 'new'); });
+const page = await ctx.newPage(); const errs = []; page.on('pageerror', (e) => errs.push(e.message));
+await page.goto(url + '?gfx=low', { waitUntil: 'domcontentloaded' });
+await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90000 });
+await page.waitForTimeout(3000);
+await page.evaluate(() => { const g = window.__coldgas; g.startRun('jump'); g.skipCountdown();
+  window.__rt = { log: [] }; let st = 'go', tapped = false;
+  const iv = setInterval(() => { const S = g.S, th = g.thumb, s = S.guide?.shown || '';
+    const last = window.__rt.log.at(-1); const c = document.querySelector('[data-cue]');
+    const vis = c && c.classList.contains('on') ? c.textContent : '';
+    if (!last || last.s !== s || last.vis !== vis) window.__rt.log.push({ s, vis, t: +(S.run?.t?.time ?? S.run?.time ?? 0) });
+    if (st === 'go' && s === 'go') { th.down(); st = 'climb'; }
+    if (st === 'climb' && s === 'tap') { th.up(); setTimeout(() => { th.down(); setTimeout(() => th.up(), 120); }, 120); st = 'air'; }
+    if (s === 'aim' && vis) { const cam = g.camera, car = g.carRoot; car.updateMatrixWorld(true); const V = car.position.constructor;
+      let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9; for (const dx of [-1,1]) for (const dy of [0,1.3]) for (const dz of [-2.3,2.3]) { const v = new V(dx,dy,dz).applyMatrix4(car.matrixWorld).project(cam); const sx=(v.x+1)/2*innerWidth, sy=(1-v.y)/2*innerHeight; x0=Math.min(x0,sx);x1=Math.max(x1,sx);y0=Math.min(y0,sy);y1=Math.max(y1,sy); }
+      const b = c.getBoundingClientRect(); const ix = Math.max(0, Math.min(x1,b.right)-Math.max(x0,b.left)), iy = Math.max(0, Math.min(y1,b.bottom)-Math.max(y0,b.top));
+      (window.__rt.car ||= []).push({ alt: +(S.run.car?.pos?.y ?? NaN).toFixed?.(2), box: [x0,y0,x1,y1].map(Math.round), covered: +((ix*iy)/((x1-x0)*(y1-y0))).toFixed(2) }); }
+    if (S.mode !== 'live') clearInterval(iv); }, 30); });
+const ok = await page.waitForFunction(() => { const c = document.querySelector('[data-cue]'); return window.__coldgas.S.guide?.shown === 'aim' && c?.classList.contains('on') && /slide/.test(c.textContent); }, null, { timeout: 180000, polling: 30 }).then(() => 1).catch(() => 0);
+if (ok) { await page.waitForTimeout(250); await page.screenshot({ path: `${out}/phone-first-jump-aim-hint.png` }); await page.evaluate(() => { document.querySelector('[data-cue]').style.visibility = 'hidden'; }); await page.screenshot({ path: `${out}/phone-first-jump-aim-hint-cue-hidden.png` }); await page.evaluate(() => { document.querySelector('[data-cue]').style.visibility = ''; }); }
+const box = await page.evaluate(() => { const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return [Math.round(b.x), Math.round(b.y), Math.round(b.width), Math.round(b.height)]; }; return { cue: r('[data-cue]'), pad: r('[data-onethumb]'), sight: r('[data-thumb-aim]'), fs: getComputedStyle(document.querySelector('[data-cue]')).fontSize }; });
+await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 180000 }).catch(() => {});
+await page.waitForTimeout(8000);
+await page.screenshot({ path: `${out}/phone-first-jump-results.png` });
+const res = await page.evaluate(() => { const c = window.__coldgas.S.card; return { verdict: c?.verdict, total: c?.total, miss: c?.facts?.padMiss, log: window.__rt.log, car: window.__rt.car }; });
+console.log(JSON.stringify({ ok, box, ...res, errs }));
+await browser.close();

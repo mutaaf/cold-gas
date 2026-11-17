@@ -165,3 +165,10 @@ rest, or a tap while it creeps flies the same release as one at rest. The criter
       (today 85.7 vs 88.3).
 - [ ] Production, 390×844 touch, first visit, the follow thumb above: the Wall ≤ 7 m.
 - [ ] The earlier boxes stand (the five patterns, the slide pays ≥ 5, the reveal's timings, `naive-players` 32/32).
+
+## Critic note (2026-11-17)
+0263 (#410) measured a second cost of this law: on the Wall, a guided first-jump thumb that slides onto the sight's dot
+lands **no nearer** the mark (6.5–12.6 m against 6.5–10.5 m hands off) and scores less on 3 of 10 sweep points, so the
+first-jump guide's "Hold, slide to the dot" ships on the Show only (`AIM_COURSES = { show: true }`, src/guide.js). When
+this ticket ships, its PR also turns the aim hint on for the Wall if the 0263 sweep there passes (≥ 8/10 obeying thumbs
+≤ 2.0 m, total ≥ the hands-off thumb's).
