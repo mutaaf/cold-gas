@@ -155,6 +155,7 @@ test('Skip ends the guide for good; keys get it in their own words', async ({ br
 });
 
 test('phone, one thumb: a newcomer who slides onto the dot as the aim hint says lands nearer the mark, for no less', async ({ browser }) => {
+  test.setTimeout(600_000);   // two SwiftShader boots and two whole flights (LESSONS 2026-11-03: a boot can take 67 s)
   const runs = {};
   for (const obey of [false, true]) {
     const page = await browser.newPage(PHONE);

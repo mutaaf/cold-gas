@@ -1447,7 +1447,8 @@ function guideCue(run, c) {
   gs.aimable = thumbOn;
   gs.sight = thumbOn && run.phase === 'air' && thumbStage(run, S.released) === 'fly' && upY > thumb.aimUy;
   gs.aimRoom = c.pos.y - SPEC.comHeight > THUMB.aimFloor + THUMB.aimFade;
-  gs.slid = thumbOn && thumb.held && (thumb.aim.x !== 0 || thumb.aim.y !== 0);
+  // Only a slide the sight is up for counts: a held thumb's drift on the run-up or in the roll is not the lesson (review).
+  gs.slid = gs.sight && thumb.held && (thumb.aim.x !== 0 || thumb.aim.y !== 0);
   const step = guideStep(S.guide, gs);
   const breathe = thumbOn && step === 'go';
   if (thumbPad.hasAttribute('data-guide') !== breathe) thumbPad.toggleAttribute('data-guide', breathe);

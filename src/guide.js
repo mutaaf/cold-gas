@@ -85,7 +85,7 @@ const DONE = {
   line: (s) => s.released || s.phase === 'air' || !!s.computerRolls,
   roll: (s, course) => s.landOn || (course === 'lineup' ? s.rolledOut || (!s.computerRolls && s.rolled) : s.phase === 'air' && !s.tilted),
   land: (s) => !!s.landHeld,
-  aim: (s, course) => !AIM_COURSES[course] || !s.aimable || !!s.slid,
+  aim: (s, course) => !AIM_COURSES[course] || !s.aimable || (s.sight && !!s.slid),
 };
 
 /**
@@ -108,7 +108,8 @@ export function guideStep(g, s) {
 // Where the next attempt picks up after a wreck: the first step this run didn't get done; with every step done (it came
 // down hard all the same), the landing.
 export function resumeFrom(g) {
-  for (let i = 0; i < g.steps.length; i++) if (!(g.done & (1 << i))) return i;
+  // 0263: the aim is never where an attempt resumes: a wreck in the air goes back to the landing (its line, its step).
+  for (let i = 0; i < g.steps.length; i++) if (!(g.done & (1 << i))) return g.steps[i] === 'aim' ? g.steps.indexOf('land') : i;
   return g.steps.indexOf('land');
 }
 

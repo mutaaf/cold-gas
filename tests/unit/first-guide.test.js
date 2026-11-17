@@ -113,7 +113,7 @@ function guidedThumb(course, react, { landPress = false, obey = false } = {}) {
     s.landHeld = th.landing; s.landOn = th.landing || c.autoLand > 0; s.computerRolls = false;
     s.aimable = true; s.sight = run.phase === 'air' && stage === 'fly' && uw.y > th.aimUy;
     s.aimRoom = c.pos.y - SPEC.comHeight > THUMB.aimFloor + THUMB.aimFade;
-    s.slid = th.held && (th.aim.x !== 0 || th.aim.y !== 0);
+    s.slid = s.sight && th.held && (th.aim.x !== 0 || th.aim.y !== 0);   // as main.js guideCue
     const step = guideStep(g, s);
     if (step === 'aim') { aimTicks++; if (aimFirst < 0) aimFirst = run.tick; }
     if (step && seen.at(-1) !== step) {
@@ -214,5 +214,20 @@ describe('the first-jump guide teaches the slide (0263)', () => {
     expect(guideStep(g, s)).toBe('');
     s.slid = false;
     expect(guideStep(g, s)).toBe('');           // done: never again this run
+  });
+
+  it('a held thumb that drifts on the run-up or in the roll hasn\'t done the aim (review)', () => {
+    const g = newGuide('show', stepsFor('show').indexOf('roll'));
+    const s = { phase: 'air', rising: false, tilted: true, landOn: true, landHeld: true, aimable: true, sight: false, aimRoom: true, slid: true, held: true };
+    guideStep(g, s);   // still rolling, the thumb slid past the dead zone: no sight, not the lesson
+    s.tilted = false; s.sight = true; s.slid = false;
+    expect(guideStep(g, s)).toBe('aim');
+  });
+
+  it('a wreck with the landing held but the aim undone resumes at the landing, not the aim (review)', () => {
+    const g = newGuide('show');
+    g.done = (1 << stepsFor('show').indexOf('aim')) - 1;   // go … land done, aim not
+    expect(stepsFor('show')[resumeFrom(g)]).toBe('land');
+    expect(wreckLine(g)).toBe('Hold sooner to land');
   });
 });

@@ -72,3 +72,10 @@ scripted thumb sees the aim hint and, sliding as told, lands nearer the mark tha
 ## Out of scope
 Auto-land's timing and the slide's law (0164, 0190); the sheet's NEXT RUN wording (0261); the Lineup (the computer
 rolls and lands it on one thumb by design, 0181).
+
+## Shipped (#410)
+The aim step ships on the Show only. On the Wall the hint would show (≈ 1.0 s, 10/10), but a guided thumb that followed
+the dot landed no nearer (6.5–12.6 m against 6.5–10.5 m) and scored less on 3 of 10 points: the Wall's slide up or down is
+a raw pitch (0190), not a place (0165). The Wall needs that law first (a follow-up for the Scout). Keys and a pad: their
+"Hold Shift / B to land" never shows either (auto-land at 11.1 s Show, 13.7 s Wall, 5/5 reactions); they have no sight
+or place-based aim, so no hint for them yet. Numbers in the PR.
