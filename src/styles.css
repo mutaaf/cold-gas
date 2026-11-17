@@ -330,6 +330,10 @@ body.building .quick-pause { visibility: hidden; }   /* build mode can't pause; 
 .rows .ini { font: 400 15px/1 var(--mono); letter-spacing: 0.2em; }
 .rows .v { font-size: 12px; color: var(--ink-3); }
 .rows .t { font: 300 20px/1 var(--text); font-variant-numeric: tabular-nums; }
+/* 0168: the empty board's how-to-earn-a-row line and its Jump, between the rows and Close. */
+.board-empty { margin: -10px 0 18px; }
+.board-how { margin: 0 0 14px; font-size: 13px; line-height: 1.45; color: var(--ink-2); }
+.board-empty .btn { width: 100%; }
 /* Key lists: the labels in a column of their own, as wide as the widest, with a gap before the text
    (0092: "ADVANCEDQ E Z C" ran together in a fixed 64 px box). Subgrid lines every row up; without it
    a label sits above its line. */

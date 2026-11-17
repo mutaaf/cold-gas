@@ -470,6 +470,11 @@
       </div>
       <div class="seg board-courses" role="group" aria-label="Event"><button data-board-course="show" aria-pressed="true">The Show</button><button data-board-course="wall" aria-pressed="false">The Wall</button><button data-board-course="lineup" aria-pressed="false">The Lineup</button></div>
       <ol class="rows" data-board-rows><li class="empty">Loading…</li></ol>
+      <!-- 0168: an empty board says what earns a row and offers the Jump that would fill it (the title's own Jump). -->
+      <div class="board-empty" data-board-empty hidden>
+        <p class="board-how" data-board-how>Land a jump, then Post · ABC from the results.</p>
+        <button type="button" class="btn primary" data-board-jump>Jump</button>
+      </div>
       <button class="btn ghost" data-board-close>Close</button>
     </div>
   </section>

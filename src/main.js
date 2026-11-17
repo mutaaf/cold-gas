@@ -238,7 +238,7 @@ addEventListener('pagehide', () => funnel.flush());
 document.addEventListener('visibilitychange', () => { if (document.hidden) funnel.flush(); });
 // first_input: the page's first touch, key or pad press that reaches the car (a live run of the player's own) or the
 // title's primary action (Jump, Take the challenge, Play today's). Capture: before anything else can swallow it.
-const PRIMARY = '[data-start], [data-vs-take], [data-daily-play]';
+const PRIMARY = '[data-start], [data-vs-take], [data-daily-play], [data-board-jump]';
 const firstInput = (e) => {
   if (e.repeat) return;
   const live = S.mode === 'live' && !S.paused && !S.autopilot;
@@ -2257,23 +2257,36 @@ poster = createPost({
 // One course at a time: the one on the stage when it opens, the tabs for the others.
 let boardKind = 'today', boardCourse = null, boardSeq = 0, boardAbort = null;
 const BOARD_COURSE = { show: 'the Show', wall: 'the Wall', lineup: 'the Lineup' };
+const BOARD_JUMP = { show: 'The Show', wall: 'The Wall', lineup: 'The Lineup' };
+const boardEmpty = document.querySelector('[data-board-empty]');
 async function openBoard(kind = boardKind, course = boardCourse || stage.course) {
   boardKind = kind; boardCourse = BOARD_COURSE[course] ? course : 'show';
   ui.show('board', true);
   document.querySelectorAll('[data-board]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.board === kind)));
   document.querySelectorAll('[data-board-course]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.boardCourse === boardCourse)));
   const seq = ++boardSeq;
+  boardEmpty.hidden = true;   // a tab's Jump never names the course of the tab before it while this one loads (0168)
   boardAbort?.abort();
   boardAbort = new AbortController();
   const rows = await fetchBoard(kind, { signal: boardAbort.signal, course: boardCourse });
   if (seq !== boardSeq) return;
   boardAbort = null;
   const empty = `No jumps on ${BOARD_COURSE[boardCourse]} ${kind === 'all' ? 'yet' : 'yet today'}. Be the first.`;
-  try { ui.board(rows, empty); } catch (err) { obs.error('app', err); ui.board(null); }
+  // 0168: from the title only, an empty board offers the Jump that would fill it (never from a run or its results).
+  try { ui.board(rows, empty, S.mode === 'title' ? BOARD_JUMP[boardCourse] : ''); } catch (err) { obs.error('app', err); ui.board(null); }
 }
 on('[data-board-open]', () => { obs.play('board-open'); boardCourse = null; openBoard(); });
 document.querySelectorAll('[data-board-course]').forEach((b) => b.addEventListener('click', () => openBoard(boardKind, b.dataset.boardCourse)));
 on('[data-board-close]', () => ui.show('board', false));
+// The empty board's Jump (0168): close the board, pick its course, and press the title's own Jump, so the how-to card for
+// a new player, "Starting…", the ads and the funnel's counts are exactly the title's.
+on('[data-board-jump]', () => {
+  if (S.mode !== 'title') return;
+  const course = boardCourse;
+  ui.show('board', false);
+  selectCourse(course);
+  document.querySelector('[data-start]').click();
+});
 document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('click', () => openBoard(b.dataset.board)));
 
 // The window changed shape (a rotation, a folding phone opened or closed mid-anything, 0075): the
