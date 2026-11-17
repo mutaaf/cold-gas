@@ -80,7 +80,10 @@ left in the tanks; on a wreck, combos that come from the physics.
     flown (`ctl-thumb|classic|keys|pad`, `fly-assist|pro|advanced`) and a wreck's cause (`wreck-*`, the coach's first finding;
     src/obs/run-end.js, 0138), the Daily (`daily-start` on a tap of Play today's or Play again; `daily-done` or `daily-miss` on every finished run on its
     course, however it was started, as the streak counts it; `daily-run`, the old name for a miss, is still counted with it for one release, 0136), how-to skips, retries, posts,
-    shares…), stored as `play:<event>` per day for
+    shares…, and a visit that ends on the title (0143, src/obs/title-leave.js: `jump-tap` once per page load before any run;
+    `title-left` once when the page goes (pagehide or hidden) on the title never past it this load, beside one reason:
+    `left-howto` the how-to card open, `left-starting` a start still waiting, `left-booting` the title not drawn yet,
+    `left-title` nothing; `title-back` if that load then comes back and plays, so leaves = title-left − title-back)), stored as `play:<event>` per day for
     people only; an automated browser (`navigator.webdriver`, i.e. our own agents and tests) is
     counted as `sessions:auto`, never as a player.
   - `GET /coldgas/api/obs/digest[?build=]`: top signatures, `regressions` (new or ≥ 2× per session
