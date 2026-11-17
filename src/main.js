@@ -1426,7 +1426,7 @@ function cues(run, c) {
 const GUIDE_KEY = 'coldgas_guide';
 const goSkip = {};   // "Hold to go" with its Skip chip, made once per device's words (no string per frame)
 function guideSkipped() { try { return localStorage.getItem(GUIDE_KEY) === 'skip'; } catch { return false; } }
-const gs = { phase: '', held: false, released: false, ledge: false, nearLine: false, rising: false, tilted: false, rolled: false, rolledOut: false, landOn: false, computerRolls: false };
+const gs = { phase: '', held: false, released: false, ledge: false, nearLine: false, rising: false, tilted: false, rolled: false, rolledOut: false, landOn: false, landHeld: false, computerRolls: false, aimable: false, sight: false, aimRoom: false, slid: false };
 function guideCue(run, c) {
   const mode = guideMode(S.ptrCtx || pointerCtx());
   if (!mode) return false;
@@ -1437,10 +1437,18 @@ function guideCue(run, c) {
   gs.ledge = !lineup && (thumbOn ? thumbStage(run, S.released) === 'ledge' : run.phase === 'ramp' && run.t.progress >= 0.92);
   gs.nearLine = lineup && c.pos.z > -14;
   gs.rising = c.vel.y > 0;
-  gs.tilted = !lineup && 1 - 2 * (c.quat.x * c.quat.x + c.quat.z * c.quat.z) < 0.85;   // the car's up vector's y
+  const upY = 1 - 2 * (c.quat.x * c.quat.x + c.quat.z * c.quat.z);   // the car's up vector's y
+  gs.tilted = !lineup && upY < 0.85;
   gs.rolled = Math.abs(run.t.rollAccum) > 0.3; gs.rolledOut = Math.abs(run.t.rollAccum) > 5.6;
-  gs.landOn = liveInput.level > 0 || c.autoLand > 0 || (thumbOn && thumb.landing);
+  gs.landHeld = liveInput.level > 0 || (thumbOn && thumb.landing);
+  gs.landOn = gs.landHeld || c.autoLand > 0;
   gs.computerRolls = lineup && thumbOn;
+  // 0263: the touchdown slide, as the pad's sight shows it (src/thumb-aim.js) and the control reads it (src/onethumb.js).
+  gs.aimable = thumbOn;
+  gs.sight = thumbOn && run.phase === 'air' && thumbStage(run, S.released) === 'fly' && upY > thumb.aimUy;
+  gs.aimRoom = c.pos.y - SPEC.comHeight > THUMB.aimFloor + THUMB.aimFade;
+  // Only a slide the sight is up for counts: a held thumb's drift on the run-up or in the roll is not the lesson (review).
+  gs.slid = gs.sight && thumb.held && (thumb.aim.x !== 0 || thumb.aim.y !== 0);
   const step = guideStep(S.guide, gs);
   const breathe = thumbOn && step === 'go';
   if (thumbPad.hasAttribute('data-guide') !== breathe) thumbPad.toggleAttribute('data-guide', breathe);
