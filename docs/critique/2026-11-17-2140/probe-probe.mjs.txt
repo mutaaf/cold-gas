@@ -1,0 +1,92 @@
+import { chromium } from '@playwright/test';
+const URL = 'https://mutaafaziz.com/coldgas/';
+const OUT = '/home/user/cold-gas/docs/critique/2026-11-17-2140';
+const GL = ['--use-gl=swiftshader', '--enable-unsafe-swiftshader', '--ignore-gpu-blocklist'];
+const browser = await chromium.launch({ args: GL, executablePath: '/opt/pw-browsers/chromium' });
+const obs = [];
+async function ctx(phone, first) {
+  const c = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 } });
+  await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+  await c.route('**/api/obs**', (r) => { if (r.request().method() === 'POST') { obs.push(r.request().postData()); return r.fulfill({ status: 204, body: '' }); } return r.continue(); });
+  if (first) await c.addInitScript(() => { try { if (!sessionStorage.__set) { localStorage.coldgas_howto = 'new'; sessionStorage.__set = 1; } } catch {} });
+  return c;
+}
+const out = {};
+// 1. first visit phone: tap Jump as soon as it is visible, record pending
+{
+  const c = await ctx(true, true); const p = await c.newPage();
+  const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  const t0 = Date.now();
+  await p.goto(URL + '?gfx=low');
+  const jump = p.locator('button', { hasText: /^\s*Jump/ }).first();
+  await jump.waitFor({ state: 'visible', timeout: 60000 });
+  out.jumpVisibleMs = Date.now() - t0;
+  await p.screenshot({ path: `${OUT}/phone-first-title-early.png` });
+  const ready0 = await p.evaluate(() => !!window.__coldgas?.physicsReady?.());
+  const box0 = await jump.boundingBox();
+  await jump.tap();
+  await p.waitForTimeout(150);
+  const pend = await p.evaluate(() => { const b = document.querySelector('[data-pending]'); return b ? { txt: getComputedStyle(b, '::after').content + '|' + b.textContent.trim(), busy: b.getAttribute('aria-busy') } : null; });
+  await p.screenshot({ path: `${OUT}/phone-first-jump-pending.png` });
+  const box1 = await jump.boundingBox().catch(() => null);
+  out.first = { readyAtTap: ready0, pending: pend, box0, box1 };
+  const tTap = Date.now();
+  await p.waitForFunction(() => window.__coldgas?.S?.mode && window.__coldgas.S.mode !== 'title', null, { timeout: 60000 }).catch(() => {});
+  out.first.tapToRunMs = Date.now() - tTap;
+  out.first.mode = await p.evaluate(() => window.__coldgas.S.mode);
+  await p.waitForTimeout(800);
+  await p.screenshot({ path: `${OUT}/phone-first-run-start.png` });
+  out.first.errs = errs;
+  await c.close();
+}
+// 2. first visit phone, settled title, then leave (0143)
+{
+  const c = await ctx(true, true); const p = await c.newPage();
+  await p.goto(URL + '?gfx=low');
+  await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60000 });
+  await p.waitForTimeout(2600);
+  await p.screenshot({ path: `${OUT}/phone-first-title.png` });
+  out.firstTitle = await p.evaluate(() => {
+    const r = (s) => { const e = document.querySelector(s); if (!e) return null; const b = e.getBoundingClientRect(); return { x: b.x|0, y: b.y|0, w: b.width|0, h: b.height|0 }; };
+    const btns = [...document.querySelectorAll('button')].filter((b) => { const q = b.getBoundingClientRect(); return q.width && q.height && q.bottom > 0 && q.top < innerHeight; }).map((b) => ({ t: b.textContent.trim().slice(0, 30), bg: getComputedStyle(b).backgroundColor, y: b.getBoundingClientRect().y | 0, h: b.getBoundingClientRect().height | 0 }));
+    return { flag: document.documentElement.hasAttribute('data-first-title'), btns };
+  });
+  const n0 = obs.length;
+  await p.evaluate(() => { document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new PageTransitionEvent('pagehide', { persisted: false })); });
+  await p.close({ runBeforeUnload: true });
+  await new Promise((r) => setTimeout(r, 1500));
+  out.leaveObs = obs.slice(n0).map((s) => (s || '').slice(0, 400));
+  await c.close();
+}
+// 3. phone returning: reference run, crash, results
+for (const [label, phone] of [['phone', true], ['desk', false]]) {
+  const c = await ctx(phone, false); const p = await c.newPage();
+  await p.goto(URL + '?gfx=low');
+  await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60000 });
+  await p.waitForTimeout(2600);
+  await p.screenshot({ path: `${OUT}/${label}-title.png` });
+  const ref = await p.evaluate(() => {
+    const g = window.__coldgas, S = g.S;
+    g.startRun('jump', true); S.autopilot = g.createAutopilot(g.stage.course); g.skipCountdown();
+    let peakY = 0, rel = null, td = null, maxG = 0, sink = null;
+    for (let i = 0; i < 6000 && !S.card; i++) { g.liveStep(1/60); const r = S.run; if (!r) continue; peakY = Math.max(peakY, r.car.pos.y);
+      if (r.phase === 'air' && rel == null) rel = r.time ?? r.t?.time; if (r.phase === 'landed' && td == null) td = r.time ?? r.t?.time; }
+    const c = S.card; return { total: c?.total, verdict: c?.verdict, peakY: +peakY.toFixed(2), rel, td };
+  });
+  out[label + 'Ref'] = ref;
+  await p.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 40000 }).catch(() => {});
+  await p.waitForTimeout(6000);
+  await p.screenshot({ path: `${OUT}/${label}-ref-results.png` });
+  // crash: no boost, no input
+  const cr = await p.evaluate(() => {
+    const g = window.__coldgas, S = g.S; g.toTitle(); g.startRun('jump', true); S.autopilot = null; g.skipCountdown();
+    for (let i = 0; i < 6000 && S.mode === 'live'; i++) g.liveStep(1/60);
+    return { mode: S.mode, verdict: S.card?.verdict, total: S.card?.total, crashed: S.card?.crashed };
+  });
+  out[label + 'Crash'] = cr;
+  await p.waitForTimeout(6000);
+  await p.screenshot({ path: `${OUT}/${label}-crash-results.png` });
+  await c.close();
+}
+console.log(JSON.stringify(out, null, 1));
+await browser.close();
