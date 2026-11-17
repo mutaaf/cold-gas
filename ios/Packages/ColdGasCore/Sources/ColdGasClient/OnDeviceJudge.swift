@@ -31,8 +31,15 @@ private let TIER_LINE = [
 ]
 
 /// src/worker/ai/prompt.js userPrompt: the verified card as compact facts. The run's numbers and nothing else.
-public func judgePrompt(_ card: ScoreCard) -> String {
-    [userFacts(card), damageLine(card.facts), TIER_LINE[card.tier ?? ""] ?? ""].filter { !$0.isEmpty }.joined(separator: "\n")
+public func judgePrompt(_ card: ScoreCard, wreck: CrewWreck? = nil) -> String {
+    [userFacts(card), damageLine(card.facts), TIER_LINE[card.tier ?? ""] ?? "", wreckLine(wreck)].filter { !$0.isEmpty }.joined(separator: "\n")
+}
+/// The Wreck score (0237), the second score: never blended with the total above.
+private func wreckLine(_ w: CrewWreck?) -> String {
+    guard let w, w.total > 0 else { return "" }
+    let combo = w.bestCombo >= 2 ? "; best combo x\(w.bestCombo): \(w.chain.joined(separator: ", ").lowercased())" : ""
+    let top = w.toppled > 0 ? "; toppled \(w.toppled) parked car\(w.toppled == 1 ? "" : "s")" : ""
+    return "Wreck score (a separate score for how spectacularly it came apart) \(jsNumberString(w.total))/100\(combo)\(top)."
 }
 
 private func damageLine(_ f: JSValue) -> String {
@@ -191,10 +198,10 @@ public enum OnDeviceJudging {
 
     /// One on-device judging: `.prompt`, then `.token` as each part lands, then `.done`; or the reason it couldn't.
     /// Never longer than `deadlineMs`. `place` is where it ran, for the receipt ("this iPhone").
-    public static func run(model: OnDeviceJudgeModel, card: ScoreCard, place: String, deadlineMs: Double = ON_DEVICE_MS,
+    public static func run(model: OnDeviceJudgeModel, card: ScoreCard, wreck: CrewWreck? = nil, place: String, deadlineMs: Double = ON_DEVICE_MS,
                            now: @escaping @Sendable () -> Double = { Date().timeIntervalSince1970 * 1000 },
                            emit: @escaping @Sendable (JudgeEvent) -> Void) async -> Outcome {
-        let user = judgePrompt(card)
+        let user = judgePrompt(card, wreck: wreck)
         let gate = Gate(emit)
         let inEst = estimateTokens(ON_DEVICE_INSTRUCTIONS) + estimateTokens(user)
         gate.send(.prompt(JudgePrompt(provider: ON_DEVICE_PROVIDER, providerLabel: "Apple\u{2019}s on-device model", vendor: "Apple", model: ON_DEVICE_MODEL,
@@ -248,13 +255,13 @@ public enum OnDeviceJudging {
 
 /// The whole choice, as Judges.swift makes it (0236): on the device first when it can; on any failure, or on the authored
 /// route, the crew's lines (`authored`), with the receipt saying so. Nothing here, or behind it, calls a cloud model.
-public func judgePanel(card: ScoreCard, route: JudgeRoute, model: OnDeviceJudgeModel?, place: String, authored: JudgeWords,
+public func judgePanel(card: ScoreCard, wreck: CrewWreck? = nil, route: JudgeRoute, model: OnDeviceJudgeModel?, place: String, authored: JudgeWords,
                        onDeviceMs: Double = ON_DEVICE_MS,
                        now: @escaping @Sendable () -> Double = { Date().timeIntervalSince1970 * 1000 },
                        emit: @escaping @Sendable (JudgeEvent) -> Void) async -> (JudgeWords, JudgeMeta)? {
     var meta = JudgeMeta.authoredMeta
     if route == .onDevice, let model {
-        switch await OnDeviceJudging.run(model: model, card: card, place: place, deadlineMs: onDeviceMs, now: now, emit: emit) {
+        switch await OnDeviceJudging.run(model: model, card: card, wreck: wreck, place: place, deadlineMs: onDeviceMs, now: now, emit: emit) {
         case let .spoke(w, m): return (w, m)
         case let .failed(reason):
             if Task.isCancelled { return nil }

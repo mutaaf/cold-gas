@@ -12,11 +12,11 @@ import Foundation
 import ColdGasClient
 
 final class JudgesClient: @unchecked Sendable {
-    func judges(card: ScoreCard, authored: JudgeWords, route: JudgeRoute = .authored, onDevice: OnDeviceJudgeModel? = nil,
+    func judges(card: ScoreCard, wreck: CrewWreck? = nil, authored: JudgeWords, route: JudgeRoute = .authored, onDevice: OnDeviceJudgeModel? = nil,
                 place: String = "this device") -> AsyncStream<JudgeEvent> {
         AsyncStream { out in
             let task = Task {
-                let said = await judgePanel(card: card, route: route, model: onDevice, place: place, authored: authored, emit: { _ = out.yield($0) })
+                let said = await judgePanel(card: card, wreck: wreck, route: route, model: onDevice, place: place, authored: authored, emit: { _ = out.yield($0) })
                 if let said, !Task.isCancelled { out.yield(.finished(words: said.0, meta: said.1)) }
                 out.finish()
             }
