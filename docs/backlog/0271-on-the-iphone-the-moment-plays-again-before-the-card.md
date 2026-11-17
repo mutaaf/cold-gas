@@ -1,12 +1,12 @@
 ---
 id: 0271
 title: On the iPhone the run's moment plays again, slowed and felt, before the card
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-17
-pr:
+pr: 417
 by: operator
 ---
 
