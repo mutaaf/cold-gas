@@ -6,7 +6,7 @@ priority: P0
 size: M
 lens: engagement
 created: 2026-11-17
-pr:
+pr: 420
 by: operator
 ---
 
@@ -36,6 +36,11 @@ Runs on: the operator's Mac (Xcode). Unscored: nothing here reaches a score, a l
       flight that lands in the row, flying beside the row, jumping off the floor by the curl, a touched cone, a slow exit).
 - [x] A stack of four tyres is shoved over by the car at 10 m/s, which keeps > 7 m/s.
 - [x] `make test` green, the 52 run vectors bit-exact.
+
+## Test plan
+- `make test` in `ios/`: `SetDressingTests` shoves a stack over, and each challenge fires on its moment and not on a near miss.
+- Simulator, launched with `-mute`: roam the Show, the Wall and the Lineup; topple tyres, tick a challenge, use "Stand the set up again" and "Fly".
+- A fresh roam opens with no challenge already ticked.
 
 ## Out of scope
 A board or medals for roam challenges (they stay unscored); new challenges in Free Drive's open world.

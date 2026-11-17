@@ -6,7 +6,7 @@ priority: P0
 size: M
 lens: authenticity
 created: 2026-11-17
-pr:
+pr: 420
 by: operator
 ---
 
@@ -50,6 +50,11 @@ Runs on: the operator's Mac (Xcode). Pixels only: no collider, mass or tick in a
 - [x] `make test`: the 52 run vectors bit-exact (nothing in the scored world changed).
 - [x] The dressing stands still where it's put, clear of every scored line (SetDressingTests).
 - [x] The start lights' cap (0270) untouched: the car's materials never take the branch.
+
+## Test plan
+- `make test` in `ios/`: the 52 run vectors stay bit-exact; `SetDressingTests` checks the dressing stands still and stays clear of every scored line.
+- Simulator, launched with `-mute`: frames at the Show's and the Lineup's marks and mid-run, with and without `-flat-sets` (`docs/shots/0273/`).
+- On the phone: `make device-bench` on each set; no new hitches, GPU within budget.
 
 ## Out of scope
 Free Drive's land and roads (another ticket's); the car's look (#365); re-exporting the web's stages.
