@@ -83,10 +83,10 @@ struct HowToView: View {
                             KeyLine("2 NOSE", "Turn it.")
                             KeyLine("TANK", "Nitrogen feeds them all. When it's empty, you fall.")
                         }
-                        fold("The judges", "Three scores, each out of 100") {
-                            KeyLine("ENGINEER", "The landing: sink rate, tilt, four wheels down together.")
-                            KeyLine("COORD.", "The height and the rotation.")
-                            KeyLine("DESIGNER", "The whole of it, gas left included.")
+                        fold("The crew", "Three judges, each out of 10") {
+                            KeyLine("HOLLIS", "The engineer. The landing: sink rate, tilt, four wheels down together. Keeps the repair bill.")
+                            KeyLine("MAGS", "The stunt coordinator. Height, rotation and nerve. Loves a big wreck.")
+                            KeyLine("VEE", "The designer. The whole of it, gas left included. Only loves a clean landing.")
                         }
                         fold("The board", "Today's scores, checked by the server") {
                             KeyLine("POST", "A scored run, with three letters.")

@@ -732,6 +732,8 @@ final class RunResult: Identifiable {
     var coach: [CoachItem] = []
     var drill: (label: String, pass: Bool, headline: String, stats: [String])?
     var dailyOK = false, dailyLine: String?
+    /// The wreck, for the crew's lines (0237): nil until the Wreck card is read.
+    var crewWreck: CrewWreck?
     /// This device's first landing (0249): the results open on its moment. `firstRun`: the run was flown on the first run.
     var firstLanding = false, firstRun = false
 }

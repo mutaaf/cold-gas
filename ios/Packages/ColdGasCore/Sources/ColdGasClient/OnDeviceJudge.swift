@@ -1,6 +1,7 @@
-// The judges on the device (0219): when the phone has Apple's on-device model (Apple Intelligence), the panel's words are
-// written there, with no network call, no key and no cost; otherwise the edge model (POST /judge/stream), then the local
-// lines, exactly as before. The numbers never change: they are scoreRun's, and the model only ever sees them.
+// The judges on the device (0219, 0236): the crew's authored lines (Crew.swift) are the panel, at once; when the phone has
+// Apple's on-device model (Apple Intelligence) and the player wants it, the words are written there instead, with no network
+// call, no key and no cost. On any on-device failure the crew's lines stand: there is no automatic cloud call (Option B,
+// operator's call 2026-11-13). The numbers never change: they are scoreRun's, and the model only ever sees them.
 //
 // This is the pure half, tested on macOS with a fake model: the brief (src/worker/ai/prompt.js, ported), the route, the
 // on-device call raced against its own deadline inside JUDGE_MS, the fallback, and the receipt's words (invariant 5½).
@@ -14,10 +15,10 @@ import ColdGasCore
 public let ON_DEVICE_INSTRUCTIONS = """
 You are the judging panel for COLD GAS, a stunt game. A roadster with a suction fan and ten cold-gas thrusters performs THE SHOW (one flight: up the Wall, let go from the inverted ledge, boost over five parked EVs on the rear jets, roll upright and land beyond them) or a single stunt: either THE WALL (crawl up a 28 m concrete curl on fan suction, hang upside down under the ledge, let go, roll upright, brake on the down-jets, land) or THE LINEUP (no ramp: lift off flat ground on thrust, a 360-degree roll over five parked EVs, landing). The event is named in the facts.
 
-Three judges:
-- ENGINEER (Chief Vehicle Engineer): dry and exacting; cares about sink rate, wheel sync, g-load and attitude at touchdown.
-- COORDINATOR (Stunt Coordinator): warm and theatrical; cares about height, rotation and nerve.
-- DESIGNER (Head of Design): minimal and precise; cares about clean lines, restraint and air left in the tanks.
+Three judges, the stunt crew:
+- ENGINEER (Hollis, the crew's engineer): dry and exacting; cares about sink rate, wheel sync, g-load and attitude at touchdown; after a crash, reads out the repair bill.
+- COORDINATOR (Mags, the stunt coordinator): loud and warm; cares about height, rotation and nerve, and cheers a big wreck.
+- DESIGNER (Vee, the designer): few words, precise; loves a clean landing and air left in the tanks, mourns the paint.
 
 The scores are final and already decided. Never change them or invent numbers that are not in the facts. Each judge writes one remark of at most 22 words, in their own voice, about something specific in the facts. No emoji, hashtags, brand names or real people.
 
@@ -93,8 +94,8 @@ public func cappedWords(_ w: JudgeWords, source: String? = "ai") -> JudgeWords {
 public let ON_DEVICE_PROVIDER = "apple"
 /// The framework's own name for it: there is no version string to show (invariant 5½: the real id, never a made-up one).
 public let ON_DEVICE_MODEL = "SystemLanguageModel.default"
-/// The on-device call's share of JUDGE_MS. A judging is a few seconds on a phone; if it hangs, the edge model still has
-/// JUDGE_MS minus this (15 s) and the results never wait longer than they did before. (The simulator on the operator's Mac:
+/// The on-device call's deadline. A judging is a few seconds on a phone; if it hangs, the crew's lines (on screen all
+/// along) simply stay. (The simulator on the operator's Mac:
 /// 10.5 s cold, 8.3 s warm; no prewarm during a run, which would spend the run's frame budget.)
 public let ON_DEVICE_MS = 20_000.0
 
@@ -119,11 +120,11 @@ public enum OnDeviceStatus: String, Equatable, Sendable, CaseIterable {
     }
 }
 
-/// Which brain is asked first.
-public enum JudgeRoute: Equatable, Sendable { case onDevice, cloud }
-/// On the device when it can and the player hasn't sent the panel to the edge model in Settings; otherwise the cloud.
+/// Who writes the words: Apple's on-device model, or the crew's own authored lines (never a cloud model on its own: 0236).
+public enum JudgeRoute: Equatable, Sendable { case onDevice, authored }
+/// On the device when it can and the player hasn't turned it off in Settings; otherwise the crew's lines.
 public func judgeRoute(status: OnDeviceStatus, preferOnDevice: Bool) -> JudgeRoute {
-    status == .available && preferOnDevice ? .onDevice : .cloud
+    status == .available && preferOnDevice ? .onDevice : .authored
 }
 
 /// How many tokens the call used, and where the numbers came from (invariant 5½: an estimate is labelled as one).
@@ -245,30 +246,24 @@ public enum OnDeviceJudging {
     }
 }
 
-/// The whole choice, as Judges.swift makes it: on the device first when it can, then the cloud with the time that's left
-/// (the cloud call ends in the local lines on its own, as before). Returns the words to show and the receipt.
-/// `cloud(deadlineMs)` is the edge model's call (breaker, network, local lines), and is never asked if the device spoke.
-public func judgePanel(card: ScoreCard, route: JudgeRoute, model: OnDeviceJudgeModel?, place: String,
-                       totalMs: Double = JUDGE_MS, onDeviceMs: Double = ON_DEVICE_MS,
+/// The whole choice, as Judges.swift makes it (0236): on the device first when it can; on any failure, or on the authored
+/// route, the crew's lines (`authored`), with the receipt saying so. Nothing here, or behind it, calls a cloud model.
+public func judgePanel(card: ScoreCard, route: JudgeRoute, model: OnDeviceJudgeModel?, place: String, authored: JudgeWords,
+                       onDeviceMs: Double = ON_DEVICE_MS,
                        now: @escaping @Sendable () -> Double = { Date().timeIntervalSince1970 * 1000 },
-                       emit: @escaping @Sendable (JudgeEvent) -> Void,
-                       cloud: (_ deadlineMs: Double) async -> (JudgeWords, JudgeMeta)) async -> (JudgeWords, JudgeMeta)? {
-    var why: String?
-    let t0 = now()
+                       emit: @escaping @Sendable (JudgeEvent) -> Void) async -> (JudgeWords, JudgeMeta)? {
+    var meta = JudgeMeta.authoredMeta
     if route == .onDevice, let model {
-        switch await OnDeviceJudging.run(model: model, card: card, place: place, deadlineMs: Swift.min(onDeviceMs, totalMs), now: now, emit: emit) {
+        switch await OnDeviceJudging.run(model: model, card: card, place: place, deadlineMs: onDeviceMs, now: now, emit: emit) {
         case let .spoke(w, m): return (w, m)
         case let .failed(reason):
             if Task.isCancelled { return nil }
-            why = reason
-            emit(.note(JudgeNote(message: "Apple\u{2019}s on-device model couldn\u{2019}t judge this one (\(reason)): asking the edge model", model: ON_DEVICE_MODEL)))
+            meta.onDeviceFailure = reason
+            emit(.note(JudgeNote(message: "Apple\u{2019}s on-device model couldn\u{2019}t judge this one (\(reason)): the crew\u{2019}s own lines stand", model: ON_DEVICE_MODEL)))
         }
     }
-    let left = Swift.max(1_000, totalMs - (now() - t0))
-    var (words, meta) = await cloud(left)
     if Task.isCancelled { return nil }
-    meta.onDeviceFailure = why
-    return (words, meta)
+    return (authored, meta)
 }
 
 // --- the receipt -------------------------------------------------------------------------------------
@@ -282,12 +277,12 @@ public func judgeReceipt(_ meta: JudgeMeta) -> String {
             let secs = d.totalMs.map { " \u{B7} \(jsToFixed($0 / 1000, 1)) s" } ?? ""
             return "Words by Apple\u{2019}s on-device model, on \(meta.where ?? "this device") \u{B7} \(n)\(secs) \u{B7} $0 \u{B7} no data left the device"
         }
+        // Invariant 3.7: a model's id is never shown to a player (the app makes no cloud call; this is the guard if one ever did).
         let cost = d.costUsd.map { $0 == 0 ? " \u{B7} $0" : " \u{B7} $\(jsToFixed($0, 5))" } ?? ""
-        let model = (d.model ?? meta.model).map { " (\($0))" } ?? ""
-        let brain = meta.provider == nil || meta.provider == "edge" ? "the edge model" : (meta.provider ?? "")
-        return "Words by \(brain)\(model) \u{B7} \(n)\(cost)"
+        return "Words by a model \u{B7} \(n)\(cost)"
     }
-    let why = meta.error ?? "No answer."
     let also = meta.onDeviceFailure.map { " Apple\u{2019}s on-device model: \($0)." } ?? ""
+    if meta.authored { return "Written by the game from this run\u{2019}s numbers, not a model.\(also)" }
+    let why = meta.error ?? "No answer."
     return "The game\u{2019}s own lines, not a model\u{2019}s \u{B7} \(why)\(also)"
 }

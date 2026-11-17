@@ -831,7 +831,6 @@ struct ResultsView: View {
     }
 }
 
-let JUDGE_NAMES = ["engineer": "ENGINEER", "coordinator": "COORDINATOR", "designer": "DESIGNER"]
 
 // MARK: - The controller
 
