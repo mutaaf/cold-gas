@@ -20,10 +20,8 @@ import { physicsReady, physicsMemoryBytes } from './sim/engine.js';
 import { loadPhysics } from './sim/engine-web.js';
 import { DT, G, CAR, NOZZLES, WHEELS, bodyRates, worldPoint, newInput } from './sim/vehicle.js';
 import { scoreRun, TIERS, WRECK_PCT } from './sim/judge.js';
-import { coach } from './sim/coach.js';
 import { createLandingHud } from './hud-landing.js';
 import { hudPitch, createGWindow, tankBar, gasState } from './hud-telemetry.js';
-import { drillById, drillsFor, buildDrill, drillResult, drillCoach } from './practice.js';
 import { createAutopilot } from './sim/autopilot.js';
 import { COURSES, surface } from './sim/courses.js';
 import { siteFloor } from './sim/complex.js';
@@ -40,7 +38,6 @@ import { padState, padWords } from './thumb-words.js';
 // 0121 thumb mastery (own modules): the one-thumb touchdown sight on the pad, and the medals row.
 import { mountThumbAim } from './thumb-aim.js';
 import { showMedals, hideMedals, getMedals } from './medals.js';
-import { createBeat, beatEligible } from './beat.js';
 import { newGuide, guideStep, guideWords, guideMode, resumeFrom, wreckLine } from './guide.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
@@ -49,15 +46,11 @@ import { syncWake, wakeHeld } from './wake.js';
 import { createUI, crashStep } from './ui.js';
 import { initFocusTrap } from './focus-trap.js';
 import { wireUnitToggles, unitText } from './units.js';
-import { drawShareCard, shareRun, toast } from './share-card.js';
+import { toast } from './toast.js';
 import { createComeback } from './comeback.js';   // [comeback] challenge links + the daily jump (src/comeback.js)
 import { objectiveFor, evaluate as dailyEval, dailyCoach, dailyItems, dailySwapsHold, loadStreak as loadDaily, streakNow } from './daily.js';
-import { createInstruments } from './instruments.js';
-import { localWords, localMeta, fetchBoard } from './panel.js';
-import { createPost, postEligible } from './post.js';
 import { withDeadline, lazyOnce, reimport, judgesOverran } from './net.js';
-import { loadAI } from './ai/config.js';
-import { openSettings, aiLabel } from './ai/settings.js';
+import { loadAI, aiLabel } from './ai/config.js';
 import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostEnabled, setGhostEnabled } from './ghost.js';
 import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
@@ -77,7 +70,12 @@ import { createWedge, WEDGE_IDLE } from './wedge.js';
 
 // The rigid-body engine's WASM (src/sim/engine.js), asked for before anything heavy starts: it
 // streams and compiles off the main thread while the stage builds (1.2 MB gzip, after first paint).
-const physicsLoad = loadPhysics();
+// The run's own modules (src/later.js: the coach, the drills, the instruments, the judges' settings, the share card,
+// the board's client, the sheet's Post, the landing's beat) are their own chunk, asked for beside it, so the title's
+// entry chunk is smaller (0053). A run waits on both (whenPhysics, gameReady).
+let late = null;
+const loadLate = lazyOnce((failed) => lazyChunk(failed, () => import('./later.js')).then((m) => { if (!late) { late = m; lateIn(m); } return m; }));
+const physicsLoad = Promise.all([loadPhysics(), loadLate()]).then(([engine]) => engine);
 physicsLoad.catch(() => {});
 const params = new URLSearchParams(location.search);
 const device = readDevice();
@@ -126,7 +124,7 @@ stage.warmGate = () => S.mode === 'title' && !S.paused;
 // while it loads goes ahead, and only if nothing else happened meanwhile: every mode change (and
 // opening Free Drive or the Sandbox) retires the token, so a Start tapped during the load can't fire
 // later into a drive, and several taps start one run.
-const physics = () => loadPhysics().catch((err) => { console.error(err); ui.cue_('The physics engine couldn’t load', 2400); throw err; });
+const physics = () => Promise.all([loadPhysics(), loadLate()]).catch((err) => { console.error(err); ui.cue_('The physics engine couldn’t load', 2400); throw err; });
 let startToken = 0;
 // While a start waits, the button the player pressed says so (0154): "Starting…" over its label (CSS, so it can't
 // change size), aria-busy, and one polite status line, until the run begins, the start is retired or the load fails.
@@ -158,7 +156,7 @@ const cancelPendingStart = () => { startToken++; if (pendingBtn || startSay?.tex
 function whenPhysics(fn) {
   return (...args) => {
     cancelPendingStart();
-    if (physicsReady()) return fn(...args);
+    if (gameReady()) return fn(...args);
     const token = startToken;
     ui.cue_('Loading physics', 1200);
     setPendingStart(true);
@@ -170,7 +168,7 @@ const ui = createUI();
 // The landing's beat (0199, src/beat.js): a landed run's verdict, its score counting up and the judges' cards going
 // up one by one, over the live scene, before the sheet. Its numbers are the card's (closeCard); a tap skips it.
 const beatRoot = document.querySelector('[data-beat]');
-const beat = createBeat(beatRoot, { chime, settle, crowd, buzz });
+let beat = null;   // created with the run's chunk (lateIn, src/later.js): it only ever plays at a run's end
 let beatShown = false;   // this run's beat has played: its sheet opens on the final score, without a second count
 // The modal sheets hold focus while they're up and hand it back when they close (0054, src/focus-trap.js).
 initFocusTrap([ui.screens.pause, ui.screens.controls, ui.screens.howto, ui.screens.assist, ui.screens.board,
@@ -178,7 +176,22 @@ initFocusTrap([ui.screens.pause, ui.screens.controls, ui.screens.howto, ui.scree
 // Units (src/units.js): US by default, metric a tap away on any unit readout, or U.
 wireUnitToggles();
 // Every HUD instrument answers a tap: peak G, burn time, splits, attitude, the valves, the damage map.
-const instruments = createInstruments(ui, { getRun: () => S.run });
+// (Created when src/later.js is in: lateIn. A run never starts before it.)
+let instruments = { close() {} };
+// src/later.js is in (0053): what it carries that the page wires up once.
+function lateIn(m) {
+  beat = m.createBeat(beatRoot, { chime, settle, crowd, buzz });
+  instruments = m.createInstruments(ui, { getRun: () => S.run });
+  // Post to the board from the sheet (src/post.js): eligible for the player's own landed jump, not a wreck (0204), the
+  // reference or a drill. The Worker scores it from the run's telemetry; the client never sends a score.
+  poster = m.createPost({
+    ctx: () => ({ run: S.run, card: S.card, eligible: m.postEligible(S) }),
+    onLeaveOpen: () => { if (S.peek) peek(false); ui.openMore(false); },   // 0199: the calm sheet shows its Post with the question
+    onLeavePost: () => theatreMod?.dockCall(),   // the sheet, to see the post land
+  });
+}
+// The engine and the run's chunk both in: what whenPhysics and the e2e's __coldgas.physicsReady() wait on.
+const gameReady = () => physicsReady() && !!late;
 
 // The car's root sits at the physics centre of mass; the model hangs below it.
 const carRoot = new THREE.Group();
@@ -426,7 +439,7 @@ function disposeRun() {
 // Once the run's card is decided (its end, before the aftermath's ≈1.4 s and the sheet) it is landed or wrecked:
 // a Retry, Home or a closed tab in the aftermath isn't a quit. 0138: the decided card also counts how the run was
 // flown (ctl-*, fly-*) and a wreck what wrecked it (wreck-*, the coach's first finding): src/obs/run-end.js.
-const runEnd = createRunEnd(obs.play, (run, card) => coach(run.inputLog, run.course, card).items);
+const runEnd = createRunEnd(obs.play, (run, card) => late?.coach(run.inputLog, run.course, card).items ?? []);
 // How it was flown is taken as its card is decided (closeCard), before a Retry's key or a mouse on Home can change it.
 function settleRun(left, now = false) {
   runEnd.settle(S.run, S.card, left, S.cardHow, now);
@@ -534,7 +547,7 @@ function startRunNow(kind = 'jump', quick = false) {
 function closeCard(run) {
   S.card = scoreRun(run.t, { assist: S.autopilot ? true : S.flyTier === 'assist' });
   S.cardHow = { device: lastDevice(), scheme: ui.touch.dataset.scheme, tier: S.flyTier };   // the funnel's ctl-*/fly-* (0138)
-  S.drillSnap = S.drill ? { result: drillResult(S.drill, run, S.card), coach: drillCoach(S.drill, run) } : null;
+  S.drillSnap = S.drill ? { result: late.drillResult(S.drill, run, S.card), coach: late.drillCoach(S.drill, run) } : null;
   // 0245: the Jump's end, and the first landing on this device (queued: this is a live frame; sent with the sheet).
   S.firstLanding = false;
   if (S.jumpN && S.runKind === 'jump' && !S.drill) {
@@ -564,7 +577,7 @@ function finishRun() {
     if (S.run !== run) return;
     try {
       const own = S.drill && S.drillSnap?.coach;
-      S.coach = own ? { items: own } : coach(run.inputLog, run.course, S.card, run.drillStartTick || 0, coachWords(pointerCtx(run.course, S.card?.tier || S.flyTier)));
+      S.coach = own ? { items: own } : late.coach(run.inputLog, run.course, S.card, run.drillStartTick || 0, coachWords(pointerCtx(run.course, S.card?.tier || S.flyTier)));
       ui.coaching(dailyItems(S.coach.items, own ? '' : dailyLine(run, true)));   // 0150: never "hold the pad" under a skim miss
       if (!own) runEnd.coached(run, S.coach.items);   // a wreck's cause in the funnel, from this coach (0138)
       if (!own && S.runKind === 'jump') showPointer(run);
@@ -628,21 +641,21 @@ function startBeat(run) {
   beat.show(S.card, { reduced: reducedMotion, course: COURSES[run.course]?.name || '', first: !!S.firstLanding && calmable });
 }
 function endBeat() {
-  if (!beat.active) return;
+  if (!beat?.active) return;
   beat.hide();
   delete document.body.dataset.beatOn;
 }
 // A tap (after the guard: a thumb still on the pad as the car came down isn't a tap), Enter or Space: the sheet now.
 // The car's last moments are stepped at once so the replay still ends at rest.
 function skipBeat() {
-  if (!beat.canSkip() || S.mode !== 'live' || S.paused) return;
+  if (!beat?.canSkip() || S.mode !== 'live' || S.paused) return;
   const run = S.run;
   if (!run.after.done) aftermath(run);
   finishRun();
 }
 beatRoot.addEventListener('click', skipBeat);
 addEventListener('keydown', (e) => {
-  if (!beat.active || e.repeat || (e.code !== 'Enter' && e.code !== 'Space') || !beat.canSkip() || S.paused || S.mode !== 'live') return;
+  if (!beat?.active || e.repeat || (e.code !== 'Enter' && e.code !== 'Space') || !beat.canSkip() || S.paused || S.mode !== 'live') return;
   if (e.target?.closest?.('input, select, textarea, button, a, [role="button"], [role="dialog"], [data-ai-modal]')) return;
   e.preventDefault();
   e.stopImmediatePropagation();   // the sheet's own Enter (Retry) must not read this press once it is up
@@ -901,7 +914,7 @@ rerollBtn?.addEventListener('click', async () => {
   else syncReroll();
 });
 // Local lines are never passed off as the judges' (0083): the receipt says why the AI didn't speak.
-const localReceipt = (reason) => { S.callMeta = localMeta(reason); ui.receipt(S.callMeta, { onChange: () => openAI() }); };
+const localReceipt = (reason) => { S.callMeta = late.localMeta(reason); ui.receipt(S.callMeta, { onChange: () => openAI() }); };
 const liftLabel = document.querySelector('[data-lift-label]'), stickHint = document.querySelector('[data-stick-hint]'), goLabel = document.querySelector('[data-go-label]');
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
 // Where the theatre takes the whole screen over the sheet (styles.css: a phone, a short landscape screen, a
@@ -917,10 +930,10 @@ async function runPanel(run, replay = null) {
   const signal = panelAbort?.signal;
   let mod;
   // A portal build has no server (src/portal/offline.js): the panel speaks local lines at once, and the receipt says so.
-  if (ON_PORTAL) { if (!replay) { S.words = localWords(card); ui.words(S.words); localReceipt('portal'); } return; }
+  if (ON_PORTAL) { if (!replay) { S.words = late.localWords(card); ui.words(S.words); localReceipt('portal'); } return; }
   // [obs] The judges are a breaker-guarded subsystem: after repeated failures the panel speaks local
   // lines for a while (a cooldown that doubles), then tries the call again.
-  if (!replay && !obs.breaker('judge').allow()) { S.words = localWords(card); ui.words(S.words); localReceipt('breaker'); ui.cue_('The judges are resting: local lines for now', 1800); return; }
+  if (!replay && !obs.breaker('judge').allow()) { S.words = late.localWords(card); ui.words(S.words); localReceipt('breaker'); ui.cue_('The judges are resting: local lines for now', 1800); return; }
   // [obs] The theatre is a lazy chunk, and loading it spends the same 35 s (invariant 5½). A chunk
   // that fails or stalls isn't the judges' fault (no breaker): local lines now, and the page is
   // marked stale so the next title checks for a new build (src/obs/heal.js).
@@ -931,7 +944,7 @@ async function runPanel(run, replay = null) {
     obs.lazyFailed(err);
     try { heal.markStale('the judges’ chunk failed to load'); } catch { /* heal not installed yet */ }
     if (S.run === run && !signal?.aborted) {
-      S.words = localWords(card); ui.words(S.words);
+      S.words = late.localWords(card); ui.words(S.words);
       localReceipt('chunk');
       // A deploy took the chunk: say so (the title loads the new build).
       try {
@@ -960,7 +973,7 @@ async function runPanel(run, replay = null) {
   };
   const deadlineMs = replay ? JUDGE_MS : JUDGE_MS - (performance.now() - t0);   // the provider's own time
   const { words, meta, aborted } = await mod.runTheatre(theatreRoot, {
-    log: run.inputLog, t: run.t, assist, ai: loadAI(), card, course: run.course, fallbackWords: localWords, reduced: reducedMotion, replay, abort: signal,
+    log: run.inputLog, t: run.t, assist, ai: loadAI(), card, course: run.course, fallbackWords: late.localWords, reduced: reducedMotion, replay, abort: signal,
     deadlineMs, docked, onLive,
   });
   liveOver = true;
@@ -980,7 +993,10 @@ const aiChip = document.querySelector('[data-ai-open]');
 // Who writes the judges' words (the free edge model, or your own key): "Judges · Free". Not "AI": the flight
 // computer is Assist, and one word for two things was one too many (audit 2026-10-30).
 const syncAiChip = () => { aiChip.textContent = aiLabel().replace(/^AI · /, 'Judges · '); };
-function openAI() { openSettings(document.querySelector('[data-ai-modal]'), { onChange: syncAiChip }); }
+function openAI() {
+  loadLate().then((m) => m.openSettings(document.querySelector('[data-ai-modal]'), { onChange: syncAiChip }),
+    () => ui.cue_('Couldn’t open the judges’ settings: try again', 2000));
+}
 aiChip.addEventListener('click', openAI);
 syncAiChip();
 
@@ -1130,7 +1146,7 @@ function liveStep(dt) {
     S.doneT += dt;
     if (S.beatFor !== run) {
       S.beatFor = run;
-      if (beatEligible({ card: S.card, autopilot: S.autopilot, drill: S.drill, runKind: S.runKind })) startBeat(run);
+      if (late.beatEligible({ card: S.card, autopilot: S.autopilot, drill: S.drill, runKind: S.runKind })) startBeat(run);
     }
     if (beatShown) { if (beat.step(dt) && run.after.done) finishRun(); }
     else if (run.after.done && S.doneT > (S.drill ? 0.5 : 1.4)) finishRun();
@@ -1832,10 +1848,10 @@ on('[data-restart]', () => { if (S.autopilot) { S.paused = false; ui.show('pause
 // ready by the click (the sheet must open inside the tap's activation), and it's drawn only then.
 let shareCard = null;
 const startCard = () => {
-  if (!S.card) return null;
+  if (!S.card || !late) return null;
   if (shareCard?.card !== S.card) {
     // 0260: the card prints the run's challenge link (packed as the sheet opened) and says when it's a personal best.
-    shareCard = { card: S.card, promise: drawShareCard({ frame: canvas, render: () => stage.render(S.time, S.mode), card: S.card, url: comeback.linkFor(S.card), pb: !!S.pb, mark: `${import.meta.env.BASE_URL}favicon.svg` }) };
+    shareCard = { card: S.card, promise: late.drawShareCard({ frame: canvas, render: () => stage.render(S.time, S.mode), card: S.card, url: comeback.linkFor(S.card), pb: !!S.pb, mark: `${import.meta.env.BASE_URL}favicon.svg` }) };
     shareCard.promise.catch(() => {});
     const t0 = performance.now(), mine = shareCard;
     mine.promise.then(() => { mine.ms = performance.now() - t0; }, () => {});   // 0260: the card's own time (e2e: under 300 ms at 4× CPU)
@@ -1849,11 +1865,11 @@ document.querySelectorAll('[data-share]').forEach((b) => b.addEventListener('poi
 // clipboard), flushed at once: the results are up, and the player may close the tab from the share sheet.
 const shareVia = (course) => (via) => { if (via === 'file' || via === 'link' || via === 'copy') { funnel.emit('share_done', { course, via }); funnel.flush(); } };
 on('[data-share]', () => {
-  if (!S.card) return;
+  if (!S.card || !late) return;
   const course = S.run?.course || stage.course;
   obs.play('share'); track('share', { course: stage.course, score: S.card.total });
   funnel.emit('share_tap', { course }); funnel.flush();
-  shareRun({ card: S.card, url: comeback.linkFor(S.card), cardPromise: startCard() }).then(shareVia(course), () => {});
+  late.shareRun({ card: S.card, url: comeback.linkFor(S.card), cardPromise: startCard() }).then(shareVia(course), () => {});
 });
 
 // Event picker on the title (also ?course=wall|lineup; the Show is the default).
@@ -1893,7 +1909,7 @@ const comeback = createComeback({
   ready: () => Promise.all([stage.ready, physicsLoad]), toast,
   // A Take tapped before the engine is up waits for it here, outside whenPhysics: the same "Starting…" (0154).
   pending: (on) => { cancelPendingStart(); if (on) setPendingStart(true); },
-  share: ({ card, url, text }) => { const course = S.run?.course || stage.course; funnel.emit('share_tap', { course }); funnel.flush(); return shareRun({ card, url, text, cardPromise: startCard() }).then(shareVia(course), () => {}); },
+  share: ({ card, url, text }) => { const course = S.run?.course || stage.course; funnel.emit('share_tap', { course }); funnel.flush(); return loadLate().then((m) => m.shareRun({ card, url, text, cardPromise: startCard() })).then(shareVia(course), () => {}); },
   metric: (name, props) => { funnel.emit(name, props); if (S.mode === 'title' || S.mode === 'results') funnel.flush(); }, course: () => stage.course,
   how: (course, tier, flown) => (flown && S.cardHow ? flownCtx(S.cardHow, course, tier) : pointerCtx(course, tier)), tip: (text) => { S.tip = text; },
 });
@@ -2089,9 +2105,10 @@ document.querySelectorAll('[data-slow]').forEach((b) => b.addEventListener('clic
 slowBtn.addEventListener('click', () => setSlow(SLOWS[(SLOWS.indexOf(S.slowmo) + 1) % SLOWS.length]));
 
 function openPractice() {
+  if (!late) { loadLate().then(openPractice, () => ui.cue_('Couldn’t load the drills: try again', 2000)); return; }
   const list = document.querySelector('[data-drills]');
   list.innerHTML = '';
-  const drills = drillsFor(stage.course);
+  const drills = late.drillsFor(stage.course);
   if (!drills.length) list.innerHTML = '<li class="empty">The Lineup has no drills yet: pick the Show or the Wall.</li>';
   for (const d of drills) {
     const li = document.createElement('li');
@@ -2109,12 +2126,12 @@ function openPractice() {
 
 const startDrill = whenPhysics(startDrillNow);
 function startDrillNow(id) {
-  const drill = drillById(id);
+  const drill = late.drillById(id);
   if (!drill || !drill.courses.includes(stage.course)) return;
   closeOverlays();
   initAudio();
   disposeRun();
-  const { run, released } = buildDrill(drill, stage.course);
+  const { run, released } = late.buildDrill(drill, stage.course);
   S.run = armAftermath(run); S.after = false; S.drillSnap = null;
   S.autopilot = null; S.released = released; S.drill = drill; S.coach = null; S.runKind = 'drill';
   latchTier();
@@ -2151,7 +2168,7 @@ on('[data-drill-again]', retryDrill);
 on('[data-drill-exit]', () => { S.paused = false; toTitle(); openPractice(); });
 on('[data-drill-menu]', () => { toTitle(); openPractice(); });
 on('[data-drill-next]', () => {
-  const list = drillsFor(stage.course), i = list.findIndex((d) => d.id === S.drill?.id);
+  const list = late.drillsFor(stage.course), i = list.findIndex((d) => d.id === S.drill?.id);
   startDrill(list[(i + 1) % list.length].id);
 });
 addEventListener('keydown', (e) => {
@@ -2245,13 +2262,7 @@ addEventListener('keydown', (e) => {
 document.addEventListener('pointerdown', (e) => { if (moreOpen() && !more.contains(e.target)) setMore(false); }, true);
 more.addEventListener('focusout', (e) => { if (moreOpen() && e.relatedTarget && !more.contains(e.relatedTarget)) setMore(false); });
 
-// Post to the board from the sheet (src/post.js): eligible for the player's own landed jump, not a wreck (0204), the
-// reference or a drill. The Worker scores it from the run's telemetry; the client never sends a score.
-poster = createPost({
-  ctx: () => ({ run: S.run, card: S.card, eligible: postEligible(S) }),
-  onLeaveOpen: () => { if (S.peek) peek(false); ui.openMore(false); },   // 0199: the calm sheet shows its Post with the question
-  onLeavePost: () => theatreMod?.dockCall(),   // the sheet, to see the post land
-});
+// (The sheet's Post, src/post.js, is created with the run's chunk: lateIn.)
 
 // The board: the latest request wins (a slow 'today' never overwrites the 'all' asked for after it).
 // One course at a time: the one on the stage when it opens, the tabs for the others.
@@ -2265,7 +2276,7 @@ async function openBoard(kind = boardKind, course = boardCourse || stage.course)
   const seq = ++boardSeq;
   boardAbort?.abort();
   boardAbort = new AbortController();
-  const rows = await fetchBoard(kind, { signal: boardAbort.signal, course: boardCourse });
+  const rows = await loadLate().then((m) => m.fetchBoard(kind, { signal: boardAbort.signal, course: boardCourse }), () => null);   // null: offline
   if (seq !== boardSeq) return;
   boardAbort = null;
   const empty = `No jumps on ${BOARD_COURSE[boardCourse]} ${kind === 'all' ? 'yet' : 'yet today'}. Be the first.`;
@@ -2377,6 +2388,6 @@ const heal = installHeal({
   stage, canvas, ui, S, pause,
   toTitle: () => { runEnd.drop(); toTitle(); },   // a trap or an escalation is the game's fault, never the player's quit (0130)
   closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { shareCardMs: () => shareCard?.ms ?? null, redrawCard: () => { shareCard = null; return startCard()?.then(() => shareCard?.ms ?? null); }, S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, funnel, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
+window.__coldgas = { shareCardMs: () => shareCard?.ms ?? null, redrawCard: () => { shareCard = null; return startCard()?.then(() => shareCard?.ms ?? null); }, S, stage, physicsReady: gameReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, funnel, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
 Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);

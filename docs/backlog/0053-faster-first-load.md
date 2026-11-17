@@ -41,11 +41,21 @@ title-irrelevant modules; on `low`/`mid`, fold uplights and red points into emis
 
 ## Acceptance criteria
 - [x] `scripts/perf.mjs` (Slow 4G profile): "usable" time improves; first 3D frame no worse
-- [ ] Main chunk gzip shrinks ≥ 20 KB
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] Main chunk gzip shrinks ≥ 20 KB
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 - [ ] (critic 2026-11-04) `scripts/perf.mjs` also reports **tapToRun**: a raw touch on the Jump sent the moment it is "usable" (CDP `Input.dispatchTouchEvent`, no actionability wait), as a returning player (`coldgas_howto = 'seen'`) → `S.mode` leaves `title`. Production today: ≈ 19–20 s from navigation, ≈ 13 s after "usable" (docs/critique/2026-11-04-0100.md). It must improve, and the PR names the number.
 - [ ] (critic 2026-11-04) On the phone profile, no main-thread task over 1 s after "usable". Today the first title frame is one 5.4 s task (`Fw` 2.43 s + GPU Commit 2.98 s, SwiftShader), and a tap waits behind it (pointerdown handled 6.1 s after its timestamp).
-- [ ] (critic 2026-11-04) While a tapped Jump waits for physics, the title shows a visible wait state that lasts until the run starts (today the "Loading physics" cue lasts 1.2 s, `src/main.js:125`, then the screen is silent for up to ≈ 6 s).
+- [x] (critic 2026-11-04) While a tapped Jump waits for physics, the title shows a visible wait state that lasts until the run starts (today the "Loading physics" cue lasts 1.2 s, `src/main.js:125`, then the screen is silent for up to ≈ 6 s).
+
+**Builder, 2026-11-17 (#PRNUM): the main chunk is 20.4 KB gzip lighter; tapToRun and the long task stay open.** The entry
+chunk had grown to 239.89 kB gzip on main `5cc8b9e` (the 221 kB above was 2026-11-03). What a run needs only once it has
+started or ended now rides in its own chunk, `src/later.js` (15.9 kB gzip): the coach, the drills, the HUD's instruments,
+the judges' settings sheet, the share card's drawing, the board's client, the sheet's Post and the landing's beat. main.js
+asks for it beside the physics WASM, and every start already waits on the engine (`whenPhysics`, `physicsLoad`), so it
+waits on both; `toast` (src/toast.js) and `aiLabel` (src/ai/config.js) stay in the entry for the title. Entry 239.89 →
+219.45 kB gzip (`npm run build`). `tests/unit/entry-lean.test.js` fails if any of those modules is imported statically
+from the entry's graph again. The wait state shipped in 0154 (#411, "Starting…" until the run begins). Open for the next
+Builder: tapToRun in perf.mjs, and the first title frame's long task (box 5, a render/GPU cost, not bytes).
 
 ## Test plan
 perf.mjs before/after in the PR; smoke e2e unchanged.
