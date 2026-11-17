@@ -68,6 +68,7 @@ final class Renderer {
     private var shedThermal = 0, overFrames = 0, underFrames = 0
     let crash = Crash()
     let mist = Plumes()
+    let smoke = TyreSmoke()
     private let sparkBufs: [MTLBuffer], puffBufs: [MTLBuffer], chipBufs: [MTLBuffer], mistBufs: [MTLBuffer]
     /// The valves this frame, and whether this run's touchdown has shown yet (main.js touchdown).
     private var thr = [Float](repeating: 0, count: 10), touched = false
@@ -427,6 +428,7 @@ final class Renderer {
             if r.live { crash.car.setWing((simd_length(vel) - 20) / 20) }   // main.js liveStep
             crash.car.update(time: heroClock, carPos: carPos, carQuat: carQ, groundedNow: loaded, fanLevel: r.fan(at: tick), throttle: thr)
             crash.feed(r.impacts, tick: c.tick + r.tickBase, vel: vel, carPos: c.pos, carQuat: c.quat)
+            if drive == nil { smoke.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, into: crash) }
             if r.touchTick >= 0 && tick >= r.touchTick && !touched { touched = true; touchdown(sink: r.sink, carPos: carPos, carQuat: carQ) }
             mist.update(dt: Float(dtReal) * crash.slowK, thr: thr, carPos: carPos, carQuat: carQ, carVel: vel)
             // plumes.js update: a cone from each nozzle over 2 % open, its length and width from the valve.
@@ -451,6 +453,7 @@ final class Renderer {
             crash.shake = { [weak self, weak cam] a in if let d = self?.drive { d.shake(a) } else { cam?.shake(a) } }
             crash.cut = { [weak cam] p, v in cam?.crashCut(at: p, vel: v) }
         }
+        cam.clockK = crash.directed ?? 1
         var view = dv?.frameCamera(aspect: aspect, dt: dtReal)
             ?? cam.update(course: replay?.course ?? "show", car: carPos, vel: replay.map { $0.ticks > 0 ? $0.velocity(at: tick) : .zero } ?? .zero, phase: phase, tick: tick, time: t, aspect: aspect)
         if let fc = fxCam {
