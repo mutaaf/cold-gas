@@ -214,7 +214,8 @@ export function createComeback(o) {
       // Tapped before the engine is up (a slow phone's first seconds): wait for it, then finish the replay here.
       if (!ch.rp) {
         taking = true;
-        try { await o.ready(); } finally { taking = false; }
+        o.pending?.(true);   // the button says "Starting…" while it waits (0154)
+        try { await o.ready(); } finally { taking = false; o.pending?.(false); }
         if (!ch || ch.state !== 'checking') return take();
         ch.rp ??= createReplay(ch.dec.log, ch.dec.course);
       }

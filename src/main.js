@@ -129,17 +129,28 @@ const physics = () => loadPhysics().catch((err) => { console.error(err); ui.cue_
 let startToken = 0;
 // While a start waits, the button the player pressed says so (0154): "Starting…" over its label (CSS, so it can't
 // change size), aria-busy, and one polite status line, until the run begins, the start is retired or the load fails.
-// On a phone over cellular that wait is 10 s and more after the 1.2 s cue has gone (0053). Which button: the title's
-// primary action the player just pressed (Jump, Play today's, Take the challenge), else Jump if it's on screen.
+// On a phone over cellular that wait is 10 s and more after the 1.2 s cue has gone (0053). Which button: the one the
+// player just pressed if it's still on screen (Jump, Play today's, Take the challenge, Watch the reference, a drill;
+// the daily card's button found again if the card redrew it under the tap), else Jump if it's on screen (a deep link,
+// or the how-to card's button, which closes as the start is asked for).
 let pendingBtn = null, pressed = null, pressedAt = -1e9;
-addEventListener('click', (e) => { const b = e.target?.closest?.(PRIMARY); if (b) { pressed = b; pressedAt = performance.now(); } }, true);
+addEventListener('click', (e) => { const b = e.target?.closest?.('button'); if (b) { pressed = b; pressedAt = performance.now(); } }, true);
 const startSay = document.querySelector('[data-start-say]');
+const shown = (el) => (el?.getClientRects().length ? el : null);
+function pendingTarget() {
+  if (pressed && performance.now() - pressedAt < 1000) {
+    if (pressed.isConnected) { if (shown(pressed)) return pressed; }
+    else {
+      const again = ['data-daily-play', 'data-vs-take'].find((a) => pressed.hasAttribute(a));
+      if (again && shown(document.querySelector(`[${again}]`))) return document.querySelector(`[${again}]`);
+    }
+  }
+  return shown(document.querySelector('[data-start]'));
+}
 function setPendingStart(on) {
   if (pendingBtn) { pendingBtn.removeAttribute('data-pending'); pendingBtn.removeAttribute('aria-busy'); pendingBtn = null; }
-  if (on) {
-    const b = pressed?.isConnected && performance.now() - pressedAt < 1000 ? pressed : document.querySelector('[data-start]');
-    if (b?.getClientRects().length) { pendingBtn = b; b.setAttribute('data-pending', ''); b.setAttribute('aria-busy', 'true'); }
-  }
+  const b = on ? pendingTarget() : null;
+  if (b) { pendingBtn = b; b.setAttribute('data-pending', ''); b.setAttribute('aria-busy', 'true'); }
   if (startSay) startSay.textContent = on ? 'Starting…' : '';
 }
 const cancelPendingStart = () => { startToken++; if (pendingBtn || startSay?.textContent) setPendingStart(false); };
@@ -1866,6 +1877,8 @@ const comeback = createComeback({
   mount: document.querySelector('[data-title-extra]'), resultMount: document.querySelector('[data-daily-result]'),
   base: shareUrl(), selectCourse, getTier: () => S.tier, setTier: (t, opts) => setTier(t, opts), jump: () => jump(), play: () => startRun('jump'),
   ready: () => Promise.all([stage.ready, physicsLoad]), toast,
+  // A Take tapped before the engine is up waits for it here, outside whenPhysics: the same "Starting…" (0154).
+  pending: (on) => { cancelPendingStart(); if (on) setPendingStart(true); },
   share: ({ card, url, text }) => { const course = S.run?.course || stage.course; funnel.emit('share_tap', { course }); funnel.flush(); return shareRun({ card, url, text, cardPromise: startCard() }).then(shareVia(course), () => {}); },
   metric: (name, props) => { funnel.emit(name, props); if (S.mode === 'title' || S.mode === 'results') funnel.flush(); }, course: () => stage.course,
   how: (course, tier, flown) => (flown && S.cardHow ? flownCtx(S.cardHow, course, tier) : pointerCtx(course, tier)), tip: (text) => { S.tip = text; },

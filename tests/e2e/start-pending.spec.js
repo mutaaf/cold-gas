@@ -32,6 +32,7 @@ test('a Jump tapped while the engine loads says Starting… until the run begins
   expect(await G(page, () => window.__coldgas.physicsReady())).toBe(false);
   const before = await state(page);
   expect(before.pending).toBe(false);
+  await G(page, () => { window.__starts = 0; new MutationObserver(() => { if (document.body.dataset.mode === 'countdown') window.__starts++; }).observe(document.body, { attributes: true, attributeFilter: ['data-mode'] }); });
   await page.locator(JUMP).tap();
   const at = await state(page);   // the same task as the tap's handlers: well inside 100 ms
   expect(at.pending).toBe(true);
@@ -42,11 +43,15 @@ test('a Jump tapped while the engine loads says Starting… until the run begins
   await page.waitForTimeout(5000);
   const later = await state(page);
   expect(later.pending).toBe(true);
+  await page.locator(JUMP).tap();   // impatient: tapped again, still pending, still one run
+  expect((await state(page)).pending).toBe(true);
   expect(await G(page, () => window.__coldgas.S.mode)).toBe('title');
   release();
   await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown', null, { timeout: 60_000 });
   const run = await state(page);
   expect(run.pending).toBe(false);
+  await page.waitForTimeout(500);
+  expect(await G(page, () => window.__starts)).toBe(1);
   expect(run.busy).toBeNull();
   await G(page, () => window.__coldgas.toTitle());
   const home = await state(page);
@@ -93,6 +98,64 @@ test('with the engine ready, a Jump never flashes Starting…', async ({ page })
   await page.locator(JUMP).tap();
   await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown', null, { timeout: 30_000 });
   expect(await G(page, () => window.__pend)).toBe(0);
+});
+
+test('Play today\'s tapped while the engine loads says Starting… on its own button, with no second label under it', async ({ page }) => {
+  const release = await boot(page);
+  const daily = page.locator('[data-daily-play]');
+  await expect(daily).toBeVisible();
+  const w = (await daily.boundingBox()).width;
+  await daily.tap();
+  const s = await G(page, () => {
+    const b = document.querySelector('[data-daily-play]');
+    return { pending: b.hasAttribute('data-pending'), color: getComputedStyle(b).color, label: getComputedStyle(b, '::before').content,
+      jump: document.querySelector('[data-start]').hasAttribute('data-pending'), w: b.getBoundingClientRect().width };
+  });
+  expect(s.pending).toBe(true);
+  expect(s.jump).toBe(false);
+  expect(s.label).toContain('Starting');
+  expect(s.color).toBe('rgba(0, 0, 0, 0)');   // its own words gone at once, not faded under "Starting…"
+  expect(Math.round(s.w)).toBe(Math.round(w));
+  release();
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'countdown', null, { timeout: 60_000 });
+  expect(await G(page, () => document.querySelectorAll('[data-pending]').length)).toBe(0);
+});
+
+test('Take the challenge tapped before the engine is up says Starting… until the race begins', async ({ browser }) => {
+  test.setTimeout(180_000);
+  // A link from a real run (a crash into the Wall is enough for a challenge).
+  const a = await browser.newContext(PHONE), pa = await a.newPage();
+  await pa.route('**/coldgas/api/**', (r) => r.abort());
+  await pa.goto('/coldgas/?gfx=low');
+  await pa.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90_000 });
+  const link = await pa.evaluate(() => {
+    const g = window.__coldgas, S = g.S;
+    g.startRun('jump', true);
+    S.autopilot = () => ({ throttle: 1, assist: 1 });
+    g.skipCountdown();
+    for (let i = 0; i < 4000 && !S.card; i++) g.liveStep(0.1);
+    S.autopilot = null;
+    for (let i = 0; i < 4000 && S.mode !== 'results'; i++) g.liveStep(0.1);
+    return g.comeback.linkFor(S.card);
+  });
+  await a.close();
+  const b = await browser.newContext(PHONE), page = await b.newPage();
+  await page.route('**/coldgas/api/**', (r) => r.abort());
+  let release;
+  const held = new Promise((r) => { release = r; });
+  await page.route('**/*.wasm', async (route) => { await held; await route.continue(); });
+  await page.goto(link.replace(/^https?:\/\/[^/]+/, '').replace('#', '&gfx=low#'));
+  const take = page.locator('[data-vs-take]');
+  await expect(take).toBeVisible({ timeout: 30_000 });
+  await take.tap();
+  const pending = () => G(page, () => document.querySelector('[data-vs-take]')?.hasAttribute('data-pending') ?? null);
+  expect(await pending()).toBe(true);
+  await page.waitForTimeout(3000);
+  expect(await pending()).toBe(true);
+  release();
+  await page.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 120_000 });
+  expect(await G(page, () => document.querySelectorAll('[data-pending]').length)).toBe(0);
+  await b.close();
 });
 
 test.describe('1280×720, keyboard', () => {

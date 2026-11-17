@@ -46,5 +46,7 @@ the challenge; Jump if a deep link or the how-to card started it) `data-pending`
 says "Starting…"; CSS draws "Starting…" over the button's own label, which keeps its room, so the button can't change size
 and nothing shifts (asserted in px at 390×844 touch and 1280×720 keyboard). It clears when the run starts, on any retired
 start (a mode change, Free Drive, the Sandbox, the title, the Menu), and on a failed load (the error cue stays). Reduced
-motion: the label without the moving bar. tests/e2e/start-pending.spec.js; the lifecycle spec's one-run-for-three-taps
+motion: the label without the moving bar. The pressed button gets it, whichever start it is (Jump, Play today's, Watch the
+reference, a drill; Jump for a deep link or the how-to card), and Take the challenge, which waits for the engine in
+src/comeback.js outside `whenPhysics`, says it through a `pending` hook. tests/e2e/start-pending.spec.js; the lifecycle spec's one-run-for-three-taps
 case is unchanged. Moves: `run` per `visit-new` (a tapped Jump that used to look dead now says it's coming).
