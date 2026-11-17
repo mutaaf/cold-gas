@@ -655,10 +655,10 @@ export function createUI() {
   // `offer` (0168): on an empty board, the course name for its Jump (the how-to-earn-a-row line and the button);
   // a board with rows, an offline board or no offer hides both.
   ui.board = (rows, empty = '', offer = '') => {
-    const ol = $('[data-board-rows]'), more = $('[data-board-empty]');
+    const ol = $('[data-board-rows]'), how = $('[data-board-how]'), jump = $('[data-board-jump]');
     ol.innerHTML = '';
-    more.hidden = !(offer && rows && !rows.length);
-    if (!more.hidden) $('[data-board-jump]').textContent = `Jump · ${offer}`;
+    how.hidden = jump.hidden = !(offer && rows && !rows.length);
+    if (!jump.hidden) jump.textContent = `Jump · ${offer}`;
     if (!rows) { ol.innerHTML = '<li class="empty">The board is offline right now.</li>'; return; }
     if (!rows.length) { ol.innerHTML = `<li class="empty">${empty || 'No jumps yet today. Be the first.'}</li>`; return; }
     for (const r of rows) {

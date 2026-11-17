@@ -135,6 +135,12 @@ let startToken = 0;
 // the daily card's button found again if the card redrew it under the tap), else Jump if it's on screen (a deep link,
 // or the how-to card's button, which closes as the start is asked for).
 let pendingBtn = null, pressed = null, pressedAt = -1e9;
+// 0168: the empty board's Jump closes the board under the finger; a quick second tap of a double-tap must not land on what
+// was under it (the how-to card's Got it, or a title control). Registered first, so nothing else sees that tap.
+let boardJumpAt = -1e9;
+addEventListener('click', (e) => {
+  if (e.isTrusted && performance.now() - boardJumpAt < 400 && !e.target?.closest?.('[data-board-jump]')) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
 addEventListener('click', (e) => { const b = e.target?.closest?.('button'); if (b) { pressed = b; pressedAt = performance.now(); } }, true);
 const startSay = document.querySelector('[data-start-say]');
 const shown = (el) => (el?.getClientRects().length ? el : null);
@@ -237,7 +243,7 @@ funnel.session();
 addEventListener('pagehide', () => funnel.flush());
 document.addEventListener('visibilitychange', () => { if (document.hidden) funnel.flush(); });
 // first_input: the page's first touch, key or pad press that reaches the car (a live run of the player's own) or the
-// title's primary action (Jump, Take the challenge, Play today's). Capture: before anything else can swallow it.
+// title's primary action (Jump, Take the challenge, Play today's, an empty board's Jump). Capture: before anything else can swallow it.
 const PRIMARY = '[data-start], [data-vs-take], [data-daily-play], [data-board-jump]';
 const firstInput = (e) => {
   if (e.repeat) return;
@@ -2258,14 +2264,14 @@ poster = createPost({
 let boardKind = 'today', boardCourse = null, boardSeq = 0, boardAbort = null;
 const BOARD_COURSE = { show: 'the Show', wall: 'the Wall', lineup: 'the Lineup' };
 const BOARD_JUMP = { show: 'The Show', wall: 'The Wall', lineup: 'The Lineup' };
-const boardEmpty = document.querySelector('[data-board-empty]');
+const boardOffer = document.querySelectorAll('[data-board-how], [data-board-jump]');
 async function openBoard(kind = boardKind, course = boardCourse || stage.course) {
   boardKind = kind; boardCourse = BOARD_COURSE[course] ? course : 'show';
   ui.show('board', true);
   document.querySelectorAll('[data-board]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.board === kind)));
   document.querySelectorAll('[data-board-course]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.boardCourse === boardCourse)));
   const seq = ++boardSeq;
-  boardEmpty.hidden = true;   // a tab's Jump never names the course of the tab before it while this one loads (0168)
+  boardOffer.forEach((el) => { el.hidden = true; });   // a tab's Jump never names the course of the tab before it while this one loads (0168)
   boardAbort?.abort();
   boardAbort = new AbortController();
   const rows = await fetchBoard(kind, { signal: boardAbort.signal, course: boardCourse });
@@ -2279,13 +2285,15 @@ on('[data-board-open]', () => { obs.play('board-open'); boardCourse = null; open
 document.querySelectorAll('[data-board-course]').forEach((b) => b.addEventListener('click', () => openBoard(boardKind, b.dataset.boardCourse)));
 on('[data-board-close]', () => ui.show('board', false));
 // The empty board's Jump (0168): close the board, pick its course, and press the title's own Jump, so the how-to card for
-// a new player, "Starting…", the ads and the funnel's counts are exactly the title's.
+// a new player, "Starting…", the ads and the funnel's counts are exactly the title's (it counts as a jump-tap).
 on('[data-board-jump]', () => {
   if (S.mode !== 'title') return;
-  const course = boardCourse;
+  boardJumpAt = performance.now();
+  const course = boardCourse, start = document.querySelector('[data-start]');
+  start.focus({ preventScroll: true });   // focus leaves the board first: the trap hands it to Jump ("Starting…"), not to Board
   ui.show('board', false);
   selectCourse(course);
-  document.querySelector('[data-start]').click();
+  start.click();
 });
 document.querySelectorAll('[data-board]').forEach((b) => b.addEventListener('click', () => openBoard(b.dataset.board)));
 
