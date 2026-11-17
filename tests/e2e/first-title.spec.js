@@ -7,6 +7,7 @@ test.slow();
 
 const PHONE = { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true };
 const DESKTOP = { viewport: { width: 1280, height: 720 } };
+const COLUMN = { viewport: { width: 320, height: 568 }, hasTouch: true, isMobile: true };
 
 async function boot(page, { landed = false } = {}) {
   const errors = [];
@@ -22,9 +23,9 @@ async function boot(page, { landed = false } = {}) {
   return errors;
 }
 
-// Everything the page shows on the title, measured: each visible control's box, its text's contrast against the darkest
-// backing it can sit on (its own fill over the title's black, the conservative case for a translucent chip), and how
-// "loud" its fill is (luma of the background colour × alpha).
+// Everything the page shows on the title, measured: each visible control's box, its text's contrast on its own fill over
+// black (the glass's tint; the HUD audit measures it on screenshots over the scene), how "loud" its fill is (luma of the
+// background colour × alpha) and its edge (the border's alpha × its colour's saturation: an amber edge is a loud one).
 const measure = (page) => page.evaluate(() => {
   const rgba = (s) => { const m = s.match(/[\d.]+/g)?.map(Number) || [0, 0, 0, 0]; return { r: m[0], g: m[1], b: m[2], a: m[3] ?? 1 }; };
   const lin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
@@ -44,7 +45,7 @@ const measure = (page) => page.evaluate(() => {
       sel: el.matches('[data-start]') ? 'jump' : el.matches('.beta-chip') ? 'beta' : el.matches('.ai-chip') ? 'judges'
         : el.matches('[data-daily-play]') ? 'daily' : (el.getAttribute('class') || el.tagName).split(' ')[0],
       box: { x: r.x, y: r.y, w: r.width, h: r.height }, inView: inView(r),
-      loud: lum(over(bg, black)), contrast: (hi + 0.05) / (lo + 0.05), border: rgba(cs.borderTopColor).a, tab: el.tabIndex >= 0,
+      loud: lum(over(bg, black)), edge: (() => { const c = rgba(cs.borderTopColor); return c.a * (Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b)) / 255; })(), contrast: (hi + 0.05) / (lo + 0.05), border: rgba(cs.borderTopColor).a, tab: el.tabIndex >= 0, radio: el.getAttribute('role') === 'radio',
     };
   });
   const card = document.querySelector('[data-title-extra] .xc-daily');
@@ -68,7 +69,7 @@ const overlaps = (out) => {
   return hits;
 };
 
-for (const [name, ctx] of [['390x844 touch', PHONE], ['1280x720', DESKTOP]]) {
+for (const [name, ctx] of [['390x844 touch', PHONE], ['1280x720', DESKTOP], ['320x568 touch', COLUMN]]) {
   test(`first visit, ${name}: Jump is the only loud button; the chips are quiet and legible; the Daily is one line`, async ({ browser }) => {
     const page = await browser.newPage(ctx);
     const errors = await boot(page);
@@ -76,9 +77,13 @@ for (const [name, ctx] of [['390x844 touch', PHONE], ['1280x720', DESKTOP]]) {
     expect(m.flag).toBe(true);
     const jump = m.out.find((o) => o.sel === 'jump');
     expect(jump?.inView).toBe(true);
-    // The one filled button: nothing else visible above the fold has a fill a third as bright as Jump's.
-    const loud = m.out.filter((o) => o.inView && o.sel !== 'jump' && o.loud > jump.loud / 3).map((o) => o.sel);
+    // The one loud button: nothing else visible above the fold has a fill a third as bright as Jump's, or a coloured edge
+    // (the gold Play today's had one); the picked event's ring is a radio's state, not a call to action.
+    const loud = m.out.filter((o) => o.inView && o.sel !== 'jump' && (o.loud > jump.loud / 3 || (o.edge > 0.25 && !o.radio))).map((o) => o.sel);
     expect(loud).toEqual([]);
+    // Every control on the screen, edge to edge (a 320 px column clips nothing).
+    const vw = ctx.viewport.width;
+    expect(m.out.filter((o) => o.box.x < -0.5 || o.box.x + o.box.w > vw + 0.5).map((o) => o.sel)).toEqual([]);
     // The Daily: its header line only, no gold button, still named for a screen reader.
     expect(m.card).toMatchObject({ head: true, goal: false, streak: false, play: false });
     expect(m.card.label).toMatch(/daily/i);
@@ -98,11 +103,13 @@ for (const [name, ctx] of [['390x844 touch', PHONE], ['1280x720', DESKTOP]]) {
     const errors2 = await boot(back, { landed: true });
     const r = await measure(back);
     expect(r.flag).toBe(false);
-    expect(r.card).toMatchObject({ head: true, goal: true, play: true });
+    // Today's whole card (a 568 px tall column has no room for it at all: its fit steps it out, as before 0264).
+    if (ctx.viewport.height >= 700) expect(r.card).toMatchObject({ head: true, goal: true, play: true });
     for (const sel of ['beta', 'judges']) {
       const q = m.out.find((o) => o.sel === sel), full = r.out.find((o) => o.sel === sel);
       expect(q.border, sel).toBeLessThan(full.border);
-      expect(q.box.h, sel).toBeLessThanOrEqual(full.box.h);
+      expect(q.box.h, sel).toBe(full.box.h);   // the same touch target
+      expect(q.box.w, sel).toBeLessThanOrEqual(full.box.w + 0.5);
     }
     expect(errors).toEqual([]);
     expect(errors2).toEqual([]);
@@ -119,7 +126,11 @@ test('first visit: the first landing gives back today’s title, Play today’s 
   await page.evaluate(() => { const f = window.__coldgas.funnel; f.jumpEnd(f.jumpStart('show', 'assist'), { course: 'show', tier: 'assist', landed: true, score: 90 }); });
   await page.evaluate(() => window.__coldgas.toTitle());
   await expect(page.locator('[data-daily-play]')).toBeVisible();
+  await expect(page.locator('[data-title-extra] .xc-daily .xc-goal')).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.hasAttribute('data-first-title'))).toBe(false);
+  // The chips have their edge back (the beta's green, Judges' hairline).
+  const edges = await page.evaluate(() => ['.beta-chip', '.ai-chip'].map((s) => +getComputedStyle(document.querySelector(s)).borderTopColor.match(/[\d.]+/g)[3]));
+  for (const a of edges) expect(a).toBeGreaterThan(0.1);
   expect(errors).toEqual([]);
   await page.close();
 });

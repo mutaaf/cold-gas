@@ -93,7 +93,8 @@
    so the Daily is its header line alone (no goal, no streak, no gold "Play today's", no amber rule) until this device has
    landed a Jump. A challenge someone sent keeps its card: that's why the visitor came. Ahead of the fit levels: the header
    is the one line, so it stays when the card is tight. */
-:root[data-first-title] .xc-daily { grid-template-areas: 'k'; grid-template-columns: minmax(0, 1fr); padding: 10px 14px; }
+:root[data-first-title] .xc-daily { grid-template-areas: 'k'; grid-template-columns: minmax(0, 1fr); padding: 4px 0;
+  border-color: transparent; background: none; backdrop-filter: none; }   /* a caption, not a pill that looks tappable */
 :root[data-first-title] .xc-daily::before { display: none; }
 :root[data-first-title] .xc-daily :is(.xc-goal, .xc-streak, .xc-go) { display: none; }
 :root[data-first-title] .title .xc-daily .xc-k { display: flex; }
