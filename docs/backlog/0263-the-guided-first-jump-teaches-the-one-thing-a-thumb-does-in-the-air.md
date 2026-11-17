@@ -1,12 +1,12 @@
 ---
 id: 0263
 title: The guided first jump teaches the one thing a thumb does in the air (aim the touchdown), not a "Hold to land" that never shows
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-14
-pr:
+pr: 410
 by: critic
 ---
 
