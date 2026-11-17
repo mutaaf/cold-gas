@@ -1,12 +1,12 @@
 ---
 id: 0264
 title: A first-ever visit's title gives Jump the only loud voice, not the iPhone chip or the daily card
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-14
-pr:
+pr: 413
 by: scout
 ---
 
@@ -28,10 +28,10 @@ collapses to its one-line header until the player has landed once; "Play today's
 players see today's title unchanged. No new network call, no new element, no sim change.
 
 ## Acceptance criteria
-- [ ] With `coldgas_howto=new` at 390×844, Jump is the only filled/bright button above the fold; the chips are
+- [x] With `coldgas_howto=new` at 390×844, Jump is the only filled/bright button above the fold; the chips are
   visibly quieter (measured contrast ≥ 4.5:1 for their text, so still legible) and the daily card shows no gold button.
-- [ ] After one landed run (or any stored medal) the title is exactly today's.
-- [ ] 1280×720 keyboard/mouse title unchanged for returning players; first-visit variant also fits with no overlap
+- [x] After one landed run (or any stored medal) the title is exactly today's.
+- [x] 1280×720 keyboard/mouse title unchanged for returning players; first-visit variant also fits with no overlap
   (`npm run audit`), and tab order still reaches every control.
 - [ ] Moves: `run` per `visit-new` in the players funnel (and `visit-new` → `run-landed`).
 
@@ -41,3 +41,14 @@ collapsed daily card; a context with a stored medal asserts the original title. 
 
 ## Out of scope
 Removing the beta link or the daily; copy changes; any returning-player layout change.
+
+**Builder, 2026-11-17:** shipped. "First visit" is 0247's `firstRun()` (this device has never landed a Jump; a stored landing
+counts), the same test that already folds the title's secondary row under More ways to play, so the two stay in step; a
+player who has only ever wrecked keeps the quiet title until a first landing. `:root[data-first-title]` (src/main.js
+`syncFirstTitle`): the beta and Judges chips keep their words, glass, Tab order and 32 px height and lose their edge and the
+green glow (text ≥ 4.5:1); the Daily is its header line as a caption (no goal, streak, amber rule or "Play today's"). A
+challenge's card stays whole. `tests/e2e/first-title.spec.js` at 390×844 touch, 1280×720 and a 320×568 column: Jump the only
+fill or coloured edge above the fold, nothing clipped or overlapping, the title under the bar; a landed device and a first
+landing in-session get today's title. The audits (`npm run audit`) fly as a returning player, so the e2e carries the
+first-visit layout checks. The funnel box (run per visit-new) is for the Critic and Scout to read on production.
+Shots: docs/shots/0264/.

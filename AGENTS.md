@@ -366,6 +366,9 @@ src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on 
                         hold to land (LAND + the carry over the row), slide to aim the touchdown (0121: pitch/roll,
                         roof up, never back over the row or in against a flank); plain sim inputs, pure, no DOM
 src/thumb-aim.js      the one-thumb pad's sight in the air (the mark from the predicted touchdown) + the slide's pointers
+src/main.js syncFirstTitle  a first visit's title (0247, 0264): until this device lands a Jump, the reference, Practice, the board and
+                        the settings wait under "More ways to play", and :root[data-first-title] quiets the beta and Judges chips and
+                        folds the Daily card to its header (no "Play today's"); a challenge's card stays whole
 src/medals.js         bronze/silver/gold per event and tier, best per device (localStorage coldgas_medals), the
                         results row under the score; getMedals(course, tier) for other screens (0121)
 src/beat.js           the landing's beat (0199): a landed run's verdict, score counting up and the judges' cards going
