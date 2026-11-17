@@ -315,7 +315,7 @@ export function createComeback(o) {
 
   render();
   return {
-    boot, ghost, results, linkFor, render, refresh,
+    boot, ghost, results, linkFor, render, refresh, fit,
     get active() { return armed; },
     // e2e
     get state() { return ch ? { state: ch.state, armed, initials: ch.dec.initials, score: ch.dec.score, course: ch.dec.course, tier: ch.dec.tier, name: ch.name || '' } : null; },

@@ -2197,6 +2197,12 @@ body[data-beat-on] .hud { filter: opacity(0); pointer-events: none; }
 .play-more:not([open]) > :is(.cta-row, .cta-set) { display: none; }
 /* Opened on a first run it holds the whole menu: the wordmark steps aside for it, as the tagline does. */
 .title[data-first]:has(.play-more[open]) > .wordmark { display: none; }
+/* 0264: and above it the top bar's chips step back: the iPhone beta and Judges keep their words, their place in the Tab order
+   and their glass (text ≥ 4.5:1), and lose their edge, the beta's green glow and a little height. From the first landing on, as
+   before. The Menu stays as it is (it's how a player finds sound, the ghost and For nerds). */
+:root[data-first-title] body:is(:not([data-mode]), [data-mode='title']) :is(.beta-chip, .ai-chip) { height: 28px; padding: 0 11px;
+  border-color: rgba(245, 246, 248, 0.06); color: var(--ink-2); }
+:root[data-first-title] body:is(:not([data-mode]), [data-mode='title']) .beta-chip i { background: var(--ink-3); box-shadow: none; }
 
 /* --- After a landing (0257): Next jump leads, then Beat <score> (Retry, a step down), then Share. A wreck: Retry leads.
    Next carries the pulse Retry has when it leads; Retry steps down to an outlined button with the score to beat. */

@@ -655,8 +655,14 @@ const TASTE_HOLD = 0.9;    // s of the reference's flight after its release befo
 // under "More ways to play" (the same buttons, moved, so every wiring holds). From the first landing on, as before.
 const titleEl = document.querySelector('[data-screen="title"]'), playMore = titleEl.querySelector('[data-play-more]');
 const ctaRow = titleEl.querySelector('.cta-row'), ctaSet = titleEl.querySelector('.cta-set');
+// 0264: and on the page around it Jump has the only loud voice: :root[data-first-title] quiets the beta and Judges chips and
+// folds the Daily card to its header line (src/styles.css, src/comeback.css); the card re-fits when the flag flips.
 function syncFirstTitle() {
   const first = firstRun();
+  if (document.documentElement.hasAttribute('data-first-title') !== first) {
+    document.documentElement.toggleAttribute('data-first-title', first);
+    S.titleCardFit?.();
+  }
   if (titleEl.hasAttribute('data-first') === first && ctaRow.parentElement === (first ? playMore : playMore.parentElement)) return;
   titleEl.toggleAttribute('data-first', first);
   if (first) playMore.querySelector('summary').after(ctaRow, ctaSet);
@@ -1884,6 +1890,7 @@ const comeback = createComeback({
   how: (course, tier, flown) => (flown && S.cardHow ? flownCtx(S.cardHow, course, tier) : pointerCtx(course, tier)), tip: (text) => { S.tip = text; },
 });
 S.titleCard = () => comeback.refresh();
+S.titleCardFit = () => comeback.fit();   // 0264: the first-visit Daily is one line, today's is whole
 
 // The flight tier: Assist → Pro → Advanced, for the next run (a run keeps the tier it started with:
 // latchTier). The top bar's chip says what the panel pays for it (off the title: on the title the Assist
@@ -2362,6 +2369,6 @@ const heal = installHeal({
   stage, canvas, ui, S, pause,
   toTitle: () => { runEnd.drop(); toTitle(); },   // a trap or an escalation is the game's fault, never the player's quit (0130)
   closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { shareCardMs: () => shareCard?.ms ?? null, redrawCard: () => { shareCard = null; return startCard()?.then(() => shareCard?.ms ?? null); }, S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
+window.__coldgas = { shareCardMs: () => shareCard?.ms ?? null, redrawCard: () => { shareCard = null; return startCard()?.then(() => shareCard?.ms ?? null); }, S, stage, physicsReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, funnel, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
 Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);
