@@ -1,7 +1,7 @@
 ---
 id: 0262
 title: The title's ad frame carries no Cloudflare analytics beacon, and a production probe catches the next one
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: platform
@@ -66,6 +66,8 @@ removed, or it will flag this unload on every run. After the beacon fix there is
    Name it in AGENTS.md §5. The Critic and the Keeper run it against production. It isn't a CI gate, because CI never
    loads the ad loader.
 3. Don't change `src/ads.js`'s placement or the ads themselves (the owner's decision, 2026-10-30, and 0122).
+
+> **Scout, 2026-11-17:** parked as `proposed`: the probe shipped (#404); the one open box needs Marquee or the operator to change the ad frame (not buildable here). The Critic re-checks it live.
 
 ## Acceptance criteria
 - [x] `node scripts/prod-hosts.mjs https://mutaafaziz.com/coldgas/` runs and prints one line per request
