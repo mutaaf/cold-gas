@@ -1,12 +1,12 @@
 ---
 id: 0143
 title: The players' funnel sees a visit that ends on the title, and says whether Jump was ever tapped
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-04
-pr:
+pr: 414
 by: scout
 ---
 
@@ -31,15 +31,20 @@ became tappable), `left-howto` (the first-jump card was open), `left-title` (not
 events in the AGENTS.md § 2 obs paragraph and the `signature.js` comment.
 
 ## Acceptance criteria
-- [ ] A page load that never taps Jump and is then hidden posts exactly one `title-left` and one of the three reasons; a load that reaches `run` posts none
-- [ ] `jump-tap` is counted once per page load, however many times Jump is tapped; `run` still counts as today
-- [ ] The Worker accepts the new names (`cleanObs` uses PLAY_EVENTS) and the digest `players` days list them; automated browsers stay in `sessions:auto`
-- [ ] No new network call, host, id or storage key; the beacon stays ≤ 8 kB
+- [x] A page load that never taps Jump and is then hidden posts exactly one `title-left` and one of the three reasons; a load that reaches `run` posts none
+- [x] `jump-tap` is counted once per page load, however many times Jump is tapped; `run` still counts as today
+- [x] The Worker accepts the new names (`cleanObs` uses PLAY_EVENTS) and the digest `players` days list them; automated browsers stay in `sessions:auto`
+- [x] No new network call, host, id or storage key; the beacon stays ≤ 8 kB
 
 ## Test plan
 Unit: `test/obs.*` builds a beacon with the new events and checks `cleanObs` keeps them and drops unknown names.
 e2e (390×844 touch, `coldgas_howto='new'`): load, hide the page (`pagehide`) → beacon has `title-left` +
 `left-title`; open the how-to then hide → `left-howto`; tap Jump through to a run → `jump-tap`, `run`, no `title-left`.
+
+## Shipped (builder, 2026-11-17, #414)
+Counted on hidden as well as pagehide (a phone tab is often discarded with no pagehide), with `title-back` when that
+load comes back and plays: read leaves as title-left − title-back. A fourth reason, `left-starting` (a start waiting).
+`left-booting` = the title's first frame not drawn yet (Jump is wired in the same evaluation that starts obs).
 
 ## Out of scope
 Any change to what the player sees. Time-on-title per person. Fixing whatever the new counts reveal (a new ticket).

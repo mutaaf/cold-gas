@@ -62,6 +62,7 @@ import { packFrames, ghostAt, isBetter, newGhostPose, loadBest, saveBest, ghostE
 import { obs, guard, deviceClass } from './obs/index.js';
 import { installHeal } from './obs/heal.js';
 import { createRunEnd } from './obs/run-end.js';
+import { createTitleLeave } from './obs/title-leave.js';
 import { createAds } from './ads.js';
 import { forgeWanted } from './render/forge-registry.js';
 import { createPacer } from './pace.js';
@@ -249,7 +250,8 @@ addEventListener('pointerdown', firstInput, true);
 addEventListener('keydown', firstInput, true);
 const rerollBtn = document.querySelector('[data-reroll]');
 let rerolled = null;
-const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); if (m !== 'results') peek(false); if (m !== 'live') endBeat(); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); ads.sync(); swapForged(); if (m === 'title' || m === 'results') funnel.flush(); };
+const titleLeave = createTitleLeave(obs.play);   // 0143: below, with its wiring
+const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); titleLeave.mode(m); if (m !== 'results') peek(false); if (m !== 'live') endBeat(); S.mode = m; document.body.dataset.mode = m; if (m !== 'results') syncReroll(); ads.sync(); swapForged(); if (m === 'title' || m === 'results') funnel.flush(); };
 // The forge's models (0211): fetched after the title is up (below), swapped into the parked rows at the next change to the
 // title or to a countdown (a cut the player already sees), never under a still title, in a run, its results (a dent would be
 // lost) or its replay. A course built after they land is built with them (src/render/scene.js lineup).
@@ -431,6 +433,12 @@ function settleRun(left, now = false) {
 }
 const quitRun = () => settleRun(true);
 obs.beforeLeave(() => settleRun(true, true));   // the page going: the cause re-flown now, onto its last beacon
+// A visit that ends on the title (0143, src/obs/title-leave.js): Jump tapped (jump-tap), and the page gone (pagehide or
+// hidden) never past the title this load (title-left + why: the how-to card, a start still waiting, the title not drawn
+// yet, or nothing); taken back (title-back) if that load then plays after all. setMode tells it every mode.
+let titleDrawn = false;
+stage.ready.then(() => { titleDrawn = true; }, () => {});
+obs.beforeHide(() => titleLeave.leave({ mode: S.mode, howto: !ui.screens.howto.hidden, starting: !!pendingBtn || !!startSay?.textContent, drawn: titleDrawn }));
 
 // Back to the title from anywhere, Free Drive and the Sandbox included (heal's escalation calls it
 // too). Their exit() calls back into toTitle (onExit): the guard keeps that from recursing.
@@ -482,7 +490,7 @@ function startRunNow(kind = 'jump', quick = false) {
   S.tasteT = 0;
   if (kind !== 'reveal') S.taste = false;   // a Retry or a Jump from inside the taste is the player's own run
   S.jumpN = null;
-  if (kind === 'jump') { obs.play('run'); runEnd.start(S.run); track('game_start', { course: stage.course, tier: S.tier }); S.jumpN = funnel.jumpStart(stage.course, S.tier); }   // the players' funnel (src/obs: counts only; Box Office: src/insights.js)
+  if (kind === 'jump') { obs.play('run'); titleLeave.ran(); runEnd.start(S.run); track('game_start', { course: stage.course, tier: S.tier }); S.jumpN = funnel.jumpStart(stage.course, S.tier); }   // the players' funnel (src/obs: counts only; Box Office: src/insights.js)
   latchTier();
   S.adaptNow = null;
   // Live pointers on the cue line (0079): a new player's first runs, or while Adapt to me says they're struggling.
@@ -1743,7 +1751,7 @@ const on = (sel, fn) => document.querySelectorAll(sel).forEach((el) => el.addEve
 // The first Jump on this device shows how to fly first (skippable, remembered); a deep link never waits.
 // 0247: a newcomer's Jump flies at once: the first jump is taught inside the run (0248), and How to fly stays on the title.
 const jump = (from = null) => (howtoSeen() || firstRun() ? startRun('jump') : openHowto({ then: () => startRun('jump'), from }));
-on('[data-start]', (e) => jump(e.currentTarget));
+on('[data-start]', (e) => { titleLeave.jumpTap(); jump(e.currentTarget); });
 on('[data-reveal]', () => startRun('reveal'));
 // Retry: straight back onto the mark with a one-beat READY (a drill restarts itself; the reference
 // jump hands over to you). Home: the title. Both from anywhere in a run: the HUD's quick buttons,
