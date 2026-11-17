@@ -1334,6 +1334,19 @@ body:is(:not([data-mode]), [data-mode='title']) .beta-chip { display: inline-fle
 .jb-e { display: inline-flex; align-items: center; gap: 10px; min-width: 0; font: 400 11px/1 var(--display); letter-spacing: 0.14em; text-transform: uppercase; color: rgba(7, 9, 13, 0.66); white-space: nowrap; }
 .jb-e::after { content: '→'; font: 500 18px/1 var(--text); letter-spacing: 0; color: #07090d; transition: transform 0.25s var(--ease); }
 .jump-btn:hover .jb-e::after { transform: translateX(3px); }
+/* A start waiting on the engine (0154): "Starting…" over the pressed button's own label, which keeps its room (hidden,
+   not removed), so nothing changes size or moves; a slow bar along its foot; still under reduced motion, no bar. */
+.btn[data-pending] { position: relative; color: transparent; cursor: progress; }
+.btn[data-pending] > * { visibility: hidden; }
+.btn[data-pending]::before { content: 'Starting…'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: #07090d; font: inherit; white-space: nowrap; pointer-events: none; }
+.btn.xc-go[data-pending]::before { color: var(--ink); }
+.btn[data-pending]::after { content: ''; position: absolute; left: 22%; right: 22%; bottom: 7px; height: 2px; border-radius: 1px; pointer-events: none;
+  background: linear-gradient(90deg, transparent 0 35%, currentColor 35% 65%, transparent 65%) 0 0 / 300% 100%, rgba(7, 9, 13, 0.14);
+  color: rgba(7, 9, 13, 0.55); animation: start-wait 1.6s linear infinite; }
+.btn.xc-go[data-pending]::after { color: rgba(245, 246, 248, 0.6); background-color: rgba(245, 246, 248, 0.14); }
+@keyframes start-wait { from { background-position: 100% 0, 0 0; } to { background-position: 0% 0, 0 0; } }
+@media (prefers-reduced-motion: reduce) { .btn[data-pending]::after { display: none; } }
 .cta-row { display: flex; gap: 8px; min-width: 0; }
 .cta-row .btn { flex: 1 1 auto; height: 44px; padding: 0 14px; font-size: 14px; white-space: nowrap; min-width: 0; }
 [data-title-extra]:empty { display: none; }

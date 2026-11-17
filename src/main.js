@@ -127,14 +127,31 @@ stage.warmGate = () => S.mode === 'title' && !S.paused;
 // later into a drive, and several taps start one run.
 const physics = () => loadPhysics().catch((err) => { console.error(err); ui.cue_('The physics engine couldn’t load', 2400); throw err; });
 let startToken = 0;
-const cancelPendingStart = () => { startToken++; };
+// While a start waits, the button the player pressed says so (0154): "Starting…" over its label (CSS, so it can't
+// change size), aria-busy, and one polite status line, until the run begins, the start is retired or the load fails.
+// On a phone over cellular that wait is 10 s and more after the 1.2 s cue has gone (0053). Which button: the title's
+// primary action the player just pressed (Jump, Play today's, Take the challenge), else Jump if it's on screen.
+let pendingBtn = null, pressed = null, pressedAt = -1e9;
+addEventListener('click', (e) => { const b = e.target?.closest?.(PRIMARY); if (b) { pressed = b; pressedAt = performance.now(); } }, true);
+const startSay = document.querySelector('[data-start-say]');
+function setPendingStart(on) {
+  if (pendingBtn) { pendingBtn.removeAttribute('data-pending'); pendingBtn.removeAttribute('aria-busy'); pendingBtn = null; }
+  if (on) {
+    const b = pressed?.isConnected && performance.now() - pressedAt < 1000 ? pressed : document.querySelector('[data-start]');
+    if (b?.getClientRects().length) { pendingBtn = b; b.setAttribute('data-pending', ''); b.setAttribute('aria-busy', 'true'); }
+  }
+  if (startSay) startSay.textContent = on ? 'Starting…' : '';
+}
+const cancelPendingStart = () => { startToken++; if (pendingBtn || startSay?.textContent) setPendingStart(false); };
 function whenPhysics(fn) {
   return (...args) => {
     cancelPendingStart();
     if (physicsReady()) return fn(...args);
     const token = startToken;
     ui.cue_('Loading physics', 1200);
-    physics().then(() => { if (token === startToken) fn(...args); }).catch(() => {});
+    setPendingStart(true);
+    physics().then(() => { if (token === startToken) { setPendingStart(false); fn(...args); } })
+      .catch(() => { if (token === startToken) setPendingStart(false); });
   };
 }
 const ui = createUI();
@@ -2189,7 +2206,7 @@ function setMore(open, { refocus = false } = {}) {
   moreBtn.setAttribute('aria-expanded', String(open));
   if (!open && refocus) moreBtn.focus();
 }
-moreBtn.addEventListener('click', () => setMore(!moreOpen()));
+moreBtn.addEventListener('click', () => { cancelPendingStart(); setMore(!moreOpen()); });   // a Jump waiting on the engine is retired (0154)
 nerdsBtn.addEventListener('click', () => { if (moreOpen()) setMore(false, { refocus: true }); });   // the panel takes the screen
 // Capture, so Escape closes the menu before the game reads it (Escape on results goes Home).
 addEventListener('keydown', (e) => {
