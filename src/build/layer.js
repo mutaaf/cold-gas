@@ -27,7 +27,7 @@ import { createBuildUI } from './ui.js';
 import { createEditor } from './editor.js';
 import { DT } from '../sim/vehicle.js';
 import { generateWithAI } from './ai-quest.js';
-import { aiLabel } from '../ai/settings.js';
+import { aiLabel } from '../ai/config.js';
 
 const ARCADE_KEY = 'coldgas_arcade';
 const SAVES_KEY = 'coldgas_builds_v1';

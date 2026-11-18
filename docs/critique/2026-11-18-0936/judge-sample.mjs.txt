@@ -1,0 +1,25 @@
+// Sample the edge panel's words for the reference runs and check every number they state against the card's facts.
+import { createRun, stepRun } from '/home/user/cold-gas/src/sim/run.js';
+import { createAutopilot } from '/home/user/cold-gas/src/sim/autopilot.js';
+import { scoreRun } from '/home/user/cold-gas/src/sim/judge.js';
+import { initPhysics } from '/home/user/cold-gas/src/sim/engine.js';
+await initPhysics();
+const N = +(process.argv[2] || 6);
+const out = [];
+for (const course of ['show', 'wall']) {
+  const run = createRun(course), ap = createAutopilot(course);
+  while (run.phase !== 'done') stepRun(run, ap(run));
+  const card = scoreRun(run.t, { assist: true });
+  for (let i = 0; i < N; i++) {
+    const res = await fetch('https://mutaafaziz.com/coldgas/api/judge/stream', { method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ log: run.inputLog, t: run.t, assist: true, course, provider: 'edge' }) });
+    const txt = await res.text();
+    const done = /event: done\ndata: (.+)/.exec(txt)?.[1];
+    const err = /event: error\ndata: (.+)/.exec(txt)?.[1];
+    out.push({ course, i, status: res.status, words: done ? JSON.parse(done).words : null, model: done ? JSON.parse(done).model : null, err });
+    console.log(course, i, res.status, done ? JSON.stringify(JSON.parse(done).words) : err);
+    await new Promise((r) => setTimeout(r, 1500));
+  }
+  out.push({ course, facts: card.facts });
+}
+console.log(JSON.stringify(out));

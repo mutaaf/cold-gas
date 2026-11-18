@@ -1,0 +1,35 @@
+// tapToRun on production (0053's open criterion): phone 390x844, 4x CPU, Slow 4G, cold cache, returning player.
+// A raw CDP touch on the Jump the moment it is visible and wired; time until S.mode leaves the title.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const URL = process.argv[2] || 'https://mutaafaziz.com/coldgas/', RUNS = +(process.argv[3] || 3);
+const browser = await chromium.launch({ args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'] });
+const rows = [];
+for (let r = 0; r < RUNS; r++) {
+  const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true, deviceScaleFactor: 3 });
+  await ctx.route('**/boxoffice/**', (q) => q.fulfill({ status: 200, body: '' }));
+  await ctx.route('**/api/obs**', (q) => q.request().method() === 'POST' ? q.fulfill({ status: 204 }) : q.continue());
+  await ctx.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (q) => q.abort());
+  await ctx.addInitScript(() => { try { localStorage.setItem('coldgas_howto', 'seen'); } catch {} });
+  await ctx.addInitScript(() => { window.__t = {}; const poll = () => { const g = window.__coldgas; if (g) { if (!__t.ready && g.physicsReady()) __t.ready = performance.now(); if (!__t.stage && g.stage?.ready) g.stage.ready.then(() => __t.stage ??= performance.now()); } setTimeout(poll, 20); }; poll(); new PerformanceObserver((l) => { for (const e of l.getEntries()) if (e.duration > 1000) (__t.long ??= []).push([Math.round(e.startTime), Math.round(e.duration)]); }).observe({ type: 'longtask', buffered: true }); });
+  const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('Network.enable'); await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+  await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 562.5, downloadThroughput: (1.6e6 * 0.9) / 8, uploadThroughput: (750e3 * 0.9) / 8 });
+  if (!process.env.NOCPU) await cdp.send('Emulation.setCPUThrottlingRate', { rate: 4 });
+  await page.goto(URL, { waitUntil: 'commit' });
+  const h = await page.waitForFunction(() => { const b = document.querySelector('[data-start]'); const r = b?.getBoundingClientRect(); return b && r.width > 0 && !b.closest('[hidden]') && window.__coldgas && { t: performance.now(), x: r.x + r.width / 2, y: r.y + r.height / 2 }; }, null, { timeout: 180000, polling: 20 });
+  const { t: usable, x, y } = await h.jsonValue();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForFunction(() => window.__coldgas.S.mode !== 'title', null, { timeout: 180000, polling: 50 });
+  const m = await page.evaluate(() => {
+    const res = performance.getEntriesByType('resource');
+    const end = (re) => Math.round(res.find((e) => re.test(e.name))?.responseEnd ?? -1);
+    return { left: Math.round(performance.now()), laterEnd: end(/later-.*\.js/), wasmEnd: end(/\.wasm|rapier/), entryEnd: end(/assets\/index-.*\.js/), mode: window.__coldgas.S.mode, ready: Math.round(__t.ready ?? -1), stageReady: Math.round(__t.stage ?? -1), long: __t.long };
+  });
+  rows.push({ usable: Math.round(usable), ...m, tapToRun: m.left - Math.round(usable) });
+  console.error(JSON.stringify(rows[rows.length - 1]));
+  await ctx.close();
+}
+console.log(JSON.stringify(rows));
+await browser.close();

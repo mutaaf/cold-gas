@@ -1,7 +1,7 @@
 ---
 id: 0179
 title: A failed WebGL context is asked for again, lighter, before the page says it needs WebGL
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: performance

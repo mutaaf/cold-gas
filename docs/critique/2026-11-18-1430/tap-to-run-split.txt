@@ -1,0 +1,2 @@
+[{"usable":6454,"left":46696,"laterEnd":5314,"wasmEnd":14888,"entryEnd":3497,"mode":"live","ready":45793,"stageReady":6707,"long":[[4961,1158],[6715,7354],[14093,1110],[15892,1374],[24461,1015]],"tapToRun":40242}]
+[{"usable":4505,"left":21726,"laterEnd":4897,"wasmEnd":14572,"entryEnd":3439,"mode":"countdown","ready":21031,"stageReady":4619,"long":[[4623,6491],[15121,1093]],"tapToRun":17221}]
