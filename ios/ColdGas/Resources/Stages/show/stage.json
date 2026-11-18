@@ -1830,7 +1830,7 @@
  },
  "roadster": {
   "vertexStride": 44,
-  "vertexCount": 20980,
+  "vertexCount": 56749,
   "submeshes": [
    {
     "material": {
@@ -1870,7 +1870,7 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 0.6759999975562095,
+    "top": 0.6939999975562096,
     "vertexStart": 0,
     "vertexCount": 4,
     "indexStart": 0,
@@ -1914,11 +1914,11 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 0.640999972820282,
+    "top": 0.7012763023376465,
     "vertexStart": 4,
-    "vertexCount": 72,
+    "vertexCount": 12,
     "indexStart": 6,
-    "indexCount": 72
+    "indexCount": 12
    },
    {
     "material": {
@@ -1958,10 +1958,10 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 0.9700000286102295,
-    "vertexStart": 76,
+    "top": 0.8500000238418579,
+    "vertexStart": 16,
     "vertexCount": 144,
-    "indexStart": 78,
+    "indexStart": 18,
     "indexCount": 144
    },
    {
@@ -2002,11 +2002,11 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 0.8379999995231628,
-    "vertexStart": 220,
-    "vertexCount": 2658,
-    "indexStart": 222,
-    "indexCount": 2658
+    "top": 0.9747233390808105,
+    "vertexStart": 160,
+    "vertexCount": 6135,
+    "indexStart": 162,
+    "indexCount": 6135
    },
    {
     "material": {
@@ -2047,9 +2047,9 @@
     },
     "renderOrder": 0,
     "top": 0.4764198362827301,
-    "vertexStart": 2878,
+    "vertexStart": 6295,
     "vertexCount": 7296,
-    "indexStart": 2880,
+    "indexStart": 6297,
     "indexCount": 7296
    },
    {
@@ -2090,11 +2090,11 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 1.0868456363677979,
-    "vertexStart": 10174,
-    "vertexCount": 252,
-    "indexStart": 10176,
-    "indexCount": 252
+    "top": 1.058247685432434,
+    "vertexStart": 13591,
+    "vertexCount": 576,
+    "indexStart": 13593,
+    "indexCount": 576
    },
    {
     "material": {
@@ -2134,11 +2134,11 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 0.5199999809265137,
-    "vertexStart": 10426,
-    "vertexCount": 3648,
-    "indexStart": 10428,
-    "indexCount": 3648
+    "top": 0.5099999904632568,
+    "vertexStart": 14167,
+    "vertexCount": 3828,
+    "indexStart": 14169,
+    "indexCount": 3828
    },
    {
     "material": {
@@ -2178,11 +2178,11 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 0.5049999952316284,
-    "vertexStart": 14074,
-    "vertexCount": 144,
-    "indexStart": 14076,
-    "indexCount": 144
+    "top": 0.5558199882507324,
+    "vertexStart": 17995,
+    "vertexCount": 84,
+    "indexStart": 17997,
+    "indexCount": 84
    },
    {
     "material": {
@@ -2223,9 +2223,9 @@
     },
     "renderOrder": 0,
     "top": 0.4593923091888428,
-    "vertexStart": 14218,
+    "vertexStart": 18079,
     "vertexCount": 540,
-    "indexStart": 14220,
+    "indexStart": 18081,
     "indexCount": 540
    },
    {
@@ -2247,9 +2247,9 @@
      "emissiveIntensity": 1,
      "unlit": false,
      "metalness": 0.05,
-     "roughness": 0.42,
-     "clearcoat": 0.5,
-     "clearcoatRoughness": 0.2,
+     "roughness": 0.36,
+     "clearcoat": 0.85,
+     "clearcoatRoughness": 0.12,
      "opacity": 1,
      "transparent": false,
      "depthWrite": true,
@@ -2266,11 +2266,11 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 1.1522353887557983,
-    "vertexStart": 14758,
-    "vertexCount": 3066,
-    "indexStart": 14760,
-    "indexCount": 3066
+    "top": 1.1380000114440918,
+    "vertexStart": 18619,
+    "vertexCount": 23142,
+    "indexStart": 18621,
+    "indexCount": 23142
    },
    {
     "material": {
@@ -2310,10 +2310,10 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 0.6980000138282776,
-    "vertexStart": 17824,
+    "top": 0.7149999737739563,
+    "vertexStart": 41761,
     "vertexCount": 72,
-    "indexStart": 17826,
+    "indexStart": 41763,
     "indexCount": 72
    },
    {
@@ -2354,11 +2354,11 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 0.9459778070449829,
-    "vertexStart": 17896,
-    "vertexCount": 2520,
-    "indexStart": 17898,
-    "indexCount": 2520
+    "top": 0.9052572250366211,
+    "vertexStart": 41833,
+    "vertexCount": 9792,
+    "indexStart": 41835,
+    "indexCount": 9792
    },
    {
     "material": {
@@ -2398,11 +2398,11 @@
      "emissiveMap": null
     },
     "renderOrder": 0,
-    "top": 0.7699999809265137,
-    "vertexStart": 20416,
-    "vertexCount": 372,
-    "indexStart": 20418,
-    "indexCount": 372
+    "top": 0.7850000262260437,
+    "vertexStart": 51625,
+    "vertexCount": 3036,
+    "indexStart": 51627,
+    "indexCount": 3036
    },
    {
     "material": {
@@ -2411,9 +2411,9 @@
      "name": "roadster-glass",
      "kind": "MeshPhysicalMaterial",
      "color": [
-      0.059511238155621766,
-      0.02955683443236377,
-      0.011612245176281512
+      0.010329823026364548,
+      0.012286488353353374,
+      0.015208514418949472
      ],
      "emissive": [
       0,
@@ -2422,11 +2422,11 @@
      ],
      "emissiveIntensity": 1,
      "unlit": false,
-     "metalness": 0.45,
-     "roughness": 0.04,
+     "metalness": 0.25,
+     "roughness": 0.03,
      "clearcoat": 1,
      "clearcoatRoughness": 0.015,
-     "opacity": 0.93,
+     "opacity": 0.84,
      "transparent": true,
      "depthWrite": true,
      "doubleSided": false,
@@ -2442,15 +2442,59 @@
      "emissiveMap": null
     },
     "renderOrder": 1,
-    "top": 1.1399999856948853,
-    "vertexStart": 20788,
-    "vertexCount": 192,
-    "indexStart": 20790,
-    "indexCount": 192
+    "top": 1.1132334470748901,
+    "vertexStart": 54661,
+    "vertexCount": 1812,
+    "indexStart": 54663,
+    "indexCount": 1812
+   },
+   {
+    "material": {
+     "effect": null,
+     "alphaMap": null,
+     "name": "roadster-lens",
+     "kind": "MeshPhysicalMaterial",
+     "color": [
+      0.005181516700061659,
+      0.006048833020386069,
+      0.007499032040460618
+     ],
+     "emissive": [
+      0,
+      0,
+      0
+     ],
+     "emissiveIntensity": 1,
+     "unlit": false,
+     "metalness": 0.1,
+     "roughness": 0.04,
+     "clearcoat": 1,
+     "clearcoatRoughness": 0.02,
+     "opacity": 0.4,
+     "transparent": true,
+     "depthWrite": false,
+     "doubleSided": false,
+     "additive": false,
+     "polygonOffset": null,
+     "vertexColors": false,
+     "fog": true,
+     "wet": false,
+     "map": null,
+     "roughnessMap": null,
+     "bumpMap": null,
+     "bumpScale": 1,
+     "emissiveMap": null
+    },
+    "renderOrder": 2,
+    "top": 0.7904999852180481,
+    "vertexStart": 56473,
+    "vertexCount": 276,
+    "indexStart": 56475,
+    "indexCount": 276
    }
   ],
   "file": "roadster.bin",
-  "indexOffsetBytes": 923120
+  "indexOffsetBytes": 2496956
  },
  "wheels": [
   {
@@ -2461,7 +2505,7 @@
    "steers": true,
    "steerPart": {
     "vertexStride": 44,
-    "vertexCount": 220,
+    "vertexCount": 548,
     "submeshes": [
      {
       "material": {
@@ -2470,53 +2514,9 @@
        "name": "roadster-caliper",
        "kind": "MeshPhysicalMaterial",
        "color": [
-        0.024157632443547246,
-        0.026241221889696346,
-        0.030713443727452196
-       ],
-       "emissive": [
-        0,
-        0,
-        0
-       ],
-       "emissiveIntensity": 1,
-       "unlit": false,
-       "metalness": 0.6,
-       "roughness": 0.35,
-       "clearcoat": 0.8,
-       "clearcoatRoughness": 0,
-       "opacity": 1,
-       "transparent": false,
-       "depthWrite": true,
-       "doubleSided": false,
-       "additive": false,
-       "polygonOffset": null,
-       "vertexColors": false,
-       "fog": true,
-       "wet": false,
-       "map": null,
-       "roughnessMap": null,
-       "bumpMap": null,
-       "bumpScale": 1,
-       "emissiveMap": null
-      },
-      "renderOrder": 0,
-      "top": 0.2443363220762931,
-      "vertexStart": 0,
-      "vertexCount": 24,
-      "indexStart": 0,
-      "indexCount": 36
-     },
-     {
-      "material": {
-       "effect": null,
-       "alphaMap": null,
-       "name": "roadster-rotor",
-       "kind": "MeshStandardMaterial",
-       "color": [
-        0.04231141061442144,
-        0.04373502925049377,
-        0.04817182422013895
+        0.26225065751888765,
+        0.010329823026364548,
+        0.012983032338510335
        ],
        "emissive": [
         0,
@@ -2526,13 +2526,13 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0.3,
-       "roughness": 0.7,
-       "clearcoat": 0,
+       "roughness": 0.35,
+       "clearcoat": 0.9,
        "clearcoatRoughness": 0,
        "opacity": 1,
        "transparent": false,
        "depthWrite": true,
-       "doubleSided": false,
+       "doubleSided": true,
        "additive": false,
        "polygonOffset": null,
        "vertexColors": false,
@@ -2545,20 +2545,12 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.20000000298023224,
-      "vertexStart": 24,
-      "vertexCount": 196,
-      "indexStart": 36,
-      "indexCount": 384
-     }
-    ],
-    "file": "wheel-0-steer.bin",
-    "indexOffsetBytes": 9680
-   },
-   "spinPart": {
-    "vertexStride": 44,
-    "vertexCount": 2662,
-    "submeshes": [
+      "top": 0.1999549118480018,
+      "vertexStart": 0,
+      "vertexCount": 156,
+      "indexStart": 0,
+      "indexCount": 156
+     },
      {
       "material": {
        "effect": null,
@@ -2566,9 +2558,9 @@
        "name": "roadster-disc",
        "kind": "MeshStandardMaterial",
        "color": [
-        0.775822218312646,
-        0.7912979403281551,
-        0.8069522576650873
+        0.023153366173251363,
+        0.02121901037134225,
+        0.019382360952473074
        ],
        "emissive": [
         0,
@@ -2577,8 +2569,8 @@
        ],
        "emissiveIntensity": 1,
        "unlit": false,
-       "metalness": 0.1,
-       "roughness": 0.38,
+       "metalness": 0.5,
+       "roughness": 0.6,
        "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
@@ -2597,22 +2589,22 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.25450000166893005,
-      "vertexStart": 0,
-      "vertexCount": 324,
-      "indexStart": 0,
-      "indexCount": 324
+      "top": 0.10000000149011612,
+      "vertexStart": 156,
+      "vertexCount": 148,
+      "indexStart": 156,
+      "indexCount": 288
      },
      {
       "material": {
        "effect": null,
        "alphaMap": null,
-       "name": "roadster-spoke",
-       "kind": "MeshPhysicalMaterial",
+       "name": "roadster-rotor",
+       "kind": "MeshStandardMaterial",
        "color": [
-        0.01764195448412081,
-        0.019382360952473074,
-        0.023153366173251363
+        0.15292615198613213,
+        0.158960835050774,
+        0.171441100722554
        ],
        "emissive": [
         0,
@@ -2621,9 +2613,9 @@
        ],
        "emissiveIntensity": 1,
        "unlit": false,
-       "metalness": 0.7,
-       "roughness": 0.3,
-       "clearcoat": 0.6,
+       "metalness": 0.85,
+       "roughness": 0.42,
+       "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
        "transparent": false,
@@ -2641,11 +2633,107 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.25850000977516174,
-      "vertexStart": 324,
-      "vertexCount": 1848,
-      "indexStart": 324,
-      "indexCount": 1848
+      "top": 0.2094999998807907,
+      "vertexStart": 304,
+      "vertexCount": 244,
+      "indexStart": 444,
+      "indexCount": 480
+     }
+    ],
+    "file": "wheel-0-steer.bin",
+    "indexOffsetBytes": 24112
+   },
+   "spinPart": {
+    "vertexStride": 44,
+    "vertexCount": 3324,
+    "submeshes": [
+     {
+      "material": {
+       "effect": null,
+       "alphaMap": null,
+       "name": "roadster-disc",
+       "kind": "MeshStandardMaterial",
+       "color": [
+        0.023153366173251363,
+        0.02121901037134225,
+        0.019382360952473074
+       ],
+       "emissive": [
+        0,
+        0,
+        0
+       ],
+       "emissiveIntensity": 1,
+       "unlit": false,
+       "metalness": 0.5,
+       "roughness": 0.6,
+       "clearcoat": 0,
+       "clearcoatRoughness": 0,
+       "opacity": 1,
+       "transparent": false,
+       "depthWrite": true,
+       "doubleSided": true,
+       "additive": false,
+       "polygonOffset": null,
+       "vertexColors": false,
+       "fog": true,
+       "wet": false,
+       "map": null,
+       "roughnessMap": null,
+       "bumpMap": null,
+       "bumpScale": 1,
+       "emissiveMap": null
+      },
+      "renderOrder": 0,
+      "top": 0.25049999356269836,
+      "vertexStart": 0,
+      "vertexCount": 216,
+      "indexStart": 0,
+      "indexCount": 216
+     },
+     {
+      "material": {
+       "effect": null,
+       "alphaMap": null,
+       "name": "roadster-spoke",
+       "kind": "MeshPhysicalMaterial",
+       "color": [
+        0.059511238155621766,
+        0.06480326668529614,
+        0.07421356837213867
+       ],
+       "emissive": [
+        0,
+        0,
+        0
+       ],
+       "emissiveIntensity": 1,
+       "unlit": false,
+       "metalness": 0.85,
+       "roughness": 0.3,
+       "clearcoat": 0.7,
+       "clearcoatRoughness": 0.1,
+       "opacity": 1,
+       "transparent": false,
+       "depthWrite": true,
+       "doubleSided": true,
+       "additive": false,
+       "polygonOffset": null,
+       "vertexColors": false,
+       "fog": true,
+       "wet": false,
+       "map": null,
+       "roughnessMap": null,
+       "bumpMap": null,
+       "bumpScale": 1,
+       "emissiveMap": null
+      },
+      "renderOrder": 0,
+      "top": 0.2574999928474426,
+      "vertexStart": 216,
+      "vertexCount": 2220,
+      "indexStart": 216,
+      "indexCount": 2220
      },
      {
       "material": {
@@ -2654,9 +2742,9 @@
        "name": "roadster-tyre",
        "kind": "MeshStandardMaterial",
        "color": [
-        0.006048833020386069,
-        0.006512090790025684,
-        0.0069954101845983935
+        0.007499032040460618,
+        0.008023192982520563,
+        0.008568125615105716
        ],
        "emissive": [
         0,
@@ -2666,7 +2754,7 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0,
-       "roughness": 0.88,
+       "roughness": 0.9,
        "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
@@ -2686,14 +2774,14 @@
       },
       "renderOrder": 0,
       "top": 0.34299999475479126,
-      "vertexStart": 2172,
-      "vertexCount": 490,
-      "indexStart": 2172,
-      "indexCount": 2592
+      "vertexStart": 2436,
+      "vertexCount": 888,
+      "indexStart": 2436,
+      "indexCount": 4968
      }
     ],
     "file": "wheel-0-spin.bin",
-    "indexOffsetBytes": 117128
+    "indexOffsetBytes": 146256
    }
   },
   {
@@ -2704,7 +2792,7 @@
    "steers": true,
    "steerPart": {
     "vertexStride": 44,
-    "vertexCount": 220,
+    "vertexCount": 548,
     "submeshes": [
      {
       "material": {
@@ -2713,53 +2801,9 @@
        "name": "roadster-caliper",
        "kind": "MeshPhysicalMaterial",
        "color": [
-        0.024157632443547246,
-        0.026241221889696346,
-        0.030713443727452196
-       ],
-       "emissive": [
-        0,
-        0,
-        0
-       ],
-       "emissiveIntensity": 1,
-       "unlit": false,
-       "metalness": 0.6,
-       "roughness": 0.35,
-       "clearcoat": 0.8,
-       "clearcoatRoughness": 0,
-       "opacity": 1,
-       "transparent": false,
-       "depthWrite": true,
-       "doubleSided": false,
-       "additive": false,
-       "polygonOffset": null,
-       "vertexColors": false,
-       "fog": true,
-       "wet": false,
-       "map": null,
-       "roughnessMap": null,
-       "bumpMap": null,
-       "bumpScale": 1,
-       "emissiveMap": null
-      },
-      "renderOrder": 0,
-      "top": 0.2443363220762931,
-      "vertexStart": 0,
-      "vertexCount": 24,
-      "indexStart": 0,
-      "indexCount": 36
-     },
-     {
-      "material": {
-       "effect": null,
-       "alphaMap": null,
-       "name": "roadster-rotor",
-       "kind": "MeshStandardMaterial",
-       "color": [
-        0.04231141061442144,
-        0.04373502925049377,
-        0.04817182422013895
+        0.26225065751888765,
+        0.010329823026364548,
+        0.012983032338510335
        ],
        "emissive": [
         0,
@@ -2769,13 +2813,13 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0.3,
-       "roughness": 0.7,
-       "clearcoat": 0,
+       "roughness": 0.35,
+       "clearcoat": 0.9,
        "clearcoatRoughness": 0,
        "opacity": 1,
        "transparent": false,
        "depthWrite": true,
-       "doubleSided": false,
+       "doubleSided": true,
        "additive": false,
        "polygonOffset": null,
        "vertexColors": false,
@@ -2788,20 +2832,12 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.20000000298023224,
-      "vertexStart": 24,
-      "vertexCount": 196,
-      "indexStart": 36,
-      "indexCount": 384
-     }
-    ],
-    "file": "wheel-1-steer.bin",
-    "indexOffsetBytes": 9680
-   },
-   "spinPart": {
-    "vertexStride": 44,
-    "vertexCount": 2662,
-    "submeshes": [
+      "top": 0.1999549118480018,
+      "vertexStart": 0,
+      "vertexCount": 156,
+      "indexStart": 0,
+      "indexCount": 156
+     },
      {
       "material": {
        "effect": null,
@@ -2809,9 +2845,9 @@
        "name": "roadster-disc",
        "kind": "MeshStandardMaterial",
        "color": [
-        0.775822218312646,
-        0.7912979403281551,
-        0.8069522576650873
+        0.023153366173251363,
+        0.02121901037134225,
+        0.019382360952473074
        ],
        "emissive": [
         0,
@@ -2820,8 +2856,8 @@
        ],
        "emissiveIntensity": 1,
        "unlit": false,
-       "metalness": 0.1,
-       "roughness": 0.38,
+       "metalness": 0.5,
+       "roughness": 0.6,
        "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
@@ -2840,22 +2876,22 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.25450000166893005,
-      "vertexStart": 0,
-      "vertexCount": 324,
-      "indexStart": 0,
-      "indexCount": 324
+      "top": 0.10000000149011612,
+      "vertexStart": 156,
+      "vertexCount": 148,
+      "indexStart": 156,
+      "indexCount": 288
      },
      {
       "material": {
        "effect": null,
        "alphaMap": null,
-       "name": "roadster-spoke",
-       "kind": "MeshPhysicalMaterial",
+       "name": "roadster-rotor",
+       "kind": "MeshStandardMaterial",
        "color": [
-        0.01764195448412081,
-        0.019382360952473074,
-        0.023153366173251363
+        0.15292615198613213,
+        0.158960835050774,
+        0.171441100722554
        ],
        "emissive": [
         0,
@@ -2864,9 +2900,9 @@
        ],
        "emissiveIntensity": 1,
        "unlit": false,
-       "metalness": 0.7,
-       "roughness": 0.3,
-       "clearcoat": 0.6,
+       "metalness": 0.85,
+       "roughness": 0.42,
+       "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
        "transparent": false,
@@ -2884,11 +2920,107 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.25850000977516174,
-      "vertexStart": 324,
-      "vertexCount": 1848,
-      "indexStart": 324,
-      "indexCount": 1848
+      "top": 0.2094999998807907,
+      "vertexStart": 304,
+      "vertexCount": 244,
+      "indexStart": 444,
+      "indexCount": 480
+     }
+    ],
+    "file": "wheel-1-steer.bin",
+    "indexOffsetBytes": 24112
+   },
+   "spinPart": {
+    "vertexStride": 44,
+    "vertexCount": 3324,
+    "submeshes": [
+     {
+      "material": {
+       "effect": null,
+       "alphaMap": null,
+       "name": "roadster-disc",
+       "kind": "MeshStandardMaterial",
+       "color": [
+        0.023153366173251363,
+        0.02121901037134225,
+        0.019382360952473074
+       ],
+       "emissive": [
+        0,
+        0,
+        0
+       ],
+       "emissiveIntensity": 1,
+       "unlit": false,
+       "metalness": 0.5,
+       "roughness": 0.6,
+       "clearcoat": 0,
+       "clearcoatRoughness": 0,
+       "opacity": 1,
+       "transparent": false,
+       "depthWrite": true,
+       "doubleSided": true,
+       "additive": false,
+       "polygonOffset": null,
+       "vertexColors": false,
+       "fog": true,
+       "wet": false,
+       "map": null,
+       "roughnessMap": null,
+       "bumpMap": null,
+       "bumpScale": 1,
+       "emissiveMap": null
+      },
+      "renderOrder": 0,
+      "top": 0.25049999356269836,
+      "vertexStart": 0,
+      "vertexCount": 216,
+      "indexStart": 0,
+      "indexCount": 216
+     },
+     {
+      "material": {
+       "effect": null,
+       "alphaMap": null,
+       "name": "roadster-spoke",
+       "kind": "MeshPhysicalMaterial",
+       "color": [
+        0.059511238155621766,
+        0.06480326668529614,
+        0.07421356837213867
+       ],
+       "emissive": [
+        0,
+        0,
+        0
+       ],
+       "emissiveIntensity": 1,
+       "unlit": false,
+       "metalness": 0.85,
+       "roughness": 0.3,
+       "clearcoat": 0.7,
+       "clearcoatRoughness": 0.1,
+       "opacity": 1,
+       "transparent": false,
+       "depthWrite": true,
+       "doubleSided": true,
+       "additive": false,
+       "polygonOffset": null,
+       "vertexColors": false,
+       "fog": true,
+       "wet": false,
+       "map": null,
+       "roughnessMap": null,
+       "bumpMap": null,
+       "bumpScale": 1,
+       "emissiveMap": null
+      },
+      "renderOrder": 0,
+      "top": 0.2574999928474426,
+      "vertexStart": 216,
+      "vertexCount": 2220,
+      "indexStart": 216,
+      "indexCount": 2220
      },
      {
       "material": {
@@ -2897,9 +3029,9 @@
        "name": "roadster-tyre",
        "kind": "MeshStandardMaterial",
        "color": [
-        0.006048833020386069,
-        0.006512090790025684,
-        0.0069954101845983935
+        0.007499032040460618,
+        0.008023192982520563,
+        0.008568125615105716
        ],
        "emissive": [
         0,
@@ -2909,7 +3041,7 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0,
-       "roughness": 0.88,
+       "roughness": 0.9,
        "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
@@ -2929,14 +3061,14 @@
       },
       "renderOrder": 0,
       "top": 0.34299999475479126,
-      "vertexStart": 2172,
-      "vertexCount": 490,
-      "indexStart": 2172,
-      "indexCount": 2592
+      "vertexStart": 2436,
+      "vertexCount": 888,
+      "indexStart": 2436,
+      "indexCount": 4968
      }
     ],
     "file": "wheel-1-spin.bin",
-    "indexOffsetBytes": 117128
+    "indexOffsetBytes": 146256
    }
   },
   {
@@ -2947,7 +3079,7 @@
    "steers": false,
    "steerPart": {
     "vertexStride": 44,
-    "vertexCount": 220,
+    "vertexCount": 548,
     "submeshes": [
      {
       "material": {
@@ -2956,53 +3088,9 @@
        "name": "roadster-caliper",
        "kind": "MeshPhysicalMaterial",
        "color": [
-        0.024157632443547246,
-        0.026241221889696346,
-        0.030713443727452196
-       ],
-       "emissive": [
-        0,
-        0,
-        0
-       ],
-       "emissiveIntensity": 1,
-       "unlit": false,
-       "metalness": 0.6,
-       "roughness": 0.35,
-       "clearcoat": 0.8,
-       "clearcoatRoughness": 0,
-       "opacity": 1,
-       "transparent": false,
-       "depthWrite": true,
-       "doubleSided": false,
-       "additive": false,
-       "polygonOffset": null,
-       "vertexColors": false,
-       "fog": true,
-       "wet": false,
-       "map": null,
-       "roughnessMap": null,
-       "bumpMap": null,
-       "bumpScale": 1,
-       "emissiveMap": null
-      },
-      "renderOrder": 0,
-      "top": 0.2443363220762931,
-      "vertexStart": 0,
-      "vertexCount": 24,
-      "indexStart": 0,
-      "indexCount": 36
-     },
-     {
-      "material": {
-       "effect": null,
-       "alphaMap": null,
-       "name": "roadster-rotor",
-       "kind": "MeshStandardMaterial",
-       "color": [
-        0.04231141061442144,
-        0.04373502925049377,
-        0.04817182422013895
+        0.26225065751888765,
+        0.010329823026364548,
+        0.012983032338510335
        ],
        "emissive": [
         0,
@@ -3012,13 +3100,13 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0.3,
-       "roughness": 0.7,
-       "clearcoat": 0,
+       "roughness": 0.35,
+       "clearcoat": 0.9,
        "clearcoatRoughness": 0,
        "opacity": 1,
        "transparent": false,
        "depthWrite": true,
-       "doubleSided": false,
+       "doubleSided": true,
        "additive": false,
        "polygonOffset": null,
        "vertexColors": false,
@@ -3031,20 +3119,12 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.20000000298023224,
-      "vertexStart": 24,
-      "vertexCount": 196,
-      "indexStart": 36,
-      "indexCount": 384
-     }
-    ],
-    "file": "wheel-2-steer.bin",
-    "indexOffsetBytes": 9680
-   },
-   "spinPart": {
-    "vertexStride": 44,
-    "vertexCount": 2662,
-    "submeshes": [
+      "top": 0.21050199016018808,
+      "vertexStart": 0,
+      "vertexCount": 156,
+      "indexStart": 0,
+      "indexCount": 156
+     },
      {
       "material": {
        "effect": null,
@@ -3052,9 +3132,9 @@
        "name": "roadster-disc",
        "kind": "MeshStandardMaterial",
        "color": [
-        0.775822218312646,
-        0.7912979403281551,
-        0.8069522576650873
+        0.023153366173251363,
+        0.02121901037134225,
+        0.019382360952473074
        ],
        "emissive": [
         0,
@@ -3063,8 +3143,8 @@
        ],
        "emissiveIntensity": 1,
        "unlit": false,
-       "metalness": 0.1,
-       "roughness": 0.38,
+       "metalness": 0.5,
+       "roughness": 0.6,
        "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
@@ -3083,22 +3163,22 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.26649999618530273,
-      "vertexStart": 0,
-      "vertexCount": 324,
-      "indexStart": 0,
-      "indexCount": 324
+      "top": 0.10000000149011612,
+      "vertexStart": 156,
+      "vertexCount": 148,
+      "indexStart": 156,
+      "indexCount": 288
      },
      {
       "material": {
        "effect": null,
        "alphaMap": null,
-       "name": "roadster-spoke",
-       "kind": "MeshPhysicalMaterial",
+       "name": "roadster-rotor",
+       "kind": "MeshStandardMaterial",
        "color": [
-        0.01764195448412081,
-        0.019382360952473074,
-        0.023153366173251363
+        0.15292615198613213,
+        0.158960835050774,
+        0.171441100722554
        ],
        "emissive": [
         0,
@@ -3107,9 +3187,9 @@
        ],
        "emissiveIntensity": 1,
        "unlit": false,
-       "metalness": 0.7,
-       "roughness": 0.3,
-       "clearcoat": 0.6,
+       "metalness": 0.85,
+       "roughness": 0.42,
+       "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
        "transparent": false,
@@ -3127,11 +3207,107 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.2705000042915344,
-      "vertexStart": 324,
-      "vertexCount": 1848,
-      "indexStart": 324,
-      "indexCount": 1848
+      "top": 0.2214999943971634,
+      "vertexStart": 304,
+      "vertexCount": 244,
+      "indexStart": 444,
+      "indexCount": 480
+     }
+    ],
+    "file": "wheel-2-steer.bin",
+    "indexOffsetBytes": 24112
+   },
+   "spinPart": {
+    "vertexStride": 44,
+    "vertexCount": 3324,
+    "submeshes": [
+     {
+      "material": {
+       "effect": null,
+       "alphaMap": null,
+       "name": "roadster-disc",
+       "kind": "MeshStandardMaterial",
+       "color": [
+        0.023153366173251363,
+        0.02121901037134225,
+        0.019382360952473074
+       ],
+       "emissive": [
+        0,
+        0,
+        0
+       ],
+       "emissiveIntensity": 1,
+       "unlit": false,
+       "metalness": 0.5,
+       "roughness": 0.6,
+       "clearcoat": 0,
+       "clearcoatRoughness": 0,
+       "opacity": 1,
+       "transparent": false,
+       "depthWrite": true,
+       "doubleSided": true,
+       "additive": false,
+       "polygonOffset": null,
+       "vertexColors": false,
+       "fog": true,
+       "wet": false,
+       "map": null,
+       "roughnessMap": null,
+       "bumpMap": null,
+       "bumpScale": 1,
+       "emissiveMap": null
+      },
+      "renderOrder": 0,
+      "top": 0.26249998807907104,
+      "vertexStart": 0,
+      "vertexCount": 216,
+      "indexStart": 0,
+      "indexCount": 216
+     },
+     {
+      "material": {
+       "effect": null,
+       "alphaMap": null,
+       "name": "roadster-spoke",
+       "kind": "MeshPhysicalMaterial",
+       "color": [
+        0.059511238155621766,
+        0.06480326668529614,
+        0.07421356837213867
+       ],
+       "emissive": [
+        0,
+        0,
+        0
+       ],
+       "emissiveIntensity": 1,
+       "unlit": false,
+       "metalness": 0.85,
+       "roughness": 0.3,
+       "clearcoat": 0.7,
+       "clearcoatRoughness": 0.1,
+       "opacity": 1,
+       "transparent": false,
+       "depthWrite": true,
+       "doubleSided": true,
+       "additive": false,
+       "polygonOffset": null,
+       "vertexColors": false,
+       "fog": true,
+       "wet": false,
+       "map": null,
+       "roughnessMap": null,
+       "bumpMap": null,
+       "bumpScale": 1,
+       "emissiveMap": null
+      },
+      "renderOrder": 0,
+      "top": 0.2694999873638153,
+      "vertexStart": 216,
+      "vertexCount": 2220,
+      "indexStart": 216,
+      "indexCount": 2220
      },
      {
       "material": {
@@ -3140,9 +3316,9 @@
        "name": "roadster-tyre",
        "kind": "MeshStandardMaterial",
        "color": [
-        0.006048833020386069,
-        0.006512090790025684,
-        0.0069954101845983935
+        0.007499032040460618,
+        0.008023192982520563,
+        0.008568125615105716
        ],
        "emissive": [
         0,
@@ -3152,7 +3328,7 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0,
-       "roughness": 0.88,
+       "roughness": 0.9,
        "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
@@ -3172,14 +3348,14 @@
       },
       "renderOrder": 0,
       "top": 0.367000013589859,
-      "vertexStart": 2172,
-      "vertexCount": 490,
-      "indexStart": 2172,
-      "indexCount": 2592
+      "vertexStart": 2436,
+      "vertexCount": 888,
+      "indexStart": 2436,
+      "indexCount": 4968
      }
     ],
     "file": "wheel-2-spin.bin",
-    "indexOffsetBytes": 117128
+    "indexOffsetBytes": 146256
    }
   },
   {
@@ -3190,7 +3366,7 @@
    "steers": false,
    "steerPart": {
     "vertexStride": 44,
-    "vertexCount": 220,
+    "vertexCount": 548,
     "submeshes": [
      {
       "material": {
@@ -3199,53 +3375,9 @@
        "name": "roadster-caliper",
        "kind": "MeshPhysicalMaterial",
        "color": [
-        0.024157632443547246,
-        0.026241221889696346,
-        0.030713443727452196
-       ],
-       "emissive": [
-        0,
-        0,
-        0
-       ],
-       "emissiveIntensity": 1,
-       "unlit": false,
-       "metalness": 0.6,
-       "roughness": 0.35,
-       "clearcoat": 0.8,
-       "clearcoatRoughness": 0,
-       "opacity": 1,
-       "transparent": false,
-       "depthWrite": true,
-       "doubleSided": false,
-       "additive": false,
-       "polygonOffset": null,
-       "vertexColors": false,
-       "fog": true,
-       "wet": false,
-       "map": null,
-       "roughnessMap": null,
-       "bumpMap": null,
-       "bumpScale": 1,
-       "emissiveMap": null
-      },
-      "renderOrder": 0,
-      "top": 0.2443363220762931,
-      "vertexStart": 0,
-      "vertexCount": 24,
-      "indexStart": 0,
-      "indexCount": 36
-     },
-     {
-      "material": {
-       "effect": null,
-       "alphaMap": null,
-       "name": "roadster-rotor",
-       "kind": "MeshStandardMaterial",
-       "color": [
-        0.04231141061442144,
-        0.04373502925049377,
-        0.04817182422013895
+        0.26225065751888765,
+        0.010329823026364548,
+        0.012983032338510335
        ],
        "emissive": [
         0,
@@ -3255,13 +3387,13 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0.3,
-       "roughness": 0.7,
-       "clearcoat": 0,
+       "roughness": 0.35,
+       "clearcoat": 0.9,
        "clearcoatRoughness": 0,
        "opacity": 1,
        "transparent": false,
        "depthWrite": true,
-       "doubleSided": false,
+       "doubleSided": true,
        "additive": false,
        "polygonOffset": null,
        "vertexColors": false,
@@ -3274,20 +3406,12 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.20000000298023224,
-      "vertexStart": 24,
-      "vertexCount": 196,
-      "indexStart": 36,
-      "indexCount": 384
-     }
-    ],
-    "file": "wheel-3-steer.bin",
-    "indexOffsetBytes": 9680
-   },
-   "spinPart": {
-    "vertexStride": 44,
-    "vertexCount": 2662,
-    "submeshes": [
+      "top": 0.21050199016018808,
+      "vertexStart": 0,
+      "vertexCount": 156,
+      "indexStart": 0,
+      "indexCount": 156
+     },
      {
       "material": {
        "effect": null,
@@ -3295,9 +3419,9 @@
        "name": "roadster-disc",
        "kind": "MeshStandardMaterial",
        "color": [
-        0.775822218312646,
-        0.7912979403281551,
-        0.8069522576650873
+        0.023153366173251363,
+        0.02121901037134225,
+        0.019382360952473074
        ],
        "emissive": [
         0,
@@ -3306,8 +3430,8 @@
        ],
        "emissiveIntensity": 1,
        "unlit": false,
-       "metalness": 0.1,
-       "roughness": 0.38,
+       "metalness": 0.5,
+       "roughness": 0.6,
        "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
@@ -3326,22 +3450,22 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.26649999618530273,
-      "vertexStart": 0,
-      "vertexCount": 324,
-      "indexStart": 0,
-      "indexCount": 324
+      "top": 0.10000000149011612,
+      "vertexStart": 156,
+      "vertexCount": 148,
+      "indexStart": 156,
+      "indexCount": 288
      },
      {
       "material": {
        "effect": null,
        "alphaMap": null,
-       "name": "roadster-spoke",
-       "kind": "MeshPhysicalMaterial",
+       "name": "roadster-rotor",
+       "kind": "MeshStandardMaterial",
        "color": [
-        0.01764195448412081,
-        0.019382360952473074,
-        0.023153366173251363
+        0.15292615198613213,
+        0.158960835050774,
+        0.171441100722554
        ],
        "emissive": [
         0,
@@ -3350,9 +3474,9 @@
        ],
        "emissiveIntensity": 1,
        "unlit": false,
-       "metalness": 0.7,
-       "roughness": 0.3,
-       "clearcoat": 0.6,
+       "metalness": 0.85,
+       "roughness": 0.42,
+       "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
        "transparent": false,
@@ -3370,11 +3494,107 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.2705000042915344,
-      "vertexStart": 324,
-      "vertexCount": 1848,
-      "indexStart": 324,
-      "indexCount": 1848
+      "top": 0.2214999943971634,
+      "vertexStart": 304,
+      "vertexCount": 244,
+      "indexStart": 444,
+      "indexCount": 480
+     }
+    ],
+    "file": "wheel-3-steer.bin",
+    "indexOffsetBytes": 24112
+   },
+   "spinPart": {
+    "vertexStride": 44,
+    "vertexCount": 3324,
+    "submeshes": [
+     {
+      "material": {
+       "effect": null,
+       "alphaMap": null,
+       "name": "roadster-disc",
+       "kind": "MeshStandardMaterial",
+       "color": [
+        0.023153366173251363,
+        0.02121901037134225,
+        0.019382360952473074
+       ],
+       "emissive": [
+        0,
+        0,
+        0
+       ],
+       "emissiveIntensity": 1,
+       "unlit": false,
+       "metalness": 0.5,
+       "roughness": 0.6,
+       "clearcoat": 0,
+       "clearcoatRoughness": 0,
+       "opacity": 1,
+       "transparent": false,
+       "depthWrite": true,
+       "doubleSided": true,
+       "additive": false,
+       "polygonOffset": null,
+       "vertexColors": false,
+       "fog": true,
+       "wet": false,
+       "map": null,
+       "roughnessMap": null,
+       "bumpMap": null,
+       "bumpScale": 1,
+       "emissiveMap": null
+      },
+      "renderOrder": 0,
+      "top": 0.26249998807907104,
+      "vertexStart": 0,
+      "vertexCount": 216,
+      "indexStart": 0,
+      "indexCount": 216
+     },
+     {
+      "material": {
+       "effect": null,
+       "alphaMap": null,
+       "name": "roadster-spoke",
+       "kind": "MeshPhysicalMaterial",
+       "color": [
+        0.059511238155621766,
+        0.06480326668529614,
+        0.07421356837213867
+       ],
+       "emissive": [
+        0,
+        0,
+        0
+       ],
+       "emissiveIntensity": 1,
+       "unlit": false,
+       "metalness": 0.85,
+       "roughness": 0.3,
+       "clearcoat": 0.7,
+       "clearcoatRoughness": 0.1,
+       "opacity": 1,
+       "transparent": false,
+       "depthWrite": true,
+       "doubleSided": true,
+       "additive": false,
+       "polygonOffset": null,
+       "vertexColors": false,
+       "fog": true,
+       "wet": false,
+       "map": null,
+       "roughnessMap": null,
+       "bumpMap": null,
+       "bumpScale": 1,
+       "emissiveMap": null
+      },
+      "renderOrder": 0,
+      "top": 0.2694999873638153,
+      "vertexStart": 216,
+      "vertexCount": 2220,
+      "indexStart": 216,
+      "indexCount": 2220
      },
      {
       "material": {
@@ -3383,9 +3603,9 @@
        "name": "roadster-tyre",
        "kind": "MeshStandardMaterial",
        "color": [
-        0.006048833020386069,
-        0.006512090790025684,
-        0.0069954101845983935
+        0.007499032040460618,
+        0.008023192982520563,
+        0.008568125615105716
        ],
        "emissive": [
         0,
@@ -3395,7 +3615,7 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0,
-       "roughness": 0.88,
+       "roughness": 0.9,
        "clearcoat": 0,
        "clearcoatRoughness": 0,
        "opacity": 1,
@@ -3415,14 +3635,14 @@
       },
       "renderOrder": 0,
       "top": 0.367000013589859,
-      "vertexStart": 2172,
-      "vertexCount": 490,
-      "indexStart": 2172,
-      "indexCount": 2592
+      "vertexStart": 2436,
+      "vertexCount": 888,
+      "indexStart": 2436,
+      "indexCount": 4968
      }
     ],
     "file": "wheel-3-spin.bin",
-    "indexOffsetBytes": 117128
+    "indexOffsetBytes": 146256
    }
   }
  ],
@@ -6090,9 +6310,9 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0.05,
-       "roughness": 0.42,
-       "clearcoat": 0.5,
-       "clearcoatRoughness": 0.2,
+       "roughness": 0.36,
+       "clearcoat": 0.85,
+       "clearcoatRoughness": 0.12,
        "opacity": 1,
        "transparent": false,
        "depthWrite": true,
@@ -6142,9 +6362,9 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0.05,
-       "roughness": 0.42,
-       "clearcoat": 0.5,
-       "clearcoatRoughness": 0.2,
+       "roughness": 0.36,
+       "clearcoat": 0.85,
+       "clearcoatRoughness": 0.12,
        "opacity": 1,
        "transparent": false,
        "depthWrite": true,
@@ -6369,7 +6589,7 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.32999998331069946,
+      "top": 0.3100000023841858,
       "vertexStart": 0,
       "vertexCount": 72,
       "indexStart": 0,
@@ -6485,7 +6705,7 @@
    },
    "drl": {
     "vertexStride": 44,
-    "vertexCount": 24,
+    "vertexCount": 60,
     "submeshes": [
      {
       "material": {
@@ -6525,19 +6745,19 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.006500000134110451,
+      "top": 0.6738458275794983,
       "vertexStart": 0,
-      "vertexCount": 24,
+      "vertexCount": 60,
       "indexStart": 0,
-      "indexCount": 36
+      "indexCount": 60
      }
     ],
     "file": "part-drl.bin",
-    "indexOffsetBytes": 1056
+    "indexOffsetBytes": 2640
    },
    "heads": {
     "vertexStride": 44,
-    "vertexCount": 6,
+    "vertexCount": 72,
     "submeshes": [
      {
       "material": {
@@ -6577,15 +6797,15 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.574999988079071,
+      "top": 0.6716662049293518,
       "vertexStart": 0,
-      "vertexCount": 6,
+      "vertexCount": 72,
       "indexStart": 0,
-      "indexCount": 6
+      "indexCount": 72
      }
     ],
     "file": "part-heads.bin",
-    "indexOffsetBytes": 264
+    "indexOffsetBytes": 3168
    },
    "covers": {
     "vertexStride": 44,
@@ -6610,9 +6830,9 @@
        "emissiveIntensity": 1,
        "unlit": false,
        "metalness": 0.05,
-       "roughness": 0.42,
-       "clearcoat": 0.5,
-       "clearcoatRoughness": 0.2,
+       "roughness": 0.36,
+       "clearcoat": 0.85,
+       "clearcoatRoughness": 0.12,
        "opacity": 1,
        "transparent": false,
        "depthWrite": true,
@@ -6629,7 +6849,7 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.574999988079071,
+      "top": 0.6712437868118286,
       "vertexStart": 0,
       "vertexCount": 6,
       "indexStart": 0,
@@ -6641,7 +6861,7 @@
    },
    "tailBar": {
     "vertexStride": 44,
-    "vertexCount": 108,
+    "vertexCount": 180,
     "submeshes": [
      {
       "material": {
@@ -6681,15 +6901,15 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.824999988079071,
+      "top": 0.781000018119812,
       "vertexStart": 0,
-      "vertexCount": 108,
+      "vertexCount": 180,
       "indexStart": 0,
-      "indexCount": 108
+      "indexCount": 180
      }
     ],
     "file": "part-tailBar.bin",
-    "indexOffsetBytes": 4752
+    "indexOffsetBytes": 7920
    },
    "tailDim": {
     "vertexStride": 44,
@@ -6733,7 +6953,7 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.7904999852180481,
+      "top": 0.753000020980835,
       "vertexStart": 0,
       "vertexCount": 36,
       "indexStart": 0,
@@ -6785,7 +7005,7 @@
        "emissiveMap": null
       },
       "renderOrder": 0,
-      "top": 0.014000000432133675,
+      "top": 0.009999999776482582,
       "vertexStart": 0,
       "vertexCount": 24,
       "indexStart": 0,
@@ -7171,7 +7391,7 @@
      -0.003000000026077032
     ],
     "half": [
-     0.9254027009010315,
+     0.8454026579856873,
      0.009999999914318323,
      0.25300000002607703
     ]
@@ -7179,12 +7399,12 @@
    "vanes": {
     "center": [
      0,
-     0.2849999964237213,
+     0.28999999910593033,
      0
     ],
     "half": [
-     0.6399999856948853,
-     0.04899999499320984,
+     0.5799999833106995,
+     0.043999992311000824,
      0.03500000014901161
     ]
    }
@@ -7192,10 +7412,10 @@
   "wing": {
    "position": [
     0,
-    0.9052500000000001,
-    -2.07
+    0.8720104145311411,
+    -1.56
    ],
-   "rotationX": -0.09966865249116212
+   "rotationX": -0.034906667832761966
   },
   "vanes": {
    "position": [
@@ -7207,15 +7427,15 @@
   "brake": {
    "position": [
     0,
-    0.812,
+    0.772,
     -1.8659999999999999
    ]
   },
   "drl": {
    "position": [
     0,
-    0.413,
-    2.472
+    0,
+    0
    ]
   },
   "fans": [
@@ -7410,7 +7630,7 @@
     0,
     2.220446049250313e-16,
     0,
-    -0.9376486539840698,
+    -0.9260631799697876,
     0.3700000047683716,
     2.2200000286102295,
     1
@@ -7428,7 +7648,7 @@
     0,
     2.220446049250313e-16,
     0,
-    0.9376486539840698,
+    0.9260631799697876,
     0.3700000047683716,
     2.2200000286102295,
     1
@@ -7592,7 +7812,7 @@
     0,
     2.220446049250313e-16,
     0,
-    -0.9576486349105835,
+    -0.9460631608963013,
     0.3700000047683716,
     2.2200000286102295,
     1
@@ -7610,7 +7830,7 @@
     0,
     2.220446049250313e-16,
     0,
-    0.9576486349105835,
+    0.9460631608963013,
     0.3700000047683716,
     2.2200000286102295,
     1
