@@ -19,11 +19,11 @@ struct SettingsView: View {
     @State private var usage = SaveStore.shared.settings.usageOn
     @State private var stability = FreeDrive.stability
     private var judgeFooter: String {
-        let scores = " Scores are the game\u{2019}s own; the model only writes the words."
-        if judgeStatus != .available { return "\(judgeStatus.line) The free edge model writes them, over the network.\(scores)" }
+        let crew = "The crew\u{2019}s own lines are written by the game from your run\u{2019}s numbers. Nothing is sent, and the scores are always the game\u{2019}s."
+        if judgeStatus != .available { return "\(judgeStatus.line) \(crew)" }
         return judgeOnDevice
-            ? "Apple Intelligence writes the judges\u{2019} words on this device: nothing is sent.\(scores)"
-            : "The free edge model writes the judges\u{2019} words, over the network.\(scores)"
+            ? "Apple Intelligence writes the crew\u{2019}s words on this device; if it can\u{2019}t, their own lines stand. \(crew)"
+            : crew
     }
     /// A sound level slider (0250): the car, the world and the hits ("Effects"), or the title's music.
     private func level(_ name: String, _ v: Binding<Double>, _ apply: @escaping (Double) -> Void) -> some View {
@@ -81,7 +81,7 @@ struct SettingsView: View {
                     Toggle("Judge on this device", isOn: $judgeOnDevice)
                         .disabled(judgeStatus != .available)
                         .onChange(of: judgeOnDevice) { _, v in var st = SaveStore.shared.settings; st.judgeOnDevice = v; SaveStore.shared.settings = st }
-                    LabeledContent("The judges\u{2019} words", value: judgeStatus == .available && judgeOnDevice ? "Apple Intelligence" : "Edge model")
+                    LabeledContent("The judges\u{2019} words", value: judgeStatus == .available && judgeOnDevice ? "Apple Intelligence" : "The crew\u{2019}s own")
                 } header: { Text("Judges") } footer: {
                     Text(judgeFooter)
                 }
