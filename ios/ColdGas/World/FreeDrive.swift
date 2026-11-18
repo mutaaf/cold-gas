@@ -46,7 +46,27 @@ final class FreeDrive: DriveScene {
     static var stability: DriveModel.ESC = DriveModel.ESC(rawValue: UserDefaults.standard.integer(forKey: "coldgas.stability")) ?? .on {
         didSet { UserDefaults.standard.set(stability.rawValue, forKey: "coldgas.stability") }
     }
+    /// The brakes and the assists (0281; Settings → Driving), kept on this device: ABS, traction control (off: the motors'
+    /// coupling only, whatever stability control is set to), the drift assist, the brake balance's front share.
+    static var absOn: Bool = UserDefaults.standard.object(forKey: "coldgas.abs") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(absOn, forKey: "coldgas.abs") }
+    }
+    static var traction: Bool = UserDefaults.standard.object(forKey: "coldgas.traction") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(traction, forKey: "coldgas.traction") }
+    }
+    static var driftAssist: Bool = UserDefaults.standard.object(forKey: "coldgas.driftAssist") as? Bool ?? true {
+        didSet { UserDefaults.standard.set(driftAssist, forKey: "coldgas.driftAssist") }
+    }
+    static var brakeBias: Double = UserDefaults.standard.object(forKey: "coldgas.brakeBias") as? Double ?? DriveSpec.brakeBias {
+        didSet { UserDefaults.standard.set(brakeBias, forKey: "coldgas.brakeBias") }
+    }
+    /// The handbrake held on the glass (the deck's HAND; Game sets it each frame).
+    var handbrake = false
     #if DEBUG
+    /// `-fd-drill stop|lock|handbrake|drift` (0281): a scripted manoeuvre on a loop once the world is built, for shots and a
+    /// look at the chassis without a thumb: a stop from 100 km/h (lock: with ABS off), a handbrake turn, a held drift.
+    static let drill = Launch.value("-fd-drill")
+    private var drillT = 0.0
     /// `-fd-hold throttle,steer[,after s[,brake]]`.
     static let hold: (Double, Double, Double, Double)? = {
         guard let a = Launch.value("-fd-hold")?.split(separator: ",").compactMap({ Double($0) }), a.count >= 2 else { return nil }
@@ -199,12 +219,23 @@ final class FreeDrive: DriveScene {
                         holdT += DT
                         if holdT >= h.2 { input.throttle = h.0; input.steer = h.1; input.brake = h.3 }
                     }
+                    if let d = FreeDrive.drill, view?.settled == true, (view?.stats.tiles ?? 0) > 0 { drill(d, input) }
                     #endif
                     input.fan = fan ? 1 : 0
                     if phase == .drive { reverse(input) }
                     // The player's stability setting, and on touch (a slider or a tilt) a light countersteer (0269).
                     if chassis.esc != FreeDrive.stability { chassis.stability(FreeDrive.stability) }
                     chassis.counterAssist = pilot == nil && (sampler.touch.active || sampler.tilt != 0) ? DriveSpec.counterAssistTouch : 0
+                    // 0281: the brakes and the assists as set, and the lever (on the ground only: in the air it does nothing).
+                    chassis.abs = FreeDrive.absOn; chassis.brakeBias = FreeDrive.brakeBias
+                    chassis.driftAssist = FreeDrive.driftAssist && pilot == nil
+                    if !FreeDrive.traction { chassis.tc = .off }
+                    else if chassis.tc == .off && chassis.esc != .off { chassis.tc = chassis.esc == .on ? .on : .sport }
+                    #if DEBUG
+                    if FreeDrive.drill == nil { car.handbrake = handbrake && phase == .drive && pilot == nil ? 1 : 0 }
+                    #else
+                    car.handbrake = handbrake && phase == .drive && pilot == nil ? 1 : 0
+                    #endif
                     if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
                     // A state that isn't a number never reaches the engine again (0229): back on the road at once.
                     if !carFinite(car) { print("DRIVE car state not finite: reset"); reset(); acc = 0; break }
@@ -250,6 +281,38 @@ final class FreeDrive: DriveScene {
         track.append(car: car, origin: origin)
     }
 
+    #if DEBUG
+    /// One tick of `-fd-drill` (see `drill`): up to speed on the road ahead, the manoeuvre, a coast, again.
+    private func drill(_ d: String, _ i: Input) {
+        drillT += DT
+        let f = forward, vf = car.vel.x * f.0 + car.vel.z * f.1
+        i.brake = 0; i.steer = 0; i.throttle = 0; car.handbrake = 0
+        switch d {
+        case "stop", "lock":
+            // To 100 km/h, then the pedal flat to a stop, 2 s still, again. `lock` stops with ABS off (and wears a flat spot).
+            if d == "lock" { chassis.abs = false }
+            if drillT < 30 && vf < 27.8 && drillT >= 0 { i.throttle = 0.5 }
+            else if drillT >= 0 { drillT = -1000; print(String(format: "DRILL brake from %.1f m/s at (%.1f, %.1f)", vf, car.pos.x, car.pos.z)) }
+            if drillT < -500 {
+                i.brake = 1
+                if abs(vf) < 0.3 { print(String(format: "DRILL stopped at (%.1f, %.1f) ABS %@", car.pos.x, car.pos.z, chassis.abs ? "on" : "off")); drillT = -3 }
+            }
+        default:
+            // "handbrake" / "drift": to 15 m/s, into a bend, the lever for 0.25 s, then the thumb held (a little into the
+            // turn, 22 % throttle: the drift assist holds it) for 2 s (handbrake) or 6 s (drift), a coast, again.
+            let hold = d == "drift" ? 6.0 : 2.0
+            if drillT < 20 && vf < 15 && drillT >= 0 { i.throttle = 0.4 }
+            else if drillT >= 0 { drillT = -100 }
+            if drillT < -50 {
+                let t = drillT + 100
+                i.steer = t < 0.5 ? 0.5 : 0.25
+                car.handbrake = t > 0.15 && t < 0.4 ? 1 : 0
+                i.throttle = t > 0.4 ? 0.22 : 0
+                if t > 0.4 + hold { drillT = -4 }
+            }
+        }
+    }
+    #endif
     /// src/hands.js createReverse: the brake held at a standstill backs the car up (after 0.35 s still).
     private func reverse(_ i: Input) {
         let f = forward, vf = car.vel.x * f.0 + car.vel.z * f.1

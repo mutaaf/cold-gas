@@ -69,6 +69,8 @@ final class Renderer {
     let crash = Crash()
     let mist = Plumes()
     let smoke = TyreSmoke()
+    /// The scored run's rubber on the set (0281; Free Drive's is the world view's).
+    private(set) var skids: RunSkids?
     private let sparkBufs: [MTLBuffer], puffBufs: [MTLBuffer], chipBufs: [MTLBuffer], mistBufs: [MTLBuffer]
     /// The valves this frame, and whether this run's touchdown has shown yet (main.js touchdown).
     private var thr = [Float](repeating: 0, count: 10), touched = false
@@ -108,7 +110,7 @@ final class Renderer {
     /// The crash's slow-motion factor, for the game's clock (a live run slows with the effects, as crash.js timeScale).
     var slowK: Double { Double(crash.slowK) }
     /// A new track (a new run, or back to the title's loop): effects and clocks start over.
-    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart() }
+    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart(); skids?.clear() }
     private(set) lazy var dents = Dents(roadster: stage.roadster, parked: stage.parked)
     private var lastCarQ = simd_quatf(angle: 0, axis: [0, 1, 0]), lastDrawT = 0.0
     private func hookDents() {
@@ -197,6 +199,7 @@ final class Renderer {
         puffBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<PuffGPU>.stride * (Crash.NM + 1), options: .storageModeShared)! }
         chipBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<ChipGPU>.stride * Crash.NC, options: .storageModeShared)! }
         mistBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<PuffGPU>.stride * Plumes.maxMist, options: .storageModeShared)! }
+        skids = RunSkids(device: device, library: lib, samples: Renderer.samples, color: Renderer.hdrFormat, depth: Renderer.depthFormat)
         archive.save()
         func ds(_ w: Bool, _ c: MTLCompareFunction) -> MTLDepthStencilState { let d = MTLDepthStencilDescriptor(); d.isDepthWriteEnabled = w; d.depthCompareFunction = c; return device.makeDepthStencilState(descriptor: d)! }
         dsWrite = ds(true, .less); dsRead = ds(false, .lessEqual); dsOff = ds(false, .always); dsShadow = ds(true, .less); dsMirror = ds(true, .less)
@@ -428,7 +431,10 @@ final class Renderer {
             if r.live { crash.car.setWing((simd_length(vel) - 20) / 20) }   // main.js liveStep
             crash.car.update(time: heroClock, carPos: carPos, carQuat: carQ, groundedNow: loaded, fanLevel: r.fan(at: tick), throttle: thr)
             crash.feed(r.impacts, tick: c.tick + r.tickBase, vel: vel, carPos: c.pos, carQuat: c.quat)
-            if drive == nil { smoke.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, into: crash) }
+            if drive == nil {
+                skids?.update(r, t: tt)
+                smoke.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, lateral: skids?.lateral ?? .zero, into: crash)
+            }
             if r.touchTick >= 0 && tick >= r.touchTick && !touched { touched = true; touchdown(sink: r.sink, carPos: carPos, carQuat: carQ) }
             mist.update(dt: Float(dtReal) * crash.slowK, thr: thr, carPos: carPos, carQuat: carQ, carVel: vel)
             // plumes.js update: a cone from each nozzle over 2 % open, its length and width from the valve.
@@ -582,7 +588,7 @@ final class Renderer {
             wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: false)
             if !away { sweepDraw(e, opaqueOnly: true) }
             if complexOn, let c = stage.complex { drawMesh(e, c.mesh, matsIndex: complexMats, model: stageM, opaqueOnly: true) }
-            if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, viewProj: u.viewProj) }
+            if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, viewProj: u.viewProj) } else if !skip.contains("marks") { skids?.draw(e, frame: fb, look: &lookU) }
             // The sky where nothing opaque stands (far plane, depth read).
             e.setCullMode(.none); e.setDepthStencilState(dsRead); e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setRenderPipelineState(sky)
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
