@@ -18,9 +18,11 @@ export const STEPS = { show: ['go', 'keep', 'tap', 'roll', 'land', 'aim'], lineu
 export const stepsFor = (course) => (course === 'lineup' ? STEPS.lineup : STEPS.show);
 
 // The words per device. ≤ 5 words each, the device's own controls (src/pointer.js names them the same way).
+// 0275: on keys the roll step also says to let go of ↑: held on from "Keep holding ↑" it waits for a fresh press
+// (src/input.js carries it), but a newcomer should know the hands are off.
 const WORDS = {
   thumb: { go: 'Hold to go', keep: 'Keep holding', tap: 'Tap to let go', roll: 'Let it roll', land: 'Hold to land', line: '', aim: 'Hold, slide to the dot' },
-  key: { go: 'Hold ↑ to go', keep: 'Keep holding ↑', tap: 'Space to let go', roll: 'Let it roll', land: 'Hold Shift to land', line: 'Space at the line', aim: '' },
+  key: { go: 'Hold ↑ to go', keep: 'Keep holding ↑', tap: 'Space to let go', roll: 'Release ↑, let it roll', land: 'Hold Shift to land', line: 'Space at the line', aim: '' },
   pad: { go: 'Hold RT to go', keep: 'Keep holding RT', tap: 'A to let go', roll: 'Let it roll', land: 'Hold B to land', line: 'A at the line', aim: '' },
 };
 // The Lineup's roll is the player's on keys and a pad.
