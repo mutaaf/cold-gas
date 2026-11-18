@@ -57,6 +57,8 @@ final class Crash {
     var dentParked: ((Int, SIMD3<Float>, SIMD3<Float>, Float, Float) -> Void)?
     private var carVel = SIMD3<Float>(), carPos = SIMD3<Float>(), carQuat = simd_quatf(angle: 0, axis: [0, 1, 0])
     var shake: ((Float) -> Void)?
+    /// A hit's jolt along its impulse (0271): the contact normal and 0…1 of how hard.
+    var kick: ((SIMD3<Float>, Float) -> Void)?
     /// The car's own states and damage (roadster.js): lamps, parts, the canopy. Crash sets the damage, the renderer draws it.
     let car = CarState()
     /// The torn-off parts: free rigid boxes on the concrete.
@@ -242,6 +244,7 @@ final class Crash {
         if audible { Sound.shared.bodyHit(severity: Double(sev), glass: glassy && v > 5, seed: e.tick * 31 + Int(e.probe), at: p, struck: e.body >= 0) }
         if !reduced {
             shake?(min(2.6, 0.25 + v * 0.17))
+            if v > 3 { kick?(n, min(1, (v - 3) / 10)) }
             if directed == nil && v > 6.5 && clock - bigT > 2.5 {
                 bigT = clock; slowT = 0.75 + 0.5 * sev
                 if !cutDone { cutDone = true; cut?(p, carVel) }
