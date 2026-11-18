@@ -10,6 +10,9 @@
 // The render size is a scale of the display's, set by the governor: judged against the display's cadence (src/obs/
 // ledger.js), pixels go first; thermal state and Low Power Mode cap it. Everything is built at launch, off the main
 // thread, through the binary archive; nothing is allocated per frame (uniforms in a triple-buffered ring).
+// The cadence (0280) is the governor's too: 120 Hz while it fits at a sharp scale, else an even 60 (never a mix of the two).
+// Three looks (0280, Look.swift): Real, Anime (cel light, a banded sky, ink from the depth) and 8-bit (a fixed low
+// resolution, no bloom, mirror or MetalFX, a dithered palette, nearest-neighbour blocks). Render-only.
 import Metal
 #if canImport(MetalFX) && !targetEnvironment(simulator)
 import MetalFX
@@ -25,6 +28,9 @@ struct FrameU {
     var eye = SIMD4<Float>(), keyDir = SIMD4<Float>(), keyColor = SIMD4<Float>(), fogColor = SIMD4<Float>(), fogRange = SIMD4<Float>()
     var invViewProj = matrix_identity_float4x4
     var proj = SIMD4<Float>(), misc = SIMD4<Float>()
+    /// The look (0280): x Look.code; y the projection's z scale and z its z offset (the film's ink reads depth with them);
+    /// w 8-bit's block in display pixels, or anime's speed lines (0…1).
+    var style = SIMD4<Float>()
 }
 struct LookU {
     var hemiSky = SIMD4<Float>(), hemiGround = SIMD4<Float>(), hazeCol = SIMD4<Float>(), sunCol = SIMD4<Float>(), sunDir = SIMD4<Float>(), fogExp = SIMD4<Float>()
@@ -98,6 +104,11 @@ final class Renderer {
     private let gate = DispatchSemaphore(value: Renderer.inFlight)
     private var msaa, depth, hdr, ldr, upscaled: MTLTexture?
     private var shadowMap: MTLTexture
+    /// Anime's ink reads the main pass's depth (0280): resolved (sample 0) into this, only while the look is Anime.
+    private var depthRes: MTLTexture?
+    private let dummyDepth: MTLTexture
+    /// The look this frame's targets were built for, and 8-bit's block (display pixels a texel).
+    private var targetLook = Look.real, pixelBlock = 1
     #if canImport(MetalFX) && !targetEnvironment(simulator)
     private var scaler: MTLFXSpatialScaler?
     #endif
@@ -111,6 +122,8 @@ final class Renderer {
     func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart() }
     private(set) lazy var dents = Dents(roadster: stage.roadster, parked: stage.parked)
     private var lastCarQ = simd_quatf(angle: 0, axis: [0, 1, 0]), lastDrawT = 0.0
+    /// The car's speed this frame (m/s), for anime's speed lines.
+    private var heroSpeed: Float = 0
     private func hookDents() {
         crash.onReset = { [unowned self] in self.dents.restore(); self.mist.clear(); self.touched = false; self.crash.car.placed() }   // a new run, or a recorded run looping
         crash.dentHero = { [unowned self] probe, crush, n, salt in self.dents.hero(probe: probe, crush: crush, normal: n, carQ: self.lastCarQ, salt: salt) }
@@ -206,6 +219,9 @@ final class Renderer {
         let dd = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
         dummy = device.makeTexture(descriptor: dd)!
         dummy.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: [UInt8](repeating: 255, count: 4), bytesPerRow: 4)
+        let zd = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Renderer.depthFormat, width: 1, height: 1, mipmapped: false)
+        zd.usage = [.renderTarget, .shaderRead]; zd.storageMode = .private
+        dummyDepth = device.makeTexture(descriptor: zd)!
         // Lights: the course's spots and points (directional lights are the key, drawn with the shadow).
         var L: [LightU] = []
         for l in st.lights where l.kind == "SpotLight" || l.kind == "PointLight" || l.kind == "DirectionalLight" {
@@ -336,10 +352,35 @@ final class Renderer {
         shedThermal = t == .critical ? 2 : (t == .serious || low) ? 1 : 0
         shed = max(shed, shedThermal)
     }
-    /// After each frame's GPU time: down a step when the frame runs past the budget, up one after 2 s of headroom.
-    func govern(gpuMs: Double, budgetMs: Double) {
+    /// The display cadence the governor holds (0280), read by the stage view each frame: 120 Hz while the frame fits there at a
+    /// sharp scale, else an even 60. Before, the budget was always 120 Hz's 8.3 ms on a 60–120 link: a frame that couldn't fit
+    /// took pixels down to the 0.5 floor (MetalFX's 2× upscale, the blocks), and frames that still missed were shown at a mix
+    /// of 8.3 and 16.7 ms (the judder). Now pixels give way only to 0.8 at 120; past that the cadence halves, which doubles the
+    /// budget and keeps the scale up; it comes back to 120 after 10 s with the frame under 40 % of 60's budget (at most twice).
+    /// `-fps 60|120` pins it.
+    private(set) var cadence: Int = Launch.value("-fps").flatMap(Int.init).map { $0 <= 60 ? 60 : 120 } ?? 120
+    static let sharpScale: Float = 0.8
+    private var cadenceCalm = 0, cadenceDrops = 0
+    private func paceCadence() -> Bool {
+        if Launch.value("-fps") != nil { return false }
+        let budget = 1000.0 / Double(cadence)
+        if cadence == 120 && gpuEMA > budget * 0.85 && scale <= Renderer.sharpScale + 0.001 {
+            cadence = 60; cadenceDrops += 1; cadenceCalm = 0; calm = 0; gpuEMA = 0
+            print(String(format: "LOOK cadence 60: GPU over 120 Hz's budget at render %.0f%%", scale * 100))
+            return true
+        }
+        if cadence == 60 && cadenceDrops < 3 && gpuEMA > 0 && gpuEMA < budget * 0.4 && scale >= min(thermalCap, Renderer.sharpScale) {
+            cadenceCalm += 1
+            if cadenceCalm > 600 { cadence = 120; cadenceCalm = 0; calm = 0; gpuEMA = 0; print("LOOK cadence 120: headroom"); return true }
+        } else { cadenceCalm = 0 }
+        return false
+    }
+    /// After each frame's GPU time: down a step when the frame runs past the cadence's budget, up one after 2 s of headroom.
+    func govern(gpuMs: Double) {
+        let budgetMs = 1000.0 / Double(cadence)
         gpuEMA = gpuEMA == 0 ? gpuMs : gpuEMA * 0.9 + gpuMs * 0.1
-        if Launch.value("-scale") != nil { return }   // a pinned scale (bench attribution)
+        if paceCadence() { return }
+        if Launch.value("-scale") != nil || targetLook == .pixel { return }   // a pinned scale (bench attribution); 8-bit's size is fixed
         #if !targetEnvironment(simulator)   // (the simulator's GPU says nothing about the phone's)
         // At the floor, with the frame still over: effects go, one at a time, 2 s apart; they come back only after 15 s well under.
         if scale <= 0.5 && gpuEMA > budgetMs * 0.92 { overFrames += 1; underFrames = 0 } else { overFrames = 0; if gpuEMA < budgetMs * 0.7 { underFrames += 1 } else { underFrames = 0 } }
@@ -351,8 +392,17 @@ final class Renderer {
         else { calm = 0 }
     }
 
-    private func ensureTargets(outW: Int, outH: Int) {
-        let rw = max(64, Int(Float(outW) * scale)), rh = max(64, Int(Float(outH) * scale))
+    private func ensureTargets(outW: Int, outH: Int, look: Look) {
+        // 8-bit draws a fixed grid of whole blocks (the last row and column cut by the screen's edge); the others the governor's scale.
+        let px = look == .pixel ? Look.pixelBlock(outW: outW, outH: outH) : 1
+        let rw = look == .pixel ? (outW + px - 1) / px : max(64, Int(Float(outW) * scale))
+        let rh = look == .pixel ? (outH + px - 1) / px : max(64, Int(Float(outH) * scale))
+        if look == .anime && (depthRes == nil || depthRes?.width != rw || depthRes?.height != rh) {
+            let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Renderer.depthFormat, width: rw, height: rh, mipmapped: false)
+            d.usage = [.renderTarget, .shaderRead]; d.storageMode = .private
+            depthRes = device.makeTexture(descriptor: d)
+        } else if look != .anime { depthRes = nil }
+        targetLook = look; pixelBlock = px
         if renderSize == (rw, rh) && outSize == (outW, outH) { return }
         renderSize = (rw, rh); outSize = (outW, outH)
         func tex(_ f: MTLPixelFormat, _ w: Int, _ h: Int, ms: Bool, usage: MTLTextureUsage, memoryless: Bool) -> MTLTexture? {
@@ -374,6 +424,7 @@ final class Renderer {
         bloomChain = (0..<6).compactMap { i in tex(low, max(4, qw >> i), max(4, qh >> i), ms: false, usage: [.renderTarget, .shaderRead], memoryless: false) }
         bloomOut = tex(low, qw, qh, ms: false, usage: [.renderTarget, .shaderRead], memoryless: false)
         #if canImport(MetalFX) && !targetEnvironment(simulator)
+        if look == .pixel { scaler = nil; return }   // 8-bit shows its blocks whole: no upscaler
         let sd = MTLFXSpatialScalerDescriptor()
         sd.inputWidth = rw; sd.inputHeight = rh; sd.outputWidth = outW; sd.outputHeight = outH
         sd.colorTextureFormat = Renderer.ldrFormat; sd.outputTextureFormat = Renderer.ldrFormat; sd.colorProcessingMode = .perceptual
@@ -385,7 +436,8 @@ final class Renderer {
     func draw(into drawable: CAMetalDrawable, time t: Double, onGPU: ((Double) -> Void)? = nil) {
         gate.wait()
         let out = drawable.texture
-        ensureTargets(outW: out.width, outH: out.height)
+        let look = Look.current
+        ensureTargets(outW: out.width, outH: out.height, look: look)
         guard let msaa, let depth, let hdr, let ldr, let upscaled else { gate.signal(); return }
         let fb = frames[fi], pb = plumes[fi]; fi = (fi + 1) % Renderer.inFlight
 
@@ -423,6 +475,7 @@ final class Renderer {
             if crash.dentHero == nil { hookDents() }
             let vel = r.velocity(at: c.tick)
             for k in 0..<10 { thr[k] = r.nozzle(k, at: tick) }
+            heroSpeed = simd_length(vel)
             var loaded = false
             for w in 0..<4 where r.wheel(w, at: tt).comp > 0.002 { loaded = true }
             if r.live { crash.car.setWing((simd_length(vel) - 20) / 20) }   // main.js liveStep
@@ -448,6 +501,7 @@ final class Renderer {
         let dv = drive, O = dv?.origin ?? .zero, away = O != .zero
         let stageM = translate(SIMD3<Float>(-O))
         lookU = dv?.look(over: stageLook) ?? stageLook
+        if look == .pixel { lookU.fogExp.w = 0 }   // 8-bit: no bloom (its passes and the film's read)
         if cam.shakeHook == nil {
             cam.shakeHook = true
             crash.shake = { [weak self, weak cam] a in if let d = self?.drive { d.shake(a) } else { cam?.shake(a) } }
@@ -493,8 +547,11 @@ final class Renderer {
         u.keyColor = SIMD4(stage.keyColor, skip.contains("lights") || away ? 0 : Float(nLights))
         u.fogColor = SIMD4(stage.fogColor, dv == nil ? 1 : 0)
         u.fogRange = SIMD4(stage.fogNear, stage.fogFar, stage.exposure, 1 / Float(Renderer.shadowSize))
-        let wantMirror = stage.wetMask != nil && !skip.contains("mirror") && !skip.contains("wet") && shed < 1 && view.eye.y > 0.05 && !away && lookU.fogExp.y > 0
+        let wantMirror = look != .pixel && stage.wetMask != nil && !skip.contains("mirror") && !skip.contains("wet") && shed < 1 && view.eye.y > 0.05 && !away && lookU.fogExp.y > 0
         u.misc = SIMD4(0, wantMirror ? 1 : 0, 1 / Float(renderSize.0), 1 / Float(renderSize.1))
+        // The look (0280). Anime's speed lines: fast (28 → 45 m/s), or the crash's slow motion.
+        let lines = look == .anime ? min(1, max(smoothstepF(28, 45, heroSpeed), (1 - crash.slowK) * 2.5)) : 0
+        u.style = SIMD4(look.code, lens.2.z, lens.3.z, look == .pixel ? Float(pixelBlock) : lines)
         fb.contents().storeBytes(of: u, as: FrameU.self)
         // The mirror's frame: the same lens looking at the world flipped in y. Its fragments keep their real world position and
         // normal for the lights; only the eye and the clip position change, and the winding (frontFace).
@@ -569,6 +626,7 @@ final class Renderer {
         mp.colorAttachments[0].texture = msaa; mp.colorAttachments[0].resolveTexture = hdr
         mp.colorAttachments[0].loadAction = .dontCare; mp.colorAttachments[0].storeAction = .multisampleResolve
         mp.depthAttachment.texture = depth; mp.depthAttachment.loadAction = .clear; mp.depthAttachment.clearDepth = 1; mp.depthAttachment.storeAction = .dontCare
+        if let depthRes { mp.depthAttachment.resolveTexture = depthRes; mp.depthAttachment.depthResolveFilter = .sample0; mp.depthAttachment.storeAction = .multisampleResolve }   // Anime's ink
         if let e = cmd.makeRenderCommandEncoder(descriptor: mp) {
             e.setVertexBuffer(fb, offset: 0, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1)
             e.setFragmentBuffer(lightsBuf, offset: 0, index: 3); e.setFragmentBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
@@ -654,6 +712,7 @@ final class Renderer {
         fp.colorAttachments[0].texture = ldr; fp.colorAttachments[0].loadAction = .dontCare; fp.colorAttachments[0].storeAction = .store
         if let e = cmd.makeRenderCommandEncoder(descriptor: fp) {
             e.setRenderPipelineState(film); e.setFragmentTexture(hdr, index: 0); e.setFragmentTexture(bloomOut ?? dummy, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1)
+            e.setFragmentTexture(depthRes ?? dummyDepth, index: 2)
             e.setFragmentBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3); e.endEncoding()
         }
@@ -664,13 +723,15 @@ final class Renderer {
         // 6. MetalFX, then present
         var shown: MTLTexture = ldr   // (the simulator has no MetalFX: the present pass upsamples bilinearly)
         #if canImport(MetalFX) && !targetEnvironment(simulator)
-        if !skip.contains("metalfx"), let sc = scaler { sc.colorTexture = ldr; sc.outputTexture = upscaled; sc.encode(commandBuffer: cmd); shown = upscaled }
+        if look != .pixel && !skip.contains("metalfx"), let sc = scaler { sc.colorTexture = ldr; sc.outputTexture = upscaled; sc.encode(commandBuffer: cmd); shown = upscaled }
         #endif
         cut("metalfx")
         let pp = MTLRenderPassDescriptor()
         pp.colorAttachments[0].texture = out; pp.colorAttachments[0].loadAction = .dontCare; pp.colorAttachments[0].storeAction = .store
         if let e = cmd.makeRenderCommandEncoder(descriptor: pp) {
             e.setRenderPipelineState(present); e.setFragmentTexture(shown, index: 0)
+            var pk = SIMD4<Float>(look == .pixel ? Float(pixelBlock) : 0, 0, 0, 0)   // 8-bit: whole blocks, nearest neighbour
+            e.setFragmentBytes(&pk, length: 16, index: 0)
             e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3); e.endEncoding()
         }
         cmd.present(drawable)
@@ -679,7 +740,7 @@ final class Renderer {
         cmd.addCompletedHandler { [weak self] cb in
             let ms = (cb.gpuEndTime - cb.gpuStartTime) * 1000
             onGPU?(ms)
-            DispatchQueue.main.async { self?.govern(gpuMs: ms, budgetMs: 1000.0 / 120.0) }
+            DispatchQueue.main.async { self?.govern(gpuMs: ms) }
             g.signal()
         }
         cmd.commit()
@@ -731,6 +792,19 @@ final class Renderer {
         setLamp(.drl, c.drl); setLamp(.heads, c.headC); setLamp(.tailBar, c.tail); setLamp(.tailDim, c.tailDim); setLamp(.brake, c.brakeC)
         setBodyLamp(subAmber, c.amber); setBodyLamp(subMarker, c.marker); setBodyLamp(subPlate, c.plate); setBodyLamp(subAmbient, c.ambient)
         if subGlass >= 0, let m = c.crazed ? crazedMat : glassMat { stageMats[1][subGlass] = m }
+        applyPaint()
+    }
+    /// Wreck Club's paint (0242), cosmetic only: the body panels' base colour, or the factory's when none is chosen.
+    nonisolated(unsafe) static var carPaint: SIMD3<Float>?   // set on the main thread between frames; a stale read costs one frame
+    private var paintSub = -2, paintBase = SIMD4<Float>()
+    private func applyPaint() {
+        if paintSub == -2 {
+            paintSub = stage.roadster.submeshes.firstIndex { $0.material.name == "roadster-paint" } ?? -1
+            if paintSub >= 0 { paintBase = stageMats[1][paintSub].color }
+        }
+        guard paintSub >= 0 else { return }
+        let want = Renderer.carPaint.map { SIMD4($0, paintBase.w) } ?? paintBase
+        if stageMats[1][paintSub].color != want { stageMats[1][paintSub].color = want }
     }
     /// wall.js searchlights update: each pivot swings on its own slow sines.
     private func updateSweep(_ t: Float) {

@@ -117,7 +117,7 @@ import Testing
         #expect(ReleaseNotes.callout("**Sky.** Look up. <!-- icon: sparkles -->")?.go == nil, "no go: a plain card")
         #expect(ReleaseNotes.callout("**Sky.** Look up. <!-- icon: sparkles, go: nowhere -->")?.go == nil, "unknown: a plain card")
         #expect(ReleaseNotes.callout("**Sky.** Look up. <!-- icon: sparkles, go: board -->")?.icon == "sparkles")
-        #expect(WhatsNewDestination.allCases.map(\.rawValue) == ["board", "settings", "howTo", "practice"])
+        #expect(WhatsNewDestination.allCases.map(\.rawValue) == ["board", "settings", "howTo", "practice", "club"])
     }
 
     @Test func theParserReadsTheShape() throws {

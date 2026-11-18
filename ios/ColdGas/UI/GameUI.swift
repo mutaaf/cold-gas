@@ -41,7 +41,7 @@ struct RootUI: View {
     @State private var whatsNew: ReleaseNotes? = RootUI.launchNotes
     private static let launchNotes = WhatsNewStore.atLaunch()
     enum Sheet: String, Identifiable {
-        case board, settings, howTo, practice; var id: String { rawValue }
+        case board, settings, howTo, practice, club; var id: String { rawValue }
         /// A What's new callout's destination (exhaustive: a new destination has to be routed here to build).
         init(_ d: WhatsNewDestination) {
             switch d {
@@ -49,6 +49,7 @@ struct RootUI: View {
             case .settings: self = .settings
             case .howTo: self = .howTo
             case .practice: self = .practice
+            case .club: self = .club
             }
         }
     }
@@ -104,6 +105,7 @@ struct RootUI: View {
                 case .settings: SettingsView()
                 case .howTo: HowToView()
                 case .practice: PracticeView(start: { id in sheet = nil; game.play(drill: id) })
+                case .club: WreckClubView()
                 }
             }
             .presentationDetents([.large])
@@ -349,6 +351,7 @@ struct TitleView: View {
         HStack(spacing: 0) {
             glyph("scope", "Practice") { open(.practice) }
             glyph("list.number", "Board") { open(.board) }
+            glyph("flag.checkered", "Wreck Club") { open(.club) }
             glyph("questionmark", "How to play") { open(.howTo) }
             glyph("gearshape", "Settings") { open(.settings) }
         }
@@ -437,6 +440,30 @@ struct RunView: View {
     }
 }
 
+/// A combo call on the HUD (0239): the multiplier in the signal red and the step that raised it, set in the marquee face.
+/// It lands with a small overshoot (none with Reduce Motion) and goes after a beat.
+struct ComboCallout: View {
+    let call: ComboCall
+    var compact = false
+    @Environment(\.accessibilityReduceMotion) private var still
+    @State private var landed = false
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 10) {
+            Text("\u{D7}\(call.multiplier)").font(Theme.mono(compact ? 30 : 38, bold: true)).foregroundStyle(Theme.hot).monospacedDigit()
+            Text(call.kind.name.uppercased()).font(Theme.marquee(compact ? 12 : 14, .headline)).tracking(2).foregroundStyle(Theme.ink)
+        }
+        .padding(.horizontal, 16).padding(.vertical, 8)
+        .glass(16)
+        .scaleEffect(landed || still ? 1 : 1.35)
+        .opacity(landed || still ? 1 : 0)
+        .id(call.tick)
+        .onAppear { withAnimation(still ? nil : .spring(response: 0.28, dampingFraction: 0.55)) { landed = true } }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Combo times \(call.multiplier), \(call.kind.name)")
+        .accessibilityAddTraits(.updatesFrequently)
+    }
+}
+
 struct HUDView: View {
     @ObservedObject var game = Game.shared
     var compact: Bool
@@ -490,8 +517,13 @@ struct HUDView: View {
             }
         }
         .padding(12)
+        .overlay(alignment: .top) {
+            // 0239: the wreck calls its combo where the eye already is, under the readouts.
+            if let c = game.combo { ComboCallout(call: c, compact: compact).padding(.top, compact ? 84 : 104).allowsHitTesting(false) }
+        }
         .animation(.easeOut(duration: 0.25), value: h.cue)
         .animation(.easeOut(duration: 0.25), value: h.guide)
+        .animation(.snappy(duration: 0.22), value: game.combo)
     }
     private var pause: some View {
         Button { game.paused = true; UISelectionFeedbackGenerator().selectionChanged() } label: {
@@ -701,6 +733,7 @@ struct ResultsView: View {
                         Text(st.text).font(Theme.text(15, .semibold)).foregroundStyle(st.won ? Theme.ok : Theme.ink)
                             .accessibilityIdentifier("standing")
                     }
+                    if !result.newFeats.isEmpty || result.rankUp != nil { clubLine }
                     if let d = result.dailyLine { Text(d).font(Theme.text(13)).foregroundStyle(result.dailyOK ? Theme.ok : Theme.ink2).fixedSize(horizontal: false, vertical: true) }
                     if let d = result.drill {
                         VStack(alignment: .leading, spacing: 4) {
@@ -742,9 +775,50 @@ struct ResultsView: View {
             if let m = Records.shared.lastRecord, let medal = m.earned {
                 Text("\(medal.label) medal\(m.isNew ? " · new" : "")").font(Theme.text(13, .semibold)).foregroundStyle(lit ? ink : Theme.amber)
             }
+            if let w = result.wreck { wreckRow(w, ink: ink, ink2: ink2) }
         }
         .padding(short ? 10 : 14).frame(maxWidth: .infinity, alignment: .leading)
         if lit { field.aurora(14) } else { field.overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).strokeBorder(Theme.hair)) }
+    }
+    /// Wreck Club (0242): what this run earned, in one quiet line; a tap opens the club.
+    private var clubLine: some View {
+        let feats = result.newFeats.map(\.name).joined(separator: ", ")
+        let rank = result.rankUp.map { "Rank up: \($0.name), a new paint" }
+        let text = [feats.isEmpty ? nil : "Feat\(result.newFeats.count == 1 ? "" : "s"): \(feats)", rank].compactMap { $0 }.joined(separator: " \u{B7} ")
+        return Button { open(.club) } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "flag.checkered").font(.system(size: 12)).foregroundStyle(Theme.hot)
+                Text(text).font(Theme.text(13, .medium)).foregroundStyle(Theme.ink).fixedSize(horizontal: false, vertical: true)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.right").font(.system(size: 11)).foregroundStyle(Theme.ink3)
+            }
+            .frame(minHeight: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Wreck Club. \(text)")
+        .accessibilityIdentifier("club-line")
+    }
+    /// The Wreck score (0237, 0239), under a hairline: its own number, never added to the score above, and the best combo's
+    /// chain in the order it happened.
+    private func wreckRow(_ w: WreckCard, ink: Color, ink2: Color) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Rectangle().fill(Theme.hair).frame(height: 1).padding(.vertical, 4)
+            HStack(alignment: .firstTextBaseline, spacing: 8) {
+                Text("WRECK").font(Theme.text(10, .medium)).tracking(1.6).foregroundStyle(ink2)
+                Text(String(format: "%.1f", w.total)).font(Theme.mono(22, bold: true)).foregroundStyle(ink).monospacedDigit()
+                Spacer(minLength: 8)
+                if w.bestMultiplier >= 2 {
+                    Text("\u{D7}\(w.bestMultiplier) combo").font(Theme.mono(13, bold: true)).foregroundStyle(Theme.hot)
+                }
+            }
+            if let b = w.best, b.multiplier >= 2 {
+                Text(b.kinds.map(\.name).joined(separator: " \u{2192} ")).font(Theme.text(12)).foregroundStyle(ink2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Wreck score \(String(format: "%.1f", w.total))\(w.bestMultiplier >= 2 ? ", best combo times \(w.bestMultiplier)" : "")")
+        .accessibilityIdentifier("wreck")
     }
     private func numbersLine(_ t: Telemetry) -> String {
         "Sink \(Fmt.rate(t.sink)) \(Fmt.rateUnit) · Tilt \(String(format: "%.0f°", t.tiltDeg))"

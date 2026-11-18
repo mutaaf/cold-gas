@@ -140,6 +140,7 @@ struct WhatsNewView: View {
         case .settings: "Open Settings"
         case .howTo: "Read How to play"
         case .practice: "Try a drill"
+        case .club: "Open Wreck Club"
         }
     }
 

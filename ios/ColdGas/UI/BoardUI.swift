@@ -223,7 +223,7 @@ final class JudgesModel: ObservableObject {
         let route = judgeRoute(status: OnDeviceJudges.status, preferOnDevice: SaveStore.shared.settings.judgeOnDeviceOn)
         let place = OnDeviceJudges.place
         task = Task { [weak self] in
-            let stream = JudgesClient().judges(card: sc, authored: authored, route: route,
+            let stream = JudgesClient().judges(card: sc, wreck: r.crewWreck, authored: authored, route: route,
                                                onDevice: route == .onDevice ? OnDeviceJudges.model() : nil, place: place)
             var heard = false
             for await e in stream {

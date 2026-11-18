@@ -77,6 +77,10 @@ final class Game: ObservableObject {
     private(set) var activeDrill: String?
     private var titleTracks: [String: Replay] = [:]
     private var haptics = HapticScore(course: "show"), seen = 0
+    /// The Wreck score's eyes on this run (0237, 0239), and the combo call on the HUD (cleared after a beat).
+    private var wreck = WreckTracker()
+    @Published private(set) var combo: ComboCall?
+    private var comboFor = 0.0
     private var countT = 0.0
     private var lastHud = 0.0
     private var touched = false   // the touchdown has reached the camera (main.js: once per run, keyed on the touch tick)
@@ -169,6 +173,7 @@ final class Game: ObservableObject {
     // --- Flow ----------------------------------------------------------------------------------
     func showTitleLoop() {
         guard screen == .title else { return }
+        paintChanged()
         // The first run: the car waits on the mark, nothing to watch, so nothing holds a newcomer on the title (0249).
         if firstRun {
             if still == nil {
@@ -212,6 +217,8 @@ final class Game: ObservableObject {
         clearEncore()
         wedge.reset(); wedged = false
         haptics = HapticScore(course: course)
+        wreck = WreckTracker(); combo = nil; comboFor = 0
+        paintChanged()
         SoundFeed.shared.reset()
         let tr = Replay(live: course)
         tr.tickBase = l.run.tick
@@ -397,6 +404,7 @@ final class Game: ObservableObject {
                 acc -= DT
                 if ticked == .rest { atRest = true; break }   // the world is freed: nothing to read
                 tr.append(r)
+                wreck.step(r)   // 0239: the Wreck score reads the tick (never writes it)
                 if wasFlying { haptics.step(HapticFeed(run: r, input: l.input, seen: &seen)) }
                 if !wasLanded && r.phase == .landed { Sound.shared.land(sink: r.t.sink, paved: 1, seed: r.tick); Sound.shared.cheer(r.t.sink < 4 ? 0.7 : 0.35) }
                 if !touched && r.t.touchTick >= 0 { touched = true; stage?.renderer?.cam.touchdown(sink: r.t.sink) }
@@ -404,6 +412,8 @@ final class Game: ObservableObject {
             }
         } catch { print("SIM stopped: \(error)"); if result == nil { home() }; return }
         haptics.drain { HapticPlayer.shared.play($0) }
+        wreck.drainCalls { call($0) }
+        if combo != nil { comboFor += dt; if comboFor > 1.6 { combo = nil } }
         HapticPlayer.shared.apply(r.phase == .done ? HapticContinuous() : haptics.continuous)
         if !atRest && r.phase != .done && result == nil && l.script == nil {
             let state = wedge.step(r.car, dt: dt, eligible: r.phase == .drive)
@@ -556,8 +566,42 @@ final class Game: ObservableObject {
         SoundFeed.shared.plain(speed: Double(simd_length(v)) * k, throttles: th, grounded: tr.phase(at: i) != 2)
     }
 
+    /// A combo call (0239): the HUD shows the multiplier and the step, and the phone plays the step's pattern then one tick
+    /// per step of the multiplier. Off the frame loop's hot path: a call is a handful a run.
+    private func call(_ c: ComboCall) {
+        combo = c; comboFor = 0
+        for p in comboPattern(c) {
+            let e = HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: p.intensity, sharpness: p.sharpness)
+            if p.ms == 0 { HapticPlayer.shared.play(e) } else { DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(p.ms)) { HapticPlayer.shared.play(e) } }
+        }
+    }
+
+    /// Wreck Club (0242): the run's feats into this device's book; what's new goes on the results.
+    private func club(_ r: RunResult, _ w: WreckCard) {
+        func n(_ k: String) -> Double? { if case let .n(v)? = r.card.flat.first(where: { $0.0 == "facts." + k })?.1 { return v }; return nil }
+        let facts = WreckClub.RunFacts(course: r.course, landed: r.landed, verdict: r.card.verdict, rotations: n("rotations") ?? 0,
+                                       padMiss: n("padMiss"), crashed: !r.landed, wreckTotal: w.total, bestCombo: w.bestMultiplier,
+                                       rollovers: w.rollovers, toppled: w.toppled)
+        var got: (new: [WreckClub.Feat], rankUp: WreckClub.Rank?) = ([], nil)
+        SaveStore.shared.update { s in var b = s.club ?? WreckClub.Book(); got = WreckClub.record(facts, into: &b, now: SaveStore.nowMs); s.club = b }
+        r.newFeats = got.new; r.rankUp = got.rankUp
+    }
+    /// The car's paint from Wreck Club's book (0242): cosmetic, read by the renderer.
+    func paintChanged() {
+        let p = (SaveStore.shared.data.club ?? WreckClub.Book()).currentPaint
+        Renderer.carPaint = p.isFactory ? nil : SIMD3(p.r, p.g, p.b)
+    }
+
     private func showResults(_ l: LiveRun) {
         stage?.renderer?.cam.orbit = true
+        // The Wreck card (0237): every event up to now, read off the run and its aftermath. Never blended with the score.
+        if let r = result, r.drill == nil {
+            let w = wreck.card
+            r.wreck = w.isEmpty ? nil : w
+            r.crewWreck = w.isEmpty ? nil : w.crew
+            club(r, w)
+        }
+        combo = nil
         // The coach re-flies the log on the sim's shared scratch: here, with no tick in flight, and the run stepping no more.
         let say = coachWords(pointerCtx(course: l.run.course, tier: l.card?.tier ?? "assist", touchScheme: l.oneThumb ? .thumb : .classic))
         result?.coach = (try? l.coachResult(say: say))?.items ?? []
@@ -735,6 +779,11 @@ final class RunResult: Identifiable {
     var dailyOK = false, dailyLine: String?
     /// The wreck, for the crew's lines (0237): nil until the Wreck card is read.
     var crewWreck: CrewWreck?
+    /// The Wreck card (0237, 0239): nil for a clean run (nothing came apart) or a drill.
+    var wreck: WreckCard?
+    /// Wreck Club (0242): the feats this run earned for the first time, and the rank it reached if it rose.
+    var newFeats: [WreckClub.Feat] = []
+    var rankUp: WreckClub.Rank?
     /// This device's first landing (0249): the results open on its moment. `firstRun`: the run was flown on the first run.
     var firstLanding = false, firstRun = false
 }
