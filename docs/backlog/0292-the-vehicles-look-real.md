@@ -6,6 +6,7 @@ priority: P1
 size: L
 lens: authenticity
 created: 2026-11-18
+pr: 436
 by: operator
 ---
 
