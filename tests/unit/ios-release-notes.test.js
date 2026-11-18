@@ -38,7 +38,7 @@ describe.each(versions)('ios release notes %s', (version) => {
       expect(m[1].split(' ').length, c).toBeLessThanOrEqual(5);
       expect(m[2].length, c).toBeLessThanOrEqual(90);
       // go: the screen the card opens (ColdGasClient's WhatsNewDestination); optional.
-      if (m[4]) expect(['board', 'settings', 'howTo', 'practice'], c).toContain(m[4]);
+      if (m[4]) expect(['board', 'settings', 'howTo', 'practice', 'club'], c).toContain(m[4]);
     }
   });
 

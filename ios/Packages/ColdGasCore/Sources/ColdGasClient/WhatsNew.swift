@@ -21,7 +21,7 @@ import Foundation
 /// Where a callout card takes you: a screen the title opens (RootUI.Sheet in the app maps each case, exhaustively).
 /// A card about something with no screen of its own (the cameras, the sky) has none and stays plain.
 public enum WhatsNewDestination: String, CaseIterable, Equatable, Sendable {
-    case board, settings, howTo, practice
+    case board, settings, howTo, practice, club
 }
 
 public struct ReleaseNotes: Equatable, Sendable {

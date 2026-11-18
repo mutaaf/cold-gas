@@ -59,8 +59,10 @@ public struct SaveData: Codable, Equatable {
     public var hud: HudPrefs?
     /// The counters on this device (0246, 0249): jumps, landings, sessions, the first landing.
     public var progress: Progress?
+    /// Wreck Club (0242): the feats, the sets landed, the paint chosen. A save from before it has none.
+    public var club: WreckClub.Book?
     public init() {}
-    enum CodingKeys: String, CodingKey { case initials, medals, daily, settings, judgeBreaker, hud, progress }
+    enum CodingKeys: String, CodingKey { case initials, medals, daily, settings, judgeBreaker, hud, progress, club }
     public init(from decoder: Decoder) throws {
         guard let c = try? decoder.container(keyedBy: CodingKeys.self) else { return }   // not even an object: a fresh save
         initials = (try? c.decodeIfPresent(String.self, forKey: .initials)).flatMap { $0 }.map { cleanInitials($0) }
@@ -73,6 +75,7 @@ public struct SaveData: Codable, Equatable {
         judgeBreaker = (try? c.decodeIfPresent(BreakerState.self, forKey: .judgeBreaker)).flatMap { $0 }
         hud = (try? c.decodeIfPresent(HudPrefs.self, forKey: .hud)).flatMap { $0 }
         progress = (try? c.decodeIfPresent(Progress.self, forKey: .progress)).flatMap { $0 }
+        club = (try? c.decodeIfPresent(WreckClub.Book.self, forKey: .club)).flatMap { $0 }
     }
     /// A save from stored bytes: anything unreadable is a fresh save, never a crash.
     public static func decode(_ data: Data?) -> SaveData {

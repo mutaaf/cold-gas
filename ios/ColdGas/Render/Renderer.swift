@@ -731,6 +731,19 @@ final class Renderer {
         setLamp(.drl, c.drl); setLamp(.heads, c.headC); setLamp(.tailBar, c.tail); setLamp(.tailDim, c.tailDim); setLamp(.brake, c.brakeC)
         setBodyLamp(subAmber, c.amber); setBodyLamp(subMarker, c.marker); setBodyLamp(subPlate, c.plate); setBodyLamp(subAmbient, c.ambient)
         if subGlass >= 0, let m = c.crazed ? crazedMat : glassMat { stageMats[1][subGlass] = m }
+        applyPaint()
+    }
+    /// Wreck Club's paint (0242), cosmetic only: the body panels' base colour, or the factory's when none is chosen.
+    nonisolated(unsafe) static var carPaint: SIMD3<Float>?   // set on the main thread between frames; a stale read costs one frame
+    private var paintSub = -2, paintBase = SIMD4<Float>()
+    private func applyPaint() {
+        if paintSub == -2 {
+            paintSub = stage.roadster.submeshes.firstIndex { $0.material.name == "roadster-paint" } ?? -1
+            if paintSub >= 0 { paintBase = stageMats[1][paintSub].color }
+        }
+        guard paintSub >= 0 else { return }
+        let want = Renderer.carPaint.map { SIMD4($0, paintBase.w) } ?? paintBase
+        if stageMats[1][paintSub].color != want { stageMats[1][paintSub].color = want }
     }
     /// wall.js searchlights update: each pivot swings on its own slow sines.
     private func updateSweep(_ t: Float) {
