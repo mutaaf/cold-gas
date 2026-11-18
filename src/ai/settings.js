@@ -25,9 +25,8 @@ const KEY_STEPS = {
   gemini: 'Sign in, then Create API key',
 };
 
-export function aiLabel(ai = loadAI()) {
-  return ai.provider === 'edge' ? 'AI · Free' : `AI · ${PROVIDER_INFO[ai.provider].vendor}`;
-}
+// The chip's label lives beside the config (0053: the title draws it, and this sheet's chunk loads later).
+export { aiLabel } from './config.js';
 
 export function openSettings(root, { onChange } = {}) {
   let cur = loadAI();
