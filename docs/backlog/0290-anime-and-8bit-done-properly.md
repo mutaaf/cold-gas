@@ -1,7 +1,7 @@
 ---
 id: 0290
 title: On the iPhone, Anime reads as cel animation and 8-bit as pixel art, not filters over Real
-status: in-progress
+status: shipped
 priority: P1
 size: M
 lens: player-feel
