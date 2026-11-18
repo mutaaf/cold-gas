@@ -102,7 +102,11 @@ export const keyHolds = (e, held) => !e.repeat || held.has(e.code);
 // The key handlers' effect on what is held, also called by the Node sweeps (scripts/keys-literal.mjs) so a modelled
 // player goes through exactly the browser's mapping.
 export function keyDown(code, repeat = false) {
-  if (!repeat) carried.delete(code);   // a real press is a fresh one, whatever was carried
+  if (!repeat) {   // a real press is a fresh one, whatever was carried
+    carried.delete(code);
+    const i = PITCH_KEYS.indexOf(code);
+    if (i >= 0) heldFor[i] = 0;
+  }
   if (keyHolds({ code, repeat }, keys)) keys.add(code);
 }
 export function keyUp(code) { keys.delete(code); carried.delete(code); }
@@ -115,6 +119,9 @@ export function keyUp(code) { keys.delete(code); carried.delete(code); }
 const PITCH_KEYS = ['ArrowUp', 'KeyW', 'ArrowDown', 'KeyS'];
 const carried = new Set();
 let wasAir = null;   // null: this run hasn't been sampled yet (a drill that opens in the air carries nothing)
+// Ticks each pitch key has been held. Only a key held CARRY_TICKS before the change carries: ↓ pressed with Space on the
+// ledge, meaning to fly the nose, is the player's choice for the air, not a leftover from the climb.
+const heldFor = new Int32Array(PITCH_KEYS.length), CARRY_TICKS = 60;   // 0.25 s at 240 Hz
 
 let onPauseCb = null;
 const MODS = new Set(['MetaLeft', 'MetaRight', 'OSLeft', 'OSRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight']);
@@ -289,6 +296,7 @@ export function pollPads() {
 // One-thumb: the run's input for this tick from the one control (and tilt, on the ground).
 export function sampleThumb(run, released, out = newInput()) {
   clearInput(out);
+  wasAir = null;   // the keys didn't fly this tick: a key pressed while the thumb flies is a fresh one (0275)
   return thumb.sample(run, released, out, tiltSteer());
 }
 
@@ -348,11 +356,17 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
   out.manual = tier === 'advanced' ? 1 : 0;
   // Let go of the Wall, you're flying (the sim calls it airborne 0.1 s later).
   const air = phase === 'air' || (phase === 'ramp' && released);
+  // The change: a take-off, or a touchdown that lands (not the Lineup's hop back onto the run-up, phase 'drive').
   if (air !== wasAir) {
-    const change = wasAir !== null;
+    const change = wasAir !== null && (air || phase === 'landed');
     wasAir = air;
-    if (change && tier === 'assist' && !ctx?.free) for (let i = 0; i < PITCH_KEYS.length; i++) if (keys.has(PITCH_KEYS[i])) carried.add(PITCH_KEYS[i]);
+    if (change && tier === 'assist' && !ctx?.free) {
+      for (let i = 0; i < PITCH_KEYS.length; i++) if (keys.has(PITCH_KEYS[i]) && heldFor[i] >= CARRY_TICKS) carried.add(PITCH_KEYS[i]);
+    }
+    // Back on the run-up after a hop: a key carried off it means what it meant there again.
+    else if (!air && phase !== 'landed') carried.clear();
   }
+  for (let i = 0; i < PITCH_KEYS.length; i++) heldFor[i] = keys.has(PITCH_KEYS[i]) ? heldFor[i] + 1 : 0;
   let ax = 0, ay = 0, lift = 0, land = 0, thr = 0, brk = 0, yaw = 0;
   const v = !air && car ? Math.sqrt(car.vel.x * car.vel.x + car.vel.z * car.vel.z) : 0;   // not Math.hypot: it boxes its answer
   // On the ground the touch stick goes through the same hands as the keys: a thumb can't feather

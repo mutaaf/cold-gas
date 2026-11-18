@@ -68,10 +68,13 @@ The two-thumb touch scheme, Pro and Advanced (who chose their keys), and new cue
 ## Shipped
 - `src/input.js`: on an Assist scored run, ↑/W and ↓/S held across the ground → air change (the release, the Show's lip)
   or the air → ground change (the touchdown) are *carried*: they do nothing on the new side until a keyup and a fresh
-  keydown. A run's first sample sets the side without carrying (a drill that opens in the air). Pro, Advanced, the pad,
+  keydown. A run's first sample sets the side without carrying (a drill that opens in the air). Self-review fixes: only a key held
+  ≥ 0.25 s carries (↓ pressed with Space means nose up at once); a touchdown is phase `landed`, so the Lineup's hop back
+  onto its run-up un-carries instead (a held ↑ is throttle there again); a tick the one thumb flies resets the side, so a
+  key pressed then is fresh. The Lineup's own key population is not swept (its guide asks for ← → in the air, not ↑). Pro, Advanced, the pad,
   touch and Free Drive (`ctx.free`) are untouched. The key handlers' effect is now `keyDown` / `keyUp`, exported so a
   Node sweep goes through the browser's own mapping.
-- `src/guide.js`: the keys' roll step says "Release ↑, let it roll" (5 words).
+- `src/guide.js`: the keys' roll step says "Let go of ↑" ("Release" is the Space action's own name on the timeline).
 - `scripts/keys-literal.mjs`: the critic's 36 key newcomers per course, but through `sample()` and the live step's wall
   assist instead of raw sim inputs. ↑ held to the end: **Show 8/36 → 36/36, Wall 15/36 → 36/36** (through the real
   hands the baseline is worse than the critic's raw-input 20/36 and 23/36). Let go at the release: 36/36 both, before

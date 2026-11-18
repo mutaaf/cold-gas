@@ -18,20 +18,29 @@ test('keys at 1280×720: ↑ held through the release is no pitch until it is le
     const g = window.__coldgas, S = g.S, run = S.run, dt = 1 / 240;
     const key = (type, code) => dispatchEvent(new KeyboardEvent(type, { code, key: code, bubbles: true }));
     const PITCH = 4;   // inputLog rows: [tick, throttle, brake, steer, pitch, …] (src/sim/run.js KEYS)
+    // The largest |pitch| in force from tick t on: the row in force at t (rows are written on a change only) and every later one.
+    const pitchSince = (t) => {
+      const log = run.inputLog;
+      let i = log.length - 1;
+      while (i > 0 && log[i][0] > t) i--;
+      let m = 0;
+      for (; i < log.length; i++) m = Math.max(m, Math.abs(log[i][PITCH]));
+      return m;
+    };
     for (let i = 0; i < 240 * 40 && !(run.phase === 'ramp' && run.t.progress >= 0.95); i++) g.liveStep(dt);
     const atLedge = run.phase;
     key('keydown', 'Space');
     for (let i = 0; i < 36; i++) g.liveStep(dt);
     key('keyup', 'Space');
-    const from = run.tick;
+    const from = S.releaseTick;
     for (let i = 0; i < 240 * 0.6 && run.phase !== 'done'; i++) g.liveStep(dt);
     const air = run.phase;
-    const pitchHeld = run.inputLog.filter((row) => row[0] >= from).reduce((m, row) => Math.max(m, Math.abs(row[PITCH])), 0);
+    const pitchHeld = pitchSince(from);
     // Let go and press again: ↑ is nose down again, as it always was.
     key('keyup', 'ArrowUp'); key('keydown', 'ArrowUp');
     const fresh = run.tick;
     for (let i = 0; i < 24 && run.phase === 'air'; i++) g.liveStep(dt);
-    const pitchFresh = run.inputLog.filter((row) => row[0] >= fresh).reduce((m, row) => Math.max(m, Math.abs(row[PITCH])), 0);
+    const pitchFresh = pitchSince(fresh);
     key('keyup', 'ArrowUp');
     return { atLedge, released: S.released, air, pitchHeld, pitchFresh, device: g.input.device() };
   });
