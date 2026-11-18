@@ -480,7 +480,7 @@ static float rdDepth(depth2d<float> t, int2 p, int2 hi) { return t.read(uint2(cl
 static float rdLum(texture2d<float> t, int2 p, int2 hi) { return log2(max(dot(t.read(uint2(clamp(p, int2(0), hi))).rgb, float3(0.2126, 0.7152, 0.0722)), 1e-4)); }
 static float animeInk(float2 clip, depth2d<float> dt, texture2d<float> hdr, constant Frame& f) {
     int2 hi = int2(dt.get_width(), dt.get_height()) - 1, c = int2(clip);
-    int k = max(1, int(f.proj.w / 1300.0 + 0.5));   // ≈ a point wide on a phone
+    int k = max(1, int(f.proj.w / 800.0 + 0.5));    // ≈ a point wide on a phone
     float dc = rdDepth(dt, c, hi);
     float lap = abs(rdDepth(dt, c - int2(k, 0), hi) + rdDepth(dt, c + int2(k, 0), hi) - 2.0 * dc)
               + abs(rdDepth(dt, c - int2(0, k), hi) + rdDepth(dt, c + int2(0, k), hi) - 2.0 * dc);
