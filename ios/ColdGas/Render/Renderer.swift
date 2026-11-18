@@ -11,8 +11,9 @@
 // ledger.js), pixels go first; thermal state and Low Power Mode cap it. Everything is built at launch, off the main
 // thread, through the binary archive; nothing is allocated per frame (uniforms in a triple-buffered ring).
 // The cadence (0280) is the governor's too: 120 Hz while it fits at a sharp scale, else an even 60 (never a mix of the two).
-// Three looks (0280, Look.swift): Real, Anime (cel light, a banded sky, ink from the depth) and 8-bit (a fixed low
-// resolution, no bloom, mirror or MetalFX, a dithered palette, nearest-neighbour blocks). Render-only.
+// Three looks (0280, 0290, Look.swift): Real; Anime (a cel ramp, a painted sky, ink from the depth's silhouettes and creases,
+// speed lines and impact frames); 8-bit (≈ 160 columns, the ramp, 32 fixed colours, a 1 px outline, a lens snapped to whole
+// pixels; no bloom, mirror or MetalFX). Render-only.
 import Metal
 #if canImport(MetalFX) && !targetEnvironment(simulator)
 import MetalFX
@@ -29,8 +30,10 @@ struct FrameU {
     var invViewProj = matrix_identity_float4x4
     var proj = SIMD4<Float>(), misc = SIMD4<Float>()
     /// The look (0280): x Look.code; y the projection's z scale and z its z offset (the film's ink reads depth with them);
-    /// w 8-bit's block in display pixels, or anime's speed lines (0…1).
+    /// w anime's speed lines (0…1).
     var style = SIMD4<Float>()
+    /// 0290: x anime's impact frame (0…1).
+    var fx = SIMD4<Float>()
 }
 struct LookU {
     var hemiSky = SIMD4<Float>(), hemiGround = SIMD4<Float>(), hazeCol = SIMD4<Float>(), sunCol = SIMD4<Float>(), sunDir = SIMD4<Float>(), fogExp = SIMD4<Float>()
@@ -104,7 +107,7 @@ final class Renderer {
     private let gate = DispatchSemaphore(value: Renderer.inFlight)
     private var msaa, depth, hdr, ldr, upscaled: MTLTexture?
     private var shadowMap: MTLTexture
-    /// Anime's ink reads the main pass's depth (0280): resolved (sample 0) into this, only while the look is Anime.
+    /// Anime's ink and 8-bit's outline read the main pass's depth (0280, 0290): resolved (sample 0) into this, only in those looks.
     private var depthRes: MTLTexture?
     private let dummyDepth: MTLTexture
     /// The look this frame's targets were built for, and 8-bit's block (display pixels a texel).
@@ -124,6 +127,14 @@ final class Renderer {
     private var lastCarQ = simd_quatf(angle: 0, axis: [0, 1, 0]), lastDrawT = 0.0
     /// The car's speed this frame (m/s), for anime's speed lines.
     private var heroSpeed: Float = 0
+    /// Anime's impact frame (0290): when the last one started (heroClock) and how long it holds; the crash's big hits seen so far.
+    private var impactAt = -10.0, impactLen = 0.0, bigHitsSeen = 0
+    /// `-impact-hold`: debug, an impact frame stays up once it starts (shots).
+    private static let impactHold = Launch.args.contains("-impact-hold")
+    private func impact(_ len: Double) {
+        guard Look.current == .anime, Look.impactsAllowed, heroClock - impactAt > 0.6 else { return }
+        impactAt = heroClock; impactLen = Renderer.impactHold ? 1e9 : len
+    }
     private func hookDents() {
         crash.onReset = { [unowned self] in self.dents.restore(); self.mist.clear(); self.touched = false; self.crash.car.placed() }   // a new run, or a recorded run looping
         crash.dentHero = { [unowned self] probe, crush, n, salt in self.dents.hero(probe: probe, crush: crush, normal: n, carQ: self.lastCarQ, salt: salt) }
@@ -397,11 +408,11 @@ final class Renderer {
         let px = look == .pixel ? Look.pixelBlock(outW: outW, outH: outH) : 1
         let rw = look == .pixel ? (outW + px - 1) / px : max(64, Int(Float(outW) * scale))
         let rh = look == .pixel ? (outH + px - 1) / px : max(64, Int(Float(outH) * scale))
-        if look == .anime && (depthRes == nil || depthRes?.width != rw || depthRes?.height != rh) {
+        if look.readsDepth && (depthRes == nil || depthRes?.width != rw || depthRes?.height != rh) {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Renderer.depthFormat, width: rw, height: rh, mipmapped: false)
             d.usage = [.renderTarget, .shaderRead]; d.storageMode = .private
             depthRes = device.makeTexture(descriptor: d)
-        } else if look != .anime { depthRes = nil }
+        } else if !look.readsDepth { depthRes = nil }
         targetLook = look; pixelBlock = px
         if renderSize == (rw, rh) && outSize == (outW, outH) { return }
         renderSize = (rw, rh); outSize = (outW, outH)
@@ -481,6 +492,7 @@ final class Renderer {
             if r.live { crash.car.setWing((simd_length(vel) - 20) / 20) }   // main.js liveStep
             crash.car.update(time: heroClock, carPos: carPos, carQuat: carQ, groundedNow: loaded, fanLevel: r.fan(at: tick), throttle: thr)
             crash.feed(r.impacts, tick: c.tick + r.tickBase, vel: vel, carPos: c.pos, carQuat: c.quat)
+            if crash.bigHits != bigHitsSeen { if crash.bigHits > bigHitsSeen { impact(0.1) }; bigHitsSeen = crash.bigHits }
             if drive == nil { smoke.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, into: crash) }
             if r.touchTick >= 0 && tick >= r.touchTick && !touched { touched = true; touchdown(sink: r.sink, carPos: carPos, carQuat: carQ) }
             mist.update(dt: Float(dtReal) * crash.slowK, thr: thr, carPos: carPos, carQuat: carQ, carVel: vel)
@@ -502,6 +514,7 @@ final class Renderer {
         let stageM = translate(SIMD3<Float>(-O))
         lookU = dv?.look(over: stageLook) ?? stageLook
         if look == .pixel { lookU.fogExp.w = 0 }   // 8-bit: no bloom (its passes and the film's read)
+        if look == .anime { lookU.bloom.x = max(lookU.bloom.x, 1.6) }   // Anime: only the lamps themselves glow, never a lit panel
         if cam.shakeHook == nil {
             cam.shakeHook = true
             crash.shake = { [weak self, weak cam] a in if let d = self?.drive { d.shake(a) } else { cam?.shake(a) } }
@@ -529,6 +542,7 @@ final class Renderer {
         var camUp = SIMD4<Float>(view.view.columns.0.y, view.view.columns.1.y, view.view.columns.2.y, 0)
         var u = FrameU()
         u.viewProj = view.proj * view.view
+        if look == .pixel { u.viewProj = Renderer.snap(u.viewProj, on: carPos, size: renderSize) }
         u.invViewProj = u.viewProj.inverse
         u.proj = SIMD4(lens.0.x, lens.1.y, Float(renderSize.0), Float(renderSize.1))
         // The mist's budget: Renderer.mistScreens of overdraw (shed: half); -fx-log prints what it comes to.
@@ -547,11 +561,12 @@ final class Renderer {
         u.keyColor = SIMD4(stage.keyColor, skip.contains("lights") || away ? 0 : Float(nLights))
         u.fogColor = SIMD4(stage.fogColor, dv == nil ? 1 : 0)
         u.fogRange = SIMD4(stage.fogNear, stage.fogFar, stage.exposure, 1 / Float(Renderer.shadowSize))
-        let wantMirror = look != .pixel && stage.wetMask != nil && !skip.contains("mirror") && !skip.contains("wet") && shed < 1 && view.eye.y > 0.05 && !away && lookU.fogExp.y > 0
+        let wantMirror = look == .real && stage.wetMask != nil && !skip.contains("mirror") && !skip.contains("wet") && shed < 1 && view.eye.y > 0.05 && !away && lookU.fogExp.y > 0
         u.misc = SIMD4(0, wantMirror ? 1 : 0, 1 / Float(renderSize.0), 1 / Float(renderSize.1))
-        // The look (0280). Anime's speed lines: fast (28 → 45 m/s), or the crash's slow motion.
+        // The look (0280, 0290). Anime's speed lines: fast (28 → 45 m/s), or the crash's slow motion; its impact frame.
         let lines = look == .anime ? min(1, max(smoothstepF(28, 45, heroSpeed), (1 - crash.slowK) * 2.5)) : 0
-        u.style = SIMD4(look.code, lens.2.z, lens.3.z, look == .pixel ? Float(pixelBlock) : lines)
+        u.style = SIMD4(look.code, lens.2.z, lens.3.z, lines)
+        u.fx = SIMD4(look == .anime && heroClock - impactAt < impactLen ? 1 : 0, 0, 0, 0)
         fb.contents().storeBytes(of: u, as: FrameU.self)
         // The mirror's frame: the same lens looking at the world flipped in y. Its fragments keep their real world position and
         // normal for the lights; only the eye and the clip position change, and the winding (frontFace).
@@ -652,7 +667,8 @@ final class Renderer {
                 }
                 if !skip.contains("glints") && !away { glintsDraw(e, c, beaconK: beaconK, pipe: glintPipe) }
             }
-            if nGlows > 0 && shed < 2 && !skip.contains("glows") && !away {   // film.js's lit air round the lamps
+            // film.js's lit air round the lamps: Real only (0290: in a drawn look a soft halo is a grey disc over the car)
+            if nGlows > 0 && shed < 2 && !skip.contains("glows") && !away && look == .real {
                 e.setRenderPipelineState(glowPipe); e.setDepthStencilState(dsRead); e.setCullMode(.none)
                 e.setVertexBuffer(glowBuf, offset: 0, index: 2)
                 e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nGlows)
@@ -747,6 +763,19 @@ final class Renderer {
     }
 
     private func setEnv(_ e: MTLRenderCommandEncoder) { e.setFragmentTexture(stage.env, index: 7) }
+    /// 8-bit (0290): the lens nudged by under a pixel so `p` (the car) lands on a pixel's centre every frame. A camera that follows
+    /// the car then moves the world in whole pixels round a car that stays put on the grid: no swimming on the car, and the
+    /// set steps instead of crawling.
+    static func snap(_ vp: simd_float4x4, on p: SIMD3<Float>, size: (Int, Int)) -> simd_float4x4 {
+        let c = vp * SIMD4(p, 1)
+        guard c.w > 1e-3, size.0 > 0, size.1 > 0 else { return vp }
+        let w = Float(size.0), h = Float(size.1)
+        let px = (c.x / c.w * 0.5 + 0.5) * w, py = (0.5 - c.y / c.w * 0.5) * h
+        let dx = ((px - 0.5).rounded() + 0.5 - px) / w * 2, dy = -((py - 0.5).rounded() + 0.5 - py) / h * 2
+        var t = matrix_identity_float4x4
+        t.columns.3 = SIMD4(dx, dy, 0, 1)   // clip.xy += (dx, dy) · clip.w
+        return t * vp
+    }
     /// rocket.js's lamps and beacons (they pulse together, eased).
     private func glintsDraw(_ e: MTLRenderCommandEncoder, _ c: StageComplex, beaconK: Float, pipe: MTLRenderPipelineState) {
         e.setRenderPipelineState(pipe); e.setDepthStencilState(dsRead); e.setCullMode(.none); e.setDepthBias(0, slopeScale: 0, clamp: 0)
@@ -782,6 +811,7 @@ final class Renderer {
             return SIMD3(w.x, max(0, w.y - 0.24 - Float(SPEC.wheelRadius)), w.z)
         }
         mist.burst((contact(0), contact(1), contact(2), contact(3)), perPoint: Int((6 + 34 * s).rounded()), speed: 1.5 + 6.5 * s)
+        if s > 0.12 { impact(0.05 + 0.05 * Double(s)) }   // Anime: the landing's impact frame
         if !crash.reduced { crash.shake?(s) }
     }
     private func setLamp(_ p: CarPart, _ c: SIMD3<Float>) { stageMats[partBase + p.rawValue][0].color = SIMD4(c, 1) }
