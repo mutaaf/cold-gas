@@ -1,7 +1,7 @@
 # The launch complex
 
-A reusable two-stage orbital launch vehicle stands on its mount a few hundred metres beyond the
-stage, floodlit, venting, with a strongback, lightning masts and a water tank around it. It frames
+A reusable booster carrying a winged orbiter stands on its mount a few hundred metres beyond the
+stage, floodlit, venting, with a fixed service tower, lightning masts and a water tank around it. It frames
 the one moment (the Wall, the carry over the row, the title), built to read as a real vehicle at
 real scale, and it is a physical place: drive out to it and it is solid where it is drawn, and its
 engines are a machine whose static fire will throw your car off the pad (docs/OBJECTS.md).
@@ -12,11 +12,35 @@ chunk). The film look that came with it (atmosphere, wet slab) is `src/render/fi
 ## IP (AGENTS.md invariant 3.7)
 
 Inspired by the class, owned by nobody: no names, marks, wordmarks, flags or liveries of any
-real vehicle, operator or agency, here or in code. The livery is ours: white tanks with
-flight-proven soot, a charcoal interstage, charcoal legs, and one signal-red hairline where the
-fairing meets the upper stage (the game's only accent colour). The silhouette is the generic
-one every vehicle of this class shares (a 3.7 m core, a wider fairing, folded legs, grid fins);
-nothing that identifies a particular vehicle or pad.
+real vehicle, operator or agency, here or in code. Until 0292 the drawing was the generic
+medium-lift silhouette (grid fins, folded legs, an ogive fairing, a lattice strongback); read
+together that is one operator's look, so the drawing is now our own stack and our own tower
+(render only: the sim's numbers and colliders below are unchanged).
+
+- **The booster:** nine engines (three in the middle, six in the ring) hanging under an open, flared
+  engine skirt; six short landing-leg pods round the skirt; a white tank (flight-proven soot)
+  with a charcoal intertank band; a charcoal forward skirt carrying four swept steering vanes; a
+  charcoal raceway on the tower side and a slim grey one opposite.
+- **The interstage and transfer stage:** ribbed metal grey, then a short white stage whose collar
+  carries the one signal-red hairline (the game's only accent colour).
+- **The orbiter:** a winged stage-separation vehicle standing nose up on an eight-strut adapter: a
+  flat-bellied lifting body with a double-delta wing (a steep strake into the main delta), one
+  fin, a body flap, two aft pods and a central engine, lit cockpit windows, thruster ports, the
+  crew hatch on the tower side, black heat-shield tiles under a white upper skin with its panel
+  joints and bay-door line. Its back faces the floods and the stage.
+- **The tower:** a fixed service tower on the sim's footprint: corner columns and a service level
+  every 7.8 m (a deck slab with a lit edge), a clad back, sides clad on alternate levels (enclosed
+  rooms with lit window bands) and K-braced open lattice elsewhere, a lift and stair core with lit
+  shaft windows, stair flights on the open levels; three umbilical arms (horizontal trusses on the
+  sim's clamp members, an umbilical plate at the booster), the service arm to the transfer stage
+  (the sim's arm box) and an enclosed crew access arm ending in a white room at the orbiter's hatch;
+  a hammerhead crane and a lightning mast on top.
+- **The pad:** hold-down posts with jaws between the leg pods, a deluge ring on the deck and risers
+  up the mount's columns, two tail service masts with umbilicals to the engine skirt, the
+  deflector's steel plate flush in the trench floor.
+
+Everything a car can reach (the first 12 m above the pad) stays inside the sim's colliders. The
+orbiter's wings and fin reach past the old fairing's radius, 55 m up.
 
 ## Dimensions (metres)
 
@@ -27,17 +51,17 @@ varies between vehicles or isn't published, the value is marked ESTIMATE.
 
 | Part | Value | Notes |
 |---|---|---|
-| Overall height | 70.0 | engine section to fairing tip; the class sits at 68–71 m |
+| Overall height | 70.0 | engine section to the orbiter's nose; the class sits at 68–71 m |
 | Core diameter | 3.66 | set by road transport (≈ 3.7 m is the class's ceiling) |
 | First stage (tanks + engine section) | 41.2 | |
-| Interstage | 6.5 | carries the grid fins; composite, charcoal |
-| Second stage, visible | 8.9 | most of its nozzle hides inside the interstage |
-| Payload fairing | 13.1 long, 5.2 diameter | boat-tail from 3.66 to 5.2 m over ≈ 1.6 m, then barrel and a tangent ogive |
-| Grid fins | 1.3 × 1.5, stowed flat | four, 90° apart, near the top of the interstage (ESTIMATE: size of the stowed panel) |
-| Landing legs, folded | 9.6 long, ≈ 1.0 wide | four, between the fins, flush along the engine section and lower tank |
+| Interstage | 6.5 | ribbed, metal grey |
+| Transfer stage, visible | 8.9 | white; the red hairline on its collar |
+| Orbiter (drawn) | 12.3 long, 3.0 body width, ≈ 8.3 span | nose up on an eight-strut adapter 1.1 m above the collar (ESTIMATE: proportions of the class of small winged orbiters). The sim keeps the old fairing's numbers (5.2 diameter, 13.1 long) as its collider |
+| Steering vanes | 0.95 span, 2.6 root chord | four, swept, on the booster's forward skirt (ESTIMATE) |
+| Landing-leg pods | 5.9 long, ≈ 0.6 wide | six round the engine skirt (ESTIMATE) |
 | Launch mount deck | 5.0 above the pad | the vehicle stands on hold-downs on a table of four columns; the flame trench runs beneath it, 9 m wide, and exits 48 m out on the side away from the stage (ESTIMATE) |
 | Pad (hardstand) | 3.0 high, ≈ 66 radius | raised, with a sloped skirt to grade |
-| Strongback / tower | 82 high, 3.4 square | a lattice beside the vehicle; clamp arms at three heights; access arm and white room at the upper stage |
+| Service tower | 82 high, 3.4 square | fixed, a service level every 7.8 m; umbilical arms at three heights; a service arm at the transfer stage; the crew access arm and white room at the orbiter's hatch; a hammerhead crane on top |
 | Lightning masts | 104 high | three around the pad; class sites use 90–110 m catenary towers |
 | Water tank | ≈ 54 to the top | sound-suppression deluge supply on four legs (ESTIMATE: height) |
 | Flood masts | 26–32 high | plus two ground banks close in (ESTIMATE) |
@@ -64,14 +88,17 @@ material's program changes. Its own haze (by distance) replaces scene fog, so it
 through the stage's dense night fog.
 
 Draw calls: structure 1 (everything opaque merged), lattice 1, lamps 1, beacons 1, beams 1,
-vapour 1, plus the static fire's glow (2 instances) while it burns. ≈ 6 draws, ~25 k triangles.
+vapour 1, plus the static fire's glow (2 instances) while it burns. ≈ 6 draws. Triangles (0292): the
+structure 9.9 k on the web (6.5 k before), the lattice 26; the iPhone's baked complex 22.4 k + 648
+(21.1 k + 190 before; scripts/native-stage-page.js splits long triangles for its baked lighting).
 
 ## Anti-flicker
 
-- Masts, clamp arms, the jib and the tank legs carry `aSpread` (src/render/sliver.js): never
-  under a pixel.
-- Weld rings, fairing seams and the red hairline are drawn in the shader and fade by their own
-  pixel footprint (fwidth), so far away they dim instead of sparkling.
+- Masts, the tower's columns, arms, struts and stairs, the crane and the tank legs carry `aSpread`
+  (src/render/sliver.js): never under a pixel; the tower's lit deck edges spread vertically.
+- Weld rings, the orbiter's panel joints and bay-door line, its tiles' gaps and shading, and the red
+  hairline are drawn in the shader and fade by their own pixel footprint (fwidth), so far away
+  they dim instead of sparkling.
 - The lattice is a mipmapped alpha texture on open boxes: at range it averages to a steady grey
   rather than a moiré of sub-pixel members.
 - Lamps and beacons are sliver blobs (≥ 1.5–2 px); beacons ramp on and off (≈ 40 a minute,
