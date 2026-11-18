@@ -1,0 +1,126 @@
+{
+ "viewport": "phone",
+ "readyS": 15.235,
+ "board": {
+  "rows": "No jumps on the Show yet today. Be the first.",
+  "jump": "Jump · The Show",
+  "jumpBox": {
+   "x": 53,
+   "y": 521,
+   "w": 179,
+   "h": 46
+  },
+  "closeBox": {
+   "x": 242,
+   "y": 521,
+   "w": 95,
+   "h": 46
+  },
+  "how": "Land a jump, then Post with your initials from the results.",
+  "vh": 844
+ },
+ "afterBoardJump": {
+  "mode": "countdown",
+  "howto": false,
+  "howRows": "",
+  "device": "Keyboard",
+  "course": "show",
+  "board": false
+ },
+ "started": {
+  "mode": "live",
+  "course": "show"
+ },
+ "ref": {
+  "seen": {
+   "climb": {
+    "y": 1.3,
+    "z": 4.5
+   },
+   "release": {
+    "y": 27.4,
+    "z": -4
+   },
+   "carry": {
+    "y": 20.6,
+    "z": -12.8
+   },
+   "rollout": {
+    "y": 5.7,
+    "z": -21.3
+   },
+   "touchdown": {
+    "y": 0.4,
+    "z": -29.4
+   },
+   "after": {
+    "y": 0.4,
+    "z": -29.9
+   }
+  },
+  "cues": [
+   "Hold to goSkip"
+  ],
+  "card": {
+   "total": 97.3,
+   "verdict": "Perfect 10",
+   "sink": 0.8,
+   "clearance": 5.1,
+   "apex": 27.4,
+   "airPct": 48,
+   "brakeG": 3,
+   "padMiss": 1.5,
+   "crashed": false,
+   "tAir": null
+  },
+  "sheet": "PERFECT TEN FOR THE SHOW Perfect 10 97.3/ 100 Flown in Assist · Pro pays ×1.08, Advanced ×1.15 Judged by gemma-4-26b-a4b-it 618 → 81 tok $0.000086 ASSIST ON rolls you out, levels and brakes Retry Share Replay Home The Engineer Chief Vehicle Engineer 9.7 Sink rate was e The Coordinator Stunt Coordinator 9.7 That release fr The Designer Head of Design 9.8 Clean rotation Judged by gemma-4-26b-a4b-it Cloudflare ATL 618 → 81 tokens 2.39 s 7.83 neurons $0.000086 Replay the call Use your own AI key Inspect the call CLIMB 10.0 INVERTED 10.0 ROLL-OUT 9.8 CLEARANCE 8.8 LANDING 9.4 PRECISION 10.0 GAS LEF"
+ },
+ "crash": {
+  "seen": {
+   "climb": {
+    "y": 1.4,
+    "z": 5
+   },
+   "release": {
+    "y": 26.9,
+    "z": -1.5
+   },
+   "carry": {
+    "y": 18.3,
+    "z": -2.8
+   },
+   "rollout": {
+    "y": 3.2,
+    "z": -4.3
+   },
+   "touchdown": {
+    "y": 0.5,
+    "z": -12.6
+   },
+   "after": {
+    "y": 0.4,
+    "z": -12.6
+   }
+  },
+  "cues": [
+   "Hold to goSkip"
+  ],
+  "card": {
+   "total": 29.7,
+   "verdict": "Contact",
+   "sink": 3.3,
+   "clearance": -0.1,
+   "apex": 27,
+   "airPct": 20,
+   "brakeG": 3.2,
+   "padMiss": 18.2,
+   "crashed": true,
+   "tAir": null
+  },
+  "sheet": "THE SHOW ENDS IN CONTACT Contact 29.7/ 100 Flown in Assist · Pro pays ×1.08, Advanced ×1.15 Judged by gemma-4-26b-a4b-it 622 → 82 tok $0.000087 ASSIST ON rolls you out, levels and brakes Retry Share Replay Home The Engineer Chief Vehicle Engineer 2.4 Sink rate at touch The Coordinator Stunt Coordinator 3.5 That inversion wa The Designer Head of Design 3.0 A massive waste o Judged by gemma-4-26b-a4b-it Cloudflare ATL 622 → 82 tokens 2.10 s 7.89 neurons $0.000087 Replay the call Use your own AI key Inspect the call CLIMB 9.4 INVERTED 10.0 ROLL-OUT 9.8 CLEARANCE 0.0 LANDING 0.0 PRECISION 0.1 GAS "
+ },
+ "replayMode": "results",
+ "errs": [
+  "Failed to load resource: net::ERR_FAILED"
+ ]
+}

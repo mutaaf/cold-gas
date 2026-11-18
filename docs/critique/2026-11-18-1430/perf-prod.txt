@@ -1,0 +1,34 @@
+desktop runs [fcp, usable, firstFrame]: [[1176,2802,10561],[516,1942,10093],[568,1884,10094]]
+phone 4xCPU Slow4G runs [fcp, usable, firstFrame]: [[1224,7230,13201],[1804,7149,13805],[1024,6863,13023]]
+prod {
+ "desktop": {
+  "fcp": 568,
+  "lcp": 1336,
+  "titleVisible": 456,
+  "usable": 1942,
+  "firstFrame": 10094,
+  "longN": 16,
+  "longMax": 7852,
+  "longSum": 14614,
+  "jsKB": 698,
+  "totalKB": 1911,
+  "nReq": 38,
+  "warmReq": 3,
+  "gl": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+ },
+ "phone 4xCPU Slow4G": {
+  "fcp": 1224,
+  "lcp": 4724,
+  "titleVisible": 947,
+  "usable": 7149,
+  "firstFrame": 13201,
+  "longN": 47,
+  "longMax": 6055,
+  "longSum": 34854,
+  "jsKB": 662,
+  "totalKB": 1875,
+  "nReq": 36,
+  "warmReq": 3,
+  "gl": "ANGLE (Google, Vulkan 1.3.0 (SwiftShader Device (Subzero) (0x0000C0DE)), SwiftShader driver)"
+ }
+}
