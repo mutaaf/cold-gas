@@ -1,0 +1,14 @@
+COLD GAS is a 3D stunt game about one perfect jump. Drive a roadster up a curved steel wall, let go at the top, fire its ten cold-gas thrusters to carry it over a row of parked cars, roll it in the air and stick the landing on the pad. A panel of three judges scores every run out of 100 and tells you what to fix.
+
+Three events:
+The Show: up the Wall, let go, and boost over five parked cars to the pad.
+The Wall: a 28 m curl you climb upside down, held on by a suction fan.
+The Lineup: no ramp at all. Lift over five parked cars and roll a full 360.
+
+The scores come from what the car really did: height, rotation, clearance over the row, how hard you came down, how level you landed, how close to the mark, and how much gas you saved. The physics are deterministic, so the same inputs always fly the same run.
+
+Start on Assist and the flight computer helps you roll out, level and brake. Move up to Pro, then Advanced, where you open the ten valves by hand for a higher multiplier. Practice drills, a reference jump to watch, a ghost of your best run, medals, a daily jump with a streak, and a board of your best scores on this device give you reasons to go again.
+
+When you want a break from scoring, Free Drive puts the car on long mountain and coast roads or an endless road, and the Sandbox lets you build ramps and loops and pick up power-ups.
+
+Plays with keyboard, gamepad or touch.

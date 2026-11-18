@@ -9,7 +9,25 @@
 //   src/portal/insights.js (nothing). Only for imports from outside src/portal/, which reuses ads.js's pure helpers.
 import { resolve, sep } from 'node:path';
 
-export const PORTALS = ['crazygames', 'gamedistribution'];
+export const PORTALS = ['crazygames', 'gamedistribution', 'itch', 'newgrounds'];
+// The portals with an ad SDK. itch.io and Newgrounds load none: no ads, no SDK, saves in localStorage.
+export const SDK_PORTALS = ['crazygames', 'gamedistribution'];
+
+// The one link back home, only where the portal's rules allow it (store/portals/SUBMIT.md, "The link back"): a small
+// line in the title's fine print that opens mutaafaziz.com in a new tab when the player clicks it. Never a redirect,
+// never a pop-up of its own. CrazyGames and GameDistribution get no link at all.
+export const HOME_URL = {
+  itch: 'https://mutaafaziz.com/?utm_source=itch.io&amp;utm_medium=game&amp;utm_campaign=coldgas',
+  newgrounds: 'https://mutaafaziz.com/?utm_source=newgrounds&amp;utm_medium=game&amp;utm_campaign=coldgas',
+};
+export const homeAnchor = (portal) => (HOME_URL[portal]
+  ? `<a class="portal-more" href="${HOME_URL[portal]}" target="_blank" rel="noopener">More games at mutaafaziz.com</a>`
+  : '');
+/** The text with the portal's one allowed home link taken out (once), for the forbidden-text checks. */
+export function withoutHomeLink(text, portal) {
+  const a = homeAnchor(portal);
+  return a ? text.replace(a, '') : text;
+}
 
 // Hidden on a portal (no server to share to, no AI key to bring, no store or other-site links), the text selection
 // the portals ask for (CrazyGames: user-select none on body, every prefix), and the blocker shown while an ad is asked.
@@ -30,7 +48,7 @@ const EDITS = [
   ['link previews', /\n\s*<!-- Link previews:[^]*?<meta name="twitter:image:alt"[^>]*\/>/g, ''],
   ['beta chip', /\n\s*<!-- The native app's public beta[^\n]*\n\s*<a class="chip beta-chip"[^]*?<\/a>/g, ''],
   ['beta button', /\n\s*<a class="course-btn drive-btn beta-btn"[^]*?<\/a>/g, ''],
-  ['fineprint links', / <a href="guide\/">How to play<\/a><span class="fp-beta"> · <a href="beta\/">iPhone beta<\/a><\/span>/g, ''],
+  ['fineprint links', / <a href="guide\/">How to play<\/a><span class="fp-beta"> · <a href="beta\/">iPhone beta<\/a><\/span>/g, (portal) => (HOME_URL[portal] ? ` ${homeAnchor(portal)}` : '')],
   ['box office', /\n\s*<!-- Box Office usage analytics[^]*?<\/script>/g, ''],
   // The boot watchdog reads any error as a failed start; on a portal the SDK's script may be blocked (an ad
   // blocker) and that is not the game failing. Script and resource errors (an element target) are ignored.
@@ -48,9 +66,11 @@ export function portalHtml(html, portal) {
   for (const [what, re, rep] of EDITS) {
     const n = (out.match(re) || []).length;
     if (n !== 1) throw new Error(`portal build: index.html edit "${what}" matched ${n} times (expected 1): update scripts/portal-html.mjs`);
-    out = out.replace(re, rep.replace('%PORTAL%', portal));
+    out = out.replace(re, typeof rep === 'function' ? rep(portal) : rep.replace('%PORTAL%', portal));
   }
-  for (const re of FORBIDDEN) if (re.test(out)) throw new Error(`portal build: index.html still has ${re}`);
+  const checked = withoutHomeLink(out, portal);
+  if (HOME_URL[portal] && checked === out) throw new Error('portal build: the home link did not land in index.html');
+  for (const re of FORBIDDEN) if (re.test(checked)) throw new Error(`portal build: index.html still has ${re}`);
   return out;
 }
 
