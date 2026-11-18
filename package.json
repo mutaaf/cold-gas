@@ -28,7 +28,8 @@
     "alloc:bench": "node scripts/alloc-bench.mjs",
     "vectors": "node scripts/vectors.mjs",
     "forge": "node tools/forge/forge.mjs",
-    "forge:brief": "node tools/forge/brief.mjs"
+    "forge:brief": "node tools/forge/brief.mjs",
+    "clips": "node scripts/clips.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.135.0",

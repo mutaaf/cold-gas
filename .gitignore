@@ -29,3 +29,4 @@ tools/forge/briefs/**/job.json
 tools/forge/briefs/**/build-*.py
 tools/forge/briefs/**/draft-*.py
 tools/forge/**/__pycache__/
+dist-clips/
