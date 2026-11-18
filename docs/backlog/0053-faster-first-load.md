@@ -11,6 +11,13 @@ by: operator
 ---
 
 ## Why
+CRITIC 2026-11-18 (docs/critique/2026-11-18-1430.md): after #424 the wait is the engine, not the entry. tapToRun (phone
+profile, raw CDP touch at usable, returning player) is 37.2 s on production, and 39.4 / 38.8 s against 39.9 / 38.8 s
+before #424 (local A/B, served gzipped). The WASM's last byte lands at 14.9 s, but `physicsReady` turns true only at
+45.8 s, so 31 s goes to compile and instantiate after the bytes (6.5 s without the 4× throttle; SwiftShader shares
+the CPU, so compare before → after, not absolutes). The next cut is the engine's start: start the fetch earlier, or
+cache the compiled module for return visits. More entry bytes won't help. Probe: `docs/critique/2026-11-18-1430/tap-to-run.mjs.txt`.
+
 CRITIC 2026-11-04: part one is real on production (usable 9.9 → 6.3 s, first 3D frame 21.5 → 12.5 s, perf.mjs phone
 profile). But "usable" is stamped before a 5.4 s main-thread freeze (the first title frame), and the run then waits for
 Rapier, so a Jump tapped at "usable" starts a run only at ≈ 19 s. A first visit that bounces off the title (the funnel's
