@@ -132,11 +132,11 @@ final class Renderer {
     private var heroSpeed: Float = 0
     /// Anime's impact frame (0290): when the last one started (heroClock) and how long it holds; the crash's big hits seen so far.
     private var impactAt = -10.0, impactLen = 0.0, bigHitsSeen = 0
-    /// `-impact-hold`: debug, an impact frame stays up once it starts (shots).
+    /// `-impact-hold`: debug, Anime's impact frame stays up the whole time (shots of its look).
     private static let impactHold = Launch.args.contains("-impact-hold")
     private func impact(_ len: Double) {
         guard Look.current == .anime, Look.impactsAllowed, heroClock - impactAt > 0.6 else { return }
-        impactAt = heroClock; impactLen = Renderer.impactHold ? 1e9 : len
+        impactAt = heroClock; impactLen = len
     }
     private func hookDents() {
         crash.onReset = { [unowned self] in self.dents.restore(); self.mist.clear(); self.touched = false; self.crash.car.placed() }   // a new run, or a recorded run looping
@@ -577,7 +577,7 @@ final class Renderer {
             }
         }
         let mb = moonBearing ?? SIMD2(0.6, 0.8)
-        u.fx = SIMD4(look == .anime && heroClock - impactAt < impactLen ? 1 : 0, mb.x, mb.y, 1)
+        u.fx = SIMD4(look == .anime && (Renderer.impactHold || heroClock - impactAt < impactLen) ? 1 : 0, mb.x, mb.y, 1)
         fb.contents().storeBytes(of: u, as: FrameU.self)
         // The mirror's frame: the same lens looking at the world flipped in y. Its fragments keep their real world position and
         // normal for the lights; only the eye and the clip position change, and the winding (frontFace).
