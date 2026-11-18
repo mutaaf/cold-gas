@@ -1,0 +1,346 @@
+{
+  "_doc": "Short-form clips (npm run clips; scripts/clips.mjs). Segments cut takes from a mark ('air', 'landed+1.2') for a length at a speed; caption times are seconds or '<segment>:<mark>[+-s]'. Caption lines: at most 2, at most 5 words, *word* = accent. Every caption must say what the game really does: no scores, no claims. No dashes.",
+  "size": {
+    "width": 1080,
+    "height": 1920
+  },
+  "style": {
+    "fonts": [
+      {
+        "family": "Geist",
+        "file": "node_modules/@fontsource-variable/geist/files/geist-latin-wght-normal.woff2"
+      },
+      {
+        "family": "Michroma",
+        "file": "node_modules/@fontsource/michroma/files/michroma-latin-400-normal.woff2",
+        "weight": 400
+      }
+    ],
+    "font": "'Geist', sans-serif",
+    "weight": 900,
+    "size": 100,
+    "tracking": "-0.01em",
+    "accent": "#ff5a62",
+    "captionTop": 300
+  },
+  "endCard": {
+    "mark": "<div style=\"font-family:Michroma;font-size:92px;letter-spacing:.08em;line-height:1.05;-webkit-text-stroke:10px #000;paint-order:stroke fill\">COLD<br>GAS</div>",
+    "kicker": "Play free at",
+    "url": "mutaafaziz.com/coldgas",
+    "pill": "#ff5a62",
+    "pillText": "#0b0b0d",
+    "sub": "In your browser. No download.",
+    "seconds": 1.8
+  },
+  "clips": [
+    {
+      "id": "cg-show-roll",
+      "hook": "the roll over the row first",
+      "segments": [
+        {
+          "take": "show",
+          "from": "air+0.05",
+          "to": "overrow+0.5"
+        },
+        {
+          "take": "show",
+          "from": "move-0.15",
+          "to": "landed+1.5",
+          "speed": 1.25
+        }
+      ],
+      "captions": [
+        {
+          "lines": [
+            "One *roll* over",
+            "a row of *cars*"
+          ],
+          "start": 0,
+          "end": "1:move+0.9"
+        },
+        {
+          "lines": [
+            "Drive up the *wall*"
+          ],
+          "start": "1:move+0.9",
+          "end": "1:air-0.3"
+        },
+        {
+          "lines": [
+            "Let go. *Boost.* Roll."
+          ],
+          "start": "1:air-0.3",
+          "end": "1:landed-0.2"
+        },
+        {
+          "lines": [
+            "Stick the *landing*"
+          ],
+          "start": "1:landed-0.2"
+        }
+      ]
+    },
+    {
+      "id": "cg-show-inverted",
+      "hook": "upside down at the top of the wall first",
+      "segments": [
+        {
+          "take": "show",
+          "from": "inverted+0.5",
+          "to": "inverted+2.6"
+        },
+        {
+          "take": "show",
+          "from": "move-0.15",
+          "to": "landed+1.5",
+          "speed": 1.3
+        }
+      ],
+      "captions": [
+        {
+          "lines": [
+            "Upside down on the *wall*"
+          ],
+          "start": 0,
+          "end": "1:move+1.4"
+        },
+        {
+          "lines": [
+            "Ten cold gas *thrusters*"
+          ],
+          "start": "1:move+1.4",
+          "end": "1:air-0.3"
+        },
+        {
+          "lines": [
+            "Clear the *row*"
+          ],
+          "start": "1:air-0.3",
+          "end": "1:landed-0.2"
+        },
+        {
+          "lines": [
+            "Then stick the *landing*"
+          ],
+          "start": "1:landed-0.2"
+        }
+      ]
+    },
+    {
+      "id": "cg-show-landing",
+      "hook": "the landing first",
+      "segments": [
+        {
+          "take": "show",
+          "from": "landed-0.9",
+          "to": "landed+0.9"
+        },
+        {
+          "take": "show",
+          "from": "ramp-0.4",
+          "to": "landed+1.4",
+          "speed": 1.2
+        }
+      ],
+      "captions": [
+        {
+          "lines": [
+            "Can you *stick* this?"
+          ],
+          "start": 0,
+          "end": "1:ramp+1.2"
+        },
+        {
+          "lines": [
+            "Up the *wall* upside down"
+          ],
+          "start": "1:ramp+1.2",
+          "end": "1:air-0.3"
+        },
+        {
+          "lines": [
+            "Roll over the *row*"
+          ],
+          "start": "1:air-0.3",
+          "end": "1:landed-0.2"
+        },
+        {
+          "lines": [
+            "A panel of *judges*",
+            "scores every run"
+          ],
+          "start": "1:landed-0.2"
+        }
+      ]
+    },
+    {
+      "id": "cg-wall",
+      "hook": "the Wall course: hanging upside down at the lip",
+      "segments": [
+        {
+          "take": "wall",
+          "from": "inverted+0.6",
+          "to": "inverted+2.6"
+        },
+        {
+          "take": "wall",
+          "from": "move-0.1",
+          "to": "landed+1.4",
+          "speed": 1.3
+        }
+      ],
+      "captions": [
+        {
+          "lines": [
+            "Drive *up* this wall"
+          ],
+          "start": 0,
+          "end": "1:move+1.6"
+        },
+        {
+          "lines": [
+            "Hold it on the *curl*"
+          ],
+          "start": "1:move+1.6",
+          "end": "1:air-0.2"
+        },
+        {
+          "lines": [
+            "Fall off and *fly*"
+          ],
+          "start": "1:air-0.2",
+          "end": "1:landed-0.2"
+        },
+        {
+          "lines": [
+            "Land it on the *pad*"
+          ],
+          "start": "1:landed-0.2"
+        }
+      ]
+    },
+    {
+      "id": "cg-lineup",
+      "hook": "the Lineup course: the barrel roll over the parked row first",
+      "segments": [
+        {
+          "take": "lineup",
+          "from": "air+0.6",
+          "to": "air+2.4"
+        },
+        {
+          "take": "lineup",
+          "from": "air-5",
+          "to": "landed+1.2",
+          "speed": 1.15
+        },
+        {
+          "take": "lineup",
+          "from": "air+0.2",
+          "to": "air+1.9",
+          "speed": 0.55
+        }
+      ],
+      "captions": [
+        {
+          "lines": [
+            "Barrel *roll* over the lineup"
+          ],
+          "start": 0,
+          "end": "1:air-2.6"
+        },
+        {
+          "lines": [
+            "Drive at the *parked cars*"
+          ],
+          "start": "1:air-2.6",
+          "end": "1:air+0.2"
+        },
+        {
+          "lines": [
+            "Thrusters *flip* you over"
+          ],
+          "start": "1:air+0.2",
+          "end": "1:landed-0.2"
+        },
+        {
+          "lines": [
+            "Wheels down on the *pad*"
+          ],
+          "start": "1:landed-0.2",
+          "end": "2:air+0.2"
+        },
+        {
+          "lines": [
+            "Again, *slower*"
+          ],
+          "start": "2:air+0.2"
+        }
+      ]
+    },
+    {
+      "id": "cg-three-courses",
+      "hook": "a fast cut of all three courses' payoffs",
+      "segments": [
+        {
+          "take": "show",
+          "from": "air+0.05",
+          "to": "overrow+0.5",
+          "speed": 1.1
+        },
+        {
+          "take": "wall",
+          "from": "climb-0.5",
+          "to": "inverted+1.2",
+          "speed": 1.3
+        },
+        {
+          "take": "wall",
+          "from": "air-0.3",
+          "to": "landed+0.4",
+          "speed": 1.3
+        },
+        {
+          "take": "lineup",
+          "from": "air-1.4",
+          "to": "air+2.2",
+          "speed": 1.15
+        },
+        {
+          "take": "show",
+          "from": "landed-1.2",
+          "to": "landed+1.6"
+        }
+      ],
+      "captions": [
+        {
+          "lines": [
+            "Three *courses*. One car."
+          ],
+          "start": 0,
+          "end": "1:climb-0.5"
+        },
+        {
+          "lines": [
+            "Ride the *Wall*"
+          ],
+          "start": "1:climb-0.5",
+          "end": "3:air-1.4"
+        },
+        {
+          "lines": [
+            "Roll the *Lineup*"
+          ],
+          "start": "3:air-1.4",
+          "end": "4:landed-1.2"
+        },
+        {
+          "lines": [
+            "Stick *every* landing"
+          ],
+          "start": "4:landed-1.2"
+        }
+      ]
+    }
+  ]
+}
