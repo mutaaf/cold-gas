@@ -37,10 +37,10 @@
   "pickup": {
    "file": "forge/pickup.glb",
    "kind": "vehicle",
-   "bytes": 233328,
+   "bytes": 284556,
    "tris": [
-    14794,
-    5116
+    18784,
+    5180
    ],
    "seed": 0,
    "source": "pickup"
