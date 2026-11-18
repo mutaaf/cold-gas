@@ -1,12 +1,12 @@
 ---
 id: 0293
 title: Every failure in the iPhone app is handled calmly and seen by the owner; the web reports a boot that never came up
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: tech-health
 created: 2026-11-18
-pr:
+pr: 433
 by: operator
 ---
 
@@ -33,18 +33,18 @@ reaches `/obs`, so `npm run heal` can't see a deploy that doesn't boot.
 - **Backend (frozen):** the platform split for `/obs` is a proposal in the audit (B1–B3), not a change.
 
 ## Acceptance criteria
-- [ ] docs/AUDIT-2026-11-18.md lists every feature with its failure modes, today's behaviour and a severity
-- [ ] A save whose bytes won't parse is restored from the mirror and the damaged bytes are kept (unit test)
-- [ ] `Obs` signatures hash as `src/obs/signature.js` does (unit test against the JS's values), and a batch is accepted by
+- [x] docs/AUDIT-2026-11-18.md lists every feature with its failure modes, today's behaviour and a severity
+- [x] A save whose bytes won't parse is restored from the mirror and the damaged bytes are kept (unit test)
+- [x] `Obs` signatures hash as `src/obs/signature.js` does (unit test against the JS's values), and a batch is accepted by
       `cleanObs` (a JS unit test builds one the Swift way and validates it)
-- [ ] MetricKit's diagnostic JSON maps to `/obs` entries with no device model, OS or locale (unit test on Apple's shape)
-- [ ] A batch is ≤ 8 kB, never sent in a countdown, run or replay, and never sent with Share usage stats off or under a tool flag
-- [ ] A renderer that can't be built is reported, retried once without the archive, and the title says so if it still fails
-- [ ] Early errors and a fired boot watchdog reach `/obs` on the web (unit test)
-- [ ] `npm run obs:report` prints the digest split by platform and exits 2 / 1 / 0 by the thresholds in the audit
-- [ ] App Privacy: ios/store/app-privacy.md and PrivacyInfo.xcprivacy list Crash Data, Performance Data and Other
+- [x] MetricKit's diagnostic JSON maps to `/obs` entries with no device model, OS or locale (unit test on Apple's shape)
+- [x] A batch is ≤ 8 kB, never sent in a countdown, run or replay, and never sent with Share usage stats off or under a tool flag
+- [x] A renderer that can't be built is reported, retried once without the archive, and the title says so if it still fails
+- [x] Early errors and a fired boot watchdog reach `/obs` on the web (unit test)
+- [x] `npm run obs:report` prints the digest split by platform and exits 2 / 1 / 0 by the thresholds in the audit
+- [x] App Privacy: ios/store/app-privacy.md and PrivacyInfo.xcprivacy list Crash Data, Performance Data and Other
       Diagnostic Data (not linked, not tracking, App Functionality)
-- [ ] `npm test` and `cd ios && make test` (52 run vectors) pass; no gameplay change
+- [x] `npm test` and `cd ios && make test` (52 run vectors) pass; no gameplay change
 
 ## Test plan
 - `cd ios/Packages/ColdGasCore && swift test --filter "ObsTests|Saves"`: the hashes, the normalisation, the queue's caps

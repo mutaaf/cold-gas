@@ -58,6 +58,15 @@ the app asks PostHog not to work out a location from it. They are sent in small 
 Settings, Privacy, Share usage stats turns them off: nothing more is sent, and the waiting counts and the random id are
 deleted from your device.
 
+## Crash and error reports from the iPhone app
+
+When something in the app goes wrong, it sends a short report to our own server at mutaafaziz.com, not to anyone else:
+what failed (for example "the stage couldn't be drawn", or a crash's exception and signal names, with up to six code
+addresses inside the app), how often, how long a freeze lasted, and the app's version. Apple's MetricKit supplies the
+crash, freeze and launch-time reports. The reports carry no id of any kind, no device model, no system version, no
+language or region, and nothing you typed. They are sent between runs, never during one, and the same switch turns them
+off: Settings, Privacy, Share usage stats and crash reports.
+
 ## What we don't receive
 
 Your name, email, contacts, precise location, photos, an advertising identifier, or any id for you beyond the random

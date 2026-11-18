@@ -60,7 +60,7 @@ final class HapticPlayer {
             try e.start()
             engine = e
             rebuildPlayers()
-        } catch { print("HAPTIC engine failed: \(error)") }
+        } catch { print("HAPTIC engine failed: \(error)"); Report.error(.audio, .audio, "haptic engine failed: \((error as NSError).code)") }
     }
     private func rebuildPlayers() {
         guard let e = engine else { return }

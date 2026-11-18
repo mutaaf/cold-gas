@@ -24,6 +24,7 @@
     "determinism": "node scripts/determinism.mjs",
     "heal": "node scripts/heal.mjs",
     "obs:bench": "node --expose-gc scripts/obs-bench.mjs",
+    "obs:report": "node scripts/obs-report.mjs",
     "alloc:bench": "node scripts/alloc-bench.mjs",
     "vectors": "node scripts/vectors.mjs",
     "forge": "node tools/forge/forge.mjs",
