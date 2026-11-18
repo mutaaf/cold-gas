@@ -345,16 +345,23 @@ vertex GlintOut cg_glint_vertex(uint vid [[vertex_id]], uint iid [[instance_id]]
     GlintOut o; o.clip = p; o.uv = c; o.color = g[iid].color.rgb * u.tint * k * k; return o;
 }
 fragment float4 cg_glint_fragment(GlintOut in [[stage_in]]) { return float4(in.color * exp(-dot(in.uv, in.uv) * 4.5), 0); }
-// film.js's lit air round a lamp: (1/h)-falloff from the ray's miss distance with an exponential skirt, the closed form's two far
-// tails taken as π. A billboard the size of the halo, its depth pulled to the lens by its radius so the slab doesn't cut it.
-struct GlowOut { float4 clip [[position]]; float2 p; float3 color; float radius; };
+// film.js's lit air round a lamp: the in-scattering along each pixel's ray up to the surface it hits (the integral of 1/d²,
+// closed form), with an exponential skirt. A billboard the size of the halo bounds it, drawn after the main pass over the
+// resolved HDR frame with the resolved depth read per pixel (0291): the glow stops where geometry stands in front of the lamp,
+// as on the web. Drawn in the main pass with its depth pulled to the lens, the billboard laid the lamp's whole halo (both tails
+// of the ray, π/h) over a car standing 1–3 m from the base uplights: the white haze that drowned the car at every run's opening.
+// And the air between the lens and the car is kept off the car (HERO_AIR): the uplights stand beside the mark, between the
+// run-up's camera and the car, and even the honest near half of their halo veiled it (a grey-white cloud over the paint).
+struct GlowHero { float4x4 toCar; float4 lo, hi; };   // world → the car's own frame, and its box there (Renderer.heroBox)
+constant float HERO_AIR = 0.15;
+struct GlowOut { float4 clip [[position]]; float2 p; float3 color; float radius; float3 lamp [[flat]]; };
 vertex GlowOut cg_glow_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], constant Frame& f [[buffer(1)]], constant GlintGPU* g [[buffer(2)]], constant LookU& k [[buffer(4)]]) {
     const float2 corners[6] = { {-1, -1}, {1, -1}, {1, 1}, {-1, -1}, {1, 1}, {-1, 1} };
     float2 c = corners[vid];
     float3 pos = g[iid].pos.xyz; float radius = g[iid].pos.w;
     float3 toEye = f.eye.xyz - pos; float dist = max(length(toEye), 0.01);
     float near = smoothstep(radius * 2.0, radius * 6.0, dist);
-    GlowOut o; o.radius = radius; o.p = c * radius * 3.0;
+    GlowOut o; o.radius = radius; o.p = c * radius * 3.0; o.lamp = pos;
     o.color = g[iid].color.rgb * near * exp(-k.sunCol.w * max(pos.y, 0.0));
     if (near <= 0) { o.clip = float4(2, 2, 2, 1); return o; }
     float4 p = f.viewProj * float4(pos, 1);
@@ -363,10 +370,28 @@ vertex GlowOut cg_glow_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], 
     p.xy += o.p * f.proj.xy;
     o.clip = p; return o;
 }
-fragment float4 cg_glow_fragment(GlowOut in [[stage_in]]) {
-    float h = max(length(in.p), 0.6);
-    float edge = 1.0 - smoothstep(0.7, 1.0, h / (in.radius * 3.0));
-    return float4(in.color * (M_PI_F / h) * exp(-h / in.radius) * edge, 0);
+fragment float4 cg_glow_fragment(GlowOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant GlowHero& hero [[buffer(2)]], depth2d<float> depthTex [[texture(0)]]) {
+    float edge = 1.0 - smoothstep(0.7, 1.0, length(in.p) / (in.radius * 3.0));
+    // The pixel's ray and how far it runs before it hits something (film.js HAZE_FS).
+    float2 sz = float2(depthTex.get_width(), depthTex.get_height());
+    float z = depthTex.read(uint2(min(in.clip.xy, sz - 1.0)));
+    float2 uv = in.clip.xy / sz;
+    float4 w = f.invViewProj * float4(uv.x * 2.0 - 1.0, 1.0 - uv.y * 2.0, z, 1.0);
+    float3 d = w.xyz / w.w - f.eye.xyz;
+    float L = max(length(d), 1e-3);
+    d /= L;
+    float veil = 1.0;
+    if (z >= 0.99999) L = 700.0;   // the sky: a long but finite path through the air
+    else {   // a surface on (or under) the car: its own lit air only as a hint, eased back in within half a metre of its box
+        float3 q = (hero.toCar * float4(w.xyz / w.w, 1.0)).xyz;
+        float out = length(max(max(hero.lo.xyz - q, q - hero.hi.xyz), 0.0));
+        veil = mix(HERO_AIR, 1.0, smoothstep(0.0, 0.5, out));
+    }
+    float3 o = f.eye.xyz - in.lamp;
+    float b = dot(d, o);
+    float h = sqrt(max(dot(o, o) - b * b, 0.36));   // a soft core
+    float I = (atan((L + b) / h) - atan(b / h)) / h;
+    return float4(in.color * max(I, 0.0) * exp(-h / in.radius) * edge * veil, 0);
 }
 
 // The mirror's image, smeared along the view as wet concrete does (film.js: taps down the image), into what the slab reads.

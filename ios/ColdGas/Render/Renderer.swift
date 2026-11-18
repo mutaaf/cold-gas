@@ -38,6 +38,8 @@ struct LookU {
 }
 struct GlintGPU { var pos = SIMD4<Float>(), color = SIMD4<Float>() }
 struct GlintGroup { var size: Float = 0, minPx: Float = 0, tint: Float = 1, pad: Float = 0 }
+/// The lit air's view of the car (0291): world → the car's frame, and its box there (Shaders.metal GlowHero).
+struct GlowHero { var toCar = matrix_identity_float4x4, lo = SIMD4<Float>(), hi = SIMD4<Float>() }
 struct LightU { var posRange = SIMD4<Float>(), colorIntensity = SIMD4<Float>(), dirCos = SIMD4<Float>(), params = SIMD4<Float>() }
 struct MaterialU { var color = SIMD4<Float>(), emissive = SIMD4<Float>(), pbr = SIMD4<Float>(), uvTransform = SIMD4<Float>(1, 1, 0, 0), flags = SIMD4<UInt32>(), effect = SIMD4<Float>(), effectKind = SIMD4<UInt32>() }
 struct ObjectU { var model = matrix_identity_float4x4, normal = matrix_identity_float4x4 }
@@ -64,6 +66,7 @@ final class Renderer {
     private var driveRepairs = 0
     private let lampBuf, beaconBuf, glowBuf: MTLBuffer
     private let nLamps, nBeacons, nGlows: Int
+    private let heroBox: (lo: SIMD3<Float>, hi: SIMD3<Float>)
     private let dsMirror: MTLDepthStencilState
     private var mirrorDepth, mirrorRaw, mirrorTex: MTLTexture?
     private var bloomChain: [MTLTexture] = [], bloomOut: MTLTexture?
@@ -198,7 +201,7 @@ final class Renderer {
         sparkPipe = spk; puffPipe = puf; chipPipe = chp; flashPipe = fla; mistPipe = mst
         let lowHDR = MTLPixelFormat.rg11b10Float
         guard let gl = pipe("cg_glint_vertex", "cg_glint_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2),
-              let gw = pipe("cg_glow_vertex", "cg_glow_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2),
+              let gw = pipe("cg_glow_vertex", "cg_glow_fragment", color: Renderer.hdrFormat, depth: false, samples: 1, vertex: nil, blend: 2),   // over the resolved frame (0291)
               let mi = pipe("cg_stage_vertex", "cg_stage_fragment", color: lowHDR, samples: 1),
               let mg = pipe("cg_glint_vertex", "cg_glint_fragment", color: lowHDR, samples: 1, vertex: nil, blend: 2),
               let sm = pipe("cg_full_vertex", "cg_smear_fragment", color: lowHDR, depth: false, samples: 1, vertex: nil),
@@ -306,6 +309,12 @@ final class Renderer {
         let gl2 = st.glows.map { GlintGPU(pos: SIMD4($0.pos, $0.radius), color: SIMD4($0.color * st.glowScale, 0)) }
         glowBuf = device.makeBuffer(bytes: gl2.isEmpty ? [GlintGPU()] : gl2, length: MemoryLayout<GlintGPU>.stride * max(1, gl2.count), options: .storageModeShared)!
         nGlows = gl2.count
+        // The roadster's box in its own frame (stride 11 floats: pos, normal, uv, colour), down to the ground and out past the
+        // tyres: where the lamps' lit air is kept off the car (0291).
+        let rv = st.roadster.vertices.contents().bindMemory(to: Float.self, capacity: st.roadster.vertices.length / 4)
+        var blo = SIMD3<Float>(repeating: .greatestFiniteMagnitude), bhi = -blo
+        for i in 0..<(st.roadster.vertices.length / 44) { let v = SIMD3(rv[i * 11], rv[i * 11 + 1], rv[i * 11 + 2]); blo = simd_min(blo, v); bhi = simd_max(bhi, v) }
+        heroBox = (SIMD3(blo.x - 0.12, min(blo.y, 0) - 0.05, blo.z - 0.12), SIMD3(bhi.x + 0.12, bhi.y + 0.05, bhi.z + 0.12))
         launchCompileMs = (CACurrentMediaTime() - t0) * 1000
         crash.configure(layout: st.layout, paints: st.paints)
         if isDrive(course) {
@@ -397,11 +406,13 @@ final class Renderer {
         let px = look == .pixel ? Look.pixelBlock(outW: outW, outH: outH) : 1
         let rw = look == .pixel ? (outW + px - 1) / px : max(64, Int(Float(outW) * scale))
         let rh = look == .pixel ? (outH + px - 1) / px : max(64, Int(Float(outH) * scale))
-        if look == .anime && (depthRes == nil || depthRes?.width != rw || depthRes?.height != rh) {
+        // The resolved depth: Anime's ink, and the lamps' lit air, which stops at the surface (0291).
+        let wantDepth = look == .anime || nGlows > 0
+        if wantDepth && (depthRes == nil || depthRes?.width != rw || depthRes?.height != rh) {
             let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Renderer.depthFormat, width: rw, height: rh, mipmapped: false)
             d.usage = [.renderTarget, .shaderRead]; d.storageMode = .private
             depthRes = device.makeTexture(descriptor: d)
-        } else if look != .anime { depthRes = nil }
+        } else if !wantDepth { depthRes = nil }
         targetLook = look; pixelBlock = px
         if renderSize == (rw, rh) && outSize == (outW, outH) { return }
         renderSize = (rw, rh); outSize = (outW, outH)
@@ -626,7 +637,8 @@ final class Renderer {
         mp.colorAttachments[0].texture = msaa; mp.colorAttachments[0].resolveTexture = hdr
         mp.colorAttachments[0].loadAction = .dontCare; mp.colorAttachments[0].storeAction = .multisampleResolve
         mp.depthAttachment.texture = depth; mp.depthAttachment.loadAction = .clear; mp.depthAttachment.clearDepth = 1; mp.depthAttachment.storeAction = .dontCare
-        if let depthRes { mp.depthAttachment.resolveTexture = depthRes; mp.depthAttachment.depthResolveFilter = .sample0; mp.depthAttachment.storeAction = .multisampleResolve }   // Anime's ink
+        let glowsOn = nGlows > 0 && shed < 2 && !skip.contains("glows") && !away && depthRes != nil
+        if let depthRes, glowsOn || targetLook == .anime { mp.depthAttachment.resolveTexture = depthRes; mp.depthAttachment.depthResolveFilter = .sample0; mp.depthAttachment.storeAction = .multisampleResolve }   // Anime's ink, the lit air
         if let e = cmd.makeRenderCommandEncoder(descriptor: mp) {
             e.setVertexBuffer(fb, offset: 0, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1)
             e.setFragmentBuffer(lightsBuf, offset: 0, index: 3); e.setFragmentBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
@@ -651,11 +663,6 @@ final class Renderer {
                     drawMesh(e, c.mesh, matsIndex: complexMats, model: stageM, opaqueOnly: false, from: k, to: k + 1)
                 }
                 if !skip.contains("glints") && !away { glintsDraw(e, c, beaconK: beaconK, pipe: glintPipe) }
-            }
-            if nGlows > 0 && shed < 2 && !skip.contains("glows") && !away {   // film.js's lit air round the lamps
-                e.setRenderPipelineState(glowPipe); e.setDepthStencilState(dsRead); e.setCullMode(.none)
-                e.setVertexBuffer(glowBuf, offset: 0, index: 2)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nGlows)
             }
             if !skip.contains("translucent") {
                 drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: false, to: blobSplit)
@@ -692,6 +699,21 @@ final class Renderer {
             e.endEncoding()
         }
         cut("main")
+        // 3b. film.js's lit air round the lamps, over the resolved frame: each pixel's ray integrated up to its surface (0291).
+        if glowsOn, let depthRes {
+            let gp = MTLRenderPassDescriptor()
+            gp.colorAttachments[0].texture = hdr; gp.colorAttachments[0].loadAction = .load; gp.colorAttachments[0].storeAction = .store
+            if let e = cmd.makeRenderCommandEncoder(descriptor: gp) {
+                e.setRenderPipelineState(glowPipe); e.setCullMode(.none)
+                e.setVertexBuffer(fb, offset: 0, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1)
+                e.setVertexBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
+                e.setVertexBuffer(glowBuf, offset: 0, index: 2); e.setFragmentTexture(depthRes, index: 0)
+                var hero = GlowHero(toCar: carM.inverse, lo: SIMD4(heroBox.lo, 0), hi: SIMD4(heroBox.hi, 0))
+                e.setFragmentBytes(&hero, length: MemoryLayout<GlowHero>.stride, index: 2)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nGlows)
+                e.endEncoding()
+            }
+        }
         // 4. bloom
         let bloomOn = lookU.fogExp.w > 0 && bloomChain.count == 6
         if bloomOn, let bloomOut {
