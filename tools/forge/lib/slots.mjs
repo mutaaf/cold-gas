@@ -48,7 +48,7 @@ export const SLOTS = {
   ...WORLD_SLOTS,
   sedan: vehicle(LINEUP_SPEC[0], [16000, 5200]),
   suv: vehicle(LINEUP_SPEC[1], [16000, 5200]),
-  semi: vehicle(LINEUP_SPEC[2], [22000, 7000]),
+  semi: vehicle(LINEUP_SPEC[2], [24000, 8000]),   // 0292: +2k / +1k for the cab-over's detail (mirrors, steps, packs, treads)
   pickup: vehicle(LINEUP_SPEC[3], [16000, 5200]),
   cab: vehicle(LINEUP_SPEC[4], [16000, 5200]),
   cone: {

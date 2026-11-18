@@ -59,10 +59,10 @@
   "semi": {
    "file": "forge/semi.glb",
    "kind": "vehicle",
-   "bytes": 318268,
+   "bytes": 371632,
    "tris": [
-    21420,
-    6956
+    22032,
+    7945
    ],
    "seed": 0,
    "source": "semi"
