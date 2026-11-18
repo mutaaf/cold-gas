@@ -70,10 +70,10 @@
   "suv": {
    "file": "forge/suv.glb",
    "kind": "vehicle",
-   "bytes": 222280,
+   "bytes": 282728,
    "tris": [
-    14464,
-    5032
+    18384,
+    5116
    ],
    "seed": 0,
    "source": "suv"
