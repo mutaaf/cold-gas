@@ -2,6 +2,13 @@
 // The portals' store art, made from the game itself (store/portals/, SUBMIT.md). Build first: npm run build:crazygames.
 //
 //   node scripts/portal-art.mjs [--covers] [--video] [--out store/portals/crazygames]
+//   node scripts/portal-art.mjs --listings     itch.io and Newgrounds (build first: npm run build:itch)
+//
+// Listings (--listings): itch.io's cover is 630×500 (itch.io/docs/creators/getting-started: a 315:250 ratio, 315×250 at
+// least, 630×500 better), plus screenshots, 3 to 5 of them, any size; these are 1920×1080 frames of the reference
+// jump with the game's own interface on, nothing added. Newgrounds publishes no icon size; its game pages serve each
+// icon at 16:9 (720×405 and 480×270, measured on picon.ngfiles.com 2026-11-18), and its small icon crops the centre, so
+// the icons are 16:9 with the title kept inside. Same frames, same rule as the covers: only the title on them.
 //
 // Covers (docs.crazygames.com/requirements/game-covers, 2026-11-13): 1920×1080 (16:9), 800×1200 (2:3), 800×800 (1:1),
 // the game's title and nothing else on them (no borders, no "Play", no logos or store badges). Each is a real frame of
@@ -21,16 +28,17 @@ import { chromium } from '@playwright/test';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../..');
 const args = process.argv.slice(2);
-const want = { covers: args.includes('--covers') || !args.includes('--video'), video: args.includes('--video') || !args.includes('--covers') };
+const listings = args.includes('--listings');
+const want = listings ? { covers: false, video: false } : { covers: args.includes('--covers') || !args.includes('--video'), video: args.includes('--video') || !args.includes('--covers') };
 const OUT = resolve(ROOT, args.includes('--out') ? args[args.indexOf('--out') + 1] : 'store/portals/crazygames');
-const GAME = join(ROOT, 'dist-portals/crazygames/game');
+const GAME = join(ROOT, `dist-portals/${listings ? 'itch' : 'crazygames'}/game`);
 const TMP = join(ROOT, 'dist-portals/art-tmp');
 const PORT = 4831;
 const FPS = 30;
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json',
   '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.glb': 'model/gltf-binary' };
-if (!existsSync(join(GAME, 'index.html'))) { console.error('build first: npm run build:crazygames'); process.exit(2); }
-mkdirSync(OUT, { recursive: true });
+if (!existsSync(join(GAME, 'index.html'))) { console.error(`build first: npm run build:${listings ? 'itch' : 'crazygames'}`); process.exit(2); }
+if (!listings) mkdirSync(OUT, { recursive: true });
 rmSync(TMP, { recursive: true, force: true });
 mkdirSync(TMP, { recursive: true });
 
@@ -98,10 +106,10 @@ async function rawFrame({ w, h, name }) {
 
 // The wordmark over a frame, at an exact size. Only the title (the portals' rule).
 const MICHROMA = readFileSync(join(ROOT, 'node_modules/@fontsource/michroma/files/michroma-latin-400-normal.woff2')).toString('base64');
-async function composite({ raw, w, h, out }) {
+async function composite({ raw, w, h, out, centred = false }) {
   const img = readFileSync(raw).toString('base64');
-  const portrait = h > w, square = h === w;
-  const size = portrait ? w * 0.17 : square ? w * 0.105 : h * 0.135;
+  const portrait = h > w, square = h === w || centred;
+  const size = portrait ? w * 0.17 : centred ? h * 0.15 : square ? w * 0.105 : h * 0.135;
   const html = `<!doctype html><html><head><style>
     @font-face { font-family: Michroma; src: url(data:font/woff2;base64,${MICHROMA}) format('woff2'); }
     html, body { margin: 0; width: ${w}px; height: ${h}px; overflow: hidden; background: #05070c; }
@@ -168,6 +176,38 @@ async function video({ w, h, name, cover }) {
 if (want.video) {
   await video({ w: 1920, h: 1080, name: 'landscape-1920x1080', cover: raws.landscape });
   await video({ w: 1080, h: 1620, name: 'portrait-1080x1620', cover: raws.portrait });
+}
+
+// --- itch.io and Newgrounds listings ---
+// A screenshot: the reference jump, interface on, at a moment of the run (or the title, before it).
+async function uiShot({ w, h, out, moments, after = 0 }) {
+  const { ctx, page } = await openGame({ w, h });
+  if (moments) {
+    await startReference(page);
+    for (const m of moments) for (let i = 0; i < 30 * 30 && !(await S(page, m)); i++) await step(page);
+    for (let i = 0; i < after * FPS; i++) await step(page);
+  }
+  await page.screenshot({ path: out });
+  await ctx.close();
+}
+if (listings) {
+  const ITCH = join(ROOT, 'store/portals/itch'), NG = join(ROOT, 'store/portals/newgrounds');
+  mkdirSync(ITCH, { recursive: true });
+  mkdirSync(NG, { recursive: true });
+  const land = await rawFrame({ w: 1920, h: 1080, name: 'landscape' });
+  await composite({ raw: land, w: 630, h: 500, out: join(ITCH, 'cover-630x500.png'), centred: true });
+  await composite({ raw: land, w: 1440, h: 810, out: join(NG, 'icon-1440x810.png'), centred: true });
+  await composite({ raw: land, w: 720, h: 405, out: join(NG, 'icon-720x405.png'), centred: true });
+  const shots = [
+    ['1-title', null],
+    ['2-the-wall', MOMENTS.slice(0, 1)],
+    ['3-over-the-row', MOMENTS],
+    ['4-landing', [...MOMENTS, (S) => !S.run || S.run.phase === 'landed' || S.run.phase === 'done' || S.mode === 'results'], 1.5],
+  ];
+  for (const [name, moments, after] of shots) {
+    await uiShot({ w: 1920, h: 1080, out: join(ITCH, `screenshot-${name}-1920x1080.png`), moments, after });
+  }
+  console.log('itch.io cover and screenshots →', ITCH, '\nNewgrounds icons →', NG);
 }
 
 writeFileSync(join(TMP, '.done'), '');
