@@ -61,7 +61,7 @@ static float3 world_cel(float3 base, float3 T, float exposure, bool pixel) {
     hue /= max(dot(hue, Y), 1e-3);
     float li = log2(I), w = pixel ? 1e-3 : clamp(fwidth(li) * 0.75, 0.02, 0.5);
     float b0 = smoothstep(-6.2 - w, -6.2 + w, li), b1 = smoothstep(-3.9 - w, -3.9 + w, li), b2 = smoothstep(-2.1 - w, -2.1 + w, li);
-    float3 k = mix(mix(mix(SH * 0.055, SH * 0.15, b0), mix(SH, hue, 0.55) * 0.36, b1), hue * 0.74, b2);
+    float3 k = mix(mix(mix(SH * 0.08, SH * 0.15, b0), mix(SH, hue, 0.55) * 0.36, b1), hue * 0.74, b2);
     return base * k / max(exposure, 1e-4);
 }
 // Matte land: the key light (shadowed), the sky and ground hemisphere, the headlamps; then the air.

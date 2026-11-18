@@ -28,17 +28,19 @@ environment's diffuse are summed as irradiance; its brightness picks a band (dee
 material's own colour. A lamp that would blow white paint out lights it to the lit band and no further, so neither look can
 wash the car out on its own. Shadows take a violet-blue tint, never grey; the lit band takes the light's hue (a red lamp's pool
 reads red). No reflections, clear coat or wet mirror; a metal reads as its tint. The set's beams, pools and spill are three
-flat steps of their own falloff at 60 %, and the lamps' halos flat rings.
+flat steps of their own falloff at 60 % (a faint beam a flat shaft). The lamps' soft halos (film.js's lit air) are Real's
+only: quantised, they drew grey discs over the car. Smoke, dust and the jets' mist are cel puffs: two flat tones with a clean
+edge (8-bit: one), the faint skirt dropped. The haze comes in four flat layers of depth, as a painted background's.
 
 **Anime**
 - The ramp with an eased (about a pixel) edge, a hard highlight shape where the GGX lobe passes a level on polished panels,
   a hard rim on the car (faint on what stands) so its outline reads against the stage.
 - A painted sky: a deep indigo gradient to a violet horizon at night (the course's own dusk, saturated, in Free Drive), soft
-  clouds in the lower sky lit on the side toward a big flat moon (shaded side, two pale craters, a glow and a halo ring) that
-  stands on the key light's bearing, so the light on the car comes from it; sparse stars.
+  clouds in the lower sky lit on the side toward a big flat moon (shaded side, two pale craters, a glow and a halo ring) 17°
+  up, fixed in the world a little left of where the lens first looks when a run (or a drive) starts; sparse stars.
 - Ink at the render size from the depth: silhouettes where a neighbour is farther than the plane through the pixel predicts
-  (in 1/distance, affine across any plane, so a floor seen edge-on reads nothing; inked on the near side only), thick near
-  (3 px), thinner mid, a hair far; creases where the normals rebuilt from the depth on the four quarters round a pixel differ
+  (in 1/distance, affine across any plane, so a floor seen edge-on reads nothing; inked on the near side only; a car a few %
+  nearer than the curl behind it is caught), thick out to 120 m (3 px at the render size), thinner to 320 m, a hair beyond; creases where the normals rebuilt from the depth on the four quarters round a pixel differ
   by more than ≈ 40° (a panel's edge, a rail), thin, faded by 110 m. A tessellated curve (the curl, 5–10° a facet) and a
   texture's seams never cross it: **no seam lines on the curl**. The brightness-jump ink is gone.
 - A print with no path to white: linear to 0.8 then a soft shoulder per channel (a lit red stays red), saturated 12 %; bloom
@@ -53,8 +55,8 @@ flat steps of their own falloff at 60 %, and the lamps' halos flat rings.
 - 32 fixed colours chosen for this game at night: seven night blues, six neutrals for concrete and the white car, six reds
   for the loop, the LEDs and the lamps, five warms for sparks, dust and the dusk, four greens for Free Drive's land, three dusk
   violets and the jets' ice blue. Each pixel takes the nearest in Oklab: **no dither** on the scene.
-- A 1 px outline in the palette's darkest colour on every silhouette (the same depth test at 160 columns), and a crease
-  darkened by half.
+- A 1 px outline in the palette's darkest colour on every silhouette (the same depth test at 160 columns), a real corner
+  (≈ 50°) darkened by half, and a pixel of rim light round the car.
 - A sky of flat palette bands with a one-pixel checker only where two bands meet, single-pixel stars fixed to the sky (each
   star is the one pixel its direction projects into, so it steps with the lens and never smears), and a pixel moon (or sun).
 - Effects take the grid and the palette (they're drawn at 160 columns and quantised); a spark is at least a pixel wide.
@@ -66,12 +68,12 @@ The car, the stage, the sky, the effects, Roam and Free Drive all take each look
 keeps its type in every look.
 
 ## Acceptance criteria
-- [ ] 8-bit is ≈ 160 columns, 32 colours, no dither on the scene, a 1 px outline; it reads as pixel art on the pad, the curl,
+- [x] 8-bit is ≈ 160 columns, 32 colours, no dither on the scene, a 1 px outline; it reads as pixel art on the pad, the curl,
   in the air, in a crash and in Roam (shots in the PR).
-- [ ] Anime has hard bands with tinted shadows, a painted sky with clouds and a moon, clean ink (thick silhouettes, thin
+- [x] Anime has hard bands with tinted shadows, a painted sky with clouds and a moon, clean ink (thick silhouettes, thin
   creases, none on the curl's facets), speed lines and impact frames; the car is never washed white (shots in the PR).
-- [ ] Neither drawn look blows the car out on its own, and Real is unchanged.
-- [ ] `make test` (52 run vectors) passes: pixels only.
+- [x] Neither drawn look blows the car out on its own, and Real is unchanged.
+- [x] `make test` (52 run vectors) passes: pixels only.
 
 ## Test plan
 Simulator only ("ColdGas iPhone", always `-mute`, the shared lock held round each session): for each of `-look real|anime|pixel`,

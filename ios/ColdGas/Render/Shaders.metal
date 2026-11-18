@@ -148,7 +148,7 @@ static float3 celRamp(float3 base, float3 T, float exposure, bool pixel) {
     float b0 = smoothstep(-6.2 - w, -6.2 + w, li);    // deep → shadow   (I ≈ 0.014)
     float b1 = smoothstep(-3.9 - w, -3.9 + w, li);    // shadow → mid    (I ≈ 0.067)
     float b2 = smoothstep(-2.1 - w, -2.1 + w, li);    // mid → lit       (I ≈ 0.23)
-    float3 deep = CEL_SHADOW * 0.055, shade = CEL_SHADOW * 0.15, mid = mix(CEL_SHADOW, hue, 0.55) * 0.36, lit = hue * 0.74;
+    float3 deep = CEL_SHADOW * 0.08, shade = CEL_SHADOW * 0.15, mid = mix(CEL_SHADOW, hue, 0.55) * 0.36, lit = hue * 0.74;
     float3 k = mix(mix(mix(deep, shade, b0), mid, b1), lit, b2);
     return base * k / max(exposure, 1e-4);
 }
@@ -249,6 +249,7 @@ static float3 drawnLight(float3 n, float3 V, float3 world, float3 base, float me
 static float4 drawnFx(float3 rgb, float a, constant Frame& f) {
     if (f.style.x < 0.5) return float4(rgb * a * a, a);
     float q = floor(clamp(a, 0.0, 1.0) * 3.0 + 0.35) / 3.0;
+    if (a > 0.04) q = max(q, 0.34);   // a faint beam stays a flat shaft, not nothing
     return float4(rgb * q * q * 0.6, q * 0.6);
 }
 fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facing]], constant Frame& f [[buffer(1)]], constant Material& m [[buffer(2)]],
@@ -427,13 +428,13 @@ static float skyNoise(float2 p) {
     return mix(mix(skyHash(i), skyHash(i + float2(1, 0)), u.x), mix(skyHash(i + float2(0, 1)), skyHash(i + float2(1, 1)), u.x), u.y);
 }
 static float skyFbm(float2 p) { return 0.55 * skyNoise(p) + 0.3 * skyNoise(p * 2.03 + 7.1) + 0.15 * skyNoise(p * 4.11 + 3.7); }
-// The moon (the night) or the sun (the dusk): 24° up on the bearing the renderer fixes when a run starts (a little left of where
+// The moon (the night) or the sun (the dusk): 17° up on the bearing the renderer fixes when a run starts (a little left of where
 // the lens first looks: over the set the run is flown toward), fixed in the world from then on.
 static float3 lightBody(constant Frame& f, constant LookU& k) {
     if (k.hemiGround.w > 0.5) return normalize(k.skySun.xyz + float3(0, 1e-4, 0));
     float2 hz = f.fx.w > 0.5 ? f.fx.yz : -f.keyDir.xz; float l = length(hz);
     hz = l > 1e-3 ? hz / l : float2(0.6, 0.8);
-    return float3(hz.x * 0.9135, 0.4067, hz.y * 0.9135);
+    return float3(hz.x * 0.9563, 0.2924, hz.y * 0.9563);   // 17° up
 }
 // Anime: a painted gradient (deep indigo to a violet horizon at night; the course's own dusk, saturated, by day's end), soft
 // clouds in the lower sky lit on the side toward the moon, a big flat moon with a shaded side and two pale craters, a halo
@@ -718,7 +719,7 @@ static Ink inkAt(depth2d<float> t, int2 c, int kNear, float creaseLo, constant F
     if (L >= far * 0.995) return o;   // the sky takes no ink
     float x0 = inkRead(t, c - int2(1, 0), hi, f), x1 = inkRead(t, c + int2(1, 0), hi, f);
     float y0 = inkRead(t, c - int2(0, 1), hi, f), y1 = inkRead(t, c + int2(0, 1), hi, f);
-    int k = L < 60.0 ? kNear : L < 200.0 ? max(1, kNear - 1) : 1;
+    int k = L < 120.0 ? kNear : L < 320.0 ? max(1, kNear - 1) : 1;
     float ic = 1.0 / L;
     float a0 = x0, a1 = x1, b0 = y0, b1 = y1;
     if (k > 1) {

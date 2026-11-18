@@ -572,7 +572,7 @@ final class Renderer {
         if moonBearing == nil {
             let fwd = SIMD2<Float>(-view.view.columns.0.z, -view.view.columns.2.z)   // the lens's forward, in xz
             if simd_length(fwd) > 0.2 {
-                let f = simd_normalize(fwd), a: Float = 0.35   // ≈ 20° left of it
+                let f = simd_normalize(fwd), a: Float = 0.12   // ≈ 7° left of it (an upright phone sees ≈ ±17°)
                 moonBearing = SIMD2(f.x * cos(a) + f.y * sin(a), -f.x * sin(a) + f.y * cos(a))
             }
         }
