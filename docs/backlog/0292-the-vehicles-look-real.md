@@ -1,7 +1,7 @@
 ---
 id: 0292
 title: Every vehicle looks real and is our own design (the roadster, the semi, the launch vehicle and tower, the lineup)
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: authenticity
