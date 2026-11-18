@@ -489,7 +489,7 @@ final class Renderer {
             mist.updateBudget(viewProj: u.viewProj, height: Float(renderSize.1), budget: Float(renderSize.0 * renderSize.1) * (shed >= 2 ? Renderer.mistScreens * 0.5 : Renderer.mistScreens))
             mistK = SIMD4(mist.budgetScale, min(2, 1 / max(mist.budgetScale, 0.1)), 0, 0)
         }
-        if fxLog { fxFrames += 1; if fxFrames % 120 == 0 { print(String(format: "FX mist %d live, k %.2f, %.2f M fragments at %d×%d · cones %d · sparks %d, puffs %d, chips %d", mist.live, mist.budgetScale, mist.fragments(viewProj: u.viewProj, height: Float(renderSize.1)) * mist.budgetScale * mist.budgetScale / 1e6, renderSize.0, renderSize.1, nPlumes, fx.0, nPuffs, fx.2))
+        if fxLog { fxFrames += 1; if fxFrames % 120 == 0 { print(String(format: "FX mist %d live, k %.2f, %.2f M fragments at %d×%d · cones %d · sparks %d, puffs %d, chips %d · marks %d", mist.live, mist.budgetScale, mist.fragments(viewProj: u.viewProj, height: Float(renderSize.1)) * mist.budgetScale * mist.budgetScale / 1e6, renderSize.0, renderSize.1, nPlumes, fx.0, nPuffs, fx.2, skids?.marks.count ?? 0))
             for (i, pc) in crash.pieces.list.enumerated() where pc.on { print(String(format: "PIECE %d at (%.2f, %.2f, %.2f) v %.2f w %.2f still %.2f", i, pc.pos.x, pc.pos.y, pc.pos.z, simd_length(pc.v), simd_length(pc.w), pc.still)) } } }
         let keyPos = carPos + stage.keyOffset, keyDir = simd_normalize(stage.keyOffset)
         let lv = lookAt(eye: keyPos, target: carPos, up: [0, 1, 0]), lp = ortho(-28, 28, -28, 28, 1, 140)

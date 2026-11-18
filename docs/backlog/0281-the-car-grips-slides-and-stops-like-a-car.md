@@ -1,11 +1,12 @@
 ---
 id: 0281
 title: The car grips, slides and stops like a car (iPhone) - brakes inside the tyre's step, fade, balance, ABS on or off with flat spots, a handbrake, a drift assist for a thumb, skid marks on every set
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: player-feel
 created: 2026-11-17
+pr: 429
 by: operator
 ---
 
@@ -58,8 +59,24 @@ Runs on: the operator's Mac (Xcode).
       still holds a drift with the assist (8-40° for 3.5 s) and spins without it; wheelspin off the line with traction
       control off (past 0.3 slip), held under 0.25 with it on; a drive replays to the same bits.
 - [x] DriveCarTests and DriveDynamicsTests unchanged and green.
-- [ ] On the simulator: a handbrake turn, a held drift, ABS on and off stops and skid marks in Roam, and marks on the
-      scored run.
+- [x] On the simulator ("ColdGas iPhone", `-mute`, the `-fd-drill` scripts): HAND on the deck above BRAKE, a handbrake
+      turn and a held drift in Roam on the Show (the drift laid 309 quads of rubber on the slab), 100-0 stops with ABS on
+      (32.0 m) and off (32.8 m on that stretch's loose ground, where a locked tyre keeps most of its grip), and the scored
+      run laying marks from its own track (`-replay crash-show-carry5 -fx-log`: marks 2, `ref-show`: 8).
+
+## After (DriveGripTests, `DRIVE_LOG=1`)
+- The brake inside the step: a front tyre now gives what its pad's torque gives (2.5 kN·m → 7.1 kN at 800 °C; it gave
+  9.7 kN from 1.6 kN·m before).
+- 100-0 km/h, asphalt: ABS on 32.0 m in 2.29 s (236 pulses), off 38.9 m in 2.75 s, all four tyres worn flat. Front axle
+  load 10.2 → 16.2 kN under the brakes, the rear 13.8 → 8.6 kN.
+- By surface (ABS on): asphalt 32.0 m, gravel 49.4 m, dirt 53.3 m, grass 65.4 m (0.97-1.06 × v²/2μg).
+- Fade: cold 32.0 m, discs at 300 °C 32.0 m, at 800 °C 41.3 m.
+- Balance, half pedal, ABS off, the wheel turned: 70/30 yaws 2°, 30/70 swaps ends (167°).
+- Handbrake at 16 m/s: rears locked, motors 0 N·m, 150°/s, 126° turned; without it 28°/s, 30°.
+- A thumb's drift (handbrake in, steer 0.25 and 22 % throttle held): with the assist 12-29° for 3.5 s, settling at 24°;
+  without it, a spin.
+- Off the line, flat out: traction control off 22.8 slip and 5.7 m/s after 1 s; on 0.08 and 8.2 m/s.
+- Two drives from the same start with the same inputs: the same bits.
 
 ## Test plan
 `cd ios/Packages/ColdGasCore && DRIVE_LOG=1 swift test --no-parallel --filter "DriveGrip|DriveDynamics|DriveCar"` prints
