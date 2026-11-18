@@ -1,6 +1,6 @@
-// The Cab: a two-seat driverless coupe. A short, low nose under a full-width light bar, one glass
+// The Cab: a two-seat driverless coupe. A short, low nose with a lamp pod at each corner, one glass
 // canopy from the screen to behind the seats, then a long fastback with no rear window that ends in
-// a full-width red bar. No mirrors (cameras), no handles (the two doors hinge up). Moulded-in
+// a red-lit pod at each corner. No mirrors (cameras), no handles (the two doors hinge up). Moulded-in
 // champagne-gold panels, flat colour-matched wheel covers, and bigger wheels at the back than the
 // front. Our own design, sized to the researched numbers (docs/VEHICLES.md).
 import { curve, paint, MAT, LAMP } from './kit.js';
@@ -32,10 +32,13 @@ export function cab(spec, color) {
     wheelStyle: 'disc',
     wheelMats: { cover: gold, rim: MAT.rimDark },
     lamps(add, t) {
-      add(MAT.gloss, band(frontStrip, t, -hw * 0.9, hw * 0.9, 0.66, 0.03));
-      add(LAMP.white, frontStrip(t, -hw * 0.88, hw * 0.88, 0.66, 0.009));
-      add(MAT.gloss, band(rearStrip, t, -hw * 0.9, hw * 0.9, 0.9, 0.035));
-      add(LAMP.red, rearStrip(t, -hw * 0.88, hw * 0.88, 0.9, 0.012));
+      // Lamp pods at the four corners: a dark lens with a running-light line along its top.
+      for (const s of [-1, 1]) {
+        add(MAT.gloss, band(frontStrip, t, s * 0.4, s * 0.7, 0.6, 0.045));
+        add(LAMP.white, frontStrip(t, s * 0.43, s * 0.67, 0.625, 0.008));
+        add(MAT.gloss, band(rearStrip, t, s * 0.38, s * 0.7, 0.86, 0.045));
+        add(LAMP.red, rearStrip(t, s * 0.42, s * 0.68, 0.865, 0.011));
+      }
       add(MAT.trim, band(rearStrip, t, -hw * 0.7, hw * 0.7, 0.42, 0.07));
       add(MAT.trim, band(frontStrip, t, -hw * 0.55, hw * 0.55, 0.33, 0.035));
     },

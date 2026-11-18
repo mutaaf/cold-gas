@@ -15,10 +15,10 @@
   "cab": {
    "file": "forge/cab.glb",
    "kind": "vehicle",
-   "bytes": 186852,
+   "bytes": 221032,
    "tris": [
-    12534,
-    5077
+    14762,
+    5089
    ],
    "seed": 0,
    "source": "cab"
