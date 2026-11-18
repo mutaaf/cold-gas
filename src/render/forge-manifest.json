@@ -48,10 +48,10 @@
   "sedan": {
    "file": "forge/sedan.glb",
    "kind": "vehicle",
-   "bytes": 207564,
+   "bytes": 266756,
    "tris": [
-    13684,
-    5033
+    17396,
+    5160
    ],
    "seed": 0,
    "source": "sedan"
