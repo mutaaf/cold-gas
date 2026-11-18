@@ -246,10 +246,10 @@ static float3 drawnLight(float3 n, float3 V, float3 world, float3 base, float me
 }
 // The set's light shafts and pools in the drawn looks (0290): three flat steps of their own falloff, at 60 %, so a beam reads as
 // painted light and the jets and lamps never sum to a white frame.
-static float4 drawnFx(float3 rgb, float a, constant Frame& f) {
+static float4 drawnFx(float3 rgb, float a, constant Frame& f, bool shaft = false) {
     if (f.style.x < 0.5) return float4(rgb * a * a, a);
     float q = floor(clamp(a, 0.0, 1.0) * 3.0 + 0.35) / 3.0;
-    if (a > 0.04) q = max(q, 0.34);   // a faint beam stays a flat shaft, not nothing
+    if (shaft && a > 0.04) q = max(q, 0.34);   // a faint beam stays a flat shaft, not nothing (a pool's skirt goes)
     return float4(rgb * q * q * 0.6, q * 0.6);
 }
 fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facing]], constant Frame& f [[buffer(1)]], constant Material& m [[buffer(2)]],
@@ -263,7 +263,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float along = clamp(in.uv.y, 0.0, 1.0);
         float edge = pow(abs(dot(normalize(in.nrm + 1e-6), V0)), 1.6);
         float a = m.effect.w * edge * pow(1.0 - along, 1.7) * smoothstep(0.0, 0.02, along);
-        return drawnFx(m.effect.rgb, a, f);   // three's AdditiveBlending is (src alpha, one) and these write (colour · a, a): a counts twice
+        return drawnFx(m.effect.rgb, a, f, true);   // three's AdditiveBlending is (src alpha, one) and these write (colour · a, a): a counts twice
     }
     if (m.effectKind.x == 2) {   // glowDecal: a radial pool on the slab
         float d = length(in.uv - 0.5) * 2.0;
@@ -278,7 +278,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float along = clamp(in.uv.y, 0.0, 1.0);
         float edge = pow(abs(dot(normalize(in.nrm + 1e-6), V0)), 1.4);
         float a = m.effect.w * edge * pow(1.0 - along, 1.5) * smoothstep(0.0, 0.05, along);
-        if (f.style.x > 0.5) return drawnFx(m.effect.rgb, a, f);
+        if (f.style.x > 0.5) return drawnFx(m.effect.rgb, a, f, true);
         return float4(m.effect.rgb * a, a);
     }
     float2 uv = in.uv * m.uvTransform.xy + m.uvTransform.zw;
@@ -459,7 +459,7 @@ static float3 animeSky(float3 d, constant Frame& f, constant LookU& k) {
     }
     float3 md = lightBody(f, k);
     float cosA = clamp(dot(d, md), -1.0, 1.0), ang = sqrt(max(2.0 * (1.0 - cosA), 0.0));
-    float R = dusk ? 0.06 : 0.075, aa = max(fwidth(ang), 1e-4);
+    float R = dusk ? 0.05 : 0.058, aa = max(fwidth(ang), 1e-4);
     float disc = 1.0 - smoothstep(R - aa, R + aa, ang);
     if (!dusk) {
         c += s2l(float3(0.36, 0.38, 0.62)) * exp(-max(ang - R, 0.0) * 9.0) * 0.45;                       // the glow round it
@@ -502,7 +502,7 @@ static float3 pixelSky(float3 d, float2 clip, constant Frame& f, constant LookU&
     else idx = hd >= 0.45 ? 2 : hd >= 0.24 ? 29 : hd >= 0.11 ? 30 : hd >= 0.035 ? 18 : h >= 0.0 ? 21 : 19;
     float3 md = lightBody(f, k);
     float cosA = clamp(dot(d, md), -1.0, 1.0), ang = sqrt(max(2.0 * (1.0 - cosA), 0.0));
-    float R = 0.065;
+    float R = 0.05;
     if (ang < R) {
         idx = dusk ? 22 : 12;
         float3 u = normalize(cross(md, float3(0, 1, 0)) + 1e-5), v = cross(u, md);

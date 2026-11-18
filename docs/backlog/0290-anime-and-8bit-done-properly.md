@@ -28,7 +28,7 @@ environment's diffuse are summed as irradiance; its brightness picks a band (dee
 material's own colour. A lamp that would blow white paint out lights it to the lit band and no further, so neither look can
 wash the car out on its own. Shadows take a violet-blue tint, never grey; the lit band takes the light's hue (a red lamp's pool
 reads red). No reflections, clear coat or wet mirror; a metal reads as its tint. The set's beams, pools and spill are three
-flat steps of their own falloff at 60 % (a faint beam a flat shaft). The lamps' soft halos (film.js's lit air) are Real's
+flat steps of their own falloff at 60 % (a faint beam stays a flat shaft; a pool's faint skirt goes). The lamps' soft halos (film.js's lit air) are Real's
 only: quantised, they drew grey discs over the car. Smoke, dust and the jets' mist are cel puffs: two flat tones with a clean
 edge (8-bit: one), the faint skirt dropped. The haze comes in four flat layers of depth, as a painted background's.
 
@@ -36,7 +36,7 @@ edge (8-bit: one), the faint skirt dropped. The haze comes in four flat layers o
 - The ramp with an eased (about a pixel) edge, a hard highlight shape where the GGX lobe passes a level on polished panels,
   a hard rim on the car (faint on what stands) so its outline reads against the stage.
 - A painted sky: a deep indigo gradient to a violet horizon at night (the course's own dusk, saturated, in Free Drive), soft
-  clouds in the lower sky lit on the side toward a big flat moon (shaded side, two pale craters, a glow and a halo ring) 17°
+  clouds in the lower sky lit on the side toward a big flat moon (≈ 6.6° across; shaded side, two pale craters, a glow and a halo ring) 17°
   up, fixed in the world a little left of where the lens first looks when a run (or a drive) starts; sparse stars.
 - Ink at the render size from the depth: silhouettes where a neighbour is farther than the plane through the pixel predicts
   (in 1/distance, affine across any plane, so a floor seen edge-on reads nothing; inked on the near side only; a car a few %
