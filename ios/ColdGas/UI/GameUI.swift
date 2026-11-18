@@ -59,13 +59,14 @@ struct RootUI: View {
             switch game.screen {
             // A challenge link's card stands alone over the scene (0253): the title waits under it, unseen.
             case .title: if game.incoming == nil { TitleView(crease: layout.crease(in: layout.controls), open: { sheet = $0 }).frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY) }
-            case .run: RunView(layout: layout)
+            case .run: if game.encore { EncoreView(seconds: game.encorePlan?.seconds ?? 3) } else { RunView(layout: layout) }
             case .drive: DriveView(layout: layout)
             case .results:
                 if let r = game.result {
                     if !game.replaying {   // the post and the judges' words live on the result, so they survive watching it back
                         ResultsView(result: r, open: { sheet = $0 }, post: r.post, judges: r.judges)
                             .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
+                            .rise()
                     } else {
                         Button { game.stopWatching() } label: { Label("Back to the score", systemImage: "chevron.down") }
                             .buttonStyle(CGButton())
@@ -830,7 +831,6 @@ struct ResultsView: View {
     }
 }
 
-let JUDGE_NAMES = ["engineer": "ENGINEER", "coordinator": "COORDINATOR", "designer": "DESIGNER"]
 
 // MARK: - The controller
 
