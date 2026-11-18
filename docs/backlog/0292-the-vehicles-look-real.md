@@ -27,19 +27,24 @@ the web and the iPhone (52 vectors).
   with lug nuts; a ventilated rotor and a caliper behind the spokes; tyres with sidewall bulge and tread grooves. Corner
   lamp units with smoked lenses and light blades (no full-width light bar), an L tail lamp, mirrors, wipers, flush handles,
   a charge door, side intakes, carbon sills, a cabin. Every part the app animates keeps its contract (`carParts()`).
-- **The semi and the lineup** (`tools/forge/archetypes/`, promoted to `public/forge/`; the procedural fallbacks in
-  `src/render/parked/`): original designs of each class with glass, lamps, mirrors, wipers, handles, wheels with brakes,
-  tyre sidewalls, underbody.
-- **The launch vehicle and tower** (`src/render/rocket.js`, docs/ROCKET.md): a reusable booster carrying a winged
-  stage-separation orbiter on an original fixed service tower and pad, inside the sim's footprint.
+- **The semi and the lineup** (`tools/forge/archetypes/`, `forgekit.py`'s wheel, promoted to `public/forge/`; the
+  semi's, pickup's and cab's procedural fallbacks in `src/render/parked/`): the semi an original flat-fronted electric
+  cab-over (split windshield, separate lamp clusters, mirrors on arms, battery packs, hub-piloted dual wheels); the pickup
+  a conventional crew-cab with an open bed and tailgate (no faceted wedge, no light bar); the cab with corner lamp pods;
+  every forged car with shut lines, wipers, tyre sidewalls and tread, brakes behind split spokes.
+- **The launch vehicle and tower** (`src/render/rocket.js`, docs/ROCKET.md): a reusable booster (nine bells under an
+  open flared skirt, leg pods, steering vanes, its own livery) carrying a winged stage-separation orbiter (double delta,
+  fin, body flap, tiled belly) on an 8-strut adapter, beside an original fixed service tower (clad service levels, a lift
+  and stair core, umbilical arms, a crew arm and white room, a hammerhead crane). Everything a car can reach stays inside
+  the sim's colliders; only the wings, 55 m up, pass the old fairing's radius.
 - **The iPhone** shows the same meshes: `scripts/native-stage.mjs` regenerates the stages; only the vehicles' sections of
   each stage.json change (the sets' own sections keep main's bytes).
 
 ## Acceptance criteria
 - [x] The roadster no longer reads as a faceted wedge or pickup: smooth curved panels, its own light signature.
 - [x] Wheels with spokes, brakes behind them and tyre sidewalls; mirrors, wipers, handles, glass, lamps, panel lines.
-- [ ] The semi, the sedan, the crossover, the pickup and the cab are original, detailed designs.
-- [ ] The launch vehicle carries a winged orbiter; the tower is an original fixed service tower.
+- [x] The semi, the sedan, the crossover, the pickup and the cab are original, detailed designs.
+- [x] The launch vehicle carries a winged orbiter; the tower is an original fixed service tower.
 - [x] No sim change: `npm test` and `cd ios && make test` (52 vectors) pass.
 - [x] Triangles and draws measured before and after, and kept within a phone's means.
 - [x] Before and after shots on the web and the iPhone (docs/shots/0292/).
