@@ -1,7 +1,7 @@
 ---
 id: 0262
 title: The title's ad frame carries no Cloudflare analytics beacon, and a production probe catches the next one
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: platform

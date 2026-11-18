@@ -1,7 +1,7 @@
 ---
 id: 0171
 title: After a second landed run the results offer "Add to Home Screen" once, quietly
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: engagement

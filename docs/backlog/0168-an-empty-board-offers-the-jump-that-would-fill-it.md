@@ -1,7 +1,7 @@
 ---
 id: 0168
 title: An empty board says what a first row needs and offers the Jump that would fill it
-status: ready
+status: in-progress
 priority: P1
 size: S
 lens: engagement
