@@ -112,6 +112,18 @@ static float3 world_light(float3 albedo, float3 n, float3 p, float4 lightClip, f
 static float3 world_air(float3 c, float3 p, constant WFrame& f, constant WLook& k) {
     float3 toP = p - f.eye.xyz;
     float dist = max(length(toP), 1e-3);
+    if (f.style.x > 0.5) {   // the drawn looks (0290): the haze in four flat layers, as Shaders.metal's hazedDrawn
+        float a = k.hazeCol.w;
+        if (a <= 0) return max(c, 0.0);
+        float3 d = toP / dist;
+        float b = k.sunCol.w, dens = a * exp(-b * f.eye.y), dy = d.y * b;
+        float tau = abs(dy) > 1e-4 ? dens * (1.0 - exp(-clamp(dy * dist, -12.0, 12.0))) / dy : dens * dist;
+        float fog = (1.0 - exp(-clamp(tau, 0.0, 12.0))) * 4.0;
+        float w = f.style.x > 1.5 ? 1e-3 : clamp(fwidth(fog), 0.01, 0.5);
+        float fl = floor(fog), q = (fl + smoothstep(1.0 - w, 1.0, fog - fl)) / 4.0;
+        float sun = pow(max(dot(d, k.sunDir.xyz), 0.0), 6.0);
+        return mix(max(c, 0.0), k.hazeCol.rgb + k.sunCol.rgb * sun, q);
+    }
     return world_hazed(max(c, 0.0), toP / dist, dist, f.eye.xyz, k);
 }
 

@@ -32,7 +32,7 @@ struct FrameU {
     /// The look (0280): x Look.code; y the projection's z scale and z its z offset (the film's ink reads depth with them);
     /// w anime's speed lines (0…1).
     var style = SIMD4<Float>()
-    /// 0290: x anime's impact frame (0…1).
+    /// 0290: x anime's impact frame (0…1); yz the moon's bearing (a unit xz), w 1 when it's set.
     var fx = SIMD4<Float>()
 }
 struct LookU {
@@ -122,7 +122,10 @@ final class Renderer {
     /// The crash's slow-motion factor, for the game's clock (a live run slows with the effects, as crash.js timeScale).
     var slowK: Double { Double(crash.slowK) }
     /// A new track (a new run, or back to the title's loop): effects and clocks start over.
-    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart() }
+    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart(); moonBearing = nil }
+    /// The drawn looks' moon (0290): fixed in the world for a run (or a drive), set from where the lens first looks, a little to
+    /// its left, so it rises over the set the run is flown toward and turns with the camera like anything at infinity.
+    private var moonBearing: SIMD2<Float>?
     private(set) lazy var dents = Dents(roadster: stage.roadster, parked: stage.parked)
     private var lastCarQ = simd_quatf(angle: 0, axis: [0, 1, 0]), lastDrawT = 0.0
     /// The car's speed this frame (m/s), for anime's speed lines.
@@ -566,7 +569,15 @@ final class Renderer {
         // The look (0280, 0290). Anime's speed lines: fast (28 → 45 m/s), or the crash's slow motion; its impact frame.
         let lines = look == .anime ? min(1, max(smoothstepF(28, 45, heroSpeed), (1 - crash.slowK) * 2.5)) : 0
         u.style = SIMD4(look.code, lens.2.z, lens.3.z, lines)
-        u.fx = SIMD4(look == .anime && heroClock - impactAt < impactLen ? 1 : 0, 0, 0, 0)
+        if moonBearing == nil {
+            let fwd = SIMD2<Float>(-view.view.columns.0.z, -view.view.columns.2.z)   // the lens's forward, in xz
+            if simd_length(fwd) > 0.2 {
+                let f = simd_normalize(fwd), a: Float = 0.35   // ≈ 20° left of it
+                moonBearing = SIMD2(f.x * cos(a) + f.y * sin(a), -f.x * sin(a) + f.y * cos(a))
+            }
+        }
+        let mb = moonBearing ?? SIMD2(0.6, 0.8)
+        u.fx = SIMD4(look == .anime && heroClock - impactAt < impactLen ? 1 : 0, mb.x, mb.y, 1)
         fb.contents().storeBytes(of: u, as: FrameU.self)
         // The mirror's frame: the same lens looking at the world flipped in y. Its fragments keep their real world position and
         // normal for the lights; only the eye and the clip position change, and the winding (frontFace).

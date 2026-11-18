@@ -19,7 +19,7 @@ struct Frame {
     float4 misc;                // x: this is the mirror's draw; y: the slab has a mirror to read; zw: 1 / render size
     float4 style;               // the look (0280, Look.swift): x 0 Real, 1 Anime, 2 8-bit; y, z the projection's z scale and offset
                                 // (depth → distance for the ink); w anime's speed lines (0…1)
-    float4 fx;                  // 0290: x anime's impact frame (0…1)
+    float4 fx;                  // 0290: x anime's impact frame (0…1); yz the moon's bearing (unit xz), w 1 when set
 };
 // What doesn't change in a course (Renderer.lookU).
 struct LookU {
@@ -71,6 +71,19 @@ static float3 hazed(float3 c, float3 d, float L, float3 eye, constant LookU& k) 
     float fog = 1.0 - exp(-clamp(tau, 0.0, 12.0));
     float sun = pow(max(dot(d, k.sunDir.xyz), 0.0), 6.0);
     return mix(c, k.hazeCol.rgb + k.sunCol.rgb * sun, fog);
+}
+// The drawn looks' air (0290): the same haze in four flat layers of depth (a painted background's), not a gradient across a
+// surface: the curl, the floor and the set each take one even tint. Eased over about a pixel in Anime, hard in 8-bit.
+static float3 hazedDrawn(float3 c, float3 d, float L, float3 eye, constant LookU& k, bool pixel) {
+    float a = k.hazeCol.w;
+    if (a <= 0) return c;
+    float b = k.sunCol.w, dens = a * exp(-b * eye.y), dy = d.y * b;
+    float tau = abs(dy) > 1e-4 ? dens * (1.0 - exp(-clamp(dy * L, -12.0, 12.0))) / dy : dens * L;
+    float fog = (1.0 - exp(-clamp(tau, 0.0, 12.0))) * 4.0;
+    float w = pixel ? 1e-3 : clamp(fwidth(fog), 0.01, 0.5);
+    float fl = floor(fog), q = (fl + smoothstep(1.0 - w, 1.0, fog - fl)) / 4.0;
+    float sun = pow(max(dot(d, k.sunDir.xyz), 0.0), 6.0);
+    return mix(c, k.hazeCol.rgb + k.sunCol.rgb * sun, q);
 }
 // The most one set lamp lights the car with (0270): ≈ 1.8× the Show's key (1.7), so white paint under two of them stays under
 // the tone curve's shoulder (AgX) and the car keeps its shape.
@@ -226,7 +239,7 @@ static float3 drawnLight(float3 n, float3 V, float3 world, float3 base, float me
     float3 hue = T / max(dot(T, LUMA), 1e-6);
     c += mix(float3(1.0), clamp(hue, 0.0, 1.6), 0.25) * spec * (pixel ? 0.8 : 0.62) / max(ex, 1e-4);
     float nv = clamp(dot(n, V), 0.0, 1.0);
-    float rimW = pixel ? 0.0 : hero ? 0.5 : 0.12 * step(abs(n.y), 0.6);
+    float rimW = hero ? (pixel ? 0.45 : 0.5) : pixel ? 0.0 : 0.12 * step(abs(n.y), 0.6);
     float rim = smoothstep(0.64, 0.70, 1.0 - nv) * rimW;
     c += float3(0.55, 0.68, 1.0) * rim * (0.3 + 0.7 * albedo) / max(ex, 1e-4);
     return c;
@@ -370,9 +383,11 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float dist = max(length(toP), 1e-3);
         if (f.fogColor.w > 0.5 && (m.flags.w & 2u)) {
             float k = look.fogExp.x > 0 ? 1.0 - exp(-look.fogExp.x * look.fogExp.x * dist * dist) : clamp((dist - f.fogRange.x) / max(f.fogRange.y - f.fogRange.x, 1.0), 0.0, 1.0);
+            if (f.style.x > 0.5) k = floor(k * 4.0 + 0.5) / 4.0;   // the drawn looks: in flat layers
             color = mix(color, f.fogColor.rgb, k);
         }
-        color = hazed(max(color, 0.0), toP / dist, dist, f.eye.xyz, look);
+        color = f.style.x > 0.5 ? hazedDrawn(max(color, 0.0), toP / dist, dist, f.eye.xyz, look, f.style.x > 1.5)
+                                : hazed(max(color, 0.0), toP / dist, dist, f.eye.xyz, look);
     }
     return float4(max(color, 0.0), base.a);
 }
@@ -412,11 +427,11 @@ static float skyNoise(float2 p) {
     return mix(mix(skyHash(i), skyHash(i + float2(1, 0)), u.x), mix(skyHash(i + float2(0, 1)), skyHash(i + float2(1, 1)), u.x), u.y);
 }
 static float skyFbm(float2 p) { return 0.55 * skyNoise(p) + 0.3 * skyNoise(p * 2.03 + 7.1) + 0.15 * skyNoise(p * 4.11 + 3.7); }
-// The moon (the night) or the sun (the dusk): opposite the key light's bearing, 24° up: the key lights the car from the lens's
-// side, so the moon stands behind the set, in view, backing the car's rim.
+// The moon (the night) or the sun (the dusk): 24° up on the bearing the renderer fixes when a run starts (a little left of where
+// the lens first looks: over the set the run is flown toward), fixed in the world from then on.
 static float3 lightBody(constant Frame& f, constant LookU& k) {
     if (k.hemiGround.w > 0.5) return normalize(k.skySun.xyz + float3(0, 1e-4, 0));
-    float2 hz = -f.keyDir.xz; float l = length(hz);
+    float2 hz = f.fx.w > 0.5 ? f.fx.yz : -f.keyDir.xz; float l = length(hz);
     hz = l > 1e-3 ? hz / l : float2(0.6, 0.8);
     return float3(hz.x * 0.9135, 0.4067, hz.y * 0.9135);
 }
@@ -696,14 +711,14 @@ static float3 inkN(float3 v) { return v * rsqrt(max(dot(v, v), 1e-30)); }
 static float silOne(float ic, float iOpp, float iNb) { return (2.0 * ic - iOpp - iNb) / ic; }
 struct Ink { float sil, crease, dist; };
 // `kNear`: the silhouette's reach in pixels for what's close (Anime draws it thick near, thin far); creases are always 1.
-static Ink inkAt(depth2d<float> t, int2 c, int kNear, constant Frame& f) {
+static Ink inkAt(depth2d<float> t, int2 c, int kNear, float creaseLo, constant Frame& f) {
     int2 hi = int2(t.get_width(), t.get_height()) - 1;
     float L = inkRead(t, c, hi, f), far = inkDist(1.0, f);
     Ink o; o.dist = L; o.sil = 0; o.crease = 0;
     if (L >= far * 0.995) return o;   // the sky takes no ink
     float x0 = inkRead(t, c - int2(1, 0), hi, f), x1 = inkRead(t, c + int2(1, 0), hi, f);
     float y0 = inkRead(t, c - int2(0, 1), hi, f), y1 = inkRead(t, c + int2(0, 1), hi, f);
-    int k = L < 35.0 ? kNear : L < 140.0 ? max(1, kNear - 1) : 1;
+    int k = L < 60.0 ? kNear : L < 200.0 ? max(1, kNear - 1) : 1;
     float ic = 1.0 / L;
     float a0 = x0, a1 = x1, b0 = y0, b1 = y1;
     if (k > 1) {
@@ -714,7 +729,7 @@ static Ink inkAt(depth2d<float> t, int2 c, int kNear, constant Frame& f) {
     // Foreground side only: the far neighbour's 1/distance falls short of the plane's prediction.
     float sx = max(silOne(ic, ia0, ia1) * step(L * 1.02, a1), silOne(ic, ia1, ia0) * step(L * 1.02, a0));
     float sy = max(silOne(ic, ib0, ib1) * step(L * 1.02, b1), silOne(ic, ib1, ib0) * step(L * 1.02, b0));
-    o.sil = smoothstep(0.03, 0.07, max(sx, sy));
+    o.sil = smoothstep(0.02, 0.05, max(sx, sy));
     float3 P = inkPos(c, L, f), Px0 = inkPos(c - int2(1, 0), x0, f), Px1 = inkPos(c + int2(1, 0), x1, f);
     float3 Py0 = inkPos(c - int2(0, 1), y0, f), Py1 = inkPos(c + int2(0, 1), y1, f);
     float3 nA = inkN(cross(Px1 - P, Py1 - P)), nB = inkN(cross(P - Px0, P - Py0));
@@ -722,7 +737,7 @@ static Ink inkAt(depth2d<float> t, int2 c, int kNear, constant Frame& f) {
     float bend = max(1.0 - dot(nA, nB), 1.0 - dot(nC, nD));
     // Across a depth step the rebuilt normals mean nothing: the silhouette speaks there.
     float jump = max(max(abs(x0 - L), abs(x1 - L)), max(abs(y0 - L), abs(y1 - L))) / L;
-    o.crease = smoothstep(0.22, 0.36, bend) * (1.0 - smoothstep(0.05, 0.1, jump));
+    o.crease = smoothstep(creaseLo, creaseLo + 0.14, bend) * (1.0 - smoothstep(0.05, 0.1, jump));
     return o;
 }
 // Anime's print: linear to 0.8, then a soft shoulder to 1 per channel, so a lit red stays red and a lit white car stays white
@@ -766,7 +781,7 @@ fragment float4 cg_film_fragment(SOut in [[stage_in]], texture2d<float> hdr [[te
         int2 p = int2(in.clip.xy);
         float3 c = min(max(hdr.read(uint2(p)).rgb, 0.0) * f.fogRange.z, float3(1.0));
         float y = dot(c, LUMA); c = max(mix(float3(y), c, 1.2), 0.0);
-        Ink e = inkAt(depthTex, p, 1, f);
+        Ink e = inkAt(depthTex, p, 1, 0.4, f);
         c *= 1.0 - 0.5 * e.crease * (1.0 - smoothstep(60.0, 120.0, e.dist));
         float3 o = paletteNearest(c);
         if (e.sil > 0.5) o = PAL_SRGB[0];
@@ -781,7 +796,7 @@ fragment float4 cg_film_fragment(SOut in [[stage_in]], texture2d<float> hdr [[te
         float y = dot(c, LUMA); c = clamp(mix(float3(y), c, 1.12), 0.0, 1.0);
         c = srgbEncode(c);
         int kNear = f.proj.w > 1500.0 ? 3 : 2;   // ≈ 1.5 pt near, 1 pt mid, a hair far
-        Ink e = inkAt(depthTex, int2(in.clip.xy), kNear, f);
+        Ink e = inkAt(depthTex, int2(in.clip.xy), kNear, 0.22, f);
         float ink = max(e.sil, e.crease * 0.75 * (1.0 - smoothstep(45.0, 110.0, e.dist))) * mix(1.0, 0.5, smoothstep(150.0, 700.0, e.dist));
         c = mix(c, INK, ink);
         if (f.style.w > 0.01) c = mix(c, float3(1.0), speedLines(in.uv, f) * 0.8);
