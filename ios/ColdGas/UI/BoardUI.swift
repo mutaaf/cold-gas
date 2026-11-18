@@ -62,6 +62,8 @@ struct BoardView: View {
     @State private var board = ColdGasAPI.Board.today
     @State private var rows: [BoardRow]? = nil
     @State private var loading = true
+    /// 0293: the empty state's Try again asks once more.
+    @State private var attempt = 0
     @State private var hidden = Moderation.hidden
     var body: some View {
         VStack(spacing: 0) {
@@ -112,11 +114,17 @@ struct BoardView: View {
                         }
                         .padding(.horizontal, 16)
                     }
-                } else { empty("The board didn\u{2019}t answer. Check your connection.") }
+                } else {
+                    VStack(spacing: 14) {
+                        Text("The board didn\u{2019}t answer. Check your connection.").font(Theme.text(14)).foregroundStyle(Theme.ink3)
+                        Button("Try again") { attempt += 1 }.buttonStyle(CGButton()).accessibilityIdentifier("board-retry")
+                    }
+                    .frame(maxHeight: .infinity)
+                }
             }
             .padding(.top, 6)
         }
-        .task(id: "\(course)-\(board.rawValue)") {
+        .task(id: "\(course)-\(board.rawValue)-\(attempt)") {
             loading = true
             let r = await ColdGasAPI.production.fetchBoard(board, course: course)
             if !Task.isCancelled { rows = r; loading = false }

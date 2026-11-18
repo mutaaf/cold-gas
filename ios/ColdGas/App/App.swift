@@ -29,6 +29,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         HapticDemo.startIfAsked()
         SoundLab.startIfAsked()
         Usage.shared.sessionStart()      // 0246: queued now, sent from the title
+        Report.start()                   // 0293: MetricKit, and what the save found at launch
         // 0253: a link that launched the app (a universal link's activity, or coldgas://), once the game is up.
         let urls = connectionOptions.urlContexts.map(\.url) + connectionOptions.userActivities.compactMap(\.webpageURL)
         #if DEBUG

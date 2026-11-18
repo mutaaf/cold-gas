@@ -174,7 +174,10 @@ final class FreeDrive: DriveScene {
 
     /// The renderer attached (its device): the world's view is built once.
     func attach(device: MTLDevice) {
-        if view == nil { view = WorldView(device: device, world: world) }
+        if view == nil {
+            view = WorldView(device: device, world: world)
+            if view == nil { Report.error(.world, .error, "the drive's world view couldn't be built") }   // 0293
+        }
         view?.origin = origin   // the drive may have moved its origin before the view existed
     }
 
@@ -207,7 +210,7 @@ final class FreeDrive: DriveScene {
                     chassis.counterAssist = pilot == nil && (sampler.touch.active || sampler.tilt != 0) ? DriveSpec.counterAssistTouch : 0
                     if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
                     // A state that isn't a number never reaches the engine again (0229): back on the road at once.
-                    if !carFinite(car) { print("DRIVE car state not finite: reset"); reset(); acc = 0; break }
+                    if !carFinite(car) { print("DRIVE car state not finite: reset"); Report.error(.drive, .trap, "drive car state not finite"); Report.recovered(.world, ok: true); reset(); acc = 0; break }
                     pedal = input.brake
                     streamer.breakCheck(car.world, car: car)
                     readLoose(car.world)
@@ -220,7 +223,7 @@ final class FreeDrive: DriveScene {
                     acc -= DT
                     rebase()
                 }
-            } catch { print("DRIVE sim stopped: \(error)"); reset() }
+            } catch { print("DRIVE sim stopped: \(error)"); Report.error(.drive, .trap, "drive sim stopped: \(error)"); Report.recovered(.world, ok: true); reset() }
             watchdog(dt)
             if carFinite(car) {
                 let f = forward

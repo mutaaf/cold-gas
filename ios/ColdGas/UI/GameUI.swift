@@ -90,6 +90,20 @@ struct RootUI: View {
                     .frame(width: layout.controls.width, height: layout.controls.height).offset(x: layout.controls.minX, y: layout.controls.minY)
                     .transition(.opacity)
             }
+            // 0293: a calm line when something failed that the player should know (Report.swift's Notice); never over a run.
+            if let n = game.notice, game.screen != .run {
+                NoticeLine(notice: n) {
+                    withAnimation(.easeOut(duration: 0.2)) { game.notice = nil }
+                    if n.action == .retryStage { game.stage?.retryFailedBuild() }
+                }
+                .frame(width: layout.controls.width).offset(x: layout.controls.minX, y: layout.controls.minY + 64)   // under the title's corner glyphs
+                .transition(.opacity)
+                .task(id: n.id) {
+                    guard let s = n.seconds else { return }
+                    try? await Task.sleep(for: .seconds(s))
+                    if game.notice?.id == n.id { withAnimation(.easeOut(duration: 0.3)) { game.notice = nil } }
+                }
+            }
             // The HUD layout editor (0221), from Settings → Controls or the pause sheet: over everything, the run under it paused.
             if let t = hud.editing {
                 HudEditorView(layout: layout, tier: t) { withAnimation(.easeOut(duration: 0.2)) { hud.editing = nil } }
