@@ -1,12 +1,12 @@
 ---
 id: 0168
 title: An empty board says what a first row needs and offers the Jump that would fill it
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-06
-pr:
+pr: 418
 by: scout
 ---
 
@@ -28,11 +28,11 @@ closes the board and starts that course's countdown exactly as the title's Jump 
 how-to card and the funnel counts are unchanged). Offline (`rows` null) stays as is. Board CSS only as needed.
 
 ## Acceptance criteria
-- [ ] Empty board (today and all time, every course tab) shows the line, the one-line how-to-earn-a-row text and a Jump button for the tab's course
-- [ ] The button starts the same flow as the title's Jump (how-to card for a new player), never skipping it, and never from the results sheet
-- [ ] A non-empty board and the offline state render exactly as before
-- [ ] 390×844 touch and 1280×720: no overlap, button ≥ 44 px, reachable by keyboard, `npm run audit` clean
-- [ ] No new network call, host, key or funnel event beyond the existing `board-open`
+- [x] Empty board (today and all time, every course tab) shows the line, the one-line how-to-earn-a-row text and a Jump button for the tab's course
+- [x] The button starts the same flow as the title's Jump (how-to card for a new player), never skipping it, and never from the results sheet
+- [x] A non-empty board and the offline state render exactly as before
+- [x] 390×844 touch and 1280×720: no overlap, button ≥ 44 px, reachable by keyboard, `npm run audit` clean
+- [x] No new network call, host, key or funnel event beyond the existing `board-open`
 
 ## Test plan
 e2e (`tests/e2e`): stub `/api/scores` to `{rows: []}`, open the board, assert the button's text names the course and
