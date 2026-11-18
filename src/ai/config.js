@@ -30,3 +30,8 @@ export function forgetAI() {
 }
 
 export const shortModel = (m) => String(m || '').replace(/^@cf\/[^/]+\//, '').replace(/-instruct.*$|-it$/, '');
+
+// The judges' chip on the title: 'AI · Free', or the vendor of the player's own key.
+export function aiLabel(ai = loadAI()) {
+  return ai.provider === 'edge' ? 'AI · Free' : `AI · ${PROVIDER_INFO[ai.provider].vendor}`;
+}

@@ -18,6 +18,14 @@ struct SettingsView: View {
     @State private var judgeStatus = OnDeviceJudges.status
     @State private var usage = SaveStore.shared.settings.usageOn
     @State private var stability = FreeDrive.stability
+    @State private var look = Look.current
+    private var lookFooter: String {
+        switch look {
+        case .real: "Real: lit as a film set, with bloom and reflections."
+        case .anime: "Anime: flat cel light, inked edges, a bold sky and speed lines when it gets fast."
+        case .pixel: "8-bit: chunky pixels and a small palette. The lightest on the battery."
+        }
+    }
     private var judgeFooter: String {
         let crew = "The crew\u{2019}s own lines are written by the game from your run\u{2019}s numbers. Nothing is sent, and the scores are always the game\u{2019}s."
         if judgeStatus != .available { return "\(judgeStatus.line) \(crew)" }
@@ -62,6 +70,17 @@ struct SettingsView: View {
                     .onChange(of: units) { _, v in var st = SaveStore.shared.settings; st.units = v; SaveStore.shared.settings = st }
                 } header: { Text("Play") } footer: {
                     Text("One thumb flies Assist on the Show and the Wall. Classic flies everything.")
+                }
+                // 0280: the game's look, render-only (the scores and the physics never see it).
+                Section {
+                    Picker("Look", selection: $look) {
+                        ForEach(Look.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: look) { _, v in Look.set(v); UISelectionFeedbackGenerator().selectionChanged() }
+                    .accessibilityIdentifier("look")
+                } header: { Text("Look") } footer: {
+                    Text(lookFooter)
                 }
                 ControlsSection(close: { dismiss() })
                 // 0269: Free Drive and Roam's stability control.

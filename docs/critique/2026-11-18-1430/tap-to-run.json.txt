@@ -1,0 +1,19 @@
+{"usable":7038,"left":44269,"laterEnd":5788,"wasmEnd":14588,"entryEnd":4055,"mode":"countdown","tapToRun":37231}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+locator.boundingBox: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('[data-start]')[22m
+[2m    - locator resolved to visible <button data-start="" class="btn primary jump-btn">…</button>[22m
+
+    at /home/user/cold-gas/docs/critique/2026-11-18-1430/tap-to-run.mjs:21:50 {
+  log: [
+    "  - waiting for locator('[data-start]')",
+    '    - locator resolved to visible <button data-start="" class="btn primary jump-btn">…</button>'
+  ],
+  name: 'TimeoutError'
+}
+
+Node.js v22.23.5

@@ -86,6 +86,10 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         }
     }
     private func startLinkIfNeeded() { if link == nil { startLink() } }
+    /// One fixed rate (0280): the governor's cadence, min = max, so every frame is shown for the same time (a 60–120 range
+    /// let a frame that missed 120's deadline show for 16.7 ms between 8.3 ms ones: the judder).
+    private static func range(_ hz: Int) -> CAFrameRateRange { let f = Float(hz); return CAFrameRateRange(minimum: f, maximum: f, preferred: f) }
+    private var linkCadence = 120
     /// Free Drive's bench starts once the world near the car is built (Game.startDrive's `-bench`).
     func startBench(seconds: Double) { if bench == nil { bench = Bench(seconds: seconds) } }
 
@@ -98,7 +102,8 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
 
     private func startLink() {
         let l = CAMetalDisplayLink(metalLayer: metal)
-        l.preferredFrameRateRange = CAFrameRateRange(minimum: 60, maximum: 120, preferred: 120)
+        l.preferredFrameRateRange = StageView.range(renderer?.cadence ?? 120)
+        linkCadence = renderer?.cadence ?? 120
         l.preferredFrameLatency = Launch.value("-frame-latency").flatMap(Float.init) ?? 2
         l.delegate = self
         l.add(to: .main, forMode: .common)
@@ -109,6 +114,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
 
     func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
         guard let r = renderer else { return }
+        if r.cadence != linkCadence { linkCadence = r.cadence; link.preferredFrameRateRange = StageView.range(r.cadence) }
         let now0 = CACurrentMediaTime()
         var dt = lastFrame == 0 ? 0 : now0 - lastFrame
         let k = r.slowK
@@ -140,11 +146,11 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         InputLag.frame(target: update.targetPresentationTimestamp)
         if stats.firstFrame { Ready.mark("frame") }
         if stats.frames % 60 == 0 {
-            NotificationCenter.default.post(name: .frameStats, object: String(format: "%.0f fps · %.2f ms cpu\n%d×%d px · render %.0f%% · MSAA 4× · MetalFX", stats.fps, stats.cpuAvg, Int(metal.drawableSize.width), Int(metal.drawableSize.height), r.scale * 100))
+            NotificationCenter.default.post(name: .frameStats, object: String(format: "%.0f fps · %.2f ms cpu\n%d×%d px · render %.0f%% · MSAA 4× · MetalFX · %d Hz · %@", stats.fps, stats.cpuAvg, Int(metal.drawableSize.width), Int(metal.drawableSize.height), r.scale * 100, r.cadence, Look.current.title))
         }
         if let b = bench {
             b.frame(target: update.targetPresentationTimestamp, cpu: (now - cpu0) * 1000)
-            if b.done { bench = nil; b.report(compiles: r.compilesAfterLaunch, launchMs: r.launchCompileMs, size: metal.drawableSize); if let fd = MainActor.assumeIsolated({ Game.shared.freeDrive }) { print("BENCH freedrive \(fd.statsLine)") }; print(String(format: "BENCH render-scale %.2f thermal %d lowpower %d · passes (ms) %@", r.scale, ProcessInfo.processInfo.thermalState.rawValue, ProcessInfo.processInfo.isLowPowerModeEnabled ? 1 : 0, r.passTimes.report())) }
+            if b.done { bench = nil; b.report(compiles: r.compilesAfterLaunch, launchMs: r.launchCompileMs, size: metal.drawableSize); if let fd = MainActor.assumeIsolated({ Game.shared.freeDrive }) { print("BENCH freedrive \(fd.statsLine)") }; print("BENCH look \(Look.current.rawValue) cadence \(r.cadence)"); print(String(format: "BENCH render-scale %.2f thermal %d lowpower %d · passes (ms) %@", r.scale, ProcessInfo.processInfo.thermalState.rawValue, ProcessInfo.processInfo.isLowPowerModeEnabled ? 1 : 0, r.passTimes.report())) }
         }
     }
 }

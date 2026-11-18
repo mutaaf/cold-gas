@@ -18,6 +18,8 @@ struct Frame {
     float4x4 invViewProj;
     float4 proj;                // P00, P11, render width, render height
     float4 misc;                // x: this is the mirror's draw; y: the slab has a mirror to read; zw: 1 / render size
+    float4 style;               // the look (0280, Look.swift): x 0 Real, 1 Anime, 2 8-bit; y, z the projection's z scale and offset
+                                // (depth → 1/distance for the ink); w 8-bit's block (display px) or anime's speed lines (0…1)
 };
 // What doesn't change in a course (Renderer.lookU).
 struct LookU {
@@ -74,12 +76,20 @@ static float3 hazed(float3 c, float3 d, float L, float3 eye, constant LookU& k) 
 // the tone curve's shoulder (AgX) and the car keeps its shape.
 constant float HERO_LUX = 3.0;
 static float ggx(float nh, float a) { float a2 = max(a * a, 1e-4), d = nh * nh * (a2 - 1.0) + 1.0; return a2 / max(M_PI_F * d * d, 1e-6); }
-static float3 brdf(float3 n, float3 v, float3 l, float3 base, float metal, float rough, float3 radiance, float cc, float ccRough) {
+static float3 brdf(float3 n, float3 v, float3 l, float3 base, float metal, float rough, float3 radiance, float cc, float ccRough, bool toon = false) {
     float3 h = normalize(l + v + 1e-6);
     float nl = clamp(dot(n, l), 0.0, 1.0), nv = clamp(dot(n, v), 1e-3, 1.0), nh = clamp(dot(n, h), 0.0, 1.0), vh = clamp(dot(v, h), 0.0, 1.0);
     if (nl <= 0) return 0;
     float r = clamp(rough, 0.045, 1.0), a = r * r;
     float3 f0 = mix(float3(0.04), base, metal);
+    if (toon) {
+        // Anime (0280): the light in three flat tones (none, half, full) with a narrow eased edge, and the highlight a hard shape
+        // where the GGX lobe passes 1 (a polished panel gets one, rough concrete none). No clear coat: the paint is flat.
+        float band = 0.5 * smoothstep(0.07, 0.13, nl) + 0.5 * smoothstep(0.5, 0.58, nl);
+        float lobe = ggx(nh, a) * 0.25 / max(nv, 0.2);
+        float hard = smoothstep(0.85, 1.15, lobe) * (1.0 - smoothstep(0.55, 0.75, r));
+        return ((1.0 - metal) * base / M_PI_F * 1.1 * band + hard * mix(float3(0.6), base, metal)) * radiance;
+    }
     float3 F = f0 + (1.0 - f0) * pow(1.0 - vh, 5.0);
     float k = (r + 1.0) * (r + 1.0) / 8.0;
     float G = (nl / (nl * (1.0 - k) + k)) * (nv / (nv * (1.0 - k) + k));
@@ -180,12 +190,14 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             rough = mix(rough, max(rough * 0.55, 0.2), wet);
         }
         float sh = shadowAt(in.lightClip, shadow, f.fogRange.w);
-        color = brdf(n, V, normalize(f.keyDir.xyz), base.rgb, metal, rough, f.keyColor.rgb * f.keyDir.w * sh, m.pbr.z, m.pbr.w);
+        bool toon = f.style.x > 0.5 && f.style.x < 1.5;   // Anime (0280)
+        if (toon) sh = smoothstep(0.35, 0.65, sh);         // a cel shadow's hard edge
+        color = brdf(n, V, normalize(f.keyDir.xyz), base.rgb, metal, rough, f.keyColor.rgb * f.keyDir.w * sh, m.pbr.z, m.pbr.w, toon);
         int nl = int(f.keyColor.w);
         for (int i = 0; i < nl; i++) {
             Light L = lights[i];
             if (L.params.z > 1.5) {   // a directional light beyond the key (the Lineup's rim): no shadow, no falloff
-                color += brdf(n, V, L.dirCos.xyz, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w, m.pbr.z, m.pbr.w);
+                color += brdf(n, V, L.dirCos.xyz, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w, m.pbr.z, m.pbr.w, toon);
                 continue;
             }
             float3 d = L.posRange.xyz - in.world;
@@ -205,7 +217,8 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             // run's opening. The lamps still light the set at full strength; on the car they read as a bright rake, never a blaze.
             if (m.flags.w & 4u) att = min(att, HERO_LUX / max(L.colorIntensity.w, 1e-3));
             if (L.posRange.w > 0) { float q = clamp(1.0 - pow(dist / L.posRange.w, 4.0), 0.0, 1.0); att *= q * q; }
-            color += brdf(n, V, l, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w * att, m.pbr.z, m.pbr.w);
+            if (toon) att *= 0.4 + 0.6 * step(0.3, att * L.colorIntensity.w * dot(L.colorIntensity.rgb, float3(0.333)));   // a lamp's pool has an edge
+            color += brdf(n, V, l, base.rgb, metal, rough, L.colorIntensity.rgb * L.colorIntensity.w * att, m.pbr.z, m.pbr.w, toon);
         }
         // Indirect, as three's RE_IndirectDiffuse/Specular_Physical: the hemisphere (irradiance / π) and the environment (its
         // roughest mip is irradiance / π already), the specular through the split-sum DFG with its multiple-scattering term.
@@ -224,6 +237,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             float3 refl = normalize(mix(reflect(-V, n), n, r1 * r1 * r1 * r1));
             radiance = env.sample(envSampler, refl, level(r1 * 5.0)).rgb * look.hemiSky.w;
         }
+        if (toon) radiance *= 0.35;   // the world's reflection, a hint on the paint
         float3 F0 = mix(float3(0.04), base.rgb, metal);
         float3 Fss = F0 * fab.x + fab.y;
         float Ess = fab.x + fab.y, Ems = 1.0 - Ess;
@@ -231,7 +245,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float3 Fms = Fss * Favg / max(1.0 - Ems * Favg, 1e-3);
         float diel = 0.04 * fab.x + fab.y; float dielMs = (0.04 * fab.x + fab.y) * (0.04 + 0.96 * 0.047619) / max(1.0 - Ems * (0.04 + 0.96 * 0.047619), 1e-3) * Ems;
         color += base.rgb * (1.0 - metal) * (1.0 - (diel + dielMs)) * cosIrr + radiance * Fss + Fms * Ems * cosIrr;
-        if (m.pbr.z > 0) {   // the clear coat over it all
+        if (m.pbr.z > 0 && !toon) {   // the clear coat over it all
             float cr = max(clamp(m.pbr.w, 0.0, 1.0), 0.03);
             float3 cc = sky ? duskEnv(reflect(-V, n), cr, look) : look.hemiSky.w > 0 ? env.sample(envSampler, reflect(-V, n), level(cr * 5.0)).rgb * look.hemiSky.w : float3(0);
             float4 rc = cr * float4(-1.0, -0.0275, -0.572, 0.022) + float4(1.0, 0.0425, 1.04, -0.04);
@@ -287,6 +301,17 @@ static float3 starField(float3 dir, float cells, float keep, float h0, bool vary
     float disc = 1.0 - smoothstep(0.32 - aa * 0.5, 0.32 + aa * 0.5, d);
     return float3(on * disc * 1.6) * (vary ? 0.35 + 0.65 * starHash(sp + 3.1) : 1.0);
 }
+// Anime's sky (0280): the course's own colours, punched up, in four flat bands to the zenith; bigger, fewer stars.
+static float3 animeSky(float3 d, float h, constant LookU& k) {
+    bool dusk = k.hemiGround.w > 0.5;
+    float3 zen = dusk ? k.skyZenith.rgb * 1.25 : float3(0.006, 0.010, 0.050);
+    float3 mid = dusk ? k.skyMid.rgb * 1.5 : float3(0.020, 0.022, 0.085);
+    float3 hor = dusk ? k.skyHorizon.rgb * 1.8 : float3(0.060, 0.036, 0.110);
+    float3 c = h < 0.05 ? hor : h < 0.17 ? mix(hor, mid, 0.5) : h < 0.4 ? mid : zen;
+    if (k.fogExp.z > 0) c += starField(d, 260.0, 0.9965, 0.12, false) * 0.9;
+    if (h < 0.0) c = hor * 0.25;
+    return c;
+}
 fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]]) {
     float3 d = normalize(in.dir + 1e-6);
     float h = clamp(d.y, -1.0, 1.0);
@@ -307,6 +332,7 @@ fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buff
         if (k.fogExp.z > 0) c += starField(d, 520.0, 0.9982, 0.08, true);
         if (h < 0.0) c = float3(0.004, 0.005, 0.007);
     }
+    if (f.style.x > 0.5 && f.style.x < 1.5) c = animeSky(d, h, k);
     return float4(hazed(c, d, 700.0, f.eye.xyz, k), 1);   // the sky: a long but finite path through the air (film.js)
 }
 
@@ -452,7 +478,41 @@ fragment float4 cg_plume_fragment(POut in [[stage_in]], constant Frame& f [[buff
 }
 
 // The film pass: bloom, exposure, AgX, film.js's vignette, half an 8-bit step of dither (a near-black sky bands without it), into the LDR target MetalFX reads.
-fragment float4 cg_film_fragment(SOut in [[stage_in]], texture2d<float> hdr [[texture(0)]], texture2d<float> bloom [[texture(1)]], constant Frame& f [[buffer(1)]], constant LookU& look [[buffer(4)]]) {
+// --- The looks' finish (0280) -----------------------------------------------------------------------------------
+// Anime's ink: where the depth's second difference jumps (1/distance is linear across a plane, and NDC depth is affine in it,
+// so a plane reads 0 however steep), and where the frame's brightness jumps a long way (a crease the depth can't see).
+// Four depth reads and four colour reads a pixel at the render size: the only extra cost of the look.
+static float rdDepth(depth2d<float> t, int2 p, int2 hi) { return t.read(uint2(clamp(p, int2(0), hi))); }
+static float rdLum(texture2d<float> t, int2 p, int2 hi) { return log2(max(dot(t.read(uint2(clamp(p, int2(0), hi))).rgb, float3(0.2126, 0.7152, 0.0722)), 1e-4)); }
+static float animeInk(float2 clip, depth2d<float> dt, texture2d<float> hdr, constant Frame& f) {
+    int2 hi = int2(dt.get_width(), dt.get_height()) - 1, c = int2(clip);
+    int k = max(1, int(f.proj.w / 800.0 + 0.5));    // ≈ a point wide on a phone
+    float dc = rdDepth(dt, c, hi);
+    float lap = abs(rdDepth(dt, c - int2(k, 0), hi) + rdDepth(dt, c + int2(k, 0), hi) - 2.0 * dc)
+              + abs(rdDepth(dt, c - int2(0, k), hi) + rdDepth(dt, c + int2(0, k), hi) - 2.0 * dc);
+    float rel = lap / max(abs(dc + f.style.y), 1e-5);
+    float lum = abs(rdLum(hdr, c - int2(k, 0), hi) - rdLum(hdr, c + int2(k, 0), hi)) + abs(rdLum(hdr, c - int2(0, k), hi) - rdLum(hdr, c + int2(0, k), hi));
+    return max(smoothstep(0.015, 0.05, rel), 0.7 * smoothstep(1.6, 2.6, lum) * step(dc, 0.99999));
+}
+// Speed lines on a big moment (style.w): thin white rays toward the edges, re-dealt twelve times a second.
+static float speedLines(float2 uv, constant Frame& f) {
+    float2 q = (uv - 0.5) * float2(f.proj.z / max(f.proj.w, 1.0), 1.0);
+    float r = length(q), a = atan2(q.y, q.x) * 36.0 / M_PI_F, cell = floor(a), fr = fract(a);
+    float h = fract(sin(cell * 12.9898 + floor(f.eye.w * 12.0) * 4.137) * 43758.5453);
+    float line = step(0.7, h) * smoothstep(0.38 + 0.3 * fract(h * 7.31), 0.8, r) * (1.0 - smoothstep(0.06, 0.14, abs(fr - 0.5)));
+    return line * f.style.w;
+}
+// 8-bit's palette: five levels a channel (125 colours) through a 4×4 Bayer matrix, a little more saturated, at the low-res grid.
+constant float BAYER4[16] = { 0, 8, 2, 10, 12, 4, 14, 6, 3, 11, 1, 9, 15, 7, 13, 5 };
+static float3 pixelPalette(float3 c, uint2 p) {
+    float t = (BAYER4[(p.y & 3u) * 4u + (p.x & 3u)] + 0.5) / 16.0 - 0.5;
+    float y = dot(c, float3(0.299, 0.587, 0.114));
+    c = clamp(mix(float3(y), c, 1.3), 0.0, 1.0);
+    return clamp(floor(c * 4.0 + 0.5 + t) / 4.0, 0.0, 1.0);
+}
+
+fragment float4 cg_film_fragment(SOut in [[stage_in]], texture2d<float> hdr [[texture(0)]], texture2d<float> bloom [[texture(1)]], depth2d<float> depthTex [[texture(2)]],
+                                 constant Frame& f [[buffer(1)]], constant LookU& look [[buffer(4)]]) {
     constexpr sampler s(filter::linear, address::clamp_to_edge);
     float3 c = max(hdr.sample(s, in.uv).rgb, 0.0);
     if (look.fogExp.w > 0) c += bloom.sample(s, in.uv).rgb;
@@ -478,11 +538,20 @@ fragment float4 cg_film_fragment(SOut in [[stage_in]], texture2d<float> hdr [[te
     c *= 1.0 - look.sunDir.w * smoothstep(0.35, 1.05, dot(q, q) * 1.6);
     c = clamp(c, 0.0, 1.0);
     c = select(1.055 * pow(c, 1.0 / 2.4) - 0.055, c * 12.92, c <= 0.0031308);   // sRGB encode: MetalFX's perceptual mode reads it so
+    if (f.style.x > 1.5) return float4(pixelPalette(c, uint2(in.clip.xy)), 1);   // 8-bit: no film grain, the dither is the grain
+    if (f.style.x > 0.5) {   // Anime: a brighter, more saturated print, the ink over it, the speed lines over all
+        float y = dot(c, float3(0.299, 0.587, 0.114));
+        c = clamp(mix(float3(y), c, 1.3) * 1.05, 0.0, 1.0);
+        c = mix(c, float3(0.05, 0.04, 0.09), animeInk(in.clip.xy, depthTex, hdr, f) * 0.9);
+        if (f.style.w > 0.01) c = mix(c, float3(1.0), speedLines(in.uv, f) * 0.75);
+    }
     float n = fract(sin(dot(in.uv * 1024.0, float2(12.9898, 78.233))) * 43758.5453);
     return float4(c + (n - 0.5) / 255.0, 1);
 }
 // The upscaled frame into the drawable.
-fragment float4 cg_present_fragment(SOut in [[stage_in]], texture2d<float> src [[texture(0)]]) {
+// 8-bit (k.x, the block in display pixels): each block one texel, read whole (nearest neighbour on an exact grid).
+fragment float4 cg_present_fragment(SOut in [[stage_in]], texture2d<float> src [[texture(0)]], constant float4& k [[buffer(0)]]) {
+    if (k.x > 0.5) return src.read(min(uint2(in.clip.xy / k.x), uint2(src.get_width() - 1, src.get_height() - 1)));
     constexpr sampler s(filter::linear, address::clamp_to_edge);
     return src.sample(s, in.uv);
 }

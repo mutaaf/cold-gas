@@ -1,12 +1,12 @@
 ---
 id: 0242
 title: Wreck Club ranks, earned by crash feats, unlock cosmetics by play alone
-status: proposed
+status: in-progress
 priority: P2
 size: M
 lens: engagement
 created: 2026-11-13
-pr:
+pr: 416
 by: operator
 ---
 
@@ -40,3 +40,10 @@ New `tests/unit/ranks.test.js`; an e2e that earns one feat and applies its unloc
 
 ## Out of scope
 The iPhone (a follow-up after 0239). Any board.
+
+## Notes
+2026-11-17 (builder): the iPhone has it first (ahead of the web and 0254's store): ColdGasClient `WreckClub.swift`, kept in the
+save as `club` (feats with the day earned, sets landed, the paint). Twelve feats, six ranks (Rookie to Legend of the lot),
+six paints unlocked by rank; a Wreck Club sheet from the title (flag glyph) lists every feat and how to earn it, and the
+results name new feats and a rank up. Cosmetic only: the paint is the car body's base colour (Renderer.applyPaint). No
+plume tint or decal yet; the web and the licenses tab are still to do.
