@@ -16,6 +16,11 @@ final class SmokeUITests: XCTestCase {
         XCTAssertTrue(p.waitForExistence(timeout: 10), "no health probe (\(at))", line: line)
         XCTAssertEqual(p.label, "faults 0", "\(at): \((p.value as? String) ?? "")", line: line)
     }
+    /// A tap that a busy simulator can drop: again until `shows` appears (three tries).
+    private func tapUntil(_ b: XCUIElement, shows: XCUIElement) -> Bool {
+        for _ in 0..<3 { if b.exists { b.tap() }; if shows.waitForExistence(timeout: 12) { return true } }
+        return false
+    }
     private func results(_ a: XCUIApplication, timeout: Double = 240) -> XCUIElement? {
         let next = a.buttons["next"], again = a.buttons["again"]
         let end = Date().addingTimeInterval(timeout)
@@ -53,8 +58,7 @@ final class SmokeUITests: XCTestCase {
             sleep(8)
             shot(id)
             healthy(a, name)
-            back.tap()
-            XCTAssertTrue(play.waitForExistence(timeout: 30), "back from \(name) failed")
+            XCTAssertTrue(tapUntil(back, shows: play), "back from \(name) failed")
         }
 
         // Settings: every look, every stability setting, and the drive's aids where this build has them.

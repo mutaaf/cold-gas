@@ -73,7 +73,8 @@ final class ReportCenter: NSObject, MXMetricManagerSubscriber, @unchecked Sendab
     /// Every fault this launch has reported, kept or not (0301: the UI tests and the soak read it; `-uitest`'s HealthProbe).
     private var faults: [String] = []
     func add(_ mod: Obs.Module, _ kind: Obs.Kind, _ message: String, frame: String, stack: String = "", build: String = ReportCenter.build, count: Int = 1) {
-        lock.lock(); if faults.count < 64 { faults.append("\(mod.rawValue)/\(kind.rawValue) \(Obs.normMessage(message))") }; lock.unlock()
+        let seen = "\(mod.rawValue)/\(kind.rawValue) \(Obs.normMessage(message))"
+        lock.lock(); if faults.count < 64 && !faults.contains(seen) { faults.append(seen) }; lock.unlock()
         let keep = on
         let log = logger(mod)
         lock.lock()

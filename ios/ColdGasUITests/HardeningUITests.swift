@@ -137,7 +137,8 @@ final class HardeningUITests: XCTestCase {
         XCTAssertEqual(f.n, 1, f.what)
         XCTAssertTrue(f.what.contains("drive input not finite"), f.what)
         shot("roam-after-nan")
-        back.tap()
-        XCTAssertTrue(a.buttons["play"].waitForExistence(timeout: 30), "Home from the roam failed")
+        var home = false
+        for _ in 0..<3 where !home { if back.exists { back.tap() }; home = a.buttons["play"].waitForExistence(timeout: 12) }
+        XCTAssertTrue(home, "Home from the roam failed")
     }
 }

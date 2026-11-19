@@ -71,6 +71,8 @@ final class FreeDrive: DriveScene {
     let track: Replay
     /// The controls (Controls routes the touches here while the drive is up): src/input.js sample, the Standard hands.
     let sampler = InputSampler(level: .standard)
+    /// 0301: a non-finite input has been let go this drive (said once, not every tick).
+    private var inputRepaired = false
     private let input = Input()
     /// A cruise (the shots): carried along the roads at this speed (m/s), not stepped.
     var cruise: Double?
@@ -212,7 +214,7 @@ final class FreeDrive: DriveScene {
                     if Inject.nanTick() { input.steer = .nan; input.throttle = .infinity }   // 0301: `-nan-input`
                     #endif
                     // 0301: a control that isn't a number (a sensor's NaN, a pad's garbage) is let go before the engine sees it.
-                    if guardInput(input) > 0 { Report.error(.drive, .error, "drive input not finite: let go") }
+                    if guardInput(input) > 0 && !inputRepaired { inputRepaired = true; Report.error(.drive, .error, "drive input not finite: let go") }
                     if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
                     // A state that isn't a number never reaches the engine again (0229): back on the road at once.
                     if !carFinite(car) { print("DRIVE car state not finite: reset"); Report.error(.drive, .trap, "drive car state not finite"); Report.recovered(.world, ok: true); reset(); acc = 0; break }
