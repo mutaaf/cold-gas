@@ -485,7 +485,7 @@ cache every frame after; nothing about a tile is recomputed per frame.
 
 | Resource | Shape | Per tile slot | What's in it |
 |---|---|---|---|
-| `slabs` | one buffer, `slotCount` × 1,221 vertices × 32 B | 39 kB | the CDLOD grid (TileSpec): pos, parent height, normal, colour |
+| `slabs` | one buffer, 512 slots × 1,221 vertices × 36 B | 44 kB | the CDLOD grid (TileSpec, 9 floats a vertex): pos, parent height, normal, colour (rgb; a: the scree share), material (RGBA8: R snow, G wetness or, under water, depth / 16 m, B road distance × 8, A flags: 1 water, 2 the slab) |
 | `surface` | `texture2d_array<float>`, RGBA8, 64 × 64 a slice | 16 kB | **R** rock, **G** snow, **B** wetness (0 … 1), **A** water depth (`depth / 16 m`, 0 on land) |
 | `traces` (on demand) | `texture2d_array<float>`, RGBA8, 512 × 512 a slice (0.25 m a texel), `traceSlots` slices | 1 MB | MATTER's: **R** rut depth (0 … 1 = 0 … 0.25 m), **G** disturbed ground (scuffed, flattened, bare), **B** mud / wet splash, **A** rubber / scorch |
 | `leafIndex` | `texture2d<int>` R32Sint, 32 × 32 | — | the finest tiles round the eye: `surfaceSlot | (traceSlot + 1) << 16`, −1 where none |

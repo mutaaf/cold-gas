@@ -18,8 +18,10 @@ public struct TileKey: Hashable, Sendable, CustomStringConvertible {
 public enum TileSpec {
     /// Cells a side (33 × 33 vertices), the finest tile (m), the levels (0 … levels − 1).
     public static let n = 32, leaf = 128.0, levels = 8
-    /// Floats a vertex: position (3), the parent level's height here (1), normal (3), colour (RGBA8 as a float's bits).
-    public static let stride = 8
+    /// Floats a vertex: position (3), the parent level's height here (1), normal (3), colour (RGBA8 as a float's bits), and
+    /// since 0310 the land's material (RGBA8 as a float's bits): R snow, G wetness (under water: the depth / 16 m), B the
+    /// distance to the road's centreline (m × 8, 255 past 31.75 m), A flags (1 water, 2 the Show's slab).
+    public static let stride = 9
     public static var gridVerts: Int { (n + 1) * (n + 1) }
     public static var verts: Int { gridVerts + 4 * (n + 1) }
     /// Levels up to this one carve the roadside into the land (their vertices are ≤ 64 m apart).
@@ -72,16 +74,16 @@ enum Palette {
 extension FreeWorld {
     /// The land's colour at a ground point (normal's y `ny`): its biomes, the slope's scree and rock, the snow line, the
     /// shore, the apron's concrete. Shared by the tiles and the roads' verges (0226), so they meet without a seam.
-    func landColor(_ g: GroundPoint, _ x: Double, _ z: Double, ny: Double) -> RGB {
+    func landColor(_ g: GroundPoint, _ x: Double, _ z: Double, ny: Double, bare: Bool = false) -> RGB {
         let w = g.land.w
         var c = Palette.alpine * w.0
         c = RGB(c.r + Palette.coastGrass.r * w.1 + Palette.desert.r * w.2 + Palette.forest.r * w.3,
                 c.g + Palette.coastGrass.g * w.1 + Palette.desert.g * w.2 + Palette.forest.g * w.3,
                 c.b + Palette.coastGrass.b * w.1 + Palette.desert.b * w.2 + Palette.forest.b * w.3)
         let slope = 1 - ny
-        c = c.mix(Palette.scree, WNoise.smooth(0.22, 0.34, slope) * (w.0 + w.2 * 0.6))
-        c = c.mix(Palette.rock, WNoise.smooth(0.32, 0.5, slope))
-        c = c.mix(Palette.snow, w.0 * WNoise.smooth(820, 1000, g.y) * (1 - WNoise.smooth(0.45, 0.65, slope)))
+        if !bare { c = c.mix(Palette.scree, WNoise.smooth(0.22, 0.34, slope) * (w.0 + w.2 * 0.6)) }
+        if !bare { c = c.mix(Palette.rock, WNoise.smooth(0.32, 0.5, slope)) }
+        if !bare { c = c.mix(Palette.snow, LandLook.snow(mountain: w.0, y: g.y, slope: slope)) }
         c = c.mix(Palette.sand, (1 - WNoise.smooth(SEA + 1, SEA + 4, g.y)) * (1 - w.0))
         c = c * (0.85 + 0.3 * (0.5 + 0.5 * WNoise.fbm(seed ^ 0x70e, x, z, 140, 2)))
         let edge = jsMax(abs(x), abs(z))
@@ -93,8 +95,9 @@ extension FreeWorld {
         c.mix(Palette.verge, 0.55 * (1 - WNoise.smooth(RoadSpec.hw + RoadSpec.shoulder, RoadSpec.hw + RoadSpec.shoulder + 7, road)))
     }
 
-    /// One terrain tile: (n + 1)² grid vertices, then the skirts.
-    public func tile(_ key: TileKey) -> TileData {
+    /// One terrain tile: (n + 1)² grid vertices, then the skirts. `seabed` (0310, §9.3): the ground under the sea as it is
+    /// (a water layer draws the surface); otherwise the sea is drawn flat at its level, as before.
+    public func tile(_ key: TileKey, seabed: Bool = false) -> TileData {
         let N = TileSpec.n, W = N + 1, S = key.size, step = S / Double(N), x0 = key.x0, z0 = key.z0
         let carve = key.level <= TileSpec.carveLevels, dip = key.level < TileSpec.roadPaintLevel
         let q = roads.query(minX: x0, minZ: z0, maxX: x0 + S, maxZ: z0 + S, margin: RoadSpec.reach, stride: Swift.max(1, Swift.min(16, Int(step / 8))))
@@ -116,8 +119,9 @@ extension FreeWorld {
             if abs(x) < Site.slab && abs(z) < Site.slab { return y - 0.35 }
             // Under a road's ribbon and its verges (the levels the ribbons are drawn over), a few centimetres down: the
             // ribbon, laid on the exact ground every 4 m along the road, is what's seen there, not a 4 m grid's facets.
-            if dip { let r = rd[(j + 1) * B + (i + 1)]; if r < RoadSpec.vergeOut { return jsMax(SEA, y - 0.22 * (1 - WNoise.smooth(RoadSpec.vergeOut - 2, RoadSpec.vergeOut, r))) } }
-            return jsMax(SEA, y)
+            let floorY = seabed ? -Double.infinity : SEA
+            if dip { let r = rd[(j + 1) * B + (i + 1)]; if r < RoadSpec.vergeOut { return jsMax(floorY, y - 0.22 * (1 - WNoise.smooth(RoadSpec.vergeOut - 2, RoadSpec.vergeOut, r))) } }
+            return jsMax(floorY, y)
         }
         var v = [Float](repeating: 0, count: TileSpec.verts * TileSpec.stride)
         var lo = Double.infinity, hi = -Double.infinity
@@ -135,7 +139,7 @@ extension FreeWorld {
             let g = gp[j * W + i]
             let x = x0 + Double(i) * step, z = z0 + Double(j) * step
             // The colour: the land's own, then the road (far off) or the verge (near).
-            var c = landColor(g, x, z, ny: ny)
+            var c = landColor(g, x, z, ny: ny, bare: true)   // 0310: rock, scree and snow come from the baked surface
             // A road reads from far away as a dark thread. Close up the ribbons draw it, so the near levels leave it out:
             // painted onto a 4–16 m grid it was a grey sawtooth either side of the ribbon (0226).
             if key.level >= TileSpec.roadPaintLevel {
@@ -144,10 +148,17 @@ extension FreeWorld {
                 c = vergeTint(c, road: g.road)
             }
             var flag: UInt32 = 0
-            if H(i, j) < SEA && !(abs(x) < Site.slab && abs(z) < Site.slab) { c = Palette.water; flag = 1 }
+            let onSlab = abs(x) < Site.slab && abs(z) < Site.slab
+            // The material (0310): the numbers `sample` gives (LandLook), for the GPU's surface bake.
+            let wat = water(x, z, groundY: H(i, j))
+            let snow = g.floor || g.surface != .grass ? 0 : LandLook.snow(mountain: g.land.w.0, y: g.y, slope: 1 - ny)
+            var wet = g.floor ? 0 : LandLook.wetness(y: H(i, j), waterLevel: wat.level, snow: snow)
+            if wat.wet { if !seabed { c = Palette.water }; flag = 1; wet = jsMin(1, wat.depth / 16) }
+            let mflags: UInt32 = (flag != 0 ? 1 : 0) | (onSlab ? 2 : 0)
+            let mat = pack(snow, wet, jsMin(255, g.road * 8) / 255, mflags)
             let o = (j * W + i) * TileSpec.stride
             v[o] = Float(Double(i) * step); v[o + 1] = Float(y); v[o + 2] = Float(Double(j) * step); v[o + 3] = Float(my)
-            v[o + 4] = Float(nx); v[o + 5] = Float(ny); v[o + 6] = Float(nz); v[o + 7] = pack(c.r, c.g, c.b, flag)
+            v[o + 4] = Float(nx); v[o + 5] = Float(ny); v[o + 6] = Float(nz); v[o + 7] = pack(c.r, c.g, c.b, UInt32(jsMin(1, g.land.w.0 + g.land.w.2 * 0.6) * 255)); v[o + 8] = mat
             lo = jsMin(lo, y); hi = jsMax(hi, y)
         } }
         // Skirts: each edge vertex again, a few steps down.

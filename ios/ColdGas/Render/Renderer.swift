@@ -34,10 +34,15 @@ struct FrameU {
     var style = SIMD4<Float>()
     /// 0290: x anime's impact frame (0…1); yz the moon's bearing (a unit xz), w 1 when it's set.
     var fx = SIMD4<Float>()
+    /// 0310: Free Drive's cached world shadow (WorldProps): its view-projection (render space); x 1 when drawn, y its texel.
+    var worldShadowVP = matrix_identity_float4x4
+    var worldShadow = SIMD4<Float>()
 }
 struct LookU {
     var hemiSky = SIMD4<Float>(), hemiGround = SIMD4<Float>(), hazeCol = SIMD4<Float>(), sunCol = SIMD4<Float>(), sunDir = SIMD4<Float>(), fogExp = SIMD4<Float>()
     var skyZenith = SIMD4<Float>(), skyMid = SIMD4<Float>(), skyHorizon = SIMD4<Float>(), skySun = SIMD4<Float>(), bloom = SIMD4<Float>()
+    /// Free Drive's physical sky (0231, 0310): x on, y haze, z the eye's height (km), w night; the sun's illuminance (rgb) and the time.
+    var atmo = SIMD4<Float>(), sunE = SIMD4<Float>()
 }
 struct GlintGPU { var pos = SIMD4<Float>(), color = SIMD4<Float>() }
 struct GlintGroup { var size: Float = 0, minPx: Float = 0, tint: Float = 1, pad: Float = 0 }
@@ -59,6 +64,7 @@ final class Renderer {
     static let mistScreens: Float = 3
 
     let device: MTLDevice, queue: MTLCommandQueue
+    private let library: MTLLibrary
     let stage: Stage
     /// The course this renderer was built for ("drive" for Free Drive, on the Show's stage).
     let courseKey: String
@@ -198,7 +204,7 @@ final class Renderer {
         guard let lib = device.makeDefaultLibrary() else { Report.error(.shader, .shader, "renderer: no default library"); return nil }
         // 0302: the stage (its JSON, meshes, textures and environment) loads on another thread while this one makes the pipelines.
         let loading = StageLoad(device: device, course: stageOf(course))
-        queue = q; self.replay = replay; courseKey = course
+        queue = q; self.replay = replay; courseKey = course; library = lib
         if Launch.args.contains("-crash-log") || Launch.args.contains("-fx-log") { setvbuf(stdout, nil, _IOLBF, 0) }
         let archive = PipelineArchive(device: device)
         let vd = MTLVertexDescriptor()
@@ -638,14 +644,18 @@ final class Renderer {
         }
         if fxLog { fxFrames += 1; if fxFrames % 120 == 0 { print(String(format: "FX mist %d live, k %.2f, %.2f M fragments at %d×%d · cones %d · sparks %d, puffs %d, chips %d · marks %d", mist.live, mist.budgetScale, mist.fragments(viewProj: u.viewProj, height: Float(renderSize.1)) * mist.budgetScale * mist.budgetScale / 1e6, renderSize.0, renderSize.1, nPlumes, fx.0, nPuffs, fx.2, skids?.marks.count ?? 0))
             for (i, pc) in crash.pieces.list.enumerated() where pc.on { print(String(format: "PIECE %d at (%.2f, %.2f, %.2f) v %.2f w %.2f still %.2f", i, pc.pos.x, pc.pos.y, pc.pos.z, simd_length(pc.v), simd_length(pc.w), pc.still)) } } }
-        let keyPos = carPos + stage.keyOffset, keyDir = simd_normalize(stage.keyOffset)
-        let lv = lookAt(eye: keyPos, target: carPos, up: [0, 1, 0]), lp = ortho(-28, 28, -28, 28, 1, 140)
+        // The key light: the stage's, or in Free Drive the sun (or the moon) of the hour (#365's DriveSky, 0310). Its box follows the car.
+        let dk = dv?.key
+        let keyDir = dk.map { simd_normalize($0.dir) } ?? simd_normalize(stage.keyOffset)
+        let keyPos = dk != nil ? carPos + keyDir * 70 : carPos + stage.keyOffset
+        let lv = lookAt(eye: keyPos, target: carPos, up: abs(keyDir.y) > 0.98 ? [0, 0, 1] : [0, 1, 0]), lp = ortho(-28, 28, -28, 28, 1, 140)
         u.lightViewProj = lp * lv
         u.eye = SIMD4(view.eye, Float(heroClock))
-        u.keyDir = SIMD4(keyDir, stage.keyIntensity)
-        u.keyColor = SIMD4(stage.keyColor, skip.contains("lights") || away ? 0 : Float(nLights))
+        u.keyDir = SIMD4(keyDir, dk?.intensity ?? stage.keyIntensity)
+        u.keyColor = SIMD4(dk?.color ?? stage.keyColor, skip.contains("lights") || away ? 0 : Float(nLights))
         u.fogColor = SIMD4(stage.fogColor, dv == nil ? 1 : 0)
-        u.fogRange = SIMD4(stage.fogNear, stage.fogFar, stage.exposure, 1 / Float(Renderer.shadowSize))
+        u.fogRange = SIMD4(stage.fogNear, stage.fogFar, dk?.exposure ?? stage.exposure, 1 / Float(Renderer.shadowSize))
+        if let ws = dv?.worldShadow, ws.on { u.worldShadowVP = ws.vp; u.worldShadow = SIMD4(1, 1 / Float(ws.map.width), 0, 0) }
         let wantMirror = look == .real && stage.wetMask != nil && !skip.contains("mirror") && !skip.contains("wet") && shed < 1 && view.eye.y > 0.05 && !away && lookU.fogExp.y > 0
         u.misc = SIMD4(0, wantMirror ? 1 : 0, 1 / Float(renderSize.0), 1 / Float(renderSize.1))
         // The look (0280, 0290). Anime's speed lines: fast (28 → 45 m/s), or the crash's slow motion; its impact frame.
@@ -681,6 +691,21 @@ final class Renderer {
             cmd.addCompletedHandler { cb in pt.add(name, (cb.gpuEndTime - cb.gpuStartTime) * 1000) }
             cmd.commit(); cmd = next
         }
+        // 0. Free Drive's world (0310): the tiles' surfaces baked, the props culled, the world's shadow when it's due, the sky's LUTs
+        // when the sun or the eye has moved. Most frames this is the cull's two dispatches and nothing else.
+        if let dv {
+            if let rs = dv.residency, rs !== residentSet {
+                if let old = residentSet { queue.removeResidencySet(old) }
+                queue.addResidencySet(rs); residentSet = rs
+            }
+            dv.encodeWorld(cmd, ring: fi, keyDir: keyDir)
+            if lookU.atmo.x > 0.5 {
+                if skyLUT == nil { skyLUT = SkyLUT(device: device, library: library) }
+                if let sl = skyLUT { sl.update(cmd, sun: SIMD3(lookU.skySun.x, lookU.skySun.y, lookU.skySun.z), eyeKm: lookU.atmo.z, sunE: SIMD3(lookU.sunE.x, lookU.sunE.y, lookU.sunE.z), time: lookU.sunE.w, night: lookU.atmo.w) } else { lookU.atmo.x = 0 }
+            }
+        } else if let old = residentSet { queue.removeResidencySet(old); residentSet = nil }
+        skyTex = lookU.atmo.x > 0.5 ? skyLUT?.view : nil
+        cut("world")
         // 1. shadow
         let sp = MTLRenderPassDescriptor()
         sp.depthAttachment.texture = shadowMap; sp.depthAttachment.loadAction = .clear; sp.depthAttachment.clearDepth = 1; sp.depthAttachment.storeAction = .store
@@ -752,10 +777,13 @@ final class Renderer {
             wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: false)
             if !away { sweepDraw(e, opaqueOnly: true) }
             if complexOn, let c = stage.complex { drawMesh(e, c.mesh, matsIndex: complexMats, model: stageM, opaqueOnly: true) }
-            if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, viewProj: u.viewProj) } else if !skip.contains("marks") { skids?.draw(e, frame: fb, look: &lookU) }
+            if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, sky: skyTex ?? dummy, viewProj: u.viewProj, quality: max(0, 2 - shed)); setEnv(e) }
+            else if !skip.contains("marks") { skids?.draw(e, frame: fb, look: &lookU) }
             // The sky where nothing opaque stands (far plane, depth read).
             e.setCullMode(.none); e.setDepthStencilState(dsRead); e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setRenderPipelineState(sky)
+            e.setFragmentTexture(skyTex ?? dummy, index: 15); e.setFragmentTexture(skyTex != nil ? (skyLUT?.clouds ?? dummy) : dummy, index: 16)
             e.tris(3)
+            if let dv { dv.drawWorldLate(e, frame: fb, look: &lookU, shadow: shadowMap, sky: skyTex ?? dummy, viewProj: u.viewProj); setEnv(e); e.setVertexBuffer(fb, offset: 0, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1) }
             if complexOn, let c = stage.complex, !skip.contains("translucent") {
                 // rocket.js's draw order: the lattice, the beams, then the lamps over them.
                 for (k, s) in c.mesh.submeshes.enumerated() where s.material.transparent {
@@ -888,7 +916,15 @@ final class Renderer {
         upscaled = device.makeTexture(descriptor: d)
         return upscaled
     }
-    private func setEnv(_ e: MTLRenderCommandEncoder) { e.setFragmentTexture(stage.env, index: 7); e.setFragmentTexture(setDetail ?? dummy, index: 8) }
+    private func setEnv(_ e: MTLRenderCommandEncoder) {
+        e.setFragmentTexture(stage.env, index: 7); e.setFragmentTexture(setDetail ?? dummy, index: 8)
+        e.setFragmentTexture(drive?.worldShadow.map(\.map) ?? dummyDepth, index: 14)   // 0310: the world's cached shadow (or none)
+    }
+    /// Free Drive's physical sky (0231, 0310): its LUTs, made on first use; the sky-view this frame (nil: the painted sky).
+    private var skyLUT: SkyLUT?
+    private var skyTex: MTLTexture?
+    /// The drive world's residency set, on this queue while a drive is drawn (0310).
+    private var residentSet: MTLResidencySet?
     /// 8-bit (0290): the lens nudged by under a pixel so `p` (the car) lands on a pixel's centre every frame. A camera that follows
     /// the car then moves the world in whole pixels round a car that stays put on the grid: no swimming on the car, and the
     /// set steps instead of crawling.
@@ -1190,10 +1226,11 @@ final class PipelineArchive {
     private let url: URL
     private var dirty = false
     static var cacheDir: URL? { FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first }
-    init(device: MTLDevice) {
+    /// `name`: a second archive beside the renderer's (0310: Free Drive's world keeps its own, so the two never overwrite each other).
+    init(device: MTLDevice, name: String = "") {
         self.device = device
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
-        url = (PipelineArchive.cacheDir ?? FileManager.default.temporaryDirectory).appendingPathComponent("pipelines-v2-\(build).metallib")
+        url = (PipelineArchive.cacheDir ?? FileManager.default.temporaryDirectory).appendingPathComponent("pipelines-v2-\(name.isEmpty ? "" : name + "-")\(build).metallib")
         #if targetEnvironment(simulator)
         archive = nil
         #else

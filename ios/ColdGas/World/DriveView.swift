@@ -61,6 +61,9 @@ struct DriveView: View {
                             toggle(h.cam == "chase" ? "video" : h.cam == "cinema" ? "film" : "car.side",
                                    h.cam == "chase" ? "Chase camera" : h.cam == "cinema" ? "Cinema camera" : "Bumper camera", on: h.cam == "cinema") { game.freeDrive?.camera.cycle() }
                             toggle("fanblades", h.fan ? "Fan armed" : "Fan off", on: h.fan) { game.freeDrive?.fan.toggle() }
+                            // The time of day (#365, 0310): golden hour → sunset → blue hour → night → morning → midday → the day runs.
+                            let tod = DriveSky.Preset(rawValue: h.sky) ?? .golden
+                            toggle(tod.icon, "Time of day: \(tod.label)", on: tod == .cycle) { game.freeDrive?.cycleSky() }
                             toggle("arrow.uturn.backward", "Back on the road", on: false) { game.freeDrive?.reset() }
                             if h.challenges.isEmpty {
                                 toggle("map", hud.prefs.mapShown ? "Hide the map" : "Show the map", on: hud.prefs.mapShown) {
