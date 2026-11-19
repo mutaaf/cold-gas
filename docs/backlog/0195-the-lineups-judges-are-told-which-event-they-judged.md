@@ -51,3 +51,10 @@ Unit: build the prompt for one reference card per course and grep the Event line
 ## Out of scope
 - The local fallback lines (`src/panel.js`), which already split by course.
 - The model choice.
+
+## Critic note (2026-11-16): still live on production, five days on
+Production `index-Cdh5aH_j.js` (= main `d7f37bb`), 390×844 touch, a landed Lineup run (`scripts/look-audit.mjs` sheet
+moments, the player's own run). The sheet's AI headline reads **"PERFECT LANDING IN THE SHOW"** over a 91.7 Lineup card
+(`docs/critique/2026-11-16-1600/sheet/lineup-390x844t-sheet5.jpg`). A second Lineup run in the same session got "PERFECT
+LANDING ON THE LINEUP", so it's a coin toss, as the missing `Event:` line predicts. Still `proposed`: `src/worker/` is
+frozen, so this is the operator's one-line change.
