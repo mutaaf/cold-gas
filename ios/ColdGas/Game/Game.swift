@@ -22,7 +22,7 @@ enum Control: String, CaseIterable, Codable { case oneThumb, classic }
 struct DriveHud: Equatable {
     var speed = 0.0, km = 0.0, heading = 0.0
     var ready = false, line = ""
-    var air = false, fan = false, cam = "chase", cue = ""
+    var air = false, fan = false, cam = "chase", cue = "", sky = "golden"
     /// A roam's challenges (0274), in the set's order: what to try, done or not, the best so far.
     var challenges: [RoamChallengeRow] = []
     /// A challenge has been done this roam: Fly gets the eye.
@@ -396,6 +396,8 @@ final class Game: ObservableObject {
         HapticPlayer.shared.apply(feel.over(HapticContinuous(rumble: Float(min(0.6, fd.roughK * 0.4 + fd.slideK * 0.2 + absK * 0.3)), rumbleSharp: Float(0.3 + 0.45 * absK),
                                                    hiss: Float(min(0.6, jets * 0.12)), hissSharp: 0.6, grind: Float(min(0.5, fd.slideK * 0.35)))))
         if !paused && fd.ownCar { driveFeel.frame(fd, handbrake: fd.handbrake, dt: dt) }
+        if PerfProbe.on { PerfProbe.worldLine = fd.perfLine }   // 0310
+        if !driveSettled && Launch.args.contains("-fd-stats") { driveLogT += dt; if driveLogT > 2 { driveLogT = 0; print(fd.view?.waitLine ?? "WORLD no view") } }
         if !driveSettled, fd.view?.settled == true, (fd.view?.stats.tiles ?? 0) > 0 {
             driveSettled = true
             Ready.mark("drive")
@@ -422,6 +424,7 @@ final class Game: ObservableObject {
             h.air = fd.car.grounded == 0 && !fd.car.hullContact
             h.fan = fd.fan
             h.cam = fd.camera.mode.rawValue
+            h.sky = fd.sky.preset.rawValue
             h.cue = fd.cue.isEmpty || driveClock - fd.cueT > 1.6 ? "" : fd.cue
             if let ch = fd.challenges {
                 h.challenges = ch.kinds.map { k in

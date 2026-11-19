@@ -48,6 +48,14 @@ enum Signs {
     }
     /// A moment (a memory warning, a fold, an interruption) on the same lane.
     static func event(_ what: StaticString, _ detail: String = "") { poster.emitEvent(what, "\(detail, privacy: .public)") }
+    /// 0310: the world's own work, each call its own interval (they overlap across threads): `tile` (a tile's heights on the
+    /// utility queue), `upload` (the frame's uploads and bakes), `blocks` (a prop block built), `cull` (the props' GPU cull
+    /// encoded), `sky` (the sky's LUTs redrawn), `shadow` (the world's cached shadow redrawn).
+    @inline(__always) static func world<T>(_ name: StaticString, _ work: () throws -> T) rethrows -> T {
+        let st = poster.beginInterval(name, id: poster.makeSignpostID())
+        defer { poster.endInterval(name, st) }
+        return try work()
+    }
 }
 
 /// The session's meter and feature flags, and the cut that hands them to the health queue.

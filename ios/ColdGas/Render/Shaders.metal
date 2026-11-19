@@ -7,6 +7,7 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "SetSurface.h"
+#include "Sky.h"
 
 struct Frame {
     float4x4 viewProj, lightViewProj;
@@ -21,6 +22,8 @@ struct Frame {
     float4 style;               // the look (0280, Look.swift): x 0 Real, 1 Anime, 2 8-bit; y, z the projection's z scale and offset
                                 // (depth → distance for the ink); w anime's speed lines (0…1)
     float4 fx;                  // 0290: x anime's impact frame (0…1); yz the moon's bearing (unit xz), w 1 when set
+    float4x4 worldShadowVP;     // 0310: Free Drive's cached world shadow (trees, rocks, the near land), render space
+    float4 worldShadow;         // x 1 when it's drawn; y its texel
 };
 // What doesn't change in a course (Renderer.lookU).
 struct LookU {
@@ -32,6 +35,8 @@ struct LookU {
     float4 fogExp;              // x: FogExp2's density (0: linear, fogRange); y: 1 with the wet slab on; z: 1 with the stars on; w: bloom on
     float4 skyZenith, skyMid, skyHorizon, skySun;
     float4 bloom;               // threshold, and UnrealBloomPass's strength × each level's factor (three levels' worth; see compose)
+    float4 atmo;                // Free Drive's physical sky (0231, 0310): x on, y haze, z the eye's height (km), w night
+    float4 sunE;                // the sun's illuminance at the top of the air (rgb), time
 };
 struct Light { float4 posRange; float4 colorIntensity; float4 dirCos; float4 params; };   // params: decay, cosOuter, kind (0 point, 1 spot), penumbra
 struct Material {
@@ -257,7 +262,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
                                   constant Light* lights [[buffer(3)]], texture2d<float> map [[texture(0)]], texture2d<float> roughMap [[texture(1)]],
                                   texture2d<float> emiMap [[texture(2)]], depth2d<float> shadow [[texture(3)]], texture2d<float> alphaMap [[texture(4)]],
                                   constant LookU& look [[buffer(4)]], texture2d<float> wetMask [[texture(5)]], texture2d<float> mirror [[texture(6)]], texturecube<float> env [[texture(7)]],
-                                  texture2d<float> detail [[texture(8)]]) {
+                                  texture2d<float> detail [[texture(8)]], depth2d<float> wshadow [[texture(14)]]) {
     constexpr sampler s(coord::normalized, filter::linear, mip_filter::linear, address::repeat, max_anisotropy(4));   // (8 on the web: on a slab at a grazing angle that's 8 taps a pixel at 120 Hz)
     float3 V0 = normalize(f.eye.xyz - in.world + 1e-6);
     // The web's ShaderMaterials (src/render/wall.js), their falloffs as written there; additive.
@@ -311,6 +316,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             rough = mix(rough, max(rough * 0.55, 0.2), wet);
         }
         float sh = shadowAt(in.lightClip, shadow, f.fogRange.w);
+        if (f.worldShadow.x > 0.5) sh = min(sh, shadowAt(f.worldShadowVP * float4(in.world, 1), wshadow, f.worldShadow.y));   // 0310: under the trees
         if (f.style.x > 0.5) {   // Anime and 8-bit (0290): the ramp, not the BRDF
             color = drawnLight(n, V, in.world, base.rgb, metal, rough, sh, (m.flags.w & 4u) != 0, f, lights, look, env);
         } else {
@@ -516,6 +522,13 @@ static float3 pixelSky(float3 d, float2 clip, constant Frame& f, constant LookU&
         if (!dusk && (length(q - float2(0.3, 0.2)) < 0.26 || length(q - float2(-0.3, -0.25)) < 0.18)) idx = 11;
         if (!dusk && dot(q, float2(-0.6, -0.8)) > 0.55) idx = 10;
     } else if (!dusk && ang < R * 1.35) idx = idx == 0 || idx == 1 ? 2 : idx;   // a one-band glow round it
+    else if (k.atmo.x > 0.5) {
+        // Free Drive's time of day (0310): the sky's own colours in five flat bands (the checker where they meet), which the
+        // film's palette then snaps to the nearest of the 32.
+        float band = hd >= 0.45 ? 1.0 : hd >= 0.24 ? 0.72 : hd >= 0.11 ? 0.45 : hd >= 0.035 ? 0.2 : 0.0;
+        float3 c = mix(mix(k.skyHorizon.rgb, k.skyMid.rgb, smoothstep(0.0, 0.5, band)), k.skyZenith.rgb, smoothstep(0.5, 1.0, band));
+        return h < 0.0 ? k.skyMid.rgb * 0.35 : c;
+    }
     if (!dusk && h > 0.05 && k.fogExp.z > 0 && ang > R * 1.4) {
         const float cells = 70.0;
         float3 cell = floor(d * cells);
@@ -533,10 +546,28 @@ static float3 pixelSky(float3 d, float2 clip, constant Frame& f, constant LookU&
     }
     return s2l(PAL_SRGB[idx]) / max(f.fogRange.z, 1e-4);
 }
-fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]]) {
+fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]], texture2d<float> skyView [[texture(15)]],
+                                texture2d<float> clouds [[texture(16)]]) {
     float3 d = normalize(in.dir + 1e-6);
     float h = clamp(d.y, -1.0, 1.0);
     float3 c;
+    if (k.atmo.x > 0.5 && f.style.x < 0.5) {   // Free Drive's physical sky (#365's, 0310): the sky-view LUT, the sun's disc, clouds, the stars
+        float3 sun = k.skySun.xyz;
+        c = sky_view(skyView, d, sun, k.atmo.z, 0.0);
+        float mu = dot(d, sun);
+        // The disc (a little larger than the real 0.53°, so a phone's screen shows it), limb-darkened, through the air.
+        float disc = smoothstep(0.99994, 0.99997, mu);
+        float limb = sqrt(max(1.0 - (1.0 - mu) / 3e-5, 0.0));
+        c += k.sunE.rgb * disc * (0.4 + 0.6 * limb) * 900.0 * smoothstep(-0.01, 0.01, d.y) * max(f.keyColor.rgb * f.keyDir.w / 7.0, 0.002);
+        float4 cl = sky_clouds(clouds, d);
+        c = c * (1.0 - cl.a) + cl.rgb;
+        if (k.atmo.w > 0.01) {   // the stars, and the night's own glow so it isn't black
+            c += starField(d, 520.0, 0.9982, 0.04, true) * 0.6 * k.atmo.w * (1.0 - cl.a);
+            c += float3(0.0018, 0.0024, 0.0045) * k.atmo.w * (0.4 + 0.6 * exp(-max(h, 0.0) * 6.0));
+        }
+        if (h < 0.0) c = mix(c, c * 0.5, smoothstep(0.0, -0.1, h));
+        return float4(max(c, 0.0), 1);
+    }
     if (k.hemiGround.w > 0.5) {   // scene.js skyMaterial, the dusk
         float3 sun = k.skySun.xyz;
         c = mix(k.skyMid.rgb, k.skyZenith.rgb, smoothstep(0.02, 0.55, h));

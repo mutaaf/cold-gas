@@ -21,8 +21,19 @@ protocol DriveScene: AnyObject {
     func frameCamera(aspect: Float, dt: Double) -> (view: simd_float4x4, proj: simd_float4x4, eye: SIMD3<Float>)
     /// The drive's sky and air over the stage's.
     func look(over base: LookU) -> LookU
-    /// The world, in the main pass, after the stage's opaque draws.
-    func drawWorld(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, look: inout LookU, shadow: MTLTexture, viewProj: simd_float4x4)
+    /// The world, in the main pass, after the stage's opaque draws (`sky`: the physical sky's view LUT, 0231/0310; `quality`
+    /// 2 … 0 by the renderer's shed: the grass).
+    func drawWorld(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, look: inout LookU, shadow: MTLTexture, sky: MTLTexture, viewProj: simd_float4x4, quality: Int)
+    /// The world's blended layers (water, spray), after the sky (0310, §9.4).
+    func drawWorldLate(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, look: inout LookU, shadow: MTLTexture, sky: MTLTexture, viewProj: simd_float4x4)
+    /// The world's compute before the frame's passes (0310): surfaces baked, props culled, the world's shadow when due.
+    func encodeWorld(_ cmd: MTLCommandBuffer, ring: Int, keyDir: SIMD3<Float>)
+    /// The key light (0231): the sun (or the moon) as the time of day has it, and the exposure; nil keeps the stage's.
+    var key: DriveKey? { get }
+    /// The world's cached shadow (0310): the map, its view-projection, whether it's drawn.
+    var worldShadow: (map: MTLTexture, vp: simd_float4x4, on: Bool)? { get }
+    /// The world's heaps, resident on the renderer's queue while the drive is drawn (0310).
+    var residency: MTLResidencySet? { get }
     /// The tyres on the ground and the loose things, once a frame before the effects update (0223).
     func effects(_ crash: Crash, dt: Double)
     /// An impact felt in the lens.
@@ -32,6 +43,8 @@ protocol DriveScene: AnyObject {
     /// The drive's car as the renderer shows it (0225): each brake disc's glow, the pedal for the brake lamps.
     var carLook: DriveCarLook { get }
 }
+/// The drive's key light: toward the light (unit), its colour (peak 1) × intensity, and the frame's exposure.
+struct DriveKey { var dir: SIMD3<Float>; var color: SIMD3<Float>; var intensity: Float; var exposure: Float }
 /// What a drive tells the renderer about its car beyond the track.
 struct DriveCarLook {
     /// Each disc's glow (0 dark … ≈ 1 orange-hot), from its temperature.
@@ -76,6 +89,8 @@ final class FreeDrive: DriveScene {
     #endif
     let world: FreeWorld
     let camera = DriveCamera()
+    /// The time of day (#365's DriveSky, 0310): the sun, the sky, the key light; the sun button cycles it.
+    let sky = DriveSky()
     private(set) var view: WorldView?
     private(set) var origin = SIMD3<Double>(0, 0, 0)
     /// The car: the scored machine on DRIVE_COURSE (the Show's stage at the centre) or a roam's course (0220: the Wall's
@@ -187,6 +202,8 @@ final class FreeDrive: DriveScene {
         say("Back on the road")
     }
     private func say(_ s: String) { cue = s; cueT = time }
+    /// The sun button (0231, 0310): the next time of day, named on the screen.
+    func cycleSky() { sky.cycle(); say(sky.preset.label) }
     /// The game's line for a moment (a challenge done), shown as the drive's own cues are.
     func announce(_ s: String) { say(s) }
     private var forward: (Double, Double) {
@@ -218,6 +235,7 @@ final class FreeDrive: DriveScene {
 
     func frame(dt: Double) {
         time += dt
+        sky.advance(dt)
         if let v = cruise { cruiseFrame(v, dt) }
         else {
             acc += min(dt, 0.1)
@@ -620,6 +638,7 @@ final class FreeDrive: DriveScene {
         camera.update(dt: dt, carPos: p, carQuat: q, vel: v, aspect: Double(aspect)) { x, z in max(w.ground(x, z).y, roofUnder(bodies, x, z) + 0.6) }
         let m = camera.matrices(origin: origin, aspect: aspect)
         view?.update(eye: camera.eye, viewProj: m.proj * m.view)
+        lastViewProj = m.proj * m.view
         return m
     }
 
@@ -641,21 +660,73 @@ final class FreeDrive: DriveScene {
         // Off the set the paint reflects the dusk itself, not the stage's cube (0225: Shaders.metal duskEnv).
         k.skySun.w = nearSlab ? 0 : 1
         k.fogExp = SIMD4(0, nearSlab ? base.fogExp.y : 0, 1, base.fogExp.w)
+        guard sky.physical else { return k }
+        // The physical sky (#365, 0310): the sun where the hour puts it, its light through the air, the haze a little thicker
+        // than a clear day's so the ranges stack, the stars once it's dark. One sky over everything, the sets too.
+        k.skySun = SIMD4(sky.sun, 1); k.sunDir = SIMD4(sky.sun, base.sunDir.w * 0.6)
+        k.atmo = SIMD4(1, 5.0, Float(max(0.0, camera.eye.y) / 1000), sky.night)
+        k.sunE = SIMD4(sky.keyColor * sky.keyIntensity, Float(time))
+        k.fogExp.z = sky.night > 0.05 ? 1 : 0
+        k.hazeCol.w = 0
+        // The drawn looks' painted sky and the paint's reflection (duskEnv) in the hour's colours, as radiance at this exposure.
+        let c = DriveSky.paintedSky(sunY: sky.sun.y), ex = max(0.05, sky.exposure)
+        k.skyZenith = SIMD4(c.zenith / ex, 0); k.skyMid = SIMD4(c.mid / ex, 0); k.skyHorizon = SIMD4(c.horizon / ex, 0)
+        k.hemiSky = SIMD4(c.mid * 0.55 / ex, base.hemiSky.w); k.hemiGround = SIMD4(c.ground / ex, 1)
+        // The bloom's threshold in the frame as exposed (#365): by day only the sun, its glints and the lamps bloom.
+        k.bloom.x = (2.6 + (0.97 - 2.6) * sky.night) / max(0.2, sky.exposure)
         return k
     }
+    var key: DriveKey? {
+        guard sky.physical else { return nil }
+        // Below the horizon the moon takes over: a cold, faint light high in the south-east.
+        let moon = simd_normalize(SIMD3<Float>(0.35, 0.62, -0.45))
+        let sunUp = smoothstepF(-0.03, 0.02, sky.sun.y)
+        let dir = sunUp > 0.5 ? sky.sun : moon
+        return DriveKey(dir: dir, color: sunUp > 0.5 ? sky.keyColor : SIMD3(0.62, 0.72, 1.0), intensity: sunUp > 0.5 ? sky.keyIntensity * sunUp : 0.09 * sky.night, exposure: sky.exposure)
+    }
+    var worldShadow: (map: MTLTexture, vp: simd_float4x4, on: Bool)? { view?.worldShadow }
+    var residency: MTLResidencySet? { view?.residency }
+    func encodeWorld(_ cmd: MTLCommandBuffer, ring: Int, keyDir: SIMD3<Float>) {
+        guard let v = view, let vp = lastViewProj else { return }
+        var d = driveU()
+        v.encode(cmd, ring: ring, eye: camera.eye, viewProj: vp, car: SIMD3(car.pos.x, car.pos.y, car.pos.z), keyDir: keyDir, drive: &d, look: Look.current, time: time)
+    }
+    private var lastViewProj: simd_float4x4?
 
-    func drawWorld(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, look: inout LookU, shadow: MTLTexture, viewProj: simd_float4x4) {
+    func drawWorld(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, look: inout LookU, shadow: MTLTexture, sky skyTex: MTLTexture, viewProj: simd_float4x4, quality: Int) {
         guard let v = view else { return }
-        // The headlamps, from the car's nose, a little down.
+        v.quality = quality
+        var d = driveU()
+        v.draw(e, frame: frame, look: &look, drive: &d, shadow: shadow, sky: skyTex, viewProj: viewProj, eye: camera.eye, lookMode: Look.current, time: time)
+    }
+    func drawWorldLate(_ e: MTLRenderCommandEncoder, frame: MTLBuffer, look: inout LookU, shadow: MTLTexture, sky skyTex: MTLTexture, viewProj: simd_float4x4) {
+        guard let v = view else { return }
+        var d = driveU()
+        v.drawLate(e, frame: frame, look: &look, drive: &d, shadow: shadow, sky: skyTex, viewProj: viewProj, eye: camera.eye, lookMode: Look.current, time: time)
+    }
+    /// The world's uniform this frame: the headlamps, the props' range and the wind, the origin's anchor, the car on the ground.
+    private func driveU() -> WDriveU {
         let q = simd_quatd(ix: car.quat.x, iy: car.quat.y, iz: car.quat.z, r: car.quat.w)
-        let f = q.act(SIMD3(0, -0.08, 1)), u = q.act(SIMD3(0, 1, 0))
+        let f = q.act(SIMD3(0, -0.08, 1))
         let lp = SIMD3(car.pos.x, car.pos.y, car.pos.z) + q.act(SIMD3(0, 0.15, 2.0)) - origin
-        var d = WDriveU(lampPos: SIMD4(SIMD3<Float>(lp), Float(280 * lampK)), lampDir: SIMD4(SIMD3<Float>(simd_normalize(f)), cos(0.42)),
-                        params: SIMD4(Float(WorldView.propR), Float(time), Launch.args.contains("-fd-lod") ? 1 : 0, 0))
-        _ = u
+        // The lamps come on as the light goes (#365): full from blue hour, off in daylight.
+        let lampOn = sky.physical ? Double(smoothstepF(0.1, 0.55, sky.night)) : 1
+        var d = WDriveU(lampPos: SIMD4(SIMD3<Float>(lp), Float(280 * lampK * lampOn)), lampDir: SIMD4(SIMD3<Float>(simd_normalize(f)), cos(0.42)),
+                        params: SIMD4(Float(WorldView.propR), Float(time), Launch.args.contains("-fd-lod") ? 1 : 0, 0.6))
         let m = 4096.0
-        d.anchor = SIMD4(Float(origin.x - (origin.x / m).rounded(.down) * m), Float(origin.z - (origin.z / m).rounded(.down) * m), Float(WorldView.nearR), 0)
-        v.draw(e, frame: frame, look: &look, drive: &d, shadow: shadow, viewProj: viewProj, eye: camera.eye)
+        d.anchor = SIMD4(Float(origin.x - (origin.x / m).rounded(.down) * m), Float(origin.z - (origin.z / m).rounded(.down) * m), Float(WorldView.nearR), Float(view?.quality ?? 2))
+        // The car on the ground, for the ground's occlusion under it.
+        let c = SIMD3(car.pos.x, car.pos.y - SPEC.comHeight, car.pos.z) - origin
+        let fw = q.act(SIMD3(0, 0, 1)), fl = max(1e-6, (fw.x * fw.x + fw.z * fw.z).squareRoot())
+        d.carPos = SIMD4(SIMD3<Float>(c), car.grounded > 0 || cruise != nil ? 1 : 0)
+        d.carFwd = SIMD4(Float(fw.x / fl), Float(fw.z / fl), 2.3, 1.0)
+        return d
+    }
+    /// The world for the perf line (0310): no spaces (key=value).
+    var perfLine: String {
+        guard let s = view?.stats else { return "-" }
+        return String(format: "tiles:%d,tris:%.0fk,props:%d,propTris:%.0fk,roads:%d,cacheMB:%.0f,bakes:%d,wshadow:%d", s.tiles, Double(s.tris) / 1000, s.instances,
+                      Double(view?.props.drawn.tris ?? 0) / 1000, s.roads, s.mb, view?.cache.baked ?? 0, view?.props.shadowDraws ?? 0)
     }
 
     /// What's under the car (debug, `-fd-stats`).
@@ -666,7 +737,7 @@ final class FreeDrive: DriveScene {
     /// One line for the debug HUD and the bench.
     var statsLine: String {
         guard let s = view?.stats else { return "" }
-        return String(format: "tiles %d · %.0fk tris · roads %d · props %d (near %d) · %.0f MB · missing %d · %.1f km out · origin (%.0f, %.0f) · marks %d · loose %d · roadside %d standing %d broken",
-                      s.tiles, Double(s.tris) / 1000, s.roads, s.instances, view?.nearDrawn ?? 0, s.mb, s.missing, dist / 1000, origin.x, origin.z, view?.marks?.count ?? 0, view?.loose?.drawn ?? 0, streamer.standingCount, streamer.brokenCount)
+        return String(format: "tiles %d · %.0fk tris · roads %d · props %d (%.0fk tris, %d shadow) · %.0f MB · missing %d · %.1f km out · origin (%.0f, %.0f) · marks %d · loose %d · roadside %d standing %d broken",
+                      s.tiles, Double(s.tris) / 1000, s.roads, s.instances, Double(view?.props.drawn.tris ?? 0) / 1000, view?.props.drawn.shadow ?? 0, s.mb, s.missing, dist / 1000, origin.x, origin.z, view?.marks?.count ?? 0, view?.loose?.drawn ?? 0, streamer.standingCount, streamer.brokenCount)
     }
 }
