@@ -15,6 +15,8 @@ public enum Obs {
     public static let MAX_SIGS = 32, MAX_SEND = 12, MAX_REC = 8
     /// The Worker refuses a body over 8,192 bytes (OBS_LIMITS.maxBytes).
     public static let MAX_BYTES = 8000
+    /// Session summaries kept between sends (0300).
+    public static let MAX_SESSIONS = 6
 
     /// MODULE_IDS in src/obs/signature.js (the ones the app uses).
     public enum Module: String, Codable, CaseIterable, Sendable { case app, render, shader, physics, audio, judge, world, net, drive, frame, page }
@@ -97,6 +99,9 @@ public enum Obs {
         public private(set) var rec: [Rec] = []
         /// Faults beyond MAX_SIGS: counted, not kept.
         public private(set) var dropped = 0
+        /// Sessions' summaries waiting to go (0300): the performance summary and the features touched. Optional so a queue
+        /// saved before 0300 still reads (its faults aren't lost on the update).
+        public private(set) var sessions: [Session]?
         public init() {}
 
         public static func decode(_ d: Data?) -> Queue { d.flatMap { try? JSONDecoder().decode(Queue.self, from: $0) } ?? Queue() }
@@ -117,19 +122,33 @@ public enum Obs {
             rec.append(Rec(kind: kind, ok: ok))
             if rec.count > MAX_REC { rec.removeFirst(rec.count - MAX_REC) }
         }
-        public var isEmpty: Bool { entries.isEmpty && rec.isEmpty }
+        public var isEmpty: Bool { entries.isEmpty && rec.isEmpty && (sessions ?? []).isEmpty }
+        /// A session's summary (0300), kept until it's sent; the oldest go first past MAX_SESSIONS.
+        public mutating func add(session s: Session) {
+            guard s.perf != nil || !s.use.isEmpty else { return }
+            var list = sessions ?? []
+            list.append(s)
+            if list.count > MAX_SESSIONS { list.removeFirst(list.count - MAX_SESSIONS) }
+            sessions = list
+        }
 
         /// The next batch: one build's faults (the oldest build first, so a crash from before an update goes under its own
         /// build), ≤ MAX_SEND of them, the recoveries when they're this build's, trimmed to MAX_BYTES. Nil: nothing to send.
         public func next(currentBuild: String) -> Batch? {
             guard !isEmpty else { return nil }
-            let build = entries.first?.build ?? currentBuild
+            let build = entries.first?.build ?? sessions?.first?.build ?? currentBuild
             var errs = Array(entries.filter { $0.build == build }.prefix(MAX_SEND))
             let recs = build == currentBuild ? rec : []
+            // One session's summary rides with its build's faults (0300): its rows first, so trimming for size drops faults
+            // (they wait for the next batch) before it drops the summary.
+            let sess = sessions?.first { $0.build == build }
+            let rows = sess?.rows ?? []
             var withStacks = true
             while true {
-                let body = Obs.body(build: build, errs: errs, rec: recs, stacks: withStacks)
-                if let body, body.count <= MAX_BYTES { return Batch(build: build, sent: errs.map { ($0.sig, min($0.n, 10_000)) }, recs: recs.count, body: body) }
+                let body = Obs.body(build: build, errs: rows + errs, rec: recs, stacks: withStacks, fr: sess?.perf?.fr)
+                if let body, body.count <= MAX_BYTES {
+                    return Batch(build: build, sent: errs.map { ($0.sig, min($0.n, 10_000)) }, recs: recs.count, session: sess != nil, body: body)
+                }
                 if withStacks { withStacks = false; continue }
                 if errs.isEmpty { return nil }
                 errs.removeLast()
@@ -143,15 +162,37 @@ public enum Obs {
                 if entries[i].n <= 0 { entries.remove(at: i) }
             }
             if b.recs > 0 { rec.removeFirst(min(b.recs, rec.count)) }
+            if b.session, let i = sessions?.firstIndex(where: { $0.build == b.build }) { sessions?.remove(at: i) }
         }
         /// Settings → Privacy off: nothing kept.
         public mutating func clear() { self = Queue() }
+    }
+
+    /// A session's summary (0300; Perf.swift): what the frames did and which features were touched, for one build.
+    public struct Session: Codable, Equatable, Sendable {
+        public var build: String
+        public var perf: Perf.Summary?
+        public var use: Perf.Use
+        public init(build: String, perf: Perf.Summary?, use: Perf.Use) { self.build = build; self.perf = perf; self.use = use }
+        /// The rows it adds to a batch: `perf …` (module frame) and `use …` (module app), each once, frame `<kind>@<build>`.
+        public var rows: [Entry] {
+            var out: [Entry] = []
+            func row(_ mod: Module, _ kind: Kind, _ msg: String, _ what: String) {
+                let m = Obs.normMessage(msg), fr = Perf.frame(what, build: build)
+                out.append(Entry(sig: Obs.hash12("\(m)|\(fr)|\(build)"), key: Obs.hash12("\(m)|\(fr)"), mod: mod, kind: kind, n: 1, msg: m, fr: fr, st: "", build: build))
+            }
+            if let p = perf { row(.frame, .frame, p.message, "perf") }
+            if let u = use.message { row(.app, .error, u, "use") }
+            return out
+        }
     }
 
     public struct Batch: Equatable, Sendable {
         public let build: String
         let sent: [(String, Int)]
         let recs: Int
+        /// It carried the oldest session summary of its build (0300).
+        let session: Bool
         public let body: Data
         public static func == (a: Batch, b: Batch) -> Bool { a.build == b.build && a.body == b.body }
         public var count: Int { sent.count }
@@ -159,8 +200,8 @@ public enum Obs {
 
     /// The `/obs` body (cleanObs's shape, v 1). `first` is false: the digest picks its current build by sessions, and an
     /// iPhone build must not become the web's "current" until the Worker splits by platform (audit B1).
-    static func body(build: String, errs: [Entry], rec: [Rec], stacks: Bool) -> Data? {
-        let o: [String: Any] = [
+    static func body(build: String, errs: [Entry], rec: [Rec], stacks: Bool, fr: [String: Any]? = nil) -> Data? {
+        var o: [String: Any] = [
             "v": 1, "build": build, "dc": "phone-hi", "tier": "high", "first": false, "auto": false,
             "errs": errs.map { e -> [String: Any] in
                 ["sig": e.sig, "key": e.key, "mod": e.mod.rawValue, "kind": e.kind.rawValue, "n": min(max(1, e.n), 10_000),
@@ -168,6 +209,8 @@ public enum Obs {
             },
             "rec": rec.map { ["kind": $0.kind.rawValue, "ok": $0.ok] },
         ]
+        // A session's frame-time histogram (0300): the Worker keeps it in obs_frames by build, device class and tier.
+        if let fr, (fr["n"] as? Int ?? 0) > 0 { o["fr"] = fr }
         return try? JSONSerialization.data(withJSONObject: o, options: [.sortedKeys])
     }
 

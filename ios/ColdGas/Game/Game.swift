@@ -238,6 +238,7 @@ final class Game: ObservableObject {
         countdown = guided ? 1 : 3; countT = 0; rollTicks = 0
         replaying = false
         Hardware.shared.startRun()
+        Signs.begin(.run, course); PerfCenter.shared.noteRun()   // 0300: start → result (or home)
         screen = .run
         UISelectionFeedbackGenerator().selectionChanged()
     }
@@ -254,6 +255,7 @@ final class Game: ObservableObject {
     }
     func home() {
         if screen == .run { Usage.shared.runOver() }
+        Signs.end(.run, "home"); Signs.end(.replay)   // 0300
         rival = nil
         // After the first landing the title is the normal one, with the reference loop behind it.
         if firstRun && !SaveStore.shared.data.counters.firstRun { firstRun = false; still = nil }
@@ -277,6 +279,7 @@ final class Game: ObservableObject {
         let c = roam.map { driveCourse(on: $0) } ?? DRIVE_COURSE
         let fd = FreeDrive(seed: Launch.value("-fd-seed") ?? FreeDrive.seedDefault, course: c, onMark: roam != nil)
         roamedFrom = roam
+        Signs.begin(roam == nil ? .drive : .roam, roam ?? "free"); PerfCenter.shared.note(roam == nil ? .drive : .roam); PerfCenter.shared.noteRun()   // 0300
         if let km = Launch.value("-fd-km").flatMap(Double.init), km > 0 {
             let a = 0.6   // a bearing out from the centre (radians from +z)
             fd.placeOnRoad(nearX: sin(a) * km * 1000, z: cos(a) * km * 1000)
@@ -303,6 +306,7 @@ final class Game: ObservableObject {
         freeDrive?.car.world.free()
         freeDrive = nil
         roamedFrom = nil
+        Signs.end(.roam, "home"); Signs.end(.drive, "home")   // 0300
         screen = .title
         showTitleLoop()
     }
@@ -314,6 +318,7 @@ final class Game: ObservableObject {
         freeDrive?.car.world.free()
         freeDrive = nil
         roamedFrom = nil
+        Signs.end(.roam, "fly")   // 0300
         if COURSES[c] != nil && course != c { screen = .title; course = c }
         play()
     }
@@ -485,9 +490,10 @@ final class Game: ObservableObject {
         guard track != nil else { return }
         stage?.renderer?.cam.orbit = false
         replayT = 0; replaying = true
+        Signs.begin(.replay); PerfCenter.shared.note(.replay)   // 0300
         UISelectionFeedbackGenerator().selectionChanged()
     }
-    func stopWatching() { replaying = false; stage?.renderer?.cam.orbit = screen == .results; if let tr = track { stage?.renderer?.liveTime = Double(max(0, tr.ticks - 1)) / Replay.hz }; Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .quiet) }
+    func stopWatching() { Signs.end(.replay); replaying = false; stage?.renderer?.cam.orbit = screen == .results; if let tr = track { stage?.renderer?.liveTime = Double(max(0, tr.ticks - 1)) / Replay.hz }; Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .quiet) }
     private func replayFrame(dt: Double, slowK: Double, _ tr: Replay) {
         replayT += min(dt, 0.1) * slowK
         let end = Double(tr.ticks) / Replay.hz
@@ -642,6 +648,7 @@ final class Game: ObservableObject {
             r.firstRun = firstRun && r.drill == nil
         }
         screen = .results
+        Signs.end(.run, result?.landed == true ? "landed" : "wrecked")   // 0300
         // A landing and a crash feel different (0249); the first landing has its own swell into the settle.
         if let r = result {
             HapticPlayer.shared.moment(r.firstLanding ? .firstLanding : r.landed ? .landed : .wrecked)

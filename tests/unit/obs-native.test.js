@@ -38,3 +38,30 @@ describe('the iPhone app\'s /obs batch', () => {
     expect(Object.keys(batch).sort()).toEqual(['auto', 'build', 'dc', 'errs', 'first', 'rec', 'tier', 'v']);
   });
 });
+
+// 0300: a session's performance summary and feature use ride the same batch: two rows the Worker keeps as signatures
+// (frame `perf@<build>`, `use@<build>`) and the session's frame-time histogram in `fr` (obs_frames). Still never a session.
+const session = JSON.parse(readFileSync(new URL('../fixtures/obs-ios-session.json', import.meta.url), 'utf8'));
+describe('the iPhone app\'s session summary in the /obs batch (0300)', () => {
+  it('passes cleanObs with the summary rows and the histogram kept', () => {
+    const b = cleanObs(session);
+    expect(b).not.toBeNull();
+    expect(b.first).toBe(false);
+    expect(b.errs.map((e) => e.fr)).toEqual(['perf@ios-1.2.0-202611181400', 'use@ios-1.2.0-202611181400', 'pipeline@Renderer.swift:1010:0']);
+    expect(b.fr).toEqual(session.fr);
+    expect(b.fr.n).toBe(b.fr.h.reduce((a, c) => a + c, 0));
+  });
+  it('keeps every word of the summary through the Worker\'s normalisation', () => {
+    for (const e of session.errs) {
+      expect(normMessage(e.msg)).toBe(e.msg);
+      expect(e.sig).toBe(hash12(`${e.msg}|${e.fr}|${session.build}`));
+    }
+    expect(session.errs[0].msg).toMatch(/^perf p50_\d+ p95_\d+ hitch_\w+ hz(120|60|mix) look_\w+ scale_\d+ heat_\w+ mem_\w+ launch_\w+$/);
+  });
+  it('carries nothing about the device or the player', () => {
+    const text = JSON.stringify(session);
+    for (const banned of ['deviceType', 'osVersion', 'region', 'install', 'uuid', 'iPhone', 'initials', 'model']) expect(text).not.toContain(banned);
+    expect(Object.keys(session).sort()).toEqual(['auto', 'build', 'dc', 'errs', 'first', 'fr', 'rec', 'tier', 'v']);
+    expect(session.dc).toBe('phone-hi');
+  });
+});

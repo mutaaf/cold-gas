@@ -7,6 +7,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         setvbuf(stdout, nil, _IOLBF, 0)   // the scripts read stdout through a pipe: one line at a time
         Ready.clear()
+        Signs.begin(.launch)        // 0300: ends at the first frame drawn (PerfCenter)
         Usage.launchedAt = Date()   // first_input's clock (0246)
         Theme.registerFonts()
         return true
@@ -47,7 +48,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         if let u = URLContexts.first?.url { Game.shared.open(url: u) }
     }
-    func sceneDidEnterBackground(_ scene: UIScene) { Usage.shared.didEnterBackground() }
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        PerfCenter.shared.cut(force: true)   // 0300: the session's summary joins the health queue (sent from a quiet screen)
+        Usage.shared.didEnterBackground()
+    }
     func sceneWillEnterForeground(_ scene: UIScene) { Usage.shared.willEnterForeground() }
 }
 

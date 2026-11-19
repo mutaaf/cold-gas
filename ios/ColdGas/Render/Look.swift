@@ -5,6 +5,7 @@
 //   8-bit  the scene drawn at a fixed low resolution (≈240 columns), no bloom, mirror or MetalFX, a small palette with
 //          ordered (Bayer) dither, shown with nearest-neighbour blocks. The cheapest of the three.
 import Foundation
+import ColdGasClient
 
 enum Look: String, CaseIterable, Identifiable {
     case real, anime, pixel
@@ -24,6 +25,11 @@ enum Look: String, CaseIterable, Identifiable {
     static func set(_ l: Look) {
         current = l
         UserDefaults.standard.set(l.rawValue, forKey: key)
+        DispatchQueue.main.async { PerfCenter.shared.note(l.feature) }   // 0300: the looks chosen, a flag each a session
+    }
+    /// The look as a feature flag in the session's summary (0300).
+    var feature: Perf.Feature {
+        switch self { case .real: .lookReal; case .anime: .lookAnime; case .pixel: .lookPixel }
     }
     /// 8-bit's block: the screen's short side over ≈240 columns (5 px on a 1206-wide phone), never under 2.
     static func pixelBlock(outW: Int, outH: Int) -> Int { max(2, Int((Float(min(outW, outH)) / 240).rounded())) }

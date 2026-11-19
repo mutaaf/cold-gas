@@ -90,7 +90,7 @@ struct SettingsView: View {
                         Text("Sport").tag(DriveModel.ESC.sport)
                         Text("Off").tag(DriveModel.ESC.off)
                     }
-                    .onChange(of: stability) { _, v in FreeDrive.stability = v }
+                    .onChange(of: stability) { _, v in FreeDrive.stability = v; PerfCenter.shared.note(v == .on ? .escOn : v == .sport ? .escSport : .escOff) }
                     .accessibilityIdentifier("stability")
                 } header: { Text("Driving") } footer: {
                     Text("Free Drive and Roam. On catches a slide early; Sport lets the car move before it steps in; Off leaves the car to you. On touch the wheels lean into a slide a little, to help you catch it.")

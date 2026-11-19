@@ -19,6 +19,7 @@ struct ColdGasAPI {
     /// postScore: a REAL board entry (public, and it can't be taken back). Retried on a 503, inside one deadline.
     /// On no answer: `status` 0, `timeout` true if the deadline ran out.
     func postScore(log: [[Int]], t: JSValue, initials: String, course: String) async -> PostResult {
+        let sp = Signs.poster.beginInterval("board-post", id: Signs.poster.makeSignpostID()); defer { Signs.poster.endInterval("board-post", sp) }   // 0300
         let body = RequestBody.post(log: log, t: t, initials: cleanInitials(initials), course: course).jsonData
         let req = Net.jsonPost(scores, body: body, timeout: ColdGasAPI.POST_MS / 1000)
         let s = session
@@ -60,6 +61,7 @@ struct ColdGasAPI {
 
     /// fetchBoard: the board's rows, top 20 (nil: offline). `course` nil: every course. Cancel by cancelling the Task.
     func fetchBoard(_ board: Board = .today, course: String? = nil) async -> [BoardRow]? {
+        let sp = Signs.poster.beginInterval("board-fetch", id: Signs.poster.makeSignpostID()); defer { Signs.poster.endInterval("board-fetch", sp) }   // 0300
         guard var c = URLComponents(url: scores, resolvingAgainstBaseURL: false) else { return nil }
         c.queryItems = [URLQueryItem(name: "board", value: board.rawValue)]
         if let course, COURSE_IDS.contains(course) { c.queryItems?.append(URLQueryItem(name: "course", value: course)) }
