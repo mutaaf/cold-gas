@@ -189,7 +189,11 @@ final class Game: ObservableObject {
             return
         }
         // Flown once per course and kept: Home must never wait on a whole flight (and the sim stays on this one thread).
+        // 0302: the course's renderer starts building on its own thread first, so the flight and the build overlap at launch.
+        if titleTracks[course] == nil { stage?.prepare(course: course) }
+        let t0 = CACurrentMediaTime()
         let tr = titleTracks[course] ?? Replay(runVector: "ref-\(course)")
+        if titleTracks[course] == nil, PerfProbe.on { print(String(format: "PERF-LAUNCH title flight %@ %.1f ms (main thread)", course, (CACurrentMediaTime() - t0) * 1000)) }
         titleTracks[course] = tr
         stage?.load(course: course, track: tr)
     }
