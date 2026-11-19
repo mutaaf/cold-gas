@@ -12,6 +12,20 @@ const watch = (page) => {
   return errors;
 };
 
+// The page's own frame loop calls drive.frame with the wall-clock dt between the test's evaluates, so on a
+// slow runner the car coasts (or, with ↑ down, drives) an unknown way between them: main's CI on
+// d77eeaa rammed the same tree to -0.79 m where a fast runner gets -1.32 (reproduced at 8× CPU
+// throttle). Hold the loop at dt 0 (it still draws, and the near tiles still stream in) and step the
+// sim only from the test, through the frame kept as drive.step. The waits for the near tiles step it at
+// dt 0 too (they draw, the car stays), so how many a runner needs can't move the car or the tree it picks.
+const hold = (page) => page.evaluate(() => {
+  const d = window.__coldgas.drive;
+  if (d.step) return;
+  const frame = d.frame;
+  d.step = frame;
+  d.frame = (dt, time) => frame(0, time);
+});
+
 // In the page: the drawn props near the car (instanced meshes by material/pool name, world
 // positions and widths) against the physics' solids in the cells it has built.
 const compare = (kinds) => {
@@ -78,7 +92,7 @@ const ram = async (page, tree) => {
     const d = window.__coldgas.drive, c = d.car, r = window.__ram;
     let vMin = Infinity;
     for (let k = 0; k < 25; k++) {
-      d.frame(0.1, performance.now() / 1000);
+      d.step(0.1, performance.now() / 1000);
       const ex = c.pos.x - r.x, ez = c.pos.z - r.z, lat = Math.abs(ex * r.dz - ez * r.dx);
       if (lat < 1.5) r.past = Math.max(r.past, ex * r.dx + ez * r.dz);
       vMin = Math.min(vMin, Math.hypot(c.vel.x, c.vel.z));
@@ -94,13 +108,14 @@ test('@heavy Free Drive (Stelvio): the trees drawn near the car are its solid tr
   const errors = watch(page);
   await page.goto('/coldgas/?drive=stelvio&gfx=low');
   await page.waitForFunction(() => window.__coldgas?.drive?.active, null, { timeout: 120_000 });
+  await hold(page);
   // Drive a little way up the road (the pilot), into the woods, and let the near tiles draw.
-  await page.evaluate(() => { const d = window.__coldgas.drive; d.goto(2400); d.autopilot(true, { vmax: 15 }); for (let n = 0; n < 30; n++) d.frame(0.1, performance.now() / 1000); d.autopilot(false); });
+  await page.evaluate(() => { const d = window.__coldgas.drive; d.goto(2400); d.autopilot(true, { vmax: 15 }); for (let n = 0; n < 30; n++) d.step(0.1, performance.now() / 1000); d.autopilot(false); });
   let r = null;
   for (let k = 0; k < 20; k++) {
     r = await page.evaluate(compare, ['tree']);
     if (r.solids > 0 && r.unsolid === 0 && r.unseen === 0) break;
-    await page.evaluate(() => window.__coldgas.drive.frame(0.05, performance.now() / 1000));
+    await page.evaluate(() => window.__coldgas.drive.step(0, performance.now() / 1000));
   }
   expect(r.solids).toBeGreaterThan(5);
   expect(r.unsolid).toBe(0);
@@ -117,12 +132,13 @@ test('@heavy Endless: trees and boulders drawn near the car are solid, and none 
   const errors = watch(page);
   await page.goto('/coldgas/?drive=endless&seed=forest&gfx=low');
   await page.waitForFunction(() => window.__coldgas?.drive?.active, null, { timeout: 120_000 });
-  await page.evaluate(() => { const d = window.__coldgas.drive; d.autopilot(true, { vmax: 20 }); for (let n = 0; n < 60; n++) d.frame(0.1, performance.now() / 1000); d.autopilot(false); });
+  await hold(page);
+  await page.evaluate(() => { const d = window.__coldgas.drive; d.autopilot(true, { vmax: 20 }); for (let n = 0; n < 60; n++) d.step(0.1, performance.now() / 1000); d.autopilot(false); });
   let r = null;
   for (let k = 0; k < 40; k++) {
     r = await page.evaluate(compare, ['conifer', 'conifer-hi', 'broad', 'rock']);
     if (r.solids > 0 && r.unsolid === 0 && r.unseen === 0) break;
-    await page.evaluate(() => window.__coldgas.drive.frame(0.05, performance.now() / 1000));
+    await page.evaluate(() => window.__coldgas.drive.step(0, performance.now() / 1000));
   }
   expect(r.solids).toBeGreaterThan(5);
   expect(r.unsolid).toBe(0);
