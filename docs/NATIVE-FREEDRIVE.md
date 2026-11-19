@@ -425,6 +425,32 @@ and back-to-back runs heat a phone. If the frame misses at the resolution floor,
 3. Take the shadow off the terrain.
 4. Use MetalFX frame interpolation in Free Drive (§2).
 
+### After 0310 (the land as a platform)
+
+`make perf`'s `freedrive` (the pilot 3 km out at 25 m/s) and a new `stream` scene (carried along a road at 60 m/s while the
+world streams in) on the "ColdGas iPhone" simulator, Release, 2026-11-19, main (4cbabe8c) first, then the branch. The PERF
+line now also prints `cpumax`, `over` (main-thread frames past 8.33 ms) and `world=` (tiles, prop triangles, cache MB, bakes,
+world-shadow redraws).
+
+| Scene, look | Footprint MB (avg / peak) | Triangles a frame | Draws | CPU p50 / p95 / max ms | Frames over 8.3 ms CPU |
+|---|---|---|---|---|---|
+| freedrive, Real: before | 344 / 345 | 1,847,788 | 299 | 1.76 / 4.34 / 6.37 | 0 |
+| freedrive, Real: after | 85 / 218 | 483,674 | 244 | 1.65 / 4.43 / 6.06 | 0 |
+| freedrive, Anime: before → after | 343 → 90 (peak 216) | 1,845,896 → 483,365 | 299 → 244 | 1.97 / 4.64 / 8.14 → 1.70 / 2.93 / 4.67 | 0 → 0 |
+| freedrive, 8-bit: before → after | 342 → 84 (peak 213) | 1,844,976 → 483,131 | 292 → 237 | 1.68 / 4.44 / 5.87 → 1.56 / 4.36 / 5.28 | 0 → 0 |
+| stream (60 m/s), Real: before | 343 / 346 | 1,658,997 | 282 | 0.83 / 1.79 / 1.96 | 0 |
+| stream (60 m/s), Real: after | 82 / 209 | 506,158 | 236 | 0.81 / 1.38 / 2.16 | 0 |
+
+- **Memory.** The footprint was the road network's cache: every link a far tile had ever asked about stayed (17 k links,
+  ≈ 250 MB of `[Double]` at 3 km out, by `heap`). The links are now a bounded LRU (1,536, rebuilt the same if wanted again).
+  The peak is the first seconds, before the far tiles' queries have been evicted.
+- **Triangles.** The props were drawn a whole 512 m block at a time at the LOD of its nearest point; the GPU cull draws each
+  instance at its own LOD, only in view: ≈ 1.6 M → 80–130 k prop triangles. The terrain's quadtree no longer refines what's
+  out of the lens: the drive settles with ≈ 140 tiles cached instead of needing ≈ 500 (main kept up to 900).
+- **The cache's own cost.** Slabs and surfaces: 37 MB of GPU memory (`cacheMB`), each tile baked once (276 bakes in the
+  window's 10 s at 25 m/s, 332 at 60 m/s); the world's shadow was redrawn 18 times in the 10 s at 25 m/s.
+- **GPU.** The simulator's GPU timings say nothing about a phone's (§8 above); `make device-bench-freedrive` is the owner's.
+
 ## 9 · The land as a platform (0310): the contract for WATER and MATTER
 
 The owner, 2026-11-19: "the landscape realism, the water realism, effects of the environment on the vehicle on the
