@@ -259,6 +259,7 @@ final class WorldView {
         for (key, bx, bz, per) in b {
             if props.add(key: key, bx: bx, bz: bz, per: per) {
                 for h in hidden { props.setHidden(h, true) }
+                for t in felledAt where Int((t.x / WorldView.block).rounded(.down)) == bx && Int((t.y / WorldView.block).rounded(.down)) == bz { props.setFelled(x: t.x, z: t.y, true) }   // 0334
             } else {
                 let B = WorldView.block
                 if let far = props.blocks.max(by: { blockD2($0.value, eye) < blockD2($1.value, eye) }), blockD2(far.value, eye) > (Double(bx) * B + B / 2 - eye.x) * (Double(bx) * B + B / 2 - eye.x) + (Double(bz) * B + B / 2 - eye.z) * (Double(bz) * B + B / 2 - eye.z) {
@@ -390,6 +391,14 @@ final class WorldView {
             }
         }
     }
+    /// 0334: a tree felled (its instance hidden) or stood again, found by where its trunk stood (world metres): trees aren't
+    /// roadside items, so they carry no item index. Kept for the blocks that come into the pool after it.
+    private var felledAt = Set<SIMD2<Double>>()
+    func setFelled(x: Double, z: Double, _ felled: Bool) {
+        let key = SIMD2(x, z)
+        if felled { felledAt.insert(key) } else { felledAt.remove(key) }
+        props.setFelled(x: x, z: z, felled)
+    }
     /// A roadside item broken loose (hide) or standing again (show): prop cell (cx, cz), its index there.
     func setBroken(cx: Int, cz: Int, item: Int, _ broken: Bool) {
         let h = SIMD3(Int32(truncatingIfNeeded: cx), Int32(truncatingIfNeeded: cz), Int32(truncatingIfNeeded: item))
@@ -458,7 +467,13 @@ final class WorldView {
         e.setVertexTexture(cache.tracesTexture, index: WorldBind.traces); e.setFragmentTexture(cache.tracesTexture, index: WorldBind.traces)
         e.setVertexTexture(cache.leafIndex, index: WorldBind.leafIndex); e.setFragmentTexture(cache.leafIndex, index: WorldBind.leafIndex)
         e.setFragmentTexture(props.shadowMap, index: WorldBind.worldShadow)
+        // MATTER's trace atlas (0330): empty by default, the layer's own when it has one.
+        WorldView.noTrace.withUnsafeBytes { e.setFragmentBytes($0.baseAddress!, length: WorldBind.matterTableSize, index: WorldBind.matterTable) }
+        e.setFragmentTexture(cache.tracesTexture, index: WorldBind.matterTraces)
+        for l in layers { l.bindGround(self, e) }
     }
+    /// An empty trace table (WorldMatter.h WTrace: no live slots).
+    private static let noTrace = [UInt8](repeating: 0, count: WorldBind.matterTableSize)
 
     /// `frame` (buffer 1) and `look` are the renderer's; `drive` is the world's own uniform (lamps, the props' range).
     func draw(_ e: MTLRenderCommandEncoder, frame fb: MTLBuffer, look: inout LookU, drive: inout WDriveU, shadow: MTLTexture, sky: MTLTexture,

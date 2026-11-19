@@ -17,6 +17,9 @@ protocol WorldLayer: AnyObject {
     func drawOpaque(_ w: WorldView, _ e: MTLRenderCommandEncoder, _ c: WorldDrawContext)
     /// The main pass, after the sky: water, spray, anything blended.
     func drawLate(_ w: WorldView, _ e: MTLRenderCommandEncoder, _ c: WorldDrawContext)
+    /// The ground's own resources for `matter_ground` (MATTER's trace atlas at fragment buffer and texture
+    /// `WorldBind.matterTable` / `.matterTraces`), bound after WorldView's empty defaults on every world draw (0330).
+    func bindGround(_ w: WorldView, _ e: MTLRenderCommandEncoder)
 }
 extension WorldLayer {
     var ownsSea: Bool { false }
@@ -25,6 +28,7 @@ extension WorldLayer {
     func drawShadow(_ w: WorldView, _ e: MTLRenderCommandEncoder, _ c: WorldDrawContext) {}
     func drawOpaque(_ w: WorldView, _ e: MTLRenderCommandEncoder, _ c: WorldDrawContext) {}
     func drawLate(_ w: WorldView, _ e: MTLRenderCommandEncoder, _ c: WorldDrawContext) {}
+    func bindGround(_ w: WorldView, _ e: MTLRenderCommandEncoder) {}
 }
 
 /// What a layer's draw knows about the frame (the same things are bound on the encoder, §9.4).
@@ -45,6 +49,10 @@ struct WorldDrawContext {
 enum WorldBind {
     static let frame = 1, look = 4, drive = 5, gpu = 6
     static let shadow = 3, skyView = 8, detail = 10, surface = 11, traces = 12, leafIndex = 13, worldShadow = 14
+    /// MATTER's fine trace atlas (0330, WorldMatter.h): its window table (fragment buffer) and its layers (fragment texture).
+    static let matterTable = 9, matterTraces = 9
+    /// WorldMatter.h WTrace's size: head, scale and a 32 × 32 table of UInt16.
+    static let matterTableSize = 32 + 32 * 32 * 2
 }
 
 /// World.metal's WorldGPU (§9.5).

@@ -7,6 +7,7 @@
 import Foundation
 import ColdGasAudio
 import Metal
+import QuartzCore
 import simd
 import ColdGasCore
 import ColdGasPhysics
@@ -42,17 +43,25 @@ protocol DriveScene: AnyObject {
     var repairs: Int { get }
     /// The drive's car as the renderer shows it (0225): each brake disc's glow, the pedal for the brake lamps.
     var carLook: DriveCarLook { get }
+    /// 0333: the car's damage as the drive's physics has it (the renderer draws the same), nil to let the crash keep its own.
+    var carDamage: CarDamage? { get }
 }
 /// The drive's key light: toward the light (unit), its colour (peak 1) × intensity, and the frame's exposure.
 struct DriveKey { var dir: SIMD3<Float>; var color: SIMD3<Float>; var intensity: Float; var exposure: Float }
+extension DriveScene { var carDamage: CarDamage? { nil } }
 /// What a drive tells the renderer about its car beyond the track.
 struct DriveCarLook {
     /// Each disc's glow (0 dark … ≈ 1 orange-hot), from its temperature.
     var glow = SIMD4<Float>(repeating: 0)
     /// The brake pedal (0…1); the brake lamps follow it.
     var pedal: Float = 0
-    /// How wet the car is (0…1) and how high the water reached on it (0 sills … 1 roof), drying (0320: the paint's to show).
-    var wet: Float = 0, wetLine: Float = 0
+    /// 0332: the coat (CarDirt): sills, nose, tail, wheels; its colour (rgb) and the body's coat (w); packed snow. `wet`: how wet the
+    /// car is (0…1, WATER's 0320 Wading.wet, or a ford's) and `wetLine` how high the water reached on it (0 sills … 1 roof),
+    /// drying. `coated`: anything to draw.
+    var dirt = SIMD4<Float>(repeating: 0), coat = SIMD4<Float>(0.3, 0.23, 0.16, 0), snow: Float = 0, wet: Float = 0, wetLine: Float = 0
+    var coated: Bool { dirt.max() > 0.01 || coat.w > 0.01 || snow > 0.01 || wet > 0.01 }
+    /// 0333: each wheel's toe and camber from a bent arm (rad).
+    var toe = SIMD4<Float>(repeating: 0), camber = SIMD4<Float>(repeating: 0)
 }
 
 final class FreeDrive: DriveScene {
@@ -156,6 +165,9 @@ final class FreeDrive: DriveScene {
         chassis.stability(FreeDrive.stability)
         chassis.water.level = { [unowned s] x, z in s.level(x, z) }
         chassis.water.current = { [unowned s] x, z in s.current(x, z) }   // a river's (0310's flow)
+        // MATTER's wetness (the coat rinsed, mud from soaked ground, the paint dark and glossy) is WATER's (0330 + 0320).
+        let wd = chassis.water
+        wetSource = { [unowned wd] in wd.wet }
         // A roam's small challenges (0274), kept on this device per set.
         if onMark {
             let st = stageOf(course.id)
@@ -208,6 +220,8 @@ final class FreeDrive: DriveScene {
             place(x: course.startX, z: course.startZ, yaw: course.id == "drive-lineup" ? 0 : .pi)
         }
         wedge.reset(); sunkT = 0
+        damage.reset(); chassis.toe = damage.toe; chassis.powerK = 1
+        for i in 0..<4 { strokeAt[i] = nil; rolledAt[i] = nil }
         resets += 1
         repairs += 1
         say("Back on the road")
@@ -228,16 +242,44 @@ final class FreeDrive: DriveScene {
     /// How many times the car's been made whole (the renderer repairs its damage when this changes).
     private(set) var repairs = 0
     private var smokeAcc = [Double](repeating: 0, count: 4), dustAcc = [Double](repeating: 0, count: 4)
-    private var groundAt: [(x: Double, z: Double, y: Double, s: Surface)] = Array(repeating: (.nan, .nan, 0, .grass), count: 4)
+    /// What each wheel last found underfoot (0310's FreeWorld.sample: the surface, how wet the ground is, the lying snow).
+    private var groundAt: [(x: Double, z: Double, y: Double, s: Surface, wet: Double, snow: Double)] = Array(repeating: (.nan, .nan, 0, .grass, 0, 0), count: 4)
     /// The tyres' work this frame, for the haptics (0…1): sliding, and rough ground.
     private(set) var slideK = 0.0, roughK = 0.0
     private var fxSeed: UInt32 = 0x9e3779b9
+    /// MATTER (0330–0333, docs/NATIVE-MATTER.md): what the car carries away from the ground and what the hits did to it.
+    /// Damage stays for the drive and a reset restores it; the coat stays through a reset (it washes off in water).
+    var damage = CarDamage()
+    var dirt = CarDirt()
+    /// The ground's memory on the GPU (ruts, berms, laid grass); nil without read-write textures.
+    private(set) var trace: TraceField?
+    /// The trace as a layer of the world (0310 §9.4).
+    private var matterLayer: MatterLayer?
+    /// `-fd-wet` taken (Debug).
+    var wetDebug = false
+    /// How wet the car is (0…1): WATER's (0320: Wading.wet, set in init), and a ford's own (a wheel in water soaks it, it drains).
+    var wetSource: (() -> Double)?
+    var fordWet = 0.0
+    /// Each wheel's last stroke on soft ground (world xz), its matter and when it rolled there (for the dirt's metres).
+    var strokeAt = [SIMD2<Double>?](repeating: nil, count: 4)
+    var rolledAt = [SIMD2<Double>?](repeating: nil, count: 4)
+    var impSeen = 0, matterSeed: UInt32 = 0x2545f491
+    var clodAcc = [Double](repeating: 0, count: 4)
+    /// 0334: trees felled this drive, and where each snapped (its splinters thrown on the next frame).
+    var felled = 0, wreckT = 0.0
+    /// The tyres' effects' cost on the main thread (µs, smoothed): the stats line and the PR's measurements.
+    var effectsUs = 0.0
+    var splinters: [SIMD3<Double>] = []
+    /// `-matter-off` (shots: the before): no traces, coat, damage model or new roost; the drive as it was.
+    static let matterOn = !Launch.args.contains("-matter-off")
+    private var noted = false
 
     /// The renderer attached (its device): the world's view is built once.
     func attach(device: MTLDevice) {
         if view == nil {
             view = WorldView(device: device, world: world)
             if view == nil { Report.error(.world, .error, "the drive's world view couldn't be built") }   // 0293
+            if FreeDrive.matterOn, let t = TraceField(device: device) { trace = t; matterLayer = MatterLayer(trace: t) }
         }
         if water == nil {
             water = WaterView(device: device, sea: sea)
@@ -246,6 +288,8 @@ final class FreeDrive: DriveScene {
         // The water is a layer of the world (0310, §9.4): it owns the sea, bakes its waves in the world's compute and draws
         // after the sky.
         if let v = view, let wv = water { v.add(wv) }
+        // MATTER's ground memory is a layer too (0330): strokes in the world's compute, its atlas bound for matter_ground.
+        if let v = view, let ml = matterLayer { v.add(ml) }
         view?.origin = origin   // the drive may have moved its origin before the view existed
     }
 
@@ -296,7 +340,9 @@ final class FreeDrive: DriveScene {
                     // The sea's clock, and the loose things in it (0320).
                     sea.time += DT
                     if sea.wet && !car.world.loose.isEmpty { floatLoose(car.world, level: { sea.level($0, $1) }) }
+                    if FreeDrive.matterOn { chassis.toe = damage.toe; chassis.powerK = damage.powerK }
                     if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
+                    if FreeDrive.matterOn { absorbImpacts() }
                     // A state that isn't a number never reaches the engine again (0229): back on the road at once.
                     if !carFinite(car) { print("DRIVE car state not finite: reset"); Report.error(.drive, .trap, "drive car state not finite"); Report.recovered(.world, ok: true); reset(); acc = 0; break }
                     pedal = input.brake
@@ -307,12 +353,15 @@ final class FreeDrive: DriveScene {
                     track.append(car: car, origin: origin)
                     // The impact buffer is the scored run's fixed one (the first 768 are a run's crash): a drive never ends,
                     // so it's emptied before it fills, or the crashes would stop being felt and seen (0229).
-                    if car.impacts.count >= car.impacts.cap - 64 { car.impacts.count = 0; track.rewindImpacts() }
+                    if car.impacts.count >= car.impacts.cap - 64 { car.impacts.count = 0; track.rewindImpacts(); impSeen = 0 }
                     acc -= DT
                     rebase()
                 }
             } catch { print("DRIVE sim stopped: \(error)"); Report.error(.drive, .trap, "drive sim stopped: \(error)"); Report.recovered(.world, ok: true); reset() }
             watchdog(dt)
+            #if DEBUG
+            matterDebug(dt)
+            #endif
             if carFinite(car) {
                 let f = forward
                 lastGood = (car.pos.x, car.pos.z, f.0, f.1)
@@ -524,7 +573,7 @@ final class FreeDrive: DriveScene {
     static func hitMaterial(_ k: LooseKind) -> HitMaterial {
         switch k {
         case .cone, .barrier: return .plastic
-        case .fence, .roadCase: return .wood
+        case .fence, .roadCase, .log: return .wood
         case .rail, .drum: return .rail
         case .sign, .signpost: return .sign
         case .kRail: return .stone
@@ -536,13 +585,23 @@ final class FreeDrive: DriveScene {
     /// what it was (timber cracks, steel bangs), scaled by the car's speed into it.
     private func roadside() {
         for c in streamer.drainChanges() {
-            view?.setBroken(cx: c.cx, cz: c.cz, item: c.item, c.broken)
+            // 0334: a felled tree's instance is found by where it stood (trees aren't roadside items).
+            if c.kind == .trunk { view?.setFelled(x: c.x, z: c.z, c.broken) } else { view?.setBroken(cx: c.cx, cz: c.cz, item: c.item, c.broken) }
             #if DEBUG
             if Launch.args.contains("-fd-stats") { print(String(format: "ROADSIDE %@ %@ at (%.1f, %.1f) %.1f m/s", c.broken ? "broke" : "stands", "\(c.kind)", c.x, c.z, c.speed)) }
             #endif
             guard c.broken else { continue }
             let k = Float(min(1, c.speed / 25))
             let steel = c.kind == .rail || c.kind == .sign
+            if c.kind == .trunk {
+                // A trunk snapping: a crack you feel, splinters and bark, a shake; the crown comes down after it.
+                Sound.shared.hit(.wood, k: 1, at: SIMD3<Float>(Float(c.x - origin.x), Float(c.y - origin.y + 0.6), Float(c.z - origin.z)), seed: c.item &* 17 &+ c.cz)
+                HapticPlayer.shared.play(HapticEvent(kind: .crush, tick: 0, channel: 4, intensity: 1, sharpness: 0.6))
+                camera.shake(0.9)
+                felled += 1; Signs.event("tree-felled")
+                splinters.append(SIMD3(c.x, c.y + 0.6, c.z))
+                continue
+            }
             Sound.shared.hit(c.kind == .rail ? .rail : c.kind == .sign ? .sign : .wood, k: Double(k), at: SIMD3<Float>(Float(c.x - origin.x), Float(c.y - origin.y), Float(c.z - origin.z)), seed: c.item &* 31 &+ c.cx)
             HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: 0.4 + 0.6 * k, sharpness: steel ? 0.8 : 0.55))
             camera.shake(0.25 + 0.5 * k)
@@ -562,6 +621,8 @@ final class FreeDrive: DriveScene {
     /// by a slide or a spin, smoke off a hard one on paving, dust and grit thrown up off the loose ground, spray from water.
     func effects(_ crash: Crash, dt: Double) {
         guard cruise == nil, dt > 0 else { return }
+        let fxT0 = CACurrentMediaTime()
+        defer { effectsUs += ((CACurrentMediaTime() - fxT0) * 1e6 - effectsUs) * 0.05 }   // the stats line: the tyres' work on the main thread
         let q = simd_quatd(ix: car.quat.x, iy: car.quat.y, iz: car.quat.z, r: car.quat.w)
         let p = SIMD3(car.pos.x, car.pos.y, car.pos.z), v = SIMD3(car.vel.x, car.vel.y, car.vel.z)
         let right = q.act(SIMD3(1, 0, 0)), fwd = q.act(SIMD3(0, 0, 1))
@@ -569,28 +630,40 @@ final class FreeDrive: DriveScene {
         var slide = 0.0, rough = 0.0
         for (i, w) in car.wheels.enumerated() {
             let a = WHEELS[i], anchor = p + q.act(SIMD3(a.x, a.y, a.z))
-            guard w.contact, w.ny > 0.85 else { view?.marks?.mark(i, at: anchor, side: right, width: 0.25, strength: 0, origin: origin); continue }
+            guard w.contact, w.ny > 0.85 else { view?.marks?.mark(i, at: anchor, side: right, width: 0.25, strength: 0, origin: origin); strokeAt[i] = nil; rolledAt[i] = nil; continue }
             // What's underfoot, asked again only once the wheel has moved half a metre.
             var g = groundAt[i]
             if !(abs(g.x - anchor.x) < 0.5 && abs(g.z - anchor.z) < 0.5) {
-                let gp = world.ground(anchor.x, anchor.z)
+                // (0330 on 0310: the land's own sample, so grip, ruts and roost read the wetness and snow the land is drawn with)
+                let gp = world.sample(anchor.x, anchor.z)
                 let floor = gp.floor || (abs(anchor.x) < ColdGasWorld.Site.half && abs(anchor.z) < ColdGasWorld.Site.half)
-                g = (anchor.x, anchor.z, floor ? 0 : gp.y, floor ? .concrete : gp.surface)
+                g = (anchor.x, anchor.z, floor ? 0 : gp.y, floor ? .concrete : gp.surface, floor ? 0 : gp.wetness, floor ? 0 : gp.snow)
                 groundAt[i] = g
             }
             // On a roof, a deck or a ramp the ground below isn't what it's touching: no mark there.
-            if anchor.y - g.y > 1.0 { view?.marks?.mark(i, at: anchor, side: right, width: 0.25, strength: 0, origin: origin); continue }
+            if anchor.y - g.y > 1.0 { view?.marks?.mark(i, at: anchor, side: right, width: 0.25, strength: 0, origin: origin); strokeAt[i] = nil; rolledAt[i] = nil; continue }
             let ground = SIMD3(anchor.x, g.y, anchor.z)
             let longS = max(0, (abs(w.slip) - 0.08) / 0.2), latS = max(0, (abs(w.slipAngle) - 0.05) / 0.12)
             let s = min(1, max(longS, latS)) * (speed > 1.2 || abs(w.omega) > 6 ? 1 : 0)
             slide = max(slide, s)
-            let paved = g.s == .concrete || g.s == .asphalt
-            let loose = !paved && g.s != .water
+            // The ground's wetness is the land's (a shore, a river bank: mud), not the car's; `-fd-wet` stands in for rain.
+            let wetNow = max(g.wet, wetDebug ? wetness : 0)
+            let freezing = g.y > GroundMatter.snowLine || g.snow > 0.5
+            let matter = GroundMatter.of(g.snow > 0.5 && g.s == .grass ? .snow : g.s, wet: wetNow, freezing: freezing)
+            if FreeDrive.matterOn {
+                // The tyre's grip over what the engine's cell gives (its dry matter): a wet road, soaked ground gone to mud.
+                let dry = GroundMatter.of(g.s, freezing: g.y > GroundMatter.snowLine).material().grip
+                chassis.gripK[i] = dry > 0 ? min(1, max(0.05, matter.material(wet: wetNow).grip / dry)) : 1
+            }
+            let paved = matter.rubber
+            let loose = !paved && g.s != .water && matter != .ice
             if loose { rough = max(rough, min(1, speed / 25)) }
-            // Rubber: paving only (on gravel or grass a slide ploughs, it doesn't mark).
+            // Rubber: paving only (on gravel or grass a slide ploughs, it doesn't mark; ice takes none).
             let side = simd_normalize(SIMD3(right.x, 0, right.z))
             view?.marks?.mark(i, at: ground, side: side, width: 0.25, strength: paved ? Float(s) : Float(0), origin: origin)
             let rp = SIMD3<Float>(ground - origin)
+            if FreeDrive.matterOn { matterWheel(i, w, matter, at: ground, rp: rp, side: side, fwd: fwd, v: v, speed: speed, slide: s, crash: crash) }
+            if g.s == .water { fordWet = 1 }
             if paved && s > 0.4 {
                 smokeAcc[i] += dt * 22 * s
                 while smokeAcc[i] >= 1 {
@@ -621,6 +694,12 @@ final class FreeDrive: DriveScene {
         slideK = slide; roughK = max(rough, water?.fx.rumble ?? 0)
         view?.loose?.update(car.world.loose, origin: origin)
         waterFrame(dt)
+        if FreeDrive.matterOn {
+            fordWet *= exp(-dt / 20)   // a soaked car drains in about a minute
+            if !splinters.isEmpty { splinterBurst(crash) }
+            dirt.weather(dt: dt, wet: wetness, speed: speed)
+            if !noted && (trace?.live ?? 0) + damage.hits > 0 { noted = true; DispatchQueue.main.async { PerfCenter.shared.note(.matter) } }   // 0300's flags
+        }
     }
 
     /// The floating origin of the drawing: 0 near the centre, else the car's position snapped to a kilometre, moved when
@@ -636,6 +715,7 @@ final class FreeDrive: DriveScene {
         let d = want - origin
         origin = want
         view?.origin = want
+        trace?.originMoved()
         track.shift(by: d)
     }
 
@@ -646,9 +726,19 @@ final class FreeDrive: DriveScene {
         // Iron starts to show a dull red in the dark at ≈ 400 °C and is orange by ≈ 750 °C.
         func g(_ t: Double) -> Float { let k = Float(max(0, min(1, (t - 380) / 420))); return k * k }
         let d = chassis.discT
-        return DriveCarLook(glow: ownCar ? SIMD4(g(d[0]), g(d[1]), g(d[2]), g(d[3])) : .zero, pedal: Float(pedal),
-                            wet: Float(chassis.water.wet), wetLine: Float(chassis.water.wetLine))
+        var l = DriveCarLook(glow: ownCar ? SIMD4(g(d[0]), g(d[1]), g(d[2]), g(d[3])) : .zero, pedal: Float(pedal))
+        // The water on the car (0320) whatever MATTER does; MATTER's `wetness` reads the same through `wetSource`.
+        l.wet = Float(chassis.water.wet); l.wetLine = Float(chassis.water.wetLine)
+        if FreeDrive.matterOn {
+            let wsum = dirt.wheel.reduce(0, +) / 4
+            l.dirt = SIMD4(Float(dirt.sill), Float(dirt.nose), Float(dirt.tail), Float(wsum))
+            l.coat = SIMD4(Float(dirt.r), Float(dirt.g), Float(dirt.b), Float(dirt.body))
+            l.snow = Float(dirt.snow); l.wet = Float(wetness)
+            l.toe = SIMD4(damage.toe.map(Float.init)); l.camber = SIMD4(damage.camber.map(Float.init))
+        }
+        return l
     }
+    var carDamage: CarDamage? { FreeDrive.matterOn ? damage : nil }
 
     func frameCamera(aspect: Float, dt: Double) -> (view: simd_float4x4, proj: simd_float4x4, eye: SIMD3<Float>) {
         // The camera follows the car as it's drawn (one tick behind, between ticks), not the newest tick.
@@ -768,5 +858,6 @@ final class FreeDrive: DriveScene {
         guard let s = view?.stats else { return "" }
         return String(format: "tiles %d · %.0fk tris · roads %d · props %d (%.0fk tris, %d shadow) · %.0f MB · missing %d · %.1f km out · origin (%.0f, %.0f) · marks %d · loose %d · roadside %d standing %d broken",
                       s.tiles, Double(s.tris) / 1000, s.roads, s.instances, Double(view?.props.drawn.tris ?? 0) / 1000, view?.props.drawn.shadow ?? 0, s.mb, s.missing, dist / 1000, origin.x, origin.z, view?.marks?.count ?? 0, view?.loose?.drawn ?? 0, streamer.standingCount, streamer.brokenCount)
+            + String(format: " · fx %.0f µs · trace %d slots %d strokes %d dispatches · coat %.2f · hits %d glass %d health %.2f toe %.3f", effectsUs, trace?.live ?? 0, trace?.strokes ?? 0, trace?.dispatches ?? 0, dirt.most, damage.hits, damage.glass.rawValue, damage.health, damage.pull)
     }
 }

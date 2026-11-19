@@ -24,7 +24,9 @@ struct Frame {
     float4 fx;                  // 0290: x anime's impact frame (0…1); yz the moon's bearing (unit xz), w 1 when set
     float4x4 worldShadowVP;     // 0310: Free Drive's cached world shadow (trees, rocks, the near land), render space
     float4 worldShadow;         // x 1 when it's drawn; y its texel
+    float4 matter[6];           // 0332: what the ground left on the car (CarMatter.h); matter[0].w 0: none
 };
+#include "CarMatter.h"
 // What doesn't change in a course (Renderer.lookU).
 struct LookU {
     float4 hemiSky;             // three's hemisphere light, rgb × intensity; w: the environment's intensity (0: no cube fetches)
@@ -305,6 +307,8 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float rough = m.pbr.y;
         if (m.flags.y) rough *= roughMap.sample(s, uv).g;
         float metal = m.pbr.x, wet = 0, setWet = 1;
+        float coat = 0.0;
+        if ((m.flags.w & 4u) && f.matter[0].w > 0.5) { float3 b3 = base.rgb; coat = carMatter(in.world, f.matter, f.style.x, b3, rough, metal); base.rgb = b3; }   // 0332: mud, dust, snow, water
         if (m.flags.w & 24u) {   // the sets' concrete and steel (0273, SetSurface.h)
             SetSurfaceOut so = setSurface(base.rgb, rough, in.world, n, m.flags.w & 24u, m.effect, detail, length(fwidth(in.world)));
             base.rgb = so.base; rough = so.rough; setWet = so.wetK;
@@ -378,7 +382,8 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             float ac = min(rc.x * rc.x, exp2(-9.28 * nv)) * rc.x + rc.y;
             float2 fc = float2(-1.04, 1.04) * ac + rc.zw;
             float Fcc = 0.04 + 0.96 * pow(1.0 - nv, 5.0);
-            color = color * (1.0 - m.pbr.z * Fcc) + cc * (0.04 * fc.x + fc.y) * m.pbr.z;
+            float ccK = m.pbr.z * (1.0 - coat);   // 0332: a coat of mud has no clear coat over it
+            color = color * (1.0 - ccK * Fcc) + cc * (0.04 * fc.x + fc.y) * ccK;
         }
         }
         color += emissive;

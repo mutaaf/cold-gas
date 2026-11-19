@@ -186,6 +186,22 @@ final class WorldProps {
         shadowDue = true
     }
 
+    /// 0334: a tree felled (hidden: its scale negated, as a broken roadside item is) or stood again, found by where its trunk
+    /// stood (world metres) among its block's spruces and broadleaves.
+    func setFelled(x: Double, z: Double, _ felled: Bool) {
+        let B = WorldView.block
+        let bx = Int((x / B).rounded(.down)), bz = Int((z / B).rounded(.down))
+        guard let b = blocks.values.first(where: { $0.bx == bx && $0.bz == bz }) else { return }
+        let f = pool.contents().bindMemory(to: Float.self, capacity: WorldProps.poolCap * 8)
+        let u = pool.contents().bindMemory(to: UInt32.self, capacity: WorldProps.poolCap * 8)
+        let lx = Float(x - Double(bx) * B), lz = Float(z - Double(bz) * B)
+        let trees: Set<UInt32> = [UInt32(PropKind.spruce.rawValue), UInt32(PropKind.broadleaf.rawValue)]
+        for i in b.start..<(b.start + b.count) where trees.contains(u[i * 8 + 6] & 0xff) && abs(f[i * 8] - lx) < 0.05 && abs(f[i * 8 + 2] - lz) < 0.05 {
+            f[i * 8 + 4] = felled ? -abs(f[i * 8 + 4]) : abs(f[i * 8 + 4])
+        }
+        shadowDue = true
+    }
+
     // MARK: - The frame
 
     /// The cull's compute (and the world's shadow when it's due), before the frame's passes.

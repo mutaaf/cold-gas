@@ -300,6 +300,7 @@ extension LooseKind {
         case .fence: return 0.087; case .signpost: return 0.0018; case .rail: return 0.014
         case .tyre: return 0.03; case .drum: return 0.21; case .roadCase: return 0.4
         case .kRail: return 0.4; case .generator: return 1.1
+        case .log: return 0.8   // 0334's felled tree (640 kg): green timber at ≈ 800 kg/m³ floats low
         }
     }
 }

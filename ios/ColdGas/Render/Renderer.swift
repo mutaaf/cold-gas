@@ -37,6 +37,8 @@ struct FrameU {
     /// 0310: Free Drive's cached world shadow (WorldProps): its view-projection (render space); x 1 when drawn, y its texel.
     var worldShadowVP = matrix_identity_float4x4
     var worldShadow = SIMD4<Float>()
+    /// 0332: what the ground left on the car (Render/CarMatter.h); all zero (off) on a scored run.
+    var matter = (SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>())
 }
 struct LookU {
     var hemiSky = SIMD4<Float>(), hemiGround = SIMD4<Float>(), hazeCol = SIMD4<Float>(), sunCol = SIMD4<Float>(), sunDir = SIMD4<Float>(), fogExp = SIMD4<Float>()
@@ -102,7 +104,7 @@ final class Renderer {
     // Where the car's own materials sit in stageMats (their colours change per frame: applyCarMaterials).
     private let partBase, sweepBase, complexMats, blobSplit: Int
     private let subAmber, subMarker, subPlate, subAmbient, subGlass: Int
-    private let glassMat: MaterialU?, crazedMat: MaterialU?
+    private let glassMat: MaterialU?, crazedMat: MaterialU?, shatteredMat: MaterialU?
     private var sweepM: [simd_float4x4]
     /// A drive's wheels (0225): each spinning part with the aero disc's flat face cut out (the barrel kept), so the rotor and
     /// caliper show between the spokes; the rotor's submesh in each steer part, for its glow.
@@ -135,6 +137,8 @@ final class Renderer {
     var hingeOpen: Float = 1
     /// A live run's draw time (s of sim time), set by the game each frame (0154).
     var liveTime = 0.0
+    /// The drive's car this frame (0225, 0332): the glow, the pedal, the coat and the bent arms.
+    private var driveLook: DriveCarLook?
     /// The crash's slow-motion factor, for the game's clock (a live run slows with the effects, as crash.js timeScale).
     var slowK: Double { Double(crash.slowK) }
     /// A new track (a new run, or back to the title's loop): effects and clocks start over.
@@ -355,7 +359,10 @@ final class Renderer {
             var cz = stageMats[1][subGlass]   // crash.js `crazed`: the glass gone milky
             cz.color = SIMD4(srgbHexToLinear(0x9a8a74), 0.9); cz.pbr = SIMD4(0.15, 0.55, 0, 0)
             crazedMat = cz
-        } else { glassMat = nil; crazedMat = nil }
+            var sh = stageMats[1][subGlass]   // 0333: shattered: the frame's few shards left, the cockpit open to the night
+            sh.color = SIMD4(srgbHexToLinear(0x2a3036), 0.14); sh.pbr = SIMD4(0.2, 0.35, 0, 0)
+            shatteredMat = sh
+        } else { glassMat = nil; crazedMat = nil; shatteredMat = nil }
         // The look's constants. A skipped feature zeroes its switch, and the shader's branch takes its fetches out too.
         let off = Set((Launch.value("-gpu-skip") ?? "").split(separator: ",").map(String.init))
         var lk = LookU()
@@ -551,6 +558,8 @@ final class Renderer {
             if d.repairs != driveRepairs { driveRepairs = d.repairs; crash.repair() }
             d.effects(crash, dt: dtReal)
             let cl = d.carLook
+            driveLook = cl
+            if let dmg = d.carDamage { crash.adopt(dmg) }   // 0333: one damage for what's felt and what's drawn
             crash.car.pedal = cl.pedal
             if rotorSub >= 0 {
                 for w in stage.wheels {
@@ -670,6 +679,7 @@ final class Renderer {
         }
         let mb = moonBearing ?? SIMD2(0.6, 0.8)
         u.fx = SIMD4(look == .anime && (Renderer.impactHold || heroClock - impactAt < impactLen) ? 1 : 0, mb.x, mb.y, 1)
+        if dv != nil, let cl = driveLook, cl.coated { u.matter = MatterLook.frame(cl, carPos: carPos, carQuat: carQ) }   // 0332
         fb.contents().storeBytes(of: u, as: FrameU.self)
         // The mirror's frame: the same lens looking at the world flipped in y. Its fragments keep their real world position and
         // normal for the lights; only the eye and the clip position change, and the winding (frontFace).
@@ -981,7 +991,7 @@ final class Renderer {
         let c = crash.car
         setLamp(.drl, c.drl); setLamp(.heads, c.headC); setLamp(.tailBar, c.tail); setLamp(.tailDim, c.tailDim); setLamp(.brake, c.brakeC)
         setBodyLamp(subAmber, c.amber); setBodyLamp(subMarker, c.marker); setBodyLamp(subPlate, c.plate); setBodyLamp(subAmbient, c.ambient)
-        if subGlass >= 0, let m = c.crazed ? crazedMat : glassMat { stageMats[1][subGlass] = m }
+        if subGlass >= 0, let m = c.shattered ? shatteredMat : c.crazed ? crazedMat : glassMat { stageMats[1][subGlass] = m }
         applyPaint()
     }
     /// Wreck Club's paint (0242), cosmetic only: the body panels' base colour, or the factory's when none is chosen.
@@ -1029,8 +1039,10 @@ final class Renderer {
     /// Everything on the car that moves on its own or can tear off, then what has torn off.
     private func carPartsDraw(_ e: MTLRenderCommandEncoder, carM: simd_float4x4, shadow: Bool) {
         let c = crash.car, L = stage.layout
-        if !c.isBroken(.wing) { wingDraw(e, base: carM * translate(L.wingPos) * rotX(L.wingRotX), k: c.wing, air: c.airbrake, shadow: shadow) }
-        if !c.isBroken(.vanes) { part(e, .vanes, carM * translate(L.vanesPos) * rotX(c.vanesRotX), shadow: shadow) }
+        // 0333: a hanging panel drops on one side, round its other end's last mount, and swings (CarState.swing).
+        func hung(_ a: Float, _ halfX: Float, _ sign: Float) -> simd_float4x4 { a == 0 ? matrix_identity_float4x4 : translate(SIMD3(sign * halfX, 0, 0)) * rotZ(sign * a) * translate(SIMD3(-sign * halfX, 0, 0)) }
+        if !c.isBroken(.wing) { wingDraw(e, base: carM * translate(L.wingPos) * rotX(L.wingRotX) * hung(c.hangAngle[1], L.wingHalf.x, -1), k: c.wing, air: c.airbrake, shadow: shadow) }
+        if !c.isBroken(.vanes) { part(e, .vanes, carM * translate(L.vanesPos) * rotX(c.vanesRotX) * hung(c.hangAngle[0], L.vanesHalf.x, 1), shadow: shadow) }
         if !c.isBroken(.barge) { part(e, .barge, carM * scaleM(c.bargeX, 1, 1), shadow: shadow) }
         if c.sideSkirtsShown { part(e, .sideSkirts, carM * translate(SIMD3(0, -0.11 * c.skirtSide, 0)), shadow: shadow) }
         if c.endSkirtsShown { part(e, .endSkirts, carM * translate(SIMD3(0, -0.11 * c.skirtEnd, 0)), shadow: shadow) }
@@ -1087,7 +1099,9 @@ final class Renderer {
             if let r = replay, r.ticks > 0 { let ws = r.wheel(w.index, at: t); comp = ws.comp; spin = ws.spin; steer = w.steers ? ws.steer : 0 }
             let anchorY = Float(anchors[w.index].1 + SPEC.comHeight)
             let y = anchorY - Float(CAR.restLen) + comp
-            let pivot = carM * translate(SIMD3(w.x, y, w.z)) * simd_float4x4(simd_quatf(angle: steer, axis: [0, 1, 0]))
+            var pivot = carM * translate(SIMD3(w.x, y, w.z)) * simd_float4x4(simd_quatf(angle: steer, axis: [0, 1, 0]))
+            // 0333: a bent arm in a drive (the fronts' toe is in their steer already), its camber leaning the wheel's top in.
+            if drive != nil, let l = driveLook, w.index < 4 { pivot = pivot * MatterLook.bent(toe: w.steers ? 0 : l.toe[w.index], camber: l.camber[w.index], left: w.x < 0) }
             let spinM = pivot * simd_float4x4(simd_quatf(angle: spin, axis: [1, 0, 0]))
             let base = 2 + stage.parked.count + w.index * 2
             drawMesh(e, w.steerPart, matsIndex: base, model: pivot, opaqueOnly: opaqueOnly, shadow: shadow)

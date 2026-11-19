@@ -176,6 +176,12 @@ public final class DriveModel {
     fileprivate var betaPrev = 0.0, hbHold = 0.0
     /// The probes' ground (tests): every wheel on this material instead of what the ray found.
     var surfaceOverride: Material?
+    /// Damage carried by the car (0333, CarDamage): each wheel's toe (rad, + toward +x) from a bent arm, added to where it
+    /// points (the fronts pull the steering, a rear crabs the car), and the motors' torque left (a wrecked unit limps).
+    public var toe = [Double](repeating: 0, count: 4)
+    public var powerK = 1.0
+    /// Each wheel's grip over its ground's (0330: a wet road, a rut's packed snow), 1 = the material's own.
+    public var gripK = [Double](repeating: 1, count: 4)
     /// Torque vectoring on.
     public var vectoring = true
     /// Each disc's temperature (°C).
@@ -431,7 +437,7 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
             let close = -M3.dot(vp, hitN)
             if close > WHEEL_MIN && close > evWheel[0] { M3.add(rp, s.pos, tmp); keep(&evWheel, close, rp, hitN, i, bodyIndex(hb), 0) }
         }
-        let steerA = i < 2 ? s.steer : 0
+        let steerA = (i < 2 ? s.steer : 0) + (dm.toe[i].isFinite ? M3.clamp(dm.toe[i], -0.1, 0.1) : 0)
         wh.steer = steerA
         let csA = DMath.dcos(steerA), snA = DMath.dsin(steerA)
         M3.set(wf, fwd.x * csA + right.x * snA, fwd.y * csA + right.y * snA, fwd.z * csA + right.z * snA)
@@ -445,7 +451,8 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         let Fz0 = DriveSpec.staticLoad(i), xL = jsMax(0.05, Fz / Fz0)
         let lsK = jsMax(0.55, 1 - DriveSpec.loadSens * (xL - 1))
         let wg = dm.water.grip[i]   // 0320: a tyre in water, or aquaplaning
-        let Dx = DriveSpec.muX * hm.grip * lsK * Fz * wg, Dy = DriveSpec.muY * hm.grip * lsK * Fz * wg
+        let gk = dm.gripK[i].isFinite ? M3.clamp(dm.gripK[i], 0.05, 1.5) : 1   // 0330: the ground's matter (a wet road, mud)
+        let Dx = DriveSpec.muX * hm.grip * gk * lsK * Fz * wg, Dy = DriveSpec.muY * hm.grip * gk * lsK * Fz * wg
         let fLat = hm.loose ? DriveSpec.latLoose : DriveSpec.lat, fLon = hm.loose ? DriveSpec.lonLoose : DriveSpec.lon
         let kp = DriveSpec.kappaPeak * (hm.loose ? 1.8 : 1)
         let ap = DriveSpec.alphaPeak[i] * pow(xL, 0.35) * (hm.loose ? 1.5 : 1)
@@ -457,7 +464,8 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         var T = 0.0
         if DRIVEN[i] {
             let motorT = jsMin(SPEC.maxWheelTorque, (SPEC.power / 2) / jsMax(abs(wh.omega), 8))
-            T = inp.throttle * motorT * dm.water.motor   // 0320: a drowned drive unit cuts the motors
+            // 0320: a drowned drive unit cuts the motors; 0333: a wrecked one limps
+            T = inp.throttle * motorT * dm.water.motor * (dm.powerK.isFinite ? M3.clamp(dm.powerK, 0, 1) : 1)
             // The handbrake up: the motors let go (a lever's clutch), so the rears lock and the tail slides.
             if s.handbrake > 0.5 { T = 0 }
             if tvDelta != 0 && T > 0 {

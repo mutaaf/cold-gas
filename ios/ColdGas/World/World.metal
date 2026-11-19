@@ -88,7 +88,8 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
                                           depth2d<float> shadow [[texture(3)]], texture2d<float> skyView [[texture(8)]],
                                           texture2d<float> det [[texture(10)]], texture2d_array<float> surface [[texture(11)]],
                                           texture2d_array<float> traces [[texture(12)]], texture2d<int> leafIndex [[texture(13)]],
-                                          depth2d<float> wshadow [[texture(14)]]) {
+                                          depth2d<float> wshadow [[texture(14)]],
+                                          constant WTrace& mt [[buffer(9)]], texture2d_array<float> mtex [[texture(9)]]) {
     if (dr.params.z > 0.5) {   // debug (`-fd-lod`): each level its own colour, with the stored albedo
         float3 lc[8] = { float3(1,0,0), float3(0,1,0), float3(0,0,1), float3(1,1,0), float3(0,1,1), float3(1,0,1), float3(1,1,1), float3(0.5,0.5,0.5) };
         return float4(lc[int(clamp(in.level, 0.0, 7.0))] * 0.05 + in.col.rgb * 0.3, 1);
@@ -109,7 +110,7 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
         }
         // MATTER's ruts, scuffs and mud (WorldMatter.h), on the finest tiles round the car.
         float4 tr = in.level < 0.5 ? world_traceAt(in.world.xz, g, leafIndex, traces) : float4(0);
-        matter_ground(s, in.world, tr, S, dr);
+        matter_ground(s, in.world, tr, S, dr, f, mt, mtex);
         s.ao *= world_carAO(in.world, dr);
         // WATER's seabed and swash (WorldWater.h): caustics on the bed, the wet line moving on the shore.
         water_ground(s, caustic, in.world, w, S, g.flags.x, dr, f);
@@ -217,7 +218,8 @@ fragment float4 cg_world_road_fragment(WRoadOut in [[stage_in]], constant WFrame
                                        depth2d<float> shadow [[texture(3)]], texture2d<float> skyView [[texture(8)]],
                                        texture2d<float> det [[texture(10)]], texture2d_array<float> surface [[texture(11)]],
                                        texture2d_array<float> traces [[texture(12)]], texture2d<int> leafIndex [[texture(13)]],
-                                       depth2d<float> wshadow [[texture(14)]]) {
+                                       depth2d<float> wshadow [[texture(14)]],
+                                       constant WTrace& mt [[buffer(9)]], texture2d_array<float> mtex [[texture(9)]]) {
     float lat = in.la.x, along = in.la.y, al = abs(lat);
     const float hw = 3.5;
     float dist = distance(in.world, f.eye.xyz);
@@ -279,7 +281,7 @@ fragment float4 cg_world_road_fragment(WRoadOut in [[stage_in]], constant WFrame
     if (vergeK > 0) {
         float4 tr = world_traceAt(in.world.xz, g, leafIndex, traces);
         WSurf v = s;
-        matter_ground(v, in.world, tr, S, dr);
+        matter_ground(v, in.world, tr, S, dr, f, mt, mtex);
         s = v;
     }
     s.ao *= world_carAO(in.world, dr);

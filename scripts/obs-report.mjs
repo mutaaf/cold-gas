@@ -48,7 +48,7 @@ const EDGE_ORDER = ['6', '9', '12', '15', '17', '20', '25', '33', '50', '66', '1
 const HITCH_ORDER = ['none', 'lt1', 'lt5', 'lt20', 'many'];
 const HEAT_ORDER = ['nominal', 'fair', 'serious', 'critical'];
 const FEATURES = ['look_real', 'look_anime', 'look_pixel', 'esc_on', 'esc_sport', 'esc_off', 'abs_on', 'abs_off', 'tc_on', 'tc_off', 'drift_on', 'drift_off', 'bias', 'hb',
-  'roam', 'roamch', 'roamreset', 'drive', 'replay', 'club'];
+  'roam', 'roamch', 'roamreset', 'drive', 'replay', 'club', 'mt'];
 // The weighted median of an ordered category (the bucket where half the sessions are at or under).
 function median(counts, order) {
   const n = order.reduce((a, k) => a + (counts[k] || 0), 0);

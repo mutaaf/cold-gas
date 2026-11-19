@@ -311,6 +311,13 @@ dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look d
   Lineup's cone lane. Done and best kept per set on the device; no timer, no streak, nothing scored.
 - `-flat-sets` turns the surfaces, the dressing and the paint off; `-roam-log` (Debug) logs the challenges to Caches/roam.log.
 
+### Everything leaves a mark (0330–0335)
+
+What the ground does to the car and the car to the ground and to everything it hits (ruts and berms in a per-tile trace
+texture, the car's coat, roost by material, snow, ice and mud, the car's lasting damage, trees that snap) is mapped and built
+in docs/NATIVE-MATTER.md. On §9's contract it's a `WorldLayer` (`MatterLayer`) whose fine trace atlas is bound for
+`matter_ground` (WorldMatter.h), and `GroundMatter.of(_:wet:freezing:)` reads `FreeWorld.sample`'s wetness and snow.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
@@ -623,6 +630,13 @@ scuffs and mud into albedo, normal, roughness and AO there (every look takes it,
 - Free Drive and Roam only: nothing a layer does reaches a scored run, a log or the vectors.
 - Every element looks deliberate in Real, Anime (cel ramp, ink from depth, bold shapes) and 8-bit (the 32-colour palette,
   whole pixels, no dither but the sky's checker): check all three before you ship.
+
+### 9.7½ MATTER on the contract (0330, landed with this section)
+
+MATTER asked for one change here: its trace atlas (6.25 cm a texel, see NATIVE-MATTER.md §2) instead of the slices in 9.3,
+which stay unallocated. `WorldLayer.bindGround` (default empty) lets a layer bind ground resources after WorldView's defaults;
+WorldView binds an empty `WTrace` table at fragment buffer 9 and a one-slice array at fragment texture 9 on every world draw,
+and `matter_ground` takes `(s, p, trace, land, dr, f, mt, mtex)`.
 
 ### 9.8 For WATER (#460): where to attach
 
