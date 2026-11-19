@@ -127,12 +127,12 @@ struct SettingsView: View {
                 }
                 // 0246: the usage counts the game sends, and the one switch that stops them.
                 Section {
-                    Toggle("Share usage stats", isOn: $usage)
+                    Toggle("Share usage stats and crash reports", isOn: $usage)
                         .onChange(of: usage) { _, v in Usage.shared.setOn(v) }
                         .accessibilityIdentifier("usage")
                     Link("Privacy policy", destination: URL(string: "https://mutaafaziz.com/coldgas/privacy")!)
                 } header: { Text("Privacy") } footer: {
-                    Text("Counts like a jump started, landed or shared, with the course, tier and score, and a random id made on this iPhone. No name, initials, location or advertising id. Off sends nothing and deletes the id.")
+                    Text("Counts like a jump started, landed or shared, with the course, tier and score, and a random id made on this iPhone. No name, initials, location or advertising id. Crash and error reports (what failed, where in the code, how often) carry no id at all. Off sends nothing and deletes the id and anything waiting.")
                 }
                 Section("About") {
                     LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")

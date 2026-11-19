@@ -52,6 +52,8 @@ final class Game: ObservableObject {
     @Published private(set) var countdown = 0
     @Published private(set) var result: RunResult?
     @Published var paused = false
+    /// 0293: one calm line over the screens when something failed that the player should know about (Report.swift).
+    @Published var notice: Notice?
     /// The results are up and the flight is playing back behind them (the track the run recorded).
     @Published private(set) var replaying = false
     private var replayT = 0.0
@@ -416,7 +418,16 @@ final class Game: ObservableObject {
                 if !touched && r.t.touchTick >= 0 { touched = true; stage?.renderer?.cam.touchdown(sink: r.t.sink) }
                 if wasFlying && r.phase == .done { finished(l) }
             }
-        } catch { print("SIM stopped: \(error)"); if result == nil { home() }; return }
+        } catch {
+            // 0293: a trap ends the run cleanly (the web's physics trap → title), said once and reported.
+            Report.error(.physics, .trap, "sim stopped: \(error)")
+            Report.recovered(.physics, ok: true)
+            if result == nil {
+                home()
+                notice = Notice(text: "That run stopped: the physics hit a snag. It\u{2019}s been noted.")
+            }
+            return
+        }
         haptics.drain { HapticPlayer.shared.play($0) }
         wreck.drainCalls { call($0) }
         if combo != nil { comboFor += dt; if comboFor > 1.6 { combo = nil } }

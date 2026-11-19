@@ -216,7 +216,21 @@ function createObs() {
       if (hidden) { runAll(hiding); o.flush('hidden'); }
     });
     wrapFetch();
+    drainEarly();
   }
+  // 0293: what index.html's boot watchdog saw before these listeners existed (a throw while the modules evaluated, a
+  // rejection on the way up): reported now, once. index.html stops keeping them when __cgEarly is null.
+  function drainEarly() {
+    const early = globalThis.__cgEarly;
+    if (!Array.isArray(early)) return;
+    globalThis.__cgEarly = null;
+    for (const err of early.slice(0, 8)) {
+      const e = err instanceof Error ? err : new Error(String(err));
+      if (isLazy(e)) { o.lazyFailed(e); continue; }
+      o.error(classify(e), e, isTrap(e) ? 'trap' : 'error');
+    }
+  }
+  o.drainEarly = drainEarly;
   const isTrap = (err) => (typeof WebAssembly !== 'undefined' && err instanceof WebAssembly.RuntimeError) || /\bunreachable\b|memory access out of bounds|recursive use of an object|RuntimeError/i.test(`${err?.name} ${err?.message}`);
   const isLazy = (err) => /dynamically imported module|Importing a module script failed|error loading dynamically imported|preload/i.test(err?.message || '');
   const classify = (err) => (isTrap(err) ? 'physics' : moduleOf(err?.stack));

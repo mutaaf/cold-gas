@@ -726,7 +726,9 @@ function dailyLine(run, items = false) {
   if (S.drill || S.runKind !== 'jump' || streakNow(loadDaily(), Date.now()).doneToday) return '';
   const obj = objectiveFor(Date.now());
   if (items && !dailySwapsHold(obj)) return '';
-  return dailyCoach(obj, dailyEval(obj, S.card, run.course), pointerCtx(run.course, S.tier));
+  // 0218: judged in the form the run was flown in (comeback.js's results line does the same).
+  const flown = S.cardHow ? flownCtx(S.cardHow, run.course, S.card?.tier ?? S.tier) : pointerCtx(run.course, S.tier);
+  return dailyCoach(obj, dailyEval(obj, S.card, run.course, flown), pointerCtx(run.course, S.tier));
 }
 function showPointer(run) {
   if (S.guideWreck) {

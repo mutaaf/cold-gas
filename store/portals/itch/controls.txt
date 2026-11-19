@@ -1,0 +1,11 @@
+Keyboard
+Ground: Up arrow throttle, Down arrow brake, Left and Right arrows steer, Space lift and let go, Shift boost
+Air: Left and Right arrows roll, Up and Down arrows pitch, Q and E yaw, Space lift, F boost, Shift land
+Any time: P pause, R retry, H home, G ghost, L pilot view, U units
+
+Touch
+One thumb (Assist): hold to climb, tap to let go, hold to land. The flight computer rolls you out and brakes.
+Classic: a stick and pedals, with roll, boost and land by hand.
+
+Gamepad
+Supported. The pause screen lists the buttons for the pad in use.

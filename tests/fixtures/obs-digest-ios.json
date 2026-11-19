@@ -1,0 +1,15 @@
+{
+  "generated": "2026-11-18T12:00:00.000Z",
+  "current": { "build": "cbda30c", "first": "2026-11-18", "sessions": 412 },
+  "previous": { "build": "74c7010", "first": "2026-11-17", "sessions": 380 },
+  "top": [
+    { "key": "aaaaaaaaaaaa", "sig": "aaaaaaaaaaa1", "mod": "net", "kind": "fetch", "msg": "fetch /api/scores N", "fr": "post@index.js:1:2", "n": 14, "sessions": 9, "builds": ["cbda30c", "74c7010"] },
+    { "key": "bbbbbbbbbbbb", "sig": "bbbbbbbbbbb1", "mod": "app", "kind": "unclean", "msg": "crash EXC_BREAKPOINT SIGTRAP", "fr": "0x1a2b3c@ColdGas", "n": 2, "sessions": 2, "builds": ["ios-1.2.0-202611181400"] },
+    { "key": "cccccccccccc", "sig": "ccccccccccc1", "mod": "frame", "kind": "frame", "msg": "main thread hang long", "fr": "0x77aa@ColdGas", "n": 6, "sessions": 4, "builds": ["ios-1.1.0-202611101200", "ios-1.2.0-202611181400"] },
+    { "key": "dddddddddddd", "sig": "ddddddddddd1", "mod": "net", "kind": "fetch", "msg": "board timeout", "fr": "fetchBoard@Board.swift:70:0", "n": 1, "sessions": 1, "builds": ["ios-1.1.0-202611101200"] }
+  ],
+  "regressions": [
+    { "status": "new", "severity": "P1", "key": "aaaaaaaaaaaa", "mod": "net", "kind": "fetch", "msg": "fetch /api/scores N", "cur": { "build": "cbda30c", "n": 14, "sessions": 9, "rate": 0.034 } }
+  ],
+  "players": { "days": [ { "day": "2026-11-18", "human": 120, "auto": 30, "run": 300, "run-landed": 180, "run-wrecked": 90, "post": 12 } ], "total": {} }
+}
