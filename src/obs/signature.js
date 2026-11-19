@@ -112,12 +112,17 @@ export const MODULE_IDS = ['app', 'render', 'webgl', 'shader', 'physics', 'audio
 // 0136: the Daily, tapped → finished → met: daily-start (a tap on Play today's or Play again), then daily-done or daily-miss
 // on every finished run on the Daily's course, however it was started (a plain Jump or a Retry there counts toward the
 // Daily too, as the streak does), so read done / (done + miss) as the met rate, and start as the taps. daily-run is the old name for a miss, still counted beside daily-miss for one release (src/comeback.js).
+// 0143: the visits that never reach a run. jump-tap: the title's Jump tapped, once per page load, before any run.
+// title-left: the page went (pagehide or hidden) on the title, never past it this load (at most once), beside its one
+// reason (LEAVE_EVENTS: the how-to card open, a start still waiting, the title not drawn yet, or nothing); title-back: that
+// load came back and played after all (leaves = title-left − title-back). src/obs/title-leave.js.
+export const LEAVE_EVENTS = ['left-howto', 'left-starting', 'left-booting', 'left-title'];
 export const CTL_EVENTS = ['ctl-thumb', 'ctl-classic', 'ctl-keys', 'ctl-pad'];
 export const FLY_EVENTS = ['fly-assist', 'fly-pro', 'fly-advanced'];
 export const WRECK_EVENTS = ['wreck-short', 'wreck-brake', 'wreck-ran-out', 'wreck-roll', 'wreck-flipped', 'wreck-fell-off', 'wreck-climb', 'wreck-release', 'wreck-other'];
 export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 'run', 'run-quit', 'run-landed', 'run-wrecked', 'retry',
   'post', 'post-fail', 'share', 'board-open', 'challenge-open', 'challenge-run', 'daily-start', 'daily-miss', 'daily-run', 'daily-done', 'drive', 'sandbox',
-  ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS];
+  'jump-tap', 'title-left', 'title-back', ...LEAVE_EVENTS, ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS];
 // The coach's finding ids (src/sim/coach.js) → the wreck's cause. Into the row; a hard touchdown (never braked,
 // braked or landed late); braked but ran out at the bottom; the roll-out or the attitude; on its roof; off the
 // curl's side; the release. Anything else (the mark, the gas, clean, no coach) is `other`.

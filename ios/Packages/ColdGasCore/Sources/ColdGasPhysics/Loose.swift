@@ -4,6 +4,7 @@
 // The car's wheels never ride on them (World.rayFilter leaves their group out), and the hull hits them as it hits
 // anything. They live at the centre of the world (the sets), so a move of the engine's origin carries them with it.
 #if canImport(CRapier)
+import Foundation
 import CRapier
 import ColdGasCore
 
@@ -11,10 +12,12 @@ public enum LooseKind: UInt8, CaseIterable, Sendable {
     case cone, barrier, sign
     /// The roadside's pieces once broken loose (0227): a fence bay, a bend sign on its post, a guard rail section.
     case fence, signpost, rail
-    /// Half extents (m) of the collider, its mass (kg) and how far its centre of mass sits below the box's middle.
+    /// Half extents (m) of the collider's box, its mass (kg) and how far its centre of mass sits below the box's middle.
     /// Sources (ESTIMATE where marked): a 750 mm road cone (EN 13422 class) with its rubber base weighs 3.5–4.5 kg, most
-    /// of it in the base, and we take 4.2 kg. An empty 1 m polyethylene water-fill barrier is 13–18 kg (ESTIMATE 15). A
-    /// folding A-frame pavement sign is 6–9 kg (ESTIMATE 7.5).
+    /// of it in the base, and we take 4.2 kg (2.8 kg of base, 1.4 kg of PVC shell). A 1 m polyethylene water-fill
+    /// barrier, 0.8 m tall, is ≈ 15 kg empty and holds ≈ 185 L (its tapered body ≈ 55 % of its box): ≈ 200 kg standing
+    /// on the road, as they're deployed (0269; it stood there empty at 15 kg, and flew). The 500–900 kg ones are the 1.8–2 m
+    /// sections; ours are 1 m. A folding A-frame pavement sign is 6–9 kg (ESTIMATE 7.5).
     public var half: (Double, Double, Double) {
         switch self {
         case .cone: return (0.17, 0.375, 0.17); case .barrier: return (0.5, 0.4, 0.22); case .sign: return (0.3, 0.45, 0.25)
@@ -23,10 +26,58 @@ public enum LooseKind: UInt8, CaseIterable, Sendable {
     }
     /// The roadside's (ESTIMATE): a 4 m bay of sawn post-and-rail, two 100 mm posts and two rails, ≈ 45 kg; a bend marker,
     /// a 2.3 m galvanised post with its aluminium board, ≈ 14 kg; 4 m of W-beam (≈ 13 kg/m) on two posts with spacers, ≈ 110 kg.
-    public var mass: Double { switch self { case .cone: return 4.2; case .barrier: return 15; case .sign: return 7.5; case .fence: return 45; case .signpost: return 14; case .rail: return 110 } }
-    /// The sign's board sits up top (its centre of mass above the middle: a negative drop).
-    public var comDrop: Double { switch self { case .cone: return 0.22; case .barrier: return 0.08; case .sign: return 0.05; case .fence: return 0.05; case .signpost: return -0.4; case .rail: return 0.0 } }
-    var material: Material { switch self { case .fence: return MATERIALS.wood; case .signpost, .rail: return MATERIALS.steel; default: return MATERIALS.paint } }
+    public var mass: Double { switch self { case .cone: return 4.2; case .barrier: return 200; case .sign: return 7.5; case .fence: return 45; case .signpost: return 14; case .rail: return 110 } }
+    /// The sign's board sits up top (its centre of mass above the middle: a negative drop). The cone's is its base's
+    /// (2.8 kg 15 mm off the ground) with its shell's (1.4 kg, its surface's centroid 0.3 m up): 0.11 m off the ground. The
+    /// barrier's water sits low in its tapered body.
+    public var comDrop: Double { switch self { case .cone: return 0.264; case .barrier: return 0.1; case .sign: return 0.05; case .fence: return 0.05; case .signpost: return -0.4; case .rail: return 0.0 } }
+    /// Principal moments of inertia about the centre of mass (kg·m²; x, y up, z). The cone's from its two parts (0269: the
+    /// solid box it was given made it 1.6× harder to tip than a real one); the rest as solid boxes of their mass (the
+    /// barrier's water, a fence bay's posts and rails and a W-beam spread along their length are near enough to that).
+    public var inertia: (Double, Double, Double) {
+        if self == .cone { return (0.157, 0.081, 0.157) }
+        let (hx, hy, hz) = half, m = mass
+        return (m / 3 * (hy * hy + hz * hz), m / 3 * (hx * hx + hz * hz), m / 3 * (hx * hx + hy * hy))
+    }
+    var material: Material {
+        switch self {
+        case .fence: return MATERIALS.wood
+        case .signpost, .rail: return MATERIALS.steel
+        case .cone: return MATERIALS.rubber
+        case .barrier: return MATERIALS.hdpe
+        case .sign: return MATERIALS.paint
+        }
+    }
+    /// Air drag as the engine's damping (1/s): a light, bluff thing slows in the air (a 4 kg cone at 10 m/s meets ≈ 3 N,
+    /// 0.07/s); a heavy one barely. Angular: the cone's is a touch more, for the rolling resistance the engine doesn't have
+    /// (a cone on its side rolls round its tip and stops in a turn or two).
+    var damping: (linear: Float, angular: Float) {
+        switch self {
+        case .cone: return (0.07, 0.2)
+        case .sign, .signpost: return (0.05, 0.1)
+        default: return (0.01, 0.05)
+        }
+    }
+    /// The knock a hit is felt and heard as (0…1), from the impulse the thing took (its mass × its change of speed, N·s), or
+    /// nil for none: a cone flicked away at 15 m/s is ≈ 100 N·s, a light tick; a barrier shoved at 5 m/s ≈ 1,000, a thud;
+    /// 2,500 or more, the full blow. A nudge under 6 N·s (a cone rocked) isn't felt.
+    public static func knock(_ k: LooseKind, dv: Double) -> Double? {
+        let J = k.mass * dv
+        guard dv > 0.4, J > 6 else { return nil }
+        return Swift.min(1, (J / 2500).squareRoot())
+    }
+    /// The cone's collider: a square rubber base under a tapered body, as it's drawn (LooseView), so it tips over its
+    /// base's edge and rolls round its tip on its side (a cylinder rolled away in a straight line forever).
+    static let coneHull: [Float] = {
+        var p: [Float] = []
+        let y0: Float = -0.375
+        for (x, z) in [(-0.19, -0.19), (0.19, -0.19), (0.19, 0.19), (-0.19, 0.19)] as [(Float, Float)] { p += [x, y0, z, x, y0 + 0.03, z] }
+        for j in 0..<8 {
+            let a = Float(j) / 8 * 2 * Float.pi
+            p += [0.155 * cos(a), y0 + 0.03, 0.155 * sin(a), 0.025 * cos(a), 0.375, 0.025 * sin(a)]
+        }
+        return p
+    }()
 }
 
 public final class LooseBody {
@@ -53,15 +104,15 @@ public func addLoose(_ w: World, _ kind: LooseKind, x: Double, y: Double, z: Dou
     let h = yaw / 2
     bd.rotation = (0, Float(DMath.dsin(h)), 0, Float(DMath.dcos(h)))
     bd.sleeping = true; bd.can_sleep = true
-    bd.linear_damping = 0.05; bd.angular_damping = 0.4
+    (bd.linear_damping, bd.angular_damping) = kind.damping
+    // A light thing flung fast keeps its contacts (no tunnelling through the ground or a rail in a tick).
+    bd.ccd_enabled = kind.mass < 20
     let rb = cg_body_create(w.rw, &bd)
-    // A solid box's inertia about its centre of mass, with the mass lowered (a cone is mostly base).
-    let m = kind.mass
-    let ix = m / 3 * (hy * hy + hz * hz), iy = m / 3 * (hx * hx + hz * hz), iz = m / 3 * (hx * hx + hy * hy)
+    let m = kind.mass, (ix, iy, iz) = kind.inertia
     cg_body_set_additional_mass_properties(w.rw, rb, Float(m), 0, Float(-kind.comDrop), 0, Float(ix), Float(iy), Float(iz), 0, 0, 0, 1, false)
     b.rb = rb
-    let shape: ShapeDesc = kind == .cone ? .cylinder(hy, hx) : .cuboid(hx, hy, hz)
-    // painted plastic slides on concrete as the parked bodies' paint does; the roadside's timber and steel as theirs
+    let shape: ShapeDesc = kind == .cone ? .hull(LooseKind.coneHull) : .cuboid(hx, hy, hz)
+    // rubber grips, polyethylene slides, the roadside's timber and steel as theirs
     b.col = colliderFor(w, shape, DescOpts(density: 0), kind.material, GROUP.loose, extra: rb)
     b.x = x; b.y = y + hy; b.z = z
     b.qy = DMath.dsin(h); b.qw = DMath.dcos(h)

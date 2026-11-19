@@ -52,9 +52,15 @@ final class Game: ObservableObject {
     @Published private(set) var countdown = 0
     @Published private(set) var result: RunResult?
     @Published var paused = false
+    /// 0293: one calm line over the screens when something failed that the player should know about (Report.swift).
+    @Published var notice: Notice?
     /// The results are up and the flight is playing back behind them (the track the run recorded).
     @Published private(set) var replaying = false
     private var replayT = 0.0
+    /// The encore (0271, Encore.swift): the run's moment again, slowed, before the card.
+    @Published private(set) var encore = false
+    private(set) var encorePlan: Encore?
+    private var encoreBuzzT = 0.0
 
     /// The stage view the game draws through (set by the root).
     weak var stage: StageView?
@@ -73,6 +79,10 @@ final class Game: ObservableObject {
     private(set) var activeDrill: String?
     private var titleTracks: [String: Replay] = [:]
     private var haptics = HapticScore(course: "show"), seen = 0
+    /// The Wreck score's eyes on this run (0237, 0239), and the combo call on the HUD (cleared after a beat).
+    private var wreck = WreckTracker()
+    @Published private(set) var combo: ComboCall?
+    private var comboFor = 0.0
     private var countT = 0.0
     private var lastHud = 0.0
     private var touched = false   // the touchdown has reached the camera (main.js: once per run, keyed on the touch tick)
@@ -165,6 +175,7 @@ final class Game: ObservableObject {
     // --- Flow ----------------------------------------------------------------------------------
     func showTitleLoop() {
         guard screen == .title else { return }
+        paintChanged()
         // The first run: the car waits on the mark, nothing to watch, so nothing holds a newcomer on the title (0249).
         if firstRun {
             if still == nil {
@@ -205,8 +216,11 @@ final class Game: ObservableObject {
         l.onRelease = { Sound.shared.release() }   // the haptic release is the HapticScore's (it reads the feed's lift)
         live = l; controls.live = l
         acc = 0; seen = 0; doneFor = 0; momentFor = 0; result = nil; paused = false; touched = false
+        clearEncore()
         wedge.reset(); wedged = false
         haptics = HapticScore(course: course)
+        wreck = WreckTracker(); combo = nil; comboFor = 0
+        paintChanged()
         SoundFeed.shared.reset()
         let tr = Replay(live: course)
         tr.tickBase = l.run.tick
@@ -236,6 +250,7 @@ final class Game: ObservableObject {
         rival = nil
         // After the first landing the title is the normal one, with the reference loop behind it.
         if firstRun && !SaveStore.shared.data.counters.firstRun { firstRun = false; still = nil }
+        clearEncore()
         live = nil; controls.live = nil; track = nil; result = nil; paused = false; activeDrill = nil
         HapticPlayer.shared.apply(HapticContinuous())
         screen = .title
@@ -249,6 +264,7 @@ final class Game: ObservableObject {
     /// `roam`: a scored course's id ("show", "wall", "lineup"): its set at the centre, the car on its mark (Roam, 0220).
     /// `-roam <course>` opens one straight away.
     func startDrive(roam: String? = nil) {
+        clearEncore()
         live = nil; controls.live = nil; track = nil; result = nil; paused = false; replaying = false
         let c = roam.map { driveCourse(on: $0) } ?? DRIVE_COURSE
         let fd = FreeDrive(seed: Launch.value("-fd-seed") ?? FreeDrive.seedDefault, course: c, onMark: roam != nil)
@@ -357,6 +373,7 @@ final class Game: ObservableObject {
     func frame(dt: Double, slowK: Double) {
         stage?.renderer?.crash.audible = screen == .run || replaying || screen == .drive
         if screen == .drive { driveFrame(dt: dt); return }
+        if encore, let tr = track { encoreFrame(dt: dt, tr); return }
         if replaying, let tr = track { replayFrame(dt: dt, slowK: slowK, tr); return }
         guard screen == .run, let l = live, let tr = track, !paused else {
             SoundFeed.shared.quiet(title: screen == .title)
@@ -389,13 +406,25 @@ final class Game: ObservableObject {
                 acc -= DT
                 if ticked == .rest { atRest = true; break }   // the world is freed: nothing to read
                 tr.append(r)
+                wreck.step(r)   // 0239: the Wreck score reads the tick (never writes it)
                 if wasFlying { haptics.step(HapticFeed(run: r, input: l.input, seen: &seen)) }
                 if !wasLanded && r.phase == .landed { Sound.shared.land(sink: r.t.sink, paved: 1, seed: r.tick); Sound.shared.cheer(r.t.sink < 4 ? 0.7 : 0.35) }
                 if !touched && r.t.touchTick >= 0 { touched = true; stage?.renderer?.cam.touchdown(sink: r.t.sink) }
                 if wasFlying && r.phase == .done { finished(l) }
             }
-        } catch { print("SIM stopped: \(error)"); if result == nil { home() }; return }
+        } catch {
+            // 0293: a trap ends the run cleanly (the web's physics trap → title), said once and reported.
+            Report.error(.physics, .trap, "sim stopped: \(error)")
+            Report.recovered(.physics, ok: true)
+            if result == nil {
+                home()
+                notice = Notice(text: "That run stopped: the physics hit a snag. It\u{2019}s been noted.")
+            }
+            return
+        }
         haptics.drain { HapticPlayer.shared.play($0) }
+        wreck.drainCalls { call($0) }
+        if combo != nil { comboFor += dt; if comboFor > 1.6 { combo = nil } }
         HapticPlayer.shared.apply(r.phase == .done ? HapticContinuous() : haptics.continuous)
         if !atRest && r.phase != .done && result == nil && l.script == nil {
             let state = wedge.step(r.car, dt: dt, eligible: r.phase == .drive)
@@ -416,7 +445,7 @@ final class Game: ObservableObject {
         // A drill that ends before its run does (the carry, past the row): half a second more of flight, then its card.
         if result == nil && l.drillMoment && r.phase != .done { momentFor += dt; if momentFor > 0.5 { l.endDrillMoment(); finished(l) } }
         // The results come up when the wreck is at rest, or after a few seconds of it rolling.
-        if result != nil { doneFor += dt; if atRest || doneFor > 3.5 { showResults(l) } }
+        if result != nil { doneFor += dt; if atRest || doneFor > 3.5 { endOfRun(l, tr) } }
         lastHud += dt
         if lastHud > 1.0 / 15, !(r.after?.done ?? false) { lastHud = 0; refreshHud(l) }
     }
@@ -433,10 +462,11 @@ final class Game: ObservableObject {
     /// isn't touched: the run is over.
     func watch() {
         guard track != nil else { return }
+        stage?.renderer?.cam.orbit = false
         replayT = 0; replaying = true
         UISelectionFeedbackGenerator().selectionChanged()
     }
-    func stopWatching() { replaying = false; if let tr = track { stage?.renderer?.liveTime = Double(max(0, tr.ticks - 1)) / Replay.hz }; Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .quiet) }
+    func stopWatching() { replaying = false; stage?.renderer?.cam.orbit = screen == .results; if let tr = track { stage?.renderer?.liveTime = Double(max(0, tr.ticks - 1)) / Replay.hz }; Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .quiet) }
     private func replayFrame(dt: Double, slowK: Double, _ tr: Replay) {
         replayT += min(dt, 0.1) * slowK
         let end = Double(tr.ticks) / Replay.hz
@@ -457,6 +487,7 @@ final class Game: ObservableObject {
     }
 
     #if DEBUG
+    private static let encoreStretch = Launch.value("-encore-rate").flatMap(Double.init) ?? 1
     private static let freezeAt = Launch.value("-freeze").flatMap(Int.init)
     private var frozen = false
     /// `-thumbbot`: a thumb on the one-thumb pad: hold to the ledge, a tap, hold to land (the path a touch takes, minus the glass).
@@ -476,7 +507,112 @@ final class Game: ObservableObject {
     }
     #endif
 
+    // --- The encore (0271) --------------------------------------------------------------------------------------------
+    /// The run is over and at rest: its moment once more (not for a drill, not with Reduce Motion), then the card.
+    private func endOfRun(_ l: LiveRun, _ tr: Replay) {
+        guard result?.drill == nil, activeDrill == nil, !UIAccessibility.isReduceMotionEnabled, let e = Encore.plan(tr) else { showResults(l); return }
+        encorePlan = e; replayT = e.from; encore = true; encoreBuzzT = 0
+        stage?.renderer?.cam.orbit = false
+        stage?.renderer?.cam.encore(at: e.at, vel: e.vel)
+        if Launch.args.contains("-cam-log") { print(String(format: "ENCORE %@ at %.2f s (%.2f to %.2f), %.1f s real", e.landing ? "landing" : "hit", e.moment, e.from, e.to, e.seconds)) }
+        Ready.mark("encore")
+    }
+    /// A tap: straight to the card.
+    func skipEncore() { if encore { finishEncore() } }
+    private func finishEncore() {
+        clearEncore()
+        if let tr = track { stage?.renderer?.liveTime = Double(max(0, tr.ticks - 1)) / Replay.hz }
+        if let l = live, result != nil, screen == .run { showResults(l) }
+    }
+    private func clearEncore() {
+        if encore || encorePlan != nil { HapticPlayer.shared.apply(HapticContinuous()) }
+        encore = false; encorePlan = nil
+        stage?.renderer?.crash.directed = nil
+        stage?.renderer?.cam.endEncore()
+        stage?.renderer?.cam.orbit = false
+    }
+    private func encoreFrame(dt: Double, _ tr: Replay) {
+        guard let e = encorePlan else { finishEncore(); return }
+        var k = e.rate(replayT)
+        #if DEBUG
+        k *= Game.encoreStretch   // `-encore-rate 0.1`: the encore alone, slower still (screenshots on a shared machine)
+        #endif
+        stage?.renderer?.crash.directed = Float(k)
+        let prev = replayT
+        replayT += min(dt, 0.1) * k
+        if replayT >= e.to { finishEncore(); return }
+        stage?.renderer?.liveTime = replayT
+        // The hands, in step with what the replay shows: each impact it reaches, and the touchdown.
+        let i0 = Int(prev * Replay.hz), i1 = Int(replayT * Replay.hz)
+        encoreBuzzT -= dt
+        if i1 > i0 {
+            let touch = tr.touchTick - tr.tickBase
+            if tr.touchTick >= 0 && touch > i0 && touch <= i1 {
+                Sound.shared.land(sink: Double(tr.sink), paved: 1, seed: tr.touchTick)
+                stage?.renderer?.cam.touchdown(sink: Double(tr.sink))   // the dip and the punch, as it was live
+                HapticPlayer.shared.play(HapticEvent(kind: .wheel, tick: 0, channel: 3, intensity: min(1, 0.5 + tr.sink / 6), sharpness: 0.5))
+                encoreBuzzT = 0.08
+            }
+            for imp in tr.impacts {
+                let li = imp.tick - tr.tickBase
+                guard li > i0 && li <= i1, encoreBuzzT <= 0 else { continue }
+                switch imp.kind {
+                case ImpactKind.HIT where imp.speed > 1.6:
+                    HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: min(1, max(0.3, imp.speed / 8)), sharpness: 0.75))
+                case ImpactKind.CRUSH where imp.crush > 0.04:
+                    HapticPlayer.shared.play(HapticEvent(kind: .crush, tick: 0, channel: 4, intensity: 1, sharpness: 0.4))
+                case ImpactKind.WHEEL where imp.speed > 3:
+                    HapticPlayer.shared.play(HapticEvent(kind: .wheel, tick: 0, channel: 3, intensity: min(1, imp.speed / 7), sharpness: 0.35))
+                default: continue
+                }
+                encoreBuzzT = 0.06
+            }
+        }
+        let g = Float(stage?.renderer?.crash.grind ?? 0)
+        HapticPlayer.shared.apply(HapticContinuous(grind: min(0.8, g)))
+        // The ears: the bed at the replay's speed, so the wind drops away as the clock slows.
+        let i = min(tr.ticks - 1, max(0, i1)), v = tr.velocity(at: i)
+        var th = Game.quiet
+        for n in 0..<10 { th[n] = Double(tr.nozzle(n, at: i)) }
+        SoundFeed.shared.plain(speed: Double(simd_length(v)) * k, throttles: th, grounded: tr.phase(at: i) != 2)
+    }
+
+    /// A combo call (0239): the HUD shows the multiplier and the step, and the phone plays the step's pattern then one tick
+    /// per step of the multiplier. Off the frame loop's hot path: a call is a handful a run.
+    private func call(_ c: ComboCall) {
+        combo = c; comboFor = 0
+        for p in comboPattern(c) {
+            let e = HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: p.intensity, sharpness: p.sharpness)
+            if p.ms == 0 { HapticPlayer.shared.play(e) } else { DispatchQueue.main.asyncAfter(deadline: .now() + .milliseconds(p.ms)) { HapticPlayer.shared.play(e) } }
+        }
+    }
+
+    /// Wreck Club (0242): the run's feats into this device's book; what's new goes on the results.
+    private func club(_ r: RunResult, _ w: WreckCard) {
+        func n(_ k: String) -> Double? { if case let .n(v)? = r.card.flat.first(where: { $0.0 == "facts." + k })?.1 { return v }; return nil }
+        let facts = WreckClub.RunFacts(course: r.course, landed: r.landed, verdict: r.card.verdict, rotations: n("rotations") ?? 0,
+                                       padMiss: n("padMiss"), crashed: !r.landed, wreckTotal: w.total, bestCombo: w.bestMultiplier,
+                                       rollovers: w.rollovers, toppled: w.toppled)
+        var got: (new: [WreckClub.Feat], rankUp: WreckClub.Rank?) = ([], nil)
+        SaveStore.shared.update { s in var b = s.club ?? WreckClub.Book(); got = WreckClub.record(facts, into: &b, now: SaveStore.nowMs); s.club = b }
+        r.newFeats = got.new; r.rankUp = got.rankUp
+    }
+    /// The car's paint from Wreck Club's book (0242): cosmetic, read by the renderer.
+    func paintChanged() {
+        let p = (SaveStore.shared.data.club ?? WreckClub.Book()).currentPaint
+        Renderer.carPaint = p.isFactory ? nil : SIMD3(p.r, p.g, p.b)
+    }
+
     private func showResults(_ l: LiveRun) {
+        stage?.renderer?.cam.orbit = true
+        // The Wreck card (0237): every event up to now, read off the run and its aftermath. Never blended with the score.
+        if let r = result, r.drill == nil {
+            let w = wreck.card
+            r.wreck = w.isEmpty ? nil : w
+            r.crewWreck = w.isEmpty ? nil : w.crew
+            club(r, w)
+        }
+        combo = nil
         // The coach re-flies the log on the sim's shared scratch: here, with no tick in flight, and the run stepping no more.
         let say = coachWords(pointerCtx(course: l.run.course, tier: l.card?.tier ?? "assist", touchScheme: l.oneThumb ? .thumb : .classic))
         result?.coach = (try? l.coachResult(say: say))?.items ?? []
@@ -652,6 +788,13 @@ final class RunResult: Identifiable {
     var coach: [CoachItem] = []
     var drill: (label: String, pass: Bool, headline: String, stats: [String])?
     var dailyOK = false, dailyLine: String?
+    /// The wreck, for the crew's lines (0237): nil until the Wreck card is read.
+    var crewWreck: CrewWreck?
+    /// The Wreck card (0237, 0239): nil for a clean run (nothing came apart) or a drill.
+    var wreck: WreckCard?
+    /// Wreck Club (0242): the feats this run earned for the first time, and the rank it reached if it rose.
+    var newFeats: [WreckClub.Feat] = []
+    var rankUp: WreckClub.Rank?
     /// This device's first landing (0249): the results open on its moment. `firstRun`: the run was flown on the first run.
     var firstLanding = false, firstRun = false
 }

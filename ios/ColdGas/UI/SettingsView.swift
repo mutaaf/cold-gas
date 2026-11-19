@@ -3,6 +3,7 @@
 import SwiftUI
 import ColdGasClient
 import ColdGasLayout
+import ColdGasPhysics
 
 struct SettingsView: View {
     @Environment(\.dismiss) private var dismiss
@@ -16,12 +17,21 @@ struct SettingsView: View {
     @State private var judgeOnDevice = SaveStore.shared.settings.judgeOnDeviceOn
     @State private var judgeStatus = OnDeviceJudges.status
     @State private var usage = SaveStore.shared.settings.usageOn
+    @State private var stability = FreeDrive.stability
+    @State private var look = Look.current
+    private var lookFooter: String {
+        switch look {
+        case .real: "Real: lit as a film set, with bloom and reflections."
+        case .anime: "Anime: flat cel light, inked edges, a bold sky and speed lines when it gets fast."
+        case .pixel: "8-bit: chunky pixels and a small palette. The lightest on the battery."
+        }
+    }
     private var judgeFooter: String {
-        let scores = " Scores are the game\u{2019}s own; the model only writes the words."
-        if judgeStatus != .available { return "\(judgeStatus.line) The free edge model writes them, over the network.\(scores)" }
+        let crew = "The crew\u{2019}s own lines are written by the game from your run\u{2019}s numbers. Nothing is sent, and the scores are always the game\u{2019}s."
+        if judgeStatus != .available { return "\(judgeStatus.line) \(crew)" }
         return judgeOnDevice
-            ? "Apple Intelligence writes the judges\u{2019} words on this device: nothing is sent.\(scores)"
-            : "The free edge model writes the judges\u{2019} words, over the network.\(scores)"
+            ? "Apple Intelligence writes the crew\u{2019}s words on this device; if it can\u{2019}t, their own lines stand. \(crew)"
+            : crew
     }
     /// A sound level slider (0250): the car, the world and the hits ("Effects"), or the title's music.
     private func level(_ name: String, _ v: Binding<Double>, _ apply: @escaping (Double) -> Void) -> some View {
@@ -61,24 +71,47 @@ struct SettingsView: View {
                 } header: { Text("Play") } footer: {
                     Text("One thumb flies Assist on the Show and the Wall. Classic flies everything.")
                 }
+                // 0280: the game's look, render-only (the scores and the physics never see it).
+                Section {
+                    Picker("Look", selection: $look) {
+                        ForEach(Look.allCases) { Text($0.title).tag($0) }
+                    }
+                    .pickerStyle(.segmented)
+                    .onChange(of: look) { _, v in Look.set(v); UISelectionFeedbackGenerator().selectionChanged() }
+                    .accessibilityIdentifier("look")
+                } header: { Text("Look") } footer: {
+                    Text(lookFooter)
+                }
                 ControlsSection(close: { dismiss() })
+                // 0269: Free Drive and Roam's stability control.
+                Section {
+                    Picker("Stability control", selection: $stability) {
+                        Text("On").tag(DriveModel.ESC.on)
+                        Text("Sport").tag(DriveModel.ESC.sport)
+                        Text("Off").tag(DriveModel.ESC.off)
+                    }
+                    .onChange(of: stability) { _, v in FreeDrive.stability = v }
+                    .accessibilityIdentifier("stability")
+                } header: { Text("Driving") } footer: {
+                    Text("Free Drive and Roam. On catches a slide early; Sport lets the car move before it steps in; Off leaves the car to you. On touch the wheels lean into a slide a little, to help you catch it.")
+                }
                 // 0219: who writes the judges' words on this device. The scores are always the game's own.
                 Section {
                     Toggle("Judge on this device", isOn: $judgeOnDevice)
                         .disabled(judgeStatus != .available)
                         .onChange(of: judgeOnDevice) { _, v in var st = SaveStore.shared.settings; st.judgeOnDevice = v; SaveStore.shared.settings = st }
-                    LabeledContent("The judges\u{2019} words", value: judgeStatus == .available && judgeOnDevice ? "Apple Intelligence" : "Edge model")
+                    LabeledContent("The judges\u{2019} words", value: judgeStatus == .available && judgeOnDevice ? "Apple Intelligence" : "The crew\u{2019}s own")
                 } header: { Text("Judges") } footer: {
                     Text(judgeFooter)
                 }
                 // 0246: the usage counts the game sends, and the one switch that stops them.
                 Section {
-                    Toggle("Share usage stats", isOn: $usage)
+                    Toggle("Share usage stats and crash reports", isOn: $usage)
                         .onChange(of: usage) { _, v in Usage.shared.setOn(v) }
                         .accessibilityIdentifier("usage")
                     Link("Privacy policy", destination: URL(string: "https://mutaafaziz.com/coldgas/privacy")!)
                 } header: { Text("Privacy") } footer: {
-                    Text("Counts like a jump started, landed or shared, with the course, tier and score, and a random id made on this iPhone. No name, initials, location or advertising id. Off sends nothing and deletes the id.")
+                    Text("Counts like a jump started, landed or shared, with the course, tier and score, and a random id made on this iPhone. No name, initials, location or advertising id. Crash and error reports (what failed, where in the code, how often) carry no id at all. Off sends nothing and deletes the id and anything waiting.")
                 }
                 Section("About") {
                     LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")

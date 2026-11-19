@@ -1,0 +1,10 @@
+- Roam: drive the Show, the Wall and the Lineup between jumps, then on into the world. Unscored.
+- A first jump that teaches itself: one tap to fly, a hint at each beat, a first landing you feel.
+- Share a picture of the jump with a link to beat it. Challenge links now open the app, straight onto your friend's card.
+- After a landing: Next, then Beat your score, then Share.
+- Arrange your controls: drag, resize and fade every button, with presets for each way you hold the screen.
+- Sound, rebuilt: motors under load, tyres by surface, hits by material, all around you.
+- Cones and signs move at their weight; fences and rails break; impacts and slides are felt in the hand.
+- A run wedged against a set light starts again from the mark; out roaming, a wedged car goes back on the road.
+- Private usage counts, never sent during a run; Settings, Privacy turns them off.
+Scores, the stunt physics and your recorded runs are unchanged.

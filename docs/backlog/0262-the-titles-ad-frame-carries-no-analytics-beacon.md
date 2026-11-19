@@ -1,12 +1,12 @@
 ---
 id: 0262
 title: The title's ad frame carries no Cloudflare analytics beacon, and a production probe catches the next one
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: platform
 created: 2026-11-14
-pr:
+pr: 404
 by: critic
 ---
 
@@ -68,16 +68,21 @@ removed, or it will flag this unload on every run. After the beacon fix there is
 3. Don't change `src/ads.js`'s placement or the ads themselves (the owner's decision, 2026-10-30, and 0122).
 
 ## Acceptance criteria
-- [ ] `node scripts/prod-hosts.mjs https://mutaafaziz.com/coldgas/` runs and prints one line per request
+- [x] `node scripts/prod-hosts.mjs https://mutaafaziz.com/coldgas/` runs and prints one line per request
       (t, host, frame, mode). It exits 1 today and names `static.cloudflareinsights.com` from
       `/ads/v1/frame.html` (paste the output in the PR).
-- [ ] It exits 0 on a page whose only third parties are Google's ad hosts from the `/ads/` frame (shown on today's
+- [x] It exits 0 on a page whose only third parties are Google's ad hosts from the `/ads/` frame (shown on today's
       phone title, or on a recorded fixture of today's log with the beacon line removed).
 - [ ] After the operator or Marquee change: the same probe exits 0 on production, and
       `curl -sSI -A 'Mozilla/5.0 Chrome/130' 'https://mutaafaziz.com/ads/v1/frame.html?app=coldgas&slot=title'` shows
       `no-transform`. The Critic re-checks this live.
-- [ ] No request to a host other than `mutaafaziz.com` while `S.mode` is `countdown` or `live` (already true today:
+- [x] No request to a host other than `mutaafaziz.com` while `S.mode` is `countdown` or `live` (already true today:
       0 of 0 in the log above; the probe keeps it so).
+
+**Builder, 2026-11-16:** the probe shipped (What 2). On production `cdde184` it exits 1 on both screens, naming
+`static.cloudflareinsights.com` from `mutaafaziz.com/ads/v1/frame.html` (desktop 72.5 s, phone 36.6 s, both on the
+title); the same log with that line removed exits 0 (`--log=`); 0 foreign requests in countdown or live. The third box
+waits on What 1 (the operator or Marquee): the frame still answers `cache-control: public, max-age=60`.
 
 ## Test plan
 A unit test for the probe's verdict function: an allowed log passes; logs fail with the beacon in the frame, with
@@ -87,3 +92,16 @@ Google ad hosts from the game page's own frame, or with any third party in `live
 - Box Office's PostHog modules (owner-allowed; their timing is 0222).
 - The ad slots, the dwell and the rewarded flow.
 - Rewording the privacy page to name Cloudflare (the operator's 11-05 call was to stop the beacon instead).
+
+## Critic re-review
+**2026-11-16 22:00 (bounce 1 of 2): the probe passes; production still beacons, so the ticket goes back to `ready`.**
+- **What 2 passes.** `scripts/prod-hosts.mjs` (#404) ran on production `3ef26c7` and printed one line per request with
+  t, host, frame and mode. It exited **1**: `static.cloudflareinsights.com` from `mutaafaziz.com/ads/v1/frame.html` on
+  the title, at **39.56 s** on the desktop and **41.92 s** on the phone. There were 0 foreign requests in countdown or
+  live (`docs/critique/2026-11-16-2150/prod-hosts.log`). Boxes 1, 2 and 4 hold.
+- **Box 3 fails.** `curl -sSI -A 'Mozilla/5.0 Chrome/130'
+  'https://mutaafaziz.com/ads/v1/frame.html?app=coldgas&slot=title'` still answers `cache-control: public, max-age=60`
+  with no `no-transform`. Every player who waits on the title is still counted by Cloudflare Web Analytics.
+- **Who can fix it: only the operator (What 1).** That means Marquee's frame header, or the zone's Web Analytics rule
+  for `/ads/*`. A cloud Builder has nothing left to build here: **skip this ticket** until the operator reports
+  What 1 done. Then the Critic re-runs the probe, and it must exit 0 on production.

@@ -18,7 +18,7 @@ shoot() { # <sim> <name> <token> <settle> [args…]
   local id=$1 name=$2 token=$3 settle=$4; shift 4
   xcrun simctl terminate "$id" $BID 2>/dev/null || true
   local d; d=$(xcrun simctl get_app_container "$id" $BID data 2>/dev/null) && rm -f "$d/Library/Caches/coldgas.ready"
-  t 30 xcrun simctl launch "$id" $BID -uitest "$@" >/dev/null
+  t 30 xcrun simctl launch "$id" $BID -mute -uitest "$@" >/dev/null
   for _ in $(seq 1 240); do grep -q "$token" "$d/Library/Caches/coldgas.ready" 2>/dev/null && break; sleep 0.5; done
   sleep "$settle"
   t 30 xcrun simctl io "$id" screenshot --display=primary "$OUT/$PRE-$name.png" >/dev/null 2>&1 && echo "$PRE-$name"

@@ -6,6 +6,7 @@
 import { one } from './units.js';
 import { TIERS } from './sim/judge.js';
 import { stuntName, dareText } from './stunt-name.js';
+import { toast } from './toast.js';
 
 export const CARD_W = 1080, CARD_H = 1350;   // 4:5, what a phone's share targets show uncropped
 const BG = '#05070c', INK = '#f5f6f8', ICE = '#bfe6ff', SIGNAL = '#e8323c';
@@ -141,20 +142,6 @@ function paint(g, card, url, mark, FH, pb = false) {
   // the address: the challenge itself where the run carries one (0260)
   text(printedAddress(url), M, H - 52, '400 18px "Geist Mono"', 'rgba(245,246,248,0.55)', { spacing: 2 });
   text('Stick the landing.', W - M, H - 52, '400 20px "Geist Variable"', 'rgba(245,246,248,0.55)', { align: 'right' });
-}
-
-// A short message at the bottom of the screen (polite live region), for the copy fallback.
-export function toast(msg, ms = 1800) {
-  let el = document.querySelector('[data-toast]');
-  if (!el) {
-    el = document.createElement('div');
-    el.className = 'toast'; el.setAttribute('data-toast', ''); el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
-    document.body.appendChild(el);
-  }
-  el.textContent = msg;
-  el.classList.add('on');
-  clearTimeout(el._t);
-  el._t = setTimeout(() => el.classList.remove('on'), ms);
 }
 
 // A link that carries the run (`#vs=`, src/challenge.js) is a rematch: the words are the dare (0260: "Beat my 82.4 on

@@ -62,6 +62,8 @@ struct BoardView: View {
     @State private var board = ColdGasAPI.Board.today
     @State private var rows: [BoardRow]? = nil
     @State private var loading = true
+    /// 0293: the empty state's Try again asks once more.
+    @State private var attempt = 0
     @State private var hidden = Moderation.hidden
     var body: some View {
         VStack(spacing: 0) {
@@ -112,11 +114,17 @@ struct BoardView: View {
                         }
                         .padding(.horizontal, 16)
                     }
-                } else { empty("The board didn\u{2019}t answer. Check your connection.") }
+                } else {
+                    VStack(spacing: 14) {
+                        Text("The board didn\u{2019}t answer. Check your connection.").font(Theme.text(14)).foregroundStyle(Theme.ink3)
+                        Button("Try again") { attempt += 1 }.buttonStyle(CGButton()).accessibilityIdentifier("board-retry")
+                    }
+                    .frame(maxHeight: .infinity)
+                }
             }
             .padding(.top, 6)
         }
-        .task(id: "\(course)-\(board.rawValue)") {
+        .task(id: "\(course)-\(board.rawValue)-\(attempt)") {
             loading = true
             let r = await ColdGasAPI.production.fetchBoard(board, course: course)
             if !Task.isCancelled { rows = r; loading = false }
@@ -201,9 +209,10 @@ struct PostRow: View {
     }
 }
 
-/// The judges' words: Apple's on-device model where the device has it (0219), else the free edge model streaming, the
-/// local lines if neither can (labelled, never passed off as a model's). Asked once per run, here rather than in the view:
-/// the sheet may be rebuilt as it grows, and the call is rate limited.
+/// The judges' words (0236): the crew's authored lines at once, from the run's numbers; where the device has Apple's
+/// on-device model (0219) its words replace them as they're written, and on any failure the crew's lines come back. No
+/// cloud call, ever, without the player asking. Asked once per run, here rather than in the view: the sheet may be
+/// rebuilt as it grows.
 @MainActor
 final class JudgesModel: ObservableObject {
     @Published var words = JudgeWords()
@@ -216,23 +225,33 @@ final class JudgesModel: ObservableObject {
         guard asked != r.id, let sc = r.card.scoreCard else { return }
         asked = r.id
         task?.cancel()
+        let authored = crewWords(sc, wreck: r.crewWreck, units: SaveStore.shared.units)
+        words = authored
+        note = judgeReceipt(.authoredMeta)
         let route = judgeRoute(status: OnDeviceJudges.status, preferOnDevice: SaveStore.shared.settings.judgeOnDeviceOn)
         let place = OnDeviceJudges.place
         task = Task { [weak self] in
-            let stream = JudgesClient().judges(run: JudgedRun(course: r.course, assist: r.card.tier == "assist"), log: r.log, t: r.telemetry.json, card: sc,
-                                               route: route, onDevice: route == .onDevice ? OnDeviceJudges.model() : nil, place: place)
+            let stream = JudgesClient().judges(card: sc, wreck: r.crewWreck, authored: authored, route: route,
+                                               onDevice: route == .onDevice ? OnDeviceJudges.model() : nil, place: place)
+            var heard = false
             for await e in stream {
                 guard let self else { return }
                 switch e {
                 case let .prompt(p) where p.provider == ON_DEVICE_PROVIDER:
-                    self.onDevice = true
                     self.note = "Apple\u{2019}s on-device model is judging, on \(place). Nothing leaves the device."
                 case let .note(n) where n.model == ON_DEVICE_MODEL:
-                    // The device couldn't: what it wrote so far goes, and the edge model starts over.
+                    // The device couldn't: the crew's lines stand.
                     self.onDevice = false
-                    self.words = JudgeWords()
+                    self.words = authored
                     self.note = n.message ?? ""
-                case let .token(_, w): self.words = w
+                case let .token(_, w):
+                    // The device's words replace the crew's once its headline lands (no blank flash before).
+                    if !heard && w.headline.isEmpty { break }
+                    heard = true
+                    self.onDevice = true
+                    self.words = JudgeWords(headline: w.headline, engineer: w.engineer.isEmpty ? authored.engineer : w.engineer,
+                                            coordinator: w.coordinator.isEmpty ? authored.coordinator : w.coordinator,
+                                            designer: w.designer.isEmpty ? authored.designer : w.designer, source: w.source)
                 case let .finished(w, meta):
                     self.words = w
                     self.onDevice = meta.ok && meta.provider == ON_DEVICE_PROVIDER
@@ -283,7 +302,8 @@ struct JudgePanel: View {
     }
     private func tile(_ id: String, _ score: Double, index: Int) -> some View {
         let on = open == id
-        let name = JUDGE_NAMES[id] ?? id
+        let member = Crew.member(id)
+        let name = (member?.name ?? id).uppercased()
         return Button {
             UISelectionFeedbackGenerator().selectionChanged()
             withAnimation(still ? nil : .snappy(duration: 0.2)) { open = on ? nil : id }
@@ -301,7 +321,7 @@ struct JudgePanel: View {
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .accessibilityLabel(name.capitalized)
+        .accessibilityLabel(member.map { "\($0.name), the \($0.role)" } ?? name.capitalized)
         .accessibilityValue(String(format: "%.1f", score))
         .accessibilityHint(on ? "Hide this judge's call" : "Show this judge's call")
         .accessibilityAddTraits(on ? .isSelected : [])

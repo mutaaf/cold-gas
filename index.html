@@ -217,6 +217,7 @@
     </div>
   </section>
   <div class="cue" data-cue aria-live="polite"></div>
+  <p class="vh" role="status" data-start-say></p>
   <div class="count" data-count aria-live="assertive"></div>
 
   <!-- Touch, classic: a steer/attitude stick for the left thumb and up to three buttons on the right
@@ -469,7 +470,13 @@
       </div>
       <div class="seg board-courses" role="group" aria-label="Event"><button data-board-course="show" aria-pressed="true">The Show</button><button data-board-course="wall" aria-pressed="false">The Wall</button><button data-board-course="lineup" aria-pressed="false">The Lineup</button></div>
       <ol class="rows" data-board-rows><li class="empty">Loading…</li></ol>
-      <button class="btn ghost" data-board-close>Close</button>
+      <!-- 0168: an empty board says what earns a row and offers the Jump that would fill it (the title's own Jump), on
+           Close's row so a short screen keeps Close in view. -->
+      <p class="board-how" data-board-how hidden>Land a jump, then Post with your initials from the results.</p>
+      <div class="board-foot">
+        <button type="button" class="btn primary" data-board-jump hidden>Jump</button>
+        <button class="btn ghost" data-board-close>Close</button>
+      </div>
     </div>
   </section>
 
@@ -525,8 +532,40 @@
     (function () {
       var shown = null, waited = 0;
       function up() { return !!(window.__coldgas && window.__coldgas.S); }
+      // 0293: the errors seen before the game is up, for src/obs to report once it installs (it sets __cgEarly to null),
+      // and, if the watchdog has to show itself, one beacon to /obs so a build that never boots is seen (src/obs/ can't:
+      // it never ran). The hash is src/obs/signature.js's hash12 (tests/unit/obs-boot.test.js holds them equal).
+      var early = window.__cgEarly = [];
+      function h12(s) {
+        function f(h) { for (var i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 0x01000193); } return h >>> 0; }
+        function x(v) { return ('0000000' + v.toString(16)).slice(-8); }
+        return (x(f(0x811c9dc5)) + x(f(0x050c5d1f))).slice(0, 12);
+      }
+      function report(why) {
+        try {
+          if (/^(localhost|127\.0\.0\.1|)$/.test(location.hostname) && !/[?&]obs=1\b/.test(location.search)) return;
+          var build = '%VITE_CG_BUILD%'; if (!/^[0-9a-z.-]{1,24}$/i.test(build)) build = 'dev';
+          build = build.toLowerCase();
+          var msg = 'boot watchdog: ' + why, fr = 'watchdog@index.html';
+          var errs = [{ sig: h12(msg + '|' + fr + '|' + build), key: h12(msg + '|' + fr), mod: 'page', kind: 'unclean', n: 1, msg: msg, fr: fr, st: '' }];
+          var e0 = early[0];
+          if (e0) {
+            var m = String((e0.name && e0.name !== 'Error' ? e0.name + ': ' : '') + e0.message).split('\n')[0].replace(/\b[a-z][a-z0-9+.-]*:\/\/[^\s'")]+/gi, '<url>').replace(/-?\b\d+(?:\.\d+)?\b/g, 'N').slice(0, 160) || 'error';
+            errs.push({ sig: h12(m + '|boot@index.html|' + build), key: h12(m + '|boot@index.html'), mod: 'page', kind: 'error', n: early.length, msg: m, fr: 'boot@index.html', st: '' });
+          }
+          var body = JSON.stringify({ v: 1, build: build, dc: matchMedia('(pointer: coarse)').matches ? 'phone-mid' : 'desktop-mid', tier: 'high', first: false, errs: errs });
+          if (navigator.sendBeacon) navigator.sendBeacon('api/obs', new Blob([body], { type: 'application/json' }));
+        } catch (e) { /* the watchdog itself must never throw */ }
+      }
+      function keep(err) { if (window.__cgEarly && window.__cgEarly.length < 8) window.__cgEarly.push(err); }
+      addEventListener('error', function (e) {
+        if (e && e.error) keep(e.error);
+        else if (e && e.message) keep(new Error(e.message));   // a failed <script>/<link> is src/obs's to tell apart once it's up
+      }, true);
+      addEventListener('unhandledrejection', function (e) { var r = e && e.reason; keep(r instanceof Error ? r : new Error(typeof r === 'string' ? r : 'unhandled rejection')); });
       function offer(why) {
         if (shown || up()) return;
+        report(/starting/.test(why) ? 'a problem while starting' : 'slow to start');
         var d = document.createElement('div');
         d.setAttribute('role', 'alert');
         d.setAttribute('data-boot-watchdog', '');

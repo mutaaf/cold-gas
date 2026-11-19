@@ -1,6 +1,6 @@
 // Apple's on-device model as the judges' brain (0219): FoundationModels' SystemLanguageModel, iOS 26 and later with Apple
 // Intelligence. The app still runs on iOS 18, so all of it sits behind canImport + @available, and everywhere else
-// `OnDeviceJudges.status` says why not and the call goes to the edge model as before. Nothing here leaves the device.
+// `OnDeviceJudges.status` says why not and the crew's authored lines speak (0236). Nothing here leaves the device.
 //
 // Guided generation fills `PanelWords`, the same four parts the cloud panel writes (headline, engineer, coordinator,
 // designer), from the same brief (ColdGasClient's ON_DEVICE_INSTRUCTIONS + judgePrompt: the voices and the run's numbers
@@ -50,11 +50,11 @@ enum OnDeviceJudges {
 struct PanelWords {
     @Guide(description: "A headline for the run, at most 6 words")
     var headline: String
-    @Guide(description: "The Chief Vehicle Engineer's remark: dry and exacting, at most 22 words, about something specific in the facts")
+    @Guide(description: "Hollis the engineer's remark: dry and exacting, a repair bill after a crash, at most 22 words, about something specific in the facts")
     var engineer: String
-    @Guide(description: "The Stunt Coordinator's remark: warm and theatrical, at most 22 words, about something specific in the facts")
+    @Guide(description: "Mags the stunt coordinator's remark: loud and warm, cheers a big wreck, at most 22 words, about something specific in the facts")
     var coordinator: String
-    @Guide(description: "The Head of Design's remark: minimal and precise, at most 22 words, about something specific in the facts")
+    @Guide(description: "Vee the designer's remark: few words, precise, loves a clean landing, at most 22 words, about something specific in the facts")
     var designer: String
 }
 

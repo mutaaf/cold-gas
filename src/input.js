@@ -18,6 +18,7 @@
 //            the run off one-thumb; a finger brings them back. Blur, a hidden tab, pagehide, pause
 //            and every new run or drill let go of everything (`resetInput`, `freshRun`), and what was
 //            held then counts again only once it is pressed again (0099). Gamepad Start pauses.
+//            On Assist, ↑/W ↓/S held across a take-off or a touchdown wait for a fresh press too (0275).
 import { newInput, clearInput, VALVE_KEYS } from './sim/vehicle.js';
 import { createKeyRamp, padValves, bindNozzlePad, VALVES } from './valves.js';
 import { createOneThumb } from './onethumb.js';
@@ -81,13 +82,14 @@ export const onDevice = (fn) => device.on(fn);
 const resetters = [];
 function resetTouch() { for (const fn of resetters) fn(); }
 export function resetInput() {
-  keys.clear(); resetTouch();
+  keys.clear(); carried.clear(); resetTouch();
   for (let i = 0; i < padHeld.length; i++) padHeld[i] = true;
 }
 // A new run or drill: let go of everything, and the hands start from rest (the wheel centred, no
 // pedal still ramping down from the last run, no valve still open on the key ramp).
 export function freshRun() {
   resetInput();
+  wasAir = null;
   driver.reset();
   keyRamp.reset();
 }
@@ -96,6 +98,30 @@ export function freshRun() {
 // restart, pause, blur): it counts again on its next real press, not on the repeats of the press from
 // before (0099). The first press, and a repeat of a key still held, do.
 export const keyHolds = (e, held) => !e.repeat || held.has(e.code);
+
+// The key handlers' effect on what is held, also called by the Node sweeps (scripts/keys-literal.mjs) so a modelled
+// player goes through exactly the browser's mapping.
+export function keyDown(code, repeat = false) {
+  if (!repeat) {   // a real press is a fresh one, whatever was carried
+    carried.delete(code);
+    const i = PITCH_KEYS.indexOf(code);
+    if (i >= 0) heldFor[i] = 0;
+  }
+  if (keyHolds({ code, repeat }, keys)) keys.add(code);
+}
+export function keyUp(code) { keys.delete(code); carried.delete(code); }
+
+// 0275: ↑/W and ↓/S mean throttle/brake on the ground and nose down/up in the air. Held across the change (the
+// release, the Show's lip, the touchdown), a key keeps meaning what it meant: it does nothing on the new side until it
+// has been let go and pressed again. The keyboard guide says "Keep holding ↑" up the curl; a newcomer who keeps
+// holding it was flying the car nose-first into the row and then driving it off the mark. Assist on a scored run only
+// (Pro and Advanced chose their keys; Free Drive's crests must not cut the throttle).
+const PITCH_KEYS = ['ArrowUp', 'KeyW', 'ArrowDown', 'KeyS'];
+const carried = new Set();
+let wasAir = null;   // null: this run hasn't been sampled yet (a drill that opens in the air carries nothing)
+// Ticks each pitch key has been held. Only a key held CARRY_TICKS before the change carries: ↓ pressed with Space on the
+// ledge, meaning to fly the nose, is the player's choice for the air, not a leftover from the climb.
+const heldFor = new Int32Array(PITCH_KEYS.length), CARRY_TICKS = 60;   // 0.25 s at 240 Hz
 
 let onPauseCb = null;
 const MODS = new Set(['MetaLeft', 'MetaRight', 'OSLeft', 'OSRight', 'ControlLeft', 'ControlRight', 'AltLeft', 'AltRight']);
@@ -115,10 +141,10 @@ export function bindInput(root, { onPause, running = () => false } = {}) {
     if (GAME_KEYS.has(e.code) && (running() || !onControl(e.target))) e.preventDefault();
     if ((e.code === 'Escape' || e.code === 'KeyP') && !e.repeat) onPause?.();
     if (!MODS.has(e.code)) device.note('key');
-    if (keyHolds(e, keys)) keys.add(e.code);
+    keyDown(e.code, e.repeat);
   });
   addEventListener('keyup', (e) => {
-    keys.delete(e.code);
+    keyUp(e.code);
     if (e.code === 'MetaLeft' || e.code === 'MetaRight' || e.code === 'OSLeft' || e.code === 'OSRight') keys.clear();
     if (e.code === 'Space' && running() && onControl(e.target)) e.preventDefault();
   });
@@ -270,10 +296,13 @@ export function pollPads() {
 // One-thumb: the run's input for this tick from the one control (and tilt, on the ground).
 export function sampleThumb(run, released, out = newInput()) {
   clearInput(out);
+  wasAir = null;   // the keys didn't fly this tick: a key pressed while the thumb flies is a fresh one (0275)
   return thumb.sample(run, released, out, tiltSteer());
 }
 
 const k = (a, b) => keys.has(a) || (b !== undefined && keys.has(b));   // no rest args: 240 calls a second each (0049)
+// ↑/W, ↓/S: held and not carried over from the other side of a take-off or a touchdown (0275).
+const kp = (a, b) => (keys.has(a) && !carried.has(a)) || (keys.has(b) && !carried.has(b));
 
 
 // Keys are on/off; a driver's hands aren't: src/hands.js turns keys and the touch stick into a
@@ -327,6 +356,17 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
   out.manual = tier === 'advanced' ? 1 : 0;
   // Let go of the Wall, you're flying (the sim calls it airborne 0.1 s later).
   const air = phase === 'air' || (phase === 'ramp' && released);
+  // The change: a take-off, or a touchdown that lands (not the Lineup's hop back onto the run-up, phase 'drive').
+  if (air !== wasAir) {
+    const change = wasAir !== null && (air || phase === 'landed');
+    wasAir = air;
+    if (change && tier === 'assist' && !ctx?.free) {
+      for (let i = 0; i < PITCH_KEYS.length; i++) if (keys.has(PITCH_KEYS[i]) && heldFor[i] >= CARRY_TICKS) carried.add(PITCH_KEYS[i]);
+    }
+    // Back on the run-up after a hop: a key carried off it means what it meant there again.
+    else if (!air && phase !== 'landed') carried.clear();
+  }
+  for (let i = 0; i < PITCH_KEYS.length; i++) heldFor[i] = keys.has(PITCH_KEYS[i]) ? heldFor[i] + 1 : 0;
   let ax = 0, ay = 0, lift = 0, land = 0, thr = 0, brk = 0, yaw = 0;
   const v = !air && car ? Math.sqrt(car.vel.x * car.vel.x + car.vel.z * car.vel.z) : 0;   // not Math.hypot: it boxes its answer
   // On the ground the touch stick goes through the same hands as the keys: a thumb can't feather
@@ -342,8 +382,8 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
   const keyAx = (k('ArrowRight', 'KeyD') ? 1 : 0) - (k('ArrowLeft', 'KeyA') ? 1 : 0), stickAx = stickGround + padGround;
   // The air's roll keeps the hands it always had; the ground's wheel is the driving level's (below).
   if (air) ax = hands.steer(Math.max(-1, Math.min(1, keyAx + stickAx)), v, keyAx === 0 && stickAx !== 0);
-  if (k('ArrowUp', 'KeyW')) ay -= 1;
-  if (k('ArrowDown', 'KeyS')) ay += 1;
+  if (kp('ArrowUp', 'KeyW')) ay -= 1;
+  if (kp('ArrowDown', 'KeyS')) ay += 1;
   if (k('KeyQ')) yaw -= 1;
   if (k('KeyE')) yaw += 1;
   if (k('Space')) lift = 1;

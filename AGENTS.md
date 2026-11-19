@@ -80,9 +80,16 @@ left in the tanks; on a wreck, combos that come from the physics.
     flown (`ctl-thumb|classic|keys|pad`, `fly-assist|pro|advanced`) and a wreck's cause (`wreck-*`, the coach's first finding;
     src/obs/run-end.js, 0138), the Daily (`daily-start` on a tap of Play today's or Play again; `daily-done` or `daily-miss` on every finished run on its
     course, however it was started, as the streak counts it; `daily-run`, the old name for a miss, is still counted with it for one release, 0136), how-to skips, retries, posts,
-    shares…), stored as `play:<event>` per day for
+    shares…, and a visit that ends on the title (0143, src/obs/title-leave.js: `jump-tap` once per page load before any run;
+    `title-left` once when the page goes (pagehide or hidden) on the title never past it this load, beside one reason:
+    `left-howto` the how-to card open, `left-starting` a start still waiting, `left-booting` the title not drawn yet,
+    `left-title` nothing; `title-back` if that load then comes back and plays, so leaves = title-left − title-back)), stored as `play:<event>` per day for
     people only; an automated browser (`navigator.webdriver`, i.e. our own agents and tests) is
     counted as `sessions:auto`, never as a player.
+  - The iPhone app reports to the same `POST /obs` (0293, ios/ColdGas/App/Report.swift + ColdGasClient/Obs.swift: os.Logger, a
+    persisted queue of web-shaped signatures, MetricKit crashes/hangs/exits; build `ios-<version>-<build>`, `first: false` so it
+    never becomes the digest's current build; behind Settings → Privacy). `npm run obs:report` splits web and iPhone, exit 2/1/0
+    as the alert (docs/AUDIT-2026-11-18.md).
   - `GET /coldgas/api/obs/digest[?build=]`: top signatures, `regressions` (new or ≥ 2× per session
     vs the previous build, and p95 frame-time regressions), frame percentiles, and `players` (per
     UTC day: `human`, `auto` and each funnel count; the Scout and the Critic read it). Cached 5 min.
@@ -339,7 +346,8 @@ src/render/           three.js (r186):
                           the Show's release cuts to a locked-off hold, then to the locked-off carry before the row, which on a screen wider than
                           tall cuts closer (at most twice) as the car comes down, the row's front still in frame (0118)
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone;
-                        every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099)
+                        every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099);
+                        on Assist, ↑/↓ held across the take-off or the touchdown wait for a fresh press (0275)
 src/fold.js           a screen that folds (pure, 0105): the segments and the posture Chromium reports → rows | cols and the
                         hinge's edges (main.js syncFold: :root[data-fold], --fold-a/b; the scene above a horizontal fold)
 src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
@@ -366,6 +374,9 @@ src/onethumb.js       one-thumb Assist: hold to climb (crawl governor, stops on 
                         hold to land (LAND + the carry over the row), slide to aim the touchdown (0121: pitch/roll,
                         roof up, never back over the row or in against a flank); plain sim inputs, pure, no DOM
 src/thumb-aim.js      the one-thumb pad's sight in the air (the mark from the predicted touchdown) + the slide's pointers
+src/main.js syncFirstTitle  a first visit's title (0247, 0264): until this device lands a Jump, the reference, Practice, the board and
+                        the settings wait under "More ways to play", and :root[data-first-title] quiets the beta and Judges chips and
+                        folds the Daily card to its header (no "Play today's"); a challenge's card stays whole
 src/medals.js         bronze/silver/gold per event and tier, best per device (localStorage coldgas_medals), the
                         results row under the score; getMedals(course, tier) for other screens (0121)
 src/beat.js           the landing's beat (0199): a landed run's verdict, score counting up and the judges' cards going
@@ -535,6 +546,13 @@ node scripts/board-probe.mjs [url]             flies the reference Show in Node 
                    (default https://mutaafaziz.com/coldgas/): exit 1 unless 200 with a card matching the local one. Nothing
                    is stored (it sends no initials, so a Worker from before `dry` answers 400 instead of storing it).
                    Never post a non-dry entry to production from a script
+node scripts/prod-hosts.mjs [url] [--phone|--desktop] [--title=60] [--json=log.jsonl] | --log=log.jsonl   every request a
+                   production page makes (0262): a first visit at 1440×900 and 390×844 touch, 60 s on the title (past the ad
+                   slot's dwell), then a reference Jump to its sheet; one line per request (t, host, frame, mode). Exit 1 on a
+                   host outside §3.3 (own origin; Google's ad hosts only from Marquee's /ads/ frame or loader) or any third
+                   party in countdown/live (the /ads/ frame's unload at the Jump excepted); exit 2 if it missed the run or the title never placed the slot frame. Google's ad
+                   requests are recorded then aborted (no real ad served to a probe; --let-ads loads them, sparingly). Not a CI
+                   gate (CI never loads the ad loader): the Critic and the Keeper run it against production
 node scripts/perf.mjs <url> [label] [runs]      first-load probe: FCP/LCP, title wired, first 3D frame, long tasks, bytes
 node scripts/roads/build.mjs [road]             rebuild Free Drive roads from OSM + terrain (network; cached)
 node scripts/perf-drive.mjs <url> [phone|desktop] [roads] [secs]   Free Drive frame times (phone = 4× CPU throttle)
@@ -549,6 +567,7 @@ node scripts/drive-feel.mjs [bench|road|levels|bench-levels] [assist|pro]   driv
 node scripts/drive-feel.mjs diag [standard,easy,ai] [roads]   0109: the four roads + the endless one, road-reading drivers (keys, stick, tilt) and naive input (mash, hold, zigzag, swerve, GO only): exits and rails per km, spins, first loss, pace
 node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
 npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
+npm run obs:report [-- --json|--digest=<url|file>]   production health on one screen, web vs iPhone; exit 2 page, 1 look, 0 quiet (0293)
 npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)
 npm run alloc:bench                                   what the per-tick input path allocates (sample, hands, the input log): 0 B/tick with keys and touch
 node scripts/flicker.mjs <url> [--gl=swiftshader] [--phone] [--only=a,b] --json=run.json   flicker probe (title, approach, wide, replay, jets, live jets, retry countdown, lineup, Free Drive, endless, z-fight)

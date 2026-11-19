@@ -6,11 +6,18 @@ priority: P1
 size: S
 lens: performance
 created: 2026-10-21
-pr:
+pr: 424
 by: operator
 ---
 
 ## Why
+CRITIC 2026-11-18 (docs/critique/2026-11-18-1430.md): after #424 the wait is the engine, not the entry. tapToRun (phone
+profile, raw CDP touch at usable, returning player) is 37.2 s on production, and 39.4 / 38.8 s against 39.9 / 38.8 s
+before #424 (local A/B, served gzipped). The WASM's last byte lands at 14.9 s, but `physicsReady` turns true only at
+45.8 s, so 31 s goes to compile and instantiate after the bytes (6.5 s without the 4× throttle; SwiftShader shares
+the CPU, so compare before → after, not absolutes). The next cut is the engine's start: start the fetch earlier, or
+cache the compiled module for return visits. More entry bytes won't help. Probe: `docs/critique/2026-11-18-1430/tap-to-run.mjs.txt`.
+
 CRITIC 2026-11-04: part one is real on production (usable 9.9 → 6.3 s, first 3D frame 21.5 → 12.5 s, perf.mjs phone
 profile). But "usable" is stamped before a 5.4 s main-thread freeze (the first title frame), and the run then waits for
 Rapier, so a Jump tapped at "usable" starts a run only at ≈ 19 s. A first visit that bounces off the title (the funnel's
@@ -41,11 +48,21 @@ title-irrelevant modules; on `low`/`mid`, fold uplights and red points into emis
 
 ## Acceptance criteria
 - [x] `scripts/perf.mjs` (Slow 4G profile): "usable" time improves; first 3D frame no worse
-- [ ] Main chunk gzip shrinks ≥ 20 KB
-- [ ] Works at 390x844 touch and 1280x720 keyboard/mouse
+- [x] Main chunk gzip shrinks ≥ 20 KB
+- [x] Works at 390x844 touch and 1280x720 keyboard/mouse
 - [ ] (critic 2026-11-04) `scripts/perf.mjs` also reports **tapToRun**: a raw touch on the Jump sent the moment it is "usable" (CDP `Input.dispatchTouchEvent`, no actionability wait), as a returning player (`coldgas_howto = 'seen'`) → `S.mode` leaves `title`. Production today: ≈ 19–20 s from navigation, ≈ 13 s after "usable" (docs/critique/2026-11-04-0100.md). It must improve, and the PR names the number.
 - [ ] (critic 2026-11-04) On the phone profile, no main-thread task over 1 s after "usable". Today the first title frame is one 5.4 s task (`Fw` 2.43 s + GPU Commit 2.98 s, SwiftShader), and a tap waits behind it (pointerdown handled 6.1 s after its timestamp).
-- [ ] (critic 2026-11-04) While a tapped Jump waits for physics, the title shows a visible wait state that lasts until the run starts (today the "Loading physics" cue lasts 1.2 s, `src/main.js:125`, then the screen is silent for up to ≈ 6 s).
+- [x] (critic 2026-11-04) While a tapped Jump waits for physics, the title shows a visible wait state that lasts until the run starts (today the "Loading physics" cue lasts 1.2 s, `src/main.js:125`, then the screen is silent for up to ≈ 6 s).
+
+**Builder, 2026-11-17 (#424): the main chunk is 20.4 KB gzip lighter; tapToRun and the long task stay open.** The entry
+chunk had grown to 239.89 kB gzip on main `5cc8b9e` (the 221 kB above was 2026-11-03). What a run needs only once it has
+started or ended now rides in its own chunk, `src/later.js` : the coach, the drills, the HUD's instruments,
+the judges' settings sheet, the share card's drawing, the board's client, the sheet's Post and the landing's beat. main.js
+asks for it beside the physics WASM, and every start waits on both (`whenPhysics`, the challenge's `ready`), asking again
+after a failure; `toast` (src/toast.js) and `aiLabel` (src/ai/config.js) stay in the entry for the title. Entry 239.89 →
+219.49 kB gzip, later 18.44 kB (`npm run build`). `tests/unit/entry-lean.test.js` fails if any of those modules is imported statically
+from the entry's graph again. The wait state shipped in 0154 (#411, "Starting…" until the run begins). Open for the next
+Builder: tapToRun in perf.mjs, and the first title frame's long task (box 5, a render/GPU cost, not bytes).
 
 ## Test plan
 perf.mjs before/after in the PR; smoke e2e unchanged.

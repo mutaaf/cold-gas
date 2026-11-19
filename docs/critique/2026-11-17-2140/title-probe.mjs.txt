@@ -1,0 +1,18 @@
+import { chromium } from '@playwright/test';
+const OUT = '/home/user/cold-gas/docs/critique/2026-11-17-2140';
+const URL = process.argv[2] || 'https://mutaafaziz.com/coldgas/';
+const tag = process.argv[3] || 'prod';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome' });
+for (const [q, name] of [['', 'default'], ['?gfx=low', 'low']]) {
+  const c = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+  await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+  await c.route('**/api/obs**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+  await c.addInitScript(() => { try { localStorage.coldgas_howto = 'new'; } catch {} });
+  const p = await c.newPage();
+  await p.goto(URL + q);
+  await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90000 });
+  for (const t of [2600, 8000]) { await p.waitForTimeout(t === 2600 ? 2600 : 5400); await p.screenshot({ path: `${OUT}/${tag}-title-${name}-${t}.png` }); }
+  console.log(name, await p.evaluate(() => ({ tier: window.__coldgas?.tier ?? window.__coldgas?.S?.tier, gl: (() => { const c = document.querySelector('canvas'); return c && c.width + 'x' + c.height; })() })));
+  await c.close();
+}
+await browser.close();

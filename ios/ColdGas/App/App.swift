@@ -29,6 +29,7 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         HapticDemo.startIfAsked()
         SoundLab.startIfAsked()
         Usage.shared.sessionStart()      // 0246: queued now, sent from the title
+        Report.start()                   // 0293: MetricKit, and what the save found at launch
         // 0253: a link that launched the app (a universal link's activity, or coldgas://), once the game is up.
         let urls = connectionOptions.urlContexts.map(\.url) + connectionOptions.userActivities.compactMap(\.webpageURL)
         #if DEBUG
@@ -65,6 +66,15 @@ enum Launch {
     /// `-freedrive`: straight into Free Drive (docs/NATIVE-FREEDRIVE.md); with `-bench`, the drive's bench.
     static let freedrive = args.contains("-freedrive")
     static let selftest = args.contains("-selftest")
+    /// `-mute` (Debug only): a simulator never makes a sound on the Mac (the owner's rule, 2026-11-16). The audio engine is
+    /// never started and the master stays at 0, whatever Settings say; `-sound-capture` still records through its tap, silently.
+    /// Every capture script passes it (sim.sh, look-shots.sh, store-capture.py, shots.sh, …). Honoured in Debug and in any
+    /// simulator build (the Release benches run there too); a device's Release build, the one that ships, ignores it.
+    #if DEBUG || targetEnvironment(simulator)
+    static let mute = args.contains("-mute")
+    #else
+    static let mute = false
+    #endif
 }
 
 /// Readiness tokens for the shots harness: Library/Caches/coldgas.ready gets a line per milestone

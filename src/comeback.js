@@ -214,7 +214,8 @@ export function createComeback(o) {
       // Tapped before the engine is up (a slow phone's first seconds): wait for it, then finish the replay here.
       if (!ch.rp) {
         taking = true;
-        try { await o.ready(); } finally { taking = false; }
+        o.pending?.(true);   // the button says "Starting…" while it waits (0154)
+        try { await o.ready(); } finally { taking = false; o.pending?.(false); }
         if (!ch || ch.state !== 'checking') return take();
         ch.rp ??= createReplay(ch.dec.log, ch.dec.course);
       }
@@ -314,7 +315,7 @@ export function createComeback(o) {
 
   render();
   return {
-    boot, ghost, results, linkFor, render, refresh,
+    boot, ghost, results, linkFor, render, refresh, fit,
     get active() { return armed; },
     // e2e
     get state() { return ch ? { state: ch.state, armed, initials: ch.dec.initials, score: ch.dec.score, course: ch.dec.course, tier: ch.dec.tier, name: ch.name || '' } : null; },

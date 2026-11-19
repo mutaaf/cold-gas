@@ -51,9 +51,13 @@ public struct JudgeMeta: Equatable {
     public var done: JudgeDone?, verify: JudgeVerify?
     /// Why Apple's on-device model didn't write these words when it was asked first (0219), for the receipt.
     public var onDeviceFailure: String?
+    /// The crew's authored lines (0236): the default voice, with no call made.
+    public var authored = false
     public init(ok: Bool, local: LocalReason? = nil, error: String? = nil, provider: String? = nil, model: String? = nil, where w: String? = nil, done: JudgeDone? = nil, verify: JudgeVerify? = nil) {
         self.ok = ok; self.local = local; self.error = error; self.provider = provider; self.model = model; self.where = w; self.done = done; self.verify = verify
     }
+    /// The crew's own lines, as the panel (0236).
+    public static var authoredMeta: JudgeMeta { var m = JudgeMeta(ok: false, provider: Crew.source, model: "", where: ""); m.authored = true; return m }
     public static func localMeta(_ reason: LocalReason) -> JudgeMeta {
         JudgeMeta(ok: false, local: reason, error: LOCAL_WHY[reason.rawValue] ?? LOCAL_WHY["chunk"], model: "", where: "")
     }

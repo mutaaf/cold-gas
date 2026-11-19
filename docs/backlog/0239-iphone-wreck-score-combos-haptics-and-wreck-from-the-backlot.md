@@ -1,12 +1,12 @@
 ---
 id: 0239
 title: On the iPhone the Wreck score and its combos are shown and felt, and Roam's backlot offers Wreck beside Fly
-status: proposed
+status: in-progress
 priority: P1
 size: M
 lens: platform
 created: 2026-11-13
-pr:
+pr: 416
 by: operator
 ---
 
@@ -35,3 +35,13 @@ Swift tests for the port and the haptic score; vectors; a simulator run from Roa
 ## Out of scope
 Building before the in-flight UI (`ios/ColdGas/UI/`), rendering and collision work has landed. Ranks and wreck days on the
 iPhone (follow-ups once 0241 and 0242 ship). Free Drive's combo reports on the iPhone (follow-up to 0243).
+
+## Notes
+2026-11-17 (builder): the iPhone scores Wreck natively ahead of the web's 0237: ColdGasClient `Wreck.swift` (the pure scorer,
+combos, the combo haptic patterns) and ColdGasPhysics `WreckTracker.swift` (reads impacts, parked cars, the car going over
+and flights off the run tick by tick, live and in the aftermath; never writes the sim). Nine steps: slam, roof, side swipe,
+grind, crush, airborne, rollover, shove, topple; a chain holds while each lands within 1.25 s, its multiplier is the number of
+different steps. The HUD calls each combo (×N and the step) and the phone plays the step's pattern then N rising ticks; the
+sheet shows WRECK beside the score, never added to it. Recorded runs: clean references score under 3, pro-fuzz-0 78.4 (×7),
+crash-lineup-rolls2 36.0 (×6); naive players 0. Not done: Wreck from Roam, Wreck medals; the vectors don't carry the card
+until 0237 lands on the web. Shots: docs/shots/0239/.

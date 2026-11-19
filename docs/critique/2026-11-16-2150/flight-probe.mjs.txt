@@ -1,0 +1,61 @@
+import { chromium, devices } from '@playwright/test';
+const out = process.argv[2], url = process.argv[3] || 'https://mutaafaziz.com/coldgas/';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome' });
+const res = {};
+async function ctxFor(first, desktop) {
+  const ctx = await browser.newContext(desktop ? { viewport: { width: 1440, height: 900 } } : { ...devices['iPhone 13'] });
+  await ctx.route(/\/boxoffice\/e\//, (r) => r.fulfill({ status: 200, body: '{}' }));
+  if (first) await ctx.addInitScript(() => localStorage.setItem('coldgas_howto', 'new'));
+  return ctx;
+}
+async function flight(tag, first, desktop, kind) {
+  const ctx = await ctxFor(first, desktop); const page = await ctx.newPage();
+  const errs = []; page.on('pageerror', (e) => errs.push(e.message));
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__coldgas?.stage, null, { timeout: 60000 });
+  await page.waitForTimeout(4000);
+  await page.screenshot({ path: `${out}/${tag}-title.png` });
+  await page.evaluate((k) => window.__coldgas.startRun(k), kind);
+  await page.waitForFunction(() => ['countdown','live'].includes(window.__coldgas.S.mode), null, { timeout: 20000 });
+  await page.evaluate(() => window.__coldgas.skipCountdown());
+  const shots = [
+    ['climb', 'S.run.phase === "ramp" && S.run.car.pos.y > 8'],
+    ['inverted', 'S.run.phase === "ramp" && S.run.t.invertedTime > 0.2'],
+    ['over-row', 'S.run.phase === "air" && S.run.car.pos.z < -16'],
+    ['touchdown', 'S.run.phase === "landed" || S.run.phase === "done"'],
+  ];
+  const t0 = Date.now();
+  for (const [n, p] of shots) {
+    const ok = await page.waitForFunction(`(()=>{const S=window.__coldgas.S;return !!S.run && (${p})})()`, null, { timeout: 120000, polling: 50 }).then(()=>1).catch(() => 0);
+    if (ok) await page.screenshot({ path: `${out}/${tag}-${n}.png` });
+    else console.log(tag, 'missed', n);
+  }
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 120000 }).catch(() => {});
+  await page.waitForTimeout(7000);
+  await page.screenshot({ path: `${out}/${tag}-results.png` });
+  res[tag] = await page.evaluate(() => { const S = window.__coldgas.S; const c = S.card || {}; return { total: c.total, verdict: c.verdict, phase: S.run?.phase, secs: null, crash: S.run?.crash?.kind ?? S.run?.wreck ?? null, mode: S.mode, text: document.querySelector('[data-results], .results, #results')?.innerText?.slice(0, 400) }; });
+  res[tag].wallS = (Date.now() - t0) / 1000; res[tag].errors = errs.slice(0, 4);
+  await ctx.close();
+}
+async function crash(tag) {
+  const ctx = await ctxFor(false, true); const page = await ctx.newPage();
+  const errs = []; page.on('pageerror', (e) => errs.push(e.message));
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__coldgas?.stage, null, { timeout: 60000 });
+  await page.waitForTimeout(3000);
+  await page.evaluate(() => window.__coldgas.startRun('jump'));
+  await page.waitForFunction(() => ['countdown','live'].includes(window.__coldgas.S.mode), null, { timeout: 20000 });
+  await page.evaluate(() => window.__coldgas.skipCountdown());
+  await page.keyboard.down('ArrowUp'); await page.waitForTimeout(2500); await page.keyboard.up('ArrowUp');
+  const ok = await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 150000 }).then(()=>1).catch(() => 0);
+  await page.waitForTimeout(6000);
+  await page.screenshot({ path: `${out}/${tag}-results.png` });
+  res[tag] = await page.evaluate(() => { const S = window.__coldgas.S; const c = S.card || {}; return { total: c.total, verdict: c.verdict, phase: S.run?.phase, mode: S.mode, text: document.body.innerText.slice(0, 500) }; });
+  res[tag].reached = ok; res[tag].errors = errs.slice(0, 4);
+  await ctx.close();
+}
+await flight('phone-first-reveal', true, false, 'reveal');
+await crash('desk-crash');
+await flight('desk-reveal', false, true, 'reveal');
+console.log(JSON.stringify(res, null, 1));
+await browser.close();

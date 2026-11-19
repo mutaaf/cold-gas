@@ -46,6 +46,8 @@ final class Crash {
     // State
     private var cursor = 0, lastTick = -1
     private(set) var slowK: Float = 1
+    /// A directed clock (the encore, 0271): while set, it is the slow motion, and no hit starts a beat or a cut of its own.
+    var directed: Float?
     private var slowT: Float = 0, clock: Float = 0, bigT: Float = -10, ventT: Float = 0
     private(set) var grind: Float = 0
     /// A live run is heard (crash.js's crunch / thud / setGrind); the title's looping reference run is not.
@@ -55,6 +57,8 @@ final class Crash {
     var dentParked: ((Int, SIMD3<Float>, SIMD3<Float>, Float, Float) -> Void)?
     private var carVel = SIMD3<Float>(), carPos = SIMD3<Float>(), carQuat = simd_quatf(angle: 0, axis: [0, 1, 0])
     var shake: ((Float) -> Void)?
+    /// A hit's jolt along its impulse (0271): the contact normal and 0…1 of how hard.
+    var kick: ((SIMD3<Float>, Float) -> Void)?
     /// The car's own states and damage (roadster.js): lamps, parts, the canopy. Crash sets the damage, the renderer draws it.
     let car = CarState()
     /// The torn-off parts: free rigid boxes on the concrete.
@@ -240,7 +244,8 @@ final class Crash {
         if audible { Sound.shared.bodyHit(severity: Double(sev), glass: glassy && v > 5, seed: e.tick * 31 + Int(e.probe), at: p, struck: e.body >= 0) }
         if !reduced {
             shake?(min(2.6, 0.25 + v * 0.17))
-            if v > 6.5 && clock - bigT > 2.5 {
+            if v > 3 { kick?(n, min(1, (v - 3) / 10)) }
+            if directed == nil && v > 6.5 && clock - bigT > 2.5 {
                 bigT = clock; slowT = 0.75 + 0.5 * sev
                 if !cutDone { cutDone = true; cut?(p, carVel) }
             }
@@ -250,8 +255,9 @@ final class Crash {
     /// Per rendered frame (real seconds; particles run on the slowed clock).
     func update(_ dtReal: Float) {
         clock += dtReal
-        if slowT > 0 { slowT -= dtReal; slowK += (0.2 - slowK) * min(1, dtReal * 18) } else { slowK += (1 - slowK) * min(1, dtReal * 3.5) }
-        if slowK > 0.995 { slowK = 1 }
+        if let d = directed { slowK = d; slowT = 0 }
+        else if slowT > 0 { slowT -= dtReal; slowK += (0.2 - slowK) * min(1, dtReal * 18) } else { slowK += (1 - slowK) * min(1, dtReal * 3.5) }
+        if directed == nil && slowK > 0.995 { slowK = 1 }
         let dt = dtReal * slowK, fl: Float = 0
         let drag = exp(-dt * 1.2)
         for j in 0..<Crash.NS where sLife[j] > 0 {
@@ -315,7 +321,8 @@ final class Crash {
         }
         return (ns, nm, nc)
     }
-    var flash: (pos: SIMD3<Float>, size: Float, k: Float)? { flashT > 0 ? (flashPos, flashS * (1.3 - 0.3 * min(1, flashT / 0.1)), pow(min(1, flashT / 0.1), 2)) : nil }
+    /// The hit's white flash; none with Reduce Motion or Dim Flashing Lights (0270: a crash's hits can come faster than 3 a second).
+    var flash: (pos: SIMD3<Float>, size: Float, k: Float)? { flashT > 0 && !Flashing.reduced ? (flashPos, flashS * (1.3 - 0.3 * min(1, flashT / 0.1)), pow(min(1, flashT / 0.1), 2)) : nil }
 }
 
 func srgbHexToLinear(_ v: UInt32) -> SIMD3<Float> {
