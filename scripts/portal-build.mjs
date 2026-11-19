@@ -1,7 +1,7 @@
 #!/usr/bin/env node
-// npm run build:crazygames | build:gamedistribution — a portal build (store/portals/SUBMIT.md).
+// npm run build:crazygames | build:gamedistribution | build:itch | build:newgrounds — a portal build (store/portals/SUBMIT.md).
 //
-//   node scripts/portal-build.mjs <crazygames|gamedistribution> [--no-zip]
+//   node scripts/portal-build.mjs <crazygames|gamedistribution|itch|newgrounds> [--no-zip]
 //
 // 1. `vite build` with CG_PORTAL set (vite.config.js): relative paths, src/portal/entry.js, the portal's SDK in place of
 //    Marquee and Box Office, into dist-portals/<portal>/game/ (gitignored). The production build is untouched.
@@ -9,13 +9,15 @@
 //    store links), the privacy page (it describes the web's analytics, which are not here), the web app manifest and its
 //    icons (no install prompt), link-preview art.
 // 3. Gates the result: no mutaafaziz.com, Marquee (/ads/v1), Box Office (/boxoffice) or root-absolute path anywhere in
-//    its text files, an index.html at the top, the file count and size inside the portals' limits.
+//    its text files, an index.html at the top, the file count and size inside the portals' limits. itch.io and Newgrounds
+//    carry one exception: the single "More games at mutaafaziz.com" link in index.html (portal-html.mjs HOME_URL), which
+//    must be there exactly once; any other mention of the site still fails.
 // 4. Zips it: dist-portals/cold-gas-<portal>.zip (index.html at the zip's root), and prints the sizes.
 import { execFileSync } from 'node:child_process';
 import { existsSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { PORTALS } from './portal-html.mjs';
+import { HOME_URL, PORTALS, homeAnchor, withoutHomeLink } from './portal-html.mjs';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../..');
 export const PRUNE = ['beta', 'guide', 'privacy', 'screenshots', 'icons', 'og.png', 'manifest.webmanifest', 'apple-touch-icon.png'];
@@ -29,7 +31,8 @@ export const FORBIDDEN = [
 ];
 // The portals' limits (docs.crazygames.com/requirements/technical, 2026-11-13): 250 MB and 1,500 files in all; the
 // initial download (to the first gameplayStart) ≤ 50 MB, ≤ 20 MB for the mobile homepage.
-export const MAX_FILES = 1500, MAX_BYTES = 250e6, WARN_BYTES = 20e6;
+// itch.io (itch.io/docs/creators/html5, 2026-11-18) is tighter on files: 1,000 after extraction, 200 MB per file.
+export const MAX_FILES = 1500, MAX_BYTES = 250e6, WARN_BYTES = 20e6, ITCH_MAX_FILES = 1000;
 
 function walk(dir) {
   const out = [];
@@ -40,7 +43,7 @@ function walk(dir) {
   return out;
 }
 
-export function gate(dir) {
+export function gate(dir, portal = '') {
   const problems = [];
   if (!existsSync(join(dir, 'index.html'))) problems.push('no index.html at the top');
   const files = walk(dir);
@@ -48,11 +51,17 @@ export function gate(dir) {
   for (const f of files) {
     bytes += statSync(f).size;
     if (!/\.(html|js|mjs|css|json|txt|svg|webmanifest)$/.test(f)) continue;
-    const text = readFileSync(f, 'utf8');
+    let text = readFileSync(f, 'utf8');
+    if (HOME_URL[portal] && relative(dir, f) === 'index.html') {
+      const n = text.split(homeAnchor(portal)).length - 1;
+      if (n !== 1) problems.push(`index.html: the home link appears ${n} times (expected 1)`);
+      text = withoutHomeLink(text, portal);
+    }
     for (const [re, what] of FORBIDDEN) if (re.test(text)) problems.push(`${relative(dir, f)}: ${what} (${text.match(re)[0]})`);
   }
   for (const p of PRUNE) if (existsSync(join(dir, p))) problems.push(`${p} should have been pruned`);
-  if (files.length > MAX_FILES) problems.push(`${files.length} files (max ${MAX_FILES})`);
+  const maxFiles = portal === 'itch' ? ITCH_MAX_FILES : MAX_FILES;
+  if (files.length > maxFiles) problems.push(`${files.length} files (max ${maxFiles})`);
   if (bytes > MAX_BYTES) problems.push(`${(bytes / 1e6).toFixed(1)} MB (max 250)`);
   return { problems, files: files.length, bytes };
 }
@@ -67,7 +76,7 @@ function main() {
   rmSync(out, { recursive: true, force: true });
   execFileSync(process.execPath, [join(ROOT, 'node_modules/vite/bin/vite.js'), 'build', '--logLevel', 'warn'], { cwd: ROOT, stdio: 'inherit', env: { ...process.env, CG_PORTAL: portal, ...(process.env.CG_GD_GAME_ID ? { VITE_CG_GD_GAME_ID: process.env.CG_GD_GAME_ID } : {}) } });
   for (const p of PRUNE) rmSync(join(game, p), { recursive: true, force: true });
-  const { problems, files, bytes } = gate(game);
+  const { problems, files, bytes } = gate(game, portal);
   if (problems.length) { console.error(`portal build ${portal}: ${problems.length} problem(s)\n  ${problems.join('\n  ')}`); process.exit(1); }
   console.log(`portal build ${portal}: ${files} files, ${mb(bytes)} unzipped → ${relative(ROOT, game)}`);
   if (bytes > WARN_BYTES) console.warn(`  note: over 20 MB in all; the mobile homepage counts only the download to the first gameplayStart`);

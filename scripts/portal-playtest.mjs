@@ -2,9 +2,10 @@
 // Plays a portal build the way a portal hosts it: the game's files on one origin, under a deep folder (relative paths
 // only), inside a sandboxed <iframe> on a page from another origin. Build first (npm run build:<portal>).
 //
-//   node scripts/portal-playtest.mjs <crazygames|gamedistribution> [--blocked] [--phone] [--headed]
+//   node scripts/portal-playtest.mjs <crazygames|gamedistribution|itch|newgrounds> [--blocked] [--phone] [--headed]
 //
 // --blocked  the portal's SDK host is refused (an ad blocker): the game must play exactly the same, with no ads
+//            (CrazyGames and GameDistribution only: itch.io and Newgrounds load no SDK at all)
 // --phone    390×844 touch: the touch controls come up
 //
 // It boots, presses Jump, flies a run by hand (keys or touch), lets it finish, posts to the board, leaves the results
@@ -17,6 +18,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { chromium, devices } from '@playwright/test';
+import { HOME_URL, SDK_PORTALS } from './portal-html.mjs';
 
 const ROOT = resolve(fileURLToPath(import.meta.url), '../..');
 const [portal = 'crazygames', ...flags] = process.argv.slice(2);
@@ -28,6 +30,7 @@ const SDK_HOSTS = { crazygames: /(^|\.)crazygames\.com$/, gamedistribution: /(^|
 const TYPES = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.wasm': 'application/wasm', '.json': 'application/json',
   '.svg': 'image/svg+xml', '.woff2': 'font/woff2', '.woff': 'font/woff', '.png': 'image/png', '.glb': 'model/gltf-binary', '.gz': 'application/gzip', '.bin': 'application/octet-stream' };
 
+if (blocked && !SDK_PORTALS.includes(portal)) { console.error(`--blocked: ${portal} loads no SDK to block`); process.exit(2); }
 if (!existsSync(join(GAME_DIR, 'index.html'))) { console.error(`no build at ${GAME_DIR}: npm run build:${portal}`); process.exit(2); }
 
 function serveGame() {
@@ -75,8 +78,12 @@ page.on('console', (m) => {
   if (where && !where.startsWith(`http://127.0.0.1:${GAME_PORT}`)) return;
   errors.push(`console: ${m.text()} @ ${where}`);
 });
+let homeClicked = false;
+const thirdPartyCalls = [];   // itch.io and Newgrounds: the game asks no other server for anything   // the home link's own new tab, opened on purpose at the end (itch.io, Newgrounds)
 page.on('request', (r) => {
   const u = new URL(r.url());
+  if (homeClicked) return;
+  if (!SDK_PORTALS.includes(portal) && !/^(data|blob):/.test(u.protocol) && ![`127.0.0.1:${GAME_PORT}`, `localhost:${HOST_PORT}`].includes(u.host)) thirdPartyCalls.push(r.url());
   // Anything to mutaafaziz.com, or the game's own origin asked for an API, Marquee or Box Office path (an ad network's
   // own /api/ calls are the portal's business).
   if (/mutaafaziz/i.test(u.hostname) || ([`127.0.0.1:${GAME_PORT}`, `localhost:${HOST_PORT}`].includes(u.host) && /\/api\/|\/ads\/v1|\/boxoffice/.test(u.pathname))) forbidden.push(r.url());
@@ -105,6 +112,13 @@ if (!phone) { await frame.locator('[data-course="wall"]').click(); }   // the ha
 check(await frame.locator('[data-start]').isVisible(), 'title up, Jump visible');
 check(!(await frame.locator('.beta-chip, .beta-btn, a[href*="beta/"], a[href*="guide/"]').first().isVisible().catch(() => false)), 'no outbound links on the title');
 check(!(await frame.locator('[data-ai-open]').isVisible()), 'no AI key chip');
+const links = await frame.evaluate(() => [...document.querySelectorAll("a[href]")].map((a) => ({ href: a.href, target: a.target, text: a.textContent.trim(), out: a.origin !== location.origin })));
+const outbound = links.filter((l) => l.out && /^https?:/.test(l.href));
+if (HOME_URL[portal]) {
+  check(outbound.length === 1 && /^https:\/\/mutaafaziz\.com\/\?utm_source=/.test(outbound[0].href) && outbound[0].target === '_blank' && outbound[0].text === 'More games at mutaafaziz.com',
+    `one link out, to mutaafaziz.com in a new tab (${outbound.map((l) => l.href).join(' ') || 'none'})`);
+  if (!phone) check(await frame.locator('a.portal-more').isVisible(), 'the home link shows on the title');
+} else check(outbound.length === 0, `no links out (${outbound.map((l) => l.href).join(' ') || 'none'})`);
 
 // --- Run 1: fly it by hand ---
 async function flyRun(n) {
@@ -177,7 +191,18 @@ if (portal === 'crazygames' && live) {
 }
 if (blocked) check(sdkRequests.length > 0, `the SDK was asked for and refused (${sdkRequests.length} request(s))`);
 
+// The home link, clicked (desktop): a new tab on mutaafaziz.com, and the game stays where it is.
+if (HOME_URL[portal] && !phone) {
+  await ctx.route(/mutaafaziz\.com/, (r) => r.fulfill({ status: 200, contentType: 'text/html', body: '<!doctype html><title>home</title>' }));
+  homeClicked = true;
+  const [tab] = await Promise.all([ctx.waitForEvent('page', { timeout: 10_000 }).catch(() => null), frame.locator('a.portal-more').click()]);
+  const url = tab ? tab.url() : '';
+  check(/^https:\/\/mutaafaziz\.com\/\?utm_source=/.test(url), `the home link opened a new tab (${url || 'none'})`);
+  check(await frame.evaluate(() => window.__coldgas.S.mode === 'title'), 'the game is still on its title in the frame');
+  if (tab) await tab.close();
+}
 check(forbidden.length === 0, `no request to mutaafaziz.com, /api/, /ads/v1 or /boxoffice${forbidden.length ? `: ${forbidden.slice(0, 5).join(' ')}` : ''}`);
+if (!SDK_PORTALS.includes(portal)) check(thirdPartyCalls.length === 0, `no request to any other server${thirdPartyCalls.length ? `: ${thirdPartyCalls.slice(0, 5).join(' ')}` : ''}`);
 check(errors.length === 0, `no console errors in the game${errors.length ? `:\n      ${errors.slice(0, 8).join('\n      ')}` : ''}`);
 
 if (thirdParty.length) console.log(`  note: the portal's own scripts threw (not the game): ${thirdParty.slice(0, 3).join(' | ')}`);

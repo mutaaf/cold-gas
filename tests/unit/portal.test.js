@@ -2,7 +2,7 @@
 // guard, the local board and the ads object main.js drives. The production build never runs any of it (ON_PORTAL).
 import { describe, it, expect, vi } from 'vitest';
 import { readFileSync, readdirSync } from 'node:fs';
-import { portalHtml, PORTALS, FORBIDDEN } from '../../scripts/portal-html.mjs';
+import { portalHtml, PORTALS, FORBIDDEN, HOME_URL, homeAnchor, withoutHomeLink } from '../../scripts/portal-html.mjs';
 import { createPortal, CG_SDK_URL, GD_SDK_URL } from '../../src/portal/sdk.js';
 import { snapshot, fit, hydrate, mirror, SAVE_KEY } from '../../src/portal/storage.js';
 import { isServerCall } from '../../src/portal/offline.js';
@@ -36,7 +36,13 @@ describe('index.html for a portal', () => {
       expect(out).toContain('<script type="module" src="/src/portal/entry.js"></script>');
       expect(out).toContain(`data-portal="${portal}"`);
       expect(out).toContain('data-portal-css');
-      for (const re of FORBIDDEN) expect(out).not.toMatch(re);
+      for (const re of FORBIDDEN) expect(withoutHomeLink(out, portal)).not.toMatch(re);
+      // The one link back: on itch.io and Newgrounds only, once, opening a new tab on a click; none on the ad portals.
+      if (HOME_URL[portal]) {
+        expect(out.split(homeAnchor(portal)).length - 1).toBe(1);
+        expect(homeAnchor(portal)).toMatch(/^<a class="portal-more" href="https:\/\/mutaafaziz\.com\/\?utm_source=[^"]+" target="_blank" rel="noopener">More games at mutaafaziz\.com<\/a>$/);
+        expect(out.match(/<a [^>]*href="https?:/g)).toHaveLength(1);
+      } else expect(out).not.toMatch(/mutaafaziz/i);
       // The game itself is all still there.
       for (const sel of ['data-start', 'data-reveal', 'data-board-open', 'data-screen="results"', 'data-screen="pause"', 'data-drive-open']) expect(out).toContain(sel);
     });
