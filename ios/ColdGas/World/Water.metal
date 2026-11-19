@@ -234,7 +234,9 @@ fragment WaterPix cg_water_fragment(WaterOut in [[stage_in]], constant WaFrame& 
     float shore = 1.0 - smoothstep(0.0, 1.6, depth);
     float roll = sin(depth * 4.5 + t * 1.6 + water_noise(in.param / 9.0) * 5.0);
     float grain = water_noise(in.param * 0.9 + float2(t * 0.3, -t * 0.2));
-    float foamShore = shore * smoothstep(0.35, 0.9, roll * 0.5 + 0.5 + grain * 0.6 - depth * 0.25) + smoothstep(0.08, 0.0, depth) * 0.9;
+    // (the surf rolls in on the open sea; a lake or a river has no swell to break, only a thin line at its edge)
+    float foamShore = shore * smoothstep(0.35, 0.9, roll * 0.5 + 0.5 + grain * 0.6 - depth * 0.25) * mix(0.08, 1.0, wa.z)
+                    + smoothstep(0.08, 0.0, depth) * mix(0.5, 0.9, wa.z);
     float foamCap = smoothstep(0.45, 0.15, J) * smoothstep(0.4, 0.8, grain + 0.2) * calm;
     float foam = saturate(max(foamShore, foamCap));
     float cosV = clamp(dot(n, v), 0.0, 1.0);
@@ -249,7 +251,10 @@ fragment WaterPix cg_water_fragment(WaterOut in [[stage_in]], constant WaFrame& 
         float3 deep = float3(0.010, 0.022, 0.07), mid = float3(0.02, 0.07, 0.16), shallow = float3(0.05, 0.20, 0.28);
         float3 body = depth > 4.0 ? deep : depth > 1.2 ? mid : shallow;
         float fres = 1.0 - cosV;
-        float3 skyB = fres > 0.82 ? k.skyHorizon.rgb * 0.8 : fres > 0.6 ? k.skyMid.rgb : body;
+        // (under the physical sky, the sky's own view as the drawn looks reflect it: WorldShading.h world_light)
+        float3 skyR = k.atmo.x > 0.5 ? sky_view(skyView, normalize(float3(0, 0.3, 0) + reflect(-v, n) * 0.7), k.skySun.xyz, k.atmo.z, 2.0) : float3(0);
+        float3 skyB = k.atmo.x > 0.5 ? (fres > 0.82 ? skyR * 0.8 : fres > 0.6 ? skyR * 0.6 : body)
+                                     : (fres > 0.82 ? k.skyHorizon.rgb * 0.8 : fres > 0.6 ? k.skyMid.rgb : body);
         c = fres > 0.6 ? skyB : body;
         c = mix(c, float3(0.55, 0.65, 0.8), sparkle * 0.9);
         c = mix(c, float3(0.75, 0.8, 0.85), step(0.5, foam));
