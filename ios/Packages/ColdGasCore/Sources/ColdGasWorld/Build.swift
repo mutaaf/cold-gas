@@ -103,12 +103,12 @@ extension FreeWorld {
         let q = roads.query(minX: x0, minZ: z0, maxX: x0 + S, maxZ: z0 + S, margin: RoadSpec.reach, stride: Swift.max(1, Swift.min(16, Int(step / 8))))
         // Heights on a grid one wider all round (for the normals).
         let B = N + 3
-        var h = [Double](repeating: 0, count: B * B), rd = [Double](repeating: .infinity, count: B * B)
+        var h = [Double](repeating: 0, count: B * B), rd = [Double](repeating: .infinity, count: B * B), wl = [Double](repeating: -.infinity, count: B * B)
         var gp = [GroundPoint](repeating: GroundPoint(), count: W * W)
         for j in 0..<B { for i in 0..<B {
             let x = x0 + Double(i - 1) * step, z = z0 + Double(j - 1) * step
             let g = ground(x, z, q, carve: carve)
-            h[j * B + i] = g.y; rd[j * B + i] = g.road
+            h[j * B + i] = g.y; rd[j * B + i] = g.road; wl[j * B + i] = g.water
             if i >= 1 && i <= W && j >= 1 && j <= W { gp[(j - 1) * W + (i - 1)] = g }
         } }
         @inline(__always) func H(_ i: Int, _ j: Int) -> Double { h[(j + 1) * B + (i + 1)] }
@@ -119,7 +119,7 @@ extension FreeWorld {
             if abs(x) < Site.slab && abs(z) < Site.slab { return y - 0.35 }
             // Under a road's ribbon and its verges (the levels the ribbons are drawn over), a few centimetres down: the
             // ribbon, laid on the exact ground every 4 m along the road, is what's seen there, not a 4 m grid's facets.
-            let floorY = seabed ? -Double.infinity : SEA
+            let floorY = seabed ? -Double.infinity : jsMax(SEA, wl[(j + 1) * B + (i + 1)])
             if dip { let r = rd[(j + 1) * B + (i + 1)]; if r < RoadSpec.vergeOut { return jsMax(floorY, y - 0.22 * (1 - WNoise.smooth(RoadSpec.vergeOut - 2, RoadSpec.vergeOut, r))) } }
             return jsMax(floorY, y)
         }
@@ -150,7 +150,7 @@ extension FreeWorld {
             var flag: UInt32 = 0
             let onSlab = abs(x) < Site.slab && abs(z) < Site.slab
             // The material (0310): the numbers `sample` gives (LandLook), for the GPU's surface bake.
-            let wat = water(x, z, groundY: H(i, j))
+            let wat = water(g, groundY: H(i, j))
             let snow = g.floor || g.surface != .grass ? 0 : LandLook.snow(mountain: g.land.w.0, y: g.y, slope: 1 - ny)
             var wet = g.floor ? 0 : LandLook.wetness(y: H(i, j), waterLevel: wat.level, snow: snow)
             if wat.wet { if !seabed { c = Palette.water }; flag = 1; wet = jsMin(1, wat.depth / 16) }
@@ -319,7 +319,7 @@ extension FreeWorld {
                 let roll = WNoise.hash2(s ^ 0x1e1, i, j)
                 if roll >= p { continue }
                 let g = ground(x, z, q)
-                if g.road < G.clear || g.y < SEA + 0.5 { continue }
+                if g.road < G.clear || g.y < g.water + 0.5 { continue }
                 let gx = ground(x + 1.5, z, q).y, gz = ground(x, z + 1.5, q).y
                 let sx = (gx - g.y) / 1.5, sz = (gz - g.y) / 1.5, slope = 1 - 1 / (sx * sx + 1 + sz * sz).squareRoot()
                 var kind = G.kind
@@ -392,7 +392,7 @@ extension FreeWorld {
                     // Not on a road (another one, at a junction), and not in the sea.
                     if g.road < RoadSpec.hw + RoadSpec.shoulder + 0.2 { return }
                     let gy = y ?? g.y
-                    if gy < SEA + 0.3 { return }
+                    if gy < g.water + 0.3 { return }
                     let item = Int32(cell.solids.count)
                     cell.solids.append(PropSolid(kind: sk, x: x, y: gy, z: z, yaw: yaw + turn, half: half))
                     cell.instances.append(PropInstance(kind: kind, x: Float(x - x0), y: Float(gy), z: Float(z - z0), yaw: Float(yaw + turn), scale: 1, tint: 1, item: item))

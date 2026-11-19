@@ -6,8 +6,11 @@ import ColdGasCore
 
 /// A water body's surface at a point and how deep it is over the ground there.
 public struct WaterSample: Sendable {
-    /// The surface's height (m). The sea's (`SEA`) where there is sea; −∞ where no water body reaches.
+    /// The surface's height (m): the sea's (`SEA`), a lake's or a river's; −∞ where no water body reaches (the Show's slab).
     public var level: Double
+    /// What it is (0310: sea, lake, river), and a river's flow (unit x, z, downstream; 0 on still water).
+    public var kind: WaterKind = .none
+    public var flow = (0.0, 0.0)
     /// `level − ground` (m): > 0 under water.
     public var depth: Double
     public var wet: Bool { depth > 0 }
@@ -63,8 +66,14 @@ extension FreeWorld {
     /// The water body at (x, z) over ground at `groundY` (§9.2): the one place water is defined, so the terrain's shore, the
     /// water's surface and the spray agree. Today: the sea at `SEA` wherever the ground falls under it (off the Show's slab).
     public func water(_ x: Double, _ z: Double, groundY: Double) -> WaterSample {
-        if abs(x) < Site.slab && abs(z) < Site.slab { return WaterSample(level: -.infinity, depth: -.infinity) }
-        return WaterSample(level: SEA, depth: SEA - groundY)
+        water(ground(x, z), groundY: groundY)
+    }
+    /// The same from a ground point already asked for (its level and kind), over ground at `groundY` (its own `y` if nil).
+    public func water(_ g: GroundPoint, groundY: Double? = nil) -> WaterSample {
+        guard g.water.isFinite else { return WaterSample(level: -.infinity, depth: -.infinity) }
+        var s = WaterSample(level: g.water, depth: g.water - (groundY ?? g.y))
+        s.kind = g.waterKind; s.flow = g.flow
+        return s
     }
 
     /// Everything the land is at (x, z) (§9.2). About three ground lookups.
@@ -80,7 +89,7 @@ extension FreeWorld {
         s.normal = (-gx / nl, 1 / nl, -gz / nl)
         s.slope = 1 - 1 / nl
         s.surface = FreeWorld.surface(g, slope: s.slope)
-        s.water = water(x, z, groundY: g.y)
+        s.water = water(g)
         if !g.floor {
             s.snow = g.surface == .grass ? LandLook.snow(mountain: g.land.w.0, y: g.y, slope: s.slope) : 0
             s.wetness = LandLook.wetness(y: g.y, waterLevel: s.water.level, snow: s.snow)

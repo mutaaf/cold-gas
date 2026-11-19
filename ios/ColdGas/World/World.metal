@@ -9,6 +9,7 @@
 //   cg_world_prop_args     the lists' counts into indirect draw arguments, and the counters back to zero
 #include "WorldShading.h"
 #include "WorldMatter.h"
+#include "WorldWater.h"
 
 // --- Terrain ------------------------------------------------------------------------------------------------------------
 // A tile vertex (TileSpec.stride = 9 floats): position + the parent's height, normal, colour (rgb, a: scree), material
@@ -98,6 +99,7 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
     bool waterFlat = (fl & 1) != 0 && g.flags.x < 0.5;
     float2 w = in.world.xz + dr.anchor.xy;
     WSurf s;
+    float caustic = 0;
     if (!waterFlat) {
         s = world_land(in.col.rgb, in.col.a, n, w, S, det);
         if (S.a > 0) {   // the seabed (a layer draws the water over it): wet sand and silt, darker with depth
@@ -109,6 +111,8 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
         float4 tr = in.level < 0.5 ? world_traceAt(in.world.xz, g, leafIndex, traces) : float4(0);
         matter_ground(s, in.world, tr, S, dr);
         s.ao *= world_carAO(in.world, dr);
+        // WATER's seabed and swash (WorldWater.h): caustics on the bed, the wet line moving on the shore.
+        water_ground(s, caustic, in.world, w, S, g.flags.x, dr, f);
     } else {
         // The sea drawn flat (until a water layer owns it): small waves from the detail, clearer and greener where it's shallow.
         float t = dr.params.y;
@@ -124,6 +128,7 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
         s.spec *= 1.0 - surf * 0.7;
     }
     float3 c = world_light(s, in.world, in.lightClip, in.amb, f, k, dr, shadow, skyView, wshadow);
+    if (caustic > 0) c += s.albedo * caustic * (f.keyColor.rgb * f.keyDir.w / M_PI_F + in.amb);
     return float4(world_air(c, in.airT, in.airIn, f), 1);
 }
 

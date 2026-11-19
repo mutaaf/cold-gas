@@ -443,6 +443,7 @@ lands first; the others build against what's here, and say so in this section if
 | `World/WorldView.swift`, `WorldCache.swift`, `WorldProps.swift`, `World.metal`, `WorldShading.h`, `Render/Sky*` | LANDSCAPE | read; register layers (9.4) |
 | `World/WorldHooks.swift` (this contract in code) | LANDSCAPE | propose changes here first |
 | `World/WorldMatter.h` (the ground's trace look) | **MATTER** | LANDSCAPE ships it as a no-op default and never edits it after |
+| `World/WorldWater.h` (the seabed's caustics, the swash on the shore) | **WATER** | the same |
 | `World/Water*.swift`, `World/Water*.metal` | **WATER** | — |
 | `ColdGasPhysics/DriveCar.swift` grip, `Drive.swift` `material(…)` | **MATTER** | LANDSCAPE doesn't touch the grip |
 | `ColdGasPhysics/Vehicle.swift` (scored) | nobody | the 52 run vectors stay bit-exact |
@@ -453,7 +454,14 @@ lands first; the others build against what's here, and say so in this section if
 any thread in any order (the physics, the effects and the app may all ask).
 
 ```swift
-public struct WaterSample: Sendable { public var level: Double; public var depth: Double; public var wet: Bool }
+public enum WaterKind: UInt8 { case none, sea, lake, river }
+public struct WaterSample: Sendable {
+    public var level: Double        // the surface's height (m); −∞ where there's no water body (the Show's slab)
+    public var depth: Double        // level − ground (> 0 under water)
+    public var wet: Bool            // depth > 0
+    public var kind: WaterKind      // sea, lake or river
+    public var flow: (Double, Double)   // a river's downstream direction (unit x, z); 0 on still water
+}
 public struct LandSample: Sendable {
     public var y: Double                         // the carved ground the car drives on (FreeWorld.ground)
     public var normal: (Double, Double, Double)  // the ground's normal (from ±1 m)
@@ -468,11 +476,19 @@ public struct LandSample: Sendable {
 extension FreeWorld {
     public func sample(_ x: Double, _ z: Double) -> LandSample
     public func water(_ x: Double, _ z: Double, groundY: Double) -> WaterSample   // the one place water bodies are defined
+    public func water(_ g: GroundPoint, groundY: Double? = nil) -> WaterSample     // the same from a ground point in hand
+    public func lakes(nearX: Double, z: Double, r: Double) -> [Lake]                // each lake's centre, radius, level, depth
 }
+// GroundPoint (FreeWorld.ground) carries the same: `water` (the level), `waterKind`, `flow`.
 ```
-- `water.level` is the sea's (`SEA`, −2 m) where there is sea; `depth = level − y` (> 0 under water); `wet` is
-  `depth > 0`. Lakes and rivers, when they come, are added inside `water(…)` only, so the terrain's shore, WATER's
-  surface and MATTER's spray agree by construction.
+- **Water bodies (ColdGasWorld `Waters.swift`, added for #460).** The sea at `SEA` (−2 m) wherever the ground falls under
+  it; **lakes**, at most one per 2,048 m cell by a hash, radius 90–260 m with a wobbled shore, ≥ 140 m from every road, their
+  level the lowest natural ground round the rim less a metre (so the shore holds them), a bowl 3–9 m deep; **rivers** where a
+  low-frequency field crosses zero: meandering channels 5–12 m wide that taper out on steep ground and in the desert, their
+  surface following the land's smooth lower field a metre under the banks (so it slopes gently, with a `flow` downhill), a
+  bed up to 2.4 m deep. A river under a road goes through a culvert: inside the road's corridor the water is the sea's
+  (under the road), never over it. All of it is carved into `FreeWorld.ground`, so the car drives into a lake's bed and the
+  physics, the tiles, the props (none under water) and `water(…)` agree by construction. Deterministic per seed (tested).
 - `wetness` and `snow` are the numbers the terrain's surface bake (9.3) uses, so grip, spray and the look agree.
 - Cost: one `sample` ≈ three `ground` calls (a few µs). Per wheel per tick is fine; per pixel is not (use 9.3).
 
@@ -552,6 +568,11 @@ in the same frame in all three looks:
 - WorldGPU (buffer 6): `leafOrigin` (the leafIndex's corner in render space, metres), `anchor` (the origin mod 4,096 m),
   `sea` (x: the sea's level in render space), `flags` (x: a layer owns the sea, y: traces on).
 
+**WATER's hook in the ground:** the terrain's fragment shader calls
+`water_ground(thread WSurf& s, thread float& light, float3 p, float2 anchored, float4 land, float owned, constant WDrive& dr,
+constant WFrame& f)` from `WorldWater.h` after MATTER's and before the light; `light` adds caustic light on the bed (× the
+key's and the sky's light). `land.a > 0` is under water (any body); `owned` is 1 when a layer owns the sea.
+
 **MATTER's hook in the ground:** the terrain's and the verge's fragment shaders call
 `matter_ground(thread WSurf& s, float3 p, float4 trace, float4 land, constant WDrive& dr)` from `WorldMatter.h` after the
 land's material is chosen and before it's lit. LANDSCAPE ships it as a no-op; MATTER owns that file and turns ruts,
@@ -576,3 +597,17 @@ scuffs and mud into albedo, normal, roughness and AO there (every look takes it,
 - Free Drive and Roam only: nothing a layer does reaches a scored run, a log or the vectors.
 - Every element looks deliberate in Real, Anime (cel ramp, ink from depth, bold shapes) and 8-bit (the 32-colour palette,
   whole pixels, no dither but the sky's checker): check all three before you ship.
+
+### 9.8 For WATER (#460): where to attach
+
+#460 was written against main before this contract. On top of 0310 it attaches like this:
+- **Its view** becomes a `WorldLayer` (`view.add(waterView)` in `FreeDrive.attach`) with `ownsSea = true`: the tiles are
+  rebuilt with the seabed under every water body and the terrain stops drawing its flat sea (its 0320 edit to `Build.swift`'s
+  `drawnY` isn't needed: `tile(key, seabed:)` does it).
+- **Its compute** (the waves' bake) goes in `encode(_:cmd:)`, not a new `DriveScene.encode` in the renderer (0310's renderer
+  already calls the world's compute before the shadow pass); **its surface** in `drawLate` (after the sky, the world's
+  bindings set, `WorldShading.h`'s light and air for all three looks).
+- **Its seabed and swash** (Water.h `water_ground`) move into `WorldWater.h`'s `water_ground` (the terrain calls it with the
+  baked depth in `land.a`); the old terrain-fragment edit isn't needed.
+- **Its levels** come from `FreeWorld.water(…)` / `GroundPoint.water` (the sea, the lakes, the rivers' sloping surface), and
+  `WaterSample.flow` gives a river's current for buoyancy; `lakes(nearX:z:r:)` lists the lakes round the eye for its maps.
