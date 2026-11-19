@@ -322,7 +322,9 @@ struct TitleView: View {
     /// Today's objective in a line (and the streak), green once it's done.
     private var daily: some View {
         let o = Daily.objectiveFor(SaveStore.nowMs), streak = SaveStore.shared.streakNow()
-        let goal = o.goal(SaveStore.shared.units), course = Daily.courseName(o.course)
+        // 0218: the goal in the form the objective's course is flown in here (Game.oneThumb: the app's Lineup is by hand).
+        let g = Game.shared, thumb = g.control == .oneThumb && g.tier == "assist" && o.course != "lineup"
+        let goal = o.goal(SaveStore.shared.units, Daily.Pilot(scheme: thumb ? .thumb : .classic)), course = Daily.courseName(o.course)
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: streak.doneToday ? "checkmark" : "calendar").font(.system(size: 10, weight: .semibold))
             Text("\(goal) · \(course)\(streak.streak > 1 ? " · \(streak.streak) days" : "")")
