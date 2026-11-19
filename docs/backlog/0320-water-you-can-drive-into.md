@@ -1,7 +1,7 @@
 ---
 id: 0320
 title: Water you can drive into (iPhone Free Drive and Roam): a real sea in three looks, and a car that floats, wades, drowns, splashes and comes out dripping
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: authenticity
