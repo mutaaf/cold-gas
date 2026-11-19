@@ -55,6 +55,7 @@ final class LooseView {
         for (k, m) in meshes.enumerated() where counts[k] > 0 {
             e.setVertexBuffer(inst[slot], offset: k * LooseView.maxPerKind * MemoryLayout<Inst>.stride, index: 3)
             e.setVertexBuffer(m.vb, offset: 0, index: 0)
+            RenderStats.draw(indices: m.count, instances: counts[k])
             e.drawIndexedPrimitives(type: .triangle, indexCount: m.count, indexType: .uint32, indexBuffer: m.ib, indexBufferOffset: 0, instanceCount: counts[k])
         }
     }

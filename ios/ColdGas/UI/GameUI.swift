@@ -31,6 +31,7 @@ struct RootUI: View {
     @State private var sheet: Sheet? = RootUI.launchSheet
     /// DEBUG `-sheet board|settings|howTo|practice`: that sheet open at launch (the shots).
     private static var launchSheet: Sheet? {
+        if PerfProbe.on, let s = Launch.value("-perf-sheet").flatMap(Sheet.init(rawValue:)) { return s }   // 0296: the perf harness's sheet scene
         #if DEBUG
         return Launch.value("-sheet").flatMap(Sheet.init(rawValue:))
         #else
