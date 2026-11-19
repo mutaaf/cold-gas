@@ -92,6 +92,8 @@ final class Renderer {
     let crash = Crash()
     let mist = Plumes()
     let smoke = TyreSmoke()
+    /// A set's water and mud in motion (0340): the splash, the wake, the mud off the tyres.
+    let setWater = SetWater()
     /// The scored run's rubber on the set (0281; Free Drive's is the world view's).
     private(set) var skids: RunSkids?
     private let sparkBufs: [MTLBuffer], puffBufs: [MTLBuffer], chipBufs: [MTLBuffer], mistBufs: [MTLBuffer]
@@ -593,6 +595,7 @@ final class Renderer {
             if drive == nil {
                 skids?.update(r, t: tt)
                 smoke.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, lateral: skids?.lateral ?? .zero, into: crash)
+                setWater.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, into: crash)
             }
             if r.touchTick >= 0 && tick >= r.touchTick && !touched { touched = true; touchdown(sink: r.sink, carPos: carPos, carQuat: carQ) }
             mist.update(dt: Float(dtReal) * crash.slowK, thr: thr, carPos: carPos, carQuat: carQ, carVel: vel)
@@ -680,6 +683,7 @@ final class Renderer {
         let mb = moonBearing ?? SIMD2(0.6, 0.8)
         u.fx = SIMD4(look == .anime && (Renderer.impactHold || heroClock - impactAt < impactLen) ? 1 : 0, mb.x, mb.y, 1)
         if dv != nil, let cl = driveLook, cl.coated { u.matter = MatterLook.frame(cl, carPos: carPos, carQuat: carQ) }   // 0332
+        else if dv == nil, let cl = setWater.look { u.matter = MatterLook.frame(cl, carPos: carPos, carQuat: carQ) }   // 0340 × 0332: a set's mud and water on the car
         fb.contents().storeBytes(of: u, as: FrameU.self)
         // The mirror's frame: the same lens looking at the world flipped in y. Its fragments keep their real world position and
         // normal for the lights; only the eye and the clip position change, and the winding (frontFace).

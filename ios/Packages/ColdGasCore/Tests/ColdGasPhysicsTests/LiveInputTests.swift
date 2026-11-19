@@ -75,10 +75,10 @@ struct LiveInputTests {
         // A drill vector (0160) starts from the hand-over: buildDrill, then the same fingers.
         let live: LiveRun
         if let d = v.j["drill"] as? String {
-            let built = try buildDrill(drillById(d)!, v.course)
+            let built = try buildDrill(drillById(d)!, v.course, simVersion: SIM_VERSION)
             #expect(built.startTick == v.j["drillStartTick"] as! Int)
             live = LiveRun(drill: built, tier: FlyTier(rawValue: v.tier)!, oneThumb: v.scheme == "thumb", level: DriveLevel(rawValue: v.level)!)
-        } else { live = LiveRun(course: v.course, tier: FlyTier(rawValue: v.tier)!, oneThumb: v.scheme == "thumb", level: DriveLevel(rawValue: v.level)!) }
+        } else { live = LiveRun(course: v.course, tier: FlyTier(rawValue: v.tier)!, oneThumb: v.scheme == "thumb", level: DriveLevel(rawValue: v.level)!, simVersion: SIM_VERSION) }
         var h: (UInt32, UInt32) = (0x811c9dc5, 0x9747b28c)
         var checks: [Int: String] = [:]
         var ei = 0, si = 0, sightBad: [String] = []
@@ -136,7 +136,7 @@ struct LiveInputTests {
         #expect(live.run.car.world.freed)
         // The log is untouched by the aftermath, and replays (the server's simulate) to the same card.
         #expect(live.run.inputLog == v.log)
-        let replayed = try simulate(live.run.inputLog, v.course)
+        let replayed = try simulate(live.run.inputLog, v.course, simVersion: SIM_VERSION)
         #expect(compare(v.card, scoreRun(replayed.t).flat, "replayed card").isEmpty)
     }
 

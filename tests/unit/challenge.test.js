@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { createRun, stepRun, simulate, SIM_VERSION, MAX_TICKS } from '../../src/sim/run.js';
+import { createRun, stepRun, simulate, SIM_VERSION, MAX_TICKS, simVersionOf } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { packBytes, unpackBytes, encodeChallenge, decodeChallenge, toB64url, fromB64url, vsFromHash, challengeUrl, compare, raceLine,
@@ -22,7 +22,7 @@ describe('challenge payload', () => {
       const p = await encodeChallenge(src(), { compress });
       expect(p[0]).toBe(compress ? 'z' : 'r');
       const d = await decodeChallenge(p);
-      expect(d).toMatchObject({ simVersion: SIM_VERSION, stale: false, course: 'show', score: show.card.total, tier: show.card.tier, initials: 'ABC' });
+      expect(d).toMatchObject({ simVersion: simVersionOf('show'), stale: false, course: 'show', score: show.card.total, tier: show.card.tier, initials: 'ABC' });
       expect(d.log).toEqual(show.log);
     }
   });

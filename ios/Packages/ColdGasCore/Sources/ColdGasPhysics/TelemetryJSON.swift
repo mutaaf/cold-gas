@@ -29,6 +29,11 @@ extension Telemetry {
             let zones: [(String, JSValue)] = d.zones.map { ($0.0, .number($0.1)) }
             kv.append(("damage", .object([("pct", .number(d.pct)), ("integrity", .number(d.integrity)), ("zones", .object(zones))])))
         } else { kv.append(("damage", .null)) }
+        // A set with water and mud (0340): run.js adds these after `damage`, only on such a course.
+        if let v = splash { b("splash", v) }
+        if let v = splashTick { n("splashTick", v) }
+        if let v = splashSpeed { n("splashSpeed", v) }
+        if let v = mudTime { n("mudTime", v) }
         if let m = mass { n("mass", m) }
         return .object(kv)
     }

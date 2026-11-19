@@ -39,9 +39,10 @@ struct LooseTests {
         let c = createVehicle(course: DRIVE_COURSE)
         defer { c.world.free() }
         c.world.streamer = DriveStreamer(world: FreeWorld(seed: "loose"))
-        let cone = addLoose(c.world, .cone, x: 0, y: 0, z: -80, yaw: 0)
+        // (Off to the side of the Show's splash tank, 0340: its walls stand at |x| < 8.4 from z −47 to −63.)
+        let cone = addLoose(c.world, .cone, x: 20, y: 0, z: -80, yaw: 0)
         #expect(LooseKind.cone.mass == 4.2)
-        c.pos.x = 0; c.pos.y = SPEC.comHeight + 0.04; c.pos.z = -60
+        c.pos.x = 20; c.pos.y = SPEC.comHeight + 0.04; c.pos.z = -60
         M3.quatFromYaw(c.quat, DMath.PI)
         c.vel.z = -15
         let inp = Input()

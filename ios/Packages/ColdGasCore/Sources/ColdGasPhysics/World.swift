@@ -15,7 +15,7 @@ let FIX_INTERNAL_EDGES: UInt32 = 0x90   // TS TriMeshFlags.FIX_INTERNAL_EDGES = 
 
 public struct SimUnsupported: Error, CustomStringConvertible { public let description: String }
 
-final class ColInfo { let mat: Material; let body: ParkedBody?; var car = false; let approx: Bool; var pad: Pad?
+final class ColInfo { let mat: Material; let body: ParkedBody?; var car = false; let approx: Bool; var pad: Pad?; var surf: Surfaces?
     init(mat: Material, body: ParkedBody?, approx: Bool) { self.mat = mat; self.body = body; self.approx = approx } }
 final class Solid { let b: (Double, Double, Double, Double, Double, Double); init(_ b: (Double, Double, Double, Double, Double, Double)) { self.b = b } }
 public final class Hit { public var t = 0.0, nx = 0.0, ny = 1.0, nz = 0.0; public var mat = MATERIALS.concrete; public var body: ParkedBody?; public var car = false }
@@ -202,6 +202,8 @@ public func createWorld(_ course: Course) -> World {
     }
     w.siteAt = siteOf(stageOf(course.id))
     for (i, b) in course.boxes.enumerated() { w.bodies.append(addParked(w, b, i)) }
+    // A set's splash tanks (0340), made last as world.js makes them (a roam makes them with its centre: buildCentre).
+    if !isDrive(course.id) { buildTanks(w) }
     refreshBounds(w.bounds, w.bodies)
     cg_world_set_timestep(w.rw, 0); cg_world_step(w.rw); cg_world_set_timestep(w.rw, Float(WORLD_DT))
     return w
@@ -212,6 +214,8 @@ func buildCentre(_ w: World) {
     let before = Set(w.info.keys), solids0 = w.solids.count
     let floor = colliderFor(w, .cuboid(1500, 1, 1500), DescOpts(t: (0 - w.ox, -1 - w.oy, 0 - w.oz)), MATERIALS.concrete, GROUP.staticG)
     if let pad = course.pad { w.info[floor]?.pad = pad }
+    // A set's mud (0340): soft ground on the floor (the scored courses; a roam's car is Free Drive's own, DriveCar.swift).
+    if !isDrive(course.id), let surf = course.surfaces { w.info[floor]?.surf = surf }
     let sid = stageOf(course.id)
     if sid == "wall" || sid == "show" {
         colliderFor(w, .trimesh(WALL_MESH.v, WALL_MESH.idx), DescOpts(), MATERIALS.deck, GROUP.curl)
@@ -220,9 +224,22 @@ func buildCentre(_ w: World) {
         wallSteel(w)
     }
     // (no course in this port has a kicker: the Lineup's reveal used none)
+    if isDrive(course.id) { buildTanks(w) }   // the set's tank walls stand in a roam too: what's drawn is solid
     if isDrive(course.id) {
         w.centre = w.info.keys.filter { !before.contains($0) }
         w.centreSolids = Array(w.solids[solids0...])
+    }
+}
+
+/// A set's splash tanks' walls (0340, world.js): concrete boxes on the slab, solid and in the ray's fast path.
+func buildTanks(_ w: World) {
+    guard let surf = w.course.surfaces else { return }
+    for k in surf.tanks {
+        for b in tankWalls(k) {
+            let hx = (b.3 - b.0) / 2, hy = (b.4 - b.1) / 2, hz = (b.5 - b.2) / 2
+            colliderFor(w, .cuboid(hx, hy, hz), DescOpts(t: (b.0 + hx - w.ox, b.1 + hy - w.oy, b.2 + hz - w.oz)), MATERIALS.concrete, GROUP.staticG)
+            w.solids.append(Solid(b))
+        }
     }
 }
 
@@ -266,6 +283,14 @@ public func raycast(_ w: World, _ ox: Double, _ oy: Double, _ oz: Double, _ dx: 
             if let pad = info.pad {
                 let ex = ox + dx * t - pad.x, ez = oz + dz * t - pad.z
                 if ex * ex + ez * ez <= PAD_R * PAD_R { h.mat = MATERIALS.pad }
+            }
+            if let surf = info.surf {
+                // Mud (0340): soft ground, and a ray coming down settles into it.
+                let sink = mudSink(surf, ox + dx * t, oz + dz * t)
+                if sink >= 0 {
+                    h.mat = MATERIALS.mud
+                    if dy < -0.2 { t += sink / -dy; if t > maxT { t = -1 } }
+                }
             }
         }
     }

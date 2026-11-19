@@ -14,7 +14,7 @@ import Testing
         let hx: (Float) -> String = { let s = String($0.bitPattern, radix: 16); return String(repeating: "0", count: 8 - s.count) + s }
         engineTrace = { t, what, vals in if t >= a && t <= b { out += "\(t) \(what) \(vals.map(hx).joined(separator: " "))\n" } }
         defer { engineTrace = nil }
-        _ = try? simulate(v.log, v.course) { r in
+        _ = try? simulate(v.log, v.course, simVersion: v.simVersion) { r in
             guard r.tick >= a && r.tick <= b else { return }
             let c = r.car
             let vals = [c.pos.x, c.pos.y, c.pos.z, c.vel.x, c.vel.y, c.vel.z, c.angVel.x, c.angVel.y, c.angVel.z, c.air].map(hex64).joined(separator: " ")

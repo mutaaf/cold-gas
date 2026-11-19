@@ -144,6 +144,9 @@ public final class Vehicle {
     public var esc = 0.0, escBrake = [Double](repeating: 0, count: 4), escBeta = 0.0
     public var tcOff = false, tcSport = false, absOff = false, handbrake = 0.0
     public var engineHeld = false
+    // A set's water and mud (0340; vehicle.js): how much of the body is under water (0–1), how much of its sealed volume
+    // still floats it, the splash-down (its tick, speed and sink; −1 until it happens) and the tyres in mud this tick.
+    public var wet = 0.0, flood = 1.0, splashTick = -1, splashSpeed = 0.0, splashSink = 0.0, mud = 0
     init(_ course: Course) {
         _ = hullBuilt
         self.course = course
@@ -481,6 +484,49 @@ var ePt = [Float](repeating: 0, count: 4)
 }
 
 /// Debug: every value handed to the engine (tests set it; nil in the app).
+// Water (0340, vehicle.js `water`): the body as four quarters, each a column from the floor pan to the roof; buoyancy on
+// the sealed volume still afloat and quadratic drag at each column's middle, capped; the splash-down's slam.
+let W_X = SPEC.width / 4, W_Z = SPEC.length / 4
+let W_COLS: [(Double, Double)] = [(W_X, W_Z), (-W_X, W_Z), (W_X, -W_Z), (-W_X, -W_Z)]
+let W_BOT = -(SPEC.comHeight - SPEC.rideHeight), W_TOP = SPEC.height - SPEC.comHeight
+let W_SPAN_MIN = 0.3
+let RHO_W = 1000.0
+let wB = V3(), wT = V3(), wM = V3(), wF = V3(), wV = V3()
+func water(_ s: Vehicle, _ surf: Surfaces, _ m: Double, _ dt: Double) {
+    var wet = 0.0
+    let kMax = (m / 4) * 0.5 / dt
+    for k in 0..<4 {
+        M3.rotate(wB, s.quat, M3.set(wF, W_COLS[k].0, W_BOT, W_COLS[k].1))
+        M3.rotate(wT, s.quat, M3.set(wF, W_COLS[k].0, W_TOP, W_COLS[k].1))
+        let level = waterLevel(surf, s.pos.x + wB.x, s.pos.z + wB.z)
+        if level == NO_WATER { continue }
+        let yb = s.pos.y + wB.y, yt = s.pos.y + wT.y
+        let lo = yb < yt ? yb : yt, span = jsMax(W_SPAN_MIN, abs(yt - yb))
+        let f = M3.clamp((level - lo) / span, 0, 1)
+        if f <= 0 { continue }
+        wet += f / 4
+        M3.set(wM, (wB.x + wT.x) / 2, (wB.y + wT.y) / 2, (wB.z + wT.z) / 2)
+        M3.set(wF, 0, RHO_W * G * (SPEC.floatVolume / 4) * f * s.flood, 0)
+        applyAt(wM, wF)
+        pointVel(wV, s, wM)
+        let v = DMath.dhypot(wV.x, wV.y, wV.z)
+        let kv = jsMin(kMax, 0.5 * RHO_W * SPEC.waterCd * SPEC.waterAreaV * f * v)
+        let kh = jsMin(kMax, 0.5 * RHO_W * SPEC.waterCd * SPEC.waterAreaH * f * v)
+        M3.set(wF, -kh * wV.x, -kv * wV.y, -kh * wV.z)
+        applyAt(wM, wF)
+    }
+    if wet > 0 { s.flood = jsMax(SPEC.floodMin, s.flood - (dt * wet) / SPEC.floodTime) }
+    if wet > 0 && s.splashTick < 0 {
+        s.splashTick = s.tick + 1
+        s.splashSpeed = DMath.dhypot(s.vel.x, s.vel.y, s.vel.z)
+        s.splashSink = jsMax(0, -s.vel.y)
+        if s.vel.y < 0 { s.vel.y *= SPEC.splashKeepV }
+        s.vel.x *= SPEC.splashKeepH; s.vel.z *= SPEC.splashKeepH
+        M3.scale(s.angMom, s.angMom, SPEC.splashKeepSpin)
+    }
+    s.wet = wet
+}
+
 public var engineTrace: ((Int, String, [Float]) -> Void)? = nil
 /// One 240 Hz tick of the car (vehicle.js step).
 public func step(_ s: Vehicle, _ inp: Input) throws {
@@ -574,7 +620,8 @@ public func step(_ s: Vehicle, _ inp: Input) throws {
     }
 
     // Wheels
-    var grounded = 0, wallContact = false, sloped = false, wheelForce = 0.0
+    var grounded = 0, wallContact = false, sloped = false, wheelForce = 0.0, mudWheels = 0
+    let surf = s.course.surfaces
     s.hullContact = false; s.hullGround = false; s.obstacleContact = false
     s.tcActive = false
     evHit[0] = 0; evScr[0] = 0; evWheel[0] = 0
@@ -631,8 +678,14 @@ public func step(_ s: Vehicle, _ inp: Input) throws {
         var kappa = (wh.omega * R - vLong) / den
         let alphaKin = DMath.datan2(vLat, jsMax(abs(vLong), 1.5))
         let xLoad = Fz / (STATIC_LOAD * AXLE_K[i])
-        let D = jsMax(0, SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (xLoad - 1)) * Fz)
-        let Dy = jsMax(0, SPEC.tyreMu0 * hitMat.grip * tyreMuLoad(xLoad) * Fz)
+        // A set's surfaces (0340): a tyre in mud, and one on a tank's floor under the water.
+        var grip = hitMat.grip
+        if let surf {
+            if hitMat == MATERIALS.mud { mudWheels += 1 }
+            if waterLevel(surf, s.pos.x + tmp.x, s.pos.z + tmp.z) > s.pos.y + tmp.y { grip *= SPEC.wetGrip }
+        }
+        let D = jsMax(0, SPEC.tyreMu * grip * (1 - 0.07 * (xLoad - 1)) * Fz)
+        let Dy = jsMax(0, SPEC.tyreMu0 * grip * tyreMuLoad(xLoad) * Fz)
         let By = tyreBy(xLoad)
         let sigma = relaxLength(i < 2 ? SPEC.tyreRelaxFront : SPEC.tyreRelaxRear, Fz, STATIC_LOAD * AXLE_K[i])
         let lag = relaxSlip(wh.slipAngle, alphaKin, vLong, sigma, dt)
@@ -693,6 +746,7 @@ public func step(_ s: Vehicle, _ inp: Input) throws {
         wh.spin += wh.omega * dt
     }
     s.grounded = grounded
+    s.mud = mudWheels
     s.fallPeak = grounded > 0 ? 0 : jsMax(s.fallPeak, -s.vel.y)
     s.onWall = wallContact
     s.onSlope = sloped
@@ -755,6 +809,9 @@ public func step(_ s: Vehicle, _ inp: Input) throws {
     // Aero drag
     let vmag = DMath.dhypot(s.vel.x, s.vel.y, s.vel.z)
     M3.addScaled(fTot, fTot, s.vel, -0.5 * RHO * SPEC.cdA * vmag)
+
+    // Water (0340): a set's splash tank. A course without one never comes here.
+    if let surf, !surf.tanks.isEmpty { water(s, surf, m, dt) }
 
     // Velocities from our forces
     M3.addScaled(s.vel, s.vel, fTot, dt / m)

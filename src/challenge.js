@@ -21,7 +21,7 @@
 // past MAX_RAW, an unknown course, a tick out of order or past MAX_TICKS, a value outside ±100 or a
 // trailing byte all reject the whole payload (null), never throw. The fragment never reaches a
 // server (a browser never sends it), so the link carries nothing personal but three letters.
-import { SIM_VERSION, MAX_TICKS, INPUT_KEYS, createRun, stepRun } from './sim/run.js';
+import { MAX_TICKS, INPUT_KEYS, createRun, stepRun, simVersionOf, replayable } from './sim/run.js';
 import { newInput } from './sim/vehicle.js';
 import { scoreRun } from './sim/judge.js';
 
@@ -55,7 +55,8 @@ const getByte = (r) => { if (r.i >= r.b.length) throw new Error('eof'); return r
 // --- the log, as bytes ---------------------------------------------------------------------------
 // A log from an older client (12 channels) is padded to today's 23 (the missing channels are zero,
 // exactly as simulate() reads it).
-export function packBytes({ log, course, score, tier = 'assist', initials = '', simVersion = SIM_VERSION }) {
+// The version is the course's today (simVersionOf: SURFACE_VERSION on a set with water and mud) unless one is given.
+export function packBytes({ log, course, score, tier = 'assist', initials = '', simVersion = simVersionOf(course) }) {
   const ci = COURSE_IDS.indexOf(course);
   if (ci < 0) throw new Error('course');
   const out = [FORMAT];
@@ -205,7 +206,9 @@ export async function decodeChallenge(payload) {
     } else if (kind !== 'r') return null;
     if (bytes.length > MAX_RAW) return null;
     const run = unpackBytes(bytes);
-    return { ...run, stale: run.simVersion !== SIM_VERSION };
+    // Stale: a version this build can't replay to its bits (a v32 run on a set with water and mud now replays on the
+    // set as it was: src/sim/run.js replayable).
+    return { ...run, stale: !replayable(run.course, run.simVersion) };
   } catch {
     return null;
   }
@@ -251,8 +254,10 @@ export function raceLine(mine, theirs) {
 // ticks as simulate() (each log entry's values were quantised once already, so stepRun's quantise
 // gives them back exactly; tests/unit/challenge.test.js checks it against simulate), but stepped a
 // slice at a time so a phone's title never stalls for the ≈0.7 s a whole flight costs there.
-export function createReplay(log, course) {
-  const run = createRun(course), inp = newInput();
+// `simVersion`: the version the log was flown at (a v32 run on a set that has water and mud now replays on the set as it
+// was: src/sim/run.js courseAt); today's when not given.
+export function createReplay(log, course, simVersion = undefined) {
+  const run = createRun(course, simVersion), inp = newInput();
   let li = 0;
   const step = (ticks = Infinity) => {
     for (let n = 0; n < ticks && run.phase !== 'done'; n++) {
@@ -267,8 +272,8 @@ export function createReplay(log, course) {
   return { run, step, card: () => (run.phase === 'done' ? scoreRun(run.t) : null) };
 }
 // Step a replay to the end in ≤ budgetMs slices, yielding between them.
-export async function replayAsync(log, course, { budgetMs = 6, now = () => performance.now(), yieldFn = () => new Promise((r) => setTimeout(r, 0)) } = {}) {
-  const rp = createReplay(log, course);
+export async function replayAsync(log, course, { budgetMs = 6, now = () => performance.now(), yieldFn = () => new Promise((r) => setTimeout(r, 0)), simVersion = undefined } = {}) {
+  const rp = createReplay(log, course, simVersion);
   for (;;) {
     const t0 = now();
     while (!rp.step(16)) if (now() - t0 >= budgetMs) break;

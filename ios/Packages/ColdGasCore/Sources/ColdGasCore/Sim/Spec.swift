@@ -19,6 +19,11 @@ public enum SPEC {
     public static let fanHang = 1.0, fanGripTime = 0.25, fanVoidSpeed = 22.0, fanIdleForce = 1300.0
     public static let fanSpool = 1.5, fanHold = 4.0, fanDump = 0.4
     public static let cdA = 0.55, ispFull = 72.0, regulatedFraction = 0.55
+    // In water (0340; spec.js has the sources).
+    public static let floatVolume = 5.0, floodTime = 10.0, floodMin = 0.2
+    public static let waterCd = 1.0, waterAreaV = 2.2, waterAreaH = 0.55
+    public static let splashKeepV = 0.5, splashKeepH = 0.85, splashKeepSpin = 0.6
+    public static let wetGrip = 0.5
 }
 public let AXLE_F = SPEC.comFromFront, AXLE_R = SPEC.comFromFront - SPEC.wheelbase
 @inline(__always) func yUp(_ h: Double) -> Double { h - SPEC.comHeight }

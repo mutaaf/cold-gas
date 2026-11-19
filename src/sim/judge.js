@@ -117,6 +117,10 @@ export const WRECK_PCT = 60;
 const damagePct = (t) => (t.damage ? t.damage.pct : 0);
 const withDamage = (s, j, c) => s * (1 - DAMAGE_W[j.id]) + DAMAGE_W[j.id] * c.damage;
 const damageFactsOf = (t) => ({ damagePct: damagePct(t), integrity: 100 - damagePct(t), damageZones: t.damage ? t.damage.zones : null });
+// A set's water and mud (0340): a splash-down is a wreck ("Splash"), however soft; the seconds in mud are a fact the
+// panel can talk about. Only a run on a course with surfaces has these, so every other card is what it was.
+const splashOf = (t) => t.splash === true;
+const surfaceFactsOf = (t) => (t.splash === undefined ? {} : { splash: t.splash, splashKmh: Math.round((t.splashSpeed || 0) * 3.6), mudS: r1(t.mudTime || 0) });
 
 // Landing quality, shared: sink rate, attitude, heading, wheel sync, suspension.
 // Each part of the touchdown: [zero at, full marks at, weight] (0261: exported so the coach's words quote the scorer's own
@@ -148,7 +152,8 @@ function scoreWall(t, opts) {
   const show = t.course === 'show';
   const course = COURSES[show ? 'show' : 'wall'];
   const wrecked = damagePct(t) >= WRECK_PCT;
-  const crashed = t.flipped || !t.settledUpright || t.fellOff || t.landedOnRamp || (show && t.contact) || wrecked;
+  const splash = splashOf(t);
+  const crashed = t.flipped || !t.settledUpright || t.fellOff || t.landedOnRamp || (show && t.contact) || wrecked || splash;
   const launched = t.airStartTick >= 0;
   const jumped = launched && t.touchTick >= 0;
   const rollDeg = Math.abs(t.rollAccum) * 180 / Math.PI;
@@ -184,6 +189,7 @@ function scoreWall(t, opts) {
   const total = r1(judges.reduce((a, j) => a + j.score, 0) * 10 / 3);
   let verdict;
   if (t.fellOff) verdict = 'Fell off the wall';
+  else if (splash) verdict = 'Splash';
   else if (wrecked) verdict = 'Wrecked';
   else if (show && t.contact) verdict = 'Contact';
   else if (!launched) verdict = t.progress > 0.5 ? 'Stalled on the wall' : 'No climb';
@@ -209,6 +215,7 @@ function scoreWall(t, opts) {
       bottomOut: t.bottomOut, bodyStrike: t.bodyStrike, contact: show && t.contact,
       clearance: show && Number.isFinite(t.minClearance) ? r1(t.minClearance) : null, crossedRow: show ? t.crossedRow : null, apexOverRoof: null,
       flipped: t.flipped, fellOff: t.fellOff, landedOnRamp: t.landedOnRamp, crashed, jumped, endReason: t.endReason, ...damageFactsOf(t),
+      ...surfaceFactsOf(t),
     },
     verdict,
   };
@@ -227,7 +234,8 @@ export const LINEUP_FULL = { apex: 9.5, clearance: 0.8, padMiss: 0.8, airPct: 65
 function scoreLineup(t, opts = {}) {
   const PAD = LINEUP.pad, TALLEST = LINEUP.tallest;
   const wrecked = damagePct(t) >= WRECK_PCT;
-  const crashed = t.contact || t.flipped || !t.settledUpright || wrecked;
+  const splash = splashOf(t);
+  const crashed = t.contact || t.flipped || !t.settledUpright || wrecked || splash;
   const jumped = t.airStartTick >= 0 && t.touchTick >= 0;
   const rollDeg = Math.abs(t.rollAccum) * 180 / Math.PI;
   const rotations = Math.round(rollDeg / 360);
@@ -284,8 +292,9 @@ function scoreLineup(t, opts = {}) {
       wheelSpreadMs: Math.round(t.wheelSpreadMs), padMiss: r1(padMiss), airPct: Math.round(airPct),
       launchKmh: Math.round(t.launchSpeed * 3.6), bottomOut: t.bottomOut, bodyStrike: t.bodyStrike,
       contact: t.contact, flipped: t.flipped, crashed, jumped, endReason: t.endReason, ...damageFactsOf(t),
+      ...surfaceFactsOf(t),
     },
-    verdict: wrecked && jumped ? 'Wrecked' : verdictOf(total, crashed, jumped, t),
+    verdict: splash ? 'Splash' : wrecked && jumped ? 'Wrecked' : verdictOf(total, crashed, jumped, t),
   };
 }
 

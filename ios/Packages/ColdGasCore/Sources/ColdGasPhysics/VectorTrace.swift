@@ -35,7 +35,7 @@ public enum VectorTrace {
             throw SimUnsupported(description: "not a run vector")
         }
         var h: (UInt32, UInt32) = (0x811c9dc5, 0x9747b28c)
-        let run = try simulate(log.map { $0.map(\.intValue) }, course) { r in mix(&h, state(r)) }
+        let run = try simulate(log.map { $0.map(\.intValue) }, course, simVersion: j["simVersion"] as? Int) { r in mix(&h, state(r)) }
         let total = scoreRun(run.t).total
         let wantTotalHex = card.first { ($0.first as? String) == "total" }?[2] as? String ?? "0"
         let wantTotal = Double(bitPattern: UInt64(wantTotalHex, radix: 16) ?? 0)
@@ -56,19 +56,20 @@ extension HapticFeed {
         let w0 = w[0].load
         self.init(phase: UInt8(run.phase.rawValue), speed: DMath.dhypot(c.vel.x, c.vel.y, c.vel.z), vy: c.vel.y, onWall: c.onWall,
                   contacts: contacts, load: jsOr(load / jsOr(4 * w0, 1), 0), flow: flow, gas: jsMax(0, c.air) / CAR.airMass, lift: input.lift > 0)
+        if c.course.surfaces != nil { wet = c.wet; mud = UInt8(c.mud); splash = c.splashTick >= 0 && c.splashTick == c.tick }
         let im = c.impacts
         while seen < im.count && Int(im.tick[seen]) <= run.tick { addImpact(kind: im.kind[seen], speed: Double(im.speed[seen])); seen += 1 }
     }
 }
 
 /// simulate() with the haptic feed recorded every tick (the app's -haptics demo, flown by the Swift sim).
-public func simulateWithFeed(_ log: [[Int]], _ course: String) throws -> (run: Run, feed: [HapticFeed]) {
+public func simulateWithFeed(_ log: [[Int]], _ course: String, simVersion: Int? = nil) throws -> (run: Run, feed: [HapticFeed]) {
     var feed: [HapticFeed] = []
     feed.reserveCapacity(log.last.map { $0[0] + 2000 } ?? 4000)
     var seen = 0
     let inp = Input()
     var li = 0
-    let run = createRun(course)
+    let run = createRun(course, simVersion: simVersion)
     while run.phase != .done && run.tick < MAX_TICKS {
         while li < log.count && log[li][0] <= run.tick { unpack(log[li], inp); li += 1 }
         try advance(run, inp)

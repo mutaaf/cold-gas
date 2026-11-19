@@ -20,7 +20,8 @@ const REAR_IDX = NOZZLES.map((n, i) => (n.group === 'rear' ? i : -1)).filter((i)
 
 // Read the flight. Returns the events the coach (and the drills) talk about. `fromTick`: a drill's
 // hand-over (what the reference flew before it isn't yours to be coached on).
-export function readFlight(inputLog, courseId, fromTick = 0) {
+// `simVersion` (optional): the version the log was flown at (src/sim/run.js simVersionOf; today's when not given).
+export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefined) {
   const course = COURSES[courseId];
   const pr = newPrediction(), u = v3(), fw = v3();
   const f = {
@@ -73,7 +74,7 @@ export function readFlight(inputLog, courseId, fromTick = 0) {
       f.lowestMargin = Math.min(f.lowestMargin, pr.margin);
       if (pr.status === 'red') f.redTicks++;
     }
-  });
+  }, simVersion);
   const t = run.t;
   f.gasAtTouch = t.touchTick >= 0 ? (t.airAtTouch / CAR.airMass) * 100 : (t.airEnd / CAR.airMass) * 100;
   f.touch = t.touchTick >= 0 ? { sink: t.sink, tilt: t.tiltDeg, x: t.lateral, z: t.landZ, padMiss: dhypot(t.lateral, t.landZ - course.pad.z), along: t.landZ - course.pad.z } : null;
@@ -146,8 +147,8 @@ export function markMiss(touch, show = true) {
 }
 
 // The fixes, most costly first. Each: { id, title, detail, fix, weight }. Only the words depend on `say`.
-export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_WORDS) {
-  const { run, flight: f } = readFlight(inputLog, courseId, fromTick);
+export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_WORDS, simVersion = undefined) {
+  const { run, flight: f } = readFlight(inputLog, courseId, fromTick, simVersion);
   const assist = (card?.tier || run.t.tier) === 'assist';
   const t = run.t, course = COURSES[courseId];
   const wall = courseId !== 'lineup', show = courseId === 'show';

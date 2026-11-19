@@ -22,7 +22,7 @@ func logOf(_ name: String) -> (log: [[Int]], course: String) {
         for row in rows {
             let a = row.arrayValue!, name = a[0].stringValue!, want = a[1].stringValue!
             let (log, course) = logOf(name)
-            let run = try simulate(log, course)
+            let run = try simulate(log, course, simVersion: SIM_VERSION)
             let got = run.t.json.json
             #expect(got == want, "\(name): the telemetry's JSON differs")
             if got.contains("\"minClearance\":null") { nulls += 1 }
@@ -32,7 +32,7 @@ func logOf(_ name: String) -> (log: [[Int]], course: String) {
     @Test func theBodiesMatchByteForByte() throws {
         let bodies = Dictionary(uniqueKeysWithValues: (clientVectors["bodies"]?.arrayValue ?? []).map { ($0.arrayValue![0].stringValue!, $0.arrayValue![1].stringValue!) })
         let (log, course) = logOf("ref-lineup")
-        let run = try simulate(log, course), t = run.t.json
+        let run = try simulate(log, course, simVersion: SIM_VERSION), t = run.t.json
         #expect(RequestBody.post(log: log, t: t, initials: "ABC", course: course).json == bodies["post"])
         #expect(RequestBody.dry(log: log, t: t, course: course).json == bodies["dry"])
         #expect(RequestBody.judges(log: log, t: t, assist: true, course: course).json == bodies["judges"])
@@ -41,7 +41,7 @@ func logOf(_ name: String) -> (log: [[Int]], course: String) {
         let want = Dictionary((clientVectors["words"]?.arrayValue ?? []).map { ($0.arrayValue![0].stringValue!, $0.arrayValue![3]) }, uniquingKeysWith: { a, _ in a })
         for name in ["ref-show", "ref-wall", "ref-lineup", "crash-show-carry5", "crash-wall-early", "crash-lineup-rolls2", "pro-fuzz-0", "naive-show-4-0.85-0"] {
             let (log, course) = logOf(name)
-            let run = try simulate(log, course)
+            let run = try simulate(log, course, simVersion: SIM_VERSION)
             let card = try #require(scoreRun(run.t).scoreCard, "\(name): no card")
             let w = localWords(card), j = try #require(want[name])
             #expect(w.headline == j["headline"]?.stringValue, "\(name)")
