@@ -117,7 +117,7 @@ extension FreeWorld {
             // Under a road's ribbon and its verges (the levels the ribbons are drawn over), a few centimetres down: the
             // ribbon, laid on the exact ground every 4 m along the road, is what's seen there, not a 4 m grid's facets.
             if dip { let r = rd[(j + 1) * B + (i + 1)]; if r < RoadSpec.vergeOut { return jsMax(SEA, y - 0.22 * (1 - WNoise.smooth(RoadSpec.vergeOut - 2, RoadSpec.vergeOut, r))) } }
-            return jsMax(SEA, y)
+            return y   // under the sea, the seabed as it lies: the app's water surface is drawn over it (0320)
         }
         var v = [Float](repeating: 0, count: TileSpec.verts * TileSpec.stride)
         var lo = Double.infinity, hi = -Double.infinity
@@ -144,7 +144,7 @@ extension FreeWorld {
                 c = vergeTint(c, road: g.road)
             }
             var flag: UInt32 = 0
-            if H(i, j) < SEA && !(abs(x) < Site.slab && abs(z) < Site.slab) { c = Palette.water; flag = 1 }
+            if H(i, j) < SEA && !(abs(x) < Site.slab && abs(z) < Site.slab) { flag = 1 }
             let o = (j * W + i) * TileSpec.stride
             v[o] = Float(Double(i) * step); v[o + 1] = Float(y); v[o + 2] = Float(Double(j) * step); v[o + 3] = Float(my)
             v[o + 4] = Float(nx); v[o + 5] = Float(ny); v[o + 6] = Float(nz); v[o + 7] = pack(c.r, c.g, c.b, flag)

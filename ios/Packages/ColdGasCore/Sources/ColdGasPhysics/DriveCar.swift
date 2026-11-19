@@ -196,10 +196,12 @@ public final class DriveModel {
     /// The downforce this tick (N).
     public fileprivate(set) var downforce = 0.0
     // This tick's wheel contacts (rays first, all four, then the forces: the anti-roll bars need both sides).
-    fileprivate var hit = [Bool](repeating: false, count: 4), tHit = [Double](repeating: 0, count: 4)
+    var hit = [Bool](repeating: false, count: 4), tHit = [Double](repeating: 0, count: 4)
     fileprivate var nX = [Double](repeating: 0, count: 4), nY = [Double](repeating: 1, count: 4), nZ = [Double](repeating: 0, count: 4)
     fileprivate var body = [ParkedBody?](repeating: nil, count: 4)
     fileprivate var mat = [Material](repeating: MATERIALS.concrete, count: 4)
+    /// The water on the car (0320, Buoyancy.swift): buoyancy, drag, the tyres in it, the drive unit, the wet.
+    public let water = Wading()
     public init() { for i in 0..<4 { c2[i] = DriveSpec.staticLoad(i) / DriveSpec.k[i]; c2Prev[i] = c2[i] } }
     /// After a placement: springs at static, brakes released, discs as they were (they don't cool by teleport).
     public func settle() { for i in 0..<4 { c2[i] = DriveSpec.staticLoad(i) / DriveSpec.k[i]; c2Prev[i] = c2[i]; press[i] = 0 } }
@@ -442,7 +444,8 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         // The tyre: load sensitivity, the slips where it peaks, the curve's shape by surface.
         let Fz0 = DriveSpec.staticLoad(i), xL = jsMax(0.05, Fz / Fz0)
         let lsK = jsMax(0.55, 1 - DriveSpec.loadSens * (xL - 1))
-        let Dx = DriveSpec.muX * hm.grip * lsK * Fz, Dy = DriveSpec.muY * hm.grip * lsK * Fz
+        let wg = dm.water.grip[i]   // 0320: a tyre in water, or aquaplaning
+        let Dx = DriveSpec.muX * hm.grip * lsK * Fz * wg, Dy = DriveSpec.muY * hm.grip * lsK * Fz * wg
         let fLat = hm.loose ? DriveSpec.latLoose : DriveSpec.lat, fLon = hm.loose ? DriveSpec.lonLoose : DriveSpec.lon
         let kp = DriveSpec.kappaPeak * (hm.loose ? 1.8 : 1)
         let ap = DriveSpec.alphaPeak[i] * pow(xL, 0.35) * (hm.loose ? 1.5 : 1)
@@ -454,7 +457,7 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         var T = 0.0
         if DRIVEN[i] {
             let motorT = jsMin(SPEC.maxWheelTorque, (SPEC.power / 2) / jsMax(abs(wh.omega), 8))
-            T = inp.throttle * motorT
+            T = inp.throttle * motorT * dm.water.motor   // 0320: a drowned drive unit cuts the motors
             // The handbrake up: the motors let go (a lever's clutch), so the rears lock and the tail slides.
             if s.handbrake > 0.5 { T = 0 }
             if tvDelta != 0 && T > 0 {
@@ -600,6 +603,9 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
             applyAt(r, force)
         }
     }
+
+    // The water (0320): buoyancy and drag on the body and wheels, the tyres' grip next tick, the drive unit, the wet.
+    wade(s, dm, m, dt)
 
     // --- The hull, the jets, drag and the engine's tick: as `step` ---------------------------------------------------
     for i in 0..<s.touchNow.count { s.touchNow[i] = 0 }

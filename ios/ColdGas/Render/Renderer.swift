@@ -681,6 +681,8 @@ final class Renderer {
             cmd.addCompletedHandler { cb in pt.add(name, (cb.gpuEndTime - cb.gpuStartTime) * 1000) }
             cmd.commit(); cmd = next
         }
+        // 0. a drive's compute (0320: the water's waves, at their capped rate)
+        if let dv { dv.encode(cmd); cut("water") }
         // 1. shadow
         let sp = MTLRenderPassDescriptor()
         sp.depthAttachment.texture = shadowMap; sp.depthAttachment.loadAction = .clear; sp.depthAttachment.clearDepth = 1; sp.depthAttachment.storeAction = .store
@@ -1165,7 +1167,7 @@ final class PassTimes {
     func add(_ k: String, _ ms: Double) { lock.lock(); sum[k, default: 0] += ms; n[k, default: 0] += 1; lock.unlock() }
     func report() -> String {
         lock.lock(); defer { lock.unlock() }
-        return ["shadow", "mirror", "main", "bloom", "film", "metalfx", "present"].compactMap { k in n[k].map { String(format: "%@ %.2f", k, sum[k, default: 0] / Double($0)) } }.joined(separator: " · ")
+        return ["water", "shadow", "mirror", "main", "bloom", "film", "metalfx", "present"].compactMap { k in n[k].map { String(format: "%@ %.2f", k, sum[k, default: 0] / Double($0)) } }.joined(separator: " · ")
     }
 }
 

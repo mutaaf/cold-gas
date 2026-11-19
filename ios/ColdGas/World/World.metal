@@ -3,6 +3,7 @@
 // as one at the centre). Lit like the stage (the key light and its shadow, the hemisphere, film.js's haze from
 // Shaders.metal, recomputed here under world_ names: one namespace, no duplicate names), plus the car's headlamps.
 #include <metal_stdlib>
+#include "Water.h"
 using namespace metal;
 
 // The stage's frame and look (Renderer.FrameU / LookU), field for field.
@@ -150,10 +151,10 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
         return float4(lc[int(clamp(in.level, 0.0, 7.0))] * 0.05 + in.col.rgb * 0.3, 1);
     }
     float3 n = normalize(in.n + 1e-6);
-    bool water = in.col.a > 0.5;
+    bool water = in.col.a > 0.5;   // under the sea (0320: the seabed, the water surface drawn over it by WaterView)
     float3 albedo = in.col.rgb;
     float dist = distance(in.world, f.eye.xyz);
-    if (!water && dist < 900.0) {
+    if (dist < 900.0) {
         // The land's grain (0226): a 64 m and an 8 m octave of colour, and a 4 m bump in the normal, faded out with distance,
         // so a 4–16 m triangle doesn't read as a flat facet. Rock (steep) takes more of it than grass.
         float2 w = in.world.xz + dr.anchor.xy;
@@ -164,7 +165,7 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
         float amp = (0.35 + 0.9 * steep) * (1.0 - smoothstep(60.0, 300.0, dist));
         n = normalize(n + float3(-(bx - b), 0.0, -(bz - b)) * (amp / e * 4.0) * 0.25);
     }
-    if (!water && dist >= 300.0) {
+    if (dist >= 300.0) {
         // Far off (0226): a mountainside is drawn with 32–512 m triangles. A 48 m relief in the normal and a 128 / 512 m
         // tone break their flat planes into ridges and gullies, fading into the haze.
         float2 w = in.world.xz + dr.anchor.xy;
@@ -174,11 +175,10 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
         float e = 4.0, b = world_noise(w / 48.0), bx = world_noise((w + float2(e, 0)) / 48.0), bz = world_noise((w + float2(0, e)) / 48.0);
         n = normalize(n + float3(-(bx - b), 0.0, -(bz - b)) / e * 48.0 * (0.15 + 0.35 * steep) * far);
     }
-    if (water) {
-        float t = dr.params.y;
-        n = normalize(float3(sin(in.world.x * 0.21 + t * 0.6) * 0.03, 1.0, cos(in.world.z * 0.17 + t * 0.5) * 0.03));
-    }
-    float3 c = world_light(albedo, n, in.world, in.lightClip, water ? 0.85 : 0.0, f, k, dr, shadow);
+    // The sea's mark (0320, Water.h): the seabed and its caustics under the water, the wet swash zone above it.
+    WaterGround wg = water_ground(albedo, in.world.xz + dr.anchor.xy, in.world.y, water, dist, dr.params.y, f.style.x);
+    float3 c = world_light(wg.albedo, n, in.world, in.lightClip, wg.gloss, f, k, dr, shadow);
+    c += wg.albedo * wg.light * (f.keyColor.rgb * f.keyDir.w / M_PI_F + k.hemiSky.rgb) * 3.0;
     return float4(world_air(c, in.world, f, k), 1);
 }
 
