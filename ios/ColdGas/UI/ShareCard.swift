@@ -18,7 +18,7 @@ extension RunResult {
     }
     /// What a share links to: this jump as a challenge (any flown run, a wreck too), else the game.
     var shareURL: URL {
-        if drill == nil, let p = try? Challenge.encode(log: log, course: course, score: card.total, tier: card.tier, initials: SaveStore.shared.initials, simVersion: SIM_VERSION),
+        if drill == nil, let p = try? Challenge.encode(log: log, course: course, score: card.total, tier: card.tier, initials: SaveStore.shared.initials, simVersion: simVersionOf(course)),
            let u = URL(string: Challenge.url(base: "https://mutaafaziz.com/coldgas/", course: course, payload: p)) { return u }
         return URL(string: "https://mutaafaziz.com/coldgas/")!
     }

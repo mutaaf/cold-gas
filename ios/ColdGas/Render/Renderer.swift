@@ -84,6 +84,8 @@ final class Renderer {
     let crash = Crash()
     let mist = Plumes()
     let smoke = TyreSmoke()
+    /// A set's water and mud in motion (0340): the splash, the wake, the mud off the tyres.
+    let setWater = SetWater()
     /// The scored run's rubber on the set (0281; Free Drive's is the world view's).
     private(set) var skids: RunSkids?
     private let sparkBufs: [MTLBuffer], puffBufs: [MTLBuffer], chipBufs: [MTLBuffer], mistBufs: [MTLBuffer]
@@ -578,6 +580,7 @@ final class Renderer {
             if drive == nil {
                 skids?.update(r, t: tt)
                 smoke.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, lateral: skids?.lateral ?? .zero, into: crash)
+                setWater.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, into: crash)
             }
             if r.touchTick >= 0 && tick >= r.touchTick && !touched { touched = true; touchdown(sink: r.sink, carPos: carPos, carQuat: carQ) }
             mist.update(dt: Float(dtReal) * crash.slowK, thr: thr, carPos: carPos, carQuat: carQ, carVel: vel)

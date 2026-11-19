@@ -188,8 +188,9 @@ public final class LiveRun {
     public private(set) var drillSnap: (result: DrillResult, coach: [CoachItem]?)?
     private var drillEnded = false
 
-    public init(course: String, tier: FlyTier = .assist, oneThumb: Bool = true, level: DriveLevel = .standard) {
-        run = armAftermath(createRun(course))
+    /// `simVersion`: fly at that version (the input vectors' SIM_VERSION runs); today's when nil.
+    public init(course: String, tier: FlyTier = .assist, oneThumb: Bool = true, level: DriveLevel = .standard, simVersion: Int? = nil) {
+        run = armAftermath(createRun(course, simVersion: simVersion))
         self.tier = tier; wantsThumb = oneThumb
         sampler = InputSampler(level: level)
         drill = nil; drillStartTick = 0

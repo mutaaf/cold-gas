@@ -56,7 +56,7 @@ struct Replay { let checks: [Int: String]; let full: [Int: [Double]]; let final:
 func replay(_ v: RunVector) throws -> Replay {
     var h: (UInt32, UInt32) = (0x811c9dc5, 0x9747b28c)
     var checks: [Int: String] = [:], full: [Int: [Double]] = [:]
-    let run = try simulate(v.log, v.course) { r in
+    let run = try simulate(v.log, v.course, simVersion: v.simVersion) { r in
         let s = stateOf(r)
         mixState(&h, s)
         if r.tick % 24 == 0 { checks[r.tick] = hex32(h.0, h.1) }
@@ -101,7 +101,9 @@ struct RunVectorTests {
     @Test("run vector", arguments: runNames())
     func runVector(_ name: String) throws {
         let v = RunVector(name)
-        #expect(v.simVersion == SIM_VERSION, "SIM_VERSION: vectors \(v.simVersion), Swift \(SIM_VERSION)")
+        // Every vector from before 0340 is SIM_VERSION's (the sets without water and mud); the surface runs are
+        // SURFACE_VERSION's, on the Show and the Lineup as they are now.
+        #expect(v.simVersion == SIM_VERSION || v.simVersion == simVersionOf(v.course), "SIM_VERSION: vectors \(v.simVersion), Swift \(SIM_VERSION)/\(simVersionOf(v.course))")
         let r: Replay
         do { r = try replay(v) } catch let e as SimUnsupported { Issue.record("\(name): \(e)"); return }
         if let miss = firstMiss(v, r) { Issue.record("\(name): \(miss)"); return }
@@ -120,7 +122,7 @@ struct NativeHapticsTests {
     @Test(arguments: ["ref-show", "ref-wall", "crash-show-carry5", "crash-lineup-rolls2"])
     func sameTrack(_ name: String) throws {
         let v = RunVector(name)
-        let (_, feed) = try simulateWithFeed(v.log, v.course)
+        let (_, feed) = try simulateWithFeed(v.log, v.course, simVersion: v.simVersion)
         let jsData = try Data(contentsOf: vectorsDir.appendingPathComponent("haptics/\(name).json"))
         let js = HapticFeed.load(jsData)!
         func events(_ f: [HapticFeed]) -> [String] {

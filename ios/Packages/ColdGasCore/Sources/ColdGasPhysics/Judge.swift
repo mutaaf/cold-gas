@@ -67,6 +67,12 @@ func damageFactsFlat(_ t: Telemetry, _ kv: inout [(String, Value)]) {
     kv.append(("facts.damagePct", .n(damagePct(t)))); kv.append(("facts.integrity", .n(100 - damagePct(t))))
     if let d = t.damage { for (z, v) in d.zones { kv.append(("facts.damageZones.\(z)", .n(v))) } } else { kv.append(("facts.damageZones", .z)) }
 }
+/// A set's water and mud (0340, judge.js surfaceFactsOf): only on a run from a course with surfaces.
+func surfaceFactsFlat(_ t: Telemetry, _ kv: inout [(String, Value)]) {
+    guard let splash = t.splash else { return }
+    kv.append(("facts.splash", .b(splash))); kv.append(("facts.splashKmh", .n(jsRound(jsOr(t.splashSpeed ?? 0, 0) * 3.6))))
+    kv.append(("facts.mudS", .n(r1(jsOr(t.mudTime ?? 0, 0)))))
+}
 func panelFlat(_ judges: [(Judge, Double)], _ kv: inout [(String, Value)]) {
     for (i, (j, s)) in judges.enumerated() {
         kv.append(("judges[\(i)].id", .s(j.id))); kv.append(("judges[\(i)].name", .s(j.name)))
@@ -78,7 +84,8 @@ func scoreWall(_ t: Telemetry) -> Card {
     let show = t.course == "show"
     let course = COURSES[show ? "show" : "wall"]!
     let wrecked = damagePct(t) >= WRECK_PCT
-    let crashed = t.flipped || !t.settledUpright || t.fellOff || t.landedOnRamp || (show && t.contact) || wrecked
+    let splash = t.splash == true
+    let crashed = t.flipped || !t.settledUpright || t.fellOff || t.landedOnRamp || (show && t.contact) || wrecked || splash
     let launched = t.airStartTick >= 0
     let jumped = launched && t.touchTick >= 0
     let rollDeg = abs(t.rollAccum) * 180 / DMath.PI
@@ -110,6 +117,7 @@ func scoreWall(_ t: Telemetry) -> Card {
     let total = r1(judges.reduce(0) { $0 + $1.1 } * 10 / 3)
     let verdict: String
     if t.fellOff { verdict = "Fell off the wall" }
+    else if splash { verdict = "Splash" }
     else if wrecked { verdict = "Wrecked" }
     else if show && t.contact { verdict = "Contact" }
     else if !launched { verdict = t.progress > 0.5 ? "Stalled on the wall" : "No climb" }
@@ -137,6 +145,7 @@ func scoreWall(_ t: Telemetry) -> Card {
     f("flipped", .b(t.flipped)); f("fellOff", .b(t.fellOff)); f("landedOnRamp", .b(t.landedOnRamp)); f("crashed", .b(crashed)); f("jumped", .b(jumped))
     f("endReason", .s(t.endReason))
     damageFactsFlat(t, &kv)
+    surfaceFactsFlat(t, &kv)
     panelFlat(judges, &kv)
     kv.append(("multiplier", .n(factor))); kv.append(("tier", .s(tier))); kv.append(("total", .n(total))); kv.append(("verdict", .s(verdict)))
     return Card(total: total, verdict: verdict, tier: tier, judges: judges.map { ($0.0.id, $0.1) }, flat: sortedFlat(kv))
@@ -145,7 +154,8 @@ func scoreWall(_ t: Telemetry) -> Card {
 func scoreLineup(_ t: Telemetry) -> Card {
     let PAD = LINEUP.pad!, TALLEST = LINEUP.tallest
     let wrecked = damagePct(t) >= WRECK_PCT
-    let crashed = t.contact || t.flipped || !t.settledUpright || wrecked
+    let splash = t.splash == true
+    let crashed = t.contact || t.flipped || !t.settledUpright || wrecked || splash
     let jumped = t.airStartTick >= 0 && t.touchTick >= 0
     let rollDeg = abs(t.rollAccum) * 180 / DMath.PI
     let rotations = jsRound(rollDeg / 360)
@@ -179,7 +189,8 @@ func scoreLineup(_ t: Telemetry) -> Card {
     }
     let total = r1(judges.reduce(0) { $0 + $1.1 } * 10 / 3)
     let verdict: String
-    if wrecked && jumped { verdict = "Wrecked" }
+    if splash { verdict = "Splash" }
+    else if wrecked && jumped { verdict = "Wrecked" }
     else if !jumped { verdict = "No jump" }
     else if t.contact { verdict = "Contact" }
     else if t.flipped { verdict = "Rolled over" }
@@ -199,6 +210,7 @@ func scoreLineup(_ t: Telemetry) -> Card {
     f("launchKmh", .n(jsRound(t.launchSpeed * 3.6))); f("bottomOut", .b(t.bottomOut)); f("bodyStrike", .b(t.bodyStrike))
     f("contact", .b(t.contact)); f("flipped", .b(t.flipped)); f("crashed", .b(crashed)); f("jumped", .b(jumped)); f("endReason", .s(t.endReason))
     damageFactsFlat(t, &kv)
+    surfaceFactsFlat(t, &kv)
     panelFlat(judges, &kv)
     kv.append(("multiplier", .n(factor))); kv.append(("tier", .s(tier))); kv.append(("total", .n(total))); kv.append(("verdict", .s(verdict)))
     return Card(total: total, verdict: verdict, tier: tier, judges: judges.map { ($0.0.id, $0.1) }, flat: sortedFlat(kv))

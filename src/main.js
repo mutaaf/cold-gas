@@ -13,6 +13,7 @@ import { createPlumes } from './render/plumes.js';
 import { createDirector } from './render/director.js';
 import { landingImpact } from './render/impact.js';
 import { createCrash } from './render/crash.js';
+import { createSurfaceFx } from './render/surfaces.js';
 import { makeGhost, ghostMat, wheelCenterY } from './render/cars.js';
 import { createRun, stepRun, armAftermath, aftermathStep, aftermath, FRAME_EVERY, BODY_FRAME, BODY_STRIDE } from './sim/run.js';
 import { freeWorld } from './sim/world.js';
@@ -41,7 +42,7 @@ import { showMedals, hideMedals, getMedals } from './medals.js';
 import { newGuide, guideStep, guideWords, guideMode, resumeFrom, wreckLine } from './guide.js';
 import { settings as touchSet, setSetting, onSettings, buzz, hasHaptics, enableTilt, disableTilt, calibrateTilt, tiltSeen, tiltSteer } from './touch-settings.js';
 import { wallProgress, INPUT_KEYS } from './sim/run.js';
-import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0, settle as settle0, crowd as crowd0, suspendAudio, resumeAudio, audioState } from './audio.js';
+import { initAudio as initAudio0, updateAudio as updateAudio0, thud as thud0, setMuted, isMuted, chime as chime0, settle as settle0, crowd as crowd0, suspendAudio, resumeAudio, audioState, splash as splash0, setSurfaces as setSurfaces0 } from './audio.js';
 import { syncWake, wakeHeld } from './wake.js';
 import { createUI, crashStep } from './ui.js';
 import { initFocusTrap } from './focus-trap.js';
@@ -89,6 +90,7 @@ const coarse = device.coarse;
 const tier = obs.boot({ forced: params.get('gfx'), deviceTier: pickDeviceTier(device).tier }).tier;
 obs.init({ deviceClass: deviceClass(navigator, coarse, deviceKind(device)) });
 // Audio is a breaker-guarded subsystem: if it throws, the game goes quiet instead of stopping.
+const splashSound = guard('audio', splash0), setSurfaces = guard('audio', setSurfaces0);
 const initAudio = guard('audio', initAudio0), updateAudio = guard('audio', updateAudio0), thud = guard('audio', thud0), chime = guard('audio', chime0), settle = guard('audio', settle0), crowd = guard('audio', crowd0);
 // The audio graph is built on the first touch, click or key anywhere (a user gesture, so the
 // context may start), not inside the Jump tap: building it can take a long task of its own. Every
@@ -233,6 +235,20 @@ const landing = createLandingHud({ scene, onStatus: (s, prev) => { if ((s === 'a
 // crunch, all keyed to the sim's impact events (src/render/crash.js).
 const crash = createCrash({ scene, hero, carRoot, director, tier,
   course: () => (S.mode === 'drive' && fd() ? fd().course : stage.course), floor: () => (S.mode === 'drive' && fd() ? fd().floor : 0) });
+// A set's water and mud (0340): the splash-down, the wake and the mud off the tyres, from the car as drawn (live and
+// replay), with its sound and, on a phone, its buzz (src/render/surfaces.js).
+const surfFx = createSurfaceFx(scene, { tier });
+let mudBuzzT = 0;
+function surfaces(dt, pos, quat, vel, course, live) {
+  const e = surfFx.update(dt, pos, quat, vel, course);
+  setSurfaces(e.mud, e.water);
+  if (e.splash > 0) {
+    splashSound(e.splash);
+    if (live) buzz('splash');
+    if (!reducedMotion) director.shake(0.1 + 0.25 * e.splash);
+  }
+  if (live && e.mud > 0.2 && (mudBuzzT -= dt) <= 0) { mudBuzzT = 0.45; buzz('mud'); }
+}
 
 // --- State -------------------------------------------------------------------------------
 const S = {
@@ -493,6 +509,7 @@ function toTitle() {
   ui.clearCue(); ui.countdown(0);
   plumes.clear();
   crash.reset();
+  surfFx.reset();
   placeOnPad();
   scheduleSpare();
   history.replaceState(null, '', stage.course === 'show' ? location.pathname : `${location.pathname}?course=${stage.course}`);
@@ -539,6 +556,7 @@ function startRunNow(kind = 'jump', quick = false) {
   if (thumbActive()) syncThumb(S.run, S.run.car);
   plumes.clear();
   crash.reset();
+  surfFx.reset();
   const c = S.run.car;
   const sag = c.wheels[0].compression;
   syncCar(c.pos, c.quat, [sag, sag, sag, sag], [0, 0, 0, 0], 0);
@@ -1151,6 +1169,7 @@ function liveStep(dt) {
   hero.setWing?.(Math.min(1, Math.max(0, (speed - 20) / 20)));
   plumes.update(dt, S.time, c.throttles, c.vel, 0);
   updateAudio({ speed, grounded: c.grounded > 0, throttles: c.throttles });
+  surfaces(dt, drawn.pos, drawn.quat, c.vel, c.course, true);
 
   // The end: a finished run (or a drill's moment) goes straight into its aftermath, and the results
   // come up once the car is at rest, and no sooner than the beat they always had (1.4 s, a drill 0.5 s).
@@ -1651,6 +1670,7 @@ function replayStep(dt) {
   hero.setFan?.(p.fan);
   plumes.update(dt * slow, S.time, p.thr, fvel, 0);
   updateAudio({ speed: fvel.length() * slow, grounded: p.pos.y < 0.7, throttles: p.thr });
+  surfaces(dt * slow, p.pos, p.quat, fvel, S.run.car.course, false);
 }
 
 // --- Title idle: an occasional breath from the lift jets --------------------------------------
@@ -2164,6 +2184,7 @@ function startDrillNow(id) {
   syncScheme();
   plumes.clear();
   crash.reset();
+  surfFx.reset();
   const c = run.car;
   for (let i = 0; i < 4; i++) { fcomp[i] = c.wheels[i].compression; fspin[i] = c.wheels[i].spin; }
   syncCar(c.pos, c.quat, fcomp, fspin, c.steer);

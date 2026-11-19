@@ -122,7 +122,7 @@ final class Game: ObservableObject {
 
     /// A universal link or a coldgas:// link. Mid-run it waits until the run is over.
     func open(url: URL) {
-        let r = ChallengeLink.route(url, simVersion: SIM_VERSION)
+        let r = ChallengeLink.route(url, replayable: replayable)
         guard r != .none else { return }
         if screen == .run && result == nil { pendingLink = r; return }
         apply(r)
@@ -478,6 +478,8 @@ final class Game: ObservableObject {
                 tr.append(r)
                 wreck.step(r)   // 0239: the Wreck score reads the tick (never writes it)
                 if wasFlying { haptics.step(HapticFeed(run: r, input: l.input, seen: &seen)) }
+                // 0340: the splash-down, heard (the hand feels it through HapticScore's .splash).
+                if r.car.splashTick >= 0 && r.car.splashTick == r.car.tick { Sound.shared.splash(min(1, max(0.3, r.car.splashSpeed / 12)), seed: r.tick) }
                 if !wasLanded && r.phase == .landed { Sound.shared.land(sink: r.t.sink, paved: 1, seed: r.tick); Sound.shared.cheer(r.t.sink < 4 ? 0.7 : 0.35) }
                 if !touched && r.t.touchTick >= 0 { touched = true; stage?.renderer?.cam.touchdown(sink: r.t.sink) }
                 if wasFlying && r.phase == .done { finished(l) }

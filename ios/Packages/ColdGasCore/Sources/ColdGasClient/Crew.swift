@@ -101,6 +101,14 @@ public func crewWords(_ card: ScoreCard, wreck: CrewWreck? = nil, units: Units =
         JudgeWords(headline: h, engineer: e, coordinator: c, designer: d, source: Crew.source)
     }
 
+    // A set's splash tank (0340): whatever else happened on the way, the run ended in the water.
+    if f.b("splash") {
+        return words(card.verdict,
+                     say(["Water in the fans, the ducts and the battery bay. That car dries out for a week.",
+                          "Into the tank at \(units.one(.speed, f.n("splashKmh") / 3.6)). I need a pump, not a wrench."], 16),
+                     say(["What a splash! The front row is soaked and they love it.", "Wrong landing, right headline. Now do it on the pad."], 17),
+                     say(["A beautiful arc, into the wrong element.", "The paint can swim. The seats can\u{2019}t."], 18))
+    }
     if f.b("fellOff") {
         return words(card.verdict, "Lateral drift took it past the deck edge at \(len("height")). Line first, speed second.",
                      say(["Off the side! Not the exit I wrote, but it was an exit.", "Straight up the middle next time, then let it fly."], 6),
@@ -169,11 +177,13 @@ public func crewWords(_ card: ScoreCard, wreck: CrewWreck? = nil, units: Units =
     }
     // Vee: the mark and the gas.
     let miss = f.n("padMiss"), air = f.n("airPct")
-    let vee: String
+    var vee: String
     if miss <= 1 && air >= 35 { vee = say(["On the mark, \(f.s("airPct"))% in the tanks. That\u{2019}s the whole idea.", "Exact. Quiet. Yes."], 14) }
     else if miss <= 1 { vee = "On the mark. Loud getting there, but on the mark." }
     else if air >= 40 { vee = "\(f.s("airPct"))% of the gas left. Restraint looks good on you." }
     else if air < 15 { vee = "\(f.s("airPct"))% left. That burn was a shout, not a sentence." }
     else { vee = say(["\(len("padMiss")) off the mark. Close is a different word from on.", "The shape was right. The finish wasn\u{2019}t."], 15) }
+    // A set's mud (0340): a roll-out that ploughed through it.
+    if f.n("mudS") >= MUD_SAID { vee = "Then \(f.s("mudS")) s ploughing through the mud. Somebody fetch a hose." }
     return words(card.verdict, hollis, mags, vee)
 }

@@ -19,6 +19,7 @@ import { SPEC, NOZZLE_SPEC, wheelAnchors, wheelRadiusOf, AXLE_F, AXLE_R } from '
 import { COURSES, DEFAULT_COURSE, MATERIALS, WALL, roofUnder } from './courses.js';
 import { createWorld, attachCar, raycast as worldRay, preStep, stepEngine, gateCurl } from './world.js';
 import { dsin, dcos, datan2, datan, dhypot } from './dmath.js';
+import { waterLevel, NO_WATER } from './surfaces.js';
 import { createImpacts, pushImpact, HIT, SCRAPE, WHEEL, CRUSH, CRUSH_STEP, PART, SCRAPE_EVERY, HIT_MIN, SCRAPE_MIN, WHEEL_MIN } from './impacts.js';
 
 export const DT = 1 / 240;
@@ -260,6 +261,10 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     // The drivetrain's own settings, for an unscored ground only (Free Drive, the Sandbox: src/driving.js
     // Advanced). Never set on a scored run, so the Worker's car (always off) replays every log the same.
     tcOff: false, tcSport: false, absOff: false, handbrake: 0,
+    // A set's water and mud (0340; only a course with `surfaces` changes these): how much of the body is under water
+    // (0–1), how much of its sealed volume still floats it (1 dry, down to SPEC.floodMin flooded), the splash-down
+    // (its tick, its speed and its sink, m/s; −1 until it happens) and how many tyres are in mud this tick.
+    wet: 0, flood: 1, splashTick: -1, splashSpeed: 0, splashSink: 0, mud: 0,
   };
   s.engineMass = massOf(s);
   attachCar(world, HULL_SHAPE, s.engineMass, { x: SPEC.inertia.pitch, y: SPEC.inertia.yaw, z: SPEC.inertia.roll });
@@ -736,6 +741,58 @@ function inertiaTimes(out, q, v) {
 }
 const qOld = q4(), pOld = v3();
 
+// --- Water (0340) -----------------------------------------------------------------------------------------
+// The body as four quarters, each a column from the floor pan to the roof over its quarter of the footprint. Each
+// quarter under the water is pushed up by the water it displaces (Archimedes, on the sealed volume still afloat) and
+// dragged by the water it moves through (quadratic), both at the column's middle, so a car that lands nose-first in the
+// tank pitches back level as it floats, and a spin dies in the water. The first touch of the water is the splash-down:
+// the slam takes some of the speed at once (SPEC.splashKeep*). Explicit forces with a cap: a quarter's drag can at
+// most halve its share of the speed in a tick, so a fast entry can't overshoot into a reversal (no NaN, ever).
+const W_X = SPEC.width / 4, W_Z = SPEC.length / 4;
+const W_COLS = [[W_X, W_Z], [-W_X, W_Z], [W_X, -W_Z], [-W_X, -W_Z]];
+const W_BOT = -(SPEC.comHeight - SPEC.rideHeight), W_TOP = SPEC.height - SPEC.comHeight;
+const W_SPAN_MIN = 0.3;   // m: a quarter on its side still has the car's thickness across the surface
+const RHO_W = 1000;       // kg/m³, fresh water
+const wB = v3(), wT = v3(), wM = v3(), wF = v3(), wV = v3();
+function water(s, surf, m, dt) {
+  let wet = 0;
+  const kMax = (m / 4) * 0.5 / dt;
+  for (let k = 0; k < 4; k++) {
+    rotate(wB, s.quat, set(wF, W_COLS[k][0], W_BOT, W_COLS[k][1]));
+    rotate(wT, s.quat, set(wF, W_COLS[k][0], W_TOP, W_COLS[k][1]));
+    const level = waterLevel(surf, s.pos.x + wB.x, s.pos.z + wB.z);
+    if (level === NO_WATER) continue;
+    const yb = s.pos.y + wB.y, yt = s.pos.y + wT.y;
+    const lo = yb < yt ? yb : yt, span = Math.max(W_SPAN_MIN, Math.abs(yt - yb));
+    const f = clamp((level - lo) / span, 0, 1);
+    if (f <= 0) continue;
+    wet += f / 4;
+    set(wM, (wB.x + wT.x) / 2, (wB.y + wT.y) / 2, (wB.z + wT.z) / 2);
+    // Buoyancy: the water this quarter displaces, of the sealed volume still afloat.
+    set(wF, 0, RHO_W * G * (SPEC.floatVolume / 4) * f * s.flood, 0);
+    applyAt(wM, wF);
+    // Drag: quadratic in the quarter's own speed through the water, the plan's area up and down, the side's across.
+    pointVel(wV, s, wM);
+    const v = dhypot(wV.x, wV.y, wV.z);
+    const kv = Math.min(kMax, 0.5 * RHO_W * SPEC.waterCd * SPEC.waterAreaV * f * v);
+    const kh = Math.min(kMax, 0.5 * RHO_W * SPEC.waterCd * SPEC.waterAreaH * f * v);
+    set(wF, -kh * wV.x, -kv * wV.y, -kh * wV.z);
+    applyAt(wM, wF);
+  }
+  // Water finds its way in while the body is under: the buoyancy falls toward floodMin of the sealed volume's.
+  if (wet > 0) s.flood = Math.max(SPEC.floodMin, s.flood - (dt * wet) / SPEC.floodTime);
+  // The splash-down: the first touch of the water this run.
+  if (wet > 0 && s.splashTick < 0) {
+    s.splashTick = s.tick + 1;
+    s.splashSpeed = dhypot(s.vel.x, s.vel.y, s.vel.z);
+    s.splashSink = Math.max(0, -s.vel.y);
+    if (s.vel.y < 0) s.vel.y *= SPEC.splashKeepV;
+    s.vel.x *= SPEC.splashKeepH; s.vel.z *= SPEC.splashKeepH;
+    scale(s.angMom, s.angMom, SPEC.splashKeepSpin);
+  }
+  s.wet = wet;
+}
+
 export function step(s, inp) {
   const dt = DT, w = s.world;
   const m = massOf(s);
@@ -871,7 +928,8 @@ export function step(s, inp) {
   }
 
   // --- Wheels: raycast suspension + Pacejka tyres + wheel spin ---
-  let grounded = 0, wallContact = false, sloped = false, wheelForce = 0;
+  let grounded = 0, wallContact = false, sloped = false, wheelForce = 0, mudWheels = 0;
+  const surf = s.course.surfaces;
   s.hullContact = false; s.hullGround = false; s.obstacleContact = false;
   s.tcActive = false;
   evHit[0] = 0; evScr[0] = 0; evWheel[0] = 0;
@@ -934,8 +992,14 @@ export function step(s, inp) {
     // unchanged (no fit of the semi-slick's μx is public; the 0–60, the brakes and the curl's climb
     // were sourced against it), μ = tyreMu with −7 % per unit of normalised load.
     const xLoad = Fz / (STATIC_LOAD * AXLE_K[i]);
-    const D = Math.max(0, SPEC.tyreMu * hitMat.grip * (1 - 0.07 * (xLoad - 1)) * Fz);
-    const Dy = Math.max(0, SPEC.tyreMu0 * hitMat.grip * tyreMuLoad(xLoad) * Fz);
+    // A set's surfaces (0340): a tyre in mud (the material says so), and one on a tank's floor under the water.
+    let grip = hitMat.grip;
+    if (surf) {
+      if (hitMat === MATERIALS.mud) mudWheels++;
+      if (waterLevel(surf, s.pos.x + tmp.x, s.pos.z + tmp.z) > s.pos.y + tmp.y) grip *= SPEC.wetGrip;
+    }
+    const D = Math.max(0, SPEC.tyreMu * grip * (1 - 0.07 * (xLoad - 1)) * Fz);
+    const Dy = Math.max(0, SPEC.tyreMu0 * grip * tyreMuLoad(xLoad) * Fz);
     const By = tyreBy(xLoad);
     const sigma = relaxLength(i < 2 ? SPEC.tyreRelaxFront : SPEC.tyreRelaxRear, Fz, STATIC_LOAD * AXLE_K[i]);
     const lag = relaxSlip(wh.slipAngle, alphaKin, vLong, sigma, dt);
@@ -1023,6 +1087,7 @@ export function step(s, inp) {
     wh.spin += wh.omega * dt;
   }
   s.grounded = grounded;
+  s.mud = mudWheels;
   s.fallPeak = grounded > 0 ? 0 : Math.max(s.fallPeak, -s.vel.y);
   s.onWall = wallContact;
   s.onSlope = sloped;   // any tyre off the level: the curl from its first metre (Assist's crawl limit)
@@ -1091,6 +1156,9 @@ export function step(s, inp) {
   // --- Aero drag ---
   const vmag = dhypot(s.vel.x, s.vel.y, s.vel.z);
   addScaled(fTot, fTot, s.vel, -0.5 * RHO * SPEC.cdA * vmag);
+
+  // --- Water (0340): a set's splash tank floats, drags and slows the car. A course without one never comes here.
+  if (surf && surf.tanks.length) water(s, surf, m, dt);
 
   // --- Velocities from our forces (semi-implicit Euler), inertia diagonal in the body frame ---
   addScaled(s.vel, s.vel, fTot, dt / m);

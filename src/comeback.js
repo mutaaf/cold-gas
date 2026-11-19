@@ -177,7 +177,7 @@ export function createComeback(o) {
       render();
       await o.ready();
       if (!ch || ch.dec !== dec || ch.state !== 'checking') return;
-      ch.rp = createReplay(dec.log, dec.course);
+      ch.rp = createReplay(dec.log, dec.course, dec.simVersion);
       // Re-fly it a slice at a time (the title keeps its frames); a tap on Take finishes it at once.
       // ≤ 8 ms of engine ticks per slice, then the frame gets the thread back.
       for (;;) {
@@ -220,7 +220,7 @@ export function createComeback(o) {
         o.pending?.(true);   // the button says "Starting…" while it waits (0154)
         try { await o.ready(); } finally { taking = false; o.pending?.(false); }
         if (!ch || ch.state !== 'checking') return take();
-        ch.rp ??= createReplay(ch.dec.log, ch.dec.course);
+        ch.rp ??= createReplay(ch.dec.log, ch.dec.course, ch.dec.simVersion);
       }
       if (!settle()) { render(); o.toast(OLD, 4200); o.metric?.('challenge_play', { course: ch?.dec.course || o.course?.() || 'show', stale: 1 }); o.jump(); return; }
     }
