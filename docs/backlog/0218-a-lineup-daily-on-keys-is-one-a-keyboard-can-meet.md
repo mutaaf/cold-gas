@@ -49,7 +49,7 @@ The number is set from a measured keys population, per LESSONS 2026-11-09 (print
       meets the day. It never says "need 720°" with "try again".
 - [x] The title card on a Lineup day at 1440×900 shows the keyboard objective's own words (screenshot in the PR).
 - [x] `ref-hash` unchanged. Vectors regenerated if `daily.js` changes (`npm run vectors`).
-- [x] Funnel number to move: `daily-run` → `retry` among key runs on Lineup days.
+- [ ] Funnel number to move: `daily-run` → `retry` among key runs on Lineup days. (Not measurable as written: the daily events carry no device; read it as `daily-done` on Lineup days, which should rise from ≈ 0 off one thumb. #442.)
 
 ## Test plan
 - Unit tests in `tests/unit/daily.test.js` for the keys form's `evaluate` and `missLine`.
