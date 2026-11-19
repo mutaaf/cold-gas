@@ -16,7 +16,8 @@ const watch = (page) => {
 // slow runner the car coasts (or, with ↑ down, drives) an unknown way between them: main's CI on
 // d77eeaa rammed the same tree to -0.79 m where a fast runner gets -1.32 (reproduced at 8× CPU
 // throttle). Hold the loop at dt 0 (it still draws, and the near tiles still stream in) and step the
-// sim only from the test, through the frame kept as drive.step: the same car on every runner.
+// sim only from the test, through the frame kept as drive.step. The waits for the near tiles step it at
+// dt 0 too (they draw, the car stays), so how many a runner needs can't move the car or the tree it picks.
 const hold = (page) => page.evaluate(() => {
   const d = window.__coldgas.drive;
   if (d.step) return;
@@ -114,7 +115,7 @@ test('@heavy Free Drive (Stelvio): the trees drawn near the car are its solid tr
   for (let k = 0; k < 20; k++) {
     r = await page.evaluate(compare, ['tree']);
     if (r.solids > 0 && r.unsolid === 0 && r.unseen === 0) break;
-    await page.evaluate(() => window.__coldgas.drive.step(0.05, performance.now() / 1000));
+    await page.evaluate(() => window.__coldgas.drive.step(0, performance.now() / 1000));
   }
   expect(r.solids).toBeGreaterThan(5);
   expect(r.unsolid).toBe(0);
@@ -137,7 +138,7 @@ test('@heavy Endless: trees and boulders drawn near the car are solid, and none 
   for (let k = 0; k < 40; k++) {
     r = await page.evaluate(compare, ['conifer', 'conifer-hi', 'broad', 'rock']);
     if (r.solids > 0 && r.unsolid === 0 && r.unseen === 0) break;
-    await page.evaluate(() => window.__coldgas.drive.step(0.05, performance.now() / 1000));
+    await page.evaluate(() => window.__coldgas.drive.step(0, performance.now() / 1000));
   }
   expect(r.solids).toBeGreaterThan(5);
   expect(r.unsolid).toBe(0);
