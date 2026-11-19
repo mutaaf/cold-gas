@@ -93,7 +93,7 @@ per kind, `LooseView.maxPerKind`) and culled with their cell.
 | `DriveModel.toe / powerK / gripK` | DriveCar.swift | A bent arm's toe added to where a wheel points; the motors' torque scaled; a wheel's grip over its ground's |
 | `DriveStreamer.material`, trunk items | Drive.swift | Snow and ice are their own materials; trunks break as the roadside does (`strength(_ s:)`, `snapSpeed`) |
 | `TraceAtlas` | ColdGasWorld/Trace.swift (pure) | Slots per 16 m tile (LRU), strokes cut per tile with their texel boxes, the shader's 32 × 32 table |
-| `TraceField` | World/TraceField.swift + Trace.metal | The 2D array texture (48 × 256² RGBA8, 12 MB, made once), a stroke = one dispatch over its box |
+| `TraceField` | World/TraceField.swift + Trace.metal | The 2D array texture (48 × 256² RGBA8, 12 MB, made once); a render pass per layer touched, a stroke = one quad over its box, each texel read in place (programmable blending on a phone; the simulator, which can't read a render target, max-blends: no deepening on repeat passes) |
 | Trace in the land | World/Trace.h (+ 3 lines in World.metal) | The terrain reads its tile's layer: rut walls lit by their slope, floor darker, berm, laid grass, packed snow, mud's sheen |
 | The coat drawn | Render/CarMatter.h (+ 4 lines in Shaders.metal), MatterLook.swift | Frame.matter; a mask in the car's frame (height, nose/tail, near a wheel) broken by body-fixed noise |
 | Damage drawn | Crash.swift (`absorb`, `adopt`), CarState (`shattered`, `hang`, `swing`), Renderer | One damage model in a drive (the physics'), the crash's own in a scored run's replay |
@@ -120,10 +120,10 @@ WATER's car wetness.
 
 ## 4 · Efficiency
 
-- **Nothing per frame when idle.** No stroke: no compute encoder (TraceField.encode returns), the table's bytes rebound
+- **Nothing per frame when idle.** No stroke: no pass encoded (TraceField.encode returns), the table's bytes rebound
   unchanged (2 KB), the terrain's read is one branch on `head.z`. A clean, dry car: `Frame.matter[0].w = 0`, one branch.
-- **Small dispatches where a tyre touched.** ≤ 4 strokes a frame (one a wheel every 30 cm), each clipped to its tile and box
-  (≈ 20 × 30 texels at 6.25 cm), so ≈ 600 threads a stroke; a tile's first stroke clears its layer once (65 k threads).
+- **Small passes where a tyre touched.** ≤ 4 strokes a frame (one a wheel every 30 cm), each clipped to its tile and box
+  (≈ 20 × 30 texels at 6.25 cm), so ≈ 600 fragments a stroke, in one pass per layer touched (one or two a frame); a tile's first stroke clears its layer by the pass's load action.
 - **Cached.** The trace survives in its slot until the least recently pressed tile needs it (48 tiles ≈ 750 m of single track).
   The table rebuilds only when a slot changes or the camera crosses a tile.
 - **Pooled.** Roost and splinters use the crash's fixed chip pool (220); puffs its 320; felled trees and broken roadside are
@@ -146,4 +146,22 @@ WATER's car wetness.
 
 ## 6 · Measured
 
-See the PR (#PR) for the before/after shots in the three looks and the table below.
+On the "ColdGas iPhone" simulator (Debug, iOS 27), 2026-11-19: `-freedrive -fd-at 1800,40,0 -fd-hold 0.3,0.8 -fd-wet 0.85
+-fd-stats`, 32 s on a soaked field, with this track (`on`) and with `-matter-off` (the drive as before, same build):
+
+| | Tyres' effects on the main thread (µs a frame, smoothed, 8 samples) | Strokes / layer passes in 30 s | Layers live | GPU memory added |
+|---|---|---|---|---|
+| `-matter-off` | 44 · 44 · 72 · 98 · 52 · 44 · 100 (median 52) | 0 / 0 | 0 | 0 |
+| on | 53 · 53 · 99 · 155 · 62 · 50 (median 58) | 425 / 203 (≈ 14 strokes, ≈ 7 passes a second) | 4 | 12 MB (the trace texture) |
+
+- **CPU:** ≈ +6 µs a frame median (+55 µs at the worst sample, a frame that cut four strokes and flung clods): inside the 1 ms
+  world budget. The physics tick: two extra fields read (toe, power) and the impacts read once; tree items add contact pairs
+  only where the car touches a trunk.
+- **GPU:** the simulator's GPU timings aren't a phone's (NATIVE-FREEDRIVE.md §8). On a phone the cost is one terrain fragment
+  branch when idle, ≈ 5 texture taps on a traced pixel within 170 m, and ≈ 7 tiny passes a second of ≤ 600 fragments while a
+  wheel crosses soft ground. `make device-bench-freedrive` (the owner's) is the gate for the 1.5 ms.
+- **Memory:** 12 MB for the trace, nothing else new (the pools are the crash's and the world's own).
+- **Tests:** MatterTests (7), TraceTests (5), TreeSnapTests (3); the 52 run vectors bit-exact.
+
+Shots (docs/shots/0330/, before = `-matter-off`, the same 30 s, in Real, Anime and 8-bit): ruts and berms behind the car,
+the shattered canopy, the coat on the car's tail and sills, smoke, and (8-bit) a tree the car snapped lying across its path.

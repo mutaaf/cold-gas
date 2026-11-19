@@ -1,9 +1,9 @@
 // The ground's memory on the GPU (0331, docs/NATIVE-MATTER.md §2): one 2D array texture, a layer per 16 m tile a tyre has
 // pressed (ColdGasWorld TraceAtlas gives the layers out and takes the least recently pressed back), written by a compute pass
-// of one small dispatch per stroke (World/Trace.metal) and read by the terrain (World/Trace.h) through a 32 × 32 table of
+// of one small quad per stroke (World/Trace.metal) and read by the terrain (World/Trace.h) through a 32 × 32 table of
 // the tiles round the camera.
 //   Cost: 12 MB of texture, made once. A frame with no stroke encodes nothing and binds the same table; a frame with strokes
-//   encodes ≤ 8 dispatches over a few hundred texels each (os_signpost "matter-trace"). The table is rebuilt only when a slot
+//   encodes a pass per layer touched (one or two), a quad of a few hundred texels per stroke (os_signpost "matter-trace"). The table is rebuilt only when a slot
 //   changes or the camera crosses a tile.
 //   Hook (LANDSCAPE's per-tile trace slot): `texture`, `table` and `slot(ofTile:)` are what another reader needs; the
 //   grass and the near-field mesh can sample the same layers.
@@ -26,7 +26,10 @@ final class TraceField {
 
     let atlas = TraceAtlas()
     let texture: MTLTexture
-    private let stampPipe, clearPipe: MTLComputePipelineState
+    private let stampPipe: MTLRenderPipelineState
+    /// The texel read in place (a phone) or a max blend (the simulator).
+    private(set) var inPlace = true
+    private var touched = [Bool](repeating: false, count: TraceSpec.slots), clearNow = [Bool](repeating: false, count: TraceSpec.slots)
     private var pending: [TraceStroke] = []
     private var tableBytes: [UInt8]
     private var u = TableU()
@@ -35,17 +38,29 @@ final class TraceField {
     private(set) var strokes = 0, dispatches = 0
 
     init?(device: MTLDevice) {
-        // Read-write RGBA8 in a kernel needs tier 2 (every A13+ phone, Apple silicon Macs); without it there's no trace.
-        guard device.readWriteTextureSupport == .tier2, let lib = device.makeDefaultLibrary(),
-              let sf = lib.makeFunction(name: "cg_trace_stamp"), let cf = lib.makeFunction(name: "cg_trace_clear"),
-              let sp = try? device.makeComputePipelineState(function: sf), let cp = try? device.makeComputePipelineState(function: cf) else { return nil }
+        // A render pass per touched layer, each texel's value read in place (programmable blending: every Apple GPU in a phone;
+        // no read-write texture tier needed). The simulator's GPU can't read a render target: a max blend there instead.
+        guard let lib = device.makeDefaultLibrary(), let vf = lib.makeFunction(name: "cg_trace_vertex"), let ff = lib.makeFunction(name: "cg_trace_fragment") else { return nil }
+        let pd = MTLRenderPipelineDescriptor()
+        pd.vertexFunction = vf; pd.fragmentFunction = ff
+        pd.colorAttachments[0].pixelFormat = .rgba8Unorm
+        pd.label = "trace"
+        var made = try? device.makeRenderPipelineState(descriptor: pd)
+        if made == nil, let mf = lib.makeFunction(name: "cg_trace_fragment_max"), let c = pd.colorAttachments[0] {
+            pd.fragmentFunction = mf
+            c.isBlendingEnabled = true; c.rgbBlendOperation = .max; c.alphaBlendOperation = .max
+            c.sourceRGBBlendFactor = .one; c.destinationRGBBlendFactor = .one; c.sourceAlphaBlendFactor = .one; c.destinationAlphaBlendFactor = .one
+            made = try? device.makeRenderPipelineState(descriptor: pd)
+            inPlace = false
+        }
+        guard let sp = made else { Report.error(.world, .error, "the trace pipeline couldn't be built"); return nil }
         let d = MTLTextureDescriptor()
         d.textureType = .type2DArray; d.pixelFormat = .rgba8Unorm
         d.width = TraceSpec.res; d.height = TraceSpec.res; d.arrayLength = TraceSpec.slots
-        d.usage = [.shaderRead, .shaderWrite]; d.storageMode = .private
+        d.usage = [.shaderRead, .renderTarget]; d.storageMode = .private
         guard let t = device.makeTexture(descriptor: d) else { return nil }
         t.label = "trace"
-        texture = t; stampPipe = sp; clearPipe = cp
+        texture = t; stampPipe = sp
         tableBytes = [UInt8](repeating: 0, count: TraceField.tableSize)
         pending.reserveCapacity(64)
     }
@@ -61,38 +76,39 @@ final class TraceField {
     var live: Int { atlas.used }
     var busy: Bool { !pending.isEmpty || !atlas.fresh.isEmpty }
 
-    /// The frame's strokes into the texture (before the main pass reads it). Nothing encoded when there are none.
+    /// The frame's strokes into the texture (before the main pass reads it): one small render pass per layer touched (a fresh
+    /// layer cleared by its pass's load action), one quad per stroke. Nothing encoded when there are none.
     func encode(_ cmd: MTLCommandBuffer) {
         let fresh = atlas.drainFresh()
         if pending.isEmpty && fresh.isEmpty { return }
         let n = pending.count
         let st = Signs.poster.beginInterval("matter-trace", "\(n) strokes")
         defer { Signs.poster.endInterval("matter-trace", st) }
-        guard let e = cmd.makeComputeCommandEncoder() else { pending.removeAll(keepingCapacity: true); return }
-        e.label = "trace"
-        e.setTexture(texture, index: 0)
-        let tg = MTLSize(width: 8, height: 8, depth: 1)
-        if !fresh.isEmpty {
-            e.setComputePipelineState(clearPipe)
-            for s in fresh {
-                var slot = UInt32(s)
-                e.setBytes(&slot, length: 4, index: 0)
-                e.dispatchThreads(MTLSize(width: TraceSpec.res, height: TraceSpec.res, depth: 1), threadsPerThreadgroup: tg)
-                dispatches += 1
-            }
-        }
-        if !pending.isEmpty {
-            e.setComputePipelineState(stampPipe)
-            for s in pending {
+        for i in touched.indices { touched[i] = false; clearNow[i] = false }
+        for f in fresh { touched[f] = true; clearNow[f] = true }
+        for s in pending { touched[s.slot] = true }
+        var res = Float(TraceSpec.res)
+        for slot in touched.indices where touched[slot] {
+            let rp = MTLRenderPassDescriptor()
+            rp.colorAttachments[0].texture = texture; rp.colorAttachments[0].slice = slot
+            rp.colorAttachments[0].loadAction = clearNow[slot] ? .clear : .load
+            rp.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 0)
+            rp.colorAttachments[0].storeAction = .store
+            guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { continue }
+            e.label = "trace"
+            e.setRenderPipelineState(stampPipe)
+            e.setVertexBytes(&res, length: 4, index: 1)
+            for s in pending where s.slot == slot {
                 var p = StampU(a: SIMD2(s.ax, s.az), b: SIMD2(s.bx, s.bz), hw: s.halfWidth, depth: s.depth, berm: s.berm, press: s.press, cap: s.cap,
                                slot: UInt32(s.slot), tag: UInt32(s.tag), lo: SIMD2(Int32(s.x0), Int32(s.z0)), hi: SIMD2(Int32(s.x1), Int32(s.z1)))
-                e.setBytes(&p, length: MemoryLayout<StampU>.stride, index: 0)
-                e.dispatchThreads(MTLSize(width: s.x1 - s.x0 + 1, height: s.z1 - s.z0 + 1, depth: 1), threadsPerThreadgroup: tg)
-                dispatches += 1
+                e.setVertexBytes(&p, length: MemoryLayout<StampU>.stride, index: 0)
+                e.setFragmentBytes(&p, length: MemoryLayout<StampU>.stride, index: 0)
+                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6)
             }
-            pending.removeAll(keepingCapacity: true)
+            e.endEncoding()
+            dispatches += 1
         }
-        e.endEncoding()
+        pending.removeAll(keepingCapacity: true)
     }
 
     /// The terrain's bindings: the texture and the table round the camera (rebuilt only when it changed).

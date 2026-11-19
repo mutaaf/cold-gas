@@ -17,7 +17,7 @@ with no per-frame work when nothing happens.
 ## What
 - `TraceAtlas` (ColdGasWorld Trace.swift, pure): 16 m tiles, 48 slots given out on a tile's first stroke and taken back least
   recently pressed first; strokes cut per tile with their texel boxes; the shader's 32 × 32 table relative to the drawing origin.
-- `TraceField` + Trace.metal: a 2D array texture (256² RGBA8 a layer, 12 MB once), one small compute dispatch per stroke over
+- `TraceField` + Trace.metal: a 2D array texture (256² RGBA8 a layer, 12 MB once), one small quad per stroke (a render pass per layer touched, the texel read in place; the simulator max-blends) over
   its box (rut depth by the ground, load and spin; berm; pressed; the matter's tag), a layer cleared once when it's given out.
 - Trace.h, read by the terrain: rut walls lit by their slope, a darker floor, the berm, laid grass paler, packed snow grey-blue,
   mud's sheen; Real soft, Anime two bands and an ink lip, 8-bit nearest and stepped. Nothing encoded on a frame without a stroke.
