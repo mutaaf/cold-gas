@@ -57,7 +57,8 @@ final class FreeDrive: DriveScene {
     static var driftAssist: Bool = UserDefaults.standard.object(forKey: "coldgas.driftAssist") as? Bool ?? true {
         didSet { UserDefaults.standard.set(driftAssist, forKey: "coldgas.driftAssist") }
     }
-    static var brakeBias: Double = UserDefaults.standard.object(forKey: "coldgas.brakeBias") as? Double ?? DriveSpec.brakeBias {
+    // 0301: a stored balance outside 0.3…0.8 (or not a number) would brake the rear backwards; it reads as the road's.
+    static var brakeBias: Double = Guard.number(UserDefaults.standard.object(forKey: "coldgas.brakeBias") as? Double, in: 0.3...0.8, fallback: DriveSpec.brakeBias).value {
         didSet { UserDefaults.standard.set(brakeBias, forKey: "coldgas.brakeBias") }
     }
     /// The handbrake held on the glass (the deck's HAND; Game sets it each frame).
@@ -459,14 +460,21 @@ final class FreeDrive: DriveScene {
     #endif
     private static func key(_ stage: String) -> String { "coldgas.roam.challenges.\(stage)" }
     static func savedChallenges(_ stage: String) -> [SetChallengeKind: SetChallengeState] {
-        guard let d = UserDefaults.standard.data(forKey: key(stage)), let m = try? JSONDecoder().decode([String: SetChallengeState].self, from: d) else { return [:] }
+        // 0301: entry by entry, so one bad field costs that challenge, not the set's others; a best that isn't a number goes.
+        guard let d = UserDefaults.standard.data(forKey: key(stage)), let m = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any] else { return [:] }
         var out: [SetChallengeKind: SetChallengeState] = [:]
-        for (k, v) in m { if let kk = SetChallengeKind(rawValue: k) { out[kk] = v } }
+        for (k, v) in m {
+            guard let kk = SetChallengeKind(rawValue: k), JSONSerialization.isValidJSONObject([v]),
+                  let e = try? JSONSerialization.data(withJSONObject: v, options: .fragmentsAllowed),
+                  var s = try? JSONDecoder().decode(SetChallengeState.self, from: e) else { continue }
+            if let b = s.best, !b.isFinite { s.best = nil }
+            out[kk] = s
+        }
         return out
     }
     static func saveChallenges(_ ch: SetChallenges) {
         var m: [String: SetChallengeState] = [:]
-        for (k, v) in ch.states { m[k.rawValue] = v }
+        for (k, v) in ch.states { var s = v; if let b = s.best, !b.isFinite { s.best = nil }; m[k.rawValue] = s }   // 0301: JSONEncoder throws on NaN
         if let d = try? JSONEncoder().encode(m) { UserDefaults.standard.set(d, forKey: key(ch.stage)) }
     }
 

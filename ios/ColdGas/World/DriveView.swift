@@ -43,7 +43,7 @@ struct DriveView: View {
                             }.buttonStyle(.plain).accessibilityIdentifier("roam-fly").accessibilityHint("A scored run from the mark.")
                             // The set's small challenges (0274), under Fly; the map takes their place when it's shown.
                             if !h.challenges.isEmpty && setList {
-                                RoamChallengesView(rows: h.challenges) { game.freeDrive?.resetSet() }.transition(.opacity)
+                                RoamChallengesView(rows: h.challenges) { game.freeDrive?.resetSet(); PerfCenter.shared.note(.roamReset) }.transition(.opacity)
                             }
                         }
                         // The minimap (0226), under Back, clear of the controls.

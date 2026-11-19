@@ -98,20 +98,20 @@ struct SettingsView: View {
                     .accessibilityIdentifier("stability")
                     // 0281: the brakes and the other assists, each on its own.
                     Toggle("Traction control", isOn: $traction)
-                        .onChange(of: traction) { _, v in FreeDrive.traction = v }
+                        .onChange(of: traction) { _, v in FreeDrive.traction = v; PerfCenter.shared.note(v ? .tractionOn : .tractionOff) }
                         .accessibilityIdentifier("traction")
                     Toggle("ABS", isOn: $absOn)
-                        .onChange(of: absOn) { _, v in FreeDrive.absOn = v }
+                        .onChange(of: absOn) { _, v in FreeDrive.absOn = v; PerfCenter.shared.note(v ? .absOn : .absOff) }
                         .accessibilityIdentifier("abs")
                     Toggle("Drift assist", isOn: $driftAssist)
-                        .onChange(of: driftAssist) { _, v in FreeDrive.driftAssist = v }
+                        .onChange(of: driftAssist) { _, v in FreeDrive.driftAssist = v; PerfCenter.shared.note(v ? .driftOn : .driftOff) }
                         .accessibilityIdentifier("drift-assist")
                     Picker("Brake balance", selection: $brakeBias) {
                         Text("Front").tag(0.68)
                         Text("Road").tag(DriveSpec.brakeBias)
                         Text("Rear").tag(0.5)
                     }
-                    .onChange(of: brakeBias) { _, v in FreeDrive.brakeBias = v }
+                    .onChange(of: brakeBias) { _, v in FreeDrive.brakeBias = v; PerfCenter.shared.note(.brakeBias) }
                     .accessibilityIdentifier("brake-balance")
                 } header: { Text("Driving") } footer: {
                     Text("Free Drive and Roam. On catches a slide early; Sport lets the car move before it steps in; Off leaves the car to you. On touch the wheels lean into a slide a little, to help you catch it. Traction control off lets the rears spin. ABS off lets the wheels lock: a longer stop, a flat spot, no steering on a locked front. The drift assist (Sport or Off) points the wheels down the slide and eases the motors so a thumb can hold an angle; HAND locks the rears. Brake balance: Front is stable, Rear rotates the car under the brakes.")

@@ -67,7 +67,7 @@ public final class SetChallenges {
     public func update(dt: Double, x: Double, y: Double, z: Double, speed: Double, airborne: Bool, tyresDown: Int, conesMoved: Bool) -> [SetChallengeEvent] {
         var out: [SetChallengeEvent] = []
         func record(_ k: SetChallengeKind, _ v: Double, better: (Double, Double) -> Bool) {
-            guard var s = states[k] else { return }
+            guard v.isFinite, var s = states[k] else { return }   // 0301: a NaN best would stop the set saving
             let first = !s.done
             if first || s.best.map({ better(v, $0) }) ?? true {
                 s.done = true; s.best = v; states[k] = s

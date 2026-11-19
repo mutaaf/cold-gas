@@ -51,6 +51,7 @@ final class RunSkids {
         if t < lastT - 1e-6 { clear() }   // the track went back (a replay looping, the encore, a retry)
         lastT = t
         guard r.ticks > 2 else { return }
+        guard t.isFinite, t >= 0, t < 86_400 else { return }   // 0301: Int(t * hz) traps on a NaN or a huge time
         let tick = min(r.ticks - 1, Int(t * Replay.hz))
         guard tick != lastTick, tick > 0 else { return }
         lastTick = tick

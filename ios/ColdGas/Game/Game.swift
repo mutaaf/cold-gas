@@ -336,7 +336,7 @@ final class Game: ObservableObject {
     }
     func endDrive() {
         if let r = stage?.renderer, isDrive(r.courseKey) { r.drive = nil }
-        controls.drive = nil
+        controls.drive = nil; controls.handbrake = false   // 0301: a lever held as the drive ends isn't held after it
         freeDrive?.car.world.free()
         freeDrive = nil
         roamedFrom = nil
@@ -348,7 +348,7 @@ final class Game: ObservableObject {
     func flyFromRoam() {
         let c = freeDrive.map { stageOf($0.course.id) } ?? course
         if let r = stage?.renderer, isDrive(r.courseKey) { r.drive = nil }
-        controls.drive = nil
+        controls.drive = nil; controls.handbrake = false   // 0301: a lever held as the drive ends isn't held after it
         freeDrive?.car.world.free()
         freeDrive = nil
         roamedFrom = nil
@@ -380,7 +380,7 @@ final class Game: ObservableObject {
         }
         // A roam's challenges (0274): each one done (or bettered) is said, felt once, and lights Fly.
         for e in fd.drainChallenges() {
-            roamDidSomething = true
+            roamDidSomething = true; PerfCenter.shared.note(.roamChallenge)   // 0300's flag
             fd.announce(RoamText.cue(e))
             HapticPlayer.shared.play(HapticEvent(kind: .settle, tick: 0, channel: 4, intensity: e.first ? 0.8 : 0.5, sharpness: 0.5))
         }

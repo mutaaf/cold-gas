@@ -395,7 +395,7 @@ final class FlightDeckView: ControlSurface {
         if hand != handHeld {
             handHeld = hand
             Game.shared.controls.handbrake = hand
-            if hand { PressHaptics.feel(.handbrake) }
+            if hand { PressHaptics.feel(.handbrake); PerfCenter.shared.note(.handbrake) }
             paintHand()
         }
         var now = pulsed.union(latchedKeys)
