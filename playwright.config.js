@@ -39,9 +39,9 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // 35 min). 50:71:86:74 keeps shards 2-4 exactly main's files (90 / 108 / 93) and shard 1 at 64.
 // Main then ran e2e 3/4 past 35 min twice running (2ca517c, f47e74d: 102 and 103 of 108 done, every file ≈ 1.75× the
 // PR's run of the same tree), and f47e74d's e2e 4/4 too. By each file's median over three runs (#452's PR run and
-// both main runs, first attempts only) 50:71:86:74 was 22.7 / 31.0 / 37.2 / 24.2 min; 72:68:72:90 cuts 88 / 79 / 83 /
+// both main runs, first attempts only; two slow runs of three, so these are near slow-runner times) 50:71:86:74 was 22.7 / 31.0 / 37.2 / 24.2 min; 72:68:72:90 cuts 88 / 79 / 83 /
 // 105 tests ≈ 29.1 / 29.3 / 29.5 / 27.3 (shard 2 starts at fold, 3 at learn, 4 at release-frame's last thumb flight). The
-// suite is ≈ 117 median minutes in four 35-minute jobs: a 2× runner still fails, the fix for that is ci.yml's.
+// suite is ≈ 115 median minutes in four 35-minute jobs: a 2× runner still fails, the fix for that is ci.yml's.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.

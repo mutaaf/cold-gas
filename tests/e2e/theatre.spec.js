@@ -13,8 +13,8 @@ test('judges theatre: a streamed answer is shown, then lands in the results', as
     + ev('done', { words, inTokens: 600, outTokens: 4, ttftMs: 300, totalMs: 900, tokensPerSec: 40, neurons: 13, costUsd: null });
   await page.route('**/coldgas/api/judge/stream', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body }));
   await page.goto('/coldgas/?play=reveal&gfx=low');
-  // A fresh boot to the run waits 90 s like every other boot in the suite: on a slow runner beside a heavy
-  // GL test it took over 60 (main f47e74d, e2e 4/4; 94 s to the countdown on one pinned core).
+  // A fresh boot to the run waits 90 s, as the newer specs give it (challenge, daily-hand, board-empty): on a
+  // slow runner beside a heavy GL test it took over 60 (main f47e74d, e2e 4/4; 94 s to the countdown on one core).
   await page.waitForFunction(() => window.__coldgas?.S.mode === 'live', null, { timeout: 90_000 });
   await page.evaluate(() => window.__coldgas.fastForward());
   // The stream reaches the ticker during COMPUTE.
@@ -56,7 +56,7 @@ async function toTheatre(page) {
 
 test('judges theatre: the run spelled figure by figure, bright, then the call by its numbers', async ({ page }) => {
   test.slow();
-  test.setTimeout(240_000);
+  test.setTimeout(270_000);
   await toTheatre(page);
   await page.waitForFunction(() => document.querySelector('[data-theatre]')?.dataset.stage === 'text', null, { timeout: 90_000 });
   // Mid-figure, settled: the glyphs' brightest pixels against the box's typical (background) pixel.
