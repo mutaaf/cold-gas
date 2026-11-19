@@ -133,6 +133,8 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
     /// let a frame that missed 120's deadline show for 16.7 ms between 8.3 ms ones: the judder).
     private static func range(_ hz: Int) -> CAFrameRateRange { let f = Float(hz); return CAFrameRateRange(minimum: f, maximum: f, preferred: f) }
     private var linkCadence = 120
+    /// The tools (the turntable bench, a recorded run's shots, the haptics demo) draw at the governor's cadence, uncapped.
+    private static let capped = !(Launch.bench && !Launch.freedrive) && Launch.value("-replay") == nil && !Launch.args.contains("-haptics")
     /// Free Drive's bench starts once the world near the car is built (Game.startDrive's `-bench`).
     func startBench(seconds: Double) { if bench == nil { bench = Bench(seconds: seconds) } }
 
@@ -157,7 +159,9 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
 
     func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
         guard let r = renderer else { return }
-        if r.cadence != linkCadence { linkCadence = r.cadence; link.preferredFrameRateRange = StageView.range(r.cadence) }
+        // 0298: the governor's cadence, capped by what the screen needs (Game.stageHz: 60 on the title, 15 under a sheet or a pause).
+        let hz = StageView.capped ? min(r.cadence, MainActor.assumeIsolated { Game.shared.stageHz }) : r.cadence
+        if hz != linkCadence { linkCadence = hz; link.preferredFrameRateRange = StageView.range(hz) }
         let now0 = CACurrentMediaTime()
         let tc0 = PerfProbe.on ? PerfProbe.threadMs() : 0   // (0296: the main thread's own CPU time, which a loaded Mac's other work doesn't inflate)
         var dt = lastFrame == 0 ? 0 : now0 - lastFrame

@@ -52,6 +52,19 @@ final class Game: ObservableObject {
     @Published private(set) var countdown = 0
     @Published private(set) var result: RunResult?
     @Published var paused = false
+    /// A sheet (Board, Settings, How to, Practice, the Club) covers the stage (GameUI). Not published: the stage view reads it.
+    var sheetUp = false
+    /// The most the stage needs drawing a second (0298), under the renderer's own cadence: a run, a drive, a replay or the
+    /// encore move fast and get it all; the title's loop and the results' orbit are slow camera moves, 60 is smooth for them;
+    /// a paused run is a held frame and a sheet (94 % opaque, `.large`) all but hides the stage, so 15 keeps it alive and no more.
+    /// Before, the title and every sheet drew at 120 Hz on a ProMotion phone: the most frames for the least to see.
+    var stageHz: Int {
+        if sheetUp || (paused && screen == .run) { return 15 }
+        switch screen {
+        case .run, .drive: return 120
+        case .title, .results: return replaying || encore ? 120 : 60
+        }
+    }
     /// 0293: one calm line over the screens when something failed that the player should know about (Report.swift).
     @Published var notice: Notice?
     /// The results are up and the flight is playing back behind them (the track the run recorded).

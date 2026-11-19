@@ -113,6 +113,7 @@ struct RootUI: View {
             }
         }
         .ignoresSafeArea()
+        .onChange(of: sheet, initial: true) { _, s in game.sheetUp = s != nil }   // 0298: the stage under a sheet draws slowly
         .sheet(item: $sheet) { s in
             Group {
                 switch s {
