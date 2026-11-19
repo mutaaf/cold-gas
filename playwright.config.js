@@ -35,6 +35,8 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // min, then 71:117:89 ran shard 2 past 35 min (78 of 117 green): on those runners the suite is ≈ 101 minutes, more than
 // three 35-minute jobs hold whatever the cut. CI now runs four (ci.yml). By each test's time in #181's two runs, at file
 // boundaries, 46:71:86:74 is ≈ 25.0 / 25.8 / 26.1 / 24.3 min: shard 2 starts at fan, 3 at lazy-retry, 4 at restart-lets-go.
+// 0266 (#452) added daily-goal-fit (5 tests, shard 1's files): 46 moved one file into each later shard (e2e 3/4 then hit
+// 35 min). 50:71:86:74 keeps shards 2-4 exactly main's files (90 / 108 / 93) and shard 1 at 64.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -42,7 +44,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '46:71:86:74';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '50:71:86:74';
 
 export default defineConfig({
   testDir: 'tests/e2e',
