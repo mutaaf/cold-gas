@@ -1,0 +1,28 @@
+import { chromium, devices } from 'playwright';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'] });
+const url = process.argv[2], out = process.argv[3];
+const sizes = [['iphone13', devices['iPhone 13']], ['390t', { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }], ['430t', { viewport: { width: 430, height: 932 }, hasTouch: true, isMobile: true, deviceScaleFactor: 2 }], ['1440', { viewport: { width: 1440, height: 900 } }]];
+for (const howto of ['new', 'seen']) for (const [tag, dev] of sizes) {
+  const ctx = await browser.newContext(dev);
+  await ctx.route(/\/boxoffice\/e\//, (r) => r.fulfill({ status: 200, body: '{}' }));
+  await ctx.addInitScript((v) => localStorage.setItem('coldgas_howto', v), howto);
+  const page = await ctx.newPage(); page.setDefaultTimeout(120000);
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__coldgas?.stage, null, { timeout: 90000 });
+  const rows = [];
+  for (const t of [3000, 12000]) {
+    await page.waitForTimeout(t === 3000 ? 3000 : 9000);
+    rows.push(await page.evaluate((t) => {
+      const g = document.querySelector('.xc-goal'); const card = g?.closest('[class*="xc"]') || g?.parentElement;
+      const frame = document.querySelector('iframe, [data-ad], .ad, [data-marquee]');
+      const fr = frame?.getBoundingClientRect();
+      return { t, goal: g?.textContent?.trim(), sw: g?.scrollWidth, cw: g?.clientWidth, cut: g ? g.scrollWidth > g.clientWidth : null,
+        extraFit: document.querySelector('.title')?.hasAttribute('data-extra-fit'), streak: !!document.querySelector('.xc-streak') && !document.querySelector('.xc-streak').hidden,
+        frame: frame ? { tag: frame.tagName, cls: frame.className, h: Math.round(fr.height), top: Math.round(fr.top) } : null, ua: navigator.userAgent.slice(0, 40) };
+    }, t));
+  }
+  await page.screenshot({ path: `${out}/daily-${howto}-${tag}.png` });
+  console.log(howto, tag, JSON.stringify(rows));
+  await ctx.close();
+}
+await browser.close();

@@ -1,0 +1,89 @@
+// Critic probe 2026-11-16 16:00. Run as: cp probe.mjs.txt /tmp/p.mjs && node /tmp/p.mjs <outdir> [url]
+import { chromium, devices } from 'playwright';
+const out = process.argv[2], url = process.argv[3] || 'https://mutaafaziz.com/coldgas/';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'] });
+const res = {};
+async function ctxFor(first, desktop) {
+  const ctx = await browser.newContext(desktop ? { viewport: { width: 1440, height: 900 } } : { ...devices['iPhone 13'] });
+  await ctx.route(/\/boxoffice\/e\//, (r) => r.fulfill({ status: 200, body: '{}' }));
+  // Never post to the real board: answer any POST /api/scores locally.
+  await ctx.route(/\/api\/scores$/, (r) => r.request().method() === 'POST'
+    ? r.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ rank: 1, dry: true }) }) : r.continue());
+  await ctx.addInitScript((v) => localStorage.setItem('coldgas_howto', v), first ? 'new' : 'seen');
+  return ctx;
+}
+async function boot(first, desktop) {
+  const ctx = await ctxFor(first, desktop); const page = await ctx.newPage(); page.setDefaultTimeout(120000);
+  const errs = []; page.on('pageerror', (e) => errs.push(e.message));
+  await page.goto(url, { waitUntil: 'domcontentloaded' });
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90000 });
+  await page.waitForTimeout(3000);
+  return { ctx, page, errs };
+}
+const sheetText = (page) => page.evaluate(() => { const r = document.querySelector('[data-screen="results"]'); return r && !r.hidden ? r.innerText.slice(0, 700) : null; });
+async function flight(tag, first, desktop) {
+  const { ctx, page, errs } = await boot(first, desktop);
+  await page.screenshot({ path: `${out}/${tag}-title.png` });
+  const t0 = Date.now();
+  await page.evaluate(() => window.__coldgas.startRun('reveal'));
+  await page.waitForFunction(() => ['countdown','live'].includes(window.__coldgas.S.mode), null, { timeout: 20000 });
+  await page.evaluate(() => window.__coldgas.skipCountdown());
+  const shots = [
+    ['climb', 'S.run.phase === "ramp" && S.run.car.pos.y > 8'],
+    ['inverted', 'S.run.phase === "ramp" && S.run.t.invertedTime > 0.2'],
+    ['over-row', 'S.run.phase === "air" && S.run.car.pos.z < -16'],
+    ['touchdown', 'S.run.phase === "landed" || S.run.phase === "done"'],
+  ];
+  for (const [n, p] of shots) {
+    const ok = await page.waitForFunction(`(()=>{const S=window.__coldgas.S;return !!S.run && (${p})})()`, null, { timeout: 180000, polling: 50 }).then(()=>1).catch(() => 0);
+    if (ok) await page.screenshot({ path: `${out}/${tag}-${n}.png` }); else console.log(tag, 'missed', n);
+  }
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 180000 }).catch(() => {});
+  await page.waitForTimeout(7000);
+  await page.screenshot({ path: `${out}/${tag}-results.png` });
+  res[tag] = await page.evaluate(() => { const S = window.__coldgas.S, c = S.card || {}; return { total: c.total, verdict: c.verdict, f: c.facts && { sink: c.facts.sink, padMiss: c.facts.padMiss, gasLeft: c.facts.gasLeft, crashed: c.facts.crashed } }; });
+  res[tag].sheet = await sheetText(page); res[tag].wallS = (Date.now() - t0) / 1000; res[tag].errors = errs.slice(0, 4);
+  await ctx.close();
+}
+// 0204: the Show reference as the player's own jump, all inputs cut 0.125 s after the release (wreck-post.spec's crash), rendered.
+async function wreck(tag, desktop) {
+  const { ctx, page, errs } = await boot(false, desktop);
+  await page.evaluate(() => {
+    const g = window.__coldgas, S = g.S;
+    g.startRun('jump');
+    const ap = g.createAutopilot(g.stage.course);
+    S.autopilot = (run) => { const i = ap(run); if (S.released && run.tick - S.releaseTick >= 0.125 * 240) for (const k of g.inputKeys) i[k] = 0; if (run.phase === 'done' || run.phase === 'crashed') S.autopilot = null; return i; };
+    g.skipCountdown();
+  });
+  await page.waitForFunction(() => { const S = window.__coldgas.S; return S.run?.crash || S.run?.phase === 'done' || S.card; }, null, { timeout: 240000, polling: 50 }).catch(() => {});
+  await page.screenshot({ path: `${out}/${tag}-impact.png` });
+  await page.evaluate(() => { window.__coldgas.S.autopilot = null; });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 240000 }).catch(() => {});
+  await page.waitForTimeout(4000);
+  await page.screenshot({ path: `${out}/${tag}-results.png` });
+  res[tag] = await page.evaluate(() => { const S = window.__coldgas.S, c = S.card || {}; const vis = (s) => { const e = document.querySelector(s); return !!e && !e.hidden && e.offsetParent !== null; }; return { kind: S.runKind, total: c.total, verdict: c.verdict, crashed: !!c.facts?.crashed, post: vis('[data-r-post]'), postBtn: vis('[data-r-post-btn]') }; });
+  res[tag].sheet = await sheetText(page); res[tag].errors = errs.slice(0, 4);
+  await ctx.close();
+}
+// 0191: one thumb held from Go on the Lineup, rendered at real speed on a phone.
+async function lineup(tag) {
+  const { ctx, page, errs } = await boot(false, false);
+  await page.locator('.courses [data-course="lineup"]').tap();
+  await page.waitForTimeout(800);
+  const label = await page.locator('[data-controls-label]').first().textContent().catch(() => null);
+  await page.evaluate(() => { const g = window.__coldgas; g.setTier?.('assist'); g.startRun('jump'); g.skipCountdown(); g.thumb.down(); });
+  await page.waitForFunction(() => window.__coldgas.S.card, null, { timeout: 240000 }).catch(() => {});
+  await page.evaluate(() => window.__coldgas.thumb.up?.());
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 120000 }).catch(() => {});
+  await page.waitForTimeout(5000);
+  await page.screenshot({ path: `${out}/${tag}-results.png` });
+  res[tag] = await page.evaluate(() => { const S = window.__coldgas.S, c = S.card || {}; return { course: S.run?.course, total: c.total, verdict: c.verdict, roll: c.facts?.rollDeg, miss: c.facts?.padMiss, next: document.querySelector('[data-pointer-text]')?.textContent }; });
+  res[tag].label = label; res[tag].sheet = await sheetText(page); res[tag].errors = errs.slice(0, 4);
+  await ctx.close();
+}
+const which = (process.argv[4] || 'phone,desk,wreck,wreckdesk,lineup').split(',');
+const steps = { phone: () => flight('phone-first-reveal', true, false), desk: () => flight('desk-reveal', false, true),
+  wreck: () => wreck('phone-wreck', false), wreckdesk: () => wreck('desk-wreck', true), lineup: () => lineup('phone-lineup-thumb') };
+for (const w of which) { try { await steps[w](); } catch (e) { console.log(w, 'FAILED', e.message.split('\n')[0]); } console.log(w, JSON.stringify(res)); }
+console.log(JSON.stringify(res, null, 1));
+await browser.close();
