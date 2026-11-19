@@ -217,6 +217,8 @@ final class WorldView {
         stats.mb = Double(cache.bytes + props.bytes) / 1e6
     }
 
+    /// Why the world isn't settled yet (`-fd-stats`).
+    var waitLine: String { "WORLD wait missing \(stats.missing) inflight \(inflight.count) tiles \(tiles.count) free \(cache.freeCount) built \(built.count) drawn \(stats.tiles)" }
     /// Everything near `eye` is built (the drive waits on this before it shows the world).
     var settled: Bool { stats.missing == 0 && inflight.isEmpty }
 
@@ -227,10 +229,11 @@ final class WorldView {
         inflight.removeAll()
         cache.leafChanged()
     }
-    /// The LRU: when the free slots run low, the tiles drawn longest ago go (never one drawn in the last two seconds).
+    /// The LRU: when the free slots run low, the tiles the quadtree hasn't visited for longest go (never one it visited this
+    /// frame or the last: the drawn tiles and their ancestors).
     private func evict() {
         guard cache.freeCount < 96 else { return }
-        let old = tiles.filter { frame - $0.value.used > 240 }.sorted { $0.value.used < $1.value.used }.prefix(160 - cache.freeCount)
+        let old = tiles.filter { frame - $0.value.used > 1 }.sorted { $0.value.used < $1.value.used }.prefix(160 - cache.freeCount)
         for (k, t) in old { tiles[k] = nil; cache.release(t.slot, frame: frame); if k.level == 0 { cache.leafChanged() } }
     }
 
@@ -295,6 +298,9 @@ final class WorldView {
         if d > WorldView.farR { return }
         guard var t = tiles[k] else { want.append((k, d)); return }
         t.used = frame; tiles[k] = t
+        // 0310: a node out of the lens is neither drawn nor refined (its subtree stays in the LRU while slots allow, so a
+        // turn of the camera finds most of it cached); the working set is what's in view, ≈ a third of the old one.
+        if !WorldView.noCull && !visible(k, t, vp) { return }
         if k.level > 0 && d < WorldView.split * k.size {
             var ready = true
             for c in 0..<4 { let ck = k.child(c); if tiles[ck] == nil { ready = false; want.append((ck, dist(ck, eye))) } }

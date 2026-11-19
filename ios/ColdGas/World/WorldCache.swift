@@ -1,6 +1,6 @@
 // What the land keeps between frames (0310, docs/NATIVE-FREEDRIVE.md §9.3): made once when the drive's view is built, never
 // resized, never allocated from in a frame.
-//   slabs     one buffer (a shared heap): `slots` CDLOD tiles' vertices, each written once when its tile arrives
+//   slabs     one fixed shared buffer: `slots` CDLOD tiles' vertices, each written once when its tile arrives
 //   surface   a texture array (a private heap): each tile's 64 × 64 surface (R rock, G snow, B wetness, A water depth), baked
 //             by one compute dispatch when the tile arrives (World.metal cg_world_surface_bake), never again while it's cached
 //   traces    MATTER's per-leaf marks (512² RGBA8 a slice), only once something calls `enableTraces()`
@@ -22,7 +22,7 @@ final class WorldCache {
     static let leafGrid = 32
 
     let device: MTLDevice
-    let sharedHeap: MTLHeap, privateHeap: MTLHeap
+    let privateHeap: MTLHeap
     let slab: MTLBuffer
     let surface: MTLTexture
     private(set) var traces: MTLTexture?
@@ -57,16 +57,14 @@ final class WorldCache {
         sd.textureType = .type2DArray; sd.pixelFormat = .rgba8Unorm
         sd.width = WorldCache.surfaceSize; sd.height = WorldCache.surfaceSize; sd.arrayLength = WorldCache.slots
         sd.usage = [.shaderRead, .shaderWrite]; sd.storageMode = .private
-        // The heaps: sized from what they hold, tracked (Metal orders the bake's writes before the draws' reads).
-        let hs = MTLHeapDescriptor(); hs.storageMode = .shared; hs.hazardTrackingMode = .tracked
-        hs.size = device.heapBufferSizeAndAlign(length: slabLen, options: .storageModeShared).size
+        // The GPU-written textures in one private heap, tracked (Metal orders the bake's writes before the draws' reads); the
+        // slabs, which the CPU writes, one fixed shared buffer beside it (a heap must be private on the simulator).
         let hp = MTLHeapDescriptor(); hp.storageMode = .private; hp.hazardTrackingMode = .tracked
         hp.size = device.heapTextureSizeAndAlign(descriptor: sd).size
-        guard let sh = device.makeHeap(descriptor: hs), let ph = device.makeHeap(descriptor: hp),
-              let sl = sh.makeBuffer(length: slabLen, options: .storageModeShared),
+        guard let ph = device.makeHeap(descriptor: hp), let sl = device.makeBuffer(length: slabLen, options: .storageModeShared),
               let su = ph.makeTexture(descriptor: sd) else { return nil }
-        sharedHeap = sh; privateHeap = ph; slab = sl; surface = su
-        sh.label = "world.shared"; ph.label = "world.private"; sl.label = "world.slabs"; su.label = "world.surface"
+        privateHeap = ph; slab = sl; surface = su
+        ph.label = "world.private"; sl.label = "world.slabs"; su.label = "world.surface"
         let td = MTLTextureDescriptor()
         td.textureType = .type2DArray; td.pixelFormat = .rgba8Unorm; td.width = 1; td.height = 1; td.arrayLength = 1
         td.usage = .shaderRead; td.storageMode = .private
@@ -80,7 +78,7 @@ final class WorldCache {
         // Resident once (Metal 3 on iOS 18: a residency set on the renderer's queue).
         let rd = MTLResidencySetDescriptor(); rd.label = "world"; rd.initialCapacity = 4
         if let rs = try? device.makeResidencySet(descriptor: rd) {
-            rs.addAllocation(sh); rs.addAllocation(ph); rs.commit(); rs.requestResidency()
+            rs.addAllocation(sl); rs.addAllocation(ph); rs.commit(); rs.requestResidency()
             residency = rs
         }
     }
@@ -187,7 +185,7 @@ final class WorldCache {
     }
 
     /// What the cache holds on the GPU (bytes).
-    var bytes: Int { sharedHeap.size + privateHeap.size + (traces?.allocatedSize ?? 0) + leafIndex.allocatedSize }
+    var bytes: Int { slab.length + privateHeap.size + (traces?.allocatedSize ?? 0) + leafIndex.allocatedSize }
 }
 
 /// World.metal's WBake.

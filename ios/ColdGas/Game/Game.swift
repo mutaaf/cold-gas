@@ -397,6 +397,7 @@ final class Game: ObservableObject {
                                                    hiss: Float(min(0.6, jets * 0.12)), hissSharp: 0.6, grind: Float(min(0.5, fd.slideK * 0.35)))))
         if !paused && fd.ownCar { driveFeel.frame(fd, handbrake: fd.handbrake, dt: dt) }
         if PerfProbe.on { PerfProbe.worldLine = fd.perfLine }   // 0310
+        if !driveSettled && Launch.args.contains("-fd-stats") { driveLogT += dt; if driveLogT > 2 { driveLogT = 0; print(fd.view?.waitLine ?? "WORLD no view") } }
         if !driveSettled, fd.view?.settled == true, (fd.view?.stats.tiles ?? 0) > 0 {
             driveSettled = true
             Ready.mark("drive")
