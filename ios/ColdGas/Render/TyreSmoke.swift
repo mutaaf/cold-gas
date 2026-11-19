@@ -18,8 +18,9 @@ final class TyreSmoke {
 
     func reset() { for i in 0..<4 { loaded[i] = true; airT[i] = 0; acc[i] = 0 }; lastT = -1 }
 
-    /// Once a frame: `t` the track's time (s), `dt` the presentation clock's step (slowed with the crash or the encore).
-    func update(_ r: Replay, t: Double, dt: Float, carPos: SIMD3<Float>, carQuat q: simd_quatf, vel: SIMD3<Float>, into crash: Crash) {
+    /// Once a frame: `t` the track's time (s), `dt` the presentation clock's step (slowed with the crash or the encore),
+    /// `lateral` each tyre's sideways slip speed (m/s, RunSkids: 0281, a slide smokes as a spin does).
+    func update(_ r: Replay, t: Double, dt: Float, carPos: SIMD3<Float>, carQuat q: simd_quatf, vel: SIMD3<Float>, lateral: SIMD4<Float> = .zero, into crash: Crash) {
         if t < lastT - 1e-6 { reset() }   // the track went back (a replay, the encore)
         let step = lastT < 0 ? 0 : t - lastT
         lastT = t
@@ -31,7 +32,7 @@ final class TyreSmoke {
             let on = w.comp > 0.002
             if !on { airT[i] += Float(step); loaded[i] = false; continue }
             let rim = abs(w.spin - w0.spin) * Float(Replay.hz) * radius   // the tread's speed
-            let slip = abs(vLong - rim)
+            let slip = (abs(vLong - rim) * abs(vLong - rim) + lateral[i] * lateral[i]).squareRoot()
             let a = anchors[i], wp = q.act(SIMD3(Float(a.0), Float(a.1), Float(a.2))) + carPos
             let at = SIMD3(wp.x, max(0.05, wp.y - 0.24 - radius) + 0.12, wp.z)
             seed = Double((r.tickBase + Int(t * Replay.hz)) * 4 + i + 1)

@@ -297,6 +297,20 @@ dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look d
   shake, scaled by the speed. When the car leaves the cell behind, the pieces are put away (collider off, the body parked
   for the next break; the engine has no body removal) and the items stand again.
 
+### The sets, built and dressed; Roam worth doing (0273, 0274)
+
+- **Surfaces.** The static stage's lit, opaque materials are concrete or steel (metal ≥ 0.5) and read one baked 512² texture
+  (`Resources/Stages/set-detail.png`, `ios/scripts/bake-set-detail.swift`) twice in world space: a 4 m tile (grain,
+  brushing) and a 37 m tile (wear, stains). Saw-cut joints every 6 m and the run line's rubber are worked out in
+  `Render/SetSurface.h`. Two fetches and ≈ 40 ALU ops on a set pixel; no per-pixel noise.
+- **Dressing.** `dressingSet(stage)` (ColdGasPhysics Loose.swift): tyre stacks, drums, flight cases, safety barrier, a
+  generator, ≥ 6 m off every run's line. A scored run draws them as one static mesh (`Render/SetDressing.swift`, pixels only);
+  a roam adds them as loose bodies at their real masses, so they topple and shove.
+- **Paint.** Stencilled set names, KEEP CLEAR, CREW, UNIT B, NO JETS ON THE APRON and chevrons, from one atlas made at launch.
+- **Challenges.** `SetChallenges` (pure) reads the car once a frame: the lip, the row end to end, the mark, six tyres, the
+  Lineup's cone lane. Done and best kept per set on the device; no timer, no streak, nothing scored.
+- `-flat-sets` turns the surfaces, the dressing and the paint off; `-roam-log` (Debug) logs the challenges to Caches/roam.log.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
