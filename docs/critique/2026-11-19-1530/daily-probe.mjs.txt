@@ -1,0 +1,60 @@
+// 0266 re-review on production: every Daily goal over 30 days, both thumb schemes, at the four sizes; first visit too.
+import { chromium, devices } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const OUT = process.argv[2], URL = process.argv[3] || 'https://mutaafaziz.com/coldgas/';
+const SIZES = {
+  'iphone13': { ...devices['iPhone 13'] },
+  '393x659': { viewport: { width: 393, height: 659 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 },
+  '430x932': { viewport: { width: 430, height: 932 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 },
+  '390x844': { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 },
+};
+const START = Date.parse('2026-11-19T15:00:00Z');
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const read = (page) => page.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(() => {
+  const t = document.querySelector('.title'), card = t.querySelector('.xc-daily'), g = card.querySelector('.xc-goal');
+  const cs = getComputedStyle(g), j = document.querySelector('[data-start]').getBoundingClientRect(), c = card.getBoundingClientRect();
+  let top = Infinity; for (const k of t.children) if (k.offsetHeight > 1 && getComputedStyle(k).display !== 'none') top = Math.min(top, k.getBoundingClientRect().top);
+  let bar = 0; for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const r = e.getBoundingClientRect(); if (r.height > 1) bar = Math.max(bar, r.bottom); }
+  res({ fit: t.dataset.extraFit ?? '', goal: g.offsetHeight > 0 ? g.textContent : '', sw: g.scrollWidth, cw: g.clientWidth,
+    cut: g.scrollWidth > g.clientWidth + 0.5 || (cs.textOverflow === 'ellipsis' && cs.whiteSpace === 'nowrap'),
+    lines: Math.round(g.getBoundingClientRect().height / parseFloat(cs.lineHeight)), fontPx: parseFloat(cs.fontSize),
+    jumpBottom: Math.round(j.bottom), vh: innerHeight, jumpIn: j.top >= 0 && j.bottom <= innerHeight + 0.5,
+    cardIn: c.top >= 0 && c.bottom <= innerHeight + 0.5 && c.right <= innerWidth + 0.5, underBar: top < bar });
+}))));
+async function boot(view, landed) {
+  const ctx = await browser.newContext(view); const page = await ctx.newPage(); const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.clock.setFixedTime(new Date(START));
+  await ctx.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+  await ctx.route('**/coldgas/api/**', (r) => r.request().method() === 'GET' ? r.continue() : r.fulfill({ status: 204 }));
+  await ctx.route(/googlesyndication|doubleclick|googleads|adservice/, (r) => r.abort());
+  await page.addInitScript((landed) => { localStorage.setItem('coldgas.units', 'us'); if (landed) localStorage.setItem('coldgas_landings', '1'); else localStorage.setItem('coldgas_howto', 'new'); }, landed);
+  await page.goto(URL);
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 120000 });
+  await page.waitForSelector('[data-title-extra] .xc-daily', { state: 'attached' });
+  await page.evaluate(() => document.fonts.ready); await page.waitForTimeout(2500);
+  return { ctx, page, errors };
+}
+const out = {};
+for (const [name, view] of Object.entries(SIZES)) {
+  const { ctx, page, errors } = await boot(view, true);
+  const rows = []; let worst = null;
+  for (const scheme of ['thumb', 'classic']) {
+    await page.evaluate((s) => window.__coldgas.touch.set('scheme', s), scheme);
+    for (let d = 0; d < 30; d++) {
+      await page.clock.setFixedTime(new Date(START + d * 86400000));
+      await page.evaluate(() => window.__coldgas.comeback.render());
+      const r = await read(page); rows.push({ scheme, d, ...r });
+      if (!worst || r.lines > worst.lines || r.cut) { worst = { scheme, d, ...r }; await page.screenshot({ path: `${OUT}/title-${name}-worst.png` }); }
+    }
+  }
+  out[name] = { fits: [...new Set(rows.map((r) => r.fit))], cut: rows.filter((r) => r.cut).length, maxLines: Math.max(...rows.map((r) => r.lines)),
+    jumpOff: rows.filter((r) => !r.jumpIn).length, cardOff: rows.filter((r) => !r.cardIn).length, underBar: rows.filter((r) => r.underBar).length,
+    goals: new Set(rows.map((r) => r.goal)).size, fontPx: rows[0].fontPx, worst, errors };
+  await ctx.close();
+  const f = await boot(view, false);
+  out[name].first = { firstTitle: await f.page.evaluate(() => document.documentElement.hasAttribute('data-first-title')), ...(await read(f.page)), errors: f.errors };
+  await f.page.screenshot({ path: `${OUT}/title-${name}-first.png` });
+  await f.ctx.close();
+}
+console.log(JSON.stringify(out, null, 1));
+await browser.close();
