@@ -135,6 +135,8 @@ final class Renderer {
     private(set) var scale: Float = Launch.value("-scale").flatMap(Float.init) ?? 0.8
     private var gpuEMA = 0.0, calm = 0
     let launchCompileMs: Double
+    /// 0300: the stage's load (ms, on its own thread) and how long the pipelines then waited for it.
+    let stageLoadMs: Double, stageWaitMs: Double
     private(set) var compilesAfterLaunch = 0
     let nLights: Int
     private let dummy: MTLTexture
@@ -167,8 +169,9 @@ final class Renderer {
         #endif
         guard let q = device.makeCommandQueue() else { Report.error(.render, .error, "renderer: no command queue"); return nil }
         guard let lib = device.makeDefaultLibrary() else { Report.error(.shader, .shader, "renderer: no default library"); return nil }
-        guard let st = Stage.shared(device: device, course: stageOf(course)) else { Report.error(.render, .error, "renderer: stage \(stageOf(course)) didn't load"); return nil }
-        queue = q; stage = st; self.replay = replay; courseKey = course
+        // 0300: the stage (its JSON, meshes, textures and environment) loads on another thread while this one makes the pipelines.
+        let loading = StageLoad(device: device, course: stageOf(course))
+        queue = q; self.replay = replay; courseKey = course
         if Launch.args.contains("-crash-log") || Launch.args.contains("-fx-log") { setvbuf(stdout, nil, _IOLBF, 0) }
         let archive = PipelineArchive(device: device)
         let vd = MTLVertexDescriptor()
@@ -217,6 +220,8 @@ final class Renderer {
               let bd = pipe("cg_full_vertex", "cg_bloom_down_fragment", color: lowHDR, depth: false, samples: 1, vertex: nil),
               let bc = pipe("cg_full_vertex", "cg_bloom_compose_fragment", color: lowHDR, depth: false, samples: 1, vertex: nil) else { return nil }
         glintPipe = gl; glowPipe = gw; mirrorPipe = mi; mirrorGlintPipe = mg; smearPipe = sm; bloomBright = bb; bloomDown = bd; bloomCompose = bc
+        guard let st = loading.wait() else { Report.error(.render, .error, "renderer: stage \(stageOf(course)) didn't load"); return nil }
+        stage = st; stageLoadMs = loading.loadMs; stageWaitMs = loading.waitedMs
         // 0293: a buffer, a texture or a state the device can't give (memory pressure) fails the renderer cleanly, reported,
         // instead of crashing on a `!`; StageView retries and, failing that, says so on the title.
         func bufs(_ length: Int) -> [MTLBuffer]? {

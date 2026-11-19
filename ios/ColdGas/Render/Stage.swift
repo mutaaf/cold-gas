@@ -4,6 +4,7 @@
 import Foundation
 import Metal
 import MetalKit
+import QuartzCore
 import simd
 
 struct StageMaterial {
@@ -255,5 +256,27 @@ final class Stage {
             }
         }
         return t
+    }
+}
+
+/// A stage loading on a thread of its own (0300): the renderer makes its pipelines meanwhile and waits only for what's left.
+final class StageLoad: @unchecked Sendable {
+    private var stage: Stage?
+    private let done = DispatchSemaphore(value: 0)
+    /// How long the load took (ms), and how long the renderer then waited for it.
+    private(set) var loadMs = 0.0, waitedMs = 0.0
+    init(device: MTLDevice, course: String) {
+        DispatchQueue.global(qos: .userInitiated).async { [self] in
+            let t0 = CACurrentMediaTime()
+            stage = Stage.shared(device: device, course: course)
+            loadMs = (CACurrentMediaTime() - t0) * 1000
+            done.signal()
+        }
+    }
+    func wait() -> Stage? {
+        let t0 = CACurrentMediaTime()
+        done.wait()
+        waitedMs = (CACurrentMediaTime() - t0) * 1000
+        return stage
     }
 }

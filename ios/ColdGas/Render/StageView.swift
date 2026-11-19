@@ -73,6 +73,8 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         if let old = renderer, old !== r { old.idle() }
         renderer = r
     }
+    /// Start building `course`'s renderer if it isn't built or building (0300): the title's flight then overlaps the build.
+    func prepare(course: String) { if renderers[course] == nil && pendingBuilds[course] == nil { build(course) { _ in } } }
     private func load(course: String?, vector: String) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let replay = Replay(runVector: vector)
@@ -115,7 +117,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
                 // A later build that worked (the tap, or the next course) takes the "couldn't be drawn" note away.
                 if self.failedAsk?.course == course { self.failedAsk = nil }
                 MainActor.assumeIsolated { if Game.shared.notice?.action == .retryStage { Game.shared.notice = nil } }
-                print(String(format: "PIPELINES built for %@ in %.1f ms (binary archive), %d lights", course, r.launchCompileMs, r.nLights))
+                print(String(format: "PIPELINES built for %@ in %.1f ms (binary archive), %d lights; the stage loaded beside them in %.1f ms, %.1f ms waited for", course, r.launchCompileMs, r.nLights, r.stageLoadMs, r.stageWaitMs))
                 for w in waiting.suffix(1) { w(r) }   // only the latest ask for this course draws
             }
         }
