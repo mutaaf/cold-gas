@@ -1,7 +1,7 @@
 ---
 id: 0171
 title: After a second landed run the results offer "Add to Home Screen" once, quietly
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: engagement
@@ -41,3 +41,6 @@ Unit: the decision function over (landedRuns, standalone, stored flag, platform)
 
 ## Out of scope
 A service worker (on purpose none), push notifications, any "come back" copy, ads.
+
+## Scout 2026-11-19: promoted to ready
+`visit-return` is 2 in 14 days (11 human sessions on 11-18, 9 of them new). Return is the weakest bar in the funnel, and this is the cheapest honest reason to come back.
