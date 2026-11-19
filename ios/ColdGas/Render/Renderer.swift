@@ -104,6 +104,8 @@ final class Renderer {
     private let gate = DispatchSemaphore(value: Renderer.inFlight)
     private var msaa, depth, hdr, ldr, upscaled: MTLTexture?
     private var shadowMap: MTLTexture
+    /// How the shadow map is made: again after an idle spell (0299, idle()).
+    private let shadowDesc: MTLTextureDescriptor
     /// Anime's ink reads the main pass's depth (0280): resolved (sample 0) into this, only while the look is Anime.
     private var depthRes: MTLTexture?
     private let dummyDepth: MTLTexture
@@ -165,7 +167,7 @@ final class Renderer {
         #endif
         guard let q = device.makeCommandQueue() else { Report.error(.render, .error, "renderer: no command queue"); return nil }
         guard let lib = device.makeDefaultLibrary() else { Report.error(.shader, .shader, "renderer: no default library"); return nil }
-        guard let st = Stage(device: device, course: stageOf(course)) else { Report.error(.render, .error, "renderer: stage \(stageOf(course)) didn't load"); return nil }
+        guard let st = Stage.shared(device: device, course: stageOf(course)) else { Report.error(.render, .error, "renderer: stage \(stageOf(course)) didn't load"); return nil }
         queue = q; stage = st; self.replay = replay; courseKey = course
         if Launch.args.contains("-crash-log") || Launch.args.contains("-fx-log") { setvbuf(stdout, nil, _IOLBF, 0) }
         let archive = PipelineArchive(device: device)
@@ -238,6 +240,7 @@ final class Renderer {
         archive.save()
         dsWrite = dw; dsRead = dr; dsOff = doff; dsShadow = dsh; dsMirror = dmi
         shadowMap = smap
+        shadowDesc = sd
         dummy = dum
         dummy.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: [UInt8](repeating: 255, count: 4), bytesPerRow: 4)
         dummyDepth = dumZ
@@ -411,6 +414,23 @@ final class Renderer {
         else { calm = 0 }
     }
 
+    /// This renderer stops being drawn: another course's is (0299, StageView). Every course's renderer is kept, so coming back
+    /// is instant, but each held its frame-sized targets and its own shadow map while it waited: the HDR and LDR frames, the
+    /// resolved depth, the mirror, bloom's chain, MetalFX's output and a 2048² depth, ≈ 40–60 MB a renderer, three or four
+    /// renderers after a session's courses and a drive. They go now, with the track (a drive's grows a tick at a time) and the
+    /// dents (the stage's meshes are shared with any other renderer on the same set, Stage.shared); the next frame drawn
+    /// makes them again (ensureTargets, a few ms, once).
+    func idle() {
+        replay = nil
+        dents.restore()
+        msaa = nil; depth = nil; hdr = nil; ldr = nil; upscaled = nil; depthRes = nil
+        mirrorDepth = nil; mirrorRaw = nil; mirrorTex = nil; bloomChain = []; bloomOut = nil
+        renderSize = (0, 0); outSize = (0, 0)
+        shadowMap = dummyDepth
+        #if canImport(MetalFX) && !targetEnvironment(simulator)
+        scaler = nil
+        #endif
+    }
     private func ensureTargets(outW: Int, outH: Int, look: Look) {
         // 8-bit draws a fixed grid of whole blocks (the last row and column cut by the screen's edge); the others the governor's scale.
         let px = look == .pixel ? Look.pixelBlock(outW: outW, outH: outH) : 1
@@ -458,6 +478,7 @@ final class Renderer {
         let out = drawable.texture
         let look = Look.current
         ensureTargets(outW: out.width, outH: out.height, look: look)
+        if shadowMap.width != Renderer.shadowSize, let s = device.makeTexture(descriptor: shadowDesc) { shadowMap = s }   // back from idle() (0299)
         guard let msaa, let depth, let hdr, let ldr, let upscaled else { gate.signal(); return }
         let fb = frames[fi], pb = plumes[fi]; fi = (fi + 1) % Renderer.inFlight
 
