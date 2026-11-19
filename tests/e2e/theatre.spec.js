@@ -4,7 +4,7 @@ import { test, expect } from '@playwright/test';
 // panel during COMPUTE, the panel leaves the stage when the verdict is spelled, and the words land
 // in the judges' cards and the receipt. (Software GL in CI is slow: generous timeouts.)
 test('judges theatre: a streamed answer is shown, then lands in the results', async ({ page }) => {
-  test.setTimeout(150_000);
+  test.setTimeout(180_000);
   const ev = (e, d) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`;
   const words = { headline: 'Clean over the row', engineer: 'Sink rate 0.6 m/s. I would sign that off.', coordinator: 'That is the stunt.', designer: 'One unbroken line.', source: 'ai' };
   const body = ev('verify', { ticks: 2400, ms: 30, card: { total: 90 } })
@@ -13,7 +13,9 @@ test('judges theatre: a streamed answer is shown, then lands in the results', as
     + ev('done', { words, inTokens: 600, outTokens: 4, ttftMs: 300, totalMs: 900, tokensPerSec: 40, neurons: 13, costUsd: null });
   await page.route('**/coldgas/api/judge/stream', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body }));
   await page.goto('/coldgas/?play=reveal&gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'live', null, { timeout: 60_000 });
+  // A fresh boot to the run waits 90 s like every other boot in the suite: on a slow runner beside a heavy
+  // GL test it took over 60 (main f47e74d, e2e 4/4; 94 s to the countdown on one pinned core).
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'live', null, { timeout: 90_000 });
   await page.evaluate(() => window.__coldgas.fastForward());
   // The stream reaches the ticker during COMPUTE.
   await page.waitForFunction(() => /ENGINEER/.test(document.querySelector('.th-out')?.textContent || ''), null, { timeout: 90_000 });
@@ -39,7 +41,7 @@ async function toTheatre(page) {
   const { body } = canned();
   await page.route('**/coldgas/api/judge/stream', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body }));
   await page.goto('/coldgas/?play=reveal&gfx=low');
-  await page.waitForFunction(() => window.__coldgas?.S.mode === 'live' && window.__coldgas.physicsReady?.(), null, { timeout: 60_000 });
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'live' && window.__coldgas.physicsReady?.(), null, { timeout: 90_000 });
   // Every figure the theatre spells, with the stage it was spelled in.
   await page.evaluate(() => {
     window.__figs = [];
@@ -120,13 +122,13 @@ const THEATRE_VIEWPORTS = [[844, 390], [932, 430], [594, 368], [951, 589], [390,
 const streamShown = (w, h) => !(h <= 330 || (w <= 520 && h <= 440));
 for (const [w, h] of THEATRE_VIEWPORTS) {
   test(`judges theatre at ${w}×${h}: controls are 44 px targets, nothing overlaps or clips`, async ({ browser }) => {
-    test.setTimeout(150_000);
+    test.setTimeout(180_000);
     const page = await browser.newPage({ viewport: { width: w, height: h }, hasTouch: true, isMobile: true });
     await page.route('**/coldgas/api/judge/stream', () => { /* held open: the theatre stays up */ });
     const errors = [];
     page.on('pageerror', (e) => errors.push(e.message));
     await page.goto('/coldgas/?gfx=low');
-    await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
+    await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90_000 });
     await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
     // A crashed run of the player's (full throttle at the Wall, never released), to its results.
     const mode = await page.evaluate(() => {
