@@ -3,17 +3,17 @@
 // population (n 40, seed 12345) flies every objective's course; each objective must be met by at least 30 % of it.
 // scripts/daily-reach.mjs prints the full table (n 150).
 import { describe, it, expect, beforeAll } from 'vitest';
-import { reach, populationOf } from '../../scripts/lib/daily-reach.mjs';
+import { reach, populationOf, HAND } from '../../scripts/lib/daily-reach.mjs';
 import { OBJECTIVES } from '../../src/daily.js';
 
 const FLOOR = 0.3;
 
 describe('the Daily is in reach (0135)', () => {
   let rows;
-  beforeAll(() => { rows = reach({ n: 40, seed: 12345 }); }, 240_000);   // 160 flights: ≈ 35 s alone
+  beforeAll(() => { rows = reach({ n: 40, seed: 12345 }); }, 300_000);   // 240 flights: ≈ 50 s alone
 
   it('measures every objective, each on its own population', () => {
-    expect(rows.map((r) => r.id)).toEqual(OBJECTIVES.map((o) => o.id));
+    expect(rows.filter((r) => !r.form).map((r) => r.id)).toEqual(OBJECTIVES.map((o) => o.id));
     for (const r of rows) expect(r.n).toBe(40);
     expect(populationOf(OBJECTIVES.find((o) => o.id === 'pro-wall'))).toBe('pro');
     expect(populationOf(OBJECTIVES.find((o) => o.id === 'mark-lineup'))).toBe('thumb');   // 0181
@@ -23,6 +23,19 @@ describe('the Daily is in reach (0135)', () => {
   it(`every objective is met by at least ${FLOOR * 100} % of the players who fly it`, () => {
     const low = rows.filter((r) => r.share < FLOOR).map((r) => `${r.id} ${r.met}/${r.n} (${r.population})`);
     expect(low).toEqual([]);
+  });
+
+  // 0218: a Lineup day by hand is its `hand` form, held to the floor above on the keys and on two thumbs; and on the keys
+  // it is no gift either (the ticket's 30–70 % at n 150; this sample of 40 gets a little room on top).
+  it('a Lineup day by hand: met by the keys and two thumbs, and not by every keys player', () => {
+    const hand = rows.filter((r) => r.form === 'hand');
+    expect(hand.map((r) => `${r.id} ${r.population}`).sort()).toEqual(['mark-lineup keys', 'mark-lineup touch', 'roll-lineup keys', 'roll-lineup touch']);
+    expect(Object.keys(HAND).sort()).toEqual(['keys', 'touch']);
+    for (const r of hand) {
+      expect(r.n).toBe(40);
+      expect(r.met, `${r.id} ${r.population}`).toBeGreaterThan(0);
+      if (r.population === 'keys') expect(r.share).toBeLessThanOrEqual(0.75);
+    }
   });
 
   it('the one-thumb mark, skim and 90+ days still leave some short: a better flight is still worth more (gas: 0200)', () => {

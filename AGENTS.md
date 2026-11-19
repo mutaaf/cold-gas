@@ -86,6 +86,10 @@ left in the tanks; on a wreck, combos that come from the physics.
     `left-title` nothing; `title-back` if that load then comes back and plays, so leaves = title-left − title-back)), stored as `play:<event>` per day for
     people only; an automated browser (`navigator.webdriver`, i.e. our own agents and tests) is
     counted as `sessions:auto`, never as a player.
+  - The iPhone app reports to the same `POST /obs` (0293, ios/ColdGas/App/Report.swift + ColdGasClient/Obs.swift: os.Logger, a
+    persisted queue of web-shaped signatures, MetricKit crashes/hangs/exits; build `ios-<version>-<build>`, `first: false` so it
+    never becomes the digest's current build; behind Settings → Privacy). `npm run obs:report` splits web and iPhone, exit 2/1/0
+    as the alert (docs/AUDIT-2026-11-18.md).
   - `GET /coldgas/api/obs/digest[?build=]`: top signatures, `regressions` (new or ≥ 2× per session
     vs the previous build, and p95 frame-time regressions), frame percentiles, and `players` (per
     UTC day: `human`, `auto` and each funnel count; the Scout and the Critic read it). Cached 5 min.
@@ -342,7 +346,8 @@ src/render/           three.js (r186):
                           the Show's release cuts to a locked-off hold, then to the locked-off carry before the row, which on a screen wider than
                           tall cuts closer (at most twice) as the car comes down, the row's front still in frame (0118)
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone;
-                        every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099)
+                        every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099);
+                        on Assist, ↑/↓ held across the take-off or the touchdown wait for a fresh press (0275)
 src/fold.js           a screen that folds (pure, 0105): the segments and the posture Chromium reports → rows | cols and the
                         hinge's edges (main.js syncFold: :root[data-fold], --fold-a/b; the scene above a horizontal fold)
 src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
@@ -562,6 +567,7 @@ node scripts/drive-feel.mjs [bench|road|levels|bench-levels] [assist|pro]   driv
 node scripts/drive-feel.mjs diag [standard,easy,ai] [roads]   0109: the four roads + the endless one, road-reading drivers (keys, stick, tilt) and naive input (mash, hold, zigzag, swerve, GO only): exits and rails per km, spins, first loss, pace
 node scripts/objects-bench.mjs [--reps=5]             what the world's objects cost a tick: the scored replays (verify path), a crash, the pad's static fire, a Sandbox slalom
 npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
+npm run obs:report [-- --json|--digest=<url|file>]   production health on one screen, web vs iPhone; exit 2 page, 1 look, 0 quiet (0293)
 npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)
 npm run alloc:bench                                   what the per-tick input path allocates (sample, hands, the input log): 0 B/tick with keys and touch
 node scripts/flicker.mjs <url> [--gl=swiftshader] [--phone] [--only=a,b] --json=run.json   flicker probe (title, approach, wide, replay, jets, live jets, retry countdown, lineup, Free Drive, endless, z-fight)

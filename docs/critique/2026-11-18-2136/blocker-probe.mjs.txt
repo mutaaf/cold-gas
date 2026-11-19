@@ -1,0 +1,26 @@
+// A content blocker that refuses Box Office's /boxoffice/v1/insights.js (or Marquee's /ads/) on a phone profile:
+// does the boot watchdog call a healthy boot "a problem while starting", and does 0293 beacon it to /obs?
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, block = 'boxoffice', cpu = '4', URL0 = 'https://mutaafaziz.com/coldgas/'] = process.argv; const URL = URL0 === '-' ? 'https://mutaafaziz.com/coldgas/' : URL0; // argv[5] = 'slow4g' for the phone network
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+const beacons = [];
+await c.route('**/api/obs**', (r) => { if (r.request().method() === 'POST') { beacons.push({ t: Date.now(), body: (r.request().postData() || '').slice(0, 400) }); return r.fulfill({ status: 204 }); } return r.continue(); });
+await c.route(/googlesyndication|doubleclick|googleads|adservice/, (r) => r.abort());
+if (block !== 'none') await c.route(`**/${block}/**`, (r) => r.abort('blockedbyclient'));
+if (block === 'none') await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+const p = await c.newPage();
+const cdp = await c.newCDPSession(p); await cdp.send('Emulation.setCPUThrottlingRate', { rate: Number(cpu) });
+if (process.argv[5] === 'slow4g') { await cdp.send('Network.enable'); await cdp.send('Network.emulateNetworkConditions', { offline: false, latency: 562.5, downloadThroughput: 1.6e6 / 8 * 0.9, uploadThroughput: 750e3 / 8 * 0.9 }); }
+await p.addInitScript(() => {
+  window.__wd = [];
+  new MutationObserver(() => { const d = document.querySelector('[data-boot-watchdog]'); if (d && !window.__wd.length) window.__wd.push({ t: performance.now(), text: d.textContent }); }).observe(document, { childList: true, subtree: true });
+});
+const t0 = Date.now();
+await p.goto(URL, { waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__coldgas?.S?.mode === 'title', null, { timeout: 120000, polling: 100 });
+const upMs = Date.now() - t0;
+await p.waitForTimeout(4000);
+const wd = await p.evaluate(() => window.__wd);
+console.log(JSON.stringify({ block, cpu, titleUpMs: upMs, watchdogShown: wd, watchdogStillUp: await p.evaluate(() => !!document.querySelector('[data-boot-watchdog]')), beacons: beacons.filter((b) => /watchdog|boot@/.test(b.body)).map((b) => ({ atMs: b.t - t0, body: b.body })) }, null, 1));
+await browser.close();

@@ -162,7 +162,13 @@ final class Renderer {
         let t0 = CACurrentMediaTime()
         self.device = device
         // Free Drive ("drive") stands on the Show's stage, a roam ("drive-wall", "drive-lineup") on its course's, at the centre.
-        guard let q = device.makeCommandQueue(), let lib = device.makeDefaultLibrary(), let st = Stage(device: device, course: stageOf(course)) else { return nil }
+        // 0293: each step that can fail says which it was (Report), and StageView retries once without the archive.
+        #if DEBUG
+        if Renderer.failForTest() { Report.error(.render, .error, "renderer forced to fail (-obs-fail-render)"); return nil }
+        #endif
+        guard let q = device.makeCommandQueue() else { Report.error(.render, .error, "renderer: no command queue"); return nil }
+        guard let lib = device.makeDefaultLibrary() else { Report.error(.shader, .shader, "renderer: no default library"); return nil }
+        guard let st = Stage(device: device, course: stageOf(course)) else { Report.error(.render, .error, "renderer: stage \(stageOf(course)) didn't load"); return nil }
         queue = q; stage = st; self.replay = replay; courseKey = course
         if Launch.args.contains("-crash-log") || Launch.args.contains("-fx-log") { setvbuf(stdout, nil, _IOLBF, 0) }
         let archive = PipelineArchive(device: device)
@@ -181,7 +187,10 @@ final class Renderer {
                 d.colorAttachments[0].sourceAlphaBlendFactor = .zero; d.colorAttachments[0].destinationAlphaBlendFactor = .one }
             if depth { d.depthAttachmentPixelFormat = Renderer.depthFormat }
             d.rasterSampleCount = samples
-            return archive.pipeline(d)
+            guard d.vertexFunction != nil, f == nil || d.fragmentFunction != nil else {
+                Report.error(.shader, .shader, "pipeline \(v) \(f ?? "-"): a function is missing from the library"); return nil
+            }
+            return archive.pipeline(d, name: v)
         }
         guard let o = pipe("cg_stage_vertex", "cg_stage_fragment", color: Renderer.hdrFormat),
               let on = pipe("cg_stage_vertex", "cg_stage_fragment", color: Renderer.hdrFormat),
@@ -209,22 +218,32 @@ final class Renderer {
               let bd = pipe("cg_full_vertex", "cg_bloom_down_fragment", color: lowHDR, depth: false, samples: 1, vertex: nil),
               let bc = pipe("cg_full_vertex", "cg_bloom_compose_fragment", color: lowHDR, depth: false, samples: 1, vertex: nil) else { return nil }
         glintPipe = gl; glowPipe = gw; mirrorPipe = mi; mirrorGlintPipe = mg; smearPipe = sm; bloomBright = bb; bloomDown = bd; bloomCompose = bc
-        sparkBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<SparkGPU>.stride * Crash.NS, options: .storageModeShared)! }
-        puffBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<PuffGPU>.stride * (Crash.NM + 1), options: .storageModeShared)! }
-        chipBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<ChipGPU>.stride * Crash.NC, options: .storageModeShared)! }
-        mistBufs = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<PuffGPU>.stride * Plumes.maxMist, options: .storageModeShared)! }
-        archive.save()
-        func ds(_ w: Bool, _ c: MTLCompareFunction) -> MTLDepthStencilState { let d = MTLDepthStencilDescriptor(); d.isDepthWriteEnabled = w; d.depthCompareFunction = c; return device.makeDepthStencilState(descriptor: d)! }
-        dsWrite = ds(true, .less); dsRead = ds(false, .lessEqual); dsOff = ds(false, .always); dsShadow = ds(true, .less); dsMirror = ds(true, .less)
+        // 0293: a buffer, a texture or a state the device can't give (memory pressure) fails the renderer cleanly, reported,
+        // instead of crashing on a `!`; StageView retries and, failing that, says so on the title.
+        func bufs(_ length: Int) -> [MTLBuffer]? {
+            let b = (0..<Renderer.inFlight).compactMap { _ in device.makeBuffer(length: length, options: .storageModeShared) }
+            return b.count == Renderer.inFlight ? b : nil
+        }
+        func ds(_ w: Bool, _ c: MTLCompareFunction) -> MTLDepthStencilState? { let d = MTLDepthStencilDescriptor(); d.isDepthWriteEnabled = w; d.depthCompareFunction = c; return device.makeDepthStencilState(descriptor: d) }
         let sd = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Renderer.depthFormat, width: Renderer.shadowSize, height: Renderer.shadowSize, mipmapped: false)
         sd.usage = [.renderTarget, .shaderRead]; sd.storageMode = .private
-        shadowMap = device.makeTexture(descriptor: sd)!
         let dd = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1, mipmapped: false)
-        dummy = device.makeTexture(descriptor: dd)!
-        dummy.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: [UInt8](repeating: 255, count: 4), bytesPerRow: 4)
         let zd = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: Renderer.depthFormat, width: 1, height: 1, mipmapped: false)
         zd.usage = [.renderTarget, .shaderRead]; zd.storageMode = .private
-        dummyDepth = device.makeTexture(descriptor: zd)!
+        guard let sb = bufs(MemoryLayout<SparkGPU>.stride * Crash.NS), let pb = bufs(MemoryLayout<PuffGPU>.stride * (Crash.NM + 1)),
+              let cb = bufs(MemoryLayout<ChipGPU>.stride * Crash.NC), let mb = bufs(MemoryLayout<PuffGPU>.stride * Plumes.maxMist),
+              let fb = bufs(MemoryLayout<FrameU>.stride), let mfb = bufs(MemoryLayout<FrameU>.stride), let plb = bufs(MemoryLayout<PlumeU>.stride * 10),
+              let dw = ds(true, .less), let dr = ds(false, .lessEqual), let doff = ds(false, .always), let dsh = ds(true, .less), let dmi = ds(true, .less),
+              let smap = device.makeTexture(descriptor: sd), let dum = device.makeTexture(descriptor: dd), let dumZ = device.makeTexture(descriptor: zd) else {
+            Report.error(.render, .error, "renderer: the device refused a buffer, texture or depth state"); return nil
+        }
+        sparkBufs = sb; puffBufs = pb; chipBufs = cb; mistBufs = mb
+        archive.save()
+        dsWrite = dw; dsRead = dr; dsOff = doff; dsShadow = dsh; dsMirror = dmi
+        shadowMap = smap
+        dummy = dum
+        dummy.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: [UInt8](repeating: 255, count: 4), bytesPerRow: 4)
+        dummyDepth = dumZ
         // Lights: the course's spots and points (directional lights are the key, drawn with the shadow).
         var L: [LightU] = []
         for l in st.lights where l.kind == "SpotLight" || l.kind == "PointLight" || l.kind == "DirectionalLight" {
@@ -243,9 +262,9 @@ final class Renderer {
         if roam { for i in L.indices where L[i].colorIntensity.x > 0.9 && L[i].colorIntensity.y < 0.1 { L[i].colorIntensity.w *= 0.3 } }
         nLights = L.count
         lightsBuf = device.makeBuffer(bytes: L.isEmpty ? [LightU()] : L, length: MemoryLayout<LightU>.stride * max(1, L.count), options: .storageModeShared)!
-        frames = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<FrameU>.stride, options: .storageModeShared)! }
-        mirrorFrames = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<FrameU>.stride, options: .storageModeShared)! }
-        plumes = (0..<Renderer.inFlight).map { _ in device.makeBuffer(length: MemoryLayout<PlumeU>.stride * 10, options: .storageModeShared)! }
+        frames = fb
+        mirrorFrames = mfb
+        plumes = plb
         func mats(_ m: StageMesh) -> [MaterialU] { m.submeshes.map { s in
             let M = s.material; var u = MaterialU()
             u.color = SIMD4(M.color, M.transparent ? M.opacity : 1)
@@ -997,16 +1016,31 @@ final class PassTimes {
     }
 }
 
+#if DEBUG
+extension Renderer {
+    /// `-obs-fail-render N` (Debug): the first N renderer builds fail, to see the stage's retry and its calm note (0293).
+    nonisolated(unsafe) private static var forcedFailures = Launch.value("-obs-fail-render").flatMap(Int.init) ?? 0
+    private static let failLock = NSLock()
+    static func failForTest() -> Bool {
+        failLock.lock(); defer { failLock.unlock() }
+        guard forcedFailures > 0 else { return false }
+        forcedFailures -= 1
+        return true
+    }
+}
+#endif
+
 /// Pipelines through an MTLBinaryArchive in Caches (device only: the simulator can't build archives).
 final class PipelineArchive {
     private let device: MTLDevice
     private var archive: MTLBinaryArchive?
     private let url: URL
     private var dirty = false
+    static var cacheDir: URL? { FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first }
     init(device: MTLDevice) {
         self.device = device
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
-        url = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("pipelines-v2-\(build).metallib")
+        url = (PipelineArchive.cacheDir ?? FileManager.default.temporaryDirectory).appendingPathComponent("pipelines-v2-\(build).metallib")
         #if targetEnvironment(simulator)
         archive = nil
         #else
@@ -1015,11 +1049,28 @@ final class PipelineArchive {
         archive = (try? device.makeBinaryArchive(descriptor: d)) ?? (try? device.makeBinaryArchive(descriptor: MTLBinaryArchiveDescriptor()))
         #endif
     }
-    func pipeline(_ d: MTLRenderPipelineDescriptor) -> MTLRenderPipelineState? {
+    /// A pipeline through the archive; if that fails (a damaged archive), the same pipeline compiled without it (0293).
+    func pipeline(_ d: MTLRenderPipelineDescriptor, name: String = "") -> MTLRenderPipelineState? {
         if let a = archive { d.binaryArchives = [a]; if (try? a.addRenderPipelineFunctions(descriptor: d)) != nil { dirty = true } }
-        return try? device.makeRenderPipelineState(descriptor: d)
+        do { return try device.makeRenderPipelineState(descriptor: d) } catch {
+            guard d.binaryArchives != nil else { Report.error(.shader, .shader, "pipeline \(name) failed: \((error as NSError).domain) \((error as NSError).code)"); return nil }
+            Report.error(.shader, .shader, "pipeline \(name) failed through the archive: compiled without it")
+            d.binaryArchives = nil
+            archive = nil; dirty = false
+            do { return try device.makeRenderPipelineState(descriptor: d) } catch {
+                Report.error(.shader, .shader, "pipeline \(name) failed: \((error as NSError).domain) \((error as NSError).code)"); return nil
+            }
+        }
     }
-    func save() { if dirty, let a = archive { try? a.serialize(to: url) } }
+    func save() {
+        guard dirty, let a = archive else { return }
+        do { try a.serialize(to: url) } catch { Report.error(.shader, .error, "pipeline archive not saved: \((error as NSError).code)") }
+    }
+    /// Delete every pipeline archive in Caches: StageView's retry builds without a cache that may be what's damaged.
+    static func purge() {
+        guard let dir = cacheDir, let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
+        for f in files where f.lastPathComponent.hasPrefix("pipelines-") && f.pathExtension == "metallib" { try? FileManager.default.removeItem(at: f) }
+    }
 }
 
 func smoothstepF(_ a: Float, _ b: Float, _ x: Float) -> Float { let t = min(1, max(0, (x - a) / (b - a))); return t * t * (3 - 2 * t) }

@@ -82,6 +82,28 @@ public struct SaveData: Codable, Equatable {
         guard let data, let s = try? JSONDecoder().decode(SaveData.self, from: data) else { return SaveData() }
         return s
     }
+    /// Bytes a save can be read from: a JSON object (damaged fields inside it still cost only themselves).
+    public static func readable(_ data: Data?) -> Bool {
+        guard let data, !data.isEmpty else { return false }
+        return (try? JSONSerialization.jsonObject(with: data)) is [String: Any]
+    }
+
+    /// How a save was found at launch (0293): the store's own bytes, the mirror's when the store's were damaged or gone, or
+    /// a fresh save. `damaged` is the store's bytes that wouldn't read, kept aside rather than overwritten.
+    public enum Loaded: Equatable {
+        case fresh, stored
+        case restored(damaged: Data?)
+        case lost(damaged: Data)
+    }
+    /// The save from the store's bytes and the mirror's (a second copy kept in a file, outside UserDefaults).
+    public static func load(stored: Data?, mirror: Data?) -> (SaveData, Loaded) {
+        if readable(stored) { return (decode(stored), .stored) }
+        let damaged = (stored?.isEmpty ?? true) ? nil : stored
+        if readable(mirror) { return (decode(mirror), .restored(damaged: damaged)) }
+        if let damaged { return (SaveData(), .lost(damaged: damaged)) }
+        return (SaveData(), .fresh)
+    }
+
     public func encoded() -> Data? {
         let e = JSONEncoder(); e.outputFormatting = [.sortedKeys]
         return try? e.encode(self)

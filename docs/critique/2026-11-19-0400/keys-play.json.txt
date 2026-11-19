@@ -1,0 +1,41 @@
+{
+ "title": {
+  "device": "key",
+  "daily": "Roll a full turn over the row and land clean"
+ },
+ "held": {
+  "course": "show",
+  "cues": [
+   "Hold ↑ to drive",
+   "Fan spooling · crawl in, about 12 mph 20 km/h"
+  ],
+  "mode": "results",
+  "card": {
+   "total": 71.3,
+   "verdict": "Rough landing",
+   "sink": 0.9,
+   "clearance": 4.3,
+   "padMiss": 13.2,
+   "crashed": false
+  },
+  "sheet": "THE SHOW ROUGH LANDING Rough landing 71.3/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze at 80 · 8.7 to go Flown in Assist RUN 1 YOUR FIRST MARK ON THIS EVENT Judged by gemma-4-26b-a4b-it Cloudflare CMH 80 tok NEXT RUN Aim for the rings: lean toward the pad above 16 ft 5 m, then level ASSIST ON rolls you out, levels and brakes Next jump The Wall N Beat 71.3 R Share Replay Home H Initials Post WHAT HAPPEN"
+ },
+ "letgo": {
+  "course": "show",
+  "cues": [
+   "Hold ↑ to drive",
+   "Fan spooling · crawl in, about 12 mph 20 km/h"
+  ],
+  "mode": "results",
+  "card": {
+   "total": 71.3,
+   "verdict": "Rough landing",
+   "sink": 0.9,
+   "clearance": 4.3,
+   "padMiss": 13.2,
+   "crashed": false
+  },
+  "sheet": "A ROUGH SHOW Rough landing 71.3/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze at 80 · 8.7 to go Flown in Assist · Pro pays ×1.08, Advanced ×1.15 RUN 2 EQUALS YOUR BEST · 71.3 Judged by gemma-4-26b-a4b-it Cloudflare CMH 82 tok NEXT RUN Aim for the rings: lean toward the pad above 16 ft 5 m, then level ASSIST ON rolls you out, levels and brakes Next jump The Wall N Beat 71.3 R Share Replay Home H Initials"
+ },
+ "errs": []
+}

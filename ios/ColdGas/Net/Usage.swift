@@ -84,11 +84,12 @@ final class Usage {
     /// Settings → Privacy.
     func setOn(_ v: Bool) {
         var st = SaveStore.shared.settings; st.usage = v; SaveStore.shared.settings = st
-        if !v { queue.clear(); save() }
+        if !v { queue.clear(); save(); Report.clear() }   // 0293: the health queue goes too
     }
 
     /// Send one batch, off the main thread. Nothing in a quiet moment, nothing when off, one send at a time.
     func flush(done: (() -> Void)? = nil) {
+        Report.flush()   // 0293: the health queue rides the same moments (its own gates: quiet screens, a minute apart)
         let batch = queue.next(moment: moment, on: on)
         guard !sending, !batch.isEmpty, let id = queue.installId,
               let body = Insights.body(batch, installId: id, release: Usage.release) else { done?(); return }

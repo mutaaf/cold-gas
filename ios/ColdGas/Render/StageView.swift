@@ -45,6 +45,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in MainActor.assumeIsolated { Game.shared.resignActive() } }
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.renderer?.applyThermal() }
         NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in self?.renderer?.applyThermal() }
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in self?.shed() }
     }
     required init?(coder: NSCoder) { nil }
     private var device: MTLDevice?
@@ -69,21 +70,57 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         }
     }
     private var pendingBuilds: [String: [(Renderer) -> Void]] = [:]
-    private func build(_ course: String, then: @escaping (Renderer) -> Void) {
+    /// The last ask that couldn't be drawn (0293): the title's note retries it.
+    private var failedAsk: (course: String, then: (Renderer) -> Void)?
+    private func build(_ course: String, retry: Bool = false, then: @escaping (Renderer) -> Void) {
         if pendingBuilds[course] != nil { pendingBuilds[course, default: []].append(then); return }
         pendingBuilds[course] = [then]
-        guard let device else { return }
+        guard let device else {
+            pendingBuilds[course] = nil
+            Report.error(.render, .error, "no Metal device")
+            MainActor.assumeIsolated { Game.shared.notice = StageView.cantDraw }
+            return
+        }
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let r = Renderer(device: device, course: course, replay: nil)
+            // 0293: a renderer that can't be built is tried once more without the pipeline cache (the damaged-cache case).
+            var r = Renderer(device: device, course: course, replay: nil)
+            var retried = false
+            if r == nil && !retry {
+                PipelineArchive.purge()
+                retried = true
+                r = Renderer(device: device, course: course, replay: nil)
+            }
             DispatchQueue.main.async {
                 guard let self else { return }
                 let waiting = self.pendingBuilds.removeValue(forKey: course) ?? []
-                guard let r else { print("RENDERER failed for \(course)"); return }
+                if retried || retry { Report.recovered(.webgl, ok: r != nil) }
+                guard let r else {
+                    print("RENDERER failed for \(course)")
+                    if let last = waiting.last { self.failedAsk = (course, last) }
+                    MainActor.assumeIsolated { Game.shared.notice = StageView.cantDraw }
+                    return
+                }
                 self.renderers[course] = r
+                // A later build that worked (the tap, or the next course) takes the "couldn't be drawn" note away.
+                if self.failedAsk?.course == course { self.failedAsk = nil }
+                MainActor.assumeIsolated { if Game.shared.notice?.action == .retryStage { Game.shared.notice = nil } }
                 print(String(format: "PIPELINES built for %@ in %.1f ms (binary archive), %d lights", course, r.launchCompileMs, r.nLights))
                 for w in waiting.suffix(1) { w(r) }   // only the latest ask for this course draws
             }
         }
+    }
+    static let cantDraw = Notice(text: "The stage couldn\u{2019}t be drawn on this iPhone. Tap to try again.", action: .retryStage, seconds: nil)
+    /// The note's tap: build the stage that failed again.
+    func retryFailedBuild() {
+        guard let ask = failedAsk else { return }
+        failedAsk = nil
+        build(ask.course, retry: true, then: ask.then)
+    }
+    /// A memory warning (0293): every renderer but the one drawing goes (one is rebuilt on demand from the archive, ≈20 ms).
+    private func shed() {
+        let before = renderers.count
+        renderers = renderers.filter { $0.value === renderer }
+        if before > renderers.count { print("MEMORY warning: dropped \(before - renderers.count) idle renderer(s)") }
     }
     private func startLinkIfNeeded() { if link == nil { startLink() } }
     /// One fixed rate (0280): the governor's cadence, min = max, so every frame is shown for the same time (a 60–120 range

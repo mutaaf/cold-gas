@@ -1,12 +1,12 @@
 ---
 id: 0275
 title: An ↑ held from the climb never noses the car down in the air or drives it off the mark
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-18
-pr:
+pr: 440
 by: critic
 ---
 
@@ -47,13 +47,13 @@ air. A carried-over press is a control the player never chose.
   hashes (`node scripts/ref-hash.mjs`) stay bit-identical.
 
 ## Acceptance criteria
-- [ ] A Node sweep of the "key newcomer" population above (Show and Wall, held ↑ through air and touchdown, fed
+- [x] A Node sweep of the "key newcomer" population above (Show and Wall, held ↑ through air and touchdown, fed
       through the same input mapping as the browser) lands **≥ 34/36 on each course**. Today it's 20/36 and 23/36.
-- [ ] A ↑ pressed fresh in the air still pitches the nose down, and ↑ pressed fresh after touchdown is still
+- [x] A ↑ pressed fresh in the air still pitches the nose down, and ↑ pressed fresh after touchdown is still
       throttle (an e2e on keys at 1280×720: hold ↑ through the release, assert pitch input 0 until keyup + keydown).
-- [ ] `naive-players` 32/32, `naive-show` 54/54, `human-show 300 assist --cues=new` ≥ 95 %. `ref-hash` is unchanged.
-- [ ] Touch at 390×844 is unaffected (the thumb's hold is its own control).
-- [ ] The PR names the funnel number it should move: `run-landed / (run-landed + run-wrecked)` on keys, 4/13 on 2026-11-18.
+- [x] `naive-players` 32/32, `naive-show` 54/54, `human-show 300 assist --cues=new` ≥ 95 %. `ref-hash` is unchanged.
+- [x] Touch at 390×844 is unaffected (the thumb's hold is its own control).
+- [x] The PR names the funnel number it should move: `run-landed / (run-landed + run-wrecked)` on keys, 4/13 on 2026-11-18.
 
 ## Test plan
 - Unit: `tests/unit/input-*.test.js`. A key held across `air` false→true gives pitch 0 until released, and the
@@ -64,3 +64,23 @@ air. A carried-over press is a control the player never chose.
 
 ## Out of scope
 The two-thumb touch scheme, Pro and Advanced (who chose their keys), and new cue copy beyond the roll step.
+
+## Shipped
+- `src/input.js`: on an Assist scored run, ↑/W and ↓/S held across the ground → air change (the release, the Show's lip)
+  or the air → ground change (the touchdown) are *carried*: they do nothing on the new side until a keyup and a fresh
+  keydown. A run's first sample sets the side without carrying (a drill that opens in the air). Self-review fixes: only a key held
+  ≥ 0.25 s carries (↓ pressed with Space means nose up at once); a touchdown is phase `landed`, so the Lineup's hop back
+  onto its run-up un-carries instead (a held ↑ is throttle there again); a tick the one thumb flies resets the side, so a
+  key pressed then is fresh. The Lineup's own key population is not swept (its guide asks for ← → in the air, not ↑). Pro, Advanced, the pad,
+  touch and Free Drive (`ctx.free`) are untouched. The key handlers' effect is now `keyDown` / `keyUp`, exported so a
+  Node sweep goes through the browser's own mapping.
+- `src/guide.js`: the keys' roll step says "Let go of ↑" ("Release" is the Space action's own name on the timeline).
+- `scripts/keys-literal.mjs`: the critic's 36 key newcomers per course, but through `sample()` and the live step's wall
+  assist instead of raw sim inputs. ↑ held to the end: **Show 8/36 → 36/36, Wall 15/36 → 36/36** (through the real
+  hands the baseline is worse than the critic's raw-input 20/36 and 23/36). Let go at the release: 36/36 both, before
+  and after. `tests/unit/input-carry.test.js` gates ≥ 34/36 on each course.
+- e2e `tests/e2e/keys-carry.spec.js` at 1280×720 on keys: ↑ held through the release logs pitch 0 (100 without the
+  change), a fresh ↑ in the air pitches.
+- Gates unchanged: naive-players 32/32, naive-show 54/54, human-show 300 assist --cues=new 286/300, ref-hash identical
+  (show 6b2cb98b, wall f1b9fab, lineup 4fc4af6b). No `SIM_VERSION` bump.
+- Funnel number it should move: keys `run-landed / (run-landed + run-wrecked)`, 4/13 on 2026-11-18.
