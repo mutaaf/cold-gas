@@ -139,6 +139,11 @@ final class Renderer {
     private(set) var compilesAfterLaunch = 0
     let nLights: Int
     private let dummy: MTLTexture
+    /// The sets' baked surface detail (0273, SetSurface.swift).
+    private let setDetail: MTLTexture?
+    /// The sets' dressing and floor paint (0273, SetDressing.swift); the dressing's static mesh only off a roam (a roam's are loose).
+    private let dressing: SetDressing
+    private let dressMats, paintMats: Int, dressStatic: Bool
     let cam = Director()
     let passTimes = PassTimes()
     /// `-holds 12.1,12.5`: debug, for shots on a loaded machine: the replay's clock stops at each of these sim times, marks
@@ -288,13 +293,22 @@ final class Renderer {
                 return u
             }
         }
-        stageMats = [toneRoam(mats(st.staticMesh)), mats(st.roadster)] + st.parked.map(mats) + st.wheels.flatMap { [mats($0.steerPart), mats($0.spinPart)] }
+        setDetail = SetSurface.load(device: device)
+        var setMats = toneRoam(mats(st.staticMesh))
+        if setDetail != nil { SetSurface.classify(&setMats, st.staticMesh, stage: stageOf(course)) }
+        stageMats = [setMats, mats(st.roadster)] + st.parked.map(mats) + st.wheels.flatMap { [mats($0.steerPart), mats($0.spinPart)] }
         partBase = stageMats.count
         stageMats += st.parts.map(mats)
         sweepBase = stageMats.count
         if let sw = st.sweep { stageMats += [mats(sw.beam), mats(sw.head), mats(sw.lens)] }
         complexMats = stageMats.count
         if let c = st.complex { stageMats.append(mats(c.mesh)) }
+        dressing = SetDressing(device: device, stage: stageOf(course))
+        dressStatic = !isDrive(course) && !Launch.args.contains("-flat-sets")
+        dressMats = stageMats.count
+        stageMats.append(dressing.props.map(mats) ?? [])
+        paintMats = stageMats.count
+        stageMats.append((dressing.paint.map(mats) ?? []).map { var u = $0; u.uvTransform = SIMD4(1, 1, 0, 0); return u })
         sweepM = [simd_float4x4](repeating: matrix_identity_float4x4, count: st.sweep?.pivots.count ?? 0)
         // scene.js BLOB_ORDER: the hero's contact shadow over the paint (order -3), under the glows and LEDs (-2 and up).
         blobSplit = st.staticMesh.submeshes.firstIndex { $0.renderOrder > -3 } ?? st.staticMesh.submeshes.count
@@ -610,6 +624,7 @@ final class Renderer {
             e.setRenderPipelineState(shadowPipe); e.setDepthStencilState(dsShadow); e.setDepthBias(1.5, slopeScale: 2.5, clamp: 0.01)
             e.setVertexBuffer(fb, offset: 0, index: 1)
             drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true, shadow: true)
+            if dressStatic, let p = dressing.props { drawMesh(e, p, matsIndex: dressMats, model: stageM, opaqueOnly: true, shadow: true) }
             parkedDraw(e, t: simT, shadow: true)
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true, shadow: true)
             carPartsDraw(e, carM: carM, shadow: true)
@@ -630,6 +645,7 @@ final class Renderer {
                 setEnv(e)
                 mirrorDraw = true; frontFace = .clockwise
                 drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true, standingOnly: true)
+                if dressStatic, let p = dressing.props { drawMesh(e, p, matsIndex: dressMats, model: stageM, opaqueOnly: true) }
                 if !skip.contains("parked") { parkedDraw(e, t: simT, shadow: false, cull: mu.viewProj) }
                 if sphereVisible(carPos, 5, mu.viewProj) {
                     drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true)
@@ -665,6 +681,7 @@ final class Renderer {
             e.setFragmentTexture(shadowMap, index: 3); e.setFragmentTexture(stage.wetMask ?? dummy, index: 5); e.setFragmentTexture(wantMirror ? (mirrorTex ?? dummy) : dummy, index: 6)
             setEnv(e)
             if !skip.contains("static") { drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true) }
+            if dressStatic, let p = dressing.props { drawMesh(e, p, matsIndex: dressMats, model: stageM, opaqueOnly: true) }
             if !skip.contains("parked") { parkedDraw(e, t: simT, shadow: false, cull: u.viewProj) }
             drawMesh(e, stage.roadster, matsIndex: 1, model: carM, opaqueOnly: true)
             carPartsDraw(e, carM: carM, shadow: false)
@@ -684,6 +701,7 @@ final class Renderer {
                 if !skip.contains("glints") && !away { glintsDraw(e, c, beaconK: beaconK, pipe: glintPipe) }
             }
             if !skip.contains("translucent") {
+                if !away, !Launch.args.contains("-flat-sets"), let p = dressing.paint { drawMesh(e, p, matsIndex: paintMats, model: stageM, opaqueOnly: false, textures: dressing.textures) }
                 drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: false, to: blobSplit)
                 // The contact shadow lies on the slab: in Free Drive only while the car is on it.
                 if dv == nil || (!away && abs(carPos.x) < Float(700) && abs(carPos.z) < Float(700) && carPos.y < 3) { blobDraw(e, carPos: carPos, carQuat: carQ) }
@@ -787,7 +805,7 @@ final class Renderer {
         cmd.commit()
     }
 
-    private func setEnv(_ e: MTLRenderCommandEncoder) { e.setFragmentTexture(stage.env, index: 7) }
+    private func setEnv(_ e: MTLRenderCommandEncoder) { e.setFragmentTexture(stage.env, index: 7); e.setFragmentTexture(setDetail ?? dummy, index: 8) }
     /// rocket.js's lamps and beacons (they pulse together, eased).
     private func glintsDraw(_ e: MTLRenderCommandEncoder, _ c: StageComplex, beaconK: Float, pipe: MTLRenderPipelineState) {
         e.setRenderPipelineState(pipe); e.setDepthStencilState(dsRead); e.setCullMode(.none); e.setDepthBias(0, slopeScale: 0, clamp: 0)
@@ -966,7 +984,8 @@ final class Renderer {
     }
 
     private var mirrorDraw = false
-    private func drawMesh(_ e: MTLRenderCommandEncoder, _ m: StageMesh, matsIndex: Int, model: simd_float4x4, opaqueOnly: Bool, shadow: Bool = false, tint: SIMD4<Float>? = nil, from: Int = 0, to: Int = .max, standingOnly: Bool = false) {
+    private func drawMesh(_ e: MTLRenderCommandEncoder, _ m: StageMesh, matsIndex: Int, model: simd_float4x4, opaqueOnly: Bool, shadow: Bool = false, tint: SIMD4<Float>? = nil, from: Int = 0, to: Int = .max, standingOnly: Bool = false, textures: [StageTexture]? = nil) {
+        let texs = textures ?? stage.textures
         var o = ObjectU(model: model, normal: model.inverse.transpose)
         e.setVertexBytes(&o, length: MemoryLayout<ObjectU>.stride, index: 2)
         e.setVertexBuffer(m.vertices, offset: 0, index: 0)
@@ -992,10 +1011,10 @@ final class Renderer {
                 var mu = mats[k]
                 if let tint { mu.color = tint }
                 e.setFragmentBytes(&mu, length: MemoryLayout<MaterialU>.stride, index: 2)
-                e.setFragmentTexture(M.map.flatMap { stage.textures[$0].texture } ?? dummy, index: 0)
-                e.setFragmentTexture(M.roughnessMap.flatMap { stage.textures[$0].texture } ?? dummy, index: 1)
-                e.setFragmentTexture(M.emissiveMap.flatMap { stage.textures[$0].texture } ?? dummy, index: 2)
-                e.setFragmentTexture(M.alphaMap.flatMap { stage.textures[$0].texture } ?? dummy, index: 4)
+                e.setFragmentTexture(M.map.flatMap { texs[$0].texture } ?? dummy, index: 0)
+                e.setFragmentTexture(M.roughnessMap.flatMap { texs[$0].texture } ?? dummy, index: 1)
+                e.setFragmentTexture(M.emissiveMap.flatMap { texs[$0].texture } ?? dummy, index: 2)
+                e.setFragmentTexture(M.alphaMap.flatMap { texs[$0].texture } ?? dummy, index: 4)
             } else {
                 e.setCullMode(.none)
             }
