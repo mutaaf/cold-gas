@@ -311,6 +311,13 @@ dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look d
   Lineup's cone lane. Done and best kept per set on the device; no timer, no streak, nothing scored.
 - `-flat-sets` turns the surfaces, the dressing and the paint off; `-roam-log` (Debug) logs the challenges to Caches/roam.log.
 
+### Everything leaves a mark (0330–0335)
+
+What the ground does to the car and the car to the ground and to everything it hits (ruts and berms in a per-tile trace
+texture, the car's coat, roost by material, snow, ice and mud, the car's lasting damage, trees that snap) is mapped and built
+in docs/NATIVE-MATTER.md, with its hook contract for this world: the trace's texture and table (the terrain reads them through
+World/Trace.h) and `GroundMatter.of(_:wet:freezing:)` as the material query.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the

@@ -200,6 +200,7 @@ final class WorldView {
                             counts: per.map { $0.count / 8 })
             blocks[key] = blk
             for h in hidden where WorldView.blockOf(h) == (bx, bz) { mark(blk, h, hide: true) }
+            for t in felledAt { let x = t.x, z = t.y; if Int((x / WorldView.block).rounded(.down)) == bx && Int((z / WorldView.block).rounded(.down)) == bz { setFelled(x: x, z: z, true) } }   // 0334
         }
     }
 
@@ -349,6 +350,24 @@ final class WorldView {
         if broken { hidden.insert(h) } else { hidden.remove(h) }
         let (bx, bz) = WorldView.blockOf(h)
         if let blk = blocks[WorldView.bkey(bx, bz)] { mark(blk, h, hide: broken) }
+        nearDirty = true
+    }
+    /// 0334: a tree felled (its instance hidden by its negated scale) or stood again, found by where its trunk stood (world
+    /// metres): trees aren't roadside items, so they carry no item index. Kept for the blocks built after it.
+    private var felledAt = Set<SIMD2<Double>>()
+    func setFelled(x: Double, z: Double, _ felled: Bool) {
+        let key = SIMD2(x, z)
+        if felled { felledAt.insert(key) } else { felledAt.remove(key) }
+        let bx = Int((x / WorldView.block).rounded(.down)), bz = Int((z / WorldView.block).rounded(.down))
+        guard let blk = blocks[WorldView.bkey(bx, bz)] else { return }
+        let ox = Float(Double(bx) * WorldView.block), oz = Float(Double(bz) * WorldView.block)
+        for k in [PropKind.spruce, .broadleaf] {
+            guard let buf = blk.inst[k.rawValue], blk.counts[k.rawValue] > 0 else { continue }
+            let f = buf.contents().bindMemory(to: Float.self, capacity: blk.counts[k.rawValue] * 8)
+            for i in 0..<blk.counts[k.rawValue] where abs(f[i * 8] + ox - Float(x)) < 0.05 && abs(f[i * 8 + 2] + oz - Float(z)) < 0.05 {
+                f[i * 8 + 4] = felled ? -abs(f[i * 8 + 4]) : abs(f[i * 8 + 4])
+            }
+        }
         nearDirty = true
     }
     private static func blockOf(_ h: SIMD3<Int32>) -> (Int, Int) {

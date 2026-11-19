@@ -15,6 +15,8 @@ public enum LooseKind: UInt8, CaseIterable, Sendable {
     /// The sets' dressing (0273): what a working backlot leaves standing round a stunt. Scored runs draw it where it stands
     /// (pixels only, nothing in the scored world); a roam makes each a free body at its real mass.
     case tyre, drum, roadCase, kRail, generator
+    /// 0334: a tree snapped at its base by a car (Drive.swift breakCheck): its trunk and crown, felled.
+    case log
     /// Half extents (m) of the collider's box, its mass (kg) and how far its centre of mass sits below the box's middle.
     /// Sources (ESTIMATE where marked): a 750 mm road cone (EN 13422 class) with its rubber base weighs 3.5–4.5 kg, most
     /// of it in the base, and we take 4.2 kg (2.8 kg of base, 1.4 kg of PVC shell). A 1 m polyethylene water-fill
@@ -27,6 +29,7 @@ public enum LooseKind: UInt8, CaseIterable, Sendable {
         case .fence: return (0.07, 0.575, 2.0); case .signpost: return (0.06, 1.15, 0.45); case .rail: return (0.18, 0.4, 2.0)
         case .tyre: return (0.32, 0.115, 0.32); case .drum: return (0.292, 0.44, 0.292); case .roadCase: return (0.6, 0.4, 0.3)
         case .kRail: return (1.0, 0.405, 0.3); case .generator: return (1.5, 0.8, 0.75)
+        case .log: return (0.35, 2.6, 0.35)
         }
     }
     /// The roadside's (ESTIMATE): a 4 m bay of sawn post-and-rail, two 100 mm posts and two rails, ≈ 45 kg; a bend marker,
@@ -38,6 +41,8 @@ public enum LooseKind: UInt8, CaseIterable, Sendable {
         switch self {
         case .cone: return 4.2; case .barrier: return 200; case .sign: return 7.5; case .fence: return 45; case .signpost: return 14; case .rail: return 110
         case .tyre: return 9.5; case .drum: return 18; case .roadCase: return 90; case .kRail: return 950; case .generator: return 1600
+        // ESTIMATE: 5.2 m of green conifer, 0.4 m across (≈ 0.65 m³ at ≈ 800 kg/m³), and its crown's ≈ 120 kg.
+        case .log: return 640
         }
     }
     /// The sign's board sits up top (its centre of mass above the middle: a negative drop). The cone's is its base's
@@ -48,6 +53,7 @@ public enum LooseKind: UInt8, CaseIterable, Sendable {
         switch self {
         case .cone: return 0.264; case .barrier: return 0.1; case .sign: return 0.05; case .fence: return 0.05; case .signpost: return -0.4; case .rail: return 0.0
         case .kRail: return 0.12; case .generator: return 0.2; case .roadCase: return 0.05; case .tyre, .drum: return 0
+        case .log: return -0.5   // the crown's weight up top
         }
     }
     /// Principal moments of inertia about the centre of mass (kg·m²; x, y up, z). The cone's from its two parts (0269: the
@@ -71,7 +77,7 @@ public enum LooseKind: UInt8, CaseIterable, Sendable {
         case .sign: return MATERIALS.paint
         case .tyre: return MATERIALS.rubber
         case .drum, .generator: return MATERIALS.steel
-        case .roadCase: return MATERIALS.wood
+        case .roadCase, .log: return MATERIALS.wood
         case .kRail: return MATERIALS.concrete
         }
     }
@@ -84,6 +90,7 @@ public enum LooseKind: UInt8, CaseIterable, Sendable {
         case .sign, .signpost: return (0.05, 0.1)
         case .tyre: return (0.05, 0.35)   // a tyre rolled away wobbles down onto its side within a few turns
         case .drum: return (0.04, 0.15)
+        case .log: return (0.03, 0.25)   // the crown's branches drag in the air and on the ground
         default: return (0.01, 0.05)
         }
     }

@@ -24,6 +24,7 @@ struct WDrive {
     float4 params;       // x: props' far distance (m), y: time
     float4 anchor;       // xy: the floating origin mod 4,096 m (world-anchored detail)
 };
+#include "Trace.h"   // 0331: the ground's memory (ruts, berms, laid grass), read by the terrain
 
 // Value noise on a hashed lattice (world metres, anchored: render-space + anchor). Every scale divides 4,096, so the pattern
 // is continuous when the origin moves (0226).
@@ -144,7 +145,8 @@ vertex WTerrainOut cg_world_terrain_vertex(WTerrainIn in [[stage_in]], constant 
     return o;
 }
 fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant WFrame& f [[buffer(1)]], constant WLook& k [[buffer(4)]],
-                                          constant WDrive& dr [[buffer(5)]], depth2d<float> shadow [[texture(3)]]) {
+                                          constant WDrive& dr [[buffer(5)]], depth2d<float> shadow [[texture(3)]],
+                                          constant WTrace& trace [[buffer(6)]], texture2d_array<float> traceTex [[texture(6)]]) {
     if (dr.params.z > 0.5) {   // debug (`-fd-lod`): each level its own colour, with the stored albedo
         float3 lc[8] = { float3(1,0,0), float3(0,1,0), float3(0,0,1), float3(1,1,0), float3(0,1,1), float3(1,0,1), float3(1,1,1), float3(0.5,0.5,0.5) };
         return float4(lc[int(clamp(in.level, 0.0, 7.0))] * 0.05 + in.col.rgb * 0.3, 1);
@@ -178,7 +180,9 @@ fragment float4 cg_world_terrain_fragment(WTerrainOut in [[stage_in]], constant 
         float t = dr.params.y;
         n = normalize(float3(sin(in.world.x * 0.21 + t * 0.6) * 0.03, 1.0, cos(in.world.z * 0.17 + t * 0.5) * 0.03));
     }
-    float3 c = world_light(albedo, n, in.world, in.lightClip, water ? 0.85 : 0.0, f, k, dr, shadow);
+    float sheen = water ? 0.85 : 0.0;
+    if (!water) world_trace(albedo, n, sheen, in.world, dist, f.style.x, trace, traceTex);   // 0331: where the tyres have been
+    float3 c = world_light(albedo, n, in.world, in.lightClip, sheen, f, k, dr, shadow);
     return float4(world_air(c, in.world, f, k), 1);
 }
 
