@@ -368,13 +368,16 @@ public struct BedCore {
                     let sq = sl * gd
                     if sq > 0.01 {
                         let wob = sqWob.step(), amr = sqAm.step()
-                        let f0 = (slipLong > 0.5 ? 640 : 820) + 380 * sl + 160 * (wob - 0.5)
+                        // The voice (0281): across 820 Hz and wobbling; a locked wheel lower, steadier and rougher (the
+                        // tread scrubbing one patch); a spinning one a chirp that climbs with the slip.
+                        let locked = slipLong > 0.5 && slipLong < 1.5, spinning = slipLong >= 1.5
+                        let f0 = (spinning ? 700 + 520 * sl : locked ? 540 + 220 * sl : 820 + 380 * sl) + (locked ? 50 : 160) * (wob - 0.5)
                         let d1 = f0 * isr
                         sqPh1 += d1; if sqPh1 >= 1 { sqPh1 -= 1 }
                         sqPh2 += d1 * 2.03; if sqPh2 >= 1 { sqPh2 -= 1 }
                         sqPh3 += d1 * 3.11; if sqPh3 >= 1 { sqPh3 -= 1 }
                         if retune { sqF.tune(f0 * 1.5, q: 7, sr) }
-                        let tone = sin2pi(sqPh1) + 0.5 * sin2pi(sqPh2) + 0.22 * sin2pi(sqPh3) + sqF.bp(white.next()) * 2.2
+                        let tone = sin2pi(sqPh1) + 0.5 * sin2pi(sqPh2) + 0.22 * sin2pi(sqPh3) + sqF.bp(white.next()) * (locked ? 4.0 : 2.2)
                         let absGate = ab > 0.05 ? 0.45 + 0.55 * (absPh < 0.5 ? 1 : 0.15) : 1
                         let g = pow(sq, 1.4) * (0.6 + 0.4 * amr) * absGate
                         car += tone * g * 0.11 * pv

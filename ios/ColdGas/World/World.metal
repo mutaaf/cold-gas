@@ -11,6 +11,7 @@ struct WFrame {
     float4 eye, keyDir, keyColor, fogColor, fogRange;
     float4x4 invViewProj;
     float4 proj, misc;
+    float4 style, fx;    // the look (0280, 0290): x 0 Real, 1 Anime, 2 8-bit
 };
 struct WLook {
     float4 hemiSky, hemiGround, hazeCol, sunCol, sunDir, fogExp;
@@ -50,14 +51,44 @@ static float world_shadow(float4 lc, depth2d<float> sm, float texel) {
     for (int y = 0; y < 2; y++) for (int x = 0; x < 2; x++) s += sm.sample_compare(cmp, uv + (float2(x, y) - 0.5) * texel, p.z - 0.0015);
     return s * 0.25;
 }
+// Anime and 8-bit (0290): Shaders.metal's celRamp under this file's names. T is the light on the surface as a factor of its
+// albedo, before exposure; a band of the albedo comes back, tinted violet in the shade, the light's hue where it's lit.
+static float3 world_cel(float3 base, float3 T, float exposure, bool pixel) {
+    const float3 Y = float3(0.2126, 0.7152, 0.0722), SH = float3(0.70, 0.76, 1.45);
+    float I = max(dot(T, Y) * exposure, 1e-6);
+    float3 hue = T / max(dot(T, Y), 1e-6);
+    hue = mix(float3(1.0), min(hue, float3(2.2)), 0.75);
+    hue /= max(dot(hue, Y), 1e-3);
+    float li = log2(I), w = pixel ? 1e-3 : clamp(fwidth(li) * 0.75, 0.02, 0.5);
+    float b0 = smoothstep(-6.2 - w, -6.2 + w, li), b1 = smoothstep(-3.9 - w, -3.9 + w, li), b2 = smoothstep(-2.1 - w, -2.1 + w, li);
+    float3 k = mix(mix(mix(SH * 0.08, SH * 0.15, b0), mix(SH, hue, 0.55) * 0.36, b1), hue * 0.74, b2);
+    return base * k / max(exposure, 1e-4);
+}
 // Matte land: the key light (shadowed), the sky and ground hemisphere, the headlamps; then the air.
 static float3 world_light(float3 albedo, float3 n, float3 p, float4 lightClip, float spec, constant WFrame& f, constant WLook& k,
                           constant WDrive& dr, depth2d<float> shadow) {
     float3 l = normalize(f.keyDir.xyz + 1e-6);
     float nl = clamp(dot(n, l), 0.0, 1.0);
     float sh = nl > 0 ? world_shadow(lightClip, shadow, f.fogRange.w) : 1.0;
-    float3 c = albedo * f.keyColor.rgb * f.keyDir.w * nl * sh / M_PI_F;
     float3 hemi = mix(k.hemiGround.rgb, k.hemiSky.rgb, clamp(n.y * 0.5 + 0.5, 0.0, 1.0));
+    if (f.style.x > 0.5) {   // the drawn looks (0290): the same lights summed as irradiance, through the ramp
+        float3 T = f.keyColor.rgb * f.keyDir.w * nl * smoothstep(0.4, 0.6, sh) / M_PI_F + hemi;
+        if (dr.lampPos.w > 0) {
+            float3 d = dr.lampPos.xyz - p;
+            float dist = max(length(d), 0.5);
+            float3 ld = d / dist;
+            float cone = smoothstep(dr.lampDir.w - 0.05, dr.lampDir.w + 0.06, dot(-ld, dr.lampDir.xyz)); cone *= cone;
+            T += clamp(dot(n, ld), 0.0, 1.0) * cone * dr.lampPos.w / (dist * dist + 25.0) * clamp(1.0 - pow(dist / 140.0, 4.0), 0.0, 1.0) * float3(1.0, 0.95, 0.86);
+        }
+        float3 c = world_cel(albedo, T, f.fogRange.z, f.style.x > 1.5);
+        if (spec > 0) {   // water: the sky's colour, flat, by a hard Fresnel step
+            float3 v = normalize(f.eye.xyz - p + 1e-6);
+            float fr = step(0.75, 1.0 - clamp(dot(n, v), 0.0, 1.0));
+            c = mix(c, mix(k.skyHorizon.rgb, k.skyMid.rgb, 0.5), fr * spec * 0.8);
+        }
+        return c;
+    }
+    float3 c = albedo * f.keyColor.rgb * f.keyDir.w * nl * sh / M_PI_F;
     c += albedo * hemi;
     float3 v = normalize(f.eye.xyz - p + 1e-6);
     if (spec > 0) {   // water and wet road: the sky's horizon, by Fresnel
@@ -81,6 +112,18 @@ static float3 world_light(float3 albedo, float3 n, float3 p, float4 lightClip, f
 static float3 world_air(float3 c, float3 p, constant WFrame& f, constant WLook& k) {
     float3 toP = p - f.eye.xyz;
     float dist = max(length(toP), 1e-3);
+    if (f.style.x > 0.5) {   // the drawn looks (0290): the haze in four flat layers, as Shaders.metal's hazedDrawn
+        float a = k.hazeCol.w;
+        if (a <= 0) return max(c, 0.0);
+        float3 d = toP / dist;
+        float b = k.sunCol.w, dens = a * exp(-b * f.eye.y), dy = d.y * b;
+        float tau = abs(dy) > 1e-4 ? dens * (1.0 - exp(-clamp(dy * dist, -12.0, 12.0))) / dy : dens * dist;
+        float fog = (1.0 - exp(-clamp(tau, 0.0, 12.0))) * 4.0;
+        float w = f.style.x > 1.5 ? 1e-3 : clamp(fwidth(fog), 0.01, 0.5);
+        float fl = floor(fog), q = (fl + smoothstep(1.0 - w, 1.0, fog - fl)) / 4.0;
+        float sun = pow(max(dot(d, k.sunDir.xyz), 0.0), 6.0);
+        return mix(max(c, 0.0), k.hazeCol.rgb + k.sunCol.rgb * sun, q);
+    }
     return world_hazed(max(c, 0.0), toP / dist, dist, f.eye.xyz, k);
 }
 

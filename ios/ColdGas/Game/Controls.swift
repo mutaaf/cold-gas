@@ -17,6 +17,8 @@ final class Controls {
     func stick(x: Double, y: Double) {
         if x == 0 && y == 0 { touch?.stickUp() } else { touch?.stick(x, y) }
     }
+    /// Free Drive's handbrake (0281): the deck's HAND, held. Game hands it to the drive each frame.
+    var handbrake = false
     func press(_ k: Key, _ on: Bool) {
         guard let t = touch else { return }
         let b: TouchControls.Button = k == .go ? .go : k == .brake ? .brk : k == .lift ? .lift : .land
