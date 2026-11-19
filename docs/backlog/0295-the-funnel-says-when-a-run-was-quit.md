@@ -1,7 +1,7 @@
 ---
 id: 0295
 title: The funnel says in which phase a run was quit: before the first hold, on the climb, or in the air
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: engagement
