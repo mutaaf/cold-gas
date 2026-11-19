@@ -408,6 +408,7 @@ final class WorldView {
                            morph: k.level < TileSpec.levels - 1 ? SIMD4(Float(0.7 * end), Float(1 / (0.3 * end)), 0, 0) : SIMD4(1e9, 0, 0, 0))
             e.setVertexBytes(&u, length: MemoryLayout<WTileU>.stride, index: 2)
             e.setVertexBuffer(t.buf, offset: 0, index: 0)
+            RenderStats.draw(indices: tileIndexCount)
             e.drawIndexedPrimitives(type: .triangle, indexCount: tileIndexCount, indexType: .uint16, indexBuffer: tileIndex, indexBufferOffset: 0)
         }
         // Roads: a few depth steps toward the camera, so the ribbon always wins over the land it's carved into.
@@ -419,6 +420,7 @@ final class WorldView {
             var u = WTileU(offset: SIMD4(Float(r.ox - origin.x), Float(-origin.y), Float(r.oz - origin.z), 0), morph: .zero)
             e.setVertexBytes(&u, length: MemoryLayout<WTileU>.stride, index: 2)
             e.setVertexBuffer(r.vb, offset: 0, index: 0)
+            RenderStats.draw(indices: r.count)
             e.drawIndexedPrimitives(type: .triangle, indexCount: r.count, indexType: .uint32, indexBuffer: r.ib, indexBufferOffset: 0)
             nr += 1
         } }
@@ -444,6 +446,7 @@ final class WorldView {
                 e.setVertexBytes(&u, length: MemoryLayout<WTileU>.stride, index: 2)
                 e.setVertexBuffer(ib, offset: 0, index: 3)
                 e.setVertexBuffer(lod.vb, offset: 0, index: 0)
+                RenderStats.draw(indices: lod.count, instances: b.counts[ki])
                 e.drawIndexedPrimitives(type: .triangle, indexCount: lod.count, indexType: .uint32, indexBuffer: lod.ib, indexBufferOffset: 0, instanceCount: b.counts[ki])
                 ni += b.counts[ki]
             }
@@ -455,6 +458,7 @@ final class WorldView {
             guard let lod = kind.lods.first, nearBufs[ki].count == Renderer.inFlight else { continue }
             e.setVertexBuffer(nearBufs[ki][nearSlot], offset: 0, index: 3)
             e.setVertexBuffer(lod.vb, offset: 0, index: 0)
+            RenderStats.draw(indices: lod.count, instances: nearCounts[ki])
             e.drawIndexedPrimitives(type: .triangle, indexCount: lod.count, indexType: .uint32, indexBuffer: lod.ib, indexBufferOffset: 0, instanceCount: nearCounts[ki])
             ni += nearCounts[ki]
         }
@@ -465,7 +469,7 @@ final class WorldView {
             m.prepare(origin: origin)
             e.setRenderPipelineState(markPipe); e.setCullMode(.none); e.setDepthStencilState(dsTest); e.setDepthBias(-24, slopeScale: -3, clamp: 0)
             e.setVertexBuffer(m.buf, offset: 0, index: 0)
-            e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: m.count * 6)
+            e.tris(m.count * 6)
             e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setDepthStencilState(dsWrite)
         }
     }

@@ -40,6 +40,7 @@ def build(kit, spec, rng):
         ],
         'mirror': {'y': 0.80, 'z': 1.07, 'in': 0.0, 'size': (0.11, 0.18, 0.11)},
         'handles': [0.42, -0.72],
+        'doors': [0.88, -0.305, -0.415, -0.99], 'hood': (hl - 0.32, 1.0, 0.9),
         'wheels': {'style': 'spokes' if kit.seed % 3 != 2 else 'mesh', 'spokes': 6, 'rim': 'rim_silver'},
     })
     # roof rails: two slim satin bars on low feet

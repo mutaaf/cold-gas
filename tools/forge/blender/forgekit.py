@@ -307,31 +307,51 @@ class Kit:
         """A smooth function through [(t, v), …] that never overshoots a key (monotone cubic), clamped outside."""
         return _mono(sorted(keys))
 
-    def wheel(self, at, r, width, rim_r, side=1, style='spokes', spokes=5, rim='rim_dark', name='wheel'):
+    def wheel(self, at, r, width, rim_r, side=1, style='spokes', spokes=5, rim='rim_dark', segments=28, inner=False, name='wheel'):
         """A wheel and tyre whose centre is `at`, its outer face toward `side` (+1 right, −1 left). style 'spokes' |
-        'cover' (a flat aero disc) | 'steel' (a dished truck wheel with hand holes) | 'mesh' (many fine spokes)."""
+        'cover' (a flat aero disc) | 'steel' (a hub-piloted truck disc with hand holes and ten nuts) | 'mesh' (many fine
+        spokes). The tyre has a bulged sidewall, rounded shoulders and two circumferential tread grooves; behind open
+        spokes sit a ventilated brake rotor and its caliper (they don't turn, but a parked car's wheels don't either).
+        `inner`: the inboard tyre of a dual pair, its face hidden by its twin: a plain disc, no nuts."""
         x, y, z = at
         w = width
-        sw = min(0.11, (r - rim_r) * 0.55)
-        # tyre: a rounded section revolved about X
-        prof = []
-        for k in range(7):
-            a = -math.pi / 2 + math.pi * k / 6
-            prof.append((r - sw * 0.5 + sw * 0.5 * math.cos(a) * 1.0, w / 2 * math.sin(a) * 0.98))
-        tyre = [(rim_r - 0.004, -w / 2 + 0.02)] + [(rr, h) for rr, h in prof] + [(rim_r - 0.004, w / 2 - 0.02)]
-        tyre = [(rr, -h) for rr, h in reversed(tyre)]
-        t = self.lathe(tyre, mat='rubber', axis='X', segments=32, loop=True, name=name + '-tyre')
+        h = w / 2
+        sw = r - rim_r                                   # sidewall height
+        # tyre section, (radius, axial) from the inboard bead round the tread to the outboard bead
+        g0, g1 = 0.34 * h, 0.22 * h                      # the grooves' edges, either side of the centre rib
+        gd = min(0.012, sw * 0.08)                       # groove depth
+        half = [(rim_r - 0.004, -h + 0.03), (rim_r + 0.2 * sw, -h + 0.008), (rim_r + 0.55 * sw, -h),
+                (r - 0.035, -h + 0.01), (r - 0.01, -h + 0.035), (r, -h + 0.07),
+                (r, -g0), (r - gd, -g0 + 0.004), (r - gd, -g1 - 0.004), (r, -g1)]
+        if inner:
+            half = half[:6]   # the hidden twin of a dual pair: no grooves, coarser
+            segments = max(12, segments * 3 // 4)
+        prof = half + [(rr, -hh) for rr, hh in reversed(half)]
+        prof = [(rr, -hh) for rr, hh in reversed(prof)]
+        t = self.lathe(prof, mat='rubber', axis='X', segments=segments, loop=True, name=name + '-tyre')
         self._close_lathe_inner(t)
         self.place(t, at)
         parts = [t]
-        face = x + side * (w / 2 - 0.035)
+        face = x + side * (h - 0.035)
         # the barrel: the rim's inside, its outer end the dark dish set back behind the spokes or the cover
-        x_in, x_out = x - side * (w / 2 - 0.03), face - side * (0.055 if style in ('spokes', 'mesh') else 0.03)
-        barrel = self.cylinder(rim_r - 0.003, abs(x_out - x_in), at=((x_in + x_out) / 2, y, z), axis='X', mat='chassis', verts=28, name=name + '-barrel')
+        open_ = style in ('spokes', 'mesh')
+        x_in, x_out = x - side * (h - 0.03), face - side * (0.075 if open_ else 0.03)
+        barrel = self.cylinder(rim_r - 0.003, abs(x_out - x_in), at=((x_in + x_out) / 2, y, z), axis='X', mat='chassis', verts=segments, name=name + '-barrel')
         parts.append(barrel)
-        if style == 'cover':
+        if open_:
+            # brakes behind the spokes: a rotor with a dark vented band, and a caliper on its trailing upper quarter
+            rr = rim_r * 0.8
+            xr = face - side * 0.062
+            parts.append(self.cylinder(rr, 0.03, at=(xr, y, z), axis='X', mat='steel', verts=segments, name=name + '-rotor'))
+            parts.append(self.cylinder(rr * 0.55, 0.036, at=(xr, y, z), axis='X', mat='chassis', verts=16, name=name + '-hat'))
+            ca = math.radians(125)
+            parts.append(self.box((0.05, rr * 0.75, 0.07), at=(xr + side * 0.004, y + math.cos(ca) * rr * 0.86, z + math.sin(ca) * rr * 0.86),
+                                  mat='rim_dark', bevel=0.012, segments=1, rot=(ca - math.pi / 2, 0, 0), name=name + '-caliper'))
+        if inner:
+            parts.append(self.cylinder(rim_r * 0.97, 0.02, at=(face, y, z), axis='X', mat='steel', verts=segments, name=name + '-disc'))
+        elif style == 'cover':
             prof = [(0, 0.012), (rim_r * 0.25, 0.012), (rim_r * 0.5, 0.008), (rim_r * 0.92, 0.0), (rim_r * 0.995, -0.01), (rim_r * 0.995, -0.03), (0, -0.03)]
-            c = self.lathe([(rr, h) for rr, h in prof], axis='X', mat='cover', segments=28, name=name + '-cover')
+            c = self.lathe([(rr, hh) for rr, hh in prof], axis='X', mat='cover', segments=segments, name=name + '-cover')
             self.place(c, (face + side * 0.0, y, z), (0, 0, 0 if side > 0 else math.pi))
             parts.append(c)
             # a few shallow aero vanes on the disc
@@ -340,33 +360,46 @@ class Kit:
                 v = self.box((0.012, rim_r * 0.5, 0.018), at=(face + side * 0.008, y + math.cos(a) * rim_r * 0.55, z + math.sin(a) * rim_r * 0.55), mat='rim_dark', bevel=0.004, segments=1, rot=(a + math.pi / 2, 0, 0), name=name + '-vane')
                 parts.append(v)
         elif style == 'steel':
-            prof = [(0, 0.03), (rim_r * 0.3, 0.03), (rim_r * 0.42, 0.0), (rim_r * 0.85, -0.02), (rim_r * 0.99, 0.01), (rim_r * 0.99, -0.03), (0, -0.04)]
-            c = self.lathe(prof, axis='X', mat='rim_silver', segments=40, name=name + '-dish')
+            # a hub-piloted truck disc: a raised centre and hub, a dished face, a rolled rim lip, ten nuts
+            prof = [(0, 0.03), (rim_r * 0.3, 0.03), (rim_r * 0.4, 0.0), (rim_r * 0.82, -0.025), (rim_r * 0.93, -0.01), (rim_r * 0.99, 0.012), (rim_r * 0.99, -0.03), (0, -0.04)]
+            c = self.lathe(prof, axis='X', mat='rim_silver', segments=segments, name=name + '-dish')
             self.place(c, (face, y, z), (0, 0, 0 if side > 0 else math.pi))
-            hub = self.cylinder(rim_r * 0.22, 0.05, at=(face + side * 0.005, y, z), axis='X', mat='steel', verts=20, bevel=0.01, name=name + '-hub')
+            hub = self.cylinder(rim_r * 0.2, 0.07, at=(face + side * 0.02, y, z), axis='X', mat='steel', verts=12, r_top=rim_r * 0.15, name=name + '-hub')
             parts += [c, hub]
             for k in range(10):
                 a = TAU * k / 10
-                nut = self.cylinder(0.014, 0.02, at=(face + side * 0.022, y + math.cos(a) * rim_r * 0.3, z + math.sin(a) * rim_r * 0.3), axis='X', mat='steel', verts=6, name=name + '-nut')
+                nut = self.cylinder(0.016, 0.026, at=(face + side * 0.03, y + math.cos(a) * rim_r * 0.3, z + math.sin(a) * rim_r * 0.3), axis='X', mat='steel', verts=6, name=name + '-nut')
                 parts.append(nut)
         else:
             n = 10 if style == 'mesh' else spokes
-            lip = self.lathe([(rim_r * 0.9, -0.02), (rim_r * 1.0, -0.02), (rim_r * 1.0, 0.012), (rim_r * 0.9, 0.012)], axis='X', mat=rim, segments=32, loop=True, name=name + '-lip')
+            lip = self.lathe([(rim_r * 0.9, -0.02), (rim_r * 1.0, -0.02), (rim_r * 1.0, 0.012), (rim_r * 0.9, 0.012)], axis='X', mat=rim, segments=segments, loop=True, name=name + '-lip')
             self.place(lip, (face, y, z))
             hub = self.cylinder(rim_r * 0.2, 0.05, at=(face, y, z), axis='X', mat=rim, verts=16, bevel=0.01, segments=1, name=name + '-hub')
-            cap = self.cylinder(rim_r * 0.09, 0.012, at=(face + side * 0.026, y, z), axis='X', mat='gloss', verts=16, name=name + '-cap')
+            cap = self.cylinder(rim_r * 0.09, 0.012, at=(face + side * 0.026, y, z), axis='X', mat='gloss', verts=12, name=name + '-cap')
             parts += [lip, hub, cap]
-            # spokes: tapered slabs from the hub to the lip, turned evenly about the axle
+            for k in range(5):
+                a = TAU * (k + 0.5) / 5
+                parts.append(self.cylinder(0.011, 0.016, at=(face + side * 0.022, y + math.cos(a) * rim_r * 0.13, z + math.sin(a) * rim_r * 0.13), axis='X', mat='steel', verts=6, name=name + '-nut'))
+            # spokes: tapered slabs from the hub to the lip, turned evenly about the axle; split twin spokes when few
             root, tip = (0.13, 0.065) if style != 'mesh' else (0.05, 0.03)
+            twin = style != 'mesh' and n <= 6
             for k in range(n):
                 a = TAU * k / n + (0.15 if style == 'mesh' else 0)
-                sp = self.extrude([(-rim_r * root, rim_r * 0.18), (rim_r * root, rim_r * 0.18), (rim_r * tip, rim_r * 0.94), (-rim_r * tip, rim_r * 0.94)],
-                                  0.03, plane='YZ', mat=rim, name=name + '-spoke')
-                self.place(sp, (face - side * 0.008, y, z), (a, 0, 0))
-                parts.append(sp)
+                if twin:
+                    for d in (-1, 1):
+                        sp = self.extrude([(-rim_r * 0.05 + d * rim_r * 0.035, rim_r * 0.18), (rim_r * 0.05 + d * rim_r * 0.035, rim_r * 0.18),
+                                           (rim_r * 0.03 + d * rim_r * 0.085, rim_r * 0.94), (-rim_r * 0.03 + d * rim_r * 0.085, rim_r * 0.94)],
+                                          0.03, plane='YZ', mat=rim, name=name + '-spoke')
+                        self.place(sp, (face - side * 0.008, y, z), (a, 0, 0))
+                        parts.append(sp)
+                else:
+                    sp = self.extrude([(-rim_r * root, rim_r * 0.18), (rim_r * root, rim_r * 0.18), (rim_r * tip, rim_r * 0.94), (-rim_r * tip, rim_r * 0.94)],
+                                      0.03, plane='YZ', mat=rim, name=name + '-spoke')
+                    self.place(sp, (face - side * 0.008, y, z), (a, 0, 0))
+                    parts.append(sp)
         return self.join(parts, name=name)
 
-    def axle_wheels(self, axle, style='spokes', spokes=5, rim='rim_dark', dual=False, name='axle'):
+    def axle_wheels(self, axle, style='spokes', spokes=5, rim='rim_dark', dual=False, segments=28, name='axle'):
         """Both wheels of one of the spec's axles ({'at', 'track', 'r', 'w', 'rimR'?, 'dual'?}), on the ground."""
         out = []
         r, w = axle['r'], axle['w']
@@ -375,9 +408,9 @@ class Kit:
             if axle.get('dual') or dual:
                 for k in (0, 1):
                     xo = axle['track'] / 2 + (k - 0.5) * (w + 0.03)
-                    out.append(self.wheel((side * xo, axle['at'], r), r, w, rim_r, side=side if k == 1 else -side, style='steel', rim=rim, name=f'{name}{side}{k}'))
+                    out.append(self.wheel((side * xo, axle['at'], r), r, w, rim_r, side=side if k == 1 else -side, style='steel', rim=rim, segments=segments, inner=k == 0, name=f'{name}{side}{k}'))
             else:
-                out.append(self.wheel((side * axle['track'] / 2, axle['at'], r), r, w, rim_r, side=side, style=style, spokes=spokes, rim=rim, name=f'{name}{side}'))
+                out.append(self.wheel((side * axle['track'] / 2, axle['at'], r), r, w, rim_r, side=side, style=style, spokes=spokes, rim=rim, segments=segments, name=f'{name}{side}'))
         return out
 
     def arches(self, body, axles, clearance=0.035, liner='trim', name='arch'):

@@ -4,11 +4,15 @@
 #   make alloc    the tick's allocation check, optimised
 #   make sim      build for the simulator and launch on the Duo
 #   make shots    screenshots: the Duo (closed, book, tabletop via -window) and the Pro Max → build/shots
+#   make glare    the glare gate: the first 3 s of the Show, Wall and Lineup runs, measured (-luma); fails on a blinding opening
 #   make bench    the 10 s turntable bench on the Pro Max simulator (prints BENCH …)
 #   make device   build, install and run -selftest on the paired iPhone (prints SELFTEST …)
 #   make bench-freedrive         Free Drive's bench on the Pro Max simulator, Release: the autopilot 3 km out, 10 s once the
 #                                world is built (prints BENCH … and BENCH freedrive …; docs/NATIVE-FREEDRIVE.md §8)
 #   make device-bench-freedrive  the same on the paired iPhone, Release (the owner runs it, on a phone of their choosing)
+#   make perf                    the perf matrix (0296, docs/PERF-2026-11-18.md): looks × scenes on the "ColdGas iPhone" simulator,
+#                                Release; CPU p50/p95/p99, main thread, draws, triangles, passes, memory, launch → first frame
+#   make device-bench-all        the same matrix and table on the paired iPhone, Release (the owner runs it; ≈ 8 min)
 # Release (§9; tooling copied from moon-club, UTC-timestamp build numbers as kin's). The App Store Connect key config is
 # the owner's: ios/.env.testflight (gitignored; copy moon-club's) or ASC_ENV=<file>. Nothing here submits for review.
 #   make rules       scripts/check-rules.sh: own code only, own origin, no force-unwrapped lookups, notes, plist, privacy
@@ -25,7 +29,7 @@ APP := $(DD)/Build/Products/Debug-iphonesimulator/ColdGas.app
 BUNDLE := com.mutaafaziz.coldgas
 id = $(shell xcrun simctl list devices available | grep -F "    $(1) (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
 
-.PHONY: up sims engine gen test alloc build sim shots bench device bench-freedrive device-bench-freedrive release rules provision archive validate testflight store-check
+.PHONY: up sims engine gen test alloc build sim shots glare bench device bench-freedrive device-bench-freedrive release rules provision archive validate testflight store-check perf device-bench-all
 up: sims engine gen test build sim
 sims:
 	# Our own simulators: another project on this Mac shares the stock "iPhone Duo" (it unfolds it, launches its app).
@@ -50,6 +54,8 @@ sim: build
 	./scripts/sim.sh "$(DUO)" $(APP) $(BUNDLE)
 shots: build
 	./scripts/shots.sh build/shots
+glare: build
+	./scripts/glare.sh $(APP)
 bench: build
 	./scripts/sim.sh "$(PROMAX)" $(APP) $(BUNDLE) -bench
 device: engine gen
@@ -62,6 +68,10 @@ bench-freedrive: release
 	SECS=70 ./scripts/sim.sh "$(PROMAX)" $(DD)/Build/Products/Release-iphonesimulator/ColdGas.app $(BUNDLE) $(FREEDRIVE_BENCH)
 device-bench-freedrive: engine gen
 	CONFIG=Release LAUNCH="$(FREEDRIVE_BENCH)" LINES_MAX=6 ./scripts/device.sh
+perf: release
+	./scripts/perf.sh $(DD)/Build/Products/Release-iphonesimulator/ColdGas.app $(PERF_OUT)
+device-bench-all: engine gen
+	./scripts/device-perf.sh
 rules:
 	./scripts/check-rules.sh
 provision:

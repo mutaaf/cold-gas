@@ -1,0 +1,5 @@
+PERF scene=title look=real frames=350 hz=60 interval=22.92 cpu50=0.86 cpu95=0.96 cpu99=1.08 enc50=0.80 enc95=0.90 main=0.87 draws=240 tris=223536 passes=13.0 mem=38 peak=38 launch=1451 gpu=0.53 scale=0.90 px=1206x2622 metal=90
+PERF scene=title look=real frames=351 hz=60 interval=22.86 cpu50=0.86 cpu95=0.97 cpu99=1.06 enc50=0.80 enc95=0.90 main=0.87 draws=240 tris=223921 passes=13.0 mem=37 peak=37 launch=1736 gpu=0.52 scale=0.90 px=1206x2622 metal=90
+PERF scene=title look=real frames=348 hz=60 interval=23.05 cpu50=0.86 cpu95=0.97 cpu99=1.04 enc50=0.80 enc95=0.91 main=0.88 draws=240 tris=223498 passes=13.0 mem=37 peak=37 launch=1306 gpu=0.55 scale=0.90 px=1206x2622 metal=90
+PERF scene=title look=real frames=321 hz=60 interval=25.00 cpu50=0.84 cpu95=0.98 cpu99=1.06 enc50=0.79 enc95=0.92 main=0.82 draws=242 tris=225379 passes=13.0 mem=37 peak=37 launch=1704 gpu=0.48 scale=0.85 px=1206x2622 metal=86
+PERF scene=title look=real frames=342 hz=60 interval=23.46 cpu50=0.87 cpu95=0.98 cpu99=1.03 enc50=0.81 enc95=0.92 main=0.83 draws=240 tris=223540 passes=13.0 mem=38 peak=38 launch=3191 gpu=0.53 scale=0.85 px=1206x2622 metal=86

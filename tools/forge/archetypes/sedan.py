@@ -42,5 +42,6 @@ def build(kit, spec, rng):
         ],
         'mirror': {'y': 0.74, 'z': 0.93, 'in': 0.0},
         'handles': [0.45, -0.62],
+        'doors': [0.84, -0.23, -0.33, -1.0], 'hood': (hl - 0.32, 0.98, 0.9),
         'wheels': {'style': style, 'spokes': 5, 'rim': 'rim_silver'},
     })

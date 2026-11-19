@@ -91,7 +91,21 @@ def car(kit, spec, rng, P):
     # flush handles: a slim satin bar on each door
     for y in P.get('handles', []):
         kit.strip(body, [(y + 0.1, zs(y) - 0.05), (y - 0.1, zs(y) - 0.05)], 0.028, plane='side', mat='trim', offset=0.003, mirror=True, name='handle')
+    # shut lines: each door's vertical edges from the belt down to the sill, the hood's two sides along the fenders
+    zb_c = kit.curve([(y, s['zb']) for y, s in st])
+    for y in P.get('doors', []):
+        kit.strip(body, [(y, zs(y) - 0.006), (y, max(zb_c(y), spec['clearance']) + 0.07)], 0.007, plane='side', mat='trim', offset=0.0022, mirror=True, name='shut')
+    H = P.get('hood')
+    if H:
+        y0, y1, k = H[0], H[1], H[2] if len(H) > 2 else 0.9
+        pts = [(wt(y0 + (y1 - y0) * i / 6) * k, y0 + (y1 - y0) * i / 6) for i in range(7)]
+        kit.strip(body, pts, 0.007, plane='top', mat='trim', offset=0.0022, mirror=True, name='hood-shut')
+    # wipers parked at the windshield's foot, and their pivots
+    if P.get('wipers', True):
+        yw, zw = a0 - 0.04, zt(a0) + 0.05
+        for s in (1, -1):
+            kit.box((wt(a0) * 0.72, 0.018, 0.014), at=(s * wt(a0) * 0.3 - 0.06, yw, zw), rot=(0.35, 0.07 * s, 0), mat='trim', bevel=0.005, segments=1, name='wiper')
     W = P.get('wheels', {})
     for a in spec['axles']:
-        kit.axle_wheels(a, style=W.get('style', 'spokes'), spokes=W.get('spokes', 5), rim=W.get('rim', 'rim_silver'))
+        kit.axle_wheels(a, style=W.get('style', 'spokes'), spokes=W.get('spokes', 5), rim=W.get('rim', 'rim_silver'), segments=W.get('segments', 24))
     return body

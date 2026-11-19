@@ -170,4 +170,12 @@ struct SetDressingTests {
         let ch = SetChallenges(stage: "show", saved: saved)
         #expect(ch.doneCount == 1 && ch.states[.mark]?.best == 0.8)
     }
+
+    /// 0301: a number that isn't one never becomes a best (JSONEncoder throws on NaN, and the set would stop saving).
+    @Test func aNaNIsNeverABest() {
+        let ch = SetChallenges(stage: "wall")
+        _ = ch.update(dt: 0.01, x: 0, y: WALL.lipY, z: WALL.lipZ, speed: .nan, airborne: false, tyresDown: 0, conesMoved: false)
+        #expect(ch.update(dt: 0.01, x: 0, y: WALL.lipY + 0.2, z: WALL.lipZ - 0.1, speed: .nan, airborne: true, tyresDown: 0, conesMoved: false).isEmpty)
+        #expect(ch.states[.lip]?.done == false && ch.states[.lip]?.best == nil)
+    }
 }

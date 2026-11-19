@@ -57,6 +57,19 @@ final class Game: ObservableObject {
     @Published private(set) var countdown = 0
     @Published private(set) var result: RunResult?
     @Published var paused = false
+    /// A sheet (Board, Settings, How to, Practice, the Club) covers the stage (GameUI). Not published: the stage view reads it.
+    var sheetUp = false
+    /// The most the stage needs drawing a second (0298), under the renderer's own cadence: a run, a drive, a replay or the
+    /// encore move fast and get it all; the title's loop and the results' orbit are slow camera moves, 60 is smooth for them;
+    /// a paused run is a held frame and a sheet (94 % opaque, `.large`) all but hides the stage, so 15 keeps it alive and no more.
+    /// Before, the title and every sheet drew at 120 Hz on a ProMotion phone: the most frames for the least to see.
+    var stageHz: Int {
+        if sheetUp || (paused && screen == .run) { return 15 }
+        switch screen {
+        case .run, .drive: return 120
+        case .title, .results: return replaying || encore ? 120 : 60
+        }
+    }
     /// 0293: one calm line over the screens when something failed that the player should know about (Report.swift).
     @Published var notice: Notice?
     /// The results are up and the flight is playing back behind them (the track the run recorded).
@@ -76,7 +89,7 @@ final class Game: ObservableObject {
     /// A challenge done (or bettered) on this roam (0274).
     private var roamDidSomething = false
     @Published private(set) var driveHud = DriveHud()
-    private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0, driveClock = 0.0, driveImpacts = 0
+    private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0, driveClock = 0.0, driveImpacts = 0, driveDropped = 0
     let controls = Controls()
 
     private(set) var live: LiveRun?
@@ -86,6 +99,7 @@ final class Game: ObservableObject {
     private(set) var activeDrill: String?
     private var titleTracks: [String: Replay] = [:]
     private var haptics = HapticScore(course: "show"), seen = 0
+    private let driveFeel = DriveFeel()
     /// The Wreck score's eyes on this run (0237, 0239), and the combo call on the HUD (cleared after a beat).
     private var wreck = WreckTracker()
     @Published private(set) var combo: ComboCall?
@@ -174,6 +188,20 @@ final class Game: ObservableObject {
 
     init() {
         if firstRun { course = "show"; tier = "assist" }   // the first jump: the Show, Assist, one thumb
+        // 0301: a course or tier from a launch flag this build doesn't know (the stored ones were repaired by Prefs).
+        if COURSES[course] == nil { course = "show" }
+        if !Prefs.TIERS.contains(tier) { tier = "assist" }
+        // 0301: under memory pressure the title's other flights go (each is flown again on demand); the stage drops its idle
+        // renderers itself (0293).
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { _ in
+            MainActor.assumeIsolated { Game.shared.shedMemory() }
+        }
+    }
+    /// A memory warning (0301): keep only what's on screen.
+    func shedMemory() {
+        let c = course
+        titleTracks = titleTracks.filter { $0.key == c }
+        if screen != .title { still = nil }
     }
 
     /// One-thumb flies only Assist on the Show and the Wall (src/onethumb.js); everything else is classic touch.
@@ -196,7 +224,12 @@ final class Game: ObservableObject {
             return
         }
         // Flown once per course and kept: Home must never wait on a whole flight (and the sim stays on this one thread).
+        // 0302: the course's renderer starts building on its own thread first, so the flight and the build overlap at launch.
+        if titleTracks[course] == nil { stage?.prepare(course: course) }
+        let t0 = CACurrentMediaTime()
         let tr = titleTracks[course] ?? Replay(runVector: "ref-\(course)")
+        if tr == nil { Report.error(.app, .error, "reference run missing: \(course)") }   // 0301: the title stands still, said once
+        if titleTracks[course] == nil, PerfProbe.on { print(String(format: "PERF-LAUNCH title flight %@ %.1f ms (main thread)", course, (CACurrentMediaTime() - t0) * 1000)) }
         titleTracks[course] = tr
         stage?.load(course: course, track: tr)
     }
@@ -294,7 +327,8 @@ final class Game: ObservableObject {
         if let v = Launch.value("-fd-pilot").flatMap(Double.init) { fd.pilot = v }
         controls.drive = fd.sampler
         if let c = Launch.value("-fd-cam"), let m = DriveCamera.Mode(rawValue: c) { fd.camera.mode = m }
-        freeDrive = fd; driveSettled = false; driveImpacts = 0
+        freeDrive = fd; driveSettled = false; driveImpacts = 0; driveDropped = 0
+        controls.handbrake = false; driveFeel.reset(fd.chassis)
         SoundFeed.shared.reset()
         stage?.load(course: c.id, track: fd.track)
         screen = .drive
@@ -302,7 +336,7 @@ final class Game: ObservableObject {
     }
     func endDrive() {
         if let r = stage?.renderer, isDrive(r.courseKey) { r.drive = nil }
-        controls.drive = nil
+        controls.drive = nil; controls.handbrake = false   // 0301: a lever held as the drive ends isn't held after it
         freeDrive?.car.world.free()
         freeDrive = nil
         roamedFrom = nil
@@ -314,7 +348,7 @@ final class Game: ObservableObject {
     func flyFromRoam() {
         let c = freeDrive.map { stageOf($0.course.id) } ?? course
         if let r = stage?.renderer, isDrive(r.courseKey) { r.drive = nil }
-        controls.drive = nil
+        controls.drive = nil; controls.handbrake = false   // 0301: a lever held as the drive ends isn't held after it
         freeDrive?.car.world.free()
         freeDrive = nil
         roamedFrom = nil
@@ -326,11 +360,16 @@ final class Game: ObservableObject {
         guard let fd = freeDrive else { return }
         // The drive's renderer is built off the main thread on first use: hook it up once it's the one drawing.
         if let r = stage?.renderer, r.courseKey == fd.course.id, r.drive !== fd { r.drive = fd; fd.attach(device: r.device) }
+        fd.handbrake = controls.handbrake && !paused
         if !paused { fd.frame(dt: min(dt, 0.1)); driveClock += dt }
         stage?.renderer?.liveTime = fd.liveTime
         if paused { SoundFeed.shared.quiet(title: false) } else { SoundFeed.shared.drive(fd, dt: dt, grind: Double(stage?.renderer?.crash.grind ?? 0)) }
         // The hands (0223): each impact the sim records, scaled by its speed; under them, rough ground and a sliding tyre.
         let imps = fd.track.impacts
+        // 0301: the track drops its oldest impacts past a cap; the cursor follows (it used to start over: a burst of old knocks).
+        if fd.track.impactsDropped != driveDropped {
+            driveImpacts = Guard.cursor(driveImpacts, count: imps.count, dropped: fd.track.impactsDropped - driveDropped); driveDropped = fd.track.impactsDropped
+        }
         if driveImpacts > imps.count { driveImpacts = 0 }
         while driveImpacts < imps.count {
             let e = imps[driveImpacts]; driveImpacts += 1
@@ -341,7 +380,7 @@ final class Game: ObservableObject {
         }
         // A roam's challenges (0274): each one done (or bettered) is said, felt once, and lights Fly.
         for e in fd.drainChallenges() {
-            roamDidSomething = true
+            roamDidSomething = true; PerfCenter.shared.note(.roamChallenge)   // 0300's flag
             fd.announce(RoamText.cue(e))
             HapticPlayer.shared.play(HapticEvent(kind: .settle, tick: 0, channel: 4, intensity: e.first ? 0.8 : 0.5, sharpness: 0.5))
         }
@@ -352,8 +391,11 @@ final class Game: ObservableObject {
         let jets = fd.car.throttles.reduce(0, +)
         // ABS cycling (0225) is a sharp buzz through the pedal: here, through the phone.
         let absK = fd.ownCar && fd.chassis.absActive ? 1.0 : 0.0
-        HapticPlayer.shared.apply(HapticContinuous(rumble: Float(min(0.6, fd.roughK * 0.4 + fd.slideK * 0.2 + absK * 0.3)), rumbleSharp: Float(0.3 + 0.45 * absK),
-                                                   hiss: Float(min(0.6, jets * 0.12)), hissSharp: 0.6, grind: Float(min(0.5, fd.slideK * 0.35))))
+        // Under it (0281): a locked wheel's judder, wheelspin's buzz, a slide's grain; ABS's pulses, the lever, a flat spot.
+        let feel = paused ? SkidFeel() : SkidFeel.read(fd.car)
+        HapticPlayer.shared.apply(feel.over(HapticContinuous(rumble: Float(min(0.6, fd.roughK * 0.4 + fd.slideK * 0.2 + absK * 0.3)), rumbleSharp: Float(0.3 + 0.45 * absK),
+                                                   hiss: Float(min(0.6, jets * 0.12)), hissSharp: 0.6, grind: Float(min(0.5, fd.slideK * 0.35)))))
+        if !paused && fd.ownCar { driveFeel.frame(fd, handbrake: fd.handbrake, dt: dt) }
         if !driveSettled, fd.view?.settled == true, (fd.view?.stats.tiles ?? 0) > 0 {
             driveSettled = true
             Ready.mark("drive")
@@ -397,6 +439,8 @@ final class Game: ObservableObject {
     // --- The frame -----------------------------------------------------------------------------
     /// Once a display frame, before the draw: step the sim by the frame's time (scaled by the crash's slow motion).
     func frame(dt: Double, slowK: Double) {
+        // 0301: the frame clock and the slow motion are numbers the sim and the replays index with (Int(t * hz) traps on NaN).
+        let dt = Guard.step(dt), slowK = Guard.rate(slowK)
         stage?.renderer?.crash.audible = screen == .run || replaying || screen == .drive
         if screen == .drive { driveFrame(dt: dt); return }
         if encore, let tr = track { encoreFrame(dt: dt, tr); return }
@@ -451,7 +495,8 @@ final class Game: ObservableObject {
         haptics.drain { HapticPlayer.shared.play($0) }
         wreck.drainCalls { call($0) }
         if combo != nil { comboFor += dt; if comboFor > 1.6 { combo = nil } }
-        HapticPlayer.shared.apply(r.phase == .done ? HapticContinuous() : haptics.continuous)
+        // The tyres under the run's own feel (0281): a locked wheel, wheelspin, a slide, read from the car (nothing written).
+        HapticPlayer.shared.apply(r.phase == .done ? HapticContinuous() : SkidFeel.read(r.car).over(haptics.continuous))
         if !atRest && r.phase != .done && result == nil && l.script == nil {
             let state = wedge.step(r.car, dt: dt, eligible: r.phase == .drive)
             wedged = state != .clear
@@ -509,6 +554,7 @@ final class Game: ObservableObject {
     func resignActive() {
         if screen == .run && !paused && result == nil { paused = true }
         live?.thumb.up(); live?.touch.stickUp()
+        freeDrive?.sampler.touch.reset()   // 0301: a drive's pedals and stick too (a call mid-roam left the throttle held)
         for k in [Controls.Key.go, .brake, .lift, .land] { controls.press(k, false) }
         HapticPlayer.shared.apply(HapticContinuous())
     }

@@ -31,6 +31,7 @@ struct RootUI: View {
     @State private var sheet: Sheet? = RootUI.launchSheet
     /// DEBUG `-sheet board|settings|howTo|practice`: that sheet open at launch (the shots).
     private static var launchSheet: Sheet? {
+        if PerfProbe.on, let s = Launch.value("-perf-sheet").flatMap(Sheet.init(rawValue:)) { return s }   // 0296: the perf harness's sheet scene
         #if DEBUG
         return Launch.value("-sheet").flatMap(Sheet.init(rawValue:))
         #else
@@ -104,6 +105,10 @@ struct RootUI: View {
                     if game.notice?.id == n.id { withAnimation(.easeOut(duration: 0.3)) { game.notice = nil } }
                 }
             }
+            #if DEBUG
+            // 0301: the UI tests' window on the health queue: the faults this launch has reported (`-uitest` only).
+            if Launch.args.contains("-uitest") { HealthProbe() }
+            #endif
             // The HUD layout editor (0221), from Settings → Controls or the pause sheet: over everything, the run under it paused.
             if let t = hud.editing {
                 HudEditorView(layout: layout, tier: t) { withAnimation(.easeOut(duration: 0.2)) { hud.editing = nil } }
@@ -112,6 +117,7 @@ struct RootUI: View {
             }
         }
         .ignoresSafeArea()
+        .onChange(of: sheet, initial: true) { _, s in game.sheetUp = s != nil }   // 0298: the stage under a sheet draws slowly
         .sheet(item: $sheet) { s in
             Group {
                 switch s {

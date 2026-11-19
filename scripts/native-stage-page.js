@@ -330,6 +330,7 @@ function bakeComplex(id, textures) {
       alb = [alb[0] + (0.03 - alb[0]) * soot, alb[1] + (0.028 - alb[1]) * soot, alb[2] + (0.026 - alb[2]) * soot];
       shin = 18; spec = 0.06 * (1 - soot);
     } else if (mat === 2) { shin = 40; spec = 0.12; }
+    else if (mat === 5) { shin = 14; spec = 0.05; }   // the orbiter's tiled belly: its tile shading and gaps average out at this range
     else if (mat === 3) { emit = [...col]; alb = [0.02, 0.02, 0.02]; }
     else if (mat === 4) {
       const pp = vnoise(wp.x * 0.05, wp.z * 0.05) * 0.5 + vnoise(wp.x * 0.21, wp.z * 0.21) * 0.3, k = 0.8 + 0.4 * pp;
@@ -341,7 +342,7 @@ function bakeComplex(id, textures) {
     return hazed([alb[0] * fl[0] + emit[0] + sky.r * rim, alb[1] * fl[1] + emit[1] + sky.g * rim, alb[2] * fl[2] + emit[2] + sky.b * rim], wp);
   }
   // Non-indexed triangles, split along their longest edge until each edge is under `maxEdge` for its surface.
-  const MAX_EDGE = { 0: 16, 1: 3.2, 2: 6, 3: 50, 4: 12 };
+  const MAX_EDGE = { 0: 16, 1: 3.2, 2: 6, 3: 50, 4: 12, 5: 3.2 };
   const lerpV = (a, b) => ({ p: a.p.map((x, i) => (x + b.p[i]) / 2), n: a.n.map((x, i) => (x + b.n[i]) / 2), uv: [(a.uv[0] + b.uv[0]) / 2, (a.uv[1] + b.uv[1]) / 2], col: a.col, mat: a.mat, sp: a.sp });
   const dist3 = (a, b) => Math.hypot(a.p[0] - b.p[0], a.p[1] - b.p[1], a.p[2] - b.p[2]);
   const split = (a, b, c, maxE, out) => {
@@ -363,7 +364,7 @@ function bakeComplex(id, textures) {
     const a = vert(i), b = vert(i + 1), c = vert(i + 2);
     split(a, b, c, MAX_EDGE[a.mat] ?? 7, tris);
   }
-  // The fairing's red hairline (STRUCT_FS `red`), as a ring: 16 cm of emissive band sits under a pixel out here, as it does on the web.
+  // The transfer stage's red hairline round its collar (STRUCT_FS `red`), as a ring: 16 cm of emissive band sits under a pixel out here, as it does on the web.
   const ringY = MOUNT_TOP + VEHICLE.stage2Top + 0.15, ringR = VEHICLE.radius + 0.1, ringOut = [];
   const redCol = [2.2 * 0.5, 0.06 * 0.5, 0.1 * 0.5];
   for (let k = 0; k < 32; k++) {
@@ -393,7 +394,7 @@ function bakeComplex(id, textures) {
   });
   for (const q of ringOut) { const pos = world(q.p); solid.push({ key: `${fmt(pos)}|ring`, pos, nrm: [0, 1, 0], uv: [0, 0], col: q.baked }); }
   addSub(base({ name: 'complex-struct' }), 0, solid);
-  // The strongback's lattice: alpha from the web's own texture, on black, read from green as three's alphaMap is.
+  // The service tower's open lattice faces: alpha from the web's own texture, on black, read from green as three's alphaMap is.
   const src = lattice.material.uniforms.uMap.value.image, cv = document.createElement('canvas'); cv.width = src.width; cv.height = src.height;
   const cx = cv.getContext('2d'); cx.fillStyle = '#000'; cx.fillRect(0, 0, cv.width, cv.height); cx.drawImage(src, 0, 0);
   const alphaTex = new THREE.CanvasTexture(cv); alphaTex.wrapS = alphaTex.wrapT = THREE.RepeatWrapping;

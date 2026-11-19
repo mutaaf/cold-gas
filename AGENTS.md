@@ -571,6 +571,9 @@ node scripts/objects-bench.mjs [--reps=5]             what the world's objects c
 npm run heal [-- --dry|--check|--max=N|--digest=<url|file>]   production's /obs/digest → backlog tickets for new/regressed signatures
 npm run obs:report [-- --json|--digest=<url|file>]   production health on one screen, web vs iPhone; exit 2 page, 1 look, 0 quiet (0293)
 npm run obs:bench                                     obs's per-frame cost and allocation (Node, a million frames)
+cd ios && scripts/soak.sh [app]                       0301: ten minutes (MINUTES=) of runs, replays, roams, Free Drive and looks on
+                   the "ColdGas iPhone" simulator (lock held, -mute); scripts/soak-check.mjs fails on growing memory or any fault.
+                   The smoke and the hardening UI tests: ColdGasUITests/SmokeUITests, HardeningUITests (`-uitest`'s health probe)
 npm run alloc:bench                                   what the per-tick input path allocates (sample, hands, the input log): 0 B/tick with keys and touch
 node scripts/flicker.mjs <url> [--gl=swiftshader] [--phone] [--only=a,b] --json=run.json   flicker probe (title, approach, wide, replay, jets, live jets, retry countdown, lineup, Free Drive, endless, z-fight)
 node scripts/flicker-budget.mjs run.json [--write]    fail if any region's pops rise > 25 % (or 0.5 ‰) over docs/flicker-budget.json

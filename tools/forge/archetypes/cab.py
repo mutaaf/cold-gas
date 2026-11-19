@@ -1,6 +1,7 @@
-# The Lineup's cab slot (LINEUP_SPEC 'cab'): a two-seat city pod of our own design at the researched size. A teardrop
-# body under one wrapped glass canopy, no mirrors (cameras), no rear window, a lamp bar at each end, bigger rear wheels
-# under aero covers. No badges, no names.
+# The Lineup's cab slot (LINEUP_SPEC 'cab'): a two-seat driverless city cab of our own design at the researched size.
+# A teardrop body under one wrapped glass canopy, no mirrors (cameras on the fenders), no rear window; round-cornered
+# lamp pods at the four corners (a running-light arc over each headlamp), a roof sensor dome on a low plinth, a satin
+# band at the sills, door shut lines and flush handles, bigger rear wheels under aero covers. No badges, no names.
 from _car import car
 
 
@@ -26,17 +27,25 @@ def build(kit, spec, rng):
         # one canopy: no B-pillar glass split, no backlight
         'glass': {'a_base': 0.95, 'a_top': 0.45, 'c_top': -0.95, 'c_base': -1.5, 'b': -2.5, 'b_w': 0.0, 'quarter': False,
                   'backlight': False, 'roof': 'glass', 'belt': 0.03, 'top': 0.06},
-        'lamps': [],
+        'lamps': [
+            {'plane': 'front', 'lens': [(0.40, 0.55), (0.66, 0.53), (0.70, 0.6), (0.62, 0.65), (0.42, 0.635)],
+             'line': [(0.43, 0.63), (0.6, 0.632), (0.67, 0.6)], 'width': 0.016, 'mat': 'lamp_white'},
+            {'plane': 'rear', 'lens': [(0.38, 0.82), (0.66, 0.8), (0.70, 0.86), (0.64, 0.9), (0.40, 0.9)],
+             'line': [(0.42, 0.865), (0.62, 0.86), (0.68, 0.835)], 'width': 0.022, 'mat': 'lamp_red'},
+        ],
         'bars': [
-            {'plane': 'front', 'line': [(-0.62, 0.62), (-0.3, 0.635), (0.3, 0.635), (0.62, 0.62)], 'width': 0.024, 'mat': 'lamp_white'},
-            {'plane': 'rear', 'outline': [(-0.66, 0.855), (0.66, 0.855), (0.66, 0.915), (-0.66, 0.915)], 'mat': 'lens', 'offset': 0.003},
-            {'plane': 'rear', 'line': [(-0.62, 0.885), (0.62, 0.885)], 'width': 0.026, 'mat': 'lamp_red'},
             {'plane': 'front', 'outline': [(-0.45, 0.30), (0.45, 0.30), (0.4, 0.38), (-0.4, 0.38)], 'mat': 'trim'},
+            {'plane': 'rear', 'outline': [(-0.55, 0.36), (0.55, 0.36), (0.5, 0.44), (-0.5, 0.44)], 'mat': 'trim'},
         ],
         'mirror': None,
-        'handles': [],
+        'handles': [0.35],
+        'doors': [0.93, -0.82], 'hood': (hl - 0.28, 1.02, 0.82),
+        'cladding': 0.3,
         'wheels': {'style': 'cover', 'spokes': 6, 'rim': 'rim_dark'},
     })
-    # the side cameras: small pods at the canopy's foot
+    # the side cameras: small pods on the front fenders
     for s in (1, -1):
         kit.box((0.05, 0.09, 0.05), at=(s * (hw - 0.02), 0.9, 0.8), mat='gloss', bevel=0.018, segments=2, name='camera')
+    # the roof sensor dome on its plinth, over the canopy's crown
+    kit.cylinder(0.2, 0.02, at=(0, -0.15, H - 0.008), mat='trim', verts=20, bevel=0.008, segments=1, name='plinth')
+    kit.lathe([(0, 0.0), (0.12, 0.0), (0.12, 0.012), (0.09, 0.022), (0, 0.026)], at=(0, -0.15, H - 0.006), mat='gloss', segments=20, name='dome')

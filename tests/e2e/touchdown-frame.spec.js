@@ -136,8 +136,12 @@ const WIDE = {
   '844×390': [[0.262, 0.282], [0.219, 0.252]], '594×368': [[0.351, 0.377], [0.293, 0.337]], '800×300': [[0.212, 0.228], [0.177, 0.204]],
   '424×360': [[0.481, 0.517], [0.402, 0.463]], '1440×900': [[0.354, 0.381], [0.296, 0.341]], '1280×720': [[0.319, 0.343], [0.266, 0.307]],
 };
+// Those widths are the drawn car's box, measured on a hero drawn 4.84 m long (its faceted body ran 0.47 m past the sim's
+// tail). 0292's roadster is drawn on the sim's 4.33 m; on this probe every view measures it 0.94–0.98× as wide (1440×900
+// reference 0.338/0.370, 1280×720 0.304/0.333, 424×360 0.459/0.502), the same camera. The bands take one factor for it.
+const DRAWN = 0.96;
 const unchanged = (r, name, crash) => {
-  const [lo, hi] = WIDE[name][crash ? 1 : 0];
+  const [lo, hi] = WIDE[name][crash ? 1 : 0].map((x) => x * DRAWN);
   expect(r.minW, `${name}: narrowest box`).toBeGreaterThanOrEqual(lo - 0.02);
   expect(r.minW, `${name}: narrowest box`).toBeLessThanOrEqual(lo + 0.02);
   expect(r.maxW, `${name}: widest box`).toBeGreaterThanOrEqual(hi - 0.02);

@@ -15,10 +15,10 @@
   "cab": {
    "file": "forge/cab.glb",
    "kind": "vehicle",
-   "bytes": 186852,
+   "bytes": 221032,
    "tris": [
-    12534,
-    5077
+    14762,
+    5089
    ],
    "seed": 0,
    "source": "cab"
@@ -37,10 +37,10 @@
   "pickup": {
    "file": "forge/pickup.glb",
    "kind": "vehicle",
-   "bytes": 233328,
+   "bytes": 284556,
    "tris": [
-    14794,
-    5116
+    18784,
+    5180
    ],
    "seed": 0,
    "source": "pickup"
@@ -48,10 +48,10 @@
   "sedan": {
    "file": "forge/sedan.glb",
    "kind": "vehicle",
-   "bytes": 207564,
+   "bytes": 266756,
    "tris": [
-    13684,
-    5033
+    17396,
+    5160
    ],
    "seed": 0,
    "source": "sedan"
@@ -59,10 +59,10 @@
   "semi": {
    "file": "forge/semi.glb",
    "kind": "vehicle",
-   "bytes": 318268,
+   "bytes": 371632,
    "tris": [
-    21420,
-    6956
+    22032,
+    7945
    ],
    "seed": 0,
    "source": "semi"
@@ -70,10 +70,10 @@
   "suv": {
    "file": "forge/suv.glb",
    "kind": "vehicle",
-   "bytes": 222280,
+   "bytes": 282728,
    "tris": [
-    14464,
-    5032
+    18384,
+    5116
    ],
    "seed": 0,
    "source": "suv"

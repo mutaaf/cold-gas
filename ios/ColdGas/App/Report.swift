@@ -70,7 +70,11 @@ final class ReportCenter: NSObject, MXMetricManagerSubscriber, @unchecked Sendab
     /// The player's switch, read where it's safe (never from inside SaveStore's own init).
     private var on: Bool { allowed && SaveStore.shared.settings.usageOn }
 
+    /// Every fault this launch has reported, kept or not (0301: the UI tests and the soak read it; `-uitest`'s HealthProbe).
+    private var faults: [String] = []
     func add(_ mod: Obs.Module, _ kind: Obs.Kind, _ message: String, frame: String, stack: String = "", build: String = ReportCenter.build, count: Int = 1) {
+        let seen = "\(mod.rawValue)/\(kind.rawValue) \(Obs.normMessage(message))"
+        lock.lock(); if faults.count < 64 && !faults.contains(seen) { faults.append(seen) }; lock.unlock()
         let keep = on
         let log = logger(mod)
         lock.lock()
@@ -84,6 +88,9 @@ final class ReportCenter: NSObject, MXMetricManagerSubscriber, @unchecked Sendab
         #endif
         if new && keep { persist() }
     }
+
+    /// The faults this launch, for a test: memory warnings are the system's, not ours, and are left out.
+    var faultsSeen: [String] { lock.lock(); defer { lock.unlock() }; return faults.filter { !$0.hasSuffix("memory warning") } }
 
     func recovered(_ kind: Obs.Recovery, ok: Bool) {
         logger(.app).notice("recovery \(kind.rawValue, privacy: .public) \(ok ? "ok" : "failed", privacy: .public)")

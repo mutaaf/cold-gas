@@ -45,12 +45,14 @@ export const WORLD_SLOTS = {
 };
 
 export const SLOTS = {
+  // The cars' LOD0 rose 16000 → 19000 in 0292 for tyres with tread and sidewalls, brakes behind the spokes, shut lines and
+  // wipers; their LOD1 (what a phone draws past a few metres) is unchanged.
   ...WORLD_SLOTS,
-  sedan: vehicle(LINEUP_SPEC[0], [16000, 5200]),
-  suv: vehicle(LINEUP_SPEC[1], [16000, 5200]),
-  semi: vehicle(LINEUP_SPEC[2], [22000, 7000]),
-  pickup: vehicle(LINEUP_SPEC[3], [16000, 5200]),
-  cab: vehicle(LINEUP_SPEC[4], [16000, 5200]),
+  sedan: vehicle(LINEUP_SPEC[0], [19000, 5200]),
+  suv: vehicle(LINEUP_SPEC[1], [19000, 5200]),
+  semi: vehicle(LINEUP_SPEC[2], [24000, 8000]),   // 0292: +2k / +1k for the cab-over's detail (mirrors, steps, packs, treads)
+  pickup: vehicle(LINEUP_SPEC[3], [19000, 5200]),
+  cab: vehicle(LINEUP_SPEC[4], [19000, 5200]),
   cone: {
     id: 'cone', kind: 'prop', archetype: 'cone', paint: 0xd8501e, budgets: [1400, 500], aoReach: 0.25,
     spec: { id: 'cone', l: CONE.half * 2, w: CONE.half * 2, h: CONE.h, base: CONE.base, cone: CONE.cone, wheelZones: [] },

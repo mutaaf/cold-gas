@@ -4,6 +4,7 @@ import Foundation
 import simd
 import ColdGasCore
 import ColdGasPhysics
+import ColdGasClient
 
 final class Replay {
     static let hz = 240.0
@@ -86,8 +87,15 @@ final class Replay {
             impacts.append(Impact(tick: Int(im.tick[i]), kind: im.kind[i], part: im.part[i], probe: im.probe[i], body: im.body[i],
                 pos: SIMD3(im.x[i] - Float(o.x), im.y[i] - Float(o.y), im.z[i] - Float(o.z)), normal: SIMD3(im.nx[i], im.ny[i], im.nz[i]), speed: im.speed[i], crush: im.crush[i]))
         }
+        // 0301: a drive never ends, so its impacts are bounded too: past the cap the oldest half goes (their sparks and
+        // knocks were seen long ago). Readers by index follow `impactsDropped` (Game) or the ticks (CrashFX.feed).
+        let d = Guard.overflow(count: impacts.count, max: Replay.DRIVE_IMPACTS_MAX, keep: Replay.DRIVE_IMPACTS_KEEP)
+        if d > 0 { impacts.removeFirst(d); impactsDropped += d }
         ticks += 1
     }
+    static let DRIVE_IMPACTS_MAX = 4096, DRIVE_IMPACTS_KEEP = 2048
+    /// Impacts dropped from the front of a drive's list so far (0301): an index cursor subtracts what's gone since it looked.
+    private(set) var impactsDropped = 0
     /// The car's impact buffer was emptied (a drive recycles it, 0229): read it again from its start.
     func rewindImpacts() { seenImpacts = 0 }
     /// Keep only the newest `keep` ticks (a drive never ends; the renderer only reads the last two).
@@ -95,7 +103,11 @@ final class Replay {
         let drop = ticks - keep
         guard drop > 0 else { return }
         carPos.removeFirst(drop); carQuat.removeFirst(drop); carVel.removeFirst(drop); fans.removeFirst(drop); phases.removeFirst(drop)
-        nozzles.removeFirst(drop * 10); wheelState.removeFirst(drop * 12); bodies.removeFirst(min(bodies.count, drop * bodyCount * 7))
+        nozzles.removeFirst(drop * 10); wheelState.removeFirst(drop * 12)
+        // 0301: the newest `keep` ticks' bodies, whatever the count was before (a roam's set can gain or lose a body: trimming
+        // by the current count from the front left the kept poses misaligned and the list growing).
+        let wantBodies = keep * bodyCount * 7
+        if bodies.count > wantBodies { bodies.removeFirst(bodies.count - wantBodies) }
         ticks -= drop; tickBase += drop
     }
     /// The origin moved by `d`: every kept position follows.

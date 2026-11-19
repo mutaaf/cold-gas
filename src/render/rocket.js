@@ -1,7 +1,8 @@
-// The backdrop: a reusable two-stage orbital launch vehicle standing on its launch mount on a raised
-// pad, a lattice strongback beside it, lightning masts, a water tank and four flood masts, a few
-// hundred metres beyond the stage. Real-world scale and proportions (docs/ROCKET.md); our own
-// design and livery (no marks, no flags, no names: AGENTS.md invariant 3.7).
+// The backdrop: a reusable booster carrying a winged orbiter, standing on its launch mount on a raised
+// pad, a fixed service tower beside it with its swing arms and crew access arm, lightning masts, a
+// water tank and four flood masts, a few hundred metres beyond the stage. Real-world scale and
+// proportions of the class (docs/ROCKET.md); our own design and livery (no marks, no flags, no
+// names: AGENTS.md invariant 3.7).
 //
 // Lazy: src/render/scene.js imports this chunk after the first frame, builds it in slices,
 // compiles its shaders off the main thread and only then adds it, so the first load doesn't pay
@@ -100,8 +101,9 @@ function lightUniforms() {
 }
 
 // Surfaces: 0 plain paint/steel (albedo = vertex colour), 1 booster skin (flight-proven soot,
-// weld rings), 2 fairing and upper stage (seams, a red hairline), 3 self-lit (windows, the
-// white room), 4 the pad (concrete, the flame trench).
+// weld rings), 2 transfer stage and the orbiter's upper skin (panel joints, bay doors, the red
+// hairline), 3 self-lit (windows, lit decks, the white room), 4 the pad (concrete, the flame
+// trench), 5 the orbiter's tiled belly.
 const STRUCT_VS = /* glsl */`
 attribute float aMat;
 varying vec3 vColor; varying float vMat; varying vec3 vWp; varying vec3 vN; varying vec2 vUv; varying vec3 vLp;
@@ -138,10 +140,12 @@ void main() {
     alb *= 1.0 - 0.18 * ring;
     shin = 18.0; spec = 0.06 * (1.0 - soot);
   } else if (vMat > 1.5 && vMat < 2.5) {
-    // Upper stage and fairing: clean white, the two fairing halves' seam, one signal-red hairline
-    // where the fairing meets the stage.
-    float seam = max(hairline(fract(u * 2.0 + 0.5) - 0.5, 0.006), 0.0) * step(${(VEHICLE.stage2Top - 0.3).toFixed(1)}, h);
-    alb *= 1.0 - 0.35 * seam;
+    // Transfer stage and the orbiter's upper skin: clean white. On the orbiter, its panel joints
+    // every 1.6 m and the bay doors' centre line down its back; one signal-red hairline round the
+    // transfer stage's collar, where the orbiter's adapter sits.
+    float orb = step(${(VEHICLE.stage2Top + 1.0).toFixed(1)}, h);
+    float seam = hairline(fract(h / 1.6 + 0.5) - 0.5, 0.008 / 1.6) * 0.6 + hairline(vLp.x, 0.025) * step(0.6, vLp.z);
+    alb *= 1.0 - 0.3 * seam * orb;
     float red = hairline(h - ${(VEHICLE.stage2Top + 0.15).toFixed(2)}, 0.16);
     alb = mix(alb, vec3(0.6, 0.02, 0.03), red);
     emit += vec3(2.2, 0.06, 0.1) * red * uOn;
@@ -149,6 +153,16 @@ void main() {
   } else if (vMat > 2.5 && vMat < 3.5) {
     emit += vColor * uOn;
     alb = vec3(0.02);
+  } else if (vMat > 4.5) {
+    // The orbiter's belly: black heat-shield tiles, each a shade apart, in a 0.6 m grid of gaps. The
+    // tile-to-tile shading and the gaps fade out with their pixel footprint (no sparkle at range).
+    vec2 tp = vec2(vLp.x + vLp.z * 0.5, h) / 0.6;
+    float fw = max(fwidth(tp.x), fwidth(tp.y));
+    float near = 1.0 - smoothstep(0.25, 0.6, fw);
+    float shade = (hash12(floor(tp)) - 0.5) * 0.35 * near;
+    float gap = max(hairline(fract(tp.x + 0.5) - 0.5, 0.04), hairline(fract(tp.y + 0.5) - 0.5, 0.04)) * near;
+    alb *= (1.0 + shade) * (1.0 - 0.5 * gap);
+    shin = 14.0; spec = 0.05;
   } else if (vMat > 3.5) {
     // The pad: concrete with large soft patches, darker in the flame trench (scorch).
     float p = vnoise(vWp.xz * 0.05) * 0.5 + vnoise(vWp.xz * 0.21) * 0.3;
@@ -166,7 +180,7 @@ void main() {
   #include <colorspace_fragment>
 }`;
 
-// The strongback and the lightning masts: open lattice, a mipmapped alpha texture on open boxes.
+// The service tower's open faces: K-braced lattice, a mipmapped alpha texture on its open bays.
 const LATTICE_VS = /* glsl */`
 varying vec3 vWp; varying vec3 vN; varying vec2 vUv;
 void main() {
@@ -193,16 +207,17 @@ void main() {
 }`;
 
 function latticeTexture() {
-  // One 3.4 m × 6.8 m bay: corner legs, a horizontal at each end and an X-brace; transparent.
+  // One 3.4 m × 6.8 m bay of the service tower's open faces: corner legs, a girt at each end and at
+  // mid-height, and K-bracing (each half's diagonals meet at one leg's quarter point); transparent.
   const Wd = 128, Ht = 256;
   const c = document.createElement('canvas'); c.width = Wd; c.height = Ht;
   const x = c.getContext('2d');
   x.strokeStyle = '#fff'; x.lineCap = 'square';
   x.lineWidth = 12; x.beginPath(); x.moveTo(6, 0); x.lineTo(6, Ht); x.moveTo(Wd - 6, 0); x.lineTo(Wd - 6, Ht); x.stroke();
-  x.lineWidth = 7; x.beginPath(); x.moveTo(0, 3); x.lineTo(Wd, 3); x.moveTo(0, Ht / 2); x.lineTo(Wd, Ht / 2); x.stroke();
+  x.lineWidth = 7; x.beginPath(); x.moveTo(0, 3); x.lineTo(Wd, 3); x.moveTo(0, Ht / 2); x.lineTo(Wd, Ht / 2); x.moveTo(0, Ht - 3); x.lineTo(Wd, Ht - 3); x.stroke();
   x.lineWidth = 5; x.beginPath();
-  x.moveTo(6, 0); x.lineTo(Wd - 6, Ht / 2); x.moveTo(Wd - 6, 0); x.lineTo(6, Ht / 2);
-  x.moveTo(6, Ht / 2); x.lineTo(Wd - 6, Ht); x.moveTo(Wd - 6, Ht / 2); x.lineTo(6, Ht);
+  x.moveTo(Wd - 6, Ht / 4); x.lineTo(6, 3); x.moveTo(Wd - 6, Ht / 4); x.lineTo(6, Ht / 2);
+  x.moveTo(6, (3 * Ht) / 4); x.lineTo(Wd - 6, Ht / 2); x.moveTo(6, (3 * Ht) / 4); x.lineTo(Wd - 6, Ht - 3);
   x.stroke();
   const t = new THREE.CanvasTexture(c);
   t.wrapS = t.wrapT = THREE.RepeatWrapping;
@@ -330,65 +345,205 @@ function member(a, b, t) {
   return g;
 }
 
+// Hand-built triangles (position + normal) as a BufferGeometry for part().
+function soup(pos, nrm) {
+  const g = new THREE.BufferGeometry();
+  g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  if (nrm) g.setAttribute('normal', new THREE.Float32BufferAttribute(nrm, 3));
+  else g.computeVertexNormals();
+  return g;
+}
+// A flat-faced slab: a convex polygon in a plane, extruded both ways by half its local thickness.
+// `toWorld(u, v, w)` maps polygon coords (u, v) and the offset w across the plane to the vehicle frame.
+// Returns { top, bottom, edge } geometries so each side can carry its own surface; every triangle is
+// wound to face out, whatever the mapping's handedness.
+function slab(poly, half, toWorld) {
+  const top = [], bot = [], edge = [];
+  const P = (p, w) => toWorld(p[0], p[1], w);
+  const cu = poly.reduce((a, p) => a + p[0], 0) / poly.length, cv = poly.reduce((a, p) => a + p[1], 0) / poly.length;
+  const tri = (out, a, b, c, want) => {
+    const e1 = [b[0] - a[0], b[1] - a[1], b[2] - a[2]], e2 = [c[0] - a[0], c[1] - a[1], c[2] - a[2]];
+    const n = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    if (n[0] * want[0] + n[1] * want[1] + n[2] * want[2] < 0) out.push(...a, ...c, ...b); else out.push(...a, ...b, ...c);
+  };
+  const o = P([cu, cv], 0), up = P([cu, cv], 1), nUp = [up[0] - o[0], up[1] - o[1], up[2] - o[2]], nDn = nUp.map((x) => -x);
+  for (let i = 1; i + 1 < poly.length; i++) {
+    const a = poly[0], b = poly[i], c = poly[i + 1];
+    tri(top, P(a, half(a)), P(b, half(b)), P(c, half(c)), nUp);
+    tri(bot, P(a, -half(a)), P(b, -half(b)), P(c, -half(c)), nDn);
+  }
+  for (let i = 0; i < poly.length; i++) {
+    const a = poly[i], b = poly[(i + 1) % poly.length];
+    const m = P([(a[0] + b[0]) / 2, (a[1] + b[1]) / 2], 0), out = [m[0] - o[0], m[1] - o[1], m[2] - o[2]];
+    const a0 = P(a, -half(a)), a1 = P(a, half(a)), b0 = P(b, -half(b)), b1 = P(b, half(b));
+    tri(edge, a0, b0, b1, out); tri(edge, a0, b1, a1, out);
+  }
+  return { top: soup(top), bottom: soup(bot), edge: soup(edge) };
+}
+const DS = (g) => { g.computeVertexNormals(); return g; };
+
+// --- The launch vehicle -------------------------------------------------------------------------------
+// Our own stack, in the class of a reusable first stage carrying a winged orbiter (docs/ROCKET.md):
+//   the booster: nine engines (three in, six out) under an open, flared engine skirt; six short
+//     landing-leg pods round the skirt; a white tank with a charcoal intertank band and a charcoal
+//     forward skirt carrying four swept steering vanes; a charcoal raceway on the tower side;
+//   a ribbed metal-grey interstage and a short white transfer stage whose collar carries the one
+//     signal-red hairline;
+//   the orbiter, nose up on a strut adapter: a flat-bellied lifting body with a double-delta wing,
+//     a single fin, a body flap, two aft pods with their engines, lit cockpit windows, and a black
+//     tiled belly (surface 5) under a white upper skin with its bay-door lines (surface 2).
+// Everything a car can reach (the first 12 m above the pad) stays inside the sim's colliders.
+export const ORBITER = { base: VEHICLE.stage2Top + 1.1, halfWidth: 1.5, hatch: 9.0 };
 function vehicleParts(parts) {
   const B = MOUNT_TOP, V = VEHICLE;
-  // Core: booster (with the engine section's slight flare), interstage, upper stage. Separate
-  // lathes so each carries its own surface id.
-  const lathe = (pts, mat, color) => {
-    const g = new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, B + y)), 64);
+  const lathe = (pts, mat, color, seg = 64) => {
+    const g = new THREE.LatheGeometry(pts.map(([r, y]) => new THREE.Vector2(r, B + y)), seg);
     parts.push(part(g, color, mat));
   };
-  lathe([[0.0, 0.0], [R + 0.06, 0.0], [R + 0.06, 1.2], [R, 2.0], [R, V.boosterTop]], 1, 0xd9dadb);
-  lathe([[R, V.boosterTop], [R + 0.01, V.boosterTop + 0.05], [R + 0.01, V.interstageTop]], 0, 0x1c1d20);
-  // Upper stage, the boat-tail up to the wider fairing, its barrel and a tangent ogive nose.
-  const FR = V.fairingRadius, z0 = V.stage2Top, zb = z0 + 1.6, zo = V.fairingTop - 6.2;
-  const nose = [];
-  for (let i = 0; i <= 16; i++) {
-    const t = i / 16;
-    nose.push([Math.max(FR * Math.sqrt(1 - t * t) * (1 - 0.06 * t), 0.0), zo + t * (V.fairingTop - zo)]);
+  const around = (geo, a, r, y) => { geo.translate(0, 0, r); geo.rotateY(a); geo.translate(0, B + y, 0); return geo; };
+  // Engines: nine bells, three round the middle and six in the outer ring, hanging under the skirt.
+  const bell = () => new THREE.CylinderGeometry(0.17, 0.43, 1.3, 18, 1, true).translate(0, 0.7, 0);
+  for (let k = 0; k < 3; k++) parts.push(part(around(bell(), Math.PI / 2 + (k * 2 * Math.PI) / 3, 0.52, 0), 0x3a3631, 0));
+  for (let k = 0; k < 6; k++) parts.push(part(around(bell(), Math.PI / 6 + (k * Math.PI) / 3, 1.3, 0), 0x3a3631, 0));
+  // The engine skirt: a heat shield over the bells, flared out and narrowing up into the tank.
+  lathe([[0.0, 1.35], [R + 0.14, 1.35], [R + 0.14, 1.95], [R + 0.03, 4.4], [R, 4.6]], 0, 0x232427);
+  // Tank (sooted with use), the intertank band, the upper tank, the forward skirt.
+  lathe([[R, 4.6], [R, 23.8]], 1, 0xd9dadb);
+  lathe([[R + 0.012, 23.8], [R + 0.012, 25.6]], 0, 0x26272a);
+  lathe([[R, 25.6], [R, 38.2]], 1, 0xd9dadb);
+  lathe([[R + 0.012, 38.2], [R + 0.012, V.boosterTop]], 0, 0x232427);
+  // Six landing-leg pods round the skirt: streamlined fairings, flattened against the tank.
+  const podProfile = [[0, 0], [0.24, 0.2], [0.3, 0.9], [0.3, 4.6], [0.26, 5.4], [0.12, 5.8], [0, 5.85]].map(([r, y]) => new THREE.Vector2(r, y));
+  for (let k = 0; k < 6; k++) {
+    const a = (k * Math.PI) / 3;
+    const pod = new THREE.LatheGeometry(podProfile, 10);
+    pod.scale(1, 1, 0.55);
+    parts.push(part(around(pod, a, R + 0.12, 1.55), 0x2a2b2e, 0));
+    parts.push(part(around(new THREE.BoxGeometry(0.62, 0.14, 0.32), a, R + 0.3, 1.5), 0x151618, 0));   // the folded foot
   }
-  nose[nose.length - 1][0] = 0;
-  lathe([[R, V.interstageTop], [R, z0], [FR - 0.02, zb], [FR, zb + 0.2], [FR, zo], ...nose.slice(1)], 2, 0xe9eaea);
+  // Raceways: a charcoal tunnel on the tower side, a slimmer grey one opposite.
+  parts.push(part(around(new THREE.BoxGeometry(0.36, 38.2 - 4.8, 0.22), Math.PI / 2, R + 0.09, 4.8 + (38.2 - 4.8) / 2), 0x232427, 0));
+  parts.push(part(around(new THREE.BoxGeometry(0.2, 38.2 - 6, 0.16), -Math.PI / 2, R + 0.07, 6 + (38.2 - 6) / 2), 0xb4b5b7, 0));
+  // Four swept steering vanes on the forward skirt (radial plates, a trapezoid in the r–y plane).
+  for (let k = 0; k < 4; k++) {
+    const a = Math.PI / 4 + (k * Math.PI) / 2, s = Math.sin(a), c = Math.cos(a);
+    const vane = slab([[0, 38.3], [0.95, 39.35], [0.95, 40.55], [0, 40.95]], () => 0.06,
+      (u, v, w) => [s * (R + u) + c * w, B + v, c * (R + u) - s * w]);
+    for (const g of [vane.top, vane.bottom, vane.edge]) parts.push(part(DS(g), 0x2c2d30, 0));
+  }
+  // Interstage: ribbed metal grey (twelve low stringers), then the white transfer stage and its collar.
+  lathe([[R + 0.012, V.boosterTop], [R + 0.012, V.interstageTop]], 0, 0x8d9095);
+  for (let k = 0; k < 12; k++) {
+    parts.push(part(around(new THREE.BoxGeometry(0.07, V.interstageTop - V.boosterTop - 0.4, 0.05), (k * Math.PI) / 6, R + 0.03, (V.boosterTop + V.interstageTop) / 2), 0x7a7d82, 0));
+  }
+  lathe([[R, V.interstageTop], [R, V.stage2Top + 0.3], [R - 0.25, V.stage2Top + 0.42], [0, V.stage2Top + 0.42]], 2, 0xe6e7e7);
+  // The separation adapter: eight struts from the collar to the orbiter's aft frame.
+  const O = ORBITER.base;
+  for (let k = 0; k < 8; k++) {
+    const a = (k * Math.PI) / 4 + Math.PI / 8;
+    const p0 = new THREE.Vector3(Math.sin(a) * (R - 0.35), B + V.stage2Top + 0.42, Math.cos(a) * (R - 0.35));
+    const p1 = new THREE.Vector3(Math.sin(a) * 1.0, B + O + 0.05, Math.cos(a) * 0.7);
+    parts.push(part(member(p0, p1, 0.16), 0x3a3c40, 0, { spread: [1, 0, 1] }));
+  }
+  orbiterParts(parts);
+}
 
-  // Grid fins, stowed flat at the top of the interstage (four, 90° apart).
-  const [fw, fh] = V.finSize;
-  for (let k = 0; k < 4; k++) {
-    const a = k * Math.PI / 2;
-    const g = new THREE.BoxGeometry(fw, fh, 0.22);
-    g.translate(0, B + V.interstageTop - 1.3, R + 0.16);
-    g.rotateY(a);
-    parts.push(part(g, 0x2c2d30, 0));
-    const hinge = new THREE.BoxGeometry(0.5, 0.3, 0.3); hinge.translate(0, B + V.interstageTop - 0.45, R + 0.12); hinge.rotateY(a);
-    parts.push(part(hinge, 0x1a1b1d, 0));
+// The orbiter, standing nose up: s runs from its aft bulkhead (s = 0) to the nose (s = L); its back
+// (cockpit, fin) faces +z, toward the floods and the stage, and its belly faces −z.
+function orbiterParts(parts) {
+  const B = MOUNT_TOP, O = ORBITER.base, L = VEHICLE.fairingTop - O, HW = ORBITER.halfWidth;
+  const Y = (s) => B + O + s;
+  const NOSE0 = 8.2;
+  const nt = (s) => Math.max(0, (s - NOSE0) / (L - NOSE0));
+  const ell = (s) => Math.sqrt(Math.max(0, 1 - nt(s) ** 2));
+  const bump = (s) => { const t = (s - 6.8) / 3.8; return t <= 0 || t >= 1 ? 0 : Math.sin(Math.PI * t) ** 2; };
+  const bw = (s) => HW * ell(s);
+  const top = (s) => (1.12 + 0.38 * bump(s)) * (0.25 + 0.75 * ell(s));
+  const belly = (s) => 0.95 * ell(s);
+  const cz = (s) => -0.35 * nt(s) ** 2;
+  const sgnp = (x, e) => Math.sign(x) * Math.abs(x) ** e;
+  const sect = (s, a) => {
+    const c = Math.cos(a), si = Math.sin(a);
+    return [bw(s) * sgnp(c, 0.72), Y(s), cz(s) + (si > 0 ? top(s) : belly(s)) * sgnp(si, 0.72)];
+  };
+  // The fuselage: one indexed grid (smooth normals), split into the white back and the tiled belly.
+  const NS = 30, NA = 28;
+  const ss = Array.from({ length: NS + 1 }, (_, i) => L * (1 - (1 - i / NS) ** 1.45));
+  ss[NS] = L;
+  const pos = [], idx = [];
+  for (const s of ss) for (let k = 0; k <= NA; k++) pos.push(...sect(s, (k / NA) * Math.PI * 2));
+  for (let i = 0; i < NS; i++) for (let k = 0; k < NA; k++) {
+    const a = i * (NA + 1) + k, b = a + NA + 1;
+    idx.push(a, b + 1, a + 1, a, b, b + 1);   // wound outward
   }
-  // Landing legs, folded: a long charcoal fairing on each quadrant between the fins, a foot at the
-  // bottom, a pusher fitting at the top.
-  for (let k = 0; k < 4; k++) {
-    const a = Math.PI / 4 + k * Math.PI / 2;
-    const leg = new THREE.BoxGeometry(1.0, V.legLength, 0.42);
-    leg.translate(0, B + 0.6 + V.legLength / 2, R + 0.2);
-    leg.rotateY(a);
-    parts.push(part(leg, 0x1d1e21, 0));
-    const ridge = new THREE.BoxGeometry(0.34, V.legLength - 0.8, 0.12);
-    ridge.translate(0, B + 1.0 + V.legLength / 2, R + 0.46);
-    ridge.rotateY(a);
-    parts.push(part(ridge, 0x2a2b2f, 0));
-    const foot = new THREE.BoxGeometry(1.3, 0.5, 0.7); foot.translate(0, B + 0.55, R + 0.3); foot.rotateY(a);
-    parts.push(part(foot, 0x151618, 0));
+  const hull = new THREE.BufferGeometry();
+  hull.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  hull.setIndex(idx);
+  hull.computeVertexNormals();
+  const flat = hull.toNonIndexed(), P = flat.attributes.position.array, N = flat.attributes.normal.array;
+  const white = [[], []], tiles = [[], []];
+  for (let t = 0; t < P.length; t += 9) {
+    const nz = (N[t + 2] + N[t + 5] + N[t + 8]) / 3;
+    const to = nz < -0.42 ? tiles : white;
+    to[0].push(...P.slice(t, t + 9)); to[1].push(...N.slice(t, t + 9));
   }
-  // Umbilical / feed lines run up the side: a raceway on the tower side.
-  const race = new THREE.BoxGeometry(0.28, V.boosterTop - 3, 0.22);
-  race.translate(R + 0.08, B + 3 + (V.boosterTop - 3) / 2, 0.55);
-  parts.push(part(race, 0xb9babb, 0));
+  parts.push(part(soup(...white), 0xe9eaea, 2), part(soup(...tiles), 0x1b1c1e, 5));
+  // Aft bulkhead.
+  const aft = [];
+  for (let k = 0; k < NA; k++) aft.push(0, Y(0), cz(0), ...sect(0, (k / NA) * Math.PI * 2), ...sect(0, ((k + 1) / NA) * Math.PI * 2));
+  parts.push(part(soup(aft), 0x2a2b2e, 0));
+  // Double-delta wing, low on the body: a steep strake into a main delta (planform in x, s).
+  const wing = [[HW - 0.15, NOSE0], [2.45, 5.0], [4.15, 1.3], [4.15, 0.55], [HW - 0.15, 0.15]];
+  const zw = -0.55, wt = (x) => 0.19 * (1 - 0.75 * (x - HW) / (4.15 - HW));
+  for (const sx of [1, -1]) {
+    const w = slab(wing, (p) => wt(p[0]), (u, v, w2) => [sx * u, Y(v), zw + w2]);
+    parts.push(part(DS(w.top), 0xe6e7e7, 2), part(DS(w.bottom), 0x1b1c1e, 5), part(DS(w.edge), 0x3b3c3f, 0));
+    // Elevon: a slim grey hinge line along the trailing edge.
+    parts.push(part(member(new THREE.Vector3(sx * (HW + 0.1), Y(0.5), zw + 0.17), new THREE.Vector3(sx * 4.0, Y(0.62), zw + 0.07), 0.05), 0x7a7c80, 0, { spread: [0, 1, 1] }));
+  }
+  // The fin, on the back.
+  const fin = [[1.1, 4.6], [3.7, 1.75], [3.7, 0.65], [1.1, 0.0]];
+  const f = slab(fin, (p) => 0.13 * (1 - 0.5 * (p[0] - 1.1) / 2.6), (u, v, w) => [w, Y(v), u]);
+  parts.push(part(DS(f.top), 0xe6e7e7, 2), part(DS(f.bottom), 0xe6e7e7, 2), part(DS(f.edge), 0x3b3c3f, 0));
+  // Body flap under the aft end (tiled).
+  parts.push(part(new THREE.BoxGeometry(2.3, 0.6, 0.18).translate(0, Y(-0.05), -0.82), 0x1b1c1e, 5));
+  // Two aft pods on the back with their engines, and a central main engine.
+  for (const sx of [1, -1]) {
+    const pod = new THREE.LatheGeometry([[0, -0.05], [0.33, 0.05], [0.33, 2.2], [0.2, 3.0], [0, 3.2]].map(([r, y]) => new THREE.Vector2(r, y)), 14);
+    pod.scale(1, 1, 0.8); pod.translate(sx * 0.82, Y(0), 0.86);
+    parts.push(part(pod, 0xe6e7e7, 2));
+    parts.push(part(new THREE.CylinderGeometry(0.22, 0.12, 0.45, 14, 1, true).translate(sx * 0.82, Y(-0.25), 0.86), 0x3a3631, 0));
+  }
+  parts.push(part(new THREE.CylinderGeometry(0.42, 0.2, 0.7, 18, 1, true).translate(0, Y(-0.38), 0.15), 0x3a3631, 0));
+  // Cockpit windows: six panes over the nose, lit from inside.
+  const pane = (s0, s1, a0, a1) => {
+    const o = 0.03, q = (s, a) => { const p = sect(s, a), n = [Math.cos(a) * 0.4, 0, Math.sin(a)]; return [p[0] + n[0] * o, p[1], p[2] + n[2] * o]; };
+    const A = q(s0, a0), Bq = q(s0, a1), C = q(s1, a1), D = q(s1, a0);
+    return soup([...A, ...C, ...Bq, ...A, ...D, ...C]);
+  };
+  const win = new THREE.Color(0.55, 0.48, 0.36).getHex();
+  for (const [a0, a1] of [[1.33, 1.57], [1.57, 1.81], [0.95, 1.25], [1.89, 2.19]]) parts.push(part(DS(pane(9.55, 10.2, a0, a1)), win, 3));
+  for (const [a0, a1] of [[0.62, 0.86], [2.28, 2.52]]) parts.push(part(DS(pane(9.0, 9.5, a0, a1)), win, 3));
+  // Thruster ports: dark squares round the nose and on the pods.
+  for (const [s, a] of [[10.9, 0.15], [10.9, Math.PI - 0.15], [11.2, 0.5], [11.2, Math.PI - 0.5], [10.6, 1.57]]) {
+    const p = sect(s, a);
+    parts.push(part(new THREE.BoxGeometry(0.16, 0.12, 0.16).translate(p[0], p[1], p[2]), 0x0e0f10, 0));
+  }
+  // The crew hatch on the tower side (+x), where the access arm meets it.
+  const h = sect(ORBITER.hatch, 0.05);
+  parts.push(part(new THREE.BoxGeometry(0.06, 1.0, 0.8).translate(h[0] + 0.02, h[1], h[2]), 0xbfc1c4, 0));
 }
 
 function padParts(parts) {
   // The raised hardstand: a flat top and a sloped skirt down to the ground.
   const mound = new THREE.LatheGeometry(PAD_PROFILE.map(([r, y]) => new THREE.Vector2(r, y)).reverse(), PAD_SEGMENTS);
   parts.push(part(mound, 0x8a8b8e, 4));
-  // The flame trench, out from under the mount along −z (away from the stage), to its exit.
+  // The flame trench, out from under the mount along −z (away from the stage), to its exit, with the
+  // deflector's steel plate flush in its floor under the mount.
   const trench = new THREE.BoxGeometry(TRENCH.w, 0.2, TRENCH.to - TRENCH.from); trench.translate(0, PAD_Y + 0.02, -(TRENCH.from + TRENCH.to) / 2);
   parts.push(part(trench, 0x1a1a1b, 4));
+  const defl = new THREE.BoxGeometry(TRENCH.w - 1.2, 0.04, 8.6); defl.translate(0, PAD_Y + 0.13, 0);
+  parts.push(part(defl, 0x34363a, 0));
   // Launch mount: a steel table on four columns, the deck under the vehicle.
   const [dw, dh, dd] = MOUNT.deck;
   const deck = new THREE.BoxGeometry(dw, dh, dd); deck.translate(0, MOUNT_TOP - dh / 2, 0);
@@ -396,11 +551,28 @@ function padParts(parts) {
   for (const [x, z] of MOUNT.cols) {
     const col = new THREE.BoxGeometry(MOUNT.col, MOUNT_TOP - dh - PAD_Y, MOUNT.col); col.translate(x, PAD_Y + (MOUNT_TOP - dh - PAD_Y) / 2, z);
     parts.push(part(col, 0x3a3c40, 0));
+    // A deluge riser up the column's outer corner.
+    const riser = new THREE.CylinderGeometry(0.14, 0.14, MOUNT_TOP - PAD_Y - 0.2, 8, 1, true);
+    riser.translate(x + Math.sign(x) * (MOUNT.col / 2 + 0.05), (MOUNT_TOP + PAD_Y) / 2, z + Math.sign(z) * (MOUNT.col / 2 + 0.05));
+    parts.push(part(riser, 0x6a6c70, 0, { spread: [1, 0, 1] }));
   }
-  // Hold-down clamps at the base.
-  for (let k = 0; k < 4; k++) {
-    const g = new THREE.BoxGeometry(0.7, 1.1, 0.7); g.translate(0, MOUNT_TOP + 0.4, R + 0.55); g.rotateY(k * Math.PI / 2 + 0.3);
-    parts.push(part(g, 0x2a2b2e, 0));
+  // The deluge ring round the base, on the deck.
+  const ring = new THREE.TorusGeometry(R + 1.5, 0.12, 6, 40); ring.rotateX(Math.PI / 2); ring.translate(0, MOUNT_TOP + 0.14, 0);
+  parts.push(part(ring, 0x6a6c70, 0));
+  // Six hold-down posts between the leg pods: a post and a jaw over the skirt's lip.
+  for (let k = 0; k < 6; k++) {
+    const a = Math.PI / 6 + (k * Math.PI) / 3;
+    const post = new THREE.BoxGeometry(0.5, 1.2, 0.5); post.translate(0, MOUNT_TOP + 0.6, R + 0.55); post.rotateY(a);
+    const jaw = new THREE.BoxGeometry(0.42, 0.3, 0.55); jaw.translate(0, MOUNT_TOP + 1.25, R + 0.33); jaw.rotateY(a);
+    parts.push(part(post, 0x2a2b2e, 0), part(jaw, 0x3a3c40, 0));
+  }
+  // Two tail service masts at the deck's back corners, each with an umbilical to the engine skirt.
+  for (const sx of [1, -1]) {
+    const m = new THREE.BoxGeometry(1.1, 4.2, 1.1); m.translate(sx * 3.7, MOUNT_TOP + 2.1, -3.7);
+    parts.push(part(m, 0x55575b, 0));
+    const lit = new THREE.BoxGeometry(0.7, 0.35, 0.04); lit.translate(sx * 3.7, MOUNT_TOP + 3.2, -3.13);
+    parts.push(part(lit, new THREE.Color(1.4, 1.15, 0.8).getHex(), 3));
+    parts.push(part(member(new THREE.Vector3(sx * 3.4, MOUNT_TOP + 3.6, -3.4), new THREE.Vector3(sx * R * 0.72, MOUNT_TOP + 3.4, -R * 0.72), 0.22), 0x2a2b2e, 0, { spread: [0, 1, 1] }));
   }
   // Ground support buildings: low blocks off to one side, and the tank farm's spheres.
   for (const [x, z, w, h, d] of BUILDINGS) {
@@ -415,31 +587,101 @@ function padParts(parts) {
   }
 }
 
-// The strongback beside the vehicle: lattice faces (a separate transparent mesh), plus its solid
-// pieces here: the top deck, the crew access arm and white room, the clamp arms.
+// --- The fixed service tower --------------------------------------------------------------------------
+// On the sim's footprint (TOWER_X, TOWER_W, TOWER_H): four corner columns and a service level every
+// LEVEL metres. The back (+x) is clad; the sides are clad on alternate levels (enclosed rooms) and open
+// lattice between; the face toward the vehicle is open lattice (latticeGeometry). Inside: a lift and
+// stair core. Swing arms: the three umbilical arms (on the sim's clamp members), the service arm to the
+// transfer stage (the sim's arm box), and the crew access arm with its white room at the orbiter's
+// hatch. On top: a hammerhead crane and a lightning mast.
+const LEVEL = 7.8;
+const LEVELS = Array.from({ length: Math.floor((TOWER_H - PAD_Y - 2) / LEVEL) }, (_, i) => PAD_Y + LEVEL * (i + 1));
 function towerParts(parts) {
-  const x0 = TOWER_X, B = MOUNT_TOP;
-  const deckTop = new THREE.BoxGeometry(TOWER_W + 1.2, 1.0, TOWER_W + 1.2); deckTop.translate(x0, TOWER_H, 0);
+  const x0 = TOWER_X, W = TOWER_W, B = MOUNT_TOP, hw = W / 2;
+  const deckTop = new THREE.BoxGeometry(W + 1.2, 1.0, W + 1.2); deckTop.translate(x0, TOWER_H, 0);
   parts.push(part(deckTop, 0x3b3d41, 0));
-  // Crane jib on top.
-  parts.push(part(member(new THREE.Vector3(x0, TOWER_H + 0.5, 0), new THREE.Vector3(x0, TOWER_H + 9, 0), 0.5), 0x2b2c2f, 0, { spread: [1, 0, 1] }));
-  parts.push(part(member(new THREE.Vector3(x0, TOWER_H + 8, 0), new THREE.Vector3(x0 - 6, TOWER_H + 6.5, 0), 0.4), 0x2b2c2f, 0, { spread: [1, 1, 1] }));
-  // Crew access arm into the white room at the upper stage.
-  const armY = B + VEHICLE.interstageTop + 5.5;
-  const arm = new THREE.BoxGeometry(x0 - TOWER_W / 2 - (R + 0.2), 2.4, 2.2); arm.translate((x0 - TOWER_W / 2 + R + 0.2) / 2, armY, 0);
-  parts.push(part(arm, 0x46484c, 0));
-  const room = new THREE.BoxGeometry(2.6, 3.0, 3.0); room.translate(R + 1.3, armY + 0.2, 0);
-  parts.push(part(room, 0x8a8c90, 0));
-  const glow = new THREE.BoxGeometry(2.0, 0.6, 0.04); glow.translate(R + 1.3, armY + 0.5, 1.53);
-  parts.push(part(glow, new THREE.Color(1.8, 1.7, 1.45).getHex(), 3));
-  const glow2 = glow.clone(); glow2.translate(0, 0, -3.06);
-  parts.push(part(glow2, new THREE.Color(1.8, 1.7, 1.45).getHex(), 3));
-  // Clamp arms holding the vehicle (a pair at each level).
-  for (const y of CLAMP_LEVELS.map((h) => B + h)) {
-    for (const z of [-0.9, 0.9]) {
-      parts.push(part(member(new THREE.Vector3(x0 - TOWER_W / 2, y, z), new THREE.Vector3(R + 0.15, y, z * 0.5), 0.45), 0x34363a, 0, { spread: [0, 1, 1] }));
-    }
+  // Corner columns.
+  for (const [dx, dz] of [[-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+    const c = new THREE.BoxGeometry(0.46, TOWER_H - PAD_Y, 0.46); c.translate(x0 + dx * (hw - 0.23), (TOWER_H + PAD_Y) / 2, dz * (hw - 0.23));
+    parts.push(part(c, 0x3a3c40, 0, { spread: [1, 0, 1] }));
   }
+  // The lift and stair core, and its lit shaft windows facing the vehicle.
+  const core = new THREE.BoxGeometry(1.3, TOWER_H - PAD_Y, 1.3); core.translate(x0 + 0.65, (TOWER_H + PAD_Y) / 2, -0.6);
+  parts.push(part(core, 0x2f3134, 0));
+  const shaft = new THREE.BoxGeometry(0.04, TOWER_H - PAD_Y - 4, 0.22); shaft.translate(x0 - 0.02, (TOWER_H + PAD_Y) / 2, -0.6);
+  parts.push(part(shaft, new THREE.Color(0.5, 0.42, 0.3).getHex(), 3, { spread: [0, 0, 1] }));
+  // Levels: a deck slab, its lit edge, the back cladding, alternate side cladding, a stair flight.
+  const lit = new THREE.Color(1.25, 1.05, 0.72).getHex();
+  LEVELS.forEach((y, i) => {
+    const slabG = new THREE.BoxGeometry(W + 0.5, 0.32, W + 0.5); slabG.translate(x0, y, 0);
+    parts.push(part(slabG, 0x45474b, 0));
+    const e1 = new THREE.BoxGeometry(0.04, 0.07, W + 0.4); e1.translate(x0 - hw - 0.27, y - 0.2, 0);
+    const e2 = new THREE.BoxGeometry(W + 0.4, 0.07, 0.04); e2.translate(x0, y - 0.2, hw + 0.27);
+    parts.push(part(e1, lit, 3, { spread: [0, 1, 0] }), part(e2, lit, 3, { spread: [0, 1, 0] }));
+    const y0 = i === 0 ? PAD_Y : LEVELS[i - 1], hgt = y - y0 - 0.5, ym = (y + y0) / 2 - 0.1;
+    const back = new THREE.BoxGeometry(0.12, hgt, W - 0.1); back.translate(x0 + hw - 0.05, ym, 0);
+    parts.push(part(back, i % 2 ? 0x686b70 : 0x60636a, 0));
+    if (i % 2 === 1) {
+      for (const sz of [1, -1]) {
+        const side = new THREE.BoxGeometry(W - 0.1, hgt, 0.12); side.translate(x0, ym, sz * (hw - 0.05));
+        parts.push(part(side, 0x6c6f74, 0));
+        // A lit window band in each enclosed room.
+        const band = new THREE.BoxGeometry(W - 0.9, 0.5, 0.04); band.translate(x0, ym + 0.6, sz * (hw + 0.02));
+        parts.push(part(band, new THREE.Color(0.9, 0.8, 0.6).getHex(), 3));
+      }
+    } else {
+      // An open level: a stair flight zigzagging up inside the +z face.
+      const a = new THREE.Vector3(x0 - hw + 0.5, y0 + 0.2, hw - 0.45), b = new THREE.Vector3(x0 + hw - 0.5, y0 + (y - y0) / 2, hw - 0.45);
+      const c = new THREE.Vector3(x0 - hw + 0.5, y - 0.2, hw - 0.45);
+      parts.push(part(member(a, b, 0.14), 0x4a4c50, 0, { spread: [1, 1, 1] }), part(member(b, c, 0.14), 0x4a4c50, 0, { spread: [1, 1, 1] }));
+    }
+  });
+  // Umbilical arms at the sim's clamp levels: a horizontal truss on the sim's two members, laced
+  // between them, with the umbilical plate where it meets the booster.
+  for (const y of CLAMP_LEVELS.map((h) => B + h)) {
+    const x1 = x0 - hw, x2 = R + 0.15;
+    const ends = [-0.9, 0.9].map((z) => [new THREE.Vector3(x1, y, z), new THREE.Vector3(x2, y, z * 0.5)]);
+    for (const [p, q] of ends) parts.push(part(member(p, q, 0.45), 0x34363a, 0, { spread: [0, 1, 1] }));
+    for (let k = 0; k < 4; k++) {
+      const t0 = k / 4, t1 = (k + 1) / 4, l = (t, z) => new THREE.Vector3(x1 + (x2 - x1) * t, y + 0.05, z * (1 - 0.5 * t));
+      parts.push(part(member(l(t0, k % 2 ? 0.9 : -0.9), l(t1, k % 2 ? -0.9 : 0.9), 0.16), 0x4a4c50, 0, { spread: [1, 1, 1] }));
+    }
+    const plate = new THREE.BoxGeometry(0.4, 1.3, 1.4); plate.translate(R + 0.35, y, 0);
+    parts.push(part(plate, 0x55575b, 0));
+  }
+  // The service arm to the transfer stage (the sim's arm box), its hood at the vehicle end.
+  const armY = B + VEHICLE.interstageTop + 5.5, ax0 = R + 0.2, ax1 = x0 - hw;
+  const walk = new THREE.BoxGeometry(ax1 - ax0, 0.3, 2.2); walk.translate((ax0 + ax1) / 2, armY - 1.05, 0);
+  parts.push(part(walk, 0x46484c, 0));
+  for (const sz of [1, -1]) {
+    const wall = new THREE.BoxGeometry(ax1 - ax0, 1.9, 0.1); wall.translate((ax0 + ax1) / 2, armY, sz * 1.05);
+    parts.push(part(wall, 0x5b5e63, 0));
+  }
+  const hood = new THREE.BoxGeometry(2.6, 3.0, 3.0); hood.translate(R + 1.3, armY + 0.2, 0);
+  parts.push(part(hood, 0x7c7f84, 0));
+  // The crew access arm: an enclosed corridor from the tower to the white room at the orbiter's hatch.
+  const cy = B + ORBITER.base + ORBITER.hatch, cx0 = ORBITER.halfWidth * 0.98 + 0.25, cx1 = x0 - hw;
+  const room = new THREE.BoxGeometry(1.5, 2.7, 2.5); room.translate(cx0 + 0.75, cy, 0);
+  parts.push(part(room, 0xd9dadc, 0));
+  const corr = new THREE.BoxGeometry(cx1 - cx0 - 1.5, 2.3, 1.8); corr.translate((cx0 + 1.5 + cx1) / 2, cy - 0.1, 0);
+  parts.push(part(corr, 0xaeb0b3, 0));
+  for (const sz of [1, -1]) {
+    const w = new THREE.BoxGeometry(cx1 - cx0 - 1.8, 0.35, 0.04); w.translate((cx0 + 1.5 + cx1) / 2, cy + 0.35, sz * 0.92);
+    parts.push(part(w, new THREE.Color(0.85, 0.8, 0.66).getHex(), 3));
+    const g = new THREE.BoxGeometry(1.1, 0.6, 0.04); g.translate(cx0 + 0.75, cy + 0.5, sz * 1.27);
+    parts.push(part(g, new THREE.Color(0.95, 0.9, 0.76).getHex(), 3));
+  }
+  // On top: a hammerhead crane (slewing mast, jib over the vehicle, counterweight, cab, hook) and the
+  // lightning mast at the back corner.
+  const top = TOWER_H + 0.5;
+  parts.push(part(new THREE.BoxGeometry(1.0, 5, 1.0).translate(x0, top + 2.5, 0), 0x2b2c2f, 0, { spread: [1, 0, 1] }));
+  parts.push(part(new THREE.BoxGeometry(17, 0.8, 0.8).translate(x0 - 1, top + 5.4, 0), 0x2b2c2f, 0, { spread: [0, 1, 1] }));
+  parts.push(part(new THREE.BoxGeometry(2.2, 1.6, 1.6).translate(x0 + 6.4, top + 4.9, 0), 0x45474b, 0));
+  parts.push(part(new THREE.BoxGeometry(1.4, 1.2, 1.3).translate(x0 + 1.1, top + 4.3, 0.9), 0x5b5e63, 0));
+  parts.push(part(new THREE.BoxGeometry(0.04, 0.4, 0.9).translate(x0 + 0.38, top + 4.4, 0.9), new THREE.Color(1.4, 1.2, 0.9).getHex(), 3));
+  parts.push(part(member(new THREE.Vector3(x0 - 8.5, top + 5, 0), new THREE.Vector3(x0 - 8.5, top - 4, 0), 0.06), 0x2b2c2f, 0, { spread: [1, 0, 1] }));
+  parts.push(part(new THREE.BoxGeometry(0.6, 0.8, 0.6).translate(x0 - 8.5, top - 4.4, 0), 0x8a6a1c, 0));
+  parts.push(part(member(new THREE.Vector3(x0 + 1.3, top, 1.3), new THREE.Vector3(x0 + 1.3, TOWER_H + 9.2, 1.3), 0.32), 0x9a9c9f, 0, { spread: [1, 0, 1] }));
   // Lightning masts: tall tapered poles around the pad (sliver: always at least a pixel).
   for (const [x, z] of MASTS) {
     const g = new THREE.CylinderGeometry(0.35, 1.0, MAST_H, 8, 1, true); g.translate(x, PAD_Y + MAST_H / 2, z);
@@ -467,21 +709,23 @@ function towerParts(parts) {
 // vehicle), a dimmer bank front-right, and a rim from behind on the right, so the tanks read round.
 
 function latticeGeometry() {
-  // Open boxes: four faces each, no top or bottom. The strongback and the tank's leg bracing.
-  const geos = [];
-  const box = (cx, cz, w, y0, y1) => {
-    const h = y1 - y0;
-    for (let f = 0; f < 4; f++) {
-      const g = new THREE.PlaneGeometry(w, h);
-      const uv = g.attributes.uv;
-      for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i), uv.getY(i) * (h / (w * 2)));
-      g.translate(0, y0 + h / 2, w / 2);
-      g.rotateY(f * Math.PI / 2);
-      g.translate(cx, 0, cz);
-      geos.push(g);
-    }
+  // The tower's open faces, level by level: the face toward the vehicle (−x) all the way up, the two
+  // sides on the open (even) levels. One bay of the texture is W wide and 2W tall.
+  const geos = [], W = TOWER_W;
+  const face = (f, y0, y1) => {
+    const h = y1 - y0, g = new THREE.PlaneGeometry(W, h), uv = g.attributes.uv;
+    for (let i = 0; i < uv.count; i++) uv.setXY(i, uv.getX(i), uv.getY(i) * (h / (W * 2)) + y0 / (W * 2));
+    g.translate(0, y0 + h / 2, W / 2);
+    g.rotateY(f * Math.PI / 2);
+    g.translate(TOWER_X, 0, 0);
+    geos.push(g);
   };
-  box(TOWER_X, 0, TOWER_W, PAD_Y, TOWER_H);
+  const ys = [PAD_Y, ...LEVELS, TOWER_H];
+  face(3, PAD_Y, TOWER_H);                         // −x: toward the vehicle
+  for (let i = 0; i + 1 < ys.length; i++) {
+    if (i % 2 === 1 && i < LEVELS.length) continue;   // enclosed level: clad (towerParts)
+    face(0, ys[i], ys[i + 1]); face(2, ys[i], ys[i + 1]);
+  }
   return mergeGeometries(geos);
 }
 
@@ -601,14 +845,17 @@ export function* buildRocket({ reducedMotion = false } = {}) {
   // a couple of pixels wide at any range.
   const lampSpots = [];
   for (const f of FLOODS) lampSpots.push([f.p[0], f.p[1] + (f.ground ? 0.3 : 0.6), f.p[2], 5, 5.3, 5.8]);
-  for (const y of [MOUNT_TOP + 4, 34, 58, TOWER_H - 1]) lampSpots.push([TOWER_X - TOWER_W / 2 - 0.3, y, TOWER_W / 2 + 0.2, 2.0, 1.25, 0.5]);
+  // The tower's working lights: every other service level's front corner, and the crane's cab.
+  LEVELS.forEach((y, i) => { if (i % 2 === 0) lampSpots.push([TOWER_X - TOWER_W / 2 - 0.3, y - 0.4, TOWER_W / 2 + 0.2, 2.0, 1.25, 0.5]); });
+  lampSpots.push([TOWER_X + 1.1, TOWER_H + 4.8, 1.6, 1.4, 1.0, 0.6]);
   const lamps = glints(lampSpots, 0.9, 3.5);
   group.add(lamps);
 
   // Aircraft-warning beacons: tower top, every mast's top and middle, the tank. They pulse together
   // and ease on and off (a hard cut lit or killed a pixel-sized dot and its bloom in one frame).
   const red = [1, 0.04, 0.03];
-  const beaconSpots = [[TOWER_X, TOWER_H + 9.4, 0, ...red], [TANK[0], PAD_Y + 53.8, TANK[1], ...red]];
+  // (Tower: the lightning mast's top and the crane jib's tip.)
+  const beaconSpots = [[TOWER_X + 1.3, TOWER_H + 9.4, 1.3, ...red], [TOWER_X - 9.5, TOWER_H + 6.2, 0, ...red], [TANK.x, PAD_Y + 53.8, TANK.z, ...red]];
   for (const [x, z] of MASTS) beaconSpots.push([x, PAD_Y + MAST_H + 0.6, z, ...red], [x, PAD_Y + MAST_H * 0.5, z, ...red]);
   const beacons = glints(beaconSpots, 1.1, 3.5);
   group.add(beacons);
