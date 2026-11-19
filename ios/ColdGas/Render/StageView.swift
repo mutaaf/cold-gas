@@ -35,7 +35,11 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         guard let device = MTLCreateSystemDefaultDevice() else { return }
         metal.device = device
         metal.pixelFormat = Renderer.drawableFormat
+        #if targetEnvironment(simulator)
         metal.framebufferOnly = true
+        #else
+        metal.framebufferOnly = false   // 0297: MetalFX upscales straight into the drawable (Renderer), no copy pass after it
+        #endif
         metal.maximumDrawableCount = 3
         isOpaque = true
         self.device = device
