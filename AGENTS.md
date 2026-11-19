@@ -346,7 +346,8 @@ src/render/           three.js (r186):
                           the Show's release cuts to a locked-off hold, then to the locked-off carry before the row, which on a screen wider than
                           tall cuts closer (at most twice) as the car comes down, the row's front still in frame (0118)
 src/input.js          keyboard + gamepad + touch → sim input (context: ground vs air; tier); stick dead zone;
-                        every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099)
+                        every run starts with nothing held, a held control counts again on a fresh press (freshRun, 0099);
+                        on Assist, ↑/↓ held across the take-off or the touchdown wait for a fresh press (0275)
 src/fold.js           a screen that folds (pure, 0105): the segments and the posture Chromium reports → rows | cols and the
                         hinge's edges (main.js syncFold: :root[data-fold], --fold-a/b; the scene above a horizontal fold)
 src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
