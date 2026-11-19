@@ -13,8 +13,14 @@
 //               grows with load); relaxation length; looser surfaces peak later and flatter.
 //   motors      the two rear motors, each on its own wheel: torque vectoring toward the yaw rate the steering asks for,
 //               per-wheel traction control (or, off, a coupling that acts as a limited-slip differential), lift-off regen.
-//   brakes      60/40, ABS cycling each wheel round its peak slip, and each disc's temperature (heat in from its torque ×
-//               speed, out to the air faster at speed): the renderer makes a hot disc glow.
+//   brakes      a balance the player sets (60/40 by default), ABS cycling each wheel round its peak slip (or off: the
+//               wheels lock, slide on the tyre's locked tail and wear a flat spot), and each disc's temperature (heat in
+//               from its torque × speed, out to the air faster at speed): the pads fade past ≈ 450 °C (0281), and the
+//               renderer makes a hot disc glow.
+//   handbrake   the rears locked by a lever of their own (0281), the motors let go while it's up, stability control
+//               standing back for the pull; the tail slides.
+//   drift       an assist for a thumb on glass (0281): in a slide the front wheels point along the front's own path and
+//               the thumb steers from there, and the rears' torque is trimmed as the angle runs past ≈ 30°.
 //   aero        drag as the scored car; downforce at each axle (so it trims the car at speed), not through the centre.
 //   yaw         the car's own yaw inertia (DriveSpec.inertiaYaw) and no damping but the tyres' and the air's (0269).
 //   assists     stability control on, sport or off (DriveModel.esc); a light countersteer on touch (counterAssist).
@@ -64,8 +70,30 @@ public enum DriveSpec {
     /// grip (the scored car's); off, 1.8× it (a driver can turn a real car's wheel past what the tyres can give, and needs
     /// to for a flick or a big countersteer).
     public static let rackReach: [Double] = [1.0, 1.3, 1.8]
-    /// Brake balance (front share 0.6, ESTIMATE: a mid/rear-heavy EV's) over SPEC.brakeTorque's per-wheel figure.
-    public static let brakeFront = 1.2, brakeRear = 0.8
+    /// Brake balance (front share 0.6, ESTIMATE: a mid/rear-heavy EV's) over SPEC.brakeTorque's per-wheel figure: each
+    /// wheel gets 2 × its axle's share of it (1.2 front, 0.8 rear at 0.6). The player can move it (Settings → Driving).
+    public static let brakeBias = 0.6
+    /// Brake fade (0281): the pads' friction against the disc's temperature. ESTIMATE, from road-performance pad data
+    /// (friction steady to ≈ 450 °C, falling ≈ 40–60 % by 800 °C, where a road pad is cooked): 1 to `fadeFrom`, then
+    /// straight down to `fadeFloor` at `fadeTo`.
+    public static let fadeFrom = 450.0, fadeTo = 800.0, fadeFloor = 0.4
+    @inline(__always) public static func fade(_ t: Double) -> Double { t <= fadeFrom ? 1 : jsMax(fadeFloor, 1 - (1 - fadeFloor) * (t - fadeFrom) / (fadeTo - fadeFrom)) }
+    /// The handbrake's torque on each rear wheel (N·m; ESTIMATE: a hydraulic lever's, enough to lock a rear at any speed:
+    /// the rear's grip is ≈ 2.4 kN·m).
+    public static let handbrakeTorque = SPEC.brakeTorque
+    /// How long stability control stands back after the handbrake is let go (s; ESTIMATE: road cars' ESC holds off for
+    /// a lever's pull and a moment after).
+    public static let handbrakeEscHold = 0.5
+    /// A flat spot (0281): a locked tyre's tread ground away. Full after this many metres slid locked (ESTIMATE: a road
+    /// tyre's tread is visibly flat after one long locked stop, ≈ 30 m), worn round again over `flatSpotHeal` m rolled.
+    public static let flatSpotSlide = 30.0, flatSpotHeal = 4000.0
+    /// The drift assist (0281): from this much body slip (rad) the front wheels lean toward the front axle's path, all the
+    /// way there by `driftFull`; the thumb then turns them by `driftSteer` of the rack's lock either side of it. The rears'
+    /// torque is trimmed round the held angle `driftHold` (≈ 24°) across ± `driftBand`, and more while the slide opens
+    /// (`driftOpenK` per rad/s); past `driftAngle` (≈ 34°) a front brake takes the yaw rate down.
+    public static let driftFrom = 0.07, driftFull = 0.2, driftSteer = 0.6, driftHold = 0.42, driftBand = 0.2, driftOpenK = 0.35, driftAngle = 0.6
+    /// How hard the assist's net brakes a front wheel per radian past its angle (rad/s of yaw rate asked away per rad).
+    public static let driftYawK = 2.0
     /// ABS: the slip it holds each wheel under, and how fast it releases and reapplies (≈ 12 Hz cycling).
     public static let absSlip = 0.13, absRelease = 30.0, absApply = 9.0
     /// Traction control's slip target (sport: more), and the coupling across the rear axle with it off (N·m per rad/s:
@@ -132,6 +160,22 @@ public final class DriveModel {
     public func stability(_ e: ESC) { esc = e; tc = e == .on ? .on : e == .sport ? .sport : .off; vectoring = e == .on }
     fileprivate var massSet = false
     public var abs = true
+    /// The brake balance's front share (0281; DriveSpec.brakeBias by default).
+    public var brakeBias = DriveSpec.brakeBias
+    /// The drift assist (0281): on, a thumb can hold a slide's angle (it does nothing with stability control on).
+    public var driftAssist = false
+    /// This tick: each wheel locked under its brake while the car moves, the worst pad fade (1 = none), the drift assist at
+    /// work (0…1: its share of the steering), the rears' torque it left (1 = all).
+    public fileprivate(set) var locked = [Bool](repeating: false, count: 4), fadeK = 1.0, drifting = 0.0, driftCut = 1.0
+    /// ABS's pulses: one each time a wheel's pressure starts to dump (counts up for ever; the haptics read the change), and
+    /// the wheel that pulsed last.
+    public fileprivate(set) var absPulses = 0, absPulseWheel = 0
+    /// Each tyre's flat spot (0…1, 0281).
+    public var flatSpot = [Double](repeating: 0, count: 4)
+    fileprivate var releasing = [Bool](repeating: false, count: 4)
+    fileprivate var betaPrev = 0.0, hbHold = 0.0
+    /// The probes' ground (tests): every wheel on this material instead of what the ray found.
+    var surfaceOverride: Material?
     /// Torque vectoring on.
     public var vectoring = true
     /// Each disc's temperature (°C).
@@ -202,21 +246,46 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         let reach = jsMin(SPEC.steerLock, lock + abs(slideR))
         steerTarget = M3.clamp(steerTarget + dm.counterAssist * slideR, -reach, reach)
     }
-    let rackRate = jsMin(SPEC.steerRate, (lock + abs(slideR)) / (RACK_T0 + RACK_TV * abs(vFwd)))
+    // The drift assist (0281): once the body slides, the wheels lean toward where the front axle is actually going (what
+    // a driver's hands do by feel in a held drift: zero front slip, the car neither spun nor straightened by the fronts)
+    // and the thumb steers either side of that; the rears' torque is trimmed past the angle (below, at the motors).
+    let betaCG = vb.x * vb.x + vFwd * vFwd > 2 ? DMath.datan2(vb.x, vFwd) : 0
+    var dBeta = betaCG - dm.betaPrev
+    if dBeta > Double.pi { dBeta -= 2 * Double.pi } else if dBeta < -Double.pi { dBeta += 2 * Double.pi }
+    let opening = dBeta / dt * sgn(betaCG)   // + while the slide grows
+    dm.betaPrev = betaCG
+    dm.drifting = 0; dm.driftCut = 1
+    let drift = dm.driftAssist && dm.esc != .on && speed > 4 && s.grounded >= 3
+    if drift {
+        let k = M3.clamp((abs(betaCG) - DriveSpec.driftFrom) / (DriveSpec.driftFull - DriveSpec.driftFrom), 0, 1)
+        if k > 0 {
+            let path = M3.clamp(DMath.datan2(vb.x + wb.y * AXLE_F, vFwd), -SPEC.steerLock, SPEC.steerLock)
+            let want = M3.clamp(path - inp.steer * DriveSpec.driftSteer * jsMax(lock, 0.15), -SPEC.steerLock, SPEC.steerLock)
+            steerTarget += (want - steerTarget) * k
+            dm.drifting = k
+        }
+        // The rears' torque on the angle: half at the held angle, all of it a band under, none a band over, less while the
+        // slide is still opening (a damped hand on the throttle, not a switch).
+        dm.driftCut = M3.clamp(0.5 - 0.5 * (abs(betaCG) - DriveSpec.driftHold) / DriveSpec.driftBand - DriveSpec.driftOpenK * opening, 0, 1)
+    }
+    let rackRate = jsMin(SPEC.steerRate, (lock + abs(slideR) + dm.drifting * abs(betaCG)) / (RACK_T0 + RACK_TV * abs(vFwd)))
     s.steer += M3.clamp(steerTarget - s.steer, -rackRate * dt, rackRate * dt)
 
     // Stability control (Assist), as the scored car's: a brake on one front wheel against a yaw rate past what the grip
     // allows, or a slip angle past its threshold.
     s.esc = 0; for i in 0..<4 { s.escBrake[i] = 0 }
     var escCut = 1.0
+    // The handbrake's pull (0281): stability control stands back for it, and a moment after.
+    dm.hbHold = s.handbrake > 0 ? DriveSpec.handbrakeEscHold : jsMax(0, dm.hbHold - dt)
     do {
         let beta = vFwd > 0.5 ? DMath.datan2(vb.x + wb.y * AXLE_R, vFwd) : 0
         let dBeta = (beta - s.escBeta) / dt
         s.escBeta = beta
-        if dm.esc != .off && truthy(inp.assist) && !truthy(inp.manual) && s.grounded >= 3 && vFwd > 5 {
+        if dm.esc != .off && truthy(inp.assist) && !truthy(inp.manual) && s.grounded >= 3 && vFwd > 5 && dm.hbHold <= 0 {
             let sport = dm.esc == .sport
             let rr = wb.y, rMax = (SPEC.escYaw * (sport ? DriveSpec.escYawSport : 1) * aGrip) / vFwd
-            let slip = sport ? DriveSpec.escSlipSport : DriveSpec.escSlip
+            // Sport with the drift assist: a net under a held drift, catching only a slide past the assist's angle.
+            let slip = sport ? (dm.driftAssist ? DriveSpec.driftAngle + 0.1 : DriveSpec.escSlipSport) : DriveSpec.escSlip
             let bx = beta > slip ? beta - slip : beta < -slip ? beta + slip : 0
             var e = rr - M3.clamp(rr, -rMax, rMax) - ESC_KB * bx
             if bx != 0 && dBeta * bx > 0 { e -= ESC_KBD * dBeta }
@@ -227,6 +296,16 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
                 s.esc = jsMin(1, abs(e) * 4)
                 escCut = 1 - s.esc
             }
+        }
+        // The drift assist's net (0281): past its angle and still opening, a brake on one front wheel takes the yaw rate
+        // down, as stability control would, so a slide a thumb can't catch in time doesn't swap ends.
+        let over = abs(betaCG) - DriveSpec.driftAngle
+        if drift && dm.hbHold <= 0 && over > 0 {
+            let e = sgn(wb.y) * (DriveSpec.driftYawK * over + jsMax(0, opening))
+            let i = e > 0 ? 0 : 1
+            let Mz = DriveSpec.inertiaYaw * abs(e) / ESC_TAU
+            s.escBrake[i] = jsMax(s.escBrake[i], jsMin(SPEC.brakeTorque * 1.15, (Mz / (SPEC.trackFront / 2)) * RW[i]))
+            s.esc = jsMax(s.esc, jsMin(1, abs(e) * 2))
         }
     }
     // Suction fan (unchanged: the Wall's curl is solid on a roam).
@@ -305,7 +384,7 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
     dm.tvShift = 0
     var regen = 0.0
     if inp.throttle == 0 && vFwd > 2 { regen = DriveSpec.regenG * m * G * RW[2] / 2 }
-    var absAny = false, tcAny = false
+    var absAny = false, tcAny = false, fadeK = 1.0
     for i in 0..<4 {
         let wh = s.wheels[i]
         let R = RW[i], k = DriveSpec.k[i], xs = DriveSpec.staticLoad(i) / k
@@ -314,7 +393,7 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         // The renderer's convention (the scored car's): wheel centre = anchor − restLen + compression.
         wh.compression = REST_LEN - DriveSpec.freeLength(i) + dm.c2[i]
         if !dm.hit[i] {
-            wh.contact = false; wh.load = 0; wh.slipAngle = 0
+            wh.contact = false; wh.load = 0; wh.slipAngle = 0; dm.locked[i] = false; dm.releasing[i] = false
             dm.fx[i] = 0; dm.fy[i] = 0; dm.fz[i] = 0; dm.brakeT[i] = 0; dm.driveT[i] = 0
             if DRIVEN[i] { wh.omega += ((inp.throttle * 600) / WHEEL_I) * dt }
             if inp.brake > 0 { wh.omega *= 0.9 }
@@ -324,7 +403,7 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         }
         wh.contact = true; grounded += 1
         M3.set(hitN, dm.nX[i], dm.nY[i], dm.nZ[i])
-        let hb = dm.body[i], hm = dm.mat[i]
+        let hb = dm.body[i], hm = dm.surfaceOverride ?? dm.mat[i]
         if hb != nil { s.obstacleContact = true }
         if hitN.y < 0.85 { wallContact = true }
         if hitN.y < 0.995 { sloped = true }
@@ -376,6 +455,8 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         if DRIVEN[i] {
             let motorT = jsMin(SPEC.maxWheelTorque, (SPEC.power / 2) / jsMax(abs(wh.omega), 8))
             T = inp.throttle * motorT
+            // The handbrake up: the motors let go (a lever's clutch), so the rears lock and the tail slides.
+            if s.handbrake > 0.5 { T = 0 }
             if tvDelta != 0 && T > 0 {
                 let side = WHEELS[i].x < 0 ? 1.0 : -1.0   // a push at −x yaws the car toward +x
                 let sh = M3.clamp(tvDelta * side, -DriveSpec.tvShare * T, DriveSpec.tvShare * T)
@@ -383,17 +464,18 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
                 if side > 0 { dm.tvShift = sh }
             }
             T *= escCut
+            if T > 0 { T *= dm.driftCut }
             if regen > 0 && inp.brake == 0 { T -= jsMin(regen, (SPEC.power / 2 * 0.3) / jsMax(abs(wh.omega), 8)) * sgn(wh.omega) }
             let kappaNow = (wh.omega * R - vLong) / den
             let kd = T >= 0 ? kappaNow : -kappaNow
             if dm.tc != .off && !s.tcOff {
                 let target = (dm.tc == .sport ? DriveSpec.tcSlipSport : DriveSpec.tcSlip) * (hm.loose ? 1.6 : 1)
-                if kd > target { T *= M3.clamp(1 - (kd - target) * 8, 0.1, 1); tcAny = true }
+                if kd > target { T *= M3.clamp(1 - (kd - target) * 12, 0.05, 1); tcAny = true }
                 // And no more torque than the grip left beside the cornering force can carry.
                 // (Sport lets the rears slide further before it trims the torque: what a sport mode is for.)
                 let syN = alpha / (ap * (dm.tc == .sport ? 2.5 : 1))
                 let room = jsSqrt(jsMax(dm.tc == .sport ? 0.3 : 0.05, 1 - jsMin(1, syN * syN)))
-                let cap = 1.1 * R * Dx * room
+                let cap = 0.98 * R * Dx * room   // (0281: was 1.1 × the peak: the wheel ran past it off the line)
                 if abs(T) > cap { T = sgn(T) * cap; tcAny = true }
             } else {
                 // Off: the two motors' controller couples the rear wheels' speeds (a limited-slip differential).
@@ -416,45 +498,68 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         // own force agree on, κ' + a·Fx(κ') = c, by Newton's method kept inside the bracket the force's bounds give. (The
         // linearised step this replaced took the curve's slope where the wheel was, ≈ 0 at the peak, and overshot to the
         // other side every tick: a free wheel buzzed between ±κ_peak and ±7 kN on the car, for ever.)
-        let aK = dt * R * R / (WHEEL_I * den), c0 = kappa + dt * R * T / (WHEEL_I * den)
-        var lo = c0 - aK * Dx * 1.001, hi = c0 + aK * Dx * 1.001, k1 = M3.clamp(kappa, lo, hi)
-        for _ in 0..<8 {
-            let (fx, _, dfx) = forces(k1)
-            let g = k1 + aK * fx - c0
-            if abs(g) < 1e-7 { break }
-            if g > 0 { hi = k1 } else { lo = k1 }
-            let dg = 1 + aK * dfx
-            var next = dg > 1e-6 ? k1 - g / dg : 0.5 * (lo + hi)
-            if !(next > lo && next < hi) { next = 0.5 * (lo + hi) }
-            k1 = next
+        let aK = dt * R * R / (WHEEL_I * den)
+        func solve(_ torque: Double) -> Double {
+            let c0 = kappa + dt * R * torque / (WHEEL_I * den)
+            var lo = c0 - aK * Dx * 1.001, hi = c0 + aK * Dx * 1.001, k1 = M3.clamp(kappa, lo, hi)
+            for _ in 0..<8 {
+                let (fx, _, dfx) = forces(k1)
+                let g = k1 + aK * fx - c0
+                if abs(g) < 1e-7 { break }
+                if g > 0 { hi = k1 } else { lo = k1 }
+                let dg = 1 + aK * dfx
+                var next = dg > 1e-6 ? k1 - g / dg : 0.5 * (lo + hi)
+                if !(next > lo && next < hi) { next = 0.5 * (lo + hi) }
+                k1 = next
+            }
+            return k1
         }
-        var omega = (k1 * den + vLong) / R
         var Fx = 0.0, Fy = 0.0
         // Brakes: the pedal × balance, ABS's pressure, ESC's; the handbrake on the rears.
         // The caliper's pressure (share of full) builds over ≈ 0.1 s and falls fast; ABS cycles it in three phases round
         // the tyre's peak: dump past the slip threshold, hold just under it, build again below.
         let want = M3.clamp(inp.brake, 0, 1), thr = DriveSpec.absSlip * (hm.loose ? 1.6 : 1)
-        var p = dm.press[i]
+        var p = dm.press[i], dump = false
         if dm.abs && !s.absOff && want > 0 && abs(vLong) > 2.5 && kappa < -0.6 * thr {
-            if kappa < -thr { p -= DriveSpec.absRelease * dt }
+            if kappa < -thr { p -= DriveSpec.absRelease * dt; dump = true }
             absAny = true
-        } else if p < want { p += DriveSpec.absApply * dt } else { p -= DriveSpec.absRelease * dt }
+        } else if p < want { p += DriveSpec.absApply * dt } else if p > want { p -= DriveSpec.absRelease * dt }
+        // A pulse: the valve starting to dump (what the pedal, and here the hands, feel).
+        if dump && !dm.releasing[i] { dm.absPulses &+= 1; dm.absPulseWheel = i }
+        dm.releasing[i] = dump
         p = M3.clamp(p, 0, want)
         dm.press[i] = p
-        var bT = p * SPEC.brakeTorque * (i < 2 ? DriveSpec.brakeFront : DriveSpec.brakeRear) + s.escBrake[i]
-        if s.handbrake > 0 && i >= 2 { bT += s.handbrake * SPEC.brakeTorque }
-        var applied = 0.0
+        // The balance's share of the pedal, the pads' fade at this disc's temperature, the handbrake on the rears.
+        let share = 2 * (i < 2 ? dm.brakeBias : 1 - dm.brakeBias), fade = DriveSpec.fade(dm.discT[i])
+        var bT = (p * SPEC.brakeTorque * share + s.escBrake[i]) * fade
+        if s.handbrake > 0 && i >= 2 { bT += s.handbrake * DriveSpec.handbrakeTorque * fade }
+        if bT > 0 { fadeK = jsMin(fadeK, fade) }
+        // The wheel's spin with the brake inside the same implicit step (0281: braked after it, the wheel's spin and the
+        // force on the car were taken at different slips, and the car stopped on more than the brake's torque, so a hot
+        // pad never faded). The brake is friction: it opposes the spin up to its torque and holds a stopped wheel still
+        // while the torque on it (the motor's and the tyre's) is under that.
+        var omega: Double, applied = 0.0
         if bT > 0 {
-            let db = (bT / WHEEL_I) * dt
-            applied = abs(omega) <= db ? abs(omega) * WHEEL_I / dt : bT
-            omega = abs(omega) <= db ? 0 : omega - jsSign(omega) * db
-        }
+            let fxLock = forces(-vLong / den).0, net = T - fxLock * R   // a held wheel's torque (+ spins it forward)
+            if wh.omega == 0 && abs(net) <= bT {
+                omega = 0; applied = abs(net)
+            } else {
+                let dir = wh.omega != 0 ? sgn(wh.omega) : sgn(net)
+                let om = (solve(T - bT * dir) * den + vLong) / R
+                if om * dir < 0 { omega = 0; applied = jsMin(bT, abs(net)) } else { omega = om; applied = bT }
+            }
+        } else { omega = (solve(T) * den + vLong) / R }
         dm.brakeT[i] = applied
         // The disc: heat in from the work the brake does, out to the air (faster at speed).
         let cool = (DriveSpec.coolRest + DriveSpec.coolPerMs * abs(vFwd)) * (dm.discT[i] - DriveSpec.ambient)
         dm.discT[i] += (applied * abs(omega) - cool) * dt / (DriveSpec.discMass[i] * DriveSpec.discC)
         wh.omega = omega
         kappa = (wh.omega * R - vLong) / den
+        // Locked under the brake while the car moves (0281): the tread slides on one patch and grinds it flat.
+        let lk = bT > 0 && abs(vLong) > 1.5 && kappa < -0.5
+        dm.locked[i] = lk
+        if lk { dm.flatSpot[i] = jsMin(1, dm.flatSpot[i] + abs(vLong) * dt / DriveSpec.flatSpotSlide) }
+        else if dm.flatSpot[i] > 0 { dm.flatSpot[i] = jsMax(0, dm.flatSpot[i] - abs(vLong) * dt / DriveSpec.flatSpotHeal) }
         (Fx, Fy, _) = forces(kappa)
         // Held still on a slope at a standstill (the scored car's stiction).
         let mEff = m * 0.25
@@ -477,7 +582,7 @@ public func driveStep(_ s: Vehicle, _ inp: Input, _ dm: DriveModel) throws {
         wheelForce += Fz
         wh.spin += wh.omega * dt
     }
-    dm.absActive = absAny; dm.tcActive = tcAny
+    dm.absActive = absAny; dm.tcActive = tcAny; dm.fadeK = fadeK
     s.tcActive = tcAny
     s.grounded = grounded
     s.fallPeak = grounded > 0 ? 0 : jsMax(s.fallPeak, -s.vel.y)

@@ -122,47 +122,57 @@ final class Stage {
                     .origin: (t["flipY"] as? Bool) == true ? MTKTextureLoader.Origin.flippedVertically : MTKTextureLoader.Origin.topLeft,
                     .textureUsage: NSNumber(value: MTLTextureUsage.shaderRead.rawValue), .textureStorageMode: NSNumber(value: MTLStorageMode.private.rawValue)])
             }
-            let rp = t["repeat"] as? [Double] ?? [1, 1], of = t["offset"] as? [Double] ?? [0, 0]
+            // 0301: a short array in the stage's JSON is the default, not an index out of range.
+            let rp = (t["repeat"] as? [Double]).flatMap { $0.count >= 2 ? $0 : nil } ?? [1, 1], of = (t["offset"] as? [Double]).flatMap { $0.count >= 2 ? $0 : nil } ?? [0, 0]
             return StageTexture(texture: tex, repeatUV: SIMD2(Float(rp[0]), Float(rp[1])), offset: SIMD2(Float(of[0]), Float(of[1])))
         }
         let texIndex = Dictionary(uniqueKeysWithValues: (j["textures"] as? [[String: Any]] ?? []).enumerated().compactMap { i, t in (t["id"] as? String).map { ($0, i) } })
         func mesh(_ m: [String: Any]) -> StageMesh? {
             guard let file = m["file"] as? String, let bin = try? Data(contentsOf: dir.appendingPathComponent(file)),
                   let off = m["indexOffsetBytes"] as? Int, let subs = m["submeshes"] as? [[String: Any]] else { return nil }
+            // 0301: a truncated or empty .bin (a damaged install) is a mesh that isn't there, never a read past its end.
+            guard bin.count >= 8, off >= 4, off < bin.count else { Report.error(.render, .error, "stage mesh \(file) truncated"); return nil }
+            let nIndex = (bin.count - off) / 4
             let s = subs.map { sm -> StageSubmesh in
                 let mt = sm["material"] as? [String: Any] ?? [:]
                 func f(_ k: String, _ d: Float = 0) -> Float { (mt[k] as? NSNumber)?.floatValue ?? d }
                 func b(_ k: String) -> Bool { mt[k] as? Bool ?? false }
-                func v3(_ k: String) -> SIMD3<Float> { let a = mt[k] as? [Double] ?? [1, 1, 1]; return SIMD3(Float(a[0]), Float(a[1]), Float(a[2])) }
+                func v3(_ k: String) -> SIMD3<Float> { let a = (mt[k] as? [Double]).flatMap { $0.count >= 3 ? $0 : nil } ?? [1, 1, 1]; return SIMD3(Float(a[0]), Float(a[1]), Float(a[2])) }
                 var M = StageMaterial()
                 M.name = mt["name"] as? String ?? ""
                 M.color = v3("color"); M.emissive = v3("emissive") * f("emissiveIntensity", 1)
                 M.metalness = f("metalness"); M.roughness = f("roughness", 1); M.clearcoat = f("clearcoat"); M.clearcoatRoughness = f("clearcoatRoughness")
                 M.opacity = f("opacity", 1); M.unlit = b("unlit"); M.transparent = b("transparent"); M.depthWrite = mt["depthWrite"] as? Bool ?? true
                 M.wet = b("wet"); M.doubleSided = b("doubleSided"); M.additive = b("additive"); M.vertexColors = b("vertexColors"); M.fog = mt["fog"] as? Bool ?? true
-                if let po = mt["polygonOffset"] as? [Double] { M.polygonOffset = (Float(po[0]), Float(po[1])) }
+                if let po = mt["polygonOffset"] as? [Double], po.count >= 2 { M.polygonOffset = (Float(po[0]), Float(po[1])) }
                 M.map = (mt["map"] as? String).flatMap { texIndex[$0] }
                 M.roughnessMap = (mt["roughnessMap"] as? String).flatMap { texIndex[$0] }
                 M.emissiveMap = (mt["emissiveMap"] as? String).flatMap { texIndex[$0] }
                 M.alphaMap = (mt["alphaMap"] as? String).flatMap { texIndex[$0] }
                 if let fx = mt["effect"] as? [String: Any], let kind = fx["kind"] as? String {
                     M.effect = ["beam": 1, "glow": 2, "spill": 3, "floodBeam": 4][kind] ?? 9
-                    if let c = fx["color"] as? [Double] { M.effectColor = SIMD3(Float(c[0]), Float(c[1]), Float(c[2])) }
+                    if let c = fx["color"] as? [Double], c.count >= 3 { M.effectColor = SIMD3(Float(c[0]), Float(c[1]), Float(c[2])) }
                     M.effectPower = (fx["power"] as? NSNumber)?.floatValue ?? 0
                 }
                 return StageSubmesh(material: M, renderOrder: sm["renderOrder"] as? Int ?? 0, vertexStart: sm["vertexStart"] as? Int ?? 0,
                                     vertexCount: sm["vertexCount"] as? Int ?? 0, indexStart: sm["indexStart"] as? Int ?? 0, indexCount: sm["indexCount"] as? Int ?? 0,
                                     top: (sm["top"] as? NSNumber)?.floatValue ?? 100)
             }
-            guard let vb = bin.withUnsafeBytes({ device.makeBuffer(bytes: $0.baseAddress!, length: max(off, 4), options: .storageModeShared) }),
-                  let ib = bin.withUnsafeBytes({ device.makeBuffer(bytes: $0.baseAddress! + off, length: max(bin.count - off, 4), options: .storageModeShared) }) else { return nil }
+            // 0301: a submesh that names indices past the buffer would draw garbage (or fault the GPU): the mesh isn't used.
+            if s.contains(where: { $0.indexStart < 0 || $0.indexCount < 0 || $0.indexStart + $0.indexCount > nIndex }) {
+                Report.error(.render, .error, "stage mesh \(file) submesh out of range"); return nil
+            }
+            guard let vb = bin.withUnsafeBytes({ p in p.baseAddress.flatMap { device.makeBuffer(bytes: $0, length: off, options: .storageModeShared) } }),
+                  let ib = bin.withUnsafeBytes({ p in p.baseAddress.flatMap { device.makeBuffer(bytes: $0 + off, length: bin.count - off, options: .storageModeShared) } }) else { return nil }
             return StageMesh(vertices: vb, indices: ib, submeshes: s)
         }
         guard let st = j["static"] as? [String: Any], let s = mesh(st), let rd = j["roadster"] as? [String: Any], let r = mesh(rd) else { return nil }
         staticMesh = s; roadster = r
         let parkedJ = j["parked"] as? [[String: Any]] ?? []
-        parked = parkedJ.compactMap(mesh)
-        paints = parkedJ.map { ($0["paint"] as? NSNumber)?.uint32Value ?? 0xe3e4e2 }
+        // 0301: the paints follow the meshes that loaded (one that didn't used to shift every paint after it onto the wrong car).
+        let pairs = parkedJ.compactMap { j in mesh(j).map { ($0, (j["paint"] as? NSNumber)?.uint32Value ?? 0xe3e4e2) } }
+        parked = pairs.map(\.0)
+        paints = pairs.map(\.1)
         guard let cp = j["carParts"] as? [String: Any], let cm = cp["meshes"] as? [String: [String: Any]] else { return nil }
         var list: [StageMesh] = []
         for part in CarPart.allCases {

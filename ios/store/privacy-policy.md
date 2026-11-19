@@ -64,8 +64,8 @@ When something in the app goes wrong, it sends a short report to our own server 
 what failed (for example "the stage couldn't be drawn", or a crash's exception and signal names, with up to six code
 addresses inside the app), how often, how long a freeze lasted, and the app's version. Apple's MetricKit supplies the
 crash, freeze and launch-time reports. The reports carry no id of any kind, no device model, no system version, no
-language or region, and nothing you typed. They are sent between runs, never during one, and the same switch turns them
-off: Settings, Privacy, Share usage stats and crash reports.
+language or region, and nothing you typed. Once a session, the same report also says how smoothly the app drew (frame times in coarse ranges, whether the phone got hot, roughly how much memory it used and how long it took to start) and which of the newer features were used, as yes-or-no flags (for example "a look was chosen", "a roam challenge was tried"). They are sent between runs, never during one, and the same
+switch turns them off: Settings, Privacy, Share usage stats and crash reports.
 
 ## What we don't receive
 
