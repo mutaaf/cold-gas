@@ -89,6 +89,7 @@ final class Usage {
 
     /// Send one batch, off the main thread. Nothing in a quiet moment, nothing when off, one send at a time.
     func flush(done: (() -> Void)? = nil) {
+        PerfCenter.shared.cut(force: false)   // 0300: a long session is summarised from a quiet screen too
         Report.flush()   // 0293: the health queue rides the same moments (its own gates: quiet screens, a minute apart)
         let batch = queue.next(moment: moment, on: on)
         guard !sending, !batch.isEmpty, let id = queue.installId,

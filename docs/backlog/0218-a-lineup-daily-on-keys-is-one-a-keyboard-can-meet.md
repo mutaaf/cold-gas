@@ -1,12 +1,12 @@
 ---
 id: 0218
 title: A Lineup Daily on keys is one a keyboard player can meet, or it says it can't
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-12
-pr:
+pr: 442
 by: critic
 ---
 
@@ -40,16 +40,16 @@ The number is set from a measured keys population, per LESSONS 2026-11-09 (print
 `Daily.swift` and the vectors (`npm run vectors`), as 0198 did.
 
 ## Acceptance criteria
-- [ ] `daily-reach` (n 150, seed 12345): each Lineup objective, in the form a keyboard player sees, is met by
+- [x] `daily-reach` (n 150, seed 12345): each Lineup objective, in the form a keyboard player sees, is met by
       **30–70 %** of a keys population (Pro, `human-show pro` cues, or a stated Assist one). The thumb population stays
       as 0198 left it (51 % / 35 %), or inside 30–70 %.
-- [ ] No objective a device can be shown has a 0 % population on that device. `tests/unit/daily-reach.test.js` asserts
+- [x] No objective a device can be shown has a 0 % population on that device. `tests/unit/daily-reach.test.js` asserts
       it per device it models.
-- [ ] A unit test: on keys, a held, clean 360 Lineup card's miss line names a change a keyboard player can make, or
+- [x] A unit test: on keys, a held, clean 360 Lineup card's miss line names a change a keyboard player can make, or
       meets the day. It never says "need 720°" with "try again".
-- [ ] The title card on a Lineup day at 1440×900 shows the keyboard objective's own words (screenshot in the PR).
-- [ ] `ref-hash` unchanged. Vectors regenerated if `daily.js` changes (`npm run vectors`).
-- [ ] Funnel number to move: `daily-run` → `retry` among key runs on Lineup days.
+- [x] The title card on a Lineup day at 1440×900 shows the keyboard objective's own words (screenshot in the PR).
+- [x] `ref-hash` unchanged. Vectors regenerated if `daily.js` changes (`npm run vectors`).
+- [ ] Funnel number to move: `daily-run` → `retry` among key runs on Lineup days. (Not measurable as written: the daily events carry no device; read it as `daily-done` on Lineup days, which should rise from ≈ 0 off one thumb. #442.)
 
 ## Test plan
 - Unit tests in `tests/unit/daily.test.js` for the keys form's `evaluate` and `missLine`.

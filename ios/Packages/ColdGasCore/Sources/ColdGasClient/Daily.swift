@@ -48,8 +48,17 @@ public enum Daily {
         let titleHintFn: ((Pilot, Bool) -> String)?
         /// 0198: the hint for a `turns` miss (nil: `hint`).
         var turnsHint: ((Pilot) -> String)? = nil
-        /// The line the title shows.
-        public func goal(_ units: Units) -> String { goalText(units) }
+        /// 0218: the form keys, a pad and two thumbs fly (src/daily.js `hand`, formOf): its own goal and check.
+        var hand: ((Pilot) -> Hand)? = nil
+        /// The line the title shows, for the way it is flown (0218: nil is the one thumb's, as before).
+        public func goal(_ units: Units, _ pilot: Pilot? = nil) -> String { (handFor(pilot)?.goalText ?? goalText)(units) }
+        /// src/daily.js formOf: the hand form when there is one and the pilot isn't one thumb.
+        func handFor(_ pilot: Pilot?) -> Hand? { guard let hand, let pilot, !pilot.thumbOn else { return nil }; return hand(pilot) }
+    }
+    /// 0218: an objective's form by hand.
+    struct Hand {
+        let goalText: (Units) -> String
+        let checkFn: (ScoreCard, Facts, Units) -> Result
     }
 
     private static func landed(_ f: Facts) -> Bool { f.b("jumped") && !f.b("crashed") }
@@ -58,6 +67,13 @@ public enum Daily {
     private static func cleanLineup(_ f: Facts) -> Bool { landed(f) && !f.b("contact") && !f.b("flipped") }
     /// src/daily.js LINEUP_MARK (0198): the Lineup's mark day, two turns within this of the mark (m).
     static let LINEUP_MARK = 4.0
+    /// src/daily.js handMark (0218): by hand, one clean turn within this of the mark (m): keys and a pad 5, two thumbs 10.
+    static func handMark(_ p: Pilot) -> Double { p.device == .touch ? 10 : 5 }
+    /// src/daily.js handTurn (0218): a clean landing with at least one full turn; nil when it has both.
+    private static func handTurn(_ f: Facts) -> Result? {
+        if !cleanLineup(f) { return Result.missed("no clean landing yet") }
+        return f.n("rotations") >= 1 ? nil : Result.missed("rolled \(f.s("rollDeg"))\u{B0}, need 360\u{B0}")
+    }
     /// src/daily.js turnsMiss / twiceHint / twiceTitle (0198).
     private static func turnsMiss(_ f: Facts) -> Result { Result(ok: false, miss: "rolled \(f.s("rollDeg"))\u{B0}, need 720\u{B0}", fix: true, turns: true) }
     static func twiceHint(_ p: Pilot) -> String { p.thumbOn ? "slide up on the run-up for two turns" : "" }
@@ -88,7 +104,8 @@ public enum Daily {
                   titleHintFn: { p, whole in !p.thumbOn ? "" : whole ? "Let go right after the tap and stay off the pad" : "Let go right after the tap" }),
         Objective(id: "roll-lineup", course: "lineup", tier: nil, goalText: { _ in "Roll two turns over the row and land clean" },
                   checkFn: { _, f, _ in !cleanLineup(f) ? .missed("no clean landing yet") : f.n("rotations") >= 2 ? .done : turnsMiss(f) },
-                  hint: twiceHint, titleHintFn: twiceTitle, turnsHint: twiceHint),
+                  hint: twiceHint, titleHintFn: twiceTitle, turnsHint: twiceHint,
+                  hand: { _ in Hand(goalText: { _ in "Roll a full turn over the row and land clean" }, checkFn: { _, f, _ in handTurn(f) ?? Result.done }) }),
         Objective(id: "stick-wall", course: "wall", tier: nil, goalText: { _ in "Stick it: score 84+" },
                   checkFn: { c, f, _ in c.total >= 84 && landed(f) ? .done : .missed("\(r1(c.total)), need 84") }, hint: nil, titleHintFn: nil),
         Objective(id: "ninety-show", course: "show", tier: nil, goalText: { _ in "Score 90 or more" },
@@ -97,7 +114,12 @@ public enum Daily {
                   checkFn: { _, f, u in !cleanLineup(f) ? .missed("no clean landing yet") : !(f.n("rotations") >= 2) ? turnsMiss(f)
                       : f.n("padMiss") <= LINEUP_MARK ? .done : .missed("\(u.one(.len, f.n("padMiss"), 1)) off the mark", fix: true) },
                   hint: aimHint, titleHintFn: { p, whole in !p.thumbOn ? "" : whole ? "Slide up on the run-up, then onto the amber dot" : "Slide up on the run-up" },
-                  turnsHint: twiceHint),
+                  turnsHint: twiceHint,
+                  hand: { p in
+                      let m = handMark(p)
+                      return Hand(goalText: { "Roll a full turn and land within \($0.one(.len, m)) of the mark" },
+                                  checkFn: { _, f, u in handTurn(f) ?? (f.n("padMiss") <= m ? Result.done : Result.missed("\(u.one(.len, f.n("padMiss"), 1)) off the mark", fix: true)) })
+                  }),
         Objective(id: "scratch-show", course: "show", tier: nil, goalText: { _ in "Clear the row without a scratch" },
                   checkFn: { _, f, _ in
                       // (f.damagePct ?? 0) === 0
@@ -175,10 +197,11 @@ public enum Daily {
         return Int(i)
     }
     public static func objectiveFor(_ ms: Double) -> Objective { OBJECTIVES[objectiveIndex(dayNumber(ms))] }
-    /// Judge a run against an objective. Only a run on the objective's course counts.
-    public static func evaluate(_ obj: Objective, _ card: ScoreCard, course: String, units: Units) -> Result? {
+    /// Judge a run against an objective. Only a run on the objective's course counts. `pilot`: how it was flown (0218: picks
+    /// the objective's form; nil is the one thumb's).
+    public static func evaluate(_ obj: Objective, _ card: ScoreCard, course: String, units: Units, pilot: Pilot? = nil) -> Result? {
         guard course == obj.course else { return nil }
-        return obj.checkFn(card, Facts(card), units)
+        return (obj.handFor(pilot)?.checkFn ?? obj.checkFn)(card, Facts(card), units)
     }
 
     // --- the streak ------------------------------------------------------------------------------------

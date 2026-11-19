@@ -15,7 +15,7 @@ import ColdGasPhysics
 /// once and kept prepared (an unprepared one is late and costs the touch thread). Settings' Haptics: Off silences these
 /// too, Subtle halves them (docs/NATIVE.md §6). They only echo what the press already shows.
 enum PressHaptics {
-    enum Feel { case go, brake, lift, release, land, boost, valveLift, valveRear, valveYaw, chord, stickEdge, stickRim }
+    enum Feel { case go, brake, lift, release, land, boost, valveLift, valveRear, valveYaw, chord, stickEdge, stickRim, handbrake }
     private static let soft = UIImpactFeedbackGenerator(style: .soft), rigid = UIImpactFeedbackGenerator(style: .rigid)
     private static let medium = UIImpactFeedbackGenerator(style: .medium), heavy = UIImpactFeedbackGenerator(style: .heavy)
     private static let light = UIImpactFeedbackGenerator(style: .light), tick = UISelectionFeedbackGenerator()
@@ -43,6 +43,7 @@ enum PressHaptics {
         case .chord: (g, i) = (heavy, 0.7)
         case .stickEdge: slide(); return
         case .stickRim: (g, i) = (light, 0.45)
+        case .handbrake: (g, i) = (heavy, 0.9)   // the lever's ratchet, up (0281)
         }
         g.impactOccurred(intensity: i * k)
         g.prepare()
