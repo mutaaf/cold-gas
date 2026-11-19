@@ -1,0 +1,182 @@
+{
+ "iphone13": {
+  "fits": [
+   "2"
+  ],
+  "cut": 0,
+  "maxLines": 3,
+  "jumpOff": 0,
+  "cardOff": 0,
+  "underBar": 0,
+  "goals": 12,
+  "fontPx": 14,
+  "worst": {
+   "scheme": "thumb",
+   "d": 0,
+   "fit": "2",
+   "goal": "Daily · The ShowClear the roofs by under 4.9 ft and land clean",
+   "sw": 186,
+   "cw": 186,
+   "cut": false,
+   "lines": 3,
+   "fontPx": 14,
+   "jumpBottom": 306,
+   "vh": 664,
+   "jumpIn": true,
+   "cardIn": true,
+   "underBar": false
+  },
+  "errors": [],
+  "first": {
+   "firstTitle": true,
+   "fit": "",
+   "goal": "",
+   "sw": 0,
+   "cw": 0,
+   "cut": false,
+   "lines": 0,
+   "fontPx": 15,
+   "jumpBottom": 459,
+   "vh": 664,
+   "jumpIn": true,
+   "cardIn": true,
+   "underBar": false,
+   "errors": []
+  }
+ },
+ "393x659": {
+  "fits": [
+   "2"
+  ],
+  "cut": 0,
+  "maxLines": 3,
+  "jumpOff": 0,
+  "cardOff": 0,
+  "underBar": 0,
+  "goals": 12,
+  "fontPx": 14,
+  "worst": {
+   "scheme": "thumb",
+   "d": 0,
+   "fit": "2",
+   "goal": "Daily · The ShowClear the roofs by under 4.9 ft and land clean",
+   "sw": 189,
+   "cw": 189,
+   "cut": false,
+   "lines": 3,
+   "fontPx": 14,
+   "jumpBottom": 301,
+   "vh": 659,
+   "jumpIn": true,
+   "cardIn": true,
+   "underBar": false
+  },
+  "errors": [],
+  "first": {
+   "firstTitle": true,
+   "fit": "",
+   "goal": "",
+   "sw": 0,
+   "cw": 0,
+   "cut": false,
+   "lines": 0,
+   "fontPx": 15,
+   "jumpBottom": 455,
+   "vh": 659,
+   "jumpIn": true,
+   "cardIn": true,
+   "underBar": false,
+   "errors": []
+  }
+ },
+ "430x932": {
+  "fits": [
+   "1"
+  ],
+  "cut": 0,
+  "maxLines": 3,
+  "jumpOff": 0,
+  "cardOff": 0,
+  "underBar": 0,
+  "goals": 12,
+  "fontPx": 14,
+  "worst": {
+   "scheme": "thumb",
+   "d": 0,
+   "fit": "1",
+   "goal": "Daily · The ShowClear the roofs by under 4.9 ft and land clean",
+   "sw": 222,
+   "cw": 222,
+   "cut": false,
+   "lines": 3,
+   "fontPx": 14,
+   "jumpBottom": 424,
+   "vh": 932,
+   "jumpIn": true,
+   "cardIn": true,
+   "underBar": false
+  },
+  "errors": [],
+  "first": {
+   "firstTitle": true,
+   "fit": "",
+   "goal": "",
+   "sw": 0,
+   "cw": 0,
+   "cut": false,
+   "lines": 0,
+   "fontPx": 15,
+   "jumpBottom": 577,
+   "vh": 932,
+   "jumpIn": true,
+   "cardIn": true,
+   "underBar": false,
+   "errors": []
+  }
+ },
+ "390x844": {
+  "fits": [
+   ""
+  ],
+  "cut": 0,
+  "maxLines": 3,
+  "jumpOff": 0,
+  "cardOff": 0,
+  "underBar": 0,
+  "goals": 12,
+  "fontPx": 15,
+  "worst": {
+   "scheme": "thumb",
+   "d": 0,
+   "fit": "",
+   "goal": "Daily · The ShowClear the roofs by under 4.9 ft and land clean",
+   "sw": 165,
+   "cw": 165,
+   "cut": false,
+   "lines": 3,
+   "fontPx": 15,
+   "jumpBottom": 381,
+   "vh": 844,
+   "jumpIn": true,
+   "cardIn": true,
+   "underBar": false
+  },
+  "errors": [],
+  "first": {
+   "firstTitle": true,
+   "fit": "",
+   "goal": "",
+   "sw": 0,
+   "cw": 0,
+   "cut": false,
+   "lines": 0,
+   "fontPx": 15,
+   "jumpBottom": 623,
+   "vh": 844,
+   "jumpIn": true,
+   "cardIn": true,
+   "underBar": false,
+   "errors": []
+  }
+ }
+}

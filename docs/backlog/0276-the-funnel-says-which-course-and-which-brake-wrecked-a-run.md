@@ -21,6 +21,14 @@ lands 95–100 %, so the gap is the most important number in the game right now.
 
 Every agent is told to steer by this funnel (control.json focus), and today it can't tell the Builder which fix to ship.
 
+## Critic sharpening (2026-11-19 15:30)
+The 11-19 `human` row so far (2 sessions, 6 runs) has **1 landed, 3 wrecked, and all 3 wrecks are `wreck-brake`**. All
+of them were on keys (`ctl-keys` 4, no pad). All-time `human`, the brake is now **9 of 16 wrecks**. This is the first
+row since 0275 and 0218 went live (`index-Dw2sHzeT.js`). Meanwhile `keys-literal` lands a scripted keys population
+**36/36** on every course and release timing. So the wrecks come from something the gates don't model, and only this
+split can say which of `no-brake`, `late-brake` and `late-land` it is, and on which course. Ship this before any more
+keyboard tuning. The number it unlocks is keys landed / decided (4/13 on 11-18, 1/4 so far on 11-19).
+
 ## What
 - `src/obs/signature.js`: `WRECK_OF` keeps the coach's own id for the three brake findings: `wreck-no-brake`,
   `wreck-late-brake` and `wreck-late-land` (new PLAY_EVENTS). `wreck-brake` stays counted beside them for one
