@@ -59,7 +59,7 @@ final class FlightDeckView: ControlSurface {
         var button: DeckButton?
         var geo = DeckSlot(c: LPoint(x: 0, y: 0), d: 0)
     }
-    private enum Hold: Equatable { case stick, key(DeckKey), armed(DeckKey), look, latch }
+    private enum Hold: Equatable { case stick, key(DeckKey), armed(DeckKey), look, latch, hand }
 
     private var deck = Deck.layout(form: .phone, width: 1, height: 1)
     private var show = DeckShow()
@@ -78,12 +78,20 @@ final class FlightDeckView: ControlSurface {
     private var latched = Set<String>(), pulsed = Set<DeckKey>()
     /// Free Drive: a finger on empty glass looks round (DriveLook).
     var look = false
+    /// Free Drive's handbrake (0281): HAND, a fourth disc on the fan past BRAKE, shown on the ground in a drive only. Held.
+    private let handDisc = CAShapeLayer(), handText: CATextLayer
+    private var handC = CGPoint.zero, handR: CGFloat = 0, handHeld = false
+    private var handShown: Bool { look && show.buttons.contains { $0?.key == .brake } }
     private var lookAt = CGPoint.zero
     private var prefs: HudPrefs { HudStore.shared.prefs }
 
     override init(frame: CGRect) {
         stickText = CATextLayer()
+        handText = CATextLayer()
         super.init(frame: frame)
+        handDisc.actions = FlightDeckView.still; handDisc.opacity = 0; handDisc.lineWidth = 1
+        handText.contentsScale = UIScreen.main.scale; handText.alignmentMode = .center; handText.actions = FlightDeckView.still; handText.opacity = 0
+        layer.addSublayer(handDisc); layer.addSublayer(handText)
         chrome.install(in: layer)
         fanArc.fillColor = nil; fanArc.strokeColor = ControlSurface.ink.withAlphaComponent(0.13).cgColor
         fanArc.lineWidth = 1; fanArc.lineDashPattern = [1, 5]; fanArc.lineCap = .round
@@ -142,6 +150,14 @@ final class FlightDeckView: ControlSurface {
                 // The label's size is paint's alone (it steps a long word down). Setting it here too made every pass
                 // change it twice, and a CATextLayer's fontSize change asks for layout: RELEASE hung the app at the ledge.
             }
+            // HAND: past BRAKE (slot B) on the line from GO through it, a little smaller than B, kept on the glass.
+            let a = deck.slots[0], b = deck.slots[1]
+            var dx = b.c.x - a.c.x, dy = b.c.y - a.c.y
+            let l = max(1, hypot(dx, dy)); dx /= l; dy /= l
+            handR = b.r * 0.86
+            let gap = b.r + handR + 12
+            handC = CGPoint(x: min(bounds.width - handR - 4, max(handR + 4, b.c.x + dx * gap)), y: min(bounds.height - handR - 4, max(handR + 4, b.c.y + dy * gap)))
+            handDisc.path = circle(handC, handR)
         }
         paint(animated: false)
         fade()
@@ -191,7 +207,7 @@ final class FlightDeckView: ControlSurface {
         chrome.strip(names: s.stripNames, at: s.strip)
         paint(animated: old.buttons != s.buttons || old.stickLabel != s.stickLabel)
         if old.hint != s.hint || old.buttons != s.buttons { ghost() }
-        if old.buttons != s.buttons { accessibility() }
+        if old.buttons != s.buttons { accessibility(); sync() }   // HAND lets go when the car leaves the ground
     }
 
     /// Pressed is the inverse, at once. A slot arriving or leaving eases (scale and fade, or fade alone under Reduce Motion).
@@ -229,6 +245,7 @@ final class FlightDeckView: ControlSurface {
                 appear(s, visible: vis, animated: animated, alpha: Float(deck.alpha(Self.slotControls[i])))
             }
         }
+        paintHand()
         let stickOn = show.stickLabel != nil
         instantly {
             ring.fillColor = heldStick ? ControlSurface.ink.withAlphaComponent(0.12).cgColor : ControlSurface.glass
@@ -243,6 +260,21 @@ final class FlightDeckView: ControlSurface {
             CATransaction.begin(); CATransaction.setAnimationDuration(animated ? 0.18 : 0)
             for l in stickLayers { l.opacity = stickA }
             CATransaction.commit()
+        }
+    }
+    private func paintHand() {
+        let vis = handShown, on = handHeld && vis
+        instantly {
+            let ink = ControlSurface.ink
+            handDisc.fillColor = on ? ink.cgColor : ControlSurface.glass
+            handDisc.strokeColor = on ? UIColor.clear.cgColor : ink.withAlphaComponent(0.24).cgColor
+            let fs: CGFloat = min(deck.form == .phone ? 12 : 13, handR * 2 * 1.25 / 4)
+            if handText.fontSize != fs { handText.fontSize = fs }
+            let font = UIFont(name: "Geist-Medium", size: fs) ?? .systemFont(ofSize: fs, weight: .medium)
+            handText.string = NSAttributedString(string: "HAND", attributes: [.font: font, .foregroundColor: on ? ControlSurface.bg : ink, .kern: 1.4])
+            place(handText, at: handC, width: handR * 2)
+            let a: Float = vis ? Float(deck.alpha(.slotB)) : 0
+            handDisc.opacity = a; handText.opacity = a
         }
     }
     private func appear(_ s: Slot, visible: Bool, animated: Bool, alpha: Float = 1) {
@@ -301,6 +333,7 @@ final class FlightDeckView: ControlSurface {
         var els: [UIAccessibilityElement] = []
         if show.stickLabel != nil { els.append(element(show.stickLabel == "STEER" ? "Steering stick" : "Attitude stick, roll and pitch", deck.stick.frame.cgRect)) }
         for s in slots { if let b = s.button { els.append(element(b.label.capitalized, s.geo.frame.cgRect)) } }
+        if handShown { els.append(element("Handbrake", CGRect(x: handC.x - handR, y: handC.y - handR, width: handR * 2, height: handR * 2), hint: "Hold to lock the rear wheels.")) }
         accessibilityElements = els
     }
 
@@ -321,7 +354,8 @@ final class FlightDeckView: ControlSurface {
         if deck.stickMode == .fixed { return hypot(p.x - deck.stick.home.x, p.y - deck.stick.home.y) <= deck.stick.ring + 16 }
         return deck.stick.zone.cgRect.contains(p)
     }
-    override func point(inside p: CGPoint, with e: UIEvent?) -> Bool { slotAt(p) != nil || inZone(p) || (look && bounds.contains(p)) }
+    private func onHand(_ p: CGPoint) -> Bool { handShown && hypot(p.x - handC.x, p.y - handC.y) <= handR + 10 }
+    override func point(inside p: CGPoint, with e: UIEvent?) -> Bool { onHand(p) || slotAt(p) != nil || inZone(p) || (look && bounds.contains(p)) }
     /// The keys a latch holds (BRAKE or BOOST tapped on), by the label still on the glass.
     private var latchedKeys: Set<DeckKey> {
         var k = Set<DeckKey>()
@@ -357,6 +391,13 @@ final class FlightDeckView: ControlSurface {
     }
     /// Presses and releases what changed. Two fingers on one control hold it until both have left.
     private func sync(slid: Bool = false) {
+        let hand = holds.values.contains(.hand) && handShown
+        if hand != handHeld {
+            handHeld = hand
+            Game.shared.controls.handbrake = hand
+            if hand { PressHaptics.feel(.handbrake) }
+            paintHand()
+        }
         var now = pulsed.union(latchedKeys)
         for h in holds.values { if case let .key(k) = h { now.insert(k) } }
         guard now != down else { paint(animated: false); return }
@@ -387,7 +428,9 @@ final class FlightDeckView: ControlSurface {
         InputLag.note(e)
         for t in ts {
             let p = t.location(in: self)
-            if let i = slotAt(p), let b = slots[i].button {
+            if onHand(p) {
+                holds[ObjectIdentifier(t)] = .hand
+            } else if let i = slotAt(p), let b = slots[i].button {
                 if toggles(b) {
                     holds[ObjectIdentifier(t)] = .latch
                     if latched.remove(b.label) == nil { latched.insert(b.label) } else { PressHaptics.slide() }

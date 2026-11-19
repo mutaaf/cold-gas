@@ -18,6 +18,7 @@ struct WreckClubView: View {
                 .padding(.horizontal, 20).padding(.vertical, 12)
             }
         }
+        .onAppear { PerfCenter.shared.note(.club) }   // 0300: a flag in the session's feature use
     }
     private var rank: some View {
         VStack(alignment: .leading, spacing: 8) {

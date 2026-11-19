@@ -25,10 +25,11 @@ final class SkidMarks {
     }
 
     /// Wheel `i` touches the ground at `p` (world metres, on the surface), its axle's lateral direction `side` (unit, in
-    /// the ground plane), marking with strength `s` (0…1). Below 0.05 the strip ends.
-    func mark(_ i: Int, at p: SIMD3<Double>, side: SIMD3<Double>, width: Double, strength s: Float, origin: SIMD3<Double>) {
+    /// the ground plane), marking with strength `s` (0…1). Below 0.05 the strip ends. `up`: the ground's normal (a mark on
+    /// the Wall's curl stands off the steel, not off the floor; 0281).
+    func mark(_ i: Int, at p: SIMD3<Double>, side: SIMD3<Double>, width: Double, strength s: Float, origin: SIMD3<Double>, up: SIMD3<Double> = SIMD3(0, 1, 0)) {
         guard s > 0.05 else { last[i] = nil; return }
-        let h = side * (width / 2), lift = SIMD3<Double>(0, 0.02, 0)
+        let h = side * (width / 2), lift = up * 0.02
         let l = p - h + lift, r = p + h + lift
         guard let prev = last[i] else { last[i] = (l, r, s); return }
         // A new quad every 0.35 m of travel (short enough to follow a slide's curve).

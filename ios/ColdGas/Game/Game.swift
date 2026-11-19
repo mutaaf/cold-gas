@@ -23,7 +23,12 @@ struct DriveHud: Equatable {
     var speed = 0.0, km = 0.0, heading = 0.0
     var ready = false, line = ""
     var air = false, fan = false, cam = "chase", cue = ""
+    /// A roam's challenges (0274), in the set's order: what to try, done or not, the best so far.
+    var challenges: [RoamChallengeRow] = []
+    /// A challenge has been done this roam: Fly gets the eye.
+    var flyLit = false
 }
+struct RoamChallengeRow: Equatable { let id: String; let text: String; let done: Bool; let best: String }
 
 /// What the HUD shows, refreshed a few times a second (SwiftUI never sees the 240 Hz state).
 struct HudState: Equatable {
@@ -68,6 +73,8 @@ final class Game: ObservableObject {
     private(set) var freeDrive: FreeDrive?
     /// The scored course a roam is on (nil in plain Free Drive): its HUD offers a scored run there.
     @Published private(set) var roamedFrom: String?
+    /// A challenge done (or bettered) on this roam (0274).
+    private var roamDidSomething = false
     @Published private(set) var driveHud = DriveHud()
     private var driveSettled = false, driveHudT = 0.0, driveLogT = 0.0, driveClock = 0.0, driveImpacts = 0, driveDropped = 0
     let controls = Controls()
@@ -79,6 +86,7 @@ final class Game: ObservableObject {
     private(set) var activeDrill: String?
     private var titleTracks: [String: Replay] = [:]
     private var haptics = HapticScore(course: "show"), seen = 0
+    private let driveFeel = DriveFeel()
     /// The Wreck score's eyes on this run (0237, 0239), and the combo call on the HUD (cleared after a beat).
     private var wreck = WreckTracker()
     @Published private(set) var combo: ComboCall?
@@ -246,6 +254,7 @@ final class Game: ObservableObject {
         countdown = guided ? 1 : 3; countT = 0; rollTicks = 0
         replaying = false
         Hardware.shared.startRun()
+        Signs.begin(.run, course); PerfCenter.shared.noteRun()   // 0300: start → result (or home)
         screen = .run
         UISelectionFeedbackGenerator().selectionChanged()
     }
@@ -262,6 +271,7 @@ final class Game: ObservableObject {
     }
     func home() {
         if screen == .run { Usage.shared.runOver() }
+        Signs.end(.run, "home"); Signs.end(.replay)   // 0300
         rival = nil
         // After the first landing the title is the normal one, with the reference loop behind it.
         if firstRun && !SaveStore.shared.data.counters.firstRun { firstRun = false; still = nil }
@@ -279,11 +289,13 @@ final class Game: ObservableObject {
     /// `roam`: a scored course's id ("show", "wall", "lineup"): its set at the centre, the car on its mark (Roam, 0220).
     /// `-roam <course>` opens one straight away.
     func startDrive(roam: String? = nil) {
+        roamDidSomething = false
         clearEncore()
         live = nil; controls.live = nil; track = nil; result = nil; paused = false; replaying = false
         let c = roam.map { driveCourse(on: $0) } ?? DRIVE_COURSE
         let fd = FreeDrive(seed: Launch.value("-fd-seed") ?? FreeDrive.seedDefault, course: c, onMark: roam != nil)
         roamedFrom = roam
+        Signs.begin(roam == nil ? .drive : .roam, roam ?? "free"); PerfCenter.shared.note(roam == nil ? .drive : .roam); PerfCenter.shared.noteRun()   // 0300
         if let km = Launch.value("-fd-km").flatMap(Double.init), km > 0 {
             let a = 0.6   // a bearing out from the centre (radians from +z)
             fd.placeOnRoad(nearX: sin(a) * km * 1000, z: cos(a) * km * 1000)
@@ -299,6 +311,7 @@ final class Game: ObservableObject {
         controls.drive = fd.sampler
         if let c = Launch.value("-fd-cam"), let m = DriveCamera.Mode(rawValue: c) { fd.camera.mode = m }
         freeDrive = fd; driveSettled = false; driveImpacts = 0; driveDropped = 0
+        controls.handbrake = false; driveFeel.reset(fd.chassis)
         SoundFeed.shared.reset()
         stage?.load(course: c.id, track: fd.track)
         screen = .drive
@@ -310,6 +323,7 @@ final class Game: ObservableObject {
         freeDrive?.car.world.free()
         freeDrive = nil
         roamedFrom = nil
+        Signs.end(.roam, "home"); Signs.end(.drive, "home")   // 0300
         screen = .title
         showTitleLoop()
     }
@@ -321,6 +335,7 @@ final class Game: ObservableObject {
         freeDrive?.car.world.free()
         freeDrive = nil
         roamedFrom = nil
+        Signs.end(.roam, "fly")   // 0300
         if COURSES[c] != nil && course != c { screen = .title; course = c }
         play()
     }
@@ -328,6 +343,7 @@ final class Game: ObservableObject {
         guard let fd = freeDrive else { return }
         // The drive's renderer is built off the main thread on first use: hook it up once it's the one drawing.
         if let r = stage?.renderer, r.courseKey == fd.course.id, r.drive !== fd { r.drive = fd; fd.attach(device: r.device) }
+        fd.handbrake = controls.handbrake && !paused
         if !paused { fd.frame(dt: min(dt, 0.1)); driveClock += dt }
         stage?.renderer?.liveTime = fd.liveTime
         if paused { SoundFeed.shared.quiet(title: false) } else { SoundFeed.shared.drive(fd, dt: dt, grind: Double(stage?.renderer?.crash.grind ?? 0)) }
@@ -345,6 +361,12 @@ final class Game: ObservableObject {
             HapticPlayer.shared.play(HapticEvent(kind: e.kind == ImpactKind.CRUSH ? .crush : e.kind == ImpactKind.WHEEL ? .wheel : .hit, tick: 0, channel: 4,
                                                  intensity: 0.2 + 0.8 * k, sharpness: e.kind == ImpactKind.WHEEL ? 0.35 : 0.7))
         }
+        // A roam's challenges (0274): each one done (or bettered) is said, felt once, and lights Fly.
+        for e in fd.drainChallenges() {
+            roamDidSomething = true
+            fd.announce(RoamText.cue(e))
+            HapticPlayer.shared.play(HapticEvent(kind: .settle, tick: 0, channel: 4, intensity: e.first ? 0.8 : 0.5, sharpness: 0.5))
+        }
         if HudStore.shared.prefs.mapShown {
             let q = fd.car.quat
             DriveMap.shared.update(world: fd.world, x: fd.car.pos.x, z: fd.car.pos.z, fx: 2 * (q.x * q.z + q.w * q.y), fz: 1 - 2 * (q.x * q.x + q.y * q.y), dt: dt)
@@ -352,8 +374,11 @@ final class Game: ObservableObject {
         let jets = fd.car.throttles.reduce(0, +)
         // ABS cycling (0225) is a sharp buzz through the pedal: here, through the phone.
         let absK = fd.ownCar && fd.chassis.absActive ? 1.0 : 0.0
-        HapticPlayer.shared.apply(HapticContinuous(rumble: Float(min(0.6, fd.roughK * 0.4 + fd.slideK * 0.2 + absK * 0.3)), rumbleSharp: Float(0.3 + 0.45 * absK),
-                                                   hiss: Float(min(0.6, jets * 0.12)), hissSharp: 0.6, grind: Float(min(0.5, fd.slideK * 0.35))))
+        // Under it (0281): a locked wheel's judder, wheelspin's buzz, a slide's grain; ABS's pulses, the lever, a flat spot.
+        let feel = paused ? SkidFeel() : SkidFeel.read(fd.car)
+        HapticPlayer.shared.apply(feel.over(HapticContinuous(rumble: Float(min(0.6, fd.roughK * 0.4 + fd.slideK * 0.2 + absK * 0.3)), rumbleSharp: Float(0.3 + 0.45 * absK),
+                                                   hiss: Float(min(0.6, jets * 0.12)), hissSharp: 0.6, grind: Float(min(0.5, fd.slideK * 0.35)))))
+        if !paused && fd.ownCar { driveFeel.frame(fd, handbrake: fd.handbrake, dt: dt) }
         if !driveSettled, fd.view?.settled == true, (fd.view?.stats.tiles ?? 0) > 0 {
             driveSettled = true
             Ready.mark("drive")
@@ -381,6 +406,13 @@ final class Game: ObservableObject {
             h.fan = fd.fan
             h.cam = fd.camera.mode.rawValue
             h.cue = fd.cue.isEmpty || driveClock - fd.cueT > 1.6 ? "" : fd.cue
+            if let ch = fd.challenges {
+                h.challenges = ch.kinds.map { k in
+                    let st = ch.states[k] ?? SetChallengeState()
+                    return RoamChallengeRow(id: k.rawValue, text: RoamText.task(k), done: st.done, best: st.best.map { RoamText.value(k, $0) } ?? "")
+                }
+                h.flyLit = roamDidSomething
+            }
             h.line = fd.statsLine
             if h.cue.isEmpty && fd.dist < 400 && driveClock < 6 { h.cue = roamedFrom == nil ? "Roads leave the apron in every direction" : "Unscored · the set is yours, the roads go on" }
             if h != driveHud { driveHud = h }
@@ -446,7 +478,8 @@ final class Game: ObservableObject {
         haptics.drain { HapticPlayer.shared.play($0) }
         wreck.drainCalls { call($0) }
         if combo != nil { comboFor += dt; if comboFor > 1.6 { combo = nil } }
-        HapticPlayer.shared.apply(r.phase == .done ? HapticContinuous() : haptics.continuous)
+        // The tyres under the run's own feel (0281): a locked wheel, wheelspin, a slide, read from the car (nothing written).
+        HapticPlayer.shared.apply(r.phase == .done ? HapticContinuous() : SkidFeel.read(r.car).over(haptics.continuous))
         if !atRest && r.phase != .done && result == nil && l.script == nil {
             let state = wedge.step(r.car, dt: dt, eligible: r.phase == .drive)
             wedged = state != .clear
@@ -485,9 +518,10 @@ final class Game: ObservableObject {
         guard track != nil else { return }
         stage?.renderer?.cam.orbit = false
         replayT = 0; replaying = true
+        Signs.begin(.replay); PerfCenter.shared.note(.replay)   // 0300
         UISelectionFeedbackGenerator().selectionChanged()
     }
-    func stopWatching() { replaying = false; stage?.renderer?.cam.orbit = screen == .results; if let tr = track { stage?.renderer?.liveTime = Double(max(0, tr.ticks - 1)) / Replay.hz }; Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .quiet) }
+    func stopWatching() { Signs.end(.replay); replaying = false; stage?.renderer?.cam.orbit = screen == .results; if let tr = track { stage?.renderer?.liveTime = Double(max(0, tr.ticks - 1)) / Replay.hz }; Sound.shared.update(speed: 0, throttles: Game.quiet, grounded: true, phase: .quiet) }
     private func replayFrame(dt: Double, slowK: Double, _ tr: Replay) {
         replayT += min(dt, 0.1) * slowK
         let end = Double(tr.ticks) / Replay.hz
@@ -643,6 +677,7 @@ final class Game: ObservableObject {
             r.firstRun = firstRun && r.drill == nil
         }
         screen = .results
+        Signs.end(.run, result?.landed == true ? "landed" : "wrecked")   // 0300
         // A landing and a crash feel different (0249); the first landing has its own swell into the settle.
         if let r = result {
             HapticPlayer.shared.moment(r.firstLanding ? .firstLanding : r.landed ? .landed : .wrecked)

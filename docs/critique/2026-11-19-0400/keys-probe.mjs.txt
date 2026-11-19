@@ -1,0 +1,46 @@
+// 0275 + 0218 on production, desktop 1440×900 on keys. The clock is moved to 2026-11-22 (a roll-lineup day) before load.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, OUT, URL = 'https://mutaafaziz.com/coldgas/', DAY = '2026-11-22T12:00:00Z'] = process.argv;
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext({ viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/obs**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+await c.route('**/api/scores**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }) : r.continue());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+await c.addInitScript((day) => { const off = Date.parse(day) - Date.now(); const N = Date.now; Date.now = () => N() + off; const D = Date;
+  globalThis.Date = class extends D { constructor(...a) { if (a.length) super(...a); else super(N() + off); } static now() { return N() + off; } }; }, DAY);
+const p = await c.newPage();
+const errs = []; p.on('pageerror', (e) => errs.push(String(e).slice(0, 200)));
+const out = {};
+await p.goto(URL, { waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
+await p.keyboard.press('Shift');   // a key: the device is the keyboard
+await p.waitForTimeout(2500);
+out.title = await p.evaluate(() => ({ device: window.__coldgas.input.device(), daily: [...document.querySelectorAll('.xc-daily .xc-goal')].map((e) => e.innerText.replace(/\s+/g, ' ')).join(' | ').slice(0, 300) }));
+await p.screenshot({ path: `${OUT}/desk-keys-title-lineup-day.png` });
+// The Show, flown as the keyboard guide says and nothing more: ↑ held from Go to the end, Space at the ledge, no Shift.
+for (const [label, letGo] of [['held', false], ['letgo', true]]) {
+  await p.evaluate(() => { const g = window.__coldgas; g.setTier('assist'); g.setCourse?.('show'); g.startRun('jump'); g.skipCountdown(); });
+  await p.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 30000 });
+  await p.keyboard.down('ArrowUp');
+  const r = await p.evaluate(async (letGo) => {
+    const g = window.__coldgas, S = g.S, run = S.run, dt = 1 / 240, cues = [];
+    const key = (type, code) => dispatchEvent(new KeyboardEvent(type, { code, key: code, bubbles: true }));
+    const cue = () => { const t = document.querySelector('[data-cue]')?.textContent || ''; if (t && cues[cues.length - 1] !== t) cues.push(t); };
+    for (let i = 0; i < 240 * 40 && !(run.phase === 'ramp' && run.t.progress >= 0.97); i++) { g.liveStep(dt); if (i % 24 === 0) cue(); }
+    key('keydown', 'Space'); for (let i = 0; i < 36; i++) g.liveStep(dt); key('keyup', 'Space');
+    if (letGo) key('keyup', 'ArrowUp');
+    for (let i = 0; i < 240 * 30 && S.mode === 'live'; i++) { g.liveStep(dt); if (i % 24 === 0) cue(); }
+    if (letGo) key('keydown', 'ArrowUp');
+    return { course: g.stage.course, cues: cues.slice(0, 14), mode: S.mode };
+  }, letGo);
+  await p.keyboard.up('ArrowUp');
+  await p.waitForTimeout(8000);
+  r.card = await p.evaluate(() => { const k = window.__coldgas.S.card; return k && { total: k.total, verdict: k.verdict, sink: k.facts?.sink, clearance: k.facts?.clearance, padMiss: k.facts?.padMiss, crashed: k.facts?.crashed }; });
+  r.sheet = await p.evaluate(() => document.querySelector('[data-screen="results"]')?.innerText.replace(/\s+/g, ' ').slice(0, 400));
+  await p.screenshot({ path: `${OUT}/desk-keys-${label}-results.png` });
+  out[label] = r;
+}
+out.errs = errs;
+console.log(JSON.stringify(out, null, 1));
+await browser.close();

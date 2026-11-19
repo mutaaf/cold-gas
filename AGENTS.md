@@ -89,7 +89,9 @@ left in the tanks; on a wreck, combos that come from the physics.
   - The iPhone app reports to the same `POST /obs` (0293, ios/ColdGas/App/Report.swift + ColdGasClient/Obs.swift: os.Logger, a
     persisted queue of web-shaped signatures, MetricKit crashes/hangs/exits; build `ios-<version>-<build>`, `first: false` so it
     never becomes the digest's current build; behind Settings → Privacy). `npm run obs:report` splits web and iPhone, exit 2/1/0
-    as the alert (docs/AUDIT-2026-11-18.md).
+    as the alert (docs/AUDIT-2026-11-18.md). 0300 adds os_signpost intervals (ios/ColdGas/App/Instruments.swift) and, once a
+    session, a performance summary and feature-use flags in the same batch (ColdGasClient/Perf.swift: a histogram in `fr`
+    and rows framed `perf@<build>` / `use@<build>`, which obs:report reads into a table per build, never as faults).
   - `GET /coldgas/api/obs/digest[?build=]`: top signatures, `regressions` (new or ≥ 2× per session
     vs the previous build, and p95 frame-time regressions), frame percentiles, and `players` (per
     UTC day: `human`, `auto` and each funnel count; the Scout and the Critic read it). Cached 5 min.

@@ -99,6 +99,13 @@ final class ReportCenter: NSObject, MXMetricManagerSubscriber, @unchecked Sendab
         persist()
     }
 
+    /// A session's performance summary and feature use (0300, Instruments.swift): kept like a fault, sent with the next batch.
+    func add(session s: Obs.Session) {
+        guard on else { return }
+        lock.lock(); queue.add(session: s); dirty = true; lock.unlock()
+        persist()
+    }
+
     func clear() {
         lock.lock(); queue.clear(); dirty = true; lock.unlock()
         persist()
