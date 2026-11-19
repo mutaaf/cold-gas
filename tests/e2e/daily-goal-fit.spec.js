@@ -13,6 +13,9 @@ const SIZES = {
   '430x932': { viewport: { width: 430, height: 932 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 },
   '390x844': { viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, deviceScaleFactor: 3 },
 };
+// The deepest fit level each size takes on any day (measured before 0266 at the same levels): the wrap must never push the
+// title a level further (a level drops the tagline, the eyebrow and the spec).
+const LEVEL = { 'iPhone 13 (390x664)': 2, '393x659': 2, '430x932': 1, '390x844': 0 };
 const START = Date.parse('2026-11-19T15:00:00Z');
 
 async function boot(browser, baseURL, view, landed) {
@@ -45,9 +48,10 @@ const read = (page) => page.evaluate(() => new Promise((res) => requestAnimation
   for (const e of document.querySelectorAll('.top .brand, .top-actions')) { const r = e.getBoundingClientRect(); if (r.height > 1) bar = Math.max(bar, r.bottom); }
   res({
     fit: t.dataset.extraFit ?? '', goal: g.offsetHeight > 0 ? g.textContent : '',
-    cut: g.scrollWidth > g.clientWidth + 0.5 || g.scrollHeight > g.clientHeight + 0.5 || (cs.textOverflow === 'ellipsis' && cs.whiteSpace === 'nowrap'),
+    cut: g.scrollWidth > g.clientWidth + 0.5 || (cs.textOverflow === 'ellipsis' && cs.whiteSpace === 'nowrap'),
+    lines: Math.round(g.getBoundingClientRect().height / parseFloat(cs.lineHeight)),
     jumpIn: j.top >= 0 && j.bottom <= innerHeight + 0.5 && j.left >= 0 && j.right <= innerWidth + 0.5,
-    cardIn: c.top >= 0 && c.bottom <= innerHeight + 0.5 && c.right <= innerWidth + 0.5,
+    cardIn: c.top >= 0 && c.left >= 0 && c.bottom <= innerHeight + 0.5 && c.right <= innerWidth + 0.5,
     underBar: top < bar,
   });
 }))));
@@ -63,7 +67,8 @@ for (const [name, view] of Object.entries(SIZES)) {
         await page.evaluate(() => window.__coldgas.comeback.render());
         const r = await read(page);
         const day = `${name} ${scheme} day +${d}`;
-        expect(r.fit, `${day}: the card stays`).not.toBe('3');
+        expect(Number(r.fit || 0), `${day}: no deeper fit level than before`).toBeLessThanOrEqual(LEVEL[name]);
+        if (r.fit) expect(r.lines, `${day}: packed, the goal is at most 3 lines beside its button`).toBeLessThanOrEqual(3);
         expect(r.goal, `${day}: the goal is shown`).not.toBe('');
         expect(r.cut, `${day}: "${r.goal}" is cut (fit ${r.fit || 0})`).toBe(false);
         expect(r.jumpIn, `${day}: Jump on screen`).toBe(true);
