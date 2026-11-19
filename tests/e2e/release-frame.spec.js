@@ -10,15 +10,22 @@ import { releaseFrameTests, thumbFrameTests } from './frame-probe.js';
 // HUD's rects. Rendering never enters, so the canvas is drawn at a quarter of the pixels.
 test.describe.configure({ mode: 'parallel' });
 
+// The width bars below measure the drawn car's box, and were set (0118, 0128) on a hero drawn 4.84 m long: its
+// faceted body ran 0.47 m past the sim's tail (z −2.33 against −1.86). 0292's roadster is drawn on the sim's own
+// 4.33 m (4.41 m with the lamps and nozzles): the same flight and the same camera measure it 0.934× as wide (390×844:
+// 65.7 px against 70.3; 360×780: 53.9 against 57.8). The bars keep their meaning (the camera frames the car as large
+// as before) by taking that one factor: DRAWN × the old bar.
+const DRAWN = 0.934;
+
 const VIEWS = [
-  { name: 'desktop 1440×900', viewport: { width: 1440, height: 900 }, carW: 0.085 },
-  { name: 'desktop 1280×720', viewport: { width: 1280, height: 720 }, carW: 0.075 },
+  { name: 'desktop 1440×900', viewport: { width: 1440, height: 900 }, carW: 0.085 * DRAWN },
+  { name: 'desktop 1280×720', viewport: { width: 1280, height: 720 }, carW: 0.075 * DRAWN },
   { name: 'phone 390×844', viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, phone: true },
-  { name: 'phone 844×390', viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, phone: true, carW: 0.06 },
+  { name: 'phone 844×390', viewport: { width: 844, height: 390 }, hasTouch: true, isMobile: true, phone: true, carW: 0.06 * DRAWN },
   // The iPads (the critic's 2026-10-27 re-measure): 11" both ways (compact HUD), 13" both ways (the full set;
   // upright, its telemetry strip stands a fifth of the way down, under the mission block).
   { name: 'iPad 820×1180', viewport: { width: 820, height: 1180 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true },
-  { name: 'iPad 1180×820', viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true, carW: 0.075 },
+  { name: 'iPad 1180×820', viewport: { width: 1180, height: 820 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true, carW: 0.075 * DRAWN },
   { name: 'iPad 1024×1366', viewport: { width: 1024, height: 1366 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true },
   { name: 'iPad 1366×1024', viewport: { width: 1366, height: 1024 }, deviceScaleFactor: 2, hasTouch: true, isMobile: true, phone: true, grow: true },
 ];
@@ -34,9 +41,9 @@ releaseFrameTests(VIEWS);
 // The car's width over the carry is held at what it was before (0128's bar).
 const TOUCH = { hasTouch: true, isMobile: true, deviceScaleFactor: 2 };
 thumbFrameTests([
-  { name: 'phone 390×844', minCarW: 69, viewport: { width: 390, height: 844 }, ...TOUCH },
-  { name: 'phone 360×780', minCarW: 57, viewport: { width: 360, height: 780 }, ...TOUCH },
-  { name: 'phone 430×932', minCarW: 86, viewport: { width: 430, height: 932 }, ...TOUCH },
-  { name: 'phone 390×844, left hand', hand: 'left', minCarW: 69, viewport: { width: 390, height: 844 }, ...TOUCH },
+  { name: 'phone 390×844', minCarW: 69 * DRAWN, viewport: { width: 390, height: 844 }, ...TOUCH },
+  { name: 'phone 360×780', minCarW: 57 * DRAWN, viewport: { width: 360, height: 780 }, ...TOUCH },
+  { name: 'phone 430×932', minCarW: 86 * DRAWN, viewport: { width: 430, height: 932 }, ...TOUCH },
+  { name: 'phone 390×844, left hand', hand: 'left', minCarW: 69 * DRAWN, viewport: { width: 390, height: 844 }, ...TOUCH },
   { name: 'iPad 820×1180', viewport: { width: 820, height: 1180 }, ...TOUCH },
 ]);
