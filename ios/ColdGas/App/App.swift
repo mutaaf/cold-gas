@@ -7,6 +7,11 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         setvbuf(stdout, nil, _IOLBF, 0)   // the scripts read stdout through a pipe: one line at a time
         Ready.clear()
+        Signs.begin(.launch)        // 0300: ends at the first frame drawn (PerfCenter)
+        #if DEBUG
+        Inject.corruptPrefsIfAsked()   // 0301: the hardening tests' bad values, before the repair
+        #endif
+        Prefs.repair()              // 0301: a setting this build doesn't know goes back to its default before anything reads it
         Usage.launchedAt = Date()   // first_input's clock (0246)
         Theme.registerFonts()
         return true
@@ -27,6 +32,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if Launch.selftest { SelfTest.runInBackground() }
         _ = HapticPlayer.shared          // the engine is started at launch, never on the first event
         HapticDemo.startIfAsked()
+        #if DEBUG
+        Inject.startIfAsked()            // 0301: the hardening tests' faults on cue
+        Soak.startIfAsked()              // 0302: `-soak <minutes>`, scripts/soak.sh
+        #endif
         SoundLab.startIfAsked()
         Usage.shared.sessionStart()      // 0246: queued now, sent from the title
         Report.start()                   // 0293: MetricKit, and what the save found at launch
@@ -47,7 +56,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         if let u = URLContexts.first?.url { Game.shared.open(url: u) }
     }
-    func sceneDidEnterBackground(_ scene: UIScene) { Usage.shared.didEnterBackground() }
+    func sceneDidEnterBackground(_ scene: UIScene) {
+        PerfCenter.shared.cut(force: true)   // 0300: the session's summary joins the health queue (sent from a quiet screen)
+        Usage.shared.didEnterBackground()
+    }
     func sceneWillEnterForeground(_ scene: UIScene) { Usage.shared.willEnterForeground() }
 }
 

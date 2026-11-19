@@ -29,9 +29,11 @@ final class Records {
     }
     func note(_ r: RunResult) {
         lastRecord = SaveStore.shared.recordRun(course: r.course, tier: r.card.tier, total: r.card.total)
-        if let sc = r.card.scoreCard, let res = Daily.evaluate(Daily.objectiveFor(SaveStore.nowMs), sc, course: r.course, units: SaveStore.shared.units) {
+        // 0218: judged in the form of the way it was flown (by hand, the Lineup's days are a full turn's).
+        let pilot = Daily.Pilot(scheme: Game.shared.oneThumb ? .thumb : .classic, tier: r.card.tier)
+        if let sc = r.card.scoreCard, let res = Daily.evaluate(Daily.objectiveFor(SaveStore.nowMs), sc, course: r.course, units: SaveStore.shared.units, pilot: pilot) {
             r.dailyOK = res.ok
-            r.dailyLine = res.ok ? "Daily done" : Daily.missLine(Daily.objectiveFor(SaveStore.nowMs), res, Daily.Pilot(scheme: Game.shared.oneThumb ? .thumb : .classic, tier: r.card.tier))
+            r.dailyLine = res.ok ? "Daily done" : Daily.missLine(Daily.objectiveFor(SaveStore.nowMs), res, pilot)
             if res.ok { SaveStore.shared.completeDaily() }
         }
     }

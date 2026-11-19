@@ -13,6 +13,7 @@ final class Hardware {
     private(set) var inUse = false
     private let motion = CMMotionManager()
     private var tiltZero: Double?
+    private var tiltLandscape: Bool?
     private var startWas = false
 
     func note(touch: Bool) { if touch { inUse = false } }
@@ -60,7 +61,10 @@ final class Hardware {
         guard SaveStore.shared.settings.tiltOn, let a = motion.deviceMotion?.attitude else { return 0 }
         // Degrees to the side, as the screen is held (the web reads gamma upright, beta on its side).
         let landscape = UIApplication.shared.connectedScenes.compactMap { ($0 as? UIWindowScene)?.effectiveGeometry.interfaceOrientation }.first?.isLandscape ?? false
+        // 0301: turned mid-run, the axis the tilt reads changes: centre again on the new one instead of a jump in the steer.
+        if landscape != tiltLandscape { tiltLandscape = landscape; tiltZero = nil }
         let roll = (landscape ? a.pitch : a.roll) * 180 / .pi
+        guard roll.isFinite else { return 0 }   // 0301: a sensor's NaN is no steer, never a steer the log can't hold
         if tiltZero == nil { tiltZero = roll }
         return TouchControls.tiltSteer(roll: roll, zero: tiltZero ?? roll)
     }

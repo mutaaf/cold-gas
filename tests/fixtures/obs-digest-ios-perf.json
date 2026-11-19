@@ -1,0 +1,18 @@
+{
+  "generated": "2026-11-19T12:00:00.000Z",
+  "current": { "build": "feb7cc0", "first": "2026-11-19", "sessions": 40 },
+  "previous": { "build": "79e9ca7", "first": "2026-11-18", "sessions": 38 },
+  "top": [
+    { "key": "aaaaaaaaaaaa", "sig": "aaaaaaaaaaa1", "mod": "net", "kind": "fetch", "msg": "fetch /api/scores N", "fr": "post@index.js:1:2", "n": 3, "sessions": 3, "builds": ["feb7cc0"] },
+    { "key": "p1p1p1p1p1p1", "sig": "p1p1p1p1p1p1", "mod": "frame", "kind": "frame", "msg": "perf p50_9 p95_12 hitch_lt1 hz120 look_real scale_100 heat_fair mem_lt500 launch_lt2s", "fr": "perf@ios-1.2.0-202611181400", "n": 6, "sessions": 6, "builds": ["ios-1.2.0-202611181400"] },
+    { "key": "p2p2p2p2p2p2", "sig": "p2p2p2p2p2p2", "mod": "frame", "kind": "frame", "msg": "perf p50_9 p95_17 hitch_lt5 hz120 look_anime scale_90 heat_serious mem_lt800 launch_lt2s", "fr": "perf@ios-1.2.0-202611190900", "n": 4, "sessions": 4, "builds": ["ios-1.2.0-202611190900"] },
+    { "key": "p3p3p3p3p3p3", "sig": "p3p3p3p3p3p3", "mod": "frame", "kind": "frame", "msg": "perf p50_9 p95_20 hitch_lt20 hzmix look_pixel scale_80 heat_serious mem_lt800 launch_lt4s", "fr": "perf@ios-1.2.0-202611190900", "n": 3, "sessions": 3, "builds": ["ios-1.2.0-202611190900"] },
+    { "key": "u1u1u1u1u1u1", "sig": "u1u1u1u1u1u1", "mod": "app", "kind": "error", "msg": "use look_anime drift_off roam roamch", "fr": "use@ios-1.2.0-202611190900", "n": 3, "sessions": 3, "builds": ["ios-1.2.0-202611190900"] },
+    { "key": "u2u2u2u2u2u2", "sig": "u2u2u2u2u2u2", "mod": "app", "kind": "error", "msg": "use club replay", "fr": "use@ios-1.2.0-202611190900", "n": 2, "sessions": 2, "builds": ["ios-1.2.0-202611190900"] },
+    { "key": "u3u3u3u3u3u3", "sig": "u3u3u3u3u3u3", "mod": "app", "kind": "error", "msg": "use roam", "fr": "use@ios-1.2.0-202611181400", "n": 1, "sessions": 1, "builds": ["ios-1.2.0-202611181400"] },
+    { "key": "ffffffffffff", "sig": "fffffffffff1", "mod": "drive", "kind": "error", "msg": "drive car input not finite", "fr": "frame@FreeDrive.swift:200:0", "n": 2, "sessions": 1, "builds": ["ios-1.2.0-202611190900"] },
+    { "key": "gggggggggggg", "sig": "ggggggggggg1", "mod": "net", "kind": "fetch", "msg": "board timeout", "fr": "fetchBoard@Board.swift:70:0", "n": 1, "sessions": 1, "builds": ["ios-1.2.0-202611181400"] }
+  ],
+  "regressions": [],
+  "players": { "days": [], "total": {} }
+}
