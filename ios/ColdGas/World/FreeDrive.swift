@@ -51,6 +51,8 @@ struct DriveCarLook {
     var glow = SIMD4<Float>(repeating: 0)
     /// The brake pedal (0…1); the brake lamps follow it.
     var pedal: Float = 0
+    /// How wet the car is (0…1) and how high the water reached on it (0 sills … 1 roof), drying (0320: the paint's to show).
+    var wet: Float = 0, wetLine: Float = 0
 }
 
 final class FreeDrive: DriveScene {
@@ -100,6 +102,10 @@ final class FreeDrive: DriveScene {
     let course: Course
     var stage: String { stageOf(course.id) }
     let streamer: DriveStreamer
+    /// The water (0320, Water.swift): the sea, the lakes and the rivers (FreeWorld.water, 0310), their waves, maps, levels and
+    /// currents; `water` draws them as a world layer once a renderer is attached.
+    let sea: Sea
+    private(set) var water: WaterView?
     /// The drive's own chassis (0225, DriveCar.swift): soft springs, combined-slip tyres, the rear motors' vectoring, ABS,
     /// hot brakes. `-fd-classic` (Debug) drives the scored car's model instead, for comparison.
     let chassis = DriveModel()
@@ -135,6 +141,8 @@ final class FreeDrive: DriveScene {
     init(seed: String = FreeDrive.seedDefault, course: Course = DRIVE_COURSE, onMark: Bool = false) {
         world = FreeWorld(seed: seed)
         streamer = DriveStreamer(world: world)
+        let s = Sea(world: world)
+        sea = s
         self.course = course
         track = Replay(live: course.id)
         car = createVehicle(course: course)
@@ -146,6 +154,8 @@ final class FreeDrive: DriveScene {
         for s in looseSpots { addLoose(car.world, s.kind, x: s.x, y: s.y, z: s.z, yaw: s.yaw) }
         looseSpeed = Array(repeating: 0, count: looseSpots.count)
         chassis.stability(FreeDrive.stability)
+        chassis.water.level = { [unowned s] x, z in s.level(x, z) }
+        chassis.water.current = { [unowned s] x, z in s.current(x, z) }   // a river's (0310's flow)
         // A roam's small challenges (0274), kept on this device per set.
         if onMark {
             let st = stageOf(course.id)
@@ -165,6 +175,7 @@ final class FreeDrive: DriveScene {
         for v in [car.vel, car.angVel, car.angMom] { v.x = 0; v.y = 0; v.z = 0 }
         car.engineHeld = false
         chassis.settle()
+        chassis.water.tow(); water?.fx.breakWake()
         sampler.freshRun()
         airT = 0; flipT = 0; stuckT = 0; reverseHeld = 0
         camera.snap()
@@ -228,6 +239,13 @@ final class FreeDrive: DriveScene {
             view = WorldView(device: device, world: world)
             if view == nil { Report.error(.world, .error, "the drive's world view couldn't be built") }   // 0293
         }
+        if water == nil {
+            water = WaterView(device: device, sea: sea)
+            if water == nil { Report.error(.world, .error, "the drive's water couldn't be built") }
+        }
+        // The water is a layer of the world (0310, §9.4): it owns the sea, bakes its waves in the world's compute and draws
+        // after the sky.
+        if let v = view, let wv = water { v.add(wv) }
         view?.origin = origin   // the drive may have moved its origin before the view existed
     }
 
@@ -241,7 +259,7 @@ final class FreeDrive: DriveScene {
             acc += min(dt, 0.1)
             do {
                 while acc >= DT {
-                    let air = car.grounded == 0 && !car.hullContact
+                    let air = car.grounded == 0 && !car.hullContact && !chassis.water.floating
                     airT = air ? airT + DT : 0
                     let phase: Phase = airT > 0.25 ? .air : .drive
                     sampler.sample(phase, .assist, input, false, car)
@@ -275,6 +293,9 @@ final class FreeDrive: DriveScene {
                     #endif
                     // 0301: a control that isn't a number (a sensor's NaN, a pad's garbage) is let go before the engine sees it.
                     if guardInput(input) > 0 && !inputRepaired { inputRepaired = true; Report.error(.drive, .error, "drive input not finite: let go") }
+                    // The sea's clock, and the loose things in it (0320).
+                    sea.time += DT
+                    if sea.wet && !car.world.loose.isEmpty { floatLoose(car.world, level: { sea.level($0, $1) }) }
                     if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
                     // A state that isn't a number never reaches the engine again (0229): back on the road at once.
                     if !carFinite(car) { print("DRIVE car state not finite: reset"); Report.error(.drive, .trap, "drive car state not finite"); Report.recovered(.world, ok: true); reset(); acc = 0; break }
@@ -401,9 +422,12 @@ final class FreeDrive: DriveScene {
         flipT = upY < 0.25 && speed < 4 && (car.grounded > 0 || car.hullContact) ? flipT + dt : 0
         if flipT > 2 { reset(); return }
         let g = world.ground(car.pos.x, car.pos.z)
-        if car.pos.y < g.y - 30 || car.pos.y < SEA - 1 { reset(); return }
+        if car.pos.y < g.y - 30 { reset(); return }
+        // In the sea (0320): drowned, or adrift going nowhere, the car is towed out (a car afloat is left to float).
+        if waterWatch(dt) { reset(); announce("Towed out of the water"); return }
         let jets = car.throttles[0] + car.throttles[1] + car.throttles[2] + car.throttles[3]
-        stuckT = speed < 0.6 && car.grounded == 0 && jets < 0.4 ? stuckT + dt : 0
+        let afloat = chassis.water.floating || chassis.water.submerged > 0.05
+        stuckT = speed < 0.6 && car.grounded == 0 && jets < 0.4 && !afloat ? stuckT + dt : 0
         if stuckT > 3 { reset(); return }
         // Wedged (0229): against a trunk, a post or a wall, still, with a pedal pressed and going nowhere for 1.5 s (a
         // car resting against something with the pedals up is left alone; reversing out moves it, which clears this).
@@ -594,8 +618,9 @@ final class FreeDrive: DriveScene {
                 }
             }
         }
-        slideK = slide; roughK = rough
+        slideK = slide; roughK = max(rough, water?.fx.rumble ?? 0)
         view?.loose?.update(car.world.loose, origin: origin)
+        waterFrame(dt)
     }
 
     /// The floating origin of the drawing: 0 near the centre, else the car's position snapped to a kilometre, moved when
@@ -621,7 +646,8 @@ final class FreeDrive: DriveScene {
         // Iron starts to show a dull red in the dark at ≈ 400 °C and is orange by ≈ 750 °C.
         func g(_ t: Double) -> Float { let k = Float(max(0, min(1, (t - 380) / 420))); return k * k }
         let d = chassis.discT
-        return DriveCarLook(glow: ownCar ? SIMD4(g(d[0]), g(d[1]), g(d[2]), g(d[3])) : .zero, pedal: Float(pedal))
+        return DriveCarLook(glow: ownCar ? SIMD4(g(d[0]), g(d[1]), g(d[2]), g(d[3])) : .zero, pedal: Float(pedal),
+                            wet: Float(chassis.water.wet), wetLine: Float(chassis.water.wetLine))
     }
 
     func frameCamera(aspect: Float, dt: Double) -> (view: simd_float4x4, proj: simd_float4x4, eye: SIMD3<Float>) {
@@ -635,7 +661,10 @@ final class FreeDrive: DriveScene {
         let v = SIMD3(car.vel.x, car.vel.y, car.vel.z)
         let w = world, bodies = car.world.bodies
         // The parked row's roofs count as ground for the lens (0220): on the Show's mark the row is right behind the car.
-        camera.update(dt: dt, carPos: p, carQuat: q, vel: v, aspect: Double(aspect)) { x, z in max(w.ground(x, z).y, roofUnder(bodies, x, z) + 0.6) }
+        let s = sea
+        // (and the water's surface: the lens stays above the sea, 0320)
+        camera.update(dt: dt, carPos: p, carQuat: q, vel: v, aspect: Double(aspect)) { x, z in max(w.ground(x, z).y, roofUnder(bodies, x, z) + 0.6, s.level(x, z) + 0.3) }
+        sea.update(eye: camera.eye)
         let m = camera.matrices(origin: origin, aspect: aspect)
         view?.update(eye: camera.eye, viewProj: m.proj * m.view)
         lastViewProj = m.proj * m.view

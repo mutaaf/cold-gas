@@ -637,3 +637,54 @@ scuffs and mud into albedo, normal, roughness and AO there (every look takes it,
   baked depth in `land.a`); the old terrain-fragment edit isn't needed.
 - **Its levels** come from `FreeWorld.water(…)` / `GroundPoint.water` (the sea, the lakes, the rivers' sloping surface), and
   `WaterSample.flow` gives a river's current for buoyancy; `lakes(nearX:z:r:)` lists the lakes round the eye for its maps.
+## 10 · Water (0320)
+
+The sea, the lakes and the rivers the car drives into. Everything is unscored; the scored car (`Vehicle.swift`) is untouched.
+It sits on 0310's contract (§9): a `WorldLayer` that owns the sea, its levels from `FreeWorld.water`, its mark on the ground
+in `WorldWater.h`.
+
+- **The water, pure** (`ColdGasWorld/Water.swift`): every body's still level comes from `FreeWorld.water` (§9.2: the sea at
+  `SEA`, a lake's level, a river's surface sloping downstream with its `flow`). Two
+  cascades of Gerstner waves (`Waves.swell`, 256 m; `Waves.chop`, 32 m; 8 waves each) with whole-cycle wave vectors, so
+  each tiles its square and the GPU can bake one period; amplitudes scaled to rms 0.22 m and 0.045 m (ESTIMATE: a sea state
+  3), Σ q·k·A ≤ 0.8 (crests sharpen, never fold); calmed to nothing over the last 6 m of depth. `Waves.surface` inverts the
+  sideways Gerstner shift, so the height the car floats at is the drawn surface's (unit-tested to < 1 cm). The swell runs
+  on the open sea only; lakes and rivers carry the chop. `WaterMap` (per cell: the ground above its body's level, that
+  level, the open sea's share, a river's flow) and `Horizon` (the land's skyline from a point, 512 bearings) feed the GPU.
+- **The terrain** draws the bed under every water body because WaterView says `ownsSea` (§9.3: `tile(key, seabed:)`), and
+  calls WATER's `water_ground` (`World/WorldWater.h`, §9.5) for caustics on the bed (from the baked depth, `land.a`) and the
+  swash moving over the shore's wet band. No new bindings in the terrain pass; `Water.h` holds the shared noise and caustics.
+- **The surface** (`World/Water.swift` WaterView, a `WorldLayer` added in `FreeDrive.attach`; `World/Water.metal`):
+  - a compute pass bakes both cascades into two 256² `rgba16Float` texture arrays (displacement + Jacobian; slopes +
+    their second moment), mipmapped, at a capped rate per look (`Look.waterHz`: 60 Real, 24 Anime, 10 8-bit), on the
+    frame's command buffer before the shadow pass (the layer's `encode`, inside the world's compute);
+  - one draw for all the water to 40 km in `drawLate` (after the sky, the world's bindings set; its own at buffers 2–3 and
+    textures 0–2, 15–17): a polar grid round the camera (112 rings × 96 segments, procedural from the vertex id), each
+    vertex at its body's level, displaced near, normal-mapped far, calmed toward the shore by three water maps (1 km at
+    4 m, 8 km at 32 m, 41 km at 320 m, `rgba16Float`: depth, level against the map's reference, open sea; `Sea`, built on
+    a utility queue only when the eye has moved 256 m / 2 km / 8 km, uploaded only on a change). The far map knows the sea
+    alone; lakes come in on the 8 km map and rivers (5–12 m wide) on the 1 km one. A far triangle that spans two bodies
+    is drawn only where it's at its own body's level;
+  - shading by look (Real: Fresnel, the physical sky (0310's sky-view LUT, the hour's sun) and the mirrored skyline, GGX
+    glints from the key light and the headlamps with the slopes' spread as roughness, Beer–Lambert to the bed, whitecaps,
+    shore foam; Anime: cel bands, inked foam, star glints; 8-bit: banded palette water, stepped sparkle tiles), all seen
+    through the world's own air (`WorldShading.h` `world_vsky` per vertex, `world_air`), so the far water closes into the
+    same haze as the land in every look;
+  - the wake (256 points, spreading and fading over ≈ 8 s) and spray (2,048 drops, gravity and drag, gone in the water),
+    each one instanced draw. Nothing is baked or drawn with no water on the maps.
+- **The car** (`ColdGasPhysics/Buoyancy.swift`, `wade` once a tick from `driveStep`): buoyancy over 3 × 4 columns of the
+  body's box (43 % of it displaces water while sealed: ≈ 3.9 m³), the cabin flooding over ≈ 50 s once a third of the body
+  is under (and draining in ≈ 8 s), quadratic drag on the wet faces and the tyres, wet grip (×0.8) and aquaplaning in a
+  film from 55 % of the NASA hydroplaning speed, the drive unit tripping past 0.5 m of wading for 1.5 s and back 3 s after
+  it's clear, wet and the waterline drying with time and speed. `DriveModel.water` (`Wading`): `level` (FreeDrive sets it
+  to `Sea.level`: the sea's swell, a lake's still level, a river's slope), `current` (`Sea.current`: a river's `flow` ×
+  1.2 m/s, ESTIMATE; the drag works on the car's speed through the water, so a car afloat drifts downstream), `film`
+  (rain's, 0 for now), and what it reports. `floatLoose` floats the loose things by
+  `LooseKind.floatVolume`.
+- **The drive** (`FreeDrive`, the `waterFrame` / `waterWatch` extension in Water.swift): splash, bow sheets, wake, rooster
+  tails, drips, the splash sound and a soft haptic thud, the wading rumble, the tyres' wet hiss (SoundFeed), cues, the lens
+  above the water, and the watchdog's water rules (drowned 6 s, adrift 25 s, 40 m down: towed out).
+- **Debug:** `-fd-skip water`; signposts water-waves, water-maps, water-draw; the bench's passes line has `water` (the bake).
+
+On 0310 (the train that landed both): 0320's own edits to `Build.swift` (the seabed) and `World.metal` (`water_ground`) and its
+`DriveScene.encode` gave way to §9's seabed, hook and layer; the renderer's `world` pass carries the waves' bake.

@@ -75,7 +75,7 @@ final class SoundFeed {
             surf = floor ? (1, 0, 0, 0, 1) : surfaceMix(g.surface)
             if was < 0.5 && surf.wet > 0.5 && c.speed > 4 { Sound.shared.splash(min(1, c.speed / 20), seed: nextSeed()) }
         }
-        c.paved = surf.paved; c.gravel = surf.gravel; c.grass = surf.grass; c.wet = surf.wet; c.concrete = surf.concrete
+        c.paved = surf.paved; c.gravel = surf.gravel; c.grass = surf.grass; c.wet = max(surf.wet, fd.tyresWet); c.concrete = surf.concrete   // 0320: the sea's
         c.deck = car.onWall ? 1 : 0
         lastOrigin = fd.origin; onDeck = car.onWall
         // A landing out in the world (the scored runs have their own touchdown).
