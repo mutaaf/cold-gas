@@ -61,6 +61,23 @@ enum Net {
         }
     }
 
+    /// 0293: an idempotent GET, tried twice more on a transport error or a 5xx (never on a 4xx: asking again won't change
+    /// it), with backoff. Each try has its own deadline; cancelling the Task ends it.
+    static let GET_WAITS_MS: [Double] = [600, 1800]
+    static func getRetry(_ req: URLRequest, ms: Double, session: URLSession = Net.session, waits: [Double] = GET_WAITS_MS) async throws -> (Data, HTTPURLResponse) {
+        var i = 0
+        while true {
+            do {
+                let out = try await fetch(req, ms: ms, session: session)
+                if out.1.statusCode < 500 || i >= waits.count || Task.isCancelled { return out }
+            } catch {
+                if i >= waits.count || Task.isCancelled || error is CancellationError { throw error }
+            }
+            try await sleep(ms: waits[i])
+            i += 1
+        }
+    }
+
     /// A POST with a JSON body, as the web's fetch makes it (the Worker checks neither Origin nor a token).
     static func jsonPost(_ url: URL, body: Data, timeout: TimeInterval, headers: [String: String] = [:]) -> URLRequest {
         var r = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: timeout)

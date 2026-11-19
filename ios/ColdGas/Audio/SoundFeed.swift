@@ -168,17 +168,19 @@ final class SoundFeed {
         c.motorHz = abs(w2) / (2 * .pi) * SoundFeed.ratio
         c.split = abs(w2) > 1 ? min(1.05, max(0.95, abs(w3) / abs(w2))) : 1
         c.grounded = Double(car.grounded) / 4
-        // Squeal from the tyres' slip past their peaks (the friction circle the chassis works on).
-        var slip = 0.0, long = 0.0, lat = 0.0
+        // Squeal from the tyres' slip past their peaks (the friction circle the chassis works on), in three voices (0281):
+        // across (a cornering howl), a locked wheel (a lower, rougher scrub) and a spinning one (a chirp).
+        var slip = 0.0, lock = 0.0, wheelspin = 0.0, lat = 0.0
         for i in 0..<4 {
             let w = car.wheels[i]
             guard w.contact else { continue }
             let ls = max(0, (abs(w.slip) - 0.1) / 0.25), as_ = max(0, (abs(w.slipAngle) - 0.07) / 0.16)
             let gate = c.speed > 2.5 || abs(w.omega) > 8 ? 1.0 : c.speed / 2.5
             slip = max(slip, min(1, max(ls, as_)) * gate)
-            long = max(long, ls); lat = max(lat, as_)
+            if w.slip < 0 { lock = max(lock, ls) } else { wheelspin = max(wheelspin, ls) }
+            lat = max(lat, as_)
         }
-        c.slip = slip; c.slipLong = long > lat ? 1 : 0
+        c.slip = slip; c.slipLong = max(lock, wheelspin) <= lat ? 0 : lock >= wheelspin ? 1 : 2
         var lift = 0.0, side = 0.0
         for i in 0..<car.throttles.count { if i < 4 { lift += car.throttles[i] } else { side += car.throttles[i] } }
         c.lift = lift; c.side = side

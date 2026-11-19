@@ -1,0 +1,7 @@
+COLD GAS is a free browser game: one car, one curved wall, ten cold-gas thrusters and a landing pad. There are no ads in this version and it sends nothing anywhere. Your saves and your board stay on your device.
+
+Plays with keyboard, gamepad or touch. Press P for the pause screen, which lists every control.
+
+How AI was used: I built COLD GAS with AI coding assistants (Claude) writing much of the code under my direction. The cars, the wall and the set are 3D models built in code and Blender scripts, not AI images. The thumbnail and screenshots are real frames from the game. The web version at mutaafaziz.com has an optional AI judges' panel; this version does not use it, and the judges speak the game's own written lines.
+
+More games at mutaafaziz.com

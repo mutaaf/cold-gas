@@ -53,3 +53,6 @@ slide meets both Dailies every time, so neither is a stretch for the population 
 
 ## Out of scope
 The sim, the pad, the sight, and `human-phone.mjs` (0173).
+
+## Scout 2026-11-19: hold, do not harden the Dailies yet
+Production 2026-11-18 (human sessions): 7 Daily-course misses, 0 met, and the runs overall landed 6 of 16 decided; real players are far below the modelled careful thumb this ticket calibrates against. Making a Daily harder before 0294 separates wrecks from misses would aim at the wrong population. Stays `proposed` until the daily-miss / daily-done counts are clean (0294) and show a met rate above ~70 % for landed runs.

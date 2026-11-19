@@ -16,6 +16,9 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
     private var stats = FrameStats()
     private var pendingSize: CGSize?
     private var bench: Bench?
+    /// `-perf` (0296, PerfProbe.swift): the window measured, when the first frame was drawn, and whether it has reported.
+    private var perfBench: Bench?
+    private var firstFrameAt: CFTimeInterval = 0, perfDone = false
     private var lastFrame: CFTimeInterval = 0
     #if DEBUG
     /// `-timescale ground,air` (Debug): the whole app on a slowed clock, so a screenshot's few seconds catch each camera shot.
@@ -32,35 +35,50 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         guard let device = MTLCreateSystemDefaultDevice() else { return }
         metal.device = device
         metal.pixelFormat = Renderer.drawableFormat
+        #if targetEnvironment(simulator)
         metal.framebufferOnly = true
+        #else
+        metal.framebufferOnly = false   // 0297: MetalFX upscales straight into the drawable (Renderer), no copy pass after it
+        #endif
         metal.maximumDrawableCount = 3
         isOpaque = true
         self.device = device
+        if PerfProbe.on { PerfProbe.watchMainThread() }
         // `-replay <vector>`: a recorded run looping (the shots and the bench); otherwise the game sets the stage.
         if let which = Launch.value("-replay") { load(course: nil, vector: which) }
 
         // No GPU work off screen (iOS kills an app that encodes in the background); the run pauses as it loses the screen.
-        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in self?.link?.isPaused = true }
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in self?.link?.isPaused = true; MainActor.assumeIsolated { PerfCenter.shared.paused() } }
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in self?.lastFrame = 0; self?.link?.isPaused = false }
         NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in MainActor.assumeIsolated { Game.shared.resignActive() } }
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.renderer?.applyThermal() }
         NotificationCenter.default.addObserver(forName: .NSProcessInfoPowerStateDidChange, object: nil, queue: .main) { [weak self] _ in self?.renderer?.applyThermal() }
+        NotificationCenter.default.addObserver(forName: UIApplication.didReceiveMemoryWarningNotification, object: nil, queue: .main) { [weak self] _ in self?.shed() }
     }
     required init?(coder: NSCoder) { nil }
     private var device: MTLDevice?
     /// One renderer per course, built once off the main thread (the binary archive makes the pipelines ≈20 ms) and kept.
     private var renderers: [String: Renderer] = [:]
     private var loading: String?
+    /// Every kept renderer's GPU bytes (0296, `-perf`).
+    private func residentBytes() -> Int { var seen = Set<ObjectIdentifier>(); return renderers.values.reduce(0) { $0 + $1.residentBytes(seen: &seen) } }
 
     /// Draw `course` with `track` (a live run, or a recorded run looping). The course's renderer is built on first use.
     func load(course: String, track: Replay?) {
-        if let r = renderers[course] { renderer = r; r.setTrack(track); startLinkIfNeeded(); return }
+        if let r = renderers[course] { show(r); r.setTrack(track); startLinkIfNeeded(); return }
         build(course) { [weak self] r in
             r.setTrack(track)
-            self?.renderer = r
+            self?.show(r)
             self?.startLinkIfNeeded()
         }
     }
+    /// Draw `r` from the next frame; the renderer it replaces lets go of its targets, its track and its dents (0299, Renderer.idle).
+    private func show(_ r: Renderer) {
+        if let old = renderer, old !== r { old.idle() }
+        renderer = r
+    }
+    /// Start building `course`'s renderer if it isn't built or building (0302): the title's flight then overlaps the build.
+    func prepare(course: String) { if renderers[course] == nil && pendingBuilds[course] == nil { build(course) { _ in } } }
     private func load(course: String?, vector: String) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             let replay = Replay(runVector: vector)
@@ -69,27 +87,67 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         }
     }
     private var pendingBuilds: [String: [(Renderer) -> Void]] = [:]
-    private func build(_ course: String, then: @escaping (Renderer) -> Void) {
+    /// The last ask that couldn't be drawn (0293): the title's note retries it.
+    private var failedAsk: (course: String, then: (Renderer) -> Void)?
+    private func build(_ course: String, retry: Bool = false, then: @escaping (Renderer) -> Void) {
         if pendingBuilds[course] != nil { pendingBuilds[course, default: []].append(then); return }
         pendingBuilds[course] = [then]
-        guard let device else { return }
+        guard let device else {
+            pendingBuilds[course] = nil
+            Report.error(.render, .error, "no Metal device")
+            MainActor.assumeIsolated { Game.shared.notice = StageView.cantDraw }
+            return
+        }
+        let sign = Signs.poster.beginInterval("stage", id: Signs.poster.makeSignpostID(), "\(course, privacy: .public)")   // 0300
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
-            let r = Renderer(device: device, course: course, replay: nil)
+            // 0293: a renderer that can't be built is tried once more without the pipeline cache (the damaged-cache case).
+            var r = Renderer(device: device, course: course, replay: nil)
+            var retried = false
+            if r == nil && !retry {
+                PipelineArchive.purge()
+                retried = true
+                r = Renderer(device: device, course: course, replay: nil)
+            }
+            Signs.poster.endInterval("stage", sign, "\(r == nil ? "failed" : retried ? "retried" : "built", privacy: .public)")
             DispatchQueue.main.async {
                 guard let self else { return }
                 let waiting = self.pendingBuilds.removeValue(forKey: course) ?? []
-                guard let r else { print("RENDERER failed for \(course)"); return }
+                if retried || retry { Report.recovered(.webgl, ok: r != nil) }
+                guard let r else {
+                    print("RENDERER failed for \(course)")
+                    if let last = waiting.last { self.failedAsk = (course, last) }
+                    MainActor.assumeIsolated { Game.shared.notice = StageView.cantDraw }
+                    return
+                }
                 self.renderers[course] = r
-                print(String(format: "PIPELINES built for %@ in %.1f ms (binary archive), %d lights", course, r.launchCompileMs, r.nLights))
+                // A later build that worked (the tap, or the next course) takes the "couldn't be drawn" note away.
+                if self.failedAsk?.course == course { self.failedAsk = nil }
+                MainActor.assumeIsolated { if Game.shared.notice?.action == .retryStage { Game.shared.notice = nil } }
+                print(String(format: "PIPELINES built for %@ in %.1f ms (binary archive), %d lights; the stage loaded beside them in %.1f ms, %.1f ms waited for", course, r.launchCompileMs, r.nLights, r.stageLoadMs, r.stageWaitMs))
                 for w in waiting.suffix(1) { w(r) }   // only the latest ask for this course draws
             }
         }
+    }
+    static let cantDraw = Notice(text: "The stage couldn\u{2019}t be drawn on this iPhone. Tap to try again.", action: .retryStage, seconds: nil)
+    /// The note's tap: build the stage that failed again.
+    func retryFailedBuild() {
+        guard let ask = failedAsk else { return }
+        failedAsk = nil
+        build(ask.course, retry: true, then: ask.then)
+    }
+    /// A memory warning (0293): every renderer but the one drawing goes (one is rebuilt on demand from the archive, ≈20 ms).
+    private func shed() {
+        let before = renderers.count
+        renderers = renderers.filter { $0.value === renderer }
+        if before > renderers.count { print("MEMORY warning: dropped \(before - renderers.count) idle renderer(s)") }
     }
     private func startLinkIfNeeded() { if link == nil { startLink() } }
     /// One fixed rate (0280): the governor's cadence, min = max, so every frame is shown for the same time (a 60–120 range
     /// let a frame that missed 120's deadline show for 16.7 ms between 8.3 ms ones: the judder).
     private static func range(_ hz: Int) -> CAFrameRateRange { let f = Float(hz); return CAFrameRateRange(minimum: f, maximum: f, preferred: f) }
     private var linkCadence = 120
+    /// The tools (the turntable bench, a recorded run's shots, the haptics demo) draw at the governor's cadence, uncapped.
+    private static let capped = !(Launch.bench && !Launch.freedrive) && Launch.value("-replay") == nil && !Launch.args.contains("-haptics")
     /// Free Drive's bench starts once the world near the car is built (Game.startDrive's `-bench`).
     func startBench(seconds: Double) { if bench == nil { bench = Bench(seconds: seconds) } }
 
@@ -114,8 +172,11 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
 
     func metalDisplayLink(_ link: CAMetalDisplayLink, needsUpdate update: CAMetalDisplayLink.Update) {
         guard let r = renderer else { return }
-        if r.cadence != linkCadence { linkCadence = r.cadence; link.preferredFrameRateRange = StageView.range(r.cadence) }
+        // 0298: the governor's cadence, capped by what the screen needs (Game.stageHz: 60 on the title, 15 under a sheet or a pause).
+        let hz = StageView.capped ? min(r.cadence, MainActor.assumeIsolated { Game.shared.stageHz }) : r.cadence
+        if hz != linkCadence { linkCadence = hz; link.preferredFrameRateRange = StageView.range(hz) }
         let now0 = CACurrentMediaTime()
+        let tc0 = PerfProbe.on ? PerfProbe.threadMs() : 0   // (0296: the main thread's own CPU time, which a loaded Mac's other work doesn't inflate)
         var dt = lastFrame == 0 ? 0 : now0 - lastFrame
         let k = r.slowK
         #if DEBUG
@@ -135,16 +196,34 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         lastFrame = now0
         if let s = pendingSize, s.width > 0, s.height > 0 { metal.drawableSize = s; pendingSize = nil }
         let cpu0 = CACurrentMediaTime()
+        let tcEnc = PerfProbe.on ? PerfProbe.threadMs() : 0
         let b = bench
+        if PerfProbe.on && perfBench == nil && !perfDone && firstFrameAt > 0 && now0 - firstFrameAt >= PerfProbe.wait { perfBench = Bench(seconds: PerfProbe.seconds ?? 8) }
+        let pb = perfBench
         var drawT = cpu0 - start
         #if DEBUG
         if !timescales.isEmpty { drawT = debugClock }
         #endif
-        r.draw(into: update.drawable, time: drawT) { gpu in b?.gpu(gpu) }
+        r.draw(into: update.drawable, time: drawT) { gpu in b?.gpu(gpu); pb?.gpu(gpu) }
         let now = CACurrentMediaTime()
         stats.add(interval: update.targetPresentationTimestamp, cpu: (now - cpu0) * 1000)
         InputLag.frame(target: update.targetPresentationTimestamp)
-        if stats.firstFrame { Ready.mark("frame") }
+        MainActor.assumeIsolated { PerfCenter.shared.frame(present: update.targetPresentationTimestamp, cadence: r.cadence, scale: r.scale) }   // 0300
+        if stats.firstFrame {
+            firstFrameAt = now; PerfProbe.launchMs = PerfProbe.sinceProcessStart()
+            Ready.mark("frame")
+        }
+        if let pb {
+            let tc1 = PerfProbe.threadMs()
+            pb.frame(target: update.targetPresentationTimestamp, cpu: tc1 - tc0, enc: tc1 - tcEnc)
+            if pb.done {
+                perfBench = nil; perfDone = true
+                print(pb.perfLine(look: Look.current.rawValue, cadence: linkCadence, scale: r.scale, size: metal.drawableSize, gpuBytes: residentBytes()))
+                fflush(stdout)
+                Ready.mark("perf")
+                exit(0)
+            }
+        }
         if stats.frames % 60 == 0 {
             NotificationCenter.default.post(name: .frameStats, object: String(format: "%.0f fps · %.2f ms cpu\n%d×%d px · render %.0f%% · MSAA 4× · MetalFX · %d Hz · %@", stats.fps, stats.cpuAvg, Int(metal.drawableSize.width), Int(metal.drawableSize.height), r.scale * 100, r.cadence, Look.current.title))
         }

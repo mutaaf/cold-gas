@@ -19,6 +19,7 @@ struct ColdGasAPI {
     /// postScore: a REAL board entry (public, and it can't be taken back). Retried on a 503, inside one deadline.
     /// On no answer: `status` 0, `timeout` true if the deadline ran out.
     func postScore(log: [[Int]], t: JSValue, initials: String, course: String) async -> PostResult {
+        let sp = Signs.poster.beginInterval("board-post", id: Signs.poster.makeSignpostID()); defer { Signs.poster.endInterval("board-post", sp) }   // 0300
         let body = RequestBody.post(log: log, t: t, initials: cleanInitials(initials), course: course).jsonData
         let req = Net.jsonPost(scores, body: body, timeout: ColdGasAPI.POST_MS / 1000)
         let s = session
@@ -26,10 +27,14 @@ struct ColdGasAPI {
             let (data, res) = try await Net.withDeadline(ms: ColdGasAPI.POST_MS) {
                 try await Net.postRetry { try await Net.fetch(req, ms: ColdGasAPI.POST_MS, session: s) }
             }
+            // 0293: a refused post is the player's message (postMessage); a 5xx after the retries is ours to see.
+            if res.statusCode >= 500 { Report.error(.net, .fetch, "post answered \(ColdGasAPI.statusClass(res.statusCode))") }
             return PostResult(ok: (200..<300).contains(res.statusCode), status: res.statusCode, response: decode(data))
         } catch NetError.timeout {
+            Report.error(.net, .fetch, "post timeout")
             return PostResult(ok: false, status: 0, timeout: true)
         } catch {
+            if let w = ColdGasAPI.why(error) { Report.error(.net, .fetch, "post \(w)") }
             return PostResult(ok: false, status: 0)
         }
     }
@@ -56,12 +61,42 @@ struct ColdGasAPI {
 
     /// fetchBoard: the board's rows, top 20 (nil: offline). `course` nil: every course. Cancel by cancelling the Task.
     func fetchBoard(_ board: Board = .today, course: String? = nil) async -> [BoardRow]? {
+        let sp = Signs.poster.beginInterval("board-fetch", id: Signs.poster.makeSignpostID()); defer { Signs.poster.endInterval("board-fetch", sp) }   // 0300
         guard var c = URLComponents(url: scores, resolvingAgainstBaseURL: false) else { return nil }
         c.queryItems = [URLQueryItem(name: "board", value: board.rawValue)]
         if let course, COURSE_IDS.contains(course) { c.queryItems?.append(URLQueryItem(name: "course", value: course)) }
         guard let url = c.url else { return nil }
         let req = URLRequest(url: url, cachePolicy: .reloadIgnoringLocalCacheData, timeoutInterval: ColdGasAPI.BOARD_MS / 1000)
-        guard let (data, res) = try? await Net.fetch(req, ms: ColdGasAPI.BOARD_MS, session: session), (200..<300).contains(res.statusCode) else { return nil }
-        return (try? JSONDecoder().decode(BoardResponse.self, from: data))?.boardRows
+        // 0293: retried with backoff (a GET is safe to ask again), and a board that still doesn't answer is reported.
+        let out: (Data, HTTPURLResponse)
+        do { out = try await Net.getRetry(req, ms: ColdGasAPI.BOARD_MS, session: session) } catch {
+            // No network is the player's state, not a fault: the sheet says so and nothing is reported.
+            if !Task.isCancelled, let w = ColdGasAPI.why(error) { Report.error(.net, .fetch, "board \(w)") }
+            return nil
+        }
+        guard (200..<300).contains(out.1.statusCode) else { Report.error(.net, .fetch, "board answered \(ColdGasAPI.statusClass(out.1.statusCode))"); return nil }
+        guard let rows = (try? JSONDecoder().decode(BoardResponse.self, from: out.0))?.boardRows else {
+            Report.error(.net, .fetch, "board answer didn't decode"); return nil
+        }
+        return rows
+    }
+
+    /// A status in words that survive the signature's number folding: "5xx", "429", "4xx".
+    static func statusClass(_ s: Int) -> String { s == 429 ? "slow-down" : s == 503 ? "unavailable" : s >= 500 ? "5xx" : s >= 400 ? "4xx" : "other" }
+    /// A transport failure in words that group (no URL, no host); nil for no network at all (not a fault).
+    static func why(_ e: Error) -> String? {
+        if let n = e as? NetError { return n == .timeout ? "timeout" : "answer not HTTP" }
+        let ns = e as NSError
+        guard ns.domain == NSURLErrorDomain else { return "error \(ns.domain)" }
+        switch ns.code {
+        case NSURLErrorNotConnectedToInternet, NSURLErrorDataNotAllowed, NSURLErrorInternationalRoamingOff: return nil
+        case NSURLErrorTimedOut: return "timeout"
+        case NSURLErrorNetworkConnectionLost: return "connection lost"
+        case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed: return "host not found"
+        case NSURLErrorCannotConnectToHost: return "cannot connect"
+        case NSURLErrorSecureConnectionFailed, NSURLErrorServerCertificateUntrusted, NSURLErrorServerCertificateHasBadDate: return "tls failed"
+        case NSURLErrorCancelled: return nil
+        default: return "url error"
+        }
     }
 }

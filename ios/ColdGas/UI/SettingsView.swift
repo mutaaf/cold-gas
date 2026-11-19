@@ -18,6 +18,10 @@ struct SettingsView: View {
     @State private var judgeStatus = OnDeviceJudges.status
     @State private var usage = SaveStore.shared.settings.usageOn
     @State private var stability = FreeDrive.stability
+    @State private var absOn = FreeDrive.absOn
+    @State private var traction = FreeDrive.traction
+    @State private var driftAssist = FreeDrive.driftAssist
+    @State private var brakeBias = FreeDrive.brakeBias
     @State private var look = Look.current
     private var lookFooter: String {
         switch look {
@@ -90,10 +94,27 @@ struct SettingsView: View {
                         Text("Sport").tag(DriveModel.ESC.sport)
                         Text("Off").tag(DriveModel.ESC.off)
                     }
-                    .onChange(of: stability) { _, v in FreeDrive.stability = v }
+                    .onChange(of: stability) { _, v in FreeDrive.stability = v; PerfCenter.shared.note(v == .on ? .escOn : v == .sport ? .escSport : .escOff) }
                     .accessibilityIdentifier("stability")
+                    // 0281: the brakes and the other assists, each on its own.
+                    Toggle("Traction control", isOn: $traction)
+                        .onChange(of: traction) { _, v in FreeDrive.traction = v }
+                        .accessibilityIdentifier("traction")
+                    Toggle("ABS", isOn: $absOn)
+                        .onChange(of: absOn) { _, v in FreeDrive.absOn = v }
+                        .accessibilityIdentifier("abs")
+                    Toggle("Drift assist", isOn: $driftAssist)
+                        .onChange(of: driftAssist) { _, v in FreeDrive.driftAssist = v }
+                        .accessibilityIdentifier("drift-assist")
+                    Picker("Brake balance", selection: $brakeBias) {
+                        Text("Front").tag(0.68)
+                        Text("Road").tag(DriveSpec.brakeBias)
+                        Text("Rear").tag(0.5)
+                    }
+                    .onChange(of: brakeBias) { _, v in FreeDrive.brakeBias = v }
+                    .accessibilityIdentifier("brake-balance")
                 } header: { Text("Driving") } footer: {
-                    Text("Free Drive and Roam. On catches a slide early; Sport lets the car move before it steps in; Off leaves the car to you. On touch the wheels lean into a slide a little, to help you catch it.")
+                    Text("Free Drive and Roam. On catches a slide early; Sport lets the car move before it steps in; Off leaves the car to you. On touch the wheels lean into a slide a little, to help you catch it. Traction control off lets the rears spin. ABS off lets the wheels lock: a longer stop, a flat spot, no steering on a locked front. The drift assist (Sport or Off) points the wheels down the slide and eases the motors so a thumb can hold an angle; HAND locks the rears. Brake balance: Front is stable, Rear rotates the car under the brakes.")
                 }
                 // 0219: who writes the judges' words on this device. The scores are always the game's own.
                 Section {
@@ -106,12 +127,12 @@ struct SettingsView: View {
                 }
                 // 0246: the usage counts the game sends, and the one switch that stops them.
                 Section {
-                    Toggle("Share usage stats", isOn: $usage)
+                    Toggle("Share usage stats and crash reports", isOn: $usage)
                         .onChange(of: usage) { _, v in Usage.shared.setOn(v) }
                         .accessibilityIdentifier("usage")
                     Link("Privacy policy", destination: URL(string: "https://mutaafaziz.com/coldgas/privacy")!)
                 } header: { Text("Privacy") } footer: {
-                    Text("Counts like a jump started, landed or shared, with the course, tier and score, and a random id made on this iPhone. No name, initials, location or advertising id. Off sends nothing and deletes the id.")
+                    Text("Counts like a jump started, landed or shared, with the course, tier and score, and a random id made on this iPhone. No name, initials, location or advertising id. Crash and error reports (what failed, where in the code, how often) carry no id at all. Off sends nothing and deletes the id and anything waiting.")
                 }
                 Section("About") {
                     LabeledContent("Version", value: "\(Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "") (\(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? ""))")
