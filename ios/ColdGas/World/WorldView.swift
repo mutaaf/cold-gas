@@ -68,9 +68,9 @@ final class WorldView {
 
     // --- Roads ----------------------------------------------------------------------------------------------------
     private struct Road { let vb: MTLBuffer; let ib: MTLBuffer; let count: Int; let ox, oz: Double; let box: (Double, Double, Double, Double) }
-    private var roads: [ObjectIdentifier: [Road]] = [:]
-    private var roadDone: [(ObjectIdentifier, [Road])] = []
-    private var roadAsked = Set<ObjectIdentifier>()
+    private var roads: [Int64: [Road]] = [:]
+    private var roadDone: [(Int64, [Road])] = []
+    private var roadAsked = Set<Int64>()
     private var roadScan = SIMD2<Double>(.infinity, .infinity), roadScanning = false
 
     // --- Props: the blocks asked for and arrived (their instances go into WorldProps' pool) ----------------------------
@@ -346,15 +346,15 @@ final class WorldView {
         let asked = roadAsked
         gen.async { [weak self] in
             let ls = w.roads.links(minX: eye.x - R, minZ: eye.z - R, maxX: eye.x + R, maxZ: eye.z + R, margin: 0)
-            var out: [(ObjectIdentifier, [Road])] = []
+            var out: [(Int64, [Road])] = []
             // The ribbons' buffers made here, off the main thread (0310: no allocation in the frame).
-            for l in ls where !asked.contains(ObjectIdentifier(l)) {
+            for l in ls where !asked.contains(Roads.key(l)) {
                 let pieces = w.ribbon(l, run: 1 << 20).compactMap { p -> Road? in
                     guard let vb = dev.makeBuffer(bytes: p.vertices, length: p.vertices.count * 4, options: .storageModeShared),
                           let ib = dev.makeBuffer(bytes: p.indices, length: p.indices.count * 4, options: .storageModeShared) else { return nil }
                     return Road(vb: vb, ib: ib, count: p.indices.count, ox: p.ox, oz: p.oz, box: (p.minX, p.maxX, p.minZ, p.maxZ))
                 }
-                out.append((ObjectIdentifier(l), pieces))
+                out.append((Roads.key(l), pieces))
             }
             DispatchQueue.main.async {
                 guard let self else { return }

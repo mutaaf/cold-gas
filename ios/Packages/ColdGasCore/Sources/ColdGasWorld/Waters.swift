@@ -48,7 +48,7 @@ final class Waters: @unchecked Sendable {
         if let l = lakes[key] { lock.unlock(); return l }
         lock.unlock()
         let l = makeLake(i, j)
-        lock.lock(); lakes[key] = l; lock.unlock()
+        lock.lock(); if lakes.count > 4096 { lakes.removeAll(keepingCapacity: true) }; lakes[key] = l; lock.unlock()   // (bounded: a lake is rebuilt the same)
         return l
     }
     private func makeLake(_ i: Int, _ j: Int) -> Lake? {

@@ -144,7 +144,9 @@ final class WorldProps {
         }
         blocks[key] = Block(bx: bx, bz: bz, slot: slot, start: start, count: n)
         highWater = max(highWater, start + n)
-        shadowDue = true
+        // The world's shadow again only if the block reaches its box.
+        let B = WorldView.block, cx = (Double(bx) + 0.5) * B - shadowCentre.x, cz = (Double(bz) + 0.5) * B - shadowCentre.z
+        if !(cx.isFinite && cz.isFinite) || abs(cx) < B / 2 + WorldProps.shadowHalf && abs(cz) < B / 2 + WorldProps.shadowHalf { shadowDue = true }
         return true
     }
     func remove(key: Int64) {
