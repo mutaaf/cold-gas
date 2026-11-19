@@ -9,7 +9,7 @@ import { decodeChallenge, encodeChallenge, vsFromHash, challengeUrl, compare, ra
 import { stuntName, dareText, landedCard } from './stunt-name.js';
 import { getMedals } from './medals.js';
 import { obs } from './obs/index.js';
-import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, courseName, dayNumber, DAY_MS, missLine, titleHint } from './daily.js';
+import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, courseName, dayNumber, DAY_MS, missLine, titleHint, goalOf } from './daily.js';
 import { packFrames } from './ghost.js';
 import { freeWorld } from './sim/world.js';
 import { onUnits } from './units.js';
@@ -47,12 +47,14 @@ export function createComeback(o) {
   let ch = null, armed = false;
   let last = null;   // { run, card, link: Promise<string> } for the run on the results sheet
   let shownDay = dayNumber(now());
-  let shownHint = '';   // the hint the daily card was last drawn with (0139)
+  let shownHint = '', shownGoal = '';   // the hint (0139) and the goal (0218: its form follows the device) last drawn
   // 0139: today's hint for this device, flown at the tier Play today's would set ('' when there is none, or done).
+  // The words of today's run on this device, at the tier Play today's would set (0218: the objective's form follows them).
+  const todayHow = (obj) => o.how?.(obj.course, obj.tier && o.getTier() === 'assist' ? obj.tier : o.getTier());
   const todayHint = (whole = false) => {
     const obj = objectiveFor(now());
     if (streakNow(loadStreak(), now()).doneToday) return '';
-    return titleHint(obj, o.how?.(obj.course, obj.tier && o.getTier() === 'assist' ? obj.tier : o.getTier()), whole);
+    return titleHint(obj, todayHow(obj), whole);
   };
 
   // --- the title card ----------------------------------------------------------------------------
@@ -77,12 +79,13 @@ export function createComeback(o) {
       // 0139: today's hint takes the streak words' place in their row (no new row: the title has no height to spare on a
       // phone); the words stay for a screen reader. It steps aside with the row when the card is tight.
       const hint = shownHint = todayHint();
+      shownGoal = goalOf(obj, todayHow(obj));
       const streakWords = st.streak ? `${st.streak}-day streak` : 'Start a streak today';
       const pips = Array.from({ length: 7 }, (_, i) => `<i${i < Math.min(7, st.streak) ? ' class="on"' : ''}></i>`).join('');
       m.innerHTML = `<div class="xc xc-daily${st.doneToday ? ' done' : ''}" role="group" aria-label="Today’s daily jump">
         <div class="xc-text">
           <p class="xc-k"><span>Daily · ${utcLabel(now())}</span><span class="xc-dot" aria-hidden="true">·</span><span>${courseName(obj.course)}</span>${st.doneToday ? '<span class="xc-tick">✓ Done</span>' : ''}</p>
-          <p class="xc-goal"><span class="xc-ck">${st.doneToday ? 'Daily ✓' : 'Daily'} · ${courseName(obj.course)}</span>${obj.goal()}</p>
+          <p class="xc-goal"><span class="xc-ck">${st.doneToday ? 'Daily ✓' : 'Daily'} · ${courseName(obj.course)}</span>${shownGoal}</p>
           <p class="xc-streak xc-sub"><span class="xc-pips" aria-hidden="true">${pips}</span>${hint ? `<span class="vh">${streakWords}</span><span class="xc-hint" data-daily-hint>${hint}</span>` : `<span>${streakWords}</span>`}</p>
         </div>
         <button type="button" class="btn xc-go" data-daily-play>${st.doneToday ? 'Play again' : 'Play today’s'}</button>
@@ -235,11 +238,12 @@ export function createComeback(o) {
     o.mount?.querySelector('[data-daily-play]')?.focus();
   }
 
-  // 0139: the device, the touch scheme or the tier changed. Redraw the daily card only if its hint did: a redraw replaces
+  // 0139: the device, the touch scheme or the tier changed. Redraw the daily card only if its hint or goal did: a redraw replaces
   // the card's buttons, and a device switch is noted on the very pointerdown or keydown that is pressing one.
   function refresh() {
     if (!o.mount || (ch && ch.state !== 'bad')) return;
-    if (todayHint() !== shownHint) render();
+    const obj = objectiveFor(now());
+    if (todayHint() !== shownHint || goalOf(obj, todayHow(obj)) !== shownGoal) render();
   }
 
   // The challenger's frames for the ghost in a run on its course, once taken.
@@ -264,8 +268,8 @@ export function createComeback(o) {
       const state = !vs.comparable ? 'other' : vs.won ? 'won' : vs.tie ? 'tie' : 'behind';
       lines.push(`<div class="xr xr-vs" data-state="${state}"><p class="xr-line"><span data-vs-line>${vs.text}</span><span class="xr-best" data-vs-best>Your best ${best.toFixed(1)}</span></p><button type="button" class="btn ${vs.won ? 'primary' : 'ghost'} xr-send" data-vs-send>Send it back</button></div>`);
     }
-    const obj = objectiveFor(now());
-    const r = evaluate(obj, card, run.course);
+    const obj = objectiveFor(now()), how = o.how?.(run.course, card.tier, true);   // how it was flown (0139)
+    const r = evaluate(obj, card, run.course, how);   // 0218: judged in the form that way of flying was shown
     if (r) {
       // 0136: a finished Daily on its course is met (daily-done) or missed (daily-miss). daily-run meant a miss
       // before daily-miss existed; it is still counted on a miss for one release so the digest's history reads on.
@@ -276,7 +280,7 @@ export function createComeback(o) {
         const s = complete(loadStreak(), now());
         saveStreak(s);
         text = `Daily ✓ complete · streak ${s.streak}`;
-      } else text = missLine(obj, r, o.how?.(run.course, card.tier, true));   // 0139: what to change, in the words of how it was flown
+      } else text = missLine(obj, r, how);   // 0139: what to change, in the words of how it was flown
       lines.push(`<p class="xr xr-daily${r.ok ? ' ok' : ''}" data-daily-line>${text}</p>`);
     }
     render();   // the title's card under the sheet: where the challenge stands, the daily done, the streak

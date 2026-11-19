@@ -105,6 +105,10 @@ struct RootUI: View {
                     if game.notice?.id == n.id { withAnimation(.easeOut(duration: 0.3)) { game.notice = nil } }
                 }
             }
+            #if DEBUG
+            // 0301: the UI tests' window on the health queue: the faults this launch has reported (`-uitest` only).
+            if Launch.args.contains("-uitest") { HealthProbe() }
+            #endif
             // The HUD layout editor (0221), from Settings → Controls or the pause sheet: over everything, the run under it paused.
             if let t = hud.editing {
                 HudEditorView(layout: layout, tier: t) { withAnimation(.easeOut(duration: 0.2)) { hud.editing = nil } }
@@ -323,7 +327,9 @@ struct TitleView: View {
     /// Today's objective in a line (and the streak), green once it's done.
     private var daily: some View {
         let o = Daily.objectiveFor(SaveStore.nowMs), streak = SaveStore.shared.streakNow()
-        let goal = o.goal(SaveStore.shared.units), course = Daily.courseName(o.course)
+        // 0218: the goal in the form the objective's course is flown in here (Game.oneThumb: the app's Lineup is by hand).
+        let g = Game.shared, thumb = g.control == .oneThumb && g.tier == "assist" && o.course != "lineup"
+        let goal = o.goal(SaveStore.shared.units, Daily.Pilot(scheme: thumb ? .thumb : .classic)), course = Daily.courseName(o.course)
         return HStack(alignment: .firstTextBaseline, spacing: 6) {
             Image(systemName: streak.doneToday ? "checkmark" : "calendar").font(.system(size: 10, weight: .semibold))
             Text("\(goal) · \(course)\(streak.streak > 1 ? " · \(streak.streak) days" : "")")

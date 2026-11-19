@@ -4,6 +4,7 @@
 #   make alloc    the tick's allocation check, optimised
 #   make sim      build for the simulator and launch on the Duo
 #   make shots    screenshots: the Duo (closed, book, tabletop via -window) and the Pro Max → build/shots
+#   make glare    the glare gate: the first 3 s of the Show, Wall and Lineup runs, measured (-luma); fails on a blinding opening
 #   make bench    the 10 s turntable bench on the Pro Max simulator (prints BENCH …)
 #   make device   build, install and run -selftest on the paired iPhone (prints SELFTEST …)
 #   make bench-freedrive         Free Drive's bench on the Pro Max simulator, Release: the autopilot 3 km out, 10 s once the
@@ -28,7 +29,7 @@ APP := $(DD)/Build/Products/Debug-iphonesimulator/ColdGas.app
 BUNDLE := com.mutaafaziz.coldgas
 id = $(shell xcrun simctl list devices available | grep -F "    $(1) (" | head -1 | sed -E 's/.*\(([0-9A-F-]{36})\).*/\1/')
 
-.PHONY: up sims engine gen test alloc build sim shots bench device bench-freedrive device-bench-freedrive release rules provision archive validate testflight store-check perf device-bench-all
+.PHONY: up sims engine gen test alloc build sim shots glare bench device bench-freedrive device-bench-freedrive release rules provision archive validate testflight store-check perf device-bench-all
 up: sims engine gen test build sim
 sims:
 	# Our own simulators: another project on this Mac shares the stock "iPhone Duo" (it unfolds it, launches its app).
@@ -53,6 +54,8 @@ sim: build
 	./scripts/sim.sh "$(DUO)" $(APP) $(BUNDLE)
 shots: build
 	./scripts/shots.sh build/shots
+glare: build
+	./scripts/glare.sh $(APP)
 bench: build
 	./scripts/sim.sh "$(PROMAX)" $(APP) $(BUNDLE) -bench
 device: engine gen

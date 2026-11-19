@@ -10,7 +10,10 @@ the same day). Change the label in App Store Connect and publish it **in the sam
 ships before. The 1.1.0 answers (Gameplay Content only) hold for 1.1.0. **From 1.2.0 the health
 reports (`/obs`, 0293) ship too**, so the label gains three Diagnostics rows: Crash Data, Performance Data and Other
 Diagnostic Data, for App Functionality, **not linked**, **not tracking** (they carry no id). Set them in the same
-submission.
+submission. **From 1.2.0 the same `/obs` batch also carries a session summary (0300)**: performance in coarse buckets and
+which new features the session touched, as flags. It adds **no new row**: it's Performance Data (already ticked, not linked)
+and Product Interaction (already ticked for the usage events; this copy carries no id, and the row stays linked because the
+usage events are).
 
 ## Does the app collect data? Yes.
 
@@ -20,7 +23,7 @@ Worker, `src/worker/`), and from 1.2.0 Box Office's first-party relay, `mutaafaz
 | Request | What it carries | Kept |
 |---|---|---|
 | `POST /boxoffice/e/batch/` (usage events, **from 1.2.0, unless Settings > Privacy > Share usage stats is off**) | the events of 0245's vocabulary (session start, first input, a jump started and ended with its course, tier, score and whether it landed, the first landing, a share, a challenge opened or played): numbers and enums only; a random install id; the app's version; `platform: ios` | in the operator's PostHog project (through the relay: cookies stripped, the IP cut to /24 before it's forwarded, and `$geoip_disable` so no location is derived) |
-| `POST /coldgas/api/obs` (health reports, **from 1.2.0, unless Settings > Privacy > Share usage stats and crash reports is off**; 0293, docs/AUDIT-2026-11-18.md) | per fault: a normalised message we wrote ("renderer: no command queue", "crash EXC_BREAKPOINT SIGTRAP"), the Swift function and file or up to six `0x<offset>@<binary>` frames, a module, a kind and a count; the app's version and build; the constants `phone-hi` and `high`. **No id, device model, OS version, locale or user content** | aggregated per day and build in our D1 (`obs_err`, `obs_evt`, a month), example stacks two weeks; the IP only as the daily salted rate-limit hash |
+| `POST /coldgas/api/obs` (health reports, **from 1.2.0, unless Settings > Privacy > Share usage stats and crash reports is off**; 0293, docs/AUDIT-2026-11-18.md) | per fault: a normalised message we wrote ("renderer: no command queue", "crash EXC_BREAKPOINT SIGTRAP"), the Swift function and file or up to six `0x<offset>@<binary>` frames, a module, a kind and a count; the app's version and build; the constants `phone-hi` and `high`. **From 1.2.0 (0300), once a session** (going to the background, or every ten minutes from the title or the results): the session's frame-time histogram (13 buckets, hitches over 50 ms, two-second windows under 30 fps, frames that lost sim time) and one line of coarse buckets (p50 and p95 frame time, hitch rate, 120 or 60 Hz, the look most drawn, the mean render scale to 10 %, the peak thermal state, the peak memory footprint in one of five ranges, the launch time in one of four), plus a second line naming which of the new features the session touched (a look chosen in Settings, stability control, ABS / traction / drift assist switched, the brake bias moved, the handbrake, a roam, a roam challenge, Free Drive, a replay, Wreck Club opened) as flags, never counts or times. **No id, device model, OS version, locale or user content** | aggregated per day and build in our D1 (`obs_err`, `obs_evt`, a month), example stacks two weeks; the IP only as the daily salted rate-limit hash |
 | `POST /scores` (posting to the board) | the run's input log and telemetry, the course, the tier, and **three letters A to Z** as initials | the initials, the score card and the day, on the public board |
 | `POST /judge/stream` (the judges' commentary, **from 1.1.0 only when the device can't judge on-device**) | the run's input log and telemetry, the tier | nothing |
 
@@ -41,10 +44,10 @@ rate-limit bucket (`ipHash` in `src/worker/index.js`).
 | Data type (Apple's name) | Collected | Purpose | Linked to the user | Used for tracking |
 |---|---|---|---|---|
 | User Content → **Gameplay Content** (the run's log and telemetry; the three initials on the board) | Yes | App Functionality | **No** | **No** |
-| Usage Data → **Product Interaction** (the usage events, from 1.2.0) | Yes | Analytics | **Yes** | **No** |
+| Usage Data → **Product Interaction** (the usage events; and, with no id, a session's feature-use flags in the health batch, 0300; from 1.2.0) | Yes | Analytics | **Yes** | **No** |
 | Identifiers → **Device ID** (the random install id, from 1.2.0) | Yes | Analytics | **Yes** | **No** |
 | Diagnostics → **Crash Data** (MetricKit crash reports: the exception and signal names, up to six code offsets in the app, from 1.2.0) | Yes | App Functionality | **No** | **No** |
-| Diagnostics → **Performance Data** (hang and launch-time buckets, CPU and disk-write exceptions, the day's exit counts by reason, from 1.2.0) | Yes | App Functionality | **No** | **No** |
+| Diagnostics → **Performance Data** (hang and launch-time buckets, CPU and disk-write exceptions, the day's exit counts by reason; a session's frame-time histogram and its coarse buckets: frame time, hitches, cadence, render scale, look, thermal peak, memory peak, launch, 0300; from 1.2.0) | Yes | App Functionality | **No** | **No** |
 | Diagnostics → **Other Diagnostic Data** (an error signature: a fixed message such as "the stage couldn't be drawn", the code's function and file, a count, the app's version, from 1.2.0) | Yes | App Functionality | **No** | **No** |
 
 Everything else: **not collected**. No contact info, health, financial info, location (coarse or precise: the relay cuts the

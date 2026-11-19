@@ -57,6 +57,8 @@ final class Crash {
     var dentParked: ((Int, SIMD3<Float>, SIMD3<Float>, Float, Float) -> Void)?
     private var carVel = SIMD3<Float>(), carPos = SIMD3<Float>(), carQuat = simd_quatf(angle: 0, axis: [0, 1, 0])
     var shake: ((Float) -> Void)?
+    /// Hits big enough for the slow-motion beat, counted (0290: Anime's impact frame); back to 0 with the run.
+    private(set) var bigHits = 0
     /// A hit's jolt along its impulse (0271): the contact normal and 0…1 of how hard.
     var kick: ((SIMD3<Float>, Float) -> Void)?
     /// The car's own states and damage (roadster.js): lamps, parts, the canopy. Crash sets the damage, the renderer draws it.
@@ -111,7 +113,7 @@ final class Crash {
     var onReset: (() -> Void)?
     func reset() {
         onReset?()
-        cursor = 0; lastTick = -1; cutDone = false; slowK = 1; slowT = 0; ventT = 0; grind = 0; bigT = -10; flashT = 0
+        cursor = 0; lastTick = -1; cutDone = false; slowK = 1; slowT = 0; bigHits = 0; ventT = 0; grind = 0; bigT = -10; flashT = 0
         head = 1; tail = 1; headFail = 0; tailFail = 0; headDead = false; tailDead = false; hazardT = -1; hazard = false; glass = false
         pieces.reset(); car.reset()
         for j in 0..<Crash.NS { sLife[j] = 0 }
@@ -153,6 +155,8 @@ final class Crash {
     /// Feed events up to `tick` (the replay's frame).
     func feed(_ imps: [Replay.Impact], tick: Int, vel: SIMD3<Float>, carPos: SIMD3<Float>, carQuat: simd_quatf) {
         if tick < lastTick { reset() }   // the replay looped
+        // 0301: a drive's list was trimmed from the front (Replay.DRIVE_IMPACTS_MAX): find the place again by tick.
+        if cursor > imps.count { cursor = imps.firstIndex { $0.tick > lastTick } ?? imps.count }
         lastTick = tick
         carVel = vel; self.carPos = carPos; self.carQuat = carQuat
         tailPos = carQuat.act(SIMD3(0, 0.1, -1.7)) + carPos; carUp = carQuat.act(SIMD3(0, 1, 0))
@@ -246,7 +250,7 @@ final class Crash {
             shake?(min(2.6, 0.25 + v * 0.17))
             if v > 3 { kick?(n, min(1, (v - 3) / 10)) }
             if directed == nil && v > 6.5 && clock - bigT > 2.5 {
-                bigT = clock; slowT = 0.75 + 0.5 * sev
+                bigT = clock; slowT = 0.75 + 0.5 * sev; bigHits += 1
                 if !cutDone { cutDone = true; cut?(p, carVel) }
             }
         }

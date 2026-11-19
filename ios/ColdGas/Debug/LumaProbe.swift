@@ -2,6 +2,9 @@
 // before MetalFX) is read back and measured, and one line is printed:
 //   LUMA <tag>#<track> t <s since the track started> car <% of the car's pixels clipped> hot <% near white> carMean sd carPeak carPx
 //        frame <% clipped> hot <% near white> washed <% with luma ≥ 160> peak mean
+//        white97 <% of the frame with luma ≥ 247 (0.97)> carFloor <the car's 10th-percentile luma> (0291)
+// The car's floor is the veil: its tyres, glass and shadow sides are dark, so a haze over the car (the lamps' lit air, 0291)
+// lifts its darkest tenth long before anything clips. scripts/glare.sh gates these.
 // "Clipped" is all three channels ≥ 250, "near white" ≥ 235 (sRGB-encoded, 0…255); sd is the car's contrast; the car's pixels are those inside the convex hull of its bounding box
 // projected to the screen (an approximation: the hull takes a little of what's behind the car). `-luma-snap 0.5,1,1.5` also
 // writes the frame at each of those times to Caches/luma/<tag>-<t>.png. Debug builds only; nothing runs without the flag.
@@ -63,7 +66,8 @@ final class LumaProbe {
                 }
                 return true
             }
-            var hot = 0, washed = 0, carHot = 0, carSum = 0, carSq = 0
+            var hot = 0, washed = 0, carHot = 0, carSum = 0, carSq = 0, white97 = 0
+            var carHist = [Int](repeating: 0, count: 256)
             for y in 0..<h {
                 let inRows = hull.count >= 3 && y >= y0 && y <= y1
                 for x in 0..<w {
@@ -71,19 +75,22 @@ final class LumaProbe {
                     let bl = Int(p[o]), g = Int(p[o + 1]), r = Int(p[o + 2])
                     let l = (2126 * r + 7152 * g + 722 * bl) / 10000
                     let white = min(r, g, bl) >= 250, near = min(r, g, bl) >= 235
-                    sum += l; if l > peak { peak = l }; if white { clip += 1 }; if near { hot += 1 }; if l >= 160 { washed += 1 }
+                    sum += l; if l > peak { peak = l }; if white { clip += 1 }; if near { hot += 1 }; if l >= 160 { washed += 1 }; if l >= 247 { white97 += 1 }
                     if inRows && x >= x0 && x <= x1 && inside(Float(x) + 0.5, Float(y) + 0.5) {
                         carN += 1; if white { carClip += 1 }; if near { carHot += 1 }; if l > carPeak { carPeak = l }
-                        carSum += l; carSq += l * l
+                        carSum += l; carSq += l * l; carHist[min(l, 255)] += 1
                     }
                 }
             }
             let px = Double(w * h), cn = Double(max(carN, 1)), cm = Double(carSum) / cn
+            var floor = 0, acc = 0
+            for (v, k) in carHist.enumerated() { acc += k; if acc * 10 >= carN { floor = v; break } }
             // clip: all channels ≥ 250; hot: ≥ 235 (detail gone); washed: luma ≥ 160; sd: the car's contrast (its shape).
-            let line = String(format: "LUMA %@ t %.3f car %.2f hot %.2f carMean %.1f sd %.1f carPeak %d carPx %d frame %.3f hot %.3f washed %.2f peak %d mean %.1f",
+            let line = String(format: "LUMA %@ t %.3f car %.2f hot %.2f carMean %.1f sd %.1f carPeak %d carPx %d frame %.3f hot %.3f washed %.2f peak %d mean %.1f white97 %.3f carFloor %d",
                               tag, t, carN > 0 ? Double(carClip) * 100 / cn : -1, carN > 0 ? Double(carHot) * 100 / cn : -1, cm,
                               (Double(carSq) / cn - cm * cm).squareRoot(), carPeak, carN,
-                              Double(clip) * 100 / px, Double(hot) * 100 / px, Double(washed) * 100 / px, peak, Double(sum) / px)
+                              Double(clip) * 100 / px, Double(hot) * 100 / px, Double(washed) * 100 / px, peak, Double(sum) / px,
+                              Double(white97) * 100 / px, carN > 0 ? floor : -1)
             print(line)
             // And Caches/luma/log.txt, for when the console isn't attached.
             let log = dir.appendingPathComponent("log.txt"), d = Data((line + "\n").utf8)
