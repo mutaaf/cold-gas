@@ -208,6 +208,11 @@ final class FreeDrive: DriveScene {
                     // The player's stability setting, and on touch (a slider or a tilt) a light countersteer (0269).
                     if chassis.esc != FreeDrive.stability { chassis.stability(FreeDrive.stability) }
                     chassis.counterAssist = pilot == nil && (sampler.touch.active || sampler.tilt != 0) ? DriveSpec.counterAssistTouch : 0
+                    #if DEBUG
+                    if Inject.nanTick() { input.steer = .nan; input.throttle = .infinity }   // 0301: `-nan-input`
+                    #endif
+                    // 0301: a control that isn't a number (a sensor's NaN, a pad's garbage) is let go before the engine sees it.
+                    if guardInput(input) > 0 { Report.error(.drive, .error, "drive input not finite: let go") }
                     if ownCar { try driveStep(car, input, chassis) } else { try step(car, input) }
                     // A state that isn't a number never reaches the engine again (0229): back on the road at once.
                     if !carFinite(car) { print("DRIVE car state not finite: reset"); Report.error(.drive, .trap, "drive car state not finite"); Report.recovered(.world, ok: true); reset(); acc = 0; break }

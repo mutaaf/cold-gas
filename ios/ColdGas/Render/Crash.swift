@@ -153,6 +153,8 @@ final class Crash {
     /// Feed events up to `tick` (the replay's frame).
     func feed(_ imps: [Replay.Impact], tick: Int, vel: SIMD3<Float>, carPos: SIMD3<Float>, carQuat: simd_quatf) {
         if tick < lastTick { reset() }   // the replay looped
+        // 0301: a drive's list was trimmed from the front (Replay.DRIVE_IMPACTS_MAX): find the place again by tick.
+        if cursor > imps.count { cursor = imps.firstIndex { $0.tick > lastTick } ?? imps.count }
         lastTick = tick
         carVel = vel; self.carPos = carPos; self.carQuat = carQuat
         tailPos = carQuat.act(SIMD3(0, 0.1, -1.7)) + carPos; carUp = carQuat.act(SIMD3(0, 1, 0))

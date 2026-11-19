@@ -7,6 +7,10 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         setvbuf(stdout, nil, _IOLBF, 0)   // the scripts read stdout through a pipe: one line at a time
         Ready.clear()
+        #if DEBUG
+        Inject.corruptPrefsIfAsked()   // 0301: the hardening tests' bad values, before the repair
+        #endif
+        Prefs.repair()              // 0301: a setting this build doesn't know goes back to its default before anything reads it
         Usage.launchedAt = Date()   // first_input's clock (0246)
         Theme.registerFonts()
         return true
@@ -27,6 +31,10 @@ final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         if Launch.selftest { SelfTest.runInBackground() }
         _ = HapticPlayer.shared          // the engine is started at launch, never on the first event
         HapticDemo.startIfAsked()
+        #if DEBUG
+        Inject.startIfAsked()            // 0301: the hardening tests' faults on cue
+        Soak.startIfAsked()              // 0302: `-soak <minutes>`, scripts/soak.sh
+        #endif
         SoundLab.startIfAsked()
         Usage.shared.sessionStart()      // 0246: queued now, sent from the title
         Report.start()                   // 0293: MetricKit, and what the save found at launch

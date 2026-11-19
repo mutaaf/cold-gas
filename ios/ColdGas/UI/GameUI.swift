@@ -104,6 +104,10 @@ struct RootUI: View {
                     if game.notice?.id == n.id { withAnimation(.easeOut(duration: 0.3)) { game.notice = nil } }
                 }
             }
+            #if DEBUG
+            // 0301: the UI tests' window on the health queue: the faults this launch has reported (`-uitest` only).
+            if Launch.args.contains("-uitest") { HealthProbe() }
+            #endif
             // The HUD layout editor (0221), from Settings → Controls or the pause sheet: over everything, the run under it paused.
             if let t = hud.editing {
                 HudEditorView(layout: layout, tier: t) { withAnimation(.easeOut(duration: 0.2)) { hud.editing = nil } }
