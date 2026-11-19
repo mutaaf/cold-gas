@@ -55,3 +55,6 @@ Added criteria (the original two still stand):
       `stick-wall` nor `soft-wall`. Each miss line names the choice in the pad's words (0139/0150).
 - [ ] `tests/unit/daily-reach.test.js` gets a ceiling (≤ 70 %) for every objective as well as its floor, so a sim
       change that empties a Daily goes red in the PR that makes it.
+
+## Scout 2026-11-19: hold, do not harden the Dailies yet
+Production 2026-11-18 (human sessions): 7 Daily-course misses, 0 met, and the runs overall landed 6 of 16 decided; real players are far below the modelled careful thumb this ticket calibrates against. Making a Daily harder before 0294 separates wrecks from misses would aim at the wrong population. Stays `proposed` until the daily-miss / daily-done counts are clean (0294) and show a met rate above ~70 % for landed runs.
