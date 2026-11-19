@@ -31,11 +31,14 @@
 // neither day). Phone-first: on keys or two thumbs the roll is flown by hand, and no modelled player of theirs lands a 720
 // (flyTouch: 0/150 land two turns; with the roll held through a second turn, 0/60; a keys Assist/Pro sweep of run-up speed, LIFT
 // hold and roll: 4 of 48 rolled two turns, none landed). 0218: so by hand (keys, a pad, two thumbs) a Lineup day asks for
-// what a hand can fly (each objective's `hand` form, formOf): one clean turn over the row, and one clean turn within 5 m of
-// the mark. Measured n 150, seed 12345, on the keys (flyKeysLineup: ↑ to their own speed, Space at the line, ← or → by the
-// roll-out cue, Shift by its cue; scripts/daily-reach.mjs prints it) and on two thumbs (flyTouch):
-//   roll-lineup  by hand: a clean 360    keys 61 %   two thumbs 37 %
-//   mark-lineup  by hand: within 5 m     keys 41 %   two thumbs 21 %   (within 4 m: keys 34 %; 3 m: 27 %)
+// what a hand can fly (each objective's `hand` form, formOf): one clean turn over the row, and one clean turn near the mark
+// (5 m on keys or a pad, 10 m on two thumbs). Measured n 150, seed 12345, on the keys (flyKeysLineup, Assist: ↑ to their
+// own speed or, a seventh, held to the line as the guide says, Space at the line, ← or → by the roll-out cue, Shift by its
+// cue; scripts/daily-reach.mjs prints it) and on two thumbs (flyTouch):
+//   roll-lineup  by hand: a clean 360    keys 51 %   two thumbs 37 %
+//   mark-lineup  by hand: near the mark  keys 33 % (5 m)   two thumbs 31 % (10 m; 7 m was 27 %, 5 m 21 %)
+// Pro on the keys gets the same form and is not measured here. A keys player who holds ↑ to the line, as the go hint says,
+// crashes into the row on the Lineup (0/150 land): that is the guide's to fix, not the Daily's.
 // What a miss can change (0139, 0150): the gas, skim, mark and ninety days' misses name the choice that meets it, in the device's words. Measured on the
 // careful one-thumb population (human-phone.mjs 150 --scheme=thumb --skill=careful --daily, seed as committed):
 //   held from the tap · slid 27/29 met · no slide 10/10    lifted, pressed again · no slide 31/31 (all at 26 %) · slid 5/80
@@ -55,8 +58,9 @@ const r1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
 const PRO_WALL = 72;
 // The Lineup's mark day (0198): two turns within this of the mark (m).
 const LINEUP_MARK = 4;
-// 0218: the same day by hand (keys, a pad, two thumbs): one clean turn within this of the mark (m).
-const HAND_MARK = 5;
+// 0218: the same day by hand: one clean turn within this of the mark (m). Keys and a pad 5 m; two thumbs (classic touch,
+// and the iPhone app's Lineup) land clean less often (37 % against the keys' 61 %), so theirs is 10 m: past the outer ring.
+const handMark = (ctx) => (ctx?.device === 'touch' ? 10 : 5);
 // The Lineup's facts carry no crossedRow: clean there is landed, no contact with the row, and not on its roof.
 const cleanLineup = (f) => landed(f) && !f.contact && !f.flipped;
 
@@ -96,7 +100,7 @@ export const OBJECTIVES = [
   { id: 'roll-lineup', course: 'lineup', goal: () => 'Roll two turns over the row and land clean',
     check: (c, f) => (!cleanLineup(f) ? miss('no clean landing yet') : f.rotations >= 2 ? done() : turnsMiss(f)),
     hint: twiceHint, titleHint: twiceTitle, coach: twiceCoach,
-    hand: { goal: () => 'Roll a full turn over the row and land clean', check: (c, f) => handTurn(f) || done() } },
+    hand: () => ({ goal: () => 'Roll a full turn over the row and land clean', check: (c, f) => handTurn(f) || done() }) },
   { id: 'stick-wall', course: 'wall', goal: () => 'Stick it: score 84+',
     check: (c, f) => (c.total >= 84 && landed(f) ? done() : miss(`${r1(c.total)}, need 84`)) },
   { id: 'ninety-show', course: 'show', goal: () => 'Score 90 or more',
@@ -114,8 +118,11 @@ export const OBJECTIVES = [
     hint: (ctx, r) => (r?.turns ? twiceHint(ctx) : aimHint(ctx)),
     titleHint: (ctx, whole) => (!thumbOn(ctx) ? '' : whole ? 'Slide up on the run-up, then onto the amber dot' : 'Slide up on the run-up'),
     coach: twiceCoach,
-    hand: { goal: () => `Roll a full turn and land within ${len(HAND_MARK)} of the mark`,
-      check: (c, f) => handTurn(f) || (f.padMiss <= HAND_MARK ? done() : miss(`${len(f.padMiss, 1)} off the mark`, true)) } },
+    hand: (ctx) => {
+      const m = handMark(ctx);
+      return { goal: () => `Roll a full turn and land within ${len(m)} of the mark`,
+        check: (c, f) => handTurn(f) || (f.padMiss <= m ? done() : miss(`${len(f.padMiss, 1)} off the mark`, true)) };
+    } },
   { id: 'scratch-show', course: 'show', goal: () => 'Clear the row without a scratch',
     check: (c, f) => (cleanOver(f) && (f.damagePct ?? 0) === 0 ? done() : !cleanOver(f) ? miss('clear the row and land clean first') : miss(`${f.damagePct} % damage`)) },
 ];
@@ -139,7 +146,7 @@ function twiceCoach(ctx, r) { return thumbOn(ctx) && r?.turns ? 'For the Daily: 
 // Lineup's: the second turn is the one thumb's call, and by hand no modelled player lands a 720) asks keys, a pad and two
 // thumbs for that instead: its own goal and check, the rest (hints, the coach) as the objective's. No ctx: the one thumb's
 // (a phone's, and every caller from before 0218).
-export const formOf = (obj, ctx) => (obj?.hand && ctx && !thumbOn(ctx) ? { ...obj, ...obj.hand } : obj);
+export const formOf = (obj, ctx) => (obj?.hand && ctx && !thumbOn(ctx) ? { ...obj, ...obj.hand(ctx) } : obj);
 // The line the title shows for today's objective, flown this way.
 export const goalOf = (obj, ctx) => formOf(obj, ctx).goal();
 

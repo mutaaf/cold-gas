@@ -668,7 +668,8 @@ const PROSE = ['27.7 m up the wall', 'Touchdown at 0.8 m/s with 3.2° of tilt.',
   '1,000,000 m', '0.25 m', '2,447 kgf', '0.05 bar', 'two meters', '12.5 meter', '+4 m', '1.2.3 m', '9 m/sx', '7 m²', '80 kN, 78 kN and 297 kg',
   '0.2 mm', '12,5 m', '3 m_', 'é4 m', '1500 kg', '1500.5 kg', '33 m/s', '0.123 km'];
 const CTXS = [{ device: 'touch', scheme: 'thumb', tier: 'assist' }, { device: 'touch', scheme: 'classic', tier: 'assist' }, { device: 'touch', scheme: 'classic', tier: 'pro' },
-  { device: 'touch', scheme: 'classic', tier: 'advanced' }, { device: 'pad', scheme: 'classic', tier: 'assist' }, { device: 'key', scheme: 'classic', tier: 'pro' }];
+  { device: 'touch', scheme: 'classic', tier: 'advanced' }, { device: 'pad', scheme: 'classic', tier: 'assist' }, { device: 'key', scheme: 'classic', tier: 'pro' },
+  { device: 'key', scheme: 'classic', tier: 'assist' }];   // 0218: the keys population the Lineup's hand form is measured on
 // Cards the runs don't reach, for the local lines' and the Daily's other branches: a real card with its facts bent.
 const BENDS = [['wrecked', { damagePct: 72 }], ['no-jump', { jumped: false, progressPct: 64 }], ['no-climb', { jumped: false, progressPct: 20 }],
   ['contact', { contact: true }], ['flipped', { flipped: true }], ['crashed', { crashed: true }], ['fell-off', { fellOff: true }],

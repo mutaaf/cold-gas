@@ -227,7 +227,8 @@ func ints(_ v: JSValue?) -> [[Int]] { (v?.arrayValue ?? []).map { ($0.arrayValue
             #expect(byId[a[1].stringValue!]!.goal(u) == a[2].stringValue!, "\(a[1].stringValue!) \(u.system)")
         }
         let pilots: [Daily.Pilot] = [.init(device: .touch, scheme: .thumb, tier: "assist"), .init(device: .touch, scheme: .classic, tier: "assist"), .init(device: .touch, scheme: .classic, tier: "pro"),
-                                     .init(device: .touch, scheme: .classic, tier: "advanced"), .init(device: .pad, scheme: .classic, tier: "assist"), .init(device: .key, scheme: .classic, tier: "pro")]
+                                     .init(device: .touch, scheme: .classic, tier: "advanced"), .init(device: .pad, scheme: .classic, tier: "assist"), .init(device: .key, scheme: .classic, tier: "pro"),
+                                     .init(device: .key, scheme: .classic, tier: "assist")]
         #expect(arr(client, "daily").count > 300)
         for x in arr(client, "daily") {
             let a = x.arrayValue!, u = Units(UnitSystem(rawValue: a[0].stringValue!)!), o = byId[a[1].stringValue!]!, name = a[2].stringValue!

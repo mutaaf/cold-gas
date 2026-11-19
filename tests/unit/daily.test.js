@@ -417,7 +417,7 @@ describe('the Lineup’s Daily on one thumb (0198)', () => {
 });
 
 // 0218: by hand (keys, a pad, two thumbs) no modelled player lands a 720, so a Lineup day asks those players for what a
-// hand flies: one clean turn over the row, and one within 5 m of the mark (scripts/daily-reach.mjs: keys 61 % and 41 %).
+// hand flies: one clean turn over the row, and one near the mark: 5 m on keys, 10 m on two thumbs (scripts/daily-reach.mjs).
 describe('the Lineup’s Daily by hand (0218)', () => {
   const roll = byId('roll-lineup'), mark = byId('mark-lineup');
   const thumb = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'lineup' };
@@ -435,7 +435,8 @@ describe('the Lineup’s Daily by hand (0218)', () => {
   it('the title shows the hand’s own words; one thumb and no ctx keep the two turns', () => {
     for (const c of hands) {
       expect(goalOf(roll, c)).toBe('Roll a full turn over the row and land clean');
-      expect(goalOf(mark, c)).toBe('Roll a full turn and land within 16 ft of the mark');
+      // Two thumbs land clean less often: their mark day is 10 m (scripts/daily-reach.mjs: 31 %; keys at 5 m, 33 %).
+      expect(goalOf(mark, c)).toBe(`Roll a full turn and land within ${c.device === 'touch' ? '33' : '16'} ft of the mark`);
       expect(titleHint(roll, c)).toBe('');
     }
     for (const c of [thumb, undefined]) {
@@ -451,8 +452,9 @@ describe('the Lineup’s Daily by hand (0218)', () => {
     for (const c of hands) {
       expect(evaluate(roll, ref, 'lineup', c)).toEqual({ ok: true, miss: '' });
       expect(evaluate(roll, at({ rotations: 2, rollDeg: 731 }), 'lineup', c).ok).toBe(true);   // a 720 is more than a full turn
-      expect(evaluate(mark, at({ padMiss: 5 }), 'lineup', c).ok).toBe(true);
-      expect(evaluate(mark, at({ padMiss: 5.1 }), 'lineup', c)).toEqual({ ok: false, miss: '16.7 ft off the mark', fix: true });
+      const [edge, past] = c.device === 'touch' ? [10, '33.1'] : [5, '16.7'];
+      expect(evaluate(mark, at({ padMiss: edge }), 'lineup', c).ok).toBe(true);
+      expect(evaluate(mark, at({ padMiss: edge + 0.1 }), 'lineup', c)).toEqual({ ok: false, miss: `${past} ft off the mark`, fix: true });
       expect(evaluate(roll, at({ contact: true }), 'lineup', c).miss).toBe('no clean landing yet');
       expect(evaluate(roll, at({ flipped: true }), 'lineup', c).miss).toBe('no clean landing yet');
       expect(evaluate(roll, at({ rotations: 0, rollDeg: 40 }), 'lineup', c)).toEqual({ ok: false, miss: 'rolled 40°, need 360°' });
@@ -462,9 +464,9 @@ describe('the Lineup’s Daily by hand (0218)', () => {
   });
 
   it('the miss line names a change a hand can make, never "need 720°" with "try again"', () => {
-    const keys = hands[0], off = at({ padMiss: 9.6 });
+    const keys = hands[0], off = at({ padMiss: 11.2 });
     const line = missLine(mark, evaluate(mark, off, 'lineup', keys), keys);
-    expect(line).toBe(`Daily: 31.5 ft off the mark · ${coachWords(keys).aim}`);
+    expect(line).toBe(`Daily: 36.7 ft off the mark · ${coachWords(keys).aim}`);
     for (const c of hands) for (const o of [roll, mark]) for (const card of [ref, off, at({ contact: true }), at({ rotations: 0, rollDeg: 40 })]) {
       const r = evaluate(o, card, 'lineup', c);
       if (r.ok) continue;

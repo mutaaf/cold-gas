@@ -42,7 +42,7 @@ export function stream(seed) {
 export const POPULATION = {
   thumb: 'one thumb, Assist, careful (slides onto the amber dot)',
   touch: 'two thumbs (classic touch), Assist: lift, roll by the cue, LAND, each a reaction late (the Lineup\'s `hand` form, 0218)',
-  keys: 'keys, Assist, the Lineup by hand: ↑ to their own speed, Space at the line, ← or → by the roll-out cue, Shift by its cue (0218)',
+  keys: 'keys, Assist, the Lineup by hand: ↑ to their own speed (a seventh hold it to the line), Space at the line, ← or → by the roll-out cue, Shift by its cue (0218)',
   pro: 'keys, Pro, 1.0 cues (scripts/human-show.mjs pro --cues=new), on the course the objective names',
 };
 // Which population flies an objective: Pro objectives the Pro players; every course on Assist one thumb (0181: the Lineup
@@ -198,7 +198,8 @@ export function flyTouch(course, r) {
 
 // 0218: one keyboard player on the Lineup (Assist), every key through src/input.js's own mapping (keyDown / keyUp / sample,
 // as the browser's handlers call them; LESSONS 2026-11-18). ↑ to their own run-up speed (6–8.5 m/s, as flyTouch's: let go
-// over it and pressed again under it, a reaction after each change), Space at the line ("Hold Space at the line", timed to
+// over it and pressed again under it, a reaction after each change; a seventh hold it to the line, as "Hold ↑ to go" says),
+// Space at the line ("Hold Space at the line", timed to
 // it as it comes: −0.15 to +0.25 s, held 0.35–0.5 s), ← or → held from its cue ("← → to roll") a reaction late until the
 // roll-out reads upright, then let go a reaction later; Shift a reaction after its cue ("Hold Shift") and held, or (a
 // quarter) never: Assist's auto-land. Half tap ← / → toward the mark once rolled out and above 2.5 m.
@@ -206,7 +207,7 @@ const LINE = COURSES.lineup.lineupZ0 - 6.5;   // src/main.js LINEUP_LINE
 const KEYS = ['ArrowUp', 'Space', 'ArrowLeft', 'ArrowRight', 'ShiftLeft'];
 export function flyKeysLineup(r) {
   const lag = 0.18 + r() * 0.25, lagT = Math.round(lag * 240);
-  const P = { speed: r.pick([6, 6.5, 7, 7.5, 8, 8.5]), early: -0.15 + r() * 0.4, hold: r.pick([0.35, 0.4, 0.45, 0.5]),
+  const P = { speed: r.pick([6, 6.5, 7, 7.5, 8, 8.5, Infinity]), early: -0.15 + r() * 0.4, hold: r.pick([0.35, 0.4, 0.45, 0.5]),
     side: r() < 0.5 ? 'ArrowLeft' : 'ArrowRight', land: r.pick(['cue', 'cue', 'cue', 'never']), steer: r() < 0.5 };
   freshRun();
   const run = createRun('lineup'), inp = newInput(), { pad } = COURSES.lineup;

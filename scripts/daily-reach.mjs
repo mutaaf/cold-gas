@@ -14,9 +14,7 @@ const FLOOR = 0.3;
 console.log(`Daily reach · n ${n} per population and course · seed ${seed} · floor ${FLOOR * 100} %`);
 for (const [k, v] of Object.entries(POPULATION)) console.log(`  ${k.padEnd(6)} ${v}`);
 let low = 0;
-// 0218: an objective's `hand` form is held to the floor on the keys; on two thumbs (classic touch, a phone that picked
-// Classic) only to "someone can": two thumbs fly the Lineup's lift and roll by hand and land it clean less often.
-const floorOf = (r) => (r.form === 'hand' && r.population === 'touch' ? Number.MIN_VALUE : FLOOR);
+const floorOf = () => FLOOR;   // 0218: an objective's `hand` form too, on the keys and on two thumbs
 for (const r of reach({ n, seed })) {
   const o = OBJECTIVES.find((x) => x.id === r.id), goal = r.form ? goalOf(o, HAND[r.population]) : o.goal();
   if (r.share < floorOf(r)) low++;

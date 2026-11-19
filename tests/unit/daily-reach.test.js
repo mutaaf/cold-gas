@@ -21,20 +21,20 @@ describe('the Daily is in reach (0135)', () => {
   });
 
   it(`every objective is met by at least ${FLOOR * 100} % of the players who fly it`, () => {
-    // Two thumbs by hand (0218) have their own bar below.
-    const low = rows.filter((r) => r.share < FLOOR && !(r.form === 'hand' && r.population === 'touch')).map((r) => `${r.id} ${r.met}/${r.n} (${r.population})`);
+    const low = rows.filter((r) => r.share < FLOOR).map((r) => `${r.id} ${r.met}/${r.n} (${r.population})`);
     expect(low).toEqual([]);
   });
 
-  // 0218: a Lineup day by hand is its `hand` form; no device that can be shown it is left with a day nobody meets.
-  it('a Lineup day by hand: the keys meet it 30–70 %, two thumbs more than none', () => {
+  // 0218: a Lineup day by hand is its `hand` form, held to the floor above on the keys and on two thumbs; and on the keys
+  // it is no gift either (the ticket's 30–70 % at n 150; this sample of 40 gets a little room on top).
+  it('a Lineup day by hand: met by the keys and two thumbs, and not by every keys player', () => {
     const hand = rows.filter((r) => r.form === 'hand');
     expect(hand.map((r) => `${r.id} ${r.population}`).sort()).toEqual(['mark-lineup keys', 'mark-lineup touch', 'roll-lineup keys', 'roll-lineup touch']);
     expect(Object.keys(HAND).sort()).toEqual(['keys', 'touch']);
     for (const r of hand) {
       expect(r.n).toBe(40);
       expect(r.met, `${r.id} ${r.population}`).toBeGreaterThan(0);
-      if (r.population === 'keys') { expect(r.share).toBeGreaterThanOrEqual(FLOOR); expect(r.share).toBeLessThanOrEqual(0.7); }
+      if (r.population === 'keys') expect(r.share).toBeLessThanOrEqual(0.75);
     }
   });
 
