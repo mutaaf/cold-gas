@@ -40,7 +40,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         if let which = Launch.value("-replay") { load(course: nil, vector: which) }
 
         // No GPU work off screen (iOS kills an app that encodes in the background); the run pauses as it loses the screen.
-        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in self?.link?.isPaused = true }
+        NotificationCenter.default.addObserver(forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main) { [weak self] _ in self?.link?.isPaused = true; MainActor.assumeIsolated { PerfCenter.shared.paused() } }
         NotificationCenter.default.addObserver(forName: UIApplication.willEnterForegroundNotification, object: nil, queue: .main) { [weak self] _ in self?.lastFrame = 0; self?.link?.isPaused = false }
         NotificationCenter.default.addObserver(forName: UIApplication.willResignActiveNotification, object: nil, queue: .main) { _ in MainActor.assumeIsolated { Game.shared.resignActive() } }
         NotificationCenter.default.addObserver(forName: ProcessInfo.thermalStateDidChangeNotification, object: nil, queue: .main) { [weak self] _ in self?.renderer?.applyThermal() }
@@ -81,6 +81,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
             MainActor.assumeIsolated { Game.shared.notice = StageView.cantDraw }
             return
         }
+        let sign = Signs.poster.beginInterval("stage", id: Signs.poster.makeSignpostID(), "\(course, privacy: .public)")   // 0300
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in
             // 0293: a renderer that can't be built is tried once more without the pipeline cache (the damaged-cache case).
             var r = Renderer(device: device, course: course, replay: nil)
@@ -90,6 +91,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
                 retried = true
                 r = Renderer(device: device, course: course, replay: nil)
             }
+            Signs.poster.endInterval("stage", sign, "\(r == nil ? "failed" : retried ? "retried" : "built", privacy: .public)")
             DispatchQueue.main.async {
                 guard let self else { return }
                 let waiting = self.pendingBuilds.removeValue(forKey: course) ?? []
@@ -181,6 +183,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         let now = CACurrentMediaTime()
         stats.add(interval: update.targetPresentationTimestamp, cpu: (now - cpu0) * 1000)
         InputLag.frame(target: update.targetPresentationTimestamp)
+        MainActor.assumeIsolated { PerfCenter.shared.frame(present: update.targetPresentationTimestamp, cadence: r.cadence, scale: r.scale) }   // 0300
         if stats.firstFrame { Ready.mark("frame") }
         if stats.frames % 60 == 0 {
             NotificationCenter.default.post(name: .frameStats, object: String(format: "%.0f fps · %.2f ms cpu\n%d×%d px · render %.0f%% · MSAA 4× · MetalFX · %d Hz · %@", stats.fps, stats.cpuAvg, Int(metal.drawableSize.width), Int(metal.drawableSize.height), r.scale * 100, r.cadence, Look.current.title))
