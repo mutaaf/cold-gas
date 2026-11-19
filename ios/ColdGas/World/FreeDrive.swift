@@ -123,10 +123,18 @@ final class FreeDrive: DriveScene {
         car.world.streamer = streamer
         // The chassis puts its downforce at the axles; the streamer's (through the centre) is for the scored model.
         streamer.aero = !ownCar
-        looseSpots = looseSet(stageOf(course.id))
-        for s in looseSpots { addLoose(car.world, s.kind, x: s.x, y: 0, z: s.z, yaw: s.yaw) }
+        // The set's loose things and its dressing (0273: tyre stacks, drums, cases, barrier, the generator), at their masses.
+        looseSpots = looseSet(stageOf(course.id)) + dressingSet(stageOf(course.id))
+        for s in looseSpots { addLoose(car.world, s.kind, x: s.x, y: s.y, z: s.z, yaw: s.yaw) }
         looseSpeed = Array(repeating: 0, count: looseSpots.count)
         chassis.stability(FreeDrive.stability)
+        // A roam's small challenges (0274), kept on this device per set.
+        if onMark {
+            let st = stageOf(course.id)
+            challenges = SetChallenges(stage: st, saved: FreeDrive.savedChallenges(st))
+            tyreIdx = looseSpots.indices.filter { looseSpots[$0].kind == .tyre }
+            laneIdx = st == "lineup" ? looseSpots.indices.filter { let s = looseSpots[$0]; return s.kind == .cone && abs(abs(s.x) - 3.6) < 0.01 && s.z <= -4 && s.z >= -64 } : []
+        }
         if onMark, let c = COURSES[stageOf(course.id)] { place(x: c.startX, z: c.startZ, yaw: 0) }
         else { place(x: course.startX, z: course.startZ, yaw: course.id == "drive-lineup" ? 0 : .pi) }
     }
@@ -176,6 +184,8 @@ final class FreeDrive: DriveScene {
         say("Back on the road")
     }
     private func say(_ s: String) { cue = s; cueT = time }
+    /// The game's line for a moment (a challenge done), shown as the drive's own cues are.
+    func announce(_ s: String) { say(s) }
     private var forward: (Double, Double) {
         let q = car.quat
         return (2 * (q.x * q.z + q.w * q.y), 1 - 2 * (q.x * q.x + q.y * q.y))
@@ -262,6 +272,7 @@ final class FreeDrive: DriveScene {
             }
             looseHits()
             roadside()
+            challengeFrame(dt)
         }
         track.trim(keep: 16)
         dist = (car.pos.x * car.pos.x + car.pos.z * car.pos.z).squareRoot()
@@ -384,9 +395,84 @@ final class FreeDrive: DriveScene {
             let v = b.speed, was = looseSpeed[i]
             looseSpeed[i] = v
             if let k = LooseKind.knock(b.kind, dv: v - was) {
-                Sound.shared.hit(b.kind == .cone || b.kind == .barrier ? .plastic : b.kind == .fence ? .wood : b.kind == .rail ? .rail : .sign, k: k, at: SIMD3<Float>(Float(b.x - origin.x), Float(b.y - origin.y), Float(b.z - origin.z)), seed: i &* 7919 &+ Int(v * 100))
-                HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: Float(0.25 + 0.6 * k), sharpness: b.kind == .cone ? 0.85 : 0.5))
+                Sound.shared.hit(FreeDrive.hitMaterial(b.kind), k: k, at: SIMD3<Float>(Float(b.x - origin.x), Float(b.y - origin.y), Float(b.z - origin.z)), seed: i &* 7919 &+ Int(v * 100))
+                HapticPlayer.shared.play(HapticEvent(kind: .hit, tick: 0, channel: 4, intensity: Float(0.25 + 0.6 * k), sharpness: b.kind == .cone || b.kind == .drum ? 0.85 : b.kind == .tyre ? 0.3 : 0.5))
             }
+        }
+    }
+    // MARK: - Roam's challenges (0274)
+
+    /// The set's challenges (a roam only; nil in Free Drive).
+    private(set) var challenges: SetChallenges?
+    private var tyreIdx: [Int] = [], laneIdx: [Int] = []
+    /// How long each tyre has been off its stack: one counts once it's stayed off half a second (a tyre read mid-wobble, or
+    /// in the world's first frames, isn't down).
+    private var tyreDownT: [Double] = []
+    /// What's happened since the game last asked (it says it, buzzes and saves).
+    private var challengeEvents: [SetChallengeEvent] = []
+    func drainChallenges() -> [SetChallengeEvent] { defer { challengeEvents.removeAll(keepingCapacity: true) }; return challengeEvents }
+    private func challengeFrame(_ dt: Double) {
+        guard let ch = challenges, cruise == nil, pilot == nil else { return }
+        let loose = car.world.loose
+        var down = 0
+        if tyreDownT.count != tyreIdx.count { tyreDownT = Array(repeating: 0, count: tyreIdx.count) }
+        for (j, i) in tyreIdx.enumerated() where i < loose.count {
+            let b = loose[i], s = looseSpots[i]
+            let up = 1 - 2 * (b.qx * b.qx + b.qz * b.qz)
+            let moved = ((b.x - s.x) * (b.x - s.x) + (b.z - s.z) * (b.z - s.z)).squareRoot()
+            let off = b.y < s.y + b.kind.half.1 - 0.08 || moved > 1.0 || up < 0.7
+            tyreDownT[j] = off ? tyreDownT[j] + dt : 0
+            if off && tyreDownT[j] >= 0.5 {
+                down += 1
+                #if DEBUG
+                if Launch.args.contains("-roam-log") && Int(time * 2) != Int((time - dt) * 2) { FreeDrive.roamLog(String(format: "ROAM %.2f tyre %d down: y %.3f (stood %.3f) moved %.2f up %.2f asleep %d car (%.1f, %.1f)", time, i, b.y, s.y + b.kind.half.1, moved, up, b.asleep ? 1 : 0, car.pos.x, car.pos.z)) }
+                #endif
+            }
+        }
+        let conesMoved = laneIdx.contains { $0 < loose.count && loose[$0].speed > 0.05 }
+        let speed = (car.vel.x * car.vel.x + car.vel.y * car.vel.y + car.vel.z * car.vel.z).squareRoot()
+        let airborne = car.grounded == 0 && !car.hullContact
+        let ev = ch.update(dt: dt, x: car.pos.x, y: car.pos.y, z: car.pos.z, speed: speed, airborne: airborne, tyresDown: down, conesMoved: conesMoved)
+        if !ev.isEmpty {
+            #if DEBUG
+            if Launch.args.contains("-roam-log") { FreeDrive.roamLog(String(format: "ROAM at %.2f s: %@ · car (%.1f, %.2f, %.1f) %.1f m/s air %d", time, "\(ev)", car.pos.x, car.pos.y, car.pos.z, speed, airborne ? 1 : 0)) }
+            #endif
+            challengeEvents += ev
+            FreeDrive.saveChallenges(ch)
+        }
+    }
+    #if DEBUG
+    /// `-roam-log`: the challenges' moments into Caches/roam.log (a shot's launch has no console).
+    static func roamLog(_ s: String) {
+        print(s)
+        let url = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask)[0].appendingPathComponent("roam.log")
+        if let h = try? FileHandle(forWritingTo: url) { h.seekToEndOfFile(); h.write((s + "\n").data(using: .utf8)!); try? h.close() }
+        else { try? (s + "\n").write(to: url, atomically: true, encoding: .utf8) }
+    }
+    #endif
+    private static func key(_ stage: String) -> String { "coldgas.roam.challenges.\(stage)" }
+    static func savedChallenges(_ stage: String) -> [SetChallengeKind: SetChallengeState] {
+        guard let d = UserDefaults.standard.data(forKey: key(stage)), let m = try? JSONDecoder().decode([String: SetChallengeState].self, from: d) else { return [:] }
+        var out: [SetChallengeKind: SetChallengeState] = [:]
+        for (k, v) in m { if let kk = SetChallengeKind(rawValue: k) { out[kk] = v } }
+        return out
+    }
+    static func saveChallenges(_ ch: SetChallenges) {
+        var m: [String: SetChallengeState] = [:]
+        for (k, v) in ch.states { m[k.rawValue] = v }
+        if let d = try? JSONEncoder().encode(m) { UserDefaults.standard.set(d, forKey: key(ch.stage)) }
+    }
+
+    /// What a loose thing sounds like struck: plastic, timber, steel (a drum rings like a rail), concrete, rubber's dull thump.
+    static func hitMaterial(_ k: LooseKind) -> HitMaterial {
+        switch k {
+        case .cone, .barrier: return .plastic
+        case .fence, .roadCase: return .wood
+        case .rail, .drum: return .rail
+        case .sign, .signpost: return .sign
+        case .kRail: return .stone
+        case .tyre: return .earth
+        case .generator: return .body
         }
     }
     /// The roadside's breaks and restorations (0227): the drawn instance hidden or shown, and a break felt and heard by
@@ -409,7 +495,7 @@ final class FreeDrive: DriveScene {
     func resetSet() {
         let spots = looseSpots, loose = car.world.loose
         // (the roadside's broken pieces past the set's own stay where they lie: theirs is the streamer's to restore)
-        resetLoose(car.world) { i in if i < spots.count { let s = spots[i]; return (s.x, 0, s.z, s.yaw) }; let b = loose[i]; return (b.x, b.y - b.kind.half.1, b.z, 2 * atan2(b.qy, b.qw)) }
+        resetLoose(car.world) { i in if i < spots.count { let s = spots[i]; return (s.x, s.y, s.z, s.yaw) }; let b = loose[i]; return (b.x, b.y - b.kind.half.1, b.z, 2 * atan2(b.qy, b.qw)) }
         for i in looseSpeed.indices { looseSpeed[i] = 0 }
         view?.marks?.clear()
     }
