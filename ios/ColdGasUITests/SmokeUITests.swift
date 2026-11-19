@@ -10,10 +10,15 @@ final class SmokeUITests: XCTestCase {
     private func shot(_ name: String) {
         let s = XCTAttachment(screenshot: XCUIScreen.main.screenshot()); s.name = name; s.lifetime = .keepAlways; add(s)
     }
-    private func healthy(_ a: XCUIApplication, _ at: String, line: UInt = #line) {
+    /// The probe counts every fault since launch, so a stop where a sheet hides it (the results' modal judges) is checked at
+    /// the next stop that shows it; the title always does (`required`).
+    private func healthy(_ a: XCUIApplication, _ at: String, required: Bool = false, line: UInt = #line) {
         sleep(1)
         let p = a.staticTexts["health"]
-        XCTAssertTrue(p.waitForExistence(timeout: 10), "no health probe (\(at))", line: line)
+        guard p.waitForExistence(timeout: required ? 10 : 3) else {
+            if required { XCTFail("no health probe (\(at))", line: line) }
+            return
+        }
         XCTAssertEqual(p.label, "faults 0", "\(at): \((p.value as? String) ?? "")", line: line)
     }
     /// A tap that a busy simulator can drop: again until `shows` appears (three tries).
@@ -34,7 +39,7 @@ final class SmokeUITests: XCTestCase {
         a.launch()
         let play = a.buttons["play"]
         XCTAssertTrue(play.waitForExistence(timeout: 90), "the title never came up")
-        healthy(a, "title")
+        healthy(a, "title", required: true)
 
         // Each course in turn: the Show, then Next to the Wall, then Next to the Lineup.
         play.tap()
@@ -49,6 +54,7 @@ final class SmokeUITests: XCTestCase {
         }
         a.buttons["Home"].firstMatch.tap()
         XCTAssertTrue(play.waitForExistence(timeout: 30), "Home didn't reach the title")
+        healthy(a, "title after the runs", required: true)
 
         // A roam on the set, then Free Drive: in, a few seconds of the world, out.
         for (id, name) in [("roam", "roam"), ("freedrive", "free drive")] {
@@ -84,11 +90,14 @@ final class SmokeUITests: XCTestCase {
         shot("settings")
         a.buttons["Done"].firstMatch.tap()
         XCTAssertTrue(play.waitForExistence(timeout: 20), "Settings didn't close")
-        healthy(a, "after settings")
+        healthy(a, "after settings", required: true)
 
         // The look chosen last draws on the title, and one more run flies under it.
         play.tap()
         XCTAssertNotNil(results(a), "a run after the settings never reached its results")
         healthy(a, "the last run")
+        let home = a.buttons["Home"].firstMatch
+        if home.exists { home.tap(); XCTAssertTrue(play.waitForExistence(timeout: 30)) }
+        healthy(a, "the end", required: true)
     }
 }
