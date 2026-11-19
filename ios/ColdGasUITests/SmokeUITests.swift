@@ -42,14 +42,15 @@ final class SmokeUITests: XCTestCase {
         healthy(a, "title", required: true)
 
         // Each course in turn: the Show, then Next to the Wall, then Next to the Lineup.
-        play.tap()
+        let pause = a.buttons["Pause"]
+        XCTAssertTrue(tapUntil(play, shows: pause), "Fly didn't start a run")
         for course in ["show", "wall", "lineup"] {
             guard let b = results(a) else { XCTFail("\(course): the results never came up"); return }
             shot("results-\(course)")
             healthy(a, "results \(course)")
             if course != "lineup" {
                 XCTAssertEqual(b.identifier, "next", "\(course) didn't land: no Next")
-                b.tap()
+                XCTAssertTrue(tapUntil(b, shows: pause), "Next didn't start the next run")
             }
         }
         a.buttons["Home"].firstMatch.tap()
@@ -93,7 +94,7 @@ final class SmokeUITests: XCTestCase {
         healthy(a, "after settings", required: true)
 
         // The look chosen last draws on the title, and one more run flies under it.
-        play.tap()
+        XCTAssertTrue(tapUntil(play, shows: pause), "Fly didn't start the last run")
         XCTAssertNotNil(results(a), "a run after the settings never reached its results")
         healthy(a, "the last run")
         let home = a.buttons["Home"].firstMatch
