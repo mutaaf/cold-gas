@@ -26,6 +26,19 @@ final class SmokeUITests: XCTestCase {
         for _ in 0..<3 { if b.exists { b.tap() }; if shows.waitForExistence(timeout: 12) { return true } }
         return false
     }
+    /// Home from the results: again until the results' buttons are gone (the title's Fly sits under the sheet, so its
+    /// existence proves nothing).
+    private func home(_ a: XCUIApplication) -> Bool {
+        let gone = NSPredicate(format: "exists == false")
+        for _ in 0..<3 {
+            let h = a.buttons["Home"].firstMatch
+            if h.exists { h.tap() }
+            let w = XCTNSPredicateExpectation(predicate: gone, object: a.buttons["next"])
+            let w2 = XCTNSPredicateExpectation(predicate: gone, object: a.buttons["again"])
+            if XCTWaiter().wait(for: [w, w2], timeout: 12) == .completed { return true }
+        }
+        return false
+    }
     private func results(_ a: XCUIApplication, timeout: Double = 240) -> XCUIElement? {
         let next = a.buttons["next"], again = a.buttons["again"]
         let end = Date().addingTimeInterval(timeout)
@@ -53,7 +66,7 @@ final class SmokeUITests: XCTestCase {
                 XCTAssertTrue(tapUntil(b, shows: pause), "Next didn't start the next run")
             }
         }
-        a.buttons["Home"].firstMatch.tap()
+        XCTAssertTrue(home(a), "Home didn't leave the results")
         XCTAssertTrue(play.waitForExistence(timeout: 30), "Home didn't reach the title")
         healthy(a, "title after the runs", required: true)
 
@@ -97,8 +110,7 @@ final class SmokeUITests: XCTestCase {
         XCTAssertTrue(tapUntil(play, shows: pause), "Fly didn't start the last run")
         XCTAssertNotNil(results(a), "a run after the settings never reached its results")
         healthy(a, "the last run")
-        let home = a.buttons["Home"].firstMatch
-        if home.exists { home.tap(); XCTAssertTrue(play.waitForExistence(timeout: 30)) }
+        XCTAssertTrue(home(a), "Home didn't leave the last results")
         healthy(a, "the end", required: true)
     }
 }
