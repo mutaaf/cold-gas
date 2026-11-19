@@ -656,7 +656,7 @@ final class Renderer {
         mp.colorAttachments[0].texture = msaa; mp.colorAttachments[0].resolveTexture = hdr
         mp.colorAttachments[0].loadAction = .dontCare; mp.colorAttachments[0].storeAction = .multisampleResolve
         mp.depthAttachment.texture = depth; mp.depthAttachment.loadAction = .clear; mp.depthAttachment.clearDepth = 1; mp.depthAttachment.storeAction = .dontCare
-        let glowsOn = nGlows > 0 && shed < 2 && !skip.contains("glows") && !away && depthRes != nil
+        let glowsOn = nGlows > 0 && shed < 2 && !skip.contains("glows") && !away && depthRes != nil && look == .real   // (#434: Anime and 8-bit draw no lit air)
         if let depthRes, glowsOn || targetLook == .anime { mp.depthAttachment.resolveTexture = depthRes; mp.depthAttachment.depthResolveFilter = .sample0; mp.depthAttachment.storeAction = .multisampleResolve }   // Anime's ink, the lit air
         if let e = cmd.makeRenderCommandEncoder(descriptor: mp) {
             e.setVertexBuffer(fb, offset: 0, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1)
