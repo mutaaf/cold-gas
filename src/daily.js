@@ -30,8 +30,12 @@
 // two clean turns; onto the mark, 53 of them are within 4 m (the never-aimed 720 is at 4.3 m, the held-from-Go 360 meets
 // neither day). Phone-first: on keys or two thumbs the roll is flown by hand, and no modelled player of theirs lands a 720
 // (flyTouch: 0/150 land two turns; with the roll held through a second turn, 0/60; a keys Assist/Pro sweep of run-up speed, LIFT
-// hold and roll: 4 of 48 rolled two turns, none landed). So a Lineup day on keys is one to fly on a phone,
-// and its miss line says "try again" there rather than name a way that isn't modelled.
+// hold and roll: 4 of 48 rolled two turns, none landed). 0218: so by hand (keys, a pad, two thumbs) a Lineup day asks for
+// what a hand can fly (each objective's `hand` form, formOf): one clean turn over the row, and one clean turn within 5 m of
+// the mark. Measured n 150, seed 12345, on the keys (flyKeysLineup: ↑ to their own speed, Space at the line, ← or → by the
+// roll-out cue, Shift by its cue; scripts/daily-reach.mjs prints it) and on two thumbs (flyTouch):
+//   roll-lineup  by hand: a clean 360    keys 61 %   two thumbs 37 %
+//   mark-lineup  by hand: within 5 m     keys 41 %   two thumbs 21 %   (within 4 m: keys 34 %; 3 m: 27 %)
 // What a miss can change (0139, 0150): the gas, skim, mark and ninety days' misses name the choice that meets it, in the device's words. Measured on the
 // careful one-thumb population (human-phone.mjs 150 --scheme=thumb --skill=careful --daily, seed as committed):
 //   held from the tap · slid 27/29 met · no slide 10/10    lifted, pressed again · no slide 31/31 (all at 26 %) · slid 5/80
@@ -51,6 +55,8 @@ const r1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
 const PRO_WALL = 72;
 // The Lineup's mark day (0198): two turns within this of the mark (m).
 const LINEUP_MARK = 4;
+// 0218: the same day by hand (keys, a pad, two thumbs): one clean turn within this of the mark (m).
+const HAND_MARK = 5;
 // The Lineup's facts carry no crossedRow: clean there is landed, no contact with the row, and not on its roof.
 const cleanLineup = (f) => landed(f) && !f.contact && !f.flipped;
 
@@ -89,7 +95,8 @@ export const OBJECTIVES = [
   // 360; within 7 m) 150/150: the streak counted a run nobody flew. Measured below (n 150, seed 12345).
   { id: 'roll-lineup', course: 'lineup', goal: () => 'Roll two turns over the row and land clean',
     check: (c, f) => (!cleanLineup(f) ? miss('no clean landing yet') : f.rotations >= 2 ? done() : turnsMiss(f)),
-    hint: twiceHint, titleHint: twiceTitle, coach: twiceCoach },
+    hint: twiceHint, titleHint: twiceTitle, coach: twiceCoach,
+    hand: { goal: () => 'Roll a full turn over the row and land clean', check: (c, f) => handTurn(f) || done() } },
   { id: 'stick-wall', course: 'wall', goal: () => 'Stick it: score 84+',
     check: (c, f) => (c.total >= 84 && landed(f) ? done() : miss(`${r1(c.total)}, need 84`)) },
   { id: 'ninety-show', course: 'show', goal: () => 'Score 90 or more',
@@ -106,7 +113,9 @@ export const OBJECTIVES = [
       : f.padMiss <= LINEUP_MARK ? done() : miss(`${len(f.padMiss, 1)} off the mark`, true)),
     hint: (ctx, r) => (r?.turns ? twiceHint(ctx) : aimHint(ctx)),
     titleHint: (ctx, whole) => (!thumbOn(ctx) ? '' : whole ? 'Slide up on the run-up, then onto the amber dot' : 'Slide up on the run-up'),
-    coach: twiceCoach },
+    coach: twiceCoach,
+    hand: { goal: () => `Roll a full turn and land within ${len(HAND_MARK)} of the mark`,
+      check: (c, f) => handTurn(f) || (f.padMiss <= HAND_MARK ? done() : miss(`${len(f.padMiss, 1)} off the mark`, true)) } },
   { id: 'scratch-show', course: 'show', goal: () => 'Clear the row without a scratch',
     check: (c, f) => (cleanOver(f) && (f.damagePct ?? 0) === 0 ? done() : !cleanOver(f) ? miss('clear the row and land clean first') : miss(`${f.damagePct} % damage`)) },
 ];
@@ -117,13 +126,22 @@ const thumbOn = (ctx) => ctx?.device === 'touch' && ctx.scheme === 'thumb';
 // Onto the mark, in the device's words (0150: mark-show and ninety-show): one thumb slides onto the amber dot, the rest lean.
 function aimHint(ctx) { return thumbOn(ctx) ? 'hold the pad in the air and slide onto the amber dot, following it down' : coachWords(ctx).aim; }
 // 0198: one turn where the day asks two. `turns`: the hint names the call, not the aim. On one thumb the call is a slide up
-// on the run-up; keys and two thumbs fly the roll by hand, and no modelled player of theirs lands a 720 (see the header),
-// so there the miss says "try again" rather than promise a way.
+// on the run-up; by hand the day is the `hand` form's (0218), so this miss is the one thumb's only.
 const turnsMiss = (f) => ({ ok: false, miss: `rolled ${f.rollDeg}°, need 720°`, fix: true, turns: true });
+// 0218: by hand, a clean landing with at least one full turn (a 720 counts too); null when it has both.
+const handTurn = (f) => (!cleanLineup(f) ? miss('no clean landing yet') : f.rotations >= 1 ? null : miss(`rolled ${f.rollDeg}°, need 360°`));
 function twiceHint(ctx) { return thumbOn(ctx) ? 'slide up on the run-up for two turns' : ''; }
 function twiceTitle(ctx, whole) { return !thumbOn(ctx) ? '' : whole ? 'Slide up on the run-up for two turns' : 'Slide up on the run-up'; }
 // The sheet's NEXT RUN line on a one-turn Lineup day: the coach would teach the mark, the day wants the call.
 function twiceCoach(ctx, r) { return thumbOn(ctx) && r?.turns ? 'For the Daily: slide up on the run-up for two turns' : ''; }
+
+// 0218: the form of an objective for the way it is flown (ctx as src/pointer.js). An objective with a `hand` form (the
+// Lineup's: the second turn is the one thumb's call, and by hand no modelled player lands a 720) asks keys, a pad and two
+// thumbs for that instead: its own goal and check, the rest (hints, the coach) as the objective's. No ctx: the one thumb's
+// (a phone's, and every caller from before 0218).
+export const formOf = (obj, ctx) => (obj?.hand && ctx && !thumbOn(ctx) ? { ...obj, ...obj.hand } : obj);
+// The line the title shows for today's objective, flown this way.
+export const goalOf = (obj, ctx) => formOf(obj, ctx).goal();
 
 // The results' line for a missed Daily (0139): the reason with its number, then what to change in this device's words
 // (ctx as src/pointer.js: { device, scheme, tier, course }) when the objective has one, else "try again".
@@ -171,9 +189,10 @@ export function objectiveIndex(day) {
 export const objectiveFor = (ms) => OBJECTIVES[objectiveIndex(dayNumber(ms))];
 
 // Judge a run against an objective. Only a run on the objective's course counts; `card` is scoreRun's.
-export function evaluate(obj, card, course) {
+// `ctx`: how it was flown (0218: picks the objective's form; none is the one thumb's).
+export function evaluate(obj, card, course, ctx) {
   if (!obj || !card || course !== obj.course) return null;
-  return obj.check(card, card.facts || {});
+  return formOf(obj, ctx).check(card, card.facts || {});
 }
 
 // --- the streak ---------------------------------------------------------------------------------------

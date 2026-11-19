@@ -4,7 +4,7 @@ import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { setUnits } from '../../src/units.js';
 import { OBJECTIVES, objectiveIndex, objectiveFor, evaluate, dayNumber, dayKey, keyToDay, readStreak, streakNow, complete,
-  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint, dailyCoach, dailyItems, dailySwapsHold } from '../../src/daily.js';
+  loadStreak, saveStreak, EPOCH, DAY_MS, missLine, titleHint, dailyCoach, dailyItems, dailySwapsHold, formOf, goalOf } from '../../src/daily.js';
 import { newInput } from '../../src/sim/vehicle.js';
 import { predict, newPrediction } from '../../src/sim/predict.js';
 import { SPEC } from '../../src/sim/spec.js';
@@ -406,13 +406,70 @@ describe('the Lineup’s Daily on one thumb (0198)', () => {
     for (const o of [roll, mark]) expect(evaluate(o, aimed, 'lineup'), o.id).toEqual({ ok: true, miss: '' });
   });
 
-  it('the title says the call on one thumb; keys and two thumbs get no way that isn’t modelled (phone-first)', () => {
+  it('the title says the call on one thumb; keys and two thumbs get their own day (0218)', () => {
     expect(titleHint(roll, thumb)).toBe('Slide up on the run-up');
     expect(titleHint(roll, thumb, true)).toBe('Slide up on the run-up for two turns');
     expect(titleHint(mark, thumb, true)).toBe('Slide up on the run-up, then onto the amber dot');
-    const r = evaluate(roll, held, 'lineup');
-    expect(missLine(roll, r, keys)).toBe(`Daily: rolled ${held.facts.rollDeg}°, need 720° — try again`);
     expect(titleHint(roll, keys)).toBe('');
-    expect(dailyCoach(roll, r, keys)).toBe('');
+    // The same clean 360, flown on the keys, meets the keys' days: never "need 720°" with "try again" there.
+    for (const o of [roll, mark]) expect(evaluate(o, held, 'lineup', keys), o.id).toEqual({ ok: true, miss: '' });
+  });
+});
+
+// 0218: by hand (keys, a pad, two thumbs) no modelled player lands a 720, so a Lineup day asks those players for what a
+// hand flies: one clean turn over the row, and one within 5 m of the mark (scripts/daily-reach.mjs: keys 61 % and 41 %).
+describe('the Lineup’s Daily by hand (0218)', () => {
+  const roll = byId('roll-lineup'), mark = byId('mark-lineup');
+  const thumb = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'lineup' };
+  const hands = [{ device: 'key', scheme: 'classic', tier: 'assist' }, { device: 'key', scheme: 'classic', tier: 'pro' },
+    { device: 'pad', scheme: 'classic', tier: 'assist' }, { device: 'touch', scheme: 'classic', tier: 'assist' }, { device: 'touch', scheme: 'classic', tier: 'pro' }]
+    .map((c) => ({ ...c, course: 'lineup' }));
+  let ref;
+  beforeAll(() => {
+    const run = createRun('lineup'), ap = createAutopilot('lineup');
+    while (run.phase !== 'done') stepRun(run, ap(run));
+    ref = scoreRun(run.t);
+  }, 60_000);
+  const at = (facts) => ({ ...ref, facts: { ...ref.facts, ...facts } });
+
+  it('the title shows the hand’s own words; one thumb and no ctx keep the two turns', () => {
+    for (const c of hands) {
+      expect(goalOf(roll, c)).toBe('Roll a full turn over the row and land clean');
+      expect(goalOf(mark, c)).toBe('Roll a full turn and land within 16 ft of the mark');
+      expect(titleHint(roll, c)).toBe('');
+    }
+    for (const c of [thumb, undefined]) {
+      expect(goalOf(roll, c)).toBe('Roll two turns over the row and land clean');
+      expect(formOf(mark, c)).toBe(mark);
+    }
+    // Only the Lineup's days have a hand form.
+    for (const o of OBJECTIVES.filter((x) => x.course !== 'lineup')) expect(formOf(o, hands[0])).toBe(o);
+  });
+
+  it('a clean 360 meets both; the mark day by hand at its edge', () => {
+    expect(ref.facts.rotations).toBe(1);
+    for (const c of hands) {
+      expect(evaluate(roll, ref, 'lineup', c)).toEqual({ ok: true, miss: '' });
+      expect(evaluate(roll, at({ rotations: 2, rollDeg: 731 }), 'lineup', c).ok).toBe(true);   // a 720 is more than a full turn
+      expect(evaluate(mark, at({ padMiss: 5 }), 'lineup', c).ok).toBe(true);
+      expect(evaluate(mark, at({ padMiss: 5.1 }), 'lineup', c)).toEqual({ ok: false, miss: '16.7 ft off the mark', fix: true });
+      expect(evaluate(roll, at({ contact: true }), 'lineup', c).miss).toBe('no clean landing yet');
+      expect(evaluate(roll, at({ flipped: true }), 'lineup', c).miss).toBe('no clean landing yet');
+      expect(evaluate(roll, at({ rotations: 0, rollDeg: 40 }), 'lineup', c)).toEqual({ ok: false, miss: 'rolled 40°, need 360°' });
+    }
+    // On one thumb the same 360 is still a turn short.
+    expect(evaluate(roll, ref, 'lineup', thumb).turns).toBe(true);
+  });
+
+  it('the miss line names a change a hand can make, never "need 720°" with "try again"', () => {
+    const keys = hands[0], off = at({ padMiss: 9.6 });
+    const line = missLine(mark, evaluate(mark, off, 'lineup', keys), keys);
+    expect(line).toBe(`Daily: 31.5 ft off the mark · ${coachWords(keys).aim}`);
+    for (const c of hands) for (const o of [roll, mark]) for (const card of [ref, off, at({ contact: true }), at({ rotations: 0, rollDeg: 40 })]) {
+      const r = evaluate(o, card, 'lineup', c);
+      if (r.ok) continue;
+      expect(missLine(o, r, c)).not.toMatch(/720/);
+      expect(dailyCoach(o, r, c)).toBe('');
+    }
   });
 });

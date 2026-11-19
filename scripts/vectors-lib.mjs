@@ -17,7 +17,7 @@ import { markOffset } from '../src/onethumb.js';
 import { input as IN, touchSettings, dom, STICK } from './vectors-dom.mjs';
 import { packBytes, unpackBytes, toB64url, fromB64url, vsFromHash, challengeUrl, compare, coarsen, COARSE_STEPS, CHANNELS, VS_MAX_CHARS } from '../src/challenge.js';
 import { localWords, boardRow, postMessage, rankLabel, LOCAL_WHY } from '../src/panel.js';
-import { OBJECTIVES, EPOCH, objectiveIndex, dayKey, dayNumber, evaluate, missLine, titleHint, readStreak, streakNow, complete } from '../src/daily.js';
+import { OBJECTIVES, EPOCH, objectiveIndex, dayKey, dayNumber, evaluate, missLine, titleHint, readStreak, streakNow, complete, goalOf } from '../src/daily.js';
 import { one, both, setUnits, getUnits, localize, toUS, fmtRoad, fmtSmall } from '../src/units.js';
 import { EDGE_DEFAULT } from '../src/ai/config.js';
 import { coach, readFlight, markMiss, markCost, sinkCost, namesMark, namesBraking, KEY_WORDS } from '../src/sim/coach.js';
@@ -706,7 +706,7 @@ export function clientVectors(flown) {
   const words = cards.map(([name, course, card]) => [name, course, cardOf(card), localWords(card)]);
   // Everything with a unit in it, with each system leading (setUnits is the module's own state: put back after).
   const was = getUnits();
-  const prose = [], goals = [], daily = [], readouts = [];
+  const prose = [], goals = [], daily = [], readouts = [], handGoals = [], handDaily = [];
   for (const s of ['us', 'metric']) {
     setUnits(s, { persist: false });
     for (const m of UNIT_SI) readouts.push([s, hex(m), fmtRoad(m), fmtSmall(m), both('len', m, { us: 0, metric: 1 }), both('speed', m)]);
@@ -715,6 +715,14 @@ export function clientVectors(flown) {
     for (const o of OBJECTIVES) for (const [name, course, card] of cards) {
       const res = evaluate(o, card, course);
       if (res) daily.push([s, o.id, name, res.ok, res.miss, !!res.fix, ...(res.ok ? [] : CTXS.map((c) => missLine(o, res, { ...c, course })))]);
+    }
+    // 0218: an objective's form for each way of flying it (formOf): the goal, and the check and miss line in that form.
+    for (const o of OBJECTIVES.filter((x) => x.hand)) for (const c of CTXS) {
+      handGoals.push([s, o.id, c, goalOf(o, c)]);
+      for (const [name, course, card] of cards) {
+        const res = evaluate(o, card, course, c);
+        if (res) handDaily.push([s, o.id, name, c, res.ok, res.miss, !!res.fix, res.ok ? '' : missLine(o, res, { ...c, course })]);
+      }
     }
   }
   setUnits(was, { persist: false });
@@ -749,7 +757,7 @@ export function clientVectors(flown) {
     .map((x) => [x, postMessage(x)]);
   const ranks = [1, 7, 0, -2, 1.5, null, '3'].map((x) => [x, rankLabel(x)]);
   return { format: VECTOR_FORMAT, simVersion: SIM_VERSION, numbers, fixed, telemetry, bodies, units, readouts, prose, words, localWhy: [LOCAL_WHY],
-    objectives: OBJECTIVES.map((o) => [o.id, o.course, o.tier ?? null]), epoch: EPOCH, days, dayKeys, goals, daily, titles, streak, streakReads, rows, posts, ranks };
+    objectives: OBJECTIVES.map((o) => [o.id, o.course, o.tier ?? null]), epoch: EPOCH, days, dayKeys, goals, daily, handGoals, handDaily, titles, streak, streakReads, rows, posts, ranks };
 }
 
 // --- the coach (0160) ------------------------------------------------------------------------------

@@ -14,6 +14,9 @@
 //          0181, kept to compare): their own run-up speed,
 //          LIFT timed to the marker and held for their own press, the stick over until the roll-out cue says upright, then
 //          LAND; each decision a reaction late (flyTouch).
+//   keys   0218: the Lineup by hand on the keys (Assist; an objective's `hand` form, src/daily.js formOf): ↑ to their own
+//          run-up speed through src/input.js, Space at the line, ← or → by the roll-out cue, Shift by its cue (flyKeysLineup).
+//          The `touch` population flies the same form on two thumbs.
 //   pro    Pro objectives (no thumb: Pro is classic or keys): scripts/human-show.mjs's Pro population with the 1.0 cues
 //          (release on the ledge, boost by the cue, roll by the roll-out cue, one hard burn from the BRAKE line).
 //
@@ -26,6 +29,7 @@ import { SPEC } from '../../src/sim/spec.js';
 import { predict, newPrediction } from '../../src/sim/predict.js';
 import { createOneThumb, markOffset, THUMB } from '../../src/onethumb.js';
 import { OBJECTIVES, evaluate } from '../../src/daily.js';
+import { sample, keyDown, keyUp, freshRun } from '../../src/input.js';
 
 // A seeded LCG stream (the scripts' own).
 export function stream(seed) {
@@ -37,7 +41,8 @@ export function stream(seed) {
 
 export const POPULATION = {
   thumb: 'one thumb, Assist, careful (slides onto the amber dot)',
-  touch: 'two thumbs (classic touch), Assist: lift, roll by the cue, LAND, each a reaction late (not a Daily population since 0181)',
+  touch: 'two thumbs (classic touch), Assist: lift, roll by the cue, LAND, each a reaction late (the Lineup\'s `hand` form, 0218)',
+  keys: 'keys, Assist, the Lineup by hand: ↑ to their own speed, Space at the line, ← or → by the roll-out cue, Shift by its cue (0218)',
   pro: 'keys, Pro, 1.0 cues (scripts/human-show.mjs pro --cues=new), on the course the objective names',
 };
 // Which population flies an objective: Pro objectives the Pro players; every course on Assist one thumb (0181: the Lineup
@@ -191,6 +196,54 @@ export function flyTouch(course, r) {
   return run;
 }
 
+// 0218: one keyboard player on the Lineup (Assist), every key through src/input.js's own mapping (keyDown / keyUp / sample,
+// as the browser's handlers call them; LESSONS 2026-11-18). ↑ to their own run-up speed (6–8.5 m/s, as flyTouch's: let go
+// over it and pressed again under it, a reaction after each change), Space at the line ("Hold Space at the line", timed to
+// it as it comes: −0.15 to +0.25 s, held 0.35–0.5 s), ← or → held from its cue ("← → to roll") a reaction late until the
+// roll-out reads upright, then let go a reaction later; Shift a reaction after its cue ("Hold Shift") and held, or (a
+// quarter) never: Assist's auto-land. Half tap ← / → toward the mark once rolled out and above 2.5 m.
+const LINE = COURSES.lineup.lineupZ0 - 6.5;   // src/main.js LINEUP_LINE
+const KEYS = ['ArrowUp', 'Space', 'ArrowLeft', 'ArrowRight', 'ShiftLeft'];
+export function flyKeysLineup(r) {
+  const lag = 0.18 + r() * 0.25, lagT = Math.round(lag * 240);
+  const P = { speed: r.pick([6, 6.5, 7, 7.5, 8, 8.5]), early: -0.15 + r() * 0.4, hold: r.pick([0.35, 0.4, 0.45, 0.5]),
+    side: r() < 0.5 ? 'ArrowLeft' : 'ArrowRight', land: r.pick(['cue', 'cue', 'cue', 'never']), steer: r() < 0.5 };
+  freshRun();
+  const run = createRun('lineup'), inp = newInput(), { pad } = COURSES.lineup;
+  let upHeld = true, upChange = -1e9, spaceAt = -1, rollFrom = -1, rollSeen = -1, rolling = false, rolledOut = false, landCue = -1, shift = false, tap = null;
+  keyDown('ArrowUp');
+  while (run.phase !== 'done') {
+    const c = run.car, t = run.tick, v = Math.hypot(c.vel.x, c.vel.z), h = Math.max(0, c.pos.y - SPEC.comHeight);
+    if (run.phase === 'drive' && spaceAt < 0 && t - upChange > lagT && (v < P.speed) !== upHeld) {
+      upChange = t; upHeld = !upHeld;
+      if (upHeld) keyDown('ArrowUp'); else keyUp('ArrowUp');
+    }
+    if (spaceAt < 0 && run.phase === 'drive' && c.pos.z > LINE + P.early * v) {
+      spaceAt = t; keyDown('Space');
+      if (upHeld) { keyUp('ArrowUp'); upHeld = false; }
+    }
+    if (spaceAt >= 0 && t === spaceAt + Math.round(P.hold * 240)) keyUp('Space');
+    if (run.phase === 'air') {
+      predict(c, h, pr);
+      if (rollFrom < 0 && Math.abs(run.t.rollAccum) < 0.3 && c.vel.y < 4) rollFrom = t + lagT;
+      if (rollFrom >= 0 && t === rollFrom) { keyDown(P.side); rolling = true; }
+      if (rolling && rollSeen < 0 && Math.abs(run.t.rollAccum) > Math.PI && Math.abs(pr.rollOut) < 0.35 + lag * 2.5) rollSeen = t;
+      if (rolling && rollSeen >= 0 && t >= rollSeen + lagT) { keyUp(P.side); rolling = false; rolledOut = true; }
+      if (landCue < 0 && Math.abs(run.t.rollAccum) > 5.6 && c.vel.y < 0) landCue = t;
+      if (P.land === 'cue' && landCue >= 0 && !shift && t >= landCue + lagT) { keyDown('ShiftLeft'); shift = true; }
+      if (P.steer && rolledOut && h > 2.5) {
+        up(c, u); forward(c, fw);
+        const ez = pad.z - pr.landZ, ex = pad.x - pr.landX, side = ez * fw.x - ex * fw.z;
+        const want = u.y > 0.9 && Math.abs(side) > 1.5 && t % (2 * lagT) < lagT ? (side > 0 ? 'ArrowRight' : 'ArrowLeft') : null;
+        if (want !== tap) { if (tap) keyUp(tap); if (want) keyDown(want); tap = want; }
+      } else if (tap) { keyUp(tap); tap = null; }
+    }
+    stepRun(run, sample(run.phase, 'assist', inp, run.phase === 'air', c));   // src/main.js wallAssist: no fan on the Lineup
+  }
+  for (const k of KEYS) keyUp(k);
+  return run;
+}
+
 // One Pro player on the Show or the Wall (scripts/human-show.mjs, `pro --cues=new`; the BOOST cue is the Show's only).
 export function flyPro(course, r) {
   const P = { lag: 0.18 + r() * 0.25, climb: r.pick([3, 4, 5, 6, 8, 'hold']), hangWait: r.pick([0.2, 0.8, 2]), spaceHold: r.pick([0.1, 0.2, 0.5]),
@@ -265,7 +318,9 @@ export function flyPro(course, r) {
   return run;
 }
 
-const FLY = { thumb: flyThumb, touch: flyTouch, pro: flyPro };
+const FLY = { thumb: flyThumb, touch: flyTouch, pro: flyPro, keys: (course, r) => flyKeysLineup(r) };
+// 0218: how each hand population flies, in src/pointer.js's ctx (formOf picks the objective's form from it).
+export const HAND = { keys: { device: 'key', scheme: 'classic', tier: 'assist' }, touch: { device: 'touch', scheme: 'classic', tier: 'assist' } };
 // scoreRun's cards for `n` players of a population on a course (each population and course starts from `seed`).
 export function cards(pop, course, n = 150, seed = 12345) {
   const r = stream(seed), list = [];
@@ -287,11 +342,14 @@ export function reach({ n = 150, seed = 12345, objectives = OBJECTIVES } = {}) {
     if (!memo.has(k)) memo.set(k, cards(pop, course, n, seed));
     return memo.get(k);
   };
-  return objectives.map((o) => {
-    const population = populationOf(o), list = cardsFor(population, o.course);
-    const met = list.filter((s) => evaluate(o, s, o.course)?.ok).length;
+  const judge = (o, population, ctx) => {
+    const list = cardsFor(population, o.course);
+    const met = list.filter((s) => evaluate(o, s, o.course, ctx)?.ok).length;
     const row = { id: o.id, course: o.course, population, n: list.length, met, share: met / list.length };
+    if (ctx) row.form = 'hand';
     if (list.some((s) => 'called' in s)) row.called = list.filter((s) => s.called).length;
     return row;
-  });
+  };
+  // Every objective on its own population; one with a `hand` form (0218) also on the keys and on two thumbs, in that form.
+  return objectives.flatMap((o) => [judge(o, populationOf(o)), ...(o.hand ? Object.entries(HAND).map(([pop, ctx]) => judge(o, pop, ctx)) : [])]);
 }

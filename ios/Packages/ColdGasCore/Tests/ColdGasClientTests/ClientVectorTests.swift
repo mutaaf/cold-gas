@@ -238,6 +238,25 @@ func ints(_ v: JSValue?) -> [[Int]] { (v?.arrayValue ?? []).map { ($0.arrayValue
             #expect(r.fix == a[5].boolValue!, "\(o.id) \(name)")
             if !r.ok { for (i, p) in pilots.enumerated() { #expect(Daily.missLine(o, r, p) == a[6 + i].stringValue!, "\(o.id) \(name) \(p)") } }
         }
+        // 0218: the Lineup's days by hand: each way of flying gets its form's goal, check and miss line.
+        func pilot(_ c: JSValue) -> Daily.Pilot {
+            Daily.Pilot(device: .init(rawValue: c["device"]!.stringValue!)!, scheme: .init(rawValue: c["scheme"]!.stringValue!)!, tier: c["tier"]!.stringValue!)
+        }
+        #expect(arr(client, "handGoals").count >= 24)
+        for x in arr(client, "handGoals") {
+            let a = x.arrayValue!, u = Units(UnitSystem(rawValue: a[0].stringValue!)!), p = pilot(a[2])
+            #expect(byId[a[1].stringValue!]!.goal(u, p) == a[3].stringValue!, "\(a[1].stringValue!) \(p) \(u.system)")
+        }
+        #expect(arr(client, "handDaily").count > 100)
+        for x in arr(client, "handDaily") {
+            let a = x.arrayValue!, u = Units(UnitSystem(rawValue: a[0].stringValue!)!), o = byId[a[1].stringValue!]!, name = a[2].stringValue!, p = pilot(a[3])
+            let (course, card) = cards[name]!
+            guard let r = Daily.evaluate(o, card, course: course, units: u, pilot: p) else { Issue.record("\(o.id) \(name) \(p): nil"); continue }
+            #expect(r.ok == a[4].boolValue!, "\(o.id) \(name) \(p)")
+            #expect(r.miss == a[5].stringValue!, "\(o.id) \(name) \(p) \(u.system)")
+            #expect(r.fix == a[6].boolValue!, "\(o.id) \(name) \(p)")
+            if !r.ok { #expect(Daily.missLine(o, r, p) == a[7].stringValue!, "\(o.id) \(name) \(p)") }
+        }
         // A run on another course doesn't count.
         #expect(Daily.evaluate(byId["mark-show"]!, cards["ref-wall"]!.1, course: "wall", units: Units()) == nil)
         for x in arr(client, "titles") {

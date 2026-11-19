@@ -9,7 +9,7 @@ import { decodeChallenge, encodeChallenge, vsFromHash, challengeUrl, compare, ra
 import { stuntName, dareText, landedCard } from './stunt-name.js';
 import { getMedals } from './medals.js';
 import { obs } from './obs/index.js';
-import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, courseName, dayNumber, DAY_MS, missLine, titleHint } from './daily.js';
+import { objectiveFor, evaluate, loadStreak, saveStreak, streakNow, complete, courseName, dayNumber, DAY_MS, missLine, titleHint, goalOf } from './daily.js';
 import { packFrames } from './ghost.js';
 import { freeWorld } from './sim/world.js';
 import { onUnits } from './units.js';
@@ -49,10 +49,12 @@ export function createComeback(o) {
   let shownDay = dayNumber(now());
   let shownHint = '';   // the hint the daily card was last drawn with (0139)
   // 0139: today's hint for this device, flown at the tier Play today's would set ('' when there is none, or done).
+  // The words of today's run on this device, at the tier Play today's would set (0218: the objective's form follows them).
+  const todayHow = (obj) => o.how?.(obj.course, obj.tier && o.getTier() === 'assist' ? obj.tier : o.getTier());
   const todayHint = (whole = false) => {
     const obj = objectiveFor(now());
     if (streakNow(loadStreak(), now()).doneToday) return '';
-    return titleHint(obj, o.how?.(obj.course, obj.tier && o.getTier() === 'assist' ? obj.tier : o.getTier()), whole);
+    return titleHint(obj, todayHow(obj), whole);
   };
 
   // --- the title card ----------------------------------------------------------------------------
@@ -82,7 +84,7 @@ export function createComeback(o) {
       m.innerHTML = `<div class="xc xc-daily${st.doneToday ? ' done' : ''}" role="group" aria-label="Today’s daily jump">
         <div class="xc-text">
           <p class="xc-k"><span>Daily · ${utcLabel(now())}</span><span class="xc-dot" aria-hidden="true">·</span><span>${courseName(obj.course)}</span>${st.doneToday ? '<span class="xc-tick">✓ Done</span>' : ''}</p>
-          <p class="xc-goal"><span class="xc-ck">${st.doneToday ? 'Daily ✓' : 'Daily'} · ${courseName(obj.course)}</span>${obj.goal()}</p>
+          <p class="xc-goal"><span class="xc-ck">${st.doneToday ? 'Daily ✓' : 'Daily'} · ${courseName(obj.course)}</span>${goalOf(obj, todayHow(obj))}</p>
           <p class="xc-streak xc-sub"><span class="xc-pips" aria-hidden="true">${pips}</span>${hint ? `<span class="vh">${streakWords}</span><span class="xc-hint" data-daily-hint>${hint}</span>` : `<span>${streakWords}</span>`}</p>
         </div>
         <button type="button" class="btn xc-go" data-daily-play>${st.doneToday ? 'Play again' : 'Play today’s'}</button>
@@ -264,8 +266,8 @@ export function createComeback(o) {
       const state = !vs.comparable ? 'other' : vs.won ? 'won' : vs.tie ? 'tie' : 'behind';
       lines.push(`<div class="xr xr-vs" data-state="${state}"><p class="xr-line"><span data-vs-line>${vs.text}</span><span class="xr-best" data-vs-best>Your best ${best.toFixed(1)}</span></p><button type="button" class="btn ${vs.won ? 'primary' : 'ghost'} xr-send" data-vs-send>Send it back</button></div>`);
     }
-    const obj = objectiveFor(now());
-    const r = evaluate(obj, card, run.course);
+    const obj = objectiveFor(now()), how = o.how?.(run.course, card.tier, true);   // how it was flown (0139)
+    const r = evaluate(obj, card, run.course, how);   // 0218: judged in the form that way of flying was shown
     if (r) {
       // 0136: a finished Daily on its course is met (daily-done) or missed (daily-miss). daily-run meant a miss
       // before daily-miss existed; it is still counted on a miss for one release so the digest's history reads on.
@@ -276,7 +278,7 @@ export function createComeback(o) {
         const s = complete(loadStreak(), now());
         saveStreak(s);
         text = `Daily ✓ complete · streak ${s.streak}`;
-      } else text = missLine(obj, r, o.how?.(run.course, card.tier, true));   // 0139: what to change, in the words of how it was flown
+      } else text = missLine(obj, r, how);   // 0139: what to change, in the words of how it was flown
       lines.push(`<p class="xr xr-daily${r.ok ? ' ok' : ''}" data-daily-line>${text}</p>`);
     }
     render();   // the title's card under the sheet: where the challenge stands, the daily done, the streak
