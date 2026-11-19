@@ -11,18 +11,36 @@ import ColdGasPhysics
 final class Bench {
     private let seconds: Double
     private var t0: CFTimeInterval = 0, last: CFTimeInterval = 0
-    private var intervals: [Double] = [], cpu: [Double] = [], gpus: [Double] = []
+    private var intervals: [Double] = [], cpu: [Double] = [], gpus: [Double] = [], enc: [Double] = []
+    /// 0296's counters over the window: draws, triangles and passes a frame, the footprint sampled, the main thread's busy time.
+    private var draws = 0, tris = 0, passes = 0, memSum = 0.0, memN = 0, busy0 = 0.0
     private let lock = NSLock()
-    init(seconds: Double) { self.seconds = seconds; intervals.reserveCapacity(1400); cpu.reserveCapacity(1400); gpus.reserveCapacity(1400) }
+    init(seconds: Double) {
+        self.seconds = seconds
+        intervals.reserveCapacity(2400); cpu.reserveCapacity(2400); gpus.reserveCapacity(2400); enc.reserveCapacity(2400)
+        busy0 = Perf.mainBusyMs()
+    }
     var done: Bool { t0 > 0 && last - t0 >= seconds }
-    func frame(target: CFTimeInterval, cpu c: Double) {
+    func frame(target: CFTimeInterval, cpu c: Double, enc e: Double = 0) {
         if t0 == 0 { t0 = target } else { intervals.append((target - last) * 1000) }
-        last = target; cpu.append(c)
+        last = target; cpu.append(c); enc.append(e)
+        draws += RenderStats.draws; tris += RenderStats.tris; passes += RenderStats.passes
+        if cpu.count % 30 == 1 { memSum += Double(Perf.footprint().now); memN += 1 }
     }
     func gpu(_ ms: Double) { lock.lock(); gpus.append(ms); lock.unlock() }
+    private func p(_ a: [Double], _ q: Double) -> Double { let s = a.sorted(); return s.isEmpty ? 0 : s[min(s.count - 1, Int(Double(s.count) * q))] }
+    private func avg(_ a: [Double]) -> Double { a.isEmpty ? 0 : a.reduce(0, +) / Double(a.count) }
+    /// `-perf`'s one line (Perf.swift), key=value, for scripts/perf-table.py.
+    func perfLine(look: String, cadence hz: Int, scale: Float, size: CGSize, gpuBytes: Int) -> String {
+        lock.lock(); let g = gpus; lock.unlock()
+        let n = Double(max(1, cpu.count)), fp = Perf.footprint()
+        let mainMs = (Perf.mainBusyMs() - busy0) / n
+        return String(format: "PERF scene=%@ look=%@ frames=%d hz=%d interval=%.2f cpu50=%.2f cpu95=%.2f cpu99=%.2f enc50=%.2f enc95=%.2f main=%.2f draws=%.0f tris=%.0f passes=%.1f mem=%.0f peak=%.0f launch=%.0f gpu=%.2f scale=%.2f px=%dx%d metal=%.0f",
+                      Perf.scene, look, cpu.count, hz, avg(intervals), p(cpu, 0.5), p(cpu, 0.95), p(cpu, 0.99), p(enc, 0.5), p(enc, 0.95), mainMs,
+                      Double(draws) / n, Double(tris) / n, Double(passes) / n, memN > 0 ? memSum / Double(memN) / 1048576 : 0, Double(fp.peak) / 1048576,
+                      Perf.launchMs, avg(g), scale, Int(size.width), Int(size.height), Double(gpuBytes) / 1048576)
+    }
     func report(compiles: Int, launchMs: Double, size: CGSize) {
-        func p(_ a: [Double], _ q: Double) -> Double { let s = a.sorted(); return s.isEmpty ? 0 : s[min(s.count - 1, Int(Double(s.count) * q))] }
-        func avg(_ a: [Double]) -> Double { a.isEmpty ? 0 : a.reduce(0, +) / Double(a.count) }
         lock.lock(); let g = gpus; lock.unlock()
         let cadence = p(intervals, 0.1)
         let hitches = intervals.filter { $0 > cadence * 1.5 }.count

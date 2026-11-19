@@ -454,6 +454,7 @@ final class Renderer {
     /// One frame at time t (s) into `drawable`.
     func draw(into drawable: CAMetalDrawable, time t: Double, onGPU: ((Double) -> Void)? = nil) {
         gate.wait()
+        RenderStats.reset()
         let out = drawable.texture
         let look = Look.current
         ensureTargets(outW: out.width, outH: out.height, look: look)
@@ -595,7 +596,7 @@ final class Renderer {
         // 1. shadow
         let sp = MTLRenderPassDescriptor()
         sp.depthAttachment.texture = shadowMap; sp.depthAttachment.loadAction = .clear; sp.depthAttachment.clearDepth = 1; sp.depthAttachment.storeAction = .store
-        if !skip.contains("shadow"), let e = cmd.makeRenderCommandEncoder(descriptor: sp) {
+        if !skip.contains("shadow"), let e = cmd.pass(sp) {
             e.setRenderPipelineState(shadowPipe); e.setDepthStencilState(dsShadow); e.setDepthBias(1.5, slopeScale: 2.5, clamp: 0.01)
             e.setVertexBuffer(fb, offset: 0, index: 1)
             drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: true, shadow: true)
@@ -611,7 +612,7 @@ final class Renderer {
             let rp = MTLRenderPassDescriptor()
             rp.colorAttachments[0].texture = mirrorRaw; rp.colorAttachments[0].loadAction = .clear; rp.colorAttachments[0].clearColor = MTLClearColor(red: 0, green: 0, blue: 0, alpha: 1); rp.colorAttachments[0].storeAction = .store
             rp.depthAttachment.texture = mirrorDepth; rp.depthAttachment.loadAction = .clear; rp.depthAttachment.clearDepth = 1; rp.depthAttachment.storeAction = .dontCare
-            if let e = cmd.makeRenderCommandEncoder(descriptor: rp) {
+            if let e = cmd.pass(rp) {
                 let mfb = mirrorFrames[fi]
                 e.setVertexBuffer(mfb, offset: 0, index: 1); e.setFragmentBuffer(mfb, offset: 0, index: 1)
                 e.setFragmentBuffer(lightsBuf, offset: 0, index: 3); e.setFragmentBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
@@ -634,9 +635,9 @@ final class Renderer {
             }
             let sp2 = MTLRenderPassDescriptor()
             sp2.colorAttachments[0].texture = mirrorTex; sp2.colorAttachments[0].loadAction = .dontCare; sp2.colorAttachments[0].storeAction = .store
-            if let e = cmd.makeRenderCommandEncoder(descriptor: sp2) {
+            if let e = cmd.pass(sp2) {
                 e.setRenderPipelineState(smearPipe); e.setFragmentTexture(mirrorRaw, index: 0)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3); e.endEncoding()
+                e.tris(3); e.endEncoding()
             }
         }
         cut("mirror")
@@ -646,7 +647,7 @@ final class Renderer {
         mp.colorAttachments[0].loadAction = .dontCare; mp.colorAttachments[0].storeAction = .multisampleResolve
         mp.depthAttachment.texture = depth; mp.depthAttachment.loadAction = .clear; mp.depthAttachment.clearDepth = 1; mp.depthAttachment.storeAction = .dontCare
         if let depthRes { mp.depthAttachment.resolveTexture = depthRes; mp.depthAttachment.depthResolveFilter = .sample0; mp.depthAttachment.storeAction = .multisampleResolve }   // Anime's ink
-        if let e = cmd.makeRenderCommandEncoder(descriptor: mp) {
+        if let e = cmd.pass(mp) {
             e.setVertexBuffer(fb, offset: 0, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1)
             e.setFragmentBuffer(lightsBuf, offset: 0, index: 3); e.setFragmentBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
             e.setVertexBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
@@ -662,7 +663,7 @@ final class Renderer {
             if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, viewProj: u.viewProj) }
             // The sky where nothing opaque stands (far plane, depth read).
             e.setCullMode(.none); e.setDepthStencilState(dsRead); e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setRenderPipelineState(sky)
-            e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3)
+            e.tris(3)
             if complexOn, let c = stage.complex, !skip.contains("translucent") {
                 // rocket.js's draw order: the lattice, the beams, then the lamps over them.
                 for (k, s) in c.mesh.submeshes.enumerated() where s.material.transparent {
@@ -674,7 +675,7 @@ final class Renderer {
             if nGlows > 0 && shed < 2 && !skip.contains("glows") && !away {   // film.js's lit air round the lamps
                 e.setRenderPipelineState(glowPipe); e.setDepthStencilState(dsRead); e.setCullMode(.none)
                 e.setVertexBuffer(glowBuf, offset: 0, index: 2)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nGlows)
+                e.tris(6, instances: nGlows)
             }
             if !skip.contains("translucent") {
                 drawMesh(e, stage.staticMesh, matsIndex: 0, model: stageM, opaqueOnly: false, to: blobSplit)
@@ -688,26 +689,26 @@ final class Renderer {
             if nPlumes > 0 && !skip.contains("plumes") {
                 e.setRenderPipelineState(plume); e.setDepthStencilState(dsRead); e.setCullMode(.none)
                 e.setVertexBuffer(pb, offset: 0, index: 2)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 24 * 3, instanceCount: nPlumes)
+                e.tris(24 * 3, instances: nPlumes)
             }
             if nMist > 0 {   // condensation (plumes.js), behind the crash's effects
                 e.setRenderPipelineState(mistPipe); e.setDepthStencilState(dsRead); e.setCullMode(.none)
                 e.setVertexBuffer(mistBufs[fi], offset: 0, index: 2); e.setVertexBytes(&mistK, length: 16, index: 3)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nMist)
+                e.tris(6, instances: nMist)
             }
             // crash.js's effects: chips (lit-ish solids), dust and smoke (blended), sparks and the flash (additive).
             if fx.2 > 0 { e.setRenderPipelineState(chipPipe); e.setDepthStencilState(dsWrite); e.setCullMode(.none); e.setVertexBuffer(chipBufs[fi], offset: 0, index: 2)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 36, instanceCount: fx.2) }
+                e.tris(36, instances: fx.2) }
             let hasFlash = crash.flash != nil
             let nDust = hasFlash ? nPuffs - 1 : nPuffs
             if nDust > 0 { e.setRenderPipelineState(puffPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(puffBufs[fi], offset: 0, index: 2)
                 e.setVertexBytes(&aspect, length: 4, index: 3)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nDust) }
+                e.tris(6, instances: nDust) }
             if fx.0 > 0 { e.setRenderPipelineState(sparkPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(sparkBufs[fi], offset: 0, index: 2)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: fx.0) }
+                e.tris(6, instances: fx.0) }
             if hasFlash { e.setRenderPipelineState(flashPipe); e.setDepthStencilState(dsOff); e.setVertexBuffer(puffBufs[fi], offset: MemoryLayout<PuffGPU>.stride * nDust, index: 2)
                 e.setVertexBytes(&camRight, length: 16, index: 3); e.setVertexBytes(&camUp, length: 16, index: 4)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: 1) }
+                e.tris(6, instances: 1) }
             e.endEncoding()
         }
         cut("main")
@@ -717,9 +718,9 @@ final class Renderer {
             func small(_ tex: MTLTexture, _ pipe: MTLRenderPipelineState, _ set: (MTLRenderCommandEncoder) -> Void) {
                 let rp = MTLRenderPassDescriptor()
                 rp.colorAttachments[0].texture = tex; rp.colorAttachments[0].loadAction = .dontCare; rp.colorAttachments[0].storeAction = .store
-                guard let e = cmd.makeRenderCommandEncoder(descriptor: rp) else { return }
+                guard let e = cmd.pass(rp) else { return }
                 e.setRenderPipelineState(pipe); set(e); e.setFragmentBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
-                e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3); e.endEncoding()
+                e.tris(3); e.endEncoding()
             }
             small(bloomChain[0], bloomBright) { $0.setFragmentTexture(hdr, index: 0) }
             for i in 1..<6 { let src = bloomChain[i - 1]; small(bloomChain[i], bloomDown) { $0.setFragmentTexture(src, index: 0) } }
@@ -729,11 +730,11 @@ final class Renderer {
         // 5. film
         let fp = MTLRenderPassDescriptor()
         fp.colorAttachments[0].texture = ldr; fp.colorAttachments[0].loadAction = .dontCare; fp.colorAttachments[0].storeAction = .store
-        if let e = cmd.makeRenderCommandEncoder(descriptor: fp) {
+        if let e = cmd.pass(fp) {
             e.setRenderPipelineState(film); e.setFragmentTexture(hdr, index: 0); e.setFragmentTexture(bloomOut ?? dummy, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1)
             e.setFragmentTexture(depthRes ?? dummyDepth, index: 2)
             e.setFragmentBytes(&lookU, length: MemoryLayout<LookU>.stride, index: 4)
-            e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3); e.endEncoding()
+            e.tris(3); e.endEncoding()
         }
         #if DEBUG
         LumaProbe.shared?.capture(cmd, ldr: ldr, t: simClock, car: stage.roadster, carM: carM, viewProj: u.viewProj)   // `-luma` (0270)
@@ -742,16 +743,16 @@ final class Renderer {
         // 6. MetalFX, then present
         var shown: MTLTexture = ldr   // (the simulator has no MetalFX: the present pass upsamples bilinearly)
         #if canImport(MetalFX) && !targetEnvironment(simulator)
-        if look != .pixel && !skip.contains("metalfx"), let sc = scaler { sc.colorTexture = ldr; sc.outputTexture = upscaled; sc.encode(commandBuffer: cmd); shown = upscaled }
+        if look != .pixel && !skip.contains("metalfx"), let sc = scaler { sc.colorTexture = ldr; sc.outputTexture = upscaled; sc.encode(commandBuffer: cmd); shown = upscaled; RenderStats.passes += 1 }
         #endif
         cut("metalfx")
         let pp = MTLRenderPassDescriptor()
         pp.colorAttachments[0].texture = out; pp.colorAttachments[0].loadAction = .dontCare; pp.colorAttachments[0].storeAction = .store
-        if let e = cmd.makeRenderCommandEncoder(descriptor: pp) {
+        if let e = cmd.pass(pp) {
             e.setRenderPipelineState(present); e.setFragmentTexture(shown, index: 0)
             var pk = SIMD4<Float>(look == .pixel ? Float(pixelBlock) : 0, 0, 0, 0)   // 8-bit: whole blocks, nearest neighbour
             e.setFragmentBytes(&pk, length: 16, index: 0)
-            e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 3); e.endEncoding()
+            e.tris(3); e.endEncoding()
         }
         cmd.present(drawable)
         if split { let pt = passTimes; cmd.addCompletedHandler { cb in pt.add("present", (cb.gpuEndTime - cb.gpuStartTime) * 1000) } }
@@ -773,11 +774,11 @@ final class Renderer {
         let pxK = Float(renderSize.1) / 1912
         var g = GlintGroup(size: c.lamps.size, minPx: max(2.5, c.lamps.minPx * pxK), tint: 1)
         e.setVertexBytes(&g, length: MemoryLayout<GlintGroup>.stride, index: 3); e.setVertexBuffer(lampBuf, offset: 0, index: 2)
-        e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nLamps)
+        e.tris(6, instances: nLamps)
         if beaconK > 0.001 && nBeacons > 0 {
             g = GlintGroup(size: c.beacons.size, minPx: max(2.5, c.beacons.minPx * pxK), tint: beaconK)
             e.setVertexBytes(&g, length: MemoryLayout<GlintGroup>.stride, index: 3); e.setVertexBuffer(beaconBuf, offset: 0, index: 2)
-            e.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: 6, instanceCount: nBeacons)
+            e.tris(6, instances: nBeacons)
         }
     }
     /// A sphere against the frustum's sides (Gribb–Hartmann on the view-projection's rows).
@@ -977,6 +978,7 @@ final class Renderer {
             } else {
                 e.setCullMode(.none)
             }
+            RenderStats.draw(indices: s.indexCount)
             e.drawIndexedPrimitives(type: .triangle, indexCount: s.indexCount, indexType: .uint32, indexBuffer: m.indices,
                                     indexBufferOffset: s.indexStart * 4, instanceCount: 1, baseVertex: s.vertexStart, baseInstance: 0)
         }
@@ -1048,6 +1050,45 @@ final class PipelineArchive {
     static func purge() {
         guard let dir = cacheDir, let files = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) else { return }
         for f in files where f.lastPathComponent.hasPrefix("pipelines-") && f.pathExtension == "metallib" { try? FileManager.default.removeItem(at: f) }
+    }
+}
+
+extension Renderer {
+    /// What this renderer holds on the GPU (0296, `-perf`'s Metal MB): the stage's meshes and textures, the targets, the
+    /// shadow map and the rings. `seen` dedupes what renderers share. (The simulator's device reports no allocated size.)
+    /// A resource's size: Metal's own where it says (a phone), else from its shape (the simulator reports 0): a buffer's length; a
+    /// texture's texels × bytes a texel × samples × slices over its mips; nothing for memoryless (tile memory only).
+    static func bytes(_ r: MTLResource) -> Int {
+        if r.allocatedSize > 0 { return r.allocatedSize }
+        if let b = r as? MTLBuffer { return b.length }
+        guard let t = r as? MTLTexture, t.storageMode != .memoryless else { return 0 }
+        let bpp: Int
+        switch t.pixelFormat {
+        case .rgba16Float, .rgba16Unorm: bpp = 8
+        case .depth16Unorm, .r16Float, .rg8Unorm: bpp = 2
+        case .r8Unorm, .a8Unorm: bpp = 1
+        case .rgba32Float: bpp = 16
+        default: bpp = 4   // bgra8, rgba8 (sRGB or not), rg11b10Float, depth32Float
+        }
+        var texels = 0, w = t.width, h = t.height
+        for _ in 0..<max(1, t.mipmapLevelCount) { texels += w * h; w = max(1, w / 2); h = max(1, h / 2) }
+        let slices = (t.textureType == .typeCube ? 6 : 1) * max(1, t.arrayLength) * max(1, t.depth)
+        return texels * bpp * max(1, t.sampleCount) * slices
+    }
+    func residentBytes(seen: inout Set<ObjectIdentifier>) -> Int {
+        var n = 0
+        func add(_ r: MTLResource?) { guard let r, seen.insert(ObjectIdentifier(r)).inserted else { return }; n += Renderer.bytes(r) }
+        func mesh(_ m: StageMesh) { add(m.vertices); add(m.indices) }
+        let s = stage
+        ([s.staticMesh, s.roadster] + s.parked + s.parts + s.wheels.flatMap { [$0.steerPart, $0.spinPart] } + openSpin).forEach(mesh)
+        if let sw = s.sweep { [sw.beam, sw.head, sw.lens].forEach(mesh) }
+        if let c = s.complex { mesh(c.mesh) }
+        s.textures.forEach { add($0.texture) }
+        add(s.env); add(s.wetMask)
+        [msaa, depth, hdr, ldr, upscaled, depthRes, mirrorDepth, mirrorRaw, mirrorTex, bloomOut, shadowMap, dummy, dummyDepth].forEach(add)
+        bloomChain.forEach(add)
+        (frames + mirrorFrames + plumes + sparkBufs + puffBufs + chipBufs + mistBufs + [lightsBuf, lampBuf, beaconBuf, glowBuf]).forEach(add)
+        return n
     }
 }
 

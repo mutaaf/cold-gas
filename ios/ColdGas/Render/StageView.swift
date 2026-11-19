@@ -16,6 +16,9 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
     private var stats = FrameStats()
     private var pendingSize: CGSize?
     private var bench: Bench?
+    /// `-perf` (0296, Perf.swift): the window measured, when the first frame was drawn, and whether it has reported.
+    private var perfBench: Bench?
+    private var firstFrameAt: CFTimeInterval = 0, perfDone = false
     private var lastFrame: CFTimeInterval = 0
     #if DEBUG
     /// `-timescale ground,air` (Debug): the whole app on a slowed clock, so a screenshot's few seconds catch each camera shot.
@@ -36,6 +39,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         metal.maximumDrawableCount = 3
         isOpaque = true
         self.device = device
+        if Perf.on { Perf.watchMainThread() }
         // `-replay <vector>`: a recorded run looping (the shots and the bench); otherwise the game sets the stage.
         if let which = Launch.value("-replay") { load(course: nil, vector: which) }
 
@@ -52,6 +56,8 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
     /// One renderer per course, built once off the main thread (the binary archive makes the pipelines ≈20 ms) and kept.
     private var renderers: [String: Renderer] = [:]
     private var loading: String?
+    /// Every kept renderer's GPU bytes (0296, `-perf`).
+    private func residentBytes() -> Int { var seen = Set<ObjectIdentifier>(); return renderers.values.reduce(0) { $0 + $1.residentBytes(seen: &seen) } }
 
     /// Draw `course` with `track` (a live run, or a recorded run looping). The course's renderer is built on first use.
     func load(course: String, track: Replay?) {
@@ -153,6 +159,7 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         guard let r = renderer else { return }
         if r.cadence != linkCadence { linkCadence = r.cadence; link.preferredFrameRateRange = StageView.range(r.cadence) }
         let now0 = CACurrentMediaTime()
+        let tc0 = Perf.on ? Perf.threadMs() : 0   // (0296: the main thread's own CPU time, which a loaded Mac's other work doesn't inflate)
         var dt = lastFrame == 0 ? 0 : now0 - lastFrame
         let k = r.slowK
         #if DEBUG
@@ -172,16 +179,33 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
         lastFrame = now0
         if let s = pendingSize, s.width > 0, s.height > 0 { metal.drawableSize = s; pendingSize = nil }
         let cpu0 = CACurrentMediaTime()
+        let tcEnc = Perf.on ? Perf.threadMs() : 0
         let b = bench
+        if Perf.on && perfBench == nil && !perfDone && firstFrameAt > 0 && now0 - firstFrameAt >= Perf.wait { perfBench = Bench(seconds: Perf.seconds ?? 8) }
+        let pb = perfBench
         var drawT = cpu0 - start
         #if DEBUG
         if !timescales.isEmpty { drawT = debugClock }
         #endif
-        r.draw(into: update.drawable, time: drawT) { gpu in b?.gpu(gpu) }
+        r.draw(into: update.drawable, time: drawT) { gpu in b?.gpu(gpu); pb?.gpu(gpu) }
         let now = CACurrentMediaTime()
         stats.add(interval: update.targetPresentationTimestamp, cpu: (now - cpu0) * 1000)
         InputLag.frame(target: update.targetPresentationTimestamp)
-        if stats.firstFrame { Ready.mark("frame") }
+        if stats.firstFrame {
+            firstFrameAt = now; Perf.launchMs = Perf.sinceProcessStart()
+            Ready.mark("frame")
+        }
+        if let pb {
+            let tc1 = Perf.threadMs()
+            pb.frame(target: update.targetPresentationTimestamp, cpu: tc1 - tc0, enc: tc1 - tcEnc)
+            if pb.done {
+                perfBench = nil; perfDone = true
+                print(pb.perfLine(look: Look.current.rawValue, cadence: linkCadence, scale: r.scale, size: metal.drawableSize, gpuBytes: residentBytes()))
+                fflush(stdout)
+                Ready.mark("perf")
+                exit(0)
+            }
+        }
         if stats.frames % 60 == 0 {
             NotificationCenter.default.post(name: .frameStats, object: String(format: "%.0f fps · %.2f ms cpu\n%d×%d px · render %.0f%% · MSAA 4× · MetalFX · %d Hz · %@", stats.fps, stats.cpuAvg, Int(metal.drawableSize.width), Int(metal.drawableSize.height), r.scale * 100, r.cadence, Look.current.title))
         }

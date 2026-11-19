@@ -54,6 +54,8 @@ final class RootViewController: UIViewController {
             #endif
             if Launch.freedrive { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Game.shared.startDrive(roam: Launch.value("-roam")) } }
             else if let c = Launch.value("-roam") { DispatchQueue.main.asyncAfter(deadline: .now() + 0.6) { Game.shared.startDrive(roam: c) } }
+            if let n = Launch.value("-perf-cycle").flatMap(Int.init) { Perf.cycleDrive(n) }   // 0296: Free Drive in and out, then the title measured
+            if Perf.on, let s = Launch.value("-perf-pause").flatMap(Double.init) { DispatchQueue.main.asyncAfter(deadline: .now() + s) { Game.shared.paused = true } }   // 0296: a paused run
         }
     }
 
