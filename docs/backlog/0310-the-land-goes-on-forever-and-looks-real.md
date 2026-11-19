@@ -1,11 +1,12 @@
 ---
 id: 0310
 title: On the iPhone Free Drive's land goes on forever and looks real, in all three looks, from a cache the GPU fills once
-status: in-progress
+status: shipped
 priority: P1
 size: L
 lens: authenticity
 created: 2026-11-19
+pr: 463
 by: operator
 ---
 
@@ -30,15 +31,16 @@ distance, the streaming and caching), WATER and MATTER. This ticket also writes 
   draws; the near pool's CPU gather goes; trees sway; trees and the roadside cast shadows from a cached map.
 - #365's physical sky (Hillaire LUTs, cached until the sun or the eye moves), its time of day and its surfaces, salvaged onto
   the three looks; the drawn looks' sky takes its colours from the same sun.
+- Lakes and rivers carved into the land, reported by `FreeWorld.water` (asked for by WATER, #460).
 - Signposts for the bake, the uploads and the cull; the perf summary reports the world's cache.
 
 ## Acceptance criteria
-- [ ] §9 committed and pushed early on `build/0310-the-land-goes-on-forever-and-looks-real`
-- [ ] `make test` passes (the 52 run vectors bit-exact) with the world's new tests
-- [ ] `make perf` (freedrive): footprint ≤ 250 MB and fewer triangles than before; streaming at 60 m/s adds no main-thread
-      spike over a frame
-- [ ] Screenshots before/after of Free Drive in Real, Anime and 8-bit
-- [ ] #365 closed with a pointer to this PR, its landscape work credited
+- [x] §9 committed and pushed early on `build/0310-the-land-goes-on-forever-and-looks-real`
+- [x] `make test` passes (the 52 run vectors bit-exact) with the world's new tests
+- [x] `make perf` (freedrive): footprint ≤ 250 MB (344 → 85, peak 218) and fewer triangles (1.85 M → 0.48 M); streaming at
+      60 m/s adds no main-thread spike over a frame (max 2.2 ms). GPU on a phone: the owner's `make device-bench-freedrive`
+- [x] Screenshots before/after of Free Drive in Real, Anime and 8-bit
+- [x] #365 closed with a pointer to this PR, its landscape work credited
 
 ## Test plan
 `cd ios && make test`; `make perf` with `SCENES="freedrive stream"` before and after, all three looks; simulator shots
