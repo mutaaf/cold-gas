@@ -1,12 +1,12 @@
 ---
 id: 0266
 title: On an iPhone's Safari viewport, the title's Daily says what it asks, not "Clear t…"
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-16
-pr:
+pr: 452
 by: critic
 ---
 
@@ -39,17 +39,17 @@ At fit level 1, the packed Daily keeps its objective readable. Pick whichever me
 `src/comeback.js` (`fit()` levels) and `src/comeback.css`. No sim, scorer or Daily change.
 
 ## Acceptance criteria
-- [ ] At 390×664 touch DPR 3 (`devices['iPhone 13']`), 393×659 touch (an iPhone 15 Pro's Safari viewport), 430×932 touch
+- [x] At 390×664 touch DPR 3 (`devices['iPhone 13']`), 393×659 touch (an iPhone 15 Pro's Safari viewport), 430×932 touch
       and 390×844 touch, first visit and returning: the Daily's `.xc-goal` has `scrollWidth <= clientWidth` and no
       `text-overflow` cut, for the longest objective `src/daily.js` can emit (assert over every objective the generator
       yields across 30 consecutive days).
-- [ ] Jump stays fully on screen at every size above, and `scripts/title-audit.mjs` passes (nothing under the top bar,
+- [x] Jump stays fully on screen at every size above, and `scripts/title-audit.mjs` passes (nothing under the top bar,
       nothing past the bottom).
-- [ ] 0142's boxes still hold: a filled 90 px frame steps aside first, an unfilled frame moves nothing, and in light mode
+- [x] 0142's boxes still hold: a filled 90 px frame steps aside first, an unfilled frame moves nothing, and in light mode
       the frame paints no slab.
-- [ ] 0264's first-visit title (if shipped first) is respected. If the first visit collapses the Daily, this applies to
+- [x] 0264's first-visit title (if shipped first) is respected. If the first visit collapses the Daily, this applies to
       every visit after it.
-- [ ] Before and after screenshots at 390×664 in the PR.
+- [x] Before and after screenshots at 390×664 in the PR.
 - [ ] Funnel number to move: `daily-run` per `visit-return` (today 7 / 2 all-time, so too few to read yet).
 
 ## Test plan
