@@ -11,7 +11,9 @@ final class Dents {
     private struct Dentable {
         let mesh: StageMesh
         let count: Int
-        let orig: [Float]
+        /// Its pristine vertices, copied the first time it's dented (0299): before, every course's roadster and parked row were
+        /// kept twice from the first frame (≈ 5 MB a set), dented or not.
+        var orig: [Float]? = nil
         var dirty = false
     }
     private var hero: Dentable
@@ -22,8 +24,7 @@ final class Dents {
     init(roadster: StageMesh, parked p: [StageMesh]) {
         func make(_ m: StageMesh) -> Dentable {
             let n = m.vertices.length / (Dents.stride * 4)
-            let ptr = m.vertices.contents().bindMemory(to: Float.self, capacity: n * Dents.stride)
-            return Dentable(mesh: m, count: n, orig: Array(UnsafeBufferPointer(start: ptr, count: n * Dents.stride)))
+            return Dentable(mesh: m, count: n)
         }
         hero = make(roadster)
         parked = p.map(make)
@@ -31,9 +32,9 @@ final class Dents {
 
     func restore() {
         func r(_ d: inout Dentable) {
-            guard d.dirty else { return }
-            let ptr = d.mesh.vertices.contents().bindMemory(to: Float.self, capacity: d.orig.count)
-            d.orig.withUnsafeBufferPointer { ptr.update(from: $0.baseAddress!, count: d.orig.count) }
+            guard d.dirty, let orig = d.orig else { return }
+            let ptr = d.mesh.vertices.contents().bindMemory(to: Float.self, capacity: orig.count)
+            orig.withUnsafeBufferPointer { ptr.update(from: $0.baseAddress!, count: orig.count) }
             d.dirty = false
         }
         r(&hero)
@@ -65,6 +66,7 @@ final class Dents {
 
     private func dent(_ d: inout Dentable, at lp: SIMD3<Float>, along ld: SIMD3<Float>, radius: Float, depth: Float, salt: Float) {
         let a = d.mesh.vertices.contents().bindMemory(to: Float.self, capacity: d.count * Dents.stride)
+        if d.orig == nil { d.orig = Array(UnsafeBufferPointer(start: a, count: d.count * Dents.stride)) }   // the first dent: keep the pristine copy
         let R2 = radius * radius, S = Dents.stride
         var moved = [Bool](repeating: false, count: d.count)
         var hit = false

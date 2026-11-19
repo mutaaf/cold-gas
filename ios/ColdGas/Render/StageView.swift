@@ -61,12 +61,17 @@ final class StageView: UIView, CAMetalDisplayLinkDelegate {
 
     /// Draw `course` with `track` (a live run, or a recorded run looping). The course's renderer is built on first use.
     func load(course: String, track: Replay?) {
-        if let r = renderers[course] { renderer = r; r.setTrack(track); startLinkIfNeeded(); return }
+        if let r = renderers[course] { show(r); r.setTrack(track); startLinkIfNeeded(); return }
         build(course) { [weak self] r in
             r.setTrack(track)
-            self?.renderer = r
+            self?.show(r)
             self?.startLinkIfNeeded()
         }
+    }
+    /// Draw `r` from the next frame; the renderer it replaces lets go of its targets, its track and its dents (0299, Renderer.idle).
+    private func show(_ r: Renderer) {
+        if let old = renderer, old !== r { old.idle() }
+        renderer = r
     }
     private func load(course: String?, vector: String) {
         DispatchQueue.global(qos: .userInitiated).async { [weak self] in

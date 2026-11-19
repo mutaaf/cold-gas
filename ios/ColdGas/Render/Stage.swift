@@ -88,6 +88,24 @@ final class Stage {
     let fogColor: SIMD3<Float>, fogNear: Float, fogFar: Float
     let keyColor: SIMD3<Float>, keyIntensity: Float, keyOffset: SIMD3<Float>
 
+    /// One Stage per set while any renderer holds it (0299). Free Drive ("drive") and a roam on the Show ("drive-show") stand on
+    /// the Show's set, and each built its own copy of it beside the Show's renderer: the meshes, the 19 textures and the
+    /// environment again, ≈ 20 MB, and the load's time on the way into the drive. The meshes are shared, so a renderer that
+    /// leaves puts its dents back (Renderer.idle) before another draws them.
+    private final class Weak { weak var stage: Stage?; init(_ s: Stage) { stage = s } }
+    nonisolated(unsafe) private static var loaded: [String: Weak] = [:]
+    private static let lock = NSLock()
+    static func shared(device: MTLDevice, course: String) -> Stage? {
+        lock.lock()
+        if let s = loaded[course]?.stage { lock.unlock(); return s }
+        lock.unlock()
+        guard let s = Stage(device: device, course: course) else { return nil }
+        lock.lock(); defer { lock.unlock() }
+        if let other = loaded[course]?.stage { return other }   // built at the same time on another thread: one copy
+        loaded[course] = Weak(s)
+        return s
+    }
+
     init?(device: MTLDevice, course: String) {
         guard let dir = Bundle.main.url(forResource: "Stages/\(course)", withExtension: nil),
               let jd = try? Data(contentsOf: dir.appendingPathComponent("stage.json")),
