@@ -1,7 +1,8 @@
 ---
 id: 0352
 title: Rivers that flow: a smooth surface, ripples along the current, no pale facets
-status: in-progress
+status: shipped
+pr: 467
 priority: P1
 size: M
 lens: player-feel

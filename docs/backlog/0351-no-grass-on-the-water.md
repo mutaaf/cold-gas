@@ -1,7 +1,8 @@
 ---
 id: 0351
 title: No grass on the water: a clump stands only where every corner of its cell is dry
-status: in-progress
+status: shipped
+pr: 467
 priority: P1
 size: S
 lens: player-feel

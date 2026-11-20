@@ -1,7 +1,8 @@
 ---
 id: 0353
 title: The splash tank holds water: its surface, the crown, the ring and the spray read as water in every look
-status: in-progress
+status: shipped
+pr: 467
 priority: P1
 size: M
 lens: player-feel

@@ -1,7 +1,8 @@
 ---
 id: 0350
 title: Water reads as water: the river's facets, the grass on the water and the black splash tank (Real, Anime, 8-bit)
-status: in-progress
+status: shipped
+pr: 467
 priority: P1
 size: M
 lens: player-feel

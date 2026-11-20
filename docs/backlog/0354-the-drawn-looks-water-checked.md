@@ -1,7 +1,8 @@
 ---
 id: 0354
 title: The drawn looks' lakes and rivers checked for the same defects
-status: in-progress
+status: shipped
+pr: 467
 priority: P2
 size: S
 lens: player-feel
