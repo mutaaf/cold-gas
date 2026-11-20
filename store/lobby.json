@@ -61,8 +61,8 @@
     "duo": "store/lobby/raw-1.2.0/duo"
   },
   "capture": {
-    "command": "",
-    "notes": "Real frames from a Debug build of main on 2026-11-19 (1.2.0 with 0292's redrawn vehicles: our own roadster, lineup and launch site; the 2026-11-16 set showed the retired wedge car and lattice rocket, which 0292 replaced as an IP risk), shot with -mute -uitest on one-off simulators, one at a time, deleted after: the reference Show on Assist and the scripted carry-5 wreck frozen at a tick (-play -autopilot -course show -freeze 2700 / 3400; -play -script crash-show-carry5 -freeze 3480, the car kicked off the row's end), the results after a whole run, the guided first jump (-firstrun -play -freeze 1300), Free Drive 3 km out (-freedrive -fd-km 3 -fd-cruise 25), a challenge link opened in the app (-open), Advanced's valve deck (-tier advanced -freeze 2700), the layout editor (-hudEdit assist), and the Duo in tabletop (-window 669x951 -pose tabletop). The iPhone and Duo simulators have no Apple Intelligence (their receipt names the game's own words); the iPad's says Judged on device. No caption claims either. 6.9-inch iPhone 18 Pro Max for raw-1.2.0/iphone, 13-inch iPad Pro (M5) for raw-1.2.0/ipad, the Duo's outer display for raw-1.2.0/duo. raw/ keeps 1.1.0's frames."
+    "command": "cd ios && make build && scripts/lobby-capture.sh iphone && scripts/lobby-capture.sh ipad && scripts/lobby-capture.sh duo",
+    "notes": "Real frames from a Debug build of main on 2026-11-20, after the 1.2.0 world train (#465: land, water, matter, splash and sink; 0350 water reads as water), shot by ios/scripts/lobby-capture.sh with -mute -uitest on one-off simulators (one at a time, deleted after), each frame waited for on its Ready token. Flags per frame are in the script: the Show on Assist frozen at ticks 2700 / 3400, the scripted carry-5 wreck frozen at 3480, the results after a whole run, the guided first jump (-firstrun -play -freeze 1300), Free Drive 3 km out (-fd-km 3 -fd-cruise 25), the lake at golden hour (-fd-tod golden -fd-at 3397,-1165,-135), a challenge link (-open), Advanced's valve deck, the layout editor (-hudEdit assist), the Duo in tabletop (-window 669x951 -pose tabletop). No caption claims Apple Intelligence. 6.9-inch iPhone 18 Pro Max, 13-inch iPad Pro (M5), the Duo's outer display. raw/ keeps 1.1.0's frames."
   },
   "shots": [
     {
@@ -103,6 +103,14 @@
       "kicker": "Free Drive",
       "title": "Then just *drive.*",
       "sub": "Off the apron into a world built as you go. No timer, no score."
+    },
+    {
+      "id": "water",
+      "raw": "11-water",
+      "layout": "hero",
+      "kicker": "Water",
+      "title": "Drive *into the lake.*",
+      "sub": "Sea, lakes and rivers. Wade in, float, drift downstream."
     },
     {
       "id": "challenge",
