@@ -1,0 +1,46 @@
+// Occlusion probe: fly the Show reference, sample the camera each frame from the carry to the results, and test whether
+// the camera's sight line to the car's four wheel contacts and to the mark ring passes through the splash tank's box.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, viewport = 'phone', OUT = '.', URL = 'https://mutaafaziz.com/coldgas/'] = process.argv;
+const phone = viewport === 'phone';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/obs**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+await c.route('**/api/scores**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }) : r.continue());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage();
+await p.goto(URL, { waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
+await p.evaluate(() => window.__coldgas.startRun('jump'));
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 60000 });
+await p.evaluate(() => { const g = window.__coldgas; g.S.autopilot = g.createAutopilot(g.stage.course, {}); g.skipCountdown(); });
+const TANK = { x0: 9.6, x1: 18.4, y0: 0, y1: 1.1, z0: -40.4, z1: -23.6 };   // walls included (courses.js:213, wall 0.4)
+const hit = (o, t) => { // segment o→t vs AABB, slab method; t is fraction along segment
+  let lo = 0, hi = 1; for (const [a, b0, b1] of [['x', TANK.x0, TANK.x1], ['y', TANK.y0, TANK.y1], ['z', TANK.z0, TANK.z1]]) {
+    const d = t[a] - o[a]; if (Math.abs(d) < 1e-9) { if (o[a] < b0 || o[a] > b1) return false; continue; }
+    let u0 = (b0 - o[a]) / d, u1 = (b1 - o[a]) / d; if (u0 > u1) [u0, u1] = [u1, u0]; lo = Math.max(lo, u0); hi = Math.min(hi, u1); if (lo > hi) return false; }
+  return hi > 0.001 && lo < 0.999; };
+const rows = []; let shots = 0;
+let post = 0; for (let i = 0; i < 1500; i++) {
+  const s = await p.evaluate(() => { const g = window.__coldgas, S = g.S; for (let k = 0; k < 3 && S.mode === 'live'; k++) g.liveStep(1 / 60);
+    const r = S.run, car = r?.car, cam = g.camera; cam.updateMatrixWorld();
+    const proj = (x, y, z) => { const v = cam.position.clone().set(x, y, z).project(cam); return { sx: (v.x + 1) / 2, sy: (1 - v.y) / 2, front: v.z < 1 }; };
+    const tc = []; for (const x of [9.6, 18.4]) for (const y of [0, 1.1]) for (const z of [-40.4, -23.6]) tc.push(proj(x, y, z));
+    return { mode: S.mode, phase: r?.phase, t: r?.tick, cam: { x: cam.position.x, y: cam.position.y, z: cam.position.z }, car: car && { x: car.pos.x, y: car.pos.y, z: car.pos.z }, tank: tc, carS: car && proj(car.pos.x, car.pos.y, car.pos.z) }; });
+  if (s.mode !== "live" && ++post > 30) break;
+  if (!s.car || s.car.z > -15) continue;
+  const wheels = [[-0.95, 1.35], [0.95, 1.35], [-0.95, -1.35], [0.95, -1.35]].map(([dx, dz]) => ({ x: s.car.x + dx, y: 0.05, z: s.car.z + dz }));
+  const wheelsHidden = wheels.filter((w) => hit(s.cam, w)).length;
+  const ring = []; for (let k = 0; k < 16; k++) { const a = k / 16 * 2 * Math.PI; ring.push({ x: 4 * Math.cos(a), y: 0.01, z: -30 + 4 * Math.sin(a) }); }
+  const ringHidden = ring.filter((q) => hit(s.cam, q)).length;
+  const inFront = s.tank.filter((q) => q.front);
+  const bx = inFront.length ? { x0: Math.max(0, Math.min(...inFront.map((q) => q.sx))), x1: Math.min(1, Math.max(...inFront.map((q) => q.sx))), y0: Math.max(0, Math.min(...inFront.map((q) => q.sy))), y1: Math.min(1, Math.max(...inFront.map((q) => q.sy))) } : null;
+  const area = bx && bx.x1 > bx.x0 && bx.y1 > bx.y0 ? (bx.x1 - bx.x0) * (bx.y1 - bx.y0) : 0;
+  rows.push({ phase: s.phase, carZ: +s.car.z.toFixed(1), carY: +s.car.y.toFixed(2), cam: [s.cam.x, s.cam.y, s.cam.z].map((v) => +v.toFixed(1)), wheelsHidden, ringHidden16: ringHidden, tankBoxFrac: +area.toFixed(2), tankTopY: bx ? +bx.y0.toFixed(2) : null, carSy: s.carS && +s.carS.sy.toFixed(2) });
+  if (rows.length % 30 === 0 && shots < 5) { await p.screenshot({ path: `${OUT}/occ-${viewport}-${shots++}.png` }); }
+}
+const air = rows.filter((r) => r.phase === 'air'), down = rows.filter((r) => r.phase !== 'air');
+const sum = (rs) => ({ n: rs.length, wheelsHiddenAny: rs.filter((r) => r.wheelsHidden > 0).length, wheelsHiddenAll: rs.filter((r) => r.wheelsHidden === 4).length, ringHalfHidden: rs.filter((r) => r.ringHidden16 >= 8).length, maxTankBoxFrac: Math.max(0, ...rs.map((r) => r.tankBoxFrac)) });
+console.log(JSON.stringify({ viewport, air: sum(air), afterTouch: sum(down), first: rows[0], touch: down[0], last: rows[rows.length - 1], every20: rows.filter((_, i) => i % 20 === 0) }, null, 1));
+await browser.close();

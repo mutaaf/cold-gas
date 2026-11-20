@@ -60,3 +60,10 @@ says: "dead on, the trunk stops it".
 ## Out of scope
 The Free Drive tree physics itself, which stops the car correctly when it is hit. The world streaming and draw/solid
 parity checks in the same tests stand as written.
+
+## Critic note 2026-11-20
+#458 (`4cbabe8`, 11-19) holds the page's frame loop at dt 0 inside `ram()` and its tile waits. That removes the
+runner-speed dependence behind the red main on `d77eeaa`, and main has been green on that test since. It doesn't meet
+this ticket's criteria. `ram()` still makes separate evaluates, and the car still yaws on the run-in and meets the trunk
+off-line. There's still no negative control, so a miss can pass `vMin < 9`. It stays P0 for that last point: a test
+that can pass on a miss doesn't guard anything. The Builder can take the remaining criteria as written.
