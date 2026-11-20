@@ -49,6 +49,13 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // 68 / 103 / 87 / 97 tests ≈ 42.3 / 43.8 / 43.2 / 39.9 (≈ 21.9 min worst), the best any file-boundary cut gives
 // (shard 2 starts at first-landing, 3 at lifecycle-fold, 4 at restart-lets-go). A 35-minute job now holds a ≈ 1.55× runner
 // where it held ≈ 1.40×; a 1.8× runner still fails, the fix for that is still ci.yml's (proposal #456).
+// Main then cancelled e2e 1/4 at 35 min on 4ecefe3 and ef2aa66 (62 and 65 of 68 done; both docs/pixels-only after #465's
+// world train), and ef2aa66's e2e 4/4 too (86 of 97). Shard 1 summed 67.4 worker-minutes on both runners, so its files are
+// slow, not its runners (LESSONS 2026-10-30): the fastest-time floor above under-read it by ≈ 60%. By each test's slowest
+// time over those two runs' eight jobs (≈ 263 worker-minutes in all), 68:103:87:97 was 72.7 / 58.2 / 59.8 / 72.0;
+// 61:112:98:84 cuts 61 / 112 / 98 / 84 tests ≈ 66.5 / 65.8 / 66.4 / 63.9 (≈ 33 min on two workers), the best any
+// file-boundary cut gives (shard 2 starts at endless, 3 at lifecycle, 4 at scenery). That is ≈ 2 min of margin, not a
+// cure: a slow runner still fails, and the fix is ci.yml's (proposal #456).
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -56,7 +63,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '68:103:87:97';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '61:112:98:84';
 
 export default defineConfig({
   testDir: 'tests/e2e',
