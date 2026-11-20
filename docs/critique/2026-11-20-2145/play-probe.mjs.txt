@@ -1,0 +1,65 @@
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, viewport = 'phone', OUT = '/home/user/cold-gas/docs/critique/2026-11-20-2145', URL = 'https://mutaafaziz.com/coldgas/'] = process.argv;
+const phone = viewport === 'phone';
+const tag = phone ? 'phone' : 'desk';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 }, deviceScaleFactor: 1 });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+const obsLog = []; c.on('request', (q) => { if (q.url().includes('/api/obs')) obsLog.push({ m: q.method(), u: q.url().slice(-40), len: (q.postData() || '').length, t: Date.now() }); }); c.on('response', (r) => { if (r.url().includes('/api/obs')) obsLog.push({ status: r.status(), u: r.url().slice(-40) }); });
+await c.route('**/api/scores**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }) : r.continue());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+await c.addInitScript(() => { try { localStorage.setItem('coldgas_howto', 'new'); } catch {} });
+const p = await c.newPage();
+const errs = []; p.on('pageerror', (e) => errs.push(String(e).slice(0, 200))); p.on('console', (m) => { if (m.type() === 'error') errs.push(m.text().slice(0, 200)); });
+const out = { viewport };
+const shot = (n) => p.screenshot({ path: `${OUT}/${tag}-${n}.png`, timeout: 20000 }).catch((e) => out[`shotErr_${n}`] = e.message.slice(0, 80));
+const t0 = Date.now();
+await p.goto(URL, { waitUntil: 'domcontentloaded' });
+await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
+out.readyS = (Date.now() - t0) / 1000;
+await p.waitForTimeout(3000); await shot('01-title');
+// 0168: the empty board
+await p.evaluate(() => document.querySelector('[data-board-open]')?.click());
+await p.waitForFunction(() => !document.querySelector('[data-board-rows] .empty')?.textContent.includes('Loading'), null, { timeout: 20000 }).catch(() => {});
+await p.waitForTimeout(800);
+out.board = await p.evaluate(() => { const j = document.querySelector('[data-board-jump]'), cl = document.querySelector('[data-board-close]'), how = document.querySelector('[data-board-how]');
+  const r = (e) => e && e.getClientRects().length ? (({ x, y, width, height }) => ({ x: Math.round(x), y: Math.round(y), w: Math.round(width), h: Math.round(height) }))(e.getBoundingClientRect()) : null;
+  return { rows: document.querySelector('[data-board-rows]')?.innerText.slice(0, 160), jump: j && !j.hidden ? j.textContent.trim() : null, jumpBox: r(j), closeBox: r(cl), how: how && !how.hidden ? how.textContent : null, vh: innerHeight }; });
+await shot('02-board-empty');
+const jb = p.locator('[data-board-jump]');
+if (await jb.isVisible()) { if (phone) await jb.tap({ timeout: 8000 }).catch(() => jb.click()); else await jb.click(); }
+await p.waitForTimeout(1500);
+out.afterBoardJump = await p.evaluate(() => ({ mode: window.__coldgas.S.mode, howto: !document.querySelector('[data-screen="howto"]')?.hidden, howRows: document.querySelector('[data-howto-rows]')?.innerText.slice(0, 300), device: document.querySelector('[data-howto-device]')?.textContent, course: window.__coldgas.stage.course, board: !document.querySelector('[data-screen="board"]')?.hidden }));
+await shot('03-howto');
+await p.evaluate(() => document.querySelector('[data-howto-go]')?.click());
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 60000 }).catch(() => {});
+out.started = await p.evaluate(() => ({ mode: window.__coldgas.S.mode, course: window.__coldgas.stage.course }));
+// fly the reference with the page's own loop stepped
+async function fly(label, opts) {
+  await p.evaluate((o) => { const g = window.__coldgas; g.S.autopilot = g.createAutopilot(g.stage.course, o || {}); g.skipCountdown(); }, opts);
+  const seen = {}, log = [];
+  const marks = [['climb', (s) => s.phase === 'ramp' && s.prog > 0.4], ['hang', (s) => s.upY < -0.5], ['release', (s) => s.phase === 'air'], ['carry', (s) => s.phase === 'air' && s.vy < -2], ['rollout', (s) => s.phase === 'air' && s.upY > 0.9 && s.y < 12], ['touchdown', (s) => s.phase === 'landed' || s.phase === 'done' || s.crashed], ['after', (s) => s.mode !== 'live']];
+  for (let i = 0; i < 1400; i++) {
+    const s = await p.evaluate(() => { const g = window.__coldgas, S = g.S; for (let k = 0; k < 3 && S.mode === 'live'; k++) g.liveStep(1 / 60); const r = S.run, c = r?.car; const up = c?.q ? 1 - 2 * (c.q.x * c.q.x + c.q.z * c.q.z) : 1;
+      return { mode: S.mode, phase: r?.phase, y: c?.pos.y, z: c?.pos.z, vy: c?.vel.y, upY: up, prog: c ? (r.progress ?? 0) : 0, cue: document.querySelector('[data-cue]')?.textContent || '', crashed: !!r?.t?.crashed }; });
+    if (s.prog === 0 && s.phase === 'ramp') s.prog = 0.5;
+    if (s.cue && log[log.length - 1] !== s.cue) log.push(s.cue);
+    for (const [n, f] of marks) if (!seen[n] && f(s)) { seen[n] = { y: +(s.y ?? 0).toFixed(1), z: +(s.z ?? 0).toFixed(1) }; await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))); await shot(`${label}-${n}`); }
+    if (s.mode !== 'live') break;
+  }
+  await p.waitForTimeout(9000);
+  const card = await p.evaluate(() => { const S = window.__coldgas.S, k = S.card; return k && { total: k.total, verdict: k.verdict, sink: k.facts?.sink, clearance: k.facts?.clearance, apex: k.facts?.apex ?? k.facts?.height, airPct: k.facts?.airPct, brakeG: k.facts?.brakeG, padMiss: k.facts?.padMiss, crashed: k.facts?.crashed, tAir: S.run?.t && (S.run.t.touchTick - S.run.t.releaseTick) / 240 }; });
+  const sheet = await p.evaluate(() => document.querySelector('[data-screen="results"]')?.innerText.replace(/\s+/g, ' ').slice(0, 600));
+  await shot(`${label}-results`);
+  return { seen, cues: log.slice(0, 20), card, sheet };
+}
+out.ref = await fly('ref');
+await p.evaluate(() => window.__coldgas.startRun('jump'));
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 30000 }).catch(() => {});
+out.crash = await fly('crash', { carry: 1.5 });
+// replay
+await p.evaluate(() => document.querySelector('[data-replay]')?.click()); await p.waitForTimeout(4000); await shot('replay');
+out.replayMode = await p.evaluate(() => window.__coldgas.S.mode);
+out.errs = errs.slice(0, 10); await p.evaluate(() => { document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('pagehide')); }); await p.waitForTimeout(3000); await p.close({ runBeforeUnload: true }); await new Promise((r) => setTimeout(r, 3000)); out.obs = obsLog;
+console.log(JSON.stringify(out, null, 1));
+await browser.close();

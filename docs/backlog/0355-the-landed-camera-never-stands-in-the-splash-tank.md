@@ -71,3 +71,15 @@ the tanks:
 ## Out of scope
 - Moving or removing the tank. It's the owner's call (0340); the camera works round it.
 - The Free Drive and Roam cameras.
+
+## Critic sharpening 2026-11-20 21:45
+A second run reproduced this on production (`b127d2a`) with a different probe:
+`docs/critique/2026-11-20-2145/cam-probe.mjs.txt` → `cam-probe.json.txt`. It reads `__coldgas.camera.position` every 4
+ticks from touchdown to the results.
+- **390×844:** the camera eases from (16.7, 1.61, −26.8) to **(13.0, 1.28, −29.7)** while the car rests at
+  (0.71, 0.4, −29.9). It's inside the tank's footprint in 10 of 11 frames, and it settles 0.33 m above the 0.95 m water,
+  2.6 m inside the near wall.
+- **1440×900:** the camera passes through the tank in 3 of 11 frames ((12.9, 1.55, −33.1) → (10.3, 1.43, −35.7)), then
+  settles at (7.6, 1.27, −38.5), just outside it.
+- So criterion 1 has to hold **for every frame of the ease**, not just where the stand settles. The desktop rig crosses
+  the tank on its way to a clean stand.

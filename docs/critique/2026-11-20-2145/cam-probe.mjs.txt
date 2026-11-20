@@ -1,0 +1,30 @@
+// Where the landed camera stands on the Show at the touchdown, phone (390×844) vs desktop, against the splash tank
+// (courses.js SHOW.surfaces.tanks[0]: x 10..18, z -40..-24, walls 0.4 m, top 1.1 m, water 0.95 m).
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, URL = 'https://mutaafaziz.com/coldgas/', OUT = '/home/user/cold-gas/docs/critique/2026-11-20-2145'] = process.argv;
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const res = {};
+for (const [tag, opt] of [['phone', { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true }], ['desk', { viewport: { width: 1440, height: 900 } }]]) {
+  const c = await browser.newContext(opt);
+  await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+  await c.route('**/api/**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+  await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+  const p = await c.newPage();
+  await p.goto(URL); await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
+  await p.evaluate(() => window.__coldgas.startRun('jump'));
+  await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 60000 });
+  await p.evaluate(() => { const g = window.__coldgas; g.S.autopilot = g.createAutopilot('show', {}); g.skipCountdown(); });
+  const track = [];
+  for (let i = 0; i < 2000; i++) {
+    const s = await p.evaluate(() => { const g = window.__coldgas, S = g.S; for (let k = 0; k < 4 && S.mode === 'live'; k++) g.liveStep(1 / 60); const c = S.run?.car, cam = g.camera.position;
+      return { mode: S.mode, phase: S.run?.phase, car: c && [c.pos.x, c.pos.y, c.pos.z].map((v) => +v.toFixed(2)), cam: [cam.x, cam.y, cam.z].map((v) => +v.toFixed(2)) }; });
+    if (s.phase === 'landed' || s.phase === 'done' || s.mode !== 'live') track.push(s);
+    if (s.mode !== 'live' || track.length > 40) break;
+  }
+  const last = track[track.length - 1];
+  const inTank = (q) => q[0] > 10 && q[0] < 18 && q[2] > -40 && q[2] < -24;
+  res[tag] = { landedFrames: track.length, camEnd: last?.cam, carEnd: last?.car, camInsideTankFootprint: track.filter((s) => inTank(s.cam)).length, camBelowWallTop: track.filter((s) => inTank(s.cam) && s.cam[1] < 1.1 + 0.5).length, track: track.map((s) => `${s.phase}/${s.mode} car ${s.car} cam ${s.cam}`) };
+  await c.close();
+}
+console.log(JSON.stringify(res, null, 1));
+await browser.close();
