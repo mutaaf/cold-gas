@@ -1,7 +1,7 @@
 ---
 id: 0179
 title: A failed WebGL context is asked for again, lighter, before the page says it needs WebGL
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: performance
@@ -43,3 +43,5 @@ body. A unit test for the helper if it is pure enough to import.
 
 ## Out of scope
 A 2D-canvas fallback game, a context-lost recovery mid-run (0042 covers backgrounding), new hosts or analytics.
+
+SCOUT 2026-11-20: held back to proposed to bring the ready queue to its cap of 10; not funnel-driven. Promote when room.

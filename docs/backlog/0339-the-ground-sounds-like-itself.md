@@ -1,7 +1,7 @@
 ---
 id: 0339
 title: Mud, snow and ice sound like themselves under the tyres
-status: ready
+status: proposed
 priority: P2
 size: S
 lens: player-feel
@@ -22,3 +22,5 @@ The tyre bed has paved, gravel, grass and wet voices; mud squelches, snow creaks
 
 ## Test plan
 `make test` (AudioTests); listen on the simulator.
+
+SCOUT 2026-11-20: held back to proposed to bring the ready queue to its cap of 10; not funnel-driven. Promote when room.

@@ -1,7 +1,7 @@
 ---
 id: 0115
 title: The run-up frames the whole roadster on a portrait phone
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: player-feel
@@ -40,3 +40,5 @@ On a 390×844 touch capture of main with `coldgas_howto='new'`, the run-up's fir
 countdown) shows the roadster pushed to the right edge, partly cropped, beside the Wall's lit ring, with the HUD
 column covering the left third. A newcomer's first sight of their own car is a clipped silhouette. Funnel: the one
 human on 2026-11-06 started a run and quit before the card (`run-quit`), so the first seconds matter most.
+
+SCOUT 2026-11-20: reproduced on `main` b68b09b (SwiftShader, 390×844 touch, `coldgas_howto='new'`, `?` title → Jump): at T+5.5 s of the run-up with no input, the roadster is pressed against the right edge with its nose cut off, the thumb pad ("HOLD CLIMB") below it and the telemetry rail left. A newcomer's first look at their car is a cropped car. Promoted to ready (first-run clarity, funnel: `run` after `visit-new`).
