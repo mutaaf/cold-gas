@@ -63,6 +63,11 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // faster run of those two (≈ 224 worker-minutes in all): 80:93:105:77 cuts 80 / 93 / 105 / 77 tests ≈ 55.1 / 53.5 / 55.3 /
 // 59.7 (≈ 28-30 min; shard 2 starts at first-title, 3 at lifecycle, 4 at smoke), where 61:112:98:84 was 50.7 / 59.9 / 48.8 /
 // 66.2. A 1.25× runner still lands on 35 min: the cure is ci.yml's headroom (proposal #456), not another cut.
+// Main on bd41a1c then cancelled e2e 3/4 at 35 min (104 of 105 done, ≈ 69 worker-minutes) while 1/4 ran 19.4 min (≈ 39),
+// 2/4 20.9 (≈ 42) and 4/4 29.9 (≈ 60): the lifecycle..share-moment region (network ≈ 12, frame-probe ≈ 10, lifecycle ≈ 9,
+// pause ≈ 6) cost ≈ 14 more than its price. Priced on that one run, all four shards on the same commit, 122:79:86:68 cuts
+// 122 / 79 / 86 / 68 tests ≈ 55.7 / 50.0 / 52.5 / 51.7 (≈ 26-28 min; shard 2 starts at hud-fit, 3 at next-jump, 4 at
+// start-pending). Still no margin for a slow runner: proposal #456 is the cure.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -70,7 +75,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '80:93:105:77';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '122:79:86:68';
 
 export default defineConfig({
   testDir: 'tests/e2e',
