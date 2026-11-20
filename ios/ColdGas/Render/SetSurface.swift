@@ -3,10 +3,11 @@
 // The shader side is SetSurface.h. Pixels only: no collider, no mass, no tick reads any of this.
 import Metal
 import MetalKit
+import ColdGasCore
 
 enum SetSurface {
-    /// Material.flags.w bits (Shaders.metal): 8 concrete, 16 steel.
-    static let concrete: UInt32 = 8, steel: UInt32 = 16
+    /// Material.flags.w bits (Shaders.metal): 8 concrete, 16 steel, 32 a splash tank's water (0353).
+    static let concrete: UInt32 = 8, steel: UInt32 = 16, water: UInt32 = 32
 
     /// The detail texture, linear, mipmapped; nil if the bundle has none (the shader's branch is then never taken).
     static func load(device: MTLDevice) -> MTLTexture? {
@@ -22,6 +23,16 @@ enum SetSurface {
         switch stage {
         case "lineup": return SIMD4(0, -70, 0, 1)     // the mark to the lift-off
         default: return SIMD4(0, -6, -120, 1)         // the Show's and the Wall's: off the mark, and the runway's test runs behind it
+        }
+    }
+
+    /// Marks a set's splash-tank water (0353: the stage's `water` plane, from the web's buildSurfaces) for Shaders.metal's
+    /// setWaterShade, its effect the tank's inside (x, z metres; the plane's uv spans it). The tanks of a course are one size.
+    static func classifyWater(_ mats: inout [MaterialU], _ mesh: StageMesh, stage: String) {
+        guard let k = COURSES[stage]?.surfaces?.tanks.first else { return }
+        for (i, s) in mesh.submeshes.enumerated() where i < mats.count && s.material.name == "water" {
+            mats[i].flags.w |= water
+            mats[i].effect = SIMD4(Float(k.x1 - k.x0), Float(k.z1 - k.z0), 0, 1)
         }
     }
 

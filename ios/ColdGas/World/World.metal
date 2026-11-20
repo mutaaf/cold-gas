@@ -452,9 +452,15 @@ vertex WGrassOut cg_world_grass_vertex(uint vid [[vertex_id]], uint iid [[instan
     uint cb = as_type<uint>(tile[ia + 7]), mb = as_type<uint>(tile[ia + 8]);
     float3 col = float3(cb & 255u, (cb >> 8) & 255u, (cb >> 16) & 255u) / 255.0;
     float road = float((mb >> 16) & 255u) / 8.0;
-    if ((mb >> 24) != 0u) return o;                                     // water or the slab
+    // Water or the slab at any corner of the 4 m cell, not only the one the colour comes from (0351: a river 5–12 m wide
+    // falls between the vertices, and a clump on its far side stood in the channel with a dry corner under it).
+    uint fl = (mb | as_type<uint>(tile[ib + 8]) | as_type<uint>(tile[ic + 8]) | as_type<uint>(tile[id + 8])) >> 24;
+    if (fl != 0u) return o;
     if (road < 5.4) return o;                                           // the road, its shoulder and the gravel
     float4 S = surface.sample(world_cs, lp / 128.0, uint(g.offset.w), level(0.0));
+    // Under water by the baked surface (2 m texels, A = depth / 16 m; any body: a lake, a river, the sea), or on the shore
+    // band that's soaked to the waterline: no grass on the bed or the bank below the water's edge (0351).
+    if (S.a > 0.0 || S.b > 0.8) return o;
     if (S.r > 0.3 || S.g > 0.3 || n.y < 0.82) return o;                 // rock, scree, snow, too steep
     if (col.r > col.g * 1.3 || dot(col, float3(0.33)) > 0.3) return o; // sand, desert, concrete
     y += 0.4 * (1.0 - smoothstep(14.7 - 3.0, 14.7, road));             // stand on the verge's ribbon, not in the dip under it

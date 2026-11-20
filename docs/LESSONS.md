@@ -2,6 +2,7 @@
 
 Mistakes already paid for. Read before working.
 
+- **A new look goes in its own pipeline, not a branch of `cg_stage_fragment`.** 0353's tank water as a branch of the iPhone's stage uber-shader took a frame with the tank on screen from 3.8 to ≈ 40 ms on the simulator; the same code as `cg_setwater_fragment` in its own pipeline costs 4.6 ms. Choose the pipeline per submesh in `drawMesh`.
 - **Convex slices have internal edges.** Rapier resolves a contact by its shortest way out; when a body is pressed a centimetre into one slice, the next slice's end face, standing flush with the surface, is shorter, and the normal comes out horizontal. That is a dead stop at speed. Bury every internal face (`sliceShape` in src/build/objects.js runs each slice on under its neighbour and dips it); don't butt slices end to end.
 - **Loft winding.** `loft()` in src/render/cars.js must wind (a, b, c) so normals face out; inverted winding back-face-culls every body and lights the inside of the far wall (looked like black slabs).
 - **No MSAA HalfFloat render target.** A multisampled HalfFloat composer target rendered pure black on some GPU paths; we use SMAA after the OutputPass instead.

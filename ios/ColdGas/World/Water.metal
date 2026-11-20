@@ -97,6 +97,33 @@ static float3 water_at(float2 xz, constant WaterU& u, texture2d<float> nearM, te
     }
     return float3(-60.0, u.centre.y, 1.0);
 }
+/// A river's current at render-space xz from the near map's flow (0352: rg the downstream direction, unit in a channel, 0 on
+/// still water and off the near map; rivers 5–12 m wide come in on that 1 km map only).
+static float2 water_flow(float2 xz, constant WaterU& u, texture2d<float> flowM) {
+    float4 m = u.nearMap;
+    if (m.w < 0.5) return 0;
+    float2 uv = (xz - m.xy) * m.z;
+    if (any(uv < 0.004) || any(uv > 0.996)) return 0;
+    return flowM.sample(mapS, uv, level(0)).rg;
+}
+/// Flow-aligned ripples (0352): the chop's slopes read in the current's own frame, stretched along it (a river's ripples are
+/// streaks drawn out downstream) and advected at the current's speed in two phases half a period apart, crossfaded so the
+/// pattern never stretches past one period (a flow map). Returns the slope (world xz) and, in z, how strongly it flows.
+static float3 water_flowRipples(float2 param, float2 fl, float t, constant WaterU& u, texture2d_array<float> slope) {
+    float sp = length(fl);
+    if (sp < 0.05) return 0;
+    float2 fd = fl / sp, side = float2(-fd.y, fd.x);
+    float2 q = float2(dot(param, fd), dot(param, side));
+    const float P = 1.6, speed = 1.2;   // the period (s) and the current (m/s, WaterSpec.riverSpeed)
+    float ph0 = fract(t / P), ph1 = fract(t / P + 0.5);
+    float w0 = 1.0 - abs(2.0 * ph0 - 1.0);
+    const float2 aniso = float2(0.45, 1.7);   // drawn out along the current, tight across it
+    float k = u.cascades.y * 3.3;
+    float2 g0 = slope.sample(waveS, (q - float2(speed * P * ph0, 0)) * aniso * k + float2(0.13, 0.71), 1).xy;
+    float2 g1 = slope.sample(waveS, (q - float2(speed * P * ph1, 0)) * aniso * k + float2(0.57, 0.29), 1).xy;
+    float2 g = (g0 * w0 + g1 * (1.0 - w0)) * aniso * 1.4;
+    return float3(fd * g.x + side * g.y, saturate(sp));
+}
 
 struct WaterOut {
     float4 clip [[position]];
@@ -111,7 +138,8 @@ struct WaterOut {
 vertex WaterOut cg_water_vertex(uint vid [[vertex_id]], constant WaFrame& f [[buffer(1)]], constant WaterU& u [[buffer(2)]],
                                 constant WaLook& k [[buffer(4)]], texture2d<float> skyView [[texture(8)]],
                                 texture2d_array<float> disp [[texture(0)]],
-                                texture2d<float> nearM [[texture(2)]], texture2d<float> midM [[texture(15)]], texture2d<float> farM [[texture(16)]]) {
+                                texture2d<float> nearM [[texture(2)]], texture2d<float> midM [[texture(15)]], texture2d<float> farM [[texture(16)]],
+                                texture2d<float> flowM [[texture(18)]]) {
     const uint2 corner[6] = { uint2(0, 0), uint2(1, 0), uint2(1, 1), uint2(0, 0), uint2(1, 1), uint2(0, 1) };
     uint S = uint(u.grid.y);
     uint quad = vid / 6, ring = quad / S + corner[vid % 6].x, seg = quad % S + corner[vid % 6].y;
@@ -124,7 +152,9 @@ vertex WaterOut cg_water_vertex(uint vid [[vertex_id]], constant WaFrame& f [[bu
     float2 anch = xz + u.anchor.xy;
     // Displacement fades out with distance (past ≈ 1 km the waves are the normals' alone) and toward the shore.
     float d = length(xz - f.eye.xz);
-    float swellK = calm * wa.z * (1.0 - smoothstep(400.0, 1600.0, d)), chopK = calm * mix(0.4, 1.0, wa.z) * (1.0 - smoothstep(60.0, 260.0, d));
+    // A river runs flat: its ripples are the normals' alone (0352; the chop's 32 m waves heaved a 6 m channel into facets).
+    float river = saturate(length(water_flow(xz, u, flowM)) * 2.0);
+    float swellK = calm * wa.z * (1.0 - smoothstep(400.0, 1600.0, d)), chopK = calm * mix(0.4, 1.0, wa.z) * (1.0 - smoothstep(60.0, 260.0, d)) * (1.0 - river);
     float3 D = 0;
     if (swellK > 0) D += disp.sample(waveS, anch * u.cascades.x, 0, level(0)).xyz * swellK;
     if (chopK > 0) D += disp.sample(waveS, anch * u.cascades.y, 1, level(0)).xyz * chopK;
@@ -203,10 +233,13 @@ fragment WaterPix cg_water_fragment(WaterOut in [[stage_in]], constant WaFrame& 
                                     texture2d<float> skyView [[texture(8)]],
                                     texture2d_array<float> slope [[texture(1)]],
                                     texture2d<float> nearM [[texture(2)]], texture2d<float> midM [[texture(15)]], texture2d<float> farM [[texture(16)]],
-                                    texture2d<float> horizon [[texture(17)]]) {
+                                    texture2d<float> horizon [[texture(17)]], texture2d<float> flowM [[texture(18)]]) {
     float3 wa = water_at(in.world.xz, u, nearM, midM, farM);
     float bed = wa.x;
-    if (bed > 0.8) discard_fragment();   // over land: the beach stands in front anyway
+    // Over land: on the sea the beach stands in front anyway (the swash runs up it). A lake's or a river's edge is where the
+    // map's ground meets its level (0352): the land's mesh (4 m apart near the eye, coarser past it) can't hold a channel a few
+    // metres wide and sags under the level between its vertices, and the surface drawn over that sag was the pale facets.
+    if (bed > mix(0.03, 0.8, wa.z)) discard_fragment();
     // A coarse far triangle across two water bodies (a lake's shore and the sea's level beyond) is drawn only where it's at
     // the body's own level: the rest of it is over land.
     if (abs(in.still - wa.y) > 1.5) discard_fragment();
@@ -223,8 +256,13 @@ fragment WaterPix cg_water_fragment(WaterOut in [[stage_in]], constant WaFrame& 
     const float2x2 R = float2x2(0.8, 0.6, -0.6, 0.8);
     float4 s3 = slope.sample(waveS, (R * in.param) * u.cascades.y * 2.71 + float2(0.37, 0.11) * t * 0.05, 1);
     float k1 = calm, k2 = mix(0.35, 1.0, calm);
-    float2 sl = s1.xy * k1 + s2.xy * k2 + s3.xy * 0.45 * k2;
-    float m2 = s1.z * k1 * k1 + s2.z * k2 * k2 + s3.z * 0.2 * k2 * k2;
+    // A river (0352): the chop gives way to ripples drawn out along its current and carried downstream by it.
+    float2 flw = water_flow(in.world.xz, u, flowM);
+    float3 rip = water_flowRipples(in.param, flw, t, u, slope);
+    float river = rip.z * (1.0 - wa.z);
+    k2 *= 1.0 - 0.85 * river;
+    float2 sl = s1.xy * k1 + s2.xy * k2 + s3.xy * 0.45 * k2 + rip.xy * river * 0.55;
+    float m2 = s1.z * k1 * k1 + s2.z * k2 * k2 + s3.z * 0.2 * k2 * k2 + dot(rip.xy, rip.xy) * river * 0.3;
     float variance = max(m2 - dot(sl, sl), 0.0) + 0.0004;
     float3 n = normalize(float3(-sl.x, 1.0, -sl.y));
     float J = s1.w * k1 + (1.0 - k1);   // the swell's pinch (whitecaps where its crests fold)
@@ -235,8 +273,18 @@ fragment WaterPix cg_water_fragment(WaterOut in [[stage_in]], constant WaFrame& 
     float roll = sin(depth * 4.5 + t * 1.6 + water_noise(in.param / 9.0) * 5.0);
     float grain = water_noise(in.param * 0.9 + float2(t * 0.3, -t * 0.2));
     // (the surf rolls in on the open sea; a lake or a river has no swell to break, only a thin line at its edge)
-    float foamShore = shore * smoothstep(0.35, 0.9, roll * 0.5 + 0.5 + grain * 0.6 - depth * 0.25) * mix(0.08, 1.0, wa.z)
-                    + smoothstep(0.08, 0.0, depth) * mix(0.5, 0.9, wa.z);
+    // (0352: the edge line only where there is water, not on the bank the map calls land: that line was painted over every
+    // sag in a river's bank; a river's own edge is a thin wet line, its flecks drawn downstream)
+    float edge = smoothstep(0.08, 0.0, depth) * mix(1.0 - smoothstep(-0.02, 0.02, bed), 1.0, wa.z);
+    float foamShore = shore * smoothstep(0.35, 0.9, roll * 0.5 + 0.5 + grain * 0.6 - depth * 0.25) * mix(0.08, 1.0, wa.z) * (1.0 - river)
+                    + edge * mix(mix(0.5, 0.25, river), 0.9, wa.z);
+    if (river > 0.01) {
+        // Flecks of foam riding the current: long thin streaks, sparse, slowly re-dealt.
+        float2 fd = flw / max(length(flw), 1e-4), sd = float2(-fd.y, fd.x);
+        float2 q = float2(dot(in.param, fd) - t * 1.2, dot(in.param, sd));
+        float fleck = smoothstep(0.72, 0.9, water_noise(q * float2(0.35, 2.2))) * smoothstep(0.3, 0.7, water_noise(q * 0.11 + 7.3));
+        foamShore = max(foamShore, fleck * river * 0.55 * smoothstep(0.15, 0.6, depth));
+    }
     float foamCap = smoothstep(0.45, 0.15, J) * smoothstep(0.4, 0.8, grain + 0.2) * calm;
     float foam = saturate(max(foamShore, foamCap));
     float cosV = clamp(dot(n, v), 0.0, 1.0);
@@ -245,7 +293,8 @@ fragment WaterPix cg_water_fragment(WaterOut in [[stage_in]], constant WaFrame& 
     if (style > 1.5) {
         // 8-bit: palette water. Depth in three bands, the sky in two, sparkle tiles stepped at 4 fps, solid foam pixels.
         float step4 = floor(t * 4.0);
-        float2 tile = floor(in.param / 2.0);
+        // (a river's sparkle drifts downstream with its current, a tile at a time: 0352)
+        float2 tile = floor((in.param - flw * (river > 0.01 ? 1.2 : 0.0) * (step4 * 0.25)) / 2.0);
         float ph = water_hash(tile + float2(step4 * 0.0, 0.0));
         float sparkle = step(0.93, fract(ph + step4 * 0.25)) * step(0.5, water_hash(tile * 1.7 + step4));
         float3 deep = float3(0.010, 0.022, 0.07), mid = float3(0.02, 0.07, 0.16), shallow = float3(0.05, 0.20, 0.28);
@@ -257,7 +306,7 @@ fragment WaterPix cg_water_fragment(WaterOut in [[stage_in]], constant WaFrame& 
                                      : (fres > 0.82 ? k.skyHorizon.rgb * 0.8 : fres > 0.6 ? k.skyMid.rgb : body);
         c = fres > 0.6 ? skyB : body;
         c = mix(c, float3(0.55, 0.65, 0.8), sparkle * 0.9);
-        c = mix(c, float3(0.75, 0.8, 0.85), step(0.5, foam));
+        c = mix(c, float3(0.75, 0.8, 0.85), step(mix(0.62, 0.5, wa.z), foam));   // (0354: a lake's or a river's thin edge isn't a white block)
         alpha = depth < 0.4 ? 0.6 : depth < 3.0 ? 0.8 : 1.0;   // the bed and a car in the shallows show through
         return { water_air(c * alpha, alpha, in.airT, in.airIn, f) };
     }
@@ -272,7 +321,8 @@ fragment WaterPix cg_water_fragment(WaterOut in [[stage_in]], constant WaFrame& 
         // Glints: the moon's highlight cut to a hard star where the slope faces it.
         float3 h = normalize(l + v);
         float spec = pow(max(dot(n, h), 0.0), 900.0);
-        float star = step(0.45, spec) + step(0.985, water_hash(floor(in.param * 1.5) + floor(t * 6.0))) * step(0.15, pow(max(dot(n, h), 0.0), 60.0));
+        float2 sp6 = in.param - flw * (river > 0.01 ? 1.2 : 0.0) * (floor(t * 6.0) / 6.0);   // (0352: carried by a river's current)
+        float star = step(0.45, spec) + step(0.985, water_hash(floor(sp6 * 1.5) + floor(t * 6.0))) * step(0.15, pow(max(dot(n, h), 0.0), 60.0));
         c += float3(0.9, 0.92, 1.0) * saturate(star) * 0.6 * (1.0 - smoothstep(150.0, 600.0, dist));
         // Foam as solid shapes with an ink line round them.
         float fw = max(fwidth(foam), 1e-3) * 1.5;
@@ -347,7 +397,11 @@ vertex WakeOut cg_wake_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], 
     o.clip = f.viewProj * float4(o.world, 1);
     return o;
 }
-fragment float4 cg_wake_fragment(WakeOut in [[stage_in]], constant WaFrame& f [[buffer(1)]], constant WaterU& u [[buffer(2)]], constant WaLook& k [[buffer(4)]]) {
+fragment float4 cg_wake_fragment(WakeOut in [[stage_in]], constant WaFrame& f [[buffer(1)]], constant WaterU& u [[buffer(2)]], constant WaLook& k [[buffer(4)]],
+                                 texture2d<float> nearM [[texture(2)]], texture2d<float> midM [[texture(15)]], texture2d<float> farM [[texture(16)]]) {
+    // Only on the water (0352): a segment spreads metres wide, and across a river's bank it laid a pale sheet over the land.
+    float3 wa = water_at(in.world.xz, u, nearM, midM, farM);
+    if (wa.x > mix(0.03, 0.8, wa.z)) discard_fragment();
     // A V of churned water: strongest along its two arms and the propwash down the middle, broken up by noise.
     float a = abs(in.uv.y);
     float arms = smoothstep(0.55, 0.85, a) * (1.0 - smoothstep(0.92, 1.0, a));
@@ -356,6 +410,8 @@ fragment float4 cg_wake_fragment(WakeOut in [[stage_in]], constant WaFrame& f [[
     float n = water_noise(in.param * 1.3 + float2(t * 0.2, 0.0));
     float m = saturate(max(arms, core * 0.6) * (0.4 + 0.9 * n)) * in.k;
     float style = u.anchor.z;
+    // (0354: the drawn looks draw the V's two arms only; solid, its churned middle filled a whole segment, a white quad on the river)
+    if (style > 0.5) m = saturate(arms * (0.4 + 0.9 * n)) * in.k;
     float3 c = float3(0.8, 0.85, 0.9) * (k.hemiSky.rgb * 2.2 + f.keyColor.rgb * f.keyDir.w * 0.1);
     if (style > 1.5) { m = step(0.35, m) * step(0.3, in.k); }
     else if (style > 0.5) {
