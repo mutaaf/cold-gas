@@ -12,8 +12,10 @@ import ColdGasWorld
 @Suite("Crashes never break the game", .serialized)
 struct CrashSafetyTests {
     /// A scored run on Assist, full throttle, the stick held at `steer` from `delay` ticks: its car each tick, until it ends.
-    func hardTurn(_ course: String, steer: Double, delay: Int, each: (Run) -> Void = { _ in }) throws -> Run {
-        let run = armAftermath(createRun(course))
+    /// The wedge repro flies the sets as they were reported (SIM_VERSION, 0229): on today's Show the full-lock curl meets the
+    /// splash tank's wall on the way round (0340) and ends against the row instead of the set light. `simVersion` nil: today's.
+    func hardTurn(_ course: String, steer: Double, delay: Int, simVersion: Int? = SIM_VERSION, each: (Run) -> Void = { _ in }) throws -> Run {
+        let run = armAftermath(createRun(course, simVersion: simVersion))
         let inp = Input(); inp.assist = 1; inp.throttle = 1
         while run.phase != .done {
             inp.steer = run.tick > delay ? steer : 0
@@ -57,7 +59,7 @@ struct CrashSafetyTests {
         for name in names {
             let v = RunVector(name)
             var watch = WedgeWatch(), acted = -1
-            try simulate(v.log, v.course) { r in if r.phase != .done && acted < 0 && watch.step(r.car, dt: DT, eligible: r.phase == .drive) == .act { acted = r.tick } }
+            try simulate(v.log, v.course, simVersion: v.simVersion) { r in if r.phase != .done && acted < 0 && watch.step(r.car, dt: DT, eligible: r.phase == .drive) == .act { acted = r.tick } }
             #expect(acted < 0, "\(name): taken for a wedge at tick \(acted)")
         }
     }
@@ -67,9 +69,9 @@ struct CrashSafetyTests {
     func everyHardTurnEndsValidly(_ course: String) throws {
         for steer in [-1.0, -0.3, 0.3, 1.0] { for delay in [120, 360] {
             var finite = true
-            let run = try hardTurn(course, steer: steer, delay: delay) { r in if !carFinite(r.car) { finite = false } }
+            let run = try hardTurn(course, steer: steer, delay: delay, simVersion: nil) { r in if !carFinite(r.car) { finite = false } }
             #expect(finite)
-            #expect(["timeout", "runout", "settled", "stalled", "no-jump", "flipped", "contact"].contains(run.t.endReason))
+            #expect(["timeout", "runout", "settled", "stalled", "no-jump", "flipped", "contact", "splash"].contains(run.t.endReason))
             try aftermath(run)
             #expect(run.after?.done == true)
         } }

@@ -98,8 +98,8 @@ public final class WreckTracker {
 
 /// A run's Wreck card from its input log alone (tests, tools): simulate's loop with the tracker reading every tick, then the
 /// aftermath (where most of a wreck happens) up to the tracker's window. The scored run is exactly simulate's.
-public func wreckOf(_ inputLog: [[Int]], _ courseId: String) throws -> (run: Run, card: WreckCard) {
-    let run = armAftermath(createRun(courseId)), tracker = WreckTracker()
+public func wreckOf(_ inputLog: [[Int]], _ courseId: String, simVersion: Int? = nil) throws -> (run: Run, card: WreckCard) {
+    let run = armAftermath(createRun(courseId, simVersion: simVersion)), tracker = WreckTracker()
     let inp = Input()
     var li = 0
     while run.phase != .done && run.tick < MAX_TICKS {

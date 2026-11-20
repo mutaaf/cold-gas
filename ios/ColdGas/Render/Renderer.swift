@@ -34,10 +34,19 @@ struct FrameU {
     var style = SIMD4<Float>()
     /// 0290: x anime's impact frame (0…1); yz the moon's bearing (a unit xz), w 1 when it's set.
     var fx = SIMD4<Float>()
+    /// 0310: Free Drive's cached world shadow (WorldProps): its view-projection (render space); x 1 when drawn, y its texel.
+    var worldShadowVP = matrix_identity_float4x4
+    var worldShadow = SIMD4<Float>()
+    /// 0332: what the ground left on the car (Render/CarMatter.h); all zero (off) on a scored run.
+    var matter = (SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>())
+    /// 0353: a set's splash-down (xz, its age in s, how hard; w 0: none) and the car in a tank (xz, speed, w 1 while in).
+    var splash = SIMD4<Float>(), wade = SIMD4<Float>()
 }
 struct LookU {
     var hemiSky = SIMD4<Float>(), hemiGround = SIMD4<Float>(), hazeCol = SIMD4<Float>(), sunCol = SIMD4<Float>(), sunDir = SIMD4<Float>(), fogExp = SIMD4<Float>()
     var skyZenith = SIMD4<Float>(), skyMid = SIMD4<Float>(), skyHorizon = SIMD4<Float>(), skySun = SIMD4<Float>(), bloom = SIMD4<Float>()
+    /// Free Drive's physical sky (0231, 0310): x on, y haze, z the eye's height (km), w night; the sun's illuminance (rgb) and the time.
+    var atmo = SIMD4<Float>(), sunE = SIMD4<Float>()
 }
 struct GlintGPU { var pos = SIMD4<Float>(), color = SIMD4<Float>() }
 struct GlintGroup { var size: Float = 0, minPx: Float = 0, tint: Float = 1, pad: Float = 0 }
@@ -59,12 +68,18 @@ final class Renderer {
     static let mistScreens: Float = 3
 
     let device: MTLDevice, queue: MTLCommandQueue
+    private let library: MTLLibrary
     let stage: Stage
     /// The course this renderer was built for ("drive" for Free Drive, on the Show's stage).
     let courseKey: String
     var replay: Replay?
     private let opaque, opaqueCullNone, blend, additive, sky, film, present, shadowPipe, plume: MTLRenderPipelineState
     private let sparkPipe, puffPipe, chipPipe, flashPipe, mistPipe: MTLRenderPipelineState
+    /// 0353: a set's splash drops (SetWater's WaterFX), lit by the set's lamps.
+    private let setSprayPipe: MTLRenderPipelineState
+    /// 0353: a set's splash-tank water (Shaders.metal cg_setwater_fragment), blended.
+    private let setWaterPipe: MTLRenderPipelineState
+    private let setSprayBufs: [MTLBuffer]
     private let glintPipe, glowPipe, mirrorPipe, mirrorGlintPipe, smearPipe, bloomBright, bloomDown, bloomCompose: MTLRenderPipelineState
     private var lookU = LookU(), stageLook = LookU()
     /// Free Drive (docs/NATIVE-FREEDRIVE.md): the lens, the floating origin, the look and the world's draw come from the drive.
@@ -84,6 +99,8 @@ final class Renderer {
     let crash = Crash()
     let mist = Plumes()
     let smoke = TyreSmoke()
+    /// A set's water and mud in motion (0340): the splash, the wake, the mud off the tyres.
+    let setWater = SetWater()
     /// The scored run's rubber on the set (0281; Free Drive's is the world view's).
     private(set) var skids: RunSkids?
     private let sparkBufs: [MTLBuffer], puffBufs: [MTLBuffer], chipBufs: [MTLBuffer], mistBufs: [MTLBuffer]
@@ -96,7 +113,7 @@ final class Renderer {
     // Where the car's own materials sit in stageMats (their colours change per frame: applyCarMaterials).
     private let partBase, sweepBase, complexMats, blobSplit: Int
     private let subAmber, subMarker, subPlate, subAmbient, subGlass: Int
-    private let glassMat: MaterialU?, crazedMat: MaterialU?
+    private let glassMat: MaterialU?, crazedMat: MaterialU?, shatteredMat: MaterialU?
     private var sweepM: [simd_float4x4]
     /// A drive's wheels (0225): each spinning part with the aero disc's flat face cut out (the barrel kept), so the rotor and
     /// caliper show between the spokes; the rotor's submesh in each steer part, for its glow.
@@ -129,10 +146,12 @@ final class Renderer {
     var hingeOpen: Float = 1
     /// A live run's draw time (s of sim time), set by the game each frame (0154).
     var liveTime = 0.0
+    /// The drive's car this frame (0225, 0332): the glow, the pedal, the coat and the bent arms.
+    private var driveLook: DriveCarLook?
     /// The crash's slow-motion factor, for the game's clock (a live run slows with the effects, as crash.js timeScale).
     var slowK: Double { Double(crash.slowK) }
     /// A new track (a new run, or back to the title's loop): effects and clocks start over.
-    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart(); skids?.clear(); moonBearing = nil }
+    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); setWater.reset(); touched = false; crash.car.placed(); cam.restart(); skids?.clear(); moonBearing = nil }
     /// The drawn looks' moon (0290): fixed in the world for a run (or a drive), set from where the lens first looks, a little to
     /// its left, so it rises over the set the run is flown toward and turns with the camera like anything at infinity.
     private var moonBearing: SIMD2<Float>?
@@ -198,7 +217,7 @@ final class Renderer {
         guard let lib = device.makeDefaultLibrary() else { Report.error(.shader, .shader, "renderer: no default library"); return nil }
         // 0302: the stage (its JSON, meshes, textures and environment) loads on another thread while this one makes the pipelines.
         let loading = StageLoad(device: device, course: stageOf(course))
-        queue = q; self.replay = replay; courseKey = course
+        queue = q; self.replay = replay; courseKey = course; library = lib
         if Launch.args.contains("-crash-log") || Launch.args.contains("-fx-log") { setvbuf(stdout, nil, _IOLBF, 0) }
         let archive = PipelineArchive(device: device)
         let vd = MTLVertexDescriptor()
@@ -235,8 +254,10 @@ final class Renderer {
               let puf = pipe("cg_soft_vertex", "cg_puff_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
               let mst = pipe("cg_mist_vertex", "cg_mist_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
               let chp = pipe("cg_chip_vertex", "cg_chip_fragment", color: Renderer.hdrFormat, vertex: nil),
-              let fla = pipe("cg_puff_vertex", "cg_flash_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2) else { return nil }
-        sparkPipe = spk; puffPipe = puf; chipPipe = chp; flashPipe = fla; mistPipe = mst
+              let fla = pipe("cg_puff_vertex", "cg_flash_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2),
+              let ssp = pipe("cg_setspray_vertex", "cg_setspray_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
+              let swp = pipe("cg_stage_vertex", "cg_setwater_fragment", color: Renderer.hdrFormat, blend: 1) else { return nil }
+        sparkPipe = spk; puffPipe = puf; chipPipe = chp; flashPipe = fla; mistPipe = mst; setSprayPipe = ssp; setWaterPipe = swp
         let lowHDR = MTLPixelFormat.rg11b10Float
         guard let gl = pipe("cg_glint_vertex", "cg_glint_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2),
               let gw = pipe("cg_glow_vertex", "cg_glow_fragment", color: Renderer.hdrFormat, depth: false, samples: 1, vertex: nil, blend: 2),   // over the resolved frame (0291)
@@ -263,12 +284,13 @@ final class Renderer {
         zd.usage = [.renderTarget, .shaderRead]; zd.storageMode = .private
         guard let sb = bufs(MemoryLayout<SparkGPU>.stride * Crash.NS), let pb = bufs(MemoryLayout<PuffGPU>.stride * (Crash.NM + 1)),
               let cb = bufs(MemoryLayout<ChipGPU>.stride * Crash.NC), let mb = bufs(MemoryLayout<PuffGPU>.stride * Plumes.maxMist),
+              let ssb = bufs(MemoryLayout<SprayGPU>.stride * SetWater.dropCap),
               let fb = bufs(MemoryLayout<FrameU>.stride), let mfb = bufs(MemoryLayout<FrameU>.stride), let plb = bufs(MemoryLayout<PlumeU>.stride * 10),
               let dw = ds(true, .less), let dr = ds(false, .lessEqual), let doff = ds(false, .always), let dsh = ds(true, .less), let dmi = ds(true, .less),
               let smap = device.makeTexture(descriptor: sd), let dum = device.makeTexture(descriptor: dd), let dumZ = device.makeTexture(descriptor: zd) else {
             Report.error(.render, .error, "renderer: the device refused a buffer, texture or depth state"); return nil
         }
-        sparkBufs = sb; puffBufs = pb; chipBufs = cb; mistBufs = mb
+        sparkBufs = sb; puffBufs = pb; chipBufs = cb; mistBufs = mb; setSprayBufs = ssb
         // The scored run's rubber (0281): without it the run still draws, just with no marks; said once, not fatal.
         skids = RunSkids(device: device, library: lib, samples: Renderer.samples, color: Renderer.hdrFormat, depth: Renderer.depthFormat)
         if skids == nil { Report.error(.render, .shader, "skid marks: pipeline or buffer refused") }
@@ -326,6 +348,7 @@ final class Renderer {
         setDetail = SetSurface.load(device: device)
         var setMats = toneRoam(mats(st.staticMesh))
         if setDetail != nil { SetSurface.classify(&setMats, st.staticMesh, stage: stageOf(course)) }
+        SetSurface.classifyWater(&setMats, st.staticMesh, stage: stageOf(course))   // 0353: the tanks' water, shaded as water
         stageMats = [setMats, mats(st.roadster)] + st.parked.map(mats) + st.wheels.flatMap { [mats($0.steerPart), mats($0.spinPart)] }
         partBase = stageMats.count
         stageMats += st.parts.map(mats)
@@ -349,7 +372,10 @@ final class Renderer {
             var cz = stageMats[1][subGlass]   // crash.js `crazed`: the glass gone milky
             cz.color = SIMD4(srgbHexToLinear(0x9a8a74), 0.9); cz.pbr = SIMD4(0.15, 0.55, 0, 0)
             crazedMat = cz
-        } else { glassMat = nil; crazedMat = nil }
+            var sh = stageMats[1][subGlass]   // 0333: shattered: the frame's few shards left, the cockpit open to the night
+            sh.color = SIMD4(srgbHexToLinear(0x2a3036), 0.14); sh.pbr = SIMD4(0.2, 0.35, 0, 0)
+            shatteredMat = sh
+        } else { glassMat = nil; crazedMat = nil; shatteredMat = nil }
         // The look's constants. A skipped feature zeroes its switch, and the shader's branch takes its fetches out too.
         let off = Set((Launch.value("-gpu-skip") ?? "").split(separator: ",").map(String.init))
         var lk = LookU()
@@ -545,6 +571,8 @@ final class Renderer {
             if d.repairs != driveRepairs { driveRepairs = d.repairs; crash.repair() }
             d.effects(crash, dt: dtReal)
             let cl = d.carLook
+            driveLook = cl
+            if let dmg = d.carDamage { crash.adopt(dmg) }   // 0333: one damage for what's felt and what's drawn
             crash.car.pedal = cl.pedal
             if rotorSub >= 0 {
                 for w in stage.wheels {
@@ -578,6 +606,7 @@ final class Renderer {
             if drive == nil {
                 skids?.update(r, t: tt)
                 smoke.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, lateral: skids?.lateral ?? .zero, into: crash)
+                setWater.update(r, t: tt, dt: Float(dtReal) * crash.slowK, carPos: carPos, carQuat: carQ, vel: vel, into: crash)
             }
             if r.touchTick >= 0 && tick >= r.touchTick && !touched { touched = true; touchdown(sink: r.sink, carPos: carPos, carQuat: carQ) }
             mist.update(dt: Float(dtReal) * crash.slowK, thr: thr, carPos: carPos, carQuat: carQ, carVel: vel)
@@ -620,6 +649,7 @@ final class Renderer {
         let nMist = skip.contains("mist") ? 0 : mist.write(mistBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Plumes.maxMist))
         let lens = view.proj.columns
         var nPuffs = fx.1
+        let nSetDrops = dv == nil && !skip.contains("translucent") && !skip.contains("spray") ? setWater.writeDrops(into: setSprayBufs[fi], cap: SetWater.dropCap) : 0
         if let fl = crash.flash, nPuffs < Crash.NM + 1 {   // the flash rides at the end of the puff buffer
             puffBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Crash.NM + 1)[nPuffs] = PuffGPU(pos: SIMD4(fl.pos, fl.size), color: SIMD4(1, 1, 1, fl.k)); nPuffs += 1
         }
@@ -638,14 +668,18 @@ final class Renderer {
         }
         if fxLog { fxFrames += 1; if fxFrames % 120 == 0 { print(String(format: "FX mist %d live, k %.2f, %.2f M fragments at %d×%d · cones %d · sparks %d, puffs %d, chips %d · marks %d", mist.live, mist.budgetScale, mist.fragments(viewProj: u.viewProj, height: Float(renderSize.1)) * mist.budgetScale * mist.budgetScale / 1e6, renderSize.0, renderSize.1, nPlumes, fx.0, nPuffs, fx.2, skids?.marks.count ?? 0))
             for (i, pc) in crash.pieces.list.enumerated() where pc.on { print(String(format: "PIECE %d at (%.2f, %.2f, %.2f) v %.2f w %.2f still %.2f", i, pc.pos.x, pc.pos.y, pc.pos.z, simd_length(pc.v), simd_length(pc.w), pc.still)) } } }
-        let keyPos = carPos + stage.keyOffset, keyDir = simd_normalize(stage.keyOffset)
-        let lv = lookAt(eye: keyPos, target: carPos, up: [0, 1, 0]), lp = ortho(-28, 28, -28, 28, 1, 140)
+        // The key light: the stage's, or in Free Drive the sun (or the moon) of the hour (#365's DriveSky, 0310). Its box follows the car.
+        let dk = dv?.key
+        let keyDir = dk.map { simd_normalize($0.dir) } ?? simd_normalize(stage.keyOffset)
+        let keyPos = dk != nil ? carPos + keyDir * 70 : carPos + stage.keyOffset
+        let lv = lookAt(eye: keyPos, target: carPos, up: abs(keyDir.y) > 0.98 ? [0, 0, 1] : [0, 1, 0]), lp = ortho(-28, 28, -28, 28, 1, 140)
         u.lightViewProj = lp * lv
         u.eye = SIMD4(view.eye, Float(heroClock))
-        u.keyDir = SIMD4(keyDir, stage.keyIntensity)
-        u.keyColor = SIMD4(stage.keyColor, skip.contains("lights") || away ? 0 : Float(nLights))
+        u.keyDir = SIMD4(keyDir, dk?.intensity ?? stage.keyIntensity)
+        u.keyColor = SIMD4(dk?.color ?? stage.keyColor, skip.contains("lights") || away ? 0 : Float(nLights))
         u.fogColor = SIMD4(stage.fogColor, dv == nil ? 1 : 0)
-        u.fogRange = SIMD4(stage.fogNear, stage.fogFar, stage.exposure, 1 / Float(Renderer.shadowSize))
+        u.fogRange = SIMD4(stage.fogNear, stage.fogFar, dk?.exposure ?? stage.exposure, 1 / Float(Renderer.shadowSize))
+        if let ws = dv?.worldShadow, ws.on { u.worldShadowVP = ws.vp; u.worldShadow = SIMD4(1, 1 / Float(ws.map.width), 0, 0) }
         let wantMirror = look == .real && stage.wetMask != nil && !skip.contains("mirror") && !skip.contains("wet") && shed < 1 && view.eye.y > 0.05 && !away && lookU.fogExp.y > 0
         u.misc = SIMD4(0, wantMirror ? 1 : 0, 1 / Float(renderSize.0), 1 / Float(renderSize.1))
         // The look (0280, 0290). Anime's speed lines: fast (28 → 45 m/s), or the crash's slow motion; its impact frame.
@@ -660,6 +694,9 @@ final class Renderer {
         }
         let mb = moonBearing ?? SIMD2(0.6, 0.8)
         u.fx = SIMD4(look == .anime && (Renderer.impactHold || heroClock - impactAt < impactLen) ? 1 : 0, mb.x, mb.y, 1)
+        if dv != nil, let cl = driveLook, cl.coated { u.matter = MatterLook.frame(cl, carPos: carPos, carQuat: carQ) }   // 0332
+        else if dv == nil, let cl = setWater.look { u.matter = MatterLook.frame(cl, carPos: carPos, carQuat: carQ) }   // 0340 × 0332: a set's mud and water on the car
+        if dv == nil { u.splash = setWater.splashU; u.wade = setWater.wadeU }   // 0353: the tank's rings and the car's ripples
         fb.contents().storeBytes(of: u, as: FrameU.self)
         // The mirror's frame: the same lens looking at the world flipped in y. Its fragments keep their real world position and
         // normal for the lights; only the eye and the clip position change, and the winding (frontFace).
@@ -681,6 +718,21 @@ final class Renderer {
             cmd.addCompletedHandler { cb in pt.add(name, (cb.gpuEndTime - cb.gpuStartTime) * 1000) }
             cmd.commit(); cmd = next
         }
+        // 0. Free Drive's world (0310): the tiles' surfaces baked, the props culled, the world's shadow when it's due, the sky's LUTs
+        // when the sun or the eye has moved. Most frames this is the cull's two dispatches and nothing else.
+        if let dv {
+            if let rs = dv.residency, rs !== residentSet {
+                if let old = residentSet { queue.removeResidencySet(old) }
+                queue.addResidencySet(rs); residentSet = rs
+            }
+            dv.encodeWorld(cmd, ring: fi, keyDir: keyDir)
+            if lookU.atmo.x > 0.5 {
+                if skyLUT == nil { skyLUT = SkyLUT(device: device, library: library) }
+                if let sl = skyLUT { sl.update(cmd, sun: SIMD3(lookU.skySun.x, lookU.skySun.y, lookU.skySun.z), eyeKm: lookU.atmo.z, sunE: SIMD3(lookU.sunE.x, lookU.sunE.y, lookU.sunE.z), time: lookU.sunE.w, night: lookU.atmo.w) } else { lookU.atmo.x = 0 }
+            }
+        } else if let old = residentSet { queue.removeResidencySet(old); residentSet = nil }
+        skyTex = lookU.atmo.x > 0.5 ? skyLUT?.view : nil
+        cut("world")
         // 1. shadow
         let sp = MTLRenderPassDescriptor()
         sp.depthAttachment.texture = shadowMap; sp.depthAttachment.loadAction = .clear; sp.depthAttachment.clearDepth = 1; sp.depthAttachment.storeAction = .store
@@ -752,10 +804,13 @@ final class Renderer {
             wheelsDraw(e, carM: carM, t: simT, opaqueOnly: true, shadow: false)
             if !away { sweepDraw(e, opaqueOnly: true) }
             if complexOn, let c = stage.complex { drawMesh(e, c.mesh, matsIndex: complexMats, model: stageM, opaqueOnly: true) }
-            if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, viewProj: u.viewProj) } else if !skip.contains("marks") { skids?.draw(e, frame: fb, look: &lookU) }
+            if let dv { dv.drawWorld(e, frame: fb, look: &lookU, shadow: shadowMap, sky: skyTex ?? dummy, viewProj: u.viewProj, quality: max(0, 2 - shed)); setEnv(e) }
+            else if !skip.contains("marks") { skids?.draw(e, frame: fb, look: &lookU) }
             // The sky where nothing opaque stands (far plane, depth read).
             e.setCullMode(.none); e.setDepthStencilState(dsRead); e.setDepthBias(0, slopeScale: 0, clamp: 0); e.setRenderPipelineState(sky)
+            e.setFragmentTexture(skyTex ?? dummy, index: 15); e.setFragmentTexture(skyTex != nil ? (skyLUT?.clouds ?? dummy) : dummy, index: 16)
             e.tris(3)
+            if let dv { dv.drawWorldLate(e, frame: fb, look: &lookU, shadow: shadowMap, sky: skyTex ?? dummy, viewProj: u.viewProj); setEnv(e); e.setVertexBuffer(fb, offset: 0, index: 1); e.setFragmentBuffer(fb, offset: 0, index: 1) }
             if complexOn, let c = stage.complex, !skip.contains("translucent") {
                 // rocket.js's draw order: the lattice, the beams, then the lamps over them.
                 for (k, s) in c.mesh.submeshes.enumerated() where s.material.transparent {
@@ -792,6 +847,11 @@ final class Renderer {
             if nDust > 0 { e.setRenderPipelineState(puffPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(puffBufs[fi], offset: 0, index: 2)
                 e.setVertexBytes(&aspect, length: 4, index: 3)
                 e.tris(6, instances: nDust) }
+            if nSetDrops > 0 {   // 0353: the splash's drops, lit by the set (vertex: frame 1, drops 2, lights 3, look 4)
+                e.setRenderPipelineState(setSprayPipe); e.setDepthStencilState(dsRead); e.setCullMode(.none)
+                e.setVertexBuffer(setSprayBufs[fi], offset: 0, index: 2); e.setVertexBuffer(lightsBuf, offset: 0, index: 3)
+                e.tris(6, instances: nSetDrops)
+            }
             if fx.0 > 0 { e.setRenderPipelineState(sparkPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(sparkBufs[fi], offset: 0, index: 2)
                 e.tris(6, instances: fx.0) }
             if hasFlash { e.setRenderPipelineState(flashPipe); e.setDepthStencilState(dsOff); e.setVertexBuffer(puffBufs[fi], offset: MemoryLayout<PuffGPU>.stride * nDust, index: 2)
@@ -888,7 +948,15 @@ final class Renderer {
         upscaled = device.makeTexture(descriptor: d)
         return upscaled
     }
-    private func setEnv(_ e: MTLRenderCommandEncoder) { e.setFragmentTexture(stage.env, index: 7); e.setFragmentTexture(setDetail ?? dummy, index: 8) }
+    private func setEnv(_ e: MTLRenderCommandEncoder) {
+        e.setFragmentTexture(stage.env, index: 7); e.setFragmentTexture(setDetail ?? dummy, index: 8)
+        e.setFragmentTexture(drive?.worldShadow.map(\.map) ?? dummyDepth, index: 14)   // 0310: the world's cached shadow (or none)
+    }
+    /// Free Drive's physical sky (0231, 0310): its LUTs, made on first use; the sky-view this frame (nil: the painted sky).
+    private var skyLUT: SkyLUT?
+    private var skyTex: MTLTexture?
+    /// The drive world's residency set, on this queue while a drive is drawn (0310).
+    private var residentSet: MTLResidencySet?
     /// 8-bit (0290): the lens nudged by under a pixel so `p` (the car) lands on a pixel's centre every frame. A camera that follows
     /// the car then moves the world in whole pixels round a car that stays put on the grid: no swimming on the car, and the
     /// set steps instead of crawling.
@@ -945,7 +1013,7 @@ final class Renderer {
         let c = crash.car
         setLamp(.drl, c.drl); setLamp(.heads, c.headC); setLamp(.tailBar, c.tail); setLamp(.tailDim, c.tailDim); setLamp(.brake, c.brakeC)
         setBodyLamp(subAmber, c.amber); setBodyLamp(subMarker, c.marker); setBodyLamp(subPlate, c.plate); setBodyLamp(subAmbient, c.ambient)
-        if subGlass >= 0, let m = c.crazed ? crazedMat : glassMat { stageMats[1][subGlass] = m }
+        if subGlass >= 0, let m = c.shattered ? shatteredMat : c.crazed ? crazedMat : glassMat { stageMats[1][subGlass] = m }
         applyPaint()
     }
     /// Wreck Club's paint (0242), cosmetic only: the body panels' base colour, or the factory's when none is chosen.
@@ -993,8 +1061,10 @@ final class Renderer {
     /// Everything on the car that moves on its own or can tear off, then what has torn off.
     private func carPartsDraw(_ e: MTLRenderCommandEncoder, carM: simd_float4x4, shadow: Bool) {
         let c = crash.car, L = stage.layout
-        if !c.isBroken(.wing) { wingDraw(e, base: carM * translate(L.wingPos) * rotX(L.wingRotX), k: c.wing, air: c.airbrake, shadow: shadow) }
-        if !c.isBroken(.vanes) { part(e, .vanes, carM * translate(L.vanesPos) * rotX(c.vanesRotX), shadow: shadow) }
+        // 0333: a hanging panel drops on one side, round its other end's last mount, and swings (CarState.swing).
+        func hung(_ a: Float, _ halfX: Float, _ sign: Float) -> simd_float4x4 { a == 0 ? matrix_identity_float4x4 : translate(SIMD3(sign * halfX, 0, 0)) * rotZ(sign * a) * translate(SIMD3(-sign * halfX, 0, 0)) }
+        if !c.isBroken(.wing) { wingDraw(e, base: carM * translate(L.wingPos) * rotX(L.wingRotX) * hung(c.hangAngle[1], L.wingHalf.x, -1), k: c.wing, air: c.airbrake, shadow: shadow) }
+        if !c.isBroken(.vanes) { part(e, .vanes, carM * translate(L.vanesPos) * rotX(c.vanesRotX) * hung(c.hangAngle[0], L.vanesHalf.x, 1), shadow: shadow) }
         if !c.isBroken(.barge) { part(e, .barge, carM * scaleM(c.bargeX, 1, 1), shadow: shadow) }
         if c.sideSkirtsShown { part(e, .sideSkirts, carM * translate(SIMD3(0, -0.11 * c.skirtSide, 0)), shadow: shadow) }
         if c.endSkirtsShown { part(e, .endSkirts, carM * translate(SIMD3(0, -0.11 * c.skirtEnd, 0)), shadow: shadow) }
@@ -1051,7 +1121,9 @@ final class Renderer {
             if let r = replay, r.ticks > 0 { let ws = r.wheel(w.index, at: t); comp = ws.comp; spin = ws.spin; steer = w.steers ? ws.steer : 0 }
             let anchorY = Float(anchors[w.index].1 + SPEC.comHeight)
             let y = anchorY - Float(CAR.restLen) + comp
-            let pivot = carM * translate(SIMD3(w.x, y, w.z)) * simd_float4x4(simd_quatf(angle: steer, axis: [0, 1, 0]))
+            var pivot = carM * translate(SIMD3(w.x, y, w.z)) * simd_float4x4(simd_quatf(angle: steer, axis: [0, 1, 0]))
+            // 0333: a bent arm in a drive (the fronts' toe is in their steer already), its camber leaning the wheel's top in.
+            if drive != nil, let l = driveLook, w.index < 4 { pivot = pivot * MatterLook.bent(toe: w.steers ? 0 : l.toe[w.index], camber: l.camber[w.index], left: w.x < 0) }
             let spinM = pivot * simd_float4x4(simd_quatf(angle: spin, axis: [1, 0, 0]))
             let base = 2 + stage.parked.count + w.index * 2
             drawMesh(e, w.steerPart, matsIndex: base, model: pivot, opaqueOnly: opaqueOnly, shadow: shadow)
@@ -1134,7 +1206,7 @@ final class Renderer {
                 if translucent { continue }
                 pipe = mirrorPipe; ds = dsMirror
             } else {
-                pipe = M.additive ? additive : translucent ? blend : (M.doubleSided ? opaqueCullNone : opaque)
+                pipe = M.additive ? additive : translucent ? (k < mats.count && mats[k].flags.w & SetSurface.water != 0 ? setWaterPipe : blend) : (M.doubleSided ? opaqueCullNone : opaque)
                 ds = translucent || !M.depthWrite ? dsRead : dsWrite
             }
             if pipe !== lastPipe { e.setRenderPipelineState(pipe); lastPipe = pipe }
@@ -1190,10 +1262,11 @@ final class PipelineArchive {
     private let url: URL
     private var dirty = false
     static var cacheDir: URL? { FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first }
-    init(device: MTLDevice) {
+    /// `name`: a second archive beside the renderer's (0310: Free Drive's world keeps its own, so the two never overwrite each other).
+    init(device: MTLDevice, name: String = "") {
         self.device = device
         let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
-        url = (PipelineArchive.cacheDir ?? FileManager.default.temporaryDirectory).appendingPathComponent("pipelines-v2-\(build).metallib")
+        url = (PipelineArchive.cacheDir ?? FileManager.default.temporaryDirectory).appendingPathComponent("pipelines-v2-\(name.isEmpty ? "" : name + "-")\(build).metallib")
         #if targetEnvironment(simulator)
         archive = nil
         #else
@@ -1260,7 +1333,7 @@ extension Renderer {
         add(s.env); add(s.wetMask)
         [msaa, depth, hdr, ldr, upscaled, depthRes, mirrorDepth, mirrorRaw, mirrorTex, bloomOut, shadowMap, dummy, dummyDepth].forEach(add)
         bloomChain.forEach(add)
-        (frames + mirrorFrames + plumes + sparkBufs + puffBufs + chipBufs + mistBufs + [lightsBuf, lampBuf, beaconBuf, glowBuf]).forEach(add)
+        (frames + mirrorFrames + plumes + sparkBufs + puffBufs + chipBufs + mistBufs + setSprayBufs + [lightsBuf, lampBuf, beaconBuf, glowBuf]).forEach(add)
         return n
     }
 }

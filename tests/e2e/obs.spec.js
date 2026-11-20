@@ -68,6 +68,10 @@ test('a lost WebGL context is restored, the renderer rebuilt, and the game keeps
 });
 
 test('a physics trap mid-run stops the run with a toast instead of freezing the page', async ({ page }) => {
+  // Four runs in one boot (the trap, 0130's quits, the landed R, 0138's Pro wreck): 42 s alone on software GL, and past
+  // 90 s in e2e 3/4 beside lifecycle and network (main 9ba1aea and #458, both tries, each further along than it
+  // started: slow, not stuck). Every assertion and wait inside stands.
+  test.slow();
   await page.goto('/coldgas/?gfx=low');
   await ready(page);
   await page.evaluate(() => { window.__coldgas.startRun('jump'); window.__coldgas.skipCountdown(); });

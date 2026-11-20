@@ -154,8 +154,8 @@ public struct BuiltDrill {
 /// Fly the reference to the drill's start and hand the run over. The ledge drills fly it onto the inverted ledge (93 %
 /// of the curl), stop and hang there; the release drills then let go as a player does (fan off, a 0.1 s RELEASE tap on
 /// the down-jets) and hand over 0.15 s after the release: every decision after it is yours.
-public func buildDrill(_ drill: Drill, _ course: String) throws -> BuiltDrill {
-    let run = createRun(course)
+public func buildDrill(_ drill: Drill, _ course: String, simVersion: Int? = nil) throws -> BuiltDrill {
+    let run = createRun(course, simVersion: simVersion)
     let ap = DrillPilot(course, hangOnLedge: drill.hang)
     var st = DrillStage()
     let idle = Input()

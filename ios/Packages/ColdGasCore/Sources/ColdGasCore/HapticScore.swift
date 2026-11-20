@@ -19,6 +19,8 @@ public struct HapticFeed: Sendable {
     public var flow: Double          // Σ of the ten valve throttles (0…10)
     public var gas: Double           // nitrogen left, 0…1
     public var lift: Bool            // the player's LIFT/RELEASE input this tick
+    // A set's water and mud (0340): how much of the body is under water (0–1), the tyres in mud, the splash-down's tick.
+    public var wet: Double = 0, mud: UInt8 = 0, splash: Bool = false
     public var impactCount: Int      // impact events this tick (up to 4 read)
     public var impactKind: (UInt8, UInt8, UInt8, UInt8)
     public var impactSpeed: (Double, Double, Double, Double)
@@ -43,7 +45,7 @@ public struct HapticFeed: Sendable {
     }
 }
 
-public enum HapticKind: UInt8, Sendable { case release, apex, wheel, hit, crush, settle, detent, tap }
+public enum HapticKind: UInt8, Sendable { case release, apex, wheel, hit, crush, settle, detent, tap, splash }
 
 public struct HapticEvent: Sendable, Equatable {
     public var kind: HapticKind
@@ -100,6 +102,11 @@ public struct HapticScore {
             continuous.rumble = 0
         }
         if f.phase == 4 { continuous.rumble = 0 }
+        // A set's water and mud (0340): the splash-down is one heavy, dull slap; afloat, a slow slosh; tyres in mud, a
+        // deeper and duller rumble than on the slab.
+        if f.splash { emit(.splash, t, channel: 4, intensity: Float(min(1, max(0.45, f.speed / 12))), sharpness: 0.12) }
+        if f.wet > 0 && f.phase != 4 { continuous.rumble = max(continuous.rumble, Float(min(0.45, 0.1 + 0.35 * f.wet))); continuous.rumbleSharp = 0.08 }
+        else if f.mud > 0 && onGround && f.phase != 4 { continuous.rumble = min(1, continuous.rumble + 0.1 * Float(f.mud)); continuous.rumbleSharp = 0.1 }
         // Hiss: the jets' total flow; sharpness falls with the pressure (the tanks blowing down).
         continuous.hiss = Float(min(1, f.flow / 4))
         continuous.hissSharp = Float(0.2 + 0.6 * max(0, min(1, f.gas)))

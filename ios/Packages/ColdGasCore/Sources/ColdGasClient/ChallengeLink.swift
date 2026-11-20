@@ -23,13 +23,15 @@ public enum ChallengeLink {
         return url.path == "/coldgas" || url.path.hasPrefix("/coldgas/")
     }
 
-    public static func route(_ url: URL, simVersion: Int) -> Route {
+    public static func route(_ url: URL, simVersion: Int) -> Route { route(url) { _, v in v == simVersion } }
+    /// route, stale by the web's per-course rule (0340): the app passes ColdGasPhysics' `replayable`.
+    public static func route(_ url: URL, replayable: (String, Int) -> Bool) -> Route {
         guard isOurs(url) else { return .none }
         let c = URLComponents(url: url, resolvingAgainstBaseURL: false)
         let course = c?.queryItems?.first { $0.name == "course" }?.value.flatMap { Challenge.COURSE_IDS.contains($0) ? $0 : nil }
         let hash = url.fragment.map { "#" + $0 } ?? ""
         guard !hash.isEmpty, hash.contains("vs=") else { return .play(course: course) }
-        guard let p = Challenge.vsFromHash(hash), let run = Challenge.decode(p, simVersion: simVersion) else { return .bad(course: course) }
+        guard let p = Challenge.vsFromHash(hash), let run = Challenge.decode(p, replayable: replayable) else { return .bad(course: course) }
         if run.stale { return .stale(course: run.course) }
         return .challenge(run)
     }

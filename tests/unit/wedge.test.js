@@ -85,11 +85,18 @@ describe('0229 repro: a scored run wedged against a fixture', () => {
     expect(fired).toBeGreaterThan(0);
     expect(fired).toBeLessThan(240 * 12);
   });
-  it('the Show, the other way: the same wedge, seen as fast', () => {
+  it('the Show, the other way: the same wedge seen as fast, or a run that ends on its own', () => {
+    // Since 0340 the Show's tank stands off to that side of the run-up: the car curling the other way meets its wall and the
+    // run ends by itself ('contact', ≈ 7 s in) before it can wedge. Either way nothing sits frozen to the 90 s cap.
     const { run, fired } = scored('show', -1);
-    expect(fired).toBeGreaterThan(0);
-    expect(fired).toBeLessThan(240 * 15);
-    expect(run.phase).toBe('drive');
+    if (fired > 0) {
+      expect(fired).toBeLessThan(240 * 15);
+      expect(run.phase).toBe('drive');
+    } else {
+      expect(run.phase).toBe('done');
+      expect(run.tick).toBeLessThan(240 * 15);
+      expect(['contact', 'splash', 'settled', 'stalled']).toContain(run.t.endReason);
+    }
   });
   it('the Lineup, steering into a lamp post from 1.5 s: seen', () => {
     const { run, fired } = scored('lineup', -0.6, 360);

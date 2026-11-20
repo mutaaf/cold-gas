@@ -135,17 +135,10 @@ public final class DriveStreamer: WorldStreamer {
 
     // MARK: - Building
 
-    static func material(_ s: Surface) -> Material {
-        switch s {
-        case .concrete: return MATERIALS.concrete
-        case .asphalt: return MATERIALS.asphalt
-        case .gravel: return MATERIALS.gravel
-        case .grass: return MATERIALS.grass
-        case .dirt: return MATERIALS.dirt
-        case .rock: return MATERIALS.rock
-        case .sand, .water: return MATERIALS.sand
-        case .snow: return MATERIALS.gravel
-        }
+    /// The ground's material for the engine (0330: through GroundMatter, so snow is snow, not gravel, and water above the
+    /// snow line is ice). `y`: the ground's height (freezing above GroundMatter.snowLine).
+    static func material(_ s: Surface, y: Double = 0) -> Material {
+        GroundMatter.of(s, freezing: y > GroundMatter.snowLine).material()
     }
     /// One cell's ground (pure: any thread).
     static func build(_ world: FreeWorld, _ ix: Int, _ iz: Int) -> CellData {
@@ -167,7 +160,7 @@ public final class DriveStreamer: WorldStreamer {
         let a = Double(v[1]), b = Double(v[N * 3 + 1]), c = Double(v[(N * (N + 1)) * 3 + 1])
         let sx = (b - a) / C, sz = (c - a) / C, slope = 1 - 1 / (sx * sx + 1 + sz * sz).squareRoot()
         var gm = mid; gm.surface = .grass
-        let mat = material(FreeWorld.surface(gm, slope: slope))
+        let mat = material(FreeWorld.surface(gm, slope: slope), y: mid.y)
         var asphalt: [UInt32] = [], gravel: [UInt32] = [], land: [UInt32] = []
         func road(_ s: Surface) -> Int { s == .asphalt || s == .concrete ? 2 : s == .gravel ? 1 : 0 }
         for j in 0..<N { for i in 0..<N {
@@ -209,7 +202,10 @@ public final class DriveStreamer: WorldStreamer {
                 let r = (hx * hx + hz * hz).squareRoot()
                 b = (min(b.0, s.x - r), min(b.1, s.y), min(b.2, s.z - r), max(b.3, s.x + r), max(b.4, s.y + 2 * hy), max(b.5, s.z + r))
             case .trunk:
+                if broken[cell]?[idx] != nil { continue }   // 0334: felled, until its cell is left behind
                 c = colliderFor(w, .cylinder(s.h / 2, s.r), DescOpts(t: (s.x - w.ox, s.y + s.h / 2 - w.oy, s.z - w.oz)), MATERIALS.wood, GROUP.staticG)
+                // 0334: a trunk holds until the car's blow passes what it takes to snap it (strength(_:)).
+                if c != CG_NONE { items[c] = Item(cell: cell, index: idx, solid: s) }
                 b = (min(b.0, s.x - s.r), min(b.1, s.y), min(b.2, s.z - s.r), max(b.3, s.x + s.r), max(b.4, s.y + s.h), max(b.5, s.z + s.r))
             case .boulder:
                 c = colliderFor(w, .ball(s.r), DescOpts(t: (s.x - w.ox, s.y - w.oy, s.z - w.oz)), MATERIALS.rock, GROUP.staticG)
@@ -275,7 +271,17 @@ extension DriveStreamer {
     /// stands on a breakaway post (≈ 1 m/s); a W-beam rail is built to hold a car glancing off it and gives way only to
     /// ≈ 10 m/s straight in.
     public static func strength(_ k: PropSolid.Kind) -> Double { k == .rail ? 24_000 : k == .sign ? 2_500 : 6_000 }
-    static func looseKind(_ k: PropSolid.Kind) -> LooseKind { k == .rail ? .rail : k == .sign ? .signpost : .fence }
+    /// 0334: a solid's strength; a trunk's by its radius. ESTIMATE: green wood's modulus of rupture (≈ 40 MPa) at a bumper's
+    /// height, with the car's crush spreading the blow, puts a 30 cm trunk's snap at ≈ 45 km/h of this car straight in and
+    /// grows as r^1.5 (the section's modulus over the crush's stiffness): 44 cm at ≈ 76 km/h, 62 cm at ≈ 128 km/h (the
+    /// forest's oldest stand). As the roadside's numbers, an impulse in one tick ≈ the car's mass × that speed.
+    public static func strength(_ s: PropSolid) -> Double {
+        guard s.kind == .trunk else { return strength(s.kind) }
+        return (SPEC.dryMass + SPEC.gasMass) * snapSpeed(radius: s.r)
+    }
+    /// The speed (m/s) this car snaps a trunk of radius `r` (m) at, straight in.
+    public static func snapSpeed(radius r: Double) -> Double { r.isFinite && r > 0 ? 12.5 * Foundation.pow(r / 0.15, 1.5) : .infinity }
+    static func looseKind(_ k: PropSolid.Kind) -> LooseKind { k == .rail ? .rail : k == .sign ? .signpost : k == .trunk ? .log : .fence }
 
     /// After a step: every roadside collider the car pressed on this tick. One pressed past its strength breaks loose, a
     /// free body with its real mass going on at the car's speed; the car gets back what the fixed collider took past that
@@ -304,7 +310,7 @@ extension DriveStreamer {
                     J += jc; nx += Double(normal[0]) * sg * jc; ny += Double(normal[1]) * sg * jc; nz += Double(normal[2]) * sg * jc
                 }
             }
-            let Jb = DriveStreamer.strength(it.solid.kind)
+            let Jb = DriveStreamer.strength(it.solid)
             guard J > Jb, J.isFinite else { continue }
             let l = (nx * nx + ny * ny + nz * nz).squareRoot()
             // A degenerate contact (its normals cancelling, or not numbers) breaks the item but hands nothing back.
@@ -338,8 +344,16 @@ extension DriveStreamer {
         }
         // Thrown on at most the car's speed, with a little lift off the ground and a tumble.
         let sp = (v.0 * v.0 + v.2 * v.2).squareRoot()
-        cg_body_set_linvel(w.rw, body.rb, Float(v.0 * 0.85), Float(min(3, 0.6 + sp * 0.06)), Float(v.2 * 0.85), true)
-        cg_body_set_angvel(w.rw, body.rb, Float(-v.2 * 0.08), 0, Float(v.0 * 0.08), true)
+        if kind == .log {
+            // 0334: a snapped tree doesn't fly: its foot is shoved on, and it topples over away from the car (about the axis
+            // across the car's path), its crown coming down a couple of seconds later.
+            let k = sp > 1e-3 ? 1 / sp : 0, tip = min(1.4, sp / (2 * kind.half.1)) * 0.35
+            cg_body_set_linvel(w.rw, body.rb, Float(v.0 * 0.3), 0.2, Float(v.2 * 0.3), true)
+            cg_body_set_angvel(w.rw, body.rb, Float(v.2 * k * tip), 0, Float(-v.0 * k * tip), true)
+        } else {
+            cg_body_set_linvel(w.rw, body.rb, Float(v.0 * 0.85), Float(min(3, 0.6 + sp * 0.06)), Float(v.2 * 0.85), true)
+            cg_body_set_angvel(w.rw, body.rb, Float(-v.2 * 0.08), 0, Float(v.0 * 0.08), true)
+        }
         body.asleep = false
         var cellBroken = broken[it.cell] ?? [:]
         cellBroken[it.index] = body
@@ -358,7 +372,9 @@ extension DriveStreamer {
             b.parked = true
             park(w, b)
             spare[b.kind, default: []].append(b)
-            changes.append(Change(cx: ci, cz: cj, item: idx, broken: false, kind: .fence, x: b.x, y: b.y, z: b.z, speed: 0))
+            // (where it stood, so the app can show it again: a felled tree is found by its place, 0334)
+            let s = propData[cell].flatMap { idx < $0.count ? $0[idx] : nil }
+            changes.append(Change(cx: ci, cz: cj, item: idx, broken: false, kind: s?.kind ?? .fence, x: s?.x ?? b.x, y: s?.y ?? b.y, z: s?.z ?? b.z, speed: 0))
         }
     }
     /// A put-away body, held still well under the ground near the engine's origin (it has no collider).

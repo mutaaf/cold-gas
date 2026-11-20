@@ -205,7 +205,10 @@ public enum Challenge {
         return "r" + toB64url(bytes)
     }
     /// decodeChallenge: a payload → its run (stale when its SIM_VERSION isn't `simVersion`), or nil for anything else.
-    public static func decode(_ payload: String, simVersion: Int) -> Run? {
+    public static func decode(_ payload: String, simVersion: Int) -> Run? { decode(payload) { _, v in v == simVersion } }
+    /// decodeChallenge with the web's per-course rule (0340, run.js `replayable`): stale unless `replayable(course, version)`
+    /// (a v32 run on a set that has water and mud now still replays, on the set as it was).
+    public static func decode(_ payload: String, replayable: (String, Int) -> Bool) -> Run? {
         let n = payload.utf16.count
         guard n >= 2 && n <= VS_MAX_CHARS else { return nil }
         let kind = payload.utf16.first!
@@ -215,7 +218,7 @@ public enum Challenge {
             bytes = raw
         } else if kind != 0x72 { return nil }   // r
         guard bytes.count <= MAX_RAW, var run = try? unpackBytes(bytes) else { return nil }
-        run.stale = run.simVersion != simVersion
+        run.stale = !replayable(run.course, run.simVersion)
         return run
     }
 

@@ -6,8 +6,9 @@ import sys
 
 COLS = [("cpu50", "CPU p50 ms"), ("cpu95", "p95"), ("cpu99", "p99"), ("enc50", "encode p50"), ("main", "main ms/frame"),
         ("draws", "draws"), ("tris", "tris"), ("passes", "passes"), ("mem", "mem MB"), ("peak", "peak MB"), ("metal", "Metal MB"),
-        ("launch", "launch→frame ms"), ("hz", "Hz asked"), ("fps", "fps"), ("gpu", "GPU ms*")]
-SCENES = ["title", "show", "wall", "lineup", "roam", "freedrive", "cycle", "sheet", "paused"]
+        ("launch", "launch→frame ms"), ("hz", "Hz asked"), ("fps", "fps"), ("gpu", "GPU ms*"),
+        ("cpumax", "CPU max ms"), ("over", "frames > 8.3 ms")]
+SCENES = ["title", "show", "wall", "lineup", "roam", "freedrive", "stream", "cycle", "sheet", "paused"]
 LOOKS = ["real", "anime", "pixel"]
 
 
@@ -36,7 +37,7 @@ def read(path):
 def fmt(v, c):
     if v is None:
         return "–"
-    return f"{v:.0f}" if c in ("draws", "tris", "mem", "peak", "metal", "launch", "hz", "fps") else f"{v:.2f}"
+    return f"{v:.0f}" if c in ("draws", "tris", "mem", "peak", "metal", "launch", "hz", "fps", "over") else f"{v:.2f}"
 
 
 def main():

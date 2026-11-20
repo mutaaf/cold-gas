@@ -7,6 +7,8 @@
 #include <metal_stdlib>
 using namespace metal;
 #include "SetSurface.h"
+#include "Sky.h"
+#include "../World/Water.h"
 
 struct Frame {
     float4x4 viewProj, lightViewProj;
@@ -21,7 +23,13 @@ struct Frame {
     float4 style;               // the look (0280, Look.swift): x 0 Real, 1 Anime, 2 8-bit; y, z the projection's z scale and offset
                                 // (depth → distance for the ink); w anime's speed lines (0…1)
     float4 fx;                  // 0290: x anime's impact frame (0…1); yz the moon's bearing (unit xz), w 1 when set
+    float4x4 worldShadowVP;     // 0310: Free Drive's cached world shadow (trees, rocks, the near land), render space
+    float4 worldShadow;         // x 1 when it's drawn; y its texel
+    float4 matter[6];           // 0332: what the ground left on the car (CarMatter.h); matter[0].w 0: none
+    float4 splash;              // 0353: a set's splash-down: xz where (render space), z its age (s), w how hard (0: none)
+    float4 wade;                // 0353: the car in a set's tank: xz where, z its speed (m/s), w 1 while it's in the water
 };
+#include "CarMatter.h"
 // What doesn't change in a course (Renderer.lookU).
 struct LookU {
     float4 hemiSky;             // three's hemisphere light, rgb × intensity; w: the environment's intensity (0: no cube fetches)
@@ -32,6 +40,8 @@ struct LookU {
     float4 fogExp;              // x: FogExp2's density (0: linear, fogRange); y: 1 with the wet slab on; z: 1 with the stars on; w: bloom on
     float4 skyZenith, skyMid, skyHorizon, skySun;
     float4 bloom;               // threshold, and UnrealBloomPass's strength × each level's factor (three levels' worth; see compose)
+    float4 atmo;                // Free Drive's physical sky (0231, 0310): x on, y haze, z the eye's height (km), w night
+    float4 sunE;                // the sun's illuminance at the top of the air (rgb), time
 };
 struct Light { float4 posRange; float4 colorIntensity; float4 dirCos; float4 params; };   // params: decay, cosOuter, kind (0 point, 1 spot), penumbra
 struct Material {
@@ -253,11 +263,157 @@ static float4 drawnFx(float3 rgb, float a, constant Frame& f, bool shaft = false
     if (shaft && a > 0.04) q = max(q, 0.34);   // a faint beam stays a flat shaft, not nothing (a pool's skirt goes)
     return float4(rgb * q * q * 0.6, q * 0.6);
 }
+// --- A set's splash tank (0353) ----------------------------------------------------------------------------------------------
+// The stage bakes the tanks' water as a dark plane (scripts/native-stage.mjs, from the web's buildSurfaces); at night it read as
+// a black box. Here it's water in all three looks, from the set's own light: ripples that move, the floodlights' glints on
+// them, the stage's environment and the red LED lip mirrored at the walls, a teal body lit by the lamps that reach it, and the
+// splash-down's rings running out to the walls (Frame.splash) with white water where the car went in, the car's own ripples
+// while it's in (Frame.wade). Material.effect: the tank's inside (x, z m; the plane's uv spans it), w 1. Pixels only.
+struct SetWaterOut { float3 color; float alpha; };
+/// The surface's slope at p: two drifting ripple octaves (Water.h's noise, finite differences), the splash's ring train and the
+/// car's ripples. `foam` gets the white water: the ring's crest early on, the churn where it went in, the bow's wash.
+static float2 setWaterSlope(float2 p, float t, constant Frame& f, thread float& foam) {
+    // Five short travelling waves at odd angles and lengths (0.5–1.6 m, their slopes summed analytically: a few sines a
+    // pixel, no noise taps), a cat's-paw of wind on still water under a roof of floodlights.
+    const float2 D[5] = { float2(0.94, 0.34), float2(-0.42, 0.91), float2(0.6, -0.8), float2(-0.97, -0.24), float2(0.17, 0.98) };
+    const float K[5] = { 4.1, 6.3, 8.9, 11.7, 5.2 }, A[5] = { 0.010, 0.0065, 0.0045, 0.0032, 0.008 };
+    float2 g = 0;
+    for (int i = 0; i < 5; i++) {
+        float ph = dot(p, D[i]) * K[i] - t * sqrt(9.81 * K[i]) * 0.6 + float(i) * 1.7;
+        g += D[i] * (K[i] * A[i] * cos(ph));
+    }
+    foam = 0;
+    float4 s = f.splash;
+    if (s.w > 0.0 && s.z < 7.0) {
+        float2 d = p - s.xy;
+        float r = length(d) + 1e-4, age = s.z;
+        float front = 0.6 + 3.6 * age / (1.0 + 0.3 * age);   // ≈ 3.5 m/s out, easing (gravity waves of ≈ 0.6 m)
+        float x = front - r;                                 // > 0 behind the front
+        float env = smoothstep(-0.3, 0.0, x) * exp(-max(x, 0.0) / 1.4) * exp(-age * 0.45) * s.w;
+        const float kk = 2.0 * M_PI_F / 0.6;
+        g += d / r * (-kk * cos(kk * x)) * 0.05 * env;
+        foam = max(foam, exp(-x * x / 0.03) * exp(-age * 1.3) * s.w);                         // the crest of the ring
+        foam = max(foam, (1.0 - smoothstep(0.6, 1.8 + age * 0.3, r)) * exp(-age * 0.8) * s.w
+                         * smoothstep(0.25, 0.65, water_noise(p * 2.6 + float2(age * 1.3, -age))));   // the churn where it went in
+    }
+    float4 w = f.wade;
+    if (w.w > 0.5) {
+        float2 d = p - w.xy;
+        float r = length(d) + 1e-4;
+        float A = (0.012 + 0.006 * min(w.z, 6.0)) * exp(-r / 2.6);
+        const float kw = 2.0 * M_PI_F / 0.45;
+        g += d / r * (kw * cos(kw * r - t * 9.0)) * A;
+        foam = max(foam, (1.0 - smoothstep(1.4, 2.4, r)) * smoothstep(0.8, 3.0, w.z) * smoothstep(0.35, 0.7, water_noise(p * 3.0 - t * 2.0)));
+    }
+    return g;
+}
+static SetWaterOut setWaterShade(float3 world, float2 uv, float4 tank, float sh, constant Frame& f, constant Light* lights,
+                                 constant LookU& look, texturecube<float> env) {
+    bool drawn = f.style.x > 0.5, pixel = f.style.x > 1.5;
+    float ex = max(f.fogRange.z, 1e-4);
+    float t = f.eye.w;
+    float2 p = world.xz;
+    if (pixel) p = floor(p * 6.0 + 0.5) / 6.0;   // 8-bit: whole blocks of water (≈ 17 cm), the rings stepped with them
+    float foam;
+    float2 g = setWaterSlope(p, pixel ? floor(t * 8.0) / 8.0 : t, f, foam);
+    float3 n = normalize(float3(-g.x, 1.0, -g.y));
+    float3 V = normalize(f.eye.xyz - world + 1e-6);
+    float nv = clamp(dot(n, V), 0.0, 1.0);
+    // How far in from the walls (m): the LED lip's red mirrored there, a thin wet line of foam against the concrete.
+    float2 inside = min(uv, 1.0 - uv) * tank.xy;
+    float edge = min(inside.x, inside.y);
+    float lip = exp(-edge / 0.12) * (0.8 + 0.4 * sin(dot(p, float2(3.1, 4.7)) + t * 2.0));
+    foam = max(foam, (1.0 - smoothstep(0.0, 0.06, edge)) * 0.8);
+    // The set's lamps: the light that reaches the water (the body's in-scatter) and their glints on the ripples.
+    float3 kd = normalize(f.keyDir.xyz + 1e-6);
+    float3 E = f.keyColor.rgb * f.keyDir.w * sh * max(kd.y, 0.0);
+    float rough = 0.09 + 0.6 * length(g);
+    float3 glint = f.keyColor.rgb * f.keyDir.w * sh * ggx(clamp(dot(n, normalize(kd + V)), 0.0, 1.0), rough * rough) * step(0.0, dot(n, kd));
+    float spot = 0;   // (the drawn looks: the brightest glint's level)
+    int nl = int(f.keyColor.w);
+    for (int i = 0; i < nl; i++) {
+        Light L = lights[i];
+        float3 l; float att = 1.0;
+        if (L.params.z > 1.5) l = L.dirCos.xyz;
+        else {
+            float3 d = L.posRange.xyz - world;
+            float dist = max(length(d), 1e-3);
+            l = d / dist;
+            if (L.posRange.w > 0 && dist >= L.posRange.w) continue;
+            if (L.params.z > 0.5) {
+                float cd = dot(-l, L.dirCos.xyz), co = L.params.y;
+                if (cd <= co) continue;
+                att = smoothstep(co, max(L.dirCos.w, co + 1e-4), cd);
+            }
+            att /= max(dist * dist, 1e-2);
+            if (L.posRange.w > 0) { float q = clamp(1.0 - pow(dist / L.posRange.w, 4.0), 0.0, 1.0); att *= q * q; }
+        }
+        if (l.y <= 0) continue;
+        float3 rad = L.colorIntensity.rgb * L.colorIntensity.w * att;
+        E += rad * l.y;
+        float gl = ggx(clamp(dot(n, normalize(l + V)), 0.0, 1.0), rough * rough);
+        glint += rad * gl;
+        spot = max(spot, gl * dot(rad, LUMA) * ex);
+    }
+    float3 amb = look.hemiSky.rgb + (look.hemiSky.w > 0 ? env.sample(envSampler, float3(0, 1, 0), level(5.0)).rgb * look.hemiSky.w * M_PI_F : float3(0));
+    E += amb;
+    // What the water mirrors: the stage's environment (its lamps and walls), or the dusk out in the world.
+    float3 r = reflect(-V, n); r.y = abs(r.y);
+    float3 refl = look.skySun.w > 0.5 ? duskEnv(r, 0.05, look) : look.hemiSky.w > 0 ? env.sample(envSampler, r, level(0.6)).rgb * look.hemiSky.w : look.skyMid.rgb;
+    const float3 LED = float3(3.2, 0.12, 0.18);
+    const float3 TEAL = float3(0.012, 0.055, 0.065);   // in-scatter albedo over the dark floor (a metre down)
+    SetWaterOut o;
+    if (!drawn) {
+        float F = 0.02 + 0.98 * pow(1.0 - nv, 5.0);
+        float3 body = TEAL * E * M_1_PI_F;
+        float3 c = body * (1.0 - F) + refl * F + glint * F * 0.25 + LED * lip * 0.06;
+        float3 white = float3(0.85, 0.9, 0.95) * E * M_1_PI_F * 0.9 + glint * 0.02;
+        float fa = saturate(foam);
+        o.color = mix(c, white, fa);
+        o.alpha = mix(mix(0.86, 1.0, F), 1.0, fa);
+        return o;
+    }
+    // Anime and 8-bit: the body through the cel ramp, a hard band of the mirrored set at grazing angles, the glints cut to
+    // stars, the lip's red as a flat stripe, the rings and the white water as solid shapes (Anime inks their edge).
+    float3 c = celRamp(TEAL * 4.0, E * M_1_PI_F, ex, pixel);   // (a night's deep teal: the lamps light it to the mid band)
+    float fr = smoothstep(0.74, 0.76, 1.0 - nv);
+    c = mix(c, min(refl, float3(4.0)) * 0.55, fr * 0.6);
+    float star = step(0.6, spot);
+    c += float3(0.9, 0.94, 1.0) * star * (pixel ? 0.8 : 0.62) / ex;
+    c += LED * step(0.55, lip) * 0.12 / ex;
+    float fw = pixel ? 1e-3 : max(fwidth(foam), 1e-3) * 1.5;
+    float solid = smoothstep(0.45 - fw, 0.45 + fw, foam);
+    float3 white = celRamp(float3(0.8, 0.86, 0.92), E * M_1_PI_F, ex, pixel) + float3(0.15) / ex;
+    c = mix(c, white, solid);
+    if (!pixel) c = mix(c, float3(0.006, 0.008, 0.02) / ex, (1.0 - smoothstep(0.0, fw * 1.6, abs(foam - 0.38))) * 0.85);
+    o.color = c;
+    o.alpha = 1.0;
+    return o;
+}
+// The tank's own pipeline (Renderer.setWaterPipe), so none of this weighs on the stage's shader: the water, then the set's fog
+// and air as cg_stage_fragment ends.
+fragment float4 cg_setwater_fragment(VOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant Material& m [[buffer(2)]],
+                                     constant Light* lights [[buffer(3)]], depth2d<float> shadow [[texture(3)]], constant LookU& look [[buffer(4)]],
+                                     texturecube<float> env [[texture(7)]]) {
+    float sh = shadowAt(in.lightClip, shadow, f.fogRange.w);
+    SetWaterOut w = setWaterShade(in.world, in.uv, m.effect, sh, f, lights, look, env);
+    float3 color = w.color;
+    float3 toP = in.world - f.eye.xyz;
+    float dist = max(length(toP), 1e-3);
+    if (f.fogColor.w > 0.5 && (m.flags.w & 2u)) {
+        float k = look.fogExp.x > 0 ? 1.0 - exp(-look.fogExp.x * look.fogExp.x * dist * dist) : clamp((dist - f.fogRange.x) / max(f.fogRange.y - f.fogRange.x, 1.0), 0.0, 1.0);
+        if (f.style.x > 0.5) k = floor(k * 4.0 + 0.5) / 4.0;
+        color = mix(color, f.fogColor.rgb, k);
+    }
+    color = f.style.x > 0.5 ? hazedDrawn(max(color, 0.0), toP / dist, dist, f.eye.xyz, look, f.style.x > 1.5)
+                            : hazed(max(color, 0.0), toP / dist, dist, f.eye.xyz, look);
+    return float4(max(color, 0.0), w.alpha);
+}
 fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facing]], constant Frame& f [[buffer(1)]], constant Material& m [[buffer(2)]],
                                   constant Light* lights [[buffer(3)]], texture2d<float> map [[texture(0)]], texture2d<float> roughMap [[texture(1)]],
                                   texture2d<float> emiMap [[texture(2)]], depth2d<float> shadow [[texture(3)]], texture2d<float> alphaMap [[texture(4)]],
                                   constant LookU& look [[buffer(4)]], texture2d<float> wetMask [[texture(5)]], texture2d<float> mirror [[texture(6)]], texturecube<float> env [[texture(7)]],
-                                  texture2d<float> detail [[texture(8)]]) {
+                                  texture2d<float> detail [[texture(8)]], depth2d<float> wshadow [[texture(14)]]) {
     constexpr sampler s(coord::normalized, filter::linear, mip_filter::linear, address::repeat, max_anisotropy(4));   // (8 on the web: on a slab at a grazing angle that's 8 taps a pixel at 120 Hz)
     float3 V0 = normalize(f.eye.xyz - in.world + 1e-6);
     // The web's ShaderMaterials (src/render/wall.js), their falloffs as written there; additive.
@@ -300,6 +456,8 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
         float rough = m.pbr.y;
         if (m.flags.y) rough *= roughMap.sample(s, uv).g;
         float metal = m.pbr.x, wet = 0, setWet = 1;
+        float coat = 0.0;
+        if ((m.flags.w & 4u) && f.matter[0].w > 0.5) { float3 b3 = base.rgb; coat = carMatter(in.world, f.matter, f.style.x, b3, rough, metal); base.rgb = b3; }   // 0332: mud, dust, snow, water
         if (m.flags.w & 24u) {   // the sets' concrete and steel (0273, SetSurface.h)
             SetSurfaceOut so = setSurface(base.rgb, rough, in.world, n, m.flags.w & 24u, m.effect, detail, length(fwidth(in.world)));
             base.rgb = so.base; rough = so.rough; setWet = so.wetK;
@@ -311,6 +469,7 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             rough = mix(rough, max(rough * 0.55, 0.2), wet);
         }
         float sh = shadowAt(in.lightClip, shadow, f.fogRange.w);
+        if (f.worldShadow.x > 0.5) sh = min(sh, shadowAt(f.worldShadowVP * float4(in.world, 1), wshadow, f.worldShadow.y));   // 0310: under the trees
         if (f.style.x > 0.5) {   // Anime and 8-bit (0290): the ramp, not the BRDF
             color = drawnLight(n, V, in.world, base.rgb, metal, rough, sh, (m.flags.w & 4u) != 0, f, lights, look, env);
         } else {
@@ -372,7 +531,8 @@ fragment float4 cg_stage_fragment(VOut in [[stage_in]], bool front [[front_facin
             float ac = min(rc.x * rc.x, exp2(-9.28 * nv)) * rc.x + rc.y;
             float2 fc = float2(-1.04, 1.04) * ac + rc.zw;
             float Fcc = 0.04 + 0.96 * pow(1.0 - nv, 5.0);
-            color = color * (1.0 - m.pbr.z * Fcc) + cc * (0.04 * fc.x + fc.y) * m.pbr.z;
+            float ccK = m.pbr.z * (1.0 - coat);   // 0332: a coat of mud has no clear coat over it
+            color = color * (1.0 - ccK * Fcc) + cc * (0.04 * fc.x + fc.y) * ccK;
         }
         }
         color += emissive;
@@ -516,6 +676,13 @@ static float3 pixelSky(float3 d, float2 clip, constant Frame& f, constant LookU&
         if (!dusk && (length(q - float2(0.3, 0.2)) < 0.26 || length(q - float2(-0.3, -0.25)) < 0.18)) idx = 11;
         if (!dusk && dot(q, float2(-0.6, -0.8)) > 0.55) idx = 10;
     } else if (!dusk && ang < R * 1.35) idx = idx == 0 || idx == 1 ? 2 : idx;   // a one-band glow round it
+    else if (k.atmo.x > 0.5) {
+        // Free Drive's time of day (0310): the sky's own colours in five flat bands (the checker where they meet), which the
+        // film's palette then snaps to the nearest of the 32.
+        float band = hd >= 0.45 ? 1.0 : hd >= 0.24 ? 0.72 : hd >= 0.11 ? 0.45 : hd >= 0.035 ? 0.2 : 0.0;
+        float3 c = mix(mix(k.skyHorizon.rgb, k.skyMid.rgb, smoothstep(0.0, 0.5, band)), k.skyZenith.rgb, smoothstep(0.5, 1.0, band));
+        return h < 0.0 ? k.skyMid.rgb * 0.35 : c;
+    }
     if (!dusk && h > 0.05 && k.fogExp.z > 0 && ang > R * 1.4) {
         const float cells = 70.0;
         float3 cell = floor(d * cells);
@@ -533,10 +700,28 @@ static float3 pixelSky(float3 d, float2 clip, constant Frame& f, constant LookU&
     }
     return s2l(PAL_SRGB[idx]) / max(f.fogRange.z, 1e-4);
 }
-fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]]) {
+fragment float4 cg_sky_fragment(SkyOut in [[stage_in]], constant Frame& f [[buffer(1)]], constant LookU& k [[buffer(4)]], texture2d<float> skyView [[texture(15)]],
+                                texture2d<float> clouds [[texture(16)]]) {
     float3 d = normalize(in.dir + 1e-6);
     float h = clamp(d.y, -1.0, 1.0);
     float3 c;
+    if (k.atmo.x > 0.5 && f.style.x < 0.5) {   // Free Drive's physical sky (#365's, 0310): the sky-view LUT, the sun's disc, clouds, the stars
+        float3 sun = k.skySun.xyz;
+        c = sky_view(skyView, d, sun, k.atmo.z, 0.0);
+        float mu = dot(d, sun);
+        // The disc (a little larger than the real 0.53°, so a phone's screen shows it), limb-darkened, through the air.
+        float disc = smoothstep(0.99994, 0.99997, mu);
+        float limb = sqrt(max(1.0 - (1.0 - mu) / 3e-5, 0.0));
+        c += k.sunE.rgb * disc * (0.4 + 0.6 * limb) * 900.0 * smoothstep(-0.01, 0.01, d.y) * max(f.keyColor.rgb * f.keyDir.w / 7.0, 0.002);
+        float4 cl = sky_clouds(clouds, d);
+        c = c * (1.0 - cl.a) + cl.rgb;
+        if (k.atmo.w > 0.01) {   // the stars, and the night's own glow so it isn't black
+            c += starField(d, 520.0, 0.9982, 0.04, true) * 0.6 * k.atmo.w * (1.0 - cl.a);
+            c += float3(0.0018, 0.0024, 0.0045) * k.atmo.w * (0.4 + 0.6 * exp(-max(h, 0.0) * 6.0));
+        }
+        if (h < 0.0) c = mix(c, c * 0.5, smoothstep(0.0, -0.1, h));
+        return float4(max(c, 0.0), 1);
+    }
     if (k.hemiGround.w > 0.5) {   // scene.js skyMaterial, the dusk
         float3 sun = k.skySun.xyz;
         c = mix(k.skyMid.rgb, k.skyZenith.rgb, smoothstep(0.02, 0.55, h));
@@ -975,4 +1160,58 @@ fragment float4 cg_chip_fragment(FxOut in [[stage_in]]) { return float4(in.color
 fragment float4 cg_flash_fragment(FxOut in [[stage_in]]) {
     float r = length(in.uv); if (r > 1.0) discard_fragment();
     return float4(float3(1.0, 0.92, 0.8) * in.color.a * pow(1.0 - r, 2.0) * 6.0, 0);
+}
+// A set's splash drops (0353): WATER's spray (WaterFX's drops, Water.metal's streak) on a scored set, lit by the set's own lamps
+// per vertex so the crown reads as water under the floods and the dark between them. Real: soft streaks; Anime: a clean round
+// edge, two tones; 8-bit: a solid block at least a pixel wide. Straight alpha (the blend pipeline).
+struct SetSprayGPU { float4 p; float4 v; };   // position, size (m); velocity, alpha
+struct SetSprayOut { float4 clip [[position]]; float2 uv; float a; float3 color; };
+vertex SetSprayOut cg_setspray_vertex(uint vid [[vertex_id]], uint iid [[instance_id]], constant Frame& f [[buffer(1)]], constant SetSprayGPU* drops [[buffer(2)]],
+                                      constant Light* lights [[buffer(3)]], constant LookU& look [[buffer(4)]]) {
+    const float2 corner[6] = { {-1, -1}, {1, -1}, {1, 1}, {-1, -1}, {1, 1}, {-1, 1} };
+    SetSprayGPU d = drops[iid];
+    float2 c = corner[vid];
+    float3 p = d.p.xyz, toEye = normalize(f.eye.xyz - p + 1e-6);
+    float3 vel = d.v.xyz;
+    float sp = length(vel);
+    float3 along = sp > 0.2 ? vel / sp : float3(0, 1, 0);
+    float3 side = normalize(cross(along, toEye) + 1e-5);
+    float wdt = d.p.w * (f.style.x > 0.5 ? 0.7 : 1.0);   // (the drawn looks' drops are solid: a little smaller reads the same)
+    if (f.style.x > 1.5) wdt = max(wdt, 2.2 * length(f.eye.xyz - p) / max(f.proj.z * f.proj.x, 1.0));   // 8-bit: ≥ a pixel
+    float len = wdt + sp * 0.012;
+    float3 w = p + along * c.y * len + side * c.x * wdt;
+    // The light on a drop: the key, every set lamp that reaches it (from any side: a drop scatters), the sky's fill.
+    float3 E = f.keyColor.rgb * f.keyDir.w + look.hemiSky.rgb * 2.0;
+    int nl = int(f.keyColor.w);
+    for (int i = 0; i < nl; i++) {
+        Light L = lights[i];
+        if (L.params.z > 1.5) { E += L.colorIntensity.rgb * L.colorIntensity.w; continue; }
+        float3 dl = L.posRange.xyz - p;
+        float dist = max(length(dl), 1e-3);
+        if (L.posRange.w > 0 && dist >= L.posRange.w) continue;
+        float att = 1.0 / max(dist * dist, 1e-2);
+        if (L.params.z > 0.5) {
+            float cd = dot(-dl / dist, L.dirCos.xyz), co = L.params.y;
+            if (cd <= co) continue;
+            att *= smoothstep(co, max(L.dirCos.w, co + 1e-4), cd);
+        }
+        E += L.colorIntensity.rgb * L.colorIntensity.w * att;
+    }
+    SetSprayOut o;
+    o.clip = f.viewProj * float4(w, 1); o.uv = c; o.a = d.v.w;
+    o.color = float3(0.72, 0.84, 0.92) * E * 0.3;
+    return o;
+}
+fragment float4 cg_setspray_fragment(SetSprayOut in [[stage_in]], constant Frame& f [[buffer(1)]]) {
+    float r = length(in.uv);
+    float a = f.style.x > 1.5 ? step(r, 1.0) : f.style.x > 0.5 ? smoothstep(1.0, 0.85, r) : 1.0 - smoothstep(0.2, 1.0, r);
+    a *= in.a;
+    if (a <= 0.003) discard_fragment();
+    float3 c = in.color;
+    if (f.style.x > 0.5) {   // the drawn looks: two flat tones of its light, before the film's exposure
+        float ex = max(f.fogRange.z, 1e-4), I = dot(c, LUMA) * ex;
+        c = (I > 0.35 ? float3(0.86, 0.92, 1.0) : float3(0.45, 0.58, 0.72)) / ex;
+        a = step(0.3, a) * 0.9;
+    }
+    return float4(c, a);
 }

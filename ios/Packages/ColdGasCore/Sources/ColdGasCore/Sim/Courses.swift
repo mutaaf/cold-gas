@@ -108,28 +108,41 @@ public final class Course: @unchecked Sendable {
     public let runoutMin, runoutMax: Double
     // The Lineup's and the Show's own numbers (NaN where a course hasn't got one).
     public let liftOffZ, lineupZ0, lineupEnd, rowNear, rowFar, tallest: Double
+    /// The set's water and mud (0340, Surfaces.swift): nil on a course without any (and on a set as it was before them).
+    public let surfaces: Surfaces?
     init(id: String, name: String, startZ: Double, startX: Double, pad: Pad?, boxes: [ParkedBox], ramp: Bool, runout: (Double, Double),
-         liftOffZ: Double = .nan, lineupZ0: Double = .nan, lineupEnd: Double = .nan, rowNear: Double = .nan, rowFar: Double = .nan, tallest: Double = .nan) {
+         liftOffZ: Double = .nan, lineupZ0: Double = .nan, lineupEnd: Double = .nan, rowNear: Double = .nan, rowFar: Double = .nan, tallest: Double = .nan,
+         surfaces: Surfaces? = nil) {
         self.id = id; self.name = name; self.startZ = startZ; self.startX = startX; self.pad = pad; self.boxes = boxes; self.ramp = ramp
         runoutMin = runout.0; runoutMax = runout.1
         self.liftOffZ = liftOffZ; self.lineupZ0 = lineupZ0; self.lineupEnd = lineupEnd; self.rowNear = rowNear; self.rowFar = rowFar; self.tallest = tallest
+        self.surfaces = surfaces
+    }
+    /// The same course without its surfaces (courses.js dryCourse).
+    func dry() -> Course {
+        Course(id: id, name: name, startZ: startZ, startX: startX, pad: pad, boxes: boxes, ramp: ramp, runout: (runoutMin, runoutMax),
+               liftOffZ: liftOffZ, lineupZ0: lineupZ0, lineupEnd: lineupEnd, rowNear: rowNear, rowFar: rowFar, tallest: tallest)
     }
 }
 public let WALL_COURSE = Course(id: "wall", name: "The Wall", startZ: -6, startX: 0, pad: Pad(z: -9, x: 0, rings: [2, 4, 7]), boxes: [], ramp: false, runout: (-260, 40))
 public let LINEUP = Course(id: "lineup", name: "The Lineup", startZ: -70, startX: 0, pad: Pad(z: 28, x: 0, rings: [2, 4, 7]), boxes: LINEUP_BOXES, ramp: false,
                            runout: (-120, 190), liftOffZ: 0, lineupZ0: LINEUP_Z0, lineupEnd: LINEUP_BOXES[LINEUP_BOXES.count - 1].maxZ,
-                           tallest: LINEUP_BOXES.map { $0.spec.h }.reduce(-.infinity, jsMax))
+                           tallest: LINEUP_BOXES.map { $0.spec.h }.reduce(-.infinity, jsMax), surfaces: LINEUP_SURFACES)
 public let SHOW = Course(id: "show", name: "The Show", startZ: -6, startX: 0, pad: Pad(z: -30, x: 0, rings: [2, 4, 7]), boxes: SHOW_BOXES, ramp: false,
                          runout: (-140, 40), rowNear: SHOW_ROW_NEAR, rowFar: SHOW_BOXES[SHOW_BOXES.count - 1].minZ,
-                         tallest: SHOW_BOXES.map { $0.spec.h }.reduce(-.infinity, jsMax))
+                         tallest: SHOW_BOXES.map { $0.spec.h }.reduce(-.infinity, jsMax), surfaces: SHOW_SURFACES)
 public let COURSES: [String: Course] = ["show": SHOW, "wall": WALL_COURSE, "lineup": LINEUP]
+/// Each course as it was before its surfaces (0340): a run from before SURFACE_VERSION replays on it (Run.swift courseAt).
+public let DRY_COURSES: [String: Course] = ["show": SHOW.dry(), "wall": WALL_COURSE, "lineup": LINEUP.dry()]
 /// Free Drive (docs/NATIVE-FREEDRIVE.md): the Show's stage at the centre of a world with no edge. Never scored, never in
 /// COURSES (nothing that looks a course up by id can reach it); `createVehicle(course:)` takes it.
-public let DRIVE_COURSE = Course(id: "drive", name: "Free Drive", startZ: -40, startX: 0, pad: SHOW.pad, boxes: SHOW_BOXES, ramp: false, runout: (-1e12, 1e12))
+public let DRIVE_COURSE = Course(id: "drive", name: "Free Drive", startZ: -40, startX: 0, pad: SHOW.pad, boxes: SHOW_BOXES, ramp: false, runout: (-1e12, 1e12),
+                                 surfaces: SHOW_SURFACES)
 /// Roam (0220): Free Drive with a scored course's own set at the world's centre (its parked row, its pad, its fixtures,
 /// its launch complex), then the same open world round it. "drive" is the Show's (the Wall's curl stands on it too).
 public let DRIVE_WALL = Course(id: "drive-wall", name: "Roam the Wall", startZ: -40, startX: 0, pad: WALL_COURSE.pad, boxes: [], ramp: false, runout: (-1e12, 1e12))
-public let DRIVE_LINEUP = Course(id: "drive-lineup", name: "Roam the Lineup", startZ: -90, startX: 0, pad: LINEUP.pad, boxes: LINEUP_BOXES, ramp: false, runout: (-1e12, 1e12))
+public let DRIVE_LINEUP = Course(id: "drive-lineup", name: "Roam the Lineup", startZ: -90, startX: 0, pad: LINEUP.pad, boxes: LINEUP_BOXES, ramp: false, runout: (-1e12, 1e12),
+                                 surfaces: LINEUP_SURFACES)
 /// The roam course on a scored course's set ("show", "wall", "lineup"; anything else is the Show's).
 public func driveCourse(on stage: String) -> Course { stage == "wall" ? DRIVE_WALL : stage == "lineup" ? DRIVE_LINEUP : DRIVE_COURSE }
 /// Free Drive or a roam: never scored, never in COURSES.
@@ -176,6 +189,8 @@ public enum MATERIALS {
     public static let rock = Material(id: "rock", grip: 0.7, slide: 0.55, bounce: 0.15, loose: true, roll: 0.005)
     public static let sand = Material(id: "sand", grip: 0.5, slide: 0.5, bounce: 0.05, loose: true, roll: 0.1)
     public static let wood = Material(id: "wood", grip: 0.6, slide: 0.45, bounce: 0.15, loose: false, roll: 0)
+    /// 0340: a scored set's mud (courses.js MATERIALS.mud, with its sources).
+    public static let mud = Material(id: "mud", grip: 0.4, slide: 0.4, bounce: 0.02, loose: true, roll: 0.12)
 }
 
 // The parked vehicles as physical objects

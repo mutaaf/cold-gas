@@ -197,7 +197,39 @@ export const SHOW = {
   runout: { zMin: -140, zMax: 40 },
 };
 
+// --- Water and mud on the sets (0340) ---------------------------------------------------------------
+// Owner's call 2026-11-19: "make the scored runs react to water and mud too". A set's `surfaces` are course data:
+//   tanks   splash tanks: concrete walls standing on the slab (x0..x1, z0..z1 is the water inside them; `wall` thick,
+//           `top` high) holding water to `level` over the slab. The walls are solid (world.js); the water floats, drags
+//           and slows a car (vehicle.js `water`).
+//   mud     soft ground on the slab: ellipses (centre x, z, radii rx, rz); a tyre on it reads MATERIALS.mud and settles
+//           up to `sink` into it (full from a quarter of the way in, so its edge is a slope, not a step: surfaces.js).
+// Only the Show and the Lineup carry any, and a run on them is SURFACE_VERSION (src/sim/run.js); a run from before is
+// replayed on the course without them (`dryCourse`), so every old replay, ghost and challenge keeps its bits.
+// The Show: a splash tank off the landing's left (as the car comes down, toward −z: a flight that drifts 10 m wide of
+// the mark ends in it, a roll-out runs straight on and never meets it) and a mud pit well past the pad (beyond where
+// Assist's carry and BOOST + LAND come down: a Pro overshoot, or a roll-out on no brakes, ploughs into it).
+SHOW.surfaces = {
+  tanks: [{ x0: 10, x1: 18, z0: -40, z1: -24, wall: 0.4, top: 1.1, level: 0.95 }],
+  mud: [{ x: 0, z: -55, rx: 9, rz: 4.5, sink: 0.05 }],
+};
+// The Lineup: a mud pit past the pad (a long landing, or a roll-out on no brakes, ploughs into it), a splash tank off the
+// landing's right, between the floodlight poles (a flight that drifts 10 m wide of the mark ends in it; a roll-out runs
+// straight on and never meets it), and a soft patch beside the run-up (off the line: a launch that wanders left through
+// it leaves slower).
+LINEUP.surfaces = {
+  tanks: [{ x0: 10, x1: 18, z0: 16, z1: 32, wall: 0.4, top: 1.1, level: 0.95 }],
+  mud: [{ x: 0, z: 44, rx: 7, rz: 5, sink: 0.06 }, { x: -7.5, z: -42, rx: 3.2, rz: 10, sink: 0.04 }],
+};
+
 export const COURSES = { show: SHOW, wall: WALL, lineup: LINEUP };
+// The course as it was before its surfaces (a run from an older SIM_VERSION replays on it, src/sim/run.js courseAt).
+const DRY = {};
+export function dryCourse(id) {
+  const c = COURSES[id];
+  if (!c || !c.surfaces) return c;
+  return (DRY[id] ??= { ...c, surfaces: null });
+}
 
 // --- The stage's fixtures --------------------------------------------------------------------------
 // The things standing on the slab a car can drive into, drawn by src/render/wall.js and scene.js from
@@ -278,6 +310,11 @@ export const MATERIALS = {
   barrier: { id: 'barrier', grip: 0.5, slide: 0.35, bounce: 0.2 },
   // A tree's trunk (bark on wood): what bodywork meets hitting one (ESTIMATE, like the barrier).
   wood: { id: 'wood', grip: 0.6, slide: 0.45, bounce: 0.15 },
+  // Mud (0340: a scored set's soft ground): wet clay over the slab. A tyre in it manages μ ≈ 0.3–0.5 of its dry grip
+  // and ploughs a rut: Crr ≈ 0.1–0.15 on wet soft soil, against ≈ 0.012 on concrete (Wong, Theory of Ground Vehicles,
+  // 4th ed., tab. 1.2). Bodywork slides on it easily and keeps no bounce (ESTIMATE). `sink` (surfaces.js) is how far a
+  // tyre settles into it.
+  mud: { id: 'mud', grip: 0.4, slide: 0.4, bounce: 0.02, loose: true, roll: 0.12 },
 };
 
 // The parked vehicles as physical objects. LINEUP_SPEC is the data (docs/VEHICLES.md, every number

@@ -42,6 +42,51 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // both main runs, first attempts only; two slow runs of three, so these are near slow-runner times) 50:71:86:74 was 22.7 / 31.0 / 37.2 / 24.2 min; 72:68:72:90 cuts 88 / 79 / 83 /
 // 105 tests ≈ 29.1 / 29.3 / 29.5 / 27.3 (shard 2 starts at fold, 3 at learn, 4 at release-frame's last thumb flight). The
 // suite is ≈ 115 median minutes in four 35-minute jobs: a 2× runner still fails, the fix for that is ci.yml's.
+// Main then cancelled e2e 1/4 at 35 min on 4cbabe8 (75 of 88 done) on a runner 1.53× the same shard's 24.5 min on #458's
+// PR run of the same tree; that PR run's shards 2 and 4 took 33.7 and 33.5 min on 1.83× and 1.46× runners. Medians mix
+// slow and fast runners, so this cut uses each test's fastest time over those eight jobs (a runner-free floor): 72:68:72:90
+// was 48.6 / 34.6 / 41.5 / 44.5 worker-minutes (≈ 24.3 / 17.3 / 20.8 / 22.3 min on two workers); 68:103:87:97 cuts
+// 68 / 103 / 87 / 97 tests ≈ 42.3 / 43.8 / 43.2 / 39.9 (≈ 21.9 min worst), the best any file-boundary cut gives
+// (shard 2 starts at first-landing, 3 at lifecycle-fold, 4 at restart-lets-go). A 35-minute job now holds a ≈ 1.55× runner
+// where it held ≈ 1.40×; a 1.8× runner still fails, the fix for that is still ci.yml's (proposal #456).
+// Main then cancelled e2e 1/4 at 35 min on 4ecefe3 and ef2aa66 (62 and 65 of 68 done; both docs/pixels-only after #465's
+// world train), and ef2aa66's e2e 4/4 too (86 of 97). Shard 1 summed 67.4 worker-minutes on both runners, so its files are
+// slow, not its runners (LESSONS 2026-10-30): the fastest-time floor above under-read it by ≈ 60%. By each test's slowest
+// time over those two runs' eight jobs (≈ 263 worker-minutes in all), 68:103:87:97 was 72.7 / 58.2 / 59.8 / 72.0;
+// 61:112:98:84 cuts 61 / 112 / 98 / 84 tests ≈ 66.5 / 65.8 / 66.4 / 63.9 (≈ 33 min on two workers), the best any
+// file-boundary cut gives (shard 2 starts at endless, 3 at lifecycle, 4 at scenery). That is ≈ 2 min of margin, not a
+// cure: a slow runner still fails, and the fix is ci.yml's (proposal #456).
+// Main on ef47c44 then cancelled e2e 2/4 at 35 min (92 of 112 done) while 1/4 ran 22.3 min, 3/4 24.4 and 4/4 33.1. The
+// same files ran ≈ 1.25× slower in that 2/4 than in ef2aa66's 2/4 (first-landing..keys-carry ≈ 60 worker-minutes against
+// ≈ 48), and 1/4's files ≈ 1.35× faster than in ef2aa66's 1/4: file costs hold from run to run, runner speed doesn't. A
+// slowest-time cut prices every file at its worst runner at once, which no runner set is. This cut prices each region at its
+// faster run of those two (≈ 224 worker-minutes in all): 80:93:105:77 cuts 80 / 93 / 105 / 77 tests ≈ 55.1 / 53.5 / 55.3 /
+// 59.7 (≈ 28-30 min; shard 2 starts at first-title, 3 at lifecycle, 4 at smoke), where 61:112:98:84 was 50.7 / 59.9 / 48.8 /
+// 66.2. A 1.25× runner still lands on 35 min: the cure is ci.yml's headroom (proposal #456), not another cut.
+// Main on bd41a1c then cancelled e2e 3/4 at 35 min (104 of 105 done, ≈ 69 worker-minutes) while 1/4 ran 19.4 min (≈ 39),
+// 2/4 20.9 (≈ 42) and 4/4 29.9 (≈ 60): the lifecycle..share-moment region (network ≈ 12, frame-probe ≈ 10, lifecycle ≈ 9,
+// pause ≈ 6) cost ≈ 14 more than its price. Priced on that one run, all four shards on the same commit, 122:79:86:68 cuts
+// 122 / 79 / 86 / 68 tests ≈ 55.7 / 50.0 / 52.5 / 51.7 (≈ 26-28 min; shard 2 starts at hud-fit, 3 at next-jump, 4 at
+// start-pending). Still no margin for a slow runner: proposal #456 is the cure.
+// Its own PR run (#470) then drew slower runners: e2e 1/4 cancelled at 35 min (116 of 122), 2/4 (76 of 79), while 3/4 ran
+// 29.7 and 4/4 26.1 (≈ 258 worker-minutes in all, ≈ 210 on bd41a1c). Moving hud-collapse into 2 and network into 3, and smoke
+// into 4, 113:78:87:77 is ≈ 63 / 66 / 67 / 61 on that run and ≈ 49 / 45 / 60 / 60 on bd41a1c's. At ≈ 64 worker-minutes a
+// shard on a slow day, no cut fits 35 min with margin: proposal #456 (ci.yml) is the cure.
+// Main on 64fb99a then cancelled e2e 2/4 at 35 min (76 of 78 done, ≈ 71 worker-minutes) while 1/4 ran 34.0 min (≈ 68),
+// 3/4 23.3 (≈ 46) and 4/4 24.3 (≈ 48): ≈ 233 worker-minutes in all. Priced on that one run's four jobs (lifecycle's 5
+// unrun tests at 60 s each), 88:79:91:97 cuts 88 / 79 / 91 / 97 tests ≈ 58.7 / 59.8 / 55.2 / 58.8 (≈ 28-30 min; shard 2
+// starts at fold, 3 at learn, 4 at restart-lets-go), the best file-boundary cut of that run. Margin ≈ 15 %, under the
+// runner swing: proposal #456 (ci.yml) is still the cure.
+// Main on 0910f74 then cancelled e2e 1/4 at 35 min (62 of 88 done) while 2/4 ran 18.0, 3/4 31.7 and 4/4 21.4; 1/4 also
+// spent ≈ 6 worker-minutes on build.spec's ring quest failing twice (its second page booted beside a live Sandbox; fixed in
+// the spec). Priced on each test's mean over 64fb99a's and 0910f74's main runs (≈ 224 worker-minutes), 88:79:91:97 was
+// 68.1 / 47.6 / 58.0 / 50.6; 61:101:89:104 cuts 61 / 101 / 89 / 104 tests ≈ 54.9 / 56.8 / 57.1 / 55.5 (≈ 28 min; shard 2
+// starts at endless, 3 at lazy-retry, 4 at replay-phone). By each test's slower run it is ≈ 67 / 66 / 64 / 64: still
+// no margin for a slow runner. Proposal #456 (ci.yml) is the cure; six re-cuts in a day have not been.
+// That cut's own PR run (#472) then cancelled e2e 2/4 at 35 min (90 of 101 done, none failed) while 1/4 ran 28.9 min,
+// 3/4 29.7 and 4/4 23.0; the ring quest passed in 1.6 min. On the mean of all three runs (64fb99a, 0910f74, #472; ≈ 230
+// worker-minutes) 61:101:89:104 is 55.5 / 64.1 / 57.8 / 52.2; 63:90:84:118 cuts 63 / 90 / 84 / 118 tests ≈ 59.0 / 55.9 /
+// 56.2 / 58.5 (shard 2 starts at fan, 3 at keys-carry, 4 at privacy). By each test's slowest run it is ≈ 69 / 69 / 64 / 72.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -49,7 +94,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '72:68:72:90';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '63:90:84:118';
 
 export default defineConfig({
   testDir: 'tests/e2e',

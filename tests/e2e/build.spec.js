@@ -85,8 +85,13 @@ test('Sandbox: a ring quest completes, rewards unlock; a shared link carries a b
   // Share: a build in the URL hash opens on another device.
   const url = await page.evaluate(() => { const L = window.__coldgas.sandbox.layer; L.place('wedge', 10, 0); L.place('loop', -20, 30); return L.api.shareUrl(); });
   expect(url).toMatch(/\?drive=sandbox#b=[\w-]+$/);
+  // The other device boots alone: this page's Sandbox keeps drawing on software GL while it lives, and on a slow
+  // CI runner (main on 0910f74, twice) the second boot under that load missed its 90 s wait. Its errors are in.
+  const port = new URL(page.url()).port;
+  expect(seen.errors).toEqual([]);
+  await page.close();
   const other = await page.context().browser().newPage();
-  await other.goto(url.replace(/^https?:\/\/[^/]+/, 'http://localhost:' + new URL(page.url()).port).replace('?drive=sandbox', '?drive=sandbox&gfx=low'));
+  await other.goto(url.replace(/^https?:\/\/[^/]+/, 'http://localhost:' + port).replace('?drive=sandbox', '?drive=sandbox&gfx=low'));
   await other.waitForFunction(() => window.__coldgas?.sandbox?.active, null, { timeout: 90_000 });
   expect(await other.evaluate(() => window.__coldgas.sandbox.layer.store.all().map((o) => o.type).sort())).toEqual(['loop', 'wedge']);
   await other.close();

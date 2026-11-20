@@ -20,7 +20,7 @@ import Testing
         let v = RunVector("ref-show")
         var start = malloc_statistics_t(), end = malloc_statistics_t()
         var a = 0, b = 0
-        try simulate(v.log, v.course) { r in
+        try simulate(v.log, v.course, simVersion: v.simVersion) { r in
             if r.tick == w.0 { malloc_zone_statistics(nil, &start); a = Int(start.blocks_in_use) }
             if r.tick == w.1 { malloc_zone_statistics(nil, &end); b = Int(end.blocks_in_use) }
         }

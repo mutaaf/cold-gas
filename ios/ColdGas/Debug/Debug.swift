@@ -35,10 +35,11 @@ final class Bench {
         lock.lock(); let g = gpus; lock.unlock()
         let n = Double(max(1, cpu.count)), fp = PerfProbe.footprint()
         let mainMs = (PerfProbe.mainBusyMs() - busy0) / n
-        return String(format: "PERF scene=%@ look=%@ frames=%d hz=%d interval=%.2f cpu50=%.2f cpu95=%.2f cpu99=%.2f enc50=%.2f enc95=%.2f main=%.2f draws=%.0f tris=%.0f passes=%.1f mem=%.0f peak=%.0f launch=%.0f gpu=%.2f scale=%.2f px=%dx%d metal=%.0f",
+        return String(format: "PERF scene=%@ look=%@ frames=%d hz=%d interval=%.2f cpu50=%.2f cpu95=%.2f cpu99=%.2f enc50=%.2f enc95=%.2f main=%.2f draws=%.0f tris=%.0f passes=%.1f mem=%.0f peak=%.0f launch=%.0f gpu=%.2f scale=%.2f px=%dx%d metal=%.0f cpumax=%.2f over=%d world=%@",
                       PerfProbe.scene, look, cpu.count, hz, avg(intervals), p(cpu, 0.5), p(cpu, 0.95), p(cpu, 0.99), p(enc, 0.5), p(enc, 0.95), mainMs,
                       Double(draws) / n, Double(tris) / n, Double(passes) / n, memN > 0 ? memSum / Double(memN) / 1048576 : 0, Double(fp.peak) / 1048576,
-                      PerfProbe.launchMs, avg(g), scale, Int(size.width), Int(size.height), Double(gpuBytes) / 1048576)
+                      PerfProbe.launchMs, avg(g), scale, Int(size.width), Int(size.height), Double(gpuBytes) / 1048576,
+                      cpu.max() ?? 0, cpu.filter { $0 > 8.34 }.count, PerfProbe.worldLine)
     }
     func report(compiles: Int, launchMs: Double, size: CGSize) {
         lock.lock(); let g = gpus; lock.unlock()

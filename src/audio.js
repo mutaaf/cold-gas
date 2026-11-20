@@ -60,6 +60,10 @@ export function initAudio() {
     grind: loopNoise(ctx, 2300, 3.5),
     grindLo: loopNoise(ctx, 520, 1.2),
     burst: noiseBuffer(ctx, 1),
+    // A set's mud (0340): tyres ploughing wet clay, a low, wet churn (gain from the speed through it).
+    mud: loopNoise(ctx, 170, 1.6),
+    // The water: the hull pushing through it (a breathy wash, gain from the speed in it).
+    wash: loopNoise(ctx, 700, 0.7),
   };
 }
 
@@ -154,6 +158,36 @@ export function setGrind(level = 0) {
   ramp(nodes.grind.g.gain, k * 0.32, 0.03);
   ramp(nodes.grind.f.frequency, 1600 + k * 2200, 0.05);
   ramp(nodes.grindLo.g.gain, k * 0.28, 0.03);
+}
+
+// A set's water and mud (0340). The splash-down, by how hard the car hit the water (0–1): the slap (a low thump with
+// no ring to it), the body of water thrown up (a broad noise burst falling in pitch) and the rain of it coming back down
+// (a long high hiss). `level`s per frame: in mud (0–1, the speed through it), in water (0–1, the speed in it).
+export function splash(strength = 0.5) {
+  if (!ctx || muted || !nodes) return;
+  const t = ctx.currentTime, k = Math.min(1, Math.max(0.1, strength));
+  const out = ctx.createGain(); out.gain.value = 0.4 + 0.6 * k; out.connect(master);
+  const o = ctx.createOscillator(); o.type = 'sine';
+  o.frequency.setValueAtTime(70 + 30 * k, t); o.frequency.exponentialRampToValueAtTime(28, t + 0.25);
+  const og = ctx.createGain(); og.gain.setValueAtTime(0.8, t); og.gain.exponentialRampToValueAtTime(0.001, t + 0.3);
+  o.connect(og).connect(out); o.start(t); o.stop(t + 0.35);
+  const n = ctx.createBufferSource(); n.buffer = nodes.burst;
+  const f = ctx.createBiquadFilter(); f.type = 'lowpass'; f.Q.value = 0.7;
+  f.frequency.setValueAtTime(2600 + 2000 * k, t); f.frequency.exponentialRampToValueAtTime(380, t + 0.7);
+  const ng = ctx.createGain(); ng.gain.setValueAtTime(0.7, t); ng.gain.exponentialRampToValueAtTime(0.001, t + 0.9);
+  n.connect(f).connect(ng).connect(out); n.start(t); n.stop(t + 1);
+  const r = ctx.createBufferSource(); r.buffer = nodes.burst; r.playbackRate.value = 1.3;
+  const rf = ctx.createBiquadFilter(); rf.type = 'highpass'; rf.frequency.value = 3200;
+  const rg = ctx.createGain(); rg.gain.setValueAtTime(0.0001, t); rg.gain.exponentialRampToValueAtTime(0.18 * k, t + 0.35); rg.gain.exponentialRampToValueAtTime(0.0001, t + 1.6 + k);
+  r.connect(rf).connect(rg).connect(out); r.start(t); r.stop(t + 2.8);
+}
+export function setSurfaces(mud = 0, water = 0) {
+  if (!ctx || !nodes) return;
+  const m = Math.min(1, Math.max(0, mud)), w = Math.min(1, Math.max(0, water));
+  ramp(nodes.mud.g.gain, m * 0.3, 0.05);
+  ramp(nodes.mud.f.frequency, 130 + m * 140, 0.1);
+  ramp(nodes.wash.g.gain, w * 0.22, 0.08);
+  ramp(nodes.wash.f.frequency, 450 + w * 900, 0.1);
 }
 
 export function chime(i = 0) {

@@ -29,6 +29,7 @@ scene_args() {
     lineup)    echo "-course lineup -play -autopilot -perf-wait 4" ;;
     roam)      echo "-roam show -fd-pilot 12 -perf-wait 6" ;;
     freedrive) echo "-freedrive -fd-km 3 -fd-pilot 25 -perf-wait 10" ;;
+    stream)    echo "-freedrive -fd-km 3 -fd-cruise 60 -perf-wait 6" ;;   # 0310: carried along a road at 60 m/s, the world streaming in
     cycle)     echo "-course show -perf-cycle 3 -perf-wait 28" ;;   # Free Drive in and out three times, then the title
     sheet)     echo "-course show -perf-sheet settings -perf-wait 4" ;;   # Settings open over the title
     paused)    echo "-course show -play -autopilot -perf-pause 4 -perf-wait 6" ;;   # a run paused
@@ -48,7 +49,7 @@ t 240 xcrun simctl bootstatus "$ID" -b >/dev/null
 t 180 xcrun simctl install "$ID" "$COPY"
 for look in $LOOKS; do
   for scene in $SCENES; do
-    case $scene in cycle|sheet|paused) [ "$look" != real ] && continue ;; esac   # memory after Free Drive, a sheet, a pause: one look
+    case $scene in cycle|sheet|paused|stream) [ "$look" != real ] && continue ;; esac   # memory after Free Drive, a sheet, a pause: one look
     for ((i = 1; i <= REPEAT; i++)); do
       xcrun simctl terminate "$ID" "$BID" 2>/dev/null || true
       # shellcheck disable=SC2046

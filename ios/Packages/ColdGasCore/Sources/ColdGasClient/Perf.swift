@@ -166,6 +166,8 @@ public enum Perf {
         case absOn = "abs_on", absOff = "abs_off", tractionOn = "tc_on", tractionOff = "tc_off"
         case driftOn = "drift_on", driftOff = "drift_off", brakeBias = "bias", handbrake = "hb"
         case roam, roamChallenge = "roamch", roamReset = "roamreset", drive, replay, club
+        /// 0330: a drive left a trace on the ground or took lasting damage (the Worker's 160 characters leave room for one more word).
+        case matter = "mt"
     }
     /// The features a session touched, in a fixed order (so equal sets are equal words).
     public struct Use: Codable, Equatable, Sendable {
