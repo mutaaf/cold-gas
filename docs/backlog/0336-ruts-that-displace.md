@@ -1,7 +1,7 @@
 ---
 id: 0336
 title: Ruts that displace the ground (a finer near-field mesh reads the trace)
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
@@ -22,3 +22,5 @@ The trace is shaded into the land; the terrain's near mesh is 4 m between vertic
 
 ## Test plan
 Simulator shots at a low camera across a mud rut, before/after.
+
+SCOUT 2026-11-20: held back to proposed to bring the ready queue to its cap of 10; not funnel-driven. Promote when room.

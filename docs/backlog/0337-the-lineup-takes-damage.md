@@ -1,7 +1,7 @@
 ---
 id: 0337
 title: The Lineup's row takes damage too: glass, lamps, panels
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
@@ -22,3 +22,5 @@ The parked vehicles rock, dent and chip, but their glass and lamps never break.
 
 ## Test plan
 Roam the Lineup and hit the row; shots in three looks.
+
+SCOUT 2026-11-20: held back to proposed to bring the ready queue to its cap of 10; not funnel-driven. Promote when room.

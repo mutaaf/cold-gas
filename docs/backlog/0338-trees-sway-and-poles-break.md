@@ -1,7 +1,7 @@
 ---
 id: 0338
 title: Trees sway under a hit they hold, and delineator posts bend and break
-status: ready
+status: proposed
 priority: P2
 size: M
 lens: authenticity
@@ -22,3 +22,5 @@ A tree under its strength is rigid, and delineator posts have no collider at all
 
 ## Test plan
 Simulator shots and a test like TreeSnapTests.
+
+SCOUT 2026-11-20: held back to proposed to bring the ready queue to its cap of 10; not funnel-driven. Promote when room.
