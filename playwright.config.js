@@ -77,6 +77,12 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // unrun tests at 60 s each), 88:79:91:97 cuts 88 / 79 / 91 / 97 tests ≈ 58.7 / 59.8 / 55.2 / 58.8 (≈ 28-30 min; shard 2
 // starts at fold, 3 at learn, 4 at restart-lets-go), the best file-boundary cut of that run. Margin ≈ 15 %, under the
 // runner swing: proposal #456 (ci.yml) is still the cure.
+// Main on 0910f74 then cancelled e2e 1/4 at 35 min (62 of 88 done) while 2/4 ran 18.0, 3/4 31.7 and 4/4 21.4; 1/4 also
+// spent ≈ 6 worker-minutes on build.spec's ring quest failing twice (its second page booted beside a live Sandbox; fixed in
+// the spec). Priced on each test's mean over 64fb99a's and 0910f74's main runs (≈ 224 worker-minutes), 88:79:91:97 was
+// 68.1 / 47.6 / 58.0 / 50.6; 61:101:89:104 cuts 61 / 101 / 89 / 104 tests ≈ 54.9 / 56.8 / 57.1 / 55.5 (≈ 28 min; shard 2
+// starts at endless, 3 at lazy-retry, 4 at replay-phone). By each test's slower run it is ≈ 67 / 66 / 64 / 64: still
+// no margin for a slow runner. Proposal #456 (ci.yml) is the cure; six re-cuts in a day have not been.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -84,7 +90,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '88:79:91:97';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '61:101:89:104';
 
 export default defineConfig({
   testDir: 'tests/e2e',
