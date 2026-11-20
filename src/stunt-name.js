@@ -13,7 +13,7 @@ export const EVENT_NAME = { show: 'The Show', wall: 'The Wall', lineup: 'The Lin
 const CAUSE = {
   'Fell off the wall': 'off the wall', Wrecked: 'wrecked', Contact: 'into the row', 'Stalled on the wall': 'stalled on the wall',
   'No climb': 'no climb', 'Came down on the deck': 'down on the deck', 'Rolled over': 'rolled over', Crash: 'crashed',
-  'Short of the row': 'short of the row', 'No jump': 'no jump',
+  'Short of the row': 'short of the row', 'No jump': 'no jump', Splash: 'into the tank',
 };
 const FINISH = { 'Perfect 10': 'stuck it', 'Stuck it': 'stuck it' };
 const ON_MARK = 2;   // m: the inner ring of every pad (src/sim/courses.js pad.rings[0])

@@ -127,6 +127,30 @@ export const SPEC = {
   // Aero
   cdA: 0.55,               // m², low-drag mode (ESTIMATE)
 
+  // In water (0340: a set's splash tank). A car floats on the air sealed in its body until water finds its way in.
+  // Sealed volume: the body's box (4.33 × 2.0 × 1.05 m from the floor pan to the roof) × 0.55 for the tapering
+  // nose, tail and greenhouse, the open wheel arches and the fan's ducts: ≈ 5.0 m³ (ESTIMATE). At 2,447 kg it floats
+  // about half under, as passenger cars do at first (crash-into-water reconstructions: a car floats nose-down for
+  // 30 s to 2 min). This one's ducts, vents and open skirts flood it faster: its buoyancy falls to a fifth of the
+  // sealed volume's over ≈ 10 s under water (floodTime, floodMin: ESTIMATE), so it settles onto the tank's floor.
+  floatVolume: 5.0,        // m³ (ESTIMATE)
+  floodTime: 10,           // s fully under to flood (ESTIMATE)
+  floodMin: 0.2,           // of the sealed volume left buoyant, flooded (ESTIMATE)
+  // Water's drag on the body, per quarter of it: a blunt body moving through water, Cd ≈ 1.0 on the plan
+  // (≈ 2.2 m² a quarter, pushed down or pulled up) and ≈ 0.55 m² a quarter on the front or side (ESTIMATE).
+  waterCd: 1.0,
+  waterAreaV: 2.2,         // m² a quarter, vertical motion
+  waterAreaH: 0.55,        // m² a quarter, horizontal motion
+  // Hitting the water (the splash-down): slamming takes about half the closing speed in the first instants (water-
+  // entry tests of blunt bodies: a flat-bottomed body loses 40–60 % of its entry speed in the slam), a sixth of the
+  // speed along the surface, and the spray and the slap take 40 % of the spin (ESTIMATE).
+  splashKeepV: 0.5,        // of the downward speed kept through the slam
+  splashKeepH: 0.85,       // of the speed along the surface
+  splashKeepSpin: 0.6,     // of the angular momentum
+  // A tyre on a tank's floor under standing water deeper than its tread can drain grips at about half its dry μ
+  // (wet-pavement and aquaplaning tests: μ 0.3–0.5 in standing water against 0.8–0.9 dry; ESTIMATE).
+  wetGrip: 0.5,
+
   // Cold gas: nitrogen. Specific impulse ≈72 s at full pressure, falling as the tanks blow down
   // (≈60 s average) (ESTIMATE). Thrust follows tank pressure; pressure follows the gas left
   // adiabatically (p ∝ m^γ, γ ≈ 1.4 for N2).

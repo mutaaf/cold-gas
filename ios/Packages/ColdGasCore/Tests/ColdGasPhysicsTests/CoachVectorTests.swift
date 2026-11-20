@@ -102,7 +102,7 @@ struct CoachVectorTests {
     func oneLog(_ name: String) throws {
         let row = (coachVectors["flights"] as! [[Any]]).first { $0[0] as! String == name }!
         let course = row[1] as! String, fromTick = row[2] as! Int, log = coachLogOf(name)
-        let (run, flight) = try readFlight(log, course, fromTick: fromTick)
+        let (run, flight) = try readFlight(log, course, fromTick: fromTick, simVersion: SIM_VERSION)
         var bad = compare(flatRows(row[5]), flight.flat, "flight")
         if hex64(markCost(run.t)) != row[3] as! String { bad.append("markCost JS \(row[3]) Swift \(hex64(markCost(run.t)))") }
         if hex64(sinkCost(run.t)) != row[4] as! String { bad.append("sinkCost JS \(row[4]) Swift \(hex64(sinkCost(run.t)))") }
@@ -114,7 +114,7 @@ struct CoachVectorTests {
         ]
         for r in (coachVectors["rows"] as! [[Any]]) where r[0] as! String == name {
             let say = r[1] as! String, withCard = r[2] as! Bool
-            let got = try coach(log, course, card: withCard ? card : nil, fromTick: withCard ? fromTick : 0, say: words[say]!)
+            let got = try coach(log, course, card: withCard ? card : nil, fromTick: withCard ? fromTick : 0, say: words[say]!, simVersion: SIM_VERSION)
             bad += itemsDiffer(got.items, r[3] as! [[Any]], "\(say)\(withCard ? "" : " no card")")
         }
         #expect(bad.isEmpty, "\(name): \(bad.prefix(6).joined(separator: "\n"))")
@@ -127,7 +127,7 @@ struct CoachVectorTests {
         let tail = v["tail"] as! [String: Any], course = v["course"] as! String
         let drill = drillById(v["drill"] as! String)!
         let name = "\(drill.id) \(course) \(tail["name"]!)"
-        let built = try buildDrill(drill, course), run = built.run
+        let built = try buildDrill(drill, course, simVersion: SIM_VERSION), run = built.run
         var bad: [String] = []
         if built.released != v["released"] as! Bool { bad.append("released") }
         if built.startTick != v["startTick"] as! Int { bad.append("start tick: JS \(v["startTick"]!) Swift \(built.startTick)") }
@@ -165,8 +165,8 @@ struct CoachVectorTests {
         if stateOf(run).map(hex64) != a["state"] as! [String] { bad.append("the car at rest") }
 
         let thumb = coachWords(Daily.Pilot(device: .touch, scheme: .thumb, tier: "assist")), classic = coachWords(Daily.Pilot(device: .touch, scheme: .classic, tier: "assist"))
-        bad += itemsDiffer(try coach(log, course, card: card, fromTick: built.startTick, say: thumb).items, v["thumb"] as! [[Any]], "thumb")
-        bad += itemsDiffer(try coach(log, course, card: card, fromTick: built.startTick, say: classic).items, v["classic"] as! [[Any]], "classic")
+        bad += itemsDiffer(try coach(log, course, card: card, fromTick: built.startTick, say: thumb, simVersion: SIM_VERSION).items, v["thumb"] as! [[Any]], "thumb")
+        bad += itemsDiffer(try coach(log, course, card: card, fromTick: built.startTick, say: classic, simVersion: SIM_VERSION).items, v["classic"] as! [[Any]], "classic")
         #expect(bad.isEmpty, "\(name): \(bad.prefix(6).joined(separator: "\n"))")
     }
 
@@ -201,7 +201,7 @@ struct CoachVectorTests {
     }
     /// Pricing a miss patches the telemetry for one call: it has to come back as it was.
     @Test func costsLeaveTheTelemetryAlone() throws {
-        let run = try simulate(coachLogOf("thumb-show-aim"), "show")
+        let run = try simulate(coachLogOf("thumb-show-aim"), "show", simVersion: SIM_VERSION)
         let before = run.t.flat().map(\.0), bits = run.t.flat().map { "\($0.1)" }
         _ = markCost(run.t); _ = sinkCost(run.t)
         #expect(run.t.flat().map(\.0) == before && run.t.flat().map { "\($0.1)" } == bits)

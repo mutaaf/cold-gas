@@ -122,6 +122,10 @@ const pick = (arr, seed) => arr[Math.abs(Math.round(seed * 997)) % arr.length];
 
 export function localWords(card) {
   const f0 = card.facts;
+  // A set's splash tank (0340): the run ended in the water, whatever else happened on the way.
+  if (f0.splash) {
+    return { headline: 'Splash', engineer: `Into the tank at ${f0.splashKmh} km/h. Water in the fans, the ducts and the battery bay: that car dries out for a week.`, coordinator: f0.jumped ? `${f0.padMiss} m past the mark and into the water. The crowd loved it. I did not.` : 'You drove it into the tank. Nobody asked for that one.', designer: 'A beautiful arc, into the wrong element.', source: 'local' };
+  }
   if (f0.damagePct >= 60) {
     return { headline: 'Wrecked', engineer: `The damage sensor reads ${f0.damagePct}%. That car does not drive home: it goes back on a flatbed.`, coordinator: 'Big, brave, and expensive. Land the next one in one piece.', designer: 'The shape was the point. You bent it.', source: 'local' };
   }
@@ -148,7 +152,13 @@ export function localWords(card) {
   const designer = f.airPct > 40
     ? pick([`${f.airPct}% of the air still in the tanks. Nothing wasted, nothing missing.`, `Quiet, exact, ${f.airPct}% in reserve. That is how it should feel.`], s)
     : pick([`Effective, but ${f.airPct}% left in the tanks tells me it was loud in places.`, `The shape was right. The burn was heavy.`], s);
-  return { headline: card.verdict, engineer, coordinator, designer, source: 'local' };
+  return muddy({ headline: card.verdict, engineer, coordinator, designer, source: 'local' }, f);
+}
+// A set's mud (0340): a roll-out that ploughed through it gets the Designer's word on it (the time is the run's own).
+export const MUD_SAID = 0.5;
+function muddy(words, f) {
+  if (!(f.mudS >= MUD_SAID) || f.crashed) return words;
+  return { ...words, designer: `Then ${f.mudS} s ploughing through the mud. Somebody fetch a hose.` };
 }
 
 function wallWords(card) {
@@ -175,6 +185,6 @@ function showWords(card) {
   if (!f.jumped || f.fellOff || f.landedOnRamp) return words;
   if (f.contact) return { ...words, headline: 'Contact with the row', engineer: `Released at ${f.launchHeight} m, but the car came down on a parked vehicle. Boost harder off the ledge.`, coordinator: `${f.invertedS} s inverted, then into the roofs. The carry is the stunt.`, designer: 'The row was the frame. You hit the frame.' };
   if (!f.crossedRow) return { ...words, headline: 'Short of the row', coordinator: 'Let go, then light the rear jets: you have to carry out over all five.' };
-  return { ...words, coordinator: pick([`${f.invertedS} seconds upside down at ${f.height} metres, then ${f.clearance} m over the roofs. That is the show.`,
-    `Off the ledge and over the semi in one flight. The crowd got all of it.`], f.height + f.sink) };
+  return muddy({ ...words, coordinator: pick([`${f.invertedS} seconds upside down at ${f.height} metres, then ${f.clearance} m over the roofs. That is the show.`,
+    `Off the ledge and over the semi in one flight. The crowd got all of it.`], f.height + f.sink) }, f);
 }

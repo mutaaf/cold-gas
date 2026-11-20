@@ -174,7 +174,10 @@ left in the tanks; on a wreck, combos that come from the physics.
    must print IDENTICAL. It uses no `Math.random`, no wall clock, no DOM and no
    three.js, and it's fixed-step at 240 Hz. A run replays bit-exactly from its input log
    (`tests/unit/sim.test.js`). Any change to the sim or the scorer that changes outcomes bumps
-   `SIM_VERSION` in `src/sim/run.js`. Physical numbers live in `spec.js` with a source or an
+   `SIM_VERSION` in `src/sim/run.js`. **The sets' water and mud (owner's call 2026-11-19, 0340)** are course data
+   (`courses.js` `surfaces`: splash tanks, mud patches) on the Show and the Lineup only; a run on them is `SURFACE_VERSION`
+   (33, `simVersionOf(course)`: the identity a challenge link and a ghost carry), the Wall's are still 32, and a v32 run on a
+   wet set replays on the set as it was (`courseAt`, `replayable`), to its bits (the 52 older run vectors are unchanged). Physical numbers live in `spec.js` with a source or an
    ESTIMATE note; never tune the car to "feel" without saying what real quantity changed.
    `node scripts/physics-bench.mjs` (0–60, braking, cornering) and `node scripts/naive-players.mjs`
    (32 simple strategies must all land upright with Assist) are the realism and accessibility
@@ -251,6 +254,9 @@ src/sim/              PURE, shared with the Worker:
   m3.js                 allocation-free vec3/quat math
   spec.js               THE CAR: dimensions, mass, inertia, power, tyres, fan, nitrogen, ten
                           nozzles. Public reveal numbers where they exist, marked estimates elsewhere
+  surfaces.js           a set's water and mud as the physics reads them (0340): waterLevel, mudSink, tankWalls; world.js makes
+                          the tanks' walls solid and the mud soft (a tyre's ray settles into it, MATERIALS.mud), vehicle.js
+                          floats, drags and slams the car in the water (`water`); the renderer draws the same numbers
   courses.js            THE COURSES as exact geometry: the Wall (9.5 m arc turning 170° + 5.5 m
                           inverted ledge, 19.8 m lip), the Lineup (no ramp, five parked EVs) and
                           the Show (one flight: the row parked across the approach under the
@@ -333,6 +339,9 @@ src/render/           three.js (r186):
                           strips and panels raycast onto a body, instanced wheels, per-material
                           merging), smooth.js (sedan / crossover / cab builder), one file per vehicle
   plumes.js             per-nozzle shock-diamond cones + condensation mist pool
+  surfaces.js           a set's water and mud, drawn (0340): the tanks, the water, the mud (static, so native-stage.mjs bakes
+                          them for the iPhone) and createSurfaceFx (the splash-down, the wake, mud off the tyres, from the car as
+                          drawn); the Free Drive WATER/MATTER renderers swap in here
   crash.js              everything a crash shows, keyed to run.impacts (live and replay): sparks,
                           chips, dust, dents, torn-off parts, lamps/hazards, shake, slow-mo, cut
   debris.js             torn-off parts as small rigid boxes on the concrete (cosmetic)

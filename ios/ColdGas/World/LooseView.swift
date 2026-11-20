@@ -193,6 +193,18 @@ final class LooseView {
             s.box(SIMD3(X * 0.68, 0.35, Z - 0.02), SIMD3(0.12, 0.05, 0.006), red, glow: 0.3)
             s.band(H, H + 0.35, 0.05, 0.05, dark, n: 10)
             s.box(SIMD3(-X + 0.1, H + 0.005, 0), SIMD3(0.06, 0.005, Z * 0.7), dark)
+        case .log:
+            // 0334: a felled tree: the snapped trunk (bark, a pale splintered break at the foot) and a spruce's crown over the
+            // top two-thirds (centred on the collider's middle; y along the trunk).
+            let bark = SIMD3<Float>(0.07, 0.05, 0.035), wood = SIMD3<Float>(0.42, 0.33, 0.2), needles = SIMD3<Float>(0.03, 0.055, 0.03)
+            s.band(-H + 0.12, H, 0.2, 0.12, bark, n: 10)
+            s.band(-H, -H + 0.12, 0.17, 0.2, wood, n: 10)
+            s.ring(-H, 0, 0.17, wood, up: false, n: 10)
+            for t in 0..<3 {
+                let y0 = -H * 0.35 + Float(t) * H * 0.48, r = 1.0 - Float(t) * 0.28
+                s.band(y0, y0 + H * 0.62, r, 0.05, needles, n: 9)
+                s.ring(y0, 0, r, needles, up: false, n: 9)
+            }
         case .fence, .signpost, .rail:
             // (the world's forged meshes draw these; a plain box if a build has none)
             s.box(.zero, SIMD3(X, H, Z), k == .fence ? SIMD3(0.17, 0.13, 0.095) : SIMD3(0.42, 0.44, 0.45))

@@ -140,7 +140,7 @@ final class Replay {
             ph.append(UInt8(r.phase.rawValue))
             for w in c.wheels { ws += [Float(w.compression), Float(w.spin), Float(w.steer)] }
         }
-        guard let run = try? simulate(log.map { $0.map(\.intValue) }, course, onTick: record) else { return nil }
+        guard let run = try? simulate(log.map { $0.map(\.intValue) }, course, simVersion: j["simVersion"] as? Int, onTick: record) else { return nil }
         carPos = cp; carQuat = cq; nozzles = nz; bodies = bd; phases = ph; wheelState = ws; carVel = cv; fans = fn; bodyCount = bc
         touchTick = Int(run.t.touchTick); sink = Float(run.t.sink)
         let im = run.car.impacts

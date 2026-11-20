@@ -14,6 +14,7 @@ import { RAMP, LINEUP, SHOW, FIXTURES } from '../sim/courses.js';
 import { makeParked, makeRoadster, lampWhite } from './cars.js';
 import { forgeRegistry } from './forge-registry.js';
 import { buildWall, nightSkyMaterial, bakeNightEnvironment, STARS } from './wall.js';
+import { buildSurfaces } from './surfaces.js';
 import { sliver, sliverView, spreadAxes, spreadThin, spreadRing, DECAL, LAYER } from './sliver.js';
 
 const PAD = LINEUP.pad, START_Z = LINEUP.start.z, RUNOUT_Z = LINEUP.runout.zMax;
@@ -300,6 +301,9 @@ function buildLineup(tier) {
   group.add(row);
   group.add(linesAndPad());
   group.add(horizon());
+  // The set's water and mud (0340): the mud pit and the splash tank past the pad, the soft patch beside the run-up.
+  const wet = buildSurfaces(LINEUP, { night: false });
+  if (wet) group.add(wet);
   // Floodlight poles along the run-up: thin, minimal, each with a small lamp head.
   // Slivers (src/render/sliver.js): down the line the poles and lamp heads are under a pixel, and
   // they crawled against the sky (and through the bloom) as the camera moved.
@@ -324,7 +328,7 @@ function buildLineup(tier) {
     titlePose: { x: PAD.x, z: PAD.z, yaw: -0.6 },
     look: { exposure: 1.05, bloom: { strength: 0.3, radius: 0.5, threshold: 0.92 }, fog: new THREE.Fog(PALETTE.haze, 120, 900) },
     keyLight: { color: 0xffd2ad, intensity: 2.6, offset: new THREE.Vector3(-30, 22, 46) },
-    update() {},
+    update(t) { wet?.userData.update(t); },
     setBodies: row.userData.setBodies,
   };
 }
@@ -368,6 +372,15 @@ function* buildShow(tier) {
   const glow = new THREE.PointLight(0xff1a28, 10, 14, 2);
   glow.position.set(0, 0.6, cz);
   look.group.add(glow);
+  yield;
+
+  // The set's water and mud (0340): the splash tank past the pad and its muddy apron.
+  const wet = buildSurfaces(SHOW, { night: true });
+  if (wet) {
+    look.group.add(wet);
+    const wallUpdate = look.update;
+    look.update = (t) => { wallUpdate(t); wet.userData.update(t); };
+  }
 }
 
 export const COURSE_IDS = ['show', 'wall', 'lineup'];

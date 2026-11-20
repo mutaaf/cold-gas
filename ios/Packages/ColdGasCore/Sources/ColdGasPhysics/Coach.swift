@@ -98,13 +98,14 @@ public final class CoachFlight {
 
 /// Re-fly the log and read the flight. `fromTick`: a drill's hand-over (what the reference flew before it isn't yours
 /// to be coached on).
-public func readFlight(_ inputLog: [[Int]], _ courseId: String, fromTick: Int = 0) throws -> (run: Run, flight: CoachFlight) {
+/// `simVersion`: the version the log was flown at (Run.swift simVersionOf; today's when nil).
+public func readFlight(_ inputLog: [[Int]], _ courseId: String, fromTick: Int = 0, simVersion: Int? = nil) throws -> (run: Run, flight: CoachFlight) {
     let course = COURSES[courseId] ?? COURSES[DEFAULT_COURSE]!
     let pr = Prediction(), u = V3(), fwd = V3()
     let f = CoachFlight(courseId)
     var lastPhase: Phase? = nil, wasInverted = false
     let start = Double(fromTick) + (fromTick > 0 ? 24 : 0)
-    let run = try simulateReading(inputLog, courseId) { r, inp in
+    let run = try simulateReading(inputLog, courseId, simVersion: simVersion) { r, inp in
         let c = r.car, t = Double(r.tick)
         if r.phase == .air && lastPhase != .air && f.releaseTick < 0 {
             f.releaseTick = r.t.airStartTick; f.releaseH = r.t.launchHeight - SPEC.comHeight; f.releaseProgress = r.t.launchProgress
@@ -229,8 +230,8 @@ public struct CoachResult {
 
 /// The fixes, most costly first, at most three (always at least one: "Clean"). Only the words depend on `say`.
 /// `card`: the run's card, as the results hold it. `fromTick`: a drill's hand-over, 0 for a whole run.
-public func coach(_ inputLog: [[Int]], _ courseId: String, card: Card? = nil, fromTick: Int = 0, say: CoachWords = COACH_KEY_WORDS) throws -> CoachResult {
-    let (run, f) = try readFlight(inputLog, courseId, fromTick: fromTick)
+public func coach(_ inputLog: [[Int]], _ courseId: String, card: Card? = nil, fromTick: Int = 0, say: CoachWords = COACH_KEY_WORDS, simVersion: Int? = nil) throws -> CoachResult {
+    let (run, f) = try readFlight(inputLog, courseId, fromTick: fromTick, simVersion: simVersion)
     return coachReading(run, f, courseId, card: card, fromTick: fromTick, say: say)
 }
 

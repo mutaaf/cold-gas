@@ -11,6 +11,7 @@ import Foundation
 import simd
 import UIKit
 import ColdGasCore
+import ColdGasPhysics
 
 struct SparkGPU { var pos: SIMD4<Float>; var vel: SIMD4<Float> }          // pos.w life (1 → 0), vel.w heat
 struct PuffGPU { var pos: SIMD4<Float>; var color: SIMD4<Float> }         // pos.w size; colour.a alpha
@@ -41,6 +42,15 @@ final class Crash {
     private var mGrow = [Float](repeating: 0, count: NM), mAlpha0 = [Float](repeating: 0, count: NM), mCol = [SIMD3<Float>](repeating: .one, count: NM)
     private var mSize = [Float](repeating: 0, count: NM), mAlpha = [Float](repeating: 0, count: NM)
     private var mHead = 0
+    // 0330: each particle's own floor (render space), taken where it was thrown: out in the world the ground isn't y = 0.
+    private var sFloor = [Float](repeating: 0, count: NS), cFloor = [Float](repeating: 0, count: NC), mFloor = [Float](repeating: 0, count: NM)
+    /// The ground's height under a point (render space), when it isn't the set's flat floor (a drive sets it; nil: y = 0).
+    var ground: ((SIMD3<Float>) -> Float)? { didSet { pieces.ground = ground } }
+    /// 0333: the car's damage as drawn (ColdGasPhysics CarDamage, fed from the same impacts in the same order as the crash's
+    /// own effects, so a replay damages it the same way): the glass's three states, the lamps per corner, the aero panels
+    /// hanging then going, the drive unit smoking.
+    private(set) var damage = CarDamage()
+    private var smokeAcc: Float = 0
     // Flash
     private(set) var flashPos = SIMD3<Float>(), flashS: Float = 0, flashT: Float = 0
     // State
@@ -113,9 +123,9 @@ final class Crash {
     var onReset: (() -> Void)?
     func reset() {
         onReset?()
-        cursor = 0; lastTick = -1; cutDone = false; slowK = 1; slowT = 0; bigHits = 0; ventT = 0; grind = 0; bigT = -10; flashT = 0
+        cursor = 0; lastTick = -1; cutDone = false; adopted = false; slowK = 1; slowT = 0; bigHits = 0; ventT = 0; grind = 0; bigT = -10; flashT = 0
         head = 1; tail = 1; headFail = 0; tailFail = 0; headDead = false; tailDead = false; hazardT = -1; hazard = false; glass = false
-        pieces.reset(); car.reset()
+        pieces.reset(); car.reset(); damage.reset(); smokeAcc = 0
         for j in 0..<Crash.NS { sLife[j] = 0 }
         for j in 0..<Crash.NC { cLife[j] = 0 }
         for j in 0..<Crash.NM { mLife[j] = 0; mAlpha[j] = 0 }
@@ -123,11 +133,11 @@ final class Crash {
 
     private func spark(_ p: SIMD3<Float>, _ v: SIMD3<Float>, _ heat: Float, _ life: Float) {
         let j = sHead; sHead = (sHead + 1) % Crash.NS
-        sPos[j] = p; sVel[j] = v; sLife[j] = 1; sHeat[j] = heat; sDecay[j] = 1 / life
+        sPos[j] = p; sVel[j] = v; sLife[j] = 1; sHeat[j] = heat; sDecay[j] = 1 / life; sFloor[j] = ground?(p) ?? 0
     }
     private func chip(_ p: SIMD3<Float>, _ v: SIMD3<Float>, _ size: Float, _ hex: UInt32, _ flat: Bool) {
         let j = cHead; cHead = (cHead + 1) % Crash.NC
-        cPos[j] = p; cVel[j] = v
+        cPos[j] = p; cVel[j] = v; cFloor[j] = ground?(p) ?? 0
         let q = simd_normalize(SIMD4<Float>(sgn(), sgn(), sgn(), sgn() + 0.01))
         cRot[j] = simd_quatf(vector: q)
         cSpin[j] = SIMD3(sgn() * 22, sgn() * 22, sgn() * 22)
@@ -137,16 +147,23 @@ final class Crash {
     }
     private func puff(_ p: SIMD3<Float>, _ v: SIMD3<Float>, _ size: Float, _ grow: Float, _ life: Float, _ alpha: Float, _ c: SIMD3<Float>) {
         let j = mHead; mHead = (mHead + 1) % Crash.NM
-        mPos[j] = p; mVel[j] = v; mLife[j] = 1; mDecay[j] = 1 / life; mSize0[j] = size; mGrow[j] = grow; mAlpha0[j] = alpha; mCol[j] = c
+        mPos[j] = p; mVel[j] = v; mLife[j] = 1; mDecay[j] = 1 / life; mSize0[j] = size; mGrow[j] = grow; mAlpha0[j] = alpha; mCol[j] = c; mFloor[j] = ground?(p) ?? 0
     }
 
     /// A puff from outside a crash (Free Drive's tyre smoke, dust and spray, 0223): the same pool, the same draw.
     func kick(_ p: SIMD3<Float>, _ v: SIMD3<Float>, size: Float, grow: Float, life: Float, alpha: Float, color: SIMD3<Float>) {
         puff(p, v, size, grow, life, alpha, color)
     }
+    /// A thrown bit from outside a crash (0330: a wheel's clods of mud, stones, cut grass, ice): the chip pool's tumbling
+    /// box, `life` seconds, `flat` a flake. Its spin and shape from the pool's own randomness.
+    func fling(_ p: SIMD3<Float>, _ v: SIMD3<Float>, size: Float, color hex: UInt32, flat: Bool = false, life: Float = 2.5) {
+        chip(p, v, size, hex, flat)
+        cLife[(cHead + Crash.NC - 1) % Crash.NC] = life
+    }
     /// The car made whole again (Free Drive's reset): dents out, lamps back, parts back on. The events already drawn
     /// stay drawn (unlike reset, which would replay them).
     func repair() {
+        damage.reset(); car.shattered = false; car.hang = [0, 0]
         onReset?()
         head = 1; tail = 1; headFail = 0; tailFail = 0; headDead = false; tailDead = false; hazardT = -1; hazard = false; glass = false
         pieces.reset(); car.reset(); grind = 0; slowK = 1; slowT = 0
@@ -173,6 +190,7 @@ final class Crash {
         let kind = e.kind, part = e.part, v = e.speed
         if log { print(String(format: "CRASH tick %d %@ part %d %.1f m/s at (%.1f, %.1f, %.1f)%@", e.tick, ["hit", "scrape", "wheel", "crush"][Int(min(3, kind))], part, v, e.pos.x, e.pos.y, e.pos.z, e.body >= 0 ? " on parked \(e.body)" : "")) }
         let p = e.pos, n = e.normal
+        absorb(e)
         reseed(e.tick, Int(e.probe) + Int(kind) * 37)
         let vn = simd_dot(carVel, n), t = carVel - vn * n
         let onGround = e.body < 0
@@ -269,16 +287,17 @@ final class Crash {
             if sLife[j] <= 0 { sLife[j] = 0; continue }
             sVel[j].x *= drag; sVel[j].y = sVel[j].y * drag - G * dt; sVel[j].z *= drag
             sPos[j] += sVel[j] * dt
-            if sPos[j].y < fl + 0.01 && sVel[j].y < 0 { sPos[j].y = fl + 0.01; sVel[j].y *= -0.35; sVel[j].x *= 0.7; sVel[j].z *= 0.7 }
+            let sf = fl + sFloor[j]
+            if sPos[j].y < sf + 0.01 && sVel[j].y < 0 { sPos[j].y = sf + 0.01; sVel[j].y *= -0.35; sVel[j].x *= 0.7; sVel[j].z *= 0.7 }
         }
         for j in 0..<Crash.NC where cLife[j] > 0 {
             cLife[j] -= dt
             if cLife[j] <= 0 { continue }
-            let rest = cPos[j].y <= cScale[j].y * 0.5 + 0.002 && abs(cVel[j].y) < 0.3 && abs(cVel[j].x) + abs(cVel[j].z) < 0.2
+            let rest = cPos[j].y <= cFloor[j] + cScale[j].y * 0.5 + 0.002 && abs(cVel[j].y) < 0.3 && abs(cVel[j].x) + abs(cVel[j].z) < 0.2
             if !rest {
                 cVel[j].y -= G * dt
                 cPos[j] += cVel[j] * dt
-                let r = fl + cScale[j].y * 0.5
+                let r = fl + cFloor[j] + cScale[j].y * 0.5
                 if cPos[j].y < r { cPos[j].y = r; cVel[j].y *= -0.3; cVel[j].x *= 0.55; cVel[j].z *= 0.55; cSpin[j] *= 0.5 }
                 let wl = simd_length(cSpin[j])
                 if wl > 1e-4 { cRot[j] = simd_quatf(angle: wl * dt, axis: cSpin[j] / wl) * cRot[j] }
@@ -291,13 +310,25 @@ final class Crash {
                 puff(tailPos + SIMD3(sgn() * 0.3, 0, 0), SIMD3(carUp.x * 3 + sgn() * 2.5, carUp.y * 3 + 1.5 + rnd() * 2, carUp.z * 3 + sgn() * 2.5), 0.35, 4.5, 1.3 + rnd(), 0.2 * min(1, ventT), SIMD3(0.9, 0.94, 0.98))
             }
         }
+        // 0333: a hurt drive unit smokes from the rear deck (the motors sit over the rear axle): pale and thin from 0.6 health,
+        // thick and dark at a wreck, carried back by the car's speed.
+        let sm = Float(damage.smoke)
+        if sm > 0 && dt > 0 {
+            smokeAcc += dt * (5 + 40 * sm)
+            while smokeAcc >= 1 {
+                smokeAcc -= 1
+                let c = 0.55 - 0.45 * sm
+                puff(tailPos + carUp * 0.55 + SIMD3(sgn() * 0.25, 0, sgn() * 0.2), SIMD3(carUp.x * 0.8 + sgn() * 0.3 - carVel.x * 0.15, 0.9 + rnd() * 0.8, carUp.z * 0.8 + sgn() * 0.3 - carVel.z * 0.15),
+                     0.3 + 0.3 * sm, 2.5 + 3 * sm, 2.2 + 1.5 * sm, 0.12 + 0.3 * sm, SIMD3(c, c * 0.98, c * 0.95))
+            }
+        }
         let sd = exp(-dt * 2.2)
         for j in 0..<Crash.NM {
             if mLife[j] <= 0 { mAlpha[j] = 0; continue }
             mLife[j] -= dt * mDecay[j]
             mVel[j].x *= sd; mVel[j].y = mVel[j].y * sd + dt * 0.25; mVel[j].z *= sd
             mPos[j] += mVel[j] * dt
-            if mPos[j].y < 0.1 { mPos[j].y = 0.1 }
+            if mPos[j].y < mFloor[j] + 0.1 { mPos[j].y = mFloor[j] + 0.1 }
             let age = 1 - max(0, mLife[j])
             mSize[j] = mSize0[j] + age * mGrow[j]
             mAlpha[j] = min(1, age * 9) * pow(max(0, mLife[j]), 1.3) * mAlpha0[j]
@@ -309,10 +340,61 @@ final class Crash {
         if headFail > 0 { headFail -= dtReal; head = sin(clock * 61) * sin(clock * 23.3) > 0.1 ? 1 : 0.05; if headFail <= 0 { head = headDead ? 0 : 0.55 } }
         if tailFail > 0 { tailFail -= dtReal; tail = sin(clock * 47) * sin(clock * 17.1) > 0 ? 1 : 0.1; if tailFail <= 0 { tail = tailDead ? 0.04 : 0.6 } }
         if hazardT > 0 { hazardT -= dtReal; if hazardT <= 0 { hazard = true } }
-        car.setDamage(head: head, tail: tail, hazard: hazard)
+        // 0333: a broken lamp on one corner halves that end (the crash's own fail and flicker over it).
+        let hk: Float = damage.lamp[0] && damage.lamp[1] ? 0 : damage.lamp[0] || damage.lamp[1] ? 0.5 : 1
+        let tk: Float = damage.lamp[2] && damage.lamp[3] ? 0.04 : damage.lamp[2] || damage.lamp[3] ? 0.5 : 1
+        car.setDamage(head: head * hk, tail: tail * tk, hazard: hazard)
+        car.swing(dt: dtReal, hang: damage.panel.map { $0 == .hanging }, speed: simd_length(carVel))
         grind *= exp(-dtReal * 5)
     }
 
+    /// One impact into the drawn damage (0333): where it was in the car's frame, then what changed: a canopy that shatters
+    /// throws its glass and is heard; an aero panel that goes is torn off as the crash's debris (its rigid box).
+    private func absorb(_ e: Replay.Impact) {
+        if adopted { return }   // a drive's damage is the drive's own (adopt)
+        let inv = carQuat.inverse, lp = inv.act(e.pos - carPos), ln = inv.act(e.normal)
+        let was = damage
+        damage.apply(kind: e.kind, part: e.part, local: (Double(lp.x), Double(lp.y), Double(lp.z)), nLocal: (Double(ln.x), Double(ln.y), Double(ln.z)),
+                     speed: Double(e.speed), crush: Double(e.crush), wheel: Int(e.probe))
+        changed(from: was, tick: e.tick)
+    }
+    /// A drive's damage, as the drive's physics has it (one model for what's felt and what's drawn): taken each frame.
+    private var adopted = false
+    func adopt(_ d: CarDamage) {
+        adopted = true
+        if d == damage { return }
+        let was = damage
+        damage = d
+        if d.hits < was.hits || (d.glass == .intact && was.glass != .intact) { car.shattered = false; car.crazed = false }   // repaired
+        changed(from: was, tick: d.hits)
+    }
+    private func changed(from was: CarDamage, tick: Int) {
+        if damage == was { return }
+        if damage.glass != .intact { car.crazed = true }
+        if damage.glass == .shattered && was.glass != .shattered {
+            car.shattered = true
+            // The canopy's glass, a burst of flakes from the roof, out and down (its own seed: the event's sparks stay the web's).
+            let s0 = seed
+            reseed(tick, 991)
+            let roof = carPos + carQuat.act(SIMD3<Float>(0, 0.6, 0.1))
+            for _ in 0..<36 { chip(roof + SIMD3(sgn() * 0.4, rnd() * 0.15, sgn() * 0.5), carVel * 0.7 + SIMD3(sgn() * 2.2, 1 + rnd() * 2.5, sgn() * 2.2), 0.01 + rnd() * 0.02, rnd() < 0.8 ? 0xd8e4ec : 0x9fb3c0, true) }
+            seed = s0
+            if audible { Sound.shared.crunch(severity: 1, glass: true, seed: tick * 13 + 7) }
+        }
+        for k in 0..<2 where damage.panel[k] == .off && was.panel[k] != .off { tearPanel(front: k == 0) }
+        car.hang = damage.panel.map { $0 == .hanging ? 1 : 0 }
+    }
+    /// The front's intake vanes or the rear wing, torn off as the crash's debris (no randomness: the piece goes with the car).
+    private func tearPanel(front: Bool) {
+        for b in breakable where (front ? b.source == .vanes : b.source == .wing) {
+            if pieces.isOn(b.piece) || !car.visible(b.source) { continue }
+            let (m, q) = car.world(b.source, layout: layout, carPos: carPos, carQuat: carQuat)
+            let c4 = m * SIMD4(b.center, 1)
+            pieces.spawn(b.piece, pos: SIMD3(c4.x, c4.y, c4.z), quat: q, v: carVel * 0.8 + carQuat.act(SIMD3(0, 1.2, front ? 0.5 : -0.5)), w: carQuat.act(SIMD3(front ? -4 : 4, 0, 1.5)))
+            if b.source == .wing { car.keepTornWing() }
+            car.broken[b.group.rawValue] = true
+        }
+    }
     var liveCounts: (Int, Int, Int) { (sLife.filter { $0 > 0 }.count, mAlpha.filter { $0 > 0.002 }.count, cLife.filter { $0 > 0 }.count) }
     /// The live particles into the GPU's instance buffers; returns how many of each.
     func write(sparks: UnsafeMutablePointer<SparkGPU>, puffs: UnsafeMutablePointer<PuffGPU>, chips: UnsafeMutablePointer<ChipGPU>) -> (Int, Int, Int) {

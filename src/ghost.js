@@ -1,7 +1,7 @@
 // Ghost of your best jump: the best finished run's replay frames, kept on this device
 // (IndexedDB, keyed by SIM_VERSION) and played back in lockstep with the live sim tick.
 // Lookups are allocation-free; storage never throws (private modes, blocked storage).
-import { FRAME_EVERY, SIM_VERSION } from './sim/run.js';
+import { FRAME_EVERY, simVersionOf, replayable } from './sim/run.js';
 
 export const newGhostPose = () => ({ x: 0, y: 0, z: 0, qx: 0, qy: 0, qz: 0, qw: 1 });
 
@@ -11,7 +11,7 @@ export function packFrames(frames, total, ref = false, course = 'show') {
   const n = frames.length, stride = n ? frames[0].length : 0;
   const data = new Float32Array(n * stride);
   for (let i = 0; i < n; i++) data.set(frames[i], i * stride);
-  return { v: SIM_VERSION, n, stride, total, ref, course, data };
+  return { v: simVersionOf(course), n, stride, total, ref, course, data };
 }
 
 // Your own run always replaces the reference; otherwise the higher total wins.
@@ -43,7 +43,8 @@ export function ghostAt(g, tick, out) {
 }
 
 // --- Storage (this device only) ------------------------------------------------------------
-// One key per course; the record carries its SIM_VERSION, so a sim change retires the old ghost.
+// One key per course; the record carries its SIM_VERSION, so a sim change retires the old ghost (a v32 ghost on a set
+// that has water and mud now still races: its frames are where that run went, src/sim/run.js replayable).
 const DB = 'coldgas', STORE = 'ghost';
 const keyOf = (course) => `best:${course}`;
 function openDB() {
@@ -56,7 +57,7 @@ function openDB() {
     req.onblocked = () => { clearTimeout(timer); reject(new Error('idb blocked')); };
   });
 }
-const valid = (g) => !!g && g.v === SIM_VERSION && g.n > 0 && g.data instanceof Float32Array;
+const valid = (g) => !!g && replayable(g.course, g.v) && g.n > 0 && g.data instanceof Float32Array;
 
 export async function loadBest(course) {
   try {

@@ -75,7 +75,7 @@ final class SoundFeed {
             surf = floor ? (1, 0, 0, 0, 1) : surfaceMix(g.surface)
             if was < 0.5 && surf.wet > 0.5 && c.speed > 4 { Sound.shared.splash(min(1, c.speed / 20), seed: nextSeed()) }
         }
-        c.paved = surf.paved; c.gravel = surf.gravel; c.grass = surf.grass; c.wet = surf.wet; c.concrete = surf.concrete
+        c.paved = surf.paved; c.gravel = surf.gravel; c.grass = surf.grass; c.wet = max(surf.wet, fd.tyresWet); c.concrete = surf.concrete   // 0320: the sea's
         c.deck = car.onWall ? 1 : 0
         lastOrigin = fd.origin; onDeck = car.onWall
         // A landing out in the world (the scored runs have their own touchdown).
@@ -184,6 +184,10 @@ final class SoundFeed {
         var lift = 0.0, side = 0.0
         for i in 0..<car.throttles.count { if i < 4 { lift += car.throttles[i] } else { side += car.throttles[i] } }
         c.lift = lift; c.side = side
+        // A set's mud and water (0340): tyres ploughing wet clay (soft and wet, not the slab's hard roar), and a car in the
+        // water (the wash, no tyre noise).
+        if car.mud > 0 { let k = Double(car.mud) / 4; c.wet = max(c.wet, k); c.grass = max(c.grass, 0.6 * k); c.paved = 1 - 0.7 * k }
+        if car.wet > 0 { c.wet = 1; c.paved = 0; c.grounded = min(c.grounded, 1 - car.wet) }
         return c
     }
 

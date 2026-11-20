@@ -42,6 +42,12 @@ final class CarState {
     // Damage (crash.js).
     var broken = [Bool](repeating: false, count: Group.allCases.count)
     var crazed = false
+    /// 0333: the canopy gone (CarDamage's third state): drawn as an empty frame with a few shards.
+    var shattered = false
+    /// 0333: the front vanes and the rear wing hanging (1) by one side, and the angle each swings to (rad).
+    var hang: [Float] = [0, 0]
+    private(set) var hangAngle: [Float] = [0, 0]
+    private var hangVel: [Float] = [0, 0], swingT: Float = 0
     private var dmgHead: Float = 1, dmgTail: Float = 1, hazard = false
     /// The wing's pose when it tore off (crash.js syncPose copies it onto the flying clone).
     private(set) var tornK: Float = 0, tornAir: Float = 0
@@ -51,7 +57,7 @@ final class CarState {
     func keepTornWing() { tornK = wing; tornAir = airbrake }
     /// A new placement the 3 m jump can't see: wake on the next frame (hero.placed).
     func placed() { has = false }
-    func reset() { for i in broken.indices { broken[i] = false }; crazed = false; dmgHead = 1; dmgTail = 1; hazard = false; for i in frost.indices { frost[i] = 0 } }
+    func reset() { for i in broken.indices { broken[i] = false }; crazed = false; shattered = false; hang = [0, 0]; hangAngle = [0, 0]; hangVel = [0, 0]; dmgHead = 1; dmgTail = 1; hazard = false; for i in frost.indices { frost[i] = 0 } }
     /// main.js: live only, `setWing((speed - 20) / 20)`; it counts for 0.3 s.
     func setWing(_ t: Float) { wingExt = min(1, max(0, t)); wingExtT = last }
     /// Free Drive (0225): the brake pedal itself (−1: none; the lamps then follow the car's deceleration, as on the web).
@@ -120,6 +126,25 @@ final class CarState {
             let p = min(1, max(0, thr[i]))
             core[i] = p
             frost[i] = min(1, frost[i] + p * dt * 0.9) * exp(-dt / 4.5)
+        }
+    }
+
+    /// 0333: a hanging panel swings on its last mount: a damped pendulum round its droop, kicked by the car's speed and the
+    /// road (a spring of ≈ 2.5 Hz, ζ 0.15: a loose plastic panel). Settles to its droop when the car stops.
+    func swing(dt: Float, hang h: [Bool], speed: Float) {
+        guard dt > 0, dt.isFinite, speed.isFinite else { return }
+        swingT += dt
+        for i in 0..<2 {
+            let target: Float = h[i] ? (i == 0 ? 0.55 : 0.35) : 0
+            if !h[i] && hangAngle[i] == 0 { continue }
+            let w: Float = 15.7, z: Float = 0.15
+            // The air and the road shake it: a forcing that grows with speed.
+            let force = min(1, speed / 25) * 6 * sin(swingT * (i == 0 ? 9.3 : 7.1)) * sin(swingT * 2.3 + Float(i))
+            let a = -w * w * (hangAngle[i] - target) - 2 * z * w * hangVel[i] + force
+            hangVel[i] += a * min(dt, 1.0 / 30)
+            hangAngle[i] += hangVel[i] * min(dt, 1.0 / 30)
+            if !hangAngle[i].isFinite || !hangVel[i].isFinite { hangAngle[i] = target; hangVel[i] = 0 }
+            if !h[i] { hangAngle[i] = 0; hangVel[i] = 0 }
         }
     }
 

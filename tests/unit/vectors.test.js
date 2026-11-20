@@ -41,7 +41,7 @@ describe('native vectors (0146)', () => {
       const r = runList().find((x) => x.name === name), log = r.log();
       const v = runVector(name, r.course, log);
       expect(v.simVersion).toBe(SIM_VERSION);
-      expect(v.card).toEqual(flat(scoreRun(simulate(log, r.course).t)));
+      expect(v.card).toEqual(flat(scoreRun(simulate(log, r.course, undefined, null, v.simVersion).t)));
       expect(v.checks.length).toBeGreaterThan(10);
       expect(v.final).toMatch(/^[0-9a-f]{16}$/);
     }
@@ -53,7 +53,7 @@ describe('native vectors (0146)', () => {
     for (const r of list.filter((x) => ['thumb-show-aim', 'touch-show-crash', 'thumb-wall-stall'].includes(x.name))) {
       const v = JSON.parse(disk(`input/${r.name}.json`));
       expect(v.simVersion).toBe(SIM_VERSION);
-      expect(flat(simulate(v.log, r.course).t)).toEqual(v.telemetry);
+      expect(flat(simulate(v.log, r.course, undefined, null, v.simVersion).t)).toEqual(v.telemetry);
       expect(v.after.endTick).toBeGreaterThan(v.ticks);
     }
     for (const r of list) {
@@ -85,7 +85,7 @@ describe('native vectors (0146)', () => {
     expect(schemeFor('touch', 'thumb', 'lineup', 'assist')).toBe('thumb');   // 0181
     const c = JSON.parse(disk('coach.json'));
     expect(c.simVersion).toBe(SIM_VERSION);
-    expect(c.flights.length).toBe(runList().length + inputList().length);
+    expect(c.flights.length).toBe(runList().filter((r) => !r.v).length + inputList().length);   // (the surface runs, 0340, are run vectors only)
     expect(c.drills.length).toBe(33);
     const ids = new Set([...c.rows.flatMap((r) => r[3]), ...c.drills.flatMap((d) => [...d.thumb, ...d.classic])].map((it) => it[0]));
     // Every finding but two: 'fell-off' (off the deck with no air at all) and 'flipped' (on its roof with nothing else

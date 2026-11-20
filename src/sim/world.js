@@ -17,6 +17,7 @@ import { WALL, wallProfile, RAMP, MATERIALS, parkedMirror, refreshBounds, PAD_R,
 import { RAILS, roadSurface, bridgePier, PIER, tunnelArch, cellKey } from './roads.js';
 import { CELL, bakedScenery, endlessScenery } from './scenery.js';
 import { dsin, dcos, datan2 } from './dmath.js';
+import { mudSink, tankWalls } from './surfaces.js';
 import { siteOf, siteSolids, toWorld as siteWorld, toLocal as siteLocal, SITE_RADIUS, SITE_TOP, PLUME } from './complex.js';
 import { staticFire, fireClock, jetSpeed, JET, CAR_CDA } from './rocket.js';
 
@@ -193,6 +194,8 @@ export function createWorld(course) {
     const floor = colliderFor(w, R.ColliderDesc.cuboid(1500, 1, 1500).setTranslation(0, -1, 0), MATERIALS.concrete, GROUP.static);
     // The landing mark is a film of paint on that concrete: the floor's material inside its disc.
     if (course.pad) w.info.get(floor.handle).pad = course.pad;
+    // A set's mud is soft ground on that same concrete (0340): the floor's material and depth inside its patches.
+    if (course.surfaces) w.info.get(floor.handle).surf = course.surfaces;
     if (course.id === 'wall' || course.id === 'show') {
       WALL_MESH ??= wallMesh();
       colliderFor(w, R.ColliderDesc.trimesh(WALL_MESH.v, WALL_MESH.idx, R.TriMeshFlags.FIX_INTERNAL_EDGES), MATERIALS.deck, GROUP.curl);
@@ -213,6 +216,15 @@ export function createWorld(course) {
     if (at) w.site = { at, cols: [], solid: null, f: {}, push: 0 };
   }
   (course.boxes || []).forEach((b, i) => w.bodies.push(addParked(w, b, i)));
+  // A set's splash tanks (0340): concrete walls on the slab, made last, after everything a course without them has, so
+  // the engine's handles for the rest are the same as before.
+  if (course.surfaces) {
+    for (const k of course.surfaces.tanks) for (const b of tankWalls(k)) {
+      const hx = (b[3] - b[0]) / 2, hy = (b[4] - b[1]) / 2, hz = (b[5] - b[2]) / 2;
+      colliderFor(w, R.ColliderDesc.cuboid(hx, hy, hz).setTranslation(b[0] + hx, b[1] + hy, b[2] + hz), MATERIALS.concrete, GROUP.static);
+      w.solids.push(b);
+    }
+  }
   refreshBounds(w);
   // A zero-length step files every collider in the engine's broad phase, so the first tick's ray
   // casts see the world (nothing moves; the sleeping bodies stay asleep).
@@ -707,6 +719,14 @@ export function raycast(w, ox, oy, oz, dx, dy, dz, maxT, excludeRb) {
     if (info.pad) {
       const ex = ox + dx * t - info.pad.x, ez = oz + dz * t - info.pad.z;
       if (ex * ex + ez * ez <= PAD_R * PAD_R) h.mat = MATERIALS.pad;
+    }
+    if (info.surf) {
+      // Mud (0340): soft ground, and a ray coming down settles into it (by its depth along the ray).
+      const sink = mudSink(info.surf, ox + dx * t, oz + dz * t);
+      if (sink >= 0) {
+        h.mat = MATERIALS.mud;
+        if (dy < -0.2) { t += sink / -dy; if (t > maxT) t = -1; }
+      }
     }
   }
   if (sdf) {

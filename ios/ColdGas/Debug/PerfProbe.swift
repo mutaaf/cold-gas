@@ -47,6 +47,9 @@ enum PerfProbe {
     }
     /// This thread's CPU time (ms): what the main thread spent, not the wall clock a busy machine stretches.
     static func threadMs() -> Double { Double(clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID)) / 1e6 }
+    /// 0310: the drive's world as the window ends (tiles, cache MB, culled props), `-` off a drive. `cpumax` and `over` (frames whose
+    /// main-thread CPU passed a 120 Hz frame) beside it: the streaming hitch at speed (scene `stream`).
+    nonisolated(unsafe) static var worldLine = "-"
     /// Launch → first frame, set once by the stage view.
     nonisolated(unsafe) static var launchMs = 0.0
 

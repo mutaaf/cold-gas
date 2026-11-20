@@ -33,6 +33,12 @@ private func local(_ h: String, _ e: String, _ c: String, _ d: String) -> JudgeW
 
 public func localWords(_ card: ScoreCard) -> JudgeWords {
     let f = Facts(card)
+    // A set's splash tank (0340, panel.js): the run ended in the water, whatever else happened on the way.
+    if f.b("splash") {
+        return local("Splash", "Into the tank at \(f.s("splashKmh")) km/h. Water in the fans, the ducts and the battery bay: that car dries out for a week.",
+                     f.b("jumped") ? "\(f.s("padMiss")) m past the mark and into the water. The crowd loved it. I did not." : "You drove it into the tank. Nobody asked for that one.",
+                     "A beautiful arc, into the wrong element.")
+    }
     if f.n("damagePct") >= 60 {
         return local("Wrecked", "The damage sensor reads \(f.s("damagePct"))%. That car does not drive home: it goes back on a flatbed.", "Big, brave, and expensive. Land the next one in one piece.", "The shape was the point. You bent it.")
     }
@@ -59,7 +65,15 @@ public func localWords(_ card: ScoreCard) -> JudgeWords {
     let designer = f.n("airPct") > 40
         ? pick(["\(f.s("airPct"))% of the air still in the tanks. Nothing wasted, nothing missing.", "Quiet, exact, \(f.s("airPct"))% in reserve. That is how it should feel."], s)
         : pick(["Effective, but \(f.s("airPct"))% left in the tanks tells me it was loud in places.", "The shape was right. The burn was heavy."], s)
-    return JudgeWords(headline: card.verdict, engineer: engineer, coordinator: coordinator, designer: designer, source: "local")
+    return muddy(JudgeWords(headline: card.verdict, engineer: engineer, coordinator: coordinator, designer: designer, source: "local"), f)
+}
+/// A set's mud (0340, panel.js muddy): a roll-out that ploughed through it gets the Designer's word on it.
+public let MUD_SAID = 0.5
+private func muddy(_ w: JudgeWords, _ f: Facts) -> JudgeWords {
+    guard f.n("mudS") >= MUD_SAID, !f.b("crashed") else { return w }
+    var o = w
+    o.designer = "Then \(f.s("mudS")) s ploughing through the mud. Somebody fetch a hose."
+    return o
 }
 
 private func wallWords(_ card: ScoreCard, _ f: Facts) -> JudgeWords {
@@ -98,7 +112,7 @@ private func showWords(_ card: ScoreCard, _ f: Facts) -> JudgeWords {
     }
     words.coordinator = pick(["\(f.s("invertedS")) seconds upside down at \(f.s("height")) metres, then \(f.s("clearance")) m over the roofs. That is the show.",
                               "Off the ledge and over the semi in one flight. The crowd got all of it."], f.n("height") + f.n("sink"))
-    return words
+    return muddy(words, f)
 }
 
 // --- parseWords (src/worker/ai/prompt.js) ------------------------------------------------------------------

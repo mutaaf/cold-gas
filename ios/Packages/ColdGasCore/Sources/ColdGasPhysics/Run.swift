@@ -4,6 +4,19 @@
 import ColdGasCore
 
 public let SIM_VERSION = 32   // 0190: LAND's line hold to 1.5 m, auto-land to two wheels
+/// v33 (0340): a set's water and mud (run.js). Only the courses that carry surfaces (the Show, the Lineup) fly at it; a v32
+/// run on them replays on the set as it was (courseAt).
+public let SURFACE_VERSION = 33
+public func simVersionOf(_ courseId: String) -> Int { COURSES[courseId]?.surfaces != nil ? SURFACE_VERSION : SIM_VERSION }
+/// A run of this version on this course replays to its bits here (today's, or a v32 run on a set that has surfaces now).
+public func replayable(_ courseId: String, _ v: Int) -> Bool { v == simVersionOf(courseId) || v == SIM_VERSION }
+/// The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION.
+public func courseAt(_ courseId: String, _ v: Int? = nil) -> Course {
+    let id = COURSES[courseId] != nil ? courseId : DEFAULT_COURSE
+    return (v ?? simVersionOf(id)) < SURFACE_VERSION ? DRY_COURSES[id]! : COURSES[id]!
+}
+/// A splash-down ends the run this long after the car hits the water.
+public let SPLASH_TICKS = 240 * 3
 public let FRAME_EVERY = 4
 public let MAX_TICKS = 240 * 90
 public let STALL_TICKS = 240 * 6, HANG_STALL_TICKS = 240 * 20
@@ -29,7 +42,12 @@ public final class Telemetry {
     public var launchHeight = 0.0, launchUpY = 1.0, launchProgress = 0.0, fellOff = false, landedOnRamp = false
     public var damage: (pct: Double, integrity: Double, zones: [(String, Double)])? = nil
     public var mass: Double? = nil
-    init(_ course: String) { self.course = course }
+    // A set with water and mud (0340): only on such a course (nil elsewhere, so every other run's telemetry is as it was).
+    public var splash: Bool? = nil, splashTick: Double? = nil, splashSpeed: Double? = nil, mudTime: Double? = nil
+    init(_ course: String, surfaces: Bool = false) {
+        self.course = course
+        if surfaces { splash = false; splashTick = -1; splashSpeed = 0; mudTime = 0 }
+    }
 
     public enum Value: Equatable { case n(Double), b(Bool), s(String), z }
     /// scripts/vectors-lib.mjs flat(run.t): every leaf as (path, value), keys sorted as JS sorts them.
@@ -49,6 +67,10 @@ public final class Telemetry {
         n("lateral", lateral); n("launchHeight", launchHeight); n("launchProgress", launchProgress); n("launchSpeed", launchSpeed); n("launchTick", launchTick)
         n("launchUpY", launchUpY)
         if let m = mass { n("mass", m) }
+        if let v = mudTime { n("mudTime", v) }
+        if let v = splash { b("splash", v) }
+        if let v = splashSpeed { n("splashSpeed", v) }
+        if let v = splashTick { n("splashTick", v) }
         n("maxCompression", maxCompression); n("maxG", maxG); n("maxRampHeight", maxRampHeight); n("maxSpeed", maxSpeed); n("minClearance", minClearance)
         n("offAxis", offAxis); n("pitchAccum", pitchAccum); n("progress", progress); n("rampEntrySpeed", rampEntrySpeed); n("rampTick", rampTick)
         n("rollAccum", rollAccum); b("settledUpright", settledUpright); n("sink", sink); n("thrustChanges", thrustChanges); kv.append(("tier", .s(tier)))
@@ -76,14 +98,15 @@ public final class Run {
     /// Armed (armAftermath) before the run ends, finish() keeps the world for the aftermath (Live.swift).
     public internal(set) var after: Aftermath? = nil
     public let t: Telemetry
-    init(_ courseId: String) {
-        let c = COURSES[courseId] ?? COURSES[DEFAULT_COURSE]!
+    init(_ courseId: String, _ simVersion: Int? = nil) {
+        let c = courseAt(courseId, simVersion)
         course = c.id
         car = Vehicle(c)
-        t = Telemetry(c.id)
+        t = Telemetry(c.id, surfaces: c.surfaces != nil)
     }
 }
-public func createRun(_ courseId: String = DEFAULT_COURSE) -> Run { Run(courseId) }
+/// `simVersion`: the version the run is flown at (simVersionOf: today's); an older one replays on the course as it was.
+public func createRun(_ courseId: String = DEFAULT_COURSE, simVersion: Int? = nil) -> Run { Run(courseId, simVersion) }
 
 /// One entry's 23 channels (hundredths) into the input, as run.js unpack: a 12-channel (legacy) entry leaves the rest 0.
 @inline(__always) func unpack(_ e: [Int], _ o: Input) {
@@ -128,6 +151,12 @@ func advance(_ run: Run, _ input: Input) throws {
     }
     let airborne = c.grounded == 0 && !c.hullContact
     let lx = c.pos.x, lz = c.pos.z
+    // A set's water and mud (0340): the splash-down, whenever it happens, and the time in mud.
+    if c.course.surfaces != nil {
+        if c.mud >= 2 { t.mudTime! += DT }
+        if c.splashTick >= 0 && t.splash != true { t.splash = true; t.splashTick = Double(c.splashTick); t.splashSpeed = c.splashSpeed }
+    }
+    let splashed = t.splash == true
 
     if run.phase == .drive {
         if wall {
@@ -177,10 +206,10 @@ func advance(_ run: Run, _ input: Input) throws {
         let minAir = wall ? 48.0 : 36.0
         let deckScrape = wall && (c.grounded > 0 || c.hullGround) && c.pos.y > 3 && wallArcLength(c.pos.z, c.pos.y) > 1
         if deckScrape { t.deckScrape = true }
-        if (c.grounded > 0 || c.hullGround) && !deckScrape && Double(run.tick) - t.airStartTick > minAir {
+        if (c.grounded > 0 || c.hullGround || splashed) && !deckScrape && Double(run.tick) - t.airStartTick > minAir {
             run.phase = .landed
             t.touchTick = Double(run.tick)
-            t.sink = jsMax(jsMax(0, -prevVy), -c.vel.y)
+            t.sink = splashed ? c.splashSink : jsMax(jsMax(0, -prevVy), -c.vel.y)
             M3.rotate(fw, c.quat, M3.set(fw, 0, 0, 1))
             t.tiltDeg = DMath.dacos(jsMax(-1, jsMin(1, upv.y))) * 180 / DMath.PI
             t.headingDeg = DMath.datan2(wall ? -fw.x : fw.x, wall ? -fw.z : fw.z) * 180 / DMath.PI
@@ -218,7 +247,8 @@ func advance(_ run: Run, _ input: Input) throws {
     let tt = Double(run.tick)
     if t.flipped { end = "flipped" }
     else if t.contact && tt - t.contactTick > 480 { end = "contact" }
-    else if run.phase == .landed && ((speed < 1.2 && tt - t.touchTick > 72) || tt - t.touchTick > 240 * 5) && (upv.y >= 0.25 || tt - t.touchTick > 240 * 5) { end = "settled" }
+    else if splashed && tt - t.splashTick! > Double(SPLASH_TICKS) { end = "splash" }
+    else if run.phase == .landed && !splashed && ((speed < 1.2 && tt - t.touchTick > 72) || tt - t.touchTick > 240 * 5) && (upv.y >= 0.25 || tt - t.touchTick > 240 * 5) { end = "settled" }
     else if c.pos.z > course.runoutMax || c.pos.z < course.runoutMin { end = "runout" }
     else if Double(run.offTicks) > Double(hanging ? HANG_STALL_TICKS : STALL_TICKS) { end = "stalled" }
     else if run.tick >= MAX_TICKS { end = "timeout" }
@@ -251,12 +281,12 @@ func closeBook(_ run: Run, _ t: Telemetry, _ reason: String) {
 /// Re-simulate a run from its input log alone (the server's verification, a replay, a challenge).
 /// `onTick(run)` sees every tick, as simulate's does in the JS (the vectors' trace reads it).
 @discardableResult
-public func simulate(_ inputLog: [[Int]], _ courseId: String = DEFAULT_COURSE, maxTicks: Int = MAX_TICKS, onTick: ((Run) -> Void)? = nil) throws -> Run {
-    try simulateReading(inputLog, courseId, maxTicks: maxTicks) { r, _ in onTick?(r) }
+public func simulate(_ inputLog: [[Int]], _ courseId: String = DEFAULT_COURSE, maxTicks: Int = MAX_TICKS, simVersion: Int? = nil, onTick: ((Run) -> Void)? = nil) throws -> Run {
+    try simulateReading(inputLog, courseId, maxTicks: maxTicks, simVersion: simVersion) { r, _ in onTick?(r) }
 }
 /// simulate, with the tick's input as well: the JS's `onTick(run, inp)` (the coach reads it, Coach.swift).
-func simulateReading(_ inputLog: [[Int]], _ courseId: String, maxTicks: Int = MAX_TICKS, onTick: (Run, Input) -> Void) throws -> Run {
-    let run = createRun(courseId)
+func simulateReading(_ inputLog: [[Int]], _ courseId: String, maxTicks: Int = MAX_TICKS, simVersion: Int? = nil, onTick: (Run, Input) -> Void) throws -> Run {
+    let run = createRun(courseId, simVersion: simVersion)
     let inp = Input()
     var li = 0
     while run.phase != .done && run.tick < maxTicks {

@@ -21,7 +21,8 @@ export function setSetting(k, v) {
 // --- Haptics --------------------------------------------------------------------------------
 const canVibrate = typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function';
 export const hasHaptics = () => canVibrate;
-const PATTERNS = { tap: 8, release: 22, warn: [28, 60, 28], crash: [70, 40, 90], phase: 10 };
+// splash (0340): the slap, then the water closing over the car; mud: a short churn, repeated while the tyres plough.
+const PATTERNS = { tap: 8, release: 22, warn: [28, 60, 28], crash: [70, 40, 90], phase: 10, splash: [90, 30, 40, 30, 20], mud: [14, 40, 14] };
 export function buzz(kind, ms) {
   if (!canVibrate || !settings.haptics) return;
   try { navigator.vibrate(ms ?? PATTERNS[kind] ?? 10); } catch { /* not allowed (no user gesture yet) */ }

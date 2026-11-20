@@ -311,6 +311,13 @@ dimmed to a red their core keeps (Renderer `toneRoam`), as the web's deck look d
   Lineup's cone lane. Done and best kept per set on the device; no timer, no streak, nothing scored.
 - `-flat-sets` turns the surfaces, the dressing and the paint off; `-roam-log` (Debug) logs the challenges to Caches/roam.log.
 
+### Everything leaves a mark (0330–0335)
+
+What the ground does to the car and the car to the ground and to everything it hits (ruts and berms in a per-tile trace
+texture, the car's coat, roost by material, snow, ice and mud, the car's lasting damage, trees that snap) is mapped and built
+in docs/NATIVE-MATTER.md. On §9's contract it's a `WorldLayer` (`MatterLayer`) whose fine trace atlas is bound for
+`matter_ground` (WorldMatter.h), and `GroundMatter.of(_:wet:freezing:)` reads `FreeWorld.sample`'s wetness and snow.
+
 ## 6 · What it must not change
 
 - `src/sim`, the vectors, `SIM_VERSION`, the Worker: untouched. The Swift scored sim's only edits are additive: the
@@ -424,3 +431,274 @@ and back-to-back runs heat a phone. If the frame misses at the resolution floor,
 2. Make the quadtree split less: lower `WorldView.split` toward 2.0.
 3. Take the shadow off the terrain.
 4. Use MetalFX frame interpolation in Free Drive (§2).
+
+### After 0310 (the land as a platform)
+
+`make perf`'s `freedrive` (the pilot 3 km out at 25 m/s) and a new `stream` scene (carried along a road at 60 m/s while the
+world streams in) on the "ColdGas iPhone" simulator, Release, 2026-11-19, main (4cbabe8c) first, then the branch. The PERF
+line now also prints `cpumax`, `over` (main-thread frames past 8.33 ms) and `world=` (tiles, prop triangles, cache MB, bakes,
+world-shadow redraws).
+
+| Scene, look | Footprint MB (avg / peak) | Triangles a frame | Draws | CPU p50 / p95 / max ms | Frames over 8.3 ms CPU |
+|---|---|---|---|---|---|
+| freedrive, Real: before | 344 / 345 | 1,847,788 | 299 | 1.76 / 4.34 / 6.37 | 0 |
+| freedrive, Real: after | 85 / 218 | 483,674 | 244 | 1.65 / 4.43 / 6.06 | 0 |
+| freedrive, Anime: before → after | 343 → 90 (peak 216) | 1,845,896 → 483,365 | 299 → 244 | 1.97 / 4.64 / 8.14 → 1.70 / 2.93 / 4.67 | 0 → 0 |
+| freedrive, 8-bit: before → after | 342 → 84 (peak 213) | 1,844,976 → 483,131 | 292 → 237 | 1.68 / 4.44 / 5.87 → 1.56 / 4.36 / 5.28 | 0 → 0 |
+| stream (60 m/s), Real: before | 343 / 346 | 1,658,997 | 282 | 0.83 / 1.79 / 1.96 | 0 |
+| stream (60 m/s), Real: after | 82 / 209 | 506,158 | 236 | 0.81 / 1.38 / 2.16 | 0 |
+
+- **Memory.** The footprint was the road network's cache: every link a far tile had ever asked about stayed (17 k links,
+  ≈ 250 MB of `[Double]` at 3 km out, by `heap`). The links are now a bounded LRU (1,536, rebuilt the same if wanted again).
+  The peak is the first seconds, before the far tiles' queries have been evicted.
+- **Triangles.** The props were drawn a whole 512 m block at a time at the LOD of its nearest point; the GPU cull draws each
+  instance at its own LOD, only in view: ≈ 1.6 M → 80–130 k prop triangles. The terrain's quadtree no longer refines what's
+  out of the lens: the drive settles with ≈ 140 tiles cached instead of needing ≈ 500 (main kept up to 900).
+- **The cache's own cost.** Slabs and surfaces: 37 MB of GPU memory (`cacheMB`), each tile baked once (276 bakes in the
+  window's 10 s at 25 m/s, 332 at 60 m/s); the world's shadow was redrawn 18 times in the 10 s at 25 m/s.
+- **GPU.** The simulator's GPU timings say nothing about a phone's (§8 above); `make device-bench-freedrive` is the owner's.
+
+## 9 · The land as a platform (0310): the contract for WATER and MATTER
+
+The owner, 2026-11-19: "the landscape realism, the water realism, effects of the environment on the vehicle on the
+environment … the most minimal amounts of re-renders, caching … every bit of damage, every bit of effect, cause and
+effect … across the real, anime, and 8-bit versions." Three tracks share Free Drive's world: **LANDSCAPE** (0310–0319:
+the terrain, its materials, vegetation, sky and distance, and the streaming and caching everything plugs into),
+**WATER** (new `Water*.swift` / `Water*.metal`, buoyancy) and **MATTER** (ruts and ground deformation, surface grip,
+dust/mud/snow spray, dirt and wet on the car, prop destruction). This section is the contract between them. LANDSCAPE
+lands first; the others build against what's here, and say so in this section if they need it to change.
+
+### 9.1 Ownership
+
+| Path | Owner | Others may |
+|---|---|---|
+| `ColdGasWorld` (Land, Roads, Build, Noise, `Sample.swift`) | LANDSCAPE | call anything public; add lakes/rivers only through `FreeWorld.water` (ask first) |
+| `World/WorldView.swift`, `WorldCache.swift`, `WorldProps.swift`, `World.metal`, `WorldShading.h`, `Render/Sky*` | LANDSCAPE | read; register layers (9.4) |
+| `World/WorldHooks.swift` (this contract in code) | LANDSCAPE | propose changes here first |
+| `World/WorldMatter.h` (the ground's trace look) | **MATTER** | LANDSCAPE ships it as a no-op default and never edits it after |
+| `World/WorldWater.h` (the seabed's caustics, the swash on the shore) | **WATER** | the same |
+| `World/Water*.swift`, `World/Water*.metal` | **WATER** | — |
+| `ColdGasPhysics/DriveCar.swift` grip, `Drive.swift` `material(…)` | **MATTER** | LANDSCAPE doesn't touch the grip |
+| `ColdGasPhysics/Vehicle.swift` (scored) | nobody | the 52 run vectors stay bit-exact |
+
+### 9.2 Asking the land (CPU, pure, any thread)
+
+`ColdGasWorld/Sample.swift`. Everything is a pure function of the seed and (x, z) in world metres, the same answer on
+any thread in any order (the physics, the effects and the app may all ask).
+
+```swift
+public enum WaterKind: UInt8 { case none, sea, lake, river }
+public struct WaterSample: Sendable {
+    public var level: Double        // the surface's height (m); −∞ where there's no water body (the Show's slab)
+    public var depth: Double        // level − ground (> 0 under water)
+    public var wet: Bool            // depth > 0
+    public var kind: WaterKind      // sea, lake or river
+    public var flow: (Double, Double)   // a river's downstream direction (unit x, z); 0 on still water
+}
+public struct LandSample: Sendable {
+    public var y: Double                         // the carved ground the car drives on (FreeWorld.ground)
+    public var normal: (Double, Double, Double)  // the ground's normal (from ±1 m)
+    public var slope: Double                     // 1 − normal.y
+    public var surface: Surface                  // what a tyre meets: FreeWorld.surface(g, slope:), unchanged
+    public var biome: (Double, Double, Double, Double)   // mountain, coast, desert, forest weights (sum 1)
+    public var road: Double                      // to the nearest road's centreline (m, ∞ past RoadSpec.reach)
+    public var wetness: Double                   // 0 dry … 1 soaked: the shore band, the water's edge
+    public var snow: Double                      // 0 … 1 lying snow (the shaders' snow line, same numbers)
+    public var water: WaterSample                // the water body's surface here and its depth over the ground
+}
+extension FreeWorld {
+    public func sample(_ x: Double, _ z: Double) -> LandSample
+    public func water(_ x: Double, _ z: Double, groundY: Double) -> WaterSample   // the one place water bodies are defined
+    public func water(_ g: GroundPoint, groundY: Double? = nil) -> WaterSample     // the same from a ground point in hand
+    public func lakes(nearX: Double, z: Double, r: Double) -> [Lake]                // each lake's centre, radius, level, depth
+}
+// GroundPoint (FreeWorld.ground) carries the same: `water` (the level), `waterKind`, `flow`.
+```
+- **Water bodies (ColdGasWorld `Waters.swift`, added for #460).** The sea at `SEA` (−2 m) wherever the ground falls under
+  it; **lakes**, at most one per 2,048 m cell by a hash, radius 90–260 m with a wobbled shore, ≥ 140 m from every road, their
+  level the lowest natural ground round the rim less a metre (so the shore holds them), a bowl 3–9 m deep; **rivers** where a
+  low-frequency field crosses zero: meandering channels 5–12 m wide that taper out on steep ground and in the desert, their
+  surface following the land's smooth lower field a metre under the banks (so it slopes gently, with a `flow` downhill), a
+  bed up to 2.4 m deep. A river under a road goes through a culvert: inside the road's corridor the water is the sea's
+  (under the road), never over it. All of it is carved into `FreeWorld.ground`, so the car drives into a lake's bed and the
+  physics, the tiles, the props (none under water) and `water(…)` agree by construction. Deterministic per seed (tested).
+- `wetness` and `snow` are the numbers the terrain's surface bake (9.3) uses, so grip, spray and the look agree.
+- Cost: one `sample` ≈ three `ground` calls (a few µs). Per wheel per tick is fine; per pixel is not (use 9.3).
+
+### 9.3 The GPU's land: tiles, surfaces, traces (WorldCache)
+
+`World/WorldCache.swift` owns one `MTLHeap` for everything the land keeps between frames, made once when the drive's view
+is built and never resized; its resources are in one `MTLResidencySet` on the renderer's queue. A tile is **generated
+once when it enters** (CPU heights on the utility queue, then one compute dispatch that bakes its surface) and drawn from
+cache every frame after; nothing about a tile is recomputed per frame.
+
+| Resource | Shape | Per tile slot | What's in it |
+|---|---|---|---|
+| `slabs` | one buffer, 512 slots × 1,221 vertices × 36 B | 44 kB | the CDLOD grid (TileSpec, 9 floats a vertex): pos, parent height, normal, colour (rgb; a: the scree share), material (RGBA8: R snow, G wetness or, under water, depth / 16 m, B road distance × 8, A flags: 1 water, 2 the slab) |
+| `surface` | `texture2d_array<float>`, RGBA8, 64 × 64 a slice | 16 kB | **R** rock, **G** snow, **B** wetness (0 … 1), **A** water depth (`depth / 16 m`, 0 on land) |
+| `traces` (on demand) | `texture2d_array<float>`, RGBA8, 512 × 512 a slice (0.25 m a texel), `traceSlots` slices | 1 MB | MATTER's: **R** rut depth (0 … 1 = 0 … 0.25 m), **G** disturbed ground (scuffed, flattened, bare), **B** mud / wet splash, **A** rubber / scorch |
+| `leafIndex` | `texture2d<int>` R32Sint, 32 × 32 | — | the finest tiles round the eye: `surfaceSlot | (traceSlot + 1) << 16`, −1 where none |
+
+- Surface texels span the tile exactly (texel centres at `(i + 0.5) / 64` of its side). Every level has one (a level-L
+  tile's texel is 2 m × 2^L).
+- Traces exist only for level-0 tiles (128 m) within `WorldCache.traceR` (≈ 260 m) of the car. A slot is kept while its
+  tile is near; when it's evicted the marks go (`WorldCache.onTraceEvict(key, slice)` is called first, so MATTER can copy
+  a slice out if it wants marks to outlive it). `traces` is allocated the first time something calls
+  `cache.enableTraces()`: nothing is spent on it unless MATTER uses it.
+- `leafIndex` is centred on the leaf under the eye (`WorldGPU.leafOrigin`, 9.5) and rewritten only when a leaf tile comes
+  or goes, not per frame.
+- **Seabed.** By default the terrain draws the sea itself, flat at `SEA` (as before 0310). When a layer says
+  `ownsSea = true` (9.4), tiles are built with the real seabed under the water and the terrain shades it as wet sand,
+  silt and rock, darker with depth; the water's surface is then the layer's to draw.
+
+### 9.4 Layers: how WATER and MATTER plug in (`WorldHooks.swift`)
+
+```swift
+protocol WorldLayer: AnyObject {
+    var ownsSea: Bool { get }                                                        // default false
+    func update(_ w: WorldView, eye: SIMD3<Double>, dt: Double)                     // main thread, after tile selection
+    func encode(_ w: WorldView, cmd: MTLCommandBuffer)                               // compute/blit before the frame's passes
+    func drawShadow(_ w: WorldView, _ e: MTLRenderCommandEncoder, _ c: WorldDrawContext)   // casters into the key light's map
+    func drawOpaque(_ w: WorldView, _ e: MTLRenderCommandEncoder, _ c: WorldDrawContext)   // main pass, after land/roads/props
+    func drawLate(_ w: WorldView, _ e: MTLRenderCommandEncoder, _ c: WorldDrawContext)     // main pass, after the sky: water, spray
+}
+// FreeDrive.view?.add(layer) once the view exists; FreeDrive.view?.remove(layer).
+```
+All methods have empty defaults; implement what you need. `encode` runs in the frame's command buffer before the shadow
+pass, so a compute write (a rut stamp, a wave step) is seen by every draw of the same frame. Draw pipelines use
+`Renderer.hdrFormat`, `Renderer.depthFormat` and `Renderer.samples` (shadow: `Renderer.shadowFormat`, one sample).
+
+**Bindings in every world draw** (set by WorldView before it calls a layer; a layer may rely on them and must not move them):
+
+| Index | Vertex / fragment | What |
+|---|---|---|
+| buffer 1 | both | `FrameU` (Renderer): viewProj, lightViewProj, eye, key light, the look (`style.x` 0 Real, 1 Anime, 2 8-bit) |
+| buffer 4 | both | `LookU`: the sky, the air, the sun (`skySun`), the time of day (`atmo`, `sunE`) |
+| buffer 5 | both | `WDriveU`: headlamps, time, wind, the floating origin's anchor, the car on the ground |
+| buffer 6 | both | `WorldGPU` (9.5) |
+| texture 3 | fragment | the key light's shadow map (`depth2d`) |
+| texture 8 | both | the sky-view LUT (a 1 × 1 texture when the physical sky is off) |
+| texture 10 | both | the baked detail (DetailTexture: R fbm, G mid noise, B grain, A Worley edges), repeat-sampled |
+| texture 11 | both | `surface` (texture2d_array) |
+| texture 12 | both | `traces` (texture2d_array; a 1-slice dummy until enabled) |
+| texture 13 | both | `leafIndex` |
+| texture 14 | fragment | the world's own cached shadow (props, 9.6) |
+
+Buffers 0, 2, 3 and textures 0–2 are free for the layer's own draws.
+
+### 9.5 Shading: one light, three looks (`WorldShading.h`)
+
+`#include "WorldShading.h"` (in `ios/ColdGas/World/`) gives a layer the exact light the land uses, so water and spray sit
+in the same frame in all three looks:
+- the structs `WFrame`, `WLook`, `WDrive`, `WorldGPU` (field for field with the Swift side);
+- `WSurf world_surf(albedo, n)`, then set `rough`, `spec` (a mirror's share: water ≈ 0.85), `ao`, `wrap`, `trans`;
+- `float3 world_light(WSurf, p, lightClip, amb, f, k, dr, shadow, skyView, worldShadow)`: the key light and its shadows, the
+  sky's ambient, GGX, the sky's reflection, the headlamps; in Anime and 8-bit it goes through the cel ramp itself;
+- `WSky world_vsky(p, n, f, k, skyView)` per vertex → `amb` and the air as `T`, `In`; `world_air(c, T, In, p, f, k)` applies
+  it (the drawn looks' flat haze bands included);
+- `world_landAt(worldXZ, g, leafIndex, surface)` → the surface channels (9.3) at any point near the eye, and
+  `world_traceAt(worldXZ, g, leafIndex, traces)` → the trace channels, 0 where there's none.
+- WorldGPU (buffer 6): `leafOrigin` (the leafIndex's corner in render space, metres), `anchor` (the origin mod 4,096 m),
+  `sea` (x: the sea's level in render space), `flags` (x: a layer owns the sea, y: traces on).
+
+**WATER's hook in the ground:** the terrain's fragment shader calls
+`water_ground(thread WSurf& s, thread float& light, float3 p, float2 anchored, float4 land, float owned, constant WDrive& dr,
+constant WFrame& f)` from `WorldWater.h` after MATTER's and before the light; `light` adds caustic light on the bed (× the
+key's and the sky's light). `land.a > 0` is under water (any body); `owned` is 1 when a layer owns the sea.
+
+**MATTER's hook in the ground:** the terrain's and the verge's fragment shaders call
+`matter_ground(thread WSurf& s, float3 p, float4 trace, float4 land, constant WDrive& dr)` from `WorldMatter.h` after the
+land's material is chosen and before it's lit. LANDSCAPE ships it as a no-op; MATTER owns that file and turns ruts,
+scuffs and mud into albedo, normal, roughness and AO there (every look takes it, since lighting runs after).
+
+### 9.6 What the land keeps, and when it's redone
+
+| Thing | Made | Redone |
+|---|---|---|
+| Atmosphere LUTs (transmittance, multi-scatter) | once a session | never |
+| Sky-view LUT | when the sun or the eye's height moves | only then |
+| Cloud map | when the sun moves; else every 8th frame (they drift) | — |
+| Tile heights + surface | when a tile enters (CPU on the utility queue, one compute bake) | never while cached; LRU by slot |
+| Prop instances | when a 512 m block enters (CPU), into the instance pool | never while cached |
+| Prop visibility + LOD | GPU compute each frame (`cg_world_prop_cull`): frustum, distance, LOD, shadow box → indirect draws | per frame |
+| World shadow (props) | a 2048² map round the car, texel-snapped | when the box moves far enough or the sun turns |
+| Pipelines | the binary archive at launch | — |
+
+### 9.7 Rules for layers
+
+- No allocation per frame; buffers made at init or in the heap. Signpost your passes (`Instruments.swift`, 0300).
+- Free Drive and Roam only: nothing a layer does reaches a scored run, a log or the vectors.
+- Every element looks deliberate in Real, Anime (cel ramp, ink from depth, bold shapes) and 8-bit (the 32-colour palette,
+  whole pixels, no dither but the sky's checker): check all three before you ship.
+
+### 9.7½ MATTER on the contract (0330, landed with this section)
+
+MATTER asked for one change here: its trace atlas (6.25 cm a texel, see NATIVE-MATTER.md §2) instead of the slices in 9.3,
+which stay unallocated. `WorldLayer.bindGround` (default empty) lets a layer bind ground resources after WorldView's defaults;
+WorldView binds an empty `WTrace` table at fragment buffer 9 and a one-slice array at fragment texture 9 on every world draw,
+and `matter_ground` takes `(s, p, trace, land, dr, f, mt, mtex)`.
+
+### 9.8 For WATER (#460): where to attach
+
+#460 was written against main before this contract. On top of 0310 it attaches like this:
+- **Its view** becomes a `WorldLayer` (`view.add(waterView)` in `FreeDrive.attach`) with `ownsSea = true`: the tiles are
+  rebuilt with the seabed under every water body and the terrain stops drawing its flat sea (its 0320 edit to `Build.swift`'s
+  `drawnY` isn't needed: `tile(key, seabed:)` does it).
+- **Its compute** (the waves' bake) goes in `encode(_:cmd:)`, not a new `DriveScene.encode` in the renderer (0310's renderer
+  already calls the world's compute before the shadow pass); **its surface** in `drawLate` (after the sky, the world's
+  bindings set, `WorldShading.h`'s light and air for all three looks).
+- **Its seabed and swash** (Water.h `water_ground`) move into `WorldWater.h`'s `water_ground` (the terrain calls it with the
+  baked depth in `land.a`); the old terrain-fragment edit isn't needed.
+- **Its levels** come from `FreeWorld.water(…)` / `GroundPoint.water` (the sea, the lakes, the rivers' sloping surface), and
+  `WaterSample.flow` gives a river's current for buoyancy; `lakes(nearX:z:r:)` lists the lakes round the eye for its maps.
+## 10 · Water (0320)
+
+The sea, the lakes and the rivers the car drives into. Everything is unscored; the scored car (`Vehicle.swift`) is untouched.
+It sits on 0310's contract (§9): a `WorldLayer` that owns the sea, its levels from `FreeWorld.water`, its mark on the ground
+in `WorldWater.h`.
+
+- **The water, pure** (`ColdGasWorld/Water.swift`): every body's still level comes from `FreeWorld.water` (§9.2: the sea at
+  `SEA`, a lake's level, a river's surface sloping downstream with its `flow`). Two
+  cascades of Gerstner waves (`Waves.swell`, 256 m; `Waves.chop`, 32 m; 8 waves each) with whole-cycle wave vectors, so
+  each tiles its square and the GPU can bake one period; amplitudes scaled to rms 0.22 m and 0.045 m (ESTIMATE: a sea state
+  3), Σ q·k·A ≤ 0.8 (crests sharpen, never fold); calmed to nothing over the last 6 m of depth. `Waves.surface` inverts the
+  sideways Gerstner shift, so the height the car floats at is the drawn surface's (unit-tested to < 1 cm). The swell runs
+  on the open sea only; lakes and rivers carry the chop. `WaterMap` (per cell: the ground above its body's level, that
+  level, the open sea's share, a river's flow) and `Horizon` (the land's skyline from a point, 512 bearings) feed the GPU.
+- **The terrain** draws the bed under every water body because WaterView says `ownsSea` (§9.3: `tile(key, seabed:)`), and
+  calls WATER's `water_ground` (`World/WorldWater.h`, §9.5) for caustics on the bed (from the baked depth, `land.a`) and the
+  swash moving over the shore's wet band. No new bindings in the terrain pass; `Water.h` holds the shared noise and caustics.
+- **The surface** (`World/Water.swift` WaterView, a `WorldLayer` added in `FreeDrive.attach`; `World/Water.metal`):
+  - a compute pass bakes both cascades into two 256² `rgba16Float` texture arrays (displacement + Jacobian; slopes +
+    their second moment), mipmapped, at a capped rate per look (`Look.waterHz`: 60 Real, 24 Anime, 10 8-bit), on the
+    frame's command buffer before the shadow pass (the layer's `encode`, inside the world's compute);
+  - one draw for all the water to 40 km in `drawLate` (after the sky, the world's bindings set; its own at buffers 2–3 and
+    textures 0–2, 15–17): a polar grid round the camera (112 rings × 96 segments, procedural from the vertex id), each
+    vertex at its body's level, displaced near, normal-mapped far, calmed toward the shore by three water maps (1 km at
+    4 m, 8 km at 32 m, 41 km at 320 m, `rgba16Float`: depth, level against the map's reference, open sea; `Sea`, built on
+    a utility queue only when the eye has moved 256 m / 2 km / 8 km, uploaded only on a change). The far map knows the sea
+    alone; lakes come in on the 8 km map and rivers (5–12 m wide) on the 1 km one. A far triangle that spans two bodies
+    is drawn only where it's at its own body's level;
+  - shading by look (Real: Fresnel, the physical sky (0310's sky-view LUT, the hour's sun) and the mirrored skyline, GGX
+    glints from the key light and the headlamps with the slopes' spread as roughness, Beer–Lambert to the bed, whitecaps,
+    shore foam; Anime: cel bands, inked foam, star glints; 8-bit: banded palette water, stepped sparkle tiles), all seen
+    through the world's own air (`WorldShading.h` `world_vsky` per vertex, `world_air`), so the far water closes into the
+    same haze as the land in every look;
+  - the wake (256 points, spreading and fading over ≈ 8 s) and spray (2,048 drops, gravity and drag, gone in the water),
+    each one instanced draw. Nothing is baked or drawn with no water on the maps.
+- **The car** (`ColdGasPhysics/Buoyancy.swift`, `wade` once a tick from `driveStep`): buoyancy over 3 × 4 columns of the
+  body's box (43 % of it displaces water while sealed: ≈ 3.9 m³), the cabin flooding over ≈ 50 s once a third of the body
+  is under (and draining in ≈ 8 s), quadratic drag on the wet faces and the tyres, wet grip (×0.8) and aquaplaning in a
+  film from 55 % of the NASA hydroplaning speed, the drive unit tripping past 0.5 m of wading for 1.5 s and back 3 s after
+  it's clear, wet and the waterline drying with time and speed. `DriveModel.water` (`Wading`): `level` (FreeDrive sets it
+  to `Sea.level`: the sea's swell, a lake's still level, a river's slope), `current` (`Sea.current`: a river's `flow` ×
+  1.2 m/s, ESTIMATE; the drag works on the car's speed through the water, so a car afloat drifts downstream), `film`
+  (rain's, 0 for now), and what it reports. `floatLoose` floats the loose things by
+  `LooseKind.floatVolume`.
+- **The drive** (`FreeDrive`, the `waterFrame` / `waterWatch` extension in Water.swift): splash, bow sheets, wake, rooster
+  tails, drips, the splash sound and a soft haptic thud, the wading rumble, the tyres' wet hiss (SoundFeed), cues, the lens
+  above the water, and the watchdog's water rules (drowned 6 s, adrift 25 s, 40 m down: towed out).
+- **Debug:** `-fd-skip water`; signposts water-waves, water-maps, water-draw; the bench's passes line has `water` (the bake).
+
+On 0310 (the train that landed both): 0320's own edits to `Build.swift` (the seabed) and `World.metal` (`water_ground`) and its
+`DriveScene.encode` gave way to §9's seabed, hook and layer; the renderer's `world` pass carries the waves' bake.

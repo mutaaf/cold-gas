@@ -3,7 +3,7 @@
 // numbers are stored as their IEEE 754 bit patterns (16 hex digits, big-endian), never as decimals.
 // Pure and deterministic: same bytes on every machine and every run (no Math.random, no clock).
 // scripts/vectors.mjs writes or checks the files; tests/unit/vectors.test.js checks a sample.
-import { createRun, stepRun, simulate, wallProgress, armAftermath, aftermathStep, SIM_VERSION } from '../src/sim/run.js';
+import { createRun, stepRun, simulate, wallProgress, armAftermath, aftermathStep, SIM_VERSION, SURFACE_VERSION } from '../src/sim/run.js';
 import { createAutopilot } from '../src/sim/autopilot.js';
 import { newInput, CAR } from '../src/sim/vehicle.js';
 const AIR_MASS = CAR.airMass;
@@ -138,17 +138,19 @@ export function flat(v, path = '', out = []) {
 }
 
 // Replay a log the way the server and a challenge do (simulate), recording the trace.
-export function runVector(name, course, log, keep = null) {
+// `v`: the version the log is flown at. Every vector from before 0340 is SIM_VERSION's (32: the sets without water and
+// mud, src/sim/run.js courseAt), so its file is the same bytes; the surface runs (SURFACE_RUNS) are SURFACE_VERSION's.
+export function runVector(name, course, log, keep = null, v = SIM_VERSION) {
   const h = [0x811c9dc5, 0x9747b28c], checks = [], full = [];
   const run = simulate(log, course, undefined, (r) => {
     const s = stateOf(r);
     mixState(h, s);
     if (r.tick % CHECK_EVERY === 0) checks.push([r.tick, hashHex(h)]);
     if (r.tick % FULL_EVERY === 0) full.push([r.tick, s.map(hex)]);
-  });
+  }, v);
   if (keep) keep.t = run.t;
   return {
-    format: VECTOR_FORMAT, simVersion: SIM_VERSION, name, course, ticks: run.tick,
+    format: VECTOR_FORMAT, simVersion: v, name, course, ticks: run.tick,
     log, checkEvery: CHECK_EVERY, fullEvery: FULL_EVERY, fields: STATE_FIELDS,
     final: hashHex(h), checks, full,
     telemetry: flat(run.t), card: flat(scoreRun(run.t)),
@@ -157,12 +159,12 @@ export function runVector(name, course, log, keep = null) {
 
 // The logs: flown live (stepRun) by the reference pilots, the naive players, crash recipes and a
 // seeded Pro fuzz. Each returns its input log; runVector replays it.
-const fly = (course, controller) => {
-  const run = createRun(course);
+const fly = (course, controller, v = SIM_VERSION) => {
+  const run = createRun(course, v);
   while (run.phase !== 'done') stepRun(run, controller(run));
   return run.inputLog;
 };
-const auto = (course, opts) => () => fly(course, createAutopilot(course, opts));
+const auto = (course, opts, v = SIM_VERSION) => () => fly(course, createAutopilot(course, opts), v);
 function naiveWall({ approach, climbThrottle, releaseAt }) {
   let released = false;
   return fly('wall', (run) => {
@@ -179,7 +181,7 @@ function naiveWall({ approach, climbThrottle, releaseAt }) {
     return inp;
   });
 }
-function naiveShow({ climb, releaseAt, boost }) {
+function naiveShow({ climb, releaseAt, boost }, v = SIM_VERSION) {
   let released = false, boostT = 0;
   return fly('show', (run) => {
     const c = run.car, inp = newInput(); inp.assist = 1;
@@ -194,7 +196,29 @@ function naiveShow({ climb, releaseAt, boost }) {
       if (boostT < boost) { inp.thrust = 1; boostT += 1 / 240; } else inp.level = 1;
     } else inp.brake = 1;
     return inp;
-  });
+  }, v);
+}
+// The Lineup's reference with its run-up steered along `lane(z)` (x, m) until the lift-off: through the soft patch
+// beside the run-up, or wide to the right, into the tank off the landing (0340).
+// `boost`: seconds of the rear jets once in the air (a carry long past the pad, into the mud pit beyond it).
+function lineupLane(opts, lane, boost = 0) {
+  const ap = createAutopilot('lineup', opts);
+  return fly('lineup', (run) => {
+    const inp = ap(run), c = run.car;
+    if (run.phase === 'drive') inp.steer = Math.max(-1, Math.min(1, (c.pos.x - lane(c.pos.z)) * 0.3 + c.vel.x * 0.4));
+    if (run.phase === 'air' && run.tick - run.t.airStartTick < boost * 240) inp.thrust = 1;
+    return inp;
+  }, SURFACE_VERSION);
+}
+// The Show's reference with a roll held for `dur` s from `from` s into the flight: it drifts wide of the mark, into the
+// tank off the landing's left (0340).
+function showWide(roll, from, dur) {
+  const ap = createAutopilot('show');
+  return fly('show', (run) => {
+    const inp = ap(run), a = run.phase === 'air' ? (run.tick - run.t.airStartTick) / 240 : -1;
+    if (a >= from && a < from + dur) inp.roll = roll;
+    return inp;
+  }, SURFACE_VERSION);
 }
 function proFuzz(trial) {
   const r = xorshift(0xc01d6a5 + trial * 7919), u = () => r() / U32;
@@ -232,8 +256,18 @@ export function runList() {
   }
   // Pro with no rate limit (LESSONS: integrate angular momentum): six seeded tricks.
   for (let trial = 0; trial < 6; trial++) { const f = proFuzz(trial); list.push({ name: `pro-fuzz-${trial}`, course: f.course, log: f.log }); }
-  return list;
+  return [...list, ...SURFACE_RUNS];
 }
+// 0340: runs that meet the sets' water and mud, flown and replayed at SURFACE_VERSION (src/sim/run.js): the float, the
+// drag and the splash-down's slam, the wet tyre, the mud's grip, rolling resistance and sink, bit for bit in Swift.
+export const SURFACE_RUNS = [
+  { name: 'splash-show-wide', course: 'show', v: SURFACE_VERSION, log: () => showWide(1, 2, 1.2) },
+  { name: 'mud-show-long', course: 'show', v: SURFACE_VERSION, log: () => naiveShow({ climb: 4, releaseAt: 1.01, boost: 0.8 }, SURFACE_VERSION) },
+  { name: 'ref-show-dry-wet', course: 'show', v: SURFACE_VERSION, log: auto('show', {}, SURFACE_VERSION) },
+  { name: 'mud-lineup-runup', course: 'lineup', v: SURFACE_VERSION, log: () => lineupLane({}, (z) => (z < -28 ? -7.5 : 0)) },
+  { name: 'splash-lineup-wide', course: 'lineup', v: SURFACE_VERSION, log: () => lineupLane({}, (z) => (z < -20 ? 0 : 9)) },
+  { name: 'mud-lineup-long', course: 'lineup', v: SURFACE_VERSION, log: () => lineupLane({}, () => 0, 1.2) },
+];
 
 // What the hand should feel, per tick (0149, docs/NATIVE.md §6): the inputs HapticScore reads, from the JS sim,
 // until the Swift sim feeds the same struct. Not bit-exact data (haptics are felt, not scored): 4 decimals.
@@ -253,7 +287,7 @@ export function hapticFeed(name, course, log) {
     while (seen < im.count) { if (im.tick[seen] <= run.tick) { hits.push([im.kind[seen], r4(im.speed[seen])]); seen++; } else break; }
     rows.push([PHASES.indexOf(run.phase), r4(dhypot(c.vel.x, c.vel.y, c.vel.z)), r4(c.vel.y), c.onWall ? 1 : 0, contacts,
       r4(load / (4 * w[0].load || 1) || 0), r4(flow), r4(Math.max(0, c.air) / AIR_MASS), inp.lift > 0 ? 1 : 0, ...hits]);
-  });
+  }, SIM_VERSION);
   return { format: VECTOR_FORMAT, simVersion: SIM_VERSION, name, course, hz: 240,
     fields: ['phase', 'speed', 'vy', 'onWall', 'contacts', 'load', 'flow', 'gas', 'lift', '...impacts[kind,speed]'], ticks: rows };
 }
@@ -293,8 +327,8 @@ export function inputVector({ name, course, scheme, tier, level, script, drill =
   dom.fresh();
   IN.setDriving({ level });
   // `drill`: flown from the drill's hand-over, as main.js startDrillNow and newFlight start one (0160).
-  const built = drill ? buildDrill(drillById(drill), course) : null;
-  const run = armAftermath(built ? built.run : createRun(course));
+  const built = drill ? buildDrill(drillById(drill), course, SIM_VERSION) : null;
+  const run = armAftermath(built ? built.run : createRun(course, SIM_VERSION));
   const S = { released: !!built?.released, releaseTick: built?.released ? run.tick - 240 : -1 };
   const events = [], sights = [], pr = newPrediction(), off = { x: 0, y: 0, m: 0 };
   const at = (...e) => events.push([run.tick, ...e]);
@@ -517,7 +551,8 @@ export function buildVectors({ only } = {}) {
   for (const r of runList()) {
     if (only && !only.includes(r.name)) continue;
     const log = r.log(), keep = {};
-    files[`runs/${r.name}.json`] = stringifyRun(runVector(r.name, r.course, log, keep));
+    files[`runs/${r.name}.json`] = stringifyRun(runVector(r.name, r.course, log, keep, r.v));
+    if (r.v) continue;   // the surface runs are run vectors only (the app vectors below are SIM_VERSION's)
     flown.push({ name: r.name, course: r.course, log, t: keep.t });
     if (HAPTIC_RUNS.includes(r.name)) {
       const h = hapticFeed(r.name, r.course, log), { ticks, ...head } = h;
@@ -574,14 +609,14 @@ export function challengeVectors(flown) {
     if (!f) return;
     const card = scoreRun(f.t), initials = i % 2 ? '' : ['ABC', 'XYZ', 'QQQ', 'MAZ'][i / 2];
     cases.push({ name, course: f.course, score: card.total, tier: card.tier, initials, simVersion: SIM_VERSION, log: f.log,
-      payload: rPayload({ log: f.log, course: f.course, score: card.total, tier: card.tier, initials }) });
+      payload: rPayload({ log: f.log, course: f.course, score: card.total, tier: card.tier, initials, simVersion: SIM_VERSION }) });
   });
   // An older client's 12-channel log: packed as today's 23 (the missing channels zero).
   const lineup = flown.find((x) => x.name === 'ref-lineup');
   if (lineup) {
     const log = lineup.log.map((e) => e.slice(0, 13));
     cases.push({ name: 'legacy-12', course: 'lineup', score: 91.25, tier: 'pro', initials: 'OLD', simVersion: SIM_VERSION, log,
-      payload: rPayload({ log, course: 'lineup', score: 91.25, tier: 'pro', initials: 'OLD' }) });
+      payload: rPayload({ log, course: 'lineup', score: 91.25, tier: 'pro', initials: 'OLD', simVersion: SIM_VERSION }) });
   }
   // Odd inputs packBytes tolerates: a score out of range, an unknown tier, bad initials, an older SIM_VERSION, values past ±100.
   const zeros = (n) => new Array(n).fill(0);
@@ -603,7 +638,7 @@ export function challengeVectors(flown) {
   const coarse = [];
   for (const name of ['ref-show', 'pro-fuzz-0']) {
     const f = flown.find((x) => x.name === name);
-    if (f) for (const step of COARSE_STEPS) { const log = coarsen(f.log, step); coarse.push({ name, step, entries: log.length, payload: rPayload({ log, course: f.course, score: 80, tier: 'assist' }) }); }
+    if (f) for (const step of COARSE_STEPS) { const log = coarsen(f.log, step); coarse.push({ name, step, entries: log.length, payload: rPayload({ log, course: f.course, score: 80, tier: 'assist', simVersion: SIM_VERSION }) }); }
   }
   // Payloads that must decode to null: each breaks one bound.
   const head = (o = {}) => [o.format ?? 1, o.sim ?? SIM_VERSION, o.course ?? 0, ...(o.score ?? [0x84, 0x07]), o.tier ?? 1, ...(o.ini ?? [65, 66, 67])];
@@ -804,7 +839,7 @@ function tailInput(inp, run, drill, k, tail) {
 const logHash = (log) => { const h = [0x811c9dc5, 0x9747b28c]; for (const e of log) mixState(h, e); return hashHex(h); };
 const DRILL_BEAT = 120;   // main.js: a drill's moment flies on for 0.5 s before its aftermath
 function drillVector(drill, course, tail, thumb, classic) {
-  const { run, released } = buildDrill(drill, course);
+  const { run, released } = buildDrill(drill, course, SIM_VERSION);
   const startTick = run.drillStartTick, handover = stateOf(run).map(hex), prefix = { entries: run.inputLog.length, hash: logHash(run.inputLog) };
   armAftermath(run);
   const inp = newInput();
@@ -823,8 +858,8 @@ function drillVector(drill, course, tail, thumb, classic) {
     drill: drill.id, course, tail, released, startTick, handover, prefix, ...flew, log: { entries: log.length, hash: logHash(log) }, after,
     result: { pass: !!result.pass, headline: result.headline, stats: result.stats.map(([text, flag]) => [text, !!flag]) },
     own: own && itemRows(own),
-    thumb: itemRows(coach(log, course, card, startTick, thumb).items),
-    classic: itemRows(coach(log, course, card, startTick, classic).items),
+    thumb: itemRows(coach(log, course, card, startTick, thumb, SIM_VERSION).items),
+    classic: itemRows(coach(log, course, card, startTick, classic, SIM_VERSION).items),
   };
 }
 const MISS_GRID = [-30, -7.04, -0.51, -0.5, -0.49, -0.04, 0, 0.04, 0.49, 0.5, 3.25, 3.3, 12];
@@ -842,15 +877,15 @@ export function coachVectors(logs) {
   const thumb = coachWords({ device: 'touch', scheme: 'thumb', tier: 'assist' });
   const flights = [], rows = [];
   for (const { name, course, log, fromTick } of logs) {
-    const { run, flight } = readFlight(log, course, fromTick);
+    const { run, flight } = readFlight(log, course, fromTick, SIM_VERSION);
     const { t, ...read } = flight, card = scoreRun(run.t);
     const classic = coachWords({ device: 'touch', scheme: 'classic', tier: card.tier });
     flights.push([name, course, fromTick, hex(markCost(run.t)), hex(sinkCost(run.t)), flat(read)]);
-    const asClassic = coach(log, course, card, fromTick, classic).items;
-    rows.push([name, 'thumb', true, itemRows(coach(log, course, card, fromTick, thumb).items)]);
+    const asClassic = coach(log, course, card, fromTick, classic, SIM_VERSION).items;
+    rows.push([name, 'thumb', true, itemRows(coach(log, course, card, fromTick, thumb, SIM_VERSION).items)]);
     rows.push([name, 'classic', true, itemRows(asClassic)]);
     // With no card only a clean run's words change; the keyboard's are the default.
-    if (asClassic[0].id === 'clean' || name.startsWith('ref-')) rows.push([name, 'key', false, itemRows(coach(log, course).items)]);
+    if (asClassic[0].id === 'clean' || name.startsWith('ref-')) rows.push([name, 'key', false, itemRows(coach(log, course, null, 0, KEY_WORDS, SIM_VERSION).items)]);
   }
   const drills = [];
   const thumbWords = thumb, classicWords = coachWords({ device: 'touch', scheme: 'classic', tier: 'assist' });

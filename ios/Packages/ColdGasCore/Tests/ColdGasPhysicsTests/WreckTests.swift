@@ -69,7 +69,7 @@ private func ev(_ t: Int, _ k: WreckKind, _ p: Double = 10) -> WreckEvent { Wrec
 /// A recorded run flown again with the tracker reading every tick.
 private func tracked(_ name: String) throws -> (run: Run, card: WreckCard) {
     let v = RunVector(name)
-    return try wreckOf(v.log, v.course)
+    return try wreckOf(v.log, v.course, simVersion: v.simVersion)
 }
 
 @Suite("The Wreck tracker over the recorded runs", .serialized)
@@ -92,7 +92,7 @@ struct WreckTrackerTests {
         let (a, ca) = try tracked("crash-show-carry5")
         let (_, cb) = try tracked("crash-show-carry5")
         #expect(ca == cb)
-        let plain = try simulate(v.log, v.course)
+        let plain = try simulate(v.log, v.course, simVersion: v.simVersion)
         #expect(plain.t.endTick == a.t.endTick && plain.t.flat().count == a.t.flat().count)
         #expect(zip(plain.t.flat(), a.t.flat()).allSatisfy { $0.0 == $1.0 && $0.1 == $1.1 })
     }

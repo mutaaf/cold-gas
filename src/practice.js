@@ -60,8 +60,9 @@ export const drillsFor = (course) => DRILLS.filter((d) => d.courses.includes(cou
 // drills fly it onto the inverted ledge (93 % of the curl), stop and hang there; the release
 // drills then let go as a player does (fan off, a 0.1 s RELEASE tap on the down-jets) and hand over
 // 0.15 s after the release: every decision after it is yours.
-export function buildDrill(drill, course) {
-  const run = createRun(course);
+// `simVersion` (optional): fly it at that version (the vectors' legacy drills); today's when not given.
+export function buildDrill(drill, course, simVersion = undefined) {
+  const run = createRun(course, simVersion);
   const ap = createAutopilot(course, drill.hang ? { releaseAt: 0.93, hang: 999, driveOff: false } : {});
   const st = { releasedTicks: 0, hanging: false };
   const idle = newInput();

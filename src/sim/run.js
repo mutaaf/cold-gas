@@ -2,7 +2,7 @@
 // run can be re-simulated exactly), records replay frames, and measures everything the judges
 // score. Pure and deterministic: the Worker runs this same file to verify a submitted run.
 import { createVehicle, step, bodyRates, up, forward, worldPoint, newInput, DT, CAR, NOZZLES, HULL, massOf, VALVE_KEYS } from './vehicle.js';
-import { COURSES, DEFAULT_COURSE, WALL, LINEUP, SHOW, roofUnder, wallArcLength } from './courses.js';
+import { COURSES, DEFAULT_COURSE, WALL, LINEUP, SHOW, roofUnder, wallArcLength, dryCourse } from './courses.js';
 import { freeWorld } from './world.js';
 import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
@@ -64,6 +64,23 @@ import { datan2, dacos, dhypot } from './dmath.js';
 // down to 1.5 m (≤ 0.12 rad) instead of letting go at 4 m, and Assist's auto-land stays on until two wheels are down (0190).
 // Off the Wall and the Show; the Lineup's reference is as before.
 export const SIM_VERSION = 32;
+// v33 (0340): a set's water and mud. The Show and the Lineup carry splash tanks and mud (courses.js `surfaces`): a car
+// floats, drags and slows in the water, a splash-down ends the run as a "Splash", and mud grips less, rolls harder and
+// lets a tyre settle in. Only those two courses changed, so only their runs are v33: the Wall's are still v32, and a
+// v32 run on the Show or the Lineup replays on the course as it was (courseAt), to the same bits.
+export const SURFACE_VERSION = 33;
+/** The version a run on this course is flown at today: SURFACE_VERSION where the course carries surfaces. */
+export const simVersionOf = (courseId) => (COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
+/** True when a run of this version on this course can be replayed to its bits (today's, or a v32 run on a set that has
+ *  surfaces now: it replays on the course without them). */
+export const replayable = (courseId, v) => v === simVersionOf(courseId) || v === SIM_VERSION;
+/** The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION. */
+export const courseAt = (courseId, v = simVersionOf(courseId)) => {
+  const id = COURSES[courseId] ? courseId : DEFAULT_COURSE;
+  return v < SURFACE_VERSION ? dryCourse(id) : COURSES[id];
+};
+// A splash-down ends the run this long after the car hits the water (3 s: the splash, the float, the replay's beat).
+export const SPLASH_TICKS = 240 * 3;
 export const FRAME_EVERY = 4;           // replay frame every 4 ticks = 60 Hz
 export const MAX_TICKS = 240 * 90;      // 90 s hard cap
 // A car stopped on the deck ends the run `stalled` after STALL_TICKS: a climb that gave up. On the ledge
@@ -117,8 +134,8 @@ const packScratch = new Int16Array(KEYS.length);
 const unpack = (arr, out) => { for (let i = 0; i < KEYS.length; i++) out[KEYS[i]] = (arr[i] || 0) / 100; return out; };
 
 // Everything the judges score.
-function newTelemetry(courseId) {
-  return {
+function newTelemetry(courseId, surfaces = null) {
+  const t = {
     course: courseId, crossedRow: false, deckScrape: false,
     launchSpeed: 0, launchTick: -1, airStartTick: -1, touchTick: -1, endTick: -1,
     apex: 0, apexZ: 0, rollAccum: 0, pitchAccum: 0, yawAccum: 0, offAxis: 0,
@@ -142,13 +159,18 @@ function newTelemetry(courseId) {
     // Damage (src/sim/damage.js): filled from the run's damage sensor when the book closes.
     damage: null,
   };
+  // A set with water and mud (0340): the splash-down (its tick, its speed) and the seconds on two or more tyres in mud.
+  // Only on such a course, so every other run's telemetry (and its card) is what it was.
+  if (surfaces) { t.splash = false; t.splashTick = -1; t.splashSpeed = 0; t.mudTime = 0; }
+  return t;
 }
 
-export function createRun(courseId = DEFAULT_COURSE) {
-  const course = COURSES[courseId] || COURSES[DEFAULT_COURSE];
+// `simVersion`: the version the run is flown at (simVersionOf, today's); an older one replays on the course as it was.
+export function createRun(courseId = DEFAULT_COURSE, simVersion = undefined) {
+  const course = courseAt(courseId, simVersion);
   const run = {
     course: course.id,
-    car: createVehicle(course.id),
+    car: createVehicle(course),
     damage: createDamage(),    // the damage sensor: per-zone %, total (src/sim/damage.js)
     phase: 'drive',            // drive → ramp (Wall, Show) → air → landed → done
     tick: 0,
@@ -158,7 +180,7 @@ export function createRun(courseId = DEFAULT_COURSE) {
     frames: [],                // see recordFrame for the layout
     gWin: new Float64Array(G_WIN), gSum: 0,   // the last 0.5 s of specific force (g), for brakePeakG
     hWin: new Float64Array(G_WIN),            // and the height over it (the peak is placed mid-window)
-    t: newTelemetry(course.id),
+    t: newTelemetry(course.id, course.surfaces),
   };
   run.impacts = run.car.impacts;   // impact events (src/sim/impacts.js): the crash, for the renderer and the replay
   return run;
@@ -249,6 +271,12 @@ function advance(run, input) {
   }
   const airborne = c.grounded === 0 && !c.hullContact;
   const lx = c.pos.x, lz = c.pos.z;
+  // A set's water and mud (0340): the splash-down, whenever it happens, and the time in mud.
+  if (c.course.surfaces) {
+    if (c.mud >= 2) t.mudTime += DT;
+    if (c.splashTick >= 0 && !t.splash) { t.splash = true; t.splashTick = c.splashTick; t.splashSpeed = c.splashSpeed; }
+  }
+  const splashed = t.splash === true;
 
   if (run.phase === 'drive') {
     if (wall) {
@@ -302,12 +330,13 @@ function advance(run, input) {
     // On the Wall, touching the deck while still up high is a scrape off the lip, not a landing.
     const deckScrape = wall && (c.grounded > 0 || c.hullGround) && c.pos.y > 3 && wallArcLength(c.pos.z, c.pos.y) > 1;
     if (deckScrape) t.deckScrape = true;
-    if ((c.grounded > 0 || c.hullGround) && !deckScrape && run.tick - t.airStartTick > minAir) {
+    if ((c.grounded > 0 || c.hullGround || splashed) && !deckScrape && run.tick - t.airStartTick > minAir) {
       run.phase = 'landed';
       t.touchTick = run.tick;
       // The sink is the closing speed into the ground: the engine resolves a rigid contact within
       // the tick, so read it from before this tick's step as well as after (the faster of the two).
-      t.sink = Math.max(0, -prevVy, -c.vel.y);
+      // Into the water (0340) it is the speed the car hit the surface with.
+      t.sink = splashed ? c.splashSink : Math.max(0, -prevVy, -c.vel.y);
       forward(c, fw);
       t.tiltDeg = dacos(Math.max(-1, Math.min(1, upv.y))) * 180 / Math.PI;
       // Heading error against the run direction (the Wall sends you back the way you came).
@@ -351,9 +380,10 @@ function advance(run, input) {
   if (!Number.isFinite(c.pos.x + c.pos.y + c.pos.z + c.quat.w + c.angVel.x + c.angVel.y + c.angVel.z + c.vel.x + c.vel.y + c.vel.z)) { finish(run, 'sim-fault'); return run; }
   if (t.flipped) end = 'flipped';
   else if (t.contact && run.tick - t.contactTick > 480) end = 'contact';
+  else if (splashed && run.tick - t.splashTick > SPLASH_TICKS) end = 'splash';
   // (A car that comes to rest on its roof or side hasn't settled: it is flipped, once that's held.)
   // (It waits out the 0.3 s wheel-sync window first: LAND sets down at 0.8 m/s, already under 1.2.)
-  else if (run.phase === 'landed' && ((speed < 1.2 && run.tick - t.touchTick > 72) || run.tick - t.touchTick > 240 * 5) && (upv.y >= 0.25 || run.tick - t.touchTick > 240 * 5)) end = 'settled';
+  else if (run.phase === 'landed' && !splashed && ((speed < 1.2 && run.tick - t.touchTick > 72) || run.tick - t.touchTick > 240 * 5) && (upv.y >= 0.25 || run.tick - t.touchTick > 240 * 5)) end = 'settled';
   else if (c.pos.z > COURSES[run.course].runout.zMax || c.pos.z < COURSES[run.course].runout.zMin) end = 'runout';
   else if (run.offTicks > (hanging ? HANG_STALL_TICKS : STALL_TICKS)) end = 'stalled';
   else if (run.tick >= MAX_TICKS) end = 'timeout';
@@ -453,8 +483,9 @@ function closeBook(run, t, reason) {
 
 // Re-simulate a run from its input log alone (replay, server verification). `onTick(run, input)`
 // (optional) sees every tick: the coach (src/sim/coach.js) reads the flight through it.
-export function simulate(inputLog, courseId = DEFAULT_COURSE, maxTicks = MAX_TICKS, onTick = null) {
-  const run = createRun(courseId);
+// `simVersion` (optional): the version the log was flown at (a challenge's; today's when not given).
+export function simulate(inputLog, courseId = DEFAULT_COURSE, maxTicks = MAX_TICKS, onTick = null, simVersion = undefined) {
+  const run = createRun(courseId, simVersion);
   const inp = newInput();
   let li = 0;
   while (run.phase !== 'done' && run.tick < maxTicks) {

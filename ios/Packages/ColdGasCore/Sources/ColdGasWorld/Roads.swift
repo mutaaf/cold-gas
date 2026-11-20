@@ -81,7 +81,15 @@ public final class Roads: @unchecked Sendable {
     private let lock = NSLock()
     private var links: [Int64: RoadLink] = [:]
     private var absent = Set<Int64>()
-    private var profiles: [ObjectIdentifier: RoadProfile] = [:]
+    private var profiles: [Int64: RoadProfile] = [:]
+    /// 0310: the links (and their profiles) are a bounded cache, least recently used out first. Before, every link a far tile
+    /// had ever asked about stayed: 17 k links, ≈ 250 MB, at 3 km out (the drive's footprint). A link is a pure function of
+    /// (seed, i, j, north), so one dropped is rebuilt the same if it's wanted again.
+    public static let cacheLinks = 1536
+    private var used: [Int64: UInt64] = [:]
+    private var clock: UInt64 = 0
+    /// Links built so far (the cache's misses).
+    public private(set) var built = 0
     public init(land: Land) { self.land = land; seed = land.seed }
 
     // --- Junctions ------------------------------------------------------------------------------------------
@@ -101,6 +109,8 @@ public final class Roads: @unchecked Sendable {
     @inline(__always) public func hasLink(_ i: Int, _ j: Int, north: Bool) -> Bool {
         north ? WNoise.hash2(seed ^ 0x41, i, j) >= 0.18 : WNoise.hash2(seed ^ 0xe1, i, j) >= 0.12
     }
+    /// A link's identity, stable across a rebuild (WorldView keys its ribbons by it).
+    public static func key(_ l: RoadLink) -> Int64 { key(l.i, l.j, l.north) }
     @inline(__always) static func key(_ i: Int, _ j: Int, _ north: Bool) -> Int64 {
         (Int64(Int32(truncatingIfNeeded: i)) << 33) ^ (Int64(UInt32(bitPattern: Int32(truncatingIfNeeded: j))) << 1) ^ (north ? 1 : 0)
     }
@@ -110,14 +120,20 @@ public final class Roads: @unchecked Sendable {
     public func link(_ i: Int, _ j: Int, north: Bool) -> RoadLink? {
         let k = Roads.key(i, j, north)
         lock.lock()
-        if let l = links[k] { lock.unlock(); return l }
+        clock &+= 1
+        if let l = links[k] { used[k] = clock; lock.unlock(); return l }
         if absent.contains(k) { lock.unlock(); return nil }
         lock.unlock()
         guard hasLink(i, j, north: north) else { lock.lock(); absent.insert(k); lock.unlock(); return nil }
         let l = buildLink(i, j, north: north)
         lock.lock()
         if let had = links[k] { lock.unlock(); return had }
-        links[k] = l
+        links[k] = l; used[k] = clock; built += 1
+        if links.count > Roads.cacheLinks {
+            // The least recently used third out (with their profiles).
+            let drop = used.sorted { $0.value < $1.value }.prefix(links.count / 3)
+            for (dk, _) in drop { links[dk] = nil; used[dk] = nil; profiles[dk] = nil }
+        }
         lock.unlock()
         return l
     }
@@ -156,7 +172,7 @@ public final class Roads: @unchecked Sendable {
 
     /// A link's height and banking (built once, kept).
     public func profile(_ l: RoadLink) -> RoadProfile {
-        let id = ObjectIdentifier(l)
+        let id = Roads.key(l)
         lock.lock()
         if let p = profiles[id] { lock.unlock(); return p }
         lock.unlock()

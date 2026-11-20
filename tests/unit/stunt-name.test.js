@@ -40,7 +40,7 @@ describe('the stunt name (0260)', () => {
     expect(crashes.length).toBeGreaterThan(0);
     for (const { card, course } of crashes) {
       const s = stuntName(card);
-      expect(s).toMatch(new RegExp(`^${EVENT_NAME[course]} · (off the wall|wrecked on (the wall|landing|the run-up)|into the row|stalled on the wall|no climb|down on the deck|rolled over|crashed|short of the row|no jump)$`));
+      expect(s).toMatch(new RegExp(`^${EVENT_NAME[course]} · (off the wall|wrecked on (the wall|landing|the run-up)|into the row|stalled on the wall|no climb|down on the deck|rolled over|crashed|short of the row|no jump|into the tank)$`));
       expect(dareText(card)).toMatch(/Can you land it\?$/);
     }
   });

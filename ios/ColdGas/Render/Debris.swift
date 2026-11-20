@@ -10,11 +10,15 @@ final class Debris {
         var v = SIMD3<Float>(), w = SIMD3<Float>()
         var half: SIMD3<Float>, I: SIMD3<Float>
         var on = false, still: Float = 0
+        /// 0330: the ground under where it was thrown (a drive's world isn't flat), else the set's floor.
+        var floor: Float = 0
     }
     private static let G: Float = 9.81, E: Float = 0.25, MU: Float = 0.55, SUB = 2
     private static let CORNERS: [SIMD3<Float>] = { var c: [SIMD3<Float>] = []; for x: Float in [-1, 1] { for y: Float in [-1, 1] { for z: Float in [-1, 1] { c.append(SIMD3(x, y, z)) } } }; return c }()
     private(set) var list: [Piece] = []
     var floorY: Float = 0
+    /// 0330: the ground's height under a point (render space), when it isn't flat (Crash.ground).
+    var ground: ((SIMD3<Float>) -> Float)?
 
     func removeAll() { list.removeAll() }
     func isOn(_ i: Int) -> Bool { list[i].on }
@@ -27,7 +31,7 @@ final class Debris {
         return list.count - 1
     }
     func spawn(_ i: Int, pos: SIMD3<Float>, quat: simd_quatf, v: SIMD3<Float>, w: SIMD3<Float>) {
-        list[i].pos = pos; list[i].quat = quat; list[i].v = v; list[i].w = w; list[i].on = true; list[i].still = 0
+        list[i].pos = pos; list[i].quat = quat; list[i].v = v; list[i].w = w; list[i].on = true; list[i].still = 0; list[i].floor = ground?(pos) ?? floorY
     }
     func reset() { for i in list.indices { list[i].on = false } }
     func update(_ dt: Float) {
@@ -50,8 +54,8 @@ final class Debris {
         var deepest: Float = 0
         for c in Debris.CORNERS {
             let r = pc.quat.act(c * pc.half), p = pc.pos + r
-            if p.y >= floorY { continue }
-            deepest = min(deepest, p.y - floorY)
+            if p.y >= pc.floor { continue }
+            deepest = min(deepest, p.y - pc.floor)
             var vp = simd_cross(pc.w, r) + pc.v
             if vp.y >= 0 { continue }
             // Normal impulse at this corner (ground normal +y). a = r × n. debris.js has it as (r.z, 0, -r.x), n × r: each bounce
