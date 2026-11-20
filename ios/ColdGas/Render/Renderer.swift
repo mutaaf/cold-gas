@@ -39,6 +39,8 @@ struct FrameU {
     var worldShadow = SIMD4<Float>()
     /// 0332: what the ground left on the car (Render/CarMatter.h); all zero (off) on a scored run.
     var matter = (SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>(), SIMD4<Float>())
+    /// 0353: a set's splash-down (xz, its age in s, how hard; w 0: none) and the car in a tank (xz, speed, w 1 while in).
+    var splash = SIMD4<Float>(), wade = SIMD4<Float>()
 }
 struct LookU {
     var hemiSky = SIMD4<Float>(), hemiGround = SIMD4<Float>(), hazeCol = SIMD4<Float>(), sunCol = SIMD4<Float>(), sunDir = SIMD4<Float>(), fogExp = SIMD4<Float>()
@@ -73,6 +75,11 @@ final class Renderer {
     var replay: Replay?
     private let opaque, opaqueCullNone, blend, additive, sky, film, present, shadowPipe, plume: MTLRenderPipelineState
     private let sparkPipe, puffPipe, chipPipe, flashPipe, mistPipe: MTLRenderPipelineState
+    /// 0353: a set's splash drops (SetWater's WaterFX), lit by the set's lamps.
+    private let setSprayPipe: MTLRenderPipelineState
+    /// 0353: a set's splash-tank water (Shaders.metal cg_setwater_fragment), blended.
+    private let setWaterPipe: MTLRenderPipelineState
+    private let setSprayBufs: [MTLBuffer]
     private let glintPipe, glowPipe, mirrorPipe, mirrorGlintPipe, smearPipe, bloomBright, bloomDown, bloomCompose: MTLRenderPipelineState
     private var lookU = LookU(), stageLook = LookU()
     /// Free Drive (docs/NATIVE-FREEDRIVE.md): the lens, the floating origin, the look and the world's draw come from the drive.
@@ -144,7 +151,7 @@ final class Renderer {
     /// The crash's slow-motion factor, for the game's clock (a live run slows with the effects, as crash.js timeScale).
     var slowK: Double { Double(crash.slowK) }
     /// A new track (a new run, or back to the title's loop): effects and clocks start over.
-    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); touched = false; crash.car.placed(); cam.restart(); skids?.clear(); moonBearing = nil }
+    func setTrack(_ r: Replay?) { replay = r; simClock = 0; liveTime = 0; crash.reset(); mist.clear(); setWater.reset(); touched = false; crash.car.placed(); cam.restart(); skids?.clear(); moonBearing = nil }
     /// The drawn looks' moon (0290): fixed in the world for a run (or a drive), set from where the lens first looks, a little to
     /// its left, so it rises over the set the run is flown toward and turns with the camera like anything at infinity.
     private var moonBearing: SIMD2<Float>?
@@ -247,8 +254,10 @@ final class Renderer {
               let puf = pipe("cg_soft_vertex", "cg_puff_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
               let mst = pipe("cg_mist_vertex", "cg_mist_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
               let chp = pipe("cg_chip_vertex", "cg_chip_fragment", color: Renderer.hdrFormat, vertex: nil),
-              let fla = pipe("cg_puff_vertex", "cg_flash_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2) else { return nil }
-        sparkPipe = spk; puffPipe = puf; chipPipe = chp; flashPipe = fla; mistPipe = mst
+              let fla = pipe("cg_puff_vertex", "cg_flash_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2),
+              let ssp = pipe("cg_setspray_vertex", "cg_setspray_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 1),
+              let swp = pipe("cg_stage_vertex", "cg_setwater_fragment", color: Renderer.hdrFormat, blend: 1) else { return nil }
+        sparkPipe = spk; puffPipe = puf; chipPipe = chp; flashPipe = fla; mistPipe = mst; setSprayPipe = ssp; setWaterPipe = swp
         let lowHDR = MTLPixelFormat.rg11b10Float
         guard let gl = pipe("cg_glint_vertex", "cg_glint_fragment", color: Renderer.hdrFormat, vertex: nil, blend: 2),
               let gw = pipe("cg_glow_vertex", "cg_glow_fragment", color: Renderer.hdrFormat, depth: false, samples: 1, vertex: nil, blend: 2),   // over the resolved frame (0291)
@@ -275,12 +284,13 @@ final class Renderer {
         zd.usage = [.renderTarget, .shaderRead]; zd.storageMode = .private
         guard let sb = bufs(MemoryLayout<SparkGPU>.stride * Crash.NS), let pb = bufs(MemoryLayout<PuffGPU>.stride * (Crash.NM + 1)),
               let cb = bufs(MemoryLayout<ChipGPU>.stride * Crash.NC), let mb = bufs(MemoryLayout<PuffGPU>.stride * Plumes.maxMist),
+              let ssb = bufs(MemoryLayout<SprayGPU>.stride * SetWater.dropCap),
               let fb = bufs(MemoryLayout<FrameU>.stride), let mfb = bufs(MemoryLayout<FrameU>.stride), let plb = bufs(MemoryLayout<PlumeU>.stride * 10),
               let dw = ds(true, .less), let dr = ds(false, .lessEqual), let doff = ds(false, .always), let dsh = ds(true, .less), let dmi = ds(true, .less),
               let smap = device.makeTexture(descriptor: sd), let dum = device.makeTexture(descriptor: dd), let dumZ = device.makeTexture(descriptor: zd) else {
             Report.error(.render, .error, "renderer: the device refused a buffer, texture or depth state"); return nil
         }
-        sparkBufs = sb; puffBufs = pb; chipBufs = cb; mistBufs = mb
+        sparkBufs = sb; puffBufs = pb; chipBufs = cb; mistBufs = mb; setSprayBufs = ssb
         // The scored run's rubber (0281): without it the run still draws, just with no marks; said once, not fatal.
         skids = RunSkids(device: device, library: lib, samples: Renderer.samples, color: Renderer.hdrFormat, depth: Renderer.depthFormat)
         if skids == nil { Report.error(.render, .shader, "skid marks: pipeline or buffer refused") }
@@ -338,6 +348,7 @@ final class Renderer {
         setDetail = SetSurface.load(device: device)
         var setMats = toneRoam(mats(st.staticMesh))
         if setDetail != nil { SetSurface.classify(&setMats, st.staticMesh, stage: stageOf(course)) }
+        SetSurface.classifyWater(&setMats, st.staticMesh, stage: stageOf(course))   // 0353: the tanks' water, shaded as water
         stageMats = [setMats, mats(st.roadster)] + st.parked.map(mats) + st.wheels.flatMap { [mats($0.steerPart), mats($0.spinPart)] }
         partBase = stageMats.count
         stageMats += st.parts.map(mats)
@@ -638,6 +649,7 @@ final class Renderer {
         let nMist = skip.contains("mist") ? 0 : mist.write(mistBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Plumes.maxMist))
         let lens = view.proj.columns
         var nPuffs = fx.1
+        let nSetDrops = dv == nil && !skip.contains("translucent") && !skip.contains("spray") ? setWater.writeDrops(into: setSprayBufs[fi], cap: SetWater.dropCap) : 0
         if let fl = crash.flash, nPuffs < Crash.NM + 1 {   // the flash rides at the end of the puff buffer
             puffBufs[fi].contents().bindMemory(to: PuffGPU.self, capacity: Crash.NM + 1)[nPuffs] = PuffGPU(pos: SIMD4(fl.pos, fl.size), color: SIMD4(1, 1, 1, fl.k)); nPuffs += 1
         }
@@ -684,6 +696,7 @@ final class Renderer {
         u.fx = SIMD4(look == .anime && (Renderer.impactHold || heroClock - impactAt < impactLen) ? 1 : 0, mb.x, mb.y, 1)
         if dv != nil, let cl = driveLook, cl.coated { u.matter = MatterLook.frame(cl, carPos: carPos, carQuat: carQ) }   // 0332
         else if dv == nil, let cl = setWater.look { u.matter = MatterLook.frame(cl, carPos: carPos, carQuat: carQ) }   // 0340 × 0332: a set's mud and water on the car
+        if dv == nil { u.splash = setWater.splashU; u.wade = setWater.wadeU }   // 0353: the tank's rings and the car's ripples
         fb.contents().storeBytes(of: u, as: FrameU.self)
         // The mirror's frame: the same lens looking at the world flipped in y. Its fragments keep their real world position and
         // normal for the lights; only the eye and the clip position change, and the winding (frontFace).
@@ -834,6 +847,11 @@ final class Renderer {
             if nDust > 0 { e.setRenderPipelineState(puffPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(puffBufs[fi], offset: 0, index: 2)
                 e.setVertexBytes(&aspect, length: 4, index: 3)
                 e.tris(6, instances: nDust) }
+            if nSetDrops > 0 {   // 0353: the splash's drops, lit by the set (vertex: frame 1, drops 2, lights 3, look 4)
+                e.setRenderPipelineState(setSprayPipe); e.setDepthStencilState(dsRead); e.setCullMode(.none)
+                e.setVertexBuffer(setSprayBufs[fi], offset: 0, index: 2); e.setVertexBuffer(lightsBuf, offset: 0, index: 3)
+                e.tris(6, instances: nSetDrops)
+            }
             if fx.0 > 0 { e.setRenderPipelineState(sparkPipe); e.setDepthStencilState(dsRead); e.setVertexBuffer(sparkBufs[fi], offset: 0, index: 2)
                 e.tris(6, instances: fx.0) }
             if hasFlash { e.setRenderPipelineState(flashPipe); e.setDepthStencilState(dsOff); e.setVertexBuffer(puffBufs[fi], offset: MemoryLayout<PuffGPU>.stride * nDust, index: 2)
@@ -1188,7 +1206,7 @@ final class Renderer {
                 if translucent { continue }
                 pipe = mirrorPipe; ds = dsMirror
             } else {
-                pipe = M.additive ? additive : translucent ? blend : (M.doubleSided ? opaqueCullNone : opaque)
+                pipe = M.additive ? additive : translucent ? (k < mats.count && mats[k].flags.w & SetSurface.water != 0 ? setWaterPipe : blend) : (M.doubleSided ? opaqueCullNone : opaque)
                 ds = translucent || !M.depthWrite ? dsRead : dsWrite
             }
             if pipe !== lastPipe { e.setRenderPipelineState(pipe); lastPipe = pipe }
@@ -1315,7 +1333,7 @@ extension Renderer {
         add(s.env); add(s.wetMask)
         [msaa, depth, hdr, ldr, upscaled, depthRes, mirrorDepth, mirrorRaw, mirrorTex, bloomOut, shadowMap, dummy, dummyDepth].forEach(add)
         bloomChain.forEach(add)
-        (frames + mirrorFrames + plumes + sparkBufs + puffBufs + chipBufs + mistBufs + [lightsBuf, lampBuf, beaconBuf, glowBuf]).forEach(add)
+        (frames + mirrorFrames + plumes + sparkBufs + puffBufs + chipBufs + mistBufs + setSprayBufs + [lightsBuf, lampBuf, beaconBuf, glowBuf]).forEach(add)
         return n
     }
 }

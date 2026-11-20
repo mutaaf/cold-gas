@@ -161,7 +161,7 @@ struct SprayGPU { var p = SIMD4<Float>(), v = SIMD4<Float>() }
 /// past the world's table).
 enum WaterBind {
     static let uniform = 2, instances = 3
-    static let disp = 0, slope = 1, near = 2, mid = 15, far = 16, horizon = 17
+    static let disp = 0, slope = 1, near = 2, mid = 15, far = 16, horizon = 17, flow = 18
 }
 
 final class WaterView: WorldLayer {
@@ -179,6 +179,9 @@ final class WaterView: WorldLayer {
     private let disp, slope: MTLTexture
     private let waveBuf: MTLBuffer
     private var nearTex, midTex, farTex, horizonTex: MTLTexture
+    /// The near map's current (0352): rg a river's downstream direction, 0 on still water; the 1 × 1 `noFlow` without one.
+    private var flowTex: MTLTexture
+    private let noFlow: MTLTexture
     private let dummyMap: MTLTexture
     private var gen = -1
     private var nearMap: WaterMap?, midMap: WaterMap?, farMap: WaterMap?
@@ -231,7 +234,10 @@ final class WaterView: WorldLayer {
         waveBuf = wb
         let md = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rgba16Float, width: 1, height: 1, mipmapped: false)
         let hd = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rg16Float, width: 1, height: 1, mipmapped: false)
-        guard let dm = device.makeTexture(descriptor: md), let hz = device.makeTexture(descriptor: hd) else { return nil }
+        guard let dm = device.makeTexture(descriptor: md), let hz = device.makeTexture(descriptor: hd), let nf = device.makeTexture(descriptor: hd) else { return nil }
+        var still: [Float16] = [0, 0]
+        nf.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: &still, bytesPerRow: 4)
+        noFlow = nf; flowTex = nf
         var deep: [Float16] = [-60, 0, 1, 0]   // deep open sea at the map's reference level
         dm.replace(region: MTLRegionMake2D(0, 0, 1, 1), mipmapLevel: 0, withBytes: &deep, bytesPerRow: 8)
         var none: [Float16] = [Float16(Horizon.none), 0]
@@ -305,9 +311,20 @@ final class WaterView: WorldLayer {
             px.withUnsafeBytes { t.replace(region: MTLRegionMake2D(0, 0, m.n, m.n), mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: m.n * 8) }
             return t
         }
+        // A river's current on the near map (0352): its ripples run downstream. None there: the still 1 × 1.
+        func flow(_ m: WaterMap?) -> MTLTexture {
+            guard let m, m.fx.contains(where: { $0 != 0 }) || m.fz.contains(where: { $0 != 0 }) else { return noFlow }
+            let d = MTLTextureDescriptor.texture2DDescriptor(pixelFormat: .rg16Float, width: m.n, height: m.n, mipmapped: false)
+            d.usage = .shaderRead
+            guard let t = device.makeTexture(descriptor: d) else { return noFlow }
+            var px = [Float16](repeating: 0, count: m.n * m.n * 2)
+            for i in 0..<(m.n * m.n) { px[i * 2] = Float16(m.fx[i]); px[i * 2 + 1] = Float16(m.fz[i]) }
+            px.withUnsafeBytes { t.replace(region: MTLRegionMake2D(0, 0, m.n, m.n), mipmapLevel: 0, withBytes: $0.baseAddress!, bytesPerRow: m.n * 4) }
+            return t
+        }
         // Only the maps that changed are made again (a map is kept by identity of its centre and size).
         func same(_ a: WaterMap?, _ b: WaterMap?) -> Bool { a?.cx == b?.cx && a?.cz == b?.cz && a?.n == b?.n && a?.cell == b?.cell && (a == nil) == (b == nil) }
-        if !same(nearMap, sea.near) { nearMap = sea.near; nearTex = tex(sea.near, nearTex) }
+        if !same(nearMap, sea.near) { nearMap = sea.near; nearTex = tex(sea.near, nearTex); flowTex = flow(sea.near) }
         if !same(midMap, sea.mid) { midMap = sea.mid; midTex = tex(sea.mid, midTex) }
         if !same(farMap, sea.far) { farMap = sea.far; farTex = tex(sea.far, farTex) }
         if let h = sea.horizon {
@@ -348,6 +365,7 @@ final class WaterView: WorldLayer {
         e.setVertexTexture(nearTex, index: WaterBind.near); e.setVertexTexture(midTex, index: WaterBind.mid); e.setVertexTexture(farTex, index: WaterBind.far)
         e.setFragmentTexture(nearTex, index: WaterBind.near); e.setFragmentTexture(midTex, index: WaterBind.mid); e.setFragmentTexture(farTex, index: WaterBind.far)
         e.setFragmentTexture(horizonTex, index: WaterBind.horizon)
+        e.setVertexTexture(flowTex, index: WaterBind.flow); e.setFragmentTexture(flowTex, index: WaterBind.flow)
         // The surface: one draw.
         e.setRenderPipelineState(surfacePipe); e.setDepthStencilState(dsWrite); e.setCullMode(.none); e.setDepthBias(0, slopeScale: 0, clamp: 0)
         let verts = WaterView.rings * WaterView.segments * 6

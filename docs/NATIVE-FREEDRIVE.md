@@ -700,5 +700,13 @@ in `WorldWater.h`.
   above the water, and the watchdog's water rules (drowned 6 s, adrift 25 s, 40 m down: towed out).
 - **Debug:** `-fd-skip water`; signposts water-waves, water-maps, water-draw; the bench's passes line has `water` (the bake).
 
+- **Rivers and edges (0352, after #465's shots):** the land's mesh (4 m near the eye) can't hold a channel 5–12 m wide and
+  sags under the level between its vertices; a lake's or a river's surface (and the wake) now stops where the map's ground
+  rises past its level (3 cm; the sea keeps its 0.8 m swash), and the edge's line is drawn only over water, so those sags no
+  longer show as pale facets. A river isn't displaced; its ripples are the chop read in the current's frame (the near map's
+  `fx`/`fz` as an rg16 texture at 18), drawn out along it and advected downstream (a two-phase flow map), with flecks of
+  foam riding it. Grass (0351) stands only where its 4 m cell's corners are all dry, the baked surface has no water depth
+  under it and the shore isn't soaked (`S.b ≤ 0.8`).
+
 On 0310 (the train that landed both): 0320's own edits to `Build.swift` (the seabed) and `World.metal` (`water_ground`) and its
 `DriveScene.encode` gave way to §9's seabed, hook and layer; the renderer's `world` pass carries the waves' bake.

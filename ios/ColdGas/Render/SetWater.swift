@@ -8,8 +8,12 @@
 // (ColdGasPhysics CarDirt: each rear tyre's metres in the mud cake the wheels and the sills, the water rinses it) and is drawn
 // by MATTER's car shading (CarMatter.h, through `look` → MatterLook.frame), and the mud comes off the tyres as MATTER's clods
 // (Crash.fling: tumbling bits that land and lie) over the puffs. All of it pixels: nothing here reaches the sim or a score.
-// WATER's (0320) splash, wake and surface stay Free Drive's: they draw as a world layer, and a scored set has no world, so
-// the tanks keep this crown and their stage-baked water.
+// WATER's (0320) splash, wake and surface are Free Drive's world layer, and a scored set has no world. 0353 brings what fits
+// across: WATER's drops (WaterFX: the crown thrown up and out, the sheets off the sides, gone in the water they fall back into),
+// drawn by the renderer's set spray (Shaders.metal cg_setspray_*, lit by the set's lamps), and the tank's water shaded as water
+// (Shaders.metal cg_setwater_fragment, its own pipeline: the stage-baked plane, its material marked by SetSurface.classifyWater) with the splash's rings
+// and the car's ripples from `splashU` / `wadeU` here. The puffs stay as the mist over it.
+import Metal
 import simd
 import ColdGasCore
 import ColdGasPhysics
@@ -24,7 +28,16 @@ final class SetWater {
 
     /// What the set left on the car (MATTER's CarDirt) and how wet it is (0…1, drying), for the car's shading.
     private var dirt = CarDirt(), wetK = 0.0
-    func reset() { wasWet = false; lastT = -1; acc = 0; mudAcc = 0; dirt.reset(); wetK = 0 }
+    /// 0353: WATER's drops (preallocated, WaterView.sprayCap) and the splash-down's ring: where, when (track time), how hard.
+    static let dropCap = WaterView.sprayCap
+    private let fx = WaterFX()
+    private var splashAt = -1.0, splashXZ = SIMD2<Float>(), splashK: Float = 0
+    private(set) var wadeU = SIMD4<Float>()
+    func reset() { wasWet = false; lastT = -1; acc = 0; mudAcc = 0; dirt.reset(); wetK = 0; fx.clear(); splashAt = -1; splashK = 0; wadeU = .zero }
+    /// Shaders.metal Frame.splash: xz, its age (s, track time: a slow-mo or a hold slows it too), how hard; zero with none.
+    var splashU: SIMD4<Float> { splashAt < 0 ? .zero : SIMD4(splashXZ.x, splashXZ.y, Float(max(0, lastT - splashAt)), splashK) }
+    /// The drops this frame into the renderer's buffer (render space is the set's own: no origin); their count.
+    func writeDrops(into buf: MTLBuffer, cap: Int) -> Int { fx.live == 0 ? 0 : fx.writeSpray(into: buf, cap: cap, origin: .zero) }
     /// The car's coat as MATTER's shading reads it (nil: nothing on it).
     var look: DriveCarLook? {
         var l = DriveCarLook()
@@ -40,6 +53,8 @@ final class SetWater {
         let step = lastT < 0 ? 0 : t - lastT
         lastT = t
         guard let surf = COURSES[r.course]?.surfaces, step > 0, step < 0.25 else { return }
+        // WATER's drops fly (and the ones that fall back into a tank, or onto the slab, are gone).
+        fx.update(dt: step) { x, z in max(waterLevel(surf, x, z), 0) }
         seed = Double((r.tickBase + Int(t * Replay.hz)) * 7 + 3)
         let level = waterLevel(surf, Double(p.x), Double(p.z))
         let along = simd_length(SIMD2(v.x, v.z))
@@ -48,7 +63,11 @@ final class SetWater {
         if wet && !wasWet {
             // The splash-down: a crown of water thrown up and out, more the harder it hit.
             let k = min(1, max(0.15, (max(0, -v.y) + 0.4 * along) / 14))
-            for _ in 0..<Int(18 + 50 * k) {
+            // WATER's crown (0353): drops up and out, a sheet thrown ahead; and the ring the surface carries out to the walls.
+            fx.splash(SIMD3(Double(p.x), level + 0.05, Double(p.z)), k: Double(k), carV: SIMD3(Double(v.x), Double(v.y), Double(v.z)))
+            splashAt = t; splashXZ = SIMD2(p.x, p.z); splashK = k
+            // The mist over it, in the crash's puff pool.
+            for _ in 0..<Int(10 + 26 * k) {
                 let a = rnd() * 2 * .pi, rr = 1.2 + rnd() * 1.4, up = 2.5 + rnd() * 7 * k, out = 1.2 + rnd() * 4 * k
                 crash.kick(SIMD3(p.x + cos(a) * rr, lv + 0.05, p.z + sin(a) * rr), SIMD3(cos(a) * out + v.x * 0.3, up, sin(a) * out + v.z * 0.3),
                            size: 0.35 + 0.3 * rnd(), grow: 1.5 + 2 * k, life: 0.9 + rnd() * 0.9, alpha: 0.35 + 0.3 * k, color: rnd() < 0.4 ? SetWater.foam : SetWater.water)
@@ -61,9 +80,13 @@ final class SetWater {
                 let s: Float = rnd() < 0.5 ? -1 : 1, nx = v.z / along * s, nz = -v.x / along * s
                 crash.kick(SIMD3(p.x + nx * 1.1, lv + 0.03, p.z + nz * 1.1), SIMD3(v.x * 0.4 + nx * 1.4, 0.6 + rnd() * 1.2, v.z * 0.4 + nz * 1.4),
                            size: 0.3, grow: 1.6, life: 0.6 + rnd() * 0.4, alpha: 0.25, color: SetWater.foam)
+                // and WATER's sheet off that side (0353)
+                fx.sheet(SIMD3(Double(p.x + nx * 1.1), level + 0.05, Double(p.z + nz * 1.1)),
+                         SIMD3(Double(v.x * 0.35 + nx * 1.8), Double(0.9 + rnd() * 1.4), Double(v.z * 0.35 + nz * 1.8)), n: 3, spread: 0.6)
             }
         }
         wasWet = wet
+        wadeU = wet ? SIMD4(p.x, p.z, along, 1) : .zero
         // The coat: the water soaks the car and rinses the mud; out of it, it dries (MATTER's weather).
         if wet { wetK = 1 }
         dirt.weather(dt: step, wet: wetK, speed: Double(along))
