@@ -300,7 +300,12 @@ const forgeAsked = /[?&]forge=1/.test(location.search);   // asked for by name (
 // leave no idle time (docs/LESSONS.md, 2026-10-29).
 const prepareForged = () => new Promise((done) => {
   const next = (f) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(f, { timeout: 400 }) : setTimeout(f, 50));
-  const step = () => { try { if (stage.prepareForged?.()) { next(step); return; } } catch { /* the swap builds it then */ } done(); };
+  // Only between runs (the title, the results): a run or its countdown waits, never paying a clone in its frames.
+  const step = () => {
+    if (S.mode !== 'title' && S.mode !== 'results') { setTimeout(step, 500); return; }
+    try { if (stage.prepareForged?.()) { next(step); return; } } catch { /* the swap builds it then */ }
+    done();
+  };
   next(step);
 });
 function swapForged() {
