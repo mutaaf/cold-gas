@@ -102,6 +102,10 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // 63 done the first time, all 63 green in 34.5 min (≈ 69 worker-minutes) the second, while 2/4 ran 18.9 (≈ 38). Moving
 // driving-levels and endless (6 tests, ≈ 9 worker-minutes on that run) into shard 2, 57:97:97:104 is ≈ 60 / 47 / 47 / 48 on
 // #478's runs. Still luck, not headroom: proposal #456 (ci.yml) is the cure.
+// Main on 664b085 (#478) then cancelled e2e 2/4 at 35 min (89 of 97 done, none failed; judges-deploy's last three and
+// keys-carry unrun) while 1/4 ran 29.0 min, 3/4 19.3 (97 tests, ≈ 38 worker-minutes) and 4/4 23.0. Moving instruments,
+// judges-deploy and keys-carry (12 tests, ≈ 10 worker-minutes on that run) into shard 3, 57:85:109:104 is ≈ 60 / 61 / 48 /
+// 46 on that run. The tenth re-cut: still luck, not headroom. Proposal #456 (ci.yml, the operator's) is the cure.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -109,7 +113,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '57:97:97:104';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '57:85:109:104';
 
 export default defineConfig({
   testDir: 'tests/e2e',
