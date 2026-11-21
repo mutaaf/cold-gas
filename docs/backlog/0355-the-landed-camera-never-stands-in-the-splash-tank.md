@@ -90,10 +90,12 @@ sight lines to the car's four wheel contacts and to the 16 points of the mark's 
 target is in is ignored: the rig may look into one, never stand in it). `src/render/director.js` `groundStand` swings the
 Show's landed stand round the car, at the same distance, in 5° steps to the nearest clear bearing (toward +z first, so the
 view still runs toward −x), keeps that bearing while it stays clear, and rises over the coping only if no bearing is clear;
-`easeGround` cuts to the stand when an eased frame would be blocked (the descent's rig at +21 m eased across the tank).
+`easeGround` cuts to the stand when an eased frame would be blocked (only to a stand that is itself clear) (the descent's rig at +21 m eased across the tank).
 The Lineup's landed stand goes through the same check (it was already clear). Measured: `tests/unit/landed-stand.test.js`
 drives the director at 60 Hz along both references (as flown, ±4 m) at 390×844, 393×659, 1440×900: every frame from the
-touchdown on is outside every tank, 4/4 wheels and ≥ 14/16 ring points in sight (9 of its cases fail on main).
+touchdown on is outside every tank, 4/4 wheels and ≥ 14/16 ring points in sight, judged by its own sampled segment test
+from the course data, not the director's helper (8 of its cases fail on main); a run shifted 13 m into the tank never
+has the camera stand in it; 0108/0119 hold at rest at both phone sizes, all three shifts.
 touchdown-frame.spec at 390×844: dark share of the lower 40 % 0 / 0 with the turned stand (a first cut that mirrored the
 stand to −x read 0.632 and failed 0119); the car 0.556–0.592 of the width (≤ 0.75); desktop widths unchanged.
 Known trade: on an upright phone the stand now stands ≈ 40° round toward the row, so the frame's backdrop is the open sky,

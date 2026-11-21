@@ -66,8 +66,9 @@ const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the m
 const TANKS = { show: tankBoxes(SHOW), lineup: tankBoxes(LINEUP) };
 const MARKS = { show: SHOW.pad, lineup: LINEUP.pad };
 const LIFT_STEP = 0.75, LIFT_STEPS = 8;   // m: a stand no bearing of which is clear rises in these steps over the coping
-// deg: the bearings a ground stand may swing to round the car, nearest first in 5° steps: toward +z (for a stand at +x)
-// to 90°, then toward −z, then on round to the far side. Searched only when the bearing it holds stops being clear.
+// deg: the bearings a ground stand may swing to round the car, in the order tried, 5° steps: toward +z (for a stand at +x,
+// past the Show's tank's near corner, keeping the floor between the car and the camera lit) to 90°, then toward −z, then
+// on round to the far side.
 const STAND_TURN = [];
 for (let d = 0; d <= 90; d += 5) STAND_TURN.push(d);
 for (let d = -5; d >= -90; d -= 5) STAND_TURN.push(d);
@@ -108,7 +109,7 @@ export function createDirector(camera) {
     carryT: 0,                                           // when the carry cut in (0128)
     titleSide: '', titleY: 0, titleAnchor: 0,            // where titleHold keeps the car's box: the band, its middle (px)
     titleFov: 0,                                         // the title's wider lens on an upright screen, when the car needs it (0131)
-    landA: 0,                                            // the ground stand's bearing round the car, an index into STAND_TURN (0355)
+    landA: 0, standOk: true,                             // the ground stand's bearing (an index into STAND_TURN), whether it's clear (0355)
     placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(), carryY: 0, placeT: 0, recuts: 0,   // the carry's locked-off placement (0113); the car's height and the time there, re-cuts so far (0118)
   };
 
@@ -151,36 +152,38 @@ export function createDirector(camera) {
   };
   // A ground stand `ox` m across and `oz` m along from the car, `y` up, into `want`, kept clear of the set's tanks (0355):
   // outside every tank's box with a margin, the four wheels and the mark's ring in sight past them. The stand swings
-  // round the car, at the same distance, to the nearest bearing that is clear (STAND_TURN: toward +z first, so the
-  // upright side stand keeps 0119's view across the lit floor to the launch complex at −x and never looks back across
-  // the dark slab); the bearing it took last is kept while it stays clear. With none clear it rises over the coping
-  // until it sees. `row`: the stand must also see the car past the parked row (the upright side stand, 0119).
-  // Returns the across offset it took (the along one is in want.z − carPos.z).
+  // round the car, at the same distance, to the first clear bearing in STAND_TURN (toward +z first, so the upright side
+  // stand still looks toward −x across lit floor, never back across the dark slab; its backdrop is the open sky, not
+  // 0119's launch complex). The search starts from 0° every frame, so the stand comes back as far as the tank allows
+  // once the car rolls clear (a car at rest holds one bearing; a rolling one moves the stand a step, eased). With none
+  // clear it rises over the coping until it sees, keeping the bearing it held. `row`: the stand must also see the car
+  // past the parked row (the upright side stand, 0119). Sets st.standOk: whether `want` is clear.
   function groundStand(carPos, ox, y, oz, row) {
     const bx = TANKS[st.course];
-    if (!bx || !bx.length) { want.set(carPos.x + ox, y, carPos.z + oz); return ox; }
+    st.standOk = true;
+    if (!bx || !bx.length) { want.set(carPos.x + ox, y, carPos.z + oz); return; }
     const mark = MARKS[st.course];
-    for (let k = -1; k < STAND_TURN.length; k++) {
-      const a = k < 0 ? st.landA : k;
-      if (k >= 0 && a === st.landA) continue;
+    for (let a = 0; a < STAND_TURN.length; a++) {
       const c = TURN_COS[a], s = TURN_SIN[a];
-      const dx = ox * c - oz * s, dz = ox * s + oz * c, x = carPos.x + dx, z = carPos.z + dz;
-      if (row && sightBlocked(ROW_BOXES, x, y, z, carPos.x, 0.6, carPos.z)) continue;
-      if (standClear(bx, x, y, z, carPos, mark)) { st.landA = a; want.set(x, y, z); return dx; }
+      const x = carPos.x + ox * c - oz * s, z = carPos.z + ox * s + oz * c;
+      if (row && sightBlocked(ROW_BOXES, x, y, z, carPos.x, 0.6, carPos.z, 6)) continue;
+      if (standClear(bx, x, y, z, carPos, mark)) { st.landA = a; want.set(x, y, z); return; }
     }
     const c = TURN_COS[st.landA], s = TURN_SIN[st.landA];
-    const dx = ox * c - oz * s, x = carPos.x + dx, z = carPos.z + ox * s + oz * c;
+    const x = carPos.x + ox * c - oz * s, z = carPos.z + ox * s + oz * c;
+    const ok = (h) => standClear(bx, x, h, z, carPos, mark) && !(row && sightBlocked(ROW_BOXES, x, h, z, carPos.x, 0.6, carPos.z, 6));
     let h = y;
-    for (let k = 1; k <= LIFT_STEPS && !standClear(bx, x, h, z, carPos, mark); k++) h = y + LIFT_STEP * k;
+    for (let k = 1; k <= LIFT_STEPS && !ok(h); k++) h = y + LIFT_STEP * k;
+    st.standOk = ok(h);
     want.set(x, h, z);
-    return dx;
   }
   // ease() for a ground stand: where the ease would carry the camera through a tank's box or behind its walls (the
-  // descent's rig at +21 m eases down across the Show's tank), it cuts to the stand instead (0355), broadcast-style.
+  // descent's rig at +21 m eases down across the Show's tank), it cuts to the stand instead (0355), broadcast-style. Only
+  // to a stand that is itself clear: one that isn't (nothing round the car is) eases, never cutting every frame.
   function easeGround(carPos, dt, rate, lookRate) {
     ease(dt, rate, lookRate);
     const bx = TANKS[st.course];
-    if (!bx || !bx.length) return;
+    if (!bx || !bx.length || !st.standOk) return;
     const p = camera.position;
     if (!standClear(bx, p.x, p.y, p.z, carPos, MARKS[st.course])) { snap(); ease(dt, rate, lookRate); }
   }
