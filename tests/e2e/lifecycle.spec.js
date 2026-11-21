@@ -117,6 +117,10 @@ for (const phone of [true, false]) {
     await ghostsReady(page);
     // …and the next run's engine world is built, between frames, so the tap doesn't build it.
     await page.waitForFunction(() => window.__coldgas.spareRun() === window.__coldgas.stage.course, null, { timeout: 30_000, polling: 50 });
+    // …and the forge's models are in and their parts built (0211), so the tap is the cut that swaps them into the row:
+    // the heaviest first tap a player gets, measured every time (it landed before some taps and after others, and
+    // the swap's own clone and box work put main's phone tap at 156–166 ms on 2026-11-21).
+    await page.waitForFunction(() => window.__coldgas.forgedReady(), null, { timeout: 60_000, polling: 50 });
     // A player who has touched the title before (here the course already chosen, a no-op): the
     // first gesture builds the audio graph. Headless Chromium has no audio device and its
     // AudioContext constructor alone takes ≈300 ms, which a phone's does not.
