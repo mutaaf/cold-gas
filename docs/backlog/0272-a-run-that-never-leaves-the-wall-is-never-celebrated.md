@@ -1,12 +1,12 @@
 ---
 id: 0272
 title: A run that never leaves the wall is never celebrated as a "first mark"
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-17
-pr:
+pr: 483
 by: critic
 ---
 
