@@ -116,8 +116,13 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // and 3/4 22.0. Priced on each test's mean over bb777b7's and 72008ae's main runs, both whole (≈ 211 and ≈ 248
 // worker-minutes; a test unrun in one run takes the other's time), 57:97:83:118 is 43.7 / 59.8 / 51.5 / 74.5;
 // 68:99:95:93 cuts 68 / 99 / 95 / 93 tests ≈ 53.0 / 59.5 / 57.7 / 59.4 (shard 2 starts at first-landing, 3 at learn,
-// 4 at results-header), and no shard of it passes ≈ 66.5 on either run's runners, where 57:97:83:118 reached 82. The
-// twelfth re-cut: luck, not headroom. Proposal #456 (ci.yml, the operator's) is the cure.
+// 4 at results-header), and no shard of it passes ≈ 66.5 on either run's runners, where 57:97:83:118 reached 82.
+// Its own PR run (#486) then cancelled e2e 1/4 at 35 min (65 of 68 done, none failed) while 2/4 ran 21.6 min, 3/4 23.1 and
+// 4/4 20.5: shard 1's 68 tests cost ≈ 40 / 66.5 / 70 worker-minutes over the three runs, so ads-room..first-jump are slow
+// files on two runners of three, not one slow runner. On all three runs together, 61:101:96:97 cuts 61 / 101 / 96 / 97 tests
+// ≈ 52.9 / 55.3 / 55.4 / 54.0 on the mean (shard 2 starts at endless, 3 at lazy-retry,
+// 4 at restart-lets-go), and no shard passes ≈ 67 on any of the three. The twelfth re-cut: luck, not headroom. Proposal #456
+// (ci.yml, the operator's) is the cure.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -125,7 +130,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '68:99:95:93';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '61:101:96:97';
 
 export default defineConfig({
   testDir: 'tests/e2e',
