@@ -39,13 +39,13 @@ keyboard tuning. The number it unlocks is keys landed / decided (4/13 on 11-18, 
   (frozen) does not change.
 
 ## Acceptance criteria
-- [ ] A wreck whose coach's first finding is `late-land` counts `wreck-late-land` and `wreck-brake` (unit test on
+- [x] A wreck whose coach's first finding is `late-land` counts `wreck-late-land` and `wreck-brake` (unit test on
       `wreckCause`).
-- [ ] A landed Show run counts `on-show` and `landed-show`, and a wrecked Wall run counts `on-wall` and
+- [x] A landed Show run counts `on-show` and `landed-show`, and a wrecked Wall run counts `on-wall` and
       `wrecked-wall`, once per run (unit test on run-end).
-- [ ] `/api/obs` accepts the new names: `cleanObs` keeps them (unit test against src/worker/obs.js, read-only).
-- [ ] The beacon is still ≤ 8 kB, with no id, initials or host (tests/unit/obs*.test.js).
-- [ ] The PR says which number it moves: none directly. It makes `wreck-brake` 5/9 actionable.
+- [x] `/api/obs` accepts the new names: `cleanObs` keeps them (unit test against src/worker/obs.js, read-only).
+- [x] The beacon is still ≤ 8 kB, with no id, initials or host (tests/unit/obs*.test.js).
+- [x] The PR says which number it moves: none directly. It makes `wreck-brake` 5/9 actionable.
 
 ## Test plan
 Unit tests in tests/unit (signature, run-end, the Worker's cleanObs) as above. No e2e needed.

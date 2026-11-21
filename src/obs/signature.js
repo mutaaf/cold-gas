@@ -119,10 +119,16 @@ export const MODULE_IDS = ['app', 'render', 'webgl', 'shader', 'physics', 'audio
 export const LEAVE_EVENTS = ['left-howto', 'left-starting', 'left-booting', 'left-title'];
 export const CTL_EVENTS = ['ctl-thumb', 'ctl-classic', 'ctl-keys', 'ctl-pad'];
 export const FLY_EVENTS = ['fly-assist', 'fly-pro', 'fly-advanced'];
-export const WRECK_EVENTS = ['wreck-short', 'wreck-brake', 'wreck-ran-out', 'wreck-roll', 'wreck-flipped', 'wreck-fell-off', 'wreck-climb', 'wreck-release', 'wreck-other'];
+// 0276: a brake wreck also counts the coach's own id (wreck-no-brake|late-brake|late-land: each has its own fix), beside
+// wreck-brake, which stays counted for one release (as daily-run did, 0136). A decided card on one of the three courses
+// also counts on-<course> and landed-<course> or wrecked-<course> (COURSE_EVENTS): numbers only, nothing about the player.
+export const WRECK_EVENTS = ['wreck-short', 'wreck-brake', 'wreck-ran-out', 'wreck-roll', 'wreck-flipped', 'wreck-fell-off', 'wreck-climb', 'wreck-release', 'wreck-other',
+  'wreck-no-brake', 'wreck-late-brake', 'wreck-late-land'];
+const RUN_COURSES = ['show', 'wall', 'lineup'];
+export const COURSE_EVENTS = ['on', 'landed', 'wrecked'].flatMap((k) => RUN_COURSES.map((c) => `${k}-${c}`));
 export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 'run', 'run-quit', 'run-landed', 'run-wrecked', 'retry',
   'post', 'post-fail', 'share', 'board-open', 'challenge-open', 'challenge-run', 'daily-start', 'daily-miss', 'daily-run', 'daily-done', 'drive', 'sandbox',
-  'jump-tap', 'title-left', 'title-back', ...LEAVE_EVENTS, ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS];
+  'jump-tap', 'title-left', 'title-back', ...LEAVE_EVENTS, ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS, ...COURSE_EVENTS];
 // The coach's finding ids (src/sim/coach.js) → the wreck's cause. Into the row; a hard touchdown (never braked,
 // braked or landed late); braked but ran out at the bottom; the roll-out or the attitude; on its roof; off the
 // curl's side; the release. Anything else (the mark, the gas, clean, no coach) is `other`.
@@ -132,6 +138,15 @@ const WRECK_OF = {
   'no-release': 'release', 'early-release': 'release', 'stopped-climb': 'climb',
 };
 export const wreckCause = (items) => `wreck-${WRECK_OF[items?.[0]?.id] || 'other'}`;
+// Every name a wreck counts: its cause and, for the three brake findings, the coach's own id beside it (0276).
+const BRAKE_IDS = ['no-brake', 'late-brake', 'late-land'];
+export function wreckCauses(items) {
+  const id = items?.[0]?.id, cause = wreckCause(items);
+  return BRAKE_IDS.includes(id) ? [cause, `wreck-${id}`] : [cause];
+}
+// A decided card's course counts (0276): [] off the three courses (a quest, the Sandbox's own course).
+export const courseOf = (course, wrecked) =>
+  (RUN_COURSES.includes(course) ? [`on-${course}`, `${wrecked ? 'wrecked' : 'landed'}-${course}`] : []);
 // How a run was flown: the device in use (src/input.js lastDevice) and, on touch, the scheme on screen.
 export function ctlOf(device, scheme) {
   if (device === 'touch') return scheme === 'thumb' ? 'ctl-thumb' : 'ctl-classic';
