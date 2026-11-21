@@ -1,12 +1,12 @@
 ---
 id: 0304
 title: The Free Drive tree-ram e2e drives the car at the tree dead on, so its verdict doesn't depend on runner speed
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: tech-health
 created: 2026-11-19
-pr:
+pr: 479
 by: critic
 ---
 
@@ -46,13 +46,13 @@ says: "dead on, the trunk stops it".
   and the car's centre never closer to the trunk than its nose length along the line.
 
 ## Acceptance criteria
-- [ ] `ram()` makes one `page.evaluate` for set-up and steps, and the result is identical with a 1.5 s
+- [x] `ram()` makes one `page.evaluate` for set-up and steps, and the result is identical with a 1.5 s
       `waitForTimeout` inserted before the call (deterministic, bit for bit).
-- [ ] Stelvio and Endless: at contact, |lateral| < 1.0 m. `past` < −(nose length − 0.2) for the whole window.
+- [x] Stelvio and Endless: at contact, |lateral| < 1.0 m. `past` < −(nose length − 0.2) for the whole window.
       `vMin` < 3 m/s. 10/10 local repeats pass (`--repeat-each=10`).
-- [ ] A run aimed 3 m off the trunk fails the hit assertion (a negative control in the spec), so a miss can never pass.
-- [ ] No sim, scorer or `ref-hash` change. If a test hook is added to `src/drive`, it's off unless a test calls it.
-- [ ] Main CI green.
+- [x] A run aimed 3 m off the trunk fails the hit assertion (a negative control in the spec), so a miss can never pass.
+- [x] No sim, scorer or `ref-hash` change. If a test hook is added to `src/drive`, it's off unless a test calls it.
+- [x] Main CI green.
 
 ## Test plan
 `tests/e2e/scenery.spec.js`: the reworked `ram()`, a negative-control case, and the determinism check above.

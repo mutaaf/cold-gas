@@ -529,6 +529,8 @@ export function createDrive(ctx) {
     autopilot(on = true, opts) { st.pilot = on && st.road ? createPilot(st.road, opts) : null; },
     cruise(v) { st.cruise = v ? { v, s: st.hint * st.road.meta.spacing } : null; },
     goto(s, dir = 1) { if (st.road) placeAt(s, dir, true); },
+    // A fresh car (and its fresh world) at { x, y, z, yaw }, y the ground's: the tree-ram e2e starts each run from nothing.
+    place(p) { if (st.road) placePose(p); },
     get active() { return st.active; }, get course() { return st.course; }, get layer() { return st.layer; }, get floor() { return st.ground; }, get paused() { return st.paused; },
     get car() { return st.car; }, get road() { return st.road; }, get world() { return st.world; }, get cam() { return st.cam; }, get seed() { return seed; },
     setTod: (t) => setTod(t), cycleCam, state: st, CAR,
