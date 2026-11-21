@@ -7,6 +7,7 @@ import { scoreRun } from '../../src/sim/judge.js';
 import { coach } from '../../src/sim/coach.js';
 import { up } from '../../src/sim/vehicle.js';
 import { SPEC } from '../../src/sim/spec.js';
+import { COURSES } from '../../src/sim/courses.js';
 import { PLAY_EVENTS, CTL_EVENTS, FLY_EVENTS, WRECK_EVENTS, COURSE_EVENTS, wreckCause, wreckCauses, ctlOf, flyOf } from '../../src/obs/signature.js';
 import { createRunEnd } from '../../src/obs/run-end.js';
 import { cleanObs, OBS_LIMITS } from '../../src/worker/obs.js';
@@ -212,10 +213,10 @@ describe('0276: which brake mistake, and which course', () => {
     expect(plays.filter((p) => /^(on|landed|wrecked)-/.test(p))).toEqual(['on-show', 'landed-show', 'on-wall', 'wrecked-wall']);
   });
 
-  it('a quit, or a course outside the three, counts no course', () => {
+  it('a quit, or a run with no known course, counts no course', () => {
     const plays = [];
     const end = createRunEnd((n) => plays.push(n), () => []);
-    const a = { course: 'show' }, b = { course: 'quest-7' };
+    const a = { course: 'show' }, b = { course: undefined };
     end.start(a);
     end.settle(a, null, true, {}, true);
     end.start(b);
@@ -226,6 +227,8 @@ describe('0276: which brake mistake, and which course', () => {
   it('the course names are play events, for each of the three courses', () => {
     expect(COURSE_EVENTS).toEqual(['on-show', 'on-wall', 'on-lineup', 'landed-show', 'landed-wall', 'landed-lineup', 'wrecked-show', 'wrecked-wall', 'wrecked-lineup']);
     for (const n of COURSE_EVENTS) expect(PLAY_EVENTS).toContain(n);
+    // A fourth course must be added here too, or its runs would count no course.
+    expect([...new Set(COURSE_EVENTS.map((n) => n.split('-')[1]))].sort()).toEqual(Object.keys(COURSES).sort());
   });
 });
 

@@ -144,7 +144,7 @@ export function wreckCauses(items) {
   const id = items?.[0]?.id, cause = wreckCause(items);
   return BRAKE_IDS.includes(id) ? [cause, `wreck-${id}`] : [cause];
 }
-// A decided card's course counts (0276): [] off the three courses (a quest, the Sandbox's own course).
+// A decided card's course counts (0276): [] for a course outside the three (a guard; every Jump is on one of them).
 export const courseOf = (course, wrecked) =>
   (RUN_COURSES.includes(course) ? [`on-${course}`, `${wrecked ? 'wrecked' : 'landed'}-${course}`] : []);
 // How a run was flown: the device in use (src/input.js lastDevice) and, on touch, the scheme on screen.
