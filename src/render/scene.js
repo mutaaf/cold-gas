@@ -168,20 +168,39 @@ function contactShadow(car) {
 // The forge's models (0211, src/render/forged.js) take a vehicle's place in the row once they're loaded: the same group
 // (its pose, its name, crash.js's dents), its contents swapped. Rows made after the load are built with them.
 const rows = new Set();
-function forgedInto(car, id) {
+// A row car's forged parts (the model and its contact shadow) in a loose group at the origin. Built ahead of the swap,
+// one car per slice while the title is up (prepareForged, main.js), so the cut that swaps them only moves children:
+// cloning a model and measuring its box is ≈ 3 ms a car on a 4× phone, and the first Jump's tap is that cut (main red
+// 2026-11-21: the phone's tap task read 156–166 ms against CI's 150 ms bar). A car not prepared builds them on the spot.
+const castAll = (o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } };
+function forgedParts(id) {
   const model = forgeRegistry.model?.(id);
-  if (!model) return false;
-  const p = car.position.clone(), q = car.quaternion.clone();
-  car.position.set(0, 0, 0); car.quaternion.identity();
+  if (!model) return null;
+  const g = new THREE.Group();
+  g.add(model);
+  g.updateMatrixWorld(true);
+  contactShadow(g);
+  g.traverse(castAll);
+  return g;
+}
+function forgedInto(car, id) {
+  const g = car.userData.forgedNext || forgedParts(id);
+  if (!g) return false;
+  delete car.userData.forgedNext;
   for (const ch of [...car.children]) car.remove(ch);
-  car.add(model);
-  car.updateMatrixWorld(true);
-  contactShadow(car);
-  car.position.copy(p); car.quaternion.copy(q);
-  car.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  for (const ch of [...g.children]) car.add(ch);
   car.userData.forged = true;
   car.userData.gen = (car.userData.gen || 0) + 1;   // crash.js re-reads a car's dentable meshes
   return true;
+}
+// Prepare the next row car not yet forged nor prepared; whether one was (call again until false).
+export function prepareForged() {
+  for (const row of rows) for (const car of row.children) {
+    if (car.userData.forged || car.userData.forgedNext !== undefined) continue;
+    car.userData.forgedNext = forgedParts(car.userData.forgeId);
+    return true;
+  }
+  return false;
 }
 // Swap every row on stage (and every row built from now on) to the forged models. Between runs only (main.js).
 export function useForged(each = () => {}) {
@@ -530,6 +549,7 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
     if (n) shadowAge = Infinity;
     return n;
   };
+  stage.prepareForged = prepareForged;   // one car's forged parts, ahead of the swap (main.js slices it over the title)
   // Their programs compiled before they're shown (0046: never on the frame of a cut): one of each, every LOD level, off
   // screen, through the same compileAsync the boot uses. At most 4 s.
   stage.warmForged = (ids) => {

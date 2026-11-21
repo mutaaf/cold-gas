@@ -295,6 +295,14 @@ const setMode = (m) => { if (m !== S.mode) cancelPendingStart(); titleLeave.mode
 let forgedPending = false;
 const forgeOn = forgeWanted();   // read at boot: the title cleans the address bar (toTitle)
 const forgeAsked = /[?&]forge=1/.test(location.search);   // asked for by name (review, audits): swap as soon as they land
+// The row's forged parts built ahead of the swap, one car a slice (src/render/scene.js prepareForged), so the cut that
+// swaps them (the first Jump's tap, often) only moves children. An idle slice with a deadline: SwiftShader's frames
+// leave no idle time (docs/LESSONS.md, 2026-10-29).
+const prepareForged = () => new Promise((done) => {
+  const next = (f) => (typeof requestIdleCallback === 'function' ? requestIdleCallback(f, { timeout: 400 }) : setTimeout(f, 50));
+  const step = () => { try { if (stage.prepareForged?.()) { next(step); return; } } catch { /* the swap builds it then */ } done(); };
+  next(step);
+});
 function swapForged() {
   if (!forgedPending || (S.mode !== 'title' && S.mode !== 'countdown')) return;   // (setMode calls this on every change)
   forgedPending = false;
@@ -909,7 +917,7 @@ Promise.all([stage.ready, physicsLoad]).then(() => {
   // models stay; nothing waits on them.
   const startForge = () => {
     if (!forgeOn || navigator.connection?.saveData) return;
-    import('./render/forged.js').then((m) => m.loadForged()).then((reg) => stage.warmForged?.(reg.ids)).then(() => { forgedPending = true; if (forgeAsked) swapForged(); }, () => {
+    import('./render/forged.js').then((m) => m.loadForged()).then((reg) => stage.warmForged?.(reg.ids)).then(prepareForged).then(() => { forgedPending = true; if (forgeAsked) swapForged(); }, () => {
       // Cosmetic: a failed fetch keeps the procedural models and is not a lazy-chunk failure (no heal, no reload, 0057).
     });
   };
@@ -2439,6 +2447,6 @@ const heal = installHeal({
   stage, canvas, ui, S, pause,
   toTitle: () => { runEnd.drop(); toTitle(); },   // a trap or an escalation is the game's fault, never the player's quit (0130)
   closeNerds: () => toggleNerds(false), activeWorld: () => fd()?.state?.world || null });
-window.__coldgas = { shareCardMs: () => shareCard?.ms ?? null, redrawCard: () => { shareCard = null; return startCard()?.then(() => shareCard?.ms ?? null); }, S, stage, physicsReady: gameReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, judgesReady: () => judgesOk, startRun, toTitle, funnel, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
+window.__coldgas = { shareCardMs: () => shareCard?.ms ?? null, redrawCard: () => { shareCard = null; return startCard()?.then(() => shareCard?.ms ?? null); }, S, stage, physicsReady: gameReady, physicsMemoryBytes, refGhostReady: (c) => !!refGhost(c, true), spareRun: () => spareRun?.course || null, forgedReady: () => forgedPending, judgesReady: () => judgesOk, startRun, toTitle, funnel, thumb, inputKeys: INPUT_KEYS, input: { held: heldState, device: lastDevice }, driving: { get: drivingState, set: setDriving, settings: drivingSettings }, touch: { set: setSetting, get: () => touchSet, sync: syncScheme, tilt: tiltSteer }, camera, carRoot, ghostRoot, refGhostRoot, hero, director, plumes, crash, createAutopilot, fastForward, skipCountdown, liveStep, startDrill, retryDrill, setTier, landing, loadDrive, get drive() { return drive; }, loadSandbox, get sandbox() { return sandbox; }, comeback };
 Object.assign(window.__coldgas, { obs, heal, life: { audio: audioState, wake: wakeHeld } });   // [obs] e2e: tests/e2e/obs.spec.js
 requestAnimationFrame(frame);
