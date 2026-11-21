@@ -20,6 +20,7 @@
 import * as THREE from 'three';
 import { LINEUP, WALL, SHOW } from '../sim/courses.js';
 import { hudMode, onHudMode } from '../hud-mode.js';
+import { tankBoxes, standClear, sightBlocked } from './tank-sight.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
 const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
@@ -60,6 +61,21 @@ const LENS_ASPECT = 0.9;
 // 12 m keeps the 4.65 m car under 0.75 of an upright phone's width (0108).
 const LAND_AHEAD = [6.5, -9], LAND_SIDE = [12, 0];
 const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the middle (≈ 60 % down)
+// The sets' splash tanks (0340) and marks, for the ground stands (0355: the landed rig never stands in a tank, and sees
+// the wheels and the ring past them; src/render/tank-sight.js). The Wall has none.
+const TANKS = { show: tankBoxes(SHOW), lineup: tankBoxes(LINEUP) };
+const MARKS = { show: SHOW.pad, lineup: LINEUP.pad };
+const LIFT_STEP = 0.75, LIFT_STEPS = 8;   // m: a stand no bearing of which is clear rises in these steps over the coping
+// deg: the bearings a ground stand may swing to round the car, in the order tried, 5° steps: toward +z (for a stand at +x,
+// past the Show's tank's near corner, keeping the floor between the car and the camera lit) to 90°, then toward −z, then
+// on round to the far side.
+const STAND_TURN = [];
+for (let d = 0; d <= 90; d += 5) STAND_TURN.push(d);
+for (let d = -5; d >= -90; d -= 5) STAND_TURN.push(d);
+for (let d = 95; d <= 180; d += 5) STAND_TURN.push(d);
+const TURN_COS = STAND_TURN.map((d) => Math.cos(d * Math.PI / 180)), TURN_SIN = STAND_TURN.map((d) => Math.sin(d * Math.PI / 180));
+// The Show's parked row as boxes, for a turned side stand's sight of the car (0355).
+const ROW_BOXES = new Float64Array(SHOW.boxes.flatMap((b) => [b.minX, 0, b.minZ, b.maxX, b.h, b.maxZ]));
 const TITLE_COVER = 0.4;   // the share of the car's box the title's panel may cover before the lens moves it (0131)
 const TITLE_FILL = 0.85;   // the most of that band's height the car's box may take; past it the lens widens (0131)
 const TITLE_FOV_MAX = 70;  // deg: how wide the title's lens may go for that
@@ -93,6 +109,7 @@ export function createDirector(camera) {
     carryT: 0,                                           // when the carry cut in (0128)
     titleSide: '', titleY: 0, titleAnchor: 0,            // where titleHold keeps the car's box: the band, its middle (px)
     titleFov: 0,                                         // the title's wider lens on an upright screen, when the car needs it (0131)
+    landA: 0, standOk: true,                             // the ground stand's bearing (an index into STAND_TURN), whether it's clear (0355)
     placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(), carryY: 0, placeT: 0, recuts: 0,   // the carry's locked-off placement (0113); the car's height and the time there, re-cuts so far (0118)
   };
 
@@ -112,7 +129,7 @@ export function createDirector(camera) {
   function snap() { st.init = false; }
   // A new run, a replay from the top or its loop: forget the last stunt (the Wall starts a few
   // metres from where it lands, so the car's position can't tell a new run from a landing).
-  function restart() { st.peak = 0; st.launched = false; st.shot = -1; snap(); }
+  function restart() { st.peak = 0; st.launched = false; st.shot = -1; st.landA = 0; snap(); }
 
   // Smoothly fly the camera toward want/lookWant (rate per second).
   function ease(dt, rate, lookRate = 8) {
@@ -133,6 +150,43 @@ export function createDirector(camera) {
     for (const b of SHOW.boxes) if (c.z >= b.minZ - 0.5 && c.z <= b.maxZ + 0.5 && b.maxX >= c.x - 0.5 && b.minX <= c.x + dx) return true;
     return false;
   };
+  // A ground stand `ox` m across and `oz` m along from the car, `y` up, into `want`, kept clear of the set's tanks (0355):
+  // outside every tank's box with a margin, the four wheels and the mark's ring in sight past them. The stand swings
+  // round the car, at the same distance, to the first clear bearing in STAND_TURN (toward +z first, so the upright side
+  // stand still looks toward −x across lit floor, never back across the dark slab; its backdrop is the open sky, not
+  // 0119's launch complex). The search starts from 0° every frame, so the stand comes back as far as the tank allows
+  // once the car rolls clear (a car at rest holds one bearing; a rolling one moves the stand a step, eased). With none
+  // clear it rises over the coping until it sees, keeping the bearing it held. `row`: the stand must also see the car
+  // past the parked row (the upright side stand, 0119). Sets st.standOk: whether `want` is clear.
+  function groundStand(carPos, ox, y, oz, row) {
+    const bx = TANKS[st.course];
+    st.standOk = true;
+    if (!bx || !bx.length) { want.set(carPos.x + ox, y, carPos.z + oz); return; }
+    const mark = MARKS[st.course];
+    for (let a = 0; a < STAND_TURN.length; a++) {
+      const c = TURN_COS[a], s = TURN_SIN[a];
+      const x = carPos.x + ox * c - oz * s, z = carPos.z + ox * s + oz * c;
+      if (row && sightBlocked(ROW_BOXES, x, y, z, carPos.x, 0.6, carPos.z, 6)) continue;
+      if (standClear(bx, x, y, z, carPos, mark)) { st.landA = a; want.set(x, y, z); return; }
+    }
+    const c = TURN_COS[st.landA], s = TURN_SIN[st.landA];
+    const x = carPos.x + ox * c - oz * s, z = carPos.z + ox * s + oz * c;
+    const ok = (h) => standClear(bx, x, h, z, carPos, mark) && !(row && sightBlocked(ROW_BOXES, x, h, z, carPos.x, 0.6, carPos.z, 6));
+    let h = y;
+    for (let k = 1; k <= LIFT_STEPS && !ok(h); k++) h = y + LIFT_STEP * k;
+    st.standOk = ok(h);
+    want.set(x, h, z);
+  }
+  // ease() for a ground stand: where the ease would carry the camera through a tank's box or behind its walls (the
+  // descent's rig at +21 m eases down across the Show's tank), it cuts to the stand instead (0355), broadcast-style. Only
+  // to a stand that is itself clear: one that isn't (nothing round the car is) eases, never cutting every frame.
+  function easeGround(carPos, dt, rate, lookRate) {
+    ease(dt, rate, lookRate);
+    const bx = TANKS[st.course];
+    if (!bx || !bx.length || !st.standOk) return;
+    const p = camera.position;
+    if (!standClear(bx, p.x, p.y, p.z, carPos, MARKS[st.course])) { snap(); ease(dt, rate, lookRate); }
+  }
   const lens = (f) => (camera.aspect >= LENS_ASPECT ? f : (Math.atan(Math.tan(f * Math.PI / 360) * LENS_ASPECT / camera.aspect) * 360) / Math.PI);
 
   // Keep the car out from under the HUD (0063): after a shot has looked where it wants, turn the camera
@@ -376,8 +430,11 @@ export function createDirector(camera) {
       want.set(carPos.x + 14, Math.max(3.4, carPos.y * 0.6 + 2.2), carPos.z + 2 - Math.min(6, speed * 0.15));
       lookWant.set(carPos.x, carPos.y + 0.2, carPos.z + 3);
     } else if (phase === 'landed' || phase === 'done') {
-      want.set(carPos.x + 7, 2.4, carPos.z - 6);
+      groundStand(carPos, 7, 2.4, -6, false);
       lookWant.copy(carPos);
+      easeGround(carPos, dt, 5);
+      fovTo(48 + Math.min(16, speed * 0.42), dt);
+      return;
     } else {
       // Car sits just below centre, clear of the HUD; the camera trails the heading.
       const back = 7.4 + speed * 0.06;
@@ -501,10 +558,11 @@ export function createDirector(camera) {
       // lower 40 % of an upright phone on unlit floor at the camera's feet (78–98 % black).
       // The Wall's landed shot is unchanged; so is a car that comes to rest with a parked body between it and the side stand.
       const u = st.course === 'show' && !rowBlocks(carPos, LAND_SIDE[0]) ? upright() : 0;
+      // Never in a splash tank, nor behind its walls (0355): groundStand swings it round the car or lifts it.
       const ox = LAND_AHEAD[0] + u * (LAND_SIDE[0] - LAND_AHEAD[0]), oz = LAND_AHEAD[1] + u * (LAND_SIDE[1] - LAND_AHEAD[1]);
-      want.set(carPos.x + ox, 1.25, carPos.z + oz);
+      groundStand(carPos, ox, 1.25, oz, u > 0);
       lookWant.set(carPos.x, carPos.y + 0.2 + liftFor(u, Math.hypot(ox, oz), 40), carPos.z);
-      ease(dt, 3, 8);
+      easeGround(carPos, dt, 3, 8);
       fovTo(lens(40), dt);
     }
   }
@@ -712,7 +770,7 @@ export function createDirector(camera) {
   // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup' })
   function update(dt, time, { carPos, carVel, phase, mode, course = 'show', subject = null }) {
     if (mode !== st.mode || course !== st.course) {
-      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.dip = 0; st.punch = 0;
+      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.dip = 0; st.punch = 0; st.landA = 0;
       st.hx = 0; st.hz = 1; st.cutT = 0; st.titleFov = 0; st.titleSide = '';
       snap(); frameOffset(mode);
     }

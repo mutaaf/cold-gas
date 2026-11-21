@@ -1,12 +1,12 @@
 ---
 id: 0355
 title: The landed camera never stands in the splash tank, so the touchdown on the mark is seen on a phone again
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: player-feel
 created: 2026-11-20
-pr:
+pr: 474
 by: critic
 ---
 
@@ -49,19 +49,19 @@ the tanks:
 - It's render only: no sim, scorer, vector or `ref-hash` change.
 
 ## Acceptance criteria
-- [ ] On the Show and the Lineup, at 390×844 touch, 393×659 and 1440×900, in the reference run and in a run that comes to
+- [x] On the Show and the Lineup, at 390×844 touch, 393×659 and 1440×900, in the reference run and in a run that comes to
       rest 4 m left and 4 m right of the mark: from touchdown until the results, the camera is never inside any tank's
       box grown by 0.5 m. In every frame, the sight lines to the four wheel contacts and to ≥ 14 of 16 points of the 4 m
       ring don't cross a tank's box. Measured the way `docs/critique/2026-11-20-1500/occ-probe.mjs.txt` does.
-- [ ] The phone's touchdown frame shows the car on its rings, with the wheels whole. The lower 40 % of the screen is
+- [x] The phone's touchdown frame shows the car on its rings, with the wheels whole. The lower 40 % of the screen is
       floor and rings, not wall, LED or water. Screenshot it beside `docs/critique/2026-11-19-1530/phone-ref-touchdown.png`.
-- [ ] A run that splashes into the tank still frames the splash. The rig may look into the tank from outside it, but it
+- [x] A run that splashes into the tank still frames the splash. The rig may look into the tank from outside it, but it
       never stands in it.
-- [ ] 0108 still holds (the car ≤ 0.75 of an upright phone's width), and so does 0119 (the upright landed frame is not
+- [x] 0108 still holds (the car ≤ 0.75 of an upright phone's width), and so does 0119 (the upright landed frame is not
       half black floor).
-- [ ] An e2e or unit test asserts the stand-outside-tank and clear-sight checks for the Show's reference touchdown at
+- [x] An e2e or unit test asserts the stand-outside-tank and clear-sight checks for the Show's reference touchdown at
       390×844.
-- [ ] No sim, scorer or `ref-hash` change. `npm test` is green.
+- [x] No sim, scorer or `ref-hash` change. `npm test` is green.
 
 ## Test plan
 - A unit test on the director's landed stand: given the Show's surfaces and a car at the mark, the stand is outside
@@ -83,3 +83,20 @@ ticks from touchdown to the results.
   settles at (7.6, 1.27, −38.5), just outside it.
 - So criterion 1 has to hold **for every frame of the ease**, not just where the stand settles. The desktop rig crosses
   the tank on its way to a clean stand.
+
+## Shipped 2026-11-21 (builder)
+`src/render/tank-sight.js` (pure) answers whether a ground stand is inside a tank's box grown by 0.5 m, and whether its
+sight lines to the car's four wheel contacts and to the 16 points of the mark's 4 m ring cross a tank's box (a tank the
+target is in is ignored: the rig may look into one, never stand in it). `src/render/director.js` `groundStand` swings the
+Show's landed stand round the car, at the same distance, in 5° steps to the nearest clear bearing (toward +z first, so the
+view still runs toward −x), keeps that bearing while it stays clear, and rises over the coping only if no bearing is clear;
+`easeGround` cuts to the stand when an eased frame would be blocked (only to a stand that is itself clear) (the descent's rig at +21 m eased across the tank).
+The Lineup's landed stand goes through the same check (it was already clear). Measured: `tests/unit/landed-stand.test.js`
+drives the director at 60 Hz along both references (as flown, ±4 m) at 390×844, 393×659, 1440×900: every frame from the
+touchdown on is outside every tank, 4/4 wheels and ≥ 14/16 ring points in sight, judged by its own sampled segment test
+from the course data, not the director's helper (8 of its cases fail on main); a run shifted 13 m into the tank never
+has the camera stand in it; 0108/0119 hold at rest at both phone sizes, all three shifts.
+touchdown-frame.spec at 390×844: dark share of the lower 40 % 0 / 0 with the turned stand (a first cut that mirrored the
+stand to −x read 0.632 and failed 0119); the car 0.556–0.592 of the width (≤ 0.75); desktop widths unchanged.
+Known trade: on an upright phone the stand now stands ≈ 40° round toward the row, so the frame's backdrop is the open sky,
+not the launch complex 0119 framed; the lower 40 % is lit floor and rings.
