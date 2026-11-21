@@ -96,7 +96,7 @@ const ram = async (page, tree, off = 0) => page.evaluate(({ t, off }) => {
   d.state.pilot = (car) => {
     const q = car.quat, fx = 2 * (q.x * q.z + q.w * q.y), fz = 1 - 2 * (q.x * q.x + q.y * q.y);
     const ex = gx - car.pos.x, ez = gz - car.pos.z, right = -(ex * fz - ez * fx), ahead = ex * fx + ez * fz;
-    const v2 = car.vel.x * car.vel.x + car.vel.z * car.vel.z, lock = Math.min(0.6, (2.825 * 9.81) / Math.max(1, v2) + 0.04);
+    const v2 = car.vel.x * car.vel.x + car.vel.z * car.vel.z, lock = Math.min(0.5, (2.825 * 1.25 * 9.81) / Math.max(1, v2) + 0.04);   // vehicle.js rackLock (wheelbase, μ 1.25, steerLock 0.5)
     const delta = Math.atan((2 * 2.825 * Math.sin(Math.atan2(right, ahead))) / Math.max(1, Math.hypot(ex, ez)));
     pin.steer = ahead > 0.5 ? Math.max(-1, Math.min(1, (delta / lock) * 1.1)) : 0;
     return pin;
@@ -117,22 +117,24 @@ const ram = async (page, tree, off = 0) => page.evaluate(({ t, off }) => {
   return { past, vMin, drop, contact, frames };
 }, { t: tree, off });
 
-// A hit, not just a slow car: the car lost ≥ 3 m/s in one frame with its centre on the trunk's line (closer than its
-// half-width plus the trunk, ≈ 1 m), it never got closer along the line than its nose (less a crush), and it ended slow.
-const isHit = (h) => !!h.contact && h.drop >= 3 && Math.abs(h.contact.lat) < 1.0 && h.past < -(NOSE - 0.2) && h.vMin < 3;
+// A hit on this trunk, not just a slow car: the car lost ≥ 3 m/s in one frame, at the trunk (its centre a nose plus at
+// most a trunk's radius and a metre's slack short of it along the line, so something else on the run-in can't count)
+// and within 1 m of the line (dead on: the glancing blow 0304 found was 1.58 m off), it never got closer along the line
+// than its nose (less a crush), and it ended slow.
+const isHit = (h) => !!h.contact && h.drop >= 3 && h.contact.along > -(NOSE + 1.5) && Math.abs(h.contact.lat) < 1.0 &&
+  h.past < -(NOSE - 0.2) && h.vMin < 3;
 
-// Dead on, the trunk stops the car (the same, bit for bit, after the page's loop has run 1.5 s more), and the same
-// run aimed 3 m beside the trunk is no hit: a miss can't pass.
+// Dead on, the trunk stops the car (the same, bit for bit, after the page's loop has run 1.5 s more); the same run
+// aimed 1.5 m beside the trunk (a glancing blow, or a graze) and 3 m beside it (a clean miss) is no hit.
 const rams = async (page, tree) => {
   const hit = await ram(page, tree);
-  expect(isHit(hit), JSON.stringify(hit)).toBe(true);
-  expect(Math.abs(hit.contact.lat)).toBeLessThan(1.0);
-  expect(hit.past).toBeLessThan(-(NOSE - 0.2));
-  expect(hit.vMin).toBeLessThan(3);
+  expect(isHit(hit), JSON.stringify({ ...hit, frames: undefined })).toBe(true);
   await page.waitForTimeout(1500);
   expect(await ram(page, tree)).toEqual(hit);
-  const miss = await ram(page, tree, 3);
-  expect(isHit(miss), JSON.stringify(miss)).toBe(false);
+  for (const off of [1.5, 3]) {
+    const miss = await ram(page, tree, off);
+    expect(isHit(miss), JSON.stringify({ off, ...miss, frames: undefined })).toBe(false);
+  }
 };
 
 test('@heavy Free Drive (Stelvio): the trees drawn near the car are its solid trunks, and one stops the car', async ({ page }) => {
