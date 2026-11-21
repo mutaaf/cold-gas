@@ -64,6 +64,10 @@ for (const [w, h, touch] of [[390, 844, true], [1280, 720, false]]) {
 }
 
 // The other side (0141 unchanged): the same reference flown clean as the player's own jump keeps Post and its rank.
+// Ticket 0272, folded in here so the suite's test count (and CI's shard cut) stays put: first a run that never leaves the
+// wall (the Show with nothing held: "No climb", ≈ 12 points). It is no mark: the run line is neutral ("No jump · not a mark
+// yet"), never the "first mark" pill, and it isn't kept as this device's best. So the landed reference flown next reads
+// "Your first mark on this event", not "New best +x" measured from the stall.
 for (const [w, h, touch] of [[390, 844, true], [1280, 720, false]]) {
   test(`${w}×${h}: a landed jump's sheet still offers Post with its rank`, async ({ browser }) => {
     const page = await browser.newPage({ viewport: { width: w, height: h }, ...(touch ? { hasTouch: true, isMobile: true } : {}) });
@@ -76,9 +80,28 @@ for (const [w, h, touch] of [[390, 844, true], [1280, 720, false]]) {
     await page.route(/\/api\/judge\/stream$/, (route) => route.abort());
     await page.goto('/coldgas/?gfx=low&course=show');
     await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 60_000 });
-    const crashed = await page.evaluate(() => {
+    const line = () => page.evaluate(() => ({ state: document.querySelector('[data-runline]')?.dataset.state, text: document.querySelector('[data-r-pb]')?.textContent }));
+    const stall = await page.evaluate(() => {
       const g = window.__coldgas, S = g.S;
       g.stage.render = () => {};
+      g.startRun('jump');
+      S.autopilot = () => { const i = {}; for (const k of g.inputKeys) i[k] = 0; return i; };   // nothing held, ever
+      g.skipCountdown();
+      for (let i = 0; i < 8000 && S.run.phase !== 'done'; i++) g.liveStep(0.05);
+      S.autopilot = null;
+      g.fastForward();
+      return { total: S.card?.total, verdict: S.card?.verdict, jumped: !!S.card?.facts?.jumped, crashed: !!S.card?.facts?.crashed };
+    });
+    const st = JSON.stringify(stall);
+    expect(stall, st).toMatchObject({ jumped: false, crashed: false });
+    expect(stall.total, st).toBeGreaterThan(0);   // a score the old line called "Your first mark"
+    await page.waitForFunction(() => ['results', 'replay'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+    expect(await line(), st).toEqual({ state: 'neutral', text: 'No jump · not a mark yet' });
+    await expect(page.locator('[data-r-post-btn]')).toBeHidden();
+    await page.waitForTimeout(500);   // the ghost store settles (ghostLoaded → saveBest)
+    expect(await page.evaluate(() => { const b = window.__coldgas.S.ghosts.show; return b && !b.ref ? b.total : null; }), st).toBeNull();
+    const crashed = await page.evaluate(() => {
+      const g = window.__coldgas, S = g.S;
       g.startRun('jump'); S.autopilot = g.createAutopilot(g.stage.course); g.skipCountdown();
       for (let i = 0; i < 4000 && S.run.phase !== 'done'; i++) g.liveStep(0.05);
       S.autopilot = null;
@@ -87,6 +110,7 @@ for (const [w, h, touch] of [[390, 844, true], [1280, 720, false]]) {
     });
     expect(crashed).toBe(false);
     await page.waitForFunction(() => ['results', 'replay'].includes(window.__coldgas.S.mode), null, { timeout: 30_000 });
+    expect(await line()).toEqual({ state: 'first', text: 'Your first mark on this event' });
     await expect(page.locator('[data-r-post-btn]')).toBeVisible();
     await expect(page.locator('[data-r-post-rank]')).toContainText('would be #1', { timeout: 10_000 });
     expect(errors).toEqual([]);

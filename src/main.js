@@ -656,7 +656,8 @@ function finishRun() {
   if (!S.autopilot) coachRun();
   // Your best run becomes the ghost for the next attempt (the reference jump only until you
   // finish one of your own). Storage keeps whichever is better, even across tabs.
-  if (run.frames.length) {
+  // 0272: a run that never jumped is no mark, so it never becomes the best the next run is measured against.
+  if (run.frames.length && (S.autopilot || S.card?.facts?.jumped)) {
     const g = packFrames(run.frames, S.card.total, !!S.autopilot, run.course);
     ghostLoaded(run.course).then(() => { if (isBetter(S.ghosts[run.course], g)) { S.ghosts[run.course] = g; saveBest(g); } });
   }

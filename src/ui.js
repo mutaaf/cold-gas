@@ -416,7 +416,8 @@ export function createUI() {
   // The run line over the actions: which run this is, and how it stands against your best on this
   // device (`best` is the stored best before this run; null when there's none yet). n = 0: the
   // reference jump, which isn't yours.
-  // A crash or a wreck is never celebrated (no "first mark", no "new best"): it gets a neutral tag. Run 1
+  // A crash, a wreck or a run that never jumped (0272: No climb, off the wall, stopped on the ledge) is never celebrated
+  // (no "first mark", no "new best"): it gets a neutral tag. Run 1
   // reads its tier plainly (no "Pro pays ×1.08" before the player has landed anything).
   let lastCard = null;
   ui.runline = (n, best, total) => {
@@ -425,7 +426,7 @@ export function createUI() {
     if (!n) return;
     $('[data-r-attempt]').textContent = `Run ${n}`;
     const f = lastCard?.facts || {};
-    const crashed = !!(f.crashed || f.damagePct >= WRECK_PCT);
+    const crashed = !!(f.crashed || f.damagePct >= WRECK_PCT || (lastCard && !f.jumped));
     const d = best == null ? null : Math.round((total - best) * 10) / 10;
     if (crashed && (best == null || d >= 0)) {
       line.dataset.state = 'neutral';
