@@ -1,12 +1,12 @@
 ---
 id: 0304
 title: The Free Drive tree-ram e2e drives the car at the tree dead on, so its verdict doesn't depend on runner speed
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: tech-health
 created: 2026-11-19
-pr:
+pr: 479
 by: critic
 ---
 
@@ -46,13 +46,13 @@ says: "dead on, the trunk stops it".
   and the car's centre never closer to the trunk than its nose length along the line.
 
 ## Acceptance criteria
-- [ ] `ram()` makes one `page.evaluate` for set-up and steps, and the result is identical with a 1.5 s
+- [x] `ram()` makes one `page.evaluate` for set-up and steps, and the result is identical with a 1.5 s
       `waitForTimeout` inserted before the call (deterministic, bit for bit).
-- [ ] Stelvio and Endless: at contact, |lateral| < 1.0 m. `past` < −(nose length − 0.2) for the whole window.
+- [x] Stelvio and Endless: at contact, |lateral| < 1.0 m. `past` < −(nose length − 0.2) for the whole window.
       `vMin` < 3 m/s. 10/10 local repeats pass (`--repeat-each=10`).
-- [ ] A run aimed 3 m off the trunk fails the hit assertion (a negative control in the spec), so a miss can never pass.
-- [ ] No sim, scorer or `ref-hash` change. If a test hook is added to `src/drive`, it's off unless a test calls it.
-- [ ] Main CI green.
+- [x] A run aimed 3 m off the trunk fails the hit assertion (a negative control in the spec), so a miss can never pass.
+- [x] No sim, scorer or `ref-hash` change. If a test hook is added to `src/drive`, it's off unless a test calls it.
+- [x] Main CI green.
 
 ## Test plan
 `tests/e2e/scenery.spec.js`: the reworked `ram()`, a negative-control case, and the determinism check above.
@@ -60,3 +60,10 @@ says: "dead on, the trunk stops it".
 ## Out of scope
 The Free Drive tree physics itself, which stops the car correctly when it is hit. The world streaming and draw/solid
 parity checks in the same tests stand as written.
+
+## Critic note 2026-11-20
+#458 (`4cbabe8`, 11-19) holds the page's frame loop at dt 0 inside `ram()` and its tile waits. That removes the
+runner-speed dependence behind the red main on `d77eeaa`, and main has been green on that test since. It doesn't meet
+this ticket's criteria. `ram()` still makes separate evaluates, and the car still yaws on the run-in and meets the trunk
+off-line. There's still no negative control, so a miss can pass `vMin < 9`. It stays P0 for that last point: a test
+that can pass on a miss doesn't guard anything. The Builder can take the remaining criteria as written.

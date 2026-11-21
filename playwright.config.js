@@ -87,6 +87,25 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // 3/4 29.7 and 4/4 23.0; the ring quest passed in 1.6 min. On the mean of all three runs (64fb99a, 0910f74, #472; ≈ 230
 // worker-minutes) 61:101:89:104 is 55.5 / 64.1 / 57.8 / 52.2; 63:90:84:118 cuts 63 / 90 / 84 / 118 tests ≈ 59.0 / 55.9 /
 // 56.2 / 58.5 (shard 2 starts at fan, 3 at keys-carry, 4 at privacy). By each test's slowest run it is ≈ 69 / 69 / 64 / 72.
+// Main on aa60bdd (#475) then cancelled e2e 1/4 (62 of 63 done) and 4/4 (93 of 118) at 35 min with nothing failing, while
+// 2/4 ran 34.0 and 3/4 17.2; the same tree's PR run was all green at 19.9 / 24.4 / 30.6 / 24.1 (≈ 189 worker-minutes there,
+// ≈ 235+ on main). On each test's mean over those two runs (≈ 217 worker-minutes) 63:90:84:118 is 52.9 / 55.7 / 46.3 / 62.2;
+// 63:91:104:97 cuts 63 / 91 / 104 / 97 tests ≈ 52.9 / 56.1 / 56.3 / 51.7 (≈ 28 min; shard 2 starts at fan, 3 at layout, 4 at
+// restart-lets-go), the best file-boundary cut. Main's shard 1 alone ran ≈ 68 worker-minutes on that runner with the same
+// files: no cut cures a slow runner. Proposal #456 (ci.yml, the operator's) is the cure; seven re-cuts have not been.
+// Main on e1f0a76 (#477) then cancelled e2e 3/4 at 35 min (99 of 104 done; one ✘, pause.spec's 1440×900 step-back, passed
+// on retry) while 1/4 ran 23.5 min, 2/4 24.0 and 4/4 19.1 (97 tests, ≈ 38 worker-minutes). Shard 3's files summed ≈ 68
+// worker-minutes with 6 tests unrun (≈ 74 whole). Moving replay-phone (7 tests, ≈ 6) into shard 4, 63:91:97:104 is ≈ 47 /
+// 48 / 67 / 44 on that run and ≈ 53 / 56 / 50 / 58 on the mean of aa60bdd's two. The ninth re-cut: luck, not headroom.
+// Proposal #456 (ci.yml, the operator's) is the cure.
+// That cut's own PR run (#478) then ran 3/4 in 23.5 min and, on its one re-run, 4/4 in 23.8, but 1/4 hit 35 min twice: 61 of
+// 63 done the first time, all 63 green in 34.5 min (≈ 69 worker-minutes) the second, while 2/4 ran 18.9 (≈ 38). Moving
+// driving-levels and endless (6 tests, ≈ 9 worker-minutes on that run) into shard 2, 57:97:97:104 is ≈ 60 / 47 / 47 / 48 on
+// #478's runs. Still luck, not headroom: proposal #456 (ci.yml) is the cure.
+// Main on 664b085 (#478) then cancelled e2e 2/4 at 35 min (89 of 97 done, none failed; judges-deploy's last three and
+// keys-carry unrun) while 1/4 ran 29.0 min, 3/4 19.3 (97 tests, ≈ 38 worker-minutes) and 4/4 23.0. Moving instruments,
+// judges-deploy and keys-carry (12 tests, ≈ 10 worker-minutes on that run) into shard 3, 57:85:109:104 is ≈ 60 / 61 / 48 /
+// 46 on that run. The tenth re-cut: still luck, not headroom. Proposal #456 (ci.yml, the operator's) is the cure.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -94,7 +113,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '63:90:84:118';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '57:85:109:104';
 
 export default defineConfig({
   testDir: 'tests/e2e',

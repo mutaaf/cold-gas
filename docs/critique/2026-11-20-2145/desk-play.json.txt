@@ -1,0 +1,138 @@
+{
+ "viewport": "desk",
+ "readyS": 18.28,
+ "board": {
+  "rows": "No jumps on the Show yet today. Be the first.",
+  "jump": "Jump · The Show",
+  "jumpBox": {
+   "x": 477,
+   "y": 520,
+   "w": 381,
+   "h": 46
+  },
+  "closeBox": {
+   "x": 868,
+   "y": 520,
+   "w": 95,
+   "h": 46
+  },
+  "how": "Land a jump, then Post with your initials from the results.",
+  "vh": 900
+ },
+ "afterBoardJump": {
+  "mode": "countdown",
+  "howto": false,
+  "howRows": "",
+  "device": "Keyboard",
+  "course": "show",
+  "board": false
+ },
+ "started": {
+  "mode": "live",
+  "course": "show"
+ },
+ "ref": {
+  "seen": {
+   "climb": {
+    "y": 1.3,
+    "z": 4.5
+   },
+   "release": {
+    "y": 27.3,
+    "z": -4.8
+   },
+   "carry": {
+    "y": 21.5,
+    "z": -12.1
+   },
+   "rollout": {
+    "y": 9.2,
+    "z": -19.3
+   },
+   "touchdown": {
+    "y": 0.4,
+    "z": -29.1
+   },
+   "after": {
+    "y": 0.4,
+    "z": -29.8
+   }
+  },
+  "cues": [
+   "Hold ↑ to goSkip"
+  ],
+  "card": {
+   "total": 97.3,
+   "verdict": "Perfect 10",
+   "sink": 0.8,
+   "clearance": 5.3,
+   "apex": 27.4,
+   "airPct": 47,
+   "brakeG": 3,
+   "padMiss": 1.4,
+   "crashed": false,
+   "tAir": null
+  },
+  "sheet": "THE SHOW PERFECT TEN Perfect 10 97.3/ 100 Flown in Assist · Pro pays ×1.08, Advanced ×1.15 Judged by gemma-4-26b-a4b-it Cloudflare ORD 73 tok ASSIST ON rolls you out, levels and brakes Retry R Share Replay Home H The Engineer Chief Vehicle Engineer 9.7 Touchdown sink rate was excellent at 2.6 ft/s (0.8 m/s) with minimal tilt and precise control. The Coordinator Stunt Coordinator 9.7 Hanging inverted for three seconds before that massive leap showed incredible nerve and height. The Designer Head of Design 9.8 Maintaining forty-seven percent gas reserve after such a flight displays superb effici"
+ },
+ "crash": {
+  "seen": {
+   "climb": {
+    "y": 1.4,
+    "z": 5
+   },
+   "release": {
+    "y": 26.9,
+    "z": -1.4
+   },
+   "carry": {
+    "y": 20.9,
+    "z": -2.5
+   },
+   "rollout": {
+    "y": 8.2,
+    "z": -3.6
+   },
+   "touchdown": {
+    "y": 0.3,
+    "z": -12.7
+   },
+   "after": {
+    "y": 0.4,
+    "z": -12.6
+   }
+  },
+  "cues": [
+   "Hold ↑ to goSkip"
+  ],
+  "card": {
+   "total": 29.7,
+   "verdict": "Contact",
+   "sink": 3.3,
+   "clearance": -0.1,
+   "apex": 27,
+   "airPct": 20,
+   "brakeG": 3.2,
+   "padMiss": 18.2,
+   "crashed": true,
+   "tAir": null
+  },
+  "sheet": "THE SHOW CONTACT VERDICT Contact 29.7/ 100 Flown in Assist · Pro pays ×1.08, Advanced ×1.15 Judged by gemma-4-26b-a4b-it Cloudflare ORD 84 tok ASSIST ON rolls you out, levels and brakes Retry R Share Replay Home H The Engineer Chief Vehicle Engineer 2.4 Sink rate of 10.8 ft/s (3.3 m/s) and the 60 ft (18.2 m) deviation from the mark resulted in an unacceptable landing. The Coordinator Stunt Coordinator 3.5 That inversion was pure magic, but hitting the vehicle completely ruined the drama of the flight. The Designer Head of Design 3.0 High climb efficiency lost to the impact; the nose sustained "
+ },
+ "replayMode": "results",
+ "errs": [
+  "Failed to load resource: net::ERR_FAILED"
+ ],
+ "obs": [
+  {
+   "m": "POST",
+   "u": "https://mutaafaziz.com/coldgas/api/obs",
+   "len": 263,
+   "t": 1795211979209
+  },
+  {
+   "status": 200,
+   "u": "https://mutaafaziz.com/coldgas/api/obs"
+  }
+ ]
+}

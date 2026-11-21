@@ -1,0 +1,109 @@
+{
+ "viewport": "phone",
+ "air": {
+  "n": 17,
+  "wheelsHiddenAny": 9,
+  "wheelsHiddenAll": 5,
+  "ringHalfHidden": 5,
+  "maxTankBoxFrac": 0.43
+ },
+ "afterTouch": {
+  "n": 42,
+  "wheelsHiddenAny": 12,
+  "wheelsHiddenAll": 12,
+  "ringHalfHidden": 12,
+  "maxTankBoxFrac": 0.25
+ },
+ "first": {
+  "phase": "air",
+  "carZ": -15.8,
+  "carY": 16.1,
+  "cam": [
+   47.6,
+   13.6,
+   -15.8
+  ],
+  "wheelsHidden": 0,
+  "ringHidden16": 0,
+  "tankBoxFrac": 0.01,
+  "tankTopY": 0.9,
+  "carSy": 0.51
+ },
+ "touch": {
+  "phase": "landed",
+  "carZ": -29,
+  "carY": 0.45,
+  "cam": [
+   16.8,
+   1.6,
+   -26.7
+  ],
+  "wheelsHidden": 4,
+  "ringHidden16": 16,
+  "tankBoxFrac": 0.15,
+  "tankTopY": 0.59,
+  "carSy": 0.6
+ },
+ "last": {
+  "phase": "done",
+  "carZ": -29.9,
+  "carY": 0.4,
+  "cam": [
+   43.4,
+   11.9,
+   -12.6
+  ],
+  "wheelsHidden": 0,
+  "ringHidden16": 0,
+  "tankBoxFrac": 0,
+  "tankTopY": 1.1,
+  "carSy": 1.04
+ },
+ "every20": [
+  {
+   "phase": "air",
+   "carZ": -15.8,
+   "carY": 16.1,
+   "cam": [
+    47.6,
+    13.6,
+    -15.8
+   ],
+   "wheelsHidden": 0,
+   "ringHidden16": 0,
+   "tankBoxFrac": 0.01,
+   "tankTopY": 0.9,
+   "carSy": 0.51
+  },
+  {
+   "phase": "done",
+   "carZ": -29.9,
+   "carY": 0.4,
+   "cam": [
+    14.4,
+    1.4,
+    -28.5
+   ],
+   "wheelsHidden": 4,
+   "ringHidden16": 16,
+   "tankBoxFrac": 0.21,
+   "tankTopY": 0.59,
+   "carSy": 0.61
+  },
+  {
+   "phase": "done",
+   "carZ": -29.9,
+   "carY": 0.4,
+   "cam": [
+    43.4,
+    11.9,
+    -12.6
+   ],
+   "wheelsHidden": 0,
+   "ringHidden16": 0,
+   "tankBoxFrac": 0,
+   "tankTopY": 1.1,
+   "carSy": 1.04
+  }
+ ]
+}
