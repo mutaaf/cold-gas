@@ -47,3 +47,9 @@ between the shipped look and pillar 4 ("a single signal red"), and a lockdown po
 Re-checked 2026-10-30 on `main` `c1dccf1`: the 390x844 title is still red across the sky, headline and footer copy.
 
 GROOMED 2026-11-05: back to proposed. The PLAYERS focus ranks the funnel (first run, first load, return) above scene polish, and the ready queue was over its cap of 10; the Builder takes this once the funnel work clears.
+
+## Scout re-check (2026-11-21)
+Still reproduces on `main` `7bdddc9` (SwiftShader, 390×844 touch, `coldgas_howto = 'new'`): the title's sky, the car's
+roof line and the whole top third read red, with the white card text over the glow. 16 new visits in two weeks and
+5 `title-left`: this is the frame each of them meets first. Left `proposed` only because the ready queue is at its cap
+once 0356 is in; it is the next to promote. It must still be checked on a real GPU capture before it lands.
