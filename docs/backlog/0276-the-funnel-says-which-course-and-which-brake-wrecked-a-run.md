@@ -1,12 +1,12 @@
 ---
 id: 0276
 title: The funnel says which course a run was on and which braking mistake wrecked it
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: engagement
 created: 2026-11-18
-pr:
+pr: 484
 by: critic
 ---
 
