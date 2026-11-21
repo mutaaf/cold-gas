@@ -537,7 +537,9 @@ export function createStage(canvas, { tier = 'high', course = 'show', aa = null,
     for (const id of ids) {
       const m = forgeRegistry.model?.(id);
       if (!m) continue;
-      m.traverse((o) => { o.visible = true; });
+      // Their bounding boxes too: a model's clones share its geometry, and contactShadow's Box3 would otherwise compute
+      // each one on the tap that swaps the rows in (≈ 17 ms of a 4× phone's ≈ 60 ms Start; lifecycle.spec's @perf bar).
+      m.traverse((o) => { o.visible = true; if (o.geometry && !o.geometry.boundingBox) o.geometry.computeBoundingBox(); });
       g.add(m);
     }
     if (film) tag(g);
