@@ -78,7 +78,9 @@ left in the tanks; on a wreck, combos that come from the physics.
     the players' funnel as counts (`obs.play`, PLAY_EVENTS in src/obs/signature.js: visits new and
     returning, runs, landed/wrecked or quit (left before the card, once per run, 0130), and on a decided card how it was
     flown (`ctl-thumb|classic|keys|pad`, `fly-assist|pro|advanced`) and a wreck's cause (`wreck-*`, the coach's first finding;
-    src/obs/run-end.js, 0138), the Daily (`daily-start` on a tap of Play today's or Play again; `daily-done` or `daily-miss` on every finished run on its
+    src/obs/run-end.js, 0138; a brake wreck also counts the coach's own id, `wreck-no-brake|late-brake|late-land`, beside
+    `wreck-brake`, which stays for one release, 0276), its course (`on-show|wall|lineup` and `landed-<course>` or
+    `wrecked-<course>`, 0276), the Daily (`daily-start` on a tap of Play today's or Play again; `daily-done` or `daily-miss` on every finished run on its
     course, however it was started, as the streak counts it; `daily-run`, the old name for a miss, is still counted with it for one release, 0136), how-to skips, retries, posts,
     shares…, and a visit that ends on the title (0143, src/obs/title-leave.js: `jump-tap` once per page load before any run;
     `title-left` once when the page goes (pagehide or hidden) on the title never past it this load, beside one reason:

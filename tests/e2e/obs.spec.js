@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test';
-import { wreckCause } from '../../src/obs/signature.js';
+import { wreckCause, wreckCauses } from '../../src/obs/signature.js';
 
 // Observability and self-heal (src/obs/): errors are captured with stable signatures, a lost WebGL
 // context is restored and the stage rebuilt, a physics trap stops the run instead of freezing the
@@ -152,14 +152,19 @@ test('a physics trap mid-run stops the run with a toast instead of freezing the 
   });
   await page.waitForFunction(() => window.__coldgas.S.mode === 'results' && !!window.__coldgas.S.coach, null, { timeout: 30_000 });
   // The card's tier (from the log: the reference's own inputs) and the cause the results' coach names.
-  const { tier, coachCause } = await page.evaluate(() => ({ tier: window.__coldgas.S.card.tier, coachCause: window.__coldgas.S.coach.items }));
+  const { tier, coachCause, course } = await page.evaluate(() => ({ tier: window.__coldgas.S.card.tier, coachCause: window.__coldgas.S.coach.items, course: window.__coldgas.S.run.course }));
   b = await leave();
   await page.evaluate(() => window.__coldgas.setTier('assist'));
   expect(b.play).toMatchObject({ run: 1, 'run-wrecked': 1, 'ctl-keys': 1, [`fly-${tier}`]: 1 });
-  const keys = (p) => Object.keys(p).filter((k) => /^(ctl|fly|wreck)-/.test(k)).map((k) => k.split('-')[0]).sort();
+  const keys = (p) => [...new Set(Object.keys(p).filter((k) => /^(ctl|fly|wreck)-/.test(k)).map((k) => k.split('-')[0]))].sort();
   expect(keys(b.play)).toEqual(['ctl', 'fly', 'wreck']);
-  const cause = Object.keys(b.play).find((k) => k.startsWith('wreck-'));
-  expect(cause).toBe(wreckCause(coachCause));
-  expect(cause).not.toBe('wreck-other');
+  // The cause, and for a brake finding the coach's own id beside it (0276), each once.
+  const causes = Object.keys(b.play).filter((k) => k.startsWith('wreck-')).sort();
+  expect(causes).toEqual(wreckCauses(coachCause).sort());
+  for (const c of causes) expect(b.play[c]).toBe(1);
+  expect(causes).toContain(wreckCause(coachCause));   // the old fold, still counted for one release
+  expect(causes).not.toContain('wreck-other');
+  // 0276: the decided card's course, once.
+  expect(b.play).toMatchObject({ [`on-${course}`]: 1, [`wrecked-${course}`]: 1 });
   expect(keys((await leave()).play)).toEqual([]);
 });

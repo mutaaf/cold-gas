@@ -7,7 +7,8 @@ import { scoreRun } from '../../src/sim/judge.js';
 import { coach } from '../../src/sim/coach.js';
 import { up } from '../../src/sim/vehicle.js';
 import { SPEC } from '../../src/sim/spec.js';
-import { PLAY_EVENTS, CTL_EVENTS, FLY_EVENTS, WRECK_EVENTS, wreckCause, ctlOf, flyOf } from '../../src/obs/signature.js';
+import { COURSES } from '../../src/sim/courses.js';
+import { PLAY_EVENTS, CTL_EVENTS, FLY_EVENTS, WRECK_EVENTS, COURSE_EVENTS, wreckCause, wreckCauses, ctlOf, flyOf } from '../../src/obs/signature.js';
 import { createRunEnd } from '../../src/obs/run-end.js';
 import { cleanObs, OBS_LIMITS } from '../../src/worker/obs.js';
 
@@ -55,13 +56,13 @@ describe('0138: what wrecked it', () => {
     expect(scoreRun(flip.t).facts.endReason).toBe('flipped');
 
     const coachOf = (run, card) => coach(run.inputLog, run.course, card).items;
-    const expected = { row: 'wreck-short', hard: 'wreck-brake', flip: wreckCause(coachOf(flip, scoreRun(flip.t))) };
+    const expected = { row: ['wreck-short'], hard: ['wreck-brake', 'wreck-no-brake'], flip: wreckCauses(coachOf(flip, scoreRun(flip.t))) };
     for (const [name, run] of Object.entries({ row, hard, flip })) {
       const plays = [];
       const end = createRunEnd((n) => plays.push(n), coachOf);
       end.start(run);
       end.settle(run, scoreRun(run.t), true, { device: 'touch', scheme: 'thumb', tier: 'assist' }, true);
-      expect(plays).toEqual(['run-wrecked', 'ctl-thumb', 'fly-assist', expected[name]]);
+      expect(plays).toEqual(['run-wrecked', 'ctl-thumb', 'fly-assist', 'on-show', 'wrecked-show', ...expected[name]]);
     }
   });
 });
@@ -94,7 +95,7 @@ describe('0138: how it was flown, once per run', () => {
     const run = {};
     end.start(run);
     end.settle(run, card(true), true, { device: 'key' }, true);
-    expect(plays).toEqual(['run-wrecked', 'ctl-keys', 'fly-assist', 'wreck-brake']);
+    expect(plays).toEqual(['run-wrecked', 'ctl-keys', 'fly-assist', 'wreck-brake', 'wreck-late-brake']);
     expect(coached).toEqual([run]);
     expect(later).toEqual([]);
   });
@@ -110,7 +111,7 @@ describe('0138: how it was flown, once per run', () => {
     end.settle(next, null, true, {}, true);                  // …and the page goes before the deferred re-fly: paid now, once
     flush();
     end.coached(run, [{ id: 'short' }]);
-    expect(plays).toEqual(['run-wrecked', 'ctl-keys', 'fly-assist', 'run-quit', 'wreck-brake']);
+    expect(plays).toEqual(['run-wrecked', 'ctl-keys', 'fly-assist', 'run-quit', 'wreck-brake', 'wreck-late-brake']);
     expect(coached).toEqual([run]);
   });
 
@@ -121,7 +122,7 @@ describe('0138: how it was flown, once per run', () => {
     end.settle(run, card(true), false, { device: 'touch', scheme: 'thumb' });
     end.settle(run, card(true), true);
     flush(); flush();
-    expect(plays.filter((p) => p.startsWith('wreck-'))).toEqual(['wreck-brake']);
+    expect(plays.filter((p) => p.startsWith('wreck-'))).toEqual(['wreck-brake', 'wreck-late-brake']);
     expect(coached).toEqual([run]);
   });
 
@@ -167,7 +168,7 @@ describe('0138: how it was flown, once per run', () => {
 describe('0138: the Worker takes the new names', () => {
   const batch = (play) => ({ v: 1, build: 'abc1234', dc: 'phone-lo', tier: 'high', scale: 0, first: true, errs: [], fr: null, rec: [], br: [], play });
   it('cleanObs accepts every new name and still drops near-misses', () => {
-    const all = [...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS];
+    const all = [...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS, ...COURSE_EVENTS];
     for (const n of all) expect(PLAY_EVENTS).toContain(n);
     const play = Object.fromEntries(all.map((n) => [n, 1]));
     expect(cleanObs(batch({ ...play, 'ctl-thumbs': 1, 'wreck-': 1, 'fly-rookie': 1, 'wreck-short ': 1 })).play).toEqual(play);
@@ -175,6 +176,59 @@ describe('0138: the Worker takes the new names', () => {
   it('a beacon with every play name at its cap stays ≤ 8 kB', () => {
     const play = Object.fromEntries(PLAY_EVENTS.map((n) => [n, 500]));
     expect(JSON.stringify(batch(play)).length).toBeLessThan(OBS_LIMITS.maxBytes / 4);
+  });
+});
+
+describe('0276: which brake mistake, and which course', () => {
+  it('a brake wreck counts the old fold and the coach\'s own id; every other cause counts one name', () => {
+    expect(wreckCauses([{ id: 'late-land' }])).toEqual(['wreck-brake', 'wreck-late-land']);
+    expect(wreckCauses([{ id: 'no-brake' }])).toEqual(['wreck-brake', 'wreck-no-brake']);
+    expect(wreckCauses([{ id: 'late-brake' }, { id: 'tilt' }])).toEqual(['wreck-brake', 'wreck-late-brake']);
+    expect(wreckCauses([{ id: 'short' }])).toEqual(['wreck-short']);
+    expect(wreckCauses(null)).toEqual(['wreck-other']);
+    expect(wreckCause([{ id: 'late-land' }])).toBe('wreck-brake');   // the fold stays for one release (as daily-run did)
+    for (const n of ['wreck-no-brake', 'wreck-late-brake', 'wreck-late-land']) expect(WRECK_EVENTS).toContain(n);
+  });
+
+  it('a wreck whose coach leads with late-land counts wreck-late-land and wreck-brake, once', () => {
+    const plays = [];
+    const end = createRunEnd((n) => plays.push(n), () => [{ id: 'late-land' }]);
+    const run = { course: 'lineup' };
+    end.start(run);
+    end.settle(run, { tier: 'assist', facts: { crashed: true } }, true, { device: 'key' }, true);
+    end.coached(run, [{ id: 'late-land' }]);
+    expect(plays).toEqual(['run-wrecked', 'ctl-keys', 'fly-assist', 'on-lineup', 'wrecked-lineup', 'wreck-brake', 'wreck-late-land']);
+  });
+
+  it('a landed Show run counts on-show and landed-show; a wrecked Wall run on-wall and wrecked-wall; once per run', () => {
+    const plays = [];
+    const end = createRunEnd((n) => plays.push(n), () => [{ id: 'short' }], () => {});
+    const show = { course: 'show' }, wall = { course: 'wall' };
+    end.start(show);
+    end.settle(show, { tier: 'assist', facts: { crashed: false } }, false, { device: 'touch', scheme: 'thumb' });
+    end.settle(show, { tier: 'assist', facts: { crashed: false } }, true, { device: 'touch', scheme: 'thumb' });
+    end.start(wall);
+    end.settle(wall, { tier: 'pro', facts: { crashed: true } }, false, { device: 'touch', scheme: 'thumb' });
+    end.settle(wall, { tier: 'pro', facts: { crashed: true } }, true, { device: 'touch', scheme: 'thumb' });
+    expect(plays.filter((p) => /^(on|landed|wrecked)-/.test(p))).toEqual(['on-show', 'landed-show', 'on-wall', 'wrecked-wall']);
+  });
+
+  it('a quit, or a run with no known course, counts no course', () => {
+    const plays = [];
+    const end = createRunEnd((n) => plays.push(n), () => []);
+    const a = { course: 'show' }, b = { course: undefined };
+    end.start(a);
+    end.settle(a, null, true, {}, true);
+    end.start(b);
+    end.settle(b, { tier: 'assist', facts: { crashed: false } }, true, {}, true);
+    expect(plays).toEqual(['run-quit', 'run-landed', 'ctl-keys', 'fly-assist']);
+  });
+
+  it('the course names are play events, for each of the three courses', () => {
+    expect(COURSE_EVENTS).toEqual(['on-show', 'on-wall', 'on-lineup', 'landed-show', 'landed-wall', 'landed-lineup', 'wrecked-show', 'wrecked-wall', 'wrecked-lineup']);
+    for (const n of COURSE_EVENTS) expect(PLAY_EVENTS).toContain(n);
+    // A fourth course must be added here too, or its runs would count no course.
+    expect([...new Set(COURSE_EVENTS.map((n) => n.split('-')[1]))].sort()).toEqual(Object.keys(COURSES).sort());
   });
 });
 
