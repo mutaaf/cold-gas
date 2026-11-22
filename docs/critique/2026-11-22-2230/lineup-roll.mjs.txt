@@ -1,0 +1,16 @@
+// Roll angle, height and z through the Lineup reference's air, every 0.1 s from lift-off.
+import { createRun, stepRun } from '/home/user/cold-gas/src/sim/run.js';
+import { createAutopilot } from '/home/user/cold-gas/src/sim/autopilot.js';
+import { initPhysics } from '/home/user/cold-gas/src/sim/engine.js';
+await initPhysics();
+const run = createRun('lineup'), ap = createAutopilot('lineup');
+let lift = null, minUp = { u: 2 }, rows = [];
+while (run.phase !== 'done') {
+  stepRun(run, ap(run));
+  const c = run.car, q = c.quat, upY = 1 - 2 * (q.x * q.x + q.z * q.z);
+  if (run.phase === 'air' && lift === null) lift = run.tick;
+  if (lift !== null && (run.tick - lift) % 24 === 0 && run.phase !== 'done') rows.push([((run.tick - lift) / 240).toFixed(1), run.phase, c.pos.y.toFixed(2), c.pos.z.toFixed(2), (Math.acos(Math.max(-1, Math.min(1, upY))) * 180 / Math.PI).toFixed(0), c.vel.y.toFixed(2)].join('\t'));
+  if (lift !== null && run.phase === 'air' && upY < minUp.u) minUp = { u: upY, t: (run.tick - lift) / 240, z: c.pos.z, y: c.pos.y };
+}
+console.log('t\tphase\ty\tz\ttilt°\tvy'); console.log(rows.join('\n'));
+console.log('most inverted', JSON.stringify(minUp));
