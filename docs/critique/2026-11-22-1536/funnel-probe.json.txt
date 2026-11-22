@@ -1,0 +1,34 @@
+{
+ "build": "https://mutaafaziz.com/coldgas/assets/index-BApKhjxx.js",
+ "a": {
+  "total": 97.3,
+  "verdict": "Perfect 10",
+  "crashed": false,
+  "coach": [
+   "clean"
+  ]
+ },
+ "b": {
+  "total": 98,
+  "verdict": "Perfect 10",
+  "crashed": false,
+  "coach": [
+   "clean"
+  ]
+ },
+ "nBodies": 1,
+ "play": [
+  {
+   "visit-new": 1,
+   "run": 2,
+   "run-landed": 2,
+   "ctl-thumb": 2,
+   "fly-assist": 2,
+   "on-show": 2,
+   "landed-show": 2
+  }
+ ],
+ "raw": [
+  "{\"v\":1,\"build\":\"7b75946\",\"dc\":\"phone-lo\",\"tier\":\"high\",\"scale\":0,\"errs\":[{\"sig\":\"2ce81bfb7587\",\"key\":\"3110ae814cd9\",\"mod\":\"judge\",\"kind\":\"fetch\",\"n\":2,\"msg\":\"fetch /api/judge/stream network error\",\"fr\":\"fetch@stream:0:0\",\"st\":\"fetch@stream:0:0\"}],\"fr\":null,\"rec\":[],\"br\":[\"judge\"],\"auto\":true,\"play\":{\"visit-new\":1,\"run\":2,\"run-landed\":2,\"ctl-thumb\":2,\"fly-assist\":2,\"on-show\":2,\"landed-show\":2},\"first\":true}"
+ ]
+}

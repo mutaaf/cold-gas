@@ -1,0 +1,27 @@
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const OUT = '/home/user/cold-gas/docs/critique/2026-11-22-1536'; const DESK = process.argv[2] === 'desk';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome' });
+const c = await browser.newContext(DESK ? { viewport: { width: 1280, height: 720 } } : { viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/obs**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+const posts = []; await c.route('**/api/board**', (r) => { if (r.request().method() !== 'GET') { posts.push(r.request().postData()); return r.fulfill({ status: 200, body: '{}' }); } return r.continue(); });
+await c.addInitScript(() => { try { localStorage.coldgas_howto = 'new'; } catch {} });
+const p = await c.newPage();
+await p.goto('https://mutaafaziz.com/coldgas/');
+await p.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90000 });
+const r = await p.evaluate(() => { const g = window.__coldgas, S = g.S; g.startRun('jump'); g.skipCountdown();
+  for (let i = 0; i < 9000 && S.mode === 'live'; i++) g.liveStep(1/60);
+  return { mode: S.mode, verdict: S.card?.verdict, total: S.card?.total, facts: S.card?.facts && { crashed: S.card.facts.crashed, jumped: S.card.facts.jumped, dmg: S.card.facts.damagePct }, t: S.run?.time }; });
+await p.waitForTimeout(7000);
+const ui = await p.evaluate(() => ({ pb: document.querySelector('[data-r-pb]')?.textContent, state: document.querySelector('[data-runline]')?.dataset.state, head: document.querySelector('[data-r-verdict], .verdict')?.textContent,
+  board: [...document.querySelectorAll('button,a')].map((b) => b.textContent.trim()).filter((t) => /board|#1|submit|post|initials/i.test(t)).slice(0, 6),
+  ls: Object.fromEntries(Object.entries(localStorage).filter(([k]) => /best|pb|score/i.test(k)).map(([k, v]) => [k, v.slice(0, 200)])) }));
+await p.screenshot({ path: `${OUT}/${DESK ? "desk" : "phone"}-noclimb-results.png` }); const more = p.locator('text=What happened · the judges · post').first(); await more.tap().catch(()=>{}); await p.waitForTimeout(800); ui.postBtn = await p.evaluate(() => [...document.querySelectorAll('[data-r-post-btn], button')].filter((b) => b.offsetParent && /post/i.test(b.textContent)).map((b) => b.textContent.trim())); await p.locator('[data-r-post-btn]').first().scrollIntoViewIfNeeded().catch(()=>{}); await p.screenshot({ path: `${OUT}/${DESK ? "desk" : "phone"}-noclimb-post.png` });
+// second run, the reference: what does the runline say?
+const r2 = await p.evaluate(() => { const g = window.__coldgas, S = g.S; g.startRun('jump'); S.autopilot = g.createAutopilot(g.stage.course); g.skipCountdown();
+  for (let i = 0; i < 9000 && S.run.phase !== 'done'; i++) g.liveStep(1/60); S.autopilot = null; g.fastForward(); return { total: S.card?.total, verdict: S.card?.verdict, mode: S.mode }; });
+await p.waitForTimeout(7000);
+const ui2 = await p.evaluate(() => ({ pb: document.querySelector('[data-r-pb]')?.textContent, state: document.querySelector('[data-runline]')?.dataset.state }));
+await p.screenshot({ path: `${OUT}/${DESK ? "desk" : "phone"}-after-noclimb-results.png` });
+console.log(JSON.stringify({ r, ui, r2, ui2, posts }, null, 1));
+await browser.close();
