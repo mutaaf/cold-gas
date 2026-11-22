@@ -2,11 +2,12 @@
 // its decided card and how it was flown, and `coachOf(run, card)` (the coach's findings, re-flown from the log).
 //
 // A run counts `run` as it starts (in main.js) and exactly one of run-landed, run-wrecked (its decided card) or
-// run-quit (left before its card). A decided card also counts how it was flown: ctl-* and fly-*. A wreck counts
-// what wrecked it (wreck-*: the coach's first finding) once: from the results' own coach a beat after the sheet
+// run-quit (left before its card). A decided card also counts how it was flown: ctl-* and fly-*, and its course: on-* and
+// landed-*|wrecked-* (0276). A wreck counts
+// what wrecked it (wreck-*: the coach's first finding, and a brake finding's own id, 0276) once: from the results' own coach a beat after the sheet
 // (no extra re-fly on the frame the sheet slides in), or re-flown here if the run is left before that coach ran:
 // at once when the page goes (its last beacon), else deferred off the Retry/Home tap (`defer`).
-import { wreckCause, ctlOf, flyOf } from './signature.js';
+import { wreckCauses, courseOf, ctlOf, flyOf } from './signature.js';
 
 export function createRunEnd(play, coachOf, defer = (fn) => setTimeout(fn, 0)) {
   let open = null, owed = null;
@@ -15,7 +16,7 @@ export function createRunEnd(play, coachOf, defer = (fn) => setTimeout(fn, 0)) {
     const o = owed;
     owed = null;
     if (items === undefined) { try { items = coachOf(o.run, o.card); } catch { items = null; } }
-    play(wreckCause(items));
+    for (const n of wreckCauses(items)) play(n);
   };
   return {
     start(run) { open = run; },
@@ -28,6 +29,7 @@ export function createRunEnd(play, coachOf, defer = (fn) => setTimeout(fn, 0)) {
           play(wrecked ? 'run-wrecked' : 'run-landed');
           play(ctlOf(how.device, how.scheme));
           play(flyOf(card.tier || how.tier));
+          for (const n of courseOf(current.course, wrecked)) play(n);   // which course it was on (0276)
           if (wrecked) owed = { run: current, card };
         } else if (left) play('run-quit');
       }
