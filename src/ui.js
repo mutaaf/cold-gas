@@ -642,6 +642,7 @@ export function createUI() {
     r.innerHTML = `
       <div class="rc-head"><span class="rc-dot${meta.ok ? '' : ' off'}"></span><b>${meta.ok ? 'Judged by' : 'AI unavailable'}</b> <code>${esc(model)}</code> <span class="rc-where">${esc(meta.where || '')}</span></div>
       <div class="rc-stats">${parts.map((p) => `<span>${esc(p)}</span>`).join('')}</div>
+      ${meta.replacedNote ? `<div class="rc-note" data-rc-replaced>${esc(meta.replacedNote)}</div>` : ''}
       <div class="rc-actions">${meta.events?.length ? '<button type="button" class="btn link" data-rc-replay>Replay the call</button>' : ''}<button type="button" class="btn link" data-rc-change>${meta.provider === 'edge' ? 'Use your own AI key' : 'Change AI'}</button></div>
       ${meta.user ? `<details class="rc-inspect"><summary>Inspect the call</summary>
         <h4>System</h4><pre>${esc(meta.system)}</pre><h4>Prompt</h4><pre>${esc(meta.user)}</pre>

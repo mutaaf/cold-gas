@@ -1,7 +1,7 @@
 ---
 id: 0282
 title: A judge's remark never shows the player a number the run didn't make
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
@@ -45,16 +45,16 @@ The fix belongs on the client: the client already holds the card and `localWords
   leave it out.
 
 ## Acceptance criteria
-- [ ] Unit (`tests/unit/check-words.test.js`): with the Show reference's card (`invertedS` 3.7), "That thirty-six second
+- [x] Unit (`tests/unit/check-words.test.js`): with the Show reference's card (`invertedS` 3.7), "That thirty-six second
       hang…" fails, and "Hanging inverted for nearly four seconds" and "for 3.7 seconds" pass.
-- [ ] Unit: every remark in docs/critique/2026-11-18-0936/judge-sample.txt passes unchanged against its reference card
+- [x] Unit: every remark in docs/critique/2026-11-18-0936/judge-sample.txt passes unchanged against its reference card
       (12/12 sets, Show and Wall). That includes "forty-eight percent", "4 ms", "26.8 meters" and "over five seconds".
-- [ ] Unit: the crash card from the same critique ("A 10.8 ft/s 3.3 m/s sink rate and 60 feet 18.2 meter deviation",
+- [x] Unit: the crash card from the same critique ("A 10.8 ft/s 3.3 m/s sink rate and 60 feet 18.2 meter deviation",
       sink 3.3, padMiss 18.2) passes: US conversions are accepted.
-- [ ] e2e at 390×844 touch and 1280×720: a judge stream stubbed to answer the "thirty-six second" remark shows the
+- [x] e2e at 390×844 touch and 1280×720: a judge stream stubbed to answer the "thirty-six second" remark shows the
       Coordinator's `localWords` line on the sheet (calm sheet and full sheet). The receipt carries the replacement line,
       and Inspect the call still shows the model's raw text.
-- [ ] No `src/worker/` change and no sim change. `npm run check` green.
+- [x] No `src/worker/` change and no sim change. `npm run check` green.
 
 ## Test plan
 New `tests/unit/check-words.test.js` built from the recorded sample. The theatre's existing e2e stub (the judge stream

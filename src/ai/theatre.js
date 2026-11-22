@@ -350,7 +350,7 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
   const meta = { provider: ai.provider, model: ai.model, events: timeline };
   const done = new Promise((resolve) => { skipResolve = resolve; });
   // The live strip's state (onLive): every token counted as it arrives, the words parsed from the stream.
-  const live = { phase: 'verify', model: ai.model, where: '', providerLabel: '', tokens: 0, text: '', words: null, docked, error: null };
+  const live = { phase: 'verify', model: ai.model, where: '', providerLabel: '', tokens: 0, text: '', words: null, docked, error: null, brief: '' };
   const report = () => { if (onLive && !finished) safe(() => onLive({ ...live, docked })); };
 
   const setStage = (s) => {
@@ -451,7 +451,8 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
       dom.set('where', d.where);
       dom.set('billed', d.provider === 'edge' ? 'COLD GAS · free allowance' : `Your ${d.providerLabel} key`);
       dom.stat('in', `~${d.inTokensEst}`);
-      Object.assign(live, { phase: 'prompt', model: d.model, where: d.where, providerLabel: d.providerLabel || '' });
+      // The brief the model read (0282): the numbers in it are ones a remark may state.
+      Object.assign(live, { phase: 'prompt', model: d.model, where: d.where, providerLabel: d.providerLabel || '', brief: `${d.system || ''}\n${d.user || ''}` });
       report();
       showText = (async () => {
         await dwell('telemetry').catch(() => {});

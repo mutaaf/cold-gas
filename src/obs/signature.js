@@ -128,7 +128,7 @@ const RUN_COURSES = ['show', 'wall', 'lineup'];
 export const COURSE_EVENTS = ['on', 'landed', 'wrecked'].flatMap((k) => RUN_COURSES.map((c) => `${k}-${c}`));
 export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 'run', 'run-quit', 'run-landed', 'run-wrecked', 'retry',
   'post', 'post-fail', 'share', 'board-open', 'challenge-open', 'challenge-run', 'daily-start', 'daily-miss', 'daily-run', 'daily-done', 'drive', 'sandbox',
-  'jump-tap', 'title-left', 'title-back', ...LEAVE_EVENTS, ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS, ...COURSE_EVENTS];
+  'jump-tap', 'title-left', 'title-back', 'words-replaced', ...LEAVE_EVENTS, ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS, ...COURSE_EVENTS];
 // The coach's finding ids (src/sim/coach.js) → the wreck's cause. Into the row; a hard touchdown (never braked,
 // braked or landed late); braked but ran out at the bottom; the roll-out or the attitude; on its roof; off the
 // curl's side; the release. Anything else (the mark, the gas, clean, no coach) is `other`.
