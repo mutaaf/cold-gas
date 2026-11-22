@@ -451,8 +451,8 @@ export function runTheatre(root, { log, t, assist, ai, card, course, fallbackWor
       dom.set('where', d.where);
       dom.set('billed', d.provider === 'edge' ? 'COLD GAS · free allowance' : `Your ${d.providerLabel} key`);
       dom.stat('in', `~${d.inTokensEst}`);
-      // The brief the model read (0282): the numbers in it are ones a remark may state.
-      Object.assign(live, { phase: 'prompt', model: d.model, where: d.where, providerLabel: d.providerLabel || '', brief: `${d.system || ''}\n${d.user || ''}` });
+      // The facts the model read (0282): the numbers in them are ones a remark may state.
+      Object.assign(live, { phase: 'prompt', model: d.model, where: d.where, providerLabel: d.providerLabel || '', brief: d.user || '' });
       report();
       showText = (async () => {
         await dwell('telemetry').catch(() => {});

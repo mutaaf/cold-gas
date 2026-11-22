@@ -193,7 +193,9 @@ const slipped = () => {
   const ev = (e, d) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`;
   const words = { headline: 'A Perfect Ten', engineer: 'Touchdown sink rate of 0.8 m/s was excellent.', coordinator: SLIP, designer: 'Clean lines with gas to spare.', source: 'ai' };
   const raw = `HEADLINE: ${words.headline}\nENGINEER: ${words.engineer}\nCOORDINATOR: ${words.coordinator}\nDESIGNER: ${words.designer}`;
-  const tokens = raw.match(/[^\s]+\s*/g);   // a word a token: "thirty-six " arrives before "second"
+  // Tokens split as a model's do, mid-word: " thirty", "-six", " second" (the docked strip must never type "thirty").
+  const tokens = raw.match(/[\s-]?[^\s-]+/g);
+  if (tokens.join('') !== raw) throw new Error('token split lost text');
   return ev('verify', { ticks: 2400, ms: 30, card: { total: 90 } })
     + ev('prompt', { provider: 'edge', providerLabel: 'Free', vendor: 'Workers AI', model: '@cf/test/model', where: 'Cloudflare edge', system: 's', user: 'u', inTokensEst: 600 })
     + tokens.map((t) => ev('token', { t })).join('')
