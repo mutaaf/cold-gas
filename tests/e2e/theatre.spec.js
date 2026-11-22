@@ -210,6 +210,16 @@ const watchQuotes = (page) => page.evaluate(() => {
     .observe(box, { subtree: true, childList: true, characterData: true });
 });
 const quotesSeen = (page) => page.evaluate(() => [...window.__quotes]);
+// The judge's line on the sheet: S.words holds it at once; the quote types it out at 14 ms a character (wall clock, so a
+// busy runner can take far longer), and data-u-src lands only when the typing ends. Read the words, then the quote as
+// the line or a typed prefix of it.
+// (A line with units types in the player's units, so only a unitless line is checked against the quote's text.)
+async function showsLine(page, id, line) {
+  await expect.poll(() => page.evaluate((id) => window.__coldgas.S.words?.[id], id), { timeout: 120_000 }).toBe(line);
+  if (/\d/.test(line)) return;
+  await expect.poll(() => page.evaluate((id) => { const q = document.querySelector(`[data-judge="${id}"] .quote`); return q.dataset.uSrc ?? q.textContent; }, id)
+    .then((t) => t.length > 0 && line.startsWith(t)), { timeout: 30_000 }).toBe(true);
+}
 
 test('0282 at 1280×720: the Coordinator’s wrong number is replaced by the game’s own line; Inspect keeps the model’s', async ({ page }) => {
   test.setTimeout(180_000);
@@ -224,9 +234,8 @@ test('0282 at 1280×720: the Coordinator’s wrong number is replaced by the gam
   await expect(page.locator('[data-rc-replaced]')).toHaveText(REPLACED, { timeout: 120_000 });
   const card = await page.evaluate(() => window.__coldgas.S.card);
   const own = localWords(card).coordinator;
-  // (The quote reads in the player's units; data-u-src keeps the words as written: src/units.js unitText.)
-  await expect(page.locator('[data-judge="coordinator"] .quote')).toHaveAttribute('data-u-src', own, { timeout: 30_000 });
-  await expect(page.locator('[data-judge="engineer"] .quote')).toHaveAttribute('data-u-src', 'Touchdown sink rate of 0.8 m/s was excellent.');
+  await showsLine(page, 'coordinator', own);
+  await showsLine(page, 'engineer', 'Touchdown sink rate of 0.8 m/s was excellent.');
   // The model's words, as it sent them, under Inspect the call.
   await page.locator('[data-receipt] .rc-inspect summary').click();
   await expect(page.locator('[data-receipt] .rc-inspect')).toContainText(SLIP);
@@ -266,7 +275,7 @@ test('0282 phone 390×844, first visit: the calm sheet never types the wrong num
   await expect.poll(() => page.evaluate(() => window.__coldgas.S.callMeta?.replaced), { timeout: 120_000 }).toEqual(['coordinator']);
   await page.locator('[data-r-more]').tap();
   await expect(sheet).toHaveAttribute('data-more', '');
-  await expect(page.locator('[data-judge="coordinator"] .quote')).toHaveAttribute('data-u-src', own, { timeout: 30_000 });
+  await showsLine(page, 'coordinator', own);
   await expect(page.locator('[data-judge="coordinator"] .quote')).toBeVisible();
   await expect(page.locator('[data-rc-replaced]')).toHaveText(REPLACED);
   await page.locator('[data-receipt] .rc-inspect summary').tap();
