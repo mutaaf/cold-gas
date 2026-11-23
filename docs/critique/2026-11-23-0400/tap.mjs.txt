@@ -1,0 +1,25 @@
+// Production, first visit at 390x844 touch: when is the title wired, when is the physics ready, and how long from a tap
+// on Jump (2.5 s after the title) to the countdown and to Go. CPU throttle via argv (1 or 4). Also a desktop profile.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, CPU = '1', VIEW = 'phone', URL = 'https://mutaafaziz.com/coldgas/', WAIT = '2500'] = process.argv;
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext(VIEW === 'phone' ? { viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 } });
+await c.addInitScript(() => localStorage.setItem('coldgas_howto', 'new'));
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/obs', (r) => r.fulfill({ status: 204 }));
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage();
+const cdp = await c.newCDPSession(p); if (+CPU > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: +CPU });
+const T0 = Date.now(); const t = () => (Date.now() - T0) / 1000;
+const ev = {};
+await p.goto(URL);
+await p.waitForFunction(() => window.__coldgas?.S.mode === 'title', null, { timeout: 180000 }); ev.title = t();
+await p.waitForTimeout(+WAIT);
+const before = await p.evaluate(() => ({ phys: window.__coldgas.physicsReady(), spare: window.__coldgas.spareRun?.() }));
+ev.tap = t(); ev.physAtTap = before.phys;
+if (VIEW === 'phone') await p.locator('[data-start]').tap(); else await p.locator('[data-start]').click();
+const poll = async (fn, key) => { await p.waitForFunction(fn, null, { timeout: 180000, polling: 50 }); ev[key] = t(); };
+await Promise.all([poll(() => window.__coldgas.physicsReady(), 'phys'), poll(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), 'countdown'), poll(() => window.__coldgas.S.mode === 'live', 'live')]);
+const lt = await p.evaluate(() => performance.getEntriesByType('resource').filter((e) => /wasm|rapier|run-|physics|sim/i.test(e.name)).map((e) => [e.name.split('/').pop(), Math.round(e.startTime), Math.round(e.responseEnd), e.encodedBodySize]));
+console.log(JSON.stringify({ CPU, VIEW, ...ev, tapToCountdown: +(ev.countdown - ev.tap).toFixed(2), tapToLive: +(ev.live - ev.tap).toFixed(2), res: lt }));
+await browser.close();

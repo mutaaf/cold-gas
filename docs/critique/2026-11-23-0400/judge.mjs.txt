@@ -1,0 +1,33 @@
+// Production: the Show reference at 1440x900, the real edge judges (or a stubbed slip with STUB=1), N runs.
+// Records each judge's words, the card's facts, callMeta.replaced and the raw model text.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, N = '1', URL = 'https://mutaafaziz.com/coldgas/'] = process.argv;
+const STUB = process.env.STUB === '1';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const SLIP = 'That thirty-six second hang under the ledge was pure nerve and absolute theater.';
+const slipped = () => { const ev = (e, d) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`;
+  const words = { headline: 'A Perfect Ten', engineer: 'Touchdown sink rate of 0.8 m/s was excellent.', coordinator: SLIP, designer: 'Clean lines with gas to spare.', source: 'ai' };
+  const raw = `HEADLINE: ${words.headline}\nENGINEER: ${words.engineer}\nCOORDINATOR: ${words.coordinator}\nDESIGNER: ${words.designer}`;
+  const tokens = raw.match(/[\s-]?[^\s-]+/g);
+  return ev('verify', { ticks: 2400, ms: 30, card: { total: 90 } }) + ev('prompt', { provider: 'edge', providerLabel: 'Free', vendor: 'Workers AI', model: '@cf/test/model', where: 'Cloudflare edge', system: 's', user: 'u', inTokensEst: 600 })
+    + tokens.map((t) => ev('token', { t })).join('') + ev('done', { words, raw, inTokens: 600, outTokens: tokens.length, ttftMs: 300, totalMs: 900, tokensPerSec: 40, neurons: 13, costUsd: null }); };
+const out = [];
+for (let i = 0; i < +N; i++) {
+  const c = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+  await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+  await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+  if (STUB) await c.route('**/coldgas/api/judge/stream', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body: slipped() }));
+  const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+  await p.goto(URL + '?play=reveal');
+  await p.waitForFunction(() => window.__coldgas?.S.mode === 'live', null, { timeout: 120000 });
+  await p.evaluate(() => window.__coldgas.fastForward());
+  try { await p.waitForFunction(() => { const S = window.__coldgas.S; return S.callMeta && (S.callMeta.done || S.callMeta.error || S.callMeta.replaced) && S.words?.coordinator; }, null, { timeout: 90000 }); } catch {}
+  await p.waitForTimeout(3000);
+  const r = await p.evaluate(() => { const S = window.__coldgas.S; const q = (id) => document.querySelector(`[data-judge="${id}"] .quote`)?.textContent;
+    return { total: S.card?.total, facts: S.card?.facts, words: S.words, meta: S.callMeta && { replaced: S.callMeta.replaced, model: S.callMeta.model, source: S.callMeta.source, raw: S.callMeta.raw }, shown: { engineer: q('engineer'), coordinator: q('coordinator'), designer: q('designer') },
+      replacedLine: document.querySelector('[data-rc-replaced]')?.textContent || null, inspect: document.querySelector('[data-receipt] .rc-inspect')?.textContent?.slice(0, 2000) }; });
+  r.errs = errs; out.push(r); console.error('run', i, r.total, JSON.stringify(r.meta?.replaced), r.replacedLine);
+  await c.close();
+}
+console.log(JSON.stringify(out, null, 1));
+await browser.close();

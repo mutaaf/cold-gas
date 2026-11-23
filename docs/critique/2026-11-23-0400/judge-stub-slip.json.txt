@@ -1,0 +1,76 @@
+[
+ {
+  "total": 97.3,
+  "facts": {
+   "course": "show",
+   "height": 26.9,
+   "progressPct": 100,
+   "invertedS": 3.7,
+   "launchHeight": 27.4,
+   "launchKmh": 27,
+   "entryKmh": 22,
+   "apex": 27.4,
+   "maxG": 3.3,
+   "brakeG": 3,
+   "brakeH": 2.3,
+   "rollDeg": 177,
+   "pitchDeg": 14,
+   "rotations": 0,
+   "sink": 0.8,
+   "tiltDeg": 1.1,
+   "headingDeg": 6.5,
+   "wheelSpreadMs": 58,
+   "padMiss": 1.5,
+   "airPct": 48,
+   "zeroToSixty": null,
+   "bottomOut": false,
+   "bodyStrike": false,
+   "contact": false,
+   "clearance": 5.1,
+   "crossedRow": true,
+   "apexOverRoof": null,
+   "flipped": false,
+   "fellOff": false,
+   "landedOnRamp": false,
+   "crashed": false,
+   "jumped": true,
+   "endReason": "settled",
+   "damagePct": 0,
+   "integrity": 100,
+   "damageZones": {
+    "nose": 0,
+    "tail": 0,
+    "left": 0,
+    "right": 0,
+    "roof": 0,
+    "floor": 0,
+    "susp": 0
+   },
+   "splash": false,
+   "splashKmh": 0,
+   "mudS": 0
+  },
+  "words": {
+   "headline": "A Perfect Ten",
+   "engineer": "Touchdown sink rate of 0.8 m/s was excellent.",
+   "coordinator": "Off the ledge and over the semi in one flight. The crowd got all of it.",
+   "designer": "Clean lines with gas to spare.",
+   "source": "ai"
+  },
+  "meta": {
+   "replaced": [
+    "coordinator"
+   ],
+   "model": "@cf/test/model",
+   "raw": "HEADLINE: A Perfect Ten\nENGINEER: Touchdown sink rate of 0.8 m/s was excellent.\nCOORDINATOR: That thirty-six second hang under the ledge was pure nerve and absolute theater.\nDESIGNER: Clean lines with gas to spare."
+  },
+  "shown": {
+   "engineer": "Touchdown sink rate of 2.6 ft/s 0.8 m/s was excellent.",
+   "coordinator": "",
+   "designer": "Clean lines with gas to spare."
+  },
+  "replacedLine": "1 remark replaced with the game’s own line: it stated a number the run didn’t make",
+  "inspect": "Inspect the call\n        SystemsPromptu\n        ResponseHEADLINE: A Perfect Ten\nENGINEER: Touchdown sink rate of 0.8 m/s was excellent.\nCOORDINATOR: That thirty-six second hang under the ledge was pure nerve and absolute theater.\nDESIGNER: Clean lines with gas to spare.",
+  "errs": []
+ }
+]
