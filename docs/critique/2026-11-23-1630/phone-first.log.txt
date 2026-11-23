@@ -1,0 +1,26 @@
+2.5 title mode
+13.7 title {"first":true,"start":"JumpThe Show","scheme":"thumb","course":"show","visibleButtons":["The Show","The Wall","The Lineup","JumpThe Show","How to play","iPhone beta"]}
+27.4 after tap countdown
+30.5 live after 14.187 s
+33.2 pad Hold|Climb cue Hold to goSkip drive 0.4 -6.0
+35.1 pad Holding|Climb cue Keep holding drive 0.4 -5.8
+78.8 pad Tap|Let go cue Tap to let go ramp 26.7 0.4
+82.5 pad Letting|Go cue  ramp 26.9 -0.5
+85.1 pad Slide|Aim cue  ramp 27.3 -2.3
+111.5 pad |Stopping cue  landed 0.4 -34.2
+131.1 score readable {"mode":"results","beat":false,"txt":"85.3","t":19.587}
+141.0 card {"total":85.3,"verdict":"Stuck it","crashed":false,"sink":1.1,"padMiss":6,"clearance":4,"invertedS":5.4,"tier":"assist","calm":true,"sheetText":null,"retry":false,"touchToSheet":23.848,"tapToLive":14.187}
+node:internal/modules/run_main:123
+    triggerUncaughtException(
+    ^
+
+locator.tap: Timeout 30000ms exceeded.
+Call log:
+[2m  - waiting for locator('[data-r-retry], [data-retry]').first()[22m
+
+    at /tmp/claude-0/-home-user-cold-gas/f949ba8f-30ad-544c-ad24-22a7260fcde1/scratchpad/first.mjs:28:79 {
+  log: [ "  - waiting for locator('[data-r-retry], [data-retry]').first()" ],
+  name: 'TimeoutError'
+}
+
+Node.js v22.23.5

@@ -1,0 +1,12 @@
+import { initPhysics } from '../src/sim/engine.js';
+import { stream, flyKeysLineup, flyTouch } from './lib/daily-reach.mjs';
+import { scoreRun } from '../src/sim/judge.js';
+import { coach } from '../src/sim/coach.js';
+await initPhysics();
+const r = stream(777); const tally = {}; let crashed = 0;
+for (let i = 0; i < 200; i++) { const run = flyKeysLineup(r); const card = scoreRun(run.t, { assist: true }); card.tier = 'assist';
+  if (!card.facts.crashed) continue; crashed++;
+  const c = coach(run.inputLog || run.log, 'lineup', card); const k = `${card.verdict} → ${c.items[0]?.id}`; tally[k] = (tally[k] || 0) + 1;
+  if (tally[k] === 1) console.log(k, '|', c.items.map((x) => `${x.title}: ${x.detail} → ${x.fix}`).join(' || '));
+}
+console.log('crashed', crashed, JSON.stringify(tally));

@@ -1,0 +1,30 @@
+// Production, first visit 390x844 touch: CPU profile of the cut from the tap on Jump to the countdown. Top self-time functions.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, URL = 'https://mutaafaziz.com/coldgas/', WAIT = '6000'] = process.argv;
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+await c.addInitScript(() => localStorage.setItem('coldgas_howto', 'new'));
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/obs', (r) => r.fulfill({ status: 204 }));
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage();
+await p.goto(URL);
+await p.waitForFunction(() => window.__coldgas?.S.mode === 'title', null, { timeout: 180000 });
+await p.waitForTimeout(+WAIT);
+await p.evaluate(() => { window.__lt = []; new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push([Math.round(e.startTime), Math.round(e.duration)]); }).observe({ type: 'longtask' }); window.__tap = performance.now(); });
+const cdp = await c.newCDPSession(p); await cdp.send('Profiler.enable'); await cdp.send('Profiler.setSamplingInterval', { interval: 1000 }); await cdp.send('Profiler.start');
+const t0 = Date.now();
+await p.locator('[data-start]').tap();
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 180000, polling: 50 });
+const tc = Date.now();
+const { profile } = await cdp.send('Profiler.stop');
+const lt = await p.evaluate(() => window.__lt.map(([s, d]) => [s - Math.round(window.__tap), d]));
+const self = new Map(); const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+const dt = profile.timeDeltas; for (let i = 0; i < profile.samples.length; i++) { const n = byId.get(profile.samples[i]); const f = n.callFrame; const k = `${f.functionName || '(anon)'} ${f.url.split('/').pop()}:${f.lineNumber}`; self.set(k, (self.get(k) || 0) + (dt[i] || 0) / 1000); }
+const top = [...self].sort((a, b) => b[1] - a[1]).slice(0, 20).map(([k, v]) => [k, Math.round(v)]);
+// inclusive time for the top frames of the main bundle: walk parents
+const parent = new Map(); for (const n of profile.nodes) for (const ch of n.children || []) parent.set(ch, n.id);
+const incl = new Map(); for (let i = 0; i < profile.samples.length; i++) { const seen = new Set(); let id = profile.samples[i]; while (id) { const f = byId.get(id).callFrame; const k = `${f.functionName || '(anon)'} ${f.url.split('/').pop()}:${f.lineNumber}`; if (!seen.has(k)) { seen.add(k); incl.set(k, (incl.get(k) || 0) + (dt[i] || 0) / 1000); } id = parent.get(id); } }
+const topIncl = [...incl].filter(([k]) => /index-|stage|run-|layer|three/.test(k)).sort((a, b) => b[1] - a[1]).slice(0, 25).map(([k, v]) => [k, Math.round(v)]);
+console.log(JSON.stringify({ tapToCountdown: (tc - t0) / 1000, longtasks: lt, topSelf: top, topIncl }, null, 1));
+await browser.close();

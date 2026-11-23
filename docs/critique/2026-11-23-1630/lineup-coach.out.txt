@@ -1,0 +1,12 @@
+# node lineup-coach.mjs (run from scripts/): 200 keys players on the Lineup (scripts/lib/daily-reach.mjs flyKeysLineup, seed 777),
+# Assist. The coach (src/sim/coach.js) on every crashed run: "<verdict> → <first finding id>".
+No jump → clean | Clean: No jump: nothing big to fix. → Want more? Try Pro: you fly the landing yourself, and it scores ×1.08.
+Contact → clean | Clean: Contact: nothing big to fix. → Want more? Try Pro: you fly the landing yourself, and it scores ×1.08.
+Contact → tilt | Touched down tilted: 34° off level at touchdown: the wheels met the ground one at a time. → Stop steering for the last 2 m and let the car level (LAND (Shift) levels it for you).
+Wrecked → clean | Clean: Wrecked: nothing big to fix. → Want more? Try Pro: you fly the landing yourself, and it scores ×1.08.
+Wrecked → tilt | Touched down tilted: 15° off level at touchdown: the wheels met the ground one at a time. → Stop steering for the last 2 m and let the car level (LAND (Shift) levels it for you).
+Wrecked → flipped | Rolled over: The car ended on its roof. → Touch down level, slowly: watch the sink band and the attitude dial.
+crashed 87 {"No jump → clean":13,"Contact → clean":28,"Contact → tilt":16,"Wrecked → clean":23,"Wrecked → tilt":5,"Wrecked → flipped":2}
+# Same population: keys 113/200 landed (median 89.3). One thumb (flyThumbLineup): 200/200 (median 92).
+# By the keys population's draws (n, landed): run-up speed 6:[30,24] 6.5:[31,20] 7:[36,25] 7.5:[25,12] 8:[29,18] 8.5:[23,14] floored:[26,0];
+# Space held 0.35 s:[49,0] 0.40:[48,30] 0.45:[58,44] 0.50:[45,39].
