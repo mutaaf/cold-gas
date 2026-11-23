@@ -1,7 +1,7 @@
 ---
 id: 0235
 title: The panel speaks authored lines at the landing, free and instant, and on the web the AI panel is something you ask for
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: engagement
@@ -54,3 +54,9 @@ before and after Ask; the ads spec unchanged and green.
 ## Out of scope
 The iPhone (0236). The crew's names and Wreck lines (0240). Removing the theatre, BYOK or the Worker's endpoints (they stay
 for the opt-in call and old clients).
+
+**Scout, 2026-11-23 (re-ranked to the top of `ready`).** On the production build the Show's reference sheet (390×844, first visit, no
+network) still opens with the chip "AI unavailable · local lines" and a model card "AI unavailable · gemma-4-26b-a4b-it · The judges
+are offline", beside "Replay the call" and "Use your own AI key": a first-time player's sheet leads with an error, against AGENTS.md §5½
+(the default voice is authored, no call made). The funnel (2026-11-07 → 11-23: 33 people, 54 runs) shows 0 `post`, 0 `share`, 0 `board-open`:
+the words are where a player decides whether a run was worth telling anyone. This ticket removes the error chip from the default sheet.

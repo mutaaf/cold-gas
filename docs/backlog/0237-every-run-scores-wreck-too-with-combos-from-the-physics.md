@@ -1,7 +1,7 @@
 ---
 id: 0237
 title: Every scored run gets a Wreck score too, with destruction combos that come from the physics
-status: proposed
+status: ready
 priority: P1
 size: M
 lens: player-feel
@@ -39,3 +39,7 @@ New `tests/unit/wreck.test.js` over recorded wreck logs from each course; vector
 
 ## Out of scope
 Showing it (0238, 0239). A server board (0244). Any change to `scoreRun` or the sim.
+
+**Scout, 2026-11-23 (promoted to `ready`).** The operator chose Wreck Club on 2026-11-13 and its pure scorer is still unbuilt on the web;
+0238 (the crash's combos and the card), 0239 (iPhone), 0242 and 0243 all wait on it. 22 of 54 runs this fortnight were wrecks (retry
+followed 20 times), so the punchline already happens; it just isn't scored. Keep it to the scorer and its unit tests; the web UI is 0238.
