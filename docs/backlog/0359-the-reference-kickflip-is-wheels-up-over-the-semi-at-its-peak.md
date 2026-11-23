@@ -1,7 +1,7 @@
 ---
 id: 0359
 title: The Lineup reference is wheels-up over the Semi at its peak, as the reveal's kickflip was
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: authenticity
