@@ -1,12 +1,12 @@
 ---
 id: 0357
 title: The Show's last second of brake is never shot across the splash tank, so the player sees the floor the car lands on
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: player-feel
 created: 2026-11-22
-pr:
+pr: 501
 by: critic
 ---
 

@@ -20,10 +20,10 @@
 import * as THREE from 'three';
 import { LINEUP, WALL, SHOW } from '../sim/courses.js';
 import { hudMode, onHudMode } from '../hud-mode.js';
-import { tankBoxes, standClear, sightBlocked } from './tank-sight.js';
+import { tankBoxes, standClear, sightBlocked, wheelsInSight } from './tank-sight.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
-const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0);
+const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), ahead = new THREE.Vector3();
 const m4 = new THREE.Matrix4();
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // The Wall's rigs were framed on a 19.8 m lip; they scale with the wall's real height.
@@ -65,6 +65,8 @@ const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the m
 // the wheels and the ring past them; src/render/tank-sight.js). The Wall has none.
 const TANKS = { show: tankBoxes(SHOW), lineup: tankBoxes(LINEUP) };
 const MARKS = { show: SHOW.pad, lineup: LINEUP.pad };
+const LAND_CUT = 6;   // m: the landed rig cuts in rather than ease from further than this (0357)
+const FOLLOW_LOW = 2.2, FOLLOW_AHEAD = 1.5, FOLLOW_STEPS = 4, FOLLOW_SWING = 60, FOLLOW_RECUT = 30;   // m: the lowest the Show's follow comes down to; s: the most ahead it looks for its bearing (0357)
 const LIFT_STEP = 0.75, LIFT_STEPS = 8;   // m: a stand no bearing of which is clear rises in these steps over the coping
 // deg: the bearings a ground stand may swing to round the car, in the order tried, 5° steps: toward +z (for a stand at +x,
 // past the Show's tank's near corner, keeping the floor between the car and the camera lit) to 90°, then toward −z, then
@@ -110,6 +112,8 @@ export function createDirector(camera) {
     titleSide: '', titleY: 0, titleAnchor: 0,            // where titleHold keeps the car's box: the band, its middle (px)
     titleFov: 0,                                         // the title's wider lens on an upright screen, when the car needs it (0131)
     landA: 0, standOk: true,                             // the ground stand's bearing (an index into STAND_TURN), whether it's clear (0355)
+    followA: 0, followDeg: NaN,                          // the Show follow's bearing: its STAND_TURN index and the angle it's at (0357)
+    cutAt: -Infinity, landIn: false,                     // when the last hard cut fell (st.t); whether the landed rig has taken over (0357)
     placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(), carryY: 0, placeT: 0, recuts: 0,   // the carry's locked-off placement (0113); the car's height and the time there, re-cuts so far (0118)
   };
 
@@ -129,7 +133,7 @@ export function createDirector(camera) {
   function snap() { st.init = false; }
   // A new run, a replay from the top or its loop: forget the last stunt (the Wall starts a few
   // metres from where it lands, so the car's position can't tell a new run from a landing).
-  function restart() { st.peak = 0; st.launched = false; st.shot = -1; st.landA = 0; snap(); }
+  function restart() { st.peak = 0; st.launched = false; st.shot = -1; st.landA = 0; st.cutAt = -Infinity; st.landIn = false; snap(); }
 
   // Smoothly fly the camera toward want/lookWant (rate per second).
   function ease(dt, rate, lookRate = 8) {
@@ -185,7 +189,56 @@ export function createDirector(camera) {
     const bx = TANKS[st.course];
     if (!bx || !bx.length || !st.standOk) return;
     const p = camera.position;
-    if (!standClear(bx, p.x, p.y, p.z, carPos, MARKS[st.course])) { snap(); ease(dt, rate, lookRate); }
+    // Not within CARRY_MIN of the last cut (0357: the landed rig's own cut in may have just fallen); it eases on instead.
+    if (st.t - st.cutAt >= CARRY_MIN && !standClear(bx, p.x, p.y, p.z, carPos, MARKS[st.course])) { snap(); st.cutAt = st.t; ease(dt, rate, lookRate); }
+  }
+  // The Show's follow down to the pad (0357), kept clear of the splash tank: the rig `ox` m out, `oz` m along, `y` up,
+  // swung round the car to the first bearing in STAND_TURN from which the floor under the four wheels (and, near the
+  // mark, the ring) is in sight past the tank: from here now, and from the same bearing at FOLLOW_LOW (the height the
+  // rig comes down to) round where the car is heading, at each quarter of the way down (its velocity held over the time a
+  // brake to a stop takes over its height, 2y/|vy|, at most FOLLOW_AHEAD s: the retro-burn slows the fall far more than
+  // the drift). So the bearing it takes at the cut in still holds at the touchdown, and the
+  // eased camera never trails a swing the car's drift asks for late. The search starts at the bearing the shot already
+  // holds and only goes on from there (st.followA, reset at the cut in): a swing is never undone and re-made. Where no
+  // bearing sees all the way down (a car heading for the water), the first that sees now and most of the way down wins;
+  // where none sees now, it keeps the last one (the landed rig, then easeGround, take over below 1 m).
+  function followStand(carPos, carVel, dt, ox, y, oz) {
+    const bx = TANKS[st.course];
+    if (!bx || !bx.length) { want.set(carPos.x + ox, y, carPos.z + oz); return; }
+    const mark = MARKS[st.course];
+    const T = Math.min(FOLLOW_AHEAD, (2 * carPos.y) / Math.max(1, -carVel.y));   // braking to a stop over its height
+    let best = st.followA, top = -1;
+    for (let a = st.followA; a < STAND_TURN.length && top < FOLLOW_STEPS + 1; a++) {
+      const c = TURN_COS[a], s = TURN_SIN[a], dx = ox * c - oz * s, dz = ox * s + oz * c;
+      if (!standClear(bx, carPos.x + dx, y, carPos.z + dz, carPos, mark)) continue;
+      let n = 1;
+      for (let k = 1; k <= FOLLOW_STEPS; k++) {
+        const f = (T * k) / FOLLOW_STEPS;
+        ahead.set(carPos.x + carVel.x * f, 0, carPos.z + carVel.z * f);
+        if (standClear(bx, ahead.x + dx, FOLLOW_LOW, ahead.z + dz, ahead, mark)) n++;
+      }
+      if (n > top) { top = n; best = a; }
+    }
+    const a = best;
+    st.followA = a;
+    // The rig swings round the car on its arc at most FOLLOW_SWING °/s (a chord eased across would come in close and
+    // move metres a frame), from the bearing it was cut in at. A bearing more than FOLLOW_RECUT° off (a car drifting
+    // toward the tank late) is cut to instead, once CARRY_MIN has passed since the last cut: a slew that long trails
+    // through the bearings it was moving off because they were blocked.
+    const to = STAND_TURN[a];
+    if (Number.isNaN(st.followDeg)) st.followDeg = to;
+    else if (Math.abs(to - st.followDeg) > FOLLOW_RECUT && st.t - st.cutAt >= CARRY_MIN) { st.followDeg = to; snap(); st.cutAt = st.t; }
+    else st.followDeg += clamp(to - st.followDeg, -FOLLOW_SWING * dt, FOLLOW_SWING * dt);
+    const r = (st.followDeg * Math.PI) / 180, c = Math.cos(r), s = Math.sin(r);
+    want.set(carPos.x + ox * c - oz * s, y, carPos.z + ox * s + oz * c);
+  }
+  // Whether the carry's locked-off camera has lost the floor under the car's wheels behind a tank (0357): it hands over
+  // to the follow, which swings clear. Not within CARRY_MIN of the last cut (no two cuts a frame apart).
+  function carryBehindTank(carPos) {
+    const bx = TANKS[st.course];
+    if (!bx || !bx.length || !st.placed || st.t - st.cutAt < CARRY_MIN) return false;
+    const p = st.carryPos;
+    return wheelsInSight(bx, p.x, p.y, p.z, carPos) < 4;
   }
   const lens = (f) => (camera.aspect >= LENS_ASPECT ? f : (Math.atan(Math.tan(f * Math.PI / 360) * LENS_ASPECT / camera.aspect) * 360) / Math.PI);
 
@@ -295,6 +348,7 @@ export function createDirector(camera) {
     if (camera.aspect < 1) fitRowAcross(carPos, tanH);
     fitCarry(carPos);
     if (camera.aspect >= 1) keepFront(carPos, tanH);
+    if (!st.placed || st.carryPos.distanceTo(want) > 1) st.cutAt = st.t;   // a hard cut (0357: none within CARRY_MIN of the next)
     st.carryPos.copy(want); st.carryLook.copy(lookWant); st.placed = true; st.carryY = carPos.y; st.placeT = st.t;
   }
   // The carry is placed for the car at its highest over the row's front, and the span from the car down to the row's
@@ -485,6 +539,7 @@ export function createDirector(camera) {
     trackWall(carPos, carVel, phase);
     const speed = Math.hypot(carVel.x, carVel.y, carVel.z);
     const landed = st.launched && (phase === 'landed' || phase === 'done' || (carPos.y < 1.0 && st.t - st.launchT > 0.6));
+    if (!landed) st.landIn = false;
     if (!st.launched && carPos.z < -16 && st.peak < 1.5) {
       // Approach: chase from behind, the curl growing ahead.
       want.set(carPos.x * 0.6, carPos.y + 2.1 + speed * 0.012, carPos.z - 7.6 - speed * 0.07);
@@ -531,9 +586,13 @@ export function createDirector(camera) {
       // car from that far out walked the lit Wall across the frame (show-live-jets wall 104 → 188‰ on a phone). If
       // the car nears the far edge (a narrow screen, a long flight) it cuts to a fresh placement from there.
       // Past the row's back it cuts to the tracking follow down to the pad, which the landing rig eases out of.
-      if (st.shot === CARRY && (carPos.z < ROW_Z0 || carryUnderPad(carPos))) { st.shot = FOLLOW; snap(); }
+      // 0357: also when the carry has lost the floor under the wheels behind a splash tank, and, rather than re-place the
+      // carry for a car that will be past the row's back within CARRY_MIN anyway (two cuts a few frames apart), at once.
+      const out = st.shot === CARRY && st.placed && carryOut(carPos);
+      if (st.shot === CARRY && (carPos.z < ROW_Z0 || carryUnderPad(carPos) || carryBehindTank(carPos) ||
+        (out && st.t - st.cutAt >= CARRY_MIN && carPos.z + carVel.z * CARRY_MIN < ROW_Z0))) { st.shot = FOLLOW; st.followA = 0; st.followDeg = NaN; st.cutAt = st.t; snap(); }
       if (st.shot === CARRY) {
-        if (!st.placed || carryOut(carPos)) placeCarry(carPos);
+        if (!st.placed || out) placeCarry(carPos);
         else if (recut(carPos)) { st.recuts++; placeCarry(carPos); }
         camera.position.copy(st.carryPos);
         camera.lookAt(st.carryLook);
@@ -541,7 +600,11 @@ export function createDirector(camera) {
         st.smooth.copy(st.carryPos); st.lookS.copy(st.carryLook); st.init = true;
         return;
       }
-      want.set(carPos.x + 21 + 0.5 * Math.max(0, carPos.y - 10), clamp(carPos.y * 0.5 + 1.5, 2.2, 14), carPos.z + 2);
+      // The follow stands ≈ 21 m out at +x, 2–3 m up as the car comes down, and since 0340 the Show's splash tank stands
+      // between it and the mark: the last second of brake was shot across the coping and the water (0357). followStand
+      // swings it round the car toward +z, past the tank's near corner, until the floor under the wheels (and the ring,
+      // near the mark) is in sight; with the same eased approach, so it never jumps.
+      followStand(carPos, carVel, dt, 21 + 0.5 * Math.max(0, carPos.y - 10), clamp(carPos.y * 0.5 + 1.5, FOLLOW_LOW, 14), 2);
       lookWant.set(carPos.x * 0.5, carPos.y * 0.55 + 0.8, carPos.z - 2);
       ease(dt, 3.2, 9);
       fovTo(54, dt);
@@ -562,6 +625,13 @@ export function createDirector(camera) {
       const ox = LAND_AHEAD[0] + u * (LAND_SIDE[0] - LAND_AHEAD[0]), oz = LAND_AHEAD[1] + u * (LAND_SIDE[1] - LAND_AHEAD[1]);
       groundStand(carPos, ox, 1.25, oz, u > 0);
       lookWant.set(carPos.x, carPos.y + 0.2 + liftFor(u, Math.hypot(ox, oz), 40), carPos.z);
+      // 0357: a stand far from where the descent left the camera (ahead of the car on a wide screen, the follow out at
+      // +x and swung toward +z) is cut to, once, as the rig takes over: eased, it swept metres a frame round the car and
+      // then cut anyway where the sweep crossed the tank. Not within CARRY_MIN of the last cut.
+      if (!st.landIn) {
+        st.landIn = true;
+        if (st.course === 'show' && st.init && camera.position.distanceTo(want) > LAND_CUT && st.t - st.cutAt >= CARRY_MIN) { snap(); st.cutAt = st.t; }
+      }
       easeGround(carPos, dt, 3, 8);
       fovTo(lens(40), dt);
     }
@@ -770,7 +840,7 @@ export function createDirector(camera) {
   // update(dt, time, { carPos, carVel, phase, mode: 'title' | 'live' | 'replay', course: 'show' | 'wall' | 'lineup' })
   function update(dt, time, { carPos, carVel, phase, mode, course = 'show', subject = null }) {
     if (mode !== st.mode || course !== st.course) {
-      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.dip = 0; st.punch = 0; st.landA = 0;
+      st.mode = mode; st.course = course; st.t = 0; st.shot = -1; st.peak = 0; st.launched = false; st.dip = 0; st.punch = 0; st.landA = 0; st.cutAt = -Infinity; st.landIn = false;
       st.hx = 0; st.hz = 1; st.cutT = 0; st.titleFov = 0; st.titleSide = '';
       snap(); frameOffset(mode);
     }
