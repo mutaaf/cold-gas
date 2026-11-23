@@ -1,0 +1,46 @@
+// Production, the Lineup reference stepped at 1/60 s (sim + director together, as lineup-prod.mjs): every air frame, how
+// much of the car's projected box is on screen, and how much of its screen width a floodlight pole (courses.js FIXTURES.poles,
+// x ±13, z −60 + 24k, 9 m, Ø 0.15 m mean) nearer the lens than the car covers.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, OUT, view = 'phone', URL = 'https://mutaafaziz.com/coldgas/'] = process.argv;
+const phone = view === 'phone';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 } });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage();
+await p.goto(URL); await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
+await p.evaluate(() => document.querySelector('[data-course="lineup"]')?.click());
+await p.waitForTimeout(800);
+await p.evaluate(() => window.__coldgas.startRun('jump'));
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 60000 });
+await p.evaluate(() => { const g = window.__coldgas, S = g.S; S.autopilot = g.createAutopilot('lineup'); g.skipCountdown();
+  S.holdLive = true; const orig = g.director.update; g.director.update = () => {};
+  window.__step = () => { if (S.mode === 'live') g.liveStep(1 / 60); orig(1 / 60, S.time, { carPos: g.carRoot.position, carVel: S.mode === 'live' ? S.run.car.vel : { x: 0, y: 0, z: 0 }, phase: S.run.phase, mode: S.mode === 'live' ? 'live' : 'replay', course: 'lineup', subject: g.hero.group }); };
+  while (S.run.phase !== 'air') window.__step(); });
+const rows = []; let lift = null, prevCam = null, n = 0;
+for (let i = 0; i < 300; i++) {
+  const s = await p.evaluate(() => { const g = window.__coldgas, S = g.S; window.__step(); const cam = g.camera; cam.updateMatrixWorld();
+    const V = cam.position.constructor, car = S.run.car, grp = g.hero.group; grp.updateMatrixWorld(true);
+    const cp = new V(car.pos.x, car.pos.y, car.pos.z); const xs = [], ys = [];
+    for (const sx of [-1, 1]) for (const sy of [-0.5, 1]) for (const sz of [-1, 1]) { const v = new V(sx * 1.0, sy * 0.575 + 0.2, sz * 2.325).applyQuaternion(grp.getWorldQuaternion(grp.quaternion.clone())).add(cp).project(cam); xs.push(v.x); ys.push(v.y); }
+    const x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const cl = (v) => Math.max(-1, Math.min(1, v)); const full = (x1 - x0) * (y1 - y0), inside = Math.max(0, cl(x1) - cl(x0)) * Math.max(0, cl(y1) - cl(y0));
+    const dCar = cam.position.distanceTo(cp); let cover = 0, pole = null;
+    for (let z = -60; z < 80; z += 24) for (const px of [-13, 13]) { const pc = new V(px, Math.min(8.9, car.pos.y), z); const d = cam.position.distanceTo(pc); if (d >= dCar) continue;
+      const a = pc.clone().project(cam), b = pc.clone().add(new V(0.075, 0, 0).applyQuaternion(cam.quaternion)).project(cam); const hw = Math.abs(b.x - a.x);
+      const ov = Math.max(0, Math.min(x1, a.x + hw) - Math.max(x0, a.x - hw)) / (x1 - x0); if (ov > cover) { cover = ov; pole = [px, z, +d.toFixed(2), +(hw * 2 / 2 * innerWidth).toFixed(0)]; } }
+    return { t: S.run.tick / 240, phase: S.run.phase, y: car.pos.y, z: car.pos.z, cam: [cam.position.x, cam.position.y, cam.position.z], onScreen: inside / full, boxW: (x1 - x0) / 2, boxX: [x0, x1], cover, pole }; });
+  if (lift === null) lift = s.t;
+  const jump = prevCam ? Math.hypot(...s.cam.map((v, k) => v - prevCam[k])) : 0; prevCam = s.cam;
+  rows.push({ dt: +(s.t - lift).toFixed(3), phase: s.phase, y: +s.y.toFixed(2), z: +s.z.toFixed(2), cam: s.cam.map((v) => +v.toFixed(1)), on: +s.onScreen.toFixed(2), boxX: s.boxX.map((v) => +v.toFixed(2)), cover: +s.cover.toFixed(2), pole: s.pole, cut: jump > 1 });
+  if (s.cover > 0.1 && n < 4 && i % 3 === 0) { n++; await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))); await p.screenshot({ path: `${OUT}/lineup-${view}-pole-dt${rows.at(-1).dt}-cover${rows.at(-1).cover}.png` }); }
+  if (s.phase !== 'air' && rows.filter((q) => q.phase !== 'air').length > 10) break;
+}
+const air = rows.filter((r) => r.phase === 'air');
+const q = (k, f) => air.filter(f).length;
+console.log(JSON.stringify({ view, airFrames: air.length, onScreenMean: +(air.reduce((a, r) => a + r.on, 0) / air.length).toFixed(2), onScreenUnder75: q('on', (r) => r.on < 0.75), onScreenUnder50: q('on', (r) => r.on < 0.5),
+  poleOver10: q('c', (r) => r.cover > 0.1), poleOver25: q('c', (r) => r.cover > 0.25), cuts: rows.filter((r) => r.cut).map((r) => `${r.dt} cam ${r.cam}`),
+  every6: air.filter((_, i) => i % 6 === 0).map((r) => `${r.dt} y${r.y} z${r.z} cam ${r.cam} on${r.on} x${r.boxX} pole${r.cover}${r.pole ? '@' + r.pole : ''}`) }, null, 1));
+await browser.close();

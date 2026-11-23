@@ -1,0 +1,29 @@
+// 0276 on production: a landed Show run and a wreck with the down-jets cut below 6 m, both flown to their cards as the
+// player's own (S.autopilot dropped before the card), then the page hidden so the beacon flushes. Logs the obs bodies.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+const bodies = [];
+await c.route('**/api/obs', (r) => { if (r.request().method() === 'POST') { bodies.push(r.request().postData()); return r.fulfill({ status: 204 }); } return r.continue(); });
+await c.route('**/api/scores**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 200, contentType: 'application/json', body: '{}' }) : r.continue());
+await c.route('**/api/judge/**', (r) => r.abort());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage();
+await p.goto('https://mutaafaziz.com/coldgas/');
+await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
+const build = await p.evaluate(() => [...document.scripts].map((s) => s.src).find((s) => /index-/.test(s)));
+const fly = (cut) => p.evaluate(async (cut) => { const g = window.__coldgas, S = g.S; g.startRun('jump'); const ap = g.createAutopilot('show');
+  S.autopilot = function (run) { const o = ap(run); if (cut && run.phase === 'air' && run.car.vel.y < 0 && run.car.pos.y < 6) for (const k of Object.keys(o)) if (k !== 'assist') o[k] = 0; return o; };
+  g.skipCountdown(); for (let i = 0; i < 9000 && S.run.phase !== 'done'; i++) g.liveStep(1 / 60); S.autopilot = null; g.fastForward();
+  await new Promise((r) => setTimeout(r, 2500));
+  return { total: S.card?.total, verdict: S.card?.verdict, crashed: !!S.card?.facts?.crashed, coach: S.coach?.items?.slice(0, 2).map((i) => i.id || i.key || i.title) }; }, cut);
+const a = await fly(false);
+await p.waitForTimeout(1500);
+const b = await fly(true);
+await p.waitForTimeout(1500);
+await p.evaluate(() => { Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true }); Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); window.dispatchEvent(new Event('pagehide')); });
+await p.waitForTimeout(4000);
+const play = bodies.map((s) => { try { const j = JSON.parse(s); return j.play || j.p || j.ev || j; } catch { return s.slice(0, 300); } });
+console.log(JSON.stringify({ build, a, b, nBodies: bodies.length, play, raw: bodies.map((s) => s.slice(0, 900)) }, null, 1));
+await browser.close();

@@ -106,6 +106,67 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // keys-carry unrun) while 1/4 ran 29.0 min, 3/4 19.3 (97 tests, ≈ 38 worker-minutes) and 4/4 23.0. Moving instruments,
 // judges-deploy and keys-carry (12 tests, ≈ 10 worker-minutes on that run) into shard 3, 57:85:109:104 is ≈ 60 / 61 / 48 /
 // 46 on that run. The tenth re-cut: still luck, not headroom. Proposal #456 (ci.yml, the operator's) is the cure.
+// Main on 72008ae (#483) then cancelled e2e 3/4 at 35 min (81 of 109 done, none failed; frame-probe's tail, privacy and the
+// layout files after it unrun) while 1/4 ran 29.4 min, 2/4 25.8 (85 tests, ≈ 52 worker-minutes) and 4/4 29.6. Priced on that
+// run (unrun tests at ≈ 0.5 worker-minutes each, shard 3 ≈ 84 whole), handing instruments, judges-deploy and keys-carry back to
+// shard 2 and privacy onward to shard 4, 57:97:83:118 is ≈ 59 / 62 / 65 / 67 (≈ 30-34 min). The eleventh re-cut, with ≈ 3 %
+// margin on the slowest shard: luck, not headroom. Proposal #456 (ci.yml, the operator's) is the cure.
+// Main on bb777b7 (#485) then cancelled e2e 4/4 at 35 min twice (93 and, on the operator's re-run, 114 of 118 done, none
+// failed) while 1/4 ran 16.3 min, 2/4 27.7 and 3/4 22.0; #486's 61:101:96:97 then cancelled 2/4 (twice) and 4/4 on its own
+// runs. On each test's mean over four whole runs (bb777b7 with both 4/4 attempts, 72008ae, and #486's f592f76 and 1a40bdf;
+// ≈ 224 worker-minutes) 57:97:83:118 is 46.5 / 60.7 / 47.0 / 69.9 and 61:101:96:97 is 50.5 / 60.4 / 54.0 / 59.2;
+// 63:99:101:92 cuts 63 / 99 / 101 / 92 tests ≈ 54.1 / 56.8 / 56.2 / 56.9 (shard 2 starts at fan, 3 at lazy-retry, 4 at
+// retry), the best file-boundary cut of that mean. The thirteenth re-cut: ≈ 20 % margin against 1.2-1.4× runner swings, so
+// luck, not headroom. Proposal #456 (ci.yml, the operator's) is the cure.
+// That cut's own PR run (#487) then cancelled e2e 3/4 at 35 min twice: all 101 green at the wall the first time, 96 of 101
+// on the re-run, ≈ 68 worker-minutes on both runners, while 4/4 ran 18.3 min (≈ 36). On the mean of five runs (those four and
+// #487's; ≈ 222 worker-minutes) 63:99:101:92 is 52.7 / 55.9 / 60.6 / 53.3; 68:99:91:97 cuts 68 / 99 / 91 / 97 tests ≈ 55.4 /
+// 57.7 / 53.9 / 55.5 (shard 2 starts at first-landing, 3 at learn, 4 at restart-lets-go), the best file-boundary cut of that
+// mean, and ≈ 60.8 at worst on #487's runners. The fourteenth re-cut: luck, not headroom. Proposal #456 (ci.yml) is the cure.
+// Main on a50fe85 (#487) then cancelled e2e 1/4 (65 of 68 done) and 2/4 (90 of 99) at 35 min, none failed, while 3/4 ran
+// 23.4 min and 4/4 22.0. On each test's mean over three whole main runs (a50fe85, bb777b7 with both 4/4 attempts, 72008ae;
+// ≈ 232 worker-minutes) 68:99:91:97 is 58.7 / 64.9 / 51.7 / 56.3; 68:94:96:97 cuts 68 / 94 / 96 / 97 tests ≈ 58.7 / 60.2 /
+// 56.4 / 56.3 (shard 2 starts at first-landing, 3 at lazy-retry, 4 at restart-lets-go), the best file-boundary cut of that
+// mean. Shard 1 overflowed at a 58.7 mean: every cut leaves ≈ 58-60 a shard against ≈ 68 that a 35-minute job holds. The
+// fifteenth re-cut: luck, not headroom. Proposal #456 (ci.yml) is the cure.
+// Main on 4e2d2e0 (#488) then cancelled e2e 2/4 (89 of 94 done) and 4/4 (88 of 97) at 35 min, none failed, while 1/4 ran
+// 17.1 min and 3/4 19.6. The same files swung ≈ 2× between runs: 1/4's cost 33.8 worker-minutes here and 67.7 on a50fe85,
+// 4/4's 67.9 here and 43.6 there. On each test's mean over those two whole runs (≈ 227 worker-minutes; 6 tests unparsed at
+// 60 s) 68:94:96:97 is 51.4 / 72.9 / 45.5 / 57.3; 77:71:110:97 cuts 77 / 71 / 110 / 97 tests ≈ 55.5 / 55.9 / 58.6 / 57.3
+// (shard 2 starts at first-run, 3 at judges-deploy, 4 at restart-lets-go), the best file-boundary cut of that mean. With a
+// 2× runner swing no cut holds: the sixteenth re-cut, luck, not headroom. Proposal #456 (ci.yml) is the cure.
+// Main on 7b75946 (#484) then cancelled e2e 4/4 at 35 min (≈ 87 of 97 done, none failed) while 1/4 ran 20.0 min, 2/4 28.0
+// and 3/4 23.0; 2cd66d3's own run of 77:71:110:97 had cancelled 3/4 once before its re-run went green. On each test's mean
+// over those two whole runs (2cd66d3 with 3/4's green re-run, 7b75946; ≈ 197 worker-minutes, unrun tests filled from the
+// other run) 77:71:110:97 is 47.2 / 40.9 / 48.9 / 63.8; 80:91:107:77 cuts 80 / 91 / 107 / 77 tests ≈ 48.6 / 50.8 / 50.0 /
+// 51.4 (shard 2 starts at first-title, 3 at lifecycle-fold, 4 at smoke), the best file-boundary cut of that mean (exhaustive
+// search). On 7b75946's runners alone it is ≈ 41 / 60 / 51 / 59. The seventeenth re-cut: luck, not headroom. Proposal #456
+// (ci.yml) is the cure.
+// That cut's own PR run (#493) then cancelled e2e 2/4 and 3/4 at 35 min (none failed; lazy-retry, learn and a few others
+// unrun) while 1/4 ran 20.8 min and 4/4 17.6 (≈ 211 worker-minutes in all, the slowest of the three). Priced on each test's
+// cost in each of the three whole runs (2cd66d3, 7b75946, #493), 88:85:98:84 minimises the worst shard of any run: ≈ 59 / 39 /
+// 44 / 49 on 2cd66d3, 47 / 55 / 44 / 65 on 7b75946, 46 / 66 / 66 / 41 on #493 (mean ≈ 51 / 54 / 51 / 51; shard 2 starts at
+// fold, 3 at lifecycle, 4 at scenery). No file-boundary cut keeps every shard of those three runs under ≈ 66 worker-minutes,
+// about what a 35-minute job holds: a coin flip. Proposal #456 (ci.yml) is the cure.
+// Main then cancelled e2e 2/4 at 35 min twice running, on bd830b0 and 8cd3192 (84 of 85 done both times, none failed),
+// while 3/4 ran 26.4 and 23.4 min and 4/4 33.2 and 18.9. 88:79:104:84 moves shard 2's last six tests (learn and
+// lifecycle-fold, ≈ 5.3 worker-minutes on both runs) into shard 3: ≈ 32.5 / 26-29 min on those runners; shards 1 and 4 keep
+// their lists. bd830b0's whole run was ≈ 275 worker-minutes against the 280 four jobs hold, so this is the eighteenth re-cut,
+// luck, not headroom. Proposal #456 (ci.yml) is the cure.
+// 0282 adds two tests to theatre.spec (shard 4's): 88:79:104:86 keeps every shard's files exactly main's.
+// Main on 0fce800 (#494) then cancelled e2e 3/4 at 35 min (101 of 104 done, none failed; rookie's last three unrun)
+// while 1/4 ran 29.0 min, 2/4 32.7 and 4/4 25.0. 88:79:91:99 moves shard 3's tail (restart-lets-go, results-header, retry,
+// rookie: 13 tests, ≈ 8 worker-minutes on that run) into shard 4, ≈ 32.5 / 29 min on those runners; shards 1 and 2 keep
+// their lists (--list diffed). The nineteenth re-cut, luck, not headroom. Proposal #456 (ci.yml) is the cure.
+// Main on ac3dca4 (#497) then cancelled e2e 1/4 at 35 min (63 of 88 done, none failed), and #499's PR run cancelled it again
+// on another runner (64 of 88): shard 1's first 63 tests cost ≈ 68.7 worker-minutes on both, against 47.7 on 0fce800. Priced
+// per test on those three whole runs, 63:90:98:106 minimises the worst shard on any one run (≈ 68.7, against 88:79:91:99's
+// 79): fan..focus-trap join shard 2, keys-carry..lazy-retry shard 3, replay-phone shard 4, all at file boundaries. The
+// twentieth re-cut, with no margin at all: a 35-minute job holds ≈ 68-70. Proposal #456 (ci.yml) is the cure.
+// #499's next run cancelled 1/4 a third time with only 63 tests (all passed, the 63rd at 34.7 min) while 2/4 ran 90 tests in
+// 16.1 min. Normalising four whole runs by each job's runner speed (runner factors 0.48-1.28), shard 1's 63 tests cost ≈ 68 at
+// speed 1: those files are heavy, not unlucky. 57:85:92:123 is ≈ 57 / 61 / 61.5 / 61.4 at speed 1, the most even cut (shard 2
+// starts at driving-levels, 3 at instruments, 4 at phone-frame). It would have passed two of those four runs; 63:90:98:106 none.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -113,7 +174,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '57:85:109:104';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '57:85:92:123';
 
 export default defineConfig({
   testDir: 'tests/e2e',

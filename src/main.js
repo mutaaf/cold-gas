@@ -656,7 +656,8 @@ function finishRun() {
   if (!S.autopilot) coachRun();
   // Your best run becomes the ghost for the next attempt (the reference jump only until you
   // finish one of your own). Storage keeps whichever is better, even across tabs.
-  if (run.frames.length) {
+  // 0272: a run that never jumped is no mark, so it never becomes the best the next run is measured against.
+  if (run.frames.length && (S.autopilot || S.card?.facts?.jumped)) {
     const g = packFrames(run.frames, S.card.total, !!S.autopilot, run.course);
     ghostLoaded(run.course).then(() => { if (isBetter(S.ghosts[run.course], g)) { S.ghosts[run.course] = g; saveBest(g); } });
   }
@@ -1008,7 +1009,8 @@ async function runPanel(run, replay = null) {
       const q = liveQueued; liveQueued = null;
       if (S.run !== run || !q || liveOver) return;
       ui.liveCall(q, { onWatch: () => mod.watchCall() });
-      ui.liveWords(q.words);
+      // A remark that has stated a number the run didn't make is held, not typed onto the sheet (0282).
+      ui.liveWords(late.liveFaithful(q.words, card, q.brief, q.phase === 'done'));
     });
     liveQueued = st;
   };
@@ -1022,7 +1024,12 @@ async function runPanel(run, replay = null) {
   if (!replay && judgesOverran(meta.error, deadlineMs)) obs.fail('judge', new Error('judge deadline'), 'fetch');
   if (!replay) {
     if (meta.verify?.card && Math.abs(meta.verify.card.total - card.total) > 0.05) console.warn('server card differs', meta.verify.card.total, card.total);
-    S.words = words; S.callMeta = meta;
+    // 0282: a model's remark that states a number the run didn't make is swapped for the same judge's own line before
+    // the sheet shows it; the receipt says so, and the model's text stays under Inspect the call (meta.raw, invariant 5½).
+    const checked = meta.ok && words?.source !== 'local' ? late.faithfulWords(words, card, late.localWords, meta.user || '') : { words, replaced: [] };
+    meta.replaced = checked.replaced; meta.replacedNote = checked.replaced.length ? late.replacedLine(checked.replaced.length) : '';
+    if (checked.replaced.length) obs.play('words-replaced');
+    S.words = checked.words; S.callMeta = meta;
   }
   ui.words(S.words);
   // Replay the call: one at a time (a second press while it plays does nothing).

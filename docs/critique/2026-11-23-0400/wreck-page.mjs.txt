@@ -1,0 +1,33 @@
+// Production page, stepped at 1/60 s (S.holdLive): the Show reference to the first air tick, then Pro with nothing held.
+// Every frame from the first impact: phase, damage, upright, the nozzle throttles the plumes draw, and S.mode;
+// then the aftermath as the page plays it. Screenshots at +0.0, +0.5, +1.0, +2.0 s after the first hit.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, OUT = 'desk', URL = 'https://mutaafaziz.com/coldgas/'] = process.argv;
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage();
+await p.goto(URL); await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 180000 });
+await p.evaluate(() => { const g = window.__coldgas; g.setTier('pro', { persist: false }); g.startRun('jump'); });
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 60000 });
+await p.evaluate(() => { const g = window.__coldgas, S = g.S; S.autopilot = g.createAutopilot('show'); g.skipCountdown(); S.holdLive = true;
+  const orig = g.director.update; g.director.update = () => {};
+  window.__step = () => { if (S.mode === 'live') g.liveStep(1 / 60); orig(1 / 60, S.time, { carPos: g.carRoot.position, carVel: S.mode === 'live' ? S.run.car.vel : { x: 0, y: 0, z: 0 }, phase: S.run.phase, mode: S.mode === 'live' ? 'live' : 'replay', course: 'show', subject: g.hero.group }); };
+  let i = 0; while (S.run.phase !== 'air' && i++ < 20000) window.__step(); S.autopilot = null; });
+const rows = []; let hit = null; const shots = new Set();
+for (let i = 0; i < 900; i++) {
+  const s = await p.evaluate(() => { const g = window.__coldgas, S = g.S; window.__step(); const r = S.run, c = r.car, q = c.quat; let sum = 0, mx = 0; for (const v of c.throttles) { sum += v; mx = Math.max(mx, v); }
+    const pl = g.plumes; return { mode: S.mode, phase: r.phase, tick: r.tick, hits: c.impacts.count, dmg: Math.round(r.damage.total), air: +c.air.toFixed(1), up: +(1 - 2 * (q.x * q.x + q.z * q.z)).toFixed(2), y: +c.pos.y.toFixed(2), jets: +sum.toFixed(2), max: +mx.toFixed(2), mist: pl?.live?.() ?? null, after: !!r.after, afterDone: !!r.after?.done, manual: S.lastInput?.manual }; });
+  if (hit === null && s.hits > 0) hit = s.tick;
+  if (hit === null) continue;
+  const dt = (s.tick - hit) / 240; s.dt = +dt.toFixed(3); rows.push(s);
+  for (const t of [0, 0.5, 1, 2, 3]) if (dt >= t && !shots.has(t)) { shots.add(t); await p.evaluate(() => new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(r)))); await p.screenshot({ path: `${OUT}/wreck2-dt${t}.png` }); }
+  if (s.mode !== 'live' || dt > 6) break;
+}
+console.log(rows.filter((_, i) => i % 6 === 0).map((r) => JSON.stringify(r)).join('\n'));
+const done = rows.find((r) => r.phase === 'done'); const lastJet = [...rows].reverse().find((r) => r.max > 0.05);
+const w = rows.find((r) => r.dmg >= 60); const jw = rows.filter((r) => w && r.tick >= w.tick && r.max > 0.05); console.log('wrecked (damage>=60) at', w?.dt, 'phase', w?.phase, 'air then', w?.air, '| frames with a nozzle >5% from then', jw.length, 'peak', Math.max(0, ...jw.map((r) => r.max)), 'last', jw.at(-1)?.dt, '| air at done', rows.find((r) => r.phase === 'done')?.air, 'at end', rows.at(-1).air);
+console.log('first done at', done?.dt, 'last jet > 5% at', lastJet?.dt, 'phase', lastJet?.phase, 'jet frames after the first hit', rows.filter((r) => r.max > 0.05).length, 'of', rows.length);
+await browser.close();

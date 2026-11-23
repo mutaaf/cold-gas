@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test';
+import { localWords } from '../../src/panel.js';
 
 // A streamed model answer plays through the judges' theatre: the words show on their own dark
 // panel during COMPUTE, the panel leaves the stage when the verdict is spelled, and the words land
@@ -183,3 +184,103 @@ for (const [w, h] of THEATRE_VIEWPORTS) {
     await page.close();
   });
 }
+
+// 0282: a remark that states a number the run didn't make is never shown. The stream answers the Coordinator's slip
+// the critic saw on production ("thirty-six second hang" against invertedS 3.7): the sheet shows the Coordinator's own
+// line (localWords) instead, the receipt says so in a line, and Inspect the call still shows what the model wrote.
+const SLIP = 'That thirty-six second hang under the ledge was pure nerve and absolute theater.';
+const slipped = () => {
+  const ev = (e, d) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`;
+  const words = { headline: 'A Perfect Ten', engineer: 'Touchdown sink rate of 0.8 m/s was excellent.', coordinator: SLIP, designer: 'Clean lines with gas to spare.', source: 'ai' };
+  const raw = `HEADLINE: ${words.headline}\nENGINEER: ${words.engineer}\nCOORDINATOR: ${words.coordinator}\nDESIGNER: ${words.designer}`;
+  // Tokens split as a model's do, mid-word: " thirty", "-six", " second" (the docked strip must never type "thirty").
+  const tokens = raw.match(/[\s-]?[^\s-]+/g);
+  if (tokens.join('') !== raw) throw new Error('token split lost text');
+  return ev('verify', { ticks: 2400, ms: 30, card: { total: 90 } })
+    + ev('prompt', { provider: 'edge', providerLabel: 'Free', vendor: 'Workers AI', model: '@cf/test/model', where: 'Cloudflare edge', system: 's', user: 'u', inTokensEst: 600 })
+    + tokens.map((t) => ev('token', { t })).join('')
+    + ev('done', { words, raw, inTokens: 600, outTokens: tokens.length, ttftMs: 300, totalMs: 900, tokensPerSec: 40, neurons: 13, costUsd: null });
+};
+const REPLACED = '1 remark replaced with the game’s own line: it stated a number the run didn’t make';
+// Every text a judge's quote ever showed (the docked strip types the stream onto the sheet as it arrives).
+const watchQuotes = (page) => page.evaluate(() => {
+  window.__quotes = new Set();
+  const box = document.querySelector('[data-r-judges]') || document.body;
+  new MutationObserver(() => { for (const q of document.querySelectorAll('[data-judge] .quote')) window.__quotes.add(q.textContent); })
+    .observe(box, { subtree: true, childList: true, characterData: true });
+});
+const quotesSeen = (page) => page.evaluate(() => [...window.__quotes]);
+// The judge's line on the sheet: S.words holds it at once; the quote types it out at 14 ms a character (wall clock, so a
+// busy runner can take far longer), and data-u-src lands only when the typing ends. Read the words, then the quote as
+// the line or a typed prefix of it.
+// (A line with units types in the player's units, so only a unitless line is checked against the quote's text.)
+async function showsLine(page, id, line) {
+  await expect.poll(() => page.evaluate((id) => window.__coldgas.S.words?.[id], id), { timeout: 120_000 }).toBe(line);
+  if (/\d/.test(line)) return;
+  await expect.poll(() => page.evaluate((id) => { const q = document.querySelector(`[data-judge="${id}"] .quote`); return q.dataset.uSrc ?? q.textContent; }, id)
+    .then((t) => t.length > 0 && line.startsWith(t)), { timeout: 30_000 }).toBe(true);
+}
+
+test('0282 at 1280×720: the Coordinator’s wrong number is replaced by the game’s own line; Inspect keeps the model’s', async ({ page }) => {
+  test.setTimeout(180_000);
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await page.route('**/coldgas/api/judge/stream', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: slipped() }));
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.goto('/coldgas/?play=reveal&gfx=low');
+  await page.waitForFunction(() => window.__coldgas?.S.mode === 'live', null, { timeout: 90_000 });
+  await watchQuotes(page);
+  await page.evaluate(() => window.__coldgas.fastForward());
+  await expect(page.locator('[data-rc-replaced]')).toHaveText(REPLACED, { timeout: 120_000 });
+  const card = await page.evaluate(() => window.__coldgas.S.card);
+  const own = localWords(card).coordinator;
+  await showsLine(page, 'coordinator', own);
+  await showsLine(page, 'engineer', 'Touchdown sink rate of 0.8 m/s was excellent.');
+  // The model's words, as it sent them, under Inspect the call.
+  await page.locator('[data-receipt] .rc-inspect summary').click();
+  await expect(page.locator('[data-receipt] .rc-inspect')).toContainText(SLIP);
+  expect((await quotesSeen(page)).filter((t) => /thirty/i.test(t))).toEqual([]);
+  expect(errors).toEqual([]);
+});
+
+test('0282 phone 390×844, first visit: the calm sheet never types the wrong number; More shows the own line and the receipt', async ({ browser }) => {
+  test.setTimeout(180_000);
+  const page = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
+  await page.route('**/coldgas/api/judge/stream', (route) => route.fulfill({ status: 200, contentType: 'text/event-stream', body: slipped() }));
+  const errors = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.addInitScript(() => { if (!localStorage.getItem('coldgas_howto')) localStorage.setItem('coldgas_howto', 'new'); });
+  await page.goto('/coldgas/?gfx=low');
+  await page.waitForFunction(() => window.__coldgas?.physicsReady?.(), null, { timeout: 90_000 });
+  await page.evaluate(() => { window.__coldgas.stage.render = () => {}; });
+  await watchQuotes(page);
+  // The reference flight, handed back to the player as the run ends (as first-landing.spec.js does), to the sheet.
+  const mode = await page.evaluate(() => {
+    const g = window.__coldgas, S = g.S;
+    g.startRun('jump', true);
+    S.autopilot = g.createAutopilot(g.stage.course);
+    g.skipCountdown();
+    for (let i = 0; i < 4000 && !S.card; i++) g.liveStep(0.1);
+    S.autopilot = null;
+    for (let i = 0; i < 4000 && S.mode !== 'results'; i++) g.liveStep(0.1);
+    return S.mode;
+  });
+  expect(mode).toBe('results');
+  const sheet = page.locator('[data-screen="results"]');
+  await expect(sheet).toHaveAttribute('data-calm', '');
+  const card = await page.evaluate(() => window.__coldgas.S.card);
+  expect(card.facts.crashed).toBe(false);
+  const own = localWords(card).coordinator;
+  // The call runs docked here; its words land under More.
+  await expect.poll(() => page.evaluate(() => window.__coldgas.S.callMeta?.replaced), { timeout: 120_000 }).toEqual(['coordinator']);
+  await page.locator('[data-r-more]').tap();
+  await expect(sheet).toHaveAttribute('data-more', '');
+  await showsLine(page, 'coordinator', own);
+  await expect(page.locator('[data-judge="coordinator"] .quote')).toBeVisible();
+  await expect(page.locator('[data-rc-replaced]')).toHaveText(REPLACED);
+  await page.locator('[data-receipt] .rc-inspect summary').tap();
+  await expect(page.locator('[data-receipt] .rc-inspect')).toContainText(SLIP);
+  expect((await quotesSeen(page)).filter((t) => /thirty/i.test(t))).toEqual([]);
+  expect(errors).toEqual([]);
+  await page.close();
+});

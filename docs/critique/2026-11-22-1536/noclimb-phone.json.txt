@@ -1,0 +1,35 @@
+{
+ "r": {
+  "mode": "results",
+  "verdict": "No climb",
+  "total": 11.7,
+  "facts": {
+   "crashed": false,
+   "jumped": false,
+   "dmg": 0
+  }
+ },
+ "ui": {
+  "pb": "No jump · not a mark yet",
+  "state": "neutral",
+  "head": "No climb",
+  "board": [
+   "Board",
+   "Post",
+   "MoreWhat happened · the judges · post",
+   "Post"
+  ],
+  "ls": {},
+  "postBtn": []
+ },
+ "r2": {
+  "total": 97.3,
+  "verdict": "Perfect 10",
+  "mode": "results"
+ },
+ "ui2": {
+  "pb": "Your first mark on this event",
+  "state": "first"
+ },
+ "posts": []
+}
