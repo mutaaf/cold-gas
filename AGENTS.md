@@ -85,7 +85,7 @@ left in the tanks; on a wreck, combos that come from the physics.
     shares…, and a visit that ends on the title (0143, src/obs/title-leave.js: `jump-tap` once per page load before any run;
     `title-left` once when the page goes (pagehide or hidden) on the title never past it this load, beside one reason:
     `left-howto` the how-to card open, `left-starting` a start still waiting, `left-booting` the title not drawn yet,
-    `left-title` nothing; `title-back` if that load then comes back and plays, so leaves = title-left − title-back)), stored as `play:<event>` per day for
+    `left-title` nothing; `title-back` if that load then comes back and plays, so leaves = title-left − title-back), and `words-replaced` when a model's remark was swapped for the game's own line (0282)), stored as `play:<event>` per day for
     people only; an automated browser (`navigator.webdriver`, i.e. our own agents and tests) is
     counted as `sessions:auto`, never as a player.
   - The iPhone app reports to the same `POST /obs` (0293, ios/ColdGas/App/Report.swift + ColdGasClient/Obs.swift: os.Logger, a
@@ -429,6 +429,8 @@ src/comeback.js       the title's card ([data-title-extra]: a challenge, else th
                         ([data-daily-result]: "You beat ABC by 2.1" + Send it back, "Daily ✓ complete · streak 4"), and the
                         link a Share carries (lossless, else a coarser log re-flown and checked, else the plain address)
 src/panel.js          board client (post with telemetry, tolerant rows, per-course board) + local judge lines (offline fallback)
+src/check-words.js    the judges' words checked against the card (0282, pure): a model's remark that states a number the run didn't
+                        make (not on the card, not its unit conversion, not in the brief) shows the judge's local line instead
 src/post.js           Post · ABC beside Retry (the initials remembered, or three letters right there), the rank inline,
                         and "Leave without posting?" asked once on Home with an unposted board jump (no browser dialogs)
 src/pace.js           the title draws at ~30 fps (pure pacer, 0049); the shadow map redraws on the title only when the hero moves

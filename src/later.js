@@ -9,5 +9,6 @@ export { createInstruments } from './instruments.js';
 export { openSettings } from './ai/settings.js';
 export { drawShareCard, shareRun } from './share-card.js';
 export { localWords, localMeta, fetchBoard } from './panel.js';
+export { faithfulWords, liveFaithful, replacedLine } from './check-words.js';
 export { createPost, postEligible } from './post.js';
 export { createBeat, beatEligible } from './beat.js';
