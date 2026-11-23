@@ -53,19 +53,26 @@ function measure(cam, f) {
   return { on, cover, x0, x1 };
 }
 
-function airFrames(frames, [w, h]) {
+function airFrames(frames, [w, h], dx = 0) {
   globalThis.innerWidth = w; globalThis.innerHeight = h;
   const cam = new THREE.PerspectiveCamera(52, w / h, 0.1, 2000);
   const dir = createDirector(cam);
   dir.restart();
-  const pos = new THREE.Vector3(), vel = new THREE.Vector3(), out = [];
+  const pos = new THREE.Vector3(), vel = new THREE.Vector3(), out = [], prevQ = new THREE.Quaternion();
+  let prevFov = NaN, turn = 0, zoom = 0;
   for (const f of frames) {
-    pos.set(f.x, f.y, f.z); vel.set(f.vx, f.vy, f.vz);
+    pos.set(f.x + dx, f.y, f.z); vel.set(f.vx, f.vy, f.vz);
     dir.update(1 / 60, 0, { carPos: pos, carVel: vel, phase: f.phase, mode: 'live', course: 'lineup' });
+    // From the lift-off on: the most the view turns (deg) and the lens moves (deg) in one frame.
+    if (f.phase !== 'drive' && f.phase !== 'ramp') {
+      if (!Number.isNaN(prevFov)) { turn = Math.max(turn, (prevQ.angleTo(cam.quaternion) * 180) / Math.PI); zoom = Math.max(zoom, Math.abs(cam.fov - prevFov)); }
+      prevQ.copy(cam.quaternion); prevFov = cam.fov;
+    }
     if (f.phase !== 'air') continue;
     cam.updateMatrixWorld(); cam.updateProjectionMatrix();
-    out.push({ ...measure(cam, f), y: f.y, z: f.z, cam: cam.position.clone() });
+    out.push({ ...measure(cam, { ...f, x: f.x + dx }), y: f.y, z: f.z, cam: cam.position.clone() });
   }
+  out.turn = turn; out.zoom = zoom;
   return out;
 }
 
@@ -86,7 +93,28 @@ for (const [name, opts] of Object.entries(FLIGHTS)) {
           if (s.cover > 0.05) bad.push(`${i} (z ${s.z.toFixed(1)}): a pole across ${s.cover.toFixed(2)} of the car, camera ${s.cam.x.toFixed(1)}, ${s.cam.z.toFixed(1)}`);
         }
         expect(bad.slice(0, 6)).toEqual([]);
+        // No lurch: the lens moves ≤ 1° a frame, the view turns ≤ 5° (main: 3.6° at the lift-off's swing), the touchdown included.
+        expect(air.zoom).toBeLessThan(1);
+        expect(air.turn).toBeLessThan(5);
       });
     }
   });
 }
+
+// A flight that drifts wide: 4 m either way keeps both bars; 10 m toward the poles (into the tank's side) still keeps the
+// whole car in frame (the stand goes outside the poles there rather than sit beside the car).
+describe('0358 lineup, the reference drifted', () => {
+  let frames;
+  beforeAll(() => { frames = flight(); });
+  for (const view of [PHONES[0], DESKS[1]]) for (const dx of [-4, 4, 10]) {
+    it(`${view.join('×')}, ${dx > 0 ? '+' : ''}${dx} m`, () => {
+      const air = airFrames(frames, view, dx);
+      const bad = [];
+      for (const [i, s] of air.entries()) {
+        if (s.on < 0.98) bad.push(`${i}: ${s.on.toFixed(2)} on screen`);
+        if (Math.abs(dx) <= 4 && s.cover > 0.05) bad.push(`${i}: a pole across ${s.cover.toFixed(2)}`);
+      }
+      expect(bad.slice(0, 6)).toEqual([]);
+    });
+  }
+});

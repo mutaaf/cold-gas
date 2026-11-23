@@ -66,6 +66,9 @@ const CHASE_BACK = 6;   // m: on an upright screen the air chase stands this far
 // m: the car as a capsule for the chase's fit (its box: ±1.0 across, −0.09…0.78 up, ±2.33 long): the spheres' radius and
 // their offset along the heading; the share of the half-frame it may reach out to (0358).
 const CHASE_R = 1.27, CAR_LONG = 2.33, FIT_W = 0.94;
+// 1/s: how fast the fit comes in at lift-off and lets go after the touchdown; deg/s: the most the lens widens for it;
+// m: the nearest the air chase stands across from a car that drifts toward the poles (it then stands outside them).
+const FIT_RATE = 12, FIT_FOV = 45, CHASE_MIN = 8;
 const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the middle (≈ 60 % down)
 // The sets' splash tanks (0340) and marks, for the ground stands (0355: the landed rig never stands in a tank, and sees
 // the wheels and the ring past them; src/render/tank-sight.js). The Wall has none.
@@ -119,7 +122,7 @@ export function createDirector(camera) {
     titleFov: 0,                                         // the title's wider lens on an upright screen, when the car needs it (0131)
     landA: 0, standOk: true,                             // the ground stand's bearing (an index into STAND_TURN), whether it's clear (0355)
     followA: 0, followDeg: NaN,                          // the Show follow's bearing: its STAND_TURN index and the angle it's at (0357)
-    cutAt: -Infinity, landIn: false,                     // when the last hard cut fell (st.t); whether the landed rig has taken over (0357)
+    cutAt: -Infinity, landIn: false, fitW: 0,                     // when the last hard cut fell (st.t); whether the landed rig has taken over (0357)
     placed: false, carryPos: new THREE.Vector3(), carryLook: new THREE.Vector3(), carryY: 0, placeT: 0, recuts: 0,   // the carry's locked-off placement (0113); the car's height and the time there, re-cuts so far (0118)
   };
 
@@ -139,7 +142,7 @@ export function createDirector(camera) {
   function snap() { st.init = false; }
   // A new run, a replay from the top or its loop: forget the last stunt (the Wall starts a few
   // metres from where it lands, so the car's position can't tell a new run from a landing).
-  function restart() { st.peak = 0; st.launched = false; st.shot = -1; st.landA = 0; st.cutAt = -Infinity; st.landIn = false; snap(); }
+  function restart() { st.peak = 0; st.launched = false; st.shot = -1; st.landA = 0; st.fitW = 0; st.cutAt = -Infinity; st.landIn = false; snap(); }
 
   // Smoothly fly the camera toward want/lookWant (rate per second).
   function ease(dt, rate, lookRate = 8) {
@@ -489,7 +492,7 @@ export function createDirector(camera) {
       // Broadcast three-quarter: off to the right, a little ahead, low. 0358: inside the floodlight poles' line (x 13), so
       // none ever stands between the lens and the car; and on an upright screen the lead shrinks with the lens.
       const u = upright();
-      want.set(Math.min(carPos.x + 14, POLE_X - POLE_GAP), Math.max(3.4, carPos.y * 0.6 + 2.2), carPos.z + (2 - Math.min(6, speed * 0.15)) * (1 - u) - CHASE_BACK * u);
+      want.set(Math.max(Math.min(carPos.x + 14, POLE_X - POLE_GAP), carPos.x + CHASE_MIN), Math.max(3.4, carPos.y * 0.6 + 2.2), carPos.z + (2 - Math.min(6, speed * 0.15)) * (1 - u) - CHASE_BACK * u);
       lookWant.set(carPos.x, carPos.y + 0.2, carPos.z + 3 * Math.min(1, camera.aspect / LENS_ASPECT));
     } else if (phase === 'landed' || phase === 'done') {
       groundStand(carPos, 7, 2.4, -6, false);
@@ -505,7 +508,11 @@ export function createDirector(camera) {
     }
     ease(dt, phase === 'air' ? 3.2 : 5);
     fovTo(48 + Math.min(16, speed * 0.42) + (phase === 'air' ? 4 : 0), dt);
-    fitCar(carPos);
+    // The fit holds in the air (and the landed hold that shares its shot) and lets go over ≈ 0.2 s after, so the
+    // touchdown's hand-over to the landed rig is not a jerk.
+    const air = phase === 'air' || (phase === 'landed' && st.t < 1.2);
+    st.fitW += ((air ? 1 : 0) - st.fitW) * (1 - Math.exp(-dt * FIT_RATE));
+    if (st.fitW > 0.002) fitCar(carPos, dt);
   }
 
   // 0358: the whole car in the chase's frame. The eased rig lags a car that leaves the lip at speed, and an upright phone's
@@ -513,11 +520,13 @@ export function createDirector(camera) {
   // (two spheres of CHASE_R, CAR_LONG either side of its centre: its box turned any way about its long axis, as a kickflip
   // turns it). After the shot has looked where it wants, the lens widens if the capsule would take more than FIT_W of the
   // frame, then the camera turns just enough to bring it inside FIT_W of each edge. A car already inside is left where the
-  // shot put it; every term is continuous in the car's position, so it never cuts. Nothing is stored, so nothing accumulates.
+  // shot put it; every term is continuous in the car's position, so it never cuts. The turn is applied to this frame only
+  // (the eased rig is untouched, so nothing accumulates); a lens it widened eases back through fovTo. The widening is
+  // rate-limited (FIT_FOV deg/s) and the turn weighted by st.fitW (fading in at lift-off, out after the touchdown).
   const ext = [0, 0, 0, 0];   // the capsule's extent seen from the lens (rad): left, right, below, above
   function capsule() {
     ext[0] = ext[2] = Infinity; ext[1] = ext[3] = -Infinity;
-    for (const s of [-1, 1]) {
+    for (let s = -1; s <= 1; s += 2) {
       tmp.copy(fitC).addScaledVector(fitH, s * CAR_LONG).sub(camera.position).applyQuaternion(qInv);
       const d = tmp.length();
       if (tmp.z > -CHASE_R || d < CHASE_R * 1.5) return false;
@@ -526,20 +535,24 @@ export function createDirector(camera) {
     }
     return true;
   }
-  function fitCar(carPos) {
+  function fitCar(carPos, dt) {
     fitC.copy(carPos); fitH.set(st.hx, 0, st.hz);
     qInv.copy(camera.quaternion).invert();
     if (!capsule()) return;
     // The lens: wide enough for the capsule across and up.
     let tv = Math.tan((st.fov - st.punch) * Math.PI / 360);
     const need = Math.max(Math.tan((ext[1] - ext[0]) / 2) / camera.aspect, Math.tan((ext[3] - ext[2]) / 2)) / FIT_W;
-    if (need > tv) { tv = need; st.fov = (Math.atan(tv) * 360) / Math.PI + st.punch; }
+    if (need > tv) {
+      st.fov = Math.min((Math.atan(need) * 360) / Math.PI + st.punch, st.fov + FIT_FOV * dt);
+      tv = Math.tan((st.fov - st.punch) * Math.PI / 360);
+    }
     const h = Math.atan(FIT_W * tv * camera.aspect);
-    if (ext[1] > h) camera.rotateOnWorldAxis(UP, h - ext[1]); else if (ext[0] < -h) camera.rotateOnWorldAxis(UP, -h - ext[0]);
+    const w = st.fitW;
+    if (ext[1] > h) camera.rotateOnWorldAxis(UP, w * (h - ext[1])); else if (ext[0] < -h) camera.rotateOnWorldAxis(UP, w * (-h - ext[0]));
     qInv.copy(camera.quaternion).invert();
     if (!capsule()) return;
     const v = Math.atan(FIT_W * tv);
-    if (ext[3] > v) camera.rotateX(ext[3] - v); else if (ext[2] < -v) camera.rotateX(-v - ext[2]);
+    if (ext[3] > v) camera.rotateX(w * (ext[3] - v)); else if (ext[2] < -v) camera.rotateX(w * (ext[2] + v));
   }
 
   function replay(carPos) {
