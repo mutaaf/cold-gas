@@ -1,0 +1,289 @@
+{
+ "tapToCountdown": 11.081,
+ "longtasks": [
+  [
+   9,
+   247
+  ],
+  [
+   259,
+   273
+  ],
+  [
+   644,
+   286
+  ],
+  [
+   943,
+   613
+  ],
+  [
+   1558,
+   267
+  ],
+  [
+   1830,
+   252
+  ],
+  [
+   2093,
+   350
+  ],
+  [
+   2446,
+   312
+  ],
+  [
+   2768,
+   1006
+  ],
+  [
+   3781,
+   470
+  ],
+  [
+   4268,
+   457
+  ],
+  [
+   4753,
+   93
+  ],
+  [
+   4846,
+   1702
+  ],
+  [
+   6555,
+   637
+  ],
+  [
+   7196,
+   526
+  ],
+  [
+   7723,
+   488
+  ],
+  [
+   8213,
+   447
+  ],
+  [
+   8661,
+   526
+  ],
+  [
+   9188,
+   69
+  ],
+  [
+   9257,
+   526
+  ],
+  [
+   9806,
+   1005
+  ],
+  [
+   10813,
+   479
+  ],
+  [
+   11297,
+   423
+  ],
+  [
+   11723,
+   438
+  ],
+  [
+   12177,
+   403
+  ]
+ ],
+ "topSelf": [
+  [
+   "(program) :-1",
+   10713
+  ],
+  [
+   "getProgramInfoLog :-1",
+   414
+  ],
+  [
+   "$d index-GK3JKZ6r.js:4540",
+   52
+  ],
+  [
+   "wt forged-DU37NwlQ.js:0",
+   25
+  ],
+  [
+   "Zd index-GK3JKZ6r.js:4540",
+   15
+  ],
+  [
+   "G index-GK3JKZ6r.js:4216",
+   12
+  ],
+  [
+   "tt forged-DU37NwlQ.js:0",
+   12
+  ],
+  [
+   "(garbage collector) :-1",
+   10
+  ],
+  [
+   "Io.renderBufferDirect index-GK3JKZ6r.js:4216",
+   9
+  ],
+  [
+   "getX three.core-Dpc4SXX1.js:0",
+   8
+  ],
+  [
+   "n index-GK3JKZ6r.js:4165",
+   8
+  ],
+  [
+   "uniformMatrix4fv :-1",
+   8
+  ],
+  [
+   "copy three.core-Dpc4SXX1.js:0",
+   8
+  ],
+  [
+   "upload index-GK3JKZ6r.js:4114",
+   7
+  ],
+  [
+   "updateMatrix three.core-Dpc4SXX1.js:0",
+   7
+  ],
+  [
+   "setValue index-GK3JKZ6r.js:4114",
+   7
+  ],
+  [
+   "ef index-GK3JKZ6r.js:4540",
+   7
+  ],
+  [
+   "Ct index-GK3JKZ6r.js:4216",
+   6
+  ],
+  [
+   "(anon) forged-DU37NwlQ.js:0",
+   6
+  ],
+  [
+   "tO index-GK3JKZ6r.js:4590",
+   6
+  ]
+ ],
+ "topIncl": [
+  [
+   "lO index-GK3JKZ6r.js:4590",
+   626
+  ],
+  [
+   "l.frame index-GK3JKZ6r.js:4590",
+   626
+  ],
+  [
+   "cO index-GK3JKZ6r.js:4590",
+   626
+  ],
+  [
+   "Pe index-GK3JKZ6r.js:4504",
+   611
+  ],
+  [
+   "e.render index-GK3JKZ6r.js:4589",
+   611
+  ],
+  [
+   "Io.render index-GK3JKZ6r.js:4216",
+   603
+  ],
+  [
+   "Io.renderBufferDirect index-GK3JKZ6r.js:4216",
+   541
+  ],
+  [
+   "Et index-GK3JKZ6r.js:4216",
+   524
+  ],
+  [
+   "wt index-GK3JKZ6r.js:4216",
+   524
+  ],
+  [
+   "Dt index-GK3JKZ6r.js:4216",
+   521
+  ],
+  [
+   "jt index-GK3JKZ6r.js:4216",
+   509
+  ],
+  [
+   "w index-GK3JKZ6r.js:4158",
+   426
+  ],
+  [
+   "Ya.getUniforms index-GK3JKZ6r.js:4165",
+   426
+  ],
+  [
+   "render index-GK3JKZ6r.js:4239",
+   135
+  ],
+  [
+   "traverse three.core-Dpc4SXX1.js:0",
+   80
+  ],
+  [
+   "addEventListener.capture index-GK3JKZ6r.js:4590",
+   68
+  ],
+  [
+   "$d index-GK3JKZ6r.js:4540",
+   66
+  ],
+  [
+   "render index-GK3JKZ6r.js:4192",
+   32
+  ],
+  [
+   "T index-GK3JKZ6r.js:4192",
+   31
+  ],
+  [
+   "G index-GK3JKZ6r.js:4216",
+   28
+  ],
+  [
+   "(anon) index-GK3JKZ6r.js:4590",
+   26
+  ],
+  [
+   "upload index-GK3JKZ6r.js:4114",
+   25
+  ],
+  [
+   "setValue index-GK3JKZ6r.js:4114",
+   25
+  ],
+  [
+   "Ct index-GK3JKZ6r.js:4216",
+   24
+  ],
+  [
+   "(anon) three.core-Dpc4SXX1.js:4",
+   18
+  ]
+ ]
+}

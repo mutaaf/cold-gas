@@ -1,0 +1,22 @@
+{
+ "course": "lineup",
+ "TAG": "mph16-500",
+ "MPH": "16",
+ "HOLD": 500,
+ "card": {
+  "total": 35,
+  "verdict": "Splash",
+  "crashed": true,
+  "clearance": 1.4,
+  "launch": 8.531035398817625,
+  "coach": []
+ },
+ "log": [
+  "0.18 z-70.0 v0.2 drive cue: Hold ↑ to drive",
+  "7.32 z-13.5 v8.2 drive cue: Hold Space at the line",
+  "7.58 Space down z-11.3 v8.2",
+  "7.72 z-10.2 v8.2 air cue: ← → to roll",
+  "9.38 z3.5 v8.2 air cue: Hold Shift"
+ ],
+ "errs": []
+}
