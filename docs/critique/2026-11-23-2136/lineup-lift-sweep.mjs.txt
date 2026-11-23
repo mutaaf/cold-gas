@@ -1,0 +1,29 @@
+// The Lineup by keys with Assist, as the page cues it: drive up (↑), "Space at the line" (held for liftS from z -4),
+// then ← to roll for 0.8 s, then hold Shift (LAND) to the ground. Per hold: apex, nitrogen left at the apex and at
+// touchdown, sink, verdict. Plus the run-up speed at the line when ↑ is simply held ("Hold ↑ to go").
+import { createRun, stepRun } from '/home/user/cold-gas/src/sim/run.js';
+import { newInput } from '/home/user/cold-gas/src/sim/vehicle.js';
+import { scoreRun } from '/home/user/cold-gas/src/sim/judge.js';
+import { initPhysics } from '/home/user/cold-gas/src/sim/engine.js';
+await initPhysics();
+const fly = (liftS, approach, rollS = 0.8) => {
+  const run = createRun('lineup'); let tLift = null, tRoll = null, apex = 0, airApex = null, air0 = null, vLine = null;
+  while (run.phase !== 'done' && run.tick < 240 * 40) {
+    const c = run.car, inp = newInput(); inp.assist = 1; const now = run.tick / 240;
+    inp.steer = Math.max(-1, Math.min(1, c.pos.x * 0.25));
+    const v = Math.hypot(c.vel.x, c.vel.z);
+    if (vLine === null && c.pos.z >= 0) vLine = v;
+    if (tLift === null && c.pos.z >= -4) { tLift = now; air0 = c.air; }
+    if (tLift === null) inp.throttle = approach === 'floored' || v < approach ? 1 : 0;
+    else if (now - tLift < liftS) inp.lift = 1;
+    else if (run.phase === 'air') { if (tRoll === null) tRoll = now; if (now - tRoll < rollS) inp.roll = -1; else inp.level = 1; }
+    else inp.brake = 1;
+    stepRun(run, inp);
+    if (c.pos.y > apex) { apex = c.pos.y; airApex = c.air; }
+  }
+  const s = scoreRun(run.t, { assist: true });
+  return { liftS, approach, vLine: +vLine.toFixed(1), apexM: +apex.toFixed(1), gasStart: +air0.toFixed(1), gasAtApex: +airApex.toFixed(1), gasEnd: +run.car.air.toFixed(1), sink: +run.t.sink.toFixed(1), verdict: s.verdict, total: s.total, end: run.t.endReason };
+};
+for (const l of [0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 1.0, 1.5, 2.0]) console.log(JSON.stringify(fly(l, 7.5)));
+console.log(JSON.stringify(fly(0.4, 'floored')));
+console.log(JSON.stringify(fly(0.4, 12)));
