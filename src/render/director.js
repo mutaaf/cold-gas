@@ -18,12 +18,12 @@
 // shots read pitch beautifully but see a roll end-on; from behind, the roll-out and the drift
 // toward the pad read at a glance.
 import * as THREE from 'three';
-import { LINEUP, WALL, SHOW } from '../sim/courses.js';
+import { LINEUP, WALL, SHOW, FIXTURES } from '../sim/courses.js';
 import { hudMode, onHudMode } from '../hud-mode.js';
 import { tankBoxes, standClear, sightBlocked, wheelsInSight } from './tank-sight.js';
 
 const PAD = LINEUP.pad, LINEUP_Z0 = LINEUP.lineupZ0, LINEUP_END = LINEUP.lineupEnd;
-const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), ahead = new THREE.Vector3();
+const tmp = new THREE.Vector3(), want = new THREE.Vector3(), lookWant = new THREE.Vector3(), qInv = new THREE.Quaternion(), UP = new THREE.Vector3(0, 1, 0), ahead = new THREE.Vector3(), fitC = new THREE.Vector3(), fitH = new THREE.Vector3();
 const m4 = new THREE.Matrix4();
 const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
 // The Wall's rigs were framed on a 19.8 m lip; they scale with the wall's real height.
@@ -60,6 +60,12 @@ const LENS_ASPECT = 0.9;
 // the open side, broadside, so its view runs across the lit floor to the launch complex (src/sim/complex.js, far −x).
 // 12 m keeps the 4.65 m car under 0.75 of an upright phone's width (0108).
 const LAND_AHEAD = [6.5, -9], LAND_SIDE = [12, 0];
+// The Lineup's floodlight poles (courses.js FIXTURES): the air chase stands this far inside their line (0358).
+const POLE_X = FIXTURES.poles.x, POLE_GAP = 1;
+const CHASE_BACK = 6;   // m: on an upright screen the air chase stands this far back along the run, a rear three-quarter (0358)
+// m: the car as a capsule for the chase's fit (its box: ±1.0 across, −0.09…0.78 up, ±2.33 long): the spheres' radius and
+// their offset along the heading; the share of the half-frame it may reach out to (0358).
+const CHASE_R = 1.27, CAR_LONG = 2.33, FIT_W = 0.94;
 const LAND_LIFT = 0.2;   // NDC: an upright landed car sits this far under the middle (≈ 60 % down)
 // The sets' splash tanks (0340) and marks, for the ground stands (0355: the landed rig never stands in a tank, and sees
 // the wheels and the ring past them; src/render/tank-sight.js). The Wall has none.
@@ -480,9 +486,11 @@ export function createDirector(camera) {
     }
     const hx = st.hx, hz = st.hz;
     if (phase === 'air' || (phase === 'landed' && st.t < 1.2)) {
-      // Broadcast three-quarter: off to the right, a little ahead, low.
-      want.set(carPos.x + 14, Math.max(3.4, carPos.y * 0.6 + 2.2), carPos.z + 2 - Math.min(6, speed * 0.15));
-      lookWant.set(carPos.x, carPos.y + 0.2, carPos.z + 3);
+      // Broadcast three-quarter: off to the right, a little ahead, low. 0358: inside the floodlight poles' line (x 13), so
+      // none ever stands between the lens and the car; and on an upright screen the lead shrinks with the lens.
+      const u = upright();
+      want.set(Math.min(carPos.x + 14, POLE_X - POLE_GAP), Math.max(3.4, carPos.y * 0.6 + 2.2), carPos.z + (2 - Math.min(6, speed * 0.15)) * (1 - u) - CHASE_BACK * u);
+      lookWant.set(carPos.x, carPos.y + 0.2, carPos.z + 3 * Math.min(1, camera.aspect / LENS_ASPECT));
     } else if (phase === 'landed' || phase === 'done') {
       groundStand(carPos, 7, 2.4, -6, false);
       lookWant.copy(carPos);
@@ -497,6 +505,41 @@ export function createDirector(camera) {
     }
     ease(dt, phase === 'air' ? 3.2 : 5);
     fovTo(48 + Math.min(16, speed * 0.42) + (phase === 'air' ? 4 : 0), dt);
+    fitCar(carPos);
+  }
+
+  // 0358: the whole car in the chase's frame. The eased rig lags a car that leaves the lip at speed, and an upright phone's
+  // lens is ≈ ±13° across: the kickflip's box ran a quarter past the edge. The car is taken as a capsule along its heading
+  // (two spheres of CHASE_R, CAR_LONG either side of its centre: its box turned any way about its long axis, as a kickflip
+  // turns it). After the shot has looked where it wants, the lens widens if the capsule would take more than FIT_W of the
+  // frame, then the camera turns just enough to bring it inside FIT_W of each edge. A car already inside is left where the
+  // shot put it; every term is continuous in the car's position, so it never cuts. Nothing is stored, so nothing accumulates.
+  const ext = [0, 0, 0, 0];   // the capsule's extent seen from the lens (rad): left, right, below, above
+  function capsule() {
+    ext[0] = ext[2] = Infinity; ext[1] = ext[3] = -Infinity;
+    for (const s of [-1, 1]) {
+      tmp.copy(fitC).addScaledVector(fitH, s * CAR_LONG).sub(camera.position).applyQuaternion(qInv);
+      const d = tmp.length();
+      if (tmp.z > -CHASE_R || d < CHASE_R * 1.5) return false;
+      const r = Math.asin(CHASE_R / d), a = Math.atan2(tmp.x, -tmp.z), b = Math.atan2(tmp.y, Math.hypot(tmp.x, tmp.z));
+      ext[0] = Math.min(ext[0], a - r); ext[1] = Math.max(ext[1], a + r); ext[2] = Math.min(ext[2], b - r); ext[3] = Math.max(ext[3], b + r);
+    }
+    return true;
+  }
+  function fitCar(carPos) {
+    fitC.copy(carPos); fitH.set(st.hx, 0, st.hz);
+    qInv.copy(camera.quaternion).invert();
+    if (!capsule()) return;
+    // The lens: wide enough for the capsule across and up.
+    let tv = Math.tan((st.fov - st.punch) * Math.PI / 360);
+    const need = Math.max(Math.tan((ext[1] - ext[0]) / 2) / camera.aspect, Math.tan((ext[3] - ext[2]) / 2)) / FIT_W;
+    if (need > tv) { tv = need; st.fov = (Math.atan(tv) * 360) / Math.PI + st.punch; }
+    const h = Math.atan(FIT_W * tv * camera.aspect);
+    if (ext[1] > h) camera.rotateOnWorldAxis(UP, h - ext[1]); else if (ext[0] < -h) camera.rotateOnWorldAxis(UP, -h - ext[0]);
+    qInv.copy(camera.quaternion).invert();
+    if (!capsule()) return;
+    const v = Math.atan(FIT_W * tv);
+    if (ext[3] > v) camera.rotateX(ext[3] - v); else if (ext[2] < -v) camera.rotateX(-v - ext[2]);
   }
 
   function replay(carPos) {
