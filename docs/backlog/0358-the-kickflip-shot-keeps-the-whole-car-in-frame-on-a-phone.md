@@ -1,12 +1,12 @@
 ---
 id: 0358
 title: The Lineup's kickflip shot keeps the whole car in frame on a phone, and no floodlight pole crosses it
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: player-feel
 created: 2026-11-22
-pr:
+pr: 503
 by: critic
 ---
 
