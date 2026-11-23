@@ -1,7 +1,7 @@
 ---
 id: 0359
 title: The Lineup reference is wheels-up over the Semi at its peak, as the reveal's kickflip was
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: authenticity
@@ -70,3 +70,28 @@ Make the test fail on main first.
 - The Lineup's pad placement and air time (+3.6 s and 27 m against the research's ≈ 3 s and 20–25 m, ESTIMATE). That is
   noted in the 2026-11-22 22:30 critique, not filed.
 - The player's own roll: Assist's rate and how a player times it are theirs.
+
+## Builder note 2026-11-23 (not buildable as scoped; back to `proposed`)
+The bar can't be met by timing the pilot's roll alone in Assist with the flight computer unchanged, which is what
+What allows. Prototyped on main `057f041` with `lineupPilot` tracking a steady roll angle through 180° at a set time
+after lift-off, stepped in Node like `lineup-roll.mjs.txt`. The first half of the bar is easy. Inverted at the apex
++0.08 s at z 12.8, and ≥ 150° to z 14.3 (2.6 rad/s through the window). The second half is the problem.
+- **The window ends falling.** The apex is at z ≈ 12.2, and z 14.3 is ≈ 0.28 s after it. Past the apex, Assist's auto-land
+  (`autoLand`, vehicle.js) engages at once: a fall from ≈ 8 m is always behind the LAND profile 0.4 s ahead. While
+  the car is banked past `upW.y > 0.55` the governor can't lift, so it falls further behind. Then envelope protection
+  (`envelope`, 0.25–1) cuts the roll command, the roll-out stalls at 60–20° of bank, and LAND brakes banked.
+- **What that does to the landing.** Every variant crashed or drifted. The lateral miss was 9.8–14.7 m (today 0.5),
+  minClearance fell to 0.0–0.6 m (needs ≥ 1.0), and the verdicts were Wrecked, Contact or Clean (score 16–86 against ≥ 91).
+  Variants tried: inversion at +1.42…+1.55 s; a slow rate of 2.4–2.9 rad/s; ±0.4–0.7 rad of slow roll around inverted;
+  a full-rate roll before and after the slow part; handing the second half to LAND's roll-out; a constant rate for the
+  whole roll; lifting off 0.8–1.4 m later so the apex sits over the Semi's middle. A roll that started late (waiting
+  after the burn) also lost ≈ 1 m of apex, because today's full-rate spin-up at the burn's end adds climb.
+- **The only clean landings** were rolls whose inversion came before z 12 or tilted < 150° over the Semi. That's today's flight.
+
+To re-scope it, pick one of these:
+- **(a)** Let the flight computer leave a held roll alone while it is inverted. For example, auto-land and envelope
+  protection could wait for `upW.y > 0` when the pilot is holding a roll. This changes Assist for players too, so it
+  needs its own ticket, a `SIM_VERSION` bump and the naive gates.
+- **(b)** Fly the reference in a tier without auto-land. That changes its tier and score.
+- **(c)** Relax the bar to what Assist can fly. For example, inverted within ±0.15 s of the apex over the Crossover/Semi
+  gap and ≥ 150° only to the Semi's near half.
