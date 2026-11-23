@@ -1,0 +1,58 @@
+{
+ "hold": 0.4,
+ "line": {
+  "t": 8.6,
+  "phase": "drive",
+  "y": 0.4,
+  "z": -3.99,
+  "vy": 0,
+  "v": 7.9,
+  "air": 297,
+  "cue": ""
+ },
+ "afterLift": {
+  "t": 9,
+  "phase": "air",
+  "y": 1.94,
+  "z": -0.85,
+  "vy": 8.1,
+  "v": 7.9,
+  "air": 256.5,
+  "cue": ""
+ },
+ "apex": {
+  "t": 9.92,
+  "phase": "air",
+  "y": 7.29,
+  "z": 6.36,
+  "vy": 0.4,
+  "v": 7.9,
+  "air": 241.5,
+  "cue": ""
+ },
+ "touch": {
+  "t": 12.63,
+  "phase": "landed",
+  "y": 0.48,
+  "z": 27.68,
+  "vy": -0.7,
+  "v": 7.9,
+  "air": 147.7,
+  "cue": ""
+ },
+ "cues": [],
+ "t": {
+  "sink": 0.7623409722852306,
+  "endReason": "settled",
+  "settledUpright": true
+ },
+ "mode": "results",
+ "res": {
+  "mode": "results",
+  "sink": 0.7623409722852306,
+  "endReason": "settled",
+  "verdict": "",
+  "sheet": "THE PANEL\n\nClean\n83.7/ 100\nBRONZE 72\nSILVER 84\nGOLD 92.5\nNew Bronze · Silver at 84 · 0.3 to go\n\nFlown in Assist\n\nRUN 1\nYOUR FIRST MARK ON THIS EVENT\nThe panel is deliberating…\ngemma-4-26b-a4b-it\nASSIST\nON\nrolls you out, levels and brakes\nNext jump\nThe Show\nN\nBeat 83.7\nR\nShare\nReplay\nHome\nH\nInitials\nPost\nThe Engineer\nChief Vehicle Engineer\n8.6\n\nThe Coordinator\nStunt Coordinator\n8.1\n\nThe Designer\nHe"
+ },
+ "errs": []
+}

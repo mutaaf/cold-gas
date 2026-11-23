@@ -1,0 +1,25 @@
+{"press":-14,"lift":0.3,"vAtPress":29.8,"apex":5.9,"verdict":"No jump","total":3.7,"end":"contact"}
+{"press":-14,"lift":0.4,"vAtPress":29.8,"apex":7.9,"verdict":"Clean","total":81,"end":"settled"}
+{"press":-14,"lift":0.6,"vAtPress":29.8,"apex":16.5,"verdict":"Clean","total":81,"end":"runout"}
+{"press":-14,"lift":0.8,"vAtPress":29.8,"apex":28.8,"verdict":"No jump","total":11.7,"end":"runout"}
+{"press":-10,"lift":0.3,"vAtPress":30.8,"apex":6.1,"verdict":"No jump","total":4,"end":"contact"}
+{"press":-10,"lift":0.4,"vAtPress":30.8,"apex":9.8,"verdict":"No jump","total":4,"end":"contact"}
+{"press":-10,"lift":0.6,"vAtPress":30.8,"apex":16.5,"verdict":"Clean","total":80,"end":"runout"}
+{"press":-10,"lift":0.8,"vAtPress":30.8,"apex":29.1,"verdict":"No jump","total":11.7,"end":"runout"}
+{"press":-7,"lift":0.3,"vAtPress":31.6,"apex":8.9,"verdict":"Wrecked","total":4.3,"end":"contact"}
+{"press":-7,"lift":0.4,"vAtPress":31.6,"apex":9.8,"verdict":"Wrecked","total":4,"end":"contact"}
+{"press":-7,"lift":0.6,"vAtPress":31.6,"apex":10.2,"verdict":"Wrecked","total":4,"end":"contact"}
+{"press":-7,"lift":0.8,"vAtPress":31.6,"apex":14.5,"verdict":"Wrecked","total":4,"end":"contact"}
+{"press":-4,"lift":0.3,"vAtPress":32.3,"apex":7.3,"verdict":"Wrecked","total":4,"end":"contact"}
+{"press":-4,"lift":0.4,"vAtPress":32.3,"apex":7.3,"verdict":"Wrecked","total":4,"end":"contact"}
+{"press":-4,"lift":0.6,"vAtPress":32.3,"apex":7.3,"verdict":"Wrecked","total":4,"end":"contact"}
+{"press":-4,"lift":0.8,"vAtPress":32.3,"apex":11,"verdict":"Wrecked","total":4,"end":"contact"}
+{"press":-2,"lift":0.3,"vAtPress":32.8,"apex":4.8,"verdict":"Wrecked","total":30.7,"end":"contact"}
+{"press":-2,"lift":0.4,"vAtPress":32.8,"apex":4.8,"verdict":"No jump","total":4,"end":"contact"}
+{"press":-2,"lift":0.6,"vAtPress":32.8,"apex":7.5,"verdict":"No jump","total":4,"end":"contact"}
+{"press":-2,"lift":0.8,"vAtPress":32.8,"apex":14.5,"verdict":"No jump","total":4,"end":"contact"}
+{"press":0,"lift":0.3,"vAtPress":33.2,"apex":2.8,"verdict":"Wrecked","total":4,"end":"contact"}
+{"press":0,"lift":0.4,"vAtPress":33.2,"apex":2.8,"verdict":"Wrecked","total":4,"end":"contact"}
+{"press":0,"lift":0.6,"vAtPress":33.2,"apex":2.8,"verdict":"Wrecked","total":4,"end":"settled"}
+{"press":0,"lift":0.8,"vAtPress":33.2,"apex":5.6,"verdict":"Wrecked","total":4,"end":"contact"}
+3/24 landed without a wreck
