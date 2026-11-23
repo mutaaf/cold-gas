@@ -1,0 +1,45 @@
+// Production, the Show reference at a true 60 fps (sim and director stepped together at 1/60 s from Go, the page's own
+// live step held): every frame from the apex to the results: the camera, the four wheel contacts' sight lines against the
+// splash tank's box (walls and coping included, courses.js:213), the tank's share of the screen, hard cuts (> 1 m).
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, OUT, view = 'phone', dx = '0', URL = 'https://mutaafaziz.com/coldgas/'] = process.argv;
+const phone = view === 'phone';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 } });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage();
+await p.goto(URL); await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
+await p.evaluate(() => window.__coldgas.startRun('jump'));
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 60000 });
+await p.evaluate((dx) => { const g = window.__coldgas, S = g.S; g.S.autopilot = g.createAutopilot('show', dx ? { aimX: dx } : {}); g.skipCountdown();
+  S.holdLive = true; const orig = g.director.update; g.director.update = () => {};
+  window.__step = () => { if (S.mode === 'live') g.liveStep(1 / 60); orig(1 / 60, S.time, { carPos: g.carRoot.position, carVel: S.mode === 'live' ? S.run.car.vel : { x: 0, y: 0, z: 0 }, phase: S.run.phase, mode: S.mode === 'live' ? 'live' : 'replay', course: 'show', subject: g.hero.group }); };
+  let vyPrev = 1; while (!(S.run.phase === 'air' && S.run.car.vel.y < 0)) window.__step(); }, +dx);
+const TANK = { x0: 9.6, x1: 18.4, y0: 0, y1: 1.1, z0: -40.4, z1: -23.6 };
+const hit = (o, t) => { let lo = 0, hi = 1; for (const a of ['x', 'y', 'z']) { const b0 = TANK[a + '0'], b1 = TANK[a + '1'], d = t[a] - o[a];
+  if (Math.abs(d) < 1e-9) { if (o[a] < b0 || o[a] > b1) return false; continue; } let u0 = (b0 - o[a]) / d, u1 = (b1 - o[a]) / d; if (u0 > u1) [u0, u1] = [u1, u0]; lo = Math.max(lo, u0); hi = Math.min(hi, u1); if (lo > hi) return false; }
+  return hi > 0.001 && lo < 0.999; };
+const rows = []; let prev = null, shots = 0;
+for (let i = 0; i < 400; i++) {
+  const s = await p.evaluate(() => { const g = window.__coldgas, S = g.S; window.__step(); const car = S.run.car, cam = g.camera; cam.updateMatrixWorld();
+    const pts = []; for (const x of [9.6, 18.4]) for (const y of [0, 1.1]) for (const z of [-40.4, -23.6]) { const v = cam.position.clone().set(x, y, z).project(cam); if (v.z < 1) pts.push([v.x, v.y]); }
+    let share = 0; if (pts.length) { const cl = (v) => Math.max(-1, Math.min(1, v)); const xs = pts.map((q) => cl(q[0])), ys = pts.map((q) => cl(q[1])); share = (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys)) / 4; }
+    return { t: +(S.run.tick / 240).toFixed(3), mode: S.mode, phase: S.run.phase, car: { x: car.pos.x, y: car.pos.y, z: car.pos.z }, q: car.quat || car.q, cam: { x: cam.position.x, y: cam.position.y, z: cam.position.z }, share: +share.toFixed(2) }; });
+  const wheels = [[-0.82, -1.42], [0.82, -1.42], [-0.82, 1.42], [0.82, 1.42]].filter(([ax, az]) => hit(s.cam, { x: s.car.x + ax, y: Math.max(0.05, s.car.y - 0.35), z: s.car.z + az })).length;
+  const jump = prev ? Math.hypot(s.cam.x - prev.cam.x, s.cam.y - prev.cam.y, s.cam.z - prev.cam.z) : 0;
+  const r = { t: s.t, phase: s.phase, carY: +s.car.y.toFixed(2), carZ: +s.car.z.toFixed(2), carX: +s.car.x.toFixed(2), cam: [s.cam.x, s.cam.y, s.cam.z].map((v) => +v.toFixed(2)), wheels, share: s.share, jump: +jump.toFixed(2) };
+  rows.push(r);
+  const want = (r.jump > 1) || (r.phase === 'air' && r.carY < 6 && (r.wheels > 0 || r.share > 0.2) && shots < 6 && i % 6 === 0);
+  if (want && shots < 10) { await p.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)))); await p.screenshot({ path: `${OUT}/brake-${view}-dx${dx}-${String(shots++).padStart(2, '0')}-t${r.t}.png` }); }
+  prev = s;
+  if (r.phase !== 'air' && rows.filter((q) => q.phase !== 'air').length > 60) break;
+}
+const air = rows.filter((r) => r.phase === 'air'), low = air.filter((r) => r.carY < 8);
+const touch = rows.find((r) => r.phase !== 'air');
+console.log(JSON.stringify({ view, dx: +dx, airFrames: air.length, below8m: low.length, wheelHiddenBelow8: low.filter((r) => r.wheels).length, allFourBelow8: low.filter((r) => r.wheels === 4).length,
+  shareMaxBelow8: Math.max(0, ...low.map((r) => r.share)), shareMeanBelow8: +(low.reduce((a, r) => a + r.share, 0) / (low.length || 1)).toFixed(2), cuts: rows.filter((r) => r.jump > 1), touch,
+  afterTouch: { n: rows.length - rows.indexOf(touch), wheelHidden: rows.slice(rows.indexOf(touch)).filter((r) => r.wheels).length },
+  below8: low.filter((_, i) => i % 3 === 0).map((r) => `${r.t} y${r.carY} x${r.carX} z${r.carZ} cam ${r.cam} w${r.wheels} s${r.share}`) }, null, 1));
+await browser.close();

@@ -1,0 +1,26 @@
+// The Lineup reference run against REVEAL_RESEARCH §2.2 (Kickflip): approach, apex, roll timing, carry, touchdown.
+import { createRun, stepRun } from '../../../../../../home/user/cold-gas/src/sim/run.js';
+import { createAutopilot } from '../../../../../../home/user/cold-gas/src/sim/autopilot.js';
+import { scoreRun } from '../../../../../../home/user/cold-gas/src/sim/judge.js';
+import { initPhysics } from '../../../../../../home/user/cold-gas/src/sim/engine.js';
+await initPhysics();
+const DT = 1 / 240;
+for (const course of (process.argv[2] || 'lineup').split(',')) {
+  const run = createRun(course), ap = createAutopilot(course);
+  let prev = run.phase, ev = [], apex = { y: -1 }, rollAcc = 0, lastRoll = null, upAt = null, invAt = null;
+  let liftV = null, liftZ = null, liftT = null;
+  while (run.phase !== 'done') {
+    stepRun(run, ap(run));
+    const c = run.car, t = run.tick * DT, q = c.quat;
+    // body up (y axis) in world: 
+    const upY = 1 - 2 * (q.x * q.x + q.z * q.z);
+    if (run.phase !== prev) { ev.push({ t: +t.toFixed(3), phase: run.phase, y: +c.pos.y.toFixed(2), z: +c.pos.z.toFixed(2), v: +Math.hypot(c.vel.x, c.vel.z).toFixed(2), vy: +c.vel.y.toFixed(2) }); if (run.phase === 'air') { liftV = Math.hypot(c.vel.x, c.vel.z); liftZ = c.pos.z; liftT = t; } prev = run.phase; }
+    if (run.phase === 'air') {
+      if (c.pos.y > apex.y) apex = { y: c.pos.y, t };
+      if (upY < -0.9 && invAt === null) invAt = t;
+      if (invAt !== null && upAt === null && upY > 0.9) upAt = t;
+    }
+  }
+  const s = scoreRun(run.t);
+  console.log(JSON.stringify({ course, events: ev, liftV: liftV && +liftV.toFixed(2), apex: +apex.y.toFixed(2), apexAfterLift: liftT && +(apex.t - liftT).toFixed(2), invertedAfterLift: invAt && +(invAt - liftT).toFixed(2), uprightAfterLift: upAt && +(upAt - liftT).toFixed(2), score: s.total, verdict: s.verdict, tKeys: Object.fromEntries(Object.entries(run.t).filter(([k, v]) => typeof v === 'number')) }, null, 1));
+}

@@ -1,0 +1,49 @@
+// Production, the Lineup reference on a phone (first visit) or a desktop, sim and director stepped together at 1/60 s:
+// the car's tilt from upright and its z against the row's boxes each frame of the air, and frames at the most
+// inverted moment, the apex, over the Semi's middle, and touchdown.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, OUT, view = 'phone', URL = 'https://mutaafaziz.com/coldgas/'] = process.argv;
+const phone = view === 'phone';
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext(phone ? { viewport: { width: 390, height: 844 }, deviceScaleFactor: 1, isMobile: true, hasTouch: true } : { viewport: { width: 1440, height: 900 } });
+if (phone) await c.addInitScript(() => localStorage.setItem('coldgas_howto', 'new'));
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage();
+const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+const t0 = Date.now();
+await p.goto(URL); await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
+const ready = Date.now() - t0;
+await p.screenshot({ path: `${OUT}/lineup-${view}-title.png` });
+await p.evaluate(() => document.querySelector('[data-course="lineup"]')?.click());
+await p.waitForTimeout(800);
+await p.evaluate(() => window.__coldgas.startRun('jump'));
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 60000 });
+const course = await p.evaluate(() => window.__coldgas.S.run.course);
+await p.evaluate(() => { const g = window.__coldgas, S = g.S; S.autopilot = g.createAutopilot('lineup'); g.skipCountdown();
+  S.holdLive = true; const orig = g.director.update; g.director.update = () => {};
+  window.__step = () => { if (S.mode === 'live') g.liveStep(1 / 60); orig(1 / 60, S.time, { carPos: g.carRoot.position, carVel: S.mode === 'live' ? S.run.car.vel : { x: 0, y: 0, z: 0 }, phase: S.run.phase, mode: S.mode === 'live' ? 'live' : 'replay', course: 'lineup', subject: g.hero.group }); };
+  while (S.run.phase !== 'air') window.__step(); });
+const rows = []; let lift = null; const want = new Set(['lift+0.50', 'lift+1.00', 'lift+1.40', 'over-semi', 'lift+2.00', 'touch']); const shot = new Set();
+for (let i = 0; i < 400; i++) {
+  const s = await p.evaluate(() => { const g = window.__coldgas, S = g.S; window.__step(); const car = S.run.car, q = car.quat;
+    const upY = 1 - 2 * (q.x * q.x + q.z * q.z);
+    return { t: S.run.tick / 240, phase: S.run.phase, y: car.pos.y, z: car.pos.z, tilt: Math.acos(Math.max(-1, Math.min(1, upY))) * 180 / Math.PI, mode: S.mode }; });
+  if (lift === null) lift = s.t;
+  const dt = s.t - lift, r = { dt: +dt.toFixed(3), phase: s.phase, y: +s.y.toFixed(2), z: +s.z.toFixed(2), tilt: +s.tilt.toFixed(0) };
+  rows.push(r);
+  const tags = [];
+  for (const m of [0.5, 1.0, 1.4, 2.0]) if (Math.abs(dt - m) < 0.009) tags.push(`lift+${m.toFixed(2)}`);
+  if (!shot.has('over-semi') && s.z >= 13.3) tags.push('over-semi');
+  if (!shot.has('touch') && s.phase === 'landed') tags.push('touch');
+  for (const tag of tags) if (want.has(tag) && !shot.has(tag)) { shot.add(tag); await p.evaluate(() => new Promise((res) => requestAnimationFrame(() => requestAnimationFrame(res)))); await p.screenshot({ path: `${OUT}/lineup-${view}-${tag}-dt${r.dt}-tilt${r.tilt}.png` }); r.shot = tag; }
+  if (s.phase !== 'air' && rows.filter((q) => q.phase !== 'air').length > 20) break;
+}
+const air = rows.filter((r) => r.phase === 'air');
+const inv = air.reduce((a, r) => (r.tilt > a.tilt ? r : a), { tilt: -1 });
+const apex = air.reduce((a, r) => (r.y > a.y ? r : a), { y: -1 });
+const semi = air.filter((r) => r.z >= 12.01 && r.z <= 14.60);
+console.log(JSON.stringify({ view, course, readyMs: ready, errs, mostInverted: inv, apex, overSemi: { n: semi.length, tiltMin: Math.min(...semi.map((r) => r.tilt)), tiltMax: Math.max(...semi.map((r) => r.tilt)), y: [semi[0]?.y, semi.at(-1)?.y] },
+  touch: rows.find((r) => r.phase !== 'air'), shots: rows.filter((r) => r.shot).map((r) => `${r.shot} dt${r.dt} y${r.y} z${r.z} tilt${r.tilt}`) }, null, 1));
+await browser.close();
