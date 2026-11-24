@@ -1,0 +1,32 @@
+// Can an ordinary keyboard player land the Lineup with Assist? The page's own cue: "Hold LIFT (Space) at the line"
+// (src/main.js:1527), then roll, then LAND. A grid of what a person does: run-up (floored / 7.5 m/s), where the
+// Space press lands (reaction: 4 m early … 3 m late of the line, z 0), how long LIFT is held, how long ROLL is held
+// (0 = no roll, then auto-level), then hold LAND to the ground, brake once down. Sim only, deterministic.
+import { createRun, stepRun } from '/home/user/cold-gas/src/sim/run.js';
+import { newInput } from '/home/user/cold-gas/src/sim/vehicle.js';
+import { scoreRun } from '/home/user/cold-gas/src/sim/judge.js';
+import { initPhysics } from '/home/user/cold-gas/src/sim/engine.js';
+await initPhysics();
+const out = []; let ok = 0, n = 0; const byLift = {}, byRoll = {};
+for (const approach of ['floored', 7.5]) for (const pressZ of [-4, -2, 0, 1.5, 3]) for (const liftS of [0.5, 1, 1.5, 2.5]) for (const rollS of [0, 0.8, 1.4]) {
+  const run = createRun('lineup'); let tLift = null, tRoll = null;
+  while (run.phase !== 'done' && run.tick < 240 * 40) {
+    const c = run.car, inp = newInput(); inp.assist = 1; const now = run.tick / 240;
+    inp.steer = Math.max(-1, Math.min(1, c.pos.x * 0.25));
+    const v = Math.hypot(c.vel.x, c.vel.z);
+    if (tLift === null && c.pos.z >= pressZ) tLift = now;
+    if (tLift === null) { inp.throttle = approach === 'floored' || v < approach ? 1 : 0; }
+    else if (now - tLift < liftS) { inp.lift = 1; inp.throttle = run.phase === 'drive' ? 1 : 0; }
+    else if (run.phase === 'air') {
+      if (tRoll === null) tRoll = now;
+      if (now - tRoll < rollS) inp.roll = -1; else inp.level = 1;
+    } else inp.brake = 1;
+    stepRun(run, inp);
+  }
+  const s = scoreRun(run.t, { assist: true }), t = run.t;
+  const landed = t.settledUpright && t.touchTick > 0 && !t.fellOff;
+  n++; if (landed) ok++;
+  (byLift[liftS] ||= [0, 0])[landed ? 0 : 1]++; (byRoll[rollS] ||= [0, 0])[landed ? 0 : 1]++;
+  console.log(JSON.stringify({ approach, pressZ, liftS, rollS }).padEnd(60), landed ? 'LANDED' : 'crash ', s.verdict.padEnd(20), String(s.total).padStart(5), 'roll°', Math.round(Math.abs(t.rollAccum || 0) * 57.3), 'sink', (t.sink ?? 0).toFixed(1), 'tilt', (t.tiltDeg ?? 0).toFixed(0), 'end', t.endReason, 'hit', t.hitVehicle ?? t.hits ?? '');
+}
+console.log(`${ok}/${n} landed upright`); console.log('by lift s [landed, crashed]', JSON.stringify(byLift)); console.log('by roll s', JSON.stringify(byRoll));

@@ -88,9 +88,10 @@ describe('native vectors (0146)', () => {
     expect(c.flights.length).toBe(runList().filter((r) => !r.v).length + inputList().length);   // (the surface runs, 0340, are run vectors only)
     expect(c.drills.length).toBe(33);
     const ids = new Set([...c.rows.flatMap((r) => r[3]), ...c.drills.flatMap((d) => [...d.thumb, ...d.classic])].map((it) => it[0]));
-    // Every finding but two: 'fell-off' (off the deck with no air at all) and 'flipped' (on its roof with nothing else
-    // to say) took more search than their two fixed strings are worth. Coach.swift's were checked against coach.js's.
-    expect([...ids].sort()).toEqual(['clean', 'early-release', 'gas', 'late-brake', 'late-land', 'late-roll', 'mark', 'no-brake', 'no-release', 'no-roll', 'over-roll', 'ran-out', 'short', 'stopped-climb', 'tilt']);
+    // Every finding but three: 'fell-off' (off the deck with no air at all) and 'flipped' (on its roof with nothing else
+    // to say) took more search than their two fixed strings are worth, and 'crash' (0367: a crash the replay names no
+    // cause for) no logged flight reaches. Coach.swift's were checked against coach.js's.
+    expect([...ids].sort()).toEqual(['clean', 'early-release', 'gas', 'late-brake', 'late-land', 'late-roll', 'mark', 'no-brake', 'no-lift', 'no-release', 'no-roll', 'over-roll', 'ran-out', 'row', 'short', 'stopped-climb', 'tilt']);
   });
   it('the manifest names every file with its hash', () => {
     const m = JSON.parse(disk('manifest.json'));

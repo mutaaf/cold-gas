@@ -1,0 +1,123 @@
+{"approach":"floored","pressZ":-4,"liftS":0.5,"rollS":0}     crash  Wrecked                3.7 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":0.5,"rollS":0.8}   crash  Wrecked                3.7 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":0.5,"rollS":1.4}   crash  Wrecked                3.7 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":1,"rollS":0}       crash  Wrecked                3.7 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":1,"rollS":0.8}     crash  Wrecked                3.7 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":1,"rollS":1.4}     crash  Wrecked                3.7 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":1.5,"rollS":0}     crash  Wrecked                3.7 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":1.5,"rollS":0.8}   crash  Wrecked                3.7 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":1.5,"rollS":1.4}   crash  Wrecked                3.7 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":2.5,"rollS":0}     crash  Wrecked                3.3 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":2.5,"rollS":0.8}   crash  Wrecked                3.3 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-4,"liftS":2.5,"rollS":1.4}   crash  Wrecked                3.3 roll° 7 sink 0.0 tilt 37 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":0.5,"rollS":0}     crash  No jump                  4 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":0.5,"rollS":0.8}   crash  No jump                  4 roll° 359 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":0.5,"rollS":1.4}   crash  No jump                  4 roll° 373 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":1,"rollS":0}       crash  No jump                  4 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":1,"rollS":0.8}     crash  No jump                  4 roll° 300 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":1,"rollS":1.4}     crash  No jump                  4 roll° 300 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":1.5,"rollS":0}     crash  No jump                  4 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":1.5,"rollS":0.8}   crash  No jump                  4 roll° 163 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":1.5,"rollS":1.4}   crash  No jump                  4 roll° 163 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":2.5,"rollS":0}     crash  No jump                  4 roll° 1 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":2.5,"rollS":0.8}   crash  No jump                  4 roll° 1 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":-2,"liftS":2.5,"rollS":1.4}   crash  No jump                  4 roll° 1 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":0.5,"rollS":0}      crash  No jump                  4 roll° 2 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":0.5,"rollS":0.8}    crash  No jump                  4 roll° 356 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":0.5,"rollS":1.4}    crash  No jump                  4 roll° 384 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":1,"rollS":0}        crash  No jump                  4 roll° 9 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":1,"rollS":0.8}      crash  No jump                  4 roll° 287 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":1,"rollS":1.4}      crash  No jump                  4 roll° 287 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":1.5,"rollS":0}      crash  No jump                  4 roll° 6 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":1.5,"rollS":0.8}    crash  No jump                  4 roll° 149 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":1.5,"rollS":1.4}    crash  No jump                  4 roll° 149 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":2.5,"rollS":0}      crash  No jump                  4 roll° 4 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":2.5,"rollS":0.8}    crash  No jump                  4 roll° 4 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":0,"liftS":2.5,"rollS":1.4}    crash  No jump                  4 roll° 4 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":0.5,"rollS":0}    crash  No jump                  4 roll° 7 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":0.5,"rollS":0.8}  crash  No jump                  4 roll° 351 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":0.5,"rollS":1.4}  LANDED Wrecked                 31 roll° 364 sink 6.3 tilt 12 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":1,"rollS":0}      crash  No jump                  4 roll° 14 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":1,"rollS":0.8}    crash  No jump                  4 roll° 272 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":1,"rollS":1.4}    crash  No jump                  4 roll° 272 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":1.5,"rollS":0}    crash  No jump                  4 roll° 12 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":1.5,"rollS":0.8}  crash  No jump                  4 roll° 134 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":1.5,"rollS":1.4}  crash  No jump                  4 roll° 134 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":2.5,"rollS":0}    crash  No jump                  4 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":2.5,"rollS":0.8}  crash  No jump                  4 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":1.5,"liftS":2.5,"rollS":1.4}  crash  No jump                  4 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":0.5,"rollS":0}      crash  No jump                  4 roll° 6 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":0.5,"rollS":0.8}    crash  No jump                  4 roll° 351 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":0.5,"rollS":1.4}    LANDED Wrecked               30.7 roll° 364 sink 6.4 tilt 10 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":1,"rollS":0}        crash  No jump                  4 roll° 2 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":1,"rollS":0.8}      crash  No jump                  4 roll° 259 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":1,"rollS":1.4}      crash  No jump                  4 roll° 259 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":1.5,"rollS":0}      crash  No jump                  4 roll° 3 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":1.5,"rollS":0.8}    crash  No jump                  4 roll° 121 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":1.5,"rollS":1.4}    crash  No jump                  4 roll° 121 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":2.5,"rollS":0}      crash  No jump                  4 roll° 1 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":2.5,"rollS":0.8}    crash  No jump                  4 roll° 1 sink 0.0 tilt 0 end contact hit 
+{"approach":"floored","pressZ":3,"liftS":2.5,"rollS":1.4}    crash  No jump                  4 roll° 1 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":-4,"liftS":0.5,"rollS":0}           LANDED No trick                45 roll° 0 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":0.5,"rollS":0.8}         LANDED Stuck it              87.7 roll° 360 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":0.5,"rollS":1.4}         LANDED Stuck it              86.7 roll° 360 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":1,"rollS":0}             LANDED Wrecked                 25 roll° 0 sink 10.6 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":1,"rollS":0.8}           LANDED Wrecked               33.7 roll° 360 sink 16.9 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":1,"rollS":1.4}           LANDED Wrecked               33.7 roll° 360 sink 17.1 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":1.5,"rollS":0}           LANDED Wrecked               24.7 roll° 0 sink 27.0 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":1.5,"rollS":0.8}         LANDED Wrecked               33.3 roll° 360 sink 30.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":1.5,"rollS":1.4}         LANDED Wrecked               33.3 roll° 360 sink 30.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":2.5,"rollS":0}           LANDED Wrecked               24.7 roll° 0 sink 42.4 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":2.5,"rollS":0.8}         LANDED Wrecked               33.3 roll° 360 sink 45.1 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-4,"liftS":2.5,"rollS":1.4}         LANDED Wrecked               33.3 roll° 360 sink 45.4 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":0.5,"rollS":0}           LANDED No trick                45 roll° 0 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":0.5,"rollS":0.8}         LANDED Stuck it              85.3 roll° 360 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":0.5,"rollS":1.4}         LANDED Stuck it              84.7 roll° 360 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":1,"rollS":0}             LANDED Wrecked                 25 roll° 0 sink 10.6 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":1,"rollS":0.8}           LANDED Wrecked               33.7 roll° 360 sink 16.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":1,"rollS":1.4}           LANDED Wrecked               33.7 roll° 360 sink 17.0 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":1.5,"rollS":0}           LANDED Wrecked               24.7 roll° 0 sink 27.0 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":1.5,"rollS":0.8}         LANDED Wrecked               33.3 roll° 360 sink 30.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":1.5,"rollS":1.4}         LANDED Wrecked               33.3 roll° 360 sink 30.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":2.5,"rollS":0}           LANDED Wrecked               24.7 roll° 0 sink 42.4 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":2.5,"rollS":0.8}         LANDED Wrecked               33.3 roll° 360 sink 45.1 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":-2,"liftS":2.5,"rollS":1.4}         LANDED Wrecked               33.3 roll° 360 sink 45.4 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":0.5,"rollS":0}            LANDED No trick                45 roll° 0 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":0.5,"rollS":0.8}          LANDED Stuck it                85 roll° 360 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":0.5,"rollS":1.4}          LANDED Stuck it                84 roll° 360 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":1,"rollS":0}              LANDED Wrecked                 26 roll° 0 sink 10.6 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":1,"rollS":0.8}            LANDED Wrecked                 34 roll° 360 sink 16.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":1,"rollS":1.4}            LANDED Wrecked                 34 roll° 360 sink 17.0 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":1.5,"rollS":0}            LANDED Wrecked               25.7 roll° 0 sink 27.0 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":1.5,"rollS":0.8}          LANDED Wrecked                 34 roll° 360 sink 30.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":1.5,"rollS":1.4}          LANDED Wrecked                 34 roll° 360 sink 30.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":2.5,"rollS":0}            LANDED Wrecked               25.7 roll° 0 sink 42.4 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":2.5,"rollS":0.8}          LANDED Wrecked               33.7 roll° 360 sink 45.1 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":0,"liftS":2.5,"rollS":1.4}          LANDED Wrecked               33.7 roll° 360 sink 45.4 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":0.5,"rollS":0}          LANDED No trick                45 roll° 0 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":0.5,"rollS":0.8}        LANDED Stuck it              84.3 roll° 360 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":0.5,"rollS":1.4}        LANDED Clean                   83 roll° 360 sink 0.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":1,"rollS":0}            LANDED Wrecked                 26 roll° 0 sink 10.6 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":1,"rollS":0.8}          LANDED Wrecked                 34 roll° 360 sink 16.9 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":1,"rollS":1.4}          LANDED Wrecked                 34 roll° 360 sink 17.1 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":1.5,"rollS":0}          LANDED Wrecked                 26 roll° 0 sink 27.0 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":1.5,"rollS":0.8}        LANDED Wrecked                 34 roll° 360 sink 30.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":1.5,"rollS":1.4}        LANDED Wrecked                 34 roll° 360 sink 30.8 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":2.5,"rollS":0}          LANDED Wrecked                 26 roll° 0 sink 42.4 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":2.5,"rollS":0.8}        LANDED Wrecked               33.7 roll° 360 sink 45.1 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":1.5,"liftS":2.5,"rollS":1.4}        LANDED Wrecked               33.7 roll° 360 sink 45.4 tilt 0 end settled hit 
+{"approach":7.5,"pressZ":3,"liftS":0.5,"rollS":0}            crash  No jump                5.3 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":0.5,"rollS":0.8}          crash  No jump                5.3 roll° 352 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":0.5,"rollS":1.4}          crash  No jump                5.3 roll° 355 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":1,"rollS":0}              crash  No jump                5.3 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":1,"rollS":0.8}            crash  No jump                5.3 roll° 300 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":1,"rollS":1.4}            crash  No jump                5.3 roll° 300 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":1.5,"rollS":0}            crash  No jump                5.3 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":1.5,"rollS":0.8}          crash  No jump                5.3 roll° 162 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":1.5,"rollS":1.4}          crash  No jump                5.3 roll° 162 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":2.5,"rollS":0}            crash  No jump                5.3 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":2.5,"rollS":0.8}          crash  No jump                5.3 roll° 0 sink 0.0 tilt 0 end contact hit 
+{"approach":7.5,"pressZ":3,"liftS":2.5,"rollS":1.4}          crash  No jump                5.3 roll° 0 sink 0.0 tilt 0 end contact hit 
+50/120 landed upright
+by lift s [landed, crashed] {"1":[12,18],"0.5":[14,16],"1.5":[12,18],"2.5":[12,18]}
+by roll s {"0":[16,24],"0.8":[16,24],"1.4":[18,22]}

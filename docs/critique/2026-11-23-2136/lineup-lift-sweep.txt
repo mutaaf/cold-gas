@@ -1,0 +1,12 @@
+{"liftS":0.2,"approach":7.5,"vLine":7.6,"apexM":3.1,"gasStart":297,"gasAtApex":204.6,"gasEnd":200.4,"sink":0,"verdict":"Wrecked","total":26.7,"end":"settled"}
+{"liftS":0.3,"approach":7.5,"vLine":7.6,"apexM":5.3,"gasStart":297,"gasAtApex":254.6,"gasEnd":203.2,"sink":0,"verdict":"Wrecked","total":32.3,"end":"contact"}
+{"liftS":0.4,"approach":7.5,"vLine":7.5,"apexM":8.3,"gasStart":297,"gasAtApex":243.6,"gasEnd":139.9,"sink":0.8,"verdict":"Stuck it","total":89,"end":"settled"}
+{"liftS":0.5,"approach":7.5,"vLine":7.5,"apexM":12.3,"gasStart":297,"gasAtApex":222.8,"gasEnd":124.8,"sink":0.8,"verdict":"Stuck it","total":87.7,"end":"settled"}
+{"liftS":0.6,"approach":7.5,"vLine":7.5,"apexM":17.4,"gasStart":297,"gasAtApex":211.6,"gasEnd":83,"sink":1.2,"verdict":"Clean","total":79,"end":"settled"}
+{"liftS":0.7,"approach":7.5,"vLine":7.5,"apexM":23.3,"gasStart":297,"gasAtApex":200.6,"gasEnd":61.9,"sink":2.3,"verdict":"Clean","total":75.3,"end":"settled"}
+{"liftS":0.8,"approach":7.5,"vLine":7.5,"apexM":30,"gasStart":297,"gasAtApex":189.7,"gasEnd":40.5,"sink":8.1,"verdict":"Survived","total":54,"end":"settled"}
+{"liftS":1,"approach":7.5,"vLine":7.5,"apexM":45,"gasStart":297,"gasAtApex":168.8,"gasEnd":26.9,"sink":17.1,"verdict":"Wrecked","total":33.7,"end":"settled"}
+{"liftS":1.5,"approach":7.5,"vLine":7.5,"apexM":82.6,"gasStart":297,"gasAtApex":124.1,"gasEnd":17,"sink":30.9,"verdict":"Wrecked","total":33.3,"end":"settled"}
+{"liftS":2,"approach":7.5,"vLine":7.5,"apexM":112.4,"gasStart":297,"gasAtApex":90.2,"gasEnd":13.1,"sink":39.5,"verdict":"Wrecked","total":33.3,"end":"settled"}
+{"liftS":0.4,"approach":"floored","vLine":32.2,"apexM":7.3,"gasStart":297,"gasAtApex":243.1,"gasEnd":223.9,"sink":0,"verdict":"Wrecked","total":4,"end":"contact"}
+{"liftS":0.4,"approach":12,"vLine":12,"apexM":8.3,"gasStart":297,"gasAtApex":243.7,"gasEnd":165.5,"sink":0.8,"verdict":"Clean","total":82.3,"end":"settled"}

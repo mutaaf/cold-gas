@@ -154,3 +154,75 @@ describe('0108 and 0119 still hold on the Show at rest', () => {
     expect(new THREE.Vector3(0, 0, -1).applyQuaternion(s.q).x).toBeLessThan(-0.3);
   });
 });
+
+// 0357: the Show's last second of brake is never shot across the splash tank. From the apex to the touchdown, every frame
+// at 60 Hz: the floor under all four wheels in sight past the tank (walls and coping), the tank's projected box ≤ 0.10 of
+// the screen while the car is below 3 m and the descent's rig has it (from 1 m the landed stand takes over: 0355's, out of
+// 0357's scope; a car drifting 4 m toward the tank comes down 2.3 m from its wall, where no stand round it keeps the tank
+// under 0.10 of a desktop frame), and the camera never moves more than 1 m in a frame except at a cut, with no two cuts
+// < 0.3 s apart (0063).
+function descentFrames(course, frames, [w, h], dx) {
+  globalThis.innerWidth = w; globalThis.innerHeight = h;
+  const cam = new THREE.PerspectiveCamera(52, w / h, 0.1, 2000);
+  const dir = createDirector(cam);
+  dir.restart();
+  let apex = -1, peak = -Infinity;
+  frames.forEach((f, i) => { if (f.phase === 'air' && f.y > peak) { peak = f.y; apex = i; } });
+  const out = [];
+  for (let i = 0; i < frames.length; i++) {
+    const f = frames[i];
+    pos.set(f.x + dx, f.y, f.z); vel.set(f.vx, f.vy, f.vz);
+    dir.update(1 / 60, 0, { carPos: pos, carVel: vel, phase: f.phase, mode: 'live', course });
+    if (i < apex) continue;
+    cam.updateMatrixWorld(); cam.updateProjectionMatrix();
+    out.push({ cam: cam.position.clone(), car: pos.clone(), share: tankShare(course, cam) });
+    if (f.phase === 'landed' || f.phase === 'done') break;
+  }
+  return out;
+}
+// The share of the screen the tank's box covers: its faces sampled on a 0.25 m grid, projected, the box round those on
+// screen (clipped to it), over the screen's area. 0 when the tank is out of view.
+function tankShare(course, cam) {
+  let lo = Infinity, hi = -Infinity, bo = Infinity, to = -Infinity;
+  const v = new THREE.Vector3(), e = new THREE.Vector3();
+  for (const t of rawTanks(course)) {
+    const pts = [];
+    for (let x = t.x0; x <= t.x1 + 1e-9; x += 0.25) for (let z = t.z0; z <= t.z1 + 1e-9; z += 0.25) pts.push([x, t.top, z]);
+    for (let y = 0; y <= t.top + 1e-9; y += 0.25) {
+      for (let x = t.x0; x <= t.x1 + 1e-9; x += 0.25) pts.push([x, y, t.z0], [x, y, t.z1]);
+      for (let z = t.z0; z <= t.z1 + 1e-9; z += 0.25) pts.push([t.x0, y, z], [t.x1, y, z]);
+    }
+    for (const [x, y, z] of pts) {
+      e.set(x, y, z).applyMatrix4(cam.matrixWorldInverse);
+      if (e.z > -0.1) continue;   // behind the camera
+      v.set(x, y, z).project(cam);
+      if (v.x < -1 || v.x > 1 || v.y < -1 || v.y > 1) continue;
+      lo = Math.min(lo, v.x); hi = Math.max(hi, v.x); bo = Math.min(bo, v.y); to = Math.max(to, v.y);
+    }
+  }
+  return hi > lo ? ((hi - lo) * (to - bo)) / 4 : 0;
+}
+
+describe('0357 show: the brake down onto the mark is never shot across the tank', () => {
+  let frames;
+  beforeAll(() => { frames = flight('show'); });
+  for (const view of VIEWS) for (const dx of SHIFTS) {
+    it(`${view.join('×')}, the flight ${dx ? `${dx > 0 ? '+' : ''}${dx} m off` : 'as flown'}: floor under the wheels in sight, the tank small, no jumps`, () => {
+      const seen = descentFrames('show', frames, view, dx);
+      expect(seen.length).toBeGreaterThan(60);
+      const bad = [];
+      let lastCut = -Infinity;
+      for (const [i, s] of seen.entries()) {
+        for (const [ox, oz] of [[-0.82, -1.42], [0.82, -1.42], [-0.82, 1.42], [0.82, 1.42]]) {
+          if (hidden(rawTanks('show'), s.cam, { x: s.car.x + ox, y: 0.02, z: s.car.z + oz })) { bad.push(`${i} (car ${s.car.y.toFixed(2)} m): a wheel's floor behind the tank`); break; }
+        }
+        if (s.car.y < 3 && s.car.y >= 1 && s.share > 0.1) bad.push(`${i} (car ${s.car.y.toFixed(2)} m): the tank ${s.share.toFixed(2)} of the screen`);
+        if (i > 0 && s.cam.distanceTo(seen[i - 1].cam) > 1) {
+          if (i - lastCut < 0.3 * 60) bad.push(`${i}: two cuts ${((i - lastCut) / 60).toFixed(2)} s apart`);
+          lastCut = i;
+        }
+      }
+      expect(bad.slice(0, 6)).toEqual([]);
+    });
+  }
+});
