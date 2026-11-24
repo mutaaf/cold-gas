@@ -20,6 +20,10 @@ public let COACH_RANOUT_THUMB = "Keep holding the pad all the way to the ground:
 /// The Lineup's run-up and lift (0367): the reveal's 25–30 km/h at the line, and about half a second of LIFT there.
 public let COACH_LINEUP_RUNUP_KMH = (25.0, 30.0)
 public let COACH_LINEUP_LIFT_HOLD = 0.5
+/// km/h either side of the band before a fix names the speed.
+public let COACH_LINEUP_SPEED_SLACK = (3.0, 4.0)
+/// A LIFT press that ends this far (m) before the line is a tap on the run-up, not the lift.
+public let COACH_LINEUP_TAP_BEFORE = 5.0
 
 // MARK: - pointer.js: the words
 
@@ -81,7 +85,8 @@ public final class CoachFlight {
     public internal(set) var touch: CoachTouch? = nil
     public internal(set) var wasInverted = false, gasAtTouch = 0.0, pressureAtTouch = 0.0, apexTick = -1.0, landedTick = -1.0, levelHeld = 0.0, airTicks = 0.0
     /// The Lineup's run-up (0367): the speed along the run as the car crossed the lift-off line, and how long the first
-    /// press of LIFT was held (s; -1 when LIFT was never pressed).
+    /// press of LIFT at the line was held (s; -1 when LIFT was never pressed there; a press that ended more than
+    /// COACH_LINEUP_TAP_BEFORE m short of the line doesn't count).
     public internal(set) var lineSpeed = -1.0, liftHeld = -1.0
     /// The re-flown run's telemetry; set once the replay is over.
     public internal(set) var t: Telemetry!
@@ -122,7 +127,10 @@ public func readFlight(_ inputLog: [[Int]], _ courseId: String, fromTick: Int = 
             if f.lineSpeed < 0 && c.pos.z >= lineZ { f.lineSpeed = DMath.dhypot(c.vel.x, c.vel.z) }
             if f.liftHeld < 0 {
                 if inp.lift > 0.5 && liftFrom < 0 { liftFrom = t }
-                else if !(inp.lift > 0.5) && liftFrom >= 0 { f.liftHeld = (t - liftFrom) * DT }
+                else if !(inp.lift > 0.5) && liftFrom >= 0 {
+                    if c.pos.z >= lineZ - COACH_LINEUP_TAP_BEFORE { f.liftHeld = (t - liftFrom) * DT }
+                    liftFrom = -1
+                }
             }
         }
         if r.phase == .air && lastPhase != .air && f.releaseTick < 0 {
@@ -265,7 +273,7 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
     let drill = fromTick > 0, scored = show && !drill
     // 0367: a crash and its card. A crash is never "Clean", and never told to try Pro (coachFinish).
     let crashed = card?.crashed ?? scoreRun(t).crashed
-    if courseId == "lineup" && !drill { coachLineupWrecks(t, f, COURSES[courseId]!, say, crashed, add) }
+    if courseId == "lineup" && !drill { coachLineupWrecks(t, f, COURSES[courseId]!, say, crashed, add, card?.tier ?? t.tier) }
 
     if wall && t.airStartTick < 0 {
         // 0189: stopped short of the ledge (a thumb lifted on the climb) names the climb, not the release.
@@ -355,29 +363,37 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
 }
 
 /// coach.js lineupWrecks (0367): the Lineup's two wrecks, ahead of everything else on its card.
-let COACH_SPEED_SLACK = (3.0, 4.0)   // km/h either side of the band before the fix names the speed
-func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say: CoachWords, _ crashed: Bool, _ add: (String, Double, String, String, String) -> Void) {
+func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say: CoachWords, _ crashed: Bool, _ add: (String, Double, String, String, String) -> Void, _ tier: String) {
     let s = jsNumberString
     let apexH = t.airStartTick >= 0 ? jsMax(0, t.apex - SPEC.comHeight) : 0
     let neverUp = t.airStartTick < 0 || apexH < course.tallest
     if !(neverUp && (crashed || t.touchTick < 0)) && !t.contact { return }
     let (lo, hi) = COACH_LINEUP_RUNUP_KMH
     let kmh = f.lineSpeed >= 0 ? jsRound(f.lineSpeed * 3.6) : -1
-    let held = f.liftHeld >= 0 ? "held \(say.lift) \(s(r1(f.liftHeld))) s" : "never pressed \(say.lift)"
+    // The one-thumb pad commits the lift itself past the line; on Advanced LIFT isn't a valve.
+    let thumb = say.aim == COACH_AIM_THUMB, timed = !thumb && tier != "advanced"
+    let heldS = r1(f.liftHeld)
+    let held = !timed ? "" : f.liftHeld >= 0 ? "held \(say.lift) \(s(heldS)) s" : "never pressed \(say.lift)"
     let atLine = kmh >= 0 ? "\(s(kmh)) km/h at the line" : "you never reached the line"
-    // The one-thumb pad paces the run-up itself: its fix is the hold alone.
-    let thumb = say.aim == COACH_AIM_THUMB
-    let speedFix = thumb || kmh < 0 || (kmh >= lo - COACH_SPEED_SLACK.0 && kmh <= hi + COACH_SPEED_SLACK.1) ? "" :
+    let speedOff = !thumb && kmh >= 0 && (kmh < lo - COACH_LINEUP_SPEED_SLACK.0 || kmh > hi + COACH_LINEUP_SPEED_SLACK.1)
+    let speedFix = !speedOff ? "" :
         kmh > hi ? "Ease off \(say.drive) before the line: between \(s(lo)) km/h and \(s(hi)) km/h, not \(s(kmh)) km/h. " : "Carry between \(s(lo)) km/h and \(s(hi)) km/h to the line, not \(s(kmh)) km/h. "
-    let holdFix = "Hold \(say.lift) at the line for about \(s(COACH_LINEUP_LIFT_HOLD)) s\(f.liftHeld >= 0 && f.liftHeld < COACH_LINEUP_LIFT_HOLD - 0.05 ? " (you held \(s(r1(f.liftHeld))) s)" : ""), then roll."
+    let shortHold = timed && !(f.liftHeld >= COACH_LINEUP_LIFT_HOLD - 0.05)
+    let holdFix = thumb ? "Keep holding the pad through the line: it lifts you over the row, then rolls you."
+        : "Hold \(say.lift) at the line for about \(s(COACH_LINEUP_LIFT_HOLD)) s\(shortHold && f.liftHeld >= 0 ? " (you held \(s(heldS)) s)" : ""), then roll."
+    let right = timed && kmh >= 0 && !speedOff && !shortHold
+    let fix = right ? "Your run-up and \(say.lift) were right: fly it the same again."
+        : !speedFix.isEmpty || thumb || kmh >= 0 ? speedFix + holdFix : "Keep between \(s(lo)) km/h and \(s(hi)) km/h to the line. \(holdFix)"
+    let heldPart = held.isEmpty ? "" : ", \(held)"
     if neverUp {
+        let under = r1(jsMax(0.1, course.tallest - apexH))
         add("no-lift", 10, "Never got over the roofs",
-            t.airStartTick < 0 ? "You never got off the ground: \(atLine)." : "You only rose \(s(r1(apexH))) m, under the roofs' \(s(r1(course.tallest))) m: \(atLine), \(held).",
-            !speedFix.isEmpty || thumb ? speedFix + holdFix : "Keep between \(s(lo)) km/h and \(s(hi)) km/h to the line. \(holdFix)")
+            t.airStartTick < 0 ? "You never got off the ground: \(atLine)\(heldPart)." : "You only rose \(s(r1(apexH))) m, \(s(under)) m under the roofs: \(atLine)\(heldPart).",
+            fix)
         return
     }
-    add("row", 9.5, "Came down on the row", "\(kmh >= 0 ? "You reached the line at \(s(kmh)) km/h and" : "You") \(held): the car peaked \(s(r1(apexH))) m up and came down on the roofs.",
-        speedFix + holdFix)
+    let lead = kmh >= 0 ? "You reached the line at \(s(kmh)) km/h\(held.isEmpty ? "" : " and \(held)"): the car" : !held.isEmpty ? "You \(held): the car" : "The car"
+    add("row", 9.5, "Came down on the row", "\(lead) peaked \(s(r1(apexH))) m up and came down on the roofs.", fix)
 }
 
 /// A card with no finding: "Clean", with the next step. A crash is never clean (0367): it reads its own verdict.

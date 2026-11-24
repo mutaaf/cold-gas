@@ -8,7 +8,7 @@ import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { predict, newPrediction, SINK_SOFT, SINK_FIRM } from './predict.js';
 import { scoreRun } from './judge.js';
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD } from './aim-words.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD, LINEUP_SPEED_SLACK as SPEED_SLACK, LINEUP_TAP_BEFORE } from './aim-words.js';
 
 export { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH };
 import { v3 } from './m3.js';
@@ -36,7 +36,8 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
     maxSinkBeforeBrake: 0, lowestMargin: Infinity, redTicks: 0,
     touch: null, wasInverted: false, gasAtTouch: 0, pressureAtTouch: 0, apexTick: -1, landedTick: -1, levelHeld: 0, airTicks: 0,
     // The Lineup's run-up (0367): the speed along the run as the car crossed the lift-off line, and how long the
-    // first press of LIFT was held (s; -1 when LIFT was never pressed).
+    // press of LIFT at the line was held (s; -1 when LIFT was never pressed there). A press that ended more than
+    // LINEUP_TAP_BEFORE m short of the line was a tap on the run-up, and doesn't count.
     lineSpeed: -1, liftHeld: -1,
   };
   let lastPhase = '', wasInverted = false, liftFrom = -1;
@@ -47,7 +48,10 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
       if (f.lineSpeed < 0 && c.pos.z >= lineZ) f.lineSpeed = dhypot(c.vel.x, c.vel.z);
       if (f.liftHeld < 0) {
         if (inp.lift > 0.5 && liftFrom < 0) liftFrom = t;
-        else if (!(inp.lift > 0.5) && liftFrom >= 0) f.liftHeld = (t - liftFrom) * DT;
+        else if (!(inp.lift > 0.5) && liftFrom >= 0) {
+          if (c.pos.z >= lineZ - LINEUP_TAP_BEFORE) f.liftHeld = (t - liftFrom) * DT;
+          liftFrom = -1;
+        }
       }
     }
     if (r.phase === 'air' && lastPhase !== 'air' && f.releaseTick < 0) {
@@ -173,7 +177,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
 
   // 0367: a crash and its card. A crash is never "Clean", and never told to try Pro (finish).
   const crashed = !!(card?.facts?.crashed ?? scoreRun(t).facts?.crashed);
-  if (courseId === 'lineup' && !drill) lineupWrecks(t, f, course, say, crashed, add);
+  if (courseId === 'lineup' && !drill) lineupWrecks(t, f, course, say, crashed, add, card?.tier || t.tier);
   if (wall && t.airStartTick < 0) {
     if (t.fellOff) add('fell-off', 10, 'Slid off the deck', `The car left the side of the curl ${r1(t.maxRampHeight)} m up.`, 'Keep it on the centreline: small steering corrections, and crawl (≈20 km/h) so the fan holds you.');
     // 0189: a car that stopped short of the ledge (a thumb lifted on the climb) never got to the let-go: name the
@@ -267,30 +271,41 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
 // - no-lift: the car never rose above the tallest roof (or never left the ground) and hit the row, or never jumped.
 // - row: it rose above the roofs and still came down on them (t.contact).
 // The fix names what decides this course: the speed at the line (the reveal's 25–30 km/h run-up) and the LIFT hold.
-const SPEED_SLACK = [3, 4];   // km/h either side of the band before the fix names the speed
-function lineupWrecks(t, f, course, say, crashed, add) {
+function lineupWrecks(t, f, course, say, crashed, add, tier) {
   const apexH = t.airStartTick >= 0 ? Math.max(0, t.apex - SPEC.comHeight) : 0;
   const neverUp = t.airStartTick < 0 || apexH < course.tallest;
   if (!(neverUp && (crashed || t.touchTick < 0)) && !t.contact) return;
   const [lo, hi] = LINEUP_RUNUP_KMH;
   const kmh = f.lineSpeed >= 0 ? Math.round(f.lineSpeed * 3.6) : -1;
-  const held = f.liftHeld >= 0 ? `held ${say.lift} ${r1(f.liftHeld)} s` : `never pressed ${say.lift}`;
+  // The one-thumb pad paces the run-up and, past the line, commits the lift itself (src/onethumb.js); on Advanced LIFT
+  // isn't a valve. Neither is told a hold it didn't choose.
+  const thumb = say.aim === AIM_THUMB, timed = !thumb && tier !== 'advanced';
+  const heldS = r1(f.liftHeld);
+  const held = !timed ? '' : f.liftHeld >= 0 ? `held ${say.lift} ${heldS} s` : `never pressed ${say.lift}`;
   const atLine = kmh >= 0 ? `${kmh} km/h at the line` : 'you never reached the line';
-  // The one-thumb pad paces the run-up itself: its fix is the hold alone.
-  const thumb = say.aim === AIM_THUMB;
-  // Every number carries its unit, so src/units.js shows each in mph too (it reads no ranges).
-  // Named once it is clearly off the band (the keys players who land reach the line at 23–32 km/h, given the hold).
-  const speedFix = thumb || kmh < 0 || (kmh >= lo - SPEED_SLACK[0] && kmh <= hi + SPEED_SLACK[1]) ? '' :
+  // Every number carries its unit, so src/units.js shows each in mph too (it reads no ranges). The speed is named once
+  // it is clearly off the band.
+  const speedOff = !thumb && kmh >= 0 && (kmh < lo - SPEED_SLACK[0] || kmh > hi + SPEED_SLACK[1]);
+  const speedFix = !speedOff ? '' :
     kmh > hi ? `Ease off ${say.drive} before the line: between ${lo} km/h and ${hi} km/h, not ${kmh} km/h. ` : `Carry between ${lo} km/h and ${hi} km/h to the line, not ${kmh} km/h. `;
-  const holdFix = `Hold ${say.lift} at the line for about ${LIFT_HOLD} s${f.liftHeld >= 0 && f.liftHeld < LIFT_HOLD - 0.05 ? ` (you held ${r1(f.liftHeld)} s)` : ''}, then roll.`;
+  const shortHold = timed && !(f.liftHeld >= LIFT_HOLD - 0.05);
+  const holdFix = thumb ? 'Keep holding the pad through the line: it lifts you over the row, then rolls you.'
+    : `Hold ${say.lift} at the line for about ${LIFT_HOLD} s${shortHold && f.liftHeld >= 0 ? ` (you held ${heldS} s)` : ''}, then roll.`;
+  // Run-up and hold both right (the keys players who do both clear the row 83 times in 90): never an instruction they
+  // already followed.
+  const right = timed && kmh >= 0 && !speedOff && !shortHold;
+  const fix = right ? `Your run-up and ${say.lift} were right: fly it the same again.`
+    : speedFix || thumb || kmh >= 0 ? speedFix + holdFix : `Keep between ${lo} km/h and ${hi} km/h to the line. ${holdFix}`;
   if (neverUp) {
+    // How far under the roofs, not both heights: in feet 4.0 m and 4.1 m both read 13 ft.
+    const under = r1(Math.max(0.1, course.tallest - apexH));
     add('no-lift', 10, 'Never got over the roofs',
-      t.airStartTick < 0 ? `You never got off the ground: ${atLine}.` : `You only rose ${r1(apexH)} m, under the roofs' ${r1(course.tallest)} m: ${atLine}, ${held}.`,
-      speedFix || thumb ? speedFix + holdFix : `Keep between ${lo} km/h and ${hi} km/h to the line. ${holdFix}`);
+      t.airStartTick < 0 ? `You never got off the ground: ${atLine}${held ? `, ${held}` : ''}.` : `You only rose ${r1(apexH)} m, ${under} m under the roofs: ${atLine}${held ? `, ${held}` : ''}.`,
+      fix);
     return;
   }
-  add('row', 9.5, 'Came down on the row', `${kmh >= 0 ? `You reached the line at ${kmh} km/h and` : 'You'} ${held}: the car peaked ${r1(apexH)} m up and came down on the roofs.`,
-    speedFix + holdFix);
+  const lead = kmh >= 0 ? `You reached the line at ${kmh} km/h${held ? ` and ${held}` : ''}: the car` : held ? `You ${held}: the car` : 'The car';
+  add('row', 9.5, 'Came down on the row', `${lead} peaked ${r1(apexH)} m up and came down on the roofs.`, fix);
 }
 
 // A card with no finding: "Clean", with the next step. A crash is never clean (0367): it reads its own verdict.

@@ -14,3 +14,8 @@ export const RANOUT_THUMB = 'Keep holding the pad all the way to the ground: the
 // 0.5 s from 23–32 km/h and comes down on the row at 0.35–0.4 s whatever the speed.
 export const LINEUP_RUNUP_KMH = [25, 30];
 export const LINEUP_LIFT_HOLD = 0.5;
+// km/h either side of the band before a fix names the speed: the keys players who land reach the line at 23–32 km/h.
+export const LINEUP_SPEED_SLACK = [3, 4];
+// A LIFT press that ends this far (m) before the line is a tap on the run-up, not the lift (0367): the hold read is the
+// press at the line.
+export const LINEUP_TAP_BEFORE = 5;

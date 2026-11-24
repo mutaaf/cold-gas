@@ -7,7 +7,7 @@
 
 // The device a player is on, from src/input.js's lastDevice ('touch' | 'key' | 'pad' | 'mouse' | 'none'):
 // a mouse or nothing yet is a desktop, so its keyboard.
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD } from './sim/aim-words.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD, LINEUP_SPEED_SLACK } from './sim/aim-words.js';
 import { LANDING, SHOW_PRECISION, CLEARANCE, SHOW_GAS_FULL, WALL_GAS_FULL, LINEUP_FULL, TIERS, PANEL, SHOW_W, WALL_W, DAMAGE_W } from './sim/judge.js';
 
 export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ? 'pad' : 'key');
@@ -134,14 +134,20 @@ export function pointerText(id, ctx, flight = null, card = null) {
       return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
     case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
-    // 0367: the Lineup's two wrecks. The hold decides it; a keyboard, a pad or two thumbs also pace the run-up, so their
-    // line names the speed at the line and the band to aim for (the one-thumb pad paces it for you).
+    // 0367: the Lineup's two wrecks, as the coach's fix says them. The hold decides it; a keyboard, a pad or two thumbs
+    // also pace the run-up, so a speed clearly off the band is named with the band (the one-thumb pad paces it, and
+    // past the line commits the lift itself). A run-up and a hold that were both right aren't told to do them again.
     case 'no-lift': case 'row': {
       const [lo, hi] = LINEUP_RUNUP_KMH, lead = id === 'row' ? 'Over the row' : 'Lift over the roofs';
-      if (thumbOn(ctx)) return `${lead}: hold the pad at the line for about ${LINEUP_LIFT_HOLD} s`;
+      if (thumbOn(ctx)) return `${lead}: keep holding the pad through the line`;
+      const adv = ctx.tier === 'advanced', lift = ctl(ctx, adv ? 'brakeAdv' : 'lift');
       const kmh = flight && flight.lineSpeed >= 0 ? Math.round(flight.lineSpeed * 3.6) : -1;
+      const off = kmh >= 0 && (kmh < lo - LINEUP_SPEED_SLACK[0] || kmh > hi + LINEUP_SPEED_SLACK[1]);
       // Each number with its unit: src/units.js puts mph beside every one (it reads no ranges).
-      return `${lead}: ${kmh >= 0 ? `${kmh} km/h at the line, aim for ${lo} km/h to ${hi} km/h` : `${lo} km/h to ${hi} km/h at the line`}, then ${ctl(ctx, 'lift')} about ${LINEUP_LIFT_HOLD} s`;
+      if (off) return `${lead}: ${kmh} km/h at the line, aim for ${lo} km/h to ${hi} km/h, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
+      if (kmh < 0) return `${lead}: ${lo} km/h to ${hi} km/h at the line, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
+      if (!adv && flight.liftHeld >= LINEUP_LIFT_HOLD - 0.05) return `${lead}: the same run-up and ${keyOf(ctx, 'lift')} again`;
+      return `${lead}: ${lift} at the line for about ${LINEUP_LIFT_HOLD} s`;
     }
     case 'crash': return 'Run it again and follow the cues: each one calls its step as you reach it';
     case 'clean': if (thumbOn(ctx)) return thumbClean(ctx, flight);

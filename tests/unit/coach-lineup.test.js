@@ -4,6 +4,8 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { scoreRun } from '../../src/sim/judge.js';
 import { SPEC } from '../../src/sim/spec.js';
+import { createRun, stepRun } from '../../src/sim/run.js';
+import { newInput } from '../../src/sim/vehicle.js';
 import { COURSES } from '../../src/sim/courses.js';
 import { coach, finish, KEY_WORDS, LINEUP_LINE } from '../../src/sim/coach.js';
 import { coachWords, pointerText, pickPointer } from '../../src/pointer.js';
@@ -61,21 +63,51 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       expect(f.liftHeld).toBeLessThanOrEqual(0.51);
       const apexH = r1(Math.max(0, run.t.apex - SPEC.comHeight));
       expect(top.detail).toMatch(new RegExp(`${String(apexH).replace('.', '\\.')} m`));
-      // The fix names LIFT and the half second; a hold under it says what was held.
-      expect(top.fix).toMatch(/Hold LIFT \(Space\) at the line for about 0\.5 s/);
-      if (f.liftHeld < 0.45) expect(top.fix).toContain(`(you held ${r1(f.liftHeld)} s)`);
+      // The fix: never what the player already did (self-review, 0367). A run-up in 22–34 km/h with a hold of
+      // ≥ 0.45 s was right (those players clear the row 83 times in 90): fly it the same. Else the half second of LIFT,
+      // with what was held when it was short, and the band when the speed was clearly off.
+      const speedOff = kmh < 22 || kmh > 34, shortHold = f.liftHeld < 0.45;
+      if (!speedOff && !shortHold) expect(top.fix).toBe('Your run-up and LIFT (Space) were right: fly it the same again.');
+      else expect(top.fix).toMatch(/Hold LIFT \(Space\) at the line for about 0\.5 s/);
+      if (shortHold) expect(top.fix).toContain(`(you held ${r1(f.liftHeld)} s)`);
       // ↑ held to the line (≈ 120 km/h): the fix says to ease off, with the band.
       if (kmh > 34) expect(top.fix).toContain(`Ease off ↑ before the line: between 25 km/h and 30 km/h, not ${kmh} km/h.`);
+      else expect(top.fix).not.toMatch(/km\/h/);
     }
   });
 
-  it('the pointer (NEXT RUN) names the speed at the line and 25–30 km/h', () => {
-    for (const { c, card } of crashes.slice(0, 20)) {
-      const p = pickPointer(c.items, KEYS, { card, flight: c.flight, crashed: true });
-      expect(p.text).toContain(`${Math.round(c.flight.lineSpeed * 3.6)} km/h at the line, aim for 25 km/h to 30 km/h`);
-      expect(p.text).toContain('hold Space about 0.5 s');
+  it('the pointer (NEXT RUN): the speed and the band when it was off, the hold when it was short, else the same again', () => {
+    const seen = new Set();
+    for (const { c, card } of crashes) {
+      const p = pickPointer(c.items, KEYS, { card, flight: c.flight, crashed: true }), f = c.flight;
+      const kmh = Math.round(f.lineSpeed * 3.6);
       expect(p.text).not.toMatch(TRY_PRO);
+      if (kmh > 34) { seen.add('speed'); expect(p.text).toContain(`${kmh} km/h at the line, aim for 25 km/h to 30 km/h, then hold Space about 0.5 s`); }
+      else if (f.liftHeld < 0.45) { seen.add('hold'); expect(p.text).toMatch(/: hold Space at the line for about 0\.5 s$/); }
+      else { seen.add('same'); expect(p.text).toMatch(/: the same run-up and Space again$/); }
     }
+    expect([...seen].sort()).toEqual(['hold', 'same', 'speed']);
+  });
+
+  it('a tap of LIFT on the run-up is not the hold: the press at the line is', () => {
+    // A scripted pilot: ↑ to ≈ 27 km/h, LIFT tapped briefly about 1 s in (≈ 60 m before the line), then LIFT held
+    // exactly 0.4 s (96 ticks) from the line.
+    const TAP_END = 240 + 6;   // a 25 ms tap: long enough to read, too short to hop the car off and end the run
+    const fly = (tap) => {
+      const run = createRun('lineup'), inp = newInput();
+      let from = -1;
+      while (run.phase !== 'done' && run.tick < 240 * 25) {
+        const c = run.car, v = Math.hypot(c.vel.x, c.vel.z);
+        inp.throttle = from < 0 && v < 7.5 ? 1 : 0;
+        if (from < 0 && c.pos.z >= LINEUP_LINE) from = run.tick;
+        inp.lift = (tap && run.tick >= 240 && run.tick < TAP_END) || (from >= 0 && run.tick < from + 96) ? 1 : 0;
+        stepRun(run, inp);
+      }
+      return coach(run.inputLog, 'lineup', null).flight;
+    };
+    const plain = fly(false), tapped = fly(true);
+    expect(plain.liftHeld).toBeCloseTo(0.4, 2);
+    expect(tapped.liftHeld).toBeCloseTo(0.4, 2);   // counted from the tap, it would read 0 s
   });
 });
 
@@ -116,9 +148,12 @@ describe('0367: the words and the funnel', () => {
   it('the pointer on every device: a thumb holds the pad, the others are told the speed and the hold', () => {
     const flight = { lineSpeed: 32.3 };
     expect(pointerText('no-lift', KEYS, flight)).toBe('Lift over the roofs: 116 km/h at the line, aim for 25 km/h to 30 km/h, then hold Space about 0.5 s');
-    expect(pointerText('row', { ...KEYS, device: 'touch' }, { lineSpeed: 7.5 })).toBe('Over the row: 27 km/h at the line, aim for 25 km/h to 30 km/h, then hold LIFT about 0.5 s');
+    expect(pointerText('row', { ...KEYS, device: 'touch' }, { lineSpeed: 7.5, liftHeld: 0.3 })).toBe('Over the row: hold LIFT at the line for about 0.5 s');
+    expect(pointerText('row', { ...KEYS, device: 'touch' }, { lineSpeed: 7.5, liftHeld: 0.5 })).toBe('Over the row: the same run-up and LIFT again');
     expect(pointerText('row', { ...KEYS, device: 'pad' }, null)).toBe('Over the row: 25 km/h to 30 km/h at the line, then hold A about 0.5 s');
-    expect(pointerText('row', { ...KEYS, device: 'touch', scheme: 'thumb' }, flight)).toBe('Over the row: hold the pad at the line for about 0.5 s');
+    expect(pointerText('row', { ...KEYS, device: 'touch', scheme: 'thumb' }, flight)).toBe('Over the row: keep holding the pad through the line');
+    // Advanced: LIFT isn't a valve there, so the hold is the down-jets and a hold is never read back.
+    expect(pointerText('row', { ...KEYS, tier: 'advanced' }, { lineSpeed: 7.5, liftHeld: 0.5 })).toBe('Over the row: hold Space at the line for about 0.5 s');
   });
   it('the funnel files them: row is wreck-short (into the row), no-lift is its own wreck-lift', () => {
     expect(wreckCause([{ id: 'row' }])).toBe('wreck-short');
