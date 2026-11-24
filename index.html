@@ -44,6 +44,37 @@
 </head>
 <body>
   <canvas id="stage" aria-label="3D view of the test range"></canvas>
+  <!-- The hero film (an 18 s cut, muted, captions burned in): the title's backdrop over the live scene, from the first
+       paint (it covers the boot) until the visitor touches the title or leaves it, then it fades to the live scene and lets
+       go of its decoder (no per-frame cost in a run). 9:16 on a narrow screen. Reduced motion: the poster only. Not on a
+       deep link (the title is skipped) or in an automated browser (the audits measure the live scene) unless ?film=1. -->
+  <div class="hero-film" data-hero-film aria-hidden="true">
+    <video autoplay muted loop playsinline preload="metadata" poster="./film/coldgas-hero-poster.jpg" disablepictureinpicture disableremoteplayback tabindex="-1">
+      <source media="(max-width: 700px)" src="./film/coldgas-hero-9x16-mobile.mp4" type="video/mp4" />
+      <source src="./film/coldgas-hero-16x9.mp4" type="video/mp4" />
+    </video>
+  </div>
+  <script>
+    (function () {
+      var box = document.querySelector('[data-hero-film]'), v = box && box.querySelector('video');
+      if (!v) return;
+      var q = new URLSearchParams(location.search), force = q.get('film') === '1';
+      var skip = q.has('play') || q.has('drive') || q.has('board') || /(^|[#&])vs=/.test(location.hash) || q.get('film') === '0' || (navigator.webdriver && !force);
+      function drop() { try { v.pause(); v.removeAttribute('autoplay'); while (v.firstChild) v.removeChild(v.firstChild); v.removeAttribute('src'); v.load(); } catch (e) {} }
+      if (skip) { drop(); box.remove(); return; }
+      if (matchMedia('(prefers-reduced-motion: reduce)').matches) { drop(); box.setAttribute('data-still', ''); }
+      var gone = false;
+      function go() {
+        if (gone) return; gone = true;
+        box.setAttribute('data-gone', '');
+        removeEventListener('pointerdown', go, true); removeEventListener('keydown', go, true); removeEventListener('wheel', go, true);
+        setTimeout(function () { drop(); box.remove(); }, 1000);
+      }
+      addEventListener('pointerdown', go, true); addEventListener('keydown', go, true); addEventListener('wheel', go, { capture: true, passive: true });
+      v.addEventListener('error', go); var s = v.querySelectorAll('source'); if (s.length) s[s.length - 1].addEventListener('error', go);
+      new MutationObserver(function () { var m = document.body.getAttribute('data-mode'); if (m && m !== 'title') go(); }).observe(document.body, { attributes: true, attributeFilter: ['data-mode'] });
+    })();
+  </script>
   <div class="grain" aria-hidden="true"></div>
 
   <header class="top">

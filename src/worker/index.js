@@ -556,9 +556,35 @@ async function page(req, env) {
   return new Response(req.method === 'HEAD' ? null : res.body.pipeThrough(new CompressionStream('gzip')), { status: 200, headers, encodeBody: 'manual' });
 }
 
+// --- The hero film (public/film/) -----------------------------------------------------------------
+// Static assets answer a Range request with the whole file (200), and Safari on an iPhone won't play a <video> without
+// 206s, so the film's files come through here: one byte range per request, `Accept-Ranges: bytes` on every answer.
+const FILM = '/coldgas/film/';
+async function film(req, env) {
+  const res = await env.ASSETS.fetch(req.url, { method: 'GET' });
+  const headers = new Headers(res.headers);
+  headers.set('accept-ranges', 'bytes');
+  if (res.status !== 200) return new Response(res.body, { status: res.status, headers });
+  const range = /^bytes=(\d*)-(\d*)$/.exec((req.headers.get('range') || '').trim());
+  if (!range) return new Response(req.method === 'HEAD' ? null : res.body, { status: 200, headers });
+  const buf = await res.arrayBuffer(), size = buf.byteLength;
+  let start, end;
+  if (range[1] === '') { start = Math.max(0, size - Number(range[2] || 0)); end = size - 1; }   // the last N bytes
+  else { start = Number(range[1]); end = range[2] === '' ? size - 1 : Math.min(Number(range[2]), size - 1); }
+  if (!(start <= end) || start >= size || (range[1] === '' && range[2] === '')) {
+    headers.set('content-range', `bytes */${size}`); headers.delete('content-length');
+    return new Response(null, { status: 416, headers });
+  }
+  headers.set('content-range', `bytes ${start}-${end}/${size}`);
+  headers.set('content-length', String(end - start + 1));
+  return new Response(req.method === 'HEAD' ? null : buf.slice(start, end + 1), { status: 206, headers });
+}
+
 export default {
   async fetch(req, env, ctx) {
-    if (PAGES.has(new URL(req.url).pathname) && (req.method === 'GET' || req.method === 'HEAD')) return page(req, env);
+    const path = new URL(req.url).pathname;
+    if (PAGES.has(path) && (req.method === 'GET' || req.method === 'HEAD')) return page(req, env);
+    if (path.startsWith(FILM) && (req.method === 'GET' || req.method === 'HEAD')) return film(req, env);
     try {
       return await handle(req, env, ctx);
     }
