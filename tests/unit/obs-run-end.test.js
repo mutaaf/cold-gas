@@ -19,7 +19,7 @@ const fly = (opts, mut) => {
 };
 const first = (run) => coach(run.inputLog, 'show', scoreRun(run.t)).items[0].id;
 // Every coach finding id (src/sim/coach.js), as tests/unit/pointer.test.js lists them.
-const COACH_IDS = ['fell-off', 'stopped-climb', 'no-release', 'early-release', 'short', 'no-brake', 'late-land', 'late-brake', 'ran-out', 'late-roll', 'over-roll', 'no-roll', 'tilt', 'mark', 'gas', 'flipped', 'clean'];
+const COACH_IDS = ['fell-off', 'stopped-climb', 'no-release', 'early-release', 'short', 'no-brake', 'late-land', 'late-brake', 'ran-out', 'late-roll', 'over-roll', 'no-roll', 'tilt', 'mark', 'gas', 'flipped', 'clean', 'row', 'no-lift', 'crash'];
 
 describe('0138: what wrecked it', () => {
   it('folds every coach finding into one wreck event on the list; no coach is "other"', () => {

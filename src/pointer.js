@@ -7,7 +7,7 @@
 
 // The device a player is on, from src/input.js's lastDevice ('touch' | 'key' | 'pad' | 'mouse' | 'none'):
 // a mouse or nothing yet is a desktop, so its keyboard.
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB } from './sim/aim-words.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD } from './sim/aim-words.js';
 import { LANDING, SHOW_PRECISION, CLEARANCE, SHOW_GAS_FULL, WALL_GAS_FULL, LINEUP_FULL, TIERS, PANEL, SHOW_W, WALL_W, DAMAGE_W } from './sim/judge.js';
 
 export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ? 'pad' : 'key');
@@ -134,6 +134,16 @@ export function pointerText(id, ctx, flight = null, card = null) {
       return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
     case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
+    // 0367: the Lineup's two wrecks. The hold decides it; a keyboard, a pad or two thumbs also pace the run-up, so their
+    // line names the speed at the line and the band to aim for (the one-thumb pad paces it for you).
+    case 'no-lift': case 'row': {
+      const [lo, hi] = LINEUP_RUNUP_KMH, lead = id === 'row' ? 'Over the row' : 'Lift over the roofs';
+      if (thumbOn(ctx)) return `${lead}: hold the pad at the line for about ${LINEUP_LIFT_HOLD} s`;
+      const kmh = flight && flight.lineSpeed >= 0 ? Math.round(flight.lineSpeed * 3.6) : -1;
+      // Each number with its unit: src/units.js puts mph beside every one (it reads no ranges).
+      return `${lead}: ${kmh >= 0 ? `${kmh} km/h at the line, aim for ${lo} km/h to ${hi} km/h` : `${lo} km/h to ${hi} km/h at the line`}, then ${ctl(ctx, 'lift')} about ${LINEUP_LIFT_HOLD} s`;
+    }
+    case 'crash': return 'Run it again and follow the cues: each one calls its step as you reach it';
     case 'clean': if (thumbOn(ctx)) return thumbClean(ctx, flight);
       return cleanLine(ctx, card);
     default: return '';
@@ -288,7 +298,7 @@ function cleanLine(ctx, card) {
 const BETTER = {
   'no-brake': 'sink', 'late-brake': 'sink', 'late-land': 'sink', 'ran-out': 'sink', flipped: 'sink', tilt: 'tilt',
   short: 'clear', 'no-release': 'release', 'early-release': 'release', 'late-roll': 'roll', 'no-roll': 'roll', 'over-roll': 'roll',
-  mark: 'mark', gas: 'gas', 'fell-off': 'height', 'stopped-climb': 'height',
+  mark: 'mark', gas: 'gas', 'fell-off': 'height', 'stopped-climb': 'height', row: 'clear', 'no-lift': 'clear',
 };
 export function betterText(id, card) {
   const f = card?.facts || {};
