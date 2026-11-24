@@ -1,7 +1,7 @@
 ---
 id: 0053
 title: Faster first load on a phone: the title's code first, then the physics
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: performance
