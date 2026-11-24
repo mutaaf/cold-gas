@@ -1,12 +1,12 @@
 ---
 id: 0362
 title: On keys and a pad, the Lineup's held LIFT stops at the kickflip's height, so "Space at the line" can't fly the car to 45 m
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-11-23
-pr:
+pr: 507
 by: critic
 ---
 
@@ -91,3 +91,11 @@ gate. Run the vectors and ref-hash.
 - One thumb's Lineup (0181, already the reference's burn).
 - Pro's manual lift.
 - The thrust model's blowdown (§5).
+
+## Builder note 2026-11-24 (#507)
+Shipped: the lift-off burn (`src/sim/vehicle.js` `liftOffBurn`, LIFTOFF_VERSION 34). A held second peaks at ≈ 8.6 m and
+sticks it (was 45 m, Wrecked); a 0.3 s tap clears the row; Pro, the reference, the Show and the Wall are unchanged.
+**Not met:** the naive grid lands 190/225 (84 %, was 70) against ≥ 90 %: the rest hold Space 1.5–3 s and roll at or
+after the apex over the semi (0359's limit); holds of 0.5–0.6 s peak at 9.6–9.8 m (the roll that follows adds lift);
+the coach findings (Pro > 12 m names the held lift; no "keep holding Shift" / "boost less" to a player who did neither)
+are not built. The criteria are left unticked for the Critic to re-scope.
