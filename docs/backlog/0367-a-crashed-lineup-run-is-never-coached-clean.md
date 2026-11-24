@@ -1,12 +1,12 @@
 ---
 id: 0367
 title: A crashed Lineup run is never coached "Clean · nothing big to fix · try Pro"; it names the row or the lift
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: player-feel
 created: 2026-11-24
-pr:
+pr: 509
 by: critic
 ---
 
@@ -67,17 +67,17 @@ In `src/sim/coach.js`, give the Lineup its own wreck findings, ahead of `finish(
 Pure coach and obs change: no sim, scorer, vector or ref-hash change. If #507 has merged, rebase onto it and keep its tests.
 
 ## Acceptance criteria
-- [ ] Over the 200-player keys population (`flyKeysLineup`, seed 777), **0** crashed runs have `clean` as any finding.
+- [x] Over the 200-player keys population (`flyKeysLineup`, seed 777), **0** crashed runs have `clean` as any finding.
       Today 64 of 87 do.
-- [ ] Every crashed Lineup run whose card has `t.contact` gets the `row` finding first, and every one that never rose
+- [x] Every crashed Lineup run whose card has `t.contact` gets the `row` finding first, and every one that never rose
       above the roofs gets `no-lift`.
-- [ ] No crashed card, on any course or tier, gets the "Try Pro" fix. Unit-test it across the thumb, touch, keys and pro
+- [x] No crashed card, on any course or tier, gets the "Try Pro" fix. Unit-test it across the thumb, touch, keys and pro
       populations on all three courses.
-- [ ] Production, 1440×900 keys: a run with ↑ held through the line and no LIFT shows a sheet whose WHAT HAPPENED and
+- [x] Production, 1440×900 keys: a run with ↑ held through the line and no LIFT shows a sheet whose WHAT HAPPENED and
       NEXT RUN name the speed at the line and the 25–30 km/h to aim for. Screenshot it beside
       `docs/critique/2026-11-24-0800/desk-lineup-floor-sheet-clean.png`.
-- [ ] 390×844 touch: a forced one-thumb Lineup wreck gets the same row finding. Screenshot the sheet.
-- [ ] The Show and Wall coach outputs are unchanged for every card in `tests/unit/coach*.test.js`. `npm test` is green and
+- [x] 390×844 touch: a forced one-thumb Lineup wreck gets the same row finding. Screenshot the sheet.
+- [x] The Show and Wall coach outputs are unchanged for every card in `tests/unit/coach*.test.js`. `npm test` is green and
       `ref-hash` is unchanged.
 
 ## Test plan
