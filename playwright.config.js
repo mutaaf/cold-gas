@@ -167,6 +167,17 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // 16.1 min. Normalising four whole runs by each job's runner speed (runner factors 0.48-1.28), shard 1's 63 tests cost ≈ 68 at
 // speed 1: those files are heavy, not unlucky. 57:85:92:123 is ≈ 57 / 61 / 61.5 / 61.4 at speed 1, the most even cut (shard 2
 // starts at driving-levels, 3 at instruments, 4 at phone-frame). It would have passed two of those four runs; 63:90:98:106 none.
+// Main on 8405507 (#509) then cancelled e2e 3/4 at 35 min (77 of 92, none failed) while 2/4 ran 17.6 min, and #511's
+// docs-only run cancelled 3/4 (65 of 92) and 4/4 (104 of 123) while 2/4 ran 17.1. Priced per test at the slower of those
+// two whole runs (shard 3's unrun pause tail at its siblings' mean; the skipped fold/flip frame probes at 0), 57:85:92:123
+// is ≈ 47 / 35 / 76.5 / 75 worker-minutes: shard 2 is half empty. 77:94:92:94 is ≈ 56 / 59 / 59 / 59, the best
+// file-boundary cut (shard 2 starts at first-run, 3 at lifecycle-fold, 4 at retry). Proposal #456 (ci.yml) is the cure.
+// #512's own run of 77:94:92:94 cancelled e2e 1/4 (66 of 77) and 4/4 (83 of 94) at 35 min, none failed for good, while
+// 2/4 and 3/4 ran 19 min: ≈ 74 / 38 / 37 / 74 worker-minutes on that one run (unrun tests at their file's mean, else
+// the median). Its best file-boundary cut is 57:114:116:70 ≈ 57 / 55 / 57 / 55 (2 starts at driving-levels, 3 at
+// lifecycle-fold, 4 at start-pending). The two cuts' prices disagree by ≈ 2× per region: runner speed, not the files.
+// Its own run: 1/4 ran 15 min, 3/4 23, 4/4 28, and 2/4 was cancelled at 35 (107 of 114, none failed; ≈ 73
+// worker-minutes). 88:83:116:70 hands shard 2's head (driving-levels..focus-trap, 31 tests, ≈ 19) to shard 1.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -174,7 +185,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '57:85:92:123';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '88:83:116:70';
 
 export default defineConfig({
   testDir: 'tests/e2e',
