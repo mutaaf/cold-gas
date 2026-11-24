@@ -1,7 +1,7 @@
 // 0340: the scored sets react to water and mud. Course data (courses.js `surfaces`) on the Show and the Lineup; a run at
 // SURFACE_VERSION meets them, a run from before replays on the set as it was, to the same bits.
 import { describe, it, expect } from 'vitest';
-import { createRun, stepRun, simulate, SIM_VERSION, SURFACE_VERSION, simVersionOf, replayable, courseAt } from '../../src/sim/run.js';
+import { createRun, stepRun, simulate, SIM_VERSION, SURFACE_VERSION, LIFTOFF_VERSION, simVersionOf, replayable, courseAt } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { newInput, createVehicle, step } from '../../src/sim/vehicle.js';
@@ -27,7 +27,8 @@ describe('surfaces: the data and the pure queries', () => {
     expect(LINEUP.surfaces.mud.length).toBeGreaterThan(1);
     expect(WALL.surfaces).toBeUndefined();
     expect(simVersionOf('show')).toBe(SURFACE_VERSION);
-    expect(simVersionOf('lineup')).toBe(SURFACE_VERSION);
+    expect(simVersionOf('lineup')).toBe(LIFTOFF_VERSION);   // 0362: the Lineup's lift-off burn (a v33 run there still replays)
+    expect(replayable('lineup', SURFACE_VERSION) && replayable('lineup', SIM_VERSION) && !replayable('wall', SURFACE_VERSION)).toBe(true);
     expect(simVersionOf('wall')).toBe(SIM_VERSION);
   });
   it('a v32 run on a wet set replays on the set as it was', () => {

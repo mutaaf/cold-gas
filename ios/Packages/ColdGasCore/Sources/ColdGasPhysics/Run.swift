@@ -7,9 +7,17 @@ public let SIM_VERSION = 32   // 0190: LAND's line hold to 1.5 m, auto-land to t
 /// v33 (0340): a set's water and mud (run.js). Only the courses that carry surfaces (the Show, the Lineup) fly at it; a v32
 /// run on them replays on the set as it was (courseAt).
 public let SURFACE_VERSION = 33
-public func simVersionOf(_ courseId: String) -> Int { COURSES[courseId]?.surfaces != nil ? SURFACE_VERSION : SIM_VERSION }
-/// A run of this version on this course replays to its bits here (today's, or a v32 run on a set that has surfaces now).
-public func replayable(_ courseId: String, _ v: Int) -> Bool { v == simVersionOf(courseId) || v == SIM_VERSION }
+/// v34 (0362): on the Lineup, Assist's LIFT held from the ground is a lift-off burn (Vehicle.swift liftOffBurn). Only the
+/// Lineup's runs are v34; a v33 or v32 Lineup run replays without it.
+public let LIFTOFF_VERSION = 34
+public func simVersionOf(_ courseId: String) -> Int {
+    courseId == "lineup" ? LIFTOFF_VERSION : COURSES[courseId]?.surfaces != nil ? SURFACE_VERSION : SIM_VERSION
+}
+/// A run of this version on this course replays to its bits here (today's; a v32 run on a set that has surfaces now; a v33
+/// Lineup run, without the lift-off burn).
+public func replayable(_ courseId: String, _ v: Int) -> Bool {
+    v == simVersionOf(courseId) || v == SIM_VERSION || (v == SURFACE_VERSION && COURSES[courseId]?.surfaces != nil)
+}
 /// The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION.
 public func courseAt(_ courseId: String, _ v: Int? = nil) -> Course {
     let id = COURSES[courseId] != nil ? courseId : DEFAULT_COURSE
@@ -102,6 +110,7 @@ public final class Run {
         let c = courseAt(courseId, simVersion)
         course = c.id
         car = Vehicle(c)
+        if c.id == "lineup" && (simVersion ?? simVersionOf(c.id)) >= LIFTOFF_VERSION { car.liftOff = 1 }
         t = Telemetry(c.id, surfaces: c.surfaces != nil)
     }
 }

@@ -69,11 +69,16 @@ export const SIM_VERSION = 32;
 // lets a tyre settle in. Only those two courses changed, so only their runs are v33: the Wall's are still v32, and a
 // v32 run on the Show or the Lineup replays on the course as it was (courseAt), to the same bits.
 export const SURFACE_VERSION = 33;
-/** The version a run on this course is flown at today: SURFACE_VERSION where the course carries surfaces. */
-export const simVersionOf = (courseId) => (COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
-/** True when a run of this version on this course can be replayed to its bits (today's, or a v32 run on a set that has
- *  surfaces now: it replays on the course without them). */
-export const replayable = (courseId, v) => v === simVersionOf(courseId) || v === SIM_VERSION;
+// v34 (0362): on the Lineup, Assist's LIFT held from the ground is a lift-off burn that stops by itself at the kickflip's
+// height (src/sim/vehicle.js liftOffBurn). Only the Lineup's runs are v34; a v33 or v32 Lineup run replays without it, to
+// its bits. The reference, the one thumb's 360 and every Show and Wall run fly as before.
+export const LIFTOFF_VERSION = 34;
+/** The version a run on this course is flown at today: LIFTOFF_VERSION on the Lineup, SURFACE_VERSION on another course
+ *  that carries surfaces, else SIM_VERSION. */
+export const simVersionOf = (courseId) => (courseId === 'lineup' ? LIFTOFF_VERSION : COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
+/** True when a run of this version on this course can be replayed to its bits (today's; a v32 run on a set that has
+ *  surfaces now: it replays on the course without them; a v33 Lineup run: without the lift-off burn). */
+export const replayable = (courseId, v) => v === simVersionOf(courseId) || v === SIM_VERSION || (v === SURFACE_VERSION && !!COURSES[courseId]?.surfaces);
 /** The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION. */
 export const courseAt = (courseId, v = simVersionOf(courseId)) => {
   const id = COURSES[courseId] ? courseId : DEFAULT_COURSE;
@@ -168,9 +173,11 @@ function newTelemetry(courseId, surfaces = null) {
 // `simVersion`: the version the run is flown at (simVersionOf, today's); an older one replays on the course as it was.
 export function createRun(courseId = DEFAULT_COURSE, simVersion = undefined) {
   const course = courseAt(courseId, simVersion);
+  const car = createVehicle(course);
+  if (course.id === 'lineup' && (simVersion ?? simVersionOf(course.id)) >= LIFTOFF_VERSION) car.liftOff = 1;
   const run = {
     course: course.id,
-    car: createVehicle(course),
+    car,
     damage: createDamage(),    // the damage sensor: per-zone %, total (src/sim/damage.js)
     phase: 'drive',            // drive → ramp (Wall, Show) → air → landed → done
     tick: 0,
