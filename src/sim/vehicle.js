@@ -473,8 +473,11 @@ export const LIFTOFF_COMMIT = 5.0, LIFTOFF_CUT = 6.5;
 const BURN_NONE = 0, BURN_HELD = 1, BURN_CUT = 2, BURN_COMMIT = 3;
 function liftOffBurn(s, inp, grounded) {
   if (!s.liftOff || !inp.assist) { s.liftBurn = BURN_NONE; return; }
-  if (grounded > 0) { if (inp.lift > 0) s.liftBurn = BURN_HELD; else if (s.liftBurn !== BURN_COMMIT) s.liftBurn = BURN_NONE; return; }
+  if (grounded > 0) { s.liftBurn = inp.lift > 0 ? BURN_HELD : BURN_NONE; return; }
   if (s.liftBurn === BURN_NONE) return;
+  // The committed burn is a lift-off's, roof up and clear: rolled past sideways or touching anything, it is over (a tap
+  // and an at-once roll had driven the car into the row roof first).
+  if (s.liftBurn === BURN_COMMIT && (upW.y <= 0.55 || s.hullContact)) s.liftBurn = BURN_NONE;
   const apex = s.pos.y + (s.vel.y > 0 ? (s.vel.y * s.vel.y) / (2 * G) : 0);
   if (s.liftBurn === BURN_HELD && !(inp.lift > 0)) s.liftBurn = apex < LIFTOFF_COMMIT ? BURN_COMMIT : BURN_NONE;
   if (s.liftBurn === BURN_COMMIT) { if (apex >= LIFTOFF_COMMIT) s.liftBurn = BURN_NONE; else { eff.lift = 1; return; } }

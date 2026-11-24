@@ -38,6 +38,16 @@ describe('the Lineup lift-off burn (0362)', () => {
     expect(old.landed).toBe(false);
   });
 
+  it('a shorter tap and an at-once roll: the committed burn ends roof down or on contact, never worse than v33 (the review)', () => {
+    const rank = (r) => (r.landed ? 1 : 0);   // never loses a landing v33 had
+    for (const speed of [6, 7.5, 9]) for (const liftS of [0.05, 0.1, 0.2]) {
+      const p = { speed, pressZ: -4, liftS, rollS: 0.8 };
+      const now = flyNaive(p), old = flyNaive({ ...p, simVersion: SURFACE_VERSION });
+      expect(rank(now), `${speed} m/s, ${liftS} s: ${now.verdict} vs ${old.verdict}`).toBeGreaterThanOrEqual(rank(old));
+      expect(now.run.car.liftBurn, `${speed} m/s, ${liftS} s`).toBe(0);
+    }
+  });
+
   it('a LIFT pressed again in the air is LIFT: the second press climbs past the cut', () => {
     const run = createRun('lineup'), pilot = naiveController({ speed: 7.5, pressZ: -4, liftS: 0.4, rollS: 0 });
     let apex = 0, t0 = -1;

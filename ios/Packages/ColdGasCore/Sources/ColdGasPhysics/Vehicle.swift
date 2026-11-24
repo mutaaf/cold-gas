@@ -285,8 +285,9 @@ let ROOF_FALL = 11.0
 public let LIFTOFF_COMMIT = 5.0, LIFTOFF_CUT = 6.5
 func liftOffBurn(_ s: Vehicle, _ inp: Input, _ grounded: Int) {
     if s.liftOff == 0 || !truthy(inp.assist) { s.liftBurn = 0; return }
-    if grounded > 0 { if inp.lift > 0 { s.liftBurn = 1 } else if s.liftBurn != 3 { s.liftBurn = 0 }; return }
+    if grounded > 0 { s.liftBurn = inp.lift > 0 ? 1 : 0; return }
     if s.liftBurn == 0 { return }
+    if s.liftBurn == 3 && (upW.y <= 0.55 || s.hullContact) { s.liftBurn = 0 }
     let apex = s.pos.y + (s.vel.y > 0 ? (s.vel.y * s.vel.y) / (2 * G) : 0)
     if s.liftBurn == 1 && !(inp.lift > 0) { s.liftBurn = apex < LIFTOFF_COMMIT ? 3 : 0 }
     if s.liftBurn == 3 { if apex >= LIFTOFF_COMMIT { s.liftBurn = 0 } else { effLift = 1; return } }

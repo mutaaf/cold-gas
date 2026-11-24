@@ -12,7 +12,7 @@ import ColdGasClient
 struct SurfaceTests {
     @Test func onlyTheShowAndTheLineupCarryThem() {
         #expect(SHOW.surfaces != nil && LINEUP.surfaces != nil && WALL_COURSE.surfaces == nil)
-        #expect(simVersionOf("show") == SURFACE_VERSION && simVersionOf("lineup") == SURFACE_VERSION && simVersionOf("wall") == SIM_VERSION)
+        #expect(simVersionOf("show") == SURFACE_VERSION && simVersionOf("lineup") == LIFTOFF_VERSION && replayable("lineup", SURFACE_VERSION) && simVersionOf("wall") == SIM_VERSION)
         #expect(courseAt("show", SIM_VERSION).surfaces == nil && courseAt("show").surfaces != nil)
         #expect(replayable("show", 32) && replayable("show", 33) && replayable("wall", 32))
         #expect(!replayable("show", 31) && !replayable("wall", 33))
