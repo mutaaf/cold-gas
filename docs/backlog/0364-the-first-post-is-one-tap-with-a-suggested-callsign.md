@@ -1,7 +1,7 @@
 ---
 id: 0364
 title: A first Post is one tap: three suggested letters are already in the field, selected, so typing replaces them
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: engagement

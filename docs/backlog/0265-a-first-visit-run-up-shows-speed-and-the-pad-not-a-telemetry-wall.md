@@ -1,7 +1,7 @@
 ---
 id: 0265
 title: A first-ever run-up shows the pad and one number, not four telemetry rows
-status: ready
+status: proposed
 priority: P2
 size: S
 lens: player-feel
