@@ -1,0 +1,6 @@
+No jump → row | Came down on the row: You reached the line at 30 km/h and held LIFT (Space) 0.5 s: the car peaked 7 m up and came down on the roofs. → Your run-up and LIFT (Space) were right: fly it the same again.
+Contact → row | Came down on the row: You reached the line at 28 km/h and held LIFT (Space) 0.4 s: the car peaked 5.3 m up and came down on the roofs. → Hold LIFT (Space) at the line for about 0.5 s (you held 0.4 s), then roll.
+Wrecked → no-lift | Never got over the roofs: You only rose 1.9 m, 2.2 m under the roofs: 120 km/h at the line, held LIFT (Space) 0.4 s. → Ease off ↑ before the line: between 25 km/h and 30 km/h, not 120 km/h. Hold LIFT (Space) at the line for about 0.5 s (you held 0.4 s), then roll.
+No jump → no-lift | Never got over the roofs: You only rose 2.4 m, 1.8 m under the roofs: 120 km/h at the line, held LIFT (Space) 0.4 s. → Ease off ↑ before the line: between 25 km/h and 30 km/h, not 120 km/h. Hold LIFT (Space) at the line for about 0.5 s (you held 0.4 s), then roll.
+Wrecked → row | Came down on the row: You reached the line at 24 km/h and held LIFT (Space) 0.4 s: the car peaked 5.5 m up and came down on the roofs. → Hold LIFT (Space) at the line for about 0.5 s (you held 0.4 s), then roll.
+crashed 87 {"No jump → row":7,"Contact → row":44,"Wrecked → no-lift":18,"No jump → no-lift":6,"Wrecked → row":12}
