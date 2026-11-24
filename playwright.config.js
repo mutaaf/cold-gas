@@ -176,6 +176,8 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // 2/4 and 3/4 ran 19 min: ≈ 74 / 38 / 37 / 74 worker-minutes on that one run (unrun tests at their file's mean, else
 // the median). Its best file-boundary cut is 57:114:116:70 ≈ 57 / 55 / 57 / 55 (2 starts at driving-levels, 3 at
 // lifecycle-fold, 4 at start-pending). The two cuts' prices disagree by ≈ 2× per region: runner speed, not the files.
+// Its own run: 1/4 ran 15 min, 3/4 23, 4/4 28, and 2/4 was cancelled at 35 (107 of 114, none failed; ≈ 73
+// worker-minutes). 88:83:116:70 hands shard 2's head (driving-levels..focus-trap, 31 tests, ≈ 19) to shard 1.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -183,7 +185,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '57:114:116:70';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '88:83:116:70';
 
 export default defineConfig({
   testDir: 'tests/e2e',
