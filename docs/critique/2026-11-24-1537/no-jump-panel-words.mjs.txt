@@ -1,0 +1,10 @@
+import { initPhysics } from '../src/sim/engine.js';
+import { stream, flyKeysLineup } from './lib/daily-reach.mjs';
+import { scoreRun } from '../src/sim/judge.js';
+import { localWords } from '../src/panel.js';
+await initPhysics();
+const r = stream(777); const seen = {};
+for (let i = 0; i < 200; i++) { const run = flyKeysLineup(r); const card = scoreRun(run.t, { assist: true }); card.facts.course = 'lineup';
+  if (card.verdict !== 'No jump') continue; const w = localWords(card); const k = w.headline; seen[k] = (seen[k] || 0) + 1;
+  if (seen[k] === 1) console.log(i, card.verdict, card.total, 'facts.apex', card.facts.apex, 'rollDeg', card.facts.rollDeg, 'dmg', card.facts.damagePct, '\n ', JSON.stringify(w)); }
+console.log(JSON.stringify(seen));

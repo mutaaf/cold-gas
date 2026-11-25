@@ -1,0 +1,12 @@
+
+ Test Files  110 passed (110)
+      Tests  1148 passed (1148)
+   Start at  15:50:00
+   Duration  581.48s (transform 6.38s, setup 14.96s, import 39.83s, tests 1594.22s, environment 13ms)
+
+32/32 naive strategies landed upright
+54/54 landed clean, 52 of them over the row
+done
+show ticks 3501 score 97.3 hash 6b2cb98b
+wall ticks 4270 score 97.7 hash f1b9fab
+lineup ticks 3444 score 91.7 hash 4fc4af6b

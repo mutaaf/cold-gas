@@ -1,0 +1,6 @@
+flyKeysLineup { n: 200, crashed: 87, noJump: 13, noJumpButAirborne: 13 }
+flyTouch lineup { n: 200, crashed: 128, noJump: 21, noJumpButAirborne: 21 }
+flyTouch show { n: 200, crashed: 0, noJump: 0, noJumpButAirborne: 0 }
+flyPro show { n: 200, crashed: 117, noJump: 0, noJumpButAirborne: 0 }
+flyPro wall { n: 200, crashed: 84, noJump: 0, noJumpButAirborne: 0 }
+flyThumbLineup { n: 200, crashed: 0 } {"Stuck it":98,"Perfect 10":102}

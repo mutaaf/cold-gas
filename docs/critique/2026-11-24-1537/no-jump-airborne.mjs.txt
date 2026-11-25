@@ -1,0 +1,10 @@
+import { initPhysics } from '../src/sim/engine.js';
+import * as L from './lib/daily-reach.mjs';
+import { scoreRun } from '../src/sim/judge.js';
+await initPhysics();
+console.log(Object.keys(L).filter(k=>k.startsWith('fly')).join(' '));
+const pops = [['flyKeysLineup', 'lineup', (r)=>L.flyKeysLineup(r)], ['flyTouch lineup','lineup',(r)=>L.flyTouch('lineup', r)], ['flyTouch show','show',(r)=>L.flyTouch('show', r)], ['flyPro show','show',(r)=>L.flyPro('show', r)], ['flyPro wall','wall',(r)=>L.flyPro('wall', r)]];
+for (const [name, course, fly] of pops) { const r = L.stream(777); let n=0, crashed=0, nj=0, njAir=0;
+  for (let i = 0; i < 200; i++) { let run; try { run = fly(r); } catch (e) { console.log(name, 'err', e.message); break; } n++;
+    const card = scoreRun(run.t, { assist: true }); if (card.facts.crashed) crashed++; if (card.verdict === 'No jump') { nj++; if (run.t.airStartTick >= 0) njAir++; } }
+  console.log(name, { n, crashed, noJump: nj, noJumpButAirborne: njAir }); }
