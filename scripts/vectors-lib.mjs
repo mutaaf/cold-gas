@@ -3,7 +3,7 @@
 // numbers are stored as their IEEE 754 bit patterns (16 hex digits, big-endian), never as decimals.
 // Pure and deterministic: same bytes on every machine and every run (no Math.random, no clock).
 // scripts/vectors.mjs writes or checks the files; tests/unit/vectors.test.js checks a sample.
-import { createRun, stepRun, simulate, wallProgress, armAftermath, aftermathStep, SIM_VERSION, SURFACE_VERSION, LIFTOFF_VERSION } from '../src/sim/run.js';
+import { createRun, stepRun, simulate, wallProgress, armAftermath, aftermathStep, SIM_VERSION, SURFACE_VERSION, LIFTOFF_VERSION, simVersionOf } from '../src/sim/run.js';
 import { naiveController } from './lib/naive-lineup.mjs';
 import { createAutopilot } from '../src/sim/autopilot.js';
 import { newInput, CAR } from '../src/sim/vehicle.js';
@@ -259,12 +259,14 @@ export function runList() {
   for (let trial = 0; trial < 6; trial++) { const f = proFuzz(trial); list.push({ name: `pro-fuzz-${trial}`, course: f.course, log: f.log }); }
   return [...list, ...SURFACE_RUNS, ...LIFTOFF_RUNS];
 }
+// 0360: a Show run is stamped with the Show's version today (MARK_VERSION: the same wet set and bits, scored on the 2 m
+// bullseye), as a challenge or a ghost of it would be; the Lineup's below stay SURFACE_VERSION's (a v33 run, replayed).
 // 0340: runs that meet the sets' water and mud, flown and replayed at SURFACE_VERSION (src/sim/run.js): the float, the
 // drag and the splash-down's slam, the wet tyre, the mud's grip, rolling resistance and sink, bit for bit in Swift.
 export const SURFACE_RUNS = [
-  { name: 'splash-show-wide', course: 'show', v: SURFACE_VERSION, log: () => showWide(1, 2, 1.2) },
-  { name: 'mud-show-long', course: 'show', v: SURFACE_VERSION, log: () => naiveShow({ climb: 4, releaseAt: 1.01, boost: 0.8 }, SURFACE_VERSION) },
-  { name: 'ref-show-dry-wet', course: 'show', v: SURFACE_VERSION, log: auto('show', {}, SURFACE_VERSION) },
+  { name: 'splash-show-wide', course: 'show', v: simVersionOf('show'), log: () => showWide(1, 2, 1.2) },
+  { name: 'mud-show-long', course: 'show', v: simVersionOf('show'), log: () => naiveShow({ climb: 4, releaseAt: 1.01, boost: 0.8 }, SURFACE_VERSION) },
+  { name: 'ref-show-dry-wet', course: 'show', v: simVersionOf('show'), log: auto('show', {}, SURFACE_VERSION) },
   { name: 'mud-lineup-runup', course: 'lineup', v: SURFACE_VERSION, log: () => lineupLane({}, (z) => (z < -28 ? -7.5 : 0)) },
   { name: 'splash-lineup-wide', course: 'lineup', v: SURFACE_VERSION, log: () => lineupLane({}, (z) => (z < -20 ? 0 : 9)) },
   { name: 'mud-lineup-long', course: 'lineup', v: SURFACE_VERSION, log: () => lineupLane({}, () => 0, 1.2) },

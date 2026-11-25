@@ -281,6 +281,9 @@ describe('the skim, mark and ninety days name the choice that meets them (0150)'
     // A crash, or a landing on the mark that scored under 90 for something else: nothing to aim, "try again".
     expect(missLine(ninety, ninety.check({ total: 60 }, { jumped: true, crashed: true, padMiss: 9 }), thumb)).toBe('Daily: 60.0, need 90 — try again');
     expect(missLine(ninety, ninety.check({ total: 84 }, { jumped: true, crossedRow: true, padMiss: 2 }), thumb)).toBe('Daily: 84.0, need 90 — try again');
+    // 0360: outside the 2 m bullseye the mark costs points (2.1–3.5 m was full marks before), so 3.0 m names the aim.
+    expect(missLine(ninety, ninety.check({ total: 89 }, { jumped: true, crossedRow: true, padMiss: 3 }), thumb)).toMatch(/ · hold the pad in the air and slide onto the amber dot/);
+    expect(missLine(ninety, ninety.check({ total: 89 }, { jumped: true, crossedRow: true, padMiss: 2.1 }), thumb)).toMatch(/amber dot/);
     // Off the mark but also scraped the row, or touched down hard: the aim isn't what cost it.
     expect(missLine(ninety, ninety.check({ total: 70 }, { jumped: true, crossedRow: true, contact: true, padMiss: 6 }), thumb)).toBe('Daily: 70.0, need 90 — try again');
     expect(missLine(ninety, ninety.check({ total: 72 }, { jumped: true, crossedRow: true, padMiss: 6, sink: 2.4 }), thumb)).toBe('Daily: 72.0, need 90 — try again');

@@ -20,6 +20,9 @@ export const MEDAL_LABEL = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
 //    each: a thumb that never aims lands 81.7–86 (median 83.7: bronze); one that slides onto the sight's dot,
 //    median 92.7 (silver) and p90 95.7 (gold); sloppy aiming median 90.3; the classic two-thumb scheme and
 //    the keyboard population median 73; the reference 97.7.
+//    0360 (the 2 m bullseye, MARK_VERSION 34; bars kept): never slides bronze 100 % (median 88.3 → 87.3); careful silver
+//    100 %, gold 8 → 4 %; sloppy silver 76 → 48 %, gold 6 → 4 %. On the Wall the careful thumbs' gold 62 → 43 %
+//    (the ones that land inside the ring keep it); the Wall reference 97.7 → 94.3 (3.5 m off), still gold.
 //  - The Wall, Assist, SIM_VERSION 31 judging (0182: the mark counts): scripts/naive-players.mjs (32 naive strategies,
 //    60–74.3: the 24 that land Clean earn the bronze, 8 Rough landings don't; all 32 did at the old 84–88) and a thumb
 //    that never finds the mark (≈ 78) earn the bronze, a clean landing (72, was 84); careful thumbs that slide onto the mark median 96.7; the reference 97.7.

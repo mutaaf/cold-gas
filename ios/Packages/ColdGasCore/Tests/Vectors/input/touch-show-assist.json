@@ -2827,7 +2827,7 @@
 ["categories.efficiency","n","4014000000000000"],
 ["categories.inversion","n","4024000000000000"],
 ["categories.landing","n","4021cccccccccccd"],
-["categories.precision","n","4014cccccccccccd"],
+["categories.precision","n","4014666666666666"],
 ["categories.rotation","n","4023333333333333"],
 ["course","s","show"],
 ["facts.airPct","n","4037000000000000"],
@@ -2882,10 +2882,10 @@
 ["judges[1].title","s","Stunt Coordinator"],
 ["judges[2].id","s","designer"],
 ["judges[2].name","s","The Designer"],
-["judges[2].score","n","401ecccccccccccd"],
+["judges[2].score","n","401e666666666666"],
 ["judges[2].title","s","Head of Design"],
 ["multiplier","n","3ff0000000000000"],
 ["tier","s","assist"],
-["total","n","4053933333333333"],
+["total","n","4053800000000000"],
 ["verdict","s","Clean"]
 ]}

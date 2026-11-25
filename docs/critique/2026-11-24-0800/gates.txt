@@ -1,0 +1,17 @@
+
+ Test Files  109 passed (109)
+      Tests  1135 passed (1135)
+   Start at  09:39:02
+   Duration  460.85s (transform 7.88s, setup 13.29s, import 34.50s, tests 1273.14s, environment 19ms)
+
+{"approach":"floored","climbThrottle":1,"releaseAt":0.85}  LANDED  Clean                   73.3 height 26.3 sink 0.8 tilt 0 gas 43 end settled
+{"approach":"floored","climbThrottle":1,"releaseAt":0.97}  LANDED  Clean                   74.3 height 27.1 sink 0.8 tilt 0 gas 42 end settled
+{"approach":"floored","climbThrottle":1,"releaseAt":1.01}  LANDED  Clean                   73.7 height 27.2 sink 0.8 tilt 0 gas 42 end settled
+32/32 naive strategies landed upright
+{"climb":9,"releaseAt":1.01,"boost":0.35}            CLEARED Rough landing       66.7 clear 8.7 sink 0.8 gas 40 end settled landZ -50
+{"climb":9,"releaseAt":1.01,"boost":0.5}             CLEARED Rough landing       66.7 clear 8.5 sink 0.8 gas 40 end settled landZ -50
+{"climb":9,"releaseAt":1.01,"boost":0.8}             CLEARED Rough landing       66.7 clear 8.5 sink 0.8 gas 40 end settled landZ -50
+54/54 landed clean, 52 of them over the row
+show ticks 3501 score 97.3 hash 6b2cb98b
+wall ticks 4270 score 97.7 hash f1b9fab
+lineup ticks 3444 score 91.7 hash 4fc4af6b

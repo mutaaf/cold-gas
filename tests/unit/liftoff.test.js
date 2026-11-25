@@ -65,7 +65,7 @@ describe('the Lineup lift-off burn (0362)', () => {
     expect(r.apex).toBeGreaterThan(30);
   });
 
-  it('a v33 Lineup log replays as it was flown (45 m), and a v34 one to its bits', () => {
+  it('a v33 Lineup log replays as it was flown (45 m), and a v35 one to its bits', () => {
     const old = flyNaive({ speed: 7.5, pressZ: -4, liftS: 1, rollS: 0.8, simVersion: SURFACE_VERSION });
     expect(old.apex).toBeGreaterThan(30);
     const re = simulate(old.run.inputLog, 'lineup', undefined, null, SURFACE_VERSION);

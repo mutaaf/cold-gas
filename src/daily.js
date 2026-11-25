@@ -45,6 +45,7 @@
 // so the hold is the sure way, and a slide after a lift is what costs the day.
 import { one } from './units.js';
 import { coachWords } from './pointer.js';
+import { SHOW_MARK_RING } from './sim/judge.js';
 
 export const DAY_MS = 86_400_000;
 const COURSE = { show: 'The Show', wall: 'The Wall', lineup: 'The Lineup' };
@@ -106,8 +107,9 @@ export const OBJECTIVES = [
   { id: 'ninety-show', course: 'show', goal: () => 'Score 90 or more',
     // 0150: a clean flight off the mark is what holds a careful flight under 90 (one thumb with no slide: 85.7–86.0 at
     // 6 m; with the slide, 95.7 at 2.4 m), so that miss names the aim. A crash, a scrape on the row, a hard or tilted
-    // touchdown, or a landing on the mark keeps "try again": the aim isn't what cost it.
-    check: (c, f) => (c.total >= 90 ? done() : miss(`${r1(c.total)}, need 90`, cleanOver(f) && f.padMiss > 3.5 && !(f.sink > 1.5) && !(f.tiltDeg > 15))),
+    // touchdown, or a landing on the mark keeps "try again": the aim isn't what cost it. 0360: "on the mark" is inside the
+    // 2 m bullseye (SHOW_MARK_RING; it was 3.5 m), since 2.1–3.5 m now costs 2–4 points.
+    check: (c, f) => (c.total >= 90 ? done() : miss(`${r1(c.total)}, need 90`, cleanOver(f) && f.padMiss > SHOW_MARK_RING && !(f.sink > 1.5) && !(f.tiltDeg > 15))),
     hint: aimHint },
   // 0198: two turns onto the mark. A 360 can't carry the mark day: the held-from-Go thumb's is already 1.3 m off, and an
   // aimed one beats 1.2 m 8 times in 150. Called and never aimed, the 720 sets down 4.3 m off (wherever it was called);

@@ -7,8 +7,8 @@
 
 // The device a player is on, from src/input.js's lastDevice ('touch' | 'key' | 'pad' | 'mouse' | 'none'):
 // a mouse or nothing yet is a desktop, so its keyboard.
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB } from './sim/aim-words.js';
-import { LANDING, SHOW_PRECISION, CLEARANCE, SHOW_GAS_FULL, WALL_GAS_FULL, LINEUP_FULL, TIERS, PANEL, SHOW_W, WALL_W, DAMAGE_W } from './sim/judge.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD, LINEUP_SPEED_SLACK } from './sim/aim-words.js';
+import { LANDING, SHOW_MARK_RING, CLEARANCE, SHOW_GAS_FULL, WALL_GAS_FULL, LINEUP_FULL, TIERS, PANEL, SHOW_W, WALL_W, DAMAGE_W } from './sim/judge.js';
 
 export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ? 'pad' : 'key');
 
@@ -134,6 +134,22 @@ export function pointerText(id, ctx, flight = null, card = null) {
       return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
     case 'gas': return 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
+    // 0367: the Lineup's two wrecks, as the coach's fix says them. The hold decides it; a keyboard, a pad or two thumbs
+    // also pace the run-up, so a speed clearly off the band is named with the band (the one-thumb pad paces it, and
+    // past the line commits the lift itself). A run-up and a hold that were both right aren't told to do them again.
+    case 'no-lift': case 'row': {
+      const [lo, hi] = LINEUP_RUNUP_KMH, lead = id === 'row' ? 'Over the row' : 'Lift over the roofs';
+      if (thumbOn(ctx)) return `${lead}: keep holding the pad through the line`;
+      const adv = ctx.tier === 'advanced', lift = ctl(ctx, adv ? 'brakeAdv' : 'lift');
+      const kmh = flight && flight.lineSpeed >= 0 ? Math.round(flight.lineSpeed * 3.6) : -1;
+      const off = kmh >= 0 && (kmh < lo - LINEUP_SPEED_SLACK[0] || kmh > hi + LINEUP_SPEED_SLACK[1]);
+      // Each number with its unit: src/units.js puts mph beside every one (it reads no ranges).
+      if (off) return `${lead}: ${kmh} km/h at the line, aim for ${lo} km/h to ${hi} km/h, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
+      if (kmh < 0) return `${lead}: ${lo} km/h to ${hi} km/h at the line, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
+      if (!adv && flight.liftHeld >= LINEUP_LIFT_HOLD - 0.05) return `${lead}: the same run-up and ${keyOf(ctx, 'lift')} again`;
+      return `${lead}: ${lift} at the line for about ${LINEUP_LIFT_HOLD} s`;
+    }
+    case 'crash': return 'Run it again and follow the cues: each one calls its step as you reach it';
     case 'clean': if (thumbOn(ctx)) return thumbClean(ctx, flight);
       return cleanLine(ctx, card);
     default: return '';
@@ -142,7 +158,8 @@ export function pointerText(id, ctx, flight = null, card = null) {
 
 // 0156: one thumb's clean line names the step after this flight. A touchdown inside the mark ring the slide is for
 // (3.5 m, the mark Daily's bar, src/daily.js) names its distance and the next step the score shows: on the Show the
-// mark is full marks inside 3.5 m (src/sim/judge.js SHOW_PRECISION), so Pro (one thumb is Assist only, and the coach's
+// mark costed under the coach's MARK_POINTS (0360: full marks only inside the 2 m ring now, judge.js SHOW_PRECISION; a
+// thumb 2.1–3.5 m off is named "mark" once it costs 3 points, ≈ 2.2 m on the Show), so Pro (one thumb is Assist only, and the coach's
 // own clean fix is "Try Pro"); the Wall reads the same rings since 0182 (it paid to 0.8 m and named the 2 m ring first). The miss is
 // read at the card's 0.1 m (judge.js r1), so the line and the Daily agree at the edges. Short of the ring, the slide.
 export const THUMB_MARK_RING = 3.5;
@@ -173,7 +190,7 @@ export const CLEAN_MIN_POINTS = 0.1;
 // for everyone; the Lineup's height and roll are the pilot's).
 const STEERED = { show: ['clearance', 'landing', 'precision', 'efficiency'], wall: ['landing', 'precision', 'efficiency'], lineup: ['height', 'rotation', 'clearance', 'landing', 'precision', 'efficiency'] };
 // The full-marks ring around the mark, per course: the rings' curve on the Show and the Wall, the Lineup's band.
-export const markRing = (course) => (course === 'lineup' ? LINEUP_FULL.padMiss : SHOW_PRECISION[0][0]);
+export const markRing = (course) => (course === 'lineup' ? LINEUP_FULL.padMiss : SHOW_MARK_RING);   // 0360: the 2 m bullseye
 // The Show's clearance pays full marks between its curve's first and last 1.
 const CLEAR_FULL = CLEARANCE.filter(([, v]) => v === 1).map(([x]) => x);
 const n1 = (x) => (Math.round(x * 10) / 10).toFixed(1);
@@ -288,7 +305,7 @@ function cleanLine(ctx, card) {
 const BETTER = {
   'no-brake': 'sink', 'late-brake': 'sink', 'late-land': 'sink', 'ran-out': 'sink', flipped: 'sink', tilt: 'tilt',
   short: 'clear', 'no-release': 'release', 'early-release': 'release', 'late-roll': 'roll', 'no-roll': 'roll', 'over-roll': 'roll',
-  mark: 'mark', gas: 'gas', 'fell-off': 'height', 'stopped-climb': 'height',
+  mark: 'mark', gas: 'gas', 'fell-off': 'height', 'stopped-climb': 'height', row: 'clear', 'no-lift': 'clear',
 };
 export function betterText(id, card) {
   const f = card?.facts || {};

@@ -1,0 +1,73 @@
+{
+ "title": {
+  "first": true,
+  "scheme": "thumb",
+  "course": "show"
+ },
+ "results": [
+  {
+   "total": 83,
+   "verdict": "Clean",
+   "crashed": false,
+   "sink": 1.1,
+   "padMiss": 6.4,
+   "clearance": 3.8,
+   "invertedS": 5.1,
+   "apex": 27.3,
+   "judges": [
+    "The Engineer 8.2",
+    "The Coordinator 8.5",
+    "The Designer 8.2"
+   ],
+   "sheet": "THE SHOW CLEAN VERDICT Clean 83.0/ 100 BRONZE 80 SILVER 90 GOLD 95 New Bronze · Silver at 90 · 7.0 to go Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot Next jump The Wall Beat 83.0 Share Replay Home MORE What happened · the judges · post",
+   "againVisible": true,
+   "beat": {
+    "simAfter": 0.7,
+    "total": "11.3"
+   },
+   "tapToLive": 14.871
+  },
+  {
+   "total": 85.3,
+   "verdict": "Stuck it",
+   "crashed": false,
+   "sink": 1.2,
+   "padMiss": 6,
+   "clearance": 1.4,
+   "invertedS": 5.3,
+   "apex": 27.3,
+   "judges": [
+    "The Engineer 8.5",
+    "The Coordinator 8.7",
+    "The Designer 8.4"
+   ],
+   "sheet": "THE SHOW STUCK THE LANDING Stuck it 85.3/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 4.7 to go Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot Next jump The Wall Beat 85.3 Share Replay Home MORE What happened · the judges · post",
+   "againVisible": true,
+   "beat": null,
+   "tapToLive": 22.52
+  },
+  {
+   "total": 84.3,
+   "verdict": "Stuck it",
+   "crashed": false,
+   "sink": 1.1,
+   "padMiss": 6.1,
+   "clearance": 4.1,
+   "invertedS": 5.4,
+   "apex": 27.3,
+   "judges": [
+    "The Engineer 8.4",
+    "The Coordinator 8.6",
+    "The Designer 8.3"
+   ],
+   "sheet": "THE SHOW STUCK THE LANDING Stuck it 84.3/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 5.7 to go Flown in Assist · Pro pays ×1.08, Advanced ×1.15 RUN 3 BEST 85.3 · -1.0 TO BEAT IT Judged by gemma-4-26b-a4b-it 621 → 84 tok $0.000087 Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot ASSIST ON rolls you out, levels and brakes Next jump The Wall Beat 85.3 Share Replay Home Initials Post READY FOR PRO? ×1.08 you fly it; brake at the line 3 clean landings in a row. The panel pays ×1.08 for it; switch back any time. WHAT HAPPENED Long of the mark You landed 20 ft 6.1 m from the mark (14 ft 4.4 m past it, 14 ft 4.2 m right): a",
+   "againVisible": true,
+   "beat": {
+    "simAfter": 0.7,
+    "total": "11.4"
+   },
+   "tapToLive": 17.631
+  }
+ ],
+ "errs": []
+}

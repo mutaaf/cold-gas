@@ -123,7 +123,7 @@ export const FLY_EVENTS = ['fly-assist', 'fly-pro', 'fly-advanced'];
 // wreck-brake, which stays counted for one release (as daily-run did, 0136). A decided card on one of the three courses
 // also counts on-<course> and landed-<course> or wrecked-<course> (COURSE_EVENTS): numbers only, nothing about the player.
 export const WRECK_EVENTS = ['wreck-short', 'wreck-brake', 'wreck-ran-out', 'wreck-roll', 'wreck-flipped', 'wreck-fell-off', 'wreck-climb', 'wreck-release', 'wreck-other',
-  'wreck-no-brake', 'wreck-late-brake', 'wreck-late-land'];
+  'wreck-no-brake', 'wreck-late-brake', 'wreck-late-land', 'wreck-lift'];
 const RUN_COURSES = ['show', 'wall', 'lineup'];
 export const COURSE_EVENTS = ['on', 'landed', 'wrecked'].flatMap((k) => RUN_COURSES.map((c) => `${k}-${c}`));
 export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 'run', 'run-quit', 'run-landed', 'run-wrecked', 'retry',
@@ -131,11 +131,13 @@ export const PLAY_EVENTS = ['visit-new', 'visit-return', 'howto', 'howto-skip', 
   'jump-tap', 'title-left', 'title-back', 'words-replaced', ...LEAVE_EVENTS, ...CTL_EVENTS, ...FLY_EVENTS, ...WRECK_EVENTS, ...COURSE_EVENTS];
 // The coach's finding ids (src/sim/coach.js) → the wreck's cause. Into the row; a hard touchdown (never braked,
 // braked or landed late); braked but ran out at the bottom; the roll-out or the attitude; on its roof; off the
-// curl's side; the release. Anything else (the mark, the gas, clean, no coach) is `other`.
+// curl's side; the release; the Lineup's lift that never got over the roofs. Anything else (the mark, the gas, clean, no coach) is `other`.
 const WRECK_OF = {
   short: 'short', 'no-brake': 'brake', 'late-brake': 'brake', 'late-land': 'brake', 'ran-out': 'ran-out',
   'late-roll': 'roll', 'no-roll': 'roll', 'over-roll': 'roll', tilt: 'roll', flipped: 'flipped', 'fell-off': 'fell-off',
   'no-release': 'release', 'early-release': 'release', 'stopped-climb': 'climb',
+  // 0367: the Lineup's own two. Its row hit is the Show's (into the row); never over the roofs is its own.
+  row: 'short', 'no-lift': 'lift',
 };
 export const wreckCause = (items) => `wreck-${WRECK_OF[items?.[0]?.id] || 'other'}`;
 // Every name a wreck counts: its cause and, for the three brake findings, the coach's own id beside it (0276).

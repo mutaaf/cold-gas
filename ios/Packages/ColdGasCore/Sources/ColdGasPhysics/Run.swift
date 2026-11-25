@@ -7,16 +7,20 @@ public let SIM_VERSION = 32   // 0190: LAND's line hold to 1.5 m, auto-land to t
 /// v33 (0340): a set's water and mud (run.js). Only the courses that carry surfaces (the Show, the Lineup) fly at it; a v32
 /// run on them replays on the set as it was (courseAt).
 public let SURFACE_VERSION = 33
-/// v34 (0362): on the Lineup, Assist's LIFT held from the ground is a lift-off burn (Vehicle.swift liftOffBurn). Only the
-/// Lineup's runs are v34; a v33 or v32 Lineup run replays without it.
-public let LIFTOFF_VERSION = 34
+/// v34 (0360): the Show and the Wall pay full Precision only inside the pad's 2 m ring (run.js MARK_VERSION). Scores only;
+/// an older Show or Wall run is stale.
+public let MARK_VERSION = 34
+/// v35 (0362): on the Lineup, Assist's LIFT held from the ground is a lift-off burn (Vehicle.swift liftOffBurn). Only the
+/// Lineup's runs are v35; a v33 or v32 Lineup run replays without it.
+public let LIFTOFF_VERSION = 35
+private let MARKED: Set<String> = ["show", "wall"]
 public func simVersionOf(_ courseId: String) -> Int {
-    courseId == "lineup" ? LIFTOFF_VERSION : COURSES[courseId]?.surfaces != nil ? SURFACE_VERSION : SIM_VERSION
+    courseId == "lineup" ? LIFTOFF_VERSION : MARKED.contains(courseId) ? MARK_VERSION : COURSES[courseId]?.surfaces != nil ? SURFACE_VERSION : SIM_VERSION
 }
-/// A run of this version on this course replays to its bits here (today's; a v32 run on a set that has surfaces now; a v33
-/// Lineup run, without the lift-off burn).
+/// A run of this version on this course replays to its bits and scores as it was here (today's; off the Show and the Wall
+/// a v32 run on a set that has surfaces now; a v33 Lineup run, without the lift-off burn).
 public func replayable(_ courseId: String, _ v: Int) -> Bool {
-    v == simVersionOf(courseId) || v == SIM_VERSION || (v == SURFACE_VERSION && COURSES[courseId]?.surfaces != nil)
+    v == simVersionOf(courseId) || (!MARKED.contains(courseId) && v == SIM_VERSION) || (courseId == "lineup" && v == SURFACE_VERSION)
 }
 /// The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION.
 public func courseAt(_ courseId: String, _ v: Int? = nil) -> Course {
