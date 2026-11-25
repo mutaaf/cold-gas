@@ -1,12 +1,12 @@
 ---
 id: 0360
 title: The pad's 2 m bullseye pays, so a careful thumb clearly outscores a sloppy one
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: player-feel
 created: 2026-11-23
-pr:
+pr: 514
 by: critic
 ---
 
