@@ -69,11 +69,17 @@ export const SIM_VERSION = 32;
 // lets a tyre settle in. Only those two courses changed, so only their runs are v33: the Wall's are still v32, and a
 // v32 run on the Show or the Lineup replays on the course as it was (courseAt), to the same bits.
 export const SURFACE_VERSION = 33;
-/** The version a run on this course is flown at today: SURFACE_VERSION where the course carries surfaces. */
-export const simVersionOf = (courseId) => (COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
-/** True when a run of this version on this course can be replayed to its bits (today's, or a v32 run on a set that has
- *  surfaces now: it replays on the course without them). */
-export const replayable = (courseId, v) => v === simVersionOf(courseId) || v === SIM_VERSION;
+// v34 (0360): the Show and the Wall pay full Precision only inside the pad's 2 m painted ring (judge.js SHOW_PRECISION).
+// Scores only: their flights are the same bits, but a card from before reads another curve, so an older Show or Wall run
+// (a challenge, a ghost) is stale, as v31 (0182) made it. The Lineup's mark is its own band: its runs stay v33.
+export const MARK_VERSION = 34;
+const MARKED = { show: true, wall: true };
+/** The version a run on this course is flown at today: MARK_VERSION on the Show and the Wall, SURFACE_VERSION on another
+ *  course that carries surfaces, else SIM_VERSION. */
+export const simVersionOf = (courseId) => (MARKED[courseId] ? MARK_VERSION : COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
+/** True when a run of this version on this course can be replayed to its bits and scored as it was: today's, or (off the
+ *  Show and the Wall) a v32 run on a set that has surfaces now: it replays on the course without them. */
+export const replayable = (courseId, v) => v === simVersionOf(courseId) || (!MARKED[courseId] && v === SIM_VERSION);
 /** The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION. */
 export const courseAt = (courseId, v = simVersionOf(courseId)) => {
   const id = COURSES[courseId] ? courseId : DEFAULT_COURSE;

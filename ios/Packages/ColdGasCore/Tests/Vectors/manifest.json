@@ -5,18 +5,18 @@
  "files": [
   {
    "path": "challenge.json",
-   "sha256": "f51a652f8278d255ed4850db964f184cc4159636d7861d4903fc88141d3c994a",
+   "sha256": "406fc2809e3b5efe192a640170f9c06a66ae16f411765b12169c904e4deb18c9",
    "bytes": 264435
   },
   {
    "path": "client.json",
-   "sha256": "6383d7b502dd55924f47bcbf43ef34947c078c7d353b22e2501dd20221f339af",
+   "sha256": "a380358061693e224fa03f8e0653ffc60429dee6f91e4f9e290c4492584c283c",
    "bytes": 821141
   },
   {
    "path": "coach.json",
-   "sha256": "a03ff3ccc5aa907fa5fb8a549ee8cc2c37f522afa7ea1243bdad44b236673374",
-   "bytes": 453987
+   "sha256": "84780857889c5cd6dc04a38af1326a02850ce2c9345764ba45505147e5dfe438",
+   "bytes": 454229
   },
   {
    "path": "dmath.json",
@@ -55,7 +55,7 @@
   },
   {
    "path": "input/drill-show-carry-thumb.json",
-   "sha256": "b520bcde99aefc7fc3e1dbe1f1aa8b2975abe2ef85c883ea7a9904935faebd2c",
+   "sha256": "f0f8da103abe40a1772365286ae3352edba1bdf603bc93d2113e421b4baa5ade",
    "bytes": 27532
   },
   {
@@ -65,7 +65,7 @@
   },
   {
    "path": "input/drill-show-ledge-thumb.json",
-   "sha256": "955249b5d5560b73955e03ad4c003d148e2b105c5741bf9f9106a2c6a1b9c0ea",
+   "sha256": "94b591f60312e00f595178e8600e5542c7d78d23a971051d5a38d14480cb67aa",
    "bytes": 27692
   },
   {
@@ -75,17 +75,17 @@
   },
   {
    "path": "input/drill-wall-release-thumb.json",
-   "sha256": "94f4d336de1010290275a5371e230106ddcad82330e95aba78cd102939c0f12a",
+   "sha256": "95c73d850639fc1df9f04e35e9e5703ece2be2b3c6dc8178263363878b634c48",
    "bytes": 43767
   },
   {
    "path": "input/thumb-show-aim.json",
-   "sha256": "7f5bd7bd1d2f7acd6cee06ceb8fd2bc29243a6632c4666f9d5e30cf3ab2108e2",
+   "sha256": "cd90e24df8bbdbf45eef1727484ff7032f1e268559b1a4eec8ab70b29ef404f9",
    "bytes": 70733
   },
   {
    "path": "input/thumb-show-hold.json",
-   "sha256": "6d81c9f8d770479948b22a97b5790e741b9e21142c214ac72ec2853aa5842b9b",
+   "sha256": "7ba2a662e91ec86ff6443668656dbfebf5a250b1cd63acb490e9b2da0efc22c0",
    "bytes": 59343
   },
   {
@@ -95,12 +95,12 @@
   },
   {
    "path": "input/thumb-show-tap-hold.json",
-   "sha256": "8db1728074c62eaa5870b77d841100fc2340971c8834d926067904b1cb2ac621",
+   "sha256": "cfe85adbfd24ea452b9f7be9f12fae0688c213528f4f365095008b3c7b36ecf5",
    "bytes": 59382
   },
   {
    "path": "input/thumb-wall-again-aim.json",
-   "sha256": "cdd60ed5c03c65466950ed332c76b5a07320bd769f554089627d016bb34575c7",
+   "sha256": "0eb8811c8dec011157cbfe46910d3d9700dfc4c3c4d957dd85f1763696147c00",
    "bytes": 73282
   },
   {
@@ -110,7 +110,7 @@
   },
   {
    "path": "input/thumb-wall-hold.json",
-   "sha256": "deadfb5ceaa502e389819d3a140649490d00c314685e6139a9aeb4e40500b14d",
+   "sha256": "a04489bc833e5180fb2507fdf6d65ccce4bf7e950869f8c5c6ac1828278f78d3",
    "bytes": 58658
   },
   {
@@ -135,7 +135,7 @@
   },
   {
    "path": "input/touch-show-assist.json",
-   "sha256": "d03fb94094030e8eae7fc07a0ddea71ee7349270147b1526c98efa59d33e6693",
+   "sha256": "1eb60c7d80fda335c188d2c62b5386e940e5e9d4ee1eef1a5cfa2b410ef6e9cd",
    "bytes": 162806
   },
   {
@@ -155,7 +155,7 @@
   },
   {
    "path": "input/touch-wall-pro.json",
-   "sha256": "b9d593def07b819589e178483c8cdeb7bf5dfde7888a4f58e310f26a1edf639a",
+   "sha256": "92e7d22690fa887ee82ce2b73c6bc1faae65d8a83fc701fd68c78b56eead4ca2",
    "bytes": 138426
   },
   {
@@ -185,7 +185,7 @@
   },
   {
    "path": "runs/mud-show-long.json",
-   "sha256": "a12e7d41c9d21a7214cc0a987c07c5afac02a045fda925ff817adfb60c89babb",
+   "sha256": "cfca95ced5c73b7f51f2bde6283de0c15cd8568e994df88b822c8ec6a56a0e54",
    "bytes": 76777
   },
   {
@@ -420,7 +420,7 @@
   },
   {
    "path": "runs/ref-show-dry-wet.json",
-   "sha256": "8254f8f99f9b2c2b365c7cdbcc6573e03590f1f3987ad5f13e5140a174079578",
+   "sha256": "c27cee327efaad9e6262c7202dcf8617c20f5254c58ac3884235b81dda63690f",
    "bytes": 42169
   },
   {
@@ -430,12 +430,12 @@
   },
   {
    "path": "runs/ref-wall-advanced.json",
-   "sha256": "a346df775814009d219b67d9c00007ec2a13b23f9dac8674cb048b54cbbb254d",
+   "sha256": "d546eec0748bc509d7784fbd5f8a5d344388129b32f007c3c5e71bd861d41b39",
    "bytes": 105956
   },
   {
    "path": "runs/ref-wall.json",
-   "sha256": "357614cc3e2c56e44e75594132b95e5fb91467d1b0926c20a1c9e8ddfa2e56e8",
+   "sha256": "66f7d0d050c7652f92a9b7c8eec6ce2cf25cd1297d9b0741e022f98ed7d66926",
    "bytes": 66537
   },
   {
@@ -445,7 +445,7 @@
   },
   {
    "path": "runs/splash-show-wide.json",
-   "sha256": "47eb743686cd021c8dde68a45ae8bbbd88b2efc59bb71953ff02e0a80fa2c06c",
+   "sha256": "41f2f7129ac05a78d9f9c35d87cfb6fd15a928ec707043828de95e1c15071690",
    "bytes": 42192
   }
  ]

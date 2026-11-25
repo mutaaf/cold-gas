@@ -179,7 +179,8 @@ left in the tanks; on a wreck, combos that come from the physics.
    `SIM_VERSION` in `src/sim/run.js`. **The sets' water and mud (owner's call 2026-11-19, 0340)** are course data
    (`courses.js` `surfaces`: splash tanks, mud patches) on the Show and the Lineup only; a run on them is `SURFACE_VERSION`
    (33, `simVersionOf(course)`: the identity a challenge link and a ghost carry), the Wall's are still 32, and a v32 run on a
-   wet set replays on the set as it was (`courseAt`, `replayable`), to its bits (the 52 older run vectors are unchanged). Physical numbers live in `spec.js` with a source or an
+   wet set replays on the set as it was (`courseAt`, `replayable`), to its bits (the 52 older run vectors are unchanged). **The 2 m bullseye (0360)** is a scores-only bump: the Show and the Wall are `MARK_VERSION` (34), so a v32/v33
+   Show or Wall run (a challenge, a ghost) is stale; the Lineup stays 33. Physical numbers live in `spec.js` with a source or an
    ESTIMATE note; never tune the car to "feel" without saying what real quantity changed.
    `node scripts/physics-bench.mjs` (0–60, braking, cornering) and `node scripts/naive-players.mjs`
    (32 simple strategies must all land upright with Assist) are the realism and accessibility

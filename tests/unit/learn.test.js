@@ -238,11 +238,14 @@ describe('the coach', () => {
     expect(keys.id).toBe('mark');
     expect(keys.fix).toMatch(/lean toward the pad/i);
   });
-  it('the cost is the judges\' own: on the mark nothing, inside the full-marks ring nothing, 3 m with nothing else wrong stays Clean (0124)', () => {
+  it('the cost is the judges\' own: on the mark nothing, inside the full-marks ring nothing, past it what the judges take (0124, 0360)', () => {
     const ref = fly('show');
     const t0 = { ...ref.t, lateral: 0, landZ: COURSES.show.pad.z };
     expect(markCost(t0)).toBe(0);
-    expect(markCost({ ...t0, lateral: 3.0 })).toBe(0);
+    expect(markCost({ ...t0, lateral: 2.0 })).toBe(0);
+    // 0360: the full-marks ring is the painted 2 m bullseye (it was 3.5 m), so 3 m off now costs the points it loses.
+    expect(markCost({ ...t0, lateral: 3.0 })).toBeCloseTo(scoreRun(t0).total - scoreRun({ ...t0, lateral: 3.0 }).total, 1);
+    expect(markCost({ ...t0, lateral: 3.0 })).toBeGreaterThan(MARK_POINTS);
     expect(markCost({ ...t0, lateral: 5 })).toBeGreaterThan(MARK_POINTS);
     expect(markCost({ ...t0, lateral: 6.8 })).toBeGreaterThan(14);
     // The reference touches down 1.5 m off: Clean, with Pro as the next step.
@@ -275,7 +278,7 @@ const flyFirm = (h, k) => fly('show', {}, (run, inp) => {
 });
 const THUMB_SHOW = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' };
 describe('the coach weighs the touchdown by what it cost (0125)', () => {
-  it('a firm 1.6–1.9 m/s touchdown a few metres off, on Assist, is Clean (it cost about a point), not Out of braking', () => {
+  it('a firm 1.6–1.9 m/s touchdown a few metres off, on Assist, is never Out of braking: it cost about a point', () => {
     const run = flyFirm(1, 0.5);
     const card = scoreRun(run.t);
     expect(card.facts.crashed).toBe(false);
@@ -291,7 +294,9 @@ describe('the coach weighs the touchdown by what it cost (0125)', () => {
     for (const say of [coachWords(THUMB_SHOW), KEY_WORDS]) {
       const { items } = coach(run.inputLog, 'show', card, 0, say);
       expect(items.some((i) => ['ran-out', 'late-brake', 'no-brake', 'late-land'].includes(i.id))).toBe(false);
-      expect(items[0].id).toBe('clean');
+      // 0360: 3–4.5 m off the mark now costs more than the touchdown did (≈ 3 points against ≈ 1), so the mark leads;
+      // before, inside 3.5 m was full marks and this read Clean.
+      expect(items[0].id).toBe('mark');
     }
   });
   it('a hard touchdown still leads with a braking finding, its cost in the detail within ±1 of the re-score', () => {

@@ -57,3 +57,50 @@ PR body (before → after).
 
 ## Out of scope
 The coach's or the HUD's words about the rings (only the scorer's curve). The Lineup's own `band(padMiss, 16, 0.8)`.
+
+## Built (0360, builder 2026-11-25)
+`SHOW_PRECISION` (src/sim/judge.js; the Show and the Wall) is `[[2, 1], [2.1, 0.9], [4, 0.85], [5, 0.8], [7, 0.45],
+[12, 0.15], [20, 0]]`: full marks only inside the painted 2 m ring, 0.9 by 2.1 m, the 4 m ring 0.85, and from 5 m out the
+old curve. Scores only (no flight changes a bit); the Show and the Wall are `MARK_VERSION` 34 (src/sim/run.js), so an older
+Show or Wall challenge or ghost is stale, as v31 (0182) made them. The Lineup is untouched (v33).
+
+**Why a short ramp and not a gentle slope.** Every careful run "between 2 and 3.5 m" measured **2.1–2.2 m** (52 of 52): they
+stop 10–20 cm outside the ring, and they outscore the inside runs on gas (efficiency 7.1 vs 6.0) and touchdown (landing
+9.6 vs 9.1), not on the mark. A slope across 2–4 m cannot reach them (0.75 at 4 m still left the band at −1.0); only a
+drop right after the line does.
+
+Populations: `human-phone.mjs 300 --scheme=thumb`, telemetry dumped once (`--dump`) and re-scored; the Wall:
+`scripts/lib/daily-reach.mjs` (n 150, seed 12345).
+
+| | main | 0360 |
+|---|---|---|
+| careful: median inside 2 m − median 2–3.5 m | −1.0 (93.7 / 94.7) | **+1.7** (93.7 / 92.0) |
+| careful median − sloppy median | 1.4 (93.7 − 92.3) | **4.0** (93.3 − 89.3) |
+| careful p90 / sloppy p90 | 94.7 / 94.7 | 94.0 / 94.7 (**missed**, see below) |
+| careful max / sloppy max | 95.3 / 95.7 | 95.3 / 95.7 |
+| never slides: median (300/300 clean either way) | 88.3 | 87.3 |
+| Show reference (1.5 m) | 97.3 | 97.3 (Precision 10) |
+| Wall careful thumb: inside 2 m − 2–3.5 m | 0.0 (96.7 / 96.7) | **+2.7** (96.7 / 94.0) |
+| Wall careful thumb median / Pro keys median | 96.7 / 70.0 | 93.7 / 69.7 |
+| Wall reference (3.5 m off) | 97.7 | 94.3, still Perfect 10 and gold |
+| Medals (bars kept): careful silver / gold | 100 % / 8 % | 100 % / 4 % |
+| sloppy silver / gold | 76 % / 6 % | 48 % / 4 % |
+| Wall careful gold (94) | 62 % | 43 % |
+
+Daily (`scripts/daily-reach.mjs 150`, seed 12345): every objective's reach is identical before and after (ninety-show
+104/150, stick-wall 150/150, pro-wall 65/150, mark-show 104/150 at its own 3.5 m bar). Gates: naive-players 32/32,
+naive-show 54/54, human-show 300 assist --cues=new 286/300 (95 %), ref-hash bit-identical (show 6b2cb98b 97.3, wall f1b9fab
+97.7 → 94.3, lineup 4fc4af6b 91.7).
+
+**Missed: careful's p90 ≥ sloppy's p90.** Sloppy's top decile (and its 95.7 best) land inside 2.05 m with more gas left;
+the mark can't tell them from careful's best, because precision is already full for both. Only a zero-tolerance cliff at
+exactly 2.0 m (precision 0.9 at 2.001 m) put sloppy's p90 under careful's on this sample (93.3 vs 94.0). There a card
+reading "2.0 m" could lose 3 points, and the bar rests on the handful of runs within 5 cm of the line. Separating the
+best runs is a gas or touchdown question (efficiency, landing), not a mark curve one; a follow-up should own it.
+
+The words follow the scorer without a change of their own: `markRing` (keys, pads, two thumbs, Pro) reads
+`SHOW_PRECISION[0][0]` and now says "within 2 m of the mark"; the coach names the mark once a miss costs `MARK_POINTS`
+(3) of the total, which the new curve reaches from ≈ 2.2 m on the Show and ≈ 3.2 m on the Wall (the Show was ≈ 4.4 m), and NEXT
+RUN follows the coach's first item.
+The one-thumb clean line's own 3.5 m ring is untouched: it only shows when the coach found nothing worth naming, so "try
+Pro" there agrees with What happened (tests/unit/thumb-mastery.test.js 0156).

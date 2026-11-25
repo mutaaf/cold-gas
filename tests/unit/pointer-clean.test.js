@@ -111,7 +111,7 @@ describe('the clean line (0261)', () => {
 
   it('Pro quotes the scorer’s thresholds: 0.9 m/s and the course’s full-marks ring', () => {
     expect(pointerText('clean', PRO)).toBe(`Clean. Next: under ${LANDING.sink[1]} m/s and inside the ${SHOW_PRECISION[0][0]} m ring`);
-    expect(pointerText('clean', PRO)).toBe('Clean. Next: under 0.9 m/s and inside the 3.5 m ring');
+    expect(pointerText('clean', PRO)).toBe('Clean. Next: under 0.9 m/s and inside the 2 m ring');   // 0360: the bullseye
     expect(pointerText('clean', { ...PRO, course: 'lineup' })).toBe(`Clean. Next: under 0.9 m/s and inside the ${LINEUP_FULL.padMiss} m ring`);
     expect(markRing('wall')).toBe(SHOW_PRECISION[0][0]);
     // With a card, Pro names what's left like Assist.
