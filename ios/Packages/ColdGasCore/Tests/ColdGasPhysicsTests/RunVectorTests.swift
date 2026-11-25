@@ -102,8 +102,9 @@ struct RunVectorTests {
     func runVector(_ name: String) throws {
         let v = RunVector(name)
         // Every vector from before 0340 is SIM_VERSION's (the sets without water and mud); the surface runs are
-        // SURFACE_VERSION's, on the Show and the Lineup as they are now.
-        #expect(v.simVersion == SIM_VERSION || v.simVersion == simVersionOf(v.course), "SIM_VERSION: vectors \(v.simVersion), Swift \(SIM_VERSION)/\(simVersionOf(v.course))")
+        // SURFACE_VERSION's, on the Show and the Lineup as they are now; since 0362 the Lineup's are v33 runs replayed
+        // (no lift-off burn) or LIFTOFF_VERSION's, both replayable there.
+        #expect(v.simVersion == SIM_VERSION || replayable(v.course, v.simVersion), "SIM_VERSION: vectors \(v.simVersion), Swift \(SIM_VERSION)/\(simVersionOf(v.course))")
         let r: Replay
         do { r = try replay(v) } catch let e as SimUnsupported { Issue.record("\(name): \(e)"); return }
         if let miss = firstMiss(v, r) { Issue.record("\(name): \(miss)"); return }
