@@ -1,0 +1,7 @@
+course lineup
+NEXT RUN: Over the row: keep holding the pad through the line
+WHAT: Came down on the row
+
+You reached the line at 20 mph 32 km/h: the car peaked 15 ft 4.7 m up and came down on the roofs.
+
+Keep holding the pad through the line: it lifts you over the row, then rolls you.

@@ -1,0 +1,13 @@
+{"total": 4, "verdict": "No jump", "crashed": true, "clearance": -0.4, "launch": 32.33621643990335, "coach": []} []
+0.08 z-70.0 v0.2 drive cue: Hold ↑ to drive
+3.82 z-13.1 v30.0 drive cue: Hold Space at the line
+4.08 Space down z-4.8 v32.1
+4.28 z1.7 v32.2 air cue: ← → to roll
+6.08 z17.7 v6.4 air cue: Hold Shift
+lineup-keys-floor-1-lift.png
+lineup-keys-floor-2-over-row.png
+lineup-keys-floor-3-sheet.png
+phone-lineup-row-sheet.png
+phone-lineup-row-what.png
+
+[exited with code 0]

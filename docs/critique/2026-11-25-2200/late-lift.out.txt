@@ -1,0 +1,13 @@
+in band (22-34 km/h, held >= 0.45 s): 90, crashed 7
+{"i":1,"crashed":true,"verdict":"No jump","kmh":30,"held":0.45,"pressPastLine":1.29,"hitAfterAir":0.26,"hitZ":4.6,"hitH":1.1,"nose":50,"coach":"row | You reached the line at 30 km/h and held LIFT (Space) 0.5 s: the car peaked 7 m up and came down on the roofs. -> Your run-up and LIFT (Space) were right: fly it the same again."}
+{"i":6,"crashed":true,"verdict":"No jump","kmh":30,"held":0.45,"pressPastLine":1.29,"hitAfterAir":0.26,"hitZ":4.6,"hitH":1.1,"nose":50,"coach":"row | You reached the line at 30 km/h and held LIFT (Space) 0.5 s: the car peaked 7 m up and came down on the roofs. -> Your run-up and LIFT (Space) were right: fly it the same again."}
+{"i":90,"crashed":true,"verdict":"No jump","kmh":30,"held":0.5,"pressPastLine":1.43,"hitAfterAir":0.24,"hitZ":4.6,"hitH":1,"nose":52,"coach":"row | You reached the line at 30 km/h and held LIFT (Space) 0.5 s: the car peaked 7.4 m up and came down on the roofs. -> Your run-up and LIFT (Space) were right: fly it the same again."}
+{"i":139,"crashed":true,"verdict":"Contact","kmh":28,"held":0.45,"pressPastLine":1.71,"hitAfterAir":0.23,"hitZ":4.6,"hitH":0.9,"nose":47,"coach":"row | You reached the line at 28 km/h and held LIFT (Space) 0.5 s: the car peaked 5.9 m up and came down on the roofs. -> Your run-up and LIFT (Space) were right: fly it the same again."}
+{"i":152,"crashed":true,"verdict":"No jump","kmh":30,"held":0.5,"pressPastLine":1.57,"hitAfterAir":0.23,"hitZ":4.6,"hitH":0.9,"nose":55,"coach":"row | You reached the line at 30 km/h and held LIFT (Space) 0.5 s: the car peaked 8.1 m up and came down on the roofs. -> Your run-up and LIFT (Space) were right: fly it the same again."}
+{"i":176,"crashed":true,"verdict":"No jump","kmh":28,"held":0.5,"pressPastLine":1.91,"hitAfterAir":0.2,"hitZ":4.6,"hitH":0.7,"nose":58,"coach":"row | You reached the line at 28 km/h and held LIFT (Space) 0.5 s: the car peaked 8 m up and came down on the roofs. -> Your run-up and LIFT (Space) were right: fly it the same again."}
+{"i":182,"crashed":true,"verdict":"Contact","kmh":28,"held":0.45,"pressPastLine":1.55,"hitAfterAir":0.25,"hitZ":4.6,"hitH":1,"nose":41,"coach":"row | You reached the line at 28 km/h and held LIFT (Space) 0.5 s: the car peaked 6.5 m up and came down on the roofs. -> Your run-up and LIFT (Space) were right: fly it the same again."}
+press -9..0.5 m past the line: 47 runs, 0 crashed
+press 0.5..1 m past the line: 13 runs, 0 crashed
+press 1..1.25 m past the line: 9 runs, 0 crashed
+press 1.25..9 m past the line: 21 runs, 7 crashed
+row starts z 7 line z 0.5

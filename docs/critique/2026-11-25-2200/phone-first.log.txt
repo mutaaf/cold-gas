@@ -1,0 +1,112 @@
+37.7 title {"first":true,"scheme":"thumb","course":"show"}
+71.6 run 1 live after 23.892 s
+86.8 pad Hold|Climb|Hold to goSkip drive 0.4 -6.0 tick 288
+91.5 pad Holding|Climb|Keep holding drive 0.4 -5.8 tick 384
+186.3 pad Tap|Let go|Tap to let go ramp 26.7 0.4 tick 2736
+190.9 pad Letting|Go| ramp 26.9 -0.5 tick 2952
+194.2 pad Slide|Aim| ramp 27.3 -2.3 tick 3096
+199.8 pad Slide|Aim|Hold, slide to the dot air 23.1 -8.4 tick 3312
+256.2 card {"total":84.3,"verdict":"Stuck it","crashed":false,"sink":1.1,"padMiss":6.1,"clearance":4.2,"invertedS":5.4,"apex":27.3,"judges":["The Engineer 8.4","The Coordinator 8.6","The Designer 8.3"],"sheet":"THE SHOW STUCK THE LANDING Stuck it 84.3/ 100 BRONZE 80 SILVER 90 GOLD 95 New Bronze · Silver at 90 · 5.7 to go Daily: cleared by 13.8 ft · let go of the pad right after the tap and stay off it; held, it carries you high NEXT RUN For the Daily: let go of the pad right after the tap and stay off it Next jump The Wall Beat 84.3 Share Replay Home MORE What happened · the judges · post","againVisible":true,"beat":null,"tapToLive":23.892}
+256.8 retry visible 1
+271.1 run 2 live after 14.819 s
+277.5 pad Hold|Climb|Hold the pad to climb drive 0.4 -6.0 tick 288
+280.1 pad Holding|Climb|Climbing · let go to stop drive 0.4 -5.8 tick 408
+288.7 pad Holding|Climb|Up the curl on suction ramp 1.4 4.8 tick 912
+327.7 pad Tap|Let go|On the ledge · tap to let go ramp 26.7 0.3 tick 2760
+332.3 pad Letting|Go|Letting go · out to the lip ramp 27.0 -1.0 tick 3000
+334.2 pad Hold|Land|Carrying you over the row ramp 27.3 -2.4 tick 3096
+336.8 pad Hold|Aim|Carrying you over the row air 25.4 -6.4 tick 3240
+339.4 pad Hold|Aim|Auto-land · braking for you air 19.1 -10.7 tick 3384
+363.3 pad |Stopping|Hold to land: it rolls you out and brakes landed 0.4 -33.3 tick 4320
+363.3 touch landed tick 4320
+368.4 pad |Stopping| done 0.4 -34.4 tick 4488
+368.4 beat score on screen {"simAfter":0.7,"total":"31.5"}
+378.2 mode results
+386.3 card {"total":85.3,"verdict":"Stuck it","crashed":false,"sink":1.2,"padMiss":5.9,"clearance":1.4,"invertedS":5.3,"apex":27.3,"judges":["The Engineer 8.5","The Coordinator 8.7","The Designer 8.4"],"sheet":"A MASTERFUL HIGH STAKES FLIGHT Stuck it 85.3/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 4.7 to go Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot Next jump The Wall Beat 85.3 Share Replay Home MORE What happened · the judges · post","againVisible":true,"beat":{"simAfter":0.7,"total":"31.5"},"tapToLive":14.819}
+386.7 retry visible 1
+396.0 run 3 live after 9.745 s
+401.8 pad Hold|Climb|Hold the pad to climb drive 0.4 -6.0 tick 288
+404.2 pad Holding|Climb|Climbing · let go to stop drive 0.4 -5.8 tick 408
+415.0 pad Holding|Climb|Up the curl on suction ramp 1.4 4.8 tick 912
+451.4 pad Tap|Let go|On the ledge · tap to let go ramp 26.7 0.3 tick 2760
+455.5 pad Letting|Go|Letting go · out to the lip ramp 26.9 -0.6 tick 2976
+458.2 pad Slide|Aim|Carrying you over the row ramp 27.3 -2.4 tick 3120
+463.3 pad Slide|Aim| air 19.2 -11.3 tick 3432
+486.2 pad |Stopping| landed 0.4 -34.5 tick 4320
+486.2 touch landed tick 4320
+492.0 beat score on screen {"simAfter":0.7,"total":"11.4"}
+502.3 mode results
+511.2 card {"total":84.3,"verdict":"Stuck it","crashed":false,"sink":1.1,"padMiss":6.1,"clearance":4.1,"invertedS":5.4,"apex":27.3,"judges":["The Engineer 8.4","The Coordinator 8.6","The Designer 8.3"],"sheet":"THE SHOW STUCK THE LANDING Stuck it 84.3/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 5.7 to go Flown in Assist · Pro pays ×1.08, Advanced ×1.15 RUN 3 BEST 85.3 · -1.0 TO BEAT IT Judged by gemma-4-26b-a4b-it 622 → 93 tok $0.000090 Daily: cleared by 13.5 ft · let go of the pad right after the tap and stay off it; held, it carries you high NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot ASSIST ON rolls you out, levels and brakes Next jump The Wall Beat 85.3 Share Replay Home Initials Post READY FOR PRO? ×1.08 you fly it; brake at the line 3 clean landings in a row. The panel pays ×1.08 for it; switch back any time. WHAT HAPPENED Long of the mark","againVisible":true,"beat":{"simAfter":0.7,"total":"11.4"},"tapToLive":9.745}
+{
+ "title": {
+  "first": true,
+  "scheme": "thumb",
+  "course": "show"
+ },
+ "results": [
+  {
+   "total": 84.3,
+   "verdict": "Stuck it",
+   "crashed": false,
+   "sink": 1.1,
+   "padMiss": 6.1,
+   "clearance": 4.2,
+   "invertedS": 5.4,
+   "apex": 27.3,
+   "judges": [
+    "The Engineer 8.4",
+    "The Coordinator 8.6",
+    "The Designer 8.3"
+   ],
+   "sheet": "THE SHOW STUCK THE LANDING Stuck it 84.3/ 100 BRONZE 80 SILVER 90 GOLD 95 New Bronze · Silver at 90 · 5.7 to go Daily: cleared by 13.8 ft · let go of the pad right after the tap and stay off it; held, it carries you high NEXT RUN For the Daily: let go of the pad right after the tap and stay off it Next jump The Wall Beat 84.3 Share Replay Home MORE What happened · the judges · post",
+   "againVisible": true,
+   "beat": null,
+   "tapToLive": 23.892
+  },
+  {
+   "total": 85.3,
+   "verdict": "Stuck it",
+   "crashed": false,
+   "sink": 1.2,
+   "padMiss": 5.9,
+   "clearance": 1.4,
+   "invertedS": 5.3,
+   "apex": 27.3,
+   "judges": [
+    "The Engineer 8.5",
+    "The Coordinator 8.7",
+    "The Designer 8.4"
+   ],
+   "sheet": "A MASTERFUL HIGH STAKES FLIGHT Stuck it 85.3/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 4.7 to go Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot Next jump The Wall Beat 85.3 Share Replay Home MORE What happened · the judges · post",
+   "againVisible": true,
+   "beat": {
+    "simAfter": 0.7,
+    "total": "31.5"
+   },
+   "tapToLive": 14.819
+  },
+  {
+   "total": 84.3,
+   "verdict": "Stuck it",
+   "crashed": false,
+   "sink": 1.1,
+   "padMiss": 6.1,
+   "clearance": 4.1,
+   "invertedS": 5.4,
+   "apex": 27.3,
+   "judges": [
+    "The Engineer 8.4",
+    "The Coordinator 8.6",
+    "The Designer 8.3"
+   ],
+   "sheet": "THE SHOW STUCK THE LANDING Stuck it 84.3/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 5.7 to go Flown in Assist · Pro pays ×1.08, Advanced ×1.15 RUN 3 BEST 85.3 · -1.0 TO BEAT IT Judged by gemma-4-26b-a4b-it 622 → 93 tok $0.000090 Daily: cleared by 13.5 ft · let go of the pad right after the tap and stay off it; held, it carries you high NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot ASSIST ON rolls you out, levels and brakes Next jump The Wall Beat 85.3 Share Replay Home Initials Post READY FOR PRO? ×1.08 you fly it; brake at the line 3 clean landings in a row. The panel pays ×1.08 for it; switch back any time. WHAT HAPPENED Long of the mark",
+   "againVisible": true,
+   "beat": {
+    "simAfter": 0.7,
+    "total": "11.4"
+   },
+   "tapToLive": 9.745
+  }
+ ],
+ "errs": []
+}

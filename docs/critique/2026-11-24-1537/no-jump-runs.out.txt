@@ -1,0 +1,14 @@
+1 No jump {"contactTick":true,"airStart":2144,"apex":0,"rollDeg":368,"clearance":0,"items":["row"],"end":"contact","endTick":2687,"touch":-1,"total":7.7,"dmg":33}
+6 No jump {"contactTick":true,"airStart":2144,"apex":0,"rollDeg":362,"clearance":0,"items":["row"],"end":"contact","endTick":2687,"touch":-1,"total":7.7,"dmg":33}
+16 No jump {"contactTick":true,"airStart":1082,"apex":0,"rollDeg":188,"clearance":0,"items":["no-lift"],"end":"contact","endTick":1526,"touch":-1,"total":4,"dmg":68}
+26 No jump {"contactTick":true,"airStart":1080,"apex":0,"rollDeg":204,"clearance":0,"items":["no-lift"],"end":"contact","endTick":1526,"touch":-1,"total":4,"dmg":67}
+90 No jump {"contactTick":true,"airStart":2148,"apex":0,"rollDeg":362,"clearance":0,"items":["row"],"end":"contact","endTick":2687,"touch":-1,"total":7.7,"dmg":34}
+114 No jump {"contactTick":true,"airStart":1018,"apex":0,"rollDeg":353,"clearance":-0.8,"items":["row"],"end":"contact","endTick":1527,"touch":-1,"total":4,"dmg":66}
+117 No jump {"contactTick":true,"airStart":1073,"apex":0,"rollDeg":200,"clearance":0,"items":["no-lift"],"end":"contact","endTick":1526,"touch":-1,"total":3.7,"dmg":69}
+121 No jump {"contactTick":true,"airStart":1082,"apex":0,"rollDeg":193,"clearance":0,"items":["no-lift"],"end":"contact","endTick":1526,"touch":-1,"total":4,"dmg":68}
+131 No jump {"contactTick":true,"airStart":1082,"apex":0,"rollDeg":371,"clearance":0,"items":["no-lift"],"end":"contact","endTick":1526,"touch":-1,"total":4,"dmg":67}
+145 No jump {"contactTick":true,"airStart":1081,"apex":0,"rollDeg":186,"clearance":0,"items":["no-lift"],"end":"contact","endTick":1526,"touch":-1,"total":4,"dmg":68}
+151 No jump {"contactTick":true,"airStart":2235,"apex":0,"rollDeg":354,"clearance":0,"items":["row"],"end":"contact","endTick":3098,"touch":-1,"total":11,"dmg":6}
+152 No jump {"contactTick":true,"airStart":2152,"apex":0,"rollDeg":365,"clearance":0,"items":["row"],"end":"contact","endTick":2687,"touch":-1,"total":7.7,"dmg":36}
+176 No jump {"contactTick":true,"airStart":2279,"apex":0,"rollDeg":370,"clearance":0,"items":["row"],"end":"contact","endTick":2808,"touch":-1,"total":7,"dmg":38}
+same-again crashes 13
