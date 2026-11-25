@@ -1,0 +1,40 @@
+// 0367 check: 390x844 touch, one thumb, the Lineup. The thumb holds the pad from Go and lets go for good at RELEASE_Z
+// (before the lift has carried the car over the row), stepping the page at a true 60 fps. Screenshot the sheet.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, OUT, TAG = 'phone', RELEASE_Z = '1', URL = 'http://localhost:4173/coldgas/?course=lineup'] = process.argv;
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext({ viewport: { width: 390, height: 844 }, deviceScaleFactor: 2, isMobile: true, hasTouch: true });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+await p.goto(URL); await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 180000 });
+await p.locator('[data-start]').tap({ trial: true }).catch(() => {});
+await p.touchscreen.tap(195, 300);   // the device in use is touch
+const pick = p.locator('[data-course="lineup"]:visible').first();
+if (await pick.count()) await pick.tap();
+await p.waitForFunction(() => window.__coldgas.stage.course === 'lineup', null, { timeout: 20000 }).catch(() => {});
+console.error('course', await p.evaluate(() => window.__coldgas.stage.course));
+await p.evaluate(() => { const g = window.__coldgas; g.startRun('jump'); g.S.autopilot = g.createAutopilot('lineup', { speed: 9, apex: 2.8, rolls: 2 }); g.skipCountdown(); });
+await p.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 60000 });
+// Too low over the row (tests/e2e/smoke.spec.js's forced Lineup crash): the autopilot flies it into the row, then hands
+// back to the (untouched) pad once the car has hit, so the sheet coaches it as a player's run.
+await p.evaluate(() => { const g = window.__coldgas; g.S.holdLive = true;
+  for (let i = 0; i < 60 * 120 && g.S.mode === 'live'; i++) { if (g.S.autopilot && g.S.run.t.contact) g.S.autopilot = null; g.liveStep(1 / 60); }
+  g.S.holdLive = false; });
+const scheme = await p.evaluate(() => [window.__coldgas.touch.get?.().scheme, window.__coldgas.input.device()]);
+await p.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 90000 }).catch(() => {});
+await p.waitForTimeout(3000);
+await p.screenshot({ path: `${OUT}/${TAG}-sheet.png` });
+await p.waitForFunction(() => document.querySelector('[data-coach-items] li') && document.querySelector('[data-pointer-text]')?.textContent, null, { timeout: 60000 }).catch((e) => console.error('wait', e.message));
+const ptr = await p.evaluate(() => document.querySelector('[data-pointer-text]')?.textContent);
+const more = p.locator('[data-r-more]:visible').first();
+if (await more.count()) { await more.tap(); await p.waitForTimeout(800); }
+await p.evaluate(() => { const el = document.querySelector('[data-coach]'); el?.scrollIntoView({ block: 'center' }); });
+await p.waitForTimeout(800);
+await p.screenshot({ path: `${OUT}/${TAG}-what.png` });
+const whatTxt = await p.evaluate(() => document.querySelector('[data-coach-items]')?.innerText);
+console.error('NEXT RUN:', ptr); console.error('WHAT:', whatTxt);
+const card = await p.evaluate(() => { const c = window.__coldgas.S.card; return c && { total: c.total, verdict: c.verdict, crashed: c.facts.crashed, coach: (c.coach || []).map((x) => [x.id, x.detail, x.fix]) }; });
+const next = await p.evaluate(() => [...document.querySelectorAll('*')].find((e) => /NEXT RUN/i.test(e.textContent) && e.children.length < 4)?.parentElement?.textContent?.replace(/\s+/g, ' ').slice(0, 300));
+console.log(JSON.stringify({ scheme, card, next, errs }, null, 1));
+await browser.close();
