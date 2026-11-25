@@ -34,8 +34,9 @@ func curve(_ x: Double, _ pts: [(Double, Double)]) -> Double {
     for i in 1..<pts.count where x <= pts[i].0 { let (a, va) = pts[i - 1], (b, vb) = pts[i]; return va + ((vb - va) * (x - a)) / (b - a) }
     return pts[pts.count - 1].1
 }
-// 0360: full marks only inside the 2 m bullseye (judge.js SHOW_PRECISION).
-let SHOW_PRECISION: [(Double, Double)] = [(2, 1), (2.1, 0.9), (4, 0.85), (5, 0.8), (7, 0.45), (12, 0.15), (20, 0)]
+// 0360: full marks only inside the 2 m bullseye, to 2.05 m where the card still reads 2.0 (judge.js SHOW_PRECISION).
+let SHOW_MARK_RING = 2.0
+let SHOW_PRECISION: [(Double, Double)] = [(2.05, 1), (2.15, 0.9), (4, 0.85), (5, 0.8), (7, 0.45), (12, 0.15), (20, 0)]
 let SHOW_GAS_FULL = 45.0
 let DAMAGE_W: [String: Double] = ["engineer": 0.15, "coordinator": 0.08, "designer": 0.12]
 public let WRECK_PCT = 60.0

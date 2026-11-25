@@ -20,7 +20,7 @@ describe('on the Wall, the mark counts (0182)', () => {
   const at = (miss) => scoreRun({ ...ref, lateral: miss, landZ: WALL.pad.z });
 
   it('precision reads the painted rings (2 · 4 · 7 m): full inside 2 m (0360; 3.5 m before), under half at the outer ring', () => {
-    const table = [[0, 10], [2, 10], [2.1, 9], [3.5, 8.6], [4, 8.5], [5, 8], [7, 4.5], [12, 1.5], [20, 0]];
+    const table = [[0, 10], [2, 10], [2.05, 10], [2.1, 9.5], [2.15, 9], [3.5, 8.6], [4, 8.5], [5, 8], [7, 4.5], [12, 1.5], [20, 0]];
     for (const [miss, p] of table) expect(at(miss).categories.precision, `${miss} m`).toBeCloseTo(p, 1);
   });
 

@@ -73,13 +73,13 @@ export const SURFACE_VERSION = 33;
 // Scores only: their flights are the same bits, but a card from before reads another curve, so an older Show or Wall run
 // (a challenge, a ghost) is stale, as v31 (0182) made it. The Lineup's mark is its own band: its runs stay v33.
 export const MARK_VERSION = 34;
-const MARKED = { show: true, wall: true };
+const MARKED = new Set(['show', 'wall']);
 /** The version a run on this course is flown at today: MARK_VERSION on the Show and the Wall, SURFACE_VERSION on another
  *  course that carries surfaces, else SIM_VERSION. */
-export const simVersionOf = (courseId) => (MARKED[courseId] ? MARK_VERSION : COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
+export const simVersionOf = (courseId) => (MARKED.has(courseId) ? MARK_VERSION : COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
 /** True when a run of this version on this course can be replayed to its bits and scored as it was: today's, or (off the
  *  Show and the Wall) a v32 run on a set that has surfaces now: it replays on the course without them. */
-export const replayable = (courseId, v) => v === simVersionOf(courseId) || (!MARKED[courseId] && v === SIM_VERSION);
+export const replayable = (courseId, v) => v === simVersionOf(courseId) || (!MARKED.has(courseId) && v === SIM_VERSION);
 /** The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION. */
 export const courseAt = (courseId, v = simVersionOf(courseId)) => {
   const id = COURSES[courseId] ? courseId : DEFAULT_COURSE;

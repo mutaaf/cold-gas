@@ -105,11 +105,13 @@ function curve(x, pts) {
 // inside the 2 m bullseye, 0.9 by 2.1 m, 0.85 at the 4 m ring, 0.8 at 5 m, under half at the outer ring's 7 m, a sliver
 // at 12 m and nothing from 20. (Was a straight line from 1 m to 20 m, which kept 74 % of the marks for a 6 m miss
 // outside the 4 m ring; then, from 0121 to 0360, full marks out to 3.5 m, so the bullseye was decoration.)
-// 0360 (SIM_VERSION MARK_VERSION 34), measured on scripts/human-phone.mjs 300 --scheme=thumb populations (seed as the
-// script's): a careful thumb's touchdowns inside 2 m now score a median 1.7 above its 2–3.5 m ones (were 1.0 below: all
-// of those were at 2.1–2.2 m, and kept more gas), careful leads sloppy by 4.0 at the median (was 1.4), a thumb that
-// never slides 88.3 → 87.3. From 5 m out the curve is as it was.
-export const SHOW_PRECISION = [[2, 1], [2.1, 0.9], [4, 0.85], [5, 0.8], [7, 0.45], [12, 0.15], [20, 0]];
+// 0360 (MARK_VERSION 34), measured on scripts/human-phone.mjs 300 --scheme=thumb populations (seed as the script's): a
+// careful thumb's touchdowns inside 2 m now score a median 1.7 above its 2–3.5 m ones (were 1.0 below: all of those were
+// at 2.1–2.2 m, and kept more gas), careful leads sloppy by 4.0 at the median (was 1.4), a thumb that never slides
+// 88.3 → 87.3. From 5 m out the curve is as it was. Full marks run to 2.05 m, where the card's 0.1 m reading (r1) still
+// says "2.0 m": a card that reads inside the ring is never marked down for the mark.
+export const SHOW_MARK_RING = 2;   // the painted bullseye (courses.js pad.rings[0]): what the words name
+export const SHOW_PRECISION = [[2.05, 1], [2.15, 0.9], [4, 0.85], [5, 0.8], [7, 0.45], [12, 0.15], [20, 0]];
 // Gas left on the Show: full marks from 45 % (the reference keeps 48 %).
 export const SHOW_GAS_FULL = 45;
 // Gas left on the Wall: full marks from 50 %.

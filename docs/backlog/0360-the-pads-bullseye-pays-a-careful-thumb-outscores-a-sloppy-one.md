@@ -59,9 +59,10 @@ PR body (before → after).
 The coach's or the HUD's words about the rings (only the scorer's curve). The Lineup's own `band(padMiss, 16, 0.8)`.
 
 ## Built (0360, builder 2026-11-25)
-`SHOW_PRECISION` (src/sim/judge.js; the Show and the Wall) is `[[2, 1], [2.1, 0.9], [4, 0.85], [5, 0.8], [7, 0.45],
-[12, 0.15], [20, 0]]`: full marks only inside the painted 2 m ring, 0.9 by 2.1 m, the 4 m ring 0.85, and from 5 m out the
-old curve. Scores only (no flight changes a bit); the Show and the Wall are `MARK_VERSION` 34 (src/sim/run.js), so an older
+`SHOW_PRECISION` (src/sim/judge.js; the Show and the Wall) is `[[2.05, 1], [2.15, 0.9], [4, 0.85], [5, 0.8], [7, 0.45],
+[12, 0.15], [20, 0]]`: full marks only inside the painted 2 m ring (to 2.05 m, where the card's 0.1 m reading still says
+"2.0 m", so a card that reads inside the ring is never marked down), 0.9 by 2.15 m, the 4 m ring 0.85, and from 5 m out
+the old curve. The words name the ring as `SHOW_MARK_RING` (2). Scores only (no flight changes a bit); the Show and the Wall are `MARK_VERSION` 34 (src/sim/run.js), so an older
 Show or Wall challenge or ghost is stale, as v31 (0182) made them. The Lineup is untouched (v33).
 
 **Why a short ramp and not a gentle slope.** Every careful run "between 2 and 3.5 m" measured **2.1–2.2 m** (52 of 52): they
@@ -76,7 +77,7 @@ Populations: `human-phone.mjs 300 --scheme=thumb`, telemetry dumped once (`--dum
 |---|---|---|
 | careful: median inside 2 m − median 2–3.5 m | −1.0 (93.7 / 94.7) | **+1.7** (93.7 / 92.0) |
 | careful median − sloppy median | 1.4 (93.7 − 92.3) | **4.0** (93.3 − 89.3) |
-| careful p90 / sloppy p90 | 94.7 / 94.7 | 94.0 / 94.7 (**missed**, see below) |
+| careful p90 / sloppy p90 | 94.7 / 94.7 | 94.7 / 94.7 (met: ≥) |
 | careful max / sloppy max | 95.3 / 95.7 | 95.3 / 95.7 |
 | never slides: median (300/300 clean either way) | 88.3 | 87.3 |
 | Show reference (1.5 m) | 97.3 | 97.3 (Precision 10) |
@@ -87,16 +88,20 @@ Populations: `human-phone.mjs 300 --scheme=thumb`, telemetry dumped once (`--dum
 | sloppy silver / gold | 76 % / 6 % | 48 % / 4 % |
 | Wall careful gold (94) | 62 % | 43 % |
 
-Daily (`scripts/daily-reach.mjs 150`, seed 12345): every objective's reach is identical before and after (ninety-show
+Daily (`scripts/daily-reach.mjs 150`, seed 12345, re-run on the final curve): every objective's reach is identical before and after (ninety-show
 104/150, stick-wall 150/150, pro-wall 65/150, mark-show 104/150 at its own 3.5 m bar). Gates: naive-players 32/32,
 naive-show 54/54, human-show 300 assist --cues=new 286/300 (95 %), ref-hash bit-identical (show 6b2cb98b 97.3, wall f1b9fab
 97.7 → 94.3, lineup 4fc4af6b 91.7).
 
-**Missed: careful's p90 ≥ sloppy's p90.** Sloppy's top decile (and its 95.7 best) land inside 2.05 m with more gas left;
-the mark can't tell them from careful's best, because precision is already full for both. Only a zero-tolerance cliff at
-exactly 2.0 m (precision 0.9 at 2.001 m) put sloppy's p90 under careful's on this sample (93.3 vs 94.0). There a card
-reading "2.0 m" could lose 3 points, and the bar rests on the handful of runs within 5 cm of the line. Separating the
-best runs is a gas or touchdown question (efficiency, landing), not a mark curve one; a follow-up should own it.
+**Careful's p90 ≥ sloppy's p90 holds only as a tie.** Both populations' best runs land inside the ring, with the most gas
+left. The mark can't tell them apart: sloppy's max is still 95.7 against careful's 95.3. Separating the very best runs is a
+gas or touchdown question (efficiency, landing), not one the mark curve can answer.
+
+**Follow-up (self-review, not done here: coach policy, out of scope).** The coach names the mark only once it costs
+`MARK_POINTS` (3) of the total. A one-thumb touchdown 2.1–2.2 m off on the Show (≈ 1.4–3 points), or 2.1–3.2 m off on the
+Wall (≈ 1–2.7 points), still reads "Clean · Try Pro", and NEXT RUN agrees with it ("try Pro"). Both are consistent with each
+other, but the score shows points left on the mark there. Re-tune `MARK_POINTS` or the one-thumb clean line to the
+bullseye, with the 0156 agreement test.
 
 The words follow the scorer without a change of their own: `markRing` (keys, pads, two thumbs, Pro) reads
 `SHOW_PRECISION[0][0]` and now says "within 2 m of the mark"; the coach names the mark once a miss costs `MARK_POINTS`

@@ -109,7 +109,7 @@ public enum Daily {
         Objective(id: "stick-wall", course: "wall", tier: nil, goalText: { _ in "Stick it: score 84+" },
                   checkFn: { c, f, _ in c.total >= 84 && landed(f) ? .done : .missed("\(r1(c.total)), need 84") }, hint: nil, titleHintFn: nil),
         Objective(id: "ninety-show", course: "show", tier: nil, goalText: { _ in "Score 90 or more" },
-                  checkFn: { c, f, _ in c.total >= 90 ? .done : .missed("\(r1(c.total)), need 90", fix: cleanOver(f) && f.n("padMiss") > 3.5 && !(f.n("sink") > 1.5) && !(f.n("tiltDeg") > 15)) }, hint: aimHint, titleHintFn: nil),
+                  checkFn: { c, f, _ in c.total >= 90 ? .done : .missed("\(r1(c.total)), need 90", fix: cleanOver(f) && f.n("padMiss") > 2.0 && !(f.n("sink") > 1.5)   // 0360: outside the 2 m bullseye the mark costs points && !(f.n("tiltDeg") > 15)) }, hint: aimHint, titleHintFn: nil),
         Objective(id: "mark-lineup", course: "lineup", tier: nil, goalText: { "Roll two turns and land within \($0.one(.len, LINEUP_MARK)) of the mark" },
                   checkFn: { _, f, u in !cleanLineup(f) ? .missed("no clean landing yet") : !(f.n("rotations") >= 2) ? turnsMiss(f)
                       : f.n("padMiss") <= LINEUP_MARK ? .done : .missed("\(u.one(.len, f.n("padMiss"), 1)) off the mark", fix: true) },

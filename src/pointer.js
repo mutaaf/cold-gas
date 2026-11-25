@@ -8,7 +8,7 @@
 // The device a player is on, from src/input.js's lastDevice ('touch' | 'key' | 'pad' | 'mouse' | 'none'):
 // a mouse or nothing yet is a desktop, so its keyboard.
 import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD, LINEUP_SPEED_SLACK } from './sim/aim-words.js';
-import { LANDING, SHOW_PRECISION, CLEARANCE, SHOW_GAS_FULL, WALL_GAS_FULL, LINEUP_FULL, TIERS, PANEL, SHOW_W, WALL_W, DAMAGE_W } from './sim/judge.js';
+import { LANDING, SHOW_MARK_RING, CLEARANCE, SHOW_GAS_FULL, WALL_GAS_FULL, LINEUP_FULL, TIERS, PANEL, SHOW_W, WALL_W, DAMAGE_W } from './sim/judge.js';
 
 export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ? 'pad' : 'key');
 
@@ -158,7 +158,8 @@ export function pointerText(id, ctx, flight = null, card = null) {
 
 // 0156: one thumb's clean line names the step after this flight. A touchdown inside the mark ring the slide is for
 // (3.5 m, the mark Daily's bar, src/daily.js) names its distance and the next step the score shows: on the Show the
-// mark is full marks inside 3.5 m (src/sim/judge.js SHOW_PRECISION), so Pro (one thumb is Assist only, and the coach's
+// mark costed under the coach's MARK_POINTS (0360: full marks only inside the 2 m ring now, judge.js SHOW_PRECISION; a
+// thumb 2.1–3.5 m off is named "mark" once it costs 3 points, ≈ 2.2 m on the Show), so Pro (one thumb is Assist only, and the coach's
 // own clean fix is "Try Pro"); the Wall reads the same rings since 0182 (it paid to 0.8 m and named the 2 m ring first). The miss is
 // read at the card's 0.1 m (judge.js r1), so the line and the Daily agree at the edges. Short of the ring, the slide.
 export const THUMB_MARK_RING = 3.5;
@@ -189,7 +190,7 @@ export const CLEAN_MIN_POINTS = 0.1;
 // for everyone; the Lineup's height and roll are the pilot's).
 const STEERED = { show: ['clearance', 'landing', 'precision', 'efficiency'], wall: ['landing', 'precision', 'efficiency'], lineup: ['height', 'rotation', 'clearance', 'landing', 'precision', 'efficiency'] };
 // The full-marks ring around the mark, per course: the rings' curve on the Show and the Wall, the Lineup's band.
-export const markRing = (course) => (course === 'lineup' ? LINEUP_FULL.padMiss : SHOW_PRECISION[0][0]);
+export const markRing = (course) => (course === 'lineup' ? LINEUP_FULL.padMiss : SHOW_MARK_RING);   // 0360: the 2 m bullseye
 // The Show's clearance pays full marks between its curve's first and last 1.
 const CLEAR_FULL = CLEARANCE.filter(([, v]) => v === 1).map(([x]) => x);
 const n1 = (x) => (Math.round(x * 10) / 10).toFixed(1);

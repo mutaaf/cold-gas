@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { createRun, stepRun, simVersionOf, replayable, MARK_VERSION, SURFACE_VERSION, SIM_VERSION } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
-import { scoreRun, SHOW_PRECISION } from '../../src/sim/judge.js';
+import { scoreRun, SHOW_PRECISION, SHOW_MARK_RING } from '../../src/sim/judge.js';
 import { COURSES } from '../../src/sim/courses.js';
 
 function fly(course) {
@@ -21,17 +21,23 @@ describe('the 2 m bullseye pays (0360)', () => {
     // The reference's own flight, moved so it touches down `miss` m short of the mark along the approach (only landZ).
     const at = (miss) => scoreRun({ ...ref, lateral: 0, landZ: pad.z + miss });
 
-    it(`${course}: full marks end at the painted 2 m ring, not 3.5 m`, () => {
-      expect(SHOW_PRECISION[0][0]).toBe(pad.rings[0]);
+    it(`${course}: full marks end at the painted 2 m ring (to 2.05 m, where the card still reads 2.0), not 3.5 m`, () => {
+      expect(SHOW_MARK_RING).toBe(pad.rings[0]);
+      expect(SHOW_PRECISION[0][0]).toBe(pad.rings[0] + 0.05);
       expect(at(1.0).categories.precision).toBe(10);
       expect(at(2.0).categories.precision).toBe(10);
+      // A card that reads 2.0 m (r1) is never marked down for the mark; one that reads 2.1 m is.
+      expect(at(2.049).facts.padMiss).toBe(2.0);
+      expect(at(2.049).categories.precision).toBe(10);
+      expect(at(2.1).facts.padMiss).toBe(2.1);
+      expect(at(2.1).categories.precision).toBeLessThan(10);
       expect(at(3.0).categories.precision).toBeLessThan(10);
     });
 
     it(`${course}: inside the ring outscores the 2–4 m band, and no step out ever pays`, () => {
       const t = (m) => at(m).total;
       // Past the painted line is 2.4–2.9 points (the careful thumbs that land 10–20 cm outside it measured 2.1–2.2 m).
-      expect(t(2.0) - t(2.1)).toBeGreaterThanOrEqual(2);
+      expect(t(2.05) - t(2.15)).toBeGreaterThanOrEqual(2);
       expect(t(1.0) - t(3.0)).toBeGreaterThanOrEqual(2.5);
       for (let m = 0; m < 20; m += 0.25) expect(t(m + 0.25), `${m} → ${m + 0.25} m`).toBeLessThanOrEqual(t(m));
       expect(at(3.0).categories.precision).toBeLessThan(at(2.0).categories.precision);
