@@ -95,9 +95,9 @@ describe('the pointer after a run', () => {
     expect(pointerText('clean', THUMB)).toMatch(/slide onto the amber dot/);   // no flight read (a drill): as before
     // Keys, pads and classic touch keep their lines whatever the miss.
     // With no card (0261: tests/unit/pointer-clean.test.js has the card-aware lines) they quote the scorer's thresholds.
-    expect(pointerText('clean', KEY, at(2.4))).toBe('Clean. Next: a touchdown under 0.9 m/s, within 3.5 m of the mark');
-    expect(pointerText('clean', TOUCH, at(2.4))).toBe('Clean. Next: a touchdown under 0.9 m/s, within 3.5 m of the mark');
-    expect(pointerText('clean', PRO, at(2.4))).toBe('Clean. Next: under 0.9 m/s and inside the 3.5 m ring');
+    expect(pointerText('clean', KEY, at(2.4))).toBe('Clean. Next: a touchdown under 0.9 m/s, within 2 m of the mark');   // 0360: the bullseye
+    expect(pointerText('clean', TOUCH, at(2.4))).toBe('Clean. Next: a touchdown under 0.9 m/s, within 2 m of the mark');
+    expect(pointerText('clean', PRO, at(2.4))).toBe('Clean. Next: under 0.9 m/s and inside the 2 m ring');
   });
   it('one thumb on the Lineup: a 360 names the call for two turns before the aim or Pro; a 720 keeps the aim, then Pro (0191)', () => {
     const LINEUP = { ...THUMB, course: 'lineup' };

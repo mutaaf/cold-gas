@@ -12,10 +12,11 @@ import ColdGasClient
 struct SurfaceTests {
     @Test func onlyTheShowAndTheLineupCarryThem() {
         #expect(SHOW.surfaces != nil && LINEUP.surfaces != nil && WALL_COURSE.surfaces == nil)
-        #expect(simVersionOf("show") == SURFACE_VERSION && simVersionOf("lineup") == SURFACE_VERSION && simVersionOf("wall") == SIM_VERSION)
+        #expect(simVersionOf("show") == MARK_VERSION && simVersionOf("lineup") == SURFACE_VERSION && simVersionOf("wall") == MARK_VERSION)
         #expect(courseAt("show", SIM_VERSION).surfaces == nil && courseAt("show").surfaces != nil)
-        #expect(replayable("show", 32) && replayable("show", 33) && replayable("wall", 32))
-        #expect(!replayable("show", 31) && !replayable("wall", 33))
+        #expect(replayable("lineup", 32) && replayable("lineup", 33) && replayable("show", MARK_VERSION))
+        // 0360: an older Show or Wall card reads the old mark curve, so those runs are stale.
+        #expect(!replayable("show", 31) && !replayable("show", 32) && !replayable("show", 33) && !replayable("wall", 32) && !replayable("wall", 33))
     }
     @Test func aRunFromBeforeFliesTheDrySet() {
         let old = createRun("show", simVersion: SIM_VERSION), now = createRun("show")
@@ -37,9 +38,10 @@ struct SurfaceTests {
             let p = try Challenge.encode(log: log, course: course, score: 50, simVersion: v, compress: false)
             return ChallengeLink.route(URL(string: "https://mutaafaziz.com/coldgas/?play=jump&course=\(course)#vs=\(p)")!, replayable: replayable)
         }
-        if case .challenge = try route("show", 32) {} else { Issue.record("a v32 Show challenge should still replay") }
-        if case .challenge = try route("show", 33) {} else { Issue.record("a v33 Show challenge should replay") }
-        #expect(try route("show", 31) == .stale(course: "show"))
+        if case .challenge = try route("lineup", 32) {} else { Issue.record("a v32 Lineup challenge should still replay") }
+        if case .challenge = try route("lineup", 33) {} else { Issue.record("a v33 Lineup challenge should replay") }
+        if case .challenge = try route("show", MARK_VERSION) {} else { Issue.record("a v34 Show challenge should replay") }
+        #expect(try route("show", 33) == .stale(course: "show"))
         #expect(try route("wall", 33) == .stale(course: "wall"))
     }
 }

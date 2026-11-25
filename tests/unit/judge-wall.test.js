@@ -19,8 +19,8 @@ describe('on the Wall, the mark counts (0182)', () => {
   // The reference's own flight (soft, level, all its gas sense), moved to land `miss` m from the mark.
   const at = (miss) => scoreRun({ ...ref, lateral: miss, landZ: WALL.pad.z });
 
-  it('precision reads the painted rings (2 · 4 · 7 m): full inside 3.5 m, under half at the outer ring', () => {
-    const table = [[0, 10], [2, 10], [3.5, 10], [4, 9.5], [5, 8.5], [7, 4.5], [12, 1.5], [20, 0]];
+  it('precision reads the painted rings (2 · 4 · 7 m): full inside 2 m (0360; 3.5 m before), under half at the outer ring', () => {
+    const table = [[0, 10], [2, 10], [2.05, 10], [2.1, 9.5], [2.15, 9], [3.5, 8.6], [4, 8.5], [5, 8], [7, 4.5], [12, 1.5], [20, 0]];
     for (const [miss, p] of table) expect(at(miss).categories.precision, `${miss} m`).toBeCloseTo(p, 1);
   });
 
@@ -39,8 +39,10 @@ describe('on the Wall, the mark counts (0182)', () => {
     expect(at(0).total - at(11).total).toBeGreaterThanOrEqual(12);
   });
 
-  it('the Wall reference loses nothing (96.0 before); the Show and the Lineup score exactly as before', () => {
-    expect(scoreRun(ref).total).toBe(97.7);   // the mark now pays: 96.0 → 97.7
+  it('the Wall reference (3.5 m off the mark) is still a Perfect 10; the Show and the Lineup score exactly as before', () => {
+    // 0182: the mark paid, 96.0 → 97.7; 0360: the 2 m bullseye, and the reference lands 3.5 m off it: 97.7 → 94.3.
+    expect(scoreRun(ref).total).toBe(94.3);
+    expect(scoreRun(ref).verdict).toBe('Perfect 10');
     expect(scoreRun(fly('show').t).total).toBe(97.3);
     expect(scoreRun(fly('lineup').t).total).toBe(91.7);
   });

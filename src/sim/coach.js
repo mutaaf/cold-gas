@@ -132,7 +132,8 @@ export function namesBraking(sink, cost, { show = false, drill = false } = {}) {
   if (!(sink > SINK_SOFT)) return false;
   return !(show && !drill) || sink >= SINK_FIRM || cost >= MARK_POINTS;
 }
-// The Show names the mark once a miss costs this many points of the total (≈ 4.4 m on Assist with the rings' curve);
+// The Show names the mark once a miss costs this many points of the total (≈ 2.2 m on Assist with the 2 m bullseye, 0360;
+// ≈ 4.4 m before);
 // under it a run with nothing else to fix is "Clean". Past 7 m it is always named: on Pro and Advanced a strong
 // run's judges sit at the 10 cap, so a 5–6 m miss can cost the total nothing. A drill (fromTick > 0) has no total
 // on its card, so it keeps the 7 m its stat line flags. The Wall does the same since 0182 (`show` here means a course

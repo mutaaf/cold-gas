@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import { createRun, stepRun } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
-import { scoreRun, LANDING, SHOW_PRECISION, CLEARANCE, LINEUP_FULL, SHOW_GAS_FULL } from '../../src/sim/judge.js';
+import { scoreRun, LANDING, SHOW_MARK_RING, CLEARANCE, LINEUP_FULL, SHOW_GAS_FULL } from '../../src/sim/judge.js';
 import { coach, KEY_WORDS } from '../../src/sim/coach.js';
 import { pointerText, pickPointer, cleanTarget, pointsLeft, markRing, CLEAN_MIN_POINTS } from '../../src/pointer.js';
 import { toUS } from '../../src/units.js';
@@ -93,7 +93,7 @@ describe('the clean line (0261)', () => {
     expect(pointerText('clean', KEY, null, proCard)).toBe(pointerText('clean', PRO, null, proCard));
     expect(lines[1]).toBe(`Clean. Next: keep ${SHOW_GAS_FULL} % of the gas (this one 30 %)`);
     expect(lines[2]).toBe('Clean. Next: clear the roofs by at least 0.8 m (this one 0.3 m)');
-    expect(lines[3]).toBe(`Clean. Next: land within ${SHOW_PRECISION[0][0]} m of the mark (this one 4.8 m)`);
+    expect(lines[3]).toBe(`Clean. Next: land within ${SHOW_MARK_RING} m of the mark (this one 4.8 m)`);
     expect(lines[4]).toBe(`Clean. Next: a touchdown under ${LANDING.sink[1]} m/s (this one 2.1 m/s)`);
     cards.forEach((c, i) => {
       if (c.categories.precision === 10) expect(lines[i]).not.toMatch(/mark/);
@@ -110,10 +110,10 @@ describe('the clean line (0261)', () => {
   });
 
   it('Pro quotes the scorer’s thresholds: 0.9 m/s and the course’s full-marks ring', () => {
-    expect(pointerText('clean', PRO)).toBe(`Clean. Next: under ${LANDING.sink[1]} m/s and inside the ${SHOW_PRECISION[0][0]} m ring`);
-    expect(pointerText('clean', PRO)).toBe('Clean. Next: under 0.9 m/s and inside the 3.5 m ring');
+    expect(pointerText('clean', PRO)).toBe(`Clean. Next: under ${LANDING.sink[1]} m/s and inside the ${SHOW_MARK_RING} m ring`);
+    expect(pointerText('clean', PRO)).toBe('Clean. Next: under 0.9 m/s and inside the 2 m ring');   // 0360: the bullseye
     expect(pointerText('clean', { ...PRO, course: 'lineup' })).toBe(`Clean. Next: under 0.9 m/s and inside the ${LINEUP_FULL.padMiss} m ring`);
-    expect(markRing('wall')).toBe(SHOW_PRECISION[0][0]);
+    expect(markRing('wall')).toBe(SHOW_MARK_RING);
     // With a card, Pro names what's left like Assist.
     expect(pointerText('clean', PRO, null, { ...refs.show.card, tier: 'pro' })).toMatch(/^Clean\. Next: /);
   });
