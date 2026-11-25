@@ -1,7 +1,7 @@
 ---
 id: 0366
 title: On a first run the run-up's HOLD CLIMB button says what happens when held, and the wait before the hold shows a countdown
-status: proposed
+status: ready
 priority: P2
 size: S
 lens: engagement
@@ -11,6 +11,8 @@ by: scout
 ---
 
 ## Why
+
+SCOUT 2026-11-25: promoted to ready. Last 14 days (human): 21 landings, 0 posts, 0 shares, 0 board opens; 4 visit-return in 14 days; 14 daily-run, 2 daily-done. This is the biggest drop in the funnel.
 Played as a first-time visitor at 390×844 (`coldgas_howto=new`, Show): after Jump the screen shows the roadster idle
 at `T +00:04.6`, SPEED 0, with a "HOLD TO GO · SKIP" strip and a round "HOLD CLIMB" button low right. Nothing moves
 until the thumb holds; across 8 screenshots 2.5 s apart (20 s) the car never left the start, the HUD read the same four
