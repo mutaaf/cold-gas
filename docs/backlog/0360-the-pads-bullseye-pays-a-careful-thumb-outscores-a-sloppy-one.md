@@ -1,7 +1,7 @@
 ---
 id: 0360
 title: The pad's 2 m bullseye pays, so a careful thumb clearly outscores a sloppy one
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: player-feel
@@ -11,6 +11,8 @@ by: critic
 ---
 
 ## Why
+
+SCOUT 2026-11-25: held back to proposed to bring the ready queue to its cap of 10; the funnel's drops (no Post after a landing, no return) outrank it. Promote when room.
 The focus's first item is "skill that shows in the score" on a phone. On the Show it barely shows once the thumb slides
 at all. `node scripts/human-phone.mjs 300 --scheme=thumb --skill=<s> -v`, main `ac3dca4`
 (docs/critique/2026-11-23-0400/human-phone-thumb-*.txt):
