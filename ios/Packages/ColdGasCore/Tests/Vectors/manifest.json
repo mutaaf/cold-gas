@@ -10,13 +10,13 @@
   },
   {
    "path": "client.json",
-   "sha256": "3926d7434da053f336025c5f8673c36ad9d13d152337b1151cee963708b9a993",
-   "bytes": 840244
+   "sha256": "904054651090df33e3dc261240342887b80b28a0ebff542a7876c5824679ba82",
+   "bytes": 850465
   },
   {
    "path": "coach.json",
-   "sha256": "da0ce419ef517f158397d423548834623eca03cb861fa85ebb70d994473bbd60",
-   "bytes": 462549
+   "sha256": "48b4c5f2fa6532388a3e61750762ab7db7b676f50900fdc64d150a6cfd9d5e81",
+   "bytes": 467193
   },
   {
    "path": "dmath.json",
@@ -157,6 +157,11 @@
    "path": "input/touch-wall-pro.json",
    "sha256": "92e7d22690fa887ee82ce2b73c6bc1faae65d8a83fc701fd68c78b56eead4ca2",
    "bytes": 138426
+  },
+  {
+   "path": "runs/crash-lineup-late-lift.json",
+   "sha256": "93dfbd83e4423cb9c95a81d64bc8bb2b5f70c5c5c68059fddf955b3ac2666514",
+   "bytes": 20483
   },
   {
    "path": "runs/crash-lineup-rolls2.json",

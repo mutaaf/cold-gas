@@ -7,7 +7,7 @@
 
 // The device a player is on, from src/input.js's lastDevice ('touch' | 'key' | 'pad' | 'mouse' | 'none'):
 // a mouse or nothing yet is a desktop, so its keyboard.
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD, LINEUP_SPEED_SLACK } from './sim/aim-words.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD, LINEUP_SPEED_SLACK, LINEUP_LIFT_LATE } from './sim/aim-words.js';
 import { LANDING, SHOW_MARK_RING, CLEARANCE, SHOW_GAS_FULL, WALL_GAS_FULL, LINEUP_FULL, TIERS, PANEL, SHOW_W, WALL_W, DAMAGE_W } from './sim/judge.js';
 
 export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ? 'pad' : 'key');
@@ -146,7 +146,9 @@ export function pointerText(id, ctx, flight = null, card = null) {
       // Each number with its unit: src/units.js puts mph beside every one (it reads no ranges).
       if (off) return `${lead}: ${kmh} km/h at the line, aim for ${lo} km/h to ${hi} km/h, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
       if (kmh < 0) return `${lead}: ${lo} km/h to ${hi} km/h at the line, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
-      if (!adv && flight.liftHeld >= LINEUP_LIFT_HOLD - 0.05) return `${lead}: the same run-up and ${keyOf(ctx, 'lift')} again`;
+      // 0370: a press that began past the line is named, with how far; a crash is never told to fly the same again.
+      if (!adv && flight.liftHeld >= 0 && flight.liftAtZ > LINEUP_LIFT_LATE) return `${lead}: press ${keyOf(ctx, 'lift')} on the line, not ${Math.round(flight.liftAtZ * 10) / 10} m past it`;
+      if (!adv && flight.liftHeld >= LINEUP_LIFT_HOLD - 0.05) return card?.facts?.crashed ? pointerText('crash', ctx) : `${lead}: the same run-up and ${keyOf(ctx, 'lift')} again`;
       return `${lead}: ${lift} at the line for about ${LINEUP_LIFT_HOLD} s`;
     }
     case 'crash': return 'Run it again and follow the cues: each one calls its step as you reach it';

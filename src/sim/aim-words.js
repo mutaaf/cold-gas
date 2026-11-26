@@ -19,3 +19,7 @@ export const LINEUP_SPEED_SLACK = [3, 4];
 // A LIFT press that ends this far (m) before the line is a tap on the run-up, not the lift (0367): the hold read is the
 // press at the line.
 export const LINEUP_TAP_BEFORE = 5;
+// A LIFT press at the line that began more than this (m, the car's centre past LINEUP_LINE) late is named as late (0370):
+// of the 90 keys players in the band (22–34 km/h, a hold ≥ 0.45 s), 0 of 69 who pressed before 1.25 m crashed and 7 of 21
+// at 1.25 m or later did, every one with the nose into the first car on the way up.
+export const LINEUP_LIFT_LATE = 1.25;
