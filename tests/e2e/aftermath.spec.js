@@ -2,8 +2,10 @@ import { test, expect } from '@playwright/test';
 
 // Ticket 0062: a crashed car finishes its crash. When a Show run ends with the car still moving, it
 // doesn't freeze: it brakes to rest under the same physics, and the results come up after that.
-// The crash: full throttle at the Wall with no release, so the car falls off the curl. The run ends on
-// its first contact, still ≈2 m up and falling at ≈6 m/s; the aftermath plays out the rest of the fall.
+// The crash: the Show reference with far too little carry (5 m), so it comes down short on the row. The run ends 2 s
+// after its first contact still sliding at ≈ 5.8 m/s (damage ≈ 6 %, not a wreck); the aftermath slides it ≈ 3 m to rest.
+// (0361: full throttle at the Wall used to be this crash, but it is a wreck now: its valves shut, the dead car stops on the
+// row and the run ends `settled` at ≈ 0.4 m/s. Its jets had kept it moving.)
 // A boot, a crash and its aftermath on software GL: CI's busy runners need the slow budget.
 test.slow();
 
@@ -15,7 +17,7 @@ async function crashToDone(page) {
   await page.waitForFunction(() => window.__coldgas.S.run, null, { timeout: 30_000 });
   return page.evaluate(() => {
     const cg = window.__coldgas, S = cg.S;
-    S.autopilot = () => ({ throttle: 1, assist: 1 });
+    S.autopilot = cg.createAutopilot('show', { carry: 5 });
     cg.skipCountdown();
     for (let i = 0; i < 4000 && S.run.phase !== 'done'; i++) cg.liveStep(0.1);
     const c = S.run.car;
