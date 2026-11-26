@@ -22,12 +22,13 @@ const flyAndSample = (page, rollAfterRelease = false) => page.evaluate((rollAfte
   const g = window.__coldgas, S = g.S, hud = document.querySelector('[data-screen="hud"]');
   g.startRun('reveal'); g.skipCountdown();
   if (rollAfterRelease) {
+    // The crash: the reference to the first air tick, then Pro with nothing held (the critic's wreck, 0361).
     const ap = S.autopilot;
+    let air = false;
     S.autopilot = (run) => {
       const i = ap(run);
-      if (!S.released) return i;
+      if (!(air ||= run.phase === 'air')) return i;
       for (const k of g.inputKeys) i[k] = 0;
-      i.roll = 1;
       return i;
     };
   }
@@ -73,9 +74,11 @@ test('reference flight: RELEASE after the lip, then CARRY/BRAKE, never HANG; ROL
   expect(errors).toEqual([]);
 });
 
-// The ticket's crash (every valve shut after the release) now lands on its wheels under SIM_VERSION 25,
-// so the crash here is a held full roll stick after the release (Pro: no computer to level it): the car
-// tumbles and comes down on its side and roof.
+// The ticket's crash (every valve shut after the release) now lands on its wheels under SIM_VERSION 25.
+// A held full roll stick after the release (Pro) used to tumble it onto its side and roof, but since 0361 the wreck on
+// the row shuts its valves and the dead car's roll jets no longer turn it over (≈ 0.1 s on its side). The crash here is
+// the reference to the first air tick, then Pro with nothing held: it comes down on the row, wrecked, and ends `flipped`
+// on its roof (≈ 0.75 s on a side or the roof after the touchdown).
 test('reference rolled into a crash: on a side or the roof, ROLL reads ≥ 60°', async ({ page }) => {
   test.slow();
   const errors = await boot(page);
