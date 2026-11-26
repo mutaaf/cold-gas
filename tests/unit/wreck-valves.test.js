@@ -16,7 +16,8 @@ function fly(course, { opts = {}, zeroPro = true, v } = {}) {
   let wreck = -1, pro = false;
   const after = [], air = [];
   const look = () => {
-    if (wreck < 0 && run.damage.total >= WRECK_PCT) wreck = run.tick;
+    // The HUD's WRECKED (src/main.js) and the card (damage.pct) read the damage rounded: from 59.5 %.
+    if (wreck < 0 && Math.round(run.damage.total) >= WRECK_PCT) wreck = run.tick;
     if (wreck >= 0 && run.tick >= wreck + 8) { after.push(Math.max(...run.car.throttles)); air.push(run.car.air); }
   };
   while (run.phase !== 'done') {
@@ -42,6 +43,20 @@ describe('0361: a wrecked car shuts its valves', () => {
     expect(w.after.every((x) => x === 0)).toBe(true);
     expect(w.air.every((a) => a === w.air[0])).toBe(true);
     expect(w.t.airEnd).toBe(w.air[0]);
+  });
+
+  it('the valves shut the tick after the HUD says WRECKED, which reads the damage rounded (self-review: 59.5 %)', () => {
+    // These Lineup crashes pass 59.5 % 24 and 11 ticks before 60 %: the jets must not run through the gap.
+    for (const opts of [{ speed: 7, apex: 2.5, rolls: 2 }, { speed: 9, apex: 1.5, rolls: 2 }]) {
+      const run = createRun('lineup'), ap = createAutopilot('lineup', opts);
+      let hud = -1;
+      while (run.phase !== 'done') {
+        stepRun(run, ap(run));
+        if (hud < 0 && Math.round(run.damage.total) >= WRECK_PCT) { hud = run.tick; expect(run.car.valvesShut).toBe(true); }
+        if (hud >= 0 && run.tick > hud) expect(Math.max(...run.car.throttles)).toBe(0);
+      }
+      expect(hud).toBeGreaterThan(0);
+    }
   });
 
   it('the latch is on the run (the HUD and the plumes read it)', () => {

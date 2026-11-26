@@ -628,7 +628,7 @@ export function challengeVectors(flown) {
     ['clamped', { score: 12, log: [[0, 150, -250, ...zeros(CHANNELS - 2)]] }]]) {
     const log = o.log || tiny;
     cases.push({ name, course: 'wall', score: o.score, tier: o.tier ?? 'assist', initials: o.initials ?? '', simVersion: o.simVersion ?? SIM_VERSION, log,
-      payload: rPayload({ log, course: 'wall', score: o.score, tier: o.tier, initials: o.initials, simVersion: o.simVersion }) });
+      payload: rPayload({ log, course: 'wall', score: o.score, tier: o.tier, initials: o.initials, simVersion: o.simVersion ?? SIM_VERSION }) });
   }
   // Decoded, as decodeChallenge returns them (the score to one decimal, the log padded to 23, clamped to ±100).
   for (const c of cases) {

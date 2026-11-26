@@ -152,8 +152,9 @@ func advance(_ run: Run, _ input: Input) throws {
     let prevVx = c.vel.x, prevVy = c.vel.y, prevVz = c.vel.z
     try step(c, input)
     updateDamage(run.damage, c.impacts) { $0 < HULL.count ? HULL[$0].x : nil }
-    // 0361: the crash sensor fires at the wreck line; the valves are shut from the next tick on (Vehicle.swift).
-    if run.crashSensor && !c.valvesShut && run.damage.total >= WRECK_PCT { c.valvesShut = true }
+    // 0361: the crash sensor fires at the wreck line the HUD and the card read (the damage rounded: from WRECK_PCT − 0.5);
+    // the valves are shut from the next tick on (Vehicle.swift).
+    if run.crashSensor && !c.valvesShut && run.damage.total >= WRECK_PCT - 0.5 { c.valvesShut = true }
     run.tick += 1
 
     let speed = DMath.dhypot(c.vel.x, c.vel.y, c.vel.z)

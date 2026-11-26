@@ -268,8 +268,9 @@ function advance(run, input) {
   step(c, input);
   updateDamage(run.damage, c, HULL);
   // 0361: the crash sensor. An airbag controller decides on a crash in tens of milliseconds; here it fires the tick the
-  // damage reaches the wreck line, and the valves are shut from the next tick on (vehicle.js), through the aftermath.
-  if (run.crashSensor && !c.valvesShut && run.damage.total >= WRECK_PCT) c.valvesShut = true;
+  // damage reaches the wreck line, and the valves are shut from the next tick on (vehicle.js), through the aftermath. The line
+  // is the one the HUD and the card read: the damage rounded (Math.round(total) >= WRECK_PCT, i.e. from WRECK_PCT − 0.5).
+  if (run.crashSensor && !c.valvesShut && run.damage.total >= WRECK_PCT - 0.5) c.valvesShut = true;
   run.tick++;
   if (run.tick % FRAME_EVERY === 0) recordFrame(run);
 
