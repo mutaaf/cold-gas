@@ -1,12 +1,12 @@
 ---
 id: 0369
 title: A Lineup run that leaves the ground and hits the row is never judged "No jump", and the judges never say it never left the ground
-status: ready
+status: shipped
 priority: P0
 size: S
 lens: authenticity
 created: 2026-11-24
-pr:
+pr: PRNUM
 by: critic
 ---
 

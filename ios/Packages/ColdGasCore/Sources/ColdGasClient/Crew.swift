@@ -114,7 +114,9 @@ public func crewWords(_ card: ScoreCard, wreck: CrewWreck? = nil, units: Units =
                      say(["Off the side! Not the exit I wrote, but it was an exit.", "Straight up the middle next time, then let it fly."], 6),
                      "Symmetry. It starts with the centreline.")
     }
-    if !f.b("jumped") {
+    // 0369: on the Lineup a car that ended on the row before its wheels came down hit the row: never "never left the ground".
+    let rowHit = course != "wall" && course != "show" && !f.b("jumped") && f.b("contact")   // the Lineup card carries no `course`
+    if !f.b("jumped") && !rowHit {
         if course == "lineup" {
             return words(card.verdict, "Never left the ground long enough to measure. Nothing on my clipboard.",
                          "The air is right there. Lift and give me something!", "Restraint is a virtue. This was too much of it.")
@@ -128,7 +130,7 @@ public func crewWords(_ card: ScoreCard, wreck: CrewWreck? = nil, units: Units =
         return words(head, hollisBill(), magsWreck(), veeWreck())
     }
     if f.b("contact") {
-        return words(card.verdict, course == "show" ? "Released at \(len("launchHeight")) and came down on a parked car. \(hollisBill())" : "Hull contact at \(len("apex")) apex. \(hollisBill())",
+        return words(card.verdict, course == "show" ? "Released at \(len("launchHeight")) and came down on a parked car. \(hollisBill())" : rowHit ? "Into the parked row before the wheels came down. \(hollisBill())" : "Hull contact at \(len("apex")) apex. \(hollisBill())",
                      say(["You had the nerve. You needed another metre.", "Into the roofs! Wrong kind of headline, right kind of nerve."], 7),
                      say(["The row was the frame. You hit the frame.", "Their paint too, now."], 8))
     }

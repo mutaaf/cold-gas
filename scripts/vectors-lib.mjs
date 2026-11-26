@@ -709,7 +709,7 @@ const CTXS = [{ device: 'touch', scheme: 'thumb', tier: 'assist' }, { device: 't
   { device: 'key', scheme: 'classic', tier: 'assist' }];   // 0218: the keys population the Lineup's hand form is measured on
 // Cards the runs don't reach, for the local lines' and the Daily's other branches: a real card with its facts bent.
 const BENDS = [['wrecked', { damagePct: 72 }], ['no-jump', { jumped: false, progressPct: 64 }], ['no-climb', { jumped: false, progressPct: 20 }],
-  ['contact', { contact: true }], ['flipped', { flipped: true }], ['crashed', { crashed: true }], ['fell-off', { fellOff: true }],
+  ['contact', { contact: true }], ['row-hit', { jumped: false, contact: true, crashed: true }], ['flipped', { flipped: true }], ['crashed', { crashed: true }], ['fell-off', { fellOff: true }],
   ['on-ramp', { landedOnRamp: true }], ['short', { crossedRow: false }], ['double', { rotations: 2, rollDeg: 731 }], ['zero-rot', { rotations: 0 }],
   ['soft', { sink: 0.6, wheelSpreadMs: 12 }], ['hard', { sink: 2.4, wheelSpreadMs: 180, airPct: 12 }], ['long-inverted', { invertedS: 1.4 }],
   ['near', { padMiss: 2.9, clearance: 1.2, airPct: 31, damagePct: 0 }], ['far', { padMiss: 9.6, clearance: 3.4, airPct: 22, damagePct: 4 }],

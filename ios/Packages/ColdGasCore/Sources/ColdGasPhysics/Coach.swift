@@ -88,6 +88,9 @@ public final class CoachFlight {
     /// press of LIFT at the line was held (s; -1 when LIFT was never pressed there; a press that ended more than
     /// COACH_LINEUP_TAP_BEFORE m short of the line doesn't count).
     public internal(set) var lineSpeed = -1.0, liftHeld = -1.0
+    /// Where the car met the row (0369, coach.js): height above the ground, climb (+ up) and speed along the ground on the
+    /// first tick of `t.contact`; contactH -1 when it never did.
+    public internal(set) var contactH = -1.0, contactVy = 0.0, contactSpeed = -1.0
     /// The re-flown run's telemetry; set once the replay is over.
     public internal(set) var t: Telemetry!
     init(_ course: String) { self.course = course }
@@ -107,6 +110,7 @@ public final class CoachFlight {
         } else { kv.append(("touch", .z)) }
         b("wasInverted", wasInverted); n("gasAtTouch", gasAtTouch); n("pressureAtTouch", pressureAtTouch); n("apexTick", apexTick); n("landedTick", landedTick); n("levelHeld", levelHeld); n("airTicks", airTicks)
         n("lineSpeed", lineSpeed); n("liftHeld", liftHeld)
+        n("contactH", contactH); n("contactVy", contactVy); n("contactSpeed", contactSpeed)
         return kv
     }
 }
@@ -125,6 +129,7 @@ public func readFlight(_ inputLog: [[Int]], _ courseId: String, fromTick: Int = 
         let c = r.car, t = Double(r.tick)
         if courseId == "lineup" && t >= Double(fromTick) {
             if f.lineSpeed < 0 && c.pos.z >= lineZ { f.lineSpeed = DMath.dhypot(c.vel.x, c.vel.z) }
+            if f.contactH < 0 && r.t.contact { f.contactH = jsMax(0, c.pos.y - SPEC.comHeight); f.contactVy = c.vel.y; f.contactSpeed = DMath.dhypot(c.vel.x, c.vel.z) }
             if f.liftHeld < 0 {
                 if inp.lift > 0.5 && liftFrom < 0 { liftFrom = t }
                 else if !(inp.lift > 0.5) && liftFrom >= 0 {
@@ -362,6 +367,7 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
     return coachFinish(out, f, card, crashed)
 }
 
+let COACH_INTO_ROW_H = 1.5
 /// coach.js lineupWrecks (0367): the Lineup's two wrecks, ahead of everything else on its card.
 func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say: CoachWords, _ crashed: Bool, _ add: (String, Double, String, String, String) -> Void, _ tier: String) {
     let s = jsNumberString
@@ -385,6 +391,13 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
     let fix = right ? "Your run-up and \(say.lift) were right: fly it the same again."
         : !speedFix.isEmpty || thumb || kmh >= 0 ? speedFix + holdFix : "Keep between \(s(lo)) km/h and \(s(hi)) km/h to the line. \(holdFix)"
     let heldPart = held.isEmpty ? "" : ", \(held)"
+    // 0369: under COACH_INTO_ROW_H and not yet falling as it met the row, the car went into it on the way up.
+    if t.contact && f.contactH >= 0 && f.contactH < COACH_INTO_ROW_H && f.contactVy >= 0 {
+        let lead = kmh >= 0 ? "You reached the line at \(s(kmh)) km/h\(held.isEmpty ? "" : " and \(held)"): the car" : !held.isEmpty ? "You \(held): the car" : "The car"
+        let up = f.contactH >= 0.1 ? " \(s(r1(f.contactH))) m up" : ", its wheels barely off the ground,"
+        add("no-lift", 10, "Into the row", "\(lead) went into the row\(up) at \(s(jsRound(f.contactSpeed * 3.6))) km/h, before it rose over the roofs.", fix)
+        return
+    }
     if neverUp {
         let under = r1(jsMax(0.1, course.tallest - apexH))
         add("no-lift", 10, "Never got over the roofs",

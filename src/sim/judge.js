@@ -301,12 +301,17 @@ function scoreLineup(t, opts = {}) {
       contact: t.contact, flipped: t.flipped, crashed, jumped, endReason: t.endReason, ...damageFactsOf(t),
       ...surfaceFactsOf(t),
     },
-    verdict: splash ? 'Splash' : wrecked && jumped ? 'Wrecked' : verdictOf(total, crashed, jumped, t),
+    verdict: splash ? 'Splash' : wrecked && (jumped || rowHit(t)) ? 'Wrecked' : verdictOf(total, crashed, jumped, t),
   };
 }
 
+// 0369: a car that left the ground and ended on the row (no wheel touchdown, so not `jumped`) jumped and hit the row: its
+// verdict is "Contact" (or "Wrecked"), never "No jump". The verdict only: its categories and `jumped` (the board's gate,
+// the landed paths) stay as they were, since the apex after a hit on the way up is the bounce, not the flight.
+const rowHit = (t) => t.airStartTick >= 0 && t.contact;
+
 function verdictOf(total, crashed, jumped, t) {
-  if (!jumped) return 'No jump';
+  if (!jumped && !rowHit(t)) return 'No jump';
   if (t.contact) return 'Contact';
   if (t.flipped) return 'Rolled over';
   if (crashed) return 'Crash';

@@ -159,6 +159,7 @@ func scoreLineup(_ t: Telemetry) -> Card {
     let splash = t.splash == true
     let crashed = t.contact || t.flipped || !t.settledUpright || wrecked || splash
     let jumped = t.airStartTick >= 0 && t.touchTick >= 0
+    let rowHit = t.airStartTick >= 0 && t.contact
     let rollDeg = abs(t.rollAccum) * 180 / DMath.PI
     let rotations = jsRound(rollDeg / 360)
     let rollError = rotations > 0 ? abs(rollDeg - rotations * 360) : 360
@@ -192,8 +193,9 @@ func scoreLineup(_ t: Telemetry) -> Card {
     let total = r1(judges.reduce(0) { $0 + $1.1 } * 10 / 3)
     let verdict: String
     if splash { verdict = "Splash" }
-    else if wrecked && jumped { verdict = "Wrecked" }
-    else if !jumped { verdict = "No jump" }
+    // 0369 (judge.js rowHit): a car that left the ground and ended on the row jumped and hit it. The verdict only.
+    else if wrecked && (jumped || rowHit) { verdict = "Wrecked" }
+    else if !jumped && !rowHit { verdict = "No jump" }
     else if t.contact { verdict = "Contact" }
     else if t.flipped { verdict = "Rolled over" }
     else if crashed { verdict = "Crash" }
