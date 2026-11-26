@@ -31,6 +31,12 @@ export function crashStep(card) {
   if (f.endReason === 'stalled') return 'Stalled';
   return 'Crash';
 }
+// The run line's note on a crash (0369): "No jump" for a run judged so or that never jumped and hit nothing; a car that left
+// the ground and ended on the row before its wheels came down (Contact) crashed (or wrecked), whatever `jumped` says.
+export function crashNote(f, verdict) {
+  return (!f.jumped && !f.contact) || verdict === 'No jump' ? 'No jump · not a mark yet' : f.damagePct >= WRECK_PCT ? 'Wrecked · not a mark yet' : 'Crashed · not a mark yet';
+}
+
 // Tenths of a second → "T+00:12.4" (minus sign in the countdown).
 export function missionClock(tenths) {
   const neg = tenths < 0, t = Math.abs(tenths), m = Math.floor(t / 600), s = (t % 600) / 10;
@@ -430,7 +436,7 @@ export function createUI() {
     const d = best == null ? null : Math.round((total - best) * 10) / 10;
     if (crashed && (best == null || d >= 0)) {
       line.dataset.state = 'neutral';
-      pb.textContent = !f.jumped ? 'No jump · not a mark yet' : f.damagePct >= WRECK_PCT ? 'Wrecked · not a mark yet' : 'Crashed · not a mark yet';
+      pb.textContent = crashNote(f, lastCard?.verdict);
     } else {
       line.dataset.state = best == null ? (total > 0 ? 'first' : '') : d > 0 ? 'best' : d === 0 ? 'tie' : 'behind';
       pb.textContent = best == null ? (total > 0 ? 'Your first mark on this event' : '')

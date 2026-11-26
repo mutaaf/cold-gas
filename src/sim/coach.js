@@ -39,6 +39,10 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
     // press of LIFT at the line was held (s; -1 when LIFT was never pressed there). A press that ended more than
     // LINEUP_TAP_BEFORE m short of the line was a tap on the run-up, and doesn't count.
     lineSpeed: -1, liftHeld: -1,
+    // Where the car met the row (0369): its height (m above the ground), climb (m/s, + up) and speed along the ground (m/s) on the first
+    // tick of `t.contact`; -1 when it never did. A car under the roofs and still climbing went into the row: its apex is
+    // the bounce after the hit, not the flight.
+    contactH: -1, contactVy: 0, contactSpeed: -1,
   };
   let lastPhase = '', wasInverted = false, liftFrom = -1;
   const lineZ = courseId === 'lineup' ? LINEUP_LINE : NaN;
@@ -46,6 +50,7 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
     const c = r.car, t = r.tick;
     if (courseId === 'lineup' && t >= fromTick) {
       if (f.lineSpeed < 0 && c.pos.z >= lineZ) f.lineSpeed = dhypot(c.vel.x, c.vel.z);
+      if (f.contactH < 0 && r.t.contact) { f.contactH = Math.max(0, c.pos.y - SPEC.comHeight); f.contactVy = c.vel.y; f.contactSpeed = dhypot(c.vel.x, c.vel.z); }
       if (f.liftHeld < 0) {
         if (inp.lift > 0.5 && liftFrom < 0) liftFrom = t;
         else if (!(inp.lift > 0.5) && liftFrom >= 0) {
@@ -269,9 +274,11 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
 }
 
 // The Lineup's two wrecks (0367), ahead of everything else on its card. Every number is the replay's (readFlight).
-// - no-lift: the car never rose above the tallest roof (or never left the ground) and hit the row, or never jumped.
+// - no-lift: the car never rose above the tallest roof (or never left the ground) and hit the row, or never jumped; or
+//   (0369) it went into the row on the way up, under the roofs.
 // - row: it rose above the roofs and still came down on them (t.contact).
 // The fix names what decides this course: the speed at the line (the reveal's 25–30 km/h run-up) and the LIFT hold.
+const INTO_ROW_H = 1.5;
 function lineupWrecks(t, f, course, say, crashed, add, tier) {
   const apexH = t.airStartTick >= 0 ? Math.max(0, t.apex - SPEC.comHeight) : 0;
   const neverUp = t.airStartTick < 0 || apexH < course.tallest;
@@ -297,6 +304,15 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
   const right = timed && kmh >= 0 && !speedOff && !shortHold;
   const fix = right ? `Your run-up and ${say.lift} were right: fly it the same again.`
     : speedFix || thumb || kmh >= 0 ? speedFix + holdFix : `Keep between ${lo} km/h and ${hi} km/h to the line. ${holdFix}`;
+  // 0369: under INTO_ROW_H and not yet falling as it met the row, the car went into it on the way up (every such hit
+  // measured 0–1.1 m up; every hit from above, 1.7 m and more): it never "peaked … and came down on the roofs", whatever
+  // its bounce reached. It never got over the roofs, so it is the lift's finding (no-lift, the funnel's wreck-lift).
+  const lead = kmh >= 0 ? `You reached the line at ${kmh} km/h${held ? ` and ${held}` : ''}: the car` : held ? `You ${held}: the car` : 'The car';
+  if (t.airStartTick >= 0 && t.contact && f.contactH >= 0 && f.contactH < INTO_ROW_H && f.contactVy >= 0) {
+    const up = f.contactH >= 0.1 ? ` ${r1(f.contactH)} m up` : ', its wheels barely off the ground,';
+    add('no-lift', 10, 'Into the row', `${lead} went into the row${up} at ${Math.round(f.contactSpeed * 3.6)} km/h, before it rose over the roofs.`, fix);
+    return;
+  }
   if (neverUp) {
     // How far under the roofs, not both heights: in feet 4.0 m and 4.1 m both read 13 ft.
     const under = r1(Math.max(0.1, course.tallest - apexH));
@@ -305,7 +321,6 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
       fix);
     return;
   }
-  const lead = kmh >= 0 ? `You reached the line at ${kmh} km/h${held ? ` and ${held}` : ''}: the car` : held ? `You ${held}: the car` : 'The car';
   add('row', 9.5, 'Came down on the row', `${lead} peaked ${r1(apexH)} m up and came down on the roofs.`, fix);
 }
 

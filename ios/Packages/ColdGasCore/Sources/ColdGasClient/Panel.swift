@@ -45,6 +45,11 @@ public func localWords(_ card: ScoreCard) -> JudgeWords {
     if f.v("course") == .string("wall") { return wallWords(card, f) }
     if f.v("course") == .string("show") { return showWords(card, f) }
     let s = f.n("sink") + f.n("tiltDeg") + f.n("padMiss")
+    // 0369 (panel.js): a car that left the ground and ended on the row before its wheels came down (verdict Contact, not
+    // No jump) hit the row; never "never left the ground", and no word on the height.
+    if !f.b("jumped") && f.b("contact") && card.verdict != "No jump" {
+        return local("Into the row", "Hull contact with the parked row\(f.n("launchKmh") > 0 ? " after a take-off at \(f.s("launchKmh")) km/h" : ""), before the wheels came down. That ends the evaluation.", "The row is there to be cleared, not hit. Go again.", "The row was the frame. You hit the frame.")
+    }
     if !f.b("jumped") {
         return local("No jump recorded", "The car never left the ground long enough to measure. Nothing to grade.", "The ramp is right there. Hit it with intent and give me something.", "Restraint is a virtue. This was too much of it.")
     }

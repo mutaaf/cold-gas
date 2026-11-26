@@ -15,6 +15,8 @@ import { stream, flyKeysLineup, flyThumb, flyTouch, flyPro } from '../../scripts
 const r1 = (x) => Math.round(x * 10) / 10;
 const TRY_PRO = /Try Pro|try Pro/;
 const KEYS = { device: 'key', scheme: 'classic', tier: 'assist', course: 'lineup' };
+// 0369: the car met the row under 1.5 m and not yet falling (coach.js INTO_ROW_H).
+const intoRow = (run, c) => run.t.contact && c.flight.contactH >= 0 && c.flight.contactH < 1.5 && c.flight.contactVy >= 0;
 
 describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', () => {
   let crashes;
@@ -41,7 +43,8 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
     const seen = { row: 0, 'no-lift': 0 };
     for (const { run, c } of crashes) {
       const t = run.t, apexH = t.airStartTick >= 0 ? t.apex - SPEC.comHeight : 0;
-      const want = t.airStartTick < 0 || apexH < tallest ? 'no-lift' : t.contact ? 'row' : null;
+      // 0369: a hit under the roofs on the way up never got over them ("no-lift", Into the row), whatever its bounce reached.
+      const want = intoRow(run, c) ? 'no-lift' : t.airStartTick < 0 || apexH < tallest ? 'no-lift' : t.contact ? 'row' : null;
       if (!want) continue;
       expect(c.items[0].id).toBe(want);
       seen[want]++;
@@ -62,7 +65,9 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       expect(f.liftHeld).toBeGreaterThanOrEqual(0.34);
       expect(f.liftHeld).toBeLessThanOrEqual(0.51);
       const apexH = r1(Math.max(0, run.t.apex - SPEC.comHeight));
-      expect(top.detail).toMatch(new RegExp(`${String(apexH).replace('.', '\\.')} m`));
+      // 0369: into the row on the way up names where it hit (the apex is the bounce); else the peak.
+      if (intoRow(run, c)) expect(top.detail).toContain(`at ${Math.round(f.contactSpeed * 3.6)} km/h, before it rose over the roofs`);
+      else expect(top.detail).toMatch(new RegExp(`${String(apexH).replace('.', '\\.')} m`));
       // The fix: never what the player already did (self-review, 0367). A run-up in 22–34 km/h with a hold of
       // ≥ 0.45 s was right (those players clear the row 83 times in 90): fly it the same. Else the half second of LIFT,
       // with what was held when it was short, and the band when the speed was clearly off.

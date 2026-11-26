@@ -10,13 +10,13 @@
   },
   {
    "path": "client.json",
-   "sha256": "a380358061693e224fa03f8e0653ffc60429dee6f91e4f9e290c4492584c283c",
-   "bytes": 821141
+   "sha256": "3926d7434da053f336025c5f8673c36ad9d13d152337b1151cee963708b9a993",
+   "bytes": 840244
   },
   {
    "path": "coach.json",
-   "sha256": "b3a198ba8f3e58a398a128565393277d4224a25d681e83ed9b94e258a78c0be9",
-   "bytes": 454229
+   "sha256": "da0ce419ef517f158397d423548834623eca03cb861fa85ebb70d994473bbd60",
+   "bytes": 462549
   },
   {
    "path": "dmath.json",
