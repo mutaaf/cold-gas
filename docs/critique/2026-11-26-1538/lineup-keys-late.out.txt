@@ -1,0 +1,23 @@
+{
+ "course": "lineup",
+ "TAG": "late",
+ "MPH": "18",
+ "HOLD": 500,
+ "card": {
+  "sheetText": "THE SHOW ENDS IN WRECKAGE\n\nWrecked\n4.7/ 100\nBRONZE 72\nSILVER 84\nGOLD 92.5\nBronze at 72 · 67.3 to go\n\nFlown in Assist\n\nRUN 1\nWRECKED · NOT A MARK YET\nJudged by\ngemma-4-26b-a4b-it\nCloudflare ORD\n80 tok\nNEXT RUN\nLift over the roofs: press Space on the line, not 5.2 ft 1.6 m past it\nASSIST\nON\nrolls you out, levels and brakes\nRetry\nR\nShare\nReplay\nHome\nH\n\nWHAT HAPPENED\n\nInto the row\n\nYou reached the line at 21 mph 33 km/h and held LIFT (Space) 0.5 s: the car went into the row 2.3 ft 0.7 m up at 16 mph 26 km/h, before it rose over the roofs.\n\nPress LIFT (Space) on the line, not 5.2 ft 1.6 m past it: the nose met the first car on the way up. Hold it about 0.5 s, then roll.\n\nThe Engineer\nChief Vehicle Engineer\n0.6\n\nDespite the perfect sink rate and attitude, the impact with the vehicle caused catastrophic structural failure.\n\nThe Coordinator\nStunt Coordinator\n0.3\n\nYou had the height and the roll, but hitting the car completely ruined the drama.\n\nThe Designer\nHead of Design\n0.5\n\nSignificant damage sensors triggered; seventy-three percent air remains in a vehicle that is now a total write-off.\n\nAMPLITUDE\n0.0\nROTATION\n0.0\nCLEARANCE\n0.0\nLANDING\n0.0\nPRECISION\n0.0\nAIR LEFT\n0.0\nINTEGRITY\n3.8\n21 mph 34 km/h at the lip\n24 ft 7.4 m apex\n369° roll\ncontact\n0 ft/s 0 m/s touchdown\n0° tilt\n1000 ms wheel sync\n92 ft 28 m from the mark\n73% air left\nwrecked · 62% damage",
+  "total": 4.7,
+  "verdict": "Wrecked",
+  "crashed": true,
+  "clearance": 0,
+  "launch": 9.437490803591185,
+  "coach": []
+ },
+ "log": [
+  "0.08 z-70.0 v0.2 drive cue: Hold ↑ to drive",
+  "6.48 z-14.0 v9.3 drive cue: Hold Space at the line",
+  "8.22 Space down z2.1 v9.2",
+  "8.35 z3.3 v9.1 air cue: ← → to roll",
+  "10.02 z12.5 v5.2 air cue: Hold Shift"
+ ],
+ "errs": []
+}

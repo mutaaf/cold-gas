@@ -1,0 +1,24 @@
+// Critic 2026-11-26 15:38 re-review of 0369 and 0370 over the seed-777 populations, on main 7efa88f.
+import { initPhysics } from '../src/sim/engine.js';
+import * as L from '../scripts/lib/daily-reach.mjs';
+import { scoreRun } from '../src/sim/judge.js';
+import { localWords } from '../src/panel.js';
+import { coach } from '../src/sim/coach.js';
+await initPhysics();
+const pops = [['flyKeysLineup', (r) => L.flyKeysLineup(r)], ['flyTouch lineup', (r) => L.flyTouch('lineup', r)], ['flyThumb lineup', L.flyThumb ? (r) => L.flyThumb('lineup', r) : null]];
+for (const [name, fly] of pops) { if (!fly) { console.log(name, 'n/a'); continue; }
+  const r = L.stream(777); const s = { n: 0, crashed: 0, airborne: 0, noJump: 0, noJumpAirborne: 0, groundNoJump: 0, falseWords: 0, sameAgainCrashed: 0, roofsLow: 0, verdicts: {}, firstIds: {}, fixes: {} };
+  for (let i = 0; i < 200; i++) { let run; try { run = fly(r); } catch (e) { console.log(name, 'err', e.message); break; } s.n++;
+    const t = run.t; const card = scoreRun(t, { assist: true }); card.facts.course = 'lineup'; card.tier = 'assist';
+    const f = card.facts; if (f.crashed) s.crashed++; if (t.airStartTick >= 0) s.airborne++;
+    s.verdicts[card.verdict] = (s.verdicts[card.verdict] || 0) + 1;
+    if (card.verdict === 'No jump') { s.noJump++; if (t.airStartTick >= 0) s.noJumpAirborne++; else s.groundNoJump++; }
+    const w = localWords(card); const all = [w.headline, w.engineer, w.coordinator, w.designer].join(' | ');
+    if ((f.apex > 1 || f.rollDeg > 90) && /never left the ground|Restraint/.test(all)) { s.falseWords++; if (s.falseWords <= 3) console.log('  falseWords', i, all); }
+    const c = coach(run.inputLog || run.log, 'lineup', card); const it = c.items[0];
+    if (f.crashed && c.items.some((x) => /same again/.test(x.fix || ''))) s.sameAgainCrashed++;
+    if (f.crashed && it) { s.firstIds[it.id] = (s.firstIds[it.id] || 0) + 1; const k = (it.fix || '').replace(/[\d.]+/g, '#').slice(0, 90); s.fixes[k] = (s.fixes[k] || 0) + 1; }
+    if (f.crashed && c.items.some((x) => /came down on the roofs/.test(x.detail || '')) && c.flight && c.flight.contactH != null && c.flight.contactH < 1) s.roofsLow++;
+  }
+  console.log(name, JSON.stringify(s, null, 1));
+}
