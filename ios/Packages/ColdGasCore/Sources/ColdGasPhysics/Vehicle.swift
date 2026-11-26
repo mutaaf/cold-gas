@@ -140,6 +140,9 @@ public final class Vehicle {
     public var lineArm = 0
     // LAND's brake, once begun: the most sink it may still want (m/s, 0 = not braking; 0169).
     public var landCap = 0.0
+    // Assist's lift-off burn (0362): 1 on a run that has it (the Lineup from LIFTOFF_VERSION, set by Run), and its state
+    // (0 none, 1 held since the wheels were down, 2 cut with LIFT still held, 3 let go, burning on to LIFTOFF_COMMIT).
+    public var liftOff = 0, liftBurn = 0
     public let crawl: Bool
     public var esc = 0.0, escBrake = [Double](repeating: 0, count: 4), escBeta = 0.0
     public var tcOff = false, tcSport = false, absOff = false, handbrake = 0.0
@@ -277,9 +280,25 @@ var behind = 0.0
 // LAND's one burn (0169): see vehicle.js.
 let LAND_CAP_ON = 5.0, LAND_CAP_MIN = 4.0, LAND_CAP_ACC = 4.8, LAND_CAP_FLOOR = 0.3
 let ROOF_FALL = 11.0
+// Assist's lift-off burn (0362, vehicle.js liftOffBurn): LIFT pressed from the ground burns to LIFTOFF_COMMIT however
+// short the press, and a held one stops at LIFTOFF_CUT (projected apex, y + vy²/2g). A LIFT pressed again in the air is LIFT.
+public let LIFTOFF_COMMIT = 5.0, LIFTOFF_CUT = 6.5
+func liftOffBurn(_ s: Vehicle, _ inp: Input, _ grounded: Int) {
+    if s.liftOff == 0 || !truthy(inp.assist) { s.liftBurn = 0; return }
+    if grounded > 0 { s.liftBurn = inp.lift > 0 ? 1 : 0; return }
+    if s.liftBurn == 0 { return }
+    if s.liftBurn == 3 && (upW.y <= 0.55 || s.hullContact) { s.liftBurn = 0 }
+    let apex = s.pos.y + (s.vel.y > 0 ? (s.vel.y * s.vel.y) / (2 * G) : 0)
+    if s.liftBurn == 1 && !(inp.lift > 0) { s.liftBurn = apex < LIFTOFF_COMMIT ? 3 : 0 }
+    if s.liftBurn == 3 { if apex >= LIFTOFF_COMMIT { s.liftBurn = 0 } else { effLift = 1; return } }
+    if s.liftBurn == 2 && !(inp.lift > 0) { s.liftBurn = 0; return }
+    if s.liftBurn == 1 && apex >= LIFTOFF_CUT { s.liftBurn = 2 }
+    if s.liftBurn == 2 { effLift = 0 }
+}
 func governor(_ s: Vehicle, _ inp: Input, _ grounded: Int, _ m: Double, _ level: Double) {
     effLift = inp.lift; effThrust = inp.thrust
     behind = 0
+    liftOffBurn(s, inp, grounded)
     if !truthy(inp.assist) || grounded > 0 { s.landCap = 0; return }
     if effThrust > 0 {
         let vh = DMath.dhypot(s.vel.x, s.vel.z)

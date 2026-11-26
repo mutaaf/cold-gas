@@ -10,13 +10,13 @@
   },
   {
    "path": "client.json",
-   "sha256": "a380358061693e224fa03f8e0653ffc60429dee6f91e4f9e290c4492584c283c",
-   "bytes": 821141
+   "sha256": "f5c744e538d2c9f3522a2ba936b07146a3dc50d8470953759c9ee0db6e16f742",
+   "bytes": 831202
   },
   {
    "path": "coach.json",
-   "sha256": "b3a198ba8f3e58a398a128565393277d4224a25d681e83ed9b94e258a78c0be9",
-   "bytes": 454229
+   "sha256": "73bccbc5d88387b332afb6fc50f03e4cdff078df712933b9c56efbb6cc4c7eb9",
+   "bytes": 463239
   },
   {
    "path": "dmath.json",
@@ -174,6 +174,16 @@
    "bytes": 54488
   },
   {
+   "path": "runs/liftoff-lineup-held.json",
+   "sha256": "85d6a7ef08be191bc7acbf34e8ffb7fb7db24bab664ff1cb4e7b019fb868419b",
+   "bytes": 28746
+  },
+  {
+   "path": "runs/liftoff-lineup-tap.json",
+   "sha256": "0812f3fa60b27e753baae03498bc6976f7ee91168a41870bd752b2abce31c0d8",
+   "bytes": 30373
+  },
+  {
    "path": "runs/mud-lineup-long.json",
    "sha256": "bdff89d32e4c554aa1c555e4d0b04d3653028a0d1bc153791bb8ebb797c792df",
    "bytes": 34604
@@ -187,6 +197,11 @@
    "path": "runs/mud-show-long.json",
    "sha256": "cfca95ced5c73b7f51f2bde6283de0c15cd8568e994df88b822c8ec6a56a0e54",
    "bytes": 76777
+  },
+  {
+   "path": "runs/naive-lineup-pro-held.json",
+   "sha256": "6620250a97f6c3f07627452dbadbdb718405cd281dd54c741841d11ccc48f2a7",
+   "bytes": 30262
   },
   {
    "path": "runs/naive-show-4-0.85-0.json",

@@ -22,7 +22,7 @@
 // the DOM: scripts/human-phone.mjs flies it in Node with the same code the page runs.
 import { wallProgress } from './sim/run.js';
 import { dhypot } from './sim/dmath.js';
-import { up, forward, CAR, bodyRates, G, landProfile } from './sim/vehicle.js';
+import { up, forward, CAR, bodyRates, G, landProfile, LIFTOFF_COMMIT, LIFTOFF_CUT } from './sim/vehicle.js';
 import { REVEAL } from './sim/autopilot.js';
 import { SPEC } from './sim/spec.js';
 import { COURSES } from './sim/courses.js';
@@ -197,7 +197,7 @@ export function thumbStage(run, released) {
 }
 
 export function createOneThumb() {
-  const st = { airPress: false, held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, steady: 0, ref0: NaN, win: 0, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false, lifting: false, burnt: false, rolled: false, twice: false, offer: false, ox: 0, oy: 0 };
+  const st = { airPress: false, held: false, pressed: false, push: 0, drive: false, carried: false, landing: false, wasStage: 'idle', ax: 0, ay: 0, live: false, ref: NaN, steady: 0, ref0: NaN, win: 0, wait: false, slid: false, refA: NaN, slidA: false, pk: 0, braked: false, canA: false, lifting: false, burnt: false, regrip: false, rolled: false, twice: false, offer: false, ox: 0, oy: 0 };
   const pr = newPrediction();
   const aim = { x: 0, y: 0 };
   return {
@@ -206,7 +206,7 @@ export function createOneThumb() {
     up() { st.held = false; st.ax = 0; st.ay = 0; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; },
     // The held thumb's slide from where it pressed, CSS px (+x right, +y up the glass).
     move(dx, dy) { if (st.held) { st.ax = dx / THUMB.aimPx - st.ox; st.ay = dy / THUMB.aimPx - st.oy; } },
-    reset() { st.airPress = false; st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; st.lifting = false; st.burnt = false; st.rolled = false; st.twice = false; st.offer = false; st.ox = 0; st.oy = 0; },
+    reset() { st.airPress = false; st.held = false; st.pressed = false; st.push = 0; st.drive = false; st.carried = false; st.landing = false; st.wasStage = 'idle'; st.ax = 0; st.ay = 0; st.live = false; st.ref = NaN; st.steady = 0; st.ref0 = NaN; st.slid = false; st.refA = NaN; st.slidA = false; st.pk = 0; st.braked = false; st.canA = false; st.lifting = false; st.burnt = false; st.regrip = false; st.rolled = false; st.twice = false; st.offer = false; st.ox = 0; st.oy = 0; },
     // 0164: where the sideways slide is measured from (m, the car's right +, along the car's own side axis), NaN
     // before this hold could aim.
     get ref() { return st.ref; },
@@ -284,6 +284,9 @@ export function createOneThumb() {
         bodyRates(c, lrates);
         const vy = c.vel.y, projected = c.pos.y + (vy > 0 ? (vy * vy) / (2 * G) : 0);
         if (!st.burnt) { if (projected < L.apex) out.lift = 1; else st.burnt = true; }
+        // 0362: Assist stops a LIFT held from the ground at LIFTOFF_CUT; the 720 burns on past it, so it lets go for one
+        // tick at the reference's cut and presses again (a LIFT pressed in the air is LIFT).
+        if (out.lift && c.liftOff && !st.regrip && projected >= LIFTOFF_COMMIT && L.apex > LIFTOFF_CUT) { out.lift = 0; st.regrip = true; }
         if (!st.rolled && st.burnt) {
           const remaining = L.rolls * Math.PI * 2 - Math.abs(run.t.rollAccum), rate = Math.abs(lrates.z);
           if (remaining <= (rate * rate) / (2 * L.rollBrake) + 0.02) st.rolled = true;

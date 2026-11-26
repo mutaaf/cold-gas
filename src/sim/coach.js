@@ -39,8 +39,11 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
     // press of LIFT at the line was held (s; -1 when LIFT was never pressed there). A press that ended more than
     // LINEUP_TAP_BEFORE m short of the line was a tap on the run-up, and doesn't count.
     lineSpeed: -1, liftHeld: -1,
+    // 0362: that press was still down when the car topped out (the climb over, the key still held), LAND was held on the
+    // last tick in the air (held to the ground), and for how many ticks unbroken up to then.
+    liftPastApex: false, landToGround: false, landRun: 0,
   };
-  let lastPhase = '', wasInverted = false, liftFrom = -1;
+  let lastPhase = '', wasInverted = false, liftFrom = -1, apexSeen = false;
   const lineZ = courseId === 'lineup' ? LINEUP_LINE : NaN;
   const run = simulate(inputLog, courseId, undefined, (r, inp) => {
     const c = r.car, t = r.tick;
@@ -53,6 +56,7 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
           liftFrom = -1;
         }
       }
+      if (r.phase === 'air' && !apexSeen && c.vel.y <= 0) { apexSeen = true; f.liftPastApex = liftFrom >= 0 && f.liftHeld < 0; }
     }
     if (r.phase === 'air' && lastPhase !== 'air' && f.releaseTick < 0) {
       f.releaseTick = r.t.airStartTick; f.releaseH = r.t.launchHeight - SPEC.comHeight; f.releaseProgress = r.t.launchProgress;
@@ -65,6 +69,8 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
     const h = Math.max(0, c.pos.y - SPEC.comHeight);
     predict(c, h, pr);
     if (inp.level) f.levelHeld++;
+    f.landToGround = !!inp.level;
+    f.landRun = inp.level ? f.landRun + 1 : 0;
     // The carry: rear jets, and the speed along the run they leave you with.
     let rear = 0;
     for (const i of REAR_IDX) rear += c.throttles[i];
@@ -178,7 +184,10 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
 
   // 0367: a crash and its card. A crash is never "Clean", and never told to try Pro (finish).
   const crashed = !!(card?.facts?.crashed ?? scoreRun(t).facts?.crashed);
-  if (courseId === 'lineup' && !drill) lineupWrecks(t, f, course, say, crashed, add, card?.tier || t.tier);
+  if (courseId === 'lineup' && !drill) {
+    lineupHeldLift(t, f, say, crashed, add, card?.tier || t.tier);
+    lineupWrecks(t, f, course, say, crashed, add, card?.tier || t.tier);
+  }
   if (wall && t.airStartTick < 0) {
     if (t.fellOff) add('fell-off', 10, 'Slid off the deck', `The car left the side of the curl ${r1(t.maxRampHeight)} m up.`, 'Keep it on the centreline: small steering corrections, and crawl (≈20 km/h) so the fan holds you.');
     // 0189: a car that stopped short of the ledge (a thumb lifted on the climb) never got to the let-go: name the
@@ -226,7 +235,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
           `Hold ${assist ? say.land : say.lift} from ${needAt} m or higher: the BRAKE line on the descent tape.${assist ? ' Or hold it from the release and let it pace the fall.' : ''}`);
       } else {
         add('ran-out', brakeW(6), 'Out of braking at the bottom', `You braked from ${r1(f.brakeH)} m but still touched down at ${r1(t.sink)} m/s with ${Math.round(f.gasAtTouch)} % gas${brakePts}.`,
-          f.gasAtTouch < 25 ? 'The tanks blow down as they empty: below about 40 % the jets lose thrust. Boost less and brake once, hard, near the BRAKE line.' : (say.ranOut || RANOUT_LEAN));
+          ranOutFix(f, assist, say));
       }
     }
   }
@@ -262,7 +271,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
     }
   }
   if (t.touchTick >= 0 && f.gasAtTouch < 10) {
-    add('gas', 3, 'Nearly out of gas', `${Math.round(f.gasAtTouch)} % left at touchdown.`, 'Shorter boosts and one hard, late brake use the least gas.');
+    add('gas', 3, 'Nearly out of gas', `${Math.round(f.gasAtTouch)} % left at touchdown.`, f.boostTicks > 0 ? 'Shorter boosts and one hard, late brake use the least gas.' : 'One hard, late brake uses the least gas.');
   }
   if (t.flipped && !out.length) add('flipped', 8, 'Rolled over', 'The car ended on its roof.', 'Touch down level, slowly: watch the sink band and the attitude dial.');
   return finish(out, f, card, crashed);
@@ -294,7 +303,7 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
     : `Hold ${say.lift} at the line for about ${LIFT_HOLD} s${shortHold && f.liftHeld >= 0 ? ` (you held ${heldS} s)` : ''}, then roll.`;
   // Run-up and hold both right (the keys players who do both clear the row 83 times in 90): never an instruction they
   // already followed.
-  const right = timed && kmh >= 0 && !speedOff && !shortHold;
+  const right = timed && kmh >= 0 && !speedOff && !shortHold && !heldTooLong(t, f, say, crashed, tier);
   const fix = right ? `Your run-up and ${say.lift} were right: fly it the same again.`
     : speedFix || thumb || kmh >= 0 ? speedFix + holdFix : `Keep between ${lo} km/h and ${hi} km/h to the line. ${holdFix}`;
   if (neverUp) {
@@ -307,6 +316,54 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
   }
   const lead = kmh >= 0 ? `You reached the line at ${kmh} km/h${held ? ` and ${held}` : ''}: the car` : held ? `You ${held}: the car` : 'The car';
   add('row', 9.5, 'Came down on the row', `${lead} peaked ${r1(apexH)} m up and came down on the roofs.`, fix);
+}
+
+// Out of braking at the bottom: the fix (0362). A player who held LAND to the ground on Assist isn't told to stay on the
+// brake (they did): the gas ran short, so the fix names what spent it. Nobody who never boosted is told to boost less.
+function ranOutFix(f, assist, say) {
+  if (assist && f.landToGround && say.aim !== AIM_THUMB) {
+    // On only for the last part of the fall: LAND came late, so the fix is the start, not the hold.
+    if (f.landRun < f.airTicks / 2) return `${say.land} came on only ${r1(f.landRun * DT)} s before the ground: hold it ${f.course === 'lineup' ? 'as the roll ends' : 'from the moment you let go'}, and it brakes the whole fall.`;
+    const spent = f.boostTicks > 0 ? `shorter boosts leave more gas for it`
+      : f.course === 'lineup' && f.liftHeld > LIFT_HOLD + 0.1 ? `let go of ${say.lift} sooner at the line to save gas for it`
+        : f.landRun < f.airTicks * 0.9 ? 'hold it from the release and it brakes the whole fall on less gas' : 'the fall was more than the gas left could stop';
+    return `${say.land} was on all the way to the ground, but the brake ran short: ${spent}.`;
+  }
+  if (f.gasAtTouch < 25) {
+    return `The tanks blow down as they empty: below about 40 % the jets lose thrust. ${f.boostTicks > 0 ? 'Boost less and brake' : 'Brake'} once, hard, near the BRAKE line.`;
+  }
+  return say.ranOut || RANOUT_LEAN;
+}
+
+// The Lineup's LIFT held too long (0362). On Pro a held LIFT is a throttle: past about 0.4 s at the line it climbs past
+// the kickflip's 8 m (0.6 s: 15 m, 1 s: 38 m) and the fall is more than the brake can stop. On Assist the lift-off burn
+// stops the climb by itself, but a key still down as the car tops out means LAND came late: that is named when it cost
+// the landing. One thumb commits its own lift and Advanced has no LIFT valve, so neither is told.
+export const LINEUP_HIGH = 12;          // m: the ticket's bar for an overshoot (the kickflip peaks at 7–9 m, §2.2)
+export const LINEUP_PRO_HOLD = 0.4;     // s: a Pro hold at the line that peaks near 8 m (flyNaive 7.5 m/s, z −4: 8.0 m)
+function heldTooLong(t, f, say, crashed, tier) {
+  if (say.aim === AIM_THUMB || tier === 'advanced' || !(f.liftHeld >= 0)) return '';
+  const apexH = t.airStartTick >= 0 ? Math.max(0, t.apex - SPEC.comHeight) : 0;
+  // Only a long press at the line: a short one with LIFT pressed again in the air is that second press (LIFT as today).
+  if (tier !== 'assist' && apexH > LINEUP_HIGH && f.liftHeld > LINEUP_PRO_HOLD + 0.05) return 'high';
+  // Assist: the burn caps the climb, so a row hit is the run-up's or the hold's start (row / no-lift say so), never this.
+  const hurt = t.touchTick >= 0 && !t.contact && (crashed || t.sink > SINK_SOFT);
+  return tier === 'assist' && f.liftPastApex && hurt ? 'past' : '';
+}
+function lineupHeldLift(t, f, say, crashed, add, tier) {
+  const kind = heldTooLong(t, f, say, crashed, tier);
+  if (!kind) return;
+  const heldS = r1(f.liftHeld), apexH = r1(Math.max(0, t.apex - SPEC.comHeight));
+  if (kind === 'high') {
+    const gas = t.touchTick >= 0 ? `, and came down with ${Math.round(f.gasAtTouch)} % gas` : '';
+    add('held-lift', 10.5, 'Held LIFT too long',
+      `You held ${say.lift} ${heldS} s at the line: the car climbed to ${apexH} m, where the kickflip peaks at about 8 m${gas}.`,
+      `Let go of ${say.lift} sooner: about ${LINEUP_PRO_HOLD} s at the line peaks near 8 m. Then roll, and brake by the BRAKE line.`);
+    return;
+  }
+  add('held-lift', 10.5, 'Held LIFT too long',
+    `You held ${say.lift} ${heldS} s at the line, still down as the car topped out at ${apexH} m: ${say.land} came late.`,
+    `Let go of ${say.lift} once you're up (about ${LIFT_HOLD} s: the climb stops by itself), then roll and hold ${say.land} to the ground.`);
 }
 
 // A card with no finding: "Clean", with the next step. A crash is never clean (0367): it reads its own verdict.

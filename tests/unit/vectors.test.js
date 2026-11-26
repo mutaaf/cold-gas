@@ -91,7 +91,7 @@ describe('native vectors (0146)', () => {
     // Every finding but three: 'fell-off' (off the deck with no air at all) and 'flipped' (on its roof with nothing else
     // to say) took more search than their two fixed strings are worth, and 'crash' (0367: a crash the replay names no
     // cause for) no logged flight reaches. Coach.swift's were checked against coach.js's.
-    expect([...ids].sort()).toEqual(['clean', 'early-release', 'gas', 'late-brake', 'late-land', 'late-roll', 'mark', 'no-brake', 'no-lift', 'no-release', 'no-roll', 'over-roll', 'ran-out', 'row', 'short', 'stopped-climb', 'tilt']);
+    expect([...ids].sort()).toEqual(['clean', 'early-release', 'gas', 'held-lift', 'late-brake', 'late-land', 'late-roll', 'mark', 'no-brake', 'no-lift', 'no-release', 'no-roll', 'over-roll', 'ran-out', 'row', 'short', 'stopped-climb', 'tilt']);
   });
   it('the manifest names every file with its hash', () => {
     const m = JSON.parse(disk('manifest.json'));

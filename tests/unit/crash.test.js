@@ -98,7 +98,9 @@ describe('impact events', () => {
   });
   // Too low over the row, two rolls asked for: the car's side clips a parked body, it grinds along
   // the roofs, its bodywork folds (and Assist rights it: where it ends is chaotic, so not pinned).
-  const clip = fly('lineup', { speed: 9, apex: 2.8, rolls: 2 });   // (3.8 before SIM_VERSION 15's later brake; 3.2 before 26's auto-land)
+  // (3.8 before SIM_VERSION 15's later brake; 3.2 before 26's auto-land; 9 m/s and two rolls before 35's committed lift-off,
+  // which carries a burn let go at 2.8 on to 5.0, src/sim/vehicle.js liftOffBurn)
+  const clip = fly('lineup', { speed: 10, apex: 2.8, rolls: 3 });
   it('a hard clip: hits a parked body side-on, grinds, folds the bodywork, and replays bit-exactly', () => {
     expect(clip.t.contact).toBe(true);
     expect(kinds(clip.impacts, HIT).some((e) => e[2] === PART.side && e[4] >= 0)).toBe(true);

@@ -125,6 +125,13 @@ export function pointerText(id, ctx, flight = null, card = null) {
     }
     // One thumb (0125): the pad is the brake (0164: the slide no longer costs braking).
     case 'ran-out': if (thumbOn(ctx)) return 'Brake to the ground: keep holding the pad all the way down';
+      if (assist && flight?.landToGround) {
+        // 0362: LAND was held to the ground already: never "keep holding" it. Name what spent the gas, or nothing.
+        if ((flight.landRun ?? flight.levelHeld) < flight.airTicks / 2) return `Brake the whole fall: ${ctl(ctx, 'land')} ${ctx.course === 'lineup' ? 'as the roll ends' : 'from the moment you let go'}`;
+        if (flight.boostTicks > 0) return 'Save gas for the brake: shorter boosts';
+        if (ctx.course === 'lineup' && flight.liftHeld > LINEUP_LIFT_HOLD + 0.1) return `Save gas for the brake: let go of ${keyOf(ctx, 'lift')} sooner at the line`;
+        return '';   // LAND from the release to the ground, no boost: nothing in its words to add; the next fix speaks
+      }
       return assist ? `Stay on the brake to the ground: keep holding ${keyOf(ctx, 'land')}` : 'Brake once, hard, at the BRAKE line, and stay on it to the ground';
     case 'late-roll': return assist ? `Roll out sooner: ${ctl(ctx, 'land')} straight after you let go` : `Roll out sooner: ${ctl(ctx, rollAct(ctx))} straight after you let go`;
     case 'over-roll': return `Stop the roll early: let go of ${keyOf(ctx, rollAct(ctx))} about 40° before level`;
@@ -132,11 +139,18 @@ export function pointerText(id, ctx, flight = null, card = null) {
     case 'tilt': return assist ? `Level it for the last 2 m: ${ctl(ctx, 'land')} and stop steering` : 'Level it by the dial before the last 2 m';
     case 'mark': if (thumbOn(ctx) && oneTurnLineup(ctx, flight)) return `For Gold: ${LINEUP_CALL}, then hold in the air and slide onto the amber dot`;
       return thumbOn(ctx) ? 'Aim for the rings: holding the pad in the air, slide onto the amber dot' : 'Aim for the rings: lean toward the pad above 5 m, then level';
-    case 'gas': return 'Save gas: shorter boosts, one hard late brake';
+    case 'gas': return flight && flight.boostTicks === 0 ? 'Save gas: one hard, late brake' : 'Save gas: shorter boosts, one hard late brake';
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
     // 0367: the Lineup's two wrecks, as the coach's fix says them. The hold decides it; a keyboard, a pad or two thumbs
     // also pace the run-up, so a speed clearly off the band is named with the band (the one-thumb pad paces it, and
     // past the line commits the lift itself). A run-up and a hold that were both right aren't told to do them again.
+    // 0362: the Lineup's LIFT held too long. Pro: past ≈ 0.4 s it climbs past the kickflip's height. Assist: still down
+    // as the car topped out, so LAND came late.
+    case 'held-lift': {
+      if (thumbOn(ctx) || ctx.tier === 'advanced') return '';
+      if (assist) return `Let go of ${keyOf(ctx, 'lift')} once you're up, then roll and ${ctl(ctx, 'land')} to the ground`;
+      return `Let go of ${keyOf(ctx, 'lift')} sooner: about 0.4 s at the line`;
+    }
     case 'no-lift': case 'row': {
       const [lo, hi] = LINEUP_RUNUP_KMH, lead = id === 'row' ? 'Over the row' : 'Lift over the roofs';
       if (thumbOn(ctx)) return `${lead}: keep holding the pad through the line`;
@@ -146,7 +160,7 @@ export function pointerText(id, ctx, flight = null, card = null) {
       // Each number with its unit: src/units.js puts mph beside every one (it reads no ranges).
       if (off) return `${lead}: ${kmh} km/h at the line, aim for ${lo} km/h to ${hi} km/h, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
       if (kmh < 0) return `${lead}: ${lo} km/h to ${hi} km/h at the line, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
-      if (!adv && flight.liftHeld >= LINEUP_LIFT_HOLD - 0.05) return `${lead}: the same run-up and ${keyOf(ctx, 'lift')} again`;
+      if (!adv && flight.liftHeld >= LINEUP_LIFT_HOLD - 0.05 && !flight.liftPastApex) return `${lead}: the same run-up and ${keyOf(ctx, 'lift')} again`;
       return `${lead}: ${lift} at the line for about ${LINEUP_LIFT_HOLD} s`;
     }
     case 'crash': return 'Run it again and follow the cues: each one calls its step as you reach it';
@@ -305,7 +319,7 @@ function cleanLine(ctx, card) {
 const BETTER = {
   'no-brake': 'sink', 'late-brake': 'sink', 'late-land': 'sink', 'ran-out': 'sink', flipped: 'sink', tilt: 'tilt',
   short: 'clear', 'no-release': 'release', 'early-release': 'release', 'late-roll': 'roll', 'no-roll': 'roll', 'over-roll': 'roll',
-  mark: 'mark', gas: 'gas', 'fell-off': 'height', 'stopped-climb': 'height', row: 'clear', 'no-lift': 'clear',
+  mark: 'mark', gas: 'gas', 'fell-off': 'height', 'stopped-climb': 'height', row: 'clear', 'no-lift': 'clear', 'held-lift': 'sink',
 };
 export function betterText(id, card) {
   const f = card?.facts || {};

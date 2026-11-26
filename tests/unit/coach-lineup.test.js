@@ -17,7 +17,7 @@ const TRY_PRO = /Try Pro|try Pro/;
 const KEYS = { device: 'key', scheme: 'classic', tier: 'assist', course: 'lineup' };
 
 describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', () => {
-  let crashes;
+  let crashes, rowCrashes;
   beforeAll(() => {
     const r = stream(777);
     crashes = [];
@@ -26,10 +26,14 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       card.tier = 'assist';
       if (card.facts.crashed) crashes.push({ run, card, c: coach(run.inputLog, 'lineup', card) });
     }
+    // The crashes the row or the lift caused (0367's findings). Since 0362 (LIFTOFF_VERSION) a crash can also clear the row
+    // and set down in the splash tank: that one is coached on its landing, not on the row.
+    rowCrashes = crashes.filter(({ c }) => c.items[0].id === 'row' || c.items[0].id === 'no-lift');
   }, 120000);
 
   it('no crash is coached clean or told to try Pro (it was 64 of 87)', () => {
-    expect(crashes.length).toBeGreaterThan(60);
+    // 87 crashes at v33; 59 at v35, where 0362's lift-off burn carries a short press over the row.
+    expect(crashes.length).toBeGreaterThan(50);
     for (const { c, card } of crashes) {
       expect(c.items.map((x) => x.id), card.verdict).not.toContain('clean');
       for (const x of c.items) expect(`${x.detail} ${x.fix}`).not.toMatch(TRY_PRO);
@@ -47,11 +51,12 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       seen[want]++;
     }
     expect(seen.row).toBeGreaterThan(30);
-    expect(seen['no-lift']).toBeGreaterThan(10);
+    expect(seen['no-lift']).toBeGreaterThan(4);   // 7 at v35 (was > 10 at v33: the lift-off burn lifts most short presses)
+    expect(rowCrashes.length).toBeGreaterThan(crashes.length - 3);
   });
 
   it("its numbers are the run's: the speed at the line, the LIFT hold, the peak", () => {
-    for (const { run, c } of crashes) {
+    for (const { run, c } of rowCrashes) {
       const f = c.flight, top = c.items[0];
       // The speed at the line, measured independently: the input log's own replay crosses LINEUP_LINE once.
       expect(f.lineSpeed).toBeGreaterThan(0);
@@ -78,7 +83,7 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
 
   it('the pointer (NEXT RUN): the speed and the band when it was off, the hold when it was short, else the same again', () => {
     const seen = new Set();
-    for (const { c, card } of crashes) {
+    for (const { c, card } of rowCrashes) {
       const p = pickPointer(c.items, KEYS, { card, flight: c.flight, crashed: true }), f = c.flight;
       const kmh = Math.round(f.lineSpeed * 3.6);
       expect(p.text).not.toMatch(TRY_PRO);

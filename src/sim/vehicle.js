@@ -253,6 +253,10 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     carryUp: 0,
     // LAND's brake, once begun: the most sink it may still want (m/s, 0 = not braking; see governor).
     landCap: 0,
+    // Assist's lift-off burn (0362): 1 on a run that has it (the Lineup from LIFTOFF_VERSION, set by createRun), and the
+    // burn's state: 0 none, 1 LIFT held since the wheels were down, 2 cut with LIFT still held, 3 let go, burning on to
+    // LIFTOFF_COMMIT (see liftOffBurn).
+    liftOff: 0, liftBurn: 0,
     // Assist's crawl limit belongs to the curl: only the courses with the Wall have one.
     crawl: course.id === 'wall' || course.id === 'show',
     // Stability control (Assist): how hard it is working (0–1, for the HUD and the sound), the
@@ -455,9 +459,36 @@ const LAND_CAP_ON = 5, LAND_CAP_MIN = 4, LAND_CAP_ACC = 4.8, LAND_CAP_FLOOR = 0.
 // down under 2 m/s from a late LAND, tests/unit/learn.test.js).
 const ROOF_FALL = 11;
 let behind = 0;   // m/s the car is falling faster than the LAND profile wants (0 when not governed)
+// Assist's lift-off burn (0362, the Lineup): LIFT pressed from the ground is a lift-off command, not a throttle.
+//  - Held, the down-jets burn until the projected apex (y + vy²/2g) reaches LIFTOFF_CUT, then stop by themselves while
+//    the key stays down (a held second of LIFT had flown the car to 45 m, more than the nitrogen left could stop).
+//  - Let go early, the burn carries on to LIFTOFF_COMMIT, the reference pilot's own cut (src/sim/autopilot.js
+//    REVEAL.lineup.apex): a 0.3 s tap had come down on the row.
+//  - Let go and press again in the air, and LIFT is LIFT, as before.
+// What the projection leaves out is the roll's own lift (it opens the down-jets on one side) and the valves' spool-down:
+// the reference, cut at 5.0 and rolling at once, peaks at ≈ 8.1 m; a hold cut at 6.5 and rolled after peaks at ≈ 7.3 m
+// (docs/REVEAL_RESEARCH.md §2.2: 7–9 m). LIFTOFF_CUT was set on scripts/naive-lineup.mjs's grid (5.5–8 swept: 6.5 lands
+// the most). Assist only, and only on a run that has it (`liftOff`, the Lineup from LIFTOFF_VERSION, src/sim/run.js).
+export const LIFTOFF_COMMIT = 5.0, LIFTOFF_CUT = 6.5;
+const BURN_NONE = 0, BURN_HELD = 1, BURN_CUT = 2, BURN_COMMIT = 3;
+function liftOffBurn(s, inp, grounded) {
+  if (!s.liftOff || !inp.assist) { s.liftBurn = BURN_NONE; return; }
+  if (grounded > 0) { s.liftBurn = inp.lift > 0 ? BURN_HELD : BURN_NONE; return; }
+  if (s.liftBurn === BURN_NONE) return;
+  // The committed burn is a lift-off's, roof up and clear: rolled past sideways or touching anything, it is over (a tap
+  // and an at-once roll had driven the car into the row roof first).
+  if (s.liftBurn === BURN_COMMIT && (upW.y <= 0.55 || s.hullContact)) s.liftBurn = BURN_NONE;
+  const apex = s.pos.y + (s.vel.y > 0 ? (s.vel.y * s.vel.y) / (2 * G) : 0);
+  if (s.liftBurn === BURN_HELD && !(inp.lift > 0)) s.liftBurn = apex < LIFTOFF_COMMIT ? BURN_COMMIT : BURN_NONE;
+  if (s.liftBurn === BURN_COMMIT) { if (apex >= LIFTOFF_COMMIT) s.liftBurn = BURN_NONE; else { eff.lift = 1; return; } }
+  if (s.liftBurn === BURN_CUT && !(inp.lift > 0)) { s.liftBurn = BURN_NONE; return; }
+  if (s.liftBurn === BURN_HELD && apex >= LIFTOFF_CUT) s.liftBurn = BURN_CUT;
+  if (s.liftBurn === BURN_CUT) eff.lift = 0;
+}
 function governor(s, inp, grounded, m, level) {
   eff.lift = inp.lift; eff.thrust = inp.thrust;
   behind = 0;
+  liftOffBurn(s, inp, grounded);
   if (!inp.assist || grounded > 0) { s.landCap = 0; return; }
   if (eff.thrust > 0) {
     const vh = dhypot(s.vel.x, s.vel.z);
