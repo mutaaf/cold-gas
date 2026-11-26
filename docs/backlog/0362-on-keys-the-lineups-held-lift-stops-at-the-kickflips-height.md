@@ -73,10 +73,10 @@ A LIFT pressed again after the burn, in the air, stays what it is today.
       9 m/s (§2.2: 7–9 m/s), a Space press at z −6…+1, holds of 0.3–3 s, a roll of 0, 0.8 or 1.4 s, then Shift. It lands
       **≥ 90 %** upright and unwrecked, and runs in `npm test` or `check:fast`. Today the 7.5 m/s grid ends 48 of 60
       upright (`naive-lineup.txt`), but 36 of those 48 are scored Wrecked (sink 10–45 m/s). Only 12 of 60 land unwrecked.
-- [ ] In Pro, where a held LIFT still overshoots, a Lineup run that peaks > 12 m on a lift-off burn gets a coach finding
+- [x] In Pro, where a held LIFT still overshoots, a Lineup run that peaks > 12 m on a lift-off burn gets a coach finding
       that names the held lift ("let go of Space sooner…"). No sheet tells a player who held LAND to the ground to "keep
       holding Shift", and none tells a player who never boosted to "boost less" (a `coach.js` unit test).
-- [ ] Pro is unchanged: a held LIFT in Pro still flies as today (a unit test pins one Pro hold of 1.0 s ≥ 30 m).
+- [x] Pro is unchanged: a held LIFT in Pro still flies as today (a unit test pins one Pro hold of 1.0 s ≥ 30 m).
 - [ ] The Lineup reference (`ref-lineup`) score is unchanged or explained. `naive-players` stays 32/32, and `naive-show`
       54/54.
 - [ ] Works at 390×844 touch (the page's touch buttons, not one thumb) and 1440×900 keys.
@@ -99,3 +99,14 @@ sticks it (was 45 m, Wrecked); a 0.3 s tap clears the row; Pro, the reference, t
 after the apex over the semi (0359's limit); holds of 0.5–0.6 s peak at 9.6–9.8 m (the roll that follows adds lift);
 the coach findings (Pro > 12 m names the held lift; no "keep holding Shift" / "boost less" to a player who did neither)
 are not built. The criteria are left unticked for the Critic to re-scope.
+
+## Builder note 2026-11-26 (#507, the coach)
+The coach half is built (`src/sim/coach.js` `lineupHeldLift` / `heldTooLong` / `ranOutFix`, Coach.swift mirrored, pointer lines;
+`tests/unit/coach-held-lift.test.js`). On Pro, a Lineup lift-off that peaks past 12 m leads with **Held LIFT too long**:
+"Let go of LIFT (Space) sooner: about 0.4 s at the line peaks near 8 m" (it led with "Never braked · hold Space by the BRAKE
+line"; 0.4 s peaks at 8.0 m on the same player). On Assist, a LIFT still down as the car tops out is named when it cost the
+landing (the 3 s hold: Wrecked, it said "Stay on the brake to the ground: keep holding Shift"). Over the naive grid on both tiers
+no Assist player who held LAND to the ground is told to keep holding it, and no player who never boosted is told to boost
+less (the ran-out and gas fixes now name what spent the gas, or nothing). It folds into `wreck-lift`. The
+`naive-lineup-pro-held` vector carries it to Swift (Swift not compiled here).
+Still not met, as the note above says: the naive grid's 90 % and the 7–9 m band at 0.5–0.6 s.

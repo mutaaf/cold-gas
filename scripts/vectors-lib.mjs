@@ -257,6 +257,9 @@ export function runList() {
   }
   // Pro with no rate limit (LESSONS: integrate angular momentum): six seeded tricks.
   for (let trial = 0; trial < 6; trial++) { const f = proFuzz(trial); list.push({ name: `pro-fuzz-${trial}`, course: f.course, log: f.log }); }
+  // 0362: a Pro Lineup player who holds Space a second at the line (scripts/lib/naive-lineup.mjs) climbs past 30 m: the
+  // coach's "Held LIFT too long", which no other flight reaches.
+  list.push({ name: 'naive-lineup-pro-held', course: 'lineup', log: () => fly('lineup', naiveController({ speed: 7.5, pressZ: -4, liftS: 1, rollS: 0.8, tier: 'pro' })) });
   return [...list, ...SURFACE_RUNS, ...LIFTOFF_RUNS];
 }
 // 0360: a Show run is stamped with the Show's version today (MARK_VERSION: the same wet set and bits, scored on the 2 m

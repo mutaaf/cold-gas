@@ -88,6 +88,8 @@ public final class CoachFlight {
     /// press of LIFT at the line was held (s; -1 when LIFT was never pressed there; a press that ended more than
     /// COACH_LINEUP_TAP_BEFORE m short of the line doesn't count).
     public internal(set) var lineSpeed = -1.0, liftHeld = -1.0
+    /// 0362: that press was still down when the car topped out, and LAND was held on the last tick in the air.
+    public internal(set) var liftPastApex = false, landToGround = false
     /// The re-flown run's telemetry; set once the replay is over.
     public internal(set) var t: Telemetry!
     init(_ course: String) { self.course = course }
@@ -106,7 +108,7 @@ public final class CoachFlight {
             n("touch.sink", m.sink); n("touch.tilt", m.tilt); n("touch.x", m.x); n("touch.z", m.z); n("touch.padMiss", m.padMiss); n("touch.along", m.along)
         } else { kv.append(("touch", .z)) }
         b("wasInverted", wasInverted); n("gasAtTouch", gasAtTouch); n("pressureAtTouch", pressureAtTouch); n("apexTick", apexTick); n("landedTick", landedTick); n("levelHeld", levelHeld); n("airTicks", airTicks)
-        n("lineSpeed", lineSpeed); n("liftHeld", liftHeld)
+        n("lineSpeed", lineSpeed); n("liftHeld", liftHeld); b("liftPastApex", liftPastApex); b("landToGround", landToGround)
         return kv
     }
 }
@@ -118,7 +120,7 @@ public func readFlight(_ inputLog: [[Int]], _ courseId: String, fromTick: Int = 
     let course = COURSES[courseId] ?? COURSES[DEFAULT_COURSE]!
     let pr = Prediction(), u = V3(), fwd = V3()
     let f = CoachFlight(courseId)
-    var lastPhase: Phase? = nil, wasInverted = false, liftFrom = -1.0
+    var lastPhase: Phase? = nil, wasInverted = false, liftFrom = -1.0, apexSeen = false
     let start = Double(fromTick) + (fromTick > 0 ? 24 : 0)
     let lineZ = courseId == "lineup" ? COACH_LINEUP_LINE : .nan
     let run = try simulateReading(inputLog, courseId, simVersion: simVersion) { r, inp in
@@ -132,6 +134,7 @@ public func readFlight(_ inputLog: [[Int]], _ courseId: String, fromTick: Int = 
                     liftFrom = -1
                 }
             }
+            if r.phase == .air && !apexSeen && c.vel.y <= 0 { apexSeen = true; f.liftPastApex = liftFrom >= 0 && f.liftHeld < 0 }
         }
         if r.phase == .air && lastPhase != .air && f.releaseTick < 0 {
             f.releaseTick = r.t.airStartTick; f.releaseH = r.t.launchHeight - SPEC.comHeight; f.releaseProgress = r.t.launchProgress
@@ -144,6 +147,7 @@ public func readFlight(_ inputLog: [[Int]], _ courseId: String, fromTick: Int = 
         let h = jsMax(0, c.pos.y - SPEC.comHeight)
         predict(c, h, pr)
         if truthy(inp.level) { f.levelHeld += 1 }
+        f.landToGround = truthy(inp.level)
         // The carry: rear jets, and the speed along the run they leave you with.
         var rear = 0.0
         for i in COACH_REAR_IDX { rear += c.throttles[i] }
@@ -273,7 +277,10 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
     let drill = fromTick > 0, scored = show && !drill
     // 0367: a crash and its card. A crash is never "Clean", and never told to try Pro (coachFinish).
     let crashed = card?.crashed ?? scoreRun(t).crashed
-    if courseId == "lineup" && !drill { coachLineupWrecks(t, f, COURSES[courseId]!, say, crashed, add, card?.tier ?? t.tier) }
+    if courseId == "lineup" && !drill {
+        coachLineupHeldLift(t, f, say, crashed, add, card?.tier ?? t.tier)
+        coachLineupWrecks(t, f, COURSES[courseId]!, say, crashed, add, card?.tier ?? t.tier)
+    }
 
     if wall && t.airStartTick < 0 {
         // 0189: stopped short of the ledge (a thumb lifted on the climb) names the climb, not the release.
@@ -321,7 +328,7 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
                     "Hold \(assist ? say.land : say.lift) from \(needAt) m or higher: the BRAKE line on the descent tape.\(assist ? " Or hold it from the release and let it pace the fall." : "")")
             } else {
                 add("ran-out", brakeW(6), "Out of braking at the bottom", "You braked from \(s(r1(f.brakeH))) m but still touched down at \(s(r1(t.sink))) m/s with \(s(jsRound(f.gasAtTouch))) % gas\(brakePts).",
-                    f.gasAtTouch < 25 ? "The tanks blow down as they empty: below about 40 % the jets lose thrust. Boost less and brake once, hard, near the BRAKE line." : say.ranOut)
+                    coachRanOutFix(f, assist, say))
             }
         }
     }
@@ -356,7 +363,7 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
         }
     }
     if t.touchTick >= 0 && f.gasAtTouch < 10 {
-        add("gas", 3, "Nearly out of gas", "\(s(jsRound(f.gasAtTouch))) % left at touchdown.", "Shorter boosts and one hard, late brake use the least gas.")
+        add("gas", 3, "Nearly out of gas", "\(s(jsRound(f.gasAtTouch))) % left at touchdown.", f.boostTicks > 0 ? "Shorter boosts and one hard, late brake use the least gas." : "One hard, late brake uses the least gas.")
     }
     if t.flipped && out.isEmpty { add("flipped", 8, "Rolled over", "The car ended on its roof.", "Touch down level, slowly: watch the sink band and the attitude dial.") }
     return coachFinish(out, f, card, crashed)
@@ -381,7 +388,7 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
     let shortHold = timed && !(f.liftHeld >= COACH_LINEUP_LIFT_HOLD - 0.05)
     let holdFix = thumb ? "Keep holding the pad through the line: it lifts you over the row, then rolls you."
         : "Hold \(say.lift) at the line for about \(s(COACH_LINEUP_LIFT_HOLD)) s\(shortHold && f.liftHeld >= 0 ? " (you held \(s(heldS)) s)" : ""), then roll."
-    let right = timed && kmh >= 0 && !speedOff && !shortHold
+    let right = timed && kmh >= 0 && !speedOff && !shortHold && coachHeldTooLong(t, f, say, crashed, tier).isEmpty
     let fix = right ? "Your run-up and \(say.lift) were right: fly it the same again."
         : !speedFix.isEmpty || thumb || kmh >= 0 ? speedFix + holdFix : "Keep between \(s(lo)) km/h and \(s(hi)) km/h to the line. \(holdFix)"
     let heldPart = held.isEmpty ? "" : ", \(held)"
@@ -394,6 +401,50 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
     }
     let lead = kmh >= 0 ? "You reached the line at \(s(kmh)) km/h\(held.isEmpty ? "" : " and \(held)"): the car" : !held.isEmpty ? "You \(held): the car" : "The car"
     add("row", 9.5, "Came down on the row", "\(lead) peaked \(s(r1(apexH))) m up and came down on the roofs.", fix)
+}
+
+/// coach.js ranOutFix (0362): a player who held LAND to the ground on Assist isn't told to stay on the brake; nobody who
+/// never boosted is told to boost less.
+func coachRanOutFix(_ f: CoachFlight, _ assist: Bool, _ say: CoachWords) -> String {
+    let s = jsNumberString
+    if assist && f.landToGround && say.aim != COACH_AIM_THUMB {
+        if f.levelHeld < f.airTicks / 2 { return "\(say.land) came on only \(s(r1(f.levelHeld * DT))) s before the ground: hold it \(f.course == "lineup" ? "as the roll ends" : "from the moment you let go"), and it brakes the whole fall." }
+        let spent = f.boostTicks > 0 ? "shorter boosts leave more gas for it"
+            : f.course == "lineup" && f.liftHeld > COACH_LINEUP_LIFT_HOLD + 0.1 ? "let go of \(say.lift) sooner at the line to save gas for it"
+            : "hold it from the release and it brakes the whole fall on less gas"
+        return "\(say.land) was on all the way to the ground, but the brake ran short: \(spent)."
+    }
+    if f.gasAtTouch < 25 {
+        return "The tanks blow down as they empty: below about 40 % the jets lose thrust. \(f.boostTicks > 0 ? "Boost less and brake" : "Brake") once, hard, near the BRAKE line."
+    }
+    return say.ranOut
+}
+
+/// coach.js heldTooLong / lineupHeldLift (0362): the Lineup's LIFT held too long. Pro: a peak past 12 m; Assist: the key
+/// still down as the car topped out, when it cost the landing. Not one thumb, not Advanced.
+public let COACH_LINEUP_HIGH = 12.0, COACH_LINEUP_PRO_HOLD = 0.4
+func coachHeldTooLong(_ t: Telemetry, _ f: CoachFlight, _ say: CoachWords, _ crashed: Bool, _ tier: String) -> String {
+    if say.aim == COACH_AIM_THUMB || tier == "advanced" || !(f.liftHeld >= 0) { return "" }
+    let apexH = t.airStartTick >= 0 ? jsMax(0, t.apex - SPEC.comHeight) : 0
+    if tier != "assist" && apexH > COACH_LINEUP_HIGH { return "high" }
+    let hurt = crashed || t.contact || (t.touchTick >= 0 && t.sink > SINK_SOFT)
+    return tier == "assist" && f.liftPastApex && hurt ? "past" : ""
+}
+func coachLineupHeldLift(_ t: Telemetry, _ f: CoachFlight, _ say: CoachWords, _ crashed: Bool, _ add: (String, Double, String, String, String) -> Void, _ tier: String) {
+    let s = jsNumberString
+    let kind = coachHeldTooLong(t, f, say, crashed, tier)
+    if kind.isEmpty { return }
+    let heldS = r1(f.liftHeld), apexH = r1(jsMax(0, t.apex - SPEC.comHeight))
+    if kind == "high" {
+        let gas = t.touchTick >= 0 ? ", and came down with \(s(jsRound(f.gasAtTouch))) % gas" : ""
+        add("held-lift", 10.5, "Held LIFT too long",
+            "You held \(say.lift) \(s(heldS)) s at the line: the car climbed to \(s(apexH)) m, where the kickflip peaks at about 8 m\(gas).",
+            "Let go of \(say.lift) sooner: about \(s(COACH_LINEUP_PRO_HOLD)) s at the line peaks near 8 m. Then roll, and brake by the BRAKE line.")
+        return
+    }
+    add("held-lift", 10.5, "Held LIFT too long",
+        "You held \(say.lift) \(s(heldS)) s at the line, still down as the car topped out at \(s(apexH)) m: \(say.land) came late.",
+        "Let go of \(say.lift) once you're up (about \(s(COACH_LINEUP_LIFT_HOLD)) s: the climb stops by itself), then roll and hold \(say.land) to the ground.")
 }
 
 /// A card with no finding: "Clean", with the next step. A crash is never clean (0367): it reads its own verdict.
