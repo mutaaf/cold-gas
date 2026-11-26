@@ -78,7 +78,7 @@ describe('0370: the keys population (flyKeysLineup × 200, seed 777)', () => {
       // A speed off the band is still named first.
       if (late && Math.round(f.lineSpeed * 3.6) > 34) expect(top.fix.indexOf('Ease off')).toBe(0);
     }
-    expect(named).toBeGreaterThan(15);   // 20 since 0363 (32 before, with the floored run-ups)
+    expect(named).toBeGreaterThanOrEqual(20);   // 20 since 0363 (32 before, with the floored run-ups)
   });
 
   it('a landed card never reads the late-press or the crash line', () => {
