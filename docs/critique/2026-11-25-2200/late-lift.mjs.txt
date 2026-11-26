@@ -1,0 +1,27 @@
+// 0370 probe: the 200 keys Lineup players (flyKeysLineup, seed 777, Assist). For those the coach calls "right" (22-34 km/h at
+// the line, LIFT held >= 0.45 s), where LIFT was first pressed relative to the line, when and where the car first touched
+// the row, and what the coach's first finding says.
+import { initPhysics } from '../src/sim/engine.js';
+import { simulate } from '../src/sim/run.js';
+import { stream, flyKeysLineup } from './lib/daily-reach.mjs';
+import { scoreRun } from '../src/sim/judge.js';
+import { coach, LINEUP_LINE } from '../src/sim/coach.js';
+import { SPEC } from '../src/sim/spec.js';
+await initPhysics();
+const r = stream(777); const rows = [];
+for (let i = 0; i < 200; i++) { const run = flyKeysLineup(r); const card = scoreRun(run.t, { assist: true }); card.tier = 'assist';
+  const log = run.inputLog || run.log, c = coach(log, 'lineup', card), f = c.flight, t = run.t;
+  const kmh = Math.round(f.lineSpeed * 3.6); if (!(kmh >= 22 && kmh <= 34 && f.liftHeld >= 0.45)) continue;
+  let pressZ = null, hitZ = null, hitH = null;
+  simulate(log, 'lineup', undefined, (rr, inp) => { if (pressZ == null && inp.lift > 0.5) pressZ = rr.car.pos.z;
+    if (hitZ == null && rr.t.contact) { hitZ = rr.car.pos.z; hitH = rr.car.pos.y - SPEC.comHeight; } });
+  rows.push({ i, crashed: !!card.facts.crashed, verdict: card.verdict, kmh, held: +f.liftHeld.toFixed(2), pressPastLine: +(pressZ - LINEUP_LINE).toFixed(2),
+    hitAfterAir: t.contactTick >= 0 ? +((t.contactTick - t.airStartTick) / 240).toFixed(2) : null, hitZ: hitZ == null ? null : +hitZ.toFixed(1), hitH: hitH == null ? null : +hitH.toFixed(1),
+    nose: card.facts.damageZones?.nose, coach: c.items[0] ? `${c.items[0].id} | ${c.items[0].detail} -> ${c.items[0].fix}` : '' });
+}
+const crashed = rows.filter((x) => x.crashed);
+console.log(`in band (22-34 km/h, held >= 0.45 s): ${rows.length}, crashed ${crashed.length}`);
+for (const x of crashed) console.log(JSON.stringify(x));
+const bins = [[-9, 0.5], [0.5, 1.0], [1.0, 1.25], [1.25, 9]];
+for (const [a, b] of bins) { const s = rows.filter((x) => x.pressPastLine >= a && x.pressPastLine < b); console.log(`press ${a}..${b} m past the line: ${s.length} runs, ${s.filter((x) => x.crashed).length} crashed`); }
+console.log('row starts z', 7, 'line z', LINEUP_LINE);

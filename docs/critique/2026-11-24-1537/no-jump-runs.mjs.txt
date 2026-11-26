@@ -1,0 +1,13 @@
+import { initPhysics } from '../src/sim/engine.js';
+import { stream, flyKeysLineup } from './lib/daily-reach.mjs';
+import { scoreRun } from '../src/sim/judge.js';
+import { coach } from '../src/sim/coach.js';
+await initPhysics();
+const r = stream(777); let same = 0, landed = 0, rightLanded = 0;
+for (let i = 0; i < 200; i++) { const run = flyKeysLineup(r); const card = scoreRun(run.t, { assist: true }); card.tier = 'assist';
+  const c = coach(run.inputLog || run.log, 'lineup', card);
+  const it = c.items[0];
+  if (card.verdict === "No jump" && run.t.airStartTick >= 0) { same++; // (edited from the "same again" filter)
+    const t = run.t; console.log(i, card.verdict, JSON.stringify({ contactTick: t.contact, airStart: t.airStartTick, apex: +(t.maxHeight||0).toFixed(2), rollDeg: Math.round(Math.abs(t.rollAccum)*57.3), clearance: card.facts.clearance, invertedS: card.facts.invertedS, items: c.items.map(x=>x.id), end: run.t.endReason, endTick: run.t.endTick, touch: run.t.touchTick, total: card.total, dmg: card.facts.damagePct })); }
+}
+console.log('same-again crashes', same);

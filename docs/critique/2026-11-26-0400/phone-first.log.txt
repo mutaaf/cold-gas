@@ -1,0 +1,43 @@
+11.9 title {"first":true,"scheme":"thumb","course":"show"}
+24.5 run 1 live after 10.209 s
+29.2 pad Hold|Climb|Hold to goSkip drive 0.4 -6.0 tick 288
+31.1 pad Holding|Climb|Keep holding drive 0.4 -5.8 tick 408
+70.9 pad Tap|Let go|Tap to let go ramp 26.7 0.3 tick 2760
+74.0 pad Letting|Go| ramp 26.9 -0.6 tick 2976
+76.6 pad Slide|Aim| ramp 27.3 -2.4 tick 3120
+79.5 pad Slide|Aim|Hold, slide to the dot air 22.9 -8.5 tick 3336
+99.8 pad |Stopping| landed 0.4 -34.5 tick 4320
+99.8 touch landed tick 4320
+104.6 beat score on screen {"simAfter":0.7,"total":"11.4"}
+114.6 mode results
+123.6 card {"total":84,"verdict":"Stuck it","crashed":false,"sink":1.1,"padMiss":6.1,"clearance":4.1,"invertedS":5.4,"apex":27.3,"judges":["The Engineer 8.4","The Coordinator 8.5","The Designer 8.3"],"sheet":"THE PANEL Stuck it 84.0/ 100 BRONZE 80 SILVER 90 GOLD 95 New Bronze · Silver at 90 · 6.0 to go Flown in Assist RUN 1 YOUR FIRST MARK ON THIS EVENT The panel is deliberating… gemma-4-26b-a4b-it Cloudflare ORD Watch the call Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot ASSIST ON rolls you out, levels and brakes Next jump The Wall Beat 84.0 Share Replay Home Initials Post WHAT HAPPENED Long of the mark You landed 20 ft 6.1 m from the mark (14 ft 4.4 m past it, 14 ft 4.2 m right): about 12 points. Hold the pad in the air and slide onto the amber dot: the touchdown follows it onto the rings. The Engineer Chief Vehicle Engineer 8.4 Th","againVisible":true,"beat":{"simAfter":0.7,"total":"11.4"},"tapToLive":10.209}
+124.1 retry visible 1
+133.8 run 2 live after 10.106 s
+139.0 pad Hold|Climb|Hold the pad to climb drive 0.4 -6.0 tick 288
+140.8 pad Holding|Climb|Climbing · let go to stop drive 0.4 -5.8 tick 408
+149.4 pad Holding|Climb|Up the curl on suction ramp 1.4 4.8 tick 912
+181.9 pad Tap|Let go|On the ledge · tap to let go ramp 26.7 0.3 tick 2760
+185.9 pad Letting|Go|Letting go · out to the lip ramp 27.0 -1.0 tick 3024
+187.4 pad Hold|Land|Carrying you over the row ramp 27.3 -2.4 tick 3120
+189.4 pad Hold|Aim|Carrying you over the row air 25.4 -6.4 tick 3264
+191.5 pad Hold|Aim|Auto-land · braking for you air 19.1 -10.7 tick 3408
+212.1 pad |Stopping|Hold to land: it rolls you out and brakes landed 0.4 -33.4 tick 4344
+212.1 touch landed tick 4344
+217.3 pad |Stopping| done 0.4 -34.5 tick 4512
+217.3 beat score on screen {"simAfter":0.7,"total":"31.3"}
+227.2 mode results
+235.0 card {"total":84.7,"verdict":"Stuck it","crashed":false,"sink":1.2,"padMiss":5.9,"clearance":1.4,"invertedS":5.4,"apex":27.3,"judges":["The Engineer 8.4","The Coordinator 8.7","The Designer 8.3"],"sheet":"THE SHOW SUCCESSFUL LANDING Stuck it 84.7/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 5.3 to go Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot Next jump The Wall Beat 84.7 Share Replay Home MORE What happened · the judges · post","againVisible":true,"beat":{"simAfter":0.7,"total":"31.3"},"tapToLive":10.106}
+235.4 retry visible 1
+244.9 run 3 live after 9.958 s
+250.0 pad Hold|Climb|Hold the pad to climb drive 0.4 -6.0 tick 288
+251.8 pad Holding|Climb|Climbing · let go to stop drive 0.4 -5.8 tick 408
+260.3 pad Holding|Climb|Up the curl on suction ramp 1.4 4.8 tick 912
+293.8 pad Tap|Let go|On the ledge · tap to let go ramp 26.7 0.3 tick 2760
+296.5 pad Letting|Go|Letting go · out to the lip ramp 26.9 -0.5 tick 2952
+298.9 pad Slide|Aim|Carrying you over the row ramp 27.3 -2.4 tick 3120
+303.2 pad Slide|Aim| air 19.2 -11.3 tick 3432
+322.2 pad |Stopping| landed 0.4 -34.5 tick 4320
+322.2 touch landed tick 4320
+327.1 beat score on screen {"simAfter":0.7,"total":"11.4"}
+337.0 mode results
+346.0 card {"total":84,"verdict":"Stuck it","crashed":false,"sink":1.1,"padMiss":6.1,"clearance":4.1,"invertedS":5.4,"apex":27.3,"judges":["The Engineer 8.4","The Coordinator 8.5","The Designer 8.3"],"sheet":"THE SHOW SUCCESSFUL STUNT Stuck it 84.0/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 6.0 to go Flown in Assist · Pro pays ×1.08, Advanced ×1.15 RUN 3 BEST 84.7 · -0.7 TO BEAT IT Judged by gemma-4-26b-a4b-it 619 → 79 tok $0.000086 Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot ASSIST ON rolls you out, levels and brakes Next jump The Wall Beat 84.7 Share Replay Home Initials Post READY FOR PRO? ×1.08 you fly it; brake at the line 3 clean landings in a row. The panel pays ×1.08 for it; switch back any time. WHAT HAPPENED Long of the mark You landed 20 ft 6.1 m from the mark (14 ft 4.4 m past it, 14 ft 4.2 m right): ab","againVisible":true,"beat":{"simAfter":0.7,"total":"11.4"},"tapToLive":9.958}
