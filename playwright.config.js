@@ -172,6 +172,10 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // 57:116:102:82 keeps shard 1's files, moves instruments..lifecycle-fold into 2 and phone-frame..segments into 3:
 // ≈ 55 / 60.5 / 64 / 62.5 worker-minutes on that pessimistic price, against shard 4's 90 (shard 2 starts at
 // driving-levels, 3 at lifecycle, 4 at share-moment). Still no margin on a slow runner: #456 (ci.yml) is the cure.
+// #521's own run of 57:116:102:82 moved the overflow into 2/4 (89 of 116 at 35 min, a judges-deploy retry, nothing failed)
+// while 4/4 ran 18.6 min. Priced at each test's slowest of four runs, the best file-boundary cut is 68:94:103:92:
+// ≈ 67.7 / 67.2 / 65.6 / 66.7 worker-minutes against a 35-minute job's ≈ 70 (shard 2 starts at first-landing, 3 at
+// lazy-retry, 4 at rookie). That is the whole margin there is.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -179,7 +183,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '57:116:102:82';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '68:94:103:92';
 
 export default defineConfig({
   testDir: 'tests/e2e',
