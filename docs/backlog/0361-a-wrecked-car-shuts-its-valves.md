@@ -1,12 +1,12 @@
 ---
 id: 0361
 title: A wrecked car shuts its valves; no jet fires from a car lying on its roof
-status: ready
+status: shipped
 priority: P1
 size: M
 lens: authenticity
 created: 2026-11-23
-pr:
+pr: 517
 by: critic
 ---
 
