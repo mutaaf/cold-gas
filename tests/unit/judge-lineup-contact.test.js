@@ -69,7 +69,10 @@ describe('0369: the populations (flyKeysLineup and flyTouch lineup × 200, seed 
           if (f.contactH >= 0.1) expect(top.detail).toContain(`${Math.round(f.contactH * 10) / 10} m up`);
         }
       }
-      expect(into).toBeGreaterThan(2);   // keys 41, touch 3 (measured 0–1.1 m up)
+      // keys 41, touch 3 (measured 0–1.1 m up); since 0363's run-up limit keys 12, touch 0: the touch players' 3 were run-ups
+      // past the limit, and none of them reaches the row that low now. Keys still carries the finding.
+      if (name === 'keys') expect(into).toBeGreaterThan(2);
+      else expect(into).toBe(0);   // pinned: a touch run that reaches the row that low again shows up here
     }, 240000);
   }
 });

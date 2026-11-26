@@ -160,6 +160,13 @@ export const LINEUP = {
   lineupZ0: Z0,
   lineupEnd: LINEUP_BOXES[LINEUP_BOXES.length - 1].maxZ,
   tallest: Math.max(...LINEUP_BOXES.map((b) => b.h)),
+  // Assist's run-up limit (0363, m/s): on the run-up (short of the row) drive torque fades out above it, like the crawl
+  // limit on the Wall's curl, so a held ↑, RT or GO arrives at the line at the kickflip's speed. It is the reference's
+  // own run-up (autopilot.js REVEAL.lineup.speed; docs/REVEAL_RESEARCH.md §2.2 "Approach": ≈ 7–9 m/s, row 48: 8 m/s,
+  // ESTIMATE). Floored, the car met the line at 32 m/s and was in the row 0.2 s after the press. Pro has no limit.
+  // It holds on the run-up's lane, between the floodlight poles (|x| < runUpX: FIXTURES.lineup.poles.x), not on the
+  // open slab beside it.
+  runUp: 7.5, runUpX: 13,
 };
 
 function kickerHeight(z) {
@@ -228,8 +235,17 @@ const DRY = {};
 export function dryCourse(id) {
   const c = COURSES[id];
   if (!c || !c.surfaces) return c;
-  return (DRY[id] ??= { ...c, surfaces: null });
+  // A course from before its surfaces is from before Assist's run-up limit too (0363 came later).
+  return (DRY[id] ??= withoutRunUp({ ...c, surfaces: null }));
 }
+// The same course without Assist's run-up limit (0363): what a Lineup run before RUNUP_VERSION was flown on.
+const FREE = {};
+export function freeRunUp(id) {
+  const c = COURSES[id];
+  if (!c || c.runUp === undefined) return c;
+  return (FREE[id] ??= withoutRunUp({ ...c }));
+}
+function withoutRunUp(c) { delete c.runUp; delete c.runUpX; return c; }
 
 // --- The stage's fixtures --------------------------------------------------------------------------
 // The things standing on the slab a car can drive into, drawn by src/render/wall.js and scene.js from

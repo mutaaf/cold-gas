@@ -10,12 +10,13 @@ import { newInput } from '../../src/sim/vehicle.js';
 
 const speedOf = (c) => Math.hypot(c.vel.x, c.vel.y, c.vel.z);
 
-// Full throttle down the Lineup's approach and never lift: the run ends 'no-jump' at ≈38 m/s.
+// Full throttle down the Lineup's approach and never lift: the run ends 'no-jump' at ≈38 m/s. On Pro: Assist's run-up
+// limit holds the Lineup's run-up at the kickflip's speed (0363).
 function noJump(arm) {
   const run = createRun('lineup');
   if (arm) armAftermath(run);
   const inp = newInput();
-  inp.throttle = 1;
+  inp.throttle = 1; inp.assist = 0;
   while (run.phase !== 'done') { inp.steer = run.tick > 600 ? 0.1 : 0; stepRun(run, inp); }
   return run;
 }

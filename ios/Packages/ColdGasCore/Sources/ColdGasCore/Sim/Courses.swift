@@ -110,30 +110,43 @@ public final class Course: @unchecked Sendable {
     public let liftOffZ, lineupZ0, lineupEnd, rowNear, rowFar, tallest: Double
     /// The set's water and mud (0340, Surfaces.swift): nil on a course without any (and on a set as it was before them).
     public let surfaces: Surfaces?
+    /// Assist's run-up limit (0363, courses.js LINEUP.runUp/runUpX): drive torque fades out above `runUp` m/s on the run-up's
+    /// lane (|x| < runUpX), short of the row. 0 on a course without one (and on the Lineup as it was before it).
+    public let runUp, runUpX: Double
     init(id: String, name: String, startZ: Double, startX: Double, pad: Pad?, boxes: [ParkedBox], ramp: Bool, runout: (Double, Double),
          liftOffZ: Double = .nan, lineupZ0: Double = .nan, lineupEnd: Double = .nan, rowNear: Double = .nan, rowFar: Double = .nan, tallest: Double = .nan,
-         surfaces: Surfaces? = nil) {
+         surfaces: Surfaces? = nil, runUp: Double = 0, runUpX: Double = 0) {
         self.id = id; self.name = name; self.startZ = startZ; self.startX = startX; self.pad = pad; self.boxes = boxes; self.ramp = ramp
         runoutMin = runout.0; runoutMax = runout.1
         self.liftOffZ = liftOffZ; self.lineupZ0 = lineupZ0; self.lineupEnd = lineupEnd; self.rowNear = rowNear; self.rowFar = rowFar; self.tallest = tallest
         self.surfaces = surfaces
+        self.runUp = runUp; self.runUpX = runUpX
     }
-    /// The same course without its surfaces (courses.js dryCourse).
+    /// The same course without its surfaces (courses.js dryCourse): from before Assist's run-up limit too.
     func dry() -> Course {
         Course(id: id, name: name, startZ: startZ, startX: startX, pad: pad, boxes: boxes, ramp: ramp, runout: (runoutMin, runoutMax),
                liftOffZ: liftOffZ, lineupZ0: lineupZ0, lineupEnd: lineupEnd, rowNear: rowNear, rowFar: rowFar, tallest: tallest)
+    }
+    /// The same course without Assist's run-up limit (courses.js freeRunUp, 0363).
+    func freeRunUp() -> Course {
+        Course(id: id, name: name, startZ: startZ, startX: startX, pad: pad, boxes: boxes, ramp: ramp, runout: (runoutMin, runoutMax),
+               liftOffZ: liftOffZ, lineupZ0: lineupZ0, lineupEnd: lineupEnd, rowNear: rowNear, rowFar: rowFar, tallest: tallest,
+               surfaces: surfaces)
     }
 }
 public let WALL_COURSE = Course(id: "wall", name: "The Wall", startZ: -6, startX: 0, pad: Pad(z: -9, x: 0, rings: [2, 4, 7]), boxes: [], ramp: false, runout: (-260, 40))
 public let LINEUP = Course(id: "lineup", name: "The Lineup", startZ: -70, startX: 0, pad: Pad(z: 28, x: 0, rings: [2, 4, 7]), boxes: LINEUP_BOXES, ramp: false,
                            runout: (-120, 190), liftOffZ: 0, lineupZ0: LINEUP_Z0, lineupEnd: LINEUP_BOXES[LINEUP_BOXES.count - 1].maxZ,
-                           tallest: LINEUP_BOXES.map { $0.spec.h }.reduce(-.infinity, jsMax), surfaces: LINEUP_SURFACES)
+                           tallest: LINEUP_BOXES.map { $0.spec.h }.reduce(-.infinity, jsMax), surfaces: LINEUP_SURFACES,
+                           runUp: 7.5, runUpX: 13)
 public let SHOW = Course(id: "show", name: "The Show", startZ: -6, startX: 0, pad: Pad(z: -30, x: 0, rings: [2, 4, 7]), boxes: SHOW_BOXES, ramp: false,
                          runout: (-140, 40), rowNear: SHOW_ROW_NEAR, rowFar: SHOW_BOXES[SHOW_BOXES.count - 1].minZ,
                          tallest: SHOW_BOXES.map { $0.spec.h }.reduce(-.infinity, jsMax), surfaces: SHOW_SURFACES)
 public let COURSES: [String: Course] = ["show": SHOW, "wall": WALL_COURSE, "lineup": LINEUP]
 /// Each course as it was before its surfaces (0340): a run from before SURFACE_VERSION replays on it (Run.swift courseAt).
 public let DRY_COURSES: [String: Course] = ["show": SHOW.dry(), "wall": WALL_COURSE, "lineup": LINEUP.dry()]
+/// Each course as it was before Assist's run-up limit (0363): a run from before RUNUP_VERSION replays on it.
+public let FREE_RUNUP_COURSES: [String: Course] = ["show": SHOW, "wall": WALL_COURSE, "lineup": LINEUP.freeRunUp()]
 /// Free Drive (docs/NATIVE-FREEDRIVE.md): the Show's stage at the centre of a world with no edge. Never scored, never in
 /// COURSES (nothing that looks a course up by id can reach it); `createVehicle(course:)` takes it.
 public let DRIVE_COURSE = Course(id: "drive", name: "Free Drive", startZ: -40, startX: 0, pad: SHOW.pad, boxes: SHOW_BOXES, ramp: false, runout: (-1e12, 1e12),

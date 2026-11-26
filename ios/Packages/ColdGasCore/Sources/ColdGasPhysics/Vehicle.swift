@@ -107,6 +107,8 @@ public final class Input {
 @inline(__always) func truthy(_ x: Double) -> Bool { !(x == 0 || x.isNaN) }
 
 public let ASSIST_CRAWL = 8.0, ASSIST_CARRY = 10.0
+/// Assist's run-up limit on the Lineup (0363, vehicle.js RUNUP_FADE): drive torque fades out over this much above LINEUP.runUp.
+public let RUNUP_FADE = 0.5
 let TC_CAP = 1.0
 let LOCK_MARGIN = 0.04
 @inline(__always) func rackLock(_ vSq: Double, _ aGrip: Double = SPEC.tyreMu * G) -> Double { jsMin(SPEC.steerLock, (SPEC.wheelbase * aGrip) / jsMax(1, vSq) + LOCK_MARGIN) }
@@ -141,6 +143,9 @@ public final class Vehicle {
     // LAND's brake, once begun: the most sink it may still want (m/s, 0 = not braking; 0169).
     public var landCap = 0.0
     public let crawl: Bool
+    // Assist's run-up limit (0363, vehicle.js): the course's runUp (m/s) on its run-up lane (|x| < runUpX), short of the
+    // row (z < runUpEnd). 0 = none.
+    public let runUp, runUpX, runUpEnd: Double
     public var esc = 0.0, escBrake = [Double](repeating: 0, count: 4), escBeta = 0.0
     public var tcOff = false, tcSport = false, absOff = false, handbrake = 0.0
     public var engineHeld = false
@@ -156,6 +161,7 @@ public final class Vehicle {
         crush = .init(repeating: 0, count: HULL.count); crushShown = crush; touch = .init(repeating: 0, count: HULL.count)
         crushE = crush; touchNow = touch
         crawl = course.id == "wall" || course.id == "show"
+        runUp = course.runUp; runUpX = course.runUpX; runUpEnd = course.lineupZ0.isNaN ? 0 : course.lineupZ0
         engineMass = massOf(self)
         attachCar(world, HULL_SHAPE, engineMass, SPEC.inertiaPitch, SPEC.inertiaYaw, SPEC.inertiaRoll)
         world.carPos = pos; world.carVel = vel; world.carQuat = quat
@@ -695,6 +701,7 @@ public func step(_ s: Vehicle, _ inp: Input) throws {
             let motorT = jsMin(SPEC.maxWheelTorque, (SPEC.power / 2) / jsMax(abs(wh.omega), 8))
             T = inp.throttle * motorT
             if truthy(inp.assist) && s.crawl && s.onSlope { T *= M3.clamp(ASSIST_CRAWL + 1 - speed, 0, 1) }
+            if truthy(inp.assist) && s.runUp != 0 && s.pos.z < s.runUpEnd && abs(s.pos.x) < s.runUpX { T *= M3.clamp(2 * (s.runUp + RUNUP_FADE - speed), 0, 1) }
             T *= escCut
             let loose = hitMat.loose == true
             let kd = T >= 0 ? kappa : -kappa

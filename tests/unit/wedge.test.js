@@ -101,7 +101,8 @@ describe('0229 repro: a scored run wedged against a fixture', () => {
   it('the Lineup, steering into a lamp post from 1.5 s: seen', () => {
     const { run, fired } = scored('lineup', -0.6, 360);
     expect(fired).toBeGreaterThan(0);
-    expect(fired).toBeLessThan(240 * 12);
+    // Since 0363 Assist's run-up holds the car at the kickflip's 7.5 m/s inside the poles, so it reaches one later (≈ 20 s).
+    expect(fired).toBeLessThan(240 * 25);
     const posts = fixturesOf('lineup');
     const near = Math.min(...posts.map((f) => Math.hypot(run.car.pos.x - f.x, run.car.pos.z - f.z)));
     expect(near).toBeLessThan(3.2);

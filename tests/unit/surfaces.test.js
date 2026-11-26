@@ -1,7 +1,7 @@
 // 0340: the scored sets react to water and mud. Course data (courses.js `surfaces`) on the Show and the Lineup; a run at
 // SURFACE_VERSION meets them, a run from before replays on the set as it was, to the same bits.
 import { describe, it, expect } from 'vitest';
-import { createRun, stepRun, simulate, SIM_VERSION, SURFACE_VERSION, MARK_VERSION, simVersionOf, replayable, courseAt } from '../../src/sim/run.js';
+import { createRun, stepRun, simulate, SIM_VERSION, SURFACE_VERSION, MARK_VERSION, RUNUP_VERSION, simVersionOf, replayable, courseAt } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { newInput, createVehicle, step } from '../../src/sim/vehicle.js';
@@ -26,9 +26,10 @@ describe('surfaces: the data and the pure queries', () => {
     expect(LINEUP.surfaces.tanks.length).toBe(1);
     expect(LINEUP.surfaces.mud.length).toBeGreaterThan(1);
     expect(WALL.surfaces).toBeUndefined();
-    // 0360: the Show and the Wall are scored at MARK_VERSION since; the Lineup is still the surfaces' v33.
+    // 0360: the Show and the Wall are scored at MARK_VERSION since; the Lineup was the surfaces' v33 until 0363's run-up
+    // limit made it RUNUP_VERSION (its v33 runs still replay: lineup-runup.test.js).
     expect(simVersionOf('show')).toBe(MARK_VERSION);
-    expect(simVersionOf('lineup')).toBe(SURFACE_VERSION);
+    expect(simVersionOf('lineup')).toBe(RUNUP_VERSION);
     expect(simVersionOf('wall')).toBe(MARK_VERSION);
   });
   it('a v32 run on a wet set replays on the set as it was', () => {
@@ -182,7 +183,8 @@ describe('surfaces: a run\'s identity', () => {
     const log = [[0, ...new Array(23).fill(0)]];
     const at = (o) => decodeChallenge(`r${toB64url(packBytes({ log, score: 50, ...o }))}`);
     expect((await at({ course: 'show' })).simVersion).toBe(MARK_VERSION);
-    expect((await at({ course: 'lineup' })).simVersion).toBe(SURFACE_VERSION);
+    expect((await at({ course: 'lineup' })).simVersion).toBe(RUNUP_VERSION);
+    expect((await at({ course: 'lineup', simVersion: SURFACE_VERSION })).stale).toBe(false);
     expect((await at({ course: 'wall' })).simVersion).toBe(MARK_VERSION);
     expect((await at({ course: 'lineup', simVersion: 32 })).stale).toBe(false);
     expect((await at({ course: 'show', simVersion: 33 })).stale).toBe(true);

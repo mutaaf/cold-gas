@@ -16,6 +16,8 @@ const r1 = (x) => Math.round(x * 10) / 10;
 const TRY_PRO = /Try Pro|try Pro/;
 const KEYS = { device: 'key', scheme: 'classic', tier: 'assist', course: 'lineup' };
 // 0369: the car met the row under 1.5 m and not yet falling (coach.js INTO_ROW_H).
+// The crashes the row and no-lift findings lead.
+const rowOrLift = ({ c }) => c.items[0].id === 'row' || c.items[0].id === 'no-lift';
 const intoRow = (run, c) => run.t.contact && c.flight.contactH >= 0 && c.flight.contactH < 1.5 && c.flight.contactVy >= 0;
 
 describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', () => {
@@ -54,7 +56,9 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
   });
 
   it("its numbers are the run's: the speed at the line, the LIFT hold, the peak", () => {
-    for (const { run, c } of crashes) {
+    // The row and no-lift findings' words (0363: with Assist's run-up limit some keys crashes clear the row and lead with
+    // the landing's finding instead; the landing's own tests cover those).
+    for (const { run, c } of crashes.filter(rowOrLift)) {
       const f = c.flight, top = c.items[0];
       // The speed at the line, measured independently: the input log's own replay crosses LINEUP_LINE once.
       expect(f.lineSpeed).toBeGreaterThan(0);
@@ -87,7 +91,7 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
 
   it('the pointer (NEXT RUN): the speed and the band when it was off, then a late press, the hold when it was short, never the same again', () => {
     const seen = new Set();
-    for (const { c, card } of crashes) {
+    for (const { c, card } of crashes.filter(rowOrLift)) {
       const p = pickPointer(c.items, KEYS, { card, flight: c.flight, crashed: true }), f = c.flight;
       const kmh = Math.round(f.lineSpeed * 3.6);
       expect(p.text).not.toMatch(TRY_PRO);
@@ -97,8 +101,10 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       else { seen.add('crash'); expect(p.text).toBe('Run it again and follow the cues: each one calls its step as you reach it'); }
       expect(p.text).not.toMatch(/the same run-up/);
     }
-    // Every in-band crash of this population pressed late (0370), so none reads the crash line here.
-    expect([...seen].sort()).toEqual(['hold', 'late', 'speed']);
+    // 0363: Assist's run-up limit holds every keys run-up of this population at 23–29 km/h, inside the band, so none is
+    // told its speed (the ease-off line is Pro's now: lineup-runup.test.js). Every in-band crash pressed late (0370), so
+    // none reads the crash line here.
+    expect([...seen].sort()).toEqual(['hold', 'late']);
   });
 
   it('a tap of LIFT on the run-up is not the hold: the press at the line is', () => {
