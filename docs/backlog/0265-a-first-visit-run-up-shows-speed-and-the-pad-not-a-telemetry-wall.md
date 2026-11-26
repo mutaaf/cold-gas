@@ -1,7 +1,7 @@
 ---
 id: 0265
 title: A first-ever run-up shows the pad and one number, not four telemetry rows
-status: ready
+status: proposed
 priority: P2
 size: S
 lens: player-feel
@@ -11,6 +11,8 @@ by: scout
 ---
 
 ## Why
+
+SCOUT 2026-11-26: held at proposed to keep the ready queue at its cap of 10; the funnel (21 landings, 0 posts, 0 shares) puts 0364/0365/0366 first. Promote when room.
 Played at 390×844 with `coldgas_howto=new`, the run-up (4 s in) shows a four-row readout on the left edge (SPEED,
 HEIGHT, G, GAS, plus MORE) over the dark road, a "HOLD TO GO · SKIP" cue and the Hold pad. For someone who has never
 flown, HEIGHT, G and GAS are zero or constant during the run-up and compete with the one instruction. Progressive

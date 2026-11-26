@@ -1,7 +1,7 @@
 ---
 id: 0359
 title: The Lineup reference is wheels-up over the Semi at its peak, as the reveal's kickflip was
-status: ready
+status: proposed
 priority: P1
 size: S
 lens: authenticity
@@ -11,6 +11,8 @@ by: critic
 ---
 
 ## Why
+
+SCOUT 2026-11-26: held at proposed to keep the ready queue at its cap of 10; the funnel (21 landings, 0 posts, 0 shares) puts 0364/0365/0366 first. Promote when room.
 The one picture everyone kept from the reveal's second stunt is the car **upside down over the Semi at the top of its
 arc**. REVEAL_RESEARCH §2.2 (frames at 4 fps from Tesla's side camera, https://www.youtube.com/watch?v=r5vsHHPVhJg) puts
 it this way:

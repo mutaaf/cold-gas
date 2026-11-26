@@ -1,7 +1,7 @@
 ---
 id: 0364
 title: A first Post is one tap: three suggested letters are already in the field, selected, so typing replaces them
-status: proposed
+status: ready
 priority: P1
 size: S
 lens: engagement
@@ -11,6 +11,8 @@ by: scout
 ---
 
 ## Why
+
+SCOUT 2026-11-26: promoted to ready. Funnel, human sessions to 2026-11-25: 31 people, 21 landed, 0 post, 0 share, 0 board-open; visit-return 5.
 Players' funnel, 14 days to 2026-11-23 (`human` sessions): 33 people, 54 runs, **21 landed**, and **0 `post`, 0 `share`,
 0 `board-open`** (the same zeros on every day since 11-12). Landing is the one moment a player holds a result worth
 sharing and the board is the only reason to come back. A first-time Post today (`src/post.js` ~124, `sync()` state
