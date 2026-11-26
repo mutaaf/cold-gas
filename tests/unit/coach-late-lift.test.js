@@ -54,7 +54,7 @@ describe('0370: the keys population (flyKeysLineup × 200, seed 777)', () => {
     for (const i of LATE7) {
       const { c, card, run } = rows[i], f = c.flight, top = c.items[0];
       expect(card.facts.crashed).toBe(true);
-      expect(f.liftAtZ).toBeGreaterThanOrEqual(1.25);
+      expect(f.liftAtZ).toBeGreaterThan(1.25);   // LINEUP_LIFT_LATE
       expect(f.liftAtZ).toBeLessThanOrEqual(2);
       // readFlight's liftAtZ is the press as the replay saw it, to 0.1 m.
       expect(Math.abs(f.liftAtZ - pressAt(run.inputLog))).toBeLessThan(0.1);

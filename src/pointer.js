@@ -136,7 +136,8 @@ export function pointerText(id, ctx, flight = null, card = null) {
     case 'flipped': return assist ? `Touch down level and slow: ${ctl(ctx, 'land')} all the way down` : 'Touch down level and slow: keep the sink in the green band';
     // 0367: the Lineup's two wrecks, as the coach's fix says them. The hold decides it; a keyboard, a pad or two thumbs
     // also pace the run-up, so a speed clearly off the band is named with the band (the one-thumb pad paces it, and
-    // past the line commits the lift itself). A run-up and a hold that were both right aren't told to do them again.
+    // past the line commits the lift itself). A press that began over LINEUP_LIFT_LATE past the line is named (0370);
+    // a run-up and a hold that were both right aren't told to do them again, and a crash never is.
     case 'no-lift': case 'row': {
       const [lo, hi] = LINEUP_RUNUP_KMH, lead = id === 'row' ? 'Over the row' : 'Lift over the roofs';
       if (thumbOn(ctx)) return `${lead}: keep holding the pad through the line`;

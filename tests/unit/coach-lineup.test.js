@@ -97,7 +97,8 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       else { seen.add('crash'); expect(p.text).toBe('Run it again and follow the cues: each one calls its step as you reach it'); }
       expect(p.text).not.toMatch(/the same run-up/);
     }
-    expect(seen.has('late') && seen.has('hold') && seen.has('speed')).toBe(true);
+    // Every in-band crash of this population pressed late (0370), so none reads the crash line here.
+    expect([...seen].sort()).toEqual(['hold', 'late', 'speed']);
   });
 
   it('a tap of LIFT on the run-up is not the hold: the press at the line is', () => {
