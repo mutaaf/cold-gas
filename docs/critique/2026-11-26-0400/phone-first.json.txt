@@ -1,0 +1,76 @@
+{
+ "title": {
+  "first": true,
+  "scheme": "thumb",
+  "course": "show"
+ },
+ "results": [
+  {
+   "total": 84,
+   "verdict": "Stuck it",
+   "crashed": false,
+   "sink": 1.1,
+   "padMiss": 6.1,
+   "clearance": 4.1,
+   "invertedS": 5.4,
+   "apex": 27.3,
+   "judges": [
+    "The Engineer 8.4",
+    "The Coordinator 8.5",
+    "The Designer 8.3"
+   ],
+   "sheet": "THE PANEL Stuck it 84.0/ 100 BRONZE 80 SILVER 90 GOLD 95 New Bronze · Silver at 90 · 6.0 to go Flown in Assist RUN 1 YOUR FIRST MARK ON THIS EVENT The panel is deliberating… gemma-4-26b-a4b-it Cloudflare ORD Watch the call Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot ASSIST ON rolls you out, levels and brakes Next jump The Wall Beat 84.0 Share Replay Home Initials Post WHAT HAPPENED Long of the mark You landed 20 ft 6.1 m from the mark (14 ft 4.4 m past it, 14 ft 4.2 m right): about 12 points. Hold the pad in the air and slide onto the amber dot: the touchdown follows it onto the rings. The Engineer Chief Vehicle Engineer 8.4 Th",
+   "againVisible": true,
+   "beat": {
+    "simAfter": 0.7,
+    "total": "11.4"
+   },
+   "tapToLive": 10.209
+  },
+  {
+   "total": 84.7,
+   "verdict": "Stuck it",
+   "crashed": false,
+   "sink": 1.2,
+   "padMiss": 5.9,
+   "clearance": 1.4,
+   "invertedS": 5.4,
+   "apex": 27.3,
+   "judges": [
+    "The Engineer 8.4",
+    "The Coordinator 8.7",
+    "The Designer 8.3"
+   ],
+   "sheet": "THE SHOW SUCCESSFUL LANDING Stuck it 84.7/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 5.3 to go Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot Next jump The Wall Beat 84.7 Share Replay Home MORE What happened · the judges · post",
+   "againVisible": true,
+   "beat": {
+    "simAfter": 0.7,
+    "total": "31.3"
+   },
+   "tapToLive": 10.106
+  },
+  {
+   "total": 84,
+   "verdict": "Stuck it",
+   "crashed": false,
+   "sink": 1.1,
+   "padMiss": 6.1,
+   "clearance": 4.1,
+   "invertedS": 5.4,
+   "apex": 27.3,
+   "judges": [
+    "The Engineer 8.4",
+    "The Coordinator 8.5",
+    "The Designer 8.3"
+   ],
+   "sheet": "THE SHOW SUCCESSFUL STUNT Stuck it 84.0/ 100 BRONZE 80 SILVER 90 GOLD 95 Bronze run · Silver at 90 · 6.0 to go Flown in Assist · Pro pays ×1.08, Advanced ×1.15 RUN 3 BEST 84.7 · -0.7 TO BEAT IT Judged by gemma-4-26b-a4b-it 619 → 79 tok $0.000086 Daily ✓ complete · streak 1 NEXT RUN Aim for the rings: holding the pad in the air, slide onto the amber dot ASSIST ON rolls you out, levels and brakes Next jump The Wall Beat 84.7 Share Replay Home Initials Post READY FOR PRO? ×1.08 you fly it; brake at the line 3 clean landings in a row. The panel pays ×1.08 for it; switch back any time. WHAT HAPPENED Long of the mark You landed 20 ft 6.1 m from the mark (14 ft 4.4 m past it, 14 ft 4.2 m right): ab",
+   "againVisible": true,
+   "beat": {
+    "simAfter": 0.7,
+    "total": "11.4"
+   },
+   "tapToLive": 9.958
+  }
+ ],
+ "errs": []
+}

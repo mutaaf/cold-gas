@@ -1,0 +1,7 @@
+import { initPhysics } from '../src/sim/engine.js';
+import * as L from './lib/daily-reach.mjs';
+import { scoreRun } from '../src/sim/judge.js';
+await initPhysics();
+const r = L.stream(777); let n=0, crashed=0, nj=0; const v={};
+for (let i = 0; i < 200; i++) { const run = L.flyThumbLineup(r); n++; const card = scoreRun(run.t, { assist: true }); if (card.facts.crashed) crashed++; v[card.verdict]=(v[card.verdict]||0)+1; }
+console.log('flyThumbLineup', { n, crashed }, JSON.stringify(v));

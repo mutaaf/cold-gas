@@ -1,0 +1,50 @@
+// Production at 1440x900 keys. (1) The Show reference flight (startRun('reveal')): carry, roll-out, touchdown, sheet, then the
+// page's own Replay. (2) A deliberate crash on Pro: hold ↑ as the cues say, press Space when the cue names it, then hands off.
+// The page's live loop is stepped at 1/60 s (S.holdLive) so SwiftShader frame times don't change the flight.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, OUT, URL = 'https://mutaafaziz.com/coldgas/'] = process.argv;
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext({ viewport: { width: 1440, height: 900 } });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+await p.goto(URL); await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 180000 });
+await p.waitForTimeout(2000); await p.screenshot({ path: `${OUT}/0-title.png` });
+const out = {};
+// (1) reference
+await p.evaluate(() => window.__coldgas.startRun('reveal'));
+await p.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 60000 });
+const shots = [['1-climb', 'S.run.phase==="ramp"&&S.run.car.pos.y>8'], ['2-hang', 'S.run.t.invertedTime>0.4'], ['3-release', 'S.run.phase==="air"&&S.run.car.pos.y>15'],
+  ['4-carry', 'S.run.phase==="air"&&S.run.car.pos.z<-16'], ['5-rollout', 'S.run.phase==="air"&&S.run.car.pos.y<6'], ['6-touchdown', 'S.run.phase==="landed"']];
+for (const [n, cond] of shots) { await p.waitForFunction(`(S=>${cond})(window.__coldgas.S)`, null, { timeout: 120000, polling: 30 }).catch(() => (out['missed ' + n] = 1)); await p.screenshot({ path: `${OUT}/ref-${n}.png` }); }
+await p.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 90000 }).catch(() => {});
+await p.waitForTimeout(4000); await p.screenshot({ path: `${OUT}/ref-7-sheet.png` });
+out.ref = await p.evaluate(() => { const c = window.__coldgas.S.card, t = window.__coldgas.S.run?.t; return c && { total: c.total, verdict: c.verdict, facts: c.facts, sheet: document.querySelector('[data-screen="results"]')?.innerText.replace(/\s+/g, ' ').slice(0, 600) }; });
+const rep = p.locator('[data-replay]:visible, button:has-text("Replay"):visible').first();
+out.replayButton = await rep.count();
+if (out.replayButton) { await rep.click(); for (const s of [2, 6, 10]) { await p.waitForTimeout(s === 2 ? 2000 : 4000); await p.screenshot({ path: `${OUT}/ref-8-replay-${s}s.png` }); } out.replayMode = await p.evaluate(() => window.__coldgas.S.mode); }
+await p.evaluate(() => window.__coldgas.toTitle?.()); await p.waitForTimeout(2000);
+// (2) Pro crash
+await p.evaluate(() => window.__coldgas.setTier('pro'));
+await p.evaluate(() => window.__coldgas.startRun('jump'));
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 120000 }); await p.evaluate(() => window.__coldgas.skipCountdown());
+await p.evaluate(() => { window.__coldgas.S.holdLive = true; });
+const step = (n = 4) => p.evaluate((n) => { const g = window.__coldgas; for (let i = 0; i < n; i++) if (g.S.mode === 'live') g.liveStep(1 / 60); const S = g.S, r = S.run, cr = r?.car;
+  return { mode: S.mode, phase: r?.phase, z: cr?.pos.z, y: cr?.pos.y, cue: (document.querySelector('[data-cue].on') || document.querySelector('[data-cue]'))?.textContent?.trim() || '', t: r?.tick / 240 }; }, n);
+const log = []; let last = ''; let st = await step(1); let pressed = false, cueAt = -1; const got = {};
+await p.keyboard.down('ArrowUp');
+for (let i = 0; i < 3000 && st.mode === 'live'; i++) {
+  st = await step(4);
+  if (st.cue !== last) { log.push(`${st.t?.toFixed(2)} ${st.phase} y${st.y?.toFixed(1)} z${st.z?.toFixed(1)} cue: ${st.cue}`); last = st.cue; }
+  if (!pressed && /space/i.test(st.cue)) { if (cueAt < 0) cueAt = st.t; if (st.t - cueAt >= 0.26) { await p.keyboard.up('ArrowUp'); await p.keyboard.press('Space'); pressed = true; log.push(`${st.t.toFixed(2)} Space, then hands off`); } }
+  for (const [n, ok] of [['c1-air', st.phase === 'air' && st.z < -10], ['c2-down', st.phase === 'air' && st.y < 4], ['c3-crash', st.phase === 'crashed' || st.phase === 'landed']]) if (ok && !got[n]) { got[n] = 1; await p.screenshot({ path: `${OUT}/pro-${n}.png` }); }
+}
+await p.keyboard.up('ArrowUp').catch(() => {});
+await p.evaluate(() => { window.__coldgas.S.holdLive = false; });
+for (const s of [1, 3]) { await p.waitForTimeout(s * 1000); await p.screenshot({ path: `${OUT}/pro-c4-after-${s}s.png` }); }
+await p.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 90000 }).catch(() => {});
+await p.waitForTimeout(4000); await p.screenshot({ path: `${OUT}/pro-c5-sheet.png` });
+out.pro = await p.evaluate(() => { const c = window.__coldgas.S.card; return c && { total: c.total, verdict: c.verdict, crashed: c.facts.crashed, facts: c.facts, sheet: document.querySelector('[data-screen="results"]')?.innerText.replace(/\s+/g, ' ').slice(0, 900) }; });
+out.proLog = log; out.errs = errs;
+console.log(JSON.stringify(out, null, 1)); await browser.close();

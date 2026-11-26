@@ -1,0 +1,5 @@
+1 No jump 7.7 facts.apex 7.4 rollDeg 368 dmg 33 
+  {"headline":"No jump recorded","engineer":"The car never left the ground long enough to measure. Nothing to grade.","coordinator":"The ramp is right there. Hit it with intent and give me something.","designer":"Restraint is a virtue. This was too much of it.","source":"local"}
+16 No jump 4 facts.apex 2.8 rollDeg 188 dmg 68 
+  {"headline":"Wrecked","engineer":"The damage sensor reads 68%. That car does not drive home: it goes back on a flatbed.","coordinator":"Big, brave, and expensive. Land the next one in one piece.","designer":"The shape was the point. You bent it.","source":"local"}
+{"No jump recorded":6,"Wrecked":7}
