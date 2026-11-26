@@ -1,0 +1,3 @@
+flyKeysLineup { crashed: 87, crashedNeverTouchedDown: 13 } {"sink 0 tilt 0 spread 1000 landing 0":13} [{"i":1,"verdict":"Contact","contact":true,"sink":0,"tiltDeg":0,"headingDeg":0,"wheelSpreadMs":1000,"padMiss":28},{"i":6,"verdict":"Contact","contact":true,"sink":0,"tiltDeg":0,"headingDeg":0,"wheelSpreadMs":1000,"padMiss":28}]
+flyTouch lineup { crashed: 128, crashedNeverTouchedDown: 21 } {"sink 0 tilt 0 spread 1000 landing 0":21} [{"i":9,"verdict":"Wrecked","contact":true,"sink":0,"tiltDeg":0,"headingDeg":0,"wheelSpreadMs":1000,"padMiss":28},{"i":14,"verdict":"Wrecked","contact":true,"sink":0,"tiltDeg":0,"headingDeg":0,"wheelSpreadMs":1000,"padMiss":28}]
+flyTouch show { crashed: 0, crashedNeverTouchedDown: 0 } {} []
