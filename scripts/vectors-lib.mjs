@@ -20,7 +20,7 @@ import { localWords, boardRow, postMessage, rankLabel, LOCAL_WHY } from '../src/
 import { OBJECTIVES, EPOCH, objectiveIndex, dayKey, dayNumber, evaluate, missLine, titleHint, readStreak, streakNow, complete, goalOf } from '../src/daily.js';
 import { one, both, setUnits, getUnits, localize, toUS, fmtRoad, fmtSmall } from '../src/units.js';
 import { EDGE_DEFAULT } from '../src/ai/config.js';
-import { coach, readFlight, markMiss, markCost, sinkCost, namesMark, namesBraking, KEY_WORDS } from '../src/sim/coach.js';
+import { coach, readFlight, markMiss, markCost, sinkCost, namesMark, namesBraking, KEY_WORDS, LINEUP_LINE } from '../src/sim/coach.js';
 import { coachWords } from '../src/pointer.js';
 import { DRILLS, drillById, buildDrill, drillResult, drillCoach } from '../src/practice.js';
 
@@ -210,6 +210,21 @@ function lineupLane(opts, lane, boost = 0) {
     return inp;
   }, SURFACE_VERSION);
 }
+// 0370: a keys player on Assist who runs up at 27 km/h and presses LIFT 1.5 m past the line for 0.5 s, then ← 0.8 s and
+// LAND: the nose meets the first car on the way up, and the coach names the late press (coach.js liftAtZ).
+function lateLiftLineup(late = 1.5, speed = 7.6) {
+  let from = -1;
+  return fly('lineup', (run) => {
+    const c = run.car, inp = newInput(); inp.assist = 1;
+    if (from < 0 && c.pos.z >= LINEUP_LINE + late) from = run.tick;
+    inp.throttle = from < 0 && dhypot(c.vel.x, c.vel.z) < speed ? 1 : 0;
+    if (from >= 0 && run.tick < from + 120) inp.lift = 1;
+    if (from >= 0 && run.tick >= from + 120 && run.tick < from + 312) inp.roll = -1;
+    if (from >= 0 && run.tick >= from + 312 && run.phase === 'air') inp.level = 1;
+    if (run.phase === 'landed') inp.brake = 1;
+    return inp;
+  });
+}
 // The Show's reference with a roll held for `dur` s from `from` s into the flight: it drifts wide of the mark, into the
 // tank off the landing's left (0340).
 function showWide(roll, from, dur) {
@@ -244,6 +259,7 @@ export function runList() {
     { name: 'crash-show-carry5', course: 'show', log: auto('show', { carry: 5 }) },
     { name: 'crash-wall-early', course: 'wall', log: auto('wall', { releaseAt: 0.6 }) },
     { name: 'crash-lineup-rolls2', course: 'lineup', log: auto('lineup', { speed: 9, apex: 2.8, rolls: 2 }) },
+    { name: 'crash-lineup-late-lift', course: 'lineup', log: () => lateLiftLineup() },
   ];
   // The 32 naive Wall players (scripts/naive-players.mjs's grid).
   for (const approach of [4, 8, 12, 'floored']) for (const climbThrottle of [0.5, 1]) for (const releaseAt of [0.6, 0.85, 0.97, 1.01]) {

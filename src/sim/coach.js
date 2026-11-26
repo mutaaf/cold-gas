@@ -8,7 +8,7 @@ import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { predict, newPrediction, SINK_SOFT, SINK_FIRM } from './predict.js';
 import { scoreRun } from './judge.js';
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD, LINEUP_SPEED_SLACK as SPEED_SLACK, LINEUP_TAP_BEFORE } from './aim-words.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD, LINEUP_SPEED_SLACK as SPEED_SLACK, LINEUP_TAP_BEFORE, LINEUP_LIFT_LATE } from './aim-words.js';
 
 export { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH };
 import { v3 } from './m3.js';
@@ -43,8 +43,11 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
     // tick of `t.contact`; -1 when it never did. A car under the roofs and still climbing went into the row: its apex is
     // the bounce after the hit, not the flight.
     contactH: -1, contactVy: 0, contactSpeed: -1,
+    // Where that press of LIFT began (0370): m past the lift-off line (negative: before it), as the car's centre was on
+    // the press's first tick; 0 when LIFT was never pressed there (read it with liftHeld).
+    liftAtZ: 0,
   };
-  let lastPhase = '', wasInverted = false, liftFrom = -1;
+  let lastPhase = '', wasInverted = false, liftFrom = -1, liftFromZ = 0;
   const lineZ = courseId === 'lineup' ? LINEUP_LINE : NaN;
   const run = simulate(inputLog, courseId, undefined, (r, inp) => {
     const c = r.car, t = r.tick;
@@ -52,9 +55,9 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
       if (f.lineSpeed < 0 && c.pos.z >= lineZ) f.lineSpeed = dhypot(c.vel.x, c.vel.z);
       if (f.contactH < 0 && r.t.contact) { f.contactH = Math.max(0, c.pos.y - SPEC.comHeight); f.contactVy = c.vel.y; f.contactSpeed = dhypot(c.vel.x, c.vel.z); }
       if (f.liftHeld < 0) {
-        if (inp.lift > 0.5 && liftFrom < 0) liftFrom = t;
+        if (inp.lift > 0.5 && liftFrom < 0) { liftFrom = t; liftFromZ = c.pos.z - lineZ; }
         else if (!(inp.lift > 0.5) && liftFrom >= 0) {
-          if (c.pos.z >= lineZ - LINEUP_TAP_BEFORE) f.liftHeld = (t - liftFrom) * DT;
+          if (c.pos.z >= lineZ - LINEUP_TAP_BEFORE) { f.liftHeld = (t - liftFrom) * DT; f.liftAtZ = liftFromZ; }
           liftFrom = -1;
         }
       }
@@ -99,7 +102,7 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
     }
   }, simVersion);
   const t = run.t;
-  if (f.liftHeld < 0 && liftFrom >= 0) f.liftHeld = (run.tick - liftFrom) * DT;   // still held at the end
+  if (f.liftHeld < 0 && liftFrom >= 0) { f.liftHeld = (run.tick - liftFrom) * DT; f.liftAtZ = liftFromZ; }   // still held at the end
   f.gasAtTouch = t.touchTick >= 0 ? (t.airAtTouch / CAR.airMass) * 100 : (t.airEnd / CAR.airMass) * 100;
   f.touch = t.touchTick >= 0 ? { sink: t.sink, tilt: t.tiltDeg, x: t.lateral, z: t.landZ, padMiss: dhypot(t.lateral, t.landZ - course.pad.z), along: t.landZ - course.pad.z } : null;
   f.rollDeg = Math.max(Math.abs(t.rollAccum), Math.abs(t.pitchAccum)) * 180 / Math.PI;
@@ -279,6 +282,8 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
 // - row: it rose above the roofs and still came down on them (t.contact).
 // The fix names what decides this course: the speed at the line (the reveal's 25–30 km/h run-up) and the LIFT hold.
 const INTO_ROW_H = 1.5;
+// A crash with nothing else to name (finish), and a Lineup crash whose run-up, press and hold were all in the band (0370).
+const CRASH_FIX = 'Run it again and follow the cues: each one calls its step as you reach it.';
 function lineupWrecks(t, f, course, say, crashed, add, tier) {
   const apexH = t.airStartTick >= 0 ? Math.max(0, t.apex - SPEC.comHeight) : 0;
   const neverUp = t.airStartTick < 0 || apexH < course.tallest;
@@ -299,16 +304,24 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
   const shortHold = timed && !(f.liftHeld >= LIFT_HOLD - 0.05);
   const holdFix = thumb ? 'Keep holding the pad through the line: it lifts you over the row, then rolls you.'
     : `Hold ${say.lift} at the line for about ${LIFT_HOLD} s${shortHold && f.liftHeld >= 0 ? ` (you held ${heldS} s)` : ''}, then roll.`;
-  // Run-up and hold both right (the keys players who do both clear the row 83 times in 90): never an instruction they
-  // already followed.
-  const right = timed && kmh >= 0 && !speedOff && !shortHold;
-  const fix = right ? `Your run-up and ${say.lift} were right: fly it the same again.`
+  // 0370: when the press began decides it too. Every in-band crash of the keys population pressed LIFT 1.29–1.91 m past
+  // the line; none of the 69 that pressed it before 1.25 m crashed. Late, the nose meets the first car on the way up.
+  const late = timed && f.liftHeld >= 0 && f.liftAtZ > LINEUP_LIFT_LATE;
+  const into = t.airStartTick >= 0 && t.contact && f.contactH >= 0 && f.contactH < INTO_ROW_H && f.contactVy >= 0;
+  const lateFix = `Press ${say.lift} on the line, not ${r1(f.liftAtZ)} m past it${into ? ': the nose met the first car on the way up' : ''}. `
+    + `Hold it about ${LIFT_HOLD} s${shortHold ? ` (you held ${heldS} s)` : ''}, then roll.`;
+  // Run-up, press and hold all right on a card that didn't crash: never an instruction they already followed. A crash
+  // is never "right" (0370): the sim is deterministic, so the same run crashes the same way.
+  const right = timed && kmh >= 0 && !speedOff && !shortHold && !late;
+  const fix = late ? speedFix + lateFix
+    : right && !crashed ? `Your run-up and ${say.lift} were right: fly it the same again.`
+    : right ? CRASH_FIX
     : speedFix || thumb || kmh >= 0 ? speedFix + holdFix : `Keep between ${lo} km/h and ${hi} km/h to the line. ${holdFix}`;
   // 0369: under INTO_ROW_H and not yet falling as it met the row, the car went into it on the way up (every such hit
   // measured 0–1.1 m up; every hit from above, 1.7 m and more): it never "peaked … and came down on the roofs", whatever
   // its bounce reached. It never got over the roofs, so it is the lift's finding (no-lift, the funnel's wreck-lift).
   const lead = kmh >= 0 ? `You reached the line at ${kmh} km/h${held ? ` and ${held}` : ''}: the car` : held ? `You ${held}: the car` : 'The car';
-  if (t.airStartTick >= 0 && t.contact && f.contactH >= 0 && f.contactH < INTO_ROW_H && f.contactVy >= 0) {
+  if (into) {
     const up = f.contactH >= 0.1 ? ` ${r1(f.contactH)} m up` : ', its wheels barely off the ground,';
     add('no-lift', 10, 'Into the row', `${lead} went into the row${up} at ${Math.round(f.contactSpeed * 3.6)} km/h, before it rose over the roofs.`, fix);
     return;
@@ -329,7 +342,7 @@ export function finish(out, f, card, crashed = false) {
   out.sort((a, b) => b.weight - a.weight);
   if (!out.length && crashed) {
     const v = card?.verdict || 'Crash';
-    out.push({ id: 'crash', weight: 0, title: v, detail: `${v}: the replay names no single cause.`, fix: 'Run it again and follow the cues: each one calls its step as you reach it.' });
+    out.push({ id: 'crash', weight: 0, title: v, detail: `${v}: the replay names no single cause.`, fix: CRASH_FIX });
   }
   if (!out.length) {
     out.push({ id: 'clean', weight: 0, title: 'Clean', detail: card ? `${card.verdict}: nothing big to fix.` : 'Nothing big to fix.',

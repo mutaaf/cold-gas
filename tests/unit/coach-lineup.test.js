@@ -71,9 +71,13 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       // The fix: never what the player already did (self-review, 0367). A run-up in 22–34 km/h with a hold of
       // ≥ 0.45 s was right (those players clear the row 83 times in 90): fly it the same. Else the half second of LIFT,
       // with what was held when it was short, and the band when the speed was clearly off.
-      const speedOff = kmh < 22 || kmh > 34, shortHold = f.liftHeld < 0.45;
-      if (!speedOff && !shortHold) expect(top.fix).toBe('Your run-up and LIFT (Space) were right: fly it the same again.');
+      // 0370: a crash is never "right": a press that began over 1.25 m past the line is named as late (every in-band
+      // crash here), and an in-band crash that wasn't gets the neutral crash line.
+      const speedOff = kmh < 22 || kmh > 34, shortHold = f.liftHeld < 0.45, late = f.liftAtZ > 1.25;
+      if (late) expect(top.fix).toMatch(new RegExp(`Press LIFT \\(Space\\) on the line, not ${String(r1(f.liftAtZ)).replace('.', '\\.')} m past it`));
+      else if (!speedOff && !shortHold) expect(top.fix).toBe('Run it again and follow the cues: each one calls its step as you reach it.');
       else expect(top.fix).toMatch(/Hold LIFT \(Space\) at the line for about 0\.5 s/);
+      expect(top.fix).not.toMatch(/same again/);
       if (shortHold) expect(top.fix).toContain(`(you held ${r1(f.liftHeld)} s)`);
       // ↑ held to the line (≈ 120 km/h): the fix says to ease off, with the band.
       if (kmh > 34) expect(top.fix).toContain(`Ease off ↑ before the line: between 25 km/h and 30 km/h, not ${kmh} km/h.`);
@@ -81,17 +85,20 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
     }
   });
 
-  it('the pointer (NEXT RUN): the speed and the band when it was off, the hold when it was short, else the same again', () => {
+  it('the pointer (NEXT RUN): the speed and the band when it was off, then a late press, the hold when it was short, never the same again', () => {
     const seen = new Set();
     for (const { c, card } of crashes) {
       const p = pickPointer(c.items, KEYS, { card, flight: c.flight, crashed: true }), f = c.flight;
       const kmh = Math.round(f.lineSpeed * 3.6);
       expect(p.text).not.toMatch(TRY_PRO);
       if (kmh > 34) { seen.add('speed'); expect(p.text).toContain(`${kmh} km/h at the line, aim for 25 km/h to 30 km/h, then hold Space about 0.5 s`); }
+      else if (f.liftAtZ > 1.25) { seen.add('late'); expect(p.text).toContain(`: press Space on the line, not ${r1(f.liftAtZ)} m past it`); }
       else if (f.liftHeld < 0.45) { seen.add('hold'); expect(p.text).toMatch(/: hold Space at the line for about 0\.5 s$/); }
-      else { seen.add('same'); expect(p.text).toMatch(/: the same run-up and Space again$/); }
+      else { seen.add('crash'); expect(p.text).toBe('Run it again and follow the cues: each one calls its step as you reach it'); }
+      expect(p.text).not.toMatch(/the same run-up/);
     }
-    expect([...seen].sort()).toEqual(['hold', 'same', 'speed']);
+    // Every in-band crash of this population pressed late (0370), so none reads the crash line here.
+    expect([...seen].sort()).toEqual(['hold', 'late', 'speed']);
   });
 
   it('a tap of LIFT on the run-up is not the hold: the press at the line is', () => {

@@ -1,12 +1,12 @@
 ---
 id: 0370
 title: A Lineup LIFT pressed past the line is named as late; a crashed run is never told "fly it the same again"
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-25
-pr:
+pr: 520
 by: critic
 ---
 
@@ -67,15 +67,30 @@ and crashes again learns nothing, and is likely to quit.
 - If 0369 has landed, its contact-height wording for the detail line stands, and this ticket changes only the fix.
 
 ## Acceptance criteria
-- [ ] Over `flyKeysLineup` ×200 (seed 777), **0** crashed cards have a fix containing "fly it the same again". Today
+- [x] Over `flyKeysLineup` ×200 (seed 777), **0** crashed cards have a fix containing "fly it the same again". Today
       7 do.
-- [ ] Each of today's 7 runs (indices 1, 6, 90, 139, 152, 176, 182 in `late-lift.out.txt`) gets a first finding whose fix
+- [x] Each of today's 7 runs (indices 1, 6, 90, 139, 152, 176, 182 in `late-lift.out.txt`) gets a first finding whose fix
       names the late press and the metres past the line.
-- [ ] No landed card's first finding changes. Show and Wall coach outputs are unchanged for every card in
+- [x] No landed card's first finding changes. Show and Wall coach outputs are unchanged for every card in
       `tests/unit/coach*.test.js`.
 - [ ] Production, 1440×900 keys, Assist: hold ↑ to about 29 km/h, then press Space 0.5 s once the car is 1.5 m past the
       cue. The sheet's WHAT HAPPENED and NEXT RUN both name the late press. Screenshot it.
-- [ ] `npm test` green. ref-hash unchanged (show `6b2cb98b`, wall `f1b9fab`, lineup `4fc4af6b`). naive-players 32/32.
+- [x] `npm test` green. ref-hash unchanged (show `6b2cb98b`, wall `f1b9fab`, lineup `4fc4af6b`). naive-players 32/32.
+
+## Built (builder, 2026-11-26)
+- `readFlight` keeps `liftAtZ`: where the counted press began, m past `LINEUP_LINE` (the car's centre on its first tick).
+- `LINEUP_LIFT_LATE` = 1.25 m (src/sim/aim-words.js). Re-measured on main after 0369 (same 7 runs): in the band, 0 of 69
+  that pressed before 1.25 m crashed and 7 of 21 at 1.25 m or later did; 0.5–1.25 m is 0 of 22, so 1 m would name presses
+  that never cost a crash.
+- The fix: "Press LIFT (Space) on the line, not 1.3 m past it: the nose met the first car on the way up. Hold it about
+  0.5 s, then roll." (the clause only for a hit on the way up); a speed off the band stays first. A crash that is otherwise
+  in the band reads the neutral crash line. NEXT RUN: "Lift over the roofs: press Space on the line, not 1.3 m past it".
+- One thumb: the pad commits the lift itself, so it never gets the finding (tested over 60 thumb runs; 0 of 200 thumb
+  cards changed).
+- Over 600 Lineup cards (keys, touch classic, thumb × 200): 40 crashed cards' fixes changed, 0 landed cards, 0 first ids.
+- Coach.swift mirrors it; vectors gain `liftAtZ` and a `crash-lineup-late-lift` run whose coach rows carry the finding.
+- Screenshots of the sheet (local build of this branch) at 1280×720 keys and 390×844 touch classic: WHAT HAPPENED and
+  NEXT RUN both name "5.2 ft 1.6 m past it".
 
 ## Test plan
 - Extend `tests/unit/coach-lineup.test.js`:
