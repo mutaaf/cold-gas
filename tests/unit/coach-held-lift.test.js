@@ -57,6 +57,34 @@ describe('0362: the Lineup coach names a held LIFT', () => {
     }
   });
 
+  it('Pro: a short press at the line with LIFT pressed again in the air is not told to let go sooner (the review)', async () => {
+    const { createRun, stepRun } = await import('../../src/sim/run.js');
+    const { scoreRun } = await import('../../src/sim/judge.js');
+    const { naiveController } = await import('../../scripts/lib/naive-lineup.mjs');
+    const run = createRun('lineup'), pilot = naiveController({ speed: 7.5, pressZ: -4, liftS: 0.3, rollS: 0, tier: 'pro' });
+    let t0 = -1;
+    while (run.phase !== 'done') {
+      const inp = pilot(run);
+      if (inp.lift) t0 = t0 < 0 ? run.tick : t0;
+      const dt = t0 < 0 ? 0 : (run.tick - t0) / 240;
+      if (dt > 0.35 && dt < 1.0) inp.lift = 1;
+      stepRun(run, inp);
+    }
+    const card = scoreRun(run.t);
+    card.tier = 'pro';
+    const c = coach(run.inputLog, 'lineup', card);
+    expect(run.t.apex).toBeGreaterThan(12);
+    expect(c.flight.liftHeld).toBeLessThan(0.4);
+    expect(c.items.map((x) => x.id)).not.toContain('held-lift');
+  });
+
+  it('Assist: a slow run-up into the row with a long hold leads with the row, not the held lift (the review)', () => {
+    for (const speed of [4, 5, 6]) {
+      const { c } = sheet({ speed, pressZ: -4, liftS: 1.5, rollS: 0.8 }, 'assist');
+      expect(c.items.map((x) => x.id), `${speed} m/s`).not.toContain('held-lift');
+    }
+  });
+
   it('never on one thumb or on Advanced, which have no held LIFT of their own', () => {
     const thumb = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'lineup' };
     expect(pointerText('held-lift', thumb)).toBe('');

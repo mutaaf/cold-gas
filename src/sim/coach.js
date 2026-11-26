@@ -39,9 +39,9 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
     // press of LIFT at the line was held (s; -1 when LIFT was never pressed there). A press that ended more than
     // LINEUP_TAP_BEFORE m short of the line was a tap on the run-up, and doesn't count.
     lineSpeed: -1, liftHeld: -1,
-    // 0362: that press was still down when the car topped out (the climb over, the key still held), and LAND was held
-    // on the last tick in the air (held to the ground).
-    liftPastApex: false, landToGround: false,
+    // 0362: that press was still down when the car topped out (the climb over, the key still held), LAND was held on the
+    // last tick in the air (held to the ground), and for how many ticks unbroken up to then.
+    liftPastApex: false, landToGround: false, landRun: 0,
   };
   let lastPhase = '', wasInverted = false, liftFrom = -1, apexSeen = false;
   const lineZ = courseId === 'lineup' ? LINEUP_LINE : NaN;
@@ -70,6 +70,7 @@ export function readFlight(inputLog, courseId, fromTick = 0, simVersion = undefi
     predict(c, h, pr);
     if (inp.level) f.levelHeld++;
     f.landToGround = !!inp.level;
+    f.landRun = inp.level ? f.landRun + 1 : 0;
     // The carry: rear jets, and the speed along the run they leave you with.
     let rear = 0;
     for (const i of REAR_IDX) rear += c.throttles[i];
@@ -322,10 +323,10 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
 function ranOutFix(f, assist, say) {
   if (assist && f.landToGround && say.aim !== AIM_THUMB) {
     // On only for the last part of the fall: LAND came late, so the fix is the start, not the hold.
-    if (f.levelHeld < f.airTicks / 2) return `${say.land} came on only ${r1(f.levelHeld * DT)} s before the ground: hold it ${f.course === 'lineup' ? 'as the roll ends' : 'from the moment you let go'}, and it brakes the whole fall.`;
+    if (f.landRun < f.airTicks / 2) return `${say.land} came on only ${r1(f.landRun * DT)} s before the ground: hold it ${f.course === 'lineup' ? 'as the roll ends' : 'from the moment you let go'}, and it brakes the whole fall.`;
     const spent = f.boostTicks > 0 ? `shorter boosts leave more gas for it`
       : f.course === 'lineup' && f.liftHeld > LIFT_HOLD + 0.1 ? `let go of ${say.lift} sooner at the line to save gas for it`
-        : 'hold it from the release and it brakes the whole fall on less gas';
+        : f.landRun < f.airTicks * 0.9 ? 'hold it from the release and it brakes the whole fall on less gas' : 'the fall was more than the gas left could stop';
     return `${say.land} was on all the way to the ground, but the brake ran short: ${spent}.`;
   }
   if (f.gasAtTouch < 25) {
@@ -343,8 +344,10 @@ export const LINEUP_PRO_HOLD = 0.4;     // s: a Pro hold at the line that peaks 
 function heldTooLong(t, f, say, crashed, tier) {
   if (say.aim === AIM_THUMB || tier === 'advanced' || !(f.liftHeld >= 0)) return '';
   const apexH = t.airStartTick >= 0 ? Math.max(0, t.apex - SPEC.comHeight) : 0;
-  if (tier !== 'assist' && apexH > LINEUP_HIGH) return 'high';
-  const hurt = crashed || t.contact || (t.touchTick >= 0 && t.sink > SINK_SOFT);
+  // Only a long press at the line: a short one with LIFT pressed again in the air is that second press (LIFT as today).
+  if (tier !== 'assist' && apexH > LINEUP_HIGH && f.liftHeld > LINEUP_PRO_HOLD + 0.05) return 'high';
+  // Assist: the burn caps the climb, so a row hit is the run-up's or the hold's start (row / no-lift say so), never this.
+  const hurt = t.touchTick >= 0 && !t.contact && (crashed || t.sink > SINK_SOFT);
   return tier === 'assist' && f.liftPastApex && hurt ? 'past' : '';
 }
 function lineupHeldLift(t, f, say, crashed, add, tier) {

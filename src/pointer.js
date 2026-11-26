@@ -127,7 +127,7 @@ export function pointerText(id, ctx, flight = null, card = null) {
     case 'ran-out': if (thumbOn(ctx)) return 'Brake to the ground: keep holding the pad all the way down';
       if (assist && flight?.landToGround) {
         // 0362: LAND was held to the ground already: never "keep holding" it. Name what spent the gas, or nothing.
-        if (flight.levelHeld < flight.airTicks / 2) return `Brake the whole fall: ${ctl(ctx, 'land')} ${ctx.course === 'lineup' ? 'as the roll ends' : 'from the moment you let go'}`;
+        if ((flight.landRun ?? flight.levelHeld) < flight.airTicks / 2) return `Brake the whole fall: ${ctl(ctx, 'land')} ${ctx.course === 'lineup' ? 'as the roll ends' : 'from the moment you let go'}`;
         if (flight.boostTicks > 0) return 'Save gas for the brake: shorter boosts';
         if (ctx.course === 'lineup' && flight.liftHeld > LINEUP_LIFT_HOLD + 0.1) return `Save gas for the brake: let go of ${keyOf(ctx, 'lift')} sooner at the line`;
         return '';   // LAND from the release to the ground, no boost: nothing in its words to add; the next fix speaks

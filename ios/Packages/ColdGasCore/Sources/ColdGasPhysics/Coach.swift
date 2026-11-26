@@ -89,7 +89,7 @@ public final class CoachFlight {
     /// COACH_LINEUP_TAP_BEFORE m short of the line doesn't count).
     public internal(set) var lineSpeed = -1.0, liftHeld = -1.0
     /// 0362: that press was still down when the car topped out, and LAND was held on the last tick in the air.
-    public internal(set) var liftPastApex = false, landToGround = false
+    public internal(set) var liftPastApex = false, landToGround = false, landRun = 0.0
     /// The re-flown run's telemetry; set once the replay is over.
     public internal(set) var t: Telemetry!
     init(_ course: String) { self.course = course }
@@ -108,7 +108,7 @@ public final class CoachFlight {
             n("touch.sink", m.sink); n("touch.tilt", m.tilt); n("touch.x", m.x); n("touch.z", m.z); n("touch.padMiss", m.padMiss); n("touch.along", m.along)
         } else { kv.append(("touch", .z)) }
         b("wasInverted", wasInverted); n("gasAtTouch", gasAtTouch); n("pressureAtTouch", pressureAtTouch); n("apexTick", apexTick); n("landedTick", landedTick); n("levelHeld", levelHeld); n("airTicks", airTicks)
-        n("lineSpeed", lineSpeed); n("liftHeld", liftHeld); b("liftPastApex", liftPastApex); b("landToGround", landToGround)
+        n("lineSpeed", lineSpeed); n("liftHeld", liftHeld); b("liftPastApex", liftPastApex); b("landToGround", landToGround); n("landRun", landRun)
         return kv
     }
 }
@@ -148,6 +148,7 @@ public func readFlight(_ inputLog: [[Int]], _ courseId: String, fromTick: Int = 
         predict(c, h, pr)
         if truthy(inp.level) { f.levelHeld += 1 }
         f.landToGround = truthy(inp.level)
+        f.landRun = truthy(inp.level) ? f.landRun + 1 : 0
         // The carry: rear jets, and the speed along the run they leave you with.
         var rear = 0.0
         for i in COACH_REAR_IDX { rear += c.throttles[i] }
@@ -408,10 +409,10 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
 func coachRanOutFix(_ f: CoachFlight, _ assist: Bool, _ say: CoachWords) -> String {
     let s = jsNumberString
     if assist && f.landToGround && say.aim != COACH_AIM_THUMB {
-        if f.levelHeld < f.airTicks / 2 { return "\(say.land) came on only \(s(r1(f.levelHeld * DT))) s before the ground: hold it \(f.course == "lineup" ? "as the roll ends" : "from the moment you let go"), and it brakes the whole fall." }
+        if f.landRun < f.airTicks / 2 { return "\(say.land) came on only \(s(r1(f.landRun * DT))) s before the ground: hold it \(f.course == "lineup" ? "as the roll ends" : "from the moment you let go"), and it brakes the whole fall." }
         let spent = f.boostTicks > 0 ? "shorter boosts leave more gas for it"
             : f.course == "lineup" && f.liftHeld > COACH_LINEUP_LIFT_HOLD + 0.1 ? "let go of \(say.lift) sooner at the line to save gas for it"
-            : "hold it from the release and it brakes the whole fall on less gas"
+            : f.landRun < f.airTicks * 0.9 ? "hold it from the release and it brakes the whole fall on less gas" : "the fall was more than the gas left could stop"
         return "\(say.land) was on all the way to the ground, but the brake ran short: \(spent)."
     }
     if f.gasAtTouch < 25 {
@@ -426,8 +427,8 @@ public let COACH_LINEUP_HIGH = 12.0, COACH_LINEUP_PRO_HOLD = 0.4
 func coachHeldTooLong(_ t: Telemetry, _ f: CoachFlight, _ say: CoachWords, _ crashed: Bool, _ tier: String) -> String {
     if say.aim == COACH_AIM_THUMB || tier == "advanced" || !(f.liftHeld >= 0) { return "" }
     let apexH = t.airStartTick >= 0 ? jsMax(0, t.apex - SPEC.comHeight) : 0
-    if tier != "assist" && apexH > COACH_LINEUP_HIGH { return "high" }
-    let hurt = crashed || t.contact || (t.touchTick >= 0 && t.sink > SINK_SOFT)
+    if tier != "assist" && apexH > COACH_LINEUP_HIGH && f.liftHeld > COACH_LINEUP_PRO_HOLD + 0.05 { return "high" }
+    let hurt = t.touchTick >= 0 && !t.contact && (crashed || t.sink > SINK_SOFT)
     return tier == "assist" && f.liftPastApex && hurt ? "past" : ""
 }
 func coachLineupHeldLift(_ t: Telemetry, _ f: CoachFlight, _ say: CoachWords, _ crashed: Bool, _ add: (String, Double, String, String, String) -> Void, _ tier: String) {
