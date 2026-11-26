@@ -1,7 +1,7 @@
 // 0340: the scored sets react to water and mud. Course data (courses.js `surfaces`) on the Show and the Lineup; a run at
 // SURFACE_VERSION meets them, a run from before replays on the set as it was, to the same bits.
 import { describe, it, expect } from 'vitest';
-import { createRun, stepRun, simulate, SIM_VERSION, SURFACE_VERSION, MARK_VERSION, simVersionOf, replayable, courseAt } from '../../src/sim/run.js';
+import { createRun, stepRun, simulate, SIM_VERSION, SURFACE_VERSION, MARK_VERSION, WRECK_VERSION, simVersionOf, replayable, courseAt } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun } from '../../src/sim/judge.js';
 import { newInput, createVehicle, step } from '../../src/sim/vehicle.js';
@@ -26,10 +26,9 @@ describe('surfaces: the data and the pure queries', () => {
     expect(LINEUP.surfaces.tanks.length).toBe(1);
     expect(LINEUP.surfaces.mud.length).toBeGreaterThan(1);
     expect(WALL.surfaces).toBeUndefined();
-    // 0360: the Show and the Wall are scored at MARK_VERSION since; the Lineup is still the surfaces' v33.
-    expect(simVersionOf('show')).toBe(MARK_VERSION);
-    expect(simVersionOf('lineup')).toBe(SURFACE_VERSION);
-    expect(simVersionOf('wall')).toBe(MARK_VERSION);
+    // 0360: the Show and the Wall were scored at MARK_VERSION, the Lineup at the surfaces' v33; since 0361 every course
+    // flies at WRECK_VERSION (a wreck shuts its valves), and those versions still replay (wreck-valves.test.js).
+    for (const c of ['show', 'lineup', 'wall']) expect(simVersionOf(c)).toBe(WRECK_VERSION);
   });
   it('a v32 run on a wet set replays on the set as it was', () => {
     expect(courseAt('show', SIM_VERSION).surfaces).toBeNull();
@@ -115,7 +114,11 @@ describe('surfaces: the physics', () => {
     expect(card.verdict).toBe('Splash');
     expect(card.facts.crashed).toBe(true);
     expect(card.facts.splash).toBe(true);
-    expect(card.facts.splashKmh).toBeGreaterThan(20);
+    // 0361: this flight wrecks on the row first (damage 60 % at tick 3181), so its valves are shut and it falls into the
+    // tank at ≈ 20 km/h (5.5 m/s); before, the dead car's jets drove it in at 31 km/h. The splash's own speed is above.
+    expect(run.car.valvesShut).toBe(true);
+    expect(card.facts.splashKmh).toBe(Math.round(run.t.splashSpeed * 3.6));
+    expect(card.facts.splashKmh).toBeGreaterThan(15);
     expect(localWords(card).headline).toBe('Splash');
     expect(card.total).toBeLessThanOrEqual(35);
   });
@@ -181,9 +184,10 @@ describe('surfaces: a run\'s identity', () => {
   it('a challenge packs the course\'s version, and a v32 one on a wet set (the Lineup) is still a challenge', async () => {
     const log = [[0, ...new Array(23).fill(0)]];
     const at = (o) => decodeChallenge(`r${toB64url(packBytes({ log, score: 50, ...o }))}`);
-    expect((await at({ course: 'show' })).simVersion).toBe(MARK_VERSION);
-    expect((await at({ course: 'lineup' })).simVersion).toBe(SURFACE_VERSION);
-    expect((await at({ course: 'wall' })).simVersion).toBe(MARK_VERSION);
+    // 0361: every course packs WRECK_VERSION today; the version before it is still a challenge.
+    for (const course of ['show', 'lineup', 'wall']) expect((await at({ course })).simVersion).toBe(WRECK_VERSION);
+    expect((await at({ course: 'show', simVersion: MARK_VERSION })).stale).toBe(false);
+    expect((await at({ course: 'lineup', simVersion: SURFACE_VERSION })).stale).toBe(false);
     expect((await at({ course: 'lineup', simVersion: 32 })).stale).toBe(false);
     expect((await at({ course: 'show', simVersion: 33 })).stale).toBe(true);
     expect((await at({ course: 'lineup', simVersion: 31 })).stale).toBe(true);

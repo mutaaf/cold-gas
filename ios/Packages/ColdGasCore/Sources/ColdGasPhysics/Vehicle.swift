@@ -127,6 +127,8 @@ public final class Vehicle {
     public let pos: V3, vel = V3(), quat: Q4, angVel = V3(), angMom = V3()
     public var air = CAR.airMass
     public var throttles = [Double](repeating: 0, count: NOZZLES.count)
+    /// 0361: the crash sensor has fired (Run.swift); every valve stays shut.
+    public var valvesShut = false
     public let wheels: [Wheel] = (0..<4).map { _ in Wheel() }
     public var fan = 0.0, fanDemand = 0.0, fanForce = 0.0, gripSat = 0.0, fanLat = 0.0, floorGap = SPEC.rideHeight
     public var hullContact = false, hullGround = false, obstacleContact = false, obstacleSpeed = 0.0, hullImpulse = 0.0
@@ -795,6 +797,7 @@ public func step(_ s: Vehicle, _ inp: Input) throws {
     for i in 0..<NOZZLES.count {
         let nz = NOZZLES[i]
         let goal = s.air > 0.5 ? target[i] : 0
+        if s.valvesShut { s.throttles[i] = 0; continue }   // 0361: the solenoids are shut
         s.throttles[i] += (goal - s.throttles[i]) * jsMin(1, dt / 0.03)
         let F = nz.max * s.throttles[i] * pr
         if F <= 0 { continue }

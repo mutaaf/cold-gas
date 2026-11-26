@@ -129,7 +129,11 @@ describe('impact events', () => {
     const imp = run.impacts;
     expect(imp.tick.length).toBe(IMPACT_CAP);
     expect(imp.count).toBeLessThanOrEqual(IMPACT_CAP);
-    expect(run.t.flipped).toBe(true);
+    // A long crash: since 0361 the wreck (60 % by ≈ 5.8 s) shuts the valves, so no jet rolls it onto its roof any more and
+    // it slides out of the arena (it flipped before).
+    expect(run.damage.total).toBeGreaterThanOrEqual(WRECK_PCT);
+    expect(run.car.valvesShut).toBe(true);
+    expect(run.tick).toBeGreaterThan(240 * 8);
   });
 });
 

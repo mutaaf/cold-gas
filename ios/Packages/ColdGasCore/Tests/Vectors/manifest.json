@@ -5,7 +5,7 @@
  "files": [
   {
    "path": "challenge.json",
-   "sha256": "406fc2809e3b5efe192a640170f9c06a66ae16f411765b12169c904e4deb18c9",
+   "sha256": "79852d579579783f3c8a55ab7039ec7cc31c2a4f59a72daf91efbffa0a610eac",
    "bytes": 264435
   },
   {
@@ -185,7 +185,7 @@
   },
   {
    "path": "runs/mud-show-long.json",
-   "sha256": "cfca95ced5c73b7f51f2bde6283de0c15cd8568e994df88b822c8ec6a56a0e54",
+   "sha256": "d56436de973860fc37c778427cf932a96b675cb1377f044e4bf5676f13606593",
    "bytes": 76777
   },
   {
@@ -420,7 +420,7 @@
   },
   {
    "path": "runs/ref-show-dry-wet.json",
-   "sha256": "c27cee327efaad9e6262c7202dcf8617c20f5254c58ac3884235b81dda63690f",
+   "sha256": "cf532475acbfec83081de548382133a425fd140a8a0c1ac55e9d9ebe42232f94",
    "bytes": 42169
   },
   {
@@ -445,8 +445,8 @@
   },
   {
    "path": "runs/splash-show-wide.json",
-   "sha256": "41f2f7129ac05a78d9f9c35d87cfb6fd15a928ec707043828de95e1c15071690",
-   "bytes": 42192
+   "sha256": "092a2dc62bf0965465c2257fa79203509ce44b5da7ec49e10fae0ac81463ccd2",
+   "bytes": 41683
   }
  ]
 }

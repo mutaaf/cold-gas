@@ -62,7 +62,9 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       expect(f.liftHeld).toBeGreaterThanOrEqual(0.34);
       expect(f.liftHeld).toBeLessThanOrEqual(0.51);
       const apexH = r1(Math.max(0, run.t.apex - SPEC.comHeight));
-      expect(top.detail).toMatch(new RegExp(`${String(apexH).replace('.', '\\.')} m`));
+      // A car that hit the row before it was ever airborne names no peak (0361: a wreck's shut valves no longer throw it up).
+      if (run.t.airStartTick < 0) expect(top.detail).toMatch(/^You never got off the ground: /);
+      else expect(top.detail).toMatch(new RegExp(`${String(apexH).replace('.', '\\.')} m`));
       // The fix: never what the player already did (self-review, 0367). A run-up in 22–34 km/h with a hold of
       // ≥ 0.45 s was right (those players clear the row 83 times in 90): fly it the same. Else the half second of LIFT,
       // with what was held when it was short, and the band when the speed was clearly off.

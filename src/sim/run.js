@@ -6,7 +6,7 @@ import { COURSES, DEFAULT_COURSE, WALL, LINEUP, SHOW, roofUnder, wallArcLength, 
 import { freeWorld } from './world.js';
 import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
-import { createDamage, updateDamage, damageFacts } from './damage.js';
+import { createDamage, updateDamage, damageFacts, WRECK_PCT } from './damage.js';
 import { datan2, dacos, dhypot } from './dmath.js';
 
 // v15: LAND rolls out at the reveal's pace on no more thrust than the roll needs (the car falls
@@ -74,12 +74,20 @@ export const SURFACE_VERSION = 33;
 // (a challenge, a ghost) is stale, as v31 (0182) made it. The Lineup's mark is its own band: its runs stay v33.
 export const MARK_VERSION = 34;
 const MARKED = new Set(['show', 'wall']);
-/** The version a run on this course is flown at today: MARK_VERSION on the Show and the Wall, SURFACE_VERSION on another
- *  course that carries surfaces, else SIM_VERSION. */
-export const simVersionOf = (courseId) => (MARKED.has(courseId) ? MARK_VERSION : COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
-/** True when a run of this version on this course can be replayed to its bits and scored as it was: today's, or (off the
- *  Show and the Wall) a v32 run on a set that has surfaces now: it replays on the course without them. */
-export const replayable = (courseId, v) => v === simVersionOf(courseId) || (!MARKED.has(courseId) && v === SIM_VERSION);
+// v35 (0361): a wrecked car shuts its valves. The crash sensor fires the tick the damage reaches WRECK_PCT (the HUD's
+// WRECKED), and from the next tick every valve is shut to the end of the aftermath: the jets stop and no gas is used, as
+// the aftermath's normally-closed solenoids (below) already were. Every course: a landed run (each reference) is the same
+// bits, so only a wreck's outcome changes (its gas, its tumble, its damage after the hit).
+export const WRECK_VERSION = 35;
+/** The version a run on this course was flown at before WRECK_VERSION: MARK_VERSION on the Show and the Wall,
+ *  SURFACE_VERSION on another course that carries surfaces, else SIM_VERSION. */
+const before35 = (courseId) => (MARKED.has(courseId) ? MARK_VERSION : COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
+/** The version a run on this course is flown at today (WRECK_VERSION on every course). */
+export const simVersionOf = (courseId) => WRECK_VERSION;
+/** True when a run of this version on this course can be replayed to its bits and scored as it was: today's; the
+ *  course's version before WRECK_VERSION (it replays with the valves left open after a wreck, as it was flown); or (off
+ *  the Show and the Wall) a v32 run on a set that has surfaces now: it replays on the course without them. */
+export const replayable = (courseId, v) => v === WRECK_VERSION || v === before35(courseId) || (!MARKED.has(courseId) && v === SIM_VERSION);
 /** The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION. */
 export const courseAt = (courseId, v = simVersionOf(courseId)) => {
   const id = COURSES[courseId] ? courseId : DEFAULT_COURSE;
@@ -174,8 +182,11 @@ function newTelemetry(courseId, surfaces = null) {
 // `simVersion`: the version the run is flown at (simVersionOf, today's); an older one replays on the course as it was.
 export function createRun(courseId = DEFAULT_COURSE, simVersion = undefined) {
   const course = courseAt(courseId, simVersion);
+  const v = simVersion ?? simVersionOf(course.id);
   const run = {
     course: course.id,
+    v,                         // the version it is flown at
+    crashSensor: v >= WRECK_VERSION,   // 0361: a wreck shuts the valves (older runs replay without it)
     car: createVehicle(course),
     damage: createDamage(),    // the damage sensor: per-zone %, total (src/sim/damage.js)
     phase: 'drive',            // drive → ramp (Wall, Show) → air → landed → done
@@ -256,6 +267,10 @@ function advance(run, input) {
   const prevVx = c.vel.x, prevVy = c.vel.y, prevVz = c.vel.z;
   step(c, input);
   updateDamage(run.damage, c, HULL);
+  // 0361: the crash sensor. An airbag controller decides on a crash in tens of milliseconds; here it fires the tick the
+  // damage reaches the wreck line, and the valves are shut from the next tick on (vehicle.js), through the aftermath. The line
+  // is the one the HUD and the card read: the damage rounded (Math.round(total) >= WRECK_PCT, i.e. from WRECK_PCT − 0.5).
+  if (run.crashSensor && !c.valvesShut && run.damage.total >= WRECK_PCT - 0.5) c.valvesShut = true;
   run.tick++;
   if (run.tick % FRAME_EVERY === 0) recordFrame(run);
 

@@ -4,6 +4,7 @@
 import { COURSES, LINEUP } from './courses.js';
 import { CAR } from './vehicle.js';
 import { dhypot } from './dmath.js';
+import { WRECK_PCT } from './damage.js';
 
 const clamp01 = (v) => (v < 0 ? 0 : v > 1 ? 1 : v);
 const lerp = (a, b, t) => a + (b - a) * t;
@@ -120,7 +121,8 @@ export const WALL_GAS_FULL = 50;
 // Damage (src/sim/damage.js): every judge marks the car's integrity, each with their own weight
 // (the Engineer cares most: they have to fix it). 60 % or worse is a wreck, whatever else happened.
 export const DAMAGE_W = { engineer: 0.15, coordinator: 0.08, designer: 0.12 };
-export const WRECK_PCT = 60;
+// The wreck line itself lives with the damage model (src/sim/damage.js), since the sim's crash sensor reads it too (0361).
+export { WRECK_PCT };
 const damagePct = (t) => (t.damage ? t.damage.pct : 0);
 const withDamage = (s, j, c) => s * (1 - DAMAGE_W[j.id]) + DAMAGE_W[j.id] * c.damage;
 const damageFactsOf = (t) => ({ damagePct: damagePct(t), integrity: 100 - damagePct(t), damageZones: t.damage ? t.damage.zones : null });

@@ -234,6 +234,7 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     pos: v3(course.start.x, SPEC.comHeight, course.start.z), vel: v3(), quat: quatFromYaw(q4(), 0), angVel: v3(), angMom: v3(),
     air: CAR.airMass,
     throttles: new Float64Array(NOZZLES.length),
+    valvesShut: false,   // 0361: the crash sensor has fired (src/sim/run.js); every valve stays shut
     wheels: WHEELS.map(() => ({ contact: true, compression: REST_LEN - MOUNT_TO_CENTRE, prevCompression: REST_LEN - MOUNT_TO_CENTRE, omega: 0, spin: 0, steer: 0, slip: 0, slipAngle: 0, slipAngleKin: 0, relax: 0, load: STATIC_LOAD, nx: 0, ny: 1, nz: 0 })),
     fan: 0, fanDemand: 0, fanForce: 0, gripSat: 0, fanLat: 0, floorGap: SPEC.rideHeight,
     hullContact: false, hullGround: false, obstacleContact: false, obstacleSpeed: 0, hullImpulse: 0,
@@ -1142,6 +1143,8 @@ export function step(s, inp) {
   for (let i = 0; i < NOZZLES.length; i++) {
     const nz = NOZZLES[i];
     const goal = s.air > 0.5 ? target[i] : 0;
+    // 0361: once the crash sensor has fired, the normally-closed solenoids are shut (no power, no controller): no thrust.
+    if (s.valvesShut) { s.throttles[i] = 0; continue; }
     s.throttles[i] += (goal - s.throttles[i]) * Math.min(1, dt / 0.03);
     const F = nz.max * s.throttles[i] * pr;
     if (F <= 0) continue;
