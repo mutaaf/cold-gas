@@ -10,17 +10,24 @@ public let SURFACE_VERSION = 33
 /// v34 (0360): the Show and the Wall pay full Precision only inside the pad's 2 m ring (run.js MARK_VERSION). Scores only;
 /// an older Show or Wall run is stale. The Lineup stays v33.
 public let MARK_VERSION = 34
+/// v35 (0363): on the Lineup, Assist's run-up is the kickflip's (run.js RUNUP_VERSION): drive torque fades out above
+/// LINEUP.runUp short of the row. Only the Lineup flies at it; its v33 and v32 runs replay on the course as it was.
+public let RUNUP_VERSION = 35
 private let MARKED: Set<String> = ["show", "wall"]
 public func simVersionOf(_ courseId: String) -> Int {
-    MARKED.contains(courseId) ? MARK_VERSION : COURSES[courseId]?.surfaces != nil ? SURFACE_VERSION : SIM_VERSION
+    (COURSES[courseId]?.runUp ?? 0) > 0 ? RUNUP_VERSION : MARKED.contains(courseId) ? MARK_VERSION : COURSES[courseId]?.surfaces != nil ? SURFACE_VERSION : SIM_VERSION
 }
 /// A run of this version on this course replays to its bits and scores as it was here (today's, or off the Show and the
-/// Wall a v32 run on a set that has surfaces now).
-public func replayable(_ courseId: String, _ v: Int) -> Bool { v == simVersionOf(courseId) || (!MARKED.contains(courseId) && v == SIM_VERSION) }
-/// The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION.
+/// Wall a v32 run, or a v33 one on a set that has surfaces).
+public func replayable(_ courseId: String, _ v: Int) -> Bool {
+    v == simVersionOf(courseId) || (!MARKED.contains(courseId) && (v == SIM_VERSION || (v == SURFACE_VERSION && COURSES[courseId]?.surfaces != nil)))
+}
+/// The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION, without Assist's run-up
+/// limit before RUNUP_VERSION.
 public func courseAt(_ courseId: String, _ v: Int? = nil) -> Course {
     let id = COURSES[courseId] != nil ? courseId : DEFAULT_COURSE
-    return (v ?? simVersionOf(id)) < SURFACE_VERSION ? DRY_COURSES[id]! : COURSES[id]!
+    let at = v ?? simVersionOf(id)
+    return at < SURFACE_VERSION ? DRY_COURSES[id]! : at < RUNUP_VERSION ? FREE_RUNUP_COURSES[id]! : COURSES[id]!
 }
 /// A splash-down ends the run this long after the car hits the water.
 public let SPLASH_TICKS = 240 * 3

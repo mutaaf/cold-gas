@@ -2,7 +2,7 @@
 // run can be re-simulated exactly), records replay frames, and measures everything the judges
 // score. Pure and deterministic: the Worker runs this same file to verify a submitted run.
 import { createVehicle, step, bodyRates, up, forward, worldPoint, newInput, DT, CAR, NOZZLES, HULL, massOf, VALVE_KEYS } from './vehicle.js';
-import { COURSES, DEFAULT_COURSE, WALL, LINEUP, SHOW, roofUnder, wallArcLength, dryCourse } from './courses.js';
+import { COURSES, DEFAULT_COURSE, WALL, LINEUP, SHOW, roofUnder, wallArcLength, dryCourse, freeRunUp } from './courses.js';
 import { freeWorld } from './world.js';
 import { SPEC } from './spec.js';
 import { v3 } from './m3.js';
@@ -73,17 +73,23 @@ export const SURFACE_VERSION = 33;
 // Scores only: their flights are the same bits, but a card from before reads another curve, so an older Show or Wall run
 // (a challenge, a ghost) is stale, as v31 (0182) made it. The Lineup's mark is its own band: its runs stay v33.
 export const MARK_VERSION = 34;
+// v35 (0363): on the Lineup, Assist's run-up is the kickflip's: drive torque fades out above LINEUP.runUp (7.5 m/s) short
+// of the row (vehicle.js), so a held ↑ meets the line at the reveal's speed, not 32 m/s. Pro is unchanged. Only the Lineup
+// changed: its runs are v35; a v33 (or v32) Lineup run replays on the course as it was (courseAt), to its bits.
+export const RUNUP_VERSION = 35;
 const MARKED = new Set(['show', 'wall']);
-/** The version a run on this course is flown at today: MARK_VERSION on the Show and the Wall, SURFACE_VERSION on another
- *  course that carries surfaces, else SIM_VERSION. */
-export const simVersionOf = (courseId) => (MARKED.has(courseId) ? MARK_VERSION : COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
+/** The version a run on this course is flown at today: RUNUP_VERSION on the Lineup, MARK_VERSION on the Show and the
+ *  Wall, SURFACE_VERSION on another course that carries surfaces, else SIM_VERSION. */
+export const simVersionOf = (courseId) => (COURSES[courseId]?.runUp !== undefined ? RUNUP_VERSION : MARKED.has(courseId) ? MARK_VERSION : COURSES[courseId]?.surfaces ? SURFACE_VERSION : SIM_VERSION);
 /** True when a run of this version on this course can be replayed to its bits and scored as it was: today's, or (off the
- *  Show and the Wall) a v32 run on a set that has surfaces now: it replays on the course without them. */
-export const replayable = (courseId, v) => v === simVersionOf(courseId) || (!MARKED.has(courseId) && v === SIM_VERSION);
-/** The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION. */
+ *  Show and the Wall) a v32 run, or a v33 one on a set that has surfaces: it replays on the course as it was then. */
+export const replayable = (courseId, v) => v === simVersionOf(courseId)
+  || (!MARKED.has(courseId) && (v === SIM_VERSION || (v === SURFACE_VERSION && !!COURSES[courseId]?.surfaces)));
+/** The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION, without Assist's run-up
+ *  limit before RUNUP_VERSION. */
 export const courseAt = (courseId, v = simVersionOf(courseId)) => {
   const id = COURSES[courseId] ? courseId : DEFAULT_COURSE;
-  return v < SURFACE_VERSION ? dryCourse(id) : COURSES[id];
+  return v < SURFACE_VERSION ? dryCourse(id) : v < RUNUP_VERSION ? freeRunUp(id) : COURSES[id];
 };
 // A splash-down ends the run this long after the car hits the water (3 s: the splash, the float, the replay's beat).
 export const SPLASH_TICKS = 240 * 3;

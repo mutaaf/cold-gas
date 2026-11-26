@@ -1,6 +1,7 @@
 // 0370: a Lineup LIFT pressed past the line is named as late, with how far; a crashed run is never told "fly it the same
 // again" (the sim is deterministic: the same run crashes the same way). The population is the critic's: flyKeysLineup
 // × 200, seed 777 (docs/critique/2026-11-25-2200/late-lift.mjs.txt), whose 7 in-band crashes all pressed 1.29–1.91 m late.
+// Since 0363 (Assist's run-up limit) no keys run-up of it is floored: its in-band crashes are 9, all pressed 1.36–1.99 m late.
 import { describe, it, expect, beforeAll } from 'vitest';
 import { scoreRun } from '../../src/sim/judge.js';
 import { simulate } from '../../src/sim/run.js';
@@ -12,7 +13,7 @@ import { stream, flyKeysLineup, flyThumb } from '../../scripts/lib/daily-reach.m
 const r1 = (x) => Math.round(x * 10) / 10;
 const SAME = /same again/;
 const KEYS = { device: 'key', scheme: 'classic', tier: 'assist', course: 'lineup' };
-const LATE7 = [1, 6, 90, 139, 152, 176, 182];
+const LATE = [21, 90, 121, 130, 131, 139, 152, 176, 182];   // 0363; [1, 6, 90, 139, 152, 176, 182] before
 
 // Where the counted press of LIFT began, measured on its own replay (not readFlight's): the first press that ends no
 // more than 5 m short of the line (LINEUP_TAP_BEFORE), as the car's centre was on its first tick.
@@ -50,8 +51,8 @@ describe('0370: the keys population (flyKeysLineup × 200, seed 777)', () => {
     expect(crashes).toBeGreaterThan(50);
   });
 
-  it("today's 7 lead with the late press and its metres past the line", () => {
-    for (const i of LATE7) {
+  it("today's 9 lead with the late press and its metres past the line", () => {
+    for (const i of LATE) {
       const { c, card, run } = rows[i], f = c.flight, top = c.items[0];
       expect(card.facts.crashed).toBe(true);
       expect(f.liftAtZ).toBeGreaterThan(1.25);   // LINEUP_LIFT_LATE
@@ -77,7 +78,7 @@ describe('0370: the keys population (flyKeysLineup × 200, seed 777)', () => {
       // A speed off the band is still named first.
       if (late && Math.round(f.lineSpeed * 3.6) > 34) expect(top.fix.indexOf('Ease off')).toBe(0);
     }
-    expect(named).toBeGreaterThan(20);
+    expect(named).toBeGreaterThan(15);   // 20 since 0363 (32 before, with the floored run-ups)
   });
 
   it('a landed card never reads the late-press or the crash line', () => {
@@ -88,7 +89,7 @@ describe('0370: the keys population (flyKeysLineup × 200, seed 777)', () => {
   });
 
   it('the words read in mph too: one number, one unit', () => {
-    const { c } = rows[LATE7[0]];
+    const { c } = rows[LATE[0]];
     expect(toUS(c.items[0].fix)).toMatch(/not \d+(\.\d)? ft past it/);
   });
 });

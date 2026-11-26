@@ -206,6 +206,8 @@ export const tierOf = (inp) => (inp.assist ? 'assist' : inp.manual ? 'advanced' 
 // CARRY: airborne, the rear jets cut out above this horizontal speed (≈10 m/s carries over the
 // row onto the pad; one reaction time of 80 kN on 2.4 t adds ≈10 m/s more).
 export const ASSIST_CRAWL = 8, ASSIST_CARRY = 10;
+// Assist's run-up limit on the Lineup (0363, courses.js LINEUP.runUp): drive torque fades out over this much (m/s) above it.
+export const RUNUP_FADE = 0.5;
 const TC_CAP = 1.0;   // traction control holds drive torque to what the tyre carries (≈ peak slip), not a 15 % bang-bang cut
 // The rack's window at speed: the kinematic angle for μg of lateral acceleration (L·μg/v²) plus
 // 0.04 rad, the lock that measured the most steady cornering g at 12, 25 and 40 m/s. (A smaller
@@ -255,6 +257,9 @@ export function createVehicle(courseId = DEFAULT_COURSE) {
     landCap: 0,
     // Assist's crawl limit belongs to the curl: only the courses with the Wall have one.
     crawl: course.id === 'wall' || course.id === 'show',
+    // Assist's run-up limit (0363): the Lineup's `runUp` (m/s) on its run-up's lane (|x| < runUpX), short of the row
+    // (z < runUpEnd). 0 = none.
+    runUp: course.runUp || 0, runUpX: course.runUpX || 0, runUpEnd: course.lineupZ0 ?? 0,
     // Stability control (Assist): how hard it is working (0–1, for the HUD and the sound), the
     // brake it adds per wheel this tick (N·m), and last tick's sideslip (rad).
     esc: 0, escBrake: new Float64Array(4), escBeta: 0,
@@ -1014,6 +1019,10 @@ export function step(s, inp) {
       // Wall has a curl: on a road it read every grade over 5.7° as one and capped the car at
       // 32 km/h up the Stelvio.
       if (inp.assist && s.crawl && s.onSlope) T *= clamp(ASSIST_CRAWL + 1 - speed, 0, 1);
+      // Assist's run-up limit (0363): on the Lineup's run-up lane, short of the row, drive torque fades out over the half
+      // metre a second above the kickflip's run-up speed (a held ↑ settles at ≈ 8 m/s, 29 km/h: inside the coach's 25–30 km/h),
+      // as the crawl limit does on the curl. Full torque below it, so the reference (which holds 7.5 m/s itself) drives as before.
+      if (inp.assist && s.runUp && s.pos.z < s.runUpEnd && Math.abs(s.pos.x) < s.runUpX) T *= clamp(2 * (s.runUp + RUNUP_FADE - speed), 0, 1);
       T *= escCut;
       // Traction control: past the slip peak, torque is cut to no less than 15 % of the command
       // (tuned on concrete). On loose ground (grass, gravel, rock: Free Drive's verges) it adapts

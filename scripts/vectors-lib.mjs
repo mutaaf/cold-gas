@@ -3,7 +3,7 @@
 // numbers are stored as their IEEE 754 bit patterns (16 hex digits, big-endian), never as decimals.
 // Pure and deterministic: same bytes on every machine and every run (no Math.random, no clock).
 // scripts/vectors.mjs writes or checks the files; tests/unit/vectors.test.js checks a sample.
-import { createRun, stepRun, simulate, wallProgress, armAftermath, aftermathStep, SIM_VERSION, SURFACE_VERSION, simVersionOf } from '../src/sim/run.js';
+import { createRun, stepRun, simulate, wallProgress, armAftermath, aftermathStep, SIM_VERSION, SURFACE_VERSION, RUNUP_VERSION, simVersionOf } from '../src/sim/run.js';
 import { createAutopilot } from '../src/sim/autopilot.js';
 import { newInput, CAR } from '../src/sim/vehicle.js';
 const AIR_MASS = CAR.airMass;
@@ -285,7 +285,24 @@ export const SURFACE_RUNS = [
   { name: 'mud-lineup-runup', course: 'lineup', v: SURFACE_VERSION, log: () => lineupLane({}, (z) => (z < -28 ? -7.5 : 0)) },
   { name: 'splash-lineup-wide', course: 'lineup', v: SURFACE_VERSION, log: () => lineupLane({}, (z) => (z < -20 ? 0 : 9)) },
   { name: 'mud-lineup-long', course: 'lineup', v: SURFACE_VERSION, log: () => lineupLane({}, () => 0, 1.2) },
+  // 0363: ↑ held down the Lineup's run-up to the line, Space 0.4 s, ← 0.8 s, then Shift (the critic's floored sweep). On
+  // Assist the run-up limit holds the car at the kickflip's speed and it lands; on Pro nothing limits it and it meets the row.
+  { name: 'runup-lineup-held', course: 'lineup', v: RUNUP_VERSION, log: () => lineupFloored(1) },
+  { name: 'runup-lineup-pro', course: 'lineup', v: RUNUP_VERSION, log: () => lineupFloored(0) },
 ];
+function lineupFloored(assist, press = 0, lift = 0.4) {
+  let tL = -1, tR = -1;
+  return fly('lineup', (run) => {
+    const c = run.car, inp = newInput(), now = run.tick;
+    inp.assist = assist; inp.steer = Math.max(-1, Math.min(1, c.pos.x * 0.25));
+    if (tL < 0 && c.pos.z >= press) tL = now;
+    if (tL < 0) inp.throttle = 1;
+    else if (now - tL < lift * 240) inp.lift = 1;
+    else if (run.phase === 'air') { if (tR < 0) tR = now; if (now - tR < 0.8 * 240) inp.roll = -1; else inp.level = 1; }
+    else inp.brake = 1;
+    return inp;
+  }, RUNUP_VERSION);
+}
 
 // What the hand should feel, per tick (0149, docs/NATIVE.md §6): the inputs HapticScore reads, from the JS sim,
 // until the Swift sim feeds the same struct. Not bit-exact data (haptics are felt, not scored): 4 decimals.

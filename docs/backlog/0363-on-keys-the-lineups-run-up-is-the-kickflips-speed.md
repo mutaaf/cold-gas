@@ -1,7 +1,7 @@
 ---
 id: 0363
 title: On keys and a pad, a held ↑ runs up to the Lineup at the kickflip's speed, not 32 m/s into the row
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
@@ -42,12 +42,14 @@ run-up speed against the kickflip's band.
   reference drives at 7.5 m/s already and should be unchanged.
 
 ## Acceptance criteria
-- [ ] Sim, Assist, Lineup: ↑ held from the start reaches the line (z 0) at **7–9 m/s** (§2.2). Today it reaches 33.2.
-- [ ] With ↑ held to the press, Space at z −6…+1 held 0.4 s, ← 0.8 s, then Shift, **every** press clears the row and lands
-      upright, unwrecked. Today 0 of 16 at z −7…0.
-- [ ] Pro: ↑ held still reaches > 25 m/s at the line (a unit test pins it).
-- [ ] The Lineup reference score is unchanged or explained. `naive-players` stays 32/32 and `naive-show` 54/54.
-- [ ] 390×844 touch (the page's GO button) and 1440×900 keys both get the limit.
+- [x] Sim, Assist, Lineup: ↑ held from the start reaches the line (z 0) at **7–9 m/s** (§2.2). Today it reaches 33.2.
+      (8.0 m/s at z −14, −4 and 0: tests/unit/lineup-runup.test.js.)
+- [x] With ↑ held to the press, Space at z −6…+1 held 0.4 s, ← 0.8 s, then Shift, **every** press clears the row and lands
+      upright, unwrecked. Today 0 of 16 at z −7…0. (8 of 8 at z −6…+1, none touching the row.)
+- [x] Pro: ↑ held still reaches > 25 m/s at the line (a unit test pins it).
+- [x] The Lineup reference score is unchanged or explained. `naive-players` stays 32/32 and `naive-show` 54/54.
+      (ref-hash bit-identical: the reference holds 7.5 m/s itself and the fade starts above it; physics-bench identical.)
+- [x] 390×844 touch (the page's GO button) and 1440×900 keys both get the limit.
 
 ## Test plan
 Add a unit test that drives `createRun('lineup')` with `assist: 1`, throttle 1 from the start, and asserts the speed at
