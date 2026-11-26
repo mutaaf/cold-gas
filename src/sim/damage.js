@@ -14,6 +14,10 @@
 // Integrity = 100 − total, total = 0.6·worst zone + 0.4·mean: one wrecked corner is a wreck.
 import { HIT, SCRAPE, WHEEL, CRUSH, PART } from './impacts.js';
 
+// 60 % or worse is a wreck, whatever else happened (judge.js scores it as a crash; the HUD says WRECKED), and the car's
+// crash sensor fires there (0361: src/sim/run.js shuts the valves).
+export const WRECK_PCT = 60;
+
 export const ZONES = ['nose', 'tail', 'left', 'right', 'roof', 'floor', 'susp'];
 const Z = Object.fromEntries(ZONES.map((z, i) => [z, i]));
 const HIT_FULL = 14, WHEEL_SAFE = 3, WHEEL_FULL = 10, SCRAPE_PER = 0.6, CRUSH_FULL = 0.35;

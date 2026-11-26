@@ -103,7 +103,8 @@ struct RunVectorTests {
         let v = RunVector(name)
         // Every vector from before 0340 is SIM_VERSION's (the sets without water and mud); the surface runs are
         // SURFACE_VERSION's, on the Show and the Lineup as they are now.
-        #expect(v.simVersion == SIM_VERSION || v.simVersion == simVersionOf(v.course), "SIM_VERSION: vectors \(v.simVersion), Swift \(SIM_VERSION)/\(simVersionOf(v.course))")
+        // 0361: and the version before WRECK_VERSION on each course still replays (replayable).
+        #expect(v.simVersion == SIM_VERSION || replayable(v.course, v.simVersion), "SIM_VERSION: vectors \(v.simVersion), Swift \(SIM_VERSION)/\(simVersionOf(v.course))")
         let r: Replay
         do { r = try replay(v) } catch let e as SimUnsupported { Issue.record("\(name): \(e)"); return }
         if let miss = firstMiss(v, r) { Issue.record("\(name): \(miss)"); return }

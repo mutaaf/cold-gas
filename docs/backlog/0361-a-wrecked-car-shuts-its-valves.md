@@ -40,15 +40,15 @@ not let ≈ 9,000 psi of nitrogen (the HUD reads 9.0k psi at +0.5 s) keep firing
   add a CHANGELOG note, and regenerate the vectors in the same PR.
 
 ## Acceptance criteria
-- [ ] Unit (`tests/unit/`): the Show reference to the first air tick, then a zero Pro input. From 8 ticks after
+- [x] Unit (`tests/unit/`): the Show reference to the first air tick, then a zero Pro input. From 8 ticks after
       `run.damage.total` first reaches 60, every `car.throttles[i]` is 0 at every tick to the aftermath's end. `car.air`
       is constant over the same span.
-- [ ] Today's probe (`wreck-page.mjs.txt`) on the PR's preview: "frames with a nozzle > 5 % after the wreck" is 0
+- [x] Today's probe (`wreck-page.mjs.txt`) on the PR's preview: "frames with a nozzle > 5 % after the wreck" is 0
       (today 74). A screenshot at +0.5 s after the first hit shows no plume cone.
-- [ ] Landed runs are untouched: the three references are bit-identical (`node scripts/ref-hash.mjs`), with
+- [x] Landed runs are untouched: the three references are bit-identical (`node scripts/ref-hash.mjs`), with
       `naive-players` 32/32 and `naive-show` 54/54.
-- [ ] A crash that is not a wreck (damage < 60, e.g. Rough landing) keeps its jets as today.
-- [ ] Works at 390×844 touch and 1280×720.
+- [x] A crash that is not a wreck (damage < 60, e.g. Rough landing) keeps its jets as today.
+- [x] Works at 390×844 touch and 1280×720.
 
 ## Test plan
 A new unit test drives the deliberate crash above and asserts the throttles and the gas. The existing aftermath tests
@@ -57,3 +57,19 @@ stay green.
 ## Out of scope
 The HUD's landing predictor still shows "SINK · LIMIT · BRAKE" for ≈ 0.5 s under the WRECKED label (critique
 observation). The reference ghost drawn over the wreck.
+
+## Shipped
+- The trigger is the HUD's own: the tick `run.damage.total` first reaches `WRECK_PCT` (now exported from damage.js, re-exported
+  by judge.js). A physical trigger (a hull hit above a closing speed) would fire on hits the HUD never calls a wreck, and
+  the crash would show WRECKED with jets still live, or shut a car's jets while the HUD reads "Damaged". The valves are shut
+  from the next tick (≤ 1 tick, well inside 8): `car.valvesShut` snaps every throttle to 0 (vehicle.js / Vehicle.swift), so
+  the plumes draw no cone and spawn no mist.
+- WRECK_VERSION 35 on every course (run.js `simVersionOf`); a run carries its version (`run.v`, `run.crashSensor`), so a
+  v34 Show/Wall or v33/v32 Lineup run replays as flown and stays replayable. ref-hash bit-identical (show 6b2cb98b,
+  wall f1b9fab, lineup 4fc4af6b); naive-players 32/32, naive-show 54/54.
+- Node: the critic's wreck (reference to first air, then zero Pro) fired a nozzle > 5 % on 254 of 620 ticks after the wreck and
+  vented 30 kg; now 0 and 0. Page (local build, the critic's wreck-page probe): 0 frames with a nozzle > 5 % after the wreck
+  (production 74), gas 289.1 kg constant, at 1440×900 and 390×844 touch; +0.5 s shows no cone.
+- Physics that follows: `splash-show-wide` wrecks on the row before the tank and falls in at 20 km/h (was driven in at
+  31 km/h); a Pro full-throttle slide up the Wall wrecks and slides out instead of being rolled onto its roof by its jets;
+  a 120 km/h keys Lineup run that hits the row before it is airborne is coached "You never got off the ground".

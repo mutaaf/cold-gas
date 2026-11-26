@@ -11,12 +11,20 @@ public let SURFACE_VERSION = 33
 /// an older Show or Wall run is stale. The Lineup stays v33.
 public let MARK_VERSION = 34
 private let MARKED: Set<String> = ["show", "wall"]
-public func simVersionOf(_ courseId: String) -> Int {
+/// v35 (0361): a wrecked car shuts its valves (run.js WRECK_VERSION). The crash sensor fires the tick the damage reaches
+/// WRECK_PCT, and every valve is shut from the next tick to the end of the aftermath. Every course; landed runs are the same bits.
+public let WRECK_VERSION = 35
+/// The version a run on this course was flown at before WRECK_VERSION.
+private func before35(_ courseId: String) -> Int {
     MARKED.contains(courseId) ? MARK_VERSION : COURSES[courseId]?.surfaces != nil ? SURFACE_VERSION : SIM_VERSION
 }
-/// A run of this version on this course replays to its bits and scores as it was here (today's, or off the Show and the
-/// Wall a v32 run on a set that has surfaces now).
-public func replayable(_ courseId: String, _ v: Int) -> Bool { v == simVersionOf(courseId) || (!MARKED.contains(courseId) && v == SIM_VERSION) }
+public func simVersionOf(_ courseId: String) -> Int { WRECK_VERSION }
+/// A run of this version on this course replays to its bits and scores as it was here: today's; the course's version
+/// before WRECK_VERSION (valves left open after a wreck, as flown); or, off the Show and the Wall, a v32 run on a set that
+/// has surfaces now.
+public func replayable(_ courseId: String, _ v: Int) -> Bool {
+    v == WRECK_VERSION || v == before35(courseId) || (!MARKED.contains(courseId) && v == SIM_VERSION)
+}
 /// The course a run of version `v` was flown on: without its surfaces before SURFACE_VERSION.
 public func courseAt(_ courseId: String, _ v: Int? = nil) -> Course {
     let id = COURSES[courseId] != nil ? courseId : DEFAULT_COURSE
@@ -105,9 +113,14 @@ public final class Run {
     /// Armed (armAftermath) before the run ends, finish() keeps the world for the aftermath (Live.swift).
     public internal(set) var after: Aftermath? = nil
     public let t: Telemetry
+    /// The version it is flown at, and (0361) whether its crash sensor shuts the valves on a wreck.
+    public let v: Int
+    let crashSensor: Bool
     init(_ courseId: String, _ simVersion: Int? = nil) {
         let c = courseAt(courseId, simVersion)
         course = c.id
+        v = simVersion ?? simVersionOf(c.id)
+        crashSensor = v >= WRECK_VERSION
         car = Vehicle(c)
         t = Telemetry(c.id, surfaces: c.surfaces != nil)
     }
@@ -139,6 +152,8 @@ func advance(_ run: Run, _ input: Input) throws {
     let prevVx = c.vel.x, prevVy = c.vel.y, prevVz = c.vel.z
     try step(c, input)
     updateDamage(run.damage, c.impacts) { $0 < HULL.count ? HULL[$0].x : nil }
+    // 0361: the crash sensor fires at the wreck line; the valves are shut from the next tick on (Vehicle.swift).
+    if run.crashSensor && !c.valvesShut && run.damage.total >= WRECK_PCT { c.valvesShut = true }
     run.tick += 1
 
     let speed = DMath.dhypot(c.vel.x, c.vel.y, c.vel.z)

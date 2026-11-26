@@ -12,7 +12,9 @@ import ColdGasClient
 struct SurfaceTests {
     @Test func onlyTheShowAndTheLineupCarryThem() {
         #expect(SHOW.surfaces != nil && LINEUP.surfaces != nil && WALL_COURSE.surfaces == nil)
-        #expect(simVersionOf("show") == MARK_VERSION && simVersionOf("lineup") == SURFACE_VERSION && simVersionOf("wall") == MARK_VERSION)
+        // 0361: every course flies at WRECK_VERSION; the version before it still replays.
+        #expect(simVersionOf("show") == WRECK_VERSION && simVersionOf("lineup") == WRECK_VERSION && simVersionOf("wall") == WRECK_VERSION)
+        #expect(replayable("show", WRECK_VERSION) && replayable("wall", MARK_VERSION) && !replayable("lineup", MARK_VERSION))
         #expect(courseAt("show", SIM_VERSION).surfaces == nil && courseAt("show").surfaces != nil)
         #expect(replayable("lineup", 32) && replayable("lineup", 33) && replayable("show", MARK_VERSION))
         // 0360: an older Show or Wall card reads the old mark curve, so those runs are stale.

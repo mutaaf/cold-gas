@@ -4,7 +4,7 @@
 // now full only inside the 2 m ring and falls across the 2–4 m band, on the Show and the Wall alike. Scores only: the
 // flights are the same bits, and a run flown before is a version behind (MARK_VERSION, src/sim/run.js).
 import { describe, it, expect } from 'vitest';
-import { createRun, stepRun, simVersionOf, replayable, MARK_VERSION, SURFACE_VERSION, SIM_VERSION } from '../../src/sim/run.js';
+import { createRun, stepRun, simVersionOf, replayable, WRECK_VERSION, MARK_VERSION, SURFACE_VERSION, SIM_VERSION } from '../../src/sim/run.js';
 import { createAutopilot } from '../../src/sim/autopilot.js';
 import { scoreRun, SHOW_PRECISION, SHOW_MARK_RING } from '../../src/sim/judge.js';
 import { COURSES } from '../../src/sim/courses.js';
@@ -53,9 +53,8 @@ describe('the 2 m bullseye pays (0360)', () => {
 
   it('the Show and the Wall are scored at MARK_VERSION; a run from before is stale; the Lineup is untouched', () => {
     expect(MARK_VERSION).toBeGreaterThan(SURFACE_VERSION);
-    expect(simVersionOf('show')).toBe(MARK_VERSION);
-    expect(simVersionOf('wall')).toBe(MARK_VERSION);
-    expect(simVersionOf('lineup')).toBe(SURFACE_VERSION);
+    // 0361: every course flies at WRECK_VERSION since (a wreck shuts its valves); MARK_VERSION runs still replay.
+    for (const c of ['show', 'wall', 'lineup']) expect(simVersionOf(c)).toBe(WRECK_VERSION);
     for (const v of [SIM_VERSION, SURFACE_VERSION]) {
       expect(replayable('show', v), `show v${v}`).toBe(false);
       expect(replayable('wall', v), `wall v${v}`).toBe(false);
