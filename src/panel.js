@@ -132,9 +132,10 @@ export function localWords(card) {
   if (card.facts.course === 'wall') return wallWords(card);
   if (card.facts.course === 'show') return showWords(card);
   const f = card.facts, s = f.sink + f.tiltDeg + f.padMiss;
-  // 0369: a car that ended on the row before its wheels came down hit the row; it is never told it never left the ground.
-  if (!f.jumped && f.contact) {
-    return { headline: 'Into the row', engineer: `Hull contact with the parked row${f.launchKmh > 0 ? ` after a take-off at ${f.launchKmh} km/h` : ''}, before the wheels came down. That ends the evaluation.`, coordinator: 'Lift at the line, then roll. The row is there to be cleared, not hit.', designer: 'All of the nerve, none of the height.', source: 'local' };
+  // 0369: a car that left the ground and ended on the row before its wheels came down (verdict Contact, not No jump) hit
+  // the row; it is never told it never left the ground. Some of these rose over the roofs first: no word on the height.
+  if (!f.jumped && f.contact && card.verdict !== 'No jump') {
+    return { headline: 'Into the row', engineer: `Hull contact with the parked row${f.launchKmh > 0 ? ` after a take-off at ${f.launchKmh} km/h` : ''}, before the wheels came down. That ends the evaluation.`, coordinator: 'The row is there to be cleared, not hit. Go again.', designer: 'The row was the frame. You hit the frame.', source: 'local' };
   }
   if (!f.jumped) {
     return { headline: 'No jump recorded', engineer: 'The car never left the ground long enough to measure. Nothing to grade.', coordinator: 'The ramp is right there. Hit it with intent and give me something.', designer: 'Restraint is a virtue. This was too much of it.', source: 'local' };

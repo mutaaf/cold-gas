@@ -307,8 +307,8 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
   // 0369: under INTO_ROW_H and not yet falling as it met the row, the car went into it on the way up (every such hit
   // measured 0–1.1 m up; every hit from above, 1.7 m and more): it never "peaked … and came down on the roofs", whatever
   // its bounce reached. It never got over the roofs, so it is the lift's finding (no-lift, the funnel's wreck-lift).
-  if (t.contact && f.contactH >= 0 && f.contactH < INTO_ROW_H && f.contactVy >= 0) {
-    const lead = kmh >= 0 ? `You reached the line at ${kmh} km/h${held ? ` and ${held}` : ''}: the car` : held ? `You ${held}: the car` : 'The car';
+  const lead = kmh >= 0 ? `You reached the line at ${kmh} km/h${held ? ` and ${held}` : ''}: the car` : held ? `You ${held}: the car` : 'The car';
+  if (t.airStartTick >= 0 && t.contact && f.contactH >= 0 && f.contactH < INTO_ROW_H && f.contactVy >= 0) {
     const up = f.contactH >= 0.1 ? ` ${r1(f.contactH)} m up` : ', its wheels barely off the ground,';
     add('no-lift', 10, 'Into the row', `${lead} went into the row${up} at ${Math.round(f.contactSpeed * 3.6)} km/h, before it rose over the roofs.`, fix);
     return;
@@ -321,7 +321,6 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
       fix);
     return;
   }
-  const lead = kmh >= 0 ? `You reached the line at ${kmh} km/h${held ? ` and ${held}` : ''}: the car` : held ? `You ${held}: the car` : 'The car';
   add('row', 9.5, 'Came down on the row', `${lead} peaked ${r1(apexH)} m up and came down on the roofs.`, fix);
 }
 

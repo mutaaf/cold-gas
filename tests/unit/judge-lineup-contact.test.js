@@ -40,7 +40,7 @@ describe('0369: the populations (flyKeysLineup and flyTouch lineup × 200, seed 
           expect(card.facts.jumped).toBe(false);
           expect(card.categories.height).toBe(0);
           expect(card.categories.rotation).toBe(0);
-          expect(crashNote(card.facts)).not.toMatch(/No jump/);
+          expect(crashNote(card.facts, card.verdict)).not.toMatch(/No jump/);
         }
       }
       expect(rowHits).toBeGreaterThan(10);
@@ -87,7 +87,26 @@ describe('0369: what stays', () => {
     const card = scoreRun(run.t, { assist: true });
     expect(card.verdict).toBe('No jump');
     expect(localWords(card).headline).toBe('No jump recorded');
-    expect(crashNote(card.facts)).toBe('No jump · not a mark yet');
+    expect(crashNote(card.facts, card.verdict)).toBe('No jump · not a mark yet');
+  });
+
+  it('a car driven into the row on its wheels (↑ held, LIFT never pressed) is "No jump" on every surface', () => {
+    const run = createRun('lineup'), inp = newInput();
+    while (run.phase !== 'done' && run.tick < 240 * 30) {
+      inp.throttle = Math.hypot(run.car.vel.x, run.car.vel.z) < 4 ? 1 : 0;   // slow enough not to wreck (a wreck reads Wrecked first)
+      stepRun(run, inp);
+    }
+    expect(run.t.contact).toBe(true);
+    expect(run.t.airStartTick).toBe(-1);
+    const card = scoreRun(run.t, { assist: true });
+    card.tier = 'assist';
+    expect(card.verdict).toBe('No jump');
+    expect(crashNote(card.facts, card.verdict)).toBe('No jump · not a mark yet');
+    expect(localWords(card).headline).toBe('No jump recorded');
+    const top = coach(run.inputLog, 'lineup', card).items[0];
+    expect(top.id).toBe('no-lift');
+    expect(top.detail).toMatch(/^You never got off the ground/);
+    expect(top.detail).not.toMatch(/into the row/);
   });
 
   it('a run that hits the row without a touchdown gets row words with its speed, never the ramp or restraint', () => {
@@ -95,7 +114,9 @@ describe('0369: what stays', () => {
     const w = localWords({ verdict: 'Contact', facts });
     expect(w.headline).toBe('Into the row');
     expect(w.engineer).toContain('63 km/h');
-    expect(`${w.engineer} ${w.coordinator} ${w.designer}`).not.toMatch(/ramp|Restraint|never left/);
+    expect(`${w.engineer} ${w.coordinator} ${w.designer}`).not.toMatch(/ramp|Restraint|never left|height/);
+    // A car driven into the row on its wheels is judged No jump, and keeps the no-jump lines.
+    expect(localWords({ verdict: 'No jump', facts: { ...facts, launchKmh: 0 } }).headline).toBe('No jump recorded');
     // Without a take-off speed the line names none.
     expect(localWords({ verdict: 'Contact', facts: { ...facts, launchKmh: 0 } }).engineer).not.toMatch(/km\/h/);
   });
@@ -104,6 +125,7 @@ describe('0369: what stays', () => {
     expect(crashNote({ jumped: false, contact: true, damagePct: 20 })).toBe('Crashed · not a mark yet');
     expect(crashNote({ jumped: false, contact: true, damagePct: 70 })).toBe('Wrecked · not a mark yet');
     expect(crashNote({ jumped: false, contact: false, damagePct: 0 })).toBe('No jump · not a mark yet');
+    expect(crashNote({ jumped: false, contact: true, damagePct: 20 }, 'No jump')).toBe('No jump · not a mark yet');
     expect(crashNote({ jumped: true, crashed: true, damagePct: 10 })).toBe('Crashed · not a mark yet');
   });
 });

@@ -115,9 +115,12 @@ public func crewWords(_ card: ScoreCard, wreck: CrewWreck? = nil, units: Units =
                      "Symmetry. It starts with the centreline.")
     }
     // 0369: on the Lineup a car that ended on the row before its wheels came down hit the row: never "never left the ground".
-    let rowHit = course != "wall" && course != "show" && !f.b("jumped") && f.b("contact")   // the Lineup card carries no `course`
+    // The Lineup card carries no `course` (so the Lineup is neither the Wall nor the Show). A row hit's verdict is Contact
+    // or Wrecked (judge.js rowHit); a car driven into the row on its wheels stays No jump.
+    let lineup = course != "wall" && course != "show"
+    let rowHit = lineup && !f.b("jumped") && f.b("contact") && card.verdict != "No jump"
     if !f.b("jumped") && !rowHit {
-        if course == "lineup" {
+        if lineup {
             return words(card.verdict, "Never left the ground long enough to measure. Nothing on my clipboard.",
                          "The air is right there. Lift and give me something!", "Restraint is a virtue. This was too much of it.")
         }

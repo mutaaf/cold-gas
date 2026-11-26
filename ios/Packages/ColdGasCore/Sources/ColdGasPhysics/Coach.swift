@@ -392,8 +392,8 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
         : !speedFix.isEmpty || thumb || kmh >= 0 ? speedFix + holdFix : "Keep between \(s(lo)) km/h and \(s(hi)) km/h to the line. \(holdFix)"
     let heldPart = held.isEmpty ? "" : ", \(held)"
     // 0369: under COACH_INTO_ROW_H and not yet falling as it met the row, the car went into it on the way up.
-    if t.contact && f.contactH >= 0 && f.contactH < COACH_INTO_ROW_H && f.contactVy >= 0 {
-        let lead = kmh >= 0 ? "You reached the line at \(s(kmh)) km/h\(held.isEmpty ? "" : " and \(held)"): the car" : !held.isEmpty ? "You \(held): the car" : "The car"
+    let lead = kmh >= 0 ? "You reached the line at \(s(kmh)) km/h\(held.isEmpty ? "" : " and \(held)"): the car" : !held.isEmpty ? "You \(held): the car" : "The car"
+    if t.airStartTick >= 0 && t.contact && f.contactH >= 0 && f.contactH < COACH_INTO_ROW_H && f.contactVy >= 0 {
         let up = f.contactH >= 0.1 ? " \(s(r1(f.contactH))) m up" : ", its wheels barely off the ground,"
         add("no-lift", 10, "Into the row", "\(lead) went into the row\(up) at \(s(jsRound(f.contactSpeed * 3.6))) km/h, before it rose over the roofs.", fix)
         return
@@ -405,7 +405,6 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
             fix)
         return
     }
-    let lead = kmh >= 0 ? "You reached the line at \(s(kmh)) km/h\(held.isEmpty ? "" : " and \(held)"): the car" : !held.isEmpty ? "You \(held): the car" : "The car"
     add("row", 9.5, "Came down on the row", "\(lead) peaked \(s(r1(apexH))) m up and came down on the roofs.", fix)
 }
 
