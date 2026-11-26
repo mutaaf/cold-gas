@@ -1,7 +1,7 @@
 ---
 id: 0361
 title: A wrecked car shuts its valves; no jet fires from a car lying on its roof
-status: ready
+status: proposed
 priority: P1
 size: M
 lens: authenticity
@@ -11,6 +11,8 @@ by: critic
 ---
 
 ## Why
+
+SCOUT 2026-11-26: held at proposed to keep the ready queue at its cap of 10; the funnel (21 landings, 0 posts, 0 shares) puts 0364/0365/0366 first. Promote when room.
 The crash is the punchline (Wreck Club), and right now it shows something fake. Production `ac3dca4`, 1440×900, the
 Show: the reference to the first air tick, then Pro with nothing held. Sim and director were stepped together at 1/60 s
 (`docs/critique/2026-11-23-0400/wreck-page.mjs.txt`).

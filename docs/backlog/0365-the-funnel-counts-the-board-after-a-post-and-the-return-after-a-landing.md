@@ -1,7 +1,7 @@
 ---
 id: 0365
 title: The funnel says whether a posted player opens the board and whether a landed player returns the next UTC day
-status: proposed
+status: ready
 priority: P2
 size: S
 lens: engagement
@@ -11,6 +11,8 @@ by: scout
 ---
 
 ## Why
+
+SCOUT 2026-11-26: promoted to ready. Funnel, human sessions to 2026-11-25: 31 people, 21 landed, 0 post, 0 share, 0 board-open; visit-return 5.
 The funnel reads 4 `visit-return` in 14 days against 17 `visit-new` (24 %), and zero `board-open`. We cannot say whether
 a returning visit followed a landing, a Post or a Daily, so no retention ticket can be aimed. 0303 counts what is pressed
 on the card; this adds the two missing links, as counts only (no ids, no cookies beyond the existing local flags).
