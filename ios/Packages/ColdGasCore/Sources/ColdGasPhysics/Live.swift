@@ -235,7 +235,7 @@ public final class LiveRun {
                 if run.phase == .done && card == nil { closeCard() }
                 return .flew
             }
-            if oneThumb { clearInput(input); thumb.sample(run, released, input, sampler.tilt) }
+            if oneThumb { clearInput(input); sampler.liftOff.reset(); thumb.sample(run, released, input, sampler.tilt) }
             else { sampler.sample(run.phase, tier, input, released, run.car) }
             wallAssist(input)
             try stepRun(run, input)

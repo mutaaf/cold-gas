@@ -8,7 +8,7 @@ import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { predict, newPrediction, SINK_SOFT, SINK_FIRM } from './predict.js';
 import { scoreRun, SHOW_MARK_RING } from './judge.js';
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD, LINEUP_SPEED_SLACK as SPEED_SLACK, LINEUP_TAP_BEFORE, LINEUP_LIFT_LATE, ringMiss } from './aim-words.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD, LINEUP_SPEED_SLACK as SPEED_SLACK, LINEUP_TAP_BEFORE, LINEUP_LIFT_LATE, LINEUP_LIFT_HIGH, KICKFLIP_APEX, ringMiss } from './aim-words.js';
 
 export { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH };
 import { v3 } from './m3.js';
@@ -186,7 +186,10 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
 
   // 0367: a crash and its card. A crash is never "Clean", and never told to try Pro (finish).
   const crashed = !!(card?.facts?.crashed ?? scoreRun(t).facts?.crashed);
-  if (courseId === 'lineup' && !drill) lineupWrecks(t, f, course, say, crashed, add, card?.tier || t.tier);
+  if (courseId === 'lineup' && !drill) {
+    lineupWrecks(t, f, course, say, crashed, add, card?.tier || t.tier);
+    heldLift(t, f, say, add, card?.tier || t.tier);
+  }
   if (wall && t.airStartTick < 0) {
     if (t.fellOff) add('fell-off', 10, 'Slid off the deck', `The car left the side of the curl ${r1(t.maxRampHeight)} m up.`, 'Keep it on the centreline: small steering corrections, and crawl (≈20 km/h) so the fan holds you.');
     // 0189: a car that stopped short of the ledge (a thumb lifted on the climb) never got to the let-go: name the
@@ -234,7 +237,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
           `Hold ${assist ? say.land : say.lift} from ${needAt} m or higher: the BRAKE line on the descent tape.${assist ? ' Or hold it from the release and let it pace the fall.' : ''}`);
       } else {
         add('ran-out', brakeW(6), 'Out of braking at the bottom', `You braked from ${r1(f.brakeH)} m but still touched down at ${r1(t.sink)} m/s with ${Math.round(f.gasAtTouch)} % gas${brakePts}.`,
-          f.gasAtTouch < 25 ? 'The tanks blow down as they empty: below about 40 % the jets lose thrust. Boost less and brake once, hard, near the BRAKE line.' : (say.ranOut || RANOUT_LEAN));
+          f.gasAtTouch < 25 ? `The tanks blow down as they empty: below about 40 % the jets lose thrust. ${f.boostTicks > 0 ? 'Boost less and brake once' : 'Save the gas for the brake, then brake once'}, hard, near the BRAKE line.` : (say.ranOut || RANOUT_LEAN));
       }
     }
   }
@@ -293,23 +296,27 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
   // The one-thumb pad paces the run-up and, past the line, commits the lift itself (src/onethumb.js); on Advanced LIFT
   // isn't a valve. Neither is told a hold it didn't choose.
   const thumb = say.aim === AIM_THUMB, timed = !thumb && tier !== 'advanced';
+  // 0362: on Assist a press on the run-up is a lift-off command (src/lift-off.js): it burns to the kickflip's height
+  // however long the key is down, so the log's LIFT is the burn's, not the key's. Its hold is never named or asked for.
+  const holdTimed = timed && tier !== 'assist';
   const heldS = r1(f.liftHeld);
-  const held = !timed ? '' : f.liftHeld >= 0 ? `held ${say.lift} ${heldS} s` : `never pressed ${say.lift}`;
+  const held = !timed ? '' : f.liftHeld < 0 ? `never pressed ${say.lift}` : holdTimed ? `held ${say.lift} ${heldS} s` : '';
   const atLine = kmh >= 0 ? `${kmh} km/h at the line` : 'you never reached the line';
   // Every number carries its unit, so src/units.js shows each in mph too (it reads no ranges). The speed is named once
   // it is clearly off the band.
   const speedOff = !thumb && kmh >= 0 && (kmh < lo - SPEED_SLACK[0] || kmh > hi + SPEED_SLACK[1]);
   const speedFix = !speedOff ? '' :
     kmh > hi ? `Ease off ${say.drive} before the line: between ${lo} km/h and ${hi} km/h, not ${kmh} km/h. ` : `Carry between ${lo} km/h and ${hi} km/h to the line, not ${kmh} km/h. `;
-  const shortHold = timed && !(f.liftHeld >= LIFT_HOLD - 0.05);
+  const shortHold = timed && (holdTimed ? !(f.liftHeld >= LIFT_HOLD - 0.05) : f.liftHeld < 0);
   const holdFix = thumb ? 'Keep holding the pad through the line: it lifts you over the row, then rolls you.'
+    : timed && !holdTimed ? `Press ${say.lift} at the line: it lifts you over the row, then roll.`
     : `Hold ${say.lift} at the line for about ${LIFT_HOLD} s${shortHold && f.liftHeld >= 0 ? ` (you held ${heldS} s)` : ''}, then roll.`;
   // 0370: when the press began decides it too. Every in-band crash of the keys population pressed LIFT 1.29–1.91 m past
   // the line; none of the 69 that pressed it before 1.25 m crashed. Late, the nose meets the first car on the way up.
   const late = timed && f.liftHeld >= 0 && f.liftAtZ > LINEUP_LIFT_LATE;
   const into = t.airStartTick >= 0 && t.contact && f.contactH >= 0 && f.contactH < INTO_ROW_H && f.contactVy >= 0;
   const lateFix = `Press ${say.lift} on the line, not ${r1(f.liftAtZ)} m past it${into ? ': the nose met the first car on the way up' : ''}. `
-    + `Hold it about ${LIFT_HOLD} s${shortHold ? ` (you held ${heldS} s)` : ''}, then roll.`;
+    + (holdTimed ? `Hold it about ${LIFT_HOLD} s${shortHold ? ` (you held ${heldS} s)` : ''}, then roll.` : 'Then roll.');
   // Run-up, press and hold all right on a card that didn't crash: never an instruction they already followed. A crash
   // is never "right" (0370): the sim is deterministic, so the same run crashes the same way.
   const right = timed && kmh >= 0 && !speedOff && !shortHold && !late;
@@ -335,6 +342,17 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
     return;
   }
   add('row', 9.5, 'Came down on the row', `${lead} peaked ${r1(apexH)} m up and came down on the roofs.`, fix);
+}
+
+// 0362: on Pro, LIFT held from the line is still a throttle. A lift-off press that flew the car past LINEUP_LIFT_HIGH spent
+// on the climb the gas the brake needed: that is the finding, ahead of the brake's (a 1.0 s hold peaks at ≈ 38 m and
+// touches down at 27 m/s), and the fix is the key they held, never a boost they didn't use.
+function heldLift(t, f, say, add, tier) {
+  if (tier !== 'pro' || f.liftHeld < 0 || t.airStartTick < 0) return;
+  const apexH = Math.max(0, t.apex - SPEC.comHeight);
+  if (!(apexH > LINEUP_LIFT_HIGH)) return;
+  add('held-lift', 10.5, 'Held LIFT too long', `You held ${say.lift} ${r1(f.liftHeld)} s from the line: the car climbed to ${r1(apexH)} m (the kickflip peaks near ${KICKFLIP_APEX} m) and touched down with ${Math.round(f.gasAtTouch)} % gas.`,
+    `Let go of ${say.lift} sooner: about ${LIFT_HOLD} s at the line lifts you to the kickflip's height and leaves the gas for the brake.`);
 }
 
 // A card with no finding: "Clean", with the next step. A crash is never clean (0367): it reads its own verdict.
