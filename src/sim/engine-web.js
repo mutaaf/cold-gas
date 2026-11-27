@@ -8,11 +8,12 @@ import { initPhysics } from './engine.js';
 // body sat unread until the glue had loaded and its `.then` had run, and on a phone the title's first frame holds the
 // main thread for seconds; a body nobody reads fills its pipe and the download stalls (1.1 MB took 12.8 s on the
 // Slow 4G profile, 6.5 s of link). A server with the wrong MIME type, or a browser without compileStreaming,
-// compiles the bytes instead (one fetch either way; no clone: a tee'd body is pumped on the main thread).
+// compiles the bytes instead (one fetch either way; no clone: a tee'd body is pumped on the main thread). The streaming
+// API takes only a bare `application/wasm`: a header with a parameter (`; charset=utf-8`) goes the bytes' way too.
 function compileWasm(url) {
   return fetch(url).then((r) => {
     if (!r.ok) throw new Error(`COLD GAS physics: ${r.status} for ${url}`);
-    const streams = typeof WebAssembly.compileStreaming === 'function' && /^application\/wasm\b/i.test(r.headers.get('content-type') || '');
+    const streams = typeof WebAssembly.compileStreaming === 'function' && /^\s*application\/wasm\s*$/i.test(r.headers.get('content-type') || '');
     return streams ? WebAssembly.compileStreaming(r) : r.arrayBuffer().then((b) => WebAssembly.compile(b));
   });
 }

@@ -161,7 +161,8 @@ for (const [name, p] of Object.entries(PROFILES)) {
   out[name].gl = rows[0].gl;
   if (p.isMobile) {
     const taps = [];
-    for (let r = 0; r < RUNS; r++) taps.push(await tapToRun(p));
+    // A tap that misses (the title still settling under the touch) is one lost sample, not the whole report.
+    for (let r = 0; r < RUNS; r++) taps.push(await tapToRun(p).catch((err) => { console.error('tapToRun run failed:', err.message.split('\n')[0]); return {}; }));
     for (const k of ['tapToRun', 'engineAt', 'wasmEnd']) out[name][k] = Math.round(med(taps.map((x) => x[k] ?? NaN)));
     console.error(name, 'runs [tapToRun, engineAt, wasmEnd]:', JSON.stringify(taps.map((x) => [x.tapToRun, x.engineAt, x.wasmEnd].map(Math.round))));
   }

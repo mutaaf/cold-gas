@@ -66,6 +66,14 @@ describe('the engine streams its WASM from the first ask (0053)', () => {
     expect(engine.RAPIER.version()).toMatch(/^0\.21\./);
   });
 
+  it('a MIME type with a parameter (the streaming API refuses it) loads from the bytes', async () => {
+    globalThis.fetch = vi.fn(async () => { calls++; return wasmResponse('application/wasm; charset=utf-8'); });
+    const { loadPhysics } = await freshWeb();
+    await loadPhysics();
+    expect((await import('../../src/sim/engine.js')).physicsReady()).toBe(true);
+    expect(calls).toBe(1);
+  });
+
   it('a browser without compileStreaming compiles the bytes', async () => {
     globalThis.fetch = vi.fn(async () => { calls++; return wasmResponse(); });
     const real = WebAssembly.compileStreaming;
