@@ -484,8 +484,8 @@ function fakeStorage({ throws = false } = {}) {
 
 // 0156: the critic's sheet (2026-11-05 §3): a thumb that slides onto the dot and holds lands ≤ 3.5 m, a Perfect 10
 // on run 1, and the sheet told it to slide onto the dot. NEXT RUN and the coach's first item now name one next step.
-describe('one thumb, a landing on the mark: the sheet names the next step (0156)', () => {
-  it('the held +24 px slide (Perfect 10, ≤ 3.5 m): NEXT RUN and What happened agree on Pro', () => {
+describe('one thumb, a landing near the mark: the sheet names the next step (0156, 0371)', () => {
+  it('the held +24 px slide (Perfect 10, 2.2 m out): NEXT RUN and What happened agree on the 2 m ring', () => {
     const run = flyThumb({ slide: (r, th) => th.move(24, 0) });
     const card = scoreRun(run.t);
     expect(card.facts.crashed).toBe(false);
@@ -495,10 +495,15 @@ describe('one thumb, a landing on the mark: the sheet names the next step (0156)
     expect(c.items[0].id).toBe('clean');
     const p = pickPointer(c.items, ctx, { card, flight: c.flight });
     expect(p.id).toBe('clean');
-    expect(p.text).not.toMatch(/slide onto the amber dot/);
     expect(p.text).toMatch(new RegExp(`^Clean, ${card.facts.padMiss.toFixed(1)} m from the mark`));
-    expect(c.items[0].fix).toMatch(/Try Pro/);
-    expect(p.text).toMatch(/try Pro/);
+    // 0371: this slide sets down 2.2 m out, just past the 2 m bullseye (0360), so the card's Precision is under 10 and
+    // both name the ring and the miss, not Pro. Inside the ring both say Pro (tests/unit/thumb-ring.test.js).
+    expect(card.facts.padMiss).toBeGreaterThan(2.05);
+    expect(card.categories.precision).toBeLessThan(10);
+    expect(c.items[0].fix).toMatch(/2 m ring/);
+    expect(p.text).toMatch(/2 m ring pays full marks\. Next: slide onto the amber dot$/);
+    expect(c.items[0].fix).not.toMatch(/Pro/);
+    expect(p.text).not.toMatch(/Pro/);
   });
 });
 

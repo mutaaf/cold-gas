@@ -7,8 +7,8 @@ import { up, CAR, NOZZLES, forward, DT } from './vehicle.js';
 import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { predict, newPrediction, SINK_SOFT, SINK_FIRM } from './predict.js';
-import { scoreRun } from './judge.js';
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD, LINEUP_SPEED_SLACK as SPEED_SLACK, LINEUP_TAP_BEFORE, LINEUP_LIFT_LATE } from './aim-words.js';
+import { scoreRun, SHOW_MARK_RING } from './judge.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD, LINEUP_SPEED_SLACK as SPEED_SLACK, LINEUP_TAP_BEFORE, LINEUP_LIFT_LATE, ringMiss } from './aim-words.js';
 
 export { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH };
 import { v3 } from './m3.js';
@@ -345,8 +345,10 @@ export function finish(out, f, card, crashed = false) {
     out.push({ id: 'crash', weight: 0, title: v, detail: `${v}: the replay names no single cause.`, fix: CRASH_FIX });
   }
   if (!out.length) {
+    const ring = ringMiss(card);
     out.push({ id: 'clean', weight: 0, title: 'Clean', detail: card ? `${card.verdict}: nothing big to fix.` : 'Nothing big to fix.',
-      fix: card && card.tier === 'assist' ? 'Want more? Try Pro: you fly the landing yourself, and it scores ×1.08.' : 'Chase the details: sink under 1 m/s, the 2 m ring, more gas left.' });
+      fix: ring >= 0 ? `Land inside the ${SHOW_MARK_RING} m ring for full marks: this one was ${r1(ring)} m from the mark.`
+        : card && card.tier === 'assist' ? 'Want more? Try Pro: you fly the landing yourself, and it scores ×1.08.' : 'Chase the details: sink under 1 m/s, the 2 m ring, more gas left.' });
   }
   return { items: out.slice(0, 3), flight: f };
 }

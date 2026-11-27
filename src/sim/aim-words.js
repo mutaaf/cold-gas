@@ -23,3 +23,12 @@ export const LINEUP_TAP_BEFORE = 5;
 // of the 90 keys players in the band (22–34 km/h, a hold ≥ 0.45 s), 0 of 69 who pressed before 1.25 m crashed and 7 of 21
 // at 1.25 m or later did, every one with the nose into the first car on the way up.
 export const LINEUP_LIFT_LATE = 1.25;
+// 0371: an Assist card on a course judged on the rings (the Show, the Wall) whose Precision is under 10 missed the 2 m
+// bullseye (SHOW_PRECISION in judge.js, 0360), so its clean step is the ring, not Pro: the card's own padMiss (at its 0.1),
+// or -1 when the ring isn't the step (Pro and Advanced keep "chase the details", which names the ring; no card; the Lineup).
+export function ringMiss(card) {
+  const f = card?.facts, p = card?.categories?.precision;
+  const course = card?.course || f?.course || 'lineup';   // a Lineup card carries no course (as pointsLeft reads it)
+  if (!f || card.tier !== 'assist' || (course !== 'show' && course !== 'wall') || !(p < 10) || !Number.isFinite(f.padMiss)) return -1;
+  return f.padMiss;
+}

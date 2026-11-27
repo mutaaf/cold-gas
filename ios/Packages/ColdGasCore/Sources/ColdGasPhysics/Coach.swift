@@ -422,6 +422,18 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
     add("row", 9.5, "Came down on the row", "\(lead) peaked \(s(r1(apexH))) m up and came down on the roofs.", fix)
 }
 
+/// 0371 (aim-words.js ringMiss): an Assist card on the rings (the Show, the Wall) with Precision under 10 missed the 2 m
+/// bullseye, so its clean step is the ring: the card's padMiss, or -1 (Pro, Advanced, no card, the Lineup).
+public func coachRingMiss(_ card: Card?) -> Double {
+    guard let card, card.tier == "assist" else { return -1 }
+    func str(_ k: String) -> String? { if case .s(let x)? = card.flat.first(where: { $0.0 == k })?.1 { return x }; return nil }
+    func num(_ k: String) -> Double? { if case .n(let x)? = card.flat.first(where: { $0.0 == k })?.1 { return x }; return nil }
+    let course = str("course") ?? str("facts.course") ?? "lineup"   // a Lineup card carries no course
+    guard course == "show" || course == "wall", let p = num("categories.precision"), p < 10,
+          let miss = num("facts.padMiss"), miss.isFinite else { return -1 }
+    return miss
+}
+
 /// A card with no finding: "Clean", with the next step. A crash is never clean (0367): it reads its own verdict.
 func coachFinish(_ found: [CoachItem], _ f: CoachFlight, _ card: Card?, _ crashed: Bool = false) -> CoachResult {
     // JS's sort is stable, Swift's only in practice: the index keeps ties in the order they were added.
@@ -433,8 +445,10 @@ func coachFinish(_ found: [CoachItem], _ f: CoachFlight, _ card: Card?, _ crashe
         out.append(CoachItem(id: "crash", weight: 0, title: v, detail: "\(v): the replay names no single cause.", fix: COACH_CRASH_FIX))
     }
     if out.isEmpty {
+        let ring = coachRingMiss(card), s = jsNumberString
         out.append(CoachItem(id: "clean", weight: 0, title: "Clean", detail: card.map { "\($0.verdict): nothing big to fix." } ?? "Nothing big to fix.",
-                             fix: card?.tier == "assist" ? "Want more? Try Pro: you fly the landing yourself, and it scores ×1.08." : "Chase the details: sink under 1 m/s, the 2 m ring, more gas left."))
+                             fix: ring >= 0 ? "Land inside the \(s(SHOW_MARK_RING)) m ring for full marks: this one was \(s(r1(ring))) m from the mark."
+                                : card?.tier == "assist" ? "Want more? Try Pro: you fly the landing yourself, and it scores ×1.08." : "Chase the details: sink under 1 m/s, the 2 m ring, more gas left."))
     }
     return CoachResult(items: Array(out.prefix(3)), flight: f)
 }
