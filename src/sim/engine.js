@@ -8,7 +8,7 @@
 // (src/sim/world.js), all as forces on Rapier's bodies.
 //
 // The WASM has to be instantiated once per process before any run is created:
-//   browser   await initPhysics(fetch(url))      (src/sim/engine-web.js: the asset URL from Vite)
+//   browser   await initPhysics(compiling)       (src/sim/engine-web.js: WebAssembly.compileStreaming of the asset, 0053)
 //   Worker    await initPhysics(wasmModule)      (a precompiled module: workerd can't compile bytes)
 //   Node      await initPhysics()                (reads the file from node_modules)
 // The engine's JS API, loaded with its WASM (its own chunk in the browser, loaded with the WASM).

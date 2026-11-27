@@ -5,6 +5,7 @@
 //     (after a build; served gzipped like production: `vite preview` sends raw bytes, so the Slow 4G profile would
 //     time 731 kB of entry instead of ≈ 220 kB)
 //   node scripts/perf.mjs https://mutaafaziz.com/coldgas/ prod 3
+//   CHROMIUM=/path/to/chrome node scripts/perf.mjs …   (a browser other than Playwright's own)
 //
 // Two profiles: desktop (no throttling) and a phone (390×844, 4× CPU slowdown, DevTools
 // "Slow 4G": 562.5 ms RTT, 1.44 Mbps down). Prints medians of:
@@ -15,6 +16,11 @@
 //   longN/Max/Sum    main-thread long tasks (> 50 ms)
 //   jsKB / totalKB   bytes over the wire (encoded), nReq requests
 //   warmReq          requests that still hit the network on a warm reload (revalidations)
+//   tapToRun         phone only (0053): a returning player (how-to seen) taps the Jump with a raw CDP touch the moment
+//                    it is usable; ms from that tap until the run starts (body[data-mode] leaves 'title'), and
+//                    engineAt (the physics WASM instantiated) / wasmEnd (its last byte), ms from navigation.
+//                    The start is read by a MutationObserver: a timer poll is starved on the title while the
+//                    reference ghosts fly (scheduler.yield outranks timers), which once read 37 s for ≈ 10 s.
 import { chromium } from '@playwright/test';
 
 const [url, label = 'run', runsArg = '3'] = process.argv.slice(2);
@@ -53,8 +59,50 @@ const INIT = `
   poll();
 })();`;
 
+const TAP_INIT = `
+(() => {
+  try { localStorage.setItem('coldgas_howto', 'seen'); } catch {}
+  window.__tap = {};
+  new MutationObserver(() => {
+    const m = document.body && document.body.dataset.mode;
+    if (m && m !== 'title' && !window.__tap.start) window.__tap.start = performance.now();
+  }).observe(document, { subtree: true, attributes: true, attributeFilter: ['data-mode'] });
+  // The engine is up when its WASM's first instance is (src/sim/engine.js; later WASM, e.g. the forge's decoder, comes after).
+  for (const k of ['instantiate', 'instantiateStreaming']) {
+    const orig = WebAssembly[k];
+    if (orig) WebAssembly[k] = function (...a) { const q = orig.apply(this, a); q.then(() => { window.__tap.engineAt ??= performance.now(); }, () => {}); return q; };
+  }
+})();`;
+
+// One cold load as a returning player: tap the Jump the moment it's usable, time until the run starts.
+async function tapToRun(p) {
+  const ctx = await browser.newContext({ viewport: p.viewport, isMobile: p.isMobile, hasTouch: p.hasTouch, deviceScaleFactor: 3 });
+  const page = await ctx.newPage();
+  const cdp = await ctx.newCDPSession(page);
+  await cdp.send('Network.enable');
+  await cdp.send('Network.setCacheDisabled', { cacheDisabled: true });
+  if (p.net) await cdp.send('Network.emulateNetworkConditions', p.net);
+  if (p.cpu > 1) await cdp.send('Emulation.setCPUThrottlingRate', { rate: p.cpu });
+  await page.addInitScript(TAP_INIT);
+  await page.goto(url, { waitUntil: 'commit' });
+  const h = await page.waitForFunction(() => {
+    const b = document.querySelector('[data-start]'), r = b && b.getBoundingClientRect();
+    return b && r.width > 0 && !b.closest('[hidden]') && window.__coldgas && { t: performance.now(), x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  }, null, { timeout: 180_000, polling: 20 });
+  const { t, x, y } = await h.jsonValue();
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
+  await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+  await page.waitForFunction(() => window.__tap.start, null, { timeout: 240_000, polling: 100 });
+  const m = await page.evaluate(() => ({
+    start: window.__tap.start, engineAt: window.__tap.engineAt,
+    wasmEnd: performance.getEntriesByType('resource').find((e) => /\.wasm/.test(e.name))?.responseEnd,
+  }));
+  await ctx.close();
+  return { tapToRun: m.start - t, engineAt: m.engineAt, wasmEnd: m.wasmEnd };
+}
+
 const med = (a) => { const s = [...a].sort((x, y) => x - y); return s[Math.floor(s.length / 2)]; };
-const browser = await chromium.launch({ args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'] });
+const browser = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--enable-gpu', '--ignore-gpu-blocklist', '--enable-unsafe-swiftshader'] });
 const out = {};
 for (const [name, p] of Object.entries(PROFILES)) {
   const rows = [];
@@ -111,6 +159,12 @@ for (const [name, p] of Object.entries(PROFILES)) {
   out[name] = Object.fromEntries(keys.map((k) => [k, Math.round(med(rows.map((x) => x[k] ?? NaN)))]));
   out[name].warmReq = rows[0].warmReq;
   out[name].gl = rows[0].gl;
+  if (p.isMobile) {
+    const taps = [];
+    for (let r = 0; r < RUNS; r++) taps.push(await tapToRun(p));
+    for (const k of ['tapToRun', 'engineAt', 'wasmEnd']) out[name][k] = Math.round(med(taps.map((x) => x[k] ?? NaN)));
+    console.error(name, 'runs [tapToRun, engineAt, wasmEnd]:', JSON.stringify(taps.map((x) => [x.tapToRun, x.engineAt, x.wasmEnd].map(Math.round))));
+  }
   console.error(name, 'runs [fcp, usable, firstFrame]:', JSON.stringify(rows.map((x) => [x.fcp, x.usable, x.firstFrame].map(Math.round))));
 }
 await browser.close();
