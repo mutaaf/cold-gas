@@ -18,7 +18,7 @@
 // shots read pitch beautifully but see a roll end-on; from behind, the roll-out and the drift
 // toward the pad read at a glance.
 import * as THREE from 'three';
-import { LINEUP, WALL, SHOW } from '../sim/courses.js';
+import { LINEUP, WALL, SHOW, FIXTURES } from '../sim/courses.js';
 import { hudMode, onHudMode } from '../hud-mode.js';
 import { tankBoxes, standClear, sightBlocked, wheelsInSight } from './tank-sight.js';
 
@@ -78,6 +78,12 @@ for (let d = 95; d <= 180; d += 5) STAND_TURN.push(d);
 const TURN_COS = STAND_TURN.map((d) => Math.cos(d * Math.PI / 180)), TURN_SIN = STAND_TURN.map((d) => Math.sin(d * Math.PI / 180));
 // The Show's parked row as boxes, for a turned side stand's sight of the car (0355).
 const ROW_BOXES = new Float64Array(SHOW.boxes.flatMap((b) => [b.minX, 0, b.minZ, b.maxX, b.h, b.maxZ]));
+// The Lineup's kickflip shot (0358). The broadcast stand beside the flight: AIR_OUT m out at +x, but never at or past the
+// floodlight poles' line (FIXTURES.poles, x ±13), where a pole would stand between the lens and the car; no nearer the car
+// than AIR_NEAR. The car's box as the fit reads it, attitude unknown (a roll, a pitch over the row): half extents (m),
+// about a point AIR_BOX_Y over its origin. The fit keeps that box inside AIR_EDGE of the frame (NDC).
+const AIR_OUT = 14, AIR_NEAR = 10, POLE_GAP = 0.8, AIR_EDGE = 0.95;
+const AIR_BOX = [1.2, 1.8, 2.4], AIR_BOX_Y = 0.2;
 const TITLE_COVER = 0.4;   // the share of the car's box the title's panel may cover before the lens moves it (0131)
 const TITLE_FILL = 0.85;   // the most of that band's height the car's box may take; past it the lens widens (0131)
 const TITLE_FOV_MAX = 70;  // deg: how wide the title's lens may go for that
@@ -480,9 +486,16 @@ export function createDirector(camera) {
     }
     const hx = st.hx, hz = st.hz;
     if (phase === 'air' || (phase === 'landed' && st.t < 1.2)) {
-      // Broadcast three-quarter: off to the right, a little ahead, low.
-      want.set(carPos.x + 14, Math.max(3.4, carPos.y * 0.6 + 2.2), carPos.z + 2 - Math.min(6, speed * 0.15));
+      // Broadcast three-quarter: off to the right, a little ahead, low; inside the poles' line (0358).
+      const out = carPos.x < FIXTURES.poles.x ? clamp(FIXTURES.poles.x - POLE_GAP - carPos.x, AIR_NEAR, AIR_OUT) : AIR_OUT;
+      want.set(carPos.x + out, Math.max(3.4, carPos.y * 0.6 + 2.2), carPos.z + 2 - Math.min(6, speed * 0.15));
       lookWant.set(carPos.x, carPos.y + 0.2, carPos.z + 3);
+      ease(dt, 3.2);
+      // Upright, the lens holds the horizontal angle it has at LENS_ASPECT, as the ground shots do (0108), so the car and
+      // its lead fit across a phone; then the fit keeps the whole car in frame through the swing out and the flip (0358).
+      fovTo(lens(48 + Math.min(16, speed * 0.42) + 4), dt);
+      fitAir(carPos);
+      return;
     } else if (phase === 'landed' || phase === 'done') {
       groundStand(carPos, 7, 2.4, -6, false);
       lookWant.copy(carPos);
@@ -497,6 +510,28 @@ export function createDirector(camera) {
     }
     ease(dt, phase === 'air' ? 3.2 : 5);
     fovTo(48 + Math.min(16, speed * 0.42) + (phase === 'air' ? 4 : 0), dt);
+  }
+
+  // After the kickflip shot has looked where it wants: turn the camera (and, only when the car is wider than the frame,
+  // widen the lens) just enough that the car's box stays inside AIR_EDGE of the frame (0358). A car already inside is
+  // left where the shot put it; the lens eases back from any widening by fovTo, so nothing cuts.
+  function fitAir(carPos) {
+    camera.updateMatrixWorld();
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (let i = 0; i < 8; i++) {
+      tmp.set(carPos.x + (i & 1 ? AIR_BOX[0] : -AIR_BOX[0]), carPos.y + AIR_BOX_Y + (i & 2 ? AIR_BOX[1] : -AIR_BOX[1]), carPos.z + (i & 4 ? AIR_BOX[2] : -AIR_BOX[2])).applyMatrix4(camera.matrixWorldInverse);
+      if (tmp.z > -0.5) return;
+      const u = tmp.x / -tmp.z, v = tmp.y / -tmp.z;
+      x0 = Math.min(x0, u); x1 = Math.max(x1, u); y0 = Math.min(y0, v); y1 = Math.max(y1, v);
+    }
+    let tv = Math.tan(st.fov * Math.PI / 360);
+    const need = Math.max((x1 - x0) / (2 * AIR_EDGE * camera.aspect), (y1 - y0) / (2 * AIR_EDGE));
+    if (need > tv) { tv = need; st.fov = Math.atan(tv) * 360 / Math.PI; }
+    const th = tv * camera.aspect, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+    const limX = Math.max(0, AIR_EDGE * th - (x1 - x0) / 2), limY = Math.max(0, AIR_EDGE * tv - (y1 - y0) / 2);
+    const tx = clamp(cx, -limX, limX), ty = clamp(cy, -limY, limY);
+    if (tx !== cx) camera.rotateOnWorldAxis(UP, Math.atan(tx) - Math.atan(cx));
+    if (ty !== cy) camera.rotateX(Math.atan(cy) - Math.atan(ty));
   }
 
   function replay(carPos) {

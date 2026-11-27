@@ -65,3 +65,12 @@ from the eight projected corners, and each pole's cover of the box. Make the tes
 - The replay's shots (`replay()`, `director.js:448`), which have their own fixed stands.
 - The roll's timing in the reference (0359).
 - The Show and the Wall.
+
+## Builder note (2026-11-27)
+`chase()`'s air branch: upright, the lens holds the horizontal angle it has at LENS_ASPECT (`lens()`, as the ground shots
+do since 0108); a new `fitAir()` then turns the camera (and widens the lens only when the car is wider than the frame)
+so a conservative box of the car (attitude unknown) stays inside 0.95 of the frame, which also covers the swing out from
+the run-up chase. The stand stands 0.8 m inside the poles' line (`FIXTURES.poles.x`), 10–14 m from the car, so no pole
+is nearer the lens than the car. `tests/unit/lineup-air-frame.test.js` (15 of 15 red on main): the reference and apex
+4 / 6.5 at 390×844, 430×932, 360×780, 1440×900, 1280×720: min on-screen share 1.00 (main 0.51, mean 0.73 on the phone),
+pole cover 0.00 (main 0.25). Screenshots in `docs/critique/2026-11-27-build-0358/`.
