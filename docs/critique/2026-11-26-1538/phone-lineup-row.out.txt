@@ -1,0 +1,21 @@
+course lineup
+NEXT RUN: Over the row: keep holding the pad through the line
+WHAT: Came down on the row
+
+You reached the line at 20 mph 32 km/h: the car peaked 15 ft 4.7 m up and came down on the roofs.
+
+Keep holding the pad through the line: it lifts you over the row, then rolls you.
+{
+ "scheme": [
+  "thumb",
+  "touch"
+ ],
+ "card": {
+  "headline": "DISASTROUS CONTACT DURING THE LINEUP\n\nContact\n35.0/ 100\nBRONZE 72\nSILVER 84\nGOLD 92.5\nBronze at 72 · 37.0 to go\n\nFlown in Assist\n\nRUN 1\nCRASHED · NOT A MARK YET\nJudged by\ngemma-4-26b-a4b-it\n534 → 81 tok\n$0.000078\nNEXT RUN\nOver the row: keep holding the pad through the line\nASSIST\nON\nrolls you out, levels and brakes\nRetry\nShare\nReplay\nHome\n\nWHAT HAPPENED\n\nCame down on the row\n\nYou reached the line ",
+  "total": 35,
+  "verdict": "Contact",
+  "crashed": true,
+  "coach": []
+ },
+ "errs": []
+}

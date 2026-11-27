@@ -1,0 +1,11 @@
+// Critic 11-26 15:38: what the model's brief says about the touchdown on Lineup runs that hit the row and never touched down.
+import { initPhysics } from '../src/sim/engine.js';
+import * as L from '../scripts/lib/daily-reach.mjs';
+import { scoreRun } from '../src/sim/judge.js';
+await initPhysics();
+for (const [name, fly] of [['flyKeysLineup', (r) => L.flyKeysLineup(r)], ['flyTouch lineup', (r) => L.flyTouch('lineup', r)], ['flyTouch show', (r) => L.flyTouch('show', r)]]) {
+  const r = L.stream(777); let crashed = 0, noTouch = 0; const ex = []; const sinks = {};
+  for (let i = 0; i < 200; i++) { const run = fly(r); const t = run.t; const card = scoreRun(t, { assist: true }); const f = card.facts;
+    if (!f.crashed) continue; crashed++;
+    if (t.touchTick < 0) { noTouch++; const k = `sink ${f.sink} tilt ${f.tiltDeg} spread ${f.wheelSpreadMs} landing ${card.scores?.landing ?? card.categories?.landing}`; sinks[k] = (sinks[k] || 0) + 1; if (ex.length < 2) ex.push({ i, verdict: card.verdict, contact: f.contact, sink: f.sink, tiltDeg: f.tiltDeg, headingDeg: f.headingDeg, wheelSpreadMs: f.wheelSpreadMs, padMiss: f.padMiss }); } }
+  console.log(name, { crashed, crashedNeverTouchedDown: noTouch }, JSON.stringify(sinks), JSON.stringify(ex)); }

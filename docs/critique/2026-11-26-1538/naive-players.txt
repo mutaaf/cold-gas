@@ -1,0 +1,33 @@
+{"approach":4,"climbThrottle":0.5,"releaseAt":0.6}         LANDED  Rough landing             60 height 21.9 sink 0.8 tilt 0 gas 48 end settled
+{"approach":4,"climbThrottle":0.5,"releaseAt":0.85}        LANDED  Clean                   73.3 height 26.3 sink 0.8 tilt 0 gas 43 end settled
+{"approach":4,"climbThrottle":0.5,"releaseAt":0.97}        LANDED  Clean                   74.3 height 27.1 sink 0.8 tilt 0 gas 42 end settled
+{"approach":4,"climbThrottle":0.5,"releaseAt":1.01}        LANDED  Clean                   73.7 height 27.2 sink 0.8 tilt 0 gas 42 end settled
+{"approach":4,"climbThrottle":1,"releaseAt":0.6}           LANDED  Rough landing           60.7 height 22.2 sink 0.8 tilt 0 gas 48 end settled
+{"approach":4,"climbThrottle":1,"releaseAt":0.85}          LANDED  Clean                   73.3 height 26.3 sink 0.8 tilt 0 gas 43 end settled
+{"approach":4,"climbThrottle":1,"releaseAt":0.97}          LANDED  Clean                   74.3 height 27.1 sink 0.8 tilt 0 gas 42 end settled
+{"approach":4,"climbThrottle":1,"releaseAt":1.01}          LANDED  Clean                   73.7 height 27.2 sink 0.8 tilt 0 gas 42 end settled
+{"approach":8,"climbThrottle":0.5,"releaseAt":0.6}         LANDED  Rough landing             60 height 21.9 sink 0.8 tilt 0 gas 48 end settled
+{"approach":8,"climbThrottle":0.5,"releaseAt":0.85}        LANDED  Clean                   73.3 height 26.3 sink 0.8 tilt 0 gas 43 end settled
+{"approach":8,"climbThrottle":0.5,"releaseAt":0.97}        LANDED  Clean                   74.3 height 27.1 sink 0.8 tilt 0 gas 42 end settled
+{"approach":8,"climbThrottle":0.5,"releaseAt":1.01}        LANDED  Clean                   73.7 height 27.2 sink 0.8 tilt 0 gas 42 end settled
+{"approach":8,"climbThrottle":1,"releaseAt":0.6}           LANDED  Rough landing           60.7 height 22.2 sink 0.8 tilt 0 gas 48 end settled
+{"approach":8,"climbThrottle":1,"releaseAt":0.85}          LANDED  Clean                   73.3 height 26.3 sink 0.8 tilt 0 gas 43 end settled
+{"approach":8,"climbThrottle":1,"releaseAt":0.97}          LANDED  Clean                   74.3 height 27.1 sink 0.8 tilt 0 gas 42 end settled
+{"approach":8,"climbThrottle":1,"releaseAt":1.01}          LANDED  Clean                   73.7 height 27.2 sink 0.8 tilt 0 gas 42 end settled
+{"approach":12,"climbThrottle":0.5,"releaseAt":0.6}        LANDED  Rough landing           60.7 height 21.9 sink 0.8 tilt 0 gas 48 end settled
+{"approach":12,"climbThrottle":0.5,"releaseAt":0.85}       LANDED  Clean                   73.3 height 26.3 sink 0.8 tilt 0 gas 43 end settled
+{"approach":12,"climbThrottle":0.5,"releaseAt":0.97}       LANDED  Clean                   74.3 height 27.1 sink 0.8 tilt 0 gas 42 end settled
+{"approach":12,"climbThrottle":0.5,"releaseAt":1.01}       LANDED  Clean                   73.7 height 27.2 sink 0.8 tilt 0 gas 42 end settled
+{"approach":12,"climbThrottle":1,"releaseAt":0.6}          LANDED  Rough landing           60.7 height 22.2 sink 0.8 tilt 0 gas 48 end settled
+{"approach":12,"climbThrottle":1,"releaseAt":0.85}         LANDED  Clean                   73.3 height 26.3 sink 0.8 tilt 0 gas 43 end settled
+{"approach":12,"climbThrottle":1,"releaseAt":0.97}         LANDED  Clean                   74.3 height 27.1 sink 0.8 tilt 0 gas 42 end settled
+{"approach":12,"climbThrottle":1,"releaseAt":1.01}         LANDED  Clean                   73.7 height 27.2 sink 0.8 tilt 0 gas 42 end settled
+{"approach":"floored","climbThrottle":0.5,"releaseAt":0.6} LANDED  Rough landing           60.7 height 21.9 sink 0.8 tilt 0 gas 48 end settled
+{"approach":"floored","climbThrottle":0.5,"releaseAt":0.85} LANDED  Clean                   73.3 height 26.3 sink 0.8 tilt 0 gas 43 end settled
+{"approach":"floored","climbThrottle":0.5,"releaseAt":0.97} LANDED  Clean                   74.3 height 27.1 sink 0.8 tilt 0 gas 42 end settled
+{"approach":"floored","climbThrottle":0.5,"releaseAt":1.01} LANDED  Clean                   73.7 height 27.2 sink 0.8 tilt 0 gas 42 end settled
+{"approach":"floored","climbThrottle":1,"releaseAt":0.6}   LANDED  Rough landing           60.7 height 22.2 sink 0.8 tilt 0 gas 48 end settled
+{"approach":"floored","climbThrottle":1,"releaseAt":0.85}  LANDED  Clean                   73.3 height 26.3 sink 0.8 tilt 0 gas 43 end settled
+{"approach":"floored","climbThrottle":1,"releaseAt":0.97}  LANDED  Clean                   74.3 height 27.1 sink 0.8 tilt 0 gas 42 end settled
+{"approach":"floored","climbThrottle":1,"releaseAt":1.01}  LANDED  Clean                   73.7 height 27.2 sink 0.8 tilt 0 gas 42 end settled
+32/32 naive strategies landed upright
