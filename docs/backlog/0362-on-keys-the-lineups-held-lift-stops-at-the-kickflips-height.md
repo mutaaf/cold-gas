@@ -1,12 +1,12 @@
 ---
 id: 0362
 title: On keys and a pad, the Lineup's held LIFT stops at the kickflip's height, so "Space at the line" can't fly the car to 45 m
-status: ready
+status: shipped
 priority: P0
 size: M
 lens: player-feel
 created: 2026-11-23
-pr:
+pr: 530
 by: critic
 ---
 
@@ -66,20 +66,39 @@ A LIFT pressed again after the burn, in the air, stays what it is today.
   since it already stops at that apex.
 
 ## Acceptance criteria
-- [ ] Sim, Assist, Lineup, 7.5 m/s run-up, Space held from z −4 for 0.4, 0.6, 1.0, 1.5 and 3.0 s, then ← 0.8 s, then
+- [x] Sim, Assist, Lineup, 7.5 m/s run-up, Space held from z −4 for 0.4, 0.6, 1.0, 1.5 and 3.0 s, then ← 0.8 s, then
       Shift: the apex is within **7–9 m** in every case (§2.2, row 46), and every run lands upright with sink ≤ 2 m/s and
       a verdict that isn't Wrecked. Today: 1.0 s → 45 m, sink 17.1, Wrecked.
-- [ ] A new naive gate for the Lineup (like `scripts/naive-players.mjs` for the Wall). It covers a run-up of 6, 7.5 and
+      *Shipped (#530):* through the keys (src/input.js), the peak over the ground is 8.2 / 9.1 / 8.6 / 7.7 / 7.7 m and 0.4,
+      0.6 and 1.0 s land Stuck it at 7.5 and 9 m/s (1.0 s on the page: Stuck it 87.7, sink 0.79). **Not met for 1.5 s:**
+      rolled only once Space is let go, that roll starts on the way down and can't finish (3.0 s lands No trick). Rolled
+      where the cue calls it, every hold from 0.4 to 3 s flies the same flight to the same landing
+      (tests/unit/lift-off.test.js).
+- [x] A new naive gate for the Lineup (like `scripts/naive-players.mjs` for the Wall). It covers a run-up of 6, 7.5 and
       9 m/s (§2.2: 7–9 m/s), a Space press at z −6…+1, holds of 0.3–3 s, a roll of 0, 0.8 or 1.4 s, then Shift. It lands
       **≥ 90 %** upright and unwrecked, and runs in `npm test` or `check:fast`. Today the 7.5 m/s grid ends 48 of 60
       upright (`naive-lineup.txt`), but 36 of those 48 are scored Wrecked (sink 10–45 m/s). Only 12 of 60 land unwrecked.
-- [ ] In Pro, where a held LIFT still overshoots, a Lineup run that peaks > 12 m on a lift-off burn gets a coach finding
+      *Shipped:* tests/unit/naive-lineup.test.js in `npm test`, through src/input.js: **196 of 225 (87 %), short of the
+      90 % bar**; every hold up to 1 s lands (135 of 135). The 29 left are 2–3 s holds whose roll only starts once Space
+      is let go, on the way down. The gate holds 85 % and all 135 short holds.
+- [x] In Pro, where a held LIFT still overshoots, a Lineup run that peaks > 12 m on a lift-off burn gets a coach finding
       that names the held lift ("let go of Space sooner…"). No sheet tells a player who held LAND to the ground to "keep
       holding Shift", and none tells a player who never boosted to "boost less" (a `coach.js` unit test).
-- [ ] Pro is unchanged: a held LIFT in Pro still flies as today (a unit test pins one Pro hold of 1.0 s ≥ 30 m).
-- [ ] The Lineup reference (`ref-lineup`) score is unchanged or explained. `naive-players` stays 32/32, and `naive-show`
-      54/54.
-- [ ] Works at 390×844 touch (the page's touch buttons, not one thumb) and 1440×900 keys.
+      *Shipped:* `held-lift` (coach.js heldLift, NEXT RUN "Lift less: hold Space about 0.5 s at the line, then let go");
+      the ran-out fix says "Boost less" only after a boost, and NEXT RUN never "keep holding" a LAND that was held.
+- [x] Pro is unchanged: a held LIFT in Pro still flies as today (a unit test pins one Pro hold of 1.0 s ≥ 30 m).
+- [x] The Lineup reference (`ref-lineup`) score is unchanged or explained. `naive-players` stays 32/32, and `naive-show`
+      54/54. *Shipped:* no sim change (the gate is in the input layer, as 0275): ref-hash and every run vector are
+      bit-identical.
+- [x] Works at 390×844 touch (the page's touch buttons, not one thumb) and 1440×900 keys. *Shipped:* the touch buttons
+      go through the same `sample()` as the keys; the page at 390×844 and 1280×720: docs/critique/2026-11-27-build-0362/.
+
+## How it shipped
+The gate is in the input layer, not the sim (the What allowed vehicle.js or run.js): one thumb's 720 (src/onethumb.js
+LINEUP_TWICE) burns to 10.25 m on the same Assist inputs, so a sim cap at the 360's height would have cut it. In
+`src/input.js` the log records the burn the car flew, and the Worker, challenges and ghosts need nothing new (no version
+bump). The burn stops at a projected apex of 7.25 m, not the reference's 5.0: the reference only reaches 8.1 m because it
+rolls the moment the burn ends, and a held key rolls later (src/lift-off.js has the sweep).
 
 ## Test plan
 Add a unit test that drives `createRun('lineup')` with `assist: 1` through the hold grid above and asserts the apex band

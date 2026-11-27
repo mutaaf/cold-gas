@@ -47,7 +47,9 @@ describe('0370: the keys population (flyKeysLineup × 200, seed 777)', () => {
       const p = pickPointer(c.items, KEYS, { card, flight: c.flight, crashed: true });
       expect(p.text).not.toMatch(/the same run-up/);
     }
-    expect(crashes).toBeGreaterThan(50);
+    // 0362: 87 crashed before Assist's lift-off became one burn to the kickflip's height (src/lift-off.js); 42 do now.
+    expect(crashes).toBeGreaterThan(30);
+    expect(crashes).toBeLessThanOrEqual(50);
   });
 
   it("today's 7 lead with the late press and its metres past the line", () => {

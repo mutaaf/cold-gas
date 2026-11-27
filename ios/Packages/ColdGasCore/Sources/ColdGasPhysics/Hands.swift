@@ -216,8 +216,10 @@ public final class InputSampler {
     public var keyValves = [Double](repeating: 0, count: 10)
     var raw = GroundRaw()
     public init(level: DriveLevel = .standard) { driver = Driver(level) }
+    /// src/lift-off.js (0362): the Lineup's lift-off on Assist, one burn to the kickflip's height however long LIFT is held.
+    public let liftOff = LiftOff()
     /// A new run: let go of everything, the hands from rest (input.js freshRun).
-    public func freshRun() { touch.reset(); driver.reset(); for k in 0..<10 { nozzleValves[k] = 0; keyValves[k] = 0 } }
+    public func freshRun() { touch.reset(); driver.reset(); liftOff.reset(); for k in 0..<10 { nozzleValves[k] = 0; keyValves[k] = 0 } }
 
     /// `released`: the car has let go of the Wall. Fills `out` and returns it.
     @discardableResult
@@ -290,7 +292,35 @@ public final class InputSampler {
             out.steer = ax; out.throttle = thr; out.brake = brk; out.lift = lift
             out.thrust = phase == .drive && truthy(land) && !truthy(brk) ? 1 : 0
         }
+        if let car { liftOff.gate(phase, car, out) }
         return out
+    }
+}
+
+/// src/lift-off.js (0362), line for line. On the Lineup in Assist, a LIFT pressed on the run-up burns the down-jets until
+/// the projected apex (pos.y + vy²/2g) reaches LIFT_OFF_APEX, held or let go, then stops; a LIFT still held after the
+/// burn counts as let go until it is pressed again. Writes only `lift`, before the log quantises it.
+public let LIFT_OFF_APEX = 7.25
+public final class LiftOff {
+    var burning = false, spent = false, was = false
+    let apex: Double
+    public init(apex: Double = LIFT_OFF_APEX) { self.apex = apex }
+    public func reset() { burning = false; spent = false; was = false }
+    @discardableResult public func gate(_ phase: Phase, _ car: Vehicle, _ inp: Input) -> Input {
+        let down = inp.lift > 0, fresh = down && !was
+        was = down
+        if car.course.id != "lineup" || !truthy(inp.assist) || truthy(inp.manual) { burning = false; spent = false; return inp }
+        if spent {
+            if fresh { spent = false }
+            else if down { inp.lift = 0; return inp }
+        }
+        if !burning && fresh && phase == .drive { burning = true }
+        if burning {
+            let vy = car.vel.y
+            if car.pos.y + (vy > 0 ? (vy * vy) / (2 * G) : 0) < apex { inp.lift = 1 }
+            else { burning = false; spent = down; inp.lift = 0 }
+        }
+        return inp
     }
 }
 #endif

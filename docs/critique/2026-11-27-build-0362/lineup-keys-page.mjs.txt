@@ -1,0 +1,38 @@
+// Production, 1440×900, the Lineup by keys with Assist, through the page's own key handling: hold ↑ to 7.5 m/s (eased),
+// at z −4 hold Space for HOLD s, then ← for 0.8 s, then hold Shift to the ground. The page's live step is held and stepped
+// at 1/60 s (S.holdLive, as the e2e does). Logs the cue line, apex, nitrogen, sink and the verdict; screenshots the apex.
+import pw from '/home/user/cold-gas/node_modules/playwright/index.js'; const { chromium } = pw;
+const [,, OUT, HOLD = '1.0', URL = 'https://mutaafaziz.com/coldgas/'] = process.argv;
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const c = await browser.newContext({ viewport: { width: +(process.env.W||1280), height: +(process.env.H||720) } });
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route('**/api/**', (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(String(e)));
+await p.goto(URL); await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 120000 });
+await p.evaluate(() => document.querySelector('.course-btn[data-course="lineup"]').click());
+await p.waitForFunction(() => window.__coldgas.stage.course === 'lineup', null, { timeout: 60000 });
+await p.evaluate(() => window.__coldgas.startRun('jump'));
+await p.waitForFunction(() => ['countdown', 'live'].includes(window.__coldgas.S.mode), null, { timeout: 60000 });
+await p.evaluate(() => { const g = window.__coldgas; g.skipCountdown(); g.S.holdLive = true; });
+// The whole flight in one page call: KeyboardEvents to the page's own listeners (src/input.js:136), the live step
+// stepped at 1/60 s between them.
+const fl = await p.evaluate((HOLD) => { const g = window.__coldgas, S = g.S, car = () => S.run.car;
+  const key = (type, code) => dispatchEvent(new KeyboardEvent(type, { code, key: code, bubbles: true }));
+  const st = () => { const c = car(); return { t: +(S.run.tick / 240).toFixed(2), phase: S.run.phase, y: +c.pos.y.toFixed(2), z: +c.pos.z.toFixed(2), vy: +c.vel.y.toFixed(1), v: +Math.hypot(c.vel.x, c.vel.z).toFixed(1), air: +c.air.toFixed(1), cue: (document.querySelector('#cue')?.textContent || '').trim() }; };
+  const stepN = (n) => { for (let i = 0; i < n && S.mode === 'live'; i++) g.liveStep(1 / 60); return st(); };
+  let s = st(), up = false; const cues = new Set();
+  for (let i = 0; i < 3000 && s.z < -4 && S.mode === 'live'; i++) { const want = s.v < 7.5; if (want !== up) { key(want ? 'keydown' : 'keyup', 'ArrowUp'); up = want; } s = stepN(1); }
+  if (up) key('keyup', 'ArrowUp'); const line = s;
+  key('keydown', 'Space'); const t0 = s.t; while (s.t - t0 < HOLD && S.mode === 'live') { s = stepN(1); cues.add(s.cue); } key('keyup', 'Space');
+  const afterLift = s;
+  key('keydown', 'ArrowLeft'); const t1 = s.t; while (s.t - t1 < 0.8 && s.phase === 'air' && S.mode === 'live') { s = stepN(1); cues.add(s.cue); } key('keyup', 'ArrowLeft');
+  key('keydown', 'ShiftLeft'); let apex = s, n = 0;
+  while (S.mode === 'live' && s.phase === 'air' && n++ < 5000) { s = stepN(1); cues.add(s.cue); if (s.y > apex.y) apex = s; }
+  const touch = s; for (let i = 0; i < 600 && S.mode === 'live'; i++) stepN(1); key('keyup', 'ShiftLeft');
+  return { line, afterLift, apex, touch, cues: [...cues].filter(Boolean), t: S.run.t ? { sink: S.run.t.sink, endReason: S.run.t.endReason, settledUpright: S.run.t.settledUpright } : null, mode: S.mode };
+}, +HOLD);
+const res = await p.evaluate(() => { const S = window.__coldgas.S; const t = S.run?.t || {}; return { mode: S.mode, sink: t.sink, endReason: t.endReason, verdict: '', sheet: document.querySelector('#results, .results')?.innerText?.slice(0, 400) }; });
+await p.screenshot({ path: `${OUT}/lineup-keys-hold${HOLD}-results.png` });
+console.log(JSON.stringify({ hold: +HOLD, ...fl, res, errs }, null, 1));
+await browser.close();

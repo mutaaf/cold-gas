@@ -31,7 +31,10 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
   }, 120000);
 
   it('no crash is coached clean or told to try Pro (it was 64 of 87)', () => {
-    expect(crashes.length).toBeGreaterThan(60);
+    // 0362: Assist's lift-off is one burn to the kickflip's height however long Space is held (src/lift-off.js): 87 of
+    // the 200 crashed before it, 42 do now (every one into the row: ↑ floored to the line, or Space pressed late).
+    expect(crashes.length).toBeGreaterThan(30);
+    expect(crashes.length).toBeLessThanOrEqual(50);
     for (const { c, card } of crashes) {
       expect(c.items.map((x) => x.id), card.verdict).not.toContain('clean');
       for (const x of c.items) expect(`${x.detail} ${x.fix}`).not.toMatch(TRY_PRO);
@@ -49,8 +52,10 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       expect(c.items[0].id).toBe(want);
       seen[want]++;
     }
-    expect(seen.row).toBeGreaterThan(30);
-    expect(seen['no-lift']).toBeGreaterThan(10);
+    // 0362: every "row" crash here was a 0.35–0.4 s hold that peaked under the kickflip and came down on the roofs. The
+    // press is now a command that burns to the kickflip's height, so none is left; the crashes are all into the row.
+    expect(seen.row).toBe(0);
+    expect(seen['no-lift']).toBeGreaterThan(30);
   });
 
   it("its numbers are the run's: the speed at the line, the LIFT hold, the peak", () => {
@@ -60,10 +65,9 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       expect(f.lineSpeed).toBeGreaterThan(0);
       const kmh = Math.round(f.lineSpeed * 3.6);
       expect(top.detail).toContain(`${kmh} km/h`);
-      expect(top.detail).toContain(`held LIFT (Space) ${r1(f.liftHeld)} s`);
-      // flyKeysLineup holds Space 0.35–0.5 s (P.hold), a reaction-free hold of whole ticks.
+      // 0362: on Assist the log's LIFT is the lift-off burn's, not the key's: the hold is never read back.
+      expect(top.detail).not.toMatch(/held LIFT/);
       expect(f.liftHeld).toBeGreaterThanOrEqual(0.34);
-      expect(f.liftHeld).toBeLessThanOrEqual(0.51);
       const apexH = r1(Math.max(0, run.t.apex - SPEC.comHeight));
       // 0369: into the row on the way up names where it hit (the apex is the bounce); else the peak.
       if (intoRow(run, c)) expect(top.detail).toContain(`at ${Math.round(f.contactSpeed * 3.6)} km/h, before it rose over the roofs`);
@@ -73,12 +77,12 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       // with what was held when it was short, and the band when the speed was clearly off.
       // 0370: a crash is never "right": a press that began over 1.25 m past the line is named as late (every in-band
       // crash here), and an in-band crash that wasn't gets the neutral crash line.
-      const speedOff = kmh < 22 || kmh > 34, shortHold = f.liftHeld < 0.45, late = f.liftAtZ > 1.25;
-      if (late) expect(top.fix).toMatch(new RegExp(`Press LIFT \\(Space\\) on the line, not ${String(r1(f.liftAtZ)).replace('.', '\\.')} m past it`));
-      else if (!speedOff && !shortHold) expect(top.fix).toBe('Run it again and follow the cues: each one calls its step as you reach it.');
-      else expect(top.fix).toMatch(/Hold LIFT \(Space\) at the line for about 0\.5 s/);
-      expect(top.fix).not.toMatch(/same again/);
-      if (shortHold) expect(top.fix).toContain(`(you held ${r1(f.liftHeld)} s)`);
+      // 0362: on Assist the press is the lift-off, so a fix asks for the press, never a hold.
+      const speedOff = kmh < 22 || kmh > 34, late = f.liftAtZ > 1.25;
+      if (late) expect(top.fix).toMatch(new RegExp(`Press LIFT \\(Space\\) on the line, not ${String(r1(f.liftAtZ)).replace('.', '\\.')} m past it.*\\. Then roll\\.$`));
+      else if (!speedOff) expect(top.fix).toBe('Run it again and follow the cues: each one calls its step as you reach it.');
+      else expect(top.fix).toMatch(/Press LIFT \(Space\) at the line: it lifts you over the row, then roll\./);
+      expect(top.fix).not.toMatch(/same again|Hold LIFT|you held/);
       // ↑ held to the line (≈ 120 km/h): the fix says to ease off, with the band.
       if (kmh > 34) expect(top.fix).toContain(`Ease off ↑ before the line: between 25 km/h and 30 km/h, not ${kmh} km/h.`);
       else expect(top.fix).not.toMatch(/km\/h/);
@@ -91,14 +95,14 @@ describe('0367: the Lineup keys population (flyKeysLineup × 200, seed 777)', ()
       const p = pickPointer(c.items, KEYS, { card, flight: c.flight, crashed: true }), f = c.flight;
       const kmh = Math.round(f.lineSpeed * 3.6);
       expect(p.text).not.toMatch(TRY_PRO);
-      if (kmh > 34) { seen.add('speed'); expect(p.text).toContain(`${kmh} km/h at the line, aim for 25 km/h to 30 km/h, then hold Space about 0.5 s`); }
+      if (kmh > 34) { seen.add('speed'); expect(p.text).toContain(`${kmh} km/h at the line, aim for 25 km/h to 30 km/h, then press Space`); }
       else if (f.liftAtZ > 1.25) { seen.add('late'); expect(p.text).toContain(`: press Space on the line, not ${r1(f.liftAtZ)} m past it`); }
-      else if (f.liftHeld < 0.45) { seen.add('hold'); expect(p.text).toMatch(/: hold Space at the line for about 0\.5 s$/); }
       else { seen.add('crash'); expect(p.text).toBe('Run it again and follow the cues: each one calls its step as you reach it'); }
-      expect(p.text).not.toMatch(/the same run-up/);
+      expect(p.text).not.toMatch(/the same run-up|about 0\.5 s/);
     }
-    // Every in-band crash of this population pressed late (0370), so none reads the crash line here.
-    expect([...seen].sort()).toEqual(['hold', 'late', 'speed']);
+    // Every in-band crash of this population pressed late (0370), so none reads the crash line here; 0362: and no hold
+    // was short, since the press burns to the kickflip's height.
+    expect([...seen].sort()).toEqual(['late', 'speed']);
   });
 
   it('a tap of LIFT on the run-up is not the hold: the press at the line is', () => {
@@ -157,12 +161,18 @@ describe('0367: the words and the funnel', () => {
     expect(landed[0].id).toBe('clean');
     expect(landed[0].fix).toMatch(/Try Pro/);
   });
-  it('the pointer on every device: a thumb holds the pad, the others are told the speed and the hold', () => {
+  it('the pointer on every device: a thumb holds the pad, Assist presses LIFT, Pro is told the speed and the hold', () => {
     const flight = { lineSpeed: 32.3 };
-    expect(pointerText('no-lift', KEYS, flight)).toBe('Lift over the roofs: 116 km/h at the line, aim for 25 km/h to 30 km/h, then hold Space about 0.5 s');
-    expect(pointerText('row', { ...KEYS, device: 'touch' }, { lineSpeed: 7.5, liftHeld: 0.3 })).toBe('Over the row: hold LIFT at the line for about 0.5 s');
-    expect(pointerText('row', { ...KEYS, device: 'touch' }, { lineSpeed: 7.5, liftHeld: 0.5 })).toBe('Over the row: the same run-up and LIFT again');
-    expect(pointerText('row', { ...KEYS, device: 'pad' }, null)).toBe('Over the row: 25 km/h to 30 km/h at the line, then hold A about 0.5 s');
+    // 0362: on Assist a press is the lift-off (src/lift-off.js): no hold to time.
+    expect(pointerText('no-lift', KEYS, flight)).toBe('Lift over the roofs: 116 km/h at the line, aim for 25 km/h to 30 km/h, then press Space');
+    expect(pointerText('row', { ...KEYS, device: 'touch' }, { lineSpeed: 7.5, liftHeld: -1 })).toBe('Over the row: press LIFT at the line');
+    expect(pointerText('row', { ...KEYS, device: 'touch' }, { lineSpeed: 7.5, liftHeld: 0.3 })).toBe('Over the row: the same run-up and LIFT again');
+    expect(pointerText('row', { ...KEYS, device: 'pad' }, null)).toBe('Over the row: 25 km/h to 30 km/h at the line, then press A');
+    const PRO = { ...KEYS, tier: 'pro' };
+    expect(pointerText('no-lift', PRO, flight)).toBe('Lift over the roofs: 116 km/h at the line, aim for 25 km/h to 30 km/h, then hold Space about 0.5 s');
+    expect(pointerText('row', { ...PRO, device: 'touch' }, { lineSpeed: 7.5, liftHeld: 0.3 })).toBe('Over the row: hold LIFT at the line for about 0.5 s');
+    expect(pointerText('row', { ...PRO, device: 'touch' }, { lineSpeed: 7.5, liftHeld: 0.5 })).toBe('Over the row: the same run-up and LIFT again');
+    expect(pointerText('row', { ...PRO, device: 'pad' }, null)).toBe('Over the row: 25 km/h to 30 km/h at the line, then hold A about 0.5 s');
     expect(pointerText('row', { ...KEYS, device: 'touch', scheme: 'thumb' }, flight)).toBe('Over the row: keep holding the pad through the line');
     // Advanced: LIFT isn't a valve there, so the hold is the down-jets and a hold is never read back.
     expect(pointerText('row', { ...KEYS, tier: 'advanced' }, { lineSpeed: 7.5, liftHeld: 0.5 })).toBe('Over the row: hold Space at the line for about 0.5 s');

@@ -26,6 +26,9 @@ public let COACH_LINEUP_SPEED_SLACK = (3.0, 4.0)
 public let COACH_LINEUP_TAP_BEFORE = 5.0
 /// A LIFT press at the line that began more than this (m past COACH_LINEUP_LINE) late is named as late (0370, aim-words.js).
 public let COACH_LINEUP_LIFT_LATE = 1.25
+/// aim-words.js LINEUP_LIFT_HIGH, KICKFLIP_APEX (0362): Pro's lift-off burn past this peak (m) is named as a held LIFT.
+public let COACH_LINEUP_LIFT_HIGH = 12.0
+public let COACH_KICKFLIP_APEX = 8.0
 
 // MARK: - pointer.js: the words
 
@@ -283,7 +286,10 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
     let drill = fromTick > 0, scored = show && !drill
     // 0367: a crash and its card. A crash is never "Clean", and never told to try Pro (coachFinish).
     let crashed = card?.crashed ?? scoreRun(t).crashed
-    if courseId == "lineup" && !drill { coachLineupWrecks(t, f, COURSES[courseId]!, say, crashed, add, card?.tier ?? t.tier) }
+    if courseId == "lineup" && !drill {
+        coachLineupWrecks(t, f, COURSES[courseId]!, say, crashed, add, card?.tier ?? t.tier)
+        coachHeldLift(t, f, say, add, card?.tier ?? t.tier)
+    }
 
     if wall && t.airStartTick < 0 {
         // 0189: stopped short of the ledge (a thumb lifted on the climb) names the climb, not the release.
@@ -331,7 +337,7 @@ func coachReading(_ run: Run, _ f: CoachFlight, _ courseId: String, card: Card?,
                     "Hold \(assist ? say.land : say.lift) from \(needAt) m or higher: the BRAKE line on the descent tape.\(assist ? " Or hold it from the release and let it pace the fall." : "")")
             } else {
                 add("ran-out", brakeW(6), "Out of braking at the bottom", "You braked from \(s(r1(f.brakeH))) m but still touched down at \(s(r1(t.sink))) m/s with \(s(jsRound(f.gasAtTouch))) % gas\(brakePts).",
-                    f.gasAtTouch < 25 ? "The tanks blow down as they empty: below about 40 % the jets lose thrust. Boost less and brake once, hard, near the BRAKE line." : say.ranOut)
+                    f.gasAtTouch < 25 ? "The tanks blow down as they empty: below about 40 % the jets lose thrust. \(f.boostTicks > 0 ? "Boost less and brake once" : "Save the gas for the brake, then brake once"), hard, near the BRAKE line." : say.ranOut)
             }
         }
     }
@@ -385,20 +391,23 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
     let kmh = f.lineSpeed >= 0 ? jsRound(f.lineSpeed * 3.6) : -1
     // The one-thumb pad commits the lift itself past the line; on Advanced LIFT isn't a valve.
     let thumb = say.aim == COACH_AIM_THUMB, timed = !thumb && tier != "advanced"
+    // 0362: on Assist a press on the run-up is a lift-off command (src/lift-off.js): its hold is never named or asked for.
+    let holdTimed = timed && tier != "assist"
     let heldS = r1(f.liftHeld)
-    let held = !timed ? "" : f.liftHeld >= 0 ? "held \(say.lift) \(s(heldS)) s" : "never pressed \(say.lift)"
+    let held = !timed ? "" : f.liftHeld < 0 ? "never pressed \(say.lift)" : holdTimed ? "held \(say.lift) \(s(heldS)) s" : ""
     let atLine = kmh >= 0 ? "\(s(kmh)) km/h at the line" : "you never reached the line"
     let speedOff = !thumb && kmh >= 0 && (kmh < lo - COACH_LINEUP_SPEED_SLACK.0 || kmh > hi + COACH_LINEUP_SPEED_SLACK.1)
     let speedFix = !speedOff ? "" :
         kmh > hi ? "Ease off \(say.drive) before the line: between \(s(lo)) km/h and \(s(hi)) km/h, not \(s(kmh)) km/h. " : "Carry between \(s(lo)) km/h and \(s(hi)) km/h to the line, not \(s(kmh)) km/h. "
-    let shortHold = timed && !(f.liftHeld >= COACH_LINEUP_LIFT_HOLD - 0.05)
+    let shortHold = timed && (holdTimed ? !(f.liftHeld >= COACH_LINEUP_LIFT_HOLD - 0.05) : f.liftHeld < 0)
     let holdFix = thumb ? "Keep holding the pad through the line: it lifts you over the row, then rolls you."
+        : timed && !holdTimed ? "Press \(say.lift) at the line: it lifts you over the row, then roll."
         : "Hold \(say.lift) at the line for about \(s(COACH_LINEUP_LIFT_HOLD)) s\(shortHold && f.liftHeld >= 0 ? " (you held \(s(heldS)) s)" : ""), then roll."
     // 0370: a press that began past the line is named, with how far; a crash is never "right".
     let late = timed && f.liftHeld >= 0 && f.liftAtZ > COACH_LINEUP_LIFT_LATE
     let into = t.airStartTick >= 0 && t.contact && f.contactH >= 0 && f.contactH < COACH_INTO_ROW_H && f.contactVy >= 0
     let lateFix = "Press \(say.lift) on the line, not \(s(r1(f.liftAtZ))) m past it\(into ? ": the nose met the first car on the way up" : ""). "
-        + "Hold it about \(s(COACH_LINEUP_LIFT_HOLD)) s\(shortHold ? " (you held \(s(heldS)) s)" : ""), then roll."
+        + (holdTimed ? "Hold it about \(s(COACH_LINEUP_LIFT_HOLD)) s\(shortHold ? " (you held \(s(heldS)) s)" : ""), then roll." : "Then roll.")
     let right = timed && kmh >= 0 && !speedOff && !shortHold && !late
     let fix = late ? speedFix + lateFix
         : right && !crashed ? "Your run-up and \(say.lift) were right: fly it the same again."
@@ -420,6 +429,16 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
         return
     }
     add("row", 9.5, "Came down on the row", "\(lead) peaked \(s(r1(apexH))) m up and came down on the roofs.", fix)
+}
+
+/// coach.js heldLift (0362): on Pro a lift-off press that flew the car past COACH_LINEUP_LIFT_HIGH is the finding.
+func coachHeldLift(_ t: Telemetry, _ f: CoachFlight, _ say: CoachWords, _ add: (String, Double, String, String, String) -> Void, _ tier: String) {
+    let s = jsNumberString
+    if tier != "pro" || !(f.liftHeld > COACH_LINEUP_LIFT_HOLD + 0.05) || t.airStartTick < 0 { return }
+    let apexH = jsMax(0, t.apex - SPEC.comHeight)
+    if !(apexH > COACH_LINEUP_LIFT_HIGH) { return }
+    add("held-lift", 10.5, "Held LIFT too long", "You held \(say.lift) \(s(r1(f.liftHeld))) s from the line: the car climbed to \(s(r1(apexH))) m (the kickflip peaks near \(s(COACH_KICKFLIP_APEX)) m) and touched down with \(s(jsRound(f.gasAtTouch))) % gas.",
+        "Let go of \(say.lift) sooner: about \(s(COACH_LINEUP_LIFT_HOLD)) s at the line lifts you to the kickflip's height and leaves the gas for the brake.")
 }
 
 /// 0371 (aim-words.js ringMiss): an Assist card on the rings (the Show, the Wall) with Precision under 10 missed the 2 m

@@ -15,8 +15,8 @@
   },
   {
    "path": "coach.json",
-   "sha256": "10597e01bc1148a1398a7ba4f4c2f313f91fd15d163601fbce5d16ba48740bc7",
-   "bytes": 467199
+   "sha256": "337aea756608d8b1ce544f89e5347505abcd873acbf4de13984bacdf841b7a37",
+   "bytes": 467174
   },
   {
    "path": "dmath.json",
@@ -120,8 +120,8 @@
   },
   {
    "path": "input/touch-lineup-easy-fast.json",
-   "sha256": "4532dbbd17f8ab3027f130a5c12a591d69f7126b7a59d8f03589fd6763168951",
-   "bytes": 28730
+   "sha256": "dd6050652648eec0732ce418443bc4d088389b0b3ec3e2c5fa4163ad491cfd01",
+   "bytes": 28191
   },
   {
    "path": "input/touch-lineup-pro.json",

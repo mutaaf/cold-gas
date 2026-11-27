@@ -138,6 +138,8 @@ const WRECK_OF = {
   'no-release': 'release', 'early-release': 'release', 'stopped-climb': 'climb',
   // 0367: the Lineup's own two. Its row hit is the Show's (into the row); never over the roofs is its own.
   row: 'short', 'no-lift': 'lift',
+  // 0362: Pro's LIFT held from the line past the kickflip's height is the lift's too.
+  'held-lift': 'lift',
 };
 export const wreckCause = (items) => `wreck-${WRECK_OF[items?.[0]?.id] || 'other'}`;
 // Every name a wreck counts: its cause and, for the three brake findings, the coach's own id beside it (0276).
