@@ -59,13 +59,13 @@ const verbose = args.includes('-v');
 const skill = opt('skill', 'none');
 const COACH = args.includes('--coach');
 const { coach } = COACH ? await import('../src/sim/coach.js') : {};
-const { coachWords } = COACH ? await import('../src/pointer.js') : {};
+const { coachWords, pickPointer } = COACH ? await import('../src/pointer.js') : {};
 const DAILY = args.includes('--daily');
 const { OBJECTIVES, evaluate } = DAILY ? await import('../src/daily.js') : {};
 const dailyMet = {}, gasLeft = [];
 // 0139: gas-show split by what the thumb chose: held from the tap or lifted and pressed again, and slid onto the mark or not.
 const split = {};
-const firsts = {}, markTitles = {};
+const firsts = {}, markTitles = {}, ring = { out: 0, outPro: 0, outRing: 0, in: 0, inPro: 0 };
 // 0173: every slide population split by what the thumb did (not what it was told): n, misses, scores, ring, gaps, and
 // how many "no slide" thumbs had read a dot of 2 px or more while held in the air (a read never acted on).
 const byChoice = {};
@@ -316,8 +316,15 @@ for (let n = 0; n < N; n++) {
     if (readBig) b.read++;
   }
   if (COACH && !why) {
-    const first = coach(run.inputLog, 'show', s, 0, coachWords({ device: 'touch', scheme, tier: s.tier, course: 'show' })).items[0], id = first.id;
+    const ctx = { device: 'touch', scheme, tier: s.tier, course: 'show' };
+    const c = coach(run.inputLog, 'show', s, 0, coachWords(ctx)), first = c.items[0], id = first.id;
     firsts[id] = (firsts[id] || 0) + 1;
+    // 0371: the sheet's NEXT RUN line against the 2 m ring: outside it (Precision under 10) it never says "try Pro".
+    if (id === 'clean') {
+      const text = pickPointer(c.items, ctx, { card: s, flight: c.flight }).text;
+      if (s.categories.precision < 10) { ring.out++; if (/try Pro/.test(text)) ring.outPro++; if (/2 m ring/.test(text)) ring.outRing++; }
+      else { ring.in++; if (/try Pro/.test(text)) ring.inPro++; }
+    }
     // 0132: the mark's title, and how often "Long" leads a miss that is mostly sideways.
     if (id === 'mark') {
       markTitles[first.title] = (markTitles[first.title] || 0) + 1;
@@ -341,6 +348,7 @@ if (Object.keys(byChoice).length) {
   console.log(`  ${skill} · no slide though a dot ≥ 2 px was read held in the air: ${ns}`);
 }
 if (COACH) console.log(`  coach's first finding (landed runs): ${JSON.stringify(firsts)} · clean ${Math.round((100 * (firsts.clean || 0)) / Math.max(1, ok))}%`);
+if (COACH) console.log(`  clean NEXT RUN (0371): Precision < 10: ${ring.out} (${ring.outPro} say try Pro, ${ring.outRing} name the 2 m ring) · Precision 10: ${ring.in} (${ring.inPro} say try Pro)`);
 if (COACH) console.log(`  the mark's title when it leads: ${JSON.stringify(markTitles)} · "Long" on a mostly-sideways miss: ${longButWide}`);
 if (DAILY) {
   gasLeft.sort((a, b) => a - b);

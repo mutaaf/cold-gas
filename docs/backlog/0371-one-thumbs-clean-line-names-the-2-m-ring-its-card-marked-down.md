@@ -1,12 +1,12 @@
 ---
 id: 0371
 title: One thumb's clean line names the 2 m ring when the card marked the touchdown down for missing it
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: player-feel
 created: 2026-11-26
-pr:
+pr: 525
 by: critic
 ---
 

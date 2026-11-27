@@ -7,8 +7,8 @@ import { up, CAR, NOZZLES, forward, DT } from './vehicle.js';
 import { COURSES } from './courses.js';
 import { SPEC } from './spec.js';
 import { predict, newPrediction, SINK_SOFT, SINK_FIRM } from './predict.js';
-import { scoreRun } from './judge.js';
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD, LINEUP_SPEED_SLACK as SPEED_SLACK, LINEUP_TAP_BEFORE, LINEUP_LIFT_LATE } from './aim-words.js';
+import { scoreRun, SHOW_MARK_RING } from './judge.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD as LIFT_HOLD, LINEUP_SPEED_SLACK as SPEED_SLACK, LINEUP_TAP_BEFORE, LINEUP_LIFT_LATE, ringMiss } from './aim-words.js';
 
 export { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH };
 import { v3 } from './m3.js';
@@ -195,7 +195,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
       add('stopped-climb', 10, 'Stopped on the climb', t.rampTick < 0 ? 'You stopped before the Wall.' : t.maxRampHeight < 1 ? 'You stopped at the foot of the Wall.' : `You stopped ${r1(t.maxRampHeight)} m up the curl, short of the ledge.`,
         `Keep holding ${say.drive} until you're upside down on the ledge.`);
     } else add('no-release', 10, 'Never let go', `You hung ${r1(t.invertedTime)} s inverted but never released.`, `On the ledge, tap ${say.release} to let go.`);
-    return finish(out, f, card, crashed);
+    return finish(out, f, card, crashed, say.aim === AIM_THUMB && !drill);
   }
   if (wall && f.releaseProgress < 0.95 && f.releaseTick >= 0) {
     add('early-release', 6, 'Let go before the ledge', `Released ${Math.round(f.releaseProgress * 100)} % up the curl: the deck was still under you.`, 'Crawl all the way onto the inverted ledge, stop, then release.');
@@ -273,7 +273,7 @@ export function coach(inputLog, courseId, card = null, fromTick = 0, say = KEY_W
     add('gas', 3, 'Nearly out of gas', `${Math.round(f.gasAtTouch)} % left at touchdown.`, 'Shorter boosts and one hard, late brake use the least gas.');
   }
   if (t.flipped && !out.length) add('flipped', 8, 'Rolled over', 'The car ended on its roof.', 'Touch down level, slowly: watch the sink band and the attitude dial.');
-  return finish(out, f, card, crashed);
+  return finish(out, f, card, crashed, say.aim === AIM_THUMB && !drill);
 }
 
 // The Lineup's two wrecks (0367), ahead of everything else on its card. Every number is the replay's (readFlight).
@@ -338,15 +338,20 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
 }
 
 // A card with no finding: "Clean", with the next step. A crash is never clean (0367): it reads its own verdict.
-export function finish(out, f, card, crashed = false) {
+// `ring` (0371): one thumb's words on a scored run (not a drill: its sheet shows no marks, and its stat line flags the mark
+// only past 7 m), where NEXT RUN names the 2 m ring too (pointer.js thumbClean). Keys, a pad and two thumbs keep Try Pro:
+// their NEXT RUN names the category with the most points left (0261), which needn't be the mark.
+export function finish(out, f, card, crashed = false, ring = false) {
   out.sort((a, b) => b.weight - a.weight);
   if (!out.length && crashed) {
     const v = card?.verdict || 'Crash';
     out.push({ id: 'crash', weight: 0, title: v, detail: `${v}: the replay names no single cause.`, fix: CRASH_FIX });
   }
   if (!out.length) {
+    const miss = ring ? ringMiss(card) : -1;
     out.push({ id: 'clean', weight: 0, title: 'Clean', detail: card ? `${card.verdict}: nothing big to fix.` : 'Nothing big to fix.',
-      fix: card && card.tier === 'assist' ? 'Want more? Try Pro: you fly the landing yourself, and it scores ×1.08.' : 'Chase the details: sink under 1 m/s, the 2 m ring, more gas left.' });
+      fix: miss >= 0 ? `Land inside the ${SHOW_MARK_RING} m ring for full marks: this one was ${r1(miss)} m from the mark.`
+        : card && card.tier === 'assist' ? 'Want more? Try Pro: you fly the landing yourself, and it scores ×1.08.' : 'Chase the details: sink under 1 m/s, the 2 m ring, more gas left.' });
   }
   return { items: out.slice(0, 3), flight: f };
 }

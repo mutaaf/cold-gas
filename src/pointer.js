@@ -7,7 +7,7 @@
 
 // The device a player is on, from src/input.js's lastDevice ('touch' | 'key' | 'pad' | 'mouse' | 'none'):
 // a mouse or nothing yet is a desktop, so its keyboard.
-import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD, LINEUP_SPEED_SLACK, LINEUP_LIFT_LATE } from './sim/aim-words.js';
+import { AIM_LEAN, AIM_THUMB, RANOUT_LEAN, RANOUT_THUMB, LINEUP_RUNUP_KMH, LINEUP_LIFT_HOLD, LINEUP_SPEED_SLACK, LINEUP_LIFT_LATE, ringMiss } from './sim/aim-words.js';
 import { LANDING, SHOW_MARK_RING, CLEARANCE, SHOW_GAS_FULL, WALL_GAS_FULL, LINEUP_FULL, TIERS, PANEL, SHOW_W, WALL_W, DAMAGE_W } from './sim/judge.js';
 
 export const deviceOf = (last) => (last === 'touch' ? 'touch' : last === 'pad' ? 'pad' : 'key');
@@ -153,7 +153,7 @@ export function pointerText(id, ctx, flight = null, card = null) {
       return `${lead}: ${lift} at the line for about ${LINEUP_LIFT_HOLD} s`;
     }
     case 'crash': return 'Run it again and follow the cues: each one calls its step as you reach it';
-    case 'clean': if (thumbOn(ctx)) return thumbClean(ctx, flight);
+    case 'clean': if (thumbOn(ctx)) return thumbClean(ctx, flight, card);
       return cleanLine(ctx, card);
     default: return '';
   }
@@ -174,13 +174,17 @@ export const LINEUP_CALL = 'slide up on the run-up for two turns';
 function oneTurnLineup(ctx, flight) {
   return ctx.course === 'lineup' && flight != null && Number.isFinite(flight.rollDeg) && flight.rollDeg < 540;
 }
-function thumbClean(ctx, flight) {
+function thumbClean(ctx, flight, card = null) {
   const raw = flight?.touch?.padMiss;
   const miss = Math.round(raw * 10) / 10;
   const call = oneTurnLineup(ctx, flight);
   if (!(miss <= THUMB_MARK_RING)) return call ? `Clean. Next: ${LINEUP_CALL}, then slide onto the amber dot` : 'Clean. Next: hold in the air and slide onto the amber dot to land on the mark';
   const d = miss.toFixed(1);
   if (call) return `Clean, ${d} m from the mark. Next: ${LINEUP_CALL}, then aim for the mark`;
+  // 0371: a card marked down for missing the 2 m bullseye names the ring, as the coach's clean fix does (coach.js
+  // ringMiss), with the card's own distance; Pro is the step only once the mark pays full marks.
+  const ring = ringMiss(card);
+  if (ring >= 0) return `Clean, ${ring.toFixed(1)} m from the mark: inside the ${SHOW_MARK_RING} m ring pays full marks. Next: slide onto the amber dot`;
   return `Clean, ${d} m from the mark. Next: try Pro and fly the landing yourself`;
 }
 
