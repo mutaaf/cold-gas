@@ -7,6 +7,10 @@
 // (src/worker/ai/prompt.js userPrompt: "28 m", "five parked EVs"). A remark that states anything else is unfaithful, and
 // the sheet shows the same judge's own line from `localWords` instead; the model's text stays under Inspect the call
 // (invariant 5½). Pure: no DOM.
+//
+// 0372: a remark is unfaithful too when the card has no touchdown and the remark gives one a quality ("the perfect sink
+// rate and attitude"). A Lineup car that ends on the row never set a wheel down (0369), but the brief still reads it
+// "Touchdown sink 0 m/s, tilt 0 degrees", a textbook landing to a model; "perfect" is no number for the check above.
 import { M_TO_FT, KG_TO_LB, MPS_TO_MPH, MPS_TO_KMH } from './units.js';
 
 export const WORD_KEYS = ['headline', 'engineer', 'coordinator', 'designer'];
@@ -92,41 +96,84 @@ const ok = (x, allowed) => (allowed[x.q] || allowed.any).some((v) => near(x.n, v
 const firstBad = (text, allowed) => statedNumbers(text).find((x) => !ok(x, allowed)) || null;
 export const faithful = (text, allowed) => !firstBad(text, allowed);
 
-// Which of the four remarks state a number the run didn't make.
-export function checkWords(words, card, brief = '') {
-  const allowed = allowedNumbers(card, brief);
-  return WORD_KEYS.filter((k) => words?.[k] && !faithful(words[k], allowed));
+// 0372: the card had no touchdown: a Lineup run that ended on the row with no wheel down (0369's row hit). The Show and
+// the Wall print their touchdown only for a card that has one, so this is the Lineup's alone. A Lineup card names no
+// course (src/sim/judge.js scoreLineup); the Show's and the Wall's carry theirs in `facts.course`, as the brief reads it.
+export const noTouchdown = (card) => !!card?.facts && (card.course ?? card.facts.course ?? 'lineup') === 'lineup'
+  && card.facts.jumped === false && !!card.facts.contact;
+
+// A quality given to a touchdown, in either order, inside one clause (no punctuation, up to three words between):
+// "perfect sink rate", "a stable sink rate and level attitude", "Touchdown parameters were perfect", "landed it cleanly".
+// Unless the clause says there was none ("never a clean landing", "without a soft touchdown").
+const QUALITY = 'perfect(?:ly)?|clean(?:ly)?|soft(?:ly)?|stable|steady|level|textbook|smooth(?:ly)?|flawless(?:ly)?|gentle|gently|ideal(?:ly)?|precise(?:ly)?|controlled|impeccable|immaculate|pristine|optimal|nominal|excellent|superb|great|beautiful(?:ly)?|graceful(?:ly)?|flat|neat(?:ly)?|tidy|solid|good|fine|exemplary|spot-on';
+const TOUCHDOWN = 'touch-?downs?|touched\\s+down|landings?|landed|set-?downs?|set\\s+down|sink(?:\\s+rates?)?|attitudes?|tilt';
+const GAP = '(?:[\\s-]+[\\w’\'-]+){0,3}?[\\s-]+';
+const PRAISE_RE = new RegExp(`\\b(?:(?:${QUALITY})${GAP}(?:${TOUCHDOWN})|(?:${TOUCHDOWN})${GAP}(?:${QUALITY}))\\b`, 'i');
+const NONE_RE = /\b(?:no|not|never|without|nor|none|lacked|lacking)\b|n[’']t\b/i;
+// Where a remark first praises a touchdown, or -1.
+function praiseAt(text) {
+  const s = String(text || ''), m = PRAISE_RE.exec(s);
+  if (!m) return -1;
+  const clause = s.slice(0, m.index).split(/[.;:!?,]/).pop().split(/\s+/).slice(-4).join(' ');
+  if (NONE_RE.test(clause)) { const rest = praiseAt(s.slice(m.index + m[0].length)); return rest < 0 ? -1 : m.index + m[0].length + rest; }
+  return m.index;
+}
+export const praisesTouchdown = (text) => praiseAt(text) >= 0;
+
+// Why a remark is unfaithful to this card ('number' or 'touchdown'), and where, or null.
+function untrue(text, allowed, none) {
+  const bad = firstBad(text, allowed), at = none ? praiseAt(text) : -1;
+  if (at >= 0 && (!bad || at < bad.at)) return { why: 'touchdown', at };
+  return bad ? { why: 'number', at: bad.at } : null;
 }
 
-// The words to show: each unfaithful remark swapped for the same judge's own line. `replaced` names the swapped keys.
+// Which of the four remarks state a number the run didn't make, or praise a touchdown it never made (0372).
+export function checkWords(words, card, brief = '') {
+  return checkReasons(words, card, brief).map((x) => x.key);
+}
+function checkReasons(words, card, brief) {
+  const allowed = allowedNumbers(card, brief), none = noTouchdown(card), out = [];
+  for (const k of WORD_KEYS) {
+    const u = words?.[k] ? untrue(words[k], allowed, none) : null;
+    if (u) out.push({ key: k, why: u.why });
+  }
+  return out;
+}
+
+// The words to show: each unfaithful remark swapped for the same judge's own line. `replaced` names the swapped keys,
+// `reasons` why each was ('number' or 'touchdown', in the same order).
 export function faithfulWords(words, card, local, brief = '') {
-  if (!words) return { words, replaced: [] };
-  const replaced = checkWords(words, card, brief);
-  if (!replaced.length) return { words, replaced };
+  if (!words) return { words, replaced: [], reasons: [] };
+  const found = checkReasons(words, card, brief), replaced = found.map((x) => x.key), reasons = found.map((x) => x.why);
+  if (!replaced.length) return { words, replaced, reasons };
   const own = local(card), out = { ...words };
   for (const k of replaced) out[k] = own[k];
-  return { words: out, replaced };
+  return { words: out, replaced, reasons };
 }
 
 // The words as they stream (the docked strip types them onto the sheet). Until the call is `done`, the last word is
 // still growing ("thirty" may become "thirty-six", "3." become "3.7"), so it is never shown: each remark shows only
 // what is already closed. A remark that has stated a wrong number stops just before it, and stays there until the
 // final words land (the judge's own line).
-let liveMemo = { card: null, brief: null, allowed: null };
+let liveMemo = { card: null, brief: null, allowed: null, none: false };
 export function liveFaithful(words, card, brief = '', done = false) {
   if (!words) return words;
-  if (liveMemo.card !== card || liveMemo.brief !== brief) liveMemo = { card, brief, allowed: allowedNumbers(card, brief) };
+  if (liveMemo.card !== card || liveMemo.brief !== brief) liveMemo = { card, brief, allowed: allowedNumbers(card, brief), none: noTouchdown(card) };
   const out = { ...words };
   for (const k of WORD_KEYS) {
     if (!out[k]) continue;
     const closed = done ? out[k] : out[k].replace(/\S*$/, '');
-    const bad = firstBad(closed, liveMemo.allowed);
+    const bad = untrue(closed, liveMemo.allowed, liveMemo.none);
     out[k] = (bad ? closed.slice(0, bad.at) : closed).trimEnd();
   }
   return out;
 }
 
-// The receipt's line when a remark was swapped.
-export const replacedLine = (n) => (n === 1
-  ? '1 remark replaced with the game’s own line: it stated a number the run didn’t make'
-  : `${n} remarks replaced with the game’s own lines: they stated numbers the run didn’t make`);
+// The receipt's line when a remark was swapped, with why (faithfulWords' `reasons`; none means numbers, as 0282).
+export function replacedLine(n, reasons = []) {
+  const why = new Set(reasons.length ? reasons : ['number']);
+  const head = n === 1 ? '1 remark replaced with the game’s own line: it' : `${n} remarks replaced with the game’s own lines: they`;
+  if (why.size > 1) return `${head} said what the run didn’t do`;
+  if (why.has('touchdown')) return `${head} praised a landing the run never made`;
+  return n === 1 ? `${head} stated a number the run didn’t make` : `${head} stated numbers the run didn’t make`;
+}
