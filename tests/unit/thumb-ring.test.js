@@ -29,7 +29,7 @@ function at(course, miss, tier = 'assist') {
   // Wall's sets down 3.5 m out (0360), which the coach names as the mark from the replay: there the clean item is
   // finish()'s, the coach's own last step, over the same card.
   const flown = coach(log, course, card, 0, coachWords(ctx));
-  const c = course === 'show' ? flown : finish([], flown.flight, card);
+  const c = course === 'show' ? flown : finish([], flown.flight, card, false, true);
   const flight = { ...c.flight, touch: { ...c.flight.touch, padMiss: miss } };
   return { card, ctx, c, flight, p: pickPointer(c.items, ctx, { card, flight }) };
 }
@@ -70,6 +70,21 @@ describe('one thumb, a touchdown just outside the 2 m ring (0371)', () => {
     // No card (a drill): the old line.
     const ctx = { device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' };
     expect(pointerText('clean', ctx, { touch: { padMiss: 2.2 } }, null)).toMatch(/try Pro/);
+  });
+
+  it('keys, a pad and two thumbs keep the coach\'s Try Pro (their NEXT RUN names the most points left, 0261); a drill never names the ring', () => {
+    const { t, log } = refs.show;
+    const card = scoreRun({ ...t, lateral: 2.2, landZ: COURSES.show.pad.z });
+    expect(card.categories.precision).toBeLessThan(10);
+    for (const ctx of [{ device: 'key', scheme: 'classic' }, { device: 'pad', scheme: 'classic' }, { device: 'touch', scheme: 'classic' }]) {
+      const c = coach(log, 'show', card, 0, coachWords({ ...ctx, tier: 'assist', course: 'show' }));
+      expect(c.items[0].id).toBe('clean');
+      expect(c.items[0].fix).toMatch(/Try Pro/);
+    }
+    // A drill (fromTick > 0) gets the run's full card in the app (main.js), but its sheet shows no marks: no ring.
+    const thumb = coachWords({ device: 'touch', scheme: 'thumb', tier: 'assist', course: 'show' });
+    const drill = coach(log, 'show', card, 1200, thumb);
+    for (const it of drill.items) expect(it.fix).not.toMatch(/ring for full marks/);
   });
 
   it('the edge: 2.0 m (full marks at the card\'s 0.1) says Pro; 2.1 m names the ring', () => {

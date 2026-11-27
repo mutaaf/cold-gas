@@ -1,0 +1,41 @@
+// 0371 screenshot: fly the 0156 one-thumb slide (+24 px, sets down ~2.2 m out) on the page and capture the sheet.
+import { createRequire } from 'module'; const { chromium } = createRequire(import.meta.url)('playwright');
+const OUT = process.argv[2], URL = process.argv[3];
+const browser = await chromium.launch({ args: ['--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+for (const [w, h, touch] of JSON.parse(process.env.VPS || '[[390,844,true]]')) {
+  const page = await browser.newPage({ viewport: { width: w, height: h }, hasTouch: touch, isMobile: w < 500, deviceScaleFactor: 1 });
+  const errors = []; page.on('pageerror', (e) => errors.push(e.message));
+  await page.route('**/api/scores**', (r) => r.fulfill({ status: 204, body: '' }));
+  await page.route('**/api/obs**', (r) => r.fulfill({ status: 204, body: '' }));
+  await page.goto(URL + '?gfx=low');
+  await page.waitForFunction(() => !!window.__coldgas?.stage && window.__coldgas.physicsReady(), null, { timeout: 120000 });
+  await page.evaluate(() => { const g = window.__coldgas; g.touch.set('scheme', 'thumb'); g.touch.sync?.(); });
+  await page.touchscreen.tap(5, h - 5).catch(() => {});
+  await page.evaluate(() => { const g = window.__coldgas; g.setTier('assist'); g.startRun('jump'); g.skipCountdown(); });
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'live', null, { timeout: 60000 });
+  const res = await page.evaluate((slide) => {
+    const g = window.__coldgas, S = g.S, th = g.thumb; S.holdLive = true;
+    let ledgeT = -1, tapT = -1; th.down();
+    const run = S.run;
+    for (let i = 0; i < 40000 && run.phase !== 'done'; i++) {
+      const c = run.car, v = Math.hypot(c.vel.x, c.vel.y, c.vel.z);
+      if (tapT < 0 && !S.released && run.phase === 'ramp' && run.t.progress > 0.9 && v < 0.3) {
+        if (ledgeT < 0) { ledgeT = run.tick; th.up(); }
+        if (run.tick === ledgeT + 120) { th.down(); tapT = run.tick; }
+      }
+      if (S.released && run.phase === 'air' && th.held) th.move(slide[0], slide[1]);
+      g.liveStep(1 / 240);
+    }
+    S.holdLive = false;
+    return { phase: run.phase, tick: run.tick, ledgeT, tapT };
+  }, (process.env.SLIDE || "24,0").split(",").map(Number));
+  await page.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 120000 }).catch(() => {});
+  await page.waitForFunction(() => !document.querySelector('[data-pointer]')?.hidden && document.querySelector('[data-pointer-text]')?.textContent, null, { timeout: 60000 }).catch(() => {});
+  await page.waitForTimeout(3000);
+  const info = await page.evaluate(() => ({ mode: window.__coldgas.S.mode, card: window.__coldgas.S.card && { total: window.__coldgas.S.card.total, padMiss: window.__coldgas.S.card.facts.padMiss, precision: window.__coldgas.S.card.categories.precision }, pointer: document.querySelector('[data-pointer-text]')?.textContent, coach: [...document.querySelectorAll('[data-coach] *')].map((e) => e.textContent).join(' | ').slice(0, 400) }));
+  await page.locator('[data-pointer]').scrollIntoViewIfNeeded().catch(() => {});
+  await page.screenshot({ path: `${OUT}/ring-${w}x${h}.png` });
+  console.log(w, h, JSON.stringify(res), JSON.stringify(info), 'errors', JSON.stringify(errors));
+  await page.close();
+}
+await browser.close();
