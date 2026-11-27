@@ -1,0 +1,6 @@
+199a200
+>           if (Math.max(0, c.pos.y - SPEC.comHeight) >= 2.5) globalThis.__lastRead = { m: off.m, x: off.x, y: off.y, h: Math.max(0, c.pos.y - SPEC.comHeight), ax: th.aim.x, ay: th.aim.y };
+334c335
+<   if (verbose) console.log(JSON.stringify(P), JSON.stringify(F), why || 'OK', s.total, 'sink', t.sink.toFixed(1), 'pad', s.facts.padMiss);
+---
+>   if (verbose) console.log(JSON.stringify(P), JSON.stringify(F), why || 'OK', s.total, 'sink', t.sink.toFixed(1), 'pad', s.facts.padMiss, 'prec', s.categories ? JSON.stringify(s.categories) : '', 'LAST', JSON.stringify(globalThis.__lastRead||null), 'LS', t.lateral.toFixed(2), (t.landZ - SHOW.pad.z).toFixed(2)); globalThis.__lastRead=null;

@@ -1,0 +1,12 @@
+ Test Files  1 failed | 112 passed (113)
+      Tests  1165 passed | 5 skipped (1170)
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/coach-late-lift.test.js > 0370: the keys population (flyKeysLineup × 200, seed 777)
+Error: Hook timed out in 180000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+ ❯ tests/unit/coach-late-lift.test.js:31:3
+     29| describe('0370: the keys population (flyKeysLineup × 200, seed 777)', …
+     30|   let rows;
+     31|   beforeAll(() => {
+Re-run alone: tests/unit/coach-late-lift.test.js 6/6 passed (63 s).

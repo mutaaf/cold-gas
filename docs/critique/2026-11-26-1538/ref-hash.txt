@@ -1,0 +1,3 @@
+show ticks 3501 score 97.3 hash 6b2cb98b
+wall ticks 4270 score 94.3 hash f1b9fab
+lineup ticks 3444 score 91.7 hash 4fc4af6b

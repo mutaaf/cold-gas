@@ -1,0 +1,84 @@
+flyKeysLineup {
+ "n": 200,
+ "crashed": 87,
+ "airborne": 200,
+ "noJump": 0,
+ "noJumpAirborne": 0,
+ "groundNoJump": 0,
+ "falseWords": 0,
+ "sameAgainCrashed": 0,
+ "roofsLow": 0,
+ "verdicts": {
+  "Stuck it": 84,
+  "Contact": 50,
+  "Perfect 10": 12,
+  "Clean": 16,
+  "Wrecked": 37,
+  "Rough landing": 1
+ },
+ "firstIds": {
+  "no-lift": 42,
+  "row": 45
+ },
+ "fixes": {
+  "Press LIFT (Space) on the line, not # m past it: the nose met the first car on the way up#": 16,
+  "Hold LIFT (Space) at the line for about # s (you held # s), then roll#": 42,
+  "Ease off ↑ before the line: between # km/h and # km/h, not # km/h# Hold LIFT (Space) at th": 13,
+  "Ease off ↑ before the line: between # km/h and # km/h, not # km/h# Press LIFT (Space) on t": 13,
+  "Press LIFT (Space) on the line, not # m past it# Hold it about # s (you held # s), then ro": 3
+ }
+}
+flyTouch lineup {
+ "n": 200,
+ "crashed": 128,
+ "airborne": 200,
+ "noJump": 0,
+ "noJumpAirborne": 0,
+ "groundNoJump": 0,
+ "falseWords": 0,
+ "sameAgainCrashed": 0,
+ "roofsLow": 0,
+ "verdicts": {
+  "Wrecked": 60,
+  "Contact": 63,
+  "Splash": 5,
+  "Stuck it": 47,
+  "Clean": 11,
+  "No trick": 7,
+  "Rough landing": 2,
+  "Perfect 10": 5
+ },
+ "firstIds": {
+  "row": 84,
+  "no-brake": 24,
+  "ran-out": 9,
+  "no-lift": 6,
+  "late-brake": 5
+ },
+ "fixes": {
+  "Hold LIFT (Space) at the line for about # s (you held # s), then roll#": 82,
+  "Hold LAND (Shift) right after you let go: it rolls you out and brakes you to the ground#": 24,
+  "Stay on the brake through the last # m: hold the sink in the green band to the ground#": 9,
+  "Press LIFT (Space) on the line, not # m past it: the nose met the first car on the way up#": 5,
+  "Hold LAND (Shift) from # m or higher: the BRAKE line on the descent tape# Or hold it from ": 5,
+  "Run it again and follow the cues: each one calls its step as you reach it#": 2,
+  "Press LIFT (Space) on the line, not # m past it# Hold it about # s, then roll#": 1
+ }
+}
+flyThumb lineup {
+ "n": 200,
+ "crashed": 0,
+ "airborne": 200,
+ "noJump": 0,
+ "noJumpAirborne": 0,
+ "groundNoJump": 0,
+ "falseWords": 0,
+ "sameAgainCrashed": 0,
+ "roofsLow": 0,
+ "verdicts": {
+  "Stuck it": 98,
+  "Perfect 10": 102
+ },
+ "firstIds": {},
+ "fixes": {}
+}

@@ -58,3 +58,19 @@ moments, the player's own run). The sheet's AI headline reads **"PERFECT LANDING
 (`docs/critique/2026-11-16-1600/sheet/lineup-390x844t-sheet5.jpg`). A second Lineup run in the same session got "PERFECT
 LANDING ON THE LINEUP", so it's a coin toss, as the missing `Event:` line predicts. Still `proposed`: `src/worker/` is
 frozen, so this is the operator's one-line change.
+
+## Critic note (2026-11-26 15:38): still live, and the same branch tells the model a row hit landed perfectly
+- **Still live.** Production `index-l6Ykvvkp.js` (= main `7efa88f`), 1440×900 keys. A Lineup wreck's AI headline reads
+  **"THE SHOW ENDS IN WRECKAGE"** (`docs/critique/2026-11-26-1538/lineup-keys-late-3-sheet.png`).
+- **A second line in the same branch to fix in the same edit.** The Lineup branch of `userFacts` (`prompt.js:67`) always
+  prints `Touchdown sink ${f.sink} m/s, tilt ${f.tiltDeg} degrees, heading ${f.headingDeg} degrees …`.
+  - A row hit before the wheels come down (0369: `!f.jumped && f.contact`) has those facts at 0. Over seed 777 that's 13 of
+    87 crashed keys cards and 21 of 128 touch (`docs/critique/2026-11-26-1538/brief.out.txt`).
+  - The model then writes "Touchdown parameters were perfect…" and "Despite the perfect sink rate and attitude…" over a
+    LANDING 0.0 (`lineup-keys-floor.out.txt`, `lineup-keys-late.out.txt`).
+  - The Show's branch already gates its touchdown on `f.jumped` (`:45`).
+- **Add to What:** on the Lineup, print the touchdown line only when `f.jumped`. Otherwise print
+  "No touchdown: the car hit the parked row before its wheels came down."
+- **Add to Acceptance:** the prompt for a row-hit card (`jumped: false, contact: true`) contains no "Touchdown sink".
+- 0372 (ready, the Builder's) guards the sheet on the client meanwhile. This half is still the operator's: `src/worker/`
+  is frozen.
