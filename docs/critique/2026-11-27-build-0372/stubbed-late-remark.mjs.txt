@@ -1,0 +1,51 @@
+// Production, the Lineup on keys at 1440x900 (Assist, a returning player): a person reading only the cue line. Hold ↑ from Go
+// (or keep near a target speed, read off the HUD's SPEED), press Space when "Hold Space at the line" shows, for HOLD ms, ← on
+// "to roll" until the cue changes, Shift on "Hold LAND". Real key events, 260 ms reactions. Screenshots, the card.
+import { chromium } from '/home/user/cold-gas/node_modules/@playwright/test/index.mjs';
+const [,, OUT, TAG, MPH = 'floor', HOLD = '500', URL = 'https://mutaafaziz.com/coldgas/?course=lineup', LATEZ = ''] = process.argv;  // LATEZ: press Space as the car's centre passes this z (m), not on the cue (critic 11-26 15:38, 0370)
+const browser = await chromium.launch({ executablePath: '/opt/pw-browsers/chromium-1243/chrome-linux64/chrome', args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const [W, H] = (process.env.VP || '1280x720').split('x').map(Number); const c = await browser.newContext({ viewport: { width: W, height: H } });
+const LATE = 'Despite the perfect sink rate and attitude, the impact with the vehicle caused catastrophic structural failure.';
+const ev = (e, d) => `event: ${e}\ndata: ${JSON.stringify(d)}\n\n`;
+const words = { headline: 'Catastrophic Collision', engineer: LATE, coordinator: 'A bold line straight into the parked row.', designer: 'Lots of drama, no landing.', source: 'ai' };
+const raw = `HEADLINE: ${words.headline}\nENGINEER: ${words.engineer}\nCOORDINATOR: ${words.coordinator}\nDESIGNER: ${words.designer}`;
+const tokens = raw.match(/[\s-]?[^\s-]+/g);
+const body = ev('verify', { ticks: 2400, ms: 30, card: { total: 4 } }) + ev('prompt', { provider: 'edge', providerLabel: 'Free', vendor: 'Workers AI', model: '@cf/test/model', where: 'Cloudflare edge', system: 's', user: 'u', inTokensEst: 600 }) + tokens.map((t) => ev('token', { t })).join('') + ev('done', { words, raw, inTokens: 600, outTokens: tokens.length, ttftMs: 300, totalMs: 900, tokensPerSec: 40, neurons: 13, costUsd: null });
+await c.route('**/coldgas/api/judge/stream', (r) => r.fulfill({ status: 200, contentType: 'text/event-stream', body }));
+await c.route('**/boxoffice/**', (r) => r.fulfill({ status: 200, body: '' }));
+await c.route(/\/api\/(scores|obs)/, (r) => r.request().method() === 'POST' ? r.fulfill({ status: 204 }) : r.continue());  // only the board and obs (LESSONS 11-26)
+await c.route(/googlesyndication|doubleclick|googleads|adservice|google\.com\/(pagead|recaptcha)/, (r) => r.abort());
+const p = await c.newPage(); const errs = []; p.on('pageerror', (e) => errs.push(e.message));
+await p.goto(URL); await p.waitForFunction(() => window.__coldgas?.physicsReady?.() && window.__coldgas.S.mode === 'title', null, { timeout: 180000 });
+const course = await p.evaluate(() => window.__coldgas.stage.course);
+await p.evaluate(() => window.__coldgas.startRun('jump'));
+await p.waitForFunction(() => ['countdown','live'].includes(window.__coldgas.S.mode), null, { timeout: 120000 }); await p.evaluate(() => window.__coldgas.skipCountdown());
+// Hold the page's clock to a true 60 fps: step the live loop ourselves so SwiftShader's slow frames don't change the flight.
+await p.evaluate(() => { const g = window.__coldgas; g.S.holdLive = true; });
+const step = (n = 4) => p.evaluate((n) => { const g = window.__coldgas; for (let i = 0; i < n; i++) if (g.S.mode === 'live') g.liveStep(1 / 60); const S = g.S, r = S.run, cr = r?.car;
+  return { mode: S.mode, phase: r?.phase, z: cr?.pos.z, y: cr?.pos.y, v: cr ? Math.hypot(cr.vel.x, cr.vel.z) : 0, cue: (document.querySelector('[data-cue].on') || document.querySelector('[data-cue]'))?.textContent?.trim() || '', t: r?.tick / 240 }; }, n);
+const held = new Set(); const kd = async (k) => { if (!held.has(k)) { held.add(k); await p.keyboard.down(k); } }; const ku = async (k) => { if (held.has(k)) { held.delete(k); await p.keyboard.up(k); } };
+const REACT = 260 / 1000; let st = await step(1); const log = []; let lastCue = ''; let spaceAt = -1, spaceUp = -1, rollOn = -1, rollOff = -1, landAt = -1, seenCueT = {};
+const shots = {}; const shot = async (n) => { if (!shots[n]) { shots[n] = 1; await p.screenshot({ path: `${OUT}/lineup-keys-${TAG}-${n}.png` }); } };
+const target = MPH === 'floor' ? Infinity : +MPH * 0.44704;
+await kd('ArrowUp');
+for (let i = 0; i < 2000 && st.mode === 'live'; i++) {
+  st = await step(4);   // 1/15 s per loop
+  if (st.cue !== lastCue) { log.push(`${st.t.toFixed(2)} z${st.z.toFixed(1)} v${st.v.toFixed(1)} ${st.phase} cue: ${st.cue}`); lastCue = st.cue; seenCueT[st.cue] ??= st.t; }
+  const since = (re) => { const k = Object.keys(seenCueT).find((q) => re.test(q)); return k != null ? st.t - seenCueT[k] : -1; };
+  if (st.phase === 'drive' && spaceAt < 0) { if (st.v > target + 0.5) await ku('ArrowUp'); else if (st.v < target - 0.5) await kd('ArrowUp'); }
+  if (spaceAt < 0 && (LATEZ !== '' ? st.z >= +LATEZ : since(/Space.*line|at the line/i) >= REACT)) { spaceAt = st.t; await ku('ArrowUp'); await kd('Space'); log.push(`${st.t.toFixed(2)} Space down z${st.z.toFixed(1)} v${st.v.toFixed(1)}`); await shot('1-lift'); }
+  if (spaceAt >= 0 && spaceUp < 0 && st.t - spaceAt >= +HOLD / 1000) { spaceUp = st.t; await ku('Space'); }
+  if (rollOn < 0 && since(/to roll/i) >= REACT) { rollOn = st.t; await kd('ArrowLeft'); }
+  if (rollOn >= 0 && rollOff < 0 && since(/Hold.*LAND|Shift/i) >= REACT) { rollOff = st.t; await ku('ArrowLeft'); }
+  if (landAt < 0 && since(/Hold.*LAND|Shift/i) >= REACT) { landAt = st.t; await kd('Shift'); }
+  if (st.phase === 'air' && st.z > -2) await shot('2-over-row');
+}
+for (const k of [...held]) await ku(k);
+await p.evaluate(() => { window.__coldgas.S.holdLive = false; });
+await p.waitForFunction(() => window.__coldgas.S.mode === 'results', null, { timeout: 90000 }).catch(() => {});
+await p.waitForFunction(() => window.__coldgas.S.callMeta, null, { timeout: 120000 }).catch(() => {}); await p.waitForTimeout(4000); await p.screenshot({ path: `${OUT}/lineup-keys-${TAG}-3-sheet.png` });
+await p.evaluate(() => (document.querySelector('[data-receipt]') || document.querySelector('[data-r-judges]'))?.scrollIntoView({ block: 'end' })); await p.waitForTimeout(800); await p.screenshot({ path: `${OUT}/lineup-keys-${TAG}-4-judges.png` });
+const card = await p.evaluate(() => { const c = window.__coldgas.S.card, t = window.__coldgas.S.run?.t; return c && { sheetText: document.querySelector('.results')?.innerText?.slice(0, 2500), words: window.__coldgas.S.words, replacedNote: window.__coldgas.S.callMeta?.replacedNote ?? 'none', rcNote: document.querySelector('[data-rc-replaced]')?.textContent ?? 'no-el', facts: { jumped: c.facts.jumped, contact: c.facts.contact }, total: c.total, verdict: c.verdict, crashed: c.facts.crashed, clearance: c.facts.clearance, launch: t?.launchSpeed, maxH: t?.maxHeight, coach: (c.coach || []).map((x) => x.id) }; });
+console.log(JSON.stringify({ course, TAG, MPH, HOLD: +HOLD, card, log, errs }, null, 1));
+await browser.close();

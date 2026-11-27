@@ -598,6 +598,8 @@ export function createUI() {
     if (words.headline) unitText($('[data-r-headline]'), words.headline);
     for (const id of ['engineer', 'coordinator', 'designer']) {
       const q = document.querySelector(`[data-judge="${id}"] .quote`);
+      // A remark cut back to nothing (0372: it began praising a touchdown the run never made) clears what it showed.
+      if (q && words[id] === '' && q.dataset.live) { q.dataset.live = ''; q.textContent = ''; continue; }
       if (!q || !words[id] || q.dataset.live === words[id]) continue;
       q.dataset.live = words[id];
       q.textContent = localize(words[id]);

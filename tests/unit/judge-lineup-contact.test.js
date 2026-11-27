@@ -129,3 +129,24 @@ describe('0369: what stays', () => {
     expect(crashNote({ jumped: true, crashed: true, damagePct: 10 })).toBe('Crashed · not a mark yet');
   });
 });
+
+// 0372: over the same populations, every card with no touchdown rejects a remark that praises its sink rate, and no
+// landed card does. Its own local lines never praise one.
+import { checkWords as checkWords0372, noTouchdown as noTouchdown0372 } from '../../src/check-words.js';
+describe('0372: no judge praises a touchdown that never happened (seed 777 × 200)', () => {
+  for (const name of Object.keys(POPS)) {
+    it(`${name}: every no-touchdown card rejects "perfect sink rate"; no landed card does`, () => {
+      const w = { headline: 'Into the row', engineer: 'Despite the perfect sink rate and attitude, the impact with the vehicle caused catastrophic structural failure.', coordinator: '', designer: '' };
+      let none = 0;
+      for (const { run, card } of pops[name]) {
+        const bad = checkWords0372(w, card).includes('engineer');
+        if (run.t.contact && run.t.touchTick < 0 && run.t.airStartTick >= 0) { none++; expect(noTouchdown0372(card)).toBe(true); }
+        if (noTouchdown0372(card)) {
+          expect(bad).toBe(true);
+          expect(checkWords0372(localWords(card), card)).toEqual([]);
+        } else if (card.facts.jumped) expect(bad).toBe(false);
+      }
+      expect(none).toBeGreaterThan(10);   // 13 keys, 21 touch on main
+    }, 240000);
+  }
+});

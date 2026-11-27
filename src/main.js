@@ -1024,10 +1024,10 @@ async function runPanel(run, replay = null) {
   if (!replay && judgesOverran(meta.error, deadlineMs)) obs.fail('judge', new Error('judge deadline'), 'fetch');
   if (!replay) {
     if (meta.verify?.card && Math.abs(meta.verify.card.total - card.total) > 0.05) console.warn('server card differs', meta.verify.card.total, card.total);
-    // 0282: a model's remark that states a number the run didn't make is swapped for the same judge's own line before
+    // 0282: a model's remark that states a number the run didn't make (or, 0372, praises a touchdown it never made) is swapped for the same judge's own line before
     // the sheet shows it; the receipt says so, and the model's text stays under Inspect the call (meta.raw, invariant 5½).
-    const checked = meta.ok && words?.source !== 'local' ? late.faithfulWords(words, card, late.localWords, meta.user || '') : { words, replaced: [] };
-    meta.replaced = checked.replaced; meta.replacedNote = checked.replaced.length ? late.replacedLine(checked.replaced.length) : '';
+    const checked = meta.ok && words?.source !== 'local' ? late.faithfulWords(words, card, late.localWords, meta.user || '') : { words, replaced: [], reasons: [] };
+    meta.replaced = checked.replaced; meta.replacedNote = checked.replaced.length ? late.replacedLine(checked.replaced.length, checked.reasons) : '';
     if (checked.replaced.length) obs.play('words-replaced');
     S.words = checked.words; S.callMeta = meta;
   }
