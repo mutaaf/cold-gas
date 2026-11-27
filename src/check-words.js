@@ -102,21 +102,27 @@ export const faithful = (text, allowed) => !firstBad(text, allowed);
 export const noTouchdown = (card) => !!card?.facts && (card.course ?? card.facts.course ?? 'lineup') === 'lineup'
   && card.facts.jumped === false && !!card.facts.contact;
 
-// A quality given to a touchdown, in either order, inside one clause (no punctuation, up to three words between):
-// "perfect sink rate", "a stable sink rate and level attitude", "Touchdown parameters were perfect", "landed it cleanly".
-// Unless the clause says there was none ("never a clean landing", "without a soft touchdown").
-const QUALITY = 'perfect(?:ly)?|clean(?:ly)?|soft(?:ly)?|stable|steady|level|textbook|smooth(?:ly)?|flawless(?:ly)?|gentle|gently|ideal(?:ly)?|precise(?:ly)?|controlled|impeccable|immaculate|pristine|optimal|nominal|excellent|superb|great|beautiful(?:ly)?|graceful(?:ly)?|flat|neat(?:ly)?|tidy|solid|good|fine|exemplary|spot-on';
-const TOUCHDOWN = 'touch-?downs?|touched\\s+down|landings?|landed|set-?downs?|set\\s+down|sink(?:\\s+rates?)?|attitudes?|tilt';
-const GAP = '(?:[\\s-]+[\\w’\'-]+){0,3}?[\\s-]+';
-const PRAISE_RE = new RegExp(`\\b(?:(?:${QUALITY})${GAP}(?:${TOUCHDOWN})|(?:${TOUCHDOWN})${GAP}(?:${QUALITY}))\\b`, 'i');
-const NONE_RE = /\b(?:no|not|never|without|nor|none|lacked|lacking)\b|n[’']t\b/i;
-// Where a remark first praises a touchdown, or -1.
+// A quality given to a touchdown, in either order, inside one clause (up to four words between, a number with its unit
+// counting as words: "a perfect 0 m/s sink"): "perfect sink rate", "a stable sink rate and level attitude", "Touchdown
+// parameters were perfect", "landed it cleanly", "nailed the landing". Unless the clause says there was none ("never a
+// clean landing", "the landing was not perfect").
+const QUALITY = 'perfect(?:ly)?|clean(?:er|est|ly)?|soft(?:er|est|ly)?|stable|steady|level|textbook|smooth(?:er|est|ly)?|flawless(?:ly)?|gentle|gentler|gently|ideal(?:ly)?|precise(?:ly)?|controlled|impeccable|immaculate|pristine|optimal|nominal|excellent|superb|great|beautiful(?:ly)?|graceful(?:ly)?|flat|neat(?:ly)?|tidy|solid|good|fine|exemplary|spot[\\s-]on|feather-?light|nailed|stuck';
+const TOUCHDOWN = 'touch-?downs?|touched\\s+down|landings?|landed|set-?downs?|set\\s+down|sink(?:\\s+rates?)?|attitudes?|tilt|heading';
+const SEP = '[\\s\\-—–:]+';
+const GAP = `(?:${SEP}[\\w’'./%°-]+){0,4}?${SEP}`;
+const PRAISE_RE = new RegExp(`\\b(?:(?:${QUALITY})${GAP}(?:${TOUCHDOWN})|(?:${TOUCHDOWN})${GAP}(?:${QUALITY}))\\b`, 'gi');
+const NONE_RE = /\b(?:no|not|never|without|nor|none|lacked|lacking|anything but)\b|n[’']t\b/i;
+// Where a remark first praises a touchdown, or -1. Each candidate is tried at every start (overlaps included), and is
+// not praise when its own words or its clause so far deny it.
 function praiseAt(text) {
-  const s = String(text || ''), m = PRAISE_RE.exec(s);
-  if (!m) return -1;
-  const clause = s.slice(0, m.index).split(/[.;:!?,]/).pop().split(/\s+/).slice(-4).join(' ');
-  if (NONE_RE.test(clause)) { const rest = praiseAt(s.slice(m.index + m[0].length)); return rest < 0 ? -1 : m.index + m[0].length + rest; }
-  return m.index;
+  const s = String(text || '');
+  PRAISE_RE.lastIndex = 0;
+  for (let m; (m = PRAISE_RE.exec(s));) {
+    const clause = s.slice(0, m.index).split(/[.;!?,]|\bbut\b/i).pop();
+    if (!NONE_RE.test(clause) && !NONE_RE.test(m[0])) return m.index;
+    PRAISE_RE.lastIndex = m.index + 1;
+  }
+  return -1;
 }
 export const praisesTouchdown = (text) => praiseAt(text) >= 0;
 
