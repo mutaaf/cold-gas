@@ -125,8 +125,9 @@ export function pointerText(id, ctx, flight = null, card = null) {
     }
     // One thumb (0125): the pad is the brake (0164: the slide no longer costs braking).
     case 'ran-out': if (thumbOn(ctx)) return 'Brake to the ground: keep holding the pad all the way down';
-      // 0362: never "keep holding" a LAND that was held: what ran out was the gas spent before the brake.
-      if (assist) return flight?.levelHeld > 0 ? 'Save gas for the brake: spend less of it before the fall' : `Stay on the brake to the ground: keep holding ${keyOf(ctx, 'land')}`;
+      // 0362: on the Lineup, a LAND held with the tanks near empty (the coach's < 25 %) was never the fix: the gas went on
+      // the climb. Elsewhere, and with gas left, the brake let go early is still the step.
+      if (assist) return ctx.course === 'lineup' && flight?.levelHeld > 0 && flight.gasAtTouch < 25 ? 'Save gas for the brake: spend less of it before the fall' : `Stay on the brake to the ground: keep holding ${keyOf(ctx, 'land')}`;
       return 'Brake once, hard, at the BRAKE line, and stay on it to the ground';
     // 0362: Pro's LIFT held from the line flew the car past the kickflip's height (src/sim/coach.js heldLift).
     case 'held-lift': return `Lift less: ${ctl(ctx, 'lift')} about ${LINEUP_LIFT_HOLD} s at the line, then let go`;

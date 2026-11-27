@@ -348,7 +348,8 @@ function lineupWrecks(t, f, course, say, crashed, add, tier) {
 // on the climb the gas the brake needed: that is the finding, ahead of the brake's (a 1.0 s hold peaks at ≈ 38 m and
 // touches down at 27 m/s), and the fix is the key they held, never a boost they didn't use.
 function heldLift(t, f, say, add, tier) {
-  if (tier !== 'pro' || f.liftHeld < 0 || t.airStartTick < 0) return;
+  // Only a hold longer than the one it would recommend: a right hold and a second press in the air isn't this finding.
+  if (tier !== 'pro' || !(f.liftHeld > LIFT_HOLD + 0.05) || t.airStartTick < 0) return;
   const apexH = Math.max(0, t.apex - SPEC.comHeight);
   if (!(apexH > LINEUP_LIFT_HIGH)) return;
   add('held-lift', 10.5, 'Held LIFT too long', `You held ${say.lift} ${r1(f.liftHeld)} s from the line: the car climbed to ${r1(apexH)} m (the kickflip peaks near ${KICKFLIP_APEX} m) and touched down with ${Math.round(f.gasAtTouch)} % gas.`,

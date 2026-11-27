@@ -195,8 +195,19 @@ describe('0362: the coach on Pro, where LIFT is still a throttle', () => {
   });
 
   it('NEXT RUN never tells a player who held LAND to keep holding it', () => {
-    const ASSIST = { device: 'key', scheme: 'classic', tier: 'assist', course: 'show' };
-    expect(pickPointer([{ id: 'ran-out' }], ASSIST, { flight: { levelHeld: 400 } }).text).not.toMatch(/keep holding/);
-    expect(pickPointer([{ id: 'ran-out' }], ASSIST, { flight: { levelHeld: 0 } }).text).toMatch(/keep holding Shift/);
+    const LINEUP = { device: 'key', scheme: 'classic', tier: 'assist', course: 'lineup' };
+    expect(pickPointer([{ id: 'ran-out' }], LINEUP, { flight: { levelHeld: 400, gasAtTouch: 10 } }).text).not.toMatch(/keep holding/);
+    expect(pickPointer([{ id: 'ran-out' }], LINEUP, { flight: { levelHeld: 0, gasAtTouch: 10 } }).text).toMatch(/keep holding Shift/);
+    // A LAND let go early with gas left (or on the Show) is still told to stay on the brake (the review of 0362).
+    expect(pickPointer([{ id: 'ran-out' }], LINEUP, { flight: { levelHeld: 400, gasAtTouch: 60 } }).text).toMatch(/keep holding Shift/);
+    expect(pickPointer([{ id: 'ran-out' }], { ...LINEUP, course: 'show' }, { flight: { levelHeld: 400, gasAtTouch: 10 } }).text).toMatch(/keep holding Shift/);
+  });
+
+  it('a right hold and a second press in the air is not a held-lift finding (the review of 0362)', () => {
+    const { run, card } = fly(0.5, { tier: 'pro', again: [0.9, 1.6], rollAt: 'cue' });
+    card.tier = 'pro';
+    expect(run.t.apex).toBeGreaterThan(12.5);
+    const c = coach(run.inputLog, 'lineup', card, 0, coachWords(PRO));
+    expect(c.items.map((x) => x.id)).not.toContain('held-lift');
   });
 });

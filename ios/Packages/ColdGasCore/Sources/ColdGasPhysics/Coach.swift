@@ -434,7 +434,7 @@ func coachLineupWrecks(_ t: Telemetry, _ f: CoachFlight, _ course: Course, _ say
 /// coach.js heldLift (0362): on Pro a lift-off press that flew the car past COACH_LINEUP_LIFT_HIGH is the finding.
 func coachHeldLift(_ t: Telemetry, _ f: CoachFlight, _ say: CoachWords, _ add: (String, Double, String, String, String) -> Void, _ tier: String) {
     let s = jsNumberString
-    if tier != "pro" || f.liftHeld < 0 || t.airStartTick < 0 { return }
+    if tier != "pro" || !(f.liftHeld > COACH_LINEUP_LIFT_HOLD + 0.05) || t.airStartTick < 0 { return }
     let apexH = jsMax(0, t.apex - SPEC.comHeight)
     if !(apexH > COACH_LINEUP_LIFT_HIGH) { return }
     add("held-lift", 10.5, "Held LIFT too long", "You held \(say.lift) \(s(r1(f.liftHeld))) s from the line: the car climbed to \(s(r1(apexH))) m (the kickflip peaks near \(s(COACH_KICKFLIP_APEX)) m) and touched down with \(s(jsRound(f.gasAtTouch))) % gas.",
