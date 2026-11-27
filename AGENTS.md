@@ -364,6 +364,9 @@ src/input.js          keyboard + gamepad + touch → sim input (context: ground 
                         on Assist, ↑/↓ held across the take-off or the touchdown wait for a fresh press (0275)
 src/fold.js           a screen that folds (pure, 0105): the segments and the posture Chromium reports → rows | cols and the
                         hinge's edges (main.js syncFold: :root[data-fold], --fold-a/b; the scene above a horizontal fold)
+src/lift-off.js       the Lineup's lift-off on Assist keys, a pad and the touch buttons (pure, 0362): a LIFT pressed on the
+                        run-up burns to a projected apex of 7.25 m and stops, held or not; run by input.js sample(), so the log
+                        records the burn (no sim change); one thumb has its own (onethumb.js)
 src/hands.js          the driver's hands (pure): keys and sticks → wheel and pedals per tick (slower at speed),
                         stick shaping, reverse at a standstill; shared with the drive bench and tests
 src/driving.js        driving levels (pure, 0066): Easy / Standard / Advanced on the ground in every mode. Writes only
