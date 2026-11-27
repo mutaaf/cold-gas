@@ -64,6 +64,25 @@ after a failure; `toast` (src/toast.js) and `aiLabel` (src/ai/config.js) stay in
 from the entry's graph again. The wait state shipped in 0154 (#411, "Starting…" until the run begins). Open for the next
 Builder: tapToRun in perf.mjs, and the first title frame's long task (box 5, a render/GPU cost, not bytes).
 
+**Builder, 2026-11-27 (#PR): perf.mjs reports tapToRun; the engine's "31 s after the bytes" was the probe, not the game.**
+`node scripts/perf.mjs <url>` now prints `tapToRun`, `engineAt` and `wasmEnd` for the phone profile (raw CDP touch at
+usable, returning player). On main `9d11f53`, local gzip-served build, phone 4× CPU Slow 4G, 6 cold loads: **tapToRun
+7.8–11.0 s (median ≈ 8.3 s) after usable**, the engine up at 14.2–18.1 s, the WASM's last byte at 11.4 s. What the
+critic's probe read as 31 s of compile:
+- Its `setTimeout(poll, 20)` is starved on the title: `precomputeRefGhosts` flies the three reference ghosts in 5 ms
+  slices and yields with `scheduler.yield()`, whose continuations outrank timers. A poll saw `physicsReady()` 28 s after
+  the engine was in (performance marks in engine.js and `setMode`, since removed). perf.mjs reads the run's start with a
+  MutationObserver on `body[data-mode]`, and the engine from its first WebAssembly instance.
+- `S.mode !== 'title'` itself was right, but the probe could only see it once the starvation ended (the run live).
+- The countdown advances by `min(dt, 0.1)` per frame, and a SwiftShader frame at 4× is ≈ 1.1–1.6 s, so a 3 s countdown
+  took 32–48 s of wall clock there (a CPU profile of it: 46 of 48 s native/GPU, 2 s JS). Real phones aren't SwiftShader.
+**Tried and measured worse, not shipped:** handing the fetch to `WebAssembly.compileStreaming` at boot (so the compile
+overlaps the download instead of starting after the glue chunk and the first frame). Same 6-load A/B: tapToRun
+12.0–13.2 s (median ≈ 12.5 s), the engine up ≈ 3 s later. On the throttled CPU the background compile competes with
+the title's first frame. Don't retry it without a real-phone A/B.
+Still open: the first title frame's long task (7.4 s at 4× on SwiftShader, `usable` → `stage.ready`), which every
+tap waits behind, and a real-device tapToRun.
+
 ## Test plan
 perf.mjs before/after in the PR; smoke e2e unchanged.
 
