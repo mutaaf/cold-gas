@@ -1,0 +1,10 @@
+Phone 390x844 · thumb · skill careful · after: 300/300 landed clean (100%), 300 inside the 7 m ring; median clean score 93.3 · mis-taps 0/522
+  clean scores: min 92 · p10 92 · median 93.3 · p90 94.7 · max 95.3
+  failures: {}
+  one burn (0169), clean landings: 0/300 with the down-jets out ≥ 0.08 s mid-brake (< 0.5 g sinking > 1 m/s, from the peak sink) · 222/300 with the sink rising > 0.5 m/s above 1.2 m
+  by what the thumb did (0173): held from the tap · slid: n 78 · median miss 2.1 m · median score 93.7 · 78 clean inside the 7 m ring · 0 jets-out gaps
+  by what the thumb did (0173): lifted, pressed again · slid: n 222 · median miss 1.2 m · median score 93.3 · 222 clean inside the 7 m ring · 0 jets-out gaps
+  careful · no slide though a dot ≥ 2 px was read held in the air: 0
+  coach's first finding (landed runs): {"clean":300} · clean 100%
+  clean NEXT RUN (0371): Precision < 10: 52 (0 say try Pro, 52 name the 2 m ring) · Precision 10: 248 (248 say try Pro)
+  the mark's title when it leads: {} · "Long" on a mostly-sideways miss: 0

@@ -1,0 +1,9 @@
+human-phone 300 --scheme=thumb --skill=careful, main 9d11f53 (= production). along = landZ - pad.z (negative = past the mark, long).
+alongSlide = the slide's along-the-run command (thumb.aim.y) was non-zero at the last sight read with the car >= 2.5 m up.
+
+held from the tap: n 78 · median padMiss 2.1 m · outside 2.05 m 52 · Precision<10 52 · median |lateral| 0.08 m · along -2.19..-1.64 (median -2.09) · median score 93.7
+   along slide acting=True: n 21 · along -2.17..-1.64 · outside 2.05 m 5
+   along slide acting=False: n 57 · along -2.19..-1.78 · outside 2.05 m 47
+lifted, pressed again: n 222 · median padMiss 1.2 m · outside 2.05 m 0 · Precision<10 0 · median |lateral| 0.37 m · along -1.69..-0.23 (median -1.08) · median score 93.3
+   along slide acting=True: n 204 · along -1.69..-0.23 · outside 2.05 m 0
+   along slide acting=False: n 18 · along -1.67..-0.91 · outside 2.05 m 0
