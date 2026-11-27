@@ -20,7 +20,7 @@ const POLES = [];
 for (let z = FIXTURES.poles.z0; z < FIXTURES.poles.z1; z += FIXTURES.poles.step) for (const sx of [-1, 1]) POLES.push({ x: sx * FIXTURES.poles.x, z });
 const POLE_R = (FIXTURES.poles.r0 + FIXTURES.poles.r1) / 2;
 
-function airFrames(opts, [w, h]) {
+function airFrames(opts, [w, h], dx = 0) {
   globalThis.innerWidth = w; globalThis.innerHeight = h;
   const cam = new THREE.PerspectiveCamera(52, w / h, 0.1, 2000);
   const dir = createDirector(cam);
@@ -33,7 +33,7 @@ function airFrames(opts, [w, h]) {
     for (let i = 0; i < PER_FRAME && run.phase !== 'done'; i++) stepRun(run, ap(run));
     t += PER_FRAME * STEP;
     const c = run.car;
-    pos.set(c.pos.x, c.pos.y, c.pos.z); vel.set(c.vel.x, c.vel.y, c.vel.z);
+    pos.set(c.pos.x + dx, c.pos.y, c.pos.z); vel.set(c.vel.x, c.vel.y, c.vel.z);
     dir.update(1 / 60, t, { carPos: pos, carVel: vel, phase: run.phase, mode: 'live', course: 'lineup' });
     if (run.phase !== 'air') continue;
     cam.updateMatrixWorld();
@@ -57,7 +57,7 @@ function airFrames(opts, [w, h]) {
       const hw = Math.abs(b.x - a.x);
       cover = Math.max(cover, Math.max(0, Math.min(x1, a.x + hw) - Math.max(x0, a.x - hw)) / (x1 - x0));
     }
-    out.push({ t: run.tick / 240, y: c.pos.y, z: c.pos.z, on, cover, x0, x1 });
+    out.push({ fov: cam.fov, t: run.tick / 240, y: c.pos.y, z: c.pos.z, on, cover, x0, x1 });
   }
   return out;
 }
@@ -66,7 +66,23 @@ const PHONES = [[390, 844], [430, 932], [360, 780]];
 const DESKS = [[1440, 900], [1280, 720]];
 const FLIGHTS = [['the reference', undefined], ['apex 4 m', { apex: 4 }], ['apex 6.5 m', { apex: 6.5 }]];
 
+// A flight steered off the line: the reference shifted across (the flat Lineup has no lateral limit; courses.js
+// speaks of flights 10 m wide). The positions the director sees are shifted, so the shot really is flown off-line.
+const SHIFTS = [-4, 2, 3, 4, 6];
+
 describe('0358 the Lineup kickflip shot', () => {
+  for (const dx of SHIFTS) {
+    for (const view of [[390, 844], [1440, 900]]) {
+      it(`the reference ${dx} m across at ${view.join('×')}: the whole car on screen, no pole across it`, () => {
+        const f = airFrames(undefined, view, dx);
+        const worst = f.reduce((m, r) => (r.on < m.on ? r : m));
+        expect(worst.on, `on-screen share at t ${worst.t.toFixed(2)}`).toBeGreaterThanOrEqual(view[0] > view[1] ? 0.999 : 0.98);
+        const pole = f.reduce((m, r) => (r.cover > m.cover ? r : m));
+        expect(pole.cover, `pole cover at t ${pole.t.toFixed(2)} z ${pole.z.toFixed(1)}`).toBeLessThanOrEqual(0.05);
+      });
+    }
+  }
+
   for (const [name, opts] of FLIGHTS) {
     for (const view of [...PHONES, ...DESKS]) {
       it(`${name} at ${view.join('×')}: the whole car on screen, no pole across it, every air frame`, () => {
@@ -76,6 +92,12 @@ describe('0358 the Lineup kickflip shot', () => {
         expect(worst.on, `on-screen share at t ${worst.t.toFixed(2)} (box x ${worst.x0.toFixed(2)}…${worst.x1.toFixed(2)})`).toBeGreaterThanOrEqual(view[0] > view[1] ? 0.999 : 0.98);
         const pole = f.reduce((m, r) => (r.cover > m.cover ? r : m));
         expect(pole.cover, `pole cover at t ${pole.t.toFixed(2)} z ${pole.z.toFixed(1)}`).toBeLessThanOrEqual(0.05);
+        // The lens never jumps: upright it opens out over the swing from the run-up (≤ 5° a frame); on a desktop it
+        // is the lens it was before 0358 (≈ 51-55°), never widened by the fit.
+        let step = 0;
+        for (let i = 1; i < f.length; i++) step = Math.max(step, Math.abs(f[i].fov - f[i - 1].fov));
+        expect(step).toBeLessThanOrEqual(view[0] > view[1] ? 0.5 : 5);
+        if (view[0] > view[1]) expect(Math.max(...f.map((r) => r.fov))).toBeLessThan(56);
       });
     }
   }

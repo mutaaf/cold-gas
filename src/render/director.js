@@ -78,11 +78,14 @@ for (let d = 95; d <= 180; d += 5) STAND_TURN.push(d);
 const TURN_COS = STAND_TURN.map((d) => Math.cos(d * Math.PI / 180)), TURN_SIN = STAND_TURN.map((d) => Math.sin(d * Math.PI / 180));
 // The Show's parked row as boxes, for a turned side stand's sight of the car (0355).
 const ROW_BOXES = new Float64Array(SHOW.boxes.flatMap((b) => [b.minX, 0, b.minZ, b.maxX, b.h, b.maxZ]));
-// The Lineup's kickflip shot (0358). The broadcast stand beside the flight: AIR_OUT m out at +x, but never at or past the
-// floodlight poles' line (FIXTURES.poles, x ±13), where a pole would stand between the lens and the car; no nearer the car
-// than AIR_NEAR. The car's box as the fit reads it, attitude unknown (a roll, a pitch over the row): half extents (m),
-// about a point AIR_BOX_Y over its origin. The fit keeps that box inside AIR_EDGE of the frame (NDC).
-const AIR_OUT = 14, AIR_NEAR = 10, POLE_GAP = 0.8, AIR_EDGE = 0.95;
+// The Lineup's kickflip shot (0358). The broadcast stand beside the flight: AIR_OUT m out at +x, but kept POLE_GAP inside
+// the floodlight poles' line (FIXTURES.poles, x ±13), so no pole stands between the lens and the car, as long as that
+// leaves AIR_NEAR m to the car (a flight up to ≈ 7 m right of the line; further right it stands out at AIR_OUT, as
+// before). The fit keeps a box about the car (half extents AIR_BOX m, AIR_BOX_Y over its origin: the 2 × 1.15 × 4.65 m
+// body with room for a roll and a pitch over the row) inside AIR_EDGE of the frame (NDC). It is not every attitude's
+// bound (a car pitched 40° reaches ≈ 2.3 m up); the 5 % edge is the rest of the margin. A box any larger widens the lens
+// in the swing out from the run-up, on a desktop too.
+const AIR_OUT = 14, AIR_NEAR = 5, POLE_GAP = 0.8, AIR_EDGE = 0.95;
 const AIR_BOX = [1.2, 1.8, 2.4], AIR_BOX_Y = 0.2;
 const TITLE_COVER = 0.4;   // the share of the car's box the title's panel may cover before the lens moves it (0131)
 const TITLE_FILL = 0.85;   // the most of that band's height the car's box may take; past it the lens widens (0131)
@@ -487,7 +490,7 @@ export function createDirector(camera) {
     const hx = st.hx, hz = st.hz;
     if (phase === 'air' || (phase === 'landed' && st.t < 1.2)) {
       // Broadcast three-quarter: off to the right, a little ahead, low; inside the poles' line (0358).
-      const out = carPos.x < FIXTURES.poles.x ? clamp(FIXTURES.poles.x - POLE_GAP - carPos.x, AIR_NEAR, AIR_OUT) : AIR_OUT;
+      const inside = FIXTURES.poles.x - POLE_GAP - carPos.x, out = inside >= AIR_NEAR ? Math.min(AIR_OUT, inside) : AIR_OUT;
       want.set(carPos.x + out, Math.max(3.4, carPos.y * 0.6 + 2.2), carPos.z + 2 - Math.min(6, speed * 0.15));
       lookWant.set(carPos.x, carPos.y + 0.2, carPos.z + 3);
       ease(dt, 3.2);
