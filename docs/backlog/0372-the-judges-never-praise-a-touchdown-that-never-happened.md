@@ -1,12 +1,12 @@
 ---
 id: 0372
 title: The judges never praise a touchdown that never happened
-status: ready
+status: shipped
 priority: P1
 size: S
 lens: authenticity
 created: 2026-11-26
-pr:
+pr: 529
 by: critic
 ---
 
