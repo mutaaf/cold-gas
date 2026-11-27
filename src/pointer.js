@@ -125,7 +125,12 @@ export function pointerText(id, ctx, flight = null, card = null) {
     }
     // One thumb (0125): the pad is the brake (0164: the slide no longer costs braking).
     case 'ran-out': if (thumbOn(ctx)) return 'Brake to the ground: keep holding the pad all the way down';
-      return assist ? `Stay on the brake to the ground: keep holding ${keyOf(ctx, 'land')}` : 'Brake once, hard, at the BRAKE line, and stay on it to the ground';
+      // 0362: on the Lineup, a LAND held with the tanks near empty (the coach's < 25 %) was never the fix: the gas went on
+      // the climb. Elsewhere, and with gas left, the brake let go early is still the step.
+      if (assist) return ctx.course === 'lineup' && flight?.levelHeld > 0 && flight.gasAtTouch < 25 ? 'Save gas for the brake: spend less of it before the fall' : `Stay on the brake to the ground: keep holding ${keyOf(ctx, 'land')}`;
+      return 'Brake once, hard, at the BRAKE line, and stay on it to the ground';
+    // 0362: Pro's LIFT held from the line flew the car past the kickflip's height (src/sim/coach.js heldLift).
+    case 'held-lift': return `Lift less: ${ctl(ctx, 'lift')} about ${LINEUP_LIFT_HOLD} s at the line, then let go`;
     case 'late-roll': return assist ? `Roll out sooner: ${ctl(ctx, 'land')} straight after you let go` : `Roll out sooner: ${ctl(ctx, rollAct(ctx))} straight after you let go`;
     case 'over-roll': return `Stop the roll early: let go of ${keyOf(ctx, rollAct(ctx))} about 40° before level`;
     case 'no-roll': return assist ? `Roll upright: ${ctl(ctx, 'land')} after you let go` : `Roll upright: ${ctl(ctx, rollAct(ctx))} after you let go`;
@@ -142,15 +147,17 @@ export function pointerText(id, ctx, flight = null, card = null) {
       const [lo, hi] = LINEUP_RUNUP_KMH, lead = id === 'row' ? 'Over the row' : 'Lift over the roofs';
       if (thumbOn(ctx)) return `${lead}: keep holding the pad through the line`;
       const adv = ctx.tier === 'advanced', lift = ctl(ctx, adv ? 'brakeAdv' : 'lift');
+      // 0362: on Assist a press is the lift-off (src/lift-off.js): no hold to time.
+      const cmd = ctx.tier === 'assist', then = cmd ? `press ${keyOf(ctx, 'lift')}` : `${lift} about ${LINEUP_LIFT_HOLD} s`;
       const kmh = flight && flight.lineSpeed >= 0 ? Math.round(flight.lineSpeed * 3.6) : -1;
       const off = kmh >= 0 && (kmh < lo - LINEUP_SPEED_SLACK[0] || kmh > hi + LINEUP_SPEED_SLACK[1]);
       // Each number with its unit: src/units.js puts mph beside every one (it reads no ranges).
-      if (off) return `${lead}: ${kmh} km/h at the line, aim for ${lo} km/h to ${hi} km/h, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
-      if (kmh < 0) return `${lead}: ${lo} km/h to ${hi} km/h at the line, then ${lift} about ${LINEUP_LIFT_HOLD} s`;
+      if (off) return `${lead}: ${kmh} km/h at the line, aim for ${lo} km/h to ${hi} km/h, then ${then}`;
+      if (kmh < 0) return `${lead}: ${lo} km/h to ${hi} km/h at the line, then ${then}`;
       // 0370: a press that began past the line is named, with how far; a crash is never told to fly the same again.
       if (!adv && flight.liftHeld >= 0 && flight.liftAtZ > LINEUP_LIFT_LATE) return `${lead}: press ${keyOf(ctx, 'lift')} on the line, not ${Math.round(flight.liftAtZ * 10) / 10} m past it`;
-      if (!adv && flight.liftHeld >= LINEUP_LIFT_HOLD - 0.05) return card?.facts?.crashed ? pointerText('crash', ctx) : `${lead}: the same run-up and ${keyOf(ctx, 'lift')} again`;
-      return `${lead}: ${lift} at the line for about ${LINEUP_LIFT_HOLD} s`;
+      if (!adv && (cmd ? flight.liftHeld >= 0 : flight.liftHeld >= LINEUP_LIFT_HOLD - 0.05)) return card?.facts?.crashed ? pointerText('crash', ctx) : `${lead}: the same run-up and ${keyOf(ctx, 'lift')} again`;
+      return cmd ? `${lead}: press ${keyOf(ctx, 'lift')} at the line` : `${lead}: ${lift} at the line for about ${LINEUP_LIFT_HOLD} s`;
     }
     case 'crash': return 'Run it again and follow the cues: each one calls its step as you reach it';
     case 'clean': if (thumbOn(ctx)) return thumbClean(ctx, flight, card);

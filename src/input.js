@@ -19,12 +19,15 @@
 //            and every new run or drill let go of everything (`resetInput`, `freshRun`), and what was
 //            held then counts again only once it is pressed again (0099). Gamepad Start pauses.
 //            On Assist, ↑/W ↓/S held across a take-off or a touchdown wait for a fresh press too (0275).
+// Lift-off   On the Lineup in Assist, LIFT pressed on the run-up burns to the kickflip's height and stops by itself,
+//            held or not (0362, src/lift-off.js); a fresh press in the air is LIFT as ever.
 import { newInput, clearInput, VALVE_KEYS } from './sim/vehicle.js';
 import { createKeyRamp, padValves, bindNozzlePad, VALVES } from './valves.js';
 import { createOneThumb } from './onethumb.js';
 import { tiltSteer, buzz, armTiltGrant } from './touch-settings.js';
 import { createDriver, shapeStick, applyGround, loadDriving, saveDriving, validLevel, TC_MODES } from './driving.js';
 import { portalDevice } from './portal/flag.js';
+import { createLiftOff } from './lift-off.js';
 
 const keys = new Set();
 const touch = { active: false, x: 0, y: 0, lift: false, land: false, go: false, brk: false, goAmt: 1, brkAmt: 1 };
@@ -90,6 +93,7 @@ export function resetInput() {
 export function freshRun() {
   resetInput();
   wasAir = null;
+  liftOff.reset();
   driver.reset();
   keyRamp.reset();
 }
@@ -297,6 +301,7 @@ export function pollPads() {
 export function sampleThumb(run, released, out = newInput()) {
   clearInput(out);
   wasAir = null;   // the keys didn't fly this tick: a key pressed while the thumb flies is a fresh one (0275)
+  liftOff.reset();   // and no lift-off burn of theirs is on (0362)
   return thumb.sample(run, released, out, tiltSteer());
 }
 
@@ -349,6 +354,7 @@ export const usingTouch = () => device.touch;
 const vScratch = new Float64Array(VALVES);
 if (VALVE_KEYS.join() !== 'v0,v1,v2,v3,v4,v5,v6,v7,v8,v9') throw new Error('input.js: the valves changed; update advanced()');
 const keyRamp = createKeyRamp(), isDown = (c) => keys.has(c);
+const liftOff = createLiftOff();
 export function sample(phase, tier, out = newInput(), released = false, car = null, ctx = null) {
   clearInput(out);
   if (typeof tier === 'boolean') tier = tier ? 'assist' : 'pro';
@@ -446,6 +452,8 @@ export function sample(phase, tier, out = newInput(), released = false, car = nu
     // through the touchdown used to fire the rear jets and launch the car off the pad.
     out.thrust = phase === 'drive' && land && !brk ? 1 : 0;
   }
+  // 0362: the Lineup's lift-off on Assist is one burn to the kickflip's height, however long LIFT is held.
+  if (car && !ctx?.free) liftOff(phase, car, out);
   return out;
 }
 
