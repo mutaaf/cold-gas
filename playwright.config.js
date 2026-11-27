@@ -167,6 +167,13 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 // 16.1 min. Normalising four whole runs by each job's runner speed (runner factors 0.48-1.28), shard 1's 63 tests cost ≈ 68 at
 // speed 1: those files are heavy, not unlucky. 57:85:92:123 is ≈ 57 / 61 / 61.5 / 61.4 at speed 1, the most even cut (shard 2
 // starts at driving-levels, 3 at instruments, 4 at phone-frame). It would have passed two of those four runs; 63:90:98:106 none.
+// Main then cancelled e2e 4/4 at 35 min on three commits running (21a9b77 twice, f240ef3, 2ee7093: 101, 119 and 93 of
+// 123 done; nothing failed for good, one theatre retry), while 1/4 ran 14-28 min. Normalised by each job's runner speed
+// over those runs' nine e2e jobs (factors 0.69-1.36), 57:85:92:123 is ≈ 39 / 59 / 54 / 80 worker-minutes at speed 1:
+// shard 4's files alone exceed the ≈ 70 a 35-minute job on two workers holds, on any runner. No e2e spec changed since
+// that cut; its 11-23 price under-read shard 4 by ≈ 19. 84:83:106:84 is ≈ 59 / 57 / 59 / 58 at speed 1, the best
+// file-boundary cut of those runs (shard 2 starts at focus-trap, 3 at learn, 4 at segments; --list diffed: every test
+// once). ≈ 15 % margin, under the runner swing: proposal #456 (ci.yml) is still the cure.
 // Check a cut with `PWTEST_SHARD_WEIGHTS=a:b:c:d npx playwright test --list --shard=N/4`.
 // Playwright reads the weights after loading this file. Only for the whole suite: the flake guard
 // (scripts/e2e-repeat-changed.mjs) names its spec files and shards those evenly.
@@ -174,7 +181,7 @@ const PORT = Number(process.env.E2E_PORT) || 4175;
 const args = process.argv.slice(2);
 const wholeSuite = !args.some((a) => /\.spec\.js|^tests\//.test(a));
 const quarters = args.some((a, i) => /^--shard=\d+\/4$/.test(a) || (a === '--shard' && /^\d+\/4$/.test(args[i + 1] ?? '')));
-if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '57:85:92:123';
+if (wholeSuite && quarters) process.env.PWTEST_SHARD_WEIGHTS ??= '84:83:106:84';
 
 export default defineConfig({
   testDir: 'tests/e2e',
