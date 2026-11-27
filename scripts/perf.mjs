@@ -20,7 +20,7 @@
 //                    it is usable; ms from that tap until the run starts (body[data-mode] leaves 'title'), and
 //                    engineAt (the physics WASM instantiated) / wasmEnd (its last byte), ms from navigation.
 //                    The start is read by a MutationObserver: a timer poll is starved on the title while the
-//                    reference ghosts fly (scheduler.yield outranks timers), which once read 37 s for ≈ 10 s.
+//                    reference ghosts fly (scheduler.yield outranks timers), which once read 37 s for ≈ 8–11 s.
 import { chromium } from '@playwright/test';
 
 const [url, label = 'run', runsArg = '3'] = process.argv.slice(2);
