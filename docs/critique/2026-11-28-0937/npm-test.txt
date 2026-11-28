@@ -1,0 +1,35 @@
+
+> cold-gas@0.10.0 test
+> vitest run
+
+
+ RUN  v4.1.11 /home/user/cold-gas
+
+(node:823) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ tests/unit/roads.test.js (20 tests | 1 failed) 173808ms
+     × bigsur: drives back on from the verge at 4 m and 8 m, both sides, all along it 65271ms
+(node:1397) ExperimentalWarning: SQLite is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  tests/unit/roads.test.js > back on the road from the grass > bigsur: drives back on from the verge at 4 m and 8 m, both sides, all along it
+Error: Test timed out in 60000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ tests/unit/roads.test.js:219:5
+    217|   }
+    218|   for (const id of ['stelvio', 'transfagarasan', 'bigsur', 'atlantic']…
+    219|     it(`${id}: drives back on from the verge at 4 m and 8 m, both side…
+       |     ^
+    220|       const road = roads[id], res = { 4: [0, 0], 8: [0, 0] };
+    221|       for (let s = 180; s < road.length - 180; s += 577) for (const si…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 117 passed (118)
+      Tests  1 failed | 1226 passed (1227)
+   Start at  09:37:09
+   Duration  817.35s (transform 7.16s, setup 19.62s, import 45.07s, tests 2265.76s, environment 23ms)
+

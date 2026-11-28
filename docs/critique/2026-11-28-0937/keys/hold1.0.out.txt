@@ -1,0 +1,23 @@
+{
+ "course": "lineup",
+ "TAG": "hold1.0",
+ "MPH": "17",
+ "HOLD": 1000,
+ "card": {
+  "sheetText": "THE SHOW STUCK THE LANDING\n\nStuck it\n89.3/ 100\nBRONZE 72\nSILVER 84\nGOLD 92.5\nNew Silver · Gold at 92.5 · 3.2 to go\n\nFlown in Assist\n\nRUN 1\nYOUR FIRST MARK ON THIS EVENT\nJudged by\ngemma-4-26b-a4b-it\nCloudflare ORD\n88 tok\n\nDaily: 19.4 ft off the mark · lean toward the pad (pitch or roll) above 5 m to walk the touchdown marker onto the rings, then level\n\nNEXT RUN\nClean. Next: two full turns: a 720\nASSIST\nON\nrolls you out, levels and brakes\nNext jump\nThe Show\nN\nBeat 89.3\nR\nShare\nReplay\nHome\nH\nInitials\nPost\n\nWHAT HAPPENED\n\nClean\n\nStuck it: nothing big to fix.\n\nWant more? Try Pro: you fly the landing yourself, and it scores ×1.08.\n\nThe Engineer\nChief Vehicle Engineer\n9.0\n\nSink rate of 2.6 ft/s (0.8 m/s) and perfect wheel synchronization ensured a stable touchdown despite the slight deviation from the mark.\n\nThe Coordinator\nStunt Coordinator\n9.0\n\nThat nine meter apex was breathtaking, providing massive clearance and incredible nerve during the full rotation.\n\nThe Designer\nHead of Design\n8.8\n\nClean lines throughout the flight with forty-eight percent air remaining in the tanks. Minimalist and controlled.\n\nAMPLITUDE\n9.2\nROTATION\n8.3\nCLEARANCE\n9.6\nLANDING\n9.9\nPRECISION\n6.7\nAIR LEFT\n7.3\nINTEGRITY\n10.0\n21 mph 33 km/h at the lip\n30 ft 9 m apex\n359° roll\n4.3 ft 1.3 m clearance\n2.6 ft/s 0.8 m/s touchdown\n0.9° tilt\n29 ms wheel sync\n19 ft 5.9 m from the mark\n48% air left\n100% intact",
+  "total": 89.3,
+  "verdict": "Stuck it",
+  "crashed": false,
+  "clearance": 1.3,
+  "launch": 9.055244238815588,
+  "coach": []
+ },
+ "log": [
+  "0.18 z-70.0 v0.2 drive cue: Hold ↑ to drive",
+  "6.92 z-13.8 v8.8 drive cue: Hold Space at the line",
+  "7.18 Space down z-11.5 v8.8",
+  "7.32 z-10.3 v8.8 air cue: ← → to roll",
+  "8.98 z4.3 v8.8 air cue: Hold Shift"
+ ],
+ "errs": []
+}

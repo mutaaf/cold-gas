@@ -1,0 +1,23 @@
+{
+ "course": "lineup",
+ "TAG": "floor",
+ "MPH": "floor",
+ "HOLD": 500,
+ "card": {
+  "sheetText": "TOTAL DESTRUCTION DURING THE SHOW\n\nWrecked\n4.0/ 100\nBRONZE 72\nSILVER 84\nGOLD 92.5\nBronze at 72 · 68.0 to go\n\nFlown in Assist\n\nRUN 1\nWRECKED · NOT A MARK YET\nJudged by\ngemma-4-26b-a4b-it\nCloudflare ORD\n74 tok\n\nDaily: no clean landing yet — try again\n\nNEXT RUN\nLift over the roofs: 72 mph 116 km/h at the line, aim for 16 mph 25 km/h to 19 mph 30 km/h, then press Space\nASSIST\nON\nrolls you out, levels and brakes\nRetry\nR\nShare\nReplay\nHome\nH\n\nWHAT HAPPENED\n\nInto the row\n\nYou reached the line at 72 mph 116 km/h: the car went into the row 2.6 ft 0.8 m up at 49 mph 79 km/h, before it rose over the roofs.\n\nEase off ↑ before the line: between 16 mph 25 km/h and 19 mph 30 km/h, not 72 mph 116 km/h. Press LIFT (Space) at the line: it lifts you over the row, then roll.\n\nThe Engineer\nChief Vehicle Engineer\n0.5\n\nThe Coordinator\nStunt Coordinator\n0.3\n\nSuch a terrifying crash after that massive roll, even if the apex height was decent.\n\nThe Designer\nHead of Design\n0.4\n\nThe nose is destroyed and the floor is crushed; there is no elegance in this wreck.\n\nAMPLITUDE\n0.0\nROTATION\n0.0\nCLEARANCE\n0.0\nLANDING\n0.0\nPRECISION\n0.0\nAIR LEFT\n0.0\nINTEGRITY\n3.4\n72 mph 116 km/h at the lip\n37 ft 11.4 m apex\n414° roll\ncontact\n0 ft/s 0 m/s touchdown\n0° tilt\n1000 ms wheel sync\n92 ft 28 m from the mark\n78% air left\nwrecked · 66% damage",
+  "total": 4,
+  "verdict": "Wrecked",
+  "crashed": true,
+  "clearance": -0.4,
+  "launch": 32.336216515363965,
+  "coach": []
+ },
+ "log": [
+  "0.18 z-70.0 v0.2 drive cue: Hold ↑ to drive",
+  "3.92 z-13.1 v30.0 drive cue: Hold Space at the line",
+  "4.18 Space down z-4.8 v32.1",
+  "4.38 z1.7 v32.2 air cue: ← → to roll",
+  "6.18 z17.7 v6.4 air cue: Hold Shift"
+ ],
+ "errs": []
+}

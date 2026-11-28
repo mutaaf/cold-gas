@@ -1,0 +1,23 @@
+{
+ "course": "lineup",
+ "TAG": "floorW",
+ "MPH": "floor",
+ "HOLD": 500,
+ "card": {
+  "sheetText": "TOTAL VEHICLE LOSS ON THE LINEUP\n\nWrecked\n4.0/ 100\nBRONZE 72\nSILVER 84\nGOLD 92.5\nBronze at 72 · 68.0 to go\n\nFlown in Assist\n\nRUN 1\nWRECKED · NOT A MARK YET\nJudged by\ngemma-4-26b-a4b-it\n544 → 80 tok\n$0.000078\n\nDaily: no clean landing yet — try again\n\nNEXT RUN\nLift over the roofs: 72 mph 116 km/h at the line, aim for 16 mph 25 km/h to 19 mph 30 km/h, then press Space\nASSIST\nON\nrolls you out, levels and brakes\nRetry\nR\nShare\nReplay\nHome\nH\n\nWHAT HAPPENED\n\nInto the row\n\nYou reached the line at 72 mph 116 km/h: the car went into the row 2.6 ft 0.8 m up at 49 mph 79 km/h, before it rose over the roofs.\n\nEase off ↑ before the line: between 16 mph 25 km/h and 19 mph 30 km/h, not 72 mph 116 km/h. Press LIFT (Space) at the line: it lifts you over the row, then roll.\n\nThe Engineer\nChief Vehicle Engineer\n0.5\n\nThe damage sensor reads 68%. That car \n\nThe Coordinator\nStunt Coordinator\n0.3\n\nA terrifying roll that ended in a violent collision; there was zero nerve in that final impact.\n\nThe Designer\nHead of Design\n0.4\n\nMassive structural damage to the nose makes this a complete waste of seventy-eight percent remaining propellant.\n\nJudged by\ngemma-4-26b-a4b-it\nCloudflare ORD\n544 → 80 tokens\n1.71 s\n7.13 neurons\n$0.000078\n1 remark replaced with the game’s own line: it praised a landing the run never made\nReplay the call\nUse your own AI key\nInspect the call\nAMPLITUDE\n0.0\nROTATION\n0.0\nCLEARANCE\n0.0\nLANDING\n0.0\nPRECISION\n0.0\nAIR LEFT\n0.0\nINTEGRITY\n3.2\n72 mph 116 km/h at the lip\n38 ft 11.6 m apex\n416° roll\ncontact\n0 ft/s 0 m/s touchdown\n0° tilt\n1000 ms wheel sync\n92 ft 28 m from the mark\n78% air left\nwrecked · 68% damage",
+  "total": 4,
+  "verdict": "Wrecked",
+  "crashed": true,
+  "clearance": -0.4,
+  "launch": 32.33621643990335,
+  "coach": []
+ },
+ "log": [
+  "0.08 z-70.0 v0.2 drive cue: Hold ↑ to drive",
+  "3.82 z-13.1 v30.0 drive cue: Hold Space at the line",
+  "4.08 Space down z-4.8 v32.1",
+  "4.28 z1.7 v32.2 air cue: ← → to roll",
+  "6.08 z17.7 v6.4 air cue: Hold Shift"
+ ],
+ "errs": []
+}
