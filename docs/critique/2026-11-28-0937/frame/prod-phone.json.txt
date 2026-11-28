@@ -1,0 +1,45 @@
+{
+ "view": "phone",
+ "course": "lineup",
+ "readyMs": 2121,
+ "errs": [],
+ "mostInverted": {
+  "dt": 0.983,
+  "phase": "air",
+  "y": 7.25,
+  "z": 9.05,
+  "tilt": 178
+ },
+ "apex": {
+  "dt": 1.367,
+  "phase": "air",
+  "y": 8.06,
+  "z": 11.94,
+  "tilt": 81
+ },
+ "overSemi": {
+  "n": 21,
+  "tiltMin": 24,
+  "tiltMax": 77,
+  "y": [
+   8.06,
+   7.74
+  ]
+ },
+ "touch": {
+  "dt": 3.6,
+  "phase": "landed",
+  "y": 0.43,
+  "z": 28.77,
+  "tilt": 0,
+  "shot": "touch"
+ },
+ "shots": [
+  "lift+0.50 dt0.5 y4.16 z5.41 tilt51",
+  "lift+1.00 dt1 y7.32 z9.18 tilt178",
+  "lift+1.40 dt1.4 y8.06 z12.19 tilt72",
+  "over-semi dt1.55 y7.93 z13.32 tilt34",
+  "lift+2.00 dt2 y7.2 z16.71 tilt10",
+  "touch dt3.6 y0.43 z28.77 tilt0"
+ ]
+}
